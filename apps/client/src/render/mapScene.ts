@@ -1,6 +1,6 @@
 import type { Application } from 'pixi.js';
 import type { MapFile } from '../protocol.gen.ts';
-import { labelResolution, type Camera } from './camera.ts';
+import { labelResolution, NO_INSETS, type Camera, type Insets } from './camera.ts';
 import { CameraController } from './cameraController.ts';
 import { createLayers, type MapLayers } from './layers.ts';
 import { MapView } from './mapView.ts';
@@ -17,6 +17,7 @@ export class MapScene {
   constructor(
     private readonly app: Application,
     map: MapFile,
+    insets: Insets = NO_INSETS,
   ) {
     this.layers = createLayers();
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.
@@ -27,6 +28,7 @@ export class MapScene {
       { width: map.meta.width, height: map.meta.height },
       { width: app.screen.width, height: app.screen.height },
       this.onCamera,
+      insets,
     );
     app.stage.addChild(this.layers.world);
     app.renderer.on('resize', this.onResize);
@@ -35,6 +37,11 @@ export class MapScene {
   /** "Fit map": show the whole map. */
   fit(): void {
     this.controller.fit();
+  }
+
+  /** The part of the screen the HUD covers; while the camera is fitted, the map moves out of it. */
+  setInsets(insets: Insets): void {
+    this.controller.setInsets(insets);
   }
 
   destroy(): void {

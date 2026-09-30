@@ -14,6 +14,7 @@ export default defineConfig({
         '../../maps',
         '../../packages/sim/tests/maps',
         '../../packages/protocol/fixtures',
+        '../../packages/protocol/vectors',
       ],
     },
   },

@@ -2,6 +2,7 @@
   import { Application } from 'pixi.js';
   import { onMount } from 'svelte';
   import type { MapFile } from '../protocol.gen.ts';
+  import { NO_INSETS, type Insets } from './camera.ts';
   import { MapScene } from './mapScene.ts';
   import { CANVAS_BACKGROUND } from './style.ts';
 
@@ -23,10 +24,17 @@
   let canvas: HTMLCanvasElement;
   let app: Application | null = null;
   let scene: MapScene | null = null;
+  let insets: Insets = NO_INSETS;
 
   /** "Fit map": show the whole map. Called by the HUD button through `bind:this`. */
   export function fitMap(): void {
     scene?.fit();
+  }
+
+  /** The screen margins the HUD covers: "fit map" keeps the map out of them. */
+  export function setInsets(next: Insets): void {
+    insets = next;
+    scene?.setInsets(next);
   }
 
   function show(next: MapFile): void {
@@ -34,7 +42,7 @@
       return;
     }
     scene?.destroy();
-    scene = new MapScene(app, next);
+    scene = new MapScene(app, next, insets);
   }
 
   // Rebuild the scene when the map changes; the first build happens once init() resolves.

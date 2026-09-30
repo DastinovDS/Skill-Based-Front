@@ -60,6 +60,21 @@ describe('fit map', () => {
     expect(fitScale({ width: 400, height: 1200 }, VIEWPORT, 0)).toBe(0.5);
   });
 
+  it('keeps the map out of the HUD insets', () => {
+    // Free area: x from 300 to 800 (500 wide), y from 60 to 600 (540 high); padding 50 leaves
+    // 400 x 440, so width is tighter: 400 / 1000 = 0.4.
+    const insets = { left: 300, top: 60, right: 0, bottom: 0 };
+    const camera = fitCamera(WORLD, VIEWPORT, 50, insets);
+    expect(camera.scale).toBeCloseTo(0.4);
+    const topLeft = worldToScreen(camera, VIEWPORT, { x: 0, y: 0 });
+    const bottomRight = worldToScreen(camera, VIEWPORT, { x: WORLD.width, y: WORLD.height });
+    // The map is centred in the free area and at least `padding` away from the HUD.
+    expect(topLeft.x).toBeCloseTo(350);
+    expect(bottomRight.x).toBeCloseTo(750);
+    expect(topLeft.y).toBeGreaterThanOrEqual(60 + 50);
+    expect((topLeft.y + bottomRight.y) / 2).toBeCloseTo(330);
+  });
+
   it('keeps a positive scale for a viewport smaller than the padding', () => {
     expect(fitScale(WORLD, { width: 0, height: 0 }, 32)).toBeGreaterThan(0);
   });

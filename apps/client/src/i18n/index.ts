@@ -20,6 +20,16 @@ export function t(key: MessageKey): string {
   return translate(localeState.current, key);
 }
 
+/**
+ * `t(key)` with `{name}` placeholders filled from `values`. A placeholder without a value stays
+ * as it is. Whole sentences take values, so a language can order the words its own way.
+ */
+export function tf(key: MessageKey, values: Readonly<Record<string, string | number>>): string {
+  return t(key).replace(/\{(\w+)\}/g, (whole, name: string) =>
+    name in values ? String(values[name]) : whole,
+  );
+}
+
 /** The current UI language. */
 export function getLocale(): Locale {
   return localeState.current;
