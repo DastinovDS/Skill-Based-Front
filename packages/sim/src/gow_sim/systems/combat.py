@@ -3,9 +3,9 @@
 Every charge is one shot: it either cancels an enemy shot or kills one enemy unit.
 
 The core is ``resolve_fight()``, a pure function of the two sides; the bonuses of the sides are
-its input (their source, planned orders and «Защита», is SIM-10, #26). The ``combat`` system
-runs after ``movement`` (rule 8: all moves and arrivals first, then all fights) and reads the
-``group_arrived`` events of the tick from ``state.events``:
+its input (their source, planned orders and «Защита», is ``systems.orders``, SIM-10). The
+``combat`` system runs after ``movement`` (rule 8: all moves and arrivals first, then all
+fights) and reads the ``group_arrived`` events of the tick from ``state.events``:
 
 1. Edge meetings first (rule 6): groups of the two players going towards each other along one
    edge meet when their progress towards their ends sums to at least 1000; a group that arrived
@@ -181,11 +181,13 @@ def combat(
 ) -> list[Event]:
     """The combat system (see the module docstring).
 
-    ``bonuses``: group id to the bonus the group brings into its next fight (SIM-10, #26). A
-    group that fought loses its bonus whether it was used or not (rule 3); the ``fight_group``
-    events name those groups. Emits ``fight``, ``fight_group`` and ``node_captured``.
+    ``bonuses``: group id to the bonus the group brings into its next fight
+    (``systems.orders.active_bonuses``, SIM-10). A group that fought loses its bonus whether it
+    was used or not (rule 3): a winner of an edge meeting that goes on into a node in the same
+    tick fights there without it; the ``fight_group`` events name those groups for the
+    ``orders`` system. Emits ``fight``, ``fight_group`` and ``node_captured``.
     """
-    bonus = bonuses or {}
+    bonus = dict(bonuses or {})
     arrivals = _arrivals(state)
     events = _edge_meetings(state, arrivals, bonus)
     for node_id in sorted(state.nodes):
@@ -252,7 +254,7 @@ def _meet(x: _OnEdge, y: _OnEdge) -> bool:
 
 
 def _edge_meetings(
-    state: GameState, arrivals: dict[int, _Arrival], bonus: Mapping[int, Bonus]
+    state: GameState, arrivals: dict[int, _Arrival], bonus: dict[int, Bonus]
 ) -> list[Event]:
     """Rule 6. One fight per edge and direction of player 0's groups; fights are disjoint."""
     presence = _edge_presence(state, arrivals)
@@ -277,7 +279,7 @@ def _edge_fight(
     met0: list[_OnEdge],
     met1: list[_OnEdge],
     arrivals: dict[int, _Arrival],
-    bonus: Mapping[int, Bonus],
+    bonus: dict[int, Bonus],
 ) -> list[Event]:
     groups = {0: [state.groups[p.gid] for p in met0], 1: [state.groups[p.gid] for p in met1]}
     before = _snapshot(groups)
@@ -315,7 +317,7 @@ def _node_fight(
     rules: Ruleset,
     node_id: int,
     arrivals: dict[int, _Arrival],
-    bonus: Mapping[int, Bonus],
+    bonus: dict[int, Bonus],
 ) -> list[Event]:
     node = state.nodes[node_id]
     here: dict[int, list[Group]] = {p: [] for p in PLAYERS}
@@ -371,10 +373,11 @@ def _node_fight(
     return events
 
 
-def _side(groups: list[Group], bonus: Mapping[int, Bonus]) -> Side:
+def _side(groups: list[Group], bonus: dict[int, Bonus]) -> Side:
+    """The side of ``groups``; takes their bonuses out of ``bonus``: they burn in this fight."""
     planned = defense = 0
     for g in groups:
-        b = bonus.get(g.id)
+        b = bonus.pop(g.id, None)
         if b is None:
             continue
         if b.source is BonusSource.PLANNED_ORDER:
