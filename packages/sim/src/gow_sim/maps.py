@@ -7,6 +7,7 @@ attributes, neutral space) are checked offline by ``gow-maps validate`` (tools/m
 File I/O is allowed in this module (AGENTS.md, section 4.1, rule 1).
 """
 
+import dataclasses
 import json
 from dataclasses import dataclass
 from enum import StrEnum
@@ -143,6 +144,23 @@ def parse_map(data: object) -> MapDef:
         mirror_edges=mirror_edges,
         incident=tuple(tuple(ids) for ids in incident),
     )
+
+
+def map_to_data(mapdef: MapDef) -> dict[str, object]:
+    """The map as JSON data in the file format, the inverse of ``parse_map``.
+
+    ``parse_map(map_to_data(m)) == m``; for a loaded file the result equals the parsed JSON.
+    The canonical game state embeds the map in this form (SIM-02).
+    """
+    return {
+        "meta": dataclasses.asdict(mapdef.meta),
+        "nodes": [{**dataclasses.asdict(n), "terrain": n.terrain.value} for n in mapdef.nodes],
+        "edges": [dataclasses.asdict(e) for e in mapdef.edges],
+        "mirror": {
+            "nodes": {str(i): m for i, m in enumerate(mapdef.mirror_nodes)},
+            "edges": {str(i): m for i, m in enumerate(mapdef.mirror_edges)},
+        },
+    }
 
 
 def _parse_meta(data: object) -> MapMeta:
