@@ -1,4 +1,4 @@
-"""Command line: ``uv run gow-maps validate <files>``."""
+"""Command line: `gow-maps validate <files>`, `gow-maps mirror <half> -o <map>`."""
 
 import argparse
 import glob
@@ -6,7 +6,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from gow_maps.validate import load_config, validate_file
+from gow_maps.mirror import HalfFormatError, mirror_file
+from gow_maps.validate import Issue, load_config, validate_file
 
 _GLOB_CHARS = frozenset("*?[")
 
@@ -25,19 +26,31 @@ def _expand(patterns: Sequence[str]) -> list[str]:
     return files
 
 
+def _report(path: str, issues: list[Issue]) -> bool:
+    if not issues:
+        print(f"OK   {path}")
+        return True
+    print(f"FAIL {path}")
+    for issue in issues:
+        print(f"  {issue}")
+    return False
+
+
 def _validate(args: argparse.Namespace) -> int:
     config = load_config(args.config)
-    failed = 0
-    for path in _expand(args.files):
-        issues = validate_file(path, config)
-        if issues:
-            failed += 1
-            print(f"FAIL {path}")
-            for issue in issues:
-                print(f"  {issue}")
-        else:
-            print(f"OK   {path}")
-    return 1 if failed else 0
+    results = [_report(path, validate_file(path, config)) for path in _expand(args.files)]
+    return 0 if all(results) else 1
+
+
+def _mirror(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    try:
+        mirror_file(args.half, args.output, config)
+    except HalfFormatError as exc:
+        print(f"FAIL {args.half}\n  [half] {exc}")
+        return 1
+    # The written map is validated right away; an invalid one stays on disk for inspection.
+    return 0 if _report(args.output, validate_file(args.output, config)) else 1
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -47,6 +60,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     validate.add_argument("files", nargs="+", help="map JSON files (glob patterns allowed)")
     validate.add_argument("--config", help="validator thresholds (default: built-in validate.toml)")
     validate.set_defaults(handler=_validate)
+    mirror = commands.add_parser("mirror", help="build a rot180 map from a half and validate it")
+    mirror.add_argument("half", help="half map, maps/src/<name>.half.json")
+    mirror.add_argument("-o", "--output", required=True, help="full map to write, maps/<name>.json")
+    mirror.add_argument("--config", help="validator thresholds (default: built-in validate.toml)")
+    mirror.set_defaults(handler=_mirror)
     args = parser.parse_args(argv)
     handler = args.handler
     return int(handler(args))
