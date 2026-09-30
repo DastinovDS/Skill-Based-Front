@@ -30,6 +30,16 @@ export interface CameraLimits {
   readonly maxScale: number;
 }
 
+/** Screen margins covered by the HUD, CSS pixels: "fit map" keeps the map out of them. */
+export interface Insets {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+export const NO_INSETS: Insets = { left: 0, top: 0, right: 0, bottom: 0 };
+
 /** Empty margin around the map in "fit map", CSS pixels. */
 export const FIT_PADDING = 32;
 /** How far out and in the player can zoom, relative to the "fit map" scale. */
@@ -50,24 +60,47 @@ export function screenToWorld(camera: Camera, viewport: Size, point: Point): Poi
   };
 }
 
-/** Scale at which the whole map fits the viewport with `padding` on the tighter side. */
-export function fitScale(world: Size, viewport: Size, padding: number = FIT_PADDING): number {
+/**
+ * Scale at which the whole map fits the free part of the viewport (the viewport minus `insets`)
+ * with `padding` on the tighter side.
+ */
+export function fitScale(
+  world: Size,
+  viewport: Size,
+  padding: number = FIT_PADDING,
+  insets: Insets = NO_INSETS,
+): number {
   // A viewport smaller than the padding (or not laid out yet) still gets a positive scale.
-  const width = Math.max(viewport.width - 2 * padding, 1);
-  const height = Math.max(viewport.height - 2 * padding, 1);
+  const width = Math.max(viewport.width - insets.left - insets.right - 2 * padding, 1);
+  const height = Math.max(viewport.height - insets.top - insets.bottom - 2 * padding, 1);
   return Math.min(width / world.width, height / world.height);
 }
 
-export function fitCamera(world: Size, viewport: Size, padding: number = FIT_PADDING): Camera {
-  return { x: world.width / 2, y: world.height / 2, scale: fitScale(world, viewport, padding) };
+/**
+ * The camera that shows the whole map centred in the free part of the viewport. With insets the
+ * camera centre is not the map centre: the viewport centre is shifted away from the HUD.
+ */
+export function fitCamera(
+  world: Size,
+  viewport: Size,
+  padding: number = FIT_PADDING,
+  insets: Insets = NO_INSETS,
+): Camera {
+  const scale = fitScale(world, viewport, padding, insets);
+  return {
+    x: world.width / 2 - (insets.left - insets.right) / 2 / scale,
+    y: world.height / 2 - (insets.top - insets.bottom) / 2 / scale,
+    scale,
+  };
 }
 
 export function cameraLimits(
   world: Size,
   viewport: Size,
   padding: number = FIT_PADDING,
+  insets: Insets = NO_INSETS,
 ): CameraLimits {
-  const fit = fitScale(world, viewport, padding);
+  const fit = fitScale(world, viewport, padding, insets);
   return { world, minScale: fit * MIN_ZOOM, maxScale: fit * MAX_ZOOM };
 }
 

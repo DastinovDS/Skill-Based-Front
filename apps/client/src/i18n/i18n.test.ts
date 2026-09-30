@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { en } from './en.ts';
-import { DICTIONARIES, getLocale, LOCALES, setLocale, t, translate, type Locale } from './index.ts';
+import {
+  DICTIONARIES,
+  getLocale,
+  LOCALES,
+  setLocale,
+  t,
+  tf,
+  translate,
+  type Locale,
+} from './index.ts';
 import type { Messages } from './messages.ts';
 import { ru } from './ru.ts';
 
@@ -16,6 +25,18 @@ describe('dictionaries', () => {
     for (const locale of LOCALES) {
       for (const [key, value] of Object.entries(DICTIONARIES[locale])) {
         expect(value.trim(), `${locale}: ${key}`).not.toBe('');
+      }
+    }
+  });
+
+  it('use the same {placeholders} in every language', () => {
+    const names = (text: string): string[] =>
+      [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1] ?? '');
+    for (const [key, value] of Object.entries(ru)) {
+      const reference = names(value).sort();
+      for (const locale of LOCALES) {
+        const text = DICTIONARIES[locale][key as keyof typeof ru];
+        expect(names(text).sort(), `${locale}: ${key}`).toEqual(reference);
       }
     }
   });
@@ -59,5 +80,19 @@ describe('t', () => {
     setLocale('ru');
     expect(window.localStorage.getItem('sbf.locale')).toBe('ru');
     expect(document.documentElement.lang).toBe('ru');
+  });
+});
+
+describe('tf', () => {
+  const initial = getLocale();
+  afterEach(() => {
+    setLocale(initial);
+  });
+
+  it('fills placeholders in the current language and keeps unknown ones', () => {
+    setLocale('en');
+    expect(tf('estimate.losses', { mine: 1, enemy: 2 })).toBe('Losses: yours 1, enemy 2');
+    setLocale('ru');
+    expect(tf('estimate.losses', { mine: 1 })).toBe('Потери: твои 1, вражеские {enemy}');
   });
 });

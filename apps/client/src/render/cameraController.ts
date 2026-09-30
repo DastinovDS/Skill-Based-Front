@@ -3,12 +3,15 @@ import {
   cameraLimits,
   clampCamera,
   fitCamera,
+  FIT_PADDING,
+  NO_INSETS,
   panBy,
   wheelZoomFactor,
   worldTransform,
   zoomAt,
   type Camera,
   type CameraLimits,
+  type Insets,
   type Point,
   type Size,
 } from './camera.ts';
@@ -37,6 +40,7 @@ export class CameraController {
   private camera: Camera;
   private limits: CameraLimits;
   private fitted = true;
+  private insets: Insets = NO_INSETS;
   private press: Press | null = null;
 
   constructor(
@@ -45,9 +49,11 @@ export class CameraController {
     private readonly worldSize: Size,
     private viewport: Size,
     private readonly onchange: (camera: Camera) => void,
+    insets: Insets = NO_INSETS,
   ) {
-    this.limits = cameraLimits(worldSize, viewport);
-    this.camera = fitCamera(worldSize, viewport);
+    this.insets = insets;
+    this.limits = cameraLimits(worldSize, viewport, FIT_PADDING, insets);
+    this.camera = fitCamera(worldSize, viewport, FIT_PADDING, insets);
     element.addEventListener('pointerdown', this.onPointerDown);
     element.addEventListener('pointermove', this.onPointerMove);
     element.addEventListener('pointerup', this.onPointerUp);
@@ -62,15 +68,24 @@ export class CameraController {
 
   fit(): void {
     this.fitted = true;
-    this.camera = fitCamera(this.worldSize, this.viewport);
+    this.camera = fitCamera(this.worldSize, this.viewport, FIT_PADDING, this.insets);
     this.apply();
+  }
+
+  /** The part of the viewport the HUD covers; "fit map" keeps the map out of it. */
+  setInsets(insets: Insets): void {
+    this.insets = insets;
+    this.limits = cameraLimits(this.worldSize, this.viewport, FIT_PADDING, insets);
+    if (this.fitted) {
+      this.fit();
+    }
   }
 
   resize(viewport: Size): void {
     this.viewport = viewport;
-    this.limits = cameraLimits(this.worldSize, viewport);
+    this.limits = cameraLimits(this.worldSize, viewport, FIT_PADDING, this.insets);
     this.camera = this.fitted
-      ? fitCamera(this.worldSize, viewport)
+      ? fitCamera(this.worldSize, viewport, FIT_PADDING, this.insets)
       : clampCamera(this.camera, this.limits);
     this.apply();
   }
