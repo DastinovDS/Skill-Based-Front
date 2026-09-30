@@ -5,9 +5,14 @@
  * nothing.
  */
 
-/** What is under the pointer: an own group (by id) or a node (by id). */
+/** What is under the pointer: an own group (by id), a node or a road (by id). */
 export type PickHit =
-  { readonly kind: 'group'; readonly id: string } | { readonly kind: 'node'; readonly id: number };
+  | { readonly kind: 'group'; readonly id: string }
+  | { readonly kind: 'node'; readonly id: number }
+  | { readonly kind: 'edge'; readonly id: number };
+
+/** What can be selected: a group or a node (a road is only hovered and clicked to upgrade it). */
+export type SelectionHit = Exclude<PickHit, { readonly kind: 'edge' }>;
 
 /** An order sent and not yet shown by a snapshot: a dashed arrow on the map. */
 export interface GhostArrow {
@@ -30,12 +35,19 @@ export interface MovePreview {
 }
 
 export interface OverlayState {
-  readonly selection: PickHit | null;
+  readonly selection: SelectionHit | null;
   readonly ghosts: readonly GhostArrow[];
   readonly preview: MovePreview | null;
+  /** The road under the pointer, lit up (a click upgrades it with a group selected). */
+  readonly road: number | null;
 }
 
-export const EMPTY_OVERLAY: OverlayState = { selection: null, ghosts: [], preview: null };
+export const EMPTY_OVERLAY: OverlayState = {
+  selection: null,
+  ghosts: [],
+  preview: null,
+  road: null,
+};
 
 export interface MapInteraction {
   /** Returns the same object while nothing changed: the scene redraws when it differs. */

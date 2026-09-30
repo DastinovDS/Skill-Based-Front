@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import { TOKEN_FULL } from './layout.ts';
-import { NODE_HIT_SLACK, pickAt } from './pick.ts';
+import { NODE_HIT_SLACK, pickAt, segmentDistance } from './pick.ts';
 import { NODE_RADIUS } from './style.ts';
 
 const map = DEFAULT_MAP;
@@ -30,5 +30,16 @@ describe('pickAt', () => {
     expect(pickAt(map, at, tokens)).toEqual({ kind: 'group', id: 'b' });
     const edge = { x: at.x - TOKEN_FULL.width / 2 - 1, y: at.y };
     expect(pickAt(map, edge, tokens)?.kind).not.toBe('group');
+  });
+
+  it('hits a road away from any city, and prefers the city near its end', () => {
+    const edge = map.edges[0];
+    const a = edge === undefined ? undefined : map.nodes[edge.a];
+    const b = edge === undefined ? undefined : map.nodes[edge.b];
+    if (edge === undefined || a === undefined || b === undefined) throw new Error('no roads');
+    const middle = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    expect(pickAt(map, middle, NONE)).toEqual({ kind: 'edge', id: edge.id });
+    expect(pickAt(map, { x: a.x, y: a.y }, NONE)).toEqual({ kind: 'node', id: a.id });
+    expect(segmentDistance(middle, a, b)).toBeCloseTo(0);
   });
 });

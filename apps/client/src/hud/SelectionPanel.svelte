@@ -1,21 +1,13 @@
 <script lang="ts">
-  import { t, tf, getLocale } from '../i18n/index.ts';
-  import { rejectMessageKey } from '../match/rejects.ts';
-  import type { OrderController } from '../match/orderController.ts';
+  import { t, tf } from '../i18n/index.ts';
   import ChargeDots from './ChargeDots.svelte';
-  import { formatCentis } from './format.ts';
   import type { HudData } from './hudData.ts';
 
   interface Props {
     data: HudData | null;
-    /** Mouse and keyboard ordering: selection itself happens by clicking the map. */
-    orders: OrderController;
   }
 
-  let { data, orders }: Props = $props();
-
-  const ui = $derived(orders.ui.current);
-  const cp = (centis: number): string => formatCentis(centis, getLocale());
+  let { data }: Props = $props();
 </script>
 
 <section class="panel">
@@ -92,50 +84,6 @@
       <p class="hint">{t(`detail.${n.detail}`)}</p>
     {/if}
 
-    <section class="orders" aria-label={t('orders.title')}>
-      <h3>{t('orders.title')}</h3>
-      {#if data.group === null}
-        <p class="hint">{t('orders.pickGroup')}</p>
-      {/if}
-      <label class="check">
-        <input
-          type="checkbox"
-          checked={ui.planned}
-          onchange={(event) => {
-            orders.setPlanned(event.currentTarget.checked);
-          }}
-        />
-        {t('orders.planned')}
-      </label>
-      {#if ui.preview !== null}
-        <p class="preview">
-          {tf(ui.preview.planned ? 'orders.previewPlanned' : 'orders.previewMove', {
-            node: ui.preview.node,
-            cost: cp(ui.preview.cost),
-          })}
-        </p>
-      {/if}
-      {#if data.group !== null}
-        <button
-          type="button"
-          onclick={() => {
-            orders.cancelSelected();
-          }}
-        >
-          {tf('orders.cancel', { cost: cp(orders.cancelCost) })}
-        </button>
-      {/if}
-      {#if ui.notice !== null}
-        <p class="notice" role="alert">
-          {#if ui.notice.kind === 'rejected'}
-            {tf('orders.rejected', { reason: t(rejectMessageKey(ui.notice.code)) })}
-          {:else}
-            {t('orders.lost')}
-          {/if}
-        </p>
-      {/if}
-    </section>
-
     {#if data.estimate !== null}
       {@const e = data.estimate.result}
       <section class="estimate" aria-label={t('estimate.title')}>
@@ -171,46 +119,6 @@
   h3 {
     margin: 0;
     font-size: 14px;
-  }
-
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .orders {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding-top: 4px;
-    border-top: 1px solid #30363d;
-  }
-
-  .preview {
-    font-weight: 600;
-  }
-
-  .notice {
-    padding: 4px 8px;
-    border: 1px solid #f85149;
-    border-radius: 4px;
-  }
-
-  button {
-    font: inherit;
-    color: inherit;
-    background: #21262d;
-    border: 1px solid #30363d;
-    border-radius: 4px;
-    padding: 2px 8px;
-    cursor: pointer;
-  }
-
-  .check {
-    flex-direction: row;
-    align-items: center;
-    gap: 6px;
   }
 
   dl {

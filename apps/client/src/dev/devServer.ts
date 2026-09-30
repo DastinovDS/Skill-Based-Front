@@ -1,9 +1,9 @@
 /**
- * Stand-in for the match server on the dev screen (CLI-06, #62), until SRV-03 (#48) exists. It
+ * Stand-in for the match server on the dev screen (CLI-06, #62; all commands: CLI-07, #63), until SRV-03 (#48) exists. It
  * speaks the real protocol through a fake socket, so the dev screen runs the same
  * `MatchConnection` as a live match: `welcome`, a snapshot 10 times a second (`devSnapshot`), an
- * `ack` a moment after each command. It answers `move` and `cancel_order` only, and is not a
- * rules engine: the orders it accepts stand in the snapshots and nothing moves. The path is a
+ * `ack` a moment after each command. It answers every command with simple stand-in checks (CP, ownership, a few reject
+ * codes) and is not a rules engine: accepted orders and modes stand in the snapshots, nothing moves. The path is a
  * breadth-first search on the map, good enough for a picture.
  */
 import { devEvent, devSnapshot, DEV_PLAYER } from '../hud/devFeed.ts';
@@ -14,7 +14,9 @@ import type {
   Command,
   MapFile,
   OrderView,
+  Mode,
   RulesetPublic,
+  Stance,
   SnapshotMsg,
 } from '../protocol.gen.ts';
 
@@ -54,6 +56,9 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
   let tick = 0;
   let spent = 0;
   let lastSeq = 0;
+  let stance: Stance = 'balance';
+  let socket: MockSocket | null = null;
+  const modes = new Map<string, Mode>();
   let timer: ReturnType<typeof setInterval> | undefined;
   const orders = new Map<string, OrderView>();
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
@@ -64,8 +69,20 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
       ...base,
       view: {
         ...base.view,
-        me: { ...base.view.me, cp: Math.max(0, base.view.me.cp - spent) },
-        groups: base.view.groups.map((g) => ({ ...g, order: orders.get(g.id) ?? null })),
+        me: { ...base.view.me, stance, cp: Math.max(0, base.view.me.cp - spent) },
+        edges: base.view.edges.map((e) => {
+          const ends = map.edges[e.id];
+          const inner = (n: number | undefined) =>
+            n !== undefined && base.view.nodes[n]?.owner === DEV_PLAYER;
+          return inner(ends?.a) && inner(ends?.b)
+            ? { ...e, upgrade_gain: { capacity_centi: 150, packet_speed_pct: 10 } }
+            : e;
+        }),
+        groups: base.view.groups.map((g) => ({
+          ...g,
+          mode: modes.get(g.id) ?? g.mode,
+          order: orders.get(g.id) ?? null,
+        })),
       },
     };
   }
@@ -96,7 +113,55 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
       orders.delete(cmd.group);
       return { code: null, path: null };
     }
-    return { code: 'INVALID_ARGUMENT', path: null };
+    return { code: judgeOther(cmd), path: null };
+  }
+
+  /** The rest of the commands: stand-in checks good for seeing accepts and rejects in the UI. */
+  function judgeOther(cmd: Command): string | null {
+    const charge = (cost: number): string | null => {
+      if (cost > current.view.me.cp) return 'NOT_ENOUGH_CP';
+      spent += cost;
+      return null;
+    };
+    const mine = (id: string) => current.view.groups.find((g) => g.id === id);
+    switch (cmd.type) {
+      case 'set_mode': {
+        const group = mine(cmd.group);
+        if (group === undefined) return 'NOT_FOUND_OR_HIDDEN';
+        if ((modes.get(group.id) ?? group.mode) === cmd.mode) return 'NO_CHANGE';
+        modes.set(group.id, cmd.mode);
+        return null;
+      }
+      case 'set_stance':
+        if (stance === cmd.stance) return 'NO_CHANGE';
+        stance = cmd.stance;
+        return charge(rules.cost.stance);
+      case 'recruit':
+        return current.view.nodes[cmd.node]?.owner === DEV_PLAYER
+          ? charge(rules.cost.recruit)
+          : 'NOT_OWNER';
+      case 'split': {
+        const group = mine(cmd.group);
+        if (group === undefined) return 'NOT_FOUND_OR_HIDDEN';
+        if (cmd.n < 1 || cmd.n >= group.units) return 'INVALID_ARGUMENT';
+        return charge(rules.cost.split);
+      }
+      case 'merge':
+        return cmd.groups.every((id) => mine(id) !== undefined)
+          ? charge(rules.cost.merge)
+          : 'NOT_FOUND_OR_HIDDEN';
+      case 'upgrade_road':
+        return current.view.edges[cmd.edge]?.upgrade_gain == null
+          ? 'NOT_INTERNAL'
+          : charge(rules.cost.build);
+      case 'forfeit':
+        setTimeout(() => {
+          socket?.reply({ type: 'match_end', tick, reason: 'forfeit', winner: 1, vp: [0, 0] });
+        }, 0);
+        return null;
+      default:
+        return 'INVALID_ARGUMENT';
+    }
   }
 
   class DevSocket extends MockSocket {
@@ -143,11 +208,12 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
 
   return {
     createSocket: (url) => {
-      const socket = new DevSocket(url);
+      const created = new DevSocket(url);
+      socket = created;
       setTimeout(() => {
-        socket.accept();
+        created.accept();
       }, 0);
-      return socket as unknown as WebSocket;
+      return created as unknown as WebSocket;
     },
     stop: () => {
       clearInterval(timer);
