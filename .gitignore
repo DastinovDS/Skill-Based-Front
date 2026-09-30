@@ -36,3 +36,6 @@ dist/
 .idea/
 .vscode/
 .DS_Store
+
+# Backups of deploy/backup.sh (BACKUP_DIR default)
+/backups/

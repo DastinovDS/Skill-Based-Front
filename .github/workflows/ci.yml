@@ -169,5 +169,7 @@ jobs:
           node-version-file: apps/client/package.json
           package-manager-cache: false
       - run: deploy/smoke.sh
+      # OPS-03 (#82): deploy, rollback of a broken release, backup and restore into a fresh volume.
+      - run: deploy/deploy-test.sh
       - if: always()
         run: docker compose down --volumes
