@@ -6,6 +6,8 @@ import type { RenderFrame } from '../net/interpolate.ts';
  * `SnapshotBuffer` and the event stream; the dev screen serves fixtures.
  */
 export interface RenderSource {
+  /** Ticks per second (`ruleset_public.tick_hz`), for the age of fog memories. Default 10. */
+  readonly tickHz?: number;
   /** The frame to draw now; `null` until the first snapshot. */
   frame(): RenderFrame | null;
   /**
