@@ -474,3 +474,6 @@ export interface MapMirrorFile {
     [k: string]: number;
   };
 }
+
+export const PROTOCOL_VERSION = 1;
+export const CLOSE_PROTOCOL_VERSION = 4001;

@@ -16,7 +16,7 @@
     "check:i18n": "vitest run src/i18n",
     "build": "vite build",
     "preview": "vite preview",
-    "gen:protocol": "json2ts -i ../../packages/protocol/protocol.schema.json -o src/protocol.gen.ts --maxItems=0 --no-format --bannerComment \"// Generated from packages/protocol/protocol.schema.json (gow_protocol), do not edit. Regenerate: uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol\" && prettier --write src/protocol.gen.ts"
+    "gen:protocol": "json2ts -i ../../packages/protocol/protocol.schema.json -o src/protocol.gen.ts --maxItems=0 --no-format --bannerComment \"// Generated from packages/protocol/protocol.schema.json (gow_protocol), do not edit. Regenerate: uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol\" && node scripts/protocol-consts.js && prettier --write src/protocol.gen.ts"
   },
   "dependencies": {
     "pixi.js": "^8.21.0"

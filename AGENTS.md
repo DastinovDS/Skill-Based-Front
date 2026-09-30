@@ -249,6 +249,8 @@ async def run(self) -> None:
   json-schema-to-typescript → `protocol.gen.ts` (команда в разделе 3). Там же тип файла карты `MapFile`
   (`gow_protocol.mapfile`), по которому клиент читает `GET /api/maps/{id}`.
 - Любое изменение протокола → повысь `PROTOCOL_VERSION`. Клиент со старой версией получает код закрытия 4001.
+  `PROTOCOL_VERSION` и `CLOSE_PROTOCOL_VERSION` попадают в клиент тем же путём: схема несёт их в `x-constants`,
+  `apps/client/scripts/protocol-consts.js` дописывает `export const` в конец `protocol.gen.ts`.
 - Кодек — в одном модуле (`codec`): JSON сейчас, msgpack позже заменой одного файла.
 - Протокольные модели и модели БД — разные классы.
 

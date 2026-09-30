@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, TypeAdapter
 
+from gow_protocol.messages import CLOSE_PROTOCOL_VERSION, PROTOCOL_VERSION
 from gow_protocol.schema import SCHEMA_PATH, WireJsonSchema, protocol_json_schema
 
 REGENERATE = "uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol"
@@ -28,6 +29,14 @@ def _members(schema: dict[str, Any], union: str) -> list[dict[str, Any]]:
 def test_committed_schema_is_current(schema: dict[str, Any]) -> None:
     committed: object = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     assert committed == schema, f"the schema is out of date, run: {REGENERATE}"
+
+
+def test_schema_carries_the_runtime_constants_of_the_client(schema: dict[str, Any]) -> None:
+    """The client's ``hello`` and its 4001 handling read these (CLI-01, #57)."""
+    assert schema["x-constants"] == {
+        "PROTOCOL_VERSION": PROTOCOL_VERSION,
+        "CLOSE_PROTOCOL_VERSION": CLOSE_PROTOCOL_VERSION,
+    }
 
 
 def test_roots_are_named_definitions(schema: dict[str, Any]) -> None:

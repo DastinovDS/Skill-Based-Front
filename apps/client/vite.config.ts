@@ -5,9 +5,17 @@ import { CSP } from './csp.ts';
 export default defineConfig({
   plugins: [svelte()],
   server: {
-    // The dev screen bundles map files from outside apps/client (src/map/bundledMaps.ts). Setting
+    // The dev screen bundles map files from outside apps/client (src/map/bundledMaps.ts), the tests
+    // read the protocol fixtures (jsdom tests go through the same check). Setting
     // `allow` replaces Vite's default (the client directory), so the client is listed too.
-    fs: { allow: ['.', '../../maps', '../../packages/sim/tests/maps'] },
+    fs: {
+      allow: [
+        '.',
+        '../../maps',
+        '../../packages/sim/tests/maps',
+        '../../packages/protocol/fixtures',
+      ],
+    },
   },
   // The production build is checked under the target CSP: `pnpm build && pnpm preview`.
   preview: {
