@@ -111,3 +111,22 @@ export const FOG_ROAD_EXTRA = 6;
 export const GHOST_ALPHA = 0.62;
 export const GHOST_AGE_FONT_SIZE = 10;
 export const GHOST_AGE_STROKE = { color: 0x0d1117, width: 3, join: 'round' } as const;
+
+// --- Selection and orders (CLI-06, #62) --------------------------------------------------------
+// The selection is a double outline (white inside a yellow one), so it reads without the hue.
+
+export const SELECT_COLOR = 0xffd33d;
+export const SELECT_RING_GAP = 6;
+export const SELECT_WIDTH = 3;
+/** Group selection: a rounded frame this far outside the token. */
+export const SELECT_TOKEN_GAP = 4;
+/** An order sent and not yet seen in a snapshot: dashed, see-through. */
+export const ORDER_GHOST_ALPHA = 0.85;
+export const ORDER_GHOST_WIDTH = 4;
+export const ORDER_GHOST_DASH = 7;
+export const ORDER_GHOST_GAP = 6;
+/** Where a click would send the group: a fine dotted line. */
+export const PREVIEW_ALPHA = 0.55;
+export const PREVIEW_DASH = 2;
+export const PREVIEW_GAP = 6;
+export const PREVIEW_WIDTH = 2;

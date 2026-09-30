@@ -4,6 +4,8 @@ import { getLocale, setLocale } from '../i18n/index.ts';
 import Hud from './Hud.svelte';
 import type { Insets } from '../render/camera.ts';
 import { DEV_PLAYER, DEV_RULES, devSnapshot } from './devFeed.ts';
+import { OrderBook } from '../match/orderBook.ts';
+import { OrderController } from '../match/orderController.ts';
 import { HudState } from './hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 
@@ -24,6 +26,13 @@ describe('Hud language switcher', () => {
     state = new HudState({ me: DEV_PLAYER, rules: DEV_RULES, map: DEFAULT_MAP }),
     oninsets?: (insets: Insets) => void,
   ): HTMLElement {
+    const orders = new OrderController({
+      hud: state,
+      map: DEFAULT_MAP,
+      rules: DEV_RULES,
+      book: new OrderBook(),
+      send: null,
+    });
     const target = document.body.appendChild(document.createElement('div'));
     hud = mount(Hud, {
       target,
@@ -35,6 +44,7 @@ describe('Hud language switcher', () => {
         sceneId: 'demo',
         fps: 60,
         hud: state,
+        orders,
         oninsets,
         onselectmap: () => undefined,
         onselectscene: () => undefined,

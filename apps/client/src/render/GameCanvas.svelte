@@ -3,6 +3,7 @@
   import { onMount, untrack } from 'svelte';
   import type { MapFile, PlayerId } from '../protocol.gen.ts';
   import { NO_INSETS, type Insets } from './camera.ts';
+  import type { MapInteraction } from './interaction.ts';
   import { MapScene } from './mapScene.ts';
   import type { RenderSource } from './source.ts';
   import { CANVAS_BACKGROUND } from './style.ts';
@@ -11,6 +12,8 @@
     map: MapFile;
     /** Frames and events to draw on the map; without it only the static map is shown. */
     source?: RenderSource | null;
+    /** Selection, ghost orders and preview to draw, and where clicks go. */
+    interaction?: MapInteraction | null;
     /** The viewing player (own groups and packets). Default 0. */
     player?: PlayerId;
     /** URL of the baked background PNG of the map, if it has one. */
@@ -21,7 +24,15 @@
     onfps?: (fps: number) => void;
   }
 
-  let { map, source = null, player = 0, backgroundUrl = null, onerror, onfps }: Props = $props();
+  let {
+    map,
+    source = null,
+    interaction = null,
+    player = 0,
+    backgroundUrl = null,
+    onerror,
+    onfps,
+  }: Props = $props();
 
   const FPS_REPORT_MS = 500;
 
@@ -55,6 +66,7 @@
       () =>
         new MapScene(current, next, insets, {
           source,
+          interaction,
           player,
           backgroundUrl,
           onsnapshot: (tick: number) => {
@@ -72,6 +84,10 @@
 
   $effect(() => {
     scene?.setSource(source);
+  });
+
+  $effect(() => {
+    scene?.setInteraction(interaction);
   });
 
   onMount(() => {

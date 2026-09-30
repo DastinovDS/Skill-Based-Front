@@ -125,6 +125,7 @@ export class EntityView {
   private eventCount = -1;
   private base: SnapshotMsg | null = null;
   private stamp = 0;
+  private points: ReadonlyMap<string, Point> = new Map();
 
   constructor(
     private readonly map: MapFile,
@@ -165,6 +166,11 @@ export class EntityView {
     }
   }
 
+  /** Drawn centres of the own group tokens by id (for hit testing and the selection frame). */
+  groupPoints(): ReadonlyMap<string, Point> {
+    return this.points;
+  }
+
   update(frame: RenderFrame, events: readonly EventMsg[]): void {
     if (frame.base !== this.base) {
       this.base = frame.base;
@@ -173,6 +179,7 @@ export class EntityView {
     this.updateEvents(events);
     this.stamp++;
     const points = this.updateGroups(frame.groups);
+    this.points = points;
     this.updatePackets(frame);
     this.drawOrders(frame.groups, points);
     this.updateFights(frame.tick);

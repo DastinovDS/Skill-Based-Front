@@ -1,14 +1,17 @@
 <script lang="ts">
-  import { DEV_PLAYER, DEV_RULES, startDevFeed } from './hud/devFeed.ts';
+  import { DEV_PLAYER, DEV_RULES } from './hud/devFeed.ts';
   import Hud from './hud/Hud.svelte';
   import { HudState } from './hud/hudState.svelte.ts';
-  import { DEMO_SCENE, FIXTURE_SCENES, demoSource, frozenSource } from './dev/scenarios.ts';
+  import { createDevMatch } from './dev/devMatch.ts';
+  import { DEMO_SCENE, FIXTURE_SCENES, frozenSource } from './dev/scenarios.ts';
+  import { OrderBook } from './match/orderBook.ts';
+  import { OrderController } from './match/orderController.ts';
   import { BUNDLED_MAPS, DEFAULT_MAP, backgroundUrl } from './map/bundledMaps.ts';
   import { NO_INSETS, type Insets } from './render/camera.ts';
   import GameCanvas from './render/GameCanvas.svelte';
 
   // Dev screen: a bundled map with the camera and a scene (a protocol fixture frozen at its tick,
-  // or a scripted demo that moves). The lobby and the match (CLI-06) replace it.
+  // or a live match against the dev server). The lobby replaces it.
   // `?scene=<id>` opens a scene right away (the Playwright reference screenshots use it).
   const requested = new URLSearchParams(window.location.search).get('scene');
   const fixtureScene = (id: string | null) => FIXTURE_SCENES.find((scene) => scene.id === id);
@@ -31,11 +34,80 @@
   });
 
   const map = $derived(BUNDLED_MAPS.find((m) => m.meta.name === mapName) ?? DEFAULT_MAP);
-  // A fixture belongs to its map; the demo runs on whichever map is picked.
-  const source = $derived.by(() => {
-    const scene = fixtureScene(sceneId);
-    return scene === undefined ? demoSource(map) : frozenSource(scene);
+  const fixture = $derived(fixtureScene(sceneId));
+
+  // The HUD numbers for the map on screen.
+  const hud = $derived(new HudState({ me: DEV_PLAYER, rules: DEV_RULES, map }));
+
+  // The demo scene is a live match against the dev server (until SRV-03); a fixture is a frozen
+  // snapshot. Either way the map and the HUD read the same snapshots.
+  const match = $derived(fixture === undefined ? createDevMatch(map, DEV_RULES, hud) : null);
+  const source = $derived(
+    match === null ? (fixture === undefined ? null : frozenSource(fixture)) : match.session,
+  );
+
+  $effect(() => {
+    const current = match;
+    if (current === null) {
+      return undefined;
+    }
+    current.start();
+    return () => {
+      current.stop();
+    };
   });
+
+  $effect(() => {
+    if (fixture !== undefined) {
+      hud.onSnapshot(fixture.snapshot);
+      for (const event of fixture.events) {
+        hud.onEvent(event);
+      }
+    }
+  });
+
+  // Clicks and keys on the map; orders go to the match, a fixture scene only selects.
+  const orders = $derived(
+    new OrderController({
+      hud,
+      map,
+      rules: DEV_RULES,
+      book: match?.session.orders ?? new OrderBook(),
+      send: match === null ? null : (cmd) => match.session.send(cmd),
+    }),
+  );
+
+  $effect(() => {
+    const current = orders;
+    return () => {
+      current.destroy();
+    };
+  });
+
+  const TEXT_INPUTS = new Set(['INPUT', 'SELECT', 'TEXTAREA']);
+
+  function handleKey(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+    const target = event.target;
+    const typing =
+      target instanceof HTMLElement &&
+      TEXT_INPUTS.has(target.tagName) &&
+      !(target instanceof HTMLInputElement && target.type === 'checkbox');
+    if (typing) {
+      return;
+    }
+    if (
+      orders.key({
+        type: event.type === 'keyup' ? 'keyup' : 'keydown',
+        code: event.code,
+        shiftKey: event.shiftKey,
+      })
+    ) {
+      event.preventDefault();
+    }
+  }
 
   function selectScene(id: string): void {
     sceneId = id;
@@ -53,32 +125,26 @@
     }
   }
 
-  // The HUD numbers for the map on screen, fed by the dev feed until the match connection (CLI-01).
-  const hud = $derived(new HudState({ me: DEV_PLAYER, rules: DEV_RULES, map }));
-
-  $effect(() => {
-    const current = hud;
-    return startDevFeed(map, DEV_RULES, {
-      onSnapshot: (snapshot) => {
-        current.onSnapshot(snapshot);
-      },
-      onEvent: (event) => {
-        current.onEvent(event);
-      },
-    });
-  });
-
   function handleRendererError(error: unknown): void {
     console.error(error);
     rendererFailed = true;
   }
 </script>
 
+<svelte:window
+  onkeydown={handleKey}
+  onkeyup={handleKey}
+  onblur={() => {
+    orders.key({ type: 'keyup', code: '', shiftKey: false });
+  }}
+/>
+
 <main class="app">
   <GameCanvas
     bind:this={canvas}
     {map}
     {source}
+    interaction={orders}
     backgroundUrl={backgroundUrl(map.meta.name)}
     onerror={handleRendererError}
     onfps={(value: number) => {
@@ -93,6 +159,7 @@
     {sceneId}
     {fps}
     {hud}
+    {orders}
     oninsets={(next: Insets) => {
       insets = next;
     }}

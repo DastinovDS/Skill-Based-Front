@@ -15,6 +15,8 @@ export default defineConfig({
         '../../packages/sim/tests/maps',
         '../../packages/protocol/fixtures',
         '../../packages/protocol/vectors',
+        // The reject codes test compares its list with the simulation's `RejectCode`.
+        '../../packages/sim/src/gow_sim',
       ],
     },
   },
