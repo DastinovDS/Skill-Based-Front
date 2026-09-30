@@ -3,6 +3,7 @@
   import type { OrderController } from '../match/orderController.ts';
   import type { Insets } from '../render/camera.ts';
   import EventLog from './EventLog.svelte';
+  import OrdersPanel from './OrdersPanel.svelte';
   import SelectionPanel from './SelectionPanel.svelte';
   import StatusBar from './StatusBar.svelte';
   import type { HudState } from './hudState.svelte.ts';
@@ -162,7 +163,8 @@
         </details>
         <p class="hint">{t('hud.fps')}: {Math.round(fps)}</p>
       </section>
-      <div class="section"><SelectionPanel data={hud.current} {orders} /></div>
+      <div class="section"><SelectionPanel data={hud.current} /></div>
+      <div class="section"><OrdersPanel data={hud.current} {orders} /></div>
       <div class="section"><EventLog data={hud.current} /></div>
     </aside>
   {/if}

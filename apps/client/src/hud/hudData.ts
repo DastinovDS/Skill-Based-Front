@@ -101,7 +101,7 @@ export interface EstimateInfo {
   readonly result: CombatEstimate;
 }
 
-/** One line of the pickers: the stand-in for clicking the map until selection on it (CLI-06). */
+/** An own group in short (which groups stand together, for merging). */
 export interface GroupChoice {
   readonly id: string;
   readonly units: number;
@@ -112,6 +112,15 @@ export interface GroupChoice {
 export interface NodeChoice {
   readonly id: number;
   readonly owner: Ownership;
+}
+
+/** What the next level of a road would give, from `EdgeView.upgrade_gain` (the server's numbers). */
+export interface RoadInfo {
+  readonly id: number;
+  /** Hundredths of capacity added to each end city; `null`: the road cannot be upgraded. */
+  readonly capacityCenti: number | null;
+  /** Percentage points of packet speed. */
+  readonly packetSpeedPct: number | null;
 }
 
 export interface HudData {
@@ -127,6 +136,7 @@ export interface HudData {
   readonly estimate: EstimateInfo | null;
   readonly groups: readonly GroupChoice[];
   readonly nodes: readonly NodeChoice[];
+  readonly roads: readonly RoadInfo[];
   /** Newest first. */
   readonly events: readonly HudEvent[];
 }
@@ -287,6 +297,11 @@ export function buildHudData(
       node: g.location.kind === 'node' ? g.location.node : null,
     })),
     nodes: view.nodes.map((n) => ({ id: n.id, owner: ownership(n.owner, me) })),
+    roads: view.edges.map((e) => ({
+      id: e.id,
+      capacityCenti: e.upgrade_gain?.capacity_centi ?? null,
+      packetSpeedPct: e.upgrade_gain?.packet_speed_pct ?? null,
+    })),
     events,
   };
 }

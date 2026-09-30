@@ -130,3 +130,6 @@ export const PREVIEW_ALPHA = 0.55;
 export const PREVIEW_DASH = 2;
 export const PREVIEW_GAP = 6;
 export const PREVIEW_WIDTH = 2;
+/** The road under the pointer: a translucent band wider than the road itself. */
+export const ROAD_LIGHT_ALPHA = 0.45;
+export const ROAD_LIGHT_EXTRA = 8;

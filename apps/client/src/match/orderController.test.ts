@@ -149,4 +149,65 @@ describe('OrderController', () => {
     expect(sent).toHaveLength(1); // nothing selected: nothing to cancel
     expect(controller.key({ type: 'keydown', code: 'KeyQ', shiftKey: false })).toBe(false);
   });
+
+  it('sends the other commands as intents', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.setMode('build');
+    controller.split(1);
+    controller.upgradeRoad(3);
+    controller.recruit();
+    controller.setStance('economy');
+    controller.forfeit();
+    expect(sent).toEqual([
+      { type: 'set_mode', group: group.id, mode: 'build' },
+      { type: 'split', group: group.id, n: 1 },
+      { type: 'upgrade_road', group: group.id, edge: 3 },
+      { type: 'recruit', node: home },
+      { type: 'set_stance', stance: 'economy' },
+      { type: 'forfeit' },
+    ]);
+  });
+
+  it('merges the selected group with the own groups in its node', () => {
+    const { controller, sent, hud } = setup();
+    const twin = { ...group, id: 'twin' };
+    hud.onSnapshot({ ...snapshot, view: { ...snapshot.view, groups: [group, twin] } });
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.mergeCandidates()).toEqual([group.id, 'twin']);
+    controller.merge();
+    expect(sent).toEqual([{ type: 'merge', groups: [group.id, 'twin'] }]);
+  });
+
+  it('keys 1-3 set the mode and R recruits', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    for (const code of ['Digit1', 'Digit2', 'Digit3', 'KeyR']) {
+      expect(controller.key({ type: 'keydown', code, shiftKey: false })).toBe(true);
+    }
+    expect(sent.map((c) => c.type)).toEqual(['set_mode', 'set_mode', 'set_mode', 'recruit']);
+  });
+
+  it('clicking a road upgrades it only with a group selected; hovering shows the gain', () => {
+    const { controller, sent, hud } = setup();
+    const edges = snapshot.view.edges.map((e, i) =>
+      i === 2 ? { ...e, upgrade_gain: { capacity_centi: 150, packet_speed_pct: 10 } } : e,
+    );
+    hud.onSnapshot({ ...snapshot, view: { ...snapshot.view, edges } });
+    controller.click({ kind: 'edge', id: 2 }, false);
+    expect(sent).toEqual([]);
+    controller.hover({ kind: 'edge', id: 2 });
+    expect(controller.ui.current.road).toEqual({
+      edge: 2,
+      capacityCenti: 150,
+      packetSpeedPct: 10,
+      cost: DEV_RULES.cost.build,
+    });
+    expect(controller.overlay().road).toBe(2);
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'edge', id: 2 }, false);
+    expect(sent).toEqual([{ type: 'upgrade_road', group: group.id, edge: 2 }]);
+    controller.hover({ kind: 'edge', id: 1 });
+    expect(controller.ui.current.road).toBeNull();
+  });
 });

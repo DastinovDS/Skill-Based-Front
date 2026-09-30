@@ -1,15 +1,28 @@
 import type { MapFile } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
-import { TOKEN_FULL, nodePoint } from './layout.ts';
+import { TOKEN_FULL, edgeEnds, nodePoint } from './layout.ts';
 import type { PickHit } from './interaction.ts';
 import { CAPITAL_RADIUS, NODE_RADIUS } from './style.ts';
 
 /** A click this far outside a city circle still hits it (world units): cities are small on screen. */
 export const NODE_HIT_SLACK = 8;
 
+/** A road is hit this close to its centre line (world units). */
+export const EDGE_HIT = 9;
+
+/** Distance from `p` to the segment `a`-`b`. */
+export function segmentDistance(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const length2 = dx * dx + dy * dy;
+  const t =
+    length2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
 /**
  * What a click at `world` hits: an own group token first (the topmost, i.e. the last drawn), then
- * the nearest city circle. `groups` are the drawn token centres by id. Pure: the order of the
+ * the nearest city circle, then the nearest road. `groups` are the drawn token centres by id. Pure: the order of the
  * checks is the only rule.
  */
 export function pickAt(
@@ -40,5 +53,18 @@ export function pickAt(
       bestDistance = distance;
     }
   }
-  return best === null ? null : { kind: 'node', id: best };
+  if (best !== null) return { kind: 'node', id: best };
+
+  let road: number | null = null;
+  let roadDistance = EDGE_HIT;
+  for (const edge of map.edges) {
+    const ends = edgeEnds(map, edge.id);
+    if (ends === undefined) continue;
+    const distance = segmentDistance(world, ends.a, ends.b);
+    if (distance <= roadDistance) {
+      road = edge.id;
+      roadDistance = distance;
+    }
+  }
+  return road === null ? null : { kind: 'edge', id: road };
 }

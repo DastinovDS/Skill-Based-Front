@@ -3,7 +3,7 @@ import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { EMPTY_OVERLAY, type GhostArrow, type OverlayState } from './interaction.ts';
 import type { MapLayers } from './layers.ts';
-import { TOKEN_FULL, arrowGeometry, dashSegments, nodePoint } from './layout.ts';
+import { TOKEN_FULL, arrowGeometry, dashSegments, edgeEnds, nodePoint } from './layout.ts';
 import {
   ARROW_HEAD,
   ARROW_OUTLINE,
@@ -18,6 +18,9 @@ import {
   PREVIEW_DASH,
   PREVIEW_GAP,
   PREVIEW_WIDTH,
+  ROAD_LIGHT_ALPHA,
+  ROAD_LIGHT_EXTRA,
+  roadThickness,
   SELECT_COLOR,
   SELECT_RING_GAP,
   SELECT_TOKEN_GAP,
@@ -97,6 +100,17 @@ export class OverlayView {
   private drawLines(state: OverlayState): void {
     const g = this.lines;
     g.clear();
+    const road = state.road === null ? undefined : edgeEnds(this.map, state.road);
+    if (road !== undefined && state.road !== null) {
+      const width = this.map.edges[state.road]?.base_width ?? 1;
+      g.moveTo(road.a.x, road.a.y).lineTo(road.b.x, road.b.y);
+      g.stroke({
+        width: roadThickness(width) + ROAD_LIGHT_EXTRA,
+        color: SELECT_COLOR,
+        alpha: ROAD_LIGHT_ALPHA,
+        cap: 'round',
+      });
+    }
     for (const ghost of state.ghosts) this.drawGhost(g, ghost);
     const preview = state.preview;
     if (preview !== null) {

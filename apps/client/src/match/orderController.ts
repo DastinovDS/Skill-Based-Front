@@ -1,6 +1,6 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AttackTarget } from '../hud/hudData.ts';
-import type { Command, MapFile, RulesetPublic } from '../protocol.gen.ts';
+import type { Command, MapFile, Mode, RulesetPublic, Stance } from '../protocol.gen.ts';
 import {
   EMPTY_OVERLAY,
   type MapInteraction,
@@ -8,11 +8,14 @@ import {
   type PickHit,
 } from '../render/interaction.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
-import { OrderUiState } from './orderUi.svelte.ts';
+import { OrderUiState, type RoadHint } from './orderUi.svelte.ts';
 import { moveCost } from './rejects.ts';
 
-/** How long a rejection stays in the panel, ms. */
+/** How long an answer stays in the panel, ms. */
 export const NOTICE_MS = 6000;
+
+/** The protocol's ceiling for one `merge` (`MergeCmd.groups`). */
+const MAX_MERGE = 16;
 
 export interface OrderControllerOptions {
   hud: HudState;
@@ -41,7 +44,12 @@ function aimKey(aim: AttackTarget | null): string {
  * whether they are allowed, the path and the price charged are the server's call. The price shown
  * in the preview is read from the ruleset of `welcome`.
  *
- * Keys: Esc deselects, P toggles the planned switch, X cancels the order of the selected group.
+ * The other commands (CLI-07, #63) are methods the panel and the keys call: modes, split, merge,
+ * recruit, stance, forfeit; a click on a road with a group selected upgrades the road. Each goes
+ * out as an intent and comes back as `accepted` or `rejected` in `ui.current.notice`.
+ *
+ * Keys: Esc deselects, P toggles the planned switch, X cancels the order of the selected group,
+ * 1 / 2 / 3 set the mode (attack / defense / build), R recruits in the selected city.
  */
 export class OrderController implements MapInteraction {
   readonly ui = new OrderUiState();
@@ -78,6 +86,16 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.cost.cancel;
   }
 
+  /** Price of recruiting, hundredths of CP. */
+  get recruitCost(): number {
+    return this.#o.rules.cost.recruit;
+  }
+
+  /** Price of a stance change, hundredths of CP. */
+  get stanceCost(): number {
+    return this.#o.rules.cost.stance;
+  }
+
   setPlanned(planned: boolean): void {
     this.ui.patch({ planned });
     this.#refresh();
@@ -90,7 +108,8 @@ export class OrderController implements MapInteraction {
     const ghosts = this.#o.book.ghosts();
     const preview = this.#previewTarget();
     const from = this.#selectedGroup()?.node ?? null;
-    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}`;
+    const road = this.#hover?.kind === 'edge' ? this.#hover.id : null;
+    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(road)}`;
     if (key !== this.#overlayKey || ghosts !== this.#overlayGhosts) {
       this.#overlayKey = key;
       this.#overlayGhosts = ghosts;
@@ -99,6 +118,7 @@ export class OrderController implements MapInteraction {
         ghosts,
         preview:
           from !== null && preview !== null ? { from, to: preview, planned: this.planned } : null,
+        road,
       };
     }
     return this.#overlay;
@@ -111,8 +131,12 @@ export class OrderController implements MapInteraction {
       return;
     }
     const group = this.#selectedGroup();
+    if (hit.kind === 'edge') {
+      // A road is for upgrading: with no group to do it, the click does nothing.
+      if (group !== null) this.upgradeRoad(hit.id);
+      return;
+    }
     if (hit.kind === 'node' && group !== null && this.#o.send !== null && group.node !== hit.id) {
-      this.#clearNotice();
       this.#sendCommand(
         { type: 'move', group: group.id, dest: hit.id, planned: this.planned },
         group.node,
@@ -139,9 +163,66 @@ export class OrderController implements MapInteraction {
   /** Cancel the order of the selected group (the server accepts it for a planned order only). */
   cancelSelected(): void {
     const group = this.#selectedGroup();
-    if (group === null || this.#o.send === null) return;
-    this.#clearNotice();
+    if (group === null) return;
     this.#sendCommand({ type: 'cancel_order', group: group.id }, null);
+  }
+
+  /** Switch the mode of the selected group (attack / defense / build). */
+  setMode(mode: Mode): void {
+    const group = this.#selectedGroup();
+    if (group === null) return;
+    this.#sendCommand({ type: 'set_mode', group: group.id, mode }, null);
+  }
+
+  /** Split `n` units off the selected group into a new group. */
+  split(n: number): void {
+    const group = this.#selectedGroup();
+    if (group === null || !Number.isInteger(n)) return;
+    this.#sendCommand({ type: 'split', group: group.id, n }, null);
+  }
+
+  /** Own groups standing in the node of the selected group (the selected one first). */
+  mergeCandidates(): string[] {
+    const data = this.#o.hud.current;
+    const group = data?.group ?? null;
+    if (data === null || group?.node == null) return [];
+    const here = data.groups.filter((g) => g.node === group.node && g.id !== group.id);
+    return [group.id, ...here.map((g) => g.id)].slice(0, MAX_MERGE);
+  }
+
+  /** Merge every own group standing with the selected one; needs at least two. */
+  merge(): void {
+    const [first, second, ...rest] = this.mergeCandidates();
+    if (first === undefined || second === undefined) return;
+    this.#sendCommand({ type: 'merge', groups: [first, second, ...rest] }, null);
+  }
+
+  /** The city to recruit in: the selected node, or the node the selected group stands in. */
+  recruitNode(): number | null {
+    const selection = this.#o.hud.selection;
+    if (selection?.kind === 'node') return selection.id;
+    return this.#selectedGroup()?.node ?? null;
+  }
+
+  recruit(): void {
+    const node = this.recruitNode();
+    if (node === null) return;
+    this.#sendCommand({ type: 'recruit', node }, null);
+  }
+
+  /** Start building on `edge` with the selected group (it must stand at an end of the road). */
+  upgradeRoad(edge: number): void {
+    const group = this.#selectedGroup();
+    if (group === null) return;
+    this.#sendCommand({ type: 'upgrade_road', group: group.id, edge }, null);
+  }
+
+  setStance(stance: Stance): void {
+    this.#sendCommand({ type: 'set_stance', stance }, null);
+  }
+
+  forfeit(): void {
+    this.#sendCommand({ type: 'forfeit' }, null);
   }
 
   /** Returns true if the key was used (the caller then prevents the browser default). */
@@ -160,6 +241,15 @@ export class OrderController implements MapInteraction {
       case 'KeyX':
         this.cancelSelected();
         return true;
+      case 'Digit1':
+        return this.#modeKey('attack');
+      case 'Digit2':
+        return this.#modeKey('defense');
+      case 'Digit3':
+        return this.#modeKey('build');
+      case 'KeyR':
+        this.recruit();
+        return true;
       default:
         return false;
     }
@@ -167,9 +257,16 @@ export class OrderController implements MapInteraction {
 
   // --- Internals ----------------------------------------------------------------------------
 
+  #modeKey(mode: Mode): boolean {
+    this.setMode(mode);
+    return true;
+  }
+
+  /** Sends an intent and starts waiting for its `ack`; a new command clears the old notice. */
   #sendCommand(cmd: Command, from: number | null): void {
     const send = this.#o.send;
     if (send === null) return;
+    this.#clearNotice();
     this.#o.book.track(send(cmd), cmd, from);
   }
 
@@ -195,6 +292,11 @@ export class OrderController implements MapInteraction {
       this.ui.patch({ preview: { node, planned, cost: moveCost(this.#o.rules, planned) } });
     }
 
+    // The upgrade hint follows the pointer over a road that has one.
+    const hover = this.#hover;
+    const road = hover?.kind === 'edge' ? this.#roadHint(hover.id) : null;
+    if (road?.edge !== this.ui.current.road?.edge) this.ui.patch({ road });
+
     // The combat estimate follows the pointer over enemy nodes.
     const isEnemy = (id: number): boolean =>
       this.#o.hud.current?.nodes.some((n) => n.id === id && n.owner === 'enemy') ?? false;
@@ -205,14 +307,27 @@ export class OrderController implements MapInteraction {
     }
   }
 
+  #roadHint(edge: number): RoadHint | null {
+    const road = this.#o.hud.current?.roads[edge];
+    if (road === undefined || road.capacityCenti === null) return null;
+    return {
+      edge,
+      capacityCenti: road.capacityCenti,
+      packetSpeedPct: road.packetSpeedPct,
+      cost: this.#o.rules.cost.build,
+    };
+  }
+
   #onResult(result: CommandResult): void {
-    if (result.kind === 'accepted') return;
+    // A move shows itself on the map (ghost, then the order line): no message for its success.
+    if (result.kind === 'accepted' && result.cmd.type === 'move') return;
     this.#noticeId += 1;
+    const id = this.#noticeId;
     this.ui.patch({
       notice:
         result.kind === 'rejected'
-          ? { id: this.#noticeId, kind: 'rejected', code: result.code, cmd: result.cmd }
-          : { id: this.#noticeId, kind: 'lost', cmd: result.cmd },
+          ? { id, kind: 'rejected', code: result.code, cmd: result.cmd }
+          : { id, kind: result.kind, cmd: result.cmd },
     });
     clearTimeout(this.#noticeTimer);
     this.#noticeTimer = setTimeout(() => {

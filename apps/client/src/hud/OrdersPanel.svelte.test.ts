@@ -7,14 +7,14 @@ import { OrderController } from '../match/orderController.ts';
 import type { Command } from '../protocol.gen.ts';
 import { DEV_RULES, devSnapshot } from './devFeed.ts';
 import { HudState } from './hudState.svelte.ts';
-import SelectionPanel from './SelectionPanel.svelte';
+import OrdersPanel from './OrdersPanel.svelte';
 
 const snapshot = devSnapshot(DEFAULT_MAP, DEV_RULES, 30);
 const group = snapshot.view.groups[0];
 const enemy = snapshot.view.nodes.find((n) => n.owner === 1 && n.detail === 'exact');
 if (group === undefined || enemy === undefined) throw new Error('the dev snapshot is too small');
 
-describe('SelectionPanel ordering', () => {
+describe('OrdersPanel', () => {
   const initial = getLocale();
   let mounted: Record<string, unknown> | undefined;
 
@@ -38,7 +38,7 @@ describe('SelectionPanel ordering', () => {
       send: (cmd) => sent.push(cmd),
     });
     const target = document.body.appendChild(document.createElement('div'));
-    mounted = mount(SelectionPanel, {
+    mounted = mount(OrdersPanel, {
       target,
       props: {
         get data() {
@@ -94,5 +94,50 @@ describe('SelectionPanel ordering', () => {
     expect(orders.ui.current.planned).toBe(true);
     orders.click({ kind: 'node', id: enemy.id }, false);
     expect(sent[0]).toMatchObject({ type: 'move', planned: true });
+  });
+
+  const button = (target: HTMLElement, label: string) =>
+    [...target.querySelectorAll('button')].find((b) => b.textContent.includes(label));
+
+  it('sends mode, split, stance and recruit from the buttons', () => {
+    setLocale('en');
+    const { target, orders, sent } = render();
+    orders.click({ kind: 'group', id: group.id }, false);
+    flushSync();
+    button(target, 'Defense')?.click();
+    button(target, 'Split off')?.click();
+    button(target, 'War')?.click();
+    button(target, 'Recruit here')?.click();
+    expect(sent).toEqual([
+      { type: 'set_mode', group: group.id, mode: 'defense' },
+      { type: 'split', group: group.id, n: 1 },
+      { type: 'set_stance', stance: 'war' },
+      { type: 'recruit', node: group.location.kind === 'node' ? group.location.node : -1 },
+    ]);
+  });
+
+  it('asks before forfeiting and sends it only after the confirmation', () => {
+    setLocale('en');
+    const { target, sent } = render();
+    button(target, 'Forfeit')?.click();
+    flushSync();
+    expect(sent).toEqual([]);
+    button(target, 'Keep playing')?.click();
+    flushSync();
+    expect(button(target, 'Yes, forfeit')).toBeUndefined();
+    button(target, 'Forfeit')?.click();
+    flushSync();
+    button(target, 'Yes, forfeit')?.click();
+    expect(sent).toEqual([{ type: 'forfeit' }]);
+  });
+
+  it('shows the accepted answer of a command', () => {
+    setLocale('en');
+    const { target, orders, book } = render();
+    orders.click({ kind: 'group', id: group.id }, false);
+    orders.setMode('defense');
+    book.onAck({ type: 'ack', seq: 1, applied_tick: 31, path: null, reject_code: null });
+    flushSync();
+    expect(target.querySelector('[role="alert"]')?.textContent).toContain('Accepted: mode change');
   });
 });

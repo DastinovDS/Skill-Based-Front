@@ -23,6 +23,7 @@ describe('OverlayView', () => {
       selection: null,
       ghosts: [{ from: a.id, dest: b.id, planned: false, path: null }],
       preview: null,
+      road: null,
     };
     view.update(state, none);
     const bounds = layers.layer.intents.getLocalBounds();
@@ -40,6 +41,7 @@ describe('OverlayView', () => {
         selection: null,
         ghosts: [{ from: a.id, dest: b.id, planned: false, path: [a.id, via.id, b.id] }],
         preview: null,
+        road: null,
       },
       none,
     );
@@ -55,6 +57,7 @@ describe('OverlayView', () => {
       selection: { kind: 'group', id: 'g' },
       ghosts: [],
       preview: null,
+      road: null,
     };
     const frame = layers.layer.intents.children[2];
     view.update(state, () => ({ x: 50, y: 60 }));
