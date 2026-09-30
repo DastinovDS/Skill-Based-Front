@@ -1,4 +1,4 @@
-"""Command line: `gow-maps validate`, `gow-maps mirror`, `gow-maps preview`."""
+"""Command line: `gow-maps validate`, `gow-maps mirror`, `gow-maps preview`, `gow-maps bake`."""
 
 import argparse
 import glob
@@ -6,6 +6,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from gow_maps.bake import background_path, bake_background
 from gow_maps.mirror import HalfFormatError, mirror_file
 from gow_maps.preview import preview_path, render_preview
 from gow_maps.validate import Issue, load_config, validate_file
@@ -70,6 +71,21 @@ def _preview(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def _bake(args: argparse.Namespace) -> int:
+    ok = True
+    for path in _expand(args.files):
+        try:
+            mapdef = load_map(path)
+            out = background_path(path)
+            bake_background(mapdef, out, args.seed)
+        except (MapFormatError, ValueError) as exc:
+            print(f"FAIL {path}\n  {exc}")
+            ok = False
+            continue
+        print(f"wrote {out} ({out.stat().st_size} bytes)")
+    return 0 if ok else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="gow-maps", description="Offline map tools.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -85,6 +101,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     preview = commands.add_parser("preview", help="draw maps/<id>.preview.png next to each map")
     preview.add_argument("files", nargs="+", help="map JSON files (glob patterns allowed)")
     preview.set_defaults(handler=_preview)
+    bake = commands.add_parser("bake", help="draw the background maps/<id>.bg.png of each map")
+    bake.add_argument("files", nargs="+", help="map JSON files (glob patterns allowed)")
+    bake.add_argument(
+        "--seed", type=int, help="noise seed (default: derived from the map name and version)"
+    )
+    bake.set_defaults(handler=_bake)
     args = parser.parse_args(argv)
     handler = args.handler
     return int(handler(args))

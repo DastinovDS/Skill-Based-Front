@@ -1,7 +1,7 @@
 [project]
 name = "gow-maps"
 version = "0.1.0"
-description = "Offline map tools: validator, mirroring script, previews."
+description = "Offline map tools: validator, mirroring script, previews, backgrounds."
 requires-python = ">=3.12"
 dependencies = [
     "gow-sim",
