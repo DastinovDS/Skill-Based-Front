@@ -47,6 +47,9 @@ jobs:
               - '.github/workflows/ci.yml'
             web:
               - 'apps/client/**'
+              # The client bundles these map files (apps/client/src/map/bundledMaps.ts).
+              - 'maps/**'
+              - 'packages/sim/tests/maps/**'
               - 'packages/protocol/**'
               - 'scripts/**'
               - '.github/workflows/ci.yml'
