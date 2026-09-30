@@ -1,0 +1,13 @@
+{
+  "meta": {"name": "diamond", "version": 1, "width": 400, "height": 400},
+  "nodes": [
+    {"id": "capital", "x": 100, "y": 200, "terrain": "mountains", "vp": 1, "base_capacity": 4, "capital_of": 0, "start_owner": 0, "start_units": 3, "start_charged": 3, "start_stock": 4},
+    {"id": "north", "x": 200, "y": 100, "terrain": "forest", "vp": 2, "base_capacity": 2, "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0}
+  ],
+  "edges": [
+    {"a": "capital", "b": "north", "base_width": 1, "max_width": 3, "travel_ticks": 42}
+  ],
+  "cross_edges": [
+    {"a": "capital", "b": "north", "base_width": 1, "max_width": 3, "travel_ticks": 42}
+  ]
+}
