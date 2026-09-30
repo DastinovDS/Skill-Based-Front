@@ -33,6 +33,12 @@ from gow_sim.systems.build import interrupt_build, start_build
 from gow_sim.systems.capacity import is_internal
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
 from gow_sim.systems.movement import find_path
+from gow_sim.systems.recruit import (
+    free_capacity,
+    recruit_allowed_here,
+    recruit_cooldown_left,
+    recruit_unit,
+)
 from gow_sim.systems.vision import compute_vision, is_visible
 
 __all__ = [
@@ -173,6 +179,12 @@ class RejectCode(StrEnum):
     """The command would leave everything as it is (same mode, stance, road; already forfeited)."""
     STANCE_COOLDOWN = "STANCE_COOLDOWN"
     NOTHING_TO_CANCEL = "NOTHING_TO_CANCEL"
+    NOT_CAPITAL = "NOT_CAPITAL"
+    """``recruit.location = capital``: recruiting only in the own capital (DEC-01)."""
+    CITY_FULL = "CITY_FULL"
+    """No free capacity for one more unit in the city (DEC-01)."""
+    RECRUIT_COOLDOWN = "RECRUIT_COOLDOWN"
+    """The city recruited less than ``recruit.cooldown_ticks`` ago (DEC-01)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -333,7 +345,12 @@ def _check(
                 return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
             if state.nodes[node].owner != player:
                 return Reject(RejectCode.NOT_OWNER)
-            # TODO(#28): recruit.location, free capacity and RECRUIT_COOLDOWN (DEC-01).
+            if not recruit_allowed_here(state, rules, player, node):
+                return Reject(RejectCode.NOT_CAPITAL)
+            if free_capacity(state, rules, player, node) <= 0:
+                return Reject(RejectCode.CITY_FULL)
+            if recruit_cooldown_left(state, rules, node) > 0:
+                return Reject(RejectCode.RECRUIT_COOLDOWN)
             return ()
         case CancelOrder(group=gid):
             group = _own_group(state, player, gid, seen)
@@ -464,9 +481,7 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             # TODO(#26): the public BUILD intent (DEC-04: builds are public like planned orders).
             return []
         case Recruit(node=node):
-            new = state.new_id()
-            state.groups[new] = Group(new, player, 1, 0, Mode.ATTACK, AtNode(node))
-            return [event(tick, "recruited", player=player, node=node, group=new)]
+            return recruit_unit(state, player, node)
         case CancelOrder(group=gid):
             state.groups[gid].order = None
             return []
