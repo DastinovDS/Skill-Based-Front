@@ -201,6 +201,10 @@
 `units`); две отскакивающие группы не встречаются. Id стартовых групп выдаются по
 `node_key(player, node)`, поэтому тай-брейк по id внутри игрока зеркален. Тесты: каждая строка
 таблицы через настоящие `movement` и `combat` на закреплённом `packages/sim/tests/rulesets/dec07.toml`.
+Сценарий «осада на истощение» (`packages/sim/tests/scenarios/test_siege_scenario.py`, карта
+`packages/sim/tests/maps/siege.json`, закреплённый `packages/sim/tests/rulesets/siege.toml`): волны
+равных сил по городу с перерезанными дорогами (склад 3, 2 защитника) берут его ровно на 4-й волне
+(расчёт в описании теста), при открытых дорогах город держит 10 волн без потерь.
 
 Формат `combat.json`: `packages/protocol/vectors/README.md`. Модификаторы рельефа в `rulesets/mvp-0.toml`: `terrain.defense_mod`; бонусы плана и «Защиты»: DEC-08, раздел 5.
 
