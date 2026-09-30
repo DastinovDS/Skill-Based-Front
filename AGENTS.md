@@ -89,6 +89,8 @@ legacy/                            — архив прототипа, не тр�
 | `uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-0.toml` | турнир ботов | BOT-04 |
 | `uv run gow-bots report docs/balance/latest.jsonl` | отчёт баланса | BOT-05 |
 | `uv run gow-server --reload` | сервер локально | SRV-01 |
+| `uv run alembic -c apps/server/alembic.ini upgrade head` | применить миграции БД (сервер делает это и сам при старте) | DB-01 |
+| `uv run alembic -c apps/server/alembic.ini revision --autogenerate -m "<что>"` | новая миграция из моделей `gow_server.models` | DB-01 |
 
 Если команда из этой таблицы не работает после своего issue — это баг: почини её или обнови таблицу в том же PR.
 

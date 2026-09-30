@@ -26,8 +26,8 @@ def maps_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def settings(maps_dir: Path) -> Settings:
-    return Settings(maps_dir=maps_dir)
+def settings(maps_dir: Path, tmp_path: Path) -> Settings:
+    return Settings(maps_dir=maps_dir, database_url=f"sqlite:///{tmp_path / 'gow.db'}")
 
 
 @pytest.fixture
