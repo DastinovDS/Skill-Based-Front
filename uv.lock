@@ -193,6 +193,16 @@ requires-dist = [
 name = "gow-protocol"
 version = "0.1.0"
 source = { editable = "packages/protocol" }
+dependencies = [
+    { name = "gow-sim" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "gow-sim", editable = "packages/sim" },
+    { name = "pydantic", specifier = ">=2.13" },
+]
 
 [[package]]
 name = "gow-server"

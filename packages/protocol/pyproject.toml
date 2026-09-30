@@ -3,7 +3,13 @@ name = "gow-protocol"
 version = "0.1.0"
 description = "Client-server message models, fixtures and test vectors."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "gow-sim",
+    "pydantic>=2.13",
+]
+
+[tool.uv.sources]
+gow-sim = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]

@@ -1,0 +1,43 @@
+{
+  "type": "snapshot",
+  "tick": 300,
+  "view": {
+    "me": { "cp": 500, "stance": "war" },
+    "vp": [4, 6],
+    "nodes": [
+      {
+        "id": 0, "owner": 0, "capacity": 4, "detail": "exact", "warehouse": 4,
+        "seen": { "tick": 300, "level": "exact", "enemy_modes": [], "enemy_units": 0, "enemy_charged": 0 }
+      },
+      {
+        "id": 1, "owner": 1, "capacity": 2, "detail": "presence", "warehouse": null,
+        "seen": { "tick": 300, "level": "presence", "enemy_modes": ["attack"], "enemy_units": null, "enemy_charged": null }
+      },
+      {
+        "id": 2, "owner": 1, "capacity": 4, "detail": "fog", "warehouse": null,
+        "seen": { "tick": 90, "level": "presence", "enemy_modes": ["defense"], "enemy_units": null, "enemy_charged": null }
+      }
+    ],
+    "edges": [
+      {
+        "id": 0, "width": 1, "detail": "presence", "upgrade_gain": null,
+        "seen": { "tick": 300, "level": "presence", "enemy_modes": [], "enemy_units": null, "enemy_charged": null }
+      },
+      {
+        "id": 1, "width": 1, "detail": "fog", "upgrade_gain": null,
+        "seen": null
+      }
+    ],
+    "groups": [
+      {
+        "id": "71ad4e0c9b2f6358", "units": 3, "charged": 2, "mode": "attack",
+        "location": { "kind": "node", "node": 0 },
+        "order": null
+      }
+    ],
+    "packets": [],
+    "intents": [
+      { "id": "b4096e1f7c3a2d85", "owner": 1, "kind": "planned_move", "origin": 1, "target": 0, "created_tick": 290 }
+    ]
+  }
+}
