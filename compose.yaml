@@ -3,7 +3,8 @@
 #   cp .env.example .env        # optional: the defaults run the game on http://localhost
 #   docker compose up --build -d
 #
-# caddy: the only public service (80/443), serves the client and proxies /api/* and /ws/* to app.
+# caddy: the only public service (80/443), serves the client and proxies /api/* and /ws/* to app
+#        (TLS, headers, caching: deploy/Caddyfile).
 # app:   the game server, reachable only from the internal network, data on the `gow-data` volume.
 
 name: skill-based-front
