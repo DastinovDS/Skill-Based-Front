@@ -10,6 +10,9 @@ __pycache__/
 htmlcov/
 build/
 
+# Output of docs/mvp/build_plan.py (copy the files into docs/mvp/ by hand)
+docs/mvp/out/
+
 # Node / client
 node_modules/
 dist/
