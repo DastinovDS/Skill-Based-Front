@@ -81,6 +81,7 @@ legacy/                            — архив прототипа, не тр�
 | `pnpm -C apps/client install --frozen-lockfile` | установить клиент | INF-03 |
 | `pnpm -C apps/client dev` | dev-сервер клиента | INF-03 |
 | `pnpm -C apps/client lint && pnpm -C apps/client check && pnpm -C apps/client test && pnpm -C apps/client build` | проверки клиента | INF-03 |
+| `pnpm -C apps/client build && pnpm -C apps/client preview` | прод-сборка локально под целевым CSP (`apps/client/csp.ts`) | INF-03 |
 | `uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol` | перегенерация схемы и TS-типов | PRO-02 |
 | `uv run gow-maps validate maps/*.json` | проверка карт | MAP-02 |
 | `uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json` | собрать карту из половины (половины лежат в `maps/src/`) | MAP-03 |
@@ -250,7 +251,7 @@ async def run(self) -> None:
 - HUD — класс в `.svelte.ts` с полем `current = $state.raw(...)`, которое заменяется раз на снапшот (10 Гц), а не каждый кадр. Экспортировать переприсваиваемый `$state` напрямую из модуля нельзя — Svelte это не компилирует.
 - Слои контейнеров: фон → территория → дороги → узлы → группы → намерения → туман → эффекты.
 - Всё, что создал, уничтожай: `obj.destroy({ children: true })`, созданные текстуры, `app.destroy()` при размонтировании. Асинхронный `app.init()` может завершиться после размонтирования — проверяй флаг.
-- CSP: `import 'pixi.js/unsafe-eval'` вместо разрешения `unsafe-eval`; загрузка текстур без воркеров или `worker-src blob:` (как решено в INF-03).
+- CSP: целевая политика лежит в `apps/client/csp.ts` (её же берёт Caddy в OPS-02). `import 'pixi.js/unsafe-eval'` вместо разрешения `unsafe-eval`; текстуры грузятся без воркеров (`Assets.setPreferences({ preferWorkers: false })`, `worker-src 'none'`); `style-src 'self'` без `unsafe-inline`, поэтому в разметке Svelte нет статических атрибутов `style="..."` (стили из JS через CSSOM и директивы `style:` разрешены).
 
 ### 7.3 Сеть и плавность
 
