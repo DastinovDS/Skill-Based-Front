@@ -1,0 +1,61 @@
+"""The shared utility of all bots: a normal or a planned order (AGENTS.md, section 8; BOT-01).
+
+Every bot decides «обычный или запланированный приказ» with ``prefer_planned``, and the answer
+depends only on the prices of the ruleset, so the share of planned orders in a tournament is set by
+the ruleset (the calibration of mechanics.md, section 5: 20..70% of attacks), not by bot code.
+
+The price model (mechanics.md, section 5, «Как рассчитать бонус»): a planned order buys
+``orders.planned_bonus`` virtual shots delivered to the fight, for ``orders.cost.planned_move -
+orders.cost.move`` extra CP. A shot is priced at the capital rate: 1 CP buys
+``economy.charges_per_cp`` charges (DEC-02). The plan pays when the shots it saves are worth more
+than the surcharge. It saves the virtual shots it fires (DEC-07, rule 2: virtual shots are spent
+first, then real ones), and when without the bonus the attack would bounce but with it the node
+falls (DEC-07, rules 3 and 4), it also saves the real charges that would otherwise be burnt for
+nothing. The delay of the plan and its public intent are not priced: the ruleset has no price for
+them, they are the counter-play of the opponent.
+
+Fight arithmetic (DEC-07, mechanics.md, section 4): the defender's pool is its charges plus the
+«Защита» bonus and the terrain modifier, both only with at least one firing charge; taking the
+node needs one shot per pooled charge (cancelling) and one per defending unit (killing).
+"""
+
+from gow_sim.maps import Terrain
+from gow_sim.ruleset import Ruleset
+
+__all__ = ["defender_pool", "prefer_planned", "shots_to_take"]
+
+
+def defender_pool(rules: Ruleset, terrain: Terrain, charged: int, defense: bool) -> int:
+    """Pool ``Qd`` of the defenders of a node with ``charged`` firing charges (DEC-07, rule 1)."""
+    if charged <= 0:
+        return 0
+    bonus = rules.orders.defense_bonus if defense else 0
+    return max(0, charged + bonus + rules.terrain.defense_mod.of(terrain))
+
+
+def shots_to_take(
+    rules: Ruleset, terrain: Terrain, units: int, charged: int, defense: bool = False
+) -> int:
+    """Attacker's pool that takes a node held by ``units`` units, ``charged`` of them charged.
+
+    ``c = min(Qa, Qd)`` shots cancel, the surplus ``Qa - Qd`` kills one unit each (DEC-07, rules
+    2 and 3), and the node falls when no defender is left (rule 4): ``Qa >= Qd + units``.
+    """
+    return defender_pool(rules, terrain, charged, defense) + units
+
+
+def prefer_planned(rules: Ruleset, own_charged: int, need: int) -> bool:
+    """Whether an attack with ``own_charged`` charges on a node that needs ``need`` shots
+    (``shots_to_take``) should be a planned order rather than a normal one.
+
+    Integer comparison in hundredths of CP: ``saved * 100 / charges_per_cp > surcharge``.
+    """
+    if need <= 0:
+        return False  # an empty node: no fight, the bonus is never fired
+    bonus = rules.orders.planned_bonus
+    cost = rules.orders.cost
+    surcharge = cost.planned_move - cost.move
+    saved = min(bonus, need)
+    if own_charged < need <= own_charged + bonus:
+        saved += own_charged  # the plan turns a bounce into a capture
+    return saved * 100 > surcharge * rules.economy.charges_per_cp

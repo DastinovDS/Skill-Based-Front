@@ -171,6 +171,12 @@ wheels = [
 name = "gow-bots"
 version = "0.1.0"
 source = { editable = "apps/bots" }
+dependencies = [
+    { name = "gow-sim" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gow-sim", editable = "packages/sim" }]
 
 [[package]]
 name = "gow-maps"

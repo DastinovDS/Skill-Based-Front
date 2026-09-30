@@ -31,6 +31,7 @@ uv run pytest --benchmark-disable                             # один про�
 | `test_bench_supply` | система `supply` на состоянии после 300 тиков той же партии, с пакетами в пути | ≤ 0,1 мс |
 | `test_bench_project` | одна `project()` на том же состоянии | ≤ 0,3 мс |
 | `test_bench_full_headless_match` | `run_headless` двух `ExpandBot` до конца партии на `pautina` (самая большая карта MVP по рёбрам) | ≤ 8 с |
+| `apps/bots/tests/test_benchmarks.py::test_bench_decide` | `decide()` каждого бота из `gow_bots.bots.BOTS` на видах партии `random_legal` на `pautina` после 300..1500 тиков | в среднем ≤ 1 мс |
 
 ## Регрессия
 
@@ -58,4 +59,5 @@ uv run pytest packages/sim/tests/test_benchmarks.py --benchmark-compare --benchm
 | шаг, 40 узлов, 40 групп | ≈ 0,15 мс (p99 ≈ 0,25 мс) | ≈ 0,36 мс |
 | `supply` | ≈ 0,05 мс | ≈ 0,13 мс |
 | `project()` | ≈ 0,11 мс | ≈ 0,26 мс |
+| решение `random_legal` (BOT-01) | ≈ 0,04 мс | — |
 | полная партия headless (7200 тиков) | ≈ 1,4 с | ≈ 3,2 с |

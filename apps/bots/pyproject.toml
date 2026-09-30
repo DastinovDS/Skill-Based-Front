@@ -3,7 +3,12 @@ name = "gow-bots"
 version = "0.1.0"
 description = "Bots and tournament harness."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "gow-sim",
+]
+
+[tool.uv.sources]
+gow-sim = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]
