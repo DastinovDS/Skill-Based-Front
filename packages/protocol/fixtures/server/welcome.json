@@ -1,0 +1,28 @@
+{
+  "type": "welcome",
+  "player": 0,
+  "ruleset_public": {
+    "tick_hz": 10,
+    "match_ticks": 7200,
+    "cp": { "cap": 500, "per_period": 100, "period_ticks": 50 },
+    "cost": {
+      "move": 100,
+      "planned_move": 200,
+      "cancel": 100,
+      "split": 100,
+      "merge": 100,
+      "attack": 0,
+      "defense": 200,
+      "build": 100,
+      "recruit": 100,
+      "stance": 0
+    },
+    "combat": {
+      "terrain_defense_mod": { "plains": -1, "forest": 0, "mountains": 1 },
+      "planned_bonus": 2,
+      "defense_bonus": 2
+    }
+  },
+  "map_id": "diamond",
+  "last_seq": 0
+}
