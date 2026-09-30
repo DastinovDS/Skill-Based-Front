@@ -135,6 +135,7 @@ forbidden_modules = ["legacy", "rts_core", "rts_client", "rts_server"]
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.13.1",
     "hypothesis>=6.168.3",
     "import-linter>=2.15",
     "pre-commit>=4.6.2",
