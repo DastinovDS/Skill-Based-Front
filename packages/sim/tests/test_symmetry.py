@@ -6,8 +6,10 @@ anything: each of its commands is the rot180 mirror of player 0's command with t
 (nodes and edges through the map's mirror tables, groups through the group correspondence). New
 groups of the two players are paired by the ``seq`` of the command that made them.
 
-Systems in the loop, in the fixed order: commands, economy, movement, combat, capacity, supply,
-vision. Fights (DEC-07, SIM-09) happen: on ``pass`` both players reach the central node 3 at once.
+Systems in the loop, in the fixed order: commands, economy, movement, combat (with the bonuses
+of planned orders and «Защита», SIM-10), capacity, supply, orders, vision. Fights (DEC-07,
+SIM-09) happen: on ``pass`` both players reach the central node 3 at once. Public intents and
+bonuses are compared mirrored too.
 Tie-breaks by group id inside a player stay mirrored because the pairing of groups keeps the id
 order (initial groups get ids by ``node_key``; new groups are made in ``seq`` order); the test
 checks that too.
@@ -20,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from gow_sim.commands import (
+    CancelOrder,
     Command,
     Merge,
     Move,
@@ -40,6 +43,7 @@ from gow_sim.systems.capacity import capacity
 from gow_sim.systems.combat import combat
 from gow_sim.systems.economy import economy
 from gow_sim.systems.movement import find_path, movement, traversal_ticks
+from gow_sim.systems.orders import active_bonuses, orders
 from gow_sim.systems.supply import supply
 from gow_sim.systems.vision import vision
 
@@ -72,6 +76,13 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
 
     cmds: list[Command] = []
     tick = state.tick
+    if tick % 50 == 25 or tick % 70 == 10:
+        for g in sorted(state.groups.values(), key=lambda g: (key(_node_or_edge(g)), g.id)):
+            if g.owner == player and g.order is not None and g.order.planned:
+                if isinstance(g.location, AtNode) and tick < g.order.depart_tick:
+                    cmds.append(CancelOrder(g.id))
+            elif g.owner == player and g.mode is Mode.DEFENSE:
+                cmds.append(CancelOrder(g.id))
     if tick % 150 == 0:
         cmds.append(SetStance([Stance.WAR, Stance.ECONOMY, Stance.BALANCE][tick // 150 % 3]))
     if tick % 100 == 0:
@@ -115,6 +126,10 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
                 if dest is not None:
                     cmds.append(Move(g.id, dest, planned=tick % 20 == 0))
     return cmds
+
+
+def _node_or_edge(g: Group) -> int:
+    return g.location.node if isinstance(g.location, AtNode) else g.location.from_node
 
 
 def _node(g: Group) -> int:
@@ -183,6 +198,7 @@ def _mirrored(state: GameState, g: Group) -> tuple[object, ...]:
         if order is None
         else (tuple(mn[n] for n in order.path), order.planned, order.depart_tick),
         None if g.build_edge is None else state.map.mirror_edges[g.build_edge],
+        (g.bonus, g.bonus_tick, g.intent is None),
     )
 
 
@@ -195,6 +211,7 @@ def _plain(g: Group) -> tuple[object, ...]:
         g.location,
         None if order is None else (order.path, order.planned, order.depart_tick),
         g.build_edge,
+        (g.bonus, g.bonus_tick, g.intent is None),
     )
 
 
@@ -233,6 +250,12 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     ]
     me, mn = mapdef.mirror_edges, mapdef.mirror_nodes
     assert sorted(packets) == sorted((1 - o, me[e], mn[f], c, d, a) for o, e, f, c, d, a in packets)
+    intents = [
+        (i.owner, i.kind, i.origin, i.target, i.created_tick) for i in state.intents.values()
+    ]
+    assert sorted(intents) == sorted(
+        (1 - o, k, mn[a], None if t is None else mn[t], c) for o, k, a, t, c in intents
+    )
     mem0, mem1 = state.vision_memory[0], state.vision_memory[1]
     assert {mapdef.mirror_nodes[n]: s for n, s in mem0.nodes.items()} == mem1.nodes
     assert {mapdef.mirror_edges[e]: s for e, s in mem0.edges.items()} == mem1.edges
@@ -286,18 +309,19 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         groups.update(zip(_new_groups(events, 0), _new_groups(events, 1), strict=True))
         economy(state, rules)
         state.events = movement(state, rules)
-        state.events += combat(state, rules)
+        state.events += combat(state, rules, active_bonuses(state))
         captures += sum(e.kind == "node_captured" for e in state.events)
         fights += sum(e.kind == "fight" for e in state.events)
         capacity(state, rules)
         supply(state, rules)
+        orders(state, rules)
         vision(state, rules)
         moves_on_edges += sum(isinstance(g.location, OnEdge) for g in state.groups.values())
         _assert_mirrored(state, groups)
         pending = _decide(state, rules, 0) if tick % DECIDE_EVERY == 0 else []
     # The run did something: commands were applied, groups moved and took nodes.
     assert applied > 20
-    assert {"Move", "Split", "SetMode", "Recruit", "SetStance"} <= set(kinds)
+    assert {"Move", "Split", "SetMode", "Recruit", "SetStance", "CancelOrder"} <= set(kinds)
     assert moves_on_edges > 0
     # On pass the only way out is the central node 3; both players reach it at once and fight
     # there (DEC-07, rule 5) with equal pools, so both bounce and nothing is captured.

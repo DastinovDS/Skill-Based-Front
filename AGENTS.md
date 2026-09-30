@@ -128,7 +128,7 @@ gow_sim/
   maps.py         MapDef + загрузчик
   state.py        GameState, Group, Node, Edge, Packet, Intent; to_canonical(), state_hash()
   commands.py     типы команд, validate(), apply_commands()
-  systems/        economy, movement, combat, capacity, supply, recruit, build, victory, vision
+  systems/        economy, movement, combat, capacity, supply, recruit, build, orders, victory, vision
   view.py         project() -> PlayerView
   match.py        Match, порядок систем, run_headless()
   replay.py       запись, проверка, дамп расхождений
@@ -152,8 +152,11 @@ def combat(state: GameState, rules: Ruleset) -> list[Event]:
 
 ```
 apply_commands → economy → movement → combat → capacity → supply (включая перезарядку)
-→ recruit → build → victory → vision (обновление памяти «последний раз видели»)
+→ recruit → build → orders → victory → vision (обновление памяти «последний раз видели»)
 ```
+
+`combat` получает бонусы запланированных приказов и «Защиты» из `systems.orders.active_bonuses(state)`;
+`orders` снимает потраченные бонусы и намерения закончившихся приказов, режимов и строек (SIM-10).
 
 Память тумана хранится в `GameState` (для каждого игрока), поэтому `project()` остаётся чистой функцией, а реплей — воспроизводимым.
 

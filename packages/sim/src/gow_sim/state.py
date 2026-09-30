@@ -108,6 +108,15 @@ class Group:
     """Edge the group upgrades (``UpgradeRoad``, SIM-11); ``None`` when it builds nothing."""
     build_since: int | None = None
     """Tick the current road level started (SIM-11); set exactly when ``build_edge`` is set."""
+    intent: int | None = None
+    """Id of the group's public ``Intent`` (SIM-10): planned order, «Защита» or build. The link
+    lives only here, the intent itself names no group (DEC-04)."""
+    bonus: int = 0
+    """Virtual shots the group brings into its next fight (DEC-08, SIM-10); 0: none. From a
+    planned order, or from «Защита» when the group is in that mode."""
+    bonus_tick: int = 0
+    """The tick from which ``bonus`` is active: departure of the planned order, or the switch to
+    «Защита» plus ``orders.defense_delay_ticks``."""
 
 
 @dataclass(slots=True)
@@ -403,6 +412,9 @@ def _group_data(g: Group) -> dict[str, object]:
         "order": None if g.order is None else _order_data(g.order),
         "build_edge": g.build_edge,
         "build_since": g.build_since,
+        "intent": g.intent,
+        "bonus": g.bonus,
+        "bonus_tick": g.bonus_tick,
     }
 
 
@@ -580,6 +592,9 @@ def _parse_group(data: object, where: str) -> Group:
             "order",
             "build_edge",
             "build_since",
+            "intent",
+            "bonus",
+            "bonus_tick",
         ),
     )
     units = _int(raw["units"], f"{where}.units", low=0)
@@ -597,6 +612,9 @@ def _parse_group(data: object, where: str) -> Group:
         order=None if raw["order"] is None else _parse_order(raw["order"], f"{where}.order"),
         build_edge=build_edge,
         build_since=build_since,
+        intent=_opt_int(raw["intent"], f"{where}.intent"),
+        bonus=_int(raw["bonus"], f"{where}.bonus", low=0),
+        bonus_tick=_int(raw["bonus_tick"], f"{where}.bonus_tick", low=0),
     )
 
 

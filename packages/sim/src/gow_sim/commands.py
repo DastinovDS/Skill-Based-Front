@@ -20,6 +20,7 @@ rejects as ``NOT_FOUND_OR_HIDDEN``.
 
 Costs are in hundredths of CP from ``orders.cost`` (DEC-08, DEC-01, DEC-02).
 Split, Merge and commands to a moving or waiting group follow the defaults of #117.
+Bonuses and public intents of planned orders, «Защита» and builds: ``systems.orders`` (SIM-10).
 """
 
 from collections.abc import Callable, Iterable
@@ -28,11 +29,12 @@ from enum import StrEnum
 from itertools import pairwise
 
 from gow_sim.ruleset import Ruleset, Stance
-from gow_sim.state import AtNode, Event, GameState, Group, Mode, Order, event
+from gow_sim.state import AtNode, Event, GameState, Group, IntentKind, Mode, Order, event
 from gow_sim.systems.build import interrupt_build, start_build
 from gow_sim.systems.capacity import is_internal
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
 from gow_sim.systems.movement import find_path
+from gow_sim.systems.orders import clear_bonus, set_intent
 from gow_sim.systems.recruit import (
     free_capacity,
     recruit_allowed_here,
@@ -119,7 +121,10 @@ class Recruit:
 
 @dataclass(frozen=True, slots=True)
 class CancelOrder:
-    """Cancel the planned order of ``group`` while it waits to depart (DEC-08)."""
+    """Cancel the planned order of ``group`` while it waits to depart, or its «Защита» (DEC-08).
+
+    TODO(#141): cancelling «Защита» costs ``orders.cost.cancel``, ``SetMode(ATTACK)`` is free.
+    """
 
     group: int
 
@@ -320,7 +325,7 @@ def _check(
             group = _standing_group(state, player, gid, seen)
             if isinstance(group, Reject):
                 return group
-            # Re-enabling «Защита» is allowed and costs again (DEC-08); its effect is SIM-10 (#26).
+            # Re-enabling «Защита» is allowed and costs again (DEC-08): a new bonus and intent.
             if mode == group.mode and mode is not Mode.DEFENSE:
                 return Reject(RejectCode.NO_CHANGE)
             return ()
@@ -358,8 +363,7 @@ def _check(
                 return group
             if not isinstance(group.location, AtNode):
                 return Reject(RejectCode.GROUP_ON_EDGE)
-            # TODO(#26): cancelling «Защита» (SIM-10).
-            if not _waits_to_depart(state, group):
+            if not (_waits_to_depart(state, group) or group.mode is Mode.DEFENSE):
                 return Reject(RejectCode.NOTHING_TO_CANCEL)
             return ()
         case SetStance(stance=stance):
@@ -446,7 +450,13 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             interrupt_build(group)  # leaving interrupts the build (SIM-11)
             if group.mode is Mode.DEFENSE:
                 group.mode = Mode.ATTACK  # a move order drops «Защита» for free (DEC-08)
-            # TODO(#26): the public intent of a planned order and of «Защита».
+            if planned:  # public intent now, the bonus from the departure on (DEC-08)
+                group.bonus = rules.orders.planned_bonus
+                group.bonus_tick = tick + delay
+                set_intent(state, group, IntentKind.PLANNED_MOVE, ok.path[-1])
+            else:
+                clear_bonus(group)
+                set_intent(state, group, None)
             return []
         case Split(group=gid, n=n):
             group = state.groups[gid]
@@ -460,12 +470,15 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             keep = state.groups[min(gids)]
             for gid in sorted(gids):
                 if gid != keep.id:
+                    set_intent(state, state.groups[gid], None)
                     other = state.groups.pop(gid)
                     keep.units += other.units
                     keep.charged += other.charged
             keep.mode = Mode.ATTACK
             keep.order = None
             interrupt_build(keep)
+            clear_bonus(keep)
+            set_intent(state, keep, None)
             return [event(tick, "groups_merged", player=player, group=keep.id, units=keep.units)]
         case SetMode(group=gid, mode=mode):
             group = state.groups[gid]
@@ -473,17 +486,32 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             group.order = None  # the group stops where it stands
             if mode is not Mode.BUILD:
                 interrupt_build(group)
+            if mode is Mode.DEFENSE:  # public at once, the bonus after the delay (DEC-08)
+                group.bonus = rules.orders.defense_bonus
+                group.bonus_tick = tick + rules.orders.defense_delay_ticks
+                set_intent(state, group, IntentKind.DEFENSE)
+            else:
+                clear_bonus(group)
+                set_intent(state, group, None)
             return []
         case UpgradeRoad(group=gid, edge=eid):
             group = state.groups[gid]
             start_build(group, eid, tick)  # a new build: the progress starts from zero
             group.order = None
-            # TODO(#26): the public BUILD intent (DEC-04: builds are public like planned orders).
+            clear_bonus(group)
+            # Builds are public like planned orders (DEC-04): from the group's node along the edge.
+            set_intent(state, group, IntentKind.BUILD, state.map.edges[eid].other(_node_of(group)))
             return []
         case Recruit(node=node):
             return recruit_unit(state, player, node)
         case CancelOrder(group=gid):
-            state.groups[gid].order = None
+            group = state.groups[gid]
+            if _waits_to_depart(state, group):
+                group.order = None
+            else:
+                group.mode = Mode.ATTACK  # «Защита» (validated)
+            clear_bonus(group)
+            set_intent(state, group, None)
             return []
         case SetStance(stance=stance):
             return set_stance(state, player, stance)

@@ -369,6 +369,21 @@ def test_rule6_winner_arriving_goes_on_into_the_node() -> None:
     assert state.nodes[1].owner == 0
 
 
+def test_rule3_bonus_burns_in_the_edge_meeting_and_not_again_in_the_node() -> None:
+    """2/2 with a planned bonus (+2) meets 1/1 on the edge in its arrival tick: Qa = 4, Qe = 1,
+    both virtual shots spent (1 cancels, 1 kills), 2/2 goes on into node 1 held by 2/2. There the
+    bonus is gone (rule 3, SIM-10): 2 against 2 is row 1, no losses, the attack bounces."""
+    state = initial_state(line(["forest"] * 3, [0, 1, 1]), RULES)
+    a = add(state, 0, 2, 2, before_arrival(state, 0, 0), order=Order((1,), True, 0))
+    add(state, 1, 1, 1, OnEdge(0, 1, 1000 // TRAVEL), order=Order((0,), False, 0))
+    d = add(state, 1, 2, 2, AtNode(1))
+    fights = [e for e in step(state, {a: Bonus(BonusSource.PLANNED_ORDER, 2)}) if e.kind == "fight"]
+    assert [(f.get("pool_0"), f.get("pool_1")) for f in fights] == [(4, 1), (2, 2)]
+    assert (state.groups[d].units, state.groups[d].charged) == (2, 0)
+    assert (state.groups[a].units, state.groups[a].charged) == (2, 0)
+    assert state.nodes[1].owner == 1
+
+
 def test_rule9_nobody_flees() -> None:
     """Row 4: the 9 discharged defenders and the bounced attacker stay where they end up."""
     state = initial_state(line(["forest"] * 3, [0, 1, 1]), RULES)
