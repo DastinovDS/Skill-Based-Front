@@ -19,6 +19,12 @@ from gow_sim.state import AtNode, Event, GameState, Group, Mode, event
 from gow_sim.systems.capacity import city_capacity, standing_units
 
 
+def recruit(state: GameState, rules: Ruleset) -> list[Event]:
+    """The ``recruit`` slot of the system order: no per-tick work in the MVP (see above)."""
+    del state, rules
+    return []
+
+
 def recruit_allowed_here(state: GameState, rules: Ruleset, player: int, node: int) -> bool:
     """``recruit.location`` allows ``player`` to recruit in ``node`` (ownership checked apart)."""
     match rules.recruit.location:

@@ -426,6 +426,8 @@ def apply_commands(
     for prev, cur in pairwise(ordered):
         if (prev.player, prev.seq) == (cur.player, cur.seq):
             raise ValueError(f"duplicate command seq {cur.seq} of player {cur.player}")
+    if not ordered:
+        return [], []
     # Enemy visibility is fixed at the start of the tick: the other player's commands of this
     # tick cannot change the reject code of this player's commands.
     seen = {p: _visible_enemy_groups(state, p) for p in sorted(state.players)}

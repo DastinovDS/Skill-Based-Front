@@ -6,10 +6,10 @@ anything: each of its commands is the rot180 mirror of player 0's command with t
 (nodes and edges through the map's mirror tables, groups through the group correspondence). New
 groups of the two players are paired by the ``seq`` of the command that made them.
 
-Systems in the loop, in the fixed order: commands, economy, movement, combat (with the bonuses
-of planned orders and «Защита», SIM-10), capacity, supply, orders, vision. Fights (DEC-07,
-SIM-09) happen: on ``pass`` both players reach the central node 3 at once. Public intents and
-bonuses are compared mirrored too.
+The loop is the full ``Match.step`` (SIM-15): every system in the fixed order, including
+``build``, ``orders`` and ``victory``. Fights (DEC-07, SIM-09) happen: on ``pass`` both players
+reach the central node 3 at once. Public intents and bonuses are compared mirrored too. If the
+match ends, it ends symmetrically: a draw.
 Tie-breaks by group id inside a player stay mirrored because the pairing of groups keeps the id
 order (initial groups get ids by ``node_key``; new groups are made in ``seq`` order); the test
 checks that too.
@@ -33,19 +33,14 @@ from gow_sim.commands import (
     SetStance,
     Split,
     UpgradeRoad,
-    apply_commands,
     map_group_ids,
 )
 from gow_sim.maps import load_map
+from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Location, Mode, OnEdge, initial_state
-from gow_sim.systems.capacity import capacity
-from gow_sim.systems.combat import combat
-from gow_sim.systems.economy import economy
-from gow_sim.systems.movement import find_path, movement, traversal_ticks
-from gow_sim.systems.orders import active_bonuses, orders
-from gow_sim.systems.supply import supply
-from gow_sim.systems.vision import vision
+from gow_sim.state import AtNode, Event, GameState, Group, Location, Mode, OnEdge
+from gow_sim.systems.movement import find_path, traversal_ticks
+from gow_sim.systems.victory import EndReason, Outcome
 
 ROOT = Path(__file__).resolve().parents[3]
 TESTS_DIR = Path(__file__).resolve().parent
@@ -265,7 +260,7 @@ def _new_groups(events: list[Event], player: int) -> list[int]:
     """Ids of the groups made by ``player``'s commands, in ``seq`` order."""
     new: list[int] = []
     for e in events:
-        if e.get("player") != player or e.kind not in ("group_split", "recruited"):
+        if e.kind not in ("group_split", "recruited") or e.get("player") != player:
             continue
         gid = e.get("new_group" if e.kind == "group_split" else "group")
         assert isinstance(gid, int)
@@ -275,7 +270,8 @@ def _new_groups(events: list[Event], player: int) -> list[int]:
 
 @pytest.mark.parametrize("path", MAPS, ids=lambda p: p.stem)
 def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -> None:
-    state = initial_state(load_map(path), rules)
+    match = Match(load_map(path), rules, bytes(range(32)))
+    state = match.state
     mapdef = state.map
     groups: dict[int, int] = {}
     for g0 in sorted(state.groups):
@@ -288,13 +284,14 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
     kinds: list[str] = []
     applied = captures = moves_on_edges = fights = 0
     for tick in range(1, TICKS + 1):
-        state.tick = tick
         commands = [PlayerCommand(0, seq, cmd) for seq, cmd in enumerate(pending)]
         commands += [
             PlayerCommand(1, seq, _mirror_cmd(state, cmd, groups))
             for seq, cmd in enumerate(pending)
         ]
-        results, events = apply_commands(state, rules, commands)
+        events = match.step(commands)
+        assert state.tick == tick
+        results = match.results
         by_seq = {(r.player, r.seq): r.outcome for r in results}
         for seq, cmd in enumerate(pending):
             assert type(by_seq[(0, seq)]) is type(by_seq[(1, seq)])
@@ -307,18 +304,18 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
             if isinstance(by_seq[(0, seq)], Ok)
         )
         groups.update(zip(_new_groups(events, 0), _new_groups(events, 1), strict=True))
-        economy(state, rules)
-        state.events = movement(state, rules)
-        state.events += combat(state, rules, active_bonuses(state))
-        captures += sum(e.kind == "node_captured" for e in state.events)
-        fights += sum(e.kind == "fight" for e in state.events)
-        capacity(state, rules)
-        supply(state, rules)
-        orders(state, rules)
-        vision(state, rules)
+        captures += sum(e.kind == "node_captured" for e in events)
+        fights += sum(e.kind == "fight" for e in events)
         moves_on_edges += sum(isinstance(g.location, OnEdge) for g in state.groups.values())
         _assert_mirrored(state, groups)
+        if match.finished:
+            break
         pending = _decide(state, rules, 0) if tick % DECIDE_EVERY == 0 else []
+    if match.finished:
+        # Only a symmetric end is possible: both capitals fall in the same tick.
+        assert match.outcome == Outcome(None, EndReason.DOUBLE_DEFEAT)
+        assert captures >= 2 and applied > 5
+        return
     # The run did something: commands were applied, groups moved and took nodes.
     assert applied > 20
     assert {"Move", "Split", "SetMode", "Recruit", "SetStance", "CancelOrder"} <= set(kinds)

@@ -190,8 +190,18 @@ def combat(
     bonus = dict(bonuses or {})
     arrivals = _arrivals(state)
     events = _edge_meetings(state, arrivals, bonus)
+    # Standing groups by node, in id order, taken after the edge meetings. A node fight only
+    # moves (bounces) or kills the groups of its own node, so the index stays right for the
+    # nodes after it; ``_node_fight`` still checks each group against the current state.
+    standing: dict[int, list[Group]] = {}
+    for gid in sorted(state.groups):
+        g = state.groups[gid]
+        if isinstance(g.location, AtNode):
+            standing.setdefault(g.location.node, []).append(g)
     for node_id in sorted(state.nodes):
-        events.extend(_node_fight(state, rules, node_id, arrivals, bonus))
+        here = standing.get(node_id)
+        if here is not None:
+            events.extend(_node_fight(state, rules, node_id, here, arrivals, bonus))
     return events
 
 
@@ -316,14 +326,16 @@ def _node_fight(
     state: GameState,
     rules: Ruleset,
     node_id: int,
+    standing: list[Group],
     arrivals: dict[int, _Arrival],
     bonus: dict[int, Bonus],
 ) -> list[Event]:
+    """The fight in ``node_id``; ``standing``: the groups that stood there, in id order."""
     node = state.nodes[node_id]
     here: dict[int, list[Group]] = {p: [] for p in PLAYERS}
-    for gid in sorted(state.groups):
-        g = state.groups[gid]
-        if g.location == AtNode(node_id):
+    at = AtNode(node_id)
+    for g in standing:
+        if g.location == at and state.groups.get(g.id) is g:
             here[g.owner].append(g)
     tick = state.tick
     owner = node.owner
