@@ -1,0 +1,13 @@
+{
+  "meta": {"name": "bad_symmetry_start", "version": 1, "symmetry": "rot180", "width": 400, "height": 200},
+  "nodes": [
+    {"id": 0, "x": 100, "y": 100, "terrain": "mountains", "vp": 1, "base_capacity": 4, "capital_of": 0, "start_owner": 0, "start_units": 3, "start_charged": 3, "start_stock": 4},
+    {"id": 1, "x": 200, "y": 100, "terrain": "plains", "vp": 1, "base_capacity": 2, "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 2, "x": 300, "y": 100, "terrain": "mountains", "vp": 1, "base_capacity": 4, "capital_of": 1, "start_owner": 1, "start_units": 3, "start_charged": 3, "start_stock": 5}
+  ],
+  "edges": [
+    {"id": 0, "a": 0, "b": 1, "base_width": 1, "max_width": 3, "travel_ticks": 30},
+    {"id": 1, "a": 2, "b": 1, "base_width": 1, "max_width": 3, "travel_ticks": 30}
+  ],
+  "mirror": {"nodes": {"0": 2, "1": 1, "2": 0}, "edges": {"0": 1, "1": 0}}
+}

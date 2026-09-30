@@ -3,7 +3,16 @@ name = "gow-maps"
 version = "0.1.0"
 description = "Offline map tools: validator, mirroring script, previews."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "gow-sim",
+    "networkx>=3.5",
+]
+
+[project.scripts]
+gow-maps = "gow_maps.cli:main"
+
+[tool.uv.sources]
+gow-sim = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]
