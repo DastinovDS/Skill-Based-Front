@@ -29,7 +29,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 1
+PROTOCOL_VERSION: Final = 2
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -160,6 +160,8 @@ class EndReason(StrEnum):
     FORFEIT = "forfeit"
     DISCONNECT = "disconnect"
     """Technical defeat after the reconnect window (a ``Forfeit`` in the replay journal)."""
+    DOUBLE_DEFEAT = "double_defeat"
+    """Both players lost in the same tick (two forfeits or both capitals taken): a draw (#136)."""
 
 
 class MatchEndMsg(WireModel):
@@ -167,14 +169,17 @@ class MatchEndMsg(WireModel):
     tick: Tick
     reason: EndReason
     winner: PlayerId | None
-    """``None`` is a draw, possible only when ``reason`` is ``timer``."""
+    """``None`` is a draw: always for ``double_defeat``, possible for ``timer``, else never."""
     vp: tuple[NonNegInt, NonNegInt]
     """Final VP of both players, by player id."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
-        if self.winner is None and self.reason is not EndReason.TIMER:
-            raise ValueError("only a match ended by the timer can be a draw")
+        if self.reason is EndReason.DOUBLE_DEFEAT:
+            if self.winner is not None:
+                raise ValueError("a double defeat is a draw")
+        elif self.winner is None and self.reason is not EndReason.TIMER:
+            raise ValueError("only a match ended by the timer or a double defeat can be a draw")
         return self
 
 

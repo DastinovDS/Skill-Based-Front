@@ -38,7 +38,7 @@ export type IntentKind = 'planned_move' | 'defense' | 'build';
 /**
  * How the match ended (DEC-03, DEC-05).
  */
-export type EndReason = 'capital_captured' | 'timer' | 'forfeit' | 'disconnect';
+export type EndReason = 'capital_captured' | 'timer' | 'forfeit' | 'disconnect' | 'double_defeat';
 export type Terrain = 'plains' | 'forest' | 'mountains';
 
 /**
@@ -386,7 +386,7 @@ export interface MatchEndMsg {
   tick: number;
   reason: EndReason;
   /**
-   * ``None`` is a draw, possible only when ``reason`` is ``timer``.
+   * ``None`` is a draw: always for ``double_defeat``, possible for ``timer``, else never.
    */
   winner: PlayerId | null;
   /**
@@ -475,5 +475,5 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const CLOSE_PROTOCOL_VERSION = 4001;
