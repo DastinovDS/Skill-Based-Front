@@ -40,3 +40,6 @@ dist/
 
 # Backups of deploy/backup.sh (BACKUP_DIR default)
 /backups/
+
+# Divergence dumps of python -m gow_sim.replay check
+/replay-divergence/

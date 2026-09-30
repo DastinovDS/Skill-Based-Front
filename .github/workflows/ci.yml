@@ -86,6 +86,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          # HEAD^1 (the base branch of a PR merge commit) for check_golden_frozen.py.
+          fetch-depth: 2
       # setup-uv publishes no moving major tags, only exact versions.
       - uses: astral-sh/setup-uv@v10.2.0
         with:
@@ -104,6 +106,16 @@ jobs:
       - run: uv run pytest
         env:
           HYPOTHESIS_PROFILE: ci
+      # Golden replays (SIM-16): the current version re-simulates (also in pytest), and
+      # the files of earlier commits stay frozen.
+      - run: uv run python -m gow_sim.replay check packages/sim/tests/golden/v*/**
+      - run: uv run python scripts/check_golden_frozen.py HEAD^1
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: replay-divergence
+          path: replay-divergence
+          if-no-files-found: ignore
 
   # Required check, same skip rules as `py`.
   web:

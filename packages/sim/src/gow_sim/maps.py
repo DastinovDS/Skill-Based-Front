@@ -14,6 +14,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
+from gow_sim.canonical import digest
+
 PLAYERS: Final = (0, 1)
 """Player ids of a 1v1 match (MVP)."""
 
@@ -161,6 +163,11 @@ def map_to_data(mapdef: MapDef) -> dict[str, object]:
             "edges": {str(i): m for i, m in enumerate(mapdef.mirror_edges)},
         },
     }
+
+
+def map_hash(mapdef: MapDef) -> str:
+    """blake2b of the canonical JSON of ``map_to_data``: the ``map_hash`` of a replay header."""
+    return digest(map_to_data(mapdef))
 
 
 def _parse_meta(data: object) -> MapMeta:

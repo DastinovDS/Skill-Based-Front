@@ -42,6 +42,7 @@ __all__ = [
     "Controller",
     "Match",
     "MatchFinishedError",
+    "MatchObserver",
     "MatchResult",
     "run_headless",
 ]
@@ -143,6 +144,18 @@ class Controller(Protocol):
     def decide(self, view: PlayerView, tick: int) -> list[Command]: ...
 
 
+class MatchObserver(Protocol):
+    """Watches a match step by step; ``gow_sim.replay.ReplayWriter`` records it this way."""
+
+    def begin(self, match: Match) -> None:
+        """Called once with the match at tick 0, before the first ``step()``."""
+        ...
+
+    def record(self, match: Match, commands: Sequence[PlayerCommand]) -> None:
+        """Called after every ``step(commands)``; ``match.tick`` is the tick just played."""
+        ...
+
+
 @dataclass(frozen=True, slots=True)
 class MatchResult:
     outcome: Outcome | None
@@ -166,6 +179,7 @@ def run_headless(
     max_ticks: int | None = None,
     decide_every: int = 5,
     match_key: bytes = HEADLESS_MATCH_KEY,
+    observer: MatchObserver | None = None,
 ) -> MatchResult:
     """Play a match between ``controllers`` (by player id) without a server.
 
@@ -173,6 +187,7 @@ def run_headless(
     tick; its commands (``seq`` counts per player from 0) are resolved like the server does it
     and applied at the start of the next tick. Stops when the match ends or after ``max_ticks``
     ticks (default: ``rules.match_ticks``, where the timer ends the match anyway).
+    ``observer`` sees the match before the first tick and after every tick (a replay writer).
     """
     if len(controllers) != len(PLAYERS):
         raise ValueError(f"need {len(PLAYERS)} controllers, got {len(controllers)}")
@@ -184,6 +199,8 @@ def run_headless(
     accepted: dict[int, int] = dict.fromkeys(PLAYERS, 0)
     rejected: dict[int, int] = dict.fromkeys(PLAYERS, 0)
     pending: list[PlayerCommand] = []
+    if observer is not None:
+        observer.begin(match)
     while not match.finished and match.tick < limit:
         if match.tick % decide_every == 0:
             for player in PLAYERS:
@@ -191,6 +208,8 @@ def run_headless(
                     pending.append(PlayerCommand(player, seqs[player], match.resolve(player, cmd)))
                     seqs[player] += 1
         match.step(pending)
+        if observer is not None:
+            observer.record(match, pending)
         pending = []
         for r in match.results:
             counter = rejected if isinstance(r.outcome, Reject) else accepted

@@ -91,6 +91,8 @@ legacy/                            — архив прототипа, не тр�
 | `uv run gow-maps bake maps/*.json` | запечь фон `maps/<name>.bg.png` (после любой правки карты) | MAP-05 |
 | `uv run pytest packages/sim/tests/test_benchmarks.py` | бенчмарки симуляции и проверка бюджетов раздела 12 (`docs/perf.md`) | SIM-15 |
 | `uv run python -m gow_sim.replay check packages/sim/tests/golden/v*/**` | проверить реплеи | SIM-16 |
+| `uv run python packages/sim/tests/golden/generate.py` | создать золотые реплеи `v{SIM_VERSION}` (после повышения `SIM_VERSION`; существующий каталог не перезаписывает) | SIM-16 |
+| `uv run python scripts/check_golden_frozen.py [base]` | золотые файлы из `base` не изменены и не удалены (CI: `HEAD^1`) | SIM-16 |
 | `uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-0.toml` | турнир ботов | BOT-04 |
 | `uv run gow-bots report docs/balance/latest.jsonl` | отчёт баланса | BOT-05 |
 | `uv run gow-server --reload` | сервер локально | SRV-01 |
