@@ -91,3 +91,23 @@ export const INTENT_ICON_DISTANCE = 15;
 export const INTENT_ICON_ANGLE = -135;
 
 export const FIGHT_COLOR = 0xff5d5d;
+
+// --- Fog of war (CLI-05, #61) ------------------------------------------------------------------
+// A hidden city is darkened AND hatched, a hidden road is darkened AND broken into dashes, a
+// memory ghost is faded AND carries the age of the sighting: none of it relies on colour alone.
+
+export const FOG_COLOR = 0x0d1117;
+export const FOG_ALPHA = 0.62;
+/** Hatching lines over a hidden city. */
+export const FOG_HATCH = { width: 1.5, color: 0xaab2bd, alpha: 0.45 } as const;
+export const FOG_HATCH_SPACING = 7;
+/** A hidden city is shaded this far beyond its body. */
+export const FOG_NODE_MARGIN = 6;
+export const FOG_DASH = 12;
+export const FOG_GAP = 8;
+/** A hidden road is shaded this much wider than the road and its casing. */
+export const FOG_ROAD_EXTRA = 6;
+/** Opacity of a memory ghost (the marker of what was last seen in a hidden place). */
+export const GHOST_ALPHA = 0.62;
+export const GHOST_AGE_FONT_SIZE = 10;
+export const GHOST_AGE_STROKE = { color: 0x0d1117, width: 3, join: 'round' } as const;

@@ -29,6 +29,7 @@ import {
   type FightInfo,
 } from './layout.ts';
 import type { Point } from './camera.ts';
+import { edgeMarkerPoint, nodeMarkerPoint } from './fogLayout.ts';
 import { EntityKit, Token } from './shapes.ts';
 import {
   ARROW_DASH,
@@ -48,8 +49,6 @@ import {
 } from './style.ts';
 
 const MAX_FIGHT_MARKS = 8;
-/** Enemy sightings on an edge sit this far from the road, to the left of the a → b way. */
-const EDGE_MARKER_OFFSET = -24;
 
 function other(player: PlayerId): PlayerId {
   return player === 0 ? 1 : 0;
@@ -104,7 +103,8 @@ interface Chip {
  * from `Seen`, losses from `fight` events. `destroy()` releases every object and context.
  */
 export class EntityView {
-  private readonly kit = new EntityKit();
+  /** Shared with the fog layer (ghosts use the same tokens); released by `destroy()`. */
+  readonly kit = new EntityKit();
   private readonly enemy: PlayerId;
   private readonly bars: Container[];
   private readonly enemyNodes: (Token | null)[];
@@ -257,12 +257,10 @@ export class EntityView {
       this.enemyLayer,
     );
     this.enemyNodes[node.id] = token;
-    const point = nodePoint(this.map, node.id);
-    if (token === null || point === undefined) return;
-    const radius = this.map.nodes[node.id]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
+    if (token === null) return;
     const size = node.seen?.level === 'exact' ? TOKEN_FULL : TOKEN_COMPACT;
-    // To the right of the city, lower half: the VP badge and the warehouse bar are above.
-    token.view.position.set(point.x + radius + 8 + size.width / 2, point.y + 6);
+    const at = nodeMarkerPoint(this.map, node.id, size.width);
+    if (at !== undefined) token.view.position.set(at.x, at.y);
   }
 
   private setEnemyEdge(edge: EdgeView): void {
@@ -273,11 +271,9 @@ export class EntityView {
       this.enemyLayer,
     );
     this.enemyEdges[edge.id] = token;
-    const ends = edgeEnds(this.map, edge.id);
-    if (token === null || ends === undefined) return;
-    const middle = edgePoint(ends.a, ends.b, true, 500);
-    const at = sideways(ends.a, ends.b, middle, EDGE_MARKER_OFFSET);
-    token.view.position.set(at.x, at.y);
+    if (token === null) return;
+    const at = edgeMarkerPoint(this.map, edge.id);
+    if (at !== undefined) token.view.position.set(at.x, at.y);
   }
 
   private drawIntents(intents: readonly IntentView[]): void {

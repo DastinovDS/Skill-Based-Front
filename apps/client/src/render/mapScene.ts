@@ -3,9 +3,13 @@ import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { labelResolution, NO_INSETS, type Camera, type Insets } from './camera.ts';
 import { CameraController } from './cameraController.ts';
 import { EntityView } from './entityView.ts';
+import { FogView } from './fogView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
 import { MapView } from './mapView.ts';
 import type { RenderSource } from './source.ts';
+
+/** Ticks per second when the source does not say (`rulesets/mvp-0.toml`). */
+const DEFAULT_TICK_HZ = 10;
 
 export interface SceneOptions {
   /** Frames and events to draw; without it only the static map is shown. */
@@ -26,6 +30,7 @@ export class MapScene {
   readonly layers: MapLayers;
   private readonly view: MapView;
   private readonly entities: EntityView;
+  private readonly fog: FogView;
   private readonly controller: CameraController;
   private source: RenderSource | null;
   private base: unknown = null;
@@ -44,6 +49,14 @@ export class MapScene {
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.
     this.view = new MapView(map, this.layers, 1);
     this.entities = new EntityView(map, this.layers, options.player ?? 0, 1);
+    this.fog = new FogView(
+      map,
+      this.layers,
+      options.player ?? 0,
+      this.entities.kit,
+      1,
+      this.source?.tickHz ?? DEFAULT_TICK_HZ,
+    );
     this.controller = new CameraController(
       app.canvas,
       this.layers.world,
@@ -80,6 +93,7 @@ export class MapScene {
     this.app.renderer.off('resize', this.onResize);
     this.app.ticker.remove(this.onFrame);
     this.controller.destroy();
+    this.fog.destroy();
     this.entities.destroy();
     this.view.destroy();
     if (this.backgroundUrl !== null) {
@@ -117,6 +131,8 @@ export class MapScene {
       this.view.setRoadWidths(frame.base.view.edges.map((edge) => edge.width));
     }
     this.entities.update(frame, this.source.events());
+    this.fog.setTickHz(this.source.tickHz ?? DEFAULT_TICK_HZ);
+    this.fog.update(frame.base);
     if (announce) this.onsnapshot?.(frame.base.tick);
   };
 
@@ -129,5 +145,6 @@ export class MapScene {
     const resolution = labelResolution(camera.scale, this.app.renderer.resolution);
     this.view.setLabelResolution(resolution);
     this.entities.setLabelResolution(resolution);
+    this.fog.setLabelResolution(resolution);
   };
 }
