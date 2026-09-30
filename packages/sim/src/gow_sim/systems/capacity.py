@@ -105,19 +105,35 @@ def node_capacities(state: GameState, rules: Ruleset) -> tuple[int, ...]:
 
 
 def _compute_capacities(state: GameState, rules: Ruleset) -> tuple[int, ...]:
-    mapdef = state.map
     supplied = {p: supplied_territory(state, p) for p in sorted(state.players)}
-    gains = rules.capacity.width_gain_centi
-    result: list[int] = []
-    for node in mapdef.nodes:
-        owner = state.nodes[node.id].owner
-        gain = 0
-        if owner is not None and supplied[owner][node.id]:
-            for eid in mapdef.incident[node.id]:
-                if is_internal(state, eid):
-                    gain += gains.of(state.edges[eid].width)
-        result.append(node.base_capacity + gain // CENTI)  # gain >= 0: rounded down
-    return tuple(result)
+    # Capacity centi >= 0: rounded down.
+    return tuple(
+        _capacity_centi(state, rules, supplied, node) // CENTI
+        for node in range(len(state.map.nodes))
+    )
+
+
+def _capacity_centi(
+    state: GameState, rules: Ruleset, supplied: dict[int, tuple[bool, ...]], node: int
+) -> int:
+    mapdef = state.map
+    total = mapdef.nodes[node].base_capacity * CENTI
+    owner = state.nodes[node].owner
+    if owner is not None and supplied[owner][node]:
+        gains = rules.capacity.width_gain_centi
+        for eid in mapdef.incident[node]:
+            if is_internal(state, eid):
+                total += gains.of(state.edges[eid].width)
+    return total
+
+
+def city_capacity_centi(state: GameState, rules: Ruleset, node: int) -> int:
+    """Capacity of one node in hundredths, before rounding down: ``city_capacity * 100 <= it``.
+
+    Not cached, O(V + E): for hints and tests (``systems.build.upgrade_gain``), not for systems.
+    """
+    supplied = {p: supplied_territory(state, p) for p in sorted(state.players)}
+    return _capacity_centi(state, rules, supplied, node)
 
 
 def city_capacity(state: GameState, rules: Ruleset, node: int) -> int:

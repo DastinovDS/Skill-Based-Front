@@ -29,6 +29,7 @@ from itertools import pairwise
 
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import AtNode, Event, GameState, Group, Mode, Order, event
+from gow_sim.systems.build import interrupt_build, start_build
 from gow_sim.systems.capacity import is_internal
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
 from gow_sim.systems.movement import find_path
@@ -425,7 +426,7 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             group = state.groups[gid]
             delay = rules.orders.planned_delay_ticks if planned else 0
             group.order = Order(path=ok.path[1:], planned=planned, depart_tick=tick + delay)
-            group.build_edge = None  # leaving interrupts the build (SIM-11)
+            interrupt_build(group)  # leaving interrupts the build (SIM-11)
             if group.mode is Mode.DEFENSE:
                 group.mode = Mode.ATTACK  # a move order drops «Защита» for free (DEC-08)
             # TODO(#26): the public intent of a planned order and of «Защита».
@@ -447,20 +448,20 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                     keep.charged += other.charged
             keep.mode = Mode.ATTACK
             keep.order = None
-            keep.build_edge = None
+            interrupt_build(keep)
             return [event(tick, "groups_merged", player=player, group=keep.id, units=keep.units)]
         case SetMode(group=gid, mode=mode):
             group = state.groups[gid]
             group.mode = mode
             group.order = None  # the group stops where it stands
             if mode is not Mode.BUILD:
-                group.build_edge = None
+                interrupt_build(group)
             return []
         case UpgradeRoad(group=gid, edge=eid):
             group = state.groups[gid]
-            group.mode = Mode.BUILD
-            group.build_edge = eid
+            start_build(group, eid, tick)  # a new build: the progress starts from zero
             group.order = None
+            # TODO(#26): the public BUILD intent (DEC-04: builds are public like planned orders).
             return []
         case Recruit(node=node):
             new = state.new_id()
