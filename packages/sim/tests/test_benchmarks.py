@@ -1,8 +1,10 @@
 """Performance budgets of the simulation (AGENTS.md, section 12; SIM-15), with pytest-benchmark.
 
-Budgets are for the reference machine of ``docs/perf.md``. A benchmark fails when it is more
-than 50% over its budget (``REGRESSION``), so a slower CI runner does not fail on noise while a
-real regression does. ``--benchmark-disable`` runs each target once and skips the budget checks.
+Budgets are for the reference machine of ``docs/perf.md``. On another machine they are scaled by
+``speed_factor``: the time of a fixed pure-Python workload that does not use the simulation,
+divided by its time on the reference machine (``REFERENCE_WORKLOAD_S``). A benchmark fails when it
+is more than 50% over its scaled budget (``REGRESSION``). ``--benchmark-disable`` runs each target
+once and skips the budget checks.
 
 Step budget: 40 nodes and 40 groups (``grid40`` of ``conftest.py``: 10 garrisons and 10 extra
 groups per player), both players driven by ``ExpandBot``; the controllers and projections run in
@@ -10,10 +12,14 @@ the untimed setup, so the timed part is ``Match.step`` alone.
 """
 
 import copy
+import timeit
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Final, Protocol
+
+import pytest
 
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef, load_map
@@ -27,6 +33,8 @@ ROOT: Final = Path(__file__).resolve().parents[3]
 MS: Final = 1e-3
 REGRESSION: Final = 1.5
 """Fail above budget x 1.5: a regression of more than 50%."""
+REFERENCE_WORKLOAD_S: Final = 1.29e-3
+"""``_workload()`` on the reference machine (Apple M4, CPython 3.12): best of 30 runs."""
 KEY: Final = bytes(range(32))
 DECIDE_EVERY: Final = 5
 
@@ -61,17 +69,45 @@ class BenchmarkFixture(Protocol):
     ) -> object: ...
 
 
+@dataclass(slots=True)
+class _Item:
+    key: int
+    value: int
+
+
+def _workload() -> int:
+    """Dicts, slotted objects, sorting with a key and a loop: the mix of the simulation."""
+    items = {i: _Item(i, (i * 7919) % 1009) for i in range(5000)}
+    order = sorted(items, key=lambda k: (items[k].value, k))
+    total = 0
+    for k in order:
+        item = items[k]
+        if item.value % 3 == 0:
+            total += item.key
+    return total
+
+
+@pytest.fixture(scope="module")
+def speed_factor() -> float:
+    """How much slower this machine is than the reference one (below 1: faster)."""
+    return min(timeit.repeat(_workload, number=1, repeat=30)) / REFERENCE_WORKLOAD_S
+
+
 def _check(
-    benchmark: BenchmarkFixture, mean_budget: float, p99_budget: float | None = None
+    benchmark: BenchmarkFixture,
+    factor: float,
+    mean_budget: float,
+    p99_budget: float | None = None,
 ) -> None:
     if benchmark.disabled:
         return
     stats = benchmark.stats.stats
-    assert stats.mean <= mean_budget * REGRESSION, f"mean {stats.mean / MS:.3f} ms"
+    limit = factor * REGRESSION
+    assert stats.mean <= mean_budget * limit, f"mean {stats.mean / MS:.3f} ms, x{factor:.2f}"
     if p99_budget is not None:
         data = sorted(stats.data)
         p99 = data[min(len(data) - 1, len(data) * 99 // 100)]
-        assert p99 <= p99_budget * REGRESSION, f"p99 {p99 / MS:.3f} ms"
+        assert p99 <= p99_budget * limit, f"p99 {p99 / MS:.3f} ms, x{factor:.2f}"
 
 
 class _Driver:
@@ -120,7 +156,11 @@ def _supply(state: GameState, rules: Ruleset) -> None:
 
 
 def test_bench_step(
-    benchmark: BenchmarkFixture, grid40_map: MapDef, mvp_rules: Ruleset, expand_bot: BotFactory
+    benchmark: BenchmarkFixture,
+    speed_factor: float,
+    grid40_map: MapDef,
+    mvp_rules: Ruleset,
+    expand_bot: BotFactory,
 ) -> None:
     driver = _Driver(grid40_map, mvp_rules, expand_bot)
     driver.warm(50)
@@ -129,11 +169,15 @@ def test_bench_step(
         return (driver.commands(),), {}
 
     benchmark.pedantic(driver.step, setup=setup, rounds=2000)
-    _check(benchmark, 0.3 * MS, 1.0 * MS)
+    _check(benchmark, speed_factor, 0.3 * MS, 1.0 * MS)
 
 
 def test_bench_supply(
-    benchmark: BenchmarkFixture, grid40_map: MapDef, mvp_rules: Ruleset, expand_bot: BotFactory
+    benchmark: BenchmarkFixture,
+    speed_factor: float,
+    grid40_map: MapDef,
+    mvp_rules: Ruleset,
+    expand_bot: BotFactory,
 ) -> None:
     state = _Driver(grid40_map, mvp_rules, expand_bot).warm(300)
     assert state.packets, "the benchmark state has packets on the way"
@@ -142,19 +186,23 @@ def test_bench_supply(
         return (copy.deepcopy(state),), {}
 
     benchmark.pedantic(partial(_supply, rules=mvp_rules), setup=setup, rounds=500)
-    _check(benchmark, 0.1 * MS)
+    _check(benchmark, speed_factor, 0.1 * MS)
 
 
 def test_bench_project(
-    benchmark: BenchmarkFixture, grid40_map: MapDef, mvp_rules: Ruleset, expand_bot: BotFactory
+    benchmark: BenchmarkFixture,
+    speed_factor: float,
+    grid40_map: MapDef,
+    mvp_rules: Ruleset,
+    expand_bot: BotFactory,
 ) -> None:
     state = _Driver(grid40_map, mvp_rules, expand_bot).warm(300)
     benchmark.pedantic(lambda: project(state, mvp_rules, 0, KEY), rounds=2000)
-    _check(benchmark, 0.3 * MS)
+    _check(benchmark, speed_factor, 0.3 * MS)
 
 
 def test_bench_full_headless_match(
-    benchmark: BenchmarkFixture, mvp_rules: Ruleset, expand_bot: BotFactory
+    benchmark: BenchmarkFixture, speed_factor: float, mvp_rules: Ruleset, expand_bot: BotFactory
 ) -> None:
     mapdef = load_map(ROOT / "maps" / "pautina.json")  # the MVP map with the most edges
 
@@ -163,4 +211,4 @@ def test_bench_full_headless_match(
 
     result = benchmark.pedantic(play, rounds=1, iterations=1)
     assert isinstance(result, MatchResult) and result.outcome is not None
-    _check(benchmark, 8.0)
+    _check(benchmark, speed_factor, 8.0)
