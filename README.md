@@ -33,6 +33,7 @@ docs/adr/                          архитектурные решения
 docs/balance/                      отчёты баланса
 docs/mvp/                          план MVP и список issues
 docs/qa/                           чек-листы
+deploy/                            Dockerfile-ы, Caddyfile, скрипты развёртывания (compose.yaml в корне)
 legacy/                            архив прототипа на Pygame, не собирается и не тестируется
 ```
 
@@ -78,25 +79,26 @@ Dev-экран клиента показывает карту из бандла 
 GitHub Actions, `.github/workflows/ci.yml`. Запускается на PR в `develop` и `main`, на push в `develop`
 и вручную (`workflow_dispatch`).
 
-**Обязательные проверки** (PR мержится только когда обе зелёные):
+**Обязательные проверки** (PR мержится только когда все зелёные):
 
 | Проверка | Что делает |
 |---|---|
 | `py` | `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `pytest` с `HYPOTHESIS_PROFILE=ci` |
 | `web` | `pnpm -C apps/client install --frozen-lockfile`, `lint`, `check`, `test`, `build` |
+| `docker` | `hadolint` для `deploy/*.Dockerfile`, затем `deploy/smoke.sh`: сборка образов, `docker compose up`, проверки через Caddy |
 
-- Вспомогательный job `changes` смотрит на изменённые пути в PR. Если в PR нет изменений для `py` или `web`
+- Вспомогательный job `changes` смотрит на изменённые пути в PR. Если в PR нет изменений для `py`, `web` или `docker`
   (например, правка только документации), соответствующий job пропускается, а GitHub считает пропущенный job
-  успешным: обязательная проверка не зависает в ожидании. Если сам `changes` упал, `py` и `web` запускаются целиком.
+  успешным: обязательная проверка не зависает в ожидании. Если сам `changes` упал, все проверки запускаются целиком.
   На push в `develop` и при ручном запуске проверяется всё.
 - Версии: Python из `.python-version`, pnpm из поля `packageManager`, Node из поля `engines.node`
   в `apps/client/package.json`.
 
 **Branch protection не включена.** Для приватного репозитория на бесплатном плане GitHub API отвечает
 `403 Upgrade to GitHub Pro or make this repository public to enable this feature` (и для branch protection,
-и для rulesets). Пока это так, правило «мерж только при зелёных `py` и `web`» держится на процессе (AGENTS.md, раздел 11).
+и для rulesets). Пока это так, правило «мерж только при зелёных `py`, `web` и `docker`» держится на процессе (AGENTS.md, раздел 11).
 После перехода на Pro или открытия репозитория: Settings → Branches → правило для `develop`
-(и `main`) с обязательными проверками `py` и `web`, без обязательных ревью, без `enforce_admins`.
+(и `main`) с обязательными проверками `py`, `web` и `docker`, без обязательных ревью, без `enforce_admins`.
 
 ## Сервер
 
@@ -137,6 +139,52 @@ HTTP API: `GET /api/health`, `GET /api/maps` (список), `GET /api/maps/{id}
   эмодзи и «пустые» буквы-заполнители запрещены. Уникальность без учёта регистра: колонка
   `nick_key = nick.casefold()` с уникальным индексом (`Straße` и `STRASSE` считаются одним ником).
   Клиент показывает ник только как текст (`AGENTS.md`, раздел 7.4).
+
+## Docker
+
+Прод-стек: `compose.yaml` в корне, образы в `deploy/`. Нужен Docker с Compose v2.
+
+```sh
+cp .env.example .env              # необязательно: без .env игра поднимается на http://localhost
+docker compose up --build -d      # http://localhost, http://localhost/api/health
+deploy/smoke.sh                   # сборка, запуск и проверка стека (то же делает CI job `docker`)
+docker compose logs -f app        # логи сервера (JSON-строки)
+docker compose down               # остановить; данные остаются в томах
+```
+
+| Сервис | Образ | Что делает |
+|---|---|---|
+| `caddy` | `deploy/caddy.Dockerfile`: сборка клиента (Node, pnpm `--frozen-lockfile`) и Caddy со статикой | единственный публичный сервис (80/443): отдаёт клиент, `/api/*` и `/ws/*` проксирует в `app` |
+| `app` | `deploy/app.Dockerfile`: uv (`uv sync --locked --no-dev`), только пакеты, нужные `gow-server` | сервер, один воркер uvicorn; порт 8000 только во внутренней сети |
+
+- **Данные:** том `gow-data` смонтирован в `/data` контейнера `app`: SQLite (`/data/gow.db` с файлами WAL)
+  и реплеи (`/data/replays/`). Миграции сервер применяет при старте. Всё, что сервер пишет на диск, должно
+  лежать в `/data`: корневая файловая система контейнера только для чтения. `/app/data` ведёт в `/data`,
+  поэтому настройки с путём по умолчанию относительно рабочего каталога (`data/...`) тоже попадают в том.
+  Тома `caddy-data` (TLS-сертификаты, ACME-аккаунт) и `caddy-config` не удаляйте без нужды.
+  `docker compose down --volumes` удаляет базу.
+- **Сеть:** `app` подключён только к сети `internal` без выхода наружу, на хост его порт не публикуется.
+  Поэтому `GOW_FORWARDED_ALLOW_IPS=*`: заголовки `X-Forwarded-*` приходят только от Caddy, а Caddy заменяет
+  присланный клиентом `X-Forwarded-For` настоящим адресом.
+- **Безопасность:** оба контейнера работают не от root (uid 10001 `app`, uid 10002 `caddy`), с `cap_drop: ALL`
+  и `no-new-privileges`. Caddy слушает 80/443 без `CAP_NET_BIND_SERVICE` благодаря
+  `net.ipv4.ip_unprivileged_port_start=0` в `compose.yaml`.
+- **Базовые образы** закреплены версией и digest в `deploy/*.Dockerfile`; как обновить, написано там же.
+
+Переменные (`.env`, образец `.env.example`):
+
+| Переменная | По умолчанию | Значение |
+|---|---|---|
+| `SITE_ADDRESS` | `http://localhost` | адрес сайта для Caddy; `http://...` без TLS (локально, e2e), доменное имя включает автоматический HTTPS |
+| `HTTP_PORT`, `HTTPS_PORT` | `80`, `443` | порты на хосте, например `HTTP_PORT=8080`, если 80 занят |
+| `GOW_ENV`, `GOW_LOG_LEVEL`, `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `prod`, `INFO`, `10`, `3600` | настройки сервера (раздел «Сервер»); `e2e` только для прогона Playwright |
+
+В `app` попадают только переменные, перечисленные в `compose.yaml` (`Settings` запрещает неизвестные поля):
+новая настройка сервера для прода добавляется и туда, и в `.env.example`.
+
+Что добавят следующие issues: маршруты, кэширование, CSP и заголовки в `deploy/Caddyfile` (OPS-02, #81);
+подготовка VPS, деплой с осушением матчей и бэкапы тома `gow-data` (OPS-03, #82); метрики и оповещения
+(OPS-04, #83); e2e Playwright против этого стека (QA-02, #84).
 
 ## Прототип на Pygame (`legacy/`)
 

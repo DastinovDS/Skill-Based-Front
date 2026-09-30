@@ -1,0 +1,83 @@
+# Skill-Based Front: production stack (OPS-01, #80). Usage and variables: README.md, section "Docker".
+#
+#   cp .env.example .env        # optional: the defaults run the game on http://localhost
+#   docker compose up --build -d
+#
+# caddy: the only public service (80/443), serves the client and proxies /api/* and /ws/* to app.
+# app:   the game server, reachable only from the internal network, data on the `gow-data` volume.
+
+name: skill-based-front
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: deploy/app.Dockerfile
+    image: skill-based-front/app:local
+    restart: unless-stopped
+    # Only variables listed here reach the server (Settings forbids unknown GOW_* fields).
+    environment:
+      GOW_ENV: ${GOW_ENV:-prod}
+      GOW_LOG_LEVEL: ${GOW_LOG_LEVEL:-INFO}
+      GOW_GUEST_RATE_LIMIT: ${GOW_GUEST_RATE_LIMIT:-10}
+      GOW_GUEST_RATE_WINDOW_S: ${GOW_GUEST_RATE_WINDOW_S:-3600}
+      # app is reachable only through the internal network, i.e. only from Caddy, and Caddy
+      # replaces a client's X-Forwarded-For with the real client address.
+      GOW_FORWARDED_ALLOW_IPS: "*"
+    volumes:
+      - gow-data:/data
+    networks:
+      - internal
+    # No `ports:`: the server is not published on the host.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # Graceful shutdown: uvicorn finishes open requests; OPS-03 (#82) adds match draining.
+    stop_grace_period: 30s
+
+  caddy:
+    build:
+      context: .
+      dockerfile: deploy/caddy.Dockerfile
+    image: skill-based-front/caddy:local
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - internal
+      - edge
+    depends_on:
+      app:
+        condition: service_healthy
+    # Caddy runs as a non-root user and binds 80/443 without CAP_NET_BIND_SERVICE.
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  # No route to the outside world: app talks only to Caddy.
+  internal:
+    internal: true
+  edge: {}
+
+volumes:
+  # SQLite database and replays. Backups: OPS-03 (#82).
+  gow-data:
+  # Caddy TLS certificates and ACME account: keep it, or Let's Encrypt rate limits hit on redeploy.
+  caddy-data:
+  caddy-config:
