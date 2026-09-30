@@ -111,6 +111,7 @@ legacy/                            — архив прототипа, не тр�
 ```
 gow_sim/
   ruleset.py      Ruleset (frozen dataclass) + загрузка TOML
+  canonical.py    канонический JSON и blake2b: основа ruleset_hash() и state_hash()
   maps.py         MapDef + загрузчик
   state.py        GameState, Group, Node, Edge, Packet, Intent; to_canonical(), state_hash()
   commands.py     типы команд, validate(), apply_commands()
