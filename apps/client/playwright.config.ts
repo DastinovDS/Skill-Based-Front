@@ -7,7 +7,7 @@ export default defineConfig({
   testDir: 'visual',
   // Software WebGL on a CI runner draws a few frames per second: give the stability check time.
   timeout: 60_000,
-  expect: { toHaveScreenshot: { timeout: 30_000 } },
+  expect: { timeout: 30_000 },
   // Out of the way of eslint and prettier (and of git).
   outputDir: 'node_modules/.playwright',
   reporter: process.env['CI'] === undefined ? 'list' : 'github',
