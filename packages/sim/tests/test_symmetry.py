@@ -6,8 +6,11 @@ anything: each of its commands is the rot180 mirror of player 0's command with t
 (nodes and edges through the map's mirror tables, groups through the group correspondence). New
 groups of the two players are paired by the ``seq`` of the command that made them.
 
-Systems in the loop, in the fixed order: commands, economy, movement, capacity, supply, vision.
-Combat is SIM-09 (#25); until then groups of both players simply stand or pass each other.
+Systems in the loop, in the fixed order: commands, economy, movement, combat, capacity, supply,
+vision. Fights (DEC-07, SIM-09) happen: on ``pass`` both players reach the central node 3 at once.
+Tie-breaks by group id inside a player stay mirrored because the pairing of groups keeps the id
+order (initial groups get ids by ``node_key``; new groups are made in ``seq`` order); the test
+checks that too.
 """
 
 import dataclasses
@@ -34,6 +37,7 @@ from gow_sim.maps import load_map
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 from gow_sim.state import AtNode, Event, GameState, Group, Location, Mode, OnEdge, initial_state
 from gow_sim.systems.capacity import capacity
+from gow_sim.systems.combat import combat
 from gow_sim.systems.economy import economy
 from gow_sim.systems.movement import find_path, movement, traversal_ticks
 from gow_sim.systems.supply import supply
@@ -89,10 +93,10 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
             cmds.append(Merge(tuple(g.id for g in here)))
             continue
         for g in here:
-            if g.units >= 4:
-                cmds.append(Split(g.id, g.units // 2))
-            elif tick % 70 == 0:
+            if tick % 70 == 5:
                 cmds.append(SetMode(g.id, Mode.DEFENSE))
+            elif g.units >= 2 and tick % 30 == 0:
+                cmds.append(Split(g.id, g.units // 2))
             elif tick % 90 == 0:
                 internal = [
                     e
@@ -160,8 +164,10 @@ def _mirror_location(state: GameState, loc: Location) -> Location:
     match loc:
         case AtNode(node=node):
             return AtNode(state.map.mirror_nodes[node])
-        case OnEdge(edge=edge, from_node=from_node, progress=progress):
-            return OnEdge(state.map.mirror_edges[edge], state.map.mirror_nodes[from_node], progress)
+        case OnEdge(edge=edge, from_node=from_node, progress=progress, back=back):
+            return OnEdge(
+                state.map.mirror_edges[edge], state.map.mirror_nodes[from_node], progress, back
+            )
 
 
 def _mirrored(state: GameState, g: Group) -> tuple[object, ...]:
@@ -218,6 +224,7 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     alive0 = sorted(g for g in state.groups if state.groups[g].owner == 0)
     alive1 = sorted(g for g in state.groups if state.groups[g].owner == 1)
     assert sorted(groups[g] for g in alive0) == alive1
+    assert [groups[g] for g in alive0] == alive1, "the pairing keeps the id order"
     for g0 in alive0:
         assert _plain(state.groups[g0]) == _mirrored(state, state.groups[groups[g0]]), g0
     packets = [
@@ -256,7 +263,7 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
     _assert_mirrored(state, groups)
     pending: list[Command] = []
     kinds: list[str] = []
-    applied = captures = moves_on_edges = 0
+    applied = captures = moves_on_edges = fights = 0
     for tick in range(1, TICKS + 1):
         state.tick = tick
         commands = [PlayerCommand(0, seq, cmd) for seq, cmd in enumerate(pending)]
@@ -278,8 +285,10 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         )
         groups.update(zip(_new_groups(events, 0), _new_groups(events, 1), strict=True))
         economy(state, rules)
-        moved = movement(state, rules)
-        captures += sum(e.kind == "node_captured" for e in moved)
+        state.events = movement(state, rules)
+        state.events += combat(state, rules)
+        captures += sum(e.kind == "node_captured" for e in state.events)
+        fights += sum(e.kind == "fight" for e in state.events)
         capacity(state, rules)
         supply(state, rules)
         vision(state, rules)
@@ -290,6 +299,8 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
     assert applied > 20
     assert {"Move", "Split", "SetMode", "Recruit", "SetStance"} <= set(kinds)
     assert moves_on_edges > 0
-    # On pass the only way out is the central node 3; both players reach it at once, so it
-    # stays neutral (a fight for SIM-09) and nothing is captured.
+    # On pass the only way out is the central node 3; both players reach it at once and fight
+    # there (DEC-07, rule 5) with equal pools, so both bounce and nothing is captured.
     assert captures >= (0 if path.stem == "pass" else 2)
+    if path.stem == "pass":
+        assert fights > 0

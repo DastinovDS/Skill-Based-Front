@@ -65,11 +65,14 @@ class OnEdge:
     """The group moves along ``edge`` away from ``from_node``.
 
     ``progress`` is in thousandths of the edge, ``0..PROGRESS_SCALE``.
+    ``back``: the group bounces (DEC-07, rules 4 and 6) and goes back to ``from_node``; its
+    ``progress`` falls by the steps it grew, so the way back takes as long as the way there.
     """
 
     edge: int
     from_node: int
     progress: int
+    back: bool = False
 
 
 type Location = AtNode | OnEdge
@@ -255,7 +258,10 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
     """State at tick 0: territory, garrisons and warehouses from the map, CP from the ruleset.
 
     Each starting garrison becomes one group in mode ``ATTACK`` (the normal state, DEC-08).
-    Groups get ids in node id order. The stance is ``economy.start_stance`` (open question #104).
+    Groups get ids player by player, each player's in ``node_key(player, node)`` order, so the
+    id order of a player's groups is the mirror of the other player's: tie-breaks by group id
+    inside a player (DEC-07, rule 7) stay mirror-symmetric. The stance is
+    ``economy.start_stance`` (open question #104).
     """
     state = GameState(
         map=mapdef,
@@ -289,8 +295,14 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
         next_id=0,
         events=[],
     )
-    for node in mapdef.nodes:
-        if node.start_units > 0 and node.start_owner is not None:
+    garrisons = sorted(
+        (node.start_owner, mapdef.node_key(node.start_owner, node.id), node.id)
+        for node in mapdef.nodes
+        if node.start_units > 0 and node.start_owner is not None
+    )
+    for _, _, node_id in garrisons:
+        node = mapdef.nodes[node_id]
+        if node.start_owner is not None:
             gid = state.new_id()
             state.groups[gid] = Group(
                 id=gid,
@@ -370,8 +382,14 @@ def _location_data(loc: Location) -> dict[str, object]:
     match loc:
         case AtNode(node=node):
             return {"kind": "node", "node": node}
-        case OnEdge(edge=edge, from_node=from_node, progress=progress):
-            return {"kind": "edge", "edge": edge, "from_node": from_node, "progress": progress}
+        case OnEdge(edge=edge, from_node=from_node, progress=progress, back=back):
+            return {
+                "kind": "edge",
+                "edge": edge,
+                "from_node": from_node,
+                "progress": progress,
+                "back": back,
+            }
 
 
 def _group_data(g: Group) -> dict[str, object]:
@@ -538,11 +556,12 @@ def _parse_location(data: object, where: str) -> Location:
         raw = _obj(data, where, ("kind", "node"))
         return AtNode(node=_int(raw["node"], f"{where}.node", low=0))
     if kind == "edge":
-        raw = _obj(data, where, ("kind", "edge", "from_node", "progress"))
+        raw = _obj(data, where, ("kind", "edge", "from_node", "progress", "back"))
         return OnEdge(
             edge=_int(raw["edge"], f"{where}.edge", low=0),
             from_node=_int(raw["from_node"], f"{where}.from_node", low=0),
             progress=_int(raw["progress"], f"{where}.progress", low=0, high=PROGRESS_SCALE),
+            back=_bool(raw["back"], f"{where}.back"),
         )
     raise StateFormatError(f"{where}.kind: expected 'node' or 'edge', got {kind!r}")
 

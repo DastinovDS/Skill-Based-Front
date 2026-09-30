@@ -95,12 +95,16 @@ def find_path(
 
 @dataclass(frozen=True, slots=True)
 class Arrival:
-    """A group reached ``node`` over ``edge`` from ``from_node`` in this tick."""
+    """A group reached ``node`` over ``edge`` from ``from_node`` in this tick.
+
+    ``back``: the group came home from a bounce (``OnEdge.back``, DEC-07, rules 4 and 6).
+    """
 
     group: int
     node: int
     edge: int
     from_node: int
+    back: bool = False
 
 
 def movement(state: GameState, rules: Ruleset) -> list[Event]:
@@ -119,6 +123,7 @@ def movement(state: GameState, rules: Ruleset) -> list[Event]:
             node=a.node,
             edge=a.edge,
             from_node=a.from_node,
+            back=a.back,
         )
         for a in arrivals
     ]
@@ -135,10 +140,15 @@ def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
     arrivals: list[Arrival] = []
     for gid in sorted(state.groups):
         group = state.groups[gid]
+        location = group.location
+        if isinstance(location, OnEdge) and location.back:
+            arrival = _step_back(state, rules, gid, location)
+            if arrival is not None:
+                arrivals.append(arrival)
+            continue
         order = group.order
         if order is None:
             continue
-        location = group.location
         if isinstance(location, AtNode):
             if state.tick < order.depart_tick:
                 continue  # a planned order waits (DEC-08)
@@ -168,6 +178,28 @@ def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
         group.order = None
         arrivals.append(Arrival(gid, to_node, location.edge, location.from_node))
     return arrivals
+
+
+def _step_back(state: GameState, rules: Ruleset, gid: int, location: OnEdge) -> Arrival | None:
+    """One tick of a bounce: ``progress`` falls by the step it grew by on the way there.
+
+    The step is that of the way there (``traversal_ticks`` into the far end), so a bounce after
+    ``k`` ticks on the edge takes ``k`` ticks (DEC-07, rules 4 and 6). No order is needed.
+    """
+    mapdef = state.map
+    far = mapdef.edges[location.edge].other(location.from_node)
+    ticks = traversal_ticks(mapdef, rules, location.edge, far)
+    # Ticks spent so far, recovered as in ``advance`` (ticks <= 1000), minus this tick.
+    spent = (location.progress * ticks + PROGRESS_SCALE - 1) // PROGRESS_SCALE - 1
+    group = state.groups[gid]
+    if spent > 0:
+        group.location = OnEdge(
+            location.edge, location.from_node, spent * PROGRESS_SCALE // ticks, back=True
+        )
+        return None
+    group.location = AtNode(location.from_node)
+    group.order = None
+    return Arrival(gid, location.from_node, location.edge, far, back=True)
 
 
 def settle_arrivals(state: GameState, arrivals: list[Arrival]) -> list[Event]:
