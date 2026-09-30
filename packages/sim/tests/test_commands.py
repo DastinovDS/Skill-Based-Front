@@ -124,6 +124,16 @@ def _state() -> tuple[GameState, Ids]:
     return state, ids
 
 
+def _room(state: GameState) -> GameState:
+    """Free a place for a recruit in city 1 (DEC-01 needs free capacity, mechanics.md, section 9).
+
+    City 1 holds 3 units (``second`` and ``waiting``); its capacity is 2 + e0 w1 (+1.0) = 3.
+    With e0 at width 3: 2 + 2.0 = 4.
+    """
+    state.edges[0].width = 3
+    return state
+
+
 # The validation table ---------------------------------------------------------------------------
 
 type Make = Callable[[Ids, int], Command]
@@ -234,13 +244,13 @@ def test_missing_target(case: str) -> None:
 )
 def test_player_command_valid(cmd: Command, cost: int) -> None:
     state, _ = _state()
-    _check(state, 0, cmd, Ok(cost=cost))
+    _check(_room(state), 0, cmd, Ok(cost=cost))
 
 
 def test_recruit_without_cp() -> None:
     state, _ = _state()
     state.players[0].cp = 99
-    _check(state, 0, Recruit(1), Reject(RejectCode.NOT_ENOUGH_CP))
+    _check(_room(state), 0, Recruit(1), Reject(RejectCode.NOT_ENOUGH_CP))
 
 
 def test_free_commands_need_no_cp() -> None:
@@ -368,7 +378,7 @@ def test_upgrade_road_rules() -> None:
 def test_recruit_creates_one_discharged_unit() -> None:
     state, _ = _state()
     before = dict(state.groups)
-    apply_commands(state, RULES, [PlayerCommand(0, 1, Recruit(1))])
+    apply_commands(_room(state), RULES, [PlayerCommand(0, 1, Recruit(1))])
     (new,) = [g for gid, g in state.groups.items() if gid not in before]
     assert (new.owner, new.units, new.charged, new.location) == (0, 1, 0, AtNode(1))
 
@@ -426,7 +436,7 @@ def test_arrival_order_does_not_matter() -> None:
     outcomes: list[tuple[str, list[tuple[int, int, Ok | Reject]]]] = []
     for order in _arrival_orders(_mixed(ids)):
         run, _ = _state()
-        results, _ = apply_commands(run, RULES, order)
+        results, _ = apply_commands(_room(run), RULES, order)
         outcomes.append((state_hash(run), [(r.player, r.seq, r.outcome) for r in results]))
     assert all(o == outcomes[0] for o in outcomes)
     codes = [None if isinstance(o, Ok) else o.code for _, _, o in outcomes[0][1]]
@@ -474,7 +484,7 @@ def test_seq_orders_one_players_commands() -> None:
     state, ids = _state()
     state.players[0].cp = 100
     results, _ = apply_commands(
-        state,
+        _room(state),
         RULES,
         [PlayerCommand(0, 9, Recruit(1)), PlayerCommand(0, 3, Split(ids.capital, 1))],
     )

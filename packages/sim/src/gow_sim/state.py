@@ -135,6 +135,8 @@ class Node:
     """Consecutive ticks the owner's standing units exceed the capacity (attrition, SIM-07)."""
     captured_tick: int | None
     """Tick of the last owner change; ``None`` for the starting owner (attrition grace)."""
+    recruited_tick: int | None = None
+    """Tick of the last recruit in this city (DEC-01 cooldown, SIM-12); ``None``: never."""
 
 
 @dataclass(slots=True)
@@ -360,6 +362,7 @@ def _node_data(n: Node) -> dict[str, object]:
         "warehouse": n.warehouse,
         "over_ticks": n.over_ticks,
         "captured_tick": n.captured_tick,
+        "recruited_tick": n.recruited_tick,
     }
 
 
@@ -503,13 +506,18 @@ def _parse_player(data: object, where: str) -> PlayerState:
 
 
 def _parse_node(data: object, where: str) -> Node:
-    raw = _obj(data, where, ("id", "owner", "warehouse", "over_ticks", "captured_tick"))
+    raw = _obj(
+        data,
+        where,
+        ("id", "owner", "warehouse", "over_ticks", "captured_tick", "recruited_tick"),
+    )
     return Node(
         id=_int(raw["id"], f"{where}.id", low=0),
         owner=_opt_int(raw["owner"], f"{where}.owner"),
         warehouse=_int(raw["warehouse"], f"{where}.warehouse", low=0),
         over_ticks=_int(raw["over_ticks"], f"{where}.over_ticks", low=0),
         captured_tick=_opt_int(raw["captured_tick"], f"{where}.captured_tick"),
+        recruited_tick=_opt_int(raw["recruited_tick"], f"{where}.recruited_tick"),
     )
 
 
