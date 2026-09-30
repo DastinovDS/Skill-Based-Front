@@ -113,26 +113,43 @@ def vision(state: GameState, rules: Ruleset) -> list[Event]:
     """
     del rules  # the vision rules of DEC-04 have no numbers
     for player in sorted(state.players):
-        levels = compute_vision(state, player)
-        at_node: dict[int, list[Group]] = {}
-        on_edge: dict[int, list[Group]] = {}
-        for gid in sorted(state.groups):
-            group = state.groups[gid]
-            if group.owner == player:
-                continue
-            match group.location:
-                case AtNode(node=node):
-                    at_node.setdefault(node, []).append(group)
-                case OnEdge(edge=edge):
-                    on_edge.setdefault(edge, []).append(group)
+        nodes, edges = current_sightings(state, player, compute_vision(state, player))
         memory = state.vision_memory[player]
-        for n, level in enumerate(levels.nodes):
-            if level is not Detail.FOG:
-                memory.nodes[n] = _sighting(state.tick, level, at_node.get(n, []))
-        for e, level in enumerate(levels.edges):
-            if level is not Detail.FOG:
-                memory.edges[e] = _sighting(state.tick, level, on_edge.get(e, []))
+        memory.nodes.update(nodes)
+        memory.edges.update(edges)
     return []
+
+
+def current_sightings(
+    state: GameState, player: int, levels: Vision
+) -> tuple[dict[int, Sighting], dict[int, Sighting]]:
+    """What ``player`` sees now: a ``Sighting`` of this tick for every node and edge not in fog.
+
+    Returns ``(nodes, edges)`` keyed by id, in ascending id order. Used by the ``vision`` system
+    for the fog memory and by the projection (SIM-14) for the places in sight.
+    """
+    at_node: dict[int, list[Group]] = {}
+    on_edge: dict[int, list[Group]] = {}
+    for gid in sorted(state.groups):
+        group = state.groups[gid]
+        if group.owner == player:
+            continue
+        match group.location:
+            case AtNode(node=node):
+                at_node.setdefault(node, []).append(group)
+            case OnEdge(edge=edge):
+                on_edge.setdefault(edge, []).append(group)
+    nodes = {
+        n: _sighting(state.tick, level, at_node.get(n, []))
+        for n, level in enumerate(levels.nodes)
+        if level is not Detail.FOG
+    }
+    edges = {
+        e: _sighting(state.tick, level, on_edge.get(e, []))
+        for e, level in enumerate(levels.edges)
+        if level is not Detail.FOG
+    }
+    return nodes, edges
 
 
 def _sighting(tick: int, level: Detail, enemies: list[Group]) -> Sighting:
