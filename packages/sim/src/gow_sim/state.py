@@ -96,6 +96,9 @@ class PlayerState:
     charge_acc: int
     """Stance share of the CP quantum waiting to become whole charges, in hundredths (DEC-02)."""
     vp: int
+    stance_changed_tick: int | None
+    """Tick of the last stance change; ``None``: never changed, so the first change is free of the
+    cooldown (#104 default)."""
 
 
 @dataclass(slots=True)
@@ -223,7 +226,12 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
         tick=0,
         players={
             p: PlayerState(
-                id=p, cp=rules.cp.start, stance=rules.economy.start_stance, charge_acc=0, vp=0
+                id=p,
+                cp=rules.cp.start,
+                stance=rules.economy.start_stance,
+                charge_acc=0,
+                vp=0,
+                stance_changed_tick=None,
             )
             for p in PLAYERS
         },
@@ -299,6 +307,7 @@ def _player_data(p: PlayerState) -> dict[str, object]:
         "stance": p.stance.value,
         "charge_acc": p.charge_acc,
         "vp": p.vp,
+        "stance_changed_tick": p.stance_changed_tick,
     }
 
 
@@ -422,13 +431,14 @@ def _collection[T: _HasId](
 
 
 def _parse_player(data: object, where: str) -> PlayerState:
-    raw = _obj(data, where, ("id", "cp", "stance", "charge_acc", "vp"))
+    raw = _obj(data, where, ("id", "cp", "stance", "charge_acc", "vp", "stance_changed_tick"))
     return PlayerState(
         id=_int(raw["id"], f"{where}.id", low=0),
         cp=_int(raw["cp"], f"{where}.cp", low=0),
         stance=Stance(_choice(raw["stance"], f"{where}.stance", Stance)),
         charge_acc=_int(raw["charge_acc"], f"{where}.charge_acc", low=0),
         vp=_int(raw["vp"], f"{where}.vp", low=0),
+        stance_changed_tick=_opt_int(raw["stance_changed_tick"], f"{where}.stance_changed_tick"),
     )
 
 

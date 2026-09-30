@@ -60,6 +60,7 @@ def _rich_state(rules: Ruleset) -> GameState:
     state.players[0].cp = 250
     state.players[1].stance = Stance.WAR
     state.players[1].charge_acc = 50
+    state.players[1].stance_changed_tick = 101
     state.players[0].vp = 12
     state.nodes[1].owner = 0
     state.nodes[1].warehouse = 3
@@ -310,6 +311,7 @@ def _states(draw: st.DrawFn) -> GameState:
         player.stance = draw(st.sampled_from(list(Stance)))
         player.charge_acc = draw(st.integers(min_value=0, max_value=99))
         player.vp = draw(st.integers(min_value=0, max_value=1000))
+        player.stance_changed_tick = draw(st.none() | st.integers(min_value=0, max_value=7200))
     for node in state.nodes.values():
         node.owner = draw(st.none() | players)
         node.warehouse = draw(_small)
