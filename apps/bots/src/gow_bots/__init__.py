@@ -1,0 +1,1 @@
+"""Bots and tournament harness."""

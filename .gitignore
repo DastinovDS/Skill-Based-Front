@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+build/
+
+# Node / client
+node_modules/
+dist/
+
+# Runtime data (server database, replays). Anchored to the root:
+# legacy/rts_core/data/ is part of the archived prototype.
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store

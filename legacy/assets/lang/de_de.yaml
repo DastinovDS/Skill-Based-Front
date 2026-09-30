@@ -1,0 +1,54 @@
+name: "Deutsche"
+widgets:
+  game:
+    leaderboard:
+      name: "Top 5 Spieler"
+      player-pos: "Du bist auf Platz {0}"
+    provincehud:
+      province-name: "Provinz: {0}"
+      province-info: "Gruppe: {0} | Armee: {1}"
+    unitrow:
+      unit-info: "Gruppe: {0} Mann | Typ: {1}"
+    resourcelist:
+      food.name: "Nahrung"
+      oil.name: "Öl"
+      metal.name: "Metall"
+      fossils.name: "Fossilien"
+      money.name: "Geld"
+  containers:
+    armymanagerwindow:
+      name: "Armeemanager"
+      merge-button: "Alle sammeln"
+
+units:
+  tank:
+    name: "Panzer"
+    description-tipp: "Gepanzerter Durchbruch der Verteidigung."
+  infantry:
+    name: "Infanterie"
+    description-tipp: "Günstig und schnell zu produzieren."
+  artillery:
+    name: "Artillerie"
+    description-tipp: "Enormer Schaden auf große Distanz."
+
+buildings:
+  metal-mine:
+    name: "Metallmine"
+    description-tipp: "Erschließung von Metallerzvorkommen. Notwendig für die Produktion jeglicher Technik und den Bau fortschrittlicher Strukturen."
+  barracks:
+    name: "Kaserne"
+    description-tipp: "Ausbildungszentrum für Personal. Ermöglicht die Rekrutierung von Infanterieeinheiten und die Koordinierung der Provinzverteidigung."
+  factory:
+    name: "Fabrik"
+    description-tipp: "Industriekomplex. Sorgt für einen stabilen Ressourcenfluss und ermöglicht den Zugang zur Produktion schwerer Waffen."
+
+radial-menu:
+  back-button: "Zurück"
+  province:
+    cancel-button: "Menü schließen."
+    build-button: "Baumenü öffnen."
+    train-button: "Neue Einheiten für die Armee ausbilden."
+    text:
+      cancel-button: "Abbrechen"
+      build-button: "Bauen"
+      train-button: "Rekrutieren"

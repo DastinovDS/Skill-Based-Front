@@ -1,0 +1,12 @@
+
+class UITheme:
+    FONT_SIZE_SMALL = 15
+    FONT_SIZE_MAIN = 24
+    FONT_SIZE_HEADER = 28
+
+    COLOR_BG = (30, 30, 30, 200)
+    COLOR_ACCENT = (0, 200, 50)
+    COLOR_TEXT = (255, 255, 255)
+    
+    PADDING = 10
+    ROUNDING = 5

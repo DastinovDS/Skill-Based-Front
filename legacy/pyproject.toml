@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Game_of_War"
+version = "0.1.0"
+requires-python = ">=3.11,<3.14"
+description = "RTS game"
+authors = [
+    { name="DastinovDS"},
+    { name="skyred"}
+]
+
+dependencies = [
+    "numpy>=2.4.2",
+    "pygame",
+    "pyinstaller>=6.20.0",
+    "pytz",
+    "pyyaml>=6.0.3",
+    "tzlocal",
+]
+
+[tool.setuptools]
+packages = ["rts_core"]
