@@ -136,13 +136,27 @@ def test_a_path_takes_the_sum_of_its_edges() -> None:
     state = initial_state(mapdef, RULES)
     gid = _group(state, 0, 0)
     _step(state, [PlayerCommand(0, 1, Move(gid, 3))])
-    arrived: dict[int, int] = {}
+    reached: dict[int, int] = {}
     while state.tick < 200:
-        loc = state.groups[gid].location
-        if isinstance(loc, AtNode) and loc.node not in arrived:
-            arrived[loc.node] = state.tick
+        match state.groups[gid].location:
+            case AtNode(node=node) | OnEdge(from_node=node, progress=0):
+                reached.setdefault(node, state.tick)
+            case OnEdge():
+                pass
         _step(state)
-    assert arrived == {1: 24, 2: 24 + 30, 3: 24 + 30 + 42}
+    assert reached == {1: 24, 2: 24 + 30, 3: 24 + 30 + 42}
+
+
+def test_transit_never_stands_in_an_intermediate_node() -> None:
+    """Between ticks a group passing an own node is on the next edge (#118: transit)."""
+    mapdef = _line(["forest"] * 4, [0, 0, 0, 1], [30, 30, 30])
+    state = initial_state(mapdef, RULES)
+    gid = _group(state, 0, 0)
+    _step(state, [PlayerCommand(0, 1, Move(gid, 3))])
+    while state.tick < 90:
+        assert not isinstance(state.groups[gid].location, AtNode), state.tick
+        _step(state)
+    assert state.groups[gid].location == AtNode(3)
 
 
 def test_planned_order_departs_after_the_delay() -> None:
@@ -286,6 +300,7 @@ def test_on_edge_order_keeps_the_rest_of_the_path() -> None:
     assert state.groups[gid].order == Order(path=(1, 2, 3), planned=False, depart_tick=1)
     while state.tick < 30:
         _step(state)
+    assert state.groups[gid].location == OnEdge(edge=1, from_node=1, progress=0)
     assert state.groups[gid].order == Order(path=(2, 3), planned=False, depart_tick=1)
 
 

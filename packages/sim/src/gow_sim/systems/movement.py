@@ -19,9 +19,11 @@ Rules (mechanics.md, sections 4 and 5; DEC-07, rules 6 and 8; AGENTS.md, section
   (SIM-09, #25), which runs after this system. No step depends on the order of the players.
 
 Timing: a group whose order may depart this tick (``state.tick >= order.depart_tick``) leaves
-its node and makes its first step in the same tick; arriving at an intermediate own node, it
-stands there until the next tick. A path of edges of ``T1`` and ``T2`` ticks thus takes
-``T1 + T2`` ticks.
+its node and makes its first step in the same tick. An intermediate own node is passed without a
+stop: in the tick of reaching it the group is already on the next edge with ``progress == 0``, so
+between ticks a group in transit is never ``AtNode`` (capacity counts only standing groups,
+#118). A path of edges of ``T1`` and ``T2`` ticks thus takes ``T1 + T2`` ticks. Only reaching
+the end of the path (the destination, or a node that is no longer own) is an ``Arrival``.
 """
 
 import heapq
@@ -30,6 +32,7 @@ from dataclasses import dataclass
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import PROGRESS_SCALE, AtNode, Event, GameState, OnEdge, Order, event
+from gow_sim.systems.capacity import change_owner
 
 
 def traversal_ticks(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int) -> int:
@@ -153,18 +156,25 @@ def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
                 location.edge, location.from_node, spent * PROGRESS_SCALE // ticks
             )
             continue
-        group.location = AtNode(to_node)
-        arrivals.append(Arrival(gid, to_node, location.edge, location.from_node))
         rest = order.path[1:] if order.path and order.path[0] == to_node else ()
         if rest and state.nodes[to_node].owner == group.owner:
-            group.order = Order(rest, order.planned, order.depart_tick)
-        else:
-            group.order = None  # the destination, or a foreign or neutral node: the target
+            eid = edge_between(mapdef, to_node, rest[0])
+            if eid is not None:  # pass through the own node
+                group.location = OnEdge(edge=eid, from_node=to_node, progress=0)
+                group.order = Order(rest, order.planned, order.depart_tick)
+                continue
+        # The destination, or a foreign or neutral node: the target of an attack or a capture.
+        group.location = AtNode(to_node)
+        group.order = None
+        arrivals.append(Arrival(gid, to_node, location.edge, location.from_node))
     return arrivals
 
 
 def settle_arrivals(state: GameState, arrivals: list[Arrival]) -> list[Event]:
-    """Phase 2: capture every empty neutral node where only one player's groups now stand."""
+    """Phase 2: capture every empty neutral node where only one player's groups now stand.
+
+    The capture goes through ``change_owner`` (SIM-07): grace period, empty warehouse.
+    """
     events: list[Event] = []
     for node_id in sorted(dict.fromkeys(a.node for a in arrivals)):
         node = state.nodes[node_id]
@@ -178,6 +188,6 @@ def settle_arrivals(state: GameState, arrivals: list[Arrival]) -> list[Event]:
             )
         )
         if len(owners) == 1:
-            node.owner = owners[0]
+            events.extend(change_owner(state, node_id, owners[0]))
             events.append(event(state.tick, "node_captured", node=node_id, player=owners[0]))
     return events
