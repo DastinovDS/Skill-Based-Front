@@ -5,6 +5,7 @@ docs/design/mechanics.md (DEC-07) and are exercised against the real combat code
 """
 
 import json
+import tomllib
 from pathlib import Path
 from typing import cast
 
@@ -12,6 +13,7 @@ import pytest
 
 VECTORS_DIR = Path(__file__).resolve().parents[1] / "vectors"
 COMBAT_PATH = VECTORS_DIR / "combat.json"
+RULESET_PATH = Path(__file__).resolve().parents[3] / "rulesets" / "mvp-0.toml"
 
 SIDES = ("a", "b")
 LOCATIONS = {"node_attack", "edge_meeting", "neutral_arrival", "empty_enemy_node"}
@@ -103,6 +105,15 @@ def test_combat_header() -> None:
         _int(mod)
     _int(params["planned_bonus"])
     _int(params["defense_bonus"])
+
+
+def test_combat_params_match_mvp0_ruleset() -> None:
+    params = _obj(_load_combat()["params"])
+    ruleset = _obj(tomllib.loads(RULESET_PATH.read_text(encoding="utf-8")))
+    orders = _obj(ruleset["orders"])
+    assert params["terrain_defense_mod"] == _obj(ruleset["terrain"])["defense_mod"]
+    assert params["planned_bonus"] == orders["planned_bonus"]
+    assert params["defense_bonus"] == orders["defense_bonus"]
 
 
 def test_combat_ids_are_1_to_16() -> None:

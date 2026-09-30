@@ -17,7 +17,7 @@
 |---|---|
 | `schema_version` | версия схемы файла, сейчас `1` |
 | `source` | откуда взяты правила и примеры |
-| `params` | числа правил, с которыми посчитаны примеры: `terrain_defense_mod` (`mountains` / `forest` / `plains`), `planned_bonus`, `defense_bonus`. Совпадают с `rulesets/mvp-0.toml` |
+| `params` | числа правил, с которыми посчитаны примеры: `terrain_defense_mod` (`mountains` / `forest` / `plains`), `planned_bonus`, `defense_bonus`. Совпадают с `rulesets/mvp-0.toml` (`terrain.defense_mod`, `orders.planned_bonus`, `orders.defense_bonus`); это проверяет тест |
 | `vectors` | список примеров, `id` от 1 до 16 совпадает с номером строки таблицы |
 
 Пример (`vectors[i]`). Стороны всегда называются `a` и `b`: в бою за узел `a` атакует, `b` защищает.
