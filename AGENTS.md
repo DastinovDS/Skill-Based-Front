@@ -85,6 +85,7 @@ legacy/                            — архив прототипа, не тр�
 | `uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol` | перегенерация схемы и TS-типов | PRO-02 |
 | `uv run gow-maps validate maps/*.json` | проверка карт | MAP-02 |
 | `uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json` | собрать карту из половины (половины лежат в `maps/src/`) | MAP-03 |
+| `uv run gow-maps preview maps/*.json` | нарисовать превью `maps/<name>.preview.png` | MAP-04 |
 | `uv run python -m gow_sim.replay check packages/sim/tests/golden/v*/**` | проверить реплеи | SIM-16 |
 | `uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-0.toml` | турнир ботов | BOT-04 |
 | `uv run gow-bots report docs/balance/latest.jsonl` | отчёт баланса | BOT-05 |

@@ -97,7 +97,7 @@ forbidden_modules = ["gow_protocol", "gow_server", "gow_bots", "gow_maps"]
 name = "gow_sim does not import the map tools' third-party packages"
 type = "forbidden"
 source_modules = ["gow_sim"]
-forbidden_modules = ["networkx"]
+forbidden_modules = ["networkx", "matplotlib"]
 
 [[tool.importlinter.contracts]]
 name = "gow_protocol does not import gow_server or gow_bots"
