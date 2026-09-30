@@ -71,7 +71,7 @@ def _rich_state(rules: Ruleset) -> GameState:
     gid = state.new_id()
     state.groups[gid] = Group(gid, 0, 2, 1, Mode.DEFENSE, OnEdge(edge=1, from_node=0, progress=333))
     gid = state.new_id()
-    state.groups[gid] = Group(gid, 1, 1, 0, Mode.BUILD, AtNode(3), build_edge=2)
+    state.groups[gid] = Group(gid, 1, 1, 0, Mode.BUILD, AtNode(3), build_edge=2, build_since=130)
     gid = state.new_id()
     state.groups[gid] = Group(
         gid, 1, 2, 2, Mode.ATTACK, AtNode(3), order=Order((1, 0), planned=True, depart_tick=150)
@@ -248,6 +248,7 @@ _GROUP0: dict[str, Any] = {
     "location": {"kind": "node", "node": 0},
     "order": None,
     "build_edge": None,
+    "build_since": None,
 }
 
 
@@ -272,6 +273,7 @@ def _set(data: Any, path: tuple[str | int, ...], value: object) -> None:
         (("groups", 0, "charged"), 5, r"groups\[0\]\.charged: 5 is out of range"),
         (("groups", 0, "mode"), "sleep", r"groups\[0\]\.mode: expected one of"),
         (("groups", 2), _GROUP0, r"groups\[2\]\.id: duplicate id 0"),
+        (("groups", 0, "build_edge"), 0, r"groups\[0\]: build_edge and build_since"),
         (
             ("groups", 0, "location"),
             {"kind": "air"},
@@ -363,8 +365,10 @@ def _states(draw: st.DrawFn) -> GameState:
                     st.integers(min_value=0, max_value=7200),
                 )
             ),
-            build_edge=draw(st.none() | edges),
         )
+        if draw(st.booleans()):
+            state.groups[gid].build_edge = draw(edges)
+            state.groups[gid].build_since = draw(st.integers(min_value=0, max_value=7200))
     for _ in range(draw(st.integers(min_value=0, max_value=3))):
         pid = state.new_id()
         edge = mapdef.edges[draw(edges)]

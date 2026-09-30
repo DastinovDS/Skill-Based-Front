@@ -103,6 +103,8 @@ class Group:
     """Current movement order; ``None`` when the group has none."""
     build_edge: int | None = None
     """Edge the group upgrades (``UpgradeRoad``, SIM-11); ``None`` when it builds nothing."""
+    build_since: int | None = None
+    """Tick the current road level started (SIM-11); set exactly when ``build_edge`` is set."""
 
 
 @dataclass(slots=True)
@@ -379,6 +381,7 @@ def _group_data(g: Group) -> dict[str, object]:
         "location": _location_data(g.location),
         "order": None if g.order is None else _order_data(g.order),
         "build_edge": g.build_edge,
+        "build_since": g.build_since,
     }
 
 
@@ -540,9 +543,23 @@ def _parse_group(data: object, where: str) -> Group:
     raw = _obj(
         data,
         where,
-        ("id", "owner", "units", "charged", "mode", "location", "order", "build_edge"),
+        (
+            "id",
+            "owner",
+            "units",
+            "charged",
+            "mode",
+            "location",
+            "order",
+            "build_edge",
+            "build_since",
+        ),
     )
     units = _int(raw["units"], f"{where}.units", low=0)
+    build_edge = _opt_int(raw["build_edge"], f"{where}.build_edge")
+    build_since = _opt_int(raw["build_since"], f"{where}.build_since")
+    if (build_edge is None) != (build_since is None):
+        raise StateFormatError(f"{where}: build_edge and build_since are set only together")
     return Group(
         id=_int(raw["id"], f"{where}.id", low=0),
         owner=_int(raw["owner"], f"{where}.owner", low=0),
@@ -551,7 +568,8 @@ def _parse_group(data: object, where: str) -> Group:
         mode=Mode(_choice(raw["mode"], f"{where}.mode", Mode)),
         location=_parse_location(raw["location"], f"{where}.location"),
         order=None if raw["order"] is None else _parse_order(raw["order"], f"{where}.order"),
-        build_edge=_opt_int(raw["build_edge"], f"{where}.build_edge"),
+        build_edge=build_edge,
+        build_since=build_since,
     )
 
 
