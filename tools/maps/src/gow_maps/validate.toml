@@ -1,0 +1,21 @@
+# Пороги валидатора карт (MAP-02, #14). Это требования к дизайну карт, а не числа правил игры:
+# симуляция их не читает. Описание проверок: docs/design/map-format.md, раздел «Валидатор».
+
+# Не больше 5 дорог у города (mechanics.md, раздел 14: лимит степени узла 4–5).
+max_degree = 5
+
+# От каждой столицы к каждому городу с vp >= disjoint_paths_min_vp ведут не меньше
+# min_disjoint_paths путей без общих дорог: одним разрезом такой город не отрезать.
+disjoint_paths_min_vp = 2
+min_disjoint_paths = 2
+
+# Нейтральное пространство (mechanics.md, раздел 11): не меньше min_neutral_pct процентов узлов
+# без стартового владельца, у которых расстояния до двух столиц (в дорогах) отличаются
+# не больше чем на neutral_max_distance_diff.
+min_neutral_pct = 20
+neutral_max_distance_diff = 1
+
+# travel_ticks дороги согласован с её длиной: ожидается длина * travel_ticks_per_100_units / 100
+# тиков (100 единиц мира = 3 секунды), допуск travel_tolerance_pct процентов, не меньше 1 тика.
+travel_ticks_per_100_units = 30
+travel_tolerance_pct = 25
