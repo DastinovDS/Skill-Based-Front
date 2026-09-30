@@ -1,9 +1,22 @@
-import type { Application } from 'pixi.js';
-import type { MapFile } from '../protocol.gen.ts';
+import { Assets, type Application, type Texture } from 'pixi.js';
+import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { labelResolution, NO_INSETS, type Camera, type Insets } from './camera.ts';
 import { CameraController } from './cameraController.ts';
+import { EntityView } from './entityView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
 import { MapView } from './mapView.ts';
+import type { RenderSource } from './source.ts';
+
+export interface SceneOptions {
+  /** Frames and events to draw; without it only the static map is shown. */
+  source?: RenderSource | null;
+  /** The viewing player: own groups and packets are this player's. Default 0. */
+  player?: PlayerId;
+  /** URL of the baked background PNG (`maps/<id>.bg.png`); without it flat terrain colours. */
+  backgroundUrl?: string | null;
+  /** Called when a frame built on a new snapshot is drawn for the first time (tick of it). */
+  onsnapshot?: (tick: number) => void;
+}
 
 /**
  * One map on the stage: layers, the static map view and the camera. Created per map and
@@ -12,16 +25,25 @@ import { MapView } from './mapView.ts';
 export class MapScene {
   readonly layers: MapLayers;
   private readonly view: MapView;
+  private readonly entities: EntityView;
   private readonly controller: CameraController;
+  private source: RenderSource | null;
+  private base: unknown = null;
+  private destroyed = false;
+  private readonly onsnapshot: ((tick: number) => void) | undefined;
 
   constructor(
     private readonly app: Application,
     map: MapFile,
     insets: Insets = NO_INSETS,
+    options: SceneOptions = {},
   ) {
+    this.source = options.source ?? null;
+    this.onsnapshot = options.onsnapshot;
     this.layers = createLayers();
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.
     this.view = new MapView(map, this.layers, 1);
+    this.entities = new EntityView(map, this.layers, options.player ?? 0, 1);
     this.controller = new CameraController(
       app.canvas,
       this.layers.world,
@@ -32,6 +54,15 @@ export class MapScene {
     );
     app.stage.addChild(this.layers.world);
     app.renderer.on('resize', this.onResize);
+    app.ticker.add(this.onFrame);
+    if (options.backgroundUrl !== undefined && options.backgroundUrl !== null) {
+      void this.loadBackground(options.backgroundUrl);
+    }
+  }
+
+  setSource(source: RenderSource | null): void {
+    this.source = source;
+    this.base = null;
   }
 
   /** "Fit map": show the whole map. */
@@ -45,12 +76,49 @@ export class MapScene {
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.app.renderer.off('resize', this.onResize);
+    this.app.ticker.remove(this.onFrame);
     this.controller.destroy();
+    this.entities.destroy();
     this.view.destroy();
+    if (this.backgroundUrl !== null) {
+      void Assets.unload(this.backgroundUrl);
+    }
     // Layers are empty now; destroy the containers themselves.
     this.layers.world.destroy({ children: true });
   }
+
+  private backgroundUrl: string | null = null;
+
+  private async loadBackground(url: string): Promise<void> {
+    try {
+      const texture = await Assets.load<Texture>(url);
+      if (this.destroyed) {
+        void Assets.unload(url);
+        return;
+      }
+      this.backgroundUrl = url;
+      this.view.setBackground(texture);
+    } catch (error) {
+      // No background is not fatal: the flat terrain colours stay.
+      console.warn('map background failed to load', error);
+    }
+  }
+
+  /** Every frame: owners and road widths from a new snapshot, then the moving entities. */
+  private readonly onFrame = (): void => {
+    const frame = this.source?.frame();
+    if (frame === undefined || frame === null || this.source === null) return;
+    const announce = frame.base !== this.base;
+    if (announce) {
+      this.base = frame.base;
+      this.view.setOwners(frame.base.view.nodes.map((node) => node.owner));
+      this.view.setRoadWidths(frame.base.view.edges.map((edge) => edge.width));
+    }
+    this.entities.update(frame, this.source.events());
+    if (announce) this.onsnapshot?.(frame.base.tick);
+  };
 
   private readonly onResize = (width: number, height: number): void => {
     this.controller.resize({ width, height });
@@ -58,6 +126,8 @@ export class MapScene {
 
   private readonly onCamera = (camera: Camera): void => {
     // Also runs on resize, so a new device pixel ratio (window moved to another screen) applies.
-    this.view.setLabelResolution(labelResolution(camera.scale, this.app.renderer.resolution));
+    const resolution = labelResolution(camera.scale, this.app.renderer.resolution);
+    this.view.setLabelResolution(resolution);
+    this.entities.setLabelResolution(resolution);
   };
 }

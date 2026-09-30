@@ -1,4 +1,12 @@
-import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
+import {
+  Container,
+  Graphics,
+  GraphicsContext,
+  Sprite,
+  Text,
+  TextStyle,
+  type Texture,
+} from 'pixi.js';
 import type { MapFile, PlayerId, Terrain } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
@@ -6,6 +14,9 @@ import {
   CAPITAL_RADIUS,
   CAPITAL_STAR,
   CELL_BORDER,
+  GLYPH_OUTLINE,
+  HALO,
+  HALO_INSET,
   INNER_RING,
   INNER_RING_INSET,
   MAP_BORDER,
@@ -14,6 +25,8 @@ import {
   NODE_RADIUS,
   OWNER_OUTLINE,
   PLAYER_COLOR,
+  ROAD_CASING,
+  ROAD_CASING_EXTRA,
   ROAD_COLOR,
   TERRAIN_FILL,
   TERRAIN_GLYPH,
@@ -52,14 +65,19 @@ export class MapView {
   private readonly shared: GraphicsContext[] = [];
   private readonly body: Readonly<Record<OwnerKey, GraphicsContext>>;
   private readonly roadContext: GraphicsContext;
+  private readonly casingContext: GraphicsContext;
   private readonly labelStyle: TextStyle;
   private readonly cells: Point[][];
-  private readonly background: Graphics;
+  private readonly terrainFill: Graphics;
+  private readonly mapFrame: Graphics;
+  private backdrop: Sprite | null = null;
   private readonly territory: Graphics;
   private readonly roads: Graphics[];
+  private readonly casings: Graphics[];
   private readonly nodes: Container[];
   private readonly bodies: Graphics[] = [];
   private readonly labels: Text[] = [];
+  private readonly layers: MapLayers;
 
   constructor(
     private readonly map: MapFile,
@@ -71,13 +89,25 @@ export class MapView {
 
     this.body = {
       neutral: this.context((g) =>
-        g.circle(0, 0, NODE_RADIUS).fill(NEUTRAL_FILL).stroke(NEUTRAL_OUTLINE),
+        g
+          .circle(0, 0, NODE_RADIUS + HALO_INSET)
+          .stroke(HALO)
+          .circle(0, 0, NODE_RADIUS)
+          .fill(NEUTRAL_FILL)
+          .stroke(NEUTRAL_OUTLINE),
       ),
       player0: this.context((g) =>
-        g.circle(0, 0, NODE_RADIUS).fill(PLAYER_COLOR[0]).stroke(OWNER_OUTLINE),
+        g
+          .circle(0, 0, NODE_RADIUS + HALO_INSET)
+          .stroke(HALO)
+          .circle(0, 0, NODE_RADIUS)
+          .fill(PLAYER_COLOR[0])
+          .stroke(OWNER_OUTLINE),
       ),
       player1: this.context((g) =>
         g
+          .circle(0, 0, NODE_RADIUS + HALO_INSET)
+          .stroke(HALO)
           .circle(0, 0, NODE_RADIUS)
           .fill(PLAYER_COLOR[1])
           .stroke(OWNER_OUTLINE)
@@ -98,14 +128,16 @@ export class MapView {
           .rect(-1, 2, 2, 3)
           .fill(TERRAIN_GLYPH)
           .poly([-4.5, 2.5, 0, -5, 4.5, 2.5])
-          .fill(TERRAIN_GLYPH),
+          .fill(TERRAIN_GLYPH)
+          .stroke(GLYPH_OUTLINE),
       ),
       mountains: this.context((g) =>
         g
           .poly([-6, 4, -2, -3, 2, 4])
           .fill(TERRAIN_GLYPH)
           .poly([-1, 4, 2.5, -5, 6, 4])
-          .fill(TERRAIN_GLYPH),
+          .fill(TERRAIN_GLYPH)
+          .stroke(GLYPH_OUTLINE),
       ),
     };
     const badge = this.context((g) =>
@@ -113,6 +145,8 @@ export class MapView {
     );
     // A unit rectangle along +x; each road scales it to its length and thickness.
     this.roadContext = this.context((g) => g.rect(0, -0.5, 1, 1).fill(ROAD_COLOR));
+    // A dark edge under each road keeps it visible on the snow of the baked background.
+    this.casingContext = this.context((g) => g.rect(0, -0.5, 1, 1).fill(ROAD_CASING));
     this.labelStyle = new TextStyle({
       fontFamily: 'system-ui, sans-serif',
       fontSize: VP_FONT_SIZE,
@@ -120,20 +154,27 @@ export class MapView {
       fill: VP_TEXT_COLOR,
     });
 
-    this.background = layers.layer.background.addChild(this.drawBackground());
+    this.layers = layers;
+    this.terrainFill = layers.layer.background.addChild(this.drawTerrain());
+    this.mapFrame = layers.layer.background.addChild(
+      new Graphics().rect(0, 0, map.meta.width, map.meta.height).stroke(MAP_BORDER),
+    );
     this.territory = layers.layer.territory.addChild(new Graphics());
 
-    this.roads = map.edges.map((edge) => {
+    const placed = (context: GraphicsContext, edge: MapFile['edges'][number]): Graphics => {
       const a = map.nodes[edge.a];
       const b = map.nodes[edge.b];
-      const road = new Graphics(this.roadContext);
+      const road = new Graphics(context);
       if (a !== undefined && b !== undefined) {
         road.position.set(a.x, a.y);
         road.rotation = Math.atan2(b.y - a.y, b.x - a.x);
         road.scale.x = Math.hypot(b.x - a.x, b.y - a.y);
       }
       return layers.layer.roads.addChild(road);
-    });
+    };
+    // All casings first, so no casing covers a neighbouring road.
+    this.casings = map.edges.map((edge) => placed(this.casingContext, edge));
+    this.roads = map.edges.map((edge) => placed(this.roadContext, edge));
 
     this.nodes = map.nodes.map((node) => {
       const city = new Container({ x: node.x, y: node.y, label: `node-${String(node.id)}` });
@@ -168,6 +209,21 @@ export class MapView {
     this.setRoadWidths(map.edges.map((edge) => edge.base_width));
   }
 
+  /**
+   * Put the baked background (maps/<id>.bg.png, 1 px per world unit, origin 0,0) under the map.
+   * It replaces the flat terrain colours; without it (no file yet) those stay as the fallback.
+   */
+  setBackground(texture: Texture): void {
+    this.backdrop?.destroy();
+    const sprite = new Sprite(texture);
+    sprite.position.set(0, 0);
+    sprite.width = this.map.meta.width;
+    sprite.height = this.map.meta.height;
+    this.layers.layer.background.addChildAt(sprite, 0);
+    this.backdrop = sprite;
+    this.terrainFill.visible = false;
+  }
+
   /** `owners[i]`: current owner of node `i` (`null`: nobody). */
   setOwners(owners: readonly Owner[]): void {
     this.territory.clear();
@@ -190,6 +246,10 @@ export class MapView {
       if (road !== undefined) {
         road.scale.y = roadThickness(width);
       }
+      const casing = this.casings[i];
+      if (casing !== undefined) {
+        casing.scale.y = roadThickness(width) + ROAD_CASING_EXTRA;
+      }
     });
   }
 
@@ -207,11 +267,13 @@ export class MapView {
     for (const city of this.nodes) {
       city.destroy({ children: true });
     }
-    for (const road of this.roads) {
+    for (const road of [...this.casings, ...this.roads]) {
       road.destroy();
     }
     this.territory.destroy();
-    this.background.destroy();
+    this.backdrop?.destroy();
+    this.terrainFill.destroy();
+    this.mapFrame.destroy();
     for (const context of this.shared) {
       context.destroy();
     }
@@ -224,8 +286,7 @@ export class MapView {
     return context;
   }
 
-  private drawBackground(): Graphics {
-    const { width, height } = this.map.meta;
+  private drawTerrain(): Graphics {
     const g = new Graphics();
     this.map.nodes.forEach((node, i) => {
       const cell = this.cells[i];
@@ -233,6 +294,6 @@ export class MapView {
         g.poly(cell).fill(TERRAIN_FILL[node.terrain]).stroke(CELL_BORDER);
       }
     });
-    return g.rect(0, 0, width, height).stroke(MAP_BORDER);
+    return g;
   }
 }

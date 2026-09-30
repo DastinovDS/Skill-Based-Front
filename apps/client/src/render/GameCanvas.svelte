@@ -1,20 +1,27 @@
 <script lang="ts">
   import { Application } from 'pixi.js';
-  import { onMount } from 'svelte';
-  import type { MapFile } from '../protocol.gen.ts';
+  import { onMount, untrack } from 'svelte';
+  import type { MapFile, PlayerId } from '../protocol.gen.ts';
   import { NO_INSETS, type Insets } from './camera.ts';
   import { MapScene } from './mapScene.ts';
+  import type { RenderSource } from './source.ts';
   import { CANVAS_BACKGROUND } from './style.ts';
 
   interface Props {
     map: MapFile;
+    /** Frames and events to draw on the map; without it only the static map is shown. */
+    source?: RenderSource | null;
+    /** The viewing player (own groups and packets). Default 0. */
+    player?: PlayerId;
+    /** URL of the baked background PNG of the map, if it has one. */
+    backgroundUrl?: string | null;
     /** Called when the renderer cannot start (for example, no WebGL). */
     onerror?: (error: unknown) => void;
     /** Frames per second, reported twice a second (not every frame) for the dev HUD. */
     onfps?: (fps: number) => void;
   }
 
-  let { map, onerror, onfps }: Props = $props();
+  let { map, source = null, player = 0, backgroundUrl = null, onerror, onfps }: Props = $props();
 
   const FPS_REPORT_MS = 500;
 
@@ -38,16 +45,33 @@
   }
 
   function show(next: MapFile): void {
-    if (app === null) {
+    const current = app;
+    if (current === null) {
       return;
     }
     scene?.destroy();
-    scene = new MapScene(app, next, insets);
+    // Only the map rebuilds the scene; a new source is handed to the running one below.
+    scene = untrack(
+      () =>
+        new MapScene(current, next, insets, {
+          source,
+          player,
+          backgroundUrl,
+          onsnapshot: (tick: number) => {
+            // A plain attribute: end-to-end tests wait for it before taking a screenshot.
+            host.dataset.tick = String(tick);
+          },
+        }),
+    );
   }
 
   // Rebuild the scene when the map changes; the first build happens once init() resolves.
   $effect(() => {
     show(map);
+  });
+
+  $effect(() => {
+    scene?.setSource(source);
   });
 
   onMount(() => {
