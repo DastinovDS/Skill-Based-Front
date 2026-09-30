@@ -1,5 +1,6 @@
 """FastAPI application factory."""
 
+import asyncio
 import logging
 import re
 import time
@@ -8,8 +9,10 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
+from sqlalchemy.orm import sessionmaker
 
 from gow_server import maps
+from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.logs import request_id_var
 from gow_server.settings import Settings
 
@@ -27,12 +30,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         app.state.maps = maps.MapCatalog.load(settings.maps_dir)
+        engine = create_db_engine(settings.database_url)
+        await asyncio.to_thread(upgrade_to_head, engine)
+        app.state.sessions = sessionmaker(engine, expire_on_commit=False)
         log.info(
             "server started",
             extra={"env": settings.env, "maps": [entry.id for entry in app.state.maps.all()]},
         )
-        yield
-        log.info("server stopped")
+        try:
+            yield
+        finally:
+            engine.dispose()
+            log.info("server stopped")
 
     app = FastAPI(title="Skill-Based Front", lifespan=lifespan)
     app.state.settings = settings

@@ -19,3 +19,5 @@ class Settings(BaseSettings):
     """Proxies trusted for X-Forwarded-* headers (uvicorn ``--forwarded-allow-ips``): Caddy."""
     maps_dir: Path = Path("maps")
     """Directory with the map pool: ``<id>.json`` and optional background ``<id>.bg.png``."""
+    database_url: str = "sqlite:///data/gow.db"
+    """SQLite only; a relative path is relative to the working directory."""
