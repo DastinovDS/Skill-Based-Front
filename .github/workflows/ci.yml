@@ -52,8 +52,15 @@ jobs:
               # The client bundles these map files (apps/client/src/map/bundledMaps.ts).
               - 'maps/**'
               - 'packages/sim/tests/maps/**'
+              # Protocol drift (PRO-02, #45): the schema comes from gow_protocol, which takes
+              # enums and limits from gow_sim; the pydantic version in uv.lock shapes it too.
+              # apps/server joins when the client gets HTTP API types (api.gen.ts, CLI-09 #65).
               - 'packages/protocol/**'
+              - 'packages/sim/src/**'
               - 'scripts/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.python-version'
               - '.github/workflows/ci.yml'
             docker:
               - 'deploy/**'
@@ -118,6 +125,23 @@ jobs:
           cache: pnpm
           cache-dependency-path: apps/client/pnpm-lock.yaml
       - run: pnpm -C apps/client install --frozen-lockfile
+      # protocol-drift (PRO-02, #45): regenerate the schema and the TypeScript types and fail if
+      # the committed files differ, e.g. a Pydantic model changed without regeneration.
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked --no-dev --package gow-protocol
+      - name: protocol-drift
+        run: |
+          uv run --no-sync python scripts/export_schema.py
+          pnpm -C apps/client gen:protocol
+          set -- packages/protocol/protocol.schema.json apps/client/src/protocol.gen.ts
+          if [ -n "$(git status --porcelain -- "$@")" ]; then
+            git status --short -- "$@"
+            git --no-pager diff -- "$@"
+            echo "::error::Generated protocol files are out of date. Run: uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol"
+            exit 1
+          fi
       - run: pnpm -C apps/client lint
       - run: pnpm -C apps/client check
       - run: pnpm -C apps/client test

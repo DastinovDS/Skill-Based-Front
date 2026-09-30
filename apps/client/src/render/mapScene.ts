@@ -1,5 +1,5 @@
 import type { Application } from 'pixi.js';
-import type { MapJson } from '../map/mapJson.ts';
+import type { MapFile } from '../protocol.gen.ts';
 import { labelResolution, type Camera } from './camera.ts';
 import { CameraController } from './cameraController.ts';
 import { createLayers, type MapLayers } from './layers.ts';
@@ -16,7 +16,7 @@ export class MapScene {
 
   constructor(
     private readonly app: Application,
-    map: MapJson,
+    map: MapFile,
   ) {
     this.layers = createLayers();
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.

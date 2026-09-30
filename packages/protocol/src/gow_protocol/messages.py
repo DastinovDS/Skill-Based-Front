@@ -72,7 +72,7 @@ class ResyncMsg(WireModel):
     type: Literal["resync"] = "resync"
 
 
-ClientMsg = Annotated[HelloMsg | CommandMsg | PingMsg | ResyncMsg, Field(discriminator="type")]
+type ClientMsg = Annotated[HelloMsg | CommandMsg | PingMsg | ResyncMsg, Field(discriminator="type")]
 
 
 # Server -> client ----------------------------------------------------------------------------
@@ -195,7 +195,7 @@ class PongMsg(WireModel):
     """``id`` of the ``ping``."""
 
 
-ServerMsg = Annotated[
+type ServerMsg = Annotated[
     WelcomeMsg | SnapshotMsg | AckMsg | EventMsg | MatchEndMsg | ErrorMsg | PongMsg,
     Field(discriminator="type"),
 ]

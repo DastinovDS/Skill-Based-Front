@@ -139,7 +139,7 @@ class OnEdgeLoc(WireModel):
     progress: Progress
 
 
-Location = Annotated[AtNodeLoc | OnEdgeLoc, Field(discriminator="kind")]
+type Location = Annotated[AtNodeLoc | OnEdgeLoc, Field(discriminator="kind")]
 
 
 class OrderView(WireModel):

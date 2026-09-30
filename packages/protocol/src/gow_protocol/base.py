@@ -12,7 +12,9 @@ Every message model derives from ``WireModel``:
 - ``frozen=True``: messages are values;
 - ``json_schema_serialization_defaults_required=True``: in the serialization schema (what the
   server sends) fields with a default are required, so the generated TypeScript types (PRO-02,
-  #45) do not mark ``type`` as optional and the unions narrow by ``type``.
+  #45) do not mark ``type`` as optional and the unions narrow by ``type``;
+- ``use_attribute_docstrings=True``: the docstring under a field becomes its description in the
+  JSON Schema and a doc comment in the generated TypeScript.
 
 Integers are bounded by ``MAX_INT`` (int32): a JavaScript ``number`` holds them exactly, and a
 huge integer from a client is a validation error, not a bignum inside the server.
@@ -22,7 +24,7 @@ from typing import Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from gow_sim.maps import MAX_WIDTH
+from gow_sim.maps import MAX_WIDTH, PLAYERS
 from gow_sim.state import PROGRESS_SCALE
 
 MAX_INT: Final = 2**31 - 1
@@ -34,6 +36,7 @@ WIRE_CONFIG: Final = ConfigDict(
     strict=True,
     frozen=True,
     json_schema_serialization_defaults_required=True,
+    use_attribute_docstrings=True,
 )
 
 
@@ -50,8 +53,11 @@ NodeId = NonNegInt
 """Map node id. The map is public (DEC-04), so node ids are the map's own ids, not opaque."""
 EdgeId = NonNegInt
 """Map edge id, public like node ids."""
-PlayerId = Annotated[int, Field(ge=0, le=1)]
-"""``gow_sim.maps.PLAYERS``. Not ``Literal[0, 1]``: pydantic accepts ``true`` and ``1.0`` there."""
+type PlayerId = Annotated[int, Field(ge=0, le=1, json_schema_extra={"enum": list(PLAYERS)})]
+"""``gow_sim.maps.PLAYERS``. Not ``Literal[0, 1]``: pydantic accepts ``true`` and ``1.0`` there.
+
+A ``type`` alias and the ``enum`` make it a named ``PlayerId = 0 | 1`` in the JSON Schema and in
+TypeScript, instead of ``number``."""
 Width = Annotated[int, Field(ge=1, le=MAX_WIDTH)]
 Progress = Annotated[int, Field(ge=0, le=PROGRESS_SCALE)]
 """Position on an edge in thousandths, as ``gow_sim.state.OnEdge.progress``."""

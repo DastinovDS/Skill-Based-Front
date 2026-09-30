@@ -1,4 +1,4 @@
-import type { PlayerId, Terrain } from '../map/mapJson.ts';
+import type { PlayerId, Terrain } from '../protocol.gen.ts';
 
 // Visual constants of the map. Sizes are in world units (docs/design/map-format.md): cities are
 // about 100 units apart on MVP maps (100 units = 3 s of travel), so these sizes do not depend on

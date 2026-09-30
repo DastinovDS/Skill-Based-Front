@@ -242,6 +242,9 @@ async def run(self) -> None:
 
 - **Pydantic-модели — единственный источник правды.** Сообщения — tagged union по полю `type`.
 - `apps/client/src/protocol.gen.ts` и `api.gen.ts` генерируются и **не редактируются руками**. CI падает при дрейфе.
+  Цепочка протокола: модели → `gow_protocol.schema` → `packages/protocol/protocol.schema.json` →
+  json-schema-to-typescript → `protocol.gen.ts` (команда в разделе 3). Там же тип файла карты `MapFile`
+  (`gow_protocol.mapfile`), по которому клиент читает `GET /api/maps/{id}`.
 - Любое изменение протокола → повысь `PROTOCOL_VERSION`. Клиент со старой версией получает код закрытия 4001.
 - Кодек — в одном модуле (`codec`): JSON сейчас, msgpack позже заменой одного файла.
 - Протокольные модели и модели БД — разные классы.

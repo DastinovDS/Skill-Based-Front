@@ -70,6 +70,13 @@ pnpm -C apps/client dev                              # http://localhost:5173
 pnpm -C apps/client build && pnpm -C apps/client preview   # прод-сборка под целевым CSP
 ```
 
+Типы протокола в клиенте (`apps/client/src/protocol.gen.ts`) генерируются из Pydantic-моделей
+`gow_protocol`, руками не правятся. После изменения моделей:
+
+```sh
+uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol
+```
+
 Dev-экран клиента показывает карту из бандла (`maps/*.json`, до MAP-04 тестовые карты
 `packages/sim/tests/maps/`): выбор карты и «Вписать карту» в панели, перетаскивание сдвигает карту,
 колесо меняет масштаб у курсора. Счётчик FPS в панели обновляется дважды в секунду.
@@ -91,7 +98,7 @@ GitHub Actions, `.github/workflows/ci.yml`. Запускается на PR в `d
 | Проверка | Что делает |
 |---|---|
 | `py` | `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `pytest` с `HYPOTHESIS_PROFILE=ci` |
-| `web` | `pnpm -C apps/client install --frozen-lockfile`, `lint`, `check`, `test`, `build` |
+| `web` | `pnpm -C apps/client install --frozen-lockfile`, шаг `protocol-drift` (перегенерация схемы протокола и `protocol.gen.ts`, падает при отличии от закоммиченных), `lint`, `check`, `test`, `build` |
 | `docker` | `hadolint` для `deploy/*.Dockerfile`, затем `deploy/smoke.sh`: сборка образов, `docker compose up`, проверки через Caddy |
 
 - Вспомогательный job `changes` смотрит на изменённые пути в PR. Если в PR нет изменений для `py`, `web` или `docker`

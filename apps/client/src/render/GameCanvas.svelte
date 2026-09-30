@@ -1,12 +1,12 @@
 <script lang="ts">
   import { Application } from 'pixi.js';
   import { onMount } from 'svelte';
-  import type { MapJson } from '../map/mapJson.ts';
+  import type { MapFile } from '../protocol.gen.ts';
   import { MapScene } from './mapScene.ts';
   import { CANVAS_BACKGROUND } from './style.ts';
 
   interface Props {
-    map: MapJson;
+    map: MapFile;
     /** Called when the renderer cannot start (for example, no WebGL). */
     onerror?: (error: unknown) => void;
     /** Frames per second, reported twice a second (not every frame) for the dev HUD. */
@@ -29,7 +29,7 @@
     scene?.fit();
   }
 
-  function show(next: MapJson): void {
+  function show(next: MapFile): void {
     if (app === null) {
       return;
     }

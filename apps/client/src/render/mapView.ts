@@ -1,5 +1,5 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
-import type { MapJson, PlayerId, Terrain } from '../map/mapJson.ts';
+import type { MapFile, PlayerId, Terrain } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import {
@@ -62,7 +62,7 @@ export class MapView {
   private readonly labels: Text[] = [];
 
   constructor(
-    private readonly map: MapJson,
+    private readonly map: MapFile,
     layers: MapLayers,
     labelResolution: number,
   ) {
