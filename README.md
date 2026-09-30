@@ -50,6 +50,16 @@ uv run python -c "import gow_sim, gow_protocol, gow_server, gow_bots, gow_maps"
 
 Если Python 3.12 не установлен: `uv python install 3.12`.
 
+Проверки Python-кода (полный список команд: `AGENTS.md`, раздел 3):
+
+```sh
+uv run ruff check . && uv run ruff format --check .
+uv run pyright
+uv run lint-imports
+uv run pytest               # в CI: HYPOTHESIS_PROFILE=ci uv run pytest
+uv run pre-commit install   # один раз: ruff перед каждым коммитом
+```
+
 ## Прототип на Pygame (`legacy/`)
 
 `legacy/` содержит архив первого прототипа (старый дизайн: пять ресурсов, здания, три типа юнитов,
