@@ -1,0 +1,24 @@
+# Caddy config of the `caddy` image (deploy/caddy.Dockerfile).
+#
+# OPS-01 (#80): minimal routing only, enough to run the game with `docker compose up`.
+# OPS-02 (#81) adds on top of it: stream_close_delay for /ws/*, try_files for the client,
+# cache headers (index.html no-cache, hashed assets immutable), the CSP from apps/client/csp.ts,
+# X-Content-Type-Options and Referrer-Policy.
+#
+# SITE_ADDRESS (compose.yaml, .env): `http://localhost` serves plain HTTP on :80 (local run, e2e);
+# a domain name such as `game.example.com` turns on automatic HTTPS (certificates in /data).
+
+{$SITE_ADDRESS:http://localhost} {
+	handle /api/* {
+		reverse_proxy app:8000
+	}
+
+	handle /ws/* {
+		reverse_proxy app:8000
+	}
+
+	handle {
+		root * /srv
+		file_server
+	}
+}

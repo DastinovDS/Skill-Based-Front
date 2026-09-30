@@ -25,6 +25,7 @@ jobs:
     outputs:
       py: ${{ github.event_name != 'pull_request' || steps.filter.outputs.py == 'true' }}
       web: ${{ github.event_name != 'pull_request' || steps.filter.outputs.web == 'true' }}
+      docker: ${{ github.event_name != 'pull_request' || steps.filter.outputs.docker == 'true' }}
     steps:
       - uses: dorny/paths-filter@v4
         id: filter
@@ -52,6 +53,19 @@ jobs:
               - 'packages/sim/tests/maps/**'
               - 'packages/protocol/**'
               - 'scripts/**'
+              - '.github/workflows/ci.yml'
+            docker:
+              - 'deploy/**'
+              - 'compose.yaml'
+              - '.dockerignore'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.python-version'
+              - 'packages/**'
+              - 'apps/**'
+              - 'tools/**'
+              - 'maps/**'
+              - 'rulesets/**'
               - '.github/workflows/ci.yml'
 
   # Required check. A job skipped by `if` reports "Success", so a PR without relevant
@@ -107,3 +121,23 @@ jobs:
       - run: pnpm -C apps/client check
       - run: pnpm -C apps/client test
       - run: pnpm -C apps/client build
+
+  # Docker images and the compose stack (OPS-01, #80): hadolint, then deploy/smoke.sh builds both
+  # images, starts the stack and checks it through Caddy. Same skip rules as `py`.
+  docker:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.docker == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: hadolint
+        run: |
+          for f in deploy/*.Dockerfile; do
+            echo "$f"
+            docker run --rm -i hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d < "$f"
+          done
+      - run: deploy/smoke.sh
+      - if: always()
+        run: docker compose down --volumes
