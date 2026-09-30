@@ -13,6 +13,10 @@
       "$ref": "#/$defs/MapFile"
     }
   ],
+  "x-constants": {
+    "PROTOCOL_VERSION": 1,
+    "CLOSE_PROTOCOL_VERSION": 4001
+  },
   "$defs": {
     "AckMsg": {
       "additionalProperties": false,

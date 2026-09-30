@@ -21,7 +21,12 @@ from pydantic.json_schema import GenerateJsonSchema, JsonSchemaValue
 from pydantic_core import core_schema
 
 from gow_protocol.mapfile import MapFile
-from gow_protocol.messages import ClientMsg, ServerMsg
+from gow_protocol.messages import (
+    CLOSE_PROTOCOL_VERSION,
+    PROTOCOL_VERSION,
+    ClientMsg,
+    ServerMsg,
+)
 
 SCHEMA_PATH: Final = Path(__file__).resolve().parents[2] / "protocol.schema.json"
 """``packages/protocol/protocol.schema.json``."""
@@ -56,7 +61,12 @@ class WireJsonSchema(GenerateJsonSchema):
 
 
 def protocol_json_schema() -> dict[str, Any]:
-    """One schema with every type in ``$defs``; the root is the union of ``ROOTS``."""
+    """One schema with every type in ``$defs``; the root is the union of ``ROOTS``.
+
+    ``x-constants`` carries the values the client needs at runtime (the ``hello`` version and the
+    close code of a mismatch). json-schema-to-typescript ignores it; ``apps/client/scripts/
+    protocol-consts.js`` appends them to ``protocol.gen.ts`` as ``export const``.
+    """
     refs, schema = TypeAdapter.json_schemas(
         [(i, "serialization", TypeAdapter[Any](root)) for i, root in enumerate(ROOTS)],
         schema_generator=WireJsonSchema,
@@ -66,6 +76,10 @@ def protocol_json_schema() -> dict[str, Any]:
         "title": "Protocol",
         "description": "Wire format of Skill-Based Front, generated from gow_protocol.",
         "anyOf": [refs[(i, "serialization")] for i in range(len(ROOTS))],
+        "x-constants": {
+            "PROTOCOL_VERSION": PROTOCOL_VERSION,
+            "CLOSE_PROTOCOL_VERSION": CLOSE_PROTOCOL_VERSION,
+        },
         "$defs": {name: _wrap_described_refs(d) for name, d in schema["$defs"].items()},
     }
 
