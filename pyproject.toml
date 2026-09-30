@@ -34,10 +34,104 @@ gow-maps = { workspace = true }
 
 # legacy/ is an archive of the Pygame prototype: it is not linted, type-checked or tested.
 [tool.ruff]
-extend-exclude = ["legacy"]
+target-version = "py312"
+line-length = 100
+# docs/mvp/*.py is plan tooling copied from the plan kit, not project code.
+extend-exclude = ["legacy", "docs/mvp"]
+# Python only: ruff 0.16 also formats Python code blocks in Markdown by default, and the
+# snippets in AGENTS.md and docs/ are illustrations with hand-aligned comments.
+include = ["*.py", "*.pyi", "**/pyproject.toml"]
+src = [
+    "packages/sim/src",
+    "packages/protocol/src",
+    "apps/server/src",
+    "apps/bots/src",
+    "tools/maps/src",
+]
 
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific rules
+    "TID", # flake8-tidy-imports (TID251 banned-api is configured in packages/sim/ruff.toml)
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+# Strict type checking for packages/, apps/, tools/ and the root test infrastructure.
+# docs/mvp/*.py (plan tooling, needs PyYAML outside the workspace) is deliberately not included.
 [tool.pyright]
+include = ["packages", "apps", "tools", "tests", "conftest.py"]
 exclude = ["legacy", "**/node_modules", "**/__pycache__", "**/.*"]
+typeCheckingMode = "strict"
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
 
 [tool.pytest.ini_options]
 norecursedirs = ["legacy", ".*", "node_modules", "dist", "build"]
+# importlib mode: test files with the same name in different packages do not collide.
+addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config"]
+xfail_strict = true
+
+# Package boundaries (AGENTS.md, section 2). Checked by `uv run lint-imports`.
+[tool.importlinter]
+root_packages = ["gow_sim", "gow_protocol", "gow_server", "gow_bots", "gow_maps"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "gow_sim does not import other project packages"
+type = "forbidden"
+source_modules = ["gow_sim"]
+forbidden_modules = ["gow_protocol", "gow_server", "gow_bots", "gow_maps"]
+
+[[tool.importlinter.contracts]]
+name = "gow_protocol does not import gow_server or gow_bots"
+type = "forbidden"
+source_modules = ["gow_protocol"]
+forbidden_modules = ["gow_server", "gow_bots"]
+
+# Bots see only PlayerView. Indirect imports are allowed because gow_sim.view and
+# gow_sim.commands themselves use gow_sim.state.
+[[tool.importlinter.contracts]]
+name = "gow_bots.bots does not import hidden simulation state directly"
+type = "forbidden"
+source_modules = ["gow_bots.bots"]
+forbidden_modules = ["gow_sim.state", "gow_sim.systems", "gow_sim.match"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "gow_bots does not import gow_server or gow_protocol"
+type = "forbidden"
+source_modules = ["gow_bots"]
+forbidden_modules = ["gow_server", "gow_protocol"]
+
+[[tool.importlinter.contracts]]
+name = "gow_maps does not import gow_server"
+type = "forbidden"
+source_modules = ["gow_maps"]
+forbidden_modules = ["gow_server"]
+
+# legacy/ is not installed; these are the top-level modules of the archived prototype.
+[[tool.importlinter.contracts]]
+name = "Nothing imports the legacy Pygame prototype"
+type = "forbidden"
+source_modules = ["gow_sim", "gow_protocol", "gow_server", "gow_bots", "gow_maps"]
+forbidden_modules = ["legacy", "rts_core", "rts_client", "rts_server"]
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.168.3",
+    "import-linter>=2.15",
+    "pre-commit>=4.6.2",
+    "pyright>=1.1.414",
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+]

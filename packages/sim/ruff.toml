@@ -1,0 +1,17 @@
+# gow_sim is a pure deterministic simulation (AGENTS.md, section 4.1):
+# no wall clock, no randomness, no concurrency, no network.
+extend = "../../pyproject.toml"
+
+[lint]
+extend-select = ["TID251"]
+
+[lint.flake8-tidy-imports.banned-api]
+"time".msg = "gow_sim is deterministic: the tick is the only clock."
+"random".msg = "gow_sim is deterministic: randomness is a design change via ADR."
+"asyncio".msg = "gow_sim has no I/O or concurrency."
+"socket".msg = "gow_sim has no network access."
+"threading".msg = "gow_sim has no I/O or concurrency."
+"datetime.datetime.now".msg = "gow_sim is deterministic: the tick is the only clock."
+"datetime.datetime.utcnow".msg = "gow_sim is deterministic: the tick is the only clock."
+"datetime.datetime.today".msg = "gow_sim is deterministic: the tick is the only clock."
+"datetime.date.today".msg = "gow_sim is deterministic: the tick is the only clock."
