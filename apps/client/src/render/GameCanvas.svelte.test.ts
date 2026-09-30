@@ -29,6 +29,7 @@ const fakes = vi.hoisted(() => {
     static instances: FakeMapScene[] = [];
 
     readonly fit = vi.fn();
+    readonly setSource = vi.fn();
     readonly destroy = vi.fn();
 
     constructor(

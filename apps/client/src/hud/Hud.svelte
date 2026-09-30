@@ -11,16 +11,32 @@
     /** Names of the maps the dev screen can show. */
     maps: readonly string[];
     mapName: string;
+    /** Ids of the dev scenes (fixtures and the live demo). */
+    scenes: readonly string[];
+    sceneId: string;
     fps: number;
     /** The HUD numbers; replaced once per snapshot. */
     hud: HudState;
     onselectmap: (name: string) => void;
+    onselectscene: (id: string) => void;
     onfit: () => void;
     /** The part of the screen the HUD covers, reported whenever it changes (for "fit map"). */
     oninsets?: (insets: Insets) => void;
   }
 
-  let { rendererFailed, maps, mapName, fps, hud, onselectmap, onfit, oninsets }: Props = $props();
+  let {
+    rendererFailed,
+    maps,
+    mapName,
+    scenes,
+    sceneId,
+    fps,
+    hud,
+    onselectmap,
+    onselectscene,
+    onfit,
+    oninsets,
+  }: Props = $props();
 
   let panelOpen = $state(true);
   let root: HTMLElement | undefined = $state();
@@ -98,6 +114,21 @@
             </select>
           </label>
           <button type="button" class="fit" onclick={onfit}>{t('hud.fitMap')}</button>
+        </div>
+        <div class="row">
+          <label>
+            {t('hud.scene')}
+            <select
+              value={sceneId}
+              onchange={(event) => {
+                onselectscene(event.currentTarget.value);
+              }}
+            >
+              {#each scenes as id (id)}
+                <option value={id}>{id}</option>
+              {/each}
+            </select>
+          </label>
         </div>
         <div class="row">
           <label>

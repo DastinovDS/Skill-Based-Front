@@ -21,5 +21,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "csp.ts"]
+  "include": ["vite.config.ts", "csp.ts", "playwright.config.ts", "visual/*.ts"]
 }

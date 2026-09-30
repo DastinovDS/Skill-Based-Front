@@ -1,0 +1,404 @@
+{
+  "type": "snapshot",
+  "tick": 400,
+  "view": {
+    "me": {
+      "cp": 300,
+      "stance": "war"
+    },
+    "vp": [
+      14,
+      11
+    ],
+    "nodes": [
+      {
+        "id": 0,
+        "owner": 0,
+        "capacity": 6,
+        "detail": "exact",
+        "warehouse": 5,
+        "seen": {
+          "tick": 400,
+          "level": "exact",
+          "enemy_modes": [],
+          "enemy_units": 0,
+          "enemy_charged": 0
+        }
+      },
+      {
+        "id": 1,
+        "owner": 0,
+        "capacity": 4,
+        "detail": "exact",
+        "warehouse": 4,
+        "seen": {
+          "tick": 400,
+          "level": "exact",
+          "enemy_modes": [],
+          "enemy_units": 0,
+          "enemy_charged": 0
+        }
+      },
+      {
+        "id": 2,
+        "owner": 1,
+        "capacity": 3,
+        "detail": "presence",
+        "warehouse": null,
+        "seen": {
+          "tick": 400,
+          "level": "presence",
+          "enemy_modes": [
+            "defense",
+            "build"
+          ],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      },
+      {
+        "id": 3,
+        "owner": 0,
+        "capacity": 3,
+        "detail": "exact",
+        "warehouse": 1,
+        "seen": {
+          "tick": 400,
+          "level": "exact",
+          "enemy_modes": [],
+          "enemy_units": 0,
+          "enemy_charged": 0
+        }
+      },
+      {
+        "id": 4,
+        "owner": 1,
+        "capacity": 3,
+        "detail": "presence",
+        "warehouse": null,
+        "seen": {
+          "tick": 400,
+          "level": "presence",
+          "enemy_modes": [
+            "attack"
+          ],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      },
+      {
+        "id": 5,
+        "owner": 1,
+        "capacity": 6,
+        "detail": "fog",
+        "warehouse": null,
+        "seen": {
+          "tick": 200,
+          "level": "presence",
+          "enemy_modes": [
+            "defense"
+          ],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      },
+      {
+        "id": 6,
+        "owner": null,
+        "capacity": 2,
+        "detail": "exact",
+        "warehouse": 0,
+        "seen": {
+          "tick": 400,
+          "level": "exact",
+          "enemy_modes": [
+            "attack"
+          ],
+          "enemy_units": 3,
+          "enemy_charged": 1
+        }
+      },
+      {
+        "id": 7,
+        "owner": null,
+        "capacity": 2,
+        "detail": "presence",
+        "warehouse": null,
+        "seen": {
+          "tick": 400,
+          "level": "presence",
+          "enemy_modes": [
+            "attack",
+            "defense"
+          ],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": 0,
+        "width": 2,
+        "detail": "presence",
+        "upgrade_gain": {
+          "capacity_centi": 50,
+          "packet_speed_pct": 25
+        },
+        "seen": {
+          "tick": 400,
+          "level": "presence",
+          "enemy_modes": [],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      },
+      {
+        "id": 1,
+        "width": 1,
+        "detail": "presence",
+        "upgrade_gain": null,
+        "seen": {
+          "tick": 400,
+          "level": "presence",
+          "enemy_modes": [],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      },
+      {
+        "id": 2,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "seen": null
+      },
+      {
+        "id": 3,
+        "width": 1,
+        "detail": "fog",
+        "upgrade_gain": null,
+        "seen": {
+          "tick": 120,
+          "level": "presence",
+          "enemy_modes": [
+            "attack"
+          ],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      },
+      {
+        "id": 4,
+        "width": 1,
+        "detail": "presence",
+        "upgrade_gain": null,
+        "seen": {
+          "tick": 400,
+          "level": "presence",
+          "enemy_modes": [],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      },
+      {
+        "id": 5,
+        "width": 3,
+        "detail": "presence",
+        "upgrade_gain": null,
+        "seen": {
+          "tick": 400,
+          "level": "presence",
+          "enemy_modes": [],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      },
+      {
+        "id": 6,
+        "width": 1,
+        "detail": "presence",
+        "upgrade_gain": null,
+        "seen": {
+          "tick": 400,
+          "level": "presence",
+          "enemy_modes": [],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      },
+      {
+        "id": 7,
+        "width": 1,
+        "detail": "presence",
+        "upgrade_gain": null,
+        "seen": {
+          "tick": 400,
+          "level": "presence",
+          "enemy_modes": [
+            "attack"
+          ],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      },
+      {
+        "id": 8,
+        "width": 1,
+        "detail": "presence",
+        "upgrade_gain": null,
+        "seen": {
+          "tick": 400,
+          "level": "presence",
+          "enemy_modes": [],
+          "enemy_units": null,
+          "enemy_charged": null
+        }
+      }
+    ],
+    "groups": [
+      {
+        "id": "1a2b3c4d5e6f7081",
+        "units": 4,
+        "charged": 3,
+        "mode": "attack",
+        "location": {
+          "kind": "node",
+          "node": 6
+        },
+        "order": null
+      },
+      {
+        "id": "2b3c4d5e6f708192",
+        "units": 12,
+        "charged": 5,
+        "mode": "defense",
+        "location": {
+          "kind": "node",
+          "node": 6
+        },
+        "order": null
+      },
+      {
+        "id": "3c4d5e6f708192a3",
+        "units": 1,
+        "charged": 0,
+        "mode": "build",
+        "location": {
+          "kind": "node",
+          "node": 6
+        },
+        "order": null
+      },
+      {
+        "id": "4d5e6f708192a3b4",
+        "units": 2,
+        "charged": 2,
+        "mode": "attack",
+        "location": {
+          "kind": "edge",
+          "edge": 5,
+          "from_node": 3,
+          "progress": 650
+        },
+        "order": {
+          "dest": 0,
+          "path": [
+            0
+          ],
+          "planned": false
+        }
+      },
+      {
+        "id": "5e6f708192a3b4c5",
+        "units": 3,
+        "charged": 1,
+        "mode": "attack",
+        "location": {
+          "kind": "edge",
+          "edge": 4,
+          "from_node": 3,
+          "progress": 300
+        },
+        "order": {
+          "dest": 4,
+          "path": [
+            4
+          ],
+          "planned": false
+        }
+      },
+      {
+        "id": "6f708192a3b4c5d6",
+        "units": 2,
+        "charged": 1,
+        "mode": "defense",
+        "location": {
+          "kind": "node",
+          "node": 0
+        },
+        "order": null
+      }
+    ],
+    "packets": [
+      {
+        "id": "a1b2c3d4e5f60718",
+        "edge": 0,
+        "from_node": 0,
+        "charges": 2,
+        "depart_tick": 380,
+        "arrive_tick": 440
+      },
+      {
+        "id": "b2c3d4e5f6071829",
+        "edge": 6,
+        "from_node": 1,
+        "charges": 1,
+        "depart_tick": 392,
+        "arrive_tick": 428
+      }
+    ],
+    "intents": [
+      {
+        "id": "c3d4e5f607182930",
+        "owner": 0,
+        "kind": "defense",
+        "origin": 0,
+        "target": null,
+        "created_tick": 370
+      },
+      {
+        "id": "d4e5f60718293041",
+        "owner": 0,
+        "kind": "build",
+        "origin": 1,
+        "target": null,
+        "created_tick": 380
+      },
+      {
+        "id": "e5f6071829304152",
+        "owner": 1,
+        "kind": "planned_move",
+        "origin": 7,
+        "target": 6,
+        "created_tick": 385
+      },
+      {
+        "id": "f607182930415263",
+        "owner": 0,
+        "kind": "planned_move",
+        "origin": 3,
+        "target": 6,
+        "created_tick": 390
+      },
+      {
+        "id": "0718293041526374",
+        "owner": 1,
+        "kind": "planned_move",
+        "origin": 4,
+        "target": 3,
+        "created_tick": 395
+      }
+    ]
+  }
+}

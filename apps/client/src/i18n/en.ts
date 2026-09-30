@@ -4,10 +4,11 @@ import type { Messages } from './messages.ts';
 export const en = {
   'app.title': 'Skill-Based Front',
   'hud.map': 'Map',
+  'hud.scene': 'Scene',
   'hud.fitMap': 'Fit map',
   'hud.cameraHint': 'Drag: pan the map. Wheel: zoom at the cursor.',
   'hud.legend':
-    'Blue with one ring: player 1, orange with a double ring: player 2, grey: nobody. Star: capital, number: VP. Icons: forest, mountains.',
+    'Blue with one ring: player 1, orange with a double ring: player 2, grey: nobody. Star: capital, number: VP. Icons: forest, mountains. Filled dot: charged unit, empty dot: uncharged. Icon on a plate: mode (triangle: attack, shield: defense, hammer: build). Plate with a double ring: player 2. Dashed arrow: planned order (dot at the tail: player 1, diamond: player 2). Bar above a city: warehouse against capacity.',
   'hud.help': 'Help',
   'hud.fps': 'FPS',
   'hud.language': 'Language',

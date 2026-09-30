@@ -31,10 +31,13 @@ describe('Hud language switcher', () => {
         rendererFailed: false,
         maps: ['pereval'],
         mapName: 'pereval',
+        scenes: ['demo'],
+        sceneId: 'demo',
         fps: 60,
         hud: state,
         oninsets,
         onselectmap: () => undefined,
+        onselectscene: () => undefined,
         onfit: () => undefined,
       },
     });

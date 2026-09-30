@@ -147,6 +147,36 @@ jobs:
       - run: pnpm -C apps/client test
       - run: pnpm -C apps/client build
 
+  # Screenshot tests of the map scenes (CLI-04, #60): Playwright against the dev server, the
+  # references are apps/client/visual/**-snapshots. Not a required check: software WebGL and fonts
+  # of the runner may differ from the machine that recorded the references; refresh them with
+  # `pnpm -C apps/client test:visual:update` (Linux ones: see apps/client/visual/README.md).
+  visual:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.web == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: apps/client/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: apps/client/package.json
+          cache: pnpm
+          cache-dependency-path: apps/client/pnpm-lock.yaml
+      - run: pnpm -C apps/client install --frozen-lockfile
+      - run: pnpm -C apps/client exec playwright install --with-deps chromium
+      - run: pnpm -C apps/client test:visual
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-diff
+          path: apps/client/node_modules/.playwright
+          if-no-files-found: ignore
+
   # Docker images and the compose stack (OPS-01, #80): hadolint, then deploy/smoke.sh builds both
   # images, starts the stack and checks it through Caddy. Same skip rules as `py`.
   docker:
