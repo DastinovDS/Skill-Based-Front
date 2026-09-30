@@ -89,6 +89,7 @@ legacy/                            — архив прототипа, не тр�
 | `uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json` | собрать карту из половины (половины лежат в `maps/src/`) | MAP-03 |
 | `uv run gow-maps preview maps/*.json` | нарисовать превью `maps/<name>.preview.png` | MAP-04 |
 | `uv run gow-maps bake maps/*.json` | запечь фон `maps/<name>.bg.png` (после любой правки карты) | MAP-05 |
+| `uv run pytest packages/sim/tests/test_benchmarks.py` | бенчмарки симуляции и проверка бюджетов раздела 12 (`docs/perf.md`) | SIM-15 |
 | `uv run python -m gow_sim.replay check packages/sim/tests/golden/v*/**` | проверить реплеи | SIM-16 |
 | `uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-0.toml` | турнир ботов | BOT-04 |
 | `uv run gow-bots report docs/balance/latest.jsonl` | отчёт баланса | BOT-05 |
@@ -154,6 +155,8 @@ def combat(state: GameState, rules: Ruleset) -> list[Event]:
 apply_commands → economy → movement → combat → capacity → supply (включая перезарядку)
 → recruit → build → orders → victory → vision (обновление памяти «последний раз видели»)
 ```
+
+Порядок в коде: `gow_sim.match.SYSTEMS`. `Match.step()` сначала увеличивает `state.tick`, поэтому все системы тика `t` видят `state.tick == t` (первый тик 1); события каждой системы сразу дописываются в `state.events`, и следующие системы их читают.
 
 `combat` получает бонусы запланированных приказов и «Защиты» из `systems.orders.active_bonuses(state)`;
 `orders` снимает потраченные бонусы и намерения закончившихся приказов, режимов и строек (SIM-10).

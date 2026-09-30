@@ -49,15 +49,16 @@ def compute_vision(state: GameState, player: int) -> Vision:
             exact[group.location.node] = True
     # TODO(#112): a group on an edge gives no vision (literal DEC-04: only standing groups do).
     edges = tuple(Detail.PRESENCE if exact[e.a] or exact[e.b] else Detail.FOG for e in mapdef.edges)
-    nodes: list[Detail] = []
-    for n in range(len(mapdef.nodes)):
-        if exact[n]:
-            nodes.append(Detail.EXACT)
-        elif any(exact[mapdef.edges[e].other(n)] for e in mapdef.incident[n]):
-            nodes.append(Detail.PRESENCE)
-        else:
-            nodes.append(Detail.FOG)
-    return Vision(nodes=tuple(nodes), edges=edges)
+    near = list(exact)  # exact nodes and their neighbours
+    for n, is_exact in enumerate(exact):
+        if is_exact:
+            for e in mapdef.incident[n]:
+                near[mapdef.edges[e].other(n)] = True
+    nodes = tuple(
+        Detail.EXACT if exact[n] else Detail.PRESENCE if near[n] else Detail.FOG
+        for n in range(len(exact))
+    )
+    return Vision(nodes=nodes, edges=edges)
 
 
 def detail_level(state: GameState, player: int, node: int) -> Detail:

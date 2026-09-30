@@ -142,6 +142,7 @@ dev = [
     "pre-commit>=4.6.2",
     "pyright>=1.1.414",
     "pytest>=9.1.1",
+    "pytest-benchmark>=5.3.0",
     "ruff>=0.16.9",
     "types-networkx>=3.6.1.20260911",
 ]

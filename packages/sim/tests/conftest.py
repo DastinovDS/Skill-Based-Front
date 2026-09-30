@@ -1,0 +1,141 @@
+"""Shared helpers of the simulation tests: a simple controller and a 40-node benchmark map.
+
+``ExpandBot`` sees only its ``PlayerView`` (plus the public map and ruleset), like a real bot
+(AGENTS.md, section 8). It is a test driver for ``run_headless`` and the benchmarks, not a bot of
+``gow_bots``: every idle group in «Атака» walks to the nearest node its player does not own,
+recruits go to the capital, and it never spends more CP than it has.
+"""
+
+from collections import deque
+from collections.abc import Callable
+from pathlib import Path
+
+import pytest
+
+from gow_sim.commands import Command, Move, Recruit
+from gow_sim.maps import MapDef, parse_map
+from gow_sim.match import Controller
+from gow_sim.ruleset import Ruleset, load_ruleset
+from gow_sim.view import AtNode, Mode, PlayerView
+
+ROOT = Path(__file__).resolve().parents[3]
+MVP0 = ROOT / "rulesets" / "mvp-0.toml"
+MVP_MAPS = ("arteriya", "pautina", "pereval")
+
+
+class ExpandBot:
+    def __init__(self, mapdef: MapDef, rules: Ruleset) -> None:
+        self.map = mapdef
+        self.rules = rules
+        self.hops = [self._bfs(n) for n in range(len(mapdef.nodes))]
+
+    def _bfs(self, start: int) -> list[int]:
+        dist = [-1] * len(self.map.nodes)
+        dist[start] = 0
+        queue = deque([start])
+        while queue:
+            node = queue.popleft()
+            for e in self.map.incident[node]:
+                other = self.map.edges[e].other(node)
+                if dist[other] < 0:
+                    dist[other] = dist[node] + 1
+                    queue.append(other)
+        return dist
+
+    def decide(self, view: PlayerView, tick: int) -> list[Command]:
+        del tick
+        me, cost = view.player, self.rules.orders.cost
+        budget = view.me.cp
+        cmds: list[Command] = []
+        capital = self.map.capital(me)
+        standing = sum(g.units for g in view.groups if g.location == AtNode(capital))
+        if budget >= cost.recruit and standing < view.nodes[capital].capacity:
+            cmds.append(Recruit(capital))
+            budget -= cost.recruit
+        foreign = [n.id for n in view.nodes if n.owner != me]
+        for g in view.groups:
+            if budget < cost.move or not foreign:
+                break
+            if (
+                not isinstance(g.location, AtNode)
+                or g.order is not None
+                or g.mode is not Mode.ATTACK
+            ):
+                continue
+            here = g.location.node
+            dist = self.hops[here]
+            reachable = [n for n in foreign if n != here and dist[n] > 0]
+            if not reachable:
+                continue
+            dest = min(reachable, key=lambda n: (dist[n], self.map.node_key(me, n)))
+            cmds.append(Move(g.id, dest))
+            budget -= cost.move
+        return cmds
+
+
+def grid40() -> MapDef:
+    """A rot180 ladder of 2 x 20 nodes (40 nodes, 58 edges); each player owns 10 nodes."""
+    cols = 20
+    nodes: list[dict[str, object]] = []
+    for node_id in range(2 * cols):
+        col = node_id % cols
+        owner = 0 if col < 5 else 1 if col >= cols - 5 else None
+        capital = 0 if node_id == 0 else 1 if node_id == 2 * cols - 1 else None
+        nodes.append(
+            {
+                "id": node_id,
+                "x": 50 + 40 * col,
+                "y": 100 + 200 * (node_id // cols),
+                "terrain": ["plains", "forest", "mountains"][min(col, cols - 1 - col) % 3],
+                "vp": 3 if capital is not None else 1,
+                "base_capacity": 8 if capital is not None else 4,
+                "capital_of": capital,
+                "start_owner": owner,
+                "start_units": 3 if owner is not None else 0,
+                "start_charged": 2 if owner is not None else 0,
+                "start_stock": 4 if capital is not None else (1 if owner is not None else 0),
+            }
+        )
+    pairs = [(r * cols + c, r * cols + c + 1) for r in range(2) for c in range(cols - 1)]
+    pairs += [(c, cols + c) for c in range(cols)]
+    edges = [
+        {"id": i, "a": a, "b": b, "base_width": 1, "max_width": 3, "travel_ticks": 30}
+        for i, (a, b) in enumerate(pairs)
+    ]
+    mirror_node = {n: 2 * cols - 1 - n for n in range(2 * cols)}
+    index = {frozenset(p): i for i, p in enumerate(pairs)}
+    mirror_edge = {
+        i: index[frozenset((mirror_node[a], mirror_node[b]))] for i, (a, b) in enumerate(pairs)
+    }
+    return parse_map(
+        {
+            "meta": {
+                "name": "grid40",
+                "version": 1,
+                "symmetry": "rot180",
+                "width": 900,
+                "height": 400,
+            },
+            "nodes": nodes,
+            "edges": edges,
+            "mirror": {
+                "nodes": {str(k): v for k, v in mirror_node.items()},
+                "edges": {str(k): v for k, v in mirror_edge.items()},
+            },
+        }
+    )
+
+
+@pytest.fixture(scope="session")
+def mvp_rules() -> Ruleset:
+    return load_ruleset(MVP0)
+
+
+@pytest.fixture(scope="session")
+def expand_bot() -> Callable[[MapDef, Ruleset], Controller]:
+    return ExpandBot
+
+
+@pytest.fixture(scope="session")
+def grid40_map() -> MapDef:
+    return grid40()
