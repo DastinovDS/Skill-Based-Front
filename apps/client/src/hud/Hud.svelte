@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getLocale, isLocale, LOCALES, setLocale, t, translate } from '../i18n/index.ts';
+  import type { OrderController } from '../match/orderController.ts';
   import type { Insets } from '../render/camera.ts';
   import EventLog from './EventLog.svelte';
   import SelectionPanel from './SelectionPanel.svelte';
@@ -17,6 +18,8 @@
     fps: number;
     /** The HUD numbers; replaced once per snapshot. */
     hud: HudState;
+    /** Ordering with the mouse and keys; its selection is the HUD's. */
+    orders: OrderController;
     onselectmap: (name: string) => void;
     onselectscene: (id: string) => void;
     onfit: () => void;
@@ -32,6 +35,7 @@
     sceneId,
     fps,
     hud,
+    orders,
     onselectmap,
     onselectscene,
     onfit,
@@ -152,11 +156,13 @@
         <details>
           <summary>{t('hud.help')}</summary>
           <p class="hint">{t('hud.cameraHint')}</p>
+          <p class="hint">{t('hud.ordersHint')}</p>
+          <p class="hint">{t('hud.keysHint')}</p>
           <p class="hint">{t('hud.legend')}</p>
         </details>
         <p class="hint">{t('hud.fps')}: {Math.round(fps)}</p>
       </section>
-      <div class="section"><SelectionPanel data={hud.current} {hud} /></div>
+      <div class="section"><SelectionPanel data={hud.current} {orders} /></div>
       <div class="section"><EventLog data={hud.current} /></div>
     </aside>
   {/if}

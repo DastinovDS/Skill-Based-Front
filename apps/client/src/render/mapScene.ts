@@ -6,7 +6,11 @@ import { EntityView } from './entityView.ts';
 import { FogView } from './fogView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
 import { MapView } from './mapView.ts';
+import { EMPTY_OVERLAY, type MapInteraction, type PickHit } from './interaction.ts';
+import { OverlayView } from './overlayView.ts';
+import { pickAt } from './pick.ts';
 import type { RenderSource } from './source.ts';
+import type { Point } from './camera.ts';
 
 /** Ticks per second when the source does not say (`rulesets/mvp-0.toml`). */
 const DEFAULT_TICK_HZ = 10;
@@ -18,6 +22,8 @@ export interface SceneOptions {
   player?: PlayerId;
   /** URL of the baked background PNG (`maps/<id>.bg.png`); without it flat terrain colours. */
   backgroundUrl?: string | null;
+  /** Selection, ghost orders and preview to draw, and where clicks go (CLI-06, #62). */
+  interaction?: MapInteraction | null;
   /** Called when a frame built on a new snapshot is drawn for the first time (tick of it). */
   onsnapshot?: (tick: number) => void;
 }
@@ -31,6 +37,9 @@ export class MapScene {
   private readonly view: MapView;
   private readonly entities: EntityView;
   private readonly fog: FogView;
+  private readonly overlay: OverlayView;
+  private interaction: MapInteraction | null;
+  private hovering = false;
   private readonly controller: CameraController;
   private source: RenderSource | null;
   private base: unknown = null;
@@ -39,11 +48,12 @@ export class MapScene {
 
   constructor(
     private readonly app: Application,
-    map: MapFile,
+    private readonly map: MapFile,
     insets: Insets = NO_INSETS,
     options: SceneOptions = {},
   ) {
     this.source = options.source ?? null;
+    this.interaction = options.interaction ?? null;
     this.onsnapshot = options.onsnapshot;
     this.layers = createLayers();
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.
@@ -57,6 +67,7 @@ export class MapScene {
       1,
       this.source?.tickHz ?? DEFAULT_TICK_HZ,
     );
+    this.overlay = new OverlayView(map, this.layers, options.player ?? 0);
     this.controller = new CameraController(
       app.canvas,
       this.layers.world,
@@ -65,6 +76,7 @@ export class MapScene {
       this.onCamera,
       insets,
     );
+    this.controller.setHandlers({ onclick: this.onClick, onhover: this.onHover });
     app.stage.addChild(this.layers.world);
     app.renderer.on('resize', this.onResize);
     app.ticker.add(this.onFrame);
@@ -76,6 +88,10 @@ export class MapScene {
   setSource(source: RenderSource | null): void {
     this.source = source;
     this.base = null;
+  }
+
+  setInteraction(interaction: MapInteraction | null): void {
+    this.interaction = interaction;
   }
 
   /** "Fit map": show the whole map. */
@@ -95,6 +111,7 @@ export class MapScene {
     this.controller.destroy();
     this.fog.destroy();
     this.entities.destroy();
+    this.overlay.destroy();
     this.view.destroy();
     if (this.backgroundUrl !== null) {
       void Assets.unload(this.backgroundUrl);
@@ -133,7 +150,38 @@ export class MapScene {
     this.entities.update(frame, this.source.events());
     this.fog.setTickHz(this.source.tickHz ?? DEFAULT_TICK_HZ);
     this.fog.update(frame.base);
+    this.overlay.update(this.interaction?.overlay() ?? EMPTY_OVERLAY, (id) =>
+      this.entities.groupPoints().get(id),
+    );
     if (announce) this.onsnapshot?.(frame.base.tick);
+  };
+
+  /** The hit under a point of the canvas, in CSS px. */
+  private hitAt(at: Point): PickHit | null {
+    const world = this.layers.world;
+    return pickAt(
+      this.map,
+      {
+        x: (at.x - world.position.x) / world.scale.x,
+        y: (at.y - world.position.y) / world.scale.y,
+      },
+      this.entities.groupPoints(),
+    );
+  }
+
+  private readonly onClick = (at: Point, shift: boolean): void => {
+    this.interaction?.click(this.hitAt(at), shift);
+  };
+
+  private readonly onHover = (at: Point | null): void => {
+    const hit = at === null ? null : this.hitAt(at);
+    // The pointer cursor (CSSOM, allowed by the CSP) tells that a click does something here.
+    const pointer = hit !== null && this.interaction !== null;
+    if (pointer !== this.hovering) {
+      this.hovering = pointer;
+      this.app.canvas.style.cursor = pointer ? 'pointer' : '';
+    }
+    this.interaction?.hover(hit);
   };
 
   private readonly onResize = (width: number, height: number): void => {

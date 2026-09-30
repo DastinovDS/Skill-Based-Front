@@ -1,76 +1,26 @@
 <script lang="ts">
-  import { t, tf } from '../i18n/index.ts';
+  import { t, tf, getLocale } from '../i18n/index.ts';
+  import { rejectMessageKey } from '../match/rejects.ts';
+  import type { OrderController } from '../match/orderController.ts';
   import ChargeDots from './ChargeDots.svelte';
+  import { formatCentis } from './format.ts';
   import type { HudData } from './hudData.ts';
-  import type { HudState } from './hudState.svelte.ts';
 
   interface Props {
     data: HudData | null;
-    hud: HudState;
+    /** Mouse and keyboard ordering: selection itself happens by clicking the map. */
+    orders: OrderController;
   }
 
-  let { data, hud }: Props = $props();
+  let { data, orders }: Props = $props();
 
-  // The pickers stand in for clicking the map, which arrives with map selection (CLI-06).
-  const NONE = '';
-  let planned = $state(false);
-
-  const groupId = $derived(hud.selection?.kind === 'group' ? hud.selection.id : NONE);
-  const nodeId = $derived(hud.selection?.kind === 'node' ? String(hud.selection.id) : NONE);
-  const targetId = $derived(hud.target === null ? NONE : String(hud.target.node));
-
-  function pickGroup(value: string): void {
-    hud.select(value === NONE ? null : { kind: 'group', id: value });
-    hud.aim(null);
-  }
-
-  function pickNode(value: string): void {
-    hud.select(value === NONE ? null : { kind: 'node', id: Number(value) });
-    hud.aim(null);
-  }
-
-  function pickTarget(value: string, isPlanned: boolean): void {
-    hud.aim(value === NONE ? null : { node: Number(value), planned: isPlanned });
-  }
+  const ui = $derived(orders.ui.current);
+  const cp = (centis: number): string => formatCentis(centis, getLocale());
 </script>
 
 <section class="panel">
   <h2>{t('inspect.title')}</h2>
   {#if data !== null}
-    <label>
-      {t('inspect.group')}
-      <select
-        value={groupId}
-        onchange={(event) => {
-          pickGroup(event.currentTarget.value);
-        }}
-      >
-        <option value={NONE}>{t('inspect.none')}</option>
-        {#each data.groups as g (g.id)}
-          <option value={g.id}>
-            {tf('inspect.groupOption', {
-              units: g.units,
-              where: g.node === null ? t('inspect.onRoad') : g.node,
-            })}
-          </option>
-        {/each}
-      </select>
-    </label>
-    <label>
-      {t('inspect.node')}
-      <select
-        value={nodeId}
-        onchange={(event) => {
-          pickNode(event.currentTarget.value);
-        }}
-      >
-        <option value={NONE}>{t('inspect.none')}</option>
-        {#each data.nodes as n (n.id)}
-          <option value={String(n.id)}>{tf('inspect.nodeOption', { id: n.id })}</option>
-        {/each}
-      </select>
-    </label>
-
     {#if data.group !== null}
       {@const g = data.group}
       <dl>
@@ -142,33 +92,49 @@
       <p class="hint">{t(`detail.${n.detail}`)}</p>
     {/if}
 
-    {#if data.group !== null && data.group.node !== null}
-      <label>
-        {t('inspect.target')}
-        <select
-          value={targetId}
-          onchange={(event) => {
-            pickTarget(event.currentTarget.value, planned);
-          }}
-        >
-          <option value={NONE}>{t('inspect.none')}</option>
-          {#each data.nodes.filter((n) => n.owner === 'enemy') as n (n.id)}
-            <option value={String(n.id)}>{tf('inspect.nodeOption', { id: n.id })}</option>
-          {/each}
-        </select>
-      </label>
+    <section class="orders" aria-label={t('orders.title')}>
+      <h3>{t('orders.title')}</h3>
+      {#if data.group === null}
+        <p class="hint">{t('orders.pickGroup')}</p>
+      {/if}
       <label class="check">
         <input
           type="checkbox"
-          checked={planned}
+          checked={ui.planned}
           onchange={(event) => {
-            planned = event.currentTarget.checked;
-            pickTarget(targetId, planned);
+            orders.setPlanned(event.currentTarget.checked);
           }}
         />
-        {t('inspect.planned')}
+        {t('orders.planned')}
       </label>
-    {/if}
+      {#if ui.preview !== null}
+        <p class="preview">
+          {tf(ui.preview.planned ? 'orders.previewPlanned' : 'orders.previewMove', {
+            node: ui.preview.node,
+            cost: cp(ui.preview.cost),
+          })}
+        </p>
+      {/if}
+      {#if data.group !== null}
+        <button
+          type="button"
+          onclick={() => {
+            orders.cancelSelected();
+          }}
+        >
+          {tf('orders.cancel', { cost: cp(orders.cancelCost) })}
+        </button>
+      {/if}
+      {#if ui.notice !== null}
+        <p class="notice" role="alert">
+          {#if ui.notice.kind === 'rejected'}
+            {tf('orders.rejected', { reason: t(rejectMessageKey(ui.notice.code)) })}
+          {:else}
+            {t('orders.lost')}
+          {/if}
+        </p>
+      {/if}
+    </section>
 
     {#if data.estimate !== null}
       {@const e = data.estimate.result}
@@ -211,6 +177,34 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+
+  .orders {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 4px;
+    border-top: 1px solid #30363d;
+  }
+
+  .preview {
+    font-weight: 600;
+  }
+
+  .notice {
+    padding: 4px 8px;
+    border: 1px solid #f85149;
+    border-radius: 4px;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
   }
 
   .check {
@@ -263,14 +257,5 @@
 
   .result {
     font-weight: 600;
-  }
-
-  select {
-    font: inherit;
-    color: inherit;
-    background: #21262d;
-    border: 1px solid #30363d;
-    border-radius: 4px;
-    padding: 2px 8px;
   }
 </style>

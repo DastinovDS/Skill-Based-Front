@@ -21,6 +21,14 @@ const DRAG_THRESHOLD = 4;
 const PRIMARY_BUTTON = 0;
 const MIDDLE_BUTTON = 1;
 
+/** Pointer events that are not camera moves: a click (press without a drag) and hovering. */
+export interface PointerHandlers {
+  /** A primary click at `at` (CSS px in the canvas); `shift` was held. */
+  onclick?: (at: Point, shift: boolean) => void;
+  /** The pointer is at `at` with no button pressed; `null`: it left the canvas. */
+  onhover?: (at: Point | null) => void;
+}
+
 interface Press {
   readonly pointerId: number;
   readonly start: Point;
@@ -42,6 +50,7 @@ export class CameraController {
   private fitted = true;
   private insets: Insets = NO_INSETS;
   private press: Press | null = null;
+  private handlers: PointerHandlers = {};
 
   constructor(
     private readonly element: HTMLElement,
@@ -58,8 +67,13 @@ export class CameraController {
     element.addEventListener('pointermove', this.onPointerMove);
     element.addEventListener('pointerup', this.onPointerUp);
     element.addEventListener('pointercancel', this.onPointerUp);
+    element.addEventListener('pointerleave', this.onPointerLeave);
     element.addEventListener('wheel', this.onWheel, { passive: false });
     this.apply();
+  }
+
+  setHandlers(handlers: PointerHandlers): void {
+    this.handlers = handlers;
   }
 
   get current(): Camera {
@@ -95,6 +109,7 @@ export class CameraController {
     this.element.removeEventListener('pointermove', this.onPointerMove);
     this.element.removeEventListener('pointerup', this.onPointerUp);
     this.element.removeEventListener('pointercancel', this.onPointerUp);
+    this.element.removeEventListener('pointerleave', this.onPointerLeave);
     this.element.removeEventListener('wheel', this.onWheel);
     this.endPress();
   }
@@ -133,7 +148,11 @@ export class CameraController {
 
   private readonly onPointerMove = (event: PointerEvent): void => {
     const press = this.press;
-    if (press?.pointerId !== event.pointerId) {
+    if (press === null) {
+      this.handlers.onhover?.(this.local(event));
+      return;
+    }
+    if (press.pointerId !== event.pointerId) {
       return;
     }
     const at = this.local(event);
@@ -150,9 +169,18 @@ export class CameraController {
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
-    if (this.press?.pointerId === event.pointerId) {
+    const press = this.press;
+    if (press?.pointerId === event.pointerId) {
       this.endPress();
+      // Only a finished primary press that never became a drag is a click.
+      if (event.type === 'pointerup' && event.button === PRIMARY_BUTTON && !press.dragging) {
+        this.handlers.onclick?.(this.local(event), event.shiftKey);
+      }
     }
+  };
+
+  private readonly onPointerLeave = (): void => {
+    this.handlers.onhover?.(null);
   };
 
   private endPress(): void {
