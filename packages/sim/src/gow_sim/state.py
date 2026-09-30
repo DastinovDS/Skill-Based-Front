@@ -75,6 +75,20 @@ class OnEdge:
 type Location = AtNode | OnEdge
 
 
+@dataclass(frozen=True, slots=True)
+class Order:
+    """A movement order of a group (``Move``, SIM-04; carried out by the movement system, SIM-05).
+
+    ``path``: the nodes still to reach, the next one first; the last one is the destination.
+    ``planned``: a planned order (DEC-08). The group leaves its node not before ``depart_tick``:
+    the tick the order was applied, plus ``orders.planned_delay_ticks`` for a planned order.
+    """
+
+    path: tuple[int, ...]
+    planned: bool
+    depart_tick: int
+
+
 @dataclass(slots=True)
 class Group:
     """Units of one player in one place: counters, not a list of units (``charged <= units``)."""
@@ -85,6 +99,10 @@ class Group:
     charged: int
     mode: Mode
     location: Location
+    order: Order | None = None
+    """Current movement order; ``None`` when the group has none."""
+    build_edge: int | None = None
+    """Edge the group upgrades (``UpgradeRoad``, SIM-11); ``None`` when it builds nothing."""
 
 
 @dataclass(slots=True)
@@ -99,6 +117,8 @@ class PlayerState:
     stance_changed_tick: int | None
     """Tick of the last stance change; ``None``: never changed, so the first change is free of the
     cooldown (#104 default)."""
+    forfeited: bool = False
+    """The player gave up: a ``Forfeit`` command, also for a technical defeat (DEC-05)."""
 
 
 @dataclass(slots=True)
@@ -308,6 +328,7 @@ def _player_data(p: PlayerState) -> dict[str, object]:
         "charge_acc": p.charge_acc,
         "vp": p.vp,
         "stance_changed_tick": p.stance_changed_tick,
+        "forfeited": p.forfeited,
     }
 
 
@@ -331,7 +352,13 @@ def _group_data(g: Group) -> dict[str, object]:
         "charged": g.charged,
         "mode": g.mode.value,
         "location": _location_data(g.location),
+        "order": None if g.order is None else _order_data(g.order),
+        "build_edge": g.build_edge,
     }
+
+
+def _order_data(o: Order) -> dict[str, object]:
+    return {"path": list(o.path), "planned": o.planned, "depart_tick": o.depart_tick}
 
 
 def _packet_data(p: Packet) -> dict[str, object]:
@@ -431,7 +458,11 @@ def _collection[T: _HasId](
 
 
 def _parse_player(data: object, where: str) -> PlayerState:
-    raw = _obj(data, where, ("id", "cp", "stance", "charge_acc", "vp", "stance_changed_tick"))
+    raw = _obj(
+        data,
+        where,
+        ("id", "cp", "stance", "charge_acc", "vp", "stance_changed_tick", "forfeited"),
+    )
     return PlayerState(
         id=_int(raw["id"], f"{where}.id", low=0),
         cp=_int(raw["cp"], f"{where}.cp", low=0),
@@ -439,6 +470,7 @@ def _parse_player(data: object, where: str) -> PlayerState:
         charge_acc=_int(raw["charge_acc"], f"{where}.charge_acc", low=0),
         vp=_int(raw["vp"], f"{where}.vp", low=0),
         stance_changed_tick=_opt_int(raw["stance_changed_tick"], f"{where}.stance_changed_tick"),
+        forfeited=_bool(raw["forfeited"], f"{where}.forfeited"),
     )
 
 
@@ -478,7 +510,11 @@ def _parse_location(data: object, where: str) -> Location:
 
 
 def _parse_group(data: object, where: str) -> Group:
-    raw = _obj(data, where, ("id", "owner", "units", "charged", "mode", "location"))
+    raw = _obj(
+        data,
+        where,
+        ("id", "owner", "units", "charged", "mode", "location", "order", "build_edge"),
+    )
     units = _int(raw["units"], f"{where}.units", low=0)
     return Group(
         id=_int(raw["id"], f"{where}.id", low=0),
@@ -487,6 +523,18 @@ def _parse_group(data: object, where: str) -> Group:
         charged=_int(raw["charged"], f"{where}.charged", low=0, high=units),
         mode=Mode(_choice(raw["mode"], f"{where}.mode", Mode)),
         location=_parse_location(raw["location"], f"{where}.location"),
+        order=None if raw["order"] is None else _parse_order(raw["order"], f"{where}.order"),
+        build_edge=_opt_int(raw["build_edge"], f"{where}.build_edge"),
+    )
+
+
+def _parse_order(data: object, where: str) -> Order:
+    raw = _obj(data, where, ("path", "planned", "depart_tick"))
+    path = _list(raw["path"], f"{where}.path")
+    return Order(
+        path=tuple(_int(n, f"{where}.path[{i}]", low=0) for i, n in enumerate(path)),
+        planned=_bool(raw["planned"], f"{where}.planned"),
+        depart_tick=_int(raw["depart_tick"], f"{where}.depart_tick", low=0),
     )
 
 
@@ -596,6 +644,12 @@ def _int(value: object, where: str, low: int | None = None, high: int | None = N
     if (low is not None and value < low) or (high is not None and value > high):
         bounds = f"[{'' if low is None else low}..{'' if high is None else high}]"
         raise StateFormatError(f"{where}: {value} is out of range {bounds}")
+    return value
+
+
+def _bool(value: object, where: str) -> bool:
+    if not isinstance(value, bool):
+        raise StateFormatError(f"{where}: expected a boolean, got {value!r}")
     return value
 
 

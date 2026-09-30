@@ -28,6 +28,7 @@ from gow_sim.state import (
     IntentKind,
     Mode,
     OnEdge,
+    Order,
     Packet,
     Sighting,
     StateFormatError,
@@ -68,7 +69,12 @@ def _rich_state(rules: Ruleset) -> GameState:
     gid = state.new_id()
     state.groups[gid] = Group(gid, 0, 2, 1, Mode.DEFENSE, OnEdge(edge=1, from_node=0, progress=333))
     gid = state.new_id()
-    state.groups[gid] = Group(gid, 1, 1, 0, Mode.BUILD, AtNode(3))
+    state.groups[gid] = Group(gid, 1, 1, 0, Mode.BUILD, AtNode(3), build_edge=2)
+    gid = state.new_id()
+    state.groups[gid] = Group(
+        gid, 1, 2, 2, Mode.ATTACK, AtNode(3), order=Order((1, 0), planned=True, depart_tick=150)
+    )
+    state.players[1].forfeited = True
     pid = state.new_id()
     state.packets[pid] = Packet(
         pid, 0, edge=0, from_node=0, charges=2, depart_tick=130, arrive_tick=172
@@ -238,6 +244,8 @@ _GROUP0: dict[str, Any] = {
     "charged": 3,
     "mode": "attack",
     "location": {"kind": "node", "node": 0},
+    "order": None,
+    "build_edge": None,
 }
 
 
@@ -272,6 +280,12 @@ def _set(data: Any, path: tuple[str | int, ...], value: object) -> None:
             {"kind": "edge", "edge": 0, "from_node": 0, "progress": 1001},
             r"location\.progress: 1001 is out of range",
         ),
+        (
+            ("groups", 0, "order"),
+            {"path": [1], "planned": 1, "depart_tick": 0},
+            r"groups\[0\]\.order\.planned: expected a boolean",
+        ),
+        (("players", 0, "forfeited"), None, r"players\[0\]\.forfeited: expected a boolean"),
         (("map", "nodes"), [], r"state\.map: nodes: the map has no nodes"),
         (
             ("events", 0),
@@ -311,6 +325,7 @@ def _states(draw: st.DrawFn) -> GameState:
         player.stance = draw(st.sampled_from(list(Stance)))
         player.charge_acc = draw(st.integers(min_value=0, max_value=99))
         player.vp = draw(st.integers(min_value=0, max_value=1000))
+        player.forfeited = draw(st.booleans())
         player.stance_changed_tick = draw(st.none() | st.integers(min_value=0, max_value=7200))
     for node in state.nodes.values():
         node.owner = draw(st.none() | players)
@@ -335,6 +350,16 @@ def _states(draw: st.DrawFn) -> GameState:
             draw(st.integers(min_value=0, max_value=units)),
             draw(modes),
             location,
+            order=draw(
+                st.none()
+                | st.builds(
+                    Order,
+                    st.lists(nodes, max_size=4).map(tuple),
+                    st.booleans(),
+                    st.integers(min_value=0, max_value=7200),
+                )
+            ),
+            build_edge=draw(st.none() | edges),
         )
     for _ in range(draw(st.integers(min_value=0, max_value=3))):
         pid = state.new_id()
