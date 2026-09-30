@@ -1,9 +1,11 @@
 /**
  * Target Content-Security-Policy of the production client.
  *
- * Single source of truth: `vite preview` sends it (see vite.config.ts), and OPS-02 (#81) copies
- * the same string into the Caddy `header Content-Security-Policy` directive. Print it with
- * `node --input-type=module -e "import { CSP } from './csp.ts'; console.log(CSP)"` in apps/client.
+ * Single source of truth: `vite preview` sends it (see vite.config.ts), and the Caddy image
+ * generates its `header Content-Security-Policy` directive from it at build time
+ * (deploy/caddy.Dockerfile, OPS-02 #81); deploy/check-caddy.sh compares the served header with it.
+ * Print it with `node --input-type=module -e "import { CSP } from './csp.ts'; console.log(CSP)"`
+ * in apps/client.
  *
  * Decisions (INF-03, #4):
  * - script-src 'self': no 'unsafe-eval'. PixiJS 8 generates shader/uniform sync code with

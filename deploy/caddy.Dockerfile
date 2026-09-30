@@ -25,7 +25,13 @@ RUN --mount=type=cache,target=/pnpm/store \
 COPY maps/*.json /repo/maps/
 COPY packages/sim/tests/maps/ /repo/packages/sim/tests/maps/
 COPY apps/client/ ./
-RUN pnpm build
+# The client build, then the Content-Security-Policy header for Caddy, generated from
+# apps/client/csp.ts (the single source of truth) and imported by deploy/Caddyfile.
+# JSON.stringify gives a valid Caddyfile token; Node runs csp.ts directly (type stripping).
+RUN pnpm build \
+    && node --input-type=module \
+        -e "import { CSP } from './csp.ts'; console.log('header Content-Security-Policy ' + JSON.stringify(CSP));" \
+        > /repo/csp.caddy
 
 
 FROM caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b AS caddy-base
@@ -50,6 +56,7 @@ RUN addgroup -S -g 10002 caddy \
     && chown -R caddy:caddy /data /config
 
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=client /repo/csp.caddy /etc/caddy/csp.caddy
 COPY --from=client /repo/apps/client/dist/ /srv/
 
 USER 10002:10002

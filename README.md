@@ -155,6 +155,7 @@ HTTP API: `GET /api/health`, `GET /api/maps` (список), `GET /api/maps/{id}
 cp .env.example .env              # необязательно: без .env игра поднимается на http://localhost
 docker compose up --build -d      # http://localhost, http://localhost/api/health
 deploy/smoke.sh                   # сборка, запуск и проверка стека (то же делает CI job `docker`)
+deploy/check-caddy.sh             # только заголовки, кэш и маршруты уже запущенного стека
 docker compose logs -f app        # логи сервера (JSON-строки)
 docker compose down               # остановить; данные остаются в томах
 ```
@@ -182,16 +183,42 @@ docker compose down               # остановить; данные оста�
 
 | Переменная | По умолчанию | Значение |
 |---|---|---|
-| `SITE_ADDRESS` | `http://localhost` | адрес сайта для Caddy; `http://...` без TLS (локально, e2e), доменное имя включает автоматический HTTPS |
+| `SITE_ADDRESS` | `http://localhost` | адрес сайта для Caddy: `http://localhost` без TLS (локально, e2e), `https://localhost` с локальным TLS, доменное имя включает автоматический HTTPS (раздел «Caddy») |
 | `HTTP_PORT`, `HTTPS_PORT` | `80`, `443` | порты на хосте, например `HTTP_PORT=8080`, если 80 занят |
 | `GOW_ENV`, `GOW_LOG_LEVEL`, `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `prod`, `INFO`, `10`, `3600` | настройки сервера (раздел «Сервер»); `e2e` только для прогона Playwright |
 
 В `app` попадают только переменные, перечисленные в `compose.yaml` (`Settings` запрещает неизвестные поля):
 новая настройка сервера для прода добавляется и туда, и в `.env.example`.
 
-Что добавят следующие issues: маршруты, кэширование, CSP и заголовки в `deploy/Caddyfile` (OPS-02, #81);
-подготовка VPS, деплой с осушением матчей и бэкапы тома `gow-data` (OPS-03, #82); метрики и оповещения
-(OPS-04, #83); e2e Playwright против этого стека (QA-02, #84).
+### Caddy
+
+`deploy/Caddyfile` (OPS-02, #81):
+
+| Путь | Что делает | Кэш |
+|---|---|---|
+| `/api/*` | прокси в `app:8000`, сжатие | заголовки сервера |
+| `/ws/*` | прокси WebSocket в `app:8000`; при `caddy reload` открытые соединения живут ещё до 15 минут (`stream_close_delay`, партия длится 12) | — |
+| `/assets/*` | файлы сборки Vite с хэшем в имени, сжатие zstd/gzip; нет файла — 404 | `public, max-age=31536000, immutable` |
+| остальное | `index.html` и файлы из `apps/client/public`; неизвестный путь отдаёт `index.html` (`try_files`) | `no-cache` (проверка по ETag при каждой загрузке) |
+
+- **Заголовки на всех ответах:** `Content-Security-Policy` из `apps/client/csp.ts` (включая `frame-ancestors 'none'`),
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` (камера, микрофон,
+  геолокация, платежи, USB выключены). CSP не копируется руками: образ `caddy` генерирует `/etc/caddy/csp.caddy`
+  из `csp.ts` при сборке, а `deploy/check-caddy.sh` сравнивает отданный заголовок с `csp.ts`.
+- **TLS:** с доменом в `SITE_ADDRESS` Caddy сам получает и продлевает сертификат Let's Encrypt (тома `caddy-data`)
+  и перенаправляет HTTP на HTTPS. `Strict-Transport-Security: max-age=31536000` отправляется только по HTTPS и
+  никогда для `localhost`/`127.0.0.1` (иначе браузер начнёт требовать HTTPS от всех локальных проектов).
+- **Локальный TLS:** `SITE_ADDRESS=https://localhost` включает внутренний CA Caddy (браузер предупреждает о
+  самоподписанном сертификате, в хранилище доверия он не ставится). Если 80/443 заняты:
+  `SITE_ADDRESS=https://localhost HTTP_PORT=8080 HTTPS_PORT=8443 docker compose up -d`, затем
+  `BASE_URL=https://localhost:8443 deploy/check-caddy.sh`. Перенаправление с HTTP ведёт на порт 443.
+- **Проверки:** `deploy/check-caddy.sh` (заголовки, кэш, сжатие, маршруты; только чтение, годится и для прода:
+  `BASE_URL=https://game.example.com`) и `deploy/check-ws-reload.sh` (WebSocket переживает `caddy reload`).
+  Пока у сервера нет WebSocket (SRV-03, #48), второй скрипт на время проверки подменяет `app` эхо-сервером
+  `deploy/ws_check.py`, поэтому только для локального стека.
+
+Что добавят следующие issues: подготовка VPS, деплой с осушением матчей и бэкапы тома `gow-data`
+(OPS-03, #82); метрики и оповещения (OPS-04, #83); e2e Playwright против этого стека (QA-02, #84).
 
 ## Прототип на Pygame (`legacy/`)
 

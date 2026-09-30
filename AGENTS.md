@@ -96,7 +96,9 @@ legacy/                            — архив прототипа, не тр�
 | `uv run alembic -c apps/server/alembic.ini upgrade head` | применить миграции БД (сервер делает это и сам при старте) | DB-01 |
 | `uv run alembic -c apps/server/alembic.ini revision --autogenerate -m "<что>"` | новая миграция из моделей `gow_server.models` | DB-01 |
 | `docker compose up --build -d` | прод-стек локально: `caddy` (клиент, прокси) и `app` (сервер), http://localhost | OPS-01 |
-| `deploy/smoke.sh` | собрать и поднять стек, проверить его через Caddy (здоровье, миграции, данные после перезапуска) | OPS-01 |
+| `deploy/smoke.sh` | собрать и поднять стек, проверить его через Caddy (здоровье, миграции, данные после перезапуска, `check-caddy.sh`, `check-ws-reload.sh`) | OPS-01 |
+| `deploy/check-caddy.sh` | заголовки безопасности (CSP равна `apps/client/csp.ts`), кэш, сжатие, маршруты работающего стека; `BASE_URL=https://...` для TLS | OPS-02 |
+| `deploy/check-ws-reload.sh` | WebSocket через Caddy переживает `caddy reload` (на время проверки подменяет `app` эхо-сервером) | OPS-02 |
 
 Если команда из этой таблицы не работает после своего issue — это баг: почини её или обнови таблицу в том же PR.
 
@@ -260,7 +262,7 @@ async def run(self) -> None:
 - HUD — класс в `.svelte.ts` с полем `current = $state.raw(...)`, которое заменяется раз на снапшот (10 Гц), а не каждый кадр. Экспортировать переприсваиваемый `$state` напрямую из модуля нельзя — Svelte это не компилирует.
 - Слои контейнеров: фон → территория → дороги → узлы → группы → намерения → туман → эффекты.
 - Всё, что создал, уничтожай: `obj.destroy({ children: true })`, созданные текстуры, `app.destroy()` при размонтировании. Асинхронный `app.init()` может завершиться после размонтирования — проверяй флаг.
-- CSP: целевая политика лежит в `apps/client/csp.ts` (её же берёт Caddy в OPS-02). `import 'pixi.js/unsafe-eval'` вместо разрешения `unsafe-eval`; текстуры грузятся без воркеров (`Assets.setPreferences({ preferWorkers: false })`, `worker-src 'none'`); `style-src 'self'` без `unsafe-inline`, поэтому в разметке Svelte нет статических атрибутов `style="..."` (стили из JS через CSSOM и директивы `style:` разрешены).
+- CSP: целевая политика лежит в `apps/client/csp.ts` (Caddy генерирует из неё заголовок при сборке образа, `deploy/caddy.Dockerfile`). `import 'pixi.js/unsafe-eval'` вместо разрешения `unsafe-eval`; текстуры грузятся без воркеров (`Assets.setPreferences({ preferWorkers: false })`, `worker-src 'none'`); `style-src 'self'` без `unsafe-inline`, поэтому в разметке Svelte нет статических атрибутов `style="..."` (стили из JS через CSSOM и директивы `style:` разрешены).
 
 ### 7.3 Сеть и плавность
 

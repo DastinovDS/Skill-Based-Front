@@ -1,24 +1,71 @@
-# Caddy config of the `caddy` image (deploy/caddy.Dockerfile).
+# Caddy config of the `caddy` image (deploy/caddy.Dockerfile). OPS-01 (#80), OPS-02 (#81).
 #
-# OPS-01 (#80): minimal routing only, enough to run the game with `docker compose up`.
-# OPS-02 (#81) adds on top of it: stream_close_delay for /ws/*, try_files for the client,
-# cache headers (index.html no-cache, hashed assets immutable), the CSP from apps/client/csp.ts,
-# X-Content-Type-Options and Referrer-Policy.
+# SITE_ADDRESS (compose.yaml, .env):
+#   http://localhost       plain HTTP on :80 (local run, e2e);
+#   https://localhost      local TLS with Caddy's internal CA (self-signed for the browser);
+#   game.example.com       automatic HTTPS with a public certificate (stored in the /data volume),
+#                          plus an HTTP -> HTTPS redirect on :80.
 #
-# SITE_ADDRESS (compose.yaml, .env): `http://localhost` serves plain HTTP on :80 (local run, e2e);
-# a domain name such as `game.example.com` turns on automatic HTTPS (certificates in /data).
+# Checks: deploy/check-caddy.sh (headers, caching, compression, routing) and
+# deploy/check-ws-reload.sh (a WebSocket survives `caddy reload`); both run in deploy/smoke.sh.
+{
+	# The internal CA (https://localhost) is not installed into the container's trust store.
+	skip_install_trust
+}
 
 {$SITE_ADDRESS:http://localhost} {
+	# Content-Security-Policy of apps/client/csp.ts (single source of truth). The image build
+	# generates this file from it (deploy/caddy.Dockerfile), so the policy is never copied by hand.
+	import /etc/caddy/csp.caddy
+
+	# Every response: static files, /api/* and the /ws/* handshake. frame-ancestors is in the CSP.
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+	}
+
+	# HSTS only over HTTPS and never for localhost: a browser would then force HTTPS for every
+	# local project on http://localhost. No includeSubDomains/preload: the domain's other
+	# subdomains are not ours to decide.
+	@hsts {
+		protocol https
+		not host localhost 127.0.0.1
+	}
+	header @hsts Strict-Transport-Security "max-age=31536000"
+
+	root * /srv
+
 	handle /api/* {
+		encode
 		reverse_proxy app:8000
 	}
 
+	# The match WebSocket (SRV-03, #48). On a config reload (`caddy reload`) open streams are kept
+	# for up to stream_close_delay instead of being cut at once: 15m covers a whole match
+	# (12 minutes, DEC-03). No `encode` here.
 	handle /ws/* {
-		reverse_proxy app:8000
+		reverse_proxy app:8000 {
+			stream_close_delay 15m
+		}
 	}
 
+	# Vite puts content-hashed bundles into /assets/: a new build means new file names, so they
+	# are cached forever. No SPA fallback here: a missing asset is a 404, not index.html (which
+	# would then be cached as immutable).
+	handle /assets/* {
+		@exists file
+		encode
+		header @exists Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# index.html and unhashed files from apps/client/public: revalidated on every load (ETag),
+	# so a deploy is picked up at once. Unknown paths fall back to index.html (client routing).
 	handle {
-		root * /srv
+		encode
+		header Cache-Control no-cache
+		try_files {path} /index.html
 		file_server
 	}
 }

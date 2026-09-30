@@ -39,6 +39,7 @@ jobs:
               - 'tools/**'
               - 'tests/**'
               - 'scripts/**'
+              - 'deploy/*.py'
               - 'rulesets/**'
               - 'maps/**'
               - '*.py'
@@ -138,6 +139,11 @@ jobs:
             echo "$f"
             docker run --rm -i hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d < "$f"
           done
+      # deploy/check-caddy.sh (run by smoke.sh) reads the CSP from apps/client/csp.ts with Node.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: apps/client/package.json
+          package-manager-cache: false
       - run: deploy/smoke.sh
       - if: always()
         run: docker compose down --volumes
