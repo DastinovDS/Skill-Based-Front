@@ -6,7 +6,7 @@ anything: each of its commands is the rot180 mirror of player 0's command with t
 (nodes and edges through the map's mirror tables, groups through the group correspondence). New
 groups of the two players are paired by the ``seq`` of the command that made them.
 
-Systems in the loop, in the fixed order: commands, economy, movement, capacity, vision.
+Systems in the loop, in the fixed order: commands, economy, movement, capacity, supply, vision.
 Combat is SIM-09 (#25); until then groups of both players simply stand or pass each other.
 """
 
@@ -36,6 +36,7 @@ from gow_sim.state import AtNode, Event, GameState, Group, Location, Mode, OnEdg
 from gow_sim.systems.capacity import capacity
 from gow_sim.systems.economy import economy
 from gow_sim.systems.movement import find_path, movement, traversal_ticks
+from gow_sim.systems.supply import supply
 from gow_sim.systems.vision import vision
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -219,6 +220,12 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     assert sorted(groups[g] for g in alive0) == alive1
     for g0 in alive0:
         assert _plain(state.groups[g0]) == _mirrored(state, state.groups[groups[g0]]), g0
+    packets = [
+        (p.owner, p.edge, p.from_node, p.charges, p.depart_tick, p.arrive_tick)
+        for p in state.packets.values()
+    ]
+    me, mn = mapdef.mirror_edges, mapdef.mirror_nodes
+    assert sorted(packets) == sorted((1 - o, me[e], mn[f], c, d, a) for o, e, f, c, d, a in packets)
     mem0, mem1 = state.vision_memory[0], state.vision_memory[1]
     assert {mapdef.mirror_nodes[n]: s for n, s in mem0.nodes.items()} == mem1.nodes
     assert {mapdef.mirror_edges[e]: s for e, s in mem0.edges.items()} == mem1.edges
@@ -274,6 +281,7 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         moved = movement(state, rules)
         captures += sum(e.kind == "node_captured" for e in moved)
         capacity(state, rules)
+        supply(state, rules)
         vision(state, rules)
         moves_on_edges += sum(isinstance(g.location, OnEdge) for g in state.groups.values())
         _assert_mirrored(state, groups)
