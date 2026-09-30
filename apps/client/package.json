@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "check": "svelte-check --tsconfig ./tsconfig.app.json --fail-on-warnings && tsc -p tsconfig.node.json",
     "test": "vitest run",
+    "check:i18n": "vitest run src/i18n",
     "build": "vite build",
     "preview": "vite preview"
   },
