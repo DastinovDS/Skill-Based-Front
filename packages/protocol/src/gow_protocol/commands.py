@@ -81,7 +81,7 @@ class ForfeitCmd(WireModel):
     type: Literal["forfeit"] = "forfeit"
 
 
-Command = Annotated[
+type Command = Annotated[
     MoveCmd
     | SplitCmd
     | MergeCmd

@@ -1,29 +1,29 @@
-import type { MapJson } from './mapJson.ts';
+import type { MapFile } from '../protocol.gen.ts';
 
 // Maps bundled into the client for the dev screen, until the lobby loads them from the server
 // (`GET /api/maps/{id}`). The MVP pool `maps/*.json` (MAP-04, #16) comes first, then the tiny test
 // maps of the simulation (MAP-01, #13). The files stay where they are, Vite bundles them from
 // there (see `server.fs.allow` in vite.config.ts).
-const mvpFiles = import.meta.glob<MapJson>('../../../../maps/*.json', {
+const mvpFiles = import.meta.glob<MapFile>('../../../../maps/*.json', {
   eager: true,
   import: 'default',
 });
-const testFiles = import.meta.glob<MapJson>('../../../../packages/sim/tests/maps/*.json', {
+const testFiles = import.meta.glob<MapFile>('../../../../packages/sim/tests/maps/*.json', {
   eager: true,
   import: 'default',
 });
 
-function byName(files: Record<string, MapJson>): MapJson[] {
+function byName(files: Record<string, MapFile>): MapFile[] {
   return Object.values(files).sort((a, b) => a.meta.name.localeCompare(b.meta.name));
 }
 
 const mvpMaps = byName(mvpFiles);
 const testMaps = byName(testFiles);
 
-export const BUNDLED_MAPS: readonly MapJson[] = [...mvpMaps, ...testMaps];
+export const BUNDLED_MAPS: readonly MapFile[] = [...mvpMaps, ...testMaps];
 
 /** The map the dev screen opens with: the first MVP map, or the "pass" test map before MAP-04. */
-export const DEFAULT_MAP: MapJson = (() => {
+export const DEFAULT_MAP: MapFile = (() => {
   const map = mvpMaps[0] ?? testMaps.find((m) => m.meta.name === 'pass') ?? testMaps[0];
   if (map === undefined) {
     throw new Error(

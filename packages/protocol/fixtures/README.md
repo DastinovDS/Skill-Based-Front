@@ -9,6 +9,9 @@
 что есть фикстура хотя бы на каждый тип сообщения и каждый тип команды и что имя файла
 начинается с типа сообщения (`command_<тип команды>` для команд).
 
+Тест клиента `apps/client/src/protocol.test.ts` проверяет, что каждая фикстура проходит проверку
+типов против сгенерированных `ClientMsg` и `ServerMsg` (`apps/client/src/protocol.gen.ts`, PRO-02, #45).
+
 Изменил схему: повысь `PROTOCOL_VERSION` (`gow_protocol.messages`), поправь фикстуры и
 `hello.json` (`protocol_version`).
 

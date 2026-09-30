@@ -65,10 +65,11 @@ select = [
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
-# Strict type checking for packages/, apps/, tools/, deploy/*.py and the root test infrastructure.
+# Strict type checking for packages/, apps/, tools/, scripts/, deploy/*.py and the root test
+# infrastructure.
 # docs/mvp/*.py (plan tooling, needs PyYAML outside the workspace) is deliberately not included.
 [tool.pyright]
-include = ["packages", "apps", "tools", "tests", "deploy", "conftest.py"]
+include = ["packages", "apps", "tools", "tests", "scripts", "deploy", "conftest.py"]
 exclude = ["legacy", "**/node_modules", "**/__pycache__", "**/.*"]
 typeCheckingMode = "strict"
 pythonVersion = "3.12"

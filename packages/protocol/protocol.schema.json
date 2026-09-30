@@ -1,0 +1,1708 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Protocol",
+  "description": "Wire format of Skill-Based Front, generated from gow_protocol.",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/ClientMsg"
+    },
+    {
+      "$ref": "#/$defs/ServerMsg"
+    },
+    {
+      "$ref": "#/$defs/MapFile"
+    }
+  ],
+  "$defs": {
+    "AckMsg": {
+      "additionalProperties": false,
+      "description": "Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.\n\n``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.\n``path``: for an accepted ``move``, the nodes from the group's node to ``dest`` (the client\ndraws it and never computes it); ``None`` otherwise.\n``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,\n``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).",
+      "properties": {
+        "type": {
+          "const": "ack",
+          "default": "ack",
+          "type": "string"
+        },
+        "seq": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "applied_tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "items": {
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reject_code": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "type",
+        "seq",
+        "applied_tick",
+        "path",
+        "reject_code"
+      ],
+      "title": "AckMsg",
+      "type": "object"
+    },
+    "AtNodeLoc": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "node",
+          "default": "node",
+          "type": "string"
+        },
+        "node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "node"
+      ],
+      "title": "AtNodeLoc",
+      "type": "object"
+    },
+    "CancelOrderCmd": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "cancel_order",
+          "default": "cancel_order",
+          "type": "string"
+        },
+        "group": {
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "group"
+      ],
+      "title": "CancelOrderCmd",
+      "type": "object"
+    },
+    "ClientMsg": {
+      "discriminator": {
+        "mapping": {
+          "command": "#/$defs/CommandMsg",
+          "hello": "#/$defs/HelloMsg",
+          "ping": "#/$defs/PingMsg",
+          "resync": "#/$defs/ResyncMsg"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/HelloMsg"
+        },
+        {
+          "$ref": "#/$defs/CommandMsg"
+        },
+        {
+          "$ref": "#/$defs/PingMsg"
+        },
+        {
+          "$ref": "#/$defs/ResyncMsg"
+        }
+      ]
+    },
+    "CombatPublic": {
+      "additionalProperties": false,
+      "properties": {
+        "terrain_defense_mod": {
+          "$ref": "#/$defs/TerrainDefensePublic"
+        },
+        "planned_bonus": {
+          "maximum": 2147483647,
+          "minimum": -2147483647,
+          "type": "integer"
+        },
+        "defense_bonus": {
+          "maximum": 2147483647,
+          "minimum": -2147483647,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "terrain_defense_mod",
+        "planned_bonus",
+        "defense_bonus"
+      ],
+      "title": "CombatPublic",
+      "type": "object"
+    },
+    "Command": {
+      "discriminator": {
+        "mapping": {
+          "cancel_order": "#/$defs/CancelOrderCmd",
+          "forfeit": "#/$defs/ForfeitCmd",
+          "merge": "#/$defs/MergeCmd",
+          "move": "#/$defs/MoveCmd",
+          "recruit": "#/$defs/RecruitCmd",
+          "set_mode": "#/$defs/SetModeCmd",
+          "set_stance": "#/$defs/SetStanceCmd",
+          "split": "#/$defs/SplitCmd",
+          "upgrade_road": "#/$defs/UpgradeRoadCmd"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/MoveCmd"
+        },
+        {
+          "$ref": "#/$defs/SplitCmd"
+        },
+        {
+          "$ref": "#/$defs/MergeCmd"
+        },
+        {
+          "$ref": "#/$defs/SetModeCmd"
+        },
+        {
+          "$ref": "#/$defs/SetStanceCmd"
+        },
+        {
+          "$ref": "#/$defs/UpgradeRoadCmd"
+        },
+        {
+          "$ref": "#/$defs/RecruitCmd"
+        },
+        {
+          "$ref": "#/$defs/CancelOrderCmd"
+        },
+        {
+          "$ref": "#/$defs/ForfeitCmd"
+        }
+      ]
+    },
+    "CommandMsg": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "command",
+          "default": "command",
+          "type": "string"
+        },
+        "seq": {
+          "description": "Client sequence number of the command, strictly increasing; ``ack`` echoes it.",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "cmd": {
+          "$ref": "#/$defs/Command"
+        }
+      },
+      "required": [
+        "type",
+        "seq",
+        "cmd"
+      ],
+      "title": "CommandMsg",
+      "type": "object"
+    },
+    "CostsPublic": {
+      "additionalProperties": false,
+      "description": "Command costs in hundredths of CP (``orders.cost`` of the ruleset).",
+      "properties": {
+        "move": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "planned_move": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cancel": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "split": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "merge": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "attack": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "defense": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "build": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "recruit": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stance": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "move",
+        "planned_move",
+        "cancel",
+        "split",
+        "merge",
+        "attack",
+        "defense",
+        "build",
+        "recruit",
+        "stance"
+      ],
+      "title": "CostsPublic",
+      "type": "object"
+    },
+    "CpPublic": {
+      "additionalProperties": false,
+      "description": "CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.",
+      "properties": {
+        "cap": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "per_period": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_ticks": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cap",
+        "per_period",
+        "period_ticks"
+      ],
+      "title": "CpPublic",
+      "type": "object"
+    },
+    "Detail": {
+      "description": "How much a player sees of a node or an edge (DEC-04, mechanics.md, section 10).",
+      "enum": [
+        "exact",
+        "presence",
+        "fog"
+      ],
+      "title": "Detail",
+      "type": "string"
+    },
+    "EdgeView": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "description": "Current width; public for every edge (DEC-04).",
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "detail": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Detail"
+            }
+          ],
+          "description": "``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges."
+        },
+        "upgrade_gain": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UpgradeGain"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Only for own internal edges that can still be upgraded."
+        },
+        "seen": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Seen"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "width",
+        "detail",
+        "upgrade_gain",
+        "seen"
+      ],
+      "title": "EdgeView",
+      "type": "object"
+    },
+    "EndReason": {
+      "description": "How the match ended (DEC-03, DEC-05).",
+      "enum": [
+        "capital_captured",
+        "timer",
+        "forfeit",
+        "disconnect"
+      ],
+      "title": "EndReason",
+      "type": "string"
+    },
+    "ErrorMsg": {
+      "additionalProperties": false,
+      "description": "A protocol-level error (malformed message, rate limit, ...); game rejections are ``ack``.\n\n``message`` is a short text for developers. It never echoes the client's input.",
+      "properties": {
+        "type": {
+          "const": "error",
+          "default": "error",
+          "type": "string"
+        },
+        "code": {
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
+          "type": "string"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "type",
+        "code",
+        "message"
+      ],
+      "title": "ErrorMsg",
+      "type": "object"
+    },
+    "EventMsg": {
+      "additionalProperties": false,
+      "description": "A simulation event visible to the player (``gow_sim.state.Event``; PRO-03 filters them).\n\n``data`` mirrors ``Event.data``: flat fields with integer, string, boolean or null values.\nEntity ids in ``data`` are opaque ids (strings), map node and edge ids are integers.",
+      "properties": {
+        "type": {
+          "const": "event",
+          "default": "event",
+          "type": "string"
+        },
+        "tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "pattern": "^[a-z][a-z0-9_]{0,31}$",
+          "type": "string"
+        },
+        "data": {
+          "maxProperties": 32,
+          "patternProperties": {
+            "^[a-z][a-z0-9_]{0,31}$": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483647,
+                  "type": "integer"
+                },
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "type",
+        "tick",
+        "kind",
+        "data"
+      ],
+      "title": "EventMsg",
+      "type": "object"
+    },
+    "ForfeitCmd": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "forfeit",
+          "default": "forfeit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ForfeitCmd",
+      "type": "object"
+    },
+    "GroupView": {
+      "additionalProperties": false,
+      "description": "An own group. Enemy groups appear only as ``Seen`` summaries of places.",
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        },
+        "units": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "charged": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "location": {
+          "$ref": "#/$defs/Location"
+        },
+        "order": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrderView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "units",
+        "charged",
+        "mode",
+        "location",
+        "order"
+      ],
+      "title": "GroupView",
+      "type": "object"
+    },
+    "HelloMsg": {
+      "additionalProperties": false,
+      "description": "First message of a connection. The token is never in the URL, a log or an error text.",
+      "properties": {
+        "type": {
+          "const": "hello",
+          "default": "hello",
+          "type": "string"
+        },
+        "protocol_version": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "token": {
+          "description": "Guest token from ``POST /api/guest`` (``secrets.token_urlsafe``, ID-01 #43).",
+          "pattern": "^[A-Za-z0-9_-]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "protocol_version",
+        "token"
+      ],
+      "title": "HelloMsg",
+      "type": "object"
+    },
+    "IntentKind": {
+      "description": "Publicly visible intent types (DEC-04, DEC-08).",
+      "enum": [
+        "planned_move",
+        "defense",
+        "build"
+      ],
+      "title": "IntentKind",
+      "type": "string"
+    },
+    "IntentView": {
+      "additionalProperties": false,
+      "description": "Public part of a planned order or a mode switch: no group id and no group size.",
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        },
+        "owner": {
+          "$ref": "#/$defs/PlayerId"
+        },
+        "kind": {
+          "$ref": "#/$defs/IntentKind"
+        },
+        "origin": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "``None`` for an intent without a destination (``defense``)."
+        },
+        "created_tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "owner",
+        "kind",
+        "origin",
+        "target",
+        "created_tick"
+      ],
+      "title": "IntentView",
+      "type": "object"
+    },
+    "Location": {
+      "discriminator": {
+        "mapping": {
+          "edge": "#/$defs/OnEdgeLoc",
+          "node": "#/$defs/AtNodeLoc"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AtNodeLoc"
+        },
+        {
+          "$ref": "#/$defs/OnEdgeLoc"
+        }
+      ]
+    },
+    "MapEdgeFile": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Equals the index in ``edges``.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "a": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "b": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "base_width": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_width": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "travel_ticks": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "a",
+        "b",
+        "base_width",
+        "max_width",
+        "travel_ticks"
+      ],
+      "title": "MapEdgeFile",
+      "type": "object"
+    },
+    "MapFile": {
+      "additionalProperties": false,
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/MapMetaFile"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/MapNodeFile"
+          },
+          "type": "array"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/MapEdgeFile"
+          },
+          "type": "array"
+        },
+        "mirror": {
+          "$ref": "#/$defs/MapMirrorFile"
+        }
+      },
+      "required": [
+        "meta",
+        "nodes",
+        "edges",
+        "mirror"
+      ],
+      "title": "MapFile",
+      "type": "object"
+    },
+    "MapMetaFile": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Map id: ``map_id`` in ``welcome`` and in the replay header.",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "type": "string"
+        },
+        "version": {
+          "description": "Revision of the map, bumped on every edit.",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "symmetry": {
+          "const": "rot180",
+          "type": "string"
+        },
+        "width": {
+          "description": "World size: coordinates are in ``[0, width] x [0, height]``, ``y`` grows down.",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "height": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "symmetry",
+        "width",
+        "height"
+      ],
+      "title": "MapMetaFile",
+      "type": "object"
+    },
+    "MapMirrorFile": {
+      "additionalProperties": false,
+      "description": "Symmetry table: id (as a JSON string key) -> id of the mirrored node or edge.",
+      "properties": {
+        "nodes": {
+          "additionalProperties": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "edges": {
+          "additionalProperties": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "nodes",
+        "edges"
+      ],
+      "title": "MapMirrorFile",
+      "type": "object"
+    },
+    "MapNodeFile": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Equals the index in ``nodes``.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "x": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "terrain": {
+          "$ref": "#/$defs/Terrain"
+        },
+        "vp": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "base_capacity": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capital_of": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlayerId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "start_owner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlayerId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "start_units": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start_charged": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start_stock": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "x",
+        "y",
+        "terrain",
+        "vp",
+        "base_capacity",
+        "capital_of",
+        "start_owner",
+        "start_units",
+        "start_charged",
+        "start_stock"
+      ],
+      "title": "MapNodeFile",
+      "type": "object"
+    },
+    "MatchEndMsg": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "match_end",
+          "default": "match_end",
+          "type": "string"
+        },
+        "tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reason": {
+          "$ref": "#/$defs/EndReason"
+        },
+        "winner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlayerId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "``None`` is a draw, possible only when ``reason`` is ``timer``."
+        },
+        "vp": {
+          "description": "Final VP of both players, by player id.",
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "tick",
+        "reason",
+        "winner",
+        "vp"
+      ],
+      "title": "MatchEndMsg",
+      "type": "object"
+    },
+    "MergeCmd": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "merge",
+          "default": "merge",
+          "type": "string"
+        },
+        "groups": {
+          "items": {
+            "pattern": "^[A-Za-z0-9_-]{1,32}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "groups"
+      ],
+      "title": "MergeCmd",
+      "type": "object"
+    },
+    "Mode": {
+      "description": "Group mode (mechanics.md, section 3; effects: DEC-08).",
+      "enum": [
+        "attack",
+        "defense",
+        "build"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "MoveCmd": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "move",
+          "default": "move",
+          "type": "string"
+        },
+        "group": {
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        },
+        "dest": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "planned": {
+          "description": "Planned order (DEC-08): costlier, visible to everyone as an intent, starts after a delay.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "group",
+        "dest",
+        "planned"
+      ],
+      "title": "MoveCmd",
+      "type": "object"
+    },
+    "NodeView": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlayerId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "capacity": {
+          "description": "Current capacity of the city; public for every node (DEC-04).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "detail": {
+          "$ref": "#/$defs/Detail"
+        },
+        "warehouse": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Charges in the warehouse; only for ``EXACT`` nodes."
+        },
+        "seen": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Seen"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Current sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one, or ``None``."
+        }
+      },
+      "required": [
+        "id",
+        "owner",
+        "capacity",
+        "detail",
+        "warehouse",
+        "seen"
+      ],
+      "title": "NodeView",
+      "type": "object"
+    },
+    "OnEdgeLoc": {
+      "additionalProperties": false,
+      "description": "Moving along ``edge`` away from ``from_node``; ``progress`` in thousandths.",
+      "properties": {
+        "kind": {
+          "const": "edge",
+          "default": "edge",
+          "type": "string"
+        },
+        "edge": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "from_node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "progress": {
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "edge",
+        "from_node",
+        "progress"
+      ],
+      "title": "OnEdgeLoc",
+      "type": "object"
+    },
+    "OrderView": {
+      "additionalProperties": false,
+      "description": "Current order of an own group: the path is the server's, the client never computes it.",
+      "properties": {
+        "dest": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Remaining nodes to ``dest``, ``dest`` included.",
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "planned": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "dest",
+        "path",
+        "planned"
+      ],
+      "title": "OrderView",
+      "type": "object"
+    },
+    "PacketView": {
+      "additionalProperties": false,
+      "description": "Own charges on the way (mechanics.md, section 7).",
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        },
+        "edge": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "from_node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "charges": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "depart_tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "arrive_tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "edge",
+        "from_node",
+        "charges",
+        "depart_tick",
+        "arrive_tick"
+      ],
+      "title": "PacketView",
+      "type": "object"
+    },
+    "PingMsg": {
+      "additionalProperties": false,
+      "description": "Application-level ping for RTT (browsers do not expose protocol pings).",
+      "properties": {
+        "type": {
+          "const": "ping",
+          "default": "ping",
+          "type": "string"
+        },
+        "id": {
+          "description": "Echoed in ``pong``; the client measures the time itself.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "title": "PingMsg",
+      "type": "object"
+    },
+    "PlayerId": {
+      "enum": [
+        0,
+        1
+      ],
+      "maximum": 1,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "PongMsg": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "pong",
+          "default": "pong",
+          "type": "string"
+        },
+        "id": {
+          "description": "``id`` of the ``ping``.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "title": "PongMsg",
+      "type": "object"
+    },
+    "RecruitCmd": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "recruit",
+          "default": "recruit",
+          "type": "string"
+        },
+        "node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "node"
+      ],
+      "title": "RecruitCmd",
+      "type": "object"
+    },
+    "ResyncMsg": {
+      "additionalProperties": false,
+      "description": "Ask for a full snapshot now (after a gap in snapshots).",
+      "properties": {
+        "type": {
+          "const": "resync",
+          "default": "resync",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ResyncMsg",
+      "type": "object"
+    },
+    "RulesetPublic": {
+      "additionalProperties": false,
+      "properties": {
+        "tick_hz": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "match_ticks": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "cp": {
+          "$ref": "#/$defs/CpPublic"
+        },
+        "cost": {
+          "$ref": "#/$defs/CostsPublic"
+        },
+        "combat": {
+          "$ref": "#/$defs/CombatPublic"
+        }
+      },
+      "required": [
+        "tick_hz",
+        "match_ticks",
+        "cp",
+        "cost",
+        "combat"
+      ],
+      "title": "RulesetPublic",
+      "type": "object"
+    },
+    "Seen": {
+      "additionalProperties": false,
+      "description": "What the player sees, or last saw, of one node or edge (``gow_sim.state.Sighting``).\n\n``enemy_modes``: distinct modes of the enemy groups there; empty means no enemy groups.\n``enemy_units`` and ``enemy_charged`` are totals, present only when ``level`` is ``EXACT``.\n``level`` is never ``FOG``: a place in fog is not seen, it keeps an older ``Seen``.",
+      "properties": {
+        "tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "level": {
+          "$ref": "#/$defs/Detail"
+        },
+        "enemy_modes": {
+          "items": {
+            "$ref": "#/$defs/Mode"
+          },
+          "maxItems": 3,
+          "type": "array"
+        },
+        "enemy_units": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enemy_charged": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "tick",
+        "level",
+        "enemy_modes",
+        "enemy_units",
+        "enemy_charged"
+      ],
+      "title": "Seen",
+      "type": "object"
+    },
+    "SelfView": {
+      "additionalProperties": false,
+      "description": "Own counters; the enemy's CP and stance are never in a view (AGENTS.md, section 4.4).",
+      "properties": {
+        "cp": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stance": {
+          "$ref": "#/$defs/Stance"
+        }
+      },
+      "required": [
+        "cp",
+        "stance"
+      ],
+      "title": "SelfView",
+      "type": "object"
+    },
+    "ServerMsg": {
+      "discriminator": {
+        "mapping": {
+          "ack": "#/$defs/AckMsg",
+          "error": "#/$defs/ErrorMsg",
+          "event": "#/$defs/EventMsg",
+          "match_end": "#/$defs/MatchEndMsg",
+          "pong": "#/$defs/PongMsg",
+          "snapshot": "#/$defs/SnapshotMsg",
+          "welcome": "#/$defs/WelcomeMsg"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/WelcomeMsg"
+        },
+        {
+          "$ref": "#/$defs/SnapshotMsg"
+        },
+        {
+          "$ref": "#/$defs/AckMsg"
+        },
+        {
+          "$ref": "#/$defs/EventMsg"
+        },
+        {
+          "$ref": "#/$defs/MatchEndMsg"
+        },
+        {
+          "$ref": "#/$defs/ErrorMsg"
+        },
+        {
+          "$ref": "#/$defs/PongMsg"
+        }
+      ]
+    },
+    "SetModeCmd": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "set_mode",
+          "default": "set_mode",
+          "type": "string"
+        },
+        "group": {
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        }
+      },
+      "required": [
+        "type",
+        "group",
+        "mode"
+      ],
+      "title": "SetModeCmd",
+      "type": "object"
+    },
+    "SetStanceCmd": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "set_stance",
+          "default": "set_stance",
+          "type": "string"
+        },
+        "stance": {
+          "$ref": "#/$defs/Stance"
+        }
+      },
+      "required": [
+        "type",
+        "stance"
+      ],
+      "title": "SetStanceCmd",
+      "type": "object"
+    },
+    "SnapshotMsg": {
+      "additionalProperties": false,
+      "description": "The player's view after tick ``tick``. Only the latest one matters (AGENTS.md, 5.3).",
+      "properties": {
+        "type": {
+          "const": "snapshot",
+          "default": "snapshot",
+          "type": "string"
+        },
+        "tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "view": {
+          "$ref": "#/$defs/View"
+        }
+      },
+      "required": [
+        "type",
+        "tick",
+        "view"
+      ],
+      "title": "SnapshotMsg",
+      "type": "object"
+    },
+    "SplitCmd": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "split",
+          "default": "split",
+          "type": "string"
+        },
+        "group": {
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        },
+        "n": {
+          "description": "Units that leave ``group`` as a new group.",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "group",
+        "n"
+      ],
+      "title": "SplitCmd",
+      "type": "object"
+    },
+    "Stance": {
+      "description": "CP stance: the share of CP regeneration that goes into charges (DEC-02).",
+      "enum": [
+        "economy",
+        "balance",
+        "war"
+      ],
+      "title": "Stance",
+      "type": "string"
+    },
+    "Terrain": {
+      "enum": [
+        "plains",
+        "forest",
+        "mountains"
+      ],
+      "title": "Terrain",
+      "type": "string"
+    },
+    "TerrainDefensePublic": {
+      "additionalProperties": false,
+      "description": "``terrain.defense_mod``: charges added to the node defender's pool; may be negative.",
+      "properties": {
+        "plains": {
+          "maximum": 2147483647,
+          "minimum": -2147483647,
+          "type": "integer"
+        },
+        "forest": {
+          "maximum": 2147483647,
+          "minimum": -2147483647,
+          "type": "integer"
+        },
+        "mountains": {
+          "maximum": 2147483647,
+          "minimum": -2147483647,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "plains",
+        "forest",
+        "mountains"
+      ],
+      "title": "TerrainDefensePublic",
+      "type": "object"
+    },
+    "UpgradeGain": {
+      "additionalProperties": false,
+      "description": "What the next road level would give (SIM-11 #27, hint of mechanics.md, section 18).",
+      "properties": {
+        "capacity_centi": {
+          "description": "Capacity gain in hundredths, e.g. 50 for «+0.5».",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "packet_speed_pct": {
+          "description": "Packet speed gain in percentage points (``supply.packet_speed_pct``).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "capacity_centi",
+        "packet_speed_pct"
+      ],
+      "title": "UpgradeGain",
+      "type": "object"
+    },
+    "UpgradeRoadCmd": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "upgrade_road",
+          "default": "upgrade_road",
+          "type": "string"
+        },
+        "group": {
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        },
+        "edge": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "group",
+        "edge"
+      ],
+      "title": "UpgradeRoadCmd",
+      "type": "object"
+    },
+    "View": {
+      "additionalProperties": false,
+      "properties": {
+        "me": {
+          "$ref": "#/$defs/SelfView"
+        },
+        "vp": {
+          "description": "VP of both players, by player id; public (DEC-04).",
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "nodes": {
+          "description": "Every node of the map, ``nodes[i].id == i``.",
+          "items": {
+            "$ref": "#/$defs/NodeView"
+          },
+          "type": "array"
+        },
+        "edges": {
+          "description": "Every edge of the map, ``edges[i].id == i``.",
+          "items": {
+            "$ref": "#/$defs/EdgeView"
+          },
+          "type": "array"
+        },
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/GroupView"
+          },
+          "type": "array"
+        },
+        "packets": {
+          "items": {
+            "$ref": "#/$defs/PacketView"
+          },
+          "type": "array"
+        },
+        "intents": {
+          "items": {
+            "$ref": "#/$defs/IntentView"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "me",
+        "vp",
+        "nodes",
+        "edges",
+        "groups",
+        "packets",
+        "intents"
+      ],
+      "title": "View",
+      "type": "object"
+    },
+    "WelcomeMsg": {
+      "additionalProperties": false,
+      "description": "Answer to a valid ``hello``, also after a reconnect; a full ``snapshot`` follows.",
+      "properties": {
+        "type": {
+          "const": "welcome",
+          "default": "welcome",
+          "type": "string"
+        },
+        "player": {
+          "$ref": "#/$defs/PlayerId"
+        },
+        "ruleset_public": {
+          "$ref": "#/$defs/RulesetPublic"
+        },
+        "map_id": {
+          "description": "The map graph itself is public and comes over HTTP (``GET /api/maps/{id}``).",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "type": "string"
+        },
+        "last_seq": {
+          "description": "Highest ``seq`` of this player the server has accepted; ``0`` if none. After a reconnect\nthe client resends only its commands with a greater ``seq``.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "player",
+        "ruleset_public",
+        "map_id",
+        "last_seq"
+      ],
+      "title": "WelcomeMsg",
+      "type": "object"
+    }
+  }
+}

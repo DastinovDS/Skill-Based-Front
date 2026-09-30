@@ -1,6 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MapJson } from '../map/mapJson.ts';
+import type { MapFile } from '../protocol.gen.ts';
 import GameCanvas from './GameCanvas.svelte';
 
 // Stand-ins for pixi.js Application (init() resolves when the test says so) and for MapScene.
@@ -46,7 +46,7 @@ vi.mock('./mapScene.ts', () => ({ MapScene: fakes.FakeMapScene }));
 
 const { FakeApplication, FakeMapScene } = fakes;
 
-function mapNamed(name: string): MapJson {
+function mapNamed(name: string): MapFile {
   return {
     meta: { name, version: 1, symmetry: 'rot180', width: 100, height: 100 },
     nodes: [],
@@ -146,7 +146,7 @@ describe('GameCanvas', () => {
     expect(FakeMapScene.instances).toHaveLength(2);
     expect(first.destroy).toHaveBeenCalledTimes(1);
     const second = last(FakeMapScene.instances);
-    expect((second.map as MapJson).meta.name).toBe('b');
+    expect((second.map as MapFile).meta.name).toBe('b');
 
     // typescript-eslint cannot see the types of .svelte imports: name the export explicitly.
     (component as { fitMap: () => void }).fitMap();
