@@ -105,6 +105,7 @@
   по возрастанию.
 - `MapDef.capital(player)`, `MapDef.node_key(player, node)`, `EdgeDef.other(node)`.
 - `load_map(path)` и `parse_map(data)`; ошибки: `MapFormatError` (подкласс `ValueError`).
+- `map_to_data(map)`: обратное к `parse_map` (данные в формате файла); так карта входит в каноническое состояние и `state_hash()` (SIM-02).
 
 ## Валидатор
 
