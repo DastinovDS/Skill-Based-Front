@@ -22,7 +22,7 @@ if [ -n "$(docker compose ps -q --status running app)" ]; then
 else
 	docker compose run --rm --no-deps -T app python -m gow_server.backup create >"$file.partial"
 fi
-tar -tzf "$file.partial" | grep -qx gow.db || { echo "FAIL: $file.partial has no gow.db" >&2; exit 1; }
+tar -tzf "$file.partial" | grep -x gow.db >/dev/null || { echo "FAIL: $file.partial has no gow.db" >&2; exit 1; }
 mv "$file.partial" "$file"
 echo "backup: $file ($(du -h "$file" | cut -f1))"
 
