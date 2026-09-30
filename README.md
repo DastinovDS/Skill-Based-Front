@@ -94,6 +94,28 @@ GitHub Actions, `.github/workflows/ci.yml`. Запускается на PR в `d
 После перехода на Pro или открытия репозитория: Settings → Branches → правило для `develop`
 (и `main`) с обязательными проверками `py` и `web`, без обязательных ревью, без `enforce_admins`.
 
+## Сервер
+
+```sh
+uv run gow-server            # http://127.0.0.1:8000/api/health
+uv run gow-server --reload   # перезапуск при изменении кода
+```
+
+Сервер всегда запускается с одним воркером (`AGENTS.md`, раздел 5.1). Логи: JSON-строки в stderr,
+у каждого запроса `request_id` (заголовок `X-Request-ID`). Настройки: переменные окружения `GOW_*`
+(`apps/server/src/gow_server/settings.py`):
+
+| Переменная | По умолчанию | Значение |
+|---|---|---|
+| `GOW_ENV` | `dev` | `dev`, `e2e` или `prod` |
+| `GOW_HOST`, `GOW_PORT` | `127.0.0.1`, `8000` | адрес сервера |
+| `GOW_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `GOW_FORWARDED_ALLOW_IPS` | `127.0.0.1` | прокси (Caddy), которому доверяются заголовки `X-Forwarded-*` |
+| `GOW_MAPS_DIR` | `maps` | пул карт: `<id>.json` и необязательный фон `<id>.bg.png` |
+
+HTTP API: `GET /api/health`, `GET /api/maps` (список), `GET /api/maps/{id}` (файл карты),
+`GET /api/maps/{id}/background.png` (фон, если есть). Схема: `/docs` на запущенном сервере.
+
 ## Прототип на Pygame (`legacy/`)
 
 `legacy/` содержит архив первого прототипа (старый дизайн: пять ресурсов, здания, три типа юнитов,

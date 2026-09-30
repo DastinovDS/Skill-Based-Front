@@ -3,7 +3,14 @@ name = "gow-server"
 version = "0.1.0"
 description = "FastAPI server: HTTP (lobby, rating) and WebSocket (matches)."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi>=0.142.2",
+    "pydantic-settings>=2.15.0",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+gow-server = "gow_server.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]
