@@ -38,6 +38,11 @@ export interface MatchHandlers {
   onRtt?: (ms: number) => void;
   /** A frame that is not a valid server message was dropped. */
   onInvalidFrame?: () => void;
+  /**
+   * The snapshot timeline is broken: `resync` was requested or the connection dropped. Clear the
+   * snapshot buffer (CLI-02, #58); the next snapshot is a full view again.
+   */
+  onReset?: () => void;
   /** After a reconnect `welcome.last_seq` covers this command, but its `ack` was lost. */
   onAckLost?: (seq: number) => void;
 }
@@ -133,7 +138,9 @@ export class MatchConnection {
 
   /** Ask the server for a full snapshot (after a gap in snapshots). */
   resync(): void {
-    if (this.#status === 'ready') this.#write({ type: 'resync' });
+    if (this.#status !== 'ready') return;
+    this.#opts.handlers.onReset?.();
+    this.#write({ type: 'resync' });
   }
 
   /** Stop for good: no more reconnects. Unacknowledged commands are dropped. */
@@ -241,6 +248,7 @@ export class MatchConnection {
 
   #onClose(code: number): void {
     this.#teardown();
+    this.#opts.handlers.onReset?.();
     if (code === CLOSE_PROTOCOL_VERSION) {
       this.#setStatus('version_mismatch');
       return;
