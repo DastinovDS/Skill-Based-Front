@@ -24,7 +24,7 @@ packages/sim/        gow_sim       правила игры: чистая дет�
 packages/protocol/   gow_protocol  Pydantic-модели сообщений клиент <-> сервер, фикстуры, тест-векторы
 apps/server/         gow_server    FastAPI: HTTP (лобби, рейтинг) + WebSocket (матчи)
 apps/bots/           gow_bots      боты и турнирный харнесс
-apps/client/                       веб-клиент: TypeScript + Vite + Svelte 5 + PixiJS 8 (появится в INF-03)
+apps/client/                       веб-клиент: TypeScript + Vite + Svelte 5 + PixiJS 8
 tools/maps/          gow_maps      офлайн-инструменты для карт: валидатор, отзеркаливание, превью
 maps/                              карты MVP (JSON, превью)
 rulesets/                          наборы правил (*.toml) и архив сыгранных по хэшу
@@ -58,6 +58,15 @@ uv run pyright
 uv run lint-imports
 uv run pytest               # в CI: HYPOTHESIS_PROFILE=ci uv run pytest
 uv run pre-commit install   # один раз: ruff перед каждым коммитом
+```
+
+Клиент: нужны Node.js 24.15+ и pnpm (версия зафиксирована в `apps/client/package.json`, поле `packageManager`;
+`corepack enable pnpm` или `npm i -g pnpm`).
+
+```sh
+pnpm -C apps/client install --frozen-lockfile
+pnpm -C apps/client dev                              # http://localhost:5173
+pnpm -C apps/client build && pnpm -C apps/client preview   # прод-сборка под целевым CSP
 ```
 
 ## Прототип на Pygame (`legacy/`)
