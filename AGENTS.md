@@ -99,6 +99,9 @@ legacy/                            — архив прототипа, не тр�
 | `deploy/smoke.sh` | собрать и поднять стек, проверить его через Caddy (здоровье, миграции, данные после перезапуска, `check-caddy.sh`, `check-ws-reload.sh`) | OPS-01 |
 | `deploy/check-caddy.sh` | заголовки безопасности (CSP равна `apps/client/csp.ts`), кэш, сжатие, маршруты работающего стека; `BASE_URL=https://...` для TLS | OPS-02 |
 | `deploy/check-ws-reload.sh` | WebSocket через Caddy переживает `caddy reload` (на время проверки подменяет `app` эхо-сервером) | OPS-02 |
+| `deploy/deploy.sh [ref]` | деплой на сервере: сборка, бэкап `predeploy`, запуск по healthcheck, откат с восстановлением бэкапа при сбое (`docs/ops/deploy.md`) | OPS-03 |
+| `deploy/backup.sh [label]`, `deploy/restore.sh <archive>` | онлайн-бэкап тома `gow-data` (`VACUUM INTO` + реплеи) и восстановление | OPS-03 |
+| `deploy/deploy-test.sh` | локальная проверка деплоя, отката сломанного релиза, бэкапа и восстановления в чистый том | OPS-03 |
 
 Если команда из этой таблицы не работает после своего issue — это баг: почини её или обнови таблицу в том же PR.
 

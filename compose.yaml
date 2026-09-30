@@ -36,7 +36,7 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
-    # Graceful shutdown: uvicorn finishes open requests; OPS-03 (#82) adds match draining.
+    # Graceful shutdown: uvicorn finishes open requests; match draining: TODO(#47), docs/ops/deploy.md.
     stop_grace_period: 30s
 
   caddy:
@@ -77,7 +77,7 @@ networks:
   edge: {}
 
 volumes:
-  # SQLite database and replays. Backups: OPS-03 (#82).
+  # SQLite database and replays. Backups: deploy/backup.sh, docs/ops/deploy.md.
   gow-data:
   # Caddy TLS certificates and ACME account: keep it, or Let's Encrypt rate limits hit on redeploy.
   caddy-data:
