@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 1,
+    "PROTOCOL_VERSION": 2,
     "CLOSE_PROTOCOL_VERSION": 4001
   },
   "$defs": {
@@ -407,7 +407,8 @@
         "capital_captured",
         "timer",
         "forfeit",
-        "disconnect"
+        "disconnect",
+        "double_defeat"
       ],
       "title": "EndReason",
       "type": "string"
@@ -918,7 +919,7 @@
               "type": "null"
             }
           ],
-          "description": "``None`` is a draw, possible only when ``reason`` is ``timer``."
+          "description": "``None`` is a draw: always for ``double_defeat``, possible for ``timer``, else never."
         },
         "vp": {
           "description": "Final VP of both players, by player id.",

@@ -42,7 +42,7 @@
   без пути, отказ `NOT_ENOUGH_CP`.
 - `server/event.json`: пример события. Набор событий (`kind` и поля `data`) задают системы
   симуляции (SIM-06…SIM-13), фильтрацию по видимости делает PRO-03 (#46).
-- `server/match_end.json` (захват столицы), `match_end_draw.json` (ничья по таймеру).
+- `server/match_end.json` (захват столицы), `match_end_draw.json` (ничья по таймеру), `match_end_double_defeat.json` (оба проиграли в одном тике, ничья; PRO-03, #46).
 
 Токен в `client/hello.json` ненастоящий.
 

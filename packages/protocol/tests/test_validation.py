@@ -154,6 +154,9 @@ BAD_SERVER_FRAMES: dict[str, str | bytes] = {
         "server", "event", lambda d: d.update(data={f"k{i}": i for i in range(33)})
     ),
     "match_end draw by capture": _edit("server", "match_end", lambda d: d.update(winner=None)),
+    "match_end double defeat with winner": _edit(
+        "server", "match_end_double_defeat", lambda d: d.update(winner=0)
+    ),
     "match_end unknown reason": _edit("server", "match_end", lambda d: d.update(reason="boredom")),
     "match_end three vp": _edit("server", "match_end", lambda d: d.update(vp=[1, 2, 3])),
     "error without code": _edit("server", "error", lambda d: d.pop("code")),
