@@ -113,6 +113,7 @@ uv run gow-server --reload   # перезапуск при изменении к
 | `GOW_FORWARDED_ALLOW_IPS` | `127.0.0.1` | прокси (Caddy), которому доверяются заголовки `X-Forwarded-*` |
 | `GOW_MAPS_DIR` | `maps` | пул карт: `<id>.json` и необязательный фон `<id>.bg.png` |
 | `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | база SQLite (WAL); путь относительно рабочего каталога |
+| `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `10`, `3600` | не больше N новых гостей с одного IP за окно в секундах |
 
 База: SQLite, модели в `gow_server/models.py`, миграции Alembic в `gow_server/migrations/versions/`.
 Сервер применяет миграции при старте; вручную: `uv run alembic -c apps/server/alembic.ini upgrade head`.
@@ -121,6 +122,17 @@ uv run gow-server --reload   # перезапуск при изменении к
 
 HTTP API: `GET /api/health`, `GET /api/maps` (список), `GET /api/maps/{id}` (файл карты),
 `GET /api/maps/{id}/background.png` (фон, если есть). Схема: `/docs` на запущенном сервере.
+
+Гостевая идентичность (ID-01):
+
+- `POST /api/guest` с телом `{"nick": "..."}` → `201 {"player_id", "token"}`. Токен показывается один раз,
+  в базе только его SHA-256. `409`: ник занят, `422`: ник не прошёл проверку, `429`: лимит гостей с IP.
+- Запросы от имени игрока: заголовок `Authorization: Bearer <token>` (пример: `GET /api/me`).
+  Токен в URL не принимается и в логи не пишется. Нет токена или он неверный: `401`.
+- Ник: 3–16 символов после нормализации NFC; буквы любого алфавита, цифры, `_` и `-`. Пробелы, знаки,
+  эмодзи и «пустые» буквы-заполнители запрещены. Уникальность без учёта регистра: колонка
+  `nick_key = nick.casefold()` с уникальным индексом (`Straße` и `STRASSE` считаются одним ником).
+  Клиент показывает ник только как текст (`AGENTS.md`, раздел 7.4).
 
 ## Прототип на Pygame (`legacy/`)
 

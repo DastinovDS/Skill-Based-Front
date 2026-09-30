@@ -11,9 +11,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from sqlalchemy.orm import sessionmaker
 
-from gow_server import maps
+from gow_server import identity, maps
+from gow_server.clock import MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.logs import request_id_var
+from gow_server.ratelimit import SlidingWindowLimiter
 from gow_server.settings import Settings
 
 log = logging.getLogger("gow_server")
@@ -45,6 +47,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Skill-Based Front", lifespan=lifespan)
     app.state.settings = settings
+    app.state.guest_limiter = SlidingWindowLimiter(
+        settings.guest_rate_limit, settings.guest_rate_window_s, MonotonicClock()
+    )
 
     @app.middleware("http")
     async def request_context(  # pyright: ignore[reportUnusedFunction]
@@ -76,4 +81,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(maps.router)
+    app.include_router(identity.router)
     return app
