@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Decides which of the required jobs (py, web) have work to do.
+  # Pushes and manual runs always check everything.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      py: ${{ github.event_name != 'pull_request' || steps.filter.outputs.py == 'true' }}
+      web: ${{ github.event_name != 'pull_request' || steps.filter.outputs.web == 'true' }}
+    steps:
+      - uses: dorny/paths-filter@v4
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            py:
+              - 'packages/**'
+              - 'apps/server/**'
+              - 'apps/bots/**'
+              - 'tools/**'
+              - 'tests/**'
+              - 'scripts/**'
+              - 'rulesets/**'
+              - 'maps/**'
+              - '*.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.python-version'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'apps/client/**'
+              - 'packages/protocol/**'
+              - 'scripts/**'
+              - '.github/workflows/ci.yml'
+
+  # Required check. A job skipped by `if` reports "Success", so a PR without relevant
+  # changes is not blocked. If `changes` itself fails, the checks run anyway (fail-closed).
+  py:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.py == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # setup-uv publishes no moving major tags, only exact versions.
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      # pyright (PyPI) runs on Node.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: apps/client/package.json
+          package-manager-cache: false
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
+      - run: uv run lint-imports
+      - run: uv run pytest
+        env:
+          HYPOTHESIS_PROFILE: ci
+
+  # Required check, same skip rules as `py`.
+  web:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.web == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Version from the "packageManager" field.
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: apps/client/package.json
+      # Version from the "engines.node" field.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: apps/client/package.json
+          cache: pnpm
+          cache-dependency-path: apps/client/pnpm-lock.yaml
+      - run: pnpm -C apps/client install --frozen-lockfile
+      - run: pnpm -C apps/client lint
+      - run: pnpm -C apps/client check
+      - run: pnpm -C apps/client test
+      - run: pnpm -C apps/client build

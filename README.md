@@ -69,6 +69,31 @@ pnpm -C apps/client dev                              # http://localhost:5173
 pnpm -C apps/client build && pnpm -C apps/client preview   # прод-сборка под целевым CSP
 ```
 
+## CI
+
+GitHub Actions, `.github/workflows/ci.yml`. Запускается на PR в `develop` и `main`, на push в `develop`
+и вручную (`workflow_dispatch`).
+
+**Обязательные проверки** (PR мержится только когда обе зелёные):
+
+| Проверка | Что делает |
+|---|---|
+| `py` | `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `pytest` с `HYPOTHESIS_PROFILE=ci` |
+| `web` | `pnpm -C apps/client install --frozen-lockfile`, `lint`, `check`, `test`, `build` |
+
+- Вспомогательный job `changes` смотрит на изменённые пути в PR. Если в PR нет изменений для `py` или `web`
+  (например, правка только документации), соответствующий job пропускается, а GitHub считает пропущенный job
+  успешным: обязательная проверка не зависает в ожидании. Если сам `changes` упал, `py` и `web` запускаются целиком.
+  На push в `develop` и при ручном запуске проверяется всё.
+- Версии: Python из `.python-version`, pnpm из поля `packageManager`, Node из поля `engines.node`
+  в `apps/client/package.json`.
+
+**Branch protection не включена.** Для приватного репозитория на бесплатном плане GitHub API отвечает
+`403 Upgrade to GitHub Pro or make this repository public to enable this feature` (и для branch protection,
+и для rulesets). Пока это так, правило «мерж только при зелёных `py` и `web`» держится на процессе (AGENTS.md, раздел 11).
+После перехода на Pro или открытия репозитория: Settings → Branches → правило для `develop`
+(и `main`) с обязательными проверками `py` и `web`, без обязательных ревью, без `enforce_admins`.
+
 ## Прототип на Pygame (`legacy/`)
 
 `legacy/` содержит архив первого прототипа (старый дизайн: пять ресурсов, здания, три типа юнитов,
