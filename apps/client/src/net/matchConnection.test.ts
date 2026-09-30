@@ -37,6 +37,7 @@ function setup(extra: { random?: () => number; token?: string } = {}) {
   const rtts: number[] = [];
   const lost: number[] = [];
   let invalid = 0;
+  let resets = 0;
   let clock = 0;
   const handlers: MatchHandlers = {
     onMessage: (m) => messages.push(m),
@@ -44,6 +45,7 @@ function setup(extra: { random?: () => number; token?: string } = {}) {
     onRtt: (ms) => rtts.push(ms),
     onInvalidFrame: () => invalid++,
     onAckLost: (seq) => lost.push(seq),
+    onReset: () => resets++,
   };
   const conn = new MatchConnection({
     matchId: 'm 1',
@@ -65,6 +67,7 @@ function setup(extra: { random?: () => number; token?: string } = {}) {
     rtts,
     lost,
     invalid: () => invalid,
+    resets: () => resets,
     setClock: (ms: number) => (clock = ms),
   };
 }
@@ -200,12 +203,14 @@ describe('commands', () => {
     expect(t.conn.send(move)).toBe(8);
   });
 
-  it('sends resync only when ready', () => {
+  it('sends resync only when ready, and resets the snapshot timeline', () => {
     const t = setup();
     t.conn.resync();
+    expect(t.resets()).toBe(0);
     const socket = ready(t);
     t.conn.resync();
     expect(socket.sent.map((m) => m.type)).toEqual(['hello', 'resync']);
+    expect(t.resets()).toBe(1);
   });
 });
 
@@ -257,6 +262,13 @@ describe('reconnect', () => {
     t.server.last().drop();
     vi.advanceTimersByTime(250);
     expect(t.server.sockets.length).toBe(2);
+  });
+
+  it('resets the snapshot timeline when the connection drops', () => {
+    const t = setup();
+    const socket = ready(t);
+    socket.drop();
+    expect(t.resets()).toBe(1);
   });
 
   it('reports the status changes', () => {
