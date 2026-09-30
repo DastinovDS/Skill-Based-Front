@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { t } from '../i18n/index.ts';
+  import { getLocale, isLocale, LOCALES, setLocale, t, translate } from '../i18n/index.ts';
 
   interface Props {
     rendererFailed: boolean;
@@ -33,6 +33,25 @@
         </select>
       </label>
       <button type="button" onclick={onfit}>{t('hud.fitMap')}</button>
+    </div>
+    <div class="row">
+      <label>
+        {t('hud.language')}
+        <select
+          value={getLocale()}
+          onchange={(event) => {
+            const next = event.currentTarget.value;
+            if (isLocale(next)) {
+              setLocale(next);
+            }
+          }}
+        >
+          {#each LOCALES as locale (locale)}
+            <!-- Each language is named in itself, so a viewer finds theirs in any UI language. -->
+            <option value={locale} lang={locale}>{translate(locale, 'language.self')}</option>
+          {/each}
+        </select>
+      </label>
     </div>
     <p class="hint">{t('hud.cameraHint')}</p>
     <p class="hint">{t('hud.legend')}</p>
