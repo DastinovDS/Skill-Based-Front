@@ -1,0 +1,443 @@
+{
+  "schema_version": 1,
+  "source": "docs/design/mechanics.md, раздел 4, «Разрешение боя (DEC-07, #11)»: правила 1–9 и таблица разобранных примеров",
+  "params": {
+    "terrain_defense_mod": { "mountains": 1, "forest": 0, "plains": -1 },
+    "planned_bonus": 2,
+    "defense_bonus": 2
+  },
+  "vectors": [
+    {
+      "id": 1,
+      "source_row": {
+        "attack": "2 заряж.",
+        "defense": "2 заряж.",
+        "result": "обе разряжены, потерь нет, атака отскакивает"
+      },
+      "location": "node_attack",
+      "terrain": "forest",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": null, "groups": [{ "id": 1, "units": 2, "charged": 2, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": null, "groups": [{ "id": 2, "units": 2, "charged": 2, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 2, "b": 2 },
+        "losses": { "a": 0, "b": 0 },
+        "groups": {
+          "a": [{ "id": 1, "units": 2, "charged": 0 }],
+          "b": [{ "id": 2, "units": 2, "charged": 0 }]
+        },
+        "bounce": { "a": true, "b": false },
+        "node_owner_after": "b",
+        "continues_on_edge": null
+      },
+      "note": "Лес: рельеф 0. Qa = 2, Qd = 2. Гашение c = 2: обе стороны тратят по 2 реальных заряда, у обеих 0 заряженных. Перевес s = 0: убийств нет. У защитника остались юниты, поэтому атака отскакивает (правило 4)."
+    },
+    {
+      "id": 2,
+      "source_row": {
+        "attack": "3 заряж.",
+        "defense": "2 заряж.",
+        "result": "убит 1 защитник; атака (3, все разряжены) отскакивает; у защиты 1 разряженный"
+      },
+      "location": "node_attack",
+      "terrain": "forest",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": null, "groups": [{ "id": 1, "units": 3, "charged": 3, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": null, "groups": [{ "id": 2, "units": 2, "charged": 2, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 3, "b": 2 },
+        "losses": { "a": 0, "b": 1 },
+        "groups": {
+          "a": [{ "id": 1, "units": 3, "charged": 0 }],
+          "b": [{ "id": 2, "units": 1, "charged": 0 }]
+        },
+        "bounce": { "a": true, "b": false },
+        "node_owner_after": "b",
+        "continues_on_edge": null
+      },
+      "note": "Qa = 3, Qd = 2. c = 2: атака тратит 2 реальных (остаётся 1 заряженный), защита тратит 2 (0 заряженных). s = 1: атака убивает 1 разряженного защитника и тратит на это последний заряд. У защиты 1 разряженный юнит, узел не взят: атака (3 юнита, 0 заряженных) отскакивает."
+    },
+    {
+      "id": 3,
+      "source_row": {
+        "attack": "4 заряж.",
+        "defense": "2 заряж.",
+        "result": "защита уничтожена, узел взят 4 разряженными"
+      },
+      "location": "node_attack",
+      "terrain": "forest",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": null, "groups": [{ "id": 1, "units": 4, "charged": 4, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": null, "groups": [{ "id": 2, "units": 2, "charged": 2, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 4, "b": 2 },
+        "losses": { "a": 0, "b": 2 },
+        "groups": {
+          "a": [{ "id": 1, "units": 4, "charged": 0 }],
+          "b": [{ "id": 2, "units": 0, "charged": 0 }]
+        },
+        "bounce": { "a": false, "b": false },
+        "node_owner_after": "a",
+        "continues_on_edge": null
+      },
+      "note": "Qa = 4, Qd = 2. c = 2: у атаки остаётся 2 заряженных, у защиты 0. s = 2: атака убивает обоих защитников, тратя 2 заряда. Защитников не осталось: узел переходит атаке, у неё 4 юнита, 0 заряженных (правило 4)."
+    },
+    {
+      "id": 4,
+      "source_row": {
+        "attack": "1 заряж.",
+        "defense": "10 разряж.",
+        "result": "убит 1; атака разряжена и отскакивает"
+      },
+      "location": "node_attack",
+      "terrain": "forest",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": null, "groups": [{ "id": 1, "units": 1, "charged": 1, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": null, "groups": [{ "id": 2, "units": 10, "charged": 0, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 1, "b": 0 },
+        "losses": { "a": 0, "b": 1 },
+        "groups": {
+          "a": [{ "id": 1, "units": 1, "charged": 0 }],
+          "b": [{ "id": 2, "units": 9, "charged": 0 }]
+        },
+        "bounce": { "a": true, "b": false },
+        "node_owner_after": "b",
+        "continues_on_edge": null
+      },
+      "note": "У защиты нет стреляющих зарядов: Qd = 0 (рельеф не действует, правило 1; в лесу он и так 0). Qa = 1. c = 0. s = 1: атака убивает 1 защитника и тратит свой заряд. У защиты 9 разряженных, атака (1 юнит, 0 заряженных) отскакивает."
+    },
+    {
+      "id": 5,
+      "source_row": {
+        "attack": "2 заряж.",
+        "defense": "пустой вражеский узел",
+        "result": "узел взят, заряды не тратятся"
+      },
+      "location": "empty_enemy_node",
+      "terrain": "forest",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": null, "groups": [{ "id": 1, "units": 2, "charged": 2, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": null, "groups": [] }
+      },
+      "expected": {
+        "pool": null,
+        "losses": { "a": 0, "b": 0 },
+        "groups": {
+          "a": [{ "id": 1, "units": 2, "charged": 2 }],
+          "b": []
+        },
+        "bounce": { "a": false, "b": false },
+        "node_owner_after": "a",
+        "continues_on_edge": null
+      },
+      "note": "В узле нет юнитов защитника: боя нет, выстрелы не тратятся. По правилу 4 узел без защитников переходит атаке; у неё остаются 2 юнита и 2 заряженных."
+    },
+    {
+      "id": 6,
+      "source_row": {
+        "attack": "3 заряж.",
+        "defense": "2 заряж., горы",
+        "result": "Qd = 3: все разряжены, потерь нет, отскок"
+      },
+      "location": "node_attack",
+      "terrain": "mountains",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": null, "groups": [{ "id": 1, "units": 3, "charged": 3, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": null, "groups": [{ "id": 2, "units": 2, "charged": 2, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 3, "b": 3 },
+        "losses": { "a": 0, "b": 0 },
+        "groups": {
+          "a": [{ "id": 1, "units": 3, "charged": 0 }],
+          "b": [{ "id": 2, "units": 2, "charged": 0 }]
+        },
+        "bounce": { "a": true, "b": false },
+        "node_owner_after": "b",
+        "continues_on_edge": null
+      },
+      "note": "У защиты есть стреляющие заряды, поэтому горы дают +1: Qd = 2 + 1 = 3, Qa = 3. c = 3: атака тратит 3 реальных; защита тратит сначала виртуальный +1, затем 2 реальных. Все разряжены, s = 0, потерь нет, атака отскакивает."
+    },
+    {
+      "id": 7,
+      "source_row": {
+        "attack": "2 заряж.",
+        "defense": "3 разряж., горы",
+        "result": "рельеф не действует; убиты 2, отскок"
+      },
+      "location": "node_attack",
+      "terrain": "mountains",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": null, "groups": [{ "id": 1, "units": 2, "charged": 2, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": null, "groups": [{ "id": 2, "units": 3, "charged": 0, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 2, "b": 0 },
+        "losses": { "a": 0, "b": 2 },
+        "groups": {
+          "a": [{ "id": 1, "units": 2, "charged": 0 }],
+          "b": [{ "id": 2, "units": 1, "charged": 0 }]
+        },
+        "bounce": { "a": true, "b": false },
+        "node_owner_after": "b",
+        "continues_on_edge": null
+      },
+      "note": "У защиты нет стреляющих зарядов: рельеф гор не действует (правило 1), Qd = 0. Qa = 2. c = 0. s = 2: атака убивает 2 из 3 защитников, тратя оба заряда. У защиты 1 разряженный, атака (2 юнита, 0 заряженных) отскакивает."
+    },
+    {
+      "id": 8,
+      "source_row": {
+        "attack": "2 заряж.",
+        "defense": "2 заряж., равнина",
+        "result": "Qd = 1: убит 1 разряженный защитник; у защиты остался 1 заряженный; отскок"
+      },
+      "location": "node_attack",
+      "terrain": "plains",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": null, "groups": [{ "id": 1, "units": 2, "charged": 2, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": null, "groups": [{ "id": 2, "units": 2, "charged": 2, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 2, "b": 1 },
+        "losses": { "a": 0, "b": 1 },
+        "groups": {
+          "a": [{ "id": 1, "units": 2, "charged": 0 }],
+          "b": [{ "id": 2, "units": 1, "charged": 1 }]
+        },
+        "bounce": { "a": true, "b": false },
+        "node_owner_after": "b",
+        "continues_on_edge": null
+      },
+      "note": "У защиты есть стреляющие заряды, равнина даёт −1: Qd = 2 − 1 = 1 (один заряженный юнит не стреляет, но сохраняет заряд). Qa = 2. c = 1: атака тратит 1 реальный, защита тратит 1 реальный (у неё 1 заряженный и 1 разряженный). s = 1: атака убивает 1 юнита, первым гибнет разряженный (правило 3), и тратит последний заряд. У защиты 1 юнит с зарядом, атака (2 юнита, 0 заряженных) отскакивает."
+    },
+    {
+      "id": 9,
+      "source_row": {
+        "attack": "2 заряж. + план (+2)",
+        "defense": "2 заряж.",
+        "result": "гасятся виртуальные +2; реальные 2 убивают 2; узел взят"
+      },
+      "location": "node_attack",
+      "terrain": "forest",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": { "source": "planned_order", "amount": 2 }, "groups": [{ "id": 1, "units": 2, "charged": 2, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": null, "groups": [{ "id": 2, "units": 2, "charged": 2, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 4, "b": 2 },
+        "losses": { "a": 0, "b": 2 },
+        "groups": {
+          "a": [{ "id": 1, "units": 2, "charged": 0 }],
+          "b": [{ "id": 2, "units": 0, "charged": 0 }]
+        },
+        "bounce": { "a": false, "b": false },
+        "node_owner_after": "a",
+        "continues_on_edge": null
+      },
+      "note": "Qa = 2 + 2 (план) = 4, Qd = 2. c = 2: атака тратит сначала виртуальные +2 (бонус израсходован), защита тратит 2 реальных. s = 2: атака убивает обоих защитников, тратя 2 реальных заряда. Защитников нет: узел взят, у атаки 2 юнита, 0 заряженных."
+    },
+    {
+      "id": 10,
+      "source_row": {
+        "attack": "3 заряж.",
+        "defense": "2 заряж. + «Защита» (+2)",
+        "result": "убит 1 атакующий; 2 разряженных отскакивают; у защиты 2 юнита, оба разряжены"
+      },
+      "location": "node_attack",
+      "terrain": "forest",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": null, "groups": [{ "id": 1, "units": 3, "charged": 3, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": { "source": "defense_mode", "amount": 2 }, "groups": [{ "id": 2, "units": 2, "charged": 2, "mode": "defense" }] }
+      },
+      "expected": {
+        "pool": { "a": 3, "b": 4 },
+        "losses": { "a": 1, "b": 0 },
+        "groups": {
+          "a": [{ "id": 1, "units": 2, "charged": 0 }],
+          "b": [{ "id": 2, "units": 2, "charged": 0 }]
+        },
+        "bounce": { "a": true, "b": false },
+        "node_owner_after": "b",
+        "continues_on_edge": null
+      },
+      "note": "У защиты есть стреляющие заряды, бонус «Защиты» действует: Qd = 2 + 2 = 4, Qa = 3. c = 3: атака тратит 3 реальных (0 заряженных); защита тратит сначала виртуальные +2, затем 1 реальный (остаётся 1 заряженный). s = 1 у защиты: она убивает 1 атакующего, тратя последний заряд. У атаки 2 разряженных, они отскакивают; у защиты 2 юнита, оба разряжены."
+    },
+    {
+      "id": 11,
+      "source_row": {
+        "attack": "ребро: 2 заряж.",
+        "defense": "ребро: 2 заряж.",
+        "result": "обе разряжены, обе отскакивают"
+      },
+      "location": "edge_meeting",
+      "terrain": null,
+      "node_owner_before": null,
+      "sides": {
+        "a": { "role": "symmetric", "bonus": null, "groups": [{ "id": 1, "units": 2, "charged": 2, "mode": "attack" }] },
+        "b": { "role": "symmetric", "bonus": null, "groups": [{ "id": 2, "units": 2, "charged": 2, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 2, "b": 2 },
+        "losses": { "a": 0, "b": 0 },
+        "groups": {
+          "a": [{ "id": 1, "units": 2, "charged": 0 }],
+          "b": [{ "id": 2, "units": 2, "charged": 0 }]
+        },
+        "bounce": { "a": true, "b": true },
+        "node_owner_after": null,
+        "continues_on_edge": { "a": false, "b": false }
+      },
+      "note": "Встреча на ребре: симметричный бой без рельефа (правило 6). Qa = 2, Qb = 2. c = 2: обе стороны разряжены, s = 0, убийств нет. При равенстве отскакивают обе стороны, каждая в свой исходный узел."
+    },
+    {
+      "id": 12,
+      "source_row": {
+        "attack": "ребро: 3 заряж.",
+        "defense": "ребро: 1 заряж.",
+        "result": "противник уничтожен; у победителя 1 заряженный, путь продолжается"
+      },
+      "location": "edge_meeting",
+      "terrain": null,
+      "node_owner_before": null,
+      "sides": {
+        "a": { "role": "symmetric", "bonus": null, "groups": [{ "id": 1, "units": 3, "charged": 3, "mode": "attack" }] },
+        "b": { "role": "symmetric", "bonus": null, "groups": [{ "id": 2, "units": 1, "charged": 1, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 3, "b": 1 },
+        "losses": { "a": 0, "b": 1 },
+        "groups": {
+          "a": [{ "id": 1, "units": 3, "charged": 1 }],
+          "b": [{ "id": 2, "units": 0, "charged": 0 }]
+        },
+        "bounce": { "a": false, "b": false },
+        "node_owner_after": null,
+        "continues_on_edge": { "a": true, "b": false }
+      },
+      "note": "Встреча на ребре, без рельефа. Qa = 3, Qb = 1. c = 1: у a остаётся 2 заряженных, у b 0. s = 2, но у b только 1 юнит: a убивает его и тратит 1 заряд; второй выстрел сверх числа юнитов не тратится (правило 3). b уничтожена; выживший победитель a (3 юнита, 1 заряженный) продолжает путь (правило 6)."
+    },
+    {
+      "id": 13,
+      "source_row": {
+        "attack": "одновременно в нейтральный: 3 заряж.",
+        "defense": "2 заряж.",
+        "result": "убит 1; обе стороны отскакивают; узел нейтральный"
+      },
+      "location": "neutral_arrival",
+      "terrain": null,
+      "node_owner_before": "neutral",
+      "sides": {
+        "a": { "role": "symmetric", "bonus": null, "groups": [{ "id": 1, "units": 3, "charged": 3, "mode": "attack" }] },
+        "b": { "role": "symmetric", "bonus": null, "groups": [{ "id": 2, "units": 2, "charged": 2, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 3, "b": 2 },
+        "losses": { "a": 0, "b": 1 },
+        "groups": {
+          "a": [{ "id": 1, "units": 3, "charged": 0 }],
+          "b": [{ "id": 2, "units": 1, "charged": 0 }]
+        },
+        "bounce": { "a": true, "b": true },
+        "node_owner_after": "neutral",
+        "continues_on_edge": null
+      },
+      "note": "Одновременное прибытие в нейтральный узел: симметричный бой без рельефа и без защитника (правило 5). Qa = 3, Qb = 2. c = 2: у a остаётся 1 заряженный, у b 0. s = 1: a убивает 1 юнита b и тратит последний заряд. Обе стороны не уничтожены: обе отскакивают, узел остаётся нейтральным."
+    },
+    {
+      "id": 14,
+      "source_row": {
+        "attack": "одновременно в нейтральный: 4 заряж.",
+        "defense": "2 заряж.",
+        "result": "вторая сторона уничтожена; узел взят"
+      },
+      "location": "neutral_arrival",
+      "terrain": null,
+      "node_owner_before": "neutral",
+      "sides": {
+        "a": { "role": "symmetric", "bonus": null, "groups": [{ "id": 1, "units": 4, "charged": 4, "mode": "attack" }] },
+        "b": { "role": "symmetric", "bonus": null, "groups": [{ "id": 2, "units": 2, "charged": 2, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 4, "b": 2 },
+        "losses": { "a": 0, "b": 2 },
+        "groups": {
+          "a": [{ "id": 1, "units": 4, "charged": 0 }],
+          "b": [{ "id": 2, "units": 0, "charged": 0 }]
+        },
+        "bounce": { "a": false, "b": false },
+        "node_owner_after": "a",
+        "continues_on_edge": null
+      },
+      "note": "Симметричный бой без рельефа (правило 5). Qa = 4, Qb = 2. c = 2: у a остаётся 2 заряженных, у b 0. s = 2: a убивает оба юнита b, тратя 2 заряда. b уничтожена, a не отскакивает и берёт узел: 4 юнита, 0 заряженных."
+    },
+    {
+      "id": 15,
+      "source_row": {
+        "attack": "3 заряж. + план (+2)",
+        "defense": "1 разряж.",
+        "result": "убит 1 (потрачен виртуальный выстрел); узел взят, у атаки 3 заряженных"
+      },
+      "location": "node_attack",
+      "terrain": "forest",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": { "source": "planned_order", "amount": 2 }, "groups": [{ "id": 1, "units": 3, "charged": 3, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": null, "groups": [{ "id": 2, "units": 1, "charged": 0, "mode": "attack" }] }
+      },
+      "expected": {
+        "pool": { "a": 5, "b": 0 },
+        "losses": { "a": 0, "b": 1 },
+        "groups": {
+          "a": [{ "id": 1, "units": 3, "charged": 3 }],
+          "b": [{ "id": 2, "units": 0, "charged": 0 }]
+        },
+        "bounce": { "a": false, "b": false },
+        "node_owner_after": "a",
+        "continues_on_edge": null
+      },
+      "note": "Qa = 3 + 2 (план) = 5. У защиты нет стреляющих зарядов: Qd = 0. c = 0. s = 5, но у защиты 1 юнит: убийство тратит 1 выстрел, сначала виртуальный (правило 3); остальные выстрелы не тратятся, оставшийся виртуальный +1 сгорает после боя. Узел взят, у атаки 3 юнита, 3 заряженных."
+    },
+    {
+      "id": 16,
+      "source_row": {
+        "attack": "3 заряж.",
+        "defense": "2 разряж. + «Защита» (+2)",
+        "result": "бонус не действует (нет стреляющих зарядов); убиты 2; узел взят, у атаки 1 заряженный"
+      },
+      "location": "node_attack",
+      "terrain": "forest",
+      "node_owner_before": "b",
+      "sides": {
+        "a": { "role": "attacker", "bonus": null, "groups": [{ "id": 1, "units": 3, "charged": 3, "mode": "attack" }] },
+        "b": { "role": "defender", "bonus": { "source": "defense_mode", "amount": 2 }, "groups": [{ "id": 2, "units": 2, "charged": 0, "mode": "defense" }] }
+      },
+      "expected": {
+        "pool": { "a": 3, "b": 0 },
+        "losses": { "a": 0, "b": 2 },
+        "groups": {
+          "a": [{ "id": 1, "units": 3, "charged": 1 }],
+          "b": [{ "id": 2, "units": 0, "charged": 0 }]
+        },
+        "bounce": { "a": false, "b": false },
+        "node_owner_after": "a",
+        "continues_on_edge": null
+      },
+      "note": "У защиты нет стреляющих зарядов, поэтому бонус «Защиты» не действует (правило 1): Qd = 0. Qa = 3. c = 0. s = 3, у защиты 2 юнита: атака убивает обоих и тратит 2 заряда, третий выстрел не тратится. Узел взят, у атаки 3 юнита, 1 заряженный."
+    }
+  ]
+}
