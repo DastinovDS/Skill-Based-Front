@@ -21,3 +21,6 @@ class Settings(BaseSettings):
     """Directory with the map pool: ``<id>.json`` and optional background ``<id>.bg.png``."""
     database_url: str = "sqlite:///data/gow.db"
     """SQLite only; a relative path is relative to the working directory."""
+    guest_rate_limit: int = 10
+    guest_rate_window_s: int = 3600
+    """At most ``guest_rate_limit`` guests per client IP within ``guest_rate_window_s`` seconds."""
