@@ -45,8 +45,8 @@ packages/protocol/   gow_protocol  — Pydantic-модели сообщений 
 apps/server/         gow_server    — FastAPI: HTTP (лобби, рейтинг) + WebSocket (матчи)
 apps/bots/           gow_bots      — боты (gow_bots.bots) и турнирный харнесс
 apps/client/                       — TypeScript + Vite + Svelte 5 + PixiJS 8
-tools/maps/          gow_maps      — валидатор, скрипт отзеркаливания, превью карт (офлайн)
-maps/                              — карты MVP (JSON, превью)
+tools/maps/          gow_maps      — валидатор, скрипт отзеркаливания, превью и фоны карт (офлайн)
+maps/                              — карты MVP (JSON, превью, фоны)
 rulesets/                          — наборы правил (*.toml) и архив сыгранных по хэшу
 docs/design/                       — mechanics.md, формат карты, архив
 docs/adr/  docs/balance/  docs/qa/ — решения, отчёты баланса, чек-листы
@@ -87,6 +87,7 @@ legacy/                            — архив прототипа, не тр�
 | `uv run gow-maps validate maps/*.json` | проверка карт | MAP-02 |
 | `uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json` | собрать карту из половины (половины лежат в `maps/src/`) | MAP-03 |
 | `uv run gow-maps preview maps/*.json` | нарисовать превью `maps/<name>.preview.png` | MAP-04 |
+| `uv run gow-maps bake maps/*.json` | запечь фон `maps/<name>.bg.png` (после любой правки карты) | MAP-05 |
 | `uv run python -m gow_sim.replay check packages/sim/tests/golden/v*/**` | проверить реплеи | SIM-16 |
 | `uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-0.toml` | турнир ботов | BOT-04 |
 | `uv run gow-bots report docs/balance/latest.jsonl` | отчёт баланса | BOT-05 |
