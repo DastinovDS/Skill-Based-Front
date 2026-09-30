@@ -1,0 +1,151 @@
+/**
+ * Camera math: pure functions, no PixiJS and no DOM, so it is unit-tested directly.
+ *
+ * Units: "world" is the map coordinate space (docs/design/map-format.md, y grows down);
+ * "screen" is CSS pixels relative to the top-left corner of the canvas. The renderer runs with
+ * `autoDensity`, so the device pixel ratio never shows up here.
+ */
+
+export interface Point {
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface Size {
+  readonly width: number;
+  readonly height: number;
+}
+
+/** `x`, `y`: the world point in the centre of the viewport; `scale`: CSS pixels per world unit. */
+export interface Camera {
+  readonly x: number;
+  readonly y: number;
+  readonly scale: number;
+}
+
+export interface CameraLimits {
+  /** The map rectangle `[0, width] × [0, height]`; the viewport centre stays inside it. */
+  readonly world: Size;
+  readonly minScale: number;
+  readonly maxScale: number;
+}
+
+/** Empty margin around the map in "fit map", CSS pixels. */
+export const FIT_PADDING = 32;
+/** How far out and in the player can zoom, relative to the "fit map" scale. */
+export const MIN_ZOOM = 0.5;
+export const MAX_ZOOM = 6;
+
+export function worldToScreen(camera: Camera, viewport: Size, point: Point): Point {
+  return {
+    x: (point.x - camera.x) * camera.scale + viewport.width / 2,
+    y: (point.y - camera.y) * camera.scale + viewport.height / 2,
+  };
+}
+
+export function screenToWorld(camera: Camera, viewport: Size, point: Point): Point {
+  return {
+    x: (point.x - viewport.width / 2) / camera.scale + camera.x,
+    y: (point.y - viewport.height / 2) / camera.scale + camera.y,
+  };
+}
+
+/** Scale at which the whole map fits the viewport with `padding` on the tighter side. */
+export function fitScale(world: Size, viewport: Size, padding: number = FIT_PADDING): number {
+  // A viewport smaller than the padding (or not laid out yet) still gets a positive scale.
+  const width = Math.max(viewport.width - 2 * padding, 1);
+  const height = Math.max(viewport.height - 2 * padding, 1);
+  return Math.min(width / world.width, height / world.height);
+}
+
+export function fitCamera(world: Size, viewport: Size, padding: number = FIT_PADDING): Camera {
+  return { x: world.width / 2, y: world.height / 2, scale: fitScale(world, viewport, padding) };
+}
+
+export function cameraLimits(
+  world: Size,
+  viewport: Size,
+  padding: number = FIT_PADDING,
+): CameraLimits {
+  const fit = fitScale(world, viewport, padding);
+  return { world, minScale: fit * MIN_ZOOM, maxScale: fit * MAX_ZOOM };
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(Math.max(value, low), high);
+}
+
+/** Scale into `[minScale, maxScale]`, viewport centre into the map rectangle. */
+export function clampCamera(camera: Camera, limits: CameraLimits): Camera {
+  return {
+    x: clamp(camera.x, 0, limits.world.width),
+    y: clamp(camera.y, 0, limits.world.height),
+    scale: clamp(camera.scale, limits.minScale, limits.maxScale),
+  };
+}
+
+/** Drag by a screen delta: the map follows the pointer. */
+export function panBy(camera: Camera, dx: number, dy: number, limits: CameraLimits): Camera {
+  return clampCamera(
+    { x: camera.x - dx / camera.scale, y: camera.y - dy / camera.scale, scale: camera.scale },
+    limits,
+  );
+}
+
+/**
+ * Multiply the scale by `factor` keeping the world point under `anchor` (screen) in place.
+ * The scale is clamped first and the anchor is kept for the clamped scale; only clamping of the
+ * centre (zooming out next to the map edge) can move the anchor.
+ */
+export function zoomAt(
+  camera: Camera,
+  viewport: Size,
+  anchor: Point,
+  factor: number,
+  limits: CameraLimits,
+): Camera {
+  const target = screenToWorld(camera, viewport, anchor);
+  const scale = clamp(camera.scale * factor, limits.minScale, limits.maxScale);
+  return clampCamera(
+    {
+      x: target.x - (anchor.x - viewport.width / 2) / scale,
+      y: target.y - (anchor.y - viewport.height / 2) / scale,
+      scale,
+    },
+    limits,
+  );
+}
+
+/** `WheelEvent.deltaMode` values. */
+const DOM_DELTA_LINE = 1;
+const DOM_DELTA_PAGE = 2;
+const LINE_PX = 16;
+const PAGE_PX = 800;
+/** Zoom speed: a 100 px wheel notch zooms by e^0.2 ≈ 1.22. */
+const ZOOM_PER_PX = 0.002;
+/** One event never zooms by more than e^0.5 ≈ 1.65, whatever the device reports. */
+const MAX_WHEEL_PX = 250;
+
+/** Scale factor for one wheel event: wheel up (negative `deltaY`) zooms in. */
+export function wheelZoomFactor(deltaY: number, deltaMode: number): number {
+  const unit = deltaMode === DOM_DELTA_LINE ? LINE_PX : deltaMode === DOM_DELTA_PAGE ? PAGE_PX : 1;
+  const px = clamp(deltaY * unit, -MAX_WHEEL_PX, MAX_WHEEL_PX);
+  return Math.exp(-px * ZOOM_PER_PX);
+}
+
+/** Position and uniform scale of the world container for this camera. */
+export function worldTransform(camera: Camera, viewport: Size): Camera {
+  const origin = worldToScreen(camera, viewport, { x: 0, y: 0 });
+  return { x: origin.x, y: origin.y, scale: camera.scale };
+}
+
+const MAX_LABEL_RESOLUTION = 8;
+
+/**
+ * Resolution for text drawn in world space: texture pixels per text unit. Rounded up to a power
+ * of two so that zooming re-renders the labels only a few times, capped to bound texture memory.
+ */
+export function labelResolution(scale: number, devicePixelRatio: number): number {
+  const needed = Math.max(scale * devicePixelRatio, 1);
+  return Math.min(2 ** Math.ceil(Math.log2(needed)), MAX_LABEL_RESOLUTION);
+}

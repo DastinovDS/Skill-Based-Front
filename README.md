@@ -69,6 +69,10 @@ pnpm -C apps/client dev                              # http://localhost:5173
 pnpm -C apps/client build && pnpm -C apps/client preview   # прод-сборка под целевым CSP
 ```
 
+Dev-экран клиента показывает карту из бандла (`maps/*.json`, до MAP-04 тестовые карты
+`packages/sim/tests/maps/`): выбор карты и «Вписать карту» в панели, перетаскивание сдвигает карту,
+колесо меняет масштаб у курсора. Счётчик FPS в панели обновляется дважды в секунду.
+
 ## CI
 
 GitHub Actions, `.github/workflows/ci.yml`. Запускается на PR в `develop` и `main`, на push в `develop`
