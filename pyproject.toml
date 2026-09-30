@@ -1,0 +1,43 @@
+[project]
+name = "skill-based-front"
+version = "0.1.0"
+description = "Skill-Based Front: competitive 1v1 browser strategy game (workspace root)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "gow-sim",
+    "gow-protocol",
+    "gow-server",
+    "gow-bots",
+    "gow-maps",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "packages/sim",
+    "packages/protocol",
+    "apps/server",
+    "apps/bots",
+    "tools/maps",
+]
+exclude = ["legacy"]
+
+[tool.uv.sources]
+gow-sim = { workspace = true }
+gow-protocol = { workspace = true }
+gow-server = { workspace = true }
+gow-bots = { workspace = true }
+gow-maps = { workspace = true }
+
+# legacy/ is an archive of the Pygame prototype: it is not linted, type-checked or tested.
+[tool.ruff]
+extend-exclude = ["legacy"]
+
+[tool.pyright]
+exclude = ["legacy", "**/node_modules", "**/__pycache__", "**/.*"]
+
+[tool.pytest.ini_options]
+norecursedirs = ["legacy", ".*", "node_modules", "dist", "build"]

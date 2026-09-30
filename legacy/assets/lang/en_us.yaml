@@ -1,0 +1,68 @@
+name: "English"
+game_name: "Game of War"
+widgets:
+  game:
+    leaderboard:
+      name: "Top 5 Players"
+      player-pos: "You are in {0}th place"
+    provincehud:
+      province-name: "Province: {0}"
+      province-info: "Group: {0} | Army: {1}"
+    unitrow:
+      unit-info: "Group: {0} men. | type: {1}"
+    resourcelist:
+      food.name: "Food"
+      oil.name: "Oil"
+      metal.name: "Metal"
+      fossils.name: "Fossils"
+      money.name: "Money"
+  containers:
+    armymanagerwindow:
+      name: "Army Manager"
+      merge-button: "Collect all"
+  mainscreen:
+    play-btn: "Connect"
+    settings-btn: "Settings"
+    exit-btn: "Exit"
+  settings_widget:
+    back-btn: "Back"
+    title: "Settings"
+    test: "Test Wow"
+    sound:
+      level: "Sound Level"
+  escapemenu:
+    back-btn: "Back Play"
+    settings-btn: "Settings"
+    exit-btn: "Exit"
+units:
+  tank:
+    name: "Tank"
+    description-tipp: "Armored breakthrough of defense."
+  infantry:
+    name: "Infantry"
+    description-tipp: "Cheap and quick to produce."
+  artillery:
+    name: "Artillery"
+    description-tipp: "Huge damage at long ranges."
+
+buildings:
+  metal-mine:
+    name: "Metal Mine"
+    description-tipp: "Development of metal ore deposits. Necessary for the production of any technology and the construction of advanced structures."
+  barracks:
+    name: "Barracks"
+    description-tipp: "Personnel Training Center. Allows you to recruit infantry units and coordinate provincial defense."
+  factory:
+    name: "Factory"
+    description-tipp: "Industrial Complex. Provides a stable flow of resources and opens access to heavy weapons production."
+
+radial-menu:
+  back-button: "Back"
+  province:
+    cancel-button: "Close menu."
+    build-button: "Open the building construction menu."
+    train-button: "Train new units for the army."
+    text:
+      cancel-button: "Cancel"
+      build-button: "Build"
+      train-button: "Train"

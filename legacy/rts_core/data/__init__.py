@@ -1,0 +1,2 @@
+from rts_core.data.buildings_data import BUILDING_DEFINITIONS
+from rts_core.data.units_data import UNIT_DEFINITIONS

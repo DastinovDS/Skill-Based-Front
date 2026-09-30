@@ -1,0 +1,54 @@
+name: "Украинский"
+widgets:
+  game:
+    leaderboard:
+      name: "Топ-5 гравців"
+      player-pos: "Ви посідаєте {0}-е місце"
+    provincehud:
+      province-name: "Провінція: {0}"
+      province-info: "Група: {0} | Армія: {1}"
+    unitrow:
+      unit-info: "Група: {0} чол. | Тип: {1}"
+    resourcelist:
+      food.name: "Їжа"
+      oil.name: "Нафта"
+      metal.name: "Метал"
+      fossils.name: "Копалини"
+      money.name: "Гроші"
+  containers:
+    armymanagerwindow:
+      name: "Менеджер армії"
+      merge-button: "Зібрати всіх"
+
+units:
+  tank:
+    name: "Танк"
+    description-tipp: "Броньований прорив оборони."
+  infantry:
+    name: "Піхота"
+    description-tipp: "Дешева та швидка у виробництві."
+  artillery:
+    name: "Артилерія"
+    description-tipp: "Величезна шкода на великих відстанях."
+
+buildings:
+  metal-mine:
+    name: "Металева шахта"
+    description-tipp: "Розробка родовищ металевої руди. Необхідна для виробництва будь-якої техніки та зведення передових споруд."
+  barracks:
+    name: "Казарми"
+    description-tipp: "Центр підготовки особового складу. Дозволяє наймати піхотні загони та координувати оборону провінції."
+  factory:
+    name: "Завод"
+    description-tipp: "Промисловий комплекс. Забезпечує стабільний приплив ресурсів та відкриває доступ до виробництва важкого озброєння."
+
+radial-menu:
+  back-button: "Назад"
+  province:
+    cancel-button: "Закрити меню."
+    build-button: "Відкрити меню будівництва."
+    train-button: "Тренувати нові загони для армії."
+    text:
+      cancel-button: "Скасувати"
+      build-button: "Будувати"
+      train-button: "Найм"

@@ -1,0 +1,14 @@
+{
+    "license": "skyred",
+    "scale": "#vfx_scale(float[2.0])",
+    "animations": {
+        "combat": {
+            "mode": "grid",
+            "frame_size": [32, 32],
+            "start_pos": [0, 0],
+            "count": 6,
+            "speed": 12,
+            "loop": true
+        }
+    } 
+}

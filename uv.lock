@@ -1,0 +1,59 @@
+version = 1
+revision = 3
+requires-python = "==3.12.*"
+
+[manifest]
+members = [
+    "gow-bots",
+    "gow-maps",
+    "gow-protocol",
+    "gow-server",
+    "gow-sim",
+    "skill-based-front",
+]
+
+[[package]]
+name = "gow-bots"
+version = "0.1.0"
+source = { editable = "apps/bots" }
+
+[[package]]
+name = "gow-maps"
+version = "0.1.0"
+source = { editable = "tools/maps" }
+
+[[package]]
+name = "gow-protocol"
+version = "0.1.0"
+source = { editable = "packages/protocol" }
+
+[[package]]
+name = "gow-server"
+version = "0.1.0"
+source = { editable = "apps/server" }
+
+[[package]]
+name = "gow-sim"
+version = "0.1.0"
+source = { editable = "packages/sim" }
+
+[[package]]
+name = "skill-based-front"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "gow-bots" },
+    { name = "gow-maps" },
+    { name = "gow-protocol" },
+    { name = "gow-server" },
+    { name = "gow-sim" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "gow-bots", editable = "apps/bots" },
+    { name = "gow-maps", editable = "tools/maps" },
+    { name = "gow-protocol", editable = "packages/protocol" },
+    { name = "gow-server", editable = "apps/server" },
+    { name = "gow-sim", editable = "packages/sim" },
+]

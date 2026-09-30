@@ -1,0 +1,54 @@
+name: "Română"
+widgets:
+  game:
+    leaderboard:
+      name: "Top 5 Jucători"
+      player-pos: "Ești pe locul {0}"
+    provincehud:
+      province-name: "Provincie: {0}"
+      province-info: "Grup: {0} | Armată: {1}"
+    unitrow:
+      unit-info: "Grup: {0} oameni. | tip: {1}"
+    resourcelist:
+      food.name: "Hrană"
+      oil.name: "Petrol"
+      metal.name: "Metal"
+      fossils.name: "Fosile"
+      money.name: "Bani"
+  containers:
+    armymanagerwindow:
+      name: "Manager Armată"
+      merge-button: "Colectează tot"
+
+units:
+  tank:
+    name: "Tanc"
+    description-tipp: "Străpungerea blindată a apărării."
+  infantry:
+    name: "Infanterie"
+    description-tipp: "Ieftină și rapid de produs."
+  artillery:
+    name: "Artilerie"
+    description-tipp: "Daune uriașe la distanțe mari."
+
+buildings:
+  metal-mine:
+    name: "Mină de Metal"
+    description-tipp: "Exploatarea zăcămintelor de minereu de metal. Necesară pentru producția oricărei tehnologii și construcția structurilor avansate."
+  barracks:
+    name: "Cazarmă"
+    description-tipp: "Centru de antrenament al personalului. Permite recrutarea unităților de infanterie și coordonarea apărării provinciale."
+  factory:
+    name: "Fabrică"
+    description-tipp: "Complex industrial. Oferă un flux stabil de resurse și deschide accesul la producția de armament greu."
+
+radial-menu:
+  back-button: "Înapoi"
+  province:
+    cancel-button: "Închide meniul."
+    build-button: "Deschide meniul de construcție."
+    train-button: "Antrenează unități noi pentru armată."
+    text:
+      cancel-button: "Anulează"
+      build-button: "Construiește"
+      train-button: "Antrenează"

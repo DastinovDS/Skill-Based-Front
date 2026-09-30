@@ -1,0 +1,31 @@
+{
+    "license": "skyred",
+    "animations": {
+        "idle": {
+            "mode": "grid",
+            "frame_size": [32, 32],
+            "start_pos": [0, 0],
+            "count": 1
+        },
+        "moving": {
+            "mode": "grid",
+            "frame_size": [32, 32],
+            "start_pos": [0, 32],
+            "count": 3,
+            "speed": 5,
+            "loop": true
+        },
+        "combat": {
+            "mode": "grid",
+            "frame_size": [32, 32],
+            "start_pos": [0, 64],
+            "count": 8,
+            "speed": 5,
+            "loop": true,
+            "events": {
+                "1": {"name": "schoot_sound"},
+                "2": {"name": "spawn_projectile", "offset": [4, -10]}
+            }
+        }
+    }   
+}
