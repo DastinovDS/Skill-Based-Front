@@ -143,7 +143,7 @@ def test_enemy_groups_in_nodes(rules: Ruleset) -> None:
     in_presence = _add(state, 1, AtNode(3))  # neighbour of own node 1
     in_fog = _add(state, 1, AtNode(4))
     in_exact = _add(state, 1, AtNode(1))  # enemy group inside own node 1
-    enemy_garrison = state.groups[2]  # ids in node order: 0 -> 0, 1 -> 1, 5 -> 2, 6 -> 3
+    enemy_garrison = state.groups[3]  # ids by node_key: 0 -> 0, 1 -> 1, 6 -> 2, 5 -> 3
     assert enemy_garrison.location == AtNode(5)  # fog for player 0
     assert is_visible(state, 0, in_presence)
     assert is_visible(state, 0, in_exact)

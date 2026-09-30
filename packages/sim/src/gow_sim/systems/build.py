@@ -67,7 +67,7 @@ def start_build(group: Group, edge: int, tick: int) -> None:
 def interrupt_build(group: Group) -> None:
     """Stop the build of ``group``; the progress of the current level is lost.
 
-    Moves, mode changes and merges call this (SIM-04); combat (SIM-09, TODO(#25)) calls it for
+    Moves, mode changes and merges call this (SIM-04); combat (SIM-09) calls it for
     every group in a fight. The mode is not changed here.
     """
     group.build_edge = None

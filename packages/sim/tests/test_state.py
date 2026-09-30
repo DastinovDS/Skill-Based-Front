@@ -112,9 +112,14 @@ def test_initial_state_follows_map_and_ruleset(name: str, rules: Ruleset) -> Non
         assert state.nodes[node["id"]].warehouse == node["start_stock"]
     for edge in raw["edges"]:
         assert state.edges[edge["id"]].width == edge["base_width"]
-    garrisons = [n for n in raw["nodes"] if n["start_units"] > 0]
+    mirror = {int(k): v for k, v in raw["mirror"]["nodes"].items()}
+    garrisons = sorted(
+        (n for n in raw["nodes"] if n["start_units"] > 0),
+        key=lambda n: (n["start_owner"], n["id"] if n["start_owner"] == 0 else mirror[n["id"]]),
+    )
     assert len(state.groups) == len(garrisons)
-    # One group per garrison, ids in node order, in the normal mode «Атака» (DEC-08).
+    # One group per garrison, ids player by player in node_key order (mirror-symmetric id
+    # tie-breaks, DEC-07 rule 7), in the normal mode «Атака» (DEC-08).
     for gid, node in enumerate(garrisons):
         group = state.groups[gid]
         assert group.location == AtNode(node["id"])
@@ -282,7 +287,7 @@ def _set(data: Any, path: tuple[str | int, ...], value: object) -> None:
         ),
         (
             ("groups", 0, "location"),
-            {"kind": "edge", "edge": 0, "from_node": 0, "progress": 1001},
+            {"kind": "edge", "edge": 0, "from_node": 0, "progress": 1001, "back": False},
             r"location\.progress: 1001 is out of range",
         ),
         (
