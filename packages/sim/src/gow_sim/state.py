@@ -129,6 +129,10 @@ class Node:
     owner: int | None
     warehouse: int
     """Charges in the city warehouse."""
+    over_ticks: int
+    """Consecutive ticks the owner's standing units exceed the capacity (attrition, SIM-07)."""
+    captured_tick: int | None
+    """Tick of the last owner change; ``None`` for the starting owner (attrition grace)."""
 
 
 @dataclass(slots=True)
@@ -192,6 +196,11 @@ class VisionMemory:
 
 type EventValue = int | str | bool | None
 
+type CapacityCache = tuple[
+    tuple[int | None, ...], tuple[int, ...], tuple[int, ...], tuple[int, ...]
+]
+"""``(owners, widths, width gains, capacities)``: see ``GameState.capacity_cache``."""
+
 
 @dataclass(frozen=True, slots=True)
 class Event:
@@ -228,6 +237,9 @@ class GameState:
     """Next id for a group, packet or intent (one counter for all three)."""
     events: list[Event]
     """Events of the current tick."""
+    capacity_cache: CapacityCache | None = field(default=None, compare=False, repr=False)
+    """Derived data, not part of the state: node capacities and the owners, widths and gains they
+    were computed from (``systems.capacity.node_capacities``). Not serialized or hashed."""
 
     def new_id(self) -> int:
         new = self.next_id
@@ -256,7 +268,14 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
             for p in PLAYERS
         },
         nodes={
-            n.id: Node(id=n.id, owner=n.start_owner, warehouse=n.start_stock) for n in mapdef.nodes
+            n.id: Node(
+                id=n.id,
+                owner=n.start_owner,
+                warehouse=n.start_stock,
+                over_ticks=0,
+                captured_tick=None,
+            )
+            for n in mapdef.nodes
         },
         edges={e.id: Edge(id=e.id, width=e.base_width) for e in mapdef.edges},
         groups={},
@@ -333,7 +352,13 @@ def _player_data(p: PlayerState) -> dict[str, object]:
 
 
 def _node_data(n: Node) -> dict[str, object]:
-    return {"id": n.id, "owner": n.owner, "warehouse": n.warehouse}
+    return {
+        "id": n.id,
+        "owner": n.owner,
+        "warehouse": n.warehouse,
+        "over_ticks": n.over_ticks,
+        "captured_tick": n.captured_tick,
+    }
 
 
 def _location_data(loc: Location) -> dict[str, object]:
@@ -475,11 +500,13 @@ def _parse_player(data: object, where: str) -> PlayerState:
 
 
 def _parse_node(data: object, where: str) -> Node:
-    raw = _obj(data, where, ("id", "owner", "warehouse"))
+    raw = _obj(data, where, ("id", "owner", "warehouse", "over_ticks", "captured_tick"))
     return Node(
         id=_int(raw["id"], f"{where}.id", low=0),
         owner=_opt_int(raw["owner"], f"{where}.owner"),
         warehouse=_int(raw["warehouse"], f"{where}.warehouse", low=0),
+        over_ticks=_int(raw["over_ticks"], f"{where}.over_ticks", low=0),
+        captured_tick=_opt_int(raw["captured_tick"], f"{where}.captured_tick"),
     )
 
 

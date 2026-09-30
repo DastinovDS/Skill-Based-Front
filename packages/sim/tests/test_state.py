@@ -65,6 +65,8 @@ def _rich_state(rules: Ruleset) -> GameState:
     state.players[0].vp = 12
     state.nodes[1].owner = 0
     state.nodes[1].warehouse = 3
+    state.nodes[1].over_ticks = 7
+    state.nodes[1].captured_tick = 120
     state.edges[0].width = 2
     gid = state.new_id()
     state.groups[gid] = Group(gid, 0, 2, 1, Mode.DEFENSE, OnEdge(edge=1, from_node=0, progress=333))
@@ -330,6 +332,8 @@ def _states(draw: st.DrawFn) -> GameState:
     for node in state.nodes.values():
         node.owner = draw(st.none() | players)
         node.warehouse = draw(_small)
+        node.over_ticks = draw(_small)
+        node.captured_tick = draw(_opt_small)
     for _ in range(draw(st.integers(min_value=0, max_value=6))):
         gid = state.new_id()
         units = draw(st.integers(min_value=1, max_value=20))
