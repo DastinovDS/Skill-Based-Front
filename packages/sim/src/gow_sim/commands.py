@@ -14,8 +14,8 @@ AGENTS.md, section 4.3:
 - Surrender and a technical defeat are the command ``Forfeit`` (DEC-05), not a special path.
 
 Ids in commands are internal ids. Opaque per-player ids of the projection are translated by
-``resolve(state, player, cmd)`` of SIM-14 (#30) with ``map_group_ids()``; an id that resolves to
-nothing may be mapped to any id absent from the state (for example ``-1``), which ``validate()``
+``gow_sim.view.resolve(state, player, cmd, match_key)`` (SIM-14) with ``map_group_ids()``; an id
+that resolves to nothing becomes a negative id absent from the state, which ``validate()``
 rejects as ``NOT_FOUND_OR_HIDDEN``.
 
 Costs are in hundredths of CP from ``orders.cost`` (DEC-08, DEC-01, DEC-02).
