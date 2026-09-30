@@ -320,6 +320,8 @@ async def run(self) -> None:
   - `type`: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`.
   - `scope`: `sim`, `protocol`, `server`, `bots`, `client`, `maps`, `infra`, `docs`.
 - **PR** в `develop`, в описании — `Closes #<номер>` и отмеченные критерии приёмки. `develop` — ветка по умолчанию на GitHub (иначе `Closes` не закрывает issue). `main` — только релизы.
+- **Шаблоны:** `.github/pull_request_template.md` (чек-лист Definition of Done ниже) и `.github/ISSUE_TEMPLATE/` (feature, bug, decision). Меняешь Definition of Done — поменяй и шаблон PR.
+- **Закрытие issue после мержа — вручную.** В этом репозитории `Closes #N` сейчас не связывает PR с issue (у PR пустой `closingIssuesReferences`, хотя база — ветка по умолчанию), поэтому автор закрывает issue сам: `gh issue close <N> --comment "Done in #<PR>"`.
 
 ### Definition of Done
 
