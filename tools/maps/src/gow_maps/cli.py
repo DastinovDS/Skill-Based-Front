@@ -1,4 +1,4 @@
-"""Command line: `gow-maps validate <files>`, `gow-maps mirror <half> -o <map>`."""
+"""Command line: `gow-maps validate`, `gow-maps mirror`, `gow-maps preview`."""
 
 import argparse
 import glob
@@ -7,7 +7,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from gow_maps.mirror import HalfFormatError, mirror_file
+from gow_maps.preview import preview_path, render_preview
 from gow_maps.validate import Issue, load_config, validate_file
+from gow_sim.maps import MapFormatError, load_map
 
 _GLOB_CHARS = frozenset("*?[")
 
@@ -53,6 +55,21 @@ def _mirror(args: argparse.Namespace) -> int:
     return 0 if _report(args.output, validate_file(args.output, config)) else 1
 
 
+def _preview(args: argparse.Namespace) -> int:
+    ok = True
+    for path in _expand(args.files):
+        try:
+            mapdef = load_map(path)
+        except MapFormatError as exc:
+            print(f"FAIL {exc}")
+            ok = False
+            continue
+        out = preview_path(path)
+        render_preview(mapdef, out)
+        print(f"wrote {out}")
+    return 0 if ok else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="gow-maps", description="Offline map tools.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -65,6 +82,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     mirror.add_argument("-o", "--output", required=True, help="full map to write, maps/<name>.json")
     mirror.add_argument("--config", help="validator thresholds (default: built-in validate.toml)")
     mirror.set_defaults(handler=_mirror)
+    preview = commands.add_parser("preview", help="draw maps/<id>.preview.png next to each map")
+    preview.add_argument("files", nargs="+", help="map JSON files (glob patterns allowed)")
+    preview.set_defaults(handler=_preview)
     args = parser.parse_args(argv)
     handler = args.handler
     return int(handler(args))

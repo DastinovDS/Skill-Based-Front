@@ -5,6 +5,7 @@ description = "Offline map tools: validator, mirroring script, previews."
 requires-python = ">=3.12"
 dependencies = [
     "gow-sim",
+    "matplotlib>=3.10",
     "networkx>=3.5",
 ]
 
