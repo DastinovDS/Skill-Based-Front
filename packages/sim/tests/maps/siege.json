@@ -1,0 +1,28 @@
+{
+  "meta": {"name": "siege", "version": 1, "symmetry": "rot180", "width": 960, "height": 480},
+  "nodes": [
+    {"id": 0, "x": 160, "y": 240, "terrain": "forest", "vp": 1, "base_capacity": 4, "capital_of": 0, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 4},
+    {"id": 1, "x": 320, "y": 128, "terrain": "forest", "vp": 1, "base_capacity": 3, "capital_of": null, "start_owner": 0, "start_units": 0, "start_charged": 0, "start_stock": 2},
+    {"id": 2, "x": 560, "y": 128, "terrain": "forest", "vp": 1, "base_capacity": 3, "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 3},
+    {"id": 3, "x": 400, "y": 352, "terrain": "forest", "vp": 1, "base_capacity": 3, "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 3},
+    {"id": 4, "x": 640, "y": 352, "terrain": "forest", "vp": 1, "base_capacity": 3, "capital_of": null, "start_owner": 1, "start_units": 0, "start_charged": 0, "start_stock": 2},
+    {"id": 5, "x": 800, "y": 240, "terrain": "forest", "vp": 1, "base_capacity": 4, "capital_of": 1, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 4},
+    {"id": 6, "x": 400, "y": 240, "terrain": "forest", "vp": 1, "base_capacity": 2, "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 7, "x": 560, "y": 240, "terrain": "forest", "vp": 1, "base_capacity": 2, "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0}
+  ],
+  "edges": [
+    {"id": 0, "a": 0, "b": 1, "base_width": 1, "max_width": 3, "travel_ticks": 59},
+    {"id": 1, "a": 1, "b": 2, "base_width": 1, "max_width": 3, "travel_ticks": 72},
+    {"id": 2, "a": 2, "b": 5, "base_width": 1, "max_width": 1, "travel_ticks": 79},
+    {"id": 3, "a": 5, "b": 4, "base_width": 1, "max_width": 3, "travel_ticks": 59},
+    {"id": 4, "a": 4, "b": 3, "base_width": 1, "max_width": 3, "travel_ticks": 72},
+    {"id": 5, "a": 3, "b": 0, "base_width": 1, "max_width": 1, "travel_ticks": 79},
+    {"id": 6, "a": 1, "b": 6, "base_width": 1, "max_width": 1, "travel_ticks": 41},
+    {"id": 7, "a": 6, "b": 7, "base_width": 1, "max_width": 1, "travel_ticks": 48},
+    {"id": 8, "a": 7, "b": 4, "base_width": 1, "max_width": 1, "travel_ticks": 41}
+  ],
+  "mirror": {
+    "nodes": {"0": 5, "1": 4, "2": 3, "3": 2, "4": 1, "5": 0, "6": 7, "7": 6},
+    "edges": {"0": 3, "1": 4, "2": 5, "3": 0, "4": 1, "5": 2, "6": 8, "7": 7, "8": 6}
+  }
+}
