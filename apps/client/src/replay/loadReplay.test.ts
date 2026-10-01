@@ -25,6 +25,7 @@ describe('loadReplay', () => {
     [401, 'auth'],
     [403, 'auth'],
     [404, 'missing'],
+    [422, 'missing'],
     [500, 'network'],
   ])('maps HTTP %i to %s', async (status, code) => {
     await expect(loadReplay('1', null, answer(status))).rejects.toMatchObject({ code });

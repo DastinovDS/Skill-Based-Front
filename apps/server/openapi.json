@@ -1,0 +1,781 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Skill-Based Front",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Api Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maps": {
+      "get": {
+        "tags": [
+          "maps"
+        ],
+        "summary": "List Maps",
+        "operationId": "list_maps_api_maps_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MapSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Maps Api Maps Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maps/{map_id}": {
+      "get": {
+        "tags": [
+          "maps"
+        ],
+        "summary": "Get Map",
+        "description": "The map file as is (format: docs/design/map-format.md).",
+        "operationId": "get_map_api_maps__map_id__get",
+        "parameters": [
+          {
+            "name": "map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Map Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/maps/{map_id}/background.png": {
+      "get": {
+        "tags": [
+          "maps"
+        ],
+        "summary": "Get Background",
+        "operationId": "get_background_api_maps__map_id__background_png_get",
+        "parameters": [
+          {
+            "name": "map_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Map Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/guest": {
+      "post": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Create Guest",
+        "operationId": "create_guest_api_guest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Me",
+        "operationId": "me_api_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/replays/{match_id}": {
+      "get": {
+        "tags": [
+          "replays"
+        ],
+        "summary": "Get Replay",
+        "description": "The frames file of a finished match (``docs/design/replay-frames.md``), gzip as stored.\n\nRated matches: public. Others: 401 without a valid token, 403 for a player outside the match.\n404: no such match, or its replay is not ready (yet).",
+        "operationId": "get_replay_api_replays__match_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "match_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Match Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/matches": {
+      "post": {
+        "tags": [
+          "private match"
+        ],
+        "summary": "Create Match",
+        "operationId": "create_match_api_matches_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/matches/{code}": {
+      "get": {
+        "tags": [
+          "private match"
+        ],
+        "summary": "Get Match",
+        "operationId": "get_match_api_matches__code__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/matches/{code}/join": {
+      "post": {
+        "tags": [
+          "private match"
+        ],
+        "summary": "Join Match",
+        "operationId": "join_match_api_matches__code__join_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/matches/{code}/ready": {
+      "post": {
+        "tags": [
+          "private match"
+        ],
+        "summary": "Ready Match",
+        "description": "Mark the caller ready; the second ready player starts the match.",
+        "operationId": "ready_match_api_matches__code__ready_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bot-matches": {
+      "post": {
+        "tags": [
+          "bot match"
+        ],
+        "summary": "Create Bot Match",
+        "operationId": "create_bot_match_api_bot_matches_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBotMatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotMatchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BotMatchOut": {
+        "properties": {
+          "match_id": {
+            "type": "string",
+            "title": "Match Id"
+          },
+          "map_id": {
+            "type": "string",
+            "title": "Map Id"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "easy",
+              "normal",
+              "hard",
+              "expert"
+            ],
+            "title": "Level"
+          },
+          "player": {
+            "type": "integer",
+            "title": "Player"
+          }
+        },
+        "type": "object",
+        "required": [
+          "match_id",
+          "map_id",
+          "level",
+          "player"
+        ],
+        "title": "BotMatchOut"
+      },
+      "CreateBotMatch": {
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "easy",
+              "normal",
+              "hard",
+              "expert"
+            ],
+            "title": "Level",
+            "default": "normal"
+          },
+          "map_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CreateBotMatch"
+      },
+      "CreateMatch": {
+        "properties": {
+          "map_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CreateMatch"
+      },
+      "GuestCreate": {
+        "properties": {
+          "nick": {
+            "type": "string",
+            "title": "Nick"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nick"
+        ],
+        "title": "GuestCreate"
+      },
+      "GuestCreated": {
+        "properties": {
+          "player_id": {
+            "type": "integer",
+            "title": "Player Id"
+          },
+          "token": {
+            "type": "string",
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "token"
+        ],
+        "title": "GuestCreated"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InviteOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "joined",
+              "started"
+            ],
+            "title": "State"
+          },
+          "map_id": {
+            "type": "string",
+            "title": "Map Id"
+          },
+          "host_nick": {
+            "type": "string",
+            "title": "Host Nick"
+          },
+          "guest_nick": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guest Nick"
+          },
+          "you_ready": {
+            "type": "boolean",
+            "title": "You Ready"
+          },
+          "opponent_ready": {
+            "type": "boolean",
+            "title": "Opponent Ready"
+          },
+          "expires_in_s": {
+            "type": "number",
+            "title": "Expires In S"
+          },
+          "match_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "state",
+          "map_id",
+          "host_nick",
+          "guest_nick",
+          "you_ready",
+          "opponent_ready",
+          "expires_in_s",
+          "match_id"
+        ],
+        "title": "InviteOut"
+      },
+      "MapSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "background_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "width",
+          "height",
+          "background_url"
+        ],
+        "title": "MapSummary"
+      },
+      "Me": {
+        "properties": {
+          "player_id": {
+            "type": "integer",
+            "title": "Player Id"
+          },
+          "nick": {
+            "type": "string",
+            "title": "Nick"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "nick"
+        ],
+        "title": "Me"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "description": "Guest token from POST /api/guest",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

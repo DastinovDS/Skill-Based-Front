@@ -23,8 +23,7 @@ function setup() {
   const session = new MatchSession({
     matchId: 'm1',
     token: 'secret',
-    hud,
-    tickHz: DEV_RULES.tick_hz,
+    context: { hud, tickHz: DEV_RULES.tick_hz },
     now: () => clock,
     connection: {
       createSocket: server.create,
@@ -46,6 +45,53 @@ describe('MatchSession', () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('makes the HUD from the first welcome, and keeps it after a reconnect', () => {
+    const server = createFakeServer();
+    const seen: ServerMsg[] = [];
+    let made = 0;
+    const session = new MatchSession({
+      matchId: 'm1',
+      token: 'secret',
+      context: (msg) => {
+        made += 1;
+        return {
+          hud: new HudState({ me: msg.player, rules: msg.ruleset_public, map }),
+          tickHz: msg.ruleset_public.tick_hz,
+        };
+      },
+      onServerMessage: (msg) => seen.push(msg),
+      connection: {
+        createSocket: server.create,
+        location: { protocol: 'http:', host: 'localhost' },
+        baseBackoffMs: 100,
+        random: () => 1,
+      },
+    });
+    session.start();
+    const socket = server.last();
+    socket.accept();
+    expect(made).toBe(0);
+    expect(session.frame()).toBeNull();
+    socket.reply({ ...welcome, ruleset_public: { ...DEV_RULES, tick_hz: 20 } });
+    expect(made).toBe(1);
+    expect(session.tickHz).toBe(20);
+    socket.reply(snapshot(20));
+    expect(seen.map((msg) => msg.type)).toEqual(['welcome', 'snapshot']);
+    socket.drop();
+    vi.advanceTimersByTime(1000);
+    const again = server.last();
+    again.accept();
+    again.reply(welcome);
+    expect(made).toBe(1);
+  });
+
+  it('sends pause and resume only while ready', () => {
+    const { session, socket } = setup();
+    session.pause();
+    session.resume();
+    expect(socket.sent.map((msg) => msg.type).slice(-2)).toEqual(['pause', 'resume']);
   });
 
   it('feeds the map and the HUD from the same snapshots', () => {
