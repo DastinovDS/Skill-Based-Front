@@ -15,7 +15,6 @@
 # Never in the context, even if the allowlist above changes.
 .claude/
 **/.claude/
-legacy/
 data/
 **/node_modules/
 **/.venv/

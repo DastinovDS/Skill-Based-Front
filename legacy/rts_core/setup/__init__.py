@@ -1,1 +1,0 @@
-from rts_core.setup.game_setup import game_init

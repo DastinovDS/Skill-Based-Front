@@ -25,7 +25,7 @@ Linux-эталоны для CI пишутся в контейнере Playwright
 
 ```sh
 docker run --rm -v "$PWD":/src:ro -v "$PWD/apps/client/visual":/out mcr.microsoft.com/playwright:v1.63.0-noble \
-  bash -c 'mkdir /work && cd /src && tar --exclude=node_modules --exclude=.git --exclude=legacy --exclude=.venv -cf - . | tar -xf - -C /work \
+  bash -c 'mkdir /work && cd /src && tar --exclude=node_modules --exclude=.git --exclude=.venv -cf - . | tar -xf - -C /work \
   && cd /work/apps/client && corepack enable && pnpm install --frozen-lockfile \
   && CI=1 pnpm exec playwright test --update-snapshots; cp -r visual/scenes.spec.ts-snapshots/. /out/scenes.spec.ts-snapshots/'
 ```

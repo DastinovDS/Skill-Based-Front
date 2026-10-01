@@ -18,8 +18,7 @@ docs/mvp/out/
 node_modules/
 dist/
 
-# Runtime data (server database, replays). Anchored to the root:
-# legacy/rts_core/data/ is part of the archived prototype.
+# Runtime data (server database, replays). Anchored to the root.
 /data/
 *.db
 *.db-shm

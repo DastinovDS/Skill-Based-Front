@@ -1,9 +1,0 @@
-{
-    "volume": 1,
-    "pitch_range": [0.9, 1.1],
-    "variants": [
-        "ui.click",
-        "ui.click_2"
-    ],
-    "category": "sfx" 
-}
