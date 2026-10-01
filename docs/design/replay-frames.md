@@ -56,7 +56,7 @@ r.json())` работает без библиотек. Реплеи рейтин
 |---|---|---|
 | `t` | тик | целое |
 | `p` | игроки по id (0, 1) | `[cp, vp, stance, forfeited]`: CP в сотых, `stance` строка, `forfeited` 0/1 |
-| `n` | узлы по id | `[owner, warehouse]`: `owner` 0, 1 или `null`; `warehouse` зарядов на складе |
+| `n` | узлы по id | `[owner, warehouse, capacity]`: `owner` 0, 1 или `null`; `warehouse` зарядов на складе; `capacity` текущая ёмкость города (клиент правил не считает) |
 | `w` | ширина рёбер по id | целое |
 | `g` | группы, по возрастанию `id` | объект группы (ниже) |
 | `k` | пакеты зарядов, по `id` | `[id, owner, edge, from_node, charges, depart_tick, arrive_tick]` |
@@ -78,6 +78,14 @@ r.json())` работает без библиотек. Реплеи рейтин
 Бюджет `AGENTS.md` 12: ≤ 2 МБ на матч в 12 минут (1441 кадр). Измерено: матч 7200 тиков на
 `pautina`, боты rusher и reactive: около 60 КБ. Дельты поэтому не нужны; если формат вырастет
 (больше узлов, больше групп), тест `apps/server/tests/test_replays.py` покажет это раньше релиза.
+
+## Просмотр в клиенте
+
+`apps/client/src/replay/`: `replayFile.ts` (разбор и проверка `format`), `timeline.ts` (кадр в
+`SnapshotMsg` с полным раскрытием; владельцы групп и пакетов отдельными таблицами),
+`replayPlayer.ts` (`RenderSource`: пауза, ×1/×4/×16, перемотка, интерполяция CLI-02),
+`ReplayViewer.svelte` (управление). Адрес: `/?replay=<id матча>` (`replayUrl`), в dev-сборке
+`/?replay=dev` играет образец `siege.frames.json`.
 
 ## Изменение формата
 

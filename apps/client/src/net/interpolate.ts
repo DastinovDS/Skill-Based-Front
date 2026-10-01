@@ -6,19 +6,23 @@
  * (a group that changed edge, appeared or vanished) stays as in the earlier snapshot until the
  * later one becomes the base. Progress is in thousandths of an edge, as on the wire.
  */
-import type { GroupView, Location, PacketView, SnapshotMsg } from '../protocol.gen.ts';
+import type { GroupView, Location, PacketView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 
 /** A full edge in thousandths (`OnEdgeLoc.progress`). */
 export const EDGE_LENGTH = 1000;
 
 export interface RenderGroup {
   group: GroupView;
+  /** Whose group it is, when the source shows both sides (the replay viewer); default: own. */
+  owner?: PlayerId;
   /** Where to draw the group now; `progress` may be fractional. */
   location: Location;
 }
 
 export interface RenderPacket {
   packet: PacketView;
+  /** Whose packet it is, when the source shows both sides (the replay viewer); default: own. */
+  owner?: PlayerId;
   /** In thousandths, `0` at `depart_tick` and `EDGE_LENGTH` at `arrive_tick`. */
   progress: number;
 }
