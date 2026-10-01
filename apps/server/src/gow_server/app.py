@@ -11,10 +11,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from sqlalchemy.orm import sessionmaker
 
-from gow_server import identity, maps
+from gow_server import identity, internal, maps
 from gow_server.clock import MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.logs import request_id_var
+from gow_server.matches import MatchManager
 from gow_server.ratelimit import SlidingWindowLimiter
 from gow_server.settings import Settings
 
@@ -35,6 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = create_db_engine(settings.database_url)
         await asyncio.to_thread(upgrade_to_head, engine)
         app.state.sessions = sessionmaker(engine, expire_on_commit=False)
+        app.state.matches = MatchManager(MonotonicClock())
         log.info(
             "server started",
             extra={"env": settings.env, "maps": [entry.id for entry in app.state.maps.all()]},
@@ -42,6 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            await app.state.matches.shutdown()
             engine.dispose()
             log.info("server stopped")
 
@@ -82,4 +85,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(maps.router)
     app.include_router(identity.router)
+    app.include_router(internal.router)
     return app
