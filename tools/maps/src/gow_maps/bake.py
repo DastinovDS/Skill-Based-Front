@@ -1,17 +1,19 @@
 """Map background baker (MAP-05): ``maps/<id>.json`` -> ``maps/<id>.bg.png``.
 
-Ported from the legacy Pygame generator (``legacy/rts_core/game_logic/World/MapGenerator.py``):
+Formulas ported from the Pygame prototype map generator (git tag ``v0-pygame-prototype``,
+path ``rts_core/game_logic/World/MapGenerator.py``):
 
 - land is a metaball field: every city and every road adds density inside ``INFLUENCE_RADIUS``,
   a cell is sea where the density plus a wave noise stays below a density-dependent threshold;
 - a thin band above the threshold is the shore;
-- the legacy temperature/moisture climate is replaced by the terrain of the nearest city
-  (Voronoi area of the node): plains, forest, mountains. The legacy moisture and detail noise only
-  pick a variant inside that terrain and shade it.
+- the prototype temperature/moisture climate is replaced by the terrain of the nearest city
+  (Voronoi area of the node): plains, forest, mountains. The prototype moisture and detail noise
+  only pick a variant inside that terrain and shade it.
 
 The picture covers exactly the world rectangle ``[0, width] x [0, height]`` at one pixel per world
 unit, so the client stretches nothing: the sprite sits at ``(0, 0)`` with the map's own size.
-The field is sampled on a ``STEP`` grid (as in legacy) and every cell is a ``STEP x STEP`` block.
+The field is sampled on a ``STEP`` grid (as in the prototype) and every cell is a
+``STEP x STEP`` block.
 
 The result is deterministic: noise offsets come from ``random.Random`` seeded by the map name and
 version (or an explicit seed), and the second half of the picture is the first half turned by
@@ -31,13 +33,13 @@ from pathlib import Path
 
 from gow_sim.maps import MapDef, Terrain
 
-STEP = 4  # world units per sampled cell (legacy MapGenerator.STEP)
-INFLUENCE_RADIUS = 95.0  # legacy MapGenerator.INFLUENCE_RADIUS
-LAND_THRESHOLD = 0.15  # legacy MapGenerator.LAND_THRESHOLD
-SHORE_BAND = 0.05  # legacy: total density below LAND_THRESHOLD + 0.05 is the shore
+STEP = 4  # world units per sampled cell (prototype MapGenerator.STEP)
+INFLUENCE_RADIUS = 95.0  # prototype MapGenerator.INFLUENCE_RADIUS
+LAND_THRESHOLD = 0.15  # prototype MapGenerator.LAND_THRESHOLD
+SHORE_BAND = 0.05  # prototype: total density below LAND_THRESHOLD + 0.05 is the shore
 SHALLOW_BAND = 0.06  # sea this close to the threshold is drawn as shallow water
-NODE_WEIGHT = 0.35  # legacy: a city adds 0.35 of a road's density
-SNOW_MOISTURE = 0.7  # mountain cells this moist are snow (legacy: cold and moist is snow)
+NODE_WEIGHT = 0.35  # prototype: a city adds 0.35 of a road's density
+SNOW_MOISTURE = 0.7  # mountain cells this moist are snow (prototype: cold and moist is snow)
 WARP = 40.0  # world units: how far the borders between node areas wander
 
 
@@ -53,7 +55,7 @@ class Biome(StrEnum):
     SNOW = "snow"
 
 
-# Legacy palette (rts_core/system/ChunkManager.py) where a legacy biome fits.
+# Prototype palette (rts_core/system/ChunkManager.py) where a prototype biome fits.
 BIOME_COLOUR: dict[Biome, tuple[int, int, int]] = {
     Biome.DEEP_SEA: (0, 105, 148),
     Biome.SHALLOW_SEA: (0, 133, 148),
@@ -77,12 +79,12 @@ TERRAIN_BIOMES: dict[Terrain, frozenset[Biome]] = {
 @dataclass(frozen=True, slots=True)
 class Cell:
     biome: Biome
-    shade: float  # brightness factor around 1.0 from the legacy detail noise
+    shade: float  # brightness factor around 1.0 from the prototype detail noise
 
 
 @dataclass(frozen=True, slots=True)
 class _Noise:
-    """Legacy noise fields, made continuous across the rot180 seam of the picture.
+    """Prototype noise fields, made continuous across the rot180 seam of the picture.
 
     The picture is mirrored at its centre, so a raw noise field would jump there. Every field is
     averaged with its own rot180 image (``symmetric``); the terrain warp is antisymmetric
