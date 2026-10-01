@@ -5,6 +5,7 @@ description = "Bots and tournament harness."
 requires-python = ">=3.12"
 dependencies = [
     "gow-sim",
+    "matplotlib>=3.10",
 ]
 
 [project.scripts]

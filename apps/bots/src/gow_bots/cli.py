@@ -1,7 +1,8 @@
 """``gow-bots``: the command line of the bot tooling (AGENTS.md, section 3).
 
 ``gow-bots tournament`` plays a tournament and writes JSONL (``gow_bots.tournament``);
-``gow-bots analyze`` prints the metrics of replay files, e.g. real matches (``gow_sim.analysis``).
+``gow-bots analyze`` prints the metrics of replay files, e.g. real matches (``gow_sim.analysis``);
+``gow-bots report`` turns a tournament file into a Markdown balance report (``gow_bots.report``).
 """
 
 import argparse
@@ -13,10 +14,12 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from gow_bots.bots import BOTS
+from gow_bots.report import write_report
 from gow_bots.tournament import build_tasks, run_tournament
 from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, ReplayError, analyze_replay
 
 DEFAULT_OUT = "docs/balance/latest.jsonl"
+DEFAULT_REPORT_DIR = "docs/balance"
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -35,6 +38,10 @@ def _parser() -> argparse.ArgumentParser:
     a.add_argument("replays", nargs="+", help="replay files")
     a.add_argument("--rulesets", default=str(DEFAULT_RULESETS_DIR), help="ruleset archive")
     a.add_argument("--maps", default=str(DEFAULT_MAPS_DIR), help="map folder")
+    r = sub.add_parser("report", help="build a Markdown balance report with charts from JSONL")
+    r.add_argument("file", help="tournament result (JSONL)")
+    r.add_argument("--out-dir", default=DEFAULT_REPORT_DIR, help="folder (default docs/balance)")
+    r.add_argument("--name", default=None, help="file name prefix (default: stem of the input)")
     return parser
 
 
@@ -69,10 +76,18 @@ def _analyze(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _report(args: argparse.Namespace) -> int:
+    for path in write_report(args.file, args.out_dir, args.name):
+        print(f"wrote {path}", file=sys.stderr)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        return _tournament(args) if args.command == "tournament" else _analyze(args)
+        if args.command == "tournament":
+            return _tournament(args)
+        return _report(args) if args.command == "report" else _analyze(args)
     except (ValueError, OSError) as exc:  # unknown bot, bad map or ruleset file
         print(f"error: {exc}", file=sys.stderr)
         return 2
