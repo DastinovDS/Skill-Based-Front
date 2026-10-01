@@ -376,7 +376,7 @@ export class EntityView {
       const entry = this.groupEntry(item.group.id);
       entry.stamp = this.stamp;
       entry.token.set({
-        owner: this.me,
+        owner: item.owner ?? this.me,
         modes: [item.group.mode],
         counts: { units: item.group.units, charged: item.group.charged },
       });
@@ -439,7 +439,7 @@ export class EntityView {
       let entry = this.packets.get(packet.id);
       if (entry === undefined) {
         const view = this.packetLayer.addChild(new Container({ label: `packet-${packet.id}` }));
-        const dot = view.addChild(new Graphics(this.kit.pipFilled[this.me]));
+        const dot = view.addChild(new Graphics(this.kit.pipFilled[item.owner ?? this.me]));
         dot.scale.set(PACKET_SCALE);
         const label = view.addChild(
           new Text({
@@ -469,8 +469,8 @@ export class EntityView {
   private drawOrders(groups: readonly RenderGroup[], points: Map<string, Point>): void {
     const g = this.orders;
     g.clear();
-    const color = PLAYER_COLOR[this.me];
-    for (const { group } of groups) {
+    for (const { group, owner } of groups) {
+      const color = PLAYER_COLOR[owner ?? this.me];
       const from = points.get(group.id);
       if (group.order === null || from === undefined) continue;
       g.moveTo(from.x, from.y);

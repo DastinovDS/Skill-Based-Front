@@ -32,3 +32,9 @@ docker run --rm -v "$PWD":/src:ro -v "$PWD/apps/client/visual":/out mcr.microsof
 
 CI запускает их отдельной задачей `visual` (не входит в обязательные `py`, `web`, `docker`).
 Упавшее сравнение кладёт фактические кадры и разницу в артефакт `visual-diff`.
+
+## Просмотр реплея (CLI-10, #66)
+
+`visual/replay.spec.ts` открывает `/?replay=dev` (встроенный образец `src/replay/siege.frames.json`:
+короткий матч на карте `siege`, записан `gow_server.frames.build_frames` и распакован) и проверяет,
+что кнопки скорости, пауза и ползунок двигают настоящий рендер. Эталонного скриншота нет.

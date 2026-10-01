@@ -86,6 +86,10 @@ def test_twelve_minute_match_resimulates_to_the_same_result(
     ticks = [f["t"] for f in doc["frames"]]
     assert ticks == list(range(0, 7201, 5))  # 2 frames a second, tick 0 and the last tick
     assert len(doc["frames"][0]["n"]) == len(mapdef.nodes)
+    # [owner, warehouse, capacity]: the capacity is never below the base one of the map
+    assert all(
+        n[2] >= m.base_capacity for n, m in zip(doc["frames"][0]["n"], mapdef.nodes, strict=True)
+    )
     assert len(doc["frames"][0]["w"]) == len(mapdef.edges)
     assert any(f["g"] for f in doc["frames"])
     assert doc["events"], "events are part of the file"

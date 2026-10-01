@@ -22,8 +22,9 @@ from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, map_hash, map_to_data
 from gow_sim.match import SIM_VERSION, Match
 from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, replay_run
-from gow_sim.ruleset import ruleset_hash
+from gow_sim.ruleset import Ruleset, ruleset_hash
 from gow_sim.state import AtNode, GameState, Group, OnEdge
+from gow_sim.systems.capacity import node_capacities
 
 __all__ = [
     "FORMAT",
@@ -68,15 +69,19 @@ def _group(g: Group) -> dict[str, object]:
     return out
 
 
-def frame_of(state: GameState) -> dict[str, object]:
+def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
     """The full state at ``state.tick`` as one frame (``docs/design/replay-frames.md``)."""
+    capacities = node_capacities(state, rules)
     return {
         "t": state.tick,
         "p": [
             [p.cp, p.vp, p.stance.value, int(p.forfeited)]
             for p in (state.players[i] for i in sorted(state.players))
         ],
-        "n": [[n.owner, n.warehouse] for n in (state.nodes[i] for i in sorted(state.nodes))],
+        "n": [
+            [n.owner, n.warehouse, capacities[n.id]]
+            for n in (state.nodes[i] for i in sorted(state.nodes))
+        ],
         "w": [state.edges[i].width for i in sorted(state.edges)],
         "g": [_group(state.groups[i]) for i in sorted(state.groups)],
         "k": [
@@ -102,13 +107,13 @@ class FramesRecorder:
     def begin(self, match: Match) -> None:
         self.match = match
         self.frame_every = max(match.rules.tick_hz // FRAMES_PER_SECOND, 1)
-        self.frames.append(frame_of(match.state))
+        self.frames.append(frame_of(match.state, match.rules))
 
     def record(self, match: Match, commands: Sequence[PlayerCommand]) -> None:
         state = match.state
         self.events.extend([e.tick, e.kind, dict(e.data)] for e in state.events)
         if state.tick % self.frame_every == 0 or match.finished:
-            self.frames.append(frame_of(state))
+            self.frames.append(frame_of(state, match.rules))
 
 
 @dataclass(frozen=True, slots=True)
