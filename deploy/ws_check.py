@@ -1,21 +1,23 @@
-"""Minimal WebSocket echo server and client for deploy/check-ws-reload.sh (OPS-02, #81).
+"""WebSocket reload check against the real match endpoint, for deploy/check-ws-reload.sh.
 
-Standard library only (RFC 6455, text frames, no extensions): it runs both on the CI host and
-inside the `app` image, which has no WebSocket package until SRV-03 (#48).
+OPS-02 (#81), SRV-03 (#48). Standard library only (RFC 6455 client, text frames, no extensions),
+so it runs on any host with Python 3.
 
-    python3 deploy/ws_check.py serve 8000
-    python3 deploy/ws_check.py reload ws://localhost:8080/ws/echo -- <command that reloads Caddy>
+    python3 deploy/ws_check.py reload ws://localhost:8080/ws/match/reload-check -- <reload command>
 
-`reload` opens a connection, checks the echo, runs the command, then checks that the same
-connection still echoes and that a new connection works as well.
+`reload` opens a connection to /ws/match/..., runs the command, then sends a `hello` of an old
+protocol version on that same connection: the server answering with close code 4001 proves the
+connection survived the reload. A new connection after the reload must get 4001 as well. No match
+or guest is needed. The server waits for `hello` for 5 seconds (``ws_hello_timeout_s``): the
+reload has to fit into that.
 """
 
 import argparse
 import base64
 import hashlib
+import json
 import os
 import socket
-import socketserver
 import ssl
 import struct
 import subprocess
@@ -25,6 +27,7 @@ import urllib.parse
 
 _GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 _OP_TEXT, _OP_CLOSE, _OP_PING, _OP_PONG = 0x1, 0x8, 0x9, 0xA
+_CLOSE_PROTOCOL_VERSION = 4001  # gow_protocol.messages.CLOSE_PROTOCOL_VERSION
 _TIMEOUT_S = 5.0
 
 
@@ -88,41 +91,6 @@ def _send_frame(sock: socket.socket, opcode: int, payload: bytes, *, masked: boo
     sock.sendall(head + payload)
 
 
-class _EchoHandler(socketserver.BaseRequestHandler):
-    def handle(self) -> None:
-        sock = self.request
-        assert isinstance(sock, socket.socket)
-        _, headers = _read_head(sock)
-        key = headers.get("sec-websocket-key")
-        if headers.get("upgrade", "").lower() != "websocket" or not key:
-            sock.sendall(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
-            return
-        sock.sendall(
-            b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-            + f"Sec-WebSocket-Accept: {_accept_key(key)}\r\n\r\n".encode()
-        )
-        while True:
-            opcode, payload = _read_frame(sock)
-            if opcode == _OP_CLOSE:
-                _send_frame(sock, _OP_CLOSE, payload[:2], masked=False)
-                return
-            if opcode == _OP_PING:
-                _send_frame(sock, _OP_PONG, payload, masked=False)
-            elif opcode == _OP_TEXT:
-                _send_frame(sock, _OP_TEXT, payload, masked=False)
-
-
-class _Server(socketserver.ThreadingTCPServer):
-    allow_reuse_address = True
-    daemon_threads = True
-
-
-def serve(port: int) -> None:
-    with _Server(("0.0.0.0", port), _EchoHandler) as server:
-        print(f"ws echo on :{port}", flush=True)
-        server.serve_forever()
-
-
 def connect(url: str) -> socket.socket:
     """Open a WebSocket. wss:// to (*.)localhost skips certificate checks (Caddy's internal CA)."""
     parts = urllib.parse.urlsplit(url)
@@ -152,18 +120,19 @@ def connect(url: str) -> socket.socket:
     return sock
 
 
-def echo(sock: socket.socket, text: str) -> None:
-    _send_frame(sock, _OP_TEXT, text.encode(), masked=True)
-    opcode, payload = _read_frame(sock)
-    if opcode != _OP_TEXT or payload.decode() != text:
-        raise ConnectionError(f"unexpected reply to {text!r}: opcode {opcode}, {payload!r}")
-
-
-def close(sock: socket.socket) -> None:
-    try:
-        _send_frame(sock, _OP_CLOSE, struct.pack("!H", 1000), masked=True)
-    finally:
-        sock.close()
+def expect_close(sock: socket.socket, code: int) -> None:
+    """Send an old-version ``hello`` and expect the server to close with ``code``."""
+    hello = json.dumps({"type": "hello", "protocol_version": 1, "token": "reloadcheck"})
+    _send_frame(sock, _OP_TEXT, hello.encode(), masked=True)
+    while True:
+        opcode, payload = _read_frame(sock)
+        if opcode == _OP_CLOSE:
+            got = struct.unpack("!H", payload[:2])[0] if len(payload) >= 2 else None
+            if got != code:
+                raise ConnectionError(f"close code {got}, expected {code}")
+            return
+        if opcode == _OP_PING:
+            _send_frame(sock, _OP_PONG, payload, masked=True)
 
 
 def check_reload(url: str, command: list[str], wait_s: float) -> None:
@@ -176,33 +145,31 @@ def check_reload(url: str, command: list[str], wait_s: float) -> None:
             if time.monotonic() > deadline:
                 raise ConnectionError(f"cannot open {url}: {exc}") from exc
             time.sleep(0.5)
-    echo(old, "before reload")
-    print("connected, echo ok; reloading:", " ".join(command), flush=True)
+    opened = time.monotonic()
+    print("connected; reloading:", " ".join(command), flush=True)
     subprocess.run(command, check=True)
-    time.sleep(1)  # give Caddy time to cut the stream if it were going to
-    echo(old, "after reload")
-    print("the connection opened before the reload still works", flush=True)
+    time.sleep(0.5)  # give Caddy time to cut the stream if it were going to
+    expect_close(old, _CLOSE_PROTOCOL_VERSION)
+    print(
+        f"the connection opened before the reload still works ({time.monotonic() - opened:.1f} s)",
+        flush=True,
+    )
+    old.close()
     new = connect(url)
-    echo(new, "new connection")
+    expect_close(new, _CLOSE_PROTOCOL_VERSION)
     print("a new connection after the reload works", flush=True)
-    close(old)
-    close(new)
+    new.close()
 
 
 def main(argv: list[str]) -> None:
-    parser = argparse.ArgumentParser(description="WebSocket echo server and reload check")
+    parser = argparse.ArgumentParser(description="WebSocket reload check of /ws/match")
     sub = parser.add_subparsers(dest="mode", required=True)
-    serve_p = sub.add_parser("serve", help="run the echo server")
-    serve_p.add_argument("port", type=int)
     reload_p = sub.add_parser("reload", help="check that a connection survives a reload")
     reload_p.add_argument("url")
     reload_p.add_argument("--wait", type=float, default=20.0, help="seconds to wait for upstream")
     reload_p.add_argument("command", nargs="+", help="reload command, after --")
     args = parser.parse_args(argv)
-    if args.mode == "serve":
-        serve(args.port)
-    else:
-        check_reload(args.url, args.command, args.wait)
+    check_reload(args.url, args.command, args.wait)
 
 
 if __name__ == "__main__":

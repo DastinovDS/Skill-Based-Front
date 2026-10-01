@@ -11,8 +11,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from sqlalchemy.orm import sessionmaker
 
-from gow_server import identity, internal, maps
-from gow_server.clock import MonotonicClock
+from gow_server import identity, internal, maps, ws
+from gow_server.clock import Clock, MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.logs import request_id_var
 from gow_server.matches import MatchManager
@@ -27,8 +27,10 @@ REQUEST_ID_HEADER = "X-Request-ID"
 _REQUEST_ID_RE = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, clock: Clock | None = None) -> FastAPI:
+    """The app; ``clock`` drives the match loops (tests pass a ``ManualClock``)."""
     settings = settings or Settings()
+    match_clock = clock or MonotonicClock()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -36,7 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = create_db_engine(settings.database_url)
         await asyncio.to_thread(upgrade_to_head, engine)
         app.state.sessions = sessionmaker(engine, expire_on_commit=False)
-        app.state.matches = MatchManager(MonotonicClock())
+        app.state.matches = MatchManager(match_clock)
         log.info(
             "server started",
             extra={"env": settings.env, "maps": [entry.id for entry in app.state.maps.all()]},
@@ -86,4 +88,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(maps.router)
     app.include_router(identity.router)
     app.include_router(internal.router)
+    app.include_router(ws.router)
     return app
