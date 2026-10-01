@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from sqlalchemy.orm import sessionmaker
 
-from gow_server import identity, internal, invites, maps, replays, ws
+from gow_server import botmatch, identity, internal, invites, maps, replays, ws
 from gow_server.clock import Clock, MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.logs import request_id_var
@@ -47,6 +47,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             replays=app.state.replays,
             reconnect_window_s=settings.reconnect_window_s,
             pause_max_s=settings.pause_max_s,
+            bot_budget_s=settings.bot_budget_s,
         )
         app.state.ruleset = load_ruleset(settings.ruleset_path)
         app.state.invites = invites.InviteBook(match_clock, settings.invite_ttl_s)
@@ -105,5 +106,6 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(replays.router)
     app.include_router(internal.router)
     app.include_router(invites.router)
+    app.include_router(botmatch.router)
     app.include_router(ws.router)
     return app
