@@ -173,10 +173,14 @@ version = "0.1.0"
 source = { editable = "apps/bots" }
 dependencies = [
     { name = "gow-sim" },
+    { name = "matplotlib" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "gow-sim", editable = "packages/sim" }]
+requires-dist = [
+    { name = "gow-sim", editable = "packages/sim" },
+    { name = "matplotlib", specifier = ">=3.10" },
+]
 
 [[package]]
 name = "gow-maps"
