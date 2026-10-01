@@ -7,6 +7,9 @@ from typing import Final
 
 from gow_bots.bots.base import Bot, BotFactory, Controller, ParamRange, choose_params
 from gow_bots.bots.basic import IdleBot, RandomLegalBot
+from gow_bots.bots.reactive import ReactiveBot
+from gow_bots.bots.rusher import RusherBot
+from gow_bots.bots.strangler import StranglerBot
 from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take
 
 __all__ = [
@@ -17,6 +20,9 @@ __all__ = [
     "IdleBot",
     "ParamRange",
     "RandomLegalBot",
+    "ReactiveBot",
+    "RusherBot",
+    "StranglerBot",
     "choose_params",
     "defender_pool",
     "prefer_planned",
@@ -26,4 +32,7 @@ __all__ = [
 BOTS: Final[dict[str, BotFactory]] = {
     IdleBot.name: IdleBot,
     RandomLegalBot.name: RandomLegalBot,
+    RusherBot.name: RusherBot,
+    StranglerBot.name: StranglerBot,
+    ReactiveBot.name: ReactiveBot,
 }
