@@ -2,6 +2,8 @@
 
 import gzip
 import json
+import zlib
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -12,23 +14,27 @@ from gow_sim.commands import (
     Forfeit,
     Merge,
     Move,
+    PlayerCommand,
     Recruit,
     SetMode,
     SetStance,
     Split,
     UpgradeRoad,
 )
-from gow_sim.match import SIM_VERSION
+from gow_sim.maps import load_map
+from gow_sim.match import HEADLESS_MATCH_KEY, SIM_VERSION, Match
 from gow_sim.replay import (
     REPLAY_SUFFIX,
+    ReplayError,
     ReplayVersionError,
+    ReplayWriter,
     decode_command,
     encode_command,
     main,
     read_replay,
     replay_run,
 )
-from gow_sim.ruleset import Stance
+from gow_sim.ruleset import Stance, load_ruleset
 from gow_sim.state import Mode
 
 TESTS = Path(__file__).resolve().parent
@@ -112,3 +118,44 @@ def test_other_sim_version_is_skipped(tmp_path: Path) -> None:
     assert main(["check", str(tmp_path)]) == 1  # nothing of the current version checked
     args = ["check", str(tmp_path), str(GOLDEN), "--rulesets", str(ARCHIVE), "--maps", str(MAPS)]
     assert main(args) == 0
+
+
+class _Ticks:
+    """A ``MatchObserver`` that remembers the ticks it saw."""
+
+    def __init__(self) -> None:
+        self.begun = False
+        self.ticks: list[int] = []
+
+    def begin(self, match: Match) -> None:
+        self.begun = True
+
+    def record(self, match: Match, commands: Sequence[PlayerCommand]) -> None:
+        self.ticks.append(match.tick)
+
+
+def test_replay_run_shows_every_tick_to_an_observer() -> None:
+    observer = _Ticks()
+    result = replay_run(REPLAYS[0], ARCHIVE, MAPS, observer=observer)
+    assert result.ok and observer.begun
+    assert observer.ticks == list(range(1, result.ticks + 1))
+
+
+def test_aborted_writer_leaves_a_log_cut_at_the_last_flushed_checkpoint(tmp_path: Path) -> None:
+    """``flush_at_checkpoints``: a log that was never closed is readable up to a checkpoint."""
+    mapdef = load_map(MAPS / "arteriya.json")
+    rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
+    match = Match(mapdef, rules, HEADLESS_MATCH_KEY)
+    writer = ReplayWriter(tmp_path / "cut.jsonl.gz", flush_at_checkpoints=True)
+    writer.begin(match)
+    for _ in range(120):
+        match.step()
+        writer.record(match, [])
+    # Not closed yet, as after a crash: the file is cut, the gzip stream has no end.
+    with pytest.raises(ReplayError):
+        read_replay(tmp_path / "cut.jsonl.gz")
+    raw = (tmp_path / "cut.jsonl.gz").read_bytes()
+    lines = zlib.decompressobj(31).decompress(raw).splitlines()
+    assert json.loads(lines[-1]) == {"tick": 100, "hash": json.loads(lines[-1])["hash"]}
+    writer.abort()
+    assert not read_replay(tmp_path / "cut.jsonl.gz").final

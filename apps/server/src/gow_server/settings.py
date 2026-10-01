@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     """Directory with the map pool: ``<id>.json`` and optional background ``<id>.bg.png``."""
     database_url: str = "sqlite:///data/gow.db"
     """SQLite only; a relative path is relative to the working directory."""
+    replays_dir: Path = Path("data/replays")
+    """Command logs and frames files of matches (AGENTS.md, section 9); the server writes only here
+    and into the database. Relative paths are relative to the working directory."""
+    rulesets_dir: Path = Path("rulesets/archive")
+    """Archive of the rulesets matches were played on (``<hash>.toml``): a replay is re-simulated
+    with the ruleset named in its header (AGENTS.md, section 4.5)."""
     guest_rate_limit: int = 10
     guest_rate_window_s: int = 3600
     """At most ``guest_rate_limit`` guests per client IP within ``guest_rate_window_s`` seconds."""
