@@ -12,6 +12,10 @@ When the second one is ready the match starts (``MatchManager.create``) and ``GE
   after creation; an invite that has started a match is kept until the same deadline, so the
   player who was ready first can still read the ``match_id``. A host has one open invite: a new
   one replaces the old one.
+- Lifecycle (SRV-09, ``gow_server.lifecycle``): an invite is a ``created`` match record; a join
+  claims both players (``waiting``, 409 if either has another active match) and starts the ready
+  timer ``ready_timeout_s``: when it runs out the invite is gone (a no-show, 404). The row of the
+  ``matches`` table is written when the second player is ready, before the match starts.
 - Invites live in memory: matches do not survive a restart either, and no table is needed.
   The endpoints are ``async def`` without awaits between the check and the change, so the
   registry needs no lock; the guest token is checked by the sync ``current_player`` dependency.
@@ -26,8 +30,9 @@ from pydantic import BaseModel, ConfigDict
 
 from gow_server.clock import Clock
 from gow_server.identity import CurrentPlayer
+from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchRecord
 from gow_server.maps import MapCatalog
-from gow_server.matches import ManagerDrainingError, MatchManager
+from gow_server.matches import ManagerDrainingError
 from gow_sim.ruleset import Ruleset
 
 CODE_BYTES: Final = 16
@@ -40,10 +45,13 @@ class Invite:
     host_nick: str
     map_id: str
     expires_at: float
+    record: MatchRecord
     guest: int | None = None
     guest_nick: str | None = None
     ready: set[int] = field(default_factory=set[int])
     match_id: str | None = None
+    starting: bool = False
+    """The row is being written and the match started (the second ``ready`` is in flight)."""
 
     def is_member(self, account_id: int) -> bool:
         return account_id in (self.host, self.guest)
@@ -58,9 +66,10 @@ class Invite:
 class InviteBook:
     """Open invites by code. Not thread-safe: use it from the event loop only."""
 
-    def __init__(self, clock: Clock, ttl_s: float) -> None:
+    def __init__(self, clock: Clock, ttl_s: float, lifecycle: MatchLifecycle) -> None:
         self.clock = clock
         self.ttl_s = ttl_s
+        self.lifecycle = lifecycle
         self._by_code: dict[str, Invite] = {}
         self._open_of_host: dict[int, str] = {}
 
@@ -73,13 +82,16 @@ class InviteBook:
         previous = self._open_of_host.pop(host, None)
         old = self._by_code.get(previous) if previous is not None else None
         if previous is not None and old is not None and old.match_id is None:
+            self.lifecycle.abort(old.record, "replaced")
             del self._by_code[previous]
+        expires_at = self.clock.now() + self.ttl_s
         invite = Invite(
             secrets.token_urlsafe(CODE_BYTES),
             host,
             host_nick,
             map_id,
-            self.clock.now() + self.ttl_s,
+            expires_at,
+            self.lifecycle.open_record(expires_at),
         )
         self._by_code[invite.code] = invite
         self._open_of_host[host] = invite.code
@@ -91,8 +103,11 @@ class InviteBook:
         return self._by_code.get(code)
 
     def _purge(self) -> None:
+        self.lifecycle.sweep()  # aborts the expired invites and the no-shows
         now = self.clock.now()
-        for code in [c for c, inv in self._by_code.items() if inv.expires_at <= now]:
+        for code in [
+            c for c, inv in self._by_code.items() if inv.expires_at <= now or inv.record.dead
+        ]:
             invite = self._by_code.pop(code)
             if self._open_of_host.get(invite.host) == code:
                 del self._open_of_host[invite.host]
@@ -147,6 +162,16 @@ def _not_found() -> HTTPException:
     return HTTPException(status.HTTP_404_NOT_FOUND, detail="invite not found or expired")
 
 
+def _busy(account_id: int, caller: int) -> HTTPException:
+    """409 of the "one active match per player" rule."""
+    detail = (
+        "you already have an active match"
+        if account_id == caller
+        else "the host is already in another match"
+    )
+    return HTTPException(status.HTTP_409_CONFLICT, detail=detail)
+
+
 def _member_invite(book: InviteBook, code: str, account_id: int) -> Invite:
     """The invite for one of its two players; 404 for everyone else (does not reveal it)."""
     invite = book.get(code)
@@ -160,6 +185,8 @@ async def create_match(
     body: CreateMatch, request: Request, response: Response, player: CurrentPlayer, book: Book
 ) -> InviteOut:
     catalog: MapCatalog = request.app.state.maps
+    if book.lifecycle.active_of(player.id) is not None:
+        raise _busy(player.id, player.id)
     if body.map_id is None:
         pool = catalog.all()
         if not pool:
@@ -192,6 +219,10 @@ async def join_match(code: str, response: Response, player: CurrentPlayer, book:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="this is your own invite")
     if invite.guest is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="invite is full")
+    try:
+        book.lifecycle.join(invite.record, invite.host, player.id)
+    except AlreadyActiveError as busy:
+        raise _busy(busy.account_id, player.id) from None
     invite.guest, invite.guest_nick = player.id, player.nick
     return _view(invite, player.id, book)
 
@@ -206,8 +237,11 @@ async def ready_match(
     if invite.guest is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="waiting for the second player")
     invite.ready.add(player.id)
-    if invite.match_id is None and invite.ready == {invite.host, invite.guest}:
-        manager: MatchManager = request.app.state.matches
+    if (
+        invite.match_id is None
+        and not invite.starting
+        and invite.ready == {invite.host, invite.guest}
+    ):
         catalog: MapCatalog = request.app.state.maps
         rules: Ruleset = request.app.state.ruleset
         entry = catalog.get(invite.map_id)
@@ -215,14 +249,22 @@ async def ready_match(
         sides = [invite.host, invite.guest]
         if secrets.randbelow(2):  # who plays which side is random
             sides.reverse()
+        invite.starting = True  # the only await below is the database; no second start meanwhile
         try:
-            runner = manager.create(
-                invite.map_id, entry.definition, rules, (sides[0], sides[1]), private=True
+            runner = await book.lifecycle.start(
+                invite.record,
+                invite.map_id,
+                entry.definition,
+                rules,
+                (sides[0], sides[1]),
+                private=True,
             )
         except ManagerDrainingError:
             invite.ready.discard(player.id)  # the caller retries
             raise HTTPException(
                 status.HTTP_503_SERVICE_UNAVAILABLE, detail="server is restarting"
             ) from None
+        finally:
+            invite.starting = False
         invite.match_id = runner.match_id
     return _view(invite, player.id, book)
