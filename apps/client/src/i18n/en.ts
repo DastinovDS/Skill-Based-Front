@@ -230,4 +230,10 @@ export const en = {
   'result.vp': 'Victory points: you {mine}, enemy {enemy}',
   'result.replay': 'Watch the replay',
   'result.menu': 'To the menu',
+  'legal.nav': 'Legal information',
+  'legal.impressum': 'Impressum',
+  'legal.privacy': 'Privacy policy',
+  'legal.game': 'Back to the game',
+  'legal.draft':
+    'Draft: placeholders like <THIS> must be replaced with the operator data and the texts reviewed by a lawyer before publishing.',
 } satisfies Messages;

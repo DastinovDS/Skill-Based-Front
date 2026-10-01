@@ -4,6 +4,8 @@ import 'pixi.js/unsafe-eval';
 import { Assets } from 'pixi.js';
 import { mount } from 'svelte';
 import RootApp from './app/RootApp.svelte';
+import LegalPage from './legal/LegalPage.svelte';
+import LegalFooter from './legal/LegalFooter.svelte';
 import DevScreen from './dev/DevScreen.svelte';
 import ReplayScreen from './replay/ReplayScreen.svelte';
 import './app.css';
@@ -24,8 +26,23 @@ const params = new URLSearchParams(window.location.search);
 const replayId = params.get('replay');
 const devScreen = import.meta.env.DEV && (params.has('scene') || params.has('dev'));
 
-export default replayId !== null
-  ? mount(ReplayScreen, { target, props: { matchId: replayId } })
-  : devScreen
-    ? mount(DevScreen, { target })
-    : mount(RootApp, { target });
+// `/impressum` and `/privacy` are the static legal pages (LEG-01); Caddy serves index.html for them.
+const legalPage =
+  window.location.pathname === '/impressum'
+    ? 'impressum'
+    : window.location.pathname === '/privacy'
+      ? 'privacy'
+      : null;
+
+// Every screen of the game carries the links to the legal pages (the pages themselves do not).
+if (legalPage === null && !devScreen) {
+  mount(LegalFooter, { target: document.body });
+}
+
+export default legalPage !== null
+  ? mount(LegalPage, { target, props: { page: legalPage } })
+  : replayId !== null
+    ? mount(ReplayScreen, { target, props: { matchId: replayId } })
+    : devScreen
+      ? mount(DevScreen, { target })
+      : mount(RootApp, { target });

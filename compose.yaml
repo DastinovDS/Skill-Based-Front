@@ -32,6 +32,12 @@ services:
       - gow-data:/data
     networks:
       - internal
+    # Log retention (LEG-01, docs/ops/legal.md): rotation by size, removed with the container.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # No `ports:`: the server is not published on the host.
     read_only: true
     tmpfs:
@@ -64,6 +70,12 @@ services:
     depends_on:
       app:
         condition: service_healthy
+    # Log retention (LEG-01, docs/ops/legal.md): rotation by size, removed with the container.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # Caddy runs as a non-root user and binds 80/443 without CAP_NET_BIND_SERVICE.
     sysctls:
       net.ipv4.ip_unprivileged_port_start: 0
