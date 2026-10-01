@@ -36,7 +36,8 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
-    # Graceful shutdown: uvicorn finishes open requests; match draining: TODO(#47), docs/ops/deploy.md.
+    # Graceful shutdown: uvicorn finishes open requests. Matches are drained before a deploy by
+    # deploy/deploy.sh (docs/ops/deploy.md); a plain `docker compose down` cuts running matches.
     stop_grace_period: 30s
 
   caddy:

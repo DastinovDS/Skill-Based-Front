@@ -10,15 +10,21 @@
 # 5. on failure: rollback to the previous checkout and images, restore the pre-deploy backup
 #    (the new version may have migrated the schema), start again, exit 1.
 #
-# Match draining (no new matches, wait for running ones) needs the match manager: TODO(#47).
-# DEPLOY_BASE_URL (default http://localhost:$HTTP_PORT; on the server https://<DOMAIN>) and
-# DEPLOY_WAIT_TIMEOUT (seconds, default 120) may be set in the environment or in .env.
+# Between 2 and 3 the running server is drained (SRV-02, #47): it starts no new matches, and the
+# deploy waits until the running ones end, at most DEPLOY_DRAIN_TIMEOUT seconds (default 900,
+# a 12-minute match plus margin); after that the remaining matches are cut by the switch.
+# A server without the drain endpoint (older than #47) is not drained. If the deploy stops
+# before the switch, draining is cancelled again.
+# DEPLOY_BASE_URL (default http://localhost:$HTTP_PORT; on the server https://<DOMAIN>),
+# DEPLOY_WAIT_TIMEOUT (seconds, default 120) and DEPLOY_DRAIN_TIMEOUT may be set in the
+# environment or in .env.
 set -euo pipefail
 
 ref="${1:-}"
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
 base="${DEPLOY_BASE_URL:-http://localhost:${HTTP_PORT:-80}}"
 wait_s="${DEPLOY_WAIT_TIMEOUT:-120}"
+drain_s="${DEPLOY_DRAIN_TIMEOUT:-900}"
 images=(app caddy)
 
 is_git() { git rev-parse --is-inside-work-tree >/dev/null 2>&1; }
@@ -45,6 +51,46 @@ done
 echo "== build"
 docker compose build
 
+# The drain endpoint (gow_server.internal) answers only on the loopback interface of the
+# container, so it is called from inside it. Exit codes: 0 drained, 3 timeout, other: no drain.
+drain_py='
+import json, sys, time, urllib.request
+url, timeout_s = "http://127.0.0.1:8000/internal/drain", float(sys.argv[1])
+def call(method):
+    req = urllib.request.Request(url, method=method)
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        return json.load(resp)
+if sys.argv[2] == "undrain":
+    call("DELETE")
+    sys.exit(0)
+status, deadline = call("POST"), time.monotonic() + timeout_s
+while status["active"] > 0:
+    if time.monotonic() > deadline:
+        print("drain timeout, matches still running:", status["active"], flush=True)
+        sys.exit(3)
+    print("waiting for matches:", status["active"], flush=True)
+    time.sleep(5)
+    status = call("GET")
+print("drained", flush=True)
+'
+drained=0
+undrain() {
+	if [ "$drained" = 1 ]; then
+		docker compose exec -T app python -c "$drain_py" 0 undrain >/dev/null 2>&1 || true
+	fi
+}
+if [ -n "$(docker compose ps -q app)" ]; then
+	echo "== drain matches (at most ${drain_s}s)"
+	trap undrain EXIT
+	rc=0
+	docker compose exec -T app python -c "$drain_py" "$drain_s" drain || rc=$?
+	case "$rc" in
+		0) drained=1 ;;
+		3) drained=1; echo "WARN: drain timeout, the running matches will be cut" >&2 ;;
+		*) echo "WARN: the running server cannot be drained (no drain endpoint?)" >&2 ;;
+	esac
+fi
+
 backup=""
 if [ -n "$(docker compose ps -q app)" ]; then
 	echo "== pre-deploy backup"
@@ -58,6 +104,7 @@ healthy() {
 }
 
 echo "== switch"
+trap - EXIT  # the new container starts undrained; the old one is replaced
 if healthy; then
 	echo "OK: deployed, $base/api/health"
 	exit 0

@@ -32,6 +32,7 @@ uv run pytest --benchmark-disable                             # один про�
 | `test_bench_project` | одна `project()` на том же состоянии | ≤ 0,3 мс |
 | `test_bench_full_headless_match` | `run_headless` двух `ExpandBot` до конца партии на `pautina` (самая большая карта MVP по рёбрам) | ≤ 8 с |
 | `apps/bots/tests/test_benchmarks.py::test_bench_decide` | `decide()` каждого бота из `gow_bots.bots.BOTS` на видах партии `random_legal` на `pautina` после 300..1500 тиков | в среднем ≤ 1 мс |
+| `apps/server/tests/test_match_load.py` | 30 матчей на `pautina` (`mvp-0`) в одном цикле событий, старты в случайные моменты, по два скриптовых клиента на матч (приказы по протоколу, проекции обоих игроков); часы замедлены в `speed_factor` раз, то есть нагрузка эталона. Отставание тика: насколько позже срока начался шаг (`MatchRunner.lag_sum`) | среднее < 10% тика, без сбросов расписания |
 
 ## Регрессия
 
@@ -61,6 +62,12 @@ uv run pytest packages/sim/tests/test_benchmarks.py --benchmark-compare --benchm
 | `project()` | ≈ 0,11 мс | ≈ 0,26 мс |
 | решение `random_legal` (BOT-01) | ≈ 0,04 мс | — |
 | полная партия headless (7200 тиков) | ≈ 1,4 с | ≈ 3,2 с |
+
+Сервер (SRV-02), машина под нагрузкой (`speed_factor` ≈ 1,1–1,5): среднее отставание тика ≈ 2% тика,
+максимум ≈ 30%. Самое дорогое в тике матча: `snapshot_msg` (валидация `View` в Pydantic, ≈ 0,64 мс
+на игрока при `speed_factor` ≈ 1,5) дороже самой `project()` (≈ 0,30 мс там же). Если все 30 матчей
+должны тикнуть в один момент (худший случай, замер на `ManualClock`), среднее отставание ≈ 46% тика
+при `speed_factor` ≈ 1,5.
 
 ## Турнир ботов (BOT-04)
 
