@@ -177,6 +177,15 @@ def test_invite_match_has_a_row_and_its_result_is_saved(live_settings: Settings)
             # SRV-07: the frames file is linked to the row created by the lifecycle
             await live.run_until(lambda: live.row(match_id)[0].replay_path is not None)
 
+            # #170: the replay link of the result screen works for an invite match
+            carol = await live.guest("carol")
+            url = f"/api/replays/{match_id}"
+            for headers in (alice, bob):
+                got = await live.http.get(url, headers=headers)
+                assert got.status_code == 200 and got.content
+            assert (await live.http.get(url, headers=carol)).status_code == 403
+            assert (await live.http.get(url)).status_code == 401
+
     asyncio.run(scenario())
 
 
@@ -201,6 +210,13 @@ def test_match_record_passes_every_state(live_settings: Settings) -> None:
                 MatchState.SAVED,
                 MatchState.CLEANED,
             ]
+            await live.run_until(lambda: live.row(match_id)[0].replay_path is not None)
+            url = f"/api/replays/{match_id}"  # #170: also for a bot match
+            assert (await live.http.get(url, headers=alice)).status_code == 200
+            assert (
+                await live.http.get(url, headers=await live.guest("mallory"))
+            ).status_code == 403
+            assert (await live.http.get(url)).status_code == 401
             row, sides = live.row(match_id)
             assert [s.bot for s in sides].count("turtle") == 1
             assert sorted(s.result or "" for s in sides) == ["loss", "win"]
