@@ -10,6 +10,10 @@ A loop more than 3 ticks behind (GC pause, suspended VM) restarts its schedule f
 time instead of catching up with a burst of steps. A paused match waits for ``resume()`` and
 then starts its schedule anew.
 
+A runner given a ``ReplayWriter`` writes the command log of its match tick by tick (SRV-07);
+``MatchManager`` hands a finished match to ``ReplayService`` for the frames file. A failing log
+(a full disk) stops the recording and never the match.
+
 The ``match_key`` of opaque ids is ``secrets.token_bytes`` and never leaves the process: it is
 not logged and not part of ``repr``.
 """
@@ -20,7 +24,7 @@ import secrets
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from gow_protocol import commands as wire
 from gow_protocol.convert import (
@@ -32,9 +36,13 @@ from gow_protocol.convert import (
 )
 from gow_protocol.messages import ServerMsg, SnapshotMsg
 from gow_server.clock import Clock
+
+if TYPE_CHECKING:
+    from gow_server.replays import ReplayService
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef
 from gow_sim.match import Match
+from gow_sim.replay import ReplayWriter
 from gow_sim.ruleset import Ruleset
 
 log = logging.getLogger("gow_server.matches")
@@ -132,6 +140,7 @@ class MatchRunner:
         players: tuple[int, int],
         clock: Clock,
         match_key: bytes | None = None,
+        replay: ReplayWriter | None = None,
     ) -> None:
         self.match_id: Final = match_id
         self.map_id: Final = map_id
@@ -139,6 +148,10 @@ class MatchRunner:
         self.clock = clock
         self.match: Final = Match(mapdef, rules, match_key or secrets.token_bytes(MATCH_KEY_BYTES))
         self.dt: Final = 1.0 / rules.tick_hz
+        self.replay = replay
+        """Writer of the command log; ``None``: not recorded, finished or the recording failed."""
+        self.replay_complete = False
+        """The command log of the finished match is whole, with its ``final`` record."""
         self.resets = 0
         """How often the loop fell more than ``MAX_BEHIND_TICKS`` behind and reset its schedule."""
         self.steps = 0
@@ -238,6 +251,7 @@ class MatchRunner:
                 if not self.finished:
                     await self.clock.sleep(start + ticks * dt - self.clock.now() - _EPS)
         finally:
+            self._close_replay()
             for box in self._outboxes.values():
                 box.close()
 
@@ -249,7 +263,9 @@ class MatchRunner:
             for q in self._inbox
         ]
         self._inbox = []
+        self._record_start()
         events = match.step(commands)
+        self._record(commands)
         outcome = match.outcome
         for player, box in self._outboxes.items():
             for result in match.results:
@@ -266,6 +282,39 @@ class MatchRunner:
                 box.put(match_end_msg(outcome, match.tick, vp))
                 box.close()
 
+    # Replay log ----------------------------------------------------------------------------
+
+    def _record_start(self) -> None:
+        if self.replay is not None and self.match.tick == 0:
+            self._replay_call(self.replay.begin, self.match)
+
+    def _record(self, commands: list[PlayerCommand]) -> None:
+        if self.replay is not None:
+            self._replay_call(self.replay.record, self.match, commands)
+
+    def _close_replay(self) -> None:
+        """Write the ``final`` record of a finished match; any other end leaves a cut log."""
+        replay, self.replay = self.replay, None
+        if replay is None:
+            return
+        try:
+            if self.finished:
+                replay.close()
+                self.replay_complete = True
+            else:
+                replay.abort()
+        except OSError:
+            log.exception("replay log not closed", extra={"match_id": self.match_id})
+
+    def _replay_call[**P](self, call: Callable[P, None], *args: P.args, **kwargs: P.kwargs) -> None:
+        try:
+            call(*args, **kwargs)
+        except OSError:
+            log.exception("replay log failed, match goes on", extra={"match_id": self.match_id})
+            replay, self.replay = self.replay, None
+            if replay is not None:
+                replay.abort()
+
 
 class ManagerDrainingError(RuntimeError):
     """The server is being drained for a deploy and starts no new matches."""
@@ -279,8 +328,14 @@ class MatchManager:
     ones are over.
     """
 
-    def __init__(self, clock: Clock, new_id: Callable[[], str] | None = None) -> None:
+    def __init__(
+        self,
+        clock: Clock,
+        new_id: Callable[[], str] | None = None,
+        replays: "ReplayService | None" = None,
+    ) -> None:
         self.clock = clock
+        self._replays = replays
         self._new_id = new_id or (lambda: secrets.token_urlsafe(12))
         self._runners: dict[str, MatchRunner] = {}
         self._tasks: dict[str, asyncio.Task[None]] = {}
@@ -294,13 +349,23 @@ class MatchManager:
         return self._runners.get(match_id)
 
     def create(
-        self, map_id: str, mapdef: MapDef, rules: Ruleset, players: tuple[int, int]
+        self,
+        map_id: str,
+        mapdef: MapDef,
+        rules: Ruleset,
+        players: tuple[int, int],
+        match_id: str | None = None,
     ) -> MatchRunner:
-        """Create a match and start its loop. Raises ``ManagerDrainingError`` while draining."""
+        """Create a match and start its loop. Raises ``ManagerDrainingError`` while draining.
+
+        ``match_id`` is ``str(matches.id)`` for a match with a database row: the replay files and
+        ``GET /api/replays/{id}`` are named by it (``gow_server.replays``).
+        """
         if self.draining:
             raise ManagerDrainingError("the server is draining for a deploy")
-        match_id = self._new_id()
-        runner = MatchRunner(match_id, map_id, mapdef, rules, players, self.clock)
+        match_id = match_id or self._new_id()
+        replay = self._replays.writer(match_id) if self._replays is not None else None
+        runner = MatchRunner(match_id, map_id, mapdef, rules, players, self.clock, replay=replay)
         self.start(runner)
         return runner
 
@@ -330,6 +395,8 @@ class MatchManager:
         elif (exc := task.exception()) is not None:
             log.error("match crashed", exc_info=exc, extra=extra)
         else:
+            if self._replays is not None and runner.replay_complete:
+                self._replays.schedule(runner.match_id)
             outcome = runner.match.outcome
             assert outcome is not None
             log.info(

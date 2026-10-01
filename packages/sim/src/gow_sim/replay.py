@@ -227,12 +227,17 @@ class ReplayWriter:
 
     ``begin(match)`` at tick 0 writes the header and the first checkpoint, ``record(match,
     commands)`` after every ``step(commands)``, ``close()`` the ``final`` record of the last tick.
-    Leaving the ``with`` block by an exception closes the file without the ``final`` record.
-    The gzip header has no name and ``mtime=0``: the same match gives the same bytes.
+    Leaving the ``with`` block by an exception closes the file without the ``final`` record
+    (``abort()`` does the same). The gzip header has no name and ``mtime=0``: the same match gives
+    the same bytes. With ``flush_at_checkpoints`` the data written so far reaches the file at
+    every checkpoint (a sync flush, which makes the gzip a little bigger): after a crash of a live
+    server the file lacks only the ticks since the last checkpoint. Its gzip stream has no end, so
+    ``read_replay`` refuses it; ``zlib.decompressobj(31)`` reads what is there.
     """
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, *, flush_at_checkpoints: bool = False) -> None:
         self.path: Final = Path(path)
+        self._flush: Final = flush_at_checkpoints
         self._raw: IO[bytes] | None = None
         self._gz: gzip.GzipFile | None = None
         self._match: Match | None = None
@@ -274,6 +279,10 @@ class ReplayWriter:
         self._gz.write(_line({"tick": match.tick, "hash": match.state_hash(), "final": True}))
         self._shut()
 
+    def abort(self) -> None:
+        """Close the file without the ``final`` record (the match did not reach its end)."""
+        self._shut()
+
     def _require(self, match: Match) -> gzip.GzipFile:
         if self._gz is None or self._match is not match:
             raise RuntimeError("record() before begin() or with another match")
@@ -282,6 +291,8 @@ class ReplayWriter:
     def _checkpoint(self, match: Match) -> None:
         assert self._gz is not None
         self._gz.write(_line({"tick": match.tick, "hash": match.state_hash()}))
+        if self._flush:
+            self._gz.flush()
 
     def _shut(self) -> None:
         if self._gz is not None:
@@ -433,12 +444,14 @@ def replay_run(
     rulesets_dir: str | Path = DEFAULT_RULESETS_DIR,
     maps_dir: str | Path = DEFAULT_MAPS_DIR,
     dump_dir: str | Path | None = None,
+    observer: MatchObserver | None = None,
 ) -> ReplayCheck:
     """Re-simulate a replay and compare every checkpoint hash; stop at the first divergence.
 
     Raises ``ReplayVersionError`` for another ``SIM_VERSION`` and ``ReplayError`` for a malformed
     file or a missing ruleset or map. With ``dump_dir``, a divergence writes the states (module
-    docstring).
+    docstring). ``observer`` sees every tick like in ``replay_match`` (the server writes the
+    frames file this way, SRV-07); it stops seeing ticks at a divergence.
     """
     path = Path(path)
     replay = read_replay(path)
@@ -457,9 +470,14 @@ def replay_run(
     for tick, cmd in replay.commands:
         by_tick.setdefault(tick, []).append(cmd)
     good: tuple[int, dict[str, object]] | None = None
+    if observer is not None:
+        observer.begin(match)
     for matched, checkpoint in enumerate(replay.checkpoints):
         while match.tick < checkpoint.tick and not match.finished:
-            match.step(by_tick.get(match.tick + 1, ()))
+            commands = by_tick.get(match.tick + 1, [])
+            match.step(commands)
+            if observer is not None:
+                observer.record(match, commands)
         data = to_canonical(match.state)
         actual = digest(data)
         if match.tick < checkpoint.tick:

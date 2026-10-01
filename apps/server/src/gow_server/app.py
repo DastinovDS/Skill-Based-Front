@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from sqlalchemy.orm import sessionmaker
 
-from gow_server import identity, internal, maps, ws
+from gow_server import identity, internal, maps, replays, ws
 from gow_server.clock import Clock, MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.logs import request_id_var
@@ -38,7 +38,10 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         engine = create_db_engine(settings.database_url)
         await asyncio.to_thread(upgrade_to_head, engine)
         app.state.sessions = sessionmaker(engine, expire_on_commit=False)
-        app.state.matches = MatchManager(match_clock)
+        app.state.replays = replays.ReplayService(
+            settings.replays_dir, settings.rulesets_dir, settings.maps_dir, app.state.sessions
+        )
+        app.state.matches = MatchManager(match_clock, replays=app.state.replays)
         log.info(
             "server started",
             extra={"env": settings.env, "maps": [entry.id for entry in app.state.maps.all()]},
@@ -47,6 +50,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             yield
         finally:
             await app.state.matches.shutdown()
+            await app.state.replays.aclose()
             engine.dispose()
             log.info("server stopped")
 
@@ -87,6 +91,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
 
     app.include_router(maps.router)
     app.include_router(identity.router)
+    app.include_router(replays.router)
     app.include_router(internal.router)
     app.include_router(ws.router)
     return app
