@@ -45,3 +45,8 @@ class Settings(BaseSettings):
     ``ws_msg_burst`` (a resend of unacknowledged commands after a reconnect); more is a flood."""
     invite_ttl_s: float = 1800.0
     """A private-match invite expires this long after creation (SRV-05: 30 minutes)."""
+    reconnect_window_s: float = 60.0
+    """A player without a connection has this long to come back, the match goes on meanwhile;
+    then the server applies a ``Forfeit`` for them, a technical defeat (DEC-05, #49)."""
+    pause_max_s: float = 60.0
+    """One pause per player in a private match, at most this long (DEC-05); none in rated ones."""

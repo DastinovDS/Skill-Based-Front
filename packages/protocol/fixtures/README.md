@@ -19,8 +19,8 @@
 
 | Каталог | Что | Декодер |
 |---|---|---|
-| `client/` | клиент → сервер: `hello`, `command` (все девять команд SIM-04, #20), `ping`, `resync` | `gow_protocol.codec.decode_client` |
-| `server/` | сервер → клиент: `welcome`, `snapshot`, `ack`, `event`, `match_end`, `error`, `pong` | `gow_protocol.codec.decode_server` |
+| `client/` | клиент → сервер: `hello`, `command` (все девять команд SIM-04, #20), `ping`, `resync`, `pause`, `resume` | `gow_protocol.codec.decode_client` |
+| `server/` | сервер → клиент: `welcome`, `snapshot`, `ack`, `event`, `match_end`, `error`, `pong`, `paused` | `gow_protocol.codec.decode_server` |
 
 ## Сценарии
 
@@ -43,6 +43,8 @@
 - `server/event.json`: пример события. Набор событий (`kind` и поля `data`) задают системы
   симуляции (SIM-06…SIM-13), фильтрацию по видимости делает PRO-03 (#46).
 - `server/match_end.json` (захват столицы), `match_end_draw.json` (ничья по таймеру), `match_end_double_defeat.json` (оба проиграли в одном тике, ничья; PRO-03, #46).
+
+- `server/paused.json`, `paused_end.json`: пауза приватного матча началась (игрок 1, 60 с) и закончилась (DEC-05, #49; SRV-04, #50).
 
 Токен в `client/hello.json` ненастоящий.
 

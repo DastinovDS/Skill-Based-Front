@@ -137,6 +137,7 @@ uv run gow-server --reload   # перезапуск при изменении к
 | `GOW_INVITE_TTL_S` | `1800` | срок жизни приглашения в приватный матч (секунды) |
 | `GOW_WS_ALLOWED_ORIGINS` | `[]` | JSON-список `Origin`, кроме собственного сайта, которым можно открывать WebSocket матча |
 | `GOW_WS_HELLO_TIMEOUT_S`, `GOW_WS_SEND_TIMEOUT_S` | `5`, `5` | ожидание `hello`; отправка дольше этого: клиент не читает, отключение |
+| `GOW_RECONNECT_WINDOW_S`, `GOW_PAUSE_MAX_S` | `60`, `60` | DEC-05: время на переподключение до технического поражения (команда `Forfeit` в журнале); максимум единственной паузы игрока в приватном матче |
 | `GOW_WS_MSG_RATE`, `GOW_WS_MSG_BURST` | `20`, `60` | token bucket сообщений одного соединения (в секунду, пачка); больше: флуд, отключение |
 
 База: SQLite, модели в `gow_server/models.py`, миграции Alembic в `gow_server/migrations/versions/`.
@@ -202,7 +203,7 @@ docker compose down               # остановить; данные оста�
 |---|---|---|
 | `SITE_ADDRESS` | `http://localhost` | адрес сайта для Caddy: `http://localhost` без TLS (локально, e2e), `https://localhost` с локальным TLS, доменное имя включает автоматический HTTPS (раздел «Caddy») |
 | `HTTP_PORT`, `HTTPS_PORT` | `80`, `443` | порты на хосте, например `HTTP_PORT=8080`, если 80 занят |
-| `GOW_ENV`, `GOW_LOG_LEVEL`, `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `prod`, `INFO`, `10`, `3600` | настройки сервера (раздел «Сервер»); `e2e` только для прогона Playwright |
+| `GOW_ENV`, `GOW_LOG_LEVEL`, `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S`, `GOW_RECONNECT_WINDOW_S`, `GOW_PAUSE_MAX_S` | `prod`, `INFO`, `10`, `3600`, `60`, `60` | настройки сервера (раздел «Сервер»); `e2e` только для прогона Playwright |
 
 В `app` попадают только переменные, перечисленные в `compose.yaml` (`Settings` запрещает неизвестные поля):
 новая настройка сервера для прода добавляется и туда, и в `.env.example`.

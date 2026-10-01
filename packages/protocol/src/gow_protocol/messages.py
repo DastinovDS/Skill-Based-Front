@@ -1,7 +1,9 @@
 """WebSocket messages of a match: ``ClientMsg`` and ``ServerMsg``, tagged unions by ``type``.
 
-Client -> server: ``hello`` (first message, with the token), ``command``, ``ping``, ``resync``.
-Server -> client: ``welcome``, ``snapshot``, ``ack``, ``event``, ``match_end``, ``error``, ``pong``.
+Client -> server: ``hello`` (first message, with the token), ``command``, ``ping``, ``resync``,
+``pause`` and ``resume`` (private matches only, DEC-05).
+Server -> client: ``welcome``, ``snapshot``, ``ack``, ``event``, ``match_end``, ``error``, ``pong``,
+``paused``.
 The connection rules are in AGENTS.md, section 5.3 (SRV-03 #48, SRV-04 #50).
 
 Any change of these models is a protocol change: bump ``PROTOCOL_VERSION`` and regenerate the
@@ -29,11 +31,15 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 2
+PROTOCOL_VERSION: Final = 3
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
 """WebSocket close code for a ``hello`` with another ``protocol_version`` (AGENTS.md, section 6)."""
+
+CLOSE_REPLACED: Final = 4009
+"""A newer connection of the same player replaced this one. Final for the client: it must not
+reconnect, or two tabs of one player would evict each other forever (SRV-04, #50)."""
 
 MAX_EVENT_FIELDS: Final = 32
 """Wire limit on the number of ``event.data`` fields."""
@@ -72,7 +78,25 @@ class ResyncMsg(WireModel):
     type: Literal["resync"] = "resync"
 
 
-type ClientMsg = Annotated[HelloMsg | CommandMsg | PingMsg | ResyncMsg, Field(discriminator="type")]
+class PauseMsg(WireModel):
+    """Pause a private match (DEC-05): one pause per player, at most ``paused.ends_in_s`` long.
+
+    Refused with ``error`` ``PAUSE_DENIED`` in a rated match, with no pause left or while paused.
+    """
+
+    type: Literal["pause"] = "pause"
+
+
+class ResumeMsg(WireModel):
+    """End a pause early. Only the player who paused may; else ``error`` ``PAUSE_DENIED``."""
+
+    type: Literal["resume"] = "resume"
+
+
+type ClientMsg = Annotated[
+    HelloMsg | CommandMsg | PingMsg | ResyncMsg | PauseMsg | ResumeMsg,
+    Field(discriminator="type"),
+]
 
 
 # Server -> client ----------------------------------------------------------------------------
@@ -200,7 +224,24 @@ class PongMsg(WireModel):
     """``id`` of the ``ping``."""
 
 
+class PausedMsg(WireModel):
+    """The pause state of the match changed (also sent after ``welcome`` while paused)."""
+
+    type: Literal["paused"] = "paused"
+    paused: bool
+    by: PlayerId | None
+    """Player who paused; ``None`` when ``paused`` is false."""
+    ends_in_s: NonNegInt | None
+    """Whole seconds until the pause ends by itself; ``None`` when ``paused`` is false."""
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.paused != (self.by is not None and self.ends_in_s is not None):
+            raise ValueError("`by` and `ends_in_s` are set exactly while paused")
+        return self
+
+
 type ServerMsg = Annotated[
-    WelcomeMsg | SnapshotMsg | AckMsg | EventMsg | MatchEndMsg | ErrorMsg | PongMsg,
+    WelcomeMsg | SnapshotMsg | AckMsg | EventMsg | MatchEndMsg | ErrorMsg | PongMsg | PausedMsg,
     Field(discriminator="type"),
 ]

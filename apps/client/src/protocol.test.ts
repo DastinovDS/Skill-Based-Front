@@ -127,6 +127,8 @@ function describeServerMsg(msg: ServerMsg): string {
       return `error ${msg.code}`;
     case 'pong':
       return `pong ${String(msg.id)}`;
+    case 'paused':
+      return `paused ${String(msg.paused)}`;
     default:
       return unreachable(msg);
   }
@@ -143,6 +145,9 @@ function describeClientMsg(msg: ClientMsg): string {
       return `ping ${String(msg.id)}`;
     case 'resync':
       return 'resync';
+    case 'pause':
+    case 'resume':
+      return msg.type;
     default:
       return unreachable(msg);
   }

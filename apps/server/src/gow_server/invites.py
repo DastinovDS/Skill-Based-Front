@@ -216,7 +216,9 @@ async def ready_match(
         if secrets.randbelow(2):  # who plays which side is random
             sides.reverse()
         try:
-            runner = manager.create(invite.map_id, entry.definition, rules, (sides[0], sides[1]))
+            runner = manager.create(
+                invite.map_id, entry.definition, rules, (sides[0], sides[1]), private=True
+            )
         except ManagerDrainingError:
             invite.ready.discard(player.id)  # the caller retries
             raise HTTPException(

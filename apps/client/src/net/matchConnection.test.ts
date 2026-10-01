@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CLOSE_PROTOCOL_VERSION, PROTOCOL_VERSION, type ServerMsg } from '../protocol.gen.ts';
+import {
+  CLOSE_PROTOCOL_VERSION,
+  CLOSE_REPLACED,
+  PROTOCOL_VERSION,
+  type ServerMsg,
+} from '../protocol.gen.ts';
 import { createFakeServer } from './fakeServer.ts';
 import {
   backoffDelay,
@@ -287,6 +292,17 @@ describe('reconnect', () => {
     t.server.last().accept();
     t.server.last().drop(CLOSE_PROTOCOL_VERSION);
     expect(t.conn.status).toBe('version_mismatch');
+    vi.advanceTimersByTime(60_000);
+    expect(t.server.sockets.length).toBe(1);
+  });
+
+  it('does not reconnect on close code 4009: a second tab must not start a ping-pong', () => {
+    const t = setup();
+    const socket = ready(t);
+    t.conn.send(move);
+    socket.drop(CLOSE_REPLACED);
+    expect(t.conn.status).toBe('replaced');
+    expect(t.conn.pendingSeqs).toEqual([]);
     vi.advanceTimersByTime(60_000);
     expect(t.server.sockets.length).toBe(1);
   });

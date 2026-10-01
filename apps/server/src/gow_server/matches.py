@@ -10,6 +10,13 @@ A loop more than 3 ticks behind (GC pause, suspended VM) restarts its schedule f
 time instead of catching up with a burst of steps. A paused match waits for ``resume()`` and
 then starts its schedule anew.
 
+Disconnects (DEC-05, #49, SRV-04): a player without a connection has ``reconnect_window_s`` to
+come back (the match goes on meanwhile, also before the first connection). When the window runs
+out the runner queues a ``Forfeit`` command for that player like any other command, so the
+technical defeat is in the command log and the replay stays reproducible; ``match_end`` then says
+``disconnect``. Rated matches have no pauses; in a ``private`` one each player may pause once, for
+at most ``pause_max_s`` (``request_pause``), and ``paused`` messages tell both players.
+
 A runner given a ``ReplayWriter`` writes the command log of its match tick by tick (SRV-07);
 ``MatchManager`` hands a finished match to ``ReplayService`` for the frames file. A failing log
 (a full disk) stops the recording and never the match.
@@ -20,6 +27,7 @@ not logged and not part of ``repr``.
 
 import asyncio
 import logging
+import math
 import secrets
 from collections import deque
 from collections.abc import Callable
@@ -34,7 +42,7 @@ from gow_protocol.convert import (
     match_end_msg,
     snapshot_msg,
 )
-from gow_protocol.messages import ServerMsg, SnapshotMsg
+from gow_protocol.messages import PausedMsg, ServerMsg, SnapshotMsg
 from gow_server.clock import Clock
 
 if TYPE_CHECKING:
@@ -54,6 +62,9 @@ OUTBOX_LIMIT: Final = 4096
 """Reliable messages one player may have unsent before its connection is dropped."""
 
 MATCH_KEY_BYTES: Final = 32
+
+DEFAULT_WINDOW_S: Final = 60.0
+"""DEC-05 default of the reconnect window and of a pause; the server settings override it."""
 
 _EPS: Final = 1e-9
 """Float slack of the schedule: ten steps of 0.1 s are due at exactly 1.0 s."""
@@ -141,6 +152,10 @@ class MatchRunner:
         clock: Clock,
         match_key: bytes | None = None,
         replay: ReplayWriter | None = None,
+        *,
+        private: bool = False,
+        reconnect_window_s: float = DEFAULT_WINDOW_S,
+        pause_max_s: float = DEFAULT_WINDOW_S,
     ) -> None:
         self.match_id: Final = match_id
         self.map_id: Final = map_id
@@ -163,6 +178,17 @@ class MatchRunner:
         self._outboxes: dict[int, Outbox] = {}
         self._resumed = asyncio.Event()
         self._resumed.set()
+        self.private: Final = private
+        self.reconnect_window_s: Final = reconnect_window_s
+        self.pause_max_s: Final = pause_max_s
+        self._stopped = False
+        self._forfeit_timers: dict[int, asyncio.Task[None]] = {}
+        self._technical_defeats: set[int] = set()
+        """Players whose ``Forfeit`` was queued by the server after the reconnect window."""
+        self._pauses_used: set[int] = set()
+        self._paused_by: int | None = None
+        self._pause_ends = 0.0
+        self._pause_timer: asyncio.Task[None] | None = None
 
     def __repr__(self) -> str:
         return f"MatchRunner({self.match_id!r}, map={self.map_id!r}, tick={self.match.tick})"
@@ -184,8 +210,11 @@ class MatchRunner:
             old.close()
         box = outbox or Outbox()
         self._outboxes[player] = box
+        self._cancel_forfeit_timer(player)
         if self.finished:
             box.close()
+        elif self.paused:
+            box.put(self._paused_msg())
         return box
 
     def detach(self, player: int, outbox: Outbox) -> None:
@@ -193,6 +222,7 @@ class MatchRunner:
         if self._outboxes.get(player) is outbox:
             del self._outboxes[player]
             outbox.close()
+            self._start_forfeit_timer(player)
 
     def last_seq(self, player: int) -> int:
         """Highest ``seq`` of ``player`` accepted so far (``welcome.last_seq``)."""
@@ -214,6 +244,37 @@ class MatchRunner:
         self._inbox.append(_Queued(player, seq, cmd))
         return True
 
+    # Disconnects ---------------------------------------------------------------------------
+
+    def connected(self, player: int) -> bool:
+        return player in self._outboxes
+
+    def _start_forfeit_timer(self, player: int) -> None:
+        if self.finished or self._stopped or player in self._forfeit_timers:
+            return
+        self._forfeit_timers[player] = asyncio.create_task(
+            self._forfeit_after_window(player), name=f"forfeit-{self.match_id}-{player}"
+        )
+
+    def _cancel_forfeit_timer(self, player: int) -> None:
+        timer = self._forfeit_timers.pop(player, None)
+        if timer is not None:
+            timer.cancel()
+
+    async def _forfeit_after_window(self, player: int) -> None:
+        await self.clock.sleep(self.reconnect_window_s)
+        del self._forfeit_timers[player]  # no await below: a reconnect cannot interleave
+        self.technical_defeat(player)
+
+    def technical_defeat(self, player: int) -> None:
+        """Queue a ``Forfeit`` for ``player`` (reconnect window over); it ends a pause."""
+        if self.finished:
+            return
+        log.info("technical defeat", extra={"match_id": self.match_id, "player": player})
+        self._technical_defeats.add(player)
+        self.submit(player, self._last_seq[player] + 1, wire.ForfeitCmd())
+        self.resume()  # the Forfeit is applied by the next tick
+
     # Pause ---------------------------------------------------------------------------------
 
     @property
@@ -224,7 +285,54 @@ class MatchRunner:
         self._resumed.clear()
 
     def resume(self) -> None:
+        """End a pause (also one of a player): the schedule starts anew."""
+        if self._paused_by is not None:
+            self._end_pause()
         self._resumed.set()
+
+    def request_pause(self, player: int) -> bool:
+        """A player's pause (DEC-05). ``False``: rated match, pause already used, or paused now."""
+        if not self.private or self.finished or self.paused or player in self._pauses_used:
+            return False
+        self._pauses_used.add(player)
+        self._paused_by = player
+        self._pause_ends = self.clock.now() + self.pause_max_s
+        self._pause_timer = asyncio.create_task(
+            self._pause_expires(), name=f"pause-{self.match_id}"
+        )
+        self.pause()
+        self._broadcast(self._paused_msg())
+        return True
+
+    def request_resume(self, player: int) -> bool:
+        """End the pause early; only the player who paused may. ``False``: not their pause."""
+        if self._paused_by != player:
+            return False
+        self.resume()
+        return True
+
+    async def _pause_expires(self) -> None:
+        await self.clock.sleep(self.pause_max_s)
+        self._pause_timer = None
+        self.resume()
+
+    def _end_pause(self) -> None:
+        timer, self._pause_timer = self._pause_timer, None
+        if timer is not None:
+            timer.cancel()
+        self._paused_by = None
+        self._resumed.set()
+        self._broadcast(self._paused_msg())
+
+    def _paused_msg(self) -> PausedMsg:
+        if self._paused_by is None:
+            return PausedMsg(paused=False, by=None, ends_in_s=None)
+        left = max(self._pause_ends - self.clock.now(), 0.0)
+        return PausedMsg(paused=True, by=self._paused_by, ends_in_s=math.ceil(left))
+
+    def _broadcast(self, msg: ServerMsg) -> None:
+        for box in self._outboxes.values():
+            box.put(msg)
 
     # Tick loop -----------------------------------------------------------------------------
 
@@ -232,6 +340,9 @@ class MatchRunner:
         """Step the match at ``tick_hz`` until it ends (AGENTS.md, section 5.2)."""
         dt = self.dt
         start, ticks = self.clock.now(), 0  # the k-th tick is due at start + k * dt
+        for player in PLAYERS:  # nobody connected yet: the window runs from the start
+            if player not in self._outboxes:
+                self._start_forfeit_timer(player)
         try:
             while not self.finished:
                 if self.paused:
@@ -251,6 +362,10 @@ class MatchRunner:
                 if not self.finished:
                     await self.clock.sleep(start + ticks * dt - self.clock.now() - _EPS)
         finally:
+            self._stopped = True
+            for timer in (*self._forfeit_timers.values(), self._pause_timer):
+                if timer is not None:
+                    timer.cancel()
             self._close_replay()
             for box in self._outboxes.values():
                 box.close()
@@ -267,6 +382,9 @@ class MatchRunner:
         events = match.step(commands)
         self._record(commands)
         outcome = match.outcome
+        disconnect = outcome is not None and (
+            outcome.winner is not None and 1 - outcome.winner in self._technical_defeats
+        )
         for player, box in self._outboxes.items():
             for result in match.results:
                 if result.player == player:
@@ -279,7 +397,7 @@ class MatchRunner:
             else:  # the final view goes before match_end, then the connection is done
                 box.put(snapshot)
                 vp = [match.state.players[p].vp for p in PLAYERS]
-                box.put(match_end_msg(outcome, match.tick, vp))
+                box.put(match_end_msg(outcome, match.tick, vp, disconnect=disconnect))
                 box.close()
 
     # Replay log ----------------------------------------------------------------------------
@@ -333,8 +451,13 @@ class MatchManager:
         clock: Clock,
         new_id: Callable[[], str] | None = None,
         replays: "ReplayService | None" = None,
+        *,
+        reconnect_window_s: float = DEFAULT_WINDOW_S,
+        pause_max_s: float = DEFAULT_WINDOW_S,
     ) -> None:
         self.clock = clock
+        self._reconnect_window_s = reconnect_window_s
+        self._pause_max_s = pause_max_s
         self._replays = replays
         self._new_id = new_id or (lambda: secrets.token_urlsafe(12))
         self._runners: dict[str, MatchRunner] = {}
@@ -355,17 +478,31 @@ class MatchManager:
         rules: Ruleset,
         players: tuple[int, int],
         match_id: str | None = None,
+        *,
+        private: bool = False,
     ) -> MatchRunner:
         """Create a match and start its loop. Raises ``ManagerDrainingError`` while draining.
 
         ``match_id`` is ``str(matches.id)`` for a match with a database row: the replay files and
-        ``GET /api/replays/{id}`` are named by it (``gow_server.replays``).
+        ``GET /api/replays/{id}`` are named by it (``gow_server.replays``). ``private``: lobby,
+        invite and bot matches, where each player may pause once (DEC-05); queue matches are rated.
         """
         if self.draining:
             raise ManagerDrainingError("the server is draining for a deploy")
         match_id = match_id or self._new_id()
         replay = self._replays.writer(match_id) if self._replays is not None else None
-        runner = MatchRunner(match_id, map_id, mapdef, rules, players, self.clock, replay=replay)
+        runner = MatchRunner(
+            match_id,
+            map_id,
+            mapdef,
+            rules,
+            players,
+            self.clock,
+            replay=replay,
+            private=private,
+            reconnect_window_s=self._reconnect_window_s,
+            pause_max_s=self._pause_max_s,
+        )
         self.start(runner)
         return runner
 
