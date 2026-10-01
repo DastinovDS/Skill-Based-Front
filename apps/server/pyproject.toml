@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.20.0",
     "fastapi>=0.142.2",
+    "gow-bots",
     "gow-protocol",
     "gow-sim",
     "pydantic-settings>=2.15.0",
@@ -18,6 +19,7 @@ dependencies = [
 gow-server = "gow_server.cli:main"
 
 [tool.uv.sources]
+gow-bots = { workspace = true }
 gow-protocol = { workspace = true }
 gow-sim = { workspace = true }
 

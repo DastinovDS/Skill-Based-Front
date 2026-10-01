@@ -50,3 +50,5 @@ class Settings(BaseSettings):
     then the server applies a ``Forfeit`` for them, a technical defeat (DEC-05, #49)."""
     pause_max_s: float = 60.0
     """One pause per player in a private match, at most this long (DEC-05); none in rated ones."""
+    bot_budget_s: float = 0.001
+    """A bot decision longer than this makes the bot skip its next call (SRV-06, AGENTS.md, 8)."""

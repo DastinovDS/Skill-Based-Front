@@ -17,6 +17,13 @@ technical defeat is in the command log and the replay stays reproducible; ``matc
 ``disconnect``. Rated matches have no pauses; in a ``private`` one each player may pause once, for
 at most ``pause_max_s`` (``request_pause``), and ``paused`` messages tell both players.
 
+A match against a bot (SRV-06, #53): one slot is a ``BotSeat``. Its controller lives in the
+server process and decides every ``BOT_DECIDE_EVERY`` ticks inside ``step`` on the same
+``PlayerView`` (``Match.view``) a human gets. Its commands are resolved and applied like the
+humans' ones and land in the command log. A decision longer than ``bot_budget_s`` (1 ms) is
+kept, but the next call is skipped and counted (``bot_overruns``). The bot has no connection,
+so no reconnect window runs for it; its slot holds ``BOT_ACCOUNT``, which no account has.
+
 A runner given a ``ReplayWriter`` writes the command log of its match tick by tick (SRV-07);
 ``MatchManager`` hands a finished match to ``ReplayService`` for the frames file. A failing log
 (a full disk) stops the recording and never the match.
@@ -29,11 +36,13 @@ import asyncio
 import logging
 import math
 import secrets
+import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from gow_bots.bots import Controller
 from gow_protocol import commands as wire
 from gow_protocol.convert import (
     ack_msg,
@@ -65,6 +74,15 @@ MATCH_KEY_BYTES: Final = 32
 
 DEFAULT_WINDOW_S: Final = 60.0
 """DEC-05 default of the reconnect window and of a pause; the server settings override it."""
+
+BOT_ACCOUNT: Final = 0
+"""Account id in ``players`` of the slot a bot plays: account ids start at 1."""
+
+BOT_DECIDE_EVERY: Final = 5
+"""A bot decides every this many ticks (AGENTS.md, section 8)."""
+
+BOT_BUDGET_S: Final = 0.001
+"""Time a bot decision should take; a longer one makes the bot skip its next call."""
 
 _EPS: Final = 1e-9
 """Float slack of the schedule: ten steps of 0.1 s are due at exactly 1.0 s."""
@@ -133,6 +151,14 @@ class Outbox:
 
 
 @dataclass(frozen=True, slots=True)
+class BotSeat:
+    """The slot a bot plays and its controller (already made for the map, ruleset and seed)."""
+
+    slot: int
+    controller: Controller
+
+
+@dataclass(frozen=True, slots=True)
 class _Queued:
     player: int
     seq: int
@@ -156,6 +182,8 @@ class MatchRunner:
         private: bool = False,
         reconnect_window_s: float = DEFAULT_WINDOW_S,
         pause_max_s: float = DEFAULT_WINDOW_S,
+        bot: BotSeat | None = None,
+        bot_budget_s: float = BOT_BUDGET_S,
     ) -> None:
         self.match_id: Final = match_id
         self.map_id: Final = map_id
@@ -173,6 +201,14 @@ class MatchRunner:
         self.lag_sum = 0.0
         self.lag_max = 0.0
         """Tick lag in seconds: how late each step started after it was due (AGENTS.md, 12)."""
+        self.bot: Final = bot
+        self.bot_budget_s: Final = bot_budget_s
+        self.bot_decisions = 0
+        self.bot_commands = 0
+        self.bot_overruns = 0
+        """Decisions slower than ``bot_budget_s``; each made the bot skip its next call."""
+        self.bot_skipped = 0
+        self._bot_skip_next = False
         self._inbox: list[_Queued] = []
         self._last_seq: dict[int, int] = dict.fromkeys(PLAYERS, 0)
         self._outboxes: dict[int, Outbox] = {}
@@ -251,6 +287,8 @@ class MatchRunner:
 
     def _start_forfeit_timer(self, player: int) -> None:
         if self.finished or self._stopped or player in self._forfeit_timers:
+            return
+        if self.bot is not None and player == self.bot.slot:
             return
         self._forfeit_timers[player] = asyncio.create_task(
             self._forfeit_after_window(player), name=f"forfeit-{self.match_id}-{player}"
@@ -377,6 +415,7 @@ class MatchRunner:
             PlayerCommand(q.player, q.seq, match.resolve(q.player, command_from_wire(q.cmd)))
             for q in self._inbox
         ]
+        commands.extend(self._bot_commands())
         self._inbox = []
         self._record_start()
         events = match.step(commands)
@@ -399,6 +438,35 @@ class MatchRunner:
                 vp = [match.state.players[p].vp for p in PLAYERS]
                 box.put(match_end_msg(outcome, match.tick, vp, disconnect=disconnect))
                 box.close()
+
+    def _bot_commands(self) -> list[PlayerCommand]:
+        """Commands of the bot for this tick (it decides every ``BOT_DECIDE_EVERY`` ticks)."""
+        seat = self.bot
+        match = self.match
+        if seat is None or match.tick % BOT_DECIDE_EVERY:
+            return []
+        if self._bot_skip_next:
+            self._bot_skip_next = False
+            self.bot_skipped += 1
+            return []
+        started = time.perf_counter()
+        try:
+            decided = seat.controller.decide(match.view(seat.slot), match.tick)
+        except Exception:  # a broken bot must not end the human's match
+            log.exception("bot failed", extra={"match_id": self.match_id, "tick": match.tick})
+            return []
+        if time.perf_counter() - started > self.bot_budget_s:
+            self.bot_overruns += 1
+            self._bot_skip_next = True
+        self.bot_decisions += 1
+        out: list[PlayerCommand] = []
+        for cmd in decided:
+            self._last_seq[seat.slot] += 1
+            out.append(
+                PlayerCommand(seat.slot, self._last_seq[seat.slot], match.resolve(seat.slot, cmd))
+            )
+        self.bot_commands += len(out)
+        return out
 
     # Replay log ----------------------------------------------------------------------------
 
@@ -454,8 +522,10 @@ class MatchManager:
         *,
         reconnect_window_s: float = DEFAULT_WINDOW_S,
         pause_max_s: float = DEFAULT_WINDOW_S,
+        bot_budget_s: float = BOT_BUDGET_S,
     ) -> None:
         self.clock = clock
+        self._bot_budget_s = bot_budget_s
         self._reconnect_window_s = reconnect_window_s
         self._pause_max_s = pause_max_s
         self._replays = replays
@@ -471,6 +541,13 @@ class MatchManager:
     def get(self, match_id: str) -> MatchRunner | None:
         return self._runners.get(match_id)
 
+    def running_bot_match_of(self, account_id: int) -> MatchRunner | None:
+        """The running match of ``account_id`` against a bot, if any."""
+        for runner in self._runners.values():
+            if runner.bot is not None and account_id in runner.players:
+                return runner
+        return None
+
     def create(
         self,
         map_id: str,
@@ -480,12 +557,14 @@ class MatchManager:
         match_id: str | None = None,
         *,
         private: bool = False,
+        bot: BotSeat | None = None,
     ) -> MatchRunner:
         """Create a match and start its loop. Raises ``ManagerDrainingError`` while draining.
 
         ``match_id`` is ``str(matches.id)`` for a match with a database row: the replay files and
         ``GET /api/replays/{id}`` are named by it (``gow_server.replays``). ``private``: lobby,
         invite and bot matches, where each player may pause once (DEC-05); queue matches are rated.
+        ``bot``: the slot a bot plays (SRV-06); that entry of ``players`` is ``BOT_ACCOUNT``.
         """
         if self.draining:
             raise ManagerDrainingError("the server is draining for a deploy")
@@ -502,6 +581,8 @@ class MatchManager:
             private=private,
             reconnect_window_s=self._reconnect_window_s,
             pause_max_s=self._pause_max_s,
+            bot=bot,
+            bot_budget_s=self._bot_budget_s,
         )
         self.start(runner)
         return runner
@@ -527,6 +608,12 @@ class MatchManager:
             "lag_max_ms": round(1000 * runner.lag_max, 2),
             "resets": runner.resets,
         }
+        if runner.bot is not None:
+            extra |= {
+                "bot_decisions": runner.bot_decisions,
+                "bot_overruns": runner.bot_overruns,
+                "bot_skipped": runner.bot_skipped,
+            }
         if task.cancelled():
             log.info("match cancelled", extra=extra)
         elif (exc := task.exception()) is not None:
