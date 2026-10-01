@@ -1,0 +1,18 @@
+# Alerts of the server to a webhook (OPS-04, #83): docs/ops/deploy.md, section "Наблюдаемость". Install:
+#   sudo cp deploy/systemd/gow-alerts.service /etc/systemd/system/ && sudo systemctl enable --now gow-alerts
+# Needs ALERT_WEBHOOK_URL in /home/gow/skill-based-front/.env.
+[Unit]
+Description=Skill-Based Front: forward server alerts to a webhook
+Requires=docker.service
+After=docker.service
+
+[Service]
+User=gow
+WorkingDirectory=/home/gow/skill-based-front
+ExecStart=/home/gow/skill-based-front/deploy/alert-forward.sh
+# The log stream ends when the app container is recreated (a deploy): start following again.
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

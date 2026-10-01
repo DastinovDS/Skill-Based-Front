@@ -26,6 +26,7 @@ services:
       GOW_RECONNECT_WINDOW_S: ${GOW_RECONNECT_WINDOW_S:-60}
       GOW_PAUSE_MAX_S: ${GOW_PAUSE_MAX_S:-60}
       GOW_READY_TIMEOUT_S: ${GOW_READY_TIMEOUT_S:-120}
+      GOW_MONITOR_INTERVAL_S: ${GOW_MONITOR_INTERVAL_S:-30}
       # app is reachable only through the internal network, i.e. only from Caddy, and Caddy
       # replaces a client's X-Forwarded-For with the real client address.
       GOW_FORWARDED_ALLOW_IPS: "*"

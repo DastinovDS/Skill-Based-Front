@@ -104,6 +104,7 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 | `deploy/check-ws-reload.sh` | WebSocket матча через Caddy переживает `caddy reload` (настоящий `/ws/match`, ответ 4001 на `hello` старой версии) | OPS-02 |
 | `deploy/deploy.sh [ref]` | деплой на сервере: сборка, осушение матчей (`DEPLOY_DRAIN_TIMEOUT`), бэкап `predeploy`, запуск по healthcheck, откат с восстановлением бэкапа при сбое (`docs/ops/deploy.md`) | OPS-03 |
 | `deploy/backup.sh [label]`, `deploy/restore.sh <archive>` | онлайн-бэкап тома `gow-data` (`VACUUM INTO` + реплеи) и восстановление | OPS-03 |
+| `deploy/alert-forward.sh` | пересылка алертов сервера (`match_crashed`, `tick_lag`) из лога контейнера в вебхук `ALERT_WEBHOOK_URL`; метрики: `GET /internal/metrics` внутри контейнера (`docs/ops/deploy.md`, «Наблюдаемость») | OPS-04 |
 | `deploy/deploy-test.sh` | локальная проверка деплоя, отката сломанного релиза, бэкапа и восстановления в чистый том | OPS-03 |
 
 Если команда из этой таблицы не работает после своего issue — это баг: почини её или обнови таблицу в том же PR.

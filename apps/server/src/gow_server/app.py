@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from sqlalchemy.orm import sessionmaker
 
-from gow_server import botmatch, identity, internal, invites, maps, replays, ws
+from gow_server import alerts, botmatch, identity, internal, invites, maps, replays, ws
 from gow_server.clock import Clock, MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.lifecycle import MatchLifecycle, abort_orphans, archive_rulesets
@@ -69,6 +69,9 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         app.state.invites = invites.InviteBook(
             match_clock, settings.invite_ttl_s, app.state.lifecycle
         )
+        monitor = asyncio.create_task(
+            alerts.monitor(app.state.matches, settings.monitor_interval_s), name="monitor"
+        )
         log.info(
             "server started",
             extra={"env": settings.env, "maps": [entry.id for entry in app.state.maps.all()]},
@@ -76,6 +79,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         try:
             yield
         finally:
+            monitor.cancel()
             await app.state.matches.shutdown()
             await app.state.lifecycle.aclose()
             await app.state.replays.aclose()

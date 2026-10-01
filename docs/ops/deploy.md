@@ -121,5 +121,70 @@ deploy/restore.sh /var/backups/skill-based-front/gow-<...>.tar.gz
 - [ ] Первый деплой, сертификат Let's Encrypt (Caddy получает сам), `check-caddy.sh` по `https://<DOMAIN>`.
 - [ ] Таймер ночного бэкапа и копия вне сервера.
 - [ ] Восстановление на чистой машине из настоящего ночного бэкапа.
-- [ ] Внешняя проверка доступности `https://<DOMAIN>/api/health` (OPS-04, #83).
-- [ ] Осушение матчей в `deploy.sh` после SRV-02 (#47).
+- [ ] Внешняя проверка доступности `https://<DOMAIN>/api/health` (раздел 7).
+- [ ] Вебхук для алертов, `ALERT_WEBHOOK_URL` в `.env`, служба `gow-alerts` (раздел 7).
+- [ ] Решение владельца: сбор ошибок внешним сервисом (Sentry и аналоги), раздел 7.
+
+## 7. Наблюдаемость (OPS-04, #83)
+
+### Логи
+
+Сервер пишет JSON-строки в stderr контейнера `app` (поля `ts`, `level`, `logger`, `msg`, `request_id`, поля события).
+Журнал запросов без query string, токены и коды приглашений в логи не попадают (тесты в `apps/server/tests`).
+Смотреть: `docker compose logs -f app`; матч целиком: `docker compose logs app | grep '"match_id": "<id>"'`.
+Ротацию логов Docker включает раздел 1. Исключение в матче пишется с traceback и `match_id`
+(`"msg": "match crashed"`), остальные матчи идут дальше; исключения HTTP-обработчиков пишет uvicorn (`uvicorn.error`) в том же JSON.
+
+### Метрики
+
+`GET /internal/metrics` (формат Prometheus). Эндпоинт отвечает только на loopback, как `/internal/drain`; Caddy проксирует
+лишь `/api/*` и `/ws/*`, и `deploy/check-caddy.sh` проверяет, что метрики снаружи недоступны. Новых зависимостей нет
+(`apps/server/src/gow_server/metrics.py`). Снять вручную:
+
+```sh
+docker compose exec app python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:8000/internal/metrics').read().decode())"
+```
+
+| Метрика | Что это |
+|---|---|
+| `gow_matches_active` | матчей идёт сейчас |
+| `gow_matches_started_total`, `_finished_total`, `_crashed_total` | счётчики матчей |
+| `gow_tick_lag_seconds` (histogram) | насколько позже срока начался тик; порог алерта 10% периода тика = 10 мс при 10 Гц |
+| `gow_step_seconds` (histogram) | длительность одного тика; p99: `histogram_quantile(0.99, rate(gow_step_seconds_bucket[5m]))` |
+| `gow_bot_overruns_total`, `gow_bot_skipped_total` | решения бота дольше бюджета и пропущенные из-за них вызовы (за матч то же пишется в лог `match finished`) |
+| `gow_ws_connections` | открытых WebSocket-соединений матчей |
+| `gow_outbox_backlog_max` | самая длинная неотправленная очередь соединения (клиент не читает) |
+
+Размер очереди матчмейкинга появится вместе с самой очередью (MM-01, #77): метрика `gow_queue_size`.
+Prometheus внутрь контейнера не достаёт (эндпоинт loopback). Для сбора рядом с приложением нужен небольшой сборщик в контейнере или
+одноразовый опрос по `cron`; пока достаточно ручного снятия и логов. [решение владельца]
+
+### Алерты
+
+Сервер пишет алерт строкой ERROR логгера `gow_server.alerts` с полем `alert`:
+
+- `match_crashed`: матч упал с исключением (рядом запись `match crashed` с traceback и тем же `match_id`);
+- `tick_lag`: среднее отставание тиков матча за окно `GOW_MONITOR_INTERVAL_S` больше 10% периода тика или цикл сбросил расписание.
+
+Один и тот же алерт для одного матча не чаще раза в 5 минут. Контейнер `app` не имеет выхода наружу (`internal`-сеть),
+поэтому доставляет алерты хостовый `deploy/alert-forward.sh`: читает лог контейнера и шлёт каждую строку алерта POST-ом
+(`application/json`, тело: запись лога) на `ALERT_WEBHOOK_URL`. Адрес вебхука секретный (в `.env`, в curl передаётся через stdin).
+
+```sh
+echo 'ALERT_WEBHOOK_URL=https://<WEBHOOK_HOST>/<TOKEN>' >> .env
+sudo cp deploy/systemd/gow-alerts.service /etc/systemd/system/ && sudo systemctl enable --now gow-alerts
+```
+
+Проверка без сервера: `echo '{"alert": "test", "msg": "probe"}' | deploy/alert-forward.sh -`.
+Формат тела: для Slack/Telegram и т.п. нужен небольшой переходник на стороне получателя (ntfy, n8n, Pipedream).
+
+### Ошибки и внешние сервисы [решение владельца]
+
+Сбор ошибок сделан по логам (выше). Внешний SaaS (Sentry, GlitchTip, Bugsnag) без решения владельца не подключён:
+он получит данные игроков и требует dependency в сервере и клиенте (`@sentry/browser` ещё и ослабляет CSP: `connect-src`).
+Самохостинг GlitchTip совместим с Sentry SDK. Ошибки клиента пока видны только в консоли браузера.
+
+### Внешняя проверка доступности [вручную]
+
+Нужна снаружи VPS (иначе падение самого VPS не заметить): UptimeRobot, Better Stack или Healthchecks.io по
+`https://<DOMAIN>/api/health` (ожидается 200 и `{"status":"ok"}`), интервал 1 минута, оповещение владельцу.

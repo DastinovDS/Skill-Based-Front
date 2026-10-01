@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     bot_budget_s: float = 0.001
     """A bot decision longer than this makes the bot skip its next call (SRV-06, AGENTS.md, 8)."""
 
+    monitor_interval_s: float = 30.0
+    """How often the tick lag of running matches is checked against the 10 % alert (OPS-04)."""
+
     @model_validator(mode="after")
     def _ruleset_allowed(self) -> "Settings":
         if self.env == "prod" and self.ruleset_path.stem in DEV_ONLY_RULESETS:
