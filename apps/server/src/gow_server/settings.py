@@ -24,3 +24,14 @@ class Settings(BaseSettings):
     guest_rate_limit: int = 10
     guest_rate_window_s: int = 3600
     """At most ``guest_rate_limit`` guests per client IP within ``guest_rate_window_s`` seconds."""
+    ws_allowed_origins: tuple[str, ...] = ()
+    """Origins allowed to open the match WebSocket besides the site's own one (the ``Host`` it was
+    reached at, i.e. the page behind Caddy). JSON in the environment: ``'["http://localhost:5173"]'``."""
+    ws_hello_timeout_s: float = 5.0
+    """The first message, ``hello``, must come within this time (AGENTS.md, section 5.3)."""
+    ws_send_timeout_s: float = 5.0
+    """A send that takes longer means the client does not read: it is disconnected."""
+    ws_msg_rate: float = 20.0
+    ws_msg_burst: int = 60
+    """Token bucket of one connection's messages: ``ws_msg_rate`` per second, bursts up to
+    ``ws_msg_burst`` (a resend of unacknowledged commands after a reconnect); more is a flood."""

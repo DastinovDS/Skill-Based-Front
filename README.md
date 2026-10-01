@@ -134,6 +134,9 @@ uv run gow-server --reload   # перезапуск при изменении к
 | `GOW_MAPS_DIR` | `maps` | пул карт: `<id>.json` и необязательный фон `<id>.bg.png` |
 | `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | база SQLite (WAL); путь относительно рабочего каталога |
 | `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `10`, `3600` | не больше N новых гостей с одного IP за окно в секундах |
+| `GOW_WS_ALLOWED_ORIGINS` | `[]` | JSON-список `Origin`, кроме собственного сайта, которым можно открывать WebSocket матча |
+| `GOW_WS_HELLO_TIMEOUT_S`, `GOW_WS_SEND_TIMEOUT_S` | `5`, `5` | ожидание `hello`; отправка дольше этого: клиент не читает, отключение |
+| `GOW_WS_MSG_RATE`, `GOW_WS_MSG_BURST` | `20`, `60` | token bucket сообщений одного соединения (в секунду, пачка); больше: флуд, отключение |
 
 База: SQLite, модели в `gow_server/models.py`, миграции Alembic в `gow_server/migrations/versions/`.
 Сервер применяет миграции при старте; вручную: `uv run alembic -c apps/server/alembic.ini upgrade head`.
@@ -142,6 +145,12 @@ uv run gow-server --reload   # перезапуск при изменении к
 
 HTTP API: `GET /api/health`, `GET /api/maps` (список), `GET /api/maps/{id}` (файл карты),
 `GET /api/maps/{id}/background.png` (фон, если есть). Схема: `/docs` на запущенном сервере.
+
+WebSocket матча: `/ws/match/{id}` (`gow_server/ws.py`, AGENTS.md, раздел 5.3). `Origin` должен быть
+собственным сайтом (`Host`) или из `GOW_WS_ALLOWED_ORIGINS`, иначе 403. Первое сообщение `hello` с
+гостевым токеном. Коды закрытия: 4001 другая версия протокола, 4004 нет матча (или токен чужой,
+неизвестный), 4009 тот же игрок открыл новое соединение, 1008 нет `hello`, флуд или клиент не читает,
+1000 после `match_end`.
 
 Гостевая идентичность (ID-01):
 
@@ -220,9 +229,9 @@ docker compose down               # остановить; данные оста�
   `SITE_ADDRESS=https://localhost HTTP_PORT=8080 HTTPS_PORT=8443 docker compose up -d`, затем
   `BASE_URL=https://localhost:8443 deploy/check-caddy.sh`. Перенаправление с HTTP ведёт на порт 443.
 - **Проверки:** `deploy/check-caddy.sh` (заголовки, кэш, сжатие, маршруты; только чтение, годится и для прода:
-  `BASE_URL=https://game.example.com`) и `deploy/check-ws-reload.sh` (WebSocket переживает `caddy reload`).
-  Пока у сервера нет WebSocket (SRV-03, #48), второй скрипт на время проверки подменяет `app` эхо-сервером
-  `deploy/ws_check.py`, поэтому только для локального стека.
+  `BASE_URL=https://game.example.com`) и `deploy/check-ws-reload.sh` (WebSocket матча `/ws/match/...`
+  переживает `caddy reload`: после перезагрузки сервер отвечает на том же соединении кодом 4001 на `hello`
+  старой версии; матч и гость не нужны, но скрипт перезагружает Caddy через `docker compose exec`).
 
 ### Сервер, деплой и бэкапы
 
