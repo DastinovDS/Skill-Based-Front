@@ -52,7 +52,9 @@ from gow_protocol.convert import (
     snapshot_msg,
 )
 from gow_protocol.messages import PausedMsg, ServerMsg, SnapshotMsg
+from gow_server.alerts import Alerter
 from gow_server.clock import Clock
+from gow_server.metrics import ServerMetrics
 
 if TYPE_CHECKING:
     from gow_server.replays import ReplayService
@@ -129,6 +131,11 @@ class Outbox:
     def closed(self) -> bool:
         return self._closed
 
+    @property
+    def backlog(self) -> int:
+        """Reliable messages not yet sent."""
+        return len(self._reliable)
+
     def get_nowait(self) -> ServerMsg | None:
         """The next message to send, or ``None`` if there is none now."""
         if self.overflowed:
@@ -184,6 +191,7 @@ class MatchRunner:
         pause_max_s: float = DEFAULT_WINDOW_S,
         bot: BotSeat | None = None,
         bot_budget_s: float = BOT_BUDGET_S,
+        metrics: ServerMetrics | None = None,
     ) -> None:
         self.match_id: Final = match_id
         self.map_id: Final = map_id
@@ -201,6 +209,8 @@ class MatchRunner:
         self.lag_sum = 0.0
         self.lag_max = 0.0
         """Tick lag in seconds: how late each step started after it was due (AGENTS.md, 12)."""
+        self.metrics = metrics or ServerMetrics()
+        """Process-wide counters and histograms; ``MatchManager.start`` replaces the default."""
         self.bot: Final = bot
         self.bot_budget_s: Final = bot_budget_s
         self.bot_decisions = 0
@@ -262,6 +272,15 @@ class MatchRunner:
             del self._outboxes[player]
             outbox.close()
             self._start_forfeit_timer(player)
+
+    @property
+    def connections(self) -> int:
+        return len(self._outboxes)
+
+    @property
+    def outbox_backlog(self) -> int:
+        """Longest unsent reliable queue of this match's connections."""
+        return max((box.backlog for box in self._outboxes.values()), default=0)
 
     def last_seq(self, player: int) -> int:
         """Highest ``seq`` of ``player`` accepted so far (``welcome.last_seq``)."""
@@ -398,7 +417,10 @@ class MatchRunner:
                     self.steps += 1
                     self.lag_sum += lag
                     self.lag_max = max(self.lag_max, lag)
+                    self.metrics.tick_lag_seconds.observe(lag)
+                    began = time.perf_counter()
                     self.step()
+                    self.metrics.step_seconds.observe(time.perf_counter() - began)
                     ticks += 1
                 if not self.finished:
                     await self.clock.sleep(start + ticks * dt - self.clock.now() - _EPS)
@@ -470,6 +492,7 @@ class MatchRunner:
         if self._bot_skip_next:
             self._bot_skip_next = False
             self.bot_skipped += 1
+            self.metrics.bot_skipped += 1
             return []
         started = time.perf_counter()
         try:
@@ -479,6 +502,7 @@ class MatchRunner:
             return []
         if time.perf_counter() - started > self.bot_budget_s:
             self.bot_overruns += 1
+            self.metrics.bot_overruns += 1
             self._bot_skip_next = True
         self.bot_decisions += 1
         out: list[PlayerCommand] = []
@@ -545,8 +569,11 @@ class MatchManager:
         reconnect_window_s: float = DEFAULT_WINDOW_S,
         pause_max_s: float = DEFAULT_WINDOW_S,
         bot_budget_s: float = BOT_BUDGET_S,
+        alerter: Alerter | None = None,
     ) -> None:
         self.clock = clock
+        self.metrics = ServerMetrics()
+        self.alerter = alerter or Alerter()
         self._bot_budget_s = bot_budget_s
         self._reconnect_window_s = reconnect_window_s
         self._pause_max_s = pause_max_s
@@ -562,6 +589,17 @@ class MatchManager:
     @property
     def active(self) -> int:
         return len(self._tasks)
+
+    @property
+    def connections(self) -> int:
+        return sum(runner.connections for runner in self._runners.values())
+
+    @property
+    def outbox_backlog_max(self) -> int:
+        return max((runner.outbox_backlog for runner in self._runners.values()), default=0)
+
+    def runners(self) -> list[MatchRunner]:
+        return list(self._runners.values())
 
     def get(self, match_id: str) -> MatchRunner | None:
         return self._runners.get(match_id)
@@ -616,6 +654,8 @@ class MatchManager:
         """Run ``runner`` as a task of this manager (``create`` uses it; tests too)."""
         if runner.match_id in self._runners:
             raise ValueError(f"match {runner.match_id} already exists")
+        runner.metrics = self.metrics
+        self.metrics.matches_started += 1
         task = asyncio.create_task(runner.run(), name=f"match-{runner.match_id}")
         self._runners[runner.match_id] = runner
         self._tasks[runner.match_id] = task
@@ -645,8 +685,17 @@ class MatchManager:
             log.info("match cancelled", extra=extra)
         elif (exc := task.exception()) is not None:
             failure = "crashed"
+            self.metrics.matches_crashed += 1
             log.error("match crashed", exc_info=exc, extra=extra)
+            self.alerter.alert(
+                "match_crashed",
+                f"match {runner.match_id} crashed: {type(exc).__name__}",
+                key=runner.match_id,
+                match_id=runner.match_id,
+                tick=runner.match.tick,
+            )
         else:
+            self.metrics.matches_finished += 1
             if self._replays is not None and runner.replay_complete:
                 self._replays.schedule(runner.match_id)
             outcome = runner.match.outcome

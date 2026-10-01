@@ -6,15 +6,17 @@ Only requests from the loopback interface are served, i.e. from inside the `app`
 
 - ``GET /internal/drain``: ``{draining, active}``;
 - ``POST /internal/drain``: stop starting new matches; running ones play to the end;
-- ``DELETE /internal/drain``: accept new matches again (a deploy that stopped before the switch).
+- ``DELETE /internal/drain``: accept new matches again (a deploy that stopped before the switch);
+- ``GET /internal/metrics``: process metrics, Prometheus text format (OPS-04, ``metrics.py``).
 """
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from gow_server.matches import MatchManager
+from gow_server.metrics import render
 
 LOOPBACK = frozenset({"127.0.0.1", "::1"})
 
@@ -62,3 +64,8 @@ async def drain(manager: Manager) -> DrainStatus:
 async def undrain(manager: Manager) -> DrainStatus:
     manager.undrain()
     return _status(manager)
+
+
+@router.get("/metrics")
+async def metrics(manager: Manager) -> Response:
+    return Response(render(manager), media_type="text/plain; version=0.0.4; charset=utf-8")

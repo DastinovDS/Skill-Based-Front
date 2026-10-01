@@ -117,6 +117,12 @@ case "$status" in
 esac
 grep -q '<div id="app">' "$tmp/ws.b" && fail "/ws/* falls back to index.html"
 
+echo "== /internal/* (drain, metrics) is not proxied (OPS-04)"
+# Caddy proxies only /api/* and /ws/*: /internal/metrics is the client's index.html here, never
+# the server's metrics.
+status="$(fetch metrics /internal/metrics)"
+grep -q 'gow_matches_active' "$tmp/metrics.b" && fail "/internal/metrics is reachable through Caddy"
+
 if [ "$failures" -gt 0 ]; then
 	echo "$failures check(s) failed" >&2
 	exit 1
