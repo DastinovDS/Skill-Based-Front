@@ -10,6 +10,7 @@ import json
 import logging
 import shutil
 import socket
+import time
 from collections.abc import AsyncGenerator, Callable, Coroutine
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -80,6 +81,7 @@ class Live:
             origin=own if origin == "" else (Origin(origin) if origin else None),
             open_timeout=RECV_TIMEOUT_S,
             close_timeout=0.5,
+            compression=None,  # uncompressed frames: the slow-client tests fill socket buffers
             **kwargs,
         )
 
@@ -416,11 +418,10 @@ def test_client_that_does_not_read_is_disconnected(
     async def scenario(live: Live) -> None:
         async with live.connect(max_queue=1, sock=small_socket(live.host)) as ws:
             await send(ws, hello(live.tokens[0]))
-            for _ in range(3000):
+            deadline = time.monotonic() + 60
+            while not closed() and time.monotonic() < deadline:
                 await live.ticks(pause_s=0.001)
-                if closed():
-                    break
-            assert closed(), "the server never gave up on the client"
+            assert closed(), f"the server never gave up on the client ({live.runner.match.tick})"
             assert not live.runner.finished
             tick = live.runner.match.tick
             await live.ticks(5)
