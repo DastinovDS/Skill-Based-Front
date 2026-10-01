@@ -18,7 +18,13 @@
    - writer: sends the player's ``Outbox`` (reliable messages first, then the latest snapshot),
      every send with a timeout: a client that does not read is disconnected. After
      ``match_end`` the connection is closed normally (1000); a newer connection of the same
-     player closes the older one with ``CLOSE_REPLACED``.
+     player closes the older one with ``CLOSE_REPLACED``, after which the old client must not
+     reconnect (``CLOSE_REPLACED`` is final for it, ``matchConnection.ts``);
+   - ``pause`` / ``resume`` go to the match (private matches, DEC-05): a refusal is ``error``
+     ``PAUSE_DENIED``.
+5. A dropped connection starts the player's reconnect window in the match (``MatchRunner``, SRV-04):
+   the same token reconnects within it and gets ``welcome`` with ``last_seq`` and a full
+   ``snapshot`` again; otherwise the match applies a ``Forfeit`` for the player.
 """
 
 import asyncio
@@ -36,12 +42,15 @@ from sqlalchemy.orm import Session, sessionmaker
 from gow_protocol.codec import decode_client, encode
 from gow_protocol.messages import (
     CLOSE_PROTOCOL_VERSION,
+    CLOSE_REPLACED,
     PROTOCOL_VERSION,
     CommandMsg,
     ErrorMsg,
     HelloMsg,
+    PauseMsg,
     PingMsg,
     PongMsg,
+    ResumeMsg,
     ResyncMsg,
     ServerMsg,
     WelcomeMsg,
@@ -59,9 +68,6 @@ CLOSE_POLICY: Final = 1008
 """No ``hello`` in time, a flood, a client that does not read."""
 CLOSE_NO_MATCH: Final = 4004
 """Unknown token, unknown or finished match, or not a player of it."""
-CLOSE_REPLACED: Final = 4009
-"""The same player opened a newer connection to the match."""
-
 router = APIRouter()
 
 
@@ -242,6 +248,12 @@ async def _read(
                 outbox.put(PongMsg(id=ping_id))
             case ResyncMsg():
                 outbox.put_snapshot(runner.snapshot(player))
+            case PauseMsg():
+                if not runner.request_pause(player):
+                    outbox.put(ErrorMsg(code="PAUSE_DENIED"))
+            case ResumeMsg():
+                if not runner.request_resume(player):
+                    outbox.put(ErrorMsg(code="PAUSE_DENIED"))
             case HelloMsg():
                 outbox.put(ErrorMsg(code="UNEXPECTED_HELLO"))
 

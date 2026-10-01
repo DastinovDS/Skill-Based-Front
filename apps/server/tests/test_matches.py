@@ -9,7 +9,14 @@ from typing import Final
 import pytest
 
 from gow_protocol import commands as wire
-from gow_protocol.messages import AckMsg, MatchEndMsg, ServerMsg, SnapshotMsg
+from gow_protocol.messages import (
+    AckMsg,
+    EndReason,
+    MatchEndMsg,
+    PausedMsg,
+    ServerMsg,
+    SnapshotMsg,
+)
 from gow_server.clock import ManualClock
 from gow_server.matches import (
     ManagerDrainingError,
@@ -261,3 +268,196 @@ def test_match_key_is_secret_and_not_in_repr(line3: MapDef, short_rules: Ruleset
     assert a.match.match_key != b.match.match_key
     assert len(a.match.match_key) == 32
     assert a.match.match_key.hex() not in repr(a)
+
+
+# Disconnects and pauses (DEC-05, SRV-04) -------------------------------------------------------
+
+
+def _runner(
+    line3: MapDef, rules: Ruleset, clock: ManualClock, *, private: bool = False
+) -> MatchRunner:
+    return MatchRunner(
+        "m",
+        "line3",
+        line3,
+        rules,
+        (1, 2),
+        clock,
+        private=private,
+        reconnect_window_s=5.0,
+        pause_max_s=5.0,
+    )
+
+
+def test_window_expiry_queues_a_forfeit_in_the_log_path(
+    line3: MapDef, short_rules: Ruleset
+) -> None:
+    """Nobody is connected at the start; player 1 never comes, player 0 stays."""
+
+    async def scenario() -> None:
+        clock = ManualClock()
+        runner = _runner(line3, short_rules, clock)
+        box = runner.attach(0)
+        task = asyncio.create_task(runner.run())
+        await settle()
+        await tick(clock, 49)
+        assert not runner.finished  # 4.9 s: the window is still open
+        await tick(clock, 3)
+        await task
+        outcome = runner.match.outcome
+        assert outcome is not None and outcome.winner == 0
+        end = [m for m in drain(box) if isinstance(m, MatchEndMsg)]
+        assert [(m.reason, m.winner) for m in end] == [(EndReason.DISCONNECT, 0)]
+        # the same path as a command of the player: it has a seq in the player's sequence
+        assert runner.last_seq(1) == 1
+
+    run(scenario)
+
+
+def test_reconnect_inside_the_window_cancels_the_forfeit(
+    line3: MapDef, short_rules: Ruleset
+) -> None:
+    async def scenario() -> None:
+        clock = ManualClock()
+        runner = _runner(line3, short_rules, clock)
+        runner.attach(0)
+        box1 = runner.attach(1)
+        task = asyncio.create_task(runner.run())
+        await settle()
+        runner.detach(1, box1)
+        await tick(clock, 40)  # 4 s of 5
+        runner.attach(1)
+        await tick(clock, 100)  # far past the original deadline
+        assert not runner.finished
+        assert runner.connected(1)
+        assert runner.last_seq(1) == 0
+        task.cancel()
+
+    run(scenario)
+
+
+def test_replaced_connection_does_not_start_a_window(line3: MapDef, short_rules: Ruleset) -> None:
+    async def scenario() -> None:
+        clock = ManualClock()
+        runner = _runner(line3, short_rules, clock)
+        runner.attach(0)
+        old = runner.attach(1)
+        task = asyncio.create_task(runner.run())
+        await settle()
+        runner.attach(1)  # a second tab takes over
+        runner.detach(1, old)  # the old connection ends: no longer the current one
+        await tick(clock, 100)
+        assert not runner.finished
+        task.cancel()
+
+    run(scenario)
+
+
+def test_both_players_gone_is_a_draw(line3: MapDef, short_rules: Ruleset) -> None:
+    async def scenario() -> None:
+        clock = ManualClock()
+        runner = _runner(line3, short_rules, clock)
+        task = asyncio.create_task(runner.run())
+        await settle()
+        await tick(clock, 60)
+        await task
+        outcome = runner.match.outcome
+        assert outcome is not None and outcome.winner is None
+
+    run(scenario)
+
+
+def test_rated_match_has_no_pause(line3: MapDef, short_rules: Ruleset) -> None:
+    async def scenario() -> None:
+        runner = _runner(line3, short_rules, ManualClock(), private=False)
+        assert not runner.request_pause(0)
+        assert not runner.paused
+
+    run(scenario)
+
+
+def test_private_pause_is_one_per_player_and_ends_by_itself(
+    line3: MapDef, short_rules: Ruleset
+) -> None:
+    async def scenario() -> None:
+        clock = ManualClock()
+        runner = _runner(line3, short_rules, clock, private=True)
+        boxes = [runner.attach(0), runner.attach(1)]
+        task = asyncio.create_task(runner.run())
+        await settle()
+        assert runner.request_pause(0)
+        assert not runner.request_pause(1)  # already paused
+        assert not runner.request_resume(1)  # not their pause
+        tick_at_pause = runner.match.tick
+        await tick(clock, 30)  # 3 s
+        assert runner.match.tick == tick_at_pause
+        for box in boxes:
+            paused = [m for m in drain(box) if isinstance(m, PausedMsg)]
+            assert paused == [PausedMsg(paused=True, by=0, ends_in_s=5)]
+        await tick(clock, 25)  # past the 5 s of the pause
+        assert not runner.paused
+        assert runner.match.tick > tick_at_pause
+        for box in boxes:
+            assert [m for m in drain(box) if isinstance(m, PausedMsg)] == [
+                PausedMsg(paused=False, by=None, ends_in_s=None)
+            ]
+        assert not runner.request_pause(0)  # spent
+        assert runner.request_pause(1)  # the other player has theirs
+        task.cancel()
+
+    run(scenario)
+
+
+def test_pauser_can_resume_early_and_a_reconnect_sees_the_pause(
+    line3: MapDef, short_rules: Ruleset
+) -> None:
+    async def scenario() -> None:
+        clock = ManualClock()
+        runner = _runner(line3, short_rules, clock, private=True)
+        runner.attach(0)
+        old = runner.attach(1)
+        task = asyncio.create_task(runner.run())
+        await settle()
+        assert runner.request_pause(1)
+        await tick(clock, 20)  # 2 s
+        runner.detach(1, old)
+        box = runner.attach(1)
+        assert drain(box) == [PausedMsg(paused=True, by=1, ends_in_s=3)]
+        assert runner.request_resume(1)
+        await settle()
+        assert not runner.paused
+        assert [m for m in drain(box) if isinstance(m, PausedMsg)] == [
+            PausedMsg(paused=False, by=None, ends_in_s=None)
+        ]
+        task.cancel()
+
+    run(scenario)
+
+
+def test_technical_defeat_ends_a_pause(line3: MapDef, short_rules: Ruleset) -> None:
+    """A pause must not delay the forfeit of a player who is gone."""
+
+    async def scenario() -> None:
+        clock = ManualClock()
+        runner = MatchRunner(
+            "m",
+            "line3",
+            line3,
+            short_rules,
+            (1, 2),
+            clock,
+            private=True,
+            reconnect_window_s=3.0,
+            pause_max_s=30.0,
+        )
+        runner.attach(0)
+        task = asyncio.create_task(runner.run())
+        await settle()
+        assert runner.request_pause(0)
+        await tick(clock, 31)
+        await tick(clock, 2)
+        await task
+        outcome = runner.match.outcome
+        assert outcome is not None and outcome.winner == 0
+
+    run(scenario)

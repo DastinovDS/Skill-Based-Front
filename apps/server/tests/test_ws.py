@@ -29,15 +29,20 @@ from gow_protocol.codec import decode_server, encode
 from gow_protocol.commands import ForfeitCmd, SetStanceCmd
 from gow_protocol.messages import (
     CLOSE_PROTOCOL_VERSION,
+    CLOSE_REPLACED,
     PROTOCOL_VERSION,
     AckMsg,
     ClientMsg,
     CommandMsg,
+    EndReason,
     ErrorMsg,
     HelloMsg,
     MatchEndMsg,
+    PausedMsg,
+    PauseMsg,
     PingMsg,
     PongMsg,
+    ResumeMsg,
     ResyncMsg,
     ServerMsg,
     SnapshotMsg,
@@ -48,7 +53,9 @@ from gow_server.cli import WS_MAX_SIZE
 from gow_server.clock import ManualClock
 from gow_server.matches import MatchManager, MatchRunner
 from gow_server.settings import Settings
-from gow_server.ws import CLOSE_NO_MATCH, CLOSE_POLICY, CLOSE_REPLACED
+from gow_server.ws import CLOSE_NO_MATCH, CLOSE_POLICY
+from gow_sim.commands import Forfeit
+from gow_sim.replay import read_replay
 from gow_sim.ruleset import Stance, load_ruleset
 
 ROOT: Final = Path(__file__).parents[3]
@@ -93,7 +100,7 @@ class Live:
 
 @asynccontextmanager
 async def live_server(
-    settings: Settings, map_id: str = "line3", ruleset: str = "test-short"
+    settings: Settings, map_id: str = "line3", ruleset: str = "test-short", private: bool = False
 ) -> AsyncGenerator[Live]:
     clock = ManualClock()
     app = create_app(settings, clock)
@@ -117,7 +124,7 @@ async def live_server(
         entry = app.state.maps.get(map_id)
         rules = load_ruleset(ROOT / "rulesets" / f"{ruleset}.toml")
         players = (created[0]["player_id"], created[1]["player_id"])
-        runner = manager.create(map_id, entry.definition, rules, players)
+        runner = manager.create(map_id, entry.definition, rules, players, private=private)
         yield Live(app, clock, host, [c["token"] for c in created], runner)
     finally:
         server.should_exit = True
@@ -129,9 +136,10 @@ def run(
     scenario: Callable[[Live], Coroutine[None, None, None]],
     map_id: str = "line3",
     ruleset: str = "test-short",
+    private: bool = False,
 ) -> None:
     async def main() -> None:
-        async with live_server(settings, map_id, ruleset) as live:
+        async with live_server(settings, map_id, ruleset, private) as live:
             await scenario(live)
 
     asyncio.run(main())
@@ -377,7 +385,9 @@ def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settin
     each way with autotuning), so the server's sends do block.
     """
     ticks = 1000
-    settings = ws_settings.model_copy(update={"ws_send_timeout_s": 60.0, "ws_msg_burst": 1000})
+    settings = ws_settings.model_copy(
+        update={"ws_send_timeout_s": 60.0, "ws_msg_burst": 1000, "reconnect_window_s": 1e9}
+    )  # the second player never comes: no technical defeat in this test
 
     async def scenario(live: Live) -> None:
         # A tiny receive buffer and max_queue=1: the client buffers almost nothing, so TCP pushes
@@ -410,7 +420,7 @@ def test_client_that_does_not_read_is_disconnected(
     ws_settings: Settings, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Snapshots pile up beyond the socket buffers; a send then times out: disconnect."""
-    settings = ws_settings.model_copy(update={"ws_send_timeout_s": 0.3})
+    settings = ws_settings.model_copy(update={"ws_send_timeout_s": 0.3, "reconnect_window_s": 1e9})
 
     def closed() -> list[logging.LogRecord]:
         return [r for r in caplog.records if r.getMessage() == "ws closed"]
@@ -430,3 +440,127 @@ def test_client_that_does_not_read_is_disconnected(
     with caplog.at_level(logging.INFO, logger="gow_server.ws"):
         run(settings, scenario, map_id="pautina", ruleset="mvp-0")
     assert [r.__dict__["code"] for r in closed()] == [CLOSE_POLICY]
+
+
+# Reconnect and disconnect policy (SRV-04, DEC-05) ------------------------------------------------
+
+
+@pytest.fixture
+def policy_settings(ws_settings: Settings, tmp_path: Path) -> Settings:
+    return ws_settings.model_copy(update={"replays_dir": tmp_path / "replays"})
+
+
+async def join(live: Live, player: int) -> tuple[ClientConnection, WelcomeMsg]:
+    """Open a connection of ``player`` and read ``welcome``; the caller closes it."""
+    ws = await live.connect()
+    await send(ws, hello(live.tokens[player]))
+    welcome = await recv(ws)
+    assert isinstance(welcome, WelcomeMsg)
+    return ws, welcome
+
+
+def test_reconnect_after_10_s_restores_the_view(policy_settings: Settings) -> None:
+    async def scenario(live: Live) -> None:
+        a, _ = await join(live, 0)
+        b, _ = await join(live, 1)
+        await send(b, CommandMsg(seq=1, cmd=SetStanceCmd(stance=Stance.WAR)))
+        await asyncio.sleep(0.05)  # the command reaches the server before the tick
+        await live.ticks()
+        await recv_until(b, AckMsg)
+        await b.close()
+        await asyncio.sleep(0.05)
+        assert not live.runner.connected(1)
+        await live.ticks(100)  # 10 s without the player: the match goes on
+        assert live.runner.match.tick >= 100
+        b, welcome = await join(live, 1)
+        assert welcome.last_seq == 1
+        snap = await recv_until(b, SnapshotMsg)
+        assert snap.view.me.stance is Stance.WAR
+        assert snap.tick == live.runner.match.tick
+        await live.ticks(700)  # well past 60 s after the first drop: no technical defeat
+        assert not live.runner.finished
+        await a.close()
+        await b.close()
+
+    run(policy_settings, scenario, ruleset="mvp-0")
+
+
+def test_reconnect_after_61_s_is_a_technical_defeat_in_the_command_log(
+    policy_settings: Settings,
+) -> None:
+    async def scenario(live: Live) -> None:
+        a, _ = await join(live, 0)
+        b, _ = await join(live, 1)
+        await b.close()
+        await asyncio.sleep(0.05)
+        await live.ticks(590)  # 59 s: the window is still open
+        assert not live.runner.finished
+        await live.ticks(20)  # 61 s
+        end = await recv_until(a, MatchEndMsg)
+        assert (end.reason, end.winner) == (EndReason.DISCONNECT, 0)
+        assert await close_code(a) == 1000
+        # too late to come back: the match is over
+        late = await live.connect()
+        await send(late, hello(live.tokens[1]))
+        assert await close_code(late) == CLOSE_NO_MATCH
+        log = read_replay(policy_settings.replays_dir / f"{live.runner.match_id}.jsonl.gz")
+        forfeits = [(t, c.player) for t, c in log.commands if isinstance(c.cmd, Forfeit)]
+        assert [p for _, p in forfeits] == [1], (
+            "the technical defeat is a Forfeit of the gone player"
+        )
+        assert log.final
+
+    run(policy_settings, scenario, ruleset="mvp-0")
+
+
+def test_a_connection_that_replaces_another_does_not_start_a_window(
+    policy_settings: Settings,
+) -> None:
+    async def scenario(live: Live) -> None:
+        a, _ = await join(live, 0)
+        old, _ = await join(live, 1)
+        new, _ = await join(live, 1)  # a second tab
+        assert await close_code(old) == CLOSE_REPLACED
+        await live.ticks(700)
+        assert not live.runner.finished
+        await a.close()
+        await new.close()
+
+    run(policy_settings, scenario, ruleset="mvp-0")
+
+
+def test_pause_in_a_private_match(policy_settings: Settings) -> None:
+    async def scenario(live: Live) -> None:
+        a, _ = await join(live, 0)
+        b, _ = await join(live, 1)
+        await send(a, PauseMsg())
+        for ws in (a, b):
+            msg = await recv_until(ws, PausedMsg)
+            assert (msg.paused, msg.by, msg.ends_in_s) == (True, 0, 60)
+        tick = live.runner.match.tick
+        await live.ticks(50)
+        assert live.runner.match.tick == tick
+        await send(b, ResumeMsg())  # not their pause
+        assert (await recv_until(b, ErrorMsg)).code == "PAUSE_DENIED"
+        await send(a, ResumeMsg())
+        for ws in (a, b):
+            assert not (await recv_until(ws, PausedMsg)).paused
+        await live.ticks(3)
+        assert live.runner.match.tick > tick
+        await send(a, PauseMsg())  # one pause per player
+        assert (await recv_until(a, ErrorMsg)).code == "PAUSE_DENIED"
+        await a.close()
+        await b.close()
+
+    run(policy_settings, scenario, ruleset="mvp-0", private=True)
+
+
+def test_rated_match_refuses_a_pause(policy_settings: Settings) -> None:
+    async def scenario(live: Live) -> None:
+        a, _ = await join(live, 0)
+        await send(a, PauseMsg())
+        assert (await recv_until(a, ErrorMsg)).code == "PAUSE_DENIED"
+        assert not live.runner.paused
+        await a.close()
+
+    run(policy_settings, scenario, ruleset="mvp-0")

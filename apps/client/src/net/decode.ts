@@ -82,6 +82,10 @@ const CHECKS: Record<ServerMsg['type'], (m: Obj) => boolean> = {
     (m.vp as unknown[]).length === 2,
   error: (m) => isStr(m.code) && (m.message === null || isStr(m.message)),
   pong: (m) => isInt(m.id),
+  paused: (m) =>
+    typeof m.paused === 'boolean' &&
+    (m.by === null || isPlayer(m.by)) &&
+    (m.ends_in_s === null || isInt(m.ends_in_s)),
 };
 
 function isServerType(type: unknown): type is ServerMsg['type'] {

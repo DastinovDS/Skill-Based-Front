@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, TypeAdapter
 
-from gow_protocol.messages import CLOSE_PROTOCOL_VERSION, PROTOCOL_VERSION
+from gow_protocol.messages import CLOSE_PROTOCOL_VERSION, CLOSE_REPLACED, PROTOCOL_VERSION
 from gow_protocol.schema import SCHEMA_PATH, WireJsonSchema, protocol_json_schema
 
 REGENERATE = "uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol"
@@ -36,6 +36,7 @@ def test_schema_carries_the_runtime_constants_of_the_client(schema: dict[str, An
     assert schema["x-constants"] == {
         "PROTOCOL_VERSION": PROTOCOL_VERSION,
         "CLOSE_PROTOCOL_VERSION": CLOSE_PROTOCOL_VERSION,
+        "CLOSE_REPLACED": CLOSE_REPLACED,
     }
 
 

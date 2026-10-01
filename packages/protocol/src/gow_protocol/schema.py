@@ -23,6 +23,7 @@ from pydantic_core import core_schema
 from gow_protocol.mapfile import MapFile
 from gow_protocol.messages import (
     CLOSE_PROTOCOL_VERSION,
+    CLOSE_REPLACED,
     PROTOCOL_VERSION,
     ClientMsg,
     ServerMsg,
@@ -64,7 +65,7 @@ def protocol_json_schema() -> dict[str, Any]:
     """One schema with every type in ``$defs``; the root is the union of ``ROOTS``.
 
     ``x-constants`` carries the values the client needs at runtime (the ``hello`` version and the
-    close code of a mismatch). json-schema-to-typescript ignores it; ``apps/client/scripts/
+    final close codes). json-schema-to-typescript ignores it; ``apps/client/scripts/
     protocol-consts.js`` appends them to ``protocol.gen.ts`` as ``export const``.
     """
     refs, schema = TypeAdapter.json_schemas(
@@ -79,6 +80,7 @@ def protocol_json_schema() -> dict[str, Any]:
         "x-constants": {
             "PROTOCOL_VERSION": PROTOCOL_VERSION,
             "CLOSE_PROTOCOL_VERSION": CLOSE_PROTOCOL_VERSION,
+            "CLOSE_REPLACED": CLOSE_REPLACED,
         },
         "$defs": {name: _wrap_described_refs(d) for name, d in schema["$defs"].items()},
     }

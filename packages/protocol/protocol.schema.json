@@ -14,8 +14,9 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 2,
-    "CLOSE_PROTOCOL_VERSION": 4001
+    "PROTOCOL_VERSION": 3,
+    "CLOSE_PROTOCOL_VERSION": 4001,
+    "CLOSE_REPLACED": 4009
   },
   "$defs": {
     "AckMsg": {
@@ -123,7 +124,9 @@
         "mapping": {
           "command": "#/$defs/CommandMsg",
           "hello": "#/$defs/HelloMsg",
+          "pause": "#/$defs/PauseMsg",
           "ping": "#/$defs/PingMsg",
+          "resume": "#/$defs/ResumeMsg",
           "resync": "#/$defs/ResyncMsg"
         },
         "propertyName": "type"
@@ -140,6 +143,12 @@
         },
         {
           "$ref": "#/$defs/ResyncMsg"
+        },
+        {
+          "$ref": "#/$defs/PauseMsg"
+        },
+        {
+          "$ref": "#/$defs/ResumeMsg"
         }
       ]
     },
@@ -1182,6 +1191,68 @@
       "title": "PacketView",
       "type": "object"
     },
+    "PauseMsg": {
+      "additionalProperties": false,
+      "description": "Pause a private match (DEC-05): one pause per player, at most ``paused.ends_in_s`` long.\n\nRefused with ``error`` ``PAUSE_DENIED`` in a rated match, with no pause left or while paused.",
+      "properties": {
+        "type": {
+          "const": "pause",
+          "default": "pause",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "PauseMsg",
+      "type": "object"
+    },
+    "PausedMsg": {
+      "additionalProperties": false,
+      "description": "The pause state of the match changed (also sent after ``welcome`` while paused).",
+      "properties": {
+        "type": {
+          "const": "paused",
+          "default": "paused",
+          "type": "string"
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlayerId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Player who paused; ``None`` when ``paused`` is false."
+        },
+        "ends_in_s": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Whole seconds until the pause ends by itself; ``None`` when ``paused`` is false."
+        }
+      },
+      "required": [
+        "type",
+        "paused",
+        "by",
+        "ends_in_s"
+      ],
+      "title": "PausedMsg",
+      "type": "object"
+    },
     "PingMsg": {
       "additionalProperties": false,
       "description": "Application-level ping for RTT (browsers do not expose protocol pings).",
@@ -1255,6 +1326,22 @@
         "node"
       ],
       "title": "RecruitCmd",
+      "type": "object"
+    },
+    "ResumeMsg": {
+      "additionalProperties": false,
+      "description": "End a pause early. Only the player who paused may; else ``error`` ``PAUSE_DENIED``.",
+      "properties": {
+        "type": {
+          "const": "resume",
+          "default": "resume",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "ResumeMsg",
       "type": "object"
     },
     "ResyncMsg": {
@@ -1387,6 +1474,7 @@
           "error": "#/$defs/ErrorMsg",
           "event": "#/$defs/EventMsg",
           "match_end": "#/$defs/MatchEndMsg",
+          "paused": "#/$defs/PausedMsg",
           "pong": "#/$defs/PongMsg",
           "snapshot": "#/$defs/SnapshotMsg",
           "welcome": "#/$defs/WelcomeMsg"
@@ -1414,6 +1502,9 @@
         },
         {
           "$ref": "#/$defs/PongMsg"
+        },
+        {
+          "$ref": "#/$defs/PausedMsg"
         }
       ]
     },

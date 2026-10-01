@@ -5,10 +5,13 @@
  * open -> `hello` (first message, the token is never in the URL) -> `welcome` (ready) -> the
  * server streams `snapshot`s. After a drop the connection is reopened with exponential backoff
  * and the same token; commands the server has not acknowledged are resent (AGENTS.md, 5.3).
- * Close code 4001 (protocol version mismatch) is final: the page has to be reloaded.
+ * Close code 4001 (protocol version mismatch) is final: the page has to be reloaded. So is 4009
+ * (replaced by a newer connection of the same player, e.g. a second tab): reconnecting would
+ * make two tabs evict each other forever (SRV-04, #50).
  */
 import {
   CLOSE_PROTOCOL_VERSION,
+  CLOSE_REPLACED,
   PROTOCOL_VERSION,
   type ClientMsg,
   type Command,
@@ -27,6 +30,8 @@ export type ConnectionStatus =
   | 'reconnecting'
   /** The server closed with 4001: reload the page. */
   | 'version_mismatch'
+  /** The server closed with 4009: another tab or device of this player took over the match. */
+  | 'replaced'
   /** `match_end` received: the server closes the connection, nothing to reconnect to. */
   | 'ended';
 
@@ -251,6 +256,11 @@ export class MatchConnection {
     this.#opts.handlers.onReset?.();
     if (code === CLOSE_PROTOCOL_VERSION) {
       this.#setStatus('version_mismatch');
+      return;
+    }
+    if (code === CLOSE_REPLACED) {
+      this.#pending.clear();
+      this.#setStatus('replaced');
       return;
     }
     this.#setStatus('reconnecting');

@@ -4,7 +4,7 @@
  * Wire format of Skill-Based Front, generated from gow_protocol.
  */
 export type Protocol = ClientMsg | ServerMsg | MapFile;
-export type ClientMsg = HelloMsg | CommandMsg | PingMsg | ResyncMsg;
+export type ClientMsg = HelloMsg | CommandMsg | PingMsg | ResyncMsg | PauseMsg | ResumeMsg;
 export type Command =
   | MoveCmd
   | SplitCmd
@@ -24,7 +24,7 @@ export type Mode = 'attack' | 'defense' | 'build';
  */
 export type Stance = 'economy' | 'balance' | 'war';
 export type ServerMsg =
-  WelcomeMsg | SnapshotMsg | AckMsg | EventMsg | MatchEndMsg | ErrorMsg | PongMsg;
+  WelcomeMsg | SnapshotMsg | AckMsg | EventMsg | MatchEndMsg | ErrorMsg | PongMsg | PausedMsg;
 export type PlayerId = 0 | 1;
 /**
  * How much a player sees of a node or an edge (DEC-04, mechanics.md, section 10).
@@ -125,6 +125,20 @@ export interface PingMsg {
  */
 export interface ResyncMsg {
   type: 'resync';
+}
+/**
+ * Pause a private match (DEC-05): one pause per player, at most ``paused.ends_in_s`` long.
+ *
+ * Refused with ``error`` ``PAUSE_DENIED`` in a rated match, with no pause left or while paused.
+ */
+export interface PauseMsg {
+  type: 'pause';
+}
+/**
+ * End a pause early. Only the player who paused may; else ``error`` ``PAUSE_DENIED``.
+ */
+export interface ResumeMsg {
+  type: 'resume';
 }
 /**
  * Answer to a valid ``hello``, also after a reconnect; a full ``snapshot`` follows.
@@ -414,6 +428,21 @@ export interface PongMsg {
    */
   id: number;
 }
+/**
+ * The pause state of the match changed (also sent after ``welcome`` while paused).
+ */
+export interface PausedMsg {
+  type: 'paused';
+  paused: boolean;
+  /**
+   * Player who paused; ``None`` when ``paused`` is false.
+   */
+  by: PlayerId | null;
+  /**
+   * Whole seconds until the pause ends by itself; ``None`` when ``paused`` is false.
+   */
+  ends_in_s: number | null;
+}
 export interface MapFile {
   meta: MapMetaFile;
   nodes: MapNodeFile[];
@@ -475,5 +504,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 export const CLOSE_PROTOCOL_VERSION = 4001;
+export const CLOSE_REPLACED = 4009;

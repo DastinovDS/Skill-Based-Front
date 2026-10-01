@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from gow_protocol import PROTOCOL_VERSION
 from gow_protocol.codec import client_adapter, decode_client, decode_server, encode, server_adapter
 from gow_protocol.commands import MoveCmd
-from gow_protocol.messages import CLOSE_PROTOCOL_VERSION, CommandMsg, HelloMsg
+from gow_protocol.messages import CLOSE_PROTOCOL_VERSION, CLOSE_REPLACED, CommandMsg, HelloMsg
 from gow_protocol.ruleset import CombatPublic, RulesetPublic
 from gow_sim.ruleset import load_ruleset
 
@@ -20,8 +20,8 @@ SERVER_FIXTURES = sorted((FIXTURES_DIR / "server").glob("*.json"))
 RULESET_PATH = Path(__file__).resolve().parents[3] / "rulesets" / "mvp-0.toml"
 
 # Message and command types named by PRO-01 (#44) and SIM-04 (#20).
-CLIENT_TYPES = {"hello", "command", "ping", "resync"}
-SERVER_TYPES = {"welcome", "snapshot", "ack", "event", "match_end", "error", "pong"}
+CLIENT_TYPES = {"hello", "command", "ping", "resync", "pause", "resume"}
+SERVER_TYPES = {"welcome", "snapshot", "ack", "event", "match_end", "error", "pong", "paused"}
 COMMAND_TYPES = {
     "move",
     "split",
@@ -105,6 +105,7 @@ def test_protocol_version_is_a_positive_integer() -> None:
     assert type(PROTOCOL_VERSION) is int
     assert PROTOCOL_VERSION >= 1
     assert CLOSE_PROTOCOL_VERSION == 4001  # AGENTS.md, section 6
+    assert CLOSE_REPLACED == 4009
 
 
 def test_hello_fixture_uses_the_current_protocol_version() -> None:

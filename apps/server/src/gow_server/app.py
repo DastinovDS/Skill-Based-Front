@@ -42,7 +42,12 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         app.state.replays = replays.ReplayService(
             settings.replays_dir, settings.rulesets_dir, settings.maps_dir, app.state.sessions
         )
-        app.state.matches = MatchManager(match_clock, replays=app.state.replays)
+        app.state.matches = MatchManager(
+            match_clock,
+            replays=app.state.replays,
+            reconnect_window_s=settings.reconnect_window_s,
+            pause_max_s=settings.pause_max_s,
+        )
         app.state.ruleset = load_ruleset(settings.ruleset_path)
         app.state.invites = invites.InviteBook(match_clock, settings.invite_ttl_s)
         log.info(
