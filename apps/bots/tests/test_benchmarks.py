@@ -67,11 +67,10 @@ def speed_factor() -> float:
     return min(timeit.repeat(_workload, number=1, repeat=30)) / REFERENCE_WORKLOAD_S
 
 
-@pytest.fixture(scope="module")
-def views(maps: dict[str, MapDef], mvp_rules: Ruleset) -> list[PlayerView]:
-    mapdef = maps["pautina"]
-    match = Match(mapdef, mvp_rules, bytes(range(32)))
-    bots = [BOTS["random_legal"](mapdef, mvp_rules, seed=3, player=p) for p in (0, 1)]
+def _play(mapdef: MapDef, rules: Ruleset, names: tuple[str, str]) -> list[PlayerView]:
+    """Views of a match between two bots at every decision from tick 300 to tick 1500."""
+    match = Match(mapdef, rules, bytes(range(32)))
+    bots = [BOTS[name](mapdef, rules, seed=3, player=p) for p, name in enumerate(names)]
     out: list[PlayerView] = []
     seq = 0
     while match.tick < 1500 and not match.finished:
@@ -88,6 +87,17 @@ def views(maps: dict[str, MapDef], mvp_rules: Ruleset) -> list[PlayerView]:
     return out
 
 
+@pytest.fixture(scope="module")
+def views(maps: dict[str, MapDef], mvp_rules: Ruleset) -> list[PlayerView]:
+    return _play(maps["pautina"], mvp_rules, ("random_legal", "random_legal"))
+
+
+@pytest.fixture(scope="module")
+def strategy_views(maps: dict[str, MapDef], mvp_rules: Ruleset) -> list[PlayerView]:
+    """Views of a match of the strategy bots: many own groups, builds and contact with the enemy."""
+    return _play(maps["pautina"], mvp_rules, ("expander", "turtle"))
+
+
 @pytest.mark.parametrize("name", sorted(BOTS))
 def test_bench_decide(
     benchmark: BenchmarkFixture,
@@ -97,8 +107,31 @@ def test_bench_decide(
     mvp_rules: Ruleset,
     name: str,
 ) -> None:
-    mapdef = maps["pautina"]
-    bots = [BOTS[name](mapdef, mvp_rules, seed=5, player=p) for p in (0, 1)]
+    _bench(benchmark, speed_factor, views, maps["pautina"], mvp_rules, name)
+
+
+@pytest.mark.parametrize("name", ["expander", "turtle"])
+def test_bench_decide_strategy_views(
+    benchmark: BenchmarkFixture,
+    speed_factor: float,
+    strategy_views: list[PlayerView],
+    maps: dict[str, MapDef],
+    mvp_rules: Ruleset,
+    name: str,
+) -> None:
+    """BOT-02: the strategy bots on the views of their own matches (the busiest case)."""
+    _bench(benchmark, speed_factor, strategy_views, maps["pautina"], mvp_rules, name)
+
+
+def _bench(
+    benchmark: BenchmarkFixture,
+    speed_factor: float,
+    views: list[PlayerView],
+    mapdef: MapDef,
+    rules: Ruleset,
+    name: str,
+) -> None:
+    bots = [BOTS[name](mapdef, rules, seed=5, player=p) for p in (0, 1)]
     feed = cycle(views)
 
     def decide() -> None:

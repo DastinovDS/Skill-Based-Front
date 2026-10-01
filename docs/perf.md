@@ -33,6 +33,7 @@ uv run pytest --benchmark-disable                             # один про�
 | `test_bench_full_headless_match` | `run_headless` двух `ExpandBot` до конца партии на `pautina` (самая большая карта MVP по рёбрам) | ≤ 8 с |
 | `apps/bots/tests/test_benchmarks.py::test_bench_decide` | `decide()` каждого бота из `gow_bots.bots.BOTS` на видах партии `random_legal` на `pautina` после 300..1500 тиков | в среднем ≤ 1 мс |
 | `apps/server/tests/test_match_load.py` | 30 матчей на `pautina` (`mvp-0`) в одном цикле событий, старты в случайные моменты, по два скриптовых клиента на матч (приказы по протоколу, проекции обоих игроков); часы замедлены в `speed_factor` раз, то есть нагрузка эталона. Отставание тика: насколько позже срока начался шаг (`MatchRunner.lag_sum`) | среднее < 10% тика, без сбросов расписания |
+| `apps/bots/tests/test_benchmarks.py::test_bench_decide_strategy_views` | `decide()` `expander` и `turtle` на видах их собственной партии на `pautina` после 300..1500 тиков (много групп, стройки, контакт с врагом) | в среднем ≤ 1 мс |
 
 ## Регрессия
 
