@@ -68,7 +68,8 @@ ENV PATH=/app/.venv/bin:$PATH \
     GOW_HOST=0.0.0.0 \
     GOW_PORT=8000 \
     GOW_DATABASE_URL=sqlite:////data/gow.db \
-    GOW_MAPS_DIR=/app/maps
+    GOW_MAPS_DIR=/app/maps \
+    GOW_RULESET_PATH=/app/rulesets/mvp-0.toml
 
 USER 10001:10001
 VOLUME ["/data"]

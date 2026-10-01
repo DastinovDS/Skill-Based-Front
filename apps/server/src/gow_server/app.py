@@ -11,13 +11,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from sqlalchemy.orm import sessionmaker
 
-from gow_server import identity, internal, maps, replays, ws
+from gow_server import identity, internal, invites, maps, replays, ws
 from gow_server.clock import Clock, MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.logs import request_id_var
 from gow_server.matches import MatchManager
 from gow_server.ratelimit import SlidingWindowLimiter
 from gow_server.settings import Settings
+from gow_sim.ruleset import load_ruleset
 
 log = logging.getLogger("gow_server")
 access_log = logging.getLogger("gow_server.access")
@@ -42,6 +43,8 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             settings.replays_dir, settings.rulesets_dir, settings.maps_dir, app.state.sessions
         )
         app.state.matches = MatchManager(match_clock, replays=app.state.replays)
+        app.state.ruleset = load_ruleset(settings.ruleset_path)
+        app.state.invites = invites.InviteBook(match_clock, settings.invite_ttl_s)
         log.info(
             "server started",
             extra={"env": settings.env, "maps": [entry.id for entry in app.state.maps.all()]},
@@ -71,12 +74,15 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         try:
             response = await call_next(request)
             response.headers[REQUEST_ID_HEADER] = request_id
-            # Path only: the query string is never logged (AGENTS.md, section 5.3).
+            # Path only: the query string is never logged (AGENTS.md, section 5.3). A matched
+            # route is logged by its template (/api/matches/{code}/join): the code is a secret.
+            route = request.scope.get("route")
+            path = getattr(route, "path", None) or request.url.path
             access_log.info(
                 "request",
                 extra={
                     "method": request.method,
-                    "path": request.url.path,
+                    "path": path,
                     "status": response.status_code,
                     "duration_ms": round((time.perf_counter() - started) * 1000, 1),
                 },
@@ -93,5 +99,6 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(identity.router)
     app.include_router(replays.router)
     app.include_router(internal.router)
+    app.include_router(invites.router)
     app.include_router(ws.router)
     return app
