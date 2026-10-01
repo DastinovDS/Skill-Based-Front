@@ -148,6 +148,16 @@ export class MatchConnection {
     this.#write({ type: 'resync' });
   }
 
+  /** Ask to pause a private match (DEC-05); not queued: a pause after a drop makes no sense. */
+  pause(): void {
+    if (this.#status === 'ready') this.#write({ type: 'pause' });
+  }
+
+  /** End a pause early (only the player who paused may). */
+  resume(): void {
+    if (this.#status === 'ready') this.#write({ type: 'resume' });
+  }
+
   /** Stop for good: no more reconnects. Unacknowledged commands are dropped. */
   close(): void {
     this.#teardown();

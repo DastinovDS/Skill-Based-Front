@@ -6,21 +6,38 @@ import {
 } from '../net/matchConnection.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 import { SnapshotBuffer } from '../net/snapshotBuffer.ts';
-import type { Command, EventMsg, ServerMsg } from '../protocol.gen.ts';
+import type { Command, EventMsg, ServerMsg, WelcomeMsg } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
 import { OrderBook } from './orderBook.ts';
 
 /** Events kept for the fight marks: they live a few seconds, so a short tail is enough. */
 const EVENT_TAIL = 64;
 
-export interface MatchSessionOptions {
-  matchId: string;
-  /** Guest token; goes out in `hello` only. */
-  token: string;
+/** Until `welcome` tells the real rate. */
+const DEFAULT_TICK_HZ = 10;
+
+/** What a session needs to know about the match: the HUD to feed and the tick rate. */
+export interface MatchContext {
   /** The HUD numbers: fed from the same snapshots the map draws. */
   hud: HudState;
   /** `ruleset_public.tick_hz`: paces the snapshot buffer and ages fog memories. */
   tickHz: number;
+}
+
+export interface MatchSessionOptions {
+  matchId: string;
+  /** Guest token; goes out in `hello` only. */
+  token: string;
+  /**
+   * The HUD and the tick rate, or a function that makes them from the first `welcome` (the
+   * ruleset and the player's side arrive there, so a real match cannot know them earlier). Until
+   * then `frame()` is `null` and `tickHz` is the default.
+   */
+  context: MatchContext | ((welcome: WelcomeMsg) => MatchContext);
+  /** Sees every server message after the session has handled it (`welcome`, `paused`, `match_end`). */
+  onServerMessage?: (msg: ServerMsg) => void;
+  /** Connection status changes. */
+  onStatus?: (status: ConnectionStatus) => void;
   /** Socket factory, page location, backoff, clocks: see `MatchConnectionOptions`. */
   connection?: Partial<Omit<MatchConnectionOptions, 'matchId' | 'token' | 'handlers'>>;
   /** Clock of the snapshot buffer, ms. */
@@ -34,17 +51,25 @@ export interface MatchSessionOptions {
  */
 export class MatchSession implements RenderSource {
   readonly orders = new OrderBook();
-  readonly tickHz: number;
-  readonly buffer: SnapshotBuffer;
-  readonly #hud: HudState;
+  tickHz = DEFAULT_TICK_HZ;
+  buffer: SnapshotBuffer;
+  #hud: HudState | null = null;
+  readonly #now: (() => number) | undefined;
+  readonly #onServerMessage: ((msg: ServerMsg) => void) | undefined;
   readonly #connection: MatchConnection;
   #events: readonly EventMsg[] = [];
   #status: ConnectionStatus = 'idle';
 
   constructor(opts: MatchSessionOptions) {
-    this.#hud = opts.hud;
-    this.tickHz = opts.tickHz;
-    this.buffer = new SnapshotBuffer({ tickMs: 1000 / opts.tickHz, now: opts.now });
+    this.#now = opts.now;
+    this.#onServerMessage = opts.onServerMessage;
+    this.buffer = new SnapshotBuffer({ tickMs: 1000 / this.tickHz, now: opts.now });
+    const context = opts.context;
+    if (typeof context === 'function') {
+      this.#makeContext = context;
+    } else {
+      this.#setContext(context);
+    }
     this.#connection = new MatchConnection({
       ...opts.connection,
       matchId: opts.matchId,
@@ -55,17 +80,26 @@ export class MatchSession implements RenderSource {
         },
         onStatus: (status) => {
           this.#status = status;
+          opts.onStatus?.(status);
         },
         // The snapshot timeline is broken: forget the old frames and the old HUD picture.
         onReset: () => {
           this.buffer.clear();
-          this.#hud.reset();
+          this.#hud?.reset();
         },
         onAckLost: (seq) => {
           this.orders.onAckLost(seq);
         },
       },
     });
+  }
+
+  #makeContext: ((welcome: WelcomeMsg) => MatchContext) | null = null;
+
+  #setContext(context: MatchContext): void {
+    this.#hud = context.hud;
+    this.tickHz = context.tickHz;
+    this.buffer = new SnapshotBuffer({ tickMs: 1000 / context.tickHz, now: this.#now });
   }
 
   get status(): ConnectionStatus {
@@ -86,6 +120,16 @@ export class MatchSession implements RenderSource {
     this.#connection.resync();
   }
 
+  /** Ask to pause a private match (DEC-05); the answer is a `paused` message or an `error`. */
+  pause(): void {
+    this.#connection.pause();
+  }
+
+  /** End the pause early; only the player who paused may. */
+  resume(): void {
+    this.#connection.resume();
+  }
+
   /** Queue a command; returns its `seq`. */
   send(cmd: Command): number {
     return this.#connection.send(cmd);
@@ -103,13 +147,19 @@ export class MatchSession implements RenderSource {
 
   #onMessage(msg: ServerMsg): void {
     switch (msg.type) {
+      case 'welcome':
+        // The first welcome fixes the ruleset; after a reconnect it is the same match.
+        if (this.#makeContext !== null && this.#hud === null) {
+          this.#setContext(this.#makeContext(msg));
+        }
+        break;
       case 'snapshot':
         // A duplicate or a stale snapshot is dropped by the buffer, and so by the HUD.
-        if (this.buffer.push(msg) === 'added') this.#hud.onSnapshot(msg);
+        if (this.buffer.push(msg) === 'added') this.#hud?.onSnapshot(msg);
         break;
       case 'event':
         this.#events = [...this.#events, msg].slice(-EVENT_TAIL);
-        this.#hud.onEvent(msg);
+        this.#hud?.onEvent(msg);
         break;
       case 'ack':
         this.orders.onAck(msg);
@@ -117,5 +167,6 @@ export class MatchSession implements RenderSource {
       default:
         break;
     }
+    this.#onServerMessage?.(msg);
   }
 }

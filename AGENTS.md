@@ -84,6 +84,7 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 | `pnpm -C apps/client check:i18n` | строки интерфейса только в словарях, одинаковые ключи ru и en (входит в `test`) | CLI-11 |
 | `pnpm -C apps/client build && pnpm -C apps/client preview` | прод-сборка локально под целевым CSP (`apps/client/csp.ts`) | INF-03 |
 | `uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol` | перегенерация схемы и TS-типов | PRO-02 |
+| `uv run python scripts/export_openapi.py && pnpm -C apps/client gen:api` | перегенерация OpenAPI сервера (`apps/server/openapi.json`) и TS-типов HTTP API (`api.gen.ts`) | CLI-09 |
 | `uv run gow-maps validate maps/*.json` | проверка карт | MAP-02 |
 | `uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json` | собрать карту из половины (половины лежат в `maps/src/`) | MAP-03 |
 | `uv run gow-maps preview maps/*.json` | нарисовать превью `maps/<name>.preview.png` | MAP-04 |

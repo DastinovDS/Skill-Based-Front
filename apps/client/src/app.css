@@ -11,3 +11,109 @@ body {
   height: 100%;
   overflow: hidden;
 }
+
+/* Menu-like screens (welcome, menu, waiting room, result): a card in the middle of the page. */
+.screen {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(420px, 100%);
+  padding: 20px;
+  box-sizing: border-box;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  background: #161b22;
+}
+
+.card h1,
+.card h2,
+.card p {
+  margin: 0;
+}
+
+.card h1 {
+  font-size: 22px;
+}
+
+.card h2 {
+  font-size: 16px;
+}
+
+.card label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.card input,
+.card select,
+.card button,
+.banner button {
+  font: inherit;
+  color: inherit;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.card button,
+.banner button {
+  cursor: pointer;
+}
+
+.card button.primary {
+  background: #1f6feb;
+  border-color: #388bfd;
+}
+
+.card button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.card .hint {
+  font-size: 12px;
+  color: #8b949e;
+}
+
+.card .error {
+  color: #ff7b72;
+  font-size: 14px;
+}
+
+.card .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Messages over the match map: connection status, pause. */
+.banner {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 56px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 32px);
+  padding: 8px 14px;
+  box-sizing: border-box;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: rgb(22 27 34 / 95%);
+  font-size: 14px;
+}

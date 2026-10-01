@@ -10,19 +10,19 @@
 
   interface Props {
     rendererFailed: boolean;
-    /** Names of the maps the dev screen can show. */
-    maps: readonly string[];
-    mapName: string;
-    /** Ids of the dev scenes (fixtures and the live demo). */
-    scenes: readonly string[];
-    sceneId: string;
+    /** Dev screen only: names of the maps it can show, and the selected one. */
+    maps?: readonly string[];
+    mapName?: string;
+    /** Dev screen only: ids of the scenes (fixtures and the live demo), and the selected one. */
+    scenes?: readonly string[];
+    sceneId?: string;
     fps: number;
     /** The HUD numbers; replaced once per snapshot. */
     hud: HudState;
     /** Ordering with the mouse and keys; its selection is the HUD's. */
     orders: OrderController;
-    onselectmap: (name: string) => void;
-    onselectscene: (id: string) => void;
+    onselectmap?: (name: string) => void;
+    onselectscene?: (id: string) => void;
     onfit: () => void;
     /** The part of the screen the HUD covers, reported whenever it changes (for "fit map"). */
     oninsets?: (insets: Insets) => void;
@@ -104,37 +104,45 @@
     <aside class="dock" bind:this={dock}>
       <section class="section">
         <h1>{t('app.title')}</h1>
-        <div class="row">
-          <label>
-            {t('hud.map')}
-            <select
-              value={mapName}
-              onchange={(event) => {
-                onselectmap(event.currentTarget.value);
-              }}
-            >
-              {#each maps as name (name)}
-                <option value={name}>{name}</option>
-              {/each}
-            </select>
-          </label>
-          <button type="button" class="fit" onclick={onfit}>{t('hud.fitMap')}</button>
-        </div>
-        <div class="row">
-          <label>
-            {t('hud.scene')}
-            <select
-              value={sceneId}
-              onchange={(event) => {
-                onselectscene(event.currentTarget.value);
-              }}
-            >
-              {#each scenes as id (id)}
-                <option value={id}>{id}</option>
-              {/each}
-            </select>
-          </label>
-        </div>
+        {#if maps !== undefined}
+          <div class="row">
+            <label>
+              {t('hud.map')}
+              <select
+                value={mapName}
+                onchange={(event) => {
+                  onselectmap?.(event.currentTarget.value);
+                }}
+              >
+                {#each maps as name (name)}
+                  <option value={name}>{name}</option>
+                {/each}
+              </select>
+            </label>
+            <button type="button" class="fit" onclick={onfit}>{t('hud.fitMap')}</button>
+          </div>
+        {:else}
+          <div class="row">
+            <button type="button" class="fit" onclick={onfit}>{t('hud.fitMap')}</button>
+          </div>
+        {/if}
+        {#if scenes !== undefined}
+          <div class="row">
+            <label>
+              {t('hud.scene')}
+              <select
+                value={sceneId}
+                onchange={(event) => {
+                  onselectscene?.(event.currentTarget.value);
+                }}
+              >
+                {#each scenes as id (id)}
+                  <option value={id}>{id}</option>
+                {/each}
+              </select>
+            </label>
+          </div>
+        {/if}
         <div class="row">
           <label>
             {t('hud.language')}

@@ -1,14 +1,15 @@
 <script lang="ts">
-  import { DEV_PLAYER, DEV_RULES } from './hud/devFeed.ts';
-  import Hud from './hud/Hud.svelte';
-  import { HudState } from './hud/hudState.svelte.ts';
-  import { createDevMatch } from './dev/devMatch.ts';
-  import { DEMO_SCENE, FIXTURE_SCENES, frozenSource } from './dev/scenarios.ts';
-  import { OrderBook } from './match/orderBook.ts';
-  import { OrderController } from './match/orderController.ts';
-  import { BUNDLED_MAPS, DEFAULT_MAP, backgroundUrl } from './map/bundledMaps.ts';
-  import { NO_INSETS, type Insets } from './render/camera.ts';
-  import GameCanvas from './render/GameCanvas.svelte';
+  import { DEV_PLAYER, DEV_RULES } from '../hud/devFeed.ts';
+  import Hud from '../hud/Hud.svelte';
+  import { HudState } from '../hud/hudState.svelte.ts';
+  import { createDevMatch } from './devMatch.ts';
+  import { DEMO_SCENE, FIXTURE_SCENES, frozenSource } from './scenarios.ts';
+  import { OrderBook } from '../match/orderBook.ts';
+  import { forwardKey } from '../match/keyEvents.ts';
+  import { OrderController } from '../match/orderController.ts';
+  import { BUNDLED_MAPS, DEFAULT_MAP, backgroundUrl } from '../map/bundledMaps.ts';
+  import { NO_INSETS, type Insets } from '../render/camera.ts';
+  import GameCanvas from '../render/GameCanvas.svelte';
 
   // Dev screen: a bundled map with the camera and a scene (a protocol fixture frozen at its tick,
   // or a live match against the dev server). The lobby replaces it.
@@ -84,27 +85,8 @@
     };
   });
 
-  const TEXT_INPUTS = new Set(['INPUT', 'SELECT', 'TEXTAREA']);
-
   function handleKey(event: KeyboardEvent): void {
-    if (event.ctrlKey || event.metaKey || event.altKey) {
-      return;
-    }
-    const target = event.target;
-    const typing =
-      target instanceof HTMLElement &&
-      TEXT_INPUTS.has(target.tagName) &&
-      !(target instanceof HTMLInputElement && target.type === 'checkbox');
-    if (typing) {
-      return;
-    }
-    if (
-      orders.key({
-        type: event.type === 'keyup' ? 'keyup' : 'keydown',
-        code: event.code,
-        shiftKey: event.shiftKey,
-      })
-    ) {
+    if (forwardKey(orders, event)) {
       event.preventDefault();
     }
   }

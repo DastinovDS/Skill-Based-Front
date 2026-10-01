@@ -3,7 +3,8 @@
 import 'pixi.js/unsafe-eval';
 import { Assets } from 'pixi.js';
 import { mount } from 'svelte';
-import App from './App.svelte';
+import RootApp from './app/RootApp.svelte';
+import DevScreen from './dev/DevScreen.svelte';
 import ReplayScreen from './replay/ReplayScreen.svelte';
 import './app.css';
 
@@ -15,10 +16,16 @@ if (target === null) {
   throw new Error('#app element is missing in index.html');
 }
 
-// `/?replay=<match id>` opens the replay viewer (CLI-10); the result screen of CLI-09 links there
-// (`replayUrl`). `?replay=dev` plays the bundled sample in a dev build.
-const replayId = new URLSearchParams(window.location.search).get('replay');
+// `/?replay=<match id>` opens the replay viewer (CLI-10); `?replay=dev` plays the bundled sample in
+// a dev build. In a dev build `?scene=<id>` and `?dev` open the dev screen (a bundled map with
+// protocol fixtures, the Playwright reference screenshots use it). Everything else is the
+// application with its screens (CLI-09); an invite link is `/?m=<code>`.
+const params = new URLSearchParams(window.location.search);
+const replayId = params.get('replay');
+const devScreen = import.meta.env.DEV && (params.has('scene') || params.has('dev'));
 
-export default replayId === null
-  ? mount(App, { target })
-  : mount(ReplayScreen, { target, props: { matchId: replayId } });
+export default replayId !== null
+  ? mount(ReplayScreen, { target, props: { matchId: replayId } })
+  : devScreen
+    ? mount(DevScreen, { target })
+    : mount(RootApp, { target });

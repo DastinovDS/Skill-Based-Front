@@ -2,7 +2,7 @@ import { parseReplay, ReplayError, type ReplayFile } from './replayFile.ts';
 
 export type ReplayLoadCode = 'auth' | 'missing' | 'network' | 'format' | 'invalid';
 
-/** Why a replay could not be loaded: `auth` (401/403), `missing` (404: no match or not ready), `network`, or a file problem. */
+/** Why a replay could not be loaded: `auth` (401/403), `missing` (404: no match or not ready; 422: the id is not a stored match, e.g. a private or bot match the server does not persist yet), `network`, or a file problem. */
 export class ReplayLoadError extends Error {
   constructor(readonly code: ReplayLoadCode) {
     super(`replay not loaded: ${code}`);
@@ -26,7 +26,7 @@ export async function loadReplay(
       headers: token === null ? {} : { Authorization: `Bearer ${token}` },
     });
     if (response.status === 401 || response.status === 403) throw new ReplayLoadError('auth');
-    if (response.status === 404) throw new ReplayLoadError('missing');
+    if (response.status === 404 || response.status === 422) throw new ReplayLoadError('missing');
     if (!response.ok) throw new ReplayLoadError('network');
     body = await response.json();
   } catch (error) {

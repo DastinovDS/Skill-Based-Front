@@ -54,7 +54,8 @@ jobs:
               - 'packages/sim/tests/maps/**'
               # Protocol drift (PRO-02, #45): the schema comes from gow_protocol, which takes
               # enums and limits from gow_sim; the pydantic version in uv.lock shapes it too.
-              # apps/server joins when the client gets HTTP API types (api.gen.ts, CLI-09 #65).
+              # HTTP API types (api.gen.ts, CLI-09 #65) come from the FastAPI app of the server.
+              - 'apps/server/**'
               - 'packages/protocol/**'
               - 'packages/sim/src/**'
               - 'scripts/**'
@@ -142,7 +143,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
-      - run: uv sync --locked --no-dev --package gow-protocol
+      - run: uv sync --locked --no-dev --package gow-server
       - name: protocol-drift
         run: |
           uv run --no-sync python scripts/export_schema.py
@@ -152,6 +153,18 @@ jobs:
             git status --short -- "$@"
             git --no-pager diff -- "$@"
             echo "::error::Generated protocol files are out of date. Run: uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol"
+            exit 1
+          fi
+      # api-drift (CLI-09, #65): the OpenAPI document of the server and the client types from it.
+      - name: api-drift
+        run: |
+          uv run --no-sync python scripts/export_openapi.py
+          pnpm -C apps/client gen:api
+          set -- apps/server/openapi.json apps/client/src/api.gen.ts
+          if [ -n "$(git status --porcelain -- "$@")" ]; then
+            git status --short -- "$@"
+            git --no-pager diff -- "$@"
+            echo "::error::Generated API files are out of date. Run: uv run python scripts/export_openapi.py && pnpm -C apps/client gen:api"
             exit 1
           fi
       - run: pnpm -C apps/client lint

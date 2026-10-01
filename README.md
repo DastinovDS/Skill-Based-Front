@@ -76,6 +76,19 @@ pnpm -C apps/client build && pnpm -C apps/client preview   # прод-сборк
 uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol
 ```
 
+Типы HTTP API (`apps/client/src/api.gen.ts`) генерируются из OpenAPI приложения FastAPI
+(`apps/server/openapi.json`), руками не правятся. После изменения эндпоинтов или их моделей:
+
+```sh
+uv run python scripts/export_openapi.py && pnpm -C apps/client gen:api
+```
+
+Клиент в разработке: `uv run gow-server` (порт 8000) и `pnpm -C apps/client dev`; dev-сервер Vite
+проксирует `/api` и `/ws` на `127.0.0.1:8000`. Экраны: ник гостя (токен в `localStorage`, ключ `sbf.guest`, в адрес
+не попадает), меню, приватный матч (ссылка-приглашение `/?m=<код>`, код после чтения убирается из адресной
+строки), матч с ботом, матч, итог с реплеем. Старый dev-экран с картой и фикстурами открывается в dev-сборке
+по `/?dev` и `/?scene=<id>`.
+
 Dev-экран клиента показывает карту из бандла (`maps/*.json`, до MAP-04 тестовые карты
 `packages/sim/tests/maps/`): выбор карты и «Вписать карту» в панели, перетаскивание сдвигает карту,
 колесо меняет масштаб у курсора. Счётчик FPS в панели обновляется дважды в секунду.
@@ -97,7 +110,7 @@ GitHub Actions, `.github/workflows/ci.yml`. Запускается на PR в `d
 | Проверка | Что делает |
 |---|---|
 | `py` | `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `pytest` с `HYPOTHESIS_PROFILE=ci` |
-| `web` | `pnpm -C apps/client install --frozen-lockfile`, шаг `protocol-drift` (перегенерация схемы протокола и `protocol.gen.ts`, падает при отличии от закоммиченных), `lint`, `check`, `test`, `build` |
+| `web` | `pnpm -C apps/client install --frozen-lockfile`, шаги `protocol-drift` и `api-drift` (перегенерация схемы протокола с `protocol.gen.ts` и OpenAPI сервера с `api.gen.ts`, падают при отличии от закоммиченных), `lint`, `check`, `test`, `build` |
 | `docker` | `hadolint` для `deploy/*.Dockerfile`, затем `deploy/smoke.sh`: сборка образов, `docker compose up`, проверки через Caddy |
 
 - Вспомогательный job `changes` смотрит на изменённые пути в PR. Если в PR нет изменений для `py`, `web` или `docker`
