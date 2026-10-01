@@ -51,7 +51,7 @@ RUN groupadd --system --gid 10001 gow \
 # replays/. The ownership set here is copied into a new named volume on first mount.
 # /app/data -> /data: settings whose default is relative to the working directory
 # (sqlite:///data/gow.db, data/replays/) land on the volume as well.
-RUN mkdir -p /data/replays /app \
+RUN mkdir -p /data/replays /data/rulesets /app \
     && chown -R gow:gow /data \
     && ln -s /data /app/data
 
@@ -69,7 +69,8 @@ ENV PATH=/app/.venv/bin:$PATH \
     GOW_PORT=8000 \
     GOW_DATABASE_URL=sqlite:////data/gow.db \
     GOW_MAPS_DIR=/app/maps \
-    GOW_RULESET_PATH=/app/rulesets/mvp-0.toml
+    GOW_RULESET_PATH=/app/rulesets/mvp-0.toml \
+    GOW_RULESETS_DIR=/data/rulesets
 
 USER 10001:10001
 VOLUME ["/data"]

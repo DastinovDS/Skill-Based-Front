@@ -221,6 +221,8 @@ class MatchRunner:
         self._forfeit_timers: dict[int, asyncio.Task[None]] = {}
         self._technical_defeats: set[int] = set()
         """Players whose ``Forfeit`` was queued by the server after the reconnect window."""
+        self._seen: set[int] = set()
+        """Players who connected at least once."""
         self._pauses_used: set[int] = set()
         self._paused_by: int | None = None
         self._pause_ends = 0.0
@@ -246,6 +248,7 @@ class MatchRunner:
             old.close()
         box = outbox or Outbox()
         self._outboxes[player] = box
+        self._seen.add(player)
         self._cancel_forfeit_timer(player)
         if self.finished:
             box.close()
@@ -439,6 +442,25 @@ class MatchRunner:
                 box.put(match_end_msg(outcome, match.tick, vp, disconnect=disconnect))
                 box.close()
 
+    def end_reason(self) -> str | None:
+        """Why the match ended, as stored in ``matches.end_reason``; ``None``: still running.
+
+        The ``EndReason`` value, except for technical defeats (DEC-05): ``no_show`` when a
+        defeated player never connected, ``disconnect`` when they left.
+        """
+        outcome = self.match.outcome
+        if outcome is None:
+            return None
+        if outcome.winner is None:  # a draw: a technical defeat only if both sides had one
+            defeated = self._technical_defeats
+            counts = len(defeated) == len(PLAYERS)
+        else:
+            defeated = {1 - outcome.winner} & self._technical_defeats
+            counts = bool(defeated)
+        if not counts:
+            return outcome.reason.value
+        return "disconnect" if defeated & self._seen else "no_show"
+
     def _bot_commands(self) -> list[PlayerCommand]:
         """Commands of the bot for this tick (it decides every ``BOT_DECIDE_EVERY`` ticks)."""
         seat = self.bot
@@ -533,6 +555,9 @@ class MatchManager:
         self._runners: dict[str, MatchRunner] = {}
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self.draining = False
+        self.on_end: Callable[[MatchRunner, str | None], None] | None = None
+        """Called when a match task is over, with ``None`` (finished), ``crashed`` or
+        ``cancelled``: the lifecycle (``gow_server.lifecycle``) saves the result there."""
 
     @property
     def active(self) -> int:
@@ -614,9 +639,12 @@ class MatchManager:
                 "bot_overruns": runner.bot_overruns,
                 "bot_skipped": runner.bot_skipped,
             }
+        failure: str | None = None
         if task.cancelled():
+            failure = "cancelled"
             log.info("match cancelled", extra=extra)
         elif (exc := task.exception()) is not None:
+            failure = "crashed"
             log.error("match crashed", exc_info=exc, extra=extra)
         else:
             if self._replays is not None and runner.replay_complete:
@@ -627,6 +655,11 @@ class MatchManager:
                 "match finished",
                 extra={**extra, "winner": outcome.winner, "reason": outcome.reason.value},
             )
+        if self.on_end is not None:
+            try:
+                self.on_end(runner, failure)
+            except Exception:
+                log.exception("match end hook failed", extra={"match_id": runner.match_id})
 
     def drain(self) -> None:
         self.draining = True

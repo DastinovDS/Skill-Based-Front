@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 from gow_server import botmatch, identity, internal, invites, maps, replays, ws
 from gow_server.clock import Clock, MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
+from gow_server.lifecycle import MatchLifecycle, abort_orphans, archive_rulesets
 from gow_server.logs import request_id_var
 from gow_server.matches import MatchManager
 from gow_server.ratelimit import SlidingWindowLimiter
@@ -49,8 +50,25 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             pause_max_s=settings.pause_max_s,
             bot_budget_s=settings.bot_budget_s,
         )
+        app.state.lifecycle = MatchLifecycle(
+            app.state.matches,
+            app.state.sessions,
+            match_clock,
+            ready_timeout_s=settings.ready_timeout_s,
+        )
         app.state.ruleset = load_ruleset(settings.ruleset_path)
-        app.state.invites = invites.InviteBook(match_clock, settings.invite_ttl_s)
+        await asyncio.to_thread(
+            archive_rulesets,
+            settings.ruleset_path,
+            settings.rulesets_dir,
+            settings.rulesets_bundled_dir,
+        )
+        orphans = await asyncio.to_thread(abort_orphans, app.state.sessions)
+        if orphans:
+            log.warning("matches of the previous run aborted", extra={"count": orphans})
+        app.state.invites = invites.InviteBook(
+            match_clock, settings.invite_ttl_s, app.state.lifecycle
+        )
         log.info(
             "server started",
             extra={"env": settings.env, "maps": [entry.id for entry in app.state.maps.all()]},
@@ -59,6 +77,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             yield
         finally:
             await app.state.matches.shutdown()
+            await app.state.lifecycle.aclose()
             await app.state.replays.aclose()
             engine.dispose()
             log.info("server stopped")

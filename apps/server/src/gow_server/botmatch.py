@@ -7,7 +7,8 @@ The match is ``private`` (unrated, one pause per player, DEC-05).
 Difficulty levels are different bots of ``gow_bots.bots.BOTS``, ordered by the win rates of
 ``docs/balance/latest.md`` (``rusher`` beats the rest, ``turtle`` loses to all); the parameters of
 a bot vary with the match seed (``choose_params``). The player's side is random, like in an invite.
-An account has one running bot match at a time (409): a bot match costs server CPU.
+An account has at most one active match of any kind (409, SRV-09): a bot match costs server CPU.
+The match goes through the lifecycle (``gow_server.lifecycle``): a ``matches`` row is written first.
 """
 
 import secrets
@@ -18,8 +19,9 @@ from pydantic import BaseModel, ConfigDict
 
 from gow_bots.bots import BOTS
 from gow_server.identity import CurrentPlayer
+from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchState
 from gow_server.maps import MapCatalog
-from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError, MatchManager
+from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError
 from gow_sim.maps import PLAYERS
 from gow_sim.ruleset import Ruleset
 
@@ -59,7 +61,7 @@ class BotMatchOut(BaseModel):
 async def create_bot_match(
     body: CreateBotMatch, request: Request, response: Response, player: CurrentPlayer
 ) -> BotMatchOut:
-    manager: MatchManager = request.app.state.matches
+    lifecycle: MatchLifecycle = request.app.state.lifecycle
     catalog: MapCatalog = request.app.state.maps
     rules: Ruleset = request.app.state.ruleset
     if body.map_id is None:
@@ -72,8 +74,8 @@ async def create_bot_match(
         if found is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="unknown map")
         entry = found
-    if manager.running_bot_match_of(player.id) is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="you already play against a bot")
+    if lifecycle.active_of(player.id) is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="you already have an active match")
     slot = secrets.randbelow(len(PLAYERS))
     bot_slot = 1 - slot
     controller = BOTS[LEVEL_BOTS[body.level]](
@@ -81,18 +83,28 @@ async def create_bot_match(
     )
     accounts = [BOT_ACCOUNT, BOT_ACCOUNT]
     accounts[slot] = player.id
+    record = lifecycle.open_record()
     try:
-        runner = manager.create(
+        runner = await lifecycle.start(
+            record,
             entry.id,
             entry.definition,
             rules,
             (accounts[0], accounts[1]),
             private=True,
             bot=BotSeat(bot_slot, controller),
+            bot_name=LEVEL_BOTS[body.level],
         )
+    except AlreadyActiveError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail="you already have an active match"
+        ) from None
     except ManagerDrainingError:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, detail="server is restarting"
         ) from None
+    finally:
+        if record.state is MatchState.CREATED:
+            lifecycle.abort(record, "start_failed")
     response.headers["Cache-Control"] = "no-store"
     return BotMatchOut(match_id=runner.match_id, map_id=entry.id, level=body.level, player=slot)

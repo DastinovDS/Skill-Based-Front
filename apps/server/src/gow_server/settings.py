@@ -3,7 +3,11 @@
 from pathlib import Path
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEV_ONLY_RULESETS = frozenset({"test-short"})
+"""Rulesets (file stems) a ``prod`` server refuses to play on (AGENTS.md, section 5.4)."""
 
 
 class Settings(BaseSettings):
@@ -28,7 +32,12 @@ class Settings(BaseSettings):
     and into the database. Relative paths are relative to the working directory."""
     rulesets_dir: Path = Path("rulesets/archive")
     """Archive of the rulesets matches were played on (``<hash>.toml``): a replay is re-simulated
-    with the ruleset named in its header (AGENTS.md, section 4.5)."""
+    with the ruleset named in its header (AGENTS.md, section 4.5). The server archives its ruleset
+    here at start-up, so it must be writable (in a container ``GOW_RULESETS_DIR=/data/rulesets``).
+    """
+    rulesets_bundled_dir: Path = Path("rulesets/archive")
+    """The archive shipped with the image (read-only): its files are copied into ``rulesets_dir``
+    at start-up when that is another directory."""
     guest_rate_limit: int = 10
     guest_rate_window_s: int = 3600
     """At most ``guest_rate_limit`` guests per client IP within ``guest_rate_window_s`` seconds."""
@@ -50,5 +59,16 @@ class Settings(BaseSettings):
     then the server applies a ``Forfeit`` for them, a technical defeat (DEC-05, #49)."""
     pause_max_s: float = 60.0
     """One pause per player in a private match, at most this long (DEC-05); none in rated ones."""
+    ready_timeout_s: float = 120.0
+    """A guest who joined an invite and the host have this long to be ready; otherwise the
+    invite is dropped, a no-show (SRV-09)."""
     bot_budget_s: float = 0.001
     """A bot decision longer than this makes the bot skip its next call (SRV-06, AGENTS.md, 8)."""
+
+    @model_validator(mode="after")
+    def _ruleset_allowed(self) -> "Settings":
+        if self.env == "prod" and self.ruleset_path.stem in DEV_ONLY_RULESETS:
+            raise ValueError(
+                f"ruleset {self.ruleset_path.stem!r} is only for dev and e2e, not GOW_ENV=prod"
+            )
+        return self

@@ -145,9 +145,11 @@ uv run gow-server --reload   # перезапуск при изменении к
 | `GOW_FORWARDED_ALLOW_IPS` | `127.0.0.1` | прокси (Caddy), которому доверяются заголовки `X-Forwarded-*` |
 | `GOW_MAPS_DIR` | `maps` | пул карт: `<id>.json` и необязательный фон `<id>.bg.png` |
 | `GOW_RULESET_PATH` | `rulesets/mvp-0.toml` | набор правил матчей, которые запускает сервер |
+| `GOW_RULESETS_DIR`, `GOW_RULESETS_BUNDLED_DIR` | `rulesets/archive`, `rulesets/archive` | архив рулсетов по хэшу: сервер сам кладёт сюда свой рулсет при старте (каталог должен быть записываемым; в контейнере `/data/rulesets` на томе), архив из образа копируется сюда, если каталоги разные. `test-short` при `GOW_ENV=prod` сервер не принимает |
 | `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | база SQLite (WAL); путь относительно рабочего каталога |
 | `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `10`, `3600` | не больше N новых гостей с одного IP за окно в секундах |
 | `GOW_INVITE_TTL_S` | `1800` | срок жизни приглашения в приватный матч (секунды) |
+| `GOW_READY_TIMEOUT_S` | `120` | SRV-09: время на готовность после входа гостя в приглашение; потом приглашение снимается (неявка) |
 | `GOW_WS_ALLOWED_ORIGINS` | `[]` | JSON-список `Origin`, кроме собственного сайта, которым можно открывать WebSocket матча |
 | `GOW_WS_HELLO_TIMEOUT_S`, `GOW_WS_SEND_TIMEOUT_S` | `5`, `5` | ожидание `hello`; отправка дольше этого: клиент не читает, отключение |
 | `GOW_RECONNECT_WINDOW_S`, `GOW_PAUSE_MAX_S` | `60`, `60` | DEC-05: время на переподключение до технического поражения (команда `Forfeit` в журнале); максимум единственной паузы игрока в приватном матче |

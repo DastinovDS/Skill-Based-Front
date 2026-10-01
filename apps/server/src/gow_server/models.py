@@ -68,6 +68,12 @@ class Match(Base):
     started_at: Mapped[datetime | None]
     ended_at: Mapped[datetime | None]
     end_reason: Mapped[str | None] = mapped_column(String(32))
+    """``EndReason`` value, or ``disconnect``, ``no_show``, ``crashed``, ``server_stopped``,
+    ``server_restart`` (see ``gow_server.lifecycle``)."""
+    status: Mapped[str] = mapped_column(String(16), default="created", server_default="created")
+    """``running``, ``saved`` (result written) or ``aborted`` (no result); SRV-09."""
+    ticks: Mapped[int | None]
+    """Duration of the match in ticks (10 per second) once it is over."""
     replay_path: Mapped[str | None] = mapped_column(String(255))
 
 
