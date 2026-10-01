@@ -36,6 +36,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import IO, Final, Self
 
+from gow_sim.analysis import MatchMetrics, MatchRecorder, analyze
 from gow_sim.canonical import digest
 from gow_sim.commands import (
     CancelOrder,
@@ -56,6 +57,7 @@ from gow_sim.match import (
     SIM_VERSION,
     Controller,
     Match,
+    MatchObserver,
     MatchResult,
     run_headless,
 )
@@ -75,11 +77,13 @@ __all__ = [
     "ReplayHeader",
     "ReplayVersionError",
     "ReplayWriter",
+    "analyze_replay",
     "decode_command",
     "encode_command",
     "main",
     "read_replay",
     "record_headless",
+    "replay_match",
     "replay_run",
 ]
 
@@ -468,6 +472,54 @@ def replay_run(
             return ReplayCheck(path, matched, match.tick, divergence)
         good = (match.tick, data)
     return ReplayCheck(path, len(replay.checkpoints), match.tick, None)
+
+
+def replay_match(
+    path: str | Path,
+    rulesets_dir: str | Path = DEFAULT_RULESETS_DIR,
+    maps_dir: str | Path = DEFAULT_MAPS_DIR,
+    observer: MatchObserver | None = None,
+) -> Match:
+    """Re-simulate a replay up to its last checkpoint and return the finished ``Match``.
+
+    ``observer`` sees every tick like in ``run_headless``. No hash is compared (that is
+    ``replay_run``). Raises ``ReplayVersionError`` and ``ReplayError`` like ``replay_run``.
+    """
+    path = Path(path)
+    replay = read_replay(path)
+    header = replay.header
+    if header.sim_version != SIM_VERSION:
+        raise ReplayVersionError(
+            f"{path}: sim_version {header.sim_version}, this code is {SIM_VERSION}"
+        )
+    rules = _find_ruleset(header.ruleset_hash, Path(rulesets_dir))
+    mapdef = _find_map(header, [path.parent / "maps", Path(maps_dir)])
+    try:
+        match = Match(mapdef, rules, header.match_key)
+    except ValueError as exc:
+        raise ReplayError(f"{path}: {exc}") from exc
+    by_tick: dict[int, list[PlayerCommand]] = {}
+    for tick, cmd in replay.commands:
+        by_tick.setdefault(tick, []).append(cmd)
+    if observer is not None:
+        observer.begin(match)
+    while not match.finished and match.tick < replay.checkpoints[-1].tick:
+        commands = by_tick.get(match.tick + 1, [])
+        match.step(commands)
+        if observer is not None:
+            observer.record(match, commands)
+    return match
+
+
+def analyze_replay(
+    path: str | Path,
+    rulesets_dir: str | Path = DEFAULT_RULESETS_DIR,
+    maps_dir: str | Path = DEFAULT_MAPS_DIR,
+) -> MatchMetrics:
+    """``analyze`` of the match of a replay (a bot tournament match or a real one)."""
+    recorder = MatchRecorder()
+    replay_match(path, rulesets_dir, maps_dir, recorder)
+    return analyze(recorder.log())
 
 
 def _find_ruleset(rules_hash: str, rulesets_dir: Path) -> Ruleset:
