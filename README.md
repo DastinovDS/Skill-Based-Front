@@ -131,8 +131,10 @@ uv run gow-server --reload   # перезапуск при изменении к
 | `GOW_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `GOW_FORWARDED_ALLOW_IPS` | `127.0.0.1` | прокси (Caddy), которому доверяются заголовки `X-Forwarded-*` |
 | `GOW_MAPS_DIR` | `maps` | пул карт: `<id>.json` и необязательный фон `<id>.bg.png` |
+| `GOW_RULESET_PATH` | `rulesets/mvp-0.toml` | набор правил матчей, которые запускает сервер |
 | `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | база SQLite (WAL); путь относительно рабочего каталога |
 | `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `10`, `3600` | не больше N новых гостей с одного IP за окно в секундах |
+| `GOW_INVITE_TTL_S` | `1800` | срок жизни приглашения в приватный матч (секунды) |
 | `GOW_WS_ALLOWED_ORIGINS` | `[]` | JSON-список `Origin`, кроме собственного сайта, которым можно открывать WebSocket матча |
 | `GOW_WS_HELLO_TIMEOUT_S`, `GOW_WS_SEND_TIMEOUT_S` | `5`, `5` | ожидание `hello`; отправка дольше этого: клиент не читает, отключение |
 | `GOW_WS_MSG_RATE`, `GOW_WS_MSG_BURST` | `20`, `60` | token bucket сообщений одного соединения (в секунду, пачка); больше: флуд, отключение |

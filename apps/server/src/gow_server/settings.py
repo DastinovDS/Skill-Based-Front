@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     """Proxies trusted for X-Forwarded-* headers (uvicorn ``--forwarded-allow-ips``): Caddy."""
     maps_dir: Path = Path("maps")
     """Directory with the map pool: ``<id>.json`` and optional background ``<id>.bg.png``."""
+    ruleset_path: Path = Path("rulesets/mvp-0.toml")
+    """The ruleset of every match this server starts (loaded once at startup)."""
     database_url: str = "sqlite:///data/gow.db"
     """SQLite only; a relative path is relative to the working directory."""
     replays_dir: Path = Path("data/replays")
@@ -41,3 +43,5 @@ class Settings(BaseSettings):
     ws_msg_burst: int = 60
     """Token bucket of one connection's messages: ``ws_msg_rate`` per second, bursts up to
     ``ws_msg_burst`` (a resend of unacknowledged commands after a reconnect); more is a flood."""
+    invite_ttl_s: float = 1800.0
+    """A private-match invite expires this long after creation (SRV-05: 30 minutes)."""

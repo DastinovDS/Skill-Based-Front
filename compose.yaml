@@ -22,6 +22,7 @@ services:
       GOW_LOG_LEVEL: ${GOW_LOG_LEVEL:-INFO}
       GOW_GUEST_RATE_LIMIT: ${GOW_GUEST_RATE_LIMIT:-10}
       GOW_GUEST_RATE_WINDOW_S: ${GOW_GUEST_RATE_WINDOW_S:-3600}
+      GOW_INVITE_TTL_S: ${GOW_INVITE_TTL_S:-1800}
       # app is reachable only through the internal network, i.e. only from Caddy, and Caddy
       # replaces a client's X-Forwarded-For with the real client address.
       GOW_FORWARDED_ALLOW_IPS: "*"
