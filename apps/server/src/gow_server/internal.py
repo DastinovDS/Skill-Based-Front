@@ -4,6 +4,11 @@ Only requests from the loopback interface are served, i.e. from inside the `app`
 (``docker compose exec app ...`` in ``deploy/deploy.sh``). Caddy proxies only ``/api/*`` and
 ``/ws/*``, so ``/internal`` is not reachable from outside either way.
 
+``request.client`` alone does not prove loopback: uvicorn trusts ``X-Forwarded-For`` of any peer
+(``GOW_FORWARDED_ALLOW_IPS="*"`` in ``compose.yaml``) and puts its address there, so a peer on the
+internal network could claim ``127.0.0.1`` (#194). A request that carries a proxy header has come
+through a proxy, never from inside the container: it gets the same 404.
+
 - ``GET /internal/drain``: ``{draining, active}``;
 - ``POST /internal/drain``: stop starting new matches; running ones play to the end;
 - ``DELETE /internal/drain``: accept new matches again (a deploy that stopped before the switch);
@@ -19,10 +24,13 @@ from gow_server.matches import MatchManager
 from gow_server.metrics import render
 
 LOOPBACK = frozenset({"127.0.0.1", "::1"})
+PROXY_HEADERS = ("x-forwarded-for", "forwarded", "x-real-ip")
+"""Headers a proxy adds; ``X-Forwarded-For`` is what uvicorn turns into ``request.client``."""
 
 
 def _loopback_only(request: Request) -> None:
-    if request.client is None or request.client.host not in LOOPBACK:
+    proxied = any(name in request.headers for name in PROXY_HEADERS)
+    if proxied or request.client is None or request.client.host not in LOOPBACK:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
