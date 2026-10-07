@@ -1,33 +1,33 @@
-"""Road upgrades in the mode «Строительство» (SIM-11; mechanics.md, sections 5 and 8; DEC-08).
+"""Road upgrades by a city (DEC-16, #203; mechanics.md, section 8).
 
-- ``UpgradeRoad(group, edge)`` (SIM-04 validates it, 1 CP) puts a group standing at an end of an
-  internal edge of its owner into «Строительство» on that edge: ``start_build()``.
-- The ``build`` system raises the width of the edge by one every ``build.ticks_per_level`` ticks
-  of building, up to ``max_width`` of the edge. Buffer edges are never upgraded.
-- Leaving (a move order), a mode change, a merge and a fight (combat, SIM-09, calls
-  ``interrupt_build()``) stop the build; the progress of the current level is lost.
+- ``UpgradeRoad(node, edge)`` (SIM-04 validates it) lets the own city ``node`` raise the width of
+  the internal ``edge`` at it by one level. ``start_build()`` applies it at the start of tick
+  ``t``: ``build.charges_per_level[w + 1]`` charges leave the city warehouse (before the recharge
+  of the same tick: ``apply_commands`` runs before ``supply``), the CP cost ``orders.cost.build``
+  is charged by ``apply_commands``; event ``build_started``.
+- The ``build`` system raises the width by one at tick ``t + build.ticks_per_level`` (event
+  ``road_upgraded``) and ends the build. The next level is a new command and a new payment.
+- One build per city, one city per edge (``city_busy``, ``edge_busy``).
+- Every tick the ``build`` system checks that the edge is still internal for the player who
+  started the build; if not (the builder city or the other end was captured), the build is
+  removed: ``build_stopped`` with ``reason = "interrupted"``, the width stays, the charges are
+  not returned. Combat runs before ``build``, so a capture in the completion tick cancels the
+  level. Nothing else stops a build: no fight without an owner change, no loss of supply, no
+  empty warehouse, no group movement.
+- There is no cancel.
 - Capacities are recomputed from the new width (``systems.capacity.node_capacities`` compares
   the widths it was computed from); packet speed is read from the width when a packet is sent
   (supply, SIM-08).
 - ``upgrade_gain()``: what the next level gives, for the road hint in the client
   (mechanics.md, section 18; the ``upgrade_gain`` of an own edge in the view, SIM-14).
 
-Details not fixed by the rules follow the defaults of #124:
-
-- the build started at tick ``t`` raises the width at ``t + ticks_per_level`` (``Group.build_since``
-  is the tick the current level started, like ``Order.depart_tick``), then every
-  ``ticks_per_level`` ticks;
-- every group has its own progress: builders of one edge neither help nor hinder each other;
-- a finished road (``max_width``) ends the build, the group stays in «Строительство»;
-- the build also stops when the edge is no longer internal or the group no longer stands at an
-  end of it; the group keeps its mode;
-- the size and the charges of the group do not matter.
+The build events go only to their player (DEC-17, item 6; ``gow_protocol.convert``).
 """
 
 from dataclasses import dataclass
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Mode, event
+from gow_sim.state import Build, Event, GameState, event
 from gow_sim.systems.capacity import is_internal
 
 
@@ -57,76 +57,70 @@ def upgrade_gain(state: GameState, rules: Ruleset, edge: int) -> UpgradeGain | N
     )
 
 
-def start_build(group: Group, edge: int, tick: int) -> None:
-    """Apply a validated ``UpgradeRoad``: the group builds ``edge`` from ``tick`` on."""
-    group.mode = Mode.BUILD
-    group.build_edge = edge
-    group.build_since = tick
+def level_price(state: GameState, rules: Ruleset, edge: int) -> int:
+    """Charges for the next level of ``edge`` below ``max_width``: ``charges_per_level[w + 1]``."""
+    return rules.build.charges_per_level.of(state.edges[edge].width + 1)
 
 
-def interrupt_build(group: Group) -> None:
-    """Stop the build of ``group``; the progress of the current level is lost.
-
-    Moves, mode changes and merges call this (SIM-04); combat (SIM-09) calls it for
-    every group in a fight. The mode is not changed here.
-    """
-    group.build_edge = None
-    group.build_since = None
-
-
-def _can_build(state: GameState, group: Group, edge: int) -> bool:
-    """The group stands at an end of ``edge``, the edge is internal and the group's owner's."""
+def builder_of(state: GameState, edge: int) -> int | None:
+    """The city that builds ``edge`` now, or ``None``: one of its two ends (DEC-16, item 5)."""
     e = state.map.edges[edge]
-    return (
-        group.mode is Mode.BUILD
-        and isinstance(group.location, AtNode)
-        and group.location.node in (e.a, e.b)
-        and is_internal(state, edge)
-        and state.nodes[e.a].owner == group.owner
+    for node in (e.a, e.b):
+        b = state.nodes[node].build
+        if b is not None and b.edge == edge:
+            return node
+    return None
+
+
+def done_tick(rules: Ruleset, b: Build) -> int:
+    """The tick the build raises the width (unless it is interrupted first)."""
+    return b.since + rules.build.ticks_per_level
+
+
+def start_build(state: GameState, rules: Ruleset, player: int, node: int, edge: int) -> Event:
+    """Apply a validated ``UpgradeRoad(node, edge)``: pay from the warehouse, start the build."""
+    width = state.edges[edge].width + 1
+    price = rules.build.charges_per_level.of(width)
+    city = state.nodes[node]
+    city.warehouse -= price
+    city.build = Build(edge=edge, owner=player, since=state.tick)
+    return event(
+        state.tick,
+        "build_started",
+        player=player,
+        node=node,
+        edge=edge,
+        width=width,
+        charges=price,
     )
+
+
+def _holds(state: GameState, b: Build) -> bool:
+    """The edge is still internal for the player who started the build."""
+    return is_internal(state, b.edge) and state.nodes[state.map.edges[b.edge].a].owner == b.owner
 
 
 def build(state: GameState, rules: Ruleset) -> list[Event]:
-    """Raise the widths of the roads under construction (see the module docstring).
+    """Finish or interrupt the builds of the cities (see the module docstring).
 
-    Groups are walked in id order; only one player can build an edge (it is internal), so the
-    order never decides between players. A second pass ends the builds of finished roads, so two
-    builders of one edge stop on the same tick whatever their ids.
+    Cities are walked in id order; a build belongs to one player and one edge, so the order
+    never decides between players or between builds.
     """
     tick = state.tick
-    per_level = rules.build.ticks_per_level
     events: list[Event] = []
-    for gid in sorted(state.groups):
-        group = state.groups[gid]
-        eid = group.build_edge
-        if eid is None:
+    for nid in sorted(state.nodes):
+        city = state.nodes[nid]
+        b = city.build
+        if b is None:
             continue
-        if not _can_build(state, group, eid):
-            interrupt_build(group)
-            events.append(_stopped(tick, group, eid, "interrupted"))
+        data = {"player": b.owner, "node": nid, "edge": b.edge}
+        if not _holds(state, b):
+            city.build = None
+            events.append(event(tick, "build_stopped", reason="interrupted", **data))
             continue
-        # TODO(#124): the level timing and independent builders of one edge are defaults.
-        edge = state.edges[eid]
-        since = group.build_since
-        due = since is not None and tick - since >= per_level
-        if due and edge.width < state.map.edges[eid].max_width:
-            edge.width += 1
-            group.build_since = tick
-            events.append(
-                event(
-                    tick, "road_upgraded", player=group.owner, group=gid, edge=eid, width=edge.width
-                )
-            )
-    for gid in sorted(state.groups):
-        group = state.groups[gid]
-        eid = group.build_edge
-        if eid is not None and state.edges[eid].width >= state.map.edges[eid].max_width:
-            interrupt_build(group)  # TODO(#124): the group stays in «Строительство»
-            events.append(_stopped(tick, group, eid, "max_width"))
+        if tick >= done_tick(rules, b):
+            edge = state.edges[b.edge]
+            edge.width += 1  # validated below max_width; nothing else changes widths
+            city.build = None
+            events.append(event(tick, "road_upgraded", width=edge.width, **data))
     return events
-
-
-def _stopped(tick: int, group: Group, edge: int, reason: str) -> Event:
-    return event(
-        tick, "build_stopped", player=group.owner, group=group.id, edge=edge, reason=reason
-    )

@@ -149,8 +149,8 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "set_mode", "group": g, "mode": mode.value}
         case SetStance(stance=stance):
             return {"type": "set_stance", "stance": stance.value}
-        case UpgradeRoad(group=g, edge=edge):
-            return {"type": "upgrade_road", "group": g, "edge": edge}
+        case UpgradeRoad(node=node, edge=edge):
+            return {"type": "upgrade_road", "node": node, "edge": edge}
         case Recruit(node=node):
             return {"type": "recruit", "node": node}
         case CancelOrder(group=g):
@@ -182,7 +182,7 @@ def decode_command(data: object) -> Command:
             case "set_stance":
                 return SetStance(Stance(_str(d["stance"])))
             case "upgrade_road":
-                return UpgradeRoad(_int(d["group"]), _int(d["edge"]))
+                return UpgradeRoad(_int(d["node"]), _int(d["edge"]))
             case "recruit":
                 return Recruit(_int(d["node"]))
             case "cancel_order":

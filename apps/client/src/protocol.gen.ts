@@ -16,9 +16,9 @@ export type Command =
   | CancelOrderCmd
   | ForfeitCmd;
 /**
- * Group mode (mechanics.md, section 3; effects: DEC-08).
+ * Group mode (mechanics.md, section 3; effects: DEC-08). Roads are built by cities (DEC-16).
  */
-export type Mode = 'attack' | 'defense' | 'build';
+export type Mode = 'attack' | 'defense';
 /**
  * CP stance: the share of CP regeneration that goes into charges (DEC-02).
  */
@@ -34,7 +34,7 @@ export type Location = AtNodeLoc | OnEdgeLoc;
 /**
  * Publicly visible intent types (DEC-04, DEC-08).
  */
-export type IntentKind = 'planned_move' | 'defense' | 'build';
+export type IntentKind = 'planned_move' | 'defense';
 /**
  * How the match ended (DEC-03, DEC-05).
  */
@@ -94,9 +94,12 @@ export interface SetStanceCmd {
   type: 'set_stance';
   stance: Stance;
 }
+/**
+ * The own city ``node`` raises the internal road ``edge`` by one level (DEC-16).
+ */
 export interface UpgradeRoadCmd {
   type: 'upgrade_road';
-  group: string;
+  node: number;
   edge: number;
 }
 export interface RecruitCmd {
@@ -163,6 +166,7 @@ export interface RulesetPublic {
   cp: CpPublic;
   cost: CostsPublic;
   combat: CombatPublic;
+  build: BuildPublic;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.
@@ -199,6 +203,23 @@ export interface TerrainDefensePublic {
   plains: number;
   forest: number;
   mountains: number;
+}
+/**
+ * Road upgrades by a city (``build`` of the ruleset, DEC-16).
+ */
+export interface BuildPublic {
+  ticks_per_level: number;
+  /**
+   * One price per new width ``2..5``, ascending.
+   */
+  charges_per_level: LevelPrice[];
+}
+/**
+ * Charges from the city warehouse for raising a road to ``width`` (DEC-16).
+ */
+export interface LevelPrice {
+  width: number;
+  charges: number;
 }
 /**
  * The player's view after tick ``tick``. Only the latest one matters (AGENTS.md, 5.3).
@@ -252,6 +273,10 @@ export interface NodeView {
    * Current sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one, or ``None``.
    */
   seen: Seen | null;
+  /**
+   * The city's road build (DEC-16): own always, an enemy one only while its edge is unfogged.
+   */
+  build: NodeBuild | null;
 }
 /**
  * What the player sees, or last saw, of one node or edge (``gow_sim.state.Sighting``).
@@ -264,11 +289,21 @@ export interface Seen {
   tick: number;
   level: Detail;
   /**
-   * @maxItems 3
+   * @maxItems 2
    */
   enemy_modes: Mode[];
   enemy_units: number | null;
   enemy_charged: number | null;
+}
+/**
+ * A road level the city builds (DEC-16): ``edge`` is one of the city's roads.
+ */
+export interface NodeBuild {
+  edge: number;
+  /**
+   * The tick the width grows; only for an own build.
+   */
+  done_tick: number | null;
 }
 export interface EdgeView {
   id: number;
@@ -517,6 +552,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

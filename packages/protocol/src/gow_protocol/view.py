@@ -5,7 +5,9 @@ conversion is PRO-03 (#46). The shape follows DEC-04 (mechanics.md, section 10) 
 what a view must not contain (AGENTS.md, section 4.4):
 
 - public to everyone: ownership and capacity of every node, road widths, VP of both players,
-  intents of planned orders and builds (origin, target, kind; no group id, no size);
+  intents of planned orders and «Защита» (origin, target, kind; no group id, no size);
+- road builds of cities (DEC-16): own ones always, with ``done_tick``; an enemy one without
+  ``done_tick`` and only while its edge is not in fog (DEC-17, item 5);
 - ``EXACT`` places (own nodes, nodes where own groups stand): everything with numbers;
 - ``PRESENCE`` places (neighbours of ``EXACT`` nodes and edges touching them): whether enemy
   groups are there and their modes, no numbers;
@@ -74,6 +76,14 @@ class Seen(WireModel):
         return self
 
 
+class NodeBuild(WireModel):
+    """A road level the city builds (DEC-16): ``edge`` is one of the city's roads."""
+
+    edge: EdgeId
+    done_tick: Tick | None
+    """The tick the width grows; only for an own build."""
+
+
 class NodeView(WireModel):
     id: NodeId
     owner: PlayerId | None
@@ -84,6 +94,8 @@ class NodeView(WireModel):
     """Charges in the warehouse; only for ``EXACT`` nodes."""
     seen: Seen | None
     """Current sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one, or ``None``."""
+    build: NodeBuild | None
+    """The city's road build (DEC-16): own always, an enemy one only while its edge is unfogged."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -251,6 +263,9 @@ class View(WireModel):
             refs_nodes.append(intent.origin)
             if intent.target is not None:
                 refs_nodes.append(intent.target)
+        refs_edges.extend(n.build.edge for n in self.nodes if n.build is not None)
         if any(n >= nodes for n in refs_nodes) or any(e >= edges for e in refs_edges):
-            raise ValueError("a group, packet or intent refers to a node or edge not in the view")
+            raise ValueError(
+                "a group, packet, intent or build refers to a node or edge not in the view"
+            )
         return self

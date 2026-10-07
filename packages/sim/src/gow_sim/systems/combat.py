@@ -36,8 +36,7 @@ from enum import StrEnum
 
 from gow_sim.maps import PLAYERS
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import PROGRESS_SCALE, AtNode, Event, GameState, Group, Mode, OnEdge, event
-from gow_sim.systems.build import interrupt_build
+from gow_sim.state import PROGRESS_SCALE, AtNode, Event, GameState, Group, OnEdge, event
 from gow_sim.systems.capacity import change_owner
 from gow_sim.systems.movement import traversal_ticks
 
@@ -50,9 +49,6 @@ __all__ = [
     "combat",
     "resolve_fight",
 ]
-
-FIRING_MODES = (Mode.ATTACK, Mode.DEFENSE)
-"""Units in these modes shoot; charges of units in «Строительство» do not count (rule 1)."""
 
 
 class BonusSource(StrEnum):
@@ -75,8 +71,7 @@ class Fighter:
     id: int
     units: int
     charged: int
-    firing: bool
-    """The group's mode shoots (``FIRING_MODES``)."""
+    """Every charged unit shoots (rule 1; DEC-16 removed the non-firing «Строительство»)."""
 
 
 @dataclass(slots=True)
@@ -136,7 +131,7 @@ def _units(side: Side) -> int:
 
 
 def _arm(side: Side, defense_mod: int | None) -> None:
-    firing = sum(g.charged for g in side.groups if g.firing)
+    firing = sum(g.charged for g in side.groups)
     # TODO(#133): the bonuses of several groups of a side add up.
     side.virtual = side.bonus
     side.real = firing
@@ -152,7 +147,7 @@ def _spend(side: Side, shots: int) -> None:
     for _ in range(shots - virtual):
         # TODO(#133): the group is chosen again for every shot.
         shooter = max(
-            (g for g in side.groups if g.firing and g.charged > 0),
+            (g for g in side.groups if g.charged > 0),
             key=lambda g: (g.charged, -g.id),
         )
         shooter.charged -= 1
@@ -454,7 +449,7 @@ def _side(groups: list[Group], bonus: dict[int, Bonus]) -> Side:
             planned += b.amount
         else:
             defense += b.amount
-    fighters = [Fighter(g.id, g.units, g.charged, g.mode in FIRING_MODES) for g in groups]
+    fighters = [Fighter(g.id, g.units, g.charged) for g in groups]
     return Side(fighters, bonus=planned, defense_bonus=defense)
 
 
@@ -463,11 +458,10 @@ def _snapshot(groups: dict[int, list[Group]]) -> dict[int, tuple[int, int]]:
 
 
 def _apply(state: GameState, groups: dict[int, list[Group]], sides: dict[int, Side]) -> None:
-    """Write the fighters back; a group without units is removed; builds stop (SIM-11)."""
+    """Write the fighters back; a group without units is removed."""
     for p in PLAYERS:
         for g, f in zip(groups[p], sides[p].groups, strict=True):
             g.units, g.charged = f.units, f.charged
-            interrupt_build(g)
             if g.units == 0:
                 del state.groups[g.id]
 

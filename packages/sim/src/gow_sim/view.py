@@ -6,7 +6,9 @@ has the shape of the wire ``View`` of the protocol (``gow_protocol.view``, PRO-0
 converts it into:
 
 - public to everyone: ownership and capacity of every node, road widths, VP of both players,
-  intents of planned orders, «Защита» and builds (kind, origin, target; no group id or size);
+  intents of planned orders and «Защита» (kind, origin, target; no group id or size);
+- road builds of cities (DEC-16, item 8): own ones always, with the tick they finish; an enemy
+  one (the city and the edge, no tick) only while the edge is not in fog (DEC-17, item 5);
 - ``EXACT`` places (own nodes, nodes where own groups stand): warehouse and enemy totals;
 - ``PRESENCE`` places (neighbours of ``EXACT`` nodes, edges touching them): whether enemy groups
   are there and their modes, no numbers;
@@ -45,7 +47,7 @@ from gow_sim.state import (
     OnEdge,
     Sighting,
 )
-from gow_sim.systems.build import UpgradeGain, upgrade_gain
+from gow_sim.systems.build import UpgradeGain, done_tick, upgrade_gain
 from gow_sim.systems.capacity import node_capacities
 from gow_sim.systems.vision import compute_vision, current_sightings
 
@@ -53,6 +55,7 @@ __all__ = [
     "MATCH_KEY_MAX",
     "MATCH_KEY_MIN",
     "AtNode",
+    "BuildView",
     "Detail",
     "EdgeView",
     "GroupView",
@@ -99,6 +102,15 @@ class SelfView:
 
 
 @dataclass(frozen=True, slots=True)
+class BuildView:
+    """A road level a city builds (DEC-16, item 8)."""
+
+    edge: int
+    done_tick: int | None
+    """The tick the width grows; only for an own build."""
+
+
+@dataclass(frozen=True, slots=True)
 class NodeView:
     id: int
     owner: int | None
@@ -109,6 +121,8 @@ class NodeView:
     """Charges in the warehouse; only for ``EXACT`` nodes."""
     seen: Sighting | None
     """This tick's sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one or ``None``."""
+    build: BuildView | None
+    """The city's road build: own always, an enemy one only while its edge is not in fog."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,8 +160,6 @@ class GroupView:
     mode: Mode
     location: Location
     order: OrderView | None
-    build_edge: int | None
-    """Edge the group upgrades in «Строительство» (SIM-11), else ``None``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,7 +177,7 @@ class PacketView:
 
 @dataclass(frozen=True, slots=True)
 class IntentView:
-    """Public part of a planned order, «Защита» or a build: no group id and no group size."""
+    """Public part of a planned order or «Защита»: no group id and no group size."""
 
     id: int
     """Opaque id."""
@@ -280,6 +292,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 detail=level,
                 warehouse=node.warehouse if level is Detail.EXACT else None,
                 seen=now_nodes[n] if level is not Detail.FOG else memory.nodes.get(n),
+                build=_build_view(state, rules, player, n, levels.edges),
             )
         )
 
@@ -313,7 +326,6 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 order=None
                 if order is None or not order.path
                 else OrderView(order.path[-1], order.path, order.planned, order.depart_tick),
-                build_edge=g.build_edge,
             )
         )
 
@@ -357,6 +369,19 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     )
 
 
+def _build_view(
+    state: GameState, rules: Ruleset, player: int, node: int, edge_levels: tuple[Detail, ...]
+) -> BuildView | None:
+    b = state.nodes[node].build
+    if b is None:
+        return None
+    if b.owner == player:
+        return BuildView(edge=b.edge, done_tick=done_tick(rules, b))
+    if edge_levels[b.edge] is Detail.FOG:  # not shown and not remembered (DEC-17, item 5)
+        return None
+    return BuildView(edge=b.edge, done_tick=None)
+
+
 # Canonical form ------------------------------------------------------------------------------
 
 
@@ -380,6 +405,9 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "detail": n.detail.value,
                 "warehouse": n.warehouse,
                 "seen": _seen_data(n.seen),
+                "build": None
+                if n.build is None
+                else {"edge": n.build.edge, "done_tick": n.build.done_tick},
             }
             for n in view.nodes
         ],
@@ -413,7 +441,6 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                     "planned": g.order.planned,
                     "depart_tick": g.order.depart_tick,
                 },
-                "build_edge": g.build_edge,
             }
             for g in view.groups
         ],
