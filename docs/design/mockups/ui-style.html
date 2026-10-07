@@ -250,7 +250,7 @@
       }
       .modes {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(2, 1fr);
         gap: 6px;
       }
       .mode {
@@ -478,7 +478,6 @@
         <div class="modes">
           <div class="mode on">▲ Атака <kbd>1</kbd></div>
           <div class="mode">⛉ Защита <kbd>2</kbd><span class="dim">2 CP</span></div>
-          <div class="mode">⚒ Стройка <kbd>3</kbd><span class="dim">1 CP</span></div>
         </div>
         <div class="row">
           <span class="toggle"><span class="switch"></span> Запланированный <kbd>P</kbd></span>
@@ -487,8 +486,8 @@
       </aside>
 
       <div class="hint-bar">
-        <span><kbd>Q</kbd> стойка</span><span><kbd>R</kbd> набор</span
-        ><span><kbd>X</kbd> отмена</span><span><kbd>?</kbd> справка</span>
+        <span><kbd>Q</kbd> стойка</span><span><kbd>U</kbd> дорога</span
+        ><span><kbd>R</kbd> набор</span><span><kbd>?</kbd> справка</span>
       </div>
     </section>
     <p class="note">
@@ -939,6 +938,17 @@
       road(map, N.B, N.E, 1);
       road(map, N.G, N.F, 2);
 
+      // Стройка: столица улучшает дорогу к городу снизу (DEC-16), штриховка растёт к концу стройки.
+      (() => {
+        const [a, c] = [N.A, N.C];
+        const t = 0.55;
+        el(map, 'line', { x1: a[0], y1: a[1], x2: a[0] + (c[0] - a[0]) * t, y2: a[1] + (c[1] - a[1]) * t, stroke: C.accent, 'stroke-width': 10, 'stroke-dasharray': '4 4', 'stroke-opacity': 0.9 });
+        const bx = a[0] - 40;
+        const by = a[1] + 4;
+        el(map, 'circle', { cx: bx, cy: by, r: 9, fill: C.ink, stroke: C.accent, 'stroke-width': 2 });
+        el(map, 'path', { d: `M${bx - 5} ${by - 5}h10v4h-10ZM${bx - 1.3} ${by - 1}h2.6v6.5h-2.6Z`, fill: C.paper });
+      })();
+
       // Туман над глубоким тылом врага (до городов, чтобы города остались видны).
       el(map, 'polygon', { points: pts([[1040, 330], [1280, 320], [1280, 720], [1060, 720], [1010, 520]]), fill: 'url(#fog)' });
       el(map, 'polygon', { points: pts([[820, 470], [1010, 520], [1060, 720], [820, 720]]), fill: 'url(#fog)' });
@@ -1068,8 +1078,8 @@
       label(800, 140, 'враг без чисел', { dim: true });
       unit(lg, [915, 85], { owner: 0, units: 4, charged: 4, mode: 'defense', size: 30, label: '4/4' });
       label(915, 140, 'режим «Защита»', { dim: true });
-      unit(lg, [1025, 85], { owner: 0, units: 4, charged: 1, mode: 'build', size: 30, label: '1/4' });
-      label(1025, 140, '«Стройка»', { dim: true });
+      unit(lg, [1025, 85], { owner: 0, units: 4, charged: 1, size: 30, label: '1/4', selected: true });
+      label(1025, 140, 'выделена', { dim: true });
       unit(lg, [1170, 85], { owner: 1, presence: true, size: 28, alpha: 0.42 });
       label(1170, 125, '−1:10', { bold: true });
       label(1170, 140, 'призрак гаснет к 2:00', { dim: true });
