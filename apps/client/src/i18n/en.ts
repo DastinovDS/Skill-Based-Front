@@ -170,6 +170,8 @@ export const en = {
   'menu.bot': 'Play against a bot',
   'menu.lobby': 'Public lobby',
   'menu.changeNick': 'Change nick',
+  'menu.activeMatch': 'You have a match in progress.',
+  'menu.resume': 'Return to the match',
   'map.label': 'Map',
   'map.random': 'Random map',
   'create.title': 'Private match',

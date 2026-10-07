@@ -26,6 +26,11 @@
   });
 
   const screen = $derived(app.screen);
+
+  // The menu offers a way back into a running match (a failed "return" or a match left by hand).
+  $effect(() => {
+    if (app.screen.name === 'menu') void app.refreshActiveMatch();
+  });
   const guest = $derived(app.guest);
 </script>
 
@@ -41,6 +46,11 @@
   <MenuScreen
     nick={guest.nick}
     notice={app.notice}
+    hasActiveMatch={app.activeMatch !== null}
+    onresume={() => {
+      const running = app.activeMatch;
+      if (running !== null) app.resumeMatch(running);
+    }}
     oncreate={() => {
       app.go({ name: 'create', public: false });
     }}

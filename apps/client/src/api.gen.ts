@@ -109,6 +109,29 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/me/active-match': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Active Match
+     * @description The running match of the player (a page reload, a second tab), ``null`` if none.
+     *
+     *     The player returns to it with the same token inside the reconnect window (DEC-05). A match
+     *     that is still waiting for its players (an invite) has no ``match_id`` yet: ``null``.
+     */
+    get: operations['active_match_api_me_active_match_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/me/nick': {
     parameters: {
       query?: never;
@@ -271,6 +294,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /**
+     * ActiveMatch
+     * @description The running match of an account: enough to reconnect to ``/ws/match/{match_id}``.
+     */
+    ActiveMatch: {
+      /** Match Id */
+      match_id: string;
+      /** Map Id */
+      map_id: string;
+    };
     /** BotMatchOut */
     BotMatchOut: {
       /** Match Id */
@@ -563,6 +596,26 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['Me'];
+        };
+      };
+    };
+  };
+  active_match_api_me_active_match_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ActiveMatch'] | null;
         };
       };
     };

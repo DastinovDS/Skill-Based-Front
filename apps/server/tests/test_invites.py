@@ -194,3 +194,34 @@ def test_invite_code_is_never_logged(api: TestClient, json_logs: io.StringIO) ->
 
 def test_default_ttl_setting(maps_dir: Path, tmp_path: Path) -> None:
     assert Settings(maps_dir=maps_dir).invite_ttl_s == 1800
+
+
+def test_active_match_endpoint_returns_the_running_match(api: TestClient) -> None:
+    """#189: after a page reload the client asks where the player's match is."""
+    alice, bob, carol = guest(api, "alice"), guest(api, "bob"), guest(api, "carol")
+    assert api.get("/api/me/active-match", headers=alice).json() is None
+    assert api.get("/api/me/active-match").status_code == 401
+
+    invite = create(api, alice)
+    code = str(invite["code"])
+    post(api, bob, code, "join")
+    # Paired but not started: nothing to reconnect to yet.
+    assert api.get("/api/me/active-match", headers=alice).json() is None
+
+    post(api, alice, code, "ready")
+    match_id = post(api, bob, code, "ready")["match_id"]
+    expected = {"match_id": match_id, "map_id": invite["map_id"]}
+    for headers in (alice, bob):
+        response = api.get("/api/me/active-match", headers=headers)
+        assert response.json() == expected
+        assert response.headers["Cache-Control"] == "no-store"
+    assert api.get("/api/me/active-match", headers=carol).json() is None  # not a player there
+
+    runner = matches_of(api).get(str(match_id))
+    assert runner is not None
+    runner.technical_defeat(0)
+    runner.step()
+    assert runner.finished
+    assert (
+        api.get("/api/me/active-match", headers=alice).json() is None
+    )  # over: nothing to return to

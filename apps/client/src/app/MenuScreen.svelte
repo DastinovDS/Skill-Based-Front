@@ -9,9 +9,21 @@
     onlobby: () => void;
     onbot: () => void;
     onchangenick: () => void;
+    /** A match of this guest is running: the way back into it. */
+    hasActiveMatch?: boolean;
+    onresume?: () => void;
   }
 
-  let { nick, notice, oncreate, onlobby, onbot, onchangenick }: Props = $props();
+  let {
+    nick,
+    notice,
+    oncreate,
+    onlobby,
+    onbot,
+    onchangenick,
+    hasActiveMatch = false,
+    onresume = () => undefined,
+  }: Props = $props();
 </script>
 
 <main class="screen">
@@ -20,6 +32,12 @@
     <p>{tf('menu.greeting', { nick })}</p>
     {#if notice !== null}
       <p class="error" role="alert">{t(notice)}</p>
+    {/if}
+    {#if hasActiveMatch}
+      <p role="status">{t('menu.activeMatch')}</p>
+      <div class="actions">
+        <button type="button" class="primary" onclick={onresume}>{t('menu.resume')}</button>
+      </div>
     {/if}
     <div class="actions">
       <button type="button" class="primary" onclick={oncreate}>{t('menu.create')}</button>

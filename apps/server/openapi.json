@@ -195,6 +195,41 @@
         ]
       }
     },
+    "/api/me/active-match": {
+      "get": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Active Match",
+        "description": "The running match of the player (a page reload, a second tab), ``null`` if none.\n\nThe player returns to it with the same token inside the reconnect window (DEC-05). A match\nthat is still waiting for its players (an invite) has no ``match_id`` yet: ``null``.",
+        "operationId": "active_match_api_me_active_match_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ActiveMatch"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Active Match Api Me Active Match Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/me/nick": {
       "put": {
         "tags": [
@@ -586,6 +621,25 @@
   },
   "components": {
     "schemas": {
+      "ActiveMatch": {
+        "properties": {
+          "match_id": {
+            "type": "string",
+            "title": "Match Id"
+          },
+          "map_id": {
+            "type": "string",
+            "title": "Map Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "match_id",
+          "map_id"
+        ],
+        "title": "ActiveMatch",
+        "description": "The running match of an account: enough to reconnect to ``/ws/match/{match_id}``."
+      },
       "BotMatchOut": {
         "properties": {
           "match_id": {

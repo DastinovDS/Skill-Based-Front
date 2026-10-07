@@ -27,6 +27,16 @@ describe('Api', () => {
     expect(init?.headers).toMatchObject({ Authorization: 'Bearer secret-token' });
   });
 
+  it('asks for the active match with the token in the header', async () => {
+    const fetchFn = respond(200, { match_id: '5', map_id: 'pereval' });
+    const found = await new Api(fetchFn).activeMatch('tok');
+    expect(found).toEqual({ match_id: '5', map_id: 'pereval' });
+    const [url, init] = vi.mocked(fetchFn).mock.calls[0] ?? [];
+    expect(url).toBe('/api/me/active-match');
+    expect(init?.headers).toMatchObject({ Authorization: 'Bearer tok' });
+    expect(await new Api(respond(200, null)).activeMatch('tok')).toBeNull();
+  });
+
   it('sends the map only when one is chosen', async () => {
     const fetchFn = respond(201, {});
     const api = new Api(fetchFn);
