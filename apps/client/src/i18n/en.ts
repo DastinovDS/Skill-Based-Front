@@ -88,7 +88,10 @@ export const en = {
   'event.forfeit.mine': 'You gave up',
   'event.forfeit.enemy': 'The enemy gave up',
   'event.match_ended': 'The match is over',
-  'event.other': 'Event: {kind}',
+  'event.attrition': 'Overcapacity at node {node}: a unit was lost',
+  'event.road_upgraded': 'Road {edge} upgraded to width {width}',
+  'event.build_stopped': 'Road {edge} is fully built',
+  'event.packet_lost': 'Charges lost on road {edge}: {charges}',
   'hud.ordersHint':
     'Click your group to select it, then click a node to send it there. Click empty map or press Esc to deselect.',
   'orders.title': 'Orders',

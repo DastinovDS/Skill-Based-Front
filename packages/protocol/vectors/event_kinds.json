@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "source": "gow_protocol.convert: PUBLIC_KINDS, PRIVATE_KINDS and fight (event_for_player)",
+  "kinds": [
+    "attrition",
+    "build_stopped",
+    "charges_overflow",
+    "charges_produced",
+    "cp_burned",
+    "fight",
+    "fight_group",
+    "forfeit",
+    "group_arrived",
+    "group_split",
+    "groups_merged",
+    "node_captured",
+    "packet_delivered",
+    "packet_lost",
+    "packet_sent",
+    "recruited",
+    "road_upgraded",
+    "stance_changed",
+    "vp_awarded",
+    "warehouse_lost"
+  ]
+}

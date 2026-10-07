@@ -59,6 +59,14 @@ describe('HudState', () => {
     expect(hud.current?.events.map((e) => e.kind)).toEqual([event.kind]);
   });
 
+  it('keeps bookkeeping kinds out of the feed so they do not push the news out (#184)', () => {
+    const hud = newState();
+    hud.onEvent({ type: 'event', tick: 1, kind: 'charges_produced', data: { node: 0 } });
+    hud.onEvent({ type: 'event', tick: 2, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.onSnapshot(snapshot(3));
+    expect(hud.current?.events.map((e) => e.kind)).toEqual(['attrition']);
+  });
+
   it('keeps the newest events first and drops the oldest over the limit', () => {
     const hud = newState();
     for (let i = 0; i < EVENT_LIMIT + 5; i += 1) {

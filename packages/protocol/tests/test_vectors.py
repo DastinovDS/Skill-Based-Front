@@ -11,6 +11,8 @@ from typing import cast
 
 import pytest
 
+from gow_protocol.convert import PRIVATE_KINDS, PUBLIC_KINDS
+
 VECTORS_DIR = Path(__file__).resolve().parents[1] / "vectors"
 COMBAT_PATH = VECTORS_DIR / "combat.json"
 RULESET_PATH = Path(__file__).resolve().parents[3] / "rulesets" / "mvp-0.toml"
@@ -189,3 +191,9 @@ def test_combat_vector_structure(vector: dict[str, object]) -> None:
             _bool(flag)
     else:
         assert expected["continues_on_edge"] is None
+
+
+def test_event_kinds_vector_is_what_the_server_sends() -> None:
+    """The client checks every one of these kinds has a feed text (or is hidden), see #184."""
+    data = cast(dict[str, object], json.loads((VECTORS_DIR / "event_kinds.json").read_text()))
+    assert data["kinds"] == sorted(PUBLIC_KINDS | PRIVATE_KINDS | {"fight"})

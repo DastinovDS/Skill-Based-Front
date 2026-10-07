@@ -13,6 +13,7 @@ import {
   type HudEvent,
   type Selection,
 } from './hudData.ts';
+import { isLogged } from './eventText.ts';
 
 /** Events kept for the feed. */
 export const EVENT_LIMIT = 30;
@@ -49,6 +50,7 @@ export class HudState {
 
   /** A visible event for the feed; shown with the next snapshot. */
   onEvent(event: EventMsg): void {
+    if (!isLogged(event.kind)) return; // bookkeeping kinds would push the real news out
     this.#seq += 1;
     this.#events = [
       { seq: this.#seq, tick: event.tick, kind: event.kind, data: event.data },

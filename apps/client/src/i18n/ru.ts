@@ -88,7 +88,10 @@ export const ru = {
   'event.forfeit.mine': 'Ты сдался',
   'event.forfeit.enemy': 'Враг сдался',
   'event.match_ended': 'Матч окончен',
-  'event.other': 'Событие: {kind}',
+  'event.attrition': 'Перегрузка в узле {node}: потерян юнит',
+  'event.road_upgraded': 'Дорога {edge} улучшена до ширины {width}',
+  'event.build_stopped': 'Дорога {edge} достроена до максимума',
+  'event.packet_lost': 'Потеряно зарядов на дороге {edge}: {charges}',
   'hud.ordersHint':
     'Кликни по своей группе, чтобы выбрать её, затем по узлу, чтобы отправить туда. Клик по пустой карте или Esc снимает выбор.',
   'orders.title': 'Приказы',
