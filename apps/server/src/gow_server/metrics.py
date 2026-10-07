@@ -2,7 +2,8 @@
 
 No client library: a few counters and two histograms are hand-rolled and rendered by
 ``render``. Matches write into ``ServerMetrics`` (step time, tick lag), the gauges (active
-matches, connections, outbox backlog) are read from the ``MatchManager`` at scrape time.
+matches, connections, outbox backlog) are read from the ``MatchManager`` at scrape time, the
+queue size from the ``MatchQueue`` (MM-01).
 The endpoint is ``GET /internal/metrics`` (loopback only, never proxied by Caddy).
 """
 
@@ -72,9 +73,16 @@ def _value(lines: list[str], kind: str, name: str, help_text: str, value: float)
     lines += [f"# HELP {name} {help_text}", f"# TYPE {name} {kind}", f"{name} {value}"]
 
 
-def render(manager: "MatchManager") -> str:
+def render(manager: "MatchManager", queue_size: int = 0) -> str:
     m = manager.metrics
     lines: list[str] = []
+    _value(
+        lines,
+        "gauge",
+        "gow_queue_size",
+        "Players in the matchmaking queue (searching or confirming a pair).",
+        queue_size,
+    )
     _value(lines, "gauge", "gow_matches_active", "Matches running now.", manager.active)
     _value(
         lines,

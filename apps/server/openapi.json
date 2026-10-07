@@ -617,6 +617,103 @@
           }
         ]
       }
+    },
+    "/api/queue": {
+      "get": {
+        "tags": [
+          "matchmaking"
+        ],
+        "summary": "Queue Status",
+        "description": "The status; the client polls it every second (it is also the heartbeat).",
+        "operationId": "queue_status_api_queue_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "matchmaking"
+        ],
+        "summary": "Join Queue",
+        "description": "Enter the queue (or read the status if already in it).",
+        "operationId": "join_queue_api_queue_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "matchmaking"
+        ],
+        "summary": "Leave Queue",
+        "description": "Leave the queue or decline the found pair; a started match is not touched.",
+        "operationId": "leave_queue_api_queue_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/queue/confirm": {
+      "post": {
+        "tags": [
+          "matchmaking"
+        ],
+        "summary": "Confirm Match",
+        "description": "Confirm the found pair; the second confirmation starts the rated match.",
+        "operationId": "confirm_match_api_queue_confirm_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -963,6 +1060,93 @@
           "nick"
         ],
         "title": "NickChange"
+      },
+      "QueueStatus": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "searching",
+              "found",
+              "started"
+            ],
+            "title": "State"
+          },
+          "waited_s": {
+            "type": "number",
+            "title": "Waited S"
+          },
+          "queue_size": {
+            "type": "integer",
+            "title": "Queue Size"
+          },
+          "bot_offer": {
+            "type": "boolean",
+            "title": "Bot Offer",
+            "default": false
+          },
+          "opponent_nick": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opponent Nick"
+          },
+          "confirm_in_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm In S"
+          },
+          "you_confirmed": {
+            "type": "boolean",
+            "title": "You Confirmed",
+            "default": false
+          },
+          "opponent_confirmed": {
+            "type": "boolean",
+            "title": "Opponent Confirmed",
+            "default": false
+          },
+          "match_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Id"
+          },
+          "map_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "waited_s",
+          "queue_size"
+        ],
+        "title": "QueueStatus"
       },
       "ValidationError": {
         "properties": {

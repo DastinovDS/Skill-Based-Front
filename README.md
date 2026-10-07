@@ -162,7 +162,10 @@ uv run gow-server --reload   # перезапуск при изменении к
 | `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | база SQLite (WAL); путь относительно рабочего каталога |
 | `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `10`, `3600` | не больше N новых гостей с одного IP за окно в секундах |
 | `GOW_MATCH_CREATE_RATE_LIMIT`, `GOW_MATCH_CREATE_RATE_WINDOW_S` | `10`, `600` | MOD-01: не больше N созданных матчей (приглашения и матчи с ботом вместе) на игрока за окно |
-| `GOW_QUEUE_RATE_LIMIT`, `GOW_QUEUE_RATE_WINDOW_S` | `20`, `60` | MOD-01: не больше N входов в очередь подбора на игрока за окно (лимитер `app.state.limits.queue`, подключается в MM-01) |
+| `GOW_QUEUE_RATE_LIMIT`, `GOW_QUEUE_RATE_WINDOW_S` | `20`, `60` | MOD-01: не больше N входов в очередь подбора (`POST /api/queue`) на игрока за окно |
+| `GOW_QUEUE_WINDOW_BASE`, `GOW_QUEUE_WINDOW_PER_S`, `GOW_QUEUE_WINDOW_MAX` | `100`, `5`, `400` | MM-01: окно подбора по рейтингу `база + k·ожидание` (секунды) с потолком (mechanics.md, раздел 19) |
+| `GOW_QUEUE_PASS_S`, `GOW_QUEUE_CONFIRM_S` | `1`, `15` | MM-01: не чаще одного прохода подбора в N секунд; время на подтверждение найденной пары |
+| `GOW_QUEUE_BOT_OFFER_S`, `GOW_QUEUE_STALE_S` | `60`, `15` | MM-01: через сколько секунд ожидания предложить бота; игрок, чей клиент молчит столько секунд, выходит из очереди |
 | `GOW_NICK_CHANGE_RATE_LIMIT`, `GOW_NICK_CHANGE_RATE_WINDOW_S` | `3`, `86400` | MOD-01: не больше N смен ника (`PUT /api/me/nick`) на игрока за окно |
 | `GOW_NICK_BLOCKLIST_FILE` | пусто | MOD-01: файл с дополнительными запрещёнными словами для ников (по слову в строке, `#` комментарий); в контейнере `/data/nick-blocklist.txt` |
 | `GOW_INVITE_TTL_S` | `1800` | срок жизни приглашения в приватный матч (секунды) |

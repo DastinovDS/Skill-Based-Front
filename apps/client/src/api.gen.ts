@@ -290,6 +290,54 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/queue': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Queue Status
+     * @description The status; the client polls it every second (it is also the heartbeat).
+     */
+    get: operations['queue_status_api_queue_get'];
+    put?: never;
+    /**
+     * Join Queue
+     * @description Enter the queue (or read the status if already in it).
+     */
+    post: operations['join_queue_api_queue_post'];
+    /**
+     * Leave Queue
+     * @description Leave the queue or decline the found pair; a started match is not touched.
+     */
+    delete: operations['leave_queue_api_queue_delete'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/queue/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm Match
+     * @description Confirm the found pair; the second confirmation starts the rated match.
+     */
+    post: operations['confirm_match_api_queue_confirm_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -422,6 +470,41 @@ export interface components {
     NickChange: {
       /** Nick */
       nick: string;
+    };
+    /** QueueStatus */
+    QueueStatus: {
+      /**
+       * State
+       * @enum {string}
+       */
+      state: 'searching' | 'found' | 'started';
+      /** Waited S */
+      waited_s: number;
+      /** Queue Size */
+      queue_size: number;
+      /**
+       * Bot Offer
+       * @default false
+       */
+      bot_offer: boolean;
+      /** Opponent Nick */
+      opponent_nick?: string | null;
+      /** Confirm In S */
+      confirm_in_s?: number | null;
+      /**
+       * You Confirmed
+       * @default false
+       */
+      you_confirmed: boolean;
+      /**
+       * Opponent Confirmed
+       * @default false
+       */
+      opponent_confirmed: boolean;
+      /** Match Id */
+      match_id?: string | null;
+      /** Map Id */
+      map_id?: string | null;
     };
     /** ValidationError */
     ValidationError: {
@@ -886,6 +969,84 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  queue_status_api_queue_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QueueStatus'];
+        };
+      };
+    };
+  };
+  join_queue_api_queue_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QueueStatus'];
+        };
+      };
+    };
+  };
+  leave_queue_api_queue_delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  confirm_match_api_queue_confirm_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QueueStatus'];
         };
       };
     };

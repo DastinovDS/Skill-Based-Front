@@ -1,5 +1,5 @@
 /**
- * The HTTP API of the server (ID-01, SRV-05, SRV-06, maps) as plain async functions. Types come
+ * The HTTP API of the server (ID-01, SRV-05, SRV-06, LOB-01, MM-01, maps) as plain async functions. Types come
  * from `api.gen.ts` (generated from the FastAPI OpenAPI document, never edited by hand).
  * Plain TypeScript, no Svelte state. The token goes in the `Authorization` header only.
  */
@@ -11,6 +11,7 @@ export type Invite = Schemas['InviteOut'];
 export type ActiveMatch = Schemas['ActiveMatch'];
 export type BotMatch = Schemas['BotMatchOut'];
 export type LobbyEntry = Schemas['LobbyEntry'];
+export type QueueStatus = Schemas['QueueStatus'];
 export type MapSummary = Schemas['MapSummary'];
 export type BotLevel = Schemas['CreateBotMatch']['level'];
 export const BOT_LEVELS: readonly BotLevel[] = ['easy', 'normal', 'hard', 'expert'];
@@ -20,7 +21,7 @@ export type ApiErrorCode =
   | 'unauthorized'
   /** 403: the account is blocked by the operator (MOD-01). */
   | 'blocked'
-  /** 404: no such invite, expired, or not yours. */
+  /** 404: no such invite, expired, or not yours; not in the matchmaking queue. */
   | 'not_found'
   /** 409: nick taken, own invite, invite full, waiting for the second player, bot match running. */
   | 'conflict'
@@ -116,6 +117,26 @@ export class Api {
 
   readyInvite(token: string, code: string): Promise<Invite> {
     return this.#request('POST', `/api/matches/${encodeURIComponent(code)}/ready`, token);
+  }
+
+  /** Enter the matchmaking queue (MM-01); the status if already in it. */
+  joinQueue(token: string): Promise<QueueStatus> {
+    return this.#request('POST', '/api/queue', token);
+  }
+
+  /** The queue status; `not_found` once the player is out of the queue. Also the heartbeat. */
+  queueStatus(token: string): Promise<QueueStatus> {
+    return this.#request('GET', '/api/queue', token);
+  }
+
+  /** Confirm the found opponent; the second confirmation starts the match. */
+  confirmQueue(token: string): Promise<QueueStatus> {
+    return this.#request('POST', '/api/queue/confirm', token);
+  }
+
+  /** Leave the queue, or decline the found opponent. */
+  async leaveQueue(token: string): Promise<void> {
+    await this.#request('DELETE', '/api/queue', token);
   }
 
   createBotMatch(token: string, level: BotLevel, mapId: string | null): Promise<BotMatch> {

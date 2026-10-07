@@ -6,6 +6,7 @@
     nick: string;
     notice: MessageKey | null;
     oncreate: () => void;
+    onqueue: () => void;
     onlobby: () => void;
     onbot: () => void;
     onchangenick: () => void;
@@ -18,6 +19,7 @@
     nick,
     notice,
     oncreate,
+    onqueue,
     onlobby,
     onbot,
     onchangenick,
@@ -40,6 +42,7 @@
       </div>
     {/if}
     <div class="actions">
+      <button type="button" class="primary" onclick={onqueue}>{t('menu.queue')}</button>
       <button type="button" class="primary" onclick={oncreate}>{t('menu.create')}</button>
       <button type="button" class="primary" onclick={onlobby}>{t('menu.lobby')}</button>
       <button type="button" class="primary" onclick={onbot}>{t('menu.bot')}</button>

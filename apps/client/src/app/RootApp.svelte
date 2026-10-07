@@ -11,6 +11,7 @@
   import InviteScreen from './InviteScreen.svelte';
   import MatchScreen from './MatchScreen.svelte';
   import MenuScreen from './MenuScreen.svelte';
+  import QueueScreen from './QueueScreen.svelte';
   import ResultScreen from './ResultScreen.svelte';
   import WelcomeScreen from './WelcomeScreen.svelte';
 
@@ -54,6 +55,9 @@
     oncreate={() => {
       app.go({ name: 'create', public: false });
     }}
+    onqueue={() => {
+      app.go({ name: 'queue' });
+    }}
     onlobby={() => {
       app.go({ name: 'lobby' });
     }}
@@ -87,6 +91,18 @@
     }}
     onback={() => {
       app.menu();
+    }}
+  />
+{:else if screen.name === 'queue'}
+  <QueueScreen
+    api={app.api}
+    token={guest.token}
+    onstart={(matchId: string, mapId: string) => {
+      app.go({ name: 'match', matchId, mapId });
+    }}
+    onbot={() => app.playBot('normal', null)}
+    onleave={(notice: MessageKey | null) => {
+      app.menu(notice);
     }}
   />
 {:else if screen.name === 'bot'}
