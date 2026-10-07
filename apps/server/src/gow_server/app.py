@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from sqlalchemy.orm import sessionmaker
 
-from gow_server import alerts, botmatch, identity, internal, invites, maps, replays, ws
+from gow_server import alerts, botmatch, identity, internal, invites, maps, matchqueue, replays, ws
 from gow_server.abuse import Limits
 from gow_server.clock import Clock, MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
@@ -71,6 +71,17 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             log.warning("matches of the previous run aborted", extra={"count": orphans})
         app.state.invites = invites.InviteBook(
             match_clock, settings.invite_ttl_s, app.state.lifecycle, settings.lobby_stale_s
+        )
+        app.state.queue = matchqueue.MatchQueue(
+            match_clock,
+            app.state.lifecycle,
+            window_base=settings.queue_window_base,
+            window_per_s=settings.queue_window_per_s,
+            window_max=settings.queue_window_max,
+            pass_s=settings.queue_pass_s,
+            confirm_s=settings.queue_confirm_s,
+            bot_offer_s=settings.queue_bot_offer_s,
+            stale_s=settings.queue_stale_s,
         )
         monitor = asyncio.create_task(
             alerts.monitor(app.state.matches, settings.monitor_interval_s), name="monitor"
@@ -142,5 +153,6 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(invites.router)
     app.include_router(invites.lobby_router)
     app.include_router(botmatch.router)
+    app.include_router(matchqueue.router)
     app.include_router(ws.router)
     return app

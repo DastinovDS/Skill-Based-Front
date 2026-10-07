@@ -85,6 +85,19 @@ class Settings(BaseSettings):
     ready_timeout_s: float = 120.0
     """A guest who joined an invite and the host have this long to be ready; otherwise the
     invite is dropped, a no-show (SRV-09)."""
+    queue_window_base: float = 100.0
+    queue_window_per_s: float = 5.0
+    queue_window_max: float = 400.0
+    """Matchmaking window (MM-01): a player accepts opponents within ``queue_window_base +
+    queue_window_per_s * waited`` rating points, at most ``queue_window_max``."""
+    queue_pass_s: float = 1.0
+    """At most one pairing pass of the queue per this many seconds."""
+    queue_confirm_s: float = 15.0
+    """A found pair has this long to confirm; who did not leaves the queue."""
+    queue_bot_offer_s: float = 60.0
+    """After this long in the queue the player is offered an unrated match against a bot."""
+    queue_stale_s: float = 15.0
+    """A player whose client did not poll the queue this long (a closed tab) leaves it."""
     bot_budget_s: float = 0.001
     """A bot decision longer than this makes the bot skip its next call (SRV-06, AGENTS.md, 8)."""
 

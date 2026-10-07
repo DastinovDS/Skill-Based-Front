@@ -20,6 +20,7 @@ describe('MenuScreen', () => {
         nick: 'Me',
         notice: null,
         oncreate: vi.fn(),
+        onqueue: vi.fn(),
         onlobby: vi.fn(),
         onbot: vi.fn(),
         onchangenick: vi.fn(),

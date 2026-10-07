@@ -21,6 +21,8 @@ export type Screen =
   /** The public lobby: open matches of other players (LOB-01). */
   | { readonly name: 'lobby' }
   | { readonly name: 'bot' }
+  /** The matchmaking queue (MM-01): searching, confirming, then the rated match. */
+  | { readonly name: 'queue' }
   /** The waiting room of an invite (host and guest). */
   | { readonly name: 'invite'; readonly code: string }
   | { readonly name: 'match'; readonly matchId: string; readonly mapId: string }
