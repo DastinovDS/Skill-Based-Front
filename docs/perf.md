@@ -18,7 +18,8 @@
 ## Как мерить
 
 Бенчмарки: `packages/sim/tests/test_benchmarks.py` (`pytest-benchmark`) и `apps/bots/tests/test_benchmarks.py`, плюс
-`apps/server/tests/test_match_load.py` (отставание тиков). Все три помечены `pytest.mark.perf`: они входят в обычный
+`apps/server/tests/test_match_load.py` (отставание тиков), плюс отношение цены снапшота к `project()`
+(`packages/protocol/tests/test_convert.py::test_snapshot_frame_costs_no_more_than_project`). Все они помечены `pytest.mark.perf`: они входят в обычный
 `uv run pytest`, а в CI идут отдельным последовательным шагом `uv run pytest -m perf`. Под `pytest-xdist` (`-n`)
 `pytest-benchmark` сам отключает замеры, поэтому с `-n` бюджеты не проверяются: в основной параллельный прогон
 CI эти тесты не входят (`-m "not perf and not slow"`).

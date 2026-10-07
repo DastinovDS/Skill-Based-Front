@@ -334,6 +334,7 @@ class _Keeper:
         pass
 
 
+@pytest.mark.perf  # timing: serial only, never under xdist
 def test_snapshot_frame_costs_no_more_than_project() -> None:
     """#155: a snapshot per player per tick must not cost more than the ``project()`` before it.
 
