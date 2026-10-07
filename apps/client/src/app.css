@@ -99,6 +99,24 @@ body {
   gap: 8px;
 }
 
+/* Open matches of the public lobby: one row per match, the join button at the right. */
+.card .list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card .list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+
 /* Messages over the match map: connection status, pause. */
 .banner {
   position: fixed;

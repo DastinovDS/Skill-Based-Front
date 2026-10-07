@@ -160,7 +160,14 @@ export interface paths {
     get: operations['get_match_api_matches__code__get'];
     put?: never;
     post?: never;
-    delete?: never;
+    /**
+     * Cancel Match
+     * @description Leave the waiting room before the match starts: the invite is dropped (404 for others).
+     *
+     *     Either player may do it; the other one sees the invite gone (404). A started match is not
+     *     touched: leaving a running one is a ``Forfeit`` over the WebSocket.
+     */
+    delete: operations['cancel_match_api_matches__code__delete'];
     options?: never;
     head?: never;
     patch?: never;
@@ -197,6 +204,26 @@ export interface paths {
      * @description Mark the caller ready; the second ready player starts the match.
      */
     post: operations['ready_match_api_matches__code__ready_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/lobby': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Lobby
+     * @description Open public matches of other players, oldest first (the client polls every 2 s).
+     */
+    get: operations['lobby_api_lobby_get'];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -253,6 +280,11 @@ export interface components {
     CreateMatch: {
       /** Map Id */
       map_id?: string | null;
+      /**
+       * Public
+       * @default false
+       */
+      public: boolean;
     };
     /** GuestCreate */
     GuestCreate: {
@@ -280,6 +312,8 @@ export interface components {
        * @enum {string}
        */
       state: 'open' | 'joined' | 'started';
+      /** Public */
+      public: boolean;
       /** Map Id */
       map_id: string;
       /** Host Nick */
@@ -294,6 +328,22 @@ export interface components {
       expires_in_s: number;
       /** Match Id */
       match_id: string | null;
+    };
+    /** LobbyEntry */
+    LobbyEntry: {
+      /** Code */
+      code: string;
+      /** Host Nick */
+      host_nick: string;
+      /** Map Id */
+      map_id: string;
+      /** Age S */
+      age_s: number;
+    };
+    /** LobbyOut */
+    LobbyOut: {
+      /** Matches */
+      matches: components['schemas']['LobbyEntry'][];
     };
     /** MapSummary */
     MapSummary: {
@@ -585,6 +635,35 @@ export interface operations {
       };
     };
   };
+  cancel_match_api_matches__code__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        code: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
   join_match_api_matches__code__join_post: {
     parameters: {
       query?: never;
@@ -643,6 +722,26 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  lobby_api_lobby_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LobbyOut'];
         };
       };
     };

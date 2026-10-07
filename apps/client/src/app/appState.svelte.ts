@@ -16,8 +16,10 @@ export type Screen =
   | { readonly name: 'boot' }
   | { readonly name: 'welcome' }
   | { readonly name: 'menu' }
-  /** Pick the map of a private match, then create it. */
-  | { readonly name: 'create' }
+  /** Pick the map of a private or public match, then create it. */
+  | { readonly name: 'create'; readonly public: boolean }
+  /** The public lobby: open matches of other players (LOB-01). */
+  | { readonly name: 'lobby' }
   | { readonly name: 'bot' }
   /** The waiting room of an invite (host and guest). */
   | { readonly name: 'invite'; readonly code: string }
@@ -129,10 +131,10 @@ export class AppState {
     this.notice = notice;
   }
 
-  async createInvite(mapId: string | null): Promise<void> {
+  async createInvite(mapId: string | null, isPublic = false): Promise<void> {
     const guest = this.#requireGuest();
     try {
-      const invite = await this.api.createInvite(guest.token, mapId);
+      const invite = await this.api.createInvite(guest.token, mapId, isPublic);
       this.go({ name: 'invite', code: invite.code });
     } catch (error) {
       this.#fail(error);

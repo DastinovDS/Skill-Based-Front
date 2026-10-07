@@ -92,4 +92,23 @@ describe('guest store', () => {
       forgetGuest(broken);
     }).not.toThrow();
   });
+
+  it('creates public matches, reads the lobby and cancels an invite', async () => {
+    const fetchFn = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ matches: [{ code: 'c' }] }), { status: 200 })),
+    );
+    const api = new Api(fetchFn);
+    await api.createInvite('t', null, true);
+    await api.createInvite('t', 'pereval');
+    expect(await api.lobby('t')).toEqual([{ code: 'c' }]);
+    fetchFn.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await expect(api.cancelInvite('t', 'a/b')).resolves.toBeUndefined();
+    const calls = fetchFn.mock.calls as unknown as [string, RequestInit][];
+    expect(calls.map(([url, init]) => [init.method, url, init.body])).toEqual([
+      ['POST', '/api/matches', '{"public":true}'],
+      ['POST', '/api/matches', '{"map_id":"pereval"}'],
+      ['GET', '/api/lobby', undefined],
+      ['DELETE', '/api/matches/a%2Fb', undefined],
+    ]);
+  });
 });
