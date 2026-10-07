@@ -22,6 +22,22 @@ _STANDARD_ATTRS: Final = frozenset(
 )
 
 
+class DropWebSocketHandshake(logging.Filter):
+    """Drops uvicorn's record of every WebSocket handshake (#193).
+
+    uvicorn logs ``<client ip:port> - "WebSocket <path?query>" [accepted]`` (or ``403``) at INFO on
+    ``uvicorn.error``: the client address is personal data and the query string is never logged
+    (AGENTS.md, section 5.3; docs/ops/legal.md). ``gow_server.ws`` logs connections itself, with
+    the match id and without the address.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not (isinstance(record.msg, str) and '"WebSocket ' in record.msg)
+
+
+DROP_WS_HANDSHAKE: Final = DropWebSocketHandshake()
+
+
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         entry: dict[str, object] = {
@@ -45,7 +61,8 @@ def configure_logging(level: str) -> None:
     """Send all logs (ours and uvicorn's) to stderr as JSON lines.
 
     The uvicorn access log is switched off: it writes the query string. The access log is the
-    request middleware in ``gow_server.app`` (path only, with the request id).
+    request middleware in ``gow_server.app`` (path only, with the request id). uvicorn's own
+    WebSocket handshake lines (client address and query string) are dropped as well.
     """
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(JsonFormatter())
@@ -56,6 +73,7 @@ def configure_logging(level: str) -> None:
         uvicorn_logger = logging.getLogger(name)
         uvicorn_logger.handlers.clear()
         uvicorn_logger.propagate = True
+    logging.getLogger("uvicorn.error").addFilter(DROP_WS_HANDSHAKE)
     uvicorn_access = logging.getLogger("uvicorn.access")
     uvicorn_access.handlers.clear()
     uvicorn_access.propagate = False

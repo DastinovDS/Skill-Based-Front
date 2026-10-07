@@ -10,8 +10,9 @@ import json
 import logging
 import shutil
 import socket
+import sys
 import time
-from collections.abc import AsyncGenerator, Callable, Coroutine
+from collections.abc import AsyncGenerator, Callable, Coroutine, Iterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -51,6 +52,7 @@ from gow_protocol.messages import (
 from gow_server.app import create_app
 from gow_server.cli import WS_MAX_SIZE
 from gow_server.clock import ManualClock
+from gow_server.logs import configure_logging
 from gow_server.matches import MatchManager, MatchRunner
 from gow_server.settings import Settings
 from gow_server.ws import CLOSE_NO_MATCH, CLOSE_POLICY
@@ -268,6 +270,56 @@ def test_unknown_token_or_foreign_match_is_refused(
     logs = json_logs.getvalue()
     assert "ws closed" in logs or "match_id" in logs
     assert all(token not in logs for token in used), "a token reached the logs"
+
+
+@pytest.fixture
+def production_logs(monkeypatch: pytest.MonkeyPatch) -> Iterator[io.StringIO]:
+    """The server's logs as ``gow-server`` configures them (``configure_logging``), in a buffer."""
+    stream = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stream)
+    root = logging.getLogger()
+    saved_root = (root.level, root.handlers[:])
+    names = ("uvicorn", "uvicorn.error", "uvicorn.access")
+    saved = {
+        name: (lg.handlers[:], lg.filters[:], lg.propagate, lg.disabled)
+        for name in names
+        for lg in [logging.getLogger(name)]
+    }
+    configure_logging("INFO")
+    try:
+        yield stream
+    finally:
+        root.setLevel(saved_root[0])
+        root.handlers[:] = saved_root[1]
+        for name, (handlers, filters, propagate, disabled) in saved.items():
+            lg = logging.getLogger(name)
+            lg.handlers[:], lg.filters[:] = handlers, filters
+            lg.propagate, lg.disabled = propagate, disabled
+
+
+def test_logs_have_no_client_address_and_no_query_string(
+    ws_settings: Settings, production_logs: io.StringIO
+) -> None:
+    """#193: uvicorn's handshake lines (``<ip:port> - "WebSocket <path?query>"``) are dropped."""
+    clients: list[str] = []
+
+    async def scenario(live: Live) -> None:
+        match_id = f"{live.runner.match_id}?probe=query-secret"
+        async with live.connect(match_id=match_id) as ws:
+            address, port = ws.local_address[:2]
+            clients.append(f"{address}:{port}")
+            await send(ws, hello(live.tokens[0]))
+            assert isinstance(await recv(ws), WelcomeMsg)
+        with pytest.raises(InvalidStatus):
+            async with live.connect(match_id=match_id, origin="http://evil.example"):
+                pass
+
+    run(ws_settings, scenario)
+    logs = production_logs.getvalue()
+    assert "ws connected" in logs and "ws origin refused" in logs  # the logs were captured
+    assert "query-secret" not in logs
+    assert '"WebSocket ' not in logs
+    assert clients and all(client not in logs for client in clients), "a client address in logs"
 
 
 # Match ---------------------------------------------------------------------------------------
