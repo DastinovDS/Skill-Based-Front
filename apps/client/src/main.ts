@@ -6,7 +6,6 @@ import { mount } from 'svelte';
 import RootApp from './app/RootApp.svelte';
 import LegalPage from './legal/LegalPage.svelte';
 import LegalFooter from './legal/LegalFooter.svelte';
-import DevScreen from './dev/DevScreen.svelte';
 import ReplayScreen from './replay/ReplayScreen.svelte';
 import './app.css';
 
@@ -39,10 +38,17 @@ if (legalPage === null && !devScreen) {
   mount(LegalFooter, { target: document.body });
 }
 
-export default legalPage !== null
-  ? mount(LegalPage, { target, props: { page: legalPage } })
-  : replayId !== null
-    ? mount(ReplayScreen, { target, props: { matchId: replayId } })
-    : devScreen
-      ? mount(DevScreen, { target })
-      : mount(RootApp, { target });
+// The dev screen is imported only in a dev build: its modules read protocol fixtures from
+// `packages/protocol/fixtures`, which the production image build does not copy, so a static
+// import would throw at load time and leave the production page blank (QA-01, #68).
+async function start(target: HTMLElement) {
+  if (legalPage !== null) return mount(LegalPage, { target, props: { page: legalPage } });
+  if (replayId !== null) return mount(ReplayScreen, { target, props: { matchId: replayId } });
+  if (import.meta.env.DEV && devScreen) {
+    const { default: DevScreen } = await import('./dev/DevScreen.svelte');
+    return mount(DevScreen, { target });
+  }
+  return mount(RootApp, { target });
+}
+
+export default await start(target);
