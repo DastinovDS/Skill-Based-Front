@@ -249,10 +249,26 @@ def _spent(progress: int, ticks: int) -> int:
     return (progress * ticks + PROGRESS_SCALE - 1) // PROGRESS_SCALE
 
 
+def _contested_edges(state: GameState, arrivals: dict[int, _Arrival]) -> dict[int, list[int]]:
+    """Edges with groups of both players on them (arrivals count on their edge): edge -> gids."""
+    by_edge: dict[int, list[int]] = {}
+    for gid in sorted(state.groups):
+        loc = state.groups[gid].location
+        if isinstance(loc, OnEdge):
+            by_edge.setdefault(loc.edge, []).append(gid)
+        elif gid in arrivals:
+            by_edge.setdefault(arrivals[gid].edge, []).append(gid)
+    return {
+        eid: gids
+        for eid, gids in by_edge.items()
+        if len({state.groups[gid].owner for gid in gids}) > 1
+    }
+
+
 def _edge_presence(
-    state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival]
-) -> list[_OnEdge]:
-    """Groups on edges and the arrivals of the tick, with their progress before the tick.
+    state: GameState, rules: Ruleset, gid: int, arrivals: dict[int, _Arrival]
+) -> _OnEdge:
+    """A group on an edge or an arrival of the tick, with its progress before the tick.
 
     Every group on an edge has made exactly one step in this tick (commands need a standing
     group, so a group on an edge always moves), so the step is undone with the formulas of
@@ -261,40 +277,33 @@ def _edge_presence(
     this tick was in the node at its start: progress 0.
     """
     mapdef = state.map
-    result: list[_OnEdge] = []
-    for gid in sorted(state.groups):
-        g = state.groups[gid]
-        loc = g.location
-        if isinstance(loc, OnEdge):
-            far = mapdef.edges[loc.edge].other(loc.from_node)
-            ticks = traversal_ticks(mapdef, rules, loc.edge, far)
-            spent = _spent(loc.progress, ticks)
-            if loc.back:
-                behind = min(PROGRESS_SCALE, (spent + 1) * PROGRESS_SCALE // ticks)
-                result.append(
-                    _OnEdge(
-                        gid,
-                        g.owner,
-                        loc.edge,
-                        loc.from_node,
-                        PROGRESS_SCALE - loc.progress,
-                        True,
-                        PROGRESS_SCALE - behind,
-                    )
-                )
-            else:
-                before = max(0, spent - 1) * PROGRESS_SCALE // ticks
-                result.append(_OnEdge(gid, g.owner, loc.edge, far, loc.progress, False, before))
-        elif gid in arrivals:
-            a = arrivals[gid]
-            if a.back:  # one step of the bounce before home: from_node is the far end
-                ticks = traversal_ticks(mapdef, rules, a.edge, a.from_node)
-                before = PROGRESS_SCALE - PROGRESS_SCALE // ticks
-            else:
-                ticks = traversal_ticks(mapdef, rules, a.edge, a.node)
-                before = (ticks - 1) * PROGRESS_SCALE // ticks
-            result.append(_OnEdge(gid, g.owner, a.edge, a.node, PROGRESS_SCALE, a.back, before))
-    return result
+    g = state.groups[gid]
+    loc = g.location
+    if isinstance(loc, OnEdge):
+        far = mapdef.edges[loc.edge].other(loc.from_node)
+        ticks = traversal_ticks(mapdef, rules, loc.edge, far)
+        spent = _spent(loc.progress, ticks)
+        if loc.back:
+            behind = min(PROGRESS_SCALE, (spent + 1) * PROGRESS_SCALE // ticks)
+            return _OnEdge(
+                gid,
+                g.owner,
+                loc.edge,
+                loc.from_node,
+                PROGRESS_SCALE - loc.progress,
+                True,
+                PROGRESS_SCALE - behind,
+            )
+        before = max(0, spent - 1) * PROGRESS_SCALE // ticks
+        return _OnEdge(gid, g.owner, loc.edge, far, loc.progress, False, before)
+    a = arrivals[gid]
+    if a.back:  # one step of the bounce before home: from_node is the far end
+        ticks = traversal_ticks(mapdef, rules, a.edge, a.from_node)
+        before = PROGRESS_SCALE - PROGRESS_SCALE // ticks
+    else:
+        ticks = traversal_ticks(mapdef, rules, a.edge, a.node)
+        before = (ticks - 1) * PROGRESS_SCALE // ticks
+    return _OnEdge(gid, g.owner, a.edge, a.node, PROGRESS_SCALE, a.back, before)
 
 
 def _meet(x: _OnEdge, y: _OnEdge) -> bool:
@@ -311,10 +320,10 @@ def _edge_meetings(
     state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, Bonus]
 ) -> list[Event]:
     """Rule 6. One fight per edge and direction of player 0's groups; fights are disjoint."""
-    presence = _edge_presence(state, rules, arrivals)
+    contested = _contested_edges(state, arrivals)
     events: list[Event] = []
-    for eid in sorted(dict.fromkeys(p.edge for p in presence)):
-        here = [p for p in presence if p.edge == eid]
+    for eid in sorted(contested):
+        here = [_edge_presence(state, rules, gid, arrivals) for gid in contested[eid]]
         edge = state.map.edges[eid]
         for heading in (edge.a, edge.b):
             # The groups of a fight for one direction are not in the fight for the other one.
