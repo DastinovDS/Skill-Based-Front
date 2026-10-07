@@ -9,8 +9,11 @@ fights) and reads the ``group_arrived`` events of the tick from ``state.events``
 
 1. Edge meetings first (rule 6): groups of the two players going towards each other along one
    edge meet when their progress towards their ends sums to at least 1000; a group that arrived
-   in this tick counts with 1000 on its arrival edge. A symmetric fight without terrain; the
-   loser bounces, a surviving winner goes on, on a draw both bounce.
+   in this tick counts with 1000 on its arrival edge. A meeting is the tick in which they pass
+   each other: a pair whose sum was already at least 1000 at the start of the tick has met
+   before and does not meet again (#175: a bouncing group that loses goes on home, the winner
+   goes on, and they move apart). A symmetric fight without terrain; the loser bounces, a
+   surviving winner goes on, on a draw both bounce.
 2. Then the nodes, in id order (each node is its own fight, so the order changes nothing):
    foreign groups in a player's node attack it (rule 4, row 5: an empty node is taken without a
    fight); both players in a neutral node fight symmetrically (rule 5). If the defender is wiped
@@ -19,7 +22,9 @@ fights) and reads the ``group_arrived`` events of the tick from ``state.events``
 
 A bounce (``OnEdge.back``) takes the group back along its edge to the node it came from and
 takes as long as the group has been on the edge; the order is dropped. A bounce into a node
-that became foreign meanwhile is an ordinary arrival there, with its own fight (rule 4). Nobody
+that became foreign meanwhile is an ordinary arrival there, with its own fight (rule 4), also
+when the group met an enemy on the edge in its arrival tick and bounced there: that bounce
+takes it home anyway (#175). Nobody
 flees on their own (rule 9): discharged groups stay until ordered away.
 
 Details that DEC-07 leaves open follow the defaults of #133 (see ``TODO(#133)`` below).
@@ -34,6 +39,7 @@ from gow_sim.ruleset import Ruleset
 from gow_sim.state import PROGRESS_SCALE, AtNode, Event, GameState, Group, Mode, OnEdge, event
 from gow_sim.systems.build import interrupt_build
 from gow_sim.systems.capacity import change_owner
+from gow_sim.systems.movement import traversal_ticks
 
 __all__ = [
     "Bonus",
@@ -189,7 +195,7 @@ def combat(
     """
     bonus = dict(bonuses or {})
     arrivals = _arrivals(state)
-    events = _edge_meetings(state, arrivals, bonus)
+    events = _edge_meetings(state, rules, arrivals, bonus)
     # Standing groups by node, in id order, taken after the edge meetings. A node fight only
     # moves (bounces) or kills the groups of its own node, so the index stays right for the
     # nodes after it; ``_node_fight`` still checks each group against the current state.
@@ -234,43 +240,90 @@ class _OnEdge:
     heading: int
     progress: int
     back: bool
+    before: int
+    """``progress`` at the start of the tick, before this tick's step of ``movement``."""
 
 
-def _edge_presence(state: GameState, arrivals: dict[int, _Arrival]) -> list[_OnEdge]:
-    mapdef = state.map
-    result: list[_OnEdge] = []
+def _spent(progress: int, ticks: int) -> int:
+    """Ticks behind ``progress = spent * 1000 // ticks`` (as ``movement`` recovers them)."""
+    return (progress * ticks + PROGRESS_SCALE - 1) // PROGRESS_SCALE
+
+
+def _contested_edges(state: GameState, arrivals: dict[int, _Arrival]) -> dict[int, list[int]]:
+    """Edges with groups of both players on them (arrivals count on their edge): edge -> gids."""
+    by_edge: dict[int, list[int]] = {}
     for gid in sorted(state.groups):
-        g = state.groups[gid]
-        loc = g.location
+        loc = state.groups[gid].location
         if isinstance(loc, OnEdge):
-            if loc.back:
-                result.append(
-                    _OnEdge(
-                        gid, g.owner, loc.edge, loc.from_node, PROGRESS_SCALE - loc.progress, True
-                    )
-                )
-            else:
-                far = mapdef.edges[loc.edge].other(loc.from_node)
-                result.append(_OnEdge(gid, g.owner, loc.edge, far, loc.progress, False))
+            by_edge.setdefault(loc.edge, []).append(gid)
         elif gid in arrivals:
-            a = arrivals[gid]
-            result.append(_OnEdge(gid, g.owner, a.edge, a.node, PROGRESS_SCALE, a.back))
-    return result
+            by_edge.setdefault(arrivals[gid].edge, []).append(gid)
+    return {
+        eid: gids
+        for eid, gids in by_edge.items()
+        if len({state.groups[gid].owner for gid in gids}) > 1
+    }
+
+
+def _edge_presence(
+    state: GameState, rules: Ruleset, gid: int, arrivals: dict[int, _Arrival]
+) -> _OnEdge:
+    """A group on an edge or an arrival of the tick, with its progress before the tick.
+
+    Every group on an edge has made exactly one step in this tick (commands need a standing
+    group, so a group on an edge always moves), so the step is undone with the formulas of
+    ``movement``: forward ``spent - 1``, a bounce ``spent + 1``, both on the ticks of the way
+    there (``traversal_ticks`` into the far end of the edge). A group that entered the edge in
+    this tick was in the node at its start: progress 0.
+    """
+    mapdef = state.map
+    g = state.groups[gid]
+    loc = g.location
+    if isinstance(loc, OnEdge):
+        far = mapdef.edges[loc.edge].other(loc.from_node)
+        ticks = traversal_ticks(mapdef, rules, loc.edge, far)
+        spent = _spent(loc.progress, ticks)
+        if loc.back:
+            behind = min(PROGRESS_SCALE, (spent + 1) * PROGRESS_SCALE // ticks)
+            return _OnEdge(
+                gid,
+                g.owner,
+                loc.edge,
+                loc.from_node,
+                PROGRESS_SCALE - loc.progress,
+                True,
+                PROGRESS_SCALE - behind,
+            )
+        before = max(0, spent - 1) * PROGRESS_SCALE // ticks
+        return _OnEdge(gid, g.owner, loc.edge, far, loc.progress, False, before)
+    a = arrivals[gid]
+    if a.back:  # one step of the bounce before home: from_node is the far end
+        ticks = traversal_ticks(mapdef, rules, a.edge, a.from_node)
+        before = PROGRESS_SCALE - PROGRESS_SCALE // ticks
+    else:
+        ticks = traversal_ticks(mapdef, rules, a.edge, a.node)
+        before = (ticks - 1) * PROGRESS_SCALE // ticks
+    return _OnEdge(gid, g.owner, a.edge, a.node, PROGRESS_SCALE, a.back, before)
 
 
 def _meet(x: _OnEdge, y: _OnEdge) -> bool:
+    """They pass each other in this tick (#175): the sum reaches 1000 now, not before."""
     # TODO(#133): two bouncing groups do not meet (they bounced off each other).
-    return x.progress + y.progress >= PROGRESS_SCALE and not (x.back and y.back)
+    return (
+        x.progress + y.progress >= PROGRESS_SCALE
+        and x.before + y.before < PROGRESS_SCALE
+        and not (x.back and y.back)
+    )
 
 
 def _edge_meetings(
-    state: GameState, arrivals: dict[int, _Arrival], bonus: dict[int, Bonus]
+    state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, Bonus]
 ) -> list[Event]:
     """Rule 6. One fight per edge and direction of player 0's groups; fights are disjoint."""
-    presence = _edge_presence(state, arrivals)
+    contested = _contested_edges(state, arrivals)
     events: list[Event] = []
-    for eid in sorted(dict.fromkeys(p.edge for p in presence)):
-        here = [p for p in presence if p.edge == eid]
+    for eid in sorted(contested):
+        here = [_edge_presence(state, rules, gid, arrivals) for gid in contested[eid]]
         edge = state.map.edges[eid]
         for heading in (edge.a, edge.b):
             # The groups of a fight for one direction are not in the fight for the other one.
@@ -313,12 +366,17 @@ def _edge_fight(
 
 def _bounce_from_edge(state: GameState, g: Group, arrivals: dict[int, _Arrival]) -> None:
     loc = g.location
-    if isinstance(loc, OnEdge):
+    if isinstance(loc, OnEdge) and loc.progress == 0 and not loc.back:
+        # It has just passed through its own node onto this edge: a bounce lasts as long as the
+        # way travelled (rule 6), here zero ticks, so it is back in that node at once (#175).
+        g.location = AtNode(loc.from_node)
+    elif isinstance(loc, OnEdge):
         g.location = OnEdge(loc.edge, loc.from_node, loc.progress, back=True)
-    else:
+    elif not arrivals[g.id].back:
         a = arrivals.pop(g.id)
-        if not a.back:  # a group that came home is already where a bounce would take it
-            g.location = OnEdge(a.edge, a.from_node, PROGRESS_SCALE, back=True)
+        g.location = OnEdge(a.edge, a.from_node, PROGRESS_SCALE, back=True)
+    # A group that came home is already where a bounce would take it. It keeps its arrival: if
+    # home became foreign meanwhile, the arrival is an attack there with its own fight (rule 4).
     g.order = None
 
 
