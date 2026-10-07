@@ -14,6 +14,7 @@ type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isInt = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0;
 const isStr = (v: unknown): v is string => typeof v === 'string';
+const isRating = (v: unknown): boolean => isObj(v) && isInt(v.before) && isInt(v.after);
 const isPlayer = (v: unknown): boolean => v === 0 || v === 1;
 const isArr = (v: unknown): v is unknown[] => Array.isArray(v);
 const every = (v: unknown, pred: (item: unknown) => boolean): boolean => isArr(v) && v.every(pred);
@@ -79,7 +80,8 @@ const CHECKS: Record<ServerMsg['type'], (m: Obj) => boolean> = {
     isStr(m.reason) &&
     (m.winner === null || isPlayer(m.winner)) &&
     every(m.vp, isInt) &&
-    (m.vp as unknown[]).length === 2,
+    (m.vp as unknown[]).length === 2 &&
+    (m.rating === undefined || m.rating === null || isRating(m.rating)),
   error: (m) => isStr(m.code) && (m.message === null || isStr(m.message)),
   pong: (m) => isInt(m.id),
   paused: (m) =>

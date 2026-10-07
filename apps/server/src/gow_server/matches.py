@@ -51,10 +51,11 @@ from gow_protocol.convert import (
     match_end_msg,
     snapshot_msg,
 )
-from gow_protocol.messages import PausedMsg, ServerMsg, SnapshotMsg
+from gow_protocol.messages import PausedMsg, RatingChange, ServerMsg, SnapshotMsg
 from gow_server.alerts import Alerter
 from gow_server.clock import Clock
 from gow_server.metrics import ServerMetrics
+from gow_server.rating import DRAW, LOSS, WIN, Glicko, displayed_rating, rate_match
 
 if TYPE_CHECKING:
     from gow_server.replays import ReplayService
@@ -192,6 +193,7 @@ class MatchRunner:
         bot: BotSeat | None = None,
         bot_budget_s: float = BOT_BUDGET_S,
         metrics: ServerMetrics | None = None,
+        ratings: tuple[Glicko, Glicko] | None = None,
     ) -> None:
         self.match_id: Final = match_id
         self.map_id: Final = map_id
@@ -211,6 +213,9 @@ class MatchRunner:
         """Tick lag in seconds: how late each step started after it was due (AGENTS.md, 12)."""
         self.metrics = metrics or ServerMetrics()
         """Process-wide counters and histograms; ``MatchManager.start`` replaces the default."""
+        self.ratings: Final = ratings
+        """Ratings of both accounts at the start of a rated match (RAT-02); else ``None``."""
+        self._rating_changes: dict[int, RatingChange] | None = None
         self.bot: Final = bot
         self.bot_budget_s: Final = bot_budget_s
         self.bot_decisions = 0
@@ -461,8 +466,32 @@ class MatchRunner:
             else:  # the final view goes before match_end, then the connection is done
                 box.put(snapshot)
                 vp = [match.state.players[p].vp for p in PLAYERS]
-                box.put(match_end_msg(outcome, match.tick, vp, disconnect=disconnect))
+                rating = self._rating_change(outcome.winner).get(player)
+                box.put(
+                    match_end_msg(outcome, match.tick, vp, disconnect=disconnect, rating=rating)
+                )
                 box.close()
+
+    def _rating_change(self, winner: int | None) -> dict[int, RatingChange]:
+        """The rating change of each player of a rated match, computed once (RAT-02, #75).
+
+        Pure arithmetic on the ratings read at the start, so the tick stays free of I/O. The
+        database write in ``gow_server.lifecycle`` recomputes the same numbers in its transaction.
+        """
+        if self.ratings is None:
+            return {}
+        if self._rating_changes is None:
+            score = DRAW if winner is None else WIN if winner == PLAYERS[0] else LOSS
+            before = self.ratings
+            after = rate_match(before[0], before[1], score)
+            self._rating_changes = {
+                p: RatingChange(
+                    before=round(displayed_rating(before[p])),
+                    after=round(displayed_rating(after[p])),
+                )
+                for p in PLAYERS
+            }
+        return self._rating_changes
 
     def end_reason(self) -> str | None:
         """Why the match ended, as stored in ``matches.end_reason``; ``None``: still running.
@@ -621,6 +650,7 @@ class MatchManager:
         *,
         private: bool = False,
         bot: BotSeat | None = None,
+        ratings: tuple[Glicko, Glicko] | None = None,
     ) -> MatchRunner:
         """Create a match and start its loop. Raises ``ManagerDrainingError`` while draining.
 
@@ -628,6 +658,7 @@ class MatchManager:
         ``GET /api/replays/{id}`` are named by it (``gow_server.replays``). ``private``: lobby,
         invite and bot matches, where each player may pause once (DEC-05); queue matches are rated.
         ``bot``: the slot a bot plays (SRV-06); that entry of ``players`` is ``BOT_ACCOUNT``.
+        ``ratings``: the ratings of both accounts of a rated match (RAT-02), for ``match_end``.
         """
         if self.draining:
             raise ManagerDrainingError("the server is draining for a deploy")
@@ -646,6 +677,7 @@ class MatchManager:
             pause_max_s=self._pause_max_s,
             bot=bot,
             bot_budget_s=self._bot_budget_s,
+            ratings=ratings,
         )
         self.start(runner)
         return runner

@@ -38,7 +38,14 @@ from collections.abc import Iterable, Sequence
 from typing import Final
 
 from gow_protocol import commands as wire
-from gow_protocol.messages import AckMsg, EndReason, EventMsg, MatchEndMsg, SnapshotMsg
+from gow_protocol.messages import (
+    AckMsg,
+    EndReason,
+    EventMsg,
+    MatchEndMsg,
+    RatingChange,
+    SnapshotMsg,
+)
 from gow_protocol.view import (
     AtNodeLoc,
     EdgeView,
@@ -317,10 +324,20 @@ _END_REASONS: Final = {
 
 
 def match_end_msg(
-    outcome: Outcome, tick: int, vp: Sequence[int], *, disconnect: bool = False
+    outcome: Outcome,
+    tick: int,
+    vp: Sequence[int],
+    *,
+    disconnect: bool = False,
+    rating: RatingChange | None = None,
 ) -> MatchEndMsg:
-    """``match_end`` of a finished match; ``disconnect``: the ``Forfeit`` was a technical defeat."""
+    """``match_end`` of a finished match; ``disconnect``: the ``Forfeit`` was a technical defeat.
+
+    ``rating``: the receiving player's rating change in a rated match (RAT-02).
+    """
     reason = _END_REASONS[outcome.reason]
     if disconnect and reason is EndReason.FORFEIT:
         reason = EndReason.DISCONNECT
-    return MatchEndMsg(tick=tick, reason=reason, winner=outcome.winner, vp=(vp[0], vp[1]))
+    return MatchEndMsg(
+        tick=tick, reason=reason, winner=outcome.winner, vp=(vp[0], vp[1]), rating=rating
+    )

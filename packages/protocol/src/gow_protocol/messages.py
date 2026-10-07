@@ -31,7 +31,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 3
+PROTOCOL_VERSION: Final = 4
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -188,6 +188,16 @@ class EndReason(StrEnum):
     """Both players lost in the same tick (two forfeits or both capitals taken): a draw (#136)."""
 
 
+class RatingChange(WireModel):
+    """The rating of the receiving player before and after a rated match (RAT-02, #75).
+
+    Both numbers are the displayed rating (``r - 2 * RD``, RAT-01), rounded to integers.
+    """
+
+    before: SignedInt
+    after: SignedInt
+
+
 class MatchEndMsg(WireModel):
     type: Literal["match_end"] = "match_end"
     tick: Tick
@@ -196,6 +206,8 @@ class MatchEndMsg(WireModel):
     """``None`` is a draw: always for ``double_defeat``, possible for ``timer``, else never."""
     vp: tuple[NonNegInt, NonNegInt]
     """Final VP of both players, by player id."""
+    rating: RatingChange | None = None
+    """Rating change of the receiving player; ``None``: the match is not rated (DEC-06)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:

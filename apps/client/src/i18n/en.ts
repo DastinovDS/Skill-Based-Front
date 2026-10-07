@@ -228,6 +228,7 @@ export const en = {
   'result.reason.disconnect': 'A player left the match.',
   'result.reason.double_defeat': 'Both capitals fell at once.',
   'result.vp': 'Victory points: you {mine}, enemy {enemy}',
+  'result.rating': 'Rating: {before} → {after} ({delta})',
   'result.replay': 'Watch the replay',
   'result.menu': 'To the menu',
   'legal.nav': 'Legal information',

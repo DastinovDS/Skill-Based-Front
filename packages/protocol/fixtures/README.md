@@ -42,7 +42,7 @@
   без пути, отказ `NOT_ENOUGH_CP`.
 - `server/event.json`: пример события. Набор событий (`kind` и поля `data`) задают системы
   симуляции (SIM-06…SIM-13), фильтрацию по видимости делает PRO-03 (#46).
-- `server/match_end.json` (захват столицы), `match_end_draw.json` (ничья по таймеру), `match_end_double_defeat.json` (оба проиграли в одном тике, ничья; PRO-03, #46).
+- `server/match_end.json` (захват столицы), `match_end_draw.json` (ничья по таймеру), `match_end_double_defeat.json` (оба проиграли в одном тике, ничья; PRO-03, #46), `match_end_rated.json` (рейтинговый матч: `rating.before` и `rating.after`, показываемый рейтинг получателя; RAT-02, #75).
 
 - `server/paused.json`, `paused_end.json`: пауза приватного матча началась (игрок 1, 60 с) и закончилась (DEC-05, #49; SRV-04, #50).
 

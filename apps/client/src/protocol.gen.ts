@@ -410,6 +410,19 @@ export interface MatchEndMsg {
    * @maxItems 2
    */
   vp: [number, number];
+  /**
+   * Rating change of the receiving player; ``None``: the match is not rated (DEC-06).
+   */
+  rating: RatingChange | null;
+}
+/**
+ * The rating of the receiving player before and after a rated match (RAT-02, #75).
+ *
+ * Both numbers are the displayed rating (``r - 2 * RD``, RAT-01), rounded to integers.
+ */
+export interface RatingChange {
+  before: number;
+  after: number;
 }
 /**
  * A protocol-level error (malformed message, rate limit, ...); game rejections are ``ack``.
@@ -504,6 +517,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

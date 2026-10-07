@@ -59,6 +59,9 @@ describe('decodeServerMsg', () => {
   it('rejects a welcome for player 2 and a match_end with a winner out of range', () => {
     expect(decodeServerMsg(JSON.stringify({ ...fixture('welcome'), player: 2 }))).toBeNull();
     expect(decodeServerMsg(JSON.stringify({ ...fixture('match_end'), winner: 5 }))).toBeNull();
+    expect(
+      decodeServerMsg(JSON.stringify({ ...fixture('match_end_rated'), rating: { before: 1 } })),
+    ).toBeNull();
   });
 });
 

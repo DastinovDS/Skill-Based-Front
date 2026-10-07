@@ -54,7 +54,7 @@ def test_alembic_upgrade_head_on_empty_database(tmp_path: Path) -> None:
         names = {row[0] for row in connection.execute("SELECT name FROM sqlite_master")}
         version = connection.execute("SELECT version_num FROM alembic_version").fetchone()
     assert names >= TABLES
-    assert version == ("0002",)
+    assert version == ("0003",)
     command.downgrade(config, "base")
     with sqlite3.connect(db_path) as connection:
         names = {row[0] for row in connection.execute("SELECT name FROM sqlite_master")}

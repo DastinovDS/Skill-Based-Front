@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 3,
+    "PROTOCOL_VERSION": 4,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -940,6 +940,18 @@
           "maxItems": 2,
           "minItems": 2,
           "type": "array"
+        },
+        "rating": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RatingChange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Rating change of the receiving player; ``None``: the match is not rated (DEC-06)."
         }
       },
       "required": [
@@ -947,7 +959,8 @@
         "tick",
         "reason",
         "winner",
-        "vp"
+        "vp",
+        "rating"
       ],
       "title": "MatchEndMsg",
       "type": "object"
@@ -1305,6 +1318,28 @@
         "id"
       ],
       "title": "PongMsg",
+      "type": "object"
+    },
+    "RatingChange": {
+      "additionalProperties": false,
+      "description": "The rating of the receiving player before and after a rated match (RAT-02, #75).\n\nBoth numbers are the displayed rating (``r - 2 * RD``, RAT-01), rounded to integers.",
+      "properties": {
+        "before": {
+          "maximum": 2147483647,
+          "minimum": -2147483647,
+          "type": "integer"
+        },
+        "after": {
+          "maximum": 2147483647,
+          "minimum": -2147483647,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "before",
+        "after"
+      ],
+      "title": "RatingChange",
       "type": "object"
     },
     "RecruitCmd": {

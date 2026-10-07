@@ -227,6 +227,7 @@ export const ru = {
   'result.reason.disconnect': 'Игрок покинул матч.',
   'result.reason.double_defeat': 'Обе столицы пали одновременно.',
   'result.vp': 'Очки победы: ты {mine}, враг {enemy}',
+  'result.rating': 'Рейтинг: {before} → {after} ({delta})',
   'result.replay': 'Смотреть реплей',
   'result.menu': 'В меню',
   'legal.nav': 'Правовая информация',

@@ -38,6 +38,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from gow_server.clock import Clock
 from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError, MatchManager, MatchRunner
 from gow_server.models import Match, MatchPlayer, utcnow
+from gow_server.rating import Glicko, apply_match, rating_of
 from gow_sim.maps import PLAYERS, MapDef
 from gow_sim.ruleset import Ruleset, archive_ruleset, ruleset_hash
 
@@ -225,8 +226,9 @@ class MatchLifecycle:
         if self.manager.draining:
             raise ManagerDrainingError("the server is draining for a deploy")
         deadline, record.deadline = record.deadline, None  # not swept while the row is written
+        rated = rated and bot is None and BOT_ACCOUNT not in players  # DEC-06: two humans only
         try:
-            pk = await asyncio.to_thread(
+            pk, ratings = await asyncio.to_thread(
                 self._insert, map_id, ruleset_hash(rules), rated, players, bot_name
             )
         except BaseException:
@@ -235,7 +237,14 @@ class MatchLifecycle:
         match_id = str(pk)
         try:
             runner = self.manager.create(
-                map_id, mapdef, rules, players, match_id=match_id, private=private, bot=bot
+                map_id,
+                mapdef,
+                rules,
+                players,
+                match_id=match_id,
+                private=private,
+                bot=bot,
+                ratings=ratings,
             )
         except BaseException:
             record.deadline = deadline
@@ -282,7 +291,8 @@ class MatchLifecycle:
 
     def _insert(
         self, map_id: str, rules_hash: str, rated: bool, players: tuple[int, int], bot: str | None
-    ) -> int:
+    ) -> tuple[int, tuple[Glicko, Glicko] | None]:
+        """Insert the match; for a rated one also read the ratings of both accounts."""
         with self._sessions.begin() as session:
             match = Match(
                 map_id=map_id,
@@ -303,7 +313,10 @@ class MatchLifecycle:
                         bot=bot if is_bot else None,
                     )
                 )
-            return match.id
+            ratings = (
+                (rating_of(session, players[0]), rating_of(session, players[1])) if rated else None
+            )
+            return match.id, ratings
 
     def _write_result(self, pk: int, result: _Result) -> None:
         with self._sessions.begin() as session:
@@ -326,6 +339,21 @@ class MatchLifecycle:
                     .where(MatchPlayer.match_id == pk, MatchPlayer.side == side)
                     .values(result=outcome)
                 )
+            if match.rated:
+                self._rate(session, pk)
+
+    @staticmethod
+    def _rate(session: Session, pk: int) -> None:
+        """Rate the match in the transaction of its result (RAT-02, #75).
+
+        A failure rolls back only the rating (a savepoint): the result stays saved and the
+        error is logged. ``apply_match`` is idempotent, so a retry cannot rate twice.
+        """
+        try:
+            with session.begin_nested():
+                apply_match(session, pk)
+        except Exception:
+            log.exception("match not rated", extra={"match_id": pk})
 
     def _write_aborted(self, pk: int, reason: str) -> None:
         self._write_result(pk, _Result(STATUS_ABORTED, reason, 0, None, False))
