@@ -1,6 +1,6 @@
 """Victory (SIM-13): VP accrual and the result by DEC-03 (mechanics.md, section 11).
 
-Expected values are worked out by hand from DEC-03: a match is 7200 ticks; every 50 ticks each
+Expected values are worked out by hand from DEC-03: a match is 7200 ticks; every 300 ticks (30 s) each
 player gets the map ``vp`` of each of its cities, a capital counts x3; capturing the enemy capital
 is an instant win; at the timer more VP wins, on equal VP more cities, else a draw.
 
@@ -25,7 +25,7 @@ MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
 DEC03: Ruleset = dataclasses.replace(
     load_ruleset(MVP0),
     match_ticks=7200,
-    victory=VictoryRules(vp_period_ticks=50, capital_multiplier=3),
+    victory=VictoryRules(vp_period_ticks=300, capital_multiplier=3),
 )
 
 MATCH_END = 7200
@@ -88,7 +88,7 @@ def test_vp_per_period_table(owners: dict[int, int | None], expected: tuple[int,
 
 @pytest.mark.parametrize(
     ("tick", "gained"),
-    [(1, 0), (49, 0), (50, 5), (51, 0), (100, 5), (7199, 0), (7200, 5)],
+    [(1, 0), (50, 0), (299, 0), (300, 5), (301, 0), (600, 5), (7199, 0), (7200, 5)],
 )
 def test_vp_accrues_only_on_period_ticks(tick: int, gained: int) -> None:
     state = with_owners({1: 0})  # player 0: capital 3 + city 2 = 5, player 1: 3
@@ -101,13 +101,13 @@ def test_vp_accrues_only_on_period_ticks(tick: int, gained: int) -> None:
     )
 
 
-def test_a_whole_match_of_static_ownership_gives_144_periods() -> None:
+def test_a_whole_match_of_static_ownership_gives_24_periods() -> None:
     state = with_owners({1: 0})
     for t in range(1, MATCH_END + 1):
         state.tick = t
         victory(state, DEC03)
-    # 7200 / 50 = 144 accruals: 144 x 5 and 144 x 3.
-    assert (state.players[0].vp, state.players[1].vp) == (720, 432)
+    # 7200 / 300 = 24 accruals: 24 x 5 and 24 x 3.
+    assert (state.players[0].vp, state.players[1].vp) == (120, 72)
 
 
 def test_no_result_before_the_timer() -> None:
@@ -169,7 +169,7 @@ def test_mirror_of_the_vp_accrual() -> None:
     state = with_owners({1: 0, 2: 0})
     twin = mirror(state)
     for s in (state, twin):
-        s.tick = 50
+        s.tick = 300
         victory(s, DEC03)
     assert (state.players[0].vp, state.players[1].vp) == (7, 3)
     assert (twin.players[0].vp, twin.players[1].vp) == (3, 7)
