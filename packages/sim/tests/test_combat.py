@@ -395,3 +395,72 @@ def test_rule9_nobody_flees() -> None:
     assert state.groups[d].location == AtNode(1)
     assert state.groups[d].units == 9
     assert state.groups[a].location == AtNode(0)
+
+
+# #175: a bounce home that meets an enemy on the way ----------------------------------------------
+
+
+def test_rule4_and_6_bounce_home_meeting_an_enemy_then_attacking_the_lost_home() -> None:
+    """#175. Player 0's 2/1 bounces home to node 0, which became player 1's (1/1 garrison D).
+    In the tick it arrives, player 1's 1/1 leaves node 0 along the same edge (33 of 1000):
+    they meet first (rule 6, 1000 + 33 >= 1000), 1 against 1 is a draw, both bounce. The
+    bounce of player 0's group takes it where it was going anyway, home: an ordinary arrival
+    with its own fight (rule 4). There Qa = 0, Qd = 1 (forest 0): one attacker dies, D spends
+    its charge; the attacker survives and bounces again (row 4), back along edge 0 to node 1,
+    the node it came from. Player 1's group bounces back to node 0 (rule 6)."""
+    state = initial_state(line(["forest"] * 3, [0, 1, 1]), RULES)
+    state.nodes[0].owner = 1
+    d = add(state, 1, 1, 1, AtNode(0))
+    a = add(state, 0, 2, 1, OnEdge(0, 0, 1000 // TRAVEL, back=True))
+    b = add(state, 1, 1, 1, AtNode(0), order=Order((1,), False, 0))
+    fights = [e for e in step(state) if e.kind == "fight"]
+    assert [(f.get("edge"), f.get("node"), f.get("pool_0"), f.get("pool_1")) for f in fights] == [
+        (0, None, 1, 1),
+        (None, 0, 0, 1),
+    ]
+    assert (state.groups[a].units, state.groups[a].charged) == (1, 0)
+    assert state.groups[a].location == OnEdge(0, 1, PROGRESS_SCALE, back=True)
+    assert (state.groups[d].units, state.groups[d].charged) == (1, 0)
+    assert state.groups[b].location == OnEdge(0, 0, 1000 // TRAVEL, back=True)
+    assert state.nodes[0].owner == 1
+
+
+def test_rule6_a_meeting_happens_once_the_winner_goes_on() -> None:
+    """#175. Player 0's discharged 2/0 bounces home to node 0 along edge 0 (now 500 of the way
+    from node 0); player 1's 2/1 goes from node 0 to node 1 (466). After the tick 466 and 500:
+    they pass each other (534 + 500 >= 1000), 1 against 0 kills one unit of the bouncing
+    group. The loser goes on home, the winner goes on to node 1 (rule 6): they have passed each
+    other and do not meet again, so the winner is in node 1 after its 30 ticks on the edge.
+    (The loser is home after its 15 ticks and takes the empty node 0, row 5.)"""
+    state = initial_state(line(["forest"] * 3, [0, 1, 1]), RULES)
+    state.nodes[0].owner = 1
+    a = add(state, 0, 2, 0, OnEdge(0, 0, 500, back=True))
+    b = add(state, 1, 2, 1, OnEdge(0, 0, 14 * 1000 // TRAVEL), order=Order((1,), False, 0))
+    fought = [e for e in step(state) if e.kind == "fight"]
+    assert [(f.get("pool_0"), f.get("pool_1"), f.get("losses_0")) for f in fought] == [(0, 1, 1)]
+    for _ in range(TRAVEL - 15 - 1):
+        assert not any(e.kind == "fight" for e in step(state))
+        loc = state.groups[b].location
+        assert isinstance(loc, OnEdge) and not loc.back
+    step(state)
+    assert state.groups[b].location == AtNode(1)
+    assert (state.groups[b].units, state.groups[b].charged) == (2, 0)
+    assert state.groups[a].units == 1
+    assert (state.groups[a].location, state.nodes[0].owner) == (AtNode(0), 0)
+
+
+def test_rule6_a_bounce_right_after_passing_through_is_back_at_once() -> None:
+    """#175. Player 0 goes 0 -> 2 through its own node 1; in the tick it passes node 1 it is on
+    edge 1 with progress 0, and player 1's 2/2 arrives at node 1 over edge 1 (0 + 1000 >= 1000).
+    Row 11 (2 against 2 on the edge): both bounce. A bounce lasts as long as the way travelled
+    (rule 6): zero ticks for player 0, which stands in node 1 at once; player 1 goes back the
+    whole edge to node 2."""
+    state = initial_state(line(["forest"] * 3, [0, 0, 1]), RULES)
+    a = add(state, 0, 2, 2, before_arrival(state, 0, 0), order=Order((1, 2), False, 0))
+    b = add(state, 1, 2, 2, before_arrival(state, 1, 2), order=Order((1,), False, 0))
+    fight = the(step(state), "fight")
+    assert (fight.get("edge"), fight.get("pool_0"), fight.get("pool_1")) == (1, 2, 2)
+    assert state.groups[a].location == AtNode(1)
+    assert state.groups[a].order is None
+    assert state.groups[b].location == OnEdge(1, 2, PROGRESS_SCALE, back=True)
+    assert state.nodes[1].owner == 0
