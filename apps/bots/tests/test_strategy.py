@@ -44,6 +44,7 @@ class _Recorder:
 # Strength against the baseline ------------------------------------------------------------------
 
 
+@pytest.mark.slow  # 12 cells x 6 full mvp-0 matches
 @pytest.mark.parametrize("name", STRATEGY)
 @pytest.mark.parametrize("map_name", MVP_MAPS)
 def test_strategy_bot_beats_random_legal_in_90_percent(
@@ -80,6 +81,7 @@ def test_params_stay_in_their_ranges_and_depend_on_the_seed(
     assert len(seen) > 15
 
 
+@pytest.mark.slow  # 10 matches of 250 s per bot
 @pytest.mark.parametrize("name", STRATEGY)
 def test_one_pair_over_seeds_gives_different_matches(
     maps: dict[str, MapDef], mvp_rules: Ruleset, name: str
@@ -101,26 +103,38 @@ def test_one_pair_over_seeds_gives_different_matches(
 # Mirror symmetry ----------------------------------------------------------------------------------
 
 
+# 4 short matches (test-short) per cell in the required path; one full mvp-0 match is ``slow``.
+_SELF_PLAY = [
+    pytest.param("short", 4, id="short"),
+    pytest.param("mvp", 1, id="mvp-0", marks=pytest.mark.slow),
+]
+
+
+@pytest.mark.parametrize("rules_name, seeds", _SELF_PLAY)
 @pytest.mark.parametrize("name", STRATEGY)
 @pytest.mark.parametrize("map_name", MVP_MAPS)
 def test_self_play_on_a_symmetric_map_is_a_draw_on_vp(
-    maps: dict[str, MapDef], mvp_rules: Ruleset, short_rules: Ruleset, name: str, map_name: str
+    maps: dict[str, MapDef],
+    mvp_rules: Ruleset,
+    short_rules: Ruleset,
+    name: str,
+    map_name: str,
+    rules_name: str,
+    seeds: int,
 ) -> None:
     # Both sides get the parameters of side 0; then nothing but opaque ids differs between them,
     # and a tie-break by opaque id would break the equality of the VP.
     mapdef = maps[map_name]
     cls = CLASSES[name]
-    for rules, seeds in ((short_rules, range(4)), (mvp_rules, range(1))):
-        for seed in seeds:
-            fixed = {
-                k: ParamRange(v, v) for k, v in choose_params(name, seed, 0, cls.PARAMS).items()
-            }
-            twin = type("Twin", (cls,), {"PARAMS": fixed})
-            bots = [twin(mapdef, rules, seed=seed, player=p) for p in (0, 1)]
-            result = run_headless(mapdef, rules, bots)
-            assert result.vp[0] == result.vp[1]
-            assert result.accepted[0] == result.accepted[1]
-            assert result.outcome is not None and result.outcome.winner is None
+    rules = short_rules if rules_name == "short" else mvp_rules
+    for seed in range(seeds):
+        fixed = {k: ParamRange(v, v) for k, v in choose_params(name, seed, 0, cls.PARAMS).items()}
+        twin = type("Twin", (cls,), {"PARAMS": fixed})
+        bots = [twin(mapdef, rules, seed=seed, player=p) for p in (0, 1)]
+        result = run_headless(mapdef, rules, bots)
+        assert result.vp[0] == result.vp[1]
+        assert result.accepted[0] == result.accepted[1]
+        assert result.outcome is not None and result.outcome.winner is None
 
 
 # The bots do what their names say ----------------------------------------------------------------

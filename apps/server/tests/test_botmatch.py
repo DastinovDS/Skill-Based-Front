@@ -57,6 +57,9 @@ def bot_settings(maps_dir: Path, tmp_path: Path) -> Settings:
         replays_dir=tmp_path / "replays",
         rulesets_dir=ROOT / "rulesets" / "archive",
         ruleset_path=ROOT / "rulesets" / "test-short.toml",
+        # The real-time budget of a decision (1 ms) depends on the machine load: with it a busy
+        # runner makes the bot skip decisions. Overruns are tested below with bot_budget_s=0.001.
+        bot_budget_s=60.0,
     )
 
 

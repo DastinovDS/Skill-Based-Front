@@ -77,7 +77,10 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 | `uv run ruff check . && uv run ruff format --check .` | линтер и формат | INF-02 |
 | `uv run pyright` | проверка типов (strict) | INF-02 |
 | `uv run lint-imports` | границы пакетов | INF-02 |
-| `uv run pytest` (`HYPOTHESIS_PROFILE=ci` в CI) | тесты | INF-02 |
+| `uv run pytest` (`HYPOTHESIS_PROFILE=ci` в CI) | тесты, всё подряд (локально) | INF-02 |
+| `uv run pytest -n auto -m "not perf and not slow"` | быстрый параллельный прогон (pytest-xdist); так идёт обязательный job `py` | INF-02 |
+| `uv run pytest -m perf` | бенчмарки и tick lag (последовательно, не под `-n`: xdist отключает замеры); шаг job `py` | SIM-15 |
+| `uv run pytest -n auto -m slow` | длинные тесты полных матчей ботов (доли побед по нескольким seed); не обязательный job `py-slow` | BOT-04 |
 | `pnpm -C apps/client install --frozen-lockfile` | установить клиент | INF-03 |
 | `pnpm -C apps/client dev` | dev-сервер клиента | INF-03 |
 | `pnpm -C apps/client lint && pnpm -C apps/client check && pnpm -C apps/client test && pnpm -C apps/client build` | проверки клиента | INF-03 |
@@ -357,7 +360,7 @@ async def run(self) -> None:
   - `type`: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`.
   - `scope`: `sim`, `protocol`, `server`, `bots`, `client`, `maps`, `infra`, `docs`.
 - **PR** в `develop`, в описании — `Closes #<номер>` и отмеченные критерии приёмки. `develop` — ветка по умолчанию на GitHub (иначе `Closes` не закрывает issue). `main` — только релизы.
-- **CI:** обязательные проверки `py`, `web` и `docker` (`.github/workflows/ci.yml`, подробности в README). Мерж — только когда все зелёные (`gh pr checks <PR> --watch`). GitHub этого не принуждает: branch protection недоступна на текущем плане, правило держится на процессе.
+- **CI:** обязательные проверки `py`, `web` и `docker` (`.github/workflows/ci.yml`, подробности в README). Не обязательный `py-slow` гоняет тесты с меткой `slow` (длинные статистические матчи ботов); новый тест дольше ~5 с на полный матч помечай `@pytest.mark.slow`, замеры времени помечай `@pytest.mark.perf`. Мерж — только когда все обязательные проверки зелёные (`gh pr checks <PR> --watch`; красный `py-slow` разбирай, но он не блокирует). GitHub этого не принуждает: branch protection недоступна на текущем плане, правило держится на процессе.
 - **Шаблоны:** `.github/pull_request_template.md` (чек-лист Definition of Done ниже) и `.github/ISSUE_TEMPLATE/` (feature, bug, decision). Меняешь Definition of Done — поменяй и шаблон PR.
 - **Закрытие issue после мержа — вручную.** В этом репозитории `Closes #N` сейчас не связывает PR с issue (у PR пустой `closingIssuesReferences`, хотя база — ветка по умолчанию), поэтому автор закрывает issue сам: `gh issue close <N> --comment "Done in #<PR>"`.
 

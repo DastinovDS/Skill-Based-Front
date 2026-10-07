@@ -56,7 +56,10 @@ uv run python -c "import gow_sim, gow_protocol, gow_server, gow_bots, gow_maps"
 uv run ruff check . && uv run ruff format --check .
 uv run pyright
 uv run lint-imports
-uv run pytest               # в CI: HYPOTHESIS_PROFILE=ci uv run pytest
+uv run pytest               # всё подряд, как раньше (в CI: HYPOTHESIS_PROFILE=ci)
+uv run pytest -n auto -m "not perf and not slow"   # быстрый прогон на всех ядрах (так идёт обязательный job py)
+uv run pytest -m perf       # бенчмарки и tick lag: только последовательно, без -n
+uv run pytest -n auto -m slow   # длинные статистические матчи ботов (job py-slow)
 uv run pre-commit install   # один раз: ruff перед каждым коммитом
 ```
 
@@ -109,10 +112,15 @@ GitHub Actions, `.github/workflows/ci.yml`. Запускается на PR в `d
 
 | Проверка | Что делает |
 |---|---|
-| `py` | `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `pytest` с `HYPOTHESIS_PROFILE=ci` |
+| `py` | `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `gow-maps validate`, `pytest -n auto -m "not perf and not slow"` (pytest-xdist, `HYPOTHESIS_PROFILE=ci`), затем `pytest -m perf` последовательно (бюджеты производительности), реплеи и `check_golden_frozen` |
 | `web` | `pnpm -C apps/client install --frozen-lockfile`, шаги `protocol-drift` и `api-drift` (перегенерация схемы протокола с `protocol.gen.ts` и OpenAPI сервера с `api.gen.ts`, падают при отличии от закоммиченных), `lint`, `check`, `test`, `build` |
 | `docker` | `hadolint` для `deploy/*.Dockerfile`, затем `deploy/smoke.sh`: сборка образов, `docker compose up`, проверки через Caddy |
 
+- Не обязательный job `py-slow` идёт параллельно с `py` на тех же путях: `pytest -n auto -m slow`, то есть длинные
+  тесты полных матчей (доли побед ботов против `random_legal` по 3 и 10 seed на карту, разнообразие по seed,
+  турнирный харнесс на всех ботах). Он не задерживает мерж, но его красный результат нужно разобрать до релиза.
+  Метки pytest: `perf` (замеры времени, не запускаются под xdist), `slow` (длинные матчи); обе описаны в
+  `pyproject.toml`.
 - Вспомогательный job `changes` смотрит на изменённые пути в PR. Если в PR нет изменений для `py`, `web` или `docker`
   (например, правка только документации), соответствующий job пропускается, а GitHub считает пропущенный job
   успешным: обязательная проверка не зависает в ожидании. Если сам `changes` упал, все проверки запускаются целиком.

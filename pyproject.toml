@@ -79,6 +79,10 @@ norecursedirs = [".*", "node_modules", "dist", "build"]
 # importlib mode: test files with the same name in different packages do not collide.
 addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config"]
 xfail_strict = true
+markers = [
+    "perf: timing-sensitive tests (benchmarks, tick lag); run serially, never under xdist (-n)",
+    "slow: long statistical full-match tests (bot win rates); CI job py-slow, deselect with -m 'not slow'",
+]
 
 # Package boundaries (AGENTS.md, section 2). Checked by `uv run lint-imports`.
 [tool.importlinter]
@@ -134,6 +138,7 @@ dev = [
     "pyright>=1.1.414",
     "pytest>=9.1.1",
     "pytest-benchmark>=5.3.0",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.16.9",
     "types-networkx>=3.6.1.20260911",
 ]
