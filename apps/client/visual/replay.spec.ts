@@ -17,3 +17,23 @@ test('replay viewer plays, speeds up and seeks', async ({ page }) => {
   await expect(canvas).toHaveAttribute('data-tick', '300');
   await page.screenshot({ path: process.env.REPLAY_SHOT ?? 'test-results/replay.png' });
 });
+
+// #185: the legal links sit in their own strip under the controls, not over the score. Checked at
+// the small window (the controls take the whole width there) and at a wide one.
+for (const size of [
+  { width: 800, height: 600 },
+  { width: 1600, height: 900 },
+]) {
+  test(`legal footer does not cover the replay controls at ${String(size.width)}x${String(size.height)}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    await page.goto('/?replay=dev');
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '0');
+    const footer = await page.getByRole('navigation', { name: /legal/i }).boundingBox();
+    const controls = await page.getByRole('region', { name: 'Replay controls' }).boundingBox();
+    if (footer === null || controls === null) throw new Error('footer or controls not laid out');
+    expect(footer.y).toBeGreaterThanOrEqual(controls.y + controls.height);
+    await expect(page.getByText(/Player 1\s+0 : 0\s+Player 2/)).toBeVisible();
+  });
+}

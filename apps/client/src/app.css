@@ -1,4 +1,7 @@
 :root {
+  /* A strip at the bottom of every game screen for the legal links (LegalFooter): the screens end
+     above it, so the links never cover the controls, the score or the map (#185). */
+  --legal-footer-h: 28px;
   color-scheme: dark;
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   background: #0d1117;
@@ -15,7 +18,7 @@ body {
 /* Menu-like screens (welcome, menu, waiting room, result): a card in the middle of the page. */
 .screen {
   position: fixed;
-  inset: 0;
+  inset: 0 0 var(--legal-footer-h);
   overflow: auto;
   display: grid;
   place-items: center;

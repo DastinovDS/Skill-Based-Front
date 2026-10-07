@@ -225,7 +225,7 @@
 <style>
   .match {
     position: fixed;
-    inset: 0;
+    inset: 0 0 var(--legal-footer-h);
   }
 
   .loading {
