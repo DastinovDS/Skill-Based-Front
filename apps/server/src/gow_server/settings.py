@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     ``ws_msg_burst`` (a resend of unacknowledged commands after a reconnect); more is a flood."""
     invite_ttl_s: float = 1800.0
     """A private-match invite expires this long after creation (SRV-05: 30 minutes)."""
+    lobby_stale_s: float = 15.0
+    """A public lobby entry is dropped when its host did not ask for the invite this long (LOB-01);
+    the waiting room polls every 1.5 s."""
+    invite_rate_limit: int = 10
+    invite_rate_window_s: float = 60.0
+    """At most ``invite_rate_limit`` matches (private or public) created per account within
+    ``invite_rate_window_s`` seconds (AGENTS.md, section 5.5)."""
     reconnect_window_s: float = 60.0
     """A player without a connection has this long to come back, the match goes on meanwhile;
     then the server applies a ``Forfeit`` for them, a technical defeat (DEC-05, #49)."""

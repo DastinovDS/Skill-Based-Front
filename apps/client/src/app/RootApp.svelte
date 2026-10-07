@@ -7,6 +7,7 @@
   import { AppState } from './appState.svelte.ts';
   import BotScreen from './BotScreen.svelte';
   import CreateScreen from './CreateScreen.svelte';
+  import LobbyScreen from './LobbyScreen.svelte';
   import InviteScreen from './InviteScreen.svelte';
   import MatchScreen from './MatchScreen.svelte';
   import MenuScreen from './MenuScreen.svelte';
@@ -41,7 +42,10 @@
     nick={guest.nick}
     notice={app.notice}
     oncreate={() => {
-      app.go({ name: 'create' });
+      app.go({ name: 'create', public: false });
+    }}
+    onlobby={() => {
+      app.go({ name: 'lobby' });
     }}
     onbot={() => {
       app.go({ name: 'bot' });
@@ -54,7 +58,23 @@
 {:else if screen.name === 'create'}
   <CreateScreen
     api={app.api}
-    oncreate={(mapId: string | null) => app.createInvite(mapId)}
+    isPublic={screen.public}
+    oncreate={(mapId: string | null) => app.createInvite(mapId, screen.public)}
+    onback={() => {
+      if (screen.public) app.go({ name: 'lobby' });
+      else app.menu();
+    }}
+  />
+{:else if screen.name === 'lobby'}
+  <LobbyScreen
+    api={app.api}
+    token={guest.token}
+    oncreate={() => {
+      app.go({ name: 'create', public: true });
+    }}
+    onjoined={(code: string) => {
+      app.go({ name: 'invite', code });
+    }}
     onback={() => {
       app.menu();
     }}

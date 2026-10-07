@@ -76,6 +76,14 @@
     }
   }
 
+  /** Leaving before the start drops the invite, so a public entry does not stay in the lobby. */
+  function leave(): void {
+    api.cancelInvite(token, code).catch(() => {
+      // Already gone or the server is away: it drops an abandoned entry by itself.
+    });
+    onleave(null);
+  }
+
   async function copy(): Promise<void> {
     try {
       await navigator.clipboard.writeText(link);
@@ -94,7 +102,9 @@
       <p role="status">{t('common.loading')}</p>
     {:else}
       <p>{tf('invite.map', { map: invite.map_id })}</p>
-      {#if isHost && invite.guest_nick === null}
+      {#if isHost && invite.guest_nick === null && invite.public}
+        <p role="status">{t('invite.waitingLobby')}</p>
+      {:else if isHost && invite.guest_nick === null}
         <label>
           {t('invite.link')}
           <input
@@ -138,7 +148,7 @@
       <button
         type="button"
         onclick={() => {
-          onleave(null);
+          leave();
         }}>{t('invite.leave')}</button
       >
     </div>

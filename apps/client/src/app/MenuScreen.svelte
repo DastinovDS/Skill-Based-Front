@@ -6,11 +6,12 @@
     nick: string;
     notice: MessageKey | null;
     oncreate: () => void;
+    onlobby: () => void;
     onbot: () => void;
     onchangenick: () => void;
   }
 
-  let { nick, notice, oncreate, onbot, onchangenick }: Props = $props();
+  let { nick, notice, oncreate, onlobby, onbot, onchangenick }: Props = $props();
 </script>
 
 <main class="screen">
@@ -22,6 +23,7 @@
     {/if}
     <div class="actions">
       <button type="button" class="primary" onclick={oncreate}>{t('menu.create')}</button>
+      <button type="button" class="primary" onclick={onlobby}>{t('menu.lobby')}</button>
       <button type="button" class="primary" onclick={onbot}>{t('menu.bot')}</button>
     </div>
     <div class="actions">

@@ -6,6 +6,7 @@ import { AppState } from './appState.svelte.ts';
 const invite = (code: string): Invite => ({
   code,
   state: 'joined',
+  public: false,
   map_id: 'pereval',
   host_nick: 'Host',
   guest_nick: 'Guest',
@@ -140,5 +141,18 @@ describe('AppState', () => {
     await app.playBot('hard', 'pereval');
     expect(createBotMatch).toHaveBeenCalledWith('t', 'hard', 'pereval');
     expect(app.screen).toEqual({ name: 'match', matchId: 'm1', mapId: 'pereval' });
+  });
+
+  it('creates a public match and goes to its waiting room', async () => {
+    const createInvite = vi.fn(() => Promise.resolve({ ...invite('pub'), public: true }));
+    const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
+    const { app } = setup('', storage, {
+      me: () => Promise.resolve({ player_id: 1, nick: 'Old' }),
+      createInvite,
+    });
+    await app.start();
+    await app.createInvite('pereval', true);
+    expect(createInvite).toHaveBeenCalledWith('t', 'pereval', true);
+    expect(app.screen).toEqual({ name: 'invite', code: 'pub' });
   });
 });

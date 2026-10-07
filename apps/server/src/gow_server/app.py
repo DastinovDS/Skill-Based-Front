@@ -67,7 +67,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         if orphans:
             log.warning("matches of the previous run aborted", extra={"count": orphans})
         app.state.invites = invites.InviteBook(
-            match_clock, settings.invite_ttl_s, app.state.lifecycle
+            match_clock, settings.invite_ttl_s, app.state.lifecycle, settings.lobby_stale_s
         )
         monitor = asyncio.create_task(
             alerts.monitor(app.state.matches, settings.monitor_interval_s), name="monitor"
@@ -90,6 +90,10 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.state.settings = settings
     app.state.guest_limiter = SlidingWindowLimiter(
         settings.guest_rate_limit, settings.guest_rate_window_s, MonotonicClock()
+    )
+
+    app.state.invite_limiter = SlidingWindowLimiter(
+        settings.invite_rate_limit, settings.invite_rate_window_s, match_clock
     )
 
     @app.middleware("http")
@@ -129,6 +133,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(replays.router)
     app.include_router(internal.router)
     app.include_router(invites.router)
+    app.include_router(invites.lobby_router)
     app.include_router(botmatch.router)
     app.include_router(ws.router)
     return app

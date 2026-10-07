@@ -327,6 +327,45 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "private match"
+        ],
+        "summary": "Cancel Match",
+        "description": "Leave the waiting room before the match starts: the invite is dropped (404 for others).\n\nEither player may do it; the other one sees the invite gone (404). A started match is not\ntouched: leaving a running one is a ``Forfeit`` over the WebSocket.",
+        "operationId": "cancel_match_api_matches__code__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/matches/{code}/join": {
@@ -422,6 +461,33 @@
             }
           }
         }
+      }
+    },
+    "/api/lobby": {
+      "get": {
+        "tags": [
+          "lobby"
+        ],
+        "summary": "Lobby",
+        "description": "Open public matches of other players, oldest first (the client polls every 2 s).",
+        "operationId": "lobby_api_lobby_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LobbyOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/bot-matches": {
@@ -548,6 +614,11 @@
               }
             ],
             "title": "Map Id"
+          },
+          "public": {
+            "type": "boolean",
+            "title": "Public",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -614,6 +685,10 @@
             ],
             "title": "State"
           },
+          "public": {
+            "type": "boolean",
+            "title": "Public"
+          },
           "map_id": {
             "type": "string",
             "title": "Map Id"
@@ -661,6 +736,7 @@
         "required": [
           "code",
           "state",
+          "public",
           "map_id",
           "host_nick",
           "guest_nick",
@@ -670,6 +746,50 @@
           "match_id"
         ],
         "title": "InviteOut"
+      },
+      "LobbyEntry": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "host_nick": {
+            "type": "string",
+            "title": "Host Nick"
+          },
+          "map_id": {
+            "type": "string",
+            "title": "Map Id"
+          },
+          "age_s": {
+            "type": "number",
+            "title": "Age S"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "host_nick",
+          "map_id",
+          "age_s"
+        ],
+        "title": "LobbyEntry"
+      },
+      "LobbyOut": {
+        "properties": {
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/LobbyEntry"
+            },
+            "type": "array",
+            "title": "Matches"
+          }
+        },
+        "type": "object",
+        "required": [
+          "matches"
+        ],
+        "title": "LobbyOut"
       },
       "MapSummary": {
         "properties": {

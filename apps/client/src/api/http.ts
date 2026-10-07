@@ -9,6 +9,7 @@ import type { MapFile } from '../protocol.gen.ts';
 type Schemas = components['schemas'];
 export type Invite = Schemas['InviteOut'];
 export type BotMatch = Schemas['BotMatchOut'];
+export type LobbyEntry = Schemas['LobbyEntry'];
 export type MapSummary = Schemas['MapSummary'];
 export type BotLevel = Schemas['CreateBotMatch']['level'];
 export const BOT_LEVELS: readonly BotLevel[] = ['easy', 'normal', 'hard', 'expert'];
@@ -22,7 +23,7 @@ export type ApiErrorCode =
   | 'conflict'
   /** 422: nick or map rejected. */
   | 'invalid'
-  /** 429: too many guests from this address. */
+  /** 429: too many guests from this address, or too many matches created. */
   | 'rate_limited'
   /** 503: no maps or the server is restarting. */
   | 'unavailable'
@@ -79,8 +80,21 @@ export class Api {
     return this.#request('GET', `/api/maps/${encodeURIComponent(id)}`, null);
   }
 
-  createInvite(token: string, mapId: string | null): Promise<Invite> {
-    return this.#request('POST', '/api/matches', token, mapId === null ? {} : { map_id: mapId });
+  createInvite(token: string, mapId: string | null, isPublic = false): Promise<Invite> {
+    return this.#request('POST', '/api/matches', token, {
+      ...(mapId === null ? {} : { map_id: mapId }),
+      ...(isPublic ? { public: true } : {}),
+    });
+  }
+
+  /** Open public matches of other players (LOB-01). */
+  async lobby(token: string): Promise<LobbyEntry[]> {
+    return (await this.#request<Schemas['LobbyOut']>('GET', '/api/lobby', token)).matches;
+  }
+
+  /** Leave the waiting room: the server drops an invite that has not started. */
+  async cancelInvite(token: string, code: string): Promise<void> {
+    await this.#request('DELETE', `/api/matches/${encodeURIComponent(code)}`, token);
   }
 
   invite(token: string, code: string): Promise<Invite> {
@@ -103,7 +117,7 @@ export class Api {
   }
 
   async #request<T>(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'DELETE',
     url: string,
     token: string | null,
     body?: unknown,
@@ -124,6 +138,7 @@ export class Api {
     if (!response.ok) {
       throw new ApiError(STATUS_CODES[response.status] ?? 'server', response.status);
     }
+    if (response.status === 204) return undefined as T;
     try {
       return (await response.json()) as T;
     } catch {

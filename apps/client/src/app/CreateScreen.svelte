@@ -5,11 +5,13 @@
 
   interface Props {
     api: Api;
+    /** A match for the public lobby instead of an invite link. */
+    isPublic?: boolean;
     oncreate: (mapId: string | null) => Promise<void>;
     onback: () => void;
   }
 
-  let { api, oncreate, onback }: Props = $props();
+  let { api, isPublic = false, oncreate, onback }: Props = $props();
 
   let mapId = $state<string | null>(null);
   let busy = $state(false);
@@ -27,8 +29,8 @@
 
 <main class="screen">
   <form class="card" onsubmit={submit}>
-    <h1>{t('create.title')}</h1>
-    <p class="hint">{t('create.intro')}</p>
+    <h1>{isPublic ? t('create.titlePublic') : t('create.title')}</h1>
+    <p class="hint">{isPublic ? t('create.introPublic') : t('create.intro')}</p>
     <MapChoice {api} bind:value={mapId} />
     <div class="actions">
       <button type="submit" class="primary" disabled={busy}>{t('create.submit')}</button>
