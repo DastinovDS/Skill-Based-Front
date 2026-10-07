@@ -156,7 +156,14 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
           : charge(rules.cost.build);
       case 'forfeit':
         setTimeout(() => {
-          socket?.reply({ type: 'match_end', tick, reason: 'forfeit', winner: 1, vp: [0, 0] });
+          socket?.reply({
+            type: 'match_end',
+            tick,
+            reason: 'forfeit',
+            winner: 1,
+            vp: [0, 0],
+            rating: null,
+          });
         }, 0);
         return null;
       default:

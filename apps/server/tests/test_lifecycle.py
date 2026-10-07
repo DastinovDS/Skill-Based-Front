@@ -29,9 +29,10 @@ from gow_server.lifecycle import (
     archive_rulesets,
 )
 from gow_server.matches import MatchRunner
-from gow_server.models import Match, MatchPlayer, Player
+from gow_server.models import Match, MatchPlayer, Player, Rating
+from gow_server.rating import apply_match
 from gow_server.settings import Settings
-from gow_sim.maps import load_map
+from gow_sim.maps import MapDef, load_map
 from gow_sim.ruleset import load_ruleset, ruleset_hash
 
 ROOT: Final = Path(__file__).parents[3]
@@ -425,5 +426,125 @@ def test_server_archives_its_ruleset_at_start(live_settings: Settings) -> None:
         async with live_server(live_settings):
             name = f"{ruleset_hash(load_ruleset(live_settings.ruleset_path))}.toml"
             assert (live_settings.rulesets_dir / name).is_file()
+
+    asyncio.run(scenario())
+
+
+# Ratings of rated matches (RAT-02) -------------------------------------------------------------
+#
+# Expected numbers come from an independent Glicko-2 implementation (the PyPI package
+# ``glicko2``, tau = 0.5), not from ``gow_server.rating``: two new players, the first one wins
+# twice in a row. The displayed rating is ``r - 2 * RD``.
+#
+#                    first win              second win
+#   winner r / RD    1662.3109 / 290.3190   1720.3172 / 260.4888
+#   loser r / RD     1337.6891 / 290.3190   1279.6828 / 260.4888
+#   winner displayed 1082 (from 800)        1199 (from 1082)
+#   loser displayed  757 (from 800)         759 (from 757)
+
+
+async def _play_rated(live: Live, mapdef: MapDef, accounts: tuple[int, int], loser: int) -> int:
+    """Start a rated match between two accounts, ``loser`` (a slot) forfeits, wait for the save."""
+    lifecycle = live.lifecycle
+    rules = load_ruleset(live.settings.ruleset_path)
+    record = lifecycle.open_record()
+    runner = await lifecycle.start(
+        record, "pautina", mapdef, rules, accounts, private=False, rated=True
+    )
+    assert runner.submit(loser, 1, ForfeitCmd())
+    pk = int(runner.match_id)
+    await live.run_until(lambda: live.row(runner.match_id)[0].status == "saved")
+    return pk
+
+
+def _ratings(live: Live, accounts: tuple[int, int]) -> list[Rating]:
+    with live.sessions() as session:
+        return [session.get_one(Rating, a) for a in accounts]
+
+
+def test_two_rated_matches_in_a_row_and_no_double_counting(live_settings: Settings) -> None:
+    async def scenario() -> None:
+        async with live_server(live_settings) as live:
+            mapdef = load_map(live.settings.maps_dir / "pautina.json")
+            alice = await live.account(await live.guest("alice"))
+            bob = await live.account(await live.guest("bob"))
+
+            first = await _play_rated(live, mapdef, (alice, bob), loser=1)
+            row, sides = live.row(str(first))
+            assert row.rating_applied
+            assert [s.result for s in sides] == ["win", "loss"]
+            assert [round(s.rating_before or 0) for s in sides] == [800, 800]
+            assert [round(s.rating_after or 0) for s in sides] == [1082, 757]
+            win, loss = _ratings(live, (alice, bob))
+            assert (win.rating, win.rd) == pytest.approx((1662.3109, 290.3190), abs=0.001)
+            assert (loss.rating, loss.rd) == pytest.approx((1337.6891, 290.3190), abs=0.001)
+            assert (win.rated_matches, loss.rated_matches) == (1, 1)
+
+            second = await _play_rated(live, mapdef, (alice, bob), loser=1)
+            _, sides = live.row(str(second))
+            assert [round(s.rating_before or 0) for s in sides] == [1082, 757]
+            assert [round(s.rating_after or 0) for s in sides] == [1199, 759]
+            win, loss = _ratings(live, (alice, bob))
+            assert (win.rating, win.rd) == pytest.approx((1720.3172, 260.4888), abs=0.001)
+            assert (loss.rating, loss.rd) == pytest.approx((1279.6828, 260.4888), abs=0.001)
+            assert (win.rated_matches, loss.rated_matches) == (2, 2)
+
+            # processing a match again changes nothing
+            with live.sessions.begin() as session:
+                assert apply_match(session, first) is False
+                assert apply_match(session, second) is False
+            again = _ratings(live, (alice, bob))
+            assert [(r.rating, r.rd, r.volatility, r.rated_matches) for r in again] == [
+                (win.rating, win.rd, win.volatility, 2),
+                (loss.rating, loss.rd, loss.volatility, 2),
+            ]
+
+    asyncio.run(scenario())
+
+
+def test_unrated_matches_do_not_touch_ratings(live_settings: Settings) -> None:
+    async def scenario() -> None:
+        async with live_server(live_settings) as live:
+            alice, bob = await live.guest("alice"), await live.guest("bob")
+            code = await live.invite(alice)
+            await live.invite_post(bob, code, "join")
+            await live.invite_post(alice, code, "ready")
+            match_id = (await live.invite_post(bob, code, "ready")).json()["match_id"]
+            runner = live.lifecycle.manager.get(match_id)
+            assert runner is not None and runner.ratings is None
+            assert runner.submit(0, 1, ForfeitCmd())
+            await live.run_until(lambda: live.row(match_id)[0].status == "saved")
+            row, sides = live.row(match_id)
+            assert not row.rated and not row.rating_applied
+            assert [s.rating_after for s in sides] == [None, None]
+            with live.sessions() as session:
+                assert session.execute(select(Rating)).first() is None
+                # even a match flagged as rated is not rated without a result or with a bot
+                assert apply_match(session, int(match_id)) is False
+
+    asyncio.run(scenario())
+
+
+def test_rated_flag_is_ignored_for_a_bot_match(live_settings: Settings) -> None:
+    """DEC-06: a match against a bot never changes a rating, whatever the caller passes."""
+
+    async def scenario() -> None:
+        async with live_server(live_settings) as live:
+            alice = await live.guest("alice")
+            match_id = (await live.bot_match(alice)).json()["match_id"]
+            with live.sessions.begin() as session:
+                session.get_one(Match, int(match_id)).rated = True  # a bug elsewhere
+            runner = live.lifecycle.manager.get(match_id)
+            assert runner is not None and runner.bot is not None
+            assert runner.submit(1 - runner.bot.slot, 1, ForfeitCmd())
+            await live.run_until(lambda: live.row(match_id)[0].status == "saved")
+            _, sides = live.row(match_id)
+            assert [s.rating_after for s in sides] == [None, None]
+            with live.sessions() as session:
+                assert session.execute(select(Rating)).first() is None
+                assert session.execute(select(MatchPlayer.rating_before)).scalars().all() == [
+                    None,
+                    None,
+                ]
 
     asyncio.run(scenario())

@@ -4,12 +4,13 @@ import { setLocale, translate } from '../i18n/index.ts';
 import type { MatchEndMsg } from '../protocol.gen.ts';
 import ResultScreen from './ResultScreen.svelte';
 
-const end = (winner: 0 | 1 | null): MatchEndMsg => ({
+const end = (winner: 0 | 1 | null, rating: MatchEndMsg['rating'] = null): MatchEndMsg => ({
   type: 'match_end',
   tick: 100,
   reason: 'timer',
   winner,
   vp: [3, 5],
+  rating,
 });
 
 describe('ResultScreen', () => {
@@ -37,6 +38,16 @@ describe('ResultScreen', () => {
 
   it('shows our VP first, whichever side we are', () => {
     expect(render(1, end(0))).toContain('you 5, enemy 3');
+  });
+
+  it('shows the rating change of a rated match, with a sign', () => {
+    expect(render(0, end(0, { before: 800, after: 1082 }))).toContain('Rating: 800 → 1082 (+282)');
+    document.body.innerHTML = '';
+    expect(render(1, end(0, { before: 800, after: 757 }))).toContain('Rating: 800 → 757 (-43)');
+  });
+
+  it('shows no rating line when the match is not rated', () => {
+    expect(render(0, end(0))).not.toContain('Rating');
   });
 
   it('names a draw and opens the replay', () => {

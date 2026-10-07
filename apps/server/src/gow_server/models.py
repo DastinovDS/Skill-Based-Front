@@ -64,6 +64,8 @@ class Match(Base):
     map_id: Mapped[str] = mapped_column(String(64))
     ruleset_hash: Mapped[str] = mapped_column(String(64))
     rated: Mapped[bool] = mapped_column(default=False)
+    rating_applied: Mapped[bool] = mapped_column(default=False, server_default="0")
+    """The result is in the ratings (RAT-02): set once, so a match is rated at most once."""
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     started_at: Mapped[datetime | None]
     ended_at: Mapped[datetime | None]
@@ -97,3 +99,6 @@ class MatchPlayer(Base):
     """Bot name when this side is a bot (then ``player_id`` is null)."""
     result: Mapped[str | None] = mapped_column(String(8))
     """``win``, ``loss`` or ``draw`` once the match is over."""
+    rating_before: Mapped[float | None]
+    rating_after: Mapped[float | None]
+    """Displayed rating (``r - 2 * RD``) before and after a rated match (RAT-02)."""
