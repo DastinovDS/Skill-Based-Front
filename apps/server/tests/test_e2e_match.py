@@ -230,7 +230,7 @@ def test_two_clients_play_a_match_by_invite(maps_dir: Path, tmp_path: Path) -> N
             raw = decode_server(await asyncio.wait_for(ws.recv(), RECV_TIMEOUT_S))
             assert isinstance(raw, SnapshotMsg)
             assert raw.tick == runner.match.tick  # no tick passed since the reconnect
-            assert raw.view == runner.snapshot(dropped.player).view
+            assert raw.view == runner.snapshot(dropped.player).message().view
             sockets[1] = ws
             tasks[1] = asyncio.create_task(dropped.play(ws))
 

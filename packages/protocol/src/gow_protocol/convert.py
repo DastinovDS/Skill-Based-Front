@@ -6,6 +6,11 @@ Server -> client:
   63-bit integers in the simulation and decimal strings on the wire. Three fields of the view stay
   on the server, the client does not need them: ``order.depart_tick``, ``build_edge`` and
   ``location.back`` (a bouncing group's ``progress`` falls, so interpolation works without it);
+- ``snapshot_frame``: the same ``snapshot`` encoded straight from the ``PlayerView``, without the
+  models and their validation (#155). The server sends these every tick; ``snapshot_msg``, built
+  through the validating models, is their specification: tests over real matches require the two
+  frames to be equal byte for byte (``test_convert.py``), and the server outside ``prod``
+  validates every frame it sends (``MatchRunner(validate_snapshots=True)``);
 - ``ack_msg``: ``CommandResult`` -> ``ack`` (``path`` of an accepted ``Move``, ``reject_code``);
 - ``events_msgs``: the events of a tick -> the ``event`` messages one player may see (below);
 - ``match_end_msg``: ``Outcome`` -> ``match_end``.
@@ -38,6 +43,7 @@ from collections.abc import Iterable, Sequence
 from typing import Final
 
 from gow_protocol import commands as wire
+from gow_protocol.codec import SnapshotFrame, encode_snapshot
 from gow_protocol.messages import (
     AckMsg,
     EndReason,
@@ -78,6 +84,7 @@ __all__ = [
     "match_end_msg",
     "opaque_from_wire",
     "opaque_to_wire",
+    "snapshot_frame",
     "snapshot_msg",
     "view_to_wire",
 ]
@@ -227,6 +234,105 @@ def _location(loc: sv.Location) -> Location:
             return AtNodeLoc(node=node)
         case sv.OnEdge(edge=edge, from_node=from_node, progress=progress):
             return OnEdgeLoc(edge=edge, from_node=from_node, progress=progress)
+
+
+# Snapshot frame (#155) -----------------------------------------------------------------------
+# The same fields as ``view_to_wire``, in the same order, as plain JSON data. Enum members go in as
+# they are: they are ``StrEnum``, and ``json`` writes a ``str`` subclass as its value.
+
+
+def snapshot_frame(view: sv.PlayerView) -> SnapshotFrame:
+    """The encoded ``snapshot`` of a view: ``encode(snapshot_msg(view))`` without validation."""
+    return encode_snapshot(view.tick, _view_data(view))
+
+
+def _view_data(view: sv.PlayerView) -> dict[str, object]:
+    me = view.me
+    return {
+        "me": {"cp": me.cp, "stance": me.stance},
+        "vp": view.vp[:2],
+        "nodes": [
+            {
+                "id": n.id,
+                "owner": n.owner,
+                "capacity": n.capacity,
+                "detail": n.detail,
+                "warehouse": n.warehouse,
+                "seen": _seen_data(n.seen),
+            }
+            for n in view.nodes
+        ],
+        "edges": [
+            {
+                "id": e.id,
+                "width": e.width,
+                "detail": e.detail,
+                "upgrade_gain": None
+                if e.upgrade_gain is None
+                else {
+                    "capacity_centi": e.upgrade_gain.capacity_centi,
+                    "packet_speed_pct": e.upgrade_gain.packet_speed_pct,
+                },
+                "seen": _seen_data(e.seen),
+            }
+            for e in view.edges
+        ],
+        "groups": [
+            {
+                "id": opaque_to_wire(g.id),
+                "units": g.units,
+                "charged": g.charged,
+                "mode": g.mode,
+                "location": _location_data(g.location),
+                "order": None
+                if g.order is None
+                else {"dest": g.order.dest, "path": g.order.path, "planned": g.order.planned},
+            }
+            for g in view.groups
+        ],
+        "packets": [
+            {
+                "id": opaque_to_wire(p.id),
+                "edge": p.edge,
+                "from_node": p.from_node,
+                "charges": p.charges,
+                "depart_tick": p.depart_tick,
+                "arrive_tick": p.arrive_tick,
+            }
+            for p in view.packets
+        ],
+        "intents": [
+            {
+                "id": opaque_to_wire(i.id),
+                "owner": i.owner,
+                "kind": i.kind,
+                "origin": i.origin,
+                "target": i.target,
+                "created_tick": i.created_tick,
+            }
+            for i in view.intents
+        ],
+    }
+
+
+def _seen_data(s: sv.Sighting | None) -> dict[str, object] | None:
+    if s is None:
+        return None
+    return {
+        "tick": s.tick,
+        "level": s.level,
+        "enemy_modes": s.enemy_modes,
+        "enemy_units": s.enemy_units,
+        "enemy_charged": s.enemy_charged,
+    }
+
+
+def _location_data(loc: sv.Location) -> dict[str, object]:
+    match loc:
+        case sv.AtNode(node=node):
+            return {"kind": "node", "node": node}
+        case sv.OnEdge(edge=edge, from_node=from_node, progress=progress):
+            return {"kind": "edge", "edge": edge, "from_node": from_node, "progress": progress}
 
 
 # Commands ------------------------------------------------------------------------------------

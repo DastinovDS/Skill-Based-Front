@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Final
 
 from gow_protocol.commands import ForfeitCmd
-from gow_protocol.messages import MatchEndMsg, RatingChange, ServerMsg
+from gow_protocol.messages import MatchEndMsg, RatingChange
 from gow_server.clock import ManualClock
-from gow_server.matches import MatchManager, Outbox
+from gow_server.matches import MatchManager, Outbox, Outgoing
 from gow_server.rating import Glicko
 from gow_sim.maps import load_map
 from gow_sim.ruleset import load_ruleset
@@ -28,8 +28,8 @@ ROOT: Final = Path(__file__).parents[3]
 DT: Final = 0.1
 
 
-def drain(box: Outbox) -> list[ServerMsg]:
-    out: list[ServerMsg] = []
+def drain(box: Outbox) -> list[Outgoing]:
+    out: list[Outgoing] = []
     while (msg := box.get_nowait()) is not None:
         out.append(msg)
     return out

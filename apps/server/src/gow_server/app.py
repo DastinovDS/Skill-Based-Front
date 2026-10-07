@@ -51,6 +51,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             reconnect_window_s=settings.reconnect_window_s,
             pause_max_s=settings.pause_max_s,
             bot_budget_s=settings.bot_budget_s,
+            validate_snapshots=settings.env != "prod",
         )
         app.state.lifecycle = MatchLifecycle(
             app.state.matches,
