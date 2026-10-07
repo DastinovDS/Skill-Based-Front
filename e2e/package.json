@@ -1,0 +1,22 @@
+{
+  "name": "skill-based-front-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@12.8.1",
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "check": "tsc -p tsconfig.json",
+    "format": "prettier --write .",
+    "lint": "prettier --check ."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.19.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3"
+  }
+}

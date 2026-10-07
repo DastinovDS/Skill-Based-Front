@@ -26,6 +26,7 @@ jobs:
       py: ${{ github.event_name != 'pull_request' || steps.filter.outputs.py == 'true' }}
       web: ${{ github.event_name != 'pull_request' || steps.filter.outputs.web == 'true' }}
       docker: ${{ github.event_name != 'pull_request' || steps.filter.outputs.docker == 'true' }}
+      e2e: ${{ github.event_name != 'pull_request' || steps.filter.outputs.e2e == 'true' }}
     steps:
       - uses: dorny/paths-filter@v4
         id: filter
@@ -76,6 +77,20 @@ jobs:
               - 'maps/**'
               - 'rulesets/**'
               - '.github/workflows/ci.yml'
+            e2e:
+              - 'deploy/**'
+              - 'compose.yaml'
+              - '.dockerignore'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.python-version'
+              - 'packages/**'
+              - 'apps/**'
+              - 'tools/**'
+              - 'maps/**'
+              - 'rulesets/**'
+              - '.github/workflows/ci.yml'
+              - 'e2e/**'
 
   # Required check. A job skipped by `if` reports "Success", so a PR without relevant
   # changes is not blocked. If `changes` itself fails, the checks run anyway (fail-closed).
@@ -257,3 +272,44 @@ jobs:
       - run: deploy/deploy-test.sh
       - if: always()
         run: docker compose down --volumes
+
+  # End-to-end test (QA-02, #84): two browser contexts play a private match by invite on the
+  # `test-short` ruleset against the real stack (Caddy with the built client + the game server,
+  # compose.yaml with e2e/compose.e2e.yaml). Not a required check, like `visual`: it builds both
+  # images (a second time next to `docker`), renders WebGL in software and plays real 60-second
+  # matches, so it is the slowest and the most environment-sensitive job; its red result must be
+  # looked at before a release. Same skip rules as `docker`, plus changes of e2e/.
+  e2e:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.e2e == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: e2e/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: e2e/package.json
+          cache: pnpm
+          cache-dependency-path: e2e/pnpm-lock.yaml
+      - run: pnpm -C e2e install --frozen-lockfile
+      - run: pnpm -C e2e lint
+      - run: pnpm -C e2e check
+      - run: pnpm -C e2e exec playwright install --with-deps chromium
+      - name: start the stack
+        run: docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build --detach --wait --wait-timeout 300
+      - run: pnpm -C e2e test
+      - if: failure()
+        run: docker compose logs --tail 200 app caddy
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-results
+          path: e2e/test-results
+          if-no-files-found: ignore
+      - if: always()
+        run: docker compose -f compose.yaml -f e2e/compose.e2e.yaml down --volumes
