@@ -1,0 +1,1104 @@
+<!doctype html>
+<!--
+  Статичный макет визуального стиля клиента (docs/design/ui-style.md, issue #202).
+  Самодостаточный: без внешних шрифтов, картинок и скриптов. Открыть в браузере как файл.
+  Это иллюстрация, а не код клиента: числа и геометрия взяты из гайда, реализация в волне 3.
+  Все глифы нарисованы здесь же простыми фигурами, чужие иконки не копировались.
+-->
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Макет стиля клиента</title>
+    <style>
+      :root {
+        /* Токены палитры (ui-style.md, раздел 3). */
+        --bg: #0d1117;
+        --surface: rgb(22 27 34 / 92%);
+        --surface-solid: #161b22;
+        --surface-2: #21262d;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-dim: #8b949e;
+        --you: #4c8dff;
+        --enemy: #ff8a3d;
+        --neutral: #8b949e;
+        --accent: #ffd33d;
+        --danger: #ff5d5d;
+        --vp: #e3b341;
+        --ink: #0d1117;
+        --paper: #f0f6fc;
+        --radius: 8px;
+        --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 24px 16px 48px;
+        background: #0a0d12;
+        color: var(--text);
+        font: 14px/1.4 var(--font);
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 16px;
+        margin: 32px 0 8px;
+      }
+      p.lead {
+        color: var(--text-dim);
+        margin: 0 0 16px;
+        max-width: 900px;
+      }
+      .screen {
+        position: relative;
+        width: 1280px;
+        max-width: 100%;
+        aspect-ratio: 16 / 9;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .screen > svg.map {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      /* --- Верхняя панель ------------------------------------------------------------------- */
+      .topbar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 44px;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        padding: 0 10px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        font-variant-numeric: tabular-nums;
+      }
+      .cluster {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .cluster.right {
+        justify-content: flex-end;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 30px;
+        padding: 0 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface-2);
+        color: var(--text);
+        font: inherit;
+      }
+      .btn.icon {
+        width: 30px;
+        padding: 0;
+        justify-content: center;
+      }
+      .btn.exit {
+        border-color: #6e3a3a;
+      }
+      kbd {
+        display: inline-block;
+        min-width: 18px;
+        padding: 0 4px;
+        border: 1px solid var(--border);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        font: 11px/16px var(--font);
+        color: var(--text-dim);
+        text-align: center;
+      }
+      .cp {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .cp-bar {
+        position: relative;
+        width: 170px;
+        height: 14px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 2px;
+      }
+      .cp-seg {
+        position: relative;
+        background: #0b0f14;
+        border: 1px solid #3b4450;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .cp-seg > i {
+        position: absolute;
+        inset: 0 auto 0 0;
+        background: var(--accent);
+      }
+      .cp-seg.next > i {
+        background: repeating-linear-gradient(135deg, var(--accent) 0 4px, #b8961f 4px 8px);
+      }
+      .cp-num {
+        font-weight: 700;
+      }
+      .dim {
+        color: var(--text-dim);
+      }
+      .stance-chip {
+        border-color: #4a5563;
+      }
+      .score {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+        font-size: 16px;
+      }
+      .score .side {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .clock {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 14px;
+        padding-left: 14px;
+        border-left: 1px solid var(--border);
+        font-weight: 700;
+      }
+      /* --- Предупреждение об истощении ------------------------------------------------------ */
+      .alert {
+        position: absolute;
+        top: 52px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 12px 6px 8px;
+        background: rgb(60 18 18 / 92%);
+        border: 1px solid var(--danger);
+        border-radius: 999px;
+        font-weight: 600;
+      }
+      /* --- Тосты событий ------------------------------------------------------------------- */
+      .toasts {
+        position: absolute;
+        top: 52px;
+        right: 10px;
+        width: 260px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .toast {
+        padding: 6px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--neutral);
+        border-radius: 6px;
+        font-size: 13px;
+      }
+      .toast.bad {
+        border-left-color: var(--danger);
+      }
+      .toast.good {
+        border-left-color: var(--you);
+      }
+      .toast.old {
+        opacity: 0.55;
+      }
+      /* --- Карточка выделения -------------------------------------------------------------- */
+      .card {
+        position: absolute;
+        left: 10px;
+        bottom: 10px;
+        width: 340px;
+        padding: 10px 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      .card h3 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+      .card .facts {
+        display: flex;
+        gap: 14px;
+        margin-bottom: 8px;
+        font-variant-numeric: tabular-nums;
+      }
+      .modes {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+      .mode {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        padding: 6px 0 4px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface-2);
+        font-size: 12px;
+      }
+      .mode.on {
+        border-color: var(--accent);
+        box-shadow: inset 0 0 0 1px var(--accent);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 8px;
+        font-size: 13px;
+      }
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .switch {
+        width: 28px;
+        height: 16px;
+        border-radius: 8px;
+        background: #3b4450;
+        position: relative;
+      }
+      .switch::after {
+        content: '';
+        position: absolute;
+        left: 2px;
+        top: 2px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--paper);
+      }
+      .hint-bar {
+        position: absolute;
+        right: 10px;
+        bottom: 10px;
+        display: flex;
+        gap: 10px;
+        padding: 4px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+      /* --- Листы легенды ------------------------------------------------------------------- */
+      .sheet {
+        width: 1280px;
+        max-width: 100%;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+      .sheet svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .two {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .two > .sheet {
+        width: 632px;
+      }
+      .note {
+        color: var(--text-dim);
+        font-size: 12px;
+        margin: 6px 0 0;
+        max-width: 1280px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Макет визуального стиля клиента</h1>
+    <p class="lead">
+      Иллюстрация к <code>docs/design/ui-style.md</code>. Экран матча после упрощения: верхняя
+      панель, карта на весь экран, карточка выделения только когда что-то выбрано. Числа
+      условные (рулсет <code>mvp-0</code>), игрок видит себя синим.
+    </p>
+
+    <section class="screen" aria-label="Экран матча">
+      <svg class="map" id="map" viewBox="0 0 1280 720" role="img" aria-label="Карта"></svg>
+
+      <header class="topbar">
+        <div class="cluster">
+          <button class="btn icon" title="Меню: язык, справка, вписать карту">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.8" />
+            </svg>
+          </button>
+          <div class="cp" title="Командные очки: 2,4 из 5, следующее через 2 с">
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+              <path
+                d="M9 1.5 16 5.5v7L9 16.5 2 12.5v-7Z"
+                fill="none"
+                stroke="var(--accent)"
+                stroke-width="1.8"
+              />
+              <path d="M9 5.5v7M5.5 9h7" stroke="var(--accent)" stroke-width="1.8" />
+            </svg>
+            <div class="cp-bar" aria-hidden="true">
+              <div class="cp-seg"><i style="width: 100%"></i></div>
+              <div class="cp-seg"><i style="width: 100%"></i></div>
+              <div class="cp-seg next"><i style="width: 40%"></i></div>
+              <div class="cp-seg"></div>
+              <div class="cp-seg"></div>
+            </div>
+            <span class="cp-num">2,4<span class="dim"> / 5 CP</span></span>
+          </div>
+          <button class="btn stance-chip" title="Стойка: открыть радиальное меню">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d="M8 2v12M3 14h10M2 6h12M4 6l-2 4h4ZM12 6l-2 4h4Z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linejoin="round"
+              />
+            </svg>
+            Баланс <kbd>Q</kbd>
+          </button>
+        </div>
+        <div class="cluster">
+          <div class="score" title="Очки победы">
+            <span class="side"
+              ><svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true">
+                <path d="M1 1h12L7 11Z" fill="var(--you)" stroke="#fff" stroke-width="1.5" />
+              </svg>
+              Вы 4</span
+            >
+            <span class="dim">:</span>
+            <span class="side"
+              >6 Враг
+              <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true">
+                <path d="M1 1h12L7 11Z" fill="var(--enemy)" stroke="#fff" stroke-width="1.5" />
+                <path d="M4.2 3h5.6L7 8.2Z" fill="none" stroke="#0d1117" stroke-width="1" />
+              </svg>
+            </span>
+            <span class="clock"
+              ><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                <circle cx="7" cy="7" r="5.8" fill="none" stroke="currentColor" stroke-width="1.5" />
+                <path d="M7 3.5V7l2.5 1.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+              </svg>
+              11:30</span
+            >
+          </div>
+        </div>
+        <div class="cluster right">
+          <button class="btn icon" title="Пауза (только приватные матчи)">
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+              <path d="M4 2v10M10 2v10" stroke="currentColor" stroke-width="2.2" />
+            </svg>
+          </button>
+          <button class="btn icon" title="Справка и легенда (?)">?</button>
+          <button class="btn exit" title="Выйти из матча">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d="M6 2H3v12h3M10 4.5 13.5 8 10 11.5M13.5 8H6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linejoin="round"
+              />
+            </svg>
+            Выйти
+          </button>
+        </div>
+      </header>
+
+      <div class="alert" role="alert">
+        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+          <circle cx="14" cy="14" r="11" fill="none" stroke="#5a2626" stroke-width="4" />
+          <circle
+            cx="14"
+            cy="14"
+            r="11"
+            fill="none"
+            stroke="var(--danger)"
+            stroke-width="4"
+            stroke-dasharray="55 70"
+            transform="rotate(-90 14 14)"
+          />
+          <text x="14" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">
+            !
+          </text>
+        </svg>
+        Переполнен город 7: 6 из 4. Минус юнит через 2,4 с
+        <kbd>Space</kbd>
+      </div>
+
+      <div class="toasts" aria-live="polite">
+        <div class="toast bad">Бой у города 9: вы −1, враг −2</div>
+        <div class="toast good">Дорога 12 улучшена до ширины 3</div>
+        <div class="toast old">Враг включил «Защиту» у города 11</div>
+      </div>
+
+      <aside class="card" aria-label="Выделенная группа">
+        <h3>
+          <svg width="18" height="16" viewBox="0 0 18 16" aria-hidden="true">
+            <path d="M1 1h16L9 15Z" fill="var(--you)" stroke="#fff" stroke-width="1.6" />
+          </svg>
+          Группа в городе 7
+        </h3>
+        <div class="facts">
+          <span><b>6</b> <span class="dim">юнитов</span></span>
+          <span><b>2</b> <span class="dim">заряжено</span></span>
+          <span class="dim">лес: защита +0</span>
+        </div>
+        <div class="modes">
+          <div class="mode on">▲ Атака <kbd>1</kbd></div>
+          <div class="mode">⛉ Защита <kbd>2</kbd><span class="dim">2 CP</span></div>
+          <div class="mode">⚒ Стройка <kbd>3</kbd><span class="dim">1 CP</span></div>
+        </div>
+        <div class="row">
+          <span class="toggle"><span class="switch"></span> Запланированный <kbd>P</kbd></span>
+          <span class="dim">1 CP / план 2 CP</span>
+        </div>
+      </aside>
+
+      <div class="hint-bar">
+        <span><kbd>Q</kbd> стойка</span><span><kbd>R</kbd> набор</span
+        ><span><kbd>X</kbd> отмена</span><span><kbd>?</kbd> справка</span>
+      </div>
+    </section>
+    <p class="note">
+      Снизу вверх: местность штампами (равнина, лес, горы), территория, дороги ширины 1..5,
+      города с кольцом ёмкости, юниты-треугольники, стрелки приказов, туман. Город 7 (слева
+      вверху) переполнен: два красных сегмента и отсчёт.
+    </p>
+
+    <h2>Радиальное меню стойки (зажата Q)</h2>
+    <div class="two">
+      <div class="sheet"><svg id="radial" viewBox="0 0 632 420" role="img" aria-label="Радиальное меню"></svg></div>
+      <div class="sheet"><svg id="arrows" viewBox="0 0 632 420" role="img" aria-label="Стрелки приказов"></svg></div>
+    </div>
+
+    <h2>Легенда: юниты, города, дороги, туман</h2>
+    <div class="sheet"><svg id="legend" viewBox="0 0 1280 470" role="img" aria-label="Легенда"></svg></div>
+
+    <script>
+      // Простая генерация SVG для макета. Не код клиента.
+      const NS = 'http://www.w3.org/2000/svg';
+      const C = {
+        you: '#4c8dff',
+        enemy: '#ff8a3d',
+        neutralFill: '#2b3139',
+        neutral: '#8b949e',
+        ink: '#0d1117',
+        paper: '#f0f6fc',
+        plate: '#161b22',
+        danger: '#ff5d5d',
+        accent: '#ffd33d',
+        vp: '#e3b341',
+        road: '#c4cbd4',
+      };
+
+      function el(parent, name, attrs = {}, text) {
+        const node = document.createElementNS(NS, name);
+        for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+        if (text !== undefined) node.textContent = text;
+        parent.appendChild(node);
+        return node;
+      }
+      const pts = (list) => list.map((p) => p.join(',')).join(' ');
+
+      // --- Узоры местности: тёмные штампы низкого контраста поверх приглушённой подложки ----
+      function defs(svg) {
+        const d = el(svg, 'defs');
+        const forest = el(d, 'pattern', {
+          id: 'forest',
+          width: 34,
+          height: 30,
+          patternUnits: 'userSpaceOnUse',
+        });
+        for (const [x, y] of [
+          [8, 8],
+          [25, 22],
+        ]) {
+          el(forest, 'path', {
+            d: `M${x} ${y - 7} L${x + 6} ${y + 4} L${x - 6} ${y + 4} Z M${x} ${y + 4} v3`,
+            fill: C.ink,
+            'fill-opacity': 0.32,
+            stroke: C.ink,
+            'stroke-opacity': 0.32,
+            'stroke-width': 1.5,
+          });
+        }
+        const mount = el(d, 'pattern', {
+          id: 'mountains',
+          width: 52,
+          height: 40,
+          patternUnits: 'userSpaceOnUse',
+        });
+        for (const [x, y] of [
+          [14, 16],
+          [40, 34],
+        ]) {
+          el(mount, 'path', {
+            d: `M${x - 11} ${y + 5} L${x} ${y - 9} L${x + 11} ${y + 5}`,
+            fill: 'none',
+            stroke: C.ink,
+            'stroke-opacity': 0.38,
+            'stroke-width': 2,
+            'stroke-linejoin': 'round',
+          });
+          el(mount, 'path', {
+            d: `M${x - 3.5} ${y - 4.5} L${x} ${y - 9} L${x + 3.5} ${y - 4.5}`,
+            fill: 'none',
+            stroke: C.paper,
+            'stroke-opacity': 0.45,
+            'stroke-width': 1.6,
+          });
+        }
+        const plains = el(d, 'pattern', {
+          id: 'plains',
+          width: 30,
+          height: 26,
+          patternUnits: 'userSpaceOnUse',
+        });
+        for (const [x, y] of [
+          [6, 8],
+          [21, 20],
+        ]) {
+          el(plains, 'path', {
+            d: `M${x} ${y} l2 -4 M${x + 4} ${y} l0 -5 M${x + 8} ${y} l-2 -4`,
+            stroke: C.ink,
+            'stroke-opacity': 0.22,
+            'stroke-width': 1.3,
+          });
+        }
+        const hatch = el(d, 'pattern', {
+          id: 'fog',
+          width: 9,
+          height: 9,
+          patternUnits: 'userSpaceOnUse',
+          patternTransform: 'rotate(45)',
+        });
+        el(hatch, 'rect', { width: 9, height: 9, fill: C.ink, 'fill-opacity': 0.55 });
+        el(hatch, 'line', { x1: 0, y1: 0, x2: 0, y2: 9, stroke: '#aab2bd', 'stroke-opacity': 0.3, 'stroke-width': 1.5 });
+        const trail = el(d, 'linearGradient', { id: 'trail', x1: 0, y1: 0, x2: 1, y2: 0 });
+        el(trail, 'stop', { offset: 0, 'stop-color': C.you, 'stop-opacity': 0 });
+        el(trail, 'stop', { offset: 1, 'stop-color': C.you, 'stop-opacity': 0.7 });
+      }
+
+      const TERRAIN_BASE = { plains: '#3a4630', forest: '#25392b', mountains: '#4a453e' };
+      function region(svg, poly, terrain, owner) {
+        el(svg, 'polygon', { points: pts(poly), fill: TERRAIN_BASE[terrain] });
+        el(svg, 'polygon', { points: pts(poly), fill: `url(#${terrain})` });
+        if (owner !== null)
+          el(svg, 'polygon', {
+            points: pts(poly),
+            fill: owner === 0 ? C.you : C.enemy,
+            'fill-opacity': 0.13,
+          });
+        el(svg, 'polygon', { points: pts(poly), fill: 'none', stroke: C.ink, 'stroke-opacity': 0.5 });
+      }
+
+      // --- Дороги: толщина 1 + 3·w, внутри w−1 тёмных полос, ширина 1 пунктиром ---------
+      function road(svg, a, b, w) {
+        const t = 1 + 3 * w;
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const len = Math.hypot(dx, dy);
+        const nx = -dy / len;
+        const ny = dx / len;
+        el(svg, 'line', {
+          x1: a[0], y1: a[1], x2: b[0], y2: b[1],
+          stroke: C.ink, 'stroke-opacity': 0.6, 'stroke-width': t + 5,
+        });
+        el(svg, 'line', {
+          x1: a[0], y1: a[1], x2: b[0], y2: b[1],
+          stroke: C.road, 'stroke-width': t,
+          ...(w === 1 ? { 'stroke-dasharray': '7 5' } : {}),
+        });
+        for (let i = 1; i < w; i++) {
+          const off = -t / 2 + (t * i) / w;
+          el(svg, 'line', {
+            x1: a[0] + nx * off, y1: a[1] + ny * off, x2: b[0] + nx * off, y2: b[1] + ny * off,
+            stroke: C.ink, 'stroke-opacity': 0.5, 'stroke-width': 1,
+          });
+        }
+      }
+
+      // --- Город: радиус по классу ёмкости, кольцо гарнизона из сегментов ----------------
+      function cityRadius(capacity) {
+        if (capacity <= 2) return 13;
+        if (capacity <= 4) return 17;
+        if (capacity <= 6) return 21;
+        return 25;
+      }
+      function arc(cx, cy, r, a0, a1) {
+        const p0 = [cx + r * Math.cos(a0), cy + r * Math.sin(a0)];
+        const p1 = [cx + r * Math.cos(a1), cy + r * Math.sin(a1)];
+        return `M${p0[0]} ${p0[1]} A${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${p1[0]} ${p1[1]}`;
+      }
+      function city(svg, at, o) {
+        const [x, y] = at;
+        const r = cityRadius(o.capacity);
+        const g = el(svg, 'g');
+        el(g, 'circle', { cx: x, cy: y, r: r + 3, fill: 'none', stroke: C.ink, 'stroke-opacity': 0.85, 'stroke-width': 3 });
+        const fill = o.owner === null ? C.neutralFill : o.owner === 0 ? C.you : C.enemy;
+        el(g, 'circle', {
+          cx: x, cy: y, r, fill,
+          stroke: o.owner === null ? C.neutral : C.paper,
+          'stroke-width': o.owner === null ? 2 : 3,
+        });
+        if (o.owner === 1) el(g, 'circle', { cx: x, cy: y, r: r - 5, fill: 'none', stroke: C.ink, 'stroke-width': 1.6 });
+        if (o.capital) {
+          const s = [];
+          for (let i = 0; i < 10; i++) {
+            const rr = i % 2 === 0 ? r * 0.6 : r * 0.27;
+            const a = -Math.PI / 2 + (i * Math.PI) / 5;
+            s.push([x + rr * Math.cos(a), y + rr * Math.sin(a)]);
+          }
+          el(g, 'polygon', { points: pts(s), fill: C.paper, stroke: C.ink, 'stroke-width': 1.4 });
+        }
+        // Кольцо ёмкости: N сегментов; заполнено столько, сколько юнитов стоит (только свои).
+        const n = o.capacity;
+        const gap = 0.16;
+        const ringR = r + 8;
+        for (let i = 0; i < n; i++) {
+          const a0 = -Math.PI / 2 + (i * 2 * Math.PI) / n + gap / 2;
+          const a1 = -Math.PI / 2 + ((i + 1) * 2 * Math.PI) / n - gap / 2;
+          const filled = o.garrison !== undefined && i < Math.min(o.garrison, n);
+          el(g, 'path', {
+            d: arc(x, y, ringR, a0, a1),
+            fill: 'none',
+            stroke: C.ink,
+            'stroke-width': 7,
+            'stroke-opacity': 0.75,
+          });
+          el(g, 'path', {
+            d: arc(x, y, ringR, a0, a1),
+            fill: 'none',
+            stroke: filled ? C.paper : '#59636e',
+            'stroke-width': 4,
+          });
+        }
+        // Переполнение: лишние сегменты красным снаружи, с отсчётом.
+        const over = (o.garrison ?? 0) - n;
+        if (over > 0) {
+          for (let i = 0; i < over; i++) {
+            const a0 = -Math.PI / 2 + i * 0.55 + 0.06;
+            const a1 = a0 + 0.45;
+            el(g, 'path', { d: arc(x, y, ringR + 8, a0, a1), fill: 'none', stroke: C.ink, 'stroke-width': 7, 'stroke-opacity': 0.8 });
+            el(g, 'path', { d: arc(x, y, ringR + 8, a0, a1), fill: 'none', stroke: C.danger, 'stroke-width': 4 });
+          }
+          el(g, 'circle', { cx: x, cy: y, r: ringR + 15, fill: 'none', stroke: C.danger, 'stroke-width': 1.5, 'stroke-dasharray': '4 4' });
+          const px = x + ringR + 18;
+          const py = y - ringR - 14;
+          el(g, 'rect', { x: px - 4, y: py - 13, width: 70, height: 24, rx: 12, fill: '#3c1212', stroke: C.danger, 'stroke-width': 1.5 });
+          el(g, 'circle', { cx: px + 9, cy: py - 1, r: 7, fill: 'none', stroke: '#5a2626', 'stroke-width': 3 });
+          el(g, 'path', { d: arc(px + 9, py - 1, 7, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * 0.8), fill: 'none', stroke: C.danger, 'stroke-width': 3 });
+          el(g, 'text', { x: px + 22, y: py + 4, fill: '#fff', 'font-size': 12, 'font-weight': 700 }, '−1 2,4с');
+        }
+        // Склад: сегментная полоска над кольцом (как сейчас, тем же языком сегментов).
+        if (o.warehouse !== undefined) {
+          const w = 6 * n + 2;
+          const bx = x - w / 2;
+          const by = y + ringR + 9;
+          el(g, 'rect', { x: bx - 1, y: by - 1, width: w + 2, height: 8, rx: 2, fill: C.ink });
+          for (let i = 0; i < n; i++) {
+            el(g, 'rect', { x: bx + 1 + i * 6, y: by + 1, width: 5, height: 4, fill: i < o.warehouse ? (o.owner === 1 ? C.enemy : C.you) : '#3b4450' });
+          }
+        }
+        if (o.vp) {
+          const bx = x + r * 0.78;
+          const by = y - r * 0.78;
+          el(g, 'circle', { cx: bx, cy: by, r: 8.5, fill: C.ink, stroke: C.vp, 'stroke-width': 2 });
+          el(g, 'text', { x: bx, y: by + 4, 'text-anchor': 'middle', fill: C.paper, 'font-size': 11, 'font-weight': 700 }, String(o.vp));
+        }
+        if (o.label) {
+          el(g, 'text', { x: x - r - 12, y: y - r - 6, 'text-anchor': 'end', fill: C.paper, 'fill-opacity': 0.7, 'font-size': 11 }, o.label);
+        }
+        return { r, ringR };
+      }
+
+      // --- Юнит: перевёрнутый треугольник, размер по числу юнитов, заливка по зарядам ------
+      function side(units) {
+        if (units <= 3) return 24;
+        if (units <= 7) return 30;
+        if (units <= 15) return 36;
+        return 42;
+      }
+      function unit(svg, at, o) {
+        const [x, y] = at;
+        const s = o.size ?? side(o.units ?? 4);
+        const h = s * 0.866;
+        const top = y - h / 3;
+        const tip = y + (2 * h) / 3;
+        const tri = [[x - s / 2, top], [x + s / 2, top], [x, tip]];
+        const g = el(svg, 'g', o.alpha !== undefined ? { opacity: o.alpha } : {});
+        const color = o.owner === 0 ? C.you : C.enemy;
+        el(g, 'polygon', { points: pts(tri), fill: C.plate, stroke: C.ink, 'stroke-width': 6, 'stroke-linejoin': 'round' });
+        el(g, 'polygon', { points: pts(tri), fill: C.plate });
+        if (o.units !== undefined && o.charged !== undefined) {
+          // Заряд как уровень «жидкости» от острия: площадь пропорциональна доле заряженных.
+          const k = Math.sqrt(o.charged / o.units);
+          if (k > 0) {
+            const lvl = tip - h * k;
+            const half = (s / 2) * k;
+            el(g, 'polygon', { points: pts([[x - half, lvl], [x + half, lvl], [x, tip]]), fill: color });
+          }
+        } else if (o.presence) {
+          el(g, 'text', { x, y: y + 3, 'text-anchor': 'middle', fill: color, 'font-size': s * 0.45, 'font-weight': 800 }, '?');
+        }
+        el(g, 'polygon', {
+          points: pts(tri),
+          fill: 'none',
+          stroke: o.presence ? color : C.paper,
+          'stroke-width': 2.4,
+          'stroke-linejoin': 'round',
+          ...(o.presence ? { 'stroke-dasharray': '5 3' } : {}),
+        });
+        if (o.owner === 1 && !o.presence) {
+          const i = 0.62;
+          const inner = tri.map(([px, py]) => [x + (px - x) * i, y + (py - y) * i]);
+          el(g, 'polygon', { points: pts(inner), fill: 'none', stroke: C.ink, 'stroke-width': 1.4 });
+        }
+        if (o.mode && o.mode !== 'attack') {
+          const bx = x + s / 2;
+          const by = top;
+          el(g, 'circle', { cx: bx, cy: by, r: 8, fill: C.ink, stroke: color, 'stroke-width': 1.8 });
+          if (o.mode === 'defense')
+            el(g, 'path', { d: `M${bx - 4} ${by - 4}h8v3.5l-4 4.5l-4 -4.5Z`, fill: C.paper });
+          else
+            el(g, 'path', { d: `M${bx - 4.5} ${by - 4.5}h9v3.5h-9ZM${bx - 1.2} ${by - 1}h2.4v6h-2.4Z`, fill: C.paper });
+        }
+        if (o.label) {
+          const ly = tip + 12;
+          const tw = 8 + o.label.length * 7;
+          el(g, 'rect', { x: x - tw / 2, y: ly - 10, width: tw, height: 16, rx: 8, fill: C.ink, 'fill-opacity': 0.88 });
+          el(g, 'text', { x, y: ly + 2, 'text-anchor': 'middle', fill: C.paper, 'font-size': 11.5, 'font-weight': 700 }, o.label);
+        }
+        if (o.selected) {
+          el(g, 'polygon', {
+            points: pts(tri.map(([px, py]) => [x + (px - x) * 1.45, y + (py - y) * 1.45])),
+            fill: 'none', stroke: C.accent, 'stroke-width': 2.5, 'stroke-linejoin': 'round',
+          });
+        }
+        return g;
+      }
+
+      // --- Стрелка в духе HOI4: широкая полупрозрачная лента по кривой, крупный наконечник --
+      function bezier(p0, p1, p2, t) {
+        const u = 1 - t;
+        return [u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]];
+      }
+      function bandArrow(svg, from, to, o) {
+        const body = o.body ?? 16;
+        const headW = o.headW ?? body * 2.4;
+        const headL = o.headL ?? body * 1.9;
+        const dx = to[0] - from[0];
+        const dy = to[1] - from[1];
+        const len = Math.hypot(dx, dy);
+        const ux = dx / len;
+        const uy = dy / len;
+        const start = [from[0] + ux * o.startGap, from[1] + uy * o.startGap];
+        const end = [to[0] - ux * o.endGap, to[1] - uy * o.endGap];
+        const bend = o.bend ?? 0.18;
+        const mid = [(start[0] + end[0]) / 2 - uy * len * bend, (start[1] + end[1]) / 2 + ux * len * bend];
+        const steps = 32;
+        const centre = [];
+        for (let i = 0; i <= steps; i++) centre.push(bezier(start, mid, end, i / steps));
+        // Наконечник начинается за headL до конца кривой.
+        let acc = 0;
+        let cut = centre.length - 1;
+        for (let i = centre.length - 1; i > 0; i--) {
+          acc += Math.hypot(centre[i][0] - centre[i - 1][0], centre[i][1] - centre[i - 1][1]);
+          if (acc >= headL) { cut = i - 1; break; }
+        }
+        const left = [];
+        const right = [];
+        for (let i = 0; i <= cut; i++) {
+          const a = centre[Math.max(0, i - 1)];
+          const b = centre[Math.min(centre.length - 1, i + 1)];
+          const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          const nx = -(b[1] - a[1]) / l;
+          const ny = (b[0] - a[0]) / l;
+          // Хвост уже: лента сужается от 60% до 100% ширины.
+          const w = (body / 2) * (0.6 + 0.4 * (i / cut));
+          left.push([centre[i][0] + nx * w, centre[i][1] + ny * w]);
+          right.push([centre[i][0] - nx * w, centre[i][1] - ny * w]);
+        }
+        const base = centre[cut];
+        const tipP = centre[centre.length - 1];
+        const hx = tipP[0] - base[0];
+        const hy = tipP[1] - base[1];
+        const hl = Math.hypot(hx, hy);
+        const nx = -hy / hl;
+        const ny = hx / hl;
+        const shape = [
+          ...left,
+          [base[0] + nx * headW / 2, base[1] + ny * headW / 2],
+          tipP,
+          [base[0] - nx * headW / 2, base[1] - ny * headW / 2],
+          ...right.reverse(),
+        ];
+        const color = o.owner === 0 ? C.you : C.enemy;
+        el(svg, 'polygon', { points: pts(shape), fill: 'none', stroke: C.ink, 'stroke-opacity': 0.45, 'stroke-width': 6, 'stroke-linejoin': 'round' });
+        el(svg, 'polygon', { points: pts(shape), fill: color, 'fill-opacity': o.alpha ?? 0.32 });
+        el(svg, 'polygon', {
+          points: pts(shape), fill: 'none', stroke: color, 'stroke-opacity': 0.95, 'stroke-width': 2.2, 'stroke-linejoin': 'round',
+          ...(o.owner === 1 ? { 'stroke-dasharray': '9 5' } : {}),
+        });
+        if (o.progress !== undefined) {
+          // Сколько задержки прошло: светлая полоса вдоль оси от хвоста.
+          const upto = Math.round(cut * o.progress);
+          el(svg, 'polyline', { points: pts(centre.slice(0, upto + 1)), fill: 'none', stroke: C.paper, 'stroke-opacity': 0.75, 'stroke-width': 3, 'stroke-linecap': 'round' });
+        }
+        return tipP;
+      }
+
+      // Обычный приказ: тонкая линия с шевронами, видна только своему игроку.
+      function orderLine(svg, path) {
+        el(svg, 'polyline', { points: pts(path), fill: 'none', stroke: C.ink, 'stroke-opacity': 0.5, 'stroke-width': 6, 'stroke-linecap': 'round' });
+        el(svg, 'polyline', { points: pts(path), fill: 'none', stroke: C.you, 'stroke-opacity': 0.9, 'stroke-width': 3, 'stroke-linecap': 'round' });
+        for (let k = 0; k < path.length - 1; k++) {
+          const [a, b] = [path[k], path[k + 1]];
+          const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          const ux = (b[0] - a[0]) / len;
+          const uy = (b[1] - a[1]) / len;
+          for (let d = 22; d < len - 10; d += 26) {
+            const cx = a[0] + ux * d;
+            const cy = a[1] + uy * d;
+            el(svg, 'path', {
+              d: `M${cx - ux * 4 - uy * 5} ${cy - uy * 4 + ux * 5} L${cx + ux * 3} ${cy + uy * 3} L${cx - ux * 4 + uy * 5} ${cy - uy * 4 - ux * 5}`,
+              fill: 'none', stroke: C.paper, 'stroke-width': 1.8,
+            });
+          }
+        }
+      }
+
+      function packet(svg, at, alpha = 1, scale = 1, label) {
+        el(svg, 'circle', { cx: at[0], cy: at[1], r: 5 * scale, fill: C.you, stroke: C.paper, 'stroke-width': 1.6, opacity: alpha });
+        if (label) el(svg, 'text', { x: at[0] + 8, y: at[1] - 6, fill: C.paper, 'font-size': 11, 'font-weight': 700 }, label);
+      }
+
+      function intentIcon(svg, at, owner, progress) {
+        const color = owner === 0 ? C.you : C.enemy;
+        el(svg, 'circle', { cx: at[0], cy: at[1], r: 13, fill: C.ink, stroke: color, 'stroke-width': 2.5 });
+        if (owner === 1) el(svg, 'circle', { cx: at[0], cy: at[1], r: 9, fill: 'none', stroke: C.paper, 'stroke-opacity': 0.6, 'stroke-width': 1 });
+        el(svg, 'path', { d: `M${at[0] - 5} ${at[1] - 5}h10v4.5l-5 5.5l-5 -5.5Z`, fill: C.paper });
+        el(svg, 'path', { d: arc(at[0], at[1], 17, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * progress), fill: 'none', stroke: color, 'stroke-width': 3 });
+      }
+
+      // === Экран матча ===================================================================
+      const map = document.getElementById('map');
+      defs(map);
+      el(map, 'rect', { width: 1280, height: 720, fill: '#0d1117' });
+      const N = {
+        A: [190, 380], B: [420, 210], C: [430, 560], D: [690, 390],
+        E: [960, 220], F: [1130, 440], G: [930, 600],
+      };
+      region(map, [[0, 44], [300, 44], [300, 300], [560, 300], [560, 470], [300, 470], [300, 720], [0, 720]], 'plains', 0);
+      region(map, [[300, 44], [560, 44], [560, 300], [300, 300]], 'forest', 0);
+      region(map, [[300, 470], [560, 470], [560, 720], [300, 720]], 'plains', 0);
+      region(map, [[560, 44], [820, 44], [820, 720], [560, 720]], 'forest', null);
+      region(map, [[820, 44], [1280, 44], [1280, 320], [1040, 330], [820, 330]], 'mountains', 1);
+      region(map, [[1040, 330], [1280, 320], [1280, 720], [1060, 720], [1010, 520]], 'mountains', 1);
+      region(map, [[820, 330], [1040, 330], [1010, 520], [1060, 720], [820, 720]], 'plains', 1);
+
+      road(map, N.A, N.B, 5);
+      road(map, N.A, N.C, 3);
+      road(map, N.B, N.D, 2);
+      road(map, N.C, N.D, 1);
+      road(map, N.D, N.E, 2);
+      road(map, N.D, N.G, 1);
+      road(map, N.E, N.F, 4);
+      road(map, N.B, N.E, 1);
+      road(map, N.G, N.F, 2);
+
+      // Туман над глубоким тылом врага (до городов, чтобы города остались видны).
+      el(map, 'polygon', { points: pts([[1040, 330], [1280, 320], [1280, 720], [1060, 720], [1010, 520]]), fill: 'url(#fog)' });
+      el(map, 'polygon', { points: pts([[820, 470], [1010, 520], [1060, 720], [820, 720]]), fill: 'url(#fog)' });
+
+      // Пакеты снабжения: едут по оси дороги, у города «въезжают» в значок и тают.
+      packet(map, [255, 333], 1, 1, '×2');
+      packet(map, [330, 273]);
+      packet(map, [398, 226], 0.55, 0.7);
+
+      city(map, N.A, { owner: 0, capacity: 7, garrison: 3, warehouse: 4, capital: true, vp: 0, label: 'столица' });
+      city(map, N.B, { owner: 0, capacity: 4, garrison: 6, warehouse: 1, label: 'город 7' });
+      city(map, N.C, { owner: 0, capacity: 3, garrison: 0, warehouse: 2 });
+      city(map, N.D, { owner: null, capacity: 2, vp: 2, label: 'город 9' });
+      city(map, N.E, { owner: 1, capacity: 4, vp: 1, label: 'город 11' });
+      city(map, N.F, { owner: 1, capacity: 7, capital: true });
+      city(map, N.G, { owner: 1, capacity: 3 });
+
+      // Свои стрелки и юниты.
+      bandArrow(map, N.B, N.E, { owner: 0, startGap: 40, endGap: 46, bend: -0.12, progress: 0.55 });
+      bandArrow(map, N.E, N.D, { owner: 1, startGap: 44, endGap: 40, bend: 0.16 });
+      el(map, 'circle', { cx: N.D[0], cy: N.D[1], r: 36, fill: 'none', stroke: C.enemy, 'stroke-width': 2, 'stroke-dasharray': '6 5' });
+      intentIcon(map, [N.E[0] + 30, N.E[1] - 44], 1, 0.4);
+
+      // Движущаяся группа C → D: след, шеврон вперёд, обычный приказ тонкой линией.
+      const mv = [560, 476];
+      orderLine(map, [mv, [N.D[0] - 14, N.D[1] + 12]]);
+      el(map, 'line', { x1: 488, y1: 524, x2: mv[0] - 6, y2: mv[1] + 4, stroke: 'url(#trail)', 'stroke-width': 10, 'stroke-linecap': 'round' });
+      unit(map, mv, { owner: 0, units: 3, charged: 3, label: '3/3' });
+
+      unit(map, [N.A[0] - 4, N.A[1] + 72], { owner: 0, units: 3, charged: 2, label: '2/3' });
+      unit(map, [N.B[0] - 2, N.B[1] + 70], { owner: 0, units: 6, charged: 2, label: '2/6', selected: true });
+      unit(map, [N.E[0] - 2, N.E[1] + 64], { owner: 1, presence: true, mode: 'defense', size: 30 });
+      unit(map, [N.D[0] + 60, N.D[1] - 30], { owner: 1, units: 4, charged: 4, label: '4/4', size: 30 });
+
+      // Призрак в тумане: блёклый треугольник с возрастом, гаснет к 2 минутам.
+      unit(map, [N.G[0] + 2, N.G[1] + 62], { owner: 1, presence: true, size: 28, alpha: 0.42 });
+      el(map, 'text', { x: N.G[0] + 2, y: N.G[1] + 100, 'text-anchor': 'middle', fill: C.paper, 'fill-opacity': 0.75, 'font-size': 11, 'font-weight': 700 }, '−1:10');
+
+      // === Радиальное меню ===============================================================
+      const radial = document.getElementById('radial');
+      el(radial, 'rect', { width: 632, height: 420, fill: '#1c2a20' });
+      el(radial, 'rect', { width: 632, height: 420, fill: 'url(#forest)' });
+      defs(radial);
+      const cx = 316;
+      const cy = 190;
+      const R = 150;
+      const r0 = 34;
+      const sectors = [
+        { name: 'Экономия', key: '1', a: 150, cp: '+3 CP/мин', ch: '+18 зар./мин', on: false, glyph: 'coins' },
+        { name: 'Баланс', key: '2', a: 270, cp: '+6 CP/мин', ch: '+12 зар./мин', on: true, glyph: 'scale' },
+        { name: 'Война', key: '3', a: 30, cp: '+9 CP/мин', ch: '+6 зар./мин', on: false, hover: true, glyph: 'swords' },
+      ];
+      const rad = (deg) => (deg * Math.PI) / 180;
+      for (const s of sectors) {
+        const a0 = rad(s.a - 58);
+        const a1 = rad(s.a + 58);
+        const p = (r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+        const [o0, o1, i1, i0] = [p(R, a0), p(R, a1), p(r0, a1), p(r0, a0)];
+        el(radial, 'path', {
+          d: `M${o0} A${R} ${R} 0 0 1 ${o1} L${i1} A${r0} ${r0} 0 0 0 ${i0} Z`,
+          fill: s.hover ? '#34404f' : s.on ? '#26303c' : 'rgb(22 27 34 / 94%)',
+          stroke: s.on ? C.accent : s.hover ? C.paper : '#3b4450',
+          'stroke-width': s.on || s.hover ? 2.5 : 1.5,
+        });
+        const [tx, ty] = p(R * 0.62, rad(s.a));
+        const gy = ty - 34;
+        if (s.glyph === 'coins') {
+          el(radial, 'ellipse', { cx: tx, cy: gy + 4, rx: 10, ry: 4, fill: 'none', stroke: C.paper, 'stroke-width': 1.8 });
+          el(radial, 'path', { d: `M${tx - 10} ${gy + 4}v6a10 4 0 0 0 20 0v-6`, fill: 'none', stroke: C.paper, 'stroke-width': 1.8 });
+          el(radial, 'path', { d: `M${tx - 10} ${gy - 2}a10 4 0 0 1 20 0`, fill: 'none', stroke: C.paper, 'stroke-width': 1.8 });
+        } else if (s.glyph === 'scale') {
+          el(radial, 'path', { d: `M${tx} ${gy - 10}v22M${tx - 8} ${gy + 12}h16M${tx - 12} ${gy - 5}h24M${tx - 12} ${gy - 5}l-4 8h8ZM${tx + 12} ${gy - 5}l-4 8h8Z`, fill: 'none', stroke: C.paper, 'stroke-width': 1.8, 'stroke-linejoin': 'round' });
+        } else {
+          el(radial, 'path', { d: `M${tx - 11} ${gy - 11}l20 20M${tx + 11} ${gy - 11}l-20 20M${tx + 3} ${gy + 7}l6 -6M${tx - 3} ${gy + 7}l-6 -6`, fill: 'none', stroke: C.paper, 'stroke-width': 2, 'stroke-linecap': 'round' });
+        }
+        el(radial, 'text', { x: tx, y: ty - 4, 'text-anchor': 'middle', fill: C.paper, 'font-size': 15, 'font-weight': 700 }, s.name);
+        el(radial, 'text', { x: tx, y: ty + 14, 'text-anchor': 'middle', fill: C.accent, 'font-size': 12 }, s.cp);
+        el(radial, 'text', { x: tx, y: ty + 30, 'text-anchor': 'middle', fill: '#9cc0ff', 'font-size': 12 }, s.ch);
+        el(radial, 'rect', { x: tx - 10, y: ty + 38, width: 20, height: 17, rx: 4, fill: 'none', stroke: '#59636e' });
+        el(radial, 'text', { x: tx, y: ty + 51, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 11 }, s.key);
+      }
+      el(radial, 'circle', { cx, cy, r: r0 - 4, fill: C.ink, stroke: '#3b4450' });
+      el(radial, 'text', { x: cx, y: cy + 4, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 11 }, 'отмена');
+      el(radial, 'line', { x1: cx, y1: cy, x2: cx + 120, y2: cy + 96, stroke: C.paper, 'stroke-opacity': 0.5, 'stroke-dasharray': '3 3' });
+      el(radial, 'path', { d: `M${cx + 120} ${cy + 96} l0 14 l4 -4 l4 7 l3 -1.5 l-4 -7 l5 -1 Z`, fill: C.paper, stroke: C.ink });
+      el(radial, 'text', { x: 316, y: 388, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'Жёлтая рамка: текущая стойка. Курсор над «Война»: отпустить Q, чтобы выбрать.');
+      el(radial, 'text', { x: 316, y: 406, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'Столица в любой стойке даёт ещё +12 зарядов/мин.');
+
+      // === Стрелки приказов ===============================================================
+      const ar = document.getElementById('arrows');
+      defs(ar);
+      el(ar, 'rect', { width: 632, height: 420, fill: '#3a4630' });
+      el(ar, 'rect', { width: 632, height: 420, fill: 'url(#plains)' });
+      const P = { a: [90, 110], b: [520, 110], c: [90, 300], d: [520, 300] };
+      road(ar, P.a, P.b, 2);
+      road(ar, P.c, P.d, 2);
+      for (const k of ['a', 'b', 'c', 'd']) city(ar, P[k], { owner: k === 'a' || k === 'c' ? 0 : null, capacity: 3 });
+      bandArrow(ar, P.a, P.b, { owner: 0, startGap: 34, endGap: 36, bend: -0.12, progress: 0.4 });
+      bandArrow(ar, [P.d[0], P.d[1] + 0], [P.c[0] + 0, P.c[1]], { owner: 1, startGap: 34, endGap: 36, bend: -0.12 });
+      el(ar, 'text', { x: 305, y: 52, 'text-anchor': 'middle', fill: C.paper, 'font-size': 13, 'font-weight': 700 }, 'Свой запланированный: сплошной контур, ось показывает задержку');
+      el(ar, 'text', { x: 305, y: 400, 'text-anchor': 'middle', fill: C.paper, 'font-size': 13, 'font-weight': 700 }, 'Чужой запланированный: пунктирный контур, цвет врага');
+      orderLine(ar, [[120, 205], [480, 205]]);
+      el(ar, 'text', { x: 305, y: 232, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'Обычный приказ: тонкая линия с шевронами (виден только вам)');
+
+      // === Легенда ========================================================================
+      const lg = document.getElementById('legend');
+      defs(lg);
+      el(lg, 'rect', { width: 1280, height: 470, fill: '#0d1117' });
+      const label = (x, y, t, o = {}) =>
+        el(lg, 'text', { x, y, fill: o.dim ? '#8b949e' : C.paper, 'font-size': o.size ?? 12, 'font-weight': o.bold ? 700 : 400, 'text-anchor': o.anchor ?? 'middle' }, t);
+
+      label(24, 30, 'Юниты: размер по числу юнитов, заливка от острия по доле заряженных', { anchor: 'start', bold: true, size: 14 });
+      const sizes = [
+        ['1-3', 3, 3], ['4-7', 6, 3], ['8-15', 12, 9], ['16+', 20, 5],
+      ];
+      sizes.forEach(([t, u, c], i) => {
+        unit(lg, [70 + i * 90, 85], { owner: 0, units: u, charged: c, label: `${c}/${u}` });
+        label(70 + i * 90, 140, `${t} юн.`, { dim: true });
+      });
+      [[0, 4], [2, 4], [4, 4]].forEach(([c, u], i) => {
+        unit(lg, [440 + i * 70, 85], { owner: 0, units: u, charged: c, label: `${c}/${u}`, size: 30 });
+      });
+      label(510, 140, 'пусто, половина, полный', { dim: true });
+      unit(lg, [690, 85], { owner: 1, units: 4, charged: 3, label: '3/4', size: 30 });
+      label(690, 140, 'враг: двойной контур', { dim: true });
+      unit(lg, [800, 85], { owner: 1, presence: true, size: 30 });
+      label(800, 140, 'враг без чисел', { dim: true });
+      unit(lg, [915, 85], { owner: 0, units: 4, charged: 4, mode: 'defense', size: 30, label: '4/4' });
+      label(915, 140, 'режим «Защита»', { dim: true });
+      unit(lg, [1025, 85], { owner: 0, units: 4, charged: 1, mode: 'build', size: 30, label: '1/4' });
+      label(1025, 140, '«Стройка»', { dim: true });
+      unit(lg, [1170, 85], { owner: 1, presence: true, size: 28, alpha: 0.42 });
+      label(1170, 125, '−1:10', { bold: true });
+      label(1170, 140, 'призрак гаснет к 2:00', { dim: true });
+
+      label(24, 185, 'Города: размер по классу ёмкости, кольцо: стоят / ёмкость, полоска: склад', { anchor: 'start', bold: true, size: 14 });
+      [[2, 1, 1], [4, 3, 2], [6, 6, 5], [8, 4, 3]].forEach(([cap, gar, wh], i) => {
+        city(lg, [80 + i * 130, 260], { owner: 0, capacity: cap, garrison: gar, warehouse: wh });
+        label(80 + i * 130, 330, `ёмкость ${cap}`, { dim: true });
+      });
+      city(lg, [620, 260], { owner: 0, capacity: 3, garrison: 5, warehouse: 1 });
+      label(620, 330, 'переполнен: отсчёт', { dim: true });
+      city(lg, [770, 260], { owner: null, capacity: 3, vp: 2 });
+      label(770, 330, 'нейтральный, 2 VP', { dim: true });
+      city(lg, [920, 260], { owner: 1, capacity: 4 });
+      label(920, 330, 'враг: внутреннее кольцо', { dim: true });
+      city(lg, [1070, 260], { owner: 0, capacity: 7, capital: true, garrison: 2 });
+      label(1070, 330, 'столица', { dim: true });
+
+      label(24, 375, 'Дороги: толщина и число полос растут с шириной; ширина 1 пунктиром', { anchor: 'start', bold: true, size: 14 });
+      for (let w = 1; w <= 5; w++) {
+        road(lg, [40 + (w - 1) * 160, 420], [160 + (w - 1) * 160, 420], w);
+        label(100 + (w - 1) * 160, 452, `ширина ${w}`, { dim: true });
+      }
+      label(860, 404, 'Местность штампами:', { anchor: 'start', bold: true });
+      [['plains', 'равнина'], ['forest', 'лес'], ['mountains', 'горы']].forEach(([t, name], i) => {
+        el(lg, 'rect', { x: 860 + i * 130, y: 414, width: 110, height: 36, fill: TERRAIN_BASE[t], rx: 4 });
+        el(lg, 'rect', { x: 860 + i * 130, y: 414, width: 110, height: 36, fill: `url(#${t})`, rx: 4 });
+        label(915 + i * 130, 466, name, { dim: true });
+      });
+    </script>
+  </body>
+</html>
