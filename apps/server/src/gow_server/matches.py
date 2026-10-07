@@ -5,6 +5,9 @@ loop reads time only through a ``Clock`` (tests use ``ManualClock``). A tick is 
 no ``await``: the commands queued since the last tick are applied at its start, ``Match.step``
 runs, and every connected player gets its acks, visible events and snapshot (``gow_protocol
 .convert``) in its ``Outbox``. The connection (SRV-03) sends them; the tick never waits for it.
+The snapshot is a ``SnapshotFrame``, encoded straight from the view without validating the wire
+models (#155); with ``validate_snapshots`` (the server outside ``prod``) every frame is also
+decoded and validated, and an invalid one crashes its match like any bug.
 
 A loop more than 3 ticks behind (GC pause, suspended VM) restarts its schedule from the current
 time instead of catching up with a burst of steps. A paused match waits for ``resume()`` and
@@ -44,14 +47,15 @@ from typing import TYPE_CHECKING, Final
 
 from gow_bots.bots import Controller
 from gow_protocol import commands as wire
+from gow_protocol.codec import SnapshotFrame
 from gow_protocol.convert import (
     ack_msg,
     command_from_wire,
     events_msgs,
     match_end_msg,
-    snapshot_msg,
+    snapshot_frame,
 )
-from gow_protocol.messages import PausedMsg, RatingChange, ServerMsg, SnapshotMsg
+from gow_protocol.messages import PausedMsg, RatingChange, ServerMsg
 from gow_server.alerts import Alerter
 from gow_server.clock import Clock
 from gow_server.metrics import ServerMetrics
@@ -90,6 +94,9 @@ BOT_BUDGET_S: Final = 0.001
 _EPS: Final = 1e-9
 """Float slack of the schedule: ten steps of 0.1 s are due at exactly 1.0 s."""
 
+type Outgoing = ServerMsg | SnapshotFrame
+"""What an ``Outbox`` holds: a message or an encoded snapshot (``codec.encode`` takes both)."""
+
 
 class Outbox:
     """Outgoing messages of one player's connection (AGENTS.md, section 5.3).
@@ -102,13 +109,13 @@ class Outbox:
 
     def __init__(self, limit: int = OUTBOX_LIMIT) -> None:
         self._limit = limit
-        self._snapshot: SnapshotMsg | None = None
-        self._reliable: deque[ServerMsg] = deque()
+        self._snapshot: SnapshotFrame | None = None
+        self._reliable: deque[Outgoing] = deque()
         self._wakeup = asyncio.Event()
         self._closed = False
         self.overflowed = False
 
-    def put(self, msg: ServerMsg) -> None:
+    def put(self, msg: Outgoing) -> None:
         if self._closed or self.overflowed:
             return
         if len(self._reliable) >= self._limit:
@@ -117,7 +124,7 @@ class Outbox:
             self._reliable.append(msg)
         self._wakeup.set()
 
-    def put_snapshot(self, msg: SnapshotMsg) -> None:
+    def put_snapshot(self, msg: SnapshotFrame) -> None:
         if self._closed or self.overflowed:
             return
         self._snapshot = msg
@@ -137,7 +144,7 @@ class Outbox:
         """Reliable messages not yet sent."""
         return len(self._reliable)
 
-    def get_nowait(self) -> ServerMsg | None:
+    def get_nowait(self) -> Outgoing | None:
         """The next message to send, or ``None`` if there is none now."""
         if self.overflowed:
             return None
@@ -146,7 +153,7 @@ class Outbox:
         snapshot, self._snapshot = self._snapshot, None
         return snapshot
 
-    async def get(self) -> ServerMsg | None:
+    async def get(self) -> Outgoing | None:
         """Wait for the next message; ``None``: closed and empty, or overflowed."""
         while True:
             msg = self.get_nowait()
@@ -194,6 +201,7 @@ class MatchRunner:
         bot_budget_s: float = BOT_BUDGET_S,
         metrics: ServerMetrics | None = None,
         ratings: tuple[Glicko, Glicko] | None = None,
+        validate_snapshots: bool = False,
     ) -> None:
         self.match_id: Final = match_id
         self.map_id: Final = map_id
@@ -216,6 +224,8 @@ class MatchRunner:
         self.ratings: Final = ratings
         """Ratings of both accounts at the start of a rated match (RAT-02); else ``None``."""
         self._rating_changes: dict[int, RatingChange] | None = None
+        self.validate_snapshots: Final = validate_snapshots
+        """Decode and validate every snapshot frame (outside ``prod``: a leak trap, #155)."""
         self.bot: Final = bot
         self.bot_budget_s: Final = bot_budget_s
         self.bot_decisions = 0
@@ -291,9 +301,12 @@ class MatchRunner:
         """Highest ``seq`` of ``player`` accepted so far (``welcome.last_seq``)."""
         return self._last_seq[player]
 
-    def snapshot(self, player: int) -> SnapshotMsg:
+    def snapshot(self, player: int) -> SnapshotFrame:
         """The current full view of ``player`` (after ``welcome``)."""
-        return snapshot_msg(self.match.view(player))
+        frame = snapshot_frame(self.match.view(player))
+        if self.validate_snapshots:
+            frame.message()
+        return frame
 
     def submit(self, player: int, seq: int, cmd: wire.Command) -> bool:
         """Queue a command for the next tick. ``False``: a repeated ``seq`` or a finished match.
@@ -460,7 +473,7 @@ class MatchRunner:
                     box.put(ack_msg(result))
             for msg in events_msgs(events, player, match.match_key):
                 box.put(msg)
-            snapshot = snapshot_msg(match.view(player))
+            snapshot = self.snapshot(player)
             if outcome is None:
                 box.put_snapshot(snapshot)
             else:  # the final view goes before match_end, then the connection is done
@@ -599,11 +612,13 @@ class MatchManager:
         pause_max_s: float = DEFAULT_WINDOW_S,
         bot_budget_s: float = BOT_BUDGET_S,
         alerter: Alerter | None = None,
+        validate_snapshots: bool = False,
     ) -> None:
         self.clock = clock
         self.metrics = ServerMetrics()
         self.alerter = alerter or Alerter()
         self._bot_budget_s = bot_budget_s
+        self._validate_snapshots = validate_snapshots
         self._reconnect_window_s = reconnect_window_s
         self._pause_max_s = pause_max_s
         self._replays = replays
@@ -678,6 +693,7 @@ class MatchManager:
             bot=bot,
             bot_budget_s=self._bot_budget_s,
             ratings=ratings,
+            validate_snapshots=self._validate_snapshots,
         )
         self.start(runner)
         return runner

@@ -9,6 +9,7 @@ from typing import Final
 import pytest
 
 from gow_protocol import commands as wire
+from gow_protocol.codec import SnapshotFrame
 from gow_protocol.messages import (
     AckMsg,
     EndReason,
@@ -58,9 +59,10 @@ async def tick(clock: ManualClock, n: int = 1) -> None:
 
 
 def drain(box: Outbox) -> list[ServerMsg]:
+    """The queued messages; snapshot frames decoded and validated as a client does it."""
     out: list[ServerMsg] = []
     while (msg := box.get_nowait()) is not None:
-        out.append(msg)
+        out.append(msg.message() if isinstance(msg, SnapshotFrame) else msg)
     return out
 
 

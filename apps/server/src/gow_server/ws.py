@@ -52,12 +52,11 @@ from gow_protocol.messages import (
     PongMsg,
     ResumeMsg,
     ResyncMsg,
-    ServerMsg,
     WelcomeMsg,
 )
 from gow_protocol.ruleset import RulesetPublic
 from gow_server.identity import hash_token
-from gow_server.matches import MatchManager, MatchRunner, Outbox
+from gow_server.matches import MatchManager, MatchRunner, Outbox, Outgoing
 from gow_server.models import Player
 from gow_server.settings import Settings
 
@@ -268,7 +267,7 @@ async def _write(ws: WebSocket, runner: MatchRunner, outbox: Outbox, settings: S
     raise _Close(CLOSE_REPLACED, "replaced")
 
 
-async def _send(ws: WebSocket, msg: ServerMsg, settings: Settings) -> None:
+async def _send(ws: WebSocket, msg: Outgoing, settings: Settings) -> None:
     try:
         await asyncio.wait_for(ws.send_text(encode(msg)), settings.ws_send_timeout_s)
     except TimeoutError:

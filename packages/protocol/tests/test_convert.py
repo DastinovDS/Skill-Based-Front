@@ -4,18 +4,24 @@ A client-side driver plays each MVP map through the wire only: it reads the ``sn
 sends wire commands with string ids, and the server side converts them (``command_from_wire``,
 ``Match.resolve``), steps the match and converts the view, the acks and the events back. Every
 message must validate, round-trip through the codec, match the ``PlayerView`` field by field, and
-never carry anything of the enemy the view does not show.
+never carry anything of the enemy the view does not show. The unvalidated ``snapshot_frame`` the
+server sends must be, on every tick of these matches, the very frame of the validated
+``snapshot_msg`` (#155).
 """
 
 import json
+import timeit
 from collections import deque
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
+from gow_bots.bots import BOTS
 from gow_protocol import commands as wire
-from gow_protocol.codec import decode_client, decode_server, encode
+from gow_protocol.codec import SnapshotFrame, decode_client, decode_server, encode, encode_snapshot
 from gow_protocol.convert import (
     ENTITY_KEYS,
     PRIVATE_KINDS,
@@ -27,15 +33,17 @@ from gow_protocol.convert import (
     match_end_msg,
     opaque_from_wire,
     opaque_to_wire,
+    snapshot_frame,
     snapshot_msg,
 )
 from gow_protocol.messages import CommandMsg, EndReason, EventMsg, MatchEndMsg, SnapshotMsg
-from gow_protocol.view import AtNodeLoc, View
+from gow_protocol.view import AtNodeLoc, OnEdgeLoc, View
 from gow_sim import commands as sim
+from gow_sim import view as sv
 from gow_sim.maps import PLAYERS, MapDef, load_map
-from gow_sim.match import Match
+from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
-from gow_sim.state import Event, Mode, event
+from gow_sim.state import AtNode, Detail, Event, Group, Mode, event
 from gow_sim.systems.victory import EndReason as SimEndReason
 from gow_sim.systems.victory import Outcome
 from gow_sim.view import PlayerView, opaque_id, view_to_canonical
@@ -46,6 +54,8 @@ MVP_MAPS = ("arteriya", "pautina", "pereval")
 CLIENT_FIXTURES = ROOT / "packages" / "protocol" / "fixtures" / "client"
 KEY = b"pro-03 test match key, 32 bytes!"
 TICKS = 1500
+BOT_TICKS = 1200
+REGRESSION = 1.5
 
 NOT_FOUND = sim.RejectCode.NOT_FOUND_OR_HIDDEN.value
 DROPPED_GROUP_KEYS = ("build_edge",)
@@ -146,6 +156,9 @@ def _check_snapshot(match: Match, player: int) -> SnapshotMsg:
     msg = snapshot_msg(view)
     frame = encode(msg)
     assert decode_server(frame) == msg
+    fast = snapshot_frame(view)
+    assert fast == SnapshotFrame(view.tick, frame)
+    assert encode(fast) == frame
     assert msg.tick == view.tick
     assert json.loads(frame)["view"] == _expected_wire_view(view)
     _check_no_enemy_ids(match, player, frame)
@@ -240,6 +253,118 @@ def test_match_through_the_wire(name: str) -> None:
     assert kinds <= PUBLIC_KINDS | PRIVATE_KINDS | {"fight", "match_ended"}
     assert {"fight", "fight_group", "recruited", "node_captured"} <= kinds
     assert all(acks.values())
+
+
+class _FrameChecker:
+    """``MatchObserver``: after every tick both players' frames equal the validated ones."""
+
+    def __init__(self) -> None:
+        self.features: set[str] = set()
+
+    def begin(self, match: Match) -> None:
+        self.record(match, ())
+
+    def record(self, match: Match, commands: Sequence[sim.PlayerCommand]) -> None:
+        for player in PLAYERS:
+            view = match.view(player)
+            msg = snapshot_msg(view)
+            assert snapshot_frame(view) == SnapshotFrame(view.tick, encode(msg))
+            self.features |= _features(msg.view)
+
+
+def _features(view: View) -> set[str]:
+    places = [*view.nodes, *view.edges]
+    found = {
+        "on_edge": any(isinstance(g.location, OnEdgeLoc) for g in view.groups),
+        "planned": any(g.order is not None and g.order.planned for g in view.groups),
+        "packets": bool(view.packets),
+        "intent_target": any(i.target is not None for i in view.intents),
+        "intent_no_target": any(i.target is None for i in view.intents),
+        "upgrade_gain": any(e.upgrade_gain is not None for e in view.edges),
+        "enemy_exact": any(p.seen is not None and p.seen.enemy_units for p in places),
+        "enemy_presence": any(
+            p.seen is not None and p.seen.enemy_modes and p.seen.enemy_units is None for p in places
+        ),
+        "fog_memory": any(p.detail is Detail.FOG and p.seen is not None for p in places),
+    }
+    return {name for name, present in found.items() if present}
+
+
+def test_snapshot_frames_of_a_bot_match() -> None:
+    """Strategic bots use what the wire driver above does not: planned orders and their intents."""
+    mapdef = load_map(ROOT / "maps" / "arteriya.json")
+    bots = ("rusher", "turtle")
+    controllers = [BOTS[bot](mapdef, RULES, seed=7, player=p) for p, bot in enumerate(bots)]
+    checker = _FrameChecker()
+    run_headless(mapdef, RULES, controllers, max_ticks=BOT_TICKS, match_key=KEY, observer=checker)
+    assert checker.features >= {
+        "on_edge",
+        "planned",
+        "packets",
+        "intent_target",
+        "upgrade_gain",
+        "enemy_presence",
+        "fog_memory",
+    }
+
+
+def test_snapshot_frame_of_rare_view_parts() -> None:
+    """An intent without a target (``defense``) and exact enemy numbers, set up directly."""
+    match = _started()
+    own = match.view(0).groups[0]
+    assert isinstance(own.location, sv.AtNode)
+    match.step([sim.PlayerCommand(0, 1, match.resolve(0, sim.SetMode(own.id, Mode.DEFENSE)))])
+    state = match.state
+    gid = state.new_id()
+    state.groups[gid] = Group(gid, 1, 3, 2, Mode.ATTACK, AtNode(own.location.node))
+    checker = _FrameChecker()
+    checker.record(match, ())
+    assert checker.features >= {"intent_no_target", "enemy_exact"}
+
+
+class _Keeper:
+    """``MatchObserver`` that keeps the match."""
+
+    match: Match
+
+    def begin(self, match: Match) -> None:
+        self.match = match
+
+    def record(self, match: Match, commands: Sequence[sim.PlayerCommand]) -> None:
+        pass
+
+
+def test_snapshot_frame_costs_no_more_than_project() -> None:
+    """#155: a snapshot per player per tick must not cost more than the ``project()`` before it.
+
+    A ratio on the same machine, so no ``speed_factor``; ``REGRESSION`` as in the benchmarks.
+    """
+    mapdef = load_map(ROOT / "maps" / "pautina.json")
+    controllers = [BOTS["rusher"](mapdef, RULES, seed=1, player=p) for p in PLAYERS]
+    keeper = _Keeper()
+    run_headless(mapdef, RULES, controllers, max_ticks=300, match_key=KEY, observer=keeper)
+    match = keeper.match
+    view = match.view(0)
+
+    def best(fn: Callable[[], object]) -> float:
+        return min(timeit.repeat(fn, number=200, repeat=7))
+
+    project_s = best(lambda: match.view(0))
+    frame_s = best(lambda: snapshot_frame(view))
+    assert frame_s <= project_s * REGRESSION, f"frame {frame_s / project_s:.2f} x project()"
+
+
+def test_snapshot_frame_message_validates() -> None:
+    """``SnapshotFrame.message()`` is the leak trap of the unvalidated frames (#155)."""
+    match = _started()
+    view = match.view(0)
+    frame = snapshot_frame(view)
+    assert frame.message() == snapshot_msg(view)
+    data = json.loads(frame.frame)["view"]
+    fog = next(n for n in data["nodes"] if n["detail"] == "fog")
+    fog["warehouse"] = 5  # an enemy warehouse in the fog: DEC-04 forbids it
+    with pytest.raises(ValidationError):
+        encode_snapshot(view.tick, data).message()
 
 
 # Commands ------------------------------------------------------------------------------------
