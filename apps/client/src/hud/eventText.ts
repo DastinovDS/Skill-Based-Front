@@ -11,7 +11,46 @@ function isStance(value: unknown): value is Stance {
   return value === 'economy' || value === 'balance' || value === 'war';
 }
 
-/** One line for the feed. Events the client does not know show their kind, never nothing. */
+/**
+ * Kinds the server sends to a player that the feed does not show: the economy ticks (every few
+ * seconds), movement and supply bookkeeping, and the per-group part of a fight (the `fight` line
+ * says it all). The list of everything the server sends is `packages/protocol/vectors/
+ * event_kinds.json`; `eventText.test.ts` checks that each kind is either here or has a text.
+ */
+export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
+  'charges_produced',
+  'charges_overflow',
+  'cp_burned',
+  'fight_group',
+  'group_arrived',
+  'group_split',
+  'groups_merged',
+  'packet_sent',
+  'packet_delivered',
+]);
+
+/** Kinds with a line in the feed. */
+export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
+  'node_captured',
+  'fight',
+  'recruited',
+  'vp_awarded',
+  'stance_changed',
+  'warehouse_lost',
+  'forfeit',
+  'match_ended',
+  'attrition',
+  'road_upgraded',
+  'build_stopped',
+  'packet_lost',
+]);
+
+/** Does the feed show this kind? An unknown kind is not shown (never a raw kind name). */
+export function isLogged(kind: string): boolean {
+  return LOGGED_EVENT_KINDS.has(kind);
+}
+
+/** One line for the feed; only for kinds `isLogged` accepts (others give an empty string). */
 export function eventText(event: HudEvent, me: PlayerId): string {
   const { data } = event;
   const side = data.player === me ? 'mine' : 'enemy';
@@ -48,7 +87,15 @@ export function eventText(event: HudEvent, me: PlayerId): string {
       return t(side === 'mine' ? 'event.forfeit.mine' : 'event.forfeit.enemy');
     case 'match_ended':
       return t('event.match_ended');
+    case 'attrition':
+      return tf('event.attrition', { node: num(data.node) });
+    case 'road_upgraded':
+      return tf('event.road_upgraded', { edge: num(data.edge), width: num(data.width) });
+    case 'build_stopped':
+      return tf('event.build_stopped', { edge: num(data.edge) });
+    case 'packet_lost':
+      return tf('event.packet_lost', { edge: num(data.edge), charges: num(data.charges) });
     default:
-      return tf('event.other', { kind: event.kind });
+      return '';
   }
 }
