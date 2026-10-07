@@ -12,11 +12,13 @@ from fastapi import FastAPI, Request, Response
 from sqlalchemy.orm import sessionmaker
 
 from gow_server import alerts, botmatch, identity, internal, invites, maps, replays, ws
+from gow_server.abuse import Limits
 from gow_server.clock import Clock, MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.lifecycle import MatchLifecycle, abort_orphans, archive_rulesets
 from gow_server.logs import request_id_var
 from gow_server.matches import MatchManager
+from gow_server.nicks import NickPolicy, load_blocklist
 from gow_server.ratelimit import SlidingWindowLimiter
 from gow_server.settings import Settings
 from gow_sim.ruleset import load_ruleset
@@ -90,6 +92,10 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.state.settings = settings
     app.state.guest_limiter = SlidingWindowLimiter(
         settings.guest_rate_limit, settings.guest_rate_window_s, MonotonicClock()
+    )
+    app.state.limits = Limits(settings, MonotonicClock())
+    app.state.nick_policy = NickPolicy(
+        load_blocklist(settings.nick_blocklist_file) if settings.nick_blocklist_file else ()
     )
 
     app.state.invite_limiter = SlidingWindowLimiter(

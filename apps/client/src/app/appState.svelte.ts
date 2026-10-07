@@ -49,6 +49,7 @@ export interface AppStateOptions {
 /** The UI string for an API failure. */
 const API_ERRORS: Record<ApiErrorCode, MessageKey> = {
   unauthorized: 'error.api.unauthorized',
+  blocked: 'error.api.blocked',
   not_found: 'error.api.not_found',
   conflict: 'error.api.conflict',
   invalid: 'error.api.invalid',

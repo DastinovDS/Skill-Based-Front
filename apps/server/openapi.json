@@ -195,6 +195,53 @@
         ]
       }
     },
+    "/api/me/nick": {
+      "put": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Change Nick",
+        "description": "Change the nick (rate limited per player). The same rules as for a new guest.",
+        "operationId": "change_nick_api_me_nick_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NickChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/replays/{match_id}": {
       "get": {
         "tags": [
@@ -848,6 +895,20 @@
           "nick"
         ],
         "title": "Me"
+      },
+      "NickChange": {
+        "properties": {
+          "nick": {
+            "type": "string",
+            "title": "Nick"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nick"
+        ],
+        "title": "NickChange"
       },
       "ValidationError": {
         "properties": {

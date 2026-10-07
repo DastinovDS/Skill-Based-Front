@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict
 
 from gow_bots.bots import BOTS
+from gow_server.abuse import Limits, enforce
 from gow_server.identity import CurrentPlayer
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchState
 from gow_server.maps import MapCatalog
@@ -64,6 +65,8 @@ async def create_bot_match(
     lifecycle: MatchLifecycle = request.app.state.lifecycle
     catalog: MapCatalog = request.app.state.maps
     rules: Ruleset = request.app.state.ruleset
+    limits: Limits = request.app.state.limits
+    enforce(limits.match_create, str(player.id), "too many matches created")
     if body.map_id is None:
         pool = catalog.all()
         if not pool:

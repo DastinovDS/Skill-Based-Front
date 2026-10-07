@@ -206,10 +206,12 @@ export const en = {
   'invite.expires': 'The invite expires in {minutes} min.',
   'invite.leave': 'Leave',
   'error.api.unauthorized': 'The server does not know you any more. Choose a nick again.',
+  'error.api.blocked': 'This account is blocked.',
   'error.api.not_found': 'Not found.',
   'error.api.conflict':
     'This is not possible now: the nick is taken, or the match is already running.',
-  'error.api.invalid': 'The server did not accept the request. Check the nick.',
+  'error.api.invalid':
+    'The server did not accept the request. Check the nick: letters of one script, no reserved names.',
   'error.api.rate_limited': 'Too many requests from your address or account. Try again later.',
   'error.api.unavailable': 'The server is not ready (restarting?). Try again in a moment.',
   'error.api.network': 'Could not reach the server.',
