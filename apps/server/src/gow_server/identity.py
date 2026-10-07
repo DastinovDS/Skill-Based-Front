@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 
 from gow_server.abuse import Limits, enforce
 from gow_server.db import DbSession
+from gow_server.lifecycle import MatchLifecycle, MatchState
 from gow_server.models import Player
 from gow_server.nicks import NickPolicy, skeleton, validate_nick
 from gow_server.ratelimit import SlidingWindowLimiter
@@ -54,6 +55,13 @@ class GuestCreated(BaseModel):
 class Me(BaseModel):
     player_id: int
     nick: str
+
+
+class ActiveMatch(BaseModel):
+    """The running match of an account: enough to reconnect to ``/ws/match/{match_id}``."""
+
+    match_id: str
+    map_id: str
 
 
 class NickChange(BaseModel):
@@ -141,6 +149,26 @@ def create_guest(
 @router.get("/me")
 def me(player: CurrentPlayer) -> Me:
     return Me(player_id=player.id, nick=player.nick)
+
+
+@router.get("/me/active-match")
+async def active_match(
+    request: Request, response: Response, player: CurrentPlayer
+) -> ActiveMatch | None:
+    """The running match of the player (a page reload, a second tab), ``null`` if none.
+
+    The player returns to it with the same token inside the reconnect window (DEC-05). A match
+    that is still waiting for its players (an invite) has no ``match_id`` yet: ``null``.
+    """
+    lifecycle: MatchLifecycle = request.app.state.lifecycle
+    response.headers["Cache-Control"] = "no-store"
+    record = lifecycle.active_of(player.id)
+    if record is None or record.state is not MatchState.RUNNING or record.match_id is None:
+        return None
+    runner = lifecycle.manager.get(record.match_id)
+    if runner is None or runner.finished:
+        return None
+    return ActiveMatch(match_id=runner.match_id, map_id=runner.map_id)
 
 
 @router.put("/me/nick")

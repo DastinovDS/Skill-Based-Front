@@ -151,3 +151,32 @@ test('pause, a dropped connection and a forfeit in a private match', async ({
   await host.close();
   await guest.close();
 });
+
+test('a page reload in a running match returns to the same match (#189)', async ({
+  browser,
+  baseURL,
+}) => {
+  const { host, guest } = await startInviteMatch(browser, baseURL ?? '');
+  const side = await host.side();
+  expect(host.welcomes()).toBe(1);
+
+  // F5 in the middle of the match: the page asks the server where the match is and reconnects
+  // with the same token (a second `welcome`), instead of landing on the menu.
+  await host.page.reload();
+  await expect.poll(() => host.welcomes(), { timeout: 30_000 }).toBe(2);
+  await host.expectPlaying();
+  expect(host.received.filter((f) => f.type === 'welcome').map((f) => f['player'])).toEqual([
+    side,
+    side,
+  ]);
+  await expect(host.page.getByText(`Hello, ${host.nick}!`)).toBeHidden();
+
+  // The match goes on for both and nobody lost by disconnect: the guest can still forfeit it.
+  await guest.page.getByRole('button', { name: 'Forfeit' }).click();
+  await guest.page.getByRole('button', { name: 'Yes, forfeit' }).click();
+  await expect(host.page.getByRole('heading', { name: 'Victory' })).toBeVisible();
+  await expect(host.page.getByText('A player gave up.')).toBeVisible();
+
+  await host.close();
+  await guest.close();
+});

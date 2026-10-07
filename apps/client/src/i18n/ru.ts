@@ -170,6 +170,8 @@ export const ru = {
   'menu.bot': 'Играть с ботом',
   'menu.lobby': 'Публичное лобби',
   'menu.changeNick': 'Сменить ник',
+  'menu.activeMatch': 'У тебя идёт матч.',
+  'menu.resume': 'Вернуться в матч',
   'map.label': 'Карта',
   'map.random': 'Случайная карта',
   'create.title': 'Приватный матч',

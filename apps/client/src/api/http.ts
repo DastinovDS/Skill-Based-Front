@@ -8,6 +8,7 @@ import type { MapFile } from '../protocol.gen.ts';
 
 type Schemas = components['schemas'];
 export type Invite = Schemas['InviteOut'];
+export type ActiveMatch = Schemas['ActiveMatch'];
 export type BotMatch = Schemas['BotMatchOut'];
 export type LobbyEntry = Schemas['LobbyEntry'];
 export type MapSummary = Schemas['MapSummary'];
@@ -73,6 +74,11 @@ export class Api {
   /** The player of a saved token; `unauthorized` if the server does not know it any more. */
   me(token: string): Promise<Schemas['Me']> {
     return this.#request('GET', '/api/me', token);
+  }
+
+  /** The running match of the guest (after a page reload or in another tab), `null` if none. */
+  activeMatch(token: string): Promise<ActiveMatch | null> {
+    return this.#request('GET', '/api/me/active-match', token);
   }
 
   maps(): Promise<MapSummary[]> {

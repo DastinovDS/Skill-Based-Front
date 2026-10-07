@@ -6,7 +6,7 @@
  * without a DOM.
  */
 import { SvelteURLSearchParams } from 'svelte/reactivity';
-import { Api, ApiError, type ApiErrorCode, type BotLevel } from '../api/http.ts';
+import { Api, ApiError, type ActiveMatch, type ApiErrorCode, type BotLevel } from '../api/http.ts';
 import { forgetGuest, loadGuest, saveGuest } from '../api/guestStore.ts';
 import type { MessageKey } from '../i18n/index.ts';
 import type { MatchEndMsg, PlayerId } from '../protocol.gen.ts';
@@ -70,6 +70,8 @@ export class AppState {
   pendingInvite = $state.raw<string | null>(null);
   /** Why the last action failed, shown on the screen it fell back to. */
   notice = $state.raw<MessageKey | null>(null);
+  /** The running match of the guest, known from the server: the menu offers to return to it. */
+  activeMatch = $state.raw<ActiveMatch | null>(null);
 
   readonly api: Api;
   readonly #storage: () => Storage;
@@ -121,6 +123,28 @@ export class AppState {
     await this.#proceed();
   }
 
+  /**
+   * Asks the server for the running match of the guest (#189). Best effort: a failure leaves the
+   * menu as it is, the next action shows the problem.
+   */
+  async refreshActiveMatch(): Promise<ActiveMatch | null> {
+    const guest = this.guest;
+    if (guest === null) return null;
+    let found: ActiveMatch | null;
+    try {
+      found = await this.api.activeMatch(guest.token);
+    } catch {
+      found = null;
+    }
+    this.activeMatch = found;
+    return found;
+  }
+
+  /** Back to the running match (the socket reconnects with the same token, DEC-05). */
+  resumeMatch(match: ActiveMatch): void {
+    this.go({ name: 'match', matchId: match.match_id, mapId: match.map_id });
+  }
+
   go(screen: Screen): void {
     this.notice = null;
     this.screen = screen;
@@ -154,6 +178,7 @@ export class AppState {
 
   /** The match ended: the result screen needs the side we played to say who won. */
   finishMatch(matchId: string, me: PlayerId, end: MatchEndMsg): void {
+    this.activeMatch = null;
     this.go({ name: 'result', matchId, me, end });
   }
 
@@ -180,6 +205,13 @@ export class AppState {
     const guest = this.guest;
     if (guest === null) {
       this.screen = { name: 'welcome' };
+      return;
+    }
+    // A page reload (or a new tab) in a running match: go back to it inside the reconnect window.
+    const running = await this.refreshActiveMatch();
+    if (running !== null) {
+      this.pendingInvite = null; // joining another match is a 409 while this one runs
+      this.resumeMatch(running);
       return;
     }
     const code = this.pendingInvite;

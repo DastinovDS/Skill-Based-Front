@@ -125,6 +125,56 @@ describe('AppState', () => {
     expect(gone.app.notice).toBe('error.api.not_found');
   });
 
+  it('returns to the running match after a reload, before the invite and the menu (#189)', async () => {
+    const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
+    const joinInvite = vi.fn(() => Promise.resolve(invite('abc')));
+    const activeMatch = vi.fn(() => Promise.resolve({ match_id: '42', map_id: 'pereval' }));
+    const { app } = setup('?m=abc', storage, {
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me' }),
+      activeMatch,
+      joinInvite,
+    });
+    await app.start();
+    expect(activeMatch).toHaveBeenCalledWith('t');
+    expect(app.screen).toEqual({ name: 'match', matchId: '42', mapId: 'pereval' });
+    expect(joinInvite).not.toHaveBeenCalled();
+    expect(app.pendingInvite).toBeNull();
+  });
+
+  it('opens the menu when there is no running match or the question fails', async () => {
+    const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
+    const me = () => Promise.resolve({ player_id: 1, nick: 'Me' });
+    const none = setup('', storage, { me, activeMatch: () => Promise.resolve(null) });
+    await none.app.start();
+    expect(none.app.screen.name).toBe('menu');
+    expect(none.app.activeMatch).toBeNull();
+    const down = setup('', storage, {
+      me,
+      activeMatch: () => Promise.reject(new ApiError('network', 0)),
+    });
+    await down.app.start();
+    expect(down.app.screen.name).toBe('menu');
+  });
+
+  it('remembers the running match for the menu and resumes it', async () => {
+    const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
+    const running = { match_id: '7', map_id: 'line3' };
+    const activeMatch = vi
+      .fn<() => Promise<typeof running | null>>()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(running);
+    const { app } = setup('', storage, {
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me' }),
+      activeMatch,
+    });
+    await app.start();
+    expect(app.screen.name).toBe('menu');
+    await app.refreshActiveMatch();
+    expect(app.activeMatch).toEqual(running);
+    app.resumeMatch(running);
+    expect(app.screen).toEqual({ name: 'match', matchId: '7', mapId: 'line3' });
+  });
+
   it('creates an invite and a bot match, and moves on to the right screens', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
     const createBotMatch = vi.fn(() =>
