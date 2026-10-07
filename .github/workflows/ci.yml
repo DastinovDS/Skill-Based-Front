@@ -107,7 +107,7 @@ jobs:
       # pytest-xdist: the tests are independent (own tmp_path, in-memory servers, ManualClock),
       # a runner has 2 cores. Timing tests (mark `perf`: benchmarks, tick lag) and the long
       # full-match tests (mark `slow`, job `py-slow`) are not run here.
-      - run: uv run pytest -n auto -m "not perf and not slow"
+      - run: uv run pytest -n auto -m "not perf and not slow" --durations=25
         env:
           HYPOTHESIS_PROFILE: ci
       # Performance budgets (AGENTS.md, section 12): serial, alone on the runner. pytest-benchmark
@@ -143,7 +143,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
-      - run: uv run pytest -n auto -m slow
+      - run: uv run pytest -n auto -m slow --durations=25
         env:
           HYPOTHESIS_PROFILE: ci
 
