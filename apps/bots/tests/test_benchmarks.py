@@ -20,6 +20,8 @@ from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import PlayerView
 
+pytestmark = pytest.mark.perf  # serial only: timings are meaningless under xdist
+
 MS: Final = 1e-3
 REGRESSION: Final = 1.5
 REFERENCE_WORKLOAD_S: Final = 1.29e-3

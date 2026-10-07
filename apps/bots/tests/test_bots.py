@@ -146,6 +146,7 @@ def test_random_legal_full_match_on_mvp_maps(
     assert sum(result.rejected) * 10 <= sum(result.accepted)  # the commands are legal
 
 
+@pytest.mark.slow  # 100 full matches on test-short
 def test_one_bot_pair_over_100_seeds_gives_at_least_30_final_hashes(
     maps: dict[str, MapDef], short_rules: Ruleset
 ) -> None:

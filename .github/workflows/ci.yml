@@ -104,7 +104,15 @@ jobs:
       - run: uv run pyright
       - run: uv run lint-imports
       - run: uv run gow-maps validate maps/*.json
-      - run: uv run pytest
+      # pytest-xdist: the tests are independent (own tmp_path, in-memory servers, ManualClock),
+      # a runner has 2 cores. Timing tests (mark `perf`: benchmarks, tick lag) and the long
+      # full-match tests (mark `slow`, job `py-slow`) are not run here.
+      - run: uv run pytest -n auto -m "not perf and not slow"
+        env:
+          HYPOTHESIS_PROFILE: ci
+      # Performance budgets (AGENTS.md, section 12): serial, alone on the runner. pytest-benchmark
+      # switches itself off under xdist, so these never go through `-n`.
+      - run: uv run pytest -m perf
         env:
           HYPOTHESIS_PROFILE: ci
       # Golden replays (SIM-16): the current version re-simulates (also in pytest), and
@@ -117,6 +125,27 @@ jobs:
           name: replay-divergence
           path: replay-divergence
           if-no-files-found: ignore
+
+  # Long full-match tests (mark `slow`: win rates of the bots against random_legal over many
+  # seeds, seed variability, the tournament harness over all bots). Not a required check, so it
+  # does not delay the merge; it runs in parallel with `py` on every PR and push to develop and
+  # must be green before a release. Same skip rules as `py`.
+  py-slow:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.py == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run pytest -n auto -m slow
+        env:
+          HYPOTHESIS_PROFILE: ci
 
   # Required check, same skip rules as `py`.
   web:

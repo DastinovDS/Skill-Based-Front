@@ -21,12 +21,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+import pytest
+
 from gow_protocol import commands as wire
 from gow_protocol.messages import SnapshotMsg
 from gow_protocol.view import AtNodeLoc
 from gow_server.matches import MatchRunner, Outbox
 from gow_sim.maps import MapDef, load_map
 from gow_sim.ruleset import load_ruleset
+
+pytestmark = pytest.mark.perf  # real-time test: serial only, load from other tests skews the lag
 
 ROOT: Final = Path(__file__).parents[3]
 MATCHES: Final = 30

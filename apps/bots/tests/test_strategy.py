@@ -44,6 +44,7 @@ class _Recorder:
 # Strength against the baseline ------------------------------------------------------------------
 
 
+@pytest.mark.slow  # 12 cells x 6 full mvp-0 matches
 @pytest.mark.parametrize("name", STRATEGY)
 @pytest.mark.parametrize("map_name", MVP_MAPS)
 def test_strategy_bot_beats_random_legal_in_90_percent(
@@ -80,6 +81,7 @@ def test_params_stay_in_their_ranges_and_depend_on_the_seed(
     assert len(seen) > 15
 
 
+@pytest.mark.slow  # 10 matches of 250 s per bot
 @pytest.mark.parametrize("name", STRATEGY)
 def test_one_pair_over_seeds_gives_different_matches(
     maps: dict[str, MapDef], mvp_rules: Ruleset, name: str

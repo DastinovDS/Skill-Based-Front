@@ -43,6 +43,7 @@ KEY = bytes(range(32))
 SEEDS = 10  # per map, half of them on each side: 90% means at most one loss
 
 
+@pytest.mark.slow  # 12 cells x 10 full mvp-0 matches
 @pytest.mark.parametrize("name", CAMPAIGN)
 @pytest.mark.parametrize("map_name", MVP_MAPS)
 def test_wins_at_least_90_percent_against_random_legal(

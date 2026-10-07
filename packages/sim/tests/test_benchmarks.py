@@ -29,6 +29,8 @@ from gow_sim.state import AtNode, GameState, Group, Mode
 from gow_sim.systems.supply import supply
 from gow_sim.view import project
 
+pytestmark = pytest.mark.perf  # serial only: timings are meaningless under xdist
+
 ROOT: Final = Path(__file__).resolve().parents[3]
 MS: Final = 1e-3
 REGRESSION: Final = 1.5
