@@ -156,6 +156,10 @@ uv run gow-server --reload   # перезапуск при изменении к
 | `GOW_RULESETS_DIR`, `GOW_RULESETS_BUNDLED_DIR` | `rulesets/archive`, `rulesets/archive` | архив рулсетов по хэшу: сервер сам кладёт сюда свой рулсет при старте (каталог должен быть записываемым; в контейнере `/data/rulesets` на томе), архив из образа копируется сюда, если каталоги разные. `test-short` при `GOW_ENV=prod` сервер не принимает |
 | `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | база SQLite (WAL); путь относительно рабочего каталога |
 | `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `10`, `3600` | не больше N новых гостей с одного IP за окно в секундах |
+| `GOW_MATCH_CREATE_RATE_LIMIT`, `GOW_MATCH_CREATE_RATE_WINDOW_S` | `10`, `600` | MOD-01: не больше N созданных матчей (приглашения и матчи с ботом вместе) на игрока за окно |
+| `GOW_QUEUE_RATE_LIMIT`, `GOW_QUEUE_RATE_WINDOW_S` | `20`, `60` | MOD-01: не больше N входов в очередь подбора на игрока за окно (лимитер `app.state.limits.queue`, подключается в MM-01) |
+| `GOW_NICK_CHANGE_RATE_LIMIT`, `GOW_NICK_CHANGE_RATE_WINDOW_S` | `3`, `86400` | MOD-01: не больше N смен ника (`PUT /api/me/nick`) на игрока за окно |
+| `GOW_NICK_BLOCKLIST_FILE` | пусто | MOD-01: файл с дополнительными запрещёнными словами для ников (по слову в строке, `#` комментарий); в контейнере `/data/nick-blocklist.txt` |
 | `GOW_INVITE_TTL_S` | `1800` | срок жизни приглашения в приватный матч (секунды) |
 | `GOW_READY_TIMEOUT_S` | `120` | SRV-09: время на готовность после входа гостя в приглашение; потом приглашение снимается (неявка) |
 | `GOW_WS_ALLOWED_ORIGINS` | `[]` | JSON-список `Origin`, кроме собственного сайта, которым можно открывать WebSocket матча |

@@ -13,7 +13,9 @@ DEV_ONLY_RULESETS = frozenset({"test-short"})
 class Settings(BaseSettings):
     """All server configuration. Example: ``GOW_PORT=9000 uv run gow-server``."""
 
-    model_config = SettingsConfigDict(env_prefix="GOW_", extra="forbid", frozen=True)
+    model_config = SettingsConfigDict(
+        env_prefix="GOW_", extra="forbid", frozen=True, env_ignore_empty=True
+    )
 
     env: Literal["dev", "e2e", "prod"] = "dev"
     host: str = "127.0.0.1"
@@ -41,6 +43,20 @@ class Settings(BaseSettings):
     guest_rate_limit: int = 10
     guest_rate_window_s: int = 3600
     """At most ``guest_rate_limit`` guests per client IP within ``guest_rate_window_s`` seconds."""
+    match_create_rate_limit: int = 10
+    match_create_rate_window_s: int = 600
+    """At most ``match_create_rate_limit`` matches (private invites and bot matches together) per
+    player within ``match_create_rate_window_s`` seconds (MOD-01)."""
+    queue_rate_limit: int = 20
+    queue_rate_window_s: int = 60
+    """At most ``queue_rate_limit`` queue entries per player within ``queue_rate_window_s``
+    seconds; used by the matchmaking queue (MM-01, ``app.state.limits.queue``)."""
+    nick_change_rate_limit: int = 3
+    nick_change_rate_window_s: int = 86400
+    """At most ``nick_change_rate_limit`` nick changes per player within the window (MOD-01)."""
+    nick_blocklist_file: Path | None = None
+    """Extra forbidden words for nicks, one per line (``#`` comments), added to the built-in list
+    (``gow_server.nicks``). In a container put it on the volume: ``/data/nick-blocklist.txt``."""
     ws_allowed_origins: tuple[str, ...] = ()
     """Origins allowed to open the match WebSocket besides the site's own one (the ``Host`` it was
     reached at, i.e. the page behind Caddy). JSON in the environment: ``'["http://localhost:5173"]'``."""

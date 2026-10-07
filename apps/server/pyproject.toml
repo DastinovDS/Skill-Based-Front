@@ -17,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 gow-server = "gow_server.cli:main"
+gow-admin = "gow_server.admin:main"
 
 [tool.uv.sources]
 gow-bots = { workspace = true }

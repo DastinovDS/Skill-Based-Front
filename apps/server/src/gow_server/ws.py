@@ -101,10 +101,15 @@ def origin_allowed(origin: str | None, host: str | None, allowed: tuple[str, ...
 
 
 def account_of(sessions: sessionmaker[Session], token: str) -> int | None:
-    """Account id of a guest token (synchronous: run it in a thread)."""
+    """Account id of a guest token; ``None`` for an unknown token or a blocked account (MOD-01).
+
+    Synchronous: run it in a thread.
+    """
     with sessions() as session:
         return session.execute(
-            select(Player.id).where(Player.token_hash == hash_token(token))
+            select(Player.id).where(
+                Player.token_hash == hash_token(token), Player.blocked_at.is_(None)
+            )
         ).scalar_one_or_none()
 
 

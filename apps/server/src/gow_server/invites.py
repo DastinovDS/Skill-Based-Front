@@ -38,6 +38,7 @@ from typing import Annotated, Final, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict
 
+from gow_server.abuse import Limits, enforce
 from gow_server.clock import Clock
 from gow_server.identity import CurrentPlayer
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchRecord
@@ -256,6 +257,8 @@ async def create_match(
             headers={"Retry-After": str(math.ceil(retry_after))},
         )
     catalog: MapCatalog = request.app.state.maps
+    limits: Limits = request.app.state.limits
+    enforce(limits.match_create, str(player.id), "too many matches created")
     if book.lifecycle.active_of(player.id) is not None:
         raise _busy(player.id, player.id)
     if body.map_id is None:

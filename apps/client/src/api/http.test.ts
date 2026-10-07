@@ -38,6 +38,7 @@ describe('Api', () => {
 
   it.each([
     [401, 'unauthorized'],
+    [403, 'blocked'],
     [404, 'not_found'],
     [409, 'conflict'],
     [422, 'invalid'],

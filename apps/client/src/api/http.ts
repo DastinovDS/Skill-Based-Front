@@ -17,13 +17,15 @@ export const BOT_LEVELS: readonly BotLevel[] = ['easy', 'normal', 'hard', 'exper
 export type ApiErrorCode =
   /** 401: the token is unknown (the guest was removed): the saved identity is useless. */
   | 'unauthorized'
+  /** 403: the account is blocked by the operator (MOD-01). */
+  | 'blocked'
   /** 404: no such invite, expired, or not yours. */
   | 'not_found'
   /** 409: nick taken, own invite, invite full, waiting for the second player, bot match running. */
   | 'conflict'
   /** 422: nick or map rejected. */
   | 'invalid'
-  /** 429: too many guests from this address, or too many matches created. */
+  /** 429: too many guests from this address, matches created or nick changes (MOD-01). */
   | 'rate_limited'
   /** 503: no maps or the server is restarting. */
   | 'unavailable'
@@ -43,6 +45,7 @@ export class ApiError extends Error {
 
 const STATUS_CODES: Readonly<Record<number, ApiErrorCode>> = {
   401: 'unauthorized',
+  403: 'blocked',
   404: 'not_found',
   409: 'conflict',
   422: 'invalid',

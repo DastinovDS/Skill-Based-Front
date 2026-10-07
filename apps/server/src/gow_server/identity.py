@@ -9,10 +9,8 @@ The endpoints are ``def``: they use the synchronous database (AGENTS.md, section
 """
 
 import hashlib
-import math
 import secrets
-import unicodedata
-from typing import Annotated, Final
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -20,37 +18,16 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from gow_server.abuse import Limits, enforce
 from gow_server.db import DbSession
 from gow_server.models import Player
+from gow_server.nicks import NickPolicy, skeleton, validate_nick
 from gow_server.ratelimit import SlidingWindowLimiter
-
-NICK_MIN: Final = 3
-NICK_MAX: Final = 16
-NICK_PUNCTUATION: Final = frozenset("_-")
-# Hangul fillers are letters (category Lo) that render as blank space: invisible nicks.
-NICK_INVISIBLE_LETTERS: Final = frozenset("\u115f\u1160\u3164\uffa0")
-
-
-def validate_nick(raw: str) -> str:
-    """Normalize a nick to NFC and check it; raises ValueError with the reason.
-
-    Allowed: 3..16 characters, each a letter (any script), a decimal digit, ``_`` or ``-``.
-    No spaces, symbols, emoji, control characters or blank-looking letters.
-    """
-    nick = unicodedata.normalize("NFC", raw)
-    if not NICK_MIN <= len(nick) <= NICK_MAX:
-        raise ValueError(f"nick must be {NICK_MIN}..{NICK_MAX} characters long")
-    for char in nick:
-        category = unicodedata.category(char)
-        letter = category.startswith("L") and char not in NICK_INVISIBLE_LETTERS
-        if not (letter or category == "Nd" or char in NICK_PUNCTUATION):
-            raise ValueError("nick may contain only letters, digits, '_' and '-'")
-    return nick
 
 
 def nick_key(nick: str) -> str:
-    """Key for case-insensitive uniqueness; works for all scripts, unlike SQLite NOCASE."""
-    return nick.casefold()
+    """Key of nick uniqueness: case, accents and look-alike letters do not make a new nick."""
+    return skeleton(nick)
 
 
 def hash_token(token: str) -> bytes:
@@ -79,13 +56,24 @@ class Me(BaseModel):
     nick: str
 
 
+class NickChange(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    nick: str
+
+    @field_validator("nick")
+    @classmethod
+    def _check_nick(cls, value: str) -> str:
+        return validate_nick(value)
+
+
 bearer = HTTPBearer(description="Guest token from POST /api/guest")
 
 
 def current_player(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)], session: DbSession
 ) -> Player:
-    """The authenticated player; 401 for a missing, malformed or unknown token."""
+    """The authenticated player; 401 for a missing, malformed or unknown token, 403 if blocked."""
     player = session.execute(
         select(Player).where(Player.token_hash == hash_token(credentials.credentials))
     ).scalar_one_or_none()
@@ -95,6 +83,8 @@ def current_player(
             detail="invalid token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if player.blocked_at is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="account is blocked")
     return player
 
 
@@ -108,6 +98,14 @@ def _guest_limiter(request: Request) -> SlidingWindowLimiter:
     return limiter
 
 
+def _nick_policy(request: Request) -> NickPolicy:
+    policy: NickPolicy = request.app.state.nick_policy
+    return policy
+
+
+Policy = Annotated[NickPolicy, Depends(_nick_policy)]
+
+
 @router.post("/guest", status_code=status.HTTP_201_CREATED)
 def create_guest(
     body: GuestCreate,
@@ -115,16 +113,16 @@ def create_guest(
     response: Response,
     session: DbSession,
     limiter: Annotated[SlidingWindowLimiter, Depends(_guest_limiter)],
+    policy: Policy,
 ) -> GuestCreated:
     # request.client is the real client address: uvicorn resolves X-Forwarded-For only from
     # the trusted proxies in GOW_FORWARDED_ALLOW_IPS.
-    retry_after = limiter.hit(request.client.host if request.client else "unknown")
-    if retry_after is not None:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="too many guests from this address",
-            headers={"Retry-After": str(math.ceil(retry_after))},
-        )
+    enforce(
+        limiter,
+        request.client.host if request.client else "unknown",
+        "too many guests from this address",
+    )
+    _check_policy(policy, body.nick)
     key = nick_key(body.nick)
     if session.execute(select(Player.id).where(Player.nick_key == key)).first() is not None:
         raise _nick_taken()
@@ -143,6 +141,37 @@ def create_guest(
 @router.get("/me")
 def me(player: CurrentPlayer) -> Me:
     return Me(player_id=player.id, nick=player.nick)
+
+
+@router.put("/me/nick")
+def change_nick(
+    body: NickChange, request: Request, player: CurrentPlayer, session: DbSession, policy: Policy
+) -> Me:
+    """Change the nick (rate limited per player). The same rules as for a new guest."""
+    limits: Limits = request.app.state.limits
+    enforce(limits.nick_change, str(player.id), "too many nick changes")
+    _check_policy(policy, body.nick)
+    key = nick_key(body.nick)
+    taken = session.execute(
+        select(Player.id).where(Player.nick_key == key, Player.id != player.id)
+    ).first()
+    if taken is not None:
+        raise _nick_taken()
+    player.nick = body.nick
+    player.nick_key = key
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise _nick_taken() from None
+    return Me(player_id=player.id, nick=player.nick)
+
+
+def _check_policy(policy: NickPolicy, nick: str) -> None:
+    if not policy.is_allowed(nick):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="this nick is not allowed"
+        )
 
 
 def _nick_taken() -> HTTPException:

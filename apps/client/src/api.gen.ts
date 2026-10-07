@@ -109,6 +109,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/me/nick': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Change Nick
+     * @description Change the nick (rate limited per player). The same rules as for a new guest.
+     */
+    put: operations['change_nick_api_me_nick_put'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/replays/{match_id}': {
     parameters: {
       query?: never;
@@ -365,6 +385,11 @@ export interface components {
       /** Nick */
       nick: string;
     };
+    /** NickChange */
+    NickChange: {
+      /** Nick */
+      nick: string;
+    };
     /** ValidationError */
     ValidationError: {
       /** Location */
@@ -538,6 +563,39 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['Me'];
+        };
+      };
+    };
+  };
+  change_nick_api_me_nick_put: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['NickChange'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Me'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
         };
       };
     };

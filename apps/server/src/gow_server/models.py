@@ -34,10 +34,14 @@ class Player(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     nick: Mapped[str] = mapped_column(String(16))
     nick_key: Mapped[str] = mapped_column(String(64), unique=True)
-    """``nick.casefold()``: case-insensitive uniqueness (SQLite NOCASE covers only ASCII)."""
+    """``gow_server.nicks.skeleton(nick)``: uniqueness that ignores case, accents and look-alike
+    letters (SQLite NOCASE covers only ASCII)."""
     token_hash: Mapped[bytes] = mapped_column(LargeBinary(32), unique=True)
     """SHA-256 of the token; the token itself is never stored (AGENTS.md, section 5.4)."""
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    blocked_at: Mapped[datetime | None]
+    """Set by ``gow-admin block`` (MOD-01): the account no longer authenticates (HTTP 403; on the
+    match WebSocket it is an unknown token)."""
 
 
 class Rating(Base):
