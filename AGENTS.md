@@ -45,6 +45,7 @@ packages/protocol/   gow_protocol  — Pydantic-модели сообщений 
 apps/server/         gow_server    — FastAPI: HTTP (лобби, рейтинг) + WebSocket (матчи)
 apps/bots/           gow_bots      — боты (gow_bots.bots) и турнирный харнесс
 apps/client/                       — TypeScript + Vite + Svelte 5 + PixiJS 8
+e2e/                               — Playwright E2E против настоящего стека (свой пакет, compose.e2e.yaml)
 tools/maps/          gow_maps      — валидатор, скрипт отзеркаливания, превью и фоны карт (офлайн)
 maps/                              — карты MVP (JSON, превью, фоны)
 rulesets/                          — наборы правил (*.toml) и архив сыгранных по хэшу
@@ -85,6 +86,8 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 | `pnpm -C apps/client dev` | dev-сервер клиента | INF-03 |
 | `pnpm -C apps/client lint && pnpm -C apps/client check && pnpm -C apps/client test && pnpm -C apps/client build` | проверки клиента | INF-03 |
 | `pnpm -C apps/client check:i18n` | строки интерфейса только в словарях, одинаковые ключи ru и en (входит в `test`) | CLI-11 |
+| `pnpm -C e2e install --frozen-lockfile && pnpm -C e2e lint && pnpm -C e2e check` | установить и проверить E2E-пакет (prettier, tsc) | QA-02 |
+| `docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d --wait && pnpm -C e2e test` | E2E: два браузера играют матч по инвайту на `test-short` против настоящего стека (`E2E_BASE_URL`, если порт не 80; README, «E2E») | QA-02 |
 | `pnpm -C apps/client build && pnpm -C apps/client preview` | прод-сборка локально под целевым CSP (`apps/client/csp.ts`) | INF-03 |
 | `uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol` | перегенерация схемы и TS-типов | PRO-02 |
 | `uv run python scripts/export_openapi.py && pnpm -C apps/client gen:api` | перегенерация OpenAPI сервера (`apps/server/openapi.json`) и TS-типов HTTP API (`api.gen.ts`) | CLI-09 |
