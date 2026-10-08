@@ -101,6 +101,33 @@ def test_messages_built_in_python_roundtrip() -> None:
     assert decode_client(encode(msg)) == msg
 
 
+def test_welcome_has_two_nicks() -> None:
+    raw = json.loads((FIXTURES_DIR / "server" / "welcome.json").read_text())
+    assert decode_server(json.dumps(raw)).model_dump(mode="json")["nicks"] == ["Danya", "Guest"]
+    for bad in (["Danya"], ["Danya", "Guest", "Third"], ["", "Guest"], ["x" * 17, "Guest"]):
+        with pytest.raises(ValidationError):
+            decode_server(json.dumps({**raw, "nicks": bad}))
+
+
+def test_overcrowding_countdown_fields_are_validated() -> None:
+    raw = json.loads((FIXTURES_DIR / "server" / "snapshot.json").read_text())
+    nodes = raw["view"]["nodes"]
+    own = next(n for n in nodes if n["detail"] == "exact")
+    other = next(n for n in nodes if n["detail"] != "exact")
+
+    def decode(node: dict[str, object], **fields: object) -> None:
+        patched = [{**node, **fields} if n is node else n for n in nodes]
+        decode_server(json.dumps({**raw, "view": {**raw["view"], "nodes": patched}}))
+
+    decode(own, attrition_in=12)
+    decode(own, grace_left=30)
+    for bad in ({"attrition_in": 0}, {"attrition_in": 3, "grace_left": 4}):
+        with pytest.raises(ValidationError):
+            decode(own, **bad)
+    with pytest.raises(ValidationError):  # only a node seen exactly has a countdown
+        decode(other, attrition_in=5)
+
+
 def test_protocol_version_is_a_positive_integer() -> None:
     assert type(PROTOCOL_VERSION) is int
     assert PROTOCOL_VERSION >= 1

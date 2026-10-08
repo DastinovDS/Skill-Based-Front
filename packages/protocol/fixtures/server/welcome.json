@@ -44,5 +44,6 @@
     }
   },
   "map_id": "diamond",
-  "last_seq": 0
+  "last_seq": 0,
+  "nicks": ["Danya", "Guest"]
 }

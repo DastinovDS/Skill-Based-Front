@@ -52,7 +52,7 @@ from gow_sim.state import (
     Sighting,
 )
 from gow_sim.systems.build import UpgradeGain, done_tick, upgrade_gain
-from gow_sim.systems.capacity import capacity_stale, known_capacities
+from gow_sim.systems.capacity import capacity_stale, known_capacities, overflow_countdown
 from gow_sim.systems.vision import compute_vision, current_sightings, known_widths
 
 __all__ = [
@@ -131,6 +131,13 @@ class NodeView:
     """This tick's sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one or ``None``."""
     build: BuildView | None
     """The city's road build: own always, an enemy one only while its edge is not in fog."""
+    attrition_in: int | None
+    """Own node only: ticks until the next unit dies of overcrowding (the garrison exceeds the
+    capacity and the grace after a capture is over); ``None`` otherwise, always for the enemy's
+    and neutral nodes (AGENTS.md, section 4.4)."""
+    grace_left: int | None
+    """Own node only: ticks the grace after a capture still lasts while the garrison exceeds the
+    capacity; ``None`` otherwise."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,6 +302,11 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     nodes: list[NodeView] = []
     for n, level in enumerate(levels.nodes):
         node = state.nodes[n]
+        attrition_in, grace_left = (
+            overflow_countdown(state, rules, n, capacities[n])
+            if node.owner == player
+            else (None, None)
+        )
         nodes.append(
             NodeView(
                 id=n,
@@ -305,6 +317,8 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 warehouse=node.warehouse if level is Detail.EXACT else None,
                 seen=now_nodes[n] if level is not Detail.FOG else memory.nodes.get(n),
                 build=_build_view(state, rules, player, n, levels.edges),
+                attrition_in=attrition_in,
+                grace_left=grace_left,
             )
         )
 
@@ -421,6 +435,8 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "build": None
                 if n.build is None
                 else {"edge": n.build.edge, "done_tick": n.build.done_tick},
+                "attrition_in": n.attrition_in,
+                "grace_left": n.grace_left,
             }
             for n in view.nodes
         ],

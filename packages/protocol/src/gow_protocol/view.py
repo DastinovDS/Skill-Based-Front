@@ -35,6 +35,7 @@ from gow_protocol.base import (
     NonNegInt,
     OpaqueId,
     PlayerId,
+    PosInt,
     Progress,
     Tick,
     Width,
@@ -100,12 +101,24 @@ class NodeView(WireModel):
     """Current sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one, or ``None``."""
     build: NodeBuild | None
     """The city's road build (DEC-16): own always, an enemy one only while its edge is unfogged."""
+    attrition_in: PosInt | None
+    """Own node only: ticks until the next unit dies of overcrowding (the garrison exceeds the
+    capacity and the grace after a capture is over). ``None`` for every other node."""
+    grace_left: PosInt | None
+    """Own node only: ticks the grace after a capture still lasts while the garrison exceeds the
+    capacity. ``None`` for every other node."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
         if (self.detail is Detail.EXACT) != (self.warehouse is not None):
             raise ValueError("warehouse is given exactly when detail is exact")
         _check_seen(self.detail, self.seen)
+        if self.attrition_in is not None and self.grace_left is not None:
+            raise ValueError("attrition_in and grace_left exclude each other")
+        if (self.attrition_in is not None or self.grace_left is not None) and (
+            self.detail is not Detail.EXACT
+        ):
+            raise ValueError("an overcrowding countdown only for a node seen exactly")
         return self
 
 

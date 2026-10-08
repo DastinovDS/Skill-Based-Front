@@ -31,7 +31,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 7
+PROTOCOL_VERSION: Final = 8
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -102,6 +102,9 @@ type ClientMsg = Annotated[
 # Server -> client ----------------------------------------------------------------------------
 
 
+Nick = Annotated[str, StringConstraints(min_length=1, max_length=16)]
+
+
 class WelcomeMsg(WireModel):
     """Answer to a valid ``hello``, also after a reconnect; a full ``snapshot`` follows."""
 
@@ -113,6 +116,9 @@ class WelcomeMsg(WireModel):
     last_seq: NonNegInt
     """Highest ``seq`` of this player the server has accepted; ``0`` if none. After a reconnect
     the client resends only its commands with a greater ``seq``."""
+    nicks: tuple[Nick, Nick]
+    """Nicks of the two players by player id (ui-style U3); the bot of a bot match is ``Bot``.
+    Not secret (visible in the waiting room and the queue), so not part of the ``PlayerView``."""
 
 
 class SnapshotMsg(WireModel):

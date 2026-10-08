@@ -286,6 +286,8 @@ def _features(view: View) -> set[str]:
         ),
         "fog_memory": any(p.detail is Detail.FOG and p.seen is not None for p in places),
         "capacity_stale": any(n.capacity_stale for n in view.nodes),
+        "attrition_in": any(n.attrition_in is not None for n in view.nodes),
+        "grace_left": any(n.grace_left is not None for n in view.nodes),
     }
     return {name for name, present in found.items() if present}
 
@@ -321,6 +323,27 @@ def test_snapshot_frame_of_rare_view_parts() -> None:
     checker = _FrameChecker()
     checker.record(match, ())
     assert checker.features >= {"intent_no_target", "enemy_exact"}
+
+
+def test_snapshot_frame_of_an_overcrowded_own_city() -> None:
+    """The countdown fields (ui-style, section 12): the direct frame equals the validated one."""
+    match = _started()
+    own = match.view(0).groups[0]
+    assert isinstance(own.location, sv.AtNode)
+    node = own.location.node
+    state = match.state
+    gid = state.new_id()
+    state.groups[gid] = Group(gid, 0, 500, 0, Mode.ATTACK, AtNode(node))
+    state.nodes[node].over_ticks = 3
+    checker = _FrameChecker()
+    checker.record(match, ())
+    assert checker.features >= {"attrition_in"}
+    state.nodes[node].captured_tick = state.tick
+    checker.record(match, ())
+    assert checker.features >= {"attrition_in", "grace_left"}
+    wire = snapshot_msg(match.view(0)).view.nodes[node]
+    assert (wire.attrition_in, wire.grace_left) == (None, match.rules.capacity.grace_ticks)
+    assert snapshot_msg(match.view(1)).view.nodes[node].grace_left is None  # the enemy sees none
 
 
 class _Keeper:

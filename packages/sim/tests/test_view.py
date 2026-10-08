@@ -189,6 +189,71 @@ def test_dec17_cut_off_enemy_city_has_exact_base_capacity(rules: Ruleset) -> Non
     assert (view.nodes[4].capacity, view.nodes[4].capacity_stale) == (30, False)
 
 
+# Overcrowding countdown (ui-style, section 12): own nodes only ---------------------------------
+# line6: node 0 (capital of player 0) has capacity 41 (40 + 1.0 of its road); attrition_ticks 30,
+# grace_ticks 50.
+
+
+def test_overcrowding_countdown_of_an_own_node(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    _add(state, 0, AtNode(0), units=45, charged=0)
+    state.nodes[0].over_ticks = 12
+    state.tick = 100
+    node = _view(state, rules).nodes[0]
+    assert (node.attrition_in, node.grace_left) == (30 - 12, None)
+
+
+def test_overcrowding_countdown_restarts_after_a_death(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    _add(state, 0, AtNode(0), units=45, charged=0)
+    node = _view(state, rules).nodes[0]  # over, nothing counted yet (the system has not run)
+    assert (node.attrition_in, node.grace_left) == (30, None)
+
+
+def test_overcrowding_grace_after_a_capture_counts_down(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    _add(state, 0, AtNode(0), units=45, charged=0)
+    state.nodes[0].captured_tick = 90
+    state.tick = 100
+    node = _view(state, rules).nodes[0]
+    assert (node.attrition_in, node.grace_left) == (None, 50 - 10)
+    state.tick = 140  # the last tick of the grace is 139: here it is over
+    assert (_view(state, rules).nodes[0].attrition_in, _view(state, rules).nodes[0].grace_left) == (
+        30,
+        None,
+    )
+
+
+def test_no_countdown_while_the_garrison_fits(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    _add(state, 0, AtNode(0), units=41, charged=0)
+    state.nodes[0].over_ticks = 7  # stale count: the system resets it on the next tick
+    node = _view(state, rules).nodes[0]
+    assert (node.attrition_in, node.grace_left) == (None, None)
+
+
+def test_fog_overcrowding_countdown_is_never_shown_for_foreign_nodes(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    _add(state, 0, AtNode(0), units=45, charged=0)  # the countdown of player 0's capital
+    _add(state, 1, AtNode(0), units=1, charged=0)  # the enemy stands there: exact detail
+    _add(state, 0, AtNode(2), units=31, charged=0)  # a neutral node over its base capacity (30)
+    state.nodes[0].over_ticks = 5
+    state.nodes[2].over_ticks = 5
+    state.nodes[0].captured_tick = None
+    mine = _view(state, rules, 0)
+    assert mine.nodes[0].attrition_in is not None
+    enemy = _view(state, rules, 1)
+    assert enemy.nodes[0].detail is E
+    for view in (mine, enemy):
+        for n in view.nodes:
+            if n.owner != view.player:
+                assert (n.attrition_in, n.grace_left) == (None, None)
+    # The enemy's own garrison counts for the enemy: node 5 is player 1's capital.
+    _add(state, 1, AtNode(5), units=45, charged=0)
+    assert _view(state, rules, 1).nodes[5].attrition_in is not None
+    assert _view(state, rules, 0).nodes[5].attrition_in is None
+
+
 def test_dec04_vp_of_both_players_are_public(rules: Ruleset) -> None:
     state = _state("line6", rules)
     state.players[0].vp = 7

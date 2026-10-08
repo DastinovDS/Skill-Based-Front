@@ -28,7 +28,9 @@
         "build": {
           "edge": 0,
           "done_tick": 550
-        }
+        },
+        "attrition_in": null,
+        "grace_left": null
       },
       {
         "id": 1,
@@ -44,7 +46,9 @@
           "enemy_units": 0,
           "enemy_charged": 0
         },
-        "build": null
+        "build": null,
+        "attrition_in": null,
+        "grace_left": null
       },
       {
         "id": 2,
@@ -62,7 +66,9 @@
           "enemy_units": null,
           "enemy_charged": null
         },
-        "build": null
+        "build": null,
+        "attrition_in": null,
+        "grace_left": null
       },
       {
         "id": 3,
@@ -78,7 +84,9 @@
           "enemy_units": 0,
           "enemy_charged": 0
         },
-        "build": null
+        "build": null,
+        "attrition_in": null,
+        "grace_left": null
       },
       {
         "id": 4,
@@ -96,7 +104,9 @@
           "enemy_units": null,
           "enemy_charged": null
         },
-        "build": null
+        "build": null,
+        "attrition_in": null,
+        "grace_left": null
       },
       {
         "id": 5,
@@ -114,7 +124,9 @@
           "enemy_units": null,
           "enemy_charged": null
         },
-        "build": null
+        "build": null,
+        "attrition_in": null,
+        "grace_left": null
       },
       {
         "id": 6,
@@ -132,7 +144,9 @@
           "enemy_units": 3,
           "enemy_charged": 1
         },
-        "build": null
+        "build": null,
+        "attrition_in": null,
+        "grace_left": null
       },
       {
         "id": 7,
@@ -151,7 +165,9 @@
           "enemy_units": null,
           "enemy_charged": null
         },
-        "build": null
+        "build": null,
+        "attrition_in": null,
+        "grace_left": null
       }
     ],
     "edges": [
