@@ -387,6 +387,11 @@ export class OrderController implements MapInteraction {
   }
 
   #onResult(result: CommandResult): void {
+    this.ui.emit(
+      result.kind === 'rejected'
+        ? { kind: 'rejected', code: result.code, cmd: result.cmd }
+        : { kind: result.kind, cmd: result.cmd },
+    );
     // A move shows itself on the map (ghost, then the order line): no message for its success.
     if (result.kind === 'accepted' && result.cmd.type === 'move') return;
     this.#noticeId += 1;

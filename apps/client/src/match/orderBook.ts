@@ -1,10 +1,13 @@
 import type { AckMsg, Command } from '../protocol.gen.ts';
 import type { GhostArrow } from '../render/interaction.ts';
+import { GHOST_REJECT_MS } from '../render/style.ts';
 
 /** An order the player sent that no snapshot shows yet. */
 export interface GhostOrder extends GhostArrow {
   readonly seq: number;
   readonly group: string;
+  readonly status: NonNullable<GhostArrow['status']>;
+  readonly rejectedAt: number | null;
 }
 
 export type CommandResult =
@@ -25,12 +28,15 @@ interface Pending {
 }
 
 /**
- * Commands sent and not answered (CLI-06, #62; AGENTS.md 7.3): a move shows at once as a ghost
- * arrow and stays until the `ack` rejects it (rolled back) or a rendered snapshot reaches the tick
- * it was applied at (the order line of the snapshot takes over). Knows no rules: the path is the
- * server's, from `ack`.
+ * Commands sent and not answered (CLI-06, #62; AGENTS.md 7.3): a move shows at once as a dashed
+ * ghost arrow. The `ack` accepting it makes the ghost solid, and it stays until a rendered
+ * snapshot reaches the tick it was applied at (the order line of the snapshot takes over). The
+ * `ack` rejecting it leaves the ghost to shake and fade for `GHOST_REJECT_MS` (U6), then it is
+ * gone. Knows no rules: the path is the server's, from `ack`.
  */
 export class OrderBook {
+  readonly #now: () => number;
+
   /** Called for every answered command; the match UI turns it into a message. */
   onResult: ((result: CommandResult) => void) | null = null;
 
@@ -39,8 +45,19 @@ export class OrderBook {
   readonly #accepted = new Map<number, { ghost: GhostOrder; tick: number }>();
   #ghosts: readonly GhostOrder[] = [];
 
+  /** `now`: milliseconds, for the fade of a rejected ghost (a test passes its own clock). */
+  constructor(now: () => number = () => performance.now()) {
+    this.#now = now;
+  }
+
   /** Ghost arrows, oldest first; the same array until they change. */
   ghosts(): readonly GhostOrder[] {
+    const now = this.#now();
+    if (this.#ghosts.some((g) => g.rejectedAt !== null && now - g.rejectedAt >= GHOST_REJECT_MS)) {
+      this.#setGhosts(
+        this.#ghosts.filter((g) => g.rejectedAt === null || now - g.rejectedAt < GHOST_REJECT_MS),
+      );
+    }
     return this.#ghosts;
   }
 
@@ -58,6 +75,8 @@ export class OrderBook {
         dest: cmd.dest,
         planned: cmd.planned,
         path: null,
+        status: 'pending',
+        rejectedAt: null,
       };
     }
     this.#pending.set(seq, { cmd, ghost });
@@ -70,13 +89,13 @@ export class OrderBook {
     if (pending === undefined) return;
     this.#pending.delete(ack.seq);
     if (ack.reject_code !== null) {
-      this.#drop(pending.ghost);
+      this.#reject(pending.ghost);
       this.onResult?.({ kind: 'rejected', seq: ack.seq, cmd: pending.cmd, code: ack.reject_code });
       return;
     }
     const ghost = pending.ghost;
     if (ghost !== null && this.#ghosts.includes(ghost)) {
-      const confirmed: GhostOrder = { ...ghost, path: ack.path };
+      const confirmed: GhostOrder = { ...ghost, path: ack.path, status: 'accepted' };
       this.#accepted.set(ack.seq, { ghost: confirmed, tick: ack.applied_tick });
       this.#setGhosts(this.#ghosts.map((g) => (g === ghost ? confirmed : g)));
     }
@@ -117,6 +136,13 @@ export class OrderBook {
       this.#accepted.delete(g.seq);
       return false;
     });
+  }
+
+  /** The ghost stays on the map, marked rejected: the view shakes it and lets it fade. */
+  #reject(ghost: GhostOrder | null): void {
+    if (ghost === null || !this.#ghosts.includes(ghost)) return;
+    const rejected: GhostOrder = { ...ghost, status: 'rejected', rejectedAt: this.#now() };
+    this.#setGhosts(this.#ghosts.map((g) => (g === ghost ? rejected : g)));
   }
 
   #drop(ghost: GhostOrder | null): void {

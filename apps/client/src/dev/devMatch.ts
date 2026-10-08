@@ -15,7 +15,7 @@ export function createDevMatch(map: MapFile, rules: RulesetPublic, hud: HudState
   const session = new MatchSession({
     matchId: 'dev',
     token: 'dev',
-    context: { hud, tickHz: rules.tick_hz },
+    context: { hud, tickHz: rules.tick_hz, orders: rules.orders },
     connection: { createSocket: server.createSocket },
   });
   return {

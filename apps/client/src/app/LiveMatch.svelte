@@ -80,7 +80,11 @@
         me = welcome.player;
         rules = welcome.ruleset_public;
         hud = state;
-        return { hud: state, tickHz: welcome.ruleset_public.tick_hz };
+        return {
+          hud: state,
+          tickHz: welcome.ruleset_public.tick_hz,
+          orders: welcome.ruleset_public.orders,
+        };
       },
       onStatus: (next) => {
         status = next;

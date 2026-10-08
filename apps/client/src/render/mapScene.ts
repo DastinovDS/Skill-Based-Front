@@ -169,6 +169,8 @@ export class MapScene {
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.entities.setTickHz(tickHz);
+    const delays = this.source.orderDelays ?? null;
+    this.intents.setDelays(delays);
     const selection = this.interaction?.overlay().selection ?? null;
     this.entities.setEmphasis(selection?.kind === 'group' ? selection.id : null, this.hoveredGroup);
     this.entities.update(frame);
@@ -224,6 +226,7 @@ export class MapScene {
     this.entities.setLabelResolution(resolution);
     this.effects.setLabelResolution(resolution);
     this.entities.setCameraScale(camera.scale);
+    this.intents.setCameraScale(camera.scale);
     this.fog.setCameraScale(camera.scale);
     this.fog.setLabelResolution(resolution);
   };

@@ -148,12 +148,29 @@ describe('OrderController', () => {
     expect(controller.overlay()).not.toBe(first);
   });
 
+  it('reports every answer to the feedback listeners, an accepted move too', () => {
+    const { controller, book } = setup();
+    const seen: string[] = [];
+    const stop = controller.ui.onFeedback((f) => seen.push(f.kind));
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    book.onAck(ack(1, null));
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    book.onAck(ack(2, 'NOT_ENOUGH_CP'));
+    expect(seen).toEqual(['accepted', 'rejected']);
+    stop();
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    book.onAck(ack(3, null));
+    expect(seen).toHaveLength(2);
+  });
+
   it('shows a rejection as a notice that fades, and rolls the ghost back', () => {
     const { controller, book } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
     controller.click({ kind: 'node', id: enemy.id }, false);
     book.onAck(ack(1, 'NOT_ENOUGH_CP'));
-    expect(book.ghosts()).toEqual([]);
+    // The ghost stays to shake and fade (U6).
+    expect(book.ghosts().map((g) => g.status)).toEqual(['rejected']);
     expect(controller.ui.current.notice).toMatchObject({ kind: 'rejected', code: 'NOT_ENOUGH_CP' });
     vi.advanceTimersByTime(NOTICE_MS);
     expect(controller.ui.current.notice).toBeNull();

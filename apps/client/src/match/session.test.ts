@@ -129,7 +129,7 @@ describe('MatchSession', () => {
     expect(session.orders.ghosts()).toHaveLength(1);
     socket.reply({ type: 'ack', seq, applied_tick: 22, path: [0, 1], reject_code: 'NO_PATH' });
     expect(results).toEqual(['rejected']);
-    expect(session.orders.ghosts()).toEqual([]);
+    expect(session.orders.ghosts().map((g) => g.status)).toEqual(['rejected']);
   });
 
   it('forgets frames and the HUD picture when the connection drops, and on resync', () => {

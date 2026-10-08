@@ -5,7 +5,15 @@ import type { RenderFrame } from '../net/interpolate.ts';
  * What the renderer draws, asked every frame. The match controller (CLI-06) serves it from a
  * `SnapshotBuffer` and the event stream; the dev screen serves fixtures.
  */
+/** Delays of planned orders and of "Defense" in ticks (`ruleset_public.orders`). */
+export interface OrderDelays {
+  readonly planned: number;
+  readonly defense: number;
+}
+
 export interface RenderSource {
+  /** Delays for the countdown on order arrows; without them the arrows show no countdown. */
+  readonly orderDelays?: OrderDelays;
   /** Ticks per second (`ruleset_public.tick_hz`), for the age of fog memories. Default 10. */
   readonly tickHz?: number;
   /** The frame to draw now; `null` until the first snapshot. */

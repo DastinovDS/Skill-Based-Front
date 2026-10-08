@@ -4,6 +4,7 @@
  * its map, frozen at the tick of the snapshot. The Playwright test (`visual/`) takes its reference
  * screenshots from them. The live `demo` scene is the dev server's match (CLI-06, #62).
  */
+import { DEV_RULES } from '../hud/devFeed.ts';
 import { interpolateFrame, type RenderFrame } from '../net/interpolate.ts';
 import type { EventMsg, SnapshotMsg } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
@@ -69,5 +70,12 @@ export const DEMO_SCENE = 'demo';
 /** A frozen scene: the snapshot at its own tick, no animation, so screenshots are stable. */
 export function frozenSource(scene: FixtureScene): RenderSource {
   const frame: RenderFrame = interpolateFrame(scene.snapshot, null, scene.snapshot.tick);
-  return { frame: () => frame, events: () => scene.events };
+  return {
+    frame: () => frame,
+    events: () => scene.events,
+    orderDelays: {
+      planned: DEV_RULES.orders.planned_delay_ticks,
+      defense: DEV_RULES.orders.defense_delay_ticks,
+    },
+  };
 }
