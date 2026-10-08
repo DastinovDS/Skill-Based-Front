@@ -3,6 +3,7 @@ import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { labelResolution, NO_INSETS, type Camera, type Insets } from './camera.ts';
 import { CameraController } from './cameraController.ts';
 import { CityView } from './cityView.ts';
+import { EffectsView } from './effectsView.ts';
 import { EntityView } from './entityView.ts';
 import { FogView } from './fogView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
@@ -38,10 +39,12 @@ export class MapScene {
   private readonly view: MapView;
   private readonly cities: CityView;
   private readonly entities: EntityView;
+  private readonly effects: EffectsView;
   private readonly fog: FogView;
   private readonly overlay: OverlayView;
   private interaction: MapInteraction | null;
   private hovering = false;
+  private hoveredGroup: string | null = null;
   private readonly controller: CameraController;
   private source: RenderSource | null;
   private base: unknown = null;
@@ -64,6 +67,7 @@ export class MapScene {
     this.cities = new CityView(map, this.layers, me, 1);
     const radiusOf = (node: number): number => this.cities.radiusOf(node);
     this.entities = new EntityView(map, this.layers, me, 1, radiusOf);
+    this.effects = new EffectsView(map, this.layers, me, 1, this.view.cells);
     this.fog = new FogView(
       map,
       this.layers,
@@ -117,6 +121,7 @@ export class MapScene {
     this.app.ticker.remove(this.onFrame);
     this.controller.destroy();
     this.fog.destroy();
+    this.effects.destroy();
     this.entities.destroy();
     this.overlay.destroy();
     this.cities.destroy();
@@ -160,7 +165,10 @@ export class MapScene {
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.entities.setTickHz(tickHz);
-    this.entities.update(frame, this.source.events());
+    const selection = this.interaction?.overlay().selection ?? null;
+    this.entities.setEmphasis(selection?.kind === 'group' ? selection.id : null, this.hoveredGroup);
+    this.entities.update(frame);
+    this.effects.update(frame, this.source.events(), this.entities.groupPoints(), tickHz);
     this.fog.setTickHz(tickHz);
     this.fog.update(frame.base);
     this.overlay.update(this.interaction?.overlay() ?? EMPTY_OVERLAY, (id) =>
@@ -179,6 +187,7 @@ export class MapScene {
         y: (at.y - world.position.y) / world.scale.y,
       },
       this.entities.groupPoints(),
+      world.scale.x,
     );
   }
 
@@ -188,6 +197,7 @@ export class MapScene {
 
   private readonly onHover = (at: Point | null): void => {
     const hit = at === null ? null : this.hitAt(at);
+    this.hoveredGroup = hit?.kind === 'group' ? hit.id : null;
     // The pointer cursor (CSSOM, allowed by the CSP) tells that a click does something here.
     const pointer = hit !== null && this.interaction !== null;
     if (pointer !== this.hovering) {
@@ -207,6 +217,9 @@ export class MapScene {
     this.cities.setLabelResolution(resolution);
     this.overlay.setLabelResolution(resolution);
     this.entities.setLabelResolution(resolution);
+    this.effects.setLabelResolution(resolution);
+    this.entities.setCameraScale(camera.scale);
+    this.fog.setCameraScale(camera.scale);
     this.fog.setLabelResolution(resolution);
   };
 }

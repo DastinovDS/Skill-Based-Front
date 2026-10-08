@@ -3,7 +3,14 @@ import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { EMPTY_OVERLAY, type GhostArrow, type OverlayState } from './interaction.ts';
 import type { MapLayers } from './layers.ts';
-import { TOKEN_FULL, arrowGeometry, dashSegments, edgeEnds, nodePoint } from './layout.ts';
+import {
+  arrowGeometry,
+  dashSegments,
+  edgeEnds,
+  nodePoint,
+  triangleCorners,
+  type TokenSpot,
+} from './layout.ts';
 import {
   ARROW_HEAD,
   ARROW_OUTLINE,
@@ -27,7 +34,7 @@ import {
   roadThickness,
   SELECT_COLOR,
   SELECT_RING_GAP,
-  SELECT_TOKEN_GAP,
+  SELECT_UNIT_SCALE,
   SELECT_WIDTH,
 } from './style.ts';
 
@@ -42,7 +49,8 @@ export class OverlayView {
   private readonly frame = new Graphics();
   private readonly lines = new Graphics();
   private overlay: OverlayState = EMPTY_OVERLAY;
-  private frameDrawn = false;
+  /** Side of the triangle the selection frame is drawn for (0: not drawn yet). */
+  private frameSide = 0;
   private widths: readonly number[] = [];
   private readonly badge = new Container({ label: 'road-width', visible: false });
   private readonly badgeText: Text;
@@ -75,21 +83,20 @@ export class OverlayView {
     this.frame.visible = false;
   }
 
-  /** `groupPoint`: the drawn centre of an own group's token. */
-  update(next: OverlayState, groupPoint: (id: string) => Point | undefined): void {
+  /** `groupSpot`: the drawn centre, side and symbol scale of an own group's token. */
+  update(next: OverlayState, groupSpot: (id: string) => TokenSpot | undefined): void {
     if (next !== this.overlay) {
       this.overlay = next;
       this.drawLines(next);
       this.drawRing(next);
     }
     const selected = next.selection;
-    const at = selected?.kind === 'group' ? groupPoint(selected.id) : undefined;
+    const at = selected?.kind === 'group' ? groupSpot(selected.id) : undefined;
     this.frame.visible = at !== undefined;
     if (at !== undefined) {
-      if (!this.frameDrawn) {
-        this.drawFrame();
-      }
+      if (this.frameSide !== at.side) this.drawFrame(at.side);
       this.frame.position.set(at.x, at.y);
+      this.frame.scale.set(at.scale);
     }
   }
 
@@ -124,14 +131,17 @@ export class OverlayView {
     g.circle(at.x, at.y, radius).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR });
   }
 
-  private drawFrame(): void {
+  /** The white outline of the triangle, 1.45 times bigger, on a dark halo (9.5). */
+  private drawFrame(side: number): void {
     const g = this.frame;
     g.clear();
-    const w = TOKEN_FULL.width + 2 * SELECT_TOKEN_GAP;
-    const h = TOKEN_FULL.height + 2 * SELECT_TOKEN_GAP;
-    g.roundRect(-w / 2 - 2, -h / 2 - 2, w + 4, h + 4, 8).stroke({ width: 2, color: BG });
-    g.roundRect(-w / 2, -h / 2, w, h, 6).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR });
-    this.frameDrawn = true;
+    const [left, right, tip] = triangleCorners(side * SELECT_UNIT_SCALE);
+    // The bigger triangle has the same tip height offset: centre it on the token's box centre.
+    const dy = (triangleCorners(side)[2].y - tip.y) / 2;
+    const poly = [left, right, tip].flatMap((p) => [p.x, p.y + dy]);
+    g.poly(poly).stroke({ width: SELECT_WIDTH + 4, color: BG, alpha: 0.8, join: 'round' });
+    g.poly(poly).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR, join: 'round' });
+    this.frameSide = side;
   }
 
   private drawLines(state: OverlayState): void {

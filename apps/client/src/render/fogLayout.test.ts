@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ageLabel, fogDashes } from './fogLayout.ts';
+import { ageLabel, fogDashes, ghostAlpha } from './fogLayout.ts';
 
 describe('ageLabel', () => {
   it('shows minutes and seconds since the sighting', () => {
@@ -36,5 +36,17 @@ describe('fogDashes', () => {
 
   it('gives nothing for an empty road', () => {
     expect(fogDashes(0, 10, 10)).toEqual([]);
+  });
+});
+
+describe('ghostAlpha (9.8)', () => {
+  it('stays at 0.6 for the first minute, fades linearly, and is gone after two minutes', () => {
+    expect(ghostAlpha(0)).toBe(0.6);
+    expect(ghostAlpha(60)).toBe(0.6);
+    expect(ghostAlpha(90)).toBeCloseTo(0.3);
+    expect(ghostAlpha(119)).toBeGreaterThan(0);
+    expect(ghostAlpha(119)).toBeLessThan(0.02);
+    expect(ghostAlpha(120)).toBe(0);
+    expect(ghostAlpha(500)).toBe(0);
   });
 });

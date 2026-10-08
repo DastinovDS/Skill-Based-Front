@@ -1,29 +1,32 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import type { Mode, PlayerId } from '../protocol.gen.ts';
+import type { Point } from './camera.ts';
 import {
-  MAX_PIPS,
-  TOKEN_COMPACT,
-  TOKEN_FULL,
-  TOKEN_TOP_ROW_Y,
+  chargeLevel,
   countLabel,
-  pipLayout,
+  dashSegments,
+  triangleCorners,
+  triangleHeight,
+  triangleSide,
 } from './layout.ts';
 import {
+  BG,
   COUNT_FONT_SIZE,
-  FIGHT_COLOR,
   GLYPH_COLOR,
-  HEADING_ARROW,
-  PIP_RADIUS,
-  PIP_STROKE,
+  PACKET_RADIUS,
   PLATE_FILL,
-  PLATE_INNER_INSET,
   PLATE_INNER_RING,
-  PLATE_OUTLINE_WIDTH,
-  PLATE_RADIUS,
+  SHIELD_BADGE_SCALE,
+  TRAIL,
+  UNIT_DASH,
+  UNIT_INNER_OUTLINE,
+  UNIT_INNER_SCALE,
+  UNIT_LABEL,
+  UNIT_OUTLINE,
+  UNIT_QUESTION_FONT_SIZE,
+  UNIT_SIDES,
   ownerColor,
 } from './style.ts';
-
-const MODES = ['attack', 'defense'] as const;
 
 /** Glyph of a mode, drawn around (0, 0) in a box of about 10 x 10 units. */
 export function drawModeGlyph(g: GraphicsContext, mode: Mode): GraphicsContext {
@@ -40,6 +43,18 @@ export function drawHammer(g: GraphicsContext): GraphicsContext {
   return g.rect(-1.3, -2, 2.6, 7.5).fill(GLYPH_COLOR).rect(-5, -5.5, 10, 4).fill(GLYPH_COLOR);
 }
 
+const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x, p.y]);
+
+/** The shapes of the triangle of one side: base fill, charge fill (per owner), outlines. */
+interface TriangleShapes {
+  fill: GraphicsContext;
+  /** From the tip, scaled by `chargeLevel` (the tip is the origin). */
+  level: Readonly<Record<PlayerId, GraphicsContext>>;
+  own: GraphicsContext;
+  enemy: GraphicsContext;
+  dashed: Readonly<Record<PlayerId, GraphicsContext>>;
+}
+
 /**
  * Shapes shared by every token, packet and mark. Like `MapView`, identical shapes share one
  * GraphicsContext; `destroy()` releases them all (a Graphics destroyed on its own leaves the
@@ -47,63 +62,80 @@ export function drawHammer(g: GraphicsContext): GraphicsContext {
  */
 export class EntityKit {
   readonly contexts: GraphicsContext[] = [];
-  readonly plateFull: Readonly<Record<PlayerId, GraphicsContext>>;
-  readonly plateCompact: Readonly<Record<PlayerId, GraphicsContext>>;
-  readonly pipFilled: Readonly<Record<PlayerId, GraphicsContext>>;
-  readonly pipEmpty: GraphicsContext;
+  readonly triangles: ReadonlyMap<number, TriangleShapes>;
+  readonly packet: Readonly<Record<PlayerId, GraphicsContext>>;
+  readonly trail: Readonly<Record<PlayerId, GraphicsContext>>;
   readonly glyph: Readonly<Record<Mode, GraphicsContext>>;
   readonly hammer: GraphicsContext;
-  readonly heading: GraphicsContext;
-  readonly swords: GraphicsContext;
   readonly iconDisc: Readonly<Record<PlayerId, GraphicsContext>>;
   readonly textStyle: TextStyle;
+  readonly questionStyle: TextStyle;
 
-  constructor(me: PlayerId) {
-    const plate = (owner: PlayerId, size: { width: number; height: number }): GraphicsContext =>
+  constructor(readonly me: PlayerId) {
+    const triangles = new Map<number, TriangleShapes>();
+    for (const side of UNIT_SIDES) {
+      const corners = triangleCorners(side);
+      const [left, right, tip] = corners;
+      const centroid = { x: 0, y: (left.y + right.y + tip.y) / 3 };
+      const inner = corners.map((p) => ({
+        x: centroid.x + (p.x - centroid.x) * UNIT_INNER_SCALE,
+        y: centroid.y + (p.y - centroid.y) * UNIT_INNER_SCALE,
+      }));
+      const level = (owner: PlayerId): GraphicsContext =>
+        this.context((g) => g.poly(flat(triangleCorners(side, true))).fill(ownerColor(me, owner)));
+      const dashed = (owner: PlayerId): GraphicsContext =>
+        this.context((g) => {
+          for (const [from, to] of [
+            [left, right],
+            [right, tip],
+            [tip, left],
+          ] as const) {
+            for (const [a, b] of dashSegments(from, to, UNIT_DASH.dash, UNIT_DASH.gap)) {
+              g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+            }
+          }
+          return g.stroke({
+            width: UNIT_OUTLINE.width,
+            color: ownerColor(me, owner),
+            cap: 'round',
+          });
+        });
+      triangles.set(side, {
+        fill: this.context((g) => g.poly(flat(corners)).fill(PLATE_FILL)),
+        level: { 0: level(0), 1: level(1) },
+        own: this.context((g) => g.poly(flat(corners)).stroke(UNIT_OUTLINE)),
+        enemy: this.context((g) =>
+          g.poly(flat(corners)).stroke(UNIT_OUTLINE).poly(flat(inner)).stroke(UNIT_INNER_OUTLINE),
+        ),
+        dashed: { 0: dashed(0), 1: dashed(1) },
+      });
+    }
+    this.triangles = triangles;
+    const packet = (owner: PlayerId): GraphicsContext =>
       this.context((g) => {
-        const { width: w, height: h } = size;
-        g.roundRect(-w / 2, -h / 2, w, h, PLATE_RADIUS)
-          .fill(PLATE_FILL)
-          .stroke({ width: PLATE_OUTLINE_WIDTH, color: ownerColor(me, owner) });
-        if (owner !== me) {
-          const inset = PLATE_INNER_INSET;
-          g.roundRect(-w / 2 + inset, -h / 2 + inset, w - 2 * inset, h - 2 * inset, 2).stroke(
-            PLATE_INNER_RING,
-          );
+        g.circle(0, 0, PACKET_RADIUS).fill(ownerColor(me, owner));
+        // The opponent's packet has a dark centre: the side is not told by the hue alone.
+        if (owner !== me) g.circle(0, 0, PACKET_RADIUS * 0.4).fill(BG);
+        return g;
+      });
+    this.packet = { 0: packet(0), 1: packet(1) };
+    const trail = (owner: PlayerId): GraphicsContext =>
+      this.context((g) => {
+        const step = TRAIL.length / TRAIL.steps;
+        for (let i = 0; i < TRAIL.steps; i++) {
+          g.rect(i * step, -TRAIL.width / 2, step + 0.5, TRAIL.width).fill({
+            color: ownerColor(me, owner),
+            alpha: TRAIL.alpha * (1 - i / TRAIL.steps),
+          });
         }
         return g;
       });
-    this.plateFull = { 0: plate(0, TOKEN_FULL), 1: plate(1, TOKEN_FULL) };
-    this.plateCompact = { 0: plate(0, TOKEN_COMPACT), 1: plate(1, TOKEN_COMPACT) };
-    const filled = (owner: PlayerId): GraphicsContext =>
-      this.context((g) =>
-        g.circle(0, 0, PIP_RADIUS).fill(ownerColor(me, owner)).stroke(PIP_STROKE),
-      );
-    this.pipFilled = { 0: filled(0), 1: filled(1) };
-    this.pipEmpty = this.context((g) =>
-      g.circle(0, 0, PIP_RADIUS).fill(PLATE_FILL).stroke(PIP_STROKE),
-    );
+    this.trail = { 0: trail(0), 1: trail(1) };
     this.glyph = {
       attack: this.context((g) => drawModeGlyph(g, 'attack')),
       defense: this.context((g) => drawModeGlyph(g, 'defense')),
     };
     this.hammer = this.context(drawHammer);
-    this.heading = this.context((g) =>
-      g.poly([5, 0, -3.5, -4.5, -3.5, 4.5]).fill(HEADING_ARROW.fill).stroke(HEADING_ARROW.stroke),
-    );
-    this.swords = this.context((g) =>
-      g
-        .moveTo(-9, -9)
-        .lineTo(9, 9)
-        .moveTo(9, -9)
-        .lineTo(-9, 9)
-        .stroke({ width: 7, color: PLATE_FILL })
-        .moveTo(-9, -9)
-        .lineTo(9, 9)
-        .moveTo(9, -9)
-        .lineTo(-9, 9)
-        .stroke({ width: 3.5, color: FIGHT_COLOR }),
-    );
     const disc = (owner: PlayerId): GraphicsContext =>
       this.context((g) => {
         g.circle(0, 0, 9)
@@ -119,6 +151,13 @@ export class EntityKit {
       fontWeight: '700',
       fill: GLYPH_COLOR,
     });
+    this.questionStyle = new TextStyle({
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: UNIT_QUESTION_FONT_SIZE,
+      fontWeight: '700',
+      fill: GLYPH_COLOR,
+      stroke: { color: BG, width: 3, join: 'round' },
+    });
   }
 
   context(draw: (g: GraphicsContext) => GraphicsContext): GraphicsContext {
@@ -130,33 +169,49 @@ export class EntityKit {
   destroy(): void {
     for (const context of this.contexts) context.destroy();
     this.textStyle.destroy();
+    this.questionStyle.destroy();
   }
 }
 
-/** What a token shows. `counts: null`: numbers are unknown (an enemy seen without numbers). */
+/**
+ * What a token shows. `counts: null`: numbers are unknown (an enemy seen without numbers).
+ * `ghost`: a memory of a hidden place, dashed like an unknown one.
+ */
 export interface TokenSpec {
   owner: PlayerId;
   modes: readonly Mode[];
   counts: { units: number; charged: number } | null;
+  ghost?: boolean;
 }
 
 function specKey(spec: TokenSpec): string {
   const counts = spec.counts === null ? '-' : countLabel(spec.counts.units, spec.counts.charged);
-  return `${String(spec.owner)}|${spec.modes.join(',')}|${counts}`;
+  return `${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${spec.ghost === true ? 'g' : ''}`;
 }
 
 /**
- * A plate with mode glyphs and, when the numbers are known, "charged/units" and one dot per unit.
- * The children are created once; `set` only swaps contexts, positions and visibility, and does
- * nothing when the spec is unchanged.
+ * A unit triangle (9.5): inverted, filled from the tip by the charged share, an own white outline
+ * or an opponent's double one (dashed with "?" without numbers, and for a ghost), a shield disc for
+ * "Defense" and a "charged/units" label under the tip. The children are created once; `set` only
+ * swaps contexts and visibility, and does nothing when the spec is unchanged. Drawn around the
+ * centre of the bounding box of the triangle.
  */
 export class Token {
   readonly view = new Container();
-  private readonly plate: Graphics;
-  private readonly glyphs: Graphics[];
+  private readonly fill: Graphics;
+  private readonly level: Graphics;
+  private readonly outline: Graphics;
+  private readonly shield: Container;
+  private readonly shieldDisc: Graphics;
+  private readonly question: Text;
+  private readonly label = new Container({ visible: false });
+  private readonly pill = new Graphics();
   private readonly count: Text;
-  private readonly pips: Graphics[];
   private key = '';
+  private counted = false;
+  private labelWanted = false;
+  /** Side of the triangle now, world units. */
+  side: number = UNIT_SIDES[1];
 
   constructor(
     private readonly kit: EntityKit,
@@ -164,55 +219,91 @@ export class Token {
   ) {
     // Every Graphics starts on a shared context: one that owned its own would leak on
     // `destroy({ children: true })`.
-    this.plate = this.view.addChild(new Graphics(kit.plateFull[0]));
-    this.glyphs = MODES.map(() => this.view.addChild(new Graphics(kit.glyph.attack)));
-    this.count = this.view.addChild(
-      new Text({ text: '', style: kit.textStyle, anchor: { x: 1, y: 0.5 }, resolution }),
-    );
-    this.pips = Array.from({ length: MAX_PIPS }, () =>
-      this.view.addChild(new Graphics(kit.pipEmpty)),
-    );
+    const base = kit.triangles.get(UNIT_SIDES[1]);
+    if (base === undefined) throw new Error('no triangle shapes');
+    this.fill = new Graphics(base.fill);
+    this.level = new Graphics(base.level[0]);
+    this.outline = new Graphics(base.own);
+    this.shieldDisc = new Graphics(kit.iconDisc[0]);
+    const glyph = new Graphics(kit.glyph.defense);
+    this.shield = new Container({ visible: false });
+    this.shield.scale.set(SHIELD_BADGE_SCALE);
+    this.shield.addChild(this.shieldDisc, glyph);
+    this.question = new Text({
+      text: '?',
+      style: kit.questionStyle,
+      anchor: 0.5,
+      resolution,
+      visible: false,
+    });
+    this.count = new Text({ text: '', style: kit.textStyle, anchor: 0.5, resolution });
+    this.label.addChild(this.pill, this.count);
+    this.view.addChild(this.fill, this.level, this.outline, this.question, this.shield, this.label);
   }
 
-  get text(): Text {
-    return this.count;
+  labels(): Text[] {
+    return [this.count, this.question];
+  }
+
+  /** Scale of the whole token (the minimum size on screen, `symbolScale`). */
+  setScale(scale: number): void {
+    if (this.view.scale.x !== scale) this.view.scale.set(scale);
+  }
+
+  /** The "charged/units" label shows only when asked to and the numbers are known. */
+  setLabel(show: boolean): void {
+    this.labelWanted = show;
+    this.label.visible = show && this.counted;
   }
 
   set(spec: TokenSpec): void {
     const key = specKey(spec);
     if (key === this.key) return;
     this.key = key;
-    const { counts } = spec;
-    const full = counts !== null;
-    this.plate.context = (full ? this.kit.plateFull : this.kit.plateCompact)[spec.owner];
+    const { counts, owner } = spec;
+    const side = triangleSide(counts === null ? null : counts.units);
+    this.side = side;
+    const shapes = this.kit.triangles.get(side);
+    if (shapes === undefined) return;
+    const h = triangleHeight(side);
+    this.counted = counts !== null;
 
-    const n = spec.modes.length;
-    this.glyphs.forEach((glyph, i) => {
-      const mode = spec.modes[i];
-      glyph.visible = mode !== undefined;
-      if (mode === undefined) return;
-      glyph.context = this.kit.glyph[mode];
-      if (full) {
-        glyph.scale.set(n > 1 ? 0.75 : 1);
-        glyph.position.set(n > 1 ? -21 + i * 8 : -19, TOKEN_TOP_ROW_Y);
-      } else {
-        glyph.scale.set(0.8);
-        glyph.position.set((i - (n - 1) / 2) * 11, 0);
-      }
-    });
-
-    this.count.visible = full;
-    const layout = full ? pipLayout(counts.units, counts.charged) : { pips: [], scaled: false };
-    if (full) {
-      this.count.text = countLabel(counts.units, counts.charged);
-      this.count.position.set(TOKEN_FULL.width / 2 - 5, TOKEN_TOP_ROW_Y);
+    this.fill.context = shapes.fill;
+    const level = counts === null ? 0 : chargeLevel(counts.units, counts.charged);
+    this.level.visible = level > 0;
+    if (level > 0) {
+      this.level.context = shapes.level[owner];
+      this.level.scale.set(level);
+      this.level.position.set(0, h / 2);
     }
-    this.pips.forEach((pip, i) => {
-      const at = layout.pips[i];
-      pip.visible = at !== undefined;
-      if (at === undefined) return;
-      pip.context = at.filled ? this.kit.pipFilled[spec.owner] : this.kit.pipEmpty;
-      pip.position.set(at.x, at.y);
-    });
+    const dashed = counts === null || spec.ghost === true;
+    this.outline.context = dashed
+      ? shapes.dashed[owner]
+      : owner === this.kit.me
+        ? shapes.own
+        : shapes.enemy;
+
+    this.question.visible = counts === null;
+    // Centre of mass of the triangle, a third of the height above the middle of the box.
+    this.question.position.set(0, -h / 6);
+
+    const defended = spec.modes.includes('defense');
+    this.shield.visible = defended;
+    if (defended) {
+      this.shieldDisc.context = this.kit.iconDisc[owner];
+      this.shield.position.set(side / 2, -h / 2);
+    }
+
+    if (counts !== null) {
+      this.count.text = countLabel(counts.units, counts.charged);
+      const w = this.count.width + 2 * UNIT_LABEL.padX;
+      this.pill.clear();
+      this.pill
+        .roundRect(-w / 2, 0, w, UNIT_LABEL.height, 3)
+        .fill({ color: UNIT_LABEL.fill, alpha: UNIT_LABEL.alpha });
+      this.label.position.set(0, h / 2 + UNIT_LABEL.gap);
+      this.count.position.set(0, UNIT_LABEL.height / 2);
+    }
+    this.label.visible = this.labelWanted && this.counted;
   }
 }

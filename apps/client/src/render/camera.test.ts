@@ -4,9 +4,11 @@ import {
   clampCamera,
   fitCamera,
   fitScale,
+  hitHalf,
   labelResolution,
   panBy,
   screenToWorld,
+  symbolScale,
   wheelZoomFactor,
   worldToScreen,
   worldTransform,
@@ -188,5 +190,25 @@ describe('label resolution', () => {
     expect(labelResolution(1.5, 2)).toBe(4);
     expect(labelResolution(3, 2)).toBe(8);
     expect(labelResolution(40, 2)).toBe(8);
+  });
+});
+
+describe('symbolScale and hitHalf (9.5)', () => {
+  it('keeps a triangle at least 20 px wide on screen at any zoom', () => {
+    for (const scale of [0.2, 0.5, 1, 3]) {
+      for (const side of [24, 30, 42]) {
+        expect(side * symbolScale(side, scale) * scale).toBeGreaterThanOrEqual(20 - 1e-9);
+      }
+    }
+    expect(symbolScale(24, 1)).toBe(1);
+    expect(symbolScale(24, 0.5)).toBeCloseTo(20 / 12);
+  });
+
+  it('makes the click area at least 28 px, and never smaller than the triangle', () => {
+    for (const scale of [0.2, 0.5, 1, 3, 6]) {
+      expect(hitHalf(24, scale) * 2 * scale).toBeGreaterThanOrEqual(28 - 1e-9);
+      expect(hitHalf(42, scale) * 2).toBeGreaterThanOrEqual(42);
+    }
+    expect(hitHalf(24, 4)).toBe(12);
   });
 });

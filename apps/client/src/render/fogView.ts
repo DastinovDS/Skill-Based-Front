@@ -2,8 +2,9 @@ import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import { fogHatching } from './regionLayout.ts';
 import type { Point } from './camera.ts';
 import type { EdgeView, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
-import { TOKEN_COMPACT, TOKEN_FULL, edgeEnds } from './layout.ts';
-import { ageLabel, edgeMarkerPoint, fogDashes, nodeMarkerPoint } from './fogLayout.ts';
+import { edgeEnds, triangleHeight, triangleSide } from './layout.ts';
+import { ageLabel, edgeMarkerPoint, fogDashes, ghostAlpha, nodeMarkerPoint } from './fogLayout.ts';
+import { symbolScale } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { Token, type EntityKit } from './shapes.ts';
 import {
@@ -18,8 +19,8 @@ import {
   FOG_ROAD_EXTRA,
   GHOST_AGE_FONT_SIZE,
   GHOST_AGE_STROKE,
-  GHOST_ALPHA,
   GLYPH_COLOR,
+  GHOST_HIDE_S,
   ROAD_CASING_EXTRA,
   roadThickness,
 } from './style.ts';
@@ -27,7 +28,7 @@ import {
 /** Where a snapshot says an enemy was last seen in a place that is hidden now. */
 type Memory = NodeView['seen'];
 
-/** A marker of what was last seen in a hidden place: a faded enemy token and its age. */
+/** A marker of what was last seen in a hidden place: a faded dashed enemy triangle and its age. */
 class Ghost {
   readonly view = new Container({ visible: false });
   readonly token: Token;
@@ -36,29 +37,48 @@ class Ghost {
 
   constructor(kit: EntityKit, style: TextStyle, resolution: number) {
     this.token = new Token(kit, resolution);
-    this.token.view.alpha = GHOST_ALPHA;
-    this.age = new Text({ text: '', style, anchor: { x: 0.5, y: 0 }, resolution });
+    this.age = new Text({ text: '', style, anchor: { x: 0.5, y: 1 }, resolution });
     this.view.addChild(this.token.view, this.age);
   }
 
   labels(): Text[] {
-    return [this.token.text, this.age];
+    return [...this.token.labels(), this.age];
   }
 
   hide(): void {
     this.view.visible = false;
   }
 
-  show(memory: NonNullable<Memory>, enemy: PlayerId, age: string, at: Point): void {
+  /** Sets the symbol scale (the minimum size on screen) and keeps the age above the triangle. */
+  setScale(scale: number): void {
+    this.token.setScale(scale);
+    this.age.position.set(0, (-triangleHeight(this.token.side) / 2 - 3) * scale);
+  }
+
+  show(
+    memory: NonNullable<Memory>,
+    enemy: PlayerId,
+    seconds: number,
+    age: string,
+    at: Point,
+    cameraScale: number,
+  ): void {
+    const alpha = ghostAlpha(seconds);
+    if (alpha <= 0) {
+      this.hide();
+      return;
+    }
     const exact =
       memory.level === 'exact' && memory.enemy_units !== null && memory.enemy_charged !== null;
     this.token.set({
       owner: enemy,
       modes: memory.enemy_modes,
       counts: exact ? { units: memory.enemy_units ?? 0, charged: memory.enemy_charged ?? 0 } : null,
+      ghost: true,
     });
-    const height = exact ? TOKEN_FULL.height : TOKEN_COMPACT.height;
-    this.age.position.set(0, height / 2 + 3);
+    this.token.setLabel(true);
+    this.setScale(symbolScale(this.token.side, cameraScale));
+    this.view.alpha = alpha;
     if (age !== this.shown) {
       this.shown = age;
       this.age.text = age;
@@ -96,6 +116,7 @@ export class FogView {
   private readonly ageStyle: TextStyle;
   private readonly enemy: PlayerId;
   private base: SnapshotMsg | null = null;
+  private cameraScale = 1;
 
   constructor(
     private readonly map: MapFile,
@@ -130,6 +151,17 @@ export class FogView {
     this.tickHz = tickHz;
     // The next update rebuilds the ages.
     this.base = null;
+  }
+
+  /** Camera scale for the minimum size of the ghosts on screen; they are redrawn at once. */
+  setCameraScale(scale: number): void {
+    if (scale === this.cameraScale) return;
+    this.cameraScale = scale;
+    for (const ghost of [...this.nodeGhosts, ...this.edgeGhosts]) {
+      if (ghost !== null && ghost.view.visible) {
+        ghost.setScale(symbolScale(ghost.token.side, scale));
+      }
+    }
   }
 
   setLabelResolution(resolution: number): void {
@@ -233,6 +265,30 @@ export class FogView {
     return ghost;
   }
 
+  private showGhost(
+    list: (Ghost | null)[],
+    id: number,
+    memory: NonNullable<Memory>,
+    tick: number,
+    at: Point,
+  ): void {
+    const ago = tick - memory.tick;
+    const seconds = this.tickHz > 0 ? ago / this.tickHz : 0;
+    // After `GHOST_HIDE_S` the memory is no longer drawn (the `PlayerView` still carries it).
+    if (seconds >= GHOST_HIDE_S) {
+      list[id]?.hide();
+      return;
+    }
+    this.ghost(list, id).show(
+      memory,
+      this.enemy,
+      seconds,
+      ageLabel(ago, this.tickHz),
+      at,
+      this.cameraScale,
+    );
+  }
+
   /** A ghost needs a hidden place and a memory of enemies in it. */
   private remembered(hidden: boolean, seen: Memory): NonNullable<Memory> | null {
     return hidden && seen !== null && seen.enemy_modes.length > 0 ? seen : null;
@@ -246,15 +302,12 @@ export class FogView {
       existing?.hide();
       return;
     }
-    const width = memory.level === 'exact' ? TOKEN_FULL.width : TOKEN_COMPACT.width;
-    const at = nodeMarkerPoint(this.map, node.id, width, this.radiusOf(node.id));
-    if (at === undefined) return;
-    this.ghost(this.nodeGhosts, node.id).show(
-      memory,
-      this.enemy,
-      ageLabel(tick - memory.tick, this.tickHz),
-      at,
+    const side = triangleSide(
+      memory.level === 'exact' && memory.enemy_units !== null ? memory.enemy_units : null,
     );
+    const at = nodeMarkerPoint(this.map, node.id, side, this.radiusOf(node.id));
+    if (at === undefined) return;
+    this.showGhost(this.nodeGhosts, node.id, memory, tick, at);
   }
 
   private setEdge(edge: EdgeView, tick: number): void {
@@ -276,11 +329,6 @@ export class FogView {
       existing?.hide();
       return;
     }
-    this.ghost(this.edgeGhosts, edge.id).show(
-      memory,
-      this.enemy,
-      ageLabel(tick - memory.tick, this.tickHz),
-      at,
-    );
+    this.showGhost(this.edgeGhosts, edge.id, memory, tick, at);
   }
 }

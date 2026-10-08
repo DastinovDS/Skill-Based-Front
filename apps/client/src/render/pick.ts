@@ -1,6 +1,6 @@
 import type { MapFile } from '../protocol.gen.ts';
-import type { Point } from './camera.ts';
-import { TOKEN_FULL, edgeEnds, nodePoint } from './layout.ts';
+import { hitHalf, type Point } from './camera.ts';
+import { edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
 import type { PickHit } from './interaction.ts';
 import { CAPITAL_RADIUS, NODE_RADIUS } from './style.ts';
 
@@ -22,22 +22,20 @@ export function segmentDistance(p: Point, a: Point, b: Point): number {
 
 /**
  * What a click at `world` hits: an own group token first (the topmost, i.e. the last drawn), then
- * the nearest city circle, then the nearest road. `groups` are the drawn token centres by id. Pure: the order of the
- * checks is the only rule.
+ * the nearest city circle, then the nearest road. `groups` are the drawn tokens by id and `scale`
+ * is the camera scale (CSS px per world unit): a triangle is hit within at least 28 px on screen,
+ * whatever the zoom (`hitHalf`). Pure: the order of the checks is the only rule.
  */
 export function pickAt(
   map: MapFile,
   world: Point,
-  groups: ReadonlyMap<string, Point>,
+  groups: ReadonlyMap<string, TokenSpot>,
+  scale = 1,
 ): PickHit | null {
   let group: string | null = null;
   for (const [id, at] of groups) {
-    if (
-      Math.abs(world.x - at.x) <= TOKEN_FULL.width / 2 &&
-      Math.abs(world.y - at.y) <= TOKEN_FULL.height / 2
-    ) {
-      group = id;
-    }
+    const half = hitHalf(at.side, scale);
+    if (Math.abs(world.x - at.x) <= half && Math.abs(world.y - at.y) <= half) group = id;
   }
   if (group !== null) return { kind: 'group', id: group };
 
