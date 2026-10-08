@@ -43,6 +43,11 @@
 
 <section class="orders" aria-label={t('orders.title')}>
   <h2>{t('orders.title')}</h2>
+  {#if ui.notice !== null}
+    <p class={ui.notice.kind === 'accepted' ? 'notice ok' : 'notice'} role="alert">
+      {noticeText(ui.notice)}
+    </p>
+  {/if}
   {#if group === null}
     <p class="hint">{t('orders.pickGroup')}</p>
   {/if}
@@ -108,16 +113,6 @@
         {t('orders.split')}
       </button>
     </div>
-    {#if mergeCount >= 2}
-      <button
-        type="button"
-        onclick={() => {
-          orders.merge();
-        }}
-      >
-        {tf('orders.merge', { count: mergeCount })}
-      </button>
-    {/if}
     <button
       type="button"
       onclick={() => {
@@ -125,6 +120,16 @@
       }}
     >
       {tf('orders.cancel', { cost: cp(orders.cancelCost) })}
+    </button>
+  {/if}
+  {#if mergeCount >= 2}
+    <button
+      type="button"
+      onclick={() => {
+        orders.merge();
+      }}
+    >
+      {tf('orders.merge', { count: mergeCount })}
     </button>
   {/if}
   {#if recruitHere}
@@ -190,12 +195,6 @@
     >
       {t('orders.forfeit')}
     </button>
-  {/if}
-
-  {#if ui.notice !== null}
-    <p class={ui.notice.kind === 'accepted' ? 'notice ok' : 'notice'} role="alert">
-      {noticeText(ui.notice)}
-    </p>
   {/if}
 </section>
 

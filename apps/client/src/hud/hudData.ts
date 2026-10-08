@@ -107,6 +107,8 @@ export interface GroupChoice {
   readonly units: number;
   /** The node the group stands in, `null` on a road. */
   readonly node: number | null;
+  /** The group has a planned order: the server refuses to merge it until it departs (#212). */
+  readonly planned: boolean;
 }
 
 export interface NodeChoice {
@@ -295,6 +297,7 @@ export function buildHudData(
       id: g.id,
       units: g.units,
       node: g.location.kind === 'node' ? g.location.node : null,
+      planned: g.order?.planned ?? false,
     })),
     nodes: view.nodes.map((n) => ({ id: n.id, owner: ownership(n.owner, me) })),
     roads: view.edges.map((e) => ({
