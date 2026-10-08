@@ -19,6 +19,7 @@ node_modules/
 dist/
 # Playwright output (apps/client/visual keeps its own under node_modules)
 e2e/test-results/
+apps/client/test-results/
 e2e/playwright-report/
 
 # Runtime data (server database, replays). Anchored to the root.

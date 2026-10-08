@@ -63,6 +63,11 @@ from gow_sim.ruleset import Stance, load_ruleset
 ROOT: Final = Path(__file__).parents[3]
 DT: Final = 0.1
 RECV_TIMEOUT_S: Final = 5.0
+DRAIN_TIMEOUT_S: Final = 60.0
+"""Wait for the next frame while a blocked client drains megabytes through a tiny socket buffer.
+
+The server's own send timeout in that test is 60 s; on a loaded CI runner the pauses between
+frames can exceed ``RECV_TIMEOUT_S`` (#188), so the drain waits as long as the server would."""
 
 
 @dataclass
@@ -151,8 +156,8 @@ async def send(ws: ClientConnection, msg: ClientMsg) -> None:
     await ws.send(encode(msg))
 
 
-async def recv(ws: ClientConnection) -> ServerMsg:
-    return decode_server(await asyncio.wait_for(ws.recv(), RECV_TIMEOUT_S))
+async def recv(ws: ClientConnection, timeout_s: float = RECV_TIMEOUT_S) -> ServerMsg:
+    return decode_server(await asyncio.wait_for(ws.recv(), timeout_s))
 
 
 async def recv_until[T: ServerMsg](ws: ClientConnection, kind: type[T]) -> T:
@@ -457,7 +462,7 @@ def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settin
             acks: list[int] = []
             snapshots = 0
             while len(acks) < ticks:
-                msg = await recv(ws)
+                msg = await recv(ws, DRAIN_TIMEOUT_S)
                 if isinstance(msg, AckMsg):
                     acks.append(msg.seq)
                 elif isinstance(msg, SnapshotMsg):
