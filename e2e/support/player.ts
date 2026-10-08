@@ -3,7 +3,7 @@ import { expect } from '@playwright/test';
 import type { MapFile } from '../../apps/client/src/protocol.gen.ts';
 import { FIT_PADDING, fitCamera, worldToScreen } from '../../apps/client/src/render/camera.ts';
 import { nodeSlots } from '../../apps/client/src/render/layout.ts';
-import { CAPITAL_RADIUS, NODE_RADIUS } from '../../apps/client/src/render/style.ts';
+import { NODE_SLOT_RADIUS } from '../../apps/client/src/render/cityLayout.ts';
 
 /** A JSON message of the match socket, in either direction. */
 export interface Frame {
@@ -182,9 +182,8 @@ export class Player {
     let world = { x: node.x, y: node.y };
     if (token) {
       // Groups stand in slots under their city.
-      const radius = node.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
       const { index, count } = token === true ? { index: 0, count: 1 } : token;
-      const slot = nodeSlots(count, radius)[index];
+      const slot = nodeSlots(count, NODE_SLOT_RADIUS)[index];
       if (slot === undefined) throw new Error('no slot');
       world = { x: node.x + slot.x, y: node.y + slot.y };
     }

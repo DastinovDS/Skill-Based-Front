@@ -28,7 +28,7 @@ import {
   type FightInfo,
 } from './layout.ts';
 import type { Point } from './camera.ts';
-import { CITY_REACH_BELOW } from './cityLayout.ts';
+import { NODE_SLOT_RADIUS } from './cityLayout.ts';
 import { edgeMarkerPoint, nodeMarkerPoint } from './fogLayout.ts';
 import { EntityKit, Token } from './shapes.ts';
 import {
@@ -474,8 +474,7 @@ export class EntityView {
         const node = nodePoint(this.map, location.node);
         const list = perNode.get(location.node) ?? [];
         // Tokens stand under the rings and the warehouse bar of the city.
-        const radius = this.radiusOf(location.node) + CITY_REACH_BELOW;
-        const slot = nodeSlots(list.length, radius)[list.indexOf(item)];
+        const slot = nodeSlots(list.length, NODE_SLOT_RADIUS)[list.indexOf(item)];
         if (node !== undefined && slot !== undefined)
           at = { x: node.x + slot.x, y: node.y + slot.y };
       } else {
