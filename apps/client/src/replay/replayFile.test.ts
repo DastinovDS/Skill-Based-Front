@@ -26,4 +26,9 @@ describe('parseReplay', () => {
     const broken = { ...SAMPLE, frames: [{ ...SAMPLE.frames[0], n: [] }] };
     expect(() => parseReplay(broken)).toThrow(expect.objectContaining({ code: 'invalid' }));
   });
+
+  it('refuses a frame whose city builds are not a list', () => {
+    const broken = { ...SAMPLE, frames: [{ ...SAMPLE.frames[0], b: 3 }] };
+    expect(() => parseReplay(broken)).toThrow(expect.objectContaining({ code: 'invalid' }));
+  });
 });

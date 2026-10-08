@@ -40,7 +40,7 @@ split = 100
 merge = 100
 attack = 0
 defense = 200
-build = 100
+build = 0
 recruit = 100
 stance = 0
 
@@ -79,6 +79,12 @@ recharge_per_tick = 1
 
 [build]
 ticks_per_level = 150
+
+[build.charges_per_level]
+2 = 2
+3 = 3
+4 = 4
+5 = 5
 
 [recruit]
 cooldown_ticks = 20

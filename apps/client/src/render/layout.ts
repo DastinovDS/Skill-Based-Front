@@ -230,6 +230,53 @@ export function dashSegments(from: Point, to: Point, dash: number, gap: number):
   return segments;
 }
 
+// --- Road builds of cities (DEC-16) -----------------------------------------------------------
+
+export interface BuildGeometry {
+  /** Short bars across the road, from rim to rim. */
+  ties: [Point, Point][];
+  /** Where the hammer disc sits: on the road, `markDistance` past the rim of the building city. */
+  mark: Point;
+}
+
+/**
+ * Marks of a road being built from the city at `from` towards `to`: bars across the road every
+ * `spacing` units between the city rims (`fromRadius`, `toRadius`), `halfWidth` to each side, and
+ * the point of the hammer disc (never past the middle of the road). `null` if the cities overlap.
+ */
+export function buildGeometry(
+  from: Point,
+  to: Point,
+  fromRadius: number,
+  toRadius: number,
+  halfWidth: number,
+  spacing: number,
+  markDistance: number,
+): BuildGeometry | null {
+  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  if (length <= fromRadius + toRadius || spacing <= 0) return null;
+  const ux = (to.x - from.x) / length;
+  const uy = (to.y - from.y) / length;
+  const at = (d: number): Point => ({ x: from.x + ux * d, y: from.y + uy * d });
+  const ties: [Point, Point][] = [];
+  const end = length - toRadius;
+  for (let d = fromRadius + spacing / 2; d < end; d += spacing) {
+    const c = at(d);
+    // Right-hand normal of (ux, uy) in a y-down plane is (-uy, ux).
+    ties.push([
+      { x: c.x - uy * halfWidth, y: c.y + ux * halfWidth },
+      { x: c.x + uy * halfWidth, y: c.y - ux * halfWidth },
+    ]);
+  }
+  return { ties, mark: at(Math.min(fromRadius + markDistance, length / 2)) };
+}
+
+/** Time left until `ticksLeft` ticks pass, as `m:ss`, rounded up (language-neutral). */
+export function timeLeftLabel(ticksLeft: number, tickHz: number): string {
+  const seconds = tickHz > 0 ? Math.max(0, Math.ceil(ticksLeft / tickHz)) : 0;
+  return `${String(Math.floor(seconds / 60))}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
 // --- Fight marks -------------------------------------------------------------------------------
 
 /** How long a fight mark stays on the map, ticks. */

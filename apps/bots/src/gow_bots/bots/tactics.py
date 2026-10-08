@@ -12,7 +12,7 @@ about and the numbers (``PARAMS``) differ:
 - ``reinforce``: fill the garrisons that are below their minimum from free groups or by recruiting;
 - ``strengthen``: spend CP that would otherwise burn on the cap on recruits at the front;
 - ``fortify``: «Защита» on the guards that face enemies;
-- ``build_roads``: spend idle rear groups on «Строительство» of internal roads.
+- ``build_roads``: unthreatened own cities upgrade internal roads with warehouse charges (DEC-16).
 
 Enemy strength (DEC-04). A view gives exact enemy numbers only at ``EXACT`` detail (own nodes and
 nodes where own groups stand); next to own nodes (``PRESENCE``) it tells only whether enemy groups
@@ -354,26 +354,31 @@ class StrategyBot(Bot):
                 and g.id not in turn.busy
                 and turn.threatened[node]
                 and g.charged > 0
-                and g.mode is not Mode.BUILD
                 and not (g.mode is Mode.DEFENSE and node in armed)
                 and self.spend(turn, SetMode(g.id, Mode.DEFENSE))
             ):
                 turn.busy.add(g.id)
 
     def build_roads(self, turn: Turn, keep: int) -> None:
-        """Idle rear groups upgrade the internal road with the best gain at their node."""
+        """Unthreatened own cities upgrade their internal road with the best gain (DEC-16).
+
+        Cities in ``node_key`` order, roads in edge key order: mirror-invariant. A city pays
+        from its warehouse, so only a city whose warehouse covers the level builds; a road that
+        the other end already builds is skipped. ``keep``: CP reserve for ``orders.cost.build``.
+        """
         view = turn.view
-        for g in turn.free():
-            node = node_of(g)
+        supplied = self.supplied(view)
+        building: dict[int, bool] = {}  # edges ordered in this turn
+        for node in sorted(range(len(view.nodes)), key=self.key):
             if turn.threatened[node]:
                 continue
-            if g.build_edge is not None and view.edges[g.build_edge].upgrade_gain is not None:
-                continue  # still building
             best: int | None = None
             best_gain = 0
             for e in self.incident[node]:
                 gain = view.edges[e].upgrade_gain
-                if gain is not None and gain.capacity_centi > best_gain:
+                if gain is None or e in building or gain.capacity_centi <= best_gain:
+                    continue
+                if self.can_upgrade(view, node, e, supplied):
                     best, best_gain = e, gain.capacity_centi
-            if best is not None and self.spend(turn, UpgradeRoad(g.id, best), keep):
-                turn.busy.add(g.id)
+            if best is not None and self.spend(turn, UpgradeRoad(node, best), keep):
+                building[best] = True

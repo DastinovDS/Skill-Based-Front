@@ -90,7 +90,7 @@ def test_mvp0_order_costs(mvp0: Ruleset) -> None:
     assert cost.split == 100
     assert cost.merge == 100
     assert cost.defense == 200
-    assert cost.build == 100  # «Строительство» / UpgradeRoad
+    assert cost.build == 0  # UpgradeRoad: paid with warehouse charges only (DEC-16)
     assert cost.attack == 0
     assert cost.recruit == 100
     assert cost.cancel == 100
@@ -128,6 +128,7 @@ def test_mvp0_capacity_supply_build_victory(mvp0: Ruleset) -> None:
     assert (supply.dispatch_ticks, supply.buffer, supply.recharge_per_tick) == (10, 2, 1)
     assert [supply.packet_speed_pct.of(w) for w in range(1, 6)] == [100, 125, 150, 175, 200]
     assert mvp0.build.ticks_per_level == 150
+    assert [mvp0.build.charges_per_level.of(w) for w in range(2, 6)] == [2, 3, 4, 5]  # DEC-16
     assert (mvp0.victory.vp_period_ticks, mvp0.victory.capital_multiplier) == (300, 3)
 
 
@@ -214,6 +215,7 @@ def test_file_errors_name_the_file(tmp_path: Path) -> None:
         (("capacity", "width_gain_centi", "3"), -5, "width_gain_centi.3: -5 is out of range"),
         (("supply", "packet_speed_pct", "1"), 0, "packet_speed_pct.1: 0 is out of range"),
         (("build", "ticks_per_level"), 0, "build.ticks_per_level: 0 is out of range"),
+        (("build", "charges_per_level", "2"), -1, r"build\.charges_per_level\.2: -1 is out"),
         (("recruit", "location"), "anywhere", "recruit.location: expected one of"),
         (("victory", "vp_period_ticks"), 0, "victory.vp_period_ticks: 0 is out of range"),
         (("cp",), 5, "cp: expected a table"),
@@ -240,7 +242,7 @@ def test_hash_changes_when_any_value_changes() -> None:
     base = _raw()
     base_hash = ruleset_hash(parse_ruleset(base))
     leaves = _leaves(base)
-    assert len(leaves) == 54  # every key of the SIM-01 table, counted by hand
+    assert len(leaves) == 58  # every key of the SIM-01 table and DEC-16, counted by hand
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)

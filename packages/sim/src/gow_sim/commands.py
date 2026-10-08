@@ -20,7 +20,8 @@ rejects as ``NOT_FOUND_OR_HIDDEN``.
 
 Costs are in hundredths of CP from ``orders.cost`` (DEC-08, DEC-01, DEC-02).
 Split, Merge and commands to a moving or waiting group follow the defaults of #117.
-Bonuses and public intents of planned orders, «Защита» and builds: ``systems.orders`` (SIM-10).
+Bonuses and public intents of planned orders and «Защита»: ``systems.orders`` (SIM-10).
+Road upgrades by a city (DEC-16): ``systems.build``; they are not public.
 """
 
 from collections.abc import Callable, Iterable
@@ -30,8 +31,8 @@ from itertools import pairwise
 
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import AtNode, Event, GameState, Group, IntentKind, Mode, Order, event
-from gow_sim.systems.build import interrupt_build, start_build
-from gow_sim.systems.capacity import is_internal
+from gow_sim.systems.build import builder_of, level_price, start_build
+from gow_sim.systems.capacity import is_internal, supplied_territory
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
 from gow_sim.systems.movement import find_path
 from gow_sim.systems.orders import clear_bonus, set_intent
@@ -108,9 +109,9 @@ class SetStance:
 
 @dataclass(frozen=True, slots=True)
 class UpgradeRoad:
-    """Put ``group`` into «Строительство» on the internal ``edge`` it stands at (SIM-11)."""
+    """The own city ``node`` raises the internal ``edge`` at it by one level (DEC-16)."""
 
-    group: int
+    node: int
     edge: int
 
 
@@ -150,11 +151,9 @@ def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
             return Merge(tuple(f(g) for g in groups))
         case SetMode(group=g, mode=mode):
             return SetMode(f(g), mode)
-        case UpgradeRoad(group=g, edge=edge):
-            return UpgradeRoad(f(g), edge)
         case CancelOrder(group=g):
             return CancelOrder(f(g))
-        case SetStance() | Recruit() | Forfeit():
+        case SetStance() | UpgradeRoad() | Recruit() | Forfeit():
             return cmd
 
 
@@ -176,12 +175,20 @@ class RejectCode(StrEnum):
     """Malformed arguments: ``n`` out of range, fewer than two or repeated groups, same node."""
     NOT_SAME_NODE = "NOT_SAME_NODE"
     NOT_ADJACENT = "NOT_ADJACENT"
-    """The group does not stand at an end of the edge."""
+    """The city is not an end of the edge (``UpgradeRoad``, DEC-16)."""
     NOT_INTERNAL = "NOT_INTERNAL"
     """Only an internal edge of the player can be upgraded (mechanics.md, section 8)."""
     MAX_WIDTH = "MAX_WIDTH"
+    NOT_SUPPLIED = "NOT_SUPPLIED"
+    """The city is not in its owner's supplied territory (DEC-16)."""
+    CITY_BUSY = "CITY_BUSY"
+    """The city already builds a road (DEC-16: one build per city)."""
+    EDGE_BUSY = "EDGE_BUSY"
+    """The other end of the edge already builds it (DEC-16: one city per edge)."""
+    NOT_ENOUGH_CHARGES = "NOT_ENOUGH_CHARGES"
+    """The city warehouse holds fewer charges than the level costs (DEC-16)."""
     NO_CHANGE = "NO_CHANGE"
-    """The command would leave everything as it is (same mode, stance, road; already forfeited)."""
+    """The command would leave everything as it is (same mode or stance; already forfeited)."""
     STANCE_COOLDOWN = "STANCE_COOLDOWN"
     NOTHING_TO_CANCEL = "NOTHING_TO_CANCEL"
     NOT_CAPITAL = "NOT_CAPITAL"
@@ -242,8 +249,6 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
                     return cost.attack
                 case Mode.DEFENSE:
                     return cost.defense
-                case Mode.BUILD:
-                    return cost.build
         case UpgradeRoad():
             return cost.build
         case Recruit():
@@ -329,22 +334,8 @@ def _check(
             if mode == group.mode and mode is not Mode.DEFENSE:
                 return Reject(RejectCode.NO_CHANGE)
             return ()
-        case UpgradeRoad(group=gid, edge=eid):
-            group = _standing_group(state, player, gid, seen)
-            if isinstance(group, Reject):
-                return group
-            if not 0 <= eid < len(state.map.edges):
-                return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
-            edge = state.map.edges[eid]
-            if _node_of(group) not in (edge.a, edge.b):
-                return Reject(RejectCode.NOT_ADJACENT)
-            if not is_internal(state, eid) or state.nodes[edge.a].owner != player:
-                return Reject(RejectCode.NOT_INTERNAL)
-            if state.edges[eid].width >= edge.max_width:
-                return Reject(RejectCode.MAX_WIDTH)
-            if group.mode is Mode.BUILD and group.build_edge == eid:
-                return Reject(RejectCode.NO_CHANGE)
-            return ()
+        case UpgradeRoad(node=node, edge=eid):
+            return _check_upgrade(state, rules, player, node, eid)
         case Recruit(node=node):
             if not 0 <= node < len(state.map.nodes):
                 return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
@@ -374,6 +365,34 @@ def _check(
             return ()
         case Forfeit():
             return Reject(RejectCode.NO_CHANGE) if state.players[player].forfeited else ()
+
+
+def _check_upgrade(
+    state: GameState, rules: Ruleset, player: int, node: int, eid: int
+) -> tuple[int, ...] | Reject:
+    """The checks of ``UpgradeRoad`` in the order of DEC-16, item 2 (CP last, in ``_validate``)."""
+    if not 0 <= node < len(state.map.nodes):
+        return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+    if state.nodes[node].owner != player:
+        return Reject(RejectCode.NOT_OWNER)
+    if not 0 <= eid < len(state.map.edges):
+        return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+    edge = state.map.edges[eid]
+    if node not in (edge.a, edge.b):
+        return Reject(RejectCode.NOT_ADJACENT)
+    if not is_internal(state, eid):  # the node is own, so an internal edge is the player's
+        return Reject(RejectCode.NOT_INTERNAL)
+    if state.edges[eid].width >= edge.max_width:
+        return Reject(RejectCode.MAX_WIDTH)
+    if not supplied_territory(state, player)[node]:
+        return Reject(RejectCode.NOT_SUPPLIED)
+    if state.nodes[node].build is not None:
+        return Reject(RejectCode.CITY_BUSY)
+    if builder_of(state, eid) is not None:
+        return Reject(RejectCode.EDGE_BUSY)
+    if state.nodes[node].warehouse < level_price(state, rules, eid):
+        return Reject(RejectCode.NOT_ENOUGH_CHARGES)
+    return ()
 
 
 def _own_group(state: GameState, player: int, gid: int, seen: dict[int, bool]) -> Group | Reject:
@@ -449,7 +468,6 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             group = state.groups[gid]
             delay = rules.orders.planned_delay_ticks if planned else 0
             group.order = Order(path=ok.path[1:], planned=planned, depart_tick=tick + delay)
-            interrupt_build(group)  # leaving interrupts the build (SIM-11)
             if group.mode is Mode.DEFENSE:
                 group.mode = Mode.ATTACK  # a move order drops «Защита» for free (DEC-08)
             if planned:  # public intent now, the bonus from the departure on (DEC-08)
@@ -478,7 +496,6 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                     keep.charged += other.charged
             keep.mode = Mode.ATTACK
             keep.order = None
-            interrupt_build(keep)
             clear_bonus(keep)
             set_intent(state, keep, None)
             return [event(tick, "groups_merged", player=player, group=keep.id, units=keep.units)]
@@ -486,8 +503,6 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             group = state.groups[gid]
             group.mode = mode
             group.order = None  # the group stops where it stands
-            if mode is not Mode.BUILD:
-                interrupt_build(group)
             if mode is Mode.DEFENSE:  # public at once, the bonus after the delay (DEC-08)
                 group.bonus = rules.orders.defense_bonus
                 group.bonus_tick = tick + rules.orders.defense_delay_ticks
@@ -496,14 +511,8 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                 clear_bonus(group)
                 set_intent(state, group, None)
             return []
-        case UpgradeRoad(group=gid, edge=eid):
-            group = state.groups[gid]
-            start_build(group, eid, tick)  # a new build: the progress starts from zero
-            group.order = None
-            clear_bonus(group)
-            # Builds are public like planned orders (DEC-04): from the group's node along the edge.
-            set_intent(state, group, IntentKind.BUILD, state.map.edges[eid].other(_node_of(group)))
-            return []
+        case UpgradeRoad(node=node, edge=eid):
+            return [start_build(state, rules, player, node, eid)]  # not public (DEC-16)
         case Recruit(node=node):
             return recruit_unit(state, player, node)
         case CancelOrder(group=gid):

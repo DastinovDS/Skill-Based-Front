@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 4,
+    "PROTOCOL_VERSION": 5,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -97,6 +97,30 @@
         "node"
       ],
       "title": "AtNodeLoc",
+      "type": "object"
+    },
+    "BuildPublic": {
+      "additionalProperties": false,
+      "description": "Road upgrades by a city (``build`` of the ruleset, DEC-16).",
+      "properties": {
+        "ticks_per_level": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "charges_per_level": {
+          "description": "One price per new width ``2..5``, ascending.",
+          "items": {
+            "$ref": "#/$defs/LevelPrice"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "ticks_per_level",
+        "charges_per_level"
+      ],
+      "title": "BuildPublic",
       "type": "object"
     },
     "CancelOrderCmd": {
@@ -602,8 +626,7 @@
       "description": "Publicly visible intent types (DEC-04, DEC-08).",
       "enum": [
         "planned_move",
-        "defense",
-        "build"
+        "defense"
       ],
       "title": "IntentKind",
       "type": "string"
@@ -655,6 +678,28 @@
         "created_tick"
       ],
       "title": "IntentView",
+      "type": "object"
+    },
+    "LevelPrice": {
+      "additionalProperties": false,
+      "description": "Charges from the city warehouse for raising a road to ``width`` (DEC-16).",
+      "properties": {
+        "width": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "charges": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "charges"
+      ],
+      "title": "LevelPrice",
       "type": "object"
     },
     "Location": {
@@ -991,11 +1036,10 @@
       "type": "object"
     },
     "Mode": {
-      "description": "Group mode (mechanics.md, section 3; effects: DEC-08).",
+      "description": "Group mode (mechanics.md, section 3; effects: DEC-08). Roads are built by cities (DEC-16).",
       "enum": [
         "attack",
-        "defense",
-        "build"
+        "defense"
       ],
       "title": "Mode",
       "type": "string"
@@ -1029,6 +1073,36 @@
         "planned"
       ],
       "title": "MoveCmd",
+      "type": "object"
+    },
+    "NodeBuild": {
+      "additionalProperties": false,
+      "description": "A road level the city builds (DEC-16): ``edge`` is one of the city's roads.",
+      "properties": {
+        "edge": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "done_tick": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The tick the width grows; only for an own build."
+        }
+      },
+      "required": [
+        "edge",
+        "done_tick"
+      ],
+      "title": "NodeBuild",
       "type": "object"
     },
     "NodeView": {
@@ -1081,6 +1155,17 @@
             }
           ],
           "description": "Current sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one, or ``None``."
+        },
+        "build": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeBuild"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The city's road build (DEC-16): own always, an enemy one only while its edge is unfogged."
         }
       },
       "required": [
@@ -1089,7 +1174,8 @@
         "capacity",
         "detail",
         "warehouse",
-        "seen"
+        "seen",
+        "build"
       ],
       "title": "NodeView",
       "type": "object"
@@ -1416,6 +1502,9 @@
         },
         "combat": {
           "$ref": "#/$defs/CombatPublic"
+        },
+        "build": {
+          "$ref": "#/$defs/BuildPublic"
         }
       },
       "required": [
@@ -1423,7 +1512,8 @@
         "match_ticks",
         "cp",
         "cost",
-        "combat"
+        "combat",
+        "build"
       ],
       "title": "RulesetPublic",
       "type": "object"
@@ -1444,7 +1534,7 @@
           "items": {
             "$ref": "#/$defs/Mode"
           },
-          "maxItems": 3,
+          "maxItems": 2,
           "type": "array"
         },
         "enemy_units": {
@@ -1712,15 +1802,17 @@
     },
     "UpgradeRoadCmd": {
       "additionalProperties": false,
+      "description": "The own city ``node`` raises the internal road ``edge`` by one level (DEC-16).",
       "properties": {
         "type": {
           "const": "upgrade_road",
           "default": "upgrade_road",
           "type": "string"
         },
-        "group": {
-          "pattern": "^[A-Za-z0-9_-]{1,32}$",
-          "type": "string"
+        "node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         },
         "edge": {
           "maximum": 2147483647,
@@ -1730,7 +1822,7 @@
       },
       "required": [
         "type",
-        "group",
+        "node",
         "edge"
       ],
       "title": "UpgradeRoadCmd",

@@ -11,15 +11,15 @@ DEC-08, numbers from ``Ruleset.orders``:
   move order drops it for free.
 - ``CancelOrder`` of a planned order during the delay, or of «Защита», costs
   ``orders.cost.cancel``.
-- A planned order, «Защита» and a road build (SIM-11) are public: an ``Intent`` with the owner,
-  the kind, the node of the group and the target, without the group id or size (DEC-04). The
-  group keeps the link (``Group.intent``); the intent names no group.
+- A planned order and «Защита» are public: an ``Intent`` with the owner, the kind, the node of
+  the group and the target, without the group id or size (DEC-04). The group keeps the link
+  (``Group.intent``); the intent names no group. Road builds are not public (DEC-16).
 
 Commands (SIM-04) set bonuses and intents when applied (``set_intent``, ``clear_bonus``).
 Around combat: the combat system gets ``active_bonuses(state)``, and the ``orders`` system at
 the end of the step (after ``build``) spends the bonuses of the groups that fought and removes
-the bonuses and intents whose order, mode or build ended in a system: arrival, bounce, death,
-attrition, ``build_stopped``.
+the bonuses and intents whose order or mode ended in a system: arrival, bounce, death,
+attrition.
 
 Details that DEC-08 leaves open follow the defaults of #141 (see ``TODO(#141)`` below).
 """
@@ -107,5 +107,3 @@ def _holds(kind: IntentKind, g: Group) -> bool:
             return g.order is not None and g.order.planned
         case IntentKind.DEFENSE:
             return g.mode is Mode.DEFENSE
-        case IntentKind.BUILD:
-            return g.build_edge is not None

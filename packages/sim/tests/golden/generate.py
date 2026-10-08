@@ -109,11 +109,13 @@ class MixBot:
         return []
 
     def _upgrade(self, view: PlayerView, idle: list[GroupView]) -> list[Command]:
+        """The city of an idle group upgrades a road (DEC-16); rejects are part of the log."""
         for g in idle:
             assert isinstance(g.location, AtNode)
-            for e in self.map.incident[g.location.node]:
+            node = g.location.node
+            for e in self.map.incident[node]:
                 if view.edges[e].upgrade_gain is not None:
-                    return [UpgradeRoad(g.id, e)]
+                    return [UpgradeRoad(node, e)]
         return []
 
 

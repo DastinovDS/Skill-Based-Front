@@ -149,6 +149,8 @@ def check_state(state: GameState) -> None:
     for nid, n in state.nodes.items():
         assert n.warehouse >= 0 and n.over_ticks >= 0, f"node {nid}: {n}"
         assert n.owner is None or n.owner in PLAYERS, f"node {nid}: {n}"
+        b = n.build
+        assert b is None or (n.owner == b.owner and nid in _ends(mapdef, b.edge)), f"node {nid}"
     for eid, e in state.edges.items():
         static = mapdef.edges[eid]
         assert static.base_width <= e.width <= static.max_width, f"edge {eid}: {e}"
@@ -158,8 +160,6 @@ def check_state(state: GameState) -> None:
         _check_location(g, n_nodes, n_edges, state)
         if g.order is not None:
             assert all(0 <= n < n_nodes for n in g.order.path), f"group {gid}: {g.order}"
-        assert (g.build_edge is None) == (g.build_since is None), f"group {gid}: {g}"
-        assert g.build_edge is None or 0 <= g.build_edge < n_edges, f"group {gid}: {g}"
         assert g.bonus >= 0, f"group {gid}: {g}"
         assert g.intent is None or g.intent in state.intents, f"group {gid}: dangling intent"
     for pid, p in state.packets.items():

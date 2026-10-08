@@ -3,8 +3,9 @@
  * speaks the real protocol through a fake socket, so the dev screen runs the same
  * `MatchConnection` as a live match: `welcome`, a snapshot 10 times a second (`devSnapshot`), an
  * `ack` a moment after each command. It answers every command with simple stand-in checks (CP, ownership, a few reject
- * codes) and is not a rules engine: accepted orders and modes stand in the snapshots, nothing moves. The path is a
- * breadth-first search on the map, good enough for a picture.
+ * codes) and is not a rules engine: accepted orders and modes stand in the snapshots, nothing moves. A road upgrade
+ * (DEC-16) shows as a build of the city that widens the road after `ruleset_public.build.ticks_per_level` ticks, with no
+ * charge accounting. The path is a breadth-first search on the map, good enough for a picture.
  */
 import { devEvent, devSnapshot, DEV_PLAYER } from '../hud/devFeed.ts';
 import { MockSocket } from '../net/fakeServer.ts';
@@ -61,22 +62,38 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
   const modes = new Map<string, Mode>();
   let timer: ReturnType<typeof setInterval> | undefined;
   const orders = new Map<string, OrderView>();
+  /** City builds: node -> road and the tick it widens; widths raised so far by edge. */
+  const builds = new Map<number, { edge: number; done: number }>();
+  const widths = new Map<number, number>();
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
   function snapshot(): SnapshotMsg {
+    for (const [node, build] of builds) {
+      if (tick >= build.done) {
+        widths.set(build.edge, (widths.get(build.edge) ?? 0) + 1);
+        builds.delete(node);
+      }
+    }
     const base = devSnapshot(map, rules, tick);
     return {
       ...base,
       view: {
         ...base.view,
         me: { ...base.view.me, stance, cp: Math.max(0, base.view.me.cp - spent) },
+        nodes: base.view.nodes.map((n) => {
+          const build = builds.get(n.id);
+          return build === undefined
+            ? n
+            : { ...n, build: { edge: build.edge, done_tick: build.done } };
+        }),
         edges: base.view.edges.map((e) => {
           const ends = map.edges[e.id];
+          const width = e.width + (widths.get(e.id) ?? 0);
           const inner = (n: number | undefined) =>
             n !== undefined && base.view.nodes[n]?.owner === DEV_PLAYER;
-          return inner(ends?.a) && inner(ends?.b)
-            ? { ...e, upgrade_gain: { capacity_centi: 150, packet_speed_pct: 10 } }
-            : e;
+          return inner(ends?.a) && inner(ends?.b) && width < (ends?.max_width ?? 0)
+            ? { ...e, width, upgrade_gain: { capacity_centi: 50, packet_speed_pct: 10 } }
+            : { ...e, width };
         }),
         groups: base.view.groups.map((g) => ({
           ...g,
@@ -150,10 +167,20 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         return cmd.groups.every((id) => mine(id) !== undefined)
           ? charge(rules.cost.merge)
           : 'NOT_FOUND_OR_HIDDEN';
-      case 'upgrade_road':
-        return current.view.edges[cmd.edge]?.upgrade_gain == null
-          ? 'NOT_INTERNAL'
-          : charge(rules.cost.build);
+      case 'upgrade_road': {
+        const edge = map.edges[cmd.edge];
+        if (current.view.nodes[cmd.node]?.owner !== DEV_PLAYER) return 'NOT_OWNER';
+        if (edge === undefined) return 'NOT_FOUND_OR_HIDDEN';
+        if (edge.a !== cmd.node && edge.b !== cmd.node) return 'NOT_ADJACENT';
+        if (current.view.edges[cmd.edge]?.upgrade_gain == null) return 'NOT_INTERNAL';
+        if (builds.has(cmd.node)) return 'CITY_BUSY';
+        if ([...builds.values()].some((b) => b.edge === cmd.edge)) return 'EDGE_BUSY';
+        const code = charge(rules.cost.build);
+        if (code === null) {
+          builds.set(cmd.node, { edge: cmd.edge, done: tick + 1 + rules.build.ticks_per_level });
+        }
+        return code;
+      }
       case 'forfeit':
         setTimeout(() => {
           socket?.reply({

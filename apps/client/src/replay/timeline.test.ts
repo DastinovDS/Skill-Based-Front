@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SAMPLE } from './fixture.ts';
+import { parseReplay } from './replayFile.ts';
 import { buildTimeline } from './timeline.ts';
 
 const timeline = buildTimeline(SAMPLE);
@@ -48,5 +49,39 @@ describe('buildTimeline', () => {
   it('carries every event of the file', () => {
     expect(timeline.events).toHaveLength(SAMPLE.events.length);
     expect(timeline.events.at(-1)).toMatchObject({ kind: 'match_ended', tick: SAMPLE.ticks });
+  });
+
+  it('fills the road builds of cities from the frame key "b" (DEC-16), none without it', () => {
+    const first = SAMPLE.frames[0];
+    if (first === undefined) throw new Error('the sample has no frames');
+    const [built] = buildTimeline({
+      ...SAMPLE,
+      frames: [{ ...first, b: [[2, 1, 150]] }],
+    }).snapshots;
+    expect(built?.view.nodes[2]?.build).toEqual({ edge: 1, done_tick: 150 });
+    expect(built?.view.nodes.filter((n) => n.build !== null)).toHaveLength(1);
+    expect(timeline.snapshots[0]?.view.nodes.every((n) => n.build === null)).toBe(true);
+  });
+
+  it('reads a file from before DEC-16: a "build" group shows as attacking, its intent is dropped', () => {
+    const first = SAMPLE.frames[0];
+    const group = first?.g[0];
+    if (first === undefined || group === undefined) throw new Error('the sample has no group');
+    const legacy = parseReplay({
+      ...SAMPLE,
+      frames: [
+        {
+          ...first,
+          g: [{ ...group, m: 'build', b: 0 }],
+          i: [
+            [7, 0, 'build', 0, null],
+            [8, 1, 'defense', 3, null],
+          ],
+        },
+      ],
+    });
+    const view = buildTimeline(legacy).snapshots[0]?.view;
+    expect(view?.groups[0]?.mode).toBe('attack');
+    expect(view?.intents.map((i) => i.kind)).toEqual(['defense']);
   });
 });

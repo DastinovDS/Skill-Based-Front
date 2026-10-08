@@ -6,6 +6,7 @@ import {
   MAX_PIPS,
   PIP_SPACING,
   arrowGeometry,
+  buildGeometry,
   countLabel,
   dashSegments,
   edgePoint,
@@ -15,6 +16,7 @@ import {
   pipLayout,
   roadPosition,
   sideways,
+  timeLeftLabel,
   warehouseBar,
 } from './layout.ts';
 
@@ -147,6 +149,33 @@ describe('arrows of intents', () => {
       [15, 25],
     ]);
     expect(dashSegments(A, A, 10, 5)).toEqual([]);
+  });
+});
+
+describe('road builds of cities', () => {
+  it('puts bars across the road between the rims, and the mark near the building city', () => {
+    const geometry = buildGeometry(A, B, 20, 20, 6, 20, 15);
+    expect(geometry?.ties.map(([a, b]) => [a.x, a.y, b.x, b.y])).toEqual([
+      [30, 6, 30, -6],
+      [50, 6, 50, -6],
+      [70, 6, 70, -6],
+    ]);
+    expect(geometry?.mark).toEqual({ x: 35, y: 0 });
+    // Built from the other end: the mark sits at that end.
+    expect(buildGeometry(B, A, 20, 20, 6, 20, 15)?.mark).toEqual({ x: 65, y: 0 });
+  });
+
+  it('never puts the mark past the middle, and draws nothing between overlapping cities', () => {
+    expect(buildGeometry(A, B, 20, 20, 6, 20, 80)?.mark).toEqual({ x: 50, y: 0 });
+    expect(buildGeometry(A, { x: 30, y: 0 }, 20, 20, 6, 20, 15)).toBeNull();
+  });
+
+  it('shows the time left as m:ss, rounded up', () => {
+    expect(timeLeftLabel(150, 10)).toBe('0:15');
+    expect(timeLeftLabel(1, 10)).toBe('0:01');
+    expect(timeLeftLabel(0, 10)).toBe('0:00');
+    expect(timeLeftLabel(-5, 10)).toBe('0:00');
+    expect(timeLeftLabel(905, 10)).toBe('1:31');
   });
 });
 

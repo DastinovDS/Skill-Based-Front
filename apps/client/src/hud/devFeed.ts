@@ -43,7 +43,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
   const presence = new Set(next.slice(SEEN_EXACT, SEEN_EXACT + SEEN_PRESENCE));
 
   const nodes: NodeView[] = map.nodes.map((n) => {
-    const base = { id: n.id, owner: n.start_owner, capacity: n.base_capacity };
+    const base = { id: n.id, owner: n.start_owner, capacity: n.base_capacity, build: null };
     if (mine.has(n.id)) {
       return {
         ...base,

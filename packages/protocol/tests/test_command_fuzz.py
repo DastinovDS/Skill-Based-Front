@@ -99,7 +99,7 @@ def _command(draw: st.DrawFn, player: int) -> wire.Command:
         case "stance":
             return wire.SetStanceCmd(stance=draw(st.sampled_from(list(Stance))))
         case "road":
-            return wire.UpgradeRoadCmd(group=draw(ids), edge=draw(_ints))
+            return wire.UpgradeRoadCmd(node=draw(_ints), edge=draw(_ints))
         case "recruit":
             return wire.RecruitCmd(node=draw(_ints))
         case _:
@@ -124,7 +124,6 @@ def _ids_of(cmd: wire.Command) -> tuple[str, ...]:
             wire.MoveCmd(group=g)
             | wire.SplitCmd(group=g)
             | wire.SetModeCmd(group=g)
-            | wire.UpgradeRoadCmd(group=g)
             | wire.CancelOrderCmd(group=g)
         ):
             return (g,)

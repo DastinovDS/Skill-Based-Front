@@ -24,6 +24,7 @@ from gow_sim.match import SIM_VERSION, Match
 from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, replay_run
 from gow_sim.ruleset import Ruleset, ruleset_hash
 from gow_sim.state import AtNode, GameState, Group, OnEdge
+from gow_sim.systems.build import done_tick
 from gow_sim.systems.capacity import node_capacities
 
 __all__ = [
@@ -64,15 +65,13 @@ def _group(g: Group) -> dict[str, object]:
         out["to"] = list(g.order.path)
         if g.order.planned:
             out["pl"] = 1
-    if g.build_edge is not None:
-        out["b"] = g.build_edge
     return out
 
 
 def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
     """The full state at ``state.tick`` as one frame (``docs/design/replay-frames.md``)."""
     capacities = node_capacities(state, rules)
-    return {
+    frame: dict[str, object] = {
         "t": state.tick,
         "p": [
             [p.cp, p.vp, p.stance.value, int(p.forfeited)]
@@ -93,6 +92,14 @@ def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
             for i in (state.intents[k] for k in sorted(state.intents))
         ],
     }
+    builds = [
+        [nid, b.edge, done_tick(rules, b)]
+        for nid, b in ((i, state.nodes[i].build) for i in sorted(state.nodes))
+        if b is not None
+    ]
+    if builds:  # only while a city builds: older files without the key stay valid
+        frame["b"] = builds
+    return frame
 
 
 class FramesRecorder:

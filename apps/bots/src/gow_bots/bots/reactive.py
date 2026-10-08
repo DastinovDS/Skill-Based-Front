@@ -99,7 +99,7 @@ class ReactiveBot(CampaignBot):
         best: GroupView | None = None
         for g in self.free_groups(ctx):
             here = node_of(g)
-            if here == target or g.charged == 0 or g.mode is Mode.BUILD:
+            if here == target or g.charged == 0:
                 continue
             if not self.may_leave(ctx, g) or target not in self.reachable(
                 ctx.view, here, SEARCH_HOPS

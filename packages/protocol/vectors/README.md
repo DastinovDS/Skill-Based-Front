@@ -31,7 +31,7 @@
 | `node_owner_before` | владелец узла до боя: `a`, `b`, `neutral`; `null` для ребра |
 | `sides.<a\|b>.role` | `attacker`, `defender` или `symmetric` (бой без защитника: ребро и нейтральный узел) |
 | `sides.<a\|b>.bonus` | `null` или `{source, amount}`, где `source` — `planned_order` (запланированный приказ) или `defense_mode` (режим «Защита», уже активный). Это бонус, с которым сторона приходит в бой; действует ли он, решают правила (правило 1) |
-| `sides.<a\|b>.groups` | группы стороны: `id` (уникален внутри вектора), `units`, `charged`, `mode` (`attack`, `defense`, `build`) |
+| `sides.<a\|b>.groups` | группы стороны: `id` (уникален внутри вектора), `units`, `charged`, `mode` (`attack`, `defense`; режим `build` снят DEC-16) |
 | `expected.pool` | пул Q каждой стороны после правила 1 (заряды стреляющих юнитов + действующий бонус + действующий рельеф); `null`, если боя нет (`empty_enemy_node`) |
 | `expected.losses` | сколько юнитов потеряла каждая сторона (то есть убил противник) |
 | `expected.groups` | те же группы после боя: `id`, `units`, `charged`; уничтоженная группа остаётся в списке с `units = 0` |

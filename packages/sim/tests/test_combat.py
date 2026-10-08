@@ -224,35 +224,6 @@ def test_rule7_several_groups_sum_and_choose_by_charged_units_and_id() -> None:
     assert state.nodes[1].owner == 1
 
 
-def test_rule1_build_mode_does_not_shoot_but_its_units_count() -> None:
-    """Defence 2/2 in «Строительство»: Qd = 0 (no firing charge, so no terrain either).
-
-    Qa = 2, c = 0, s = 2: no discharged defender, so charged ones die; node taken, attack 2/0.
-    """
-    state = initial_state(line(["forest", "mountains", "forest"], [0, 1, 1]), RULES)
-    d = add(state, 1, 2, 2, AtNode(1), mode=Mode.BUILD, build_edge=1, build_since=0)
-    a = add(state, 0, 2, 2, before_arrival(state, 0, 0), order=Order((1,), False, 0))
-    fight = the(step(state), "fight")
-    assert (fight.get("pool_0"), fight.get("pool_1")) == (2, 0)
-    assert d not in state.groups
-    assert (state.groups[a].units, state.groups[a].charged) == (2, 0)
-    assert state.nodes[1].owner == 0
-
-
-def test_a_fight_interrupts_the_build_of_a_surviving_builder() -> None:
-    """SIM-11: a fight stops the builds of its groups (the progress of the level is lost).
-
-    Defence 2/2 in «Атака» plus a builder 1/0 in the forest; attack 2/2: table row 1, no losses.
-    """
-    state = initial_state(line(["forest"] * 3, [0, 1, 1]), RULES)
-    add(state, 1, 2, 2, AtNode(1))
-    b = add(state, 1, 1, 0, AtNode(1), mode=Mode.BUILD, build_edge=1, build_since=0)
-    add(state, 0, 2, 2, before_arrival(state, 0, 0), order=Order((1,), False, 0))
-    step(state)
-    builder = state.groups[b]
-    assert (builder.units, builder.build_edge, builder.build_since) == (1, None, None)
-
-
 def test_rule4_bounce_goes_back_along_the_edge_as_long_as_the_way_there() -> None:
     """Row 1 at a mountain node: the way there takes 30 * 100 // 70 = 42 ticks, so does the way
     back (rule 4; #133: a bounce retraces its steps), then the group stands at home."""

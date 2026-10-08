@@ -165,9 +165,40 @@ class Bot:
         groups = [g for g in view.groups if isinstance(g.location, AtNode) and g.order is None]
         return sorted(groups, key=self._group_key)
 
-    def _group_key(self, g: GroupView) -> tuple[int, int, int, str, int, int]:
-        build = -1 if g.build_edge is None else self.edge_keys[g.build_edge]
-        return (self.key(node_of(g)), -g.units, -g.charged, g.mode.value, build, g.id)
+    def _group_key(self, g: GroupView) -> tuple[int, int, int, str, int]:
+        return (self.key(node_of(g)), -g.units, -g.charged, g.mode.value, g.id)
+
+    def supplied(self, view: PlayerView) -> list[bool]:
+        """Own nodes connected to the own capital over own nodes (ownership is public)."""
+        me = self.player
+        result = [False] * len(view.nodes)
+        capital = self.map.capital(me)
+        if view.nodes[capital].owner != me:
+            return result
+        result[capital] = True
+        queue = [capital]
+        while queue:
+            node = queue.pop()
+            for other in self.neighbors[node]:
+                if not result[other] and view.nodes[other].owner == me:
+                    result[other] = True
+                    queue.append(other)
+        return result
+
+    def can_upgrade(self, view: PlayerView, node: int, edge: int, supplied: list[bool]) -> bool:
+        """``UpgradeRoad(node, edge)`` passes the checks of DEC-16 that the view shows."""
+        city = view.nodes[node]
+        if city.owner != self.player or not supplied[node] or city.build is not None:
+            return False
+        e = view.edges[edge]
+        other = self.map.edges[edge].other(node)
+        if e.upgrade_gain is None or node not in (self.map.edges[edge].a, self.map.edges[edge].b):
+            return False
+        busy = view.nodes[other].build
+        if busy is not None and busy.edge == edge:
+            return False
+        price = self.rules.build.charges_per_level.of(e.width + 1)
+        return (city.warehouse or 0) >= price
 
     def standing(self, view: PlayerView) -> list[int]:
         """Own units standing in each node (the load that recruiting checks against capacity)."""

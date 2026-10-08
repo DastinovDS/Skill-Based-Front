@@ -86,6 +86,18 @@ class WidthTable:
 
 
 @dataclass(frozen=True, slots=True)
+class LevelTable:
+    """One integer per new road width ``2..MAX_WIDTH`` (a road level): ``values[width - 2]``."""
+
+    values: tuple[int, ...]
+
+    def of(self, width: int) -> int:
+        if not 2 <= width <= len(self.values) + 1:
+            raise ValueError(f"road level {width} is out of range 2..{len(self.values) + 1}")
+        return self.values[width - 2]
+
+
+@dataclass(frozen=True, slots=True)
 class CpRules:
     start: int
     cap: int
@@ -151,7 +163,11 @@ class SupplyRules:
 
 @dataclass(frozen=True, slots=True)
 class BuildRules:
+    """Road upgrades by a city (DEC-16): one level per command, paid from the city warehouse."""
+
     ticks_per_level: int
+    charges_per_level: LevelTable
+    """Charges for raising a road to a width, by the new width ``2..MAX_WIDTH``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,6 +222,8 @@ def to_canonical(rules: Ruleset) -> dict[str, object]:
 def _plain(value: object) -> object:
     if isinstance(value, WidthTable):
         return {str(width): v for width, v in enumerate(value.values, start=1)}
+    if isinstance(value, LevelTable):
+        return {str(width): v for width, v in enumerate(value.values, start=2)}
     if isinstance(value, StrEnum):
         return value.value
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
@@ -238,6 +256,7 @@ def archive_ruleset(path: str | Path, archive_dir: str | Path) -> Path:
 
 
 _WIDTH_KEYS: Final = tuple(str(width) for width in range(1, MAX_WIDTH + 1))
+_LEVEL_KEYS: Final = tuple(str(width) for width in range(2, MAX_WIDTH + 1))
 
 
 def parse_ruleset(data: object) -> Ruleset:
@@ -297,11 +316,7 @@ def parse_ruleset(data: object) -> Ruleset:
                 "supply", ("dispatch_ticks", "buffer", "recharge_per_tick", "packet_speed_pct")
             )
         ),
-        build=BuildRules(
-            ticks_per_level=root.table("build", ("ticks_per_level",)).integer(
-                "ticks_per_level", low=1
-            )
-        ),
+        build=_parse_build(root.table("build", ("ticks_per_level", "charges_per_level"))),
         recruit=_parse_recruit(root.table("recruit", ("cooldown_ticks", "location"))),
         victory=_parse_victory(root.table("victory", ("vp_period_ticks", "capital_multiplier"))),
     )
@@ -379,6 +394,14 @@ def _parse_supply(t: "_Table") -> SupplyRules:
         buffer=t.integer("buffer", low=0),
         recharge_per_tick=t.integer("recharge_per_tick", low=0),
         packet_speed_pct=WidthTable(tuple(speed.integer(key, low=1) for key in _WIDTH_KEYS)),
+    )
+
+
+def _parse_build(t: "_Table") -> BuildRules:
+    price = t.table("charges_per_level", _LEVEL_KEYS)
+    return BuildRules(
+        ticks_per_level=t.integer("ticks_per_level", low=1),
+        charges_per_level=LevelTable(tuple(price.integer(key, low=0) for key in _LEVEL_KEYS)),
     )
 
 

@@ -3,7 +3,7 @@
 A command is an intent, never state. It names own groups by opaque id and map nodes and edges by
 their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``Move(group, dest, planned)``, ``Split(group, n)``, ``Merge(groups)``, ``SetMode(group, mode)``,
-``SetStance(stance)``, ``UpgradeRoad(group, edge)``, ``Recruit(node)``, ``CancelOrder(group)``,
+``SetStance(stance)``, ``UpgradeRoad(node, edge)``, ``Recruit(node)``, ``CancelOrder(group)``,
 ``Forfeit()``. The conversion to simulation commands is PRO-03 (#46).
 
 The schema checks only the shape. Ownership, visibility, reachability and CP are checked by the
@@ -62,8 +62,10 @@ class SetStanceCmd(WireModel):
 
 
 class UpgradeRoadCmd(WireModel):
+    """The own city ``node`` raises the internal road ``edge`` by one level (DEC-16)."""
+
     type: Literal["upgrade_road"] = "upgrade_road"
-    group: OpaqueId
+    node: NodeId
     edge: EdgeId
 
 

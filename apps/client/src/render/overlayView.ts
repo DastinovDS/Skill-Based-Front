@@ -13,6 +13,7 @@ import {
   ORDER_GHOST_GAP,
   ORDER_GHOST_WIDTH,
   NODE_RADIUS,
+  PICK_BAND,
   PLAYER_COLOR,
   PREVIEW_ALPHA,
   PREVIEW_DASH,
@@ -100,6 +101,7 @@ export class OverlayView {
   private drawLines(state: OverlayState): void {
     const g = this.lines;
     g.clear();
+    this.drawCandidates(g, state.candidates);
     const road = state.road === null ? undefined : edgeEnds(this.map, state.road);
     if (road !== undefined && state.road !== null) {
       const width = this.map.edges[state.road]?.base_width ?? 1;
@@ -128,6 +130,39 @@ export class OverlayView {
         });
       }
     }
+  }
+
+  /** Road pick: a dashed band along each road a click would upgrade. */
+  private drawCandidates(g: Graphics, candidates: readonly number[]): void {
+    if (candidates.length === 0) return;
+    for (const id of candidates) {
+      const ends = edgeEnds(this.map, id);
+      const edge = this.map.edges[id];
+      if (ends === undefined || edge === undefined) continue;
+      // From rim to rim: the band stays off the city bodies.
+      const length = Math.hypot(ends.b.x - ends.a.x, ends.b.y - ends.a.y);
+      const ra = this.radius(edge.a) + 2;
+      const rb = this.radius(edge.b) + 2;
+      if (length <= ra + rb) continue;
+      const at = (d: number): Point => ({
+        x: ends.a.x + ((ends.b.x - ends.a.x) * d) / length,
+        y: ends.a.y + ((ends.b.y - ends.a.y) * d) / length,
+      });
+      for (const [p, q] of dashSegments(at(ra), at(length - rb), PICK_BAND.dash, PICK_BAND.gap)) {
+        g.moveTo(p.x, p.y).lineTo(q.x, q.y);
+      }
+    }
+    // One stroke for all: the band is as wide as the widest road plus a margin.
+    g.stroke({
+      width: roadThickness(5) + PICK_BAND.extra,
+      color: SELECT_COLOR,
+      alpha: PICK_BAND.alpha,
+      cap: 'butt',
+    });
+  }
+
+  private radius(node: number): number {
+    return this.map.nodes[node]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
   }
 
   /** Dashed arrow along the server's path, or straight to the destination while unanswered. */

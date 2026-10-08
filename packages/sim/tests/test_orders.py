@@ -369,27 +369,17 @@ def test_cancel_without_planned_order_or_defense_is_rejected() -> None:
 # Builds -----------------------------------------------------------------------------------------
 
 
-def test_build_is_public_until_it_stops() -> None:
-    """DEC-04: builds are public like planned orders: from the group's node along the edge."""
+def test_a_city_build_is_not_public() -> None:
+    """DEC-16, item 8: a road build has no public intent."""
     state = _state()
     state.nodes[1].owner = 0  # edge 0 internal to player 0
-    a = _add(state, 0, 1, 0, 1)
+    state.nodes[0].warehouse = 2
     run = _Run(state)
-    run.step((0, UpgradeRoad(a, 0)))
-    assert _public(state) == [(0, IntentKind.BUILD, 1, 0, 1)]
-    run.until(151)  # width 1 -> 2 = max_width at 1 + 150: the build stops (SIM-11)
-    assert state.edges[0].width == 2
+    run.step((0, UpgradeRoad(0, 0)))
+    assert state.nodes[0].build is not None
     assert state.intents == {}
-
-
-def test_move_ends_the_build_intent() -> None:
-    state = _state()
-    state.nodes[1].owner = 0
-    a = _add(state, 0, 1, 0, 1)
-    run = _Run(state)
-    run.step((0, UpgradeRoad(a, 0)))
-    run.step((0, Move(a, 0)))
-    assert state.intents == {}
+    run.until(151)  # width 1 -> 2 at 1 + 150
+    assert state.edges[0].width == 2 and state.nodes[0].build is None
 
 
 def test_intent_of_a_destroyed_group_is_removed() -> None:

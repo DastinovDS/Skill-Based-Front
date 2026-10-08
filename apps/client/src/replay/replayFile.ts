@@ -26,13 +26,16 @@ export type FrameNode = [PlayerId | null, number, number];
 export type FramePacket = [number, PlayerId, number, number, number, number, number];
 /** `[id, owner, kind, origin, target]`. */
 export type FrameIntent = [number, PlayerId, string, number, number | null];
+/** `[node, edge, done_tick]`: a road build of a city (DEC-16). */
+export type FrameBuild = [number, number, number];
 
 export interface FrameGroup {
   id: number;
   o: PlayerId;
   u: number;
   c: number;
-  m: Mode;
+  /** `build`: only in files written before DEC-16 (`sim_version` 2); shown as `attack`. */
+  m: Mode | 'build';
   /** Standing in this node. */
   at?: number;
   /** `[edge, from_node, progress, back]`: moving along an edge. */
@@ -41,7 +44,7 @@ export interface FrameGroup {
   to?: number[];
   /** `1`: the order is planned. */
   pl?: number;
-  /** Building a road on this edge. */
+  /** Before DEC-16 only: the group built a road on this edge. Ignored. */
   b?: number;
 }
 
@@ -53,6 +56,8 @@ export interface ReplayFrame {
   g: FrameGroup[];
   k: FramePacket[];
   i: FrameIntent[];
+  /** Road builds of cities, by node id; absent while no city builds (DEC-16). */
+  b?: FrameBuild[];
 }
 
 /** `[tick, kind, data]`; `data` is the flat object of the simulation event. */
@@ -107,7 +112,8 @@ export function parseReplay(raw: unknown): ReplayFile {
         f.w.length === (map.edges as unknown[]).length &&
         Array.isArray(f.g) &&
         Array.isArray(f.k) &&
-        Array.isArray(f.i),
+        Array.isArray(f.i) &&
+        (f.b === undefined || Array.isArray(f.b)),
     );
   if (!sound) throw new ReplayError('invalid');
   return raw as unknown as ReplayFile;

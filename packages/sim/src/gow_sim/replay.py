@@ -149,8 +149,8 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "set_mode", "group": g, "mode": mode.value}
         case SetStance(stance=stance):
             return {"type": "set_stance", "stance": stance.value}
-        case UpgradeRoad(group=g, edge=edge):
-            return {"type": "upgrade_road", "group": g, "edge": edge}
+        case UpgradeRoad(node=node, edge=edge):
+            return {"type": "upgrade_road", "node": node, "edge": edge}
         case Recruit(node=node):
             return {"type": "recruit", "node": node}
         case CancelOrder(group=g):
@@ -182,7 +182,7 @@ def decode_command(data: object) -> Command:
             case "set_stance":
                 return SetStance(Stance(_str(d["stance"])))
             case "upgrade_road":
-                return UpgradeRoad(_int(d["group"]), _int(d["edge"]))
+                return UpgradeRoad(_int(d["node"]), _int(d["edge"]))
             case "recruit":
                 return Recruit(_int(d["node"]))
             case "cancel_order":
@@ -351,6 +351,25 @@ def read_replay(path: str | Path) -> Replay:
         raise ReplayError(f"{path}: {exc}") from exc
 
 
+def _read_current(path: Path) -> Replay:
+    """``read_replay`` of a replay of this ``SIM_VERSION``; another version raises
+    ``ReplayVersionError`` before its commands are parsed (their format may have changed)."""
+    try:
+        with gzip.open(path, "rb") as f:
+            first = f.readline()
+    except (OSError, EOFError) as exc:
+        raise ReplayError(f"{path}: {exc}") from exc
+    if not first:
+        raise ReplayError(f"{path}: empty replay")
+    try:
+        version = _parse_header(_json(first.rstrip(b"\n"), 1)).sim_version
+    except ReplayError as exc:
+        raise ReplayError(f"{path}: {exc}") from exc
+    if version != SIM_VERSION:
+        raise ReplayVersionError(f"{path}: sim_version {version}, this code is {SIM_VERSION}")
+    return read_replay(path)
+
+
 def _parse(lines: list[bytes]) -> Replay:
     header = _parse_header(_json(lines[0], 1))
     commands: list[tuple[int, PlayerCommand]] = []
@@ -454,12 +473,8 @@ def replay_run(
     frames file this way, SRV-07); it stops seeing ticks at a divergence.
     """
     path = Path(path)
-    replay = read_replay(path)
+    replay = _read_current(path)
     header = replay.header
-    if header.sim_version != SIM_VERSION:
-        raise ReplayVersionError(
-            f"{path}: sim_version {header.sim_version}, this code is {SIM_VERSION}"
-        )
     rules = _find_ruleset(header.ruleset_hash, Path(rulesets_dir))
     mapdef = _find_map(header, [path.parent / "maps", Path(maps_dir)])
     try:
@@ -504,12 +519,8 @@ def replay_match(
     ``replay_run``). Raises ``ReplayVersionError`` and ``ReplayError`` like ``replay_run``.
     """
     path = Path(path)
-    replay = read_replay(path)
+    replay = _read_current(path)
     header = replay.header
-    if header.sim_version != SIM_VERSION:
-        raise ReplayVersionError(
-            f"{path}: sim_version {header.sim_version}, this code is {SIM_VERSION}"
-        )
     rules = _find_ruleset(header.ruleset_hash, Path(rulesets_dir))
     mapdef = _find_map(header, [path.parent / "maps", Path(maps_dir)])
     try:

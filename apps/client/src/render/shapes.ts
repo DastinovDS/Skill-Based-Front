@@ -27,7 +27,7 @@ import {
   PLAYER_COLOR,
 } from './style.ts';
 
-const MODES = ['attack', 'defense', 'build'] as const;
+const MODES = ['attack', 'defense'] as const;
 
 /** Glyph of a mode, drawn around (0, 0) in a box of about 10 x 10 units. */
 export function drawModeGlyph(g: GraphicsContext, mode: Mode): GraphicsContext {
@@ -36,9 +36,12 @@ export function drawModeGlyph(g: GraphicsContext, mode: Mode): GraphicsContext {
       return g.poly([-5, 4.5, 0, -5.5, 5, 4.5]).fill(GLYPH_COLOR);
     case 'defense':
       return g.poly([-4.5, -5, 4.5, -5, 4.5, 1, 0, 5.5, -4.5, 1]).fill(GLYPH_COLOR);
-    case 'build':
-      return g.rect(-1.3, -2, 2.6, 7.5).fill(GLYPH_COLOR).rect(-5, -5.5, 10, 4).fill(GLYPH_COLOR);
   }
+}
+
+/** A hammer, the mark of a road being built by a city (DEC-16), around (0, 0), about 10 x 10. */
+export function drawHammer(g: GraphicsContext): GraphicsContext {
+  return g.rect(-1.3, -2, 2.6, 7.5).fill(GLYPH_COLOR).rect(-5, -5.5, 10, 4).fill(GLYPH_COLOR);
 }
 
 /**
@@ -53,6 +56,7 @@ export class EntityKit {
   readonly pipFilled: Readonly<Record<PlayerId, GraphicsContext>>;
   readonly pipEmpty: GraphicsContext;
   readonly glyph: Readonly<Record<Mode, GraphicsContext>>;
+  readonly hammer: GraphicsContext;
   readonly heading: GraphicsContext;
   readonly swords: GraphicsContext;
   readonly iconDisc: Readonly<Record<PlayerId, GraphicsContext>>;
@@ -88,8 +92,8 @@ export class EntityKit {
     this.glyph = {
       attack: this.context((g) => drawModeGlyph(g, 'attack')),
       defense: this.context((g) => drawModeGlyph(g, 'defense')),
-      build: this.context((g) => drawModeGlyph(g, 'build')),
     };
+    this.hammer = this.context(drawHammer);
     this.heading = this.context((g) =>
       g.poly([5, 0, -3.5, -4.5, -3.5, 4.5]).fill(HEADING_ARROW.fill).stroke(HEADING_ARROW.stroke),
     );

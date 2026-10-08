@@ -27,11 +27,10 @@ PROGRESS_SCALE: Final = 1000
 
 
 class Mode(StrEnum):
-    """Group mode (mechanics.md, section 3; effects: DEC-08)."""
+    """Group mode (mechanics.md, section 3; effects: DEC-08). Roads are built by cities (DEC-16)."""
 
     ATTACK = "attack"
     DEFENSE = "defense"
-    BUILD = "build"
 
 
 class IntentKind(StrEnum):
@@ -39,7 +38,6 @@ class IntentKind(StrEnum):
 
     PLANNED_MOVE = "planned_move"
     DEFENSE = "defense"
-    BUILD = "build"
 
 
 class Detail(StrEnum):
@@ -104,12 +102,8 @@ class Group:
     location: Location
     order: Order | None = None
     """Current movement order; ``None`` when the group has none."""
-    build_edge: int | None = None
-    """Edge the group upgrades (``UpgradeRoad``, SIM-11); ``None`` when it builds nothing."""
-    build_since: int | None = None
-    """Tick the current road level started (SIM-11); set exactly when ``build_edge`` is set."""
     intent: int | None = None
-    """Id of the group's public ``Intent`` (SIM-10): planned order, «Защита» or build. The link
+    """Id of the group's public ``Intent`` (SIM-10): planned order or «Защита». The link
     lives only here, the intent itself names no group (DEC-04)."""
     bonus: int = 0
     """Virtual shots the group brings into its next fight (DEC-08, SIM-10); 0: none. From a
@@ -135,6 +129,20 @@ class PlayerState:
     """The player gave up: a ``Forfeit`` command, also for a technical defeat (DEC-05)."""
 
 
+@dataclass(frozen=True, slots=True)
+class Build:
+    """A road level under construction by a city (``UpgradeRoad(node, edge)``, DEC-16).
+
+    ``owner``: the player who started it; the build holds while ``edge`` is internal for them.
+    ``since``: the tick the command was applied; the width grows at
+    ``since + build.ticks_per_level``.
+    """
+
+    edge: int
+    owner: int
+    since: int
+
+
 @dataclass(slots=True)
 class Node:
     """Dynamic part of a node; the static part is ``GameState.map.nodes[id]``."""
@@ -149,6 +157,8 @@ class Node:
     """Tick of the last owner change; ``None`` for the starting owner (attrition grace)."""
     recruited_tick: int | None = None
     """Tick of the last recruit in this city (DEC-01 cooldown, SIM-12); ``None``: never."""
+    build: Build | None = None
+    """The road this city upgrades (DEC-16); ``None``: no build."""
 
 
 @dataclass(slots=True)
@@ -384,6 +394,9 @@ def _node_data(n: Node) -> dict[str, object]:
         "over_ticks": n.over_ticks,
         "captured_tick": n.captured_tick,
         "recruited_tick": n.recruited_tick,
+        "build": None
+        if n.build is None
+        else {"edge": n.build.edge, "owner": n.build.owner, "since": n.build.since},
     }
 
 
@@ -410,8 +423,6 @@ def _group_data(g: Group) -> dict[str, object]:
         "mode": g.mode.value,
         "location": _location_data(g.location),
         "order": None if g.order is None else _order_data(g.order),
-        "build_edge": g.build_edge,
-        "build_since": g.build_since,
         "intent": g.intent,
         "bonus": g.bonus,
         "bonus_tick": g.bonus_tick,
@@ -539,7 +550,7 @@ def _parse_node(data: object, where: str) -> Node:
     raw = _obj(
         data,
         where,
-        ("id", "owner", "warehouse", "over_ticks", "captured_tick", "recruited_tick"),
+        ("id", "owner", "warehouse", "over_ticks", "captured_tick", "recruited_tick", "build"),
     )
     return Node(
         id=_int(raw["id"], f"{where}.id", low=0),
@@ -548,6 +559,16 @@ def _parse_node(data: object, where: str) -> Node:
         over_ticks=_int(raw["over_ticks"], f"{where}.over_ticks", low=0),
         captured_tick=_opt_int(raw["captured_tick"], f"{where}.captured_tick"),
         recruited_tick=_opt_int(raw["recruited_tick"], f"{where}.recruited_tick"),
+        build=None if raw["build"] is None else _parse_build(raw["build"], f"{where}.build"),
+    )
+
+
+def _parse_build(data: object, where: str) -> Build:
+    raw = _obj(data, where, ("edge", "owner", "since"))
+    return Build(
+        edge=_int(raw["edge"], f"{where}.edge", low=0),
+        owner=_int(raw["owner"], f"{where}.owner", low=0),
+        since=_int(raw["since"], f"{where}.since", low=0),
     )
 
 
@@ -590,18 +611,12 @@ def _parse_group(data: object, where: str) -> Group:
             "mode",
             "location",
             "order",
-            "build_edge",
-            "build_since",
             "intent",
             "bonus",
             "bonus_tick",
         ),
     )
     units = _int(raw["units"], f"{where}.units", low=0)
-    build_edge = _opt_int(raw["build_edge"], f"{where}.build_edge")
-    build_since = _opt_int(raw["build_since"], f"{where}.build_since")
-    if (build_edge is None) != (build_since is None):
-        raise StateFormatError(f"{where}: build_edge and build_since are set only together")
     return Group(
         id=_int(raw["id"], f"{where}.id", low=0),
         owner=_int(raw["owner"], f"{where}.owner", low=0),
@@ -610,8 +625,6 @@ def _parse_group(data: object, where: str) -> Group:
         mode=Mode(_choice(raw["mode"], f"{where}.mode", Mode)),
         location=_parse_location(raw["location"], f"{where}.location"),
         order=None if raw["order"] is None else _parse_order(raw["order"], f"{where}.order"),
-        build_edge=build_edge,
-        build_since=build_since,
         intent=_opt_int(raw["intent"], f"{where}.intent"),
         bonus=_int(raw["bonus"], f"{where}.bonus", low=0),
         bonus_tick=_int(raw["bonus_tick"], f"{where}.bonus_tick", low=0),

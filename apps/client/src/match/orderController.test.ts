@@ -2,12 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { HudState } from '../hud/hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
-import type { Command } from '../protocol.gen.ts';
+import type { Command, RulesetPublic, SnapshotMsg } from '../protocol.gen.ts';
 import { OrderBook } from './orderBook.ts';
 import { NOTICE_MS, OrderController } from './orderController.ts';
 
 const map = DEFAULT_MAP;
-const snapshot = devSnapshot(map, DEV_RULES, 30);
+// Road prices of DEC-16 (mechanics.md, section 8): the price of a level is the new width.
+const RULES: RulesetPublic = {
+  ...DEV_RULES,
+  build: {
+    ticks_per_level: 150,
+    charges_per_level: [
+      { width: 2, charges: 2 },
+      { width: 3, charges: 3 },
+      { width: 4, charges: 4 },
+      { width: 5, charges: 5 },
+    ],
+  },
+};
+const snapshot = devSnapshot(map, RULES, 30);
 const group = snapshot.view.groups[0];
 if (group?.location.kind !== 'node') throw new Error('the dev snapshot has no group in a node');
 const home = group.location.node;
@@ -16,14 +29,14 @@ const other = snapshot.view.nodes.find((n) => n.id !== home && n.owner === 0);
 if (enemy === undefined || other === undefined) throw new Error('the dev snapshot lacks nodes');
 
 function setup(withSend = true) {
-  const hud = new HudState({ me: 0, rules: DEV_RULES, map });
+  const hud = new HudState({ me: 0, rules: RULES, map });
   hud.onSnapshot(snapshot);
   const book = new OrderBook();
   const sent: Command[] = [];
   const controller = new OrderController({
     hud,
     map,
-    rules: DEV_RULES,
+    rules: RULES,
     book,
     send: withSend ? (cmd) => sent.push(cmd) : null,
   });
@@ -161,16 +174,17 @@ describe('OrderController', () => {
   it('sends the other commands as intents', () => {
     const { controller, sent } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
-    controller.setMode('build');
+    controller.setMode('defense');
     controller.split(1);
     controller.upgradeRoad(3);
     controller.recruit();
     controller.setStance('economy');
     controller.forfeit();
     expect(sent).toEqual([
-      { type: 'set_mode', group: group.id, mode: 'build' },
+      { type: 'set_mode', group: group.id, mode: 'defense' },
       { type: 'split', group: group.id, n: 1 },
-      { type: 'upgrade_road', group: group.id, edge: 3 },
+      // The group stands in an own city: that city builds (DEC-16).
+      { type: 'upgrade_road', node: home, edge: 3 },
       { type: 'recruit', node: home },
       { type: 'set_stance', stance: 'economy' },
       { type: 'forfeit' },
@@ -214,35 +228,118 @@ describe('OrderController', () => {
     expect(controller.mergeCandidates()).toEqual([]);
   });
 
-  it('keys 1-3 set the mode and R recruits', () => {
+  it('keys 1 and 2 set the mode, R recruits, 3 does nothing (no "build" mode since DEC-16)', () => {
     const { controller, sent } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
-    for (const code of ['Digit1', 'Digit2', 'Digit3', 'KeyR']) {
+    for (const code of ['Digit1', 'Digit2', 'KeyR']) {
       expect(controller.key({ type: 'keydown', code, shiftKey: false })).toBe(true);
     }
-    expect(sent.map((c) => c.type)).toEqual(['set_mode', 'set_mode', 'set_mode', 'recruit']);
+    expect(controller.key({ type: 'keydown', code: 'Digit3', shiftKey: false })).toBe(false);
+    expect(sent).toEqual([
+      { type: 'set_mode', group: group.id, mode: 'attack' },
+      { type: 'set_mode', group: group.id, mode: 'defense' },
+      { type: 'recruit', node: home },
+    ]);
   });
 
-  it('clicking a road upgrades it only with a group selected; hovering shows the gain', () => {
-    const { controller, sent, hud } = setup();
-    const edges = snapshot.view.edges.map((e, i) =>
-      i === 2 ? { ...e, upgrade_gain: { capacity_centi: 150, packet_speed_pct: 10 } } : e,
-    );
-    hud.onSnapshot({ ...snapshot, view: { ...snapshot.view, edges } });
-    controller.click({ kind: 'edge', id: 2 }, false);
-    expect(sent).toEqual([]);
-    controller.hover({ kind: 'edge', id: 2 });
-    expect(controller.ui.current.road).toEqual({
-      edge: 2,
-      capacityCenti: 150,
-      packetSpeedPct: 10,
-      cost: DEV_RULES.cost.build,
+  describe('road pick of a city (key U, DEC-16)', () => {
+    // Roads of the home city, and one road elsewhere; two of the home roads can be upgraded.
+    const homeRoads = map.edges.filter((e) => e.a === home || e.b === home).map((e) => e.id);
+    const away = map.edges.find((e) => e.a !== home && e.b !== home)?.id;
+    const [up1, up2] = homeRoads;
+    if (up1 === undefined || up2 === undefined || away === undefined) {
+      throw new Error('the map lacks roads around the home city');
+    }
+    const gain = { capacity_centi: 50, packet_speed_pct: 10 };
+
+    function withRoads(base: SnapshotMsg, build: { edge: number; done_tick: number } | null) {
+      return {
+        ...base,
+        view: {
+          ...base.view,
+          nodes: base.view.nodes.map((n) => (n.id === home ? { ...n, build } : n)),
+          edges: base.view.edges.map((e) =>
+            e.id === up1 || e.id === up2 || e.id === away
+              ? { ...e, width: e.id === up2 ? 2 : 1, upgrade_gain: gain }
+              : e,
+          ),
+        },
+      };
+    }
+
+    function pickSetup(build: { edge: number; done_tick: number } | null = null) {
+      const env = setup();
+      env.hud.onSnapshot(withRoads(snapshot, build));
+      env.controller.click({ kind: 'node', id: home }, false);
+      return env;
+    }
+
+    const key = (code: string) => ({ type: 'keydown', code, shiftKey: false }) as const;
+
+    it('U lights up the upgradable roads of the selected own city; a click on one sends it', () => {
+      const { controller, sent } = pickSetup();
+      expect(controller.key(key('KeyU'))).toBe(true);
+      expect(controller.ui.current.roadPick).toBe(home);
+      expect([...controller.overlay().candidates].sort()).toEqual([up1, up2].sort());
+
+      // A road of another city is not a candidate: the click does nothing.
+      controller.click({ kind: 'edge', id: away }, false);
+      expect(sent).toEqual([]);
+
+      controller.click({ kind: 'edge', id: up2 }, false);
+      expect(sent).toEqual([{ type: 'upgrade_road', node: home, edge: up2 }]);
+      // The pick ends with the command.
+      expect(controller.ui.current.roadPick).toBeNull();
+      expect(controller.overlay().candidates).toEqual([]);
     });
-    expect(controller.overlay().road).toBe(2);
-    controller.click({ kind: 'group', id: group.id }, false);
-    controller.click({ kind: 'edge', id: 2 }, false);
-    expect(sent).toEqual([{ type: 'upgrade_road', group: group.id, edge: 2 }]);
-    controller.hover({ kind: 'edge', id: 1 });
-    expect(controller.ui.current.road).toBeNull();
+
+    it('hovering a candidate shows the gain and the price in charges of the next width', () => {
+      const { controller } = pickSetup();
+      controller.key(key('KeyU'));
+      controller.hover({ kind: 'edge', id: up2 });
+      // Width 2 -> 3 costs 3 charges (DEC-16).
+      expect(controller.ui.current.road).toEqual({
+        edge: up2,
+        width: 3,
+        capacityCenti: 50,
+        packetSpeedPct: 10,
+        charges: 3,
+        pickable: true,
+      });
+      controller.hover({ kind: 'edge', id: away });
+      expect(controller.ui.current.road).toMatchObject({ edge: away, charges: 2, pickable: false });
+    });
+
+    it('Esc ends the pick and keeps the city selected; a second Esc deselects', () => {
+      const { controller, hud, sent } = pickSetup();
+      controller.key(key('KeyU'));
+      expect(controller.key(key('Escape'))).toBe(true);
+      expect(controller.ui.current.roadPick).toBeNull();
+      expect(hud.selection).toEqual({ kind: 'node', id: home });
+      controller.click({ kind: 'edge', id: up1 }, false);
+      expect(sent).toEqual([]); // no pick: a road click does nothing
+      controller.key(key('Escape'));
+      expect(hud.selection).toBeNull();
+    });
+
+    it('U again or a click on a node ends the pick', () => {
+      const { controller, hud } = pickSetup();
+      controller.key(key('KeyU'));
+      controller.key(key('KeyU'));
+      expect(controller.ui.current.roadPick).toBeNull();
+      controller.key(key('KeyU'));
+      controller.click({ kind: 'node', id: other.id }, false);
+      expect(controller.ui.current.roadPick).toBeNull();
+      expect(hud.selection).toEqual({ kind: 'node', id: other.id });
+    });
+
+    it('does not start without an own city, nor in a city that already builds', () => {
+      const { controller } = pickSetup({ edge: up1, done_tick: 120 });
+      controller.key(key('KeyU'));
+      expect(controller.ui.current.roadPick).toBeNull();
+      controller.click({ kind: 'node', id: enemy.id }, false);
+      controller.key(key('KeyU'));
+      expect(controller.ui.current.roadPick).toBeNull();
+    });
   });
 });

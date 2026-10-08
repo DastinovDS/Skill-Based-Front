@@ -45,7 +45,7 @@ class RandomLegalBot(Bot):
         "act_pct": ParamRange(30, 90),  # chance that an idle group gets a command
         "radius": ParamRange(1, 4),  # farthest destination of a move, in road hops
         "recruit_pct": ParamRange(20, 80),  # chance to recruit one unit on a decision
-        "other_pct": ParamRange(0, 20),  # split, change mode or build instead of moving
+        "other_pct": ParamRange(0, 20),  # split or change mode instead of moving; a city builds
         "stance_pct": ParamRange(0, 10),  # chance to change the stance on a decision
         "reserve": ParamRange(0, 200),  # CP in hundredths kept unspent
     }
@@ -132,7 +132,8 @@ class RandomLegalBot(Bot):
         if g.units >= 2:
             options.append(Split(g.id, self.rng.randint(1, g.units - 1)))
         options.append(SetMode(g.id, Mode.ATTACK if g.mode is Mode.DEFENSE else Mode.DEFENSE))
-        for e in self.incident[here]:
-            if view.edges[e].upgrade_gain is not None and g.build_edge != e:
-                options.append(UpgradeRoad(g.id, e))
+        supplied = self.supplied(view)
+        for e in self.incident[here]:  # the city where the group stands builds (DEC-16)
+            if self.can_upgrade(view, here, e, supplied):
+                options.append(UpgradeRoad(here, e))
         return self.rng.choice(options)

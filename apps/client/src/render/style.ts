@@ -56,7 +56,7 @@ export const VP_TEXT_COLOR = 0xf0f6fc;
 // Tokens (groups, enemy sightings) sit on a dark plate, so they read on any terrain, snow
 // included. The owner shows in the plate outline colour AND its shape: one ring for player 0, a
 // second inner ring for player 1 (as on the cities). A charge is a filled dot, an empty unit a
-// hollow one; the mode is a glyph (triangle: attack, shield: defense, hammer: build).
+// hollow one; the mode is a glyph (triangle: attack, shield: defense).
 
 export const PLATE_FILL = 0x161b22;
 export const PLATE_RADIUS = 6;
@@ -133,3 +133,19 @@ export const PREVIEW_WIDTH = 2;
 /** The road under the pointer: a translucent band wider than the road itself. */
 export const ROAD_LIGHT_ALPHA = 0.45;
 export const ROAD_LIGHT_EXTRA = 8;
+/**
+ * Road pick (key U, DEC-16): the roads a click would upgrade carry a dashed band (the dashes, not
+ * only the colour, tell them from the hover light).
+ */
+export const PICK_BAND = { extra: 6, dash: 10, gap: 7, alpha: 0.85 } as const;
+
+// --- Road builds of cities (DEC-16) -----------------------------------------------------------
+// A road being built is crossed by short bars across it ("ties"), and a hammer disc of the owner
+// sits on it near the building city (the disc carries the owner's ring shape, as intent icons do);
+// an own build also shows the time left, `m:ss`.
+
+export const BUILD_TIE = { width: 3, color: 0xffd33d, spacing: 12, extra: 8 } as const;
+export const BUILD_TIE_CASING = { width: 5, color: 0x0d1117, alpha: 0.8 } as const;
+/** Distance of the hammer disc from the centre of the building city, along the road. */
+export const BUILD_MARK_DISTANCE = 34;
+export const BUILD_TIME_FONT_SIZE = 10;

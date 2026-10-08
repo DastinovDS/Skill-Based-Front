@@ -66,7 +66,8 @@ function attackerOf(v: Vector): AttackerInput {
   const side = v.sides.a;
   return {
     units: sum(side.groups, (g) => g.units),
-    firingCharged: sum(side.groups, (g) => (g.mode === 'build' ? 0 : g.charged)),
+    // Every charged unit fires: there is no non-firing mode since DEC-16.
+    firingCharged: sum(side.groups, (g) => g.charged),
     planned: side.bonus?.source === 'planned_order',
   };
 }
@@ -181,23 +182,19 @@ describe('estimateCombat on the DEC-07 vectors, enemy not seen in full', () => {
 describe('estimateCombat special cases', () => {
   const attacker: AttackerInput = { units: 3, firingCharged: 3, planned: false };
 
-  it('a build-mode group makes the answer an upper bound: its charges do not shoot', () => {
+  it('an enemy seen in full is exact whatever its modes: every charged unit fires (DEC-16)', () => {
     const defender: DefenderInput = {
       visibility: 'exact',
       units: 4,
       charged: 4,
-      modes: ['attack', 'build'],
+      modes: ['attack'],
     };
     const estimate: CombatEstimate = estimateCombat(rules, attacker, defender, 'forest');
-    expect(estimate).toMatchObject({
-      kind: 'upper_bound',
-      defenderPoolMax: 4,
-      defenderUnitsMax: 4,
-    });
+    expect(estimate).toMatchObject({ kind: 'exact', defenderPool: 4 });
   });
 
-  it('only build groups: nothing shoots at the attacker', () => {
-    const defender: DefenderInput = { visibility: 'partial', capacity: 5, modes: ['build'] };
+  it('no enemy group seen there now: nothing shoots at the attacker', () => {
+    const defender: DefenderInput = { visibility: 'partial', capacity: 5, modes: [] };
     expect(estimateCombat(rules, attacker, defender, 'mountains')).toMatchObject({
       kind: 'upper_bound',
       defenderPoolMax: 0,

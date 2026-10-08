@@ -56,6 +56,14 @@
           <dt>{t('sel.warehouse')}</dt>
           <dd>{n.warehouse}</dd>
         {/if}
+        {#if n.build !== null}
+          <dt>{t('sel.build')}</dt>
+          <dd>
+            {n.build.secondsLeft === null
+              ? tf('sel.buildEnemy', { edge: n.build.edge })
+              : tf('sel.buildOwn', { edge: n.build.edge, seconds: n.build.secondsLeft })}
+          </dd>
+        {/if}
         <dt>{t('sel.here')}</dt>
         <dd>
           {n.mine.units}

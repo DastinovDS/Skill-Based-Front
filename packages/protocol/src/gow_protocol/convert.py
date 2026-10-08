@@ -3,9 +3,9 @@
 Server -> client:
 
 - ``snapshot_msg``: ``PlayerView`` (``gow_sim.view.project()``) -> ``snapshot``. Opaque ids are
-  63-bit integers in the simulation and decimal strings on the wire. Three fields of the view stay
-  on the server, the client does not need them: ``order.depart_tick``, ``build_edge`` and
-  ``location.back`` (a bouncing group's ``progress`` falls, so interpolation works without it);
+  63-bit integers in the simulation and decimal strings on the wire. Two fields of the view stay
+  on the server, the client does not need them: ``order.depart_tick`` and ``location.back`` (a
+  bouncing group's ``progress`` falls, so interpolation works without it);
 - ``snapshot_frame``: the same ``snapshot`` encoded straight from the ``PlayerView``, without the
   models and their validation (#155). The server sends these every tick; ``snapshot_msg``, built
   through the validating models, is their specification: tests over real matches require the two
@@ -28,7 +28,9 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
 - ``fight``: to both players, they both fight in it; the enemy's ``pool`` and ``unspent`` (its
   charges) are removed, the losses of both sides stay;
 - everything else only to the player of the event (``player``, for ``warehouse_lost`` ``owner``),
-  enemy ones are dropped. ``fight_group`` goes only to the owner of the group;
+  enemy ones are dropped. ``fight_group`` goes only to the owner of the group; the road build
+  events ``build_started``, ``road_upgraded`` and ``build_stopped`` only to the builder (DEC-17,
+  item 6);
 - ``match_ended`` is not an event on the wire: it is ``match_end``.
 
 Entity ids in event data (``group``, ``new_group``, ``packet``) become opaque ids of the player;
@@ -58,6 +60,7 @@ from gow_protocol.view import (
     GroupView,
     IntentView,
     Location,
+    NodeBuild,
     NodeView,
     OnEdgeLoc,
     OrderView,
@@ -98,6 +101,7 @@ PUBLIC_KINDS: Final = frozenset({"node_captured", "vp_awarded", "forfeit"})
 PRIVATE_KINDS: Final = frozenset(
     {
         "attrition",
+        "build_started",
         "build_stopped",
         "charges_overflow",
         "charges_produced",
@@ -160,6 +164,9 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 detail=n.detail,
                 warehouse=n.warehouse,
                 seen=_seen(n.seen),
+                build=None
+                if n.build is None
+                else NodeBuild(edge=n.build.edge, done_tick=n.build.done_tick),
             )
             for n in view.nodes
         ),
@@ -259,6 +266,9 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "detail": n.detail,
                 "warehouse": n.warehouse,
                 "seen": _seen_data(n.seen),
+                "build": None
+                if n.build is None
+                else {"edge": n.build.edge, "done_tick": n.build.done_tick},
             }
             for n in view.nodes
         ],
@@ -359,8 +369,8 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.SetMode(gid(g), mode)
         case wire.SetStanceCmd(stance=stance):
             return sim.SetStance(stance)
-        case wire.UpgradeRoadCmd(group=g, edge=edge):
-            return sim.UpgradeRoad(gid(g), edge)
+        case wire.UpgradeRoadCmd(node=node, edge=edge):
+            return sim.UpgradeRoad(node, edge)
         case wire.RecruitCmd(node=node):
             return sim.Recruit(node)
         case wire.CancelOrderCmd(group=g):

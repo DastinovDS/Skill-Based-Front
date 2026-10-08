@@ -52,6 +52,12 @@ describe('eventText', () => {
     expect(eventText(event('road_upgraded', { edge: 2, width: 3 }), 0)).toBe(
       'Road 2 upgraded to width 3',
     );
+    expect(
+      eventText(event('build_started', { node: 4, edge: 2, width: 3, charges: 3, player: 0 }), 0),
+    ).toBe('City 4 upgrades road 2 to width 3: 3 charges spent');
+    expect(eventText(event('build_stopped', { node: 4, edge: 2, reason: 'interrupted' }), 0)).toBe(
+      'The build of road 2 was interrupted',
+    );
     expect(eventText(event('packet_lost', { edge: 1, charges: 5 }), 0)).toBe(
       'Charges lost on road 1: 5',
     );

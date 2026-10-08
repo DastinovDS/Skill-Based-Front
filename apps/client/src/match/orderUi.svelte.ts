@@ -7,12 +7,17 @@ export interface MovePricing {
   readonly cost: number;
 }
 
-/** What the next level of the road under the pointer gives, and what it costs (hundredths of CP). */
+/** What the next level of the road under the pointer gives, and what it costs (DEC-16). */
 export interface RoadHint {
   readonly edge: number;
-  readonly capacityCenti: number | null;
-  readonly packetSpeedPct: number | null;
-  readonly cost: number;
+  /** The width the road would get. */
+  readonly width: number;
+  readonly capacityCenti: number;
+  readonly packetSpeedPct: number;
+  /** Warehouse charges of the building city; `null` if the ruleset lists no price. */
+  readonly charges: number | null;
+  /** A click on it now sends the upgrade (road pick of the selected city). */
+  readonly pickable: boolean;
 }
 
 /** The answer to the last command, for the panel. */
@@ -27,6 +32,8 @@ export interface OrderUiData {
   readonly preview: MovePricing | null;
   /** The upgrade hint of the road under the pointer; `null` if it has none. */
   readonly road: RoadHint | null;
+  /** Road pick (key U, DEC-16): the own city whose road a click upgrades; `null`: off. */
+  readonly roadPick: number | null;
   readonly notice: OrderNotice | null;
 }
 
@@ -39,6 +46,7 @@ export class OrderUiState {
     planned: false,
     preview: null,
     road: null,
+    roadPick: null,
     notice: null,
   });
 

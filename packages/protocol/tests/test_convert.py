@@ -53,12 +53,11 @@ RULES = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
 MVP_MAPS = ("arteriya", "pautina", "pereval")
 CLIENT_FIXTURES = ROOT / "packages" / "protocol" / "fixtures" / "client"
 KEY = b"pro-03 test match key, 32 bytes!"
-TICKS = 1500
+TICKS = 1800  # pereval: the first fight of the scripted drivers is at tick 1568
 BOT_TICKS = 1200
 REGRESSION = 1.5
 
 NOT_FOUND = sim.RejectCode.NOT_FOUND_OR_HIDDEN.value
-DROPPED_GROUP_KEYS = ("build_edge",)
 DROPPED_ORDER_KEYS = ("depart_tick",)
 DROPPED_LOCATION_KEYS = ("back",)
 
@@ -109,13 +108,12 @@ class WireDriver:
                 mode = Mode.DEFENSE if g.mode is Mode.ATTACK else Mode.ATTACK
                 cmds.append(wire.SetModeCmd(group=g.id, mode=mode))
                 continue
-            if phase == 21:
-                gains = [
-                    e for e in self.map.incident[here] if view.edges[e].upgrade_gain is not None
-                ]
-                if gains:
-                    cmds.append(wire.UpgradeRoadCmd(group=g.id, edge=gains[0]))
-                    continue
+            gains = [e for e in self.map.incident[here] if view.edges[e].upgrade_gain is not None]
+            if 21 <= phase <= 30 and gains:
+                # The city upgrades a road (DEC-16); its groups wait meanwhile, so armies gather.
+                if phase == 21:
+                    cmds.append(wire.UpgradeRoadCmd(node=here, edge=gains[0]))
+                continue
             if g.mode is not Mode.ATTACK:
                 continue
             dist = self.hops[here]
@@ -141,8 +139,6 @@ def _expected_wire_view(view: PlayerView) -> dict[str, Any]:
         for entity in data[key]:
             entity["id"] = str(entity["id"])
     for group in data["groups"]:
-        for name in DROPPED_GROUP_KEYS:
-            del group[name]
         if group["order"] is not None:
             for name in DROPPED_ORDER_KEYS:
                 del group["order"][name]
@@ -403,10 +399,10 @@ def test_command_fields() -> None:
     assert command_from_wire(wire.MoveCmd(group="12", dest=3, planned=False)) == sim.Move(12, 3)
     assert command_from_wire(wire.SplitCmd(group="5", n=2)) == sim.Split(5, 2)
     assert command_from_wire(wire.MergeCmd(groups=("7", "9"))) == sim.Merge((7, 9))
-    assert command_from_wire(wire.SetModeCmd(group="1", mode=Mode.BUILD)) == sim.SetMode(
-        1, Mode.BUILD
+    assert command_from_wire(wire.SetModeCmd(group="1", mode=Mode.DEFENSE)) == sim.SetMode(
+        1, Mode.DEFENSE
     )
-    assert command_from_wire(wire.UpgradeRoadCmd(group="4", edge=8)) == sim.UpgradeRoad(4, 8)
+    assert command_from_wire(wire.UpgradeRoadCmd(node=4, edge=8)) == sim.UpgradeRoad(4, 8)
     assert command_from_wire(wire.CancelOrderCmd(group="0")) == sim.CancelOrder(0)
     assert command_from_wire(wire.SetStanceCmd(stance=Stance.ECONOMY)) == sim.SetStance(
         Stance.ECONOMY
