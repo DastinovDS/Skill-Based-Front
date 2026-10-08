@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Статичный макет визуального стиля клиента (docs/design/ui-style.md, issue #202).
+  Статичный макет визуального стиля клиента (docs/design/ui-style.md v2, issues #202 и #208).
   Самодостаточный: без внешних шрифтов, картинок и скриптов. Открыть в браузере как файл.
   Это иллюстрация, а не код клиента: числа и геометрия взяты из гайда, реализация в волне 3.
   Все глифы нарисованы здесь же простыми фигурами, чужие иконки не копировались.
@@ -12,7 +12,7 @@
     <title>Макет стиля клиента</title>
     <style>
       :root {
-        /* Токены палитры (ui-style.md, раздел 3). */
+        /* Токены палитры (ui-style.md v2, раздел 6). */
         --bg: #0d1117;
         --surface: rgb(22 27 34 / 92%);
         --surface-solid: #161b22;
@@ -20,11 +20,10 @@
         --border: #30363d;
         --text: #e6edf3;
         --text-dim: #8b949e;
-        --you: #4c8dff;
-        --enemy: #ff8a3d;
+        --you: #5b9bff;
+        --enemy: #e5484d;
         --neutral: #8b949e;
-        --accent: #ffd33d;
-        --danger: #ff5d5d;
+        --warn: #ffb020;
         --vp: #e3b341;
         --ink: #0d1117;
         --paper: #f0f6fc;
@@ -131,7 +130,7 @@
       }
       .cp-bar {
         position: relative;
-        width: 170px;
+        width: 130px;
         height: 14px;
         display: grid;
         grid-template-columns: repeat(5, 1fr);
@@ -147,12 +146,13 @@
       .cp-seg > i {
         position: absolute;
         inset: 0 auto 0 0;
-        background: var(--accent);
+        background: var(--you);
       }
       .cp-seg.next > i {
-        background: repeating-linear-gradient(135deg, var(--accent) 0 4px, #b8961f 4px 8px);
+        background: repeating-linear-gradient(135deg, var(--you) 0 4px, #2f5aa8 4px 8px);
       }
       .cp-num {
+        white-space: nowrap;
         font-weight: 700;
       }
       .dim {
@@ -192,8 +192,8 @@
         align-items: center;
         gap: 10px;
         padding: 6px 12px 6px 8px;
-        background: rgb(60 18 18 / 92%);
-        border: 1px solid var(--danger);
+        background: rgb(58 40 8 / 94%);
+        border: 1px solid var(--warn);
         border-radius: 999px;
         font-weight: 600;
       }
@@ -216,7 +216,7 @@
         font-size: 13px;
       }
       .toast.bad {
-        border-left-color: var(--danger);
+        border-left-color: var(--enemy);
       }
       .toast.good {
         border-left-color: var(--you);
@@ -265,13 +265,13 @@
         font-size: 12px;
       }
       .mode.on {
-        border-color: var(--accent);
-        box-shadow: inset 0 0 0 1px var(--accent);
+        border-color: var(--paper);
+        box-shadow: inset 0 0 0 1px var(--paper);
       }
       .row {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
+        flex-direction: column;
+        gap: 4px;
         margin-top: 8px;
         font-size: 13px;
       }
@@ -337,14 +337,216 @@
         margin: 6px 0 0;
         max-width: 1280px;
       }
+      /* --- v2: перетягивание VP, стопка тревог, подсказка ---------------------------------- */
+      .nick {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text);
+      }
+      .tug {
+        position: relative;
+        width: 120px;
+        height: 8px;
+        border-radius: 4px;
+        background: var(--enemy);
+        overflow: hidden;
+        outline: 1px solid #0d1117;
+      }
+      .tug > .tug-you {
+        position: absolute;
+        inset: 0 auto 0 0;
+        background: var(--you);
+      }
+      .tug > .tug-mid {
+        position: absolute;
+        left: calc(50% - 1px);
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--paper);
+      }
+      .alerts {
+        position: absolute;
+        top: 54px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .alerts .alert {
+        position: static;
+        transform: none;
+      }
+      .tip {
+        position: absolute;
+        left: 76.5%;
+        top: 31%;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 220px;
+        padding: 8px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--enemy);
+        border-radius: 6px;
+        font-size: 13px;
+      }
+      /* --- v2: экраны вне матча ----------------------------------------------------------- */
+      .shell {
+        position: relative;
+        width: 1280px;
+        max-width: 100%;
+        aspect-ratio: 16 / 9;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 30% 40%, rgb(91 155 255 / 18%), transparent 45%),
+          radial-gradient(circle at 75% 60%, rgb(229 72 77 / 14%), transparent 45%),
+          repeating-linear-gradient(60deg, #111821 0 18px, #0f151d 18px 36px);
+      }
+      .shell-head {
+        position: absolute;
+        left: 24px;
+        right: 24px;
+        top: 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .brand {
+        font-size: 24px;
+        font-weight: 800;
+      }
+      .brand small {
+        display: block;
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--text-dim);
+      }
+      .who {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-size: 14px;
+      }
+      .panel {
+        position: absolute;
+        left: 50%;
+        top: 52%;
+        transform: translate(-50%, -50%);
+        width: 480px;
+        padding: 20px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+      .two > .shell {
+        aspect-ratio: 4 / 3;
+      }
+      .two > .shell .panel {
+        top: 57%;
+      }
+      .panel.wide {
+        width: 760px;
+      }
+      .primary {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: 48px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--you);
+        color: #06101f;
+        font: 700 17px var(--font);
+      }
+      .tiles {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .tile {
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface-2);
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .tile span {
+        display: block;
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--text-dim);
+      }
+      .links {
+        display: flex;
+        gap: 16px;
+        margin-top: 14px;
+        font-size: 14px;
+        color: #9cc0ff;
+      }
+      .ring {
+        display: block;
+        margin: 4px auto 10px;
+      }
+      .center {
+        text-align: center;
+      }
+      .verdict {
+        font-size: 40px;
+        font-weight: 800;
+        color: var(--you);
+        margin: 0;
+      }
+      .kpis {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin: 14px 0;
+      }
+      .kpi {
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #121820;
+      }
+      .kpi b {
+        display: block;
+        font-size: 24px;
+        font-variant-numeric: tabular-nums;
+      }
+      .kpi span {
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+      .btnrow {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .btnrow .btn {
+        height: 44px;
+        justify-content: center;
+        font-size: 15px;
+      }
     </style>
   </head>
   <body>
     <h1>Макет визуального стиля клиента</h1>
     <p class="lead">
-      Иллюстрация к <code>docs/design/ui-style.md</code>. Экран матча после упрощения: верхняя
-      панель, карта на весь экран, карточка выделения только когда что-то выбрано. Числа
-      условные (рулсет <code>mvp-0</code>), игрок видит себя синим.
+      Иллюстрация к <code>docs/design/ui-style.md</code> v2. Экран матча после упрощения: верхняя
+      панель с «перетягиванием» VP и никами, карта на весь экран, стопка тревог, тосты, подсказка
+      по наведению, карточка выделения только когда что-то выбрано. Ниже: радиальное меню, стрелки,
+      легенда, меню, очередь и экран итога. Числа условные (рулсет <code>mvp-0</code>); свои всегда
+      синие, противник красный, тревоги янтарные.
     </p>
 
     <section class="screen" aria-label="Экран матча">
@@ -362,10 +564,10 @@
               <path
                 d="M9 1.5 16 5.5v7L9 16.5 2 12.5v-7Z"
                 fill="none"
-                stroke="var(--accent)"
+                stroke="var(--you)"
                 stroke-width="1.8"
               />
-              <path d="M9 5.5v7M5.5 9h7" stroke="var(--accent)" stroke-width="1.8" />
+              <path d="M9 5.5v7M5.5 9h7" stroke="var(--you)" stroke-width="1.8" />
             </svg>
             <div class="cp-bar" aria-hidden="true">
               <div class="cp-seg"><i style="width: 100%"></i></div>
@@ -390,16 +592,16 @@
           </button>
         </div>
         <div class="cluster">
-          <div class="score" title="Очки победы">
+          <div class="score" title="Очки победы: перетягивание">
             <span class="side"
               ><svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true">
                 <path d="M1 1h12L7 11Z" fill="var(--you)" stroke="#fff" stroke-width="1.5" />
               </svg>
-              Вы 4</span
+              <span class="nick">Danya</span> 46</span
             >
-            <span class="dim">:</span>
+            <div class="tug" aria-hidden="true"><i class="tug-you" style="width: 42%"></i><i class="tug-mid"></i></div>
             <span class="side"
-              >6 Враг
+              >64 <span class="nick">Guest</span>
               <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true">
                 <path d="M1 1h12L7 11Z" fill="var(--enemy)" stroke="#fff" stroke-width="1.5" />
                 <path d="M4.2 3h5.6L7 8.2Z" fill="none" stroke="#0d1117" stroke-width="1" />
@@ -415,6 +617,12 @@
           </div>
         </div>
         <div class="cluster right">
+          <button class="btn icon" title="Звук: вкл">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M2 6h3l4-3v10l-4-3H2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+              <path d="M11.5 5.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" stroke-width="1.5" />
+            </svg>
+          </button>
           <button class="btn icon" title="Пауза (только приватные матчи)">
             <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
               <path d="M4 2v10M10 2v10" stroke="currentColor" stroke-width="2.2" />
@@ -436,31 +644,31 @@
         </div>
       </header>
 
-      <div class="alert" role="alert">
-        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
-          <circle cx="14" cy="14" r="11" fill="none" stroke="#5a2626" stroke-width="4" />
-          <circle
-            cx="14"
-            cy="14"
-            r="11"
-            fill="none"
-            stroke="var(--danger)"
-            stroke-width="4"
-            stroke-dasharray="55 70"
-            transform="rotate(-90 14 14)"
-          />
-          <text x="14" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">
-            !
-          </text>
-        </svg>
-        Переполнен город 7: 6 из 4. Минус юнит через 2,4 с
-        <kbd>Space</kbd>
+      <div class="alerts" role="alert">
+        <div class="alert">
+          <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+            <circle cx="14" cy="14" r="11" fill="none" stroke="#5a4208" stroke-width="4" />
+            <circle cx="14" cy="14" r="11" fill="none" stroke="var(--warn)" stroke-width="4" stroke-dasharray="55 70" transform="rotate(-90 14 14)" />
+            <text x="14" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">!</text>
+          </svg>
+          Переполнен город 7: 6 из 4. Минус юнит через 2,4 с
+          <kbd>Space</kbd>
+        </div>
+        <div class="alert">
+          <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+            <circle cx="14" cy="14" r="11" fill="none" stroke="#5a4208" stroke-width="4" />
+            <circle cx="14" cy="14" r="11" fill="none" stroke="var(--warn)" stroke-width="4" stroke-dasharray="28 70" transform="rotate(-90 14 14)" />
+            <path d="M8 14h11M15 10l4 4-4 4" fill="none" stroke="#fff" stroke-width="1.8" />
+          </svg>
+          На город 9 идут: выступят через 3 с
+          <kbd>Space</kbd>
+        </div>
       </div>
 
       <div class="toasts" aria-live="polite">
-        <div class="toast bad">Бой у города 9: вы −1, враг −2</div>
-        <div class="toast good">Дорога 12 улучшена до ширины 3</div>
-        <div class="toast old">Враг включил «Защиту» у города 11</div>
+        <div class="toast bad">⚔ Бой у города 9: ты −1, враг −2</div>
+        <div class="toast good">✓ Дорога 12 улучшена до ширины 3</div>
+        <div class="toast old">✕ Приказ не принят: не хватает CP</div>
       </div>
 
       <aside class="card" aria-label="Выделенная группа">
@@ -480,10 +688,18 @@
           <div class="mode">⛉ Защита <kbd>2</kbd><span class="dim">2 CP</span></div>
         </div>
         <div class="row">
-          <span class="toggle"><span class="switch"></span> Запланированный <kbd>P</kbd></span>
-          <span class="dim">1 CP / план 2 CP</span>
+          <span>Клик: приказ <b>1 CP</b></span>
+          <span><kbd>Shift</kbd>+клик: запланированный <b>2 CP</b></span>
         </div>
       </aside>
+
+      <div class="tip" role="tooltip">
+        <b>Город 11 · противник</b>
+        <span><span class="dim">Ёмкость</span> 4</span>
+        <span><span class="dim">Рельеф</span> горы: защита +1, вход 70%</span>
+        <span><span class="dim">VP</span> +1 за 30 с</span>
+        <span><span class="dim">Видели</span> сейчас</span>
+      </div>
 
       <div class="hint-bar">
         <span><kbd>Q</kbd> стойка</span><span><kbd>U</kbd> дорога</span
@@ -493,7 +709,8 @@
     <p class="note">
       Снизу вверх: местность штампами (равнина, лес, горы), территория, дороги ширины 1..5,
       города с кольцом ёмкости, юниты-треугольники, стрелки приказов, туман. Город 7 (слева
-      вверху) переполнен: два красных сегмента и отсчёт.
+      вверху) переполнен: два янтарных сегмента и отсчёт. Выделенная группа обведена белым.
+      Справа подсказка по наведению на город 11 (У5).
     </p>
 
     <h2>Радиальное меню стойки (зажата Q)</h2>
@@ -505,19 +722,91 @@
     <h2>Легенда: юниты, города, дороги, туман</h2>
     <div class="sheet"><svg id="legend" viewBox="0 0 1280 470" role="img" aria-label="Легенда"></svg></div>
 
+    <h2>Меню и очередь (раздел 13)</h2>
+    <div class="two">
+      <section class="shell" aria-label="Меню" style="width: 632px">
+        <div class="shell-head">
+          <div class="brand">Skill-Based Front<small>Столица производит заряды, дороги их развозят</small></div>
+          <div class="who"><b>Danya</b><span class="dim">1480</span></div>
+        </div>
+        <div class="panel" style="width: 420px">
+          <button class="primary">▶ Играть рейтинговый</button>
+          <div class="tiles">
+            <div class="tile">С другом<span>ссылка-приглашение</span></div>
+            <div class="tile">Публичное лобби<span>открытые матчи</span></div>
+            <div class="tile">С ботом<span>без рейтинга</span></div>
+            <div class="tile">Как играть<span>2 минуты</span></div>
+          </div>
+          <div class="links"><span>Сменить ник</span><span>Реплеи</span><span>Настройки</span></div>
+        </div>
+      </section>
+      <section class="shell" aria-label="Очередь" style="width: 632px">
+        <div class="shell-head">
+          <div class="brand">Поиск соперника<small>Рейтинговый матч</small></div>
+          <div class="who"><b>Danya</b><span class="dim">1480</span></div>
+        </div>
+        <div class="panel center" style="width: 420px">
+          <svg class="ring" width="140" height="140" viewBox="0 0 140 140" aria-hidden="true">
+            <circle cx="70" cy="70" r="60" fill="none" stroke="#21262d" stroke-width="8" />
+            <circle cx="70" cy="70" r="60" fill="none" stroke="var(--you)" stroke-width="8" stroke-dasharray="90 290" stroke-linecap="round" transform="rotate(-60 70 70)" />
+            <text x="70" y="78" text-anchor="middle" font-size="26" font-weight="700" fill="#e6edf3">0:42</text>
+          </svg>
+          <div>Ищем соперника · в очереди 3</div>
+          <div class="dim" style="font-size: 13px; margin-top: 4px">Ищем шире: ±250 рейтинга</div>
+          <div class="tile" style="margin-top: 12px; text-align: left">
+            Соперника пока нет<span>Сыграй с ботом без рейтинга, очередь отменится</span>
+          </div>
+          <div class="links" style="justify-content: center"><span>Отменить поиск</span></div>
+        </div>
+      </section>
+    </div>
+    <p class="note">Одна главная кнопка на экран, вторичные действия карточками, третичные ссылками.
+      Очередь: таймер вверх внутри кольца, при найденном сопернике кольцо становится отсчётом
+      подтверждения, звук и заголовок вкладки «(!) Соперник найден».</p>
+
+    <h2>Экран итога (У1, раздел 13.6)</h2>
+    <section class="shell" aria-label="Экран итога">
+      <div class="shell-head">
+        <div class="brand">Skill-Based Front</div>
+        <div class="who"><b>Danya</b><span class="dim">1480 → 1496</span></div>
+      </div>
+      <div class="panel wide">
+        <p class="verdict">Победа</p>
+        <div class="dim">Время вышло: решают очки победы</div>
+        <div style="margin-top: 6px; font-size: 16px; font-weight: 600">
+          Danya 134 : 96 Guest <span class="dim">· arteriya · 12:00 · рейтинг +16 ▲</span>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><b>9</b><span>городов в конце</span></div>
+          <div class="kpi"><b>14</b><span>юнитов потеряно</span></div>
+          <div class="kpi"><b>212</b><span>зарядов доставлено</span></div>
+          <div class="kpi"><b>+41</b><span>пик разницы VP</span></div>
+        </div>
+        <svg id="vpchart" viewBox="0 0 720 170" role="img" aria-label="Разница VP по времени" style="display: block; width: 100%; height: auto"></svg>
+        <div class="btnrow">
+          <button class="primary" style="height: 44px">Ещё раз</button>
+          <button class="btn">Смотреть реплей</button>
+          <button class="btn">В меню</button>
+        </div>
+      </div>
+    </section>
+    <p class="note">График разницы VP: выше нуля синий, ниже красный; захваты своих отмечены над
+      графиком, чужих под ним; заштрихованы периоды боёв. Наведение показывает время и счёт, клик
+      открывает реплей на этом тике. Данные из файла кадров реплея.</p>
+
     <script>
       // Простая генерация SVG для макета. Не код клиента.
       const NS = 'http://www.w3.org/2000/svg';
       const C = {
-        you: '#4c8dff',
-        enemy: '#ff8a3d',
+        you: '#5b9bff',
+        enemy: '#e5484d',
         neutralFill: '#2b3139',
         neutral: '#8b949e',
         ink: '#0d1117',
         paper: '#f0f6fc',
         plate: '#161b22',
-        danger: '#ff5d5d',
-        accent: '#ffd33d',
+        warn: '#ffb020',
+        accent: '#f0f6fc',
         vp: '#e3b341',
         road: '#c4cbd4',
       };
@@ -711,14 +1000,14 @@
             const a0 = -Math.PI / 2 + i * 0.55 + 0.06;
             const a1 = a0 + 0.45;
             el(g, 'path', { d: arc(x, y, ringR + 8, a0, a1), fill: 'none', stroke: C.ink, 'stroke-width': 7, 'stroke-opacity': 0.8 });
-            el(g, 'path', { d: arc(x, y, ringR + 8, a0, a1), fill: 'none', stroke: C.danger, 'stroke-width': 4 });
+            el(g, 'path', { d: arc(x, y, ringR + 8, a0, a1), fill: 'none', stroke: C.warn, 'stroke-width': 4 });
           }
-          el(g, 'circle', { cx: x, cy: y, r: ringR + 15, fill: 'none', stroke: C.danger, 'stroke-width': 1.5, 'stroke-dasharray': '4 4' });
+          el(g, 'circle', { cx: x, cy: y, r: ringR + 15, fill: 'none', stroke: C.warn, 'stroke-width': 1.5, 'stroke-dasharray': '4 4' });
           const px = x + ringR + 18;
           const py = y - ringR - 14;
-          el(g, 'rect', { x: px - 4, y: py - 13, width: 70, height: 24, rx: 12, fill: '#3c1212', stroke: C.danger, 'stroke-width': 1.5 });
-          el(g, 'circle', { cx: px + 9, cy: py - 1, r: 7, fill: 'none', stroke: '#5a2626', 'stroke-width': 3 });
-          el(g, 'path', { d: arc(px + 9, py - 1, 7, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * 0.8), fill: 'none', stroke: C.danger, 'stroke-width': 3 });
+          el(g, 'rect', { x: px - 4, y: py - 13, width: 70, height: 24, rx: 12, fill: '#3a2808', stroke: C.warn, 'stroke-width': 1.5 });
+          el(g, 'circle', { cx: px + 9, cy: py - 1, r: 7, fill: 'none', stroke: '#5a4208', 'stroke-width': 3 });
+          el(g, 'path', { d: arc(px + 9, py - 1, 7, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * 0.8), fill: 'none', stroke: C.warn, 'stroke-width': 3 });
           el(g, 'text', { x: px + 22, y: py + 4, fill: '#fff', 'font-size': 12, 'font-weight': 700 }, '−1 2,4с');
         }
         // Склад: сегментная полоска над кольцом (как сейчас, тем же языком сегментов).
@@ -801,6 +1090,10 @@
           el(g, 'text', { x, y: ly + 2, 'text-anchor': 'middle', fill: C.paper, 'font-size': 11.5, 'font-weight': 700 }, o.label);
         }
         if (o.selected) {
+          el(g, 'polygon', {
+            points: pts(tri.map(([px, py]) => [x + (px - x) * 1.45, y + (py - y) * 1.45])),
+            fill: 'none', stroke: C.ink, 'stroke-opacity': 0.7, 'stroke-width': 6, 'stroke-linejoin': 'round',
+          });
           el(g, 'polygon', {
             points: pts(tri.map(([px, py]) => [x + (px - x) * 1.45, y + (py - y) * 1.45])),
             fill: 'none', stroke: C.accent, 'stroke-width': 2.5, 'stroke-linejoin': 'round',
@@ -1010,7 +1303,7 @@
         el(radial, 'path', {
           d: `M${o0} A${R} ${R} 0 0 1 ${o1} L${i1} A${r0} ${r0} 0 0 0 ${i0} Z`,
           fill: s.hover ? '#34404f' : s.on ? '#26303c' : 'rgb(22 27 34 / 94%)',
-          stroke: s.on ? C.accent : s.hover ? C.paper : '#3b4450',
+          stroke: s.on ? C.paper : s.hover ? '#9da7b3' : '#3b4450',
           'stroke-width': s.on || s.hover ? 2.5 : 1.5,
         });
         const [tx, ty] = p(R * 0.62, rad(s.a));
@@ -1024,9 +1317,9 @@
         } else {
           el(radial, 'path', { d: `M${tx - 11} ${gy - 11}l20 20M${tx + 11} ${gy - 11}l-20 20M${tx + 3} ${gy + 7}l6 -6M${tx - 3} ${gy + 7}l-6 -6`, fill: 'none', stroke: C.paper, 'stroke-width': 2, 'stroke-linecap': 'round' });
         }
-        el(radial, 'text', { x: tx, y: ty - 4, 'text-anchor': 'middle', fill: C.paper, 'font-size': 15, 'font-weight': 700 }, s.name);
-        el(radial, 'text', { x: tx, y: ty + 14, 'text-anchor': 'middle', fill: C.accent, 'font-size': 12 }, s.cp);
-        el(radial, 'text', { x: tx, y: ty + 30, 'text-anchor': 'middle', fill: '#9cc0ff', 'font-size': 12 }, s.ch);
+        el(radial, 'text', { x: tx, y: ty - 4, 'text-anchor': 'middle', fill: C.paper, 'font-size': 15, 'font-weight': 700 }, s.on ? '✓ ' + s.name : s.name);
+        el(radial, 'text', { x: tx, y: ty + 14, 'text-anchor': 'middle', fill: '#9cc0ff', 'font-size': 12 }, s.cp);
+        el(radial, 'text', { x: tx, y: ty + 30, 'text-anchor': 'middle', fill: '#c9d1d9', 'font-size': 12 }, s.ch);
         el(radial, 'rect', { x: tx - 10, y: ty + 38, width: 20, height: 17, rx: 4, fill: 'none', stroke: '#59636e' });
         el(radial, 'text', { x: tx, y: ty + 51, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 11 }, s.key);
       }
@@ -1034,7 +1327,7 @@
       el(radial, 'text', { x: cx, y: cy + 4, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 11 }, 'отмена');
       el(radial, 'line', { x1: cx, y1: cy, x2: cx + 120, y2: cy + 96, stroke: C.paper, 'stroke-opacity': 0.5, 'stroke-dasharray': '3 3' });
       el(radial, 'path', { d: `M${cx + 120} ${cy + 96} l0 14 l4 -4 l4 7 l3 -1.5 l-4 -7 l5 -1 Z`, fill: C.paper, stroke: C.ink });
-      el(radial, 'text', { x: 316, y: 388, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'Жёлтая рамка: текущая стойка. Курсор над «Война»: отпустить Q, чтобы выбрать.');
+      el(radial, 'text', { x: 316, y: 388, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'Белая рамка и галочка: текущая стойка. Курсор над «Война»: отпустить Q, чтобы выбрать.');
       el(radial, 'text', { x: 316, y: 406, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'Столица в любой стойке даёт ещё +12 зарядов/мин.');
 
       // === Стрелки приказов ===============================================================
@@ -1109,6 +1402,44 @@
         el(lg, 'rect', { x: 860 + i * 130, y: 414, width: 110, height: 36, fill: `url(#${t})`, rx: 4 });
         label(915 + i * 130, 466, name, { dim: true });
       });
+      // === Экран итога: разница VP по времени ================================================
+      (() => {
+        const svg = document.getElementById('vpchart');
+        const W = 720, H = 170, x0 = 34, x1 = 712, mid = 92, k = 1.4;
+        const diff = [0, 0, 2, 4, 3, 1, -4, -9, -6, 2, 10, 15, 22, 18, 26, 31, 37, 41, 36, 38];
+        const X = (i) => x0 + ((x1 - x0) * i) / (diff.length - 1);
+        el(svg, 'rect', { width: W, height: H, fill: '#121820', rx: 8 });
+        for (const [a, b] of [[5.6, 8.4], [12.5, 13.6]]) {
+          el(svg, 'rect', { x: X(a), y: 20, width: X(b) - X(a), height: 130, fill: '#ffffff', 'fill-opacity': 0.05 });
+        }
+        el(svg, 'line', { x1: x0, y1: mid, x2: x1, y2: mid, stroke: '#59636e', 'stroke-dasharray': '3 3' });
+        const line = diff.map((d, i) => `${X(i)},${mid - d * k}`).join(' ');
+        const defsC = el(svg, 'defs');
+        el(el(defsC, 'clipPath', { id: 'above' }), 'rect', { width: W, height: mid });
+        el(el(defsC, 'clipPath', { id: 'below' }), 'rect', { y: mid, width: W, height: H });
+        const area = `M${x0},${mid} L${line.replaceAll(' ', ' L')} L${x1},${mid} Z`;
+        el(svg, 'path', { d: area, fill: C.you, 'fill-opacity': 0.35, 'clip-path': 'url(#above)' });
+        el(svg, 'path', { d: area, fill: C.enemy, 'fill-opacity': 0.35, 'clip-path': 'url(#below)' });
+        el(svg, 'polyline', { points: line, fill: 'none', stroke: C.paper, 'stroke-width': 2 });
+        const mark = (i, up, color) => {
+          const y = up ? 14 : 156;
+          el(svg, 'line', { x1: X(i), y1: up ? 20 : 150, x2: X(i), y2: mid - diff[Math.round(i)] * k, stroke: color, 'stroke-opacity': 0.5 });
+          el(svg, 'path', { d: `M${X(i)} ${y - 5}l5 5-5 5-5-5Z`, fill: color, stroke: up ? '#fff' : C.ink, 'stroke-width': 1 });
+        };
+        [2, 9.5, 11, 14, 16].forEach((i) => mark(i, true, C.you));
+        [6, 7].forEach((i) => mark(i, false, C.enemy));
+        for (const [i, t] of [[0, '0:00'], [6.3, '4:00'], [12.6, '8:00'], [19, '12:00']]) {
+          el(svg, 'text', { x: X(i), y: 166, 'text-anchor': i === 19 ? 'end' : i === 0 ? 'start' : 'middle', fill: '#8b949e', 'font-size': 10 }, t);
+        }
+        el(svg, 'text', { x: 6, y: mid - 40, fill: '#9cc0ff', 'font-size': 10 }, 'ты');
+        el(svg, 'text', { x: 6, y: mid + 46, fill: '#f0a0a3', 'font-size': 10 }, 'враг');
+        // Курсор наведения.
+        const hi = 15;
+        el(svg, 'line', { x1: X(hi), y1: 20, x2: X(hi), y2: 150, stroke: C.paper, 'stroke-opacity': 0.6 });
+        el(svg, 'rect', { x: X(hi) + 6, y: 24, width: 116, height: 34, rx: 5, fill: C.ink, stroke: '#30363d' });
+        el(svg, 'text', { x: X(hi) + 12, y: 38, fill: C.paper, 'font-size': 11, 'font-weight': 700 }, '9:28 · ты +31');
+        el(svg, 'text', { x: X(hi) + 12, y: 52, fill: '#8b949e', 'font-size': 10 }, 'клик: реплей отсюда');
+      })();
     </script>
   </body>
 </html>
