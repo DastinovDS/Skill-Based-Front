@@ -143,6 +143,30 @@
       "title": "CancelOrderCmd",
       "type": "object"
     },
+    "CapacityPublic": {
+      "additionalProperties": false,
+      "description": "Overcrowding attrition (``capacity`` of the ruleset): the arc of the countdown (ui-style 12).",
+      "properties": {
+        "attrition_ticks": {
+          "description": "Ticks over the capacity in a row before one unit dies.",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "grace_ticks": {
+          "description": "Ticks after a capture in which the garrison is not counted.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "attrition_ticks",
+        "grace_ticks"
+      ],
+      "title": "CapacityPublic",
+      "type": "object"
+    },
     "ClientMsg": {
       "discriminator": {
         "mapping": {
@@ -1606,6 +1630,9 @@
         },
         "orders": {
           "$ref": "#/$defs/OrdersPublic"
+        },
+        "capacity": {
+          "$ref": "#/$defs/CapacityPublic"
         }
       },
       "required": [
@@ -1616,7 +1643,8 @@
         "combat",
         "build",
         "economy",
-        "orders"
+        "orders",
+        "capacity"
       ],
       "title": "RulesetPublic",
       "type": "object"

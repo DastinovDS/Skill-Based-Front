@@ -155,6 +155,8 @@ def test_ruleset_public_has_the_stance_table_and_order_delays_of_mvp_0() -> None
         "defense_delay_ticks": 30,
         "stance_cooldown_ticks": 100,
     }
+    # The overcrowding countdown of ui-style 12 (rulesets/mvp-0.toml, [capacity]).
+    assert public.capacity.model_dump() == {"attrition_ticks": 30, "grace_ticks": 50}
 
 
 def test_ruleset_public_takes_values_from_the_ruleset() -> None:

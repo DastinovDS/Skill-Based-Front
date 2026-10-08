@@ -177,6 +177,7 @@ export interface RulesetPublic {
   build: BuildPublic;
   economy: EconomyPublic;
   orders: OrdersPublic;
+  capacity: CapacityPublic;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.
@@ -261,6 +262,19 @@ export interface OrdersPublic {
   planned_delay_ticks: number;
   defense_delay_ticks: number;
   stance_cooldown_ticks: number;
+}
+/**
+ * Overcrowding attrition (``capacity`` of the ruleset): the arc of the countdown (ui-style 12).
+ */
+export interface CapacityPublic {
+  /**
+   * Ticks over the capacity in a row before one unit dies.
+   */
+  attrition_ticks: number;
+  /**
+   * Ticks after a capture in which the garrison is not counted.
+   */
+  grace_ticks: number;
 }
 /**
  * The player's view after tick ``tick``. Only the latest one matters (AGENTS.md, 5.3).
