@@ -178,6 +178,7 @@ export class MapScene {
     this.entities.setTickHz(tickHz);
     const delays = this.source.orderDelays ?? null;
     this.intents.setDelays(delays);
+    this.intents.setTickHz(tickHz);
     const selection = this.interaction?.overlay().selection ?? null;
     this.entities.setEmphasis(selection?.kind === 'group' ? selection.id : null, this.hoveredGroup);
     this.entities.update(frame);

@@ -17,6 +17,8 @@
 
   /** The menu is the ring plus a caption under it; the origin is the middle of the ring. */
   const HALF = RADIAL.outer + 20;
+  /** The caption is wider than the ring. */
+  const HALF_W = 250;
   const CAPTION = 56;
 
   const menu = $derived(orders.radial.current);
@@ -30,7 +32,7 @@
   function inside(at: { x: number; y: number }): { x: number; y: number } {
     const margin = HALF;
     return {
-      x: Math.min(Math.max(at.x, margin), Math.max(margin, window.innerWidth - margin)),
+      x: Math.min(Math.max(at.x, HALF_W), Math.max(HALF_W, window.innerWidth - HALF_W)),
       y: Math.min(Math.max(at.y, margin), Math.max(margin, window.innerHeight - margin - CAPTION)),
     };
   }
@@ -73,10 +75,10 @@
     class:sticky={menu.sticky}
     role="menu"
     aria-label={t('radial.title')}
-    viewBox="{-HALF} {-HALF} {HALF * 2} {HALF * 2 + CAPTION}"
-    width={HALF * 2}
+    viewBox="{-HALF_W} {-HALF} {HALF_W * 2} {HALF * 2 + CAPTION}"
+    width={HALF_W * 2}
     height={HALF * 2 + CAPTION}
-    style:left="{centre.x - HALF}px"
+    style:left="{centre.x - HALF_W}px"
     style:top="{centre.y - HALF}px"
   >
     {#each SECTORS as sector (sector.stance)}

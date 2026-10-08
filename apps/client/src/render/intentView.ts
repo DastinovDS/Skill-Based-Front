@@ -70,7 +70,7 @@ export class IntentView {
   private readonly iconPool: Container[] = [];
   private cameraScale = 1;
   private delays: OrderDelays | null = null;
-  private clock: () => number = () => performance.now();
+  private tickHz = 10;
 
   constructor(
     private readonly map: MapFile,
@@ -94,9 +94,9 @@ export class IntentView {
     this.delays = delays;
   }
 
-  /** Test hook: a fixed clock (ms) for the running dashes. */
-  setClock(clock: () => number): void {
-    this.clock = clock;
+  /** Ticks per second: the dashes run with the render tick, so a frozen scene holds still. */
+  setTickHz(tickHz: number): void {
+    this.tickHz = tickHz;
   }
 
   update(frame: RenderFrame, spots: ReadonlyMap<string, Point>): void {
@@ -104,7 +104,7 @@ export class IntentView {
     const { intents, nodes } = frame.base.view;
     // Own groups with a planned order, matched to the intent that announces it.
     const pool = frame.groups.filter((g) => g.group.order?.planned === true);
-    const run = reducedMotion() ? 0 : (this.clock() / 1000) * RIBBON.runSpeed;
+    const run = reducedMotion() ? 0 : (frame.tick / this.tickHz) * RIBBON.runSpeed;
     this.ribbons.clear();
     this.rings.clear();
     this.arcs.clear();
