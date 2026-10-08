@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { getLocale, t, tf } from '../i18n/index.ts';
+  import { t } from '../i18n/index.ts';
   import type { AlertState } from '../match/alerts.svelte.ts';
+  import { alertRows, alertRowText } from './alertRows.ts';
 
   interface Props {
     alerts: AlertState;
@@ -8,26 +9,16 @@
 
   let { alerts }: Props = $props();
 
-  const list = $derived(alerts.current);
-  const seconds = (ticks: number): string =>
-    new Intl.NumberFormat(getLocale(), {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }).format(ticks / alerts.tickHz);
+  const rows = $derived(alertRows(alerts.overflow, alerts.current));
 </script>
 
-<!-- The list of alerts under the top bar: the line of package D replaces this one. -->
-{#if list.length > 0}
+<!-- The alerts under the top bar (ui-style 10.4): one row per kind, `Space` takes the camera there. -->
+{#if rows.length > 0}
   <ul class="alerts" aria-label={t('alert.title')}>
-    {#each list as alert (alert.node)}
-      <li class="incoming">
+    {#each rows as row (row.kind)}
+      <li class="row {row.kind}">
         <span class="mark" aria-hidden="true">!</span>
-        <span>
-          {tf('alert.incoming', { node: alert.node, count: alert.count })}:
-          {alert.ticksLeft === null
-            ? t('alert.incomingGone')
-            : tf('alert.incomingIn', { seconds: seconds(alert.ticksLeft) })}
-        </span>
+        <span>{alertRowText(row, alerts.tickHz)}</span>
       </li>
     {/each}
     <li class="hint">{t('alert.focusHint')}</li>
@@ -37,13 +28,15 @@
 <style>
   .alerts {
     position: absolute;
-    top: 48px;
+    top: 56px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 4;
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 4px;
+    max-width: calc(100% - 32px);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -65,6 +58,7 @@
 
   .mark {
     display: grid;
+    flex: none;
     place-items: center;
     width: 18px;
     height: 18px;
@@ -79,6 +73,5 @@
     border-left-color: var(--border);
     color: var(--text-dim);
     font-size: 12px;
-    align-self: center;
   }
 </style>

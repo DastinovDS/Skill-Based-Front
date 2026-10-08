@@ -1,126 +1,136 @@
 <script lang="ts">
-  import { t, tf } from '../i18n/index.ts';
+  import { getLocale, t, tf } from '../i18n/index.ts';
   import ChargeDots from './ChargeDots.svelte';
+  import { formatSeconds } from './format.ts';
   import type { HudData } from './hudData.ts';
 
   interface Props {
-    data: HudData | null;
+    data: HudData;
+    /** Ticks per second, for the countdown of overcrowding. */
+    tickHz: number;
   }
 
-  let { data }: Props = $props();
+  let { data, tickHz }: Props = $props();
+
+  const seconds = (ticks: number): string => formatSeconds(ticks, tickHz, getLocale());
 </script>
 
-<section class="panel">
-  <h2>{t('inspect.title')}</h2>
-  {#if data !== null}
-    {#if data.group !== null}
-      {@const g = data.group}
-      <dl>
-        <dt>{t('sel.units')}</dt>
-        <dd>{g.units}</dd>
-        <dt>{t('sel.charged')}</dt>
-        <dd><ChargeDots units={g.units} charged={g.charged} /> {g.charged}</dd>
-        <dt>{t('sel.mode')}</dt>
-        <dd>{t(`mode.${g.mode}`)}</dd>
-        {#if g.capacity !== null}
-          <dt>{t('sel.capacity')}</dt>
-          <dd>{g.capacity}</dd>
-        {/if}
-      </dl>
-      <p class="hint">
-        {#if g.node !== null}
-          {tf('sel.atNode', { node: g.node })}
-        {:else if g.progress !== null}
-          {tf('sel.onEdge', { percent: Math.round(g.progress / 10) })}
-        {/if}
-        {#if g.destination !== null}
-          <br />{tf(g.planned ? 'sel.heading.planned' : 'sel.heading', { node: g.destination })}
-        {/if}
-      </p>
-    {/if}
-
-    {#if data.node !== null}
-      {@const n = data.node}
-      <dl>
-        <dt>{tf('inspect.nodeOption', { id: n.id })}</dt>
-        <dd>
-          {t(`owner.${n.owner}`)}{n.capital ? `, ${t('sel.capital')}` : ''}
-        </dd>
-        <dt>{t('sel.terrain')}</dt>
-        <dd>{t(`terrain.${n.terrain}`)}</dd>
-        <dt>{t('sel.vp')}</dt>
-        <dd>{n.vp}</dd>
+<!-- The facts of the selected group or city: the head of the selection card (ui-style 10.3). -->
+<div class="facts">
+  {#if data.group !== null}
+    {@const g = data.group}
+    <h2>{tf('card.group', { units: g.units })}</h2>
+    <dl>
+      <dt>{t('sel.charged')}</dt>
+      <dd><ChargeDots units={g.units} charged={g.charged} /> {g.charged}</dd>
+      <dt>{t('sel.mode')}</dt>
+      <dd>{t(`mode.${g.mode}`)}</dd>
+      {#if g.capacity !== null}
         <dt>{t('sel.capacity')}</dt>
-        {#if n.capacityStale}
-          <dd title={t('sel.capacityStale')}>≈{n.capacity}</dd>
-        {:else}
-          <dd>{n.capacity}</dd>
-        {/if}
-        {#if n.warehouse !== null}
-          <dt>{t('sel.warehouse')}</dt>
-          <dd>{n.warehouse}</dd>
-        {/if}
-        {#if n.build !== null}
-          <dt>{t('sel.build')}</dt>
-          <dd>
-            {n.build.secondsLeft === null
-              ? tf('sel.buildEnemy', { edge: n.build.edge })
-              : tf('sel.buildOwn', { edge: n.build.edge, seconds: n.build.secondsLeft })}
-          </dd>
-        {/if}
-        <dt>{t('sel.here')}</dt>
-        <dd>
-          {n.mine.units}
-          {#if n.mine.units > 0}<ChargeDots units={n.mine.units} charged={n.mine.charged} />{/if}
-        </dd>
-        <dt>{t('sel.enemy')}</dt>
-        <dd>
-          {#if n.enemy === null}
-            {t('sel.enemyHidden')}
-          {:else if n.enemy.modes.length === 0}
-            {t('sel.enemyNone')}
-          {:else}
-            {n.enemy.modes.map((mode) => t(`mode.${mode}`)).join(', ')}
-            {#if n.enemy.units !== null && n.enemy.charged !== null}
-              : {n.enemy.units}
-              <ChargeDots units={n.enemy.units} charged={n.enemy.charged} />
-            {:else}
-              ({t('sel.enemyHidden')})
-            {/if}
-          {/if}
-        </dd>
-      </dl>
-      {#if n.enemy?.stale === true}
-        <p class="hint">{tf('sel.enemyOld', { tick: n.enemy.seenTick })}</p>
+        <dd>{g.capacity}</dd>
       {/if}
-      <p class="hint">{t(`detail.${n.detail}`)}</p>
-    {/if}
-
-    {#if data.estimate !== null}
-      {@const e = data.estimate.result}
-      <section class="estimate" aria-label={t('estimate.title')}>
-        <h3>{t('estimate.title')} <span class="badge">{t('estimate.badge')}</span></h3>
-        {#if e.kind === 'exact'}
-          <p>{t('estimate.exact')}</p>
-          <p>{tf('estimate.pools', { attacker: e.attackerPool, defender: e.defenderPool })}</p>
-          <p>{tf('estimate.losses', { mine: e.attackerLosses, enemy: e.defenderLosses })}</p>
-          <p class="result">{e.captures ? t('estimate.takes') : t('estimate.bounces')}</p>
-        {:else if e.kind === 'upper_bound'}
-          <p>{t('estimate.upper')}</p>
-          <p>{tf('estimate.poolsMax', { attacker: e.attackerPool, max: e.defenderPoolMax })}</p>
-          <p>{tf('estimate.unitsMax', { max: e.defenderUnitsMax })}</p>
-          <p>{tf('estimate.lossesMax', { max: e.attackerLossesMax })}</p>
-        {/if}
-        <p class="hint">{t('estimate.note')}</p>
-      </section>
-    {/if}
-  {:else}
-    <p class="hint">{t('sel.nothing')}</p>
+    </dl>
+    <p class="hint">
+      {#if g.node !== null}
+        {tf('sel.atNode', { node: g.node })}
+      {:else if g.progress !== null}
+        {tf('sel.onEdge', { percent: Math.round(g.progress / 10) })}
+      {/if}
+      {#if g.destination !== null}
+        <br />{tf(g.planned ? 'sel.heading.planned' : 'sel.heading', { node: g.destination })}
+      {/if}
+    </p>
   {/if}
-</section>
+
+  {#if data.node !== null}
+    {@const n = data.node}
+    <h2>
+      {tf(n.capital ? 'tip.capital' : 'tip.city', { node: n.id, owner: t(`owner.${n.owner}`) })}
+    </h2>
+    <dl>
+      <dt>{t('sel.terrain')}</dt>
+      <dd>{t(`terrain.${n.terrain}`)}</dd>
+      <dt>{t('sel.vp')}</dt>
+      <dd>{n.vp}</dd>
+      <dt>{t('sel.capacity')}</dt>
+      {#if n.capacityStale}
+        <dd title={t('sel.capacityStale')}>≈{n.capacity}</dd>
+      {:else}
+        <dd>{n.capacity}</dd>
+      {/if}
+      {#if n.warehouse !== null}
+        <dt>{t('sel.warehouse')}</dt>
+        <dd>{n.warehouse}</dd>
+      {/if}
+      {#if n.build !== null}
+        <dt>{t('sel.build')}</dt>
+        <dd>
+          {n.build.secondsLeft === null
+            ? tf('sel.buildEnemy', { edge: n.build.edge })
+            : tf('sel.buildOwn', { edge: n.build.edge, seconds: n.build.secondsLeft })}
+        </dd>
+      {/if}
+      {#if n.attritionIn !== null}
+        <dt class="warn">{t('tip.overflow')}</dt>
+        <dd class="warn">
+          {tf('tip.overflowIn', { seconds: `${seconds(n.attritionIn)} ${t('unit.s')}` })}
+        </dd>
+      {:else if n.graceLeft !== null}
+        <dt class="warn">{t('tip.overflow')}</dt>
+        <dd class="warn">
+          {tf('tip.overflowGrace', { seconds: `${seconds(n.graceLeft)} ${t('unit.s')}` })}
+        </dd>
+      {/if}
+      <dt>{t('sel.here')}</dt>
+      <dd>
+        {n.mine.units}
+        {#if n.mine.units > 0}<ChargeDots units={n.mine.units} charged={n.mine.charged} />{/if}
+      </dd>
+      <dt>{t('sel.enemy')}</dt>
+      <dd>
+        {#if n.enemy === null}
+          {t('sel.enemyHidden')}
+        {:else if n.enemy.modes.length === 0}
+          {t('sel.enemyNone')}
+        {:else}
+          {n.enemy.modes.map((mode) => t(`mode.${mode}`)).join(', ')}
+          {#if n.enemy.units !== null && n.enemy.charged !== null}
+            : {n.enemy.units}
+            <ChargeDots units={n.enemy.units} charged={n.enemy.charged} />
+          {:else}
+            ({t('sel.enemyHidden')})
+          {/if}
+        {/if}
+      </dd>
+    </dl>
+    {#if n.enemy?.stale === true}
+      <p class="hint">{tf('sel.enemyOld', { tick: n.enemy.seenTick })}</p>
+    {/if}
+    <p class="hint">{t(`detail.${n.detail}`)}</p>
+  {/if}
+
+  {#if data.estimate !== null}
+    {@const e = data.estimate.result}
+    <section class="estimate" aria-label={t('estimate.title')}>
+      <h3>{t('estimate.title')} <span class="badge">{t('estimate.badge')}</span></h3>
+      {#if e.kind === 'exact'}
+        <p>{t('estimate.exact')}</p>
+        <p>{tf('estimate.pools', { attacker: e.attackerPool, defender: e.defenderPool })}</p>
+        <p>{tf('estimate.losses', { mine: e.attackerLosses, enemy: e.defenderLosses })}</p>
+        <p class="result">{e.captures ? t('estimate.takes') : t('estimate.bounces')}</p>
+      {:else if e.kind === 'upper_bound'}
+        <p>{t('estimate.upper')}</p>
+        <p>{tf('estimate.poolsMax', { attacker: e.attackerPool, max: e.defenderPoolMax })}</p>
+        <p>{tf('estimate.unitsMax', { max: e.defenderUnitsMax })}</p>
+        <p>{tf('estimate.lossesMax', { max: e.attackerLossesMax })}</p>
+      {/if}
+      <p class="hint">{t('estimate.note')}</p>
+    </section>
+  {/if}
+</div>
 
 <style>
-  .panel {
+  .facts {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -130,6 +140,10 @@
   h2,
   h3 {
     margin: 0;
+    font-size: 15px;
+  }
+
+  h3 {
     font-size: 14px;
   }
 
@@ -141,12 +155,16 @@
   }
 
   dt {
-    color: #8b949e;
+    color: var(--text-dim);
   }
 
   dd {
     margin: 0;
     font-variant-numeric: tabular-nums;
+  }
+
+  .warn {
+    color: var(--warn);
   }
 
   p {
@@ -155,7 +173,7 @@
 
   .hint {
     font-size: 12px;
-    color: #8b949e;
+    color: var(--text-dim);
   }
 
   .estimate {
@@ -163,7 +181,7 @@
     flex-direction: column;
     gap: 4px;
     padding: 6px 8px;
-    border: 1px dashed #8b949e;
+    border: 1px dashed var(--neutral);
     border-radius: 4px;
   }
 
@@ -171,7 +189,7 @@
     font-weight: normal;
     font-size: 12px;
     padding: 0 6px;
-    border: 1px solid #8b949e;
+    border: 1px solid var(--neutral);
     border-radius: 8px;
   }
 

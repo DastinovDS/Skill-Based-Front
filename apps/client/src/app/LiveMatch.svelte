@@ -1,6 +1,10 @@
 <script lang="ts">
+  import { HudChrome } from '../hud/chrome.svelte.ts';
+  import { hintsVisible, registerMatch } from '../hud/hints.ts';
   import Hud from '../hud/Hud.svelte';
+  import { routeKey } from '../hud/hudKeys.ts';
   import { HudState } from '../hud/hudState.svelte.ts';
+  import { HudPrefs } from '../hud/prefs.svelte.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import { backgroundUrl } from '../map/bundledMaps.ts';
   import { forwardKey } from '../match/keyEvents.ts';
@@ -49,7 +53,6 @@
   let paused = $state.raw<PausedMsg | null>(null);
   let notice = $state.raw<MessageKey | null>(null);
   let rendererFailed = $state(false);
-  let fps = $state(0);
   let canvas:
     | {
         fitMap: () => void;
@@ -59,6 +62,10 @@
     | undefined = $state.raw();
   let insets: Insets = $state.raw(NO_INSETS);
   let pauseLeft = $state(0);
+  const chrome = new HudChrome();
+  const prefs = new HudPrefs();
+  // The key hints show in the first matches only; a match counts once, also after a reload.
+  const hints = $derived(hintsVisible(registerMatch(matchId)));
 
   function handle(msg: ServerMsg): void {
     if (msg.type === 'paused') {
@@ -79,6 +86,7 @@
       context: (welcome) => {
         const state = new HudState({
           me: welcome.player,
+          nicks: welcome.nicks,
           rules: welcome.ruleset_public,
           map,
         });
@@ -101,7 +109,9 @@
     return () => {
       current.stop();
       session = null;
+      hud?.destroy();
       hud = null;
+      chrome.closeAll();
     };
   });
 
@@ -146,6 +156,8 @@
   });
 
   function handleKey(event: KeyboardEvent): void {
+    // The HUD's own keys and the open overlays first, then the keys of the orders.
+    if (routeKey(chrome, event, { fit: () => canvas?.fitMap() })) return;
     if (orders !== null && forwardKey(orders, event)) {
       event.preventDefault();
     }
@@ -175,29 +187,24 @@
         console.error(error);
         rendererFailed = true;
       }}
-      onfps={(value: number) => {
-        fps = value;
-      }}
     />
     <Hud
       {rendererFailed}
-      {fps}
       {hud}
       {orders}
+      {chrome}
+      {prefs}
+      {hints}
+      onpause={status === 'ready' && paused === null
+        ? () => {
+            session?.pause();
+          }
+        : undefined}
       oninsets={(next: Insets) => {
         insets = next;
       }}
       onfit={() => canvas?.fitMap()}
     />
-    {#if status === 'ready' && paused === null}
-      <button
-        type="button"
-        class="pause"
-        onclick={() => {
-          session?.pause();
-        }}>{t('match.pause')}</button
-      >
-    {/if}
   {:else if status === 'version_mismatch' || status === 'replaced'}
     <!-- The banner below says what happened. -->
   {:else}
@@ -242,19 +249,5 @@
   .loading {
     margin: 0;
     padding: 24px;
-  }
-
-  .pause {
-    position: fixed;
-    right: 12px;
-    top: 48px;
-    z-index: 5;
-    font: inherit;
-    color: inherit;
-    background: #21262d;
-    border: 1px solid #30363d;
-    border-radius: 4px;
-    padding: 4px 10px;
-    cursor: pointer;
   }
 </style>

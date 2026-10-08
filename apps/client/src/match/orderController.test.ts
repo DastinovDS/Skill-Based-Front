@@ -30,7 +30,7 @@ const other = snapshot.view.nodes.find((n) => n.id !== home && n.owner === 0);
 if (enemy === undefined || other === undefined) throw new Error('the dev snapshot lacks nodes');
 
 function setup(withSend = true) {
-  const hud = new HudState({ me: 0, rules: RULES, map });
+  const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: RULES, map });
   hud.onSnapshot(snapshot);
   const book = new OrderBook();
   const sent: Command[] = [];

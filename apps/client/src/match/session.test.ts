@@ -13,12 +13,13 @@ const welcome: ServerMsg = {
   ruleset_public: DEV_RULES,
   map_id: map.meta.name,
   last_seq: 0,
+  nicks: ['Danya', 'Bot'],
 };
 const snapshot = (tick: number): ServerMsg => devSnapshot(map, DEV_RULES, tick);
 
 function setup() {
   const server = createFakeServer();
-  const hud = new HudState({ me: 0, rules: DEV_RULES, map });
+  const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
   let clock = 0;
   const session = new MatchSession({
     matchId: 'm1',
@@ -57,7 +58,12 @@ describe('MatchSession', () => {
       context: (msg) => {
         made += 1;
         return {
-          hud: new HudState({ me: msg.player, rules: msg.ruleset_public, map }),
+          hud: new HudState({
+            me: msg.player,
+            nicks: ['Danya', 'Bot'],
+            rules: msg.ruleset_public,
+            map,
+          }),
           tickHz: msg.ruleset_public.tick_hz,
         };
       },

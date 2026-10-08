@@ -8,7 +8,7 @@ import { EVENT_LIMIT, HudState } from './hudState.svelte.ts';
 const map = DEFAULT_MAP;
 
 function newState(): HudState {
-  return new HudState({ me: 0, rules: DEV_RULES, map });
+  return new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
 }
 
 function snapshot(tick: number): SnapshotMsg {

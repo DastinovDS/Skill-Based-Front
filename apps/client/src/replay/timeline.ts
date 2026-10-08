@@ -68,6 +68,8 @@ function snapshot(frame: ReplayFrame): SnapshotMsg {
     warehouse,
     seen: null,
     build: builds.get(id) ?? null,
+    attrition_in: null, // not in the replay files: the viewer shows no countdown
+    grace_left: null,
   }));
   const packets: PacketView[] = frame.k.map(
     ([id, , edge, from_node, charges, depart_tick, arrive_tick]) => ({

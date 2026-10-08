@@ -5,14 +5,18 @@
  * nothing.
  */
 
-/** What is under the pointer: an own group (by id), a node or a road (by id). */
+/**
+ * What is under the pointer: an own group (by id), a node or a road (by id), or the arrow of a
+ * public intent (by its id; only for the tooltip, a click never picks it).
+ */
 export type PickHit =
   | { readonly kind: 'group'; readonly id: string }
   | { readonly kind: 'node'; readonly id: number }
-  | { readonly kind: 'edge'; readonly id: number };
+  | { readonly kind: 'edge'; readonly id: number }
+  | { readonly kind: 'intent'; readonly id: string };
 
 /** What can be selected: a group or a node (a road is only hovered, and clicked in road pick). */
-export type SelectionHit = Exclude<PickHit, { readonly kind: 'edge' }>;
+export type SelectionHit = Exclude<PickHit, { readonly kind: 'edge' | 'intent' }>;
 
 /** The life of a ghost: sent (dashed), accepted by the server (solid), rejected (shakes and fades). */
 export type GhostStatus = 'pending' | 'accepted' | 'rejected';
@@ -49,6 +53,8 @@ export interface OverlayState {
   readonly road: number | null;
   /** Road pick (key U, DEC-16): the roads of the selected city a click would upgrade. */
   readonly candidates: readonly number[];
+  /** The city ringed in the first seconds of a match ("your capital is here"); `null`: none. */
+  readonly beacon: number | null;
 }
 
 export const EMPTY_OVERLAY: OverlayState = {
@@ -57,6 +63,7 @@ export const EMPTY_OVERLAY: OverlayState = {
   preview: null,
   road: null,
   candidates: [],
+  beacon: null,
 };
 
 export interface MapInteraction {

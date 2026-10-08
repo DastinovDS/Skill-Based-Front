@@ -18,11 +18,18 @@ import type {
   Stance,
   Terrain,
 } from '../protocol.gen.ts';
+import { delayLeft } from '../render/intentLayout.ts';
 import { estimateCombat, type CombatEstimate, type DefenderInput } from './combatEstimate.ts';
 
 /** What the player picked to look at: one own group or one node. */
 export type Selection =
   { readonly kind: 'group'; readonly id: string } | { readonly kind: 'node'; readonly id: number };
+
+/** What the pointer rests on (the tooltip): a selectable thing, a road, or the arrow of an intent. */
+export type HoverTarget =
+  | Selection
+  | { readonly kind: 'edge'; readonly id: number }
+  | { readonly kind: 'intent'; readonly id: string };
 
 /** The enemy node a selected group would attack, and how (for the combat estimate). */
 export interface AttackTarget {
@@ -34,6 +41,8 @@ export interface AttackTarget {
 /** Fixed for the whole match: the ruleset from `welcome` and the map. */
 export interface HudContext {
   readonly me: PlayerId;
+  /** Nicks by player id (`welcome.nicks`). */
+  readonly nicks: readonly [string, string];
   readonly rules: RulesetPublic;
   readonly map: MapFile;
 }
@@ -80,6 +89,10 @@ export interface NodeInfo {
   readonly enemy: EnemyInfo | null;
   /** The road this city builds (DEC-16), if the snapshot shows one. */
   readonly build: BuildInfo | null;
+  /** Own city over its capacity: ticks until the next unit dies; `null` otherwise. */
+  readonly attritionIn: number | null;
+  /** Own city over its capacity right after a capture: ticks the grace still lasts. */
+  readonly graceLeft: number | null;
 }
 
 /** A road level a city builds (`NodeView.build`). */
@@ -146,9 +159,31 @@ export interface RoadInfo {
   readonly charges: number | null;
 }
 
+/** A public intent (planned order or "Defense") under the pointer. */
+export interface IntentInfo {
+  readonly id: string;
+  readonly owner: 'mine' | 'enemy';
+  readonly kind: 'planned_move' | 'defense';
+  readonly origin: number;
+  readonly target: number | null;
+  /** Ticks until the order leaves; `null`: it has left already. */
+  readonly ticksLeft: number | null;
+}
+
+/** What the tooltip shows, from the snapshot (language-free; `hud/tipText.ts` writes the text). */
+export type TipInfo =
+  | { readonly kind: 'node'; readonly node: NodeInfo }
+  | { readonly kind: 'edge'; readonly road: RoadInfo }
+  | { readonly kind: 'group'; readonly group: GroupInfo }
+  | { readonly kind: 'intent'; readonly intent: IntentInfo };
+
 export interface HudData {
   readonly tick: number;
   readonly me: PlayerId;
+  /** Nicks of the two sides. */
+  readonly nicks: { readonly mine: string; readonly enemy: string };
+  /** The thing under the pointer, for the tooltip; `null`: nothing. */
+  readonly tip: TipInfo | null;
   readonly cp: CpInfo;
   readonly stance: Stance;
   readonly vp: { readonly mine: number; readonly enemy: number };
@@ -252,7 +287,67 @@ function nodeInfo(
     },
     enemy: enemyInfo(node.seen, node.detail),
     build: buildInfo(ctx, node, tick),
+    attritionIn: node.attrition_in,
+    graceLeft: node.grace_left,
   };
+}
+
+function intentInfo(ctx: HudContext, view: SnapshotMsg, id: string): IntentInfo | null {
+  const intent = view.view.intents.find((i) => i.id === id);
+  if (intent === undefined) {
+    return null;
+  }
+  const delay =
+    intent.kind === 'planned_move'
+      ? ctx.rules.orders.planned_delay_ticks
+      : ctx.rules.orders.defense_delay_ticks;
+  const left = delayLeft(intent.created_tick, view.tick, delay);
+  return {
+    id,
+    owner: intent.owner === ctx.me ? 'mine' : 'enemy',
+    kind: intent.kind,
+    origin: intent.origin,
+    target: intent.target,
+    ticksLeft: left > 0 ? left : null,
+  };
+}
+
+function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): RoadInfo {
+  const file = ctx.map.edges[edge.id];
+  return {
+    id: edge.id,
+    a: file?.a ?? -1,
+    b: file?.b ?? -1,
+    width: edge.width,
+    capacityCenti: edge.upgrade_gain?.capacity_centi ?? null,
+    packetSpeedPct: edge.upgrade_gain?.packet_speed_pct ?? null,
+    charges: edge.upgrade_gain === null ? null : levelCharges(ctx.rules, edge.width + 1),
+  };
+}
+
+function tipFor(ctx: HudContext, snapshot: SnapshotMsg, hover: HoverTarget | null): TipInfo | null {
+  const { view } = snapshot;
+  if (hover === null) return null;
+  switch (hover.kind) {
+    case 'node': {
+      const node = nodeAt(view.nodes, hover.id);
+      return node === undefined
+        ? null
+        : { kind: 'node', node: nodeInfo(ctx, node, view.groups, snapshot.tick) };
+    }
+    case 'edge': {
+      const edge = view.edges[hover.id];
+      return edge === undefined ? null : { kind: 'edge', road: roadInfo(ctx, edge) };
+    }
+    case 'group': {
+      const group = view.groups.find((g) => g.id === hover.id);
+      return group === undefined ? null : { kind: 'group', group: groupInfo(group, view.nodes) };
+    }
+    case 'intent': {
+      const intent = intentInfo(ctx, snapshot, hover.id);
+      return intent === null ? null : { kind: 'intent', intent };
+    }
+  }
 }
 
 /** What the client knows of the enemy at `node`, in the terms of the estimate. */
@@ -316,6 +411,7 @@ export function buildHudData(
   selection: Selection | null,
   target: AttackTarget | null,
   events: readonly HudEvent[],
+  hover: HoverTarget | null = null,
 ): HudData {
   const { view, tick } = snapshot;
   const { rules, me } = ctx;
@@ -332,6 +428,8 @@ export function buildHudData(
   return {
     tick,
     me,
+    nicks: { mine: ctx.nicks[me], enemy: ctx.nicks[me === 0 ? 1 : 0] },
+    tip: tipFor(ctx, snapshot, hover),
     cp: {
       value: view.me.cp,
       cap: rules.cp.cap,
@@ -353,18 +451,7 @@ export function buildHudData(
       planned: g.order?.planned ?? false,
     })),
     nodes: view.nodes.map((n) => ({ id: n.id, owner: ownership(n.owner, me) })),
-    roads: view.edges.map((e) => {
-      const file = ctx.map.edges[e.id];
-      return {
-        id: e.id,
-        a: file?.a ?? -1,
-        b: file?.b ?? -1,
-        width: e.width,
-        capacityCenti: e.upgrade_gain?.capacity_centi ?? null,
-        packetSpeedPct: e.upgrade_gain?.packet_speed_pct ?? null,
-        charges: e.upgrade_gain === null ? null : levelCharges(rules, e.width + 1),
-      };
-    }),
+    roads: view.edges.map((e) => roadInfo(ctx, e)),
     events,
   };
 }

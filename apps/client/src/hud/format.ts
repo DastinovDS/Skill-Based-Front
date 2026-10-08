@@ -25,3 +25,11 @@ export function chargeDots(units: number, charged: number): string {
   const filled = Math.min(Math.max(charged, 0), units);
   return '●'.repeat(filled) + '○'.repeat(units - filled);
 }
+
+/** Ticks as seconds with one decimal ("2,4"), for countdowns. */
+export function formatSeconds(ticks: number, tickHz: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(Math.max(0, ticks) / tickHz);
+}
