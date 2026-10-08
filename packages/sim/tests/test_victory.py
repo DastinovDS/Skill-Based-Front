@@ -1,8 +1,8 @@
 """Victory (SIM-13): VP accrual and the result by DEC-03 (mechanics.md, section 11).
 
 Expected values are worked out by hand from DEC-03: a match is 7200 ticks; every 300 ticks (30 s)
-each player gets the map ``vp`` of each of its cities, a capital counts x3; capturing the enemy capital
-is an instant win; at the timer more VP wins, on equal VP more cities, else a draw.
+each player gets the map ``vp`` of each of its cities, a capital counts x3; capturing the enemy
+capital is an instant win; at the timer more VP wins, on equal VP more cities, else a draw.
 
 Map ``diamond`` (vp): capitals 0 and 3 are worth 1 each (x3 = 3), cities 1 and 2 are worth 2.
 The DEC-03 numbers are pinned in ``DEC03``, so balance changes of ``mvp-0.toml`` do not break these
