@@ -188,7 +188,9 @@
     left: 12px;
     bottom: 12px;
     z-index: 3;
-    pointer-events: auto;
+    /* The card lets the pointer through to the map beneath (own cities are often there); only its
+       controls catch it. */
+    pointer-events: none;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -201,6 +203,10 @@
     border-radius: 8px;
     background: var(--surface);
     color: var(--text);
+  }
+
+  .selection :is(button, input, label, select) {
+    pointer-events: auto;
   }
 
   .error {

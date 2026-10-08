@@ -42,7 +42,8 @@
     </p>
   {/if}
 
-  {#if data.node !== null}
+  <!-- With a group selected the card is about the group: the city under it is a hover away. -->
+  {#if data.node !== null && data.group === null}
     {@const n = data.node}
     <h2>
       {tf(n.capital ? 'tip.capital' : 'tip.city', { node: n.id, owner: t(`owner.${n.owner}`) })}

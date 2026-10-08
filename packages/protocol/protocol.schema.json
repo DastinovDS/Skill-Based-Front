@@ -145,7 +145,7 @@
     },
     "CapacityPublic": {
       "additionalProperties": false,
-      "description": "Overcrowding attrition (``capacity`` of the ruleset): the arc of the countdown (ui-style 12).",
+      "description": "Overcrowding attrition (``capacity`` of the ruleset), for the countdown of ui-style 12.",
       "properties": {
         "attrition_ticks": {
           "description": "Ticks over the capacity in a row before one unit dies.",

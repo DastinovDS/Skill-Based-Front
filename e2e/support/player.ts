@@ -187,12 +187,9 @@ export class Player {
       world = { x: node.x + slot.x, y: node.y + slot.y };
     }
     const at = await this.#screenPoint(map, world);
-    const canvasBox = await this.page.locator('.game-canvas').boundingBox();
-    if (canvasBox === null) throw new Error('no canvas');
-    await this.page.locator('.game-canvas').click({
-      position: { x: at.x - canvasBox.x, y: at.y - canvasBox.y },
-      modifiers,
-    });
+    for (const key of modifiers) await this.page.keyboard.down(key);
+    await this.page.mouse.click(at.x, at.y);
+    for (const key of modifiers) await this.page.keyboard.up(key);
   }
 
   /**
@@ -204,9 +201,7 @@ export class Player {
     // on the empty corner of the canvas deselects. Not `Esc`: two in a row ask to leave the match.
     const canvas = await this.page.locator('.game-canvas').boundingBox();
     if (canvas === null) throw new Error('no canvas');
-    await this.page.locator('.game-canvas').click({
-      position: { x: canvas.width - 3, y: canvas.height - 3 },
-    });
+    await this.page.mouse.click(canvas.x + canvas.width - 3, canvas.y + canvas.height - 3);
     await expect(this.page.locator('.selection')).toHaveCount(0);
     await this.clickNode(map, from, true);
     await expect(this.page.getByText(`At node ${String(from)}`).first()).toBeVisible();

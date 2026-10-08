@@ -264,7 +264,7 @@ export interface OrdersPublic {
   stance_cooldown_ticks: number;
 }
 /**
- * Overcrowding attrition (``capacity`` of the ruleset): the arc of the countdown (ui-style 12).
+ * Overcrowding attrition (``capacity`` of the ruleset), for the countdown of ui-style 12.
  */
 export interface CapacityPublic {
   /**

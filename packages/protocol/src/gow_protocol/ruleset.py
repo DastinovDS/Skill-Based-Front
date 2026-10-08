@@ -98,7 +98,7 @@ class OrdersPublic(WireModel):
 
 
 class CapacityPublic(WireModel):
-    """Overcrowding attrition (``capacity`` of the ruleset): the arc of the countdown (ui-style 12)."""
+    """Overcrowding attrition (``capacity`` of the ruleset), for the countdown of ui-style 12."""
 
     attrition_ticks: PosInt
     """Ticks over the capacity in a row before one unit dies."""
