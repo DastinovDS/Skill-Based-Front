@@ -23,6 +23,10 @@
           "enemy_modes": [],
           "enemy_units": 0,
           "enemy_charged": 0
+        },
+        "build": {
+          "edge": 0,
+          "done_tick": 550
         }
       },
       {
@@ -37,7 +41,8 @@
           "enemy_modes": [],
           "enemy_units": 0,
           "enemy_charged": 0
-        }
+        },
+        "build": null
       },
       {
         "id": 2,
@@ -49,12 +54,12 @@
           "tick": 400,
           "level": "presence",
           "enemy_modes": [
-            "defense",
-            "build"
+            "defense"
           ],
           "enemy_units": null,
           "enemy_charged": null
-        }
+        },
+        "build": null
       },
       {
         "id": 3,
@@ -68,7 +73,8 @@
           "enemy_modes": [],
           "enemy_units": 0,
           "enemy_charged": 0
-        }
+        },
+        "build": null
       },
       {
         "id": 4,
@@ -84,7 +90,8 @@
           ],
           "enemy_units": null,
           "enemy_charged": null
-        }
+        },
+        "build": null
       },
       {
         "id": 5,
@@ -100,7 +107,8 @@
           ],
           "enemy_units": null,
           "enemy_charged": null
-        }
+        },
+        "build": null
       },
       {
         "id": 6,
@@ -116,7 +124,8 @@
           ],
           "enemy_units": 3,
           "enemy_charged": 1
-        }
+        },
+        "build": null
       },
       {
         "id": 7,
@@ -133,7 +142,8 @@
           ],
           "enemy_units": null,
           "enemy_charged": null
-        }
+        },
+        "build": null
       }
     ],
     "edges": [
@@ -283,7 +293,7 @@
         "id": "3c4d5e6f708192a3",
         "units": 1,
         "charged": 0,
-        "mode": "build",
+        "mode": "attack",
         "location": {
           "kind": "node",
           "node": 6
@@ -366,14 +376,6 @@
         "origin": 0,
         "target": null,
         "created_tick": 370
-      },
-      {
-        "id": "d4e5f60718293041",
-        "owner": 0,
-        "kind": "build",
-        "origin": 1,
-        "target": null,
-        "created_tick": 380
       },
       {
         "id": "e5f6071829304152",

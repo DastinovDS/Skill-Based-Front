@@ -13,7 +13,7 @@
       "merge": 100,
       "attack": 0,
       "defense": 200,
-      "build": 100,
+      "build": 0,
       "recruit": 100,
       "stance": 0
     },
@@ -21,6 +21,15 @@
       "terrain_defense_mod": { "plains": -1, "forest": 0, "mountains": 1 },
       "planned_bonus": 2,
       "defense_bonus": 2
+    },
+    "build": {
+      "ticks_per_level": 150,
+      "charges_per_level": [
+        { "width": 2, "charges": 2 },
+        { "width": 3, "charges": 3 },
+        { "width": 4, "charges": 4 },
+        { "width": 5, "charges": 5 }
+      ]
     }
   },
   "map_id": "diamond",

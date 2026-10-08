@@ -58,7 +58,6 @@ BOT_TICKS = 1200
 REGRESSION = 1.5
 
 NOT_FOUND = sim.RejectCode.NOT_FOUND_OR_HIDDEN.value
-DROPPED_GROUP_KEYS = ("build_edge",)
 DROPPED_ORDER_KEYS = ("depart_tick",)
 DROPPED_LOCATION_KEYS = ("back",)
 
@@ -114,7 +113,7 @@ class WireDriver:
                     e for e in self.map.incident[here] if view.edges[e].upgrade_gain is not None
                 ]
                 if gains:
-                    cmds.append(wire.UpgradeRoadCmd(group=g.id, edge=gains[0]))
+                    cmds.append(wire.UpgradeRoadCmd(node=here, edge=gains[0]))
                     continue
             if g.mode is not Mode.ATTACK:
                 continue
@@ -141,8 +140,6 @@ def _expected_wire_view(view: PlayerView) -> dict[str, Any]:
         for entity in data[key]:
             entity["id"] = str(entity["id"])
     for group in data["groups"]:
-        for name in DROPPED_GROUP_KEYS:
-            del group[name]
         if group["order"] is not None:
             for name in DROPPED_ORDER_KEYS:
                 del group["order"][name]
@@ -403,10 +400,10 @@ def test_command_fields() -> None:
     assert command_from_wire(wire.MoveCmd(group="12", dest=3, planned=False)) == sim.Move(12, 3)
     assert command_from_wire(wire.SplitCmd(group="5", n=2)) == sim.Split(5, 2)
     assert command_from_wire(wire.MergeCmd(groups=("7", "9"))) == sim.Merge((7, 9))
-    assert command_from_wire(wire.SetModeCmd(group="1", mode=Mode.BUILD)) == sim.SetMode(
-        1, Mode.BUILD
+    assert command_from_wire(wire.SetModeCmd(group="1", mode=Mode.DEFENSE)) == sim.SetMode(
+        1, Mode.DEFENSE
     )
-    assert command_from_wire(wire.UpgradeRoadCmd(group="4", edge=8)) == sim.UpgradeRoad(4, 8)
+    assert command_from_wire(wire.UpgradeRoadCmd(node=4, edge=8)) == sim.UpgradeRoad(4, 8)
     assert command_from_wire(wire.CancelOrderCmd(group="0")) == sim.CancelOrder(0)
     assert command_from_wire(wire.SetStanceCmd(stance=Stance.ECONOMY)) == sim.SetStance(
         Stance.ECONOMY

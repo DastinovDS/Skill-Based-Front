@@ -367,11 +367,10 @@ class StrategyBot(Bot):
         the other end already builds is skipped. ``keep``: CP reserve for ``orders.cost.build``.
         """
         view = turn.view
-        prices = self.rules.build.charges_per_level
-        building = {n.build.edge for n in view.nodes if n.build is not None}
+        supplied = self.supplied(view)
+        building: dict[int, bool] = {}  # edges ordered in this turn
         for node in sorted(range(len(view.nodes)), key=self.key):
-            city = view.nodes[node]
-            if city.owner != self.player or turn.threatened[node] or city.build is not None:
+            if turn.threatened[node]:
                 continue
             best: int | None = None
             best_gain = 0
@@ -379,7 +378,7 @@ class StrategyBot(Bot):
                 gain = view.edges[e].upgrade_gain
                 if gain is None or e in building or gain.capacity_centi <= best_gain:
                     continue
-                if (city.warehouse or 0) >= prices.of(view.edges[e].width + 1):
+                if self.can_upgrade(view, node, e, supplied):
                     best, best_gain = e, gain.capacity_centi
             if best is not None and self.spend(turn, UpgradeRoad(node, best), keep):
-                building.add(best)
+                building[best] = True

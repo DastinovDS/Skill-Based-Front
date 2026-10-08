@@ -92,7 +92,8 @@ export const ru = {
   'event.match_ended': 'Матч окончен',
   'event.attrition': 'Перегрузка в узле {node}: потерян юнит',
   'event.road_upgraded': 'Дорога {edge} улучшена до ширины {width}',
-  'event.build_started': 'Город {node} улучшает дорогу {edge} до ширины {width}: потрачено зарядов {charges}',
+  'event.build_started':
+    'Город {node} улучшает дорогу {edge} до ширины {width}: потрачено зарядов {charges}',
   'event.build_stopped': 'Стройка дороги {edge} прервана',
   'event.packet_lost': 'Потеряно зарядов на дороге {edge}: {charges}',
   'hud.ordersHint':
@@ -152,7 +153,8 @@ export const ru = {
   'orders.roadHintPick': 'Кликни, чтобы улучшить.',
   'orders.roadHintHow': 'Выбери свой город на её конце и нажми U.',
   'orders.upgradeRoad': 'Улучшить дорогу [U]',
-  'orders.roadPick': 'Город {node} (склад: {warehouse}): выбери дорогу на карте или в списке. Esc: отмена.',
+  'orders.roadPick':
+    'Город {node} (склад: {warehouse}): выбери дорогу на карте или в списке. Esc: отмена.',
   'orders.roadPickNone': 'У этого города нет дорог, которые можно улучшить.',
   'orders.roadOption':
     'Дорога {edge} к узлу {node}: ширина {width}, +{capacity} ёмкости, +{speed}% скорости, зарядов {charges}',

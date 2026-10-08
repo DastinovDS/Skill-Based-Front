@@ -97,17 +97,15 @@ function snapshot(frame: ReplayFrame): SnapshotMsg {
       packets,
       intents: frame.i
         .filter(([, , kind]) => INTENT_KINDS.has(kind))
-        .map(
-          ([id, owner, kind, origin, target]): IntentView => ({
-            id: String(id),
-            owner,
-            // Filtered above: the file has the kind as the simulation names it.
-            kind: kind as IntentKind,
-            origin,
-            target,
-            created_tick: frame.t,
-          }),
-        ),
+        .map(([id, owner, kind, origin, target]): IntentView => ({
+          id: String(id),
+          owner,
+          // Filtered above: the file has the kind as the simulation names it.
+          kind: kind as IntentKind,
+          origin,
+          target,
+          created_tick: frame.t,
+        })),
     },
   };
 }

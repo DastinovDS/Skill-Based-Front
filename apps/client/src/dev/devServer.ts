@@ -82,7 +82,9 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         me: { ...base.view.me, stance, cp: Math.max(0, base.view.me.cp - spent) },
         nodes: base.view.nodes.map((n) => {
           const build = builds.get(n.id);
-          return build === undefined ? n : { ...n, build: { edge: build.edge, done_tick: build.done } };
+          return build === undefined
+            ? n
+            : { ...n, build: { edge: build.edge, done_tick: build.done } };
         }),
         edges: base.view.edges.map((e) => {
           const ends = map.edges[e.id];

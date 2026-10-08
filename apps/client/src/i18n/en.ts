@@ -92,7 +92,8 @@ export const en = {
   'event.match_ended': 'The match is over',
   'event.attrition': 'Overcapacity at node {node}: a unit was lost',
   'event.road_upgraded': 'Road {edge} upgraded to width {width}',
-  'event.build_started': 'City {node} upgrades road {edge} to width {width}: {charges} charges spent',
+  'event.build_started':
+    'City {node} upgrades road {edge} to width {width}: {charges} charges spent',
   'event.build_stopped': 'The build of road {edge} was interrupted',
   'event.packet_lost': 'Charges lost on road {edge}: {charges}',
   'hud.ordersHint':
@@ -152,7 +153,8 @@ export const en = {
   'orders.roadHintPick': 'Click to upgrade it.',
   'orders.roadHintHow': 'Select your city at one of its ends and press U.',
   'orders.upgradeRoad': 'Upgrade a road [U]',
-  'orders.roadPick': 'City {node} (warehouse: {warehouse}): pick a road on the map or in the list. Esc: cancel.',
+  'orders.roadPick':
+    'City {node} (warehouse: {warehouse}): pick a road on the map or in the list. Esc: cancel.',
   'orders.roadPickNone': 'This city has no road that can be upgraded.',
   'orders.roadOption':
     'Road {edge} to node {node}: width {width}, +{capacity} capacity, +{speed}% speed, {charges} charges',

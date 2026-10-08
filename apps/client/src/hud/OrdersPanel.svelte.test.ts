@@ -47,7 +47,7 @@ describe('OrdersPanel', () => {
         orders,
       },
     });
-    return { target, orders, book, sent };
+    return { target, orders, book, sent, hud };
   }
 
   it('shows the price of the hovered target and sends a cancel from the button', () => {
@@ -139,5 +139,52 @@ describe('OrdersPanel', () => {
     book.onAck({ type: 'ack', seq: 1, applied_tick: 31, path: null, reject_code: null });
     flushSync();
     expect(target.querySelector('[role="alert"]')?.textContent).toContain('Accepted: mode change');
+  });
+
+  it('starts the road pick of an own city from its button and sends the picked road', () => {
+    setLocale('en');
+    const home = group.location.kind === 'node' ? group.location.node : -1;
+    const road = DEFAULT_MAP.edges.find((e) => e.a === home || e.b === home);
+    if (road === undefined) throw new Error('the home city has no road');
+    const { target, orders, sent, hud } = render();
+    hud.onSnapshot({
+      ...snapshot,
+      view: {
+        ...snapshot.view,
+        edges: snapshot.view.edges.map((e) =>
+          e.id === road.id
+            ? { ...e, upgrade_gain: { capacity_centi: 50, packet_speed_pct: 10 } }
+            : e,
+        ),
+      },
+    });
+    orders.click({ kind: 'node', id: home }, false);
+    flushSync();
+    button(target, 'Upgrade a road')?.click();
+    flushSync();
+    expect(orders.ui.current.roadPick).toBe(home);
+    const option = button(target, `Road ${String(road.id)} to node`);
+    expect(option?.textContent).toContain('+0.5 capacity');
+    option?.click();
+    expect(sent).toEqual([{ type: 'upgrade_road', node: home, edge: road.id }]);
+  });
+
+  it('says how long the build of a city takes instead of offering a new one', () => {
+    setLocale('en');
+    const home = group.location.kind === 'node' ? group.location.node : -1;
+    const { target, orders, hud } = render();
+    hud.onSnapshot({
+      ...snapshot,
+      view: {
+        ...snapshot.view,
+        nodes: snapshot.view.nodes.map((n) =>
+          n.id === home ? { ...n, build: { edge: 0, done_tick: snapshot.tick + 100 } } : n,
+        ),
+      },
+    });
+    orders.click({ kind: 'node', id: home }, false);
+    flushSync();
+    expect(button(target, 'Upgrade a road')).toBeUndefined();
+    expect(target.textContent).toContain('The city is building road 0: done in 10 s');
   });
 });

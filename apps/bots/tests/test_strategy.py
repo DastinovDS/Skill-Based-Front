@@ -236,7 +236,7 @@ def _estimate(
     view = Match(mapdef, rules, KEY).view(0)
     node = next(n.id for n in view.nodes if n.owner == 1)
     nodes = list(view.nodes)
-    nodes[node] = NodeView(node, 1, 6, detail, None, seen)
+    nodes[node] = NodeView(node, 1, 6, detail, None, seen, None)
     view = dataclasses.replace(view, nodes=tuple(nodes))
     bot = ExpanderBot(mapdef, rules, seed=0, player=0)
     if memory is not None:

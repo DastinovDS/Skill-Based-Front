@@ -3,6 +3,7 @@
   "source": "gow_protocol.convert: PUBLIC_KINDS, PRIVATE_KINDS and fight (event_for_player)",
   "kinds": [
     "attrition",
+    "build_started",
     "build_stopped",
     "charges_overflow",
     "charges_produced",

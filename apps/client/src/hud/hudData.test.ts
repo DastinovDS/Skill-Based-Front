@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { MapFile, NodeView, Seen, SnapshotMsg } from '../protocol.gen.ts';
 import { DEV_RULES } from './devFeed.ts';
-import { buildHudData, defenderOf, type HudContext } from './hudData.ts';
+import { buildHudData, defenderOf, roadCandidates, type HudContext } from './hudData.ts';
 
 const snapshotFiles = import.meta.glob<string>(
   '../../../../packages/protocol/fixtures/server/snapshot_fog.json',
@@ -169,5 +169,57 @@ describe('buildHudData: combat estimate', () => {
     expect(
       buildHudData(ctx, fog, { kind: 'node', id: 0 }, { node: 1, planned: false }, []).estimate,
     ).toBeNull();
+  });
+});
+
+describe('buildHudData: road upgrades of cities (DEC-16)', () => {
+  // Prices of mechanics.md, section 8: the price of a level is the new width.
+  const rules = {
+    ...DEV_RULES,
+    build: {
+      ticks_per_level: 150,
+      charges_per_level: [2, 3, 4, 5].map((width) => ({ width, charges: width })),
+    },
+  };
+  const gain = { capacity_centi: 50, packet_speed_pct: 10 };
+  const snapshot: SnapshotMsg = {
+    ...fog,
+    view: {
+      ...fog.view,
+      edges: fog.view.edges.map((e) => (e.id === 0 ? { ...e, width: 2, upgrade_gain: gain } : e)),
+    },
+  };
+  const edge0 = map.edges[0];
+  if (edge0 === undefined) throw new Error('the map has no edge 0');
+
+  it('prices the next level of a road in charges, from the ruleset', () => {
+    const data = buildHudData({ ...ctx, rules }, snapshot, null, null, []);
+    expect(data.roads[0]).toEqual({
+      id: 0,
+      a: edge0.a,
+      b: edge0.b,
+      width: 2,
+      capacityCenti: 50,
+      packetSpeedPct: 10,
+      charges: 3,
+    });
+    // No upgrade hint from the server: no price either.
+    expect(data.roads[1]).toMatchObject({ capacityCenti: null, charges: null });
+    expect(roadCandidates(data.roads, edge0.a).map((r) => r.id)).toEqual([0]);
+  });
+
+  it('shows the own build of a city with the seconds left, an enemy one without', () => {
+    const own = withNode({ id: 0, build: { edge: 0, done_tick: 345 } });
+    // Tick 300, 45 ticks left at 10 ticks per second: 5 s (rounded up).
+    expect(buildHudData(ctx, own, { kind: 'node', id: 0 }, null, []).node?.build).toEqual({
+      edge: 0,
+      secondsLeft: 5,
+    });
+    const enemy = withNode({ id: 1, build: { edge: 1, done_tick: null } });
+    expect(buildHudData(ctx, enemy, { kind: 'node', id: 1 }, null, []).node?.build).toEqual({
+      edge: 1,
+      secondsLeft: null,
+    });
+    expect(buildHudData(ctx, fog, { kind: 'node', id: 0 }, null, []).node?.build).toBeNull();
   });
 });

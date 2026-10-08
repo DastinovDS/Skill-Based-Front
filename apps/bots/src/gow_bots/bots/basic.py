@@ -132,8 +132,8 @@ class RandomLegalBot(Bot):
         if g.units >= 2:
             options.append(Split(g.id, self.rng.randint(1, g.units - 1)))
         options.append(SetMode(g.id, Mode.ATTACK if g.mode is Mode.DEFENSE else Mode.DEFENSE))
-        if view.nodes[here].owner == view.player and view.nodes[here].build is None:
-            for e in self.incident[here]:  # the city where the group stands builds (DEC-16)
-                if view.edges[e].upgrade_gain is not None:
-                    options.append(UpgradeRoad(here, e))
+        supplied = self.supplied(view)
+        for e in self.incident[here]:  # the city where the group stands builds (DEC-16)
+            if self.can_upgrade(view, here, e, supplied):
+                options.append(UpgradeRoad(here, e))
         return self.rng.choice(options)
