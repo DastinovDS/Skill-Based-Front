@@ -6,8 +6,15 @@ import {
 } from '../net/matchConnection.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 import { SnapshotBuffer } from '../net/snapshotBuffer.ts';
-import type { Command, EventMsg, OrdersPublic, ServerMsg, WelcomeMsg } from '../protocol.gen.ts';
-import type { OrderDelays, RenderSource } from '../render/source.ts';
+import type {
+  CapacityPublic,
+  Command,
+  EventMsg,
+  OrdersPublic,
+  ServerMsg,
+  WelcomeMsg,
+} from '../protocol.gen.ts';
+import type { CapacityTicks, OrderDelays, RenderSource } from '../render/source.ts';
 import { OrderBook } from './orderBook.ts';
 
 /** Events kept for the fight marks: they live a few seconds, so a short tail is enough. */
@@ -24,6 +31,8 @@ export interface MatchContext {
   tickHz: number;
   /** `ruleset_public.orders`: the delays of the countdown on order arrows. */
   orders?: Pick<OrdersPublic, 'planned_delay_ticks' | 'defense_delay_ticks'>;
+  /** `ruleset_public.capacity`: the arc of the overcrowding pill. */
+  capacity?: Pick<CapacityPublic, 'attrition_ticks' | 'grace_ticks'>;
 }
 
 export interface MatchSessionOptions {
@@ -56,6 +65,8 @@ export class MatchSession implements RenderSource {
   tickHz = DEFAULT_TICK_HZ;
   /** Delays of planned orders and "Defense": the countdown on the arrows. */
   orderDelays: OrderDelays | undefined;
+  /** The overcrowding numbers: the pill beside an overcrowded city. */
+  capacityTicks: CapacityTicks | undefined;
   buffer: SnapshotBuffer;
   #hud: HudState | null = null;
   readonly #now: (() => number) | undefined;
@@ -108,6 +119,13 @@ export class MatchSession implements RenderSource {
       orders === undefined
         ? undefined
         : { planned: orders.planned_delay_ticks, defense: orders.defense_delay_ticks };
+    this.capacityTicks =
+      context.capacity === undefined
+        ? undefined
+        : {
+            attritionTicks: context.capacity.attrition_ticks,
+            graceTicks: context.capacity.grace_ticks,
+          };
     this.buffer = new SnapshotBuffer({ tickMs: 1000 / context.tickHz, now: this.#now });
   }
 

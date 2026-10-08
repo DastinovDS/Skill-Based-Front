@@ -97,6 +97,7 @@
           hud: state,
           tickHz: welcome.ruleset_public.tick_hz,
           orders: welcome.ruleset_public.orders,
+          capacity: welcome.ruleset_public.capacity,
         };
       },
       onStatus: (next) => {

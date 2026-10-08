@@ -11,7 +11,15 @@ export interface OrderDelays {
   readonly defense: number;
 }
 
+/** `ruleset_public.capacity` in ticks: the arc of the overcrowding pill fills over `attritionTicks`. */
+export interface CapacityTicks {
+  readonly attritionTicks: number;
+  readonly graceTicks: number;
+}
+
 export interface RenderSource {
+  /** Overcrowding numbers for the pill beside an overcrowded city; without them no pill. */
+  readonly capacityTicks?: CapacityTicks;
   /** Delays for the countdown on order arrows; without them the arrows show no countdown. */
   readonly orderDelays?: OrderDelays;
   /** Ticks per second (`ruleset_public.tick_hz`), for the age of fog memories. Default 10. */

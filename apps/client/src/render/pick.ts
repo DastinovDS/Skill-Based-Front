@@ -10,6 +10,9 @@ export const NODE_HIT_SLACK = 8;
 /** A road is hit this close to its centre line (world units). */
 export const EDGE_HIT = 9;
 
+/** An intent ribbon is hit this close to its axis (world units); it is a little wider than a road. */
+export const RIBBON_HIT = 11;
+
 /** Distance from `p` to the segment `a`-`b`. */
 export function segmentDistance(p: Point, a: Point, b: Point): number {
   const dx = b.x - a.x;
@@ -31,6 +34,8 @@ export function pickAt(
   world: Point,
   groups: ReadonlyMap<string, TokenSpot>,
   scale = 1,
+  /** Axes of the intent ribbons, for a pointer resting on one (the tooltip); never for a click. */
+  ribbons?: ReadonlyMap<string, readonly Point[]>,
 ): PickHit | null {
   let group: string | null = null;
   for (const [id, at] of groups) {
@@ -52,6 +57,24 @@ export function pickAt(
     }
   }
   if (best !== null) return { kind: 'node', id: best };
+
+  if (ribbons !== undefined) {
+    let intent: string | null = null;
+    let intentDistance = RIBBON_HIT;
+    for (const [id, axis] of ribbons) {
+      for (let i = 1; i < axis.length; i++) {
+        const a = axis[i - 1];
+        const b = axis[i];
+        if (a === undefined || b === undefined) continue;
+        const distance = segmentDistance(world, a, b);
+        if (distance <= intentDistance) {
+          intent = id;
+          intentDistance = distance;
+        }
+      }
+    }
+    if (intent !== null) return { kind: 'intent', id: intent };
+  }
 
   let road: number | null = null;
   let roadDistance = EDGE_HIT;

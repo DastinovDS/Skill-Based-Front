@@ -77,5 +77,9 @@ export function frozenSource(scene: FixtureScene): RenderSource {
       planned: DEV_RULES.orders.planned_delay_ticks,
       defense: DEV_RULES.orders.defense_delay_ticks,
     },
+    capacityTicks: {
+      attritionTicks: DEV_RULES.capacity.attrition_ticks,
+      graceTicks: DEV_RULES.capacity.grace_ticks,
+    },
   };
 }
