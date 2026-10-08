@@ -11,6 +11,7 @@ import { createLayers, type MapLayers } from './layers.ts';
 import { MapView } from './mapView.ts';
 import { EMPTY_OVERLAY, type MapInteraction, type PickHit } from './interaction.ts';
 import { OverlayView } from './overlayView.ts';
+import { nodePoint } from './layout.ts';
 import { pickAt } from './pick.ts';
 import type { RenderSource } from './source.ts';
 import type { Point } from './camera.ts';
@@ -106,6 +107,12 @@ export class MapScene {
 
   setInteraction(interaction: MapInteraction | null): void {
     this.interaction = interaction;
+  }
+
+  /** Moves the camera to a city (the jump of `Space` to an alert). */
+  focusNode(node: number): void {
+    const at = nodePoint(this.map, node);
+    if (at !== undefined) this.controller.focus(at);
   }
 
   /** "Fit map": show the whole map. */

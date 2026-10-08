@@ -292,4 +292,20 @@ export const en = {
   'legal.game': 'Back to the game',
   'legal.draft':
     'Draft: placeholders like <THIS> must be replaced with the operator data and the texts reviewed by a lawyer before publishing.',
+  // Stance menu (Q, ui-style 11) and alerts (U7).
+  'radial.title': 'Stance',
+  'radial.cancel': 'cancel',
+  'radial.cpPerMin': '+{value} CP per minute',
+  'radial.chargesPerMin': '+{value} charges per minute',
+  'radial.capital': 'The capital makes another +{value} charges per minute in any stance.',
+  'radial.hintHold': 'Release Q over a sector to choose. The centre cancels.',
+  'radial.hintTap': 'Click or 1, 2, 3 chooses a stance, Esc closes.',
+  'radial.current': 'current stance',
+  'radial.close': 'Close the stance menu',
+  'orders.stanceOpen': 'Stance: {stance} [Q]',
+  'alert.title': 'Alerts',
+  'alert.incoming': 'They are coming for city {node} (orders: {count})',
+  'alert.incomingIn': 'they leave in {seconds} s',
+  'alert.incomingGone': 'already on the way',
+  'alert.focusHint': 'Space: go to the alert',
 } satisfies Messages;

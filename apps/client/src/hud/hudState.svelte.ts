@@ -14,6 +14,7 @@ import {
   type Selection,
 } from './hudData.ts';
 import { isLogged } from './eventText.ts';
+import { AlertState } from '../match/alerts.svelte.ts';
 
 /** Events kept for the feed. */
 export const EVENT_LIMIT = 30;
@@ -21,6 +22,9 @@ export const EVENT_LIMIT = 30;
 export class HudState {
   /** `null` until the first snapshot. Replaced, never mutated. */
   current = $state.raw<HudData | null>(null);
+
+  /** Alerts of the match (incoming attacks); package D draws them. */
+  readonly alerts: AlertState;
 
   readonly #ctx: HudContext;
   #snapshot: SnapshotMsg | null = null;
@@ -32,6 +36,7 @@ export class HudState {
 
   constructor(ctx: HudContext) {
     this.#ctx = ctx;
+    this.alerts = new AlertState(ctx.me, ctx.rules);
   }
 
   get selection(): Selection | null {
@@ -45,6 +50,7 @@ export class HudState {
   /** A new snapshot: the HUD numbers are recomputed here and only here. */
   onSnapshot(snapshot: SnapshotMsg): void {
     this.#snapshot = snapshot;
+    this.alerts.onSnapshot(snapshot);
     this.#publish();
   }
 
@@ -73,6 +79,7 @@ export class HudState {
   reset(): void {
     this.#snapshot = null;
     this.current = null;
+    this.alerts.reset();
   }
 
   #publish(): void {

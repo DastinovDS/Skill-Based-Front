@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cameraLimits,
+  centerOn,
   clampCamera,
   fitCamera,
   fitScale,
@@ -210,5 +211,44 @@ describe('symbolScale and hitHalf (9.5)', () => {
       expect(hitHalf(42, scale) * 2).toBeGreaterThanOrEqual(42);
     }
     expect(hitHalf(24, 4)).toBe(12);
+  });
+});
+
+describe('centerOn', () => {
+  const limits: CameraLimits = cameraLimits(WORLD, VIEWPORT, 0);
+  const camera: Camera = { x: 500, y: 250, scale: 1 };
+
+  it('puts the point in the middle of the viewport and keeps the scale', () => {
+    const next = centerOn(
+      camera,
+      { x: 300, y: 200 },
+      { left: 0, top: 0, right: 0, bottom: 0 },
+      limits,
+    );
+    expect(next).toEqual({ x: 300, y: 200, scale: 1 });
+  });
+
+  it('puts the point in the middle of what the HUD leaves free', () => {
+    // A 200 px panel on the left: the free middle is 100 px right of the viewport centre.
+    const next = centerOn(
+      camera,
+      { x: 300, y: 200 },
+      { left: 200, top: 0, right: 0, bottom: 0 },
+      limits,
+    );
+    expect(next.x).toBe(200);
+    const screen = worldToScreen(next, VIEWPORT, { x: 300, y: 200 });
+    expect(screen.x).toBe(500);
+  });
+
+  it('stays inside the map', () => {
+    const next = centerOn(
+      camera,
+      { x: -50, y: 900 },
+      { left: 0, top: 0, right: 0, bottom: 0 },
+      limits,
+    );
+    expect(next.x).toBe(0);
+    expect(next.y).toBe(WORLD.height);
   });
 });

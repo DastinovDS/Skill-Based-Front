@@ -50,8 +50,13 @@
   let notice = $state.raw<MessageKey | null>(null);
   let rendererFailed = $state(false);
   let fps = $state(0);
-  let canvas: { fitMap: () => void; setInsets: (insets: Insets) => void } | undefined =
-    $state.raw();
+  let canvas:
+    | {
+        fitMap: () => void;
+        setInsets: (insets: Insets) => void;
+        focusNode: (node: number) => void;
+      }
+    | undefined = $state.raw();
   let insets: Insets = $state.raw(NO_INSETS);
   let pauseLeft = $state(0);
 
@@ -128,6 +133,8 @@
       rules,
       book: live.orders,
       send: (cmd) => live.send(cmd),
+      alerts: hud.alerts,
+      focusNode: (node) => canvas?.focusNode(node),
     });
   });
 

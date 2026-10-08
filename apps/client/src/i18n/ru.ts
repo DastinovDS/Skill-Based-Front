@@ -292,4 +292,20 @@ export const ru = {
   'legal.game': 'К игре',
   'legal.draft':
     'Черновик: заглушки вида <ТАКОЕ> нужно заменить данными оператора, тексты проверить юристу до публикации.',
+  // Stance menu (Q, ui-style 11) and alerts (U7).
+  'radial.title': 'Стойка',
+  'radial.cancel': 'отмена',
+  'radial.cpPerMin': '+{value} CP в минуту',
+  'radial.chargesPerMin': '+{value} зарядов в минуту',
+  'radial.capital': 'Столица в любой стойке даёт ещё +{value} зарядов в минуту.',
+  'radial.hintHold': 'Отпусти Q над сектором, чтобы выбрать. В центре отмена.',
+  'radial.hintTap': 'Клик или 1, 2, 3 выбирает стойку, Esc закрывает.',
+  'radial.current': 'текущая стойка',
+  'radial.close': 'Закрыть меню стойки',
+  'orders.stanceOpen': 'Стойка: {stance} [Q]',
+  'alert.title': 'Тревоги',
+  'alert.incoming': 'На город {node} идут (приказов: {count})',
+  'alert.incomingIn': 'выступят через {seconds} с',
+  'alert.incomingGone': 'уже в пути',
+  'alert.focusHint': 'Space: к тревоге',
 } as const;

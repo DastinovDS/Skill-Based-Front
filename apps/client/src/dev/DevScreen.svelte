@@ -24,8 +24,13 @@
   let fps = $state(0);
   // The part of the GameCanvas instance the HUD uses (spelled out: typescript-eslint cannot see
   // the types of .svelte imports).
-  let canvas: { fitMap: () => void; setInsets: (insets: Insets) => void } | undefined =
-    $state.raw();
+  let canvas:
+    | {
+        fitMap: () => void;
+        setInsets: (insets: Insets) => void;
+        focusNode: (node: number) => void;
+      }
+    | undefined = $state.raw();
 
   // Screen margins the HUD covers: "fit map" keeps the map out of them.
   let insets: Insets = $state.raw(NO_INSETS);
@@ -75,6 +80,8 @@
       rules: DEV_RULES,
       book: match?.session.orders ?? new OrderBook(),
       send: match === null ? null : (cmd) => match.session.send(cmd),
+      alerts: hud.alerts,
+      focusNode: (node) => canvas?.focusNode(node),
     }),
   );
 

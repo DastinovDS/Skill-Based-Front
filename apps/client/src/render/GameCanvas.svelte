@@ -49,6 +49,11 @@
     scene?.fit();
   }
 
+  /** Moves the camera to a city (`Space`: the next alert). */
+  export function focusNode(node: number): void {
+    scene?.focusNode(node);
+  }
+
   /** The screen margins the HUD covers: "fit map" keeps the map out of them. */
   export function setInsets(next: Insets): void {
     insets = next;
