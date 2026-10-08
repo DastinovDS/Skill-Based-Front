@@ -167,6 +167,8 @@ export interface RulesetPublic {
   cost: CostsPublic;
   combat: CombatPublic;
   build: BuildPublic;
+  economy: EconomyPublic;
+  orders: OrdersPublic;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.
@@ -220,6 +222,37 @@ export interface BuildPublic {
 export interface LevelPrice {
   width: number;
   charges: number;
+}
+/**
+ * The charge production the stance menu shows (``economy`` of the ruleset, DEC-02).
+ */
+export interface EconomyPublic {
+  stance_to_charges_pct: StancePctPublic;
+  /**
+   * Charges per whole CP put into charges.
+   */
+  charges_per_cp: number;
+  passive_amount: number;
+  /**
+   * The capital makes ``passive_amount`` charges every ``passive_period_ticks`` in any stance.
+   */
+  passive_period_ticks: number;
+}
+/**
+ * ``economy.stance_to_charges_pct``: the share of the CP quantum put into charges, in %.
+ */
+export interface StancePctPublic {
+  economy: number;
+  balance: number;
+  war: number;
+}
+/**
+ * Delays of planned orders and modes, and the stance cooldown (``orders`` of the ruleset).
+ */
+export interface OrdersPublic {
+  planned_delay_ticks: number;
+  defense_delay_ticks: number;
+  stance_cooldown_ticks: number;
 }
 /**
  * The player's view after tick ``tick``. Only the latest one matters (AGENTS.md, 5.3).
@@ -559,6 +592,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
