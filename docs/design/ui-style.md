@@ -301,12 +301,11 @@ Dribbble и Behance, Interface In Game. Game UI Database за проверкой
 
 ## 9. Карта: визуальный язык
 
-![после: макет экрана](mockups/img/mock-screen.png)
+![v2: экран матча](mockups/img/mock2-screen.png)
 
-![после: легенда символов](mockups/img/mock-legend.png)
+![v2: легенда символов](mockups/img/mock2-legend.png)
 
-Картинки выше из v1 (противник там ещё оранжевый); актуальный вид в
-[`mockups/ui-style.html`](mockups/ui-style.html). Размеры в мировых единицах карты (города
+Картинки выше сняты с [`mockups/ui-style.html`](mockups/ui-style.html). Размеры в мировых единицах карты (города
 примерно в 100 единицах друг от друга), если не сказано «px на экране».
 
 ### 9.1 Слои
@@ -493,7 +492,7 @@ Dribbble и Behance, Interface In Game. Game UI Database за проверкой
 
 ## 11. Радиальное меню стойки
 
-![радиальное меню](mockups/img/mock-radial.png)
+![радиальное меню](mockups/img/mock2-radial.png)
 
 - **Клавиша `Q`.** Удержание: меню с центром под курсором, выбор отпусканием в секторе, отмена в
   мёртвой зоне радиусом 28 px. Короткое нажатие (меньше 200 мс): меню остаётся открытым, выбор
@@ -540,6 +539,10 @@ Dribbble и Behance, Interface In Game. Game UI Database за проверкой
 ---
 
 ## 13. Экраны вне матча
+
+![v2: меню и очередь](mockups/img/mock2-menu-queue.png)
+
+![v2: экран итога](mockups/img/mock2-result.png)
 
 ### 13.1 Общий каркас
 
