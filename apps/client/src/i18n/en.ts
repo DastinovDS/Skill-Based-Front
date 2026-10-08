@@ -96,7 +96,7 @@ export const en = {
     'Click your group to select it, then click a node to send it there. Click empty map or press Esc to deselect.',
   'orders.title': 'Orders',
   'orders.pickGroup': 'Click one of your groups on the map to give it orders.',
-  'orders.planned': 'Planned order (P or Shift+click)',
+  'orders.planned': 'Planned order (Shift+click)',
   'orders.previewMove': 'Move to node {node}: {cost} CP',
   'orders.previewPlanned': 'Planned move to node {node}: {cost} CP',
   'orders.cancel': 'Cancel order ({cost} CP)',
@@ -143,7 +143,7 @@ export const en = {
   'orders.roadHint':
     'Upgrade this road: +{capacity} city capacity, +{speed}% packet speed ({cost} CP). Click it with a group standing at its end.',
   'hud.keysHint':
-    'Shift+click or P: planned order (costs more, visible to the enemy). X: cancel the order. 1 / 2 / 3: mode attack / defense / build. R: recruit in the selected city. Click a road with a group selected: upgrade it.',
+    'Shift+click: planned order (costs more, visible to the enemy). X: cancel the order. 1 / 2 / 3: mode attack / defense / build. R: recruit in the selected city. Click a road with a group selected: upgrade it.',
   'replay.controls': 'Replay controls',
   'replay.back': 'Back',
   'replay.play': 'Play',

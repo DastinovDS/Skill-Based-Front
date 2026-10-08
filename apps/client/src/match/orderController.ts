@@ -48,7 +48,7 @@ function aimKey(aim: AttackTarget | null): string {
  * recruit, stance, forfeit; a click on a road with a group selected upgrades the road. Each goes
  * out as an intent and comes back as `accepted` or `rejected` in `ui.current.notice`.
  *
- * Keys: Esc deselects, P toggles the planned switch, X cancels the order of the selected group,
+ * Keys: Esc deselects, X cancels the order of the selected group,
  * 1 / 2 / 3 set the mode (attack / defense / build), R recruits in the selected city.
  */
 export class OrderController implements MapInteraction {
@@ -243,9 +243,6 @@ export class OrderController implements MapInteraction {
     switch (input.code) {
       case 'Escape':
         this.deselect();
-        return true;
-      case 'KeyP':
-        this.setPlanned(!this.ui.current.planned);
         return true;
       case 'KeyX':
         this.cancelSelected();

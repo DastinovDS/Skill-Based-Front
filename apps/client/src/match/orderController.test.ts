@@ -65,15 +65,23 @@ describe('OrderController', () => {
     expect(book.ghosts().map((g) => [g.from, g.dest, g.planned])).toEqual([[home, other.id, true]]);
   });
 
-  it('makes every order planned while the switch is on (key P toggles it)', () => {
+  it('makes every order planned while the switch is on', () => {
     const { controller, sent } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
-    expect(controller.key({ type: 'keydown', code: 'KeyP', shiftKey: false })).toBe(true);
-    expect(controller.ui.current.planned).toBe(true);
+    controller.setPlanned(true);
     controller.click({ kind: 'node', id: enemy.id }, false);
     expect(sent[0]).toMatchObject({ planned: true });
-    controller.key({ type: 'keydown', code: 'KeyP', shiftKey: false });
+    controller.setPlanned(false);
     expect(controller.ui.current.planned).toBe(false);
+  });
+
+  it('key P does nothing: Shift+click is the way to a planned order (#213)', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.key({ type: 'keydown', code: 'KeyP', shiftKey: false })).toBe(false);
+    expect(controller.ui.current.planned).toBe(false);
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    expect(sent[0]).toMatchObject({ planned: false });
   });
 
   it('does not order the group to its own node: that click selects the node', () => {
