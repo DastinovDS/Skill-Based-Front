@@ -162,7 +162,7 @@ export const en = {
   'orders.roadPickCancel': 'Cancel [Esc]',
   'orders.roadBusy': 'The city is building road {edge}: done in {seconds} s',
   'hud.keysHint':
-    'Shift+click: planned order (costs more, visible to the enemy). X: cancel the order. 1 / 2: mode attack / defense. R: recruit in the selected city. U: upgrade a road of your selected city, then click a lit road (Esc: cancel).',
+    'Shift+click: planned order (costs more, visible to the enemy). X: cancel the order. 1 / 2: mode attack / defense. R: recruit in the selected city. U: upgrade a road of your selected city, then click a lit road (Esc: cancel). Q: stance (hold and release over a sector, or tap and click; 1, 2, 3 choose). Space: go to a city they are coming for.',
   'replay.controls': 'Replay controls',
   'replay.back': 'Back',
   'replay.play': 'Play',

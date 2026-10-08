@@ -114,6 +114,22 @@ def test_hello_fixture_uses_the_current_protocol_version() -> None:
     assert msg.protocol_version == PROTOCOL_VERSION
 
 
+def test_ruleset_public_has_the_stance_table_and_order_delays_of_mvp_0() -> None:
+    """The numbers of the stance menu and of the countdown on order arrows (ui-style 11 and 9.7)."""
+    public = RulesetPublic.from_ruleset(load_ruleset(RULESET_PATH))
+    assert public.economy.model_dump() == {
+        "stance_to_charges_pct": {"economy": 75, "balance": 50, "war": 25},
+        "charges_per_cp": 2,
+        "passive_amount": 1,
+        "passive_period_ticks": 50,
+    }
+    assert public.orders.model_dump() == {
+        "planned_delay_ticks": 30,
+        "defense_delay_ticks": 30,
+        "stance_cooldown_ticks": 100,
+    }
+
+
 def test_ruleset_public_takes_values_from_the_ruleset() -> None:
     rules = load_ruleset(RULESET_PATH)
     public = RulesetPublic.from_ruleset(rules)
