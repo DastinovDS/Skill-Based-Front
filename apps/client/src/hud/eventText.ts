@@ -27,6 +27,8 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'groups_merged',
   'packet_sent',
   'packet_delivered',
+  // The score is in the top bar already (ui-style U2): a VP line would repeat it every few seconds.
+  'vp_awarded',
 ]);
 
 /** Kinds with a line in the feed. */
@@ -34,7 +36,6 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'node_captured',
   'fight',
   'recruited',
-  'vp_awarded',
   'stance_changed',
   'warehouse_lost',
   'forfeit',
@@ -73,10 +74,6 @@ export function eventText(event: HudEvent, me: PlayerId): string {
     case 'recruited':
       return tf(side === 'mine' ? 'event.recruited.mine' : 'event.recruited.enemy', {
         node: num(data.node),
-      });
-    case 'vp_awarded':
-      return tf(side === 'mine' ? 'event.vp_awarded.mine' : 'event.vp_awarded.enemy', {
-        vp: num(data.vp),
       });
     case 'stance_changed':
       return tf(side === 'mine' ? 'event.stance_changed.mine' : 'event.stance_changed.enemy', {

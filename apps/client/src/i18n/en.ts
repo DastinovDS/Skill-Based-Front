@@ -70,8 +70,6 @@ export const en = {
   'event.fight.edge': 'Fight on road {edge}: your losses {mine}, enemy losses {enemy}',
   'event.recruited.mine': 'You recruited a unit at node {node}',
   'event.recruited.enemy': 'The enemy recruited a unit at node {node}',
-  'event.vp_awarded.mine': 'You got {vp} VP',
-  'event.vp_awarded.enemy': 'The enemy got {vp} VP',
   'event.stance_changed.mine': 'Your stance: {stance}',
   'event.stance_changed.enemy': 'Enemy stance: {stance}',
   'event.warehouse_lost': 'Warehouse lost at node {node}',

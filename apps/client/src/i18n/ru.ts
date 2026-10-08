@@ -70,8 +70,6 @@ export const ru = {
   'event.fight.edge': 'Бой на дороге {edge}: твои потери {mine}, вражеские {enemy}',
   'event.recruited.mine': 'Ты нанял юнита в узле {node}',
   'event.recruited.enemy': 'Враг нанял юнита в узле {node}',
-  'event.vp_awarded.mine': 'Ты получил {vp} VP',
-  'event.vp_awarded.enemy': 'Враг получил {vp} VP',
   'event.stance_changed.mine': 'Твоя стойка: {stance}',
   'event.stance_changed.enemy': 'Стойка врага: {stance}',
   'event.warehouse_lost': 'Склад потерян в узле {node}',

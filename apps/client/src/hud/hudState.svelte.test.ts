@@ -1,9 +1,9 @@
 import { flushSync } from 'svelte';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { SnapshotMsg } from '../protocol.gen.ts';
 import { DEV_RULES, devEvent, devSnapshot } from './devFeed.ts';
-import { EVENT_LIMIT, HudState } from './hudState.svelte.ts';
+import { EVENT_LIMIT, HudState, LAST_MINUTE_S, START_MS } from './hudState.svelte.ts';
 
 const map = DEFAULT_MAP;
 
@@ -87,5 +87,102 @@ describe('HudState', () => {
     expect(hud.current?.group?.id).toBe(first.id);
     hud.select(null);
     expect(hud.current?.group).toBeNull();
+  });
+});
+
+describe('HudState: start banner, hover, toasts and the last minute', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('opens the start banner for three seconds on the first snapshot of a fresh match', () => {
+    const hud = newState();
+    expect(hud.banner).toBe(false);
+    expect(hud.beacon).toBeNull();
+    hud.onSnapshot(snapshot(2));
+    expect(hud.banner).toBe(true);
+    // The capital of the own side is ringed meanwhile (the map reads it every frame).
+    expect(hud.beacon).toBe(map.nodes.find((n) => n.capital_of === 0)?.id);
+    vi.advanceTimersByTime(START_MS - 1);
+    expect(hud.banner).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(hud.banner).toBe(false);
+    expect(hud.beacon).toBeNull();
+  });
+
+  it('does not open it again for later snapshots, nor on a rejoin in the middle of a match', () => {
+    const hud = newState();
+    hud.onSnapshot(snapshot(2));
+    vi.advanceTimersByTime(START_MS);
+    hud.onSnapshot(snapshot(3));
+    expect(hud.banner).toBe(false);
+    const rejoined = newState();
+    rejoined.onSnapshot(snapshot(900));
+    expect(rejoined.banner).toBe(false);
+  });
+
+  it('keeps the nicks of both sides for the top bar', () => {
+    const hud = newState();
+    hud.onSnapshot(snapshot(2));
+    expect(hud.current?.nicks).toEqual({ mine: 'Danya', enemy: 'Bot' });
+    const second = new HudState({ me: 1, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
+    second.onSnapshot(snapshot(2));
+    expect(second.current?.nicks).toEqual({ mine: 'Bot', enemy: 'Danya' });
+  });
+
+  it('publishes the thing under the pointer once per change', () => {
+    const hud = newState();
+    hud.onSnapshot(snapshot(2));
+    expect(hud.current?.tip).toBeNull();
+    hud.hover({ kind: 'node', id: 0 });
+    const withTip = hud.current;
+    expect(withTip?.tip?.kind).toBe('node');
+    hud.hover({ kind: 'node', id: 0 });
+    expect(hud.current).toBe(withTip); // the same hit: no new object
+    hud.hover(null);
+    expect(hud.current?.tip).toBeNull();
+  });
+
+  it('turns fights, captures and attrition into toasts, and VP awards into nothing', () => {
+    const hud = newState();
+    hud.onSnapshot(snapshot(2));
+    hud.onEvent({ type: 'event', tick: 5, kind: 'vp_awarded', data: { player: 0, vp: 1 } });
+    hud.onEvent({ type: 'event', tick: 6, kind: 'recruited', data: { node: 0, player: 0 } });
+    expect(hud.toasts.current).toEqual([]);
+    hud.onEvent({ type: 'event', tick: 7, kind: 'node_captured', data: { node: 1, player: 1 } });
+    hud.onEvent({ type: 'event', tick: 8, kind: 'attrition', data: { node: 0, player: 0 } });
+    expect(hud.toasts.current.map((t) => t.tone)).toEqual(['warn', 'enemy']);
+    hud.onSnapshot(snapshot(3));
+    // The journal keeps what the toasts leave out, but not the VP awards.
+    expect(hud.current?.events.map((e) => e.kind)).toEqual([
+      'attrition',
+      'node_captured',
+      'recruited',
+    ]);
+  });
+
+  it('adds one toast when the last minute starts', () => {
+    const hud = newState();
+    const last = (seconds: number): SnapshotMsg =>
+      snapshot(DEV_RULES.match_ticks - seconds * DEV_RULES.tick_hz);
+    hud.onSnapshot(last(LAST_MINUTE_S + 5));
+    expect(hud.toasts.current).toEqual([]);
+    hud.onSnapshot(last(LAST_MINUTE_S));
+    hud.onSnapshot(last(LAST_MINUTE_S - 10));
+    expect(hud.toasts.current).toHaveLength(1);
+    expect(hud.toasts.current[0]?.tone).toBe('warn');
+  });
+
+  it('drops the toasts and the timers on a reset and on destroy', () => {
+    const hud = newState();
+    hud.onSnapshot(snapshot(2));
+    hud.onEvent({ type: 'event', tick: 8, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.reset();
+    expect(hud.toasts.current).toEqual([]);
+    hud.destroy();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
