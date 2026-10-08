@@ -12,6 +12,8 @@ Capacity:
   (``rulesets/mvp-0.toml``, section ``[capacity]``).
 - Capacities depend only on node owners and road widths; ``node_capacities()`` recomputes them
   only when one of those changed (``GameState.capacity_cache``).
+- A player's view computes capacities by the same formula from the widths that player knows
+  (DEC-17, ``known_capacities``); ``capacity_stale`` marks the nodes where that is an estimate.
 
 Attrition (the ``capacity`` system; details: #118 default):
 
@@ -99,22 +101,62 @@ def node_capacities(state: GameState, rules: Ruleset) -> tuple[int, ...]:
     cache = state.capacity_cache
     if cache is not None and cache[0] == owners and cache[1] == widths and cache[2] == gains:
         return cache[3]
-    capacities = _compute_capacities(state, rules)
+    capacities = _compute_capacities(state, rules, widths)
     state.capacity_cache = (owners, widths, gains, capacities)
     return capacities
 
 
-def _compute_capacities(state: GameState, rules: Ruleset) -> tuple[int, ...]:
+def known_capacities(state: GameState, rules: Ruleset, widths: tuple[int, ...]) -> tuple[int, ...]:
+    """Capacity of every node by the road ``widths`` a player knows (DEC-17, point 3).
+
+    The same formula as ``node_capacities`` with ``widths[edge_id]`` instead of the true widths;
+    owners (public) are the true ones. Equal to ``node_capacities`` (and cached) when the widths
+    are the true ones; otherwise O(V + E) and not cached, so the cache of the state stays intact.
+    """
+    if widths == tuple(state.edges[e].width for e in range(len(state.map.edges))):
+        return node_capacities(state, rules)
+    return _compute_capacities(state, rules, widths)
+
+
+def capacity_stale(state: GameState, fogged: tuple[bool, ...]) -> tuple[bool, ...]:
+    """``result[node]``: the capacity a player knows is an estimate (DEC-17, point 3).
+
+    True when the node is in its owner's supplied territory and at least one of its internal
+    edges is fogged for the player (``fogged[edge_id]``). Own nodes never are: every edge of an
+    own node touches it, so it is not in fog.
+    """
+    mapdef = state.map
+    candidates = [
+        any(fogged[eid] and is_internal(state, eid) for eid in mapdef.incident[n])
+        for n in range(len(mapdef.nodes))
+    ]
+    if not any(candidates):
+        return tuple(candidates)
+    supplied = {p: supplied_territory(state, p) for p in sorted(state.players)}
+    result: list[bool] = []
+    for n, candidate in enumerate(candidates):
+        owner = state.nodes[n].owner
+        result.append(candidate and owner is not None and supplied[owner][n])
+    return tuple(result)
+
+
+def _compute_capacities(
+    state: GameState, rules: Ruleset, widths: tuple[int, ...]
+) -> tuple[int, ...]:
     supplied = {p: supplied_territory(state, p) for p in sorted(state.players)}
     # Capacity centi >= 0: rounded down.
     return tuple(
-        _capacity_centi(state, rules, supplied, node) // CENTI
+        _capacity_centi(state, rules, supplied, node, widths) // CENTI
         for node in range(len(state.map.nodes))
     )
 
 
 def _capacity_centi(
-    state: GameState, rules: Ruleset, supplied: dict[int, tuple[bool, ...]], node: int
+    state: GameState,
+    rules: Ruleset,
+    supplied: dict[int, tuple[bool, ...]],
+    node: int,
+    widths: tuple[int, ...],
 ) -> int:
     mapdef = state.map
     total = mapdef.nodes[node].base_capacity * CENTI
@@ -123,7 +165,7 @@ def _capacity_centi(
         gains = rules.capacity.width_gain_centi
         for eid in mapdef.incident[node]:
             if is_internal(state, eid):
-                total += gains.of(state.edges[eid].width)
+                total += gains.of(widths[eid])
     return total
 
 
@@ -133,7 +175,8 @@ def city_capacity_centi(state: GameState, rules: Ruleset, node: int) -> int:
     Not cached, O(V + E): for hints and tests (``systems.build.upgrade_gain``), not for systems.
     """
     supplied = {p: supplied_territory(state, p) for p in sorted(state.players)}
-    return _capacity_centi(state, rules, supplied, node)
+    widths = tuple(state.edges[e].width for e in range(len(state.map.edges)))
+    return _capacity_centi(state, rules, supplied, node, widths)
 
 
 def city_capacity(state: GameState, rules: Ruleset, node: int) -> int:

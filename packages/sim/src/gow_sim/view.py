@@ -1,12 +1,15 @@
 """Projection (SIM-14): ``project()`` builds the ``PlayerView``, the only thing a player sees.
 
 ``PlayerView`` is everything that leaves the simulation towards a player or a bot (AGENTS.md,
-section 4.4); bots get the same view as people. It follows DEC-04 (mechanics.md, section 10) and
-has the shape of the wire ``View`` of the protocol (``gow_protocol.view``, PRO-01), which PRO-03
-converts it into:
+section 4.4); bots get the same view as people. It follows DEC-04 and DEC-17 (mechanics.md,
+section 10) and has the shape of the wire ``View`` of the protocol (``gow_protocol.view``,
+PRO-01), which PRO-03 converts it into:
 
-- public to everyone: ownership and capacity of every node, road widths, VP of both players,
-  intents of planned orders and «Защита» (kind, origin, target; no group id or size);
+- public to everyone: ownership of every node, VP of both players, intents of planned orders
+  and «Защита» (kind, origin, target; no group id or size);
+- road widths (DEC-17): exact on edges not in fog; on a fogged edge the width of its last
+  sighting, or ``base_width`` of the map if never seen. Node capacities by the same formula from
+  these known widths, ``capacity_stale`` where that is an estimate;
 - road builds of cities (DEC-16, item 8): own ones always, with the tick they finish; an enemy
   one (the city and the edge, no tick) only while the edge is not in fog (DEC-17, item 5);
 - ``EXACT`` places (own nodes, nodes where own groups stand): warehouse and enemy totals;
@@ -14,7 +17,8 @@ converts it into:
   are there and their modes, no numbers;
 - ``FOG``: only the last sighting from ``GameState.vision_memory``.
 
-What a view never has: enemy groups as entities (only the per-place ``Sighting``), enemy packets
+What a view never has: enemy groups as entities (only the per-place ``Sighting``), road widths
+of fogged edges newer than the last sighting, enemy builds on fogged edges, enemy packets
 (#112 default), enemy CP, stance, production and counters, events, the target of an enemy's normal
 order (normal orders have no intent), sequential ids.
 
@@ -48,8 +52,8 @@ from gow_sim.state import (
     Sighting,
 )
 from gow_sim.systems.build import UpgradeGain, done_tick, upgrade_gain
-from gow_sim.systems.capacity import node_capacities
-from gow_sim.systems.vision import compute_vision, current_sightings
+from gow_sim.systems.capacity import capacity_stale, known_capacities
+from gow_sim.systems.vision import compute_vision, current_sightings, known_widths
 
 __all__ = [
     "MATCH_KEY_MAX",
@@ -115,7 +119,11 @@ class NodeView:
     id: int
     owner: int | None
     capacity: int
-    """Current capacity of the city; public for every node (DEC-04)."""
+    """Capacity by the road widths the player knows (DEC-17): exact unless ``capacity_stale``,
+    never above the true capacity."""
+    capacity_stale: bool
+    """The node is in its owner's supplied territory and one of its internal edges is in fog:
+    ``capacity`` is an estimate by the last seen widths (DEC-17, point 3)."""
     detail: Detail
     warehouse: int | None
     """Charges in the warehouse; only for ``EXACT`` nodes."""
@@ -129,7 +137,8 @@ class NodeView:
 class EdgeView:
     id: int
     width: int
-    """Current width; public for every edge (DEC-04)."""
+    """Width the player knows (DEC-17): the current one unless ``detail`` is ``FOG``; in fog the
+    width of the last sighting, or ``base_width`` if never seen. Never above the true width."""
     detail: Detail
     """``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges."""
     upgrade_gain: UpgradeGain | None
@@ -269,9 +278,9 @@ def resolve(state: GameState, player: int, cmd: Command, match_key: bytes) -> Co
 
 
 def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> PlayerView:
-    """The view of ``player`` on ``state`` (DEC-04). A pure function: reads, never writes.
+    """The view of ``player`` on ``state`` (DEC-04, DEC-17). A pure function: reads, never writes.
 
-    Node capacities come from ``node_capacities``, which may refresh the derived
+    Node capacities come from ``known_capacities``, which may refresh the derived
     ``capacity_cache`` of the state; the cache is not part of the state (SIM-07).
     """
     opaque = _hasher(match_key)
@@ -279,7 +288,9 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     levels = compute_vision(state, player)
     now_nodes, now_edges = current_sightings(state, player, levels)
     memory = state.vision_memory[player]
-    capacities = node_capacities(state, rules)
+    widths = known_widths(state, player, levels)
+    capacities = known_capacities(state, rules, widths)
+    stale = capacity_stale(state, tuple(level is Detail.FOG for level in levels.edges))
 
     nodes: list[NodeView] = []
     for n, level in enumerate(levels.nodes):
@@ -289,6 +300,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 id=n,
                 owner=node.owner,
                 capacity=capacities[n],
+                capacity_stale=stale[n],
                 detail=level,
                 warehouse=node.warehouse if level is Detail.EXACT else None,
                 seen=now_nodes[n] if level is not Detail.FOG else memory.nodes.get(n),
@@ -303,7 +315,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
         edges.append(
             EdgeView(
                 id=e,
-                width=state.edges[e].width,
+                width=widths[e],
                 detail=level,
                 upgrade_gain=upgrade_gain(state, rules, e) if own else None,
                 seen=now_edges[e] if level is not Detail.FOG else memory.edges.get(e),
@@ -402,6 +414,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "id": n.id,
                 "owner": n.owner,
                 "capacity": n.capacity,
+                "capacity_stale": n.capacity_stale,
                 "detail": n.detail.value,
                 "warehouse": n.warehouse,
                 "seen": _seen_data(n.seen),
@@ -478,6 +491,7 @@ def _seen_data(s: Sighting | None) -> dict[str, object] | None:
         "enemy_modes": [m.value for m in s.enemy_modes],
         "enemy_units": s.enemy_units,
         "enemy_charged": s.enemy_charged,
+        "width": s.width,
     }
 
 

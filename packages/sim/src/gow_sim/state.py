@@ -203,6 +203,7 @@ class Sighting:
 
     ``enemy_modes``: distinct modes of the enemy groups seen, sorted; empty means none seen.
     ``enemy_units`` and ``enemy_charged`` are totals, known only when ``level`` is ``EXACT``.
+    ``width``: the road width seen (DEC-17), for an edge; ``None`` for a node.
     """
 
     tick: int
@@ -210,6 +211,7 @@ class Sighting:
     enemy_modes: tuple[Mode, ...]
     enemy_units: int | None
     enemy_charged: int | None
+    width: int | None = None
 
 
 @dataclass(slots=True)
@@ -468,6 +470,7 @@ def _sighting_data(key: int, s: Sighting) -> dict[str, object]:
         "enemy_modes": [m.value for m in s.enemy_modes],
         "enemy_units": s.enemy_units,
         "enemy_charged": s.enemy_charged,
+        "width": s.width,
     }
 
 
@@ -672,7 +675,11 @@ def _parse_sightings(data: object, where: str) -> dict[int, Sighting]:
     result: dict[int, Sighting] = {}
     for i, item in enumerate(_list(data, where)):
         at = f"{where}[{i}]"
-        raw = _obj(item, at, ("id", "tick", "level", "enemy_modes", "enemy_units", "enemy_charged"))
+        raw = _obj(
+            item,
+            at,
+            ("id", "tick", "level", "enemy_modes", "enemy_units", "enemy_charged", "width"),
+        )
         key = _int(raw["id"], f"{at}.id", low=0)
         if key in result:
             raise StateFormatError(f"{at}.id: duplicate id {key}")
@@ -685,6 +692,7 @@ def _parse_sightings(data: object, where: str) -> dict[int, Sighting]:
             ),
             enemy_units=_opt_int(raw["enemy_units"], f"{at}.enemy_units"),
             enemy_charged=_opt_int(raw["enemy_charged"], f"{at}.enemy_charged"),
+            width=_opt_int(raw["width"], f"{at}.width"),
         )
     return result
 

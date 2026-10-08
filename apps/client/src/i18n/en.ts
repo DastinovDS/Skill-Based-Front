@@ -42,6 +42,7 @@ export const en = {
   'sel.charged': 'Charged',
   'sel.chargedOf': '{charged} of {units} charged',
   'sel.capacity': 'Capacity',
+  'sel.capacityStale': 'Estimate from the roads last seen',
   'sel.warehouse': 'Warehouse',
   'sel.mode': 'Mode',
   'sel.terrain': 'Terrain',

@@ -7,8 +7,15 @@ DEC-04 (mechanics.md, section 10):
   whether enemy groups are there and their modes, without numbers;
 - ``FOG``: everything else; the player has the last sighting from ``vision_memory``.
 
-Public to everyone regardless of level: geography, terrain, road widths, ownership and capacity
-of all nodes, VP, intents. That part is the projection's job (SIM-14).
+Public to everyone regardless of level: geography, terrain, ``base_width`` and ``max_width`` of
+the map, ownership of all nodes, VP, intents of planned orders and «Защита». That part is the
+projection's job (SIM-14).
+
+Road widths follow the edge level (DEC-17, mechanics.md, section 10): an edge not in fog shows
+its width exactly; a fogged edge shows the width of its last sighting (``Sighting.width``), or
+``base_width`` of the map if the player never saw it (``known_widths``). No roads are torn down,
+so a known width never exceeds the true one. Enemy road builds are visible only on edges not in
+fog (DEC-16, ``NodeView.build``).
 
 ``is_visible()`` is the single visibility check for command validation (SIM-04) and the
 projection (SIM-14). ``vision()`` is the last system of a tick and refreshes the fog memory.
@@ -87,7 +94,8 @@ def is_visible(
 ) -> bool:
     """Whether ``player`` may know that ``entity`` exists.
 
-    - Intents are public (DEC-04). Own groups and packets are always visible.
+    - Intents (planned orders and «Защита») are public (DEC-04). Own groups and packets are
+      always visible.
     - An enemy group is visible in a node or on an edge that is not in fog; how much of it is
       shown (numbers or only presence and mode) is ``detail_level`` of that place.
     - Enemy packets are never visible: DEC-04 shows only groups on edges (TODO(#112)).
@@ -109,8 +117,8 @@ def is_visible(
 def vision(state: GameState, rules: Ruleset) -> list[Event]:
     """Last system of a tick: record what each player sees now in ``vision_memory``.
 
-    Every node and edge not in fog gets a fresh ``Sighting`` with the current tick; fogged ones
-    keep their last sighting. Emits no events.
+    Every node and edge not in fog gets a fresh ``Sighting`` with the current tick (an edge's
+    with its current width, DEC-17); fogged ones keep their last sighting. Emits no events.
     """
     del rules  # the vision rules of DEC-04 have no numbers
     for player in sorted(state.players):
@@ -141,19 +149,37 @@ def current_sightings(
             case OnEdge(edge=edge):
                 on_edge.setdefault(edge, []).append(group)
     nodes = {
-        n: _sighting(state.tick, level, at_node.get(n, []))
+        n: _sighting(state.tick, level, at_node.get(n, []), None)
         for n, level in enumerate(levels.nodes)
         if level is not Detail.FOG
     }
     edges = {
-        e: _sighting(state.tick, level, on_edge.get(e, []))
+        e: _sighting(state.tick, level, on_edge.get(e, []), state.edges[e].width)
         for e, level in enumerate(levels.edges)
         if level is not Detail.FOG
     }
     return nodes, edges
 
 
-def _sighting(tick: int, level: Detail, enemies: list[Group]) -> Sighting:
+def known_widths(state: GameState, player: int, levels: Vision) -> tuple[int, ...]:
+    """Road widths as ``player`` knows them (DEC-17, points 1 and 2), ``result[edge_id]``.
+
+    Exact for edges not in fog; for a fogged edge the width of its last sighting, else
+    ``base_width`` of the map. Never above the true width.
+    """
+    memory = state.vision_memory[player].edges
+    widths: list[int] = []
+    for e, level in enumerate(levels.edges):
+        if level is not Detail.FOG:
+            widths.append(state.edges[e].width)
+            continue
+        seen = memory.get(e)
+        width = seen.width if seen is not None else None
+        widths.append(state.map.edges[e].base_width if width is None else width)
+    return tuple(widths)
+
+
+def _sighting(tick: int, level: Detail, enemies: list[Group], width: int | None) -> Sighting:
     modes: list[Mode] = sorted(dict.fromkeys(g.mode for g in enemies))  # distinct, sorted
     if level is Detail.EXACT:
         return Sighting(
@@ -162,7 +188,13 @@ def _sighting(tick: int, level: Detail, enemies: list[Group]) -> Sighting:
             enemy_modes=tuple(modes),
             enemy_units=sum(g.units for g in enemies),
             enemy_charged=sum(g.charged for g in enemies),
+            width=width,
         )
     return Sighting(
-        tick=tick, level=level, enemy_modes=tuple(modes), enemy_units=None, enemy_charged=None
+        tick=tick,
+        level=level,
+        enemy_modes=tuple(modes),
+        enemy_units=None,
+        enemy_charged=None,
+        width=width,
     )

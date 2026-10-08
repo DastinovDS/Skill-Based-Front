@@ -42,6 +42,7 @@ export const ru = {
   'sel.charged': 'Заряжено',
   'sel.chargedOf': 'заряжено {charged} из {units}',
   'sel.capacity': 'Ёмкость',
+  'sel.capacityStale': 'Оценка по последним увиденным дорогам',
   'sel.warehouse': 'Склад',
   'sel.mode': 'Режим',
   'sel.terrain': 'Рельеф',

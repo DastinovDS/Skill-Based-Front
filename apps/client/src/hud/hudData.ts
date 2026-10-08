@@ -70,6 +70,8 @@ export interface NodeInfo {
   readonly vp: number;
   readonly capital: boolean;
   readonly capacity: number;
+  /** `capacity` is an estimate by the last seen roads (DEC-17): shown as «≈». */
+  readonly capacityStale: boolean;
   readonly detail: Detail;
   /** Charges in the warehouse, `null` unless the node is seen exactly. */
   readonly warehouse: number | null;
@@ -241,6 +243,7 @@ function nodeInfo(
     vp: file?.vp ?? 0,
     capital: file?.capital_of != null,
     capacity: node.capacity,
+    capacityStale: node.capacity_stale,
     detail: node.detail,
     warehouse: node.warehouse,
     mine: {

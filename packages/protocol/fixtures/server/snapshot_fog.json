@@ -15,6 +15,7 @@
         "id": 0,
         "owner": 0,
         "capacity": 4,
+        "capacity_stale": false,
         "detail": "exact",
         "warehouse": 4,
         "seen": {
@@ -30,6 +31,7 @@
         "id": 1,
         "owner": 1,
         "capacity": 2,
+        "capacity_stale": false,
         "detail": "presence",
         "warehouse": null,
         "seen": {
@@ -47,6 +49,7 @@
         "id": 2,
         "owner": 1,
         "capacity": 4,
+        "capacity_stale": true,
         "detail": "fog",
         "warehouse": null,
         "seen": {

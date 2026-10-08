@@ -63,6 +63,7 @@ function snapshot(frame: ReplayFrame): SnapshotMsg {
     id,
     owner,
     capacity,
+    capacity_stale: false, // replay frames are the true state (DEC-17)
     detail: 'exact',
     warehouse,
     seen: null,

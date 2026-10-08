@@ -88,7 +88,11 @@ class NodeView(WireModel):
     id: NodeId
     owner: PlayerId | None
     capacity: NonNegInt
-    """Current capacity of the city; public for every node (DEC-04)."""
+    """Capacity by the road widths the player knows (DEC-17): exact unless ``capacity_stale``,
+    never above the true capacity."""
+    capacity_stale: bool
+    """``capacity`` is an estimate by the last seen widths: the node is in its owner's supplied
+    territory and one of its internal edges is in fog (DEC-17). Never for own nodes."""
     detail: Detail
     warehouse: NonNegInt | None
     """Charges in the warehouse; only for ``EXACT`` nodes."""
@@ -117,7 +121,8 @@ class UpgradeGain(WireModel):
 class EdgeView(WireModel):
     id: EdgeId
     width: Width
-    """Current width; public for every edge (DEC-04)."""
+    """Width the player knows (DEC-17): the current one unless ``detail`` is ``fog``; in fog the
+    last seen width, or ``base_width`` of the map if never seen. Never above the true width."""
     detail: Detail
     """``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges."""
     upgrade_gain: UpgradeGain | None

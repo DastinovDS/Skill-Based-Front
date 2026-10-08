@@ -43,7 +43,13 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
   const presence = new Set(next.slice(SEEN_EXACT, SEEN_EXACT + SEEN_PRESENCE));
 
   const nodes: NodeView[] = map.nodes.map((n) => {
-    const base = { id: n.id, owner: n.start_owner, capacity: n.base_capacity, build: null };
+    const base = {
+      id: n.id,
+      owner: n.start_owner,
+      capacity: n.base_capacity,
+      capacity_stale: false,
+      build: null,
+    };
     if (mine.has(n.id)) {
       return {
         ...base,
@@ -80,7 +86,9 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         },
       };
     }
-    return { ...base, detail: 'fog', warehouse: null, seen: null };
+    // An enemy city in fog: its capacity is an estimate by the last seen roads (DEC-17).
+    const stale = n.start_owner === 1;
+    return { ...base, capacity_stale: stale, detail: 'fog', warehouse: null, seen: null };
   });
 
   const groups: GroupView[] = map.nodes

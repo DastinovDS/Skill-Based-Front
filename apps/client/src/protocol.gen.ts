@@ -261,9 +261,15 @@ export interface NodeView {
   id: number;
   owner: PlayerId | null;
   /**
-   * Current capacity of the city; public for every node (DEC-04).
+   * Capacity by the road widths the player knows (DEC-17): exact unless ``capacity_stale``,
+   * never above the true capacity.
    */
   capacity: number;
+  /**
+   * ``capacity`` is an estimate by the last seen widths: the node is in its owner's supplied
+   * territory and one of its internal edges is in fog (DEC-17). Never for own nodes.
+   */
+  capacity_stale: boolean;
   detail: Detail;
   /**
    * Charges in the warehouse; only for ``EXACT`` nodes.
@@ -308,7 +314,8 @@ export interface NodeBuild {
 export interface EdgeView {
   id: number;
   /**
-   * Current width; public for every edge (DEC-04).
+   * Width the player knows (DEC-17): the current one unless ``detail`` is ``fog``; in fog the
+   * last seen width, or ``base_width`` of the map if never seen. Never above the true width.
    */
   width: number;
   /**
@@ -552,6 +559,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

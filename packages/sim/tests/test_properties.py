@@ -16,7 +16,9 @@ and advance the clock. After every tick the invariants below must hold:
 - a garrison never grows without an arrival (``group_arrived``) or a recruit in its city, so an
   overfull city cannot fill up further on its own;
 - fog: ``project()`` does not change when everything the player must not see is perturbed
-  (extends the synthetic-state test of SIM-14 in ``test_view.py`` to states of real matches).
+  (extends the synthetic-state test of SIM-14 in ``test_view.py`` to states of real matches),
+  including the widths of fogged roads and enemy builds on them (DEC-17); known widths and
+  capacities never exceed the true ones and equal them in sight.
 
 A counterexample found by Hypothesis goes into a regression test at the end of the file.
 """
@@ -61,6 +63,7 @@ from gow_sim.state import (
     OnEdge,
     Packet,
 )
+from gow_sim.systems.capacity import node_capacities
 from gow_sim.view import opaque_id, project
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -269,7 +272,8 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
 
     Hidden: numbers of enemy groups outside EXACT places, enemy groups in fog (may vanish, new
     ones may appear), warehouses outside EXACT nodes, enemy packets, the enemy's CP, stance and
-    charge accumulator, the enemy's fog memory and the events of the tick.
+    charge accumulator, the enemy's fog memory and the events of the tick; DEC-17: widths of
+    fogged edges (only upwards, roads are never torn down) and enemy builds on fogged edges.
     """
     draw = data.draw
     nodes, edges = levels
@@ -305,6 +309,19 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     state.vision_memory[enemy].nodes.clear()
     state.vision_memory[enemy].edges.clear()
     state.events = []
+    for e, level in enumerate(edges):
+        if level is Detail.FOG:
+            edge = state.edges[e]
+            edge.width = draw(st.integers(edge.width, state.map.edges[e].max_width))
+    for node in state.nodes.values():
+        b = node.build
+        if (
+            b is not None
+            and b.owner == enemy
+            and edges[b.edge] is Detail.FOG
+            and draw(st.booleans())
+        ):
+            node.build = None
 
 
 # Commands -------------------------------------------------------------------------------------
@@ -408,6 +425,13 @@ class MatchMachine(RuleBasedStateMachine):
         own_packets = {opaque_id(KEY, player, p.id) for p in _own(m.state, player)}
         assert {p.id for p in view.packets} == own_packets
         levels = ([n.detail for n in view.nodes], [e.detail for e in view.edges])
+        for e in view.edges:  # DEC-17: a known width never exceeds the true one, exact in sight
+            true_width = m.state.edges[e.id].width
+            assert e.width <= true_width and (e.detail is Detail.FOG or e.width == true_width)
+        capacities = node_capacities(m.state, m.rules)
+        for n in view.nodes:
+            assert n.capacity <= capacities[n.id]
+            assert n.capacity_stale or n.capacity == capacities[n.id]
         hidden = copy.deepcopy(m.state)
         perturb_hidden(data, hidden, player, levels)
         assert project(hidden, m.rules, player, KEY) == view
