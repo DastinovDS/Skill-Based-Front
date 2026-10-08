@@ -82,6 +82,17 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
         cmds.append(SetStance([Stance.WAR, Stance.ECONOMY, Stance.BALANCE][tick // 150 % 3]))
     if tick % 100 == 0:
         cmds.append(Recruit(mapdef.capital(player)))
+    if tick % 90 == 0:  # every own city upgrades its internal road to the lowest-key neighbour
+        for node in sorted(range(len(mapdef.nodes)), key=key):
+            internal = [
+                e
+                for e in mapdef.incident[node]
+                if state.nodes[mapdef.edges[e].other(node)].owner == player
+                and state.nodes[node].owner == player
+            ]
+            if internal:
+                edge = min(internal, key=lambda e: key(mapdef.edges[e].other(node)))
+                cmds.append(UpgradeRoad(node, edge))
     idle = sorted(
         (
             g
@@ -103,19 +114,6 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
                 cmds.append(SetMode(g.id, Mode.DEFENSE))
             elif g.units >= 2 and tick % 30 == 0:
                 cmds.append(Split(g.id, g.units // 2))
-            elif tick % 90 == 0:
-                internal = [
-                    e
-                    for e in mapdef.incident[node]
-                    if state.nodes[mapdef.edges[e].other(node)].owner == player
-                    and state.nodes[node].owner == player
-                ]
-                if internal:
-                    cmds.append(
-                        UpgradeRoad(
-                            g.id, min(internal, key=lambda e: key(mapdef.edges[e].other(node)))
-                        )
-                    )
             else:
                 dest = _target(state, rules, player, node)
                 if dest is not None:
@@ -162,8 +160,8 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
     match cmd:
         case Move(group=g, dest=dest, planned=planned):
             return Move(g, mirror_nodes[dest], planned)
-        case UpgradeRoad(group=g, edge=edge):
-            return UpgradeRoad(g, mirror_edges[edge])
+        case UpgradeRoad(node=node, edge=edge):
+            return UpgradeRoad(mirror_nodes[node], mirror_edges[edge])
         case Recruit(node=node):
             return Recruit(mirror_nodes[node])
         case _:
@@ -192,7 +190,6 @@ def _mirrored(state: GameState, g: Group) -> tuple[object, ...]:
         None
         if order is None
         else (tuple(mn[n] for n in order.path), order.planned, order.depart_tick),
-        None if g.build_edge is None else state.map.mirror_edges[g.build_edge],
         (g.bonus, g.bonus_tick, g.intent is None),
     )
 
@@ -205,7 +202,6 @@ def _plain(g: Group) -> tuple[object, ...]:
         g.mode,
         g.location,
         None if order is None else (order.path, order.planned, order.depart_tick),
-        g.build_edge,
         (g.bonus, g.bonus_tick, g.intent is None),
     )
 
@@ -222,6 +218,14 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             a.over_ticks,
             a.captured_tick,
         ), f"node {n}"
+        ab, bb = a.build, b.build
+        assert (bb is None) == (ab is None), f"build of {n}"
+        if ab is not None and bb is not None:
+            assert (bb.edge, bb.owner, bb.since) == (
+                mapdef.mirror_edges[ab.edge],
+                swap[ab.owner],
+                ab.since,
+            ), f"build of {n}"
     for e in range(len(mapdef.edges)):
         assert state.edges[mapdef.mirror_edges[e]].width == state.edges[e].width
     p0, p1 = state.players[0], state.players[1]

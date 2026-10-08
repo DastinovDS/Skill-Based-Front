@@ -4,7 +4,7 @@
   import { rejectMessageKey } from '../match/rejects.ts';
   import type { Mode, Stance } from '../protocol.gen.ts';
   import { formatCentis } from './format.ts';
-  import type { HudData } from './hudData.ts';
+  import { roadCandidates, type HudData } from './hudData.ts';
 
   interface Props {
     data: HudData | null;
@@ -17,7 +17,6 @@
   const MODES: readonly { mode: Mode; key: string }[] = [
     { mode: 'attack', key: '1' },
     { mode: 'defense', key: '2' },
-    { mode: 'build', key: '3' },
   ];
   const STANCES: readonly Stance[] = ['economy', 'balance', 'war'];
 
@@ -28,6 +27,13 @@
   const recruitHere = $derived(
     data?.node?.owner === 'mine' || (group !== null && group.node !== null),
   );
+  // Road upgrades (DEC-16): the selected own city, its build, and the roads it may upgrade.
+  const city = $derived(data?.node?.owner === 'mine' ? data.node : null);
+  const pick = $derived(ui.roadPick);
+  const candidates = $derived(
+    data === null || pick === null ? [] : roadCandidates(data.roads, pick),
+  );
+  const unknown = (value: number | null): string | number => value ?? '?';
 
   let splitN = $state(1);
   let confirmingForfeit = $state(false);
@@ -72,11 +78,67 @@
   {#if ui.road !== null}
     <p class="preview">
       {tf('orders.roadHint', {
-        capacity: cp(ui.road.capacityCenti ?? 0),
-        speed: ui.road.packetSpeedPct ?? 0,
-        cost: cp(ui.road.cost),
+        edge: ui.road.edge,
+        width: ui.road.width,
+        capacity: cp(ui.road.capacityCenti),
+        speed: ui.road.packetSpeedPct,
+        charges: unknown(ui.road.charges),
       })}
+      {t(ui.road.pickable ? 'orders.roadHintPick' : 'orders.roadHintHow')}
     </p>
+  {/if}
+
+  {#if pick !== null}
+    <div class="pick" role="group" aria-label={t('orders.upgradeRoad')}>
+      <p>
+        {tf('orders.roadPick', {
+          node: pick,
+          warehouse: unknown(city?.id === pick ? city.warehouse : null),
+        })}
+      </p>
+      {#each candidates as road (road.id)}
+        <button
+          type="button"
+          onclick={() => {
+            orders.upgradeRoad(road.id);
+          }}
+        >
+          {tf('orders.roadOption', {
+            edge: road.id,
+            node: road.a === pick ? road.b : road.a,
+            width: road.width + 1,
+            capacity: cp(road.capacityCenti ?? 0),
+            speed: road.packetSpeedPct ?? 0,
+            charges: unknown(road.charges),
+          })}
+        </button>
+      {:else}
+        <p class="hint">{t('orders.roadPickNone')}</p>
+      {/each}
+      <button
+        type="button"
+        onclick={() => {
+          orders.stopRoadPick();
+        }}
+      >
+        {t('orders.roadPickCancel')}
+      </button>
+    </div>
+  {:else if city !== null}
+    {#if city.build !== null && city.build.secondsLeft !== null}
+      <p class="hint">
+        {tf('orders.roadBusy', { edge: city.build.edge, seconds: city.build.secondsLeft })}
+      </p>
+    {:else}
+      <button
+        type="button"
+        onclick={() => {
+          orders.toggleRoadPick();
+        }}
+      >
+        {t('orders.upgradeRoad')}
+      </button>
+    {/if}
   {/if}
 
   {#if group !== null}
@@ -245,6 +307,19 @@
 
   .notice.ok {
     border-color: #3fb950;
+  }
+
+  .pick {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
+    border: 1px dashed #ffd33d;
+    border-radius: 4px;
+  }
+
+  .pick button {
+    text-align: left;
   }
 
   .confirm {

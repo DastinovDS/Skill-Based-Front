@@ -199,12 +199,12 @@ def test_vision_records_sightings(rules: Ruleset) -> None:
     _add(state, 1, AtNode(3), Mode.DEFENSE)
     _add(state, 1, AtNode(3), Mode.ATTACK)
     _add(state, 1, AtNode(3), Mode.DEFENSE)
-    _add(state, 1, OnEdge(edge=1, from_node=3, progress=100), Mode.BUILD)
+    _add(state, 1, OnEdge(edge=1, from_node=3, progress=100), Mode.DEFENSE)
     assert vision(state, rules) == []
     memory = state.vision_memory[0]
     # PRESENCE: enemy modes (distinct, sorted), no numbers.
     assert memory.nodes[3] == Sighting(40, P, (Mode.ATTACK, Mode.DEFENSE), None, None)
-    assert memory.edges[1] == Sighting(40, P, (Mode.BUILD,), None, None)
+    assert memory.edges[1] == Sighting(40, P, (Mode.DEFENSE,), None, None)
     assert memory.edges[0] == Sighting(40, P, (), None, None)
     # EXACT: own nodes, enemy totals are known (none here).
     assert memory.nodes[0] == Sighting(40, E, (), 0, 0)

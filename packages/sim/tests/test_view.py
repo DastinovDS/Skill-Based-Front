@@ -35,6 +35,7 @@ from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 from gow_sim.state import (
     PROGRESS_SCALE,
     AtNode,
+    Build,
     Detail,
     Event,
     GameState,
@@ -51,6 +52,7 @@ from gow_sim.state import (
 from gow_sim.systems.capacity import city_capacity
 from gow_sim.systems.vision import vision
 from gow_sim.view import (
+    BuildView,
     EdgeView,
     GroupView,
     IntentView,
@@ -135,10 +137,10 @@ def test_dec04_intents_are_public_without_group_id_or_size(rules: Ruleset) -> No
     state.intents[iid] = Intent(iid, 1, IntentKind.PLANNED_MOVE, 5, 3, created_tick=0)
     enemy.intent = iid
     bid = state.new_id()
-    state.intents[bid] = Intent(bid, 1, IntentKind.BUILD, 4, 5, created_tick=0)
+    state.intents[bid] = Intent(bid, 1, IntentKind.DEFENSE, 4, None, created_tick=0)
     view = _view(state, rules)  # nodes 3..5 are in fog for player 0
-    assert sorted((i.origin, i.owner, i.kind, i.target) for i in view.intents) == [
-        (4, 1, IntentKind.BUILD, 5),
+    assert sorted((i.origin, i.owner, i.kind, i.target or -1) for i in view.intents) == [
+        (4, 1, IntentKind.DEFENSE, -1),
         (5, 1, IntentKind.PLANNED_MOVE, 3),
     ]
     fields = {f.name for f in dataclasses.fields(IntentView)}
@@ -263,8 +265,7 @@ def test_no_events_in_the_view(rules: Ruleset) -> None:
 
 def test_own_entities_are_exact(rules: Ruleset) -> None:
     state = _state("line6", rules)
-    g = _add(state, 0, AtNode(1), units=5, charged=3, mode=Mode.BUILD)
-    g.build_edge, g.build_since = 0, 0
+    g = _add(state, 0, AtNode(1), units=5, charged=3, mode=Mode.DEFENSE)
     w = _add(state, 0, AtNode(0), units=2, charged=1)
     w.order = Order(path=(1, 2), planned=True, depart_tick=30)
     m = _add(state, 0, OnEdge(edge=1, from_node=1, progress=250, back=True), units=1, charged=0)
@@ -273,7 +274,7 @@ def test_own_entities_are_exact(rules: Ruleset) -> None:
     view = _view(state, rules)
     by_id = {v.id: v for v in view.groups}
     assert by_id[opaque_id(KEY, 0, g.id)] == GroupView(
-        opaque_id(KEY, 0, g.id), 5, 3, Mode.BUILD, AtNode(1), None, build_edge=0
+        opaque_id(KEY, 0, g.id), 5, 3, Mode.DEFENSE, AtNode(1), None
     )
     order = by_id[opaque_id(KEY, 0, w.id)].order
     assert order is not None and (order.dest, order.path, order.planned) == (2, (1, 2), True)
@@ -556,3 +557,35 @@ def _check_place(place: NodeView | EdgeView, memory: object) -> None:
     assert place.seen is not None and place.seen.level is place.detail
     if place.detail is P:
         assert (place.seen.enemy_units, place.seen.enemy_charged) == (None, None)
+
+
+# DEC-16, item 8 and DEC-17, item 5: road builds of cities ---------------------------------------
+
+
+def test_dec16_own_build_is_exact(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    state.nodes[1].build = Build(edge=0, owner=0, since=40)
+    view = _view(state, rules)
+    done = 40 + rules.build.ticks_per_level
+    assert view.nodes[1].build == BuildView(edge=0, done_tick=done)
+    assert [n.id for n in view.nodes if n.build is not None] == [1]
+
+
+def test_dec16_enemy_build_in_fog_is_hidden(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    state.nodes[4].build = Build(edge=4, owner=1, since=40)  # e4 = 4-5: fog for player 0
+    view = _view(state, rules)
+    assert view.edges[4].detail is Detail.FOG
+    assert all(n.build is None for n in view.nodes)
+    assert _view(state, rules, player=1).nodes[4].build == BuildView(
+        edge=4, done_tick=40 + rules.build.ticks_per_level
+    )
+
+
+def test_dec16_enemy_build_on_a_seen_edge_shows_city_and_edge_only(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    state.nodes[4].build = Build(edge=4, owner=1, since=40)
+    _add(state, 0, AtNode(4), units=1, charged=0)  # node 4 exact, so e4 is not in fog
+    view = _view(state, rules)
+    assert view.edges[4].detail is Detail.PRESENCE
+    assert view.nodes[4].build == BuildView(edge=4, done_tick=None)

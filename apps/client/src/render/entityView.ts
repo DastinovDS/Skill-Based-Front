@@ -1,11 +1,10 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { RenderFrame, RenderGroup } from '../net/interpolate.ts';
 import type {
   EdgeView,
   EventMsg,
   IntentView,
   MapFile,
-  Mode,
   NodeView,
   PlayerId,
   SnapshotMsg,
@@ -16,6 +15,7 @@ import {
   TOKEN_COMPACT,
   TOKEN_FULL,
   arrowGeometry,
+  buildGeometry,
   dashSegments,
   edgeEnds,
   edgePoint,
@@ -25,6 +25,7 @@ import {
   nodeSlots,
   roadPosition,
   sideways,
+  timeLeftLabel,
   warehouseBar,
   type FightInfo,
 } from './layout.ts';
@@ -37,6 +38,10 @@ import {
   ARROW_HEAD,
   ARROW_OUTLINE,
   ARROW_WIDTH,
+  BUILD_MARK_DISTANCE,
+  BUILD_TIE,
+  BUILD_TIE_CASING,
+  BUILD_TIME_FONT_SIZE,
   CAPITAL_RADIUS,
   HEADING_DISTANCE,
   INTENT_ICON_ANGLE,
@@ -46,6 +51,7 @@ import {
   PACKET_SCALE,
   PLAYER_COLOR,
   PLATE_FILL,
+  roadThickness,
 } from './style.ts';
 
 const MAX_FIGHT_MARKS = 8;
@@ -89,11 +95,19 @@ interface Chip {
   text: Text;
 }
 
+/** The hammer disc on a road a city builds, with the time left for an own build. */
+interface BuildMark {
+  view: Container;
+  disc: Graphics;
+  time: Text;
+}
+
 /**
  * Everything the snapshot puts on top of the map (CLI-04, #60): warehouse bars, own groups with
  * charge pips, own packets moving along roads, what is known about enemies (a marker per city or
- * road, with numbers only where the snapshot has them), intents of both players as arrows, and
- * fight marks from events.
+ * road, with numbers only where the snapshot has them), intents of both players as arrows, road
+ * builds of cities (DEC-16: bars across the road and a hammer disc, the time left for an own
+ * build), and fight marks from events.
  *
  * Two kinds of input. `update(frame)` runs every frame: moving things (groups, packets, order
  * lines, fight marks). Things that change only with a snapshot (bars, enemy markers, intent
@@ -116,6 +130,11 @@ export class EntityView {
   private readonly arrows = new Graphics();
   private readonly icons = new Container({ label: 'intent-icons' });
   private readonly iconPool: Container[] = [];
+  private readonly buildTies = new Graphics();
+  private readonly buildLayer = new Container({ label: 'builds' });
+  private readonly buildMarks: BuildMark[] = [];
+  private readonly timeStyle: TextStyle;
+  private tickHz = 10;
   private readonly fightLayer = new Container({ label: 'fights' });
   private readonly fightMarks: FightMark[] = [];
   private readonly groups = new Map<string, GroupEntry>();
@@ -146,9 +165,18 @@ export class EntityView {
     this.enemyNodes = map.nodes.map(() => null);
     this.enemyEdges = map.edges.map(() => null);
 
+    this.timeStyle = new TextStyle({
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: BUILD_TIME_FONT_SIZE,
+      fontWeight: '700',
+      fill: 0xf0f6fc,
+      stroke: { color: 0x0d1117, width: 3, join: 'round' },
+    });
+    // Road builds lie on the roads, under the groups.
+    layers.layer.roads.addChild(this.buildTies);
     // Order lines go under the tokens of the groups they belong to; arrows of intents on top.
     layers.layer.groups.addChild(this.orders, this.enemyLayer, this.packetLayer, this.groupLayer);
-    layers.layer.intents.addChild(this.arrows, this.icons);
+    layers.layer.intents.addChild(this.buildLayer, this.arrows, this.icons);
     layers.layer.effects.addChild(this.fightLayer);
   }
 
@@ -161,9 +189,17 @@ export class EntityView {
     for (const entry of [...this.groups.values(), ...this.packets.values(), ...this.fightMarks]) {
       texts.push(...entry.labels());
     }
+    for (const mark of this.buildMarks) texts.push(mark.time);
     for (const text of texts) {
       if (text.resolution !== resolution) text.resolution = resolution;
     }
+  }
+
+  /** Ticks per second (`ruleset_public.tick_hz`), for the time left of own road builds. */
+  setTickHz(tickHz: number): void {
+    if (tickHz === this.tickHz) return;
+    this.tickHz = tickHz;
+    if (this.base !== null) this.drawBuilds(this.base);
   }
 
   /** Drawn centres of the own group tokens by id (for hit testing and the selection frame). */
@@ -190,8 +226,10 @@ export class EntityView {
     // leaves alone. The two Graphics below own their contexts and are destroyed without options.
     this.arrows.destroy();
     this.orders.destroy();
+    this.buildTies.destroy();
     for (const container of [
       ...this.bars,
+      this.buildLayer,
       this.enemyLayer,
       this.packetLayer,
       this.groupLayer,
@@ -201,6 +239,7 @@ export class EntityView {
       container.destroy({ children: true });
     }
     this.kit.destroy();
+    this.timeStyle.destroy();
   }
 
   // --- Snapshot-driven part -----------------------------------------------------------------
@@ -215,6 +254,81 @@ export class EntityView {
       this.setEnemyEdge(edge);
     });
     this.drawIntents(intents);
+    this.drawBuilds(base);
+  }
+
+  /**
+   * Road builds of cities (DEC-16): bars across the road and a hammer disc of the owner near the
+   * building city; an own build (the server sends its `done_tick`) also shows the time left.
+   */
+  private drawBuilds(base: SnapshotMsg): void {
+    const { nodes, edges } = base.view;
+    const g = this.buildTies;
+    g.clear();
+    let used = 0;
+    for (const node of nodes) {
+      const build = node.build;
+      const owner = node.owner;
+      const edge = build === null ? undefined : this.map.edges[build.edge];
+      if (build === null || owner === null || edge === undefined) continue;
+      const other = edge.a === node.id ? edge.b : edge.a;
+      const from = nodePoint(this.map, node.id);
+      const to = nodePoint(this.map, other);
+      if (from === undefined || to === undefined) continue;
+      const width = edges[build.edge]?.width ?? edge.base_width;
+      const geometry = buildGeometry(
+        from,
+        to,
+        this.radius(node.id),
+        this.radius(other),
+        (roadThickness(width) + BUILD_TIE.extra) / 2,
+        BUILD_TIE.spacing,
+        BUILD_MARK_DISTANCE,
+      );
+      if (geometry === null) continue;
+      for (const [a, b] of geometry.ties) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      g.stroke(BUILD_TIE_CASING);
+      for (const [a, b] of geometry.ties) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      g.stroke({ width: BUILD_TIE.width, color: BUILD_TIE.color });
+
+      const mark = this.buildMark(used++);
+      mark.disc.context = this.kit.iconDisc[owner];
+      mark.view.position.set(geometry.mark.x, geometry.mark.y);
+      mark.view.visible = true;
+      const time =
+        build.done_tick === null ? '' : timeLeftLabel(build.done_tick - base.tick, this.tickHz);
+      mark.time.visible = time !== '';
+      if (mark.time.text !== time) mark.time.text = time;
+    }
+    for (let i = used; i < this.buildMarks.length; i++) {
+      const mark = this.buildMarks[i];
+      if (mark !== undefined) mark.view.visible = false;
+    }
+  }
+
+  private buildMark(index: number): BuildMark {
+    let mark = this.buildMarks[index];
+    if (mark === undefined) {
+      const view = this.buildLayer.addChild(new Container({ label: 'build' }));
+      const disc = view.addChild(new Graphics(this.kit.iconDisc[0]));
+      view.addChild(new Graphics(this.kit.hammer));
+      const time = view.addChild(
+        new Text({
+          text: '',
+          style: this.timeStyle,
+          anchor: { x: 0.5, y: 0 },
+          resolution: this.labelResolution,
+        }),
+      );
+      time.position.set(0, 11);
+      mark = { view, disc, time };
+      this.buildMarks.push(mark);
+    }
+    return mark;
+  }
+
+  private radius(node: number): number {
+    return this.map.nodes[node]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
   }
 
   private setBar(node: NodeView): void {
@@ -344,13 +458,12 @@ export class EntityView {
     if (icon === undefined) {
       icon = this.icons.addChild(new Container());
       icon.addChild(new Graphics(this.kit.iconDisc[0]));
+      // The only intent without a destination is "Defense" (DEC-08).
       icon.addChild(new Graphics(this.kit.glyph.defense));
       this.iconPool.push(icon);
     }
-    const [disc, glyph] = icon.children as [Graphics, Graphics];
-    const mode: Mode = intent.kind === 'build' ? 'build' : 'defense';
+    const [disc] = icon.children as [Graphics, Graphics];
     disc.context = this.kit.iconDisc[intent.owner];
-    glyph.context = this.kit.glyph[mode];
     const node = this.map.nodes[intent.origin];
     const radius = node?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
     const offset = around(radius + INTENT_ICON_DISTANCE, INTENT_ICON_ANGLE);

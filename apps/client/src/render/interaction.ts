@@ -11,7 +11,7 @@ export type PickHit =
   | { readonly kind: 'node'; readonly id: number }
   | { readonly kind: 'edge'; readonly id: number };
 
-/** What can be selected: a group or a node (a road is only hovered and clicked to upgrade it). */
+/** What can be selected: a group or a node (a road is only hovered, and clicked in road pick). */
 export type SelectionHit = Exclude<PickHit, { readonly kind: 'edge' }>;
 
 /** An order sent and not yet shown by a snapshot: a dashed arrow on the map. */
@@ -38,8 +38,10 @@ export interface OverlayState {
   readonly selection: SelectionHit | null;
   readonly ghosts: readonly GhostArrow[];
   readonly preview: MovePreview | null;
-  /** The road under the pointer, lit up (a click upgrades it with a group selected). */
+  /** The road under the pointer, lit up. */
   readonly road: number | null;
+  /** Road pick (key U, DEC-16): the roads of the selected city a click would upgrade. */
+  readonly candidates: readonly number[];
 }
 
 export const EMPTY_OVERLAY: OverlayState = {
@@ -47,6 +49,7 @@ export const EMPTY_OVERLAY: OverlayState = {
   ghosts: [],
   preview: null,
   road: null,
+  candidates: [],
 };
 
 export interface MapInteraction {

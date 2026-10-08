@@ -10,7 +10,9 @@ import type {
   EventMsg,
   GroupView,
   IntentKind,
+  IntentView,
   Location,
+  NodeBuild,
   NodeView,
   PacketView,
   PlayerId,
@@ -41,7 +43,8 @@ function groupView(g: FrameGroup): GroupView {
     id: String(g.id),
     units: g.u,
     charged: g.c,
-    mode: g.m,
+    // Files from before DEC-16 may have the removed "build" mode: its group shows as attacking.
+    mode: g.m === 'build' ? 'attack' : g.m,
     location: location(g),
     order:
       g.to === undefined || dest === undefined
@@ -50,7 +53,12 @@ function groupView(g: FrameGroup): GroupView {
   };
 }
 
+/** Intent kinds the viewer draws; older files may have others (the group build, before DEC-16). */
+const INTENT_KINDS: ReadonlySet<string> = new Set<IntentKind>(['planned_move', 'defense']);
+
 function snapshot(frame: ReplayFrame): SnapshotMsg {
+  const builds = new Map<number, NodeBuild>();
+  for (const [node, edge, done_tick] of frame.b ?? []) builds.set(node, { edge, done_tick });
   const nodes: NodeView[] = frame.n.map(([owner, warehouse, capacity], id) => ({
     id,
     owner,
@@ -58,6 +66,7 @@ function snapshot(frame: ReplayFrame): SnapshotMsg {
     detail: 'exact',
     warehouse,
     seen: null,
+    build: builds.get(id) ?? null,
   }));
   const packets: PacketView[] = frame.k.map(
     ([id, , edge, from_node, charges, depart_tick, arrive_tick]) => ({
@@ -86,15 +95,19 @@ function snapshot(frame: ReplayFrame): SnapshotMsg {
       })),
       groups: frame.g.map(groupView),
       packets,
-      intents: frame.i.map(([id, owner, kind, origin, target]) => ({
-        id: String(id),
-        owner,
-        // The file has the kind as the simulation names it; the dictionary of the map knows these.
-        kind: kind as IntentKind,
-        origin,
-        target,
-        created_tick: frame.t,
-      })),
+      intents: frame.i
+        .filter(([, , kind]) => INTENT_KINDS.has(kind))
+        .map(
+          ([id, owner, kind, origin, target]): IntentView => ({
+            id: String(id),
+            owner,
+            // Filtered above: the file has the kind as the simulation names it.
+            kind: kind as IntentKind,
+            origin,
+            target,
+            created_tick: frame.t,
+          }),
+        ),
     },
   };
 }

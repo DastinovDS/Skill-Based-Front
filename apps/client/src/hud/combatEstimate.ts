@@ -11,8 +11,8 @@
  * defender is left without units, otherwise the attacker bounces.
  *
  * What the client knows about the defender decides the kind of the answer:
- * - `exact`: the enemy at the node is seen in full (totals of units and charges, and no group in
- *   the non-firing "build" mode, whose charges the totals cannot separate);
+ * - `exact`: the enemy at the node is seen in full (totals of units and charges); every charged
+ *   unit fires (DEC-16 removed the non-firing "build" mode);
  * - `upper_bound`: otherwise; then only a ceiling is known, from the node capacity ("not more
  *   than N"). The defender can hold at most `capacity` units (a garrison over capacity dies off
  *   slowly, so this is a soft ceiling: mechanics.md, section 9).
@@ -22,7 +22,7 @@ import type { CombatPublic, Mode, Terrain } from '../protocol.gen.ts';
 /** The attacking side: one own group (the client knows its own groups exactly). */
 export interface AttackerInput {
   readonly units: number;
-  /** Charges of the group that shoot, 0 in the "build" mode (mechanics.md, rule 1). */
+  /** Charges of the group that shoot: all of them (mechanics.md, rule 1; DEC-16). */
   readonly firingCharged: number;
   /** The attack is a planned order: it brings the `planned_bonus` virtual shots. */
   readonly planned: boolean;
@@ -67,10 +67,6 @@ export type CombatEstimate =
       readonly defenderUnitsMax: number;
     };
 
-function fires(mode: Mode): boolean {
-  return mode !== 'build';
-}
-
 /**
  * The pool of the node defender (mechanics.md, rule 1). Terrain and the "Defense" bonus count
  * only if the defender has a firing charge; a negative terrain modifier silences that many real
@@ -99,7 +95,7 @@ export function estimateCombat(
   const terrainMod = rules.terrain_defense_mod[terrain];
   const attackerPool = attacker.firingCharged + (attacker.planned ? rules.planned_bonus : 0);
 
-  if (defender.visibility === 'exact' && !defender.modes.includes('build')) {
+  if (defender.visibility === 'exact') {
     const bonus = defender.modes.includes('defense') ? rules.defense_bonus : 0;
     const pool = defenderPool(defender.charged, bonus, terrainMod);
     const defenderLosses = Math.min(Math.max(0, attackerPool - pool), defender.units);
@@ -113,15 +109,10 @@ export function estimateCombat(
     };
   }
 
-  // Not seen in full. The ceilings: units by the capacity (or the known total if only the mode
-  // "build" spoils the picture), firing charges by the units, the bonus only if the mode may be there.
-  const unitsMax = defender.visibility === 'exact' ? defender.units : defender.capacity;
-  const firingMax =
-    defender.modes === null || defender.modes.some(fires)
-      ? defender.visibility === 'exact'
-        ? defender.charged
-        : unitsMax
-      : 0;
+  // Not seen in full. The ceilings: units by the capacity, firing charges by the units (none if
+  // no enemy group is seen there now), the bonus only if the mode may be there.
+  const unitsMax = defender.capacity;
+  const firingMax = defender.modes === null || defender.modes.length > 0 ? unitsMax : 0;
   const bonusMax =
     defender.modes === null || defender.modes.includes('defense') ? rules.defense_bonus : 0;
   const poolMax = defenderPool(firingMax, bonusMax, terrainMod);

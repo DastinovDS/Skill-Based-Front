@@ -256,7 +256,7 @@ class CampaignBot(Bot):
         view, bonus = ctx.view, self.rules.orders.planned_bonus
         found: list[Option] = []
         for g in groups:
-            if g.mode is Mode.BUILD or not self.may_leave(ctx, g):
+            if not self.may_leave(ctx, g):
                 continue
             for dest in self.reachable(view, node_of(g), self.params["radius"]):
                 if view.nodes[dest].owner == self.player or dest in ctx.claimed:
@@ -318,15 +318,14 @@ class CampaignBot(Bot):
     @staticmethod
     def fake_group(like: GroupView, units: int, charged: int) -> GroupView:
         """A group that does not exist yet (a split or a merge), to ask what it could take."""
-        return GroupView(-1, units, charged, Mode.ATTACK, like.location, None, None)
+        return GroupView(-1, units, charged, Mode.ATTACK, like.location, None)
 
     # Gathering ------------------------------------------------------------------------------
 
     def _gather(self, ctx: Ctx) -> None:
         by_node: dict[int, list[GroupView]] = {}
         for g in self.free_groups(ctx):
-            if g.mode is not Mode.BUILD:
-                by_node.setdefault(node_of(g), []).append(g)
+            by_node.setdefault(node_of(g), []).append(g)
         for node in sorted(by_node, key=self.key):
             groups = by_node[node]
             if len(groups) < 2:
@@ -357,7 +356,7 @@ class CampaignBot(Bot):
         hops = self.hops[goal]
         for g in self.free_groups(ctx):
             here = node_of(g)
-            if g.mode is Mode.BUILD or not self.may_leave(ctx, g) or g.charged == 0:
+            if not self.may_leave(ctx, g) or g.charged == 0:
                 continue
             best = min(
                 (

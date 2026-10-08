@@ -21,6 +21,7 @@ from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 from gow_sim.state import (
     PROGRESS_SCALE,
     AtNode,
+    Build,
     Detail,
     GameState,
     Group,
@@ -72,7 +73,8 @@ def _rich_state(rules: Ruleset) -> GameState:
     gid = state.new_id()
     state.groups[gid] = Group(gid, 0, 2, 1, Mode.DEFENSE, OnEdge(edge=1, from_node=0, progress=333))
     gid = state.new_id()
-    state.groups[gid] = Group(gid, 1, 1, 0, Mode.BUILD, AtNode(3), build_edge=2, build_since=130)
+    state.groups[gid] = Group(gid, 1, 1, 0, Mode.ATTACK, AtNode(3))
+    state.nodes[1].build = Build(edge=0, owner=0, since=130)
     gid = state.new_id()
     state.groups[gid] = Group(
         gid,
@@ -262,8 +264,6 @@ _GROUP0: dict[str, Any] = {
     "mode": "attack",
     "location": {"kind": "node", "node": 0},
     "order": None,
-    "build_edge": None,
-    "build_since": None,
     "intent": None,
     "bonus": 0,
     "bonus_tick": 0,
@@ -291,7 +291,7 @@ def _set(data: Any, path: tuple[str | int, ...], value: object) -> None:
         (("groups", 0, "charged"), 5, r"groups\[0\]\.charged: 5 is out of range"),
         (("groups", 0, "mode"), "sleep", r"groups\[0\]\.mode: expected one of"),
         (("groups", 2), _GROUP0, r"groups\[2\]\.id: duplicate id 0"),
-        (("groups", 0, "build_edge"), 0, r"groups\[0\]: build_edge and build_since"),
+        (("nodes", 0, "build"), {"edge": 0}, r"nodes\[0\]\.build: missing keys"),
         (("groups", 0, "bonus"), -1, r"groups\[0\]\.bonus: -1 is out of range"),
         (("groups", 0, "intent"), "x", r"groups\[0\]\.intent: expected an integer"),
         (
@@ -357,6 +357,8 @@ def _states(draw: st.DrawFn) -> GameState:
         node.over_ticks = draw(_small)
         node.captured_tick = draw(_opt_small)
         node.recruited_tick = draw(_opt_small)
+        if draw(st.booleans()):
+            node.build = Build(draw(edges), draw(players), draw(_small))
     for _ in range(draw(st.integers(min_value=0, max_value=6))):
         gid = state.new_id()
         units = draw(st.integers(min_value=1, max_value=20))
@@ -387,9 +389,6 @@ def _states(draw: st.DrawFn) -> GameState:
                 )
             ),
         )
-        if draw(st.booleans()):
-            state.groups[gid].build_edge = draw(edges)
-            state.groups[gid].build_since = draw(st.integers(min_value=0, max_value=7200))
         if draw(st.booleans()):
             state.groups[gid].intent = draw(_small)
             state.groups[gid].bonus = draw(_small)

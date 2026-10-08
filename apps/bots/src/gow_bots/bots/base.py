@@ -165,9 +165,8 @@ class Bot:
         groups = [g for g in view.groups if isinstance(g.location, AtNode) and g.order is None]
         return sorted(groups, key=self._group_key)
 
-    def _group_key(self, g: GroupView) -> tuple[int, int, int, str, int, int]:
-        build = -1 if g.build_edge is None else self.edge_keys[g.build_edge]
-        return (self.key(node_of(g)), -g.units, -g.charged, g.mode.value, build, g.id)
+    def _group_key(self, g: GroupView) -> tuple[int, int, int, str, int]:
+        return (self.key(node_of(g)), -g.units, -g.charged, g.mode.value, g.id)
 
     def standing(self, view: PlayerView) -> list[int]:
         """Own units standing in each node (the load that recruiting checks against capacity)."""

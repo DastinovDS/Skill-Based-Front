@@ -147,8 +147,10 @@ export class MapScene {
       this.view.setOwners(frame.base.view.nodes.map((node) => node.owner));
       this.view.setRoadWidths(frame.base.view.edges.map((edge) => edge.width));
     }
+    const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
+    this.entities.setTickHz(tickHz);
     this.entities.update(frame, this.source.events());
-    this.fog.setTickHz(this.source.tickHz ?? DEFAULT_TICK_HZ);
+    this.fog.setTickHz(tickHz);
     this.fog.update(frame.base);
     this.overlay.update(this.interaction?.overlay() ?? EMPTY_OVERLAY, (id) =>
       this.entities.groupPoints().get(id),

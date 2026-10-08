@@ -40,6 +40,7 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'forfeit',
   'match_ended',
   'attrition',
+  'build_started',
   'road_upgraded',
   'build_stopped',
   'packet_lost',
@@ -91,6 +92,13 @@ export function eventText(event: HudEvent, me: PlayerId): string {
       return tf('event.attrition', { node: num(data.node) });
     case 'road_upgraded':
       return tf('event.road_upgraded', { edge: num(data.edge), width: num(data.width) });
+    case 'build_started':
+      return tf('event.build_started', {
+        node: num(data.node),
+        edge: num(data.edge),
+        width: num(data.width),
+        charges: num(data.charges),
+      });
     case 'build_stopped':
       return tf('event.build_stopped', { edge: num(data.edge) });
     case 'packet_lost':

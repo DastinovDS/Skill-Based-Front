@@ -76,6 +76,15 @@ export interface NodeInfo {
   /** Own units and charges standing here. */
   readonly mine: { readonly units: number; readonly charged: number };
   readonly enemy: EnemyInfo | null;
+  /** The road this city builds (DEC-16), if the snapshot shows one. */
+  readonly build: BuildInfo | null;
+}
+
+/** A road level a city builds (`NodeView.build`). */
+export interface BuildInfo {
+  readonly edge: number;
+  /** Whole seconds until the width grows; `null` for an enemy build (the server does not say). */
+  readonly secondsLeft: number | null;
 }
 
 export interface EnemyInfo {
@@ -119,10 +128,20 @@ export interface NodeChoice {
 /** What the next level of a road would give, from `EdgeView.upgrade_gain` (the server's numbers). */
 export interface RoadInfo {
   readonly id: number;
+  /** The two end nodes (from the map). */
+  readonly a: number;
+  readonly b: number;
+  /** Current width. */
+  readonly width: number;
   /** Hundredths of capacity added to each end city; `null`: the road cannot be upgraded. */
   readonly capacityCenti: number | null;
   /** Percentage points of packet speed. */
   readonly packetSpeedPct: number | null;
+  /**
+   * Warehouse charges the next level costs (`ruleset_public.build`, DEC-16); `null` when the road
+   * cannot be upgraded or the ruleset has no price for that width.
+   */
+  readonly charges: number | null;
 }
 
 export interface HudData {
@@ -145,6 +164,20 @@ export interface HudData {
 
 function nodeAt(nodes: readonly NodeView[], id: number): NodeView | undefined {
   return nodes[id];
+}
+
+/** Charges for raising a road to `width` (`build.charges_per_level`); `null` if not listed. */
+export function levelCharges(rules: RulesetPublic, width: number): number | null {
+  return rules.build.charges_per_level.find((level) => level.width === width)?.charges ?? null;
+}
+
+/**
+ * The roads city `node` may be asked to upgrade: its roads with an upgrade hint (the server sends
+ * one only for own internal roads below their maximum width). Whether the command is accepted is
+ * still the server's call (supply, busy roads, charges).
+ */
+export function roadCandidates(roads: readonly RoadInfo[], node: number): RoadInfo[] {
+  return roads.filter((r) => (r.a === node || r.b === node) && r.capacityCenti !== null);
 }
 
 function ownership(owner: PlayerId | null, me: PlayerId): Ownership {
@@ -183,7 +216,22 @@ function enemyInfo(seen: Seen | null, detail: Detail): EnemyInfo | null {
   };
 }
 
-function nodeInfo(ctx: HudContext, node: NodeView, groups: readonly GroupView[]): NodeInfo {
+function buildInfo(ctx: HudContext, node: NodeView, tick: number): BuildInfo | null {
+  const build = node.build;
+  if (build === null) return null;
+  const left = build.done_tick === null ? null : Math.max(0, build.done_tick - tick);
+  return {
+    edge: build.edge,
+    secondsLeft: left === null ? null : Math.ceil(left / ctx.rules.tick_hz),
+  };
+}
+
+function nodeInfo(
+  ctx: HudContext,
+  node: NodeView,
+  groups: readonly GroupView[],
+  tick: number,
+): NodeInfo {
   const file = ctx.map.nodes[node.id];
   const here = groups.filter((g) => g.location.kind === 'node' && g.location.node === node.id);
   return {
@@ -200,6 +248,7 @@ function nodeInfo(ctx: HudContext, node: NodeView, groups: readonly GroupView[])
       charged: here.reduce((total, g) => total + g.charged, 0),
     },
     enemy: enemyInfo(node.seen, node.detail),
+    build: buildInfo(ctx, node, tick),
   };
 }
 
@@ -248,7 +297,8 @@ function estimateFor(
       ctx.rules.combat,
       {
         units: group.units,
-        firingCharged: group.mode === 'build' ? 0 : group.charged,
+        // Every charged unit fires (DEC-16 removed the non-firing "build" mode).
+        firingCharged: group.charged,
         planned: target.planned,
       },
       defenderOf(node),
@@ -288,7 +338,7 @@ export function buildHudData(
     vp: { mine: view.vp[me], enemy: view.vp[me === 0 ? 1 : 0] },
     secondsLeft: Math.ceil(Math.max(0, rules.match_ticks - tick) / rules.tick_hz),
     group: selectedGroup === undefined ? null : groupInfo(selectedGroup, view.nodes),
-    node: selectedNode === undefined ? null : nodeInfo(ctx, selectedNode, view.groups),
+    node: selectedNode === undefined ? null : nodeInfo(ctx, selectedNode, view.groups, tick),
     estimate:
       selectedGroup === undefined || target === null
         ? null
@@ -300,11 +350,18 @@ export function buildHudData(
       planned: g.order?.planned ?? false,
     })),
     nodes: view.nodes.map((n) => ({ id: n.id, owner: ownership(n.owner, me) })),
-    roads: view.edges.map((e) => ({
-      id: e.id,
-      capacityCenti: e.upgrade_gain?.capacity_centi ?? null,
-      packetSpeedPct: e.upgrade_gain?.packet_speed_pct ?? null,
-    })),
+    roads: view.edges.map((e) => {
+      const file = ctx.map.edges[e.id];
+      return {
+        id: e.id,
+        a: file?.a ?? -1,
+        b: file?.b ?? -1,
+        width: e.width,
+        capacityCenti: e.upgrade_gain?.capacity_centi ?? null,
+        packetSpeedPct: e.upgrade_gain?.packet_speed_pct ?? null,
+        charges: e.upgrade_gain === null ? null : levelCharges(rules, e.width + 1),
+      };
+    }),
     events,
   };
 }

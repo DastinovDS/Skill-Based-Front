@@ -172,8 +172,6 @@ ROWS = [
     Row("split", lambda _, g: Split(g, 1), lambda i: i.capital, 100),
     Row("merge", lambda i, g: Merge((i.extra, g)), lambda i: i.capital, 100),
     Row("set_defense", lambda _, g: SetMode(g, Mode.DEFENSE), lambda i: i.capital, 200),
-    Row("set_build", lambda _, g: SetMode(g, Mode.BUILD), lambda i: i.capital, 100),
-    Row("upgrade_road", lambda _, g: UpgradeRoad(g, 0), lambda i: i.capital, 100),
     Row("cancel", lambda _, g: CancelOrder(g), lambda i: i.waiting, 100),
 ]
 
@@ -223,7 +221,9 @@ def test_missing_and_hidden_give_the_same_reject() -> None:
 
 _TARGETS: dict[str, tuple[Callable[[Ids], Command], RejectCode]] = {
     "move_dest": (lambda i: Move(i.second, 99), RejectCode.NOT_FOUND_OR_HIDDEN),
-    "upgrade_edge": (lambda i: UpgradeRoad(i.capital, 99), RejectCode.NOT_FOUND_OR_HIDDEN),
+    "upgrade_edge": (lambda _: UpgradeRoad(0, 99), RejectCode.NOT_FOUND_OR_HIDDEN),
+    "upgrade_node": (lambda _: UpgradeRoad(99, 0), RejectCode.NOT_FOUND_OR_HIDDEN),
+    "upgrade_enemy_node": (lambda _: UpgradeRoad(5, 3), RejectCode.NOT_OWNER),
     "recruit_node": (lambda _: Recruit(99), RejectCode.NOT_FOUND_OR_HIDDEN),
     "recruit_enemy_node": (lambda _: Recruit(5), RejectCode.NOT_OWNER),
     "recruit_neutral": (lambda _: Recruit(3), RejectCode.NOT_OWNER),
@@ -361,18 +361,22 @@ def test_set_mode_same_mode() -> None:
 
 
 def test_upgrade_road_rules() -> None:
-    state, ids = _state()
+    """``UpgradeRoad(node, edge)`` of a city (DEC-16); the full table is in ``test_build.py``."""
+    state, _ = _state()
     # e1 joins own 1 and neutral 3: a buffer edge (mechanics.md, section 8).
-    assert validate(state, RULES, 0, UpgradeRoad(ids.second, 1)) == Reject(RejectCode.NOT_INTERNAL)
+    assert validate(state, RULES, 0, UpgradeRoad(1, 1)) == Reject(RejectCode.NOT_INTERNAL)
     # e3 joins 5 and 6: node 0 is not an end of it.
-    assert validate(state, RULES, 0, UpgradeRoad(ids.capital, 3)) == Reject(RejectCode.NOT_ADJACENT)
+    assert validate(state, RULES, 0, UpgradeRoad(0, 3)) == Reject(RejectCode.NOT_ADJACENT)
     state.edges[0].width = 3  # max_width of e0
-    assert validate(state, RULES, 0, UpgradeRoad(ids.capital, 0)) == Reject(RejectCode.MAX_WIDTH)
+    assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.MAX_WIDTH)
     state.edges[0].width = 1
-    apply_commands(state, RULES, [PlayerCommand(0, 1, UpgradeRoad(ids.capital, 0))])
-    group = state.groups[ids.capital]
-    assert (group.mode, group.build_edge) == (Mode.BUILD, 0)
-    assert validate(state, RULES, 0, UpgradeRoad(ids.capital, 0)) == Reject(RejectCode.NO_CHANGE)
+    state.nodes[0].warehouse = 1  # the level to width 2 costs 2 charges
+    assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.NOT_ENOUGH_CHARGES)
+    state.nodes[0].warehouse = 2
+    _check(state, 0, UpgradeRoad(0, 0), Ok(cost=100))  # orders.cost.build of these rules
+    assert state.nodes[0].warehouse == 0
+    assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.CITY_BUSY)
+    assert validate(state, RULES, 0, UpgradeRoad(1, 0)) == Reject(RejectCode.EDGE_BUSY)
 
 
 def test_recruit_creates_one_discharged_unit() -> None:
@@ -505,9 +509,9 @@ def test_map_group_ids() -> None:
 
     assert map_group_ids(Move(1, 5, True), f) == Move(101, 5, True)
     assert map_group_ids(Merge((1, 2)), f) == Merge((101, 102))
-    assert map_group_ids(UpgradeRoad(3, 4), f) == UpgradeRoad(103, 4)
+    assert map_group_ids(UpgradeRoad(3, 4), f) == UpgradeRoad(3, 4)  # a city, no group
     assert map_group_ids(Split(1, 2), f) == Split(101, 2)
-    assert map_group_ids(SetMode(1, Mode.BUILD), f) == SetMode(101, Mode.BUILD)
+    assert map_group_ids(SetMode(1, Mode.DEFENSE), f) == SetMode(101, Mode.DEFENSE)
     assert map_group_ids(CancelOrder(7), f) == CancelOrder(107)
     assert map_group_ids(Recruit(3), f) == Recruit(3)
     assert map_group_ids(SetStance(Stance.WAR), f) == SetStance(Stance.WAR)
