@@ -128,7 +128,7 @@ def test_mvp0_capacity_supply_build_victory(mvp0: Ruleset) -> None:
     assert (supply.dispatch_ticks, supply.buffer, supply.recharge_per_tick) == (10, 2, 1)
     assert [supply.packet_speed_pct.of(w) for w in range(1, 6)] == [100, 125, 150, 175, 200]
     assert mvp0.build.ticks_per_level == 150
-    assert (mvp0.victory.vp_period_ticks, mvp0.victory.capital_multiplier) == (50, 3)
+    assert (mvp0.victory.vp_period_ticks, mvp0.victory.capital_multiplier) == (300, 3)
 
 
 def test_width_table_rejects_unknown_width(mvp0: Ruleset) -> None:

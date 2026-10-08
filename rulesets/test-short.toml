@@ -85,5 +85,5 @@ cooldown_ticks = 20
 location = "any_city"
 
 [victory]
-vp_period_ticks = 50
+vp_period_ticks = 300
 capital_multiplier = 3
