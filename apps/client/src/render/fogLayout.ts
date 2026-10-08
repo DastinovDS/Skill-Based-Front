@@ -1,6 +1,5 @@
 /**
- * Geometry of the fog of war (CLI-05, #61): where enemy markers sit, hatching of hidden cities,
- * dashes of hidden roads and the age of a memory.
+ * Geometry of the fog of war (CLI-05, #61): where enemy markers sit, dashes of hidden roads and the age of a memory.
  *
  * Pure functions, no PixiJS and no DOM. Nothing here decides what is visible: the server does
  * (`detail` of a node or an edge); the client only draws that level.
@@ -8,24 +7,25 @@
 import type { MapFile } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { edgeEnds, edgePoint, nodePoint, sideways } from './layout.ts';
-import { CAPITAL_RADIUS, NODE_RADIUS } from './style.ts';
+import { RING_GAP } from './style.ts';
 
 /** Enemy markers on an edge sit this far from the road, to the left of the a → b way. */
 export const EDGE_MARKER_OFFSET = -24;
 
-/** Radius of a city, capital or not. */
-export function nodeRadius(map: MapFile, id: number): number {
-  return map.nodes[id]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
-}
-
 /**
  * Centre of the enemy marker (or the memory ghost) of a city: to the right of it, in the lower
- * half, because the VP badge and the warehouse bar are above. `width` is the marker width.
+ * half, because the VP badge is above and the warehouse bar below the ring. `width` is the marker width.
  */
-export function nodeMarkerPoint(map: MapFile, id: number, width: number): Point | undefined {
+export function nodeMarkerPoint(
+  map: MapFile,
+  id: number,
+  width: number,
+  radius: number,
+): Point | undefined {
   const point = nodePoint(map, id);
   if (point === undefined) return undefined;
-  return { x: point.x + nodeRadius(map, id) + 8 + width / 2, y: point.y + 6 };
+  // Beyond the capacity ring (it reaches `RING_GAP + 4` outside the body).
+  return { x: point.x + radius + RING_GAP + 8 + width / 2, y: point.y + 6 };
 }
 
 /** Centre of the enemy marker (or the memory ghost) of a road: the middle, beside the road. */
@@ -34,26 +34,6 @@ export function edgeMarkerPoint(map: MapFile, id: number): Point | undefined {
   if (ends === undefined) return undefined;
   const middle = edgePoint(ends.a, ends.b, true, 500);
   return sideways(ends.a, ends.b, middle, EDGE_MARKER_OFFSET);
-}
-
-/**
- * Diagonal hatching inside a circle of `radius` around (0, 0): chords of lines at 45 degrees,
- * `spacing` apart. A hidden city is hatched, so it differs from a visible one without colour.
- */
-export function hatchChords(radius: number, spacing: number): [Point, Point][] {
-  const chords: [Point, Point][] = [];
-  // Lines x + y = c (written in rotated coordinates: distance `d` from the centre).
-  for (let d = -Math.floor(radius / spacing) * spacing; d < radius; d += spacing) {
-    const half = Math.sqrt(radius * radius - d * d);
-    // Along the line direction (1, -1)/sqrt2, at distance d along the normal (1, 1)/sqrt2.
-    const nx = d / Math.SQRT2;
-    const hx = half / Math.SQRT2;
-    chords.push([
-      { x: nx - hx, y: nx + hx },
-      { x: nx + hx, y: nx - hx },
-    ]);
-  }
-  return chords;
 }
 
 /**

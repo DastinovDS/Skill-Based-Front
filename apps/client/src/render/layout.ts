@@ -149,30 +149,6 @@ export function nodeSlots(
   return slots;
 }
 
-// --- Warehouse ---------------------------------------------------------------------------------
-
-export const BAR = { width: 32, height: 6 } as const;
-/** Most capacity units that still get their own segment mark on the bar. */
-export const MAX_BAR_SEGMENTS = 10;
-
-export interface WarehouseBar {
-  /** Filled share of the bar, 0..1. */
-  ratio: number;
-  /** x (from the left end of the bar) of the marks between capacity units. */
-  marks: number[];
-}
-
-/** The warehouse fill bar: charges against the capacity of the city. */
-export function warehouseBar(warehouse: number, capacity: number): WarehouseBar {
-  const cap = Math.max(0, Math.floor(capacity));
-  const ratio = cap === 0 ? 0 : Math.min(1, Math.max(0, warehouse / cap));
-  const marks: number[] = [];
-  if (cap > 1 && cap <= MAX_BAR_SEGMENTS) {
-    for (let i = 1; i < cap; i++) marks.push((BAR.width * i) / cap);
-  }
-  return { ratio, marks };
-}
-
 // --- Arrows of intents -------------------------------------------------------------------------
 
 export interface Arrow {

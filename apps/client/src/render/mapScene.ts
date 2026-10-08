@@ -2,6 +2,7 @@ import { Assets, type Application, type Texture } from 'pixi.js';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { labelResolution, NO_INSETS, type Camera, type Insets } from './camera.ts';
 import { CameraController } from './cameraController.ts';
+import { CityView } from './cityView.ts';
 import { EntityView } from './entityView.ts';
 import { FogView } from './fogView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
@@ -35,6 +36,7 @@ export interface SceneOptions {
 export class MapScene {
   readonly layers: MapLayers;
   private readonly view: MapView;
+  private readonly cities: CityView;
   private readonly entities: EntityView;
   private readonly fog: FogView;
   private readonly overlay: OverlayView;
@@ -56,18 +58,23 @@ export class MapScene {
     this.interaction = options.interaction ?? null;
     this.onsnapshot = options.onsnapshot;
     this.layers = createLayers();
+    const me = options.player ?? 0;
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.
-    this.view = new MapView(map, this.layers, 1);
-    this.entities = new EntityView(map, this.layers, options.player ?? 0, 1);
+    this.view = new MapView(map, this.layers, me, app.renderer);
+    this.cities = new CityView(map, this.layers, me, 1);
+    const radiusOf = (node: number): number => this.cities.radiusOf(node);
+    this.entities = new EntityView(map, this.layers, me, 1, radiusOf);
     this.fog = new FogView(
       map,
       this.layers,
-      options.player ?? 0,
+      me,
       this.entities.kit,
       1,
       this.source?.tickHz ?? DEFAULT_TICK_HZ,
+      this.view.cells,
+      radiusOf,
     );
-    this.overlay = new OverlayView(map, this.layers, options.player ?? 0);
+    this.overlay = new OverlayView(map, this.layers, me, radiusOf);
     this.controller = new CameraController(
       app.canvas,
       this.layers.world,
@@ -112,6 +119,7 @@ export class MapScene {
     this.fog.destroy();
     this.entities.destroy();
     this.overlay.destroy();
+    this.cities.destroy();
     this.view.destroy();
     if (this.backgroundUrl !== null) {
       void Assets.unload(this.backgroundUrl);
@@ -145,7 +153,10 @@ export class MapScene {
     if (announce) {
       this.base = frame.base;
       this.view.setOwners(frame.base.view.nodes.map((node) => node.owner));
-      this.view.setRoadWidths(frame.base.view.edges.map((edge) => edge.width));
+      const widths = frame.base.view.edges.map((edge) => edge.width);
+      this.view.setRoadWidths(widths);
+      this.overlay.setRoadWidths(widths);
+      this.cities.update(frame.base);
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.entities.setTickHz(tickHz);
@@ -193,7 +204,8 @@ export class MapScene {
   private readonly onCamera = (camera: Camera): void => {
     // Also runs on resize, so a new device pixel ratio (window moved to another screen) applies.
     const resolution = labelResolution(camera.scale, this.app.renderer.resolution);
-    this.view.setLabelResolution(resolution);
+    this.cities.setLabelResolution(resolution);
+    this.overlay.setLabelResolution(resolution);
     this.entities.setLabelResolution(resolution);
     this.fog.setLabelResolution(resolution);
   };

@@ -1,4 +1,4 @@
-import { Graphics } from 'pixi.js';
+import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { EMPTY_OVERLAY, type GhostArrow, type OverlayState } from './interaction.ts';
@@ -7,6 +7,7 @@ import { TOKEN_FULL, arrowGeometry, dashSegments, edgeEnds, nodePoint } from './
 import {
   ARROW_HEAD,
   ARROW_OUTLINE,
+  BG,
   CAPITAL_RADIUS,
   ORDER_GHOST_ALPHA,
   ORDER_GHOST_DASH,
@@ -14,7 +15,9 @@ import {
   ORDER_GHOST_WIDTH,
   NODE_RADIUS,
   PICK_BAND,
-  PLAYER_COLOR,
+  PAPER,
+  WIDTH_BADGE,
+  YOU,
   PREVIEW_ALPHA,
   PREVIEW_DASH,
   PREVIEW_GAP,
@@ -40,13 +43,35 @@ export class OverlayView {
   private readonly lines = new Graphics();
   private overlay: OverlayState = EMPTY_OVERLAY;
   private frameDrawn = false;
+  private widths: readonly number[] = [];
+  private readonly badge = new Container({ label: 'road-width', visible: false });
+  private readonly badgeText: Text;
+  private readonly badgeStyle = new TextStyle({
+    fontFamily: 'system-ui, sans-serif',
+    fontSize: WIDTH_BADGE.fontSize,
+    fontWeight: '700',
+    fill: PAPER,
+  });
 
   constructor(
     private readonly map: MapFile,
     layers: MapLayers,
-    private readonly me: PlayerId,
+    // The viewing player: the own colour is blue whoever that is (6).
+    _me: PlayerId,
+    /** Radius of a city now (`CityView.radiusOf`); the class radius of the city kind by default. */
+    private readonly radiusOf: (node: number) => number = (node) =>
+      map.nodes[node]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS,
   ) {
-    layers.layer.intents.addChild(this.lines, this.ring, this.frame);
+    this.badge.addChild(
+      new Graphics()
+        .circle(0, 0, WIDTH_BADGE.radius)
+        .fill(WIDTH_BADGE.fill)
+        .stroke({ width: 1.5, color: WIDTH_BADGE.stroke }),
+    );
+    this.badgeText = this.badge.addChild(
+      new Text({ text: '', style: this.badgeStyle, anchor: 0.5, resolution: 1 }),
+    );
+    layers.layer.intents.addChild(this.lines, this.ring, this.frame, this.badge);
     this.frame.visible = false;
   }
 
@@ -68,7 +93,19 @@ export class OverlayView {
     }
   }
 
+  /** `widths[i]`: the width of road `i` as the snapshot says (shown on the hovered road). */
+  setRoadWidths(widths: readonly number[]): void {
+    this.widths = widths;
+    if (this.overlay.road !== null) this.drawLines(this.overlay);
+  }
+
+  setLabelResolution(resolution: number): void {
+    if (this.badgeText.resolution !== resolution) this.badgeText.resolution = resolution;
+  }
+
   destroy(): void {
+    this.badge.destroy({ children: true });
+    this.badgeStyle.destroy();
     this.lines.destroy();
     this.ring.destroy();
     this.frame.destroy();
@@ -81,10 +118,9 @@ export class OverlayView {
     if (selected?.kind !== 'node') return;
     const at = nodePoint(this.map, selected.id);
     if (at === undefined) return;
-    const radius =
-      (this.map.nodes[selected.id]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS) +
-      SELECT_RING_GAP;
-    g.circle(at.x, at.y, radius + SELECT_WIDTH).stroke({ width: 2, color: 0xf0f6fc });
+    // Outside the capacity ring: a white ring on a dark one.
+    const radius = this.radiusOf(selected.id) + SELECT_RING_GAP;
+    g.circle(at.x, at.y, radius + SELECT_WIDTH).stroke({ width: 2, color: BG });
     g.circle(at.x, at.y, radius).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR });
   }
 
@@ -93,7 +129,7 @@ export class OverlayView {
     g.clear();
     const w = TOKEN_FULL.width + 2 * SELECT_TOKEN_GAP;
     const h = TOKEN_FULL.height + 2 * SELECT_TOKEN_GAP;
-    g.roundRect(-w / 2 - 2, -h / 2 - 2, w + 4, h + 4, 8).stroke({ width: 2, color: 0xf0f6fc });
+    g.roundRect(-w / 2 - 2, -h / 2 - 2, w + 4, h + 4, 8).stroke({ width: 2, color: BG });
     g.roundRect(-w / 2, -h / 2, w, h, 6).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR });
     this.frameDrawn = true;
   }
@@ -103,8 +139,13 @@ export class OverlayView {
     g.clear();
     this.drawCandidates(g, state.candidates);
     const road = state.road === null ? undefined : edgeEnds(this.map, state.road);
+    this.badge.visible = false;
     if (road !== undefined && state.road !== null) {
-      const width = this.map.edges[state.road]?.base_width ?? 1;
+      const width = this.widths[state.road] ?? this.map.edges[state.road]?.base_width ?? 1;
+      // The width as a number in a disc in the middle of the road: it reads without colour.
+      this.badge.position.set((road.a.x + road.b.x) / 2, (road.a.y + road.b.y) / 2);
+      this.badgeText.text = String(width);
+      this.badge.visible = true;
       g.moveTo(road.a.x, road.a.y).lineTo(road.b.x, road.b.y);
       g.stroke({
         width: roadThickness(width) + ROAD_LIGHT_EXTRA,
@@ -124,7 +165,7 @@ export class OverlayView {
         }
         g.stroke({
           width: PREVIEW_WIDTH,
-          color: preview.planned ? SELECT_COLOR : PLAYER_COLOR[this.me],
+          color: preview.planned ? SELECT_COLOR : YOU,
           alpha: PREVIEW_ALPHA,
           cap: 'round',
         });
@@ -162,7 +203,7 @@ export class OverlayView {
   }
 
   private radius(node: number): number {
-    return this.map.nodes[node]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
+    return this.radiusOf(node);
   }
 
   /** Dashed arrow along the server's path, or straight to the destination while unanswered. */
@@ -172,7 +213,7 @@ export class OverlayView {
     const points = nodes
       .map((id) => nodePoint(this.map, id))
       .filter((p): p is Point => p !== undefined);
-    const color = PLAYER_COLOR[this.me];
+    const color = YOU;
     const last = points.at(-1);
     const before = points.at(-2);
     if (last === undefined || before === undefined) return;
@@ -180,7 +221,7 @@ export class OverlayView {
       before,
       last,
       0,
-      NODE_RADIUS + 2,
+      this.radiusOf(nodes.at(-1) ?? 0) + 2,
       ARROW_HEAD.length,
       ARROW_HEAD.width,
     );

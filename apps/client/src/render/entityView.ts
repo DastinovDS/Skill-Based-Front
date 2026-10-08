@@ -11,7 +11,6 @@ import type {
 } from '../protocol.gen.ts';
 import type { MapLayers } from './layers.ts';
 import {
-  BAR,
   TOKEN_COMPACT,
   TOKEN_FULL,
   arrowGeometry,
@@ -26,10 +25,10 @@ import {
   roadPosition,
   sideways,
   timeLeftLabel,
-  warehouseBar,
   type FightInfo,
 } from './layout.ts';
 import type { Point } from './camera.ts';
+import { CITY_REACH_BELOW } from './cityLayout.ts';
 import { edgeMarkerPoint, nodeMarkerPoint } from './fogLayout.ts';
 import { EntityKit, Token } from './shapes.ts';
 import {
@@ -42,14 +41,12 @@ import {
   BUILD_TIE,
   BUILD_TIE_CASING,
   BUILD_TIME_FONT_SIZE,
-  CAPITAL_RADIUS,
   HEADING_DISTANCE,
   INTENT_ICON_ANGLE,
   INTENT_ICON_DISTANCE,
-  NODE_RADIUS,
   ORDER_LINE_ALPHA,
   PACKET_SCALE,
-  PLAYER_COLOR,
+  ownerColor,
   PLATE_FILL,
   roadThickness,
 } from './style.ts';
@@ -118,9 +115,8 @@ interface BuildMark {
  */
 export class EntityView {
   /** Shared with the fog layer (ghosts use the same tokens); released by `destroy()`. */
-  readonly kit = new EntityKit();
+  readonly kit: EntityKit;
   private readonly enemy: PlayerId;
-  private readonly bars: Container[];
   private readonly enemyNodes: (Token | null)[];
   private readonly enemyEdges: (Token | null)[];
   private readonly enemyLayer = new Container({ label: 'enemy' });
@@ -151,17 +147,11 @@ export class EntityView {
     layers: MapLayers,
     private readonly me: PlayerId,
     private labelResolution: number,
+    /** Radius of a city now (by its capacity class, `CityView.radiusOf`). */
+    private readonly radiusOf: (node: number) => number,
   ) {
+    this.kit = new EntityKit(me);
     this.enemy = other(me);
-    this.bars = map.nodes.map((node) => {
-      const bar = new Container({ label: `bar-${String(node.id)}`, visible: false });
-      const radius = node.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
-      bar.position.set(node.x - BAR.width / 2, node.y - radius - 10 - BAR.height);
-      bar.addChild(new Graphics(this.kit.barFrame));
-      bar.addChild(new Graphics(this.kit.barFill[0]));
-      bar.addChild(new Graphics(this.kit.barMarks(2)));
-      return layers.layer.nodes.addChild(bar);
-    });
     this.enemyNodes = map.nodes.map(() => null);
     this.enemyEdges = map.edges.map(() => null);
 
@@ -228,7 +218,6 @@ export class EntityView {
     this.orders.destroy();
     this.buildTies.destroy();
     for (const container of [
-      ...this.bars,
       this.buildLayer,
       this.enemyLayer,
       this.packetLayer,
@@ -247,7 +236,6 @@ export class EntityView {
   private applyBase(base: SnapshotMsg): void {
     const { nodes, edges, intents } = base.view;
     nodes.forEach((node) => {
-      this.setBar(node);
       this.setEnemyNode(node);
     });
     edges.forEach((edge) => {
@@ -328,20 +316,7 @@ export class EntityView {
   }
 
   private radius(node: number): number {
-    return this.map.nodes[node]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
-  }
-
-  private setBar(node: NodeView): void {
-    const bar = this.bars[node.id];
-    if (bar === undefined) return;
-    const shown = node.detail === 'exact' && node.warehouse !== null;
-    bar.visible = shown;
-    if (!shown || node.warehouse === null) return;
-    const { ratio } = warehouseBar(node.warehouse, node.capacity);
-    const [, fill, marks] = bar.children as [Graphics, Graphics, Graphics];
-    fill.context = this.kit.barFill[node.owner ?? this.me];
-    fill.scale.x = ratio * BAR.width;
-    marks.context = this.kit.barMarks(node.capacity);
+    return this.radiusOf(node);
   }
 
   /** The token for what the player knows about enemies in a place; `null`: nothing to show. */
@@ -380,7 +355,7 @@ export class EntityView {
     this.enemyNodes[node.id] = token;
     if (token === null) return;
     const size = node.seen?.level === 'exact' ? TOKEN_FULL : TOKEN_COMPACT;
-    const at = nodeMarkerPoint(this.map, node.id, size.width);
+    const at = nodeMarkerPoint(this.map, node.id, size.width, this.radiusOf(node.id));
     if (at !== undefined) token.view.position.set(at.x, at.y);
   }
 
@@ -419,7 +394,7 @@ export class EntityView {
   }
 
   private drawArrow(g: Graphics, intent: IntentView, from: Point, to: Point): void {
-    const color = PLAYER_COLOR[intent.owner];
+    const color = ownerColor(this.me, intent.owner);
     // Both players' arrows on one road run side by side instead of on top of each other.
     const lane = intent.owner === 0 ? 5 : -5;
     const start = sideways(from, to, from, lane);
@@ -427,8 +402,8 @@ export class EntityView {
     const arrow = arrowGeometry(
       start,
       end,
-      NODE_RADIUS + 6,
-      NODE_RADIUS + 6,
+      this.radiusOf(intent.origin) + 6,
+      this.radiusOf(intent.target ?? intent.origin) + 6,
       ARROW_HEAD.length,
       ARROW_HEAD.width,
     );
@@ -442,9 +417,9 @@ export class EntityView {
     g.poly([tip.x, tip.y, left.x, left.y, right.x, right.y])
       .fill(color)
       .stroke({ width: 1.5, color: PLATE_FILL });
-    // The tail tells the owner without colour: a dot for player 0, a hollow diamond for player 1.
+    // The tail tells the side without colour: a dot for own, a hollow diamond for the opponent.
     const { x, y } = arrow.start;
-    if (intent.owner === 0) {
+    if (intent.owner === this.me) {
       g.circle(x, y, 4).fill(color).stroke({ width: 1.5, color: PLATE_FILL });
     } else {
       g.poly([x, y - 5.5, x + 5.5, y, x, y + 5.5, x - 5.5, y])
@@ -464,8 +439,7 @@ export class EntityView {
     }
     const [disc] = icon.children as [Graphics, Graphics];
     disc.context = this.kit.iconDisc[intent.owner];
-    const node = this.map.nodes[intent.origin];
-    const radius = node?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
+    const radius = this.radiusOf(intent.origin);
     const offset = around(radius + INTENT_ICON_DISTANCE, INTENT_ICON_ANGLE);
     icon.position.set(at.x + offset.x, at.y + offset.y);
     icon.visible = true;
@@ -499,8 +473,8 @@ export class EntityView {
       if (location.kind === 'node') {
         const node = nodePoint(this.map, location.node);
         const list = perNode.get(location.node) ?? [];
-        const radius =
-          this.map.nodes[location.node]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
+        // Tokens stand under the rings and the warehouse bar of the city.
+        const radius = this.radiusOf(location.node) + CITY_REACH_BELOW;
         const slot = nodeSlots(list.length, radius)[list.indexOf(item)];
         if (node !== undefined && slot !== undefined)
           at = { x: node.x + slot.x, y: node.y + slot.y };
@@ -583,7 +557,7 @@ export class EntityView {
     const g = this.orders;
     g.clear();
     for (const { group, owner } of groups) {
-      const color = PLAYER_COLOR[owner ?? this.me];
+      const color = ownerColor(this.me, owner ?? this.me);
       const from = points.get(group.id);
       if (group.order === null || from === undefined) continue;
       g.moveTo(from.x, from.y);
@@ -594,7 +568,7 @@ export class EntityView {
       g.stroke({ width: 2, color, alpha: ORDER_LINE_ALPHA });
       const dest = nodePoint(this.map, group.order.dest);
       if (dest !== undefined)
-        g.circle(dest.x, dest.y, NODE_RADIUS + 5).stroke({
+        g.circle(dest.x, dest.y, this.radiusOf(group.order.dest) + 5).stroke({
           width: 2,
           color,
           alpha: ORDER_LINE_ALPHA,

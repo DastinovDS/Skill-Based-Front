@@ -1,18 +1,14 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import type { Mode, PlayerId } from '../protocol.gen.ts';
 import {
-  BAR,
   MAX_PIPS,
   TOKEN_COMPACT,
   TOKEN_FULL,
   TOKEN_TOP_ROW_Y,
   countLabel,
   pipLayout,
-  warehouseBar,
 } from './layout.ts';
 import {
-  BAR_FRAME,
-  BAR_MARK,
   COUNT_FONT_SIZE,
   FIGHT_COLOR,
   GLYPH_COLOR,
@@ -24,7 +20,7 @@ import {
   PLATE_INNER_RING,
   PLATE_OUTLINE_WIDTH,
   PLATE_RADIUS,
-  PLAYER_COLOR,
+  ownerColor,
 } from './style.ts';
 
 const MODES = ['attack', 'defense'] as const;
@@ -60,20 +56,16 @@ export class EntityKit {
   readonly heading: GraphicsContext;
   readonly swords: GraphicsContext;
   readonly iconDisc: Readonly<Record<PlayerId, GraphicsContext>>;
-  readonly barFrame: GraphicsContext;
-  /** Unit rectangle along +x, scaled to the filled share of the bar. */
-  readonly barFill: Readonly<Record<PlayerId, GraphicsContext>>;
   readonly textStyle: TextStyle;
-  private readonly marks = new Map<number, GraphicsContext>();
 
-  constructor() {
+  constructor(me: PlayerId) {
     const plate = (owner: PlayerId, size: { width: number; height: number }): GraphicsContext =>
       this.context((g) => {
         const { width: w, height: h } = size;
         g.roundRect(-w / 2, -h / 2, w, h, PLATE_RADIUS)
           .fill(PLATE_FILL)
-          .stroke({ width: PLATE_OUTLINE_WIDTH, color: PLAYER_COLOR[owner] });
-        if (owner === 1) {
+          .stroke({ width: PLATE_OUTLINE_WIDTH, color: ownerColor(me, owner) });
+        if (owner !== me) {
           const inset = PLATE_INNER_INSET;
           g.roundRect(-w / 2 + inset, -h / 2 + inset, w - 2 * inset, h - 2 * inset, 2).stroke(
             PLATE_INNER_RING,
@@ -84,7 +76,9 @@ export class EntityKit {
     this.plateFull = { 0: plate(0, TOKEN_FULL), 1: plate(1, TOKEN_FULL) };
     this.plateCompact = { 0: plate(0, TOKEN_COMPACT), 1: plate(1, TOKEN_COMPACT) };
     const filled = (owner: PlayerId): GraphicsContext =>
-      this.context((g) => g.circle(0, 0, PIP_RADIUS).fill(PLAYER_COLOR[owner]).stroke(PIP_STROKE));
+      this.context((g) =>
+        g.circle(0, 0, PIP_RADIUS).fill(ownerColor(me, owner)).stroke(PIP_STROKE),
+      );
     this.pipFilled = { 0: filled(0), 1: filled(1) };
     this.pipEmpty = this.context((g) =>
       g.circle(0, 0, PIP_RADIUS).fill(PLATE_FILL).stroke(PIP_STROKE),
@@ -112,37 +106,19 @@ export class EntityKit {
     );
     const disc = (owner: PlayerId): GraphicsContext =>
       this.context((g) => {
-        g.circle(0, 0, 9).fill(PLATE_FILL).stroke({ width: 2.5, color: PLAYER_COLOR[owner] });
-        if (owner === 1) g.circle(0, 0, 5.5).stroke(PLATE_INNER_RING);
+        g.circle(0, 0, 9)
+          .fill(PLATE_FILL)
+          .stroke({ width: 2.5, color: ownerColor(me, owner) });
+        if (owner !== me) g.circle(0, 0, 5.5).stroke(PLATE_INNER_RING);
         return g;
       });
     this.iconDisc = { 0: disc(0), 1: disc(1) };
-    this.barFrame = this.context((g) =>
-      g.rect(0, 0, BAR.width, BAR.height).fill(BAR_FRAME.fill).stroke(BAR_FRAME.stroke),
-    );
-    const fill = (owner: PlayerId): GraphicsContext =>
-      this.context((g) => g.rect(0, 0, 1, BAR.height).fill(PLAYER_COLOR[owner]));
-    this.barFill = { 0: fill(0), 1: fill(1) };
     this.textStyle = new TextStyle({
       fontFamily: 'system-ui, sans-serif',
       fontSize: COUNT_FONT_SIZE,
       fontWeight: '700',
       fill: GLYPH_COLOR,
     });
-  }
-
-  /** Marks between capacity units of a warehouse bar; one shared context per capacity. */
-  barMarks(capacity: number): GraphicsContext {
-    let context = this.marks.get(capacity);
-    if (context === undefined) {
-      const { marks } = warehouseBar(0, capacity);
-      context = this.context((g) => {
-        for (const x of marks) g.moveTo(x, 0.75).lineTo(x, BAR.height - 0.75);
-        return g.stroke(BAR_MARK);
-      });
-      this.marks.set(capacity, context);
-    }
-    return context;
   }
 
   context(draw: (g: GraphicsContext) => GraphicsContext): GraphicsContext {
