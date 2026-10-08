@@ -59,7 +59,7 @@ export class OrderUiState {
     notice: null,
   });
 
-  readonly #listeners = new Set<(feedback: OrderFeedback) => void>();
+  #listeners: readonly ((feedback: OrderFeedback) => void)[] = [];
 
   patch(change: Partial<OrderUiData>): void {
     this.current = { ...this.current, ...change };
@@ -67,9 +67,9 @@ export class OrderUiState {
 
   /** Calls `listener` for every answered command; returns the function that stops it. */
   onFeedback(listener: (feedback: OrderFeedback) => void): () => void {
-    this.#listeners.add(listener);
+    this.#listeners = [...this.#listeners, listener];
     return () => {
-      this.#listeners.delete(listener);
+      this.#listeners = this.#listeners.filter((l) => l !== listener);
     };
   }
 
