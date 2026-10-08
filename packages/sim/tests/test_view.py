@@ -1,8 +1,8 @@
-"""Projection (SIM-14): PlayerView by DEC-04, opaque ids, resolve(), determinism.
+"""Projection (SIM-14): PlayerView by DEC-04 and DEC-17, opaque ids, resolve(), determinism.
 
-Every rule of DEC-04 (mechanics.md, section 10) has its own test below, plus the list of what a
-view must not contain (AGENTS.md, section 4.4) and the #112 default. Expected detail levels are
-worked out by hand from DEC-04 and the map file:
+Every rule of DEC-04 and DEC-17 (mechanics.md, section 10) has its own test below, plus the list
+of what a view must not contain (AGENTS.md, section 4.4) and the #112 default. Expected detail
+levels are worked out by hand from DEC-04 and the map file:
 
 - line6: 0 (capital of 0) -e0- 1 -e1- 2 -e2- 3 -e3- 4 -e4- 5 (capital of 1); player 0 owns 0 and
   1, player 1 owns 4 and 5, nodes 2 and 3 are neutral; widths 1, ``max_width`` 5.
@@ -104,22 +104,89 @@ def _view(state: GameState, rules: Ruleset, player: int = 0) -> PlayerView:
 # DEC-04, rule by rule -------------------------------------------------------------------------
 
 
-def test_dec04_geography_and_road_widths_are_public(rules: Ruleset) -> None:
-    state = _state("line6", rules)
-    state.edges[3].width = 4  # e3 is in fog for player 0
-    view = _view(state, rules)
-    assert [e.id for e in view.edges] == [0, 1, 2, 3, 4]
-    assert [e.width for e in view.edges] == [1, 1, 1, 4, 1]
-    assert [e.detail for e in view.edges] == [P, P, F, F, F]
-
-
-def test_dec04_ownership_and_capacity_of_all_nodes_are_public(rules: Ruleset) -> None:
+def test_dec04_geography_and_ownership_of_all_nodes_are_public(rules: Ruleset) -> None:
     state = _state("line6", rules)
     view = _view(state, rules)
     assert [n.id for n in view.nodes] == [0, 1, 2, 3, 4, 5]
+    assert [e.id for e in view.edges] == [0, 1, 2, 3, 4]
     assert [n.detail for n in view.nodes] == [E, E, P, F, F, F]
+    assert [e.detail for e in view.edges] == [P, P, F, F, F]
     assert [n.owner for n in view.nodes] == [0, 0, None, None, 1, 1]
-    assert [n.capacity for n in view.nodes] == [city_capacity(state, rules, n) for n in range(6)]
+
+
+# DEC-17: fog of war for roads, rule by rule ---------------------------------------------------
+# line6, player 0: e0 own internal, e1 buffer with an own end (both presence); e2, e3 in fog;
+# e4 internal edge of player 1, in fog. Gains of mvp-0 (mechanics.md, section 9): width 1 +1.0,
+# width 3 +2.0, width 5 +2.6.
+
+
+def test_dec17_upgrade_in_fog_does_not_change_the_view(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    before = _view(state, rules)
+    state.edges[3].width = 4
+    state.edges[4].width = 5  # the enemy upgrades its internal road in fog
+    after = _view(state, rules)
+    assert after == before
+    # Never seen: base_width of the map file (point 2).
+    assert [e.width for e in after.edges] == [1, 1, 1, 1, 1]
+
+
+def test_dec17_own_and_buffer_edges_are_exact(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    state.edges[0].width = 3  # own internal edge
+    state.edges[1].width = 2  # buffer edge with an own end (point 1)
+    view = _view(state, rules)
+    assert [(e.width, e.detail) for e in view.edges[:2]] == [(3, P), (2, P)]
+    # Player 1 sees its own internal e4 exactly as well.
+    state.edges[4].width = 5
+    assert _view(state, rules, 1).edges[4].width == 5
+
+
+def test_dec17_lost_edge_freezes_at_the_last_seen_width(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    scout = _add(state, 0, AtNode(4))  # node 4 exact: e3 and e4 are in sight
+    state.edges[4].width = 2
+    state.tick = 10
+    assert _view(state, rules).edges[4].width == 2  # in sight: exact
+    vision(state, rules)  # end of tick 10: memory keeps width 2
+    scout.location = AtNode(1)  # sight lost
+    state.edges[4].width = 4
+    state.tick = 20
+    lost = _view(state, rules).edges[4]
+    assert (lost.width, lost.detail) == (2, F)  # frozen at the last sighting (point 2)
+    assert lost.seen is not None and (lost.seen.tick, lost.seen.width) == (10, 2)
+    scout.location = AtNode(5)  # sight back: exact again
+    back = _view(state, rules).edges[4]
+    assert (back.width, back.detail) == (4, P)
+
+
+def test_dec17_capacity_from_known_widths_and_stale_flag(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    state.edges[0].width = 3
+    state.edges[4].width = 5  # in fog for player 0
+    view = _view(state, rules)
+    # Own nodes exact (40 + 2.0, 30 + 2.0); neutral base; enemy 4 and 5 by width 1, not 5.
+    assert [n.capacity for n in view.nodes] == [42, 32, 30, 30, 31, 41]
+    assert [n.capacity_stale for n in view.nodes] == [False, False, False, False, True, True]
+    assert city_capacity(state, rules, 4) == 32  # the true one: 30 + 2.6, rounded down
+    # Player 1 sees its own capacities exactly; e0 is in fog for it, so 0 and 1 are estimates.
+    enemy_view = _view(state, rules, 1)
+    assert [n.capacity for n in enemy_view.nodes] == [41, 31, 30, 30, 32, 42]
+    assert [n.capacity_stale for n in enemy_view.nodes] == [True, True, False, False, False, False]
+    # In sight of e4 (a group in node 5): exact, no estimate.
+    _add(state, 0, AtNode(5))
+    seen = _view(state, rules)
+    assert [n.capacity for n in seen.nodes][4:] == [32, 42]
+    assert [n.capacity_stale for n in seen.nodes][4:] == [False, False]
+
+
+def test_dec17_cut_off_enemy_city_has_exact_base_capacity(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    state.nodes[5].owner = 0  # player 1 lost its capital: node 4 is cut off (ownership public)
+    state.edges[3].width = 3
+    state.edges[4].width = 5
+    view = _view(state, rules)
+    assert (view.nodes[4].capacity, view.nodes[4].capacity_stale) == (30, False)
 
 
 def test_dec04_vp_of_both_players_are_public(rules: Ruleset) -> None:
@@ -463,13 +530,16 @@ def _states(draw: st.DrawFn) -> tuple[GameState, int]:
         node.owner = draw(st.sampled_from([None, 0, 1]))
         node.warehouse = draw(st.integers(0, 30))
     for edge in state.edges.values():
-        edge.width = draw(st.integers(1, state.map.edges[edge.id].max_width))
+        static = state.map.edges[edge.id]
+        edge.width = draw(st.integers(static.base_width, static.max_width))
     for _ in range(draw(st.integers(0, 3))):  # earlier ticks leave fog memory
         state.groups = {}
         for _ in range(draw(st.integers(0, 6))):
             _random_group(draw, state, draw(st.sampled_from([0, 1])))
         vision(state, _RULES)
         state.tick += draw(st.integers(1, 20))
+        for edge in state.edges.values():  # roads are upgraded, never torn down
+            edge.width = draw(st.integers(edge.width, state.map.edges[edge.id].max_width))
     state.groups = {}
     for _ in range(draw(st.integers(0, 8))):
         _random_group(draw, state, draw(st.sampled_from([0, 1])))
@@ -479,11 +549,16 @@ def _states(draw: st.DrawFn) -> tuple[GameState, int]:
         state.packets[pid] = Packet(
             pid, draw(st.sampled_from([0, 1])), edge.id, edge.a, draw(st.integers(1, 5)), 0, 5
         )
-    for _ in range(draw(st.integers(0, 3))):
+    for _ in range(draw(st.integers(0, 4))):
         iid = state.new_id()
         kind = draw(st.sampled_from(list(IntentKind)))
-        target = None if kind is IntentKind.DEFENSE else 1
-        state.intents[iid] = Intent(iid, draw(st.sampled_from([0, 1])), kind, 0, target, 0)
+        edge = state.map.edges[draw(st.integers(0, len(state.map.edges) - 1))]
+        target = None if kind is IntentKind.DEFENSE else edge.b
+        state.intents[iid] = Intent(iid, draw(st.sampled_from([0, 1])), kind, edge.a, target, 0)
+    for _ in range(draw(st.integers(0, 3))):  # road builds of cities (DEC-16)
+        edge = state.map.edges[draw(st.integers(0, len(state.map.edges) - 1))]
+        node = draw(st.sampled_from([edge.a, edge.b]))
+        state.nodes[node].build = Build(edge.id, draw(st.sampled_from([0, 1])), 0)
     return state, draw(st.sampled_from([0, 1]))
 
 
@@ -522,6 +597,15 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
     other.stance = draw(st.sampled_from(list(Stance)))
     other.charge_acc = draw(st.integers(0, 99))
     state.events = [Event(state.tick, "fight", (("node", 0),))]
+    # DEC-17: roads in fog may be upgraded further, enemy builds on them may start or stop.
+    for e, level in enumerate(edges):
+        if level is F:
+            edge = state.edges[e]
+            edge.width = draw(st.integers(edge.width, state.map.edges[e].max_width))
+    for node in state.nodes.values():
+        b = node.build
+        if b is not None and b.owner == enemy and edges[b.edge] is F and draw(st.booleans()):
+            node.build = None
 
 
 @given(data=st.data())
@@ -543,6 +627,16 @@ def test_property_nothing_leaks_from_places_out_of_sight(data: st.DataObject) ->
         _check_place(n, memory.nodes.get(n.id))
     for e in view.edges:
         _check_place(e, memory.edges.get(e.id))
+    # DEC-17: known widths and capacities never exceed the true ones and equal them in sight.
+    for e in view.edges:
+        true_width = state.edges[e.id].width
+        assert e.width <= true_width
+        assert e.detail is F or e.width == true_width
+    for n in view.nodes:
+        true_capacity = city_capacity(state, _RULES, n.id)
+        assert n.capacity <= true_capacity
+        assert n.capacity_stale or n.capacity == true_capacity
+        assert not (n.capacity_stale and n.owner == player)
 
     _hide(data, state, player)
     assert project(state, _RULES, player, KEY) == view

@@ -204,8 +204,9 @@ def test_vision_records_sightings(rules: Ruleset) -> None:
     memory = state.vision_memory[0]
     # PRESENCE: enemy modes (distinct, sorted), no numbers.
     assert memory.nodes[3] == Sighting(40, P, (Mode.ATTACK, Mode.DEFENSE), None, None)
-    assert memory.edges[1] == Sighting(40, P, (Mode.DEFENSE,), None, None)
-    assert memory.edges[0] == Sighting(40, P, (), None, None)
+    # Edges also record their width (DEC-17); nodes have none.
+    assert memory.edges[1] == Sighting(40, P, (Mode.DEFENSE,), None, None, width=1)
+    assert memory.edges[0] == Sighting(40, P, (), None, None, width=1)
     # EXACT: own nodes, enemy totals are known (none here).
     assert memory.nodes[0] == Sighting(40, E, (), 0, 0)
     assert memory.nodes[1] == Sighting(40, E, (), 0, 0)

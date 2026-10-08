@@ -144,6 +144,9 @@ def _expected_wire_view(view: PlayerView) -> dict[str, Any]:
                 del group["order"][name]
         for name in DROPPED_LOCATION_KEYS:
             group["location"].pop(name, None)
+    for place in (*data["nodes"], *data["edges"]):
+        if place["seen"] is not None:
+            del place["seen"]["width"]  # the edge's ``width`` carries it (DEC-17)
     return data
 
 
@@ -282,6 +285,7 @@ def _features(view: View) -> set[str]:
             p.seen is not None and p.seen.enemy_modes and p.seen.enemy_units is None for p in places
         ),
         "fog_memory": any(p.detail is Detail.FOG and p.seen is not None for p in places),
+        "capacity_stale": any(n.capacity_stale for n in view.nodes),
     }
     return {name for name, present in found.items() if present}
 
@@ -301,6 +305,7 @@ def test_snapshot_frames_of_a_bot_match() -> None:
         "upgrade_gain",
         "enemy_presence",
         "fog_memory",
+        "capacity_stale",
     }
 
 

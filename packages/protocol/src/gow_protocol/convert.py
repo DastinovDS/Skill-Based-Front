@@ -3,9 +3,10 @@
 Server -> client:
 
 - ``snapshot_msg``: ``PlayerView`` (``gow_sim.view.project()``) -> ``snapshot``. Opaque ids are
-  63-bit integers in the simulation and decimal strings on the wire. Two fields of the view stay
-  on the server, the client does not need them: ``order.depart_tick`` and ``location.back`` (a
-  bouncing group's ``progress`` falls, so interpolation works without it);
+  63-bit integers in the simulation and decimal strings on the wire. Three fields of the view stay
+  on the server, the client does not need them: ``order.depart_tick``, ``location.back`` (a
+  bouncing group's ``progress`` falls, so interpolation works without it) and ``seen.width`` (the
+  known width of an edge is its ``width``, DEC-17);
 - ``snapshot_frame``: the same ``snapshot`` encoded straight from the ``PlayerView``, without the
   models and their validation (#155). The server sends these every tick; ``snapshot_msg``, built
   through the validating models, is their specification: tests over real matches require the two
@@ -161,6 +162,7 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 id=n.id,
                 owner=n.owner,
                 capacity=n.capacity,
+                capacity_stale=n.capacity_stale,
                 detail=n.detail,
                 warehouse=n.warehouse,
                 seen=_seen(n.seen),
@@ -263,6 +265,7 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "id": n.id,
                 "owner": n.owner,
                 "capacity": n.capacity,
+                "capacity_stale": n.capacity_stale,
                 "detail": n.detail,
                 "warehouse": n.warehouse,
                 "seen": _seen_data(n.seen),

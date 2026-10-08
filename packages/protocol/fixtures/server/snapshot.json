@@ -15,6 +15,7 @@
         "id": 0,
         "owner": 0,
         "capacity": 5,
+        "capacity_stale": false,
         "detail": "exact",
         "warehouse": 2,
         "seen": {
@@ -30,6 +31,7 @@
         "id": 1,
         "owner": 0,
         "capacity": 3,
+        "capacity_stale": false,
         "detail": "exact",
         "warehouse": 0,
         "seen": {
@@ -45,6 +47,7 @@
         "id": 2,
         "owner": null,
         "capacity": 2,
+        "capacity_stale": false,
         "detail": "presence",
         "warehouse": null,
         "seen": {
@@ -60,6 +63,7 @@
         "id": 3,
         "owner": 1,
         "capacity": 4,
+        "capacity_stale": false,
         "detail": "presence",
         "warehouse": null,
         "seen": {

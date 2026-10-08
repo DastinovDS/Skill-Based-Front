@@ -389,7 +389,7 @@
           "type": "integer"
         },
         "width": {
-          "description": "Current width; public for every edge (DEC-04).",
+          "description": "Width the player knows (DEC-17): the current one unless ``detail`` is ``fog``; in fog the\nlast seen width, or ``base_width`` of the map if never seen. Never above the true width.",
           "maximum": 5,
           "minimum": 1,
           "type": "integer"
@@ -1124,10 +1124,14 @@
           ]
         },
         "capacity": {
-          "description": "Current capacity of the city; public for every node (DEC-04).",
+          "description": "Capacity by the road widths the player knows (DEC-17): exact unless ``capacity_stale``,\nnever above the true capacity.",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
+        },
+        "capacity_stale": {
+          "description": "``capacity`` is an estimate by the last seen widths: the node is in its owner's supplied\nterritory and one of its internal edges is in fog (DEC-17). Never for own nodes.",
+          "type": "boolean"
         },
         "detail": {
           "$ref": "#/$defs/Detail"
@@ -1172,6 +1176,7 @@
         "id",
         "owner",
         "capacity",
+        "capacity_stale",
         "detail",
         "warehouse",
         "seen",

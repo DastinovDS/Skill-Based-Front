@@ -78,10 +78,17 @@ describe('buildHudData: selection', () => {
   it('shows a node with warehouse and enemy sighting', () => {
     const own = buildHudData(ctx, fog, { kind: 'node', id: 0 }, null, []);
     expect(own.group).toBeNull();
-    expect(own.node).toMatchObject({ owner: 'mine', capacity: 4, warehouse: 4 });
+    expect(own.node).toMatchObject({
+      owner: 'mine',
+      capacity: 4,
+      capacityStale: false,
+      warehouse: 4,
+    });
     const enemy = buildHudData(ctx, fog, { kind: 'node', id: 2 }, null, []);
     expect(enemy.node).toMatchObject({
       owner: 'enemy',
+      capacity: 4,
+      capacityStale: true, // DEC-17: an enemy city in fog, its capacity is an estimate
       warehouse: null,
       enemy: { modes: ['defense'], units: null, seenTick: 90, stale: true },
     });
