@@ -1,0 +1,279 @@
+/**
+ * Geometry of the regions of the map (ui-style.md 9.1, 9.2, 9.8): where terrain stamps go, the
+ * border between areas of different owners, and the hatching along the border of the fog.
+ *
+ * Pure functions, no PixiJS and no DOM. The cells are the Voronoi cells of `voronoi.ts` (convex).
+ */
+import type { Point } from './camera.ts';
+
+export interface Segment {
+  readonly a: Point;
+  readonly b: Point;
+}
+
+/** Twice the signed area: positive for a polygon counter-clockwise in a y-up system. */
+function signedArea(polygon: readonly Point[]): number {
+  let sum = 0;
+  polygon.forEach((p, i) => {
+    const q = polygon[(i + 1) % polygon.length];
+    if (q !== undefined) sum += p.x * q.y - q.x * p.y;
+  });
+  return sum;
+}
+
+export function centroid(polygon: readonly Point[]): Point {
+  const n = Math.max(1, polygon.length);
+  return {
+    x: polygon.reduce((sum, p) => sum + p.x, 0) / n,
+    y: polygon.reduce((sum, p) => sum + p.y, 0) / n,
+  };
+}
+
+/** Whether `p` lies inside (or on) a convex polygon, either orientation. */
+export function insideConvex(polygon: readonly Point[], p: Point): boolean {
+  if (polygon.length < 3) return false;
+  const sign = Math.sign(signedArea(polygon)) || 1;
+  return polygon.every((a, i) => {
+    const b = polygon[(i + 1) % polygon.length];
+    if (b === undefined) return true;
+    return sign * ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) >= 0;
+  });
+}
+
+/** Distance from `p` to the segment `s`. */
+export function distanceToSegment(p: Point, s: Segment): number {
+  const dx = s.b.x - s.a.x;
+  const dy = s.b.y - s.a.y;
+  const length2 = dx * dx + dy * dy;
+  const t =
+    length2 === 0
+      ? 0
+      : Math.max(0, Math.min(1, ((p.x - s.a.x) * dx + (p.y - s.a.y) * dy) / length2));
+  return Math.hypot(p.x - (s.a.x + t * dx), p.y - (s.a.y + t * dy));
+}
+
+export interface StampGrid {
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Where stamps of a terrain go inside `cell`: a grid of `grid` steps, every second row shifted by
+ * half a step, the whole grid shifted by integers derived from the id of the city (so the picture
+ * is the same at every start). A point must be inside the cell, at least `cityClearance` from the
+ * city centre `centre` and `roadClearance` from every road axis in `roads`.
+ */
+export function stampPoints(
+  cell: readonly Point[],
+  grid: StampGrid,
+  nodeId: number,
+  centre: Point,
+  roads: readonly Segment[],
+  cityClearance: number,
+  roadClearance: number,
+): Point[] {
+  if (cell.length < 3) return [];
+  const xs = cell.map((p) => p.x);
+  const ys = cell.map((p) => p.y);
+  const shiftX = (nodeId * 37) % grid.width;
+  const shiftY = (nodeId * 53) % grid.height;
+  const points: Point[] = [];
+  const firstRow = Math.floor((Math.min(...ys) - shiftY) / grid.height) - 1;
+  const lastRow = Math.ceil((Math.max(...ys) - shiftY) / grid.height) + 1;
+  for (let row = firstRow; row <= lastRow; row++) {
+    const y = row * grid.height + shiftY;
+    const offset = row % 2 === 0 ? 0 : grid.width / 2;
+    const firstCol = Math.floor((Math.min(...xs) - shiftX - offset) / grid.width) - 1;
+    const lastCol = Math.ceil((Math.max(...xs) - shiftX - offset) / grid.width) + 1;
+    for (let col = firstCol; col <= lastCol; col++) {
+      const p = { x: col * grid.width + shiftX + offset, y };
+      if (!insideConvex(cell, p)) continue;
+      if (Math.hypot(p.x - centre.x, p.y - centre.y) < cityClearance) continue;
+      if (roads.some((road) => distanceToSegment(p, road) < roadClearance)) continue;
+      points.push(p);
+    }
+  }
+  return points;
+}
+
+// --- Borders between areas -------------------------------------------------------------------
+
+function edgeKey(a: Point, b: Point): string {
+  const key = (p: Point): string =>
+    `${String(Math.round(p.x * 100))},${String(Math.round(p.y * 100))}`;
+  const [first, second] = [key(a), key(b)].sort();
+  return `${first ?? ''}|${second ?? ''}`;
+}
+
+export interface CellEdge {
+  readonly cell: number;
+  readonly a: Point;
+  readonly b: Point;
+  /** The cell on the other side of the edge; `null` on the border of the map. */
+  readonly neighbour: number | null;
+}
+
+/** Every edge of every cell, with the cell across it (matched by its end points). */
+export function cellEdges(cells: readonly (readonly Point[])[]): CellEdge[] {
+  const owners = new Map<string, number>();
+  cells.forEach((cell, i) => {
+    cell.forEach((a, k) => {
+      const b = cell[(k + 1) % cell.length];
+      if (b !== undefined) owners.set(`${String(i)}:${edgeKey(a, b)}`, i);
+    });
+  });
+  const edges: CellEdge[] = [];
+  cells.forEach((cell, i) => {
+    cell.forEach((a, k) => {
+      const b = cell[(k + 1) % cell.length];
+      if (b === undefined) return;
+      const key = edgeKey(a, b);
+      let neighbour: number | null = null;
+      for (let j = 0; j < cells.length; j++) {
+        if (j !== i && owners.has(`${String(j)}:${key}`)) {
+          neighbour = j;
+          break;
+        }
+      }
+      edges.push({ cell: i, a, b, neighbour });
+    });
+  });
+  return edges;
+}
+
+/** `p` moved `distance` from the edge `a`-`b` toward `towards` (perpendicular to the edge). */
+function inward(a: Point, b: Point, towards: Point, distance: number): Point {
+  const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  let nx = -(b.y - a.y) / length;
+  let ny = (b.x - a.x) / length;
+  const mx = (a.x + b.x) / 2;
+  if ((towards.x - mx) * nx + (towards.y - (a.y + b.y) / 2) * ny < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  return { x: nx * distance, y: ny * distance };
+}
+
+export interface Border extends Segment {
+  readonly owner: number;
+}
+
+/**
+ * Border of the areas of owners: for every edge of an owned cell whose neighbour belongs to
+ * somebody else (or nobody), a segment of the owner, moved `inset` into its own cell so that two
+ * owners' lines do not cover each other. The border of the map is not a border.
+ */
+export function territoryBorders(
+  cells: readonly (readonly Point[])[],
+  owners: readonly (number | null)[],
+  inset: number,
+): Border[] {
+  const borders: Border[] = [];
+  for (const edge of cellEdges(cells)) {
+    const owner = owners[edge.cell] ?? null;
+    if (owner === null || edge.neighbour === null) continue;
+    if (owners[edge.neighbour] === owner) continue;
+    const cell = cells[edge.cell];
+    if (cell === undefined) continue;
+    const d = inward(edge.a, edge.b, centroid(cell), inset);
+    borders.push({
+      owner,
+      a: { x: edge.a.x + d.x, y: edge.a.y + d.y },
+      b: { x: edge.b.x + d.x, y: edge.b.y + d.y },
+    });
+  }
+  return borders;
+}
+
+// --- Fog hatching ----------------------------------------------------------------------------
+
+/** Sutherland-Hodgman: the part of `subject` inside the convex polygon `clip`. */
+export function clipToConvex(subject: readonly Point[], clip: readonly Point[]): Point[] {
+  const sign = Math.sign(signedArea(clip)) || 1;
+  let result = [...subject];
+  clip.forEach((a, i) => {
+    const b = clip[(i + 1) % clip.length];
+    if (b === undefined || result.length === 0) return;
+    const side = (p: Point): number =>
+      sign * ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x));
+    const next: Point[] = [];
+    result.forEach((current, k) => {
+      const previous = result[(k + result.length - 1) % result.length];
+      if (previous === undefined) return;
+      const sc = side(current);
+      const sp = side(previous);
+      if (sc >= 0 !== sp >= 0) {
+        const t = sp / (sp - sc);
+        next.push({
+          x: previous.x + (current.x - previous.x) * t,
+          y: previous.y + (current.y - previous.y) * t,
+        });
+      }
+      if (sc >= 0) next.push(current);
+    });
+    result = next;
+  });
+  return result;
+}
+
+/**
+ * Lines at 45 degrees (x + y = const, `spacing` apart on the x + y axis) inside a convex polygon,
+ * as segments. The lines are global, so bands of neighbouring edges hatch in step.
+ */
+export function hatchInside(polygon: readonly Point[], spacing: number): Segment[] {
+  if (polygon.length < 3 || spacing <= 0) return [];
+  const sums = polygon.map((p) => p.x + p.y);
+  const segments: Segment[] = [];
+  const first = Math.ceil(Math.min(...sums) / spacing);
+  const last = Math.floor(Math.max(...sums) / spacing);
+  for (let k = first; k <= last; k++) {
+    const c = k * spacing;
+    const hits: Point[] = [];
+    polygon.forEach((p, i) => {
+      const q = polygon[(i + 1) % polygon.length];
+      if (q === undefined) return;
+      const fp = p.x + p.y - c;
+      const fq = q.x + q.y - c;
+      if (fp === fq || fp * fq > 0) return;
+      const t = fp / (fp - fq);
+      hits.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+    });
+    if (hits.length < 2) continue;
+    hits.sort((u, v) => u.x - v.x);
+    const a = hits[0];
+    const b = hits[hits.length - 1];
+    if (a !== undefined && b !== undefined && Math.hypot(b.x - a.x, b.y - a.y) > 0.5) {
+      segments.push({ a, b });
+    }
+  }
+  return segments;
+}
+
+/**
+ * The hatching along the border of the visible area: in every hidden cell, a band `width` wide
+ * along each edge shared with a cell that is not hidden, hatched at 45 degrees.
+ */
+export function fogHatching(
+  cells: readonly (readonly Point[])[],
+  hidden: readonly boolean[],
+  width: number,
+  spacing: number,
+): Segment[] {
+  const segments: Segment[] = [];
+  for (const edge of cellEdges(cells)) {
+    const cell = cells[edge.cell];
+    if (hidden[edge.cell] !== true || edge.neighbour === null || hidden[edge.neighbour] === true) {
+      continue;
+    }
+    if (cell === undefined) continue;
+    const d = inward(edge.a, edge.b, centroid(cell), width);
+    const band = [
+      edge.a,
+      edge.b,
+      { x: edge.b.x + d.x, y: edge.b.y + d.y },
+      { x: edge.a.x + d.x, y: edge.a.y + d.y },
+    ];
+    segments.push(...hatchInside(clipToConvex(band, cell), spacing));
+  }
+  return segments;
+}

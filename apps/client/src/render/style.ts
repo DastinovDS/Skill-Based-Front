@@ -4,53 +4,117 @@ import type { PlayerId, Terrain } from '../protocol.gen.ts';
 // about 100 units apart on MVP maps (100 units = 3 s of travel), so these sizes do not depend on
 // the map. State is never shown by colour alone (AGENTS.md §7.4): see the comments below.
 
-export const CANVAS_BACKGROUND = 0x0d1117;
+// --- Palette (docs/design/ui-style.md, section 6): the only place with map colours ---------------
+// Mirrors the CSS variables of `app.css`; `style.test.ts` keeps the two in step.
+
+export const BG = 0x0d1117;
+export const PAPER = 0xf0f6fc;
+export const YOU = 0x5b9bff;
+export const ENEMY = 0xe5484d;
+export const NEUTRAL_STROKE = 0x8b949e;
+export const NEUTRAL_FILL = 0x2b3139;
+export const WARN = 0xffb020;
+export const VP = 0xe3b341;
+/** Empty segment of a capacity ring and of a warehouse bar. */
+export const SEGMENT_EMPTY = 0x59636e;
+export const SEGMENT_EMPTY_BAR = 0x3b4450;
+
+export const CANVAS_BACKGROUND = BG;
 
 export const TERRAIN_FILL: Readonly<Record<Terrain, number>> = {
-  plains: 0x2b3a28,
-  forest: 0x1a3223,
-  mountains: 0x3a3631,
+  plains: 0x3a4630,
+  forest: 0x25392b,
+  mountains: 0x4a453e,
 };
-/** Terrain is also marked by a glyph next to the city; plains have none. */
-export const TERRAIN_GLYPH = 0xc9d1d9;
-/** A dark edge keeps the glyph readable on the snow of the baked background. */
-export const GLYPH_OUTLINE = { width: 1.2, color: 0x0d1117 } as const;
-export const CELL_BORDER = { width: 1, color: 0x0d1117, alpha: 0.5 } as const;
+/** The baked background (or the flat terrain colours) is darkened by this (9.1). */
+export const BACKDROP_DIM = { color: BG, alpha: 0.3 } as const;
+export const CELL_BORDER = { width: 1, color: BG, alpha: 0.5 } as const;
 export const MAP_BORDER = { width: 2, color: 0x484f58 } as const;
 
-export const PLAYER_COLOR: Readonly<Record<PlayerId, number>> = {
-  0: 0x4c8dff,
-  1: 0xff8a3d,
-};
-/** Territory: the cell of an owned city is tinted with the owner colour. */
-export const TERRITORY_ALPHA = 0.16;
+// --- Sides: the viewing player is always blue, the opponent always red -----------------------------
+export type Side = 'you' | 'enemy';
 
-export const ROAD_COLOR = 0xaab2bd;
-export const ROAD_CASING = { color: 0x0d1117, alpha: 0.55 } as const;
-export const ROAD_CASING_EXTRA = 3;
-/** Road thickness grows with its width (1..5), so width reads without colour. */
-export function roadThickness(width: number): number {
-  return 2 + 2 * width;
+/** Which side `owner` is for the player `me`. */
+export function sideOf(me: PlayerId, owner: PlayerId): Side {
+  return owner === me ? 'you' : 'enemy';
 }
 
-export const NODE_RADIUS = 16;
+/** Colour of `owner` as seen by `me`: own blue, opponent red (red means only "opponent"). */
+export function ownerColor(me: PlayerId, owner: PlayerId): number {
+  return sideOf(me, owner) === 'you' ? YOU : ENEMY;
+}
+
+/** Territory: the cell of an owned city is tinted with the owner colour (9.1). */
+export const TERRITORY_ALPHA = 0.13;
+/** The border of an area of one owner: a light line of the owner colour. */
+export const TERRITORY_BORDER = { width: 2, alpha: 0.95, inset: 1.5 } as const;
+
+// --- Terrain stamps (9.2): dark "ink" stamps on the cell of a city ------------------------------
+export interface StampSpec {
+  /** Grid step in world units. */
+  readonly cell: { readonly width: number; readonly height: number };
+  /** Ink opacity of the stamp. */
+  readonly alpha: number;
+}
+export const STAMPS: Readonly<Record<Terrain, StampSpec>> = {
+  forest: { cell: { width: 34, height: 30 }, alpha: 0.32 },
+  mountains: { cell: { width: 52, height: 40 }, alpha: 0.38 },
+  plains: { cell: { width: 30, height: 26 }, alpha: 0.22 },
+};
+/** A stamp keeps this far from a city centre and from a road axis (world units). */
+export const STAMP_CITY_CLEARANCE = 30;
+export const STAMP_ROAD_CLEARANCE = 12;
+/** The snow cap of a mountain stamp. */
+export const SNOW_ALPHA = 0.45;
+
+// --- Roads, width 1..5 (9.3) ---------------------------------------------------------------------
+export const ROAD_COLOR = 0xc4cbd4;
+export const ROAD_CASING = { color: BG, alpha: 0.6 } as const;
+export const ROAD_CASING_EXTRA = 5;
+export const ROAD_STRIPE = { color: BG, alpha: 0.5, width: 1 } as const;
+/** Width 1 is a dashed trail. */
+export const ROAD_TRAIL_DASH = 7;
+export const ROAD_TRAIL_GAP = 5;
+/** Road thickness grows with its width (1..5), so width reads without colour: `1 + 3w`. */
+export function roadThickness(width: number): number {
+  return 1 + 3 * width;
+}
+/** The width badge of a hovered road. */
+export const WIDTH_BADGE = { radius: 9, fill: BG, stroke: PAPER, fontSize: 11 } as const;
+
+// --- Cities (9.4) -------------------------------------------------------------------------------
+/** Radius when the capacity is not known (a map without a snapshot). */
+export const NODE_RADIUS = 17;
 export const CAPITAL_RADIUS = 21;
-export const NEUTRAL_FILL = 0x2b3139;
-export const NEUTRAL_OUTLINE = { width: 2, color: 0x8b949e } as const;
-/**
- * Owner outlines differ in shape as well as colour: player 0 has one thick ring, player 1 a thick
- * ring with a second inner ring, a neutral city a thin grey ring.
- */
-export const OWNER_OUTLINE = { width: 4, color: 0xf0f6fc } as const;
-export const INNER_RING = { width: 2, color: 0x0d1117 } as const;
-export const INNER_RING_INSET = 6;
+export const OWNER_OUTLINE = { width: 3, color: PAPER } as const;
+export const NEUTRAL_OUTLINE = { width: 2, color: NEUTRAL_STROKE } as const;
+/** An enemy city has a second, dark inner ring (the shape carries the side, not only the hue). */
+export const INNER_RING = { width: 1.6, color: BG } as const;
+export const INNER_RING_INSET = 5;
+export const CITY_HALO = { width: 3, color: BG, alpha: 0.85 } as const;
+export const CITY_HALO_INSET = 3;
+export const CAPITAL_STAR = { fill: PAPER, stroke: { width: 1.4, color: BG } } as const;
 
-export const CAPITAL_STAR = { fill: 0xf0f6fc, stroke: { width: 1.5, color: 0x0d1117 } } as const;
+/** The capacity ring: `RING_GAP` outside the body, segments 4 wide on a 7 wide dark base. */
+export const RING_GAP = 8;
+export const RING_SEGMENT = { width: 4, base: 7, baseAlpha: 0.75, gap: 0.16 } as const;
+export const RING_FILLED = PAPER;
+/** Above this capacity the ring is one solid arc with a notch at every fifth unit. */
+export const RING_MAX_SEGMENTS = 10;
+/** Units above the capacity: segments on a second ring, a dashed circle and the countdown. */
+export const OVERFLOW_RING_GAP = 8;
+export const OVERFLOW_CIRCLE = { gap: 15, width: 1.5, dash: 4 } as const;
 
-export const VP_BADGE_RADIUS = 8;
-export const VP_BADGE = { fill: 0x0d1117, stroke: { width: 1.5, color: 0xf0f6fc } } as const;
+/** The warehouse bar under the ring: one 5 x 4 segment per unit of capacity (6 apart). */
+export const BAR_SEGMENT = { width: 5, height: 4, pitch: 6, pad: 1 } as const;
+export const BAR_BASE = { color: BG, radius: 2 } as const;
+export const BAR_GAP = 9;
+
+export const VP_BADGE_RADIUS = 8.5;
+export const VP_BADGE = { fill: BG, stroke: { width: 2, color: VP } } as const;
 export const VP_FONT_SIZE = 11;
-export const VP_TEXT_COLOR = 0xf0f6fc;
+export const VP_TEXT_COLOR = PAPER;
+export const STALE_FONT_SIZE = 11;
 
 // --- Entities on the map (CLI-04, #60) ---------------------------------------------------------
 // Tokens (groups, enemy sightings) sit on a dark plate, so they read on any terrain, snow
@@ -61,48 +125,44 @@ export const VP_TEXT_COLOR = 0xf0f6fc;
 export const PLATE_FILL = 0x161b22;
 export const PLATE_RADIUS = 6;
 export const PLATE_OUTLINE_WIDTH = 3;
-export const PLATE_INNER_RING = { width: 1.5, color: 0xf0f6fc, alpha: 0.9 } as const;
+export const PLATE_INNER_RING = { width: 1.5, color: PAPER, alpha: 0.9 } as const;
 export const PLATE_INNER_INSET = 4.5;
-export const GLYPH_COLOR = 0xf0f6fc;
+export const GLYPH_COLOR = PAPER;
 export const COUNT_FONT_SIZE = 10;
 export const PIP_RADIUS = 2.6;
-export const PIP_STROKE = { width: 1.2, color: 0xf0f6fc } as const;
+export const PIP_STROKE = { width: 1.2, color: PAPER } as const;
 /** A packet is a charge on the road: the filled dot, larger. */
 export const PACKET_SCALE = 1.7;
 /** Distance of the heading arrow from the centre of a token that moves along a road. */
 export const HEADING_DISTANCE = 33;
-export const HEADING_ARROW = { fill: 0xf0f6fc, stroke: { width: 1.5, color: 0x0d1117 } } as const;
-
-/** Soft halo behind city outlines, so white rings stay visible on the snow of the baked background. */
-export const HALO_INSET = 3;
-export const HALO = { width: 2, color: 0x0d1117, alpha: 0.85 } as const;
-
-export const BAR_FRAME = { fill: 0x0d1117, stroke: { width: 1.5, color: 0xf0f6fc } } as const;
-export const BAR_MARK = { width: 1, color: 0x0d1117 } as const;
+export const HEADING_ARROW = { fill: PAPER, stroke: { width: 1.5, color: BG } } as const;
 
 export const ARROW_WIDTH = 3;
 export const ARROW_DASH = 9;
 export const ARROW_GAP = 6;
 export const ARROW_HEAD = { length: 14, width: 14 } as const;
-export const ARROW_OUTLINE = { width: 6, color: 0x0d1117, alpha: 0.7 } as const;
+export const ARROW_OUTLINE = { width: 6, color: BG, alpha: 0.7 } as const;
 export const ORDER_LINE_ALPHA = 0.7;
-export const INTENT_ICON_DISTANCE = 15;
+export const INTENT_ICON_DISTANCE = 25;
 /** Intent icon offset direction from the city centre, degrees (-135: up and to the left). */
 export const INTENT_ICON_ANGLE = -135;
 
-export const FIGHT_COLOR = 0xff5d5d;
+/** Red means only "opponent" (6), so a fight mark is paper white. */
+export const FIGHT_COLOR = PAPER;
 
-// --- Fog of war (CLI-05, #61) ------------------------------------------------------------------
-// A hidden city is darkened AND hatched, a hidden road is darkened AND broken into dashes, a
-// memory ghost is faded AND carries the age of the sighting: none of it relies on colour alone.
+// --- Fog of war (CLI-05, #61; softer in 9.8) -----------------------------------------------------
+// A hidden area is darkened (no solid hatching) and hatched at 45 degrees only in a band along the
+// border of what is seen, so the border reads without colour; a hidden road is broken into dashes;
+// a memory ghost is faded AND carries the age of the sighting.
 
-export const FOG_COLOR = 0x0d1117;
-export const FOG_ALPHA = 0.62;
-/** Hatching lines over a hidden city. */
-export const FOG_HATCH = { width: 1.5, color: 0xaab2bd, alpha: 0.45 } as const;
-export const FOG_HATCH_SPACING = 7;
-/** A hidden city is shaded this far beyond its body. */
-export const FOG_NODE_MARGIN = 6;
+export const FOG_COLOR = BG;
+export const FOG_ALPHA = 0.45;
+/** Hatching in the band along the border of the visible area. */
+export const FOG_HATCH = { width: 1.5, color: 0xaab2bd, alpha: 0.3 } as const;
+export const FOG_HATCH_SPACING = 9;
+export const FOG_BAND_WIDTH = 24;
+/** Dashes over a hidden road (the road shows through the gaps). */
+export const FOG_ROAD_ALPHA = 0.6;
 export const FOG_DASH = 12;
 export const FOG_GAP = 8;
 /** A hidden road is shaded this much wider than the road and its casing. */
@@ -110,13 +170,15 @@ export const FOG_ROAD_EXTRA = 6;
 /** Opacity of a memory ghost (the marker of what was last seen in a hidden place). */
 export const GHOST_ALPHA = 0.62;
 export const GHOST_AGE_FONT_SIZE = 10;
-export const GHOST_AGE_STROKE = { color: 0x0d1117, width: 3, join: 'round' } as const;
+export const GHOST_AGE_STROKE = { color: BG, width: 3, join: 'round' } as const;
 
 // --- Selection and orders (CLI-06, #62) --------------------------------------------------------
-// The selection is a double outline (white inside a yellow one), so it reads without the hue.
+// The selection is a white outline on a dark one, so it reads on any terrain and any owner.
 
-export const SELECT_COLOR = 0xffd33d;
-export const SELECT_RING_GAP = 6;
+/** The selection is white (6): a double outline, the inner one dark. */
+export const SELECT_COLOR = PAPER;
+/** The selection ring of a city sits outside its capacity ring and warning ring. */
+export const SELECT_RING_GAP = 18;
 export const SELECT_WIDTH = 3;
 /** Group selection: a rounded frame this far outside the token. */
 export const SELECT_TOKEN_GAP = 4;
@@ -144,8 +206,8 @@ export const PICK_BAND = { extra: 6, dash: 10, gap: 7, alpha: 0.85 } as const;
 // sits on it near the building city (the disc carries the owner's ring shape, as intent icons do);
 // an own build also shows the time left, `m:ss`.
 
-export const BUILD_TIE = { width: 3, color: 0xffd33d, spacing: 12, extra: 8 } as const;
-export const BUILD_TIE_CASING = { width: 5, color: 0x0d1117, alpha: 0.8 } as const;
+export const BUILD_TIE = { width: 3, color: PAPER, spacing: 12, extra: 8 } as const;
+export const BUILD_TIE_CASING = { width: 5, color: BG, alpha: 0.8 } as const;
 /** Distance of the hammer disc from the centre of the building city, along the road. */
-export const BUILD_MARK_DISTANCE = 34;
+export const BUILD_MARK_DISTANCE = 46;
 export const BUILD_TIME_FONT_SIZE = 10;

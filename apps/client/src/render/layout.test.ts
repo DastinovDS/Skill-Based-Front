@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EventMsg, MapFile } from '../protocol.gen.ts';
 import {
-  BAR,
   FIGHT_MARK_TICKS,
   MAX_PIPS,
   PIP_SPACING,
@@ -17,7 +16,6 @@ import {
   roadPosition,
   sideways,
   timeLeftLabel,
-  warehouseBar,
 } from './layout.ts';
 
 const A = { x: 0, y: 0 };
@@ -106,24 +104,6 @@ describe('position on a road', () => {
 
   it('does not move a point on a zero-length road', () => {
     expect(sideways(A, A, A, 5)).toEqual(A);
-  });
-});
-
-describe('warehouseBar', () => {
-  it('is the share of the capacity', () => {
-    expect(warehouseBar(2, 4).ratio).toBe(0.5);
-    expect(warehouseBar(0, 4).ratio).toBe(0);
-  });
-
-  it('never leaves the bar, also for capacity 0', () => {
-    expect(warehouseBar(9, 4).ratio).toBe(1);
-    expect(warehouseBar(3, 0).ratio).toBe(0);
-  });
-
-  it('marks the capacity units on a bar of up to 10', () => {
-    expect(warehouseBar(0, 4).marks).toEqual([BAR.width / 4, BAR.width / 2, (BAR.width * 3) / 4]);
-    expect(warehouseBar(0, 1).marks).toEqual([]);
-    expect(warehouseBar(0, 11).marks).toEqual([]);
   });
 });
 

@@ -1,11 +1,30 @@
 :root {
+  /* Palette (docs/design/ui-style.md, section 6): the single source of colours; the map reads the
+     same values from render/style.ts (style.test.ts keeps the two in step). */
+  --bg: #0d1117;
+  --surface: rgb(22 27 34 / 94%);
+  --surface-2: var(--surface-2);
+  --border: var(--border);
+  --text: #e6edf3;
+  --text-dim: #9da7b3;
+  --paper: #f0f6fc;
+  --you: #5b9bff;
+  --enemy: #e5484d;
+  --neutral: #8b949e;
+  --neutral-fill: #2b3139;
+  --warn: #ffb020;
+  --vp: #e3b341;
+  --ok: var(--you);
+  --terrain-plains: #3a4630;
+  --terrain-forest: #25392b;
+  --terrain-mountains: #4a453e;
   /* A strip at the bottom of every game screen for the legal links (LegalFooter): the screens end
      above it, so the links never cover the controls, the score or the map (#185). */
   --legal-footer-h: 28px;
   color-scheme: dark;
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
-  background: #0d1117;
-  color: #e6edf3;
+  background: var(--bg);
+  color: var(--text);
 }
 
 html,
@@ -33,9 +52,9 @@ body {
   width: min(420px, 100%);
   padding: 20px;
   box-sizing: border-box;
-  border: 1px solid #30363d;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #161b22;
+  background: var(--surface);
 }
 
 .card h1,
@@ -65,8 +84,8 @@ body {
 .banner button {
   font: inherit;
   color: inherit;
-  background: #21262d;
-  border: 1px solid #30363d;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 6px 10px;
 }
@@ -77,8 +96,9 @@ body {
 }
 
 .card button.primary {
-  background: #1f6feb;
-  border-color: #388bfd;
+  background: var(--you);
+  border-color: var(--paper);
+  color: var(--bg);
 }
 
 .card button:disabled {
@@ -88,11 +108,11 @@ body {
 
 .card .hint {
   font-size: 12px;
-  color: #8b949e;
+  color: var(--text-dim);
 }
 
 .card .error {
-  color: #ff7b72;
+  color: var(--warn);
   font-size: 14px;
 }
 
@@ -133,7 +153,7 @@ body {
   max-width: calc(100% - 32px);
   padding: 8px 14px;
   box-sizing: border-box;
-  border: 1px solid #30363d;
+  border: 1px solid var(--border);
   border-radius: 6px;
   background: rgb(22 27 34 / 95%);
   font-size: 14px;

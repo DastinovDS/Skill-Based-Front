@@ -1,208 +1,130 @@
-import {
-  Container,
-  Graphics,
-  GraphicsContext,
-  Sprite,
-  Text,
-  TextStyle,
-  type Texture,
-} from 'pixi.js';
-import type { MapFile, PlayerId, Terrain } from '../protocol.gen.ts';
+import { Container, Graphics, GraphicsContext, Sprite, type Renderer, type Texture } from 'pixi.js';
+import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
+import { territoryBorders } from './regionLayout.ts';
 import {
-  CAPITAL_RADIUS,
-  CAPITAL_STAR,
+  BACKDROP_DIM,
   CELL_BORDER,
-  GLYPH_OUTLINE,
-  HALO,
-  HALO_INSET,
-  INNER_RING,
-  INNER_RING_INSET,
   MAP_BORDER,
-  NEUTRAL_FILL,
-  NEUTRAL_OUTLINE,
-  NODE_RADIUS,
-  OWNER_OUTLINE,
-  PLAYER_COLOR,
   ROAD_CASING,
   ROAD_CASING_EXTRA,
   ROAD_COLOR,
+  ROAD_STRIPE,
+  ROAD_TRAIL_DASH,
+  ROAD_TRAIL_GAP,
   TERRAIN_FILL,
-  TERRAIN_GLYPH,
   TERRITORY_ALPHA,
-  VP_BADGE,
-  VP_BADGE_RADIUS,
-  VP_FONT_SIZE,
-  VP_TEXT_COLOR,
+  TERRITORY_BORDER,
+  ownerColor,
   roadThickness,
 } from './style.ts';
+import { TerrainView } from './terrainView.ts';
 import { voronoiCells } from './voronoi.ts';
 
 type Owner = PlayerId | null;
-type OwnerKey = 'neutral' | 'player0' | 'player1';
 
-function ownerKey(owner: Owner): OwnerKey {
-  return owner === null ? 'neutral' : owner === 0 ? 'player0' : 'player1';
-}
-
-/** A point at `distance` from the city centre in direction `degrees` (0 = right, y down). */
-function around(distance: number, degrees: number): Point {
-  const rad = (degrees * Math.PI) / 180;
-  return { x: distance * Math.cos(rad), y: distance * Math.sin(rad) };
+/** One road: its parts are unit shapes along +x, scaled by the road's length and thickness. */
+interface Road {
+  readonly holder: Container;
+  readonly body: Graphics;
+  readonly stripes: Graphics[];
+  readonly length: number;
+  width: number;
 }
 
 /**
- * Static part of the map: terrain background, territory, roads and cities with owner, capital
- * star and VP. Owners and road widths come from the map start fields now and from snapshots later
- * (CLI-04, #60) through `setOwners` and `setRoadWidths`.
+ * Static part of the map (ui-style.md 9.1-9.3): the terrain background with its dimming and
+ * stamps, the territory of the owners with its border line, and the roads. Cities are `CityView`.
  *
- * Identical shapes share one GraphicsContext (a city body per owner, the capital star, terrain
- * glyphs, the VP badge, the unit road rectangle); `destroy()` releases every object and context
- * created here.
+ * Owners and road widths come from the map start fields now and from snapshots later
+ * (CLI-04, #60) through `setOwners` and `setRoadWidths`. Identical shapes share one
+ * GraphicsContext (the unit road rectangle, the dashed trail of a given length); `destroy()`
+ * releases every object and context created here.
  */
 export class MapView {
   private readonly shared: GraphicsContext[] = [];
-  private readonly body: Readonly<Record<OwnerKey, GraphicsContext>>;
   private readonly roadContext: GraphicsContext;
   private readonly casingContext: GraphicsContext;
-  private readonly labelStyle: TextStyle;
-  private readonly cells: Point[][];
+  private readonly stripeContext: GraphicsContext;
+  private readonly trailContexts = new Map<number, GraphicsContext>();
+  readonly cells: Point[][];
   private readonly terrainFill: Graphics;
+  private readonly dim: Graphics;
+  private readonly stamps: TerrainView;
   private readonly mapFrame: Graphics;
   private backdrop: Sprite | null = null;
   private readonly territory: Graphics;
-  private readonly roads: Graphics[];
+  private readonly roads: Road[];
   private readonly casings: Graphics[];
-  private readonly nodes: Container[];
-  private readonly bodies: Graphics[] = [];
-  private readonly labels: Text[] = [];
+  private readonly casingLayer: Container;
+  private readonly bodyLayer: Container;
   private readonly layers: MapLayers;
 
   constructor(
     private readonly map: MapFile,
     layers: MapLayers,
-    labelResolution: number,
+    private readonly me: PlayerId,
+    renderer: Renderer,
   ) {
     const bounds = { width: map.meta.width, height: map.meta.height };
     this.cells = voronoiCells(map.nodes, bounds);
 
-    this.body = {
-      neutral: this.context((g) =>
-        g
-          .circle(0, 0, NODE_RADIUS + HALO_INSET)
-          .stroke(HALO)
-          .circle(0, 0, NODE_RADIUS)
-          .fill(NEUTRAL_FILL)
-          .stroke(NEUTRAL_OUTLINE),
-      ),
-      player0: this.context((g) =>
-        g
-          .circle(0, 0, NODE_RADIUS + HALO_INSET)
-          .stroke(HALO)
-          .circle(0, 0, NODE_RADIUS)
-          .fill(PLAYER_COLOR[0])
-          .stroke(OWNER_OUTLINE),
-      ),
-      player1: this.context((g) =>
-        g
-          .circle(0, 0, NODE_RADIUS + HALO_INSET)
-          .stroke(HALO)
-          .circle(0, 0, NODE_RADIUS)
-          .fill(PLAYER_COLOR[1])
-          .stroke(OWNER_OUTLINE)
-          .circle(0, 0, NODE_RADIUS - INNER_RING_INSET)
-          .stroke(INNER_RING),
-      ),
-    };
-    const star = this.context((g) =>
-      g
-        .star(0, 0, 5, NODE_RADIUS * 0.62, NODE_RADIUS * 0.28)
-        .fill(CAPITAL_STAR.fill)
-        .stroke(CAPITAL_STAR.stroke),
-    );
-    const glyph: Readonly<Record<Terrain, GraphicsContext | null>> = {
-      plains: null,
-      forest: this.context((g) =>
-        g
-          .rect(-1, 2, 2, 3)
-          .fill(TERRAIN_GLYPH)
-          .poly([-4.5, 2.5, 0, -5, 4.5, 2.5])
-          .fill(TERRAIN_GLYPH)
-          .stroke(GLYPH_OUTLINE),
-      ),
-      mountains: this.context((g) =>
-        g
-          .poly([-6, 4, -2, -3, 2, 4])
-          .fill(TERRAIN_GLYPH)
-          .poly([-1, 4, 2.5, -5, 6, 4])
-          .fill(TERRAIN_GLYPH)
-          .stroke(GLYPH_OUTLINE),
-      ),
-    };
-    const badge = this.context((g) =>
-      g.circle(0, 0, VP_BADGE_RADIUS).fill(VP_BADGE.fill).stroke(VP_BADGE.stroke),
-    );
     // A unit rectangle along +x; each road scales it to its length and thickness.
     this.roadContext = this.context((g) => g.rect(0, -0.5, 1, 1).fill(ROAD_COLOR));
     // A dark edge under each road keeps it visible on the snow of the baked background.
     this.casingContext = this.context((g) => g.rect(0, -0.5, 1, 1).fill(ROAD_CASING));
-    this.labelStyle = new TextStyle({
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: VP_FONT_SIZE,
-      fontWeight: '700',
-      fill: VP_TEXT_COLOR,
-    });
+    this.stripeContext = this.context((g) => g.rect(0, -0.5, 1, 1).fill(ROAD_STRIPE));
 
     this.layers = layers;
-    this.terrainFill = layers.layer.background.addChild(this.drawTerrain());
-    this.mapFrame = layers.layer.background.addChild(
-      new Graphics().rect(0, 0, map.meta.width, map.meta.height).stroke(MAP_BORDER),
+    const background = layers.layer.background;
+    this.terrainFill = background.addChild(this.drawTerrain());
+    this.dim = background.addChild(
+      new Graphics().rect(0, 0, bounds.width, bounds.height).fill(BACKDROP_DIM),
+    );
+    this.stamps = new TerrainView(map, this.cells, background, renderer);
+    this.mapFrame = background.addChild(
+      new Graphics().rect(0, 0, bounds.width, bounds.height).stroke(MAP_BORDER),
     );
     this.territory = layers.layer.territory.addChild(new Graphics());
 
-    const placed = (context: GraphicsContext, edge: MapFile['edges'][number]): Graphics => {
+    // All casings first, so no casing covers a neighbouring road.
+    this.casingLayer = layers.layer.roads.addChild(new Container({ label: 'road-casings' }));
+    this.bodyLayer = layers.layer.roads.addChild(new Container({ label: 'road-bodies' }));
+    const placed = (
+      parent: Container,
+      context: GraphicsContext,
+      edge: MapFile['edges'][number],
+    ) => {
       const a = map.nodes[edge.a];
       const b = map.nodes[edge.b];
-      const road = new Graphics(context);
+      const part = new Graphics(context);
+      let length = 0;
       if (a !== undefined && b !== undefined) {
-        road.position.set(a.x, a.y);
-        road.rotation = Math.atan2(b.y - a.y, b.x - a.x);
-        road.scale.x = Math.hypot(b.x - a.x, b.y - a.y);
+        length = Math.hypot(b.x - a.x, b.y - a.y);
+        part.position.set(a.x, a.y);
+        part.rotation = Math.atan2(b.y - a.y, b.x - a.x);
+        part.scale.x = length;
       }
-      return layers.layer.roads.addChild(road);
+      parent.addChild(part);
+      return { part, length };
     };
-    // All casings first, so no casing covers a neighbouring road.
-    this.casings = map.edges.map((edge) => placed(this.casingContext, edge));
-    this.roads = map.edges.map((edge) => placed(this.roadContext, edge));
-
-    this.nodes = map.nodes.map((node) => {
-      const city = new Container({ x: node.x, y: node.y, label: `node-${String(node.id)}` });
-      const radius = node.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS;
-      const body = city.addChild(new Graphics(this.body.neutral));
-      body.scale.set(radius / NODE_RADIUS);
-      this.bodies.push(body);
-      if (node.capital_of !== null) {
-        city.addChild(new Graphics(star)).scale.set(radius / NODE_RADIUS);
+    this.casings = map.edges.map((edge) => placed(this.casingLayer, this.casingContext, edge).part);
+    this.roads = map.edges.map((edge) => {
+      const a = map.nodes[edge.a];
+      const b = map.nodes[edge.b];
+      // The holder carries the position and rotation; its parts are unit shapes scaled to the road.
+      const holder = new Container({ label: `road-${String(edge.id)}` });
+      let length = 0;
+      if (a !== undefined && b !== undefined) {
+        length = Math.hypot(b.x - a.x, b.y - a.y);
+        holder.position.set(a.x, a.y);
+        holder.rotation = Math.atan2(b.y - a.y, b.x - a.x);
+        holder.scale.x = length;
       }
-      const terrain = glyph[node.terrain];
-      if (terrain !== null) {
-        const at = around(radius + 8, 140);
-        city.addChild(new Graphics(terrain)).position.set(at.x, at.y);
-      }
-      if (node.vp > 0) {
-        const at = around(radius + 1, -45);
-        city.addChild(new Graphics(badge)).position.set(at.x, at.y);
-        const label = new Text({
-          text: String(node.vp),
-          style: this.labelStyle,
-          anchor: 0.5,
-          resolution: labelResolution,
-        });
-        label.position.set(at.x, at.y);
-        this.labels.push(city.addChild(label));
-      }
-      return layers.layer.nodes.addChild(city);
+      const body = holder.addChild(new Graphics(this.roadContext));
+      this.bodyLayer.addChild(holder);
+      return { holder, body, stripes: [], length, width: 0 };
     });
 
     this.setOwners(map.nodes.map((node) => node.start_owner));
@@ -224,65 +146,98 @@ export class MapView {
     this.terrainFill.visible = false;
   }
 
+  /** Number of terrain stamps (tests and the performance check). */
+  get stampCount(): number {
+    return this.stamps.count;
+  }
+
   /** `owners[i]`: current owner of node `i` (`null`: nobody). */
   setOwners(owners: readonly Owner[]): void {
-    this.territory.clear();
+    const g = this.territory;
+    g.clear();
     owners.forEach((owner, i) => {
-      const body = this.bodies[i];
-      if (body !== undefined) {
-        body.context = this.body[ownerKey(owner)];
-      }
       const cell = this.cells[i];
       if (owner !== null && cell !== undefined) {
-        this.territory.poly(cell).fill({ color: PLAYER_COLOR[owner], alpha: TERRITORY_ALPHA });
+        g.poly(cell).fill({ color: ownerColor(this.me, owner), alpha: TERRITORY_ALPHA });
       }
     });
+    // The border of an area: a light line of the owner colour, one stroke per owner.
+    const borders = territoryBorders(this.cells, owners, TERRITORY_BORDER.inset);
+    for (const owner of [0, 1] as const) {
+      const own = borders.filter((border) => border.owner === owner);
+      for (const { a, b } of own) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      if (own.length > 0) {
+        g.stroke({
+          width: TERRITORY_BORDER.width,
+          color: ownerColor(this.me, owner),
+          alpha: TERRITORY_BORDER.alpha,
+          cap: 'round',
+        });
+      }
+    }
   }
 
   /** `widths[i]`: current width of edge `i` (1..5). */
   setRoadWidths(widths: readonly number[]): void {
     widths.forEach((width, i) => {
       const road = this.roads[i];
-      if (road !== undefined) {
-        road.scale.y = roadThickness(width);
-      }
       const casing = this.casings[i];
-      if (casing !== undefined) {
-        casing.scale.y = roadThickness(width) + ROAD_CASING_EXTRA;
+      if (road === undefined || casing === undefined) return;
+      const thickness = roadThickness(width);
+      casing.scale.y = thickness + ROAD_CASING_EXTRA;
+      if (road.width === width) return;
+      road.width = width;
+      road.body.scale.y = thickness;
+      // Width 1 is a dashed trail, wider roads are solid with `width - 1` dark lanes between.
+      road.body.context = width <= 1 ? this.trailContext(road.length) : this.roadContext;
+      for (let k = 0; k < Math.max(width - 1, road.stripes.length); k++) {
+        let stripe = road.stripes[k];
+        if (stripe === undefined && k < width - 1) {
+          stripe = road.holder.addChild(new Graphics(this.stripeContext));
+          stripe.scale.y = ROAD_STRIPE.width;
+          road.stripes[k] = stripe;
+        }
+        if (stripe !== undefined) {
+          stripe.visible = k < width - 1;
+          stripe.position.y = -thickness / 2 + (thickness * (k + 1)) / width;
+        }
       }
     });
   }
 
-  /** Re-render the VP labels for the current zoom (see `labelResolution` in camera.ts). */
-  setLabelResolution(resolution: number): void {
-    for (const label of this.labels) {
-      if (label.resolution !== resolution) {
-        label.resolution = resolution;
-      }
-    }
-  }
-
   destroy(): void {
-    // Children first: they reference the shared contexts, which Graphics.destroy() leaves alone.
-    for (const city of this.nodes) {
-      city.destroy({ children: true });
-    }
-    for (const road of [...this.casings, ...this.roads]) {
-      road.destroy();
-    }
+    for (const road of this.roads) road.holder.destroy({ children: true });
+    for (const casing of this.casings) casing.destroy();
+    this.casingLayer.destroy();
+    this.bodyLayer.destroy();
     this.territory.destroy();
+    this.stamps.destroy();
     this.backdrop?.destroy();
     this.terrainFill.destroy();
+    this.dim.destroy();
     this.mapFrame.destroy();
-    for (const context of this.shared) {
-      context.destroy();
-    }
-    this.labelStyle.destroy();
+    for (const context of this.shared) context.destroy();
   }
 
   private context(draw: (g: GraphicsContext) => GraphicsContext): GraphicsContext {
     const context = draw(new GraphicsContext());
     this.shared.push(context);
+    return context;
+  }
+
+  /** Dashes of the trail along a road of `length`, in the unit space of the road (0..1). */
+  private trailContext(length: number): GraphicsContext {
+    const key = Math.max(1, Math.round(length));
+    let context = this.trailContexts.get(key);
+    if (context === undefined) {
+      context = this.context((g) => {
+        for (let at = 0; at < key; at += ROAD_TRAIL_DASH + ROAD_TRAIL_GAP) {
+          g.rect(at / key, -0.5, Math.min(ROAD_TRAIL_DASH, key - at) / key, 1);
+        }
+        return g.fill(ROAD_COLOR);
+      });
+      this.trailContexts.set(key, context);
+    }
     return context;
   }
 

@@ -1,15 +1,9 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
+import { fogHatching } from './regionLayout.ts';
 import type { Point } from './camera.ts';
 import type { EdgeView, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import { TOKEN_COMPACT, TOKEN_FULL, edgeEnds } from './layout.ts';
-import {
-  ageLabel,
-  edgeMarkerPoint,
-  fogDashes,
-  hatchChords,
-  nodeMarkerPoint,
-  nodeRadius,
-} from './fogLayout.ts';
+import { ageLabel, edgeMarkerPoint, fogDashes, nodeMarkerPoint } from './fogLayout.ts';
 import type { MapLayers } from './layers.ts';
 import { Token, type EntityKit } from './shapes.ts';
 import {
@@ -18,8 +12,9 @@ import {
   FOG_DASH,
   FOG_GAP,
   FOG_HATCH,
+  FOG_BAND_WIDTH,
   FOG_HATCH_SPACING,
-  FOG_NODE_MARGIN,
+  FOG_ROAD_ALPHA,
   FOG_ROAD_EXTRA,
   GHOST_AGE_FONT_SIZE,
   GHOST_AGE_STROKE,
@@ -77,8 +72,9 @@ class Ghost {
  * The fog layer (CLI-05, #61): what the snapshot says is hidden, drawn as hidden.
  *
  * The server decides visibility: a node or an edge with `detail: 'fog'` is hidden, anything else
- * is (at least partly) seen. The client shades hidden cities (dark disc with hatching) and
- * hidden roads (dark dashes), and puts a "last seen" ghost on a hidden place when the snapshot
+ * is (at least partly) seen. The client darkens the Voronoi cell of a hidden city (softly, 9.8)
+ * and hatches a band along the border of what is seen, so the border reads without colour; a
+ * hidden road also gets dark dashes. It puts a "last seen" ghost on a hidden place when the snapshot
  * still carries a `Seen` with enemy groups in it: the enemy token, faded, with its age as
  * `-m:ss`. A place that is seen again loses its shade and its ghost on the next snapshot.
  * Nothing is inferred: no ghost without a `Seen`, no numbers the `Seen` has not got.
@@ -88,9 +84,10 @@ class Ghost {
  */
 export class FogView {
   private readonly contexts: GraphicsContext[] = [];
-  private readonly nodeContexts = new Map<number, GraphicsContext>();
   private readonly edgeContexts = new Map<number, GraphicsContext>();
-  private readonly nodeShades: Graphics[];
+  private readonly regions = new Graphics();
+  private readonly hatching = new Graphics();
+  private hiddenKey = '';
   private readonly edgeShades: (Graphics | null)[];
   private readonly nodeGhosts: (Ghost | null)[];
   private readonly edgeGhosts: (Ghost | null)[];
@@ -107,6 +104,10 @@ export class FogView {
     private readonly kit: EntityKit,
     private labelResolution: number,
     private tickHz: number,
+    /** The Voronoi cells of the cities (`MapView.cells`). */
+    private readonly cells: readonly (readonly Point[])[],
+    /** Radius of a city now (`CityView.radiusOf`). */
+    private readonly radiusOf: (node: number) => number,
   ) {
     this.enemy = me === 0 ? 1 : 0;
     this.ageStyle = new TextStyle({
@@ -116,12 +117,7 @@ export class FogView {
       fill: GLYPH_COLOR,
       stroke: GHOST_AGE_STROKE,
     });
-    this.nodeShades = map.nodes.map((node) => {
-      const shade = new Graphics(this.nodeContext(nodeRadius(map, node.id)));
-      shade.position.set(node.x, node.y);
-      shade.visible = false;
-      return this.shadeLayer.addChild(shade);
-    });
+    this.shadeLayer.addChild(this.regions, this.hatching);
     this.edgeShades = map.edges.map(() => null);
     this.nodeGhosts = map.nodes.map(() => null);
     this.edgeGhosts = map.edges.map(() => null);
@@ -151,6 +147,7 @@ export class FogView {
     if (base === this.base) return;
     this.base = base;
     const { nodes, edges } = base.view;
+    this.setRegions(nodes);
     for (const node of nodes) this.setNode(node, base.tick);
     for (const edge of edges) this.setEdge(edge, base.tick);
   }
@@ -158,6 +155,8 @@ export class FogView {
   destroy(): void {
     // Shades use shared contexts (Graphics leaves those alone); containers go first, then the
     // contexts and the style.
+    this.regions.destroy();
+    this.hatching.destroy();
     this.shadeLayer.destroy({ children: true });
     this.ghostLayer.destroy({ children: true });
     for (const context of this.contexts) context.destroy();
@@ -172,23 +171,6 @@ export class FogView {
     return context;
   }
 
-  /** A dark disc with diagonal hatching, one per city size. */
-  private nodeContext(radius: number): GraphicsContext {
-    let context = this.nodeContexts.get(radius);
-    if (context === undefined) {
-      const r = radius + FOG_NODE_MARGIN;
-      context = this.context((g) => {
-        g.circle(0, 0, r).fill({ color: FOG_COLOR, alpha: FOG_ALPHA });
-        for (const [from, to] of hatchChords(r, FOG_HATCH_SPACING)) {
-          g.moveTo(from.x, from.y).lineTo(to.x, to.y);
-        }
-        return g.stroke(FOG_HATCH);
-      });
-      this.nodeContexts.set(radius, context);
-    }
-    return context;
-  }
-
   /** Dark dashes along +x on a road of `length`, a unit high; the road scales it to its width. */
   private edgeContext(length: number): GraphicsContext {
     const key = Math.round(length);
@@ -198,7 +180,7 @@ export class FogView {
         for (const [from, to] of fogDashes(key, FOG_DASH, FOG_GAP)) {
           g.rect(from, -0.5, to - from, 1);
         }
-        return g.fill({ color: FOG_COLOR, alpha: FOG_ALPHA });
+        return g.fill({ color: FOG_COLOR, alpha: FOG_ROAD_ALPHA });
       });
       this.edgeContexts.set(key, context);
     }
@@ -221,6 +203,25 @@ export class FogView {
     return shade;
   }
 
+  /** Darken the cells of hidden cities and hatch the band along the border of the seen area. */
+  private setRegions(nodes: readonly NodeView[]): void {
+    const hidden = nodes.map((node) => node.detail === 'fog');
+    const key = hidden.map((h) => (h ? '1' : '0')).join('');
+    if (key === this.hiddenKey) return;
+    this.hiddenKey = key;
+    const regions = this.regions.clear();
+    hidden.forEach((isHidden, i) => {
+      const cell = this.cells[i];
+      if (isHidden && cell !== undefined) regions.poly([...cell]);
+    });
+    regions.fill({ color: FOG_COLOR, alpha: FOG_ALPHA });
+    const hatching = this.hatching.clear();
+    for (const { a, b } of fogHatching(this.cells, hidden, FOG_BAND_WIDTH, FOG_HATCH_SPACING)) {
+      hatching.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    }
+    hatching.stroke(FOG_HATCH);
+  }
+
   // --- Snapshot-driven part -----------------------------------------------------------------
 
   private ghost(list: (Ghost | null)[], id: number): Ghost {
@@ -239,8 +240,6 @@ export class FogView {
 
   private setNode(node: NodeView, tick: number): void {
     const hidden = node.detail === 'fog';
-    const shade = this.nodeShades[node.id];
-    if (shade !== undefined) shade.visible = hidden;
     const memory = this.remembered(hidden, node.seen);
     const existing = this.nodeGhosts[node.id] ?? null;
     if (memory === null) {
@@ -248,7 +247,7 @@ export class FogView {
       return;
     }
     const width = memory.level === 'exact' ? TOKEN_FULL.width : TOKEN_COMPACT.width;
-    const at = nodeMarkerPoint(this.map, node.id, width);
+    const at = nodeMarkerPoint(this.map, node.id, width, this.radiusOf(node.id));
     if (at === undefined) return;
     this.ghost(this.nodeGhosts, node.id).show(
       memory,
