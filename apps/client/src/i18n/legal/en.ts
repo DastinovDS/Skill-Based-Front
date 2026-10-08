@@ -70,6 +70,8 @@ export const en = {
         items: [
           'sbf.guest: your nickname and your token, so that you stay the same guest on your next visit. Remove it with "Change nickname" in the menu or by clearing site data; the guest on the server is then no longer reachable from this browser.',
           'sbf.locale: the interface language you picked.',
+          'sbf.sound: whether the sound switch in a match is on.',
+          'sbf.hints.matches and sbf.hints.last: how many matches you played, to hide the key hints after the third (and the last match counted).',
         ],
       },
       {

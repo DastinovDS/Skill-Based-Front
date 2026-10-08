@@ -7,8 +7,8 @@
 /** The bar shows in this many matches, then hides (the help overlay still has the keys). */
 export const HINT_MATCHES = 3;
 
-const COUNT_KEY = 'gow.hints.matches';
-const LAST_KEY = 'gow.hints.last';
+const COUNT_KEY = 'sbf.hints.matches';
+const LAST_KEY = 'sbf.hints.last';
 
 /**
  * Counts `matchId` and returns its ordinal (the first match is 1). The same id again does not

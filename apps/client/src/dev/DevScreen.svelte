@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { HudChrome } from '../hud/chrome.svelte.ts';
   import { DEV_PLAYER, DEV_RULES } from '../hud/devFeed.ts';
   import Hud from '../hud/Hud.svelte';
@@ -72,10 +73,14 @@
 
   $effect(() => {
     if (fixture !== undefined) {
-      hud.onSnapshot(fixture.snapshot);
-      for (const event of fixture.events) {
-        hud.onEvent(event);
-      }
+      const scene = fixture;
+      // The HUD reads and writes its own state: feeding it must not make this effect depend on it.
+      untrack(() => {
+        hud.onSnapshot(scene.snapshot);
+        for (const event of scene.events) {
+          hud.onEvent(event);
+        }
+      });
     }
   });
 

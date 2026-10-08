@@ -152,7 +152,7 @@ export class AlertView {
     const ticks = node.attrition_in ?? node.grace_left ?? 0;
     const color = graceOnly ? NEUTRAL_STROKE : WARN;
     const seconds = `${formatSeconds(ticks, tickHz, getLocale())} ${t('unit.s')}`;
-    pill.label.text = graceOnly ? seconds : `${MINUS}1 ${seconds}`;
+    pill.label.text = graceOnly ? seconds : `${MINUS}1 · ${seconds}`;
     pill.label.position.set(PILL.arcRadius * 2 + 8, 0);
     pill.mark.position.set(PILL.arcRadius + 4, 0.5);
     const fill = graceOnly ? 0 : arcFill(ticks, capacity.attritionTicks);

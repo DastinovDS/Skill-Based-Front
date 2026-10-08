@@ -3,6 +3,7 @@
      same values from render/style.ts (style.test.ts keeps the two in step). */
   --bg: #0d1117;
   --surface: rgb(22 27 34 / 94%);
+  --scrim: rgb(13 17 23 / 70%);
   --surface-2: #21262d;
   --border: #30363d;
   --text: #e6edf3;
@@ -155,6 +156,6 @@ body {
   box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: rgb(22 27 34 / 95%);
+  background: var(--surface);
   font-size: 14px;
 }

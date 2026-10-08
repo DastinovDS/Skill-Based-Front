@@ -110,15 +110,15 @@ describe('Hud', () => {
     const snapshot = devSnapshot(DEFAULT_MAP, DEV_RULES, 30);
     state.onSnapshot(snapshot);
     flushSync();
-    expect(target.querySelector('.card')).toBeNull();
+    expect(target.querySelector('.selection')).toBeNull();
     const group = snapshot.view.groups[0];
     if (group === undefined) throw new Error('no group');
     orders.click({ kind: 'group', id: group.id }, false);
     flushSync();
-    expect(target.querySelector('.card')).not.toBeNull();
+    expect(target.querySelector('.selection')).not.toBeNull();
     orders.deselect();
     flushSync();
-    expect(target.querySelector('.card')).toBeNull();
+    expect(target.querySelector('.selection')).toBeNull();
   });
 
   it('opens the menu with the language switcher and the fit button', () => {

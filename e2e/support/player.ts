@@ -146,13 +146,11 @@ export class Player {
   /** Page coordinates of a world point of the map, as the client draws it ("fit map" camera). */
   async #screenPoint(map: MapFile, world: { x: number; y: number }) {
     const canvas = await this.page.locator('.game-canvas').boundingBox();
-    const dock = await this.page.locator('aside.dock').boundingBox();
     const top = await this.page.locator('.top').boundingBox();
-    if (canvas === null || dock === null || top === null)
-      throw new Error('match screen not laid out');
-    // The same insets the HUD reports to the camera: the side panel and the status bar.
+    if (canvas === null || top === null) throw new Error('match screen not laid out');
+    // The same inset the HUD reports to the camera: the top bar (there is no side panel).
     const insets = {
-      left: Math.ceil(dock.x + dock.width - canvas.x),
+      left: 0,
       top: Math.ceil(top.y + top.height - canvas.y),
       right: 0,
       bottom: 0,
@@ -176,6 +174,7 @@ export class Player {
     map: MapFile,
     nodeId: number,
     token: boolean | { index: number; count: number } = false,
+    modifiers: ('Shift' | 'Control')[] = [],
   ): Promise<void> {
     const node = map.nodes[nodeId];
     if (node === undefined) throw new Error(`no node ${String(nodeId)}`);
@@ -188,16 +187,35 @@ export class Player {
       world = { x: node.x + slot.x, y: node.y + slot.y };
     }
     const at = await this.#screenPoint(map, world);
-    await this.page.mouse.click(at.x, at.y);
+    const canvasBox = await this.page.locator('.game-canvas').boundingBox();
+    if (canvasBox === null) throw new Error('no canvas');
+    await this.page.locator('.game-canvas').click({
+      position: { x: at.x - canvasBox.x, y: at.y - canvasBox.y },
+      modifiers,
+    });
   }
 
-  /** The order "move the group standing in `from` to `to`": group, then destination. */
-  async moveGroup(map: MapFile, from: number, to: number): Promise<void> {
-    // Start from nothing selected: after an order the group on the road stays selected.
-    await this.page.keyboard.press('Escape');
-    await expect(this.page.getByText('Click one of your groups on the map')).toBeVisible();
+  /**
+   * The order "move the group standing in `from` to `to`": group, then destination. `planned`: the
+   * second click holds Shift (a planned order, dearer and shown to the enemy as an intent).
+   */
+  async moveGroup(map: MapFile, from: number, to: number, planned = false): Promise<void> {
+    // Start from nothing selected (after an order the group on the road stays selected): a click
+    // on the empty corner of the canvas deselects. Not `Esc`: two in a row ask to leave the match.
+    const canvas = await this.page.locator('.game-canvas').boundingBox();
+    if (canvas === null) throw new Error('no canvas');
+    await this.page.locator('.game-canvas').click({
+      position: { x: canvas.width - 3, y: canvas.height - 3 },
+    });
+    await expect(this.page.locator('.selection')).toHaveCount(0);
     await this.clickNode(map, from, true);
-    await expect(this.page.getByText(`At node ${String(from)}`)).toBeVisible();
-    await this.clickNode(map, to);
+    await expect(this.page.getByText(`At node ${String(from)}`).first()).toBeVisible();
+    await this.clickNode(map, to, false, planned ? ['Shift'] : []);
+  }
+
+  /** "Exit" of the top bar, then the confirmation of the dialog: a forfeit. */
+  async forfeit(): Promise<void> {
+    await this.page.getByRole('button', { name: 'Exit', exact: true }).click();
+    await this.page.getByRole('button', { name: 'Forfeit and leave' }).click();
   }
 }

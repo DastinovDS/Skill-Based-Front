@@ -34,6 +34,11 @@
         {/if}
       </section>
     {/each}
+    <section class="licenses" aria-labelledby="licenses-title">
+      <h2 id="licenses-title">{t('legal.licenses')}</h2>
+      <p>{t('legal.licenses.intro')}</p>
+      <p>{t('legal.licenses.lucide')}</p>
+    </section>
     <nav class="links" aria-label={t('legal.nav')}>
       <a href="/{other[page]}">{t(`legal.${other[page]}`)}</a>
       <a href="/">{t('legal.game')}</a>
@@ -72,9 +77,9 @@
 
   .draft {
     padding: 8px 12px;
-    border: 1px solid #d29922;
+    border: 1px solid var(--warn);
     border-radius: 6px;
-    color: #e3b341;
+    color: var(--warn);
   }
 
   .links {

@@ -3,7 +3,7 @@
  * bar (package F builds the sound itself and the settings screen on top of this). Stored in
  * `localStorage`; every access is guarded, the HUD works without it.
  */
-const SOUND_KEY = 'gow.sound';
+const SOUND_KEY = 'sbf.sound';
 
 function load(storage: () => Storage): boolean {
   try {

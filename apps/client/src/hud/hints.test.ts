@@ -46,7 +46,7 @@ describe('the key-hint bar', () => {
       }),
     ).toBe(1);
     const storage = memory();
-    storage.setItem('gow.hints.matches', 'many');
+    storage.setItem('sbf.hints.matches', 'many');
     expect(registerMatch('a', () => storage)).toBe(1);
   });
 });

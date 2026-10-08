@@ -137,7 +137,7 @@
   <ToastStack toasts={hud.toasts} />
   <StartBanner {data} visible={hud.banner} />
   {#if data !== null && selected}
-    <section class="card" aria-label={t('card.title')}>
+    <section class="selection" aria-label={t('card.title')}>
       <SelectionPanel {data} tickHz={hud.context.rules.tick_hz} />
       <OrdersPanel {data} {orders} />
     </section>
@@ -183,7 +183,7 @@
   }
 
   /* The selection card appears only with a selection, bottom left (ui-style 10.3). */
-  .card {
+  .selection {
     position: absolute;
     left: 12px;
     bottom: 12px;

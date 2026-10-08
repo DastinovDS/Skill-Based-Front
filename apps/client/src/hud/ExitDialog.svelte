@@ -62,7 +62,7 @@
     display: grid;
     place-items: center;
     padding: 16px;
-    background: rgb(13 17 23 / 70%);
+    background: var(--scrim);
     pointer-events: auto;
   }
 

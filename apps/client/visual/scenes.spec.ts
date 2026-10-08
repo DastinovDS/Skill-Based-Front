@@ -6,6 +6,7 @@ const SCENES = [
   { id: 'snapshot', tick: 120 },
   { id: 'snapshot_fog', tick: 300 },
   { id: 'snapshot_clash', tick: 400 },
+  { id: 'overflow', tick: 120 },
 ] as const;
 
 for (const scene of SCENES) {

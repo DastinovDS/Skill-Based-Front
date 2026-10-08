@@ -40,6 +40,32 @@ function fight(tick: number, where: { node: number } | { edge: number }, l0: num
   return event;
 }
 
+/**
+ * The `snapshot` fixture with two overcrowded own cities (ui-style 12): city 1 holds five units
+ * where three fit and loses one in 1.8 s, city 0 holds six where five fit and is still in the
+ * grace after a capture (3 s). Made here, not a fixture of the protocol: the numbers of the
+ * countdown only need to be on screen.
+ */
+function overflowSnapshot(): SnapshotMsg {
+  const base = fixture('snapshot');
+  return {
+    ...base,
+    view: {
+      ...base.view,
+      nodes: base.view.nodes.map((n) =>
+        n.id === 1 ? { ...n, attrition_in: 18 } : n.id === 0 ? { ...n, grace_left: 30 } : n,
+      ),
+      groups: base.view.groups.map((g) =>
+        g.location.kind === 'node' && g.location.node === 1
+          ? { ...g, units: 5, charged: 3 }
+          : g.location.kind === 'node' && g.location.node === 0
+            ? { ...g, units: 6, charged: 2 }
+            : g,
+      ),
+    },
+  };
+}
+
 export interface FixtureScene {
   id: string;
   /** `meta.name` of the map the snapshot was written for. */
@@ -55,6 +81,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     snapshot: fixture('snapshot'),
     events: [fight(118, { edge: 3 }, 1, 2)],
   },
+  { id: 'overflow', map: 'diamond', snapshot: overflowSnapshot(), events: [] },
   { id: 'snapshot_fog', map: 'line3', snapshot: fixture('snapshot_fog'), events: [] },
   {
     id: 'snapshot_clash',
