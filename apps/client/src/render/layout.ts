@@ -7,6 +7,7 @@
  */
 import type { EventMsg, MapFile } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
+import { PACKET_FADE_MARGIN, PACKET_MIN_SCALE, UNIT_SIDES, UNIT_SIDE_UNKNOWN } from './style.ts';
 
 /** A full edge in thousandths of progress, as on the wire (`OnEdgeLoc.progress`). */
 export const EDGE_PROGRESS = 1000;
@@ -52,7 +53,7 @@ export function sideways(from: Point, to: Point, at: Point, distance: number): P
 }
 
 /** Half the gap between the two lanes of a road. */
-export const LANE_OFFSET = 13;
+export const LANE_OFFSET = 9;
 
 /** Where an entity on an edge is drawn: on its lane of the road (`fromIsA`: lane of the a → b way). */
 export function roadPosition(
@@ -68,56 +69,67 @@ export function roadPosition(
 
 // --- Tokens (a group, or what is known about enemies in a place) -------------------------------
 
+/** Footprint of a group slot under a city (the spacing of `nodeSlots`). */
 export const TOKEN_FULL = { width: 54, height: 32 } as const;
 export const TOKEN_COMPACT = { width: 44, height: 22 } as const;
-export const MAX_PIPS = 10;
-export const PIPS_PER_ROW = 5;
-export const PIP_SPACING = 7;
-/** Vertical centre of the row with the mode glyph and the numbers, inside a full token. */
-export const TOKEN_TOP_ROW_Y = -9;
+// --- Unit triangles (9.5) ----------------------------------------------------------------------
 
-export interface Pip {
-  x: number;
-  y: number;
-  filled: boolean;
+/** Side of the triangle of a group: steps by the number of units; `null`: the number is unknown. */
+export function triangleSide(units: number | null): number {
+  if (units === null) return UNIT_SIDE_UNKNOWN;
+  const [s1, s2, s3, s4] = UNIT_SIDES;
+  if (units <= 3) return s1;
+  if (units <= 7) return s2;
+  if (units <= 15) return s3;
+  return s4;
 }
 
-export interface PipLayout {
-  pips: Pip[];
-  /** More units than `MAX_PIPS`: the pips show the share of charged units, not the count. */
-  scaled: boolean;
+/** Where a group token is drawn: its centre, its side and the scale of the symbol on screen. */
+export interface TokenSpot extends Point {
+  readonly side: number;
+  /** `symbolScale` now: 1, or more when the zoom would make the triangle smaller than 20 px. */
+  readonly scale: number;
+}
+
+/** Height of an equilateral triangle of `side`. */
+export function triangleHeight(side: number): number {
+  return (side * Math.sqrt(3)) / 2;
 }
 
 /**
- * Charge pips of a group, relative to the centre of a full token: one dot per unit, filled if the
- * unit is charged, hollow if not (a charge is never told by colour alone). Up to `PIPS_PER_ROW`
- * dots in a row, at most two rows. A group of more than `MAX_PIPS` units draws `MAX_PIPS` dots
- * with the same share of filled ones (at least one if anything is charged); the numbers next to
- * the pips stay exact.
+ * Height share of the charge fill, from the tip: `sqrt(charged / units)`, so that the filled
+ * area equals the share of charged units. 0 for an empty group.
  */
-export function pipLayout(units: number, charged: number): PipLayout {
-  const total = Math.max(0, Math.floor(units));
-  const full = Math.min(total, Math.max(0, Math.floor(charged)));
-  const scaled = total > MAX_PIPS;
-  const shown = scaled ? MAX_PIPS : total;
-  const filled = scaled
-    ? full === 0
-      ? 0
-      : Math.max(1, Math.round((full * MAX_PIPS) / total))
-    : full;
-  const rows = shown > PIPS_PER_ROW ? 2 : 1;
-  const pips: Pip[] = [];
-  for (let i = 0; i < shown; i++) {
-    const row = Math.floor(i / PIPS_PER_ROW);
-    const inRow = row === 0 ? Math.min(shown, PIPS_PER_ROW) : shown - PIPS_PER_ROW;
-    const col = i - row * PIPS_PER_ROW;
-    pips.push({
-      x: (col - (inRow - 1) / 2) * PIP_SPACING,
-      y: rows === 1 ? 7 : 3 + row * 8,
-      filled: i < filled,
-    });
-  }
-  return { pips, scaled };
+export function chargeLevel(units: number, charged: number): number {
+  if (units <= 0 || charged <= 0) return 0;
+  return Math.sqrt(Math.min(1, charged / units));
+}
+
+/**
+ * Corners of a triangle pointing down, around the centre of its bounding box: left, right, tip.
+ * `tipOrigin`: relative to the tip instead (the shape of the charge fill, scaled from there).
+ */
+export function triangleCorners(side: number, tipOrigin = false): [Point, Point, Point] {
+  const h = triangleHeight(side);
+  const top = tipOrigin ? -h : -h / 2;
+  const tip = tipOrigin ? 0 : h / 2;
+  return [
+    { x: -side / 2, y: top },
+    { x: side / 2, y: top },
+    { x: 0, y: tip },
+  ];
+}
+
+/** A packet near a city: scale and opacity while it glides into (or out of) the city icon. */
+export function packetFade(
+  distance: number,
+  radius: number,
+  margin = PACKET_FADE_MARGIN,
+): { scale: number; alpha: number } {
+  const reach = radius + margin;
+  if (distance >= reach) return { scale: 1, alpha: 1 };
+  const f = Math.max(0, distance) / reach;
+  return { scale: PACKET_MIN_SCALE + (1 - PACKET_MIN_SCALE) * f, alpha: f };
 }
 
 /** Text of the numbers on a token: charged units over all units. */
@@ -255,9 +267,6 @@ export function timeLeftLabel(ticksLeft: number, tickHz: number): string {
 
 // --- Fight marks -------------------------------------------------------------------------------
 
-/** How long a fight mark stays on the map, ticks. */
-export const FIGHT_MARK_TICKS = 50;
-
 export interface FightInfo {
   event: EventMsg;
   /** Units lost by player 0 and player 1. */
@@ -291,15 +300,4 @@ export function fightInfo(event: EventMsg, map: MapFile): FightInfo | null {
     at = ends && edgePoint(ends.a, ends.b, true, EDGE_PROGRESS / 2);
   }
   return at === undefined ? null : { event, losses: [losses0, losses1], at };
-}
-
-/**
- * Opacity of a fight mark at render tick `tick`: `null` before the event and after the mark
- * expired, 1 for most of its life, then fading out.
- */
-export function fightMarkAlpha(eventTick: number, tick: number): number | null {
-  const age = tick - eventTick;
-  if (age < 0 || age >= FIGHT_MARK_TICKS) return null;
-  const fadeFrom = FIGHT_MARK_TICKS * 0.7;
-  return age <= fadeFrom ? 1 : 1 - (age - fadeFrom) / (FIGHT_MARK_TICKS - fadeFrom);
 }

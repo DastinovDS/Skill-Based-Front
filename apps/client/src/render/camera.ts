@@ -6,6 +6,8 @@
  * `autoDensity`, so the device pixel ratio never shows up here.
  */
 
+import { UNIT_MIN_HIT_PX, UNIT_MIN_SIDE_PX } from './style.ts';
+
 export interface Point {
   readonly x: number;
   readonly y: number;
@@ -181,4 +183,16 @@ const MAX_LABEL_RESOLUTION = 8;
 export function labelResolution(scale: number, devicePixelRatio: number): number {
   const needed = Math.max(scale * devicePixelRatio, 1);
   return Math.min(2 ** Math.ceil(Math.log2(needed)), MAX_LABEL_RESOLUTION);
+}
+
+/** Size of a symbol on screen: `scale` for a triangle of `side` so that it is >= `minPx` wide. */
+export function symbolScale(side: number, cameraScale: number, minPx = UNIT_MIN_SIDE_PX): number {
+  if (cameraScale <= 0 || side <= 0) return 1;
+  return Math.max(1, minPx / (side * cameraScale));
+}
+
+/** Half width of the click area of a triangle of `side` (world units): >= 28 px on screen. */
+export function hitHalf(side: number, cameraScale: number): number {
+  const drawn = side * symbolScale(side, cameraScale);
+  return Math.max(drawn, cameraScale > 0 ? UNIT_MIN_HIT_PX / cameraScale : drawn) / 2;
 }

@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { EventMsg, MapFile } from '../protocol.gen.ts';
 import {
-  FIGHT_MARK_TICKS,
-  MAX_PIPS,
-  PIP_SPACING,
   arrowGeometry,
   buildGeometry,
   countLabel,
   dashSegments,
   edgePoint,
   fightInfo,
-  fightMarkAlpha,
+  chargeLevel,
   nodeSlots,
-  pipLayout,
+  packetFade,
+  triangleCorners,
+  triangleHeight,
+  triangleSide,
   roadPosition,
   sideways,
   timeLeftLabel,
@@ -21,41 +21,43 @@ import {
 const A = { x: 0, y: 0 };
 const B = { x: 100, y: 0 };
 
-describe('pipLayout', () => {
-  it('draws one dot per unit, filled for charged ones, in one row up to 5', () => {
-    const { pips, scaled } = pipLayout(3, 2);
-    expect(scaled).toBe(false);
-    expect(pips.map((p) => p.filled)).toEqual([true, true, false]);
-    expect(pips.map((p) => p.x)).toEqual([-PIP_SPACING, 0, PIP_SPACING]);
-    expect(new Set(pips.map((p) => p.y)).size).toBe(1);
+describe('unit triangles (9.5)', () => {
+  it('steps the side by the number of units, 30 when unknown', () => {
+    expect([1, 3, 4, 7, 8, 15, 16, 99].map(triangleSide)).toEqual([24, 24, 30, 30, 36, 36, 42, 42]);
+    expect(triangleSide(null)).toBe(30);
   });
 
-  it('starts a second row after 5 dots and centres each row', () => {
-    const { pips } = pipLayout(7, 0);
-    expect(pips).toHaveLength(7);
-    const rows = [pips.slice(0, 5), pips.slice(5)];
-    expect(rows[0]?.map((p) => p.x)).toEqual([-14, -7, 0, 7, 14]);
-    expect(rows[1]?.map((p) => p.x)).toEqual([-3.5, 3.5]);
-    expect(rows[1]?.[0]?.y).toBeGreaterThan(rows[0]?.[0]?.y ?? 0);
+  it('fills from the tip by sqrt(charged / units) of the height', () => {
+    expect(chargeLevel(4, 1)).toBeCloseTo(0.5);
+    expect(chargeLevel(4, 4)).toBe(1);
+    expect(chargeLevel(4, 0)).toBe(0);
+    expect(chargeLevel(0, 0)).toBe(0);
+    expect(chargeLevel(2, 9)).toBe(1);
+    // The filled area (level squared) is the charged share.
+    expect(chargeLevel(10, 3) ** 2).toBeCloseTo(0.3);
   });
 
-  it('keeps the share of charged units for a group bigger than the dot limit', () => {
-    const { pips, scaled } = pipLayout(20, 10);
-    expect(scaled).toBe(true);
-    expect(pips).toHaveLength(MAX_PIPS);
-    expect(pips.filter((p) => p.filled)).toHaveLength(5);
+  it('points down: the tip is the lowest corner, the box is centred on the origin', () => {
+    const [left, right, tip] = triangleCorners(24);
+    expect(left.y).toBeCloseTo(-triangleHeight(24) / 2);
+    expect(right.x).toBe(12);
+    expect(tip).toEqual({ x: 0, y: triangleHeight(24) / 2 });
+    expect(triangleCorners(24, true)[2]).toEqual({ x: 0, y: 0 });
   });
 
-  it('never hides the only charged unit of a big group, never invents one', () => {
-    expect(pipLayout(40, 1).pips.filter((p) => p.filled)).toHaveLength(1);
-    expect(pipLayout(40, 0).pips.filter((p) => p.filled)).toHaveLength(0);
+  it('fades a packet into a city icon: 30% and see-through at the centre, whole outside', () => {
+    expect(packetFade(40, 17)).toEqual({ scale: 1, alpha: 1 });
+    const edge = packetFade(25, 17);
+    expect(edge).toEqual({ scale: 1, alpha: 1 });
+    const middle = packetFade(12.5, 17);
+    expect(middle.scale).toBeGreaterThan(0.3);
+    expect(middle.scale).toBeLessThan(1);
+    expect(middle.alpha).toBeCloseTo(0.5);
+    expect(packetFade(0, 17)).toEqual({ scale: 0.3, alpha: 0 });
   });
+});
 
-  it('clamps charged to units and handles an empty group', () => {
-    expect(pipLayout(2, 9).pips.filter((p) => p.filled)).toHaveLength(2);
-    expect(pipLayout(0, 0).pips).toEqual([]);
-  });
-
+describe('countLabel', () => {
   it('writes the numbers as charged over units', () => {
     expect(countLabel(12, 5)).toBe('5/12');
   });
@@ -189,15 +191,5 @@ describe('fight marks', () => {
       fightInfo(fightEvent({ node: 9, edge: null, losses_0: 1, losses_1: 1 }), map),
     ).toBeNull();
     expect(fightInfo(fightEvent({ node: 0, edge: null }), map)).toBeNull();
-  });
-
-  it('shows for a while, then fades out, and not before the event', () => {
-    expect(fightMarkAlpha(50, 49)).toBeNull();
-    expect(fightMarkAlpha(50, 50)).toBe(1);
-    expect(fightMarkAlpha(50, 50 + FIGHT_MARK_TICKS * 0.7)).toBe(1);
-    const fading = fightMarkAlpha(50, 50 + FIGHT_MARK_TICKS * 0.85);
-    expect(fading).toBeGreaterThan(0);
-    expect(fading).toBeLessThan(1);
-    expect(fightMarkAlpha(50, 50 + FIGHT_MARK_TICKS)).toBeNull();
   });
 });

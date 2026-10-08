@@ -116,26 +116,46 @@ export const VP_FONT_SIZE = 11;
 export const VP_TEXT_COLOR = PAPER;
 export const STALE_FONT_SIZE = 11;
 
-// --- Entities on the map (CLI-04, #60) ---------------------------------------------------------
-// Tokens (groups, enemy sightings) sit on a dark plate, so they read on any terrain, snow
-// included. The owner shows in the plate outline colour AND its shape: one ring for player 0, a
-// second inner ring for player 1 (as on the cities). A charge is a filled dot, an empty unit a
-// hollow one; the mode is a glyph (triangle: attack, shield: defense).
+// --- Units on the map (9.5): inverted triangles ---------------------------------------------------
+// A group is a triangle pointing down. Its side steps with the number of units; the share of
+// charged units fills it from the tip (`sqrt(charged / units)` of the height), so the charge reads
+// as a level. The owner is told by the outline as well as by the hue: own, one white outline;
+// opponent, a white outline plus a dark inner one; an opponent without numbers, dashed with "?".
+// The mode "Defense" is a shield disc at the top right corner ("Attack" is not drawn).
 
 export const PLATE_FILL = 0x161b22;
-export const PLATE_RADIUS = 6;
-export const PLATE_OUTLINE_WIDTH = 3;
 export const PLATE_INNER_RING = { width: 1.5, color: PAPER, alpha: 0.9 } as const;
-export const PLATE_INNER_INSET = 4.5;
 export const GLYPH_COLOR = PAPER;
 export const COUNT_FONT_SIZE = 10;
-export const PIP_RADIUS = 2.6;
-export const PIP_STROKE = { width: 1.2, color: PAPER } as const;
-/** A packet is a charge on the road: the filled dot, larger. */
-export const PACKET_SCALE = 1.7;
-/** Distance of the heading arrow from the centre of a token that moves along a road. */
-export const HEADING_DISTANCE = 33;
-export const HEADING_ARROW = { fill: PAPER, stroke: { width: 1.5, color: BG } } as const;
+
+/** Side of the triangle by the number of units (steps: 1-3, 4-7, 8-15, 16+); unknown: `UNIT_SIDE_UNKNOWN`. */
+export const UNIT_SIDES = [24, 30, 36, 42] as const;
+export const UNIT_SIDE_UNKNOWN = 30;
+export const UNIT_OUTLINE = { width: 2.4, color: PAPER, join: 'round' } as const;
+export const UNIT_INNER_OUTLINE = { width: 1.6, color: BG, join: 'round' } as const;
+/** The dark inner outline of an opponent triangle: this share of the size. */
+export const UNIT_INNER_SCALE = 0.62;
+export const UNIT_DASH = { dash: 5, gap: 3.5 } as const;
+export const UNIT_QUESTION_FONT_SIZE = 15;
+/** On screen a triangle is at least this wide, and a click hits at least this wide (CSS px). */
+export const UNIT_MIN_SIDE_PX = 20;
+export const UNIT_MIN_HIT_PX = 28;
+/** Own groups carry their "charged/units" label from this camera scale (CSS px per world unit). */
+export const UNIT_LABEL_MIN_SCALE = 0.6;
+export const UNIT_LABEL = { fill: PLATE_FILL, alpha: 0.92, padX: 4, height: 13, gap: 3 } as const;
+export const SHIELD_BADGE_SCALE = 0.9;
+/** The selection outline is a copy of the triangle this much bigger (9.5). */
+export const SELECT_UNIT_SCALE = 1.45;
+
+/** The trail of a moving group: a bar of `width` and `length` fading from `alpha` to 0, in steps. */
+export const TRAIL = { width: 10, length: 40, alpha: 0.7, steps: 8 } as const;
+
+/** A packet is a small disc without an outline (9.6); an opponent one has a dark centre. */
+export const PACKET_RADIUS = 5;
+/** Inside this distance past a city rim a packet shrinks and fades into the city icon. */
+export const PACKET_FADE_MARGIN = 8;
+export const PACKET_MIN_SCALE = 0.3;
+export const PACKET_LABEL_FONT_SIZE = 10;
 
 export const ARROW_WIDTH = 3;
 export const ARROW_DASH = 9;
@@ -167,8 +187,11 @@ export const FOG_DASH = 12;
 export const FOG_GAP = 8;
 /** A hidden road is shaded this much wider than the road and its casing. */
 export const FOG_ROAD_EXTRA = 6;
-/** Opacity of a memory ghost (the marker of what was last seen in a hidden place). */
-export const GHOST_ALPHA = 0.62;
+/** Opacity of a fresh memory ghost (the marker of what was last seen in a hidden place). */
+export const GHOST_ALPHA = 0.6;
+/** Ghosts fade linearly from `GHOST_FADE_START_S` to nothing at `GHOST_HIDE_S` seconds after the sighting (9.8). */
+export const GHOST_FADE_START_S = 60;
+export const GHOST_HIDE_S = 120;
 export const GHOST_AGE_FONT_SIZE = 10;
 export const GHOST_AGE_STROKE = { color: BG, width: 3, join: 'round' } as const;
 
@@ -211,3 +234,16 @@ export const BUILD_TIE_CASING = { width: 5, color: BG, alpha: 0.8 } as const;
 /** Distance of the hammer disc from the centre of the building city, along the road. */
 export const BUILD_MARK_DISTANCE = 46;
 export const BUILD_TIME_FONT_SIZE = 10;
+
+// --- Fight, bounce, capture (9.9) ----------------------------------------------------------------
+export const FLASH_MS = 400;
+/** The loss numbers stay this long, rising `NUMBERS_RISE` world units. */
+export const NUMBERS_MS = 3000;
+export const NUMBERS_RISE = 12;
+export const BOUNCE_MS = 1000;
+export const BOUNCE_LENGTH = 40;
+export const WAVE_MS = 500;
+export const WAVE_FILL_ALPHA = 0.28;
+export const WAVE_STROKE = { width: 3, alpha: 0.9 } as const;
+export const FLASH_STAR = { outer: 15, inner: 6, points: 8 } as const;
+export const LOSS_FONT_SIZE = 13;

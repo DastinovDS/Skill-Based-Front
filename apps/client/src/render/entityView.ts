@@ -1,8 +1,12 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
-import type { RenderFrame, RenderGroup } from '../net/interpolate.ts';
+import {
+  EDGE_LENGTH,
+  type RenderFrame,
+  type RenderGroup,
+  type RenderPacket,
+} from '../net/interpolate.ts';
 import type {
   EdgeView,
-  EventMsg,
   IntentView,
   MapFile,
   NodeView,
@@ -11,23 +15,20 @@ import type {
 } from '../protocol.gen.ts';
 import type { MapLayers } from './layers.ts';
 import {
-  TOKEN_COMPACT,
-  TOKEN_FULL,
   arrowGeometry,
   buildGeometry,
   dashSegments,
   edgeEnds,
   edgePoint,
-  fightInfo,
-  fightMarkAlpha,
   nodePoint,
   nodeSlots,
   roadPosition,
   sideways,
+  packetFade,
   timeLeftLabel,
-  type FightInfo,
+  type TokenSpot,
 } from './layout.ts';
-import type { Point } from './camera.ts';
+import { symbolScale, type Point } from './camera.ts';
 import { NODE_SLOT_RADIUS } from './cityLayout.ts';
 import { edgeMarkerPoint, nodeMarkerPoint } from './fogLayout.ts';
 import { EntityKit, Token } from './shapes.ts';
@@ -41,17 +42,14 @@ import {
   BUILD_TIE,
   BUILD_TIE_CASING,
   BUILD_TIME_FONT_SIZE,
-  HEADING_DISTANCE,
   INTENT_ICON_ANGLE,
   INTENT_ICON_DISTANCE,
   ORDER_LINE_ALPHA,
-  PACKET_SCALE,
+  UNIT_LABEL_MIN_SCALE,
   ownerColor,
   PLATE_FILL,
   roadThickness,
 } from './style.ts';
-
-const MAX_FIGHT_MARKS = 8;
 
 function other(player: PlayerId): PlayerId {
   return player === 0 ? 1 : 0;
@@ -69,9 +67,14 @@ interface Labelled {
 
 interface GroupEntry extends Labelled {
   token: Token;
-  heading: Graphics;
+  /** The trail behind a group that moves along a road. */
+  trail: Graphics;
   stamp: number;
   view: Container;
+  /** Where the token was drawn last frame, and its heading (radians): the trail follows these. */
+  last: Point | null;
+  heading: number | null;
+  owner: PlayerId;
 }
 
 interface PacketEntry extends Labelled {
@@ -79,17 +82,6 @@ interface PacketEntry extends Labelled {
   label: Text;
   stamp: number;
   view: Container;
-}
-
-interface FightMark extends Labelled {
-  view: Container;
-  chips: [Chip, Chip];
-  shown: FightInfo | null;
-}
-
-interface Chip {
-  plate: Graphics;
-  text: Text;
 }
 
 /** The hammer disc on a road a city builds, with the time left for an own build. */
@@ -100,18 +92,19 @@ interface BuildMark {
 }
 
 /**
- * Everything the snapshot puts on top of the map (CLI-04, #60): warehouse bars, own groups with
- * charge pips, own packets moving along roads, what is known about enemies (a marker per city or
+ * Everything the snapshot puts on top of the map (CLI-04, #60; units and packets: ui-style 9.5 and
+ * 9.6): warehouse bars, own groups as inverted triangles with a motion trail, own packets gliding
+ * along roads into and out of the city icons, what is known about enemies (a marker per city or
  * road, with numbers only where the snapshot has them), intents of both players as arrows, road
  * builds of cities (DEC-16: bars across the road and a hammer disc, the time left for an own
- * build), and fight marks from events.
+ * build). Fight, bounce and capture effects are `EffectsView`.
  *
  * Two kinds of input. `update(frame)` runs every frame: moving things (groups, packets, order
- * lines, fight marks). Things that change only with a snapshot (bars, enemy markers, intent
+ * lines). Things that change only with a snapshot (bars, enemy markers, intent
  * arrows) are redrawn when `frame.base` is a different snapshot than last time.
  *
  * Nothing is computed here that the server did not send: paths come from orders, enemy numbers
- * from `Seen`, losses from `fight` events. `destroy()` releases every object and context.
+ * from `Seen`. `destroy()` releases every object and context.
  */
 export class EntityView {
   /** Shared with the fog layer (ghosts use the same tokens); released by `destroy()`. */
@@ -131,16 +124,14 @@ export class EntityView {
   private readonly buildMarks: BuildMark[] = [];
   private readonly timeStyle: TextStyle;
   private tickHz = 10;
-  private readonly fightLayer = new Container({ label: 'fights' });
-  private readonly fightMarks: FightMark[] = [];
+  private cameraScale = 1;
+  private selected: string | null = null;
+  private hovered: string | null = null;
   private readonly groups = new Map<string, GroupEntry>();
   private readonly packets = new Map<string, PacketEntry>();
-  private fights: FightInfo[] = [];
-  private eventsSeen: readonly EventMsg[] | null = null;
-  private eventCount = -1;
   private base: SnapshotMsg | null = null;
   private stamp = 0;
-  private points: ReadonlyMap<string, Point> = new Map();
+  private spots: ReadonlyMap<string, TokenSpot> = new Map();
 
   constructor(
     private readonly map: MapFile,
@@ -167,16 +158,15 @@ export class EntityView {
     // Order lines go under the tokens of the groups they belong to; arrows of intents on top.
     layers.layer.groups.addChild(this.orders, this.enemyLayer, this.packetLayer, this.groupLayer);
     layers.layer.intents.addChild(this.buildLayer, this.arrows, this.icons);
-    layers.layer.effects.addChild(this.fightLayer);
   }
 
   setLabelResolution(resolution: number): void {
     this.labelResolution = resolution;
     const texts: Text[] = [];
     for (const token of [...this.enemyNodes, ...this.enemyEdges]) {
-      if (token !== null) texts.push(token.text);
+      if (token !== null) texts.push(...token.labels());
     }
-    for (const entry of [...this.groups.values(), ...this.packets.values(), ...this.fightMarks]) {
+    for (const entry of [...this.groups.values(), ...this.packets.values()]) {
       texts.push(...entry.labels());
     }
     for (const mark of this.buildMarks) texts.push(mark.time);
@@ -192,23 +182,35 @@ export class EntityView {
     if (this.base !== null) this.drawBuilds(this.base);
   }
 
-  /** Drawn centres of the own group tokens by id (for hit testing and the selection frame). */
-  groupPoints(): ReadonlyMap<string, Point> {
-    return this.points;
+  /** Drawn centre, side and symbol scale of the own group tokens by id (hit testing, selection). */
+  groupPoints(): ReadonlyMap<string, TokenSpot> {
+    return this.spots;
   }
 
-  update(frame: RenderFrame, events: readonly EventMsg[]): void {
+  /** Camera scale (CSS px per world unit): triangles never get smaller than 20 px on screen. */
+  setCameraScale(scale: number): void {
+    if (scale === this.cameraScale) return;
+    this.cameraScale = scale;
+    for (const token of [...this.enemyNodes, ...this.enemyEdges]) {
+      if (token !== null) token.setScale(symbolScale(token.side, scale));
+    }
+  }
+
+  /** The selected and the hovered own group: they carry their "charged/units" label. */
+  setEmphasis(selected: string | null, hovered: string | null): void {
+    this.selected = selected;
+    this.hovered = hovered;
+  }
+
+  update(frame: RenderFrame): void {
     if (frame.base !== this.base) {
       this.base = frame.base;
       this.applyBase(frame.base);
     }
-    this.updateEvents(events);
     this.stamp++;
-    const points = this.updateGroups(frame.groups);
-    this.points = points;
+    this.spots = this.updateGroups(frame.groups);
     this.updatePackets(frame);
-    this.drawOrders(frame.groups, points);
-    this.updateFights(frame.tick);
+    this.drawOrders(frame.groups, this.spots);
   }
 
   destroy(): void {
@@ -223,7 +225,6 @@ export class EntityView {
       this.packetLayer,
       this.groupLayer,
       this.icons,
-      this.fightLayer,
     ]) {
       container.destroy({ children: true });
     }
@@ -341,6 +342,8 @@ export class EntityView {
       modes: seen.enemy_modes,
       counts: exact ? { units: seen.enemy_units ?? 0, charged: seen.enemy_charged ?? 0 } : null,
     });
+    token.setLabel(true);
+    token.setScale(symbolScale(token.side, this.cameraScale));
     token.view.visible = true;
     return token;
   }
@@ -354,8 +357,7 @@ export class EntityView {
     );
     this.enemyNodes[node.id] = token;
     if (token === null) return;
-    const size = node.seen?.level === 'exact' ? TOKEN_FULL : TOKEN_COMPACT;
-    const at = nodeMarkerPoint(this.map, node.id, size.width, this.radiusOf(node.id));
+    const at = nodeMarkerPoint(this.map, node.id, token.side, this.radiusOf(node.id));
     if (at !== undefined) token.view.position.set(at.x, at.y);
   }
 
@@ -447,9 +449,9 @@ export class EntityView {
 
   // --- Frame-driven part --------------------------------------------------------------------
 
-  /** Returns the drawn position of every group by id, for the order lines. */
-  private updateGroups(groups: readonly RenderGroup[]): Map<string, Point> {
-    const points = new Map<string, Point>();
+  /** Returns the drawn spot of every group by id (the order lines, hit testing, the selection). */
+  private updateGroups(groups: readonly RenderGroup[]): Map<string, TokenSpot> {
+    const spots = new Map<string, TokenSpot>();
     // Tokens standing in one city fan out under it.
     const perNode = new Map<number, RenderGroup[]>();
     for (const item of groups) {
@@ -460,16 +462,17 @@ export class EntityView {
       }
     }
     for (const item of groups) {
-      const entry = this.groupEntry(item.group.id);
+      const owner = item.owner ?? this.me;
+      const entry = this.groupEntry(item.group.id, owner);
       entry.stamp = this.stamp;
       entry.token.set({
-        owner: item.owner ?? this.me,
+        owner,
         modes: [item.group.mode],
         counts: { units: item.group.units, charged: item.group.charged },
       });
       const { location } = item;
       let at: Point | undefined;
-      entry.heading.visible = false;
+      let roadAngle: number | null = null;
       if (location.kind === 'node') {
         const node = nodePoint(this.map, location.node);
         const list = perNode.get(location.node) ?? [];
@@ -485,33 +488,55 @@ export class EntityView {
           at = roadPosition(ends.a, ends.b, fromIsA, location.progress);
           const from = fromIsA ? ends.a : ends.b;
           const to = fromIsA ? ends.b : ends.a;
-          const angle = Math.atan2(to.y - from.y, to.x - from.x);
-          entry.heading.visible = true;
-          entry.heading.rotation = angle;
-          entry.heading.position.set(
-            Math.cos(angle) * HEADING_DISTANCE,
-            Math.sin(angle) * HEADING_DISTANCE,
-          );
+          roadAngle = Math.atan2(to.y - from.y, to.x - from.x);
         }
       }
       entry.view.visible = at !== undefined;
-      if (at !== undefined) {
-        entry.view.position.set(at.x, at.y);
-        points.set(item.group.id, at);
+      if (at === undefined) continue;
+      // The heading comes from the way the token really moved (a bounce goes backwards); a
+      // token that has not moved yet takes the direction of its road.
+      const last = entry.last;
+      if (last !== null && Math.hypot(at.x - last.x, at.y - last.y) > 0.2) {
+        entry.heading = Math.atan2(at.y - last.y, at.x - last.x);
+      } else if (entry.heading === null) {
+        entry.heading = roadAngle;
       }
+      entry.last = at;
+      const moving = location.kind === 'edge' && entry.heading !== null;
+      entry.trail.visible = moving;
+      if (moving && entry.heading !== null) entry.trail.rotation = entry.heading + Math.PI;
+
+      const scale = symbolScale(entry.token.side, this.cameraScale);
+      entry.view.scale.set(scale);
+      entry.view.position.set(at.x, at.y);
+      const id = item.group.id;
+      entry.token.setLabel(
+        id === this.selected || id === this.hovered || this.cameraScale >= UNIT_LABEL_MIN_SCALE,
+      );
+      spots.set(id, { x: at.x, y: at.y, side: entry.token.side, scale });
     }
     sweep(this.groups, this.stamp);
-    return points;
+    return spots;
   }
 
-  private groupEntry(id: string): GroupEntry {
+  private groupEntry(id: string, owner: PlayerId): GroupEntry {
     let entry = this.groups.get(id);
     if (entry === undefined) {
       const view = this.groupLayer.addChild(new Container({ label: `group-${id}` }));
       const token = new Token(this.kit, this.labelResolution);
-      const heading = new Graphics(this.kit.heading);
-      view.addChild(token.view, heading);
-      entry = { token, heading, view, stamp: this.stamp, labels: () => [token.text] };
+      const trail = new Graphics(this.kit.trail[owner]);
+      trail.visible = false;
+      view.addChild(trail, token.view);
+      entry = {
+        token,
+        trail,
+        view,
+        stamp: this.stamp,
+        last: null,
+        heading: null,
+        owner,
+        labels: () => token.labels(),
+      };
       this.groups.set(id, entry);
     }
     return entry;
@@ -519,40 +544,54 @@ export class EntityView {
 
   private updatePackets(frame: RenderFrame): void {
     for (const item of frame.packets) {
+      const entry = this.packetEntry(item);
+      entry.stamp = this.stamp;
       const { packet } = item;
       const ends = edgeEnds(this.map, packet.edge);
       const edge = this.map.edges[packet.edge];
-      let entry = this.packets.get(packet.id);
-      if (entry === undefined) {
-        const view = this.packetLayer.addChild(new Container({ label: `packet-${packet.id}` }));
-        const dot = view.addChild(new Graphics(this.kit.pipFilled[item.owner ?? this.me]));
-        dot.scale.set(PACKET_SCALE);
-        const label = view.addChild(
-          new Text({
-            text: '',
-            style: this.kit.textStyle,
-            anchor: { x: 0, y: 0.5 },
-            resolution: this.labelResolution,
-          }),
-        );
-        label.position.set(9, 0);
-        entry = { dot, label, view, stamp: this.stamp, labels: () => [label] };
-        this.packets.set(packet.id, entry);
-      }
-      entry.stamp = this.stamp;
       const shown = ends !== undefined && edge !== undefined;
       entry.view.visible = shown;
       if (!shown) continue;
-      const at = edgePoint(ends.a, ends.b, edge.a === packet.from_node, item.progress);
+      const fromIsA = edge.a === packet.from_node;
+      const at = edgePoint(ends.a, ends.b, fromIsA, item.progress);
       entry.view.position.set(at.x, at.y);
+      // Near a city the packet shrinks and fades into its icon (or grows out of it): no jump
+      // when it leaves the snapshot, and no packet sticking to the rim of the city.
+      const length = Math.hypot(ends.b.x - ends.a.x, ends.b.y - ends.a.y);
+      const travelled = (item.progress / EDGE_LENGTH) * length;
+      const near = packetFade(travelled, this.radiusOf(packet.from_node));
+      const far = packetFade(length - travelled, this.radiusOf(fromIsA ? edge.b : edge.a));
+      entry.view.scale.set(Math.min(near.scale, far.scale));
+      entry.view.alpha = Math.min(near.alpha, far.alpha);
       // The number of charges matters only when it is more than the one dot.
-      const text = packet.charges > 1 ? String(packet.charges) : '';
+      const text = packet.charges > 1 ? `\u00d7${String(packet.charges)}` : '';
       if (entry.label.text !== text) entry.label.text = text;
     }
     sweep(this.packets, this.stamp);
   }
 
-  private drawOrders(groups: readonly RenderGroup[], points: Map<string, Point>): void {
+  private packetEntry(item: RenderPacket): PacketEntry {
+    const { packet } = item;
+    let entry = this.packets.get(packet.id);
+    if (entry === undefined) {
+      const view = this.packetLayer.addChild(new Container({ label: `packet-${packet.id}` }));
+      const dot = view.addChild(new Graphics(this.kit.packet[item.owner ?? this.me]));
+      const label = view.addChild(
+        new Text({
+          text: '',
+          style: this.kit.textStyle,
+          anchor: { x: 0, y: 0.5 },
+          resolution: this.labelResolution,
+        }),
+      );
+      label.position.set(8, 0);
+      entry = { dot, label, view, stamp: this.stamp, labels: () => [label] };
+      this.packets.set(packet.id, entry);
+    }
+    return entry;
+  }
+
+  private drawOrders(groups: readonly RenderGroup[], points: ReadonlyMap<string, Point>): void {
     const g = this.orders;
     g.clear();
     for (const { group, owner } of groups) {
@@ -573,69 +612,6 @@ export class EntityView {
           alpha: ORDER_LINE_ALPHA,
         });
     }
-  }
-
-  private updateEvents(events: readonly EventMsg[]): void {
-    if (events === this.eventsSeen && events.length === this.eventCount) return;
-    this.eventsSeen = events;
-    this.eventCount = events.length;
-    this.fights = [];
-    for (const event of events) {
-      const info = fightInfo(event, this.map);
-      if (info !== null) this.fights.push(info);
-    }
-  }
-
-  private updateFights(tick: number): void {
-    let used = 0;
-    for (const fight of this.fights) {
-      const alpha = fightMarkAlpha(fight.event.tick, tick);
-      if (alpha === null || used >= MAX_FIGHT_MARKS) continue;
-      const mark = this.fightMark(used++);
-      if (mark.shown !== fight) {
-        mark.shown = fight;
-        mark.view.position.set(fight.at.x, fight.at.y);
-        mark.chips.forEach((chip, player) => {
-          chip.text.text = `-${String(fight.losses[player] ?? 0)}`;
-        });
-      }
-      mark.view.alpha = alpha;
-      mark.view.visible = true;
-    }
-    for (let i = used; i < this.fightMarks.length; i++) {
-      const mark = this.fightMarks[i];
-      if (mark !== undefined) {
-        mark.view.visible = false;
-        mark.shown = null;
-      }
-    }
-  }
-
-  private fightMark(index: number): FightMark {
-    let mark = this.fightMarks[index];
-    if (mark === undefined) {
-      const view = this.fightLayer.addChild(new Container({ label: 'fight' }));
-      view.addChild(new Graphics(this.kit.swords));
-      const chip = (player: PlayerId): Chip => {
-        const plate = view.addChild(new Graphics(this.kit.plateCompact[player]));
-        plate.position.set(player === 0 ? -22 : 22, 22);
-        const text = view.addChild(
-          new Text({
-            text: '',
-            style: this.kit.textStyle,
-            anchor: 0.5,
-            resolution: this.labelResolution,
-          }),
-        );
-        text.position.copyFrom(plate.position);
-        // Player 0's chip sits on the left, player 1's on the right.
-        return { plate, text };
-      };
-      const chips: [Chip, Chip] = [chip(0), chip(1)];
-      mark = { view, chips, shown: null, labels: () => [chips[0].text, chips[1].text] };
-      this.fightMarks.push(mark);
-    }
-    return mark;
   }
 }
 

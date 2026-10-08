@@ -7,7 +7,7 @@
 import type { MapFile } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { edgeEnds, edgePoint, nodePoint, sideways } from './layout.ts';
-import { RING_GAP } from './style.ts';
+import { GHOST_ALPHA, GHOST_FADE_START_S, GHOST_HIDE_S, RING_GAP } from './style.ts';
 
 /** Enemy markers on an edge sit this far from the road, to the left of the a → b way. */
 export const EDGE_MARKER_OFFSET = -24;
@@ -58,4 +58,15 @@ export function ageLabel(ticksAgo: number, tickHz: number): string {
   const minutes = Math.floor(seconds / 60);
   const rest = String(seconds % 60).padStart(2, '0');
   return `-${String(minutes)}:${rest}`;
+}
+
+/**
+ * Opacity of a memory ghost `ageSeconds` after the sighting (9.8): `GHOST_ALPHA` up to
+ * `GHOST_FADE_START_S`, then linearly down to 0 at `GHOST_HIDE_S`; 0 (not drawn) after that.
+ * Only what is shown: the memory itself stays in the `PlayerView`.
+ */
+export function ghostAlpha(ageSeconds: number): number {
+  if (ageSeconds <= GHOST_FADE_START_S) return GHOST_ALPHA;
+  if (ageSeconds >= GHOST_HIDE_S) return 0;
+  return (GHOST_ALPHA * (GHOST_HIDE_S - ageSeconds)) / (GHOST_HIDE_S - GHOST_FADE_START_S);
 }

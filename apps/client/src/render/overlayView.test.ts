@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
-import type { Point } from './camera.ts';
+import type { TokenSpot } from './layout.ts';
 import type { OverlayState } from './interaction.ts';
 import { createLayers } from './layers.ts';
 import { OverlayView } from './overlayView.ts';
@@ -12,7 +12,7 @@ if (a === undefined || b === undefined) throw new Error('map too small');
 function setup() {
   const layers = createLayers();
   const view = new OverlayView(map, layers, 0);
-  const none = (): Point | undefined => undefined;
+  const none = (): TokenSpot | undefined => undefined;
   return { layers, view, none };
 }
 
@@ -63,7 +63,7 @@ describe('OverlayView', () => {
       candidates: [],
     };
     const frame = layers.layer.intents.children[2];
-    view.update(state, () => ({ x: 50, y: 60 }));
+    view.update(state, () => ({ x: 50, y: 60, side: 30, scale: 1 }));
     expect(frame?.visible).toBe(true);
     expect(frame?.position.x).toBe(50);
     view.update(state, () => undefined);
