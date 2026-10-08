@@ -179,6 +179,33 @@ describe('OrderController', () => {
     expect(sent).toEqual([{ type: 'merge', groups: [group.id, 'twin'] }]);
   });
 
+  it('merges from a selected node too: the groups standing in it (#212)', () => {
+    const { controller, sent, hud } = setup();
+    const twin = { ...group, id: 'twin' };
+    hud.onSnapshot({ ...snapshot, view: { ...snapshot.view, groups: [group, twin] } });
+    controller.click({ kind: 'node', id: home }, false);
+    expect(controller.mergeCandidates()).toEqual([group.id, 'twin']);
+    controller.merge();
+    expect(sent).toEqual([{ type: 'merge', groups: [group.id, 'twin'] }]);
+  });
+
+  it('leaves out a group waiting on a planned order: the server rejects the whole merge (#212)', () => {
+    const { controller, sent, hud } = setup();
+    const twin = { ...group, id: 'twin' };
+    const waiting = {
+      ...group,
+      id: 'waiting',
+      order: { dest: enemy.id, path: [enemy.id], planned: true },
+    } satisfies typeof group;
+    hud.onSnapshot({ ...snapshot, view: { ...snapshot.view, groups: [group, twin, waiting] } });
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.mergeCandidates()).toEqual([group.id, 'twin']);
+    controller.merge();
+    expect(sent).toEqual([{ type: 'merge', groups: [group.id, 'twin'] }]);
+    controller.click({ kind: 'group', id: 'waiting' }, false);
+    expect(controller.mergeCandidates()).toEqual([]);
+  });
+
   it('keys 1-3 set the mode and R recruits', () => {
     const { controller, sent } = setup();
     controller.click({ kind: 'group', id: group.id }, false);

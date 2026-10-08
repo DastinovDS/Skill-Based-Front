@@ -460,6 +460,30 @@ def test_unknown_and_enemy_ids_are_not_found_or_hidden() -> None:
         assert _ack_for(match, 0, wire.MergeCmd(groups=(own, text))) == NOT_FOUND
 
 
+def test_split_groups_merge_back_through_the_wire() -> None:
+    """Split, then merge the pair by opaque ids from the snapshot (#212, the owner's report)."""
+    match = _started()
+    groups = snapshot_msg(match.view(0)).view.groups
+    big = max(groups, key=lambda g: g.units)
+    assert isinstance(big.location, AtNodeLoc)
+    node = big.location.node
+    assert _ack_for(match, 0, wire.SplitCmd(group=big.id, n=2), seq=1) is None
+    match.step()
+    here = [
+        g
+        for g in snapshot_msg(match.view(0)).view.groups
+        if isinstance(g.location, AtNodeLoc) and g.location.node == node
+    ]
+    assert sorted(g.units for g in here) == [2, big.units - 2]
+    assert _ack_for(match, 0, wire.MergeCmd(groups=tuple(g.id for g in here)), seq=2) is None
+    after = [
+        g
+        for g in snapshot_msg(match.view(0)).view.groups
+        if isinstance(g.location, AtNodeLoc) and g.location.node == node
+    ]
+    assert [g.units for g in after] == [big.units]
+
+
 def test_move_ack_carries_the_path() -> None:
     match = _started()
     view = snapshot_msg(match.view(0)).view

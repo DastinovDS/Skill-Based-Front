@@ -181,16 +181,25 @@ export class OrderController implements MapInteraction {
     this.#sendCommand({ type: 'split', group: group.id, n }, null);
   }
 
-  /** Own groups standing in the node of the selected group (the selected one first). */
+  /**
+   * Own groups that can be merged in one node: the node of the selected group, or the selected
+   * node itself (the selected group first). A group with a planned order waits to depart and the
+   * server refuses the whole `merge` because of it (`GROUP_BUSY`), so it is left out (#212).
+   */
   mergeCandidates(): string[] {
     const data = this.#o.hud.current;
-    const group = data?.group ?? null;
-    if (data === null || group?.node == null) return [];
-    const here = data.groups.filter((g) => g.node === group.node && g.id !== group.id);
-    return [group.id, ...here.map((g) => g.id)].slice(0, MAX_MERGE);
+    if (data === null) return [];
+    const group = data.group;
+    if (group?.planned === true) return [];
+    const node = group?.node ?? (group === null ? (data.node?.id ?? null) : null);
+    if (node === null) return [];
+    const here = data.groups.filter((g) => g.node === node && !g.planned);
+    const ids = here.map((g) => g.id);
+    const first = group !== null && ids.includes(group.id) ? [group.id] : [];
+    return [...first, ...ids.filter((id) => id !== group?.id)].slice(0, MAX_MERGE);
   }
 
-  /** Merge every own group standing with the selected one; needs at least two. */
+  /** Merge every own group standing in the selected node or with the selected group; needs two. */
   merge(): void {
     const [first, second, ...rest] = this.mergeCandidates();
     if (first === undefined || second === undefined) return;
