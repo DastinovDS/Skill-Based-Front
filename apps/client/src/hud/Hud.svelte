@@ -205,7 +205,7 @@
     color: var(--text);
   }
 
-  .selection :is(button, input, label, select) {
+  .selection :global(:is(button, input, label, select)) {
     pointer-events: auto;
   }
 
