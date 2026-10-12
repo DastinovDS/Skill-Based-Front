@@ -1,8 +1,8 @@
 {
   "meta": {"name": "bad_connectivity", "version": 1, "symmetry": "rot180", "width": 400, "height": 200},
   "nodes": [
-    {"id": 0, "x": 100, "y": 100, "terrain": "mountains", "vp": 1, "base_capacity": 4, "capital_of": 0, "start_owner": 0, "start_units": 3, "start_charged": 3, "start_stock": 4},
-    {"id": 1, "x": 300, "y": 100, "terrain": "mountains", "vp": 1, "base_capacity": 4, "capital_of": 1, "start_owner": 1, "start_units": 3, "start_charged": 3, "start_stock": 4}
+    {"id": 0, "x": 100, "y": 100, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 0, "start_owner": 0, "start_units": 3, "start_charged": 3, "start_stock": 4},
+    {"id": 1, "x": 300, "y": 100, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 1, "start_owner": 1, "start_units": 3, "start_charged": 3, "start_stock": 4}
   ],
   "edges": [
   ],

@@ -1,6 +1,6 @@
 # Рулсет test-short: короткая партия для e2e (SIM-01, #17; AGENTS.md, раздел 5.4).
 #
-# Совпадает с mvp-0.toml во всём, кроме match_ticks: партия 60 секунд вместо 12 минут.
+# Совпадает с mvp-0.toml во всём, кроме match_ticks: партия 60 секунд вместо 15 минут.
 # Смысл ключей описан в mvp-0.toml. Меняешь mvp-0.toml: поменяй и этот файл
 # (тест packages/sim/tests/test_ruleset.py сверяет их).
 # Доступен только в dev и e2e окружении (AGENTS.md, раздел 5.4).
@@ -58,33 +58,34 @@ mountains = 70
 attrition_ticks = 30
 grace_ticks = 50
 
-[capacity.width_gain_centi]
-1 = 100
-2 = 150
-3 = 200
-4 = 230
-5 = 260
+[capacity.by_kind]
+capital = 10
+city_large = 8
+city_medium = 6
+city_small = 4
+province = 3
 
 [supply]
 dispatch_ticks = 10
 buffer = 2
 recharge_per_tick = 1
+base_speed_pct = 100
+base_amount = 1
 
-[supply.packet_speed_pct]
-1 = 100
-2 = 125
-3 = 150
-4 = 175
-5 = 200
+[supply.fast_speed_pct]
+2 = 150
+3 = 200
+
+[supply.freight_amount]
+2 = 2
+3 = 3
 
 [build]
 ticks_per_level = 150
 
 [build.charges_per_level]
-2 = 2
-3 = 3
-4 = 4
-5 = 5
+2 = 3
+3 = 4
 
 [recruit]
 cooldown_ticks = 20

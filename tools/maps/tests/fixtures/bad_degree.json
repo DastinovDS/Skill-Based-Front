@@ -1,13 +1,13 @@
 {
   "meta": {"name": "bad_degree", "version": 1, "symmetry": "rot180", "width": 600, "height": 600},
   "nodes": [
-    {"id": 0, "x": 100, "y": 300, "terrain": "mountains", "vp": 1, "base_capacity": 4, "capital_of": 0, "start_owner": 0, "start_units": 3, "start_charged": 3, "start_stock": 4},
-    {"id": 1, "x": 300, "y": 100, "terrain": "plains", "vp": 1, "base_capacity": 2, "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
-    {"id": 2, "x": 160, "y": 160, "terrain": "plains", "vp": 1, "base_capacity": 2, "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
-    {"id": 3, "x": 300, "y": 300, "terrain": "forest", "vp": 1, "base_capacity": 2, "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
-    {"id": 4, "x": 440, "y": 440, "terrain": "plains", "vp": 1, "base_capacity": 2, "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
-    {"id": 5, "x": 300, "y": 500, "terrain": "plains", "vp": 1, "base_capacity": 2, "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
-    {"id": 6, "x": 500, "y": 300, "terrain": "mountains", "vp": 1, "base_capacity": 4, "capital_of": 1, "start_owner": 1, "start_units": 3, "start_charged": 3, "start_stock": 4}
+    {"id": 0, "x": 100, "y": 300, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 0, "start_owner": 0, "start_units": 3, "start_charged": 3, "start_stock": 4},
+    {"id": 1, "x": 300, "y": 100, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 2, "x": 160, "y": 160, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 3, "x": 300, "y": 300, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 4, "x": 440, "y": 440, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 5, "x": 300, "y": 500, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": 6, "x": 500, "y": 300, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 1, "start_owner": 1, "start_units": 3, "start_charged": 3, "start_stock": 4}
   ],
   "edges": [
     {"id": 0, "a": 3, "b": 0, "base_width": 1, "max_width": 3, "travel_ticks": 60},

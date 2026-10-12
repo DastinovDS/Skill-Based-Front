@@ -40,6 +40,18 @@ class IntentKind(StrEnum):
     DEFENSE = "defense"
 
 
+class RoadKind(StrEnum):
+    """Type of a road (DEC-22, item 2): chosen by the first upgrade, never changes after."""
+
+    NONE = "none"
+    """A level 1 road: no type yet."""
+    FAST = "fast"
+    """Faster packets (``supply.fast_speed_pct``)."""
+    FREIGHT = "freight"
+    """More charges per dispatch period (``supply.freight_amount``); its packets arrive even when
+    the edge stops being internal (DEC-22, item 5)."""
+
+
 class Detail(StrEnum):
     """How much a player sees of a node or an edge (DEC-04, mechanics.md, section 10)."""
 
@@ -131,16 +143,18 @@ class PlayerState:
 
 @dataclass(frozen=True, slots=True)
 class Build:
-    """A road level under construction by a city (``UpgradeRoad(node, edge)``, DEC-16).
+    """A road level under construction by a city (``UpgradeRoad(node, edge, kind)``, DEC-16).
 
     ``owner``: the player who started it; the build holds while ``edge`` is internal for them.
-    ``since``: the tick the command was applied; the width grows at
-    ``since + build.ticks_per_level``.
+    ``since``: the tick the command was applied; the level grows at
+    ``since + build.ticks_per_level``. ``kind``: the road type after this level (DEC-22): the
+    chosen one for the first upgrade, the road's own one for the second.
     """
 
     edge: int
     owner: int
     since: int
+    kind: RoadKind
 
 
 @dataclass(slots=True)
@@ -163,10 +177,15 @@ class Node:
 
 @dataclass(slots=True)
 class Edge:
-    """Dynamic part of an edge; the static part is ``GameState.map.edges[id]``."""
+    """Dynamic part of an edge; the static part is ``GameState.map.edges[id]``.
+
+    ``width``: the road level ``1..max_width`` (DEC-22; the name follows the map field until
+    DEC-23 renames it). ``kind``: ``NONE`` on level 1, then the type the first upgrade chose.
+    """
 
     id: int
     width: int
+    kind: RoadKind = RoadKind.NONE
 
 
 @dataclass(slots=True)
@@ -203,7 +222,8 @@ class Sighting:
 
     ``enemy_modes``: distinct modes of the enemy groups seen, sorted; empty means none seen.
     ``enemy_units`` and ``enemy_charged`` are totals, known only when ``level`` is ``EXACT``.
-    ``width``: the road width seen (DEC-17), for an edge; ``None`` for a node.
+    ``width`` and ``road``: the road level and type seen (DEC-17, DEC-22), for an edge; ``None``
+    for a node.
     """
 
     tick: int
@@ -212,6 +232,7 @@ class Sighting:
     enemy_units: int | None
     enemy_charged: int | None
     width: int | None = None
+    road: RoadKind | None = None
 
 
 @dataclass(slots=True)
@@ -223,11 +244,6 @@ class VisionMemory:
 
 
 type EventValue = int | str | bool | None
-
-type CapacityCache = tuple[
-    tuple[int | None, ...], tuple[int, ...], tuple[int, ...], tuple[int, ...]
-]
-"""``(owners, widths, width gains, capacities)``: see ``GameState.capacity_cache``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,9 +281,6 @@ class GameState:
     """Next id for a group, packet or intent (one counter for all three)."""
     events: list[Event]
     """Events of the current tick."""
-    capacity_cache: CapacityCache | None = field(default=None, compare=False, repr=False)
-    """Derived data, not part of the state: node capacities and the owners, widths and gains they
-    were computed from (``systems.capacity.node_capacities``). Not serialized or hashed."""
 
     def new_id(self) -> int:
         new = self.next_id
@@ -356,7 +369,9 @@ def to_canonical(state: GameState) -> dict[str, object]:
         "next_id": state.next_id,
         "players": [_player_data(state.players[p]) for p in sorted(state.players)],
         "nodes": [_node_data(state.nodes[n]) for n in sorted(state.nodes)],
-        "edges": [{"id": e.id, "width": e.width} for e in _by_id(state.edges)],
+        "edges": [
+            {"id": e.id, "width": e.width, "kind": e.kind.value} for e in _by_id(state.edges)
+        ],
         "groups": [_group_data(g) for g in _by_id(state.groups)],
         "packets": [_packet_data(p) for p in _by_id(state.packets)],
         "intents": [_intent_data(i) for i in _by_id(state.intents)],
@@ -398,7 +413,12 @@ def _node_data(n: Node) -> dict[str, object]:
         "recruited_tick": n.recruited_tick,
         "build": None
         if n.build is None
-        else {"edge": n.build.edge, "owner": n.build.owner, "since": n.build.since},
+        else {
+            "edge": n.build.edge,
+            "owner": n.build.owner,
+            "since": n.build.since,
+            "kind": n.build.kind.value,
+        },
     }
 
 
@@ -471,6 +491,7 @@ def _sighting_data(key: int, s: Sighting) -> dict[str, object]:
         "enemy_units": s.enemy_units,
         "enemy_charged": s.enemy_charged,
         "width": s.width,
+        "road": None if s.road is None else s.road.value,
     }
 
 
@@ -567,18 +588,21 @@ def _parse_node(data: object, where: str) -> Node:
 
 
 def _parse_build(data: object, where: str) -> Build:
-    raw = _obj(data, where, ("edge", "owner", "since"))
+    raw = _obj(data, where, ("edge", "owner", "since", "kind"))
     return Build(
         edge=_int(raw["edge"], f"{where}.edge", low=0),
         owner=_int(raw["owner"], f"{where}.owner", low=0),
         since=_int(raw["since"], f"{where}.since", low=0),
+        kind=RoadKind(_choice(raw["kind"], f"{where}.kind", RoadKind)),
     )
 
 
 def _parse_edge(data: object, where: str) -> Edge:
-    raw = _obj(data, where, ("id", "width"))
+    raw = _obj(data, where, ("id", "width", "kind"))
     return Edge(
-        id=_int(raw["id"], f"{where}.id", low=0), width=_int(raw["width"], f"{where}.width", low=1)
+        id=_int(raw["id"], f"{where}.id", low=0),
+        width=_int(raw["width"], f"{where}.width", low=1),
+        kind=RoadKind(_choice(raw["kind"], f"{where}.kind", RoadKind)),
     )
 
 
@@ -678,7 +702,16 @@ def _parse_sightings(data: object, where: str) -> dict[int, Sighting]:
         raw = _obj(
             item,
             at,
-            ("id", "tick", "level", "enemy_modes", "enemy_units", "enemy_charged", "width"),
+            (
+                "id",
+                "tick",
+                "level",
+                "enemy_modes",
+                "enemy_units",
+                "enemy_charged",
+                "width",
+                "road",
+            ),
         )
         key = _int(raw["id"], f"{at}.id", low=0)
         if key in result:
@@ -693,6 +726,9 @@ def _parse_sightings(data: object, where: str) -> dict[int, Sighting]:
             enemy_units=_opt_int(raw["enemy_units"], f"{at}.enemy_units"),
             enemy_charged=_opt_int(raw["enemy_charged"], f"{at}.enemy_charged"),
             width=_opt_int(raw["width"], f"{at}.width"),
+            road=None
+            if raw["road"] is None
+            else RoadKind(_choice(raw["road"], f"{at}.road", RoadKind)),
         )
     return result
 

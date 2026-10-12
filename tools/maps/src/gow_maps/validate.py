@@ -170,7 +170,7 @@ def _swap(player: int | None) -> int | None:
     return None if player is None else 1 - player
 
 
-_NODE_FIELDS = ("terrain", "vp", "base_capacity", "start_units", "start_charged", "start_stock")
+_NODE_FIELDS = ("terrain", "vp", "kind", "start_units", "start_charged", "start_stock")
 _EDGE_FIELDS = ("base_width", "max_width", "travel_ticks")
 
 

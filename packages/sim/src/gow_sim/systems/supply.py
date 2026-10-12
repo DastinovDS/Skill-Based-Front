@@ -19,19 +19,29 @@ DEC-14 default, #131), numbers from ``Ruleset.supply``:
 - Every ``supply.dispatch_ticks`` ticks (ticks ``t > 0`` divisible by it) each node of the tree
   sends everything above its target to its children, the child with the larger subtree
   deficit first (ties: lower ``node_key``). A child gets at most its subtree deficit, at most the
-  road ``width`` (one packet per road per period) and at most its free room
+  road ``amount`` (one packet per road per period, ``road_amount``) and at most its free room
   ``capacity - warehouse - incoming``.
-- A packet travels ``packet_ticks = travel_ticks * 100 // supply.packet_speed_pct[width]`` ticks
-  (rounded down, at least 1), with the width at departure. It is delivered into the warehouse on
-  ``arrive_tick``; charges above the capacity are lost (event ``charges_overflow``).
-- A packet on a road that is no longer internal to its owner is lost (event ``packet_lost``).
+- Road parameters by level and type (DEC-22, item 4): ``speed_pct`` is ``supply.base_speed_pct``
+  on level 1 and on a freight road, ``supply.fast_speed_pct[level]`` on a fast one; ``amount`` is
+  ``supply.base_amount`` on level 1 and on a fast road, ``supply.freight_amount[level]`` on a
+  freight one.
+- A packet travels ``packet_ticks = travel_ticks * 100 // speed_pct`` ticks (rounded down, at
+  least 1), with the road at departure. It is delivered into the warehouse on ``arrive_tick``;
+  charges above the capacity are lost (event ``charges_overflow``).
+- A packet on a road that is no longer internal to its owner is lost (event ``packet_lost``),
+  except on a freight road (DEC-22, item 5): there it arrives at ``arrive_tick``. An own end
+  node takes it as usual; an end node of the other player takes the charges into its warehouse
+  for the new owner within the capacity (``packet_captured`` with the charges taken, for the
+  captor; ``packet_lost`` with all charges, for the sender; the excess burns without an event);
+  at a neutral end node the charges are lost (``packet_lost``).
 - Recharge: each tick, units of the node owner standing in the node (``capacity.is_standing``)
   take charges from the warehouse, at most ``supply.recharge_per_tick`` per node and tick, the
   lowest group id first. Units on edges do not recharge.
 
 Order inside the system: lost packets, deliveries, recharge, dispatch. Charges are created only
 by the economy (``charges_produced``) and leave the supply chain only through recharge or the
-documented sinks ``packet_lost``, ``charges_overflow`` and ``warehouse_lost``.
+documented sinks ``packet_lost``, ``charges_overflow`` and ``warehouse_lost``;
+``packet_captured`` moves charges of a freight packet into the captor's warehouse.
 
 Cost per tick: O(V + E + P + G); a dispatch tick adds the tree, a Dijkstra over at most V nodes
 and E roads (O(E log V)).
@@ -42,14 +52,34 @@ from dataclasses import dataclass
 
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Packet, event
+from gow_sim.state import AtNode, Event, GameState, Group, Packet, RoadKind, event
 from gow_sim.systems.capacity import is_standing, node_capacities
 
 
-def packet_ticks(mapdef: MapDef, rules: Ruleset, edge: int, width: int) -> int:
-    """Ticks a packet needs along ``edge`` of the given ``width`` (see the module docstring)."""
-    pct = rules.supply.packet_speed_pct.of(width)
+def road_speed_pct(rules: Ruleset, level: int, kind: RoadKind) -> int:
+    """Packet speed in percent on a road of ``level`` and ``kind`` (DEC-22, item 4)."""
+    if kind is RoadKind.FAST and level >= 2:
+        return rules.supply.fast_speed_pct.of(level)
+    return rules.supply.base_speed_pct
+
+
+def road_amount(rules: Ruleset, level: int, kind: RoadKind) -> int:
+    """Charges per road and dispatch period on a road of ``level`` and ``kind`` (DEC-22)."""
+    if kind is RoadKind.FREIGHT and level >= 2:
+        return rules.supply.freight_amount.of(level)
+    return rules.supply.base_amount
+
+
+def packet_ticks(mapdef: MapDef, rules: Ruleset, edge: int, level: int, kind: RoadKind) -> int:
+    """Ticks a packet needs along ``edge`` of ``level`` and ``kind`` (see the module docstring)."""
+    pct = road_speed_pct(rules, level, kind)
     return max(1, mapdef.edges[edge].travel_ticks * 100 // pct)  # both positive: rounded down
+
+
+def edge_packet_ticks(state: GameState, rules: Ruleset, edge: int) -> int:
+    """``packet_ticks`` of ``edge`` with its current level and type."""
+    e = state.edges[edge]
+    return packet_ticks(state.map, rules, edge, e.width, e.kind)
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +121,7 @@ def supply_tree(state: GameState, rules: Ruleset, player: int) -> SupplyTree:
             nxt = mapdef.edges[eid].other(node)
             if done[nxt] or state.nodes[nxt].owner != player:
                 continue  # every road between two own nodes is internal
-            cand = d + packet_ticks(mapdef, rules, eid, state.edges[eid].width)
+            cand = d + edge_packet_ticks(state, rules, eid)
             old = parent[nxt]
             if (
                 dist[nxt] < 0
@@ -132,39 +162,47 @@ def supply(state: GameState, rules: Ruleset) -> list[Event]:
 
 
 def _move_packets(state: GameState, capacities: tuple[int, ...]) -> list[Event]:
-    """Lose packets on roads that are no longer own internal ones, deliver the arrived ones."""
+    """Lose packets on roads that are no longer own internal ones, deliver the arrived ones.
+
+    A packet on a freight road is not lost there (DEC-22, item 5); it is delivered on
+    ``arrive_tick`` to whoever owns the end node then.
+    """
     events: list[Event] = []
     tick = state.tick
     mapdef = state.map
     for pid in sorted(state.packets):
         packet = state.packets[pid]
         e = mapdef.edges[packet.edge]
-        if not (state.nodes[e.a].owner == packet.owner == state.nodes[e.b].owner):
+        internal = state.nodes[e.a].owner == packet.owner == state.nodes[e.b].owner
+        if not internal and state.edges[packet.edge].kind is not RoadKind.FREIGHT:
             del state.packets[pid]
-            events.append(
-                event(
-                    tick,
-                    "packet_lost",
-                    packet=pid,
-                    player=packet.owner,
-                    edge=packet.edge,
-                    charges=packet.charges,
-                )
-            )
+            events.append(_lost(tick, pid, packet))
             continue
         if packet.arrive_tick > tick:
             continue
         del state.packets[pid]
         node_id = e.other(packet.from_node)
         node = state.nodes[node_id]
+        receiver = node.owner
+        if receiver is None:  # a neutral end node of a freight road: the charges are lost
+            events.append(_lost(tick, pid, packet))
+            continue
         added = min(packet.charges, max(0, capacities[node_id] - node.warehouse))
         node.warehouse += added
+        if receiver != packet.owner:
+            # The captor of the end node takes a freight packet (DEC-22, item 5): the sender
+            # loses all of it, the captor gets what fits, the excess burns.
+            events.append(
+                event(tick, "packet_captured", player=receiver, node=node_id, charges=added)
+            )
+            events.append(_lost(tick, pid, packet))
+            continue
         events.append(
             event(
                 tick,
                 "packet_delivered",
                 packet=pid,
-                player=packet.owner,
+                player=receiver,
                 node=node_id,
                 charges=added,
             )
@@ -180,6 +218,17 @@ def _move_packets(state: GameState, capacities: tuple[int, ...]) -> list[Event]:
                 )
             )
     return events
+
+
+def _lost(tick: int, pid: int, packet: Packet) -> Event:
+    return event(
+        tick,
+        "packet_lost",
+        packet=pid,
+        player=packet.owner,
+        edge=packet.edge,
+        charges=packet.charges,
+    )
 
 
 def _garrisons(state: GameState) -> dict[int, list[Group]]:
@@ -251,9 +300,9 @@ def _dispatch(
                 break
             eid = tree.parent_edge[child]
             assert eid is not None
-            width = state.edges[eid].width
+            road = state.edges[eid]
             room = capacities[child] - state.nodes[child].warehouse - incoming[child]
-            amount = min(surplus, need[child], width, room)
+            amount = min(surplus, need[child], road_amount(rules, road.width, road.kind), room)
             if amount <= 0:
                 continue
             surplus -= amount
@@ -267,7 +316,7 @@ def _dispatch(
                 from_node=node_id,
                 charges=amount,
                 depart_tick=tick,
-                arrive_tick=tick + packet_ticks(mapdef, rules, eid, width),
+                arrive_tick=tick + packet_ticks(mapdef, rules, eid, road.width, road.kind),
             )
             events.append(
                 event(

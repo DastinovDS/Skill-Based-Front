@@ -35,7 +35,7 @@ _NODE_KEYS = (
     "y",
     "terrain",
     "vp",
-    "base_capacity",
+    "kind",
     "capital_of",
     "start_owner",
     "start_units",

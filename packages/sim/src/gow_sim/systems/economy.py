@@ -21,9 +21,14 @@ the first step after ``initial_state()``. A period fires on ticks ``t > 0`` with
 ``t % period == 0``, so the first CP quantum comes at tick 50, and 600 steps give 12 quanta.
 """
 
+from typing import Final
+
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import Event, GameState, event
-from gow_sim.systems.capacity import CENTI, node_capacities
+from gow_sim.systems.capacity import node_capacities
+
+CENTI: Final = 100
+"""The stance share of a CP quantum is kept in hundredths of a charge (DEC-02)."""
 
 
 def economy(state: GameState, rules: Ruleset) -> list[Event]:

@@ -62,7 +62,7 @@ from gow_sim.match import (
     run_headless,
 )
 from gow_sim.ruleset import Ruleset, RulesetError, Stance, load_ruleset, ruleset_hash
-from gow_sim.state import Mode, to_canonical
+from gow_sim.state import Mode, RoadKind, to_canonical
 
 __all__ = [
     "CHECKPOINT_EVERY",
@@ -149,8 +149,13 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "set_mode", "group": g, "mode": mode.value}
         case SetStance(stance=stance):
             return {"type": "set_stance", "stance": stance.value}
-        case UpgradeRoad(node=node, edge=edge):
-            return {"type": "upgrade_road", "node": node, "edge": edge}
+        case UpgradeRoad(node=node, edge=edge, kind=kind):
+            return {
+                "type": "upgrade_road",
+                "node": node,
+                "edge": edge,
+                "kind": None if kind is None else kind.value,
+            }
         case Recruit(node=node):
             return {"type": "recruit", "node": node}
         case CancelOrder(group=g):
@@ -182,7 +187,10 @@ def decode_command(data: object) -> Command:
             case "set_stance":
                 return SetStance(Stance(_str(d["stance"])))
             case "upgrade_road":
-                return UpgradeRoad(_int(d["node"]), _int(d["edge"]))
+                road = d["kind"]
+                return UpgradeRoad(
+                    _int(d["node"]), _int(d["edge"]), None if road is None else RoadKind(_str(road))
+                )
             case "recruit":
                 return Recruit(_int(d["node"]))
             case "cancel_order":
