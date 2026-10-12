@@ -26,34 +26,72 @@ export const SECTORS: readonly {
   { stance: 'war', angle: 30, key: '3' },
 ];
 
-/** The stance whose sector is nearest to the pointer at (`dx`, `dy`) from the centre; `null` in the dead zone. */
-export function sectorAt(dx: number, dy: number): Stance | null {
+/**
+ * The item whose sector centre (`angle`, screen degrees) is nearest to the pointer at (`dx`, `dy`)
+ * from the middle of a menu; `null` in the dead zone. Any part of a sector selects it.
+ */
+export function nearestSector<T>(
+  sectors: readonly { readonly angle: number; readonly item: T }[],
+  dx: number,
+  dy: number,
+): T | null {
   if (Math.hypot(dx, dy) < RADIAL.dead) return null;
   const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-  let best: Stance | null = null;
+  let best: T | null = null;
   let nearest = Infinity;
-  for (const { stance, angle: centre } of SECTORS) {
+  for (const { item, angle: centre } of sectors) {
     // The angular distance to the centre of the sector, 0..180.
     const distance = Math.abs(((((angle - centre + 540) % 360) + 360) % 360) - 180);
     if (distance < nearest) {
       nearest = distance;
-      best = stance;
+      best = item;
     }
   }
   return best;
 }
 
+const STANCE_SECTORS = SECTORS.map((s) => ({ angle: s.angle, item: s.stance }));
+
+/** The stance whose sector is nearest to the pointer at (`dx`, `dy`) from the centre; `null` in the dead zone. */
+export function sectorAt(dx: number, dy: number): Stance | null {
+  return nearestSector(STANCE_SECTORS, dx, dy);
+}
+
+/** A road type the first upgrade chooses (DEC-22). */
+export type RoadType = 'fast' | 'freight';
+
+/** The road type menu (DEC-22): fast on the left, freight on the right; keys 1 and 2. */
+export const ROAD_SECTORS: readonly {
+  readonly type: RoadType;
+  readonly angle: number;
+  readonly key: string;
+}[] = [
+  { type: 'fast', angle: 180, key: '1' },
+  { type: 'freight', angle: 0, key: '2' },
+];
+
+/** Half the angle of a road type sector: two sectors of 160 degrees with gaps between them. */
+export const ROAD_HALF = 80;
+
+const TYPE_SECTORS = ROAD_SECTORS.map((s) => ({ angle: s.angle, item: s.type }));
+
+/** The road type under the pointer at (`dx`, `dy`) from the middle of the menu; `null`: dead zone. */
+export function roadSectorAt(dx: number, dy: number): RoadType | null {
+  return nearestSector(TYPE_SECTORS, dx, dy);
+}
+
 /** SVG path of the ring sector around `centre` degrees, relative to the middle of the menu. */
-export function sectorPath(centre: number): string {
+export function sectorPath(centre: number, half: number = RADIAL.half): string {
   const rad = (deg: number): number => (deg * Math.PI) / 180;
   const at = (r: number, deg: number): string =>
     `${(r * Math.cos(rad(deg))).toFixed(2)} ${(r * Math.sin(rad(deg))).toFixed(2)}`;
-  const a0 = centre - RADIAL.half;
-  const a1 = centre + RADIAL.half;
+  const a0 = centre - half;
+  const a1 = centre + half;
   const { outer, inner } = RADIAL;
+  const large = a1 - a0 > 180 ? 1 : 0;
   return (
-    `M${at(outer, a0)} A${String(outer)} ${String(outer)} 0 0 1 ${at(outer, a1)} ` +
-    `L${at(inner, a1)} A${String(inner)} ${String(inner)} 0 0 0 ${at(inner, a0)} Z`
+    `M${at(outer, a0)} A${String(outer)} ${String(outer)} 0 ${String(large)} 1 ${at(outer, a1)} ` +
+    `L${at(inner, a1)} A${String(inner)} ${String(inner)} 0 ${String(large)} 0 ${at(inner, a0)} Z`
   );
 }
 

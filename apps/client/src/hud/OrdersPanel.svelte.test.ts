@@ -121,7 +121,12 @@ describe('OrdersPanel', () => {
         ...snapshot.view,
         edges: snapshot.view.edges.map((e) =>
           e.id === road.id
-            ? { ...e, upgrade_gain: { capacity_centi: 50, packet_speed_pct: 10 } }
+            ? {
+                ...e,
+                kind: 'fast' as const,
+                width: 2,
+                upgrade_gain: { fast: { speed_pct: 50, amount: 0 }, freight: null },
+              }
             : e,
         ),
       },
@@ -132,9 +137,10 @@ describe('OrdersPanel', () => {
     flushSync();
     expect(orders.ui.current.roadPick).toBe(home);
     const option = button(target, `Road ${String(road.id)} to node`);
-    expect(option?.textContent).toContain('+0.5 capacity');
+    expect(option?.textContent).toContain('level 3, fast');
+    // A typed road keeps its type (DEC-22): the upgrade goes out at once, without a type.
     option?.click();
-    expect(sent).toEqual([{ type: 'upgrade_road', node: home, edge: road.id }]);
+    expect(sent).toEqual([{ type: 'upgrade_road', node: home, edge: road.id, kind: null }]);
   });
 
   it('says how long the build of a city takes instead of offering a new one', () => {

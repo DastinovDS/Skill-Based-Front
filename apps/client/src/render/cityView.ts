@@ -28,12 +28,10 @@ import {
   NODE_RADIUS,
   OVERFLOW_CIRCLE,
   OWNER_OUTLINE,
-  PAPER,
   RING_FILLED,
   RING_SEGMENT,
   SEGMENT_EMPTY,
   SEGMENT_EMPTY_BAR,
-  STALE_FONT_SIZE,
   VP_BADGE,
   VP_BADGE_RADIUS,
   VP_FONT_SIZE,
@@ -51,14 +49,13 @@ interface CityState {
   readonly owner: PlayerId | null;
   /** `null`: the capacity is not known yet (a map without a snapshot). */
   readonly capacity: number | null;
-  readonly stale: boolean;
   /** Units of the viewing player standing in the city. */
   readonly garrison: number;
   readonly warehouse: number | null;
 }
 
 function stateKey(s: CityState): string {
-  return [s.owner, s.capacity, s.stale, s.garrison, s.warehouse].map(String).join('|');
+  return [s.owner, s.capacity, s.garrison, s.warehouse].map(String).join('|');
 }
 
 /** A point on the circle of `radius` at `angle` radians. */
@@ -71,8 +68,8 @@ function onCircle(radius: number, angle: number): Point {
  * with the colour of the owner (own: blue with a white outline, enemy: red with a white outline and
  * a dark inner ring, neutral: grey with a thin outline), the capital star, the capacity ring of
  * segments (white for own units standing there, grey otherwise), the overflow segments in the
- * warning colour, the warehouse bar under the ring and the VP badge. A stale capacity (DEC-17) is
- * marked with `≈N` next to the city: a number the player does not know exactly is shown as such.
+ * warning colour, the warehouse bar under the ring and the VP badge. The capacity is public and
+ * exact (DEC-22: fixed by the node kind).
  *
  * Bodies share GraphicsContexts (one per kind and radius); rings and bars are redrawn when a
  * city's state changes. `destroy()` releases every object and context created here.
@@ -86,12 +83,10 @@ export class CityView {
   private readonly rings: Graphics[];
   private readonly bars: Graphics[];
   private readonly badges: (Container | null)[];
-  private readonly stale: Text[];
   private readonly vpLabels: Text[] = [];
   private readonly keys: string[];
   private readonly radii: number[];
   private readonly vpStyle: TextStyle;
-  private readonly staleStyle: TextStyle;
   private readonly badge: GraphicsContext;
 
   constructor(
@@ -106,13 +101,6 @@ export class CityView {
       fontWeight: '700',
       fill: VP_TEXT_COLOR,
     });
-    this.staleStyle = new TextStyle({
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: STALE_FONT_SIZE,
-      fontWeight: '700',
-      fill: PAPER,
-      stroke: { color: BG, width: 3, join: 'round' },
-    });
     this.badge = this.context('badge', (g) =>
       g.circle(0, 0, VP_BADGE_RADIUS).fill(VP_BADGE.fill).stroke(VP_BADGE.stroke),
     );
@@ -124,7 +112,6 @@ export class CityView {
     this.rings = [];
     this.bars = [];
     this.badges = [];
-    this.stale = [];
     for (const node of map.nodes) {
       const city = new Container({ x: node.x, y: node.y, label: `node-${String(node.id)}` });
       this.bodies.push(city.addChild(new Graphics()));
@@ -145,14 +132,6 @@ export class CityView {
       } else {
         this.badges.push(null);
       }
-      const stale = new Text({
-        text: '',
-        style: this.staleStyle,
-        anchor: { x: 1, y: 0.5 },
-        resolution: labelResolution,
-        visible: false,
-      });
-      this.stale.push(city.addChild(stale));
       this.cities.push(layers.layer.nodes.addChild(city));
     }
     this.setOwners(map.nodes.map((node) => node.start_owner));
@@ -171,7 +150,7 @@ export class CityView {
   /** Owners before the first snapshot (the map's start owners); capacity is not known yet. */
   setOwners(owners: readonly (PlayerId | null)[]): void {
     owners.forEach((owner, id) => {
-      this.set(id, { owner, capacity: null, stale: false, garrison: 0, warehouse: null });
+      this.set(id, { owner, capacity: null, garrison: 0, warehouse: null });
     });
   }
 
@@ -189,7 +168,7 @@ export class CityView {
   }
 
   setLabelResolution(resolution: number): void {
-    for (const text of [...this.vpLabels, ...this.stale]) {
+    for (const text of this.vpLabels) {
       if (text.resolution !== resolution) text.resolution = resolution;
     }
   }
@@ -199,7 +178,6 @@ export class CityView {
     for (const city of this.cities) city.destroy({ children: true });
     for (const context of this.shared) context.destroy();
     this.vpStyle.destroy();
-    this.staleStyle.destroy();
   }
 
   // --- Drawing ------------------------------------------------------------------------------
@@ -208,7 +186,6 @@ export class CityView {
     return {
       owner: node.owner,
       capacity: node.capacity,
-      stale: node.capacity_stale,
       garrison: node.owner === this.me ? garrison : 0,
       warehouse: node.detail === 'exact' ? node.warehouse : null,
     };
@@ -281,7 +258,6 @@ export class CityView {
 
     ring.clear();
     bar.clear();
-    const stale = this.stale[id];
     if (state.capacity !== null) {
       this.drawRing(ring, radius, state.capacity, kind === 'you' ? state.garrison : 0);
       const over = kind === 'you' ? state.garrison - state.capacity : 0;
@@ -289,15 +265,6 @@ export class CityView {
       if (state.warehouse !== null) {
         this.drawBar(bar, radius, state.warehouse, state.capacity, state.owner);
       }
-      if (stale !== undefined) {
-        stale.visible = state.stale;
-        if (state.stale) {
-          stale.text = `≈${String(state.capacity)}`;
-          stale.position.set(-(ringRadius(radius) + 9), 0);
-        }
-      }
-    } else if (stale !== undefined) {
-      stale.visible = false;
     }
     const badge = this.badges[id];
     if (badge !== null && badge !== undefined) {

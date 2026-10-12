@@ -92,6 +92,7 @@ function snapshot(frame: ReplayFrame): SnapshotMsg {
       edges: frame.w.map((width, id) => ({
         id,
         width,
+        kind: frame.r?.[id] ?? 'none',
         detail: 'presence',
         upgrade_gain: null,
         seen: null,

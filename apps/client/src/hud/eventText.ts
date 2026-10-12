@@ -7,6 +7,11 @@ function num(value: unknown): number {
   return typeof value === 'number' ? value : 0;
 }
 
+/** The name of a road type in an event (`road`, DEC-22); an unknown value reads as untyped. */
+function roadName(value: unknown): string {
+  return t(value === 'fast' || value === 'freight' ? `road.${value}` : 'road.none');
+}
+
 function isStance(value: unknown): value is Stance {
   return value === 'economy' || value === 'balance' || value === 'war';
 }
@@ -45,6 +50,7 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'road_upgraded',
   'build_stopped',
   'packet_lost',
+  'packet_captured',
 ]);
 
 /** Does the feed show this kind? An unknown kind is not shown (never a raw kind name). */
@@ -88,18 +94,25 @@ export function eventText(event: HudEvent, me: PlayerId): string {
     case 'attrition':
       return tf('event.attrition', { node: num(data.node) });
     case 'road_upgraded':
-      return tf('event.road_upgraded', { edge: num(data.edge), width: num(data.width) });
+      return tf('event.road_upgraded', {
+        edge: num(data.edge),
+        width: num(data.width),
+        road: roadName(data.road),
+      });
     case 'build_started':
       return tf('event.build_started', {
         node: num(data.node),
         edge: num(data.edge),
         width: num(data.width),
+        road: roadName(data.road),
         charges: num(data.charges),
       });
     case 'build_stopped':
       return tf('event.build_stopped', { edge: num(data.edge) });
     case 'packet_lost':
       return tf('event.packet_lost', { edge: num(data.edge), charges: num(data.charges) });
+    case 'packet_captured':
+      return tf('event.packet_captured', { node: num(data.node), charges: num(data.charges) });
     default:
       return '';
   }

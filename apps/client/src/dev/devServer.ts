@@ -16,6 +16,7 @@ import type {
   MapFile,
   OrderView,
   Mode,
+  RoadKind,
   RulesetPublic,
   Stance,
   SnapshotMsg,
@@ -62,15 +63,17 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
   const modes = new Map<string, Mode>();
   let timer: ReturnType<typeof setInterval> | undefined;
   const orders = new Map<string, OrderView>();
-  /** City builds: node -> road and the tick it widens; widths raised so far by edge. */
-  const builds = new Map<number, { edge: number; done: number }>();
+  /** City builds: node -> road, the tick it grows and its type; levels and types so far by edge. */
+  const builds = new Map<number, { edge: number; done: number; kind: RoadKind }>();
   const widths = new Map<number, number>();
+  const kinds = new Map<number, RoadKind>();
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
   function snapshot(): SnapshotMsg {
     for (const [node, build] of builds) {
       if (tick >= build.done) {
         widths.set(build.edge, (widths.get(build.edge) ?? 0) + 1);
+        kinds.set(build.edge, build.kind);
         builds.delete(node);
       }
     }
@@ -89,11 +92,15 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         edges: base.view.edges.map((e) => {
           const ends = map.edges[e.id];
           const width = e.width + (widths.get(e.id) ?? 0);
+          const kind = kinds.get(e.id) ?? 'none';
           const inner = (n: number | undefined) =>
             n !== undefined && base.view.nodes[n]?.owner === DEV_PLAYER;
+          // The DEC-22 gains: +50 speed for fast, +1 charge for freight; one type once chosen.
+          const fast = kind === 'freight' ? null : { speed_pct: 50, amount: 0 };
+          const freight = kind === 'fast' ? null : { speed_pct: 0, amount: 1 };
           return inner(ends?.a) && inner(ends?.b) && width < (ends?.max_width ?? 0)
-            ? { ...e, width, upgrade_gain: { capacity_centi: 50, packet_speed_pct: 10 } }
-            : { ...e, width };
+            ? { ...e, width, kind, upgrade_gain: { fast, freight } }
+            : { ...e, width, kind };
         }),
         groups: base.view.groups.map((g) => ({
           ...g,
@@ -175,9 +182,19 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         if (current.view.edges[cmd.edge]?.upgrade_gain == null) return 'NOT_INTERNAL';
         if (builds.has(cmd.node)) return 'CITY_BUSY';
         if ([...builds.values()].some((b) => b.edge === cmd.edge)) return 'EDGE_BUSY';
+        const typed = kinds.get(cmd.edge);
+        if (typed === undefined && cmd.kind === null) return 'INVALID_ARGUMENT';
+        if (typed !== undefined && cmd.kind !== null && cmd.kind !== typed) {
+          return 'ROAD_KIND_MISMATCH';
+        }
+        const kind: RoadKind = typed ?? cmd.kind ?? 'none';
         const code = charge(rules.cost.build);
         if (code === null) {
-          builds.set(cmd.node, { edge: cmd.edge, done: tick + 1 + rules.build.ticks_per_level });
+          builds.set(cmd.node, {
+            edge: cmd.edge,
+            done: tick + 1 + rules.build.ticks_per_level,
+            kind,
+          });
         }
         return code;
       }

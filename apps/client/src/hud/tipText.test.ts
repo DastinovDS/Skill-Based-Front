@@ -45,12 +45,12 @@ describe('tipText', () => {
     expect(tip.rows.find((r) => r.label === 'Capacity')?.hint).toContain('how many units');
   });
 
-  it('marks an estimated capacity with ≈', () => {
+  it('shows the capacity of a fogged enemy city exactly (DEC-22: it is public)', () => {
     setLocale('en');
-    const fogged = base.view.nodes.find((n) => n.capacity_stale);
-    if (fogged === undefined) throw new Error('no stale node in the dev snapshot');
+    const fogged = base.view.nodes.find((n) => n.detail === 'fog' && n.owner === 1);
+    if (fogged === undefined) throw new Error('no fogged enemy node in the dev snapshot');
     const tip = tipOf({ kind: 'node', id: fogged.id });
-    expect(tip.rows.find((r) => r.label === 'Capacity')?.value).toMatch(/^≈\d+$/);
+    expect(tip.rows.find((r) => r.label === 'Capacity')?.value).toBe(String(fogged.capacity));
   });
 
   it('shows the countdown of an overcrowded own city', () => {
@@ -66,24 +66,36 @@ describe('tipText', () => {
     expect(tip.rows.find((r) => r.label === 'Overcrowding')?.value).toBe('a unit is lost in 2.4 s');
   });
 
-  it('gives a road its width, and what the next level gives and costs when it can be upgraded', () => {
+  it('gives a road its level and type, and what each type of the next level gives and costs', () => {
     setLocale('en');
     const plain = tipOf({ kind: 'edge', id: road.id });
-    expect(plain.rows).toEqual([{ label: 'Width', value: String(road.base_width) }]);
+    expect(plain.rows).toEqual([
+      { label: 'Level', value: String(road.base_width) },
+      { label: 'Type', value: 'plain' },
+    ]);
     const snapshot: SnapshotMsg = {
       ...base,
       view: {
         ...base.view,
         edges: base.view.edges.map((e) =>
           e.id === road.id
-            ? { ...e, upgrade_gain: { capacity_centi: 50, packet_speed_pct: 10 } }
+            ? {
+                ...e,
+                upgrade_gain: {
+                  fast: { speed_pct: 50, amount: 0 },
+                  freight: { speed_pct: 0, amount: 1 },
+                },
+              }
             : e,
         ),
       },
     };
     const tip = tipOf({ kind: 'edge', id: road.id }, snapshot);
-    const next = tip.rows.find((r) => r.label === `Width ${String(road.base_width + 1)}`);
-    expect(next?.value).toMatch(/^\+0\.5 capacity, \+10% packet speed, costs \d+ charges$/);
+    const level = String(road.base_width + 1);
+    const fast = tip.rows.find((r) => r.label === `fast, level ${level}`);
+    expect(fast?.value).toMatch(/^\+50% packet speed, costs \d+ charges$/);
+    const freight = tip.rows.find((r) => r.label === `freight, level ${level}`);
+    expect(freight?.value).toMatch(/^\+1 charges per period, costs \d+ charges$/);
     expect(tip.note).toContain('Select your city');
     const hovered = buildHudData(ctx, snapshot, null, null, [], { kind: 'edge', id: road.id });
     if (hovered.tip === null) throw new Error('no tip');

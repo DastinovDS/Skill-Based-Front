@@ -50,17 +50,23 @@ describe('eventText', () => {
     expect(eventText(event('attrition', { node: 4, player: 0 }), 0)).toBe(
       'Overcapacity at node 4: a unit was lost',
     );
-    expect(eventText(event('road_upgraded', { edge: 2, width: 3 }), 0)).toBe(
-      'Road 2 upgraded to width 3',
+    expect(eventText(event('road_upgraded', { edge: 2, width: 3, road: 'freight' }), 0)).toBe(
+      'Road 2 upgraded to level 3 (freight)',
     );
     expect(
-      eventText(event('build_started', { node: 4, edge: 2, width: 3, charges: 3, player: 0 }), 0),
-    ).toBe('City 4 upgrades road 2 to width 3: 3 charges spent');
+      eventText(
+        event('build_started', { node: 4, edge: 2, width: 2, road: 'fast', charges: 3, player: 0 }),
+        0,
+      ),
+    ).toBe('City 4 upgrades road 2 to level 2 (fast): 3 charges spent');
     expect(eventText(event('build_stopped', { node: 4, edge: 2, reason: 'interrupted' }), 0)).toBe(
       'The build of road 2 was interrupted',
     );
     expect(eventText(event('packet_lost', { edge: 1, charges: 5 }), 0)).toBe(
       'Charges lost on road 1: 5',
+    );
+    expect(eventText(event('packet_captured', { node: 3, charges: 2, player: 0 }), 0)).toBe(
+      'Cargo taken on a freight road at node 3: 2 charges',
     );
     setLocale('ru');
     expect(eventText(event('attrition', { node: 4, player: 0 }), 0)).toContain('Перегрузка');

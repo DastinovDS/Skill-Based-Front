@@ -173,9 +173,9 @@ export class MapScene {
     if (announce) {
       this.base = frame.base;
       this.view.setOwners(frame.base.view.nodes.map((node) => node.owner));
-      const widths = frame.base.view.edges.map((edge) => edge.width);
-      this.view.setRoadWidths(widths);
-      this.overlay.setRoadWidths(widths);
+      const edges = frame.base.view.edges;
+      this.view.setRoads(edges);
+      this.overlay.setRoadWidths(edges.map((edge) => edge.width));
       this.cities.update(frame.base);
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;

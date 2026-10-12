@@ -5,8 +5,8 @@
  * decided here (AGENTS.md 7.1).
  */
 import { getLocale, t, tf } from '../i18n/index.ts';
-import type { RulesetPublic } from '../protocol.gen.ts';
-import { formatCentis, formatSeconds } from './format.ts';
+import type { RoadGain, RulesetPublic } from '../protocol.gen.ts';
+import { formatSeconds } from './format.ts';
 import type { GroupInfo, IntentInfo, NodeInfo, RoadInfo, TipInfo } from './hudData.ts';
 
 export interface TipRow {
@@ -39,7 +39,7 @@ function cityTip(node: NodeInfo, env: TipEnv): TipText {
   const rows: TipRow[] = [];
   rows.push({
     label: t('sel.capacity'),
-    value: `${node.capacityStale ? '≈' : ''}${String(node.capacity)}`,
+    value: String(node.capacity),
     hint: t('tip.capacityHint'),
   });
   if (node.warehouse !== null)
@@ -89,18 +89,30 @@ function cityTip(node: NodeInfo, env: TipEnv): TipText {
   return { title, rows };
 }
 
+/** What one more level of a road type adds, as the server says (DEC-22, item 7). */
+export function gainText(gain: RoadGain): string {
+  const parts: string[] = [];
+  if (gain.speed_pct > 0) parts.push(tf('roadType.speed', { value: gain.speed_pct }));
+  if (gain.amount > 0) parts.push(tf('roadType.amount', { value: gain.amount }));
+  return parts.join(', ');
+}
+
 function roadTip(road: RoadInfo, env: TipEnv): TipText {
-  const rows: TipRow[] = [{ label: t('tip.width'), value: String(road.width) }];
+  const rows: TipRow[] = [
+    { label: t('tip.width'), value: String(road.width) },
+    { label: t('tip.roadKind'), value: t(`road.${road.kind}`) },
+  ];
   let note: string | undefined;
-  if (road.capacityCenti !== null) {
-    rows.push({
-      label: tf('tip.nextWidth', { width: road.width + 1 }),
-      value: tf('tip.gain', {
-        capacity: formatCentis(road.capacityCenti, getLocale()),
-        speed: road.packetSpeedPct ?? 0,
-        charges: road.charges ?? '?',
-      }),
-    });
+  if (road.gain !== null) {
+    // Both types on level 1 (the first upgrade chooses one), the road's own type later.
+    for (const type of ['fast', 'freight'] as const) {
+      const gain = road.gain[type];
+      if (gain === null) continue;
+      rows.push({
+        label: tf('tip.nextWidth', { type: t(`road.${type}`), width: road.width + 1 }),
+        value: tf('tip.gain', { gain: gainText(gain), charges: road.charges ?? '?' }),
+      });
+    }
     note = t(env.pickable ? 'orders.roadHintPick' : 'orders.roadHintHow');
   }
   return {

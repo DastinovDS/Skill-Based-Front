@@ -1,4 +1,4 @@
-import type { Command } from '../protocol.gen.ts';
+import type { Command, RoadKind } from '../protocol.gen.ts';
 
 /** Where a click would send the selected group, with the price (hundredths of CP, from the ruleset). */
 export interface MovePricing {
@@ -7,13 +7,13 @@ export interface MovePricing {
   readonly cost: number;
 }
 
-/** What the next level of the road under the pointer gives, and what it costs (DEC-16). */
+/** The road under the pointer and what its next level costs (DEC-16, DEC-22). */
 export interface RoadHint {
   readonly edge: number;
-  /** The width the road would get. */
+  /** The level the road would get. */
   readonly width: number;
-  readonly capacityCenti: number;
-  readonly packetSpeedPct: number;
+  /** Its type now: `none` before the first upgrade, which chooses one (DEC-22). */
+  readonly kind: RoadKind;
   /** Warehouse charges of the building city; `null` if the ruleset lists no price. */
   readonly charges: number | null;
   /** A click on it now sends the upgrade (road pick of the selected city). */

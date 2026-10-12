@@ -54,11 +54,7 @@
       <dt>{t('sel.vp')}</dt>
       <dd>{n.vp}</dd>
       <dt>{t('sel.capacity')}</dt>
-      {#if n.capacityStale}
-        <dd title={t('sel.capacityStale')}>≈{n.capacity}</dd>
-      {:else}
-        <dd>{n.capacity}</dd>
-      {/if}
+      <dd>{n.capacity}</dd>
       {#if n.warehouse !== null}
         <dt>{t('sel.warehouse')}</dt>
         <dd>{n.warehouse}</dd>

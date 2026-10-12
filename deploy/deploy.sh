@@ -11,8 +11,8 @@
 #    (the new version may have migrated the schema), start again, exit 1.
 #
 # Between 2 and 3 the running server is drained (SRV-02, #47): it starts no new matches, and the
-# deploy waits until the running ones end, at most DEPLOY_DRAIN_TIMEOUT seconds (default 900,
-# a 12-minute match plus margin); after that the remaining matches are cut by the switch.
+# deploy waits until the running ones end, at most DEPLOY_DRAIN_TIMEOUT seconds (default 1200,
+# a 15-minute match, DEC-22, plus margin); after that the remaining matches are cut by the switch.
 # A server without the drain endpoint (older than #47) is not drained. If the deploy stops
 # before the switch, draining is cancelled again.
 # DEPLOY_BASE_URL (default http://localhost:$HTTP_PORT; on the server https://<DOMAIN>),
@@ -24,7 +24,7 @@ ref="${1:-}"
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
 base="${DEPLOY_BASE_URL:-http://localhost:${HTTP_PORT:-80}}"
 wait_s="${DEPLOY_WAIT_TIMEOUT:-120}"
-drain_s="${DEPLOY_DRAIN_TIMEOUT:-900}"
+drain_s="${DEPLOY_DRAIN_TIMEOUT:-1200}"
 images=(app caddy)
 
 is_git() { git rev-parse --is-inside-work-tree >/dev/null 2>&1; }

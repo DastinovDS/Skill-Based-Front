@@ -5,7 +5,7 @@
  * JSON. `parseReplay` checks the `format` field and the shape the viewer dereferences; a file with
  * an unknown format is refused, never half-read.
  */
-import type { EndReason, MapFile, Mode, PlayerId, Stance } from '../protocol.gen.ts';
+import type { EndReason, MapFile, Mode, PlayerId, RoadKind, Stance } from '../protocol.gen.ts';
 
 /** The only frames format this viewer reads. */
 export const REPLAY_FORMAT = 1;
@@ -58,6 +58,8 @@ export interface ReplayFrame {
   i: FrameIntent[];
   /** Road builds of cities, by node id; absent while no city builds (DEC-16). */
   b?: FrameBuild[];
+  /** Road types by edge id; absent while every road is untyped (DEC-22, older files). */
+  r?: RoadKind[];
 }
 
 /** `[tick, kind, data]`; `data` is the flat object of the simulation event. */
@@ -113,7 +115,9 @@ export function parseReplay(raw: unknown): ReplayFile {
         Array.isArray(f.g) &&
         Array.isArray(f.k) &&
         Array.isArray(f.i) &&
-        (f.b === undefined || Array.isArray(f.b)),
+        (f.b === undefined || Array.isArray(f.b)) &&
+        (f.r === undefined ||
+          (Array.isArray(f.r) && f.r.length === (map.edges as unknown[]).length)),
     );
   if (!sound) throw new ReplayError('invalid');
   return raw as unknown as ReplayFile;

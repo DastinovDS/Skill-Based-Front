@@ -42,11 +42,11 @@
 	}
 
 	# The match WebSocket (SRV-03, #48). On a config reload (`caddy reload`) open streams are kept
-	# for up to stream_close_delay instead of being cut at once: 15m covers a whole match
-	# (12 minutes, DEC-03). No `encode` here.
+	# for up to stream_close_delay instead of being cut at once: 20m covers a whole match
+	# (15 minutes, DEC-22) plus pauses. No `encode` here.
 	handle /ws/* {
 		reverse_proxy app:8000 {
-			stream_close_delay 15m
+			stream_close_delay 20m
 		}
 	}
 

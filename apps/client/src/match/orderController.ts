@@ -9,9 +9,18 @@ import {
   type PickHit,
 } from '../render/interaction.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
-import { passivePerMinute, RADIAL, SECTORS, stanceRates, type StanceRate } from '../hud/radial.ts';
+import {
+  passivePerMinute,
+  RADIAL,
+  ROAD_SECTORS,
+  SECTORS,
+  stanceRates,
+  type RoadType,
+  type StanceRate,
+} from '../hud/radial.ts';
 import { OrderUiState, type RoadHint } from './orderUi.svelte.ts';
 import { RadialState } from './radialState.svelte.ts';
+import { RoadTypeState } from './roadTypeState.svelte.ts';
 import { moveCost } from './rejects.ts';
 
 /** How long an answer stays in the panel, ms. */
@@ -47,7 +56,7 @@ export interface KeyInput {
 function hintKey(hint: RoadHint | null): string {
   return hint === null
     ? '-'
-    : `${String(hint.edge)}:${String(hint.width)}:${String(hint.charges)}:${String(hint.pickable)}`;
+    : `${String(hint.edge)}:${String(hint.width)}:${hint.kind}:${String(hint.charges)}:${String(hint.pickable)}`;
 }
 
 function aimKey(aim: AttackTarget | null): string {
@@ -67,8 +76,12 @@ function aimKey(aim: AttackTarget | null): string {
  *
  * Road upgrades are a city's job (DEC-16): with an own city selected (or a group standing in
  * one), U starts the road pick. The roads of that city with an upgrade hint light up; a click on
- * one sends `upgrade_road` and ends the pick. Esc, U again, or a click elsewhere ends it too.
- * Whether the city may build (supply, a build already going, charges) is the server's call.
+ * one ends the pick. A road of level 1 has no type yet: the click opens the road type menu
+ * (DEC-22: fast or freight, a radial menu under the pointer; a click or 1 / 2 chooses, U, Esc or a
+ * click outside closes it), and the choice sends `upgrade_road` with that type. A typed road keeps
+ * its type: the click sends `upgrade_road` at once. Esc, U again, or a click elsewhere ends the
+ * pick too. Whether the city may build (supply, a build already going, charges) is the server's
+ * call.
  *
  * Keys: Esc ends the road pick or deselects, X cancels the order of
  * the selected group, 1 / 2 set the mode (attack / defense), R recruits in the selected city,
@@ -79,6 +92,8 @@ export class OrderController implements MapInteraction {
   readonly ui = new OrderUiState();
   /** The stance menu on Q (ui-style 11). */
   readonly radial = new RadialState();
+  /** The road type menu of a first road upgrade (DEC-22). */
+  readonly roadType = new RoadTypeState();
 
   readonly #o: OrderControllerOptions;
   #shift = false;
@@ -204,6 +219,7 @@ export class OrderController implements MapInteraction {
 
   deselect(): void {
     this.stopRoadPick();
+    this.roadType.close();
     this.#o.hud.select(null);
     this.#refresh();
   }
@@ -299,12 +315,41 @@ export class OrderController implements MapInteraction {
     this.#refresh();
   }
 
-  /** The city of the road pick (or the selected own city) raises `edge` by one level (DEC-16). */
-  upgradeRoad(edge: number): void {
+  /**
+   * The city of the road pick (or the selected own city) raises `edge` by one level (DEC-16).
+   * A road without a type opens the road type menu instead (DEC-22); `kind` sends that choice.
+   */
+  upgradeRoad(edge: number, kind?: RoadType): void {
     const node = this.#pick ?? this.roadCity();
     if (node === null) return;
     this.stopRoadPick();
-    this.#sendCommand({ type: 'upgrade_road', node, edge }, null);
+    const road = this.#o.hud.current?.roads[edge];
+    if (this.#o.send === null) return;
+    if (kind === undefined && road?.kind === 'none' && road.gain !== null) {
+      this.radial.close();
+      this.roadType.open({
+        node,
+        edge,
+        level: road.width + 1,
+        fast: road.gain.fast,
+        freight: road.gain.freight,
+        charges: road.charges,
+      });
+      return;
+    }
+    this.#sendCommand({ type: 'upgrade_road', node, edge, kind: kind ?? null }, null);
+  }
+
+  /** A sector of the road type menu was chosen: close it and send the upgrade with that type. */
+  chooseRoadType(kind: RoadType): void {
+    const { open, node, edge } = this.roadType.current;
+    this.roadType.close();
+    if (!open || this.#o.send === null) return;
+    this.#sendCommand({ type: 'upgrade_road', node, edge, kind }, null);
+  }
+
+  closeRoadType(): void {
+    this.roadType.close();
   }
 
   setStance(stance: Stance): void {
@@ -325,6 +370,7 @@ export class OrderController implements MapInteraction {
   openRadial(sticky: boolean): boolean {
     if (this.#o.send === null) return false;
     this.stopRoadPick();
+    this.roadType.close();
     this.radial.open(sticky);
     return true;
   }
@@ -351,6 +397,18 @@ export class OrderController implements MapInteraction {
     if (shiftChanged) this.#refresh();
     if (input.type !== 'keydown') return this.#keyUp(input);
     if (input.code === 'KeyQ') return this.#qDown(input);
+    if (this.roadType.current.open) {
+      // The road type menu: 1 / 2 choose (not the modes); U, the key that opened it, or Esc close.
+      const sector = ROAD_SECTORS.find((s) => `Digit${s.key}` === input.code);
+      if (sector !== undefined) {
+        this.chooseRoadType(sector.type);
+        return true;
+      }
+      if (input.code === 'Escape' || input.code === 'KeyU') {
+        this.closeRoadType();
+        return true;
+      }
+    }
     if (this.radial.current.open) {
       // The menu is open: 1 / 2 / 3 choose a stance (not the modes), Esc closes it.
       const sector = SECTORS.find((s) => `Digit${s.key}` === input.code);
@@ -495,12 +553,11 @@ export class OrderController implements MapInteraction {
 
   #roadHint(edge: number): RoadHint | null {
     const road = this.#o.hud.current?.roads[edge];
-    if (road === undefined || road.capacityCenti === null) return null;
+    if (road === undefined || road.gain === null) return null;
     return {
       edge,
       width: road.width + 1,
-      capacityCenti: road.capacityCenti,
-      packetSpeedPct: road.packetSpeedPct ?? 0,
+      kind: road.kind,
       charges: road.charges,
       pickable: this.#candidates().includes(edge),
     };
