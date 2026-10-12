@@ -1,4 +1,5 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
+import type { AlertState } from './alerts.svelte.ts';
 import { roadCandidates, type AttackTarget } from '../hud/hudData.ts';
 import type { Command, MapFile, Mode, RulesetPublic, Stance } from '../protocol.gen.ts';
 import {
@@ -8,7 +9,9 @@ import {
   type PickHit,
 } from '../render/interaction.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
+import { passivePerMinute, RADIAL, SECTORS, stanceRates, type StanceRate } from '../hud/radial.ts';
 import { OrderUiState, type RoadHint } from './orderUi.svelte.ts';
+import { RadialState } from './radialState.svelte.ts';
 import { moveCost } from './rejects.ts';
 
 /** How long an answer stays in the panel, ms. */
@@ -24,6 +27,12 @@ export interface OrderControllerOptions {
   book: OrderBook;
   /** Queues a command and returns its `seq`; `null`: there is no match to send to (selection only). */
   send: ((cmd: Command) => number) | null;
+  /** Milliseconds, for telling a tap on Q from a hold (a test passes its own clock). */
+  now?: () => number;
+  /** The alerts of the match: `Space` takes the camera to the next one. */
+  alerts?: Pick<AlertState, 'nextNode'>;
+  /** Moves the camera to a city (the canvas). */
+  focusNode?: (node: number) => void;
 }
 
 /** The parts of a keyboard event the controller needs (`code`: layout-independent key). */
@@ -31,6 +40,8 @@ export interface KeyInput {
   readonly type: 'keydown' | 'keyup';
   readonly code: string;
   readonly shiftKey: boolean;
+  /** The key is held and the browser repeats it (a repeat of Q must not reopen the menu). */
+  readonly repeat?: boolean;
 }
 
 function hintKey(hint: RoadHint | null): string {
@@ -61,10 +72,13 @@ function aimKey(aim: AttackTarget | null): string {
  *
  * Keys: Esc ends the road pick or deselects, X cancels the order of
  * the selected group, 1 / 2 set the mode (attack / defense), R recruits in the selected city,
- * U toggles the road pick.
+ * U toggles the road pick, Q the stance menu (hold and release over a sector, or tap and click;
+ * 1 / 2 / 3 choose while it is open), Space the camera to the next alert.
  */
 export class OrderController implements MapInteraction {
   readonly ui = new OrderUiState();
+  /** The stance menu on Q (ui-style 11). */
+  readonly radial = new RadialState();
 
   readonly #o: OrderControllerOptions;
   #shift = false;
@@ -77,6 +91,8 @@ export class OrderController implements MapInteraction {
   #overlayGhosts: OverlayState['ghosts'] = [];
   /** The city of the road pick, or `null`. Mirrored to `ui.current.roadPick` for the panel. */
   #pick: number | null = null;
+  /** When Q went down (ms) while the menu is held open; `null`: Q is up. */
+  #qDownAt: number | null = null;
 
   constructor(options: OrderControllerOptions) {
     this.#o = options;
@@ -281,6 +297,35 @@ export class OrderController implements MapInteraction {
     this.#sendCommand({ type: 'set_stance', stance }, null);
   }
 
+  /** The numbers of the stance menu, from the ruleset of `welcome`. */
+  get stanceRates(): StanceRate[] {
+    return stanceRates(this.#o.rules);
+  }
+
+  /** Charges a minute the capital makes in any stance (the caption of the menu). */
+  get passivePerMinute(): number {
+    return passivePerMinute(this.#o.rules);
+  }
+
+  /** The menu opens only in a match, where a stance can be sent. */
+  openRadial(sticky: boolean): boolean {
+    if (this.#o.send === null) return false;
+    this.stopRoadPick();
+    this.radial.open(sticky);
+    return true;
+  }
+
+  closeRadial(): void {
+    this.#qDownAt = null;
+    this.radial.close();
+  }
+
+  /** A sector was chosen: close the menu and send the stance unless it is the current one. */
+  chooseStance(stance: Stance): void {
+    this.closeRadial();
+    if (this.#o.hud.current?.stance !== stance) this.setStance(stance);
+  }
+
   forfeit(): void {
     this.#sendCommand({ type: 'forfeit' }, null);
   }
@@ -290,7 +335,20 @@ export class OrderController implements MapInteraction {
     const shiftChanged = this.#shift !== input.shiftKey;
     this.#shift = input.shiftKey;
     if (shiftChanged) this.#refresh();
-    if (input.type !== 'keydown') return false;
+    if (input.type !== 'keydown') return this.#keyUp(input);
+    if (input.code === 'KeyQ') return this.#qDown(input);
+    if (this.radial.current.open) {
+      // The menu is open: 1 / 2 / 3 choose a stance (not the modes), Esc closes it.
+      const sector = SECTORS.find((s) => `Digit${s.key}` === input.code);
+      if (sector !== undefined) {
+        this.chooseStance(sector.stance);
+        return true;
+      }
+      if (input.code === 'Escape') {
+        this.closeRadial();
+        return true;
+      }
+    }
     switch (input.code) {
       case 'Escape':
         if (this.#pick !== null) this.stopRoadPick();
@@ -309,12 +367,60 @@ export class OrderController implements MapInteraction {
       case 'KeyU':
         this.toggleRoadPick();
         return true;
+      case 'Space':
+        return this.#jumpToAlert();
       default:
         return false;
     }
   }
 
   // --- Internals ----------------------------------------------------------------------------
+
+  /** `Space`: the camera goes to the city the next alert is about; taken only if there is one. */
+  #jumpToAlert(): boolean {
+    const node = this.#o.alerts?.nextNode() ?? null;
+    if (node === null) return false;
+    this.#o.focusNode?.(node);
+    return true;
+  }
+
+  #now(): number {
+    return this.#o.now?.() ?? performance.now();
+  }
+
+  /** Q down: a held key opens the menu under the pointer; Q again closes a menu left open. */
+  #qDown(input: KeyInput): boolean {
+    if (input.repeat === true) return true;
+    if (this.radial.current.open) {
+      this.closeRadial();
+      return true;
+    }
+    this.#qDownAt = this.openRadial(false) ? this.#now() : null;
+    return true;
+  }
+
+  /**
+   * Q up: a short press leaves the menu open for a click or 1 / 2 / 3; after a hold the sector
+   * under the pointer is chosen, and the dead zone cancels. A lost focus cancels a hold.
+   */
+  #keyUp(input: KeyInput): boolean {
+    if (input.code === '' && this.#qDownAt !== null) {
+      this.closeRadial();
+      return false;
+    }
+    if (input.code !== 'KeyQ' || this.#qDownAt === null) return false;
+    const held = this.#now() - this.#qDownAt;
+    this.#qDownAt = null;
+    const { hover } = this.radial.current;
+    if (held < RADIAL.tapMs) {
+      this.radial.keep();
+    } else if (hover === null) {
+      this.closeRadial();
+    } else {
+      this.chooseStance(hover);
+    }
+    return true;
+  }
 
   #modeKey(mode: Mode): boolean {
     this.setMode(mode);
@@ -387,6 +493,11 @@ export class OrderController implements MapInteraction {
   }
 
   #onResult(result: CommandResult): void {
+    this.ui.emit(
+      result.kind === 'rejected'
+        ? { kind: 'rejected', code: result.code, cmd: result.cmd }
+        : { kind: result.kind, cmd: result.cmd },
+    );
     // A move shows itself on the map (ghost, then the order line): no message for its success.
     if (result.kind === 'accepted' && result.cmd.type === 'move') return;
     this.#noticeId += 1;

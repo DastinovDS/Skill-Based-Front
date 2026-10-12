@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 6,
+    "PROTOCOL_VERSION": 7,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -379,6 +379,40 @@
       ],
       "title": "Detail",
       "type": "string"
+    },
+    "EconomyPublic": {
+      "additionalProperties": false,
+      "description": "The charge production the stance menu shows (``economy`` of the ruleset, DEC-02).",
+      "properties": {
+        "stance_to_charges_pct": {
+          "$ref": "#/$defs/StancePctPublic"
+        },
+        "charges_per_cp": {
+          "description": "Charges per whole CP put into charges.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "passive_amount": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "passive_period_ticks": {
+          "description": "The capital makes ``passive_amount`` charges every ``passive_period_ticks`` in any stance.",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "stance_to_charges_pct",
+        "charges_per_cp",
+        "passive_amount",
+        "passive_period_ticks"
+      ],
+      "title": "EconomyPublic",
+      "type": "object"
     },
     "EdgeView": {
       "additionalProperties": false,
@@ -1250,6 +1284,34 @@
       "title": "OrderView",
       "type": "object"
     },
+    "OrdersPublic": {
+      "additionalProperties": false,
+      "description": "Delays of planned orders and modes, and the stance cooldown (``orders`` of the ruleset).",
+      "properties": {
+        "planned_delay_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "defense_delay_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stance_cooldown_ticks": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "planned_delay_ticks",
+        "defense_delay_ticks",
+        "stance_cooldown_ticks"
+      ],
+      "title": "OrdersPublic",
+      "type": "object"
+    },
     "PacketView": {
       "additionalProperties": false,
       "description": "Own charges on the way (mechanics.md, section 7).",
@@ -1510,6 +1572,12 @@
         },
         "build": {
           "$ref": "#/$defs/BuildPublic"
+        },
+        "economy": {
+          "$ref": "#/$defs/EconomyPublic"
+        },
+        "orders": {
+          "$ref": "#/$defs/OrdersPublic"
         }
       },
       "required": [
@@ -1518,7 +1586,9 @@
         "cp",
         "cost",
         "combat",
-        "build"
+        "build",
+        "economy",
+        "orders"
       ],
       "title": "RulesetPublic",
       "type": "object"
@@ -1743,6 +1813,34 @@
       ],
       "title": "Stance",
       "type": "string"
+    },
+    "StancePctPublic": {
+      "additionalProperties": false,
+      "description": "``economy.stance_to_charges_pct``: the share of the CP quantum put into charges, in %.",
+      "properties": {
+        "economy": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "balance": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "war": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "economy",
+        "balance",
+        "war"
+      ],
+      "title": "StancePctPublic",
+      "type": "object"
     },
     "Terrain": {
       "enum": [

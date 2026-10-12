@@ -2,7 +2,7 @@
   import { getLocale, t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import { rejectMessageKey } from '../match/rejects.ts';
-  import type { Mode, Stance } from '../protocol.gen.ts';
+  import type { Mode } from '../protocol.gen.ts';
   import { formatCentis } from './format.ts';
   import { roadCandidates, type HudData } from './hudData.ts';
 
@@ -18,7 +18,6 @@
     { mode: 'attack', key: '1' },
     { mode: 'defense', key: '2' },
   ];
-  const STANCES: readonly Stance[] = ['economy', 'balance', 'war'];
 
   const ui = $derived(orders.ui.current);
   const cp = (centis: number): string => formatCentis(centis, getLocale());
@@ -206,20 +205,14 @@
   {/if}
 
   {#if data !== null}
-    <div class="row" role="group" aria-label={tf('orders.stance', { cost: cp(orders.stanceCost) })}>
-      {#each STANCES as stance (stance)}
-        <button
-          type="button"
-          class:active={data.stance === stance}
-          aria-pressed={data.stance === stance}
-          onclick={() => {
-            orders.setStance(stance);
-          }}
-        >
-          {t(`stance.${stance}`)}
-        </button>
-      {/each}
-    </div>
+    <button
+      type="button"
+      onclick={() => {
+        orders.openRadial(true);
+      }}
+    >
+      {tf('orders.stanceOpen', { stance: t(`stance.${data.stance}`) })}
+    </button>
     <p class="hint">{tf('orders.stance', { cost: cp(orders.stanceCost) })}</p>
   {/if}
 

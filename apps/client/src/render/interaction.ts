@@ -14,6 +14,9 @@ export type PickHit =
 /** What can be selected: a group or a node (a road is only hovered, and clicked in road pick). */
 export type SelectionHit = Exclude<PickHit, { readonly kind: 'edge' }>;
 
+/** The life of a ghost: sent (dashed), accepted by the server (solid), rejected (shakes and fades). */
+export type GhostStatus = 'pending' | 'accepted' | 'rejected';
+
 /** An order sent and not yet shown by a snapshot: a dashed arrow on the map. */
 export interface GhostArrow {
   /** The node the group stood in when the order was sent. */
@@ -25,6 +28,10 @@ export interface GhostArrow {
    * the order is unanswered: the arrow is a straight line to `dest`.
    */
   readonly path: readonly number[] | null;
+  /** Default `pending`. */
+  readonly status?: GhostStatus;
+  /** When the server rejected it (`performance.now()` ms), for the shake and the fade. */
+  readonly rejectedAt?: number | null;
 }
 
 /** Where a click would send the selected group. */

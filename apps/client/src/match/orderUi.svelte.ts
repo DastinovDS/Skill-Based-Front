@@ -26,6 +26,15 @@ export type OrderNotice =
   | { readonly id: number; readonly kind: 'rejected'; readonly code: string; readonly cmd: Command }
   | { readonly id: number; readonly kind: 'lost'; readonly cmd: Command };
 
+/**
+ * The answer to a command, for whoever reacts to it besides the panel (the sound of package F:
+ * a short tone for `accepted`, another for `rejected`). A move that was accepted is reported too.
+ */
+export type OrderFeedback =
+  | { readonly kind: 'accepted'; readonly cmd: Command }
+  | { readonly kind: 'rejected'; readonly code: string; readonly cmd: Command }
+  | { readonly kind: 'lost'; readonly cmd: Command };
+
 export interface OrderUiData {
   /** The "planned order" switch (Shift+click also makes one order planned). */
   readonly planned: boolean;
@@ -50,7 +59,21 @@ export class OrderUiState {
     notice: null,
   });
 
+  #listeners: readonly ((feedback: OrderFeedback) => void)[] = [];
+
   patch(change: Partial<OrderUiData>): void {
     this.current = { ...this.current, ...change };
+  }
+
+  /** Calls `listener` for every answered command; returns the function that stops it. */
+  onFeedback(listener: (feedback: OrderFeedback) => void): () => void {
+    this.#listeners = [...this.#listeners, listener];
+    return () => {
+      this.#listeners = this.#listeners.filter((l) => l !== listener);
+    };
+  }
+
+  emit(feedback: OrderFeedback): void {
+    for (const listener of this.#listeners) listener(feedback);
   }
 }

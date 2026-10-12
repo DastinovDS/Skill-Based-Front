@@ -6,16 +6,20 @@ Only what the client uses (AGENTS.md, section 7.1):
 - the combat estimate parameters (CLI-08, #64): terrain defense modifier and the planned and
   defense bonuses (DEC-07, rule 1; same names as ``packages/protocol/vectors/combat.json``);
 - the clock and the CP regeneration, for the HUD timer and the CP bar (CLI-08);
-- the road level prices and duration, for the road upgrade hint (DEC-16).
+- the road level prices and duration, for the road upgrade hint (DEC-16);
+- the stance table and the delays of planned orders, for the stance menu and the countdown on
+  order arrows (ui-style 11 and 9.7).
 
 The rules are the same for both players, so nothing here is hidden information.
 """
 
-from typing import Self
+from typing import Annotated, Self
+
+from pydantic import Field
 
 from gow_protocol.base import Centi, NonNegInt, PosInt, SignedInt, Width, WireModel
 from gow_sim.maps import MAX_WIDTH
-from gow_sim.ruleset import Ruleset
+from gow_sim.ruleset import Ruleset, Stance
 
 
 class CostsPublic(WireModel):
@@ -62,6 +66,36 @@ class LevelPrice(WireModel):
     charges: NonNegInt
 
 
+Percent = Annotated[int, Field(ge=0, le=100)]
+
+
+class StancePctPublic(WireModel):
+    """``economy.stance_to_charges_pct``: the share of the CP quantum put into charges, in %."""
+
+    economy: Percent
+    balance: Percent
+    war: Percent
+
+
+class EconomyPublic(WireModel):
+    """The charge production the stance menu shows (``economy`` of the ruleset, DEC-02)."""
+
+    stance_to_charges_pct: StancePctPublic
+    charges_per_cp: NonNegInt
+    """Charges per whole CP put into charges."""
+    passive_amount: NonNegInt
+    passive_period_ticks: PosInt
+    """The capital makes ``passive_amount`` charges every ``passive_period_ticks`` in any stance."""
+
+
+class OrdersPublic(WireModel):
+    """Delays of planned orders and modes, and the stance cooldown (``orders`` of the ruleset)."""
+
+    planned_delay_ticks: NonNegInt
+    defense_delay_ticks: NonNegInt
+    stance_cooldown_ticks: NonNegInt
+
+
 class BuildPublic(WireModel):
     """Road upgrades by a city (``build`` of the ruleset, DEC-16)."""
 
@@ -77,11 +111,14 @@ class RulesetPublic(WireModel):
     cost: CostsPublic
     combat: CombatPublic
     build: BuildPublic
+    economy: EconomyPublic
+    orders: OrdersPublic
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
         cost = rules.orders.cost
         defense_mod = rules.terrain.defense_mod
+        pct = rules.economy.stance_to_charges_pct
         return cls(
             tick_hz=rules.tick_hz,
             match_ticks=rules.match_ticks,
@@ -115,5 +152,20 @@ class RulesetPublic(WireModel):
                     LevelPrice(width=w, charges=rules.build.charges_per_level.of(w))
                     for w in range(2, MAX_WIDTH + 1)
                 ),
+            ),
+            economy=EconomyPublic(
+                stance_to_charges_pct=StancePctPublic(
+                    economy=pct.of(Stance.ECONOMY),
+                    balance=pct.of(Stance.BALANCE),
+                    war=pct.of(Stance.WAR),
+                ),
+                charges_per_cp=rules.economy.charges_per_cp,
+                passive_amount=rules.economy.passive_amount,
+                passive_period_ticks=rules.economy.passive_period_ticks,
+            ),
+            orders=OrdersPublic(
+                planned_delay_ticks=rules.orders.planned_delay_ticks,
+                defense_delay_ticks=rules.orders.defense_delay_ticks,
+                stance_cooldown_ticks=rules.orders.stance_cooldown_ticks,
             ),
         )

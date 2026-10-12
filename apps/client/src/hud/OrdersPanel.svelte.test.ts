@@ -99,21 +99,22 @@ describe('OrdersPanel', () => {
   const button = (target: HTMLElement, label: string) =>
     [...target.querySelectorAll('button')].find((b) => b.textContent.includes(label));
 
-  it('sends mode, split, stance and recruit from the buttons', () => {
+  it('sends mode, split and recruit from the buttons, and opens the stance menu', () => {
     setLocale('en');
     const { target, orders, sent } = render();
     orders.click({ kind: 'group', id: group.id }, false);
     flushSync();
     button(target, 'Defense')?.click();
     button(target, 'Split off')?.click();
-    button(target, 'War')?.click();
+    button(target, 'Stance:')?.click();
     button(target, 'Recruit here')?.click();
     expect(sent).toEqual([
       { type: 'set_mode', group: group.id, mode: 'defense' },
       { type: 'split', group: group.id, n: 1 },
-      { type: 'set_stance', stance: 'war' },
       { type: 'recruit', node: group.location.kind === 'node' ? group.location.node : -1 },
     ]);
+    // The stance buttons are gone: the button opens the radial menu (ui-style 11).
+    expect(orders.radial.current).toMatchObject({ open: true, sticky: true });
   });
 
   it('asks before forfeiting and sends it only after the confirmation', () => {

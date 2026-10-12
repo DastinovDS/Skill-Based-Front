@@ -5,25 +5,15 @@ import {
   type RenderGroup,
   type RenderPacket,
 } from '../net/interpolate.ts';
-import type {
-  EdgeView,
-  IntentView,
-  MapFile,
-  NodeView,
-  PlayerId,
-  SnapshotMsg,
-} from '../protocol.gen.ts';
+import type { EdgeView, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { MapLayers } from './layers.ts';
 import {
-  arrowGeometry,
   buildGeometry,
-  dashSegments,
   edgeEnds,
   edgePoint,
   nodePoint,
   nodeSlots,
   roadPosition,
-  sideways,
   packetFade,
   timeLeftLabel,
   type TokenSpot,
@@ -33,31 +23,16 @@ import { NODE_SLOT_RADIUS } from './cityLayout.ts';
 import { edgeMarkerPoint, nodeMarkerPoint } from './fogLayout.ts';
 import { EntityKit, Token } from './shapes.ts';
 import {
-  ARROW_DASH,
-  ARROW_GAP,
-  ARROW_HEAD,
-  ARROW_OUTLINE,
-  ARROW_WIDTH,
   BUILD_MARK_DISTANCE,
   BUILD_TIE,
   BUILD_TIE_CASING,
   BUILD_TIME_FONT_SIZE,
-  INTENT_ICON_ANGLE,
-  INTENT_ICON_DISTANCE,
-  ORDER_LINE_ALPHA,
   UNIT_LABEL_MIN_SCALE,
-  ownerColor,
-  PLATE_FILL,
   roadThickness,
 } from './style.ts';
 
 function other(player: PlayerId): PlayerId {
   return player === 0 ? 1 : 0;
-}
-
-function around(distance: number, degrees: number): Point {
-  const rad = (degrees * Math.PI) / 180;
-  return { x: distance * Math.cos(rad), y: distance * Math.sin(rad) };
 }
 
 /** An object with a label that follows the zoom-dependent text resolution. */
@@ -115,10 +90,6 @@ export class EntityView {
   private readonly enemyLayer = new Container({ label: 'enemy' });
   private readonly packetLayer = new Container({ label: 'packets' });
   private readonly groupLayer = new Container({ label: 'own-groups' });
-  private readonly orders = new Graphics();
-  private readonly arrows = new Graphics();
-  private readonly icons = new Container({ label: 'intent-icons' });
-  private readonly iconPool: Container[] = [];
   private readonly buildTies = new Graphics();
   private readonly buildLayer = new Container({ label: 'builds' });
   private readonly buildMarks: BuildMark[] = [];
@@ -155,9 +126,8 @@ export class EntityView {
     });
     // Road builds lie on the roads, under the groups.
     layers.layer.roads.addChild(this.buildTies);
-    // Order lines go under the tokens of the groups they belong to; arrows of intents on top.
-    layers.layer.groups.addChild(this.orders, this.enemyLayer, this.packetLayer, this.groupLayer);
-    layers.layer.intents.addChild(this.buildLayer, this.arrows, this.icons);
+    layers.layer.groups.addChild(this.enemyLayer, this.packetLayer, this.groupLayer);
+    layers.layer.intents.addChild(this.buildLayer);
   }
 
   setLabelResolution(resolution: number): void {
@@ -210,22 +180,13 @@ export class EntityView {
     this.stamp++;
     this.spots = this.updateGroups(frame.groups);
     this.updatePackets(frame);
-    this.drawOrders(frame.groups, this.spots);
   }
 
   destroy(): void {
     // Containers and their children first: they reference the shared contexts, which Graphics
     // leaves alone. The two Graphics below own their contexts and are destroyed without options.
-    this.arrows.destroy();
-    this.orders.destroy();
     this.buildTies.destroy();
-    for (const container of [
-      this.buildLayer,
-      this.enemyLayer,
-      this.packetLayer,
-      this.groupLayer,
-      this.icons,
-    ]) {
+    for (const container of [this.buildLayer, this.enemyLayer, this.packetLayer, this.groupLayer]) {
       container.destroy({ children: true });
     }
     this.kit.destroy();
@@ -235,14 +196,13 @@ export class EntityView {
   // --- Snapshot-driven part -----------------------------------------------------------------
 
   private applyBase(base: SnapshotMsg): void {
-    const { nodes, edges, intents } = base.view;
+    const { nodes, edges } = base.view;
     nodes.forEach((node) => {
       this.setEnemyNode(node);
     });
     edges.forEach((edge) => {
       this.setEnemyEdge(edge);
     });
-    this.drawIntents(intents);
     this.drawBuilds(base);
   }
 
@@ -372,79 +332,6 @@ export class EntityView {
     if (token === null) return;
     const at = edgeMarkerPoint(this.map, edge.id);
     if (at !== undefined) token.view.position.set(at.x, at.y);
-  }
-
-  private drawIntents(intents: readonly IntentView[]): void {
-    const g = this.arrows;
-    g.clear();
-    let icons = 0;
-    for (const intent of intents) {
-      const from = nodePoint(this.map, intent.origin);
-      if (from === undefined) continue;
-      const to = intent.target === null ? undefined : nodePoint(this.map, intent.target);
-      if (intent.kind === 'planned_move' && to !== undefined) {
-        this.drawArrow(g, intent, from, to);
-      } else if (intent.kind !== 'planned_move') {
-        this.placeIcon(icons++, intent, from);
-      }
-    }
-    // Hide the icons left over from the previous snapshot.
-    for (let i = icons; i < this.iconPool.length; i++) {
-      const icon = this.iconPool[i];
-      if (icon !== undefined) icon.visible = false;
-    }
-  }
-
-  private drawArrow(g: Graphics, intent: IntentView, from: Point, to: Point): void {
-    const color = ownerColor(this.me, intent.owner);
-    // Both players' arrows on one road run side by side instead of on top of each other.
-    const lane = intent.owner === 0 ? 5 : -5;
-    const start = sideways(from, to, from, lane);
-    const end = sideways(from, to, to, lane);
-    const arrow = arrowGeometry(
-      start,
-      end,
-      this.radiusOf(intent.origin) + 6,
-      this.radiusOf(intent.target ?? intent.origin) + 6,
-      ARROW_HEAD.length,
-      ARROW_HEAD.width,
-    );
-    if (arrow === null) return;
-    const dashes = dashSegments(arrow.start, arrow.end, ARROW_DASH, ARROW_GAP);
-    for (const [a, b] of dashes) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-    g.stroke(ARROW_OUTLINE);
-    for (const [a, b] of dashes) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-    g.stroke({ width: ARROW_WIDTH, color });
-    const [tip, left, right] = arrow.head;
-    g.poly([tip.x, tip.y, left.x, left.y, right.x, right.y])
-      .fill(color)
-      .stroke({ width: 1.5, color: PLATE_FILL });
-    // The tail tells the side without colour: a dot for own, a hollow diamond for the opponent.
-    const { x, y } = arrow.start;
-    if (intent.owner === this.me) {
-      g.circle(x, y, 4).fill(color).stroke({ width: 1.5, color: PLATE_FILL });
-    } else {
-      g.poly([x, y - 5.5, x + 5.5, y, x, y + 5.5, x - 5.5, y])
-        .fill(PLATE_FILL)
-        .stroke({ width: 2, color });
-    }
-  }
-
-  private placeIcon(index: number, intent: IntentView, at: Point): void {
-    let icon = this.iconPool[index];
-    if (icon === undefined) {
-      icon = this.icons.addChild(new Container());
-      icon.addChild(new Graphics(this.kit.iconDisc[0]));
-      // The only intent without a destination is "Defense" (DEC-08).
-      icon.addChild(new Graphics(this.kit.glyph.defense));
-      this.iconPool.push(icon);
-    }
-    const [disc] = icon.children as [Graphics, Graphics];
-    disc.context = this.kit.iconDisc[intent.owner];
-    const radius = this.radiusOf(intent.origin);
-    const offset = around(radius + INTENT_ICON_DISTANCE, INTENT_ICON_ANGLE);
-    icon.position.set(at.x + offset.x, at.y + offset.y);
-    icon.visible = true;
   }
 
   // --- Frame-driven part --------------------------------------------------------------------
@@ -589,29 +476,6 @@ export class EntityView {
       this.packets.set(packet.id, entry);
     }
     return entry;
-  }
-
-  private drawOrders(groups: readonly RenderGroup[], points: ReadonlyMap<string, Point>): void {
-    const g = this.orders;
-    g.clear();
-    for (const { group, owner } of groups) {
-      const color = ownerColor(this.me, owner ?? this.me);
-      const from = points.get(group.id);
-      if (group.order === null || from === undefined) continue;
-      g.moveTo(from.x, from.y);
-      for (const id of group.order.path) {
-        const step = nodePoint(this.map, id);
-        if (step !== undefined) g.lineTo(step.x, step.y);
-      }
-      g.stroke({ width: 2, color, alpha: ORDER_LINE_ALPHA });
-      const dest = nodePoint(this.map, group.order.dest);
-      if (dest !== undefined)
-        g.circle(dest.x, dest.y, this.radiusOf(group.order.dest) + 5).stroke({
-          width: 2,
-          color,
-          alpha: ORDER_LINE_ALPHA,
-        });
-    }
   }
 }
 

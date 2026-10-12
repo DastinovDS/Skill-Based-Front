@@ -77,7 +77,7 @@ describe('dev match', () => {
     match.session.orders.track(match.session.send(cmd), cmd, home.location.node);
     vi.advanceTimersByTime(DEV_ACK_MS + 1);
     expect(results.at(-1)).toMatchObject({ kind: 'rejected', code: 'NOT_ENOUGH_CP' });
-    expect(match.session.orders.ghosts()).toEqual([]);
+    expect(match.session.orders.ghosts().map((g) => g.status)).toEqual(['rejected']);
     match.stop();
   });
 });

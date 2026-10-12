@@ -2,6 +2,8 @@ import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { EMPTY_OVERLAY, type GhostArrow, type OverlayState } from './interaction.ts';
+import { ghostLook } from './intentLayout.ts';
+import { reducedMotion } from './motion.ts';
 import type { MapLayers } from './layers.ts';
 import {
   arrowGeometry,
@@ -48,6 +50,8 @@ export class OverlayView {
   private readonly ring = new Graphics();
   private readonly frame = new Graphics();
   private readonly lines = new Graphics();
+  /** Ghost arrows of sent orders: redrawn every frame while one shakes and fades. */
+  private readonly ghosts = new Graphics();
   private overlay: OverlayState = EMPTY_OVERLAY;
   /** Side of the triangle the selection frame is drawn for (0: not drawn yet). */
   private frameSide = 0;
@@ -79,17 +83,24 @@ export class OverlayView {
     this.badgeText = this.badge.addChild(
       new Text({ text: '', style: this.badgeStyle, anchor: 0.5, resolution: 1 }),
     );
-    layers.layer.intents.addChild(this.lines, this.ring, this.frame, this.badge);
+    layers.layer.intents.addChild(this.lines, this.ring, this.frame, this.badge, this.ghosts);
     this.frame.visible = false;
   }
 
   /** `groupSpot`: the drawn centre, side and symbol scale of an own group's token. */
-  update(next: OverlayState, groupSpot: (id: string) => TokenSpot | undefined): void {
-    if (next !== this.overlay) {
+  update(
+    next: OverlayState,
+    groupSpot: (id: string) => TokenSpot | undefined,
+    now: number = performance.now(),
+  ): void {
+    const changed = next !== this.overlay;
+    if (changed) {
       this.overlay = next;
       this.drawLines(next);
       this.drawRing(next);
     }
+    // A rejected ghost shakes and fades with the clock; the others only when the overlay changes.
+    if (changed || next.ghosts.some((g) => g.status === 'rejected')) this.drawGhosts(next, now);
     const selected = next.selection;
     const at = selected?.kind === 'group' ? groupSpot(selected.id) : undefined;
     this.frame.visible = at !== undefined;
@@ -114,6 +125,7 @@ export class OverlayView {
     this.badge.destroy({ children: true });
     this.badgeStyle.destroy();
     this.lines.destroy();
+    this.ghosts.destroy();
     this.ring.destroy();
     this.frame.destroy();
   }
@@ -164,7 +176,6 @@ export class OverlayView {
         cap: 'round',
       });
     }
-    for (const ghost of state.ghosts) this.drawGhost(g, ghost);
     const preview = state.preview;
     if (preview !== null) {
       const from = nodePoint(this.map, preview.from);
@@ -216,13 +227,30 @@ export class OverlayView {
     return this.radiusOf(node);
   }
 
-  /** Dashed arrow along the server's path, or straight to the destination while unanswered. */
-  private drawGhost(g: Graphics, ghost: GhostArrow): void {
+  private drawGhosts(state: OverlayState, now: number): void {
+    this.ghosts.clear();
+    for (const ghost of state.ghosts) this.drawGhost(this.ghosts, ghost, now);
+  }
+
+  /**
+   * Dashed arrow along the server's path, or straight to the destination while unanswered; solid
+   * once the server accepted it; shaking and fading once it rejected it (U6).
+   */
+  private drawGhost(g: Graphics, ghost: GhostArrow, now: number): void {
+    const status = ghost.status ?? 'pending';
+    const look = ghostLook(
+      status,
+      ghost.rejectedAt == null ? 0 : now - ghost.rejectedAt,
+      status === 'accepted' ? 1 : ORDER_GHOST_ALPHA,
+      reducedMotion(),
+    );
+    if (look.alpha <= 0) return;
     // The server's path starts at the group's node; the unanswered arrow goes straight to `dest`.
     const nodes = ghost.path ?? [ghost.from, ghost.dest];
     const points = nodes
       .map((id) => nodePoint(this.map, id))
-      .filter((p): p is Point => p !== undefined);
+      .filter((p): p is Point => p !== undefined)
+      .map((p) => ({ x: p.x + look.dx, y: p.y }));
     const color = YOU;
     const last = points.at(-1);
     const before = points.at(-2);
@@ -235,14 +263,19 @@ export class OverlayView {
       ARROW_HEAD.length,
       ARROW_HEAD.width,
     );
+    const fade = Math.min(1, look.alpha / ORDER_GHOST_ALPHA);
     for (const pass of [
-      ARROW_OUTLINE,
-      { width: ORDER_GHOST_WIDTH, color, alpha: ORDER_GHOST_ALPHA },
+      { ...ARROW_OUTLINE, alpha: ARROW_OUTLINE.alpha * fade },
+      { width: ORDER_GHOST_WIDTH, color, alpha: look.alpha },
     ]) {
       for (let i = 1; i < points.length; i++) {
         const a = points[i - 1];
         const b = i === points.length - 1 && head !== null ? head.end : points[i];
         if (a === undefined || b === undefined) continue;
+        if (look.solid) {
+          g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+          continue;
+        }
         for (const [s, e] of dashSegments(a, b, ORDER_GHOST_DASH, ORDER_GHOST_GAP)) {
           g.moveTo(s.x, s.y).lineTo(e.x, e.y);
         }

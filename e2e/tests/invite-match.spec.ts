@@ -54,13 +54,12 @@ async function giveOrders(player: Player, map: MapFile): Promise<void> {
   await expect.poll(() => player.accepted('move')).toBe(2);
   await player.page.getByLabel(/Planned order/).uncheck();
 
-  // 3. The CP stance: costs nothing, the panel shows the new one pressed.
-  await player.page.getByRole('button', { name: 'War' }).click();
+  // 3. The CP stance from the radial menu (Q, a tap keeps it open): costs nothing, the panel shows
+  // the new one.
+  await player.page.keyboard.press('q');
+  await player.page.getByRole('menuitemradio', { name: /War/ }).click();
   await expect.poll(() => player.accepted('set_stance')).toBe(1);
-  await expect(player.page.getByRole('button', { name: 'War' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(player.page.getByRole('button', { name: /Stance: War/ })).toBeVisible();
 }
 
 test('two guests play a private match by invite to the end and watch the replay', async ({

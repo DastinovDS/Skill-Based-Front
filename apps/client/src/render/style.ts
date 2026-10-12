@@ -247,3 +247,43 @@ export const WAVE_FILL_ALPHA = 0.28;
 export const WAVE_STROKE = { width: 3, alpha: 0.9 } as const;
 export const FLASH_STAR = { outer: 15, inner: 6, points: 8 } as const;
 export const LOSS_FONT_SIZE = 13;
+
+// --- Ribbon arrows of intents and orders (9.7) ---------------------------------------------------
+// A planned order is a wide translucent ribbon along a curve with a big head (HOI4, Mini
+// Motorways). Own: solid contour; the opponent: dashed 9/5, which also "runs" once the group has
+// left. A light stripe grows from the tail while the delay runs out.
+export const RIBBON = {
+  /** Body width; the tail narrows to `tailRatio` of it. Head 38 x 30 at this body. */
+  body: 16,
+  tailRatio: 0.6,
+  headWidth: 38,
+  headLength: 30,
+  /** The curve bends by this share of the chord. */
+  bend: 0.15,
+  fillAlpha: 0.32,
+  contour: { width: 2.2, alpha: 0.95 },
+  casing: { width: 6, alpha: 0.45 },
+  /** The ribbon leaves a city at radius + `startGap` and ends at radius + `endGap` of the target. */
+  startGap: 16,
+  endGap: 20,
+  /** The narrow end of the body is never thinner than this on screen (CSS px). */
+  minTailPx: 8,
+  dash: 9,
+  gap: 5,
+  /** The dashes run along the contour at this speed (world units per second). */
+  runSpeed: 28,
+  stripe: { width: 3, alpha: 0.75 },
+} as const;
+/** The dotted ring around the target of an enemy intent. */
+export const INTENT_TARGET_RING = { gap: 20, width: 2, dash: 5, gap2: 4, alpha: 0.95 } as const;
+/** The disc of "Defense" with the delay arc around it. */
+export const DEFENSE_ARC = { gap: 3, width: 3 } as const;
+
+/** Thin line of an ordinary order (own only) with white chevrons every 26 units. */
+export const ORDER_LINE = { width: 3, alpha: 0.9, casing: { width: 6, alpha: 0.5 } } as const;
+export const CHEVRON = { spacing: 26, first: 22, endMargin: 10, size: 5, width: 1.8 } as const;
+
+/** A rejected order: the ghost shakes for `SHAKE_MS`, then fades out until `REJECT_MS` (U6). */
+export const GHOST_SHAKE_MS = 200;
+export const GHOST_REJECT_MS = 500;
+export const GHOST_SHAKE_AMPLITUDE = 3;

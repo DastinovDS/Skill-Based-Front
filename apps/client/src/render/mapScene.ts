@@ -6,10 +6,12 @@ import { CityView } from './cityView.ts';
 import { EffectsView } from './effectsView.ts';
 import { EntityView } from './entityView.ts';
 import { FogView } from './fogView.ts';
+import { IntentView } from './intentView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
 import { MapView } from './mapView.ts';
 import { EMPTY_OVERLAY, type MapInteraction, type PickHit } from './interaction.ts';
 import { OverlayView } from './overlayView.ts';
+import { nodePoint } from './layout.ts';
 import { pickAt } from './pick.ts';
 import type { RenderSource } from './source.ts';
 import type { Point } from './camera.ts';
@@ -39,6 +41,7 @@ export class MapScene {
   private readonly view: MapView;
   private readonly cities: CityView;
   private readonly entities: EntityView;
+  private readonly intents: IntentView;
   private readonly effects: EffectsView;
   private readonly fog: FogView;
   private readonly overlay: OverlayView;
@@ -67,6 +70,7 @@ export class MapScene {
     this.cities = new CityView(map, this.layers, me, 1);
     const radiusOf = (node: number): number => this.cities.radiusOf(node);
     this.entities = new EntityView(map, this.layers, me, 1, radiusOf);
+    this.intents = new IntentView(map, this.layers, me, this.entities.kit, radiusOf);
     this.effects = new EffectsView(map, this.layers, me, 1, this.view.cells);
     this.fog = new FogView(
       map,
@@ -105,6 +109,12 @@ export class MapScene {
     this.interaction = interaction;
   }
 
+  /** Moves the camera to a city (the jump of `Space` to an alert). */
+  focusNode(node: number): void {
+    const at = nodePoint(this.map, node);
+    if (at !== undefined) this.controller.focus(at);
+  }
+
   /** "Fit map": show the whole map. */
   fit(): void {
     this.controller.fit();
@@ -122,6 +132,7 @@ export class MapScene {
     this.controller.destroy();
     this.fog.destroy();
     this.effects.destroy();
+    this.intents.destroy();
     this.entities.destroy();
     this.overlay.destroy();
     this.cities.destroy();
@@ -165,9 +176,13 @@ export class MapScene {
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.entities.setTickHz(tickHz);
+    const delays = this.source.orderDelays ?? null;
+    this.intents.setDelays(delays);
+    this.intents.setTickHz(tickHz);
     const selection = this.interaction?.overlay().selection ?? null;
     this.entities.setEmphasis(selection?.kind === 'group' ? selection.id : null, this.hoveredGroup);
     this.entities.update(frame);
+    this.intents.update(frame, this.entities.groupPoints());
     this.effects.update(frame, this.source.events(), this.entities.groupPoints(), tickHz);
     this.fog.setTickHz(tickHz);
     this.fog.update(frame.base);
@@ -219,6 +234,7 @@ export class MapScene {
     this.entities.setLabelResolution(resolution);
     this.effects.setLabelResolution(resolution);
     this.entities.setCameraScale(camera.scale);
+    this.intents.setCameraScale(camera.scale);
     this.fog.setCameraScale(camera.scale);
     this.fog.setLabelResolution(resolution);
   };

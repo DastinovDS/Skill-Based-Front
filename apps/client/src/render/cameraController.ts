@@ -1,6 +1,7 @@
 import type { Container } from 'pixi.js';
 import {
   cameraLimits,
+  centerOn,
   clampCamera,
   fitCamera,
   FIT_PADDING,
@@ -84,6 +85,11 @@ export class CameraController {
     this.fitted = true;
     this.camera = fitCamera(this.worldSize, this.viewport, FIT_PADDING, this.insets);
     this.apply();
+  }
+
+  /** Moves the camera to `point` (world), keeping the scale: the jump to an alert. */
+  focus(point: Point): void {
+    this.move(centerOn(this.camera, point, this.insets, this.limits));
   }
 
   /** The part of the viewport the HUD covers; "fit map" keeps the map out of it. */

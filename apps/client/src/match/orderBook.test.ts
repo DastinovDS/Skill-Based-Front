@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AckMsg, Command } from '../protocol.gen.ts';
+import { GHOST_REJECT_MS } from '../render/style.ts';
 import { OrderBook, type CommandResult } from './orderBook.ts';
 
 const move = (group: string, dest: number, planned = false): Command => ({
@@ -19,10 +20,11 @@ const ack = (seq: number, extra: Partial<AckMsg> = {}): AckMsg => ({
 });
 
 function setup() {
-  const book = new OrderBook();
+  const clock = { now: 1000 };
+  const book = new OrderBook(() => clock.now);
   const results: CommandResult[] = [];
   book.onResult = (r) => results.push(r);
-  return { book, results };
+  return { book, results, clock };
 }
 
 describe('OrderBook', () => {
@@ -30,7 +32,16 @@ describe('OrderBook', () => {
     const { book } = setup();
     book.track(1, move('g', 5, true), 2);
     expect(book.ghosts()).toEqual([
-      { seq: 1, group: 'g', from: 2, dest: 5, planned: true, path: null },
+      {
+        seq: 1,
+        group: 'g',
+        from: 2,
+        dest: 5,
+        planned: true,
+        path: null,
+        status: 'pending',
+        rejectedAt: null,
+      },
     ]);
   });
 
@@ -39,6 +50,8 @@ describe('OrderBook', () => {
     book.track(1, move('g', 5), 2);
     book.onAck(ack(1, { applied_tick: 12, path: [2, 3, 5] }));
     expect(book.ghosts()[0]?.path).toEqual([2, 3, 5]);
+    // The ack makes the ghost solid.
+    expect(book.ghosts()[0]?.status).toBe('accepted');
     expect(results).toEqual([{ kind: 'accepted', seq: 1, cmd: move('g', 5) }]);
 
     book.onRendered(11);
@@ -47,10 +60,14 @@ describe('OrderBook', () => {
     expect(book.ghosts()).toEqual([]);
   });
 
-  it('rolls the ghost back on a reject and reports the code', () => {
-    const { book, results } = setup();
+  it('keeps a rejected ghost for the shake and the fade, then removes it, and reports the code', () => {
+    const { book, results, clock } = setup();
     book.track(1, move('g', 5), 2);
     book.onAck(ack(1, { reject_code: 'NOT_ENOUGH_CP' }));
+    expect(book.ghosts().map((g) => [g.status, g.rejectedAt])).toEqual([['rejected', 1000]]);
+    clock.now += GHOST_REJECT_MS - 1;
+    expect(book.ghosts()).toHaveLength(1);
+    clock.now += 1;
     expect(book.ghosts()).toEqual([]);
     expect(results).toEqual([
       { kind: 'rejected', seq: 1, cmd: move('g', 5), code: 'NOT_ENOUGH_CP' },
@@ -66,6 +83,7 @@ describe('OrderBook', () => {
     // The older one being rejected later must not remove the newer ghost.
     book.onAck(ack(1, { reject_code: 'GROUP_BUSY' }));
     expect(book.ghosts().map((g) => g.dest)).toEqual([7, 4]);
+    expect(book.ghosts().map((g) => g.status)).toEqual(['pending', 'pending']);
   });
 
   it('gives commands without a ghost a result too, and ignores unknown acks', () => {

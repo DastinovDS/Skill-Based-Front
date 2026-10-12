@@ -2,8 +2,10 @@
   import { getLocale, isLocale, LOCALES, setLocale, t, translate } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import type { Insets } from '../render/camera.ts';
+  import AlertStrip from './AlertStrip.svelte';
   import EventLog from './EventLog.svelte';
   import OrdersPanel from './OrdersPanel.svelte';
+  import RadialMenu from './RadialMenu.svelte';
   import SelectionPanel from './SelectionPanel.svelte';
   import StatusBar from './StatusBar.svelte';
   import type { HudState } from './hudState.svelte.ts';
@@ -176,6 +178,8 @@
       <div class="section"><EventLog data={hud.current} /></div>
     </aside>
   {/if}
+  <AlertStrip alerts={hud.alerts} />
+  <RadialMenu {orders} stance={hud.current?.stance ?? null} passive={orders.passivePerMinute} />
   {#if rendererFailed}
     <section class="section error" role="alert">{t('error.renderer')}</section>
   {/if}

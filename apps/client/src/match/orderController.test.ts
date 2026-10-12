@@ -3,6 +3,7 @@ import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { HudState } from '../hud/hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { Command, RulesetPublic, SnapshotMsg } from '../protocol.gen.ts';
+import { RADIAL } from '../hud/radial.ts';
 import { OrderBook } from './orderBook.ts';
 import { NOTICE_MS, OrderController } from './orderController.ts';
 
@@ -33,15 +34,24 @@ function setup(withSend = true) {
   hud.onSnapshot(snapshot);
   const book = new OrderBook();
   const sent: Command[] = [];
+  const clock = { now: 0 };
+  const focused: number[] = [];
   const controller = new OrderController({
     hud,
     map,
     rules: RULES,
     book,
     send: withSend ? (cmd) => sent.push(cmd) : null,
+    now: () => clock.now,
+    alerts: hud.alerts,
+    focusNode: (node) => focused.push(node),
   });
-  return { hud, book, sent, controller };
+  return { hud, book, sent, controller, clock, focused };
 }
+
+const down = (code: string, repeat = false) =>
+  ({ type: 'keydown', code, shiftKey: false, repeat }) as const;
+const up = (code: string) => ({ type: 'keyup', code, shiftKey: false }) as const;
 
 const ack = (seq: number, reject_code: string | null = null) =>
   ({ type: 'ack', seq, applied_tick: 31, path: null, reject_code }) as const;
@@ -148,12 +158,29 @@ describe('OrderController', () => {
     expect(controller.overlay()).not.toBe(first);
   });
 
+  it('reports every answer to the feedback listeners, an accepted move too', () => {
+    const { controller, book } = setup();
+    const seen: string[] = [];
+    const stop = controller.ui.onFeedback((f) => seen.push(f.kind));
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    book.onAck(ack(1, null));
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    book.onAck(ack(2, 'NOT_ENOUGH_CP'));
+    expect(seen).toEqual(['accepted', 'rejected']);
+    stop();
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    book.onAck(ack(3, null));
+    expect(seen).toHaveLength(2);
+  });
+
   it('shows a rejection as a notice that fades, and rolls the ghost back', () => {
     const { controller, book } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
     controller.click({ kind: 'node', id: enemy.id }, false);
     book.onAck(ack(1, 'NOT_ENOUGH_CP'));
-    expect(book.ghosts()).toEqual([]);
+    // The ghost stays to shake and fade (U6).
+    expect(book.ghosts().map((g) => g.status)).toEqual(['rejected']);
     expect(controller.ui.current.notice).toMatchObject({ kind: 'rejected', code: 'NOT_ENOUGH_CP' });
     vi.advanceTimersByTime(NOTICE_MS);
     expect(controller.ui.current.notice).toBeNull();
@@ -168,7 +195,7 @@ describe('OrderController', () => {
     expect(hud.selection).toBeNull();
     controller.key({ type: 'keydown', code: 'KeyX', shiftKey: false });
     expect(sent).toHaveLength(1); // nothing selected: nothing to cancel
-    expect(controller.key({ type: 'keydown', code: 'KeyQ', shiftKey: false })).toBe(false);
+    expect(controller.key({ type: 'keydown', code: 'KeyZ', shiftKey: false })).toBe(false);
   });
 
   it('sends the other commands as intents', () => {
@@ -341,5 +368,106 @@ describe('OrderController', () => {
       controller.key(key('KeyU'));
       expect(controller.ui.current.roadPick).toBeNull();
     });
+  });
+
+  describe('the stance menu on Q', () => {
+    const current = snapshot.view.me.stance;
+    const target = current === 'war' ? 'economy' : 'war';
+
+    it('opens on Q, and a hold released over a sector chooses it', () => {
+      const { controller, sent, clock } = setup();
+      expect(controller.key(down('KeyQ'))).toBe(true);
+      expect(controller.radial.current).toMatchObject({ open: true, sticky: false });
+      // A repeat of the held key changes nothing.
+      expect(controller.key(down('KeyQ', true))).toBe(true);
+      controller.radial.hover(target);
+      clock.now = RADIAL.tapMs + 1;
+      expect(controller.key(up('KeyQ'))).toBe(true);
+      expect(controller.radial.current.open).toBe(false);
+      expect(sent).toEqual([{ type: 'set_stance', stance: target }]);
+    });
+
+    it('cancels a hold released in the dead zone', () => {
+      const { controller, sent, clock } = setup();
+      controller.key(down('KeyQ'));
+      clock.now = 500;
+      controller.key(up('KeyQ'));
+      expect(controller.radial.current.open).toBe(false);
+      expect(sent).toEqual([]);
+    });
+
+    it('stays open after a tap and chooses by 1 / 2 / 3, not as modes', () => {
+      const { controller, sent, clock } = setup();
+      controller.key(down('KeyQ'));
+      clock.now = RADIAL.tapMs - 1;
+      controller.key(up('KeyQ'));
+      expect(controller.radial.current).toMatchObject({ open: true, sticky: true });
+      controller.key(down('Digit3'));
+      expect(controller.radial.current.open).toBe(false);
+      expect(sent).toEqual(current === 'war' ? [] : [{ type: 'set_stance', stance: 'war' }]);
+      // Closed again: 1 is the mode of the selected group.
+      controller.click({ kind: 'group', id: group.id }, false);
+      controller.key(down('Digit1'));
+      expect(sent.at(-1)).toMatchObject({ type: 'set_mode' });
+    });
+
+    it('closes on Esc or on a second Q, and does not resend the current stance', () => {
+      const { controller, sent, clock } = setup();
+      controller.key(down('KeyQ'));
+      clock.now = 10;
+      controller.key(up('KeyQ'));
+      expect(controller.key(down('Escape'))).toBe(true);
+      expect(controller.radial.current.open).toBe(false);
+      controller.openRadial(true);
+      controller.key(down('KeyQ'));
+      expect(controller.radial.current.open).toBe(false);
+      controller.chooseStance(current);
+      expect(sent).toEqual([]);
+    });
+
+    it('a lost window focus cancels a hold, and there is no menu without a match', () => {
+      const { controller, sent } = setup();
+      controller.key(down('KeyQ'));
+      controller.key({ type: 'keyup', code: '', shiftKey: false });
+      expect(controller.radial.current.open).toBe(false);
+      expect(sent).toEqual([]);
+      const lone = setup(false).controller;
+      lone.key(down('KeyQ'));
+      expect(lone.radial.current.open).toBe(false);
+    });
+
+    it('serves the numbers of the ruleset of welcome', () => {
+      const { controller } = setup();
+      expect(controller.stanceRates.map((r) => [r.cpPerMinCenti / 100, r.chargesPerMin])).toEqual([
+        [3, 18],
+        [6, 12],
+        [9, 6],
+      ]);
+    });
+  });
+
+  it('Space takes the camera to the next alert, and is not taken without one', () => {
+    const { controller, focused, hud } = setup();
+    expect(controller.key(down('Space'))).toBe(false);
+    const aimed = snapshot.view.nodes.find((n) => n.owner === 0);
+    if (aimed === undefined) throw new Error('no own node');
+    hud.onSnapshot({
+      ...snapshot,
+      view: {
+        ...snapshot.view,
+        intents: [
+          {
+            id: 'i1',
+            owner: 1,
+            kind: 'planned_move',
+            origin: enemy.id,
+            target: aimed.id,
+            created_tick: snapshot.tick,
+          },
+        ],
+      },
+    });
+    expect(controller.key(down('Space'))).toBe(true);
+    expect(focused).toEqual([aimed.id]);
   });
 });

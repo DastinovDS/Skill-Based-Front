@@ -119,6 +119,26 @@ export function clampCamera(camera: Camera, limits: CameraLimits): Camera {
   };
 }
 
+/**
+ * The camera with `point` in the middle of the part of the viewport the HUD leaves free (the
+ * scale stays): the jump of the camera to an alert.
+ */
+export function centerOn(
+  camera: Camera,
+  point: Point,
+  insets: Insets,
+  limits: CameraLimits,
+): Camera {
+  return clampCamera(
+    {
+      x: point.x - (insets.left - insets.right) / (2 * camera.scale),
+      y: point.y - (insets.top - insets.bottom) / (2 * camera.scale),
+      scale: camera.scale,
+    },
+    limits,
+  );
+}
+
 /** Drag by a screen delta: the map follows the pointer. */
 export function panBy(camera: Camera, dx: number, dy: number, limits: CameraLimits): Camera {
   return clampCamera(

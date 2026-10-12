@@ -22,5 +22,6 @@ export function forwardKey(orders: OrderController, event: KeyboardEvent): boole
     type: event.type === 'keyup' ? 'keyup' : 'keydown',
     code: event.code,
     shiftKey: event.shiftKey,
+    repeat: event.repeat,
   });
 }

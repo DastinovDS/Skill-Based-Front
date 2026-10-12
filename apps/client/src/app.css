@@ -3,8 +3,8 @@
      same values from render/style.ts (style.test.ts keeps the two in step). */
   --bg: #0d1117;
   --surface: rgb(22 27 34 / 94%);
-  --surface-2: var(--surface-2);
-  --border: var(--border);
+  --surface-2: #21262d;
+  --border: #30363d;
   --text: #e6edf3;
   --text-dim: #9da7b3;
   --paper: #f0f6fc;
