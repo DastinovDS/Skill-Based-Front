@@ -1,19 +1,15 @@
 """City capacity and attrition (SIM-07; mechanics.md, section 9).
 
-Capacity:
+Capacity (DEC-22, item 1, replaces the road-dependent formula of SIM-07):
 
-- Supplied territory of a player: the nodes reachable from the own capital over own nodes; every
-  edge between two own nodes is internal, so this is a BFS over internal edges.
-- Capacity of a node: ``base_capacity`` of the map plus, for a node in its owner's supplied
-  territory, the sum of ``capacity.width_gain_centi[width]`` over its internal edges (they lead
-  into the same territory), in hundredths, divided by 100 and rounded down. A node outside
-  the supplied territory of its owner (cut off) and a neutral node have only ``base_capacity``.
+- Capacity of a node: ``capacity.by_kind[kind]`` by the node kind of the map. It does not
+  depend on roads, the owner or supply, so it is public and exact for every node; cutting a node
+  off does not change it (the pressure of an encirclement is starvation, DEC-19).
 - The same number limits the units standing in the city and, separately, its warehouse
   (``rulesets/mvp-0.toml``, section ``[capacity]``).
-- Capacities depend only on node owners and road widths; ``node_capacities()`` recomputes them
-  only when one of those changed (``GameState.capacity_cache``).
-- A player's view computes capacities by the same formula from the widths that player knows
-  (DEC-17, ``known_capacities``); ``capacity_stale`` marks the nodes where that is an estimate.
+- Supplied territory of a player (road upgrades ``NOT_SUPPLIED`` and the supply tree): the nodes
+  reachable from the own capital over own nodes; every edge between two own nodes is internal,
+  so this is a BFS over internal edges.
 
 Attrition (the ``capacity`` system; details: #118 default):
 
@@ -27,16 +23,11 @@ Attrition (the ``capacity`` system; details: #118 default):
   the group with the most units, ties by lowest id (as DEC-07, rule 7). An empty group is removed.
 
 Every owner change goes through ``change_owner()``: the warehouse is emptied (no trophies,
-mechanics.md, section 9), road widths are kept, the grace period starts.
+mechanics.md, section 9), road levels and types are kept, the grace period starts.
 """
-
-from typing import Final
 
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import AtNode, Event, GameState, Group, event
-
-CENTI: Final = 100
-"""Width gains are stored in hundredths of a capacity unit."""
 
 
 def is_internal(state: GameState, edge: int) -> bool:
@@ -111,98 +102,17 @@ def supplied_territory(state: GameState, player: int) -> tuple[bool, ...]:
 
 
 def node_capacities(state: GameState, rules: Ruleset) -> tuple[int, ...]:
-    """Capacity of every node, ``result[node_id]``.
+    """Capacity of every node, ``result[node_id]``: ``capacity.by_kind[kind]`` (DEC-22, item 1).
 
-    Recomputed (O(V + E)) only when node owners, road widths or the width gains changed since
-    the last call on this state; otherwise the cached tuple is returned.
+    O(V); fixed by the map and the ruleset, public to everyone.
     """
-    owners = tuple(state.nodes[n].owner for n in range(len(state.map.nodes)))
-    widths = tuple(state.edges[e].width for e in range(len(state.map.edges)))
-    gains = rules.capacity.width_gain_centi.values
-    cache = state.capacity_cache
-    if cache is not None and cache[0] == owners and cache[1] == widths and cache[2] == gains:
-        return cache[3]
-    capacities = _compute_capacities(state, rules, widths)
-    state.capacity_cache = (owners, widths, gains, capacities)
-    return capacities
-
-
-def known_capacities(state: GameState, rules: Ruleset, widths: tuple[int, ...]) -> tuple[int, ...]:
-    """Capacity of every node by the road ``widths`` a player knows (DEC-17, point 3).
-
-    The same formula as ``node_capacities`` with ``widths[edge_id]`` instead of the true widths;
-    owners (public) are the true ones. Equal to ``node_capacities`` (and cached) when the widths
-    are the true ones; otherwise O(V + E) and not cached, so the cache of the state stays intact.
-    """
-    if widths == tuple(state.edges[e].width for e in range(len(state.map.edges))):
-        return node_capacities(state, rules)
-    return _compute_capacities(state, rules, widths)
-
-
-def capacity_stale(state: GameState, fogged: tuple[bool, ...]) -> tuple[bool, ...]:
-    """``result[node]``: the capacity a player knows is an estimate (DEC-17, point 3).
-
-    True when the node is in its owner's supplied territory and at least one of its internal
-    edges is fogged for the player (``fogged[edge_id]``). Own nodes never are: every edge of an
-    own node touches it, so it is not in fog.
-    """
-    mapdef = state.map
-    candidates = [
-        any(fogged[eid] and is_internal(state, eid) for eid in mapdef.incident[n])
-        for n in range(len(mapdef.nodes))
-    ]
-    if not any(candidates):
-        return tuple(candidates)
-    supplied = {p: supplied_territory(state, p) for p in sorted(state.players)}
-    result: list[bool] = []
-    for n, candidate in enumerate(candidates):
-        owner = state.nodes[n].owner
-        result.append(candidate and owner is not None and supplied[owner][n])
-    return tuple(result)
-
-
-def _compute_capacities(
-    state: GameState, rules: Ruleset, widths: tuple[int, ...]
-) -> tuple[int, ...]:
-    supplied = {p: supplied_territory(state, p) for p in sorted(state.players)}
-    # Capacity centi >= 0: rounded down.
-    return tuple(
-        _capacity_centi(state, rules, supplied, node, widths) // CENTI
-        for node in range(len(state.map.nodes))
-    )
-
-
-def _capacity_centi(
-    state: GameState,
-    rules: Ruleset,
-    supplied: dict[int, tuple[bool, ...]],
-    node: int,
-    widths: tuple[int, ...],
-) -> int:
-    mapdef = state.map
-    total = mapdef.nodes[node].base_capacity * CENTI
-    owner = state.nodes[node].owner
-    if owner is not None and supplied[owner][node]:
-        gains = rules.capacity.width_gain_centi
-        for eid in mapdef.incident[node]:
-            if is_internal(state, eid):
-                total += gains.of(widths[eid])
-    return total
-
-
-def city_capacity_centi(state: GameState, rules: Ruleset, node: int) -> int:
-    """Capacity of one node in hundredths, before rounding down: ``city_capacity * 100 <= it``.
-
-    Not cached, O(V + E): for hints and tests (``systems.build.upgrade_gain``), not for systems.
-    """
-    supplied = {p: supplied_territory(state, p) for p in sorted(state.players)}
-    widths = tuple(state.edges[e].width for e in range(len(state.map.edges)))
-    return _capacity_centi(state, rules, supplied, node, widths)
+    by_kind = rules.capacity.by_kind
+    return tuple(by_kind.of(node.kind) for node in state.map.nodes)
 
 
 def city_capacity(state: GameState, rules: Ruleset, node: int) -> int:
     """Capacity of one node (see the module docstring)."""
-    return node_capacities(state, rules)[node]
+    return rules.capacity.by_kind.of(state.map.nodes[node].kind)
 
 
 def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:

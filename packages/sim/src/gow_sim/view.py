@@ -7,9 +7,9 @@ PRO-01), which PRO-03 converts it into:
 
 - public to everyone: ownership of every node, VP of both players, intents of planned orders
   and «Защита» (kind, origin, target; no group id or size);
-- road widths (DEC-17): exact on edges not in fog; on a fogged edge the width of its last
-  sighting, or ``base_width`` of the map if never seen. Node capacities by the same formula from
-  these known widths, ``capacity_stale`` where that is an estimate;
+- node capacities: fixed by the node kind (DEC-22, item 1), public and exact for every node;
+- road levels and types (DEC-17; DEC-22, item 8): exact on edges not in fog; on a fogged edge
+  those of its last sighting, or level 1 without a type if never seen;
 - road builds of cities (DEC-16, item 8): own ones always, with the tick they finish; an enemy
   one (the city and the edge, no tick) only while the edge is not in fog (DEC-17, item 5);
 - ``EXACT`` places (own nodes, nodes where own groups stand): warehouse and enemy totals;
@@ -17,8 +17,8 @@ PRO-01), which PRO-03 converts it into:
   are there and their modes, no numbers;
 - ``FOG``: only the last sighting from ``GameState.vision_memory``.
 
-What a view never has: enemy groups as entities (only the per-place ``Sighting``), road widths
-of fogged edges newer than the last sighting, enemy builds on fogged edges, enemy packets
+What a view never has: enemy groups as entities (only the per-place ``Sighting``), road levels
+and types of fogged edges newer than the last sighting, enemy builds on fogged edges, enemy packets
 (#112 default), enemy CP, stance, production and counters, events, the target of an enemy's normal
 order (normal orders have no intent), sequential ids.
 
@@ -49,11 +49,12 @@ from gow_sim.state import (
     Location,
     Mode,
     OnEdge,
+    RoadKind,
     Sighting,
 )
-from gow_sim.systems.build import UpgradeGain, done_tick, upgrade_gain
-from gow_sim.systems.capacity import capacity_stale, known_capacities, overflow_countdown
-from gow_sim.systems.vision import compute_vision, current_sightings, known_widths
+from gow_sim.systems.build import RoadGain, UpgradeGain, done_tick, upgrade_gain
+from gow_sim.systems.capacity import node_capacities, overflow_countdown
+from gow_sim.systems.vision import compute_vision, current_sightings, known_roads
 
 __all__ = [
     "MATCH_KEY_MAX",
@@ -72,6 +73,8 @@ __all__ = [
     "OrderView",
     "PacketView",
     "PlayerView",
+    "RoadGain",
+    "RoadKind",
     "SelfView",
     "Sighting",
     "Stance",
@@ -111,7 +114,7 @@ class BuildView:
 
     edge: int
     done_tick: int | None
-    """The tick the width grows; only for an own build."""
+    """The tick the level grows; only for an own build."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,11 +122,7 @@ class NodeView:
     id: int
     owner: int | None
     capacity: int
-    """Capacity by the road widths the player knows (DEC-17): exact unless ``capacity_stale``,
-    never above the true capacity."""
-    capacity_stale: bool
-    """The node is in its owner's supplied territory and one of its internal edges is in fog:
-    ``capacity`` is an estimate by the last seen widths (DEC-17, point 3)."""
+    """Capacity by the node kind (DEC-22, item 1): public and exact."""
     detail: Detail
     warehouse: int | None
     """Charges in the warehouse; only for ``EXACT`` nodes."""
@@ -144,12 +143,14 @@ class NodeView:
 class EdgeView:
     id: int
     width: int
-    """Width the player knows (DEC-17): the current one unless ``detail`` is ``FOG``; in fog the
-    width of the last sighting, or ``base_width`` if never seen. Never above the true width."""
+    """Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is ``FOG``;
+    in fog the level of the last sighting, or level 1 if never seen. Never above the true one."""
+    kind: RoadKind
+    """Road type the player knows, by the same rule as ``width`` (DEC-22, item 8)."""
     detail: Detail
     """``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges."""
     upgrade_gain: UpgradeGain | None
-    """Only for own internal edges below ``max_width`` (SIM-11)."""
+    """Only for own internal edges below ``max_width`` (DEC-22, item 7)."""
     seen: Sighting | None
 
 
@@ -285,19 +286,14 @@ def resolve(state: GameState, player: int, cmd: Command, match_key: bytes) -> Co
 
 
 def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> PlayerView:
-    """The view of ``player`` on ``state`` (DEC-04, DEC-17). A pure function: reads, never writes.
-
-    Node capacities come from ``known_capacities``, which may refresh the derived
-    ``capacity_cache`` of the state; the cache is not part of the state (SIM-07).
-    """
+    """The view of ``player`` on ``state`` (DEC-04, DEC-17). A pure function: never writes."""
     opaque = _hasher(match_key)
     mapdef = state.map
     levels = compute_vision(state, player)
     now_nodes, now_edges = current_sightings(state, player, levels)
     memory = state.vision_memory[player]
-    widths = known_widths(state, player, levels)
-    capacities = known_capacities(state, rules, widths)
-    stale = capacity_stale(state, tuple(level is Detail.FOG for level in levels.edges))
+    roads = known_roads(state, player, levels)
+    capacities = node_capacities(state, rules)
 
     nodes: list[NodeView] = []
     for n, level in enumerate(levels.nodes):
@@ -312,7 +308,6 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 id=n,
                 owner=node.owner,
                 capacity=capacities[n],
-                capacity_stale=stale[n],
                 detail=level,
                 warehouse=node.warehouse if level is Detail.EXACT else None,
                 seen=now_nodes[n] if level is not Detail.FOG else memory.nodes.get(n),
@@ -329,7 +324,8 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
         edges.append(
             EdgeView(
                 id=e,
-                width=widths[e],
+                width=roads[e][0],
+                kind=roads[e][1],
                 detail=level,
                 upgrade_gain=upgrade_gain(state, rules, e) if own else None,
                 seen=now_edges[e] if level is not Detail.FOG else memory.edges.get(e),
@@ -428,7 +424,6 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "id": n.id,
                 "owner": n.owner,
                 "capacity": n.capacity,
-                "capacity_stale": n.capacity_stale,
                 "detail": n.detail.value,
                 "warehouse": n.warehouse,
                 "seen": _seen_data(n.seen),
@@ -444,12 +439,13 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
             {
                 "id": e.id,
                 "width": e.width,
+                "kind": e.kind.value,
                 "detail": e.detail.value,
                 "upgrade_gain": None
                 if e.upgrade_gain is None
                 else {
-                    "capacity_centi": e.upgrade_gain.capacity_centi,
-                    "packet_speed_pct": e.upgrade_gain.packet_speed_pct,
+                    "fast": _gain_data(e.upgrade_gain.fast),
+                    "freight": _gain_data(e.upgrade_gain.freight),
                 },
                 "seen": _seen_data(e.seen),
             }
@@ -498,6 +494,10 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
     }
 
 
+def _gain_data(g: RoadGain | None) -> dict[str, object] | None:
+    return None if g is None else {"speed_pct": g.speed_pct, "amount": g.amount}
+
+
 def _seen_data(s: Sighting | None) -> dict[str, object] | None:
     if s is None:
         return None
@@ -508,6 +508,7 @@ def _seen_data(s: Sighting | None) -> dict[str, object] | None:
         "enemy_units": s.enemy_units,
         "enemy_charged": s.enemy_charged,
         "width": s.width,
+        "road": None if s.road is None else s.road.value,
     }
 
 

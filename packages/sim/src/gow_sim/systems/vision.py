@@ -11,10 +11,11 @@ Public to everyone regardless of level: geography, terrain, ``base_width`` and `
 the map, ownership of all nodes, VP, intents of planned orders and «Защита». That part is the
 projection's job (SIM-14).
 
-Road widths follow the edge level (DEC-17, mechanics.md, section 10): an edge not in fog shows
-its width exactly; a fogged edge shows the width of its last sighting (``Sighting.width``), or
-``base_width`` of the map if the player never saw it (``known_widths``). No roads are torn down,
-so a known width never exceeds the true one. Enemy road builds are visible only on edges not in
+Road levels and types follow the edge level (DEC-17, DEC-22, item 8; mechanics.md, section 10):
+an edge not in fog shows its level and type exactly; a fogged edge shows those of its last
+sighting (``Sighting.width`` and ``Sighting.road``), or level 1 without a type if the player never
+saw it (``known_roads``). No roads are torn down and a type never changes, so a known level never
+exceeds the true one. Enemy road builds are visible only on edges not in
 fog (DEC-16, ``NodeView.build``).
 
 ``is_visible()`` is the single visibility check for command validation (SIM-04) and the
@@ -34,6 +35,7 @@ from gow_sim.state import (
     Mode,
     OnEdge,
     Packet,
+    RoadKind,
     Sighting,
 )
 
@@ -118,7 +120,7 @@ def vision(state: GameState, rules: Ruleset) -> list[Event]:
     """Last system of a tick: record what each player sees now in ``vision_memory``.
 
     Every node and edge not in fog gets a fresh ``Sighting`` with the current tick (an edge's
-    with its current width, DEC-17); fogged ones keep their last sighting. Emits no events.
+    with its current level and type, DEC-17); fogged ones keep their last sighting. Emits no events.
     """
     del rules  # the vision rules of DEC-04 have no numbers
     for player in sorted(state.players):
@@ -149,37 +151,44 @@ def current_sightings(
             case OnEdge(edge=edge):
                 on_edge.setdefault(edge, []).append(group)
     nodes = {
-        n: _sighting(state.tick, level, at_node.get(n, []), None)
+        n: _sighting(state.tick, level, at_node.get(n, []), None, None)
         for n, level in enumerate(levels.nodes)
         if level is not Detail.FOG
     }
     edges = {
-        e: _sighting(state.tick, level, on_edge.get(e, []), state.edges[e].width)
+        e: _sighting(
+            state.tick, level, on_edge.get(e, []), state.edges[e].width, state.edges[e].kind
+        )
         for e, level in enumerate(levels.edges)
         if level is not Detail.FOG
     }
     return nodes, edges
 
 
-def known_widths(state: GameState, player: int, levels: Vision) -> tuple[int, ...]:
-    """Road widths as ``player`` knows them (DEC-17, points 1 and 2), ``result[edge_id]``.
+def known_roads(state: GameState, player: int, levels: Vision) -> tuple[tuple[int, RoadKind], ...]:
+    """Road levels and types as ``player`` knows them (DEC-17; DEC-22, item 8).
 
-    Exact for edges not in fog; for a fogged edge the width of its last sighting, else
-    ``base_width`` of the map. Never above the true width.
+    ``result[edge_id] = (level, kind)``: exact for edges not in fog; for a fogged edge those of
+    its last sighting, else ``base_width`` of the map (level 1) without a type. Never above the
+    true level.
     """
     memory = state.vision_memory[player].edges
-    widths: list[int] = []
+    roads: list[tuple[int, RoadKind]] = []
     for e, level in enumerate(levels.edges):
         if level is not Detail.FOG:
-            widths.append(state.edges[e].width)
+            roads.append((state.edges[e].width, state.edges[e].kind))
             continue
         seen = memory.get(e)
-        width = seen.width if seen is not None else None
-        widths.append(state.map.edges[e].base_width if width is None else width)
-    return tuple(widths)
+        if seen is None or seen.width is None:
+            roads.append((state.map.edges[e].base_width, RoadKind.NONE))
+        else:
+            roads.append((seen.width, RoadKind.NONE if seen.road is None else seen.road))
+    return tuple(roads)
 
 
-def _sighting(tick: int, level: Detail, enemies: list[Group], width: int | None) -> Sighting:
+def _sighting(
+    tick: int, level: Detail, enemies: list[Group], width: int | None, road: RoadKind | None
+) -> Sighting:
     modes: list[Mode] = sorted(dict.fromkeys(g.mode for g in enemies))  # distinct, sorted
     if level is Detail.EXACT:
         return Sighting(
@@ -189,6 +198,7 @@ def _sighting(tick: int, level: Detail, enemies: list[Group], width: int | None)
             enemy_units=sum(g.units for g in enemies),
             enemy_charged=sum(g.charged for g in enemies),
             width=width,
+            road=road,
         )
     return Sighting(
         tick=tick,
@@ -197,4 +207,5 @@ def _sighting(tick: int, level: Detail, enemies: list[Group], width: int | None)
         enemy_units=None,
         enemy_charged=None,
         width=width,
+        road=road,
     )

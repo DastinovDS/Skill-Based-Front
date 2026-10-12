@@ -81,14 +81,12 @@ describe('buildHudData: selection', () => {
     expect(own.node).toMatchObject({
       owner: 'mine',
       capacity: 4,
-      capacityStale: false,
       warehouse: 4,
     });
     const enemy = buildHudData(ctx, fog, { kind: 'node', id: 2 }, null, []);
     expect(enemy.node).toMatchObject({
       owner: 'enemy',
-      capacity: 4,
-      capacityStale: true, // DEC-17: an enemy city in fog, its capacity is an estimate
+      capacity: 4, // DEC-22: public and exact, also in fog
       warehouse: null,
       enemy: { modes: ['defense'], units: null, seenTick: 90, stale: true },
     });
@@ -185,15 +183,20 @@ describe('buildHudData: road upgrades of cities (DEC-16)', () => {
     ...DEV_RULES,
     build: {
       ticks_per_level: 150,
-      charges_per_level: [2, 3, 4, 5].map((width) => ({ width, charges: width })),
+      charges_per_level: [
+        { width: 2, charges: 3 },
+        { width: 3, charges: 4 },
+      ],
     },
   };
-  const gain = { capacity_centi: 50, packet_speed_pct: 10 };
+  const gain = { fast: { speed_pct: 50, amount: 0 }, freight: null };
   const snapshot: SnapshotMsg = {
     ...fog,
     view: {
       ...fog.view,
-      edges: fog.view.edges.map((e) => (e.id === 0 ? { ...e, width: 2, upgrade_gain: gain } : e)),
+      edges: fog.view.edges.map((e) =>
+        e.id === 0 ? { ...e, width: 2, kind: 'fast' as const, upgrade_gain: gain } : e,
+      ),
     },
   };
   const edge0 = map.edges[0];
@@ -206,12 +209,12 @@ describe('buildHudData: road upgrades of cities (DEC-16)', () => {
       a: edge0.a,
       b: edge0.b,
       width: 2,
-      capacityCenti: 50,
-      packetSpeedPct: 10,
-      charges: 3,
+      kind: 'fast',
+      gain,
+      charges: 4,
     });
     // No upgrade hint from the server: no price either.
-    expect(data.roads[1]).toMatchObject({ capacityCenti: null, charges: null });
+    expect(data.roads[1]).toMatchObject({ gain: null, charges: null });
     expect(roadCandidates(data.roads, edge0.a).map((r) => r.id)).toEqual([0]);
   });
 

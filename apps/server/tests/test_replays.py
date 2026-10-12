@@ -18,7 +18,7 @@ from gow_protocol import commands as wire
 from gow_server.app import create_app
 from gow_server.clock import ManualClock
 from gow_server.db import create_db_engine, upgrade_to_head
-from gow_server.frames import FORMAT, FramesError, build_frames
+from gow_server.frames import FORMAT, FramesError, build_frames, frame_of
 from gow_server.matches import MatchManager, MatchRunner
 from gow_server.models import Match, MatchPlayer
 from gow_server.replays import ReplayService
@@ -28,13 +28,14 @@ from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match as SimMatch
 from gow_sim.replay import ReplayWriter, read_replay, record_headless, replay_run
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
+from gow_sim.state import RoadKind, initial_state
 
 ROOT: Final = Path(__file__).parents[3]
 RULESETS: Final = ROOT / "rulesets" / "archive"
 MAPS: Final = ROOT / "maps"
 DT: Final = 0.1
 FRAMES_BUDGET: Final = 2 * 1024 * 1024
-"""AGENTS.md, section 12: the frames file of a 12-minute match."""
+"""AGENTS.md, section 12: the frames file of a whole match (15 minutes, DEC-22)."""
 
 
 @pytest.fixture(scope="module")
@@ -55,10 +56,20 @@ def full_rules() -> Ruleset:
 # The frames file --------------------------------------------------------------------------
 
 
-def test_twelve_minute_match_resimulates_to_the_same_result(
+def test_frame_has_road_types_only_once_a_road_has_one(line3: MapDef, full_rules: Ruleset) -> None:
+    """Key ``r`` (DEC-22): road types by edge id, absent while every road is untyped."""
+    state = initial_state(line3, full_rules)
+    assert "r" not in frame_of(state, full_rules)
+    state.edges[1].width, state.edges[1].kind = 2, RoadKind.FREIGHT
+    frame = frame_of(state, full_rules)
+    assert (frame["w"], frame["r"]) == ([1, 2], ["none", "freight"])
+
+
+def test_fifteen_minute_match_resimulates_to_the_same_result(
     tmp_path: Path, full_rules: Ruleset
 ) -> None:
-    """A real 12-minute match: same hash and outcome after the re-simulation, file within 2 MB."""
+    """A real 15-minute match (DEC-22): same hash and outcome after the re-simulation, file
+    within 2 MB."""
     mapdef = load_map(MAPS / "pautina.json")
     bots = [
         BOTS["rusher"](mapdef, full_rules, seed=1, player=0),
@@ -67,7 +78,7 @@ def test_twelve_minute_match_resimulates_to_the_same_result(
     log = tmp_path / "7.jsonl.gz"
     played = record_headless(log, mapdef, full_rules, bots)
     assert played.outcome is not None
-    assert played.ticks == full_rules.match_ticks == 7200  # it went the whole 12 minutes
+    assert played.ticks == full_rules.match_ticks == 9000  # it went the whole 15 minutes
 
     result = build_frames(log, tmp_path / "7.frames.json.gz", RULESETS, MAPS)
 
@@ -84,11 +95,12 @@ def test_twelve_minute_match_resimulates_to_the_same_result(
     assert doc["vp"] == list(played.vp)
     assert doc["map"]["meta"]["name"] == "pautina"
     ticks = [f["t"] for f in doc["frames"]]
-    assert ticks == list(range(0, 7201, 5))  # 2 frames a second, tick 0 and the last tick
+    assert ticks == list(range(0, 9001, 5))  # 2 frames a second, tick 0 and the last tick
     assert len(doc["frames"][0]["n"]) == len(mapdef.nodes)
-    # [owner, warehouse, capacity]: the capacity is never below the base one of the map
+    # [owner, warehouse, capacity]: the capacity of the node kind (DEC-22)
     assert all(
-        n[2] >= m.base_capacity for n, m in zip(doc["frames"][0]["n"], mapdef.nodes, strict=True)
+        n[2] == full_rules.capacity.by_kind.of(m.kind)
+        for n, m in zip(doc["frames"][0]["n"], mapdef.nodes, strict=True)
     )
     assert len(doc["frames"][0]["w"]) == len(mapdef.edges)
     assert any(f["g"] for f in doc["frames"])

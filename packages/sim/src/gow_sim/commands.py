@@ -29,8 +29,19 @@ from dataclasses import dataclass
 from enum import StrEnum
 from itertools import pairwise
 
+from gow_sim.maps import NodeKind
 from gow_sim.ruleset import Ruleset, Stance
-from gow_sim.state import AtNode, Event, GameState, Group, IntentKind, Mode, Order, event
+from gow_sim.state import (
+    AtNode,
+    Event,
+    GameState,
+    Group,
+    IntentKind,
+    Mode,
+    Order,
+    RoadKind,
+    event,
+)
 from gow_sim.systems.build import builder_of, level_price, start_build
 from gow_sim.systems.capacity import is_internal, supplied_territory
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
@@ -109,10 +120,15 @@ class SetStance:
 
 @dataclass(frozen=True, slots=True)
 class UpgradeRoad:
-    """The own city ``node`` raises the internal ``edge`` at it by one level (DEC-16)."""
+    """The own city ``node`` raises the internal ``edge`` at it by one level (DEC-16, DEC-22).
+
+    ``kind``: the road type, required for the first upgrade (``FAST`` or ``FREIGHT``); for the
+    second it may be omitted or must equal the road's type.
+    """
 
     node: int
     edge: int
+    kind: RoadKind | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,13 +188,19 @@ class RejectCode(StrEnum):
     """The group waits to depart on a planned order; only ``CancelOrder`` is accepted (#117)."""
     NO_PATH = "NO_PATH"
     INVALID_ARGUMENT = "INVALID_ARGUMENT"
-    """Malformed arguments: ``n`` out of range, fewer than two or repeated groups, same node."""
+    """Malformed arguments: ``n`` out of range, fewer than two or repeated groups, same node; no
+    road type for the first road upgrade (DEC-22)."""
     NOT_SAME_NODE = "NOT_SAME_NODE"
     NOT_ADJACENT = "NOT_ADJACENT"
     """The city is not an end of the edge (``UpgradeRoad``, DEC-16)."""
     NOT_INTERNAL = "NOT_INTERNAL"
     """Only an internal edge of the player can be upgraded (mechanics.md, section 8)."""
     MAX_WIDTH = "MAX_WIDTH"
+    """The road already has ``max_width`` (its last level, DEC-22)."""
+    ROAD_KIND_MISMATCH = "ROAD_KIND_MISMATCH"
+    """The second road upgrade names the other road type (DEC-22, item 3)."""
+    NOT_CITY = "NOT_CITY"
+    """The node is a province, not a city (DEC-22, item 3; DEC-23)."""
     NOT_SUPPLIED = "NOT_SUPPLIED"
     """The city is not in its owner's supplied territory (DEC-16)."""
     CITY_BUSY = "CITY_BUSY"
@@ -334,8 +356,8 @@ def _check(
             if mode == group.mode and mode is not Mode.DEFENSE:
                 return Reject(RejectCode.NO_CHANGE)
             return ()
-        case UpgradeRoad(node=node, edge=eid):
-            return _check_upgrade(state, rules, player, node, eid)
+        case UpgradeRoad(node=node, edge=eid, kind=kind):
+            return _check_upgrade(state, rules, player, node, eid, kind)
         case Recruit(node=node):
             if not 0 <= node < len(state.map.nodes):
                 return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
@@ -368,13 +390,16 @@ def _check(
 
 
 def _check_upgrade(
-    state: GameState, rules: Ruleset, player: int, node: int, eid: int
+    state: GameState, rules: Ruleset, player: int, node: int, eid: int, kind: RoadKind | None
 ) -> tuple[int, ...] | Reject:
-    """The checks of ``UpgradeRoad`` in the order of DEC-16, item 2 (CP last, in ``_validate``)."""
+    """The checks of ``UpgradeRoad`` in the order of DEC-16, item 2 with the changes of DEC-22,
+    item 3 (CP last, in ``_validate``)."""
     if not 0 <= node < len(state.map.nodes):
         return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
     if state.nodes[node].owner != player:
         return Reject(RejectCode.NOT_OWNER)
+    if state.map.nodes[node].kind is NodeKind.PROVINCE:
+        return Reject(RejectCode.NOT_CITY)
     if not 0 <= eid < len(state.map.edges):
         return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
     edge = state.map.edges[eid]
@@ -382,8 +407,14 @@ def _check_upgrade(
         return Reject(RejectCode.NOT_ADJACENT)
     if not is_internal(state, eid):  # the node is own, so an internal edge is the player's
         return Reject(RejectCode.NOT_INTERNAL)
-    if state.edges[eid].width >= edge.max_width:
+    road = state.edges[eid]
+    if road.width >= edge.max_width:
         return Reject(RejectCode.MAX_WIDTH)
+    if road.kind is RoadKind.NONE:
+        if kind not in (RoadKind.FAST, RoadKind.FREIGHT):
+            return Reject(RejectCode.INVALID_ARGUMENT)
+    elif kind is not None and kind is not road.kind:
+        return Reject(RejectCode.ROAD_KIND_MISMATCH)
     if not supplied_territory(state, player)[node]:
         return Reject(RejectCode.NOT_SUPPLIED)
     if state.nodes[node].build is not None:
@@ -511,8 +542,8 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                 clear_bonus(group)
                 set_intent(state, group, None)
             return []
-        case UpgradeRoad(node=node, edge=eid):
-            return [start_build(state, rules, player, node, eid)]  # not public (DEC-16)
+        case UpgradeRoad(node=node, edge=eid, kind=kind):
+            return [start_build(state, rules, player, node, eid, kind)]  # not public (DEC-16)
         case Recruit(node=node):
             return recruit_unit(state, player, node)
         case CancelOrder(group=gid):

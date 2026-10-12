@@ -19,8 +19,11 @@ from gow_sim.canonical import digest
 PLAYERS: Final = (0, 1)
 """Player ids of a 1v1 match (MVP)."""
 
-MAX_WIDTH: Final = 5
-"""Widest road the format allows: the capacity table in mechanics.md, section 9, covers 1..5."""
+MAX_WIDTH: Final = 3
+"""Highest road level the format allows: levels 1..3, two upgrades (DEC-22, item 2).
+
+The map fields keep the names ``base_width`` and ``max_width`` until DEC-23 (#235) renames
+``max_width`` to ``max_level``; every road starts at level 1 (``base_width`` must be 1)."""
 
 SYMMETRIES: Final = ("rot180",)
 
@@ -29,6 +32,20 @@ class Terrain(StrEnum):
     PLAINS = "plains"
     FOREST = "forest"
     MOUNTAINS = "mountains"
+
+
+class NodeKind(StrEnum):
+    """Kind of a node (DEC-22, item 1; DEC-23, item 1): its capacity is ``capacity.by_kind``."""
+
+    CAPITAL = "capital"
+    CITY_LARGE = "city_large"
+    CITY_MEDIUM = "city_medium"
+    CITY_SMALL = "city_small"
+    PROVINCE = "province"
+    """A node without a city (DEC-23, item 2): no road upgrades from it (``NOT_CITY``).
+
+    TODO(#235): the other province rules (no warehouse, transit packets, no recruit) come with
+    the DEC-23 implementation; the MVP maps have no provinces yet."""
 
 
 class MapFormatError(ValueError):
@@ -51,7 +68,7 @@ class NodeDef:
     y: int
     terrain: Terrain
     vp: int
-    base_capacity: int
+    kind: NodeKind
     capital_of: int | None
     start_owner: int | None
     start_units: int
@@ -156,7 +173,10 @@ def map_to_data(mapdef: MapDef) -> dict[str, object]:
     """
     return {
         "meta": dataclasses.asdict(mapdef.meta),
-        "nodes": [{**dataclasses.asdict(n), "terrain": n.terrain.value} for n in mapdef.nodes],
+        "nodes": [
+            {**dataclasses.asdict(n), "terrain": n.terrain.value, "kind": n.kind.value}
+            for n in mapdef.nodes
+        ],
         "edges": [dataclasses.asdict(e) for e in mapdef.edges],
         "mirror": {
             "nodes": {str(i): m for i, m in enumerate(mapdef.mirror_nodes)},
@@ -197,7 +217,7 @@ _NODE_KEYS: Final = (
     "y",
     "terrain",
     "vp",
-    "base_capacity",
+    "kind",
     "capital_of",
     "start_owner",
     "start_units",
@@ -218,6 +238,11 @@ def _parse_node(data: object, where: str, index: int, meta: MapMeta) -> NodeDef:
         raise MapFormatError(
             f"{where}.terrain: expected one of {[t.value for t in Terrain]}, got {terrain!r}"
         )
+    kind = raw["kind"]
+    if kind not in [k.value for k in NodeKind]:
+        raise MapFormatError(
+            f"{where}.kind: expected one of {[k.value for k in NodeKind]}, got {kind!r}"
+        )
     units = _int(raw["start_units"], f"{where}.start_units", low=0)
     node = NodeDef(
         id=node_id,
@@ -225,7 +250,7 @@ def _parse_node(data: object, where: str, index: int, meta: MapMeta) -> NodeDef:
         y=_int(raw["y"], f"{where}.y", low=0, high=meta.height),
         terrain=Terrain(str(terrain)),
         vp=_int(raw["vp"], f"{where}.vp", low=0),
-        base_capacity=_int(raw["base_capacity"], f"{where}.base_capacity", low=0),
+        kind=NodeKind(str(kind)),
         capital_of=_player(raw["capital_of"], f"{where}.capital_of"),
         start_owner=_player(raw["start_owner"], f"{where}.start_owner"),
         start_units=units,
@@ -236,6 +261,14 @@ def _parse_node(data: object, where: str, index: int, meta: MapMeta) -> NodeDef:
         raise MapFormatError(
             f"{where}.start_owner: the capital of player {node.capital_of} must start owned by it"
         )
+    if (node.kind is NodeKind.CAPITAL) != (node.capital_of is not None):
+        # DEC-23, item 3: kind = capital if and only if capital_of is not null.
+        raise MapFormatError(f"{where}.kind: 'capital' exactly for the node with capital_of")
+    if node.kind is NodeKind.PROVINCE and (
+        node.vp or node.start_units or node.start_charged or node.start_stock
+    ):
+        # DEC-23, item 2: a province has no VP, no starting garrison and no warehouse.
+        raise MapFormatError(f"{where}: a province has vp 0 and no garrison or warehouse")
     if node.start_owner is None and (node.start_units or node.start_stock):
         # There is no neutral player: neutral nodes start empty (mechanics.md, section 9).
         raise MapFormatError(f"{where}: a neutral node has no garrison and an empty warehouse")
@@ -258,7 +291,8 @@ def _parse_edge(data: object, where: str, index: int, node_count: int) -> EdgeDe
         id=edge_id,
         a=a,
         b=b,
-        base_width=_int(raw["base_width"], f"{where}.base_width", low=1, high=max_width),
+        # Every road starts at level 1 without a type (DEC-22, item 2).
+        base_width=_int(raw["base_width"], f"{where}.base_width", low=1, high=1),
         max_width=max_width,
         travel_ticks=_int(raw["travel_ticks"], f"{where}.travel_ticks", low=1),
     )

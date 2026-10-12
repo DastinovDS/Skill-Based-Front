@@ -4,7 +4,8 @@ It carries a ``PlayerView`` (``gow_sim.view.project()``, SIM-14 #30) and nothing
 conversion is PRO-03 (#46). The shape follows DEC-04 (mechanics.md, section 10) and the list of
 what a view must not contain (AGENTS.md, section 4.4):
 
-- public to everyone: ownership and capacity of every node, road widths, VP of both players,
+- public to everyone: ownership and capacity (DEC-22) of every node, road levels and types
+  (DEC-17: last seen in fog), VP of both players,
   intents of planned orders and «Защита» (origin, target, kind; no group id, no size);
 - road builds of cities (DEC-16): own ones always, with ``done_tick``; an enemy one without
   ``done_tick`` and only while its edge is not in fog (DEC-17, item 5);
@@ -42,7 +43,7 @@ from gow_protocol.base import (
     WireModel,
 )
 from gow_sim.ruleset import Stance
-from gow_sim.state import Detail, IntentKind, Mode
+from gow_sim.state import Detail, IntentKind, Mode, RoadKind
 
 
 class Seen(WireModel):
@@ -89,11 +90,7 @@ class NodeView(WireModel):
     id: NodeId
     owner: PlayerId | None
     capacity: NonNegInt
-    """Capacity by the road widths the player knows (DEC-17): exact unless ``capacity_stale``,
-    never above the true capacity."""
-    capacity_stale: bool
-    """``capacity`` is an estimate by the last seen widths: the node is in its owner's supplied
-    territory and one of its internal edges is in fog (DEC-17). Never for own nodes."""
+    """Capacity by the node kind (DEC-22, item 1): public and exact for every node."""
     detail: Detail
     warehouse: NonNegInt | None
     """Charges in the warehouse; only for ``EXACT`` nodes."""
@@ -122,20 +119,30 @@ class NodeView(WireModel):
         return self
 
 
-class UpgradeGain(WireModel):
-    """What the next road level would give (SIM-11 #27, hint of mechanics.md, section 18)."""
+class RoadGain(WireModel):
+    """What one more level of one road type adds (DEC-22, item 7)."""
 
-    capacity_centi: Centi
-    """Capacity gain in hundredths, e.g. 50 for «+0.5»."""
-    packet_speed_pct: NonNegInt
-    """Packet speed gain in percentage points (``supply.packet_speed_pct``)."""
+    speed_pct: NonNegInt
+    """Packet speed gain in percentage points."""
+    amount: NonNegInt
+    """Gain in charges per road and dispatch period."""
+
+
+class UpgradeGain(WireModel):
+    """What the next road level would give, per road type (DEC-22, item 7): both types on
+    level 1, only the road's own type on level 2."""
+
+    fast: RoadGain | None
+    freight: RoadGain | None
 
 
 class EdgeView(WireModel):
     id: EdgeId
     width: Width
-    """Width the player knows (DEC-17): the current one unless ``detail`` is ``fog``; in fog the
-    last seen width, or ``base_width`` of the map if never seen. Never above the true width."""
+    """Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is
+    ``fog``; in fog the last seen level, or 1 if never seen. Never above the true level."""
+    kind: RoadKind
+    """Road type the player knows, by the same rule (DEC-22, item 8): ``none`` on level 1."""
     detail: Detail
     """``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges."""
     upgrade_gain: UpgradeGain | None

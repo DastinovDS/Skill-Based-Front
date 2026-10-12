@@ -10,12 +10,19 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
-from gow_sim.maps import MapDef, Terrain
+from gow_sim.maps import MapDef, NodeKind, Terrain
 
 _OWNER_COLOUR = {0: "#2f6fdf", 1: "#d9453b", None: "#b5b5b5"}
 _OWNER_LABEL = {0: "игрок 0", 1: "игрок 1", None: "нейтральный"}
 # Terrain is shown by shape, the owner by colour: the preview does not rely on colour alone.
 _TERRAIN_MARKER = {Terrain.PLAINS: "o", Terrain.FOREST: "s", Terrain.MOUNTAINS: "^"}
+_KIND_MARK = {
+    NodeKind.CAPITAL: "",
+    NodeKind.CITY_LARGE: " L",
+    NodeKind.CITY_MEDIUM: " M",
+    NodeKind.CITY_SMALL: " S",
+    NodeKind.PROVINCE: " P",
+}
 _TERRAIN_LABEL = {Terrain.PLAINS: "равнина", Terrain.FOREST: "лес", Terrain.MOUNTAINS: "горы"}
 
 
@@ -64,7 +71,8 @@ def render_preview(mapdef: MapDef, out: str | Path) -> None:
             linewidths=1.6 if capital else 0.8,
             zorder=3,
         )
-        label = f"{node.id}" + (f"\nvp{node.vp}" if node.vp != 1 else "")
+        # Node kind (DEC-22): S, M, L city; P province; the capital is the star.
+        label = f"{node.id}{_KIND_MARK[node.kind]}" + (f"\nvp{node.vp}" if node.vp != 1 else "")
         ax.annotate(
             label, (node.x, node.y), xytext=(7, 7), textcoords="offset points", fontsize=7, zorder=4
         )
@@ -129,7 +137,7 @@ def render_preview(mapdef: MapDef, out: str | Path) -> None:
     ax.set_title(
         f"{mapdef.meta.name} v{mapdef.meta.version}: {len(mapdef.nodes)} узлов, "
         f"{len(mapdef.edges)} дорог, нейтральных {neutral}. "
-        "Подпись: id, vp; заряжено/юнитов",
+        "Подпись: id, вид (S/M/L: малый, средний, большой город), vp; заряжено/юнитов",
         fontsize=9,
     )
     fig.tight_layout()

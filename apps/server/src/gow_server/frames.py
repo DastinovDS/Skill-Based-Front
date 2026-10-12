@@ -23,7 +23,7 @@ from gow_sim.maps import PLAYERS, map_hash, map_to_data
 from gow_sim.match import SIM_VERSION, Match
 from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, replay_run
 from gow_sim.ruleset import Ruleset, ruleset_hash
-from gow_sim.state import AtNode, GameState, Group, OnEdge
+from gow_sim.state import AtNode, GameState, Group, OnEdge, RoadKind
 from gow_sim.systems.build import done_tick
 from gow_sim.systems.capacity import node_capacities
 
@@ -99,6 +99,9 @@ def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
     ]
     if builds:  # only while a city builds: older files without the key stay valid
         frame["b"] = builds
+    roads = [state.edges[i].kind.value for i in sorted(state.edges)]
+    if any(r != RoadKind.NONE.value for r in roads):  # DEC-22; absent: every road untyped
+        frame["r"] = roads
     return frame
 
 

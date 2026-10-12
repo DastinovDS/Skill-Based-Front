@@ -72,10 +72,12 @@ export const ROAD_COLOR = 0xc4cbd4;
 export const ROAD_CASING = { color: BG, alpha: 0.6 } as const;
 export const ROAD_CASING_EXTRA = 5;
 export const ROAD_STRIPE = { color: BG, alpha: 0.5, width: 1 } as const;
+/** A fast road (DEC-22): dark chevrons every `spacing` px, `size` px long, notch at `depth`. */
+export const ROAD_CHEVRON = { color: BG, spacing: 28, size: 9, gap: 3, depth: 0.45 } as const;
 /** Width 1 is a dashed trail. */
 export const ROAD_TRAIL_DASH = 7;
 export const ROAD_TRAIL_GAP = 5;
-/** Road thickness grows with its width (1..5), so width reads without colour: `1 + 3w`. */
+/** Road thickness grows with its level (1..3, DEC-22), so the level reads without colour: `1 + 3w`. */
 export function roadThickness(width: number): number {
   return 1 + 3 * width;
 }
@@ -114,7 +116,6 @@ export const VP_BADGE_RADIUS = 8.5;
 export const VP_BADGE = { fill: BG, stroke: { width: 2, color: VP } } as const;
 export const VP_FONT_SIZE = 11;
 export const VP_TEXT_COLOR = PAPER;
-export const STALE_FONT_SIZE = 11;
 
 // --- Units on the map (9.5): inverted triangles ---------------------------------------------------
 // A group is a triangle pointing down. Its side steps with the number of units; the share of

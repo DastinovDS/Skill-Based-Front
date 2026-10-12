@@ -15,7 +15,6 @@
         "id": 0,
         "owner": 0,
         "capacity": 6,
-        "capacity_stale": false,
         "detail": "exact",
         "warehouse": 5,
         "seen": {
@@ -36,7 +35,6 @@
         "id": 1,
         "owner": 0,
         "capacity": 4,
-        "capacity_stale": false,
         "detail": "exact",
         "warehouse": 4,
         "seen": {
@@ -54,7 +52,6 @@
         "id": 2,
         "owner": 1,
         "capacity": 3,
-        "capacity_stale": false,
         "detail": "presence",
         "warehouse": null,
         "seen": {
@@ -74,7 +71,6 @@
         "id": 3,
         "owner": 0,
         "capacity": 3,
-        "capacity_stale": false,
         "detail": "exact",
         "warehouse": 1,
         "seen": {
@@ -92,7 +88,6 @@
         "id": 4,
         "owner": 1,
         "capacity": 3,
-        "capacity_stale": false,
         "detail": "presence",
         "warehouse": null,
         "seen": {
@@ -112,7 +107,6 @@
         "id": 5,
         "owner": 1,
         "capacity": 6,
-        "capacity_stale": false,
         "detail": "fog",
         "warehouse": null,
         "seen": {
@@ -132,7 +126,6 @@
         "id": 6,
         "owner": null,
         "capacity": 2,
-        "capacity_stale": false,
         "detail": "exact",
         "warehouse": 0,
         "seen": {
@@ -152,7 +145,6 @@
         "id": 7,
         "owner": null,
         "capacity": 2,
-        "capacity_stale": false,
         "detail": "presence",
         "warehouse": null,
         "seen": {
@@ -174,10 +166,11 @@
       {
         "id": 0,
         "width": 2,
+        "kind": "fast",
         "detail": "presence",
         "upgrade_gain": {
-          "capacity_centi": 50,
-          "packet_speed_pct": 25
+          "fast": { "speed_pct": 50, "amount": 0 },
+          "freight": null
         },
         "seen": {
           "tick": 400,
@@ -190,6 +183,7 @@
       {
         "id": 1,
         "width": 1,
+        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -203,6 +197,7 @@
       {
         "id": 2,
         "width": 1,
+        "kind": "none",
         "detail": "fog",
         "upgrade_gain": null,
         "seen": null
@@ -210,6 +205,7 @@
       {
         "id": 3,
         "width": 1,
+        "kind": "none",
         "detail": "fog",
         "upgrade_gain": null,
         "seen": {
@@ -225,6 +221,7 @@
       {
         "id": 4,
         "width": 1,
+        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -238,6 +235,7 @@
       {
         "id": 5,
         "width": 3,
+        "kind": "fast",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -251,6 +249,7 @@
       {
         "id": 6,
         "width": 1,
+        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -264,6 +263,7 @@
       {
         "id": 7,
         "width": 1,
+        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -279,6 +279,7 @@
       {
         "id": 8,
         "width": 1,
+        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {

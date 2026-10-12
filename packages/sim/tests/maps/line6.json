@@ -13,7 +13,7 @@
    "y": 100,
    "terrain": "plains",
    "vp": 1,
-   "base_capacity": 40,
+   "kind": "capital",
    "capital_of": 0,
    "start_owner": 0,
    "start_units": 0,
@@ -26,7 +26,7 @@
    "y": 100,
    "terrain": "plains",
    "vp": 1,
-   "base_capacity": 30,
+   "kind": "city_large",
    "capital_of": null,
    "start_owner": 0,
    "start_units": 0,
@@ -39,7 +39,7 @@
    "y": 100,
    "terrain": "plains",
    "vp": 1,
-   "base_capacity": 30,
+   "kind": "city_large",
    "capital_of": null,
    "start_owner": null,
    "start_units": 0,
@@ -52,7 +52,7 @@
    "y": 100,
    "terrain": "plains",
    "vp": 1,
-   "base_capacity": 30,
+   "kind": "city_large",
    "capital_of": null,
    "start_owner": null,
    "start_units": 0,
@@ -65,7 +65,7 @@
    "y": 100,
    "terrain": "plains",
    "vp": 1,
-   "base_capacity": 30,
+   "kind": "city_large",
    "capital_of": null,
    "start_owner": 1,
    "start_units": 0,
@@ -78,7 +78,7 @@
    "y": 100,
    "terrain": "plains",
    "vp": 1,
-   "base_capacity": 40,
+   "kind": "capital",
    "capital_of": 1,
    "start_owner": 1,
    "start_units": 0,
@@ -92,7 +92,7 @@
    "a": 0,
    "b": 1,
    "base_width": 1,
-   "max_width": 5,
+   "max_width": 3,
    "travel_ticks": 30
   },
   {
@@ -100,7 +100,7 @@
    "a": 1,
    "b": 2,
    "base_width": 1,
-   "max_width": 5,
+   "max_width": 3,
    "travel_ticks": 30
   },
   {
@@ -108,7 +108,7 @@
    "a": 2,
    "b": 3,
    "base_width": 1,
-   "max_width": 5,
+   "max_width": 3,
    "travel_ticks": 30
   },
   {
@@ -116,7 +116,7 @@
    "a": 3,
    "b": 4,
    "base_width": 1,
-   "max_width": 5,
+   "max_width": 3,
    "travel_ticks": 30
   },
   {
@@ -124,7 +124,7 @@
    "a": 4,
    "b": 5,
    "base_width": 1,
-   "max_width": 5,
+   "max_width": 3,
    "travel_ticks": 30
   }
  ],

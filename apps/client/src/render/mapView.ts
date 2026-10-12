@@ -1,5 +1,5 @@
 import { Container, Graphics, GraphicsContext, Sprite, type Renderer, type Texture } from 'pixi.js';
-import type { MapFile, PlayerId } from '../protocol.gen.ts';
+import type { MapFile, PlayerId, RoadKind } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { territoryBorders } from './regionLayout.ts';
@@ -9,6 +9,7 @@ import {
   MAP_BORDER,
   ROAD_CASING,
   ROAD_CASING_EXTRA,
+  ROAD_CHEVRON,
   ROAD_COLOR,
   ROAD_STRIPE,
   ROAD_TRAIL_DASH,
@@ -29,18 +30,29 @@ interface Road {
   readonly holder: Container;
   readonly body: Graphics;
   readonly stripes: Graphics[];
+  /** The chevrons of a fast road; created on first need. */
+  chevrons: Graphics | null;
   readonly length: number;
   width: number;
+  kind: RoadKind;
+}
+
+/** A road as a snapshot shows it: level (the wire `width`) and type (DEC-22). */
+export interface RoadLook {
+  readonly width: number;
+  readonly kind: RoadKind;
 }
 
 /**
  * Static part of the map (ui-style.md 9.1-9.3): the terrain background with its dimming and
  * stamps, the territory of the owners with its border line, and the roads. Cities are `CityView`.
  *
- * Owners and road widths come from the map start fields now and from snapshots later
- * (CLI-04, #60) through `setOwners` and `setRoadWidths`. Identical shapes share one
- * GraphicsContext (the unit road rectangle, the dashed trail of a given length); `destroy()`
- * releases every object and context created here.
+ * Owners and roads come from the map start fields now and from snapshots later (CLI-04, #60)
+ * through `setOwners` and `setRoads`. A road reads without colour (DEC-22): level 1 is a dashed
+ * trail; an upgraded road is solid and thicker per level; a freight road carries lanes (one per
+ * level above 1), a fast road chevrons (double ones on level 3). Identical shapes share one
+ * GraphicsContext (the unit road rectangle, the dashed trail and the chevrons of a given length);
+ * `destroy()` releases every object and context created here.
  */
 export class MapView {
   private readonly shared: GraphicsContext[] = [];
@@ -48,6 +60,7 @@ export class MapView {
   private readonly casingContext: GraphicsContext;
   private readonly stripeContext: GraphicsContext;
   private readonly trailContexts = new Map<number, GraphicsContext>();
+  private readonly chevronContexts = new Map<string, GraphicsContext>();
   readonly cells: Point[][];
   private readonly terrainFill: Graphics;
   private readonly dim: Graphics;
@@ -124,11 +137,11 @@ export class MapView {
       }
       const body = holder.addChild(new Graphics(this.roadContext));
       this.bodyLayer.addChild(holder);
-      return { holder, body, stripes: [], length, width: 0 };
+      return { holder, body, stripes: [], chevrons: null, length, width: 0, kind: 'none' };
     });
 
     this.setOwners(map.nodes.map((node) => node.start_owner));
-    this.setRoadWidths(map.edges.map((edge) => edge.base_width));
+    this.setRoads(map.edges.map((edge) => ({ width: edge.base_width, kind: 'none' })));
   }
 
   /**
@@ -177,30 +190,42 @@ export class MapView {
     }
   }
 
-  /** `widths[i]`: current width of edge `i` (1..5). */
-  setRoadWidths(widths: readonly number[]): void {
-    widths.forEach((width, i) => {
+  /** `roads[i]`: current level and type of edge `i` (levels 1..3, DEC-22). */
+  setRoads(roads: readonly RoadLook[]): void {
+    roads.forEach(({ width, kind }, i) => {
       const road = this.roads[i];
       const casing = this.casings[i];
       if (road === undefined || casing === undefined) return;
       const thickness = roadThickness(width);
       casing.scale.y = thickness + ROAD_CASING_EXTRA;
-      if (road.width === width) return;
+      if (road.width === width && road.kind === kind) return;
       road.width = width;
+      road.kind = kind;
       road.body.scale.y = thickness;
-      // Width 1 is a dashed trail, wider roads are solid with `width - 1` dark lanes between.
       road.body.context = width <= 1 ? this.trailContext(road.length) : this.roadContext;
-      for (let k = 0; k < Math.max(width - 1, road.stripes.length); k++) {
+      // A freight road: `width - 1` dark lanes across the body.
+      const lanes = kind === 'freight' ? width - 1 : 0;
+      for (let k = 0; k < Math.max(lanes, road.stripes.length); k++) {
         let stripe = road.stripes[k];
-        if (stripe === undefined && k < width - 1) {
+        if (stripe === undefined && k < lanes) {
           stripe = road.holder.addChild(new Graphics(this.stripeContext));
           stripe.scale.y = ROAD_STRIPE.width;
           road.stripes[k] = stripe;
         }
         if (stripe !== undefined) {
-          stripe.visible = k < width - 1;
+          stripe.visible = k < lanes;
           stripe.position.y = -thickness / 2 + (thickness * (k + 1)) / width;
         }
+      }
+      // A fast road: chevrons along it, double on level 3.
+      if (kind === 'fast' && width > 1) {
+        const context = this.chevronContext(road.length, width >= 3 ? 2 : 1);
+        if (road.chevrons === null) road.chevrons = road.holder.addChild(new Graphics(context));
+        else road.chevrons.context = context;
+        road.chevrons.scale.y = thickness;
+        road.chevrons.visible = true;
+      } else if (road.chevrons !== null) {
+        road.chevrons.visible = false;
       }
     });
   }
@@ -222,6 +247,33 @@ export class MapView {
   private context(draw: (g: GraphicsContext) => GraphicsContext): GraphicsContext {
     const context = draw(new GraphicsContext());
     this.shared.push(context);
+    return context;
+  }
+
+  /**
+   * Chevrons of a fast road of `length`, in the unit space of the road (x 0..1 along it, y
+   * -0.5..0.5 across, scaled by the thickness): `count` arrowheads per mark.
+   */
+  private chevronContext(length: number, count: number): GraphicsContext {
+    const span = Math.max(1, Math.round(length));
+    const key = `${String(span)}:${String(count)}`;
+    let context = this.chevronContexts.get(key);
+    if (context === undefined) {
+      const { spacing, size, gap, depth } = ROAD_CHEVRON;
+      context = this.context((g) => {
+        const mark = count * size + (count - 1) * gap;
+        for (let at = spacing / 2; at + mark < span - spacing / 4; at += spacing) {
+          for (let c = 0; c < count; c++) {
+            const x0 = (at + c * (size + gap)) / span;
+            const x1 = (at + c * (size + gap) + size) / span;
+            const notch = (at + c * (size + gap) + size * depth) / span;
+            g.poly([x0, -0.4, x1, 0, x0, 0.4, notch, 0]);
+          }
+        }
+        return g.fill(ROAD_CHEVRON.color);
+      });
+      this.chevronContexts.set(key, context);
+    }
     return context;
   }
 

@@ -84,8 +84,7 @@
             edge: road.id,
             node: road.a === pick ? road.b : road.a,
             width: road.width + 1,
-            capacity: cp(road.capacityCenti ?? 0),
-            speed: road.packetSpeedPct ?? 0,
+            type: road.kind === 'none' ? t('road.choose') : t(`road.${road.kind}`),
             charges: unknown(road.charges),
           })}
         </button>

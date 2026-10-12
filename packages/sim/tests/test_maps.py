@@ -92,8 +92,18 @@ BROKEN: list[tuple[str, Path_, object, str]] = [
         4,
         "start_charged: 4 is out of range [0..3]",
     ),
-    ("width > max", ("edges", 0, "base_width"), 4, "edges[0].base_width: 4 is out of range [1..3]"),
-    ("max width > 5", ("edges", 0, "max_width"), 6, "edges[0].max_width: 6 is out of range [1..5]"),
+    # DEC-22: every road starts at level 1, levels 1..3.
+    (
+        "base width > 1",
+        ("edges", 0, "base_width"),
+        2,
+        "edges[0].base_width: 2 is out of range [1..1]",
+    ),
+    ("max width > 3", ("edges", 0, "max_width"), 4, "edges[0].max_width: 4 is out of range [1..3]"),
+    ("unknown kind", ("nodes", 1, "kind"), "town", "nodes[1].kind: expected one of"),
+    ("capital kind", ("nodes", 1, "kind"), "capital", "nodes[1].kind: 'capital' exactly for"),
+    ("not capital kind", ("nodes", 0, "kind"), "city_large", "nodes[0].kind: 'capital' exactly"),
+    ("province vp", ("nodes", 1, "kind"), "province", "nodes[1]: a province has vp 0"),
     ("zero travel", ("edges", 0, "travel_ticks"), 0, "edges[0].travel_ticks: 0 is out of range"),
     ("outside map", ("nodes", 2, "x"), 401, "nodes[2].x: 401 is out of range [0..400]"),
     (
@@ -116,7 +126,7 @@ BROKEN: list[tuple[str, Path_, object, str]] = [
         "nodes[2].start_owner: the capital of player 0",
     ),
     ("capital not owned", ("nodes", 0, "start_owner"), None, "the capital of player 0 must start"),
-    ("no capital", ("nodes", 2, "capital_of"), None, "player 1 must have exactly one capital"),
+    ("no capital", ("nodes", 2, "capital_of"), None, "nodes[2].kind: 'capital' exactly for"),
     (
         "neutral garrison",
         ("nodes", 1, "start_units"),
@@ -149,7 +159,7 @@ def test_broken_map_is_rejected(case: str, path: Path_, value: object, message: 
 
 def test_two_capitals_of_one_player_are_rejected() -> None:
     data = _broken(("nodes", 1, "capital_of"), 0)
-    data["nodes"][1].update(start_owner=0, start_units=1, start_charged=1)
+    data["nodes"][1].update(start_owner=0, start_units=1, start_charged=1, kind="capital")
     with pytest.raises(
         MapFormatError, match=r"player 0 must have exactly one capital, found \[0, 1\]"
     ):

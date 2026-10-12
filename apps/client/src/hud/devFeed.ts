@@ -8,6 +8,7 @@ import type {
   EventMsg,
   GroupView,
   MapFile,
+  NodeKind,
   NodeView,
   RulesetPublic,
   SnapshotMsg,
@@ -36,6 +37,18 @@ const SEEN_EXACT = 1;
 const SEEN_PRESENCE = 2;
 
 /** The snapshot of dev tick `tick` for `map` (player 0 sees its own nodes; the first enemy nodes are shown in full or as presence). */
+/**
+ * Capacities of the dev feed by node kind: the `mvp-0` numbers of DEC-22, only for this offline
+ * fake (a real snapshot carries the server's capacity of every node).
+ */
+const DEV_CAPACITY: Record<NodeKind, number> = {
+  capital: 10,
+  city_large: 8,
+  city_medium: 6,
+  city_small: 4,
+  province: 3,
+};
+
 export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): SnapshotMsg {
   const mine = new Set(map.nodes.filter((n) => n.start_owner === DEV_PLAYER).map((n) => n.id));
   const next = map.nodes.filter((n) => n.start_owner === 1).map((n) => n.id);
@@ -46,8 +59,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
     const base = {
       id: n.id,
       owner: n.start_owner,
-      capacity: n.base_capacity,
-      capacity_stale: false,
+      capacity: DEV_CAPACITY[n.kind],
       build: null,
       attrition_in: null,
       grace_left: null,
@@ -88,9 +100,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         },
       };
     }
-    // An enemy city in fog: its capacity is an estimate by the last seen roads (DEC-17).
-    const stale = n.start_owner === 1;
-    return { ...base, capacity_stale: stale, detail: 'fog', warehouse: null, seen: null };
+    return { ...base, detail: 'fog', warehouse: null, seen: null };
   });
 
   const groups: GroupView[] = map.nodes
@@ -115,6 +125,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       edges: map.edges.map((e) => ({
         id: e.id,
         width: e.base_width,
+        kind: 'none',
         detail: 'fog',
         upgrade_gain: null,
         seen: null,

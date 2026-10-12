@@ -11,7 +11,7 @@ every bundled map.
 from typing import Literal
 
 from gow_protocol.base import EdgeId, MapId, NodeId, NonNegInt, PlayerId, PosInt, Width, WireModel
-from gow_sim.maps import Terrain
+from gow_sim.maps import NodeKind, Terrain
 
 
 class MapMetaFile(WireModel):
@@ -32,7 +32,8 @@ class MapNodeFile(WireModel):
     y: NonNegInt
     terrain: Terrain
     vp: NonNegInt
-    base_capacity: NonNegInt
+    kind: NodeKind
+    """Node kind: its capacity is ``capacity.by_kind`` of the ruleset (DEC-22)."""
     capital_of: PlayerId | None
     start_owner: PlayerId | None
     start_units: NonNegInt
@@ -46,7 +47,9 @@ class MapEdgeFile(WireModel):
     a: NodeId
     b: NodeId
     base_width: Width
+    """Road level at the start: always 1 (DEC-22)."""
     max_width: Width
+    """Highest road level, at most 3 (DEC-22)."""
     travel_ticks: PosInt
 
 

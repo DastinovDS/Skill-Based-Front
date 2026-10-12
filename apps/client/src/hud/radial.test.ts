@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { DEV_RULES } from './devFeed.ts';
-import { RADIAL, passivePerMinute, sectorAt, sectorPath, stanceRates } from './radial.ts';
+import {
+  RADIAL,
+  ROAD_HALF,
+  passivePerMinute,
+  roadSectorAt,
+  sectorAt,
+  sectorPath,
+  stanceRates,
+} from './radial.ts';
 
 describe('stanceRates', () => {
   it('gives mvp-0 the table of the guide: 3/18, 6/12, 9/6 and 12 from the capital', () => {
@@ -51,5 +59,21 @@ describe('sectorPath', () => {
     expect(path.endsWith('Z')).toBe(true);
     expect(path).toContain(`A${String(RADIAL.outer)} ${String(RADIAL.outer)}`);
     expect(path).toContain(`A${String(RADIAL.inner)} ${String(RADIAL.inner)}`);
+  });
+});
+
+describe('roadSectorAt (road type menu, DEC-22)', () => {
+  it('picks fast on the left and freight on the right; the middle cancels', () => {
+    expect(roadSectorAt(0, 0)).toBeNull();
+    expect(roadSectorAt(-80, 0)).toBe('fast');
+    expect(roadSectorAt(80, 0)).toBe('freight');
+    // Any part of a sector selects it, also near the top and bottom.
+    expect(roadSectorAt(-5, -90)).toBe('fast');
+    expect(roadSectorAt(5, 90)).toBe('freight');
+  });
+
+  it('draws sectors wider than a half circle with the large arc flag', () => {
+    expect(sectorPath(0, 100)).toContain(' 0 1 1 ');
+    expect(sectorPath(0, ROAD_HALF)).not.toContain(' 0 1 1 ');
   });
 });

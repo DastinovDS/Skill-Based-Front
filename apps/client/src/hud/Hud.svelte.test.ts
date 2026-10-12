@@ -93,8 +93,8 @@ describe('Hud', () => {
     flushSync();
     expect(target.querySelector('aside')).toBeNull();
     const bar = (target.querySelector('header')?.textContent ?? '').replace(/\s+/g, ' ');
-    // Tick 250 at 10 Hz of a 7200-tick match: 695 s = 11:35 left; CP is at the cap by then.
-    expect(bar).toContain('11:35');
+    // Tick 250 at 10 Hz of a 9000-tick match (DEC-22): 875 s = 14:35 left; CP is at the cap.
+    expect(bar).toContain('14:35');
     expect(bar).toContain('Balance');
     expect(bar).toContain('Danya');
     expect(bar).toContain('Guest');

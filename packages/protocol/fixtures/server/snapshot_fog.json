@@ -15,7 +15,6 @@
         "id": 0,
         "owner": 0,
         "capacity": 4,
-        "capacity_stale": false,
         "detail": "exact",
         "warehouse": 4,
         "seen": {
@@ -33,7 +32,6 @@
         "id": 1,
         "owner": 1,
         "capacity": 2,
-        "capacity_stale": false,
         "detail": "presence",
         "warehouse": null,
         "seen": {
@@ -53,7 +51,6 @@
         "id": 2,
         "owner": 1,
         "capacity": 4,
-        "capacity_stale": true,
         "detail": "fog",
         "warehouse": null,
         "seen": {
@@ -74,6 +71,7 @@
       {
         "id": 0,
         "width": 1,
+        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -87,6 +85,7 @@
       {
         "id": 1,
         "width": 1,
+        "kind": "none",
         "detail": "fog",
         "upgrade_gain": null,
         "seen": null

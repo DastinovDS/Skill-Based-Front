@@ -30,6 +30,10 @@ export type PlayerId = 0 | 1;
  * How much a player sees of a node or an edge (DEC-04, mechanics.md, section 10).
  */
 export type Detail = 'exact' | 'presence' | 'fog';
+/**
+ * Type of a road (DEC-22, item 2): chosen by the first upgrade, never changes after.
+ */
+export type RoadKind = 'none' | 'fast' | 'freight';
 export type Location = AtNodeLoc | OnEdgeLoc;
 /**
  * Publicly visible intent types (DEC-04, DEC-08).
@@ -40,6 +44,10 @@ export type IntentKind = 'planned_move' | 'defense';
  */
 export type EndReason = 'capital_captured' | 'timer' | 'forfeit' | 'disconnect' | 'double_defeat';
 export type Terrain = 'plains' | 'forest' | 'mountains';
+/**
+ * Kind of a node (DEC-22, item 1; DEC-23, item 1): its capacity is ``capacity.by_kind``.
+ */
+export type NodeKind = 'capital' | 'city_large' | 'city_medium' | 'city_small' | 'province';
 
 /**
  * First message of a connection. The token is never in the URL, a log or an error text.
@@ -95,12 +103,16 @@ export interface SetStanceCmd {
   stance: Stance;
 }
 /**
- * The own city ``node`` raises the internal road ``edge`` by one level (DEC-16).
+ * The own city ``node`` raises the internal road ``edge`` by one level (DEC-16, DEC-22).
+ *
+ * ``kind`` is required by the first upgrade (level 1 -> 2) and chooses the road type; for the
+ * second it may be omitted or must equal the road's type (``ROAD_KIND_MISMATCH`` otherwise).
  */
 export interface UpgradeRoadCmd {
   type: 'upgrade_road';
   node: number;
   edge: number;
+  kind: ('fast' | 'freight') | null;
 }
 export interface RecruitCmd {
   type: 'recruit';
@@ -221,12 +233,12 @@ export interface TerrainDefensePublic {
 export interface BuildPublic {
   ticks_per_level: number;
   /**
-   * One price per new width ``2..5``, ascending.
+   * One price per new level ``2..3`` (DEC-22), ascending.
    */
   charges_per_level: LevelPrice[];
 }
 /**
- * Charges from the city warehouse for raising a road to ``width`` (DEC-16).
+ * Charges from the city warehouse for raising a road to level ``width`` (DEC-16, DEC-22).
  */
 export interface LevelPrice {
   width: number;
@@ -316,15 +328,9 @@ export interface NodeView {
   id: number;
   owner: PlayerId | null;
   /**
-   * Capacity by the road widths the player knows (DEC-17): exact unless ``capacity_stale``,
-   * never above the true capacity.
+   * Capacity by the node kind (DEC-22, item 1): public and exact for every node.
    */
   capacity: number;
-  /**
-   * ``capacity`` is an estimate by the last seen widths: the node is in its owner's supplied
-   * territory and one of its internal edges is in fog (DEC-17). Never for own nodes.
-   */
-  capacity_stale: boolean;
   detail: Detail;
   /**
    * Charges in the warehouse; only for ``EXACT`` nodes.
@@ -379,10 +385,14 @@ export interface NodeBuild {
 export interface EdgeView {
   id: number;
   /**
-   * Width the player knows (DEC-17): the current one unless ``detail`` is ``fog``; in fog the
-   * last seen width, or ``base_width`` of the map if never seen. Never above the true width.
+   * Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is
+   * ``fog``; in fog the last seen level, or 1 if never seen. Never above the true level.
    */
   width: number;
+  /**
+   * Road type the player knows, by the same rule (DEC-22, item 8): ``none`` on level 1.
+   */
+  kind: RoadKind;
   /**
    * ``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges.
    */
@@ -394,17 +404,25 @@ export interface EdgeView {
   seen: Seen | null;
 }
 /**
- * What the next road level would give (SIM-11 #27, hint of mechanics.md, section 18).
+ * What the next road level would give, per road type (DEC-22, item 7): both types on
+ * level 1, only the road's own type on level 2.
  */
 export interface UpgradeGain {
+  fast: RoadGain | null;
+  freight: RoadGain | null;
+}
+/**
+ * What one more level of one road type adds (DEC-22, item 7).
+ */
+export interface RoadGain {
   /**
-   * Capacity gain in hundredths, e.g. 50 for «+0.5».
+   * Packet speed gain in percentage points.
    */
-  capacity_centi: number;
+  speed_pct: number;
   /**
-   * Packet speed gain in percentage points (``supply.packet_speed_pct``).
+   * Gain in charges per road and dispatch period.
    */
-  packet_speed_pct: number;
+  amount: number;
 }
 /**
  * An own group. Enemy groups appear only as ``Seen`` summaries of places.
@@ -594,7 +612,10 @@ export interface MapNodeFile {
   y: number;
   terrain: Terrain;
   vp: number;
-  base_capacity: number;
+  /**
+   * Node kind: its capacity is ``capacity.by_kind`` of the ruleset (DEC-22).
+   */
+  kind: NodeKind;
   capital_of: PlayerId | null;
   start_owner: PlayerId | null;
   start_units: number;
@@ -608,7 +629,13 @@ export interface MapEdgeFile {
   id: number;
   a: number;
   b: number;
+  /**
+   * Road level at the start: always 1 (DEC-22).
+   */
   base_width: number;
+  /**
+   * Highest road level, at most 3 (DEC-22).
+   */
   max_width: number;
   travel_ticks: number;
 }
@@ -624,6 +651,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

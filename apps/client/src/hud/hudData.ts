@@ -12,11 +12,13 @@ import type {
   Mode,
   NodeView,
   PlayerId,
+  RoadKind,
   RulesetPublic,
   Seen,
   SnapshotMsg,
   Stance,
   Terrain,
+  UpgradeGain,
 } from '../protocol.gen.ts';
 import { delayLeft } from '../render/intentLayout.ts';
 import { estimateCombat, type CombatEstimate, type DefenderInput } from './combatEstimate.ts';
@@ -78,9 +80,8 @@ export interface NodeInfo {
   readonly terrain: Terrain;
   readonly vp: number;
   readonly capital: boolean;
+  /** Fixed by the node kind (DEC-22): public and exact. */
   readonly capacity: number;
-  /** `capacity` is an estimate by the last seen roads (DEC-17): shown as «≈». */
-  readonly capacityStale: boolean;
   readonly detail: Detail;
   /** Charges in the warehouse, `null` unless the node is seen exactly. */
   readonly warehouse: number | null;
@@ -140,18 +141,18 @@ export interface NodeChoice {
   readonly owner: Ownership;
 }
 
-/** What the next level of a road would give, from `EdgeView.upgrade_gain` (the server's numbers). */
+/** A road and what its next level would give, from `EdgeView.upgrade_gain` (the server's numbers). */
 export interface RoadInfo {
   readonly id: number;
   /** The two end nodes (from the map). */
   readonly a: number;
   readonly b: number;
-  /** Current width. */
+  /** Current level (1..3, DEC-22; the wire calls it `width`). */
   readonly width: number;
-  /** Hundredths of capacity added to each end city; `null`: the road cannot be upgraded. */
-  readonly capacityCenti: number | null;
-  /** Percentage points of packet speed. */
-  readonly packetSpeedPct: number | null;
+  /** Road type: `none` on level 1, then the type the first upgrade chose (DEC-22). */
+  readonly kind: RoadKind;
+  /** What the next level adds per type; `null`: the road cannot be upgraded (DEC-22, item 7). */
+  readonly gain: UpgradeGain | null;
   /**
    * Warehouse charges the next level costs (`ruleset_public.build`, DEC-16); `null` when the road
    * cannot be upgraded or the ruleset has no price for that width.
@@ -214,7 +215,7 @@ export function levelCharges(rules: RulesetPublic, width: number): number | null
  * still the server's call (supply, busy roads, charges).
  */
 export function roadCandidates(roads: readonly RoadInfo[], node: number): RoadInfo[] {
-  return roads.filter((r) => (r.a === node || r.b === node) && r.capacityCenti !== null);
+  return roads.filter((r) => (r.a === node || r.b === node) && r.gain !== null);
 }
 
 function ownership(owner: PlayerId | null, me: PlayerId): Ownership {
@@ -278,7 +279,6 @@ function nodeInfo(
     vp: file?.vp ?? 0,
     capital: file?.capital_of != null,
     capacity: node.capacity,
-    capacityStale: node.capacity_stale,
     detail: node.detail,
     warehouse: node.warehouse,
     mine: {
@@ -319,8 +319,8 @@ function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): 
     a: file?.a ?? -1,
     b: file?.b ?? -1,
     width: edge.width,
-    capacityCenti: edge.upgrade_gain?.capacity_centi ?? null,
-    packetSpeedPct: edge.upgrade_gain?.packet_speed_pct ?? null,
+    kind: edge.kind,
+    gain: edge.upgrade_gain,
     charges: edge.upgrade_gain === null ? null : levelCharges(ctx.rules, edge.width + 1),
   };
 }

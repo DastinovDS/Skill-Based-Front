@@ -60,7 +60,7 @@ def _node(i: int, terrain: str, owner: int | None, capital: int | None = None) -
         "y": 10,
         "terrain": terrain,
         "vp": 1,
-        "base_capacity": 4,
+        "kind": "city_small",
         "capital_of": capital,
         "start_owner": owner,
         "start_units": 0,
@@ -74,6 +74,7 @@ def _line(terrains: list[str], owners: list[int | None], travel: list[int]) -> M
     n = len(terrains)
     nodes = [_node(i, terrains[i], owners[i]) for i in range(n)]
     nodes[0]["capital_of"], nodes[-1]["capital_of"] = 0, 1
+    nodes[0]["kind"] = nodes[-1]["kind"] = "capital"
     edges = [
         {"id": i, "a": i, "b": i + 1, "base_width": 1, "max_width": 3, "travel_ticks": travel[i]}
         for i in range(n - 1)

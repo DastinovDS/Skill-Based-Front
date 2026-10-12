@@ -1,8 +1,8 @@
 """Scenario of SIM-12 (#28) on the map ``fork``: recruiting in the capital until it is full.
 
 DEC-01 (mechanics.md, section 3): one discharged unit per city per 20 ticks for 1 CP, only with
-free capacity. The capital 0 of player 0 holds 4 + e0 w2 (+1.5) + e1 w1 (+1.0) = 6.5 -> 6 units
-(mechanics.md, section 9) and starts with 2. Rules pinned below; CP start at the cap 5 CP, no
+free capacity. The capital 0 of player 0 holds 6 units (``RULES`` pins the capital kind at 6,
+DEC-22) and starts with 2. Rules pinned below; CP start at the cap 5 CP, no
 regeneration in this scenario. Tick convention: step ``t`` runs with ``state.tick == t``.
 """
 
@@ -13,10 +13,10 @@ from gow_sim.commands import Ok, PlayerCommand, Recruit, RejectCode, apply_comma
 from gow_sim.maps import load_map
 from gow_sim.ruleset import (
     CapacityRules,
+    KindTable,
     RecruitLocation,
     RecruitRules,
     Ruleset,
-    WidthTable,
     load_ruleset,
 )
 from gow_sim.state import AtNode, initial_state
@@ -32,7 +32,9 @@ RULES: Ruleset = dataclasses.replace(
         _BASE.orders, cost=dataclasses.replace(_BASE.orders.cost, recruit=100)
     ),
     capacity=CapacityRules(
-        attrition_ticks=30, grace_ticks=50, width_gain_centi=WidthTable((100, 150, 200, 230, 260))
+        attrition_ticks=30,
+        grace_ticks=50,
+        by_kind=KindTable(capital=6, city_large=8, city_medium=6, city_small=4, province=3),
     ),
     recruit=RecruitRules(cooldown_ticks=20, location=RecruitLocation.ANY_CITY),
 )

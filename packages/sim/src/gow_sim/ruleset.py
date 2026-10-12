@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Final, cast
 
 from gow_sim.canonical import digest
-from gow_sim.maps import MAX_WIDTH, Terrain
+from gow_sim.maps import MAX_WIDTH, NodeKind, Terrain
 
 
 class RulesetError(ValueError):
@@ -74,20 +74,32 @@ class StanceTable:
 
 
 @dataclass(frozen=True, slots=True)
-class WidthTable:
-    """One integer per road width ``1..MAX_WIDTH``: ``values[width - 1]``."""
+class KindTable:
+    """One integer per node kind (DEC-22, item 1)."""
 
-    values: tuple[int, ...]
+    capital: int
+    city_large: int
+    city_medium: int
+    city_small: int
+    province: int
 
-    def of(self, width: int) -> int:
-        if not 1 <= width <= len(self.values):
-            raise ValueError(f"road width {width} is out of range 1..{len(self.values)}")
-        return self.values[width - 1]
+    def of(self, kind: NodeKind) -> int:
+        match kind:
+            case NodeKind.CAPITAL:
+                return self.capital
+            case NodeKind.CITY_LARGE:
+                return self.city_large
+            case NodeKind.CITY_MEDIUM:
+                return self.city_medium
+            case NodeKind.CITY_SMALL:
+                return self.city_small
+            case NodeKind.PROVINCE:
+                return self.province
 
 
 @dataclass(frozen=True, slots=True)
 class LevelTable:
-    """One integer per new road width ``2..MAX_WIDTH`` (a road level): ``values[width - 2]``."""
+    """One integer per upgraded road level ``2..MAX_WIDTH``: ``values[level - 2]`` (DEC-22)."""
 
     values: tuple[int, ...]
 
@@ -150,7 +162,8 @@ class TerrainRules:
 class CapacityRules:
     attrition_ticks: int
     grace_ticks: int
-    width_gain_centi: WidthTable
+    by_kind: KindTable
+    """Capacity of a node by its kind (DEC-22, item 1)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,7 +171,14 @@ class SupplyRules:
     dispatch_ticks: int
     buffer: int
     recharge_per_tick: int
-    packet_speed_pct: WidthTable
+    base_speed_pct: int
+    """Packet speed on a level 1 road and on a freight road (DEC-22, item 4)."""
+    base_amount: int
+    """Charges per road and dispatch period on a level 1 road and on a fast road (DEC-22)."""
+    fast_speed_pct: LevelTable
+    """Packet speed on a fast road by its level ``2..MAX_WIDTH``."""
+    freight_amount: LevelTable
+    """Charges per dispatch period on a freight road by its level ``2..MAX_WIDTH``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,7 +187,7 @@ class BuildRules:
 
     ticks_per_level: int
     charges_per_level: LevelTable
-    """Charges for raising a road to a width, by the new width ``2..MAX_WIDTH``."""
+    """Charges for raising a road to a level, by the new level ``2..MAX_WIDTH`` (DEC-22, item 6)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,8 +240,6 @@ def to_canonical(rules: Ruleset) -> dict[str, object]:
 
 
 def _plain(value: object) -> object:
-    if isinstance(value, WidthTable):
-        return {str(width): v for width, v in enumerate(value.values, start=1)}
     if isinstance(value, LevelTable):
         return {str(width): v for width, v in enumerate(value.values, start=2)}
     if isinstance(value, StrEnum):
@@ -255,7 +273,6 @@ def archive_ruleset(path: str | Path, archive_dir: str | Path) -> Path:
     return target
 
 
-_WIDTH_KEYS: Final = tuple(str(width) for width in range(1, MAX_WIDTH + 1))
 _LEVEL_KEYS: Final = tuple(str(width) for width in range(2, MAX_WIDTH + 1))
 
 
@@ -309,11 +326,20 @@ def parse_ruleset(data: object) -> Ruleset:
         ),
         terrain=_parse_terrain(root.table("terrain", ("defense_mod", "entry_speed_pct"))),
         capacity=_parse_capacity(
-            root.table("capacity", ("attrition_ticks", "grace_ticks", "width_gain_centi"))
+            root.table("capacity", ("attrition_ticks", "grace_ticks", "by_kind"))
         ),
         supply=_parse_supply(
             root.table(
-                "supply", ("dispatch_ticks", "buffer", "recharge_per_tick", "packet_speed_pct")
+                "supply",
+                (
+                    "dispatch_ticks",
+                    "buffer",
+                    "recharge_per_tick",
+                    "base_speed_pct",
+                    "base_amount",
+                    "fast_speed_pct",
+                    "freight_amount",
+                ),
             )
         ),
         build=_parse_build(root.table("build", ("ticks_per_level", "charges_per_level"))),
@@ -379,21 +405,25 @@ def _parse_terrain(t: "_Table") -> TerrainRules:
 
 
 def _parse_capacity(t: "_Table") -> CapacityRules:
-    gain = t.table("width_gain_centi", _WIDTH_KEYS)
+    kinds = t.table("by_kind", tuple(k.value for k in NodeKind))
     return CapacityRules(
         attrition_ticks=t.integer("attrition_ticks", low=1),
         grace_ticks=t.integer("grace_ticks", low=0),
-        width_gain_centi=WidthTable(tuple(gain.integer(key, low=0) for key in _WIDTH_KEYS)),
+        by_kind=KindTable(**{k.value: kinds.integer(k.value, low=0) for k in NodeKind}),
     )
 
 
 def _parse_supply(t: "_Table") -> SupplyRules:
-    speed = t.table("packet_speed_pct", _WIDTH_KEYS)
+    speed = t.table("fast_speed_pct", _LEVEL_KEYS)
+    amount = t.table("freight_amount", _LEVEL_KEYS)
     return SupplyRules(
         dispatch_ticks=t.integer("dispatch_ticks", low=1),
         buffer=t.integer("buffer", low=0),
         recharge_per_tick=t.integer("recharge_per_tick", low=0),
-        packet_speed_pct=WidthTable(tuple(speed.integer(key, low=1) for key in _WIDTH_KEYS)),
+        base_speed_pct=t.integer("base_speed_pct", low=1),
+        base_amount=t.integer("base_amount", low=1),
+        fast_speed_pct=LevelTable(tuple(speed.integer(key, low=1) for key in _LEVEL_KEYS)),
+        freight_amount=LevelTable(tuple(amount.integer(key, low=1) for key in _LEVEL_KEYS)),
     )
 
 

@@ -44,27 +44,37 @@ def _dec02() -> Ruleset:
             stance_to_charges_pct=StanceTable(economy=75, balance=50, war=25),
         ),
         orders=dataclasses.replace(base.orders, stance_cooldown_ticks=100),
+        # A capital holds 4 charges in these tests (its kind's capacity, DEC-22).
+        capacity=dataclasses.replace(
+            base.capacity, by_kind=dataclasses.replace(base.capacity.by_kind, capital=4)
+        ),
     )
 
 
 DEC02 = _dec02()
+ROOMY = dataclasses.replace(
+    DEC02,
+    capacity=dataclasses.replace(
+        DEC02.capacity, by_kind=dataclasses.replace(DEC02.capacity.by_kind, capital=1000)
+    ),
+)
+"""DEC02 with capitals of capacity 1000: nothing overflows."""
 
 
 def _roomy_state() -> GameState:
-    """line3 with capitals of capacity 1000 and empty warehouses: nothing overflows."""
+    """line3 with empty warehouses, for the ``ROOMY`` rules."""
     data = json.loads((MAPS_DIR / "line3.json").read_text(encoding="utf-8"))
     for node in data["nodes"]:
         if node["capital_of"] is not None:
-            node["base_capacity"] = 1000
             node["start_stock"] = 0
-    return initial_state(parse_map(data), DEC02)
+    return initial_state(parse_map(data), ROOMY)
 
 
-def _run(state: GameState, ticks: int) -> list[Event]:
+def _run(state: GameState, ticks: int, rules: Ruleset = ROOMY) -> list[Event]:
     events: list[Event] = []
     for _ in range(ticks):
         state.tick += 1
-        events.extend(economy(state, DEC02))
+        events.extend(economy(state, rules))
     return events
 
 
@@ -188,10 +198,10 @@ def test_600_ticks(
 
 
 def test_overflow_is_lost_with_an_event() -> None:
-    # line3: the capital has base_capacity 4 and only a buffer road, so its capacity is 4.
+    # line3: the capital holds 4 (``DEC02``).
     state = initial_state(load_map(MAPS_DIR / "line3.json"), DEC02)
     state.nodes[0].warehouse = 3
-    events = _run(state, 50)
+    events = _run(state, 50, DEC02)
     # BALANCE: 1 charge from the stance + 1 passive = 2; room for 1, 1 lost.
     assert state.nodes[0].warehouse == 4
     produced = [e for e in events if e.kind == "charges_produced" and e.get("player") == 0]
@@ -202,17 +212,18 @@ def test_overflow_is_lost_with_an_event() -> None:
 
 def test_full_warehouse_loses_everything() -> None:
     state = initial_state(load_map(MAPS_DIR / "line3.json"), DEC02)  # start_stock 4 = capacity
-    events = _run(state, 50)
+    events = _run(state, 50, DEC02)
     assert state.nodes[0].warehouse == 4
     assert [e.kind for e in events if e.get("player") == 0] == ["charges_overflow"]
 
 
-def test_capacity_counts_internal_roads() -> None:
-    # pass: capital 0 (base 4) is joined to own node 1 by e0 of width 1 (+1.0): capacity 5.
+def test_capacity_does_not_count_internal_roads() -> None:
+    # pass: capital 0 is joined to own node 1 by e0; roads add nothing (DEC-22): capacity 4.
     state = initial_state(load_map(MAPS_DIR / "pass.json"), DEC02)
-    state.nodes[0].warehouse = 4
-    _run(state, 50)
-    assert state.nodes[0].warehouse == 5
+    state.nodes[0].warehouse = 3
+    state.edges[0].width = 3
+    _run(state, 50, DEC02)
+    assert state.nodes[0].warehouse == 4
 
 
 def test_lost_capital_produces_nothing_but_cp_regenerates() -> None:

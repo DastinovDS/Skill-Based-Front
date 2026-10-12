@@ -15,6 +15,7 @@
   import OrdersPanel from './OrdersPanel.svelte';
   import type { HudPrefs } from './prefs.svelte.ts';
   import RadialMenu from './RadialMenu.svelte';
+  import RoadTypeMenu from './RoadTypeMenu.svelte';
   import SelectionPanel from './SelectionPanel.svelte';
   import StartBanner from './StartBanner.svelte';
   import ToastStack from './ToastStack.svelte';
@@ -146,6 +147,7 @@
     <KeyHints />
   {/if}
   <RadialMenu {orders} stance={data?.stance ?? null} passive={orders.passivePerMinute} />
+  <RoadTypeMenu {orders} />
   <Tooltip {data} ctx={hud.context} {orders} />
   <HelpOverlay
     open={chrome.helpOpen}
