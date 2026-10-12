@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 8,
+    "PROTOCOL_VERSION": 9,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -109,7 +109,7 @@
           "type": "integer"
         },
         "charges_per_level": {
-          "description": "One price per new width ``2..5``, ascending.",
+          "description": "One price per new level ``2..3`` (DEC-22), ascending.",
           "items": {
             "$ref": "#/$defs/LevelPrice"
           },
@@ -447,10 +447,18 @@
           "type": "integer"
         },
         "width": {
-          "description": "Width the player knows (DEC-17): the current one unless ``detail`` is ``fog``; in fog the\nlast seen width, or ``base_width`` of the map if never seen. Never above the true width.",
-          "maximum": 5,
+          "description": "Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is\n``fog``; in fog the last seen level, or 1 if never seen. Never above the true level.",
+          "maximum": 3,
           "minimum": 1,
           "type": "integer"
+        },
+        "kind": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/RoadKind"
+            }
+          ],
+          "description": "Road type the player knows, by the same rule (DEC-22, item 8): ``none`` on level 1."
         },
         "detail": {
           "allOf": [
@@ -485,6 +493,7 @@
       "required": [
         "id",
         "width",
+        "kind",
         "detail",
         "upgrade_gain",
         "seen"
@@ -740,10 +749,10 @@
     },
     "LevelPrice": {
       "additionalProperties": false,
-      "description": "Charges from the city warehouse for raising a road to ``width`` (DEC-16).",
+      "description": "Charges from the city warehouse for raising a road to level ``width`` (DEC-16, DEC-22).",
       "properties": {
         "width": {
-          "maximum": 5,
+          "maximum": 3,
           "minimum": 1,
           "type": "integer"
         },
@@ -797,12 +806,14 @@
           "type": "integer"
         },
         "base_width": {
-          "maximum": 5,
+          "description": "Road level at the start: always 1 (DEC-22).",
+          "maximum": 3,
           "minimum": 1,
           "type": "integer"
         },
         "max_width": {
-          "maximum": 5,
+          "description": "Highest road level, at most 3 (DEC-22).",
+          "maximum": 3,
           "minimum": 1,
           "type": "integer"
         },
@@ -949,10 +960,13 @@
           "minimum": 0,
           "type": "integer"
         },
-        "base_capacity": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
+        "kind": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/NodeKind"
+            }
+          ],
+          "description": "Node kind: its capacity is ``capacity.by_kind`` of the ruleset (DEC-22)."
         },
         "capital_of": {
           "anyOf": [
@@ -996,7 +1010,7 @@
         "y",
         "terrain",
         "vp",
-        "base_capacity",
+        "kind",
         "capital_of",
         "start_owner",
         "start_units",
@@ -1163,6 +1177,18 @@
       "title": "NodeBuild",
       "type": "object"
     },
+    "NodeKind": {
+      "description": "Kind of a node (DEC-22, item 1; DEC-23, item 1): its capacity is ``capacity.by_kind``.",
+      "enum": [
+        "capital",
+        "city_large",
+        "city_medium",
+        "city_small",
+        "province"
+      ],
+      "title": "NodeKind",
+      "type": "string"
+    },
     "NodeView": {
       "additionalProperties": false,
       "properties": {
@@ -1182,14 +1208,10 @@
           ]
         },
         "capacity": {
-          "description": "Capacity by the road widths the player knows (DEC-17): exact unless ``capacity_stale``,\nnever above the true capacity.",
+          "description": "Capacity by the node kind (DEC-22, item 1): public and exact for every node.",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
-        },
-        "capacity_stale": {
-          "description": "``capacity`` is an estimate by the last seen widths: the node is in its owner's supplied\nterritory and one of its internal edges is in fog (DEC-17). Never for own nodes.",
-          "type": "boolean"
         },
         "detail": {
           "$ref": "#/$defs/Detail"
@@ -1260,7 +1282,6 @@
         "id",
         "owner",
         "capacity",
-        "capacity_stale",
         "detail",
         "warehouse",
         "seen",
@@ -1600,6 +1621,40 @@
       "title": "ResyncMsg",
       "type": "object"
     },
+    "RoadGain": {
+      "additionalProperties": false,
+      "description": "What one more level of one road type adds (DEC-22, item 7).",
+      "properties": {
+        "speed_pct": {
+          "description": "Packet speed gain in percentage points.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "amount": {
+          "description": "Gain in charges per road and dispatch period.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "speed_pct",
+        "amount"
+      ],
+      "title": "RoadGain",
+      "type": "object"
+    },
+    "RoadKind": {
+      "description": "Type of a road (DEC-22, item 2): chosen by the first upgrade, never changes after.",
+      "enum": [
+        "none",
+        "fast",
+        "freight"
+      ],
+      "title": "RoadKind",
+      "type": "string"
+    },
     "RulesetPublic": {
       "additionalProperties": false,
       "properties": {
@@ -1937,31 +1992,39 @@
     },
     "UpgradeGain": {
       "additionalProperties": false,
-      "description": "What the next road level would give (SIM-11 #27, hint of mechanics.md, section 18).",
+      "description": "What the next road level would give, per road type (DEC-22, item 7): both types on\nlevel 1, only the road's own type on level 2.",
       "properties": {
-        "capacity_centi": {
-          "description": "Capacity gain in hundredths, e.g. 50 for «+0.5».",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
+        "fast": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RoadGain"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
-        "packet_speed_pct": {
-          "description": "Packet speed gain in percentage points (``supply.packet_speed_pct``).",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
+        "freight": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RoadGain"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
-        "capacity_centi",
-        "packet_speed_pct"
+        "fast",
+        "freight"
       ],
       "title": "UpgradeGain",
       "type": "object"
     },
     "UpgradeRoadCmd": {
       "additionalProperties": false,
-      "description": "The own city ``node`` raises the internal road ``edge`` by one level (DEC-16).",
+      "description": "The own city ``node`` raises the internal road ``edge`` by one level (DEC-16, DEC-22).\n\n``kind`` is required by the first upgrade (level 1 -> 2) and chooses the road type; for the\nsecond it may be omitted or must equal the road's type (``ROAD_KIND_MISMATCH`` otherwise).",
       "properties": {
         "type": {
           "const": "upgrade_road",
@@ -1977,12 +2040,28 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "fast",
+                "freight"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
         "type",
         "node",
-        "edge"
+        "edge",
+        "kind"
       ],
       "title": "UpgradeRoadCmd",
       "type": "object"

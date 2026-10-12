@@ -3,7 +3,7 @@
   "player": 0,
   "ruleset_public": {
     "tick_hz": 10,
-    "match_ticks": 7200,
+    "match_ticks": 9000,
     "cp": { "cap": 500, "per_period": 100, "period_ticks": 50 },
     "cost": {
       "move": 100,
@@ -25,10 +25,8 @@
     "build": {
       "ticks_per_level": 150,
       "charges_per_level": [
-        { "width": 2, "charges": 2 },
-        { "width": 3, "charges": 3 },
-        { "width": 4, "charges": 4 },
-        { "width": 5, "charges": 5 }
+        { "width": 2, "charges": 3 },
+        { "width": 3, "charges": 4 }
       ]
     },
     "economy": {

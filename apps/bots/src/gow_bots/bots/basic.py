@@ -23,7 +23,7 @@ from gow_sim.commands import (
 )
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import RecruitLocation, Ruleset
-from gow_sim.view import GroupView, Mode, PlayerView, Stance
+from gow_sim.view import GroupView, Mode, PlayerView, RoadKind, Stance
 
 __all__ = ["IdleBot", "RandomLegalBot"]
 
@@ -135,5 +135,7 @@ class RandomLegalBot(Bot):
         supplied = self.supplied(view)
         for e in self.incident[here]:  # the city where the group stands builds (DEC-16)
             if self.can_upgrade(view, here, e, supplied):
-                options.append(UpgradeRoad(here, e))
+                first = view.edges[e].kind is RoadKind.NONE
+                kind = self.rng.choice([RoadKind.FAST, RoadKind.FREIGHT]) if first else None
+                options.append(UpgradeRoad(here, e, kind))
         return self.rng.choice(options)

@@ -15,6 +15,7 @@
     "group_split",
     "groups_merged",
     "node_captured",
+    "packet_captured",
     "packet_delivered",
     "packet_lost",
     "packet_sent",

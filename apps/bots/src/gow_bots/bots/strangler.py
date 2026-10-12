@@ -2,9 +2,10 @@
 
 Supply flows from the capital through the connected territory (mechanics.md, sections 7 and 9),
 so taking a city cuts the roads through it: the cities behind it lose the connection (their
-warehouse is no longer refilled, their capacity falls to the base) and the neighbours lose the
-capacity of the road. ``cut_value`` prices a city by that damage, from the public ownership of
-the nodes only, and the Strangler attacks the most damaging city it can take. A city taken that
+warehouse is no longer refilled) and the upgraded roads into it stop carrying supply (DEC-22:
+roads change supply only). ``cut_value`` prices a city by that damage, from the public ownership
+of the nodes and the known road levels only, and the Strangler attacks the most damaging city it
+can take. A city taken that
 way is held (``hold`` units stay), the enemy cities that are already cut are besieged in waves:
 after a bounce the estimate of a cut city drops (``CampaignBot._starve``), so the next wave is
 cheaper, which is the «осада на истощение» of mechanics.md, section 4.
@@ -60,9 +61,8 @@ class StranglerBot(CampaignBot):
                     seen.add(other)
                     queue.append(other)
         lost = len(net) - 1 - len(seen)
-        gain = self.rules.capacity.width_gain_centi
         roads = sum(
-            gain.of(view.edges[e].width)
+            100 * view.edges[e].width
             for e in self.incident[node]
             if self.map.edges[e].other(node) in net
         )

@@ -3,10 +3,10 @@
 Server -> client:
 
 - ``snapshot_msg``: ``PlayerView`` (``gow_sim.view.project()``) -> ``snapshot``. Opaque ids are
-  63-bit integers in the simulation and decimal strings on the wire. Three fields of the view stay
+  63-bit integers in the simulation and decimal strings on the wire. Some fields of the view stay
   on the server, the client does not need them: ``order.depart_tick``, ``location.back`` (a
-  bouncing group's ``progress`` falls, so interpolation works without it) and ``seen.width`` (the
-  known width of an edge is its ``width``, DEC-17);
+  bouncing group's ``progress`` falls, so interpolation works without it) and ``seen.width``,
+  ``seen.road`` (the known level and type of an edge are its ``width`` and ``kind``, DEC-17);
 - ``snapshot_frame``: the same ``snapshot`` encoded straight from the ``PlayerView``, without the
   models and their validation (#155). The server sends these every tick; ``snapshot_msg``, built
   through the validating models, is their specification: tests over real matches require the two
@@ -66,6 +66,7 @@ from gow_protocol.view import (
     OnEdgeLoc,
     OrderView,
     PacketView,
+    RoadGain,
     Seen,
     SelfView,
     UpgradeGain,
@@ -73,7 +74,7 @@ from gow_protocol.view import (
 )
 from gow_sim import commands as sim
 from gow_sim import view as sv
-from gow_sim.state import Event, EventValue
+from gow_sim.state import Event, EventValue, RoadKind
 from gow_sim.systems.victory import EndReason as SimEndReason
 from gow_sim.systems.victory import Outcome
 
@@ -111,6 +112,7 @@ PRIVATE_KINDS: Final = frozenset(
         "group_arrived",
         "group_split",
         "groups_merged",
+        "packet_captured",
         "packet_delivered",
         "packet_lost",
         "packet_sent",
@@ -162,7 +164,6 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 id=n.id,
                 owner=n.owner,
                 capacity=n.capacity,
-                capacity_stale=n.capacity_stale,
                 detail=n.detail,
                 warehouse=n.warehouse,
                 seen=_seen(n.seen),
@@ -178,12 +179,13 @@ def view_to_wire(view: sv.PlayerView) -> View:
             EdgeView(
                 id=e.id,
                 width=e.width,
+                kind=e.kind,
                 detail=e.detail,
                 upgrade_gain=None
                 if e.upgrade_gain is None
                 else UpgradeGain(
-                    capacity_centi=e.upgrade_gain.capacity_centi,
-                    packet_speed_pct=e.upgrade_gain.packet_speed_pct,
+                    fast=_road_gain(e.upgrade_gain.fast),
+                    freight=_road_gain(e.upgrade_gain.freight),
                 ),
                 seen=_seen(e.seen),
             )
@@ -227,6 +229,10 @@ def view_to_wire(view: sv.PlayerView) -> View:
     )
 
 
+def _road_gain(g: sv.RoadGain | None) -> RoadGain | None:
+    return None if g is None else RoadGain(speed_pct=g.speed_pct, amount=g.amount)
+
+
 def _seen(s: sv.Sighting | None) -> Seen | None:
     if s is None:
         return None
@@ -267,7 +273,6 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "id": n.id,
                 "owner": n.owner,
                 "capacity": n.capacity,
-                "capacity_stale": n.capacity_stale,
                 "detail": n.detail,
                 "warehouse": n.warehouse,
                 "seen": _seen_data(n.seen),
@@ -283,12 +288,13 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
             {
                 "id": e.id,
                 "width": e.width,
+                "kind": e.kind,
                 "detail": e.detail,
                 "upgrade_gain": None
                 if e.upgrade_gain is None
                 else {
-                    "capacity_centi": e.upgrade_gain.capacity_centi,
-                    "packet_speed_pct": e.upgrade_gain.packet_speed_pct,
+                    "fast": _road_gain_data(e.upgrade_gain.fast),
+                    "freight": _road_gain_data(e.upgrade_gain.freight),
                 },
                 "seen": _seen_data(e.seen),
             }
@@ -330,6 +336,10 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
             for i in view.intents
         ],
     }
+
+
+def _road_gain_data(g: sv.RoadGain | None) -> dict[str, object] | None:
+    return None if g is None else {"speed_pct": g.speed_pct, "amount": g.amount}
 
 
 def _seen_data(s: sv.Sighting | None) -> dict[str, object] | None:
@@ -376,8 +386,8 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.SetMode(gid(g), mode)
         case wire.SetStanceCmd(stance=stance):
             return sim.SetStance(stance)
-        case wire.UpgradeRoadCmd(node=node, edge=edge):
-            return sim.UpgradeRoad(node, edge)
+        case wire.UpgradeRoadCmd(node=node, edge=edge, kind=kind):
+            return sim.UpgradeRoad(node, edge, None if kind is None else RoadKind(kind))
         case wire.RecruitCmd(node=node):
             return sim.Recruit(node)
         case wire.CancelOrderCmd(group=g):

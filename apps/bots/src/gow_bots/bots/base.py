@@ -25,10 +25,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import ClassVar, Protocol
 
-from gow_sim.commands import Command, command_cost
+from gow_sim.commands import Command, UpgradeRoad, command_cost
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import AtNode, GroupView, IntentKind, PlayerView
+from gow_sim.view import AtNode, GroupView, IntentKind, PlayerView, RoadKind
 
 __all__ = [
     "Bot",
@@ -185,8 +185,32 @@ class Bot:
                     queue.append(other)
         return result
 
+    def front_road(self, view: PlayerView, edge: int) -> bool:
+        """A road at the front: a neighbour of one of its ends is not own (public ownership)."""
+        e = self.map.edges[edge]
+        return any(
+            view.nodes[other].owner != self.player
+            for end in (e.a, e.b)
+            for other in self.neighbors[end]
+        )
+
+    def road_kind(self, view: PlayerView, edge: int) -> RoadKind | None:
+        """The type for the next level of ``edge`` (DEC-22): ``None`` when it already has one.
+
+        Freight at the front (a captured end node does not lose the charges on the way, and a
+        front city needs volume), fast in the rear (refills arrive sooner).
+        """
+        if view.edges[edge].kind is not RoadKind.NONE:
+            return None
+        return RoadKind.FREIGHT if self.front_road(view, edge) else RoadKind.FAST
+
+    def upgrade(self, view: PlayerView, node: int, edge: int) -> UpgradeRoad:
+        """``UpgradeRoad(node, edge, kind)`` with the type of ``road_kind``."""
+        return UpgradeRoad(node, edge, self.road_kind(view, edge))
+
     def can_upgrade(self, view: PlayerView, node: int, edge: int, supplied: list[bool]) -> bool:
-        """``UpgradeRoad(node, edge)`` passes the checks of DEC-16 that the view shows."""
+        """``UpgradeRoad(node, edge, kind)`` passes the checks of DEC-16 and DEC-22 that the view
+        shows."""
         city = view.nodes[node]
         if city.owner != self.player or not supplied[node] or city.build is not None:
             return False

@@ -61,7 +61,7 @@ class CpPublic(WireModel):
 
 
 class LevelPrice(WireModel):
-    """Charges from the city warehouse for raising a road to ``width`` (DEC-16)."""
+    """Charges from the city warehouse for raising a road to level ``width`` (DEC-16, DEC-22)."""
 
     width: Width
     charges: NonNegInt
@@ -111,7 +111,7 @@ class BuildPublic(WireModel):
 
     ticks_per_level: PosInt
     charges_per_level: tuple[LevelPrice, ...]
-    """One price per new width ``2..5``, ascending."""
+    """One price per new level ``2..3`` (DEC-22), ascending."""
 
 
 class RulesetPublic(WireModel):
