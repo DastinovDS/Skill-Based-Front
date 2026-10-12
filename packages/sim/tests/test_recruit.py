@@ -3,12 +3,12 @@
 Expected values come from DEC-01 (mechanics.md, section 3), not from the code: ``Recruit(node)``
 in an own city with free capacity creates one discharged unit as a new group for 1 CP; at most
 one unit per city per 20 ticks, otherwise ``RECRUIT_COOLDOWN``; ``recruit.location`` is
-``any_city`` or ``capital``. Capacity by mechanics.md, section 9 (+1.0 / +1.5 / +2.0 / +2.3 /
-+2.6). These numbers are pinned in ``RULES`` below.
+``any_city`` or ``capital``. Capacity by node kind (DEC-22); ``RULES`` pins the capital at 6
+and a small city at 3, so the cases below stay small. These numbers are pinned in ``RULES``.
 
-The map ``fork`` (see ``test_capacity.py``): player 0 owns 0 (capital, base 4), 1 and 2 (base 2);
-3 and 4 are neutral. Capacities: 0: 4 + e0 w2 (+1.5) + e1 w1 (+1.0) = 6.5 -> 6;
-1: 2 + 1.5 = 3.5 -> 3; 2: 2 + 1.0 = 3. Player 0 starts with a group of 2 charged units in 0.
+The map ``fork`` (see ``test_capacity.py``): player 0 owns 0 (capital, capacity 6), 1 and 2
+(small cities, capacity 3); 3 and 4 are neutral. Player 0 starts with a group of 2 charged units
+in 0.
 """
 
 import dataclasses
@@ -28,10 +28,10 @@ from gow_sim.commands import (
 from gow_sim.maps import load_map
 from gow_sim.ruleset import (
     CapacityRules,
+    KindTable,
     RecruitLocation,
     RecruitRules,
     Ruleset,
-    WidthTable,
     load_ruleset,
 )
 from gow_sim.state import AtNode, GameState, Group, Mode, OnEdge, from_canonical, initial_state
@@ -52,7 +52,7 @@ def _rules(location: RecruitLocation = RecruitLocation.ANY_CITY) -> Ruleset:
         capacity=CapacityRules(
             attrition_ticks=30,
             grace_ticks=50,
-            width_gain_centi=WidthTable((100, 150, 200, 230, 260)),
+            by_kind=KindTable(capital=6, city_large=8, city_medium=6, city_small=3, province=3),
         ),
         recruit=RecruitRules(cooldown_ticks=20, location=location),
     )

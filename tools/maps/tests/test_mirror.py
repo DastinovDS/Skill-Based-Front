@@ -108,6 +108,7 @@ def test_two_centre_nodes_are_rejected() -> None:
 # --- property: any valid half mirrors into a symmetric map ------------------------------------
 
 _TERRAINS = ["plains", "forest", "mountains"]
+_CITY_KINDS = ["city_large", "city_medium", "city_small"]
 
 
 @st.composite
@@ -130,7 +131,7 @@ def halves(draw: st.DrawFn) -> dict[str, Any]:
                 "y": y,
                 "terrain": draw(st.sampled_from(_TERRAINS)),
                 "vp": draw(st.integers(0, 3)),
-                "base_capacity": draw(st.integers(0, 6)),
+                "kind": "capital" if i == capital else draw(st.sampled_from(_CITY_KINDS)),
                 "capital_of": 0 if i == capital else None,
                 "start_owner": owner,
                 "start_units": units,
@@ -146,6 +147,7 @@ def halves(draw: st.DrawFn) -> dict[str, Any]:
                 "id": "centre",
                 "x": width // 2,
                 "y": height // 2,
+                "kind": "city_medium",
                 "capital_of": None,
                 "start_owner": None,
                 "start_units": 0,
@@ -161,11 +163,11 @@ def halves(draw: st.DrawFn) -> dict[str, Any]:
         chosen = draw(st.lists(st.sampled_from(candidates), unique=True)) if candidates else []
         result: list[dict[str, Any]] = []
         for a, b in chosen:
-            max_width = draw(st.integers(1, 5))
+            max_width = draw(st.integers(1, 3))
             road: dict[str, Any] = {
                 "a": a,
                 "b": b,
-                "base_width": draw(st.integers(1, max_width)),
+                "base_width": 1,
                 "max_width": max_width,
             }
             if draw(st.booleans()):

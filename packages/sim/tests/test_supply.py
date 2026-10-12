@@ -1,20 +1,23 @@
 """Supply (SIM-08): packet time table, recharge, charge conservation, canonical form.
 
-Expected values from mechanics.md, sections 7 and 8, and SIM-01 (#17): packet time
-``travel_ticks * 100 // packet_speed_pct[width]`` with 100 / 125 / 150 / 175 / 200 percent for
-widths 1..5; recharge at most 1 charge per node and tick; details: DEC-14 default (#131).
+Expected values from mechanics.md, sections 7 and 8, SIM-01 (#17) and DEC-22 (#234), item 4:
+packet time ``travel_ticks * 100 // speed_pct`` with speed 100 on level 1 and on freight roads,
+150 / 200 on fast roads of level 2 / 3; recharge at most 1 charge per node and tick; details:
+DEC-14 default (#131).
 
 The map ``line6``: ``0 (capital of 0) - 1 - 2 | 3 - 4 - 5 (capital of 1)``; 2 and 3 start
 neutral, ``_line6()`` gives them to 0 and 1. Every road ``e_i`` joins ``i`` and ``i + 1``,
-width 1, 30 ticks; plains; base capacity 40 for capitals, 30 otherwise.
+level 1, 30 ticks; plains; ``RULES`` gives capitals capacity 40 and the large cities 30, so
+capacity never limits these tests.
 """
 
+import dataclasses
 from pathlib import Path
 
 import pytest
 
 from gow_sim.maps import load_map
-from gow_sim.ruleset import Ruleset, load_ruleset
+from gow_sim.ruleset import LevelTable, Ruleset, load_ruleset
 from gow_sim.state import (
     AtNode,
     Event,
@@ -22,6 +25,7 @@ from gow_sim.state import (
     Group,
     Mode,
     OnEdge,
+    RoadKind,
     from_canonical,
     initial_state,
     state_hash,
@@ -31,7 +35,21 @@ from gow_sim.systems.capacity import change_owner
 from gow_sim.systems.supply import packet_ticks, supply, supply_tree
 
 TESTS_DIR = Path(__file__).resolve().parent
-RULES: Ruleset = load_ruleset(TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml")
+_MVP0: Ruleset = load_ruleset(TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml")
+RULES: Ruleset = dataclasses.replace(
+    _MVP0,
+    capacity=dataclasses.replace(
+        _MVP0.capacity,
+        by_kind=dataclasses.replace(_MVP0.capacity.by_kind, capital=40, city_large=30),
+    ),
+    supply=dataclasses.replace(
+        _MVP0.supply,
+        base_speed_pct=100,
+        base_amount=1,
+        fast_speed_pct=LevelTable((150, 200)),
+        freight_amount=LevelTable((2, 3)),
+    ),
+)
 
 
 def _line6() -> GameState:
@@ -48,9 +66,18 @@ def _group(state: GameState, owner: int, node: int, units: int, charged: int = 0
     return group
 
 
-@pytest.mark.parametrize(("width", "ticks"), [(1, 30), (2, 24), (3, 20), (4, 17), (5, 15)])
-def test_packet_time_by_width(width: int, ticks: int) -> None:
-    assert packet_ticks(_line6().map, RULES, 0, width) == ticks
+@pytest.mark.parametrize(
+    ("level", "kind", "ticks"),
+    [
+        (1, RoadKind.NONE, 30),
+        (2, RoadKind.FAST, 20),  # 30 * 100 // 150
+        (3, RoadKind.FAST, 15),  # 30 * 100 // 200
+        (2, RoadKind.FREIGHT, 30),
+        (3, RoadKind.FREIGHT, 30),
+    ],
+)
+def test_packet_time_by_level_and_type(level: int, kind: RoadKind, ticks: int) -> None:
+    assert packet_ticks(_line6().map, RULES, 0, level, kind) == ticks
 
 
 def test_tree_is_the_own_territory_from_the_capital() -> None:

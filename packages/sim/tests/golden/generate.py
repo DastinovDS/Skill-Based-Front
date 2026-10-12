@@ -37,7 +37,7 @@ from gow_sim.maps import MapDef, load_map
 from gow_sim.match import SIM_VERSION, Controller
 from gow_sim.replay import REPLAY_SUFFIX, record_headless
 from gow_sim.ruleset import Ruleset, Stance, archive_ruleset, load_ruleset
-from gow_sim.view import AtNode, GroupView, Mode, PlayerView
+from gow_sim.view import AtNode, GroupView, Mode, PlayerView, RoadKind
 
 TESTS = Path(__file__).resolve().parents[1]
 ROOT = TESTS.parents[2]
@@ -109,13 +109,22 @@ class MixBot:
         return []
 
     def _upgrade(self, view: PlayerView, idle: list[GroupView]) -> list[Command]:
-        """The city of an idle group upgrades a road (DEC-16); rejects are part of the log."""
+        """The city of an idle group upgrades a road (DEC-16, DEC-22); rejects are part of the log.
+
+        The first upgrade alternates fast and freight roads; the second omits the type.
+        """
         for g in idle:
             assert isinstance(g.location, AtNode)
             node = g.location.node
             for e in self.map.incident[node]:
                 if view.edges[e].upgrade_gain is not None:
-                    return [UpgradeRoad(node, e)]
+                    first = view.edges[e].kind is RoadKind.NONE
+                    kind = (
+                        (RoadKind.FAST if self.decisions % 2 else RoadKind.FREIGHT)
+                        if first
+                        else None
+                    )
+                    return [UpgradeRoad(node, e, kind)]
         return []
 
 

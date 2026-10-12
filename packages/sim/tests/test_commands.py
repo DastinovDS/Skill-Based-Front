@@ -44,7 +44,17 @@ from gow_sim.commands import (
 )
 from gow_sim.maps import load_map
 from gow_sim.ruleset import OrderCosts, Ruleset, Stance, load_ruleset
-from gow_sim.state import AtNode, GameState, Group, Mode, OnEdge, Order, initial_state, state_hash
+from gow_sim.state import (
+    AtNode,
+    GameState,
+    Group,
+    Mode,
+    OnEdge,
+    Order,
+    RoadKind,
+    initial_state,
+    state_hash,
+)
 
 TESTS_DIR = Path(__file__).resolve().parent
 MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
@@ -67,7 +77,11 @@ def _rules() -> Ruleset:
     orders = dataclasses.replace(
         base.orders, planned_delay_ticks=30, stance_cooldown_ticks=100, cost=costs
     )
-    return dataclasses.replace(base, orders=orders)
+    # City 1 is small (capacity 4, DEC-22) and holds 3 units: room for one recruit (DEC-01).
+    capacity = dataclasses.replace(
+        base.capacity, by_kind=dataclasses.replace(base.capacity.by_kind, city_small=4)
+    )
+    return dataclasses.replace(base, orders=orders, capacity=capacity)
 
 
 RULES = _rules()
@@ -122,16 +136,6 @@ def _state() -> tuple[GameState, Ids]:
         enemy_hidden=by_node[AtNode(5)],
     )
     return state, ids
-
-
-def _room(state: GameState) -> GameState:
-    """Free a place for a recruit in city 1 (DEC-01 needs free capacity, mechanics.md, section 9).
-
-    City 1 holds 3 units (``second`` and ``waiting``); its capacity is 2 + e0 w1 (+1.0) = 3.
-    With e0 at width 3: 2 + 2.0 = 4.
-    """
-    state.edges[0].width = 3
-    return state
 
 
 # The validation table ---------------------------------------------------------------------------
@@ -244,13 +248,13 @@ def test_missing_target(case: str) -> None:
 )
 def test_player_command_valid(cmd: Command, cost: int) -> None:
     state, _ = _state()
-    _check(_room(state), 0, cmd, Ok(cost=cost))
+    _check(state, 0, cmd, Ok(cost=cost))
 
 
 def test_recruit_without_cp() -> None:
     state, _ = _state()
     state.players[0].cp = 99
-    _check(_room(state), 0, Recruit(1), Reject(RejectCode.NOT_ENOUGH_CP))
+    _check(state, 0, Recruit(1), Reject(RejectCode.NOT_ENOUGH_CP))
 
 
 def test_free_commands_need_no_cp() -> None:
@@ -361,28 +365,32 @@ def test_set_mode_same_mode() -> None:
 
 
 def test_upgrade_road_rules() -> None:
-    """``UpgradeRoad(node, edge)`` of a city (DEC-16); the full table is in ``test_build.py``."""
+    """``UpgradeRoad(node, edge, kind)`` of a city (DEC-16, DEC-22); the full tables are in
+    ``test_build.py`` and ``test_dec22.py``."""
     state, _ = _state()
+    fast = RoadKind.FAST
     # e1 joins own 1 and neutral 3: a buffer edge (mechanics.md, section 8).
-    assert validate(state, RULES, 0, UpgradeRoad(1, 1)) == Reject(RejectCode.NOT_INTERNAL)
+    assert validate(state, RULES, 0, UpgradeRoad(1, 1, fast)) == Reject(RejectCode.NOT_INTERNAL)
     # e3 joins 5 and 6: node 0 is not an end of it.
-    assert validate(state, RULES, 0, UpgradeRoad(0, 3)) == Reject(RejectCode.NOT_ADJACENT)
-    state.edges[0].width = 3  # max_width of e0
+    assert validate(state, RULES, 0, UpgradeRoad(0, 3, fast)) == Reject(RejectCode.NOT_ADJACENT)
+    state.edges[0].width, state.edges[0].kind = 3, fast  # max_width of e0
     assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.MAX_WIDTH)
-    state.edges[0].width = 1
-    state.nodes[0].warehouse = 1  # the level to width 2 costs 2 charges
-    assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.NOT_ENOUGH_CHARGES)
-    state.nodes[0].warehouse = 2
-    _check(state, 0, UpgradeRoad(0, 0), Ok(cost=100))  # orders.cost.build of these rules
+    state.edges[0].width, state.edges[0].kind = 1, RoadKind.NONE
+    state.nodes[0].warehouse = 2  # the level 2 costs 3 charges (DEC-22, item 6)
+    assert validate(state, RULES, 0, UpgradeRoad(0, 0, fast)) == Reject(
+        RejectCode.NOT_ENOUGH_CHARGES
+    )
+    state.nodes[0].warehouse = 3
+    _check(state, 0, UpgradeRoad(0, 0, fast), Ok(cost=100))  # orders.cost.build of these rules
     assert state.nodes[0].warehouse == 0
-    assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.CITY_BUSY)
-    assert validate(state, RULES, 0, UpgradeRoad(1, 0)) == Reject(RejectCode.EDGE_BUSY)
+    assert validate(state, RULES, 0, UpgradeRoad(0, 0, fast)) == Reject(RejectCode.CITY_BUSY)
+    assert validate(state, RULES, 0, UpgradeRoad(1, 0, fast)) == Reject(RejectCode.EDGE_BUSY)
 
 
 def test_recruit_creates_one_discharged_unit() -> None:
     state, _ = _state()
     before = dict(state.groups)
-    apply_commands(_room(state), RULES, [PlayerCommand(0, 1, Recruit(1))])
+    apply_commands(state, RULES, [PlayerCommand(0, 1, Recruit(1))])
     (new,) = [g for gid, g in state.groups.items() if gid not in before]
     assert (new.owner, new.units, new.charged, new.location) == (0, 1, 0, AtNode(1))
 
@@ -440,7 +448,7 @@ def test_arrival_order_does_not_matter() -> None:
     outcomes: list[tuple[str, list[tuple[int, int, Ok | Reject]]]] = []
     for order in _arrival_orders(_mixed(ids)):
         run, _ = _state()
-        results, _ = apply_commands(_room(run), RULES, order)
+        results, _ = apply_commands(run, RULES, order)
         outcomes.append((state_hash(run), [(r.player, r.seq, r.outcome) for r in results]))
     assert all(o == outcomes[0] for o in outcomes)
     codes = [None if isinstance(o, Ok) else o.code for _, _, o in outcomes[0][1]]
@@ -488,7 +496,7 @@ def test_seq_orders_one_players_commands() -> None:
     state, ids = _state()
     state.players[0].cp = 100
     results, _ = apply_commands(
-        _room(state),
+        state,
         RULES,
         [PlayerCommand(0, 9, Recruit(1)), PlayerCommand(0, 3, Split(ids.capital, 1))],
     )

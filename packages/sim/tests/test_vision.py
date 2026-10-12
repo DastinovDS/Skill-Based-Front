@@ -24,6 +24,7 @@ from gow_sim.state import (
     Mode,
     OnEdge,
     Packet,
+    RoadKind,
     Sighting,
     initial_state,
 )
@@ -204,9 +205,9 @@ def test_vision_records_sightings(rules: Ruleset) -> None:
     memory = state.vision_memory[0]
     # PRESENCE: enemy modes (distinct, sorted), no numbers.
     assert memory.nodes[3] == Sighting(40, P, (Mode.ATTACK, Mode.DEFENSE), None, None)
-    # Edges also record their width (DEC-17); nodes have none.
-    assert memory.edges[1] == Sighting(40, P, (Mode.DEFENSE,), None, None, width=1)
-    assert memory.edges[0] == Sighting(40, P, (), None, None, width=1)
+    # Edges also record their level and type (DEC-17, DEC-22); nodes have none.
+    assert memory.edges[1] == Sighting(40, P, (Mode.DEFENSE,), None, None, 1, RoadKind.NONE)
+    assert memory.edges[0] == Sighting(40, P, (), None, None, 1, RoadKind.NONE)
     # EXACT: own nodes, enemy totals are known (none here).
     assert memory.nodes[0] == Sighting(40, E, (), 0, 0)
     assert memory.nodes[1] == Sighting(40, E, (), 0, 0)

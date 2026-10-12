@@ -88,7 +88,7 @@ def grid40() -> MapDef:
                 "y": 100 + 200 * (node_id // cols),
                 "terrain": ["plains", "forest", "mountains"][min(col, cols - 1 - col) % 3],
                 "vp": 3 if capital is not None else 1,
-                "base_capacity": 8 if capital is not None else 4,
+                "kind": "city_small" if capital is None else "capital",
                 "capital_of": capital,
                 "start_owner": owner,
                 "start_units": 3 if owner is not None else 0,

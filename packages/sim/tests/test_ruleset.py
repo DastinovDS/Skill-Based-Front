@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from gow_sim.canonical import canonical_json
-from gow_sim.maps import Terrain
+from gow_sim.maps import NodeKind, Terrain
 from gow_sim.ruleset import (
     RecruitLocation,
     Ruleset,
@@ -65,7 +65,7 @@ def mvp0() -> Ruleset:
 
 
 def test_mvp0_clock_and_cp(mvp0: Ruleset) -> None:
-    assert (mvp0.tick_hz, mvp0.match_ticks) == (10, 7200)  # 12 minutes (DEC-03)
+    assert (mvp0.tick_hz, mvp0.match_ticks) == (10, 9000)  # 15 minutes (DEC-22)
     cp = mvp0.cp
     assert (cp.start, cp.cap, cp.per_period, cp.period_ticks) == (300, 500, 100, 50)
 
@@ -121,22 +121,32 @@ def test_mvp0_terrain(mvp0: Ruleset) -> None:
 
 
 def test_mvp0_capacity_supply_build_victory(mvp0: Ruleset) -> None:
-    gain = mvp0.capacity.width_gain_centi
-    assert [gain.of(w) for w in range(1, 6)] == [100, 150, 200, 230, 260]
+    # DEC-22 (#234): capacity by node kind, road tables by level and type, prices 3 / 4.
+    by_kind = mvp0.capacity.by_kind
+    kinds = (
+        NodeKind.CAPITAL,
+        NodeKind.CITY_LARGE,
+        NodeKind.CITY_MEDIUM,
+        NodeKind.CITY_SMALL,
+        NodeKind.PROVINCE,
+    )
+    assert [by_kind.of(k) for k in kinds] == [10, 8, 6, 4, 3]
     assert (mvp0.capacity.attrition_ticks, mvp0.capacity.grace_ticks) == (30, 50)
     supply = mvp0.supply
     assert (supply.dispatch_ticks, supply.buffer, supply.recharge_per_tick) == (10, 2, 1)
-    assert [supply.packet_speed_pct.of(w) for w in range(1, 6)] == [100, 125, 150, 175, 200]
+    assert (supply.base_speed_pct, supply.base_amount) == (100, 1)
+    assert [supply.fast_speed_pct.of(level) for level in (2, 3)] == [150, 200]
+    assert [supply.freight_amount.of(level) for level in (2, 3)] == [2, 3]
     assert mvp0.build.ticks_per_level == 150
-    assert [mvp0.build.charges_per_level.of(w) for w in range(2, 6)] == [2, 3, 4, 5]  # DEC-16
+    assert [mvp0.build.charges_per_level.of(level) for level in (2, 3)] == [3, 4]
     assert (mvp0.victory.vp_period_ticks, mvp0.victory.capital_multiplier) == (300, 3)
 
 
-def test_width_table_rejects_unknown_width(mvp0: Ruleset) -> None:
-    with pytest.raises(ValueError, match="width 6"):
-        mvp0.supply.packet_speed_pct.of(6)
-    with pytest.raises(ValueError, match="width 0"):
-        mvp0.capacity.width_gain_centi.of(0)
+def test_level_table_rejects_unknown_level(mvp0: Ruleset) -> None:
+    with pytest.raises(ValueError, match="level 4"):
+        mvp0.supply.fast_speed_pct.of(4)
+    with pytest.raises(ValueError, match="level 1"):
+        mvp0.build.charges_per_level.of(1)
 
 
 def test_ruleset_is_frozen(mvp0: Ruleset) -> None:
@@ -167,7 +177,8 @@ def test_canonical_form_is_the_toml_data(path: Path) -> None:
         (("cp",), "strat", "cp.strat"),
         (("orders", "cost"), "mvoe", "orders.cost.mvoe"),
         (("terrain", "defense_mod"), "hills", "terrain.defense_mod.hills"),
-        (("capacity", "width_gain_centi"), "6", "capacity.width_gain_centi.6"),
+        (("capacity", "by_kind"), "town", "capacity.by_kind.town"),
+        (("supply", "freight_amount"), "4", "supply.freight_amount.4"),
     ],
 )
 def test_typo_in_key_names_the_key(path: tuple[str, ...], typo: str, name: str) -> None:
@@ -212,8 +223,9 @@ def test_file_errors_name_the_file(tmp_path: Path) -> None:
         (("orders", "cost", "move"), -1, "orders.cost.move: -1 is out of range"),
         (("orders", "cost", "split"), "100", "orders.cost.split: expected an integer"),
         (("terrain", "entry_speed_pct", "forest"), 0, "entry_speed_pct.forest: 0 is out"),
-        (("capacity", "width_gain_centi", "3"), -5, "width_gain_centi.3: -5 is out of range"),
-        (("supply", "packet_speed_pct", "1"), 0, "packet_speed_pct.1: 0 is out of range"),
+        (("capacity", "by_kind", "city_small"), -5, "by_kind.city_small: -5 is out of range"),
+        (("supply", "fast_speed_pct", "2"), 0, "fast_speed_pct.2: 0 is out of range"),
+        (("supply", "base_amount"), 0, "supply.base_amount: 0 is out of range"),
         (("build", "ticks_per_level"), 0, "build.ticks_per_level: 0 is out of range"),
         (("build", "charges_per_level", "2"), -1, r"build\.charges_per_level\.2: -1 is out"),
         (("recruit", "location"), "anywhere", "recruit.location: expected one of"),
@@ -242,7 +254,7 @@ def test_hash_changes_when_any_value_changes() -> None:
     base = _raw()
     base_hash = ruleset_hash(parse_ruleset(base))
     leaves = _leaves(base)
-    assert len(leaves) == 58  # every key of the SIM-01 table and DEC-16, counted by hand
+    assert len(leaves) == 57  # every key of the SIM-01 table, DEC-16 and DEC-22, counted by hand
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)

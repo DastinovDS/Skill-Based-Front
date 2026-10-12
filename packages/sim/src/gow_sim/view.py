@@ -74,6 +74,7 @@ __all__ = [
     "PacketView",
     "PlayerView",
     "RoadGain",
+    "RoadKind",
     "SelfView",
     "Sighting",
     "Stance",

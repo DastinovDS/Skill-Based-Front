@@ -9,16 +9,19 @@ and advance the clock. After every tick the invariants below must hold:
   (``charges_produced``), minus the documented sinks: shots and killed charged units
   (``fight_group``), ``warehouse_lost``, ``packet_lost``, the part of a delivered packet that does
   not fit the warehouse (``packet_delivered`` vs. the packet; that part is also a
-  ``charges_overflow``) and ``attrition`` deaths of charged units. The overflow of the capital's
-  own production is not a sink: those charges were never created;
+  ``charges_overflow``) and ``attrition`` deaths of charged units; plus the charges a captor takes
+  from a freight packet (``packet_captured``, DEC-22: the sender's ``packet_lost`` counts the
+  whole packet). The overflow of the capital's own production is not a sink: those charges were
+  never created;
 - no negative counters, ``charged <= units``, road widths within their limits, every group in an
   existing node or on an existing edge, ids unique, links between groups and intents;
 - a garrison never grows without an arrival (``group_arrived``) or a recruit in its city, so an
   overfull city cannot fill up further on its own;
 - fog: ``project()`` does not change when everything the player must not see is perturbed
   (extends the synthetic-state test of SIM-14 in ``test_view.py`` to states of real matches),
-  including the widths of fogged roads and enemy builds on them (DEC-17); known widths and
-  capacities never exceed the true ones and equal them in sight.
+  including the levels and types of fogged roads and enemy builds on them (DEC-17, DEC-22);
+  known levels never exceed the true ones and equal them (with the type) in sight; capacities are
+  exact (DEC-22, item 1).
 
 A counterexample found by Hypothesis goes into a regression test at the end of the file.
 """
@@ -62,6 +65,7 @@ from gow_sim.state import (
     Mode,
     OnEdge,
     Packet,
+    RoadKind,
 )
 from gow_sim.systems.capacity import node_capacities
 from gow_sim.view import opaque_id, project
@@ -103,6 +107,8 @@ class Ledger:
 
     start: int
     produced: int = 0
+    captured: int = 0
+    """Charges of freight packets that went into the captor's warehouse (DEC-22, item 5)."""
     shots: int = 0
     """Charges spent in fights: shots and charged units that died."""
     warehouse_lost: int = 0
@@ -122,6 +128,8 @@ class Ledger:
             match e.kind:
                 case "charges_produced":
                     self.produced += _int(e, "charges")
+                case "packet_captured":
+                    self.captured += _int(e, "charges")
                 case "fight_group":
                     spent = _int(e, "charged_before") - _int(e, "charged")
                     assert spent >= 0, f"a fight created charges: {e}"
@@ -254,7 +262,7 @@ class Tracker:
         check_state(m.state)
         check_garrisons(garrisons, m.state, events)
         now, ledger = total_charges(m.state), self.ledger
-        assert now == ledger.start + ledger.produced - ledger.lost, (
+        assert now == ledger.start + ledger.produced + ledger.captured - ledger.lost, (
             f"tick {m.tick}: {now} charges exist, the ledger says "
             f"{ledger.start} + {ledger.produced} produced - {ledger.lost} lost ({ledger})"
         )
@@ -312,7 +320,10 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     for e, level in enumerate(edges):
         if level is Detail.FOG:
             edge = state.edges[e]
-            edge.width = draw(st.integers(edge.width, state.map.edges[e].max_width))
+            level = draw(st.integers(edge.width, state.map.edges[e].max_width))
+            if level > edge.width and edge.kind is RoadKind.NONE:
+                edge.kind = draw(st.sampled_from([RoadKind.FAST, RoadKind.FREIGHT]))
+            edge.width = level
     for node in state.nodes.values():
         b = node.build
         if (
@@ -367,7 +378,11 @@ def _candidate(data: st.DataObject, tracker: Tracker, player: int) -> Command:
         case "stance":
             return SetStance(draw(st.sampled_from(list(Stance))))
         case "upgrade":
-            return UpgradeRoad(group(), draw(st.integers(0, n_edges - 1)))
+            return UpgradeRoad(
+                group(),
+                draw(st.integers(0, n_edges - 1)),
+                draw(st.sampled_from([None, RoadKind.FAST, RoadKind.FREIGHT])),
+            )
         case "recruit":
             return Recruit(draw(st.integers(0, n_nodes - 1)))
         case _:
@@ -425,13 +440,12 @@ class MatchMachine(RuleBasedStateMachine):
         own_packets = {opaque_id(KEY, player, p.id) for p in _own(m.state, player)}
         assert {p.id for p in view.packets} == own_packets
         levels = ([n.detail for n in view.nodes], [e.detail for e in view.edges])
-        for e in view.edges:  # DEC-17: a known width never exceeds the true one, exact in sight
-            true_width = m.state.edges[e.id].width
-            assert e.width <= true_width and (e.detail is Detail.FOG or e.width == true_width)
+        for e in view.edges:  # DEC-17, DEC-22: known levels never exceed the true ones
+            road = m.state.edges[e.id]
+            assert e.width <= road.width and e.kind in (RoadKind.NONE, road.kind)
+            assert e.detail is Detail.FOG or (e.width, e.kind) == (road.width, road.kind)
         capacities = node_capacities(m.state, m.rules)
-        for n in view.nodes:
-            assert n.capacity <= capacities[n.id]
-            assert n.capacity_stale or n.capacity == capacities[n.id]
+        assert [n.capacity for n in view.nodes] == list(capacities)
         hidden = copy.deepcopy(m.state)
         perturb_hidden(data, hidden, player, levels)
         assert project(hidden, m.rules, player, KEY) == view
@@ -470,5 +484,9 @@ def test_ledger_holds_in_a_full_bot_match(
         "packet_delivered",
         "warehouse_lost",
     } <= tracker.kinds
-    if name in MVP_MAPS:  # the big maps also meet the sinks of a cut-off and of overcrowding
-        assert {"packet_lost", "attrition"} <= tracker.kinds
+    if name in MVP_MAPS:  # the big maps also meet the sink of a cut-off
+        assert "packet_lost" in tracker.kinds
+    if name == "arteriya":
+        # Overcrowding: capacity no longer drops on a cut (DEC-22), so only arrivals overfill a
+        # city; ExpandBot does that on arteriya.
+        assert "attrition" in tracker.kinds
