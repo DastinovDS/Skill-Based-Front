@@ -164,7 +164,7 @@
 
   .gain {
     fill: var(--text);
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .keycap {

@@ -70,8 +70,8 @@ export const ROAD_SECTORS: readonly {
   { type: 'freight', angle: 0, key: '2' },
 ];
 
-/** Half the angle of a road type sector: two sectors of 160 degrees with gaps between them. */
-export const ROAD_HALF = 80;
+/** Half the angle of a road type sector: two sectors of 144 degrees with gaps between them. */
+export const ROAD_HALF = 72;
 
 const TYPE_SECTORS = ROAD_SECTORS.map((s) => ({ angle: s.angle, item: s.type }));
 
