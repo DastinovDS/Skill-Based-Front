@@ -9,46 +9,56 @@
  */
 import type { PlayerId, RulesetPublic, SnapshotMsg } from '../protocol.gen.ts';
 import { incomingAlerts, type IncomingAlert } from './incoming.ts';
+import { overflowAlerts, type OverflowAlert } from './overflow.ts';
 
-export type Alert = IncomingAlert;
+export type Alert = IncomingAlert | OverflowAlert;
 
 export class AlertState {
   /** Newest information of the last snapshot; replaced, never mutated. */
-  current = $state.raw<readonly Alert[]>([]);
+  current = $state.raw<readonly IncomingAlert[]>([]);
+
+  /** Own cities over their capacity (ui-style 12), the soonest loss first. */
+  overflow = $state.raw<readonly OverflowAlert[]>([]);
 
   /** Ticks per second, to show a countdown in seconds. */
   readonly tickHz: number;
 
   readonly #me: PlayerId;
   readonly #delayTicks: number;
+  readonly #attritionTicks: number;
   #cursor = -1;
 
-  constructor(me: PlayerId, rules: Pick<RulesetPublic, 'tick_hz' | 'orders'>) {
+  constructor(me: PlayerId, rules: Pick<RulesetPublic, 'tick_hz' | 'orders' | 'capacity'>) {
     this.#me = me;
     this.#delayTicks = rules.orders.planned_delay_ticks;
+    this.#attritionTicks = rules.capacity.attrition_ticks;
     this.tickHz = rules.tick_hz;
   }
 
   onSnapshot(snapshot: SnapshotMsg): void {
     this.current = incomingAlerts(snapshot, this.#me, this.#delayTicks);
+    this.overflow = overflowAlerts(snapshot, this.#me, this.#attritionTicks);
   }
 
   reset(): void {
     this.current = [];
+    this.overflow = [];
     this.#cursor = -1;
   }
 
   /**
-   * The city the camera goes to on `Space`: the soonest alert first, then one more per press, round
-   * and round; `null` without alerts.
+   * The city the camera goes to on `Space`: the overcrowded cities first (a unit is lost there),
+   * then the cities they march on, one more per press, round and round; `null` without alerts.
    */
   nextNode(): number | null {
-    const list = this.current;
-    if (list.length === 0) {
+    const nodes = [...this.overflow, ...this.current]
+      .map((a) => a.node)
+      .filter((node, i, all) => all.indexOf(node) === i);
+    if (nodes.length === 0) {
       this.#cursor = -1;
       return null;
     }
-    this.#cursor = (this.#cursor + 1) % list.length;
-    return list[this.#cursor]?.node ?? null;
+    this.#cursor = (this.#cursor + 1) % nodes.length;
+    return nodes[this.#cursor] ?? null;
   }
 }

@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 7,
+    "PROTOCOL_VERSION": 8,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -141,6 +141,30 @@
         "group"
       ],
       "title": "CancelOrderCmd",
+      "type": "object"
+    },
+    "CapacityPublic": {
+      "additionalProperties": false,
+      "description": "Overcrowding attrition (``capacity`` of the ruleset), for the countdown of ui-style 12.",
+      "properties": {
+        "attrition_ticks": {
+          "description": "Ticks over the capacity in a row before one unit dies.",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "grace_ticks": {
+          "description": "Ticks after a capture in which the garrison is not counted.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "attrition_ticks",
+        "grace_ticks"
+      ],
+      "title": "CapacityPublic",
       "type": "object"
     },
     "ClientMsg": {
@@ -1204,6 +1228,32 @@
             }
           ],
           "description": "The city's road build (DEC-16): own always, an enemy one only while its edge is unfogged."
+        },
+        "attrition_in": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Own node only: ticks until the next unit dies of overcrowding (the garrison exceeds the\ncapacity and the grace after a capture is over). ``None`` for every other node."
+        },
+        "grace_left": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Own node only: ticks the grace after a capture still lasts while the garrison exceeds the\ncapacity. ``None`` for every other node."
         }
       },
       "required": [
@@ -1214,7 +1264,9 @@
         "detail",
         "warehouse",
         "seen",
-        "build"
+        "build",
+        "attrition_in",
+        "grace_left"
       ],
       "title": "NodeView",
       "type": "object"
@@ -1578,6 +1630,9 @@
         },
         "orders": {
           "$ref": "#/$defs/OrdersPublic"
+        },
+        "capacity": {
+          "$ref": "#/$defs/CapacityPublic"
         }
       },
       "required": [
@@ -1588,7 +1643,8 @@
         "combat",
         "build",
         "economy",
-        "orders"
+        "orders",
+        "capacity"
       ],
       "title": "RulesetPublic",
       "type": "object"
@@ -2018,6 +2074,17 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
+        },
+        "nicks": {
+          "description": "Nicks of the two players by player id (ui-style U3); the bot of a bot match is ``Bot``.\nNot secret (visible in the waiting room and the queue), so not part of the ``PlayerView``.",
+          "items": {
+            "maxLength": 16,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
         }
       },
       "required": [
@@ -2025,7 +2092,8 @@
         "player",
         "ruleset_public",
         "map_id",
-        "last_seq"
+        "last_seq",
+        "nicks"
       ],
       "title": "WelcomeMsg",
       "type": "object"

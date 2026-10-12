@@ -1,7 +1,11 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import { HudChrome } from '../hud/chrome.svelte.ts';
   import { DEV_PLAYER, DEV_RULES } from '../hud/devFeed.ts';
   import Hud from '../hud/Hud.svelte';
+  import { routeKey } from '../hud/hudKeys.ts';
   import { HudState } from '../hud/hudState.svelte.ts';
+  import { HudPrefs } from '../hud/prefs.svelte.ts';
   import { createDevMatch } from './devMatch.ts';
   import { DEMO_SCENE, FIXTURE_SCENES, frozenSource } from './scenarios.ts';
   import { OrderBook } from '../match/orderBook.ts';
@@ -43,7 +47,11 @@
   const fixture = $derived(fixtureScene(sceneId));
 
   // The HUD numbers for the map on screen.
-  const hud = $derived(new HudState({ me: DEV_PLAYER, rules: DEV_RULES, map }));
+  const hud = $derived(
+    new HudState({ me: DEV_PLAYER, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map }),
+  );
+  const chrome = new HudChrome();
+  const prefs = new HudPrefs();
 
   // The demo scene is a live match against the dev server (until SRV-03); a fixture is a frozen
   // snapshot. Either way the map and the HUD read the same snapshots.
@@ -65,10 +73,14 @@
 
   $effect(() => {
     if (fixture !== undefined) {
-      hud.onSnapshot(fixture.snapshot);
-      for (const event of fixture.events) {
-        hud.onEvent(event);
-      }
+      const scene = fixture;
+      // The HUD reads and writes its own state: feeding it must not make this effect depend on it.
+      untrack(() => {
+        hud.onSnapshot(scene.snapshot);
+        for (const event of scene.events) {
+          hud.onEvent(event);
+        }
+      });
     }
   });
 
@@ -93,6 +105,7 @@
   });
 
   function handleKey(event: KeyboardEvent): void {
+    if (routeKey(chrome, event, { fit: () => canvas?.fitMap() })) return;
     if (forwardKey(orders, event)) {
       event.preventDefault();
     }
@@ -142,18 +155,22 @@
   />
   <Hud
     {rendererFailed}
-    maps={BUNDLED_MAPS.map((m) => m.meta.name)}
-    {mapName}
-    scenes={[DEMO_SCENE, ...FIXTURE_SCENES.map((scene) => scene.id)]}
-    {sceneId}
-    {fps}
+    dev={{
+      maps: BUNDLED_MAPS.map((m) => m.meta.name),
+      mapName,
+      scenes: [DEMO_SCENE, ...FIXTURE_SCENES.map((scene) => scene.id)],
+      sceneId,
+      fps,
+      onselectmap: selectMap,
+      onselectscene: selectScene,
+    }}
     {hud}
     {orders}
+    {chrome}
+    {prefs}
     oninsets={(next: Insets) => {
       insets = next;
     }}
-    onselectmap={selectMap}
-    onselectscene={selectScene}
     onfit={() => canvas?.fitMap()}
   />
 </main>

@@ -27,6 +27,7 @@ describe('OverlayView', () => {
       preview: null,
       road: null,
       candidates: [],
+      beacon: null,
     };
     view.update(state, none);
     const bounds = layers.layer.intents.getLocalBounds();
@@ -46,6 +47,7 @@ describe('OverlayView', () => {
         preview: null,
         road: null,
         candidates: [],
+        beacon: null,
       },
       none,
     );
@@ -63,6 +65,7 @@ describe('OverlayView', () => {
       preview: null,
       road: null,
       candidates: [],
+      beacon: null,
     };
     const frame = layers.layer.intents.children[2];
     view.update(state, () => ({ x: 50, y: 60, side: 30, scale: 1 }));
@@ -80,6 +83,7 @@ describe('OverlayView', () => {
       preview: null,
       road: null,
       candidates: [],
+      beacon: null,
     });
     /** The ghost Graphics is the last child of the layer. */
     const bounds = (layers: ReturnType<typeof setup>['layers']) => {

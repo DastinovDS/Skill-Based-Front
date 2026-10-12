@@ -14,6 +14,9 @@ const group = snapshot.view.groups[0];
 const enemy = snapshot.view.nodes.find((n) => n.owner === 1 && n.detail === 'exact');
 if (group === undefined || enemy === undefined) throw new Error('the dev snapshot is too small');
 
+const button = (target: HTMLElement, label: string) =>
+  [...target.querySelectorAll('button')].find((b) => b.textContent.includes(label));
+
 describe('OrdersPanel', () => {
   const initial = getLocale();
   let mounted: Record<string, unknown> | undefined;
@@ -26,7 +29,12 @@ describe('OrdersPanel', () => {
   });
 
   function render() {
-    const hud = new HudState({ me: 0, rules: DEV_RULES, map: DEFAULT_MAP });
+    const hud = new HudState({
+      me: 0,
+      nicks: ['Danya', 'Bot'],
+      rules: DEV_RULES,
+      map: DEFAULT_MAP,
+    });
     hud.onSnapshot(snapshot);
     const book = new OrderBook();
     const sent: Command[] = [];
@@ -50,6 +58,15 @@ describe('OrdersPanel', () => {
     return { target, orders, book, sent, hud };
   }
 
+  it('shows the prices of an order and of a mode, as the card of ui-style 10.3 does', () => {
+    setLocale('en');
+    const { target, orders } = render();
+    orders.click({ kind: 'group', id: group.id }, false);
+    flushSync();
+    expect(target.textContent).toContain('Click: order 1 CP. Shift+click: planned 2 CP.');
+    expect(button(target, 'Defense')?.textContent).toContain('2 CP');
+  });
+
   it('shows the price of the hovered target and sends a cancel from the button', () => {
     setLocale('en');
     const { target, orders, sent } = render();
@@ -66,25 +83,6 @@ describe('OrdersPanel', () => {
     expect(sent).toEqual([{ type: 'cancel_order', group: group.id }]);
   });
 
-  it.each([
-    ['en', 'Not enough CP'],
-    ['ru', 'Не хватает CP'],
-  ] as const)('explains a rejection in %s', (locale, text) => {
-    setLocale(locale);
-    const { target, orders, book } = render();
-    orders.click({ kind: 'group', id: group.id }, false);
-    orders.click({ kind: 'node', id: enemy.id }, false);
-    book.onAck({
-      type: 'ack',
-      seq: 1,
-      applied_tick: 31,
-      path: null,
-      reject_code: 'NOT_ENOUGH_CP',
-    });
-    flushSync();
-    expect(target.querySelector('[role="alert"]')?.textContent).toContain(text);
-  });
-
   it('switches planned orders with the checkbox', () => {
     const { target, orders, sent } = render();
     orders.click({ kind: 'group', id: group.id }, false);
@@ -96,50 +94,19 @@ describe('OrdersPanel', () => {
     expect(sent[0]).toMatchObject({ type: 'move', planned: true });
   });
 
-  const button = (target: HTMLElement, label: string) =>
-    [...target.querySelectorAll('button')].find((b) => b.textContent.includes(label));
-
-  it('sends mode, split and recruit from the buttons, and opens the stance menu', () => {
+  it('sends mode, split and recruit from the buttons', () => {
     setLocale('en');
     const { target, orders, sent } = render();
     orders.click({ kind: 'group', id: group.id }, false);
     flushSync();
     button(target, 'Defense')?.click();
     button(target, 'Split off')?.click();
-    button(target, 'Stance:')?.click();
     button(target, 'Recruit here')?.click();
     expect(sent).toEqual([
       { type: 'set_mode', group: group.id, mode: 'defense' },
       { type: 'split', group: group.id, n: 1 },
       { type: 'recruit', node: group.location.kind === 'node' ? group.location.node : -1 },
     ]);
-    // The stance buttons are gone: the button opens the radial menu (ui-style 11).
-    expect(orders.radial.current).toMatchObject({ open: true, sticky: true });
-  });
-
-  it('asks before forfeiting and sends it only after the confirmation', () => {
-    setLocale('en');
-    const { target, sent } = render();
-    button(target, 'Forfeit')?.click();
-    flushSync();
-    expect(sent).toEqual([]);
-    button(target, 'Keep playing')?.click();
-    flushSync();
-    expect(button(target, 'Yes, forfeit')).toBeUndefined();
-    button(target, 'Forfeit')?.click();
-    flushSync();
-    button(target, 'Yes, forfeit')?.click();
-    expect(sent).toEqual([{ type: 'forfeit' }]);
-  });
-
-  it('shows the accepted answer of a command', () => {
-    setLocale('en');
-    const { target, orders, book } = render();
-    orders.click({ kind: 'group', id: group.id }, false);
-    orders.setMode('defense');
-    book.onAck({ type: 'ack', seq: 1, applied_tick: 31, path: null, reject_code: null });
-    flushSync();
-    expect(target.querySelector('[role="alert"]')?.textContent).toContain('Accepted: mode change');
   });
 
   it('starts the road pick of an own city from its button and sends the picked road', () => {

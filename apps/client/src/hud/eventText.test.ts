@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { getLocale, setLocale } from '../i18n/index.ts';
 import { eventText, HIDDEN_EVENT_KINDS, isLogged, LOGGED_EVENT_KINDS } from './eventText.ts';
 import type { HudEvent } from './hudData.ts';
+import { toastOf } from './toasts.ts';
 
 function event(kind: string, data: HudEvent['data']): HudEvent {
   return { seq: 1, tick: 10, kind, data };
@@ -77,6 +78,16 @@ if (kindsText === undefined) {
   throw new Error('event_kinds.json not found');
 }
 const serverKinds = (JSON.parse(kindsText) as { kinds: string[] }).kinds;
+
+describe('the VP award stays out of the feed (ui-style U2)', () => {
+  it('is neither logged nor a toast, and has no line', () => {
+    const award = event('vp_awarded', { player: 0, vp: 1 });
+    expect(isLogged('vp_awarded')).toBe(false);
+    expect(HIDDEN_EVENT_KINDS.has('vp_awarded')).toBe(true);
+    expect(eventText(award, 0)).toBe('');
+    expect(toastOf(award, 0)).toBeNull();
+  });
+});
 
 describe('event kinds of the server', () => {
   afterEach(() => {

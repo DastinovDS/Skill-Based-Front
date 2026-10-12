@@ -96,7 +96,11 @@ def test_create_join_ready_starts_the_match(api: TestClient) -> None:
         ) as ws:
             hello = HelloMsg(protocol_version=PROTOCOL_VERSION, token=token_of(headers))
             ws.send_text(encode(hello))
-            assert isinstance(decode_server(ws.receive_text()), WelcomeMsg)
+            welcome = decode_server(ws.receive_text())
+            assert isinstance(welcome, WelcomeMsg)
+            # Nicks by player id (the slot), the same for both players.
+            assert sorted(welcome.nicks) == ["alice", "bob"]
+            assert welcome.nicks[welcome.player] == ("alice" if headers is alice else "bob")
 
 
 def test_third_player_is_refused(api: TestClient) -> None:

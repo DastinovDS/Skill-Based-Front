@@ -65,6 +65,27 @@ def standing_units(state: GameState, node: int, player: int) -> int:
     return total
 
 
+def overflow_countdown(
+    state: GameState, rules: Ruleset, node: int, capacity: int
+) -> tuple[int | None, int | None]:
+    """``(attrition_in, grace_left)`` of an own city for the owner's view (ui-style, section 12).
+
+    Both are ``None`` while the units standing in the node owned by the owner fit into
+    ``capacity``. Over capacity: ``grace_left`` is the number of ticks the grace after a capture
+    still lasts (attrition does not count then, ``attrition_in`` is ``None``); otherwise
+    ``attrition_in`` is the number of ticks until the next unit dies (``attrition_ticks`` minus
+    ``over_ticks``, at least 1). The caller shows it only to the owner of the node.
+    """
+    owner = state.nodes[node].owner
+    if owner is None or standing_units(state, node, owner) <= capacity:
+        return None, None
+    captured = state.nodes[node].captured_tick
+    if captured is not None and state.tick - captured < rules.capacity.grace_ticks:
+        return None, rules.capacity.grace_ticks - (state.tick - captured)
+    left = rules.capacity.attrition_ticks - state.nodes[node].over_ticks
+    return max(1, left), None
+
+
 def supplied_territory(state: GameState, player: int) -> tuple[bool, ...]:
     """``result[node]``: the node is connected to the player's capital over own nodes.
 

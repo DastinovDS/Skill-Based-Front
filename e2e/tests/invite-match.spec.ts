@@ -48,11 +48,9 @@ async function giveOrders(player: Player, map: MapFile): Promise<void> {
   await player.moveGroup(map, capital.id, first);
   await expect.poll(() => player.accepted('move')).toBe(1);
 
-  // 2. A planned move (the checkbox of the orders panel): dearer, shown to the enemy as an intent.
-  await player.page.getByLabel(/Planned order/).check();
-  await player.moveGroup(map, second, target);
+  // 2. A planned move (Shift+click): dearer, shown to the enemy as an intent.
+  await player.moveGroup(map, second, target, true);
   await expect.poll(() => player.accepted('move')).toBe(2);
-  await player.page.getByLabel(/Planned order/).uncheck();
 
   // 3. The CP stance from the radial menu (Q, a tap keeps it open): costs nothing, the panel shows
   // the new one.
@@ -139,8 +137,7 @@ test('pause, a dropped connection and a forfeit in a private match', async ({
   await expect(guest.page.getByText('Connection lost. Reconnecting...')).toBeHidden();
 
   // The guest gives up: a defeat for them, a victory for the host.
-  await guest.page.getByRole('button', { name: 'Forfeit' }).click();
-  await guest.page.getByRole('button', { name: 'Yes, forfeit' }).click();
+  await guest.forfeit();
   await expect(guest.page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
   await expect(host.page.getByRole('heading', { name: 'Victory' })).toBeVisible();
   for (const player of [host, guest]) {
@@ -171,8 +168,7 @@ test('a page reload in a running match returns to the same match (#189)', async 
   await expect(host.page.getByText(`Hello, ${host.nick}!`)).toBeHidden();
 
   // The match goes on for both and nobody lost by disconnect: the guest can still forfeit it.
-  await guest.page.getByRole('button', { name: 'Forfeit' }).click();
-  await guest.page.getByRole('button', { name: 'Yes, forfeit' }).click();
+  await guest.forfeit();
   await expect(host.page.getByRole('heading', { name: 'Victory' })).toBeVisible();
   await expect(host.page.getByText('A player gave up.')).toBeVisible();
 

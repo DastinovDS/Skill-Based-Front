@@ -121,6 +121,16 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.cost.recruit;
   }
 
+  /** Price of a move order, hundredths of CP: ordinary or planned (ruleset of `welcome`). */
+  moveCostFor(planned: boolean): number {
+    return moveCost(this.#o.rules, planned);
+  }
+
+  /** Price of switching a group to `mode`, hundredths of CP. */
+  modeCost(mode: Mode): number {
+    return mode === 'attack' ? this.#o.rules.cost.attack : this.#o.rules.cost.defense;
+  }
+
   /** Price of a stance change, hundredths of CP. */
   get stanceCost(): number {
     return this.#o.rules.cost.stance;
@@ -140,7 +150,8 @@ export class OrderController implements MapInteraction {
     const from = this.#selectedGroup()?.node ?? null;
     const road = this.#hover?.kind === 'edge' ? this.#hover.id : null;
     const candidates = this.#candidates();
-    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(road)}|${candidates.join(',')}`;
+    const beacon = this.#o.hud.beacon;
+    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(road)}|${candidates.join(',')}|${String(beacon)}`;
     if (key !== this.#overlayKey || ghosts !== this.#overlayGhosts) {
       this.#overlayKey = key;
       this.#overlayGhosts = ghosts;
@@ -151,6 +162,7 @@ export class OrderController implements MapInteraction {
           from !== null && preview !== null ? { from, to: preview, planned: this.planned } : null,
         road,
         candidates,
+        beacon,
       };
     }
     return this.#overlay;
@@ -162,6 +174,7 @@ export class OrderController implements MapInteraction {
       this.deselect();
       return;
     }
+    if (hit.kind === 'intent') return; // an arrow is only hovered
     if (hit.kind === 'edge') {
       // A road is clicked only to upgrade it, in the road pick of a city; elsewhere it does nothing.
       if (this.#candidates().includes(hit.id)) this.upgradeRoad(hit.id);
@@ -183,6 +196,7 @@ export class OrderController implements MapInteraction {
 
   hover(hit: PickHit | null): void {
     this.#hover = hit;
+    this.#o.hud.hover(hit);
     this.#refresh();
   }
 

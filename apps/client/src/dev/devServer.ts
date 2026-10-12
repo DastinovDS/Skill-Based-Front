@@ -209,6 +209,7 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
           ruleset_public: rules,
           map_id: map.meta.name,
           last_seq: lastSeq,
+          nicks: ['Danya', 'Bot'],
         });
         this.push();
         timer = setInterval(() => {

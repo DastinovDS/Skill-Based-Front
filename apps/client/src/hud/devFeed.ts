@@ -49,6 +49,8 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       capacity: n.base_capacity,
       capacity_stale: false,
       build: null,
+      attrition_in: null,
+      grace_left: null,
     };
     if (mine.has(n.id)) {
       return {

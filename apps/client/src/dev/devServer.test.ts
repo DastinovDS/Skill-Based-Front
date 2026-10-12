@@ -28,7 +28,7 @@ describe('dev match', () => {
   });
 
   it('runs the real connection against the dev server: snapshots, acks, rejects', () => {
-    const hud = new HudState({ me: 0, rules: DEV_RULES, map });
+    const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
     const match = createDevMatch(map, DEV_RULES, hud);
     const results: CommandResult[] = [];
     match.session.orders.onResult = (r) => results.push(r);
@@ -65,7 +65,7 @@ describe('dev match', () => {
   });
 
   it('refuses a move with NOT_ENOUGH_CP while CP is still zero', () => {
-    const hud = new HudState({ me: 0, rules: DEV_RULES, map });
+    const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
     const match = createDevMatch(map, DEV_RULES, hud);
     const results: CommandResult[] = [];
     match.session.orders.onResult = (r) => results.push(r);

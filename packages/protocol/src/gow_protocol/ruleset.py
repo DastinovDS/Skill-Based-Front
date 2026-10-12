@@ -8,7 +8,8 @@ Only what the client uses (AGENTS.md, section 7.1):
 - the clock and the CP regeneration, for the HUD timer and the CP bar (CLI-08);
 - the road level prices and duration, for the road upgrade hint (DEC-16);
 - the stance table and the delays of planned orders, for the stance menu and the countdown on
-  order arrows (ui-style 11 and 9.7).
+  order arrows (ui-style 11 and 9.7);
+- the attrition and grace ticks, for the overcrowding countdown (ui-style 12).
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -96,6 +97,15 @@ class OrdersPublic(WireModel):
     stance_cooldown_ticks: NonNegInt
 
 
+class CapacityPublic(WireModel):
+    """Overcrowding attrition (``capacity`` of the ruleset), for the countdown of ui-style 12."""
+
+    attrition_ticks: PosInt
+    """Ticks over the capacity in a row before one unit dies."""
+    grace_ticks: NonNegInt
+    """Ticks after a capture in which the garrison is not counted."""
+
+
 class BuildPublic(WireModel):
     """Road upgrades by a city (``build`` of the ruleset, DEC-16)."""
 
@@ -113,6 +123,7 @@ class RulesetPublic(WireModel):
     build: BuildPublic
     economy: EconomyPublic
     orders: OrdersPublic
+    capacity: CapacityPublic
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
@@ -167,5 +178,9 @@ class RulesetPublic(WireModel):
                 planned_delay_ticks=rules.orders.planned_delay_ticks,
                 defense_delay_ticks=rules.orders.defense_delay_ticks,
                 stance_cooldown_ticks=rules.orders.stance_cooldown_ticks,
+            ),
+            capacity=CapacityPublic(
+                attrition_ticks=rules.capacity.attrition_ticks,
+                grace_ticks=rules.capacity.grace_ticks,
             ),
         )

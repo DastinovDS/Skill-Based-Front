@@ -1,7 +1,6 @@
 <script lang="ts">
   import { getLocale, t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
-  import { rejectMessageKey } from '../match/rejects.ts';
   import type { Mode } from '../protocol.gen.ts';
   import { formatCentis } from './format.ts';
   import { roadCandidates, type HudData } from './hudData.ts';
@@ -35,26 +34,18 @@
   const unknown = (value: number | null): string | number => value ?? '?';
 
   let splitN = $state(1);
-  let confirmingForfeit = $state(false);
   const maxSplit = $derived(group === null ? 1 : Math.max(1, group.units - 1));
-
-  function noticeText(notice: NonNullable<typeof ui.notice>): string {
-    const command = t(`cmd.${notice.cmd.type}`);
-    if (notice.kind === 'accepted') return tf('orders.accepted', { command });
-    if (notice.kind === 'lost') return t('orders.lost');
-    return tf('orders.rejected', { command, reason: t(rejectMessageKey(notice.code)) });
-  }
 </script>
 
+<!-- The actions of the selection card (ui-style 10.3); the answers to commands are toasts. -->
 <section class="orders" aria-label={t('orders.title')}>
-  <h2>{t('orders.title')}</h2>
-  {#if ui.notice !== null}
-    <p class={ui.notice.kind === 'accepted' ? 'notice ok' : 'notice'} role="alert">
-      {noticeText(ui.notice)}
+  {#if group !== null}
+    <p class="hint">
+      {tf('card.clickHint', {
+        normal: cp(orders.moveCostFor(false)),
+        planned: cp(orders.moveCostFor(true)),
+      })}
     </p>
-  {/if}
-  {#if group === null}
-    <p class="hint">{t('orders.pickGroup')}</p>
   {/if}
   <label class="check">
     <input
@@ -74,19 +65,6 @@
       })}
     </p>
   {/if}
-  {#if ui.road !== null}
-    <p class="preview">
-      {tf('orders.roadHint', {
-        edge: ui.road.edge,
-        width: ui.road.width,
-        capacity: cp(ui.road.capacityCenti),
-        speed: ui.road.packetSpeedPct,
-        charges: unknown(ui.road.charges),
-      })}
-      {t(ui.road.pickable ? 'orders.roadHintPick' : 'orders.roadHintHow')}
-    </p>
-  {/if}
-
   {#if pick !== null}
     <div class="pick" role="group" aria-label={t('orders.upgradeRoad')}>
       <p>
@@ -151,7 +129,11 @@
             orders.setMode(mode);
           }}
         >
-          {t(`mode.${mode}`)} [{key}]
+          {tf('card.mode', {
+            mode: t(`mode.${mode}`),
+            key,
+            cost: cp(orders.modeCost(mode)),
+          })}
         </button>
       {/each}
     </div>
@@ -203,54 +185,6 @@
       {tf('orders.recruit', { cost: cp(orders.recruitCost) })}
     </button>
   {/if}
-
-  {#if data !== null}
-    <button
-      type="button"
-      onclick={() => {
-        orders.openRadial(true);
-      }}
-    >
-      {tf('orders.stanceOpen', { stance: t(`stance.${data.stance}`) })}
-    </button>
-    <p class="hint">{tf('orders.stance', { cost: cp(orders.stanceCost) })}</p>
-  {/if}
-
-  {#if confirmingForfeit}
-    <div class="confirm" role="alertdialog" aria-label={t('orders.forfeitAsk')}>
-      <p>{t('orders.forfeitAsk')}</p>
-      <div class="row">
-        <button
-          type="button"
-          class="danger"
-          onclick={() => {
-            confirmingForfeit = false;
-            orders.forfeit();
-          }}
-        >
-          {t('orders.forfeitYes')}
-        </button>
-        <button
-          type="button"
-          onclick={() => {
-            confirmingForfeit = false;
-          }}
-        >
-          {t('orders.forfeitNo')}
-        </button>
-      </div>
-    </div>
-  {:else}
-    <button
-      type="button"
-      class="danger"
-      onclick={() => {
-        confirmingForfeit = true;
-      }}
-    >
-      {t('orders.forfeit')}
-    </button>
-  {/if}
 </section>
 
 <style>
@@ -258,11 +192,6 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    font-size: 14px;
-  }
-
-  h2 {
-    margin: 0;
     font-size: 14px;
   }
 
@@ -285,21 +214,11 @@
 
   .hint {
     font-size: 12px;
-    color: #8b949e;
+    color: var(--text-dim);
   }
 
   .preview {
     font-weight: 600;
-  }
-
-  .notice {
-    padding: 4px 8px;
-    border: 1px solid #f85149;
-    border-radius: 4px;
-  }
-
-  .notice.ok {
-    border-color: #3fb950;
   }
 
   .pick {
@@ -307,7 +226,7 @@
     flex-direction: column;
     gap: 4px;
     padding: 6px 8px;
-    border: 1px dashed #ffd33d;
+    border: 1px dashed var(--paper);
     border-radius: 4px;
   }
 
@@ -315,23 +234,20 @@
     text-align: left;
   }
 
-  .confirm {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 6px 8px;
-    border: 1px solid #f85149;
-    border-radius: 4px;
-  }
-
   button,
   input[type='number'] {
     font: inherit;
     color: inherit;
-    background: #21262d;
-    border: 1px solid #30363d;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 2px 8px;
+  }
+
+  button:focus-visible,
+  input:focus-visible {
+    outline: 2px solid var(--paper);
+    outline-offset: 1px;
   }
 
   input[type='number'] {
@@ -347,13 +263,9 @@
     opacity: 0.5;
   }
 
-  /* The active mode or stance: a thick outline as well as the colour. */
+  /* The active mode: a thick white outline as well as the colour. */
   button.active {
-    border: 2px solid #ffd33d;
+    border: 2px solid var(--paper);
     font-weight: 600;
-  }
-
-  button.danger {
-    border-color: #f85149;
   }
 </style>

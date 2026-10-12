@@ -169,6 +169,8 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 build=None
                 if n.build is None
                 else NodeBuild(edge=n.build.edge, done_tick=n.build.done_tick),
+                attrition_in=n.attrition_in,
+                grace_left=n.grace_left,
             )
             for n in view.nodes
         ),
@@ -272,6 +274,8 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "build": None
                 if n.build is None
                 else {"edge": n.build.edge, "done_tick": n.build.done_tick},
+                "attrition_in": n.attrition_in,
+                "grace_left": n.grace_left,
             }
             for n in view.nodes
         ],

@@ -10,8 +10,7 @@ test('a match against a bot starts and ends with a forfeit', async ({ browser, b
   await player.page.getByRole('button', { name: 'Start' }).click();
   await player.expectPlaying();
 
-  await player.page.getByRole('button', { name: 'Forfeit' }).click();
-  await player.page.getByRole('button', { name: 'Yes, forfeit' }).click();
+  await player.forfeit();
   await expect(player.page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
   await expect(player.page.getByRole('button', { name: 'Watch the replay' })).toBeVisible();
   await player.close();

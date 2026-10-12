@@ -159,6 +159,14 @@ export interface WelcomeMsg {
    * the client resends only its commands with a greater ``seq``.
    */
   last_seq: number;
+  /**
+   * Nicks of the two players by player id (ui-style U3); the bot of a bot match is ``Bot``.
+   * Not secret (visible in the waiting room and the queue), so not part of the ``PlayerView``.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  nicks: [string, string];
 }
 export interface RulesetPublic {
   tick_hz: number;
@@ -169,6 +177,7 @@ export interface RulesetPublic {
   build: BuildPublic;
   economy: EconomyPublic;
   orders: OrdersPublic;
+  capacity: CapacityPublic;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.
@@ -255,6 +264,19 @@ export interface OrdersPublic {
   stance_cooldown_ticks: number;
 }
 /**
+ * Overcrowding attrition (``capacity`` of the ruleset), for the countdown of ui-style 12.
+ */
+export interface CapacityPublic {
+  /**
+   * Ticks over the capacity in a row before one unit dies.
+   */
+  attrition_ticks: number;
+  /**
+   * Ticks after a capture in which the garrison is not counted.
+   */
+  grace_ticks: number;
+}
+/**
  * The player's view after tick ``tick``. Only the latest one matters (AGENTS.md, 5.3).
  */
 export interface SnapshotMsg {
@@ -316,6 +338,16 @@ export interface NodeView {
    * The city's road build (DEC-16): own always, an enemy one only while its edge is unfogged.
    */
   build: NodeBuild | null;
+  /**
+   * Own node only: ticks until the next unit dies of overcrowding (the garrison exceeds the
+   * capacity and the grace after a capture is over). ``None`` for every other node.
+   */
+  attrition_in: number | null;
+  /**
+   * Own node only: ticks the grace after a capture still lasts while the garrison exceeds the
+   * capacity. ``None`` for every other node.
+   */
+  grace_left: number | null;
 }
 /**
  * What the player sees, or last saw, of one node or edge (``gow_sim.state.Sighting``).
@@ -592,6 +624,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

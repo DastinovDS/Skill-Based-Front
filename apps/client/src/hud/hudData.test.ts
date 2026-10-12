@@ -22,7 +22,7 @@ const map: MapFile = {
   ...base,
   nodes: base.nodes.map((n) => ({ ...n, terrain: 'forest', vp: n.id === 1 ? 2 : n.vp })),
 };
-const ctx: HudContext = { me: 0, rules: DEV_RULES, map };
+const ctx: HudContext = { me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map };
 
 function withNode(patch: Partial<NodeView> & { id: number }): SnapshotMsg {
   return {

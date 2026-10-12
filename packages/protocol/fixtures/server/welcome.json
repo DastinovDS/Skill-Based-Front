@@ -41,8 +41,10 @@
       "planned_delay_ticks": 30,
       "defense_delay_ticks": 30,
       "stance_cooldown_ticks": 100
-    }
+    },
+    "capacity": { "attrition_ticks": 30, "grace_ticks": 50 }
   },
   "map_id": "diamond",
-  "last_seq": 0
+  "last_seq": 0,
+  "nicks": ["Danya", "Guest"]
 }

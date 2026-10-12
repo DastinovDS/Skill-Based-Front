@@ -24,7 +24,12 @@ describe('RadialMenu', () => {
   });
 
   function render() {
-    const hud = new HudState({ me: 0, rules: DEV_RULES, map: DEFAULT_MAP });
+    const hud = new HudState({
+      me: 0,
+      nicks: ['Danya', 'Bot'],
+      rules: DEV_RULES,
+      map: DEFAULT_MAP,
+    });
     hud.onSnapshot(snapshot);
     const sent: Command[] = [];
     const orders = new OrderController({

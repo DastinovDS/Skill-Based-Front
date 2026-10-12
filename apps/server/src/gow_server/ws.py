@@ -112,6 +112,26 @@ def account_of(sessions: sessionmaker[Session], token: str) -> int | None:
         ).scalar_one_or_none()
 
 
+BOT_NICK = "Bot"
+"""Nick of a bot in ``welcome``; the nick rules reserve it, so no player has it."""
+
+
+def nicks_of(sessions: sessionmaker[Session], players: tuple[int, int]) -> tuple[str, str]:
+    """Nicks of the two accounts of a match by slot; a bot slot (``BOT_ACCOUNT``) is ``Bot``.
+
+    Synchronous: run it in a thread.
+    """
+    with sessions() as session:
+        found = {
+            account: nick
+            for account, nick in session.execute(
+                select(Player.id, Player.nick).where(Player.id.in_(players))
+            )
+        }
+    first, second = (found.get(account, BOT_NICK) for account in players)
+    return first, second
+
+
 class _Close(Exception):
     """Ends the connection's task group with a close code."""
 
@@ -203,6 +223,7 @@ async def _serve(ws: WebSocket, match_id: str, settings: Settings) -> None:
     player = None if runner is None or account is None else runner.slot_of(account)
     if runner is None or player is None or runner.finished:
         raise _Close(CLOSE_NO_MATCH, "no such match")
+    nicks = await asyncio.to_thread(nicks_of, ws.app.state.sessions, runner.players)
     outbox = runner.attach(player)
     outbox.put(
         WelcomeMsg(
@@ -210,6 +231,7 @@ async def _serve(ws: WebSocket, match_id: str, settings: Settings) -> None:
             ruleset_public=RulesetPublic.from_ruleset(runner.match.rules),
             map_id=runner.map_id,
             last_seq=runner.last_seq(player),
+            nicks=nicks,
         )
     )
     outbox.put_snapshot(runner.snapshot(player))

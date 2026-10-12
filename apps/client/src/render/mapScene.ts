@@ -3,6 +3,7 @@ import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { labelResolution, NO_INSETS, type Camera, type Insets } from './camera.ts';
 import { CameraController } from './cameraController.ts';
 import { CityView } from './cityView.ts';
+import { AlertView } from './alertView.ts';
 import { EffectsView } from './effectsView.ts';
 import { EntityView } from './entityView.ts';
 import { FogView } from './fogView.ts';
@@ -45,6 +46,7 @@ export class MapScene {
   private readonly effects: EffectsView;
   private readonly fog: FogView;
   private readonly overlay: OverlayView;
+  private readonly alerts: AlertView;
   private interaction: MapInteraction | null;
   private hovering = false;
   private hoveredGroup: string | null = null;
@@ -83,6 +85,7 @@ export class MapScene {
       radiusOf,
     );
     this.overlay = new OverlayView(map, this.layers, me, radiusOf);
+    this.alerts = new AlertView(map, this.layers, me, radiusOf);
     this.controller = new CameraController(
       app.canvas,
       this.layers.world,
@@ -131,6 +134,7 @@ export class MapScene {
     this.app.ticker.remove(this.onFrame);
     this.controller.destroy();
     this.fog.destroy();
+    this.alerts.destroy();
     this.effects.destroy();
     this.intents.destroy();
     this.entities.destroy();
@@ -186,14 +190,20 @@ export class MapScene {
     this.effects.update(frame, this.source.events(), this.entities.groupPoints(), tickHz);
     this.fog.setTickHz(tickHz);
     this.fog.update(frame.base);
-    this.overlay.update(this.interaction?.overlay() ?? EMPTY_OVERLAY, (id) =>
-      this.entities.groupPoints().get(id),
+    const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;
+    this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
+    this.alerts.update(
+      frame.base.view.nodes,
+      tickHz,
+      this.source.capacityTicks ?? null,
+      overlay.beacon,
+      performance.now(),
     );
     if (announce) this.onsnapshot?.(frame.base.tick);
   };
 
-  /** The hit under a point of the canvas, in CSS px. */
-  private hitAt(at: Point): PickHit | null {
+  /** The hit under a point of the canvas, in CSS px; `hover` also finds the arrows of intents. */
+  private hitAt(at: Point, hover = false): PickHit | null {
     const world = this.layers.world;
     return pickAt(
       this.map,
@@ -203,6 +213,7 @@ export class MapScene {
       },
       this.entities.groupPoints(),
       world.scale.x,
+      hover ? this.intents.ribbonAxes() : undefined,
     );
   }
 
@@ -211,7 +222,7 @@ export class MapScene {
   };
 
   private readonly onHover = (at: Point | null): void => {
-    const hit = at === null ? null : this.hitAt(at);
+    const hit = at === null ? null : this.hitAt(at, true);
     this.hoveredGroup = hit?.kind === 'group' ? hit.id : null;
     // The pointer cursor (CSSOM, allowed by the CSP) tells that a click does something here.
     const pointer = hit !== null && this.interaction !== null;
@@ -232,9 +243,11 @@ export class MapScene {
     this.cities.setLabelResolution(resolution);
     this.overlay.setLabelResolution(resolution);
     this.entities.setLabelResolution(resolution);
+    this.alerts.setLabelResolution(resolution);
     this.effects.setLabelResolution(resolution);
     this.entities.setCameraScale(camera.scale);
     this.intents.setCameraScale(camera.scale);
+    this.alerts.setCameraScale(camera.scale);
     this.fog.setCameraScale(camera.scale);
     this.fog.setLabelResolution(resolution);
   };
