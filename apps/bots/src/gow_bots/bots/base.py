@@ -25,10 +25,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import ClassVar, Protocol
 
-from gow_sim.commands import Command, UpgradeRoad, command_cost
+from gow_sim.commands import Command, SetPriority, UpgradeRoad, command_cost
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import AtNode, GroupView, IntentKind, PlayerView, RoadKind
+from gow_sim.view import AtNode, GroupView, IntentKind, PlayerView, Priority, RoadKind
 
 __all__ = [
     "Bot",
@@ -193,6 +193,25 @@ class Bot:
             for end in (e.a, e.b)
             for other in self.neighbors[end]
         )
+
+    def priorities(self, view: PlayerView) -> list[Command]:
+        """Supply priorities (DEC-18): own cities at the front ``high``, the rest ``normal``.
+
+        A city is at the front when one of its neighbours is not own (public ownership): supply
+        then reaches the front before the rear. Only changes are commanded (``NO_CHANGE``
+        otherwise); cities in ``node_key`` order (mirror-invariant).
+        """
+        me = view.player
+        cmds: list[Command] = []
+        for n in sorted(range(len(view.nodes)), key=self.key):
+            current = view.nodes[n].priority
+            if current is None:  # not an own city
+                continue
+            front = any(view.nodes[m].owner != me for m in self.neighbors[n])
+            want = Priority.HIGH if front else Priority.NORMAL
+            if current is not want:
+                cmds.append(SetPriority(n, want))
+        return cmds
 
     def road_kind(self, view: PlayerView, edge: int) -> RoadKind | None:
         """The type for the next level of ``edge`` (DEC-22): ``None`` when it already has one.

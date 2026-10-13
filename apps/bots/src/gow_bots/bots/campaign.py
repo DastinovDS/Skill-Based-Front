@@ -129,6 +129,8 @@ class CampaignBot(Bot):
                 ctx.claimed[g.order.dest] = True
         self._learn(ctx)
         self._stance(ctx)
+        for cmd in self.priorities(view):  # front cities first in the supply order (DEC-18)
+            self.spend(ctx, cmd)
         self.respond(ctx)
         self._attack(ctx)
         self._gather(ctx)
