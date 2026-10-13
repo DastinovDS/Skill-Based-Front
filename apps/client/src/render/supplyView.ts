@@ -8,7 +8,7 @@ import { ARROW_HEAD, ARROW_OUTLINE, BG, PAPER, SELECT_COLOR, SELECT_WIDTH, YOU }
 import { priorityMarks, signCorners, signPoint, supplyRoutes } from './supplyLayout.ts';
 
 /** Size of a priority sign (world px). */
-const SIGN = 13;
+const SIGN = 18;
 /** Line of an automatic packet and of a transfer (wider and dashed: told by shape, not colour). */
 const ROUTE = { width: 2.5, alpha: 0.85 } as const;
 const TRANSFER = { width: 4.5, alpha: 0.95, dash: 10, gap: 6 } as const;
@@ -112,7 +112,7 @@ export class SupplyView {
       } else {
         g.poly(corners.flatMap((p) => [p.x, p.y]));
       }
-      g.fill({ color: PAPER }).stroke({ width: 2, color: BG, join: 'round' });
+      g.fill({ color: PAPER }).stroke({ width: 3, color: BG, join: 'round' });
     }
   }
 

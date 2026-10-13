@@ -59,7 +59,13 @@
   }
 </script>
 
-<svelte:window onpointermove={onmove} />
+<svelte:window
+  onpointermove={onmove}
+  onpointerdown={(event) => {
+    // The click on the city opens the menu: its middle is where that click was.
+    pointer = { x: event.clientX, y: event.clientY, seen: true };
+  }}
+/>
 
 {#if menu.open}
   <!-- A click outside the ring (or in its middle, or on the city again) closes the menu. -->

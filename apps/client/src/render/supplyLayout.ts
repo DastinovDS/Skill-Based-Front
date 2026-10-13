@@ -62,8 +62,8 @@ export function signCorners(priority: Priority, at: Point, size: number): Point[
   }
 }
 
-/** Where the sign of a city sits: above and to the left of its rim. */
+/** Where the sign of a city sits: above and to the left of its rim, clear of its rings. */
 export function signPoint(city: Point, radius: number, size: number): Point {
-  const d = (radius + size / 2 + 2) * Math.SQRT1_2;
+  const d = (radius + size / 2 + 6) * Math.SQRT1_2;
   return { x: city.x - d, y: city.y - d };
 }
