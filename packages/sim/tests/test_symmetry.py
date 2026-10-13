@@ -234,11 +234,12 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
         m = mapdef.mirror_nodes[n]
         assert state.nodes[m].owner == swap[state.nodes[n].owner], f"owner of {n}"
         a, b = state.nodes[n], state.nodes[m]
-        assert (b.warehouse, b.over_ticks, b.captured_tick, b.priority) == (
+        assert (b.warehouse, b.over_ticks, b.captured_tick, b.priority, b.cut_since) == (
             a.warehouse,
             a.over_ticks,
             a.captured_tick,
             a.priority,
+            a.cut_since,
         ), f"node {n}"
         ab, bb = a.build, b.build
         assert (bb is None) == (ab is None), f"build of {n}"

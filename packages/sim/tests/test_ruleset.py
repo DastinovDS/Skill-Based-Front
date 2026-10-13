@@ -99,6 +99,12 @@ def test_mvp0_order_costs(mvp0: Ruleset) -> None:
     assert cost.transfer == 0  # Transfer is free (DEC-18, item 6)
 
 
+def test_mvp0_starvation(mvp0: Ruleset) -> None:
+    """DEC-19: 1 charge per started 3 units every 10 s, after a 10 s grace."""
+    s = mvp0.starvation
+    assert (s.grace_ticks, s.period_ticks, s.charges, s.per_units) == (100, 100, 1, 3)
+
+
 def test_mvp0_order_timing_and_bonuses(mvp0: Ruleset) -> None:
     orders = mvp0.orders
     assert (orders.planned_delay_ticks, orders.defense_delay_ticks) == (30, 30)
@@ -256,7 +262,7 @@ def test_hash_changes_when_any_value_changes() -> None:
     base = _raw()
     base_hash = ruleset_hash(parse_ruleset(base))
     leaves = _leaves(base)
-    assert len(leaves) == 59  # every key of the SIM-01 table, DEC-16, DEC-22 and DEC-18 by hand
+    assert len(leaves) == 63  # every key of SIM-01, DEC-16, DEC-22, DEC-18 and DEC-19 by hand
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)

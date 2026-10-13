@@ -13,7 +13,8 @@ PRO-01), which PRO-03 converts it into:
 - road builds of cities (DEC-16, item 8): own ones always, with the tick they finish; an enemy
   one (the city and the edge, no tick) only while the edge is not in fog (DEC-17, item 5);
 - ``EXACT`` places (own nodes, nodes where own groups stand): warehouse and enemy totals;
-- own cities: their supply priority (DEC-18, item 8); own packets with their remaining path and
+- own cities: their supply priority (DEC-18, item 8) and, cut off, the ticks until the garrison
+  next starves (``starve_in``, DEC-19, item 8); own packets with their remaining path and
   whether they are a transfer;
 - ``PRESENCE`` places (neighbours of ``EXACT`` nodes, edges touching them): whether enemy groups
   are there and their modes, no numbers;
@@ -57,7 +58,7 @@ from gow_sim.state import (
     Sighting,
 )
 from gow_sim.systems.build import RoadGain, UpgradeGain, done_tick, upgrade_gain
-from gow_sim.systems.capacity import node_capacities, overflow_countdown
+from gow_sim.systems.capacity import node_capacities, overflow_countdown, starve_in
 from gow_sim.systems.movement import reachable
 from gow_sim.systems.supply import is_city, packet_dest_tick, packet_path
 from gow_sim.systems.vision import compute_vision, current_sightings, known_roads
@@ -149,6 +150,9 @@ class NodeView:
     priority: Priority | None
     """Own city only: its supply priority (DEC-18); ``None`` for provinces, the enemy's and
     neutral nodes."""
+    starve_in: int | None
+    """Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8, grace
+    included); ``None`` otherwise, always for the enemy's and neutral nodes."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -374,6 +378,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 attrition_in=attrition_in,
                 grace_left=grace_left,
                 priority=node.priority if node.owner == player and is_city(mapdef, n) else None,
+                starve_in=starve_in(state, rules, n) if node.owner == player else None,
             )
         )
 
@@ -496,6 +501,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "attrition_in": n.attrition_in,
                 "grace_left": n.grace_left,
                 "priority": None if n.priority is None else n.priority.value,
+                "starve_in": n.starve_in,
             }
             for n in view.nodes
         ],

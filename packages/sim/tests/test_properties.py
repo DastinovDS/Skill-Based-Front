@@ -11,7 +11,8 @@ and advance the clock. After every tick the invariants below must hold:
   not fit the warehouse (``packet_delivered`` vs. the packet; that part is also a
   ``charges_overflow``) and ``attrition`` deaths of charged units; plus the charges a captor takes
   from a freight packet (``packet_captured``, DEC-22: the sender's ``packet_lost`` counts the
-  whole packet). A transfer (DEC-18) only moves charges from a warehouse into a packet: it is a
+  whole packet); the charges a cut-off garrison spends (``starvation``, DEC-19; units never die
+  of it). A transfer (DEC-18) only moves charges from a warehouse into a packet: it is a
   flow, not a sink. The overflow of the capital's own production is not a sink: those charges were
   never created;
 - no negative counters, ``charged <= units``, road widths within their limits, every group in an
@@ -120,12 +121,14 @@ class Ledger:
     packet_lost: int = 0
     packet_overflow: int = 0
     attrition: int = 0
+    starvation: int = 0
+    """Charges a cut-off garrison spent (DEC-19): a documented sink."""
 
     @property
     def lost(self) -> int:
         return (
             self.shots + self.warehouse_lost + self.packet_lost + self.packet_overflow
-            + self.attrition
+            + self.attrition + self.starvation
         )  # fmt: skip
 
     def record(self, events: list[Event], packets_before: dict[int, int]) -> None:
@@ -149,6 +152,10 @@ class Ledger:
                     self.packet_overflow += sent - _int(e, "charges")
                 case "attrition":
                     self.attrition += 1 if e.get("charged") else 0
+                case "starvation":
+                    spent = _int(e, "warehouse") + _int(e, "units")
+                    assert spent > 0, f"an empty starvation event: {e}"
+                    self.starvation += spent
                 case _:
                     pass
 
@@ -290,7 +297,8 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     ones may appear), warehouses outside EXACT nodes, enemy packets, the enemy's CP, stance and
     charge accumulator, the enemy's fog memory and the events of the tick; DEC-17: widths of
     fogged edges (only upwards, roads are never torn down) and enemy builds on fogged edges;
-    DEC-18: supply priorities of enemy cities and routes of enemy packets (transfers).
+    DEC-18: supply priorities of enemy cities and routes of enemy packets (transfers); DEC-19: the
+    starvation countdown of enemy cities.
     """
     draw = data.draw
     nodes, edges = levels
@@ -323,6 +331,7 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     for node in state.nodes.values():
         if node.owner == enemy:
             node.priority = draw(st.sampled_from(list(Priority)))
+            node.cut_since = draw(st.none() | st.integers(0, state.tick))
     other = state.players[enemy]
     other.cp = draw(st.integers(0, 10_000))
     other.stance = draw(st.sampled_from(list(Stance)))
