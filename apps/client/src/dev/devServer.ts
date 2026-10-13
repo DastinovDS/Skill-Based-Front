@@ -16,6 +16,7 @@ import type {
   MapFile,
   OrderView,
   Mode,
+  Priority,
   RoadKind,
   RulesetPublic,
   Stance,
@@ -67,6 +68,8 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
   const builds = new Map<number, { edge: number; done: number; kind: RoadKind }>();
   const widths = new Map<number, number>();
   const kinds = new Map<number, RoadKind>();
+  /** Supply priorities the player set (DEC-18). */
+  const priorities = new Map<number, Priority>();
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
   function snapshot(): SnapshotMsg {
@@ -85,9 +88,10 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         me: { ...base.view.me, stance, cp: Math.max(0, base.view.me.cp - spent) },
         nodes: base.view.nodes.map((n) => {
           const build = builds.get(n.id);
+          const priority = n.priority === null ? null : (priorities.get(n.id) ?? n.priority);
           return build === undefined
-            ? n
-            : { ...n, build: { edge: build.edge, done_tick: build.done } };
+            ? { ...n, priority }
+            : { ...n, priority, build: { edge: build.edge, done_tick: build.done } };
         }),
         edges: base.view.edges.map((e) => {
           const ends = map.edges[e.id];
@@ -113,7 +117,11 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
 
   let current: SnapshotMsg = snapshot();
 
-  function judge(cmd: Command): { code: string | null; path: AckMsg['path'] } {
+  function judge(cmd: Command): {
+    code: string | null;
+    path: AckMsg['path'];
+    arrive?: number;
+  } {
     if (cmd.type === 'move') {
       const group = current.view.groups.find((g) => g.id === cmd.group);
       if (group === undefined) return { code: 'NOT_FOUND_OR_HIDDEN', path: null };
@@ -136,6 +144,15 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
       spent += rules.cost.cancel;
       orders.delete(cmd.group);
       return { code: null, path: null };
+    }
+    if (cmd.type === 'transfer') {
+      // Stand-in (DEC-18): own cities, a path over the map, 30 ticks a road; free.
+      const own = (id: number) => current.view.nodes[id]?.owner === DEV_PLAYER;
+      if (!own(cmd.from_node) || !own(cmd.to_node)) return { code: 'NOT_OWNER', path: null };
+      if (cmd.from_node === cmd.to_node) return { code: 'INVALID_ARGUMENT', path: null };
+      const path = devPath(map, cmd.from_node, cmd.to_node);
+      if (path === null) return { code: 'NO_PATH', path: null };
+      return { code: null, path, arrive: tick + 1 + 30 * (path.length - 1) };
     }
     return { code: judgeOther(cmd), path: null };
   }
@@ -198,6 +215,11 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         }
         return code;
       }
+      case 'set_priority':
+        if (current.view.nodes[cmd.node]?.owner !== DEV_PLAYER) return 'NOT_OWNER';
+        if (current.view.nodes[cmd.node]?.priority === cmd.level) return 'NO_CHANGE';
+        priorities.set(cmd.node, cmd.level);
+        return charge(rules.cost.priority);
       case 'forfeit':
         setTimeout(() => {
           socket?.reply({
@@ -237,12 +259,13 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         lastSeq = Math.max(lastSeq, msg.seq);
         const handle = setTimeout(() => {
           timeouts.delete(handle);
-          const { code, path } = judge(msg.cmd);
+          const { code, path, arrive } = judge(msg.cmd);
           this.reply({
             type: 'ack',
             seq: msg.seq,
             applied_tick: tick + 1,
             path,
+            arrive_tick: arrive ?? null,
             reject_code: code,
           });
         }, DEV_ACK_MS);

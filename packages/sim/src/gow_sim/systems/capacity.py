@@ -23,11 +23,12 @@ Attrition (the ``capacity`` system; details: #118 default):
   the group with the most units, ties by lowest id (as DEC-07, rule 7). An empty group is removed.
 
 Every owner change goes through ``change_owner()``: the warehouse is emptied (no trophies,
-mechanics.md, section 9), road levels and types are kept, the grace period starts.
+mechanics.md, section 9), road levels and types are kept, the supply priority goes back to
+``normal`` (DEC-18), the grace period starts.
 """
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, event
+from gow_sim.state import AtNode, Event, GameState, Group, Priority, event
 
 
 def is_internal(state: GameState, edge: int) -> bool:
@@ -118,6 +119,8 @@ def city_capacity(state: GameState, rules: Ruleset, node: int) -> int:
 def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     """Give ``node`` to ``owner``: the warehouse is emptied, road widths stay, grace starts.
 
+    The supply priority goes back to ``normal`` (DEC-18, item 1).
+
     Captures (movement SIM-05, combat SIM-09) call this; it emits ``warehouse_lost`` when
     charges were in the warehouse. A call with the current owner changes nothing.
     """
@@ -131,6 +134,7 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
         )
     n.owner = owner
     n.warehouse = 0
+    n.priority = Priority.NORMAL
     n.over_ticks = 0
     n.captured_tick = state.tick
     return events

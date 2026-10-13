@@ -30,16 +30,19 @@ from gow_sim.commands import (
     PlayerCommand,
     Recruit,
     SetMode,
+    SetPriority,
     SetStance,
     Split,
+    Transfer,
     UpgradeRoad,
     map_group_ids,
 )
 from gow_sim.maps import load_map
 from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Location, Mode, OnEdge
+from gow_sim.state import AtNode, Event, GameState, Group, Location, Mode, OnEdge, Priority
 from gow_sim.systems.movement import find_path, traversal_ticks
+from gow_sim.systems.supply import is_city
 from gow_sim.systems.victory import EndReason, Outcome
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -93,6 +96,20 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
             if internal:
                 edge = min(internal, key=lambda e: key(mapdef.edges[e].other(node)))
                 cmds.append(UpgradeRoad(node, edge))
+    own_cities = sorted(
+        (
+            n
+            for n in range(len(mapdef.nodes))
+            if state.nodes[n].owner == player and is_city(mapdef, n)
+        ),
+        key=key,
+    )
+    if tick % 60 == 0:  # cycle the supply priority of the own cities (DEC-18)
+        levels = list(Priority)
+        for i, node in enumerate(own_cities):
+            cmds.append(SetPriority(node, levels[(tick // 60 + i) % 3]))
+    if tick % 80 == 0 and len(own_cities) >= 2:  # ship 2 charges to the farthest own city
+        cmds.append(Transfer(own_cities[0], own_cities[-1], 2))
     idle = sorted(
         (
             g
@@ -164,6 +181,10 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
             return UpgradeRoad(mirror_nodes[node], mirror_edges[edge])
         case Recruit(node=node):
             return Recruit(mirror_nodes[node])
+        case SetPriority(node=node, level=level):
+            return SetPriority(mirror_nodes[node], level)
+        case Transfer(src=src, dst=dst, n=n):
+            return Transfer(mirror_nodes[src], mirror_nodes[dst], n)
         case _:
             return cmd
 
@@ -213,10 +234,11 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
         m = mapdef.mirror_nodes[n]
         assert state.nodes[m].owner == swap[state.nodes[n].owner], f"owner of {n}"
         a, b = state.nodes[n], state.nodes[m]
-        assert (b.warehouse, b.over_ticks, b.captured_tick) == (
+        assert (b.warehouse, b.over_ticks, b.captured_tick, b.priority) == (
             a.warehouse,
             a.over_ticks,
             a.captured_tick,
+            a.priority,
         ), f"node {n}"
         ab, bb = a.build, b.build
         assert (bb is None) == (ab is None), f"build of {n}"
@@ -244,11 +266,24 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     for g0 in alive0:
         assert _plain(state.groups[g0]) == _mirrored(state, state.groups[groups[g0]]), g0
     packets = [
-        (p.owner, p.edge, p.from_node, p.charges, p.depart_tick, p.arrive_tick)
+        (
+            p.owner,
+            p.edge,
+            p.from_node,
+            p.charges,
+            p.depart_tick,
+            p.arrive_tick,
+            p.route,
+            p.route_ticks,
+            p.transfer,
+        )
         for p in state.packets.values()
     ]
     me, mn = mapdef.mirror_edges, mapdef.mirror_nodes
-    assert sorted(packets) == sorted((1 - o, me[e], mn[f], c, d, a) for o, e, f, c, d, a in packets)
+    assert sorted(packets) == sorted(
+        (1 - o, me[e], mn[f], c, d, a, tuple(me[x] for x in r), rt, t)
+        for o, e, f, c, d, a, r, rt, t in packets
+    )
     intents = [
         (i.owner, i.kind, i.origin, i.target, i.created_tick) for i in state.intents.values()
     ]
@@ -322,7 +357,15 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         return
     # The run did something: commands were applied, groups moved and took nodes.
     assert applied > 20
-    assert {"Move", "Split", "SetMode", "Recruit", "SetStance", "CancelOrder"} <= set(kinds)
+    assert {
+        "Move",
+        "Split",
+        "SetMode",
+        "Recruit",
+        "SetStance",
+        "CancelOrder",
+        "SetPriority",
+    } <= set(kinds)
     assert moves_on_edges > 0
     # On pass the only way out is the central node 3; both players reach it at once and fight
     # there (DEC-07, rule 5) with equal pools, so both bounce and nothing is captured.

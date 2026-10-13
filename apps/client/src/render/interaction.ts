@@ -45,6 +45,16 @@ export interface MovePreview {
   readonly planned: boolean;
 }
 
+/**
+ * The «Supply» map mode (DEC-18, item 7; Tab or F2): priorities of the own cities, own packets
+ * with their paths and transfers. `source`: the city a transfer starts from while the player
+ * picks its destination; `targets`: the own cities a click would pick then.
+ */
+export interface SupplyOverlay {
+  readonly source: number | null;
+  readonly targets: readonly number[];
+}
+
 export interface OverlayState {
   readonly selection: SelectionHit | null;
   readonly ghosts: readonly GhostArrow[];
@@ -55,6 +65,8 @@ export interface OverlayState {
   readonly candidates: readonly number[];
   /** The city ringed in the first seconds of a match ("your capital is here"); `null`: none. */
   readonly beacon: number | null;
+  /** The «Supply» map mode; `null`: the normal map. */
+  readonly supply: SupplyOverlay | null;
 }
 
 export const EMPTY_OVERLAY: OverlayState = {
@@ -64,6 +76,7 @@ export const EMPTY_OVERLAY: OverlayState = {
   road: null,
   candidates: [],
   beacon: null,
+  supply: null,
 };
 
 export interface MapInteraction {

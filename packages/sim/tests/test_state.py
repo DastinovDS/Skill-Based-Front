@@ -31,6 +31,7 @@ from gow_sim.state import (
     OnEdge,
     Order,
     Packet,
+    Priority,
     RoadKind,
     Sighting,
     StateFormatError,
@@ -93,8 +94,18 @@ def _rich_state(rules: Ruleset) -> GameState:
     state.players[1].forfeited = True
     pid = state.new_id()
     state.packets[pid] = Packet(
-        pid, 0, edge=0, from_node=0, charges=2, depart_tick=130, arrive_tick=172
+        pid,
+        0,
+        edge=0,
+        from_node=0,
+        charges=2,
+        depart_tick=130,
+        arrive_tick=172,
+        route=(1,),
+        route_ticks=(30,),
+        transfer=True,
     )
+    state.nodes[1].priority = Priority.HIGH
     iid = state.new_id()
     state.intents[iid] = Intent(
         iid, 1, IntentKind.PLANNED_MOVE, origin=3, target=2, created_tick=120
@@ -365,6 +376,7 @@ def _states(draw: st.DrawFn) -> GameState:
         node.over_ticks = draw(_small)
         node.captured_tick = draw(_opt_small)
         node.recruited_tick = draw(_opt_small)
+        node.priority = draw(st.sampled_from(list(Priority)))
         if draw(st.booleans()):
             node.build = Build(draw(edges), draw(players), draw(_small), draw(_road_kinds))
     for _ in range(draw(st.integers(min_value=0, max_value=6))):
@@ -404,8 +416,18 @@ def _states(draw: st.DrawFn) -> GameState:
     for _ in range(draw(st.integers(min_value=0, max_value=3))):
         pid = state.new_id()
         edge = mapdef.edges[draw(edges)]
+        route = tuple(draw(st.lists(edges, max_size=3)))
         state.packets[pid] = Packet(
-            pid, draw(players), edge.id, edge.a, draw(_small), 0, draw(_small)
+            pid,
+            draw(players),
+            edge.id,
+            edge.a,
+            draw(_small),
+            0,
+            draw(_small),
+            route=route,
+            route_ticks=tuple(draw(st.integers(1, 99)) for _ in route),
+            transfer=draw(st.booleans()),
         )
     for _ in range(draw(st.integers(min_value=0, max_value=3))):
         iid = state.new_id()

@@ -140,6 +140,10 @@ class OrderCosts:
     build: int
     recruit: int
     stance: int
+    priority: int
+    """``SetPriority``: supply priority of a city (DEC-18, item 1)."""
+    transfer: int
+    """``Transfer``: one-off shipment of charges between own cities (DEC-18, item 6)."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -43,6 +43,8 @@ defense = 200
 build = 0
 recruit = 100
 stance = 0
+priority = 0
+transfer = 0
 
 [terrain.defense_mod]
 mountains = 1

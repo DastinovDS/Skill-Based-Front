@@ -26,7 +26,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": "normal"
       },
       {
         "id": 1,
@@ -43,7 +44,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": "normal"
       },
       {
         "id": 2,
@@ -60,7 +62,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": null
       },
       {
         "id": 3,
@@ -80,7 +83,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": null
       }
     ],
     "edges": [
@@ -196,7 +200,10 @@
         "from_node": 0,
         "charges": 1,
         "depart_tick": 110,
-        "arrive_tick": 152
+        "arrive_tick": 152,
+        "path": [1],
+        "dest_tick": 152,
+        "transfer": false
       }
     ],
     "intents": [

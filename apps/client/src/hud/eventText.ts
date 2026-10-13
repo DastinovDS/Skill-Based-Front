@@ -1,5 +1,5 @@
 /** Text of the visible-event feed: which dictionary entry a server event maps to (CLI-08, #64). */
-import type { PlayerId, Stance } from '../protocol.gen.ts';
+import type { PlayerId, Priority, Stance } from '../protocol.gen.ts';
 import { t, tf } from '../i18n/index.ts';
 import type { HudEvent } from './hudData.ts';
 
@@ -14,6 +14,10 @@ function roadName(value: unknown): string {
 
 function isStance(value: unknown): value is Stance {
   return value === 'economy' || value === 'balance' || value === 'war';
+}
+
+function isPriority(value: unknown): value is Priority {
+  return value === 'high' || value === 'normal' || value === 'low';
 }
 
 /**
@@ -51,6 +55,8 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'build_stopped',
   'packet_lost',
   'packet_captured',
+  'priority_set',
+  'transfer_started',
 ]);
 
 /** Does the feed show this kind? An unknown kind is not shown (never a raw kind name). */
@@ -113,6 +119,17 @@ export function eventText(event: HudEvent, me: PlayerId): string {
       return tf('event.packet_lost', { edge: num(data.edge), charges: num(data.charges) });
     case 'packet_captured':
       return tf('event.packet_captured', { node: num(data.node), charges: num(data.charges) });
+    case 'priority_set':
+      return tf('event.priority_set', {
+        node: num(data.node),
+        level: isPriority(data.level) ? t(`priority.${data.level}`) : '?',
+      });
+    case 'transfer_started':
+      return tf('event.transfer_started', {
+        charges: num(data.charges),
+        from: num(data.from_node),
+        to: num(data.to_node),
+      });
     default:
       return '';
   }

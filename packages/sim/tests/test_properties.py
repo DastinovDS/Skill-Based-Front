@@ -11,12 +11,14 @@ and advance the clock. After every tick the invariants below must hold:
   not fit the warehouse (``packet_delivered`` vs. the packet; that part is also a
   ``charges_overflow``) and ``attrition`` deaths of charged units; plus the charges a captor takes
   from a freight packet (``packet_captured``, DEC-22: the sender's ``packet_lost`` counts the
-  whole packet). The overflow of the capital's own production is not a sink: those charges were
+  whole packet). A transfer (DEC-18) only moves charges from a warehouse into a packet: it is a
+  flow, not a sink. The overflow of the capital's own production is not a sink: those charges were
   never created;
 - no negative counters, ``charged <= units``, road widths within their limits, every group in an
   existing node or on an existing edge, ids unique, links between groups and intents;
 - a garrison never grows without an arrival (``group_arrived``) or a recruit in its city, so an
   overfull city cannot fill up further on its own;
+- packets: the route and its times match, every edge of it exists (DEC-18, item 5);
 - fog: ``project()`` does not change when everything the player must not see is perturbed
   (extends the synthetic-state test of SIM-14 in ``test_view.py`` to states of real matches),
   including the levels and types of fogged roads and enemy builds on them (DEC-17, DEC-22);
@@ -47,8 +49,10 @@ from gow_sim.commands import (
     PlayerCommand,
     Recruit,
     SetMode,
+    SetPriority,
     SetStance,
     Split,
+    Transfer,
     UpgradeRoad,
     validate,
 )
@@ -65,6 +69,7 @@ from gow_sim.state import (
     Mode,
     OnEdge,
     Packet,
+    Priority,
     RoadKind,
 )
 from gow_sim.systems.capacity import node_capacities
@@ -177,6 +182,9 @@ def check_state(state: GameState) -> None:
         assert p.id == pid and p.owner in PLAYERS and pid < state.next_id, f"packet {pid}: {p}"
         assert p.charges >= 1 and p.arrive_tick > p.depart_tick, f"packet {pid}: {p}"
         assert 0 <= p.edge < n_edges and p.from_node in _ends(mapdef, p.edge), f"packet {pid}: {p}"
+        assert len(p.route) == len(p.route_ticks), f"packet {pid}: {p}"
+        assert all(0 <= e < n_edges for e in p.route), f"packet {pid}: {p}"
+        assert all(t >= 1 for t in p.route_ticks), f"packet {pid}: {p}"
     for iid, i in state.intents.items():
         assert i.id == iid and i.owner in PLAYERS and iid < state.next_id, f"intent {iid}: {i}"
     for a, b in (
@@ -281,7 +289,8 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     Hidden: numbers of enemy groups outside EXACT places, enemy groups in fog (may vanish, new
     ones may appear), warehouses outside EXACT nodes, enemy packets, the enemy's CP, stance and
     charge accumulator, the enemy's fog memory and the events of the tick; DEC-17: widths of
-    fogged edges (only upwards, roads are never torn down) and enemy builds on fogged edges.
+    fogged edges (only upwards, roads are never torn down) and enemy builds on fogged edges;
+    DEC-18: supply priorities of enemy cities and routes of enemy packets (transfers).
     """
     draw = data.draw
     nodes, edges = levels
@@ -310,6 +319,10 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     for p in state.packets.values():
         if p.owner == enemy:
             p.charges = draw(st.integers(1, 9))
+            p.transfer = draw(st.booleans())
+    for node in state.nodes.values():
+        if node.owner == enemy:
+            node.priority = draw(st.sampled_from(list(Priority)))
     other = state.players[enemy]
     other.cp = draw(st.integers(0, 10_000))
     other.stance = draw(st.sampled_from(list(Stance)))
@@ -337,7 +350,18 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
 
 # Commands -------------------------------------------------------------------------------------
 
-ALL_KINDS: Final = ("move", "split", "merge", "mode", "stance", "upgrade", "recruit", "cancel")
+ALL_KINDS: Final = (
+    "move",
+    "split",
+    "merge",
+    "mode",
+    "stance",
+    "upgrade",
+    "recruit",
+    "priority",
+    "transfer",
+    "cancel",
+)
 
 
 def draw_command(data: st.DataObject, tracker: Tracker, player: int) -> Command:
@@ -385,6 +409,16 @@ def _candidate(data: st.DataObject, tracker: Tracker, player: int) -> Command:
             )
         case "recruit":
             return Recruit(draw(st.integers(0, n_nodes - 1)))
+        case "priority":
+            return SetPriority(
+                draw(st.integers(0, n_nodes - 1)), draw(st.sampled_from(list(Priority)))
+            )
+        case "transfer":
+            return Transfer(
+                draw(st.integers(0, n_nodes - 1)),
+                draw(st.integers(0, n_nodes - 1)),
+                draw(st.integers(0, 6)),
+            )
         case _:
             return CancelOrder(group())
 

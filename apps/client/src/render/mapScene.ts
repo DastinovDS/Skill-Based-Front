@@ -15,6 +15,7 @@ import { OverlayView } from './overlayView.ts';
 import { nodePoint } from './layout.ts';
 import { pickAt } from './pick.ts';
 import type { RenderSource } from './source.ts';
+import { SupplyView } from './supplyView.ts';
 import type { Point } from './camera.ts';
 
 /** Ticks per second when the source does not say (`rulesets/mvp-0.toml`). */
@@ -46,6 +47,7 @@ export class MapScene {
   private readonly effects: EffectsView;
   private readonly fog: FogView;
   private readonly overlay: OverlayView;
+  private readonly supply: SupplyView;
   private readonly alerts: AlertView;
   private interaction: MapInteraction | null;
   private hovering = false;
@@ -85,6 +87,7 @@ export class MapScene {
       radiusOf,
     );
     this.overlay = new OverlayView(map, this.layers, me, radiusOf);
+    this.supply = new SupplyView(map, this.layers, radiusOf);
     this.alerts = new AlertView(map, this.layers, me, radiusOf);
     this.controller = new CameraController(
       app.canvas,
@@ -139,6 +142,7 @@ export class MapScene {
     this.intents.destroy();
     this.entities.destroy();
     this.overlay.destroy();
+    this.supply.destroy();
     this.cities.destroy();
     this.view.destroy();
     if (this.backgroundUrl !== null) {
@@ -192,6 +196,7 @@ export class MapScene {
     this.fog.update(frame.base);
     const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
+    this.supply.update(frame.base, overlay.supply);
     this.alerts.update(
       frame.base.view.nodes,
       tickHz,

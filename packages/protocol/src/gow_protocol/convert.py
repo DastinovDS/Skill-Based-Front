@@ -12,7 +12,8 @@ Server -> client:
   through the validating models, is their specification: tests over real matches require the two
   frames to be equal byte for byte (``test_convert.py``), and the server outside ``prod``
   validates every frame it sends (``MatchRunner(validate_snapshots=True)``);
-- ``ack_msg``: ``CommandResult`` -> ``ack`` (``path`` of an accepted ``Move``, ``reject_code``);
+- ``ack_msg``: ``CommandResult`` -> ``ack`` (``path`` of an accepted ``Move`` or ``Transfer``,
+  ``arrive_tick`` of an accepted ``Transfer``, ``reject_code``);
 - ``events_msgs``: the events of a tick -> the ``event`` messages one player may see (below);
 - ``match_end_msg``: ``Outcome`` -> ``match_end``.
 
@@ -31,7 +32,7 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
 - everything else only to the player of the event (``player``, for ``warehouse_lost`` ``owner``),
   enemy ones are dropped. ``fight_group`` goes only to the owner of the group; the road build
   events ``build_started``, ``road_upgraded`` and ``build_stopped`` only to the builder (DEC-17,
-  item 6);
+  item 6); ``priority_set`` and ``transfer_started`` only to their player (DEC-18, item 8);
 - ``match_ended`` is not an event on the wire: it is ``match_end``.
 
 Entity ids in event data (``group``, ``new_group``, ``packet``) become opaque ids of the player;
@@ -116,9 +117,11 @@ PRIVATE_KINDS: Final = frozenset(
         "packet_delivered",
         "packet_lost",
         "packet_sent",
+        "priority_set",
         "recruited",
         "road_upgraded",
         "stance_changed",
+        "transfer_started",
         "warehouse_lost",
     }
 )
@@ -172,6 +175,7 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 else NodeBuild(edge=n.build.edge, done_tick=n.build.done_tick),
                 attrition_in=n.attrition_in,
                 grace_left=n.grace_left,
+                priority=n.priority,
             )
             for n in view.nodes
         ),
@@ -212,6 +216,9 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 charges=p.charges,
                 depart_tick=p.depart_tick,
                 arrive_tick=p.arrive_tick,
+                path=p.path,
+                dest_tick=p.dest_tick,
+                transfer=p.transfer,
             )
             for p in view.packets
         ),
@@ -281,6 +288,7 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 else {"edge": n.build.edge, "done_tick": n.build.done_tick},
                 "attrition_in": n.attrition_in,
                 "grace_left": n.grace_left,
+                "priority": n.priority,
             }
             for n in view.nodes
         ],
@@ -321,6 +329,9 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "charges": p.charges,
                 "depart_tick": p.depart_tick,
                 "arrive_tick": p.arrive_tick,
+                "path": p.path,
+                "dest_tick": p.dest_tick,
+                "transfer": p.transfer,
             }
             for p in view.packets
         ],
@@ -392,6 +403,10 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.Recruit(node)
         case wire.CancelOrderCmd(group=g):
             return sim.CancelOrder(gid(g))
+        case wire.SetPriorityCmd(node=node, level=level):
+            return sim.SetPriority(node, level)
+        case wire.TransferCmd(from_node=src, to_node=dst, n=n):
+            return sim.Transfer(src, dst, n)
         case wire.ForfeitCmd():
             return sim.Forfeit()
 
@@ -399,8 +414,13 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
 def ack_msg(result: sim.CommandResult) -> AckMsg:
     """``ack`` of a command result; ``result.seq`` is the client's ``seq``."""
     match result.outcome:
-        case sim.Ok(path=path):
-            return AckMsg(seq=result.seq, applied_tick=result.tick, path=path or None)
+        case sim.Ok(path=path, arrive_tick=arrive_tick):
+            return AckMsg(
+                seq=result.seq,
+                applied_tick=result.tick,
+                path=path or None,
+                arrive_tick=arrive_tick,
+            )
         case sim.Reject(code=code):
             return AckMsg(seq=result.seq, applied_tick=result.tick, reject_code=code.value)
 

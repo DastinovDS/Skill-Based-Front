@@ -1,0 +1,8 @@
+{
+  "type": "ack",
+  "seq": 13,
+  "applied_tick": 141,
+  "path": [0, 1],
+  "arrive_tick": 211,
+  "reject_code": null
+}

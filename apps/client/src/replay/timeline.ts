@@ -12,6 +12,7 @@ import type {
   IntentKind,
   IntentView,
   Location,
+  MapFile,
   NodeBuild,
   NodeView,
   PacketView,
@@ -56,7 +57,7 @@ function groupView(g: FrameGroup): GroupView {
 /** Intent kinds the viewer draws; older files may have others (the group build, before DEC-16). */
 const INTENT_KINDS: ReadonlySet<string> = new Set<IntentKind>(['planned_move', 'defense']);
 
-function snapshot(frame: ReplayFrame): SnapshotMsg {
+function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
   const builds = new Map<number, NodeBuild>();
   for (const [node, edge, done_tick] of frame.b ?? []) builds.set(node, { edge, done_tick });
   const nodes: NodeView[] = frame.n.map(([owner, warehouse, capacity], id) => ({
@@ -70,16 +71,25 @@ function snapshot(frame: ReplayFrame): SnapshotMsg {
     build: builds.get(id) ?? null,
     attrition_in: null, // not in the replay files: the viewer shows no countdown
     grace_left: null,
+    priority: null, // not in the replay files (DEC-18): the viewer has no supply mode
   }));
   const packets: PacketView[] = frame.k.map(
-    ([id, , edge, from_node, charges, depart_tick, arrive_tick]) => ({
-      id: String(id),
-      edge,
-      from_node,
-      charges,
-      depart_tick,
-      arrive_tick,
-    }),
+    ([id, , edge, from_node, charges, depart_tick, arrive_tick]) => {
+      // The frames hold the current road of a packet only: its path is the end of that road.
+      const road = map.edges[edge];
+      const end = road === undefined ? from_node : road.a === from_node ? road.b : road.a;
+      return {
+        id: String(id),
+        edge,
+        from_node,
+        charges,
+        depart_tick,
+        arrive_tick,
+        path: [end],
+        dest_tick: arrive_tick,
+        transfer: false,
+      };
+    },
   );
   const [first, second] = frame.p;
   return {
@@ -122,7 +132,7 @@ export function buildTimeline(file: ReplayFile): Timeline {
     for (const k of frame.k) packetOwners.set(String(k[0]), k[1]);
   }
   return {
-    snapshots: file.frames.map(snapshot),
+    snapshots: file.frames.map((frame) => snapshot(file.map, frame)),
     groupOwners,
     packetOwners,
     events: file.events.map(([tick, kind, data]) => ({ type: 'event', tick, kind, data })),

@@ -70,6 +70,8 @@ defense = 200 # режим «Защита»; повторное включени
 build = 0 # UpgradeRoad(node, edge, kind): плата CP за уровень дороги; 0: платят только заряды склада (DEC-16, #203)
 recruit = 100 # Recruit(node): 1 CP (DEC-01, #7; mechanics.md, раздел 3)
 stance = 0 # смена стойки бесплатна (DEC-02, #8)
+priority = 0 # SetPriority(node, level): приоритет снабжения города бесплатен (DEC-18, #230)
+transfer = 0 # Transfer(from, to, n): разовая перевозка зарядов бесплатна (DEC-18, #230)
 
 [terrain.defense_mod]
 # Модификатор пула защитника узла по рельефу, в зарядах (DEC-07, #11, правило 1; mechanics.md, раздел 4).

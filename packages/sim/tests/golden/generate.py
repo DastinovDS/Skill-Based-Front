@@ -10,8 +10,9 @@ the rulesets into ``rulesets/archive/`` and copies the maps next to the replays,
 edits do not touch the old replays.
 
 The drivers are ``ExpandBot`` of ``conftest.py`` plus ``MixBot``, which adds every other command
-type on a fixed schedule (planned moves, splits, merges, modes, stances, road upgrades,
-cancellations, unknown ids), so the replays go through every command path and many rejections.
+type on a fixed schedule (planned moves, splits, merges, modes, stances, road upgrades, supply
+priorities and transfers, cancellations, unknown ids), so the replays go through every command
+path and many rejections.
 """
 
 import argparse
@@ -29,14 +30,17 @@ from gow_sim.commands import (
     Merge,
     Move,
     SetMode,
+    SetPriority,
     SetStance,
     Split,
+    Transfer,
     UpgradeRoad,
 )
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import SIM_VERSION, Controller
 from gow_sim.replay import REPLAY_SUFFIX, record_headless
 from gow_sim.ruleset import Ruleset, Stance, archive_ruleset, load_ruleset
+from gow_sim.state import Priority
 from gow_sim.view import AtNode, GroupView, Mode, PlayerView, RoadKind
 
 TESTS = Path(__file__).resolve().parents[1]
@@ -96,7 +100,20 @@ class MixBot:
             cmds.append(Move(UNKNOWN_ID, 0))
         if k % 40 == 0:
             cmds.append(SetStance(list(Stance)[k // 40 % len(Stance)]))
+        if k % 29 == 0:
+            cmds.extend(self._supply(view, k))
         return cmds
+
+    def _supply(self, view: PlayerView, k: int) -> list[Command]:
+        """A supply priority for the own city of rank ``k`` and a transfer from the capital to
+        it (DEC-18); rejects are part of the log."""
+        me = view.player
+        cities = [n.id for n in view.nodes if n.owner == me]
+        if not cities:
+            return []
+        node = cities[k % len(cities)]
+        level = list(Priority)[k // 29 % len(Priority)]
+        return [SetPriority(node, level), Transfer(self.map.capital(me), node, 1 + k % 3)]
 
     def _merge(self, idle: list[GroupView]) -> list[Command]:
         by_node: dict[int, list[int]] = {}

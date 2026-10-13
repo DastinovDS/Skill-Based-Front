@@ -14,6 +14,8 @@ export type Command =
   | UpgradeRoadCmd
   | RecruitCmd
   | CancelOrderCmd
+  | SetPriorityCmd
+  | TransferCmd
   | ForfeitCmd;
 /**
  * Group mode (mechanics.md, section 3; effects: DEC-08). Roads are built by cities (DEC-16).
@@ -23,6 +25,10 @@ export type Mode = 'attack' | 'defense';
  * CP stance: the share of CP regeneration that goes into charges (DEC-02).
  */
 export type Stance = 'economy' | 'balance' | 'war';
+/**
+ * Supply priority of a city (DEC-18, item 1): only the order of delivery, not the target.
+ */
+export type Priority = 'high' | 'normal' | 'low';
 export type ServerMsg =
   WelcomeMsg | SnapshotMsg | AckMsg | EventMsg | MatchEndMsg | ErrorMsg | PongMsg | PausedMsg;
 export type PlayerId = 0 | 1;
@@ -122,6 +128,25 @@ export interface CancelOrderCmd {
   type: 'cancel_order';
   group: string;
 }
+/**
+ * Supply priority ``level`` of the own city ``node`` (DEC-18, item 1).
+ */
+export interface SetPriorityCmd {
+  type: 'set_priority';
+  node: number;
+  level: Priority;
+}
+/**
+ * Ship ``n`` charges from the warehouse of the own city ``from_node`` to the own city
+ * ``to_node`` along own roads, once (DEC-18, item 6). The ``ack`` carries the path and the
+ * arrival tick; the client never computes them.
+ */
+export interface TransferCmd {
+  type: 'transfer';
+  from_node: number;
+  to_node: number;
+  n: number;
+}
 export interface ForfeitCmd {
   type: 'forfeit';
 }
@@ -213,6 +238,14 @@ export interface CostsPublic {
   build: number;
   recruit: number;
   stance: number;
+  /**
+   * ``set_priority`` (DEC-18, item 1).
+   */
+  priority: number;
+  /**
+   * ``transfer`` (DEC-18, item 6).
+   */
+  transfer: number;
 }
 export interface CombatPublic {
   terrain_defense_mod: TerrainDefensePublic;
@@ -354,6 +387,11 @@ export interface NodeView {
    * capacity. ``None`` for every other node.
    */
   grace_left: number | null;
+  /**
+   * Own city only: its supply priority (DEC-18, item 1). ``None`` for provinces, the enemy's
+   * and neutral nodes (DEC-18, item 8).
+   */
+  priority: Priority | null;
 }
 /**
  * What the player sees, or last saw, of one node or edge (``gow_sim.state.Sighting``).
@@ -462,7 +500,12 @@ export interface OrderView {
   planned: boolean;
 }
 /**
- * Own charges on the way (mechanics.md, section 7).
+ * Own charges on the way along a path of roads (mechanics.md, section 7; DEC-18, item 5).
+ *
+ * ``edge`` is the current road, travelled away from ``from_node`` during
+ * ``depart_tick..arrive_tick``; ``path``: the nodes still to reach, the end of ``edge`` first,
+ * the destination last; ``dest_tick``: the tick it reaches the destination if nothing stops it.
+ * ``transfer``: a one-off transfer (DEC-18, item 6), not the automatic dispatch.
  */
 export interface PacketView {
   id: string;
@@ -471,6 +514,12 @@ export interface PacketView {
   charges: number;
   depart_tick: number;
   arrive_tick: number;
+  /**
+   * @minItems 1
+   */
+  path: [number, ...number[]];
+  dest_tick: number;
+  transfer: boolean;
 }
 /**
  * Public part of a planned order or a mode switch: no group id and no group size.
@@ -490,8 +539,11 @@ export interface IntentView {
  * Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.
  *
  * ``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.
- * ``path``: for an accepted ``move``, the nodes from the group's node to ``dest`` (the client
- * draws it and never computes it); ``None`` otherwise.
+ * ``path``: for an accepted ``move``, the nodes from the group's node to ``dest``; for an
+ * accepted ``transfer`` (DEC-18), the nodes from ``from_node`` to ``to_node`` (the client draws
+ * it and never computes it); ``None`` otherwise.
+ * ``arrive_tick``: for an accepted ``transfer``, the tick the charges reach ``to_node`` if
+ * nothing stops them; ``None`` otherwise.
  * ``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,
  * ``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).
  */
@@ -500,6 +552,7 @@ export interface AckMsg {
   seq: number;
   applied_tick: number;
   path: [number, ...number[]] | null;
+  arrive_tick: number | null;
   reject_code: string | null;
 }
 /**
@@ -651,6 +704,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

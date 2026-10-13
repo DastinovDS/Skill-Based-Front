@@ -49,6 +49,7 @@ class ExpanderBot(StrategyBot):
         p = self.params
         turn = self.begin(view, tick)
         self.set_stance(turn, Stance.WAR if tick < p["war_until"] else Stance.BALANCE)
+        self.prioritize(turn)
         self.guard(turn, p["hold_capital"], p["hold_front"])
         self.strike(turn, None, p["margin"], p["est_pct"])
         self.claim(turn, None)
@@ -90,6 +91,7 @@ class TurtleBot(StrategyBot):
         p = self.params
         turn: Turn = self.begin(view, tick)
         self.set_stance(turn, Stance.ECONOMY)
+        self.prioritize(turn)
         self.guard(turn, p["hold_capital"], p["hold_front"])
         self.fortify(turn)
         self.strike(turn, self.region, p["margin"], p["est_pct"])

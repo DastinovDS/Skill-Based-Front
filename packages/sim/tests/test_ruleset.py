@@ -95,6 +95,8 @@ def test_mvp0_order_costs(mvp0: Ruleset) -> None:
     assert cost.recruit == 100
     assert cost.cancel == 100
     assert cost.stance == 0
+    assert cost.priority == 0  # SetPriority is free (DEC-18, item 1)
+    assert cost.transfer == 0  # Transfer is free (DEC-18, item 6)
 
 
 def test_mvp0_order_timing_and_bonuses(mvp0: Ruleset) -> None:
@@ -254,7 +256,7 @@ def test_hash_changes_when_any_value_changes() -> None:
     base = _raw()
     base_hash = ruleset_hash(parse_ruleset(base))
     leaves = _leaves(base)
-    assert len(leaves) == 57  # every key of the SIM-01 table, DEC-16 and DEC-22, counted by hand
+    assert len(leaves) == 59  # every key of the SIM-01 table, DEC-16, DEC-22 and DEC-18 by hand
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)

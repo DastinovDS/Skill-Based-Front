@@ -1,0 +1,5 @@
+{
+  "type": "command",
+  "seq": 12,
+  "cmd": { "type": "set_priority", "node": 1, "level": "high" }
+}

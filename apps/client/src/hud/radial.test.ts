@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { DEV_RULES } from './devFeed.ts';
 import {
+  PRIORITY_SIGN,
   RADIAL,
   ROAD_HALF,
+  SUPPLY_SECTORS,
   passivePerMinute,
   roadSectorAt,
   sectorAt,
   sectorPath,
   stanceRates,
+  supplySectorAt,
 } from './radial.ts';
 
 describe('stanceRates', () => {
@@ -75,5 +78,23 @@ describe('roadSectorAt (road type menu, DEC-22)', () => {
   it('draws sectors wider than a half circle with the large arc flag', () => {
     expect(sectorPath(0, 100)).toContain(' 0 1 1 ');
     expect(sectorPath(0, ROAD_HALF)).not.toContain(' 0 1 1 ');
+  });
+});
+
+describe('supplySectorAt (DEC-18)', () => {
+  it('cancels in the dead zone', () => {
+    expect(supplySectorAt(0, 0)).toBeNull();
+  });
+
+  it('picks high up, normal right, low down and transfer left', () => {
+    expect(supplySectorAt(0, -80)).toBe('high');
+    expect(supplySectorAt(80, 0)).toBe('normal');
+    expect(supplySectorAt(0, 80)).toBe('low');
+    expect(supplySectorAt(-80, 0)).toBe('transfer');
+  });
+
+  it('has one key per sector and a shape per priority', () => {
+    expect(SUPPLY_SECTORS.map((s) => s.key)).toEqual(['1', '2', '3', '4']);
+    expect(new Set(Object.values(PRIORITY_SIGN)).size).toBe(3);
   });
 });

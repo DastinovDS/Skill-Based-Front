@@ -73,6 +73,8 @@ def _rules() -> Ruleset:
         build=100,
         recruit=100,
         stance=0,
+        priority=0,
+        transfer=0,
     )
     orders = dataclasses.replace(
         base.orders, planned_delay_ticks=30, stance_cooldown_ticks=100, cost=costs

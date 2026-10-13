@@ -31,7 +31,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 9
+PROTOCOL_VERSION: Final = 10
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -145,8 +145,11 @@ class AckMsg(WireModel):
     """Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.
 
     ``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.
-    ``path``: for an accepted ``move``, the nodes from the group's node to ``dest`` (the client
-    draws it and never computes it); ``None`` otherwise.
+    ``path``: for an accepted ``move``, the nodes from the group's node to ``dest``; for an
+    accepted ``transfer`` (DEC-18), the nodes from ``from_node`` to ``to_node`` (the client draws
+    it and never computes it); ``None`` otherwise.
+    ``arrive_tick``: for an accepted ``transfer``, the tick the charges reach ``to_node`` if
+    nothing stops them; ``None`` otherwise.
     ``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,
     ``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).
     """
@@ -155,12 +158,15 @@ class AckMsg(WireModel):
     seq: PosInt
     applied_tick: Tick
     path: Annotated[tuple[NodeId, ...], Field(min_length=1)] | None = None
+    arrive_tick: Tick | None = None
     reject_code: Code | None = None
 
     @model_validator(mode="after")
     def _check(self) -> Self:
         if self.path is not None and self.reject_code is not None:
             raise ValueError("a rejected command has no path")
+        if self.arrive_tick is not None and self.path is None:
+            raise ValueError("an arrival tick comes with a path")
         return self
 
 

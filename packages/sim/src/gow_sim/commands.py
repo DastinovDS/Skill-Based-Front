@@ -22,6 +22,8 @@ Costs are in hundredths of CP from ``orders.cost`` (DEC-08, DEC-01, DEC-02).
 Split, Merge and commands to a moving or waiting group follow the defaults of #117.
 Bonuses and public intents of planned orders and «Защита»: ``systems.orders`` (SIM-10).
 Road upgrades by a city (DEC-16): ``systems.build``; they are not public.
+Supply priority and one-off transfers (DEC-18): ``SetPriority`` and ``Transfer``; neither is
+public, a transfer leaves as a packet in the tick it is applied (``systems.supply``).
 """
 
 from collections.abc import Callable, Iterable
@@ -39,6 +41,7 @@ from gow_sim.state import (
     IntentKind,
     Mode,
     Order,
+    Priority,
     RoadKind,
     event,
 )
@@ -53,6 +56,7 @@ from gow_sim.systems.recruit import (
     recruit_cooldown_left,
     recruit_unit,
 )
+from gow_sim.systems.supply import TransferRoute, is_city, send_packet, transfer_route
 from gow_sim.systems.vision import compute_vision, is_visible
 
 __all__ = [
@@ -65,13 +69,16 @@ __all__ = [
     "Move",
     "Ok",
     "PlayerCommand",
+    "Priority",
     "Recruit",
     "Reject",
     "RejectCode",
     "SetMode",
+    "SetPriority",
     "SetStance",
     "Split",
     "Stance",
+    "Transfer",
     "UpgradeRoad",
     "apply_commands",
     "command_cost",
@@ -147,12 +154,40 @@ class CancelOrder:
 
 
 @dataclass(frozen=True, slots=True)
+class SetPriority:
+    """Supply priority ``level`` of the own city ``node`` (DEC-18, item 1)."""
+
+    node: int
+    level: Priority
+
+
+@dataclass(frozen=True, slots=True)
+class Transfer:
+    """Ship ``n`` charges from the warehouse of the own city ``src`` to the own city ``dst``
+    along own internal roads, once (DEC-18, item 6). ``from``/``to`` of the decision."""
+
+    src: int
+    dst: int
+    n: int
+
+
+@dataclass(frozen=True, slots=True)
 class Forfeit:
     pass
 
 
 type Command = (
-    Move | Split | Merge | SetMode | SetStance | UpgradeRoad | Recruit | CancelOrder | Forfeit
+    Move
+    | Split
+    | Merge
+    | SetMode
+    | SetStance
+    | UpgradeRoad
+    | Recruit
+    | CancelOrder
+    | SetPriority
+    | Transfer
+    | Forfeit
 )
 
 
@@ -169,7 +204,7 @@ def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
             return SetMode(f(g), mode)
         case CancelOrder(group=g):
             return CancelOrder(f(g))
-        case SetStance() | UpgradeRoad() | Recruit() | Forfeit():
+        case SetStance() | UpgradeRoad() | Recruit() | SetPriority() | Transfer() | Forfeit():
             return cmd
 
 
@@ -200,7 +235,7 @@ class RejectCode(StrEnum):
     ROAD_KIND_MISMATCH = "ROAD_KIND_MISMATCH"
     """The second road upgrade names the other road type (DEC-22, item 3)."""
     NOT_CITY = "NOT_CITY"
-    """The node is a province, not a city (DEC-22, item 3; DEC-23)."""
+    """The node is a province, not a city (DEC-22, item 3; DEC-18, items 1 and 6; DEC-23)."""
     NOT_SUPPLIED = "NOT_SUPPLIED"
     """The city is not in its owner's supplied territory (DEC-16)."""
     CITY_BUSY = "CITY_BUSY"
@@ -208,7 +243,8 @@ class RejectCode(StrEnum):
     EDGE_BUSY = "EDGE_BUSY"
     """The other end of the edge already builds it (DEC-16: one city per edge)."""
     NOT_ENOUGH_CHARGES = "NOT_ENOUGH_CHARGES"
-    """The city warehouse holds fewer charges than the level costs (DEC-16)."""
+    """The city warehouse holds fewer charges than the level costs (DEC-16) or than a transfer
+    ships (DEC-18)."""
     NO_CHANGE = "NO_CHANGE"
     """The command would leave everything as it is (same mode or stance; already forfeited)."""
     STANCE_COOLDOWN = "STANCE_COOLDOWN"
@@ -226,7 +262,10 @@ class Ok:
     cost: int
     """CP charged on application, in hundredths."""
     path: tuple[int, ...] = ()
-    """For ``Move``: the nodes ``(start, ..., dest)``, returned to the client in ``ack``."""
+    """For ``Move`` and ``Transfer``: the nodes ``(start, ..., dest)``, returned to the client in
+    ``ack``."""
+    arrive_tick: int | None = None
+    """For ``Transfer``: the tick the charges reach ``dst`` if nothing stops them (DEC-18)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,6 +318,10 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
             return cost.cancel
         case SetStance():
             return cost.stance
+        case SetPriority():
+            return cost.priority
+        case Transfer():
+            return cost.transfer
         case Forfeit():
             return 0
 
@@ -310,13 +353,16 @@ def _validate(
     cost = command_cost(rules, cmd)
     if cost > state.players[player].cp:
         return Reject(RejectCode.NOT_ENOUGH_CP)
+    if isinstance(checked, TransferRoute):
+        return Ok(cost=cost, path=checked.nodes, arrive_tick=state.tick + checked.total_ticks)
     return Ok(cost=cost, path=checked)
 
 
 def _check(
     state: GameState, rules: Ruleset, player: int, cmd: Command, seen: dict[int, bool]
-) -> tuple[int, ...] | Reject:
-    """Every rule except CP; returns the path for ``Move`` (empty for the rest) or a Reject."""
+) -> tuple[int, ...] | TransferRoute | Reject:
+    """Every rule except CP; returns the path for ``Move``, the route for ``Transfer`` (empty
+    for the rest) or a Reject."""
     match cmd:
         case Move(group=gid, dest=dest):
             group = _standing_group(state, player, gid, seen)
@@ -385,8 +431,43 @@ def _check(
             if stance_cooldown_left(state, rules, player) > 0:
                 return Reject(RejectCode.STANCE_COOLDOWN)
             return ()
+        case SetPriority(node=node, level=level):
+            # DEC-18, item 1: the checks in this order (CP last, in ``_validate``).
+            if not 0 <= node < len(state.map.nodes):
+                return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+            if state.nodes[node].owner != player:
+                return Reject(RejectCode.NOT_OWNER)
+            if not is_city(state.map, node):
+                return Reject(RejectCode.NOT_CITY)
+            if state.nodes[node].priority is level:
+                return Reject(RejectCode.NO_CHANGE)
+            return ()
+        case Transfer(src=src, dst=dst, n=n):
+            return _check_transfer(state, rules, player, src, dst, n)
         case Forfeit():
             return Reject(RejectCode.NO_CHANGE) if state.players[player].forfeited else ()
+
+
+def _check_transfer(
+    state: GameState, rules: Ruleset, player: int, src: int, dst: int, n: int
+) -> TransferRoute | Reject:
+    """The checks of ``Transfer`` in the order of DEC-18, item 6 (CP last, in ``_validate``)."""
+    size = len(state.map.nodes)
+    for node in (src, dst):
+        if not 0 <= node < size:
+            return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+        if state.nodes[node].owner != player:
+            return Reject(RejectCode.NOT_OWNER)
+    if not (is_city(state.map, src) and is_city(state.map, dst)):
+        return Reject(RejectCode.NOT_CITY)
+    if src == dst or n < 1:
+        return Reject(RejectCode.INVALID_ARGUMENT)
+    route = transfer_route(state, rules, player, src, dst, n)
+    if route is None:
+        return Reject(RejectCode.NO_PATH)
+    if state.nodes[src].warehouse < n:
+        return Reject(RejectCode.NOT_ENOUGH_CHARGES)
+    return route
 
 
 def _check_upgrade(
@@ -557,6 +638,26 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             return []
         case SetStance(stance=stance):
             return set_stance(state, player, stance)
+        case SetPriority(node=node, level=level):
+            state.nodes[node].priority = level
+            return [event(tick, "priority_set", player=player, node=node, level=level.value)]
+        case Transfer(src=src, dst=dst, n=n):
+            route = transfer_route(state, rules, player, src, dst, n)
+            assert route is not None  # validated just before, on this state
+            state.nodes[src].warehouse -= n
+            packet = send_packet(state, player, src, route.edges, route.ticks, n, transfer=True)
+            return [
+                event(
+                    tick,
+                    "transfer_started",
+                    packet=packet.id,
+                    player=player,
+                    from_node=src,
+                    to_node=dst,
+                    charges=n,
+                    arrive_tick=tick + route.total_ticks,
+                )
+            ]
         case Forfeit():
             state.players[player].forfeited = True
             return [event(tick, "forfeit", player=player)]

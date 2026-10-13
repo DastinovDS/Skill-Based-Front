@@ -44,6 +44,7 @@ from gow_sim.maps import PLAYERS, MapDef, load_map
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 from gow_sim.state import AtNode, Detail, Event, Group, Mode, RoadKind, event
+from gow_sim.systems.movement import find_path
 from gow_sim.systems.victory import EndReason as SimEndReason
 from gow_sim.systems.victory import Outcome
 from gow_sim.view import PlayerView, opaque_id, view_to_canonical
@@ -294,6 +295,8 @@ def _features(view: View) -> set[str]:
         "road_kind": any(e.kind is not RoadKind.NONE for e in view.edges),
         "attrition_in": any(n.attrition_in is not None for n in view.nodes),
         "grace_left": any(n.grace_left is not None for n in view.nodes),
+        "priority": any(n.priority not in (None, sim.Priority.NORMAL) for n in view.nodes),
+        "transfer": any(p.transfer and len(p.path) > 1 for p in view.packets),
     }
     return {name for name, present in found.items() if present}
 
@@ -417,6 +420,8 @@ def test_fixture_commands_convert() -> None:
         "upgrade_road": sim.UpgradeRoad,
         "recruit": sim.Recruit,
         "cancel_order": sim.CancelOrder,
+        "set_priority": sim.SetPriority,
+        "transfer": sim.Transfer,
         "forfeit": sim.Forfeit,
     }
     for name, kind in types.items():
@@ -441,6 +446,10 @@ def test_command_fields() -> None:
         Stance.ECONOMY
     )
     assert command_from_wire(wire.RecruitCmd(node=2)) == sim.Recruit(2)
+    assert command_from_wire(
+        wire.SetPriorityCmd(node=3, level=sim.Priority.HIGH)
+    ) == sim.SetPriority(3, sim.Priority.HIGH)
+    assert command_from_wire(wire.TransferCmd(from_node=1, to_node=4, n=3)) == sim.Transfer(1, 4, 3)
     assert command_from_wire(wire.ForfeitCmd()) == sim.Forfeit()
 
 
@@ -530,6 +539,45 @@ def test_move_ack_carries_the_path() -> None:
     moved = next(g for g in snapshot_msg(match.view(0)).view.groups if g.id == group.id)
     assert moved.order is not None
     assert moved.order.dest == dest
+
+
+def test_supply_control_through_the_wire() -> None:
+    """DEC-18: priority and a transfer by wire commands; the ack carries the transfer's path and
+    arrival tick, the frames carry the priority and the transfer packet (byte-equal frames), the
+    enemy gets neither the events nor the fields."""
+    match = _started()
+    view = snapshot_msg(match.view(0)).view
+    cities = [n.id for n in view.nodes if n.priority is not None]
+    capital = match.state.map.capital(0)
+    far = max(
+        (c for c in cities if c != capital),
+        key=lambda c: len(find_path(match.state, RULES, 0, capital, c) or ()),
+    )
+    match.state.nodes[capital].warehouse = 5
+    cmds = [
+        command_from_wire(wire.SetPriorityCmd(node=far, level=sim.Priority.HIGH)),
+        command_from_wire(wire.TransferCmd(from_node=capital, to_node=far, n=3)),
+    ]
+    events = match.step([sim.PlayerCommand(0, i + 1, c) for i, c in enumerate(cmds)])
+    acks = [ack_msg(r) for r in match.results]
+    assert [a.reject_code for a in acks] == [None, None]
+    assert acks[0].path is None and acks[0].arrive_tick is None
+    path, arrive = acks[1].path, acks[1].arrive_tick
+    assert path is not None and (path[0], path[-1]) == (capital, far) and len(path) > 2
+    assert arrive is not None and arrive > match.tick
+    own = events_msgs(events, 0, KEY)
+    assert {m.kind for m in own} >= {"priority_set", "transfer_started"}
+    assert not {m.kind for m in events_msgs(events, 1, KEY)} & {"priority_set", "transfer_started"}
+    checker = _FrameChecker()
+    checker.record(match, ())
+    assert checker.features >= {"priority", "transfer"}
+    wire_view = snapshot_msg(match.view(0)).view
+    (packet,) = (p for p in wire_view.packets if p.transfer)
+    assert (packet.path[-1], packet.dest_tick, packet.charges) == (far, arrive, 3)
+    assert wire_view.nodes[far].priority is sim.Priority.HIGH
+    enemy = snapshot_msg(match.view(1)).view
+    assert all(n.priority is None for n in enemy.nodes if n.owner == 0)
+    assert not any(p.transfer for p in enemy.packets)
 
 
 def test_ack_of_an_accepted_command_without_path() -> None:
