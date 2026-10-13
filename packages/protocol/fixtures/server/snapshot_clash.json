@@ -29,7 +29,8 @@
           "done_tick": 550
         },
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": "normal"
       },
       {
         "id": 1,
@@ -46,7 +47,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": "normal"
       },
       {
         "id": 2,
@@ -65,7 +67,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": null
       },
       {
         "id": 3,
@@ -82,7 +85,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": "normal"
       },
       {
         "id": 4,
@@ -101,7 +105,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": null
       },
       {
         "id": 5,
@@ -120,7 +125,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": null
       },
       {
         "id": 6,
@@ -139,7 +145,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": null
       },
       {
         "id": 7,
@@ -159,7 +166,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": null
       }
     ],
     "edges": [
@@ -382,7 +390,10 @@
         "from_node": 0,
         "charges": 2,
         "depart_tick": 380,
-        "arrive_tick": 440
+        "arrive_tick": 440,
+        "path": [1],
+        "dest_tick": 440,
+        "transfer": false
       },
       {
         "id": "b2c3d4e5f6071829",
@@ -390,7 +401,10 @@
         "from_node": 1,
         "charges": 1,
         "depart_tick": 392,
-        "arrive_tick": 428
+        "arrive_tick": 428,
+        "path": [6],
+        "dest_tick": 428,
+        "transfer": false
       }
     ],
     "intents": [

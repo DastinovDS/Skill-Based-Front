@@ -12,8 +12,9 @@ values come from the decision, not from the code. The setting of the examples:
 These numbers are pinned in ``RULES``, so balance changes of ``mvp-0.toml`` do not break them.
 
 Map ``dec18`` (rot180): K = 0 (capital of 0), A = 1, B = 2, C = 3 (medium cities); P = 4 (a
-province, neutral unless a test takes it) with K -e3- P -e4- B; X = 5 (own medium city) reached
-only through E = 6 (a medium city the tests give to player 1); E -e7- 7 joins the mirror half.
+province, neutral unless a test takes it) with K -e3- P -e4- B; X = 5 (a neutral medium city,
+example 14 gives it to player 0) reached only through E = 6 (a medium city the tests give to
+player 1) from C; E -e7- 7 joins the mirror half.
 Roads: K-A e0, A-B e1, A-C e2.
 """
 
@@ -258,7 +259,7 @@ def test_example_13_enemy_city() -> None:
 def test_example_14_no_path_through_an_enemy_node() -> None:
     state = _state(A=5)
     state.nodes[E].owner = 1
-    assert state.nodes[X].owner == 0
+    state.nodes[X].owner = 0
     assert _cmd(state, Transfer(A, X, 1)) == Reject(RejectCode.NO_PATH)
 
 

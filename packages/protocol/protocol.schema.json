@@ -14,14 +14,14 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 9,
+    "PROTOCOL_VERSION": 10,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
   "$defs": {
     "AckMsg": {
       "additionalProperties": false,
-      "description": "Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.\n\n``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.\n``path``: for an accepted ``move``, the nodes from the group's node to ``dest`` (the client\ndraws it and never computes it); ``None`` otherwise.\n``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,\n``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).",
+      "description": "Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.\n\n``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.\n``path``: for an accepted ``move``, the nodes from the group's node to ``dest``; for an\naccepted ``transfer`` (DEC-18), the nodes from ``from_node`` to ``to_node`` (the client draws\nit and never computes it); ``None`` otherwise.\n``arrive_tick``: for an accepted ``transfer``, the tick the charges reach ``to_node`` if\nnothing stops them; ``None`` otherwise.\n``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,\n``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).",
       "properties": {
         "type": {
           "const": "ack",
@@ -55,6 +55,19 @@
           ],
           "default": null
         },
+        "arrive_tick": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "reject_code": {
           "anyOf": [
             {
@@ -73,6 +86,7 @@
         "seq",
         "applied_tick",
         "path",
+        "arrive_tick",
         "reject_code"
       ],
       "title": "AckMsg",
@@ -234,8 +248,10 @@
           "move": "#/$defs/MoveCmd",
           "recruit": "#/$defs/RecruitCmd",
           "set_mode": "#/$defs/SetModeCmd",
+          "set_priority": "#/$defs/SetPriorityCmd",
           "set_stance": "#/$defs/SetStanceCmd",
           "split": "#/$defs/SplitCmd",
+          "transfer": "#/$defs/TransferCmd",
           "upgrade_road": "#/$defs/UpgradeRoadCmd"
         },
         "propertyName": "type"
@@ -264,6 +280,12 @@
         },
         {
           "$ref": "#/$defs/CancelOrderCmd"
+        },
+        {
+          "$ref": "#/$defs/SetPriorityCmd"
+        },
+        {
+          "$ref": "#/$defs/TransferCmd"
         },
         {
           "$ref": "#/$defs/ForfeitCmd"
@@ -349,6 +371,18 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
+        },
+        "priority": {
+          "description": "``set_priority`` (DEC-18, item 1).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transfer": {
+          "description": "``transfer`` (DEC-18, item 6).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -361,7 +395,9 @@
         "defense",
         "build",
         "recruit",
-        "stance"
+        "stance",
+        "priority",
+        "transfer"
       ],
       "title": "CostsPublic",
       "type": "object"
@@ -1276,6 +1312,17 @@
             }
           ],
           "description": "Own node only: ticks the grace after a capture still lasts while the garrison exceeds the\ncapacity. ``None`` for every other node."
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Priority"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Own city only: its supply priority (DEC-18, item 1). ``None`` for provinces, the enemy's\nand neutral nodes (DEC-18, item 8)."
         }
       },
       "required": [
@@ -1287,7 +1334,8 @@
         "seen",
         "build",
         "attrition_in",
-        "grace_left"
+        "grace_left",
+        "priority"
       ],
       "title": "NodeView",
       "type": "object"
@@ -1387,7 +1435,7 @@
     },
     "PacketView": {
       "additionalProperties": false,
-      "description": "Own charges on the way (mechanics.md, section 7).",
+      "description": "Own charges on the way along a path of roads (mechanics.md, section 7; DEC-18, item 5).\n\n``edge`` is the current road, travelled away from ``from_node`` during\n``depart_tick..arrive_tick``; ``path``: the nodes still to reach, the end of ``edge`` first,\nthe destination last; ``dest_tick``: the tick it reaches the destination if nothing stops it.\n``transfer``: a one-off transfer (DEC-18, item 6), not the automatic dispatch.",
       "properties": {
         "id": {
           "pattern": "^[A-Za-z0-9_-]{1,32}$",
@@ -1417,6 +1465,23 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
+        },
+        "path": {
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "dest_tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transfer": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1425,7 +1490,10 @@
         "from_node",
         "charges",
         "depart_tick",
-        "arrive_tick"
+        "arrive_tick",
+        "path",
+        "dest_tick",
+        "transfer"
       ],
       "title": "PacketView",
       "type": "object"
@@ -1545,6 +1613,16 @@
       ],
       "title": "PongMsg",
       "type": "object"
+    },
+    "Priority": {
+      "description": "Supply priority of a city (DEC-18, item 1): only the order of delivery, not the target.",
+      "enum": [
+        "high",
+        "normal",
+        "low"
+      ],
+      "title": "Priority",
+      "type": "string"
     },
     "RatingChange": {
       "additionalProperties": false,
@@ -1843,6 +1921,32 @@
       "title": "SetModeCmd",
       "type": "object"
     },
+    "SetPriorityCmd": {
+      "additionalProperties": false,
+      "description": "Supply priority ``level`` of the own city ``node`` (DEC-18, item 1).",
+      "properties": {
+        "type": {
+          "const": "set_priority",
+          "default": "set_priority",
+          "type": "string"
+        },
+        "node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "level": {
+          "$ref": "#/$defs/Priority"
+        }
+      },
+      "required": [
+        "type",
+        "node",
+        "level"
+      ],
+      "title": "SetPriorityCmd",
+      "type": "object"
+    },
     "SetStanceCmd": {
       "additionalProperties": false,
       "properties": {
@@ -1988,6 +2092,40 @@
         "mountains"
       ],
       "title": "TerrainDefensePublic",
+      "type": "object"
+    },
+    "TransferCmd": {
+      "additionalProperties": false,
+      "description": "Ship ``n`` charges from the warehouse of the own city ``from_node`` to the own city\n``to_node`` along own roads, once (DEC-18, item 6). The ``ack`` carries the path and the\narrival tick; the client never computes them.",
+      "properties": {
+        "type": {
+          "const": "transfer",
+          "default": "transfer",
+          "type": "string"
+        },
+        "from_node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "to_node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "n": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "from_node",
+        "to_node",
+        "n"
+      ],
+      "title": "TransferCmd",
       "type": "object"
     },
     "UpgradeGain": {

@@ -48,6 +48,7 @@ from gow_sim.state import (
     OnEdge,
     Order,
     Packet,
+    Priority,
     RoadKind,
     initial_state,
     state_hash,
@@ -421,6 +422,56 @@ def test_own_entities_are_exact(rules: Ruleset) -> None:
     )
 
 
+def test_dec18_priority_only_for_own_cities(rules: Ruleset) -> None:
+    """DEC-18, item 8: an own city shows its priority; the enemy's, neutral nodes don't."""
+    state = _state("line6", rules)
+    state.nodes[1].priority = Priority.HIGH
+    state.nodes[4].priority = Priority.LOW  # an enemy city
+    view = _view(state, rules)
+    assert [n.priority for n in view.nodes] == [
+        Priority.NORMAL,
+        Priority.HIGH,
+        None,
+        None,
+        None,
+        None,
+    ]
+    before = _view(state, rules, player=1)
+    state.nodes[1].priority = Priority.LOW
+    assert _view(state, rules, player=1) == before  # the enemy never sees it
+
+
+def test_dec18_enemy_priority_hidden_even_in_sight(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    state.nodes[2].owner = 1  # an enemy city next to an own one: presence
+    _add(state, 0, AtNode(2))  # own group in it: exact
+    view = _view(state, rules)
+    assert view.nodes[2].detail is E and view.nodes[2].priority is None
+    state.nodes[2].priority = Priority.HIGH
+    assert _view(state, rules) == view
+
+
+def test_dec18_own_packet_path_and_transfer(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    state.nodes[2].owner = 0
+    pid = state.new_id()
+    state.packets[pid] = Packet(
+        pid, 0, 0, 0, 3, 5, 35, route=(1,), route_ticks=(30,), transfer=True
+    )
+    [packet] = _view(state, rules).packets
+    assert (packet.path, packet.dest_tick, packet.transfer) == ((1, 2), 65, True)
+
+
+def test_dec18_enemy_transfer_is_never_visible(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    before = _view(state, rules)
+    pid = state.new_id()
+    state.packets[pid] = Packet(
+        pid, 1, 4, 5, 3, 5, 35, route=(3,), route_ticks=(30,), transfer=True
+    )
+    assert _view(state, rules) == before
+
+
 def test_upgrade_gain_only_on_own_internal_edges(rules: Ruleset) -> None:
     state = _state("line6", rules)
     state.edges[0].width, state.edges[0].kind = 2, RoadKind.FAST
@@ -669,6 +720,10 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
     for pid in sorted(state.packets):
         if state.packets[pid].owner == enemy:
             state.packets[pid].charges = draw(st.integers(1, 9))
+            state.packets[pid].transfer = draw(st.booleans())
+    for node in state.nodes.values():  # DEC-18: enemy supply priorities are hidden
+        if node.owner == enemy:
+            node.priority = draw(st.sampled_from(list(Priority)))
     other = state.players[enemy]
     other.cp = draw(st.integers(0, 10_000))
     other.stance = draw(st.sampled_from(list(Stance)))

@@ -1,1 +1,1 @@
-{"type": "ack", "seq": 8, "applied_tick": 131, "path": null, "reject_code": "NOT_ENOUGH_CP"}
+{"type": "ack", "seq": 8, "applied_tick": 131, "path": null, "arrive_tick": null, "reject_code": "NOT_ENOUGH_CP"}

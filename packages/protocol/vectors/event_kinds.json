@@ -19,9 +19,11 @@
     "packet_delivered",
     "packet_lost",
     "packet_sent",
+    "priority_set",
     "recruited",
     "road_upgraded",
     "stance_changed",
+    "transfer_started",
     "vp_awarded",
     "warehouse_lost"
   ]

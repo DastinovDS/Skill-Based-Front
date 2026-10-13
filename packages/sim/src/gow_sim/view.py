@@ -13,14 +13,17 @@ PRO-01), which PRO-03 converts it into:
 - road builds of cities (DEC-16, item 8): own ones always, with the tick they finish; an enemy
   one (the city and the edge, no tick) only while the edge is not in fog (DEC-17, item 5);
 - ``EXACT`` places (own nodes, nodes where own groups stand): warehouse and enemy totals;
+- own cities: their supply priority (DEC-18, item 8); own packets with their remaining path and
+  whether they are a transfer;
 - ``PRESENCE`` places (neighbours of ``EXACT`` nodes, edges touching them): whether enemy groups
   are there and their modes, no numbers;
 - ``FOG``: only the last sighting from ``GameState.vision_memory``.
 
 What a view never has: enemy groups as entities (only the per-place ``Sighting``), road levels
 and types of fogged edges newer than the last sighting, enemy builds on fogged edges, enemy packets
-(#112 default), enemy CP, stance, production and counters, events, the target of an enemy's normal
-order (normal orders have no intent), sequential ids.
+(#112 default), enemy CP, stance, production and counters, supply priorities of enemy cities and
+enemy transfers (DEC-18, item 8), events, the target of an enemy's normal order (normal orders have
+no intent), sequential ids.
 
 Ids of own groups, own packets and intents are opaque per player: keyed blake2b of
 ``(player, internal id)`` with the secret ``match_key`` of the match (``opaque_id``). They are
@@ -49,11 +52,13 @@ from gow_sim.state import (
     Location,
     Mode,
     OnEdge,
+    Priority,
     RoadKind,
     Sighting,
 )
 from gow_sim.systems.build import RoadGain, UpgradeGain, done_tick, upgrade_gain
 from gow_sim.systems.capacity import node_capacities, overflow_countdown
+from gow_sim.systems.supply import is_city, packet_dest_tick, packet_path
 from gow_sim.systems.vision import compute_vision, current_sightings, known_roads
 
 __all__ = [
@@ -73,6 +78,7 @@ __all__ = [
     "OrderView",
     "PacketView",
     "PlayerView",
+    "Priority",
     "RoadGain",
     "RoadKind",
     "SelfView",
@@ -137,6 +143,9 @@ class NodeView:
     grace_left: int | None
     """Own node only: ticks the grace after a capture still lasts while the garrison exceeds the
     capacity; ``None`` otherwise."""
+    priority: Priority | None
+    """Own city only: its supply priority (DEC-18); ``None`` for provinces, the enemy's and
+    neutral nodes."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,15 +190,22 @@ class GroupView:
 
 @dataclass(frozen=True, slots=True)
 class PacketView:
-    """Own charges on the way (mechanics.md, section 7)."""
+    """Own charges on the way (mechanics.md, section 7; DEC-18, item 5)."""
 
     id: int
     """Opaque id."""
     edge: int
+    """The current edge, travelled away from ``from_node`` during ``depart_tick..arrive_tick``."""
     from_node: int
     charges: int
     depart_tick: int
     arrive_tick: int
+    path: tuple[int, ...]
+    """The nodes still to reach, the end of ``edge`` first, the destination last."""
+    dest_tick: int
+    """The tick the packet reaches the destination if nothing stops it."""
+    transfer: bool
+    """A one-off ``Transfer`` (DEC-18, item 6), not the automatic dispatch."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,6 +330,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 build=_build_view(state, rules, player, n, levels.edges),
                 attrition_in=attrition_in,
                 grace_left=grace_left,
+                priority=node.priority if node.owner == player and is_city(mapdef, n) else None,
             )
         )
 
@@ -359,6 +376,9 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
             charges=p.charges,
             depart_tick=p.depart_tick,
             arrive_tick=p.arrive_tick,
+            path=packet_path(state, p),
+            dest_tick=packet_dest_tick(p),
+            transfer=p.transfer,
         )
         for pid, p in sorted(state.packets.items())
         if p.owner == player
@@ -432,6 +452,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 else {"edge": n.build.edge, "done_tick": n.build.done_tick},
                 "attrition_in": n.attrition_in,
                 "grace_left": n.grace_left,
+                "priority": None if n.priority is None else n.priority.value,
             }
             for n in view.nodes
         ],
@@ -477,6 +498,9 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "charges": p.charges,
                 "depart_tick": p.depart_tick,
                 "arrive_tick": p.arrive_tick,
+                "path": list(p.path),
+                "dest_tick": p.dest_tick,
+                "transfer": p.transfer,
             }
             for p in view.packets
         ],

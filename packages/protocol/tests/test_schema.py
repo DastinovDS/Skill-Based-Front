@@ -69,6 +69,8 @@ def test_roots_are_named_definitions(schema: dict[str, Any]) -> None:
                 "upgrade_road",
                 "recruit",
                 "cancel_order",
+                "set_priority",
+                "transfer",
                 "forfeit",
             },
         ),

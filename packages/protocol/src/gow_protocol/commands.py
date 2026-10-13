@@ -4,7 +4,8 @@ A command is an intent, never state. It names own groups by opaque id and map no
 their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``Move(group, dest, planned)``, ``Split(group, n)``, ``Merge(groups)``, ``SetMode(group, mode)``,
 ``SetStance(stance)``, ``UpgradeRoad(node, edge, kind)``, ``Recruit(node)``, ``CancelOrder(group)``,
-``Forfeit()``. The conversion to simulation commands is PRO-03 (#46).
+``Forfeit()``; DEC-18: ``SetPriority(node, level)``, ``Transfer(from, to, n)``. The conversion
+to simulation commands is PRO-03 (#46).
 
 The schema checks only the shape. Ownership, visibility, reachability and CP are checked by the
 simulation's ``validate()``, which answers with one ``reject_code`` in ``ack`` and uses the same
@@ -17,7 +18,7 @@ from pydantic import Field, field_validator
 
 from gow_protocol.base import EdgeId, NodeId, OpaqueId, PosInt, WireModel
 from gow_sim.ruleset import Stance
-from gow_sim.state import Mode
+from gow_sim.state import Mode, Priority
 
 MAX_MERGE_GROUPS: Final = 16
 """Wire limit on ``merge.groups`` against oversized messages; not a game rule."""
@@ -88,6 +89,25 @@ class CancelOrderCmd(WireModel):
     group: OpaqueId
 
 
+class SetPriorityCmd(WireModel):
+    """Supply priority ``level`` of the own city ``node`` (DEC-18, item 1)."""
+
+    type: Literal["set_priority"] = "set_priority"
+    node: NodeId
+    level: Priority
+
+
+class TransferCmd(WireModel):
+    """Ship ``n`` charges from the warehouse of the own city ``from_node`` to the own city
+    ``to_node`` along own roads, once (DEC-18, item 6). The ``ack`` carries the path and the
+    arrival tick; the client never computes them."""
+
+    type: Literal["transfer"] = "transfer"
+    from_node: NodeId
+    to_node: NodeId
+    n: PosInt
+
+
 class ForfeitCmd(WireModel):
     type: Literal["forfeit"] = "forfeit"
 
@@ -101,6 +121,8 @@ type Command = Annotated[
     | UpgradeRoadCmd
     | RecruitCmd
     | CancelOrderCmd
+    | SetPriorityCmd
+    | TransferCmd
     | ForfeitCmd,
     Field(discriminator="type"),
 ]

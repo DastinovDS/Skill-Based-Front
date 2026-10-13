@@ -26,7 +26,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": "normal"
       },
       {
         "id": 1,
@@ -45,7 +46,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": null
       },
       {
         "id": 2,
@@ -64,7 +66,8 @@
         },
         "build": null,
         "attrition_in": null,
-        "grace_left": null
+        "grace_left": null,
+        "priority": null
       }
     ],
     "edges": [

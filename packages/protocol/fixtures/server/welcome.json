@@ -15,7 +15,9 @@
       "defense": 200,
       "build": 0,
       "recruit": 100,
-      "stance": 0
+      "stance": 0,
+      "priority": 0,
+      "transfer": 0
     },
     "combat": {
       "terrain_defense_mod": { "plains": -1, "forest": 0, "mountains": 1 },

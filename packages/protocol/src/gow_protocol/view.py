@@ -43,7 +43,7 @@ from gow_protocol.base import (
     WireModel,
 )
 from gow_sim.ruleset import Stance
-from gow_sim.state import Detail, IntentKind, Mode, RoadKind
+from gow_sim.state import Detail, IntentKind, Mode, Priority, RoadKind
 
 
 class Seen(WireModel):
@@ -104,9 +104,14 @@ class NodeView(WireModel):
     grace_left: PosInt | None
     """Own node only: ticks the grace after a capture still lasts while the garrison exceeds the
     capacity. ``None`` for every other node."""
+    priority: Priority | None
+    """Own city only: its supply priority (DEC-18, item 1). ``None`` for provinces, the enemy's
+    and neutral nodes (DEC-18, item 8)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
+        if self.priority is not None and self.detail is not Detail.EXACT:
+            raise ValueError("a supply priority only for an own city, which is seen exactly")
         if (self.detail is Detail.EXACT) != (self.warehouse is not None):
             raise ValueError("warehouse is given exactly when detail is exact")
         _check_seen(self.detail, self.seen)
@@ -206,7 +211,13 @@ class GroupView(WireModel):
 
 
 class PacketView(WireModel):
-    """Own charges on the way (mechanics.md, section 7)."""
+    """Own charges on the way along a path of roads (mechanics.md, section 7; DEC-18, item 5).
+
+    ``edge`` is the current road, travelled away from ``from_node`` during
+    ``depart_tick..arrive_tick``; ``path``: the nodes still to reach, the end of ``edge`` first,
+    the destination last; ``dest_tick``: the tick it reaches the destination if nothing stops it.
+    ``transfer``: a one-off transfer (DEC-18, item 6), not the automatic dispatch.
+    """
 
     id: OpaqueId
     edge: EdgeId
@@ -214,11 +225,16 @@ class PacketView(WireModel):
     charges: NonNegInt
     depart_tick: Tick
     arrive_tick: Tick
+    path: Annotated[tuple[NodeId, ...], Field(min_length=1)]
+    dest_tick: Tick
+    transfer: bool
 
     @model_validator(mode="after")
     def _check(self) -> Self:
         if self.arrive_tick < self.depart_tick:
             raise ValueError("arrive_tick must not be before depart_tick")
+        if self.dest_tick < self.arrive_tick:
+            raise ValueError("dest_tick must not be before arrive_tick")
         return self
 
 
@@ -283,7 +299,7 @@ class View(WireModel):
                 refs_nodes.extend((group.order.dest, *group.order.path))
         for packet in self.packets:
             refs_edges.append(packet.edge)
-            refs_nodes.append(packet.from_node)
+            refs_nodes.extend((packet.from_node, *packet.path))
         for intent in self.intents:
             refs_nodes.append(intent.origin)
             if intent.target is not None:

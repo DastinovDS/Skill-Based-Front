@@ -36,6 +36,10 @@ class CostsPublic(WireModel):
     build: Centi
     recruit: Centi
     stance: Centi
+    priority: Centi
+    """``set_priority`` (DEC-18, item 1)."""
+    transfer: Centi
+    """``transfer`` (DEC-18, item 6)."""
 
 
 class TerrainDefensePublic(WireModel):
@@ -147,6 +151,8 @@ class RulesetPublic(WireModel):
                 build=cost.build,
                 recruit=cost.recruit,
                 stance=cost.stance,
+                priority=cost.priority,
+                transfer=cost.transfer,
             ),
             combat=CombatPublic(
                 terrain_defense_mod=TerrainDefensePublic(
