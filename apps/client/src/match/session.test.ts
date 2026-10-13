@@ -133,7 +133,14 @@ describe('MatchSession', () => {
     session.orders.track(seq, cmd, 0);
     expect(socket.sent.at(-1)).toEqual({ type: 'command', seq, cmd });
     expect(session.orders.ghosts()).toHaveLength(1);
-    socket.reply({ type: 'ack', seq, applied_tick: 22, path: [0, 1], reject_code: 'NO_PATH' });
+    socket.reply({
+      type: 'ack',
+      seq,
+      applied_tick: 22,
+      path: [0, 1],
+      arrive_tick: null,
+      reject_code: 'NO_PATH',
+    });
     expect(results).toEqual(['rejected']);
     expect(session.orders.ghosts().map((g) => g.status)).toEqual(['rejected']);
   });
@@ -164,7 +171,14 @@ describe('MatchSession', () => {
     const cmd = { type: 'move', group: 'dev-0', dest: 1, planned: false } as const;
     const seq = session.send(cmd);
     session.orders.track(seq, cmd, 0);
-    socket.reply({ type: 'ack', seq, applied_tick: 22, path: [0, 1], reject_code: null });
+    socket.reply({
+      type: 'ack',
+      seq,
+      applied_tick: 22,
+      path: [0, 1],
+      arrive_tick: null,
+      reject_code: null,
+    });
     socket.reply(snapshot(21));
 
     // The render time runs behind the newest snapshot: the order is not on screen yet.

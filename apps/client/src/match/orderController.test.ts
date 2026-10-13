@@ -54,7 +54,7 @@ const down = (code: string, repeat = false) =>
 const up = (code: string) => ({ type: 'keyup', code, shiftKey: false }) as const;
 
 const ack = (seq: number, reject_code: string | null = null) =>
-  ({ type: 'ack', seq, applied_tick: 31, path: null, reject_code }) as const;
+  ({ type: 'ack', seq, applied_tick: 31, path: null, arrive_tick: null, reject_code }) as const;
 
 describe('OrderController', () => {
   beforeEach(() => {
@@ -516,5 +516,126 @@ describe('OrderController', () => {
     });
     expect(controller.key(down('Space'))).toBe(true);
     expect(focused).toEqual([aimed.id]);
+  });
+
+  describe('supply map mode (DEC-18)', () => {
+    const city = home;
+    const target = other.id;
+
+    it('Tab and F2 toggle the mode; the overlay carries it', () => {
+      const { controller } = setup();
+      expect(controller.overlay().supply).toBeNull();
+      expect(controller.key(down('Tab'))).toBe(true);
+      expect(controller.supplyMode).toBe(true);
+      expect(controller.overlay().supply).toEqual({ source: null, targets: [] });
+      expect(controller.key(down('Tab', true))).toBe(true); // a held key does not flip it back
+      expect(controller.supplyMode).toBe(true);
+      controller.key(down('F2'));
+      expect(controller.supplyMode).toBe(false);
+      expect(controller.overlay().supply).toBeNull();
+    });
+
+    it('a click on an own city opens its menu; a priority sector sends set_priority', () => {
+      const { controller, sent } = setup();
+      controller.key(down('Tab'));
+      controller.click({ kind: 'node', id: city }, false);
+      expect(controller.supplyMenu.current).toMatchObject({ open: true, node: city });
+      expect(controller.supplyMenu.current.priority).toBe('normal');
+      controller.chooseSupply('high');
+      expect(controller.supplyMenu.current.open).toBe(false);
+      expect(sent).toEqual([{ type: 'set_priority', node: city, level: 'high' }]);
+    });
+
+    it('keys 1..4 choose in the menu (not the modes); the current level is not resent', () => {
+      const { controller, sent } = setup();
+      controller.key(down('Tab'));
+      controller.click({ kind: 'node', id: city }, false);
+      controller.key(down('Digit2')); // normal: already the city's level
+      expect(sent).toEqual([]);
+      controller.click({ kind: 'node', id: city }, false);
+      controller.key(down('Digit3'));
+      expect(sent).toEqual([{ type: 'set_priority', node: city, level: 'low' }]);
+    });
+
+    it('Esc closes the menu; an enemy node opens nothing', () => {
+      const { controller, sent } = setup();
+      controller.key(down('Tab'));
+      controller.click({ kind: 'node', id: city }, false);
+      controller.key(down('Escape'));
+      expect(controller.supplyMenu.current.open).toBe(false);
+      controller.click({ kind: 'node', id: enemy.id }, false);
+      expect(controller.supplyMenu.current.open).toBe(false);
+      expect(sent).toEqual([]);
+    });
+
+    it('transfer: pick the source in the menu, click the destination, choose the amount', () => {
+      const { controller, sent } = setup();
+      controller.key(down('Tab'));
+      controller.click({ kind: 'node', id: city }, false);
+      controller.key(down('Digit4'));
+      expect(controller.ui.current.transferFrom).toBe(city);
+      const overlay = controller.overlay().supply;
+      expect(overlay?.source).toBe(city);
+      expect(overlay?.targets).toContain(target);
+      expect(overlay?.targets).not.toContain(city);
+      controller.click({ kind: 'node', id: target }, false);
+      expect(controller.ui.current.transferFrom).toBeNull();
+      const stock = snapshot.view.nodes[city]?.warehouse ?? 0;
+      expect(controller.transfer.current).toMatchObject({
+        open: true,
+        from: city,
+        to: target,
+        max: stock,
+      });
+      controller.setTransferAmount(1);
+      controller.confirmTransfer();
+      expect(controller.transfer.current.open).toBe(false);
+      expect(sent).toEqual(
+        stock > 0 ? [{ type: 'transfer', from_node: city, to_node: target, n: 1 }] : [],
+      );
+    });
+
+    it('the amount stays within 1..warehouse', () => {
+      const { controller } = setup();
+      controller.transfer.open(city, target, 4);
+      controller.setTransferAmount(99);
+      expect(controller.transfer.current.n).toBe(4);
+      controller.setTransferAmount(0);
+      expect(controller.transfer.current.n).toBe(1);
+    });
+
+    it('Esc or a click elsewhere ends the transfer pick without a command', () => {
+      const { controller, sent } = setup();
+      controller.key(down('Tab'));
+      controller.click({ kind: 'node', id: city }, false);
+      controller.chooseSupply('transfer');
+      controller.key(down('Escape'));
+      expect(controller.ui.current.transferFrom).toBeNull();
+      controller.click({ kind: 'node', id: city }, false);
+      controller.chooseSupply('transfer');
+      controller.click({ kind: 'node', id: enemy.id }, false);
+      expect(controller.ui.current.transferFrom).toBeNull();
+      expect(controller.transfer.current.open).toBe(false);
+      expect(sent).toEqual([]);
+    });
+
+    it('reports the arrival tick of an accepted transfer from the ack', () => {
+      const { controller, book } = setup();
+      const seen: (number | null | undefined)[] = [];
+      controller.ui.onFeedback((f) => {
+        if (f.kind === 'accepted') seen.push(f.arriveTick);
+      });
+      controller.transfer.open(city, target, 3);
+      controller.confirmTransfer();
+      book.onAck({
+        type: 'ack',
+        seq: 1,
+        applied_tick: 31,
+        path: [city, target],
+        arrive_tick: 91,
+        reject_code: null,
+      });
+      expect(seen).toEqual([91]);
+    });
   });
 });

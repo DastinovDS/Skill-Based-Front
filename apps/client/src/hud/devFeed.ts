@@ -63,10 +63,12 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       build: null,
       attrition_in: null,
       grace_left: null,
+      priority: null,
     };
     if (mine.has(n.id)) {
       return {
         ...base,
+        priority: n.kind === 'province' ? null : 'normal',
         detail: 'exact',
         warehouse: n.start_stock,
         seen: { tick, level: 'exact', enemy_modes: [], enemy_units: 0, enemy_charged: 0 },

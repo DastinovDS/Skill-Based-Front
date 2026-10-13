@@ -31,7 +31,12 @@ export type OrderNotice =
  * a short tone for `accepted`, another for `rejected`). A move that was accepted is reported too.
  */
 export type OrderFeedback =
-  | { readonly kind: 'accepted'; readonly cmd: Command }
+  | {
+      readonly kind: 'accepted';
+      readonly cmd: Command;
+      /** When an accepted transfer arrives (`ack.arrive_tick`, DEC-18); `null` otherwise. */
+      readonly arriveTick?: number | null;
+    }
   | { readonly kind: 'rejected'; readonly code: string; readonly cmd: Command }
   | { readonly kind: 'lost'; readonly cmd: Command };
 
@@ -43,6 +48,10 @@ export interface OrderUiData {
   readonly road: RoadHint | null;
   /** Road pick (key U, DEC-16): the own city whose road a click upgrades; `null`: off. */
   readonly roadPick: number | null;
+  /** The «Supply» map mode is on (Tab or F2, DEC-18). */
+  readonly supplyMode: boolean;
+  /** Transfer pick: the own city the charges leave; a click on another own city picks `to`. */
+  readonly transferFrom: number | null;
   readonly notice: OrderNotice | null;
 }
 
@@ -56,6 +65,8 @@ export class OrderUiState {
     preview: null,
     road: null,
     roadPick: null,
+    supplyMode: false,
+    transferFrom: null,
     notice: null,
   });
 

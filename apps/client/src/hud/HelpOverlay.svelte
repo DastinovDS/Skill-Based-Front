@@ -25,6 +25,7 @@
     ['R', 'help.key.recruit'],
     ['U', 'help.key.road'],
     ['Q', 'help.key.stance'],
+    ['Tab / F2', 'help.key.supply'],
     ['Space', 'help.key.alert'],
     ['Home', 'help.key.fit'],
     ['J', 'help.key.journal'],

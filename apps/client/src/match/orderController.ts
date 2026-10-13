@@ -1,12 +1,13 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AlertState } from './alerts.svelte.ts';
 import { roadCandidates, type AttackTarget } from '../hud/hudData.ts';
-import type { Command, MapFile, Mode, RulesetPublic, Stance } from '../protocol.gen.ts';
+import type { Command, MapFile, Mode, Priority, RulesetPublic, Stance } from '../protocol.gen.ts';
 import {
   EMPTY_OVERLAY,
   type MapInteraction,
   type OverlayState,
   type PickHit,
+  type SupplyOverlay,
 } from '../render/interaction.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
 import {
@@ -15,12 +16,15 @@ import {
   ROAD_SECTORS,
   SECTORS,
   stanceRates,
+  SUPPLY_SECTORS,
   type RoadType,
   type StanceRate,
+  type SupplyChoice,
 } from '../hud/radial.ts';
 import { OrderUiState, type RoadHint } from './orderUi.svelte.ts';
 import { RadialState } from './radialState.svelte.ts';
 import { RoadTypeState } from './roadTypeState.svelte.ts';
+import { SupplyMenuState, TransferState } from './supplyState.svelte.ts';
 import { moveCost } from './rejects.ts';
 
 /** How long an answer stays in the panel, ms. */
@@ -83,6 +87,13 @@ function aimKey(aim: AttackTarget | null): string {
  * pick too. Whether the city may build (supply, a build already going, charges) is the server's
  * call.
  *
+ * The «Supply» map mode (DEC-18, item 7) is toggled by Tab (or F2). In it a click on an own city
+ * opens its supply menu (a radial menu under the pointer: high, normal, low priority, or a
+ * transfer from it; a click or 1..4 chooses, Esc or a click outside closes it). "Transfer" starts
+ * the transfer pick: the own cities a click would pick are ringed; a click on one opens the amount
+ * dialog, which sends `transfer`. A click anywhere else, or Esc, ends the pick. The path and the
+ * arrival of a transfer come from the server (`ack`); the client computes neither.
+ *
  * Keys: Esc ends the road pick or deselects, X cancels the order of
  * the selected group, 1 / 2 set the mode (attack / defense), R recruits in the selected city,
  * U toggles the road pick, Q the stance menu (hold and release over a sector, or tap and click;
@@ -94,6 +105,10 @@ export class OrderController implements MapInteraction {
   readonly radial = new RadialState();
   /** The road type menu of a first road upgrade (DEC-22). */
   readonly roadType = new RoadTypeState();
+  /** The supply menu of an own city in the «Supply» map mode (DEC-18). */
+  readonly supplyMenu = new SupplyMenuState();
+  /** The amount dialog of a transfer (DEC-18). */
+  readonly transfer = new TransferState();
 
   readonly #o: OrderControllerOptions;
   #shift = false;
@@ -104,6 +119,7 @@ export class OrderController implements MapInteraction {
   #overlay: OverlayState = EMPTY_OVERLAY;
   #overlayKey = '';
   #overlayGhosts: OverlayState['ghosts'] = [];
+  #supplyOverlay: SupplyOverlay | null = null;
   /** The city of the road pick, or `null`. Mirrored to `ui.current.roadPick` for the panel. */
   #pick: number | null = null;
   /** When Q went down (ms) while the menu is held open; `null`: Q is up. */
@@ -166,8 +182,13 @@ export class OrderController implements MapInteraction {
     const road = this.#hover?.kind === 'edge' ? this.#hover.id : null;
     const candidates = this.#candidates();
     const beacon = this.#o.hud.beacon;
+    const supply = this.#supplyOverlayNow();
     const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(road)}|${candidates.join(',')}|${String(beacon)}`;
-    if (key !== this.#overlayKey || ghosts !== this.#overlayGhosts) {
+    if (
+      key !== this.#overlayKey ||
+      ghosts !== this.#overlayGhosts ||
+      supply !== this.#overlay.supply
+    ) {
       this.#overlayKey = key;
       this.#overlayGhosts = ghosts;
       this.#overlay = {
@@ -178,6 +199,7 @@ export class OrderController implements MapInteraction {
         road,
         candidates,
         beacon,
+        supply,
       };
     }
     return this.#overlay;
@@ -185,6 +207,7 @@ export class OrderController implements MapInteraction {
 
   click(hit: PickHit | null, shift: boolean): void {
     this.#shift = shift;
+    if (this.#supplyClick(hit)) return;
     if (hit === null) {
       this.deselect();
       return;
@@ -390,13 +413,111 @@ export class OrderController implements MapInteraction {
     this.#sendCommand({ type: 'forfeit' }, null);
   }
 
+  // --- The «Supply» map mode (DEC-18) ----------------------------------------------------------
+
+  get supplyMode(): boolean {
+    return this.ui.current.supplyMode;
+  }
+
+  /** Tab / F2: the «Supply» map mode on or off; leaving it closes its menu, pick and dialog. */
+  toggleSupplyMode(): void {
+    const on = !this.ui.current.supplyMode;
+    this.supplyMenu.close();
+    this.transfer.close();
+    if (on) {
+      this.stopRoadPick();
+      this.roadType.close();
+      this.closeRadial();
+    }
+    this.ui.patch({ supplyMode: on, transferFrom: null });
+  }
+
+  /** Opens the supply menu of the own city `node` (a click on it in the «Supply» mode). */
+  openSupplyMenu(node: number): boolean {
+    const city = this.#ownCity(node);
+    if (city === null || city.priority === null || this.#o.send === null) return false;
+    this.radial.close();
+    this.roadType.close();
+    this.supplyMenu.open(node, city.priority, city.warehouse);
+    return true;
+  }
+
+  closeSupplyMenu(): void {
+    this.supplyMenu.close();
+  }
+
+  /** A sector of the supply menu: a new priority is sent, "transfer" starts the transfer pick. */
+  chooseSupply(choice: SupplyChoice): void {
+    const { open, node, priority } = this.supplyMenu.current;
+    this.supplyMenu.close();
+    if (!open) return;
+    if (choice === 'transfer') {
+      this.ui.patch({ transferFrom: node });
+      return;
+    }
+    if (choice !== priority) this.setPriority(node, choice);
+  }
+
+  setPriority(node: number, level: Priority): void {
+    this.#sendCommand({ type: 'set_priority', node, level }, null);
+  }
+
+  /** Ends the transfer pick without a transfer. */
+  cancelTransferPick(): void {
+    if (this.ui.current.transferFrom !== null) this.ui.patch({ transferFrom: null });
+  }
+
+  /** The amount chosen in the transfer dialog. */
+  setTransferAmount(n: number): void {
+    this.transfer.set(n);
+  }
+
+  /** Sends the transfer of the dialog (the server checks the path and the warehouse). */
+  confirmTransfer(): void {
+    const { open, from, to, n } = this.transfer.current;
+    this.transfer.close();
+    if (!open || n < 1) return;
+    this.#sendCommand({ type: 'transfer', from_node: from, to_node: to, n }, null);
+  }
+
+  closeTransfer(): void {
+    this.transfer.close();
+  }
+
   /** Returns true if the key was used (the caller then prevents the browser default). */
   key(input: KeyInput): boolean {
     const shiftChanged = this.#shift !== input.shiftKey;
     this.#shift = input.shiftKey;
     if (shiftChanged) this.#refresh();
     if (input.type !== 'keydown') return this.#keyUp(input);
+    if (input.code === 'Tab' || input.code === 'F2') {
+      if (input.repeat !== true) this.toggleSupplyMode();
+      return true;
+    }
     if (input.code === 'KeyQ') return this.#qDown(input);
+    if (this.transfer.current.open) {
+      // The amount dialog: Esc closes it (Enter and the slider are the dialog's own).
+      if (input.code === 'Escape') {
+        this.closeTransfer();
+        return true;
+      }
+    }
+    if (this.supplyMenu.current.open) {
+      // The supply menu: 1..4 choose (not the modes), Esc closes it.
+      const sector = SUPPLY_SECTORS.find((s) => `Digit${s.key}` === input.code);
+      if (sector !== undefined) {
+        this.chooseSupply(sector.choice);
+        return true;
+      }
+      if (input.code === 'Escape') {
+        this.closeSupplyMenu();
+        return true;
+      }
+    }
+    if (input.code === 'Escape' && this.ui.current.transferFrom !== null) {
+      this.cancelTransferPick();
+      return true;
+    }
     if (this.roadType.current.open) {
       // The road type menu: 1 / 2 choose (not the modes); U, the key that opened it, or Esc close.
       const sector = ROAD_SECTORS.find((s) => `Digit${s.key}` === input.code);
@@ -447,6 +568,54 @@ export class OrderController implements MapInteraction {
   }
 
   // --- Internals ----------------------------------------------------------------------------
+
+  /** An own city of the snapshot (priority and warehouse), or `null`. */
+  #ownCity(node: number): { priority: Priority | null; warehouse: number | null } | null {
+    const choice = this.#o.hud.current?.nodes.find((n) => n.id === node);
+    return choice?.owner === 'mine' && choice.priority !== null ? choice : null;
+  }
+
+  /**
+   * A click in the «Supply» mode: picks the destination of a transfer, or opens the supply menu
+   * of an own city. Returns false when the click is an ordinary one (selection, orders).
+   */
+  #supplyClick(hit: PickHit | null): boolean {
+    if (!this.ui.current.supplyMode) return false;
+    const from = this.ui.current.transferFrom;
+    const node = hit?.kind === 'node' ? hit.id : null;
+    if (from !== null) {
+      this.cancelTransferPick();
+      if (node !== null && node !== from && this.#ownCity(node) !== null) {
+        this.transfer.open(from, node, this.#ownCity(from)?.warehouse ?? 0);
+      }
+      return true;
+    }
+    return node !== null && this.openSupplyMenu(node);
+  }
+
+  /** The supply part of the overlay; the same object while nothing changed. */
+  #supplyOverlayNow(): SupplyOverlay | null {
+    if (!this.ui.current.supplyMode) {
+      this.#supplyOverlay = null;
+      return null;
+    }
+    const source = this.ui.current.transferFrom;
+    const targets =
+      source === null
+        ? []
+        : (this.#o.hud.current?.nodes ?? [])
+            .filter((n) => n.owner === 'mine' && n.priority !== null && n.id !== source)
+            .map((n) => n.id);
+    const prev = this.#supplyOverlay;
+    if (
+      prev?.source !== source ||
+      prev.targets.length !== targets.length ||
+      prev.targets.some((t, i) => t !== targets[i])
+    ) {
+      this.#supplyOverlay = { source, targets };
+    }
+    return this.#supplyOverlay;
+  }
 
   /** `Space`: the camera goes to the city the next alert is about; taken only if there is one. */
   #jumpToAlert(): boolean {
@@ -567,7 +736,9 @@ export class OrderController implements MapInteraction {
     this.ui.emit(
       result.kind === 'rejected'
         ? { kind: 'rejected', code: result.code, cmd: result.cmd }
-        : { kind: result.kind, cmd: result.cmd },
+        : result.kind === 'accepted'
+          ? { kind: 'accepted', cmd: result.cmd, arriveTick: result.arriveTick ?? null }
+          : { kind: result.kind, cmd: result.cmd },
     );
     // A move shows itself on the map (ghost, then the order line): no message for its success.
     if (result.kind === 'accepted' && result.cmd.type === 'move') return;

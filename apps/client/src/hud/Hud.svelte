@@ -18,6 +18,9 @@
   import RoadTypeMenu from './RoadTypeMenu.svelte';
   import SelectionPanel from './SelectionPanel.svelte';
   import StartBanner from './StartBanner.svelte';
+  import SupplyBanner from './SupplyBanner.svelte';
+  import SupplyMenu from './SupplyMenu.svelte';
+  import TransferDialog from './TransferDialog.svelte';
   import ToastStack from './ToastStack.svelte';
   import Tooltip from './Tooltip.svelte';
   import TopBar from './TopBar.svelte';
@@ -97,10 +100,26 @@
     };
   });
 
-  // A refused command is a toast (U6); the accepted ones show on the map.
+  // A refused command is a toast (U6); the accepted ones show on the map, except a transfer: its
+  // arrival is the server's answer (DEC-18), told in a toast.
   $effect(() => {
     return orders.ui.onFeedback((feedback) => {
-      if (feedback.kind === 'accepted') return;
+      if (feedback.kind === 'accepted') {
+        const { cmd, arriveTick } = feedback;
+        const now = hud.current?.tick;
+        if (cmd.type === 'transfer' && arriveTick != null && now !== undefined) {
+          hud.toasts.push({
+            tone: 'mine',
+            icon: 'road',
+            text: tf('transfer.accepted', {
+              n: cmd.n,
+              node: cmd.to_node,
+              seconds: Math.ceil(Math.max(0, arriveTick - now) / hud.context.rules.tick_hz),
+            }),
+          });
+        }
+        return;
+      }
       const command = t(`cmd.${feedback.cmd.type}`);
       hud.toasts.push({
         tone: 'warn',
@@ -148,6 +167,9 @@
   {/if}
   <RadialMenu {orders} stance={data?.stance ?? null} passive={orders.passivePerMinute} />
   <RoadTypeMenu {orders} />
+  <SupplyBanner {orders} />
+  <SupplyMenu {orders} />
+  <TransferDialog {orders} />
   <Tooltip {data} ctx={hud.context} {orders} />
   <HelpOverlay
     open={chrome.helpOpen}

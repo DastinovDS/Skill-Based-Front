@@ -34,6 +34,9 @@ const packet = (id: string, depart_tick: number, arrive_tick: number): PacketVie
   charges: 1,
   depart_tick,
   arrive_tick,
+  path: [1],
+  dest_tick: arrive_tick,
+  transfer: false,
 });
 /** The PRO-01 snapshot fixture with another tick, groups and packets. */
 function snap(tick: number, groups: GroupView[] = [], packets: PacketView[] = []): SnapshotMsg {

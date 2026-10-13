@@ -204,6 +204,7 @@ describe('Hud', () => {
       seq: 1,
       applied_tick: 31,
       path: null,
+      arrive_tick: null,
       reject_code: 'NOT_ENOUGH_CP',
     });
     flushSync();

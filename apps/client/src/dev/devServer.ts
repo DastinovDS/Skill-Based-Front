@@ -113,7 +113,11 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
 
   let current: SnapshotMsg = snapshot();
 
-  function judge(cmd: Command): { code: string | null; path: AckMsg['path'] } {
+  function judge(cmd: Command): {
+    code: string | null;
+    path: AckMsg['path'];
+    arrive?: number;
+  } {
     if (cmd.type === 'move') {
       const group = current.view.groups.find((g) => g.id === cmd.group);
       if (group === undefined) return { code: 'NOT_FOUND_OR_HIDDEN', path: null };
@@ -136,6 +140,15 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
       spent += rules.cost.cancel;
       orders.delete(cmd.group);
       return { code: null, path: null };
+    }
+    if (cmd.type === 'transfer') {
+      // Stand-in (DEC-18): own cities, a path over the map, 30 ticks a road; free.
+      const own = (id: number) => current.view.nodes[id]?.owner === DEV_PLAYER;
+      if (!own(cmd.from_node) || !own(cmd.to_node)) return { code: 'NOT_OWNER', path: null };
+      if (cmd.from_node === cmd.to_node) return { code: 'INVALID_ARGUMENT', path: null };
+      const path = devPath(map, cmd.from_node, cmd.to_node);
+      if (path === null) return { code: 'NO_PATH', path: null };
+      return { code: null, path, arrive: tick + 1 + 30 * (path.length - 1) };
     }
     return { code: judgeOther(cmd), path: null };
   }
@@ -198,6 +211,10 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         }
         return code;
       }
+      case 'set_priority':
+        return current.view.nodes[cmd.node]?.owner === DEV_PLAYER
+          ? charge(rules.cost.priority)
+          : 'NOT_OWNER';
       case 'forfeit':
         setTimeout(() => {
           socket?.reply({
@@ -237,12 +254,13 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         lastSeq = Math.max(lastSeq, msg.seq);
         const handle = setTimeout(() => {
           timeouts.delete(handle);
-          const { code, path } = judge(msg.cmd);
+          const { code, path, arrive } = judge(msg.cmd);
           this.reply({
             type: 'ack',
             seq: msg.seq,
             applied_tick: tick + 1,
             path,
+            arrive_tick: arrive ?? null,
             reject_code: code,
           });
         }, DEV_ACK_MS);

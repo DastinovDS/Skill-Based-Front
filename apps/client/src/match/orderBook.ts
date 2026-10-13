@@ -11,7 +11,13 @@ export interface GhostOrder extends GhostArrow {
 }
 
 export type CommandResult =
-  | { readonly kind: 'accepted'; readonly seq: number; readonly cmd: Command }
+  | {
+      readonly kind: 'accepted';
+      readonly seq: number;
+      readonly cmd: Command;
+      /** `arrive_tick` of the `ack` (a transfer, DEC-18); `null` for the other commands. */
+      readonly arriveTick?: number | null;
+    }
   | {
       readonly kind: 'rejected';
       readonly seq: number;
@@ -99,7 +105,12 @@ export class OrderBook {
       this.#accepted.set(ack.seq, { ghost: confirmed, tick: ack.applied_tick });
       this.#setGhosts(this.#ghosts.map((g) => (g === ghost ? confirmed : g)));
     }
-    this.onResult?.({ kind: 'accepted', seq: ack.seq, cmd: pending.cmd });
+    this.onResult?.({
+      kind: 'accepted',
+      seq: ack.seq,
+      cmd: pending.cmd,
+      arriveTick: ack.arrive_tick,
+    });
   }
 
   /** After a reconnect the server had the command but its `ack` was lost (`onAckLost`). */

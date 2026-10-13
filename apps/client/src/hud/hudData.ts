@@ -12,6 +12,7 @@ import type {
   Mode,
   NodeView,
   PlayerId,
+  Priority,
   RoadKind,
   RulesetPublic,
   Seen,
@@ -94,6 +95,8 @@ export interface NodeInfo {
   readonly attritionIn: number | null;
   /** Own city over its capacity right after a capture: ticks the grace still lasts. */
   readonly graceLeft: number | null;
+  /** Supply priority of an own city (DEC-18); `null` for the rest. */
+  readonly priority: Priority | null;
 }
 
 /** A road level a city builds (`NodeView.build`). */
@@ -139,6 +142,10 @@ export interface GroupChoice {
 export interface NodeChoice {
   readonly id: number;
   readonly owner: Ownership;
+  /** Supply priority of an own city (DEC-18); `null` for the rest. */
+  readonly priority: Priority | null;
+  /** Warehouse charges where the view has them (own nodes and nodes seen exactly). */
+  readonly warehouse: number | null;
 }
 
 /** A road and what its next level would give, from `EdgeView.upgrade_gain` (the server's numbers). */
@@ -289,6 +296,7 @@ function nodeInfo(
     build: buildInfo(ctx, node, tick),
     attritionIn: node.attrition_in,
     graceLeft: node.grace_left,
+    priority: node.priority,
   };
 }
 
@@ -450,7 +458,12 @@ export function buildHudData(
       node: g.location.kind === 'node' ? g.location.node : null,
       planned: g.order?.planned ?? false,
     })),
-    nodes: view.nodes.map((n) => ({ id: n.id, owner: ownership(n.owner, me) })),
+    nodes: view.nodes.map((n) => ({
+      id: n.id,
+      owner: ownership(n.owner, me),
+      priority: n.priority,
+      warehouse: n.warehouse,
+    })),
     roads: view.edges.map((e) => roadInfo(ctx, e)),
     events,
   };
