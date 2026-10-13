@@ -47,8 +47,10 @@ from gow_sim.commands import (
     PlayerCommand,
     Recruit,
     SetMode,
+    SetPriority,
     SetStance,
     Split,
+    Transfer,
     UpgradeRoad,
 )
 from gow_sim.maps import MapDef, MapFormatError, load_map, map_hash
@@ -62,7 +64,7 @@ from gow_sim.match import (
     run_headless,
 )
 from gow_sim.ruleset import Ruleset, RulesetError, Stance, load_ruleset, ruleset_hash
-from gow_sim.state import Mode, RoadKind, to_canonical
+from gow_sim.state import Mode, Priority, RoadKind, to_canonical
 
 __all__ = [
     "CHECKPOINT_EVERY",
@@ -160,6 +162,10 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "recruit", "node": node}
         case CancelOrder(group=g):
             return {"type": "cancel_order", "group": g}
+        case SetPriority(node=node, level=level):
+            return {"type": "set_priority", "node": node, "level": level.value}
+        case Transfer(src=src, dst=dst, n=n):
+            return {"type": "transfer", "from": src, "to": dst, "n": n}
         case Forfeit():
             return {"type": "forfeit"}
 
@@ -195,6 +201,10 @@ def decode_command(data: object) -> Command:
                 return Recruit(_int(d["node"]))
             case "cancel_order":
                 return CancelOrder(_int(d["group"]))
+            case "set_priority":
+                return SetPriority(_int(d["node"]), Priority(_str(d["level"])))
+            case "transfer":
+                return Transfer(_int(d["from"]), _int(d["to"]), _int(d["n"]))
             case "forfeit":
                 return Forfeit()
             case _:

@@ -52,6 +52,22 @@ class RoadKind(StrEnum):
     the edge stops being internal (DEC-22, item 5)."""
 
 
+class Priority(StrEnum):
+    """Supply priority of a city (DEC-18, item 1): only the order of delivery, not the target."""
+
+    HIGH = "high"
+    NORMAL = "normal"
+    LOW = "low"
+
+    @property
+    def rank(self) -> int:
+        """``high`` 0, ``normal`` 1, ``low`` 2: a lower rank is served first (DEC-18, item 4)."""
+        return _PRIORITY_RANK[self]
+
+
+_PRIORITY_RANK: Final = {Priority.HIGH: 0, Priority.NORMAL: 1, Priority.LOW: 2}
+
+
 class Detail(StrEnum):
     """How much a player sees of a node or an edge (DEC-04, mechanics.md, section 10)."""
 
@@ -173,6 +189,8 @@ class Node:
     """Tick of the last recruit in this city (DEC-01 cooldown, SIM-12); ``None``: never."""
     build: Build | None = None
     """The road this city upgrades (DEC-16); ``None``: no build."""
+    priority: Priority = Priority.NORMAL
+    """Supply priority of the city (DEC-18, item 1); back to ``NORMAL`` on every owner change."""
 
 
 @dataclass(slots=True)
@@ -190,7 +208,13 @@ class Edge:
 
 @dataclass(slots=True)
 class Packet:
-    """Charges on the way along an internal edge from ``from_node`` (mechanics.md, section 7)."""
+    """Charges on the way along a path of internal edges (mechanics.md, section 7; DEC-18, item 5).
+
+    ``edge`` is the current edge of the path, travelled away from ``from_node`` during
+    ``depart_tick .. arrive_tick``. ``route``: the edges of the path still to go after ``edge``,
+    the next one first; ``route_ticks``: their times, fixed at dispatch. ``transfer``: a one-off
+    ``Transfer`` (DEC-18, item 6), not the automatic dispatch.
+    """
 
     id: int
     owner: int
@@ -199,6 +223,9 @@ class Packet:
     charges: int
     depart_tick: int
     arrive_tick: int
+    route: tuple[int, ...] = ()
+    route_ticks: tuple[int, ...] = ()
+    transfer: bool = False
 
 
 @dataclass(slots=True)
@@ -411,6 +438,7 @@ def _node_data(n: Node) -> dict[str, object]:
         "over_ticks": n.over_ticks,
         "captured_tick": n.captured_tick,
         "recruited_tick": n.recruited_tick,
+        "priority": n.priority.value,
         "build": None
         if n.build is None
         else {
@@ -464,6 +492,9 @@ def _packet_data(p: Packet) -> dict[str, object]:
         "charges": p.charges,
         "depart_tick": p.depart_tick,
         "arrive_tick": p.arrive_tick,
+        "route": list(p.route),
+        "route_ticks": list(p.route_ticks),
+        "transfer": p.transfer,
     }
 
 
@@ -574,7 +605,16 @@ def _parse_node(data: object, where: str) -> Node:
     raw = _obj(
         data,
         where,
-        ("id", "owner", "warehouse", "over_ticks", "captured_tick", "recruited_tick", "build"),
+        (
+            "id",
+            "owner",
+            "warehouse",
+            "over_ticks",
+            "captured_tick",
+            "recruited_tick",
+            "priority",
+            "build",
+        ),
     )
     return Node(
         id=_int(raw["id"], f"{where}.id", low=0),
@@ -584,6 +624,7 @@ def _parse_node(data: object, where: str) -> Node:
         captured_tick=_opt_int(raw["captured_tick"], f"{where}.captured_tick"),
         recruited_tick=_opt_int(raw["recruited_tick"], f"{where}.recruited_tick"),
         build=None if raw["build"] is None else _parse_build(raw["build"], f"{where}.build"),
+        priority=Priority(_choice(raw["priority"], f"{where}.priority", Priority)),
     )
 
 
@@ -670,8 +711,25 @@ def _parse_order(data: object, where: str) -> Order:
 
 def _parse_packet(data: object, where: str) -> Packet:
     raw = _obj(
-        data, where, ("id", "owner", "edge", "from_node", "charges", "depart_tick", "arrive_tick")
+        data,
+        where,
+        (
+            "id",
+            "owner",
+            "edge",
+            "from_node",
+            "charges",
+            "depart_tick",
+            "arrive_tick",
+            "route",
+            "route_ticks",
+            "transfer",
+        ),
     )
+    route = _list(raw["route"], f"{where}.route")
+    route_ticks = _list(raw["route_ticks"], f"{where}.route_ticks")
+    if len(route) != len(route_ticks):
+        raise StateFormatError(f"{where}.route_ticks: expected one time per edge of the route")
     return Packet(
         id=_int(raw["id"], f"{where}.id", low=0),
         owner=_int(raw["owner"], f"{where}.owner", low=0),
@@ -680,6 +738,11 @@ def _parse_packet(data: object, where: str) -> Packet:
         charges=_int(raw["charges"], f"{where}.charges", low=0),
         depart_tick=_int(raw["depart_tick"], f"{where}.depart_tick", low=0),
         arrive_tick=_int(raw["arrive_tick"], f"{where}.arrive_tick", low=0),
+        route=tuple(_int(e, f"{where}.route[{i}]", low=0) for i, e in enumerate(route)),
+        route_ticks=tuple(
+            _int(t, f"{where}.route_ticks[{i}]", low=1) for i, t in enumerate(route_ticks)
+        ),
+        transfer=_bool(raw["transfer"], f"{where}.transfer"),
     )
 
 
