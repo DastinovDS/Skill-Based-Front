@@ -50,6 +50,11 @@
       orders.supplyMenu.hover(supplySectorAt(event.clientX - centre.x, event.clientY - centre.y));
   }
 
+  // The click on the city opens the menu: its middle is where that click was.
+  function ondown(event: PointerEvent): void {
+    pointer = { x: event.clientX, y: event.clientY, seen: true };
+  }
+
   function sign(choice: SupplyChoice): string {
     return choice === 'transfer' ? '⇢' : PRIORITY_SIGN[choice];
   }
@@ -59,13 +64,7 @@
   }
 </script>
 
-<svelte:window
-  onpointermove={onmove}
-  onpointerdown={(event) => {
-    // The click on the city opens the menu: its middle is where that click was.
-    pointer = { x: event.clientX, y: event.clientY, seen: true };
-  }}
-/>
+<svelte:window onpointermove={onmove} onpointerdown={ondown} />
 
 {#if menu.open}
   <!-- A click outside the ring (or in its middle, or on the city again) closes the menu. -->
