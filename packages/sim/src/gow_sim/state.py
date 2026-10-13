@@ -191,6 +191,9 @@ class Node:
     """The road this city upgrades (DEC-16); ``None``: no build."""
     priority: Priority = Priority.NORMAL
     """Supply priority of the city (DEC-18, item 1); back to ``NORMAL`` on every owner change."""
+    cut_since: int | None = None
+    """First tick of the current continuous cut of an own city from the owner's capital
+    (DEC-19, item 2); ``None`` while supplied, for provinces and neutral nodes."""
 
 
 @dataclass(slots=True)
@@ -439,6 +442,7 @@ def _node_data(n: Node) -> dict[str, object]:
         "captured_tick": n.captured_tick,
         "recruited_tick": n.recruited_tick,
         "priority": n.priority.value,
+        "cut_since": n.cut_since,
         "build": None
         if n.build is None
         else {
@@ -613,6 +617,7 @@ def _parse_node(data: object, where: str) -> Node:
             "captured_tick",
             "recruited_tick",
             "priority",
+            "cut_since",
             "build",
         ),
     )
@@ -625,6 +630,7 @@ def _parse_node(data: object, where: str) -> Node:
         recruited_tick=_opt_int(raw["recruited_tick"], f"{where}.recruited_tick"),
         build=None if raw["build"] is None else _parse_build(raw["build"], f"{where}.build"),
         priority=Priority(_choice(raw["priority"], f"{where}.priority", Priority)),
+        cut_since=_opt_int(raw["cut_since"], f"{where}.cut_since"),
     )
 
 
