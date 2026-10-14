@@ -34,6 +34,7 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
   enemy ones are dropped. ``fight_group`` goes only to the owner of the group; the road build
   events ``build_started``, ``road_upgraded`` and ``build_stopped`` only to the builder (DEC-17,
   item 6); ``priority_set`` and ``transfer_started`` only to their player (DEC-18, item 8);
+  ``starvation`` only to the owner of the city (DEC-19, item 8);
 - ``match_ended`` is not an event on the wire: it is ``match_end``.
 
 Entity ids in event data (``group``, ``new_group``, ``packet``) become opaque ids of the player;
@@ -125,6 +126,7 @@ PRIVATE_KINDS: Final = frozenset(
         "recruited",
         "road_upgraded",
         "stance_changed",
+        "starvation",
         "transfer_started",
         "warehouse_lost",
     }
@@ -180,6 +182,7 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 attrition_in=n.attrition_in,
                 grace_left=n.grace_left,
                 priority=n.priority,
+                starve_in=n.starve_in,
             )
             for n in view.nodes
         ),
@@ -293,6 +296,7 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "attrition_in": n.attrition_in,
                 "grace_left": n.grace_left,
                 "priority": n.priority,
+                "starve_in": n.starve_in,
             }
             for n in view.nodes
         ],

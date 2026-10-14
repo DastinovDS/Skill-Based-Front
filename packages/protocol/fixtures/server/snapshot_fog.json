@@ -27,7 +27,8 @@
         "build": null,
         "attrition_in": null,
         "grace_left": null,
-        "priority": "normal"
+        "priority": "normal",
+        "starve_in": null
       },
       {
         "id": 1,
@@ -47,7 +48,8 @@
         "build": null,
         "attrition_in": null,
         "grace_left": null,
-        "priority": null
+        "priority": null,
+        "starve_in": null
       },
       {
         "id": 2,
@@ -67,7 +69,8 @@
         "build": null,
         "attrition_in": null,
         "grace_left": null,
-        "priority": null
+        "priority": null,
+        "starve_in": null
       }
     ],
     "edges": [
