@@ -191,10 +191,27 @@ def is_city_node(state: GameState, node: int) -> bool:
 def starve_in(state: GameState, rules: Ruleset, node: int) -> int | None:
     """Ticks until the next consumption of a cut-off city (DEC-19, item 8); ``None`` if not cut.
 
+    Also ``None`` when that consumption would spend nothing (#253): no standing unit of the owner
+    in the city, or an empty warehouse and no charged standing unit. The schedule itself
+    (``cut_since``) does not change, so the countdown comes back on it once there are charges.
     The caller shows it only to the owner of the node.
     """
-    since = state.nodes[node].cut_since
+    n = state.nodes[node]
+    since = n.cut_since
     if since is None:
+        return None
+    units = charged = 0
+    for group in state.groups.values():  # sums only: the order does not matter
+        location = group.location
+        if (
+            group.owner == n.owner
+            and is_standing(group)
+            and isinstance(location, AtNode)
+            and location.node == node
+        ):
+            units += group.units
+            charged += group.charged
+    if units == 0 or (n.warehouse == 0 and charged == 0):
         return None
     first = since + rules.starvation.grace_ticks
     if state.tick < first:

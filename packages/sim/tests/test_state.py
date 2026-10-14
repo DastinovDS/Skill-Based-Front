@@ -430,6 +430,7 @@ def _states(draw: st.DrawFn) -> GameState:
             route=route,
             route_ticks=tuple(draw(st.integers(1, 99)) for _ in route),
             transfer=draw(st.booleans()),
+            share=draw(_small),
         )
     for _ in range(draw(st.integers(min_value=0, max_value=3))):
         iid = state.new_id()

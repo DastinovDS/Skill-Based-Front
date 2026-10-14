@@ -2,11 +2,14 @@
 
 Rules (mechanics.md, sections 4 and 5; DEC-07, rules 6 and 8; AGENTS.md, section 4.1):
 
-- Going along an edge into node ``v`` takes ``traversal_ticks = travel_ticks * 100 // pct``
-  ticks (rounded down, at least 1), where ``pct`` is ``terrain.entry_speed_pct`` of the terrain
-  of ``v``, the node being entered.
-- ``progress`` is in thousandths of the edge. After ``k`` ticks on an edge of ``T`` ticks it is
-  ``k * 1000 // T`` (rounded down); the group arrives on tick ``T``. Groups stand only in nodes.
+- Terrain speed by zone (owner's decision of 2026-10-14, #253; mechanics.md, section 4): the
+  border point ``border_permille`` splits an edge; the part next to node A goes at
+  ``terrain.speed_pct`` of A's terrain, the part next to node B at that of B. ``Leg`` holds the
+  integer formulas of crossing an edge from A to B: ``traversal_ticks`` ``T`` and ``progress``
+  after ``k`` ticks. An edge of one terrain ``p`` keeps ``T = travel_ticks * 100 // p`` and
+  ``progress = k * 1000 // T``.
+- ``progress`` is in thousandths of the edge from the node the group left; the group arrives on
+  tick ``T``. Groups stand only in nodes.
 - A path goes only through own nodes: the path search never expands a node of another player or
   a neutral one, so the first such node is the end of the path, the target of an attack or a
   capture. If an own node on the way is lost meanwhile, the group stops there on arrival.
@@ -39,18 +42,80 @@ from gow_sim.state import PROGRESS_SCALE, AtNode, Event, GameState, OnEdge, Orde
 from gow_sim.systems.capacity import change_owner, city_capacity
 
 
-def traversal_ticks(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int) -> int:
-    """Ticks to go along ``edge`` into ``to_node`` (see the module docstring).
+def border_permille(mapdef: MapDef, edge: int) -> int:
+    """The border point of ``edge`` in thousandths from its end ``a`` (DEC-21, DEC-23).
 
-    Raises ValueError above ``PROGRESS_SCALE`` ticks: ``progress`` would then stop growing on
-    some ticks and could no longer encode the time spent on the edge.
+    The single source of the border point for every rule. Maps have no such field yet, so it is
+    the midpoint; the map field of DEC-23 plugs in here.
+    """
+    del mapdef, edge
+    return PROGRESS_SCALE // 2
+
+
+@dataclass(frozen=True, slots=True)
+class Leg:
+    """Crossing an edge from node A to node B in two terrain zones (#253, mechanics.md, section 4).
+
+    ``border``: the border point ``b`` in thousandths from A; ``pa``, ``pb``: ``terrain.speed_pct``
+    of A and B; ``d = b * pb + (1000 - b) * pa``; ``ticks``: ``T``. The formulas take every
+    number non-negative, so ``//`` rounds down.
+    """
+
+    ticks: int
+    border: int
+    pa: int
+    pb: int
+    d: int
+
+    def progress(self, spent: int) -> int:
+        """``progress`` after ``spent`` ticks on the edge: ``k * d // (T * pb)`` in the zone of A
+        (while ``k * d <= T * b * pb``), ``b + (k * d - T * b * pb) // (T * pa)`` in the zone of
+        B; exactly ``PROGRESS_SCALE`` from ``T`` on."""
+        t = self.ticks
+        if spent >= t:
+            return PROGRESS_SCALE
+        at_border = t * self.border * self.pb
+        if spent * self.d <= at_border:
+            return spent * self.d // (t * self.pb)
+        return self.border + (spent * self.d - at_border) // (t * self.pa)
+
+    def spent(self, progress: int) -> int:
+        """Ticks behind ``progress``, the inverse of ``progress()``: the least ``k`` whose exact
+        position reaches ``progress`` (rounded up). Exact because every tick moves at least one
+        thousandth in both zones (``leg`` checks it)."""
+        t, b = self.ticks, self.border
+        if progress <= b:
+            scaled = t * progress * self.pb
+        else:
+            scaled = t * (b * self.pb + (progress - b) * self.pa)
+        return (scaled + self.d - 1) // self.d
+
+
+def leg(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int) -> Leg:
+    """The ``Leg`` of going along ``edge`` into ``to_node`` (see ``Leg``).
+
+    ``T = max(1, travel_ticks * 100 * d // (1000 * pa * pb))``: the exact sum of the times of the
+    two zones, rounded down once, at least 1. Raises ValueError when some tick would move less
+    than one thousandth (``T * max(pa, pb) > d``): ``progress`` could then no longer encode the
+    time spent on the edge (for one terrain: ``T > PROGRESS_SCALE``).
     """
     e = mapdef.edges[edge]
-    pct = rules.terrain.entry_speed_pct.of(mapdef.nodes[to_node].terrain)
-    ticks = max(1, e.travel_ticks * 100 // pct)  # both positive: rounded down
-    if ticks > PROGRESS_SCALE:
-        raise ValueError(f"edge {edge} into node {to_node} takes {ticks} > {PROGRESS_SCALE} ticks")
-    return ticks
+    from_node = e.other(to_node)
+    border = border_permille(mapdef, edge)
+    b = border if from_node == e.a else PROGRESS_SCALE - border
+    speed = rules.terrain.speed_pct
+    pa = speed.of(mapdef.nodes[from_node].terrain)
+    pb = speed.of(mapdef.nodes[to_node].terrain)
+    d = b * pb + (PROGRESS_SCALE - b) * pa
+    ticks = max(1, e.travel_ticks * 100 * d // (PROGRESS_SCALE * pa * pb))  # positive: round down
+    if ticks * max(pa, pb) > d:
+        raise ValueError(f"edge {edge} into node {to_node} takes {ticks} ticks: too slow")
+    return Leg(ticks, b, pa, pb, d)
+
+
+def traversal_ticks(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int) -> int:
+    """Ticks to go along ``edge`` into ``to_node``: ``T`` of its ``leg``."""
+    return leg(mapdef, rules, edge, to_node).ticks
 
 
 def edge_between(mapdef: MapDef, a: int, b: int) -> int | None:
@@ -201,13 +266,10 @@ def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
                 continue
             location = OnEdge(edge=eid, from_node=location.node, progress=0)
         to_node = mapdef.edges[location.edge].other(location.from_node)
-        ticks = traversal_ticks(mapdef, rules, location.edge, to_node)
-        # Ticks spent so far, recovered from progress = spent * 1000 // ticks (ticks <= 1000).
-        spent = (location.progress * ticks + PROGRESS_SCALE - 1) // PROGRESS_SCALE + 1
-        if spent < ticks:
-            group.location = OnEdge(
-                location.edge, location.from_node, spent * PROGRESS_SCALE // ticks
-            )
+        way = leg(mapdef, rules, location.edge, to_node)
+        spent = way.spent(location.progress) + 1  # ticks spent so far, with this one
+        if spent < way.ticks:
+            group.location = OnEdge(location.edge, location.from_node, way.progress(spent))
             continue
         rest = order.path[1:] if order.path and order.path[0] == to_node else ()
         if rest and state.nodes[to_node].owner == group.owner:
@@ -226,19 +288,17 @@ def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
 def _step_back(state: GameState, rules: Ruleset, gid: int, location: OnEdge) -> Arrival | None:
     """One tick of a bounce: ``progress`` falls by the step it grew by on the way there.
 
-    The step is that of the way there (``traversal_ticks`` into the far end), so a bounce after
-    ``k`` ticks on the edge takes ``k`` ticks (DEC-07, rules 4 and 6). No order is needed.
+    The steps are those of the way there (the ``leg`` into the far end, terrain zones included),
+    so a bounce after ``k`` ticks on the edge takes ``k`` ticks (DEC-07, rules 4 and 6). No order
+    is needed.
     """
     mapdef = state.map
     far = mapdef.edges[location.edge].other(location.from_node)
-    ticks = traversal_ticks(mapdef, rules, location.edge, far)
-    # Ticks spent so far, recovered as in ``advance`` (ticks <= 1000), minus this tick.
-    spent = (location.progress * ticks + PROGRESS_SCALE - 1) // PROGRESS_SCALE - 1
+    way = leg(mapdef, rules, location.edge, far)
+    spent = way.spent(location.progress) - 1  # ticks spent so far, minus this one
     group = state.groups[gid]
     if spent > 0:
-        group.location = OnEdge(
-            location.edge, location.from_node, spent * PROGRESS_SCALE // ticks, back=True
-        )
+        group.location = OnEdge(location.edge, location.from_node, way.progress(spent), back=True)
         return None
     group.location = AtNode(location.from_node)
     group.order = None

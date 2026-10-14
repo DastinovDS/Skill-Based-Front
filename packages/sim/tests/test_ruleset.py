@@ -74,11 +74,9 @@ def test_mvp0_economy(mvp0: Ruleset) -> None:
     economy = mvp0.economy
     pct = economy.stance_to_charges_pct
     assert (pct.of(Stance.ECONOMY), pct.of(Stance.BALANCE), pct.of(Stance.WAR)) == (75, 50, 25)
-    assert (economy.charges_per_cp, economy.passive_period_ticks, economy.passive_amount) == (
-        2,
-        50,
-        1,
-    )
+    assert economy.charges_per_cp == 2
+    # No passive production of the capital (#253): no such keys.
+    assert not hasattr(economy, "passive_amount")
     # Default of the open question #104.
     assert economy.start_stance is Stance.BALANCE
 
@@ -120,7 +118,7 @@ def test_mvp0_recruit(mvp0: Ruleset) -> None:
 def test_mvp0_terrain(mvp0: Ruleset) -> None:
     mod = mvp0.terrain.defense_mod
     assert [mod.of(t) for t in (Terrain.MOUNTAINS, Terrain.FOREST, Terrain.PLAINS)] == [1, 0, -1]
-    speed = mvp0.terrain.entry_speed_pct
+    speed = mvp0.terrain.speed_pct  # by zone (#253)
     assert [speed.of(t) for t in (Terrain.PLAINS, Terrain.FOREST, Terrain.MOUNTAINS)] == [
         125,
         100,
@@ -230,7 +228,7 @@ def test_file_errors_name_the_file(tmp_path: Path) -> None:
         (("economy", "start_stance"), "panic", "economy.start_stance: expected one of"),
         (("orders", "cost", "move"), -1, "orders.cost.move: -1 is out of range"),
         (("orders", "cost", "split"), "100", "orders.cost.split: expected an integer"),
-        (("terrain", "entry_speed_pct", "forest"), 0, "entry_speed_pct.forest: 0 is out"),
+        (("terrain", "speed_pct", "forest"), 0, "speed_pct.forest: 0 is out"),
         (("capacity", "by_kind", "city_small"), -5, "by_kind.city_small: -5 is out of range"),
         (("supply", "fast_speed_pct", "2"), 0, "fast_speed_pct.2: 0 is out of range"),
         (("supply", "base_amount"), 0, "supply.base_amount: 0 is out of range"),
@@ -262,7 +260,7 @@ def test_hash_changes_when_any_value_changes() -> None:
     base = _raw()
     base_hash = ruleset_hash(parse_ruleset(base))
     leaves = _leaves(base)
-    assert len(leaves) == 63  # every key of SIM-01, DEC-16, DEC-22, DEC-18 and DEC-19 by hand
+    assert len(leaves) == 61  # keys of SIM-01, DEC-16, DEC-22, DEC-18, DEC-19 by hand; #253: -2
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)

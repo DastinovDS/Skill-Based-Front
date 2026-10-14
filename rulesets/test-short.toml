@@ -16,8 +16,6 @@ period_ticks = 50
 
 [economy]
 charges_per_cp = 2
-passive_period_ticks = 50
-passive_amount = 1
 start_stance = "balance" # TODO(#104): как в mvp-0.toml
 
 [economy.stance_to_charges_pct]
@@ -51,7 +49,7 @@ mountains = 1
 forest = 0
 plains = -1
 
-[terrain.entry_speed_pct]
+[terrain.speed_pct]
 plains = 125
 forest = 100
 mountains = 70

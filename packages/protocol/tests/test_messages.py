@@ -159,8 +159,6 @@ def test_ruleset_public_has_the_stance_table_and_order_delays_of_mvp_0() -> None
     assert public.economy.model_dump() == {
         "stance_to_charges_pct": {"economy": 75, "balance": 50, "war": 25},
         "charges_per_cp": 2,
-        "passive_amount": 1,
-        "passive_period_ticks": 50,
     }
     assert public.orders.model_dump() == {
         "planned_delay_ticks": 30,

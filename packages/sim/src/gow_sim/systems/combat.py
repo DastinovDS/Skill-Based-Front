@@ -38,7 +38,7 @@ from gow_sim.maps import PLAYERS
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import PROGRESS_SCALE, AtNode, Event, GameState, Group, OnEdge, event
 from gow_sim.systems.capacity import change_owner
-from gow_sim.systems.movement import traversal_ticks
+from gow_sim.systems.movement import leg
 
 __all__ = [
     "Bonus",
@@ -239,11 +239,6 @@ class _OnEdge:
     """``progress`` at the start of the tick, before this tick's step of ``movement``."""
 
 
-def _spent(progress: int, ticks: int) -> int:
-    """Ticks behind ``progress = spent * 1000 // ticks`` (as ``movement`` recovers them)."""
-    return (progress * ticks + PROGRESS_SCALE - 1) // PROGRESS_SCALE
-
-
 def _contested_edges(state: GameState, arrivals: dict[int, _Arrival]) -> dict[int, list[int]]:
     """Edges with groups of both players on them (arrivals count on their edge): edge -> gids."""
     by_edge: dict[int, list[int]] = {}
@@ -267,19 +262,19 @@ def _edge_presence(
 
     Every group on an edge has made exactly one step in this tick (commands need a standing
     group, so a group on an edge always moves), so the step is undone with the formulas of
-    ``movement``: forward ``spent - 1``, a bounce ``spent + 1``, both on the ticks of the way
-    there (``traversal_ticks`` into the far end of the edge). A group that entered the edge in
-    this tick was in the node at its start: progress 0.
+    ``movement``: forward ``spent - 1``, a bounce ``spent + 1``, both on the steps of the way
+    there (the ``leg`` into the far end of the edge, terrain zones included). A group that
+    entered the edge in this tick was in the node at its start: progress 0.
     """
     mapdef = state.map
     g = state.groups[gid]
     loc = g.location
     if isinstance(loc, OnEdge):
         far = mapdef.edges[loc.edge].other(loc.from_node)
-        ticks = traversal_ticks(mapdef, rules, loc.edge, far)
-        spent = _spent(loc.progress, ticks)
+        way = leg(mapdef, rules, loc.edge, far)
+        spent = way.spent(loc.progress)
         if loc.back:
-            behind = min(PROGRESS_SCALE, (spent + 1) * PROGRESS_SCALE // ticks)
+            behind = way.progress(spent + 1)
             return _OnEdge(
                 gid,
                 g.owner,
@@ -289,15 +284,14 @@ def _edge_presence(
                 True,
                 PROGRESS_SCALE - behind,
             )
-        before = max(0, spent - 1) * PROGRESS_SCALE // ticks
+        before = way.progress(max(0, spent - 1))
         return _OnEdge(gid, g.owner, loc.edge, far, loc.progress, False, before)
     a = arrivals[gid]
     if a.back:  # one step of the bounce before home: from_node is the far end
-        ticks = traversal_ticks(mapdef, rules, a.edge, a.from_node)
-        before = PROGRESS_SCALE - PROGRESS_SCALE // ticks
+        before = PROGRESS_SCALE - leg(mapdef, rules, a.edge, a.from_node).progress(1)
     else:
-        ticks = traversal_ticks(mapdef, rules, a.edge, a.node)
-        before = (ticks - 1) * PROGRESS_SCALE // ticks
+        way = leg(mapdef, rules, a.edge, a.node)
+        before = way.progress(way.ticks - 1)
     return _OnEdge(gid, g.owner, a.edge, a.node, PROGRESS_SCALE, a.back, before)
 
 

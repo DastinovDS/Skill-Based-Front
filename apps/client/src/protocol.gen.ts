@@ -305,11 +305,6 @@ export interface EconomyPublic {
    * Charges per whole CP put into charges.
    */
   charges_per_cp: number;
-  passive_amount: number;
-  /**
-   * The capital makes ``passive_amount`` charges every ``passive_period_ticks`` in any stance.
-   */
-  passive_period_ticks: number;
 }
 /**
  * ``economy.stance_to_charges_pct``: the share of the CP quantum put into charges, in %.
@@ -755,6 +750,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 12;
+export const PROTOCOL_VERSION = 13;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

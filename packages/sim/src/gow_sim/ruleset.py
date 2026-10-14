@@ -120,8 +120,6 @@ class CpRules:
 @dataclass(frozen=True, slots=True)
 class EconomyRules:
     charges_per_cp: int
-    passive_period_ticks: int
-    passive_amount: int
     start_stance: Stance
     stance_to_charges_pct: StanceTable
 
@@ -159,7 +157,8 @@ class OrderRules:
 @dataclass(frozen=True, slots=True)
 class TerrainRules:
     defense_mod: TerrainTable
-    entry_speed_pct: TerrainTable
+    speed_pct: TerrainTable
+    """Movement speed in the zone of a node of this terrain, in percent (#253)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,8 +320,6 @@ def parse_ruleset(data: object) -> Ruleset:
                 "economy",
                 (
                     "charges_per_cp",
-                    "passive_period_ticks",
-                    "passive_amount",
                     "start_stance",
                     "stance_to_charges_pct",
                 ),
@@ -341,7 +338,7 @@ def parse_ruleset(data: object) -> Ruleset:
                 ),
             )
         ),
-        terrain=_parse_terrain(root.table("terrain", ("defense_mod", "entry_speed_pct"))),
+        terrain=_parse_terrain(root.table("terrain", ("defense_mod", "speed_pct"))),
         capacity=_parse_capacity(
             root.table("capacity", ("attrition_ticks", "grace_ticks", "by_kind"))
         ),
@@ -382,8 +379,6 @@ def _parse_economy(t: "_Table") -> EconomyRules:
     pct = t.table("stance_to_charges_pct", tuple(s.value for s in Stance))
     return EconomyRules(
         charges_per_cp=t.integer("charges_per_cp", low=0),
-        passive_period_ticks=t.integer("passive_period_ticks", low=1),
-        passive_amount=t.integer("passive_amount", low=0),
         start_stance=Stance(t.choice("start_stance", tuple(s.value for s in Stance))),
         stance_to_charges_pct=StanceTable(
             economy=pct.integer("economy", low=0, high=100),
@@ -409,14 +404,14 @@ def _parse_orders(t: "_Table") -> OrderRules:
 def _parse_terrain(t: "_Table") -> TerrainRules:
     keys = tuple(terrain.value for terrain in Terrain)
     mod = t.table("defense_mod", keys)
-    speed = t.table("entry_speed_pct", keys)
+    speed = t.table("speed_pct", keys)
     return TerrainRules(
         defense_mod=TerrainTable(
             plains=mod.integer("plains"),
             forest=mod.integer("forest"),
             mountains=mod.integer("mountains"),
         ),
-        entry_speed_pct=TerrainTable(
+        speed_pct=TerrainTable(
             plains=speed.integer("plains", low=1),
             forest=speed.integer("forest", low=1),
             mountains=speed.integer("mountains", low=1),

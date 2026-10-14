@@ -1,4 +1,4 @@
-"""Economy (SIM-06): CP regeneration, the stance split and production in the capital.
+"""Economy (SIM-06): CP regeneration and the stance split into charges of the capital.
 
 DEC-02 (mechanics.md, section 6), numbers from ``Ruleset``:
 
@@ -8,7 +8,8 @@ DEC-02 (mechanics.md, section 6), numbers from ``Ruleset``:
   accumulator ``charge_acc`` in hundredths of a charge; every whole 100 becomes one charge.
 - CP never exceed ``cp.cap``: the excess of the quantum burns (event ``cp_burned``). The stance
   share into charges is credited always, also at the cap.
-- Every ``economy.passive_period_ticks`` the capital produces ``economy.passive_amount`` charges.
+- The capital produces no charges of its own: charges come only from CP through the stance (no
+  passive production, owner's decision of 2026-10-14, #253).
 - Charges go to the warehouse of the capital up to its capacity (``systems.capacity``); the
   excess is lost (event ``charges_overflow``). If the player does not own its capital, all of the
   produced charges are lost.
@@ -32,30 +33,24 @@ CENTI: Final = 100
 
 
 def economy(state: GameState, rules: Ruleset) -> list[Event]:
-    """CP quantum and capital production for both players (symmetric, no player order effect)."""
+    """CP quantum and its charge share for both players (symmetric, no player order effect)."""
     tick = state.tick
-    cp_quantum = tick > 0 and tick % rules.cp.period_ticks == 0
-    passive = tick > 0 and tick % rules.economy.passive_period_ticks == 0
-    if not (cp_quantum or passive):
+    if not (tick > 0 and tick % rules.cp.period_ticks == 0):
         return []
     events: list[Event] = []
     capacities: tuple[int, ...] | None = None
     for pid in sorted(state.players):
         player = state.players[pid]
-        charges = 0
-        if cp_quantum:
-            pct = rules.economy.stance_to_charges_pct.of(player.stance)
-            to_charges = rules.cp.per_period * pct // 100  # non-negative: rounded down
-            total = player.cp + rules.cp.per_period - to_charges
-            burned = max(0, total - rules.cp.cap)
-            player.cp = total - burned
-            if burned > 0:
-                events.append(event(tick, "cp_burned", player=pid, cp=burned))
-            player.charge_acc += to_charges * rules.economy.charges_per_cp
-            charges += player.charge_acc // CENTI
-            player.charge_acc %= CENTI
-        if passive:
-            charges += rules.economy.passive_amount
+        pct = rules.economy.stance_to_charges_pct.of(player.stance)
+        to_charges = rules.cp.per_period * pct // 100  # non-negative: rounded down
+        total = player.cp + rules.cp.per_period - to_charges
+        burned = max(0, total - rules.cp.cap)
+        player.cp = total - burned
+        if burned > 0:
+            events.append(event(tick, "cp_burned", player=pid, cp=burned))
+        player.charge_acc += to_charges * rules.economy.charges_per_cp
+        charges = player.charge_acc // CENTI
+        player.charge_acc %= CENTI
         if charges == 0:
             continue
         capital = state.map.capital(pid)
