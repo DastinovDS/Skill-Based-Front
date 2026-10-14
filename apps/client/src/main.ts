@@ -6,6 +6,7 @@ import { mount } from 'svelte';
 import RootApp from './app/RootApp.svelte';
 import LegalPage from './legal/LegalPage.svelte';
 import LegalFooter from './legal/LegalFooter.svelte';
+import { loadGuest } from './api/guestStore.ts';
 import ReplayScreen from './replay/ReplayScreen.svelte';
 import './app.css';
 
@@ -43,7 +44,15 @@ if (legalPage === null && !devScreen) {
 // import would throw at load time and leave the production page blank (QA-01, #68).
 async function start(target: HTMLElement) {
   if (legalPage !== null) return mount(LegalPage, { target, props: { page: legalPage } });
-  if (replayId !== null) return mount(ReplayScreen, { target, props: { matchId: replayId } });
+  if (replayId !== null) {
+    // A direct link has no screen to go back to: "Back" opens the start page. The saved guest
+    // opens the replay of their own private or bot match (those are for the players only).
+    const token = loadGuest(() => window.localStorage)?.token ?? null;
+    const onback = () => {
+      window.location.assign('/');
+    };
+    return mount(ReplayScreen, { target, props: { matchId: replayId, token, onback } });
+  }
   if (import.meta.env.DEV && devScreen) {
     const { default: DevScreen } = await import('./dev/DevScreen.svelte');
     return mount(DevScreen, { target });

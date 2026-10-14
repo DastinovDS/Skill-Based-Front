@@ -21,7 +21,7 @@ from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.frames import FORMAT, FramesError, build_frames, frame_of
 from gow_server.matches import MatchManager, MatchRunner
 from gow_server.models import Match, MatchPlayer
-from gow_server.replays import ReplayService
+from gow_server.replays import ReplayService, ReplayState
 from gow_server.settings import Settings
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import MapDef, load_map
@@ -236,6 +236,73 @@ def test_match_without_a_database_row_still_gets_frames(
     assert (service.replays_dir / "abc_DEF-1.frames.json.gz").is_file()
 
 
+def test_replay_is_preparing_until_the_frames_are_written(
+    tmp_path: Path,
+    maps_dir: Path,
+    sessions: sessionmaker[Session],
+    line3: MapDef,
+    short_rules: Ruleset,
+) -> None:
+    """The root cause of #259: right after the match there is no frames file for a while, and
+    that must read as "preparing", not as "does not exist"."""
+    with sessions.begin() as session:
+        session.add(Match(id=5, map_id="line3", ruleset_hash="x", rated=False, status="running"))
+    seen: list[ReplayState] = []
+
+    def state_now(service: ReplayService) -> ReplayState:
+        with sessions() as session:
+            match = session.get(Match, 5)
+            assert match is not None
+            return service.state(match)
+
+    async def scenario() -> ReplayService:
+        clock = ManualClock()
+        service = _service(tmp_path, maps_dir, sessions)
+        manager = MatchManager(clock, replays=service)
+        runner = manager.create("line3", line3, short_rules, (101, 202), match_id="5")
+        await _settle()
+        seen.append(state_now(service))  # the match runs
+        await _play(manager, runner, clock, stances=False)
+        # The match is over, its row says "saved" already; the worker has not finished yet.
+        with sessions.begin() as session:
+            match = session.get(Match, 5)
+            assert match is not None
+            match.status = "saved"
+        seen.append(state_now(service))
+        await service.aclose()
+        seen.append(state_now(service))
+        return service
+
+    service = asyncio.run(scenario())
+    assert seen == [ReplayState.PREPARING, ReplayState.PREPARING, ReplayState.READY]
+    assert not service._building  # pyright: ignore[reportPrivateUsage]
+
+
+def test_failed_build_is_unavailable_not_preparing(
+    tmp_path: Path,
+    maps_dir: Path,
+    sessions: sessionmaker[Session],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A log that cannot be turned into frames: after the build ends the state is "unavailable"
+    (a poller must stop), and the file never appears."""
+    service = _service(tmp_path, maps_dir, sessions)
+    service.replays_dir.mkdir()
+    service.log_path("8").write_bytes(b"not a replay")
+    saved = Match(id=8, map_id="line3", ruleset_hash="x", status="saved")
+
+    async def scenario() -> ReplayState:
+        task = service.schedule("8")
+        assert service.state(saved) is ReplayState.PREPARING
+        assert await task is None
+        state = service.state(saved)
+        await service.aclose()
+        return state
+
+    assert asyncio.run(scenario()) is ReplayState.UNAVAILABLE
+    assert "replay frames failed" in caplog.text
+
+
 def test_cancelled_match_keeps_a_cut_log_and_no_frames(
     tmp_path: Path,
     maps_dir: Path,
@@ -331,11 +398,23 @@ def _guest(api: Api, nick: str) -> tuple[int, dict[str, str]]:
 
 
 def _add_match(
-    api: Api, match_id: int, rated: bool, players: tuple[int, int], path: str | None
+    api: Api,
+    match_id: int,
+    rated: bool,
+    players: tuple[int, int],
+    path: str | None,
+    status: str = "saved",
 ) -> None:
     with api.sessions.begin() as session:
         session.add(
-            Match(id=match_id, map_id="line3", ruleset_hash="x", rated=rated, replay_path=path)
+            Match(
+                id=match_id,
+                map_id="line3",
+                ruleset_hash="x",
+                rated=rated,
+                replay_path=path,
+                status=status,
+            )
         )
         session.flush()
         for side, player in enumerate(players):
@@ -387,11 +466,53 @@ def test_unrated_replay_is_for_the_participants(
 
 
 def test_replay_not_found(api: Api) -> None:
+    _, auth = _guest(api, "Alice")
+    assert api.client.get("/api/replays/99", headers=auth).status_code == 404
+    assert api.client.get("/api/replays/abc").status_code == 422
+
+
+def test_replay_of_a_running_match_is_preparing(api: Api) -> None:
+    """202 with ``Retry-After``: the client waits instead of reporting "not found" (#259)."""
     a, auth = _guest(api, "Alice")
     b, _ = _guest(api, "Bobby")
-    _add_match(api, 3, True, (a, b), None)  # the frames are not ready (yet)
-    _add_match(api, 4, True, (a, b), "4.frames.json.gz")  # the file is gone
-    _add_match(api, 5, True, (a, b), "../gow.db")  # never leaves the replays folder
-    for match_id in (3, 4, 5, 99):
-        assert api.client.get(f"/api/replays/{match_id}", headers=auth).status_code == 404
-    assert api.client.get("/api/replays/abc").status_code == 422
+    _add_match(api, 3, True, (a, b), None, status="running")
+    response = api.client.get("/api/replays/3", headers=auth)
+    assert response.status_code == 202
+    assert response.json() == {"status": "preparing"}
+    assert response.headers["retry-after"] == "2"
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_preparing_replay_keeps_its_access_rules(api: Api) -> None:
+    a, auth_a = _guest(api, "Alice")
+    b, _ = _guest(api, "Bobby")
+    _, auth_c = _guest(api, "Carol")
+    _add_match(api, 3, False, (a, b), None, status="running")
+    assert api.client.get("/api/replays/3", headers=auth_a).status_code == 202
+    assert api.client.get("/api/replays/3").status_code == 401
+    assert api.client.get("/api/replays/3", headers=auth_c).status_code == 403
+
+
+def test_replay_that_will_never_exist_is_gone(api: Api) -> None:
+    """410: the match is over and nothing builds its frames (failed build, crash, aborted)."""
+    a, auth = _guest(api, "Alice")
+    b, _ = _guest(api, "Bobby")
+    _add_match(api, 3, True, (a, b), None, status="saved")  # the build failed or never ran
+    _add_match(api, 4, True, (a, b), "4.frames.json.gz", status="saved")  # the file is gone
+    _add_match(api, 5, True, (a, b), "../gow.db", status="saved")  # never leaves the folder
+    _add_match(api, 6, True, (a, b), None, status="aborted")  # crashed or cut by a restart
+    for match_id in (3, 4, 5, 6):
+        response = api.client.get(f"/api/replays/{match_id}", headers=auth)
+        assert response.status_code == 410, match_id
+        assert response.headers.get("content-encoding") != "gzip"
+
+
+def test_replay_is_found_by_its_file_before_the_path_is_saved(
+    api: Api, line3: MapDef, short_rules: Ruleset
+) -> None:
+    """The worker wrote the file but the row has no ``replay_path`` yet: it is already ready."""
+    a, _ = _guest(api, "Alice")
+    b, _ = _guest(api, "Bobby")
+    _frames_file(api, "7.frames.json.gz", line3, short_rules)
+    _add_match(api, 7, True, (a, b), None, status="saved")
+    assert api.client.get("/api/replays/7").status_code == 200

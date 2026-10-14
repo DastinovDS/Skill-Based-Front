@@ -32,7 +32,12 @@ export type Screen =
       readonly me: PlayerId;
       readonly end: MatchEndMsg;
     }
-  | { readonly name: 'replay'; readonly matchId: string };
+  | {
+      readonly name: 'replay';
+      readonly matchId: string;
+      /** The screen the replay was opened from, where "Back" returns; none: the menu. */
+      readonly back?: Screen;
+    };
 
 export interface Guest {
   readonly token: string;
@@ -182,6 +187,18 @@ export class AppState {
   finishMatch(matchId: string, me: PlayerId, end: MatchEndMsg): void {
     this.activeMatch = null;
     this.go({ name: 'result', matchId, me, end });
+  }
+
+  /** The replay of a match, opened from the current screen: "Back" returns here (#259). */
+  openReplay(matchId: string): void {
+    this.go({ name: 'replay', matchId, back: this.screen });
+  }
+
+  /** "Back" on the replay screen: to the screen it was opened from, else to the menu. */
+  closeReplay(): void {
+    const screen = this.screen;
+    if (screen.name === 'replay' && screen.back !== undefined) this.go(screen.back);
+    else this.menu();
   }
 
   /** The saved guest is not known to the server: start over with a new nick. */

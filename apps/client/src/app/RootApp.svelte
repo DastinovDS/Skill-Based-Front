@@ -148,7 +148,7 @@
     me={screen.me}
     end={screen.end}
     onreplay={() => {
-      app.go({ name: 'replay', matchId: screen.matchId });
+      app.openReplay(screen.matchId);
     }}
     onmenu={() => {
       app.menu();
@@ -159,7 +159,7 @@
     matchId={screen.matchId}
     token={guest.token}
     onback={() => {
-      app.menu();
+      app.closeReplay();
     }}
   />
 {/if}
