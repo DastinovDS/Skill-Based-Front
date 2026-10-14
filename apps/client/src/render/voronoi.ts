@@ -23,7 +23,18 @@ export function voronoiCells(sites: readonly Point[], bounds: Size): Point[][] {
         cell = clipCloserTo(cell, site, other);
       }
     });
-    return cell;
+    return withoutRepeats(cell);
+  });
+}
+
+/**
+ * The corners of a cell without repeats: where the bisectors of three or four sites meet in one
+ * point (sites on a circle, common on symmetric maps) a clip leaves the same corner twice.
+ */
+function withoutRepeats(cell: readonly Point[]): Point[] {
+  return cell.filter((p, k) => {
+    const next = cell[(k + 1) % cell.length];
+    return next === undefined || cell.length < 2 || Math.hypot(next.x - p.x, next.y - p.y) > 1e-6;
   });
 }
 

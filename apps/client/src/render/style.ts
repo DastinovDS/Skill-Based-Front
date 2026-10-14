@@ -27,7 +27,7 @@ export const TERRAIN_FILL: Readonly<Record<Terrain, number>> = {
   mountains: 0x4a453e,
 };
 /** The baked background (or the flat terrain colours) is darkened by this (9.1). */
-export const BACKDROP_DIM = { color: BG, alpha: 0.3 } as const;
+export const BACKDROP_DIM = { color: BG, alpha: 0.18 } as const;
 export const CELL_BORDER = { width: 1, color: BG, alpha: 0.5 } as const;
 export const MAP_BORDER = { width: 2, color: 0x484f58 } as const;
 
@@ -45,7 +45,7 @@ export function ownerColor(me: PlayerId, owner: PlayerId): number {
 }
 
 /** Territory: the cell of an owned city is tinted with the owner colour (9.1). */
-export const TERRITORY_ALPHA = 0.13;
+export const TERRITORY_ALPHA = 0.07;
 /** The border of an area of one owner: a light line of the owner colour. */
 export const TERRITORY_BORDER = { width: 2, alpha: 0.95, inset: 1.5 } as const;
 
@@ -57,9 +57,9 @@ export interface StampSpec {
   readonly alpha: number;
 }
 export const STAMPS: Readonly<Record<Terrain, StampSpec>> = {
-  forest: { cell: { width: 34, height: 30 }, alpha: 0.32 },
-  mountains: { cell: { width: 52, height: 40 }, alpha: 0.38 },
-  plains: { cell: { width: 30, height: 26 }, alpha: 0.22 },
+  forest: { cell: { width: 34, height: 30 }, alpha: 0.4 },
+  mountains: { cell: { width: 52, height: 40 }, alpha: 0.46 },
+  plains: { cell: { width: 30, height: 26 }, alpha: 0.28 },
 };
 /** A stamp keeps this far from a city centre and from a road axis (world units). */
 export const STAMP_CITY_CLEARANCE = 30;
@@ -70,24 +70,24 @@ export const SNOW_ALPHA = 0.45;
 // --- Roads, width 1..5 (9.3) ---------------------------------------------------------------------
 export const ROAD_COLOR = 0xc4cbd4;
 export const ROAD_CASING = { color: BG, alpha: 0.6 } as const;
-export const ROAD_CASING_EXTRA = 5;
+export const ROAD_CASING_EXTRA = 4;
 export const ROAD_STRIPE = { color: BG, alpha: 0.5, width: 1 } as const;
 /** A fast road (DEC-22): dark chevrons every `spacing` px, `size` px long, notch at `depth`. */
 export const ROAD_CHEVRON = { color: BG, spacing: 28, size: 9, gap: 3, depth: 0.45 } as const;
 /** Width 1 is a dashed trail. */
 export const ROAD_TRAIL_DASH = 7;
 export const ROAD_TRAIL_GAP = 5;
-/** Road thickness grows with its level (1..3, DEC-22), so the level reads without colour: `1 + 3w`. */
+/** Road thickness grows with its level (1..3, DEC-22), so the level reads without colour: `1 + 2w`. */
 export function roadThickness(width: number): number {
-  return 1 + 3 * width;
+  return 1 + 2 * width;
 }
 /** The width badge of a hovered road. */
 export const WIDTH_BADGE = { radius: 9, fill: BG, stroke: PAPER, fontSize: 11 } as const;
 
 // --- Cities (9.4) -------------------------------------------------------------------------------
 /** Radius when the capacity is not known (a map without a snapshot). */
-export const NODE_RADIUS = 17;
-export const CAPITAL_RADIUS = 21;
+export const NODE_RADIUS = 14;
+export const CAPITAL_RADIUS = 17;
 export const OWNER_OUTLINE = { width: 3, color: PAPER } as const;
 export const NEUTRAL_OUTLINE = { width: 2, color: NEUTRAL_STROKE } as const;
 /** An enemy city has a second, dark inner ring (the shape carries the side, not only the hue). */
@@ -98,7 +98,7 @@ export const CITY_HALO_INSET = 3;
 export const CAPITAL_STAR = { fill: PAPER, stroke: { width: 1.4, color: BG } } as const;
 
 /** The capacity ring: `RING_GAP` outside the body, segments 4 wide on a 7 wide dark base. */
-export const RING_GAP = 8;
+export const RING_GAP = 7;
 export const RING_SEGMENT = { width: 4, base: 7, baseAlpha: 0.75, gap: 0.16 } as const;
 export const RING_FILLED = PAPER;
 /** Above this capacity the ring is one solid arc with a notch at every fifth unit. */
@@ -117,8 +117,8 @@ export const VP_TEXT_COLOR = PAPER;
 // --- Units on the map (9.5): inverted triangles ---------------------------------------------------
 // A group is a triangle pointing down. Its side steps with the number of units; the share of
 // charged units fills it from the tip (`sqrt(charged / units)` of the height), so the charge reads
-// as a level. The owner is told by the outline as well as by the hue: own, one white outline;
-// opponent, a white outline plus a dark inner one; an opponent without numbers, dashed with "?".
+// as a level. The owner is told by the outline's hue and by its shape: own, one blue outline;
+// opponent, a red outline plus a light inner one; an opponent without numbers, dashed with "?".
 // The mode "Defense" is a shield disc at the top right corner ("Attack" is not drawn).
 
 export const PLATE_FILL = 0x161b22;
