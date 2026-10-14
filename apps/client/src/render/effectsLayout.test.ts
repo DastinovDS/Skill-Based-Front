@@ -5,7 +5,6 @@ import {
   bounceInfo,
   captureInfo,
   effectProgress,
-  flashLook,
   numbersLook,
   scaledPolygon,
   starPolygon,
@@ -33,12 +32,6 @@ describe('effectProgress', () => {
 });
 
 describe('effect looks', () => {
-  it('fades the flash out while it grows', () => {
-    expect(flashLook(0).alpha).toBe(1);
-    expect(flashLook(1).alpha).toBe(0);
-    expect(flashLook(1).scale).toBeGreaterThan(flashLook(0).scale);
-  });
-
   it('lets the numbers rise by 12 and fade at the end, but not rise with reduced motion', () => {
     expect(numbersLook(0, false)).toEqual({ alpha: 1, rise: 0 });
     expect(numbersLook(1, false).rise).toBe(12);

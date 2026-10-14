@@ -20,24 +20,59 @@ function fixture(name: string): SnapshotMsg {
   return found[1];
 }
 
-function fight(tick: number, where: { node: number } | { edge: number }, l0: number, l1: number) {
+type Where = { node: number } | { edge: number; point: number };
+
+function place(where: Where) {
+  return {
+    node: 'node' in where ? where.node : null,
+    edge: 'edge' in where ? where.edge : null,
+    // The meeting point on an edge (DEC-24, C3): twice the position in thousandths from `a`.
+    point: 'edge' in where ? where.point : null,
+  };
+}
+
+/** A finished fight (DEC-24): `winner` `null`: both sides bounced. */
+function fight(
+  tick: number,
+  where: Where,
+  l0: number,
+  l1: number,
+  winner: 0 | 1 | null = 0,
+  captured = false,
+) {
   const event: EventMsg = {
     type: 'event',
     tick,
     kind: 'fight_ended',
     data: {
       fight: `dev-fight-${String(tick)}`,
-      node: 'node' in where ? where.node : null,
-      edge: 'edge' in where ? where.edge : null,
-      // The meeting point on an edge (DEC-24, C3): a little off the middle, towards the end `b`.
-      point: 'edge' in where ? 1200 : null,
+      ...place(where),
       attacker: 'node' in where ? 0 : null,
       start: tick - 20,
-      winner: 0,
-      captured: false,
+      winner,
+      captured,
       shots_0: 2,
       losses_0: l0,
       losses_1: l1,
+    },
+  };
+  return event;
+}
+
+/** One round of a fight: own shots, the losses of both sides (the enemy's shots are not sent). */
+function round(tick: number, where: Where, shots: number, l0: number, l1: number) {
+  const event: EventMsg = {
+    type: 'event',
+    tick,
+    kind: 'fight_round',
+    data: {
+      fight: `dev-fight-${String(tick)}`,
+      ...place(where),
+      shots_0: shots,
+      virtual_0: 0,
+      losses_0: l0,
+      losses_1: l1,
+      spent_0: shots,
     },
   };
   return event;
@@ -82,7 +117,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     id: 'snapshot',
     map: 'diamond',
     snapshot: fixture('snapshot'),
-    events: [fight(118, { edge: 3 }, 1, 2)],
+    events: [fight(118, { edge: 3, point: 1200 }, 1, 2)],
   },
   { id: 'overflow', map: 'diamond', snapshot: overflowSnapshot(), events: [] },
   { id: 'snapshot_fog', map: 'line3', snapshot: fixture('snapshot_fog'), events: [] },
@@ -90,7 +125,14 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     id: 'snapshot_clash',
     map: 'siege',
     snapshot: fixture('snapshot_clash'),
-    events: [fight(395, { edge: 1 }, 2, 3), fight(398, { node: 1 }, 0, 1)],
+    events: [
+      // A fight going on over the road 5 (the fixture lists it): a round just fired, its shots in
+      // the air; a held city, a captured one and a pair of groups that both bounced, ended.
+      round(398, { edge: 5, point: 1250 }, 2, 1, 1),
+      fight(397, { node: 0 }, 1, 2, 0),
+      fight(395, { node: 1 }, 2, 1, 1, true),
+      fight(394, { edge: 1, point: 1000 }, 1, 1, null),
+    ],
   },
 ];
 

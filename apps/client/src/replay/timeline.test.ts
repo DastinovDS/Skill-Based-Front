@@ -51,6 +51,30 @@ describe('buildTimeline', () => {
     expect(timeline.events.at(-1)).toMatchObject({ kind: 'match_ended', tick: SAMPLE.ticks });
   });
 
+  it('lists the fights going on from the frame key "f" (DEC-24): both sides, none without it', () => {
+    const first = SAMPLE.frames[0];
+    if (first === undefined) throw new Error('the sample has no frames');
+    const withFight = buildTimeline({
+      ...SAMPLE,
+      frames: [{ ...first, f: [[7, null, 1, 1250, null, 40, 50, [3, 4]]] }],
+    }).snapshots[0];
+    expect(withFight?.view.fights).toEqual([
+      {
+        id: '7',
+        node: null,
+        edge: 1,
+        point: 1250,
+        attacker: null,
+        start_tick: 40,
+        next_round_tick: 50,
+        groups: ['3', '4'],
+        enemy_units: 0,
+        enemy_charged: 0,
+      },
+    ]);
+    expect(timeline.snapshots[0]?.view.fights).toEqual([]);
+  });
+
   it('fills the road builds of cities from the frame key "b" (DEC-16), none without it', () => {
     const first = SAMPLE.frames[0];
     if (first === undefined) throw new Error('the sample has no frames');

@@ -5,7 +5,7 @@
  * them directly. Units are world units (docs/design/map-format.md, y grows down) unless stated.
  * Nothing here knows a game rule: numbers come from the snapshot and events.
  */
-import type { EventMsg, MapFile } from '../protocol.gen.ts';
+import type { MapFile } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { PACKET_FADE_MARGIN, PACKET_MIN_SCALE, UNIT_SIDES, UNIT_SIDE_UNKNOWN } from './style.ts';
 
@@ -243,16 +243,6 @@ export function timeLeftLabel(ticksLeft: number, tickHz: number): string {
 
 // --- Fight marks -------------------------------------------------------------------------------
 
-export interface FightInfo {
-  event: EventMsg;
-  /** Units lost by player 0 and player 1: in the round, or in the whole fight when `final`. */
-  losses: readonly [number, number];
-  /** Where the fight is: a city, or its meeting point on an edge (DEC-24, C3). */
-  at: Point;
-  /** `fight_ended`: the loss numbers of the whole fight are shown; a round only flashes. */
-  final: boolean;
-}
-
 /**
  * Where a fight is drawn: its city, or on an edge at `point / 2000` of the way from the end `a`
  * (`point`: twice the meeting position in thousandths, DEC-24, C3). `undefined`: unknown place.
@@ -268,33 +258,4 @@ export function fightPoint(
   const ends = edgeEnds(map, edge);
   const progress = point === null ? EDGE_PROGRESS / 2 : point / 2;
   return ends && edgePoint(ends.a, ends.b, true, progress);
-}
-
-function intField(data: EventMsg['data'], key: string): number | null {
-  const value = data[key];
-  return typeof value === 'number' ? value : null;
-}
-
-/**
- * A `fight_round` or `fight_ended` event (DEC-24) as a mark on the map, or `null` if it is not one
- * or names an unknown place. A fight on an edge is drawn at its meeting point (`point`). The
- * events come from `gow_sim.systems.combat` (`node` or `edge`, `point`, `losses_0`, `losses_1`).
- * Replays of `sim_version` 9 and older have the instant `fight` instead: a finished fight drawn in
- * the middle of its road.
- */
-export function fightInfo(event: EventMsg, map: MapFile): FightInfo | null {
-  const kind = event.kind;
-  if (kind !== 'fight_round' && kind !== 'fight_ended' && kind !== 'fight') return null;
-  const losses0 = intField(event.data, 'losses_0');
-  const losses1 = intField(event.data, 'losses_1');
-  if (losses0 === null || losses1 === null) return null;
-  const at = fightPoint(
-    map,
-    intField(event.data, 'node'),
-    intField(event.data, 'edge'),
-    intField(event.data, 'point'),
-  );
-  return at === undefined
-    ? null
-    : { event, losses: [losses0, losses1], at, final: kind !== 'fight_round' };
 }

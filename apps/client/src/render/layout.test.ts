@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { EventMsg, MapFile } from '../protocol.gen.ts';
 import {
   arrowGeometry,
   buildGeometry,
   countLabel,
   dashSegments,
   edgePoint,
-  fightInfo,
   chargeLevel,
   packetFade,
   triangleCorners,
@@ -135,48 +133,5 @@ describe('road builds of cities', () => {
     expect(timeLeftLabel(0, 10)).toBe('0:00');
     expect(timeLeftLabel(-5, 10)).toBe('0:00');
     expect(timeLeftLabel(905, 10)).toBe('1:31');
-  });
-});
-
-describe('fight marks', () => {
-  const map = {
-    nodes: [
-      { id: 0, x: 10, y: 20 },
-      { id: 1, x: 110, y: 20 },
-    ],
-    edges: [{ id: 0, a: 0, b: 1 }],
-  } as unknown as MapFile;
-
-  function fightEvent(data: EventMsg['data']): EventMsg {
-    return { type: 'event', tick: 50, kind: 'fight_ended', data };
-  }
-
-  it('puts a fight in a city at the city and reads both sides losses', () => {
-    const info = fightInfo(fightEvent({ node: 1, edge: null, losses_0: 2, losses_1: 3 }), map);
-    expect(info?.at).toEqual({ x: 110, y: 20 });
-    expect(info?.losses).toEqual([2, 3]);
-  });
-
-  it('puts a fight on a road at its meeting point', () => {
-    // DEC-24, C3: point = pos_0 + pos_1 = 1134, the mark at 1134 / 2000 of the road from `a`.
-    const data = { node: null, edge: 0, point: 1134, losses_0: 0, losses_1: 1 };
-    const at = fightInfo(fightEvent(data), map)?.at;
-    expect(at?.x).toBeCloseTo(66.7);
-    expect(at?.y).toBe(20);
-  });
-
-  it('flashes a round and shows the numbers of a finished fight only', () => {
-    const round = { ...fightEvent({ node: 1, edge: null, losses_0: 0, losses_1: 1 }) };
-    expect(fightInfo({ ...round, kind: 'fight_round' }, map)?.final).toBe(false);
-    expect(fightInfo(round, map)?.final).toBe(true);
-    expect(fightInfo({ ...round, kind: 'fight_started' }, map)).toBeNull();
-  });
-
-  it('ignores other events, unknown places and events without losses', () => {
-    expect(fightInfo({ type: 'event', tick: 1, kind: 'node_captured', data: {} }, map)).toBeNull();
-    expect(
-      fightInfo(fightEvent({ node: 9, edge: null, losses_0: 1, losses_1: 1 }), map),
-    ).toBeNull();
-    expect(fightInfo(fightEvent({ node: 0, edge: null }), map)).toBeNull();
   });
 });

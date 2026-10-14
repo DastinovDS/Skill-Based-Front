@@ -1,4 +1,4 @@
-import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import type { EventMsg, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 import type { Point } from './camera.ts';
@@ -7,34 +7,19 @@ import {
   bounceInfo,
   captureInfo,
   effectProgress,
-  flashLook,
-  numbersLook,
   scaledPolygon,
-  starPolygon,
   waveLook,
   type BounceInfo,
   type CaptureInfo,
 } from './effectsLayout.ts';
+import { FightView } from './fightView.ts';
 import type { MapLayers } from './layers.ts';
-import {
-  dashSegments,
-  edgeEnds,
-  fightInfo,
-  fightPoint,
-  nodePoint,
-  type FightInfo,
-  type TokenSpot,
-} from './layout.ts';
+import { dashSegments, edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
 import { reducedMotion } from './motion.ts';
 import {
   BG,
   BOUNCE_LENGTH,
   BOUNCE_MS,
-  FIGHT_COLOR,
-  FLASH_MS,
-  FLASH_STAR,
-  LOSS_FONT_SIZE,
-  NUMBERS_MS,
   ORDER_GHOST_DASH,
   ORDER_GHOST_GAP,
   WAVE_FILL_ALPHA,
@@ -43,50 +28,28 @@ import {
   ownerColor,
 } from './style.ts';
 
-const MAX_FIGHTS = 8;
-/** Radius of the ring of a fight going on, px (DEC-24): its arc fills towards the next round. */
-const RUNNING_RADIUS = 13;
-/** Half the size of the cross inside the ring: the fight is told by the shape, not the colour. */
-const RUNNING_CROSS = 5;
 /** Ticks between rounds when the source does not say (`rulesets/mvp-0.toml`). */
 const DEFAULT_ROUND_TICKS = 10;
 const MAX_WAVES = 4;
-/** The minus sign (U+2212) in front of a loss number. */
-const MINUS = '−';
-
-interface FightMark {
-  view: Container;
-  star: Graphics;
-  /** Own losses on the left, the opponent's on the right. */
-  texts: [Text, Text];
-}
-
 /** Where a bounced group goes back to, found once when its own token is on the road. */
 type BounceArrow = NonNullable<ReturnType<typeof bounceArrow>> | null;
 
 /**
- * Effects of events on the map (ui-style 9.9, U8): a ring with a cross over every fight going on
- * (DEC-24, `view.fights`; its arc fills until the next round), the white flash of every round, the
- * two loss numbers of a finished fight (own on the left, the opponent's on the right: the side is
- * told by the place and the colour), the short dashed arrow of an own group bounced back along its
- * road, and the wave of the new owner over the cell of a captured city. A fight on an edge sits at
- * its meeting point. With "less motion" the flash and the wave are left out and the numbers do not
- * rise. Events come from the server (`fight_round`, `fight_ended`, `fight_group`,
- * `node_captured`); nothing is guessed: the enemy's bounces are not sent, so none is drawn.
+ * Effects of events on the map (ui-style 9.9, U8): the animation of fights (`FightView`: arena,
+ * shots, losses, result), the short dashed arrow of an own group bounced back along its road, and
+ * the wave of the new owner over the cell of a captured city. With "less motion" the shots, the
+ * wave and the arrow are left out and the numbers do not rise. Events come from the server
+ * (`fight_round`, `fight_ended`, `fight_group`, `node_captured`); nothing is guessed: the enemy's
+ * bounces are not sent, so none is drawn.
  *
  * `update` runs every frame with the render tick; the effects are a function of the tick, so a
  * paused or frozen scene shows them in the state of that tick. `destroy()` releases everything.
  */
 export class EffectsView {
   private readonly layer = new Container({ label: 'effects' });
-  private readonly marks: FightMark[] = [];
+  private readonly fightView: FightView;
   private readonly waves: Graphics[] = [];
   private readonly arrows = new Graphics();
-  private readonly running = new Graphics();
-  private readonly contexts: GraphicsContext[] = [];
-  private readonly star: GraphicsContext;
-  private readonly lossStyles: Record<'own' | 'enemy', TextStyle>;
-  private fights: FightInfo[] = [];
   private captures: CaptureInfo[] = [];
   private bounces: BounceInfo[] = [];
   private readonly arrowAt = new Map<string, BounceArrow>();
@@ -97,43 +60,19 @@ export class EffectsView {
     private readonly map: MapFile,
     layers: MapLayers,
     private readonly me: PlayerId,
-    private labelResolution: number,
+    labelResolution: number,
     /** The Voronoi cells of the cities (`MapView.cells`). */
     private readonly cells: readonly (readonly Point[])[],
+    /** Radius of a city now (`CityView.radiusOf`). */
+    radiusOf: (node: number) => number,
   ) {
-    this.star = this.context((g) =>
-      g
-        .poly(starPolygon(FLASH_STAR.outer, FLASH_STAR.inner, FLASH_STAR.points))
-        .fill(FIGHT_COLOR)
-        .stroke({ width: 2.5, color: BG, join: 'round' }),
-    );
-    const loss = (color: number): TextStyle =>
-      new TextStyle({
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: LOSS_FONT_SIZE,
-        fontWeight: '700',
-        fill: color,
-        stroke: { color: BG, width: 3.5, join: 'round' },
-      });
-    this.lossStyles = { own: loss(ownerColor(me, me)), enemy: loss(ownerColor(me, other(me))) };
     this.layer.addChild(this.arrows);
-    this.layer.addChild(this.running);
     layers.layer.effects.addChild(this.layer);
-  }
-
-  private context(draw: (g: GraphicsContext) => GraphicsContext): GraphicsContext {
-    const context = draw(new GraphicsContext());
-    this.contexts.push(context);
-    return context;
+    this.fightView = new FightView(map, layers, me, labelResolution, radiusOf);
   }
 
   setLabelResolution(resolution: number): void {
-    this.labelResolution = resolution;
-    for (const mark of this.marks) {
-      for (const text of mark.texts) {
-        if (text.resolution !== resolution) text.resolution = resolution;
-      }
-    }
+    this.fightView.setLabelResolution(resolution);
   }
 
   update(
@@ -145,31 +84,24 @@ export class EffectsView {
   ): void {
     this.readEvents(events);
     const reduced = reducedMotion();
-    this.drawRunning(frame, roundTicks);
-    this.drawFights(frame.tick, tickHz, reduced);
+    this.fightView.update(frame, events, tickHz, roundTicks, reduced);
     this.drawWaves(frame.tick, tickHz, reduced);
     this.drawBounces(frame, spots, tickHz, reduced);
   }
 
   destroy(): void {
+    this.fightView.destroy();
     this.arrows.destroy();
-    this.running.destroy();
     this.layer.destroy({ children: true });
-    for (const context of this.contexts) context.destroy();
-    this.lossStyles.own.destroy();
-    this.lossStyles.enemy.destroy();
   }
 
   private readEvents(events: readonly EventMsg[]): void {
     if (events === this.eventsSeen && events.length === this.eventCount) return;
     this.eventsSeen = events;
     this.eventCount = events.length;
-    this.fights = [];
     this.captures = [];
     this.bounces = [];
     for (const event of events) {
-      const fight = fightInfo(event, this.map);
-      if (fight !== null) this.fights.push(fight);
       const capture = captureInfo(event, this.map);
       if (capture !== null) this.captures.push(capture);
       const bounce = bounceInfo(event);
@@ -180,85 +112,6 @@ export class EffectsView {
     for (const key of this.arrowAt.keys()) {
       if (!live.has(key)) this.arrowAt.delete(key);
     }
-  }
-
-  // --- Fight going on: a ring with a cross, the arc fills until the next round --------------
-
-  private drawRunning(frame: RenderFrame, roundTicks: number): void {
-    const g = this.running;
-    g.clear();
-    for (const fight of frame.base.view.fights) {
-      const at = fightPoint(this.map, fight.node, fight.edge, fight.point);
-      if (at === undefined) continue;
-      const left = (fight.next_round_tick - frame.tick) / Math.max(1, roundTicks);
-      const progress = Math.min(1, Math.max(0, 1 - left));
-      g.circle(at.x, at.y, RUNNING_RADIUS).fill({ color: BG, alpha: 0.55 });
-      g.circle(at.x, at.y, RUNNING_RADIUS).stroke({ width: 1.5, color: FIGHT_COLOR, alpha: 0.6 });
-      if (progress > 0) {
-        const start = -Math.PI / 2;
-        const end = start + 2 * Math.PI * progress;
-        g.moveTo(at.x + RUNNING_RADIUS * Math.cos(start), at.y + RUNNING_RADIUS * Math.sin(start));
-        g.arc(at.x, at.y, RUNNING_RADIUS, start, end).stroke({
-          width: 3.5,
-          color: FIGHT_COLOR,
-          cap: 'round',
-        });
-      }
-      const c = RUNNING_CROSS;
-      g.moveTo(at.x - c, at.y - c)
-        .lineTo(at.x + c, at.y + c)
-        .moveTo(at.x + c, at.y - c)
-        .lineTo(at.x - c, at.y + c)
-        .stroke({ width: 2.5, color: FIGHT_COLOR, cap: 'round' });
-    }
-  }
-
-  // --- Fight: flash of a round, loss numbers of a finished fight ------------------------------
-
-  private drawFights(tick: number, tickHz: number, reduced: boolean): void {
-    let used = 0;
-    for (const fight of this.fights) {
-      // A round only flashes; a finished fight keeps its loss numbers longer.
-      const life = fight.final ? NUMBERS_MS : FLASH_MS;
-      const t = effectProgress(tick - fight.event.tick, life, tickHz);
-      if (t === null || used >= MAX_FIGHTS) continue;
-      const mark = this.fightMark(used++);
-      mark.view.position.set(fight.at.x, fight.at.y);
-      const numbers = numbersLook(t, reduced);
-      mark.texts.forEach((text, i) => {
-        const losses = fight.losses[i === 0 ? this.me : other(this.me)];
-        const label = `${MINUS}${String(losses)}`;
-        if (text.text !== label) text.text = label;
-        text.visible = fight.final;
-        text.alpha = numbers.alpha;
-        text.position.set(i === 0 ? -17 : 17, 20 - numbers.rise);
-      });
-      const flash = reduced ? null : effectProgress(tick - fight.event.tick, FLASH_MS, tickHz);
-      mark.star.visible = flash !== null;
-      if (flash !== null) {
-        const look = flashLook(flash);
-        mark.star.scale.set(look.scale);
-        mark.star.alpha = look.alpha;
-      }
-      mark.view.visible = true;
-    }
-    for (let i = used; i < this.marks.length; i++) {
-      const mark = this.marks[i];
-      if (mark !== undefined) mark.view.visible = false;
-    }
-  }
-
-  private fightMark(index: number): FightMark {
-    let mark = this.marks[index];
-    if (mark === undefined) {
-      const view = this.layer.addChild(new Container({ label: 'fight' }));
-      const star = view.addChild(new Graphics(this.star));
-      const text = (style: TextStyle): Text =>
-        view.addChild(new Text({ text: '', style, anchor: 0.5, resolution: this.labelResolution }));
-      mark = { view, star, texts: [text(this.lossStyles.own), text(this.lossStyles.enemy)] };
-      this.marks.push(mark);
-    }
-    return mark;
   }
 
   // --- Capture: the wave over the cell -------------------------------------------------------
@@ -350,10 +203,6 @@ export class EffectsView {
     if (home === undefined || edgeEnds(this.map, location.edge) === undefined) return null;
     return bounceArrow(spot, home, BOUNCE_LENGTH, 10);
   }
-}
-
-function other(player: PlayerId): PlayerId {
-  return player === 0 ? 1 : 0;
 }
 
 function bounceKey(bounce: BounceInfo): string {

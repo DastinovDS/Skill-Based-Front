@@ -16,11 +16,6 @@ export function effectProgress(age: number, ms: number, tickHz: number): number 
   return t >= 1 ? null : t;
 }
 
-/** The white flash of a fight: it grows and fades out. */
-export function flashLook(t: number): { scale: number; alpha: number } {
-  return { scale: 0.6 + 0.8 * t, alpha: 1 - t };
-}
-
 /** The loss numbers: still, then fading in the last third; they rise unless motion is reduced. */
 export function numbersLook(t: number, reduced: boolean): { alpha: number; rise: number } {
   const fade = 0.7;

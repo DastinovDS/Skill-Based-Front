@@ -137,7 +137,85 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       groups,
       packets: [],
       intents: [],
-      fights: [],
+      fights: devFights(map, tick),
+    },
+  };
+}
+
+// --- A scripted fight for the demo (DEC-24) ----------------------------------------------------------
+// Every `FIGHT_CYCLE` ticks a fight runs from phase 120 to 180 (a round every 10 ticks): in a city on
+// even cycles, on a road on odd ones. It ends captured, held or both bounced in turn.
+
+const FIGHT_CYCLE = 200;
+const FIGHT_START = 120;
+const FIGHT_END = 180;
+const FIGHT_ROUND = 10;
+
+function devFightPlace(map: MapFile, cycle: number) {
+  const city = map.nodes[1]?.id ?? 0;
+  return cycle % 2 === 0
+    ? { node: city, edge: null, point: null, attacker: 1 as const }
+    : { node: null, edge: map.edges[0]?.id ?? 0, point: 900, attacker: null };
+}
+
+/** The fight of the demo going on at `tick`, as the view of a player lists it. */
+export function devFights(map: MapFile, tick: number): SnapshotMsg['view']['fights'] {
+  const phase = tick % FIGHT_CYCLE;
+  if (phase < FIGHT_START || phase >= FIGHT_END) return [];
+  const cycle = Math.floor(tick / FIGHT_CYCLE);
+  const start = cycle * FIGHT_CYCLE + FIGHT_START;
+  return [
+    {
+      id: 'dev-fight',
+      ...devFightPlace(map, cycle),
+      start_tick: start,
+      next_round_tick: start + (Math.floor((tick - start) / FIGHT_ROUND) + 1) * FIGHT_ROUND,
+      groups: [],
+      enemy_units: 3,
+      enemy_charged: 2,
+    },
+  ];
+}
+
+/** `fight_round` every round of the scripted fight and `fight_ended` at its end; else `null`. */
+export function devFightEvent(map: MapFile, tick: number): EventMsg | null {
+  const phase = tick % FIGHT_CYCLE;
+  const cycle = Math.floor(tick / FIGHT_CYCLE);
+  const place = devFightPlace(map, cycle);
+  const round = Math.floor((phase - FIGHT_START) / FIGHT_ROUND);
+  if (phase === FIGHT_END) {
+    const result = cycle % 3;
+    return {
+      type: 'event',
+      tick,
+      kind: 'fight_ended',
+      data: {
+        fight: 'dev-fight',
+        ...place,
+        start: tick - (FIGHT_END - FIGHT_START),
+        winner: result === 2 ? null : result === 0 ? 1 : 0,
+        captured: result === 0 && place.node !== null,
+        shots_0: 3,
+        losses_0: result === 0 ? 2 : 1,
+        losses_1: result === 0 ? 1 : 3,
+      },
+    };
+  }
+  if (phase <= FIGHT_START || phase > FIGHT_END || (phase - FIGHT_START) % FIGHT_ROUND !== 0) {
+    return null;
+  }
+  return {
+    type: 'event',
+    tick,
+    kind: 'fight_round',
+    data: {
+      fight: 'dev-fight',
+      ...place,
+      shots_0: 1,
+      virtual_0: 0,
+      losses_0: round % 2 === 0 ? 1 : 0,
+      losses_1: round % 2 === 0 ? 0 : 1,
+      spent_0: 1,
     },
   };
 }
@@ -155,7 +233,16 @@ export function devEvent(map: MapFile, tick: number): EventMsg | null {
         type: 'event',
         tick,
         kind: 'fight_ended',
-        data: { node, edge: null, point: null, attacker: 1, losses_0: 1, losses_1: 2 },
+        data: {
+          node,
+          edge: null,
+          point: null,
+          attacker: 1,
+          winner: 0,
+          captured: false,
+          losses_0: 1,
+          losses_1: 2,
+        },
       };
     default:
       return { type: 'event', tick, kind: 'vp_awarded', data: { player: 1, vp: 1 } };
@@ -177,6 +264,8 @@ export function startDevFeed(
   const step = (): void => {
     const event = devEvent(map, tick);
     if (event !== null) handlers.onEvent(event);
+    const fight = devFightEvent(map, tick);
+    if (fight !== null) handlers.onEvent(fight);
     handlers.onSnapshot(devSnapshot(map, rules, tick));
     tick += 1;
   };

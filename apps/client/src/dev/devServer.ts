@@ -7,7 +7,7 @@
  * (DEC-16) shows as a build of the city that widens the road after `ruleset_public.build.ticks_per_level` ticks, with no
  * charge accounting. The path is a breadth-first search on the map, good enough for a picture.
  */
-import { devEvent, devSnapshot, DEV_PLAYER } from '../hud/devFeed.ts';
+import { devEvent, devFightEvent, devSnapshot, DEV_PLAYER } from '../hud/devFeed.ts';
 import { MockSocket } from '../net/fakeServer.ts';
 import type {
   AckMsg,
@@ -294,6 +294,8 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
       current = snapshot();
       const event = devEvent(map, tick);
       if (event !== null) this.reply(event);
+      const fight = devFightEvent(map, tick);
+      if (fight !== null) this.reply(fight);
       this.reply(current);
     }
   }
