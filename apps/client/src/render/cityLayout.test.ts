@@ -3,20 +3,20 @@ import { barTop, capacityRing, cityRadius, ringRadius, warehouseSegments } from 
 
 describe('cityRadius', () => {
   it.each([
-    [0, 13],
-    [2, 13],
-    [3, 17],
-    [4, 17],
-    [5, 21],
-    [6, 21],
-    [7, 25],
-    [12, 25],
-  ])('capacity %i gives radius %i (ui-style.md 9.4)', (capacity, radius) => {
+    [0, 11],
+    [2, 11],
+    [3, 14],
+    [4, 14],
+    [5, 17],
+    [6, 17],
+    [7, 20],
+    [12, 20],
+  ])('capacity %i gives radius %i (round 3: smaller than ui-style.md 9.4)', (capacity, radius) => {
     expect(cityRadius(capacity)).toBe(radius);
   });
 
-  it('puts the ring 8 outside the body', () => {
-    expect(ringRadius(17)).toBe(25);
+  it('puts the ring 7 outside the body', () => {
+    expect(ringRadius(17)).toBe(24);
   });
 });
 
@@ -65,6 +65,6 @@ describe('warehouseSegments', () => {
   });
 
   it('sits under the ring', () => {
-    expect(barTop(13)).toBeGreaterThan(ringRadius(13));
+    expect(barTop(11)).toBeGreaterThan(ringRadius(11));
   });
 });

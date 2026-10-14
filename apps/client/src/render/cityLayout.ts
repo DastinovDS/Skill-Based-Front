@@ -9,10 +9,10 @@ import { BAR_SEGMENT, RING_GAP, RING_MAX_SEGMENTS, RING_SEGMENT } from './style.
 
 /** City radius by capacity class: up to 2, 3-4, 5-6, 7 and more. */
 export function cityRadius(capacity: number): number {
-  if (capacity <= 2) return 13;
-  if (capacity <= 4) return 17;
-  if (capacity <= 6) return 21;
-  return 25;
+  if (capacity <= 2) return 11;
+  if (capacity <= 4) return 14;
+  if (capacity <= 6) return 17;
+  return 20;
 }
 
 /** Radius of the capacity ring. */

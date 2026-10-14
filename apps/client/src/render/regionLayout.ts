@@ -98,12 +98,8 @@ export function stampPoints(
 
 // --- Borders between areas -------------------------------------------------------------------
 
-function edgeKey(a: Point, b: Point): string {
-  const key = (p: Point): string =>
-    `${String(Math.round(p.x * 100))},${String(Math.round(p.y * 100))}`;
-  const [first, second] = [key(a), key(b)].sort();
-  return `${first ?? ''}|${second ?? ''}`;
-}
+/** Two corners of cells closer than this (world units) are the same point. */
+const SNAP = 0.01;
 
 export interface CellEdge {
   readonly cell: number;
@@ -113,13 +109,39 @@ export interface CellEdge {
   readonly neighbour: number | null;
 }
 
-/** Every edge of every cell, with the cell across it (matched by its end points). */
-export function cellEdges(cells: readonly (readonly Point[])[]): CellEdge[] {
-  const owners = new Map<string, number>();
+const edgeCache = new WeakMap<readonly (readonly Point[])[], readonly CellEdge[]>();
+
+/**
+ * Every edge of every cell, with the cell across it. The corners of neighbouring cells are
+ * computed by different clips and differ in the last bits, so they are matched by distance
+ * (`SNAP`), not by rounding to a grid: a coordinate like `408.125` sits exactly on the rounding
+ * boundary of a hundredth and used to fall to either side, which lost the neighbour of the edge
+ * and with it a piece of the territory border. Edges that collapse to a point are dropped.
+ * The result is cached per `cells` array (the cells of a map never change).
+ */
+export function cellEdges(cells: readonly (readonly Point[])[]): readonly CellEdge[] {
+  const cached = edgeCache.get(cells);
+  if (cached !== undefined) return cached;
+  const corners: Point[] = [];
+  const cornerId = (p: Point): number => {
+    const known = corners.findIndex((q) => Math.hypot(q.x - p.x, q.y - p.y) <= SNAP);
+    if (known >= 0) return known;
+    corners.push(p);
+    return corners.length - 1;
+  };
+  const keyOf = (a: Point, b: Point): string | null => {
+    const first = cornerId(a);
+    const second = cornerId(b);
+    return first === second
+      ? null
+      : `${String(Math.min(first, second))}|${String(Math.max(first, second))}`;
+  };
+  const owners = new Map<string, number[]>();
   cells.forEach((cell, i) => {
     cell.forEach((a, k) => {
       const b = cell[(k + 1) % cell.length];
-      if (b !== undefined) owners.set(`${String(i)}:${edgeKey(a, b)}`, i);
+      const key = b === undefined ? null : keyOf(a, b);
+      if (key !== null) owners.set(key, [...(owners.get(key) ?? []), i]);
     });
   });
   const edges: CellEdge[] = [];
@@ -127,17 +149,13 @@ export function cellEdges(cells: readonly (readonly Point[])[]): CellEdge[] {
     cell.forEach((a, k) => {
       const b = cell[(k + 1) % cell.length];
       if (b === undefined) return;
-      const key = edgeKey(a, b);
-      let neighbour: number | null = null;
-      for (let j = 0; j < cells.length; j++) {
-        if (j !== i && owners.has(`${String(j)}:${key}`)) {
-          neighbour = j;
-          break;
-        }
-      }
+      const key = keyOf(a, b);
+      if (key === null) return;
+      const neighbour = (owners.get(key) ?? []).find((j) => j !== i) ?? null;
       edges.push({ cell: i, a, b, neighbour });
     });
   });
+  edgeCache.set(cells, edges);
   return edges;
 }
 

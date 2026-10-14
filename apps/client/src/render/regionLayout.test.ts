@@ -9,6 +9,7 @@ import {
   stampPoints,
   territoryBorders,
 } from './regionLayout.ts';
+import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
 import { voronoiCells } from './voronoi.ts';
 
 const square = [
@@ -86,6 +87,62 @@ describe('territoryBorders', () => {
     const edges = cellEdges(cells);
     expect(edges.filter((e) => e.neighbour !== null)).toHaveLength(2);
   });
+});
+
+describe('cellEdges: the neighbour across an edge', () => {
+  it('matches corners that differ in the last bits, also on a rounding boundary of a hundredth', () => {
+    // 408.125 * 100 is exactly x.5: rounding to a grid sent two results of one corner to
+    // different keys, the edge lost its neighbour and the border of the territory a piece.
+    const cells = [
+      [
+        { x: 0, y: 0 },
+        { x: 415, y: 408.125 },
+        { x: 300, y: 500 },
+      ],
+      [
+        { x: 414.99999999999994, y: 408.1249999999999 },
+        { x: 300.00000000000006, y: 500 },
+        { x: 500, y: 0 },
+      ],
+    ];
+    const shared = cellEdges(cells).filter((e) => e.neighbour !== null);
+    expect(shared.map((e) => [e.cell, e.neighbour])).toEqual([
+      [0, 1],
+      [1, 0],
+    ]);
+  });
+
+  it('drops an edge that collapsed to a point, and gives the same answer for the same cells', () => {
+    const cells = [
+      [
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 0 },
+        { x: 0, y: 10 },
+      ],
+    ];
+    expect(cellEdges(cells)).toHaveLength(3);
+    expect(cellEdges(cells)).toBe(cellEdges(cells));
+  });
+
+  it.each(BUNDLED_MAPS.map((map) => [map.meta.name, map] as const))(
+    'finds a neighbour for every inner edge of the map %s, and the pairs are mutual',
+    (_name, map) => {
+      const { width, height } = map.meta;
+      const edges = cellEdges(voronoiCells(map.nodes, { width, height }));
+      const near = (value: number, line: number): boolean => Math.abs(value - line) < 1e-6;
+      const onFrame = (e: (typeof edges)[number]): boolean =>
+        (near(e.a.x, 0) && near(e.b.x, 0)) ||
+        (near(e.a.x, width) && near(e.b.x, width)) ||
+        (near(e.a.y, 0) && near(e.b.y, 0)) ||
+        (near(e.a.y, height) && near(e.b.y, height));
+      expect(edges.filter((e) => e.neighbour === null && !onFrame(e))).toEqual([]);
+      for (const e of edges) {
+        if (e.neighbour === null) continue;
+        expect(edges.some((f) => f.cell === e.neighbour && f.neighbour === e.cell)).toBe(true);
+      }
+    },
+  );
 });
 
 describe('fog hatching', () => {
