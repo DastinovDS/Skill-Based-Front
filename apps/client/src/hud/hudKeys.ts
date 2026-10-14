@@ -1,6 +1,6 @@
 /**
- * The keys of the HUD itself (ui-style 10 and 11): `?` help, `Home` fit the map, `J` the journal,
- * the double `Esc` that opens the exit dialog, and `Esc` that closes an overlay. The keys of the
+ * The keys of the HUD itself (ui-style 10 and 11): `?` help, `H` (or `Home`) fit the map, the
+ * double `Esc` that opens the exit dialog, and `Esc` that closes an overlay. The keys of the
  * orders (`match/keyEvents.ts`) come after these.
  */
 import { DOUBLE_ESC_MS, type HudChrome } from './chrome.svelte.ts';
@@ -22,6 +22,11 @@ export type HudKeyResult = 'handled' | 'blocked' | 'pass';
 export interface HudKeyActions {
   /** "Fit map". */
   fit: () => void;
+  /**
+   * Nothing is selected and no order menu is open: an `Esc` now has nothing to drop, so two of
+   * them in a row ask to leave the match. Absent: always idle (the unit tests of the keys).
+   */
+  idle?: () => boolean;
 }
 
 export function hudKey(
@@ -32,12 +37,16 @@ export function hudKey(
 ): HudKeyResult {
   if (input.type !== 'keydown') return chrome.modal ? 'blocked' : 'pass';
   if (input.code === 'Escape') {
-    if (chrome.modal || chrome.journalOpen) {
+    if (chrome.modal) {
       chrome.closeAll();
       return 'handled';
     }
-    // An Esc that closes nothing counts for the double press; the first one also reaches the map
-    // (it deselects), the second asks whether to leave.
+    // An Esc that drops a selection or closes a menu is the map's (it never counts); only an Esc
+    // with nothing to drop counts for the double press: two of them ask whether to leave.
+    if (actions.idle?.() === false) {
+      chrome.lastEscape = -Infinity;
+      return 'pass';
+    }
     const double = now - chrome.lastEscape <= DOUBLE_ESC_MS;
     chrome.lastEscape = double ? -Infinity : now;
     if (double) {
@@ -54,10 +63,8 @@ export function hudKey(
   if (chrome.modal) return 'blocked';
   switch (input.code) {
     case 'Home':
+    case 'KeyH':
       actions.fit();
-      return 'handled';
-    case 'KeyJ':
-      if (input.repeat !== true) chrome.journalOpen = !chrome.journalOpen;
       return 'handled';
     default:
       return 'pass';

@@ -21,13 +21,17 @@ describe('hudKey', () => {
     expect(chrome.helpOpen).toBe(true);
   });
 
-  it('fits the map on Home and toggles the journal on J', () => {
+  it('fits the map on H and on Home', () => {
     const chrome = new HudChrome();
     const fit = vi.fn();
-    expect(hudKey(chrome, down('Home'), { fit }, 0)).toBe('handled');
-    expect(fit).toHaveBeenCalledOnce();
-    expect(hudKey(chrome, down('KeyJ', 'j'), { fit }, 1)).toBe('handled');
-    expect(chrome.journalOpen).toBe(true);
+    expect(hudKey(chrome, down('KeyH', 'h'), { fit }, 0)).toBe('handled');
+    expect(hudKey(chrome, down('Home'), { fit }, 1)).toBe('handled');
+    expect(fit).toHaveBeenCalledTimes(2);
+  });
+
+  it('has no key for the removed journal: J goes on to the orders', () => {
+    const chrome = new HudChrome();
+    expect(hudKey(chrome, down('KeyJ', 'j'), { fit: vi.fn() }, 0)).toBe('pass');
   });
 
   it('passes the keys of the orders on', () => {
@@ -73,18 +77,37 @@ describe('hudKey', () => {
     expect(chrome.helpOpen).toBe(false);
   });
 
-  it('closes any open overlay on Esc', () => {
+  it('closes the help on Esc', () => {
     const chrome = new HudChrome();
     chrome.helpOpen = true;
-    chrome.journalOpen = true;
     expect(hudKey(chrome, down('Escape'), { fit: vi.fn() }, 0)).toBe('handled');
     expect(chrome.helpOpen).toBe(false);
-    expect(chrome.journalOpen).toBe(false);
   });
 
-  it('blocks the game keys while the help or the menu is open', () => {
+  it('lets an Esc through that drops a selection or closes a menu, and it never counts', () => {
     const chrome = new HudChrome();
-    chrome.menuOpen = true;
+    let idle = false;
+    const actions = { fit: vi.fn(), idle: () => idle };
+    expect(hudKey(chrome, down('Escape'), actions, 0)).toBe('pass'); // drops the selection
+    expect(hudKey(chrome, down('Escape'), actions, 100)).toBe('pass'); // closes a menu
+    idle = true;
+    // Nothing selected now: this is the first of a pair, the second one asks to leave.
+    expect(hudKey(chrome, down('Escape'), actions, 200)).toBe('pass');
+    expect(chrome.exitOpen).toBe(false);
+    expect(hudKey(chrome, down('Escape'), actions, 300)).toBe('handled');
+    expect(chrome.exitOpen).toBe(true);
+  });
+
+  it('does not open the exit dialog while something is selected, however fast Esc is pressed', () => {
+    const chrome = new HudChrome();
+    const actions = { fit: vi.fn(), idle: () => false };
+    for (let i = 0; i < 4; i++) hudKey(chrome, down('Escape'), actions, i * 50);
+    expect(chrome.exitOpen).toBe(false);
+  });
+
+  it('blocks the game keys while the help is open', () => {
+    const chrome = new HudChrome();
+    chrome.helpOpen = true;
     expect(hudKey(chrome, down('KeyU'), { fit: vi.fn() }, 0)).toBe('blocked');
     expect(hudKey(chrome, { type: 'keyup', code: 'KeyQ', key: 'q' }, { fit: vi.fn() }, 0)).toBe(
       'blocked',
@@ -112,10 +135,9 @@ describe('routeKey', () => {
       false,
     );
     const input = document.createElement('input');
-    expect(routeKey(chrome, event({ code: 'KeyJ', key: 'j' }, input), { fit: vi.fn() }, 0)).toBe(
-      false,
-    );
-    expect(chrome.journalOpen).toBe(false);
+    const fit = vi.fn();
+    expect(routeKey(chrome, event({ code: 'KeyH', key: 'h' }, input), { fit }, 0)).toBe(false);
+    expect(fit).not.toHaveBeenCalled();
   });
 
   it('does not prevent the default of a key an overlay only blocks', () => {

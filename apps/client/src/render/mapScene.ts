@@ -16,6 +16,7 @@ import { nodePoint } from './layout.ts';
 import { pickAt } from './pick.ts';
 import type { RenderSource } from './source.ts';
 import { SupplyView } from './supplyView.ts';
+import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
 
 /** Ticks per second when the source does not say (`rulesets/mvp-0.toml`). */
@@ -119,6 +120,28 @@ export class MapScene {
   focusNode(node: number): void {
     const at = nodePoint(this.map, node);
     if (at !== undefined) this.controller.focus(at);
+  }
+
+  /** Where the city `id` is on the page and the radius of its circle there (CSS px). */
+  nodeAnchor(id: number): Anchor | null {
+    const at = nodePoint(this.map, id);
+    return at === undefined ? null : this.anchorAt(at, this.cities.radiusOf(id));
+  }
+
+  /** Where the own group `id` is drawn on the page (CSS px); `null`: no such token now. */
+  groupAnchor(id: string): Anchor | null {
+    const spot = this.entities.groupPoints().get(id);
+    return spot === undefined ? null : this.anchorAt(spot, (spot.side * spot.scale) / 2);
+  }
+
+  private anchorAt(world: Point, radius: number): Anchor {
+    const box = this.app.canvas.getBoundingClientRect();
+    const { position, scale } = this.layers.world;
+    return {
+      x: box.left + position.x + world.x * scale.x,
+      y: box.top + position.y + world.y * scale.y,
+      r: radius * scale.x,
+    };
   }
 
   /** "Fit map": show the whole map. */

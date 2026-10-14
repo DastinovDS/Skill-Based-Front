@@ -12,6 +12,7 @@
   import { forwardKey } from '../match/keyEvents.ts';
   import { OrderController } from '../match/orderController.ts';
   import { BUNDLED_MAPS, DEFAULT_MAP, backgroundUrl } from '../map/bundledMaps.ts';
+  import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
 
@@ -33,6 +34,8 @@
         fitMap: () => void;
         setInsets: (insets: Insets) => void;
         focusNode: (node: number) => void;
+        nodeAnchor: (node: number) => Anchor | null;
+        groupAnchor: (group: string) => Anchor | null;
       }
     | undefined = $state.raw();
 
@@ -105,7 +108,9 @@
   });
 
   function handleKey(event: KeyboardEvent): void {
-    if (routeKey(chrome, event, { fit: () => canvas?.fitMap() })) return;
+    if (routeKey(chrome, event, { fit: () => canvas?.fitMap(), idle: () => orders.isIdle() })) {
+      return;
+    }
     if (forwardKey(orders, event)) {
       event.preventDefault();
     }
@@ -171,7 +176,10 @@
     oninsets={(next: Insets) => {
       insets = next;
     }}
-    onfit={() => canvas?.fitMap()}
+    anchors={{
+      node: (id: number) => canvas?.nodeAnchor(id) ?? null,
+      group: (id: string) => canvas?.groupAnchor(id) ?? null,
+    }}
   />
 </main>
 

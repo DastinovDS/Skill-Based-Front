@@ -40,18 +40,6 @@
 
 <header class="bar">
   <div class="left">
-    <button
-      type="button"
-      class="icon-button"
-      aria-label={t('bar.menu')}
-      aria-expanded={chrome.menuOpen}
-      title={t('bar.menu')}
-      onclick={() => {
-        chrome.menuOpen = !chrome.menuOpen;
-      }}
-    >
-      <Icon name="menu" />
-    </button>
     {#if data !== null}
       <div
         class="cp"
@@ -162,18 +150,6 @@
         <Icon name="pause" />
       </button>
     {/if}
-    <button
-      type="button"
-      class="icon-button"
-      aria-label={t('bar.journal')}
-      aria-expanded={chrome.journalOpen}
-      title={t('bar.journal')}
-      onclick={() => {
-        chrome.journalOpen = !chrome.journalOpen;
-      }}
-    >
-      <Icon name="list" />
-    </button>
     <button
       type="button"
       class="icon-button"

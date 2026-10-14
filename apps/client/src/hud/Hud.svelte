@@ -2,22 +2,23 @@
   import { t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import { rejectMessageKey } from '../match/rejects.ts';
+  import { NO_ANCHORS, type MapAnchors } from '../render/anchors.ts';
   import type { Insets } from '../render/camera.ts';
   import type { HudChrome } from './chrome.svelte.ts';
   import type { DevControls } from './devControls.ts';
   import AlertStack from './AlertStack.svelte';
-  import EventLog from './EventLog.svelte';
+  import CityRadial from './CityRadial.svelte';
+  import DevPanel from './DevPanel.svelte';
   import ExitDialog from './ExitDialog.svelte';
+  import GroupRadial from './GroupRadial.svelte';
   import HelpOverlay from './HelpOverlay.svelte';
   import type { HudState } from './hudState.svelte.ts';
   import KeyHints from './KeyHints.svelte';
-  import MenuSheet from './MenuSheet.svelte';
-  import OrdersPanel from './OrdersPanel.svelte';
+  import OrderHint from './OrderHint.svelte';
   import type { HudPrefs } from './prefs.svelte.ts';
   import RadialMenu from './RadialMenu.svelte';
   import RoadTypeMenu from './RoadTypeMenu.svelte';
   import SplitMenu from './SplitMenu.svelte';
-  import SelectionPanel from './SelectionPanel.svelte';
   import StartBanner from './StartBanner.svelte';
   import SupplyBanner from './SupplyBanner.svelte';
   import SupplyMenu from './SupplyMenu.svelte';
@@ -34,14 +35,15 @@
     hud: HudState;
     /** Ordering with the mouse and keys; its selection is the HUD's. */
     orders: OrderController;
-    /** Which overlay is open (menu, journal, help, exit dialog). */
+    /** Which overlay is open (help, exit dialog). */
     chrome: HudChrome;
     prefs: HudPrefs;
     /** Show the key-hint bar (the first matches only). */
     hints?: boolean;
+    /** Where cities and groups are on screen: the radial menus of a city and a group sit on them. */
+    anchors?: MapAnchors;
     /** The pause of a private match; without it the button is not shown. */
     onpause?: () => void;
-    onfit: () => void;
     /** The part of the screen the HUD covers, reported whenever it changes (for "fit map"). */
     oninsets?: (insets: Insets) => void;
   }
@@ -54,8 +56,8 @@
     chrome,
     prefs,
     hints = false,
+    anchors = NO_ANCHORS,
     onpause,
-    onfit,
     oninsets,
   }: Props = $props();
 
@@ -64,7 +66,18 @@
   let reported: Insets | null = null;
 
   const data = $derived(hud.current);
-  const selected = $derived(data !== null && (data.group !== null || data.node !== null));
+  // What is selected, as a plain attribute (end-to-end tests wait for it).
+  const selection = $derived(
+    data?.group != null
+      ? `group:${data.group.id}`
+      : data?.node != null
+        ? `node:${String(data.node.id)}`
+        : 'none',
+  );
+  const mergeable = $derived(data === null ? 0 : orders.mergeCandidates().length);
+  const building = $derived(
+    data?.node?.owner === 'mine' ? (data.node.build?.secondsLeft ?? null) : null,
+  );
 
   // "Fit map" keeps the map out of the top bar: measure it, its height depends on the zoom of the
   // page and the window.
@@ -135,34 +148,17 @@
 </script>
 
 <!-- The overlay lets pointer events through to the canvas; only panels catch them. -->
-<div class="hud" bind:this={root}>
+<div class="hud" bind:this={root} data-selection={selection}>
   <div class="top" bind:this={top}>
     <TopBar {data} {orders} {chrome} {prefs} {onpause} />
   </div>
-  <MenuSheet
-    open={chrome.menuOpen}
-    onclose={() => {
-      chrome.menuOpen = false;
-    }}
-    {onfit}
-    {dev}
-  />
-  <EventLog
-    {data}
-    open={chrome.journalOpen}
-    onclose={() => {
-      chrome.journalOpen = false;
-    }}
-  />
+  {#if dev !== undefined}
+    <DevPanel {dev} />
+  {/if}
   <AlertStack alerts={hud.alerts} />
   <ToastStack toasts={hud.toasts} />
   <StartBanner {data} visible={hud.banner} />
-  {#if data !== null && selected}
-    <section class="selection" aria-label={t('card.title')}>
-      <SelectionPanel {data} tickHz={hud.context.rules.tick_hz} />
-      <OrdersPanel {data} {orders} />
-    </section>
-  {/if}
+  <OrderHint {data} {orders} />
   {#if hints}
     <KeyHints />
   {/if}
@@ -171,7 +167,9 @@
   <SupplyBanner {orders} />
   <SupplyMenu {orders} />
   <TransferDialog {orders} />
-  <SplitMenu {orders} />
+  <SplitMenu {orders} {anchors} />
+  <CityRadial {orders} {anchors} {building} />
+  <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
   <Tooltip {data} ctx={hud.context} {orders} />
   <HelpOverlay
     open={chrome.helpOpen}
@@ -206,33 +204,6 @@
 
   .top {
     align-self: stretch;
-  }
-
-  /* The selection card appears only with a selection, bottom left (ui-style 10.3). */
-  .selection {
-    position: absolute;
-    left: 12px;
-    bottom: 12px;
-    z-index: 3;
-    /* The card lets the pointer through to the map beneath (own cities are often there); only its
-       controls catch it. */
-    pointer-events: none;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: min(340px, calc(100% - 24px));
-    max-height: calc(100% - 72px);
-    overflow-y: auto;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--text);
-  }
-
-  .selection :global(:is(button, input, label, select)) {
-    pointer-events: auto;
   }
 
   .error {

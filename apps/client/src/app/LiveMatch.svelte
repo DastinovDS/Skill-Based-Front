@@ -19,6 +19,7 @@
     RulesetPublic,
     ServerMsg,
   } from '../protocol.gen.ts';
+  import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
 
@@ -58,6 +59,8 @@
         fitMap: () => void;
         setInsets: (insets: Insets) => void;
         focusNode: (node: number) => void;
+        nodeAnchor: (node: number) => Anchor | null;
+        groupAnchor: (group: string) => Anchor | null;
       }
     | undefined = $state.raw();
   let insets: Insets = $state.raw(NO_INSETS);
@@ -163,7 +166,14 @@
 
   function handleKey(event: KeyboardEvent): void {
     // The HUD's own keys and the open overlays first, then the keys of the orders.
-    if (routeKey(chrome, event, { fit: () => canvas?.fitMap() })) return;
+    if (
+      routeKey(chrome, event, {
+        fit: () => canvas?.fitMap(),
+        idle: () => orders?.isIdle() ?? true,
+      })
+    ) {
+      return;
+    }
     if (orders !== null && forwardKey(orders, event)) {
       event.preventDefault();
     }
@@ -209,7 +219,10 @@
       oninsets={(next: Insets) => {
         insets = next;
       }}
-      onfit={() => canvas?.fitMap()}
+      anchors={{
+        node: (id: number) => canvas?.nodeAnchor(id) ?? null,
+        group: (id: string) => canvas?.groupAnchor(id) ?? null,
+      }}
     />
   {:else if status === 'version_mismatch' || status === 'replaced'}
     <!-- The banner below says what happened. -->
