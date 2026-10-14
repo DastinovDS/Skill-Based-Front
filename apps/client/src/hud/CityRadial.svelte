@@ -44,7 +44,7 @@
   const ring = $derived.by(() => {
     const circle = menu.target === null ? null : anchors.node(menu.target);
     const inner = Math.max(24, Math.round((circle?.r ?? 20) + 10));
-    return { inner, outer: inner + 76 };
+    return { inner, outer: inner + 64 };
   });
 </script>
 

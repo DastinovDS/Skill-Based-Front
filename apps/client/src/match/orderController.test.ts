@@ -762,10 +762,12 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
     expect(controller.ui.current.roadPick).toBe(home);
   });
 
-  it('opens the menu of a group on a click on it, and a second click closes it', () => {
+  it('the first click on a group only selects it, a second opens its menu, a third closes it', () => {
     const { controller, hud } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
     expect(hud.selection).toEqual({ kind: 'group', id: group.id });
+    expect(controller.groupMenu.current.open).toBe(false); // no ring in the way of an order
+    controller.click({ kind: 'group', id: group.id }, false);
     expect(controller.groupMenu.current).toMatchObject({ open: true, target: group.id });
     controller.click({ kind: 'group', id: group.id }, false);
     expect(controller.groupMenu.current.open).toBe(false);
@@ -775,6 +777,8 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
   it('a click on another node orders the group and closes its menu', () => {
     const { controller, sent } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.groupMenu.current.open).toBe(true);
     controller.click({ kind: 'node', id: other.id }, false);
     expect(controller.groupMenu.current.open).toBe(false);
     expect(sent).toEqual([{ type: 'move', group: group.id, dest: other.id, planned: false }]);
@@ -783,10 +787,10 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
   it('a sector of the group menu does what its key does', () => {
     const { controller, sent } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'group', id: group.id }, false);
     controller.chooseGroup('cancel');
     expect(sent.at(-1)).toEqual({ type: 'cancel_order', group: group.id });
-    controller.click({ kind: 'group', id: group.id }, false);
-    controller.click({ kind: 'group', id: group.id }, false); // closed again
+    expect(controller.groupMenu.current.open).toBe(false);
     controller.chooseGroup('defense');
     expect(sent.at(-1)).toEqual({ type: 'set_mode', group: group.id, mode: 'defense' });
     controller.chooseGroup('split');
@@ -803,6 +807,7 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
 
   it('Esc deselects and closes the menus; the menu goes when the selection moves on', () => {
     const { controller, hud } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
     controller.click({ kind: 'group', id: group.id }, false);
     controller.key(key('Escape'));
     expect(hud.selection).toBeNull();

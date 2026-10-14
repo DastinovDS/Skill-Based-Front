@@ -27,9 +27,9 @@ export function centreOf(view: Rect): Point {
   return { x: (view.left + view.right) / 2, y: (view.top + view.bottom) / 2 };
 }
 
-/** Radius of the ring the arcs sit on: most of the way from the middle to the nearest edge. */
+/** Radius of the ring the arcs sit on: nearly all the way from the middle to the nearest edge. */
 export function arcRadius(view: Rect): number {
-  return Math.max(40, Math.min(view.right - view.left, view.bottom - view.top) * 0.42);
+  return Math.max(40, Math.min(view.right - view.left, view.bottom - view.top) * 0.46);
 }
 
 /**

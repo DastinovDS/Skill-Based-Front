@@ -19,7 +19,7 @@ describe('offscreenAngle', () => {
 
 describe('arcRadius', () => {
   it('follows the smaller side of the view, with a floor', () => {
-    expect(arcRadius(view)).toBeCloseTo(600 * 0.42);
+    expect(arcRadius(view)).toBeCloseTo(600 * 0.46);
     expect(arcRadius({ left: 0, top: 0, right: 20, bottom: 20 })).toBe(40);
   });
 });

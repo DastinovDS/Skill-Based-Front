@@ -85,6 +85,7 @@ describe('the radial menus of a city and of a group', () => {
     setLocale('ru');
     const { target, orders, hud } = render();
     orders.click({ kind: 'group', id: group.id }, false);
+    orders.click({ kind: 'group', id: group.id }, false); // the second click opens the menu
     flushSync();
     const items = [...target.querySelectorAll('[role="menuitem"], [role="menuitemradio"]')];
     expect(items).toHaveLength(4);

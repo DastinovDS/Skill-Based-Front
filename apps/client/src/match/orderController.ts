@@ -126,10 +126,11 @@ function aimKey(aim: AttackTarget | null): string {
  * X cancels any order of the selected group (on a road it turns back, free).
  *
  * UI round 2: there is no selection card. A click on an own city opens its radial menu (recruit
- * `R`, roads `U`) centred on the city circle; a click on an own group opens a small radial menu on
- * the group (split `S`, merge `G`, cancel `X`, defense `D`). The menus only front the keys: a key
- * does the same without the menu. A click on the same object again, any click elsewhere and Esc
- * close the menu (a click on another node still orders the selected group).
+ * `R`, roads `U`) centred on the city circle; a second click on an own group (the first selects
+ * it) opens a small radial menu on the group (split `S`, merge `G`, cancel `X`, defense `D`). The
+ * menus only front the keys: a key does the same without the menu. A click on the same object
+ * again, any click elsewhere and Esc close the menu (a click on another node still orders the
+ * selected group).
  *
  * Keys: Esc ends the road pick or deselects, X cancels the order of
  * the selected group, 1 / 2 set the mode (attack / defense), D toggles defense, R recruits in the
@@ -287,21 +288,26 @@ export class OrderController implements MapInteraction {
       );
       return;
     }
-    // A second click on the object whose menu is open closes the menu and keeps the selection.
-    const reclick =
-      (hit.kind === 'node' &&
-        this.cityMenu.current.open &&
-        this.cityMenu.current.target === hit.id) ||
-      (hit.kind === 'group' &&
-        this.groupMenu.current.open &&
-        this.groupMenu.current.target === hit.id);
+    // A city opens its menu on the click that selects it, a second click on it closes the menu.
+    // A group opens its menu on a click on the group that is already selected (a second click
+    // toggles it): the first click only selects, so ordering a move never has a ring in the way.
+    const selected = this.#o.hud.selection;
+    const again = selected?.kind === hit.kind && selected.id === hit.id;
+    const cityReclick =
+      hit.kind === 'node' && this.cityMenu.current.open && this.cityMenu.current.target === hit.id;
+    const groupWasOpen =
+      hit.kind === 'group' &&
+      this.groupMenu.current.open &&
+      this.groupMenu.current.target === hit.id;
     this.#closeTargetMenus();
     this.splitMenu.close();
     this.#o.hud.select(hit);
     this.#hover = hit;
-    if (!reclick && this.#o.send !== null) {
-      if (hit.kind === 'group') this.groupMenu.open(hit.id);
-      else if (this.#isOwnNode(hit.id)) this.cityMenu.open(hit.id);
+    if (this.#o.send !== null) {
+      if (hit.kind === 'group' && again && !groupWasOpen) this.groupMenu.open(hit.id);
+      else if (hit.kind === 'node' && !cityReclick && this.#isOwnNode(hit.id)) {
+        this.cityMenu.open(hit.id);
+      }
     }
     this.#refresh();
   }
