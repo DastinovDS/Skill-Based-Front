@@ -39,9 +39,9 @@ async function giveOrders(player: Player, map: MapFile): Promise<void> {
   const capital = map.nodes.find((node) => node.capital_of === side);
   if (capital === undefined) throw new Error('no capital');
   // Two orders that do not meet: the first group leaves the capital for `first`, the second one
-  // goes from `second` to `target`. A click on a city hits a group token standing on it first,
-  // so the second order must not aim at the capital or at `first`, where the first group is
-  // (or soon will be).
+  // goes from `second` to `target`. Own units in a city are one icon on it, and a click on the
+  // icon of a city is a click on the city, so the second order may aim at any city; it still must
+  // not aim at the capital or at `first`, where the first group is (or soon will be).
   const { first, second, target } = orderPlan(map, side, capital.id);
 
   // 1. A normal move out of the capital.

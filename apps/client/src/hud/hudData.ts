@@ -26,6 +26,9 @@ import type {
 export type Selection =
   { readonly kind: 'group'; readonly id: string } | { readonly kind: 'node'; readonly id: number };
 
+/** What the pointer rests on for the charge tip: a group (by id), the groups of a city, nothing. */
+export type HoverTarget = string | { readonly node: number } | null;
+
 /** Fixed for the whole match: the ruleset from `welcome` and the map. */
 export interface HudContext {
   readonly me: PlayerId;
@@ -113,6 +116,8 @@ export interface HudEvent {
 export interface GroupChoice {
   readonly id: string;
   readonly units: number;
+  readonly charged: number;
+  readonly mode: Mode;
   /** The node the group stands in, `null` on a road. */
   readonly node: number | null;
   /** The group has a planned order: the server refuses to merge it until it departs (#212). */
@@ -274,9 +279,31 @@ function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): 
   };
 }
 
-function groupUnderPointer(view: SnapshotMsg['view'], id: string | null): GroupInfo | null {
-  const group = id === null ? undefined : view.groups.find((g) => g.id === id);
-  return group === undefined ? null : groupInfo(group, view.nodes);
+/**
+ * The tip's subject: one group, or the total of the groups standing in a city (their one icon),
+ * as a group of its own with no order.
+ */
+function groupUnderPointer(view: SnapshotMsg['view'], target: HoverTarget): GroupInfo | null {
+  if (target === null) return null;
+  if (typeof target === 'string') {
+    const group = view.groups.find((g) => g.id === target);
+    return group === undefined ? null : groupInfo(group, view.nodes);
+  }
+  const here = view.groups.filter(
+    (g) => g.location.kind === 'node' && g.location.node === target.node,
+  );
+  if (here.length === 0) return null;
+  return {
+    id: `node:${String(target.node)}`,
+    units: here.reduce((total, g) => total + g.units, 0),
+    charged: here.reduce((total, g) => total + g.charged, 0),
+    mode: here.some((g) => g.mode === 'defense') ? 'defense' : 'attack',
+    node: target.node,
+    capacity: nodeAt(view.nodes, target.node)?.capacity ?? null,
+    progress: null,
+    destination: null,
+    planned: false,
+  };
 }
 
 export function buildHudData(
@@ -284,8 +311,8 @@ export function buildHudData(
   snapshot: SnapshotMsg,
   selection: Selection | null,
   events: readonly HudEvent[],
-  /** The id of the group under the pointer. */
-  hovered: string | null = null,
+  /** The group (or the groups of a city) under the pointer. */
+  hovered: HoverTarget = null,
 ): HudData {
   const { view, tick } = snapshot;
   const { rules, me } = ctx;
@@ -317,6 +344,8 @@ export function buildHudData(
     groups: view.groups.map((g) => ({
       id: g.id,
       units: g.units,
+      charged: g.charged,
+      mode: g.mode,
       node: g.location.kind === 'node' ? g.location.node : null,
       planned: g.order?.planned ?? false,
     })),

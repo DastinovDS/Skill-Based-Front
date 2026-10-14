@@ -69,9 +69,6 @@ export function roadPosition(
 
 // --- Tokens (a group, or what is known about enemies in a place) -------------------------------
 
-/** Footprint of a group slot under a city (the spacing of `nodeSlots`). */
-export const TOKEN_FULL = { width: 54, height: 32 } as const;
-export const TOKEN_COMPACT = { width: 44, height: 22 } as const;
 // --- Unit triangles (9.5) ----------------------------------------------------------------------
 
 /** Side of the triangle of a group: steps by the number of units; `null`: the number is unknown. */
@@ -138,30 +135,6 @@ export function packetFade(
  */
 export function countLabel(units: number): string {
   return String(units);
-}
-
-/**
- * Centres of tokens standing under a city, relative to the city centre: two columns, rows going
- * down. `radius` is the city radius, `height` the token height.
- */
-export function nodeSlots(
-  count: number,
-  radius: number,
-  size: { width: number; height: number } = TOKEN_FULL,
-): Point[] {
-  const gap = 4;
-  const slots: Point[] = [];
-  for (let i = 0; i < count; i++) {
-    const row = Math.floor(i / 2);
-    // A lone token in its row is centred, a pair sits in two columns.
-    const inRow = Math.min(2, count - row * 2);
-    const col = i - row * 2;
-    slots.push({
-      x: (col - (inRow - 1) / 2) * (size.width + gap),
-      y: radius + 10 + size.height / 2 + row * (size.height + gap),
-    });
-  }
-  return slots;
 }
 
 // --- Arrows of intents -------------------------------------------------------------------------

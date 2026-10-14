@@ -1,6 +1,6 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AlertState } from './alerts.svelte.ts';
-import { roadCandidates } from '../hud/hudData.ts';
+import { roadCandidates, type GroupChoice as GroupBrief, type Selection } from '../hud/hudData.ts';
 import type {
   Command,
   MapFile,
@@ -141,6 +141,8 @@ export class OrderController implements MapInteraction {
   readonly cityMenu = new TargetMenuState<number, CityChoice>();
   /** The small radial menu of the selected own group: split, merge, cancel, defense. */
   readonly groupMenu = new TargetMenuState<string, GroupChoice>();
+  /** The list of the own groups standing in one city (the click on their one icon): a group each. */
+  readonly stackMenu = new TargetMenuState<number, string>();
 
   readonly #o: OrderControllerOptions;
   #shift = false;
@@ -247,20 +249,31 @@ export class OrderController implements MapInteraction {
     return this.#overlay;
   }
 
-  click(hit: PickHit | null, shift: boolean): void {
+  click(picked: PickHit | null, shift: boolean): void {
     this.#shift = shift;
-    if (this.#supplyClick(hit)) return;
-    if (hit === null) {
+    if (this.#supplyClick(picked)) return;
+    if (picked === null) {
       this.deselect();
       return;
     }
+    let hit: PickHit = picked;
     if (hit.kind === 'edge') {
-      // A road is clicked only to upgrade it, in the road pick of a city; elsewhere it does nothing.
-      if (this.#candidates().includes(hit.id)) this.upgradeRoad(hit.id);
-      return;
+      // A road is clicked to upgrade it, in the road pick of a city; anywhere else it is a click
+      // on the area of the city it lies in.
+      if (this.#candidates().includes(hit.id)) {
+        this.upgradeRoad(hit.id);
+        return;
+      }
+      if (hit.cell === undefined) return;
+      hit = { kind: 'node', id: hit.cell };
     }
     this.stopRoadPick();
     const group = this.#selectedGroup();
+    // The icon of own units in a city is the city for an order of a group selected elsewhere.
+    const iconNode = hit.kind === 'stack' ? hit.node : hit.kind === 'group' ? hit.node : undefined;
+    if (iconNode !== undefined && group !== null && group.node !== iconNode) {
+      hit = { kind: 'node', id: iconNode };
+    }
     if (hit.kind === 'node' && group !== null && this.#o.send !== null && group.node !== hit.id) {
       this.#closeTargetMenus();
       this.#sendCommand(
@@ -271,32 +284,77 @@ export class OrderController implements MapInteraction {
       this.deselect();
       return;
     }
+    if (hit.kind === 'stack') {
+      this.#clickStack(hit.node, hit.ids);
+      return;
+    }
     // A city opens its menu on the click that selects it, a second click on it closes the menu.
     // A group opens its menu on a click on the group that is already selected (a second click
     // toggles it): the first click only selects, so ordering a move never has a ring in the way.
+    const target: Selection = hit.kind === 'group' ? { kind: 'group', id: hit.id } : hit;
     const selected = this.#o.hud.selection;
-    const again = selected?.kind === hit.kind && selected.id === hit.id;
+    const again = selected?.kind === target.kind && selected.id === target.id;
     const cityReclick =
-      hit.kind === 'node' && this.cityMenu.current.open && this.cityMenu.current.target === hit.id;
+      target.kind === 'node' &&
+      this.cityMenu.current.open &&
+      this.cityMenu.current.target === target.id;
     const groupWasOpen =
-      hit.kind === 'group' &&
+      target.kind === 'group' &&
       this.groupMenu.current.open &&
-      this.groupMenu.current.target === hit.id;
+      this.groupMenu.current.target === target.id;
     this.#closeTargetMenus();
     this.splitMenu.close();
-    this.#o.hud.select(hit);
+    this.#o.hud.select(target);
     this.#hover = hit;
     if (this.#o.send !== null) {
-      if (hit.kind === 'group' && again && !groupWasOpen) this.groupMenu.open(hit.id);
-      else if (hit.kind === 'node' && !cityReclick && this.#isOwnNode(hit.id)) {
-        this.cityMenu.open(hit.id);
+      if (target.kind === 'group' && again && !groupWasOpen) this.groupMenu.open(target.id);
+      else if (target.kind === 'node' && !cityReclick && this.#isOwnNode(target.id)) {
+        this.cityMenu.open(target.id);
       }
+    }
+  }
+
+  /**
+   * A click on the one icon of several own groups in a city: the city is selected (unless one of
+   * those groups already is) and the list of the groups opens; a second click closes it.
+   */
+  #clickStack(node: number, ids: readonly string[]): void {
+    const wasOpen = this.stackMenu.current.open && this.stackMenu.current.target === node;
+    this.#closeTargetMenus();
+    this.splitMenu.close();
+    const selected = this.#o.hud.selection;
+    if (!(selected?.kind === 'group' && ids.includes(selected.id))) {
+      this.#o.hud.select({ kind: 'node', id: node });
+    }
+    this.#hover = { kind: 'node', id: node };
+    if (this.#o.send !== null && !wasOpen) this.stackMenu.open(node);
+  }
+
+  /** The own groups standing in the city of the open list menu, in the order the menu shows them. */
+  stackGroups(): GroupBrief[] {
+    const node = this.stackMenu.current.target;
+    return node === null ? [] : (this.#o.hud.current?.groups ?? []).filter((g) => g.node === node);
+  }
+
+  /**
+   * A sector of the list menu: the group is selected; a group that already is selected opens its
+   * own menu (split, merge, cancel, defense), so a stacked group has a menu too.
+   */
+  chooseStackGroup(id: string): void {
+    this.stackMenu.close();
+    const selected = this.#o.hud.selection;
+    this.splitMenu.close();
+    this.#o.hud.select({ kind: 'group', id });
+    if (selected?.kind === 'group' && selected.id === id && this.#o.send !== null) {
+      this.groupMenu.open(id);
     }
   }
 
   hover(hit: PickHit | null): void {
     this.#hover = hit;
-    this.#o.hud.hoverGroup(hit?.kind === 'group' ? hit.id : null);
+    this.#o.hud.hoverGroup(
+      hit?.kind === 'group' ? hit.id : hit?.kind === 'stack' ? { node: hit.node } : null,
+    );
   }
 
   /**
@@ -310,6 +368,7 @@ export class OrderController implements MapInteraction {
       this.ui.current.transferFrom === null &&
       !this.cityMenu.current.open &&
       !this.groupMenu.current.open &&
+      !this.stackMenu.current.open &&
       !this.radial.current.open &&
       !this.roadType.current.open &&
       !this.supplyMenu.current.open &&
@@ -712,6 +771,15 @@ export class OrderController implements MapInteraction {
         return true;
       }
     }
+    if (this.stackMenu.current.open) {
+      // The list of groups: 1..9 choose the group (not the modes), Esc closes it.
+      const number = /^Digit([1-9])$/.exec(input.code)?.[1];
+      const group = number === undefined ? undefined : this.stackGroups()[Number(number) - 1];
+      if (group !== undefined) {
+        this.chooseStackGroup(group.id);
+        return true;
+      }
+    }
     if (this.radial.current.open) {
       // The menu is open: 1 / 2 / 3 choose a stance (not the modes), Esc closes it.
       const sector = SECTORS.find((s) => `Digit${s.key}` === input.code);
@@ -763,6 +831,7 @@ export class OrderController implements MapInteraction {
   #closeTargetMenus(): void {
     this.cityMenu.close();
     this.groupMenu.close();
+    this.stackMenu.close();
   }
 
   /** The node `id` is one of the player's own cities in the snapshot on screen. */
@@ -791,6 +860,13 @@ export class OrderController implements MapInteraction {
       const selection = this.#o.hud.selection;
       if (selection?.kind !== 'group' || selection.id !== group.target) this.groupMenu.close();
     }
+    const stack = this.stackMenu.current;
+    if (stack.open) {
+      // The list belongs to its city while it is selected (or a group in it is) and has a choice.
+      const node = this.#o.hud.selection?.kind === 'node' ? this.#o.hud.selection.id : null;
+      const at = node ?? this.#selectedGroup()?.node ?? null;
+      if (at !== stack.target || this.stackGroups().length < 2) this.stackMenu.close();
+    }
   }
 
   /** An own city of the snapshot (priority and warehouse), or `null`. */
@@ -806,7 +882,7 @@ export class OrderController implements MapInteraction {
   #supplyClick(hit: PickHit | null): boolean {
     if (!this.ui.current.supplyMode) return false;
     const from = this.ui.current.transferFrom;
-    const node = hit?.kind === 'node' ? hit.id : null;
+    const node = hit === null ? null : this.#cityOf(hit);
     if (from !== null) {
       this.cancelTransferPick();
       if (node !== null && node !== from && this.#ownCity(node) !== null) {
@@ -815,6 +891,20 @@ export class OrderController implements MapInteraction {
       return true;
     }
     return node !== null && this.openSupplyMenu(node);
+  }
+
+  /** The city a hit belongs to: itself, its area, or the icon of own units standing in it. */
+  #cityOf(hit: PickHit): number | null {
+    switch (hit.kind) {
+      case 'node':
+        return hit.id;
+      case 'stack':
+        return hit.node;
+      case 'group':
+        return hit.node ?? null;
+      case 'edge':
+        return hit.cell ?? null;
+    }
   }
 
   /** The supply part of the overlay; the same object while nothing changed. */
@@ -957,7 +1047,13 @@ export class OrderController implements MapInteraction {
   #previewTarget(): number | null {
     const group = this.#selectedGroup();
     if (group === null || group.node === null || this.#o.send === null) return null;
-    return this.#hover?.kind === 'node' && this.#hover.id !== group.node ? this.#hover.id : null;
+    const city = this.#hoverCity();
+    return city !== null && city !== group.node ? city : null;
+  }
+
+  /** The city under the pointer: its circle or area, or the icon of own units standing in it. */
+  #hoverCity(): number | null {
+    return this.#hover === null ? null : this.#cityOf(this.#hover);
   }
 
   #onResult(result: CommandResult): void {

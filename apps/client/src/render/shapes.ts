@@ -18,6 +18,7 @@ import {
   PLATE_INNER_RING,
   SHIELD_BADGE_SCALE,
   UNIT_DASH,
+  UNIT_HALO,
   UNIT_INNER_OUTLINE,
   UNIT_INNER_SCALE,
   UNIT_LABEL,
@@ -46,6 +47,8 @@ const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x,
 
 /** The shapes of the triangle of one side: base fill, charge fill (per owner), outlines. */
 interface TriangleShapes {
+  /** A dark casing around the triangle: the icon of units in a city stays apart from the city body. */
+  halo: GraphicsContext;
   fill: GraphicsContext;
   /** From the tip, scaled by `chargeLevel` (the tip is the origin). */
   level: Readonly<Record<PlayerId, GraphicsContext>>;
@@ -67,6 +70,8 @@ export class EntityKit {
   readonly hammer: GraphicsContext;
   readonly iconDisc: Readonly<Record<PlayerId, GraphicsContext>>;
   readonly textStyle: TextStyle;
+  /** The number inside a triangle (a city icon): dark stroke, so it reads on the fill and the plate. */
+  readonly insideStyle: TextStyle;
   readonly questionStyle: TextStyle;
 
   constructor(readonly me: PlayerId) {
@@ -100,6 +105,7 @@ export class EntityKit {
           });
         });
       triangles.set(side, {
+        halo: this.context((g) => g.poly(flat(corners)).stroke({ ...UNIT_HALO, color: BG })),
         fill: this.context((g) => g.poly(flat(corners)).fill(PLATE_FILL)),
         level: { 0: level(0), 1: level(1) },
         // The outline carries the owner's colour, so an empty triangle still tells whose it is;
@@ -146,6 +152,13 @@ export class EntityKit {
       fontWeight: '700',
       fill: GLYPH_COLOR,
     });
+    this.insideStyle = new TextStyle({
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: COUNT_FONT_SIZE + 1,
+      fontWeight: '700',
+      fill: GLYPH_COLOR,
+      stroke: { color: BG, width: 3, join: 'round' },
+    });
     this.questionStyle = new TextStyle({
       fontFamily: 'system-ui, sans-serif',
       fontSize: UNIT_QUESTION_FONT_SIZE,
@@ -164,26 +177,29 @@ export class EntityKit {
   destroy(): void {
     for (const context of this.contexts) context.destroy();
     this.textStyle.destroy();
+    this.insideStyle.destroy();
     this.questionStyle.destroy();
   }
 }
 
 /**
  * What a token shows. `counts: null`: numbers are unknown (an enemy seen without numbers).
- * `ghost`: a memory of a hidden place, dashed like an unknown one.
+ * `ghost`: a memory of a hidden place, dashed like an unknown one. `inside`: the number sits in
+ * the triangle (the icon of the units in a city, which has no room under it), not in a pill.
  */
 export interface TokenSpec {
   owner: PlayerId;
   modes: readonly Mode[];
   counts: { units: number; charged: number } | null;
   ghost?: boolean;
+  inside?: boolean;
 }
 
 function specKey(spec: TokenSpec): string {
   // The charged count is the fill of the triangle, so it belongs to the key, not to the text.
   const counts =
     spec.counts === null ? '-' : `${String(spec.counts.units)}/${String(spec.counts.charged)}`;
-  return `${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${spec.ghost === true ? 'g' : ''}`;
+  return `${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}`;
 }
 
 /**
@@ -195,6 +211,7 @@ function specKey(spec: TokenSpec): string {
  */
 export class Token {
   readonly view = new Container();
+  private readonly halo: Graphics;
   private readonly fill: Graphics;
   private readonly level: Graphics;
   private readonly outline: Graphics;
@@ -218,6 +235,8 @@ export class Token {
     // `destroy({ children: true })`.
     const base = kit.triangles.get(UNIT_SIDES[1]);
     if (base === undefined) throw new Error('no triangle shapes');
+    this.halo = new Graphics(base.halo);
+    this.halo.visible = false;
     this.fill = new Graphics(base.fill);
     this.level = new Graphics(base.level[0]);
     this.outline = new Graphics(base.own);
@@ -235,7 +254,15 @@ export class Token {
     });
     this.count = new Text({ text: '', style: kit.textStyle, anchor: 0.5, resolution });
     this.label.addChild(this.pill, this.count);
-    this.view.addChild(this.fill, this.level, this.outline, this.question, this.shield, this.label);
+    this.view.addChild(
+      this.halo,
+      this.fill,
+      this.level,
+      this.outline,
+      this.question,
+      this.shield,
+      this.label,
+    );
   }
 
   labels(): Text[] {
@@ -265,6 +292,8 @@ export class Token {
     const h = triangleHeight(side);
     this.counted = counts !== null;
 
+    this.halo.context = shapes.halo;
+    this.halo.visible = spec.inside === true;
     this.fill.context = shapes.fill;
     const level = counts === null ? 0 : chargeLevel(counts.units, counts.charged);
     this.level.visible = level > 0;
@@ -292,14 +321,22 @@ export class Token {
     }
 
     if (counts !== null) {
+      const inside = spec.inside === true;
+      this.count.style = inside ? this.kit.insideStyle : this.kit.textStyle;
       this.count.text = countLabel(counts.units);
-      const w = this.count.width + 2 * UNIT_LABEL.padX;
       this.pill.clear();
-      this.pill
-        .roundRect(-w / 2, 0, w, UNIT_LABEL.height, 3)
-        .fill({ color: UNIT_LABEL.fill, alpha: UNIT_LABEL.alpha });
-      this.label.position.set(0, h / 2 + UNIT_LABEL.gap);
-      this.count.position.set(0, UNIT_LABEL.height / 2);
+      if (inside) {
+        // At the centre of mass of the triangle, where the "?" of an unknown group sits too.
+        this.label.position.set(0, -h / 6);
+        this.count.position.set(0, 0);
+      } else {
+        const w = this.count.width + 2 * UNIT_LABEL.padX;
+        this.pill
+          .roundRect(-w / 2, 0, w, UNIT_LABEL.height, 3)
+          .fill({ color: UNIT_LABEL.fill, alpha: UNIT_LABEL.alpha });
+        this.label.position.set(0, h / 2 + UNIT_LABEL.gap);
+        this.count.position.set(0, UNIT_LABEL.height / 2);
+      }
     }
     this.label.visible = this.labelWanted && this.counted;
   }

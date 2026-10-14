@@ -237,7 +237,11 @@ export class MapScene {
         x: (at.x - world.position.x) / world.scale.x,
         y: (at.y - world.position.y) / world.scale.y,
       },
-      this.entities.groupPoints(),
+      {
+        groups: this.entities.roadGroupPoints(),
+        icons: this.entities.cityIcons(),
+        cells: this.view.cells,
+      },
       world.scale.x,
     );
   }

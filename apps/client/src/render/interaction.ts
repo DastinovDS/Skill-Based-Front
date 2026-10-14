@@ -5,14 +5,23 @@
  * nothing.
  */
 
-/** What is under the pointer: an own group (by id) or a node or a road (by id). */
+/**
+ * What is under the pointer: an own group (by id), the icon of several own groups standing in a
+ * city (`stack`), a node, or a road (by id).
+ *
+ * `group.node`: the group is the only one in that city and the hit is its icon there. `edge.cell`:
+ * the city whose area (Voronoi cell) holds the point; a click on a road that is not in the road
+ * pick is a click on that city.
+ */
 export type PickHit =
-  | { readonly kind: 'group'; readonly id: string }
+  | { readonly kind: 'group'; readonly id: string; readonly node?: number }
+  | { readonly kind: 'stack'; readonly node: number; readonly ids: readonly string[] }
   | { readonly kind: 'node'; readonly id: number }
-  | { readonly kind: 'edge'; readonly id: number };
+  | { readonly kind: 'edge'; readonly id: number; readonly cell?: number };
 
 /** What can be selected: a group or a node (a road is only hovered, and clicked in road pick). */
-export type SelectionHit = Exclude<PickHit, { readonly kind: 'edge' }>;
+export type SelectionHit =
+  { readonly kind: 'group'; readonly id: string } | { readonly kind: 'node'; readonly id: number };
 
 /** The life of a ghost: sent (dashed), accepted by the server (solid), rejected (shakes and fades). */
 export type GhostStatus = 'pending' | 'accepted' | 'rejected';
