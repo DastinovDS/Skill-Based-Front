@@ -56,7 +56,7 @@
     label={tf('city.title', { node: target })}
     at={() => anchors.node(target)}
     {ring}
-    half={halfFor(2) - 8}
+    half={halfFor(2)}
     clamp={false}
     hover={menu.hover}
     onhover={(id: string | null) => {

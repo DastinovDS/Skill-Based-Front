@@ -10,11 +10,9 @@
     orders: OrderController;
     /** The current stance (`null` before the first snapshot). */
     stance: Stance | null;
-    /** Charges a minute of the capital, for the caption (`passivePerMinute` of the ruleset). */
-    passive: number;
   }
 
-  let { orders, stance, passive }: Props = $props();
+  let { orders, stance }: Props = $props();
 
   const menu = $derived(orders.radial.current);
   const rates = $derived(orders.stanceRates);
@@ -39,10 +37,6 @@
       };
     }),
   );
-  const captions = $derived([
-    { text: tf('radial.capital', { value: passive }) },
-    { text: menu.sticky ? t('radial.hintTap') : t('radial.hintHold'), dim: true },
-  ]);
 </script>
 
 <!-- The stance menu is static at the middle of the screen: the cursor picks a sector (Q). -->
@@ -64,7 +58,6 @@
     closeLabel={t('radial.close')}
     modal={menu.sticky}
     interactive={menu.sticky}
-    {captions}
   >
     {#snippet centre()}
       <span class="cancel">{t('radial.cancel')}</span>

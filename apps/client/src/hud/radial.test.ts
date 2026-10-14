@@ -5,7 +5,6 @@ import {
   RADIAL,
   ROAD_HALF,
   SUPPLY_SECTORS,
-  passivePerMinute,
   roadSectorAt,
   sectorAt,
   sectorPath,
@@ -14,14 +13,13 @@ import {
 } from './radial.ts';
 
 describe('stanceRates', () => {
-  it('gives mvp-0 the table of the guide: 3/18, 6/12, 9/6 and 12 from the capital', () => {
+  it('gives mvp-0 the table of the guide: 3/18, 6/12, 9/6', () => {
     const rates = stanceRates(DEV_RULES);
     expect(rates.map((r) => [r.stance, r.cpPerMinCenti / 100, r.chargesPerMin])).toEqual([
       ['economy', 3, 18],
       ['balance', 6, 12],
       ['war', 9, 6],
     ]);
-    expect(passivePerMinute(DEV_RULES)).toBe(12);
   });
 
   it('follows the ruleset, not constants', () => {

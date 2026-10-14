@@ -167,7 +167,7 @@
   {#if hints}
     <KeyHints />
   {/if}
-  <RadialMenu {orders} stance={data?.stance ?? null} passive={orders.passivePerMinute} />
+  <RadialMenu {orders} stance={data?.stance ?? null} />
   <RoadTypeMenu {orders} />
   <SupplyBanner {orders} />
   <SupplyMenu {orders} />

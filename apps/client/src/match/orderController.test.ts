@@ -81,6 +81,7 @@ describe('OrderController', () => {
     const { controller, sent, book } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
     controller.click({ kind: 'node', id: enemy.id }, false);
+    controller.click({ kind: 'group', id: group.id }, false); // the order let the group go
     controller.click({ kind: 'node', id: other.id }, true);
     expect(sent).toEqual([
       { type: 'move', group: group.id, dest: enemy.id, planned: false },
@@ -88,6 +89,16 @@ describe('OrderController', () => {
     ]);
     // Shown at once as a ghost, the last order replacing the first.
     expect(book.ghosts().map((g) => [g.from, g.dest, g.planned])).toEqual([[home, other.id, true]]);
+  });
+
+  it('lets the selection go after an order is given and after one is cancelled', () => {
+    const { controller, hud } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    expect(hud.selection).toBeNull();
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.cancelSelected();
+    expect(hud.selection).toBeNull();
   });
 
   it('makes every order planned while the switch is on', () => {
@@ -171,10 +182,12 @@ describe('OrderController', () => {
     controller.click({ kind: 'group', id: group.id }, false);
     controller.click({ kind: 'node', id: enemy.id }, false);
     book.onAck(ack(1, null));
+    controller.click({ kind: 'group', id: group.id }, false);
     controller.click({ kind: 'node', id: enemy.id }, false);
     book.onAck(ack(2, 'NOT_ENOUGH_CP'));
     expect(seen).toEqual(['accepted', 'rejected']);
     stop();
+    controller.click({ kind: 'group', id: group.id }, false);
     controller.click({ kind: 'node', id: enemy.id }, false);
     book.onAck(ack(3, null));
     expect(seen).toHaveLength(2);
@@ -791,6 +804,8 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
     controller.chooseGroup('cancel');
     expect(sent.at(-1)).toEqual({ type: 'cancel_order', group: group.id });
     expect(controller.groupMenu.current.open).toBe(false);
+    controller.click({ kind: 'group', id: group.id }, false); // cancelling let the group go
+    controller.click({ kind: 'group', id: group.id }, false);
     controller.chooseGroup('defense');
     expect(sent.at(-1)).toEqual({ type: 'set_mode', group: group.id, mode: 'defense' });
     controller.chooseGroup('split');
