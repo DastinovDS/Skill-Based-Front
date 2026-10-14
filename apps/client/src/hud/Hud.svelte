@@ -9,6 +9,7 @@
   import AlertStack from './AlertStack.svelte';
   import CityRadial from './CityRadial.svelte';
   import DevPanel from './DevPanel.svelte';
+  import EdgeAlerts from './EdgeAlerts.svelte';
   import ExitDialog from './ExitDialog.svelte';
   import GroupRadial from './GroupRadial.svelte';
   import HelpOverlay from './HelpOverlay.svelte';
@@ -64,6 +65,8 @@
   let root: HTMLElement | undefined = $state();
   let top: HTMLElement | undefined = $state();
   let reported: Insets | null = null;
+  // The height of the top bar: the arcs at the screen edge keep below it.
+  let topInset = $state(48);
 
   const data = $derived(hud.current);
   // What is selected, as a plain attribute (end-to-end tests wait for it).
@@ -94,6 +97,7 @@
     };
     if (reported?.top !== insets.top) {
       reported = insets;
+      topInset = insets.top;
       oninsets?.(insets);
     }
   }
@@ -155,6 +159,7 @@
   {#if dev !== undefined}
     <DevPanel {dev} />
   {/if}
+  <EdgeAlerts threats={hud.threats} {anchors} top={topInset} />
   <AlertStack alerts={hud.alerts} />
   <ToastStack toasts={hud.toasts} />
   <StartBanner {data} visible={hud.banner} />

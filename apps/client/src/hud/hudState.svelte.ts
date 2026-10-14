@@ -19,6 +19,7 @@ import {
 } from './hudData.ts';
 import { isLogged } from './eventText.ts';
 import { AlertState } from '../match/alerts.svelte.ts';
+import { ThreatLog } from '../match/threats.ts';
 import { t } from '../i18n/index.ts';
 import { ToastState } from './toastState.svelte.ts';
 import { toastOf } from './toasts.ts';
@@ -46,6 +47,9 @@ export class HudState {
   /** Alerts of the match: incoming attacks and overcrowded cities (`hud/AlertStack.svelte`). */
   readonly alerts: AlertState;
 
+  /** Threats to own cities for the arcs at the screen edge: plain data, read every frame. */
+  readonly threats: ThreatLog;
+
   /** Toasts of the match (fights, captures, attrition, refused commands). */
   readonly toasts = new ToastState();
 
@@ -70,6 +74,7 @@ export class HudState {
   constructor(ctx: HudContext) {
     this.#ctx = ctx;
     this.alerts = new AlertState(ctx.me, ctx.rules);
+    this.threats = new ThreatLog(ctx.me);
   }
 
   /** The context of the match: ruleset, side, nicks, map. */
@@ -96,6 +101,7 @@ export class HudState {
   onSnapshot(snapshot: SnapshotMsg): void {
     this.#snapshot = snapshot;
     this.alerts.onSnapshot(snapshot);
+    this.threats.onSnapshot(snapshot);
     this.#startOnce(snapshot);
     this.#lastMinute(snapshot);
     this.#publish();
@@ -109,6 +115,7 @@ export class HudState {
       kind: event.kind,
       data: event.data,
     };
+    this.threats.onEvent(event, (node) => this.#snapshot?.view.nodes[node]?.owner);
     const toast = toastOf(entry, this.#ctx.me);
     if (toast !== null) this.toasts.push(toast);
     if (!isLogged(event.kind)) return; // bookkeeping kinds would push the real news out

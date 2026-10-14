@@ -1,27 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { arcFill, BEACON, beaconPulse, PILL_SCALE, pillScale } from './alertLayout.ts';
+import { BADGE_SCALE, badgeScale, BEACON, beaconPulse } from './alertLayout.ts';
 
-describe('arcFill', () => {
-  it('fills as the loss comes closer', () => {
-    expect(arcFill(30, 30)).toBe(0);
-    expect(arcFill(15, 30)).toBeCloseTo(0.5);
-    expect(arcFill(0, 30)).toBe(1);
-  });
-
-  it('stays within 0..1', () => {
-    expect(arcFill(40, 30)).toBe(0);
-    expect(arcFill(-3, 30)).toBe(1);
-    expect(arcFill(5, 0)).toBe(1);
-  });
-});
-
-describe('pillScale', () => {
-  it('keeps the pill the same size on screen, within the bounds', () => {
-    expect(pillScale(1)).toBe(1);
-    expect(pillScale(2)).toBe(PILL_SCALE.min);
-    expect(pillScale(0.25)).toBe(PILL_SCALE.max);
-    expect(pillScale(0)).toBe(PILL_SCALE.max);
-    expect(pillScale(0.5)).toBe(2);
+describe('badgeScale', () => {
+  it('keeps the badge the same size on screen, within the bounds', () => {
+    expect(badgeScale(1)).toBe(1);
+    expect(badgeScale(2)).toBe(BADGE_SCALE.min);
+    expect(badgeScale(0.25)).toBe(BADGE_SCALE.max);
+    expect(badgeScale(0)).toBe(BADGE_SCALE.max);
+    expect(badgeScale(0.5)).toBe(2);
   });
 });
 

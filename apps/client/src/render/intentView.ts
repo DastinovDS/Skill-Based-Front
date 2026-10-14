@@ -14,6 +14,7 @@ import {
 import type { MapLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
 import { reducedMotion } from './motion.ts';
+import { splitOrder, trackOrder } from './orderTrack.ts';
 import type { EntityKit } from './shapes.ts';
 import type { OrderDelays } from './source.ts';
 import {
@@ -71,6 +72,8 @@ export class IntentView {
   private cameraScale = 1;
   /** The drawn axis of each ribbon by intent id, for the tooltip's hit test. */
   private readonly axes = new Map<string, readonly Point[]>();
+  /** The chain of nodes of each own ordinary order, kept while the order lives (`orderTrack.ts`). */
+  private readonly chains = new Map<string, number[]>();
   private delays: OrderDelays | null = null;
   private tickHz = 10;
 
@@ -319,57 +322,115 @@ export class IntentView {
     }
   }
 
+  /**
+   * The arrow of every own ordinary order: from where the order began to its target, along the
+   * server's path, drawn once and left in place while the group walks it. The walked part of the
+   * current road fades, the roads behind are gone. A planned order is the ribbon's job.
+   */
   private drawOrders(groups: readonly RenderGroup[], points: ReadonlyMap<string, Point>): void {
     const g = this.lines;
     g.clear();
-    for (const { group, owner } of groups) {
+    const live = new Set<string>();
+    for (const { group, owner, location } of groups) {
       const order = group.order;
-      const from = points.get(group.id);
-      // A planned order is the ribbon's job.
-      if (order === null || order.planned || from === undefined) continue;
+      const unit = points.get(group.id);
+      if (order === null || order.planned || unit === undefined) continue;
       const color = ownerColor(this.me, owner ?? this.me);
-      const path: Point[] = [from];
-      for (const id of order.path) {
-        const step = nodePoint(this.map, id);
-        if (step !== undefined) path.push(step);
-      }
-      const [first, ...rest] = path;
-      if (first === undefined) continue;
-      const trace = (): void => {
-        g.moveTo(first.x, first.y);
-        for (const p of rest) g.lineTo(p.x, p.y);
+      const start = location.kind === 'node' ? location.node : location.from_node;
+      const tracked = trackOrder(this.chains.get(group.id) ?? null, order.path, start);
+      this.chains.set(group.id, tracked.chain);
+      live.add(group.id);
+      const places = tracked.chain
+        .map((id) => nodePoint(this.map, id))
+        .filter((p): p is Point => p !== undefined);
+      if (places.length !== tracked.chain.length || places.length < 2) continue;
+      // The arrow leaves the circle of the city it began in.
+      const first = places[0];
+      const second = places[1];
+      if (first === undefined || second === undefined) continue;
+      const lead = this.radiusOf(tracked.chain[0] ?? start) + RIBBON.startGap;
+      const gap = Math.hypot(second.x - first.x, second.y - first.y) || 1;
+      places[0] = {
+        x: first.x + ((second.x - first.x) / gap) * lead,
+        y: first.y + ((second.y - first.y) / gap) * lead,
       };
-      trace();
-      g.stroke({
-        width: ORDER_LINE.casing.width,
-        color: BG,
-        alpha: ORDER_LINE.casing.alpha,
-        cap: 'round',
-        join: 'round',
-      });
-      trace();
-      g.stroke({
-        width: ORDER_LINE.width,
-        color,
-        alpha: ORDER_LINE.alpha,
-        cap: 'round',
-        join: 'round',
-      });
-      for (const { at, dir } of chevrons(path, CHEVRON.spacing, CHEVRON.first, CHEVRON.endMargin)) {
-        const s = CHEVRON.size;
-        g.moveTo(at.x - dir.x * s - dir.y * s, at.y - dir.y * s + dir.x * s)
-          .lineTo(at.x + dir.x * (s * 0.6), at.y + dir.y * (s * 0.6))
-          .lineTo(at.x - dir.x * s + dir.y * s, at.y - dir.y * s - dir.x * s);
-      }
-      g.stroke({ width: CHEVRON.width, color: PAPER, alpha: 1, cap: 'round', join: 'round' });
-      const dest = nodePoint(this.map, order.dest);
-      if (dest !== undefined) {
-        g.circle(dest.x, dest.y, this.radiusOf(order.dest) + 5).stroke({
-          width: 2,
-          color,
-          alpha: ORDER_LINE.alpha,
-        });
-      }
+      const { walked, ahead } = splitOrder(places, tracked.segment, unit);
+      this.drawWalked(walked, color);
+      this.drawAhead(ahead, color, order.dest);
     }
+    for (const id of this.chains.keys()) {
+      if (!live.has(id)) this.chains.delete(id);
+    }
+  }
+
+  /** The walked part of the road under the group: a faint line, what is left of the arrow. */
+  private drawWalked(walked: readonly Point[], color: number): void {
+    const [first, ...rest] = walked;
+    if (first === undefined || rest.length === 0) return;
+    const g = this.lines;
+    g.moveTo(first.x, first.y);
+    for (const p of rest) g.lineTo(p.x, p.y);
+    g.stroke({ width: ORDER_LINE.width, color, alpha: ORDER_LINE.walkedAlpha, cap: 'round' });
+  }
+
+  /** From the group to the target: casing, line, chevrons, the ring round the target, the head. */
+  private drawAhead(ahead: readonly Point[], color: number, dest: number): void {
+    const [first, ...rest] = ahead;
+    if (first === undefined || rest.length === 0) return;
+    const g = this.lines;
+    const target = rest[rest.length - 1] ?? first;
+    const before = rest[rest.length - 2] ?? first;
+    const radius = this.radiusOf(dest) + ORDER_LINE.ringGap;
+    // The line stops at the ring of the target, the head sits on it.
+    const length = Math.hypot(target.x - before.x, target.y - before.y) || 1;
+    const dir = { x: (target.x - before.x) / length, y: (target.y - before.y) / length };
+    const end = { x: target.x - dir.x * radius, y: target.y - dir.y * radius };
+    const body = [first, ...rest.slice(0, -1), end];
+    const trace = (): void => {
+      g.moveTo(first.x, first.y);
+      for (const p of body.slice(1)) g.lineTo(p.x, p.y);
+    };
+    trace();
+    g.stroke({
+      width: ORDER_LINE.casing.width,
+      color: BG,
+      alpha: ORDER_LINE.casing.alpha,
+      cap: 'round',
+      join: 'round',
+    });
+    trace();
+    g.stroke({
+      width: ORDER_LINE.width,
+      color,
+      alpha: ORDER_LINE.alpha,
+      cap: 'round',
+      join: 'round',
+    });
+    for (const { at, dir: d } of chevrons(
+      body,
+      CHEVRON.spacing,
+      CHEVRON.first,
+      CHEVRON.endMargin,
+    )) {
+      const s = CHEVRON.size;
+      g.moveTo(at.x - d.x * s - d.y * s, at.y - d.y * s + d.x * s)
+        .lineTo(at.x + d.x * (s * 0.6), at.y + d.y * (s * 0.6))
+        .lineTo(at.x - d.x * s + d.y * s, at.y - d.y * s - d.x * s);
+    }
+    g.stroke({ width: CHEVRON.width, color: PAPER, alpha: 1, cap: 'round', join: 'round' });
+    // The arrowhead: a filled triangle whose tip touches the ring of the target.
+    const h = ORDER_LINE.head;
+    const base = { x: end.x - dir.x * h.length, y: end.y - dir.y * h.length };
+    g.poly([
+      end.x,
+      end.y,
+      base.x - dir.y * h.half,
+      base.y + dir.x * h.half,
+      base.x + dir.y * h.half,
+      base.y - dir.x * h.half,
+    ])
+      .fill({ color, alpha: ORDER_LINE.alpha })
+      .stroke({ width: 1.5, color: BG, alpha: ORDER_LINE.casing.alpha, join: 'round' });
+    g.circle(target.x, target.y, radius).stroke({ width: 2, color, alpha: ORDER_LINE.alpha });
   }
 }

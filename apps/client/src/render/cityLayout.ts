@@ -5,13 +5,7 @@
  * Pure functions, no PixiJS and no DOM. Capacity, garrison and warehouse come from the snapshot;
  * nothing is inferred here.
  */
-import {
-  BAR_SEGMENT,
-  OVERFLOW_RING_GAP,
-  RING_GAP,
-  RING_MAX_SEGMENTS,
-  RING_SEGMENT,
-} from './style.ts';
+import { BAR_SEGMENT, RING_GAP, RING_MAX_SEGMENTS, RING_SEGMENT } from './style.ts';
 
 /** City radius by capacity class: up to 2, 3-4, 5-6, 7 and more. */
 export function cityRadius(capacity: number): number {
@@ -81,24 +75,6 @@ export function capacityRing(capacity: number, garrison: number): Ring {
     });
   }
   return { solid: false, arcs, notches: [] };
-}
-
-/** Most overflow segments drawn on the second ring (more would not fit). */
-export const MAX_OVERFLOW_SEGMENTS = 8;
-
-/** Arcs of the units above the capacity, on the ring `OVERFLOW_RING_GAP` outside the first one. */
-export function overflowArcs(over: number): Arc[] {
-  const count = Math.min(MAX_OVERFLOW_SEGMENTS, Math.max(0, Math.floor(over)));
-  const arcs: Arc[] = [];
-  for (let i = 0; i < count; i++) {
-    arcs.push({ from: START + i * 0.55 + 0.06, to: START + i * 0.55 + 0.51, filled: true });
-  }
-  return arcs;
-}
-
-/** Radius of the second (overflow) ring. */
-export function overflowRadius(radius: number): number {
-  return ringRadius(radius) + OVERFLOW_RING_GAP;
 }
 
 export interface BarSegment {

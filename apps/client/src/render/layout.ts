@@ -132,9 +132,12 @@ export function packetFade(
   return { scale: PACKET_MIN_SCALE + (1 - PACKET_MIN_SCALE) * f, alpha: f };
 }
 
-/** Text of the numbers on a token: charged units over all units. */
-export function countLabel(units: number, charged: number): string {
-  return `${String(charged)}/${String(units)}`;
+/**
+ * Text of the number on a token (UI round 2): ONE number, all the units. How many of them are
+ * charged is the fill of the triangle; the exact numbers are in the tooltip.
+ */
+export function countLabel(units: number): string {
+  return String(units);
 }
 
 /**

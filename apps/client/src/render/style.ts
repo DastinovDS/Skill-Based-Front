@@ -103,9 +103,6 @@ export const RING_SEGMENT = { width: 4, base: 7, baseAlpha: 0.75, gap: 0.16 } as
 export const RING_FILLED = PAPER;
 /** Above this capacity the ring is one solid arc with a notch at every fifth unit. */
 export const RING_MAX_SEGMENTS = 10;
-/** Units above the capacity: segments on a second ring, a dashed circle and the countdown. */
-export const OVERFLOW_RING_GAP = 8;
-export const OVERFLOW_CIRCLE = { gap: 15, width: 1.5, dash: 4 } as const;
 
 /** The warehouse bar under the ring: one 5 x 4 segment per unit of capacity (6 apart). */
 export const BAR_SEGMENT = { width: 5, height: 4, pitch: 6, pad: 1 } as const;
@@ -141,15 +138,10 @@ export const UNIT_QUESTION_FONT_SIZE = 15;
 /** On screen a triangle is at least this wide, and a click hits at least this wide (CSS px). */
 export const UNIT_MIN_SIDE_PX = 20;
 export const UNIT_MIN_HIT_PX = 28;
-/** Own groups carry their "charged/units" label from this camera scale (CSS px per world unit). */
-export const UNIT_LABEL_MIN_SCALE = 0.6;
 export const UNIT_LABEL = { fill: PLATE_FILL, alpha: 0.92, padX: 4, height: 13, gap: 3 } as const;
 export const SHIELD_BADGE_SCALE = 0.9;
 /** The selection outline is a copy of the triangle this much bigger (9.5). */
 export const SELECT_UNIT_SCALE = 1.45;
-
-/** The trail of a moving group: a bar of `width` and `length` fading from `alpha` to 0, in steps. */
-export const TRAIL = { width: 10, length: 40, alpha: 0.7, steps: 8 } as const;
 
 /** A packet is a small disc without an outline (9.6); an opponent one has a dark centre. */
 export const PACKET_RADIUS = 5;
@@ -286,7 +278,17 @@ export const INTENT_TARGET_RING = { gap: 20, width: 2, dash: 5, gap2: 4, alpha: 
 export const DEFENSE_ARC = { gap: 3, width: 3 } as const;
 
 /** Thin line of an ordinary order (own only) with white chevrons every 26 units. */
-export const ORDER_LINE = { width: 3, alpha: 0.9, casing: { width: 6, alpha: 0.5 } } as const;
+export const ORDER_LINE = {
+  width: 3,
+  alpha: 0.9,
+  casing: { width: 6, alpha: 0.5 },
+  /** The part of the road the group has walked: what is left of the arrow, faint. */
+  walkedAlpha: 0.22,
+  /** The ring round the target is this far outside its circle. */
+  ringGap: 5,
+  /** The arrowhead on the ring of the target. */
+  head: { length: 11, half: 6 },
+} as const;
 export const CHEVRON = { spacing: 26, first: 22, endMargin: 10, size: 5, width: 1.8 } as const;
 
 /** A rejected order: the ghost shakes for `SHAKE_MS`, then fades out until `REJECT_MS` (U6). */

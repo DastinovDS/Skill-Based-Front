@@ -27,7 +27,6 @@ import {
   BUILD_TIE,
   BUILD_TIE_CASING,
   BUILD_TIME_FONT_SIZE,
-  UNIT_LABEL_MIN_SCALE,
   roadThickness,
 } from './style.ts';
 
@@ -42,13 +41,8 @@ interface Labelled {
 
 interface GroupEntry extends Labelled {
   token: Token;
-  /** The trail behind a group that moves along a road. */
-  trail: Graphics;
   stamp: number;
   view: Container;
-  /** Where the token was drawn last frame, and its heading (radians): the trail follows these. */
-  last: Point | null;
-  heading: number | null;
   owner: PlayerId;
 }
 
@@ -68,7 +62,7 @@ interface BuildMark {
 
 /**
  * Everything the snapshot puts on top of the map (CLI-04, #60; units and packets: ui-style 9.5 and
- * 9.6): warehouse bars, own groups as inverted triangles with a motion trail, own packets gliding
+ * 9.6): warehouse bars, own groups as inverted triangles (no trail: the arrow of their order is the intent view's), own packets gliding
  * along roads into and out of the city icons, what is known about enemies (a marker per city or
  * road, with numbers only where the snapshot has them), intents of both players as arrows, road
  * builds of cities (DEC-16: bars across the road and a hammer disc, the time left for an own
@@ -96,8 +90,6 @@ export class EntityView {
   private readonly timeStyle: TextStyle;
   private tickHz = 10;
   private cameraScale = 1;
-  private selected: string | null = null;
-  private hovered: string | null = null;
   private readonly groups = new Map<string, GroupEntry>();
   private readonly packets = new Map<string, PacketEntry>();
   private base: SnapshotMsg | null = null;
@@ -164,12 +156,6 @@ export class EntityView {
     for (const token of [...this.enemyNodes, ...this.enemyEdges]) {
       if (token !== null) token.setScale(symbolScale(token.side, scale));
     }
-  }
-
-  /** The selected and the hovered own group: they carry their "charged/units" label. */
-  setEmphasis(selected: string | null, hovered: string | null): void {
-    this.selected = selected;
-    this.hovered = hovered;
   }
 
   update(frame: RenderFrame): void {
@@ -359,7 +345,6 @@ export class EntityView {
       });
       const { location } = item;
       let at: Point | undefined;
-      let roadAngle: number | null = null;
       if (location.kind === 'node') {
         const node = nodePoint(this.map, location.node);
         const list = perNode.get(location.node) ?? [];
@@ -373,33 +358,16 @@ export class EntityView {
         if (ends !== undefined && edge !== undefined) {
           const fromIsA = edge.a === location.from_node;
           at = roadPosition(ends.a, ends.b, fromIsA, location.progress);
-          const from = fromIsA ? ends.a : ends.b;
-          const to = fromIsA ? ends.b : ends.a;
-          roadAngle = Math.atan2(to.y - from.y, to.x - from.x);
         }
       }
       entry.view.visible = at !== undefined;
       if (at === undefined) continue;
-      // The heading comes from the way the token really moved (a bounce goes backwards); a
-      // token that has not moved yet takes the direction of its road.
-      const last = entry.last;
-      if (last !== null && Math.hypot(at.x - last.x, at.y - last.y) > 0.2) {
-        entry.heading = Math.atan2(at.y - last.y, at.x - last.x);
-      } else if (entry.heading === null) {
-        entry.heading = roadAngle;
-      }
-      entry.last = at;
-      const moving = location.kind === 'edge' && entry.heading !== null;
-      entry.trail.visible = moving;
-      if (moving && entry.heading !== null) entry.trail.rotation = entry.heading + Math.PI;
-
       const scale = symbolScale(entry.token.side, this.cameraScale);
       entry.view.scale.set(scale);
       entry.view.position.set(at.x, at.y);
       const id = item.group.id;
-      entry.token.setLabel(
-        id === this.selected || id === this.hovered || this.cameraScale >= UNIT_LABEL_MIN_SCALE,
-      );
+      // One short number: always shown (the exact units and charged are the tooltip's).
+      entry.token.setLabel(true);
       spots.set(id, { x: at.x, y: at.y, side: entry.token.side, scale });
     }
     sweep(this.groups, this.stamp);
@@ -411,16 +379,11 @@ export class EntityView {
     if (entry === undefined) {
       const view = this.groupLayer.addChild(new Container({ label: `group-${id}` }));
       const token = new Token(this.kit, this.labelResolution);
-      const trail = new Graphics(this.kit.trail[owner]);
-      trail.visible = false;
-      view.addChild(trail, token.view);
+      view.addChild(token.view);
       entry = {
         token,
-        trail,
         view,
         stamp: this.stamp,
-        last: null,
-        heading: null,
         owner,
         labels: () => token.labels(),
       };

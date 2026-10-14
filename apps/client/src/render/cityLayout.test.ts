@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  barTop,
-  capacityRing,
-  cityRadius,
-  overflowArcs,
-  ringRadius,
-  warehouseSegments,
-} from './cityLayout.ts';
+import { barTop, capacityRing, cityRadius, ringRadius, warehouseSegments } from './cityLayout.ts';
 
 describe('cityRadius', () => {
   it.each([
@@ -55,14 +48,6 @@ describe('capacityRing', () => {
 
   it('is empty for capacity 0', () => {
     expect(capacityRing(0, 0).arcs).toEqual([]);
-  });
-});
-
-describe('overflowArcs', () => {
-  it('has a segment per unit over the capacity', () => {
-    expect(overflowArcs(0)).toEqual([]);
-    expect(overflowArcs(3)).toHaveLength(3);
-    expect(overflowArcs(30)).toHaveLength(8);
   });
 });
 

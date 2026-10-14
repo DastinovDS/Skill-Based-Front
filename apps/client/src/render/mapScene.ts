@@ -52,7 +52,6 @@ export class MapScene {
   private readonly alerts: AlertView;
   private interaction: MapInteraction | null;
   private hovering = false;
-  private hoveredGroup: string | null = null;
   private readonly controller: CameraController;
   private source: RenderSource | null;
   private base: unknown = null;
@@ -210,8 +209,6 @@ export class MapScene {
     const delays = this.source.orderDelays ?? null;
     this.intents.setDelays(delays);
     this.intents.setTickHz(tickHz);
-    const selection = this.interaction?.overlay().selection ?? null;
-    this.entities.setEmphasis(selection?.kind === 'group' ? selection.id : null, this.hoveredGroup);
     this.entities.update(frame);
     this.intents.update(frame, this.entities.groupPoints());
     this.effects.update(frame, this.source.events(), this.entities.groupPoints(), tickHz);
@@ -220,13 +217,7 @@ export class MapScene {
     const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
     this.supply.update(frame.base, overlay.supply);
-    this.alerts.update(
-      frame.base.view.nodes,
-      tickHz,
-      this.source.capacityTicks ?? null,
-      overlay.beacon,
-      performance.now(),
-    );
+    this.alerts.update(frame.base.view.nodes, tickHz, overlay.beacon, performance.now());
     if (announce) this.onsnapshot?.(frame.base.tick);
   };
 
@@ -251,7 +242,6 @@ export class MapScene {
 
   private readonly onHover = (at: Point | null): void => {
     const hit = at === null ? null : this.hitAt(at, true);
-    this.hoveredGroup = hit?.kind === 'group' ? hit.id : null;
     // The pointer cursor (CSSOM, allowed by the CSP) tells that a click does something here.
     const pointer = hit !== null && this.interaction !== null;
     if (pointer !== this.hovering) {
