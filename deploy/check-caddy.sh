@@ -92,6 +92,21 @@ else
 	esac
 fi
 
+echo "== baked map backgrounds are bundled into the client"
+# maps/*.bg.png reach the client only through Vite's import.meta.glob at image build time; when the
+# Docker context misses them the glob is empty and the map is drawn without its background.
+bg="$(grep -oE '/assets/[A-Za-z0-9_.-]+\.bg-[A-Za-z0-9_-]+\.png' "$tmp/asset.b" | head -n 1 || true)"
+if [ -z "$bg" ]; then
+	fail "the client bundle references no baked map background (/assets/<map>.bg-<hash>.png)"
+else
+	status="$(fetch bg "$bg")"
+	[ "$status" = 200 ] || fail "GET $bg returned $status"
+	case "$(header bg Content-Type)" in
+	image/png*) ;;
+	*) fail "$bg: Content-Type is '$(header bg Content-Type)'" ;;
+	esac
+fi
+
 echo "== missing asset is a 404, not index.html"
 status="$(fetch missing /assets/missing-0000.js)"
 [ "$status" = 404 ] || fail "GET /assets/missing-0000.js returned $status"

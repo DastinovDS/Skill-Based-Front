@@ -1,4 +1,4 @@
-"""Map background baker (MAP-05): terrain biomes, sea, determinism, committed PNGs."""
+"""Map background baker (MAP-05, DEC-27): land biomes by terrain, no water, determinism, PNGs."""
 
 import json
 import math
@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from gow_maps.bake import (
-    INFLUENCE_RADIUS,
+    BIOME_COLOUR,
     STEP,
     TERRAIN_BIOMES,
     WARP,
@@ -31,7 +31,7 @@ TEST_MAPS = ROOT / "packages" / "sim" / "tests" / "maps"
 POOL = ["arteriya", "pautina", "pereval"]
 ALL_MAPS = [MAPS / f"{name}.json" for name in POOL] + sorted(TEST_MAPS.glob("*.json"))
 MAX_PNG_BYTES = 1_500_000  # issue MAP-05: every background is at most 1.5 MB
-SEA = {Biome.DEEP_SEA, Biome.SHALLOW_SEA}
+LAND = frozenset(biome for biomes in TERRAIN_BIOMES.values() for biome in biomes)
 
 
 @cache
@@ -68,12 +68,6 @@ def _centre(gx: int, gy: int) -> tuple[float, float]:
     return gx * STEP + STEP / 2, gy * STEP + STEP / 2
 
 
-def _segment_distance(px: float, py: float, a: tuple[int, int], b: tuple[int, int]) -> float:
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    t = max(0.0, min(1.0, ((px - a[0]) * dx + (py - a[1]) * dy) / (dx * dx + dy * dy)))
-    return math.hypot(a[0] + t * dx - px, a[1] + t * dy - py)
-
-
 @pytest.mark.parametrize("path", ALL_MAPS, ids=lambda p: p.stem)
 def test_grid_covers_the_world_rectangle(path: Path) -> None:
     mapdef, cells = _map(path), _cells(path)
@@ -84,7 +78,7 @@ def test_grid_covers_the_world_rectangle(path: Path) -> None:
 @pytest.mark.parametrize("path", ALL_MAPS, ids=lambda p: p.stem)
 def test_node_area_has_the_node_terrain(path: Path) -> None:
     # Near a node (closer than half the distance to any other node, minus the border warp)
-    # every land cell belongs to that node's area, so its biome comes from the node's terrain.
+    # every cell belongs to that node's area, so its biome comes from the node's terrain.
     mapdef, cells = _map(path), _cells(path)
     for node in mapdef.nodes:
         others = min(
@@ -92,7 +86,7 @@ def test_node_area_has_the_node_terrain(path: Path) -> None:
         )
         reach = others / 2 - WARP - STEP
         assert reach > STEP  # the check below looks at some cells around every node
-        allowed = TERRAIN_BIOMES[node.terrain] | {Biome.BEACH} | SEA
+        allowed = TERRAIN_BIOMES[node.terrain]
         for gy, row in enumerate(cells):
             for gx, cell in enumerate(row):
                 x, y = _centre(gx, gy)
@@ -103,30 +97,22 @@ def test_node_area_has_the_node_terrain(path: Path) -> None:
         assert own.biome in TERRAIN_BIOMES[node.terrain]
 
 
-@pytest.mark.parametrize("path", ALL_MAPS, ids=lambda p: p.stem)
-def test_far_from_cities_and_roads_is_sea(path: Path) -> None:
-    mapdef, cells = _map(path), _cells(path)
-    points = [(n.x, n.y) for n in mapdef.nodes]
-    roads = [(points[e.a], points[e.b]) for e in mapdef.edges]
-    far = 0
-    # Every third cell in each direction: enough to cover the sea, fast enough for CI.
-    for gy in range(0, len(cells), 3):
-        for gx in range(0, len(cells[0]), 3):
-            cell, (x, y) = cells[gy][gx], _centre(gx, gy)
-            near_city = any(math.hypot(px - x, py - y) < INFLUENCE_RADIUS for px, py in points)
-            near_road = any(_segment_distance(x, y, a, b) < INFLUENCE_RADIUS for a, b in roads)
-            if not near_city and not near_road:
-                far += 1
-                assert cell.biome in SEA, (gx, gy, cell.biome)
-    assert far > 0
-    assert cells[0][0].biome in SEA
+def test_there_is_no_water_biome() -> None:
+    # DEC-27, item 3: no deep sea, shallow sea or beach, only the land biomes of the terrains.
+    assert set(Biome) == LAND
+    assert {biome.value for biome in Biome} == {
+        "steppe",
+        "savanna",
+        "forest",
+        "jungle",
+        "rock",
+        "snow",
+    }
 
 
 @pytest.mark.parametrize("path", ALL_MAPS, ids=lambda p: p.stem)
-def test_background_is_rot180_symmetric(path: Path) -> None:
-    cells = _cells(path)
-    flat = [cell for row in cells for cell in row]
-    assert flat == flat[::-1]
+def test_every_cell_is_land(path: Path) -> None:
+    assert {cell.biome for row in _cells(path) for cell in row} <= LAND
 
 
 def test_bake_is_deterministic() -> None:
@@ -175,6 +161,26 @@ def test_committed_background_is_up_to_date(name: str) -> None:
     mapdef = _map(path)
     # Compared as pixels, not bytes: zlib builds may compress the same pixels differently.
     assert _decode_png(png) == (mapdef.meta.width, mapdef.meta.height, render_rgb(mapdef))
+
+
+def _is_land_pixel(pixel: bytes) -> bool:
+    # A land pixel is a biome colour times the detail shade (1 +- 0.09), rounded.
+    return any(
+        all(c * 0.9 - 1 <= p <= min(255, c * 1.1 + 1) for p, c in zip(pixel, colour, strict=True))
+        for biome, colour in BIOME_COLOUR.items()
+        if biome in LAND
+    )
+
+
+@pytest.mark.parametrize("name", POOL)
+def test_committed_background_has_no_water_pixels(name: str) -> None:
+    # Example 12 of DEC-27: not a single sea, shallow water or beach pixel. The colours of the
+    # three water biomes of the old baker (deep sea, shallow sea, beach) match no land colour.
+    water_or_beach = [bytes(c) for c in [(0, 105, 148), (0, 133, 148), (238, 214, 175)]]
+    assert not any(_is_land_pixel(pixel) for pixel in water_or_beach)
+    _, _, rgb = _decode_png(background_path(MAPS / f"{name}.json").read_bytes())
+    pixels = {rgb[i : i + 3] for i in range(0, len(rgb), 3)}
+    assert all(_is_land_pixel(pixel) for pixel in pixels)
 
 
 def test_cli_bake_writes_next_to_the_map(

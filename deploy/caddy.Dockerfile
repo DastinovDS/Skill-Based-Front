@@ -22,7 +22,9 @@ RUN --mount=type=cache,target=/pnpm/store \
     pnpm config set store-dir /pnpm/store \
     && pnpm install --frozen-lockfile
 
-COPY maps/*.json /repo/maps/
+# Backgrounds too: Vite bundles maps/*.bg.png with `import.meta.glob`; without them the glob is
+# empty and the production client draws flat terrain colours (bug #269).
+COPY maps/*.json maps/*.bg.png /repo/maps/
 COPY packages/sim/tests/maps/ /repo/packages/sim/tests/maps/
 COPY apps/client/ ./
 # The client build, then the Content-Security-Policy header for Caddy, generated from
