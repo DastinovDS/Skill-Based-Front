@@ -306,9 +306,12 @@ function intField(data: EventMsg['data'], key: string): number | null {
  * A `fight_round` or `fight_ended` event (DEC-24) as a mark on the map, or `null` if it is not one
  * or names an unknown place. A fight on an edge is drawn at its meeting point (`point`). The
  * events come from `gow_sim.systems.combat` (`node` or `edge`, `point`, `losses_0`, `losses_1`).
+ * Replays of `sim_version` 9 and older have the instant `fight` instead: a finished fight drawn in
+ * the middle of its road.
  */
 export function fightInfo(event: EventMsg, map: MapFile): FightInfo | null {
-  if (event.kind !== 'fight_round' && event.kind !== 'fight_ended') return null;
+  const kind = event.kind;
+  if (kind !== 'fight_round' && kind !== 'fight_ended' && kind !== 'fight') return null;
   const losses0 = intField(event.data, 'losses_0');
   const losses1 = intField(event.data, 'losses_1');
   if (losses0 === null || losses1 === null) return null;
@@ -320,5 +323,5 @@ export function fightInfo(event: EventMsg, map: MapFile): FightInfo | null {
   );
   return at === undefined
     ? null
-    : { event, losses: [losses0, losses1], at, final: event.kind === 'fight_ended' };
+    : { event, losses: [losses0, losses1], at, final: kind !== 'fight_round' };
 }
