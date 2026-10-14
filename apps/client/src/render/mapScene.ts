@@ -75,7 +75,7 @@ export class MapScene {
     const radiusOf = (node: number): number => this.cities.radiusOf(node);
     this.entities = new EntityView(map, this.layers, me, 1, radiusOf);
     this.intents = new IntentView(map, this.layers, me, this.entities.kit, radiusOf);
-    this.effects = new EffectsView(map, this.layers, me, 1, this.view.cells);
+    this.effects = new EffectsView(map, this.layers, me, 1, this.view.cells, radiusOf);
     this.fog = new FogView(
       map,
       this.layers,

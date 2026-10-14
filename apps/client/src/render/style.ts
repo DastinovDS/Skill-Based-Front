@@ -233,16 +233,13 @@ export const BUILD_MARK_DISTANCE = 46;
 export const BUILD_TIME_FONT_SIZE = 10;
 
 // --- Fight, bounce, capture (9.9) ----------------------------------------------------------------
-export const FLASH_MS = 400;
-/** The loss numbers stay this long, rising `NUMBERS_RISE` world units. */
-export const NUMBERS_MS = 3000;
+/** The loss numbers rise this many world units while they stay (`fightFx.ts`: how long). */
 export const NUMBERS_RISE = 12;
 export const BOUNCE_MS = 1000;
 export const BOUNCE_LENGTH = 40;
 export const WAVE_MS = 500;
 export const WAVE_FILL_ALPHA = 0.28;
 export const WAVE_STROKE = { width: 3, alpha: 0.9 } as const;
-export const FLASH_STAR = { outer: 15, inner: 6, points: 8 } as const;
 export const LOSS_FONT_SIZE = 13;
 
 // --- Ribbon arrows of intents and orders (9.7) ---------------------------------------------------
