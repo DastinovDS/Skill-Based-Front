@@ -24,7 +24,7 @@ export interface Toast extends ToastBody {
 /** The event kinds with a toast. */
 export const TOAST_EVENT_KINDS: ReadonlySet<string> = new Set([
   'node_captured',
-  'fight',
+  'fight_ended',
   'attrition',
 ]);
 
@@ -37,7 +37,7 @@ export function toastOf(event: HudEvent, me: PlayerId): ToastBody | null {
     case 'node_captured':
       // A lost city is the opponent's colour: the loss is the news.
       return { tone: event.data.player === me ? 'mine' : 'enemy', icon: 'flag', text };
-    case 'fight':
+    case 'fight_ended':
       return { tone: 'neutral', icon: 'war', text };
     default:
       return { tone: 'warn', icon: 'alert', text };

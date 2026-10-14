@@ -103,6 +103,7 @@
           tickHz: welcome.ruleset_public.tick_hz,
           orders: welcome.ruleset_public.orders,
           capacity: welcome.ruleset_public.capacity,
+          roundTicks: welcome.ruleset_public.combat.round_ticks,
         };
       },
       onStatus: (next) => {

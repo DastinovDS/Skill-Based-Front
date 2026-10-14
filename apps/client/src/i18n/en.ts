@@ -59,6 +59,7 @@ export const en = {
   'reject.NOT_CAPITAL': 'You can recruit only in your capital',
   'reject.CITY_FULL': 'The city has no free capacity',
   'reject.RECRUIT_COOLDOWN': 'The city recruited too recently',
+  'reject.IN_FIGHT': 'In a fight: the group can only withdraw',
   'reject.STACK_LIMIT': 'The group is bigger than a node on the way: split it (S)',
   'cmd.move': 'move',
   'cmd.split': 'split',

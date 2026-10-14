@@ -24,15 +24,18 @@ function fight(tick: number, where: { node: number } | { edge: number }, l0: num
   const event: EventMsg = {
     type: 'event',
     tick,
-    kind: 'fight',
+    kind: 'fight_ended',
     data: {
+      fight: `dev-fight-${String(tick)}`,
       node: 'node' in where ? where.node : null,
       edge: 'edge' in where ? where.edge : null,
-      attacker: 0,
-      pool_0: 4,
-      pool_1: 3,
-      unspent_0: 1,
-      unspent_1: 0,
+      // The meeting point on an edge (DEC-24, C3): a little off the middle, towards the end `b`.
+      point: 'edge' in where ? 1200 : null,
+      attacker: 'node' in where ? 0 : null,
+      start: tick - 20,
+      winner: 0,
+      captured: false,
+      shots_0: 2,
       losses_0: l0,
       losses_1: l1,
     },
@@ -104,6 +107,7 @@ export function frozenSource(scene: FixtureScene): RenderSource {
       planned: DEV_RULES.orders.planned_delay_ticks,
       defense: DEV_RULES.orders.defense_delay_ticks,
     },
+    roundTicks: DEV_RULES.combat.round_ticks,
     capacityTicks: {
       attritionTicks: DEV_RULES.capacity.attrition_ticks,
       graceTicks: DEV_RULES.capacity.grace_ticks,

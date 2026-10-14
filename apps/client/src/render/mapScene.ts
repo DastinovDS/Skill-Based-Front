@@ -212,7 +212,13 @@ export class MapScene {
     this.intents.setTickHz(tickHz);
     this.entities.update(frame);
     this.intents.update(frame, this.entities.groupPoints());
-    this.effects.update(frame, this.source.events(), this.entities.groupPoints(), tickHz);
+    this.effects.update(
+      frame,
+      this.source.events(),
+      this.entities.groupPoints(),
+      tickHz,
+      this.source.roundTicks,
+    );
     this.fog.setTickHz(tickHz);
     this.fog.update(frame.base);
     const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;

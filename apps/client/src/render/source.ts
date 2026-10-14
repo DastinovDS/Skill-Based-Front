@@ -24,6 +24,8 @@ export interface RenderSource {
   readonly orderDelays?: OrderDelays;
   /** Ticks per second (`ruleset_public.tick_hz`), for the age of fog memories. Default 10. */
   readonly tickHz?: number;
+  /** Ticks between the rounds of a fight (`ruleset_public.combat.round_ticks`). Default 10. */
+  readonly roundTicks?: number;
   /** The frame to draw now; `null` until the first snapshot. */
   frame(): RenderFrame | null;
   /**

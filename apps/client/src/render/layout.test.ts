@@ -171,7 +171,7 @@ describe('fight marks', () => {
   } as unknown as MapFile;
 
   function fightEvent(data: EventMsg['data']): EventMsg {
-    return { type: 'event', tick: 50, kind: 'fight', data };
+    return { type: 'event', tick: 50, kind: 'fight_ended', data };
   }
 
   it('puts a fight in a city at the city and reads both sides losses', () => {
@@ -180,9 +180,19 @@ describe('fight marks', () => {
     expect(info?.losses).toEqual([2, 3]);
   });
 
-  it('puts a fight on a road in the middle of the road', () => {
-    const info = fightInfo(fightEvent({ node: null, edge: 0, losses_0: 0, losses_1: 1 }), map);
-    expect(info?.at).toEqual({ x: 60, y: 20 });
+  it('puts a fight on a road at its meeting point', () => {
+    // DEC-24, C3: point = pos_0 + pos_1 = 1134, the mark at 1134 / 2000 of the road from `a`.
+    const data = { node: null, edge: 0, point: 1134, losses_0: 0, losses_1: 1 };
+    const at = fightInfo(fightEvent(data), map)?.at;
+    expect(at?.x).toBeCloseTo(66.7);
+    expect(at?.y).toBe(20);
+  });
+
+  it('flashes a round and shows the numbers of a finished fight only', () => {
+    const round = { ...fightEvent({ node: 1, edge: null, losses_0: 0, losses_1: 1 }) };
+    expect(fightInfo({ ...round, kind: 'fight_round' }, map)?.final).toBe(false);
+    expect(fightInfo(round, map)?.final).toBe(true);
+    expect(fightInfo({ ...round, kind: 'fight_started' }, map)).toBeNull();
   });
 
   it('ignores other events, unknown places and events without losses', () => {
