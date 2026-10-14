@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Api, ApiError, type Invite } from '../api/http.ts';
 import { GUEST_STORAGE_KEY } from '../api/guestStore.ts';
+import type { MatchEndMsg } from '../protocol.gen.ts';
 import { AppState } from './appState.svelte.ts';
 
 const invite = (code: string): Invite => ({
@@ -204,5 +205,30 @@ describe('AppState', () => {
     await app.createInvite('pereval', true);
     expect(createInvite).toHaveBeenCalledWith('t', 'pereval', true);
     expect(app.screen).toEqual({ name: 'invite', code: 'pub' });
+  });
+
+  it('"Back" from a replay opened on the result screen returns to that result screen (#259)', () => {
+    const { app } = setup('');
+    const end: MatchEndMsg = {
+      type: 'match_end',
+      tick: 100,
+      reason: 'timer',
+      winner: 0,
+      vp: [3, 5],
+      rating: null,
+    };
+    app.finishMatch('7', 0, end);
+    const result = app.screen;
+    app.openReplay('7');
+    expect(app.screen).toMatchObject({ name: 'replay', matchId: '7' });
+    app.closeReplay();
+    expect(app.screen).toBe(result); // the same result: the verdict and the rating are not lost
+  });
+
+  it('"Back" from a replay opened from nowhere goes to the menu', () => {
+    const { app } = setup('');
+    app.go({ name: 'replay', matchId: '7' });
+    app.closeReplay();
+    expect(app.screen.name).toBe('welcome'); // no guest here: the nick form is the menu's stand-in
   });
 });

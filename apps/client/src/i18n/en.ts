@@ -89,7 +89,12 @@ export const en = {
   'replay.draw': 'Draw',
   'replay.loading': 'Loading the replay...',
   'replay.error.auth': 'This replay is available to the players of the match only',
-  'replay.error.missing': 'The replay was not found or is not ready yet',
+  'replay.error.missing': 'Replay not found',
+  'replay.error.unavailable':
+    'Replay is unavailable: the match was cut short or the server could not build it',
+  'replay.error.timeout': 'The replay is taking too long to prepare. Try again later',
+  'replay.preparing': 'Preparing the replay...',
+  'replay.preparing.hint': 'The server is building the match frames, this can take up to a minute.',
   'replay.error.network': 'Could not load the replay',
   'replay.error.format': 'This replay has a format this version cannot play',
   'replay.error.invalid': 'The replay file is damaged',

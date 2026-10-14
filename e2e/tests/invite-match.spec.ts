@@ -99,7 +99,10 @@ test('two guests play a private match by invite to the end and watch the replay'
   await page.getByLabel('Position in the match').fill('300');
   await expect(canvas).toHaveAttribute('data-tick', '300');
 
+  // "Back" returns to the result screen the replay was opened from (#259), not to the menu.
   await page.getByRole('button', { name: 'Back' }).click();
+  await expect(page.getByRole('heading', { name: VERDICT })).toBeVisible();
+  await page.getByRole('button', { name: 'To the menu' }).click();
   await expect(page.getByText(`Hello, ${host.nick}!`)).toBeVisible();
 
   await host.close();
