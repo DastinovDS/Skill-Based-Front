@@ -99,7 +99,6 @@
       <span class="tug" aria-hidden="true">
         <span class="tug-mine" style:flex-basis="{share}%"></span>
         <span class="tug-enemy"></span>
-        <span class="notch"></span>
       </span>
       <span class="vp enemy-vp">{data.vp.enemy}</span>
       <span class="side enemy">
@@ -376,14 +375,6 @@
   .tug-enemy {
     flex: 1 1 0;
     background: var(--enemy);
-  }
-
-  .notch {
-    position: absolute;
-    inset: -2px auto -2px 50%;
-    width: 2px;
-    margin-left: -1px;
-    background: var(--paper);
   }
 
   .timer {

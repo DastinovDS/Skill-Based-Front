@@ -42,7 +42,7 @@ describe('RadialMenu', () => {
     const target = document.body.appendChild(document.createElement('div'));
     mounted = mount(RadialMenu, {
       target,
-      props: { orders, stance: current, passive: orders.passivePerMinute },
+      props: { orders, stance: current },
     });
     return { target, orders, sent };
   }
@@ -66,7 +66,8 @@ describe('RadialMenu', () => {
     expect(text[1]).toContain('+12 charges per minute');
     expect(text[2]).toContain('+9 CP per minute');
     expect(text[2]).toContain('+6 charges per minute');
-    expect(target.textContent).toContain('+12 charges per minute in any stance');
+    // No hint lines under the ring.
+    expect(target.querySelector('.caption')).toBeNull();
   });
 
   it('marks the current stance, and the state is told by a tick, not only by the frame', () => {

@@ -19,7 +19,6 @@ import {
 } from '../render/interaction.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
 import {
-  passivePerMinute,
   RADIAL,
   ROAD_SECTORS,
   SECTORS,
@@ -286,6 +285,8 @@ export class OrderController implements MapInteraction {
         { type: 'move', group: group.id, dest: hit.id, planned: this.planned },
         group.node,
       );
+      // The order is given: the group is let go (the ghost of the order is drawn without it).
+      this.deselect();
       return;
     }
     // A city opens its menu on the click that selects it, a second click on it closes the menu.
@@ -358,6 +359,7 @@ export class OrderController implements MapInteraction {
     if (group === null) return;
     this.groupMenu.close();
     this.#sendCommand({ type: 'cancel_order', group: group.id }, null);
+    if (this.#o.send !== null) this.deselect();
   }
 
   /** Switch the mode of the selected group (attack / defense). */
@@ -567,11 +569,6 @@ export class OrderController implements MapInteraction {
   /** The numbers of the stance menu, from the ruleset of `welcome`. */
   get stanceRates(): StanceRate[] {
     return stanceRates(this.#o.rules);
-  }
-
-  /** Charges a minute the capital makes in any stance (the caption of the menu). */
-  get passivePerMinute(): number {
-    return passivePerMinute(this.#o.rules);
   }
 
   /** The menu opens only in a match, where a stance can be sent. */

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { OrderController } from '../match/orderController.ts';
   import type { HudData } from './hudData.ts';
+  import ChargeTip from './ChargeTip.svelte';
   import { tipText } from './tipText.ts';
   import type { HudContext } from './hudData.ts';
 
@@ -23,17 +24,6 @@
   let overMap = false;
 
   const tip = $derived(data?.tip ?? null);
-  // The selected group's way to the node under the pointer: the server's answer (DEC-20).
-  const route = $derived.by(() => {
-    const reach = orders.ui.current.reach;
-    const group = data?.group ?? null;
-    if (tip?.kind !== 'node' || reach === null || group === null || reach.group !== group.id) {
-      return null;
-    }
-    const ticks = reach.ticks.get(tip.node.id);
-    if (ticks !== undefined) return { ticks, split: false };
-    return reach.split.has(tip.node.id) ? { ticks: null, split: true } : null;
-  });
   const text = $derived(
     tip === null
       ? null
@@ -41,7 +31,6 @@
           rules: ctx.rules,
           pickable:
             orders.ui.current.roadPick !== null && orders.ui.current.road?.pickable === true,
-          route,
         }),
   );
   // A tip is the same thing while its kind and id are: the numbers change under it every snapshot.
@@ -94,13 +83,17 @@
   });
 
   $effect(() => {
-    if (shown && text !== null) place();
+    if (shown && (text !== null || tip?.kind === 'group')) place();
   });
 </script>
 
 <svelte:window onpointermove={onMove} />
 
-{#if shown && text !== null}
+{#if shown && tip?.kind === 'group'}
+  <div class="tip charge-box" role="tooltip" bind:this={box}>
+    <ChargeTip units={tip.group.units} charged={tip.group.charged} />
+  </div>
+{:else if shown && text !== null}
   <div class="tip" role="tooltip" bind:this={box}>
     <p class="title">{text.title}</p>
     {#each text.rows as row (row.label)}
@@ -130,6 +123,10 @@
     color: var(--text);
     font-size: 13px;
     pointer-events: none;
+  }
+
+  .charge-box {
+    padding: 6px 10px;
   }
 
   p {

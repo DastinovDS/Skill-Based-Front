@@ -10,7 +10,7 @@ export const RADIAL = {
   outer: 150,
   inner: 34,
   dead: 28,
-  /** Half the angle of a sector (116 degrees in all, with a gap between neighbours). */
+  /** Half the angle of a sector (a gap between neighbours). */
   half: 58,
   /** A press shorter than this keeps the menu open (ms); longer: release selects. */
   tapMs: 200,
@@ -61,7 +61,7 @@ export function spreadAngles(n: number): number[] {
 
 /** Half the angle of one of `n` sectors: wide, with a small gap between neighbours. */
 export function halfFor(n: number): number {
-  return n <= 1 ? 58 : Math.min(72, 180 / n - 2);
+  return n <= 1 ? 58 : Math.min(89, 180 / n - 1);
 }
 
 /** The fixed order: economy bottom left, balance on top, war bottom right (screen angles, y down). */
@@ -122,8 +122,8 @@ export const ROAD_SECTORS: readonly {
   { type: 'freight', angle: 0, key: '2' },
 ];
 
-/** Half the angle of a road type sector: two sectors of 144 degrees with gaps between them. */
-export const ROAD_HALF = 72;
+/** Half the angle of a road type sector: two sectors of 178 degrees with gaps between them. */
+export const ROAD_HALF = 89;
 
 const TYPE_SECTORS = ROAD_SECTORS.map((s) => ({ angle: s.angle, item: s.type }));
 
@@ -187,12 +187,6 @@ export function stanceRates(rules: RulesetPublic): StanceRate[] {
   });
 }
 
-/** Charges a minute the capital makes in any stance (`economy.passive_*`). */
-export function passivePerMinute(rules: RulesetPublic): number {
-  const { economy, tick_hz } = rules;
-  return Math.floor((economy.passive_amount * 60 * tick_hz) / economy.passive_period_ticks);
-}
-
 /** A choice of the supply menu of an own city (DEC-18): a priority, or a transfer from it. */
 export type SupplyChoice = Priority | 'transfer';
 
@@ -212,8 +206,8 @@ export const SUPPLY_SECTORS: readonly {
   { choice: 'transfer', angle: 180, key: '4' },
 ];
 
-/** Half the angle of a supply sector: four sectors of 80 degrees with gaps between them. */
-export const SUPPLY_HALF = 40;
+/** Half the angle of a supply sector: four sectors of 90 degrees with a minimal gap. */
+export const SUPPLY_HALF = 44;
 
 /** The sign of a priority on the map and in the menu: up, round, down (shape, not colour). */
 export const PRIORITY_SIGN: Readonly<Record<Priority, string>> = {

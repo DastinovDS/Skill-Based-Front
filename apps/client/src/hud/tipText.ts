@@ -1,13 +1,12 @@
 /**
  * The text of the map tooltips (ui-style U5): a title and "key: value" rows with the numbers the
- * player needs to decide (capacity, warehouse, terrain with its modifier, the width a road gets
- * next). Pure: the numbers come from the snapshot (`HudData.tip`) and `ruleset_public`; nothing is
+ * player needs to decide (the width a road gets next, when an intent leaves). Pure: the numbers come from the snapshot (`HudData.tip`) and `ruleset_public`; nothing is
  * decided here (AGENTS.md 7.1).
  */
 import { getLocale, t, tf } from '../i18n/index.ts';
 import type { RoadGain, RulesetPublic } from '../protocol.gen.ts';
 import { formatSeconds } from './format.ts';
-import type { GroupInfo, IntentInfo, NodeInfo, RoadInfo, TipInfo } from './hudData.ts';
+import type { IntentInfo, RoadInfo, TipInfo } from './hudData.ts';
 
 export interface TipRow {
   readonly label: string;
@@ -23,88 +22,14 @@ export interface TipText {
   readonly note?: string;
 }
 
-/** The way of the selected group to the node under the pointer, as the server answered (DEC-20). */
-export interface TipRoute {
-  /** Travel ticks once the group departs; `null` when it must split first. */
-  readonly ticks: number | null;
-  /** Too small a node on every way: the group must split (`STACK_LIMIT`). */
-  readonly split: boolean;
-}
-
 export interface TipEnv {
   readonly rules: Pick<RulesetPublic, 'tick_hz' | 'combat'>;
   /** A click on this road upgrades it now (the road pick of the selected city). */
   readonly pickable: boolean;
-  /** The selected group's way to this node; `null`: no group selected or no answer. */
-  readonly route?: TipRoute | null;
 }
-
-const signed = (value: number): string => (value > 0 ? `+${String(value)}` : String(value));
 
 function seconds(ticks: number, env: TipEnv): string {
   return `${formatSeconds(ticks, env.rules.tick_hz, getLocale())} ${t('unit.s')}`;
-}
-
-function cityTip(node: NodeInfo, env: TipEnv): TipText {
-  const rows: TipRow[] = [];
-  rows.push({
-    label: t('sel.capacity'),
-    value: String(node.capacity),
-    hint: t('tip.capacityHint'),
-  });
-  if (node.warehouse !== null)
-    rows.push({ label: t('sel.warehouse'), value: String(node.warehouse) });
-  const defence = env.rules.combat.terrain_defense_mod[node.terrain];
-  rows.push({
-    label: t('sel.terrain'),
-    value: tf('tip.terrain', { terrain: t(`terrain.${node.terrain}`), mod: signed(defence) }),
-  });
-  if (node.vp > 0) rows.push({ label: t('sel.vp'), value: String(node.vp) });
-  if (node.mine.units > 0) {
-    rows.push({
-      label: t('sel.here'),
-      value: tf('sel.chargedOf', { charged: node.mine.charged, units: node.mine.units }),
-    });
-  }
-  if (node.enemy !== null && node.enemy.modes.length > 0) {
-    rows.push({
-      label: t('sel.enemy'),
-      value:
-        node.enemy.units === null
-          ? t('sel.enemyHidden')
-          : tf('sel.chargedOf', { charged: node.enemy.charged ?? 0, units: node.enemy.units }),
-    });
-  }
-  if (node.build !== null && node.build.secondsLeft !== null) {
-    rows.push({
-      label: t('sel.build'),
-      value: tf('sel.buildOwn', { edge: node.build.edge, seconds: node.build.secondsLeft }),
-    });
-  }
-  if (node.attritionIn !== null) {
-    rows.push({
-      label: t('tip.overflow'),
-      value: tf('tip.overflowIn', { seconds: seconds(node.attritionIn, env) }),
-    });
-  } else if (node.graceLeft !== null) {
-    rows.push({
-      label: t('tip.overflow'),
-      value: tf('tip.overflowGrace', { seconds: seconds(node.graceLeft, env) }),
-    });
-  }
-  const title = tf(node.capital ? 'tip.capital' : 'tip.city', {
-    node: node.id,
-    owner: t(`owner.${node.owner}`),
-  });
-  const route = env.route ?? null;
-  if (route?.split === true) {
-    rows.push({ label: t('tip.route'), value: t('tip.routeSplit') });
-    return { title, rows, note: t('tip.routeSplitHint') };
-  }
-  if (route !== null && route.ticks !== null) {
-    rows.push({ label: t('tip.route'), value: seconds(route.ticks, env) });
-  }
-  return { title, rows };
 }
 
 /** What one more level of a road type adds, as the server says (DEC-22, item 7). */
@@ -140,30 +65,6 @@ function roadTip(road: RoadInfo, env: TipEnv): TipText {
   };
 }
 
-function groupTip(group: GroupInfo): TipText {
-  const rows: TipRow[] = [
-    {
-      label: t('sel.charged'),
-      value: tf('sel.chargedOf', { charged: group.charged, units: group.units }),
-    },
-    { label: t('sel.mode'), value: t(`mode.${group.mode}`) },
-    {
-      label: t('tip.place'),
-      value:
-        group.node !== null
-          ? tf('sel.atNode', { node: group.node })
-          : tf('sel.onEdge', { percent: Math.round((group.progress ?? 0) / 10) }),
-    },
-  ];
-  if (group.destination !== null) {
-    rows.push({
-      label: t('tip.heading'),
-      value: tf(group.planned ? 'sel.heading.planned' : 'sel.heading', { node: group.destination }),
-    });
-  }
-  return { title: tf('tip.group', { units: group.units }), rows };
-}
-
 function intentTip(intent: IntentInfo, env: TipEnv): TipText {
   const when = intent.ticksLeft === null ? t('alert.incomingGone') : seconds(intent.ticksLeft, env);
   const rows: TipRow[] = [
@@ -180,15 +81,17 @@ function intentTip(intent: IntentInfo, env: TipEnv): TipText {
   return { title, rows };
 }
 
-/** The tooltip text of what the pointer rests on. */
-export function tipText(tip: TipInfo, env: TipEnv): TipText {
+/**
+ * The tooltip text of what the pointer rests on. A city has no tooltip, and a group shows only its
+ * charges (`ChargeTip.svelte`), so both give `null`.
+ */
+export function tipText(tip: TipInfo, env: TipEnv): TipText | null {
   switch (tip.kind) {
     case 'node':
-      return cityTip(tip.node, env);
+    case 'group':
+      return null;
     case 'edge':
       return roadTip(tip.road, env);
-    case 'group':
-      return groupTip(tip.group);
     case 'intent':
       return intentTip(tip.intent, env);
   }

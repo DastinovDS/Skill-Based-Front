@@ -197,8 +197,8 @@ export class Player {
    * second click holds Shift (a planned order, dearer and shown to the enemy as an intent).
    */
   async moveGroup(map: MapFile, from: number, to: number, planned = false): Promise<void> {
-    // Start from nothing selected (after an order the group on the road stays selected): a click
-    // on the empty corner of the canvas deselects. Not `Esc`: two in a row ask to leave the match.
+    // Start from nothing selected (an order lets the group go, but the pick may be left over): a
+    // click on the empty corner of the canvas deselects. Not `Esc`: two in a row ask to leave the match.
     const canvas = await this.page.locator('.game-canvas').boundingBox();
     if (canvas === null) throw new Error('no canvas');
     await this.page.mouse.click(canvas.x + canvas.width - 3, canvas.y + canvas.height - 3);
