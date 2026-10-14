@@ -16,10 +16,10 @@ DEC-08, numbers from ``Ruleset.orders``:
   (``Group.intent``); the intent names no group. Road builds are not public (DEC-16).
 
 Commands (SIM-04) set bonuses and intents when applied (``set_intent``, ``clear_bonus``).
-Around combat: the combat system gets ``active_bonuses(state)``, and the ``orders`` system at
-the end of the step (after ``build``) spends the bonuses of the groups that fought and removes
-the bonuses and intents whose order or mode ended in a system: arrival, bounce, death,
-attrition.
+Around combat: the combat system gets ``active_bonuses(state)`` and takes the bonus of a group
+that joins a fight off the group (it burns with the fight, DEC-24 F1); the ``orders`` system at
+the end of the step (after ``build``) removes the bonuses and intents whose order or mode ended
+in a system: arrival, bounce, death, attrition.
 
 Auto-merge (DEC-20, A), also at the end of the step, after the bonuses: an own group that
 finished its movement in an own node in this tick (arrived at its target, came back from a bounce
@@ -30,7 +30,7 @@ finished there join the one with the smallest id. The target keeps its mode, «�
 intent; the others lose theirs. Groups in transit, waiting groups and groups on edges never merge.
 The target group is chosen among one player's groups only, so the players stay symmetric.
 
-Details that DEC-08 leaves open follow the defaults of #141 (see ``TODO(#141)`` below).
+Details that DEC-08 leaves open follow the defaults of #141, accepted by DEC-24 (item L).
 """
 
 from gow_sim.ruleset import Ruleset
@@ -86,31 +86,21 @@ def active_bonuses(state: GameState) -> dict[int, Bonus]:
 
 
 def orders(state: GameState, rules: Ruleset) -> list[Event]:
-    """The orders system, at the end of the step: spent bonuses, ended orders and intents, then
-    the auto-merge (DEC-20, A).
+    """The orders system, at the end of the step: ended orders and intents, then the auto-merge
+    (DEC-20, A).
 
-    Reads the ``fight_group``, ``group_arrived`` and ``recruited`` events of the tick from
-    ``state.events``. A group that fought with an active bonus loses it, used or not (DEC-07,
-    rule 3); an inactive one (a planned order still waiting, «Защита» before its delay) is kept.
-    A planned bonus also ends with the order. Emits ``groups_merged`` for every auto-merge.
+    The bonuses that entered a fight left their groups there (``systems.combat``, DEC-24 F1):
+    they burn with the fight. A planned bonus not yet used ends with its order; an inactive one
+    (a planned order still waiting, «Защита» before its delay) is kept. Reads the
+    ``group_arrived``, ``recruited`` and ``fight_group`` events of the tick from
+    ``state.events``. Emits ``groups_merged`` for every auto-merge.
     """
     del rules  # the signature of a system; no numbers are needed here
-    tick = state.tick
-    fought: dict[int, bool] = {}
-    for e in state.events:
-        if e.tick == tick and e.kind == "fight_group":
-            gid = e.get("group")
-            assert isinstance(gid, int)
-            fought[gid] = True
     live: dict[int, bool] = {}
     for gid in sorted(state.groups):
         g = state.groups[gid]
-        if g.bonus > 0:
-            spent = gid in fought and tick >= g.bonus_tick
-            # TODO(#141): the planned bonus ends with the order, also without a fight.
-            ended = g.mode is not Mode.DEFENSE and g.order is None
-            if spent or ended:
-                clear_bonus(g)
+        if g.bonus > 0 and g.mode is not Mode.DEFENSE and g.order is None:
+            clear_bonus(g)  # the planned bonus ends with the order (#141 default)
         if g.intent is not None:
             if _holds(state.intents[g.intent].kind, g):
                 live[g.intent] = True
@@ -123,19 +113,32 @@ def orders(state: GameState, rules: Ruleset) -> list[Event]:
 
 
 def _auto_merge(state: GameState) -> list[Event]:
-    """DEC-20, A: the groups that finished their movement in an own node join its target group."""
+    """DEC-20, A: the groups that finished their movement in an own node join its target group.
+
+    A group in a fight does not merge (DEC-07, rule 7); a group that arrived into a fight
+    finishes its movement when the fight ends (``fight_group`` with ``arrived``).
+    """
     tick = state.tick
     finished: dict[int, bool] = {}
     for e in state.events:
-        if e.tick == tick and e.kind in ("group_arrived", "recruited"):
+        if e.tick != tick:
+            continue
+        if e.kind in ("group_arrived", "recruited") or (
+            e.kind == "fight_group" and e.get("arrived") is True and e.get("left") is False
+        ):
             gid = e.get("group")
             assert isinstance(gid, int)
             finished[gid] = True
     by_node: dict[int, list[int]] = {}
     for gid in sorted(finished):
         g = state.groups.get(gid)
-        if g is None or g.order is not None or not isinstance(g.location, AtNode):
-            continue  # dead, bouncing, or ordered on in this tick (a recruit)
+        if (
+            g is None
+            or g.order is not None
+            or g.fight is not None
+            or not isinstance(g.location, AtNode)
+        ):
+            continue  # dead, bouncing, in a fight, or ordered on in this tick (a recruit)
         node = g.location.node
         if state.nodes[node].owner == g.owner:
             by_node.setdefault(node, []).append(gid)
@@ -152,6 +155,7 @@ def _auto_merge(state: GameState) -> list[Event]:
                 and state.groups[gid].owner == owner
                 and state.groups[gid].location == at
                 and state.groups[gid].order is None
+                and state.groups[gid].fight is None
             ),
             None,
         )
@@ -169,7 +173,7 @@ def _auto_merge(state: GameState) -> list[Event]:
 
 
 def _holds(kind: IntentKind, g: Group) -> bool:
-    """The intent still describes the group (TODO(#141): the life of intents)."""
+    """The intent still describes the group (#141 item 5, kept by DEC-24 item L)."""
     match kind:
         case IntentKind.PLANNED_MOVE:
             return g.order is not None and g.order.planned

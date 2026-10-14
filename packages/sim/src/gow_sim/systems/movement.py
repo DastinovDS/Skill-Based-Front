@@ -176,6 +176,7 @@ def _search(
     paths: dict[int, tuple[int, ...]] = {start: (start,)}
     found: dict[int, tuple[int, ...]] = {}
     dist: dict[int, int] = {}
+    fight_at = state.fight_nodes()
     heap: list[tuple[int, tuple[int, ...], int]] = [(0, (key(start),), start)]
     while heap:
         d, keys, node = heapq.heappop(heap)
@@ -185,8 +186,8 @@ def _search(
         found[node] = paths[node]
         if node == dest:
             break
-        if node != start and state.nodes[node].owner != player:
-            continue  # the first foreign or neutral node ends a path
+        if node != start and (state.nodes[node].owner != player or node in fight_at):
+            continue  # the first foreign or neutral node, or one with a fight, ends a path
         for eid in mapdef.incident[node]:
             nxt = mapdef.edges[eid].other(node)
             if nxt in dist:
@@ -206,6 +207,8 @@ class Arrival:
     """A group reached ``node`` over ``edge`` from ``from_node`` in this tick.
 
     ``back``: the group came home from a bounce (``OnEdge.back``, DEC-07, rules 4 and 6).
+    ``planned``: the order that ended here was a planned one (DEC-08); combat puts a group that
+    met an enemy on the edge in its arrival tick back on the edge with that order (DEC-24, C2).
     """
 
     group: int
@@ -213,6 +216,7 @@ class Arrival:
     edge: int
     from_node: int
     back: bool = False
+    planned: bool = False
 
 
 def movement(state: GameState, rules: Ruleset) -> list[Event]:
@@ -232,6 +236,7 @@ def movement(state: GameState, rules: Ruleset) -> list[Event]:
             edge=a.edge,
             from_node=a.from_node,
             back=a.back,
+            planned=a.planned,
         )
         for a in arrivals
     ]
@@ -245,9 +250,12 @@ def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
     change, so the order of the groups does not matter.
     """
     mapdef = state.map
+    fight_at = state.fight_nodes()
     arrivals: list[Arrival] = []
     for gid in sorted(state.groups):
         group = state.groups[gid]
+        if group.fight is not None:
+            continue  # the groups of a fight do not move (DEC-24, B6)
         location = group.location
         if isinstance(location, OnEdge) and location.back:
             arrival = _step_back(state, rules, gid, location)
@@ -257,9 +265,9 @@ def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
         order = group.order
         if order is None:
             continue
+        if state.tick < order.depart_tick:
+            continue  # a planned order waits (DEC-08), an edge winner regroups (DEC-24, G4)
         if isinstance(location, AtNode):
-            if state.tick < order.depart_tick:
-                continue  # a planned order waits (DEC-08)
             eid = edge_between(mapdef, location.node, order.path[0]) if order.path else None
             if eid is None:
                 group.order = None
@@ -272,16 +280,19 @@ def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
             group.location = OnEdge(location.edge, location.from_node, way.progress(spent))
             continue
         rest = order.path[1:] if order.path and order.path[0] == to_node else ()
-        if rest and state.nodes[to_node].owner == group.owner:
+        if rest and state.nodes[to_node].owner == group.owner and to_node not in fight_at:
             eid = edge_between(mapdef, to_node, rest[0])
             if eid is not None:  # pass through the own node
                 group.location = OnEdge(edge=eid, from_node=to_node, progress=0)
                 group.order = Order(rest, order.planned, order.depart_tick)
                 continue
-        # The destination, or a foreign or neutral node: the target of an attack or a capture.
+        # The destination, a foreign or neutral node (the target of an attack or a capture), or
+        # an own node with a fight: the group stops there and joins it (DEC-24, D1).
         group.location = AtNode(to_node)
         group.order = None
-        arrivals.append(Arrival(gid, to_node, location.edge, location.from_node))
+        arrivals.append(
+            Arrival(gid, to_node, location.edge, location.from_node, planned=order.planned)
+        )
     return arrivals
 
 

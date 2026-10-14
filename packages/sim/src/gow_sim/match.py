@@ -47,7 +47,7 @@ __all__ = [
     "run_headless",
 ]
 
-SIM_VERSION: Final = 9
+SIM_VERSION: Final = 10
 """Version of the rules and the system order; replays and golden hashes are per version."""
 
 HEADLESS_MATCH_KEY: Final = b"gow_sim headless match key 0001"

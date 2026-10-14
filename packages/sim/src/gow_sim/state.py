@@ -139,6 +139,60 @@ class Group:
     bonus_tick: int = 0
     """The tick from which ``bonus`` is active: departure of the planned order, or the switch to
     «Защита» plus ``orders.defense_delay_ticks``."""
+    fight: int | None = None
+    """Id of the ``Fight`` the group is in (DEC-24); ``None``: in no fight. A group in a fight
+    does not move (DEC-24, item B6)."""
+
+
+@dataclass(frozen=True, slots=True)
+class FightMember:
+    """A group in a fight (DEC-24), by group id in ``Fight.members``.
+
+    ``player``: the owner (kept after the group dies, for the events). ``edge`` and
+    ``from_node``: the edge the group came over into the node of the fight, the way back of a
+    bounce or a withdrawal (item E2); ``None`` for a group that stood there or fights on an edge.
+    ``returning``: it came back over that edge (a bounce, a cancel or a withdrawal): if its side
+    does not take the node, it dies (item G3). ``arrived``: it finished a movement into the node,
+    so it joins the auto-merge after the fight (DEC-20, A; DEC-07, rule 7). ``leaving``: a
+    withdrawal is ordered (item E), the group leaves after the next round. ``units`` and
+    ``charged``: the counters when it joined (for ``fight_group``).
+    """
+
+    player: int
+    units: int
+    charged: int
+    edge: int | None = None
+    from_node: int | None = None
+    returning: bool = False
+    arrived: bool = False
+    leaving: bool = False
+
+
+@dataclass(slots=True)
+class Fight:
+    """A fight that lasts over ticks (DEC-24): a node or an edge, rounds every ``round_ticks``.
+
+    ``node`` or ``edge`` (exactly one is set). ``point``: on an edge, ``pos_0 + pos_1`` in
+    thousandths from the end ``a`` (0..2000, item C3); ``None`` in a node. ``attacker``: the
+    player attacking a node; ``None`` for an edge and a neutral node (symmetric fights).
+    ``start``: the contact tick; ``next_round``: the tick of the next round. ``virtual``: the
+    virtual shots left by player (bonuses, mountains; item F); ``mute``: real charges of the
+    player silent in every round (plains, item F2); ``shots`` and ``losses``: totals of the fight
+    by player (the edge winner, item G4). ``members``: the groups in the fight by group id.
+    """
+
+    id: int
+    node: int | None
+    edge: int | None
+    point: int | None
+    attacker: int | None
+    start: int
+    next_round: int
+    virtual: tuple[int, int]
+    mute: tuple[int, int]
+    shots: tuple[int, int]
+    losses: tuple[int, int]
+    members: dict[int, FightMember]
 
 
 @dataclass(slots=True)
@@ -311,9 +365,15 @@ class GameState:
     vision_memory: dict[int, VisionMemory]
     """Fog memory per player id; updated by the vision system at the end of a tick."""
     next_id: int
-    """Next id for a group, packet or intent (one counter for all three)."""
+    """Next id for a group, packet, intent or fight (one counter for all of them)."""
     events: list[Event]
     """Events of the current tick."""
+    fights: dict[int, Fight] = field(default_factory=dict[int, Fight])
+    """Fights going on (DEC-24), by id."""
+
+    def fight_nodes(self) -> dict[int, int]:
+        """Nodes with a fight going on: node id to fight id."""
+        return {f.node: fid for fid, f in sorted(self.fights.items()) if f.node is not None}
 
     def new_id(self) -> int:
         new = self.next_id
@@ -408,6 +468,7 @@ def to_canonical(state: GameState) -> dict[str, object]:
         "groups": [_group_data(g) for g in _by_id(state.groups)],
         "packets": [_packet_data(p) for p in _by_id(state.packets)],
         "intents": [_intent_data(i) for i in _by_id(state.intents)],
+        "fights": [_fight_data(f) for f in _by_id(state.fights)],
         "vision_memory": [
             {
                 "player": p,
@@ -483,6 +544,37 @@ def _group_data(g: Group) -> dict[str, object]:
         "intent": g.intent,
         "bonus": g.bonus,
         "bonus_tick": g.bonus_tick,
+        "fight": g.fight,
+    }
+
+
+def _fight_data(f: Fight) -> dict[str, object]:
+    return {
+        "id": f.id,
+        "node": f.node,
+        "edge": f.edge,
+        "point": f.point,
+        "attacker": f.attacker,
+        "start": f.start,
+        "next_round": f.next_round,
+        "virtual": list(f.virtual),
+        "mute": list(f.mute),
+        "shots": list(f.shots),
+        "losses": list(f.losses),
+        "members": [
+            {
+                "group": gid,
+                "player": m.player,
+                "units": m.units,
+                "charged": m.charged,
+                "edge": m.edge,
+                "from_node": m.from_node,
+                "returning": m.returning,
+                "arrived": m.arrived,
+                "leaving": m.leaving,
+            }
+            for gid, m in sorted(f.members.items())
+        ],
     }
 
 
@@ -549,6 +641,7 @@ def from_canonical(data: object) -> GameState:
             "groups",
             "packets",
             "intents",
+            "fights",
             "vision_memory",
             "events",
         ),
@@ -566,6 +659,7 @@ def from_canonical(data: object) -> GameState:
         groups=_collection(root["groups"], "groups", _parse_group),
         packets=_collection(root["packets"], "packets", _parse_packet),
         intents=_collection(root["intents"], "intents", _parse_intent),
+        fights=_collection(root["fights"], "fights", _parse_fight),
         vision_memory=_parse_vision_memory(root["vision_memory"]),
         next_id=_int(root["next_id"], "state.next_id", low=0),
         events=[
@@ -692,6 +786,7 @@ def _parse_group(data: object, where: str) -> Group:
             "intent",
             "bonus",
             "bonus_tick",
+            "fight",
         ),
     )
     units = _int(raw["units"], f"{where}.units", low=0)
@@ -706,6 +801,80 @@ def _parse_group(data: object, where: str) -> Group:
         intent=_opt_int(raw["intent"], f"{where}.intent"),
         bonus=_int(raw["bonus"], f"{where}.bonus", low=0),
         bonus_tick=_int(raw["bonus_tick"], f"{where}.bonus_tick", low=0),
+        fight=_opt_int(raw["fight"], f"{where}.fight"),
+    )
+
+
+def _pair(data: object, where: str) -> tuple[int, int]:
+    items = _list(data, where)
+    if len(items) != len(PLAYERS):
+        raise StateFormatError(f"{where}: expected one value per player")
+    return (_int(items[0], f"{where}[0]", low=0), _int(items[1], f"{where}[1]", low=0))
+
+
+def _parse_fight(data: object, where: str) -> Fight:
+    raw = _obj(
+        data,
+        where,
+        (
+            "id",
+            "node",
+            "edge",
+            "point",
+            "attacker",
+            "start",
+            "next_round",
+            "virtual",
+            "mute",
+            "shots",
+            "losses",
+            "members",
+        ),
+    )
+    members: dict[int, FightMember] = {}
+    for i, item in enumerate(_list(raw["members"], f"{where}.members")):
+        at = f"{where}.members[{i}]"
+        m = _obj(
+            item,
+            at,
+            (
+                "group",
+                "player",
+                "units",
+                "charged",
+                "edge",
+                "from_node",
+                "returning",
+                "arrived",
+                "leaving",
+            ),
+        )
+        gid = _int(m["group"], f"{at}.group", low=0)
+        if gid in members:
+            raise StateFormatError(f"{at}.group: duplicate group {gid}")
+        members[gid] = FightMember(
+            player=_int(m["player"], f"{at}.player", low=0),
+            units=_int(m["units"], f"{at}.units", low=0),
+            charged=_int(m["charged"], f"{at}.charged", low=0),
+            edge=_opt_int(m["edge"], f"{at}.edge"),
+            from_node=_opt_int(m["from_node"], f"{at}.from_node"),
+            returning=_bool(m["returning"], f"{at}.returning"),
+            arrived=_bool(m["arrived"], f"{at}.arrived"),
+            leaving=_bool(m["leaving"], f"{at}.leaving"),
+        )
+    return Fight(
+        id=_int(raw["id"], f"{where}.id", low=0),
+        node=_opt_int(raw["node"], f"{where}.node"),
+        edge=_opt_int(raw["edge"], f"{where}.edge"),
+        point=_opt_int(raw["point"], f"{where}.point"),
+        attacker=_opt_int(raw["attacker"], f"{where}.attacker"),
+        start=_int(raw["start"], f"{where}.start", low=0),
+        next_round=_int(raw["next_round"], f"{where}.next_round", low=0),
+        virtual=_pair(raw["virtual"], f"{where}.virtual"),
+        mute=_pair(raw["mute"], f"{where}.mute"),
+        shots=_pair(raw["shots"], f"{where}.shots"),
+        losses=_pair(raw["losses"], f"{where}.losses"),
+        members=members,
     )
 
 
