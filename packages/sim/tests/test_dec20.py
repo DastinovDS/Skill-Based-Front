@@ -206,6 +206,14 @@ class _Run:
         while self.state.tick < tick:
             self.step()
 
+    def until_event(self, kind: str, limit: int = 200) -> int:
+        """Step until an event of ``kind`` (DEC-24: fights last); returns its tick."""
+        for _ in range(limit):
+            self.step()
+            if any(e.kind == kind for e in self.state.events):
+                return self.state.tick
+        raise AssertionError(f"no {kind} in {limit} ticks")
+
     def kinds(self, kind: str, tick: int | None = None) -> list[Event]:
         return [e for e in self.events if e.kind == kind and (tick is None or e.tick == tick)]
 
@@ -303,7 +311,9 @@ def test_dec20_example_6_fight_first_then_the_survivors_merge() -> None:
     run.until(5)
     run.step(Move(g2, A))
     run.until(25)
-    fighters = {e.get("group") for e in run.kinds("fight_group", 25) if e.get("player") == 0}
+    assert run.kinds("fight_started", 25)
+    end = run.until_event("fight_ended")  # DEC-24: the survivors merge when the fight ends
+    fighters = {e.get("group") for e in run.kinds("fight_group", end) if e.get("player") == 0}
     assert fighters == {g1, g2}  # two groups in the fight, not one (DEC-07, rule 7)
     assert enemy not in state.groups
     assert g2 not in state.groups
@@ -413,7 +423,7 @@ def test_dec20_example_13_nothing_to_cancel_after_a_fight() -> None:
     g = _add(state, 2, 2, A)
     run = _Run(state)
     run.step(Move(g, C))
-    run.until(40)
+    run.until_event("fight_ended")  # DEC-24: the fight lasts its rounds
     location = state.groups[g].location
     assert isinstance(location, OnEdge) and location.back
     assert run.step(CancelOrder(g)) == [Reject(RejectCode.NOTHING_TO_CANCEL)]
@@ -479,9 +489,9 @@ def test_dec20_example_21_cancel_home_was_taken_meanwhile() -> None:
     _add(state, 1, 1, A, owner=1)
     run.step(CancelOrder(g))  # tick 6: 5 steps back, home at tick 10
     run.until(9)
-    assert run.kinds("fight") == []
+    assert run.kinds("fight_started") == []
     run.step()
-    (fight,) = run.kinds("fight", 10)
+    (fight,) = run.kinds("fight_started", 10)
     assert (fight.get("node"), fight.get("attacker")) == (A, 0)
 
 

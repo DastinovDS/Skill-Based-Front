@@ -211,7 +211,7 @@ def _mirrored(state: GameState, g: Group) -> tuple[object, ...]:
         None
         if order is None
         else (tuple(mn[n] for n in order.path), order.planned, order.depart_tick),
-        (g.bonus, g.bonus_tick, g.intent is None),
+        (g.bonus, g.bonus_tick, g.intent is None, g.fight is None),
     )
 
 
@@ -223,8 +223,60 @@ def _plain(g: Group) -> tuple[object, ...]:
         g.mode,
         g.location,
         None if order is None else (order.path, order.planned, order.depart_tick),
-        (g.bonus, g.bonus_tick, g.intent is None),
+        (g.bonus, g.bonus_tick, g.intent is None, g.fight is None),
     )
+
+
+def _fights(state: GameState, groups: dict[int, int], mirror: bool) -> list[tuple[object, ...]]:
+    """The fights (DEC-24) as comparable tuples; ``mirror``: each as the mirror of itself (nodes,
+    edges, the point from the other end, players and paired groups swapped)."""
+    mapdef = state.map
+    mn, me = mapdef.mirror_nodes, mapdef.mirror_edges
+    pair = {**groups, **{g1: g0 for g0, g1 in groups.items()}}
+
+    def node(n: int | None) -> int | None:
+        return n if n is None or not mirror else mn[n]
+
+    def swap(t: tuple[int, int]) -> tuple[int, int]:
+        return (t[1], t[0]) if mirror else t
+
+    result: list[tuple[object, ...]] = []
+    for f in state.fights.values():
+        edge, point = f.edge, f.point
+        if mirror and edge is not None and point is not None:
+            reversed_ = mapdef.edges[me[edge]].a != mn[mapdef.edges[edge].a]
+            edge, point = me[edge], 2000 - point if reversed_ else point
+        members = sorted(
+            (
+                pair[gid] if mirror else gid,
+                1 - m.player if mirror else m.player,
+                m.units,
+                m.charged,
+                m.edge if m.edge is None or not mirror else me[m.edge],
+                node(m.from_node),
+                m.returning,
+                m.arrived,
+                m.leaving,
+            )
+            for gid, m in f.members.items()
+        )
+        attacker = f.attacker if f.attacker is None or not mirror else 1 - f.attacker
+        result.append(
+            (
+                node(f.node),
+                edge,
+                point,
+                attacker,
+                f.start,
+                f.next_round,
+                swap(f.virtual),
+                swap(f.mute),
+                swap(f.shots),
+                swap(f.losses),
+                tuple(members),
+            )
+        )
+    return sorted(result, key=repr)
 
 
 def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
@@ -291,6 +343,7 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     assert sorted(intents) == sorted(
         (1 - o, k, mn[a], None if t is None else mn[t], c) for o, k, a, t, c in intents
     )
+    assert _fights(state, groups, mirror=False) == _fights(state, groups, mirror=True)
     mem0, mem1 = state.vision_memory[0], state.vision_memory[1]
     assert {mapdef.mirror_nodes[n]: s for n, s in mem0.nodes.items()} == mem1.nodes
     assert {mapdef.mirror_edges[e]: s for e, s in mem0.edges.items()} == mem1.edges
@@ -345,7 +398,7 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         )
         groups.update(zip(_new_groups(events, 0), _new_groups(events, 1), strict=True))
         captures += sum(e.kind == "node_captured" for e in events)
-        fights += sum(e.kind == "fight" for e in events)
+        fights += sum(e.kind == "fight_started" for e in events)
         moves_on_edges += sum(isinstance(g.location, OnEdge) for g in state.groups.values())
         _assert_mirrored(state, groups)
         if match.finished:
@@ -369,7 +422,7 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
     } <= set(kinds)
     assert moves_on_edges > 0
     # On pass the only way out is the central node 3; both players reach it at once and fight
-    # there (DEC-07, rule 5) with equal pools, so both bounce and nothing is captured.
+    # there (DEC-07, rule 5; DEC-24) with equal sides, so both bounce and nothing is captured.
     assert captures >= (0 if path.stem == "pass" else 2)
     if path.stem == "pass":
         assert fights > 0

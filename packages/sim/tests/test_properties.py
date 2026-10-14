@@ -7,7 +7,8 @@ and advance the clock. After every tick the invariants below must hold:
 - charge conservation: the charges that exist (warehouses + packets on the way + ``charged`` of
   the groups) equal the charges at the start, plus the ones the capitals produced
   (``charges_produced``), minus the documented sinks: shots and killed charged units
-  (``fight_group``), ``warehouse_lost``, ``packet_lost``, the part of a delivered packet that does
+  (``spent`` of ``fight_round``; a group dying by DEC-24 G3: ``fight_group`` with ``encircled``),
+  ``warehouse_lost``, ``packet_lost``, the part of a delivered packet that does
   not fit the warehouse (``packet_delivered`` vs. the packet; that part is also a
   ``charges_overflow``) and ``attrition`` deaths of charged units; plus the charges a captor takes
   from a freight packet (``packet_captured``, DEC-22: the sender's ``packet_lost`` counts the
@@ -31,7 +32,7 @@ A counterexample found by Hypothesis goes into a regression test at the end of t
 
 import copy
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Final
 
@@ -138,10 +139,13 @@ class Ledger:
                     self.produced += _int(e, "charges")
                 case "packet_captured":
                     self.captured += _int(e, "charges")
-                case "fight_group":
-                    spent = _int(e, "charged_before") - _int(e, "charged")
-                    assert spent >= 0, f"a fight created charges: {e}"
-                    self.shots += spent
+                case "fight_round":
+                    for p in PLAYERS:
+                        spent = _int(e, f"spent_{p}")
+                        assert spent >= 0, f"a fight created charges: {e}"
+                        self.shots += spent
+                case "fight_group" if e.get("encircled") is True:
+                    self.shots += _int(e, "charged")  # DEC-24, G3: lost with the group
                 case "warehouse_lost":
                     self.warehouse_lost += _int(e, "charges")
                 case "packet_lost":
@@ -194,6 +198,18 @@ def check_state(state: GameState) -> None:
         assert all(t >= 1 for t in p.route_ticks), f"packet {pid}: {p}"
     for iid, i in state.intents.items():
         assert i.id == iid and i.owner in PLAYERS and iid < state.next_id, f"intent {iid}: {i}"
+    for fid, f in state.fights.items():  # DEC-24
+        assert f.id == fid and fid < state.next_id, f"fight {fid}: {f}"
+        assert (f.node is None) != (f.edge is None), f"fight {fid}: node or edge"
+        assert (f.point is None) == (f.edge is None), f"fight {fid}: point"
+        assert f.point is None or 0 <= f.point <= 2 * 1000, f"fight {fid}: point"
+        assert min(f.virtual + f.mute + f.shots + f.losses) >= 0, f"fight {fid}: {f}"
+        assert f.next_round > f.start and f.next_round > state.tick - 1, f"fight {fid}"
+        for gid, m in f.members.items():
+            g = state.groups.get(gid)
+            assert g is None or (g.fight == fid and g.owner == m.player), f"fight {fid}: {gid}"
+    for gid, g in state.groups.items():
+        assert g.fight is None or gid in state.fights[g.fight].members, f"group {gid}: fight"
     for a, b in (
         (state.groups, state.packets),
         (state.groups, state.intents),
@@ -298,14 +314,29 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     charge accumulator, the enemy's fog memory and the events of the tick; DEC-17: widths of
     fogged edges (only upwards, roads are never torn down) and enemy builds on fogged edges;
     DEC-18: supply priorities of enemy cities and routes of enemy packets (transfers); DEC-19: the
-    starvation countdown of enemy cities.
+    starvation countdown of enemy cities. DEC-24: the enemy's virtual shots and shots in a fight,
+    the withdrawals of its groups there; its groups in a fight are visible (their counters are in
+    ``PlayerView.fights``), the rest of them is not.
     """
     draw = data.draw
     nodes, edges = levels
     enemy = 1 - player
+    for fid in sorted(state.fights):
+        f = state.fights[fid]
+        virtual, shots = list(f.virtual), list(f.shots)
+        virtual[enemy] = draw(st.integers(0, 5))
+        shots[enemy] = draw(st.integers(0, 9))
+        f.virtual, f.shots = (virtual[0], virtual[1]), (shots[0], shots[1])
+        for gid in sorted(f.members):
+            m = f.members[gid]
+            if m.player == enemy:
+                f.members[gid] = replace(m, leaving=draw(st.booleans()))
     for gid in sorted(state.groups):
         g = state.groups[gid]
         if g.owner != enemy:
+            continue
+        if g.fight is not None:
+            g.order = None  # its counters are public in the fight, its order is not
             continue
         level = nodes[g.location.node] if isinstance(g.location, AtNode) else edges[g.location.edge]
         if level is Detail.FOG and draw(st.booleans()):

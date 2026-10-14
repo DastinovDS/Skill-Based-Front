@@ -261,7 +261,7 @@ def _check_goes_on(state: GameState, gid: int, first_step: int) -> None:
 # Rows 17-23 -----------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("row", ["17", "17б"])
+@pytest.mark.parametrize("row", ["17", "17б"])  # noqa: RUF001 (row names of the table)
 def test_row17_a_bounce_into_a_lost_home_does_not_chain(row: str) -> None:
     """L (1, discharged) comes back into its home H, which the enemy's W took meanwhile."""
     exp = SCENARIOS[row]

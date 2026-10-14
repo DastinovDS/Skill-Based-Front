@@ -120,12 +120,14 @@ class Side:
 
 @dataclass(frozen=True, slots=True)
 class RoundResult:
-    """Per player: shots made (cancelled plus killing ones), the virtual ones among them, and the
-    units lost."""
+    """Per player: shots made (cancelled plus killing ones), the virtual ones among them, the
+    units lost, and the charges that left the player's units (real shots and charged units
+    killed)."""
 
     shots: tuple[int, int]
     virtual: tuple[int, int]
     losses: tuple[int, int]
+    spent: tuple[int, int]
 
 
 def can_fire(side: Side, enemy: Side) -> bool:
@@ -142,6 +144,7 @@ def play_round(sides: tuple[Side, Side], shots_per_round: int) -> RoundResult:
     spent. Shooter and victim groups are chosen again for every shot (rule 7, #133 item 3).
     """
     fire = [min(s.virtual + s.real(), shots_per_round) for s in sides]
+    charged = [sum(g.charged for g in s.groups) for s in sides]
     cancel = min(fire)
     kills = [0, 0]
     for p in PLAYERS:
@@ -151,10 +154,12 @@ def play_round(sides: tuple[Side, Side], shots_per_round: int) -> RoundResult:
     virtual = [_spend(sides[p], shots[p]) for p in PLAYERS]
     for p in PLAYERS:
         _kill(sides[1 - p], kills[p])
+    spent = [charged[p] - sum(g.charged for g in sides[p].groups) for p in PLAYERS]
     return RoundResult(
         shots=(shots[0], shots[1]),
         virtual=(virtual[0], virtual[1]),
         losses=(kills[1], kills[0]),
+        spent=(spent[0], spent[1]),
     )
 
 
@@ -598,6 +603,8 @@ def _round(state: GameState, rules: Ruleset, fight: Fight) -> Event:
         virtual_1=result.virtual[1],
         losses_0=result.losses[0],
         losses_1=result.losses[1],
+        spent_0=result.spent[0],
+        spent_1=result.spent[1],
     )
 
 
@@ -639,7 +646,7 @@ def _end(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
     captured = False
     bounce = {p: False for p in PLAYERS}
     losses = [fight.losses[0], fight.losses[1]]
-    encircled: dict[int, bool] = {}
+    encircled: dict[int, tuple[int, int]] = {}
     if fight.edge is not None:  # item G4
         if alive[0] and alive[1]:
             s0, s1 = fight.shots
@@ -683,7 +690,7 @@ def _end(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
                 m = fight.members[g.id]
                 if m.returning:  # item G3: back in its lost node and it did not take it
                     losses[p] += g.units
-                    encircled[g.id] = True
+                    encircled[g.id] = (g.units, g.charged)
                     del state.groups[g.id]
                     continue
                 if m.edge is None or m.from_node is None:
@@ -720,7 +727,7 @@ def _end(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
                 m,
                 g,
                 bounce=bounce[m.player] and g is not None,
-                encircled=gid in encircled,
+                encircled=encircled.get(gid),
             )
         )
     del state.fights[fight.id]
@@ -738,8 +745,13 @@ def _group_event(
     *,
     bounce: bool = False,
     left: bool = False,
-    encircled: bool = False,
+    encircled: tuple[int, int] | None = None,
 ) -> Event:
+    """``fight_group``: the counters of the group when it joined and now; a group that died by
+    item G3 (``encircled``) has the counters it died with (its charges are lost with it)."""
+    units, charged = (0, 0) if g is None else (g.units, g.charged)
+    if encircled is not None:
+        units, charged = encircled
     return event(
         state.tick,
         "fight_group",
@@ -747,11 +759,11 @@ def _group_event(
         player=m.player,
         units_before=m.units,
         charged_before=m.charged,
-        units=0 if g is None else g.units,
-        charged=0 if g is None else g.charged,
+        units=units,
+        charged=charged,
         destroyed=g is None,
         bounce=bounce,
         left=left,
-        encircled=encircled,
+        encircled=encircled is not None,
         arrived=m.arrived,
     )

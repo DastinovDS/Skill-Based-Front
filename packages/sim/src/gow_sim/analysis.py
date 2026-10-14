@@ -13,10 +13,11 @@ PT-01 or REL-01, ``analyze_replay`` in ``gow_sim.replay``). Two steps:
 Definitions (all counts per player id, sides ``0`` and ``1``):
 
 - ``planned_attack_share``: planned attack orders / attack orders (``None`` without attacks).
-- **Siege attempt** (``sieges``): one assault on a node the enemy owns: a ``fight`` in the node
-  with this player as attacker, or the walk-in into an enemy node without defenders (the capture
-  without a fight, DEC-07 row 5). **Siege success** (``sieges_won``): a capture of an enemy node
-  (a neutral node is no siege); every capture counts once.
+- **Siege attempt** (``sieges``): one assault on a node the enemy owns: a fight in the node with
+  this player as attacker (``fight_started``, DEC-24), or the walk-in into an enemy node without
+  defenders (the capture without a fight, DEC-07 row 5). A capture at the end of a fight
+  (``fight_ended`` in the same tick) is no walk-in. **Siege success** (``sieges_won``): a
+  capture of an enemy node (a neutral node is no siege); every capture counts once.
 - **Captures** (``captures``): every ``node_captured`` of the player, neutral nodes included;
   ``captures_by_minute[p][m]`` is the number in minute ``m`` of the match (ticks
   ``m * 60 * tick_hz < t <= (m + 1) * 60 * tick_hz``). The list has ``ceil(ticks / minute)``
@@ -198,17 +199,21 @@ def analyze(log: MatchLog) -> MatchMetrics:
     by_minute: dict[int, list[int]] = {p: [0] * minutes for p in PLAYERS}
     winner: int | None = None
     reason = UNFINISHED
-    fought: set[int] = set()  # nodes assaulted in the tick being read
+    fought: set[int] = set()  # nodes whose fight started or ended in the tick being read
     fight_tick = -1
     for e in log.events:
         if e.tick != fight_tick:
             fought.clear()
             fight_tick = e.tick
         match e.kind:
-            case "fight":
+            case "fight_started":
                 node, attacker = e.get("node"), e.get("attacker")
                 if isinstance(node, int) and isinstance(attacker, int):  # not an edge meeting
                     sieges[attacker] += 1
+                    fought.add(node)
+            case "fight_ended":
+                node = e.get("node")
+                if isinstance(node, int):
                     fought.add(node)
             case "node_captured":
                 node, player = e.get("node"), e.get("player")
