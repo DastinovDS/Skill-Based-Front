@@ -28,10 +28,11 @@ wave  tick   D    fight (DEC-07 rules 1-4) and what happens until the next wave 
 
 So the city falls exactly on wave N = 3 (without starvation, SIM-09: wave 4).
 
-Open roads (M is player 0's): T is refilled over 0 -> 1 -> 2. The capital produces 2 charges
-per 50 ticks (passive 1 + half of the CP quantum at stance «Баланс»), a level 1 road carries
-1 charge per 10 ticks and the chain takes 59 + 72 ticks; a wave uses 2 charges of T per round
-trip of more than 158 ticks, and T starts with 3. So the defender meets every wave with both
+Open roads (M is player 0's): T is refilled over 0 -> 1 -> 2. The capital produces 1 charge
+per 50 ticks (half of the CP quantum at stance «Баланс»; no passive production since #253), a
+level 1 road carries 1 charge per 10 ticks and the chain takes 59 + 72 ticks; a wave uses 2
+charges of T per round trip of more than 158 ticks (the capital makes 3 in that time), and T
+starts with 3. So the defender meets every wave with both
 units charged (row 1 every time) and does not fall in 10 waves.
 """
 

@@ -1,4 +1,4 @@
-"""Economy (SIM-06): CP regeneration, cap, stance split, accumulator, capital production.
+"""Economy (SIM-06): CP regeneration, cap, stance split, accumulator, charges of the capital.
 
 Expected values are worked out by hand from DEC-02 (mechanics.md, section 6):
 
@@ -6,13 +6,14 @@ Expected values are worked out by hand from DEC-02 (mechanics.md, section 6):
   charges («Экономия» / «Баланс» / «Война»), the rest into CP;
 - the charge share is converted at 1 CP -> 2 charges into an accumulator in hundredths of a
   charge, every whole 100 is one charge;
-- passive production: 1 charge per 50 ticks in the capital;
+- no passive production (owner's decision of 2026-10-14, #253): charges come only from the
+  stance share; 600 ticks give 18 / 12 / 6 charges in «Экономия» / «Баланс» / «Война»;
 - CP cap 5 (500): the CP excess burns, the charge share is credited always;
 - stance change at most once per 100 ticks; the first change is free (#104 default).
 
 The DEC-02 numbers are pinned in ``DEC02`` below, so balance changes of ``mvp-0.toml`` do not
 break these rule tests. Tick convention (``gow_sim.systems.economy``): step ``t`` runs with
-``state.tick == t``; 600 steps are ticks 1..600, that is 12 quanta and 12 passive charges.
+``state.tick == t``; 600 steps are ticks 1..600, that is 12 quanta.
 """
 
 import dataclasses
@@ -38,8 +39,6 @@ def _dec02() -> Ruleset:
         cp=CpRules(start=300, cap=500, per_period=100, period_ticks=50),
         economy=EconomyRules(
             charges_per_cp=2,
-            passive_period_ticks=50,
-            passive_amount=1,
             start_stance=Stance.BALANCE,
             stance_to_charges_pct=StanceTable(economy=75, balance=50, war=25),
         ),
@@ -104,8 +103,7 @@ def test_one_quantum(stance: Stance, cp: int, charges: int, acc: int) -> None:
     for pid in (0, 1):
         assert state.players[pid].cp == cp
         assert state.players[pid].charge_acc == acc
-        # + 1 passive charge at tick 50
-        assert state.nodes[state.map.capital(pid)].warehouse == charges + 1
+        assert state.nodes[state.map.capital(pid)].warehouse == charges  # no passive charge
 
 
 def test_nothing_happens_between_periods() -> None:
@@ -134,7 +132,7 @@ def test_accumulator(stance: Stance, charges: list[int], accs: list[int]) -> Non
     for expected_charges, expected_acc in zip(charges, accs, strict=True):
         before = state.nodes[capital].warehouse
         _run(state, 50)
-        assert state.nodes[capital].warehouse - before == expected_charges + 1  # + passive
+        assert state.nodes[capital].warehouse - before == expected_charges
         assert state.players[0].charge_acc == expected_acc
 
 
@@ -146,10 +144,10 @@ def test_cp_cap_burns_cp_but_not_the_charge_share() -> None:
     state.players[0].cp = 480
     state.players[0].stance = Stance.BALANCE
     events = _run(state, 50)
-    # 480 + 50 = 530 -> cap 500, 30 burn; the charge share (1 charge) and 1 passive are credited.
+    # 480 + 50 = 530 -> cap 500, 30 burn; the charge share (1 charge) is credited.
     assert state.players[0].cp == 500
     assert _burned(events, 0) == 30
-    assert state.nodes[state.map.capital(0)].warehouse == 2
+    assert state.nodes[state.map.capital(0)].warehouse == 1
 
 
 def test_at_the_cap_all_cp_burn_and_charges_keep_coming() -> None:
@@ -159,20 +157,21 @@ def test_at_the_cap_all_cp_burn_and_charges_keep_coming() -> None:
     events = _run(state, 100)
     assert state.players[0].cp == 500
     assert _burned(events, 0) == 150  # 2 quanta x 75
-    assert state.nodes[state.map.capital(0)].warehouse == 1 + 2  # 2 x 50 hundredths + 2 passive
+    assert state.nodes[state.map.capital(0)].warehouse == 1  # 2 x 50 hundredths
 
 
 # 600 ticks for every stance ------------------------------------------------------------------
 
 # start CP, stance, CP after 600 ticks, CP burned, charges produced (warehouse), accumulator
-# 12 quanta: ECONOMY +25 CP / 150 hundredths, BALANCE +50 / 100, WAR +75 / 50; 12 passive charges.
+# 12 quanta: ECONOMY +25 CP / 150 hundredths, BALANCE +50 / 100, WAR +75 / 50; no passive charges
+# (mechanics.md, DEC-02: 18 / 12 / 6 charges in 600 ticks).
 SIX_HUNDRED = [
-    (0, Stance.ECONOMY, 300, 0, 18 + 12, 0),  # 12 x 25 = 300; 1800 / 100 = 18
-    (0, Stance.BALANCE, 500, 100, 12 + 12, 0),  # 12 x 50 = 600 -> cap 500
-    (0, Stance.WAR, 500, 400, 6 + 12, 0),  # 12 x 75 = 900 -> cap 500; 600 / 100 = 6
-    (300, Stance.ECONOMY, 500, 100, 18 + 12, 0),  # 300 + 300 = 600 -> 500
-    (300, Stance.BALANCE, 500, 400, 12 + 12, 0),  # 300 + 600 = 900 -> 500
-    (300, Stance.WAR, 500, 700, 6 + 12, 0),  # 300 + 900 = 1200 -> 500
+    (0, Stance.ECONOMY, 300, 0, 18, 0),  # 12 x 25 = 300; 1800 / 100 = 18
+    (0, Stance.BALANCE, 500, 100, 12, 0),  # 12 x 50 = 600 -> cap 500
+    (0, Stance.WAR, 500, 400, 6, 0),  # 12 x 75 = 900 -> cap 500; 600 / 100 = 6
+    (300, Stance.ECONOMY, 500, 100, 18, 0),  # 300 + 300 = 600 -> 500
+    (300, Stance.BALANCE, 500, 400, 12, 0),  # 300 + 600 = 900 -> 500
+    (300, Stance.WAR, 500, 700, 6, 0),  # 300 + 900 = 1200 -> 500
 ]
 
 
@@ -191,7 +190,7 @@ def test_600_ticks(
         assert state.nodes[state.map.capital(pid)].warehouse == charges
         assert state.players[pid].charge_acc == acc
         # Nothing is lost: CP gained + burned + CP spent on charges = 12 quanta of 100.
-        assert cp - start + burned + (charges - 12) * 100 // 2 == 12 * 100
+        assert cp - start + burned + charges * 100 // 2 == 12 * 100
 
 
 # Capital warehouse and capacity --------------------------------------------------------------
@@ -201,8 +200,10 @@ def test_overflow_is_lost_with_an_event() -> None:
     # line3: the capital holds 4 (``DEC02``).
     state = initial_state(load_map(MAPS_DIR / "line3.json"), DEC02)
     state.nodes[0].warehouse = 3
+    state.players[0].stance = Stance.ECONOMY
+    state.players[0].charge_acc = 50
     events = _run(state, 50, DEC02)
-    # BALANCE: 1 charge from the stance + 1 passive = 2; room for 1, 1 lost.
+    # ECONOMY: 50 + 150 hundredths = 2 charges; room for 1, 1 lost.
     assert state.nodes[0].warehouse == 4
     produced = [e for e in events if e.kind == "charges_produced" and e.get("player") == 0]
     lost = [e for e in events if e.kind == "charges_overflow" and e.get("player") == 0]
@@ -233,7 +234,7 @@ def test_lost_capital_produces_nothing_but_cp_regenerates() -> None:
     assert state.nodes[0].warehouse == 0
     assert state.players[0].cp == 350
     lost = [e for e in events if e.kind == "charges_overflow" and e.get("player") == 0]
-    assert [e.get("charges") for e in lost] == [2]
+    assert [e.get("charges") for e in lost] == [1]  # BALANCE: 1 charge, no passive
 
 
 # Stance changes ------------------------------------------------------------------------------

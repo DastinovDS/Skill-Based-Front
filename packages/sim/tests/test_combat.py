@@ -37,7 +37,7 @@ from gow_sim.state import (
     initial_state,
 )
 from gow_sim.systems.combat import Bonus, BonusSource, combat
-from gow_sim.systems.movement import movement, traversal_ticks
+from gow_sim.systems.movement import leg, movement
 
 TESTS_DIR = Path(__file__).resolve().parent
 VECTORS = json.loads(
@@ -105,8 +105,8 @@ def step(state: GameState, bonuses: dict[int, Bonus] | None = None) -> list[Even
 def before_arrival(state: GameState, edge: int, from_node: int) -> OnEdge:
     """On ``edge`` from ``from_node``, one tick before arriving at the other end."""
     to = state.map.edges[edge].other(from_node)
-    ticks = traversal_ticks(state.map, RULES, edge, to)
-    return OnEdge(edge, from_node, (ticks - 1) * PROGRESS_SCALE // ticks)
+    way = leg(state.map, RULES, edge, to)
+    return OnEdge(edge, from_node, way.progress(way.ticks - 1))
 
 
 def the(events: list[Event], kind: str) -> Event:
@@ -226,7 +226,8 @@ def test_rule7_several_groups_sum_and_choose_by_charged_units_and_id() -> None:
 
 
 def test_rule4_bounce_goes_back_along_the_edge_as_long_as_the_way_there() -> None:
-    """Row 1 at a mountain node: the way there takes 30 * 100 // 70 = 42 ticks, so does the way
+    """Row 1 at a mountain node from a forest one: the way there takes 36 ticks (half the edge in
+    forest, half in mountains, #253: ``30 * 100 * 85000 // (1000 * 100 * 70)``), so does the way
     back (rule 4; #133: a bounce retraces its steps), then the group stands at home."""
     state = initial_state(line(["forest", "mountains", "forest"], [0, 1, 1]), RULES)
     add(state, 1, 2, 2, AtNode(1))
@@ -235,7 +236,7 @@ def test_rule4_bounce_goes_back_along_the_edge_as_long_as_the_way_there() -> Non
     bounced_at = state.tick
     assert state.groups[a].location == OnEdge(0, 0, PROGRESS_SCALE, back=True)
     assert state.groups[a].order is None
-    while state.tick < bounced_at + 41:
+    while state.tick < bounced_at + 35:
         assert step(state) == []
         assert isinstance(state.groups[a].location, OnEdge)
     step(state)

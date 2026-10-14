@@ -457,6 +457,9 @@ def test_dec19_starve_in_only_for_own_cut_off_cities(rules: Ruleset) -> None:
     state.tick = 150
     state.nodes[1].cut_since = 100  # grace 100: the first consumption at 200
     state.nodes[4].cut_since = 100  # an enemy city, cut off
+    for owner, node in ((0, 1), (1, 4)):  # garrisons with charges: something to spend (#253)
+        gid = state.new_id()
+        state.groups[gid] = Group(gid, owner, 2, 1, Mode.ATTACK, AtNode(node))
     view = _view(state, rules)
     assert view.nodes[1].starve_in == 200 - 150
     assert [n.starve_in for n in view.nodes if n.id != 1] == [None] * 5
@@ -465,6 +468,25 @@ def test_dec19_starve_in_only_for_own_cut_off_cities(rules: Ruleset) -> None:
     assert before.nodes[1].starve_in is None
     state.nodes[1].cut_since = None
     assert _view(state, rules, player=1) == before
+
+
+def test_dec19_no_starve_in_when_there_is_nothing_to_spend(rules: Ruleset) -> None:
+    """#253 (DEC-19, item 8): an own cut-off city with an empty warehouse and no charged standing
+    unit, or with no standing unit at all, has no countdown; charges bring it back."""
+    state = _state("line6", rules)
+    state.tick = 150
+    state.nodes[1].cut_since = 100
+    gid = state.new_id()
+    state.groups[gid] = Group(gid, 0, 2, 0, Mode.ATTACK, AtNode(1))
+    assert _view(state, rules).nodes[1].starve_in is None
+    state.nodes[1].warehouse = 1
+    assert _view(state, rules).nodes[1].starve_in == 50
+    state.nodes[1].warehouse = 0
+    state.groups[gid].charged = 1
+    assert _view(state, rules).nodes[1].starve_in == 50
+    del state.groups[gid]
+    state.nodes[1].warehouse = 3
+    assert _view(state, rules).nodes[1].starve_in is None
 
 
 def test_dec18_own_packet_path_and_transfer(rules: Ruleset) -> None:

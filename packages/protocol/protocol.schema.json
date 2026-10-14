@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 12,
+    "PROTOCOL_VERSION": 13,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -456,24 +456,11 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
-        },
-        "passive_amount": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "passive_period_ticks": {
-          "description": "The capital makes ``passive_amount`` charges every ``passive_period_ticks`` in any stance.",
-          "maximum": 2147483647,
-          "minimum": 1,
-          "type": "integer"
         }
       },
       "required": [
         "stance_to_charges_pct",
-        "charges_per_cp",
-        "passive_amount",
-        "passive_period_ticks"
+        "charges_per_cp"
       ],
       "title": "EconomyPublic",
       "type": "object"

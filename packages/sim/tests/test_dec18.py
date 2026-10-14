@@ -1,6 +1,6 @@
 """Supply control: priorities, transit cities, one-off transfers (DEC-18, #230).
 
-Table tests of exactly the 22 worked examples of DEC-18 (mechanics.md, section 7). Expected
+Table tests of exactly the 25 worked examples of DEC-18 (mechanics.md, section 7). Expected
 values come from the decision, not from the code. The setting of the examples:
 
 - capital K (capacity 10); cities A, B, C (capacity 6); roads K-A, A-B, A-C; the province P only
@@ -316,6 +316,72 @@ def test_example_19_freight_packet_goes_to_the_captor() -> None:
     assert [(e.kind, e.get("player")) for e in events if e.kind == "packet_captured"] == [
         ("packet_captured", 1)
     ]
+
+
+# Transfers share the road with the automatic dispatch: examples 23-25 (item 10, #253) -----------
+
+SHARED_T = 110
+"""A dispatch tick ``t`` for examples 23 and 24."""
+
+
+def _sent(events: list[Event]) -> list[tuple[int, object, object, object]]:
+    """``(tick, from, to, charges)`` of the automatic packets of player 0 in ``events``."""
+    return [
+        (e.tick, e.get("from_node"), e.get("to_node"), e.get("charges"))
+        for e in events
+        if e.kind == "packet_sent" and e.get("player") == 0
+    ]
+
+
+def _transfer_on_dispatch_tick(state: GameState, src: int, dst: int, n: int) -> list[Event]:
+    """``Transfer`` applied at the dispatch tick ``SHARED_T``, then the supply of that tick."""
+    state.tick = SHARED_T
+    assert isinstance(_cmd(state, Transfer(src, dst, n)), Ok)
+    return supply(state, RULES)
+
+
+def test_example_23_transfer_takes_the_road_first() -> None:
+    state = _state(K=5)
+    events = _transfer_on_dispatch_tick(state, K, A, 2)
+    assert state.nodes[K].warehouse == 3
+    events += _until(state, SHARED_T + 20)
+    # t and t + 10: the transfer takes the amount 1 of K-A; t + 20: K sends A 1 charge.
+    assert _sent(events) == [(SHARED_T + 20, K, A, 1)]
+    _until(state, SHARED_T + 39)
+    assert state.nodes[A].warehouse == 0
+    _until(state, SHARED_T + 40)  # t + 30 + 1 * 10
+    assert state.nodes[A].warehouse == 2
+
+
+def test_example_24_freight_road_leaves_the_rest_to_the_dispatch() -> None:
+    state = _state(K=5)
+    _road(state, KA, 3, RoadKind.FREIGHT)
+    events = _transfer_on_dispatch_tick(state, K, A, 2)
+    assert _sent(events) == [(SHARED_T, K, A, 1)]  # amount 3: the transfer takes 2, 1 is left
+    _until(state, SHARED_T + 29)
+    assert state.nodes[A].warehouse == 0
+    _until(state, SHARED_T + 30)
+    assert state.nodes[A].warehouse == 2
+
+
+def test_example_25_transfer_entering_the_next_road_takes_it_again() -> None:
+    state = _state(A=3)
+    pid = state.new_id()
+    packet = Packet(
+        pid,
+        0,
+        KA,
+        from_node=K,
+        charges=1,
+        depart_tick=DISPATCH - 30,
+        arrive_tick=DISPATCH,
+        route=(AB,),
+        route_ticks=(30,),
+        transfer=True,
+    )
+    state.packets[pid] = packet
+    assert _dispatch(state) == [(A, C, 1)]  # A-B taken by the transfer: the surplus goes to C
+    assert (packet.edge, packet.from_node, packet.share) == (AB, A, 0)
 
 
 # Priority: examples 20 and 21 --------------------------------------------------------------------

@@ -33,9 +33,7 @@
     },
     "economy": {
       "stance_to_charges_pct": { "economy": 75, "balance": 50, "war": 25 },
-      "charges_per_cp": 2,
-      "passive_amount": 1,
-      "passive_period_ticks": 50
+      "charges_per_cp": 2
     },
     "orders": {
       "planned_delay_ticks": 30,

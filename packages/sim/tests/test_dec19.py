@@ -1,6 +1,6 @@
 """Starvation in an encirclement (DEC-19, #231).
 
-Table tests of exactly the 10 worked examples of DEC-19 (mechanics.md, section 7). Expected
+Table tests of exactly the 13 worked examples of DEC-19 (mechanics.md, section 7). Expected
 values come from the decision: city X (capacity 6) is cut off from tick 1000
 (``cut_since = 1000``); ``grace_ticks = 100``, ``period_ticks = 100``, ``charges = 1``,
 ``per_units = 3``; the garrison stands in X.
@@ -22,14 +22,13 @@ TESTS_DIR = Path(__file__).resolve().parent
 MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
 
 
-def _rules(attrition_ticks: int | None = None) -> Ruleset:
+def _rules() -> Ruleset:
     base = load_ruleset(MVP0)
     return dataclasses.replace(
         base,
         capacity=dataclasses.replace(
             base.capacity,
             by_kind=KindTable(capital=10, city_large=8, city_medium=6, city_small=4, province=3),
-            attrition_ticks=attrition_ticks or base.capacity.attrition_ticks,
         ),
         starvation=StarvationRules(grace_ticks=100, period_ticks=100, charges=1, per_units=3),
     )
@@ -93,18 +92,17 @@ def test_example_2_no_units_nothing_spent() -> None:
 
 
 def test_example_3_one_charge_per_started_three_units() -> None:
-    # 7 units over the capacity 6 would also die of overcrowding (#118), which the example leaves
-    # out: attrition is switched off here, only the starvation numbers are checked.
-    rules = _rules(attrition_ticks=10**6)
+    # The real rules: 5 units fit the capacity 6, so no attrition (#253 fixed the example).
     state = _state()
     state.tick = CUT - 1
-    g = _group(state, 7, 7)
-    _run(state, 1100, rules)
-    assert g.charged == 4  # ceil(7 / 3) = 3
-    _run(state, 1200, rules)
+    g = _group(state, 5, 5)
+    _run(state, 1100)
+    assert g.charged == 3  # ceil(5 / 3) = 2
+    _run(state, 1200)
     assert g.charged == 1
-    _run(state, 1300, rules)
-    assert (g.charged, g.units) == (0, 7)
+    events = _run(state, 1300)
+    assert _starved(events) == [(1300, 0, 1)]  # the shortfall of 1 is not carried over
+    assert (g.charged, g.units) == (0, 5) and not [e for e in events if e.kind == "attrition"]
 
 
 def test_example_4_warehouse_then_one_unit_charge() -> None:
@@ -192,9 +190,36 @@ def test_example_10_nothing_to_spend_nobody_dies() -> None:
     assert (g.units, g.charged) == (3, 0)
 
 
-def test_starve_in_counts_down_to_the_next_consumption() -> None:
+def test_example_11_nothing_to_spend_no_countdown() -> None:
     state = _state()
     state.tick = CUT - 1
+    _group(state, 3, 0)
+    _run(state, 1150)
+    assert starve_in(state, RULES, X) is None
+
+
+def test_example_12_charges_back_the_countdown_keeps_its_schedule() -> None:
+    state = _state()
+    state.tick = CUT - 1
+    _group(state, 3, 0)
+    _run(state, 1159)
+    state.nodes[X].warehouse = 1  # tick 1160: a packet brings 1 charge
+    _run(state, 1160)
+    assert starve_in(state, RULES, X) == 40  # the next consumption at 1200
+
+
+def test_example_13_no_units_no_countdown() -> None:
+    state = _state(warehouse=5)
+    state.tick = CUT - 1
+    _run(state, 1150)
+    assert state.nodes[X].cut_since == CUT
+    assert starve_in(state, RULES, X) is None
+
+
+def test_starve_in_counts_down_to_the_next_consumption() -> None:
+    state = _state(warehouse=5)
+    state.tick = CUT - 1
+    _group(state, 3, 0)
     _run(state, CUT)
     assert starve_in(state, RULES, X) == 100
     _run(state, 1099)

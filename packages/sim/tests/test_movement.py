@@ -2,11 +2,14 @@
 
 Expected values are worked out by hand from the rules:
 
-- ``terrain.entry_speed_pct`` of SIM-01 (#17): plains 125, forest 100, mountains 70; the time into
-  a node is ``travel_ticks * 100 // pct`` (rounded down). Pinned in ``RULES`` below.
-  For ``travel_ticks = 30``: plains 3000 // 125 = 24, forest 30, mountains 3000 // 70 = 42.
-- ``progress`` in thousandths of the edge (DEC-07, rule 6): after ``k`` of ``T`` ticks it is
-  ``k * 1000 // T``.
+- ``terrain.speed_pct`` of SIM-01 (#17): plains 125, forest 100, mountains 70, by zone (#253,
+  mechanics.md, section 4: worked examples in ``test_terrain_zones.py``). An edge of one terrain
+  takes ``travel_ticks * 100 // pct`` (rounded down); for ``travel_ticks = 30``: plains
+  3000 // 125 = 24, forest 30, mountains 3000 // 70 = 42. An edge between terrains A and B with
+  the border at 500: ``T = travel_ticks * 100 * d // (1000 * pa * pb)``,
+  ``d = 500 * pb + 500 * pa``: forest - plains 27, forest - mountains 36, both ways.
+- ``progress`` in thousandths of the edge (DEC-07, rule 6): on an edge of one terrain after ``k``
+  of ``T`` ticks it is ``k * 1000 // T``.
 - a path goes only through own nodes; the first foreign or neutral node is its end (SIM-05);
   an empty neutral node is captured on arrival; both players arriving at once is combat
   (DEC-07, rule 5, SIM-09), so movement leaves that node neutral.
@@ -45,7 +48,7 @@ def _rules() -> Ruleset:
     base = load_ruleset(MVP0)
     terrain = TerrainRules(
         defense_mod=base.terrain.defense_mod,
-        entry_speed_pct=TerrainTable(plains=125, forest=100, mountains=70),
+        speed_pct=TerrainTable(plains=125, forest=100, mountains=70),
     )
     return dataclasses.replace(base, terrain=terrain)
 
@@ -110,8 +113,8 @@ def _step(state: GameState, commands: list[PlayerCommand] | None = None) -> None
 @pytest.mark.parametrize(
     ("terrain", "expected"), [("plains", 24), ("forest", 30), ("mountains", 42)]
 )
-def test_edge_time_is_travel_ticks_with_the_entry_terrain(terrain: str, expected: int) -> None:
-    mapdef = _line(["forest", terrain, "forest"], [0, 0, 1], [30, 30])
+def test_edge_of_one_terrain_keeps_its_time(terrain: str, expected: int) -> None:
+    mapdef = _line([terrain, terrain, "forest"], [0, 0, 1], [30, 30])
     assert traversal_ticks(mapdef, RULES, 0, 1) == expected
     state = initial_state(mapdef, RULES)
     gid = _group(state, 0, 0)
@@ -124,15 +127,16 @@ def test_edge_time_is_travel_ticks_with_the_entry_terrain(terrain: str, expected
     assert state.groups[gid].order is None
 
 
-def test_entry_terrain_decides_the_direction() -> None:
-    # 0 forest - 1 mountains: into 1 takes 42 ticks, back into 0 takes 30.
+def test_both_zones_count_in_both_directions() -> None:
+    # 0 forest - 1 mountains, border 500: d = 500 * 70 + 500 * 100 = 85000,
+    # T = 3000 * 85000 // (1000 * 100 * 70) = 36 both ways (#253).
     mapdef = _line(["forest", "mountains", "forest"], [0, 0, 1], [30, 30])
-    assert traversal_ticks(mapdef, RULES, 0, 1) == 42
-    assert traversal_ticks(mapdef, RULES, 0, 0) == 30
+    assert traversal_ticks(mapdef, RULES, 0, 1) == 36
+    assert traversal_ticks(mapdef, RULES, 0, 0) == 36
 
 
 def test_a_path_takes_the_sum_of_its_edges() -> None:
-    # 0 -> 1 (plains, 24) -> 2 (forest, 30) -> 3 (mountains, 42), all own but the last.
+    # 0 forest -> 1 plains (27) -> 2 forest (27) -> 3 mountains (36), all own but the last.
     mapdef = _line(["forest", "plains", "forest", "mountains"], [0, 0, 0, 1], [30, 30, 30])
     state = initial_state(mapdef, RULES)
     gid = _group(state, 0, 0)
@@ -145,7 +149,7 @@ def test_a_path_takes_the_sum_of_its_edges() -> None:
             case OnEdge():
                 pass
         _step(state)
-    assert reached == {1: 24, 2: 24 + 30, 3: 24 + 30 + 42}
+    assert reached == {1: 27, 2: 27 + 27, 3: 27 + 27 + 36}
 
 
 def test_transit_never_stands_in_an_intermediate_node() -> None:
@@ -175,8 +179,15 @@ def test_planned_order_departs_after_the_delay() -> None:
 
 
 def test_too_long_edge_is_an_error() -> None:
+    # One terrain: at most PROGRESS_SCALE ticks (70000 // 70 = 1000 fits, 70100 // 70 = 1001 not).
+    mapdef = _line(["mountains", "mountains", "mountains", "forest"], [0, 0, 0, 1], [700, 701, 30])
+    assert traversal_ticks(mapdef, RULES, 0, 1) == 1000
+    with pytest.raises(ValueError, match="takes 1001 ticks: too slow"):
+        traversal_ticks(mapdef, RULES, 1, 2)
+    # Two zones: forest - mountains of 701: T = 70100 * 85000 // 7000000 = 851, and
+    # 851 * 100 > 85000: the forest zone would not move a thousandth every tick.
     mapdef = _line(["forest", "mountains", "forest"], [0, 0, 1], [701, 30])
-    with pytest.raises(ValueError, match="takes 1001 > 1000 ticks"):
+    with pytest.raises(ValueError, match="takes 851 ticks: too slow"):
         traversal_ticks(mapdef, RULES, 0, 1)
 
 

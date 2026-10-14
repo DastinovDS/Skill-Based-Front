@@ -88,9 +88,6 @@ class EconomyPublic(WireModel):
     stance_to_charges_pct: StancePctPublic
     charges_per_cp: NonNegInt
     """Charges per whole CP put into charges."""
-    passive_amount: NonNegInt
-    passive_period_ticks: PosInt
-    """The capital makes ``passive_amount`` charges every ``passive_period_ticks`` in any stance."""
 
 
 class OrdersPublic(WireModel):
@@ -177,8 +174,6 @@ class RulesetPublic(WireModel):
                     war=pct.of(Stance.WAR),
                 ),
                 charges_per_cp=rules.economy.charges_per_cp,
-                passive_amount=rules.economy.passive_amount,
-                passive_period_ticks=rules.economy.passive_period_ticks,
             ),
             orders=OrdersPublic(
                 planned_delay_ticks=rules.orders.planned_delay_ticks,

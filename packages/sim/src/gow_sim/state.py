@@ -216,7 +216,9 @@ class Packet:
     ``edge`` is the current edge of the path, travelled away from ``from_node`` during
     ``depart_tick .. arrive_tick``. ``route``: the edges of the path still to go after ``edge``,
     the next one first; ``route_ticks``: their times, fixed at dispatch. ``transfer``: a one-off
-    ``Transfer`` (DEC-18, item 6), not the automatic dispatch.
+    ``Transfer`` (DEC-18, item 6), not the automatic dispatch. ``share``: charges of a transfer not
+    yet taken from the ``amount`` of its current edge (DEC-18, item 10, #253); 0 for the automatic
+    dispatch.
     """
 
     id: int
@@ -229,6 +231,7 @@ class Packet:
     route: tuple[int, ...] = ()
     route_ticks: tuple[int, ...] = ()
     transfer: bool = False
+    share: int = 0
 
 
 @dataclass(slots=True)
@@ -499,6 +502,7 @@ def _packet_data(p: Packet) -> dict[str, object]:
         "route": list(p.route),
         "route_ticks": list(p.route_ticks),
         "transfer": p.transfer,
+        "share": p.share,
     }
 
 
@@ -730,6 +734,7 @@ def _parse_packet(data: object, where: str) -> Packet:
             "route",
             "route_ticks",
             "transfer",
+            "share",
         ),
     )
     route = _list(raw["route"], f"{where}.route")
@@ -749,6 +754,7 @@ def _parse_packet(data: object, where: str) -> Packet:
             _int(t, f"{where}.route_ticks[{i}]", low=1) for i, t in enumerate(route_ticks)
         ),
         transfer=_bool(raw["transfer"], f"{where}.transfer"),
+        share=_int(raw["share"], f"{where}.share", low=0),
     )
 
 

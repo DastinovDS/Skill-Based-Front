@@ -24,8 +24,8 @@ item 4: road parameters), numbers from ``Ruleset.supply``:
     ``(priority rank, warehouse, node_key)`` among the active cities of the child's subtree with
     an own deficit above 0 (rank ``high`` 0, ``normal`` 1, ``low`` 2). A child gets at most its
     subtree deficit, at most its free room ``capacity - warehouse - incoming`` and at most what is
-    left of the ``amount`` of every road of the way this period (``road_amount``; shared by the
-    three passes and every way through the road).
+    left of the ``amount`` of every road of the way this period (``road_amount`` minus what the
+    transfers took, item 10; shared by the three passes and every way through the road).
   - Everything one city sent to one child in a period goes as one packet.
 
 - Road parameters by level and type (DEC-22, item 4): ``speed_pct`` is ``supply.base_speed_pct``
@@ -42,17 +42,22 @@ item 4: road parameters), numbers from ``Ruleset.supply``:
   the end of the path the charges go into the warehouse within the capacity, the excess burns
   (``charges_overflow``).
 - Transfer (item 6, ``commands.Transfer``): the fastest way for its ``n`` charges by
-  ``transfer_ticks`` per road, ties by the lexicographically smaller ``node_key`` sequence; it
-  does not use the ``amount`` of the automatic dispatch (default of DEC-18).
+  ``transfer_ticks`` per road, ties by the lexicographically smaller ``node_key`` sequence.
+- Transfers share the ``amount`` of a road with the automatic dispatch and take it first
+  (item 10, owner's decision of 2026-10-14, #253): a transfer packet entering a road gets the
+  ``share`` of all its charges there; on every dispatch tick while it is on the road it takes
+  ``min(amount, share)`` of the road's ``amount`` (``share`` falls by as much), and the automatic
+  dispatch of the period gets ``max(0, amount - taken)``. Transfers do not delay each other (their
+  times stay those of item 6), what they take adds up.
 - Recharge: each tick, units of the node owner standing in the node (``capacity.is_standing``)
   take charges from the warehouse, at most ``supply.recharge_per_tick`` per node and tick, the
   lowest group id first. Units on edges do not recharge.
 
 Order inside the system (item 9): lost packets, packets along their path and deliveries,
-recharge, dispatch. Charges are created only by the economy (``charges_produced``) and leave the
-supply chain only through recharge or the documented sinks ``packet_lost``, ``charges_overflow``
-and ``warehouse_lost``; ``packet_captured`` moves charges of a freight packet into the captor's
-warehouse.
+recharge, the transfer shares (item 10), dispatch. Charges are created only by the economy
+(``charges_produced``) and leave the supply chain only through recharge or the documented sinks
+``packet_lost``, ``charges_overflow`` and ``warehouse_lost``; ``packet_captured`` moves charges of
+a freight packet into the captor's warehouse.
 
 Cost per tick: O(V + E + P + G); a dispatch tick adds the tree (Dijkstra, O(E log V)) and three
 passes over the cities of the tree.
@@ -261,6 +266,7 @@ def send_packet(
         route=edges[1:],
         route_ticks=ticks[1:],
         transfer=transfer,
+        share=charges if transfer else 0,
     )
     state.packets[pid] = packet
     return packet
@@ -304,9 +310,29 @@ def supply(state: GameState, rules: Ruleset) -> list[Event]:
     _recharge(state, rules, garrisons)
     tick = state.tick
     if tick > 0 and tick % rules.supply.dispatch_ticks == 0:
+        taken = _take_transfer_shares(state, rules)
         for pid in sorted(state.players):
-            events.extend(_dispatch(state, rules, pid, capacities, garrisons))
+            events.extend(_dispatch(state, rules, pid, capacities, garrisons, taken))
     return events
+
+
+def _take_transfer_shares(state: GameState, rules: Ruleset) -> dict[tuple[int, int], int]:
+    """Item 10: every transfer packet takes ``min(amount, share)`` of its road this period.
+
+    Returns what the transfers took, by ``(owner, edge)``. A packet's take depends only on the
+    packet and its road, so the order of the packets does not matter.
+    """
+    taken: dict[tuple[int, int], int] = {}
+    for pid in sorted(state.packets):
+        packet = state.packets[pid]
+        if packet.share <= 0:
+            continue
+        road = state.edges[packet.edge]
+        take = min(road_amount(rules, road.width, road.kind), packet.share)
+        packet.share -= take
+        key = (packet.owner, packet.edge)
+        taken[key] = taken.get(key, 0) + take
+    return taken
 
 
 def _owned_by(state: GameState, edge: int, player: int) -> bool:
@@ -356,6 +382,8 @@ def _move_packets(state: GameState, capacities: tuple[int, ...]) -> list[Event]:
                 packet.arrive_tick = tick + packet.route_ticks[0]
                 packet.route = packet.route[1:]
                 packet.route_ticks = packet.route_ticks[1:]
+                if packet.transfer:  # a new road: the whole transfer takes its amount again
+                    packet.share = packet.charges
                 continue
             if not is_city(mapdef, node_id):  # the way is cut at a province: lost
                 del state.packets[pid]
@@ -423,6 +451,7 @@ def _dispatch(
     player: int,
     capacities: tuple[int, ...],
     garrisons: dict[int, list[Group]],
+    taken: dict[tuple[int, int], int],
 ) -> list[Event]:
     tree = supply_tree(state, rules, player)
     if len(tree.order) < 2:
@@ -513,7 +542,8 @@ def _dispatch(
                     left = edge_left.get(e)
                     if left is None:
                         road = state.edges[e]
-                        left = edge_left[e] = road_amount(rules, road.width, road.kind)
+                        amount_e = road_amount(rules, road.width, road.kind)
+                        left = edge_left[e] = max(0, amount_e - taken.get((player, e), 0))
                     amount = min(amount, left)
                 if amount <= 0:
                     continue
