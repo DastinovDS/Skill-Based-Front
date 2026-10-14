@@ -108,7 +108,7 @@ class _Run:
     def step(self, *cmds: tuple[int, Command]) -> list[Ok | Reject]:
         state = self.state
         state.tick += 1
-        batch = []
+        batch: list[PlayerCommand] = []
         for player, cmd in cmds:
             batch.append(PlayerCommand(player, self.seq, cmd))
             self.seq += 1
