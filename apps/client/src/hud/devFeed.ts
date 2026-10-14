@@ -129,7 +129,8 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         id: e.id,
         width: e.base_width,
         kind: 'none',
-        detail: 'fog',
+        // A road is seen when one of its ends is (as in the real fog), hidden only between two hidden cities.
+        detail: nodes[e.a]?.detail === 'fog' && nodes[e.b]?.detail === 'fog' ? 'fog' : 'exact',
         upgrade_gain: null,
         seen: null,
       })),

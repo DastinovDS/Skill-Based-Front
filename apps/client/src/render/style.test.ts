@@ -59,7 +59,7 @@ describe('sides', () => {
 });
 
 describe('roadThickness', () => {
-  it('is 1 + 3w for widths 1..5 (ui-style.md 9.3), so the widths are clearly apart', () => {
-    expect([1, 2, 3, 4, 5].map(roadThickness)).toEqual([3, 5, 7, 9, 11]);
+  it('is 0.5 + 1.5w for widths 1..5 (ui-style.md 9.3), so the levels stay apart', () => {
+    expect([1, 2, 3, 4, 5].map(roadThickness)).toEqual([2, 3.5, 5, 6.5, 8]);
   });
 });

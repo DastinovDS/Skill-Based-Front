@@ -12,8 +12,6 @@ import {
   ROAD_CHEVRON,
   ROAD_COLOR,
   ROAD_STRIPE,
-  ROAD_TRAIL_DASH,
-  ROAD_TRAIL_GAP,
   TERRAIN_FILL,
   TERRITORY_ALPHA,
   TERRITORY_BORDER,
@@ -48,10 +46,10 @@ export interface RoadLook {
  * stamps, the territory of the owners with its border line, and the roads. Cities are `CityView`.
  *
  * Owners and roads come from the map start fields now and from snapshots later (CLI-04, #60)
- * through `setOwners` and `setRoads`. A road reads without colour (DEC-22): level 1 is a dashed
- * trail; an upgraded road is solid and thicker per level; a freight road carries lanes (one per
- * level above 1), a fast road chevrons (double ones on level 3). Identical shapes share one
- * GraphicsContext (the unit road rectangle, the dashed trail and the chevrons of a given length);
+ * through `setOwners` and `setRoads`. A road is always a solid line and reads without colour
+ * (DEC-22): the level shows in its thickness; a freight road carries lanes (one per level above
+ * 1), a fast road chevrons (double ones on level 3). Identical shapes share one GraphicsContext
+ * (the unit road rectangle and the chevrons of a given length);
  * `destroy()` releases every object and context created here.
  */
 export class MapView {
@@ -59,7 +57,6 @@ export class MapView {
   private readonly roadContext: GraphicsContext;
   private readonly casingContext: GraphicsContext;
   private readonly stripeContext: GraphicsContext;
-  private readonly trailContexts = new Map<number, GraphicsContext>();
   private readonly chevronContexts = new Map<string, GraphicsContext>();
   readonly cells: Point[][];
   private readonly terrainFill: Graphics;
@@ -202,7 +199,6 @@ export class MapView {
       road.width = width;
       road.kind = kind;
       road.body.scale.y = thickness;
-      road.body.context = width <= 1 ? this.trailContext(road.length) : this.roadContext;
       // A freight road: `width - 1` dark lanes across the body.
       const lanes = kind === 'freight' ? width - 1 : 0;
       for (let k = 0; k < Math.max(lanes, road.stripes.length); k++) {
@@ -273,22 +269,6 @@ export class MapView {
         return g.fill(ROAD_CHEVRON.color);
       });
       this.chevronContexts.set(key, context);
-    }
-    return context;
-  }
-
-  /** Dashes of the trail along a road of `length`, in the unit space of the road (0..1). */
-  private trailContext(length: number): GraphicsContext {
-    const key = Math.max(1, Math.round(length));
-    let context = this.trailContexts.get(key);
-    if (context === undefined) {
-      context = this.context((g) => {
-        for (let at = 0; at < key; at += ROAD_TRAIL_DASH + ROAD_TRAIL_GAP) {
-          g.rect(at / key, -0.5, Math.min(ROAD_TRAIL_DASH, key - at) / key, 1);
-        }
-        return g.fill(ROAD_COLOR);
-      });
-      this.trailContexts.set(key, context);
     }
     return context;
   }
