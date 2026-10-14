@@ -113,7 +113,7 @@ class RandomLegalBot(Bot):
         return sorted(cities, key=self.key)
 
     def _move(self, view: PlayerView, g: GroupView, budget: int) -> Command | None:
-        dests = self.reachable(view, node_of(g), self.params["radius"])
+        dests = self.reachable(view, node_of(g), self.params["radius"], g.units)
         if not dests:
             return None
         dest = self.rng.choice(dests)

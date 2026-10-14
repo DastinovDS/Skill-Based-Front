@@ -18,8 +18,10 @@ Ids in commands are internal ids. Opaque per-player ids of the projection are tr
 that resolves to nothing becomes a negative id absent from the state, which ``validate()``
 rejects as ``NOT_FOUND_OR_HIDDEN``.
 
-Costs are in hundredths of CP from ``orders.cost`` (DEC-08, DEC-01, DEC-02).
-Split, Merge and commands to a moving or waiting group follow the defaults of #117.
+Costs are in hundredths of CP from ``orders.cost`` (DEC-08, DEC-01, DEC-02); split, merge and
+cancel are free in the rulesets of DEC-20, the keys stay so that balance can bring a price back.
+Split, Merge, CancelOrder and the stack limit of ``Move`` follow DEC-20 (mechanics.md, section 3);
+what DEC-20 leaves open keeps the defaults of #117 (split takes the charged units first).
 Bonuses and public intents of planned orders and «Защита»: ``systems.orders`` (SIM-10).
 Road upgrades by a city (DEC-16): ``systems.build``; they are not public.
 Supply priority and one-off transfers (DEC-18): ``SetPriority`` and ``Transfer``; neither is
@@ -40,6 +42,7 @@ from gow_sim.state import (
     Group,
     IntentKind,
     Mode,
+    OnEdge,
     Order,
     Priority,
     RoadKind,
@@ -48,8 +51,8 @@ from gow_sim.state import (
 from gow_sim.systems.build import builder_of, level_price, start_build
 from gow_sim.systems.capacity import is_internal, supplied_territory
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
-from gow_sim.systems.movement import find_path
-from gow_sim.systems.orders import clear_bonus, set_intent
+from gow_sim.systems.movement import find_path, path_ticks
+from gow_sim.systems.orders import absorb, clear_bonus, set_intent
 from gow_sim.systems.recruit import (
     free_capacity,
     recruit_allowed_here,
@@ -101,7 +104,7 @@ class Move:
 
 @dataclass(frozen=True, slots=True)
 class Split:
-    """Split ``n`` units off ``group`` into a new group (#117)."""
+    """Split ``n`` units off ``group`` into a new group; the charged units go first (DEC-20, B1)."""
 
     group: int
     n: int
@@ -109,7 +112,8 @@ class Split:
 
 @dataclass(frozen=True, slots=True)
 class Merge:
-    """Merge two or more groups standing in one node into the one with the smallest id (#117)."""
+    """Merge two or more groups standing in one node into the one with the smallest id; it keeps
+    its mode and «Защита» with the bonus (DEC-20, B2)."""
 
     groups: tuple[int, ...]
 
@@ -145,10 +149,9 @@ class Recruit:
 
 @dataclass(frozen=True, slots=True)
 class CancelOrder:
-    """Cancel the planned order of ``group`` while it waits to depart, or its «Защита» (DEC-08).
-
-    TODO(#141): cancelling «Защита» costs ``orders.cost.cancel``, ``SetMode(ATTACK)`` is free.
-    """
+    """Cancel any order of ``group`` (DEC-20, C): a planned order while it waits to depart, a move
+    order on an edge (the group turns back to the start of the current edge, ``OnEdge.back``),
+    or «Защита» (the same as ``SetMode(ATTACK)``)."""
 
     group: int
 
@@ -218,10 +221,12 @@ class RejectCode(StrEnum):
     """A visible group or a node of another player (or a neutral node)."""
     NOT_ENOUGH_CP = "NOT_ENOUGH_CP"
     GROUP_ON_EDGE = "GROUP_ON_EDGE"
-    """Groups take commands only while standing in a node (#117)."""
+    """Groups take commands other than ``CancelOrder`` only while standing in a node (DEC-20)."""
     GROUP_BUSY = "GROUP_BUSY"
     """The group waits to depart on a planned order; only ``CancelOrder`` is accepted (#117)."""
     NO_PATH = "NO_PATH"
+    STACK_LIMIT = "STACK_LIMIT"
+    """A path exists, but none whose nodes (besides the start) all hold the group (DEC-20, D)."""
     INVALID_ARGUMENT = "INVALID_ARGUMENT"
     """Malformed arguments: ``n`` out of range, fewer than two or repeated groups, same node; no
     road type for the first road upgrade (DEC-22)."""
@@ -265,7 +270,9 @@ class Ok:
     """For ``Move`` and ``Transfer``: the nodes ``(start, ..., dest)``, returned to the client in
     ``ack``."""
     arrive_tick: int | None = None
-    """For ``Transfer``: the tick the charges reach ``dst`` if nothing stops them (DEC-18)."""
+    """For ``Transfer``: the tick the charges reach ``dst`` if nothing stops them (DEC-18). For
+    ``Move``: the tick the group reaches ``dest`` if the command is applied at ``state.tick`` and
+    nothing stops it (DEC-22, item 10: the client shows the travel time)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -355,6 +362,11 @@ def _validate(
         return Reject(RejectCode.NOT_ENOUGH_CP)
     if isinstance(checked, TransferRoute):
         return Ok(cost=cost, path=checked.nodes, arrive_tick=state.tick + checked.total_ticks)
+    if isinstance(cmd, Move):
+        # The first step is made in the tick of the order (or of the departure): tick + T - 1.
+        delay = rules.orders.planned_delay_ticks if cmd.planned else 0
+        arrive = state.tick + delay + path_ticks(state, rules, checked) - 1
+        return Ok(cost=cost, path=checked, arrive_tick=arrive)
     return Ok(cost=cost, path=checked)
 
 
@@ -373,8 +385,12 @@ def _check(
             start = _node_of(group)
             if dest == start:
                 return Reject(RejectCode.INVALID_ARGUMENT)
-            path = find_path(state, rules, player, start, dest)
-            return Reject(RejectCode.NO_PATH) if path is None else path
+            path = find_path(state, rules, player, start, dest, size=group.units)
+            if path is not None:
+                return path
+            if find_path(state, rules, player, start, dest) is not None:
+                return Reject(RejectCode.STACK_LIMIT)  # DEC-20, D2
+            return Reject(RejectCode.NO_PATH)
         case Split(group=gid, n=n):
             group = _standing_group(state, player, gid, seen)
             if isinstance(group, Reject):
@@ -420,8 +436,12 @@ def _check(
             group = _own_group(state, player, gid, seen)
             if isinstance(group, Reject):
                 return group
-            if not isinstance(group.location, AtNode):
-                return Reject(RejectCode.GROUP_ON_EDGE)
+            location = group.location
+            if isinstance(location, OnEdge):
+                # A bouncing group lost its order in the fight (DEC-20, C4).
+                if location.back or group.order is None:
+                    return Reject(RejectCode.NOTHING_TO_CANCEL)
+                return ()
             if not (_waits_to_depart(state, group) or group.mode is Mode.DEFENSE):
                 return Reject(RejectCode.NOTHING_TO_CANCEL)
             return ()
@@ -599,17 +619,11 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             state.groups[new] = Group(new, player, n, charged, Mode.ATTACK, group.location)
             return [event(tick, "group_split", player=player, group=gid, new_group=new, units=n)]
         case Merge(groups=gids):
+            # The smallest id keeps its mode, «Защита» with its bonus and intent (DEC-20, B2).
             keep = state.groups[min(gids)]
             for gid in sorted(gids):
                 if gid != keep.id:
-                    set_intent(state, state.groups[gid], None)
-                    other = state.groups.pop(gid)
-                    keep.units += other.units
-                    keep.charged += other.charged
-            keep.mode = Mode.ATTACK
-            keep.order = None
-            clear_bonus(keep)
-            set_intent(state, keep, None)
+                    absorb(state, keep, gid)
             return [event(tick, "groups_merged", player=player, group=keep.id, units=keep.units)]
         case SetMode(group=gid, mode=mode):
             group = state.groups[gid]
@@ -629,7 +643,13 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             return recruit_unit(state, player, node)
         case CancelOrder(group=gid):
             group = state.groups[gid]
-            if _waits_to_depart(state, group):
+            location = group.location
+            if isinstance(location, OnEdge):
+                # Back to the start of this edge, as long as the way travelled (DEC-20, C2): the
+                # mechanics of a bounce, without spending charges.
+                group.location = OnEdge(location.edge, location.from_node, location.progress, True)
+                group.order = None
+            elif _waits_to_depart(state, group):
                 group.order = None
             else:
                 group.mode = Mode.ATTACK  # «Защита» (validated)

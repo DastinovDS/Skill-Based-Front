@@ -33,6 +33,7 @@ from gow_protocol.convert import (
     match_end_msg,
     opaque_from_wire,
     opaque_to_wire,
+    reach_msg,
     snapshot_frame,
     snapshot_msg,
 )
@@ -302,7 +303,9 @@ def _features(view: View) -> set[str]:
 
 
 def test_snapshot_frames_of_a_bot_match() -> None:
-    """Strategic bots use what the wire driver above does not: planned orders and their intents."""
+    """Strategic bots against each other: their frames equal the validated ones. Under the stack
+    limit (DEC-20) their armies split into smaller waves that take targets with plain orders, so
+    planned orders and their intents are set up in ``test_snapshot_frame_of_rare_view_parts``."""
     mapdef = load_map(ROOT / "maps" / "arteriya.json")
     bots = ("rusher", "turtle")
     controllers = [BOTS[bot](mapdef, RULES, seed=7, player=p) for p, bot in enumerate(bots)]
@@ -310,9 +313,7 @@ def test_snapshot_frames_of_a_bot_match() -> None:
     run_headless(mapdef, RULES, controllers, max_ticks=BOT_TICKS, match_key=KEY, observer=checker)
     assert checker.features >= {
         "on_edge",
-        "planned",
         "packets",
-        "intent_target",
         "upgrade_gain",
         "enemy_presence",
         "fog_memory",
@@ -320,17 +321,26 @@ def test_snapshot_frames_of_a_bot_match() -> None:
 
 
 def test_snapshot_frame_of_rare_view_parts() -> None:
-    """An intent without a target (``defense``) and exact enemy numbers, set up directly."""
+    """Intents with and without a target (a planned move, ``defense``) and exact enemy numbers,
+    set up directly."""
     match = _started()
     own = match.view(0).groups[0]
     assert isinstance(own.location, sv.AtNode)
     match.step([sim.PlayerCommand(0, 1, match.resolve(0, sim.SetMode(own.id, Mode.DEFENSE)))])
     state = match.state
+    home = own.location.node
+    walker = state.new_id()
+    state.groups[walker] = Group(walker, 0, 1, 1, Mode.ATTACK, AtNode(home))
+    near = state.map.edges[state.map.incident[home][0]].other(home)
+    state.players[0].cp = RULES.cp.cap  # the defense spent the start CP
+    planned = sim.Move(opaque_id(KEY, 0, walker), near, planned=True)
+    match.step([sim.PlayerCommand(0, 2, match.resolve(0, planned))])
+    assert isinstance(match.results[0].outcome, sim.Ok)
     gid = state.new_id()
     state.groups[gid] = Group(gid, 1, 3, 2, Mode.ATTACK, AtNode(own.location.node))
     checker = _FrameChecker()
     checker.record(match, ())
-    assert checker.features >= {"intent_no_target", "enemy_exact"}
+    assert checker.features >= {"intent_no_target", "enemy_exact", "planned", "intent_target"}
 
 
 def test_snapshot_frame_of_an_overcrowded_own_city() -> None:
@@ -673,3 +683,33 @@ def test_forfeit_ends_the_match_on_the_wire() -> None:
     assert match.outcome is not None
     msg = match_end_msg(match.outcome, match.tick, [match.state.players[p].vp for p in PLAYERS])
     assert (msg.reason, msg.winner) == (EndReason.FORFEIT, 0)
+
+
+# Reach (DEC-20, D5) ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", MVP_MAPS)
+def test_reach_msg_promises_what_a_move_gets(name: str) -> None:
+    """Every ``reach`` node is a move the simulation accepts, arriving after ``ticks``; every
+    ``split`` node is ``STACK_LIMIT``. A foreign or unknown group gets empty lists."""
+    match = Match(load_map(ROOT / "maps" / f"{name}.json"), RULES, KEY)
+    match.step()
+    for player in PLAYERS:
+        for g in match.view(player).groups:
+            wire_id = opaque_to_wire(g.id)
+            msg = reach_msg(wire_id, match.tick, match.reach(player, g.id))
+            assert decode_server(encode(msg)) == msg
+            assert msg.nodes, "the start garrison can go somewhere"
+            for rn in msg.nodes:
+                cmd = match.resolve(player, sim.Move(g.id, rn.node))
+                ok = sim.validate(match.state, RULES, player, cmd)
+                assert isinstance(ok, sim.Ok)
+                assert ok.arrive_tick == match.tick + rn.ticks - 1
+            for node in msg.split:
+                cmd = match.resolve(player, sim.Move(g.id, node))
+                assert sim.validate(match.state, RULES, player, cmd) == sim.Reject(
+                    sim.RejectCode.STACK_LIMIT
+                )
+            enemy = reach_msg(wire_id, match.tick, match.reach(1 - player, g.id))
+            assert (enemy.nodes, enemy.split) == ((), ())
+    assert reach_msg("x", 1, None).nodes == ()

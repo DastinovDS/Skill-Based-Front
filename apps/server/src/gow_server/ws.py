@@ -14,7 +14,8 @@
    - reader: every message takes a token from the connection's token bucket (flood: ``error``
      ``RATE_LIMITED`` and close ``CLOSE_POLICY``); ``command`` goes to the match (a repeated
      ``seq`` is dropped, the ``ack`` comes from the tick), ``ping`` is answered with ``pong``,
-     ``resync`` puts a full snapshot into the outbox; a malformed message gets ``error``;
+     ``resync`` puts a full snapshot into the outbox, ``reach_query`` a ``reach`` (DEC-20); a
+     malformed message gets ``error``;
    - writer: sends the player's ``Outbox`` (reliable messages first, then the latest snapshot),
      every send with a timeout: a client that does not read is disconnected. After
      ``match_end`` the connection is closed normally (1000); a newer connection of the same
@@ -50,6 +51,7 @@ from gow_protocol.messages import (
     PauseMsg,
     PingMsg,
     PongMsg,
+    ReachQueryMsg,
     ResumeMsg,
     ResyncMsg,
     WelcomeMsg,
@@ -274,6 +276,8 @@ async def _read(
                 outbox.put(PongMsg(id=ping_id))
             case ResyncMsg():
                 outbox.put_snapshot(runner.snapshot(player))
+            case ReachQueryMsg(group=group):
+                outbox.put(runner.reach(player, group))
             case PauseMsg():
                 if not runner.request_pause(player):
                     outbox.put(ErrorMsg(code="PAUSE_DENIED"))

@@ -23,10 +23,20 @@ export interface TipText {
   readonly note?: string;
 }
 
+/** The way of the selected group to the node under the pointer, as the server answered (DEC-20). */
+export interface TipRoute {
+  /** Travel ticks once the group departs; `null` when it must split first. */
+  readonly ticks: number | null;
+  /** Too small a node on every way: the group must split (`STACK_LIMIT`). */
+  readonly split: boolean;
+}
+
 export interface TipEnv {
   readonly rules: Pick<RulesetPublic, 'tick_hz' | 'combat'>;
   /** A click on this road upgrades it now (the road pick of the selected city). */
   readonly pickable: boolean;
+  /** The selected group's way to this node; `null`: no group selected or no answer. */
+  readonly route?: TipRoute | null;
 }
 
 const signed = (value: number): string => (value > 0 ? `+${String(value)}` : String(value));
@@ -86,6 +96,14 @@ function cityTip(node: NodeInfo, env: TipEnv): TipText {
     node: node.id,
     owner: t(`owner.${node.owner}`),
   });
+  const route = env.route ?? null;
+  if (route?.split === true) {
+    rows.push({ label: t('tip.route'), value: t('tip.routeSplit') });
+    return { title, rows, note: t('tip.routeSplitHint') };
+  }
+  if (route !== null && route.ticks !== null) {
+    rows.push({ label: t('tip.route'), value: seconds(route.ticks, env) });
+  }
   return { title, rows };
 }
 

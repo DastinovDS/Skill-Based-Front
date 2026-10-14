@@ -129,6 +129,8 @@ function describeServerMsg(msg: ServerMsg): string {
       return `pong ${String(msg.id)}`;
     case 'paused':
       return `paused ${String(msg.paused)}`;
+    case 'reach':
+      return `reach ${String(msg.nodes.length)} nodes`;
     default:
       return unreachable(msg);
   }
@@ -148,6 +150,8 @@ function describeClientMsg(msg: ClientMsg): string {
     case 'pause':
     case 'resume':
       return msg.type;
+    case 'reach_query':
+      return `reach of ${msg.group}`;
     default:
       return unreachable(msg);
   }

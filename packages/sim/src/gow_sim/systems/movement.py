@@ -13,6 +13,9 @@ Rules (mechanics.md, sections 4 and 5; DEC-07, rules 6 and 8; AGENTS.md, section
 - Dijkstra over ``traversal_ticks``; among paths of equal time the one whose sequence of
   ``node_key(player, node)`` is lexicographically smallest wins, so the rot180 mirror of a position
   gives the mirrored path.
+- Stack limit (DEC-20, D): a group of ``units`` goes only through nodes (intermediate ones and the
+  target) whose capacity is at least ``units``; the search skips the other nodes, so the chosen
+  path may be slower than the fastest one. ``Move`` checks it once, with the group's size.
 - Two phases: first every group moves and every arrival is fixed (``advance``), then the arrivals
   are settled (``settle_arrivals``): an empty neutral node reached by groups of one player only
   is captured. Everything else at a node or on an edge with both players is left to combat
@@ -28,11 +31,12 @@ the end of the path (the destination, or a node that is no longer own) is an ``A
 
 import heapq
 from dataclasses import dataclass
+from itertools import pairwise
 
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import PROGRESS_SCALE, AtNode, Event, GameState, OnEdge, Order, event
-from gow_sim.systems.capacity import change_owner
+from gow_sim.systems.capacity import change_owner, city_capacity
 
 
 def traversal_ticks(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int) -> int:
@@ -57,12 +61,47 @@ def edge_between(mapdef: MapDef, a: int, b: int) -> int | None:
 
 
 def find_path(
-    state: GameState, rules: Ruleset, player: int, start: int, dest: int
+    state: GameState, rules: Ruleset, player: int, start: int, dest: int, size: int = 0
 ) -> tuple[int, ...] | None:
     """Fastest path ``(start, ..., dest)`` for a group of ``player``, or ``None`` if there is none.
 
     Only ``start`` and own nodes are expanded; ``dest`` may be any node such a path reaches.
+    ``size``: the stack limit (DEC-20, D): every node of the path except ``start`` must have a
+    capacity of at least ``size``; ``0`` means no limit.
     """
+    found = _search(state, rules, player, start, size, dest)
+    return found[0].get(dest)
+
+
+def path_ticks(state: GameState, rules: Ruleset, path: tuple[int, ...]) -> int:
+    """Ticks a group needs for ``path`` (``(start, ..., dest)``) once it departs: the sum of
+    ``traversal_ticks`` of its edges (transit through own nodes costs no extra tick)."""
+    mapdef = state.map
+    total = 0
+    for a, b in pairwise(path):
+        eid = edge_between(mapdef, a, b)
+        assert eid is not None  # a path of find_path
+        total += traversal_ticks(mapdef, rules, eid, b)
+    return total
+
+
+def reachable(
+    state: GameState, rules: Ruleset, player: int, start: int, size: int = 0
+) -> dict[int, int]:
+    """Every node a group of ``player`` in ``start`` can be ordered to, by node id, with the
+    ticks of its fastest path (``path_ticks``) under the stack limit ``size`` (as ``find_path``).
+
+    ``start`` itself is not included. The same search as ``find_path``, so the ticks and the
+    nodes match what a ``Move`` would get.
+    """
+    dist = _search(state, rules, player, start, size, None)[1]
+    return {node: dist[node] for node in sorted(dist) if node != start}
+
+
+def _search(
+    state: GameState, rules: Ruleset, player: int, start: int, size: int, dest: int | None
+) -> tuple[dict[int, tuple[int, ...]], dict[int, int]]:
+    """Dijkstra of ``find_path``: the paths and times of the settled nodes; stops at ``dest``."""
     mapdef = state.map
 
     def key(node: int) -> int:
@@ -70,27 +109,31 @@ def find_path(
 
     best: dict[int, tuple[int, tuple[int, ...]]] = {start: (0, (key(start),))}
     paths: dict[int, tuple[int, ...]] = {start: (start,)}
-    done: dict[int, bool] = {}
+    found: dict[int, tuple[int, ...]] = {}
+    dist: dict[int, int] = {}
     heap: list[tuple[int, tuple[int, ...], int]] = [(0, (key(start),), start)]
     while heap:
-        dist, keys, node = heapq.heappop(heap)
-        if node in done:
+        d, keys, node = heapq.heappop(heap)
+        if node in dist:
             continue
-        done[node] = True
+        dist[node] = d
+        found[node] = paths[node]
         if node == dest:
-            return paths[node]
+            break
         if node != start and state.nodes[node].owner != player:
             continue  # the first foreign or neutral node ends a path
         for eid in mapdef.incident[node]:
             nxt = mapdef.edges[eid].other(node)
-            if nxt in done:
+            if nxt in dist:
                 continue
-            cand = (dist + traversal_ticks(mapdef, rules, eid, nxt), (*keys, key(nxt)))
+            if size > 0 and city_capacity(state, rules, nxt) < size:
+                continue  # the stack limit (DEC-20, D): the group does not fit there
+            cand = (d + traversal_ticks(mapdef, rules, eid, nxt), (*keys, key(nxt)))
             if nxt not in best or cand < best[nxt]:
                 best[nxt] = cand
                 paths[nxt] = (*paths[node], nxt)
                 heapq.heappush(heap, (cand[0], cand[1], nxt))
-    return None
+    return found, dist
 
 
 @dataclass(frozen=True, slots=True)

@@ -67,6 +67,12 @@ export interface OverlayState {
   readonly beacon: number | null;
   /** The «Supply» map mode; `null`: the normal map. */
   readonly supply: SupplyOverlay | null;
+  /**
+   * Where the selected group can be ordered to, as the server answered `reach_query` (DEC-20):
+   * `reach` gets a solid ring, `split` (too small for the group: split it first) a dashed one.
+   */
+  readonly reach: readonly number[];
+  readonly split: readonly number[];
 }
 
 export const EMPTY_OVERLAY: OverlayState = {
@@ -77,6 +83,8 @@ export const EMPTY_OVERLAY: OverlayState = {
   candidates: [],
   beacon: null,
   supply: null,
+  reach: [],
+  split: [],
 };
 
 export interface MapInteraction {

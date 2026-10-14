@@ -3,7 +3,9 @@
 ``ExpandBot`` sees only its ``PlayerView`` (plus the public map and ruleset), like a real bot
 (AGENTS.md, section 8). It is a test driver for ``run_headless`` and the benchmarks, not a bot of
 ``gow_bots``: every idle group in «Атака» walks to the nearest node its player does not own,
-recruits go to the capital, and it never spends more CP than it has.
+recruits go to the capital, and it never spends more CP than it has. Under the stack limit
+(DEC-20, D) a group bigger than the smallest node capacity of the map first splits off the rest,
+which stays for a later decision.
 """
 
 from collections import deque
@@ -12,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from gow_sim.commands import Command, Move, Recruit
+from gow_sim.commands import Command, Move, Recruit, Split
 from gow_sim.maps import MapDef, parse_map
 from gow_sim.match import Controller
 from gow_sim.ruleset import Ruleset, load_ruleset
@@ -28,6 +30,8 @@ class ExpandBot:
         self.map = mapdef
         self.rules = rules
         self.hops = [self._bfs(n) for n in range(len(mapdef.nodes))]
+        self.stack = min(rules.capacity.by_kind.of(n.kind) for n in mapdef.nodes)
+        """The biggest group that fits into every node (DEC-20, D)."""
 
     def _bfs(self, start: int) -> list[int]:
         dist = [-1] * len(self.map.nodes)
@@ -68,6 +72,11 @@ class ExpandBot:
             if not reachable:
                 continue
             dest = min(reachable, key=lambda n: (dist[n], self.map.node_key(me, n)))
+            if g.units > self.stack:
+                if budget < cost.split + cost.move:
+                    continue
+                cmds.append(Split(g.id, g.units - self.stack))
+                budget -= cost.split
             cmds.append(Move(g.id, dest))
             budget -= cost.move
         return cmds

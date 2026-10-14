@@ -25,6 +25,8 @@ import type {
 
 /** How long an `ack` takes, ms: long enough to see the ghost arrow. */
 export const DEV_ACK_MS = 800;
+/** Ticks per road hop of the dev screen's stand-in `arrive_tick` (not a rule). */
+const DEV_EDGE_TICKS = 30;
 
 export interface DevServer {
   createSocket: (url: string) => WebSocket;
@@ -265,11 +267,16 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
             seq: msg.seq,
             applied_tick: tick + 1,
             path,
-            arrive_tick: arrive ?? null,
+            // A stand-in for the dev screen only: the real server derives it from the rules.
+            arrive_tick:
+              arrive ?? (path === null ? null : tick + DEV_EDGE_TICKS * (path.length - 1)),
             reject_code: code,
           });
         }, DEV_ACK_MS);
         timeouts.add(handle);
+      } else if (msg.type === 'reach_query') {
+        // The dev screen has no simulation to ask: an empty answer, no rings on the map.
+        this.reply({ type: 'reach', group: msg.group, tick, nodes: [], split: [] });
       }
     }
 

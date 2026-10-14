@@ -520,7 +520,6 @@ def test_ledger_holds_in_a_full_bot_match(
     } <= tracker.kinds
     if name in MVP_MAPS:  # the big maps also meet the sink of a cut-off
         assert "packet_lost" in tracker.kinds
-    if name == "arteriya":
-        # Overcrowding: capacity no longer drops on a cut (DEC-22), so only arrivals overfill a
-        # city; ExpandBot does that on arteriya.
-        assert "attrition" in tracker.kinds
+    # No attrition sink here: under the stack limit ExpandBot splits and moves on every 5 ticks
+    # (DEC-20), so no city stays overfilled for ``attrition_ticks``. The rush of ``MatchMachine``
+    # and ``test_dec20.py`` (example 7) overfill cities.

@@ -24,6 +24,8 @@
     ['X', 'help.key.cancel'],
     ['R', 'help.key.recruit'],
     ['U', 'help.key.road'],
+    ['S', 'help.key.split'],
+    ['G', 'help.key.merge'],
     ['Q', 'help.key.stance'],
     ['Tab / F2', 'help.key.supply'],
     ['Space', 'help.key.alert'],

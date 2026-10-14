@@ -23,6 +23,17 @@
   let overMap = false;
 
   const tip = $derived(data?.tip ?? null);
+  // The selected group's way to the node under the pointer: the server's answer (DEC-20).
+  const route = $derived.by(() => {
+    const reach = orders.ui.current.reach;
+    const group = data?.group ?? null;
+    if (tip?.kind !== 'node' || reach === null || group === null || reach.group !== group.id) {
+      return null;
+    }
+    const ticks = reach.ticks.get(tip.node.id);
+    if (ticks !== undefined) return { ticks, split: false };
+    return reach.split.has(tip.node.id) ? { ticks: null, split: true } : null;
+  });
   const text = $derived(
     tip === null
       ? null
@@ -30,6 +41,7 @@
           rules: ctx.rules,
           pickable:
             orders.ui.current.roadPick !== null && orders.ui.current.road?.pickable === true,
+          route,
         }),
   );
   // A tip is the same thing while its kind and id are: the numbers change under it every snapshot.

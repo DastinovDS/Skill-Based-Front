@@ -102,7 +102,7 @@ class ReactiveBot(CampaignBot):
             if here == target or g.charged == 0:
                 continue
             if not self.may_leave(ctx, g) or target not in self.reachable(
-                ctx.view, here, SEARCH_HOPS
+                ctx.view, here, SEARCH_HOPS, g.units
             ):
                 continue
             if best is None or (self.hops[here][target], -g.charged) < (

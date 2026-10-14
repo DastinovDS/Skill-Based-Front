@@ -5,6 +5,19 @@ export interface MovePricing {
   readonly node: number;
   readonly planned: boolean;
   readonly cost: number;
+  /** Travel ticks of the path once the group departs, as the server answered; `null`: unknown. */
+  readonly ticks: number | null;
+  /** The node is too small for the group on every path: split it first (DEC-20, `STACK_LIMIT`). */
+  readonly split: boolean;
+}
+
+/** Where the selected group can go, as the server answered `reach_query` (DEC-20, D5). */
+export interface ReachInfo {
+  readonly group: string;
+  /** Travel ticks by node: the nodes a move of the group is accepted to now. */
+  readonly ticks: ReadonlyMap<number, number>;
+  /** Nodes only a smaller group reaches (`STACK_LIMIT`). */
+  readonly split: ReadonlySet<number>;
 }
 
 /** The road under the pointer and what its next level costs (DEC-16, DEC-22). */
@@ -53,6 +66,8 @@ export interface OrderUiData {
   /** Transfer pick: the own city the charges leave; a click on another own city picks `to`. */
   readonly transferFrom: number | null;
   readonly notice: OrderNotice | null;
+  /** The answer to the last `reach_query` for the selected group; `null`: none yet. */
+  readonly reach: ReachInfo | null;
 }
 
 /**
@@ -68,6 +83,7 @@ export class OrderUiState {
     supplyMode: false,
     transferFrom: null,
     notice: null,
+    reach: null,
   });
 
   #listeners: readonly ((feedback: OrderFeedback) => void)[] = [];

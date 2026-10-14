@@ -9,8 +9,8 @@ DEC-08, numbers from ``Ruleset.orders``:
   ``orders.defense_bonus`` is active ``orders.defense_delay_ticks`` later and counts only for a
   node defender with a firing charge (DEC-07, rule 1). «Защита» holds while the group stands; a
   move order drops it for free.
-- ``CancelOrder`` of a planned order during the delay, or of «Защита», costs
-  ``orders.cost.cancel``.
+- ``CancelOrder`` of any order costs ``orders.cost.cancel`` (0 since DEC-20): a planned order
+  during the delay, a move order on an edge (the group turns back), «Защита».
 - A planned order and «Защита» are public: an ``Intent`` with the owner, the kind, the node of
   the group and the target, without the group id or size (DEC-04). The group keeps the link
   (``Group.intent``); the intent names no group. Road builds are not public (DEC-16).
@@ -21,14 +21,23 @@ the end of the step (after ``build``) spends the bonuses of the groups that foug
 the bonuses and intents whose order or mode ended in a system: arrival, bounce, death,
 attrition.
 
+Auto-merge (DEC-20, A), also at the end of the step, after the bonuses: an own group that
+finished its movement in an own node in this tick (arrived at its target, came back from a bounce
+or a cancel: ``group_arrived``) or appeared by a recruit (``recruited``) joins the target group of
+the node: the own group standing there with the smallest id, without an order (not waiting to
+depart) and not one of the groups that finished in this tick. Without a target the groups that
+finished there join the one with the smallest id. The target keeps its mode, «Защита», bonus and
+intent; the others lose theirs. Groups in transit, waiting groups and groups on edges never merge.
+The target group is chosen among one player's groups only, so the players stay symmetric.
+
 Details that DEC-08 leaves open follow the defaults of #141 (see ``TODO(#141)`` below).
 """
 
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Intent, IntentKind, Mode
+from gow_sim.state import AtNode, Event, GameState, Group, Intent, IntentKind, Mode, event
 from gow_sim.systems.combat import Bonus, BonusSource
 
-__all__ = ["active_bonuses", "clear_bonus", "orders", "set_intent"]
+__all__ = ["absorb", "active_bonuses", "clear_bonus", "orders", "set_intent"]
 
 
 def set_intent(
@@ -52,6 +61,18 @@ def clear_bonus(group: Group) -> None:
     group.bonus_tick = 0
 
 
+def absorb(state: GameState, keep: Group, gid: int) -> None:
+    """Move the units and charges of group ``gid`` into ``keep`` and remove it with its intent.
+
+    ``keep`` stays as it is otherwise: mode, «Защита», bonus, order and intent (DEC-20, A4, B2).
+    """
+    other = state.groups[gid]
+    set_intent(state, other, None)
+    del state.groups[gid]
+    keep.units += other.units
+    keep.charged += other.charged
+
+
 def active_bonuses(state: GameState) -> dict[int, Bonus]:
     """The bonuses the groups bring into a fight in this tick: the ``bonuses`` of ``combat``."""
     result: dict[int, Bonus] = {}
@@ -65,12 +86,13 @@ def active_bonuses(state: GameState) -> dict[int, Bonus]:
 
 
 def orders(state: GameState, rules: Ruleset) -> list[Event]:
-    """The orders system, at the end of the step: spent bonuses, ended orders and intents.
+    """The orders system, at the end of the step: spent bonuses, ended orders and intents, then
+    the auto-merge (DEC-20, A).
 
-    Reads the ``fight_group`` events of the tick from ``state.events``. A group that fought
-    with an active bonus loses it, used or not (DEC-07, rule 3); an inactive one (a planned
-    order still waiting, «Защита» before its delay) is kept. A planned bonus also ends with the
-    order. Emits nothing.
+    Reads the ``fight_group``, ``group_arrived`` and ``recruited`` events of the tick from
+    ``state.events``. A group that fought with an active bonus loses it, used or not (DEC-07,
+    rule 3); an inactive one (a planned order still waiting, «Защита» before its delay) is kept.
+    A planned bonus also ends with the order. Emits ``groups_merged`` for every auto-merge.
     """
     del rules  # the signature of a system; no numbers are needed here
     tick = state.tick
@@ -97,7 +119,53 @@ def orders(state: GameState, rules: Ruleset) -> list[Event]:
     for iid in sorted(state.intents):
         if iid not in live:
             del state.intents[iid]  # the group is gone (fight, attrition)
-    return []
+    return _auto_merge(state)
+
+
+def _auto_merge(state: GameState) -> list[Event]:
+    """DEC-20, A: the groups that finished their movement in an own node join its target group."""
+    tick = state.tick
+    finished: dict[int, bool] = {}
+    for e in state.events:
+        if e.tick == tick and e.kind in ("group_arrived", "recruited"):
+            gid = e.get("group")
+            assert isinstance(gid, int)
+            finished[gid] = True
+    by_node: dict[int, list[int]] = {}
+    for gid in sorted(finished):
+        g = state.groups.get(gid)
+        if g is None or g.order is not None or not isinstance(g.location, AtNode):
+            continue  # dead, bouncing, or ordered on in this tick (a recruit)
+        node = g.location.node
+        if state.nodes[node].owner == g.owner:
+            by_node.setdefault(node, []).append(gid)
+    events: list[Event] = []
+    for node in sorted(by_node):
+        movers = by_node[node]
+        owner = state.groups[movers[0]].owner
+        at = AtNode(node)
+        target = next(
+            (
+                gid
+                for gid in sorted(state.groups)
+                if gid not in finished
+                and state.groups[gid].owner == owner
+                and state.groups[gid].location == at
+                and state.groups[gid].order is None
+            ),
+            None,
+        )
+        if target is None:  # A2: the smallest id of the groups that finished here
+            target, movers = movers[0], movers[1:]
+        if not movers:
+            continue
+        keep = state.groups[target]
+        for gid in movers:
+            absorb(state, keep, gid)
+        events.append(
+            event(tick, "groups_merged", player=owner, group=target, units=keep.units, node=node)
+        )
+    return events
 
 
 def _holds(kind: IntentKind, g: Group) -> bool:

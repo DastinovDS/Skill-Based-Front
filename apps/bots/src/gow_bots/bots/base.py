@@ -14,6 +14,12 @@ a tournament measures nothing. The bot's own choices during the match come from 
 ``random.Random`` stream of the same seed; the global ``random`` is never used, so a match is a
 function of ``(map, ruleset, bots, seed)`` in any process.
 
+Stack limit (DEC-20, D): a group goes only along paths whose nodes (besides the start) hold it,
+by the public capacity of the view; a bigger group must split first (``fit``, ``fitted``). The
+new group of a ``Split`` gets the charged units first, so the bot splits off the army and orders
+it in the next decision, when its opaque id is in the view. Split, merge and cancel are free in
+the DEC-20 rulesets; the bots still pay ``command_cost``, so a price brought back works as before.
+
 Tie-breaks are mirror-invariant: nodes are ordered by ``MapDef.node_key(player, node)`` and own
 groups by the ``node_key`` of their node first, never by opaque id alone. On a symmetric map the
 two sides of the same bot with the same parameters take mirrored decisions.
@@ -25,7 +31,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import ClassVar, Protocol
 
-from gow_sim.commands import Command, SetPriority, UpgradeRoad, command_cost
+from gow_sim.commands import Command, Move, SetPriority, Split, UpgradeRoad, command_cost
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import AtNode, GroupView, IntentKind, PlayerView, Priority, RoadKind
@@ -108,6 +114,8 @@ class Bot:
         """Edges touching every node, in edge key order."""
         self.hops: tuple[tuple[int, ...], ...] = tuple(self._bfs(n) for n in range(count))
         """``hops[a][b]``: road hops between two nodes on the whole map (-1: unreachable)."""
+        self._reach_tick = -1
+        self._reach: dict[tuple[int, int, int], list[int]] = {}
 
     def decide(self, view: PlayerView, tick: int) -> list[Command]:
         raise NotImplementedError
@@ -133,14 +141,21 @@ class Bot:
         if view.player != self.player:
             raise ValueError(f"bot of player {self.player} got the view of player {view.player}")
 
-    def reachable(self, view: PlayerView, start: int, radius: int) -> list[int]:
+    def reachable(self, view: PlayerView, start: int, radius: int, size: int = 0) -> list[int]:
         """Nodes a group standing in ``start`` can be sent to, at most ``radius`` hops away.
 
         A path goes through own nodes only and ends at the first foreign or neutral node
         (``find_path`` of the simulation, SIM-05), so the destinations are the own nodes
         connected to ``start`` through own nodes and their foreign neighbours. ``start`` itself
-        is not a destination. In ``node_key`` order.
+        is not a destination. ``size``: the units of the group; nodes whose capacity is smaller
+        are neither passed nor reached (the stack limit, DEC-20, D); ``0``: no limit. In
+        ``node_key`` order.
         """
+        if self._reach_tick != view.tick:
+            self._reach_tick, self._reach = view.tick, {}
+        cached = self._reach.get((start, radius, size))
+        if cached is not None:
+            return cached
         me = view.player
         nodes = view.nodes
         dist = {start: 0}
@@ -150,11 +165,37 @@ class Bot:
             if dist[node] >= radius or (node != start and nodes[node].owner != me):
                 continue
             for other in self.neighbors[node]:
-                if other not in dist:
+                if other not in dist and nodes[other].capacity >= size:
                     dist[other] = dist[node] + 1
                     queue.append(other)
         del dist[start]
-        return sorted(dist, key=self.key)
+        found = sorted(dist, key=self.key)
+        self._reach[(start, radius, size)] = found
+        return found
+
+    def fit(self, view: PlayerView, start: int, dest: int, units: int) -> int:
+        """The biggest group of at most ``units`` that can be sent from ``start`` to ``dest``
+        under the stack limit (DEC-20, D); ``0``: no path at all."""
+        far = len(self.map.nodes)
+        sizes = sorted({units, *(n.capacity for n in view.nodes if n.capacity < units)})
+        for size in reversed(sizes):
+            if size >= 1 and dest in self.reachable(view, start, far, size):
+                return size
+        return 0
+
+    def fitted(self, view: PlayerView, cmd: Command) -> Command | None:
+        """``cmd``, or for a ``Move`` of a group too big for any path the ``Split`` that makes
+        its army (``fit`` units, the charged first) to be sent in the next decision; ``None``
+        when there is no path at all."""
+        if not isinstance(cmd, Move):
+            return cmd
+        g = next((g for g in view.groups if g.id == cmd.group), None)
+        if g is None or not isinstance(g.location, AtNode):
+            return cmd
+        size = self.fit(view, g.location.node, cmd.dest, g.units)
+        if size == g.units:
+            return cmd
+        return Split(g.id, size) if size >= 1 else None
 
     def idle_groups(self, view: PlayerView) -> list[GroupView]:
         """Own groups that stand in a node without an order, in mirror-invariant order.

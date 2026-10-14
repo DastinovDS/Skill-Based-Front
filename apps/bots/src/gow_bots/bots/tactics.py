@@ -29,6 +29,9 @@ are there and their modes. ``StrategyBot.estimate`` therefore returns, for an en
 The estimate is a guess, not a bound: an attack can bounce (both sides lose the charges, nobody
 dies, DEC-07 rule 4), and the next sighting corrects the memory.
 
+Stack limit (DEC-20, D): ``spend`` turns the move of a group too big for the way into the split
+of an army that fits; the army is a free group of the next decision.
+
 Tie-breaks are mirror-invariant (``Bot``): nodes by ``node_key``, edges by their mirrored id,
 groups by ``Bot._group_key``. Nothing here draws from ``self.rng``, so the two sides of a
 symmetric map decide alike when their parameters are alike.
@@ -175,7 +178,15 @@ class StrategyBot(Bot):
     # Spending ----------------------------------------------------------------------------------
 
     def spend(self, turn: Turn, cmd: Command, keep: int = 0) -> bool:
-        """Queue ``cmd`` if at least ``keep`` CP (in hundredths) stay in the budget after it."""
+        """Queue ``cmd`` if at least ``keep`` CP (in hundredths) stay in the budget after it.
+
+        A ``Move`` of a group too big for every path becomes the ``Split`` of the army that
+        fits (``Bot.fitted``, DEC-20): the army goes in a later decision.
+        """
+        fitted = self.fitted(turn.view, cmd)
+        if fitted is None:
+            return False
+        cmd = fitted
         cost = self.cost(cmd)
         if cost > turn.budget - keep:
             return False

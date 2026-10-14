@@ -11,8 +11,8 @@ edits do not touch the old replays.
 
 The drivers are ``ExpandBot`` of ``conftest.py`` plus ``MixBot``, which adds every other command
 type on a fixed schedule (planned moves, splits, merges, modes, stances, road upgrades, supply
-priorities and transfers, cancellations, unknown ids), so the replays go through every command
-path and many rejections.
+priorities and transfers, cancellations while waiting and on an edge, unknown ids), so the
+replays go through every command path and many rejections.
 """
 
 import argparse
@@ -41,7 +41,7 @@ from gow_sim.match import SIM_VERSION, Controller
 from gow_sim.replay import REPLAY_SUFFIX, record_headless
 from gow_sim.ruleset import Ruleset, Stance, archive_ruleset, load_ruleset
 from gow_sim.state import Priority
-from gow_sim.view import AtNode, GroupView, Mode, PlayerView, RoadKind
+from gow_sim.view import AtNode, GroupView, Mode, OnEdge, PlayerView, RoadKind
 
 TESTS = Path(__file__).resolve().parents[1]
 ROOT = TESTS.parents[2]
@@ -96,6 +96,10 @@ class MixBot:
             waiting = [g for g in view.groups if g.order is not None and g.order.planned]
             if waiting:
                 cmds.append(CancelOrder(waiting[0].id))
+        if k % 29 == 0:  # a move order on an edge turns back (DEC-20, C2)
+            moving = [g for g in view.groups if isinstance(g.location, OnEdge) and g.order]
+            if moving:
+                cmds.append(CancelOrder(moving[0].id))
         if k % 23 == 0:
             cmds.append(Move(UNKNOWN_ID, 0))
         if k % 40 == 0:

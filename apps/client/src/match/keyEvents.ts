@@ -14,7 +14,10 @@ export function forwardKey(orders: OrderController, event: KeyboardEvent): boole
   const typing =
     target instanceof HTMLElement &&
     TEXT_INPUTS.has(target.tagName) &&
-    !(target instanceof HTMLInputElement && target.type === 'checkbox');
+    !(
+      target instanceof HTMLInputElement &&
+      (target.type === 'checkbox' || target.type === 'range')
+    );
   if (typing) {
     return false;
   }

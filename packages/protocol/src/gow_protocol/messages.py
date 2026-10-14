@@ -1,9 +1,9 @@
 """WebSocket messages of a match: ``ClientMsg`` and ``ServerMsg``, tagged unions by ``type``.
 
 Client -> server: ``hello`` (first message, with the token), ``command``, ``ping``, ``resync``,
-``pause`` and ``resume`` (private matches only, DEC-05).
+``pause`` and ``resume`` (private matches only, DEC-05), ``reach_query`` (DEC-20).
 Server -> client: ``welcome``, ``snapshot``, ``ack``, ``event``, ``match_end``, ``error``, ``pong``,
-``paused``.
+``paused``, ``reach``.
 The connection rules are in AGENTS.md, section 5.3 (SRV-03 #48, SRV-04 #50).
 
 Any change of these models is a protocol change: bump ``PROTOCOL_VERSION`` and regenerate the
@@ -20,6 +20,7 @@ from gow_protocol.base import (
     MapId,
     NodeId,
     NonNegInt,
+    OpaqueId,
     PlayerId,
     PosInt,
     SignedInt,
@@ -31,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 10
+PROTOCOL_VERSION: Final = 11
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -93,8 +94,19 @@ class ResumeMsg(WireModel):
     type: Literal["resume"] = "resume"
 
 
+class ReachQueryMsg(WireModel):
+    """Ask where an own standing group can be ordered to and how long it takes (DEC-20, D5).
+
+    The answer is ``reach``. The interface sends it when a group is selected; the connection's
+    message rate limit covers it like every other message.
+    """
+
+    type: Literal["reach_query"] = "reach_query"
+    group: OpaqueId
+
+
 type ClientMsg = Annotated[
-    HelloMsg | CommandMsg | PingMsg | ResyncMsg | PauseMsg | ResumeMsg,
+    HelloMsg | CommandMsg | PingMsg | ResyncMsg | PauseMsg | ResumeMsg | ReachQueryMsg,
     Field(discriminator="type"),
 ]
 
@@ -148,8 +160,9 @@ class AckMsg(WireModel):
     ``path``: for an accepted ``move``, the nodes from the group's node to ``dest``; for an
     accepted ``transfer`` (DEC-18), the nodes from ``from_node`` to ``to_node`` (the client draws
     it and never computes it); ``None`` otherwise.
-    ``arrive_tick``: for an accepted ``transfer``, the tick the charges reach ``to_node`` if
-    nothing stops them; ``None`` otherwise.
+    ``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` (planned delay
+    included; DEC-22, item 10); for an accepted ``transfer``, the tick the charges reach
+    ``to_node``; both if nothing stops them; ``None`` otherwise.
     ``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,
     ``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).
     """
@@ -265,7 +278,36 @@ class PausedMsg(WireModel):
         return self
 
 
+class ReachNode(WireModel):
+    node: NodeId
+    ticks: PosInt
+    """Ticks of the path once the group departs (a planned order waits its delay first)."""
+
+
+class ReachMsg(WireModel):
+    """Answer to ``reach_query``, computed by the server on the state after tick ``tick``
+    (DEC-20, D5; DEC-22, item 10). The client highlights ``nodes``, shows their travel time and
+    suggests splitting the group for ``split``; it computes neither. Both lists are empty for a
+    group that is unknown, not own, hidden or on an edge."""
+
+    type: Literal["reach"] = "reach"
+    group: OpaqueId
+    tick: Tick
+    nodes: tuple[ReachNode, ...]
+    """Nodes a ``move`` of the group is accepted to now, by node id."""
+    split: tuple[NodeId, ...]
+    """Nodes a ``move`` is rejected to with ``STACK_LIMIT``: only a smaller group gets there."""
+
+
 type ServerMsg = Annotated[
-    WelcomeMsg | SnapshotMsg | AckMsg | EventMsg | MatchEndMsg | ErrorMsg | PongMsg | PausedMsg,
+    WelcomeMsg
+    | SnapshotMsg
+    | AckMsg
+    | EventMsg
+    | MatchEndMsg
+    | ErrorMsg
+    | PongMsg
+    | PausedMsg
+    | ReachMsg,
     Field(discriminator="type"),
 ]

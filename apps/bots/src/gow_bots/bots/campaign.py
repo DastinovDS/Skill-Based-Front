@@ -4,14 +4,22 @@ One decision (every 5 ticks) goes in a fixed order, and CP is spent in the same 
 scarce resource (about 0.5 CP per 50 ticks, mechanics.md, section 6) goes to the useful things
 first:
 
-1. ``respond`` (a hook; ``ReactiveBot`` answers the visible intents of the enemy here);
-2. attacks and captures: every idle group looks at the nodes it can reach, a node is a *viable
-   target* when the group's charges are enough to take it (``shots_to_take`` against the estimate of
-   the enemy below, plus ``margin``), and ``score`` ranks the viable (group, target) pairs;
-3. ``gather``: groups standing in one node are merged when together they can take a target
-   that none of them can take alone (one ``Merge`` costs 1 CP whatever the number of groups);
-4. ``rally``: groups without a target walk to the own node closest to the objective;
-5. ``recruit``: one new unit in the own city closest to the objective, while CP is left.
+1. ``recall``: an attack on the way whose target turned out stronger (exact numbers seen this
+   tick) is cancelled, the group turns back (free since DEC-20);
+2. ``respond`` (a hook; ``ReactiveBot`` answers the visible intents of the enemy here);
+3. attacks and captures: every idle group looks at the nodes it can reach under the stack limit
+   (DEC-20, D), a node is a *viable target* when the group's charges are enough to take it
+   (``shots_to_take`` against the estimate of the enemy below, plus ``margin``), and ``score``
+   ranks the viable (group, target) pairs; a group too big for every path to a target splits off
+   an army that fits and could take it (``fit_split``), the army goes in the next decision;
+4. ``gather``: groups standing in one node are merged when together they can take a target
+   that none of them can take alone (and the merged group still fits the path);
+5. ``rally``: groups without a target walk to the own node closest to the objective (a group too
+   big for the way splits off the part that fits);
+6. ``recruit``: one new unit in the own city closest to the objective, while CP is left.
+
+Groups that arrive in an own node merge on their own (DEC-20, A), so a rally point gathers the
+army without a ``Merge``.
 
 Each attack is a normal or a planned order by ``prefer_planned``, i.e. by the prices of the
 ruleset only (BOT-01). The capital keeps ``guard`` units at home: the group that would leave
@@ -41,10 +49,10 @@ from typing import ClassVar, override
 
 from gow_bots.bots.base import Bot, ParamRange, node_of
 from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take
-from gow_sim.commands import Command, Merge, Move, Recruit, SetStance, Split
+from gow_sim.commands import CancelOrder, Command, Merge, Move, Recruit, SetStance, Split
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import RecruitLocation, Ruleset
-from gow_sim.view import GroupView, Mode, PlayerView, Stance
+from gow_sim.view import GroupView, Mode, OnEdge, PlayerView, Stance
 
 __all__ = ["CampaignBot", "Ctx", "Option"]
 
@@ -131,8 +139,10 @@ class CampaignBot(Bot):
         self._stance(ctx)
         for cmd in self.priorities(view):  # front cities first in the supply order (DEC-18)
             self.spend(ctx, cmd)
+        self._recall(ctx)
         self.respond(ctx)
         self._attack(ctx)
+        self._fit_split(ctx)
         self._gather(ctx)
         self._rally(ctx)
         self._recruit(ctx)
@@ -251,6 +261,28 @@ class CampaignBot(Bot):
         killed = max(0, wave.charged - pool)
         self.memory[dest] = (tick, max(0, units - killed), max(0, charged - cancelled))
 
+    def _recall(self, ctx: Ctx) -> None:
+        """Cancel an attack on the way when the target is seen exactly and is too strong for it.
+
+        Free since DEC-20: the group turns back to the start of its edge. Only on numbers of
+        this tick, so an old memory does not make the bot hesitate.
+        """
+        view = ctx.view
+        bonus = self.rules.orders.planned_bonus
+        for g in view.groups:
+            if not isinstance(g.location, OnEdge) or g.order is None:
+                continue
+            dest = g.order.dest
+            seen = view.nodes[dest].seen
+            if view.nodes[dest].owner == self.player or seen is None or seen.tick != view.tick:
+                continue
+            if self.enemy_at(view, dest) is None:
+                continue
+            have = g.charged + (bonus if g.order.planned else 0)
+            if have < self.need(view, ctx.tick, dest) and self.spend(ctx, CancelOrder(g.id)):
+                ctx.used[g.id] = True
+                ctx.claimed.pop(dest, None)
+
     # Attacks --------------------------------------------------------------------------------
 
     def options(self, ctx: Ctx, groups: list[GroupView]) -> list[Option]:
@@ -260,7 +292,7 @@ class CampaignBot(Bot):
         for g in groups:
             if not self.may_leave(ctx, g):
                 continue
-            for dest in self.reachable(view, node_of(g), self.params["radius"]):
+            for dest in self.reachable(view, node_of(g), self.params["radius"], g.units):
                 if view.nodes[dest].owner == self.player or dest in ctx.claimed:
                     continue
                 need = self.need(view, ctx.tick, dest)
@@ -317,6 +349,36 @@ class CampaignBot(Bot):
                 ctx.used[g.id] = True
                 return
 
+    def _fit_split(self, ctx: Ctx) -> None:
+        """A free group too big for the paths to its targets splits off an army that fits.
+
+        The army (the new group of ``Split``, charged units first) has the size of the biggest
+        group that reaches the target (``fit``) and must be able to take it; it gets its order in
+        the next decision. The best such target by ``score`` decides the size.
+        """
+        view, radius = ctx.view, self.params["radius"]
+        for g in self.free_groups(ctx):
+            here = node_of(g)
+            # The capital keeps ``guard`` units: only the rest may split off.
+            spare = g.units - 1
+            if here == self.home:
+                spare = min(spare, ctx.standing[here] - self.params["guard"])
+            if spare < 1 or self.options(ctx, [g]):
+                continue
+            best: tuple[int, int] | None = None
+            for dest in self.reachable(view, here, radius):
+                if view.nodes[dest].owner == self.player or dest in ctx.claimed:
+                    continue
+                size = min(spare, self.fit(view, here, dest, g.units))
+                if size < 1:
+                    continue
+                army = self.fake_group(g, size, min(size, g.charged))
+                found = [o for o in self.options(ctx, [army]) if o.dest == dest]
+                if found and (best is None or found[0].score > best[0]):
+                    best = (found[0].score, size)
+            if best is not None and self.spend(ctx, Split(g.id, best[1])):
+                ctx.used[g.id] = True
+
     @staticmethod
     def fake_group(like: GroupView, units: int, charged: int) -> GroupView:
         """A group that does not exist yet (a split or a merge), to ask what it could take."""
@@ -369,9 +431,14 @@ class CampaignBot(Bot):
                 key=lambda n: (hops[n], self.key(n)),
                 default=None,
             )
-            if best is not None and self.spend(ctx, Move(g.id, best)):
+            if best is None:
+                continue
+            size = self.fit(ctx.view, here, best, g.units)
+            if size == g.units and self.spend(ctx, Move(g.id, best)):
                 ctx.used[g.id] = True
                 ctx.standing[here] -= g.units
+            elif 1 <= size < g.units and self.spend(ctx, Split(g.id, size)):
+                ctx.used[g.id] = True  # the part that fits rallies in the next decision
 
     # Recruiting -----------------------------------------------------------------------------
 

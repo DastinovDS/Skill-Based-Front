@@ -4,7 +4,8 @@
  * Wire format of Skill-Based Front, generated from gow_protocol.
  */
 export type Protocol = ClientMsg | ServerMsg | MapFile;
-export type ClientMsg = HelloMsg | CommandMsg | PingMsg | ResyncMsg | PauseMsg | ResumeMsg;
+export type ClientMsg =
+  HelloMsg | CommandMsg | PingMsg | ResyncMsg | PauseMsg | ResumeMsg | ReachQueryMsg;
 export type Command =
   | MoveCmd
   | SplitCmd
@@ -30,7 +31,15 @@ export type Stance = 'economy' | 'balance' | 'war';
  */
 export type Priority = 'high' | 'normal' | 'low';
 export type ServerMsg =
-  WelcomeMsg | SnapshotMsg | AckMsg | EventMsg | MatchEndMsg | ErrorMsg | PongMsg | PausedMsg;
+  | WelcomeMsg
+  | SnapshotMsg
+  | AckMsg
+  | EventMsg
+  | MatchEndMsg
+  | ErrorMsg
+  | PongMsg
+  | PausedMsg
+  | ReachMsg;
 export type PlayerId = 0 | 1;
 /**
  * How much a player sees of a node or an edge (DEC-04, mechanics.md, section 10).
@@ -179,6 +188,16 @@ export interface PauseMsg {
  */
 export interface ResumeMsg {
   type: 'resume';
+}
+/**
+ * Ask where an own standing group can be ordered to and how long it takes (DEC-20, D5).
+ *
+ * The answer is ``reach``. The interface sends it when a group is selected; the connection's
+ * message rate limit covers it like every other message.
+ */
+export interface ReachQueryMsg {
+  type: 'reach_query';
+  group: string;
 }
 /**
  * Answer to a valid ``hello``, also after a reconnect; a full ``snapshot`` follows.
@@ -542,8 +561,9 @@ export interface IntentView {
  * ``path``: for an accepted ``move``, the nodes from the group's node to ``dest``; for an
  * accepted ``transfer`` (DEC-18), the nodes from ``from_node`` to ``to_node`` (the client draws
  * it and never computes it); ``None`` otherwise.
- * ``arrive_tick``: for an accepted ``transfer``, the tick the charges reach ``to_node`` if
- * nothing stops them; ``None`` otherwise.
+ * ``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` (planned delay
+ * included; DEC-22, item 10); for an accepted ``transfer``, the tick the charges reach
+ * ``to_node``; both if nothing stops them; ``None`` otherwise.
  * ``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,
  * ``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).
  */
@@ -634,6 +654,32 @@ export interface PausedMsg {
    */
   ends_in_s: number | null;
 }
+/**
+ * Answer to ``reach_query``, computed by the server on the state after tick ``tick``
+ * (DEC-20, D5; DEC-22, item 10). The client highlights ``nodes``, shows their travel time and
+ * suggests splitting the group for ``split``; it computes neither. Both lists are empty for a
+ * group that is unknown, not own, hidden or on an edge.
+ */
+export interface ReachMsg {
+  type: 'reach';
+  group: string;
+  tick: number;
+  /**
+   * Nodes a ``move`` of the group is accepted to now, by node id.
+   */
+  nodes: ReachNode[];
+  /**
+   * Nodes a ``move`` is rejected to with ``STACK_LIMIT``: only a smaller group gets there.
+   */
+  split: number[];
+}
+export interface ReachNode {
+  node: number;
+  /**
+   * Ticks of the path once the group departs (a planned order waits its delay first).
+   */
+  ticks: number;
+}
 export interface MapFile {
   meta: MapMetaFile;
   nodes: MapNodeFile[];
@@ -704,6 +750,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

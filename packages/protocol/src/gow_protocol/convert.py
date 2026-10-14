@@ -12,8 +12,9 @@ Server -> client:
   through the validating models, is their specification: tests over real matches require the two
   frames to be equal byte for byte (``test_convert.py``), and the server outside ``prod``
   validates every frame it sends (``MatchRunner(validate_snapshots=True)``);
-- ``ack_msg``: ``CommandResult`` -> ``ack`` (``path`` of an accepted ``Move`` or ``Transfer``,
-  ``arrive_tick`` of an accepted ``Transfer``, ``reject_code``);
+- ``ack_msg``: ``CommandResult`` -> ``ack`` (``path`` and ``arrive_tick`` of an accepted ``Move``
+  or ``Transfer``, ``reject_code``);
+- ``reach_msg``: ``gow_sim.view.Reach`` (``Match.reach``) -> ``reach`` (DEC-20, D5);
 - ``events_msgs``: the events of a tick -> the ``event`` messages one player may see (below);
 - ``match_end_msg``: ``Outcome`` -> ``match_end``.
 
@@ -54,6 +55,8 @@ from gow_protocol.messages import (
     EventMsg,
     MatchEndMsg,
     RatingChange,
+    ReachMsg,
+    ReachNode,
     SnapshotMsg,
 )
 from gow_protocol.view import (
@@ -90,6 +93,7 @@ __all__ = [
     "match_end_msg",
     "opaque_from_wire",
     "opaque_to_wire",
+    "reach_msg",
     "snapshot_frame",
     "snapshot_msg",
     "view_to_wire",
@@ -423,6 +427,18 @@ def ack_msg(result: sim.CommandResult) -> AckMsg:
             )
         case sim.Reject(code=code):
             return AckMsg(seq=result.seq, applied_tick=result.tick, reject_code=code.value)
+
+
+def reach_msg(group: str, tick: int, reach: sv.Reach | None) -> ReachMsg:
+    """``reach`` for the wire id ``group`` after tick ``tick``; ``None``: empty lists."""
+    if reach is None:
+        return ReachMsg(group=group, tick=tick, nodes=(), split=())
+    return ReachMsg(
+        group=group,
+        tick=tick,
+        nodes=tuple(ReachNode(node=n, ticks=t) for n, t in reach.nodes),
+        split=reach.split,
+    )
 
 
 # Events --------------------------------------------------------------------------------------

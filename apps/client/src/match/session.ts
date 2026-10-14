@@ -157,6 +157,11 @@ export class MatchSession implements RenderSource {
     this.#connection.resume();
   }
 
+  /** Ask where an own group can go (DEC-20); the `reach` answer goes to `onServerMessage`. */
+  queryReach(group: string): void {
+    this.#connection.queryReach(group);
+  }
+
   /** Queue a command; returns its `seq`. */
   send(cmd: Command): number {
     return this.#connection.send(cmd);

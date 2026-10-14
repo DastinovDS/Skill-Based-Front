@@ -203,6 +203,11 @@ export const GHOST_AGE_STROKE = { color: BG, width: 3, join: 'round' } as const;
 export const SELECT_COLOR = PAPER;
 /** The selection ring of a city sits outside its capacity ring and warning ring. */
 export const SELECT_RING_GAP = 18;
+/**
+ * Nodes the selected group can go to (DEC-20): a thin solid ring (own colour); nodes it can
+ * reach only after a split: a dashed warning ring. Solid against dashed, not only colour.
+ */
+export const REACH_RING = { gap: 12, width: 2, alpha: 0.8, dash: 5 } as const;
 export const SELECT_WIDTH = 3;
 /** Group selection: a rounded frame this far outside the token. */
 export const SELECT_TOKEN_GAP = 4;
