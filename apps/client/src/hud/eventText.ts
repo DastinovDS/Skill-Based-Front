@@ -57,6 +57,7 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'packet_captured',
   'priority_set',
   'transfer_started',
+  'starvation',
 ]);
 
 /** Does the feed show this kind? An unknown kind is not shown (never a raw kind name). */
@@ -123,6 +124,12 @@ export function eventText(event: HudEvent, me: PlayerId): string {
       return tf('event.priority_set', {
         node: num(data.node),
         level: isPriority(data.level) ? t(`priority.${data.level}`) : '?',
+      });
+    case 'starvation':
+      return tf('event.starvation', {
+        node: num(data.node),
+        warehouse: num(data.warehouse),
+        units: num(data.units),
       });
     case 'transfer_started':
       return tf('event.transfer_started', {

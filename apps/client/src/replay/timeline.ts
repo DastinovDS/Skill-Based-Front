@@ -72,6 +72,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     attrition_in: null, // not in the replay files: the viewer shows no countdown
     grace_left: null,
     priority: null, // not in the replay files (DEC-18): the viewer has no supply mode
+    starve_in: null, // not in the replay files (DEC-19)
   }));
   const packets: PacketView[] = frame.k.map(
     ([id, , edge, from_node, charges, depart_tick, arrive_tick]) => {

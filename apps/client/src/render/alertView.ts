@@ -1,5 +1,5 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
-import { t } from '../i18n/index.ts';
+import { t, tf } from '../i18n/index.ts';
 import { formatSeconds } from '../hud/format.ts';
 import { getLocale } from '../i18n/index.ts';
 import type { NodeView, PlayerId } from '../protocol.gen.ts';
@@ -7,6 +7,9 @@ import type { Point } from './camera.ts';
 import { arcFill, BEACON, beaconPulse, PILL, pillScale } from './alertLayout.ts';
 import type { MapLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
+
+/** The sign of a starving cut-off city (DEC-19): scissors, the cut. */
+const STARVE_MARK = '✂';
 import { reducedMotion } from './motion.ts';
 import type { CapacityTicks } from './source.ts';
 import { BG, NEUTRAL_STROKE, PAPER, WARN, YOU } from './style.ts';
@@ -95,6 +98,13 @@ export class AlertView {
         used++;
       }
     }
+    // A cut-off own city: the countdown to the next starvation (DEC-19), below the other pill.
+    for (const node of nodes) {
+      if (node.owner !== this.me || node.starve_in === null) continue;
+      if (used >= MAX_PILLS) break;
+      this.placeStarve(this.pill(used), node, tickHz);
+      used++;
+    }
     for (let i = used; i < this.pills.length; i++) {
       const pill = this.pills[i];
       if (pill !== undefined) pill.root.visible = false;
@@ -145,6 +155,28 @@ export class AlertView {
     return pill;
   }
 
+  /** The starvation pill (DEC-19): scissors and the word, not only a colour. */
+  private placeStarve(pill: Pill, node: NodeView, tickHz: number): void {
+    const at: Point | undefined = nodePoint(this.map, node.id);
+    if (at === undefined || node.starve_in === null) return;
+    const seconds = formatSeconds(node.starve_in, tickHz, getLocale());
+    pill.mark.text = STARVE_MARK;
+    pill.label.text = tf('starve.pill', { seconds });
+    pill.label.position.set(PILL.arcRadius * 2 + 8, 0);
+    pill.mark.position.set(PILL.arcRadius + 4, 0.5);
+    const g = pill.arc;
+    g.clear();
+    g.roundRect(0, -PILL.height / 2, PILL.width * 1.4, PILL.height, PILL.radius)
+      .fill({ color: BG, alpha: 0.92 })
+      .stroke({ width: 1.5, color: WARN });
+    g.circle(PILL.arcRadius + 4, 0, PILL.arcRadius - PILL.arcWidth + 1).fill(WARN);
+    pill.root.scale.set(pillScale(this.cameraScale));
+    // Right of the city, under the overcrowding pill.
+    const r = this.radiusOf(node.id);
+    pill.root.position.set(at.x + r + PILL.gap, at.y - r + PILL.height + 4);
+    pill.root.visible = true;
+  }
+
   private place(pill: Pill, node: NodeView, tickHz: number, capacity: CapacityTicks): void {
     const at: Point | undefined = nodePoint(this.map, node.id);
     if (at === undefined) return;
@@ -153,6 +185,7 @@ export class AlertView {
     const color = graceOnly ? NEUTRAL_STROKE : WARN;
     const seconds = `${formatSeconds(ticks, tickHz, getLocale())} ${t('unit.s')}`;
     pill.label.text = graceOnly ? seconds : `${MINUS}1 · ${seconds}`;
+    pill.mark.text = '!';
     pill.label.position.set(PILL.arcRadius * 2 + 8, 0);
     pill.mark.position.set(PILL.arcRadius + 4, 0.5);
     const fill = graceOnly ? 0 : arcFill(ticks, capacity.attritionTicks);

@@ -407,6 +407,8 @@ export const en = {
     'Lucide: ISC licence; icons taken from Feather are under the MIT licence. The full notices are in THIRD_PARTY_NOTICES.md in the repository.',
   'cmd.set_priority': 'supply priority',
   'cmd.transfer': 'transfer',
+  'starve.pill': 'starving in {seconds} s',
+  'event.starvation': 'Starvation in cut-off node {node}: warehouse −{warehouse}, units −{units}',
   'event.priority_set': 'Supply priority of node {node}: {level}',
   'event.transfer_started': 'Transfer: {charges} charges from node {from} to node {to}',
   'priority.high': 'high',

@@ -64,6 +64,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       attrition_in: null,
       grace_left: null,
       priority: null,
+      starve_in: null,
     };
     if (mine.has(n.id)) {
       return {
