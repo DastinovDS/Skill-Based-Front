@@ -53,9 +53,11 @@ from gow_protocol.convert import (
     command_from_wire,
     events_msgs,
     match_end_msg,
+    opaque_from_wire,
+    reach_msg,
     snapshot_frame,
 )
-from gow_protocol.messages import PausedMsg, RatingChange, ServerMsg
+from gow_protocol.messages import PausedMsg, RatingChange, ReachMsg, ServerMsg
 from gow_server.alerts import Alerter
 from gow_server.clock import Clock
 from gow_server.metrics import ServerMetrics
@@ -307,6 +309,13 @@ class MatchRunner:
         if self.validate_snapshots:
             frame.message()
         return frame
+
+    def reach(self, player: int, group: str) -> ReachMsg:
+        """Where the own group ``group`` (wire id) can go, on the state after the last tick
+        (DEC-20, D5). Synchronous and outside the step, like ``snapshot``."""
+        oid = opaque_from_wire(group)
+        found = None if oid is None else self.match.reach(player, oid)
+        return reach_msg(group, self.match.tick, found)
 
     def submit(self, player: int, seq: int, cmd: wire.Command) -> bool:
         """Queue a command for the next tick. ``False``: a repeated ``seq`` or a finished match.

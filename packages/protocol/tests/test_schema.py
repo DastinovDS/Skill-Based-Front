@@ -51,11 +51,25 @@ def test_roots_are_named_definitions(schema: dict[str, Any]) -> None:
 @pytest.mark.parametrize(
     ("union", "tag", "tags"),
     [
-        ("ClientMsg", "type", {"hello", "command", "ping", "resync", "pause", "resume"}),
+        (
+            "ClientMsg",
+            "type",
+            {"hello", "command", "ping", "resync", "pause", "resume", "reach_query"},
+        ),
         (
             "ServerMsg",
             "type",
-            {"welcome", "snapshot", "ack", "event", "match_end", "error", "pong", "paused"},
+            {
+                "welcome",
+                "snapshot",
+                "ack",
+                "event",
+                "match_end",
+                "error",
+                "pong",
+                "paused",
+                "reach",
+            },
         ),
         (
             "Command",

@@ -73,6 +73,7 @@ const CHECKS: Record<ServerMsg['type'], (m: Obj) => boolean> = {
     isInt(m.seq) &&
     isInt(m.applied_tick) &&
     (m.path === null || every(m.path, isInt)) &&
+    (m.arrive_tick === null || isInt(m.arrive_tick)) &&
     (m.reject_code === null || isStr(m.reject_code)),
   event: (m) => isInt(m.tick) && isStr(m.kind) && isObj(m.data),
   match_end: (m) =>
@@ -88,6 +89,11 @@ const CHECKS: Record<ServerMsg['type'], (m: Obj) => boolean> = {
     typeof m.paused === 'boolean' &&
     (m.by === null || isPlayer(m.by)) &&
     (m.ends_in_s === null || isInt(m.ends_in_s)),
+  reach: (m) =>
+    isStr(m.group) &&
+    isInt(m.tick) &&
+    every(m.nodes, (n) => isObj(n) && isInt(n.node) && isInt(n.ticks)) &&
+    every(m.split, isInt),
 };
 
 function isServerType(type: unknown): type is ServerMsg['type'] {

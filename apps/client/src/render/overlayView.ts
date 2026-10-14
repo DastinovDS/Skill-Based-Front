@@ -31,6 +31,7 @@ import {
   PREVIEW_DASH,
   PREVIEW_GAP,
   PREVIEW_WIDTH,
+  REACH_RING,
   ROAD_LIGHT_ALPHA,
   ROAD_LIGHT_EXTRA,
   roadThickness,
@@ -38,6 +39,7 @@ import {
   SELECT_RING_GAP,
   SELECT_UNIT_SCALE,
   SELECT_WIDTH,
+  WARN,
 } from './style.ts';
 
 /**
@@ -133,6 +135,7 @@ export class OverlayView {
   private drawRing(state: OverlayState): void {
     const g = this.ring;
     g.clear();
+    this.drawReach(g, state);
     const selected = state.selection;
     if (selected?.kind !== 'node') return;
     const at = nodePoint(this.map, selected.id);
@@ -141,6 +144,32 @@ export class OverlayView {
     const radius = this.radiusOf(selected.id) + SELECT_RING_GAP;
     g.circle(at.x, at.y, radius + SELECT_WIDTH).stroke({ width: 2, color: BG });
     g.circle(at.x, at.y, radius).stroke({ width: SELECT_WIDTH, color: SELECT_COLOR });
+  }
+
+  /** Rings of the nodes the selected group can go to, solid; dashed where it must split first. */
+  private drawReach(g: Graphics, state: OverlayState): void {
+    for (const id of state.reach) {
+      const at = nodePoint(this.map, id);
+      if (at === undefined) continue;
+      g.circle(at.x, at.y, this.radiusOf(id) + REACH_RING.gap);
+    }
+    if (state.reach.length > 0) {
+      g.stroke({ width: REACH_RING.width, color: YOU, alpha: REACH_RING.alpha });
+    }
+    for (const id of state.split) {
+      const at = nodePoint(this.map, id);
+      if (at === undefined) continue;
+      const r = this.radiusOf(id) + REACH_RING.gap;
+      const dashes = Math.max(8, Math.round((2 * Math.PI * r) / (2 * REACH_RING.dash)));
+      for (let i = 0; i < dashes; i++) {
+        const from = (2 * Math.PI * i) / dashes;
+        g.moveTo(at.x + r * Math.cos(from), at.y + r * Math.sin(from));
+        g.arc(at.x, at.y, r, from, from + Math.PI / dashes);
+      }
+    }
+    if (state.split.length > 0) {
+      g.stroke({ width: REACH_RING.width, color: WARN, alpha: REACH_RING.alpha });
+    }
   }
 
   /** The white outline of the triangle, 1.45 times bigger, on a dark halo (9.5). */

@@ -66,6 +66,18 @@ describe('tipText', () => {
     expect(tip.rows.find((r) => r.label === 'Overcrowding')?.value).toBe('a unit is lost in 2.4 s');
   });
 
+  it('shows the travel time of the selected group, or that it must split (DEC-20)', () => {
+    setLocale('en');
+    const tip = buildHudData(ctx, base, null, null, [], { kind: 'node', id: home }).tip;
+    if (tip === null) throw new Error('no tip');
+    const timed = tipText(tip, { ...env, route: { ticks: 45, split: false } });
+    expect(timed.rows.find((r) => r.label === 'Travel')?.value).toBe('4.5 s');
+    const split = tipText(tip, { ...env, route: { ticks: null, split: true } });
+    expect(split.rows.find((r) => r.label === 'Travel')?.value).toBe('split the group');
+    expect(split.note).toContain('(S)');
+    expect(tipText(tip, env).rows.find((r) => r.label === 'Travel')).toBeUndefined();
+  });
+
   it('gives a road its level and type, and what each type of the next level gives and costs', () => {
     setLocale('en');
     const plain = tipOf({ kind: 'edge', id: road.id });

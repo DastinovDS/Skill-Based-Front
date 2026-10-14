@@ -3,13 +3,15 @@
 Expected values come from the rules, not from the code:
 
 - costs in hundredths of CP, DEC-08 (mechanics.md, section 5) and DEC-01 (section 3): move 1 CP,
-  planned move 2 CP, cancel 1 CP, split and merge 1 CP (section 14), «Атака» free, «Защита»
-  2 CP, «Строительство» and UpgradeRoad 1 CP, recruit 1 CP, stance change free (DEC-02);
-  the planned delay is 30 ticks (DEC-08). These numbers are pinned in ``RULES`` below;
+  planned move 2 CP, «Атака» free, «Защита» 2 CP, UpgradeRoad 1 CP, recruit 1 CP, stance change
+  free (DEC-02); the planned delay is 30 ticks (DEC-08). Cancel, split and merge are free since
+  DEC-20, but ``RULES`` below pins them at the former 1 CP: the keys stay so that balance can bring
+  a price back, and the CP plumbing must still work. These numbers are pinned in ``RULES``;
 - AGENTS.md, section 4.3: one code ``NOT_FOUND_OR_HIDDEN`` for a missing and a hidden entity,
   a rejected command changes nothing, commands run in ``(player, seq)`` order and one player's
   commands do not change the validity of the other's;
-- Split, Merge and commands to a moving or waiting group: defaults of #117.
+- Split, Merge, CancelOrder and commands to a moving or waiting group: DEC-20 (mechanics.md,
+  section 3; the full table of its worked examples is ``test_dec20.py``).
 
 The map is ``tests/maps/pass.json``: 0 -e0- 1 -e1- 3, 3 -e2- 2, 3 -e5- 4, 3 -e4- 5 -e3- 6.
 Player 0 owns 0 and 1, player 1 owns 5 and 6; 2, 3, 4 are neutral. Player 0 sees 0 and 1 exactly
@@ -55,6 +57,7 @@ from gow_sim.state import (
     initial_state,
     state_hash,
 )
+from gow_sim.systems.movement import edge_between, traversal_ticks
 
 TESTS_DIR = Path(__file__).resolve().parent
 MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
@@ -102,7 +105,7 @@ class Ids:
     waiting: int
     """Own group in node 1 waiting to depart on a planned order to node 3."""
     moving: int
-    """Own group on edge e0, half way from node 0 to node 1."""
+    """Own group on edge e0, half way from node 0 to node 1, ordered to node 1."""
     enemy_seen: int
     """Enemy group in the neutral node 3: visible to player 0 (presence)."""
     enemy_hidden: int
@@ -127,6 +130,7 @@ def _state() -> tuple[GameState, Ids]:
     waiting = add(0, 1, 1, AtNode(1))
     state.groups[waiting].order = Order(path=(3,), planned=True, depart_tick=TICK + 10)
     moving = add(0, 1, 1, OnEdge(edge=0, from_node=0, progress=500))
+    state.groups[moving].order = Order(path=(1,), planned=False, depart_tick=TICK - 5)
     enemy_seen = add(1, 2, 2, AtNode(3))
     ids = Ids(
         capital=by_node[AtNode(0)],
@@ -197,10 +201,25 @@ def _check(state: GameState, player: int, cmd: Command, expected: Ok | Reject) -
         assert state.players[player].cp == cp - expected.cost
 
 
+def _arrive_tick(state: GameState, path: tuple[int, ...], delay: int) -> int | None:
+    """The first step is made in the tick of the departure (SIM-05): ``tick + delay + T - 1``."""
+    if not path:
+        return None
+    ticks = sum(
+        traversal_ticks(state.map, RULES, edge_between(state.map, a, b) or 0, b)
+        for a, b in itertools.pairwise(path)
+    )
+    return TICK + delay + ticks - 1
+
+
 @pytest.mark.parametrize("row", ROWS, ids=lambda r: r.name)
 def test_group_command_valid(row: Row) -> None:
     state, ids = _state()
-    _check(state, 0, row.make(ids, row.subject(ids)), Ok(cost=row.cost, path=row.path))
+    delay = RULES.orders.planned_delay_ticks if row.name == "planned_move" else 0
+    arrive = _arrive_tick(state, row.path, delay)
+    _check(
+        state, 0, row.make(ids, row.subject(ids)), Ok(row.cost, path=row.path, arrive_tick=arrive)
+    )
 
 
 @pytest.mark.parametrize("row", ROWS, ids=lambda r: r.name)
@@ -215,6 +234,10 @@ def test_group_command_without_cp(row: Row) -> None:
 def test_group_command_rejects(row: Row, variant: str) -> None:
     state, ids = _state()
     cmd = row.make(ids, _GROUP_VARIANTS[variant](ids))
+    if (row.name, variant) == ("cancel", "on_edge"):  # DEC-20, C2: the group turns back
+        _check(state, 0, cmd, Ok(cost=row.cost))
+        assert state.groups[ids.moving].location == OnEdge(0, 0, 500, back=True)
+        return
     _check(state, 0, cmd, Reject(_EXPECTED[variant]))
 
 
@@ -343,7 +366,8 @@ def test_merge_keeps_the_smallest_id() -> None:
     apply_commands(state, RULES, [PlayerCommand(0, 1, Merge((ids.extra, ids.capital)))])
     keep = state.groups[min(ids.capital, ids.extra)]
     assert max(ids.capital, ids.extra) not in state.groups
-    assert (keep.units, keep.charged, keep.mode, keep.order) == (5, 4, Mode.ATTACK, None)
+    # The group with the smallest id keeps its mode (DEC-20, B2).
+    assert (keep.units, keep.charged, keep.mode, keep.order) == (5, 4, Mode.DEFENSE, None)
 
 
 def test_merge_rejects() -> None:
@@ -490,7 +514,7 @@ def test_players_do_not_affect_each_other() -> None:
     assert [r.outcome for r in only_p1] == [
         Reject(RejectCode.NOT_OWNER),  # the merged-away group was visible at the tick start
         Reject(RejectCode.NOT_FOUND_OR_HIDDEN),  # did not exist at the tick start
-        Ok(cost=100, path=(3, 1)),
+        Ok(cost=100, path=(3, 1), arrive_tick=_arrive_tick(state, (3, 1), 0)),
     ]
 
 

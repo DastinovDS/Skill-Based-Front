@@ -76,6 +76,8 @@
       notice = msg.code === 'PAUSE_DENIED' ? 'match.error.pauseDenied' : 'match.error.generic';
     } else if (msg.type === 'match_end') {
       onend(me, msg);
+    } else if (msg.type === 'reach') {
+      orders?.onReach(msg);
     }
   }
 
@@ -146,6 +148,9 @@
       send: (cmd) => live.send(cmd),
       alerts: hud.alerts,
       focusNode: (node) => canvas?.focusNode(node),
+      queryReach: (group) => {
+        live.queryReach(group);
+      },
     });
   });
 

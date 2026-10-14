@@ -5,7 +5,7 @@ import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { Command, RulesetPublic, SnapshotMsg } from '../protocol.gen.ts';
 import { RADIAL } from '../hud/radial.ts';
 import { OrderBook } from './orderBook.ts';
-import { NOTICE_MS, OrderController } from './orderController.ts';
+import { NOTICE_MS, OrderController, REACH_REFRESH_TICKS } from './orderController.ts';
 
 const map = DEFAULT_MAP;
 // Road prices of DEC-16 (mechanics.md, section 8): the price of a level is the new width.
@@ -36,6 +36,7 @@ function setup(withSend = true) {
   const sent: Command[] = [];
   const clock = { now: 0 };
   const focused: number[] = [];
+  const queried: string[] = [];
   const controller = new OrderController({
     hud,
     map,
@@ -45,8 +46,9 @@ function setup(withSend = true) {
     now: () => clock.now,
     alerts: hud.alerts,
     focusNode: (node) => focused.push(node),
+    queryReach: (id) => queried.push(id),
   });
-  return { hud, book, sent, controller, clock, focused };
+  return { hud, book, sent, controller, clock, focused, queried };
 }
 
 const down = (code: string, repeat = false) =>
@@ -130,6 +132,8 @@ describe('OrderController', () => {
       node: enemy.id,
       planned: false,
       cost: DEV_RULES.cost.move,
+      ticks: null,
+      split: false,
     });
     expect(hud.target).toEqual({ node: enemy.id, planned: false });
     expect(controller.overlay().preview).toEqual({ from: home, to: enemy.id, planned: false });
@@ -140,6 +144,8 @@ describe('OrderController', () => {
       node: enemy.id,
       planned: true,
       cost: DEV_RULES.cost.planned_move,
+      ticks: null,
+      split: false,
     });
 
     controller.hover(null);
@@ -216,6 +222,80 @@ describe('OrderController', () => {
       { type: 'set_stance', stance: 'economy' },
       { type: 'forfeit' },
     ]);
+  });
+
+  it('asks the server where the selected group can go and shows the answer (DEC-20)', () => {
+    const { controller, queried, hud } = setup();
+    controller.overlay();
+    expect(queried).toEqual([]); // nothing selected: nothing to ask
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.overlay();
+    controller.overlay();
+    expect(queried).toEqual([group.id]); // once per group, node and size
+    controller.onReach({ type: 'reach', group: 'another', tick: 30, nodes: [], split: [] });
+    expect(controller.ui.current.reach).toBeNull(); // an answer about another group is dropped
+    controller.onReach({
+      type: 'reach',
+      group: group.id,
+      tick: 30,
+      nodes: [{ node: enemy.id, ticks: 25 }],
+      split: [other.id],
+    });
+    const overlay = controller.overlay();
+    expect([overlay.reach, overlay.split]).toEqual([[enemy.id], [other.id]]);
+    // The hovered target shows the server's travel time, or that the group must split.
+    controller.hover({ kind: 'node', id: enemy.id });
+    expect(controller.ui.current.preview).toMatchObject({ ticks: 25, split: false });
+    controller.hover({ kind: 'node', id: other.id });
+    expect(controller.ui.current.preview).toMatchObject({ ticks: null, split: true });
+    // The answer is asked again after a while (ownership on the way changes).
+    hud.onSnapshot({ ...snapshot, tick: snapshot.tick + REACH_REFRESH_TICKS });
+    controller.overlay();
+    expect(queried).toEqual([group.id, group.id]);
+    // Deselected: the rings go.
+    controller.deselect();
+    expect(controller.overlay().reach).toEqual([]);
+    expect(controller.ui.current.reach).toBeNull();
+  });
+
+  it('splits with the menu on S: arrows set the amount, Enter splits, S closes (DEC-20)', () => {
+    const { controller, sent, hud } = setup();
+    const big = { ...group, units: 5, charged: 3 };
+    hud.onSnapshot({ ...snapshot, view: { ...snapshot.view, groups: [big] } });
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.key(down('KeyS'))).toBe(true);
+    expect(controller.splitMenu.current).toMatchObject({ open: true, units: 5, n: 2 });
+    controller.key(down('ArrowRight'));
+    controller.key(down('ArrowRight'));
+    controller.key(down('ArrowRight')); // at most units - 1
+    expect(controller.splitMenu.current.n).toBe(4);
+    controller.key(down('ArrowLeft'));
+    expect(controller.key(down('KeyX'))).toBe(false); // a stray key does not order the group
+    controller.key(down('Enter'));
+    expect(sent).toEqual([{ type: 'split', group: group.id, n: 3 }]);
+    expect(controller.splitMenu.current.open).toBe(false);
+    controller.key(down('KeyS'));
+    expect(controller.splitMenu.current.open).toBe(true);
+    controller.key(down('KeyS')); // the same key closes it
+    expect(controller.splitMenu.current.open).toBe(false);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('does not open the split menu for a single unit', () => {
+    const { controller, hud } = setup();
+    hud.onSnapshot({ ...snapshot, view: { ...snapshot.view, groups: [{ ...group, units: 1 }] } });
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.key(down('KeyS'));
+    expect(controller.splitMenu.current.open).toBe(false);
+  });
+
+  it('merges the groups of the node on G (DEC-20)', () => {
+    const { controller, sent, hud } = setup();
+    const twin = { ...group, id: 'twin' };
+    hud.onSnapshot({ ...snapshot, view: { ...snapshot.view, groups: [group, twin] } });
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.key(down('KeyG'))).toBe(true);
+    expect(sent).toEqual([{ type: 'merge', groups: [group.id, 'twin'] }]);
   });
 
   it('merges the selected group with the own groups in its node', () => {

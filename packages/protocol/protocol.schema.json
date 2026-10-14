@@ -14,14 +14,14 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 10,
+    "PROTOCOL_VERSION": 11,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
   "$defs": {
     "AckMsg": {
       "additionalProperties": false,
-      "description": "Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.\n\n``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.\n``path``: for an accepted ``move``, the nodes from the group's node to ``dest``; for an\naccepted ``transfer`` (DEC-18), the nodes from ``from_node`` to ``to_node`` (the client draws\nit and never computes it); ``None`` otherwise.\n``arrive_tick``: for an accepted ``transfer``, the tick the charges reach ``to_node`` if\nnothing stops them; ``None`` otherwise.\n``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,\n``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).",
+      "description": "Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.\n\n``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.\n``path``: for an accepted ``move``, the nodes from the group's node to ``dest``; for an\naccepted ``transfer`` (DEC-18), the nodes from ``from_node`` to ``to_node`` (the client draws\nit and never computes it); ``None`` otherwise.\n``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` (planned delay\nincluded; DEC-22, item 10); for an accepted ``transfer``, the tick the charges reach\n``to_node``; both if nothing stops them; ``None`` otherwise.\n``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,\n``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).",
       "properties": {
         "type": {
           "const": "ack",
@@ -188,6 +188,7 @@
           "hello": "#/$defs/HelloMsg",
           "pause": "#/$defs/PauseMsg",
           "ping": "#/$defs/PingMsg",
+          "reach_query": "#/$defs/ReachQueryMsg",
           "resume": "#/$defs/ResumeMsg",
           "resync": "#/$defs/ResyncMsg"
         },
@@ -211,6 +212,9 @@
         },
         {
           "$ref": "#/$defs/ResumeMsg"
+        },
+        {
+          "$ref": "#/$defs/ReachQueryMsg"
         }
       ]
     },
@@ -1646,6 +1650,94 @@
       "title": "RatingChange",
       "type": "object"
     },
+    "ReachMsg": {
+      "additionalProperties": false,
+      "description": "Answer to ``reach_query``, computed by the server on the state after tick ``tick``\n(DEC-20, D5; DEC-22, item 10). The client highlights ``nodes``, shows their travel time and\nsuggests splitting the group for ``split``; it computes neither. Both lists are empty for a\ngroup that is unknown, not own, hidden or on an edge.",
+      "properties": {
+        "type": {
+          "const": "reach",
+          "default": "reach",
+          "type": "string"
+        },
+        "group": {
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        },
+        "tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "nodes": {
+          "description": "Nodes a ``move`` of the group is accepted to now, by node id.",
+          "items": {
+            "$ref": "#/$defs/ReachNode"
+          },
+          "type": "array"
+        },
+        "split": {
+          "description": "Nodes a ``move`` is rejected to with ``STACK_LIMIT``: only a smaller group gets there.",
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "group",
+        "tick",
+        "nodes",
+        "split"
+      ],
+      "title": "ReachMsg",
+      "type": "object"
+    },
+    "ReachNode": {
+      "additionalProperties": false,
+      "properties": {
+        "node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks": {
+          "description": "Ticks of the path once the group departs (a planned order waits its delay first).",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "node",
+        "ticks"
+      ],
+      "title": "ReachNode",
+      "type": "object"
+    },
+    "ReachQueryMsg": {
+      "additionalProperties": false,
+      "description": "Ask where an own standing group can be ordered to and how long it takes (DEC-20, D5).\n\nThe answer is ``reach``. The interface sends it when a group is selected; the connection's\nmessage rate limit covers it like every other message.",
+      "properties": {
+        "type": {
+          "const": "reach_query",
+          "default": "reach_query",
+          "type": "string"
+        },
+        "group": {
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "group"
+      ],
+      "title": "ReachQueryMsg",
+      "type": "object"
+    },
     "RecruitCmd": {
       "additionalProperties": false,
       "properties": {
@@ -1865,6 +1957,7 @@
           "match_end": "#/$defs/MatchEndMsg",
           "paused": "#/$defs/PausedMsg",
           "pong": "#/$defs/PongMsg",
+          "reach": "#/$defs/ReachMsg",
           "snapshot": "#/$defs/SnapshotMsg",
           "welcome": "#/$defs/WelcomeMsg"
         },
@@ -1894,6 +1987,9 @@
         },
         {
           "$ref": "#/$defs/PausedMsg"
+        },
+        {
+          "$ref": "#/$defs/ReachMsg"
         }
       ]
     },

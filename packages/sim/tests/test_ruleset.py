@@ -87,13 +87,13 @@ def test_mvp0_order_costs(mvp0: Ruleset) -> None:
     cost = mvp0.orders.cost
     assert cost.move == 100
     assert cost.planned_move == 200
-    assert cost.split == 100
-    assert cost.merge == 100
+    assert cost.split == 0  # free since DEC-20
+    assert cost.merge == 0
     assert cost.defense == 200
     assert cost.build == 0  # UpgradeRoad: paid with warehouse charges only (DEC-16)
     assert cost.attack == 0
     assert cost.recruit == 100
-    assert cost.cancel == 100
+    assert cost.cancel == 0  # any order, free since DEC-20
     assert cost.stance == 0
     assert cost.priority == 0  # SetPriority is free (DEC-18, item 1)
     assert cost.transfer == 0  # Transfer is free (DEC-18, item 6)

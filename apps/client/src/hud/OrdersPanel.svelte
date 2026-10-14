@@ -2,7 +2,7 @@
   import { getLocale, t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import type { Mode } from '../protocol.gen.ts';
-  import { formatCentis } from './format.ts';
+  import { formatCentis, formatSeconds } from './format.ts';
   import { roadCandidates, type HudData } from './hudData.ts';
 
   interface Props {
@@ -63,6 +63,20 @@
         node: ui.preview.node,
         cost: cp(ui.preview.cost),
       })}
+    </p>
+    {#if ui.preview.split}
+      <p class="warn">{t('orders.previewSplit')}</p>
+    {:else if ui.preview.ticks !== null}
+      <p class="hint">
+        {tf('orders.previewTime', {
+          seconds: `${formatSeconds(ui.preview.ticks, orders.tickHz, getLocale())} ${t('unit.s')}`,
+        })}
+      </p>
+    {/if}
+  {/if}
+  {#if group !== null && group.node !== null && group.capacity !== null && group.units > group.capacity}
+    <p class="warn">
+      {tf('orders.overCapacity', { units: group.units, capacity: group.capacity })}
     </p>
   {/if}
   {#if pick !== null}
@@ -218,6 +232,16 @@
 
   .preview {
     font-weight: 600;
+  }
+
+  /* A warning reads by its words and the marker, not only by the colour. */
+  .warn {
+    font-size: 12px;
+    color: var(--warn);
+  }
+
+  .warn::before {
+    content: '⚠ ';
   }
 
   .pick {

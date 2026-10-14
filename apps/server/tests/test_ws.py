@@ -43,6 +43,8 @@ from gow_protocol.messages import (
     PauseMsg,
     PingMsg,
     PongMsg,
+    ReachMsg,
+    ReachQueryMsg,
     ResumeMsg,
     ResyncMsg,
     ServerMsg,
@@ -366,6 +368,26 @@ def test_welcome_snapshot_ack_ping_resync_and_seq_dedup(ws_settings: Settings) -
             await send(ws, hello(live.tokens[1]))
             welcome = await recv(ws)
             assert isinstance(welcome, WelcomeMsg) and welcome.last_seq == 1
+
+    run(ws_settings, scenario)
+
+
+def test_reach_query_is_answered_by_the_server(ws_settings: Settings) -> None:
+    """DEC-20, D5: the server computes where a group can go; an unknown id gets empty lists."""
+
+    async def scenario(live: Live) -> None:
+        async with live.connect() as ws:
+            await send(ws, hello(live.tokens[0]))
+            assert isinstance(await recv(ws), WelcomeMsg)
+            snap = await recv_until(ws, SnapshotMsg)
+            group = snap.view.groups[0].id
+            await send(ws, ReachQueryMsg(group=group))
+            reach = await recv_until(ws, ReachMsg)
+            assert (reach.group, reach.tick) == (group, live.runner.match.tick)
+            assert reach.nodes
+            await send(ws, ReachQueryMsg(group="999"))
+            unknown = await recv_until(ws, ReachMsg)
+            assert (unknown.group, unknown.nodes, unknown.split) == ("999", (), ())
 
     run(ws_settings, scenario)
 

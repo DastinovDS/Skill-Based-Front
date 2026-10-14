@@ -158,6 +158,11 @@ export class MatchConnection {
     if (this.#status === 'ready') this.#write({ type: 'resume' });
   }
 
+  /** Ask where an own group can go (DEC-20); not queued: a stale question is worth nothing. */
+  queryReach(group: string): void {
+    if (this.#status === 'ready') this.#write({ type: 'reach_query', group });
+  }
+
   /** Stop for good: no more reconnects. Unacknowledged commands are dropped. */
   close(): void {
     this.#teardown();

@@ -3,7 +3,8 @@
 Expected values come from DEC-08 (mechanics.md, section 5): a planned move costs 2 CP instead of
 1, waits 30 ticks in its node and gives +2 for the first fight; «Защита» costs 2 CP, is public at
 once, its +2 is active after 30 ticks and spent in the first fight; a move drops it for free;
-cancelling costs 1 CP. Fights follow the DEC-07 table (rows named below), forest everywhere.
+cancelling is free (DEC-20 replaced the 1 CP of DEC-08). Fights follow the DEC-07 table (rows
+named below), forest everywhere.
 Details DEC-08 leaves open: defaults of #141.
 
 Line map ``0 - 1 - 2`` (capitals at the ends), 30 ticks per edge, so a group that leaves node 0
@@ -134,7 +135,7 @@ def test_dec08_numbers_are_the_pinned_ruleset() -> None:
     o = RULES.orders
     assert (o.planned_delay_ticks, o.defense_delay_ticks) == (30, 30)
     assert (o.planned_bonus, o.defense_bonus) == (2, 2)
-    assert (o.cost.move, o.cost.planned_move, o.cost.defense, o.cost.cancel) == (100, 200, 200, 100)
+    assert (o.cost.move, o.cost.planned_move, o.cost.defense, o.cost.cancel) == (100, 200, 200, 0)
 
 
 # Planned orders -------------------------------------------------------------------------------
@@ -321,30 +322,35 @@ def test_move_drops_defense_for_free() -> None:
 # Cancel ---------------------------------------------------------------------------------------
 
 
-def test_cancel_planned_order_during_the_delay_costs_1_cp() -> None:
+def test_cancel_planned_order_during_the_delay_is_free() -> None:
     state = _state()
     a = _add(state, 0, 2, 2, 0)
     run = _Run(state)
     run.step((0, Move(a, 1, planned=True)))
     (ok,) = run.step((0, CancelOrder(a)))
-    assert isinstance(ok, Ok) and ok.cost == 100
-    assert state.players[0].cp == 0
+    assert isinstance(ok, Ok) and ok.cost == 0
+    assert state.players[0].cp == 100  # the 2 CP of the order are not returned (DEC-20, C1)
     assert state.intents == {}
     run.until(60)
     assert state.groups[a].location == AtNode(0)
     assert state.nodes[1].owner == 1
 
 
-def test_cancel_after_departure_is_rejected() -> None:
+def test_cancel_after_departure_turns_the_group_back() -> None:
+    # DEC-20, C2: one step on the edge (tick 31), one step back (tick 32); bonus and intent go.
     state = _state()
     a = _add(state, 0, 2, 2, 0)
     run = _Run(state)
     run.step((0, Move(a, 1, planned=True)))
     run.until(31)
-    assert run.step((0, CancelOrder(a))) == [Reject(RejectCode.GROUP_ON_EDGE)]
+    assert isinstance(state.groups[a].location, OnEdge)
+    assert run.step((0, CancelOrder(a))) == [Ok(cost=0)]
+    g = state.groups[a]
+    assert (g.location, g.order, g.bonus, state.intents) == (AtNode(0), None, 0, {})
+    assert (g.units, g.charged) == (2, 2)  # no charges spent, unlike a bounce
 
 
-def test_cancel_defense_costs_1_cp_and_drops_the_bonus() -> None:
+def test_cancel_defense_is_free_and_drops_the_bonus() -> None:
     # After the cancel the 3/3 attack at tick 31 meets 2/2 without a bonus: row 2.
     state = _state()
     d = _add(state, 1, 2, 2, 1)
@@ -352,8 +358,8 @@ def test_cancel_defense_costs_1_cp_and_drops_the_bonus() -> None:
     run = _Run(state)
     run.step((1, SetMode(d, Mode.DEFENSE)))
     _, ok = run.step((1, CancelOrder(d)), (0, Move(a, 1)))  # results in (player, seq) order
-    assert isinstance(ok, Ok) and ok.cost == 100
-    assert state.players[1].cp == 0
+    assert isinstance(ok, Ok) and ok.cost == 0
+    assert state.players[1].cp == 100
     assert state.groups[d].mode is Mode.ATTACK
     assert state.intents == {}
     run.until(31)

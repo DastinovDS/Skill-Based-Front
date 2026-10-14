@@ -19,8 +19,8 @@
 
 | Каталог | Что | Декодер |
 |---|---|---|
-| `client/` | клиент → сервер: `hello`, `command` (все девять команд SIM-04, #20), `ping`, `resync`, `pause`, `resume` | `gow_protocol.codec.decode_client` |
-| `server/` | сервер → клиент: `welcome`, `snapshot`, `ack`, `event`, `match_end`, `error`, `pong`, `paused` | `gow_protocol.codec.decode_server` |
+| `client/` | клиент → сервер: `hello`, `command` (все девять команд SIM-04, #20), `ping`, `resync`, `pause`, `resume`, `reach_query` (DEC-20) | `gow_protocol.codec.decode_client` |
+| `server/` | сервер → клиент: `welcome`, `snapshot`, `ack`, `event`, `match_end`, `error`, `pong`, `paused`, `reach` (DEC-20) | `gow_protocol.codec.decode_server` |
 
 ## Сценарии
 

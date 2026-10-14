@@ -138,7 +138,7 @@ describe('MatchSession', () => {
       seq,
       applied_tick: 22,
       path: [0, 1],
-      arrive_tick: null,
+      arrive_tick: 51,
       reject_code: 'NO_PATH',
     });
     expect(results).toEqual(['rejected']);
@@ -176,7 +176,7 @@ describe('MatchSession', () => {
       seq,
       applied_tick: 22,
       path: [0, 1],
-      arrive_tick: null,
+      arrive_tick: 51,
       reject_code: null,
     });
     socket.reply(snapshot(21));

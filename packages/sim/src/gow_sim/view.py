@@ -58,6 +58,7 @@ from gow_sim.state import (
 )
 from gow_sim.systems.build import RoadGain, UpgradeGain, done_tick, upgrade_gain
 from gow_sim.systems.capacity import node_capacities, overflow_countdown
+from gow_sim.systems.movement import reachable
 from gow_sim.systems.supply import is_city, packet_dest_tick, packet_path
 from gow_sim.systems.vision import compute_vision, current_sightings, known_roads
 
@@ -79,6 +80,7 @@ __all__ = [
     "PacketView",
     "PlayerView",
     "Priority",
+    "Reach",
     "RoadGain",
     "RoadKind",
     "SelfView",
@@ -88,6 +90,7 @@ __all__ = [
     "check_match_key",
     "opaque_id",
     "project",
+    "reach",
     "resolve",
     "view_hash",
     "view_to_canonical",
@@ -296,6 +299,46 @@ def resolve(state: GameState, player: int, cmd: Command, match_key: bytes) -> Co
         return missing.setdefault(oid, -1 - len(missing))
 
     return map_group_ids(cmd, internal)
+
+
+@dataclass(frozen=True, slots=True)
+class Reach:
+    """Where an own standing group can be ordered to (DEC-20, D5; DEC-22, item 10).
+
+    The interface highlights ``nodes`` and shows their travel time; it never computes either.
+    Ownership of the own nodes is all the search reads besides the public map and ruleset, so
+    the answer shows nothing a ``Move`` and its ``ack`` would not.
+    """
+
+    group: int
+    """Opaque id of the group."""
+    nodes: tuple[tuple[int, int], ...]
+    """``(node, ticks)`` by node id: the nodes a ``Move`` of the group accepts now, with the
+    ticks of the path once the group departs (``movement.path_ticks``)."""
+    split: tuple[int, ...]
+    """Nodes a ``Move`` rejects with ``STACK_LIMIT``: reachable only by a smaller group."""
+
+
+def reach(
+    state: GameState, rules: Ruleset, player: int, group: int, match_key: bytes
+) -> Reach | None:
+    """The ``Reach`` of the own group with opaque id ``group`` standing in a node, else ``None``
+    (unknown, foreign, hidden or on an edge: one answer for all, as ``NOT_FOUND_OR_HIDDEN``)."""
+    opaque = _hasher(match_key)
+    for gid in sorted(state.groups):
+        g = state.groups[gid]
+        if g.owner == player and opaque(player, gid) == group:
+            if not isinstance(g.location, AtNode):
+                return None
+            start = g.location.node
+            fits = reachable(state, rules, player, start, size=g.units)
+            every = reachable(state, rules, player, start)
+            return Reach(
+                group=group,
+                nodes=tuple(fits.items()),
+                split=tuple(n for n in every if n not in fits),
+            )
+    return None
 
 
 # Projection ----------------------------------------------------------------------------------

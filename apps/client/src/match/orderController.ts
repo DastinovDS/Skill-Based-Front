@@ -1,7 +1,15 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AlertState } from './alerts.svelte.ts';
 import { roadCandidates, type AttackTarget } from '../hud/hudData.ts';
-import type { Command, MapFile, Mode, Priority, RulesetPublic, Stance } from '../protocol.gen.ts';
+import type {
+  Command,
+  MapFile,
+  Mode,
+  Priority,
+  ReachMsg,
+  RulesetPublic,
+  Stance,
+} from '../protocol.gen.ts';
 import {
   EMPTY_OVERLAY,
   type MapInteraction,
@@ -21,9 +29,10 @@ import {
   type StanceRate,
   type SupplyChoice,
 } from '../hud/radial.ts';
-import { OrderUiState, type RoadHint } from './orderUi.svelte.ts';
+import { OrderUiState, type ReachInfo, type RoadHint } from './orderUi.svelte.ts';
 import { RadialState } from './radialState.svelte.ts';
 import { RoadTypeState } from './roadTypeState.svelte.ts';
+import { SplitState } from './splitState.svelte.ts';
 import { SupplyMenuState, TransferState } from './supplyState.svelte.ts';
 import { moveCost } from './rejects.ts';
 
@@ -32,6 +41,12 @@ export const NOTICE_MS = 6000;
 
 /** The protocol's ceiling for one `merge` (`MergeCmd.groups`). */
 const MAX_MERGE = 16;
+
+/**
+ * A selected group asks the server again where it can go after this many ticks (ownership on the
+ * way may change); a new group, node or size asks at once. Well under the message rate limit.
+ */
+export const REACH_REFRESH_TICKS = 10;
 
 export interface OrderControllerOptions {
   hud: HudState;
@@ -46,6 +61,8 @@ export interface OrderControllerOptions {
   alerts?: Pick<AlertState, 'nextNode'>;
   /** Moves the camera to a city (the canvas). */
   focusNode?: (node: number) => void;
+  /** Sends `reach_query` for a group (DEC-20); the answer comes back through `onReach`. */
+  queryReach?: (group: string) => void;
 }
 
 /** The parts of a keyboard event the controller needs (`code`: layout-independent key). */
@@ -94,10 +111,18 @@ function aimKey(aim: AttackTarget | null): string {
  * dialog, which sends `transfer`. A click anywhere else, or Esc, ends the pick. The path and the
  * arrival of a transfer come from the server (`ack`); the client computes neither.
  *
+ * Groups (DEC-20): a selected group standing in a node asks the server where it can go
+ * (`reach_query`); the answer rings the nodes it reaches and, dashed, those it reaches only after a
+ * split (the stack limit), and the hovered target shows its travel time or the split hint. The
+ * client computes neither. S opens the split menu (a slider for the new group; Enter or a click
+ * splits, S, Esc or a click outside close it), G merges the groups standing with the selected one,
+ * X cancels any order of the selected group (on a road it turns back, free).
+ *
  * Keys: Esc ends the road pick or deselects, X cancels the order of
  * the selected group, 1 / 2 set the mode (attack / defense), R recruits in the selected city,
  * U toggles the road pick, Q the stance menu (hold and release over a sector, or tap and click;
- * 1 / 2 / 3 choose while it is open), Space the camera to the next alert.
+ * 1 / 2 / 3 choose while it is open), S the split menu, G merge, Space the camera to the next
+ * alert.
  */
 export class OrderController implements MapInteraction {
   readonly ui = new OrderUiState();
@@ -109,6 +134,8 @@ export class OrderController implements MapInteraction {
   readonly supplyMenu = new SupplyMenuState();
   /** The amount dialog of a transfer (DEC-18). */
   readonly transfer = new TransferState();
+  /** The split menu on S (DEC-20). */
+  readonly splitMenu = new SplitState();
 
   readonly #o: OrderControllerOptions;
   #shift = false;
@@ -124,6 +151,9 @@ export class OrderController implements MapInteraction {
   #pick: number | null = null;
   /** When Q went down (ms) while the menu is held open; `null`: Q is up. */
   #qDownAt: number | null = null;
+  /** The group, node and size the last `reach_query` was sent for, and the tick it was sent. */
+  #reachKey = '';
+  #reachTick = 0;
 
   constructor(options: OrderControllerOptions) {
     this.#o = options;
@@ -145,6 +175,11 @@ export class OrderController implements MapInteraction {
   /** Price of cancelling a planned order, hundredths of CP (ruleset of `welcome`). */
   get cancelCost(): number {
     return this.#o.rules.cost.cancel;
+  }
+
+  /** Ticks a second (`ruleset_public.tick_hz`): travel times are shown in seconds. */
+  get tickHz(): number {
+    return this.#o.rules.tick_hz;
   }
 
   /** Price of recruiting, hundredths of CP. */
@@ -175,6 +210,8 @@ export class OrderController implements MapInteraction {
   // --- MapInteraction -----------------------------------------------------------------------
 
   overlay(): OverlayState {
+    this.#syncReach();
+    const reach = this.#reach();
     const selection = this.#o.hud.selection;
     const ghosts = this.#o.book.ghosts();
     const preview = this.#previewTarget();
@@ -183,7 +220,9 @@ export class OrderController implements MapInteraction {
     const candidates = this.#candidates();
     const beacon = this.#o.hud.beacon;
     const supply = this.#supplyOverlayNow();
-    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(road)}|${candidates.join(',')}|${String(beacon)}`;
+    const reachNodes = reach === null ? [] : [...reach.ticks.keys()];
+    const splitNodes = reach === null ? [] : [...reach.split];
+    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(road)}|${candidates.join(',')}|${String(beacon)}|${reachNodes.join(',')}/${splitNodes.join(',')}`;
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
@@ -200,6 +239,8 @@ export class OrderController implements MapInteraction {
         candidates,
         beacon,
         supply,
+        reach: reachNodes,
+        split: splitNodes,
       };
     }
     return this.#overlay;
@@ -243,11 +284,16 @@ export class OrderController implements MapInteraction {
   deselect(): void {
     this.stopRoadPick();
     this.roadType.close();
+    this.splitMenu.close();
     this.#o.hud.select(null);
     this.#refresh();
   }
 
-  /** Cancel the order of the selected group (the server accepts it for a planned order only). */
+  /**
+   * Cancel the order of the selected group: a planned order while it waits, a move on a road
+   * (the group turns back to the start of that road), or «Defense» (DEC-20). Free; whether there
+   * is anything to cancel is the server's call (`NOTHING_TO_CANCEL`).
+   */
   cancelSelected(): void {
     const group = this.#selectedGroup();
     if (group === null) return;
@@ -266,6 +312,47 @@ export class OrderController implements MapInteraction {
     const group = this.#selectedGroup();
     if (group === null || !Number.isInteger(n)) return;
     this.#sendCommand({ type: 'split', group: group.id, n }, null);
+  }
+
+  /** S: open the split menu for the selected group standing in a node, or close it. */
+  toggleSplit(): void {
+    if (this.splitMenu.current.open) {
+      this.splitMenu.close();
+      return;
+    }
+    const group = this.#selectedGroup();
+    if (group === null || group.node === null || this.#o.send === null) return;
+    this.stopRoadPick();
+    this.roadType.close();
+    this.closeRadial();
+    this.splitMenu.open(group.id, group.units, group.charged);
+  }
+
+  /** The split menu's button or Enter: split the chosen amount off and close the menu. */
+  confirmSplit(): void {
+    const { open, group, n } = this.splitMenu.current;
+    this.splitMenu.close();
+    if (!open || this.#o.send === null) return;
+    this.#sendCommand({ type: 'split', group, n }, null);
+  }
+
+  closeSplit(): void {
+    this.splitMenu.close();
+  }
+
+  /**
+   * The server's answer to `reach_query` (DEC-20, D5). Kept only while it is about the selected
+   * group: a late answer for a group selected before is dropped.
+   */
+  onReach(msg: ReachMsg): void {
+    if (msg.group !== this.#selectedGroup()?.id) return;
+    const info: ReachInfo = {
+      group: msg.group,
+      ticks: new Map(msg.nodes.map((n) => [n.node, n.ticks])),
+      split: new Set(msg.split),
+    };
+    this.ui.patch({ reach: info });
+    this.#refresh();
   }
 
   /**
@@ -394,6 +481,7 @@ export class OrderController implements MapInteraction {
     if (this.#o.send === null) return false;
     this.stopRoadPick();
     this.roadType.close();
+    this.splitMenu.close();
     this.radial.open(sticky);
     return true;
   }
@@ -495,6 +583,30 @@ export class OrderController implements MapInteraction {
       return true;
     }
     if (input.code === 'KeyQ') return this.#qDown(input);
+    if (this.splitMenu.current.open) {
+      // The split menu: arrows change the amount, Enter splits, S (the key that opened it) or Esc
+      // close it; the other keys stay with the menu so a stray key does not order the group.
+      switch (input.code) {
+        case 'ArrowLeft':
+        case 'ArrowDown':
+          this.splitMenu.set(this.splitMenu.current.n - 1);
+          return true;
+        case 'ArrowRight':
+        case 'ArrowUp':
+          this.splitMenu.set(this.splitMenu.current.n + 1);
+          return true;
+        case 'Enter':
+        case 'NumpadEnter':
+          this.confirmSplit();
+          return true;
+        case 'KeyS':
+        case 'Escape':
+          this.closeSplit();
+          return true;
+        default:
+          return false;
+      }
+    }
     if (this.transfer.current.open) {
       // The amount dialog: Esc closes it (Enter and the slider are the dialog's own).
       if (input.code === 'Escape') {
@@ -559,6 +671,12 @@ export class OrderController implements MapInteraction {
         return true;
       case 'KeyU':
         this.toggleRoadPick();
+        return true;
+      case 'KeyS':
+        this.toggleSplit();
+        return true;
+      case 'KeyG':
+        this.merge();
         return true;
       case 'Space':
         return this.#jumpToAlert();
@@ -680,6 +798,36 @@ export class OrderController implements MapInteraction {
     return this.#o.hud.current?.group ?? null;
   }
 
+  /** The reach answer, if it is about the selected group as it stands now. */
+  #reach(): ReachInfo | null {
+    const reach = this.ui.current.reach;
+    const group = this.#selectedGroup();
+    return reach !== null && group !== null && group.node !== null && reach.group === group.id
+      ? reach
+      : null;
+  }
+
+  /**
+   * Asks the server where the selected group can go: at once for a new group, node or size, then
+   * every `REACH_REFRESH_TICKS`. Without a standing group the old answer is dropped.
+   */
+  #syncReach(): void {
+    const query = this.#o.queryReach;
+    const group = this.#selectedGroup();
+    if (query === undefined || group === null || group.node === null) {
+      this.#reachKey = '';
+      if (this.ui.current.reach !== null) this.ui.patch({ reach: null });
+      return;
+    }
+    const key = `${group.id}:${String(group.node)}:${String(group.units)}`;
+    const tick = this.#o.hud.current?.tick ?? 0;
+    if (key === this.#reachKey && tick - this.#reachTick < REACH_REFRESH_TICKS) return;
+    if (key !== this.#reachKey && this.ui.current.reach !== null) this.ui.patch({ reach: null });
+    this.#reachKey = key;
+    this.#reachTick = tick;
+    query(group.id);
+  }
+
   /** Roads lit up by the road pick: the city's roads with an upgrade hint (none without a pick). */
   #candidates(): number[] {
     const roads = this.#o.hud.current?.roads;
@@ -701,8 +849,20 @@ export class OrderController implements MapInteraction {
     const previous = this.ui.current.preview;
     if (node === null) {
       if (previous !== null) this.ui.patch({ preview: null });
-    } else if (previous?.node !== node || previous.planned !== planned) {
-      this.ui.patch({ preview: { node, planned, cost: moveCost(this.#o.rules, planned) } });
+    } else {
+      const reach = this.#reach();
+      const ticks = reach?.ticks.get(node) ?? null;
+      const split = reach?.split.has(node) ?? false;
+      if (
+        previous?.node !== node ||
+        previous.planned !== planned ||
+        previous.ticks !== ticks ||
+        previous.split !== split
+      ) {
+        this.ui.patch({
+          preview: { node, planned, cost: moveCost(this.#o.rules, planned), ticks, split },
+        });
+      }
     }
 
     // The upgrade hint follows the pointer over a road that has one.
