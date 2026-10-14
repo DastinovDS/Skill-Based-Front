@@ -35,9 +35,9 @@ stance_cooldown_ticks = 100
 [orders.cost]
 move = 100
 planned_move = 200
-cancel = 100
-split = 100
-merge = 100
+cancel = 0
+split = 0
+merge = 0
 attack = 0
 defense = 200
 build = 0
