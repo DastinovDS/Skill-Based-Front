@@ -22,7 +22,10 @@
     "combat": {
       "terrain_defense_mod": { "plains": -1, "forest": 0, "mountains": 1 },
       "planned_bonus": 2,
-      "defense_bonus": 2
+      "defense_bonus": 2,
+      "round_ticks": 10,
+      "shots_per_round": 1,
+      "regroup_ticks": 10
     },
     "build": {
       "ticks_per_level": 150,

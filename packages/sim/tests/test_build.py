@@ -44,6 +44,7 @@ from gow_sim.state import (
     Group,
     Mode,
     RoadKind,
+    event,
     from_canonical,
     initial_state,
 )
@@ -265,8 +266,23 @@ def test_dec16_example_13_held_city_keeps_building() -> None:
         attacker = Group(s.new_id(), 1, 1, 0, Mode.ATTACK, AtNode(A))
         s.groups[defender.id] = defender
         s.groups[attacker.id] = attacker
+        # Setup: the attacker has just arrived over A's other edge (a fight needs an arrival).
+        other = s.map.edges[A_OTHER].other(A)
+        s.events = [
+            event(
+                s.tick,
+                "group_arrived",
+                group=attacker.id,
+                player=1,
+                node=A,
+                edge=A_OTHER,
+                from_node=other,
+                back=False,
+                planned=False,
+            )
+        ]
         fought = combat(s, RULES, {})
-        assert any(e.kind == "fight" for e in fought) and s.nodes[A].owner == 0
+        assert any(e.kind == "fight_started" for e in fought) and s.nodes[A].owner == 0
 
     assert _until(state, 200, fight) == []
     assert _kinds(_until(state, 250)) == [(250, "road_upgraded")]

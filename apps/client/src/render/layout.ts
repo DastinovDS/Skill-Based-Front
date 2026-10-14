@@ -272,10 +272,29 @@ export function timeLeftLabel(ticksLeft: number, tickHz: number): string {
 
 export interface FightInfo {
   event: EventMsg;
-  /** Units lost by player 0 and player 1. */
+  /** Units lost by player 0 and player 1: in the round, or in the whole fight when `final`. */
   losses: readonly [number, number];
-  /** Where the fight was: a city, or the middle of an edge. */
+  /** Where the fight is: a city, or its meeting point on an edge (DEC-24, C3). */
   at: Point;
+  /** `fight_ended`: the loss numbers of the whole fight are shown; a round only flashes. */
+  final: boolean;
+}
+
+/**
+ * Where a fight is drawn: its city, or on an edge at `point / 2000` of the way from the end `a`
+ * (`point`: twice the meeting position in thousandths, DEC-24, C3). `undefined`: unknown place.
+ */
+export function fightPoint(
+  map: MapFile,
+  node: number | null,
+  edge: number | null,
+  point: number | null,
+): Point | undefined {
+  if (node !== null) return nodePoint(map, node);
+  if (edge === null) return undefined;
+  const ends = edgeEnds(map, edge);
+  const progress = point === null ? EDGE_PROGRESS / 2 : point / 2;
+  return ends && edgePoint(ends.a, ends.b, true, progress);
 }
 
 function intField(data: EventMsg['data'], key: string): number | null {
@@ -284,23 +303,25 @@ function intField(data: EventMsg['data'], key: string): number | null {
 }
 
 /**
- * A `fight` event as a mark on the map, or `null` if it is not one or names an unknown place.
- * A fight on an edge has no exact point in the event: its mark sits in the middle of the road.
- * The events come from `gow_sim.systems.combat` (`fight`: `node` or `edge`, `losses_0`, `losses_1`).
+ * A `fight_round` or `fight_ended` event (DEC-24) as a mark on the map, or `null` if it is not one
+ * or names an unknown place. A fight on an edge is drawn at its meeting point (`point`). The
+ * events come from `gow_sim.systems.combat` (`node` or `edge`, `point`, `losses_0`, `losses_1`).
+ * Replays of `sim_version` 9 and older have the instant `fight` instead: a finished fight drawn in
+ * the middle of its road.
  */
 export function fightInfo(event: EventMsg, map: MapFile): FightInfo | null {
-  if (event.kind !== 'fight') return null;
+  const kind = event.kind;
+  if (kind !== 'fight_round' && kind !== 'fight_ended' && kind !== 'fight') return null;
   const losses0 = intField(event.data, 'losses_0');
   const losses1 = intField(event.data, 'losses_1');
   if (losses0 === null || losses1 === null) return null;
-  const node = intField(event.data, 'node');
-  const edge = intField(event.data, 'edge');
-  let at: Point | undefined;
-  if (node !== null) {
-    at = nodePoint(map, node);
-  } else if (edge !== null) {
-    const ends = edgeEnds(map, edge);
-    at = ends && edgePoint(ends.a, ends.b, true, EDGE_PROGRESS / 2);
-  }
-  return at === undefined ? null : { event, losses: [losses0, losses1], at };
+  const at = fightPoint(
+    map,
+    intField(event.data, 'node'),
+    intField(event.data, 'edge'),
+    intField(event.data, 'point'),
+  );
+  return at === undefined
+    ? null
+    : { event, losses: [losses0, losses1], at, final: kind !== 'fight_round' };
 }

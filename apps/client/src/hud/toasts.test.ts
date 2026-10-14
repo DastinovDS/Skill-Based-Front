@@ -13,7 +13,7 @@ describe('toastOf', () => {
   });
 
   it('makes toasts of fights, captures and attrition only', () => {
-    expect([...TOAST_EVENT_KINDS].sort()).toEqual(['attrition', 'fight', 'node_captured']);
+    expect([...TOAST_EVENT_KINDS].sort()).toEqual(['attrition', 'fight_ended', 'node_captured']);
     for (const kind of [
       'vp_awarded',
       'recruited',
@@ -43,7 +43,9 @@ describe('toastOf', () => {
   it('warns about attrition and keeps fights neutral', () => {
     setLocale('en');
     expect(toastOf(event('attrition', { node: 4, player: 0 }), 0)?.tone).toBe('warn');
-    expect(toastOf(event('fight', { node: 3, losses_0: 1, losses_1: 2 }), 0)?.tone).toBe('neutral');
+    expect(toastOf(event('fight_ended', { node: 3, losses_0: 1, losses_1: 2 }), 0)?.tone).toBe(
+      'neutral',
+    );
   });
 });
 

@@ -59,6 +59,7 @@ export const ru = {
   'reject.NOT_CAPITAL': 'Нанимать можно только в своей столице',
   'reject.CITY_FULL': 'В городе нет свободной ёмкости',
   'reject.RECRUIT_COOLDOWN': 'Город нанимал слишком недавно',
+  'reject.IN_FIGHT': 'Идёт бой: группа может только отойти',
   'reject.STACK_LIMIT': 'Группа больше ёмкости узла на пути: разделите её (S)',
   'cmd.move': 'движение',
   'cmd.split': 'деление',

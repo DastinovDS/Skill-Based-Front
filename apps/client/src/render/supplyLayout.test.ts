@@ -36,6 +36,7 @@ const view = (nodes: NodeView[], packets: PacketView[]): View => ({
   groups: [],
   packets,
   intents: [],
+  fights: [],
 });
 
 describe('supply layout (DEC-18)', () => {

@@ -54,6 +54,11 @@ plains = 125
 forest = 100
 mountains = 70
 
+[combat]
+round_ticks = 10
+shots_per_round = 1
+regroup_ticks = 10
+
 [capacity]
 attrition_ticks = 30
 grace_ticks = 50

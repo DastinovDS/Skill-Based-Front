@@ -51,14 +51,17 @@ def test_neutral_captures_are_no_sieges_and_go_by_minute() -> None:
 
 def test_siege_attempts_and_successes() -> None:
     events = [
-        event(10, "fight", node=3, edge=None, attacker=0),  # bounced
-        event(20, "fight", node=3, edge=None, attacker=0),  # won: the capture follows
-        event(20, "node_captured", node=3, player=0),
-        event(30, "fight", node=None, edge=4, attacker=None),  # an edge meeting: no siege
-        event(40, "node_captured", node=0, player=1),  # walk-in into an empty enemy node
-        event(50, "fight", node=2, edge=None, attacker=None),  # neutral fight: no siege
-        event(50, "node_captured", node=2, player=1),
-        event(60, "match_ended", winner=0, reason="capital"),
+        event(10, "fight_started", node=3, edge=None, attacker=0),  # bounced
+        event(20, "fight_ended", node=3, edge=None, attacker=0),
+        event(30, "fight_started", node=3, edge=None, attacker=0),  # won: the capture follows
+        event(50, "fight_ended", node=3, edge=None, attacker=0),  # at the end (DEC-24)
+        event(50, "node_captured", node=3, player=0),
+        event(60, "fight_started", node=None, edge=4, attacker=None),  # an edge meeting
+        event(70, "node_captured", node=0, player=1),  # walk-in into an empty enemy node
+        event(80, "fight_started", node=2, edge=None, attacker=None),  # neutral: no siege
+        event(90, "fight_ended", node=2, edge=None, attacker=None),
+        event(90, "node_captured", node=2, player=1),
+        event(100, "match_ended", winner=0, reason="capital"),
     ]
     m = analyze(_log(events))
     assert m.sieges == (2, 1)

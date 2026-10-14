@@ -24,6 +24,7 @@ from gow_protocol import commands as wire
 from gow_protocol.codec import SnapshotFrame, decode_client, decode_server, encode, encode_snapshot
 from gow_protocol.convert import (
     ENTITY_KEYS,
+    FIGHT_KINDS,
     PRIVATE_KINDS,
     PUBLIC_KINDS,
     ack_msg,
@@ -140,9 +141,11 @@ def _expected_wire_view(view: PlayerView) -> dict[str, Any]:
     """``view_to_canonical`` in wire shape: ids as strings, the server-only fields removed."""
     data: dict[str, Any] = json.loads(json.dumps(view_to_canonical(view)))
     del data["tick"], data["player"]
-    for key in ("groups", "packets", "intents"):
+    for key in ("groups", "packets", "intents", "fights"):
         for entity in data[key]:
             entity["id"] = str(entity["id"])
+    for fight in data["fights"]:
+        fight["groups"] = [str(g) for g in fight["groups"]]
     for group in data["groups"]:
         if group["order"] is not None:
             for name in DROPPED_ORDER_KEYS:
@@ -196,12 +199,14 @@ def _check_events(match: Match, events: list[Event], player: int) -> list[EventM
             owner = data["owner"] if raw.kind == "warehouse_lost" else data["player"]
             assert owner == player
         else:
-            assert raw.kind in PUBLIC_KINDS or raw.kind == "fight"
-        if raw.kind == "fight":
+            assert raw.kind in PUBLIC_KINDS or raw.kind in FIGHT_KINDS
+        if raw.kind in FIGHT_KINDS:
             other = 1 - player
-            assert f"pool_{other}" not in msg.data
-            assert f"unspent_{other}" not in msg.data
-            assert msg.data[f"losses_{other}"] == data[f"losses_{other}"]
+            for name in ("shots", "virtual", "spent"):
+                assert f"{name}_{other}" not in msg.data
+                data.pop(f"{name}_{other}", None)
+            if raw.kind != "fight_started":
+                assert msg.data[f"losses_{other}"] == data[f"losses_{other}"]
         for key, value in msg.data.items():
             if key in ENTITY_KEYS:
                 assert value == str(opaque_id(match.match_key, player, int(str(data[key]))))
@@ -255,8 +260,9 @@ def test_match_through_the_wire(name: str) -> None:
             snapshots[p] = _check_snapshot(match, p)
             _check_events(match, events, p)
     # Every event kind the match produced is classified: nothing reaches a player by default.
-    assert kinds <= PUBLIC_KINDS | PRIVATE_KINDS | {"fight", "match_ended"}
-    assert {"fight", "fight_group", "recruited", "node_captured", "road_upgraded"} <= kinds
+    assert kinds <= PUBLIC_KINDS | PRIVATE_KINDS | FIGHT_KINDS | {"match_ended"}
+    assert {"fight_started", "fight_round", "fight_ended", "fight_group"} <= kinds
+    assert {"recruited", "node_captured", "road_upgraded"} <= kinds
     assert all(acks.values())
     # Typed roads went through the views (DEC-22): the wire driver builds both types.
     assert any(e.kind is not RoadKind.NONE for e in snapshots[0].view.edges)
@@ -640,34 +646,42 @@ def test_event_policy() -> None:
     assert event_for_player(event(tick, "brand_new_kind", player=0), 0, KEY) is None
 
 
-def test_fight_hides_the_enemy_charges() -> None:
-    fight = event(
-        7,
-        "fight",
+def test_fight_events_hide_the_enemy_shots_and_charges() -> None:
+    """DEC-24, I2: both players get the fight events; the enemy's shots, virtual shots and spent
+    charges (its bonuses and charges) are cut out, the losses of both sides stay."""
+    fight_round = event(
+        17,
+        "fight_round",
+        fight=4,
         node=2,
         edge=None,
-        attacker=1,
-        pool_0=5,
-        pool_1=3,
-        unspent_0=2,
-        unspent_1=0,
-        losses_0=1,
-        losses_1=3,
+        point=None,
+        shots_0=1,
+        shots_1=1,
+        virtual_0=0,
+        virtual_1=1,
+        losses_0=0,
+        losses_1=0,
+        spent_0=1,
+        spent_1=0,
     )
     for p in PLAYERS:
-        msg = event_for_player(fight, p, KEY)
+        msg = event_for_player(fight_round, p, KEY)
         assert msg is not None
         o = 1 - p
+        data = dict(fight_round.data)
         assert msg.data == {
+            "fight": str(opaque_id(KEY, p, 4)),
             "node": 2,
             "edge": None,
-            "attacker": 1,
-            f"pool_{p}": dict(fight.data)[f"pool_{p}"],
-            f"unspent_{p}": dict(fight.data)[f"unspent_{p}"],
-            "losses_0": 1,
-            "losses_1": 3,
+            "point": None,
+            f"shots_{p}": data[f"shots_{p}"],
+            f"virtual_{p}": data[f"virtual_{p}"],
+            f"spent_{p}": data[f"spent_{p}"],
+            "losses_0": 0,
+            "losses_1": 0,
         }
-        assert f"pool_{o}" not in msg.data
+        assert f"virtual_{o}" not in msg.data
 
 
 # Match end -----------------------------------------------------------------------------------

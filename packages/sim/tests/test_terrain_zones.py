@@ -195,8 +195,8 @@ def test_example_6_edge_meeting_on_the_17th_tick() -> None:
     assert isinstance(gx, OnEdge) and isinstance(gy, OnEdge)
     assert (gx.progress, gy.progress) == (598, 378)  # 976 after 16 ticks: not yet
     fought = _step(state)  # tick 17: 621 + 401 = 1022
-    assert [e.kind for e in fought if e.kind == "fight"] == ["fight"]
-    assert next(e for e in fought if e.kind == "fight").get("edge") == 0
+    assert [e.kind for e in fought if e.kind == "fight_started"] == ["fight_started"]
+    assert next(e for e in fought if e.kind == "fight_started").get("edge") == 0
 
 
 @pytest.mark.parametrize("border", [0, 1, 300, 500, 700, 999, 1000])

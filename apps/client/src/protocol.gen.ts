@@ -270,6 +270,15 @@ export interface CombatPublic {
   terrain_defense_mod: TerrainDefensePublic;
   planned_bonus: number;
   defense_bonus: number;
+  /**
+   * Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight.
+   */
+  round_ticks: number;
+  shots_per_round: number;
+  /**
+   * The pause of an edge winner before it goes on (DEC-24, item G4).
+   */
+  regroup_ticks: number;
 }
 /**
  * ``terrain.defense_mod``: charges added to the node defender's pool; may be negative.
@@ -363,6 +372,10 @@ export interface View {
   groups: GroupView[];
   packets: PacketView[];
   intents: IntentView[];
+  /**
+   * Fights going on (DEC-24): own groups fight in each.
+   */
+  fights: FightView[];
 }
 /**
  * Own counters; the enemy's CP and stance are never in a view (AGENTS.md, section 4.4).
@@ -553,6 +566,29 @@ export interface IntentView {
    */
   target: number | null;
   created_tick: number;
+}
+/**
+ * A fight going on (DEC-24, item I1): a node, or an edge with the meeting ``point``.
+ *
+ * ``point``: twice the meeting position in thousandths from the end ``a`` of the edge
+ * (0..2000); the mark sits at ``point / 2000`` of the edge from ``a`` (item C3). ``groups``:
+ * the own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this
+ * fight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.
+ */
+export interface FightView {
+  id: string;
+  node: number | null;
+  edge: number | null;
+  point: number | null;
+  /**
+   * The player attacking the node; ``None`` on an edge and in a neutral node.
+   */
+  attacker: PlayerId | null;
+  start_tick: number;
+  next_round_tick: number;
+  groups: string[];
+  enemy_units: number;
+  enemy_charged: number;
 }
 /**
  * Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.
@@ -750,6 +786,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

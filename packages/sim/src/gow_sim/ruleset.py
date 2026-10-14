@@ -162,6 +162,16 @@ class TerrainRules:
 
 
 @dataclass(frozen=True, slots=True)
+class CombatRules:
+    """Fights over time (DEC-24, item B): rounds every ``round_ticks``, ``shots_per_round`` shots
+    of each side per round; the winner of an edge fight goes on ``regroup_ticks`` after its end."""
+
+    round_ticks: int
+    shots_per_round: int
+    regroup_ticks: int
+
+
+@dataclass(frozen=True, slots=True)
 class CapacityRules:
     attrition_ticks: int
     grace_ticks: int
@@ -224,6 +234,7 @@ class Ruleset:
     economy: EconomyRules
     orders: OrderRules
     terrain: TerrainRules
+    combat: CombatRules
     capacity: CapacityRules
     starvation: StarvationRules
     supply: SupplyRules
@@ -303,6 +314,7 @@ def parse_ruleset(data: object) -> Ruleset:
             "economy",
             "orders",
             "terrain",
+            "combat",
             "capacity",
             "starvation",
             "supply",
@@ -339,6 +351,9 @@ def parse_ruleset(data: object) -> Ruleset:
             )
         ),
         terrain=_parse_terrain(root.table("terrain", ("defense_mod", "speed_pct"))),
+        combat=_parse_combat(
+            root.table("combat", ("round_ticks", "shots_per_round", "regroup_ticks"))
+        ),
         capacity=_parse_capacity(
             root.table("capacity", ("attrition_ticks", "grace_ticks", "by_kind"))
         ),
@@ -416,6 +431,14 @@ def _parse_terrain(t: "_Table") -> TerrainRules:
             forest=speed.integer("forest", low=1),
             mountains=speed.integer("mountains", low=1),
         ),
+    )
+
+
+def _parse_combat(t: "_Table") -> CombatRules:
+    return CombatRules(
+        round_ticks=t.integer("round_ticks", low=1),
+        shots_per_round=t.integer("shots_per_round", low=1),
+        regroup_ticks=t.integer("regroup_ticks", low=0),
     )
 
 

@@ -29,6 +29,7 @@ export const REJECT_MESSAGES = {
   CITY_FULL: 'reject.CITY_FULL',
   RECRUIT_COOLDOWN: 'reject.RECRUIT_COOLDOWN',
   STACK_LIMIT: 'reject.STACK_LIMIT',
+  IN_FIGHT: 'reject.IN_FIGHT',
 } as const satisfies Record<string, MessageKey>;
 
 /** The message for a `reject_code` from `ack`; a code this client does not know gets a generic one. */

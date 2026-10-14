@@ -51,7 +51,8 @@ item 4: road parameters), numbers from ``Ruleset.supply``:
   times stay those of item 6), what they take adds up.
 - Recharge: each tick, units of the node owner standing in the node (``capacity.is_standing``)
   take charges from the warehouse, at most ``supply.recharge_per_tick`` per node and tick, the
-  lowest group id first. Units on edges do not recharge.
+  lowest group id first. Units on edges do not recharge, nor do groups in a fight while it lasts
+  (DEC-24, H1: packets still reach the warehouse of the node).
 
 Order inside the system (item 9): lost packets, packets along their path and deliveries,
 recharge, the transfer shares (item 10), dispatch. Charges are created only by the economy
@@ -439,6 +440,8 @@ def _recharge(state: GameState, rules: Ruleset, garrisons: dict[int, list[Group]
         for group in garrisons[node_id]:
             if left == 0:
                 break
+            if group.fight is not None:
+                continue  # no recharge while a fight lasts (DEC-24, H1)
             take = min(left, group.units - group.charged)
             group.charged += take
             left -= take

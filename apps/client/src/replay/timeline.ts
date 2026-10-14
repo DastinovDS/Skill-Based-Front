@@ -121,6 +121,22 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
           target,
           created_tick: frame.t,
         })),
+      // Fights (DEC-24): the viewer sees both sides, so every group of the fight is listed and
+      // the enemy totals stay 0 (they are in the groups).
+      fights: (frame.f ?? []).map(
+        ([id, node, edge, point, attacker, start_tick, next_round_tick, groups]) => ({
+          id: String(id),
+          node,
+          edge,
+          point,
+          attacker,
+          start_tick,
+          next_round_tick,
+          groups: groups.map(String),
+          enemy_units: 0,
+          enemy_charged: 0,
+        }),
+      ),
     },
   };
 }

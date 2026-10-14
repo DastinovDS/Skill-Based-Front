@@ -448,6 +448,20 @@
         "target": 3,
         "created_tick": 395
       }
+    ],
+    "fights": [
+      {
+        "id": "9a8b7c6d5e4f3021",
+        "node": null,
+        "edge": 5,
+        "point": 1250,
+        "attacker": null,
+        "start_tick": 396,
+        "next_round_tick": 406,
+        "groups": ["4d5e6f708192a3b4"],
+        "enemy_units": 3,
+        "enemy_charged": 2
+      }
     ]
   }
 }

@@ -60,7 +60,24 @@ export interface ReplayFrame {
   b?: FrameBuild[];
   /** Road types by edge id; absent while every road is untyped (DEC-22, older files). */
   r?: RoadKind[];
+  /** Fights going on (DEC-24); absent while there is none (and in older files). */
+  f?: FrameFight[];
 }
+
+/**
+ * `[id, node, edge, point, attacker, start, next_round, groups]` of a fight (DEC-24): `point` is
+ * twice the meeting position from the end `a` of the edge (0..2000), `null` in a node.
+ */
+export type FrameFight = [
+  number,
+  number | null,
+  number | null,
+  number | null,
+  PlayerId | null,
+  number,
+  number,
+  number[],
+];
 
 /** `[tick, kind, data]`; `data` is the flat object of the simulation event. */
 export type FileEvent = [number, string, Record<string, boolean | number | string | null>];
@@ -117,7 +134,8 @@ export function parseReplay(raw: unknown): ReplayFile {
         Array.isArray(f.i) &&
         (f.b === undefined || Array.isArray(f.b)) &&
         (f.r === undefined ||
-          (Array.isArray(f.r) && f.r.length === (map.edges as unknown[]).length)),
+          (Array.isArray(f.r) && f.r.length === (map.edges as unknown[]).length)) &&
+        (f.f === undefined || Array.isArray(f.f)),
     );
   if (!sound) throw new ReplayError('invalid');
   return raw as unknown as ReplayFile;

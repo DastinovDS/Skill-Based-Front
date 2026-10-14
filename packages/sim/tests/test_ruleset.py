@@ -260,7 +260,8 @@ def test_hash_changes_when_any_value_changes() -> None:
     base = _raw()
     base_hash = ruleset_hash(parse_ruleset(base))
     leaves = _leaves(base)
-    assert len(leaves) == 61  # keys of SIM-01, DEC-16, DEC-22, DEC-18, DEC-19 by hand; #253: -2
+    # Keys of SIM-01, DEC-16, DEC-22, DEC-18, DEC-19 by hand; #253: -2; DEC-24: +3.
+    assert len(leaves) == 64
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)

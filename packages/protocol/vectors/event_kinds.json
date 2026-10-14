@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source": "gow_protocol.convert: PUBLIC_KINDS, PRIVATE_KINDS and fight (event_for_player)",
+  "source": "gow_protocol.convert: PUBLIC_KINDS, PRIVATE_KINDS and FIGHT_KINDS (event_for_player)",
   "kinds": [
     "attrition",
     "build_started",
@@ -8,8 +8,10 @@
     "charges_overflow",
     "charges_produced",
     "cp_burned",
-    "fight",
+    "fight_ended",
     "fight_group",
+    "fight_round",
+    "fight_started",
     "forfeit",
     "group_arrived",
     "group_split",

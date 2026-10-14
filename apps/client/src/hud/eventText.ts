@@ -22,8 +22,8 @@ function isPriority(value: unknown): value is Priority {
 
 /**
  * Kinds the server sends to a player that the feed does not show: the economy ticks (every few
- * seconds), movement and supply bookkeeping, and the per-group part of a fight (the `fight` line
- * says it all). The list of everything the server sends is `packages/protocol/vectors/
+ * seconds), movement and supply bookkeeping, and the start, the rounds and the per-group part of a
+ * fight (the `fight_ended` line says it all, DEC-24). The list of everything the server sends is `packages/protocol/vectors/
  * event_kinds.json`; `eventText.test.ts` checks that each kind is either here or has a text.
  */
 export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
@@ -31,6 +31,8 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'charges_overflow',
   'cp_burned',
   'fight_group',
+  'fight_round',
+  'fight_started',
   'group_arrived',
   'group_split',
   'groups_merged',
@@ -43,7 +45,7 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
 /** Kinds with a line in the feed. */
 export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'node_captured',
-  'fight',
+  'fight_ended',
   'recruited',
   'stance_changed',
   'warehouse_lost',
@@ -74,8 +76,8 @@ export function eventText(event: HudEvent, me: PlayerId): string {
       return tf(side === 'mine' ? 'event.node_captured.mine' : 'event.node_captured.enemy', {
         node: num(data.node),
       });
-    case 'fight': {
-      // `losses_<p>`: units player p lost.
+    case 'fight_ended': {
+      // `losses_<p>`: units player p lost in the whole fight (DEC-24).
       const values = {
         mine: num(data[`losses_${String(me)}`]),
         enemy: num(data[`losses_${String(1 - me)}`]),

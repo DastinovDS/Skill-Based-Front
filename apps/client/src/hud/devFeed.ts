@@ -136,6 +136,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       groups,
       packets: [],
       intents: [],
+      fights: [],
     },
   };
 }
@@ -152,8 +153,8 @@ export function devEvent(map: MapFile, tick: number): EventMsg | null {
       return {
         type: 'event',
         tick,
-        kind: 'fight',
-        data: { node, edge: null, attacker: 1, losses_0: 1, losses_1: 2 },
+        kind: 'fight_ended',
+        data: { node, edge: null, point: null, attacker: 1, losses_0: 1, losses_1: 2 },
       };
     default:
       return { type: 'event', tick, kind: 'vp_awarded', data: { player: 1, vp: 1 } };

@@ -31,10 +31,27 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import ClassVar, Protocol
 
-from gow_sim.commands import Command, Move, SetPriority, Split, UpgradeRoad, command_cost
+from gow_sim.commands import (
+    CancelOrder,
+    Command,
+    Move,
+    SetPriority,
+    Split,
+    UpgradeRoad,
+    command_cost,
+)
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import AtNode, GroupView, IntentKind, PlayerView, Priority, RoadKind
+from gow_sim.view import (
+    AtNode,
+    FightView,
+    GroupView,
+    IntentKind,
+    OnEdge,
+    PlayerView,
+    Priority,
+    RoadKind,
+)
 
 __all__ = [
     "Bot",
@@ -116,6 +133,8 @@ class Bot:
         """``hops[a][b]``: road hops between two nodes on the whole map (-1: unreachable)."""
         self._reach_tick = -1
         self._reach: dict[tuple[int, int, int], list[int]] = {}
+        self._left: dict[int, int] = {}
+        """Own group id to the tick it was ordered out of a fight: no second withdrawal."""
 
     def decide(self, view: PlayerView, tick: int) -> list[Command]:
         raise NotImplementedError
@@ -158,12 +177,15 @@ class Bot:
             return cached
         me = view.player
         nodes = view.nodes
+        fights = self.fight_nodes(view)
         dist = {start: 0}
         queue = deque([start])
         while queue:
             node = queue.popleft()
-            if dist[node] >= radius or (node != start and nodes[node].owner != me):
-                continue
+            if dist[node] >= radius or (
+                node != start and (nodes[node].owner != me or node in fights)
+            ):
+                continue  # a path ends at a foreign node or at one with a fight (DEC-24, D1)
             for other in self.neighbors[node]:
                 if other not in dist and nodes[other].capacity >= size:
                     dist[other] = dist[node] + 1
@@ -198,13 +220,111 @@ class Bot:
         return Split(g.id, size) if size >= 1 else None
 
     def idle_groups(self, view: PlayerView) -> list[GroupView]:
-        """Own groups that stand in a node without an order, in mirror-invariant order.
+        """Own groups that stand in a node without an order and outside fights, in
+        mirror-invariant order.
 
         Groups on edges and groups on the way or waiting to depart are left alone: the first
-        reject commands (``GROUP_ON_EDGE``, ``GROUP_BUSY``), the second already have work.
+        reject commands (``GROUP_ON_EDGE``, ``GROUP_BUSY``), the second already have work. Groups
+        in a fight only withdraw (``IN_FIGHT``, DEC-24): ``fight_commands``.
         """
-        groups = [g for g in view.groups if isinstance(g.location, AtNode) and g.order is None]
+        busy = self.fighting(view)
+        groups = [
+            g
+            for g in view.groups
+            if isinstance(g.location, AtNode) and g.order is None and g.id not in busy
+        ]
         return sorted(groups, key=self._group_key)
+
+    # Fights (DEC-24) ----------------------------------------------------------------------------
+
+    def fighting(self, view: PlayerView) -> dict[int, FightView]:
+        """Own group id to the fight it is in."""
+        return {gid: f for f in view.fights for gid in f.groups}
+
+    def fight_nodes(self, view: PlayerView) -> dict[int, FightView]:
+        """Nodes with a fight going on: no transit, no recruit there (DEC-24, D1; DEC-25, 9)."""
+        return {f.node: f for f in view.fights if f.node is not None}
+
+    def fight_commands(self, view: PlayerView, tick: int, budget: int) -> list[Command]:
+        """Withdrawals from lost fights and one reinforcement per fight of an own node (DEC-24,
+        item K), at most ``budget`` CP in hundredths.
+
+        Withdraw: the own side has fewer charged units than the enemy, so every round costs a
+        unit. Attackers and groups on edges cancel (free, back along the edge); defenders of an
+        own node leave by ``Move`` to a neighbouring own node only when they cannot shoot at all.
+        Reinforce: an idle charged group of a neighbouring own node goes to an own node whose
+        fight it reaches before its expected end (``max`` of the charged units of the sides
+        rounds from the next one).
+        """
+        me = view.player
+        groups = {g.id: g for g in view.groups}
+        idle = self.idle_groups(view)
+        fight_at = self.fight_nodes(view)
+        round_ticks = self.rules.combat.round_ticks
+        cmds: list[Command] = []
+        for f in sorted(view.fights, key=self._fight_key):
+            mine = [groups[gid] for gid in f.groups if gid in groups]
+            charged = sum(g.charged for g in mine)
+            if f.enemy_charged > charged:
+                for g in sorted(mine, key=lambda g: (-g.units, -g.charged, g.id)):
+                    if self._left.get(g.id, -1) >= f.start_tick:
+                        continue
+                    cmd = self._withdrawal(view, g, charged, fight_at)
+                    if cmd is not None and self.cost(cmd) <= budget:
+                        budget -= self.cost(cmd)
+                        cmds.append(cmd)
+                        self._left[g.id] = tick
+            node = f.node
+            if node is None or view.nodes[node].owner != me or f.enemy_charged < charged:
+                continue
+            end = f.next_round_tick + (max(charged, f.enemy_charged) - 1) * round_ticks
+            for g in idle:
+                here = node_of(g)
+                if g.charged == 0 or here == node or here in fight_at:
+                    continue
+                edge = next(
+                    (e for e in self.incident[here] if self._other_end(e, here) == node), None
+                )
+
+                if edge is None or tick + self.map.edges[edge].travel_ticks >= end:
+                    continue
+                cmd = Move(g.id, node)
+                if self.cost(cmd) <= budget:
+                    budget -= self.cost(cmd)
+                    cmds.append(cmd)
+                    idle = [x for x in idle if x.id != g.id]
+                    break
+        return cmds
+
+    def _other_end(self, edge: int, node: int) -> int:
+        return self.map.edges[edge].other(node)
+
+    def _fight_key(self, f: FightView) -> tuple[int, int]:
+        """Mirror-invariant order of fights: nodes by ``node_key``, then edges by edge key."""
+        if f.node is not None:
+            return (0, self.key(f.node))
+        assert f.edge is not None
+        return (1, self.edge_keys[f.edge])
+
+    def _withdrawal(
+        self, view: PlayerView, g: GroupView, charged: int, fight_at: dict[int, FightView]
+    ) -> Command | None:
+        loc = g.location
+        if isinstance(loc, OnEdge):
+            return None if loc.back or g.order is None else CancelOrder(g.id)
+        here = loc.node
+        if view.nodes[here].owner != view.player:
+            return CancelOrder(g.id)  # an attacker of the node
+        if charged > 0 or g.order is not None:
+            return None
+        exits = [
+            n
+            for n in (self._other_end(e, here) for e in self.incident[here])
+            if view.nodes[n].owner == view.player
+            and n not in fight_at
+            and view.nodes[n].capacity >= g.units
+        ]
+        return Move(g.id, min(exits, key=self.key)) if exits else None
 
     def _group_key(self, g: GroupView) -> tuple[int, int, int, str, int]:
         return (self.key(node_of(g)), -g.units, -g.charged, g.mode.value, g.id)

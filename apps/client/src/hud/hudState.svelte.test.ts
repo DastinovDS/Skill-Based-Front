@@ -70,7 +70,7 @@ describe('HudState', () => {
   it('keeps the newest events first and drops the oldest over the limit', () => {
     const hud = newState();
     for (let i = 0; i < EVENT_LIMIT + 5; i += 1) {
-      hud.onEvent({ type: 'event', tick: i, kind: 'fight', data: { node: 0 } });
+      hud.onEvent({ type: 'event', tick: i, kind: 'fight_ended', data: { node: 0 } });
     }
     hud.onSnapshot(snapshot(1));
     const events = hud.current?.events ?? [];

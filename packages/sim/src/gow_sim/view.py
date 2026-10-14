@@ -18,7 +18,9 @@ PRO-01), which PRO-03 converts it into:
   whether they are a transfer;
 - ``PRESENCE`` places (neighbours of ``EXACT`` nodes, edges touching them): whether enemy groups
   are there and their modes, no numbers;
-- ``FOG``: only the last sighting from ``GameState.vision_memory``.
+- ``FOG``: only the last sighting from ``GameState.vision_memory``;
+- fights going on (DEC-24, item I1): both players fight in each, so both see it with the exact
+  units and charged of the enemy in it; the enemy's virtual shots and group ids stay hidden.
 
 What a view never has: enemy groups as entities (only the per-place ``Sighting``), road levels
 and types of fogged edges newer than the last sighting, enemy builds on fogged edges, enemy packets
@@ -70,6 +72,7 @@ __all__ = [
     "BuildView",
     "Detail",
     "EdgeView",
+    "FightView",
     "GroupView",
     "IntentKind",
     "IntentView",
@@ -229,6 +232,29 @@ class IntentView:
 
 
 @dataclass(frozen=True, slots=True)
+class FightView:
+    """A fight going on (DEC-24, item I1). A fight always has groups of both players, so both see
+    it, with the exact counters of the enemy in it, also on an edge where own groups give no
+    vision (#112). The enemy's virtual shots (bonuses, terrain) and group ids are hidden."""
+
+    id: int
+    """Opaque id (``fight`` in the fight events)."""
+    node: int | None
+    edge: int | None
+    point: int | None
+    """On an edge: twice the meeting position in thousandths from the end ``a`` (0..2000), so the
+    mark sits at ``point / 2000`` of the edge from ``a`` (item C3); ``None`` in a node."""
+    attacker: int | None
+    """The player attacking the node; ``None`` on an edge and in a neutral node."""
+    start_tick: int
+    next_round_tick: int
+    groups: tuple[int, ...]
+    """Opaque ids of the own groups in the fight, sorted."""
+    enemy_units: int
+    enemy_charged: int
+
+
+@dataclass(frozen=True, slots=True)
 class PlayerView:
     """What ``player`` knows at ``tick``. Groups, packets and intents are sorted by opaque id."""
 
@@ -247,6 +273,8 @@ class PlayerView:
     """Own packets only (enemy packets are never visible, #112 default)."""
     intents: tuple[IntentView, ...]
     """Intents of both players."""
+    fights: tuple[FightView, ...] = ()
+    """Fights going on (DEC-24): every fight has own groups, so all of them; sorted by opaque id."""
 
 
 # Opaque ids ----------------------------------------------------------------------------------
@@ -444,6 +472,34 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
         for iid, i in sorted(state.intents.items())
     ]
 
+    fights: list[FightView] = []
+    for fid, f in sorted(state.fights.items()):
+        mine: list[int] = []
+        units = charged = 0
+        for gid in sorted(f.members):
+            g = state.groups.get(gid)
+            if g is None:
+                continue
+            if g.owner == player:
+                mine.append(opaque(player, gid))
+            else:
+                units += g.units
+                charged += g.charged
+        fights.append(
+            FightView(
+                id=opaque(player, fid),
+                node=f.node,
+                edge=f.edge,
+                point=f.point,
+                attacker=f.attacker,
+                start_tick=f.start,
+                next_round_tick=f.next_round,
+                groups=tuple(sorted(mine)),
+                enemy_units=units,
+                enemy_charged=charged,
+            )
+        )
+
     me = state.players[player]
     return PlayerView(
         tick=state.tick,
@@ -456,6 +512,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
         groups=tuple(sorted(groups, key=lambda v: v.id)),
         packets=tuple(sorted(packets, key=lambda v: v.id)),
         intents=tuple(sorted(intents, key=lambda v: v.id)),
+        fights=tuple(sorted(fights, key=lambda v: v.id)),
     )
 
 
@@ -563,6 +620,21 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "created_tick": i.created_tick,
             }
             for i in view.intents
+        ],
+        "fights": [
+            {
+                "id": f.id,
+                "node": f.node,
+                "edge": f.edge,
+                "point": f.point,
+                "attacker": f.attacker,
+                "start_tick": f.start_tick,
+                "next_round_tick": f.next_round_tick,
+                "groups": list(f.groups),
+                "enemy_units": f.enemy_units,
+                "enemy_charged": f.enemy_charged,
+            }
+            for f in view.fights
         ],
     }
 

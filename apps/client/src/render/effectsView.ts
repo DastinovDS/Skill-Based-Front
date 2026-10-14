@@ -20,6 +20,7 @@ import {
   dashSegments,
   edgeEnds,
   fightInfo,
+  fightPoint,
   nodePoint,
   type FightInfo,
   type TokenSpot,
@@ -43,6 +44,12 @@ import {
 } from './style.ts';
 
 const MAX_FIGHTS = 8;
+/** Radius of the ring of a fight going on, px (DEC-24): its arc fills towards the next round. */
+const RUNNING_RADIUS = 13;
+/** Half the size of the cross inside the ring: the fight is told by the shape, not the colour. */
+const RUNNING_CROSS = 5;
+/** Ticks between rounds when the source does not say (`rulesets/mvp-0.toml`). */
+const DEFAULT_ROUND_TICKS = 10;
 const MAX_WAVES = 4;
 /** The minus sign (U+2212) in front of a loss number. */
 const MINUS = '−';
@@ -58,12 +65,14 @@ interface FightMark {
 type BounceArrow = NonNullable<ReturnType<typeof bounceArrow>> | null;
 
 /**
- * Effects of events on the map (ui-style 9.9, U8): the white flash of a fight and then the two
- * loss numbers (own on the left, the opponent's on the right: the side is told by the place and
- * the colour), the short dashed arrow of an own group bounced back along its road, and the wave of
- * the new owner over the cell of a captured city. With "less motion" only the numbers stay, and
- * they do not rise. Events come from the server (`fight`, `fight_group`, `node_captured`); nothing
- * is guessed: the enemy's bounces are not sent, so none is drawn.
+ * Effects of events on the map (ui-style 9.9, U8): a ring with a cross over every fight going on
+ * (DEC-24, `view.fights`; its arc fills until the next round), the white flash of every round, the
+ * two loss numbers of a finished fight (own on the left, the opponent's on the right: the side is
+ * told by the place and the colour), the short dashed arrow of an own group bounced back along its
+ * road, and the wave of the new owner over the cell of a captured city. A fight on an edge sits at
+ * its meeting point. With "less motion" the flash and the wave are left out and the numbers do not
+ * rise. Events come from the server (`fight_round`, `fight_ended`, `fight_group`,
+ * `node_captured`); nothing is guessed: the enemy's bounces are not sent, so none is drawn.
  *
  * `update` runs every frame with the render tick; the effects are a function of the tick, so a
  * paused or frozen scene shows them in the state of that tick. `destroy()` releases everything.
@@ -73,6 +82,7 @@ export class EffectsView {
   private readonly marks: FightMark[] = [];
   private readonly waves: Graphics[] = [];
   private readonly arrows = new Graphics();
+  private readonly running = new Graphics();
   private readonly contexts: GraphicsContext[] = [];
   private readonly star: GraphicsContext;
   private readonly lossStyles: Record<'own' | 'enemy', TextStyle>;
@@ -107,6 +117,7 @@ export class EffectsView {
       });
     this.lossStyles = { own: loss(ownerColor(me, me)), enemy: loss(ownerColor(me, other(me))) };
     this.layer.addChild(this.arrows);
+    this.layer.addChild(this.running);
     layers.layer.effects.addChild(this.layer);
   }
 
@@ -130,9 +141,11 @@ export class EffectsView {
     events: readonly EventMsg[],
     spots: ReadonlyMap<string, TokenSpot>,
     tickHz: number,
+    roundTicks: number = DEFAULT_ROUND_TICKS,
   ): void {
     this.readEvents(events);
     const reduced = reducedMotion();
+    this.drawRunning(frame, roundTicks);
     this.drawFights(frame.tick, tickHz, reduced);
     this.drawWaves(frame.tick, tickHz, reduced);
     this.drawBounces(frame, spots, tickHz, reduced);
@@ -140,6 +153,7 @@ export class EffectsView {
 
   destroy(): void {
     this.arrows.destroy();
+    this.running.destroy();
     this.layer.destroy({ children: true });
     for (const context of this.contexts) context.destroy();
     this.lossStyles.own.destroy();
@@ -168,12 +182,45 @@ export class EffectsView {
     }
   }
 
-  // --- Fight: flash and loss numbers ---------------------------------------------------------
+  // --- Fight going on: a ring with a cross, the arc fills until the next round --------------
+
+  private drawRunning(frame: RenderFrame, roundTicks: number): void {
+    const g = this.running;
+    g.clear();
+    for (const fight of frame.base.view.fights) {
+      const at = fightPoint(this.map, fight.node, fight.edge, fight.point);
+      if (at === undefined) continue;
+      const left = (fight.next_round_tick - frame.tick) / Math.max(1, roundTicks);
+      const progress = Math.min(1, Math.max(0, 1 - left));
+      g.circle(at.x, at.y, RUNNING_RADIUS).fill({ color: BG, alpha: 0.55 });
+      g.circle(at.x, at.y, RUNNING_RADIUS).stroke({ width: 1.5, color: FIGHT_COLOR, alpha: 0.6 });
+      if (progress > 0) {
+        const start = -Math.PI / 2;
+        const end = start + 2 * Math.PI * progress;
+        g.moveTo(at.x + RUNNING_RADIUS * Math.cos(start), at.y + RUNNING_RADIUS * Math.sin(start));
+        g.arc(at.x, at.y, RUNNING_RADIUS, start, end).stroke({
+          width: 3.5,
+          color: FIGHT_COLOR,
+          cap: 'round',
+        });
+      }
+      const c = RUNNING_CROSS;
+      g.moveTo(at.x - c, at.y - c)
+        .lineTo(at.x + c, at.y + c)
+        .moveTo(at.x + c, at.y - c)
+        .lineTo(at.x - c, at.y + c)
+        .stroke({ width: 2.5, color: FIGHT_COLOR, cap: 'round' });
+    }
+  }
+
+  // --- Fight: flash of a round, loss numbers of a finished fight ------------------------------
 
   private drawFights(tick: number, tickHz: number, reduced: boolean): void {
     let used = 0;
     for (const fight of this.fights) {
-      const t = effectProgress(tick - fight.event.tick, NUMBERS_MS, tickHz);
+      // A round only flashes; a finished fight keeps its loss numbers longer.
+      const life = fight.final ? NUMBERS_MS : FLASH_MS;
+      const t = effectProgress(tick - fight.event.tick, life, tickHz);
       if (t === null || used >= MAX_FIGHTS) continue;
       const mark = this.fightMark(used++);
       mark.view.position.set(fight.at.x, fight.at.y);
@@ -182,6 +229,7 @@ export class EffectsView {
         const losses = fight.losses[i === 0 ? this.me : other(this.me)];
         const label = `${MINUS}${String(losses)}`;
         if (text.text !== label) text.text = label;
+        text.visible = fight.final;
         text.alpha = numbers.alpha;
         text.position.set(i === 0 ? -17 : 17, 20 - numbers.rise);
       });

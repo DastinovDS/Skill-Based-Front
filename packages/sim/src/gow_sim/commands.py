@@ -29,7 +29,7 @@ public, a transfer leaves as a packet in the tick it is applied (``systems.suppl
 """
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from itertools import pairwise
 
@@ -38,6 +38,7 @@ from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import (
     AtNode,
     Event,
+    FightMember,
     GameState,
     Group,
     IntentKind,
@@ -260,6 +261,10 @@ class RejectCode(StrEnum):
     """No free capacity for one more unit in the city (DEC-01)."""
     RECRUIT_COOLDOWN = "RECRUIT_COOLDOWN"
     """The city recruited less than ``recruit.cooldown_ticks`` ago (DEC-01)."""
+    IN_FIGHT = "IN_FIGHT"
+    """The group is in a fight: it only withdraws (DEC-24, item E): a defender of a node by a
+    normal ``Move``, everyone else by ``CancelOrder``. Also a recruit in a city with a fight
+    (DEC-25, item 9)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,10 +381,12 @@ def _check(
     """Every rule except CP; returns the path for ``Move``, the route for ``Transfer`` (empty
     for the rest) or a Reject."""
     match cmd:
-        case Move(group=gid, dest=dest):
+        case Move(group=gid, dest=dest, planned=planned):
             group = _standing_group(state, player, gid, seen)
             if isinstance(group, Reject):
                 return group
+            if group.fight is not None and (planned or not _defends(state, group)):
+                return Reject(RejectCode.IN_FIGHT)  # DEC-24, E1 and E4
             if not 0 <= dest < len(state.map.nodes):
                 return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
             start = _node_of(group)
@@ -395,6 +402,8 @@ def _check(
             group = _standing_group(state, player, gid, seen)
             if isinstance(group, Reject):
                 return group
+            if group.fight is not None:
+                return Reject(RejectCode.IN_FIGHT)
             if not 1 <= n < group.units:
                 return Reject(RejectCode.INVALID_ARGUMENT)
             return ()
@@ -406,6 +415,8 @@ def _check(
                 group = _standing_group(state, player, gid, seen)
                 if isinstance(group, Reject):
                     return group
+                if group.fight is not None:
+                    return Reject(RejectCode.IN_FIGHT)
                 nodes.append(_node_of(group))
             if any(node != nodes[0] for node in nodes):
                 return Reject(RejectCode.NOT_SAME_NODE)
@@ -414,6 +425,8 @@ def _check(
             group = _standing_group(state, player, gid, seen)
             if isinstance(group, Reject):
                 return group
+            if group.fight is not None:
+                return Reject(RejectCode.IN_FIGHT)
             # Re-enabling «Защита» is allowed and costs again (DEC-08): a new bonus and intent.
             if mode == group.mode and mode is not Mode.DEFENSE:
                 return Reject(RejectCode.NO_CHANGE)
@@ -431,11 +444,15 @@ def _check(
                 return Reject(RejectCode.CITY_FULL)
             if recruit_cooldown_left(state, rules, node) > 0:
                 return Reject(RejectCode.RECRUIT_COOLDOWN)
+            if node in state.fight_nodes():
+                return Reject(RejectCode.IN_FIGHT)  # no production in a city with a fight
             return ()
         case CancelOrder(group=gid):
             group = _own_group(state, player, gid, seen)
             if isinstance(group, Reject):
                 return group
+            if group.fight is not None:
+                return _check_cancel_in_fight(state, group)
             location = group.location
             if isinstance(location, OnEdge):
                 # A bouncing group lost its order in the fight (DEC-20, C4).
@@ -466,6 +483,40 @@ def _check(
             return _check_transfer(state, rules, player, src, dst, n)
         case Forfeit():
             return Reject(RejectCode.NO_CHANGE) if state.players[player].forfeited else ()
+
+
+def _defends(state: GameState, group: Group) -> bool:
+    """The group stands in an own node: in a fight there it defends the node (DEC-24, E1)."""
+    location = group.location
+    return isinstance(location, AtNode) and state.nodes[location.node].owner == group.owner
+
+
+def _member(state: GameState, group: Group) -> FightMember:
+    assert group.fight is not None
+    return state.fights[group.fight].members[group.id]
+
+
+def _check_cancel_in_fight(state: GameState, group: Group) -> tuple[int, ...] | Reject:
+    """``CancelOrder`` of a group in a fight (DEC-24, E): the withdrawal of an attacker of a node
+    or of a group on an edge; for a defender of a node, the cancel of its withdrawal ``Move`` or
+    of its waiting planned order. A returning group has no order (E2), «Защита» is a mode (E4)."""
+    member = _member(state, group)
+    location = group.location
+    if _defends(state, group):
+        if group.order is not None:
+            return ()
+        if group.mode is Mode.DEFENSE:
+            return Reject(RejectCode.IN_FIGHT)
+        return Reject(RejectCode.NOTHING_TO_CANCEL)
+    if member.leaving or member.returning:
+        return Reject(RejectCode.NOTHING_TO_CANCEL)
+    if isinstance(location, OnEdge):
+        if location.back or group.order is None:
+            return Reject(RejectCode.NOTHING_TO_CANCEL)
+        return ()
+    if member.edge is None:
+        return Reject(RejectCode.NOTHING_TO_CANCEL)
+    return ()
 
 
 def _check_transfer(
@@ -550,6 +601,12 @@ def _standing_group(
     return group
 
 
+def _set_leaving(state: GameState, group: Group, *, leaving: bool) -> None:
+    assert group.fight is not None
+    members = state.fights[group.fight].members
+    members[group.id] = replace(members[group.id], leaving=leaving)
+
+
 def _waits_to_depart(state: GameState, group: Group) -> bool:
     order = group.order
     return order is not None and order.planned and state.tick < order.depart_tick
@@ -602,6 +659,8 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             group.order = Order(path=ok.path[1:], planned=planned, depart_tick=tick + delay)
             if group.mode is Mode.DEFENSE:
                 group.mode = Mode.ATTACK  # a move order drops «Защита» for free (DEC-08)
+            if group.fight is not None:  # a defender withdraws after the next round (DEC-24)
+                _set_leaving(state, group, leaving=True)
             if planned:  # public intent now, the bonus from the departure on (DEC-08)
                 group.bonus = rules.orders.planned_bonus
                 group.bonus_tick = tick + delay
@@ -644,6 +703,17 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
         case CancelOrder(group=gid):
             group = state.groups[gid]
             location = group.location
+            if group.fight is not None:
+                # DEC-24, E: a defender's withdrawal or waiting order is cancelled, it stays in
+                # the fight; anyone else withdraws after the next round.
+                if _defends(state, group):
+                    group.order = None
+                    _set_leaving(state, group, leaving=False)
+                else:
+                    _set_leaving(state, group, leaving=True)
+                clear_bonus(group)
+                set_intent(state, group, None)
+                return []
             if isinstance(location, OnEdge):
                 # Back to the start of this edge, as long as the way travelled (DEC-20, C2): the
                 # mechanics of a bounce, without spending charges.

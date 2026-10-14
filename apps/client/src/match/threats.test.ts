@@ -23,12 +23,14 @@ describe('threatOfEvent', () => {
   });
 
   it('a fight in a city of mine is a threat, a fight on a road or elsewhere is not', () => {
-    expect(threatOfEvent({ kind: 'fight', data: { node: mine.id } }, 0, owner)).toEqual({
+    expect(threatOfEvent({ kind: 'fight_started', data: { node: mine.id } }, 0, owner)).toEqual({
       node: mine.id,
       kind: 'attack',
     });
-    expect(threatOfEvent({ kind: 'fight', data: { node: theirs.id } }, 0, owner)).toBeNull();
-    expect(threatOfEvent({ kind: 'fight', data: { edge: 2 } }, 0, owner)).toBeNull();
+    expect(
+      threatOfEvent({ kind: 'fight_started', data: { node: theirs.id } }, 0, owner),
+    ).toBeNull();
+    expect(threatOfEvent({ kind: 'fight_started', data: { edge: 2 } }, 0, owner)).toBeNull();
     expect(threatOfEvent({ kind: 'recruited', data: { node: mine.id } }, 0, owner)).toBeNull();
   });
 });

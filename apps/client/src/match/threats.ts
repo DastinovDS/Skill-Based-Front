@@ -29,7 +29,8 @@ export function threatOfEvent(
     // The enemy took it: the city was mine a moment ago (the snapshot may already say otherwise).
     return event.data.player !== me && owner(node) === me ? { node, kind: 'captured' } : null;
   }
-  if (event.kind === 'fight' && owner(node) === me) return { node, kind: 'attack' };
+  // A fight starts in a city of mine (DEC-24: it lasts its rounds, the start is the news).
+  if (event.kind === 'fight_started' && owner(node) === me) return { node, kind: 'attack' };
   return null;
 }
 
