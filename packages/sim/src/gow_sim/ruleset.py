@@ -171,6 +171,17 @@ class CapacityRules:
 
 
 @dataclass(frozen=True, slots=True)
+class StarvationRules:
+    """Starvation of a cut-off city (DEC-19): ``charges`` per started ``per_units`` standing units
+    every ``period_ticks``, the first time ``grace_ticks`` after the cut."""
+
+    grace_ticks: int
+    period_ticks: int
+    charges: int
+    per_units: int
+
+
+@dataclass(frozen=True, slots=True)
 class SupplyRules:
     dispatch_ticks: int
     buffer: int
@@ -215,6 +226,7 @@ class Ruleset:
     orders: OrderRules
     terrain: TerrainRules
     capacity: CapacityRules
+    starvation: StarvationRules
     supply: SupplyRules
     build: BuildRules
     recruit: RecruitRules
@@ -293,6 +305,7 @@ def parse_ruleset(data: object) -> Ruleset:
             "orders",
             "terrain",
             "capacity",
+            "starvation",
             "supply",
             "build",
             "recruit",
@@ -331,6 +344,9 @@ def parse_ruleset(data: object) -> Ruleset:
         terrain=_parse_terrain(root.table("terrain", ("defense_mod", "entry_speed_pct"))),
         capacity=_parse_capacity(
             root.table("capacity", ("attrition_ticks", "grace_ticks", "by_kind"))
+        ),
+        starvation=_parse_starvation(
+            root.table("starvation", ("grace_ticks", "period_ticks", "charges", "per_units"))
         ),
         supply=_parse_supply(
             root.table(
@@ -414,6 +430,15 @@ def _parse_capacity(t: "_Table") -> CapacityRules:
         attrition_ticks=t.integer("attrition_ticks", low=1),
         grace_ticks=t.integer("grace_ticks", low=0),
         by_kind=KindTable(**{k.value: kinds.integer(k.value, low=0) for k in NodeKind}),
+    )
+
+
+def _parse_starvation(t: "_Table") -> StarvationRules:
+    return StarvationRules(
+        grace_ticks=t.integer("grace_ticks", low=0),
+        period_ticks=t.integer("period_ticks", low=1),
+        charges=t.integer("charges", low=0),
+        per_units=t.integer("per_units", low=1),
     )
 
 

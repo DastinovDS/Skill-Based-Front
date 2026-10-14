@@ -22,11 +22,23 @@ Attrition (the ``capacity`` system; details: #118 default):
 - The victim: a discharged unit of the lowest-id group that has one; otherwise a charged unit of
   the group with the most units, ties by lowest id (as DEC-07, rule 7). An empty group is removed.
 
+Starvation in an encirclement (DEC-19; ``starvation`` after the attrition, in the same system):
+
+- A cut-off city: an own city (not a province) outside its owner's ``supplied_territory``.
+  ``Node.cut_since`` is the first tick of the current continuous cut; it is reset when the city is
+  supplied again or changes its owner (a city captured cut off counts from the capture tick).
+- On ticks ``cut_since + starvation.grace_ticks + k * starvation.period_ticks`` the garrison
+  spends ``starvation.charges * ceil(U / starvation.per_units)`` charges, ``U``: the owner's
+  units standing in the city: first from the warehouse, the rest one charge at a time from the
+  standing group with the most ``charged`` (ties: lower id). A shortfall is not carried over.
+  Units never die of it. Event ``starvation`` (player, node, from the warehouse, from the units).
+
 Every owner change goes through ``change_owner()``: the warehouse is emptied (no trophies,
 mechanics.md, section 9), road levels and types are kept, the supply priority goes back to
 ``normal`` (DEC-18), the grace period starts.
 """
 
+from gow_sim.maps import NodeKind
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import AtNode, Event, GameState, Group, Priority, event
 
@@ -135,6 +147,7 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     n.owner = owner
     n.warehouse = 0
     n.priority = Priority.NORMAL
+    n.cut_since = None
     n.over_ticks = 0
     n.captured_tick = state.tick
     return events
@@ -167,6 +180,73 @@ def capacity(state: GameState, rules: Ruleset) -> list[Event]:
             continue
         node.over_ticks = 0
         events.append(_kill_one(state, node_id, groups))
+    events.extend(starvation(state, rules, garrisons))
+    return events
+
+
+def is_city_node(state: GameState, node: int) -> bool:
+    return state.map.nodes[node].kind is not NodeKind.PROVINCE
+
+
+def starve_in(state: GameState, rules: Ruleset, node: int) -> int | None:
+    """Ticks until the next consumption of a cut-off city (DEC-19, item 8); ``None`` if not cut.
+
+    The caller shows it only to the owner of the node.
+    """
+    since = state.nodes[node].cut_since
+    if since is None:
+        return None
+    first = since + rules.starvation.grace_ticks
+    if state.tick < first:
+        return first - state.tick
+    period = rules.starvation.period_ticks
+    return period - (state.tick - first) % period
+
+
+def starvation(state: GameState, rules: Ruleset, garrisons: dict[int, list[Group]]) -> list[Event]:
+    """Update ``cut_since`` of every own city and let the cut-off garrisons starve (DEC-19)."""
+    events: list[Event] = []
+    rules_s = rules.starvation
+    supplied = {p: supplied_territory(state, p) for p in sorted(state.players)}
+    tick = state.tick
+    for node_id in sorted(state.nodes):
+        node = state.nodes[node_id]
+        owner = node.owner
+        if owner is None or not is_city_node(state, node_id) or supplied[owner][node_id]:
+            node.cut_since = None
+            continue
+        if node.cut_since is None:
+            node.cut_since = tick
+        since = tick - node.cut_since - rules_s.grace_ticks
+        if since < 0 or since % rules_s.period_ticks != 0:
+            continue
+        groups = [g for g in garrisons.get(node_id, ()) if g.units > 0]
+        units = sum(g.units for g in groups)
+        if units == 0:
+            continue
+        need = rules_s.charges * ((units + rules_s.per_units - 1) // rules_s.per_units)
+        from_stock = min(need, node.warehouse)
+        node.warehouse -= from_stock
+        left = need - from_stock
+        from_units = 0
+        while left > 0:
+            group = max(groups, key=lambda g: (g.charged, -g.id))
+            if group.charged == 0:
+                break  # nothing left to spend: the shortfall is not carried over
+            group.charged -= 1
+            left -= 1
+            from_units += 1
+        if from_stock or from_units:
+            events.append(
+                event(
+                    tick,
+                    "starvation",
+                    player=owner,
+                    node=node_id,
+                    warehouse=from_stock,
+                    units=from_units,
+                )
+            )
     return events
 
 

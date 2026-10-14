@@ -107,9 +107,14 @@ class NodeView(WireModel):
     priority: Priority | None
     """Own city only: its supply priority (DEC-18, item 1). ``None`` for provinces, the enemy's
     and neutral nodes (DEC-18, item 8)."""
+    starve_in: PosInt | None
+    """Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8). ``None``
+    for every other node."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
+        if self.starve_in is not None and self.detail is not Detail.EXACT:
+            raise ValueError("a starvation countdown only for an own city, seen exactly")
         if self.priority is not None and self.detail is not Detail.EXACT:
             raise ValueError("a supply priority only for an own city, which is seen exactly")
         if (self.detail is Detail.EXACT) != (self.warehouse is not None):

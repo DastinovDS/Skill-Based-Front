@@ -298,6 +298,7 @@ def _features(view: View) -> set[str]:
         "grace_left": any(n.grace_left is not None for n in view.nodes),
         "priority": any(n.priority not in (None, sim.Priority.NORMAL) for n in view.nodes),
         "transfer": any(p.transfer and len(p.path) > 1 for p in view.packets),
+        "starve_in": any(n.starve_in is not None for n in view.nodes),
     }
     return {name for name, present in found.items() if present}
 
@@ -588,6 +589,25 @@ def test_supply_control_through_the_wire() -> None:
     enemy = snapshot_msg(match.view(1)).view
     assert all(n.priority is None for n in enemy.nodes if n.owner == 0)
     assert not any(p.transfer for p in enemy.packets)
+
+
+def test_starvation_countdown_through_the_wire() -> None:
+    """DEC-19: the countdown of an own cut-off city in byte-equal frames; the enemy gets neither
+    the field nor the event."""
+    match = _started()
+    state = match.state
+    city = next(
+        n for n in sorted(state.nodes) if state.nodes[n].owner == 0 and n != state.map.capital(0)
+    )
+    state.nodes[city].cut_since = match.tick
+    checker = _FrameChecker()
+    checker.record(match, ())
+    assert "starve_in" in checker.features
+    assert snapshot_msg(match.view(0)).view.nodes[city].starve_in is not None
+    assert snapshot_msg(match.view(1)).view.nodes[city].starve_in is None
+    starving = event(5, "starvation", player=0, node=city, warehouse=1, units=0)
+    assert event_for_player(starving, 0, KEY) is not None
+    assert event_for_player(starving, 1, KEY) is None
 
 
 def test_ack_of_an_accepted_command_without_path() -> None:

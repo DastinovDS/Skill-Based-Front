@@ -451,6 +451,22 @@ def test_dec18_enemy_priority_hidden_even_in_sight(rules: Ruleset) -> None:
     assert _view(state, rules) == view
 
 
+def test_dec19_starve_in_only_for_own_cut_off_cities(rules: Ruleset) -> None:
+    """DEC-19, item 8: the countdown of an own cut-off city; never for the enemy's."""
+    state = _state("line6", rules)
+    state.tick = 150
+    state.nodes[1].cut_since = 100  # grace 100: the first consumption at 200
+    state.nodes[4].cut_since = 100  # an enemy city, cut off
+    view = _view(state, rules)
+    assert view.nodes[1].starve_in == 200 - 150
+    assert [n.starve_in for n in view.nodes if n.id != 1] == [None] * 5
+    before = _view(state, rules, player=1)
+    assert before.nodes[4].starve_in == 50
+    assert before.nodes[1].starve_in is None
+    state.nodes[1].cut_since = None
+    assert _view(state, rules, player=1) == before
+
+
 def test_dec18_own_packet_path_and_transfer(rules: Ruleset) -> None:
     state = _state("line6", rules)
     state.nodes[2].owner = 0
@@ -721,9 +737,10 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
         if state.packets[pid].owner == enemy:
             state.packets[pid].charges = draw(st.integers(1, 9))
             state.packets[pid].transfer = draw(st.booleans())
-    for node in state.nodes.values():  # DEC-18: enemy supply priorities are hidden
+    for node in state.nodes.values():  # DEC-18, DEC-19: enemy priorities and starvation hidden
         if node.owner == enemy:
             node.priority = draw(st.sampled_from(list(Priority)))
+            node.cut_since = draw(st.none() | st.integers(0, max(0, state.tick)))
     other = state.players[enemy]
     other.cp = draw(st.integers(0, 10_000))
     other.stance = draw(st.sampled_from(list(Stance)))

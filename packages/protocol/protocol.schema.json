@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 11,
+    "PROTOCOL_VERSION": 12,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -1327,6 +1327,19 @@
             }
           ],
           "description": "Own city only: its supply priority (DEC-18, item 1). ``None`` for provinces, the enemy's\nand neutral nodes (DEC-18, item 8)."
+        },
+        "starve_in": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8). ``None``\nfor every other node."
         }
       },
       "required": [
@@ -1339,7 +1352,8 @@
         "build",
         "attrition_in",
         "grace_left",
-        "priority"
+        "priority",
+        "starve_in"
       ],
       "title": "NodeView",
       "type": "object"

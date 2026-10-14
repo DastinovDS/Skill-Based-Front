@@ -106,6 +106,7 @@ def _rich_state(rules: Ruleset) -> GameState:
         transfer=True,
     )
     state.nodes[1].priority = Priority.HIGH
+    state.nodes[1].cut_since = 120
     iid = state.new_id()
     state.intents[iid] = Intent(
         iid, 1, IntentKind.PLANNED_MOVE, origin=3, target=2, created_tick=120
@@ -377,6 +378,7 @@ def _states(draw: st.DrawFn) -> GameState:
         node.captured_tick = draw(_opt_small)
         node.recruited_tick = draw(_opt_small)
         node.priority = draw(st.sampled_from(list(Priority)))
+        node.cut_since = draw(_opt_small)
         if draw(st.booleans()):
             node.build = Build(draw(edges), draw(players), draw(_small), draw(_road_kinds))
     for _ in range(draw(st.integers(min_value=0, max_value=6))):

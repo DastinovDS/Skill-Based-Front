@@ -404,6 +404,8 @@ export const ru = {
     'Lucide: лицензия ISC; значки, перенятые из Feather, под лицензией MIT. Полный текст уведомлений лежит в файле THIRD_PARTY_NOTICES.md репозитория.',
   'cmd.set_priority': 'приоритет снабжения',
   'cmd.transfer': 'перевозка',
+  'starve.pill': 'голод через {seconds} с',
+  'event.starvation': 'Голод в отрезанном узле {node}: склад −{warehouse}, юниты −{units}',
   'event.priority_set': 'Приоритет снабжения узла {node}: {level}',
   'event.transfer_started': 'Перевозка: {charges} зарядов из узла {from} в узел {to}',
   'priority.high': 'высокий',

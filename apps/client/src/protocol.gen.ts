@@ -411,6 +411,11 @@ export interface NodeView {
    * and neutral nodes (DEC-18, item 8).
    */
   priority: Priority | null;
+  /**
+   * Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8). ``None``
+   * for every other node.
+   */
+  starve_in: number | null;
 }
 /**
  * What the player sees, or last saw, of one node or edge (``gow_sim.state.Sighting``).
@@ -750,6 +755,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 12;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

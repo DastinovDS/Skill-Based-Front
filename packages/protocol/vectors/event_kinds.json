@@ -23,6 +23,7 @@
     "recruited",
     "road_upgraded",
     "stance_changed",
+    "starvation",
     "transfer_started",
     "vp_awarded",
     "warehouse_lost"

@@ -11,19 +11,22 @@ warehouse at 1 per tick (``supply.recharge_per_tick``), long before the next wav
 trip takes 2 * 79 ticks).
 
 Cut roads (player 1 already holds M, so T is outside the supplied territory and gets no
-packets; as a medium city its capacity is 6 (DEC-22), which holds the warehouse of 3). Hand
-computation, D = the defender's firing charges, W = T's warehouse after the recharge:
+packets; as a medium city its capacity is 6 (DEC-22), which holds the warehouse of 3). T starves
+(DEC-19): the capacity system sees it cut on tick 1 (``cut_since = 1``), so the garrison spends
+``ceil(U / 3) = 1`` charge on ticks 101, 201, 301, ..., the warehouse first. A wave meets T every
+159 ticks: ticks 79, 238, 397, ... Hand computation, D = the defender's firing charges, W = T's
+warehouse:
 
-====  ===  ============================================================  ====
-wave   D   fight (DEC-07 rules 1-4)                                        W
-====  ===  ============================================================  ====
-1      2   2 vs 2: all cancelled, no losses, bounce; recharge 2          1
-2      2   2 vs 2: all cancelled, no losses, bounce; recharge 1          0
-3      1   2 vs 1: 1 cancelled, the surplus 1 kills 1; bounce           0
-4      0   2 vs 0: the surplus kills the last unit, T is captured       --
-====  ===  ============================================================  ====
+====  =====  ===  ======================================================================  ===
+wave  tick   D    fight (DEC-07 rules 1-4) and what happens until the next wave              W
+====  =====  ===  ======================================================================  ===
+1     79     2    2 vs 2: all cancelled, no losses; recharge 2 (W 3 -> 1); starves at 101    0
+                  (W 1 -> 0) and at 201 (one unit charge: D 2 -> 1)
+2     238    1    2 vs 1: 1 cancelled, the surplus 1 kills 1; at 301 nothing left to spend    0
+3     397    0    2 vs 0: the surplus kills the last unit, T is captured                     --
+====  =====  ===  ======================================================================  ===
 
-So the city falls exactly on wave N = 4.
+So the city falls exactly on wave N = 3 (without starvation, SIM-09: wave 4).
 
 Open roads (M is player 0's): T is refilled over 0 -> 1 -> 2. The capital produces 2 charges
 per 50 ticks (passive 1 + half of the CP quantum at stance «Баланс»), a level 1 road carries
@@ -91,13 +94,14 @@ def _siege(*, cut: bool, waves: int) -> tuple[GameState, list[Event]]:
     return state, fights
 
 
-def test_cut_off_city_falls_exactly_on_wave_4() -> None:
+def test_cut_off_city_falls_exactly_on_wave_3() -> None:
     state, fights = _siege(cut=True, waves=10)
-    assert [f.get("attacker") for f in fights] == [1, 1, 1, 1]
-    assert [f.get("pool_1") for f in fights] == [2, 2, 2, 2]
-    assert [f.get("pool_0") for f in fights] == [2, 2, 1, 0]
-    assert [f.get("losses_0") for f in fights] == [0, 0, 1, 1]
-    assert [f.get("losses_1") for f in fights] == [0, 0, 0, 0]
+    assert [f.tick for f in fights] == [79, 238, 397]
+    assert [f.get("attacker") for f in fights] == [1, 1, 1]
+    assert [f.get("pool_1") for f in fights] == [2, 2, 2]
+    assert [f.get("pool_0") for f in fights] == [2, 1, 0]
+    assert [f.get("losses_0") for f in fights] == [0, 1, 1]
+    assert [f.get("losses_1") for f in fights] == [0, 0, 0]
     assert state.nodes[CITY].owner == 1
 
 
