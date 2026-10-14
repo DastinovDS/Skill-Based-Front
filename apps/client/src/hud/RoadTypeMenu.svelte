@@ -3,7 +3,7 @@
   import type { OrderController } from '../match/orderController.ts';
   import Radial from './Radial.svelte';
   import { ROAD_HALF, ROAD_SECTORS, type RadialItem, type RoadType } from './radial.ts';
-  import { gainText } from './tipText.ts';
+  import { gainText } from './roadGain.ts';
 
   interface Props {
     orders: OrderController;

@@ -1,5 +1,4 @@
 import type { MessageKey } from '../i18n/messages.ts';
-import type { RulesetPublic } from '../protocol.gen.ts';
 
 /**
  * Reject codes of the simulation (`RejectCode` in `packages/sim/src/gow_sim/commands.py`), each
@@ -37,9 +36,4 @@ export function rejectMessageKey(code: string): MessageKey {
   return Object.hasOwn(REJECT_MESSAGES, code)
     ? REJECT_MESSAGES[code as keyof typeof REJECT_MESSAGES]
     : 'reject.unknown';
-}
-
-/** Price of a move order in hundredths of CP, from the ruleset the server sent. */
-export function moveCost(rules: RulesetPublic, planned: boolean): number {
-  return planned ? rules.cost.planned_move : rules.cost.move;
 }

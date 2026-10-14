@@ -91,8 +91,8 @@ describe('tf', () => {
 
   it('fills placeholders in the current language and keeps unknown ones', () => {
     setLocale('en');
-    expect(tf('estimate.losses', { mine: 1, enemy: 2 })).toBe('Losses: yours 1, enemy 2');
+    expect(tf('bar.cpLabel', { value: 1, cap: 2 })).toBe('CP: 1 of 2');
     setLocale('ru');
-    expect(tf('estimate.losses', { mine: 1 })).toBe('Потери: твои 1, вражеские {enemy}');
+    expect(tf('bar.cpLabel', { value: 1 })).toBe('CP: 1 из {cap}');
   });
 });

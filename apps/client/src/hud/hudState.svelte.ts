@@ -10,8 +10,6 @@
 import type { EventMsg, SnapshotMsg } from '../protocol.gen.ts';
 import {
   buildHudData,
-  type AttackTarget,
-  type HoverTarget,
   type HudContext,
   type HudData,
   type HudEvent,
@@ -36,10 +34,6 @@ const FRESH_SECONDS = 3;
 /** The timer turns amber at this many seconds left (U12). */
 export const LAST_MINUTE_S = 60;
 
-function hoverKey(hover: HoverTarget | null): string {
-  return hover === null ? '-' : `${hover.kind}:${String(hover.id)}`;
-}
-
 export class HudState {
   /** `null` until the first snapshot. Replaced, never mutated. */
   current = $state.raw<HudData | null>(null);
@@ -62,8 +56,8 @@ export class HudState {
   readonly #ctx: HudContext;
   #snapshot: SnapshotMsg | null = null;
   #selection: Selection | null = null;
-  #target: AttackTarget | null = null;
-  #hover: HoverTarget | null = null;
+  /** The group under the pointer (for its charge tip). */
+  #hovered: string | null = null;
   /** Newest first; events arrive between snapshots and reach `current` with the next one. */
   #events: HudEvent[] = [];
   #seq = 0;
@@ -84,10 +78,6 @@ export class HudState {
 
   get selection(): Selection | null {
     return this.#selection;
-  }
-
-  get target(): AttackTarget | null {
-    return this.#target;
   }
 
   /** The own capital to ring while the start banner is up (read every frame by the map). */
@@ -128,16 +118,10 @@ export class HudState {
     this.#publish();
   }
 
-  /** The thing the pointer rests on, for the tooltip; `null`: nothing. */
-  hover(hover: HoverTarget | null): void {
-    if (hoverKey(hover) === hoverKey(this.#hover)) return;
-    this.#hover = hover;
-    this.#publish();
-  }
-
-  /** The enemy node the selected group is aimed at, for the combat estimate; `null` clears it. */
-  aim(target: AttackTarget | null): void {
-    this.#target = target;
+  /** The group the pointer rests on, for its charge tip; `null`: none. */
+  hoverGroup(id: string | null): void {
+    if (id === this.#hovered) return;
+    this.#hovered = id;
     this.#publish();
   }
 
@@ -184,9 +168,8 @@ export class HudState {
       this.#ctx,
       this.#snapshot,
       this.#selection,
-      this.#target,
       this.#events,
-      this.#hover,
+      this.#hovered,
     );
   }
 }

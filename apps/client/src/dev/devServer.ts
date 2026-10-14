@@ -275,8 +275,18 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         }, DEV_ACK_MS);
         timeouts.add(handle);
       } else if (msg.type === 'reach_query') {
-        // The dev screen has no simulation to ask: an empty answer, no rings on the map.
-        this.reply({ type: 'reach', group: msg.group, tick, nodes: [], split: [] });
+        // Stand-in: every node with a path is reachable, DEV_EDGE_TICKS a road; no stack limit.
+        const at = current.view.groups.find((g) => g.id === msg.group)?.location;
+        const nodes =
+          at?.kind === 'node'
+            ? map.nodes.flatMap((n) => {
+                const path = n.id === at.node ? null : devPath(map, at.node, n.id);
+                return path === null
+                  ? []
+                  : [{ node: n.id, ticks: DEV_EDGE_TICKS * (path.length - 1) }];
+              })
+            : [];
+        this.reply({ type: 'reach', group: msg.group, tick, nodes, split: [] });
       }
     }
 

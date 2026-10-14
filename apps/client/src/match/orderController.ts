@@ -1,6 +1,6 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AlertState } from './alerts.svelte.ts';
-import { roadCandidates, type AttackTarget } from '../hud/hudData.ts';
+import { roadCandidates } from '../hud/hudData.ts';
 import type {
   Command,
   MapFile,
@@ -28,13 +28,12 @@ import {
   type StanceRate,
   type SupplyChoice,
 } from '../hud/radial.ts';
-import { OrderUiState, type ReachInfo, type RoadHint } from './orderUi.svelte.ts';
+import { OrderUiState, type ReachInfo } from './orderUi.svelte.ts';
 import { RadialState } from './radialState.svelte.ts';
 import { RoadTypeState } from './roadTypeState.svelte.ts';
 import { SplitState } from './splitState.svelte.ts';
 import { TargetMenuState } from './targetMenuState.svelte.ts';
 import { SupplyMenuState, TransferState } from './supplyState.svelte.ts';
-import { moveCost } from './rejects.ts';
 
 /** A sector of the menu of a city. */
 export type CityChoice = 'recruit' | 'roads';
@@ -80,22 +79,11 @@ export interface KeyInput {
   readonly repeat?: boolean;
 }
 
-function hintKey(hint: RoadHint | null): string {
-  return hint === null
-    ? '-'
-    : `${String(hint.edge)}:${String(hint.width)}:${hint.kind}:${String(hint.charges)}:${String(hint.pickable)}`;
-}
-
-function aimKey(aim: AttackTarget | null): string {
-  return aim === null ? '-' : `${String(aim.node)}:${String(aim.planned)}`;
-}
-
 /**
  * Mouse and keyboard ordering on the map (CLI-06, #62). A click picks an own group or a node;
  * with a group selected, a click on a node orders it there (Shift or the switch: a planned order);
  * the order shows as a ghost arrow until the server answers. The controller only sends intents:
- * whether they are allowed, the path and the price charged are the server's call. The price shown
- * in the preview is read from the ruleset of `welcome`.
+ * whether they are allowed, the path and the price charged are the server's call.
  *
  * The other commands (CLI-07, #63) are methods the panel and the keys call: modes, split, merge,
  * recruit, stance, forfeit. Each goes out as an intent and comes back as `accepted` or `rejected`
@@ -119,8 +107,8 @@ function aimKey(aim: AttackTarget | null): string {
  *
  * Groups (DEC-20): a selected group standing in a node asks the server where it can go
  * (`reach_query`); the answer rings the nodes it reaches and, dashed, those it reaches only after a
- * split (the stack limit), and the hovered target shows its travel time or the split hint. The
- * client computes neither. S opens the split menu (a slider for the new group; Enter or a click
+ * split (the stack limit), and the hovered target shows its travel time as one small number on the
+ * map (no window). The client computes neither. S opens the split menu (a slider for the new group; Enter or a click
  * splits, S, Esc or a click outside close it), G merges the groups standing with the selected one,
  * X cancels any order of the selected group (on a road it turns back, free).
  *
@@ -157,7 +145,6 @@ export class OrderController implements MapInteraction {
   readonly #o: OrderControllerOptions;
   #shift = false;
   #hover: PickHit | null = null;
-  #aimed: AttackTarget | null = null;
   #noticeId = 0;
   #noticeTimer: ReturnType<typeof setTimeout> | undefined;
   #overlay: OverlayState = EMPTY_OVERLAY;
@@ -204,11 +191,6 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.cost.recruit;
   }
 
-  /** Price of a move order, hundredths of CP: ordinary or planned (ruleset of `welcome`). */
-  moveCostFor(planned: boolean): number {
-    return moveCost(this.#o.rules, planned);
-  }
-
   /** Price of switching a group to `mode`, hundredths of CP. */
   modeCost(mode: Mode): number {
     return mode === 'attack' ? this.#o.rules.cost.attack : this.#o.rules.cost.defense;
@@ -221,7 +203,6 @@ export class OrderController implements MapInteraction {
 
   setPlanned(planned: boolean): void {
     this.ui.patch({ planned });
-    this.#refresh();
   }
 
   // --- MapInteraction -----------------------------------------------------------------------
@@ -240,7 +221,8 @@ export class OrderController implements MapInteraction {
     const supply = this.#supplyOverlayNow();
     const reachNodes = reach === null ? [] : [...reach.ticks.keys()];
     const splitNodes = reach === null ? [] : [...reach.split];
-    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(road)}|${candidates.join(',')}|${String(beacon)}|${reachNodes.join(',')}/${splitNodes.join(',')}`;
+    const eta = this.#eta(reach, preview);
+    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(road)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}|${reachNodes.join(',')}/${splitNodes.join(',')}`;
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
@@ -259,6 +241,7 @@ export class OrderController implements MapInteraction {
         supply,
         reach: reachNodes,
         split: splitNodes,
+        eta: eta === null || preview === null ? null : { node: preview, ticks: eta.ticks },
       };
     }
     return this.#overlay;
@@ -271,7 +254,6 @@ export class OrderController implements MapInteraction {
       this.deselect();
       return;
     }
-    if (hit.kind === 'intent') return; // an arrow is only hovered
     if (hit.kind === 'edge') {
       // A road is clicked only to upgrade it, in the road pick of a city; elsewhere it does nothing.
       if (this.#candidates().includes(hit.id)) this.upgradeRoad(hit.id);
@@ -310,13 +292,11 @@ export class OrderController implements MapInteraction {
         this.cityMenu.open(hit.id);
       }
     }
-    this.#refresh();
   }
 
   hover(hit: PickHit | null): void {
     this.#hover = hit;
-    this.#o.hud.hover(hit);
-    this.#refresh();
+    this.#o.hud.hoverGroup(hit?.kind === 'group' ? hit.id : null);
   }
 
   /**
@@ -346,7 +326,6 @@ export class OrderController implements MapInteraction {
     this.splitMenu.close();
     this.#closeTargetMenus();
     this.#o.hud.select(null);
-    this.#refresh();
   }
 
   /**
@@ -423,7 +402,6 @@ export class OrderController implements MapInteraction {
       split: new Set(msg.split),
     };
     this.ui.patch({ reach: info });
-    this.#refresh();
   }
 
   /**
@@ -515,14 +493,12 @@ export class OrderController implements MapInteraction {
     if (city === null || this.#o.hud.current?.node?.build != null) return;
     this.#pick = city;
     this.ui.patch({ roadPick: city });
-    this.#refresh();
   }
 
   stopRoadPick(): void {
     if (this.#pick === null) return;
     this.#pick = null;
     this.ui.patch({ roadPick: null });
-    this.#refresh();
   }
 
   /**
@@ -670,9 +646,7 @@ export class OrderController implements MapInteraction {
 
   /** Returns true if the key was used (the caller then prevents the browser default). */
   key(input: KeyInput): boolean {
-    const shiftChanged = this.#shift !== input.shiftKey;
     this.#shift = input.shiftKey;
-    if (shiftChanged) this.#refresh();
     if (input.type !== 'keydown') return this.#keyUp(input);
     if (input.code === 'Tab' || input.code === 'F2') {
       if (input.repeat !== true) this.toggleSupplyMode();
@@ -967,61 +941,23 @@ export class OrderController implements MapInteraction {
     return roadCandidates(roads, this.#pick).map((r) => r.id);
   }
 
+  /**
+   * The time to the hovered node for the one small number there: the server's travel time of the
+   * whole path (`reach`), and for a planned order the delay before the group sets off, from
+   * `ruleset_public` (display arithmetic only; the client computes no path). `null`: no number.
+   */
+  #eta(reach: ReachInfo | null, preview: number | null): { ticks: number } | null {
+    if (reach === null || preview === null) return null;
+    const ticks = reach.ticks.get(preview);
+    if (ticks === undefined) return null;
+    return { ticks: this.planned ? ticks + this.#o.rules.orders.planned_delay_ticks : ticks };
+  }
+
   /** The node a click would send the selected group to, if it would. */
   #previewTarget(): number | null {
     const group = this.#selectedGroup();
     if (group === null || group.node === null || this.#o.send === null) return null;
     return this.#hover?.kind === 'node' && this.#hover.id !== group.node ? this.#hover.id : null;
-  }
-
-  /** Preview price for the panel and the combat estimate aim, after a hover/switch/key change. */
-  #refresh(): void {
-    const node = this.#previewTarget();
-    const planned = this.planned;
-    const previous = this.ui.current.preview;
-    if (node === null) {
-      if (previous !== null) this.ui.patch({ preview: null });
-    } else {
-      const reach = this.#reach();
-      const ticks = reach?.ticks.get(node) ?? null;
-      const split = reach?.split.has(node) ?? false;
-      if (
-        previous?.node !== node ||
-        previous.planned !== planned ||
-        previous.ticks !== ticks ||
-        previous.split !== split
-      ) {
-        this.ui.patch({
-          preview: { node, planned, cost: moveCost(this.#o.rules, planned), ticks, split },
-        });
-      }
-    }
-
-    // The upgrade hint follows the pointer over a road that has one.
-    const hover = this.#hover;
-    const road = hover?.kind === 'edge' ? this.#roadHint(hover.id) : null;
-    if (hintKey(road) !== hintKey(this.ui.current.road)) this.ui.patch({ road });
-
-    // The combat estimate follows the pointer over enemy nodes.
-    const isEnemy = (id: number): boolean =>
-      this.#o.hud.current?.nodes.some((n) => n.id === id && n.owner === 'enemy') ?? false;
-    const aim: AttackTarget | null = node !== null && isEnemy(node) ? { node, planned } : null;
-    if (aimKey(aim) !== aimKey(this.#aimed)) {
-      this.#aimed = aim;
-      this.#o.hud.aim(aim);
-    }
-  }
-
-  #roadHint(edge: number): RoadHint | null {
-    const road = this.#o.hud.current?.roads[edge];
-    if (road === undefined || road.gain === null) return null;
-    return {
-      edge,
-      width: road.width + 1,
-      kind: road.kind,
-      charges: road.charges,
-      pickable: this.#candidates().includes(edge),
-    };
   }
 
   #onResult(result: CommandResult): void {

@@ -58,7 +58,13 @@
 
   // The demo scene is a live match against the dev server (until SRV-03); a fixture is a frozen
   // snapshot. Either way the map and the HUD read the same snapshots.
-  const match = $derived(fixture === undefined ? createDevMatch(map, DEV_RULES, hud) : null);
+  const match = $derived(
+    fixture === undefined
+      ? createDevMatch(map, DEV_RULES, hud, (msg) => {
+          orders.onReach(msg);
+        })
+      : null,
+  );
   const source = $derived(
     match === null ? (fixture === undefined ? null : frozenSource(fixture)) : match.session,
   );
@@ -97,6 +103,7 @@
       send: match === null ? null : (cmd) => match.session.send(cmd),
       alerts: hud.alerts,
       focusNode: (node) => canvas?.focusNode(node),
+      queryReach: (group) => match?.session.queryReach(group),
     }),
   );
 

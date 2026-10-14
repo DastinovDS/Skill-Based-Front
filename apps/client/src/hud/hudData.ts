@@ -21,25 +21,10 @@ import type {
   Terrain,
   UpgradeGain,
 } from '../protocol.gen.ts';
-import { delayLeft } from '../render/intentLayout.ts';
-import { estimateCombat, type CombatEstimate, type DefenderInput } from './combatEstimate.ts';
 
 /** What the player picked to look at: one own group or one node. */
 export type Selection =
   { readonly kind: 'group'; readonly id: string } | { readonly kind: 'node'; readonly id: number };
-
-/** What the pointer rests on (the tooltip): a selectable thing, a road, or the arrow of an intent. */
-export type HoverTarget =
-  | Selection
-  | { readonly kind: 'edge'; readonly id: number }
-  | { readonly kind: 'intent'; readonly id: string };
-
-/** The enemy node a selected group would attack, and how (for the combat estimate). */
-export interface AttackTarget {
-  readonly node: number;
-  /** A planned order: brings `planned_bonus` virtual shots. */
-  readonly planned: boolean;
-}
 
 /** Fixed for the whole match: the ruleset from `welcome` and the map. */
 export interface HudContext {
@@ -124,11 +109,6 @@ export interface HudEvent {
   readonly data: EventMsg['data'];
 }
 
-export interface EstimateInfo {
-  readonly target: AttackTarget;
-  readonly result: CombatEstimate;
-}
-
 /** An own group in short (which groups stand together, for merging). */
 export interface GroupChoice {
   readonly id: string;
@@ -167,31 +147,13 @@ export interface RoadInfo {
   readonly charges: number | null;
 }
 
-/** A public intent (planned order or "Defense") under the pointer. */
-export interface IntentInfo {
-  readonly id: string;
-  readonly owner: 'mine' | 'enemy';
-  readonly kind: 'planned_move' | 'defense';
-  readonly origin: number;
-  readonly target: number | null;
-  /** Ticks until the order leaves; `null`: it has left already. */
-  readonly ticksLeft: number | null;
-}
-
-/** What the tooltip shows, from the snapshot (language-free; `hud/tipText.ts` writes the text). */
-export type TipInfo =
-  | { readonly kind: 'node'; readonly node: NodeInfo }
-  | { readonly kind: 'edge'; readonly road: RoadInfo }
-  | { readonly kind: 'group'; readonly group: GroupInfo }
-  | { readonly kind: 'intent'; readonly intent: IntentInfo };
-
 export interface HudData {
   readonly tick: number;
   readonly me: PlayerId;
   /** Nicks of the two sides. */
   readonly nicks: { readonly mine: string; readonly enemy: string };
-  /** The thing under the pointer, for the tooltip; `null`: nothing. */
-  readonly tip: TipInfo | null;
+  /** The own or seen group under the pointer, for its charge tip; `null`: nothing. */
+  readonly hovered: GroupInfo | null;
   readonly cp: CpInfo;
   readonly stance: Stance;
   readonly vp: { readonly mine: number; readonly enemy: number };
@@ -199,7 +161,6 @@ export interface HudData {
   readonly secondsLeft: number;
   readonly group: GroupInfo | null;
   readonly node: NodeInfo | null;
-  readonly estimate: EstimateInfo | null;
   readonly groups: readonly GroupChoice[];
   readonly nodes: readonly NodeChoice[];
   readonly roads: readonly RoadInfo[];
@@ -300,26 +261,6 @@ function nodeInfo(
   };
 }
 
-function intentInfo(ctx: HudContext, view: SnapshotMsg, id: string): IntentInfo | null {
-  const intent = view.view.intents.find((i) => i.id === id);
-  if (intent === undefined) {
-    return null;
-  }
-  const delay =
-    intent.kind === 'planned_move'
-      ? ctx.rules.orders.planned_delay_ticks
-      : ctx.rules.orders.defense_delay_ticks;
-  const left = delayLeft(intent.created_tick, view.tick, delay);
-  return {
-    id,
-    owner: intent.owner === ctx.me ? 'mine' : 'enemy',
-    kind: intent.kind,
-    origin: intent.origin,
-    target: intent.target,
-    ticksLeft: left > 0 ? left : null,
-  };
-}
-
 function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): RoadInfo {
   const file = ctx.map.edges[edge.id];
   return {
@@ -333,93 +274,18 @@ function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): 
   };
 }
 
-function tipFor(ctx: HudContext, snapshot: SnapshotMsg, hover: HoverTarget | null): TipInfo | null {
-  const { view } = snapshot;
-  if (hover === null) return null;
-  switch (hover.kind) {
-    case 'node': {
-      const node = nodeAt(view.nodes, hover.id);
-      return node === undefined
-        ? null
-        : { kind: 'node', node: nodeInfo(ctx, node, view.groups, snapshot.tick) };
-    }
-    case 'edge': {
-      const edge = view.edges[hover.id];
-      return edge === undefined ? null : { kind: 'edge', road: roadInfo(ctx, edge) };
-    }
-    case 'group': {
-      const group = view.groups.find((g) => g.id === hover.id);
-      return group === undefined ? null : { kind: 'group', group: groupInfo(group, view.nodes) };
-    }
-    case 'intent': {
-      const intent = intentInfo(ctx, snapshot, hover.id);
-      return intent === null ? null : { kind: 'intent', intent };
-    }
-  }
-}
-
-/** What the client knows of the enemy at `node`, in the terms of the estimate. */
-export function defenderOf(node: NodeView): DefenderInput {
-  const seen = node.seen;
-  const current = node.detail !== 'fog' && seen !== null;
-  if (
-    current &&
-    seen.level === 'exact' &&
-    seen.enemy_units !== null &&
-    seen.enemy_charged !== null
-  ) {
-    return {
-      visibility: 'exact',
-      units: seen.enemy_units,
-      charged: seen.enemy_charged,
-      modes: seen.enemy_modes,
-    };
-  }
-  if (current && seen.enemy_modes.length === 0) {
-    // Seen now and no enemy group there: an empty node, known exactly.
-    return { visibility: 'exact', units: 0, charged: 0, modes: [] };
-  }
-  return {
-    visibility: 'partial',
-    capacity: node.capacity,
-    modes: current ? seen.enemy_modes : null,
-  };
-}
-
-function estimateFor(
-  ctx: HudContext,
-  group: GroupView,
-  target: AttackTarget,
-  nodes: readonly NodeView[],
-): EstimateInfo | null {
-  const node = nodeAt(nodes, target.node);
-  const file = ctx.map.nodes[target.node];
-  if (node === undefined || file === undefined || node.owner === null || node.owner === ctx.me) {
-    return null;
-  }
-  return {
-    target,
-    result: estimateCombat(
-      ctx.rules.combat,
-      {
-        units: group.units,
-        // Every charged unit fires (DEC-16 removed the non-firing "build" mode).
-        firingCharged: group.charged,
-        planned: target.planned,
-      },
-      defenderOf(node),
-      file.terrain,
-    ),
-  };
+function groupUnderPointer(view: SnapshotMsg['view'], id: string | null): GroupInfo | null {
+  const group = id === null ? undefined : view.groups.find((g) => g.id === id);
+  return group === undefined ? null : groupInfo(group, view.nodes);
 }
 
 export function buildHudData(
   ctx: HudContext,
   snapshot: SnapshotMsg,
   selection: Selection | null,
-  target: AttackTarget | null,
   events: readonly HudEvent[],
-  hover: HoverTarget | null = null,
+  /** The id of the group under the pointer. */
+  hovered: string | null = null,
 ): HudData {
   const { view, tick } = snapshot;
   const { rules, me } = ctx;
@@ -437,7 +303,7 @@ export function buildHudData(
     tick,
     me,
     nicks: { mine: ctx.nicks[me], enemy: ctx.nicks[me === 0 ? 1 : 0] },
-    tip: tipFor(ctx, snapshot, hover),
+    hovered: groupUnderPointer(view, hovered),
     cp: {
       value: view.me.cp,
       cap: rules.cp.cap,
@@ -448,10 +314,6 @@ export function buildHudData(
     secondsLeft: Math.ceil(Math.max(0, rules.match_ticks - tick) / rules.tick_hz),
     group: selectedGroup === undefined ? null : groupInfo(selectedGroup, view.nodes),
     node: selectedNode === undefined ? null : nodeInfo(ctx, selectedNode, view.groups, tick),
-    estimate:
-      selectedGroup === undefined || target === null
-        ? null
-        : estimateFor(ctx, selectedGroup, target, view.nodes),
     groups: view.groups.map((g) => ({
       id: g.id,
       units: g.units,

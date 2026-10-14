@@ -15,7 +15,6 @@
   import HelpOverlay from './HelpOverlay.svelte';
   import type { HudState } from './hudState.svelte.ts';
   import KeyHints from './KeyHints.svelte';
-  import OrderHint from './OrderHint.svelte';
   import type { HudPrefs } from './prefs.svelte.ts';
   import RadialMenu from './RadialMenu.svelte';
   import RoadTypeMenu from './RoadTypeMenu.svelte';
@@ -25,7 +24,7 @@
   import SupplyMenu from './SupplyMenu.svelte';
   import TransferDialog from './TransferDialog.svelte';
   import ToastStack from './ToastStack.svelte';
-  import Tooltip from './Tooltip.svelte';
+  import GroupTip from './GroupTip.svelte';
   import TopBar from './TopBar.svelte';
 
   interface Props {
@@ -163,7 +162,6 @@
   <AlertStack alerts={hud.alerts} />
   <ToastStack toasts={hud.toasts} />
   <StartBanner {data} visible={hud.banner} />
-  <OrderHint {data} {orders} />
   {#if hints}
     <KeyHints />
   {/if}
@@ -175,7 +173,7 @@
   <SplitMenu {orders} {anchors} />
   <CityRadial {orders} {anchors} {building} />
   <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
-  <Tooltip {data} ctx={hud.context} {orders} />
+  <GroupTip group={data?.hovered ?? null} />
   <HelpOverlay
     open={chrome.helpOpen}
     onclose={() => {

@@ -135,35 +135,15 @@ describe('OrderController', () => {
     expect(hud.selection).toEqual({ kind: 'node', id: enemy.id });
   });
 
-  it('previews the target with the price from the ruleset, and aims the estimate at enemies', () => {
-    const { controller, hud } = setup();
+  it('previews the target with the dotted line, and the combat estimate is gone', () => {
+    const { controller } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
     controller.hover({ kind: 'node', id: enemy.id });
-    expect(controller.ui.current.preview).toEqual({
-      node: enemy.id,
-      planned: false,
-      cost: DEV_RULES.cost.move,
-      ticks: null,
-      split: false,
-    });
-    expect(hud.target).toEqual({ node: enemy.id, planned: false });
     expect(controller.overlay().preview).toEqual({ from: home, to: enemy.id, planned: false });
-
-    // Shift held: the price switches to the planned one before the click.
     controller.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
-    expect(controller.ui.current.preview).toEqual({
-      node: enemy.id,
-      planned: true,
-      cost: DEV_RULES.cost.planned_move,
-      ticks: null,
-      split: false,
-    });
-
+    expect(controller.overlay().preview).toEqual({ from: home, to: enemy.id, planned: true });
     controller.hover(null);
-    expect(controller.ui.current.preview).toBeNull();
-    expect(hud.target).toBeNull();
-    controller.hover({ kind: 'node', id: other.id });
-    expect(hud.target).toBeNull(); // not an enemy node: no estimate
+    expect(controller.overlay().preview).toBeNull();
   });
 
   it('returns the same overlay object until something changes', () => {
@@ -256,11 +236,22 @@ describe('OrderController', () => {
     });
     const overlay = controller.overlay();
     expect([overlay.reach, overlay.split]).toEqual([[enemy.id], [other.id]]);
-    // The hovered target shows the server's travel time, or that the group must split.
+    // The hovered reachable target shows the server's travel time as one number, nothing else.
+    expect(controller.overlay().eta).toBeNull();
     controller.hover({ kind: 'node', id: enemy.id });
-    expect(controller.ui.current.preview).toMatchObject({ ticks: 25, split: false });
+    expect(controller.overlay().eta).toEqual({ node: enemy.id, ticks: 25 });
+    // Shift (a planned order): the delay before the group sets off comes on top.
+    controller.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
+    expect(controller.overlay().eta).toEqual({
+      node: enemy.id,
+      ticks: 25 + DEV_RULES.orders.planned_delay_ticks,
+    });
+    controller.key({ type: 'keyup', code: 'ShiftLeft', shiftKey: false });
+    expect(controller.overlay().eta?.ticks).toBe(25);
+    // A node the group must split for has no number (its ring is dashed).
     controller.hover({ kind: 'node', id: other.id });
-    expect(controller.ui.current.preview).toMatchObject({ ticks: null, split: true });
+    expect(controller.overlay().eta).toBeNull();
+    controller.hover({ kind: 'node', id: enemy.id });
     // The answer is asked again after a while (ownership on the way changes).
     hud.onSnapshot({ ...snapshot, tick: snapshot.tick + REACH_REFRESH_TICKS });
     controller.overlay();
@@ -268,6 +259,7 @@ describe('OrderController', () => {
     // Deselected: the rings go.
     controller.deselect();
     expect(controller.overlay().reach).toEqual([]);
+    expect(controller.overlay().eta).toBeNull();
     expect(controller.ui.current.reach).toBeNull();
   });
 
@@ -459,22 +451,6 @@ describe('OrderController', () => {
       expect(controller.key(key('Escape'))).toBe(true);
       expect(controller.roadType.current.open).toBe(false);
       expect(sent).toHaveLength(1);
-    });
-
-    it('hovering a candidate shows the gain and the price in charges of the next width', () => {
-      const { controller } = pickSetup();
-      controller.key(key('KeyU'));
-      controller.hover({ kind: 'edge', id: up2 });
-      // Level 2 -> 3 costs 3 charges by the ruleset of these tests.
-      expect(controller.ui.current.road).toEqual({
-        edge: up2,
-        width: 3,
-        kind: 'fast',
-        charges: 3,
-        pickable: true,
-      });
-      controller.hover({ kind: 'edge', id: away });
-      expect(controller.ui.current.road).toMatchObject({ edge: away, charges: 2, pickable: false });
     });
 
     it('Esc ends the pick and keeps the city selected; a second Esc deselects', () => {
