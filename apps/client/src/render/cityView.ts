@@ -262,7 +262,8 @@ export class CityView {
     }
     const badge = this.badges[id];
     if (badge !== null && badge !== undefined) {
-      const at = onCircle(radius * 0.78, -Math.PI / 4);
+      // Outside the capacity ring: the icon of the units in the city covers the body.
+      const at = onCircle(ringRadius(radius) + VP_BADGE_RADIUS + 1, -Math.PI / 4);
       badge.position.set(at.x, at.y);
     }
   }

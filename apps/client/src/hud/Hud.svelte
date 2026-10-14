@@ -19,6 +19,7 @@
   import RadialMenu from './RadialMenu.svelte';
   import RoadTypeMenu from './RoadTypeMenu.svelte';
   import SplitMenu from './SplitMenu.svelte';
+  import StackRadial from './StackRadial.svelte';
   import StartBanner from './StartBanner.svelte';
   import SupplyBanner from './SupplyBanner.svelte';
   import SupplyMenu from './SupplyMenu.svelte';
@@ -173,6 +174,7 @@
   <SplitMenu {orders} {anchors} />
   <CityRadial {orders} {anchors} {building} />
   <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
+  <StackRadial {orders} {anchors} />
   <GroupTip group={data?.hovered ?? null} />
   <HelpOverlay
     open={chrome.helpOpen}

@@ -12,14 +12,13 @@ import {
   edgeEnds,
   edgePoint,
   nodePoint,
-  nodeSlots,
   roadPosition,
   packetFade,
   timeLeftLabel,
   type TokenSpot,
 } from './layout.ts';
 import { symbolScale, type Point } from './camera.ts';
-import { NODE_SLOT_RADIUS } from './cityLayout.ts';
+import { iconPoint, stackGroups, stackKey, type CityIcon } from './cityStacks.ts';
 import { edgeMarkerPoint, nodeMarkerPoint } from './fogLayout.ts';
 import { EntityKit, Token } from './shapes.ts';
 import {
@@ -95,6 +94,8 @@ export class EntityView {
   private base: SnapshotMsg | null = null;
   private stamp = 0;
   private spots: ReadonlyMap<string, TokenSpot> = new Map();
+  private edgeSpots: ReadonlyMap<string, TokenSpot> = new Map();
+  private icons: readonly CityIcon[] = [];
 
   constructor(
     private readonly map: MapFile,
@@ -147,6 +148,16 @@ export class EntityView {
   /** Drawn centre, side and symbol scale of the own group tokens by id (hit testing, selection). */
   groupPoints(): ReadonlyMap<string, TokenSpot> {
     return this.spots;
+  }
+
+  /** The own groups on roads (each its own token), by id: hit testing. */
+  roadGroupPoints(): ReadonlyMap<string, TokenSpot> {
+    return this.edgeSpots;
+  }
+
+  /** The icons of the own units standing in cities: hit testing and the anchors of menus. */
+  cityIcons(): readonly CityIcon[] {
+    return this.icons;
   }
 
   /** Camera scale (CSS px per world unit): triangles never get smaller than 20 px on screen. */
@@ -322,19 +333,44 @@ export class EntityView {
 
   // --- Frame-driven part --------------------------------------------------------------------
 
-  /** Returns the drawn spot of every group by id (the order lines, hit testing, the selection). */
+  /**
+   * Returns the drawn spot of every group by id (the order lines, hit testing, the selection).
+   * Groups standing in a city are one icon per side (`cityStacks`): the own one in the middle of
+   * the city, the opponent's (a replay shows both sides) beside it; every group of a stack has the
+   * spot of its icon. A group on a road is a token of its own.
+   */
   private updateGroups(groups: readonly RenderGroup[]): Map<string, TokenSpot> {
     const spots = new Map<string, TokenSpot>();
-    // Tokens standing in one city fan out under it.
-    const perNode = new Map<number, RenderGroup[]>();
-    for (const item of groups) {
-      if (item.location.kind === 'node') {
-        const list = perNode.get(item.location.node) ?? [];
-        list.push(item);
-        perNode.set(item.location.node, list);
-      }
+    const edgeSpots = new Map<string, TokenSpot>();
+    const icons: CityIcon[] = [];
+    for (const stack of stackGroups(groups, this.me)) {
+      const entry = this.groupEntry(stackKey(stack.node, stack.owner), stack.owner);
+      entry.stamp = this.stamp;
+      entry.token.set({
+        owner: stack.owner,
+        modes: stack.modes,
+        counts: { units: stack.units, charged: stack.charged },
+        inside: true,
+      });
+      const city = nodePoint(this.map, stack.node);
+      const mine = stack.owner === this.me;
+      const marker =
+        city === undefined
+          ? undefined
+          : nodeMarkerPoint(this.map, stack.node, entry.token.side, this.radiusOf(stack.node));
+      const at = city === undefined ? undefined : iconPoint(city, marker, mine);
+      entry.view.visible = at !== undefined;
+      if (at === undefined) continue;
+      const scale = symbolScale(entry.token.side, this.cameraScale);
+      entry.view.scale.set(scale);
+      entry.view.position.set(at.x, at.y);
+      entry.token.setLabel(true);
+      const spot: TokenSpot = { x: at.x, y: at.y, side: entry.token.side, scale };
+      for (const id of stack.ids) spots.set(id, spot);
+      if (mine) icons.push({ ...stack, spot });
     }
     for (const item of groups) {
+      if (item.location.kind === 'node') continue;
       const owner = item.owner ?? this.me;
       const entry = this.groupEntry(item.group.id, owner);
       entry.stamp = this.stamp;
@@ -345,32 +381,26 @@ export class EntityView {
       });
       const { location } = item;
       let at: Point | undefined;
-      if (location.kind === 'node') {
-        const node = nodePoint(this.map, location.node);
-        const list = perNode.get(location.node) ?? [];
-        // Tokens stand under the rings and the warehouse bar of the city.
-        const slot = nodeSlots(list.length, NODE_SLOT_RADIUS)[list.indexOf(item)];
-        if (node !== undefined && slot !== undefined)
-          at = { x: node.x + slot.x, y: node.y + slot.y };
-      } else {
-        const ends = edgeEnds(this.map, location.edge);
-        const edge = this.map.edges[location.edge];
-        if (ends !== undefined && edge !== undefined) {
-          const fromIsA = edge.a === location.from_node;
-          at = roadPosition(ends.a, ends.b, fromIsA, location.progress);
-        }
+      const ends = edgeEnds(this.map, location.edge);
+      const edge = this.map.edges[location.edge];
+      if (ends !== undefined && edge !== undefined) {
+        const fromIsA = edge.a === location.from_node;
+        at = roadPosition(ends.a, ends.b, fromIsA, location.progress);
       }
       entry.view.visible = at !== undefined;
       if (at === undefined) continue;
       const scale = symbolScale(entry.token.side, this.cameraScale);
       entry.view.scale.set(scale);
       entry.view.position.set(at.x, at.y);
-      const id = item.group.id;
       // One short number: always shown (the exact units and charged are the tooltip's).
       entry.token.setLabel(true);
-      spots.set(id, { x: at.x, y: at.y, side: entry.token.side, scale });
+      const spot: TokenSpot = { x: at.x, y: at.y, side: entry.token.side, scale };
+      spots.set(item.group.id, spot);
+      edgeSpots.set(item.group.id, spot);
     }
     sweep(this.groups, this.stamp);
+    this.edgeSpots = edgeSpots;
+    this.icons = icons;
     return spots;
   }
 

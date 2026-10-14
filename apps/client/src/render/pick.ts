@@ -1,6 +1,8 @@
 import type { MapFile } from '../protocol.gen.ts';
 import { hitHalf, type Point } from './camera.ts';
+import type { CityIcon } from './cityStacks.ts';
 import { edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
+import { insideConvex } from './regionLayout.ts';
 import type { PickHit } from './interaction.ts';
 import { CAPITAL_RADIUS, NODE_RADIUS } from './style.ts';
 
@@ -20,24 +22,56 @@ export function segmentDistance(p: Point, a: Point, b: Point): number {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
-/**
- * What a click at `world` hits: an own group token first (the topmost, i.e. the last drawn), then
- * the nearest city circle, then the nearest road. `groups` are the drawn tokens by id and `scale`
- * is the camera scale (CSS px per world unit): a triangle is hit within at least 28 px on screen,
- * whatever the zoom (`hitHalf`). Pure: the order of the checks is the only rule.
- */
-export function pickAt(
-  map: MapFile,
+/** What the map has drawn to pick from, besides the roads and the city circles of the map file. */
+export interface PickScene {
+  /** Own groups on roads, by id. */
+  readonly groups: ReadonlyMap<string, TokenSpot>;
+  /** Icons of own units standing in cities. */
+  readonly icons?: readonly CityIcon[];
+  /** The Voronoi cells of the cities (`MapView.cells`): the area of a city. */
+  readonly cells?: readonly (readonly Point[])[];
+}
+
+/** The city whose area holds `world`, or `null`. */
+export function cellAt(
+  cells: readonly (readonly Point[])[] | undefined,
   world: Point,
-  groups: ReadonlyMap<string, TokenSpot>,
-  scale = 1,
-): PickHit | null {
+): number | null {
+  const found = cells?.findIndex((cell) => insideConvex(cell, world)) ?? -1;
+  return found < 0 ? null : found;
+}
+
+/**
+ * What a click at `world` hits: an own group token on a road, or the icon of own units in a city
+ * (the topmost, i.e. the last drawn), then the nearest city circle, then the nearest road, then
+ * the area of a city (any other place inside its cell). `scale` is the camera scale (CSS px per
+ * world unit): a triangle is hit within at least 28 px on screen, whatever the zoom (`hitHalf`).
+ * Pure: the order of the checks is the only rule.
+ */
+export function pickAt(map: MapFile, world: Point, scene: PickScene, scale = 1): PickHit | null {
   let group: string | null = null;
-  for (const [id, at] of groups) {
+  for (const [id, at] of scene.groups) {
     const half = hitHalf(at.side, scale);
     if (Math.abs(world.x - at.x) <= half && Math.abs(world.y - at.y) <= half) group = id;
   }
   if (group !== null) return { kind: 'group', id: group };
+
+  let icon: CityIcon | null = null;
+  for (const candidate of scene.icons ?? []) {
+    const half = hitHalf(candidate.spot.side, scale);
+    if (
+      Math.abs(world.x - candidate.spot.x) <= half &&
+      Math.abs(world.y - candidate.spot.y) <= half
+    ) {
+      icon = candidate;
+    }
+  }
+  if (icon !== null) {
+    const [only] = icon.ids;
+    return icon.ids.length === 1 && only !== undefined
+      ? { kind: 'group', id: only, node: icon.node }
+      : { kind: 'stack', node: icon.node, ids: icon.ids };
+  }
 
   let best: number | null = null;
   let bestDistance = Infinity;
@@ -53,6 +87,7 @@ export function pickAt(
   }
   if (best !== null) return { kind: 'node', id: best };
 
+  const cell = cellAt(scene.cells, world);
   let road: number | null = null;
   let roadDistance = EDGE_HIT;
   for (const edge of map.edges) {
@@ -64,5 +99,7 @@ export function pickAt(
       roadDistance = distance;
     }
   }
-  return road === null ? null : { kind: 'edge', id: road };
+  if (road !== null)
+    return cell === null ? { kind: 'edge', id: road } : { kind: 'edge', id: road, cell };
+  return cell === null ? null : { kind: 'node', id: cell };
 }

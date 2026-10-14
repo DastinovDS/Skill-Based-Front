@@ -1,0 +1,65 @@
+/**
+ * The units standing in a city, as the map draws them (UI round 2, #236): one icon per city and
+ * side, whatever the number of groups. Splitting a group never changes the picture, because the
+ * icon shows the total.
+ *
+ * Pure functions, no PixiJS. Numbers come from the snapshot; nothing is inferred.
+ */
+import type { Mode, PlayerId } from '../protocol.gen.ts';
+import type { RenderGroup } from '../net/interpolate.ts';
+import type { Point } from './camera.ts';
+import type { TokenSpot } from './layout.ts';
+
+/** The groups of one side standing in one city. */
+export interface CityStack {
+  readonly node: number;
+  readonly owner: PlayerId;
+  /** Group ids in the order of the frame (the order the list menu shows them). */
+  readonly ids: readonly string[];
+  readonly units: number;
+  readonly charged: number;
+  /** Distinct modes of the groups ("Defense" shows as the shield of the icon). */
+  readonly modes: readonly Mode[];
+}
+
+/** A drawn city icon: the stack and where its triangle is (hit testing, anchors). */
+export interface CityIcon extends CityStack {
+  readonly spot: TokenSpot;
+}
+
+/** Key of the icon of a side in a city. */
+export function stackKey(node: number, owner: PlayerId): string {
+  return `n${String(node)}:${String(owner)}`;
+}
+
+/**
+ * The groups standing in cities, one stack per city and side, in the order of the first group of
+ * each. Groups on a road are not part of any stack. `me`: the side of a group without `owner`.
+ */
+export function stackGroups(groups: readonly RenderGroup[], me: PlayerId): CityStack[] {
+  const stacks = new Map<
+    string,
+    { node: number; owner: PlayerId; ids: string[]; units: number; charged: number; modes: Mode[] }
+  >();
+  for (const item of groups) {
+    if (item.location.kind !== 'node') continue;
+    const node = item.location.node;
+    const owner = item.owner ?? me;
+    const key = stackKey(node, owner);
+    let stack = stacks.get(key);
+    if (stack === undefined) {
+      stack = { node, owner, ids: [], units: 0, charged: 0, modes: [] };
+      stacks.set(key, stack);
+    }
+    stack.ids.push(item.group.id);
+    stack.units += item.group.units;
+    stack.charged += item.group.charged;
+    if (!stack.modes.includes(item.group.mode)) stack.modes.push(item.group.mode);
+  }
+  return [...stacks.values()];
+}
+
+/** Where the icon of a side stands: the middle of its city, the opponent's beside it. */
+export function iconPoint(city: Point, marker: Point | undefined, mine: boolean): Point {
+  return mine || marker === undefined ? city : marker;
+}

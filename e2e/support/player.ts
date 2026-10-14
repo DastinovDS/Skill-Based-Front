@@ -2,8 +2,6 @@ import type { Browser, Page, WebSocketRoute } from '@playwright/test';
 import { expect } from '@playwright/test';
 import type { MapFile } from '../../apps/client/src/protocol.gen.ts';
 import { FIT_PADDING, fitCamera, worldToScreen } from '../../apps/client/src/render/camera.ts';
-import { nodeSlots } from '../../apps/client/src/render/layout.ts';
-import { NODE_SLOT_RADIUS } from '../../apps/client/src/render/cityLayout.ts';
 
 /** A JSON message of the match socket, in either direction. */
 export interface Frame {
@@ -167,26 +165,17 @@ export class Player {
   }
 
   /**
-   * Clicks a city, or with `token` the group token under it: the only one, or number `index` of
-   * `count` groups standing there (the first click of an order picks the group).
+   * Clicks a city. Own units standing in it are one icon in the middle of the city, so a click
+   * there picks the group (the only one in the city; with several the click opens their list).
    */
   async clickNode(
     map: MapFile,
     nodeId: number,
-    token: boolean | { index: number; count: number } = false,
     modifiers: ('Shift' | 'Control')[] = [],
   ): Promise<void> {
     const node = map.nodes[nodeId];
     if (node === undefined) throw new Error(`no node ${String(nodeId)}`);
-    let world = { x: node.x, y: node.y };
-    if (token) {
-      // Groups stand in slots under their city.
-      const { index, count } = token === true ? { index: 0, count: 1 } : token;
-      const slot = nodeSlots(count, NODE_SLOT_RADIUS)[index];
-      if (slot === undefined) throw new Error('no slot');
-      world = { x: node.x + slot.x, y: node.y + slot.y };
-    }
-    const at = await this.#screenPoint(map, world);
+    const at = await this.#screenPoint(map, { x: node.x, y: node.y });
     for (const key of modifiers) await this.page.keyboard.down(key);
     await this.page.mouse.click(at.x, at.y);
     for (const key of modifiers) await this.page.keyboard.up(key);
@@ -204,9 +193,9 @@ export class Player {
     await this.page.mouse.click(canvas.x + canvas.width - 3, canvas.y + canvas.height - 3);
     // There is no selection card since UI round 2: the HUD says what is selected in an attribute.
     await expect(this.page.locator('.hud')).toHaveAttribute('data-selection', 'none');
-    await this.clickNode(map, from, true);
+    await this.clickNode(map, from);
     await expect(this.page.locator('.hud')).toHaveAttribute('data-selection', /^group:/);
-    await this.clickNode(map, to, false, planned ? ['Shift'] : []);
+    await this.clickNode(map, to, planned ? ['Shift'] : []);
   }
 
   /** "Exit" of the top bar, then the confirmation of the dialog: a forfeit. */

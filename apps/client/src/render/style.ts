@@ -132,6 +132,8 @@ export const UNIT_OUTLINE = { width: 2.4, join: 'round' } as const;
 export const UNIT_INNER_OUTLINE = { width: 1.5, color: PAPER, alpha: 0.9, join: 'round' } as const;
 /** The inner outline of an opponent triangle: this share of the size. */
 export const UNIT_INNER_SCALE = 0.62;
+/** The casing of the icon of units standing in a city (round, in the colour of the background). */
+export const UNIT_HALO = { width: 7, alpha: 0.9, join: 'round' } as const;
 export const UNIT_DASH = { dash: 5, gap: 3.5 } as const;
 export const UNIT_QUESTION_FONT_SIZE = 15;
 /** On screen a triangle is at least this wide, and a click hits at least this wide (CSS px). */

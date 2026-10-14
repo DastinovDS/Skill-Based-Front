@@ -20,16 +20,6 @@ export function ringRadius(radius: number): number {
   return radius + RING_GAP;
 }
 
-/** How far from the city centre the rings and the bar reach (tokens under a city start there). */
-export const CITY_REACH_BELOW = RING_GAP + 4 + 9 + BAR_SEGMENT.height + 4;
-
-/**
- * The radius tokens of groups standing in a city are laid out from: below the largest city's rings
- * and bar, whatever the capacity class, so the slots do not move when a capacity changes (and the
- * end-to-end tests can click them without knowing the capacity).
- */
-export const NODE_SLOT_RADIUS = cityRadius(99) + CITY_REACH_BELOW;
-
 const START = -Math.PI / 2;
 const FULL = 2 * Math.PI;
 

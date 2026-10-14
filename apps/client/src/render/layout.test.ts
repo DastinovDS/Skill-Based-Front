@@ -8,7 +8,6 @@ import {
   edgePoint,
   fightInfo,
   chargeLevel,
-  nodeSlots,
   packetFade,
   triangleCorners,
   triangleHeight,
@@ -60,28 +59,6 @@ describe('unit triangles (9.5)', () => {
 describe('countLabel', () => {
   it('writes one number: all the units, not the charged share', () => {
     expect(countLabel(12)).toBe('12');
-  });
-});
-
-describe('nodeSlots', () => {
-  it('centres a lone token under the city', () => {
-    const [slot] = nodeSlots(1, 16);
-    expect(slot?.x).toBe(0);
-    expect(slot?.y).toBeGreaterThan(16);
-  });
-
-  it('puts two tokens side by side and the third in a new row', () => {
-    const slots = nodeSlots(3, 16);
-    expect(slots[0]?.x).toBeLessThan(0);
-    expect(slots[1]?.x).toBeGreaterThan(0);
-    expect(slots[0]?.y).toBe(slots[1]?.y);
-    expect(slots[2]?.x).toBe(0);
-    expect(slots[2]?.y).toBeGreaterThan(slots[0]?.y ?? 0);
-  });
-
-  it('gives no two tokens the same place', () => {
-    const slots = nodeSlots(6, 21).map((s) => `${String(s.x)},${String(s.y)}`);
-    expect(new Set(slots).size).toBe(6);
   });
 });
 

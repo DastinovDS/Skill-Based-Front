@@ -12,6 +12,7 @@ import {
   buildHudData,
   type HudContext,
   type HudData,
+  type HoverTarget,
   type HudEvent,
   type Selection,
 } from './hudData.ts';
@@ -56,8 +57,8 @@ export class HudState {
   readonly #ctx: HudContext;
   #snapshot: SnapshotMsg | null = null;
   #selection: Selection | null = null;
-  /** The group under the pointer (for its charge tip). */
-  #hovered: string | null = null;
+  /** The group, or the icon of the groups of a city, under the pointer (for its charge tip). */
+  #hovered: HoverTarget = null;
   /** Newest first; events arrive between snapshots and reach `current` with the next one. */
   #events: HudEvent[] = [];
   #seq = 0;
@@ -118,10 +119,18 @@ export class HudState {
     this.#publish();
   }
 
-  /** The group the pointer rests on, for its charge tip; `null`: none. */
-  hoverGroup(id: string | null): void {
-    if (id === this.#hovered) return;
-    this.#hovered = id;
+  /**
+   * The group the pointer rests on, or the one icon of the groups of a city (`{ node }`, the tip
+   * shows their totals), for the charge tip; `null`: none.
+   */
+  hoverGroup(target: HoverTarget): void {
+    const same =
+      target === this.#hovered ||
+      (typeof target === 'object' &&
+        typeof this.#hovered === 'object' &&
+        target?.node === this.#hovered?.node);
+    if (same) return;
+    this.#hovered = target;
     this.#publish();
   }
 

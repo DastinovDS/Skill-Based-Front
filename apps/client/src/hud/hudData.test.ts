@@ -56,7 +56,9 @@ describe('buildHudData: the numbers of the snapshot', () => {
   });
 
   it('lists the groups and nodes to pick from', () => {
-    expect(data.groups).toEqual([{ id: '71ad4e0c9b2f6358', units: 3, node: 0, planned: false }]);
+    expect(data.groups).toEqual([
+      { id: '71ad4e0c9b2f6358', units: 3, charged: 2, mode: 'attack', node: 0, planned: false },
+    ]);
     expect(data.nodes.map((n) => n.owner)).toEqual(['mine', 'enemy', 'enemy']);
   });
 });
