@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
-import type { MapFile, NodeView, Seen, SnapshotMsg } from '../protocol.gen.ts';
+import type { MapFile, NodeView, SnapshotMsg } from '../protocol.gen.ts';
 import { DEV_RULES } from './devFeed.ts';
-import { buildHudData, defenderOf, roadCandidates, type HudContext } from './hudData.ts';
+import { buildHudData, roadCandidates, type HudContext } from './hudData.ts';
 
 const snapshotFiles = import.meta.glob<string>(
   '../../../../packages/protocol/fixtures/server/snapshot_fog.json',
@@ -35,7 +35,7 @@ function withNode(patch: Partial<NodeView> & { id: number }): SnapshotMsg {
 }
 
 describe('buildHudData: the numbers of the snapshot', () => {
-  const data = buildHudData(ctx, fog, null, null, []);
+  const data = buildHudData(ctx, fog, null, []);
 
   it('takes CP, stance and VP from the view, from my side', () => {
     expect(data.cp).toEqual({
@@ -52,7 +52,7 @@ describe('buildHudData: the numbers of the snapshot', () => {
   });
 
   it('counts VP from the other side for player 1', () => {
-    expect(buildHudData({ ...ctx, me: 1 }, fog, null, null, []).vp).toEqual({ mine: 6, enemy: 4 });
+    expect(buildHudData({ ...ctx, me: 1 }, fog, null, []).vp).toEqual({ mine: 6, enemy: 4 });
   });
 
   it('lists the groups and nodes to pick from', () => {
@@ -63,7 +63,7 @@ describe('buildHudData: the numbers of the snapshot', () => {
 
 describe('buildHudData: selection', () => {
   it('shows a group with its node capacity', () => {
-    const data = buildHudData(ctx, fog, { kind: 'group', id: '71ad4e0c9b2f6358' }, null, []);
+    const data = buildHudData(ctx, fog, { kind: 'group', id: '71ad4e0c9b2f6358' }, []);
     expect(data.group).toMatchObject({
       units: 3,
       charged: 2,
@@ -76,14 +76,14 @@ describe('buildHudData: selection', () => {
   });
 
   it('shows a node with warehouse and enemy sighting', () => {
-    const own = buildHudData(ctx, fog, { kind: 'node', id: 0 }, null, []);
+    const own = buildHudData(ctx, fog, { kind: 'node', id: 0 }, []);
     expect(own.group).toBeNull();
     expect(own.node).toMatchObject({
       owner: 'mine',
       capacity: 4,
       warehouse: 4,
     });
-    const enemy = buildHudData(ctx, fog, { kind: 'node', id: 2 }, null, []);
+    const enemy = buildHudData(ctx, fog, { kind: 'node', id: 2 }, []);
     expect(enemy.node).toMatchObject({
       owner: 'enemy',
       capacity: 4, // DEC-22: public and exact, also in fog
@@ -93,87 +93,9 @@ describe('buildHudData: selection', () => {
   });
 
   it('shows nothing for a group that is gone', () => {
-    const data = buildHudData(ctx, fog, { kind: 'group', id: 'gone' }, null, []);
+    const data = buildHudData(ctx, fog, { kind: 'group', id: 'gone' }, []);
     expect(data.group).toBeNull();
     expect(data.node).toBeNull();
-  });
-});
-
-describe('buildHudData: combat estimate', () => {
-  const group = { kind: 'group', id: '71ad4e0c9b2f6358' } as const;
-  const combat = DEV_RULES.combat;
-
-  it('gives a ceiling for an enemy seen as presence only', () => {
-    const data = buildHudData(ctx, fog, group, { node: 1, planned: false }, []);
-    // Forest: no terrain modifier. Node 1 holds at most capacity 2; I shoot with 2 charges.
-    expect(data.estimate?.result).toEqual({
-      kind: 'upper_bound',
-      attackerPool: 2,
-      defenderPoolMax: 2,
-      attackerLossesMax: 0,
-      defenderUnitsMax: 2,
-    });
-  });
-
-  it('assumes the Defense bonus may be there for a node in fog', () => {
-    const data = buildHudData(ctx, fog, group, { node: 2, planned: true }, []);
-    expect(data.estimate?.result).toMatchObject({
-      kind: 'upper_bound',
-      attackerPool: 2 + combat.planned_bonus,
-      defenderPoolMax: 4 + combat.defense_bonus,
-    });
-  });
-
-  it('is exact when the enemy is seen in full', () => {
-    const seen: Seen = {
-      tick: 300,
-      level: 'exact',
-      enemy_modes: ['attack'],
-      enemy_units: 1,
-      enemy_charged: 1,
-    };
-    const data = buildHudData(
-      ctx,
-      withNode({ id: 1, detail: 'exact', seen }),
-      group,
-      { node: 1, planned: false },
-      [],
-    );
-    // Pools 2 against 1: one enemy unit dies and the node is taken.
-    expect(data.estimate?.result).toMatchObject({
-      kind: 'exact',
-      attackerPool: 2,
-      defenderPool: 1,
-      defenderLosses: 1,
-      captures: true,
-    });
-  });
-
-  it('knows an empty node: presence without enemy groups', () => {
-    const seen: Seen = {
-      tick: 300,
-      level: 'presence',
-      enemy_modes: [],
-      enemy_units: null,
-      enemy_charged: null,
-    };
-    const node = withNode({ id: 1, seen }).view.nodes[1];
-    if (node === undefined) throw new Error('no node 1');
-    expect(defenderOf(node)).toEqual({ visibility: 'exact', units: 0, charged: 0, modes: [] });
-  });
-
-  it('does not trust an old sighting in fog', () => {
-    const node = fog.view.nodes[2];
-    if (node === undefined) throw new Error('no node 2');
-    expect(defenderOf(node)).toEqual({ visibility: 'partial', capacity: 4, modes: null });
-  });
-
-  it('has no estimate for my own node or without a target', () => {
-    expect(buildHudData(ctx, fog, group, { node: 0, planned: false }, []).estimate).toBeNull();
-    expect(buildHudData(ctx, fog, group, null, []).estimate).toBeNull();
-    expect(
-      buildHudData(ctx, fog, { kind: 'node', id: 0 }, { node: 1, planned: false }, []).estimate,
-    ).toBeNull();
   });
 });
 
@@ -203,7 +125,7 @@ describe('buildHudData: road upgrades of cities (DEC-16)', () => {
   if (edge0 === undefined) throw new Error('the map has no edge 0');
 
   it('prices the next level of a road in charges, from the ruleset', () => {
-    const data = buildHudData({ ...ctx, rules }, snapshot, null, null, []);
+    const data = buildHudData({ ...ctx, rules }, snapshot, null, []);
     expect(data.roads[0]).toEqual({
       id: 0,
       a: edge0.a,
@@ -221,15 +143,15 @@ describe('buildHudData: road upgrades of cities (DEC-16)', () => {
   it('shows the own build of a city with the seconds left, an enemy one without', () => {
     const own = withNode({ id: 0, build: { edge: 0, done_tick: 345 } });
     // Tick 300, 45 ticks left at 10 ticks per second: 5 s (rounded up).
-    expect(buildHudData(ctx, own, { kind: 'node', id: 0 }, null, []).node?.build).toEqual({
+    expect(buildHudData(ctx, own, { kind: 'node', id: 0 }, []).node?.build).toEqual({
       edge: 0,
       secondsLeft: 5,
     });
     const enemy = withNode({ id: 1, build: { edge: 1, done_tick: null } });
-    expect(buildHudData(ctx, enemy, { kind: 'node', id: 1 }, null, []).node?.build).toEqual({
+    expect(buildHudData(ctx, enemy, { kind: 'node', id: 1 }, []).node?.build).toEqual({
       edge: 1,
       secondsLeft: null,
     });
-    expect(buildHudData(ctx, fog, { kind: 'node', id: 0 }, null, []).node?.build).toBeNull();
+    expect(buildHudData(ctx, fog, { kind: 'node', id: 0 }, []).node?.build).toBeNull();
   });
 });

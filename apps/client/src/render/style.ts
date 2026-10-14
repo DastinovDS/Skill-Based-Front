@@ -129,9 +129,11 @@ export const COUNT_FONT_SIZE = 10;
 /** Side of the triangle by the number of units (steps: 1-3, 4-7, 8-15, 16+); unknown: `UNIT_SIDE_UNKNOWN`. */
 export const UNIT_SIDES = [24, 30, 36, 42] as const;
 export const UNIT_SIDE_UNKNOWN = 30;
-export const UNIT_OUTLINE = { width: 2.4, color: PAPER, join: 'round' } as const;
-export const UNIT_INNER_OUTLINE = { width: 1.6, color: BG, join: 'round' } as const;
-/** The dark inner outline of an opponent triangle: this share of the size. */
+/** The outline of a triangle (the colour is the owner's, set where it is drawn). */
+export const UNIT_OUTLINE = { width: 2.4, join: 'round' } as const;
+/** The light inner outline of an opponent triangle: visible on a dark empty plate and on its fill. */
+export const UNIT_INNER_OUTLINE = { width: 1.5, color: PAPER, alpha: 0.9, join: 'round' } as const;
+/** The inner outline of an opponent triangle: this share of the size. */
 export const UNIT_INNER_SCALE = 0.62;
 export const UNIT_DASH = { dash: 5, gap: 3.5 } as const;
 export const UNIT_QUESTION_FONT_SIZE = 15;
@@ -200,6 +202,8 @@ export const SELECT_RING_GAP = 18;
  * reach only after a split: a dashed warning ring. Solid against dashed, not only colour.
  */
 export const REACH_RING = { gap: 12, width: 2, alpha: 0.8, dash: 5 } as const;
+/** The travel time under a hovered node: font size in world units (scaled to stay readable). */
+export const ETA_FONT_SIZE = 13;
 export const SELECT_WIDTH = 3;
 /** Group selection: a rounded frame this far outside the token. */
 export const SELECT_TOKEN_GAP = 4;

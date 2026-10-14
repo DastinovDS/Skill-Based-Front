@@ -103,7 +103,7 @@ describe('Hud', () => {
     expect(target.querySelectorAll('.segment')).toHaveLength(5);
   });
 
-  it('has no selection card: a selection is a data attribute, the order hint a quiet line', () => {
+  it('has no selection card: a selection is a data attribute, there is no hint line', () => {
     setLocale('en');
     const { target, state, orders } = render();
     const snapshot = devSnapshot(DEFAULT_MAP, DEV_RULES, 30);
@@ -119,7 +119,7 @@ describe('Hud', () => {
     flushSync();
     expect(hud?.getAttribute('data-selection')).toBe(`group:${group.id}`);
     expect(target.querySelector('.selection')).toBeNull();
-    expect(target.querySelector('[aria-label="Orders"]')?.textContent).toContain('Shift+click');
+    expect(target.querySelector('[aria-label="Orders"]')).toBeNull(); // no hint line at the bottom
     orders.deselect();
     flushSync();
     expect(hud?.getAttribute('data-selection')).toBe('none');

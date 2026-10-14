@@ -61,31 +61,3 @@ describe('pickAt', () => {
     expect(segmentDistance(middle, a, b)).toBeCloseTo(0);
   });
 });
-
-describe('pickAt, the arrows of intents (tooltip only)', () => {
-  const away = { x: at.x + 5000, y: at.y + 5000 };
-  const axis = [
-    { x: away.x, y: away.y },
-    { x: away.x + 100, y: away.y },
-    { x: away.x + 100, y: away.y + 100 },
-  ];
-  const ribbons = new Map([['intent', axis]]);
-
-  it('finds the arrow near its axis, also along a bend', () => {
-    expect(pickAt(map, { x: away.x + 50, y: away.y + 8 }, NONE, 1, ribbons)).toEqual({
-      kind: 'intent',
-      id: 'intent',
-    });
-    expect(pickAt(map, { x: away.x + 105, y: away.y + 60 }, NONE, 1, ribbons)?.kind).toBe('intent');
-  });
-
-  it('misses it beyond the reach, and never finds it for a click (no ribbons given)', () => {
-    expect(pickAt(map, { x: away.x + 50, y: away.y + 30 }, NONE, 1, ribbons)).toBeNull();
-    expect(pickAt(map, { x: away.x + 50, y: away.y }, NONE, 1)).toBeNull();
-  });
-
-  it('lets a city or a group on top of the arrow win', () => {
-    const onCity = new Map([['a', [at, { x: at.x + 200, y: at.y }]]]);
-    expect(pickAt(map, at, NONE, 1, onCity)).toEqual({ kind: 'node', id: node.id });
-  });
-});

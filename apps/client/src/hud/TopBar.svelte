@@ -48,7 +48,6 @@
           value: formatCentis(data.cp.value, locale),
           cap: formatCentis(data.cp.cap, locale),
         })}
-        title={t(full ? 'bar.cpFull' : 'bar.cpHint')}
       >
         <span class="term">{t('status.cp')}</span>
         <span class="segments" aria-hidden="true">
@@ -66,7 +65,6 @@
         type="button"
         class="chip"
         aria-label={tf('orders.stanceOpen', { stance: t(`stance.${data.stance}`) })}
-        title={t('bar.stanceHint')}
         onclick={() => {
           orders.openRadial(true);
         }}
@@ -115,13 +113,7 @@
 
   <div class="right">
     {#if data !== null}
-      <span
-        class="timer"
-        class:last={lastMinute}
-        role="timer"
-        aria-label={t('status.time')}
-        title={t(lastMinute ? 'bar.lastMinute' : 'status.time')}
-      >
+      <span class="timer" class:last={lastMinute} role="timer" aria-label={t('status.time')}>
         <Icon name="clock" size={lastMinute ? 20 : 18} />
         <span class="time">{formatClock(data.secondsLeft)}</span>
       </span>

@@ -206,6 +206,7 @@ export class MapScene {
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.entities.setTickHz(tickHz);
+    this.overlay.setTickHz(tickHz);
     const delays = this.source.orderDelays ?? null;
     this.intents.setDelays(delays);
     this.intents.setTickHz(tickHz);
@@ -221,8 +222,8 @@ export class MapScene {
     if (announce) this.onsnapshot?.(frame.base.tick);
   };
 
-  /** The hit under a point of the canvas, in CSS px; `hover` also finds the arrows of intents. */
-  private hitAt(at: Point, hover = false): PickHit | null {
+  /** The hit under a point of the canvas, in CSS px. */
+  private hitAt(at: Point): PickHit | null {
     const world = this.layers.world;
     return pickAt(
       this.map,
@@ -232,7 +233,6 @@ export class MapScene {
       },
       this.entities.groupPoints(),
       world.scale.x,
-      hover ? this.intents.ribbonAxes() : undefined,
     );
   }
 
@@ -241,7 +241,7 @@ export class MapScene {
   };
 
   private readonly onHover = (at: Point | null): void => {
-    const hit = at === null ? null : this.hitAt(at, true);
+    const hit = at === null ? null : this.hitAt(at);
     // The pointer cursor (CSSOM, allowed by the CSP) tells that a click does something here.
     const pointer = hit !== null && this.interaction !== null;
     if (pointer !== this.hovering) {
@@ -260,6 +260,7 @@ export class MapScene {
     const resolution = labelResolution(camera.scale, this.app.renderer.resolution);
     this.cities.setLabelResolution(resolution);
     this.overlay.setLabelResolution(resolution);
+    this.overlay.setCameraScale(camera.scale);
     this.entities.setLabelResolution(resolution);
     this.alerts.setLabelResolution(resolution);
     this.effects.setLabelResolution(resolution);

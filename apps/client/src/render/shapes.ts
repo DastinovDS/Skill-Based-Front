@@ -71,6 +71,7 @@ export class EntityKit {
 
   constructor(readonly me: PlayerId) {
     const triangles = new Map<number, TriangleShapes>();
+    const other: PlayerId = me === 0 ? 1 : 0;
     for (const side of UNIT_SIDES) {
       const corners = triangleCorners(side);
       const [left, right, tip] = corners;
@@ -101,9 +102,17 @@ export class EntityKit {
       triangles.set(side, {
         fill: this.context((g) => g.poly(flat(corners)).fill(PLATE_FILL)),
         level: { 0: level(0), 1: level(1) },
-        own: this.context((g) => g.poly(flat(corners)).stroke(UNIT_OUTLINE)),
+        // The outline carries the owner's colour, so an empty triangle still tells whose it is;
+        // the opponent's second, inner outline tells it without the hue (AGENTS.md 7.4).
+        own: this.context((g) =>
+          g.poly(flat(corners)).stroke({ ...UNIT_OUTLINE, color: ownerColor(me, me) }),
+        ),
         enemy: this.context((g) =>
-          g.poly(flat(corners)).stroke(UNIT_OUTLINE).poly(flat(inner)).stroke(UNIT_INNER_OUTLINE),
+          g
+            .poly(flat(corners))
+            .stroke({ ...UNIT_OUTLINE, color: ownerColor(me, other) })
+            .poly(flat(inner))
+            .stroke(UNIT_INNER_OUTLINE),
         ),
         dashed: { 0: dashed(0), 1: dashed(1) },
       });
@@ -178,8 +187,8 @@ function specKey(spec: TokenSpec): string {
 }
 
 /**
- * A unit triangle (9.5): inverted, filled from the tip by the charged share, an own white outline
- * or an opponent's double one (dashed with "?" without numbers, and for a ghost), a shield disc for
+ * A unit triangle (9.5): inverted, filled from the tip by the charged share, an outline in the owner's
+ * colour (the opponent's double) (dashed with "?" without numbers, and for a ghost), a shield disc for
  * "Defense" and one number (all the units) under the tip. The children are created once; `set` only
  * swaps contexts and visibility, and does nothing when the spec is unchanged. Drawn around the
  * centre of the bounding box of the triangle.

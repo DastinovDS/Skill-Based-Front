@@ -70,8 +70,6 @@ export class IntentView {
   private readonly icons = new Container({ label: 'intent-icons' });
   private readonly iconPool: Container[] = [];
   private cameraScale = 1;
-  /** The drawn axis of each ribbon by intent id, for the tooltip's hit test. */
-  private readonly axes = new Map<string, readonly Point[]>();
   /** The chain of nodes of each own ordinary order, kept while the order lives (`orderTrack.ts`). */
   private readonly chains = new Map<string, number[]>();
   private delays: OrderDelays | null = null;
@@ -113,7 +111,6 @@ export class IntentView {
     this.ribbons.clear();
     this.rings.clear();
     this.arcs.clear();
-    this.axes.clear();
     let icons = 0;
     for (const intent of intents) {
       const from = nodePoint(this.map, intent.origin);
@@ -142,11 +139,6 @@ export class IntentView {
       const icon = this.iconPool[i];
       if (icon !== undefined) icon.visible = false;
     }
-  }
-
-  /** The axes of the ribbons on screen, by intent id: what a pointer can rest on. */
-  ribbonAxes(): ReadonlyMap<string, readonly Point[]> {
-    return this.axes;
   }
 
   destroy(): void {
@@ -203,7 +195,6 @@ export class IntentView {
     );
     const ribbon = ribbonOutline(axis, ribbonBody(this.cameraScale));
     if (ribbon === null) return;
-    this.axes.set(intent.id, axis);
     const g = this.ribbons;
     const color = ownerColor(this.me, intent.owner);
     const own = intent.owner === this.me;

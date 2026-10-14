@@ -5,18 +5,14 @@
  * nothing.
  */
 
-/**
- * What is under the pointer: an own group (by id), a node or a road (by id), or the arrow of a
- * public intent (by its id; only for the tooltip, a click never picks it).
- */
+/** What is under the pointer: an own group (by id) or a node or a road (by id). */
 export type PickHit =
   | { readonly kind: 'group'; readonly id: string }
   | { readonly kind: 'node'; readonly id: number }
-  | { readonly kind: 'edge'; readonly id: number }
-  | { readonly kind: 'intent'; readonly id: string };
+  | { readonly kind: 'edge'; readonly id: number };
 
 /** What can be selected: a group or a node (a road is only hovered, and clicked in road pick). */
-export type SelectionHit = Exclude<PickHit, { readonly kind: 'edge' | 'intent' }>;
+export type SelectionHit = Exclude<PickHit, { readonly kind: 'edge' }>;
 
 /** The life of a ghost: sent (dashed), accepted by the server (solid), rejected (shakes and fades). */
 export type GhostStatus = 'pending' | 'accepted' | 'rejected';
@@ -73,6 +69,16 @@ export interface OverlayState {
    */
   readonly reach: readonly number[];
   readonly split: readonly number[];
+  /**
+   * The time to the hovered reachable node, drawn as one small number there: the server's travel
+   * time of the whole path, plus the delay of a planned order (Shift held). `null`: no number.
+   */
+  readonly eta: EtaMark | null;
+}
+
+export interface EtaMark {
+  readonly node: number;
+  readonly ticks: number;
 }
 
 export const EMPTY_OVERLAY: OverlayState = {
@@ -85,6 +91,7 @@ export const EMPTY_OVERLAY: OverlayState = {
   supply: null,
   reach: [],
   split: [],
+  eta: null,
 };
 
 export interface MapInteraction {

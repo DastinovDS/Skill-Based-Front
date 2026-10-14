@@ -1,5 +1,7 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { t } from '../i18n/index.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
+import { badgeScale } from './alertLayout.ts';
 import type { Point } from './camera.ts';
 import { EMPTY_OVERLAY, type GhostArrow, type OverlayState } from './interaction.ts';
 import { ghostLook } from './intentLayout.ts';
@@ -15,6 +17,7 @@ import {
 } from './layout.ts';
 import {
   ARROW_HEAD,
+  ETA_FONT_SIZE,
   ARROW_OUTLINE,
   BG,
   CAPITAL_RADIUS,
@@ -58,6 +61,17 @@ export class OverlayView {
   /** Side of the triangle the selection frame is drawn for (0: not drawn yet). */
   private frameSide = 0;
   private widths: readonly number[] = [];
+  /** The time to the hovered reachable node: one small number under it, no window. */
+  private readonly eta: Text;
+  private readonly etaStyle = new TextStyle({
+    fontFamily: 'system-ui, sans-serif',
+    fontSize: ETA_FONT_SIZE,
+    fontWeight: '700',
+    fill: PAPER,
+    stroke: { color: BG, width: 3, join: 'round' },
+  });
+  private tickHz = 10;
+  private cameraScale = 1;
   private readonly badge = new Container({ label: 'road-width', visible: false });
   private readonly badgeText: Text;
   private readonly badgeStyle = new TextStyle({
@@ -85,7 +99,21 @@ export class OverlayView {
     this.badgeText = this.badge.addChild(
       new Text({ text: '', style: this.badgeStyle, anchor: 0.5, resolution: 1 }),
     );
-    layers.layer.intents.addChild(this.lines, this.ring, this.frame, this.badge, this.ghosts);
+    this.eta = new Text({
+      text: '',
+      style: this.etaStyle,
+      anchor: { x: 0.5, y: 0 },
+      resolution: 1,
+      visible: false,
+    });
+    layers.layer.intents.addChild(
+      this.lines,
+      this.ring,
+      this.frame,
+      this.badge,
+      this.eta,
+      this.ghosts,
+    );
     this.frame.visible = false;
   }
 
@@ -101,6 +129,7 @@ export class OverlayView {
       this.drawLines(next);
       this.drawRing(next);
     }
+    this.placeEta(next);
     // A rejected ghost shakes and fades with the clock; the others only when the overlay changes.
     if (changed || next.ghosts.some((g) => g.status === 'rejected')) this.drawGhosts(next, now);
     const selected = next.selection;
@@ -121,11 +150,40 @@ export class OverlayView {
 
   setLabelResolution(resolution: number): void {
     if (this.badgeText.resolution !== resolution) this.badgeText.resolution = resolution;
+    if (this.eta.resolution !== resolution) this.eta.resolution = resolution;
+  }
+
+  /** Ticks per second, to turn the travel time into seconds. */
+  setTickHz(tickHz: number): void {
+    this.tickHz = tickHz;
+  }
+
+  /** Camera scale (CSS px per world unit): the number keeps its size on screen. */
+  setCameraScale(scale: number): void {
+    this.cameraScale = scale;
+  }
+
+  /** The number of seconds (rounded up) under the hovered node, or nothing. */
+  private placeEta(state: OverlayState): void {
+    const mark = state.eta;
+    const at = mark === null ? undefined : nodePoint(this.map, mark.node);
+    if (mark === null || at === undefined || this.tickHz <= 0) {
+      this.eta.visible = false;
+      return;
+    }
+    const text = `${String(Math.ceil(mark.ticks / this.tickHz))} ${t('unit.s')}`;
+    if (this.eta.text !== text) this.eta.text = text;
+    const scale = badgeScale(this.cameraScale);
+    this.eta.scale.set(scale);
+    this.eta.position.set(at.x, at.y + this.radiusOf(mark.node) + REACH_RING.gap + 4 * scale);
+    this.eta.visible = true;
   }
 
   destroy(): void {
     this.badge.destroy({ children: true });
     this.badgeStyle.destroy();
+    this.eta.destroy();
+    this.etaStyle.destroy();
     this.lines.destroy();
     this.ghosts.destroy();
     this.ring.destroy();

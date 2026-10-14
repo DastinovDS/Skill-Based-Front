@@ -133,17 +133,19 @@ describe('HudState: start banner, hover, toasts and the last minute', () => {
     expect(second.current?.nicks).toEqual({ mine: 'Bot', enemy: 'Danya' });
   });
 
-  it('publishes the thing under the pointer once per change', () => {
+  it('publishes the group under the pointer once per change', () => {
     const hud = newState();
     hud.onSnapshot(snapshot(2));
-    expect(hud.current?.tip).toBeNull();
-    hud.hover({ kind: 'node', id: 0 });
+    expect(hud.current?.hovered).toBeNull();
+    const id = hud.current?.groups[0]?.id;
+    if (id === undefined) throw new Error('no group');
+    hud.hoverGroup(id);
     const withTip = hud.current;
-    expect(withTip?.tip?.kind).toBe('node');
-    hud.hover({ kind: 'node', id: 0 });
-    expect(hud.current).toBe(withTip); // the same hit: no new object
-    hud.hover(null);
-    expect(hud.current?.tip).toBeNull();
+    expect(withTip?.hovered?.id).toBe(id);
+    hud.hoverGroup(id);
+    expect(hud.current).toBe(withTip); // the same group: no new object
+    hud.hoverGroup(null);
+    expect(hud.current?.hovered).toBeNull();
   });
 
   it('turns fights, captures and attrition into toasts, and VP awards into nothing', () => {
