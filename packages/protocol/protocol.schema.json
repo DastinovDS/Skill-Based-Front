@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 13,
+    "PROTOCOL_VERSION": 14,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -233,12 +233,32 @@
           "maximum": 2147483647,
           "minimum": -2147483647,
           "type": "integer"
+        },
+        "round_ticks": {
+          "description": "Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight.",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "shots_per_round": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "regroup_ticks": {
+          "description": "The pause of an edge winner before it goes on (DEC-24, item G4).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "terrain_defense_mod",
         "planned_bonus",
-        "defense_bonus"
+        "defense_bonus",
+        "round_ticks",
+        "shots_per_round",
+        "regroup_ticks"
       ],
       "title": "CombatPublic",
       "type": "object"
@@ -625,6 +645,104 @@
         "data"
       ],
       "title": "EventMsg",
+      "type": "object"
+    },
+    "FightView": {
+      "additionalProperties": false,
+      "description": "A fight going on (DEC-24, item I1): a node, or an edge with the meeting ``point``.\n\n``point``: twice the meeting position in thousandths from the end ``a`` of the edge\n(0..2000); the mark sits at ``point / 2000`` of the edge from ``a`` (item C3). ``groups``:\nthe own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this\nfight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.",
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        },
+        "node": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "edge": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "point": {
+          "anyOf": [
+            {
+              "maximum": 2000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attacker": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlayerId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The player attacking the node; ``None`` on an edge and in a neutral node."
+        },
+        "start_tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "next_round_tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "groups": {
+          "items": {
+            "pattern": "^[A-Za-z0-9_-]{1,32}$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "enemy_units": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "enemy_charged": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "node",
+        "edge",
+        "point",
+        "attacker",
+        "start_tick",
+        "next_round_tick",
+        "groups",
+        "enemy_units",
+        "enemy_charged"
+      ],
+      "title": "FightView",
       "type": "object"
     },
     "ForfeitCmd": {
@@ -2349,6 +2467,13 @@
             "$ref": "#/$defs/IntentView"
           },
           "type": "array"
+        },
+        "fights": {
+          "description": "Fights going on (DEC-24): own groups fight in each.",
+          "items": {
+            "$ref": "#/$defs/FightView"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -2358,7 +2483,8 @@
         "edges",
         "groups",
         "packets",
-        "intents"
+        "intents",
+        "fights"
       ],
       "title": "View",
       "type": "object"

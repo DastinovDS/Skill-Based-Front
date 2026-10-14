@@ -54,6 +54,11 @@ class CombatPublic(WireModel):
     terrain_defense_mod: TerrainDefensePublic
     planned_bonus: SignedInt
     defense_bonus: SignedInt
+    round_ticks: PosInt
+    """Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight."""
+    shots_per_round: PosInt
+    regroup_ticks: NonNegInt
+    """The pause of an edge winner before it goes on (DEC-24, item G4)."""
 
 
 class CpPublic(WireModel):
@@ -159,6 +164,9 @@ class RulesetPublic(WireModel):
                 ),
                 planned_bonus=rules.orders.planned_bonus,
                 defense_bonus=rules.orders.defense_bonus,
+                round_ticks=rules.combat.round_ticks,
+                shots_per_round=rules.combat.shots_per_round,
+                regroup_ticks=rules.combat.regroup_ticks,
             ),
             build=BuildPublic(
                 ticks_per_level=rules.build.ticks_per_level,

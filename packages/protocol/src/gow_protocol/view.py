@@ -12,7 +12,10 @@ what a view must not contain (AGENTS.md, section 4.4):
 - ``EXACT`` places (own nodes, nodes where own groups stand): everything with numbers;
 - ``PRESENCE`` places (neighbours of ``EXACT`` nodes and edges touching them): whether enemy
   groups are there and their modes, no numbers;
-- ``FOG``: only the last sighting from the fog memory.
+- ``FOG``: only the last sighting from the fog memory;
+- fights going on (DEC-24, item I1): every fight has groups of both players, so both see it with
+  the exact units and charged of the enemy in it; the enemy's virtual shots and group ids are not
+  in the view.
 
 Deliberate choices of the wire format:
 
@@ -255,6 +258,40 @@ class IntentView(WireModel):
     created_tick: Tick
 
 
+class FightView(WireModel):
+    """A fight going on (DEC-24, item I1): a node, or an edge with the meeting ``point``.
+
+    ``point``: twice the meeting position in thousandths from the end ``a`` of the edge
+    (0..2000); the mark sits at ``point / 2000`` of the edge from ``a`` (item C3). ``groups``:
+    the own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this
+    fight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.
+    """
+
+    id: OpaqueId
+    node: NodeId | None
+    edge: EdgeId | None
+    point: Annotated[int, Field(ge=0, le=2000)] | None
+    attacker: PlayerId | None
+    """The player attacking the node; ``None`` on an edge and in a neutral node."""
+    start_tick: Tick
+    next_round_tick: Tick
+    groups: tuple[OpaqueId, ...]
+    enemy_units: NonNegInt
+    enemy_charged: NonNegInt
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if (self.node is None) == (self.edge is None):
+            raise ValueError("a fight is in a node or on an edge")
+        if (self.point is None) != (self.edge is None):
+            raise ValueError("point is given exactly for a fight on an edge")
+        if self.next_round_tick <= self.start_tick:
+            raise ValueError("next_round_tick must be after start_tick")
+        if self.enemy_charged > self.enemy_units:
+            raise ValueError("enemy_charged must not exceed enemy_units")
+        return self
+
+
 class SelfView(WireModel):
     """Own counters; the enemy's CP and stance are never in a view (AGENTS.md, section 4.4)."""
 
@@ -273,6 +310,8 @@ class View(WireModel):
     groups: tuple[GroupView, ...]
     packets: tuple[PacketView, ...]
     intents: tuple[IntentView, ...]
+    fights: tuple[FightView, ...]
+    """Fights going on (DEC-24): own groups fight in each."""
 
     @field_validator("nodes", "edges")
     @classmethod
@@ -286,10 +325,12 @@ class View(WireModel):
 
     @model_validator(mode="after")
     def _check_refs(self) -> Self:
-        for entities in (self.groups, self.packets, self.intents):
+        for entities in (self.groups, self.packets, self.intents, self.fights):
             ids = [e.id for e in entities]
             if len(set(ids)) != len(ids):
-                raise ValueError("ids of groups, packets and intents must be unique in their list")
+                raise ValueError(
+                    "ids of groups, packets, intents and fights must be unique in their list"
+                )
         nodes, edges = len(self.nodes), len(self.edges)
         refs_nodes: list[int] = []
         refs_edges: list[int] = []
@@ -310,8 +351,16 @@ class View(WireModel):
             if intent.target is not None:
                 refs_nodes.append(intent.target)
         refs_edges.extend(n.build.edge for n in self.nodes if n.build is not None)
+        own = {g.id for g in self.groups}
+        for fight in self.fights:
+            if fight.node is not None:
+                refs_nodes.append(fight.node)
+            if fight.edge is not None:
+                refs_edges.append(fight.edge)
+            if any(g not in own for g in fight.groups):
+                raise ValueError("a fight names a group that is not an own group of the view")
         if any(n >= nodes for n in refs_nodes) or any(e >= edges for e in refs_edges):
             raise ValueError(
-                "a group, packet, intent or build refers to a node or edge not in the view"
+                "a group, packet, intent, build or fight refers to a node or edge not in the view"
             )
         return self

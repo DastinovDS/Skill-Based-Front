@@ -28,8 +28,9 @@ Which events a player sees (AGENTS.md, section 4.4: nothing about the enemy's CP
 production, counters or groups, no fights and supply in the fog). Unknown kinds are never sent:
 
 - public: ``node_captured`` (ownership is public), ``vp_awarded`` (VP are public), ``forfeit``;
-- ``fight``: to both players, they both fight in it; the enemy's ``pool`` and ``unspent`` (its
-  charges) are removed, the losses of both sides stay;
+- ``fight_started``, ``fight_round``, ``fight_ended`` (DEC-24, item I2): to both players, they
+  both fight in it; the enemy's ``shots``, ``virtual`` and ``spent`` (its bonuses and charges)
+  are removed, the place, the point and the losses of both sides stay;
 - everything else only to the player of the event (``player``, for ``warehouse_lost`` ``owner``),
   enemy ones are dropped. ``fight_group`` goes only to the owner of the group; the road build
   events ``build_started``, ``road_upgraded`` and ``build_stopped`` only to the builder (DEC-17,
@@ -37,8 +38,8 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
   ``starvation`` only to the owner of the city (DEC-19, item 8);
 - ``match_ended`` is not an event on the wire: it is ``match_end``.
 
-Entity ids in event data (``group``, ``new_group``, ``packet``) become opaque ids of the player;
-only events about the player's own entities carry them.
+Entity ids in event data (``group``, ``new_group``, ``packet``, ``fight``) become opaque ids of
+the player; only events about the player's own entities and own fights carry them.
 
 The simulation's ``victory.EndReason`` is finer than the wire's: ``vp``, ``cities`` and ``draw``
 are all ``timer``; ``double_defeat`` (both players lost in one tick, #136) is its own reason.
@@ -63,6 +64,7 @@ from gow_protocol.messages import (
 from gow_protocol.view import (
     AtNodeLoc,
     EdgeView,
+    FightView,
     GroupView,
     IntentView,
     Location,
@@ -85,6 +87,7 @@ from gow_sim.systems.victory import Outcome
 
 __all__ = [
     "ENTITY_KEYS",
+    "FIGHT_KINDS",
     "PRIVATE_KINDS",
     "PUBLIC_KINDS",
     "ack_msg",
@@ -133,11 +136,15 @@ PRIVATE_KINDS: Final = frozenset(
 )
 """Events only their own player gets."""
 
-ENTITY_KEYS: Final = frozenset({"group", "new_group", "packet"})
+ENTITY_KEYS: Final = frozenset({"group", "new_group", "packet", "fight"})
 """Keys of ``Event.data`` that hold internal entity ids."""
 
-_FIGHT_HIDDEN: Final = ("pool", "unspent")
-"""Per-player fields of ``fight`` the other player does not get (``pool_1`` for player 0)."""
+FIGHT_KINDS: Final = frozenset({"fight_started", "fight_round", "fight_ended"})
+"""Events of a fight (DEC-24): both players get them, without the enemy's hidden fields."""
+
+_FIGHT_HIDDEN: Final = ("shots", "virtual", "spent")
+"""Per-player fields of the fight events the other player does not get (``shots_1`` for player
+0): its shots and virtual shots would show its bonuses, ``spent`` its charges."""
 
 
 # Ids -----------------------------------------------------------------------------------------
@@ -239,6 +246,21 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 created_tick=i.created_tick,
             )
             for i in view.intents
+        ),
+        fights=tuple(
+            FightView(
+                id=opaque_to_wire(f.id),
+                node=f.node,
+                edge=f.edge,
+                point=f.point,
+                attacker=f.attacker,
+                start_tick=f.start_tick,
+                next_round_tick=f.next_round_tick,
+                groups=tuple(opaque_to_wire(g) for g in f.groups),
+                enemy_units=f.enemy_units,
+                enemy_charged=f.enemy_charged,
+            )
+            for f in view.fights
         ),
     )
 
@@ -354,6 +376,21 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
             }
             for i in view.intents
         ],
+        "fights": [
+            {
+                "id": opaque_to_wire(f.id),
+                "node": f.node,
+                "edge": f.edge,
+                "point": f.point,
+                "attacker": f.attacker,
+                "start_tick": f.start_tick,
+                "next_round_tick": f.next_round_tick,
+                "groups": [opaque_to_wire(g) for g in f.groups],
+                "enemy_units": f.enemy_units,
+                "enemy_charged": f.enemy_charged,
+            }
+            for f in view.fights
+        ],
     }
 
 
@@ -461,10 +498,10 @@ def events_msgs(events: Iterable[Event], player: int, match_key: bytes) -> list[
 def event_for_player(e: Event, player: int, match_key: bytes) -> EventMsg | None:
     """The ``event`` message of ``e`` for ``player``, or ``None`` if the player must not see it."""
     data = dict(e.data)
-    if e.kind == "fight":
+    if e.kind in FIGHT_KINDS:
         other = 1 - player
         for name in _FIGHT_HIDDEN:
-            del data[f"{name}_{other}"]
+            data.pop(f"{name}_{other}", None)
     elif e.kind in PRIVATE_KINDS:
         owner = data["owner"] if e.kind == "warehouse_lost" else data["player"]
         if owner != player:

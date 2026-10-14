@@ -1,7 +1,8 @@
 """Structure checks for the shared test vectors (packages/protocol/vectors).
 
 Only the file format and internal consistency are checked here. The expected values come from
-docs/design/mechanics.md (DEC-07) and are exercised against the real combat code in SIM-09.
+docs/design/mechanics.md (DEC-24, which keeps the outcomes of DEC-07) and are exercised against the
+real combat code (``packages/sim/tests/test_combat.py``).
 """
 
 import json
@@ -11,7 +12,7 @@ from typing import cast
 
 import pytest
 
-from gow_protocol.convert import PRIVATE_KINDS, PUBLIC_KINDS
+from gow_protocol.convert import FIGHT_KINDS, PRIVATE_KINDS, PUBLIC_KINDS
 
 VECTORS_DIR = Path(__file__).resolve().parents[1] / "vectors"
 COMBAT_PATH = VECTORS_DIR / "combat.json"
@@ -36,12 +37,17 @@ VECTOR_KEYS = {
     "note",
 }
 EXPECTED_KEYS = {
-    "pool",
+    "fight",
+    "end_after",
+    "rounds",
+    "trace",
+    "shots",
     "losses",
     "groups",
     "bounce",
     "node_owner_after",
     "continues_on_edge",
+    "goes_on_after",
 }
 
 
@@ -96,17 +102,33 @@ def _groups(value: object) -> dict[int, tuple[int, int]]:
 
 def test_combat_header() -> None:
     data = _load_combat()
-    assert set(data) == {"schema_version", "source", "params", "vectors"}
-    assert _int(data["schema_version"]) == 1
+    assert set(data) == {"schema_version", "source", "params", "vectors", "scenarios"}
+    assert _int(data["schema_version"]) == 2
     assert isinstance(data["source"], str)
     params = _obj(data["params"])
-    assert set(params) == {"terrain_defense_mod", "planned_bonus", "defense_bonus"}
+    assert set(params) == {
+        "terrain_defense_mod",
+        "planned_bonus",
+        "defense_bonus",
+        "round_ticks",
+        "shots_per_round",
+        "regroup_ticks",
+    }
     terrain = _obj(params["terrain_defense_mod"])
     assert set(terrain) == TERRAINS
     for mod in terrain.values():
         _int(mod)
     _int(params["planned_bonus"])
     _int(params["defense_bonus"])
+    assert _int(params["round_ticks"]) > 0
+    assert _int(params["shots_per_round"]) > 0
+    assert _int(params["regroup_ticks"]) >= 0
+    scenarios = [_obj(s) for s in _list(data["scenarios"])]
+    assert [s["id"] for s in scenarios] == ["17", "17б", "17в", "18", "19", "20", "21", "22", "23"]  # noqa: RUF001
+    for scenario in scenarios:
+        assert set(scenario) == {"id", "source_row", "expected"}
+        assert isinstance(scenario["source_row"], str) and scenario["source_row"]
+        _obj(scenario["expected"])
 
 
 def test_combat_params_match_mvp0_ruleset() -> None:
@@ -116,6 +138,9 @@ def test_combat_params_match_mvp0_ruleset() -> None:
     assert params["terrain_defense_mod"] == _obj(ruleset["terrain"])["defense_mod"]
     assert params["planned_bonus"] == orders["planned_bonus"]
     assert params["defense_bonus"] == orders["defense_bonus"]
+    combat = _obj(ruleset["combat"])
+    for key in ("round_ticks", "shots_per_round", "regroup_ticks"):
+        assert params[key] == combat[key]
 
 
 def test_combat_ids_are_1_to_16() -> None:
@@ -129,7 +154,7 @@ def test_combat_vector_structure(vector: dict[str, object]) -> None:
     assert isinstance(vector["note"], str)
     assert vector["note"]
     row = _obj(vector["source_row"])
-    assert set(row) == {"attack", "defense", "result"}
+    assert set(row) == {"attack", "defense", "rounds", "result"}
     assert all(isinstance(cell, str) and cell for cell in row.values())
 
     location = vector["location"]
@@ -164,11 +189,22 @@ def test_combat_vector_structure(vector: dict[str, object]) -> None:
 
     expected = _obj(vector["expected"])
     assert set(expected) == EXPECTED_KEYS
-    if location == "empty_enemy_node":
-        assert expected["pool"] is None
-    else:
-        for pool in _per_side(expected["pool"]).values():
-            assert _int(pool) >= 0
+    fight = _bool(expected["fight"])
+    assert fight == (location != "empty_enemy_node")
+    rounds = _int(expected["rounds"])
+    assert _int(expected["end_after"]) == 10 * rounds  # round_ticks = 10, the end after a round
+    assert fight == (rounds > 0)
+    for raw in _list(expected["trace"]):
+        step = _obj(raw)
+        assert 1 <= _int(step["round"]) <= rounds
+        for charged in _per_side(step["charged"]).values():
+            assert _int(charged) >= 0
+    if expected["shots"] is not None:
+        assert on_edge
+        for shots in _per_side(expected["shots"]).values():
+            assert 0 <= _int(shots) <= rounds
+    if expected["goes_on_after"] is not None:
+        assert on_edge and _int(expected["goes_on_after"]) > _int(expected["end_after"])
     losses = _per_side(expected["losses"])
     after_groups = _per_side(expected["groups"])
     for name in SIDES:
@@ -196,4 +232,4 @@ def test_combat_vector_structure(vector: dict[str, object]) -> None:
 def test_event_kinds_vector_is_what_the_server_sends() -> None:
     """The client checks every one of these kinds has a feed text (or is hidden), see #184."""
     data = cast(dict[str, object], json.loads((VECTORS_DIR / "event_kinds.json").read_text()))
-    assert data["kinds"] == sorted(PUBLIC_KINDS | PRIVATE_KINDS | {"fight"})
+    assert data["kinds"] == sorted(PUBLIC_KINDS | PRIVATE_KINDS | FIGHT_KINDS)
