@@ -103,10 +103,12 @@ class RandomLegalBot(Bot):
         else:
             candidates = [n.id for n in view.nodes]
         standing = self.standing(view)
+        fights = self.fight_nodes(view)
         cities = [
             n
             for n in candidates
             if view.nodes[n].owner == me
+            and n not in fights
             and standing[n] < view.nodes[n].capacity
             and tick - self.recruited.get(n, tick - cooldown) >= cooldown
         ]

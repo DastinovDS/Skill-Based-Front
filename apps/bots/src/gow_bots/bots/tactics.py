@@ -134,6 +134,9 @@ class StrategyBot(Bot):
         for g in view.groups:
             if g.order is not None:
                 turn.taken.add(g.order.dest)
+        for cmd in self.fight_commands(view, tick, turn.budget):  # DEC-24: fights first
+            if self.spend(turn, cmd) and isinstance(cmd, Move):
+                turn.busy.add(cmd.group)
         return turn
 
     def _components(self, owner: list[int | None]) -> list[int]:
@@ -214,6 +217,8 @@ class StrategyBot(Bot):
             return False
         if turn.standing[node] >= turn.view.nodes[node].capacity:
             return False
+        if node in self.fight_nodes(turn.view):
+            return False  # no production in a city with a fight (DEC-25, item 9)
         last = self.recruited.get(node)
         if last is not None and turn.tick - last < self.rules.recruit.cooldown_ticks:
             return False

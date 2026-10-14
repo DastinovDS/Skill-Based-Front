@@ -102,6 +102,12 @@ def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
     roads = [state.edges[i].kind.value for i in sorted(state.edges)]
     if any(r != RoadKind.NONE.value for r in roads):  # DEC-22; absent: every road untyped
         frame["r"] = roads
+    fights = [
+        [f.id, f.node, f.edge, f.point, f.attacker, f.start, f.next_round, sorted(f.members)]
+        for f in (state.fights[i] for i in sorted(state.fights))
+    ]
+    if fights:  # DEC-24, only while a fight goes on: older files without the key stay valid
+        frame["f"] = fights
     return frame
 
 

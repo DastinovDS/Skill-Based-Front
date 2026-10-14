@@ -136,6 +136,9 @@ class CampaignBot(Bot):
             if g.order is not None:
                 ctx.claimed[g.order.dest] = True
         self._learn(ctx)
+        for cmd in self.fight_commands(view, tick, ctx.budget):  # DEC-24: fights first
+            if self.spend(ctx, cmd) and isinstance(cmd, Move):
+                ctx.used[cmd.group] = True
         self._stance(ctx)
         for cmd in self.priorities(view):  # front cities first in the supply order (DEC-18)
             self.spend(ctx, cmd)
@@ -269,8 +272,9 @@ class CampaignBot(Bot):
         """
         view = ctx.view
         bonus = self.rules.orders.planned_bonus
+        busy = self.fighting(view)
         for g in view.groups:
-            if not isinstance(g.location, OnEdge) or g.order is None:
+            if not isinstance(g.location, OnEdge) or g.order is None or g.id in busy:
                 continue
             dest = g.order.dest
             seen = view.nodes[dest].seen
@@ -451,10 +455,12 @@ class CampaignBot(Bot):
         else:
             candidates = [n.id for n in view.nodes]
         hops = self.hops[self.objective(ctx)]
+        fights = self.fight_nodes(view)
         cities = [
             n
             for n in candidates
             if view.nodes[n].owner == self.player
+            and n not in fights  # no production in a city with a fight (DEC-25, item 9)
             and ctx.standing[n] < view.nodes[n].capacity
             and ctx.tick - self.recruited.get(n, ctx.tick - cooldown) >= cooldown
         ]

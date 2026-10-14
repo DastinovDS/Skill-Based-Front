@@ -208,3 +208,45 @@ def test_match_is_the_same_in_fresh_processes() -> None:
         for seed in ("0", "1", "4242")
     }
     assert len(outputs) == 1
+
+
+# Fights over time (DEC-24, item K) ----------------------------------------------------------------
+
+
+class _Rejects:
+    """A ``MatchObserver`` that counts reject codes and fights."""
+
+    def __init__(self) -> None:
+        self.codes: dict[str, int] = {}
+        self.fights = 0
+        self.withdrawals = 0
+
+    def begin(self, match: Match) -> None:
+        del match
+
+    def record(self, match: Match, commands: object) -> None:
+        del commands
+        for r in match.results:
+            code = getattr(r.outcome, "code", None)
+            if code is not None:
+                self.codes[code.value] = self.codes.get(code.value, 0) + 1
+        for e in match.state.events:
+            self.fights += e.kind == "fight_started"
+            self.withdrawals += e.kind == "fight_group" and e.get("left") is True
+
+
+@pytest.mark.parametrize(("a", "b"), [("rusher", "reactive"), ("expander", "strangler")])
+def test_bots_fight_without_in_fight_rejects(
+    maps: dict[str, MapDef], mvp_rules: Ruleset, a: str, b: str
+) -> None:
+    """Groups in a fight get only withdrawals (IN_FIGHT never comes back); fights happen."""
+    mapdef = maps["pautina"]
+    seen = _Rejects()
+    bots = [
+        BOTS[a](mapdef, mvp_rules, seed=1, player=0),
+        BOTS[b](mapdef, mvp_rules, seed=1, player=1),
+    ]
+    result = run_headless(mapdef, mvp_rules, bots, observer=seen)
+    assert result.outcome is not None
+    assert seen.fights > 0
+    assert seen.codes.get("IN_FIGHT", 0) == 0
