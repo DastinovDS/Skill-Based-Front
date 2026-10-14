@@ -17,7 +17,6 @@ import {
   PLATE_FILL,
   PLATE_INNER_RING,
   SHIELD_BADGE_SCALE,
-  TRAIL,
   UNIT_DASH,
   UNIT_INNER_OUTLINE,
   UNIT_INNER_SCALE,
@@ -64,7 +63,6 @@ export class EntityKit {
   readonly contexts: GraphicsContext[] = [];
   readonly triangles: ReadonlyMap<number, TriangleShapes>;
   readonly packet: Readonly<Record<PlayerId, GraphicsContext>>;
-  readonly trail: Readonly<Record<PlayerId, GraphicsContext>>;
   readonly glyph: Readonly<Record<Mode, GraphicsContext>>;
   readonly hammer: GraphicsContext;
   readonly iconDisc: Readonly<Record<PlayerId, GraphicsContext>>;
@@ -119,18 +117,6 @@ export class EntityKit {
         return g;
       });
     this.packet = { 0: packet(0), 1: packet(1) };
-    const trail = (owner: PlayerId): GraphicsContext =>
-      this.context((g) => {
-        const step = TRAIL.length / TRAIL.steps;
-        for (let i = 0; i < TRAIL.steps; i++) {
-          g.rect(i * step, -TRAIL.width / 2, step + 0.5, TRAIL.width).fill({
-            color: ownerColor(me, owner),
-            alpha: TRAIL.alpha * (1 - i / TRAIL.steps),
-          });
-        }
-        return g;
-      });
-    this.trail = { 0: trail(0), 1: trail(1) };
     this.glyph = {
       attack: this.context((g) => drawModeGlyph(g, 'attack')),
       defense: this.context((g) => drawModeGlyph(g, 'defense')),
@@ -185,14 +171,16 @@ export interface TokenSpec {
 }
 
 function specKey(spec: TokenSpec): string {
-  const counts = spec.counts === null ? '-' : countLabel(spec.counts.units, spec.counts.charged);
+  // The charged count is the fill of the triangle, so it belongs to the key, not to the text.
+  const counts =
+    spec.counts === null ? '-' : `${String(spec.counts.units)}/${String(spec.counts.charged)}`;
   return `${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${spec.ghost === true ? 'g' : ''}`;
 }
 
 /**
  * A unit triangle (9.5): inverted, filled from the tip by the charged share, an own white outline
  * or an opponent's double one (dashed with "?" without numbers, and for a ghost), a shield disc for
- * "Defense" and a "charged/units" label under the tip. The children are created once; `set` only
+ * "Defense" and one number (all the units) under the tip. The children are created once; `set` only
  * swaps contexts and visibility, and does nothing when the spec is unchanged. Drawn around the
  * centre of the bounding box of the triangle.
  */
@@ -250,7 +238,7 @@ export class Token {
     if (this.view.scale.x !== scale) this.view.scale.set(scale);
   }
 
-  /** The "charged/units" label shows only when asked to and the numbers are known. */
+  /** The number of units shows only when asked to and the numbers are known. */
   setLabel(show: boolean): void {
     this.labelWanted = show;
     this.label.visible = show && this.counted;
@@ -295,7 +283,7 @@ export class Token {
     }
 
     if (counts !== null) {
-      this.count.text = countLabel(counts.units, counts.charged);
+      this.count.text = countLabel(counts.units);
       const w = this.count.width + 2 * UNIT_LABEL.padX;
       this.pill.clear();
       this.pill

@@ -16,6 +16,7 @@ import { nodePoint } from './layout.ts';
 import { pickAt } from './pick.ts';
 import type { RenderSource } from './source.ts';
 import { SupplyView } from './supplyView.ts';
+import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
 
 /** Ticks per second when the source does not say (`rulesets/mvp-0.toml`). */
@@ -51,7 +52,6 @@ export class MapScene {
   private readonly alerts: AlertView;
   private interaction: MapInteraction | null;
   private hovering = false;
-  private hoveredGroup: string | null = null;
   private readonly controller: CameraController;
   private source: RenderSource | null;
   private base: unknown = null;
@@ -121,6 +121,28 @@ export class MapScene {
     if (at !== undefined) this.controller.focus(at);
   }
 
+  /** Where the city `id` is on the page and the radius of its circle there (CSS px). */
+  nodeAnchor(id: number): Anchor | null {
+    const at = nodePoint(this.map, id);
+    return at === undefined ? null : this.anchorAt(at, this.cities.radiusOf(id));
+  }
+
+  /** Where the own group `id` is drawn on the page (CSS px); `null`: no such token now. */
+  groupAnchor(id: string): Anchor | null {
+    const spot = this.entities.groupPoints().get(id);
+    return spot === undefined ? null : this.anchorAt(spot, (spot.side * spot.scale) / 2);
+  }
+
+  private anchorAt(world: Point, radius: number): Anchor {
+    const box = this.app.canvas.getBoundingClientRect();
+    const { position, scale } = this.layers.world;
+    return {
+      x: box.left + position.x + world.x * scale.x,
+      y: box.top + position.y + world.y * scale.y,
+      r: radius * scale.x,
+    };
+  }
+
   /** "Fit map": show the whole map. */
   fit(): void {
     this.controller.fit();
@@ -187,8 +209,6 @@ export class MapScene {
     const delays = this.source.orderDelays ?? null;
     this.intents.setDelays(delays);
     this.intents.setTickHz(tickHz);
-    const selection = this.interaction?.overlay().selection ?? null;
-    this.entities.setEmphasis(selection?.kind === 'group' ? selection.id : null, this.hoveredGroup);
     this.entities.update(frame);
     this.intents.update(frame, this.entities.groupPoints());
     this.effects.update(frame, this.source.events(), this.entities.groupPoints(), tickHz);
@@ -197,13 +217,7 @@ export class MapScene {
     const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
     this.supply.update(frame.base, overlay.supply);
-    this.alerts.update(
-      frame.base.view.nodes,
-      tickHz,
-      this.source.capacityTicks ?? null,
-      overlay.beacon,
-      performance.now(),
-    );
+    this.alerts.update(frame.base.view.nodes, tickHz, overlay.beacon, performance.now());
     if (announce) this.onsnapshot?.(frame.base.tick);
   };
 
@@ -228,7 +242,6 @@ export class MapScene {
 
   private readonly onHover = (at: Point | null): void => {
     const hit = at === null ? null : this.hitAt(at, true);
-    this.hoveredGroup = hit?.kind === 'group' ? hit.id : null;
     // The pointer cursor (CSSOM, allowed by the CSP) tells that a click does something here.
     const pointer = hit !== null && this.interaction !== null;
     if (pointer !== this.hovering) {

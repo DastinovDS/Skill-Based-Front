@@ -22,6 +22,7 @@
     ['Shift + LMB', 'help.key.planned'],
     ['1 / 2', 'help.key.mode'],
     ['X', 'help.key.cancel'],
+    ['D', 'help.key.defense'],
     ['R', 'help.key.recruit'],
     ['U', 'help.key.road'],
     ['S', 'help.key.split'],
@@ -29,8 +30,7 @@
     ['Q', 'help.key.stance'],
     ['Tab / F2', 'help.key.supply'],
     ['Space', 'help.key.alert'],
-    ['Home', 'help.key.fit'],
-    ['J', 'help.key.journal'],
+    ['H', 'help.key.fit'],
     ['?', 'help.key.help'],
     ['Esc', 'help.key.escape'],
   ] as const;

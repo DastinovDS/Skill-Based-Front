@@ -58,8 +58,8 @@ describe('unit triangles (9.5)', () => {
 });
 
 describe('countLabel', () => {
-  it('writes the numbers as charged over units', () => {
-    expect(countLabel(12, 5)).toBe('5/12');
+  it('writes one number: all the units, not the charged share', () => {
+    expect(countLabel(12)).toBe('12');
   });
 });
 

@@ -18,9 +18,16 @@ import {
 } from './camera.ts';
 
 /** A press that moves less than this (CSS px) stays a click, for selection (CLI-06, #62). */
-const DRAG_THRESHOLD = 4;
+const DRAG_THRESHOLD = 6;
 const PRIMARY_BUTTON = 0;
 const MIDDLE_BUTTON = 1;
+const SECONDARY_BUTTON = 2;
+/** The buttons that start a press: the left one clicks, the right and middle ones pan. */
+const PRESS_BUTTONS: Readonly<Record<number, true>> = {
+  [PRIMARY_BUTTON]: true,
+  [MIDDLE_BUTTON]: true,
+  [SECONDARY_BUTTON]: true,
+};
 
 /** Pointer events that are not camera moves: a click (press without a drag) and hovering. */
 export interface PointerHandlers {
@@ -32,15 +39,18 @@ export interface PointerHandlers {
 
 interface Press {
   readonly pointerId: number;
+  readonly button: number;
   readonly start: Point;
   last: Point;
   dragging: boolean;
 }
 
 /**
- * Camera input on the canvas element: drag with the primary or middle button pans, the wheel
- * zooms around the cursor, `fit()` shows the whole map. DOM listeners, not PixiJS events: the
- * camera works in screen space and does not need hit testing.
+ * Camera input on the canvas element: dragging with the RIGHT (or middle) button pans, the wheel
+ * zooms around the cursor, `fit()` shows the whole map. The left button only clicks (select and
+ * order), it never moves the camera; the context menu of the canvas is suppressed so the right
+ * button is free for panning (UI round 2). DOM listeners, not PixiJS events: the camera works in
+ * screen space and does not need hit testing.
  *
  * Until the player moves the camera it follows "fit map" on resize; after that a resize keeps
  * the centre and the scale (clamped to the new limits).
@@ -69,6 +79,7 @@ export class CameraController {
     element.addEventListener('pointerup', this.onPointerUp);
     element.addEventListener('pointercancel', this.onPointerUp);
     element.addEventListener('pointerleave', this.onPointerLeave);
+    element.addEventListener('contextmenu', this.onContextMenu);
     element.addEventListener('wheel', this.onWheel, { passive: false });
     this.apply();
   }
@@ -116,6 +127,7 @@ export class CameraController {
     this.element.removeEventListener('pointerup', this.onPointerUp);
     this.element.removeEventListener('pointercancel', this.onPointerUp);
     this.element.removeEventListener('pointerleave', this.onPointerLeave);
+    this.element.removeEventListener('contextmenu', this.onContextMenu);
     this.element.removeEventListener('wheel', this.onWheel);
     this.endPress();
   }
@@ -139,17 +151,20 @@ export class CameraController {
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
-    if (
-      this.press !== null ||
-      (event.button !== PRIMARY_BUTTON && event.button !== MIDDLE_BUTTON)
-    ) {
+    if (this.press !== null || !(event.button in PRESS_BUTTONS)) {
       return;
     }
     if (event.button === MIDDLE_BUTTON) {
       event.preventDefault(); // no autoscroll on Windows
     }
     const at = this.local(event);
-    this.press = { pointerId: event.pointerId, start: at, last: at, dragging: false };
+    this.press = {
+      pointerId: event.pointerId,
+      button: event.button,
+      start: at,
+      last: at,
+      dragging: false,
+    };
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
@@ -168,9 +183,15 @@ export class CameraController {
       }
       press.dragging = true;
       this.element.setPointerCapture(event.pointerId);
-      this.element.style.cursor = 'grabbing'; // CSSOM, allowed by the CSP (csp.ts)
+      // Only the right and middle buttons move the camera; a left press that wandered off is no
+      // click either (it neither selects nor orders).
+      if (press.button !== PRIMARY_BUTTON) {
+        this.element.style.cursor = 'grabbing'; // CSSOM, allowed by the CSP (csp.ts)
+      }
     }
-    this.move(panBy(this.camera, at.x - press.last.x, at.y - press.last.y, this.limits));
+    if (press.button !== PRIMARY_BUTTON) {
+      this.move(panBy(this.camera, at.x - press.last.x, at.y - press.last.y, this.limits));
+    }
     press.last = at;
   };
 
@@ -183,6 +204,11 @@ export class CameraController {
         this.handlers.onclick?.(this.local(event), event.shiftKey);
       }
     }
+  };
+
+  /** The right button pans: the browser menu must not open on top of the map. */
+  private readonly onContextMenu = (event: Event): void => {
+    event.preventDefault();
   };
 
   private readonly onPointerLeave = (): void => {

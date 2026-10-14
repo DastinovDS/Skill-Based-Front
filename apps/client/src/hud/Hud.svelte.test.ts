@@ -50,7 +50,6 @@ describe('Hud', () => {
     });
     const chrome = new HudChrome();
     const prefs = new HudPrefs(() => window.localStorage);
-    const fitted = vi.fn();
     const target = document.body.appendChild(document.createElement('div'));
     mounted = mount(Hud, {
       target,
@@ -62,7 +61,6 @@ describe('Hud', () => {
         prefs,
         hints: options.hints ?? false,
         oninsets: options.oninsets,
-        onfit: fitted,
         dev:
           options.dev === true
             ? {
@@ -78,7 +76,7 @@ describe('Hud', () => {
       },
     });
     flushSync(); // the effects (the subscription to the answers of commands) have run
-    return { target, state, orders, book, sent, chrome, fitted };
+    return { target, state, orders, book, sent, chrome };
   }
 
   const button = (target: HTMLElement, label: string) =>
@@ -105,52 +103,42 @@ describe('Hud', () => {
     expect(target.querySelectorAll('.segment')).toHaveLength(5);
   });
 
-  it('shows the selection card only while something is selected', () => {
+  it('has no selection card: a selection is a data attribute, the order hint a quiet line', () => {
+    setLocale('en');
     const { target, state, orders } = render();
     const snapshot = devSnapshot(DEFAULT_MAP, DEV_RULES, 30);
     state.onSnapshot(snapshot);
     flushSync();
+    const hud = target.querySelector('.hud');
+    expect(hud?.getAttribute('data-selection')).toBe('none');
     expect(target.querySelector('.selection')).toBeNull();
+    expect(target.querySelector('[aria-label="Orders"]')).toBeNull();
     const group = snapshot.view.groups[0];
     if (group === undefined) throw new Error('no group');
     orders.click({ kind: 'group', id: group.id }, false);
     flushSync();
-    expect(target.querySelector('.selection')).not.toBeNull();
+    expect(hud?.getAttribute('data-selection')).toBe(`group:${group.id}`);
+    expect(target.querySelector('.selection')).toBeNull();
+    expect(target.querySelector('[aria-label="Orders"]')?.textContent).toContain('Shift+click');
     orders.deselect();
     flushSync();
-    expect(target.querySelector('.selection')).toBeNull();
+    expect(hud?.getAttribute('data-selection')).toBe('none');
   });
 
-  it('opens the menu with the language switcher and the fit button', () => {
-    setLocale('ru');
-    const { target, chrome, fitted } = render();
-    expect(target.querySelector('select')).toBeNull();
-    button(target, 'Меню')?.click();
-    flushSync();
-    expect(chrome.menuOpen).toBe(true);
-    const language = target.querySelector('select');
-    if (language === null) throw new Error('no language select');
-    expect([...language.options].map((option) => option.textContent)).toEqual([
-      'English',
-      'Русский',
-    ]);
-    language.value = 'en';
-    language.dispatchEvent(new Event('change', { bubbles: true }));
-    flushSync();
-    expect(getLocale()).toBe('en');
-    expect(window.localStorage.getItem('sbf.locale')).toBe('en');
-    button(target, 'Fit map')?.click();
-    expect(fitted).toHaveBeenCalledOnce();
-    // The place for the settings of package F exists, and the dev pickers are not here.
-    expect(target.querySelector('[data-slot="settings"]')).not.toBeNull();
-    expect(target.textContent).not.toContain('pereval');
-  });
-
-  it('puts the map and scene pickers and the frame rate in the menu of the dev screen only', () => {
+  it('has neither the in-match menu nor the event journal nor a language switcher', () => {
     setLocale('en');
+    const { target } = render();
+    expect(target.querySelector('select')).toBeNull();
+    expect(button(target, 'Menu')).toBeUndefined();
+    expect(button(target, 'Event journal')).toBeUndefined();
+    expect(target.querySelector('aside')).toBeNull();
+  });
+
+  it('puts the map and scene pickers and the frame rate in the dev panel of the dev screen only', () => {
+    setLocale('en');
+    expect(render().target.textContent).not.toContain('pereval');
+    document.body.innerHTML = '';
     const { target } = render({ dev: true });
-    button(target, 'Menu')?.click();
-    flushSync();
     expect(target.textContent).toContain('pereval');
     expect(target.textContent).toContain('FPS: 60');
   });
@@ -217,7 +205,7 @@ describe('Hud', () => {
     button(target, 'Help')?.click();
     flushSync();
     expect(chrome.helpOpen).toBe(true);
-    expect(target.querySelector('[role="dialog"]')?.textContent).toContain('Home');
+    expect(target.querySelector('[role="dialog"]')?.textContent).toContain('fit the map');
     button(target, 'Close the help')?.click();
     flushSync();
     expect(target.querySelector('[role="dialog"]')).toBeNull();

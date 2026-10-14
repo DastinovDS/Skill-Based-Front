@@ -10,9 +10,10 @@ function setup() {
   element.hasPointerCapture = () => true;
   const clicks: { x: number; y: number; shift: boolean }[] = [];
   const hovers: ({ x: number; y: number } | null)[] = [];
+  const world = new Container();
   const controller = new CameraController(
     element,
-    new Container(),
+    world,
     { width: 1000, height: 600 },
     { width: 800, height: 600 },
     () => undefined,
@@ -26,7 +27,7 @@ function setup() {
     Object.defineProperty(event, 'pointerId', { value: 1 });
     element.dispatchEvent(event);
   };
-  return { element, controller, clicks, hovers, fire };
+  return { element, controller, clicks, hovers, fire, world };
 }
 
 describe('CameraController clicks', () => {
@@ -52,11 +53,17 @@ describe('CameraController clicks', () => {
     expect(s.clicks).toEqual([]);
   });
 
-  it('ignores the secondary button and a cancelled press', () => {
+  it('does not click with the secondary button', () => {
     const s = setup();
     controller = s.controller;
     s.fire('pointerdown', 10, 10, { button: 2 });
     s.fire('pointerup', 10, 10, { button: 2 });
+    expect(s.clicks).toEqual([]);
+  });
+
+  it('does not click after a cancelled press', () => {
+    const s = setup();
+    controller = s.controller;
     s.fire('pointerdown', 10, 10);
     s.fire('pointercancel', 10, 10);
     expect(s.clicks).toEqual([]);
@@ -71,5 +78,44 @@ describe('CameraController clicks', () => {
     s.fire('pointerdown', 30, 40);
     s.fire('pointermove', 31, 40);
     expect(s.hovers).toHaveLength(2); // a press is not hovering
+  });
+});
+
+describe('CameraController panning', () => {
+  let controller: CameraController | undefined;
+  afterEach(() => {
+    controller?.destroy();
+  });
+
+  it('pans with the right button, and a drag is no click', () => {
+    const s = setup();
+    controller = s.controller;
+    s.controller.focus({ x: 700, y: 300 });
+    const before = s.world.position.x;
+    s.fire('pointerdown', 400, 300, { button: 2 });
+    s.fire('pointermove', 340, 300, { button: 2 });
+    s.fire('pointerup', 340, 300, { button: 2 });
+    expect(s.world.position.x).not.toBe(before);
+    expect(s.clicks).toEqual([]);
+  });
+
+  it('does not pan with the left button', () => {
+    const s = setup();
+    controller = s.controller;
+    s.controller.focus({ x: 700, y: 300 });
+    const before = s.world.position.x;
+    s.fire('pointerdown', 400, 300);
+    s.fire('pointermove', 340, 300);
+    s.fire('pointerup', 340, 300);
+    expect(s.world.position.x).toBe(before);
+    expect(s.clicks).toEqual([]);
+  });
+
+  it('suppresses the context menu of the canvas', () => {
+    const s = setup();
+    controller = s.controller;
+    const event = new MouseEvent('contextmenu', { cancelable: true, bubbles: true });
+    s.element.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
   });
 });

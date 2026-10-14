@@ -5,8 +5,6 @@ import {
   barTop,
   capacityRing,
   cityRadius,
-  overflowArcs,
-  overflowRadius,
   ringRadius,
   warehouseSegments,
   type Arc,
@@ -26,7 +24,6 @@ import {
   NEUTRAL_OUTLINE,
   NEUTRAL_STROKE,
   NODE_RADIUS,
-  OVERFLOW_CIRCLE,
   OWNER_OUTLINE,
   RING_FILLED,
   RING_SEGMENT,
@@ -36,7 +33,6 @@ import {
   VP_BADGE_RADIUS,
   VP_FONT_SIZE,
   VP_TEXT_COLOR,
-  WARN,
   YOU,
   sideOf,
 } from './style.ts';
@@ -67,8 +63,8 @@ function onCircle(radius: number, angle: number): Point {
  * The cities of the map (ui-style.md 9.4): a body whose size follows the capacity class, filled
  * with the colour of the owner (own: blue with a white outline, enemy: red with a white outline and
  * a dark inner ring, neutral: grey with a thin outline), the capital star, the capacity ring of
- * segments (white for own units standing there, grey otherwise), the overflow segments in the
- * warning colour, the warehouse bar under the ring and the VP badge. The capacity is public and
+ * segments (white for own units standing there, grey otherwise; overcrowding is the alert view's
+ * pulsing ring and badge, not drawn here), the warehouse bar under the ring and the VP badge. The capacity is public and
  * exact (DEC-22: fixed by the node kind).
  *
  * Bodies share GraphicsContexts (one per kind and radius); rings and bars are redrawn when a
@@ -260,8 +256,6 @@ export class CityView {
     bar.clear();
     if (state.capacity !== null) {
       this.drawRing(ring, radius, state.capacity, kind === 'you' ? state.garrison : 0);
-      const over = kind === 'you' ? state.garrison - state.capacity : 0;
-      if (over > 0) this.drawOverflow(ring, radius, over);
       if (state.warehouse !== null) {
         this.drawBar(bar, radius, state.warehouse, state.capacity, state.owner);
       }
@@ -307,22 +301,6 @@ export class CityView {
       g.moveTo(inner.x, inner.y).lineTo(outer.x, outer.y);
     }
     if (ring.notches.length > 0) g.stroke({ width: 1.5, color: BG });
-  }
-
-  private drawOverflow(g: Graphics, radius: number, over: number): void {
-    const r = overflowRadius(radius);
-    const arcs = overflowArcs(over);
-    this.strokeArcs(g, r, arcs, { width: RING_SEGMENT.base, color: BG, alpha: 0.8 });
-    this.strokeArcs(g, r, arcs, { width: RING_SEGMENT.width, color: WARN });
-    // A dashed circle around: the warning does not rely on the colour.
-    const outer = r + OVERFLOW_CIRCLE.gap - 8;
-    const dashes = Math.max(8, Math.round((2 * Math.PI * outer) / (2 * OVERFLOW_CIRCLE.dash)));
-    for (let i = 0; i < dashes; i++) {
-      const from = (2 * Math.PI * i) / dashes;
-      const start = onCircle(outer, from);
-      g.moveTo(start.x, start.y).arc(0, 0, outer, from, from + Math.PI / dashes);
-    }
-    g.stroke({ width: OVERFLOW_CIRCLE.width, color: WARN });
   }
 
   private drawBar(

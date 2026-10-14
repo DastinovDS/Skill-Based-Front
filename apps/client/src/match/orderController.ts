@@ -33,8 +33,15 @@ import { OrderUiState, type ReachInfo, type RoadHint } from './orderUi.svelte.ts
 import { RadialState } from './radialState.svelte.ts';
 import { RoadTypeState } from './roadTypeState.svelte.ts';
 import { SplitState } from './splitState.svelte.ts';
+import { TargetMenuState } from './targetMenuState.svelte.ts';
 import { SupplyMenuState, TransferState } from './supplyState.svelte.ts';
 import { moveCost } from './rejects.ts';
+
+/** A sector of the menu of a city. */
+export type CityChoice = 'recruit' | 'roads';
+
+/** A sector of the menu of a group. */
+export type GroupChoice = 'split' | 'merge' | 'cancel' | 'defense';
 
 /** How long an answer stays in the panel, ms. */
 export const NOTICE_MS = 6000;
@@ -118,11 +125,18 @@ function aimKey(aim: AttackTarget | null): string {
  * splits, S, Esc or a click outside close it), G merges the groups standing with the selected one,
  * X cancels any order of the selected group (on a road it turns back, free).
  *
+ * UI round 2: there is no selection card. A click on an own city opens its radial menu (recruit
+ * `R`, roads `U`) centred on the city circle; a second click on an own group (the first selects
+ * it) opens a small radial menu on the group (split `S`, merge `G`, cancel `X`, defense `D`). The
+ * menus only front the keys: a key does the same without the menu. A click on the same object
+ * again, any click elsewhere and Esc close the menu (a click on another node still orders the
+ * selected group).
+ *
  * Keys: Esc ends the road pick or deselects, X cancels the order of
- * the selected group, 1 / 2 set the mode (attack / defense), R recruits in the selected city,
- * U toggles the road pick, Q the stance menu (hold and release over a sector, or tap and click;
- * 1 / 2 / 3 choose while it is open), S the split menu, G merge, Space the camera to the next
- * alert.
+ * the selected group, 1 / 2 set the mode (attack / defense), D toggles defense, R recruits in the
+ * selected city, U toggles the road pick, Q the stance menu (hold and release over a sector, or
+ * tap and click; 1 / 2 / 3 choose while it is open), S the split menu, G merge, Space the camera
+ * to the next alert.
  */
 export class OrderController implements MapInteraction {
   readonly ui = new OrderUiState();
@@ -136,6 +150,10 @@ export class OrderController implements MapInteraction {
   readonly transfer = new TransferState();
   /** The split menu on S (DEC-20). */
   readonly splitMenu = new SplitState();
+  /** The radial menu of the selected own city: recruit, roads (UI round 2). */
+  readonly cityMenu = new TargetMenuState<number, CityChoice>();
+  /** The small radial menu of the selected own group: split, merge, cancel, defense. */
+  readonly groupMenu = new TargetMenuState<string, GroupChoice>();
 
   readonly #o: OrderControllerOptions;
   #shift = false;
@@ -211,6 +229,7 @@ export class OrderController implements MapInteraction {
 
   overlay(): OverlayState {
     this.#syncReach();
+    this.#syncTargetMenus();
     const reach = this.#reach();
     const selection = this.#o.hud.selection;
     const ghosts = this.#o.book.ghosts();
@@ -262,14 +281,34 @@ export class OrderController implements MapInteraction {
     this.stopRoadPick();
     const group = this.#selectedGroup();
     if (hit.kind === 'node' && group !== null && this.#o.send !== null && group.node !== hit.id) {
+      this.#closeTargetMenus();
       this.#sendCommand(
         { type: 'move', group: group.id, dest: hit.id, planned: this.planned },
         group.node,
       );
       return;
     }
+    // A city opens its menu on the click that selects it, a second click on it closes the menu.
+    // A group opens its menu on a click on the group that is already selected (a second click
+    // toggles it): the first click only selects, so ordering a move never has a ring in the way.
+    const selected = this.#o.hud.selection;
+    const again = selected?.kind === hit.kind && selected.id === hit.id;
+    const cityReclick =
+      hit.kind === 'node' && this.cityMenu.current.open && this.cityMenu.current.target === hit.id;
+    const groupWasOpen =
+      hit.kind === 'group' &&
+      this.groupMenu.current.open &&
+      this.groupMenu.current.target === hit.id;
+    this.#closeTargetMenus();
+    this.splitMenu.close();
     this.#o.hud.select(hit);
     this.#hover = hit;
+    if (this.#o.send !== null) {
+      if (hit.kind === 'group' && again && !groupWasOpen) this.groupMenu.open(hit.id);
+      else if (hit.kind === 'node' && !cityReclick && this.#isOwnNode(hit.id)) {
+        this.cityMenu.open(hit.id);
+      }
+    }
     this.#refresh();
   }
 
@@ -279,12 +318,32 @@ export class OrderController implements MapInteraction {
     this.#refresh();
   }
 
+  /**
+   * Nothing to drop: no selection, no pick, no open menu or dialog. An `Esc` now has nothing to
+   * do, so two of them in a row ask whether to leave the match (`hud/hudKeys.ts`).
+   */
+  isIdle(): boolean {
+    return (
+      this.#o.hud.selection === null &&
+      this.#pick === null &&
+      this.ui.current.transferFrom === null &&
+      !this.cityMenu.current.open &&
+      !this.groupMenu.current.open &&
+      !this.radial.current.open &&
+      !this.roadType.current.open &&
+      !this.supplyMenu.current.open &&
+      !this.splitMenu.current.open &&
+      !this.transfer.current.open
+    );
+  }
+
   // --- Commands -----------------------------------------------------------------------------
 
   deselect(): void {
     this.stopRoadPick();
     this.roadType.close();
     this.splitMenu.close();
+    this.#closeTargetMenus();
     this.#o.hud.select(null);
     this.#refresh();
   }
@@ -297,6 +356,7 @@ export class OrderController implements MapInteraction {
   cancelSelected(): void {
     const group = this.#selectedGroup();
     if (group === null) return;
+    this.groupMenu.close();
     this.#sendCommand({ type: 'cancel_order', group: group.id }, null);
   }
 
@@ -304,7 +364,15 @@ export class OrderController implements MapInteraction {
   setMode(mode: Mode): void {
     const group = this.#selectedGroup();
     if (group === null) return;
+    this.groupMenu.close();
     this.#sendCommand({ type: 'set_mode', group: group.id, mode }, null);
+  }
+
+  /** D: «Defense» on, or back to «Attack» when the selected group already holds it. */
+  toggleDefense(): void {
+    const group = this.#selectedGroup();
+    if (group === null) return;
+    this.setMode(group.mode === 'defense' ? 'attack' : 'defense');
   }
 
   /** Split `n` units off the selected group into a new group. */
@@ -325,6 +393,7 @@ export class OrderController implements MapInteraction {
     this.stopRoadPick();
     this.roadType.close();
     this.closeRadial();
+    this.groupMenu.close();
     this.splitMenu.open(group.id, group.units, group.charged);
   }
 
@@ -376,8 +445,35 @@ export class OrderController implements MapInteraction {
   /** Merge every own group standing in the selected node or with the selected group; needs two. */
   merge(): void {
     const [first, second, ...rest] = this.mergeCandidates();
+    this.groupMenu.close();
     if (first === undefined || second === undefined) return;
     this.#sendCommand({ type: 'merge', groups: [first, second, ...rest] }, null);
+  }
+
+  /** A sector of the menu of a city: the same as its key. */
+  chooseCity(choice: CityChoice): void {
+    this.cityMenu.close();
+    if (choice === 'recruit') this.recruit();
+    else this.toggleRoadPick();
+  }
+
+  /** A sector of the menu of a group: the same as its key. */
+  chooseGroup(choice: GroupChoice): void {
+    this.groupMenu.close();
+    switch (choice) {
+      case 'split':
+        this.toggleSplit();
+        return;
+      case 'merge':
+        this.merge();
+        return;
+      case 'cancel':
+        this.cancelSelected();
+        return;
+      case 'defense':
+        this.toggleDefense();
+        return;
+    }
   }
 
   /** The city to recruit in: the selected node, or the node the selected group stands in. */
@@ -389,6 +485,7 @@ export class OrderController implements MapInteraction {
 
   recruit(): void {
     const node = this.recruitNode();
+    this.cityMenu.close();
     if (node === null) return;
     this.#sendCommand({ type: 'recruit', node }, null);
   }
@@ -407,6 +504,7 @@ export class OrderController implements MapInteraction {
    * already builds a road does not start one: the panel says how long its build takes.
    */
   toggleRoadPick(): void {
+    this.cityMenu.close();
     if (this.#pick !== null) {
       this.stopRoadPick();
       return;
@@ -482,6 +580,7 @@ export class OrderController implements MapInteraction {
     this.stopRoadPick();
     this.roadType.close();
     this.splitMenu.close();
+    this.#closeTargetMenus();
     this.radial.open(sticky);
     return true;
   }
@@ -662,6 +761,9 @@ export class OrderController implements MapInteraction {
       case 'KeyX':
         this.cancelSelected();
         return true;
+      case 'KeyD':
+        this.toggleDefense();
+        return true;
       case 'Digit1':
         return this.#modeKey('attack');
       case 'Digit2':
@@ -686,6 +788,39 @@ export class OrderController implements MapInteraction {
   }
 
   // --- Internals ----------------------------------------------------------------------------
+
+  #closeTargetMenus(): void {
+    this.cityMenu.close();
+    this.groupMenu.close();
+  }
+
+  /** The node `id` is one of the player's own cities in the snapshot on screen. */
+  #isOwnNode(id: number): boolean {
+    return this.#o.hud.current?.nodes.some((n) => n.id === id && n.owner === 'mine') ?? false;
+  }
+
+  /**
+   * The menus of a city and of a group belong to the selection: when it moves on (the group is
+   * gone, the city was captured, another thing got selected) the menu goes. Cheap, runs every frame.
+   */
+  #syncTargetMenus(): void {
+    const city = this.cityMenu.current;
+    if (city.open) {
+      const selection = this.#o.hud.selection;
+      if (
+        selection?.kind !== 'node' ||
+        selection.id !== city.target ||
+        !this.#isOwnNode(city.target)
+      ) {
+        this.cityMenu.close();
+      }
+    }
+    const group = this.groupMenu.current;
+    if (group.open) {
+      const selection = this.#o.hud.selection;
+      if (selection?.kind !== 'group' || selection.id !== group.target) this.groupMenu.close();
+    }
+  }
 
   /** An own city of the snapshot (priority and warehouse), or `null`. */
   #ownCity(node: number): { priority: Priority | null; warehouse: number | null } | null {

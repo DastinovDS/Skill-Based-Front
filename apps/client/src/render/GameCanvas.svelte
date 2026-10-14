@@ -2,6 +2,7 @@
   import { Application } from 'pixi.js';
   import { onMount, untrack } from 'svelte';
   import type { MapFile, PlayerId } from '../protocol.gen.ts';
+  import type { Anchor } from './anchors.ts';
   import { NO_INSETS, type Insets } from './camera.ts';
   import type { MapInteraction } from './interaction.ts';
   import { MapScene } from './mapScene.ts';
@@ -52,6 +53,16 @@
   /** Moves the camera to a city (`Space`: the next alert). */
   export function focusNode(node: number): void {
     scene?.focusNode(node);
+  }
+
+  /** Where a city is on screen (client px) with the radius of its circle; `null` before the map is up. */
+  export function nodeAnchor(node: number): Anchor | null {
+    return scene?.nodeAnchor(node) ?? null;
+  }
+
+  /** Where an own group's token is on screen; `null`: not drawn. */
+  export function groupAnchor(group: string): Anchor | null {
+    return scene?.groupAnchor(group) ?? null;
   }
 
   /** The screen margins the HUD covers: "fit map" keeps the map out of them. */

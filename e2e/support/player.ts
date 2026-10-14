@@ -202,9 +202,10 @@ export class Player {
     const canvas = await this.page.locator('.game-canvas').boundingBox();
     if (canvas === null) throw new Error('no canvas');
     await this.page.mouse.click(canvas.x + canvas.width - 3, canvas.y + canvas.height - 3);
-    await expect(this.page.locator('.selection')).toHaveCount(0);
+    // There is no selection card since UI round 2: the HUD says what is selected in an attribute.
+    await expect(this.page.locator('.hud')).toHaveAttribute('data-selection', 'none');
     await this.clickNode(map, from, true);
-    await expect(this.page.getByText(`At node ${String(from)}`).first()).toBeVisible();
+    await expect(this.page.locator('.hud')).toHaveAttribute('data-selection', /^group:/);
     await this.clickNode(map, to, false, planned ? ['Shift'] : []);
   }
 

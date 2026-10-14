@@ -719,3 +719,115 @@ describe('OrderController', () => {
     });
   });
 });
+
+describe('radial menus of a city and of a group (UI round 2)', () => {
+  const key = (code: string) => ({ type: 'keydown', code, shiftKey: false }) as const;
+
+  it('opens the menu of an own city on a click, and closes it on a second click on the city', () => {
+    const { controller, hud } = setup();
+    controller.click({ kind: 'node', id: home }, false);
+    expect(hud.selection).toEqual({ kind: 'node', id: home });
+    expect(controller.cityMenu.current).toMatchObject({ open: true, target: home });
+    controller.click({ kind: 'node', id: home }, false);
+    expect(controller.cityMenu.current.open).toBe(false);
+    expect(hud.selection).toEqual({ kind: 'node', id: home }); // still selected
+  });
+
+  it('opens no city menu on an enemy city, or without a match to send to', () => {
+    const a = setup();
+    a.controller.click({ kind: 'node', id: enemy.id }, false);
+    expect(a.controller.cityMenu.current.open).toBe(false);
+    const b = setup(false);
+    b.controller.click({ kind: 'node', id: home }, false);
+    expect(b.controller.cityMenu.current.open).toBe(false);
+  });
+
+  it('a sector of the city menu does what its key does: recruit, or the road pick', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'node', id: home }, false);
+    controller.chooseCity('recruit');
+    expect(sent).toEqual([{ type: 'recruit', node: home }]);
+    expect(controller.cityMenu.current.open).toBe(false);
+    controller.click({ kind: 'node', id: home }, false);
+    controller.chooseCity('roads');
+    expect(controller.cityMenu.current.open).toBe(false);
+    expect(controller.ui.current.roadPick).toBe(home);
+  });
+
+  it('the keys R and U close the menu of the city as well', () => {
+    const { controller } = setup();
+    controller.click({ kind: 'node', id: home }, false);
+    controller.key(key('KeyU'));
+    expect(controller.cityMenu.current.open).toBe(false);
+    expect(controller.ui.current.roadPick).toBe(home);
+  });
+
+  it('the first click on a group only selects it, a second opens its menu, a third closes it', () => {
+    const { controller, hud } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(hud.selection).toEqual({ kind: 'group', id: group.id });
+    expect(controller.groupMenu.current.open).toBe(false); // no ring in the way of an order
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.groupMenu.current).toMatchObject({ open: true, target: group.id });
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.groupMenu.current.open).toBe(false);
+    expect(hud.selection).toEqual({ kind: 'group', id: group.id });
+  });
+
+  it('a click on another node orders the group and closes its menu', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.groupMenu.current.open).toBe(true);
+    controller.click({ kind: 'node', id: other.id }, false);
+    expect(controller.groupMenu.current.open).toBe(false);
+    expect(sent).toEqual([{ type: 'move', group: group.id, dest: other.id, planned: false }]);
+  });
+
+  it('a sector of the group menu does what its key does', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.chooseGroup('cancel');
+    expect(sent.at(-1)).toEqual({ type: 'cancel_order', group: group.id });
+    expect(controller.groupMenu.current.open).toBe(false);
+    controller.chooseGroup('defense');
+    expect(sent.at(-1)).toEqual({ type: 'set_mode', group: group.id, mode: 'defense' });
+    controller.chooseGroup('split');
+    expect(controller.splitMenu.current.open).toBe(true);
+    expect(controller.groupMenu.current.open).toBe(false);
+  });
+
+  it('D toggles the defense of the selected group', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.key(key('KeyD'))).toBe(true);
+    expect(sent).toEqual([{ type: 'set_mode', group: group.id, mode: 'defense' }]);
+  });
+
+  it('Esc deselects and closes the menus; the menu goes when the selection moves on', () => {
+    const { controller, hud } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.key(key('Escape'));
+    expect(hud.selection).toBeNull();
+    expect(controller.groupMenu.current.open).toBe(false);
+    controller.click({ kind: 'node', id: home }, false);
+    hud.select(null);
+    controller.overlay(); // the frame loop syncs the menus with the selection
+    expect(controller.cityMenu.current.open).toBe(false);
+  });
+
+  it('is idle only with nothing selected and no menu or pick open (the double Esc asks to leave)', () => {
+    const { controller } = setup();
+    expect(controller.isIdle()).toBe(true);
+    controller.click({ kind: 'group', id: group.id }, false);
+    expect(controller.isIdle()).toBe(false);
+    controller.deselect();
+    expect(controller.isIdle()).toBe(true);
+    controller.openRadial(true);
+    expect(controller.isIdle()).toBe(false);
+    controller.closeRadial();
+    expect(controller.isIdle()).toBe(true);
+  });
+});
