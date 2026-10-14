@@ -3,25 +3,21 @@ import { fogHatching } from './regionLayout.ts';
 import type { Point } from './camera.ts';
 import type { EdgeView, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import { edgeEnds, triangleHeight, triangleSide } from './layout.ts';
-import { ageLabel, edgeMarkerPoint, fogDashes, ghostAlpha, nodeMarkerPoint } from './fogLayout.ts';
+import { ageLabel, edgeMarkerPoint, ghostAlpha, nodeMarkerPoint } from './fogLayout.ts';
 import { symbolScale } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { Token, type EntityKit } from './shapes.ts';
 import {
   FOG_ALPHA,
   FOG_COLOR,
-  FOG_DASH,
-  FOG_GAP,
   FOG_HATCH,
   FOG_BAND_WIDTH,
   FOG_HATCH_SPACING,
   FOG_ROAD_ALPHA,
-  FOG_ROAD_EXTRA,
   GHOST_AGE_FONT_SIZE,
   GHOST_AGE_STROKE,
   GLYPH_COLOR,
   GHOST_HIDE_S,
-  ROAD_CASING_EXTRA,
   roadThickness,
 } from './style.ts';
 
@@ -94,17 +90,17 @@ class Ghost {
  * The server decides visibility: a node or an edge with `detail: 'fog'` is hidden, anything else
  * is (at least partly) seen. The client darkens the Voronoi cell of a hidden city (softly, 9.8)
  * and hatches a band along the border of what is seen, so the border reads without colour; a
- * hidden road also gets dark dashes. It puts a "last seen" ghost on a hidden place when the snapshot
+ * hidden road is shaded dark (still a solid line). It puts a "last seen" ghost on a hidden place when the snapshot
  * still carries a `Seen` with enemy groups in it: the enemy token, faded, with its age as
  * `-m:ss`. A place that is seen again loses its shade and its ghost on the next snapshot.
  * Nothing is inferred: no ghost without a `Seen`, no numbers the `Seen` has not got.
  *
  * Redrawn once per snapshot (`update` does nothing when `base` is the same object). Shades reuse
- * a few GraphicsContexts (one per city size, one per road length); `destroy()` releases them.
+ * a few GraphicsContexts (one per city size, one for the road shade); `destroy()` releases them.
  */
 export class FogView {
   private readonly contexts: GraphicsContext[] = [];
-  private readonly edgeContexts = new Map<number, GraphicsContext>();
+  private edgeShadeContext: GraphicsContext | null = null;
   private readonly regions = new Graphics();
   private readonly hatching = new Graphics();
   private hiddenKey = '';
@@ -203,20 +199,12 @@ export class FogView {
     return context;
   }
 
-  /** Dark dashes along +x on a road of `length`, a unit high; the road scales it to its width. */
-  private edgeContext(length: number): GraphicsContext {
-    const key = Math.round(length);
-    let context = this.edgeContexts.get(key);
-    if (context === undefined) {
-      context = this.context((g) => {
-        for (const [from, to] of fogDashes(key, FOG_DASH, FOG_GAP)) {
-          g.rect(from, -0.5, to - from, 1);
-        }
-        return g.fill({ color: FOG_COLOR, alpha: FOG_ROAD_ALPHA });
-      });
-      this.edgeContexts.set(key, context);
-    }
-    return context;
+  /** A dark solid line along +x on a road of `length`, a unit high; the road scales it to its width. */
+  private edgeContext(): GraphicsContext {
+    this.edgeShadeContext ??= this.context((g) =>
+      g.rect(0, -0.5, 1, 1).fill({ color: FOG_COLOR, alpha: FOG_ROAD_ALPHA }),
+    );
+    return this.edgeShadeContext;
   }
 
   private edgeShade(id: number): Graphics | null {
@@ -226,11 +214,10 @@ export class FogView {
     if (ends === undefined) return null;
     const { a, b } = ends;
     const length = Math.hypot(b.x - a.x, b.y - a.y);
-    const shade = new Graphics(this.edgeContext(length));
+    const shade = new Graphics(this.edgeContext());
     shade.position.set(a.x, a.y);
     shade.rotation = Math.atan2(b.y - a.y, b.x - a.x);
-    // The dashes are built for the rounded length; stretch to the exact one.
-    shade.scale.x = length / Math.max(1, Math.round(length));
+    shade.scale.x = length;
     this.edgeShades[id] = this.shadeLayer.addChild(shade);
     return shade;
   }
@@ -316,7 +303,7 @@ export class FogView {
       const shade = this.edgeShade(edge.id);
       if (shade !== null) {
         shade.visible = true;
-        shade.scale.y = roadThickness(edge.width) + ROAD_CASING_EXTRA + FOG_ROAD_EXTRA;
+        shade.scale.y = roadThickness(edge.width);
       }
     } else {
       const shade = this.edgeShades[edge.id];

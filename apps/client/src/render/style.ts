@@ -45,7 +45,7 @@ export function ownerColor(me: PlayerId, owner: PlayerId): number {
 }
 
 /** Territory: the cell of an owned city is tinted with the owner colour (9.1). */
-export const TERRITORY_ALPHA = 0.07;
+export const TERRITORY_ALPHA = 0.2;
 /** The border of an area of one owner: a light line of the owner colour. */
 export const TERRITORY_BORDER = { width: 2, alpha: 0.95, inset: 1.5 } as const;
 
@@ -68,18 +68,15 @@ export const STAMP_ROAD_CLEARANCE = 12;
 export const SNOW_ALPHA = 0.45;
 
 // --- Roads, width 1..5 (9.3) ---------------------------------------------------------------------
-export const ROAD_COLOR = 0xc4cbd4;
-export const ROAD_CASING = { color: BG, alpha: 0.6 } as const;
-export const ROAD_CASING_EXTRA = 4;
+export const ROAD_COLOR = { color: 0xc4cbd4, alpha: 0.8 } as const;
+export const ROAD_CASING = { color: BG, alpha: 0.4 } as const;
+export const ROAD_CASING_EXTRA = 3;
 export const ROAD_STRIPE = { color: BG, alpha: 0.5, width: 1 } as const;
 /** A fast road (DEC-22): dark chevrons every `spacing` px, `size` px long, notch at `depth`. */
 export const ROAD_CHEVRON = { color: BG, spacing: 28, size: 9, gap: 3, depth: 0.45 } as const;
-/** Width 1 is a dashed trail. */
-export const ROAD_TRAIL_DASH = 7;
-export const ROAD_TRAIL_GAP = 5;
-/** Road thickness grows with its level (1..3, DEC-22), so the level reads without colour: `1 + 2w`. */
+/** Road thickness grows with its level (1..3, DEC-22), so the level reads without colour: `0.5 + 1.5w`. */
 export function roadThickness(width: number): number {
-  return 1 + 2 * width;
+  return 0.5 + 1.5 * width;
 }
 /** The width badge of a hovered road. */
 export const WIDTH_BADGE = { radius: 9, fill: BG, stroke: PAPER, fontSize: 11 } as const;
@@ -167,7 +164,7 @@ export const FIGHT_COLOR = PAPER;
 
 // --- Fog of war (CLI-05, #61; softer in 9.8) -----------------------------------------------------
 // A hidden area is darkened (no solid hatching) and hatched at 45 degrees only in a band along the
-// border of what is seen, so the border reads without colour; a hidden road is broken into dashes;
+// border of what is seen, so the border reads without colour; a hidden road is a solid line shaded dark;
 // a memory ghost is faded AND carries the age of the sighting.
 
 export const FOG_COLOR = BG;
@@ -176,12 +173,8 @@ export const FOG_ALPHA = 0.45;
 export const FOG_HATCH = { width: 1.5, color: 0xaab2bd, alpha: 0.3 } as const;
 export const FOG_HATCH_SPACING = 9;
 export const FOG_BAND_WIDTH = 24;
-/** Dashes over a hidden road (the road shows through the gaps). */
-export const FOG_ROAD_ALPHA = 0.6;
-export const FOG_DASH = 12;
-export const FOG_GAP = 8;
-/** A hidden road is shaded this much wider than the road and its casing. */
-export const FOG_ROAD_EXTRA = 6;
+/** A hidden road stays a solid line, shaded dark (the dark cell and the hatched border carry the state too). */
+export const FOG_ROAD_ALPHA = 0.55;
 /** Opacity of a fresh memory ghost (the marker of what was last seen in a hidden place). */
 export const GHOST_ALPHA = 0.6;
 /** Ghosts fade linearly from `GHOST_FADE_START_S` to nothing at `GHOST_HIDE_S` seconds after the sighting (9.8). */

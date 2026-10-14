@@ -1,5 +1,5 @@
 /**
- * Geometry of the fog of war (CLI-05, #61): where enemy markers sit, dashes of hidden roads and the age of a memory.
+ * Geometry of the fog of war (CLI-05, #61): where enemy markers sit and the age of a memory.
  *
  * Pure functions, no PixiJS and no DOM. Nothing here decides what is visible: the server does
  * (`detail` of a node or an edge); the client only draws that level.
@@ -34,19 +34,6 @@ export function edgeMarkerPoint(map: MapFile, id: number): Point | undefined {
   if (ends === undefined) return undefined;
   const middle = edgePoint(ends.a, ends.b, true, 500);
   return sideways(ends.a, ends.b, middle, EDGE_MARKER_OFFSET);
-}
-
-/**
- * Darkening dashes along a hidden road of `length`: `[start, end]` pairs on the road axis. The
- * gaps between them let the road shine through, so a hidden road looks broken, not just darker.
- */
-export function fogDashes(length: number, dash: number, gap: number): [number, number][] {
-  const dashes: [number, number][] = [];
-  if (length <= 0 || dash <= 0) return dashes;
-  for (let at = 0; at < length; at += dash + gap) {
-    dashes.push([at, Math.min(length, at + dash)]);
-  }
-  return dashes;
 }
 
 /**
