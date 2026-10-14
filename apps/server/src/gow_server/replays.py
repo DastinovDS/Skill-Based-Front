@@ -18,6 +18,13 @@ to the database outside the event loop.
 
 Access (``GET /api/replays/{id}``): replays of rated matches are public; any other replay only
 for the two participants (``Authorization: Bearer <token>``).
+
+The frames file takes seconds to minutes after the match (the whole match is simulated again, and
+builds queue behind each other in the worker pool), so the endpoint tells three cases apart
+(``ReplayState``, #259): ready (200 and the file), preparing (202: the match is still running or
+its frames are being built, try again), unavailable (410: the match is over and no build is
+running, so none will appear: the build failed, the server died while building, or the match
+never finished). A match that does not exist is 404.
 """
 
 import asyncio
@@ -26,18 +33,21 @@ import multiprocessing
 import re
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
+from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Final
+from typing import Annotated, Final, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from gow_server.db import DbSession
 from gow_server.frames import FramesResult, build_frames
 from gow_server.identity import hash_token
+from gow_server.lifecycle import STATUS_RUNNING
 from gow_server.models import Match, MatchPlayer, Player
 from gow_sim.replay import ReplayWriter
 
@@ -46,6 +56,20 @@ log = logging.getLogger("gow_server.replays")
 LOG_SUFFIX: Final = ".jsonl.gz"
 FRAMES_SUFFIX: Final = ".frames.json.gz"
 _MATCH_ID_RE: Final = re.compile(r"[A-Za-z0-9_-]{1,64}")
+RETRY_AFTER_S: Final = 2
+"""``Retry-After`` of a replay that is still being prepared (the client backs off from there)."""
+
+
+class ReplayState(StrEnum):
+    READY = "ready"
+    PREPARING = "preparing"
+    UNAVAILABLE = "unavailable"
+
+
+class ReplayPreparing(BaseModel):
+    """Body of ``202``: the replay will be there shortly (or when the match is over)."""
+
+    status: Literal["preparing"] = "preparing"
 
 
 class ReplayService:
@@ -66,6 +90,8 @@ class ReplayService:
         self._workers: Final = workers
         self._pool: ProcessPoolExecutor | None = None
         self._tasks: set[asyncio.Task[FramesResult | None]] = set()
+        self._building: set[str] = set()
+        """Ids of the matches whose frames are being built (from ``schedule`` to the end)."""
 
     def log_path(self, match_id: str) -> Path:
         return self.replays_dir / (self._checked(match_id) + LOG_SUFFIX)
@@ -88,6 +114,7 @@ class ReplayService:
 
     def schedule(self, match_id: str) -> asyncio.Task[FramesResult | None]:
         """Start ``finalize`` as a task that ``aclose()`` waits for. Needs a running loop."""
+        self._building.add(match_id)  # before the task starts: no gap for the HTTP side
         task = asyncio.create_task(self.finalize(match_id), name=f"replay-{match_id}")
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
@@ -99,6 +126,12 @@ class ReplayService:
         Returns ``None`` (after logging the reason) when the log cannot be turned into frames:
         the match then simply has no replay for viewing; the command log stays for analysis.
         """
+        try:
+            return await self._build(match_id)
+        finally:
+            self._building.discard(match_id)
+
+    async def _build(self, match_id: str) -> FramesResult | None:
         loop = asyncio.get_running_loop()
         out = self.replays_dir / self.frames_name(match_id)
         try:
@@ -129,6 +162,21 @@ class ReplayService:
             },
         )
         return result
+
+    def frames_file(self, match: Match) -> Path | None:
+        """The frames file of ``match`` if it is on disk (and inside ``replays_dir``)."""
+        root = self.replays_dir.resolve()
+        name = match.replay_path or self.frames_name(str(match.id))
+        file = (root / name).resolve()
+        return file if file.is_relative_to(root) and file.is_file() else None
+
+    def state(self, match: Match) -> ReplayState:
+        """Where the replay of ``match`` is. Blocking only for a ``stat`` (call from a ``def``)."""
+        if self.frames_file(match) is not None:
+            return ReplayState.READY
+        if match.status == STATUS_RUNNING or str(match.id) in self._building:
+            return ReplayState.PREPARING
+        return ReplayState.UNAVAILABLE
 
     def _get_pool(self) -> ProcessPoolExecutor:
         if self._pool is None:
@@ -182,20 +230,29 @@ def _unauthorized() -> HTTPException:
     )
 
 
-@router.get("/{match_id}", response_class=FileResponse)
+@router.get(
+    "/{match_id}",
+    response_class=FileResponse,
+    responses={
+        202: {"model": ReplayPreparing, "description": "The replay is being prepared: retry."},
+        404: {"description": "No such match."},
+        410: {"description": "The match is over and no replay will be made."},
+    },
+)
 def get_replay(
     match_id: int,
     session: DbSession,
     service: Annotated[ReplayService, Depends(_service)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_optional_bearer)],
-) -> FileResponse:
+) -> Response:
     """The frames file of a finished match (``docs/design/replay-frames.md``), gzip as stored.
 
     Rated matches: public. Others: 401 without a valid token, 403 for a player outside the match.
-    404: no such match, or its replay is not ready (yet).
+    404: no such match. 202 (``Retry-After``): the match runs or the frames are being built.
+    410: the match is over and there will be no frames (failed build, crash, aborted match).
     """
     match = session.get(Match, match_id)
-    if match is None or match.replay_path is None:
+    if match is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="replay not found")
     if not match.rated:
         if credentials is None:
@@ -212,11 +269,17 @@ def get_replay(
         ).first()
         if played is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="not your match")
-    root = service.replays_dir.resolve()
-    file = (root / match.replay_path).resolve()
-    if not file.is_relative_to(root) or not file.is_file():
-        log.error("replay file is missing", extra={"match_id": match_id})
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="replay not found")
+    state = service.state(match)
+    if state is ReplayState.PREPARING:
+        return JSONResponse(
+            ReplayPreparing().model_dump(),
+            status_code=status.HTTP_202_ACCEPTED,
+            headers={"Retry-After": str(RETRY_AFTER_S), "Cache-Control": "no-store"},
+        )
+    file = service.frames_file(match)
+    if state is ReplayState.UNAVAILABLE or file is None:
+        log.warning("replay is not available", extra={"match_id": match_id})
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="replay is not available")
     cache = "public" if match.rated else "private"
     return FileResponse(
         file,

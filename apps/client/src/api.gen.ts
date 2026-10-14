@@ -164,7 +164,8 @@ export interface paths {
      * @description The frames file of a finished match (``docs/design/replay-frames.md``), gzip as stored.
      *
      *     Rated matches: public. Others: 401 without a valid token, 403 for a player outside the match.
-     *     404: no such match, or its replay is not ready (yet).
+     *     404: no such match. 202 (``Retry-After``): the match runs or the frames are being built.
+     *     410: the match is over and there will be no frames (failed build, crash, aborted match).
      */
     get: operations['get_replay_api_replays__match_id__get'];
     put?: never;
@@ -506,6 +507,18 @@ export interface components {
       /** Map Id */
       map_id?: string | null;
     };
+    /**
+     * ReplayPreparing
+     * @description Body of ``202``: the replay will be there shortly (or when the match is over).
+     */
+    ReplayPreparing: {
+      /**
+       * Status
+       * @default preparing
+       * @constant
+       */
+      status: 'preparing';
+    };
     /** ValidationError */
     ValidationError: {
       /** Location */
@@ -749,6 +762,29 @@ export interface operations {
     responses: {
       /** @description Successful Response */
       200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description The replay is being prepared: retry. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReplayPreparing'];
+        };
+      };
+      /** @description No such match. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description The match is over and no replay will be made. */
+      410: {
         headers: {
           [name: string]: unknown;
         };

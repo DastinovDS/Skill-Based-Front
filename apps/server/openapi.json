@@ -283,7 +283,7 @@
           "replays"
         ],
         "summary": "Get Replay",
-        "description": "The frames file of a finished match (``docs/design/replay-frames.md``), gzip as stored.\n\nRated matches: public. Others: 401 without a valid token, 403 for a player outside the match.\n404: no such match, or its replay is not ready (yet).",
+        "description": "The frames file of a finished match (``docs/design/replay-frames.md``), gzip as stored.\n\nRated matches: public. Others: 401 without a valid token, 403 for a player outside the match.\n404: no such match. 202 (``Retry-After``): the match runs or the frames are being built.\n410: the match is over and there will be no frames (failed build, crash, aborted match).",
         "operationId": "get_replay_api_replays__match_id__get",
         "security": [
           {
@@ -304,6 +304,22 @@
         "responses": {
           "200": {
             "description": "Successful Response"
+          },
+          "202": {
+            "description": "The replay is being prepared: retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayPreparing"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such match."
+          },
+          "410": {
+            "description": "The match is over and no replay will be made."
           },
           "422": {
             "description": "Validation Error",
@@ -1147,6 +1163,19 @@
           "queue_size"
         ],
         "title": "QueueStatus"
+      },
+      "ReplayPreparing": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "preparing",
+            "title": "Status",
+            "default": "preparing"
+          }
+        },
+        "type": "object",
+        "title": "ReplayPreparing",
+        "description": "Body of ``202``: the replay will be there shortly (or when the match is over)."
       },
       "ValidationError": {
         "properties": {
