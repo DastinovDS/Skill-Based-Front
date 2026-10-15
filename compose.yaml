@@ -20,6 +20,8 @@ services:
     environment:
       GOW_ENV: ${GOW_ENV:-prod}
       GOW_LOG_LEVEL: ${GOW_LOG_LEVEL:-INFO}
+      # The ruleset of every match (rulesets/ is in the image, WORKDIR /app).
+      GOW_RULESET_PATH: ${GOW_RULESET_PATH:-rulesets/mvp-0.toml}
       GOW_GUEST_RATE_LIMIT: ${GOW_GUEST_RATE_LIMIT:-10}
       GOW_GUEST_RATE_WINDOW_S: ${GOW_GUEST_RATE_WINDOW_S:-3600}
       GOW_MATCH_CREATE_RATE_LIMIT: ${GOW_MATCH_CREATE_RATE_LIMIT:-10}

@@ -59,7 +59,15 @@ export function stackGroups(groups: readonly RenderGroup[], me: PlayerId): CityS
   return [...stacks.values()];
 }
 
-/** Where the icon of a side stands: the middle of its city, the opponent's beside it. */
-export function iconPoint(city: Point, marker: Point | undefined, mine: boolean): Point {
-  return mine || marker === undefined ? city : marker;
+/**
+ * Where the icon of a side stands: the middle of its city. The opponent's moves beside it only
+ * when `shared`: an own icon already stands in the middle of that city.
+ */
+export function iconPoint(
+  city: Point,
+  marker: Point | undefined,
+  mine: boolean,
+  shared: boolean,
+): Point {
+  return mine || !shared || marker === undefined ? city : marker;
 }

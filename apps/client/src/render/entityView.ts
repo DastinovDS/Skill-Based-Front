@@ -96,6 +96,8 @@ export class EntityView {
   private spots: ReadonlyMap<string, TokenSpot> = new Map();
   private edgeSpots: ReadonlyMap<string, TokenSpot> = new Map();
   private icons: readonly CityIcon[] = [];
+  /** The cities where an own icon stands in the middle. */
+  private ownIcons: ReadonlySet<number> = new Set();
 
   constructor(
     private readonly map: MapFile,
@@ -176,6 +178,7 @@ export class EntityView {
     }
     this.stamp++;
     this.spots = this.updateGroups(frame.groups);
+    this.placeEnemyNodes();
     this.updatePackets(frame);
   }
 
@@ -283,6 +286,7 @@ export class EntityView {
     seen: NodeView['seen'],
     detail: NodeView['detail'],
     parent: Container,
+    inside: boolean,
   ): Token | null {
     const shown =
       seen !== null && detail !== 'fog' && seen.level !== 'fog' && seen.enemy_modes.length > 0;
@@ -298,6 +302,7 @@ export class EntityView {
       owner: this.enemy,
       modes: seen.enemy_modes,
       counts: exact ? { units: seen.enemy_units ?? 0, charged: seen.enemy_charged ?? 0 } : null,
+      inside,
     });
     token.setLabel(true);
     token.setScale(symbolScale(token.side, this.cameraScale));
@@ -305,17 +310,31 @@ export class EntityView {
     return token;
   }
 
+  /** What is seen of enemies in a city: a token like the own one, placed every frame (`placeEnemyNodes`). */
   private setEnemyNode(node: NodeView): void {
-    const token = this.enemyToken(
+    this.enemyNodes[node.id] = this.enemyToken(
       this.enemyNodes[node.id] ?? null,
       node.seen,
       node.detail,
       this.enemyLayer,
+      true,
     );
-    this.enemyNodes[node.id] = token;
-    if (token === null) return;
-    const at = nodeMarkerPoint(this.map, node.id, token.side, this.radiusOf(node.id));
-    if (at !== undefined) token.view.position.set(at.x, at.y);
+  }
+
+  /**
+   * Enemies seen in a city stand in the middle of it like own units (the number inside, or "?"
+   * without numbers); beside it only where an own icon already holds the middle. Redone every
+   * frame because own groups come and go between snapshots.
+   */
+  private placeEnemyNodes(): void {
+    this.enemyNodes.forEach((token, id) => {
+      if (token === null || !token.view.visible) return;
+      const city = nodePoint(this.map, id);
+      if (city === undefined) return;
+      const marker = nodeMarkerPoint(this.map, id, token.side, this.radiusOf(id));
+      const at = iconPoint(city, marker, false, this.ownIcons.has(id));
+      token.view.position.set(at.x, at.y);
+    });
   }
 
   private setEnemyEdge(edge: EdgeView): void {
@@ -324,6 +343,7 @@ export class EntityView {
       edge.seen,
       edge.detail,
       this.enemyLayer,
+      false,
     );
     this.enemyEdges[edge.id] = token;
     if (token === null) return;
@@ -336,14 +356,17 @@ export class EntityView {
   /**
    * Returns the drawn spot of every group by id (the order lines, hit testing, the selection).
    * Groups standing in a city are one icon per side (`cityStacks`): the own one in the middle of
-   * the city, the opponent's (a replay shows both sides) beside it; every group of a stack has the
+   * the city, the opponent's (a replay shows both sides) too, beside it only when an own icon is there; every group of a stack has the
    * spot of its icon. A group on a road is a token of its own.
    */
   private updateGroups(groups: readonly RenderGroup[]): Map<string, TokenSpot> {
     const spots = new Map<string, TokenSpot>();
     const edgeSpots = new Map<string, TokenSpot>();
     const icons: CityIcon[] = [];
-    for (const stack of stackGroups(groups, this.me)) {
+    const stacks = stackGroups(groups, this.me);
+    const mine = new Set(stacks.filter((stack) => stack.owner === this.me).map((s) => s.node));
+    this.ownIcons = mine;
+    for (const stack of stacks) {
       const entry = this.groupEntry(stackKey(stack.node, stack.owner), stack.owner);
       entry.stamp = this.stamp;
       entry.token.set({
@@ -353,12 +376,13 @@ export class EntityView {
         inside: true,
       });
       const city = nodePoint(this.map, stack.node);
-      const mine = stack.owner === this.me;
+      const own = stack.owner === this.me;
       const marker =
         city === undefined
           ? undefined
           : nodeMarkerPoint(this.map, stack.node, entry.token.side, this.radiusOf(stack.node));
-      const at = city === undefined ? undefined : iconPoint(city, marker, mine);
+      const at =
+        city === undefined ? undefined : iconPoint(city, marker, own, mine.has(stack.node));
       entry.view.visible = at !== undefined;
       if (at === undefined) continue;
       const scale = symbolScale(entry.token.side, this.cameraScale);
@@ -367,7 +391,7 @@ export class EntityView {
       entry.token.setLabel(true);
       const spot: TokenSpot = { x: at.x, y: at.y, side: entry.token.side, scale };
       for (const id of stack.ids) spots.set(id, spot);
-      if (mine) icons.push({ ...stack, spot });
+      if (own) icons.push({ ...stack, spot });
     }
     for (const item of groups) {
       if (item.location.kind === 'node') continue;

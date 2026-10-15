@@ -28,6 +28,8 @@ export const TERRAIN_FILL: Readonly<Record<Terrain, number>> = {
 };
 /** The baked background (or the flat terrain colours) is darkened by this (9.1). */
 export const BACKDROP_DIM = { color: BG, alpha: 0.18 } as const;
+/** The thin line round every area of the map (also between areas of one owner): subtle. */
+export const CELL_LINE = { width: 1, color: PAPER, alpha: 0.16 } as const;
 export const CELL_BORDER = { width: 1, color: BG, alpha: 0.5 } as const;
 export const MAP_BORDER = { width: 2, color: 0x484f58 } as const;
 
@@ -77,8 +79,6 @@ export const ROAD_CHEVRON = { color: BG, spacing: 28, size: 9, gap: 3, depth: 0.
 export function roadThickness(width: number): number {
   return 0.5 + 1.5 * width;
 }
-/** The width badge of a hovered road. */
-export const WIDTH_BADGE = { radius: 9, fill: BG, stroke: PAPER, fontSize: 11 } as const;
 
 // --- Cities (9.4) -------------------------------------------------------------------------------
 /** Radius when the capacity is not known (a map without a snapshot). */
@@ -213,17 +213,13 @@ export const ORDER_GHOST_ALPHA = 0.85;
 export const ORDER_GHOST_WIDTH = 4;
 export const ORDER_GHOST_DASH = 7;
 export const ORDER_GHOST_GAP = 6;
-/** Where a click would send the group: a fine dotted line. */
+/** Where a click would send the group with a planned order (Shift): a fine dotted line. */
 export const PREVIEW_ALPHA = 0.55;
 export const PREVIEW_DASH = 2;
 export const PREVIEW_GAP = 6;
 export const PREVIEW_WIDTH = 2;
-/** The road under the pointer: a translucent band wider than the road itself. */
-export const ROAD_LIGHT_ALPHA = 0.45;
-export const ROAD_LIGHT_EXTRA = 8;
 /**
- * Road pick (key U, DEC-16): the roads a click would upgrade carry a dashed band (the dashes, not
- * only the colour, tell them from the hover light).
+ * Road pick (key U, DEC-16): the roads a click would upgrade carry a dashed band.
  */
 export const PICK_BAND = { extra: 6, dash: 10, gap: 7, alpha: 0.85 } as const;
 
@@ -249,30 +245,32 @@ export const WAVE_STROKE = { width: 3, alpha: 0.9 } as const;
 export const LOSS_FONT_SIZE = 13;
 
 // --- Ribbon arrows of intents and orders (9.7) ---------------------------------------------------
-// A planned order is a wide translucent ribbon along a curve with a big head (HOI4, Mini
-// Motorways). Own: solid contour; the opponent: dashed 9/5, which also "runs" once the group has
-// left. A light stripe grows from the tail while the delay runs out.
+// A planned order is a wide translucent ribbon, straight from the start city to the centre of the
+// target, with a big head (HOI4, Mini Motorways). Own: solid contour; the opponent: dashed 9/5,
+// which also "runs" once the group has left. While the delay runs the ribbon fills from the start
+// to the tip; when it ends the ribbon blinks and locks into its colour.
 export const RIBBON = {
   /** Body width; the tail narrows to `tailRatio` of it. Head 38 x 30 at this body. */
   body: 16,
   tailRatio: 0.6,
   headWidth: 38,
   headLength: 30,
-  /** The curve bends by this share of the chord. */
-  bend: 0.15,
-  fillAlpha: 0.32,
+  /** Fill of the part the delay has not reached yet, and of the filled / locked ribbon. */
+  idleAlpha: 0.1,
+  fillAlpha: 0.5,
+  /** The blink at the end of the delay: a paper-white fill for this many ticks (two flashes). */
+  flashAlpha: 0.75,
+  blinkTicks: 4,
   contour: { width: 2.2, alpha: 0.95 },
   casing: { width: 6, alpha: 0.45 },
-  /** The ribbon leaves a city at radius + `startGap` and ends at radius + `endGap` of the target. */
+  /** The ribbon leaves the start city at radius + `startGap` and ends in the centre of the target. */
   startGap: 16,
-  endGap: 20,
   /** The narrow end of the body is never thinner than this on screen (CSS px). */
   minTailPx: 8,
   dash: 9,
   gap: 5,
   /** The dashes run along the contour at this speed (world units per second). */
   runSpeed: 28,
-  stripe: { width: 3, alpha: 0.75 },
 } as const;
 /** The dotted ring around the target of an enemy intent. */
 export const INTENT_TARGET_RING = { gap: 20, width: 2, dash: 5, gap2: 4, alpha: 0.95 } as const;
@@ -291,7 +289,15 @@ export const ORDER_LINE = {
   /** The arrowhead on the ring of the target. */
   head: { length: 11, half: 6 },
 } as const;
-export const CHEVRON = { spacing: 26, first: 22, endMargin: 10, size: 5, width: 1.8 } as const;
+export const CHEVRON = {
+  spacing: 26,
+  first: 22,
+  endMargin: 10,
+  size: 5,
+  width: 1.8,
+  /** The chevrons run along the whole remaining path at this speed (world units per second). */
+  runSpeed: 30,
+} as const;
 
 /** A rejected order: the ghost shakes for `SHAKE_MS`, then fades out until `REJECT_MS` (U6). */
 export const GHOST_SHAKE_MS = 200;

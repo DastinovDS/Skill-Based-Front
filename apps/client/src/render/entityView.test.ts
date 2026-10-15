@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest';
+import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
+import { DEFAULT_MAP } from '../map/bundledMaps.ts';
+import { interpolateFrame } from '../net/interpolate.ts';
+import type { GroupView, NodeView, SnapshotMsg } from '../protocol.gen.ts';
+import { EntityView } from './entityView.ts';
+import { createLayers } from './layers.ts';
+import { nodePoint } from './layout.ts';
+
+const map = DEFAULT_MAP;
+const base = devSnapshot(map, DEV_RULES, 100);
+const node = base.view.nodes.find((n) => n.owner === 0);
+if (node === undefined) throw new Error('small map');
+
+/** A snapshot where the player sees `units` enemy units in `node` and has `groups` of his own. */
+function frameWith(groups: GroupView[], exact: boolean) {
+  const nodes: NodeView[] = base.view.nodes.map((n) =>
+    n.id === node?.id
+      ? {
+          ...n,
+          detail: exact ? 'exact' : 'presence',
+          seen: {
+            tick: 100,
+            level: exact ? 'exact' : 'presence',
+            enemy_modes: ['attack'],
+            enemy_units: exact ? 3 : null,
+            enemy_charged: exact ? 1 : null,
+          },
+        }
+      : { ...n, seen: null },
+  );
+  const snapshot: SnapshotMsg = { ...base, view: { ...base.view, nodes, groups } };
+  return interpolateFrame(snapshot, null, snapshot.tick);
+}
+
+function enemyTokenAt(layers: ReturnType<typeof createLayers>) {
+  const enemy = layers.layer.groups.children.find((c) => c.label === 'enemy');
+  return enemy?.children.find((c) => c.visible);
+}
+
+describe('EntityView, enemies seen in a city', () => {
+  it('stands in the middle of the city like an own group, with or without numbers', () => {
+    const city = nodePoint(map, node?.id ?? 0);
+    for (const exact of [true, false]) {
+      const layers = createLayers();
+      const view = new EntityView(map, layers, 0, 1, () => 17);
+      view.update(frameWith([], exact));
+      const token = enemyTokenAt(layers);
+      expect(token?.position.x).toBeCloseTo(city?.x ?? NaN);
+      expect(token?.position.y).toBeCloseTo(city?.y ?? NaN);
+      view.destroy();
+    }
+  });
+
+  it('steps beside the city only while an own icon holds the middle', () => {
+    const city = nodePoint(map, node?.id ?? 0);
+    const own: GroupView = {
+      id: 'g',
+      units: 2,
+      charged: 2,
+      mode: 'attack',
+      location: { kind: 'node', node: node?.id ?? 0 },
+      order: null,
+    };
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.update(frameWith([own], true));
+    const token = enemyTokenAt(layers);
+    expect(token?.position.x).toBeGreaterThan((city?.x ?? 0) + 10);
+    view.update(frameWith([], true));
+    expect(token?.position.x).toBeCloseTo(city?.x ?? NaN);
+    view.destroy();
+  });
+});

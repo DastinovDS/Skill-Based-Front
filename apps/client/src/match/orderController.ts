@@ -228,14 +228,13 @@ export class OrderController implements MapInteraction {
     const ghosts = this.#o.book.ghosts();
     const preview = this.#previewTarget();
     const from = this.#selectedGroup()?.node ?? null;
-    const road = this.#hover?.kind === 'edge' ? this.#hover.id : null;
     const candidates = this.#candidates();
     const beacon = this.#o.hud.beacon;
     const supply = this.#supplyOverlayNow();
     const reachNodes = reach === null ? [] : [...reach.ticks.keys()];
     const splitNodes = reach === null ? [] : [...reach.split];
     const eta = this.#eta(reach, preview);
-    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${String(road)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}|${reachNodes.join(',')}/${splitNodes.join(',')}`;
+    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}|${reachNodes.join(',')}/${splitNodes.join(',')}`;
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
@@ -248,7 +247,6 @@ export class OrderController implements MapInteraction {
         ghosts,
         preview:
           from !== null && preview !== null ? { from, to: preview, planned: this.planned } : null,
-        road,
         candidates,
         beacon,
         supply,
@@ -280,6 +278,12 @@ export class OrderController implements MapInteraction {
     }
     this.stopRoadPick();
     const group = this.#selectedGroup();
+    // A click on the node the selected group stands in only lets the group go: no city menu, no
+    // city selection (a click on another node stays an order).
+    if (hit.kind === 'node' && group !== null && group.node === hit.id) {
+      this.deselect();
+      return;
+    }
     // The icon of own units in a city is the city for an order of a group selected elsewhere.
     const iconNode = hit.kind === 'stack' ? hit.node : hit.kind === 'group' ? hit.node : undefined;
     if (iconNode !== undefined && group !== null && group.node !== iconNode) {

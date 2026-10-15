@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Radial from './Radial.svelte';
+import { setReducedMotion } from '../render/motion.ts';
 import { spreadAngles, type RadialItem } from './radial.ts';
 
 const angles = spreadAngles(3);
@@ -122,5 +123,23 @@ describe('Radial', () => {
     const { target } = render({ items: [], disc: 100 });
     expect(target.querySelector('circle.disc')).not.toBeNull();
     expect(target.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it('grows from the centre of the ring, and not at all with less motion', () => {
+    const { target } = render();
+    const box = target.querySelector<HTMLElement>('.radial');
+    expect(box?.classList.contains('grow')).toBe(true);
+    // The origin of the growth is the middle of the ring inside the box.
+    expect(box?.style.transformOrigin).toMatch(/^\d+(\.\d+)?px \d+(\.\d+)?px$/);
+    void unmount(mounted ?? {});
+    mounted = undefined;
+    document.body.innerHTML = '';
+    setReducedMotion(true);
+    try {
+      const { target: still } = render();
+      expect(still.querySelector('.radial')?.classList.contains('grow')).toBe(false);
+    } finally {
+      setReducedMotion(null);
+    }
   });
 });

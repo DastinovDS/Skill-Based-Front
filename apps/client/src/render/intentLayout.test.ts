@@ -4,11 +4,13 @@ import {
   dashAlong,
   delayLeft,
   delayProgress,
+  departBlink,
   ghostLook,
   polylineLength,
   polylinePrefix,
   ribbonAxis,
   ribbonBody,
+  ribbonFilled,
   ribbonOutline,
 } from './intentLayout.ts';
 import { GHOST_REJECT_MS, GHOST_SHAKE_MS, RIBBON } from './style.ts';
@@ -125,6 +127,71 @@ describe('chevrons', () => {
     const marks = chevrons([A, B], 26, 22, 10);
     expect(marks.map((m) => m.at.x)).toEqual([22, 48, 74, 100, 126, 152, 178]);
     expect(marks[0]?.dir).toEqual({ x: 1, y: 0 });
+  });
+});
+
+describe('chevrons along the whole path', () => {
+  const bent = [A, { x: 100, y: 0 }, { x: 100, y: 100 }];
+
+  it('go on over a corner as one flow, not restarted on the second leg', () => {
+    const marks = chevrons(bent, 26, 22, 10);
+    // 22, 48, 74 on the first leg, 100 is the corner, then 26, 52, 78 into the second.
+    expect(marks.map((m) => [m.at.x, m.at.y])).toEqual([
+      [22, 0],
+      [48, 0],
+      [74, 0],
+      [100, 0],
+      [100, 26],
+      [100, 52],
+      [100, 78],
+    ]);
+    expect(marks.at(-1)?.dir).toEqual({ x: 0, y: 1 });
+  });
+
+  it('run with the offset: the pattern slides along the whole path and wraps by one spacing', () => {
+    const slid = chevrons(bent, 26, 22, 10, 10);
+    expect(slid[0]?.at.x).toBe(32);
+    expect(slid.some((m) => m.at.x === 100 && m.at.y > 0)).toBe(true);
+    expect(chevrons(bent, 26, 22, 10, 26).map((m) => m.at)).toEqual(
+      chevrons(bent, 26, 22, 10, 0).map((m) => m.at),
+    );
+    expect(chevrons(bent, 26, 22, 10, -4)[0]?.at.x).toBe(44);
+  });
+});
+
+describe('a straight ribbon into the centre of the target', () => {
+  it('ends exactly at the target when there is no end gap and no bend', () => {
+    const axis = ribbonAxis([A, B], 16, 0, 0);
+    expect(axis[0]).toEqual({ x: 16, y: 0 });
+    expect(axis.at(-1)).toEqual(B);
+    expect(new Set(axis.map((p) => p.y))).toEqual(new Set([0]));
+    expect(ribbonOutline(axis, RIBBON.body)?.tip).toEqual(B);
+  });
+});
+
+describe('ribbonFilled', () => {
+  const axis = ribbonAxis([A, B], 16, 0, 0);
+  const outline = ribbonOutline(axis, RIBBON.body)?.outline ?? [];
+  const maxX = (poly: readonly { x: number }[]): number => Math.max(...poly.map((p) => p.x));
+
+  it('is empty at the start, the whole arrow at the end, and grows from the start to the tip between', () => {
+    expect(ribbonFilled(outline, axis, 0)).toEqual([]);
+    expect(ribbonFilled(outline, axis, 1)).toEqual(outline);
+    const half = ribbonFilled(outline, axis, 0.5);
+    // Half of the axis from x = 16 to 200.
+    expect(maxX(half)).toBeCloseTo(16 + (200 - 16) / 2);
+    expect(Math.min(...half.map((p) => p.x))).toBeCloseTo(Math.min(...outline.map((p) => p.x)));
+    const most = ribbonFilled(outline, axis, 0.9);
+    expect(maxX(most)).toBeGreaterThan(maxX(half));
+  });
+});
+
+describe('departBlink', () => {
+  it('flashes twice in the first ticks after the delay ends, never before or after', () => {
+    const on = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5].map((since) => departBlink(since, 4));
+    expect(on).toEqual([true, true, false, false, true, true, false, false]);
+    expect(departBlink(-1, 4)).toBe(false);
+    expect(departBlink(4, 4)).toBe(false);
   });
 });
 

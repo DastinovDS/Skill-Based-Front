@@ -59,16 +59,18 @@ describe('IntentView', () => {
     kit.destroy();
   });
 
-  it('follows the server path of an own planned order, not a straight line', () => {
+  it('draws an own planned order straight, whatever path the group has (no bends)', () => {
     const { view, draw, ribbons, kit } = setup();
     const own = intent({ owner: 0, origin: home, target: far });
-    const straight = (): number => {
-      draw([own]);
-      return ribbons?.getLocalBounds().width ?? 0;
-    };
-    const direct = straight();
-    // The group's path detours through another own city: the ribbon reaches it.
-    const detour = nodePoint(map, via);
+    draw([own]);
+    const direct = ribbons?.getLocalBounds();
+    const [x0, y0, w0, h0] = [
+      direct?.x ?? 0,
+      direct?.y ?? 0,
+      direct?.width ?? 0,
+      direct?.height ?? 0,
+    ];
+    // The group's path detours through another own city: the ribbon still ignores it.
     const group: GroupView = {
       id: 'g',
       units: 2,
@@ -79,11 +81,8 @@ describe('IntentView', () => {
     };
     draw([own], [group]);
     const bounds = ribbons?.getLocalBounds();
-    expect(detour).toBeDefined();
-    expect(bounds).toBeDefined();
-    const x = detour?.x ?? 0;
-    expect(bounds?.x ?? Infinity).toBeLessThanOrEqual(Math.min(x, nodePoint(map, home)?.x ?? x));
-    expect(direct).toBeGreaterThan(0);
+    expect(w0).toBeGreaterThan(0);
+    expect([bounds?.x, bounds?.y, bounds?.width, bounds?.height]).toEqual([x0, y0, w0, h0]);
     view.destroy();
     kit.destroy();
   });

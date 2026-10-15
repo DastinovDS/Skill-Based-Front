@@ -1,4 +1,4 @@
-import { Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Graphics, Text, TextStyle } from 'pixi.js';
 import { t } from '../i18n/index.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { badgeScale } from './alertLayout.ts';
@@ -28,15 +28,12 @@ import {
   NODE_RADIUS,
   PICK_BAND,
   PAPER,
-  WIDTH_BADGE,
   YOU,
   PREVIEW_ALPHA,
   PREVIEW_DASH,
   PREVIEW_GAP,
   PREVIEW_WIDTH,
   REACH_RING,
-  ROAD_LIGHT_ALPHA,
-  ROAD_LIGHT_EXTRA,
   roadThickness,
   SELECT_COLOR,
   SELECT_RING_GAP,
@@ -60,7 +57,6 @@ export class OverlayView {
   private overlay: OverlayState = EMPTY_OVERLAY;
   /** Side of the triangle the selection frame is drawn for (0: not drawn yet). */
   private frameSide = 0;
-  private widths: readonly number[] = [];
   /** The time to the hovered reachable node: one small number under it, no window. */
   private readonly eta: Text;
   private readonly etaStyle = new TextStyle({
@@ -72,15 +68,6 @@ export class OverlayView {
   });
   private tickHz = 10;
   private cameraScale = 1;
-  private readonly badge = new Container({ label: 'road-width', visible: false });
-  private readonly badgeText: Text;
-  private readonly badgeStyle = new TextStyle({
-    fontFamily: 'system-ui, sans-serif',
-    fontSize: WIDTH_BADGE.fontSize,
-    fontWeight: '700',
-    fill: PAPER,
-  });
-
   constructor(
     private readonly map: MapFile,
     layers: MapLayers,
@@ -90,15 +77,6 @@ export class OverlayView {
     private readonly radiusOf: (node: number) => number = (node) =>
       map.nodes[node]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS,
   ) {
-    this.badge.addChild(
-      new Graphics()
-        .circle(0, 0, WIDTH_BADGE.radius)
-        .fill(WIDTH_BADGE.fill)
-        .stroke({ width: 1.5, color: WIDTH_BADGE.stroke }),
-    );
-    this.badgeText = this.badge.addChild(
-      new Text({ text: '', style: this.badgeStyle, anchor: 0.5, resolution: 1 }),
-    );
     this.eta = new Text({
       text: '',
       style: this.etaStyle,
@@ -106,14 +84,7 @@ export class OverlayView {
       resolution: 1,
       visible: false,
     });
-    layers.layer.intents.addChild(
-      this.lines,
-      this.ring,
-      this.frame,
-      this.badge,
-      this.eta,
-      this.ghosts,
-    );
+    layers.layer.intents.addChild(this.lines, this.ring, this.frame, this.eta, this.ghosts);
     this.frame.visible = false;
   }
 
@@ -142,14 +113,7 @@ export class OverlayView {
     }
   }
 
-  /** `widths[i]`: the width of road `i` as the snapshot says (shown on the hovered road). */
-  setRoadWidths(widths: readonly number[]): void {
-    this.widths = widths;
-    if (this.overlay.road !== null) this.drawLines(this.overlay);
-  }
-
   setLabelResolution(resolution: number): void {
-    if (this.badgeText.resolution !== resolution) this.badgeText.resolution = resolution;
     if (this.eta.resolution !== resolution) this.eta.resolution = resolution;
   }
 
@@ -180,8 +144,6 @@ export class OverlayView {
   }
 
   destroy(): void {
-    this.badge.destroy({ children: true });
-    this.badgeStyle.destroy();
     this.eta.destroy();
     this.etaStyle.destroy();
     this.lines.destroy();
@@ -247,23 +209,9 @@ export class OverlayView {
     const g = this.lines;
     g.clear();
     this.drawCandidates(g, state.candidates);
-    const road = state.road === null ? undefined : edgeEnds(this.map, state.road);
-    this.badge.visible = false;
-    if (road !== undefined && state.road !== null) {
-      const width = this.widths[state.road] ?? this.map.edges[state.road]?.base_width ?? 1;
-      // The width as a number in a disc in the middle of the road: it reads without colour.
-      this.badge.position.set((road.a.x + road.b.x) / 2, (road.a.y + road.b.y) / 2);
-      this.badgeText.text = String(width);
-      this.badge.visible = true;
-      g.moveTo(road.a.x, road.a.y).lineTo(road.b.x, road.b.y);
-      g.stroke({
-        width: roadThickness(width) + ROAD_LIGHT_EXTRA,
-        color: SELECT_COLOR,
-        alpha: ROAD_LIGHT_ALPHA,
-        cap: 'round',
-      });
-    }
-    const preview = state.preview;
+    // The dotted line of an ordinary order is gone (the arrow of the order is its picture); only a
+    // planned order shows where its ribbon will go.
+    const preview = state.preview !== null && state.preview.planned ? state.preview : null;
     if (preview !== null) {
       const from = nodePoint(this.map, preview.from);
       const to = nodePoint(this.map, preview.to);
@@ -273,7 +221,7 @@ export class OverlayView {
         }
         g.stroke({
           width: PREVIEW_WIDTH,
-          color: preview.planned ? SELECT_COLOR : YOU,
+          color: SELECT_COLOR,
           alpha: PREVIEW_ALPHA,
           cap: 'round',
         });
@@ -316,12 +264,16 @@ export class OverlayView {
 
   private drawGhosts(state: OverlayState, now: number): void {
     this.ghosts.clear();
-    for (const ghost of state.ghosts) this.drawGhost(this.ghosts, ghost, now);
+    // Only a rejected order leaves a trace (it shakes and fades, U6): an accepted or unanswered one
+    // draws nothing, the order line or the ribbon of the snapshot is its picture.
+    for (const ghost of state.ghosts) {
+      if (ghost.status === 'rejected') this.drawGhost(this.ghosts, ghost, now);
+    }
   }
 
   /**
-   * Dashed arrow along the server's path, or straight to the destination while unanswered; solid
-   * once the server accepted it; shaking and fading once it rejected it (U6).
+   * The arrow of a rejected order, shaking and fading (U6): along the server's path if it sent
+   * one, else straight to the destination.
    */
   private drawGhost(g: Graphics, ghost: GhostArrow, now: number): void {
     const status = ghost.status ?? 'pending';

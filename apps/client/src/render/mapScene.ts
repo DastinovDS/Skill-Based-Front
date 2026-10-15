@@ -201,7 +201,6 @@ export class MapScene {
       this.view.setOwners(frame.base.view.nodes.map((node) => node.owner));
       const edges = frame.base.view.edges;
       this.view.setRoads(edges);
-      this.overlay.setRoadWidths(edges.map((edge) => edge.width));
       this.cities.update(
         frame.base,
         this.source.recruitTicks ?? null,
