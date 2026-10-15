@@ -51,7 +51,7 @@ from gow_bots.bots.base import Bot, ParamRange, node_of
 from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take
 from gow_sim.commands import CancelOrder, Command, Merge, Move, Recruit, SetStance, Split
 from gow_sim.maps import MapDef
-from gow_sim.ruleset import RecruitLocation, Ruleset
+from gow_sim.ruleset import Ruleset
 from gow_sim.view import GroupView, Mode, OnEdge, PlayerView, Stance
 
 __all__ = ["CampaignBot", "Ctx", "Option"]
@@ -447,26 +447,21 @@ class CampaignBot(Bot):
     # Recruiting -----------------------------------------------------------------------------
 
     def _recruit(self, ctx: Ctx) -> None:
-        view, cooldown = ctx.view, self.rules.recruit.cooldown_ticks
+        view = ctx.view
         if ctx.budget - self.cost(Recruit(0)) < self.params["recruit_keep"]:
             return
-        if self.rules.recruit.location is RecruitLocation.CAPITAL:
-            candidates = [self.home]
-        else:
-            candidates = [n.id for n in view.nodes]
         hops = self.hops[self.objective(ctx)]
-        fights = self.fight_nodes(view)
         cities = [
-            n
-            for n in candidates
-            if view.nodes[n].owner == self.player
-            and n not in fights  # no production in a city with a fight (DEC-25, item 9)
-            and ctx.standing[n] < view.nodes[n].capacity
-            and ctx.tick - self.recruited.get(n, ctx.tick - cooldown) >= cooldown
+            n.id
+            for n in view.nodes
+            if self.recruited.get(n.id) != ctx.tick
+            and self.can_queue(view, n.id, ctx.standing[n.id])
         ]
         if not cities:
             return
-        city = min(cities, key=lambda n: (hops[n], self.key(n)))
+        # Closest to the objective, but not in a front city: a queue there is lost with the
+        # city (DEC-25, items 10 and 13); the next rear city is a few seconds away.
+        city = min(cities, key=lambda n: (self.front(view, n), hops[n], self.key(n)))
         if self.spend(ctx, Recruit(city)):
             self.recruited[city] = ctx.tick
             ctx.standing[city] += 1

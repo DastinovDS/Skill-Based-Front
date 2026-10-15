@@ -9,7 +9,9 @@ Only what the client uses (AGENTS.md, section 7.1):
 - the road level prices and duration, for the road upgrade hint (DEC-16);
 - the stance table and the delays of planned orders, for the stance menu and the countdown on
   order arrows (ui-style 11 and 9.7);
-- the attrition and grace ticks, for the overcrowding countdown (ui-style 12).
+- the attrition and grace ticks, for the overcrowding countdown (ui-style 12);
+- the recruit queue numbers, for the production progress over a city and the cancel refund
+  (DEC-25).
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -120,6 +122,18 @@ class BuildPublic(WireModel):
     """One price per new level ``2..3`` (DEC-22), ascending."""
 
 
+class RecruitPublic(WireModel):
+    """The recruit queue of a city (``recruit`` of the ruleset, DEC-25)."""
+
+    unit_ticks: PosInt
+    """Ticks of production per unit: the full progress of the current unit."""
+    queue_max: PosInt
+    """Units in the queue of one city at most, the one in production included."""
+    refund_started_pct: Percent
+    """Share of ``cost.recruit`` a cancel returns for the unit in production; a unit not started
+    yet returns all of it."""
+
+
 class RulesetPublic(WireModel):
     tick_hz: PosInt
     match_ticks: PosInt
@@ -130,6 +144,7 @@ class RulesetPublic(WireModel):
     economy: EconomyPublic
     orders: OrdersPublic
     capacity: CapacityPublic
+    recruit: RecruitPublic
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
@@ -191,5 +206,10 @@ class RulesetPublic(WireModel):
             capacity=CapacityPublic(
                 attrition_ticks=rules.capacity.attrition_ticks,
                 grace_ticks=rules.capacity.grace_ticks,
+            ),
+            recruit=RecruitPublic(
+                unit_ticks=rules.recruit.unit_ticks,
+                queue_max=rules.recruit.queue_max,
+                refund_started_pct=rules.recruit.refund_started_pct,
             ),
         )

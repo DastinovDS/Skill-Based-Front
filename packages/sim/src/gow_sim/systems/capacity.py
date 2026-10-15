@@ -35,7 +35,8 @@ Starvation in an encirclement (DEC-19; ``starvation`` after the attrition, in th
 
 Every owner change goes through ``change_owner()``: the warehouse is emptied (no trophies,
 mechanics.md, section 9), road levels and types are kept, the supply priority goes back to
-``normal`` (DEC-18), the grace period starts.
+``normal`` (DEC-18), the recruit queue of the former owner is lost without a refund (DEC-25,
+item 10), the grace period starts.
 """
 
 from gow_sim.maps import NodeKind
@@ -131,10 +132,12 @@ def city_capacity(state: GameState, rules: Ruleset, node: int) -> int:
 def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     """Give ``node`` to ``owner``: the warehouse is emptied, road widths stay, grace starts.
 
-    The supply priority goes back to ``normal`` (DEC-18, item 1).
+    The supply priority goes back to ``normal`` (DEC-18, item 1); the recruit queue and its
+    progress are dropped (DEC-25, item 10).
 
     Captures (movement SIM-05, combat SIM-09) call this; it emits ``warehouse_lost`` when
-    charges were in the warehouse. A call with the current owner changes nothing.
+    charges were in the warehouse and ``recruit_queue_lost`` (for the former owner) when units
+    were queued. A call with the current owner changes nothing.
     """
     n = state.nodes[node]
     if n.owner == owner:
@@ -144,6 +147,15 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
         events.append(
             event(state.tick, "warehouse_lost", node=node, owner=n.owner, charges=n.warehouse)
         )
+    if n.recruit_queue > 0 and n.owner is not None:
+        # The queue belongs to the former owner and is lost without a refund (DEC-25, item 10).
+        events.append(
+            event(
+                state.tick, "recruit_queue_lost", player=n.owner, node=node, units=n.recruit_queue
+            )
+        )
+    n.recruit_queue = 0
+    n.recruit_progress = 0
     n.owner = owner
     n.warehouse = 0
     n.priority = Priority.NORMAL

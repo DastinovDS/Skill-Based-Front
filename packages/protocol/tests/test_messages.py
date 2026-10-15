@@ -41,6 +41,7 @@ COMMAND_TYPES = {
     "upgrade_road",
     "recruit",
     "cancel_order",
+    "cancel_recruit",
     "set_priority",
     "transfer",
     "forfeit",

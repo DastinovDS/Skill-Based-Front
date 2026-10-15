@@ -27,7 +27,7 @@ export const REJECT_MESSAGES = {
   NOTHING_TO_CANCEL: 'reject.NOTHING_TO_CANCEL',
   NOT_CAPITAL: 'reject.NOT_CAPITAL',
   CITY_FULL: 'reject.CITY_FULL',
-  RECRUIT_COOLDOWN: 'reject.RECRUIT_COOLDOWN',
+  QUEUE_FULL: 'reject.QUEUE_FULL',
   STACK_LIMIT: 'reject.STACK_LIMIT',
   IN_FIGHT: 'reject.IN_FIGHT',
 } as const satisfies Record<string, MessageKey>;

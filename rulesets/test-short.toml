@@ -104,7 +104,9 @@ ticks_per_level = 150
 3 = 4
 
 [recruit]
-cooldown_ticks = 20
+unit_ticks = 30
+queue_max = 3
+refund_started_pct = 50
 location = "any_city"
 
 [victory]

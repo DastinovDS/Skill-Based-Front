@@ -382,7 +382,8 @@ def test_no_enemy_cp_stance_production_or_counters(rules: Ruleset) -> None:
     enemy = state.players[1]
     enemy.cp, enemy.stance, enemy.charge_acc, enemy.stance_changed_tick = 999, Stance.WAR, 77, 3
     state.nodes[5].warehouse = 42  # enemy capital production piles up in fog
-    state.nodes[5].recruited_tick = 1
+    state.nodes[5].recruit_queue = 2  # the enemy's production is hidden (DEC-25, item 12)
+    state.nodes[5].recruit_progress = 17
     assert _view(state, rules) == before
     assert {f.name for f in dataclasses.fields(SelfView)} == {"cp", "stance"}
     assert before.me == SelfView(cp=state.players[0].cp, stance=state.players[0].stance)
@@ -468,6 +469,36 @@ def test_dec19_starve_in_only_for_own_cut_off_cities(rules: Ruleset) -> None:
     assert before.nodes[1].starve_in is None
     state.nodes[1].cut_since = None
     assert _view(state, rules, player=1) == before
+
+
+def test_dec25_recruit_queue_only_for_own_cities(rules: Ruleset) -> None:
+    """DEC-25, item 12: an own city shows its queue, the progress and whether the ready unit
+    waits; the enemy's and neutral nodes show ``None``, even in sight."""
+    state = _state("line6", rules)
+    state.nodes[1].recruit_queue, state.nodes[1].recruit_progress = 2, 7
+    state.nodes[4].recruit_queue, state.nodes[4].recruit_progress = 3, 12  # an enemy city
+    view = _view(state, rules)
+    fields = [(n.recruit_queue, n.recruit_progress, n.recruit_waiting) for n in view.nodes]
+    assert fields == [(0, 0, False), (2, 7, False)] + [(None, None, None)] * 4
+    state.nodes[1].recruit_progress = rules.recruit.unit_ticks  # ready, no place yet
+    assert _view(state, rules).nodes[1].recruit_waiting is True
+    before = _view(state, rules, player=1)
+    assert before.nodes[4].recruit_queue == 3
+    for queue, progress in ((0, 0), (1, 29), (3, 30)):
+        state.nodes[1].recruit_queue, state.nodes[1].recruit_progress = queue, progress
+        assert _view(state, rules, player=1) == before  # the enemy never sees it
+
+
+def test_dec25_enemy_recruit_queue_hidden_even_in_sight(rules: Ruleset) -> None:
+    state = _state("line6", rules)
+    state.nodes[2].owner = 1  # an enemy city next to an own one, with an own group: exact
+    _add(state, 0, AtNode(2))
+    view = _view(state, rules)
+    assert view.nodes[2].detail is E
+    assert (view.nodes[2].recruit_queue, view.nodes[2].recruit_progress) == (None, None)
+    assert view.nodes[2].recruit_waiting is None
+    state.nodes[2].recruit_queue, state.nodes[2].recruit_progress = 2, 30
+    assert _view(state, rules) == view
 
 
 def test_dec19_no_starve_in_when_there_is_nothing_to_spend(rules: Ruleset) -> None:
@@ -763,6 +794,8 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
         if node.owner == enemy:
             node.priority = draw(st.sampled_from(list(Priority)))
             node.cut_since = draw(st.none() | st.integers(0, max(0, state.tick)))
+            node.recruit_queue = draw(st.integers(0, 3))  # DEC-25: the enemy's queue is hidden
+            node.recruit_progress = draw(st.integers(0, 30))
     other = state.players[enemy]
     other.cp = draw(st.integers(0, 10_000))
     other.stance = draw(st.sampled_from(list(Stance)))

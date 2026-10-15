@@ -85,6 +85,8 @@ export interface NodeInfo {
   readonly graceLeft: number | null;
   /** Supply priority of an own city (DEC-18); `null` for the rest. */
   readonly priority: Priority | null;
+  /** The recruit queue of an own city (DEC-25): units queued; `null` for the rest. */
+  readonly recruitQueue: number | null;
 }
 
 /** A road level a city builds (`NodeView.build`). */
@@ -263,6 +265,7 @@ function nodeInfo(
     attritionIn: node.attrition_in,
     graceLeft: node.grace_left,
     priority: node.priority,
+    recruitQueue: node.recruit_queue,
   };
 }
 

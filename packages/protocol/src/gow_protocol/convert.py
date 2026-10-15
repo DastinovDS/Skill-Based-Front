@@ -126,6 +126,8 @@ PRIVATE_KINDS: Final = frozenset(
         "packet_lost",
         "packet_sent",
         "priority_set",
+        "recruit_cancelled",
+        "recruit_queue_lost",
         "recruited",
         "road_upgraded",
         "stance_changed",
@@ -190,6 +192,9 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 grace_left=n.grace_left,
                 priority=n.priority,
                 starve_in=n.starve_in,
+                recruit_queue=n.recruit_queue,
+                recruit_progress=n.recruit_progress,
+                recruit_waiting=n.recruit_waiting,
             )
             for n in view.nodes
         ),
@@ -319,6 +324,9 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "grace_left": n.grace_left,
                 "priority": n.priority,
                 "starve_in": n.starve_in,
+                "recruit_queue": n.recruit_queue,
+                "recruit_progress": n.recruit_progress,
+                "recruit_waiting": n.recruit_waiting,
             }
             for n in view.nodes
         ],
@@ -446,6 +454,8 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.UpgradeRoad(node, edge, None if kind is None else RoadKind(kind))
         case wire.RecruitCmd(node=node):
             return sim.Recruit(node)
+        case wire.CancelRecruitCmd(node=node):
+            return sim.CancelRecruit(node)
         case wire.CancelOrderCmd(group=g):
             return sim.CancelOrder(gid(g))
         case wire.SetPriorityCmd(node=node, level=level):

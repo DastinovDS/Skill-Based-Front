@@ -36,7 +36,7 @@ import { TargetMenuState } from './targetMenuState.svelte.ts';
 import { SupplyMenuState, TransferState } from './supplyState.svelte.ts';
 
 /** A sector of the menu of a city. */
-export type CityChoice = 'recruit' | 'roads';
+export type CityChoice = 'recruit' | 'cancel_recruit' | 'roads';
 
 /** A sector of the menu of a group. */
 export type GroupChoice = 'split' | 'merge' | 'cancel' | 'defense';
@@ -191,6 +191,24 @@ export class OrderController implements MapInteraction {
   /** Price of recruiting, hundredths of CP. */
   get recruitCost(): number {
     return this.#o.rules.cost.recruit;
+  }
+
+  /** Units in the recruit queue of one city at most (`ruleset_public.recruit`, DEC-25). */
+  get recruitQueueMax(): number {
+    return this.#o.rules.recruit.queue_max;
+  }
+
+  /**
+   * What a cancel returns, hundredths of CP: all of the price for a unit not started yet, the
+   * ruleset share (`refund_started_pct`, rounded down) for the unit in production. The numbers of
+   * the ruleset for the menu line; which of the two applies is the server's answer.
+   */
+  get recruitRefund(): { readonly full: number; readonly started: number } {
+    const { cost, recruit } = this.#o.rules;
+    return {
+      full: cost.recruit,
+      started: Math.floor((cost.recruit * recruit.refund_started_pct) / 100),
+    };
   }
 
   /** Price of switching a group to `mode`, hundredths of CP. */
@@ -493,6 +511,7 @@ export class OrderController implements MapInteraction {
   chooseCity(choice: CityChoice): void {
     this.cityMenu.close();
     if (choice === 'recruit') this.recruit();
+    else if (choice === 'cancel_recruit') this.cancelRecruit();
     else this.toggleRoadPick();
   }
 
@@ -527,6 +546,14 @@ export class OrderController implements MapInteraction {
     this.cityMenu.close();
     if (node === null) return;
     this.#sendCommand({ type: 'recruit', node }, null);
+  }
+
+  /** Take the last unit off the recruit queue of the selected city (DEC-25); free. */
+  cancelRecruit(): void {
+    const node = this.recruitNode();
+    this.cityMenu.close();
+    if (node === null) return;
+    this.#sendCommand({ type: 'cancel_recruit', node }, null);
   }
 
   /**

@@ -22,7 +22,7 @@ from gow_sim.commands import (
     UpgradeRoad,
 )
 from gow_sim.maps import MapDef
-from gow_sim.ruleset import RecruitLocation, Ruleset
+from gow_sim.ruleset import Ruleset
 from gow_sim.view import GroupView, Mode, PlayerView, RoadKind, Stance
 
 __all__ = ["IdleBot", "RandomLegalBot"]
@@ -52,8 +52,6 @@ class RandomLegalBot(Bot):
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> None:
         super().__init__(mapdef, rules, seed=seed, player=player)
-        self.recruited: dict[int, int] = {}
-        """Decision tick of the last recruit in each city (the cooldown belongs to the city)."""
         self.stance_tick: int | None = None
 
     @override
@@ -77,11 +75,9 @@ class RandomLegalBot(Bot):
             if spend(SetStance(stance)):
                 self.stance_tick = tick
         if rng.randrange(100) < p["recruit_pct"]:
-            cities = self._recruit_cities(view, tick)
+            cities = self._recruit_cities(view)
             if cities:
-                node = rng.choice(cities)
-                if spend(Recruit(node)):
-                    self.recruited[node] = tick
+                spend(Recruit(rng.choice(cities)))
         for g in self.idle_groups(view):
             if rng.randrange(100) >= p["act_pct"]:
                 continue
@@ -96,23 +92,12 @@ class RandomLegalBot(Bot):
         last = self.stance_tick
         return last is None or tick - last >= self.rules.orders.stance_cooldown_ticks
 
-    def _recruit_cities(self, view: PlayerView, tick: int) -> list[int]:
-        me, cooldown = view.player, self.rules.recruit.cooldown_ticks
-        if self.rules.recruit.location is RecruitLocation.CAPITAL:
-            candidates = [self.map.capital(me)]
-        else:
-            candidates = [n.id for n in view.nodes]
+    def _recruit_cities(self, view: PlayerView) -> list[int]:
+        """Own cities with room in the recruit queue, the rear ones if there are any (DEC-25)."""
         standing = self.standing(view)
-        fights = self.fight_nodes(view)
-        cities = [
-            n
-            for n in candidates
-            if view.nodes[n].owner == me
-            and n not in fights
-            and standing[n] < view.nodes[n].capacity
-            and tick - self.recruited.get(n, tick - cooldown) >= cooldown
-        ]
-        return sorted(cities, key=self.key)
+        cities = [n.id for n in view.nodes if self.can_queue(view, n.id, standing[n.id])]
+        rear = [n for n in cities if not self.front(view, n)]
+        return sorted(rear or cities, key=self.key)
 
     def _move(self, view: PlayerView, g: GroupView, budget: int) -> Command | None:
         dests = self.reachable(view, node_of(g), self.params["radius"], g.units)

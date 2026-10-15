@@ -38,6 +38,8 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'groups_merged',
   'packet_sent',
   'packet_delivered',
+  // A cancel of a recruit is the player's own act: the CP bar shows the refund (DEC-25).
+  'recruit_cancelled',
   // The score is in the top bar already (ui-style U2): a VP line would repeat it every few seconds.
   'vp_awarded',
 ]);
@@ -49,6 +51,7 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'recruited',
   'stance_changed',
   'warehouse_lost',
+  'recruit_queue_lost',
   'forfeit',
   'match_ended',
   'attrition',
@@ -96,6 +99,8 @@ export function eventText(event: HudEvent, me: PlayerId): string {
       });
     case 'warehouse_lost':
       return tf('event.warehouse_lost', { node: num(data.node) });
+    case 'recruit_queue_lost':
+      return tf('event.recruit_queue_lost', { node: num(data.node), units: num(data.units) });
     case 'forfeit':
       return t(side === 'mine' ? 'event.forfeit.mine' : 'event.forfeit.enemy');
     case 'match_ended':

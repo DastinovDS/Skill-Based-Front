@@ -14,14 +14,14 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 14,
+    "PROTOCOL_VERSION": 15,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
   "$defs": {
     "AckMsg": {
       "additionalProperties": false,
-      "description": "Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.\n\n``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.\n``path``: for an accepted ``move``, the nodes from the group's node to ``dest``; for an\naccepted ``transfer`` (DEC-18), the nodes from ``from_node`` to ``to_node`` (the client draws\nit and never computes it); ``None`` otherwise.\n``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` (planned delay\nincluded; DEC-22, item 10); for an accepted ``transfer``, the tick the charges reach\n``to_node``; both if nothing stops them; ``None`` otherwise.\n``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,\n``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).",
+      "description": "Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.\n\n``applied_tick``: the tick at whose start the command was validated and, if accepted, applied.\n``path``: for an accepted ``move``, the nodes from the group's node to ``dest``; for an\naccepted ``transfer`` (DEC-18), the nodes from ``from_node`` to ``to_node`` (the client draws\nit and never computes it); ``None`` otherwise.\n``arrive_tick``: for an accepted ``move``, the tick the group reaches ``dest`` (planned delay\nincluded; DEC-22, item 10); for an accepted ``transfer``, the tick the charges reach\n``to_node``; both if nothing stops them; ``None`` otherwise.\n``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,\n``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20).",
       "properties": {
         "type": {
           "const": "ack",
@@ -157,6 +157,28 @@
       "title": "CancelOrderCmd",
       "type": "object"
     },
+    "CancelRecruitCmd": {
+      "additionalProperties": false,
+      "description": "Take the last unit off the recruit queue of the own city ``node`` (DEC-25, item 11).",
+      "properties": {
+        "type": {
+          "const": "cancel_recruit",
+          "default": "cancel_recruit",
+          "type": "string"
+        },
+        "node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "node"
+      ],
+      "title": "CancelRecruitCmd",
+      "type": "object"
+    },
     "CapacityPublic": {
       "additionalProperties": false,
       "description": "Overcrowding attrition (``capacity`` of the ruleset), for the countdown of ui-style 12.",
@@ -267,6 +289,7 @@
       "discriminator": {
         "mapping": {
           "cancel_order": "#/$defs/CancelOrderCmd",
+          "cancel_recruit": "#/$defs/CancelRecruitCmd",
           "forfeit": "#/$defs/ForfeitCmd",
           "merge": "#/$defs/MergeCmd",
           "move": "#/$defs/MoveCmd",
@@ -301,6 +324,9 @@
         },
         {
           "$ref": "#/$defs/RecruitCmd"
+        },
+        {
+          "$ref": "#/$defs/CancelRecruitCmd"
         },
         {
           "$ref": "#/$defs/CancelOrderCmd"
@@ -1445,6 +1471,43 @@
             }
           ],
           "description": "Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8). ``None``\nfor every other node."
+        },
+        "recruit_queue": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Own city only: units in its recruit queue, the one in production included (DEC-25, item\n12). ``None`` for provinces, the enemy's and neutral nodes: the enemy's production is hidden."
+        },
+        "recruit_progress": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Own city only: ticks of production of the current unit, up to ``recruit.unit_ticks``."
+        },
+        "recruit_waiting": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Own city only: the current unit is ready and waits for a place (DEC-25, item 7)."
         }
       },
       "required": [
@@ -1458,7 +1521,10 @@
         "attrition_in",
         "grace_left",
         "priority",
-        "starve_in"
+        "starve_in",
+        "recruit_queue",
+        "recruit_progress",
+        "recruit_waiting"
       ],
       "title": "NodeView",
       "type": "object"
@@ -1859,6 +1925,7 @@
     },
     "RecruitCmd": {
       "additionalProperties": false,
+      "description": "Put one unit into the recruit queue of the own city ``node`` (DEC-25).",
       "properties": {
         "type": {
           "const": "recruit",
@@ -1876,6 +1943,37 @@
         "node"
       ],
       "title": "RecruitCmd",
+      "type": "object"
+    },
+    "RecruitPublic": {
+      "additionalProperties": false,
+      "description": "The recruit queue of a city (``recruit`` of the ruleset, DEC-25).",
+      "properties": {
+        "unit_ticks": {
+          "description": "Ticks of production per unit: the full progress of the current unit.",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "queue_max": {
+          "description": "Units in the queue of one city at most, the one in production included.",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "refund_started_pct": {
+          "description": "Share of ``cost.recruit`` a cancel returns for the unit in production; a unit not started\nyet returns all of it.",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "unit_ticks",
+        "queue_max",
+        "refund_started_pct"
+      ],
+      "title": "RecruitPublic",
       "type": "object"
     },
     "ResumeMsg": {
@@ -1977,6 +2075,9 @@
         },
         "capacity": {
           "$ref": "#/$defs/CapacityPublic"
+        },
+        "recruit": {
+          "$ref": "#/$defs/RecruitPublic"
         }
       },
       "required": [
@@ -1988,7 +2089,8 @@
         "build",
         "economy",
         "orders",
-        "capacity"
+        "capacity",
+        "recruit"
       ],
       "title": "RulesetPublic",
       "type": "object"

@@ -14,6 +14,7 @@ export type Command =
   | SetStanceCmd
   | UpgradeRoadCmd
   | RecruitCmd
+  | CancelRecruitCmd
   | CancelOrderCmd
   | SetPriorityCmd
   | TransferCmd
@@ -129,8 +130,18 @@ export interface UpgradeRoadCmd {
   edge: number;
   kind: ('fast' | 'freight') | null;
 }
+/**
+ * Put one unit into the recruit queue of the own city ``node`` (DEC-25).
+ */
 export interface RecruitCmd {
   type: 'recruit';
+  node: number;
+}
+/**
+ * Take the last unit off the recruit queue of the own city ``node`` (DEC-25, item 11).
+ */
+export interface CancelRecruitCmd {
+  type: 'cancel_recruit';
   node: number;
 }
 export interface CancelOrderCmd {
@@ -234,6 +245,7 @@ export interface RulesetPublic {
   economy: EconomyPublic;
   orders: OrdersPublic;
   capacity: CapacityPublic;
+  recruit: RecruitPublic;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.
@@ -345,6 +357,24 @@ export interface CapacityPublic {
   grace_ticks: number;
 }
 /**
+ * The recruit queue of a city (``recruit`` of the ruleset, DEC-25).
+ */
+export interface RecruitPublic {
+  /**
+   * Ticks of production per unit: the full progress of the current unit.
+   */
+  unit_ticks: number;
+  /**
+   * Units in the queue of one city at most, the one in production included.
+   */
+  queue_max: number;
+  /**
+   * Share of ``cost.recruit`` a cancel returns for the unit in production; a unit not started
+   * yet returns all of it.
+   */
+  refund_started_pct: number;
+}
+/**
  * The player's view after tick ``tick``. Only the latest one matters (AGENTS.md, 5.3).
  */
 export interface SnapshotMsg {
@@ -424,6 +454,19 @@ export interface NodeView {
    * for every other node.
    */
   starve_in: number | null;
+  /**
+   * Own city only: units in its recruit queue, the one in production included (DEC-25, item
+   * 12). ``None`` for provinces, the enemy's and neutral nodes: the enemy's production is hidden.
+   */
+  recruit_queue: number | null;
+  /**
+   * Own city only: ticks of production of the current unit, up to ``recruit.unit_ticks``.
+   */
+  recruit_progress: number | null;
+  /**
+   * Own city only: the current unit is ready and waits for a place (DEC-25, item 7).
+   */
+  recruit_waiting: boolean | null;
 }
 /**
  * What the player sees, or last saw, of one node or edge (``gow_sim.state.Sighting``).
@@ -601,7 +644,7 @@ export interface FightView {
  * included; DEC-22, item 10); for an accepted ``transfer``, the tick the charges reach
  * ``to_node``; both if nothing stops them; ``None`` otherwise.
  * ``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,
- * ``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).
+ * ``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20).
  */
 export interface AckMsg {
   type: 'ack';
@@ -786,6 +829,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 14;
+export const PROTOCOL_VERSION = 15;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

@@ -41,7 +41,7 @@ from gow_sim.commands import (
     command_cost,
 )
 from gow_sim.maps import MapDef
-from gow_sim.ruleset import Ruleset
+from gow_sim.ruleset import RecruitLocation, Ruleset
 from gow_sim.view import (
     AtNode,
     FightView,
@@ -403,6 +403,35 @@ class Bot:
             return False
         price = self.rules.build.charges_per_level.of(e.width + 1)
         return (city.warehouse or 0) >= price
+
+    def can_queue(self, view: PlayerView, node: int, standing: int) -> bool:
+        """``Recruit(node)`` is accepted and sensible now (DEC-25), with ``standing`` own units
+        in the node as the caller counts them.
+
+        An own city (``recruit_queue`` is ``None`` for provinces and foreign nodes) where
+        ``recruit.location`` allows it, without a fight (the production would stand) and with an
+        empty queue: a decision comes every few ticks and a unit takes ``recruit.unit_ticks``, so
+        one unit at a time per city is all that is made before the next decision, and a longer
+        queue would only tie CP up and be lost with the city (DEC-25, items 10 and 13).
+        """
+        n = view.nodes[node]
+        if n.owner != view.player or n.recruit_queue is None:
+            return False
+        if self.rules.recruit.location is RecruitLocation.CAPITAL and node != self.map.capital(
+            view.player
+        ):
+            return False
+        if node in self.fight_nodes(view):
+            return False
+        return n.recruit_queue == 0 and standing + n.recruit_queue < n.capacity
+
+    def front(self, view: PlayerView, node: int) -> bool:
+        """An own node next to a node of the enemy: a recruit queue there risks the capture."""
+        me = view.player
+        return any(
+            view.nodes[self.map.edges[e].other(node)].owner not in (None, me)
+            for e in self.map.incident[node]
+        )
 
     def standing(self, view: PlayerView) -> list[int]:
         """Own units standing in each node (the load that recruiting checks against capacity)."""

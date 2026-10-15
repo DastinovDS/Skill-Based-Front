@@ -67,7 +67,10 @@ def test_tick_grows_before_the_systems(mvp_rules: Ruleset) -> None:
 
 def test_step_keeps_the_events_of_the_tick_in_the_state(mvp_rules: Ruleset) -> None:
     match = Match(_map("line3"), mvp_rules, KEY)
-    events = match.step([PlayerCommand(0, 0, Recruit(0))])
+    match.step([PlayerCommand(0, 0, Recruit(0))])
+    for _ in range(mvp_rules.recruit.unit_ticks - 2):
+        match.step()
+    events = match.step()  # the unit appears unit_ticks - 1 ticks after the order (DEC-25)
     assert events == match.state.events
     assert "recruited" in [e.kind for e in events]
     assert match.step() == match.state.events

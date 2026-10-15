@@ -105,6 +105,11 @@ export const RING_MAX_SEGMENTS = 10;
 export const BAR_SEGMENT = { width: 5, height: 4, pitch: 6, pad: 1 } as const;
 export const BAR_BASE = { color: BG, radius: 2 } as const;
 export const BAR_GAP = 9;
+/**
+ * The recruit queue above the ring of an own city (DEC-25): one 8 x 4 slot per queued unit
+ * (10 apart); the first fills with the progress of the unit in production.
+ */
+export const QUEUE_SLOT = { width: 8, height: 4, pitch: 10, pad: 1 } as const;
 
 export const VP_BADGE_RADIUS = 8.5;
 export const VP_BADGE = { fill: BG, stroke: { width: 2, color: VP } } as const;

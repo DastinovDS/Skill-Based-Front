@@ -150,6 +150,7 @@ export function frozenSource(scene: FixtureScene): RenderSource {
       defense: DEV_RULES.orders.defense_delay_ticks,
     },
     roundTicks: DEV_RULES.combat.round_ticks,
+    recruitTicks: DEV_RULES.recruit.unit_ticks,
     capacityTicks: {
       attritionTicks: DEV_RULES.capacity.attrition_ticks,
       graceTicks: DEV_RULES.capacity.grace_ticks,

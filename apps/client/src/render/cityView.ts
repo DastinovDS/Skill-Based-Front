@@ -5,6 +5,8 @@ import {
   barTop,
   capacityRing,
   cityRadius,
+  queueSlots,
+  queueTop,
   ringRadius,
   warehouseSegments,
   type Arc,
@@ -25,6 +27,7 @@ import {
   NEUTRAL_STROKE,
   NODE_RADIUS,
   OWNER_OUTLINE,
+  QUEUE_SLOT,
   RING_FILLED,
   RING_SEGMENT,
   SEGMENT_EMPTY,
@@ -33,6 +36,7 @@ import {
   VP_BADGE_RADIUS,
   VP_FONT_SIZE,
   VP_TEXT_COLOR,
+  WARN,
   YOU,
   sideOf,
 } from './style.ts';
@@ -48,10 +52,18 @@ interface CityState {
   /** Units of the viewing player standing in the city. */
   readonly garrison: number;
   readonly warehouse: number | null;
+  /** Own city: units in the recruit queue (DEC-25); `null` for the rest. */
+  readonly queue: number | null;
+  /** Ticks of production of the current unit. */
+  readonly progress: number;
+  /** Ticks per unit (`ruleset_public.recruit.unit_ticks`); `null`: no queue mark. */
+  readonly unitTicks: number | null;
 }
 
 function stateKey(s: CityState): string {
-  return [s.owner, s.capacity, s.garrison, s.warehouse].map(String).join('|');
+  return [s.owner, s.capacity, s.garrison, s.warehouse, s.queue, s.progress, s.unitTicks]
+    .map(String)
+    .join('|');
 }
 
 /** A point on the circle of `radius` at `angle` radians. */
@@ -64,8 +76,9 @@ function onCircle(radius: number, angle: number): Point {
  * with the colour of the owner (own: blue with a white outline, enemy: red with a white outline and
  * a dark inner ring, neutral: grey with a thin outline), the capital star, the capacity ring of
  * segments (white for own units standing there, grey otherwise; overcrowding is the alert view's
- * pulsing ring and badge, not drawn here), the warehouse bar under the ring and the VP badge. The capacity is public and
- * exact (DEC-22: fixed by the node kind).
+ * pulsing ring and badge, not drawn here), the warehouse bar under the ring, the recruit queue of an
+ * own city above it (DEC-25) and the VP badge. The capacity is public and exact (DEC-22: fixed by
+ * the node kind).
  *
  * Bodies share GraphicsContexts (one per kind and radius); rings and bars are redrawn when a
  * city's state changes. `destroy()` releases every object and context created here.
@@ -78,6 +91,7 @@ export class CityView {
   private readonly stars: (Graphics | null)[];
   private readonly rings: Graphics[];
   private readonly bars: Graphics[];
+  private readonly queues: Graphics[];
   private readonly badges: (Container | null)[];
   private readonly vpLabels: Text[] = [];
   private readonly keys: string[];
@@ -107,6 +121,7 @@ export class CityView {
     this.stars = [];
     this.rings = [];
     this.bars = [];
+    this.queues = [];
     this.badges = [];
     for (const node of map.nodes) {
       const city = new Container({ x: node.x, y: node.y, label: `node-${String(node.id)}` });
@@ -114,6 +129,7 @@ export class CityView {
       this.stars.push(node.capital_of === null ? null : city.addChild(new Graphics()));
       this.rings.push(city.addChild(new Graphics()));
       this.bars.push(city.addChild(new Graphics()));
+      this.queues.push(city.addChild(new Graphics()));
       if (node.vp > 0) {
         const badge = city.addChild(new Container());
         badge.addChild(new Graphics(this.badge));
@@ -146,12 +162,23 @@ export class CityView {
   /** Owners before the first snapshot (the map's start owners); capacity is not known yet. */
   setOwners(owners: readonly (PlayerId | null)[]): void {
     owners.forEach((owner, id) => {
-      this.set(id, { owner, capacity: null, garrison: 0, warehouse: null });
+      this.set(id, {
+        owner,
+        capacity: null,
+        garrison: 0,
+        warehouse: null,
+        queue: null,
+        progress: 0,
+        unitTicks: null,
+      });
     });
   }
 
-  /** A new snapshot: owners, capacity classes, garrisons and warehouses. */
-  update(base: SnapshotMsg): void {
+  /**
+   * A new snapshot: owners, capacity classes, garrisons, warehouses and recruit queues;
+   * `unitTicks`: ticks per recruit (`null`: no queue marks).
+   */
+  update(base: SnapshotMsg, unitTicks: number | null = null): void {
     const garrison = new Map<number, number>();
     for (const group of base.view.groups) {
       if (group.location.kind === 'node') {
@@ -159,7 +186,7 @@ export class CityView {
       }
     }
     for (const node of base.view.nodes) {
-      this.set(node.id, this.stateOf(node, garrison.get(node.id) ?? 0));
+      this.set(node.id, this.stateOf(node, garrison.get(node.id) ?? 0, unitTicks));
     }
   }
 
@@ -178,12 +205,15 @@ export class CityView {
 
   // --- Drawing ------------------------------------------------------------------------------
 
-  private stateOf(node: NodeView, garrison: number): CityState {
+  private stateOf(node: NodeView, garrison: number, unitTicks: number | null): CityState {
     return {
       owner: node.owner,
       capacity: node.capacity,
       garrison: node.owner === this.me ? garrison : 0,
       warehouse: node.detail === 'exact' ? node.warehouse : null,
+      queue: node.recruit_queue,
+      progress: node.recruit_progress ?? 0,
+      unitTicks,
     };
   }
 
@@ -237,7 +267,16 @@ export class CityView {
     const body = this.bodies[id];
     const ring = this.rings[id];
     const bar = this.bars[id];
-    if (node === undefined || body === undefined || ring === undefined || bar === undefined) return;
+    const queue = this.queues[id];
+    if (
+      node === undefined ||
+      body === undefined ||
+      ring === undefined ||
+      bar === undefined ||
+      queue === undefined
+    ) {
+      return;
+    }
 
     const capital = node.capital_of !== null;
     const radius =
@@ -254,6 +293,10 @@ export class CityView {
 
     ring.clear();
     bar.clear();
+    queue.clear();
+    if (state.queue !== null && state.queue > 0 && state.unitTicks !== null) {
+      this.drawQueue(queue, radius, state.queue, state.progress, state.unitTicks);
+    }
     if (state.capacity !== null) {
       this.drawRing(ring, radius, state.capacity, kind === 'you' ? state.garrison : 0);
       if (state.warehouse !== null) {
@@ -302,6 +345,28 @@ export class CityView {
       g.moveTo(inner.x, inner.y).lineTo(outer.x, outer.y);
     }
     if (ring.notches.length > 0) g.stroke({ width: 1.5, color: BG });
+  }
+
+  private drawQueue(
+    g: Graphics,
+    radius: number,
+    count: number,
+    progress: number,
+    unitTicks: number,
+  ): void {
+    const mark = queueSlots(count, progress, unitTicks);
+    const top = queueTop(radius);
+    const { width, height } = QUEUE_SLOT;
+    g.roundRect(-mark.width / 2 - 1, top - 1, mark.width + 2, height + 4, BAR_BASE.radius).fill(
+      BAR_BASE.color,
+    );
+    for (const slot of mark.slots) {
+      g.rect(slot.x, top + 1, width, height).fill(SEGMENT_EMPTY_BAR);
+      if (slot.fill > 0) {
+        // Full: a ready unit waits for a place (DEC-25, item 7), told by the full slot and the colour.
+        g.rect(slot.x, top + 1, width * slot.fill, height).fill(slot.fill >= 1 ? WARN : YOU);
+      }
+    }
   }
 
   private drawBar(

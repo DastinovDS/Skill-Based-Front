@@ -31,7 +31,10 @@
         "attrition_in": null,
         "grace_left": null,
         "priority": "normal",
-        "starve_in": null
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false
       },
       {
         "id": 1,
@@ -50,7 +53,10 @@
         "attrition_in": null,
         "grace_left": null,
         "priority": "normal",
-        "starve_in": null
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false
       },
       {
         "id": 2,
@@ -71,7 +77,10 @@
         "attrition_in": null,
         "grace_left": null,
         "priority": null,
-        "starve_in": null
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null
       },
       {
         "id": 3,
@@ -90,7 +99,10 @@
         "attrition_in": null,
         "grace_left": null,
         "priority": "normal",
-        "starve_in": null
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false
       },
       {
         "id": 4,
@@ -111,7 +123,10 @@
         "attrition_in": null,
         "grace_left": null,
         "priority": null,
-        "starve_in": null
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null
       },
       {
         "id": 5,
@@ -132,7 +147,10 @@
         "attrition_in": null,
         "grace_left": null,
         "priority": null,
-        "starve_in": null
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null
       },
       {
         "id": 6,
@@ -153,7 +171,10 @@
         "attrition_in": null,
         "grace_left": null,
         "priority": null,
-        "starve_in": null
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null
       },
       {
         "id": 7,
@@ -175,7 +196,10 @@
         "attrition_in": null,
         "grace_left": null,
         "priority": null,
-        "starve_in": null
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null
       }
     ],
     "edges": [

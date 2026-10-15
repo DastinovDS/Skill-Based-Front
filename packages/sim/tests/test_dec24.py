@@ -45,6 +45,7 @@ from gow_sim.state import (
 from gow_sim.systems.combat import combat
 from gow_sim.systems.movement import find_path, leg, movement, reachable
 from gow_sim.systems.orders import active_bonuses, orders
+from gow_sim.systems.recruit import recruit
 from gow_sim.systems.supply import supply
 from gow_sim.view import project
 
@@ -117,6 +118,7 @@ class _Run:
         state.events += movement(state, RULES)
         state.events += combat(state, RULES, active_bonuses(state))
         state.events += supply(state, RULES)
+        state.events += recruit(state, RULES)
         state.events += orders(state, RULES)
         return [r.outcome for r in results]
 
@@ -150,10 +152,28 @@ def test_commands_to_a_group_in_a_fight_are_in_fight() -> None:
     assert validate(state, RULES, 1, SetMode(d, Mode.DEFENSE)) == in_fight
     assert validate(state, RULES, 1, Move(d, 2, planned=True)) == in_fight  # E1
     assert validate(state, RULES, 0, Move(a, 0)) == in_fight  # the attacker cancels instead
-    assert validate(state, RULES, 1, Recruit(1)) == in_fight  # DEC-25, item 9
+    assert validate(state, RULES, 1, Recruit(1)) == Ok(cost=100)  # queued, paused (DEC-25, 9)
     assert isinstance(validate(state, RULES, 1, Move(d, 2)), Ok)  # the defender withdraws
     assert validate(state, RULES, 0, CancelOrder(a)) == Ok(cost=0)
     assert validate(state, RULES, 1, CancelOrder(d)) == Reject(RejectCode.NOTHING_TO_CANCEL)
+
+
+def test_a_recruit_queued_during_a_fight_waits_for_its_end() -> None:
+    """DEC-25, item 9 with a real fight: queueing is allowed, the progress stands while the
+    fight lasts; then the queue goes on (the node held) or is lost (the node taken)."""
+    run, _, _ = _node_fight()
+    state = run.state
+    assert run.step((1, Recruit(1))) == [Ok(cost=100)]
+    assert state.nodes[1].recruit_queue == 1
+    while 1 in state.fight_nodes():
+        assert state.nodes[1].recruit_progress == 0
+        run.step()
+    lost = run.kinds("recruit_queue_lost")
+    if state.nodes[1].owner == 1:
+        assert not lost and state.nodes[1].recruit_progress == 1
+    else:
+        assert [dict(e.data) for e in lost] == [{"node": 1, "player": 1, "units": 1}]
+        assert state.nodes[1].recruit_queue == 0
 
 
 def test_a_defender_cancels_its_withdrawal_and_stays() -> None:

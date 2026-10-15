@@ -305,6 +305,7 @@ def _features(view: View) -> set[str]:
         "priority": any(n.priority not in (None, sim.Priority.NORMAL) for n in view.nodes),
         "transfer": any(p.transfer and len(p.path) > 1 for p in view.packets),
         "starve_in": any(n.starve_in is not None for n in view.nodes),
+        "recruit_queue": any(n.recruit_queue for n in view.nodes),
     }
     return {name for name, present in found.items() if present}
 

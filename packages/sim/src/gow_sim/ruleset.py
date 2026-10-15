@@ -216,7 +216,15 @@ class BuildRules:
 
 @dataclass(frozen=True, slots=True)
 class RecruitRules:
-    cooldown_ticks: int
+    """The recruit queue of a city (DEC-25): one unit at a time, ``unit_ticks`` per unit."""
+
+    unit_ticks: int
+    """Ticks of production per unit (DEC-25, item 4)."""
+    queue_max: int
+    """Units in the queue of one city at most, the one in production included (DEC-25, item 6)."""
+    refund_started_pct: int
+    """Share of ``orders.cost.recruit`` returned for a cancelled unit in production, in percent
+    (DEC-25, item 3); a unit not started yet is returned in full."""
     location: RecruitLocation
 
 
@@ -375,7 +383,9 @@ def parse_ruleset(data: object) -> Ruleset:
             )
         ),
         build=_parse_build(root.table("build", ("ticks_per_level", "charges_per_level"))),
-        recruit=_parse_recruit(root.table("recruit", ("cooldown_ticks", "location"))),
+        recruit=_parse_recruit(
+            root.table("recruit", ("unit_ticks", "queue_max", "refund_started_pct", "location"))
+        ),
         victory=_parse_victory(root.table("victory", ("vp_period_ticks", "capital_multiplier"))),
     )
 
@@ -484,7 +494,9 @@ def _parse_build(t: "_Table") -> BuildRules:
 
 def _parse_recruit(t: "_Table") -> RecruitRules:
     return RecruitRules(
-        cooldown_ticks=t.integer("cooldown_ticks", low=0),
+        unit_ticks=t.integer("unit_ticks", low=1),
+        queue_max=t.integer("queue_max", low=1),
+        refund_started_pct=t.integer("refund_started_pct", low=0, high=100),
         location=RecruitLocation(t.choice("location", tuple(loc.value for loc in RecruitLocation))),
     )
 

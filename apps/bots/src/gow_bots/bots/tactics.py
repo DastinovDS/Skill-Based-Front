@@ -45,7 +45,7 @@ from gow_bots.bots.base import Bot, node_of
 from gow_bots.bots.utility import prefer_planned, shots_to_take
 from gow_sim.commands import Command, Move, Recruit, SetMode, SetStance
 from gow_sim.maps import MapDef
-from gow_sim.ruleset import RecruitLocation, Ruleset
+from gow_sim.ruleset import Ruleset
 from gow_sim.view import Detail, GroupView, IntentKind, Mode, PlayerView, RoadKind, Stance
 
 __all__ = ["MEMORY_TICKS", "StrategyBot", "Turn"]
@@ -90,7 +90,7 @@ class StrategyBot(Bot):
         super().__init__(mapdef, rules, seed=seed, player=player)
         self.capital = mapdef.capital(player)
         self.recruited: dict[int, int] = {}
-        """Decision tick of the last recruit in each city (the cooldown belongs to the city)."""
+        """Decision tick of the last recruit in each city: one unit per city and decision."""
         self.stance_tick: int | None = None
         self.memory: dict[int, tuple[int, int, int]] = {}
         """Last exact sighting of the enemy per node: ``(units, charged, tick)``."""
@@ -99,7 +99,6 @@ class StrategyBot(Bot):
             for n in mapdef.nodes
         )
         """VP per accrual of every node (the value of owning it)."""
-        self.capital_only = rules.recruit.location is RecruitLocation.CAPITAL
 
     # Observation -------------------------------------------------------------------------------
 
@@ -212,15 +211,10 @@ class StrategyBot(Bot):
             self.stance_tick = turn.tick
 
     def recruit(self, turn: Turn, node: int, keep: int = 0) -> bool:
-        """Recruit one unit in ``node`` if the rules allow it there now."""
-        if turn.owner[node] != self.player or (self.capital_only and node != self.capital):
+        """Queue one unit in ``node`` if the rules allow it there now (``Bot.can_queue``)."""
+        if turn.owner[node] != self.player or self.recruited.get(node) == turn.tick:
             return False
-        if turn.standing[node] >= turn.view.nodes[node].capacity:
-            return False
-        if node in self.fight_nodes(turn.view):
-            return False  # no production in a city with a fight (DEC-25, item 9)
-        last = self.recruited.get(node)
-        if last is not None and turn.tick - last < self.rules.recruit.cooldown_ticks:
+        if not self.can_queue(turn.view, node, turn.standing[node]):
             return False
         if not self.spend(turn, Recruit(node), keep):
             return False

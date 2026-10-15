@@ -113,6 +113,13 @@ class NodeView(WireModel):
     starve_in: PosInt | None
     """Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8). ``None``
     for every other node."""
+    recruit_queue: NonNegInt | None
+    """Own city only: units in its recruit queue, the one in production included (DEC-25, item
+    12). ``None`` for provinces, the enemy's and neutral nodes: the enemy's production is hidden."""
+    recruit_progress: NonNegInt | None
+    """Own city only: ticks of production of the current unit, up to ``recruit.unit_ticks``."""
+    recruit_waiting: bool | None
+    """Own city only: the current unit is ready and waits for a place (DEC-25, item 7)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -120,6 +127,11 @@ class NodeView(WireModel):
             raise ValueError("a starvation countdown only for an own city, seen exactly")
         if self.priority is not None and self.detail is not Detail.EXACT:
             raise ValueError("a supply priority only for an own city, which is seen exactly")
+        recruit = (self.recruit_queue, self.recruit_progress, self.recruit_waiting)
+        if any(v is not None for v in recruit) and (
+            None in recruit or self.detail is not Detail.EXACT
+        ):
+            raise ValueError("a recruit queue only for an own city, all three fields together")
         if (self.detail is Detail.EXACT) != (self.warehouse is not None):
             raise ValueError("warehouse is given exactly when detail is exact")
         _check_seen(self.detail, self.seen)

@@ -1,0 +1,114 @@
+# Рулсет test-short: короткая партия для e2e (SIM-01, #17; AGENTS.md, раздел 5.4).
+#
+# Совпадает с mvp-0.toml во всём, кроме match_ticks: партия 60 секунд вместо 15 минут.
+# Смысл ключей описан в mvp-0.toml. Меняешь mvp-0.toml: поменяй и этот файл
+# (тест packages/sim/tests/test_ruleset.py сверяет их).
+# Доступен только в dev и e2e окружении (AGENTS.md, раздел 5.4).
+
+tick_hz = 10
+match_ticks = 600 # партия 60 секунд
+
+[cp]
+start = 300
+cap = 500
+per_period = 100
+period_ticks = 50
+
+[economy]
+charges_per_cp = 2
+start_stance = "balance" # TODO(#104): как в mvp-0.toml
+
+[economy.stance_to_charges_pct]
+economy = 75
+balance = 50
+war = 25
+
+[orders]
+planned_delay_ticks = 30
+defense_delay_ticks = 30
+planned_bonus = 2
+defense_bonus = 2
+stance_cooldown_ticks = 100
+
+[orders.cost]
+move = 100
+planned_move = 200
+cancel = 0
+split = 0
+merge = 0
+attack = 0
+defense = 200
+build = 0
+recruit = 100
+stance = 0
+priority = 0
+transfer = 0
+
+[terrain.defense_mod]
+mountains = 1
+forest = 0
+plains = -1
+
+[terrain.speed_pct]
+plains = 125
+forest = 100
+mountains = 70
+
+[combat]
+round_ticks = 10
+shots_per_round = 1
+regroup_ticks = 10
+
+[capacity]
+attrition_ticks = 30
+grace_ticks = 50
+
+[capacity.by_kind]
+capital = 10
+city_large = 8
+city_medium = 6
+city_small = 4
+province = 3
+
+[starvation]
+# Голод в окружении (DEC-19, #231; mechanics.md, раздел 7). Свой город, отрезанный от своей
+# столицы (нет пути по своим узлам), тратит заряды гарнизона: на тиках
+# cut_since + grace_ticks + k * period_ticks гарнизон теряет charges * ceil(U / per_units) зарядов,
+# U: стоящие в городе юниты владельца. Сначала склад, потом заряды юнитов. Юниты не гибнут.
+# Провинции и нейтральные узлы не голодают.
+grace_ticks = 100 # отсрочка после отрезания: 10 с
+period_ticks = 100 # потребление раз в 10 с
+charges = 1 # зарядов ...
+per_units = 3 # ... на каждые начатые 3 юнита
+
+[supply]
+dispatch_ticks = 10
+buffer = 2
+recharge_per_tick = 1
+base_speed_pct = 100
+base_amount = 1
+
+[supply.fast_speed_pct]
+2 = 150
+3 = 200
+
+[supply.freight_amount]
+2 = 2
+3 = 3
+
+[build]
+ticks_per_level = 150
+
+[build.charges_per_level]
+2 = 3
+3 = 4
+
+[recruit]
+unit_ticks = 30
+queue_max = 3
+refund_started_pct = 50
+location = "any_city"
+
+[victory]
+vp_period_ticks = 300
+capital_multiplier = 3
