@@ -11,11 +11,12 @@ const map = DEFAULT_MAP;
 const base = devSnapshot(map, DEV_RULES, 100);
 const node = base.view.nodes.find((n) => n.owner === 0);
 if (node === undefined) throw new Error('small map');
+const nodeId = node.id;
 
 /** A snapshot where the player sees `units` enemy units in `node` and has `groups` of his own. */
 function frameWith(groups: GroupView[], exact: boolean) {
   const nodes: NodeView[] = base.view.nodes.map((n) =>
-    n.id === node?.id
+    n.id === nodeId
       ? {
           ...n,
           detail: exact ? 'exact' : 'presence',
@@ -40,7 +41,7 @@ function enemyTokenAt(layers: ReturnType<typeof createLayers>) {
 
 describe('EntityView, enemies seen in a city', () => {
   it('stands in the middle of the city like an own group, with or without numbers', () => {
-    const city = nodePoint(map, node?.id ?? 0);
+    const city = nodePoint(map, nodeId);
     for (const exact of [true, false]) {
       const layers = createLayers();
       const view = new EntityView(map, layers, 0, 1, () => 17);
@@ -53,13 +54,13 @@ describe('EntityView, enemies seen in a city', () => {
   });
 
   it('steps beside the city only while an own icon holds the middle', () => {
-    const city = nodePoint(map, node?.id ?? 0);
+    const city = nodePoint(map, nodeId);
     const own: GroupView = {
       id: 'g',
       units: 2,
       charged: 2,
       mode: 'attack',
-      location: { kind: 'node', node: node?.id ?? 0 },
+      location: { kind: 'node', node: nodeId },
       order: null,
     };
     const layers = createLayers();

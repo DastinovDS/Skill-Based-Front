@@ -7,6 +7,7 @@ import {
   dashAlong,
   delayProgress,
   departBlink,
+  pathBend,
   ribbonAxis,
   ribbonBody,
   ribbonFilled,
@@ -106,6 +107,8 @@ export class IntentView {
 
   update(frame: RenderFrame, spots: ReadonlyMap<string, Point>): void {
     const { intents, nodes } = frame.base.view;
+    // Own groups with a planned order: the server's path shapes the curve of their ribbon.
+    const pool = frame.groups.filter((g) => g.group.order?.planned === true);
     const seconds = reducedMotion() ? 0 : frame.tick / this.tickHz;
     this.drawOrders(frame.groups, spots, seconds * CHEVRON.runSpeed);
     const run = seconds * RIBBON.runSpeed;
@@ -124,7 +127,7 @@ export class IntentView {
             : delayProgress(intent.created_tick, frame.tick, this.delays.planned);
         const since =
           this.delays === null ? -1 : frame.tick - (intent.created_tick + this.delays.planned);
-        this.drawRibbon(intent, progress, since, run);
+        this.drawRibbon(intent, pool, progress, since, run);
         if (intent.owner !== this.me) {
           const warn = nodes[intent.target]?.owner === this.me;
           this.drawTargetRing(target, intent.target, warn);
@@ -153,13 +156,15 @@ export class IntentView {
   }
 
   /**
-   * The ribbon of a planned order, own or the opponent's, from the intent only: straight from the
-   * rim of the start city to the centre of the target. While the delay runs (`progress` < 1) the
-   * part it has filled is bright and the rest faint; `since` ticks after the end of the delay it
-   * blinks, then it stays in its colour.
+   * The ribbon of a planned order, own or the opponent's: one smooth curve from the rim of the
+   * start city to the centre of the target. It bends toward the server's path when the order is an
+   * own one (never a kink at each city of the path); the opponent's, whose path nobody sends, is
+   * straight. While the delay runs (`progress` < 1) the part it has filled is bright and the rest
+   * faint; `since` ticks after the end of the delay it blinks, then it stays in its colour.
    */
   private drawRibbon(
     intent: WireIntent,
+    pool: RenderGroup[],
     progress: number | null,
     since: number,
     run: number,
@@ -167,7 +172,22 @@ export class IntentView {
     const origin = nodePoint(this.map, intent.origin);
     const target = intent.target === null ? undefined : nodePoint(this.map, intent.target);
     if (origin === undefined || target === undefined) return;
-    const axis = ribbonAxis([origin, target], this.radiusOf(intent.origin) + RIBBON.startGap, 0, 0);
+    const index = pool.findIndex(
+      (g) => (g.owner ?? this.me) === intent.owner && g.group.order?.dest === intent.target,
+    );
+    const item = index < 0 ? undefined : pool[index];
+    if (item !== undefined) pool.splice(index, 1);
+    const via = (item?.group.order?.path ?? [])
+      .filter((id) => id !== intent.origin && id !== intent.target)
+      .map((id) => nodePoint(this.map, id))
+      .filter((p): p is Point => p !== undefined);
+    const bend = pathBend(origin, target, via, RIBBON.maxBend);
+    const axis = ribbonAxis(
+      [origin, target],
+      this.radiusOf(intent.origin) + RIBBON.startGap,
+      0,
+      bend,
+    );
     const ribbon = ribbonOutline(axis, ribbonBody(this.cameraScale));
     if (ribbon === null) return;
     const g = this.ribbons;

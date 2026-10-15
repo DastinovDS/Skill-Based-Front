@@ -59,18 +59,13 @@ describe('IntentView', () => {
     kit.destroy();
   });
 
-  it('draws an own planned order straight, whatever path the group has (no bends)', () => {
+  it('bends one smooth curve toward the server path of an own planned order, enemy stays straight', () => {
     const { view, draw, ribbons, kit } = setup();
     const own = intent({ owner: 0, origin: home, target: far });
     draw([own]);
-    const direct = ribbons?.getLocalBounds();
-    const [x0, y0, w0, h0] = [
-      direct?.x ?? 0,
-      direct?.y ?? 0,
-      direct?.width ?? 0,
-      direct?.height ?? 0,
-    ];
-    // The group's path detours through another own city: the ribbon still ignores it.
+    const straight = ribbons?.getLocalBounds();
+    const h0 = straight?.height ?? 0;
+    const w0 = straight?.width ?? 0;
     const group: GroupView = {
       id: 'g',
       units: 2,
@@ -80,9 +75,24 @@ describe('IntentView', () => {
       order: { dest: far, path: [via, far], planned: true },
     };
     draw([own], [group]);
-    const bounds = ribbons?.getLocalBounds();
+    const bent = ribbons?.getLocalBounds();
+    const a = nodePoint(map, home);
+    const b = nodePoint(map, far);
+    const v = nodePoint(map, via);
     expect(w0).toBeGreaterThan(0);
-    expect([bounds?.x, bounds?.y, bounds?.width, bounds?.height]).toEqual([x0, y0, w0, h0]);
+    // The curve leaves the straight line, but only toward the waypoint, not through it.
+    if (a !== undefined && b !== undefined && v !== undefined) {
+      const side =
+        ((v.x - a.x) * (b.y - a.y) - (v.y - a.y) * (b.x - a.x)) / Math.hypot(b.x - a.x, b.y - a.y);
+      if (Math.abs(side) > 20) {
+        expect((bent?.height ?? 0) + (bent?.width ?? 0)).not.toBeCloseTo(h0 + w0, 0);
+      }
+    }
+    // The opponent's intent has no path: the same bounds as without any group.
+    draw([intent({})], [group]);
+    const enemy = ribbons?.getLocalBounds();
+    draw([intent({})]);
+    expect(enemy?.width).toBeCloseTo(ribbons?.getLocalBounds().width ?? NaN);
     view.destroy();
     kit.destroy();
   });

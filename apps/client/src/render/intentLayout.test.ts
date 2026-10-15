@@ -6,6 +6,7 @@ import {
   delayProgress,
   departBlink,
   ghostLook,
+  pathBend,
   polylineLength,
   polylinePrefix,
   ribbonAxis,
@@ -183,6 +184,52 @@ describe('ribbonFilled', () => {
     expect(Math.min(...half.map((p) => p.x))).toBeCloseTo(Math.min(...outline.map((p) => p.x)));
     const most = ribbonFilled(outline, axis, 0.9);
     expect(maxX(most)).toBeGreaterThan(maxX(half));
+  });
+});
+
+describe('pathBend', () => {
+  it('is 0 without waypoints, signed toward the farthest one, and clamped', () => {
+    expect(pathBend(A, B, [], 0.3)).toBe(0);
+    expect(pathBend(A, B, [{ x: 100, y: 0 }], 0.3)).toBeCloseTo(0);
+    // Left of the way A -> B (same side as ribbonAxis bends for a positive share).
+    const left = pathBend(A, B, [{ x: 100, y: 20 }], 0.3);
+    const right = pathBend(A, B, [{ x: 100, y: -20 }], 0.3);
+    expect(left).toBeCloseTo(0.2);
+    expect(right).toBeCloseTo(-0.2);
+    expect(pathBend(A, B, [{ x: 100, y: 500 }], 0.3)).toBe(0.3);
+    expect(
+      pathBend(
+        A,
+        B,
+        [
+          { x: 50, y: -5 },
+          { x: 150, y: -30 },
+        ],
+        0.3,
+      ),
+    ).toBeCloseTo(-0.3);
+    // The bend matches the axis: the same sign bends ribbonAxis the same way.
+    const axis = ribbonAxis([A, B], 0, 0, left);
+    expect(Math.max(...axis.map((p) => p.y))).toBeGreaterThan(15);
+  });
+});
+
+describe('ribbonFilled on a curve', () => {
+  it('cuts across the curved axis: more of the outline with more delay, never past the tip', () => {
+    const axis = ribbonAxis([A, B], 16, 0, 0.2);
+    const outline = ribbonOutline(axis, RIBBON.body)?.outline ?? [];
+    const area = (poly: readonly { x: number; y: number }[]): number =>
+      Math.abs(
+        poly.reduce((sum, p, i) => {
+          const q = poly[(i + 1) % poly.length];
+          return sum + (q === undefined ? 0 : p.x * q.y - q.x * p.y);
+        }, 0) / 2,
+      );
+    const a3 = area(ribbonFilled(outline, axis, 0.3));
+    const a6 = area(ribbonFilled(outline, axis, 0.6));
+    expect(a3).toBeGreaterThan(0);
+    expect(a6).toBeGreaterThan(a3);
+    expect(a6).toBeLessThan(area(outline));
   });
 });
 

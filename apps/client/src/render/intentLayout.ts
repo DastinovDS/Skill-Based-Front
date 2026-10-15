@@ -248,31 +248,53 @@ export function chevrons(
 }
 
 /**
- * The part of a ribbon over a straight axis that `fraction` (0..1) of the delay has filled: its
- * outline cut across the axis at that share of the axis length (the delay fills the whole arrow
- * from the start to the tip). Empty for 0.
+ * How much one smooth curve from `from` to `to` must bend (share of the chord, positive: to the
+ * left of the travel direction, as `ribbonAxis` bends) to roughly follow the waypoints `via` of the
+ * server's path: the one farthest from the chord decides. Clamped to `limit`; 0 without waypoints.
+ * The arrow is one curve, it never kinks at a waypoint.
+ */
+export function pathBend(from: Point, to: Point, via: readonly Point[], limit: number): number {
+  const chord = dist(from, to);
+  if (chord === 0) return 0;
+  const nx = -(to.y - from.y) / chord;
+  const ny = (to.x - from.x) / chord;
+  let far = 0;
+  for (const p of via) {
+    const side = (p.x - from.x) * nx + (p.y - from.y) * ny;
+    if (Math.abs(side) > Math.abs(far)) far = side;
+  }
+  // The middle of a quadratic curve sits half way between the chord and its control point.
+  return Math.max(-limit, Math.min(limit, (2 * far) / chord));
+}
+
+/**
+ * The part of a ribbon over `axis` (a gently curved line) that `fraction` (0..1) of the delay has
+ * filled: its outline cut across the axis at that share of the axis length (the delay fills the
+ * whole arrow from the start to the tip). Empty for 0.
  */
 export function ribbonFilled(
   outline: readonly Point[],
   axis: readonly Point[],
   fraction: number,
 ): Point[] {
-  const from = axis[0];
-  const to = axis[axis.length - 1];
-  if (from === undefined || to === undefined || fraction <= 0) return [];
+  if (fraction <= 0 || axis.length < 2) return [];
   if (fraction >= 1) return [...outline];
-  const len = dist(from, to);
+  const upTo = polylinePrefix(axis, fraction);
+  const front = upTo[upTo.length - 1];
+  const before = upTo[upTo.length - 2];
+  if (front === undefined || before === undefined) return [];
+  const len = dist(before, front);
   if (len === 0) return [];
-  const ux = (to.x - from.x) / len;
-  const uy = (to.y - from.y) / len;
-  // A box along the axis, wider than any ribbon: its far side is the filling front.
-  const reach = len * fraction;
+  const ux = (front.x - before.x) / len;
+  const uy = (front.y - before.y) / len;
+  // A box behind the front, across the axis and wider than any ribbon: the front is its far side.
   const wide = 400;
+  const deep = 4000;
   const box = [
-    { x: from.x - ux * 4 - uy * wide, y: from.y - uy * 4 + ux * wide },
-    { x: from.x + ux * reach - uy * wide, y: from.y + uy * reach + ux * wide },
-    { x: from.x + ux * reach + uy * wide, y: from.y + uy * reach - ux * wide },
-    { x: from.x - ux * 4 + uy * wide, y: from.y - uy * 4 - ux * wide },
+    { x: front.x - ux * deep - uy * wide, y: front.y - uy * deep + ux * wide },
+    { x: front.x - uy * wide, y: front.y + ux * wide },
+    { x: front.x + uy * wide, y: front.y - ux * wide },
+    { x: front.x - ux * deep + uy * wide, y: front.y - uy * deep - ux * wide },
   ];
   return clipToConvex(outline, box);
 }

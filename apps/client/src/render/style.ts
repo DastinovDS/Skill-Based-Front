@@ -263,6 +263,8 @@ export const RIBBON = {
   blinkTicks: 4,
   contour: { width: 2.2, alpha: 0.95 },
   casing: { width: 6, alpha: 0.45 },
+  /** The ribbon bends at most this share of its chord toward the server's path (one smooth curve). */
+  maxBend: 0.3,
   /** The ribbon leaves the start city at radius + `startGap` and ends in the centre of the target. */
   startGap: 16,
   /** The narrow end of the body is never thinner than this on screen (CSS px). */
