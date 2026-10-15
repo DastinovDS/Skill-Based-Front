@@ -19,7 +19,7 @@ from enum import StrEnum
 from typing import Final, Protocol, cast
 
 from gow_sim.canonical import digest
-from gow_sim.maps import PLAYERS, MapDef, map_to_data, parse_map
+from gow_sim.maps import PLAYERS, MapDef, NodeKind, map_to_data, parse_map
 from gow_sim.ruleset import Ruleset, Stance
 
 PROGRESS_SCALE: Final = 1000
@@ -40,16 +40,12 @@ class IntentKind(StrEnum):
     DEFENSE = "defense"
 
 
-class RoadKind(StrEnum):
-    """Type of a road (DEC-22, item 2): chosen by the first upgrade, never changes after."""
+class BuildKind(StrEnum):
+    """What a city builds (DEC-26, item 9): a road level, the barracks or a warehouse level."""
 
-    NONE = "none"
-    """A level 1 road: no type yet."""
-    FAST = "fast"
-    """Faster packets (``supply.fast_speed_pct``)."""
-    FREIGHT = "freight"
-    """More charges per dispatch period (``supply.freight_amount``); its packets arrive even when
-    the edge stops being internal (DEC-22, item 5)."""
+    ROAD = "road"
+    BARRACKS = "barracks"
+    WAREHOUSE = "warehouse"
 
 
 class Priority(StrEnum):
@@ -213,18 +209,19 @@ class PlayerState:
 
 @dataclass(frozen=True, slots=True)
 class Build:
-    """A road level under construction by a city (``UpgradeRoad(node, edge, kind)``, DEC-16).
+    """The build of a city (DEC-16; DEC-26, item 8: one at a time, shared by the three kinds).
 
-    ``owner``: the player who started it; the build holds while ``edge`` is internal for them.
-    ``since``: the tick the command was applied; the level grows at
-    ``since + build.ticks_per_level``. ``kind``: the road type after this level (DEC-22): the
-    chosen one for the first upgrade, the road's own one for the second.
+    ``kind``: a road level (``UpgradeRoad(node, edge)``, ``edge`` set), the barracks or a
+    warehouse level (``edge`` is ``None``). ``owner``: the player who started it; a road build
+    holds while ``edge`` is internal for them, the others while the city is theirs. ``since``: the
+    tick the command was applied; the build ends ``build.ticks_per_level`` (road),
+    ``city_upgrades.barracks_ticks`` or ``city_upgrades.warehouse_ticks`` ticks later.
     """
 
-    edge: int
+    edge: int | None
     owner: int
     since: int
-    kind: RoadKind
+    kind: BuildKind = BuildKind.ROAD
 
 
 @dataclass(slots=True)
@@ -246,7 +243,13 @@ class Node:
     """Ticks of production of the first unit of the queue, ``0..recruit.unit_ticks``; equal to
     ``unit_ticks``: the unit is ready and waits for a place (DEC-25, items 4 and 7)."""
     build: Build | None = None
-    """The road this city upgrades (DEC-16); ``None``: no build."""
+    """The build of this city (DEC-16, DEC-26); ``None``: no build."""
+    has_barracks: bool = False
+    """The city may recruit (DEC-26): with ``city_upgrades`` the capital from the start and the
+    cities that built the barracks; without it every city. Kept on a capture."""
+    warehouse_level: int = 0
+    """Warehouse upgrades of the city, ``0..warehouse.max_level`` (DEC-26, item 2); kept on a
+    capture, used only with ``city_upgrades``."""
     priority: Priority = Priority.NORMAL
     """Supply priority of the city (DEC-18, item 1); back to ``NORMAL`` on every owner change."""
     cut_since: int | None = None
@@ -259,12 +262,11 @@ class Edge:
     """Dynamic part of an edge; the static part is ``GameState.map.edges[id]``.
 
     ``width``: the road level ``1..max_width`` (DEC-22; the name follows the map field until
-    DEC-23 renames it). ``kind``: ``NONE`` on level 1, then the type the first upgrade chose.
+    DEC-23 renames it). Roads have no type (DEC-26, item 7).
     """
 
     id: int
     width: int
-    kind: RoadKind = RoadKind.NONE
 
 
 @dataclass(slots=True)
@@ -313,8 +315,7 @@ class Sighting:
 
     ``enemy_modes``: distinct modes of the enemy groups seen, sorted; empty means none seen.
     ``enemy_units`` and ``enemy_charged`` are totals, known only when ``level`` is ``EXACT``.
-    ``width`` and ``road``: the road level and type seen (DEC-17, DEC-22), for an edge; ``None``
-    for a node.
+    ``width``: the road level seen (DEC-17), for an edge; ``None`` for a node.
     """
 
     tick: int
@@ -323,7 +324,6 @@ class Sighting:
     enemy_units: int | None
     enemy_charged: int | None
     width: int | None = None
-    road: RoadKind | None = None
 
 
 @dataclass(slots=True)
@@ -352,7 +352,7 @@ class Event:
         raise KeyError(key)
 
 
-def event(tick: int, kind: str, **data: EventValue) -> Event:
+def event(tick: int, kind: str, /, **data: EventValue) -> Event:
     return Event(tick=tick, kind=kind, data=tuple(sorted(data.items())))
 
 
@@ -392,7 +392,8 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
     Groups get ids player by player, each player's in ``node_key(player, node)`` order, so the
     id order of a player's groups is the mirror of the other player's: tie-breaks by group id
     inside a player (DEC-07, rule 7) stay mirror-symmetric. The stance is
-    ``economy.start_stance`` (open question #104).
+    ``economy.start_stance`` (open question #104). Barracks and the start stock follow
+    ``city_upgrades`` (DEC-26, item 5 and the barracks block of section 3).
     """
     state = GameState(
         map=mapdef,
@@ -412,9 +413,10 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
             n.id: Node(
                 id=n.id,
                 owner=n.start_owner,
-                warehouse=n.start_stock,
+                warehouse=_start_stock(rules, n.start_stock, n.kind),
                 over_ticks=0,
                 captured_tick=None,
+                has_barracks=_starts_with_barracks(rules, n.kind),
             )
             for n in mapdef.nodes
         },
@@ -446,6 +448,30 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
     return state
 
 
+def start_warehouse_capacity(rules: Ruleset, kind: NodeKind) -> int:
+    """Warehouse capacity of a city of ``kind`` at level 0: ``warehouse.start_by_kind`` with
+    ``city_upgrades`` (DEC-26, item 2), the node capacity without it (DEC-22, item 1)."""
+    if rules.city_upgrades.enabled:
+        return rules.warehouse.start_by_kind.of(kind)
+    return rules.capacity.by_kind.of(kind)
+
+
+def _start_stock(rules: Ruleset, stock: int, kind: NodeKind) -> int:
+    """With ``city_upgrades`` the start stock of the map is cut to the warehouse capacity, the
+    excess is dropped without an event (DEC-26, item 5); without it the map's stock as it is."""
+    if rules.city_upgrades.enabled:
+        return min(stock, start_warehouse_capacity(rules, kind))
+    return stock
+
+
+def _starts_with_barracks(rules: Ruleset, kind: NodeKind) -> bool:
+    """With ``city_upgrades`` only the capital recruits at the start (DEC-26, item 1 of the
+    barracks); without it every city does (DEC-01, DEC-25). Provinces never recruit."""
+    if kind is NodeKind.PROVINCE:
+        return False
+    return kind is NodeKind.CAPITAL or not rules.city_upgrades.enabled
+
+
 # Canonical form ------------------------------------------------------------------------------
 
 
@@ -466,9 +492,7 @@ def to_canonical(state: GameState) -> dict[str, object]:
         "next_id": state.next_id,
         "players": [_player_data(state.players[p]) for p in sorted(state.players)],
         "nodes": [_node_data(state.nodes[n]) for n in sorted(state.nodes)],
-        "edges": [
-            {"id": e.id, "width": e.width, "kind": e.kind.value} for e in _by_id(state.edges)
-        ],
+        "edges": [{"id": e.id, "width": e.width} for e in _by_id(state.edges)],
         "groups": [_group_data(g) for g in _by_id(state.groups)],
         "packets": [_packet_data(p) for p in _by_id(state.packets)],
         "intents": [_intent_data(i) for i in _by_id(state.intents)],
@@ -520,6 +544,8 @@ def _node_data(n: Node) -> dict[str, object]:
             "since": n.build.since,
             "kind": n.build.kind.value,
         },
+        "has_barracks": n.has_barracks,
+        "warehouse_level": n.warehouse_level,
     }
 
 
@@ -627,7 +653,6 @@ def _sighting_data(key: int, s: Sighting) -> dict[str, object]:
         "enemy_units": s.enemy_units,
         "enemy_charged": s.enemy_charged,
         "width": s.width,
-        "road": None if s.road is None else s.road.value,
     }
 
 
@@ -723,6 +748,8 @@ def _parse_node(data: object, where: str) -> Node:
             "priority",
             "cut_since",
             "build",
+            "has_barracks",
+            "warehouse_level",
         ),
     )
     return Node(
@@ -736,25 +763,25 @@ def _parse_node(data: object, where: str) -> Node:
         build=None if raw["build"] is None else _parse_build(raw["build"], f"{where}.build"),
         priority=Priority(_choice(raw["priority"], f"{where}.priority", Priority)),
         cut_since=_opt_int(raw["cut_since"], f"{where}.cut_since"),
+        has_barracks=_bool(raw["has_barracks"], f"{where}.has_barracks"),
+        warehouse_level=_int(raw["warehouse_level"], f"{where}.warehouse_level", low=0),
     )
 
 
 def _parse_build(data: object, where: str) -> Build:
     raw = _obj(data, where, ("edge", "owner", "since", "kind"))
     return Build(
-        edge=_int(raw["edge"], f"{where}.edge", low=0),
+        edge=_opt_int(raw["edge"], f"{where}.edge"),
         owner=_int(raw["owner"], f"{where}.owner", low=0),
         since=_int(raw["since"], f"{where}.since", low=0),
-        kind=RoadKind(_choice(raw["kind"], f"{where}.kind", RoadKind)),
+        kind=BuildKind(_choice(raw["kind"], f"{where}.kind", BuildKind)),
     )
 
 
 def _parse_edge(data: object, where: str) -> Edge:
-    raw = _obj(data, where, ("id", "width", "kind"))
+    raw = _obj(data, where, ("id", "width"))
     return Edge(
-        id=_int(raw["id"], f"{where}.id", low=0),
-        width=_int(raw["width"], f"{where}.width", low=1),
-        kind=RoadKind(_choice(raw["kind"], f"{where}.kind", RoadKind)),
+        id=_int(raw["id"], f"{where}.id", low=0), width=_int(raw["width"], f"{where}.width", low=1)
     )
 
 
@@ -961,7 +988,6 @@ def _parse_sightings(data: object, where: str) -> dict[int, Sighting]:
                 "enemy_units",
                 "enemy_charged",
                 "width",
-                "road",
             ),
         )
         key = _int(raw["id"], f"{at}.id", low=0)
@@ -977,9 +1003,6 @@ def _parse_sightings(data: object, where: str) -> dict[int, Sighting]:
             enemy_units=_opt_int(raw["enemy_units"], f"{at}.enemy_units"),
             enemy_charged=_opt_int(raw["enemy_charged"], f"{at}.enemy_charged"),
             width=_opt_int(raw["width"], f"{at}.width"),
-            road=None
-            if raw["road"] is None
-            else RoadKind(_choice(raw["road"], f"{at}.road", RoadKind)),
         )
     return result
 

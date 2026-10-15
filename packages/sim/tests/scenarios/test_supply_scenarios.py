@@ -1,8 +1,8 @@
-"""Scenarios of SIM-08 (#24): chain through a node, road type, cut road, flow direction.
+"""Scenarios of SIM-08 (#24): chain through a node, road level, cut road, flow direction.
 
 Maps, rules and hand computations: see ``packages/sim/tests/test_supply.py`` (``line6``: roads
-of 30 ticks, packet time 30 on level 1; DEC-22: a freight road of level 3 carries 3 charges per
-period, a fast one 1). Dispatch every 10 ticks, buffer 2,
+of 30 ticks, packet time 30 on level 1; DEC-26: a road of any level carries 1 charge per
+period, an upgraded one only faster). Dispatch every 10 ticks, buffer 2,
 recharge 1 per tick (SIM-01 starting values). Tick convention: step ``t`` runs with
 ``state.tick == t``; a packet sent at tick ``t`` is delivered at ``t + packet time``.
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 
 from gow_sim.maps import load_map
 from gow_sim.ruleset import LevelTable, Ruleset, load_ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Mode, RoadKind, initial_state
+from gow_sim.state import AtNode, Event, GameState, Group, Mode, initial_state
 from gow_sim.systems.capacity import capacity, change_owner
 from gow_sim.systems.economy import economy
 from gow_sim.systems.supply import edge_packet_ticks, packet_target, supply
@@ -32,7 +32,6 @@ RULES: Ruleset = dataclasses.replace(
         base_speed_pct=100,
         base_amount=1,
         fast_speed_pct=LevelTable((150, 200)),
-        freight_amount=LevelTable((2, 3)),
     ),
 )
 """As in ``test_supply.py``: capacity never limits ``line6``; the DEC-22 road numbers."""
@@ -76,10 +75,10 @@ def test_chain_charges_reach_b_through_a() -> None:
     assert state.nodes[1].warehouse == 2  # A passes everything above its target on
 
 
-def _delivered(level: int, kind: RoadKind) -> int:
+def _delivered(level: int) -> int:
     """Charges delivered into node 1 during ticks 41..140 over road 0 of the given level."""
     state = _line6()
-    state.edges[0].width, state.edges[0].kind = level, kind
+    state.edges[0].width = level
     state.nodes[0].warehouse = 200
     _group(state, 0, 1, units=60)  # demand far above what the road carries
     total = 0
@@ -90,11 +89,10 @@ def _delivered(level: int, kind: RoadKind) -> int:
     return total
 
 
-def test_freight_road_delivers_three_times_level_1() -> None:
+def test_an_upgraded_road_is_faster_not_wider() -> None:
     # One packet of at most `amount` charges per road per 10-tick period: 10 periods in the window.
-    assert _delivered(1, RoadKind.NONE) == 10
-    assert _delivered(3, RoadKind.FREIGHT) == 30
-    assert _delivered(3, RoadKind.FAST) == 10  # faster, not more
+    assert _delivered(1) == 10
+    assert _delivered(3) == 10  # faster, not more (DEC-26, item 7)
 
 
 def test_cut_road_stops_refill_and_recharge_behind_it() -> None:

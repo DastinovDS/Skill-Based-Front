@@ -41,7 +41,6 @@ from gow_sim.state import (
     IntentKind,
     Mode,
     OnEdge,
-    RoadKind,
     initial_state,
 )
 from gow_sim.systems.build import build
@@ -388,9 +387,9 @@ def test_a_city_build_is_not_public() -> None:
     """DEC-16, item 8: a road build has no public intent."""
     state = _state()
     state.nodes[1].owner = 0  # edge 0 internal to player 0
-    state.nodes[0].warehouse = 3  # the level 2 costs 3 charges (DEC-22, item 6)
+    state.nodes[0].warehouse = 3  # enough for the level 2 (1 charge, DEC-26, item 7)
     run = _Run(state)
-    run.step((0, UpgradeRoad(0, 0, RoadKind.FAST)))
+    run.step((0, UpgradeRoad(0, 0)))
     assert state.nodes[0].build is not None
     assert state.intents == {}
     run.until(151)  # width 1 -> 2 at 1 + 150

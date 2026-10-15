@@ -27,7 +27,6 @@ from gow_sim.state import (
     Group,
     Mode,
     OnEdge,
-    RoadKind,
     initial_state,
 )
 from gow_sim.systems.capacity import (
@@ -115,7 +114,7 @@ def test_capacity_by_kind_with_neutral_and_owned_centre() -> None:
 def test_roads_do_not_change_capacity() -> None:
     state = _fork()
     for eid in (2, 3):
-        state.edges[eid].width, state.edges[eid].kind = 3, RoadKind.FREIGHT
+        state.edges[eid].width = 3
     assert node_capacities(state, RULES) == FORK_CAPACITIES
 
 
@@ -154,12 +153,11 @@ def test_change_owner_empties_the_warehouse_and_keeps_roads() -> None:
     state.tick = 40
     state.nodes[3].warehouse = 4
     state.nodes[3].over_ticks = 12
-    state.edges[2].width, state.edges[2].kind = 3, RoadKind.FAST
+    state.edges[2].width = 3
     events = change_owner(state, 3, 1)
     node = state.nodes[3]
     assert (node.owner, node.warehouse, node.over_ticks, node.captured_tick) == (1, 0, 0, 40)
     assert [e.width for e in state.edges.values()] == [1, 1, 3, 1, 1, 1, 1, 1, 1]
-    assert state.edges[2].kind is RoadKind.FAST
     assert [(e.kind, e.get("node"), e.get("owner"), e.get("charges")) for e in events] == [
         ("warehouse_lost", 3, 0, 4)
     ]

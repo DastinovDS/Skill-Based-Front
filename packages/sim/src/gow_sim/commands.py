@@ -23,7 +23,8 @@ cancel are free in the rulesets of DEC-20, the keys stay so that balance can bri
 Split, Merge, CancelOrder and the stack limit of ``Move`` follow DEC-20 (mechanics.md, section 3);
 what DEC-20 leaves open keeps the defaults of #117 (split takes the charged units first).
 Bonuses and public intents of planned orders and «Защита»: ``systems.orders`` (SIM-10).
-Road upgrades by a city (DEC-16): ``systems.build``; they are not public.
+Road upgrades by a city (DEC-16) and, with ``city_upgrades``, the barracks and the warehouse
+levels (DEC-26): ``systems.build``; they are not public.
 Supply priority and one-off transfers (DEC-18): ``SetPriority`` and ``Transfer``; neither is
 public, a transfer leaves as a packet in the tick it is applied (``systems.supply``).
 """
@@ -37,6 +38,7 @@ from gow_sim.maps import NodeKind
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import (
     AtNode,
+    BuildKind,
     Event,
     FightMember,
     GameState,
@@ -46,10 +48,9 @@ from gow_sim.state import (
     OnEdge,
     Order,
     Priority,
-    RoadKind,
     event,
 )
-from gow_sim.systems.build import builder_of, level_price, start_build
+from gow_sim.systems.build import builder_of, level_price, start_city_build, start_road
 from gow_sim.systems.capacity import is_internal, supplied_territory
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
 from gow_sim.systems.movement import find_path, path_ticks
@@ -64,6 +65,7 @@ from gow_sim.systems.supply import TransferRoute, is_city, send_packet, transfer
 from gow_sim.systems.vision import compute_vision, is_visible
 
 __all__ = [
+    "BuildBarracks",
     "CancelOrder",
     "CancelRecruit",
     "Command",
@@ -85,6 +87,7 @@ __all__ = [
     "Stance",
     "Transfer",
     "UpgradeRoad",
+    "UpgradeWarehouse",
     "apply_commands",
     "command_cost",
     "map_group_ids",
@@ -135,13 +138,27 @@ class SetStance:
 class UpgradeRoad:
     """The own city ``node`` raises the internal ``edge`` at it by one level (DEC-16, DEC-22).
 
-    ``kind``: the road type, required for the first upgrade (``FAST`` or ``FREIGHT``); for the
-    second it may be omitted or must equal the road's type.
+    Roads have no type (DEC-26, item 7): ``kind`` must be ``None``; any value, a road type of a
+    client from before DEC-26 included, gives ``INVALID_ARGUMENT``.
     """
 
     node: int
     edge: int
-    kind: RoadKind | None = None
+    kind: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BuildBarracks:
+    """The own city ``node`` builds the barracks: then it recruits (DEC-26, ``city_upgrades``)."""
+
+    node: int
+
+
+@dataclass(frozen=True, slots=True)
+class UpgradeWarehouse:
+    """The own city ``node`` raises its warehouse by one level (DEC-26, item 3)."""
+
+    node: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,6 +214,8 @@ type Command = (
     | SetMode
     | SetStance
     | UpgradeRoad
+    | BuildBarracks
+    | UpgradeWarehouse
     | Recruit
     | CancelRecruit
     | CancelOrder
@@ -222,6 +241,8 @@ def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
         case (
             SetStance()
             | UpgradeRoad()
+            | BuildBarracks()
+            | UpgradeWarehouse()
             | Recruit()
             | CancelRecruit()
             | SetPriority()
@@ -248,8 +269,8 @@ class RejectCode(StrEnum):
     STACK_LIMIT = "STACK_LIMIT"
     """A path exists, but none whose nodes (besides the start) all hold the group (DEC-20, D)."""
     INVALID_ARGUMENT = "INVALID_ARGUMENT"
-    """Malformed arguments: ``n`` out of range, fewer than two or repeated groups, same node; no
-    road type for the first road upgrade (DEC-22)."""
+    """Malformed arguments: ``n`` out of range, fewer than two or repeated groups, same node; a
+    road type in ``UpgradeRoad`` (DEC-26, item 7: roads have no type)."""
     NOT_SAME_NODE = "NOT_SAME_NODE"
     NOT_ADJACENT = "NOT_ADJACENT"
     """The city is not an end of the edge (``UpgradeRoad``, DEC-16)."""
@@ -257,14 +278,13 @@ class RejectCode(StrEnum):
     """Only an internal edge of the player can be upgraded (mechanics.md, section 8)."""
     MAX_WIDTH = "MAX_WIDTH"
     """The road already has ``max_width`` (its last level, DEC-22)."""
-    ROAD_KIND_MISMATCH = "ROAD_KIND_MISMATCH"
-    """The second road upgrade names the other road type (DEC-22, item 3)."""
     NOT_CITY = "NOT_CITY"
     """The node is a province, not a city (DEC-22, item 3; DEC-18, items 1 and 6; DEC-23)."""
     NOT_SUPPLIED = "NOT_SUPPLIED"
     """The city is not in its owner's supplied territory (DEC-16)."""
     CITY_BUSY = "CITY_BUSY"
-    """The city already builds a road (DEC-16: one build per city)."""
+    """The city already builds (DEC-16: one build per city; DEC-26, item 8: shared by the road,
+    the barracks and the warehouse)."""
     EDGE_BUSY = "EDGE_BUSY"
     """The other end of the edge already builds it (DEC-16: one city per edge)."""
     NOT_ENOUGH_CHARGES = "NOT_ENOUGH_CHARGES"
@@ -276,6 +296,14 @@ class RejectCode(StrEnum):
     NOTHING_TO_CANCEL = "NOTHING_TO_CANCEL"
     NOT_CAPITAL = "NOT_CAPITAL"
     """``recruit.location = capital``: recruiting only in the own capital (DEC-01)."""
+    FEATURE_DISABLED = "FEATURE_DISABLED"
+    """``BuildBarracks`` and ``UpgradeWarehouse`` without ``city_upgrades`` (DEC-26, item 1)."""
+    ALREADY_BUILT = "ALREADY_BUILT"
+    """The city has its barracks already, the capital from the start (DEC-26, item 9)."""
+    WAREHOUSE_MAX = "WAREHOUSE_MAX"
+    """The warehouse has ``warehouse.max_level`` (DEC-26, item 9)."""
+    NO_BARRACKS = "NO_BARRACKS"
+    """With ``city_upgrades`` a city recruits only with the barracks (DEC-26, section 3)."""
     QUEUE_FULL = "QUEUE_FULL"
     """The recruit queue of the city holds ``recruit.queue_max`` units (DEC-25, item 6)."""
     CITY_FULL = "CITY_FULL"
@@ -343,6 +371,10 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
                     return cost.defense
         case UpgradeRoad():
             return cost.build
+        case BuildBarracks():
+            return cost.barracks
+        case UpgradeWarehouse():
+            return cost.warehouse
         case Recruit():
             return cost.recruit
         case CancelRecruit():
@@ -454,6 +486,10 @@ def _check(
             return ()
         case UpgradeRoad(node=node, edge=eid, kind=kind):
             return _check_upgrade(state, rules, player, node, eid, kind)
+        case BuildBarracks(node=node):
+            return _check_city_build(state, rules, player, node, BuildKind.BARRACKS)
+        case UpgradeWarehouse(node=node):
+            return _check_city_build(state, rules, player, node, BuildKind.WAREHOUSE)
         case Recruit(node=node):
             # DEC-25, item 11: the checks in this order (CP last, in ``_validate``). A fight in
             # the city does not reject: it only pauses the production (item 9).
@@ -464,7 +500,10 @@ def _check(
                 return Reject(RejectCode.NOT_OWNER)
             if not is_city(state.map, node):
                 return Reject(RejectCode.NOT_CITY)
-            if not recruit_allowed_here(state, rules, player, node):
+            if rules.city_upgrades.enabled:  # the barracks decides, not the location (DEC-26)
+                if not city.has_barracks:
+                    return Reject(RejectCode.NO_BARRACKS)
+            elif not recruit_allowed_here(state, rules, player, node):
                 return Reject(RejectCode.NOT_CAPITAL)
             if city.recruit_queue >= rules.recruit.queue_max:
                 return Reject(RejectCode.QUEUE_FULL)
@@ -573,11 +612,34 @@ def _check_transfer(
     return route
 
 
+def _check_city_build(
+    state: GameState, rules: Ruleset, player: int, node: int, kind: BuildKind
+) -> tuple[int, ...] | Reject:
+    """The checks of ``BuildBarracks`` and ``UpgradeWarehouse`` in the order of DEC-26, item 9
+    (CP last, in ``_validate``). Neither needs supplied territory (item 8)."""
+    if not rules.city_upgrades.enabled:
+        return Reject(RejectCode.FEATURE_DISABLED)
+    if not 0 <= node < len(state.map.nodes):
+        return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+    city = state.nodes[node]
+    if city.owner != player:
+        return Reject(RejectCode.NOT_OWNER)
+    if not is_city(state.map, node):
+        return Reject(RejectCode.NOT_CITY)
+    if kind is BuildKind.BARRACKS and city.has_barracks:
+        return Reject(RejectCode.ALREADY_BUILT)
+    if kind is BuildKind.WAREHOUSE and city.warehouse_level >= rules.warehouse.max_level:
+        return Reject(RejectCode.WAREHOUSE_MAX)
+    if city.build is not None:
+        return Reject(RejectCode.CITY_BUSY)
+    return ()
+
+
 def _check_upgrade(
-    state: GameState, rules: Ruleset, player: int, node: int, eid: int, kind: RoadKind | None
+    state: GameState, rules: Ruleset, player: int, node: int, eid: int, kind: str | None
 ) -> tuple[int, ...] | Reject:
     """The checks of ``UpgradeRoad`` in the order of DEC-16, item 2 with the changes of DEC-22,
-    item 3 (CP last, in ``_validate``)."""
+    item 3 and DEC-26, item 7 (CP last, in ``_validate``)."""
     if not 0 <= node < len(state.map.nodes):
         return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
     if state.nodes[node].owner != player:
@@ -594,11 +656,8 @@ def _check_upgrade(
     road = state.edges[eid]
     if road.width >= edge.max_width:
         return Reject(RejectCode.MAX_WIDTH)
-    if road.kind is RoadKind.NONE:
-        if kind not in (RoadKind.FAST, RoadKind.FREIGHT):
-            return Reject(RejectCode.INVALID_ARGUMENT)
-    elif kind is not None and kind is not road.kind:
-        return Reject(RejectCode.ROAD_KIND_MISMATCH)
+    if kind is not None:  # roads have no type (DEC-26, item 7)
+        return Reject(RejectCode.INVALID_ARGUMENT)
     if not supplied_territory(state, player)[node]:
         return Reject(RejectCode.NOT_SUPPLIED)
     if state.nodes[node].build is not None:
@@ -728,8 +787,12 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                 clear_bonus(group)
                 set_intent(state, group, None)
             return []
-        case UpgradeRoad(node=node, edge=eid, kind=kind):
-            return [start_build(state, rules, player, node, eid, kind)]  # not public (DEC-16)
+        case UpgradeRoad(node=node, edge=eid):
+            return [start_road(state, rules, player, node, eid)]  # not public (DEC-16)
+        case BuildBarracks(node=node):
+            return [start_city_build(state, player, node, BuildKind.BARRACKS)]
+        case UpgradeWarehouse(node=node):
+            return [start_city_build(state, player, node, BuildKind.WAREHOUSE)]
         case Recruit(node=node):
             queue_unit(state, node)
             return []

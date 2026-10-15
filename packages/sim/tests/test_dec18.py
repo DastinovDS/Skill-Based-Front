@@ -34,7 +34,7 @@ from gow_sim.commands import (
 )
 from gow_sim.maps import load_map
 from gow_sim.ruleset import KindTable, LevelTable, Ruleset, load_ruleset
-from gow_sim.state import Event, GameState, Packet, Priority, RoadKind, initial_state
+from gow_sim.state import Event, GameState, Packet, Priority, initial_state
 from gow_sim.systems.capacity import change_owner
 from gow_sim.systems.supply import packet_dest, supply
 
@@ -57,7 +57,6 @@ def _rules() -> Ruleset:
             base_speed_pct=100,
             base_amount=1,
             fast_speed_pct=LevelTable((150, 200)),
-            freight_amount=LevelTable((2, 3)),
         ),
         orders=dataclasses.replace(
             base.orders,
@@ -82,9 +81,8 @@ def _state(**warehouses: int) -> GameState:
     return state
 
 
-def _road(state: GameState, edge: int, level: int, kind: RoadKind) -> None:
+def _road(state: GameState, edge: int, level: int) -> None:
     state.edges[edge].width = level
-    state.edges[edge].kind = kind
 
 
 def _dispatch(state: GameState) -> list[tuple[int, int, int]]:
@@ -154,15 +152,16 @@ def _chain(**warehouses: int) -> GameState:
 def test_example_4_low_city_is_transit_in_the_normal_pass() -> None:
     state = _chain(A=2)
     state.nodes[A].priority = Priority.LOW
-    _road(state, AB, 3, RoadKind.FREIGHT)
-    # Pass normal: A inactive (transit), B gets 2; pass low: K empty, A stays empty.
-    assert _dispatch(state) == [(A, B, 2)]
-    assert state.nodes[A].warehouse == 0
+    _road(state, AB, 3)
+    # Pass normal: A inactive (transit), B gets 1 (amount 1 on every level, DEC-26); pass low:
+    # A active, target 2, warehouse 1: it gives nothing.
+    assert _dispatch(state) == [(A, B, 1)]
+    assert state.nodes[A].warehouse == 1
 
 
 def test_example_5_normal_city_keeps_its_target() -> None:
     state = _chain(A=2)
-    _road(state, AB, 3, RoadKind.FREIGHT)
+    _road(state, AB, 3)
     assert _dispatch(state) == []
     assert state.nodes[A].warehouse == 2
 
@@ -171,9 +170,10 @@ def test_example_6_equal_priority_nearer_city_keeps_its_target_first() -> None:
     state = _chain(A=4)
     state.nodes[A].priority = Priority.HIGH
     state.nodes[B].priority = Priority.HIGH
-    _road(state, AB, 3, RoadKind.FREIGHT)
-    assert _dispatch(state) == [(A, B, 2)]
-    assert state.nodes[A].warehouse == 2
+    _road(state, AB, 3)
+    # Surplus 2 for B, but the road lets 1 through (DEC-26: amount 1 on level 3).
+    assert _dispatch(state) == [(A, B, 1)]
+    assert state.nodes[A].warehouse == 3
 
 
 def test_example_7_high_city_behind_a_normal_one() -> None:
@@ -219,19 +219,19 @@ def test_example_9_transfer_time_with_batches() -> None:
     assert packet.id not in state.packets
 
 
-def test_example_10_transfer_on_a_freight_road() -> None:
+def test_example_10_transfer_on_a_level_3_road() -> None:
     state = _state(A=5)
-    _road(state, AB, 3, RoadKind.FREIGHT)
+    _road(state, AB, 3)
     _transfer(state, A, B, 4)
-    _until(state, T + 39)
+    _until(state, T + 44)
     assert state.nodes[B].warehouse == 0
-    _until(state, T + 40)  # t + 30 + 1 * 10
+    _until(state, T + 45)  # t + 15 + 3 * 10 (speed 200, amount 1; DEC-26)
     assert state.nodes[B].warehouse == 4
 
 
 def test_example_11_transfer_on_a_fast_road() -> None:
     state = _state(A=5)
-    _road(state, AB, 3, RoadKind.FAST)
+    _road(state, AB, 3)
     _transfer(state, A, B, 1)
     _until(state, T + 14)
     assert state.nodes[B].warehouse == 0
@@ -305,17 +305,17 @@ def test_example_18_transfer_overflow_burns() -> None:
     ]
 
 
-def test_example_19_freight_packet_goes_to_the_captor() -> None:
+def test_example_19_a_packet_to_a_captured_city_is_lost() -> None:
     state = _state(A=2)
-    _road(state, AB, 2, RoadKind.FREIGHT)
+    _road(state, AB, 2)
     _transfer(state, A, B, 2)
     _until(state, T + 10)
     change_owner(state, B, 1)
     events = _until(state, T + 30)
-    assert state.nodes[B].warehouse == 2  # for the new owner (DEC-22, item 5)
-    assert [(e.kind, e.get("player")) for e in events if e.kind == "packet_captured"] == [
-        ("packet_captured", 1)
-    ]
+    assert state.nodes[B].warehouse == 0  # no freight road, nothing for the captor (DEC-26)
+    lost = [(e.get("player"), e.get("charges")) for e in events if e.kind == "packet_lost"]
+    assert lost == [(0, 2)]
+    assert not [e for e in events if e.kind == "packet_captured"]
 
 
 # Transfers share the road with the automatic dispatch: examples 23-25 (item 10, #253) -----------
@@ -353,15 +353,7 @@ def test_example_23_transfer_takes_the_road_first() -> None:
     assert state.nodes[A].warehouse == 2
 
 
-def test_example_24_freight_road_leaves_the_rest_to_the_dispatch() -> None:
-    state = _state(K=5)
-    _road(state, KA, 3, RoadKind.FREIGHT)
-    events = _transfer_on_dispatch_tick(state, K, A, 2)
-    assert _sent(events) == [(SHARED_T, K, A, 1)]  # amount 3: the transfer takes 2, 1 is left
-    _until(state, SHARED_T + 29)
-    assert state.nodes[A].warehouse == 0
-    _until(state, SHARED_T + 30)
-    assert state.nodes[A].warehouse == 2
+# Example 24 (a freight road) is deleted by DEC-26: there is no freight road.
 
 
 def test_example_25_transfer_entering_the_next_road_takes_it_again() -> None:

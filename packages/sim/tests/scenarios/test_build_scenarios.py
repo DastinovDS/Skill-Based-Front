@@ -3,9 +3,9 @@ level to max_width, both sides mirrored.
 
 Map: see ``packages/sim/tests/test_capacity.py``; e1 joins the capital 0 and 2, level 1,
 max_width 3; its rot180 mirror is e7 (7 - 5). Rules pinned below: a level 150 ticks after its
-command, one command and one payment per level, prices 3 / 4 charges by the new level (DEC-22,
-item 6); the first command chooses the type (here freight), the second keeps it; capacities do
-not change (DEC-22, item 1). Tick convention: step ``t`` runs with ``state.tick == t``; the
+command, one command and one payment per level, prices 3 / 4 charges by the new level (pinned;
+the rule does not depend on them); roads have no type (DEC-26, item 7); capacities do not change
+(DEC-22, item 1). Tick convention: step ``t`` runs with ``state.tick == t``; the
 systems run in the fixed order (AGENTS.md, section 4.2), here only the ones this scenario needs:
 apply_commands -> capacity -> build.
 """
@@ -16,7 +16,7 @@ from pathlib import Path
 from gow_sim.commands import Ok, PlayerCommand, UpgradeRoad, apply_commands
 from gow_sim.maps import load_map
 from gow_sim.ruleset import BuildRules, LevelTable, Ruleset, load_ruleset
-from gow_sim.state import Event, GameState, RoadKind, initial_state
+from gow_sim.state import Event, GameState, initial_state
 from gow_sim.systems.build import build
 from gow_sim.systems.capacity import capacity, node_capacities
 
@@ -53,29 +53,26 @@ def test_road_grows_by_the_ruleset_and_stops_at_max_width() -> None:
     state = initial_state(load_map(TESTS_DIR / "maps" / "fork.json"), RULES)
     for p in (0, 1):
         state.nodes[CITY[p]].warehouse = 7  # 3 + 4: the whole road from 1 to 3
-    widths: dict[int, list[tuple[int, int, str]]] = {0: [], 1: []}
+    widths: dict[int, list[tuple[int, int]]] = {0: [], 1: []}
     stopped: list[tuple[int, int]] = []
     capacities = node_capacities(state, RULES)
     for t in range(1, 1001):
         start = [
-            PlayerCommand(p, t, UpgradeRoad(CITY[p], EDGE[p], RoadKind.FREIGHT))
+            PlayerCommand(p, t, UpgradeRoad(CITY[p], EDGE[p]))
             for p in (0, 1)
             if state.nodes[CITY[p]].build is None and state.edges[EDGE[p]].width < 3
         ]
         events = _step(state, start)
         for e in events:
             if e.kind == "road_upgraded":
-                road = e.get("road")
-                assert isinstance(road, str)
-                widths[_int(e, "player")].append((e.tick, _int(e, "width"), road))
+                widths[_int(e, "player")].append((e.tick, _int(e, "width")))
             elif e.kind == "build_stopped":
                 stopped.append((e.tick, _int(e, "player")))
-        # Mirror symmetry: both roads always have the same level and type.
+        # Mirror symmetry: both roads always have the same level.
         assert state.edges[EDGE[0]].width == state.edges[EDGE[1]].width
-        assert state.edges[EDGE[0]].kind is state.edges[EDGE[1]].kind
     # A command applied at tick t gives +1 at t + 150; the city is free again after the build
     # system of that tick, so the next command applies at t + 151.
-    assert widths[0] == [(151, 2, "freight"), (302, 3, "freight")]
+    assert widths[0] == [(151, 2), (302, 3)]
     assert widths[1] == widths[0]
     assert stopped == []
     assert state.nodes[CITY[0]].warehouse == state.nodes[CITY[1]].warehouse == 0

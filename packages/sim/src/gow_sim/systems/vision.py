@@ -11,12 +11,11 @@ Public to everyone regardless of level: geography, terrain, ``base_width`` and `
 the map, ownership of all nodes, VP, intents of planned orders and «Защита». That part is the
 projection's job (SIM-14).
 
-Road levels and types follow the edge level (DEC-17, DEC-22, item 8; mechanics.md, section 10):
-an edge not in fog shows its level and type exactly; a fogged edge shows those of its last
-sighting (``Sighting.width`` and ``Sighting.road``), or level 1 without a type if the player never
-saw it (``known_roads``). No roads are torn down and a type never changes, so a known level never
-exceeds the true one. Enemy road builds are visible only on edges not in
-fog (DEC-16, ``NodeView.build``).
+Road levels follow the edge level (DEC-17, DEC-22, item 8; mechanics.md, section 10; roads have
+no type, DEC-26): an edge not in fog shows its level exactly; a fogged edge shows that of its last
+sighting (``Sighting.width``), or level 1 if the player never saw it (``known_roads``). No roads
+are torn down, so a known level never exceeds the true one. Enemy road builds are visible only
+on edges not in fog (DEC-16, ``NodeView.build``).
 
 ``is_visible()`` is the single visibility check for command validation (SIM-04) and the
 projection (SIM-14). ``vision()`` is the last system of a tick and refreshes the fog memory.
@@ -35,7 +34,6 @@ from gow_sim.state import (
     Mode,
     OnEdge,
     Packet,
-    RoadKind,
     Sighting,
 )
 
@@ -151,44 +149,39 @@ def current_sightings(
             case OnEdge(edge=edge):
                 on_edge.setdefault(edge, []).append(group)
     nodes = {
-        n: _sighting(state.tick, level, at_node.get(n, []), None, None)
+        n: _sighting(state.tick, level, at_node.get(n, []), None)
         for n, level in enumerate(levels.nodes)
         if level is not Detail.FOG
     }
     edges = {
-        e: _sighting(
-            state.tick, level, on_edge.get(e, []), state.edges[e].width, state.edges[e].kind
-        )
+        e: _sighting(state.tick, level, on_edge.get(e, []), state.edges[e].width)
         for e, level in enumerate(levels.edges)
         if level is not Detail.FOG
     }
     return nodes, edges
 
 
-def known_roads(state: GameState, player: int, levels: Vision) -> tuple[tuple[int, RoadKind], ...]:
-    """Road levels and types as ``player`` knows them (DEC-17; DEC-22, item 8).
+def known_roads(state: GameState, player: int, levels: Vision) -> tuple[int, ...]:
+    """Road levels as ``player`` knows them (DEC-17; DEC-22, item 8).
 
-    ``result[edge_id] = (level, kind)``: exact for edges not in fog; for a fogged edge those of
-    its last sighting, else ``base_width`` of the map (level 1) without a type. Never above the
-    true level.
+    ``result[edge_id]``: exact for edges not in fog; for a fogged edge that of its last
+    sighting, else ``base_width`` of the map (level 1). Never above the true level.
     """
     memory = state.vision_memory[player].edges
-    roads: list[tuple[int, RoadKind]] = []
+    roads: list[int] = []
     for e, level in enumerate(levels.edges):
         if level is not Detail.FOG:
-            roads.append((state.edges[e].width, state.edges[e].kind))
+            roads.append(state.edges[e].width)
             continue
         seen = memory.get(e)
         if seen is None or seen.width is None:
-            roads.append((state.map.edges[e].base_width, RoadKind.NONE))
+            roads.append(state.map.edges[e].base_width)
         else:
-            roads.append((seen.width, RoadKind.NONE if seen.road is None else seen.road))
+            roads.append(seen.width)
     return tuple(roads)
 
 
-def _sighting(
-    tick: int, level: Detail, enemies: list[Group], width: int | None, road: RoadKind | None
-) -> Sighting:
+def _sighting(tick: int, level: Detail, enemies: list[Group], width: int | None) -> Sighting:
     modes: list[Mode] = sorted(dict.fromkeys(g.mode for g in enemies))  # distinct, sorted
     if level is Detail.EXACT:
         return Sighting(
@@ -198,7 +191,6 @@ def _sighting(
             enemy_units=sum(g.units for g in enemies),
             enemy_charged=sum(g.charged for g in enemies),
             width=width,
-            road=road,
         )
     return Sighting(
         tick=tick,
@@ -207,5 +199,4 @@ def _sighting(
         enemy_units=None,
         enemy_charged=None,
         width=width,
-        road=road,
     )

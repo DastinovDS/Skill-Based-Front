@@ -8,14 +8,15 @@ PRO-01), which PRO-03 converts it into:
 - public to everyone: ownership of every node, VP of both players, intents of planned orders
   and «Защита» (kind, origin, target; no group id or size);
 - node capacities: fixed by the node kind (DEC-22, item 1), public and exact for every node;
-- road levels and types (DEC-17; DEC-22, item 8): exact on edges not in fog; on a fogged edge
-  those of its last sighting, or level 1 without a type if never seen;
+- road levels (DEC-17; DEC-22, item 8; roads have no type, DEC-26): exact on edges not in fog; on a
+  fogged edge that of its last sighting, or level 1 if never seen;
 - road builds of cities (DEC-16, item 8): own ones always, with the tick they finish; an enemy
   one (the city and the edge, no tick) only while the edge is not in fog (DEC-17, item 5);
 - ``EXACT`` places (own nodes, nodes where own groups stand): warehouse and enemy totals;
 - own cities: their supply priority (DEC-18, item 8) and, cut off, the ticks until the garrison
   next starves (``starve_in``, DEC-19, item 8), their recruit queue and its progress (DEC-25,
-  item 12); own packets with their remaining path and whether they are a transfer;
+  item 12), the barracks, the warehouse level and capacity and the current build of any kind
+  (DEC-26, item 10); own packets with their remaining path and whether they are a transfer;
 - ``PRESENCE`` places (neighbours of ``EXACT`` nodes, edges touching them): whether enemy groups
   are there and their modes, no numbers;
 - ``FOG``: only the last sighting from ``GameState.vision_memory``;
@@ -23,7 +24,8 @@ PRO-01), which PRO-03 converts it into:
   units and charged of the enemy in it; the enemy's virtual shots and group ids stay hidden.
 
 What a view never has: enemy groups as entities (only the per-place ``Sighting``), road levels
-and types of fogged edges newer than the last sighting, enemy builds on fogged edges, enemy packets
+of fogged edges newer than the last sighting, the barracks, warehouse level and city builds of
+the enemy (DEC-26, item 10), enemy builds on fogged edges, enemy packets
 (#112 default), enemy CP, stance, production and counters, supply priorities of enemy cities and
 enemy transfers (DEC-18, item 8), events, the target of an enemy's normal order (normal orders have
 no intent), sequential ids.
@@ -49,6 +51,8 @@ from gow_sim.maps import PLAYERS
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import (
     AtNode,
+    Build,
+    BuildKind,
     Detail,
     GameState,
     IntentKind,
@@ -56,11 +60,15 @@ from gow_sim.state import (
     Mode,
     OnEdge,
     Priority,
-    RoadKind,
     Sighting,
 )
-from gow_sim.systems.build import RoadGain, UpgradeGain, done_tick, upgrade_gain
-from gow_sim.systems.capacity import node_capacities, overflow_countdown, starve_in
+from gow_sim.systems.build import UpgradeGain, done_tick, upgrade_gain
+from gow_sim.systems.capacity import (
+    node_capacities,
+    overflow_countdown,
+    starve_in,
+    warehouse_capacity,
+)
 from gow_sim.systems.movement import reachable
 from gow_sim.systems.recruit import recruit_waiting
 from gow_sim.systems.supply import is_city, packet_dest_tick, packet_path
@@ -70,7 +78,9 @@ __all__ = [
     "MATCH_KEY_MAX",
     "MATCH_KEY_MIN",
     "AtNode",
+    "BuildKind",
     "BuildView",
+    "BuildingView",
     "Detail",
     "EdgeView",
     "FightView",
@@ -86,8 +96,6 @@ __all__ = [
     "PlayerView",
     "Priority",
     "Reach",
-    "RoadGain",
-    "RoadKind",
     "SelfView",
     "Sighting",
     "Stance",
@@ -132,6 +140,15 @@ class BuildView:
 
 
 @dataclass(frozen=True, slots=True)
+class BuildingView:
+    """The current build of an own city, of any kind (DEC-26, item 10)."""
+
+    kind: BuildKind
+    done_tick: int
+    """The tick it ends, if nothing interrupts it."""
+
+
+@dataclass(frozen=True, slots=True)
 class NodeView:
     id: int
     owner: int | None
@@ -164,6 +181,18 @@ class NodeView:
     """Own city only: ticks of production of the current unit, ``0..recruit.unit_ticks``."""
     recruit_waiting: bool | None
     """Own city only: the current unit is ready and waits for a place (DEC-25, item 7)."""
+    has_barracks: bool | None
+    """Own city only: it may recruit (DEC-26): with ``city_upgrades`` the capital and the cities
+    with the barracks, without it every city. ``None`` for provinces, the enemy's and neutral
+    nodes: the enemy's barracks are hidden (DEC-26, item 10)."""
+    warehouse_level: int | None
+    """Own city only: warehouse upgrades, ``0..warehouse.max_level`` (always 0 without
+    ``city_upgrades``)."""
+    warehouse_cap: int | None
+    """Own city only: charges its warehouse holds (DEC-26, item 2; the capacity without
+    ``city_upgrades``)."""
+    building: BuildingView | None
+    """Own city only: its current build of any kind and when it ends; ``None`` without one."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,12 +201,10 @@ class EdgeView:
     width: int
     """Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is ``FOG``;
     in fog the level of the last sighting, or level 1 if never seen. Never above the true one."""
-    kind: RoadKind
-    """Road type the player knows, by the same rule as ``width`` (DEC-22, item 8)."""
     detail: Detail
     """``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges."""
     upgrade_gain: UpgradeGain | None
-    """Only for own internal edges below ``max_width`` (DEC-22, item 7)."""
+    """Only for own internal edges below ``max_width`` (DEC-26, item 7)."""
     seen: Sighting | None
 
 
@@ -419,6 +446,10 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 recruit_queue=node.recruit_queue if own_city else None,
                 recruit_progress=node.recruit_progress if own_city else None,
                 recruit_waiting=recruit_waiting(state, rules, n) if own_city else None,
+                has_barracks=node.has_barracks if own_city else None,
+                warehouse_level=node.warehouse_level if own_city else None,
+                warehouse_cap=warehouse_capacity(state, rules, n) if own_city else None,
+                building=_building_view(rules, node.build) if own_city else None,
             )
         )
 
@@ -429,8 +460,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
         edges.append(
             EdgeView(
                 id=e,
-                width=roads[e][0],
-                kind=roads[e][1],
+                width=roads[e],
                 detail=level,
                 upgrade_gain=upgrade_gain(state, rules, e) if own else None,
                 seen=now_edges[e] if level is not Detail.FOG else memory.edges.get(e),
@@ -532,13 +562,17 @@ def _build_view(
     state: GameState, rules: Ruleset, player: int, node: int, edge_levels: tuple[Detail, ...]
 ) -> BuildView | None:
     b = state.nodes[node].build
-    if b is None:
+    if b is None or b.edge is None:  # the barracks and the warehouse: ``building``, own only
         return None
     if b.owner == player:
         return BuildView(edge=b.edge, done_tick=done_tick(rules, b))
     if edge_levels[b.edge] is Detail.FOG:  # not shown and not remembered (DEC-17, item 5)
         return None
     return BuildView(edge=b.edge, done_tick=None)
+
+
+def _building_view(rules: Ruleset, b: Build | None) -> BuildingView | None:
+    return None if b is None else BuildingView(kind=b.kind, done_tick=done_tick(rules, b))
 
 
 # Canonical form ------------------------------------------------------------------------------
@@ -574,6 +608,12 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "recruit_queue": n.recruit_queue,
                 "recruit_progress": n.recruit_progress,
                 "recruit_waiting": n.recruit_waiting,
+                "has_barracks": n.has_barracks,
+                "warehouse_level": n.warehouse_level,
+                "warehouse_cap": n.warehouse_cap,
+                "building": None
+                if n.building is None
+                else {"kind": n.building.kind.value, "done_tick": n.building.done_tick},
             }
             for n in view.nodes
         ],
@@ -581,14 +621,10 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
             {
                 "id": e.id,
                 "width": e.width,
-                "kind": e.kind.value,
                 "detail": e.detail.value,
                 "upgrade_gain": None
                 if e.upgrade_gain is None
-                else {
-                    "fast": _gain_data(e.upgrade_gain.fast),
-                    "freight": _gain_data(e.upgrade_gain.freight),
-                },
+                else {"speed_pct": e.upgrade_gain.speed_pct},
                 "seen": _seen_data(e.seen),
             }
             for e in view.edges
@@ -654,10 +690,6 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
     }
 
 
-def _gain_data(g: RoadGain | None) -> dict[str, object] | None:
-    return None if g is None else {"speed_pct": g.speed_pct, "amount": g.amount}
-
-
 def _seen_data(s: Sighting | None) -> dict[str, object] | None:
     if s is None:
         return None
@@ -668,7 +700,6 @@ def _seen_data(s: Sighting | None) -> dict[str, object] | None:
         "enemy_units": s.enemy_units,
         "enemy_charged": s.enemy_charged,
         "width": s.width,
-        "road": None if s.road is None else s.road.value,
     }
 
 

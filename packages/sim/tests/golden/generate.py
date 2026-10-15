@@ -12,7 +12,8 @@ edits do not touch the old replays.
 The drivers are ``ExpandBot`` of ``conftest.py`` plus ``MixBot``, which adds every other command
 type on a fixed schedule (planned moves, splits, merges, modes, stances, road upgrades, supply
 priorities and transfers, cancellations while waiting and on an edge, recruit cancellations,
-unknown ids), so the replays go through every command path and many rejections.
+barracks and warehouse upgrades, unknown ids), so the replays go through every command path and
+many rejections. The games cover ``mvp-0`` and ``mvp-1`` (``city_upgrades`` on, DEC-26).
 """
 
 import argparse
@@ -24,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from gow_sim.commands import (
+    BuildBarracks,
     CancelOrder,
     CancelRecruit,
     Command,
@@ -36,13 +38,14 @@ from gow_sim.commands import (
     Split,
     Transfer,
     UpgradeRoad,
+    UpgradeWarehouse,
 )
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import SIM_VERSION, Controller
 from gow_sim.replay import REPLAY_SUFFIX, record_headless
 from gow_sim.ruleset import Ruleset, Stance, archive_ruleset, load_ruleset
 from gow_sim.state import Priority
-from gow_sim.view import AtNode, GroupView, Mode, OnEdge, PlayerView, RoadKind
+from gow_sim.view import AtNode, GroupView, Mode, OnEdge, PlayerView
 
 TESTS = Path(__file__).resolve().parents[1]
 ROOT = TESTS.parents[2]
@@ -109,7 +112,18 @@ class MixBot:
             cmds.extend(self._supply(view, k))
         if k % 31 == 0:  # the last unit of the capital's recruit queue comes back (DEC-25)
             cmds.append(CancelRecruit(self.map.capital(view.player)))
+        if k % 37 == 0:
+            cmds.extend(self._develop(view, k))
         return cmds
+
+    def _develop(self, view: PlayerView, k: int) -> list[Command]:
+        """The barracks or a warehouse level in the own city of rank ``k`` (DEC-26); without
+        ``city_upgrades`` both are rejected, which is part of the log too."""
+        cities = [n.id for n in view.nodes if n.owner == view.player and n.has_barracks is not None]
+        if not cities:
+            return []
+        node = cities[k % len(cities)]
+        return [BuildBarracks(node) if k % 2 else UpgradeWarehouse(node)]
 
     def _supply(self, view: PlayerView, k: int) -> list[Command]:
         """A supply priority for the own city of rank ``k`` and a transfer from the capital to
@@ -133,21 +147,14 @@ class MixBot:
         return []
 
     def _upgrade(self, view: PlayerView, idle: list[GroupView]) -> list[Command]:
-        """The city of an idle group upgrades a road (DEC-16, DEC-22); rejects are part of the log.
-
-        The first upgrade alternates fast and freight roads; the second omits the type.
-        """
+        """The city of an idle group upgrades a road (DEC-16, DEC-26); rejects are part of the
+        log. Now and then with a road type, which DEC-26 rejects (``INVALID_ARGUMENT``)."""
         for g in idle:
             assert isinstance(g.location, AtNode)
             node = g.location.node
             for e in self.map.incident[node]:
                 if view.edges[e].upgrade_gain is not None:
-                    first = view.edges[e].kind is RoadKind.NONE
-                    kind = (
-                        (RoadKind.FAST if self.decisions % 2 else RoadKind.FREIGHT)
-                        if first
-                        else None
-                    )
+                    kind = "fast" if self.decisions % 85 == 0 else None
                     return [UpgradeRoad(node, e, kind)]
         return []
 
@@ -168,6 +175,8 @@ GAMES = (
     Game("arteriya-mvp0", "arteriya", "mvp-0"),
     Game("pautina-mvp0", "pautina", "mvp-0"),
     Game("pereval-short-forfeit", "pereval", "test-short", forfeit_at=400),
+    Game("arteriya-mvp1", "arteriya", "mvp-1"),
+    Game("pereval-mvp1", "pereval", "mvp-1"),
 )
 
 
