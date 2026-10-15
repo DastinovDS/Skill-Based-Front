@@ -47,7 +47,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Final, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -301,11 +301,11 @@ def _unauthorized() -> HTTPException:
     },
 )
 def get_replay(
+    request: Request,
     match_id: int,
     session: DbSession,
     service: Annotated[ReplayService, Depends(_service)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_optional_bearer)],
-    if_none_match: Annotated[str | None, Header()] = None,
 ) -> Response:
     """The frames file of a finished match (``docs/design/replay-frames.md``), gzip as stored.
 
@@ -347,7 +347,8 @@ def get_replay(
     cache = "public" if match.rated else "private"
     etag = replay_etag(match, file)
     headers = {"Cache-Control": f"{cache}, no-cache", "ETag": etag}
-    if if_none_match is not None and etag in {tag.strip() for tag in if_none_match.split(",")}:
+    if_none_match = request.headers.get("if-none-match", "")
+    if etag in {tag.strip() for tag in if_none_match.split(",")}:
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     return FileResponse(
         file,
