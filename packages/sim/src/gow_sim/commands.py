@@ -26,7 +26,8 @@ Bonuses and public intents of planned orders and «Защита»: ``systems.ord
 Road upgrades by a city (DEC-16) and, with ``city_upgrades``, the barracks and the warehouse
 levels (DEC-26): ``systems.build``; they are not public.
 Supply priority and one-off transfers (DEC-18): ``SetPriority`` and ``Transfer``; neither is
-public, a transfer leaves as a packet in the tick it is applied (``systems.supply``).
+public; a transfer is cut to the free room of the target and leaves in batches, the first in the
+tick it is applied (``systems.supply``, #287).
 """
 
 from collections.abc import Callable, Iterable
@@ -61,7 +62,14 @@ from gow_sim.systems.recruit import (
     queue_unit,
     recruit_allowed_here,
 )
-from gow_sim.systems.supply import TransferRoute, is_city, send_packet, transfer_route
+from gow_sim.systems.supply import (
+    TransferRoute,
+    is_city,
+    send_transfer,
+    transfer_arrive_tick,
+    transfer_route,
+    warehouse_room,
+)
 from gow_sim.systems.vision import compute_vision, is_visible
 
 __all__ = [
@@ -290,6 +298,8 @@ class RejectCode(StrEnum):
     NOT_ENOUGH_CHARGES = "NOT_ENOUGH_CHARGES"
     """The city warehouse holds fewer charges than the level costs (DEC-16) or than a transfer
     ships (DEC-18)."""
+    TARGET_FULL = "TARGET_FULL"
+    """The warehouse of the transfer's target has no free room (DEC-18, item 6, #287)."""
     NO_CHANGE = "NO_CHANGE"
     """The command would leave everything as it is (same mode or stance; already forfeited)."""
     STANCE_COOLDOWN = "STANCE_COOLDOWN"
@@ -419,7 +429,10 @@ def _validate(
     if cost > state.players[player].cp:
         return Reject(RejectCode.NOT_ENOUGH_CP)
     if isinstance(checked, TransferRoute):
-        return Ok(cost=cost, path=checked.nodes, arrive_tick=state.tick + checked.total_ticks)
+        assert isinstance(cmd, Transfer)
+        n = _transfer_charges(state, rules, player, cmd)
+        arrive = transfer_arrive_tick(state, rules, checked, n)
+        return Ok(cost=cost, path=checked.nodes, arrive_tick=arrive)
     if isinstance(cmd, Move):
         # The first step is made in the tick of the order (or of the departure): tick + T - 1.
         delay = rules.orders.planned_delay_ticks if cmd.planned else 0
@@ -604,12 +617,19 @@ def _check_transfer(
         return Reject(RejectCode.NOT_CITY)
     if src == dst or n < 1:
         return Reject(RejectCode.INVALID_ARGUMENT)
-    route = transfer_route(state, rules, player, src, dst, n)
+    route = transfer_route(state, rules, player, src, dst)
     if route is None:
         return Reject(RejectCode.NO_PATH)
     if state.nodes[src].warehouse < n:
         return Reject(RejectCode.NOT_ENOUGH_CHARGES)
+    if warehouse_room(state, rules, player, dst) == 0:
+        return Reject(RejectCode.TARGET_FULL)
     return route
+
+
+def _transfer_charges(state: GameState, rules: Ruleset, player: int, cmd: Transfer) -> int:
+    """The charges a valid ``Transfer`` ships: ``n`` cut to the free room of the target (#287)."""
+    return min(cmd.n, warehouse_room(state, rules, player, cmd.dst))
 
 
 def _check_city_build(
@@ -829,21 +849,23 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
         case SetPriority(node=node, level=level):
             state.nodes[node].priority = level
             return [event(tick, "priority_set", player=player, node=node, level=level.value)]
-        case Transfer(src=src, dst=dst, n=n):
-            route = transfer_route(state, rules, player, src, dst, n)
+        case Transfer(src=src, dst=dst):
+            route = transfer_route(state, rules, player, src, dst)
             assert route is not None  # validated just before, on this state
+            n = _transfer_charges(state, rules, player, cmd)
+            arrive = transfer_arrive_tick(state, rules, route, n)
             state.nodes[src].warehouse -= n
-            packet = send_packet(state, player, src, route.edges, route.ticks, n, transfer=True)
+            packets = send_transfer(state, rules, player, route, n)
             return [
                 event(
                     tick,
                     "transfer_started",
-                    packet=packet.id,
+                    packet=packets[0].id,
                     player=player,
                     from_node=src,
                     to_node=dst,
                     charges=n,
-                    arrive_tick=tick + route.total_ticks,
+                    arrive_tick=arrive,
                 )
             ]
         case Forfeit():

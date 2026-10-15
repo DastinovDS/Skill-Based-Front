@@ -69,6 +69,7 @@ export const en = {
   'reject.QUEUE_FULL': 'The recruit queue of the city is full',
   'reject.IN_FIGHT': 'In a fight: the group can only withdraw',
   'reject.STACK_LIMIT': 'The group is bigger than a node on the way: split it (S)',
+  'reject.TARGET_FULL': 'The warehouse of the target city is full',
   'cmd.move': 'move',
   'cmd.split': 'split',
   'cmd.merge': 'merge',

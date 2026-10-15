@@ -69,6 +69,7 @@ export const ru = {
   'reject.QUEUE_FULL': 'Очередь найма города заполнена',
   'reject.IN_FIGHT': 'Идёт бой: группа может только отойти',
   'reject.STACK_LIMIT': 'Группа больше ёмкости узла на пути: разделите её (S)',
+  'reject.TARGET_FULL': 'Склад города назначения полон',
   'cmd.move': 'движение',
   'cmd.split': 'деление',
   'cmd.merge': 'слияние',
