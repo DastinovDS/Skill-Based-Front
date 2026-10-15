@@ -109,29 +109,6 @@ export function sectorAt(dx: number, dy: number): Stance | null {
   return nearestSector(STANCE_SECTORS, dx, dy);
 }
 
-/** A road type the first upgrade chooses (DEC-22). */
-export type RoadType = 'fast' | 'freight';
-
-/** The road type menu (DEC-22): fast on the left, freight on the right; keys 1 and 2. */
-export const ROAD_SECTORS: readonly {
-  readonly type: RoadType;
-  readonly angle: number;
-  readonly key: string;
-}[] = [
-  { type: 'fast', angle: 180, key: '1' },
-  { type: 'freight', angle: 0, key: '2' },
-];
-
-/** Half the angle of a road type sector: two sectors of 178 degrees with gaps between them. */
-export const ROAD_HALF = 89;
-
-const TYPE_SECTORS = ROAD_SECTORS.map((s) => ({ angle: s.angle, item: s.type }));
-
-/** The road type under the pointer at (`dx`, `dy`) from the middle of the menu; `null`: dead zone. */
-export function roadSectorAt(dx: number, dy: number): RoadType | null {
-  return nearestSector(TYPE_SECTORS, dx, dy);
-}
-
 /** SVG path of the ring sector around `centre` degrees, relative to the middle of the menu. */
 export function sectorPath(
   centre: number,

@@ -202,7 +202,7 @@ describe('OrderController', () => {
     controller.click({ kind: 'group', id: group.id }, false);
     controller.setMode('defense');
     controller.split(1);
-    controller.upgradeRoad(3, 'fast');
+    controller.upgradeRoad(3);
     controller.recruit();
     controller.setStance('economy');
     controller.forfeit();
@@ -210,7 +210,7 @@ describe('OrderController', () => {
       { type: 'set_mode', group: group.id, mode: 'defense' },
       { type: 'split', group: group.id, n: 1 },
       // The group stands in an own city: that city builds (DEC-16).
-      { type: 'upgrade_road', node: home, edge: 3, kind: 'fast' },
+      { type: 'upgrade_road', node: home, edge: 3, kind: null },
       { type: 'recruit', node: home },
       { type: 'set_stance', stance: 'economy' },
       { type: 'forfeit' },
@@ -362,9 +362,8 @@ describe('OrderController', () => {
     if (up1 === undefined || up2 === undefined || away === undefined) {
       throw new Error('the map lacks roads around the home city');
     }
-    // Level 1: both types offered; up2 is a fast road of level 2: only its own type.
-    const both = { fast: { speed_pct: 50, amount: 0 }, freight: { speed_pct: 0, amount: 1 } };
-    const fastOnly = { fast: { speed_pct: 50, amount: 0 }, freight: null };
+    // Roads have no type (DEC-26): every next level only speeds the packets up.
+    const gain = { speed_pct: 50 };
 
     function withRoads(base: SnapshotMsg, build: { edge: number; done_tick: number } | null) {
       return {
@@ -374,9 +373,9 @@ describe('OrderController', () => {
           nodes: base.view.nodes.map((n) => (n.id === home ? { ...n, build } : n)),
           edges: base.view.edges.map((e) =>
             e.id === up2
-              ? { ...e, width: 2, kind: 'fast' as const, upgrade_gain: fastOnly }
+              ? { ...e, width: 2, upgrade_gain: gain }
               : e.id === up1 || e.id === away
-                ? { ...e, width: 1, kind: 'none' as const, upgrade_gain: both }
+                ? { ...e, width: 1, upgrade_gain: gain }
                 : e,
           ),
         },
@@ -402,55 +401,20 @@ describe('OrderController', () => {
       controller.click({ kind: 'edge', id: away }, false);
       expect(sent).toEqual([]);
 
-      // A typed road keeps its type: the click sends at once, without a type (DEC-22).
+      // The click sends at once, without a type (DEC-26, item 7).
       controller.click({ kind: 'edge', id: up2 }, false);
       expect(sent).toEqual([{ type: 'upgrade_road', node: home, edge: up2, kind: null }]);
-      expect(controller.roadType.current.open).toBe(false);
       // The pick ends with the command.
       expect(controller.ui.current.roadPick).toBeNull();
       expect(controller.overlay().candidates).toEqual([]);
     });
 
-    it('a road without a type opens the type menu; a click on a sector sends that type', () => {
+    it('a road of level 1 is sent at once as well: no type menu any more (DEC-26)', () => {
       const { controller, sent } = pickSetup();
       controller.key(key('KeyU'));
       controller.click({ kind: 'edge', id: up1 }, false);
-      expect(sent).toEqual([]);
+      expect(sent).toEqual([{ type: 'upgrade_road', node: home, edge: up1, kind: null }]);
       expect(controller.ui.current.roadPick).toBeNull();
-      expect(controller.roadType.current).toMatchObject({
-        open: true,
-        node: home,
-        edge: up1,
-        level: 2,
-        fast: both.fast,
-        freight: both.freight,
-        charges: 2,
-      });
-      controller.roadType.hover('freight');
-      expect(controller.roadType.current.hover).toBe('freight');
-      controller.chooseRoadType('freight');
-      expect(controller.roadType.current.open).toBe(false);
-      expect(sent).toEqual([{ type: 'upgrade_road', node: home, edge: up1, kind: 'freight' }]);
-    });
-
-    it('in the type menu 1 / 2 choose a type (not the modes); U or Esc close it', () => {
-      const { controller, sent } = pickSetup();
-      const open = () => {
-        controller.key(key('KeyU'));
-        controller.click({ kind: 'edge', id: up1 }, false);
-        expect(controller.roadType.current.open).toBe(true);
-      };
-      open();
-      expect(controller.key(key('Digit1'))).toBe(true);
-      expect(sent).toEqual([{ type: 'upgrade_road', node: home, edge: up1, kind: 'fast' }]);
-      open();
-      expect(controller.key(key('KeyU'))).toBe(true); // the key that opened it closes it
-      expect(controller.roadType.current.open).toBe(false);
-      expect(controller.ui.current.roadPick).toBeNull();
-      open();
-      expect(controller.key(key('Escape'))).toBe(true);
-      expect(controller.roadType.current.open).toBe(false);
-      expect(sent).toHaveLength(1);
     });
 
     it('Esc ends the pick and keeps the city selected; a second Esc deselects', () => {

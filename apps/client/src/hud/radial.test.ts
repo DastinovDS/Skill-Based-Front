@@ -3,9 +3,7 @@ import { DEV_RULES } from './devFeed.ts';
 import {
   PRIORITY_SIGN,
   RADIAL,
-  ROAD_HALF,
   SUPPLY_SECTORS,
-  roadSectorAt,
   sectorAt,
   sectorPath,
   stanceRates,
@@ -63,19 +61,10 @@ describe('sectorPath', () => {
   });
 });
 
-describe('roadSectorAt (road type menu, DEC-22)', () => {
-  it('picks fast on the left and freight on the right; the middle cancels', () => {
-    expect(roadSectorAt(0, 0)).toBeNull();
-    expect(roadSectorAt(-80, 0)).toBe('fast');
-    expect(roadSectorAt(80, 0)).toBe('freight');
-    // Any part of a sector selects it, also near the top and bottom.
-    expect(roadSectorAt(-5, -90)).toBe('fast');
-    expect(roadSectorAt(5, 90)).toBe('freight');
-  });
-
+describe('sectorPath', () => {
   it('draws sectors wider than a half circle with the large arc flag', () => {
     expect(sectorPath(0, 100)).toContain(' 0 1 1 ');
-    expect(sectorPath(0, ROAD_HALF)).not.toContain(' 0 1 1 ');
+    expect(sectorPath(0, 89)).not.toContain(' 0 1 1 ');
   });
 });
 

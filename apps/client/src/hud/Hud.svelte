@@ -17,7 +17,6 @@
   import KeyHints from './KeyHints.svelte';
   import type { HudPrefs } from './prefs.svelte.ts';
   import RadialMenu from './RadialMenu.svelte';
-  import RoadTypeMenu from './RoadTypeMenu.svelte';
   import SplitMenu from './SplitMenu.svelte';
   import StackRadial from './StackRadial.svelte';
   import StartBanner from './StartBanner.svelte';
@@ -167,7 +166,6 @@
     <KeyHints />
   {/if}
   <RadialMenu {orders} stance={data?.stance ?? null} />
-  <RoadTypeMenu {orders} />
   <SupplyBanner {orders} />
   <SupplyMenu {orders} />
   <TransferDialog {orders} />

@@ -20,17 +20,14 @@ import {
 import type { CommandResult, OrderBook } from './orderBook.ts';
 import {
   RADIAL,
-  ROAD_SECTORS,
   SECTORS,
   stanceRates,
   SUPPLY_SECTORS,
-  type RoadType,
   type StanceRate,
   type SupplyChoice,
 } from '../hud/radial.ts';
 import { OrderUiState, type ReachInfo } from './orderUi.svelte.ts';
 import { RadialState } from './radialState.svelte.ts';
-import { RoadTypeState } from './roadTypeState.svelte.ts';
 import { SplitState } from './splitState.svelte.ts';
 import { TargetMenuState } from './targetMenuState.svelte.ts';
 import { SupplyMenuState, TransferState } from './supplyState.svelte.ts';
@@ -91,11 +88,8 @@ export interface KeyInput {
  *
  * Road upgrades are a city's job (DEC-16): with an own city selected (or a group standing in
  * one), U starts the road pick. The roads of that city with an upgrade hint light up; a click on
- * one ends the pick. A road of level 1 has no type yet: the click opens the road type menu
- * (DEC-22: fast or freight, a radial menu under the pointer; a click or 1 / 2 chooses, U, Esc or a
- * click outside closes it), and the choice sends `upgrade_road` with that type. A typed road keeps
- * its type: the click sends `upgrade_road` at once. Esc, U again, or a click elsewhere ends the
- * pick too. Whether the city may build (supply, a build already going, charges) is the server's
+ * one ends the pick and sends `upgrade_road`: roads have no type (DEC-26, item 7), a level only
+ * speeds the supply up. Esc, U again, or a click elsewhere ends the pick too. Whether the city may build (supply, a build already going, charges) is the server's
  * call.
  *
  * The «Supply» map mode (DEC-18, item 7) is toggled by Tab (or F2). In it a click on an own city
@@ -130,7 +124,6 @@ export class OrderController implements MapInteraction {
   /** The stance menu on Q (ui-style 11). */
   readonly radial = new RadialState();
   /** The road type menu of a first road upgrade (DEC-22). */
-  readonly roadType = new RoadTypeState();
   /** The supply menu of an own city in the «Supply» map mode (DEC-18). */
   readonly supplyMenu = new SupplyMenuState();
   /** The amount dialog of a transfer (DEC-18). */
@@ -388,7 +381,6 @@ export class OrderController implements MapInteraction {
       !this.groupMenu.current.open &&
       !this.stackMenu.current.open &&
       !this.radial.current.open &&
-      !this.roadType.current.open &&
       !this.supplyMenu.current.open &&
       !this.splitMenu.current.open &&
       !this.transfer.current.open
@@ -399,7 +391,6 @@ export class OrderController implements MapInteraction {
 
   deselect(): void {
     this.stopRoadPick();
-    this.roadType.close();
     this.splitMenu.close();
     this.#closeTargetMenus();
     this.#o.hud.select(null);
@@ -449,7 +440,6 @@ export class OrderController implements MapInteraction {
     const group = this.#selectedGroup();
     if (group === null || group.node === null || this.#o.send === null) return;
     this.stopRoadPick();
-    this.roadType.close();
     this.closeRadial();
     this.groupMenu.close();
     this.splitMenu.open(group.id, group.units, group.charged);
@@ -587,41 +577,13 @@ export class OrderController implements MapInteraction {
     this.ui.patch({ roadPick: null });
   }
 
-  /**
-   * The city of the road pick (or the selected own city) raises `edge` by one level (DEC-16).
-   * A road without a type opens the road type menu instead (DEC-22); `kind` sends that choice.
-   */
-  upgradeRoad(edge: number, kind?: RoadType): void {
+  /** The city of the road pick (or the selected own city) raises `edge` by one level (DEC-16). */
+  upgradeRoad(edge: number): void {
     const node = this.#pick ?? this.roadCity();
     if (node === null) return;
     this.stopRoadPick();
-    const road = this.#o.hud.current?.roads[edge];
     if (this.#o.send === null) return;
-    if (kind === undefined && road?.kind === 'none' && road.gain !== null) {
-      this.radial.close();
-      this.roadType.open({
-        node,
-        edge,
-        level: road.width + 1,
-        fast: road.gain.fast,
-        freight: road.gain.freight,
-        charges: road.charges,
-      });
-      return;
-    }
-    this.#sendCommand({ type: 'upgrade_road', node, edge, kind: kind ?? null }, null);
-  }
-
-  /** A sector of the road type menu was chosen: close it and send the upgrade with that type. */
-  chooseRoadType(kind: RoadType): void {
-    const { open, node, edge } = this.roadType.current;
-    this.roadType.close();
-    if (!open || this.#o.send === null) return;
-    this.#sendCommand({ type: 'upgrade_road', node, edge, kind }, null);
-  }
-
-  closeRoadType(): void {
-    this.roadType.close();
+    this.#sendCommand({ type: 'upgrade_road', node, edge, kind: null }, null);
   }
 
   setStance(stance: Stance): void {
@@ -637,7 +599,6 @@ export class OrderController implements MapInteraction {
   openRadial(sticky: boolean): boolean {
     if (this.#o.send === null) return false;
     this.stopRoadPick();
-    this.roadType.close();
     this.splitMenu.close();
     this.#closeTargetMenus();
     this.radial.open(sticky);
@@ -672,8 +633,7 @@ export class OrderController implements MapInteraction {
     this.transfer.close();
     if (on) {
       this.stopRoadPick();
-      this.roadType.close();
-      this.closeRadial();
+        this.closeRadial();
     }
     this.ui.patch({ supplyMode: on, transferFrom: null });
   }
@@ -683,7 +643,6 @@ export class OrderController implements MapInteraction {
     const city = this.#ownCity(node);
     if (city === null || city.priority === null || this.#o.send === null) return false;
     this.radial.close();
-    this.roadType.close();
     this.supplyMenu.open(node, city.priority, city.warehouse);
     return true;
   }
@@ -785,18 +744,6 @@ export class OrderController implements MapInteraction {
     if (input.code === 'Escape' && this.ui.current.transferFrom !== null) {
       this.cancelTransferPick();
       return true;
-    }
-    if (this.roadType.current.open) {
-      // The road type menu: 1 / 2 choose (not the modes); U, the key that opened it, or Esc close.
-      const sector = ROAD_SECTORS.find((s) => `Digit${s.key}` === input.code);
-      if (sector !== undefined) {
-        this.chooseRoadType(sector.type);
-        return true;
-      }
-      if (input.code === 'Escape' || input.code === 'KeyU') {
-        this.closeRoadType();
-        return true;
-      }
     }
     if (this.stackMenu.current.open) {
       // The list of groups: 1..9 choose the group (not the modes), Esc closes it.

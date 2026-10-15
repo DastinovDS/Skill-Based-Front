@@ -68,6 +68,10 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       recruit_queue: null,
       recruit_progress: null,
       recruit_waiting: null,
+      has_barracks: null,
+      warehouse_level: null,
+      warehouse_cap: null,
+      building: null,
     };
     if (mine.has(n.id)) {
       const city = n.kind !== 'province';
@@ -77,6 +81,9 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         recruit_queue: city ? 0 : null,
         recruit_progress: city ? 0 : null,
         recruit_waiting: city ? false : null,
+        has_barracks: city ? true : null,
+        warehouse_level: city ? 0 : null,
+        warehouse_cap: city ? DEV_CAPACITY[n.kind] : null,
         detail: 'exact',
         warehouse: n.start_stock,
         seen: { tick, level: 'exact', enemy_modes: [], enemy_units: 0, enemy_charged: 0 },
@@ -135,7 +142,6 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       edges: map.edges.map((e) => ({
         id: e.id,
         width: e.base_width,
-        kind: 'none',
         // A road is seen when one of its ends is (as in the real fog), hidden only between two hidden cities.
         detail: nodes[e.a]?.detail === 'fog' && nodes[e.b]?.detail === 'fog' ? 'fog' : 'exact',
         upgrade_gain: null,

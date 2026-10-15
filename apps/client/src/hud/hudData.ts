@@ -13,7 +13,6 @@ import type {
   NodeView,
   PlayerId,
   Priority,
-  RoadKind,
   RulesetPublic,
   Seen,
   SnapshotMsg,
@@ -143,9 +142,7 @@ export interface RoadInfo {
   readonly b: number;
   /** Current level (1..3, DEC-22; the wire calls it `width`). */
   readonly width: number;
-  /** Road type: `none` on level 1, then the type the first upgrade chose (DEC-22). */
-  readonly kind: RoadKind;
-  /** What the next level adds per type; `null`: the road cannot be upgraded (DEC-22, item 7). */
+  /** What the next level adds (packet speed, DEC-26, item 7); `null`: it cannot be upgraded. */
   readonly gain: UpgradeGain | null;
   /**
    * Warehouse charges the next level costs (`ruleset_public.build`, DEC-16); `null` when the road
@@ -276,7 +273,6 @@ function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): 
     a: file?.a ?? -1,
     b: file?.b ?? -1,
     width: edge.width,
-    kind: edge.kind,
     gain: edge.upgrade_gain,
     charges: edge.upgrade_gain === null ? null : levelCharges(ctx.rules, edge.width + 1),
   };

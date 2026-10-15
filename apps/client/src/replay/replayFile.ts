@@ -5,7 +5,7 @@
  * JSON. `parseReplay` checks the `format` field and the shape the viewer dereferences; a file with
  * an unknown format is refused, never half-read.
  */
-import type { EndReason, MapFile, Mode, PlayerId, RoadKind, Stance } from '../protocol.gen.ts';
+import type { EndReason, MapFile, Mode, PlayerId, Stance } from '../protocol.gen.ts';
 
 /** The only frames format this viewer reads. */
 export const REPLAY_FORMAT = 1;
@@ -58,8 +58,11 @@ export interface ReplayFrame {
   i: FrameIntent[];
   /** Road builds of cities, by node id; absent while no city builds (DEC-16). */
   b?: FrameBuild[];
-  /** Road types by edge id; absent while every road is untyped (DEC-22, older files). */
-  r?: RoadKind[];
+  /**
+   * Road types by edge id, only in files from before DEC-26 (DEC-22); read and ignored: roads have
+   * no type now.
+   */
+  r?: string[];
   /** Fights going on (DEC-24); absent while there is none (and in older files). */
   f?: FrameFight[];
 }

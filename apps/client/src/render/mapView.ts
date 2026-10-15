@@ -1,5 +1,5 @@
 import { Container, Graphics, GraphicsContext, Sprite, type Renderer, type Texture } from 'pixi.js';
-import type { MapFile, PlayerId, RoadKind } from '../protocol.gen.ts';
+import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { territoryBorders } from './regionLayout.ts';
@@ -11,7 +11,6 @@ import {
   ROAD_CASING_EXTRA,
   ROAD_CHEVRON,
   ROAD_COLOR,
-  ROAD_STRIPE,
   TERRAIN_FILL,
   TERRITORY_ALPHA,
   TERRITORY_BORDER,
@@ -27,18 +26,15 @@ type Owner = PlayerId | null;
 interface Road {
   readonly holder: Container;
   readonly body: Graphics;
-  readonly stripes: Graphics[];
-  /** The chevrons of a fast road; created on first need. */
+  /** The chevrons of an upgraded road; created on first need. */
   chevrons: Graphics | null;
   readonly length: number;
   width: number;
-  kind: RoadKind;
 }
 
-/** A road as a snapshot shows it: level (the wire `width`) and type (DEC-22). */
+/** A road as a snapshot shows it: its level (the wire `width`); roads have no type (DEC-26). */
 export interface RoadLook {
   readonly width: number;
-  readonly kind: RoadKind;
 }
 
 /**
@@ -47,8 +43,8 @@ export interface RoadLook {
  *
  * Owners and roads come from the map start fields now and from snapshots later (CLI-04, #60)
  * through `setOwners` and `setRoads`. A road is always a solid line and reads without colour
- * (DEC-22): the level shows in its thickness; a freight road carries lanes (one per level above
- * 1), a fast road chevrons (double ones on level 3). Identical shapes share one GraphicsContext
+ * (DEC-22): the level shows in its thickness and an upgraded road carries chevrons (double ones on
+ * level 3): an upgrade only speeds the supply up (DEC-26, item 7). Identical shapes share one GraphicsContext
  * (the unit road rectangle and the chevrons of a given length);
  * `destroy()` releases every object and context created here.
  */
@@ -56,7 +52,6 @@ export class MapView {
   private readonly shared: GraphicsContext[] = [];
   private readonly roadContext: GraphicsContext;
   private readonly casingContext: GraphicsContext;
-  private readonly stripeContext: GraphicsContext;
   private readonly chevronContexts = new Map<string, GraphicsContext>();
   readonly cells: Point[][];
   private readonly terrainFill: Graphics;
@@ -84,7 +79,6 @@ export class MapView {
     this.roadContext = this.context((g) => g.rect(0, -0.5, 1, 1).fill(ROAD_COLOR));
     // A dark edge under each road keeps it visible on the snow of the baked background.
     this.casingContext = this.context((g) => g.rect(0, -0.5, 1, 1).fill(ROAD_CASING));
-    this.stripeContext = this.context((g) => g.rect(0, -0.5, 1, 1).fill(ROAD_STRIPE));
 
     this.layers = layers;
     const background = layers.layer.background;
@@ -134,11 +128,11 @@ export class MapView {
       }
       const body = holder.addChild(new Graphics(this.roadContext));
       this.bodyLayer.addChild(holder);
-      return { holder, body, stripes: [], chevrons: null, length, width: 0, kind: 'none' };
+      return { holder, body, chevrons: null, length, width: 0 };
     });
 
     this.setOwners(map.nodes.map((node) => node.start_owner));
-    this.setRoads(map.edges.map((edge) => ({ width: edge.base_width, kind: 'none' })));
+    this.setRoads(map.edges.map((edge) => ({ width: edge.base_width })));
   }
 
   /**
@@ -187,34 +181,19 @@ export class MapView {
     }
   }
 
-  /** `roads[i]`: current level and type of edge `i` (levels 1..3, DEC-22). */
+  /** `roads[i]`: current level of edge `i` (levels 1..3, DEC-22). */
   setRoads(roads: readonly RoadLook[]): void {
-    roads.forEach(({ width, kind }, i) => {
+    roads.forEach(({ width }, i) => {
       const road = this.roads[i];
       const casing = this.casings[i];
       if (road === undefined || casing === undefined) return;
       const thickness = roadThickness(width);
       casing.scale.y = thickness + ROAD_CASING_EXTRA;
-      if (road.width === width && road.kind === kind) return;
+      if (road.width === width) return;
       road.width = width;
-      road.kind = kind;
       road.body.scale.y = thickness;
-      // A freight road: `width - 1` dark lanes across the body.
-      const lanes = kind === 'freight' ? width - 1 : 0;
-      for (let k = 0; k < Math.max(lanes, road.stripes.length); k++) {
-        let stripe = road.stripes[k];
-        if (stripe === undefined && k < lanes) {
-          stripe = road.holder.addChild(new Graphics(this.stripeContext));
-          stripe.scale.y = ROAD_STRIPE.width;
-          road.stripes[k] = stripe;
-        }
-        if (stripe !== undefined) {
-          stripe.visible = k < lanes;
-          stripe.position.y = -thickness / 2 + (thickness * (k + 1)) / width;
-        }
-      }
-      // A fast road: chevrons along it, double on level 3.
-      if (kind === 'fast' && width > 1) {
+      // An upgraded road: chevrons along it, double on level 3.
+      if (width > 1) {
         const context = this.chevronContext(road.length, width >= 3 ? 2 : 1);
         if (road.chevrons === null) road.chevrons = road.holder.addChild(new Graphics(context));
         else road.chevrons.context = context;
