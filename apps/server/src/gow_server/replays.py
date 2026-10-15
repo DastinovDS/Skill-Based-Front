@@ -25,9 +25,19 @@ builds queue behind each other in the worker pool), so the endpoint tells three 
 its frames are being built, try again), unavailable (410: the match is over and no build is
 running, so none will appear: the build failed, the server died while building, or the match
 never finished). A match that does not exist is 404.
+
+A replay always belongs to its match (#280). Match ids are only unique within one database: a new
+database (a new volume, a deleted ``gow.db``) starts again from 1 while old files may remain, and a
+browser may remember ``/api/replays/1`` of the previous database. Therefore (1) only the file named
+in ``matches.replay_path`` is served (no guess by ``{id}``), a stale ``{id}.frames.json.gz`` is
+removed when a match with that id starts, and its header (map, ruleset, ticks) must agree with the
+``matches`` row; (2) the file is sent with ``Cache-Control: no-cache`` and an ``ETag`` that names
+the match instance (id, creation time) and the file, so a browser asks again every time and never
+shows the file of another match.
 """
 
 import asyncio
+import gzip
 import logging
 import multiprocessing
 import re
@@ -37,7 +47,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Final, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -56,6 +66,11 @@ log = logging.getLogger("gow_server.replays")
 LOG_SUFFIX: Final = ".jsonl.gz"
 FRAMES_SUFFIX: Final = ".frames.json.gz"
 _MATCH_ID_RE: Final = re.compile(r"[A-Za-z0-9_-]{1,64}")
+_HEADER_BYTES: Final = 1024
+"""Unzipped bytes read to check the identity of a frames file: its header keys come first."""
+_HEADER_STR_RE: Final = r'"{key}":"([^"]*)"'
+_HEADER_INT_RE: Final = r'"{key}":(\d+)'
+
 RETRY_AFTER_S: Final = 2
 """``Retry-After`` of a replay that is still being prepared (the client backs off from there)."""
 
@@ -70,6 +85,33 @@ class ReplayPreparing(BaseModel):
     """Body of ``202``: the replay will be there shortly (or when the match is over)."""
 
     status: Literal["preparing"] = "preparing"
+
+
+def _header_agrees(file: Path, match: Match) -> bool:
+    """The map, ruleset and length in the head of the frames file are those of the ``matches`` row.
+
+    Reads only the start of the unzipped file; a key that is not found there is not checked.
+    """
+    try:
+        with gzip.open(file, "rb") as f:
+            head = f.read(_HEADER_BYTES).decode("ascii", errors="replace")
+    except (OSError, EOFError):
+        return False
+    for key, expected in (("map_id", match.map_id), ("ruleset_hash", match.ruleset_hash)):
+        found = re.search(_HEADER_STR_RE.format(key=key), head)
+        if found is not None and found.group(1) != expected:
+            return False
+    ticks = re.search(_HEADER_INT_RE.format(key="ticks"), head)
+    if ticks is None or match.ticks is None:
+        return True
+    return int(ticks.group(1)) == match.ticks
+
+
+def replay_etag(match: Match, file: Path) -> str:
+    """Names this match instance and this file: the same id in another database differs."""
+    stat = file.stat()
+    created = int(match.created_at.timestamp() * 1000)
+    return f'"m{match.id}-{created}-{stat.st_mtime_ns}-{stat.st_size}"'
 
 
 class ReplayService:
@@ -101,7 +143,13 @@ class ReplayService:
         return self._checked(match_id) + FRAMES_SUFFIX
 
     def writer(self, match_id: str) -> ReplayWriter:
-        """The log writer of a match that is about to start (the file opens at its first tick)."""
+        """The log writer of a match that is about to start (the file opens at its first tick).
+
+        A frames file left under this id by an older database is removed: it is not this match's.
+        """
+        stale = self.replays_dir / self.frames_name(match_id)
+        stale.unlink(missing_ok=True)
+        stale.with_name(stale.name + ".tmp").unlink(missing_ok=True)
         return ReplayWriter(self.log_path(match_id), flush_at_checkpoints=True)
 
     @staticmethod
@@ -164,11 +212,24 @@ class ReplayService:
         return result
 
     def frames_file(self, match: Match) -> Path | None:
-        """The frames file of ``match`` if it is on disk (and inside ``replays_dir``)."""
+        """The frames file of ``match``: the one in ``replay_path``, on disk, inside ``replays_dir``
+        and with the header of this match (``None`` otherwise).
+
+        There is no fallback to ``{id}.frames.json.gz``: the id alone does not say whose file it is.
+        """
+        if not match.replay_path:
+            return None
         root = self.replays_dir.resolve()
-        name = match.replay_path or self.frames_name(str(match.id))
-        file = (root / name).resolve()
-        return file if file.is_relative_to(root) and file.is_file() else None
+        file = (root / match.replay_path).resolve()
+        if not (file.is_relative_to(root) and file.is_file()):
+            return None
+        if not _header_agrees(file, match):
+            log.error(
+                "frames file does not belong to its match",
+                extra={"match_id": match.id, "file": file.name},
+            )
+            return None
+        return file
 
     def state(self, match: Match) -> ReplayState:
         """Where the replay of ``match`` is. Blocking only for a ``stat`` (call from a ``def``)."""
@@ -244,6 +305,7 @@ def get_replay(
     session: DbSession,
     service: Annotated[ReplayService, Depends(_service)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_optional_bearer)],
+    if_none_match: Annotated[str | None, Header()] = None,
 ) -> Response:
     """The frames file of a finished match (``docs/design/replay-frames.md``), gzip as stored.
 
@@ -280,12 +342,15 @@ def get_replay(
     if state is ReplayState.UNAVAILABLE or file is None:
         log.warning("replay is not available", extra={"match_id": match_id})
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="replay is not available")
+    # no-cache: the browser may keep the file but asks every time (a match id can come back with
+    # another match behind it after a database reset), the ETag makes that a cheap 304.
     cache = "public" if match.rated else "private"
+    etag = replay_etag(match, file)
+    headers = {"Cache-Control": f"{cache}, no-cache", "ETag": etag}
+    if if_none_match is not None and etag in {tag.strip() for tag in if_none_match.split(",")}:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     return FileResponse(
         file,
         media_type="application/json",
-        headers={
-            "Content-Encoding": "gzip",
-            "Cache-Control": f"{cache}, max-age=3600, immutable",
-        },
+        headers={"Content-Encoding": "gzip", **headers},
     )
