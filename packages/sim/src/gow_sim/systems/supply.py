@@ -21,8 +21,10 @@ item 4: road parameters), numbers from ``Ruleset.supply``:
   - Own deficit: active ``target - warehouse - incoming``, inactive ``-(warehouse + incoming)``;
     ``incoming``: charges of own packets whose path ends in the city.
   - Subtree deficit, bottom up: ``max(0, own + sum of the children's subtree deficits)``.
-  - Cities in tree order give ``warehouse - (target if active else 0)`` to children with a
-    subtree deficit above 0. Children go by ascending key: the smallest
+  - Cities in tree order give ``warehouse - keep`` to children with a subtree deficit above 0;
+    an active city keeps ``min(target, warehouse capacity // 2)`` (rounded down; owner's decision
+    of 2026-10-15, #287: a warehouse of 1 is a pure relay), an inactive one keeps 0. Children
+    go by ascending key: the smallest
     ``(priority rank, warehouse, node_key)`` among the active cities of the child's subtree with
     an own deficit above 0 (rank ``high`` 0, ``normal`` 1, ``low`` 2). A child gets at most its
     subtree deficit, at most its free room ``capacity - warehouse - incoming`` and at most what is
@@ -41,14 +43,19 @@ item 4: road parameters), numbers from ``Ruleset.supply``:
   an own city takes the charges into its warehouse, a province loses them (``packet_lost``). At
   the end of the path the charges go into the warehouse within the capacity, the excess burns
   (``charges_overflow``).
-- Transfer (item 6, ``commands.Transfer``): the fastest way for its ``n`` charges by
-  ``transfer_ticks`` per road, ties by the lexicographically smaller ``node_key`` sequence.
+- Transfer (item 6, ``commands.Transfer``; #287): ``n`` is cut to the free room of the target
+  warehouse (``warehouse_room``); the fastest way by ``packet_ticks``, ties by the
+  lexicographically smaller ``node_key`` sequence. It goes in batches: batch ``k`` of
+  ``min(amount, left)`` charges leaves ``k * dispatch_ticks`` ticks after the command (the first
+  at once) as a packet of its own; until then it waits in the source city (a packet with a later
+  ``depart_tick``). A waiting batch whose first road stops being internal goes back into the
+  warehouse of the source while the source is own, otherwise it is lost.
 - Transfers share the ``amount`` of a road with the automatic dispatch and take it first
   (item 10, owner's decision of 2026-10-14, #253): a transfer packet entering a road gets the
-  ``share`` of all its charges there; on every dispatch tick while it is on the road it takes
-  ``min(amount, share)`` of the road's ``amount`` (``share`` falls by as much), and the automatic
-  dispatch of the period gets ``max(0, amount - taken)``. Transfers do not delay each other (their
-  times stay those of item 6), what they take adds up.
+  ``share`` of all its charges there; on every dispatch tick while it is on the road (and has
+  left) it takes ``min(amount, share)`` of the road's ``amount`` (``share`` falls by as much), and
+  the automatic dispatch of the period gets ``max(0, amount - taken)``. Transfers do not delay
+  each other (their times stay those of item 6), what they take adds up.
 - Recharge: each tick, units of the node owner standing in the node (``capacity.is_standing``)
   take charges from the warehouse, at most ``supply.recharge_per_tick`` per node and tick, the
   lowest group id first. Units on edges do not recharge, nor do groups in a fight while it lasts
@@ -98,22 +105,23 @@ def edge_packet_ticks(state: GameState, rules: Ruleset, edge: int) -> int:
     return packet_ticks(state.map, rules, edge, state.edges[edge].width)
 
 
-def transfer_ticks(state: GameState, rules: Ruleset, edge: int, n: int) -> int:
-    """Ticks a transfer of ``n`` charges needs along ``edge`` (DEC-18, item 6).
-
-    ``packet_ticks + (ceil(n / amount) - 1) * supply.dispatch_ticks``: the charges go in batches
-    of ``amount`` per period, the simulation carries them as one packet with the time of the last
-    batch. ``ceil(n / a) = (n + a - 1) // a``, both positive.
-    """
+def transfer_batches(rules: Ruleset, n: int) -> int:
+    """Batches of a transfer of ``n`` charges (DEC-18, item 6): ``ceil(n / amount)``, one per
+    dispatch period; ``ceil(n / a) = (n + a - 1) // a``, both positive."""
     amount = road_amount(rules)
-    batches = (n + amount - 1) // amount
-    return edge_packet_ticks(state, rules, edge) + (batches - 1) * rules.supply.dispatch_ticks
+    return (n + amount - 1) // amount
 
 
 def target_stock(rules: Ruleset, warehouse_cap: int, discharged: int) -> int:
     """Target stock of a city (DEC-18, item 2; DEC-26, item 6): its warehouse capacity, at most
     the discharged units standing there plus ``supply.buffer``."""
     return min(warehouse_cap, discharged + rules.supply.buffer)
+
+
+def forward_reserve(warehouse_cap: int, target: int) -> int:
+    """What an active city keeps when it gives to its children (DEC-18, item 4, owner's decision
+    of 2026-10-15, #287): its target, at most half its warehouse capacity, rounded down."""
+    return min(target, warehouse_cap // 2)
 
 
 def is_city(mapdef: MapDef, node: int) -> bool:
@@ -192,11 +200,12 @@ class TransferRoute:
 
 
 def transfer_route(
-    state: GameState, rules: Ruleset, player: int, src: int, dst: int, n: int
+    state: GameState, rules: Ruleset, player: int, src: int, dst: int
 ) -> TransferRoute | None:
-    """The fastest way of a transfer of ``n`` charges from ``src`` to ``dst`` (DEC-18, item 6).
+    """The fastest way of a transfer from ``src`` to ``dst`` (DEC-18, item 6).
 
-    Only own nodes, so only internal roads; ``transfer_ticks`` per road; among ways of equal time
+    Only own nodes, so only internal roads; ``packet_ticks`` per road (every batch takes the same
+    way, the number of batches does not depend on it, #287); among ways of equal time
     the lexicographically smaller sequence of ``node_key(player, node)`` wins, as for movement.
     ``None``: no such way.
     """
@@ -221,7 +230,7 @@ def transfer_route(
             nxt = mapdef.edges[eid].other(node)
             if nxt in done or nodes[nxt].owner != player:
                 continue
-            cand = (dist + transfer_ticks(state, rules, eid, n), (*keys, key(nxt)))
+            cand = (dist + edge_packet_ticks(state, rules, eid), (*keys, key(nxt)))
             if nxt not in best or cand < best[nxt]:
                 best[nxt] = cand
                 via[nxt] = (node, eid)
@@ -241,7 +250,7 @@ def transfer_route(
     return TransferRoute(
         nodes=tuple(path_nodes),
         edges=tuple(path_edges),
-        ticks=tuple(transfer_ticks(state, rules, e, n) for e in path_edges),
+        ticks=tuple(edge_packet_ticks(state, rules, e) for e in path_edges),
     )
 
 
@@ -254,17 +263,20 @@ def send_packet(
     charges: int,
     *,
     transfer: bool,
+    delay: int = 0,
 ) -> Packet:
-    """A new packet of ``player`` leaving ``from_node`` now along ``edges`` (DEC-18, item 5)."""
+    """A new packet of ``player`` leaving ``from_node`` along ``edges`` (DEC-18, item 5) now, or
+    ``delay`` ticks later (a later batch of a transfer, which waits in ``from_node`` till then)."""
     pid = state.new_id()
+    depart = state.tick + delay
     packet = Packet(
         id=pid,
         owner=player,
         edge=edges[0],
         from_node=from_node,
         charges=charges,
-        depart_tick=state.tick,
-        arrive_tick=state.tick + ticks[0],
+        depart_tick=depart,
+        arrive_tick=depart + ticks[0],
         route=edges[1:],
         route_ticks=ticks[1:],
         transfer=transfer,
@@ -272,6 +284,60 @@ def send_packet(
     )
     state.packets[pid] = packet
     return packet
+
+
+def incoming_charges(state: GameState, player: int, node: int) -> int:
+    """Charges of the own packets of ``player`` whose path ends in ``node`` ("on the way to it")."""
+    total = 0
+    for pid in sorted(state.packets):
+        packet = state.packets[pid]
+        if packet.owner == player and packet_dest(state, packet) == node:
+            total += packet.charges
+    return total
+
+
+def warehouse_room(state: GameState, rules: Ruleset, player: int, node: int) -> int:
+    """Free room of the warehouse of the own city ``node``: ``capacity - warehouse - incoming``,
+    at least 0 (DEC-18, item 6, #287: a transfer is cut to it)."""
+    cap = warehouse_capacities(state, rules)[node]
+    used = state.nodes[node].warehouse + incoming_charges(state, player, node)
+    return max(0, cap - used)
+
+
+def transfer_arrive_tick(state: GameState, rules: Ruleset, route: TransferRoute, n: int) -> int:
+    """The tick the last batch of a transfer of ``n`` charges applied now reaches its end."""
+    last = (transfer_batches(rules, n) - 1) * rules.supply.dispatch_ticks
+    return state.tick + last + route.total_ticks
+
+
+def send_transfer(
+    state: GameState, rules: Ruleset, player: int, route: TransferRoute, n: int
+) -> list[Packet]:
+    """The batches of a transfer of ``n`` charges applied now (DEC-18, item 6, #287): batch ``k``
+    of ``min(amount, left)`` charges leaves ``k * supply.dispatch_ticks`` ticks later, the first
+    one now; every batch is a packet of its own with its own ``share`` (item 10)."""
+    amount = road_amount(rules)
+    packets: list[Packet] = []
+    left = n
+    k = 0
+    while left > 0:
+        charges = min(amount, left)
+        delay = k * rules.supply.dispatch_ticks
+        packets.append(
+            send_packet(
+                state,
+                player,
+                route.nodes[0],
+                route.edges,
+                route.ticks,
+                charges,
+                transfer=True,
+                delay=delay,
+            )
+        )
+        left -= charges
+        k += 1
+    return packets
 
 
 def packet_target(state: GameState, packet: Packet) -> int:
@@ -327,8 +393,8 @@ def _take_transfer_shares(state: GameState, rules: Ruleset) -> dict[tuple[int, i
     taken: dict[tuple[int, int], int] = {}
     for pid in sorted(state.packets):
         packet = state.packets[pid]
-        if packet.share <= 0:
-            continue
+        if packet.share <= 0 or packet.depart_tick > state.tick:
+            continue  # a batch still waiting in its city takes nothing yet
         take = min(road_amount(rules), packet.share)
         packet.share -= take
         key = (packet.owner, packet.edge)
@@ -350,14 +416,19 @@ def _move_packets(state: GameState, capacities: tuple[int, ...]) -> list[Event]:
         packet = state.packets[pid]
         owner = packet.owner
         if not _owned_by(state, packet.edge, owner):
-            del state.packets[pid]
-            events.append(_lost(tick, pid, packet))
+            start = packet.from_node
+            waiting = packet.depart_tick > tick  # a later transfer batch, still in its city
+            if not (waiting and state.nodes[start].owner == owner):
+                del state.packets[pid]
+                events.append(_lost(tick, pid, packet))
+                continue
+            node_id = start  # its way is cut: back into the warehouse of the own city (#287)
+        elif packet.arrive_tick > tick:
             continue
-        if packet.arrive_tick > tick:
-            continue
-        node_id = mapdef.edges[packet.edge].other(packet.from_node)
+        else:
+            node_id = mapdef.edges[packet.edge].other(packet.from_node)
         node = state.nodes[node_id]
-        if packet.route:
+        if packet.route and node_id != packet.from_node:
             nxt = packet.route[0]
             if _owned_by(state, nxt, owner):  # an intermediate node: on at once
                 packet.edge = nxt
@@ -515,7 +586,8 @@ def _dispatch(
                         best[a] = b
         for c in cities:
             node = nodes[c]
-            surplus = node.warehouse - (target[c] if rank[c] <= level else 0)
+            keep = forward_reserve(capacities[c], target[c]) if rank[c] <= level else 0
+            surplus = node.warehouse - keep
             if surplus <= 0:
                 continue
             ready = [k for k in kids[c] if need[k] > 0]

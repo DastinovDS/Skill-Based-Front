@@ -587,8 +587,11 @@ def test_supply_control_through_the_wire() -> None:
     checker.record(match, ())
     assert checker.features >= {"priority", "transfer"}
     wire_view = snapshot_msg(match.view(0)).view
-    (packet,) = (p for p in wire_view.packets if p.transfer)
-    assert (packet.path[-1], packet.dest_tick, packet.charges) == (far, arrive, 3)
+    batches = sorted((p for p in wire_view.packets if p.transfer), key=lambda p: p.dest_tick)
+    assert {p.path[-1] for p in batches} == {far}
+    # #287: cut to the free room of ``far`` (the event has the actual amount), sent in batches.
+    n = next(e.get("charges") for e in events if e.kind == "transfer_started")
+    assert (batches[-1].dest_tick, sum(p.charges for p in batches)) == (arrive, n)
     assert wire_view.nodes[far].priority is sim.Priority.HIGH
     enemy = snapshot_msg(match.view(1)).view
     assert all(n.priority is None for n in enemy.nodes if n.owner == 0)

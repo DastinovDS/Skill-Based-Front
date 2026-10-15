@@ -1,13 +1,16 @@
 """Supply control: priorities, transit cities, one-off transfers (DEC-18, #230).
 
-Table tests of exactly the 25 worked examples of DEC-18 (mechanics.md, section 7). Expected
-values come from the decision, not from the code. The setting of the examples:
+Table tests of exactly the 33 worked examples of DEC-18 (mechanics.md, section 7; 26-33: owner's
+decisions of 2026-10-15, #287). Expected values come from the decision, not from the code. The
+setting of the examples:
 
 - capital K (capacity 10); cities A, B, C (capacity 6); roads K-A, A-B, A-C; the province P only
   in examples 8, 15 and 20; every road ``travel_ticks = 30``, level 1 (``speed_pct`` 100,
   ``amount`` 1) unless said otherwise; ``buffer = 2``, ``dispatch_ticks = 10``; ``node_key``
   grows in the order K, A, B, C; no units; warehouses as at the dispatch (after recharge); the
-  result describes one dispatch period.
+  result describes one dispatch period; examples 26-28: the warehouse apart from the capacity
+  (DEC-26), capacity of K 6, of the others given by the example (``UPGRADED``: level 0..3 gives
+  a medium city 1..4).
 
 These numbers are pinned in ``RULES``, so balance changes of ``mvp-0.toml`` do not break them.
 
@@ -33,7 +36,7 @@ from gow_sim.commands import (
     apply_commands,
 )
 from gow_sim.maps import load_map
-from gow_sim.ruleset import KindTable, LevelTable, Ruleset, load_ruleset
+from gow_sim.ruleset import CityKindTable, KindTable, LevelTable, Ruleset, load_ruleset
 from gow_sim.state import Event, GameState, Packet, Priority, initial_state
 from gow_sim.systems.capacity import change_owner
 from gow_sim.systems.supply import packet_dest, supply
@@ -66,6 +69,17 @@ def _rules() -> Ruleset:
 
 
 RULES = _rules()
+UPGRADED = dataclasses.replace(
+    RULES,
+    city_upgrades=dataclasses.replace(RULES.city_upgrades, enabled=True),
+    warehouse=dataclasses.replace(
+        RULES.warehouse,
+        gain_per_level=1,
+        max_level=3,
+        start_by_kind=CityKindTable(capital=6, city_large=1, city_medium=1, city_small=1),
+    ),
+)
+"""Examples 26-28: a medium city's warehouse holds ``1 + level`` charges, the capital's 6."""
 
 K, A, B, C, P, X, E = 0, 1, 2, 3, 4, 5, 6
 KA, AB, AC = 0, 1, 2
@@ -85,11 +99,11 @@ def _road(state: GameState, edge: int, level: int) -> None:
     state.edges[edge].width = level
 
 
-def _dispatch(state: GameState) -> list[tuple[int, int, int]]:
+def _dispatch(state: GameState, rules: Ruleset = RULES) -> list[tuple[int, int, int]]:
     """One dispatch at tick ``DISPATCH``: ``(from, to, charges)`` of the new packets of player 0."""
     state.tick = DISPATCH
     before = set(state.packets)
-    supply(state, RULES)
+    supply(state, rules)
     return sorted(
         (p.from_node, packet_dest(state, p), p.charges)
         for pid, p in state.packets.items()
@@ -110,11 +124,20 @@ def _until(state: GameState, tick: int) -> list[Event]:
     return events
 
 
-def _transfer(state: GameState, src: int, dst: int, n: int) -> Packet:
+def _transfer(state: GameState, src: int, dst: int, n: int) -> list[Packet]:
+    """``Transfer`` applied at tick ``T``; its batches by departure (#287)."""
     state.tick = T
     assert isinstance(_cmd(state, Transfer(src, dst, n)), Ok)
-    (packet,) = (p for p in state.packets.values() if p.transfer)
-    return packet
+    return sorted((p for p in state.packets.values() if p.transfer), key=lambda p: p.depart_tick)
+
+
+def _arrivals(events: list[Event], node: int) -> list[tuple[int, object]]:
+    """``(tick, charges)`` of the deliveries into ``node``."""
+    return [
+        (e.tick, e.get("charges"))
+        for e in events
+        if e.kind == "packet_delivered" and e.get("node") == node
+    ]
 
 
 # Dispatch: examples 1-8 and 22 -----------------------------------------------------------------
@@ -210,23 +233,26 @@ def test_example_22_all_normal_least_stock_first() -> None:
 
 def test_example_9_transfer_time_with_batches() -> None:
     state = _state(A=5)
-    packet = _transfer(state, A, B, 4)
+    batches = _transfer(state, A, B, 4)
     assert state.nodes[A].warehouse == 1  # in tick t
-    _until(state, T + 59)
-    assert state.nodes[B].warehouse == 0
-    _until(state, T + 60)  # t + 30 + 3 * 10
+    assert [(p.depart_tick, p.charges) for p in batches] == [
+        (T, 1),
+        (T + 10, 1),
+        (T + 20, 1),
+        (T + 30, 1),
+    ]
+    events = _until(state, T + 60)
+    assert _arrivals(events, B) == [(T + 30, 1), (T + 40, 1), (T + 50, 1), (T + 60, 1)]
     assert state.nodes[B].warehouse == 4
-    assert packet.id not in state.packets
+    assert not state.packets
 
 
 def test_example_10_transfer_on_a_level_3_road() -> None:
     state = _state(A=5)
     _road(state, AB, 3)
     _transfer(state, A, B, 4)
-    _until(state, T + 44)
-    assert state.nodes[B].warehouse == 0
-    _until(state, T + 45)  # t + 15 + 3 * 10 (speed 200, amount 1; DEC-26)
-    assert state.nodes[B].warehouse == 4
+    events = _until(state, T + 45)  # last batch: t + 3 * 10 + 15 (speed 200, amount 1; DEC-26)
+    assert _arrivals(events, B) == [(T + 15, 1), (T + 25, 1), (T + 35, 1), (T + 45, 1)]
 
 
 def test_example_11_transfer_on_a_fast_road() -> None:
@@ -271,50 +297,43 @@ def test_example_15_province_is_not_a_city() -> None:
 
 def test_example_16_packet_lost_when_its_road_stops_being_internal() -> None:
     state = _state(K=3)
-    packet = _transfer(state, K, B, 3)
-    assert packet.route == (AB,)
-    _until(state, T + 55)  # on A-B since t + 50 (30 + 2 * 10 per road)
-    assert (packet.edge, packet.from_node) == (AB, A)
+    batches = _transfer(state, K, B, 3)
+    assert [p.route for p in batches] == [(AB,)] * 3
+    _until(state, T + 55)  # on A-B since t + 30, t + 40 and t + 50
+    assert [(p.edge, p.from_node) for p in batches] == [(AB, A)] * 3
     change_owner(state, A, 1)
     events = _until(state, T + 56)
-    assert [(e.kind, e.get("charges")) for e in events] == [("packet_lost", 3)]
-    assert packet.id not in state.packets
+    assert [(e.kind, e.get("charges")) for e in events] == [("packet_lost", 1)] * 3
+    assert not state.packets
 
 
 def test_example_17_way_cut_ahead_charges_stay_in_the_city() -> None:
     state = _state(K=3)
-    packet = _transfer(state, K, C, 3)
-    _until(state, T + 10)  # on K-A
+    _transfer(state, K, C, 3)
+    _until(state, T + 10)
     change_owner(state, C, 1)
     events = _until(state, T + 50)
     assert [(e.kind, e.get("node"), e.get("charges")) for e in events] == [
-        ("packet_delivered", A, 3)
-    ]
+        ("packet_delivered", A, 1)
+    ] * 3
+    assert _arrivals(events, A) == [(T + 30, 1), (T + 40, 1), (T + 50, 1)]
     assert state.nodes[A].warehouse == 3
-    assert packet.id not in state.packets
+    assert not state.packets
 
 
-def test_example_18_transfer_overflow_burns() -> None:
-    state = _state(A=3, B=5)
-    _transfer(state, A, B, 3)
-    events = _until(state, T + 50)
-    assert state.nodes[B].warehouse == 6  # capacity 6: B gets 1
-    assert [(e.kind, e.get("charges")) for e in events] == [
-        ("packet_delivered", 1),
-        ("charges_overflow", 2),
-    ]
+# Example 18 (the overflow burns) is replaced by example 29 (#287): the transfer is cut.
 
 
 def test_example_19_a_packet_to_a_captured_city_is_lost() -> None:
     state = _state(A=2)
     _road(state, AB, 2)
-    _transfer(state, A, B, 2)
+    _transfer(state, A, B, 2)  # two batches, at t and t + 10
     _until(state, T + 10)
     change_owner(state, B, 1)
     events = _until(state, T + 30)
     assert state.nodes[B].warehouse == 0  # no freight road, nothing for the captor (DEC-26)
     lost = [(e.get("player"), e.get("charges")) for e in events if e.kind == "packet_lost"]
-    assert lost == [(0, 2)]
+    assert lost == [(0, 1), (0, 1)]
     assert not [e for e in events if e.kind == "packet_captured"]
 
 
@@ -345,11 +364,10 @@ def test_example_23_transfer_takes_the_road_first() -> None:
     events = _transfer_on_dispatch_tick(state, K, A, 2)
     assert state.nodes[K].warehouse == 3
     events += _until(state, SHARED_T + 20)
-    # t and t + 10: the transfer takes the amount 1 of K-A; t + 20: K sends A 1 charge.
+    # t and t + 10: the batches take the amount 1 of K-A; t + 20: K sends A 1 charge.
     assert _sent(events) == [(SHARED_T + 20, K, A, 1)]
-    _until(state, SHARED_T + 39)
-    assert state.nodes[A].warehouse == 0
-    _until(state, SHARED_T + 40)  # t + 30 + 1 * 10
+    events = _until(state, SHARED_T + 40)
+    assert _arrivals(events, A) == [(SHARED_T + 30, 1), (SHARED_T + 40, 1)]
     assert state.nodes[A].warehouse == 2
 
 
@@ -374,6 +392,104 @@ def test_example_25_transfer_entering_the_next_road_takes_it_again() -> None:
     state.packets[pid] = packet
     assert _dispatch(state) == [(A, C, 1)]  # A-B taken by the transfer: the surplus goes to C
     assert (packet.edge, packet.from_node, packet.share) == (AB, A, 0)
+
+
+# Forwarding reserve: examples 26-28 (owner's decision of 2026-10-15, #287) ---------------------
+
+
+def _small(levels: dict[int, int], **warehouses: int) -> GameState:
+    """K-A-B without C, warehouses apart from the capacity: ``levels[node]`` gives ``1 + level``."""
+    state = _chain(**warehouses)
+    for node, level in levels.items():
+        state.nodes[node].warehouse_level = level
+    return state
+
+
+def test_example_26_warehouse_of_1_is_a_pure_relay() -> None:
+    state = _small({A: 0, B: 1}, K=6, A=1)
+    # Pass normal: A keeps min(1, 1 // 2) = 0 and gives B 1 (K: no room in A yet); pass low: A
+    # has room 1 and a subtree deficit 1 + 1: K sends A 1.
+    assert _dispatch(state, UPGRADED) == [(K, A, 1), (A, B, 1)]
+    assert state.nodes[A].warehouse == 0
+
+
+def test_example_27_the_relay_waits_for_its_packet() -> None:
+    state = _small({A: 0, B: 1}, K=6)
+    for edge, start in ((KA, K), (AB, A)):
+        pid = state.new_id()
+        state.packets[pid] = Packet(pid, 0, edge, start, charges=1, depart_tick=0, arrive_tick=30)
+    # Free room of A: 1 - 0 - 1 = 0.
+    assert _dispatch(state, UPGRADED) == []
+
+
+def test_example_28_warehouse_of_2_keeps_1() -> None:
+    state = _small({A: 1, B: 1}, K=6, A=2)
+    assert _dispatch(state, UPGRADED) == [(K, A, 1), (A, B, 1)]
+    assert state.nodes[A].warehouse == 1
+
+
+# Transfer amount and batches: examples 29-33 (owner's decision of 2026-10-15, #287) ------------
+
+
+def test_example_29_transfer_cut_to_the_free_room() -> None:
+    state = _state(A=3, B=5)
+    state.tick = T
+    results, events = apply_commands(state, RULES, [PlayerCommand(0, 0, Transfer(A, B, 3))])
+    assert results[0].outcome == Ok(cost=0, path=(A, B), arrive_tick=T + 30)
+    assert [(e.kind, e.get("charges")) for e in events] == [("transfer_started", 1)]
+    assert state.nodes[A].warehouse == 2
+    events = _until(state, T + 30)
+    assert _arrivals(events, B) == [(T + 30, 1)]
+    assert not [e for e in events if e.kind == "charges_overflow"]
+    assert state.nodes[B].warehouse == 6
+
+
+def test_example_30_target_full() -> None:
+    state = _state(A=3, B=6)
+    assert _cmd(state, Transfer(A, B, 1)) == Reject(RejectCode.TARGET_FULL)
+    assert state.nodes[A].warehouse == 3
+
+
+def test_example_31_charges_on_the_way_count() -> None:
+    state = _state(A=3, B=2)
+    pid = state.new_id()
+    state.packets[pid] = Packet(
+        pid,
+        0,
+        KA,
+        from_node=K,
+        charges=2,
+        depart_tick=0,
+        arrive_tick=500,
+        route=(AB,),
+        route_ticks=(30,),
+    )
+    batches = _transfer(state, A, B, 3)
+    assert sum(p.charges for p in batches) == 2
+    assert state.nodes[A].warehouse == 1
+
+
+def test_example_32_batches_go_the_whole_way_one_period_apart() -> None:
+    state = _state(K=5)
+    state.tick = T
+    assert _cmd(state, Transfer(K, B, 3)) == Ok(cost=0, path=(K, A, B), arrive_tick=T + 80)
+    events = _until(state, T + 80)
+    assert _arrivals(events, B) == [(T + 60, 1), (T + 70, 1), (T + 80, 1)]
+
+
+def test_example_33_waiting_batches_go_back_when_the_way_is_cut() -> None:
+    state = _state(A=3)
+    _transfer(state, A, B, 3)
+    assert state.nodes[A].warehouse == 0
+    _until(state, T + 5)
+    change_owner(state, B, 1)
+    events = _until(state, T + 6)
+    assert [(e.kind, e.get("charges")) for e in events if e.kind == "packet_lost"] == [
+        ("packet_lost", 1)
+    ]
+    assert _arrivals(events, A) == [(T + 6, 1), (T + 6, 1)]
+    assert state.nodes[A].warehouse == 2
+    assert not state.packets
 
 
 # Priority: examples 20 and 21 --------------------------------------------------------------------

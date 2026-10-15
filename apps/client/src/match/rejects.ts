@@ -33,6 +33,7 @@ export const REJECT_MESSAGES = {
   NO_BARRACKS: 'reject.NO_BARRACKS',
   STACK_LIMIT: 'reject.STACK_LIMIT',
   IN_FIGHT: 'reject.IN_FIGHT',
+  TARGET_FULL: 'reject.TARGET_FULL',
 } as const satisfies Record<string, MessageKey>;
 
 /** The message for a `reject_code` from `ack`; a code this client does not know gets a generic one. */

@@ -262,6 +262,7 @@ def test_examples_10_11_two_road_levels_from_a_warehouse_of_level_1() -> None:
     run = _Run()
     run.node(A).warehouse_level = 1  # capacity 3
     run.node(A).warehouse = 3
+    run.node(B).warehouse = 2  # B full: A forwards nothing (DEC-18 reserve, #287)
     assert run.step(UpgradeRoad(A, AB)) == [Ok(cost=0)]
     assert run.node(A).warehouse == 2  # level 2 costs 1
     run.until(T + 149)
@@ -390,10 +391,11 @@ def test_example_21_a_transfer_into_a_small_warehouse() -> None:
     run.node(A).warehouse_level = 1  # A has 3 charges to send: capacity 3
     run.node(A).warehouse = 3
     run.node(B).warehouse = 1  # B: medium, level 0, capacity 2
-    run.step(Transfer(A, B, 3))
-    run.until(T + 60)  # 30 + 3 * 10 (amount 1)
+    run.step(Transfer(A, B, 3))  # cut to the free room of B: 1 (DEC-18, #287)
+    assert run.node(A).warehouse == 2
+    run.until(T + 30)  # one batch, 30 ticks
     assert run.node(B).warehouse == 2
-    assert [d["charges"] for _, d in run.of("charges_overflow")] == [2]
+    assert run.of("charges_overflow") == []
 
 
 # 22-23: the flag off --------------------------------------------------------------------------
