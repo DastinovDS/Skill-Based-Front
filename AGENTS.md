@@ -63,7 +63,7 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 | `gow_bots.bots` | `gow_sim.view`, `gow_sim.commands`, `gow_sim.maps`, `gow_sim.ruleset` | — | прямой импорт `gow_sim.state`, `gow_sim.systems`, `gow_sim.match` (иначе бот видит скрытое) |
 | `gow_bots` (харнесс) | `gow_sim` целиком | `matplotlib` (только отчёты) | `gow_server`, `gow_protocol` |
 | `gow_server` | всё выше | `fastapi`, `uvicorn`, `sqlalchemy`, `alembic`, `pydantic-settings` | — |
-| `gow_maps` | `gow_sim.maps` | `networkx`, `matplotlib` | `gow_server` |
+| `gow_maps` | `gow_sim.maps`, `gow_sim.ruleset` (проверка `warehouse`, DEC-26) | `networkx`, `matplotlib` | `gow_server` |
 | клиент | `src/protocol.gen.ts`, `src/api.gen.ts` | `pixi.js`, `svelte`, `howler` | собственные копии правил игры |
 
 ---
@@ -92,6 +92,7 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 | `uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol` | перегенерация схемы и TS-типов | PRO-02 |
 | `uv run python scripts/export_openapi.py && pnpm -C apps/client gen:api` | перегенерация OpenAPI сервера (`apps/server/openapi.json`) и TS-типов HTTP API (`api.gen.ts`) | CLI-09 |
 | `uv run gow-maps validate maps/*.json` | проверка карт | MAP-02 |
+| `uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json` | плюс проверка `warehouse`: стартовый склад не больше склада рулсета с `city_upgrades` (DEC-26, п. 5); сейчас `arteriya` и `pautina` её не проходят (малые города со `start_stock = 2`, симуляция обрезает до 1, вопрос в #265) | #265 |
 | `uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json` | собрать карту из половины (половины лежат в `maps/src/`) | MAP-03 |
 | `uv run gow-maps preview maps/*.json` | нарисовать превью `maps/<name>.preview.png` | MAP-04 |
 | `uv run gow-maps bake maps/*.json` | запечь фон `maps/<name>.bg.png` (после любой правки карты) | MAP-05 |
@@ -194,8 +195,9 @@ apply_commands → economy → movement → combat → capacity → supply (вк
   - CP, стойку, производство и общие счётчики противника;
   - события боёв и снабжения в тумане;
   - размер и id группы в намерениях; цель обычного приказа противника;
-  - уровень и тип ребра в тумане новее последних увиденных (`Sighting.width` и `Sighting.road`,
-    иначе уровень 1 без типа), стройки противника на рёбрах в тумане (DEC-17, DEC-22).
+  - уровень ребра в тумане новее последнего увиденного (`Sighting.width`, иначе уровень 1; типа у
+    дорог нет, DEC-26), стройки противника на рёбрах в тумане (DEC-17, DEC-22);
+  - казарму, уровень склада, ёмкость склада, стройки и очередь найма чужих городов (DEC-25, DEC-26).
     Ёмкость узла публична и точна: она задана видом узла (DEC-22), оценки нет.
 - Новое поле в `PlayerView` — только вместе с тестом тумана на это поле.
 
@@ -440,13 +442,14 @@ async def run(self) -> None:
 | рулсет | `Ruleset` | все числа и флаги правил, `rulesets/*.toml` |
 | город / узел | `Node` | вершина графа; узел: город со складом или провинция (DEC-23) |
 | провинция | `kind = province` | узел без города: без склада, ёмкость 3, без VP, только позиция (DEC-23) |
-| дорога / ребро | `Edge` | связь узлов; `width`: уровень дороги 1..3, тип быстрая или грузовая с уровня 2 (DEC-22; DEC-26 [принято, ждёт реализации]: типа не будет, улучшение только ускоряет доставку) |
+| дорога / ребро | `Edge` | связь узлов; `width`: уровень дороги 1..3; типа нет, улучшение только ускоряет доставку снабжения (DEC-22, DEC-26) |
 | точка границы | `border_permille` | точка на ребре в тысячных от конца `a`; делит ребро на половины для обзора (DEC-21, DEC-23) |
 | внутреннее ребро | `is_internal` | оба конца у одного владельца; только его можно улучшать и только по нему идёт снабжение |
 | буферное ребро | `is_buffer` | концы у разных владельцев или один нейтральный |
 | группа | `Group` | юниты одного игрока в одном месте: `units`, `charged` |
 | заряд | `charged` | заряженный юнит; каждый заряд — один «выстрел» |
-| склад | `warehouse` | запас зарядов города |
+| склад | `warehouse` | запас зарядов города; ёмкость склада: ёмкость узла, при `city_upgrades.enabled` своя по виду и уровню `warehouse_level` (DEC-26) |
+| казарма | `has_barracks` | город может рекрутировать; при `city_upgrades.enabled` у столицы с начала, у других городов улучшением за 3 CP (DEC-26) |
 | очередь найма | `recruit_queue` | юниты, которых город производит по одному за `recruit.unit_ticks`; CP при постановке, отмена последнего с возвратом (DEC-25) |
 | ёмкость | `capacity` | сколько юнитов и зарядов держит узел; фиксирована видом узла (DEC-22) |
 | приоритет | `priority` | уровень снабжения города: высокий, обычный, низкий (DEC-18) |
