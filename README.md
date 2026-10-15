@@ -214,6 +214,7 @@ deploy/smoke.sh                   # сборка, запуск и проверк
 deploy/check-caddy.sh             # только заголовки, кэш и маршруты уже запущенного стека
 docker compose logs -f app        # логи сервера (JSON-строки)
 docker compose down               # остановить; данные остаются в томах
+GOW_RULESET_PATH=rulesets/mvp-1.toml docker compose up -d   # стек на другом рулсете (по умолчанию mvp-0)
 # партия 60 секунд (рулсет test-short) для ручной проверки и E2E: docs/qa/manual-match.md
 docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d --wait
 ```

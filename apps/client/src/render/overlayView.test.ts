@@ -19,49 +19,50 @@ function setup() {
 }
 
 describe('OverlayView', () => {
-  it('draws a ghost arrow from the group node to the destination', () => {
+  it('draws no arrow for an order sent or accepted (the snapshot shows it)', () => {
     const { layers, view, none } = setup();
-    const state: OverlayState = {
+    const via = map.nodes[1];
+    if (via === undefined) throw new Error('map too small');
+    const state = (ghosts: OverlayState['ghosts']): OverlayState => ({
       selection: null,
-      ghosts: [{ from: a.id, dest: b.id, planned: false, path: null }],
+      ghosts,
       preview: null,
-      road: null,
       candidates: [],
       beacon: null,
       supply: null,
       reach: [],
       split: [],
       eta: null,
-    };
-    view.update(state, none);
-    const bounds = layers.layer.intents.getLocalBounds();
-    expect(bounds.width).toBeGreaterThan(Math.abs(b.x - a.x) * 0.8);
-    expect(bounds.height).toBeGreaterThan(Math.abs(b.y - a.y) * 0.8);
+    });
+    view.update(state([{ from: a.id, dest: b.id, planned: false, path: null }]), none);
+    expect(layers.layer.intents.getLocalBounds().width).toBe(0);
+    view.update(
+      state([
+        { from: a.id, dest: b.id, planned: true, path: [a.id, via.id, b.id], status: 'accepted' },
+      ]),
+      none,
+    );
+    expect(layers.layer.intents.getLocalBounds().width).toBe(0);
     view.destroy();
   });
 
-  it('follows the server path when the ack brought one', () => {
+  it('draws the dotted preview of a planned order only', () => {
     const { layers, view, none } = setup();
-    const via = map.nodes[1];
-    if (via === undefined) throw new Error('map too small');
-    view.update(
-      {
-        selection: null,
-        ghosts: [{ from: a.id, dest: b.id, planned: false, path: [a.id, via.id, b.id] }],
-        preview: null,
-        road: null,
-        candidates: [],
-        beacon: null,
-        supply: null,
-        reach: [],
-        split: [],
-        eta: null,
-      },
-      none,
-    );
-    const bounds = layers.layer.intents.getLocalBounds();
-    const xs = [a.x, via.x, b.x];
-    expect(bounds.width).toBeGreaterThanOrEqual(Math.max(...xs) - Math.min(...xs));
+    const state = (planned: boolean): OverlayState => ({
+      selection: null,
+      ghosts: [],
+      preview: { from: a.id, to: b.id, planned },
+      candidates: [],
+      beacon: null,
+      supply: null,
+      reach: [],
+      split: [],
+      eta: null,
+    });
+    view.update(state(false), none);
+    expect(layers.layer.intents.getLocalBounds().width).toBe(0);
+    view.update(state(true), none);
+    expect(layers.layer.intents.getLocalBounds().width).toBeGreaterThan(Math.abs(b.x - a.x) * 0.8);
     view.destroy();
   });
 
@@ -71,7 +72,6 @@ describe('OverlayView', () => {
       selection: { kind: 'group', id: 'g' },
       ghosts: [],
       preview: null,
-      road: null,
       candidates: [],
       beacon: null,
       supply: null,
@@ -93,7 +93,6 @@ describe('OverlayView', () => {
       selection: null,
       ghosts: [{ from: a.id, dest: b.id, planned: false, path: null, ...extra }],
       preview: null,
-      road: null,
       candidates: [],
       beacon: null,
       supply: null,
@@ -141,13 +140,12 @@ describe('OverlayView', () => {
       }
     });
 
-    it('draws a pending and an accepted ghost alike in extent', () => {
+    it('draws nothing for a pending or an accepted ghost', () => {
       const { layers, view, none } = setup();
       view.update(ghost({ status: 'pending' }), none, 0);
-      const pending = bounds(layers);
+      expect(bounds(layers).width).toBe(0);
       view.update(ghost({ status: 'accepted', path: [a.id, b.id] }), none, 0);
-      const accepted = bounds(layers);
-      expect(accepted.width).toBeCloseTo(pending.width, 0);
+      expect(bounds(layers).width).toBe(0);
       view.destroy();
     });
   });

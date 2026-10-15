@@ -67,8 +67,9 @@ describe('where the icon stands', () => {
   it('the own one is the middle of the city, the opponent one beside it', () => {
     const city = { x: 10, y: 10 };
     const marker = { x: 50, y: 16 };
-    expect(iconPoint(city, marker, true)).toEqual(city);
-    expect(iconPoint(city, marker, false)).toEqual(marker);
+    expect(iconPoint(city, marker, true, true)).toEqual(city);
+    expect(iconPoint(city, marker, false, false)).toEqual(city);
+    expect(iconPoint(city, marker, false, true)).toEqual(marker);
     expect(stackKey(3, 1)).not.toBe(stackKey(3, 0));
   });
 });

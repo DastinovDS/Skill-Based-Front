@@ -6,6 +6,7 @@
  */
 import type { Point } from './camera.ts';
 import type { GhostStatus } from './interaction.ts';
+import { clipToConvex } from './regionLayout.ts';
 import { GHOST_REJECT_MS, GHOST_SHAKE_AMPLITUDE, GHOST_SHAKE_MS, RIBBON } from './style.ts';
 
 function dist(a: Point, b: Point): number {
@@ -211,14 +212,25 @@ export interface Chevron {
   dir: Point;
 }
 
-/** White chevrons along a thin order line: the first `first` from the start of a leg, then every `spacing`. */
+/**
+ * White chevrons along a thin order line, one flow over the WHOLE polyline (not restarted on every
+ * leg): one every `spacing`, the first not before `first` from the start, none within `endMargin`
+ * of the end. `offset` moves the whole pattern along the line (the running order); each chevron
+ * points along the leg it stands on.
+ */
 export function chevrons(
   points: readonly Point[],
   spacing: number,
   first: number,
   endMargin: number,
+  offset = 0,
 ): Chevron[] {
   const out: Chevron[] = [];
+  if (spacing <= 0) return out;
+  const total = polylineLength(points);
+  // The first mark `first` from the start, then every `spacing`; the pattern slides by `offset`.
+  let d = first + (((offset % spacing) + spacing) % spacing);
+  let start = 0;
   for (let i = 1; i < points.length; i++) {
     const a = points[i - 1];
     const b = points[i];
@@ -226,11 +238,74 @@ export function chevrons(
     const len = dist(a, b);
     if (len === 0) continue;
     const dir = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
-    for (let d = first; d < len - endMargin; d += spacing) {
-      out.push({ at: { x: a.x + dir.x * d, y: a.y + dir.y * d }, dir });
+    for (; d < start + len && d < total - endMargin; d += spacing) {
+      const into = d - start;
+      out.push({ at: { x: a.x + dir.x * into, y: a.y + dir.y * into }, dir });
     }
+    start += len;
   }
   return out;
+}
+
+/**
+ * How much one smooth curve from `from` to `to` must bend (share of the chord, positive: to the
+ * left of the travel direction, as `ribbonAxis` bends) to roughly follow the waypoints `via` of the
+ * server's path: the one farthest from the chord decides. Clamped to `limit`; 0 without waypoints.
+ * The arrow is one curve, it never kinks at a waypoint.
+ */
+export function pathBend(from: Point, to: Point, via: readonly Point[], limit: number): number {
+  const chord = dist(from, to);
+  if (chord === 0) return 0;
+  const nx = -(to.y - from.y) / chord;
+  const ny = (to.x - from.x) / chord;
+  let far = 0;
+  for (const p of via) {
+    const side = (p.x - from.x) * nx + (p.y - from.y) * ny;
+    if (Math.abs(side) > Math.abs(far)) far = side;
+  }
+  // The middle of a quadratic curve sits half way between the chord and its control point.
+  return Math.max(-limit, Math.min(limit, (2 * far) / chord));
+}
+
+/**
+ * The part of a ribbon over `axis` (a gently curved line) that `fraction` (0..1) of the delay has
+ * filled: its outline cut across the axis at that share of the axis length (the delay fills the
+ * whole arrow from the start to the tip). Empty for 0.
+ */
+export function ribbonFilled(
+  outline: readonly Point[],
+  axis: readonly Point[],
+  fraction: number,
+): Point[] {
+  if (fraction <= 0 || axis.length < 2) return [];
+  if (fraction >= 1) return [...outline];
+  const upTo = polylinePrefix(axis, fraction);
+  const front = upTo[upTo.length - 1];
+  const before = upTo[upTo.length - 2];
+  if (front === undefined || before === undefined) return [];
+  const len = dist(before, front);
+  if (len === 0) return [];
+  const ux = (front.x - before.x) / len;
+  const uy = (front.y - before.y) / len;
+  // A box behind the front, across the axis and wider than any ribbon: the front is its far side.
+  const wide = 400;
+  const deep = 4000;
+  const box = [
+    { x: front.x - ux * deep - uy * wide, y: front.y - uy * deep + ux * wide },
+    { x: front.x - uy * wide, y: front.y + ux * wide },
+    { x: front.x + uy * wide, y: front.y - ux * wide },
+    { x: front.x - ux * deep + uy * wide, y: front.y - uy * deep - ux * wide },
+  ];
+  return clipToConvex(outline, box);
+}
+
+/**
+ * The blink of a ribbon when its delay has just run out: bright for the first and third part of
+ * `ticks`, normal in between. `since`: ticks after the end of the delay (negative before it).
+ */
+export function departBlink(since: number, ticks: number): boolean {
+  if (since < 0 || since >= ticks) return false;
+  return Math.floor((since / ticks) * 4) % 2 === 0;
 }
 
 /** How much of the delay of a planned order has run: 0 at its creation, 1 once the group left. */

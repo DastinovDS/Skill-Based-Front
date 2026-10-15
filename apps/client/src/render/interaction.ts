@@ -64,8 +64,6 @@ export interface OverlayState {
   readonly selection: SelectionHit | null;
   readonly ghosts: readonly GhostArrow[];
   readonly preview: MovePreview | null;
-  /** The road under the pointer, lit up. */
-  readonly road: number | null;
   /** Road pick (key U, DEC-16): the roads of the selected city a click would upgrade. */
   readonly candidates: readonly number[];
   /** The city ringed in the first seconds of a match ("your capital is here"); `null`: none. */
@@ -94,7 +92,6 @@ export const EMPTY_OVERLAY: OverlayState = {
   selection: null,
   ghosts: [],
   preview: null,
-  road: null,
   candidates: [],
   beacon: null,
   supply: null,

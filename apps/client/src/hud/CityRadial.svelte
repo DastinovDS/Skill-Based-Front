@@ -105,11 +105,14 @@
     return list;
   });
 
+  /** The ring is this wide, CSS px (a bit narrower than before: 64). */
+  const RING_WIDTH = 54;
+
   /** The hole is as wide as the city circle, and the ring starts just outside it. */
   const ring = $derived.by(() => {
     const circle = menu.target === null ? null : anchors.node(menu.target);
     const inner = Math.max(24, Math.round((circle?.r ?? 20) + 10));
-    return { inner, outer: inner + 64 };
+    return { inner, outer: inner + RING_WIDTH };
   });
 </script>
 

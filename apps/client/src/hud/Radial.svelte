@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { reducedMotion } from '../render/motion.ts';
   import { pointerAt } from './pointer.ts';
   import {
     BIG_RING,
@@ -188,7 +189,15 @@
   <button type="button" class="backdrop" tabindex="-1" aria-label={closeLabel} onclick={onbackdrop}
   ></button>
 {/if}
-<div class="radial" class:small class:interactive bind:this={root}>
+<!-- The box grows out of the middle of the ring (it also holds the captions under it). -->
+<div
+  class="radial"
+  class:small
+  class:interactive
+  class:grow={!reducedMotion()}
+  style:transform-origin="{halfW}px {outer + pad}px"
+  bind:this={root}
+>
   <svg
     role={items.length === 0 ? 'dialog' : 'menu'}
     aria-label={label}
@@ -284,6 +293,28 @@
     display: block;
     text-anchor: middle;
     overflow: visible;
+  }
+
+  /* Every radial menu opens growing from its centre: a short ease-out, none with less motion. */
+  .radial.grow {
+    animation: radial-open 140ms ease-out;
+  }
+
+  @keyframes radial-open {
+    from {
+      transform: scale(0.4);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .radial.grow {
+      animation: none;
+    }
   }
 
   .centre {

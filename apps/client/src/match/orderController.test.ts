@@ -120,12 +120,18 @@ describe('OrderController', () => {
     expect(sent[0]).toMatchObject({ planned: false });
   });
 
-  it('does not order the group to its own node: that click selects the node', () => {
+  it('does not order the group to its own node: that click only deselects, no city menu', () => {
     const { controller, sent, hud } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
     controller.click({ kind: 'node', id: home }, false);
     expect(sent).toEqual([]);
-    expect(hud.selection).toEqual({ kind: 'node', id: home });
+    expect(hud.selection).toBeNull();
+    expect(controller.cityMenu.current.open).toBe(false);
+    // The area of the city (a click on a road inside its cell) is the same click.
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.click({ kind: 'edge', id: 0, cell: home }, false);
+    expect(hud.selection).toBeNull();
+    expect(controller.cityMenu.current.open).toBe(false);
   });
 
   it('only selects when there is no match to send to', () => {

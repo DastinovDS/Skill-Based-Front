@@ -6,9 +6,11 @@ import {
   chevrons,
   dashAlong,
   delayProgress,
-  polylinePrefix,
+  departBlink,
+  pathBend,
   ribbonAxis,
   ribbonBody,
+  ribbonFilled,
   ribbonOutline,
 } from './intentLayout.ts';
 import type { MapLayers } from './layers.ts';
@@ -55,12 +57,13 @@ const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x,
 
 /**
  * What the players intend, on the map (ui-style 9.7): planned orders of both sides as ribbon
- * arrows (own along the server's `order.path`, the opponent's in one arc `origin -> target`: the
- * client finds no route), a light stripe growing from the tail while the delay runs, the ring
- * around the target of an enemy intent (`--warn` over an own city: it is coming for you), the
- * shield disc of "Defense" with its delay arc, and the thin order lines with chevrons of own
- * ordinary orders. Everything is redrawn every frame (a few shapes): the positions of own groups
- * move and the stripe and the dashes run. "Less motion" stops the running dashes only.
+ * arrows drawn the same way from the intent (`origin -> target`, a straight ribbon ending in the
+ * centre of the target city: the client finds no route), filling from the start to the tip while
+ * the delay runs and blinking when it ends, the ring around the target of an enemy intent
+ * (`--warn` over an own city: it is coming for you), the shield disc of "Defense" with its delay
+ * arc, and the thin order lines with running chevrons of own ordinary orders. Everything is
+ * redrawn every frame (a few shapes): the fill and the dashes run, the positions of own groups
+ * move. "Less motion" stops the running dashes and chevrons and the blink.
  */
 export class IntentView {
   private readonly lines = new Graphics();
@@ -92,7 +95,7 @@ export class IntentView {
     this.cameraScale = scale;
   }
 
-  /** `ruleset_public.orders` delays; without them no stripe and no arc are drawn. */
+  /** `ruleset_public.orders` delays; without them the ribbons are drawn locked and no arc is drawn. */
   setDelays(delays: OrderDelays | null): void {
     this.delays = delays;
   }
@@ -103,11 +106,12 @@ export class IntentView {
   }
 
   update(frame: RenderFrame, spots: ReadonlyMap<string, Point>): void {
-    this.drawOrders(frame.groups, spots);
     const { intents, nodes } = frame.base.view;
-    // Own groups with a planned order, matched to the intent that announces it.
+    // Own groups with a planned order: the server's path shapes the curve of their ribbon.
     const pool = frame.groups.filter((g) => g.group.order?.planned === true);
-    const run = reducedMotion() ? 0 : (frame.tick / this.tickHz) * RIBBON.runSpeed;
+    const seconds = reducedMotion() ? 0 : frame.tick / this.tickHz;
+    this.drawOrders(frame.groups, spots, seconds * CHEVRON.runSpeed);
+    const run = seconds * RIBBON.runSpeed;
     this.ribbons.clear();
     this.rings.clear();
     this.arcs.clear();
@@ -121,7 +125,9 @@ export class IntentView {
           this.delays === null
             ? null
             : delayProgress(intent.created_tick, frame.tick, this.delays.planned);
-        this.drawRibbon(intent, pool, spots, progress, run);
+        const since =
+          this.delays === null ? -1 : frame.tick - (intent.created_tick + this.delays.planned);
+        this.drawRibbon(intent, pool, progress, since, run);
         if (intent.owner !== this.me) {
           const warn = nodes[intent.target]?.owner === this.me;
           this.drawTargetRing(target, intent.target, warn);
@@ -149,49 +155,38 @@ export class IntentView {
     this.icons.destroy({ children: true });
   }
 
-  /** The points the axis of an intent runs through, and how far it leaves the first one. */
-  private route(
+  /**
+   * The ribbon of a planned order, own or the opponent's: one smooth curve from the rim of the
+   * start city to the centre of the target. It bends toward the server's path when the order is an
+   * own one (never a kink at each city of the path); the opponent's, whose path nobody sends, is
+   * straight. While the delay runs (`progress` < 1) the part it has filled is bright and the rest
+   * faint; `since` ticks after the end of the delay it blinks, then it stays in its colour.
+   */
+  private drawRibbon(
     intent: WireIntent,
     pool: RenderGroup[],
-    spots: ReadonlyMap<string, Point>,
-  ): { nodes: Point[]; startGap: number } | null {
+    progress: number | null,
+    since: number,
+    run: number,
+  ): void {
     const origin = nodePoint(this.map, intent.origin);
     const target = intent.target === null ? undefined : nodePoint(this.map, intent.target);
-    if (origin === undefined || target === undefined) return null;
-    const gap = this.radiusOf(intent.origin) + RIBBON.startGap;
-    // Own order: along the server's path, from where the group is now.
+    if (origin === undefined || target === undefined) return;
     const index = pool.findIndex(
       (g) => (g.owner ?? this.me) === intent.owner && g.group.order?.dest === intent.target,
     );
     const item = index < 0 ? undefined : pool[index];
-    if (item?.group.order != null) {
-      pool.splice(index, 1);
-      const steps = item.group.order.path
-        .map((id) => nodePoint(this.map, id))
-        .filter((p): p is Point => p !== undefined);
-      const at = item.location.kind === 'node' ? origin : spots.get(item.group.id);
-      if (at !== undefined && steps.length > 0) {
-        return { nodes: [at, ...steps], startGap: item.location.kind === 'node' ? gap : 0 };
-      }
-    }
-    return { nodes: [origin, target], startGap: gap };
-  }
-
-  private drawRibbon(
-    intent: WireIntent,
-    pool: RenderGroup[],
-    spots: ReadonlyMap<string, Point>,
-    progress: number | null,
-    run: number,
-  ): void {
-    const route = this.route(intent, pool, spots);
-    if (route === null) return;
-    const last = intent.target ?? intent.origin;
+    if (item !== undefined) pool.splice(index, 1);
+    const via = (item?.group.order?.path ?? [])
+      .filter((id) => id !== intent.origin && id !== intent.target)
+      .map((id) => nodePoint(this.map, id))
+      .filter((p): p is Point => p !== undefined);
+    const bend = pathBend(origin, target, via, RIBBON.maxBend);
     const axis = ribbonAxis(
-      route.nodes,
-      route.startGap,
-      this.radiusOf(last) + RIBBON.endGap,
-      RIBBON.bend,
+      [origin, target],
+      this.radiusOf(intent.origin) + RIBBON.startGap,
+      0,
+      bend,
     );
     const ribbon = ribbonOutline(axis, ribbonBody(this.cameraScale));
     if (ribbon === null) return;
@@ -206,8 +201,19 @@ export class IntentView {
       alpha: RIBBON.casing.alpha,
       join: 'round',
     });
-    g.poly(poly).fill({ color, alpha: RIBBON.fillAlpha });
     const left = progress === null || progress < 1;
+    if (progress === null || !left) {
+      g.poly(poly).fill({ color, alpha: RIBBON.fillAlpha });
+    } else {
+      // The delay runs: the whole arrow is outlined faintly and fills from the start to the tip.
+      g.poly(poly).fill({ color, alpha: RIBBON.idleAlpha });
+      const filled = ribbonFilled(ribbon.outline, axis, progress);
+      if (filled.length >= 3) g.poly(flat(filled)).fill({ color, alpha: RIBBON.fillAlpha });
+    }
+    // The delay has just ended: two flashes, then the colour stays ("less motion": no flash).
+    if (!reducedMotion() && departBlink(since, RIBBON.blinkTicks)) {
+      g.poly(poly).fill({ color: PAPER, alpha: RIBBON.flashAlpha });
+    }
     const style = { width: RIBBON.contour.width, color, alpha: RIBBON.contour.alpha };
     // Own: solid until the group leaves, then dashes that run. The opponent's: dashed throughout.
     if (own && left) {
@@ -221,22 +227,6 @@ export class IntentView {
         for (const p of rest) g.lineTo(p.x, p.y);
       }
       g.stroke({ ...style, cap: 'round', join: 'round' });
-    }
-    if (progress !== null && progress > 0 && progress < 1) {
-      // The light stripe: how much of the delay has run, from the tail along the axis.
-      const stripe = polylinePrefix(ribbon.body, progress);
-      const [first, ...rest] = stripe;
-      if (first !== undefined && rest.length > 0) {
-        g.moveTo(first.x, first.y);
-        for (const p of rest) g.lineTo(p.x, p.y);
-        g.stroke({
-          width: RIBBON.stripe.width,
-          color: PAPER,
-          alpha: RIBBON.stripe.alpha,
-          cap: 'round',
-          join: 'round',
-        });
-      }
     }
     const start = axis[0];
     if (start === undefined) return;
@@ -318,7 +308,11 @@ export class IntentView {
    * server's path, drawn once and left in place while the group walks it. The walked part of the
    * current road fades, the roads behind are gone. A planned order is the ribbon's job.
    */
-  private drawOrders(groups: readonly RenderGroup[], points: ReadonlyMap<string, Point>): void {
+  private drawOrders(
+    groups: readonly RenderGroup[],
+    points: ReadonlyMap<string, Point>,
+    run: number,
+  ): void {
     const g = this.lines;
     g.clear();
     const live = new Set<string>();
@@ -347,7 +341,7 @@ export class IntentView {
       };
       const { walked, ahead } = splitOrder(places, tracked.segment, unit);
       this.drawWalked(walked, color);
-      this.drawAhead(ahead, color, order.dest);
+      this.drawAhead(ahead, color, order.dest, run);
     }
     for (const id of this.chains.keys()) {
       if (!live.has(id)) this.chains.delete(id);
@@ -365,7 +359,7 @@ export class IntentView {
   }
 
   /** From the group to the target: casing, line, chevrons, the ring round the target, the head. */
-  private drawAhead(ahead: readonly Point[], color: number, dest: number): void {
+  private drawAhead(ahead: readonly Point[], color: number, dest: number, run: number): void {
     const [first, ...rest] = ahead;
     if (first === undefined || rest.length === 0) return;
     const g = this.lines;
@@ -402,6 +396,7 @@ export class IntentView {
       CHEVRON.spacing,
       CHEVRON.first,
       CHEVRON.endMargin,
+      run,
     )) {
       const s = CHEVRON.size;
       g.moveTo(at.x - d.x * s - d.y * s, at.y - d.y * s + d.x * s)

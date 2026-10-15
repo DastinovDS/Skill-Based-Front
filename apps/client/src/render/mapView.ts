@@ -2,10 +2,11 @@ import { Container, Graphics, GraphicsContext, Sprite, type Renderer, type Textu
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
-import { territoryBorders } from './regionLayout.ts';
+import { cellEdges, territoryBorders } from './regionLayout.ts';
 import {
   BACKDROP_DIM,
   CELL_BORDER,
+  CELL_LINE,
   MAP_BORDER,
   ROAD_CASING,
   ROAD_CASING_EXTRA,
@@ -59,6 +60,7 @@ export class MapView {
   private readonly stamps: TerrainView;
   private readonly mapFrame: Graphics;
   private backdrop: Sprite | null = null;
+  private readonly cellLines: Graphics;
   private readonly territory: Graphics;
   private readonly roads: Road[];
   private readonly casings: Graphics[];
@@ -90,6 +92,9 @@ export class MapView {
     this.mapFrame = background.addChild(
       new Graphics().rect(0, 0, bounds.width, bounds.height).stroke(MAP_BORDER),
     );
+    // A thin line round every area, also between areas of one owner or nobody: under the tint and
+    // the stronger border of the owners, under the roads.
+    this.cellLines = layers.layer.territory.addChild(this.drawCellLines());
     this.territory = layers.layer.territory.addChild(new Graphics());
 
     // All casings first, so no casing covers a neighbouring road.
@@ -210,6 +215,7 @@ export class MapView {
     for (const casing of this.casings) casing.destroy();
     this.casingLayer.destroy();
     this.bodyLayer.destroy();
+    this.cellLines.destroy();
     this.territory.destroy();
     this.stamps.destroy();
     this.backdrop?.destroy();
@@ -250,6 +256,15 @@ export class MapView {
       this.chevronContexts.set(key, context);
     }
     return context;
+  }
+
+  /** Each edge shared by two areas once; the edge on the border of the map is the map frame's. */
+  private drawCellLines(): Graphics {
+    const g = new Graphics();
+    for (const { cell, a, b, neighbour } of cellEdges(this.cells)) {
+      if (neighbour !== null && cell < neighbour) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    }
+    return g.stroke({ width: CELL_LINE.width, color: CELL_LINE.color, alpha: CELL_LINE.alpha });
   }
 
   private drawTerrain(): Graphics {

@@ -59,16 +59,13 @@ describe('IntentView', () => {
     kit.destroy();
   });
 
-  it('follows the server path of an own planned order, not a straight line', () => {
+  it('bends one smooth curve toward the server path of an own planned order, enemy stays straight', () => {
     const { view, draw, ribbons, kit } = setup();
     const own = intent({ owner: 0, origin: home, target: far });
-    const straight = (): number => {
-      draw([own]);
-      return ribbons?.getLocalBounds().width ?? 0;
-    };
-    const direct = straight();
-    // The group's path detours through another own city: the ribbon reaches it.
-    const detour = nodePoint(map, via);
+    draw([own]);
+    const straight = ribbons?.getLocalBounds();
+    const h0 = straight?.height ?? 0;
+    const w0 = straight?.width ?? 0;
     const group: GroupView = {
       id: 'g',
       units: 2,
@@ -78,12 +75,24 @@ describe('IntentView', () => {
       order: { dest: far, path: [via, far], planned: true },
     };
     draw([own], [group]);
-    const bounds = ribbons?.getLocalBounds();
-    expect(detour).toBeDefined();
-    expect(bounds).toBeDefined();
-    const x = detour?.x ?? 0;
-    expect(bounds?.x ?? Infinity).toBeLessThanOrEqual(Math.min(x, nodePoint(map, home)?.x ?? x));
-    expect(direct).toBeGreaterThan(0);
+    const bent = ribbons?.getLocalBounds();
+    const a = nodePoint(map, home);
+    const b = nodePoint(map, far);
+    const v = nodePoint(map, via);
+    expect(w0).toBeGreaterThan(0);
+    // The curve leaves the straight line, but only toward the waypoint, not through it.
+    if (a !== undefined && b !== undefined && v !== undefined) {
+      const side =
+        ((v.x - a.x) * (b.y - a.y) - (v.y - a.y) * (b.x - a.x)) / Math.hypot(b.x - a.x, b.y - a.y);
+      if (Math.abs(side) > 20) {
+        expect((bent?.height ?? 0) + (bent?.width ?? 0)).not.toBeCloseTo(h0 + w0, 0);
+      }
+    }
+    // The opponent's intent has no path: the same bounds as without any group.
+    draw([intent({})], [group]);
+    const enemy = ribbons?.getLocalBounds();
+    draw([intent({})]);
+    expect(enemy?.width).toBeCloseTo(ribbons?.getLocalBounds().width ?? NaN);
     view.destroy();
     kit.destroy();
   });
