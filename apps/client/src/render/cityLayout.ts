@@ -5,7 +5,14 @@
  * Pure functions, no PixiJS and no DOM. Capacity, garrison and warehouse come from the snapshot;
  * nothing is inferred here.
  */
-import { BAR_SEGMENT, RING_GAP, RING_MAX_SEGMENTS, RING_SEGMENT } from './style.ts';
+import {
+  BAR_GAP,
+  BAR_SEGMENT,
+  QUEUE_SLOT,
+  RING_GAP,
+  RING_MAX_SEGMENTS,
+  RING_SEGMENT,
+} from './style.ts';
 
 /** City radius by capacity class: up to 2, 3-4, 5-6, 7 and more. */
 export function cityRadius(capacity: number): number {
@@ -93,5 +100,39 @@ export function warehouseSegments(warehouse: number, capacity: number): Warehous
 
 /** Where the warehouse bar sits: its top edge, from the city centre. */
 export function barTop(radius: number): number {
-  return ringRadius(radius) + 9;
+  return ringRadius(radius) + BAR_GAP;
+}
+
+export interface QueueSlot {
+  /** Left edge from the middle of the mark. */
+  readonly x: number;
+  /** Filled share of the slot, 0..1: the progress of the unit in production, 0 for the rest. */
+  readonly fill: number;
+}
+
+export interface QueueMark {
+  readonly width: number;
+  readonly slots: QueueSlot[];
+}
+
+/**
+ * The recruit queue of an own city (DEC-25): a slot per queued unit, the first filled by
+ * `progress / unitTicks` (both from the server). A full first slot is a ready unit waiting for a
+ * place: a unit in production never shows a full slot, it appears at full progress.
+ */
+export function queueSlots(queue: number, progress: number, unitTicks: number): QueueMark {
+  const count = Math.max(0, Math.floor(queue));
+  const { pitch, pad } = QUEUE_SLOT;
+  const width = count === 0 ? 0 : count * pitch + 2 * pad - (pitch - QUEUE_SLOT.width);
+  const first = unitTicks > 0 ? Math.min(1, Math.max(0, progress / unitTicks)) : 0;
+  const slots: QueueSlot[] = [];
+  for (let i = 0; i < count; i++) {
+    slots.push({ x: -width / 2 + pad + i * pitch, fill: i === 0 ? first : 0 });
+  }
+  return { width, slots };
+}
+
+/** Where the queue mark sits: its top edge, from the city centre (above the ring). */
+export function queueTop(radius: number): number {
+  return -(ringRadius(radius) + BAR_GAP) - QUEUE_SLOT.height - 2;
 }

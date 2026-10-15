@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { barTop, capacityRing, cityRadius, ringRadius, warehouseSegments } from './cityLayout.ts';
+import {
+  barTop,
+  capacityRing,
+  cityRadius,
+  queueSlots,
+  queueTop,
+  ringRadius,
+  warehouseSegments,
+} from './cityLayout.ts';
 
 describe('cityRadius', () => {
   it.each([
@@ -66,5 +74,26 @@ describe('warehouseSegments', () => {
 
   it('sits under the ring', () => {
     expect(barTop(11)).toBeGreaterThan(ringRadius(11));
+  });
+});
+
+describe('queueSlots (DEC-25)', () => {
+  it('has a slot per queued unit and fills the first by the progress', () => {
+    const mark = queueSlots(3, 15, 30);
+    expect(mark.slots.map((slot) => slot.fill)).toEqual([0.5, 0, 0]);
+    expect(mark.slots[0]?.x).toBeCloseTo(-mark.width / 2 + 1);
+  });
+
+  it('shows a ready unit waiting for a place as a full slot', () => {
+    expect(queueSlots(1, 30, 30).slots.map((slot) => slot.fill)).toEqual([1]);
+  });
+
+  it('is empty without a queue', () => {
+    expect(queueSlots(0, 0, 30)).toEqual({ width: 0, slots: [] });
+  });
+
+  it('sits above the ring, the warehouse bar below it', () => {
+    expect(queueTop(17)).toBeLessThan(-ringRadius(17));
+    expect(barTop(17)).toBeGreaterThan(ringRadius(17));
   });
 });

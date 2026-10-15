@@ -26,6 +26,11 @@ export interface RenderSource {
   readonly tickHz?: number;
   /** Ticks between the rounds of a fight (`ruleset_public.combat.round_ticks`). Default 10. */
   readonly roundTicks?: number;
+  /**
+   * Ticks of production of one recruit (`ruleset_public.recruit.unit_ticks`, DEC-25): the full
+   * progress of the queue mark over an own city. Without it no queue mark.
+   */
+  readonly recruitTicks?: number;
   /** The frame to draw now; `null` until the first snapshot. */
   frame(): RenderFrame | null;
   /**

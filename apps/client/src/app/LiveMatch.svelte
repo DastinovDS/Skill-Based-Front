@@ -104,6 +104,7 @@
           orders: welcome.ruleset_public.orders,
           capacity: welcome.ruleset_public.capacity,
           roundTicks: welcome.ruleset_public.combat.round_ticks,
+          recruitTicks: welcome.ruleset_public.recruit.unit_ticks,
         };
       },
       onStatus: (next) => {

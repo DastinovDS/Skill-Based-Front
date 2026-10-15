@@ -31,7 +31,7 @@ describe('the radial menus of a city and of a group', () => {
     document.body.innerHTML = '';
   });
 
-  function render() {
+  function render(queue: number | null = 0) {
     const hud = new HudState({
       me: 0,
       nicks: ['Danya', 'Bot'],
@@ -49,7 +49,7 @@ describe('the radial menus of a city and of a group', () => {
     });
     const target = document.body.appendChild(document.createElement('div'));
     mounted.push(
-      mount(CityRadial, { target, props: { orders, anchors, building: null } }),
+      mount(CityRadial, { target, props: { orders, anchors, building: null, queue } }),
       mount(GroupRadial, {
         target,
         props: { orders, anchors, group: hud.current?.group ?? null, mergeable: 1 },
@@ -63,7 +63,7 @@ describe('the radial menus of a city and of a group', () => {
     expect(target.querySelector('[role="menu"]')).toBeNull();
   });
 
-  it('the city menu lists recruit and roads with their keys, and recruit sends the command', () => {
+  it('the city menu lists recruit, cancel and roads, and recruit sends the command', () => {
     setLocale('en');
     const { target, orders, sent } = render();
     orders.click({ kind: 'node', id: home }, false);
@@ -71,14 +71,30 @@ describe('the radial menus of a city and of a group', () => {
     const items = [...target.querySelectorAll('[role="menuitem"]')];
     expect(items.map((i) => i.textContent.replace(/\s+/g, ' ').trim())).toEqual([
       expect.stringContaining('Recruit'),
+      expect.stringContaining('Cancel recruit'),
       expect.stringContaining('Roads'),
     ]);
     expect(items[0]?.textContent).toContain('R');
-    expect(items[1]?.textContent).toContain('U');
+    expect(items[0]?.textContent).toContain('0 of 3 queued');
+    expect(items[1]?.getAttribute('aria-disabled')).toBe('true'); // nothing queued
+    expect(items[2]?.textContent).toContain('U');
     items[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     flushSync();
     expect(sent).toEqual([{ type: 'recruit', node: home }]);
     expect(target.querySelector('[role="menu"]')).toBeNull();
+  });
+
+  it('the city menu cancels the last queued unit (DEC-25)', () => {
+    setLocale('en');
+    const { target, orders, sent } = render(2);
+    orders.click({ kind: 'node', id: home }, false);
+    flushSync();
+    const cancel = [...target.querySelectorAll('[role="menuitem"]')][1];
+    expect(cancel?.getAttribute('aria-disabled')).not.toBe('true');
+    expect(cancel?.textContent).toContain('returns 1 CP, started 0.5');
+    cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    flushSync();
+    expect(sent).toEqual([{ type: 'cancel_recruit', node: home }]);
   });
 
   it('the group menu dims merge for a lone group and speaks Russian too', () => {

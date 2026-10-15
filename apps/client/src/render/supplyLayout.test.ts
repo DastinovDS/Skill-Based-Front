@@ -14,6 +14,9 @@ const node = (id: number, priority: NodeView['priority']): NodeView => ({
   grace_left: null,
   priority,
   starve_in: null,
+  recruit_queue: null,
+  recruit_progress: null,
+  recruit_waiting: null,
 });
 
 const packet = (id: string, transfer: boolean, path: [number, ...number[]]): PacketView => ({

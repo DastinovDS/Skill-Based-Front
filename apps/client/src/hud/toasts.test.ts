@@ -12,8 +12,13 @@ describe('toastOf', () => {
     setLocale(initial);
   });
 
-  it('makes toasts of fights, captures and attrition only', () => {
-    expect([...TOAST_EVENT_KINDS].sort()).toEqual(['attrition', 'fight_ended', 'node_captured']);
+  it('makes toasts of fights, captures, attrition and a lost recruit queue only', () => {
+    expect([...TOAST_EVENT_KINDS].sort()).toEqual([
+      'attrition',
+      'fight_ended',
+      'node_captured',
+      'recruit_queue_lost',
+    ]);
     for (const kind of [
       'vp_awarded',
       'recruited',
@@ -26,6 +31,13 @@ describe('toastOf', () => {
     ]) {
       expect(toastOf(event(kind, { node: 1, player: 0, vp: 1 }), 0), kind).toBeNull();
     }
+  });
+
+  it('warns of a recruit queue lost with its city (DEC-25)', () => {
+    setLocale('en');
+    expect(toastOf(event('recruit_queue_lost', { node: 4, player: 0, units: 2 }), 0)).toMatchObject(
+      { tone: 'warn', text: 'Recruit queue lost at node 4: 2 units' },
+    );
   });
 
   it('colours a capture by who took the city, and a loss in the colour of the enemy', () => {

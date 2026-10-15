@@ -12,33 +12,51 @@
     anchors: MapAnchors;
     /** The city builds a road (it cannot start another): the number of seconds left; else `null`. */
     building: number | null;
+    /** Units in the recruit queue of the city (DEC-25, from the snapshot); `null`: unknown. */
+    queue: number | null;
   }
 
-  let { orders, anchors, building }: Props = $props();
+  let { orders, anchors, building, queue }: Props = $props();
 
   const menu = $derived(orders.cityMenu.current);
   const cp = (centis: number): string => formatCentis(centis, getLocale());
 
-  const angles = spreadAngles(2);
-  const items = $derived<RadialItem[]>([
-    {
-      id: 'recruit',
-      angle: angles[0] ?? 180,
-      sign: '+',
-      label: t('city.recruit'),
-      lines: [tf('city.cost', { cost: cp(orders.recruitCost) })],
-      key: 'R',
-    },
-    {
-      id: 'roads',
-      angle: angles[1] ?? 0,
-      sign: '≡',
-      label: t('city.roads'),
-      lines: building === null ? [] : [tf('city.building', { seconds: building })],
-      key: 'U',
-      disabled: building !== null,
-    },
-  ]);
+  const COUNT = 3;
+  const angles = spreadAngles(COUNT);
+  const items = $derived.by<RadialItem[]>(() => {
+    const queued = queue ?? 0;
+    const refund = orders.recruitRefund;
+    return [
+      {
+        id: 'recruit',
+        angle: angles[0] ?? 180,
+        sign: '+',
+        label: t('city.recruit'),
+        lines: [
+          tf('city.cost', { cost: cp(orders.recruitCost) }),
+          tf('city.queue', { n: queued, max: orders.recruitQueueMax }),
+        ],
+        key: 'R',
+      },
+      {
+        id: 'cancel_recruit',
+        angle: angles[1] ?? 60,
+        sign: '−',
+        label: t('city.cancel_recruit'),
+        lines: [tf('city.refund', { full: cp(refund.full), half: cp(refund.started) })],
+        disabled: queued === 0,
+      },
+      {
+        id: 'roads',
+        angle: angles[2] ?? 0,
+        sign: '≡',
+        label: t('city.roads'),
+        lines: building === null ? [] : [tf('city.building', { seconds: building })],
+        key: 'U',
+        disabled: building !== null,
+      },
+    ];
+  });
 
   /** The hole is as wide as the city circle, and the ring starts just outside it. */
   const ring = $derived.by(() => {
@@ -56,7 +74,7 @@
     label={tf('city.title', { node: target })}
     at={() => anchors.node(target)}
     {ring}
-    half={halfFor(2)}
+    half={halfFor(COUNT)}
     clamp={false}
     hover={menu.hover}
     onhover={(id: string | null) => {

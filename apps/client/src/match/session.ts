@@ -35,6 +35,8 @@ export interface MatchContext {
   capacity?: Pick<CapacityPublic, 'attrition_ticks' | 'grace_ticks'>;
   /** `ruleset_public.combat.round_ticks`: the round progress of a fight going on (DEC-24). */
   roundTicks?: number;
+  /** `ruleset_public.recruit.unit_ticks`: the progress of a recruit queue (DEC-25). */
+  recruitTicks?: number;
 }
 
 export interface MatchSessionOptions {
@@ -68,6 +70,7 @@ export class MatchSession implements RenderSource {
   /** Delays of planned orders and "Defense": the countdown on the arrows. */
   orderDelays: OrderDelays | undefined;
   roundTicks: number | undefined;
+  recruitTicks: number | undefined;
   /** The overcrowding numbers: the pill beside an overcrowded city. */
   capacityTicks: CapacityTicks | undefined;
   buffer: SnapshotBuffer;
@@ -123,6 +126,7 @@ export class MatchSession implements RenderSource {
         ? undefined
         : { planned: orders.planned_delay_ticks, defense: orders.defense_delay_ticks };
     this.roundTicks = context.roundTicks;
+    this.recruitTicks = context.recruitTicks;
     this.capacityTicks =
       context.capacity === undefined
         ? undefined

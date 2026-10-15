@@ -65,11 +65,18 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       grace_left: null,
       priority: null,
       starve_in: null,
+      recruit_queue: null,
+      recruit_progress: null,
+      recruit_waiting: null,
     };
     if (mine.has(n.id)) {
+      const city = n.kind !== 'province';
       return {
         ...base,
-        priority: n.kind === 'province' ? null : 'normal',
+        priority: city ? 'normal' : null,
+        recruit_queue: city ? 0 : null,
+        recruit_progress: city ? 0 : null,
+        recruit_waiting: city ? false : null,
         detail: 'exact',
         warehouse: n.start_stock,
         seen: { tick, level: 'exact', enemy_modes: [], enemy_units: 0, enemy_charged: 0 },
