@@ -11,8 +11,8 @@ edits do not touch the old replays.
 
 The drivers are ``ExpandBot`` of ``conftest.py`` plus ``MixBot``, which adds every other command
 type on a fixed schedule (planned moves, splits, merges, modes, stances, road upgrades, supply
-priorities and transfers, cancellations while waiting and on an edge, unknown ids), so the
-replays go through every command path and many rejections.
+priorities and transfers, cancellations while waiting and on an edge, recruit cancellations,
+unknown ids), so the replays go through every command path and many rejections.
 """
 
 import argparse
@@ -25,6 +25,7 @@ from pathlib import Path
 
 from gow_sim.commands import (
     CancelOrder,
+    CancelRecruit,
     Command,
     Forfeit,
     Merge,
@@ -106,6 +107,8 @@ class MixBot:
             cmds.append(SetStance(list(Stance)[k // 40 % len(Stance)]))
         if k % 29 == 0:
             cmds.extend(self._supply(view, k))
+        if k % 31 == 0:  # the last unit of the capital's recruit queue comes back (DEC-25)
+            cmds.append(CancelRecruit(self.map.capital(view.player)))
         return cmds
 
     def _supply(self, view: PlayerView, k: int) -> list[Command]:

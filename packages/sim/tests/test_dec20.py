@@ -46,6 +46,7 @@ from gow_sim.systems.capacity import capacity
 from gow_sim.systems.combat import combat
 from gow_sim.systems.movement import movement, reachable
 from gow_sim.systems.orders import active_bonuses, orders
+from gow_sim.systems.recruit import recruit
 
 TESTS_DIR = Path(__file__).resolve().parent
 MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
@@ -198,6 +199,7 @@ class _Run:
         state.events += movement(state, RULES)
         state.events += combat(state, RULES, active_bonuses(state))
         state.events += capacity(state, RULES)
+        state.events += recruit(state, RULES)
         state.events += orders(state, RULES)
         self.events += state.events
         return [r.outcome for r in results]
@@ -269,6 +271,8 @@ def test_dec20_example_3_recruit_joins_the_standing_group() -> None:
     run = _Run(state)
     (ok,) = run.step(Recruit(A))
     assert isinstance(ok, Ok)
+    tick = run.until_event("recruited")  # from the recruit queue (DEC-25)
+    assert state.tick == tick
     assert _counts(state, g1) == (5, 4, Mode.ATTACK)
     assert [g.id for g in state.groups.values() if g.owner == 0] == [g1]
 

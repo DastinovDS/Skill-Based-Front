@@ -40,6 +40,7 @@ from gow_sim.analysis import MatchMetrics, MatchRecorder, analyze
 from gow_sim.canonical import digest
 from gow_sim.commands import (
     CancelOrder,
+    CancelRecruit,
     Command,
     Forfeit,
     Merge,
@@ -160,6 +161,8 @@ def encode_command(cmd: Command) -> dict[str, object]:
             }
         case Recruit(node=node):
             return {"type": "recruit", "node": node}
+        case CancelRecruit(node=node):
+            return {"type": "cancel_recruit", "node": node}
         case CancelOrder(group=g):
             return {"type": "cancel_order", "group": g}
         case SetPriority(node=node, level=level):
@@ -199,6 +202,8 @@ def decode_command(data: object) -> Command:
                 )
             case "recruit":
                 return Recruit(_int(d["node"]))
+            case "cancel_recruit":
+                return CancelRecruit(_int(d["node"]))
             case "cancel_order":
                 return CancelOrder(_int(d["group"]))
             case "set_priority":

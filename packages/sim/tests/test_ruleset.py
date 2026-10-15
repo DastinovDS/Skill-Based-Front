@@ -111,8 +111,9 @@ def test_mvp0_order_timing_and_bonuses(mvp0: Ruleset) -> None:
 
 
 def test_mvp0_recruit(mvp0: Ruleset) -> None:
-    assert mvp0.recruit.cooldown_ticks == 20
-    assert mvp0.recruit.location is RecruitLocation.ANY_CITY
+    recruit = mvp0.recruit  # DEC-25
+    assert (recruit.unit_ticks, recruit.queue_max, recruit.refund_started_pct) == (30, 3, 50)
+    assert recruit.location is RecruitLocation.ANY_CITY
 
 
 def test_mvp0_terrain(mvp0: Ruleset) -> None:
@@ -260,8 +261,8 @@ def test_hash_changes_when_any_value_changes() -> None:
     base = _raw()
     base_hash = ruleset_hash(parse_ruleset(base))
     leaves = _leaves(base)
-    # Keys of SIM-01, DEC-16, DEC-22, DEC-18, DEC-19 by hand; #253: -2; DEC-24: +3.
-    assert len(leaves) == 64
+    # Keys of SIM-01, DEC-16, DEC-22, DEC-18, DEC-19 by hand; #253: -2; DEC-24: +3; DEC-25: +2.
+    assert len(leaves) == 66
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)

@@ -14,8 +14,8 @@ PRO-01), which PRO-03 converts it into:
   one (the city and the edge, no tick) only while the edge is not in fog (DEC-17, item 5);
 - ``EXACT`` places (own nodes, nodes where own groups stand): warehouse and enemy totals;
 - own cities: their supply priority (DEC-18, item 8) and, cut off, the ticks until the garrison
-  next starves (``starve_in``, DEC-19, item 8); own packets with their remaining path and
-  whether they are a transfer;
+  next starves (``starve_in``, DEC-19, item 8), their recruit queue and its progress (DEC-25,
+  item 12); own packets with their remaining path and whether they are a transfer;
 - ``PRESENCE`` places (neighbours of ``EXACT`` nodes, edges touching them): whether enemy groups
   are there and their modes, no numbers;
 - ``FOG``: only the last sighting from ``GameState.vision_memory``;
@@ -62,6 +62,7 @@ from gow_sim.state import (
 from gow_sim.systems.build import RoadGain, UpgradeGain, done_tick, upgrade_gain
 from gow_sim.systems.capacity import node_capacities, overflow_countdown, starve_in
 from gow_sim.systems.movement import reachable
+from gow_sim.systems.recruit import recruit_waiting
 from gow_sim.systems.supply import is_city, packet_dest_tick, packet_path
 from gow_sim.systems.vision import compute_vision, current_sightings, known_roads
 
@@ -156,6 +157,13 @@ class NodeView:
     starve_in: int | None
     """Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8, grace
     included); ``None`` otherwise, always for the enemy's and neutral nodes."""
+    recruit_queue: int | None
+    """Own city only: units in its recruit queue, the one in production included (DEC-25, item
+    12); ``None`` for provinces, the enemy's and neutral nodes: the enemy's production is hidden."""
+    recruit_progress: int | None
+    """Own city only: ticks of production of the current unit, ``0..recruit.unit_ticks``."""
+    recruit_waiting: bool | None
+    """Own city only: the current unit is ready and waits for a place (DEC-25, item 7)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -389,6 +397,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     nodes: list[NodeView] = []
     for n, level in enumerate(levels.nodes):
         node = state.nodes[n]
+        own_city = node.owner == player and is_city(mapdef, n)
         attrition_in, grace_left = (
             overflow_countdown(state, rules, n, capacities[n])
             if node.owner == player
@@ -405,8 +414,11 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 build=_build_view(state, rules, player, n, levels.edges),
                 attrition_in=attrition_in,
                 grace_left=grace_left,
-                priority=node.priority if node.owner == player and is_city(mapdef, n) else None,
+                priority=node.priority if own_city else None,
                 starve_in=starve_in(state, rules, n) if node.owner == player else None,
+                recruit_queue=node.recruit_queue if own_city else None,
+                recruit_progress=node.recruit_progress if own_city else None,
+                recruit_waiting=recruit_waiting(state, rules, n) if own_city else None,
             )
         )
 
@@ -559,6 +571,9 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "grace_left": n.grace_left,
                 "priority": None if n.priority is None else n.priority.value,
                 "starve_in": n.starve_in,
+                "recruit_queue": n.recruit_queue,
+                "recruit_progress": n.recruit_progress,
+                "recruit_waiting": n.recruit_waiting,
             }
             for n in view.nodes
         ],

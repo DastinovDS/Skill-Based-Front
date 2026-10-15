@@ -28,7 +28,10 @@
         "attrition_in": null,
         "grace_left": null,
         "priority": "normal",
-        "starve_in": null
+        "starve_in": null,
+        "recruit_queue": 0,
+        "recruit_progress": 0,
+        "recruit_waiting": false
       },
       {
         "id": 1,
@@ -49,7 +52,10 @@
         "attrition_in": null,
         "grace_left": null,
         "priority": null,
-        "starve_in": null
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null
       },
       {
         "id": 2,
@@ -70,7 +76,10 @@
         "attrition_in": null,
         "grace_left": null,
         "priority": null,
-        "starve_in": null
+        "starve_in": null,
+        "recruit_queue": null,
+        "recruit_progress": null,
+        "recruit_waiting": null
       }
     ],
     "edges": [

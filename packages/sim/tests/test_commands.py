@@ -413,12 +413,13 @@ def test_upgrade_road_rules() -> None:
     assert validate(state, RULES, 0, UpgradeRoad(1, 0, fast)) == Reject(RejectCode.EDGE_BUSY)
 
 
-def test_recruit_creates_one_discharged_unit() -> None:
+def test_recruit_queues_one_unit() -> None:
+    """The unit appears later, from the recruit queue (DEC-25; ``test_recruit.py``)."""
     state, _ = _state()
     before = dict(state.groups)
     apply_commands(state, RULES, [PlayerCommand(0, 1, Recruit(1))])
-    (new,) = [g for gid, g in state.groups.items() if gid not in before]
-    assert (new.owner, new.units, new.charged, new.location) == (0, 1, 0, AtNode(1))
+    assert state.groups == before
+    assert state.nodes[1].recruit_queue == 1
 
 
 def test_stance_change_and_cooldown() -> None:

@@ -239,8 +239,12 @@ class Node:
     """Consecutive ticks the owner's standing units exceed the capacity (attrition, SIM-07)."""
     captured_tick: int | None
     """Tick of the last owner change; ``None`` for the starting owner (attrition grace)."""
-    recruited_tick: int | None = None
-    """Tick of the last recruit in this city (DEC-01 cooldown, SIM-12); ``None``: never."""
+    recruit_queue: int = 0
+    """Units in the recruit queue of the city, the one in production included (DEC-25); it
+    belongs to the owner and is emptied on every owner change."""
+    recruit_progress: int = 0
+    """Ticks of production of the first unit of the queue, ``0..recruit.unit_ticks``; equal to
+    ``unit_ticks``: the unit is ready and waits for a place (DEC-25, items 4 and 7)."""
     build: Build | None = None
     """The road this city upgrades (DEC-16); ``None``: no build."""
     priority: Priority = Priority.NORMAL
@@ -504,7 +508,8 @@ def _node_data(n: Node) -> dict[str, object]:
         "warehouse": n.warehouse,
         "over_ticks": n.over_ticks,
         "captured_tick": n.captured_tick,
-        "recruited_tick": n.recruited_tick,
+        "recruit_queue": n.recruit_queue,
+        "recruit_progress": n.recruit_progress,
         "priority": n.priority.value,
         "cut_since": n.cut_since,
         "build": None
@@ -713,7 +718,8 @@ def _parse_node(data: object, where: str) -> Node:
             "warehouse",
             "over_ticks",
             "captured_tick",
-            "recruited_tick",
+            "recruit_queue",
+            "recruit_progress",
             "priority",
             "cut_since",
             "build",
@@ -725,7 +731,8 @@ def _parse_node(data: object, where: str) -> Node:
         warehouse=_int(raw["warehouse"], f"{where}.warehouse", low=0),
         over_ticks=_int(raw["over_ticks"], f"{where}.over_ticks", low=0),
         captured_tick=_opt_int(raw["captured_tick"], f"{where}.captured_tick"),
-        recruited_tick=_opt_int(raw["recruited_tick"], f"{where}.recruited_tick"),
+        recruit_queue=_int(raw["recruit_queue"], f"{where}.recruit_queue", low=0),
+        recruit_progress=_int(raw["recruit_progress"], f"{where}.recruit_progress", low=0),
         build=None if raw["build"] is None else _parse_build(raw["build"], f"{where}.build"),
         priority=Priority(_choice(raw["priority"], f"{where}.priority", Priority)),
         cut_since=_opt_int(raw["cut_since"], f"{where}.cut_since"),

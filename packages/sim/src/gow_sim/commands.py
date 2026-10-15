@@ -55,16 +55,17 @@ from gow_sim.systems.economy import set_stance, stance_cooldown_left
 from gow_sim.systems.movement import find_path, path_ticks
 from gow_sim.systems.orders import absorb, clear_bonus, set_intent
 from gow_sim.systems.recruit import (
+    cancel_unit,
     free_capacity,
+    queue_unit,
     recruit_allowed_here,
-    recruit_cooldown_left,
-    recruit_unit,
 )
 from gow_sim.systems.supply import TransferRoute, is_city, send_packet, transfer_route
 from gow_sim.systems.vision import compute_vision, is_visible
 
 __all__ = [
     "CancelOrder",
+    "CancelRecruit",
     "Command",
     "CommandResult",
     "Forfeit",
@@ -145,6 +146,15 @@ class UpgradeRoad:
 
 @dataclass(frozen=True, slots=True)
 class Recruit:
+    """Put one unit into the recruit queue of the own city ``node`` (DEC-25)."""
+
+    node: int
+
+
+@dataclass(frozen=True, slots=True)
+class CancelRecruit:
+    """Take the last unit off the recruit queue of the own city ``node`` (DEC-25, item 11)."""
+
     node: int
 
 
@@ -188,6 +198,7 @@ type Command = (
     | SetStance
     | UpgradeRoad
     | Recruit
+    | CancelRecruit
     | CancelOrder
     | SetPriority
     | Transfer
@@ -208,7 +219,15 @@ def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
             return SetMode(f(g), mode)
         case CancelOrder(group=g):
             return CancelOrder(f(g))
-        case SetStance() | UpgradeRoad() | Recruit() | SetPriority() | Transfer() | Forfeit():
+        case (
+            SetStance()
+            | UpgradeRoad()
+            | Recruit()
+            | CancelRecruit()
+            | SetPriority()
+            | Transfer()
+            | Forfeit()
+        ):
             return cmd
 
 
@@ -257,14 +276,14 @@ class RejectCode(StrEnum):
     NOTHING_TO_CANCEL = "NOTHING_TO_CANCEL"
     NOT_CAPITAL = "NOT_CAPITAL"
     """``recruit.location = capital``: recruiting only in the own capital (DEC-01)."""
+    QUEUE_FULL = "QUEUE_FULL"
+    """The recruit queue of the city holds ``recruit.queue_max`` units (DEC-25, item 6)."""
     CITY_FULL = "CITY_FULL"
-    """No free capacity for one more unit in the city (DEC-01)."""
-    RECRUIT_COOLDOWN = "RECRUIT_COOLDOWN"
-    """The city recruited less than ``recruit.cooldown_ticks`` ago (DEC-01)."""
+    """The owner's units standing in the city plus its recruit queue fill the capacity
+    (DEC-25, item 7)."""
     IN_FIGHT = "IN_FIGHT"
     """The group is in a fight: it only withdraws (DEC-24, item E): a defender of a node by a
-    normal ``Move``, everyone else by ``CancelOrder``. Also a recruit in a city with a fight
-    (DEC-25, item 9)."""
+    normal ``Move``, everyone else by ``CancelOrder``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,6 +345,8 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
             return cost.build
         case Recruit():
             return cost.recruit
+        case CancelRecruit():
+            return 0  # free, the refund is paid on application (DEC-25, item 11)
         case CancelOrder():
             return cost.cancel
         case SetStance():
@@ -434,18 +455,29 @@ def _check(
         case UpgradeRoad(node=node, edge=eid, kind=kind):
             return _check_upgrade(state, rules, player, node, eid, kind)
         case Recruit(node=node):
+            # DEC-25, item 11: the checks in this order (CP last, in ``_validate``). A fight in
+            # the city does not reject: it only pauses the production (item 9).
+            if not 0 <= node < len(state.map.nodes):
+                return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+            city = state.nodes[node]
+            if city.owner != player:
+                return Reject(RejectCode.NOT_OWNER)
+            if not is_city(state.map, node):
+                return Reject(RejectCode.NOT_CITY)
+            if not recruit_allowed_here(state, rules, player, node):
+                return Reject(RejectCode.NOT_CAPITAL)
+            if city.recruit_queue >= rules.recruit.queue_max:
+                return Reject(RejectCode.QUEUE_FULL)
+            if free_capacity(state, rules, player, node) - city.recruit_queue <= 0:
+                return Reject(RejectCode.CITY_FULL)
+            return ()
+        case CancelRecruit(node=node):
             if not 0 <= node < len(state.map.nodes):
                 return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
             if state.nodes[node].owner != player:
                 return Reject(RejectCode.NOT_OWNER)
-            if not recruit_allowed_here(state, rules, player, node):
-                return Reject(RejectCode.NOT_CAPITAL)
-            if free_capacity(state, rules, player, node) <= 0:
-                return Reject(RejectCode.CITY_FULL)
-            if recruit_cooldown_left(state, rules, node) > 0:
-                return Reject(RejectCode.RECRUIT_COOLDOWN)
-            if node in state.fight_nodes():
-                return Reject(RejectCode.IN_FIGHT)  # no production in a city with a fight
+            if state.nodes[node].recruit_queue == 0:
+                return Reject(RejectCode.NOTHING_TO_CANCEL)
             return ()
         case CancelOrder(group=gid):
             group = _own_group(state, player, gid, seen)
@@ -699,7 +731,10 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
         case UpgradeRoad(node=node, edge=eid, kind=kind):
             return [start_build(state, rules, player, node, eid, kind)]  # not public (DEC-16)
         case Recruit(node=node):
-            return recruit_unit(state, player, node)
+            queue_unit(state, node)
+            return []
+        case CancelRecruit(node=node):
+            return cancel_unit(state, rules, player, node)
         case CancelOrder(group=gid):
             group = state.groups[gid]
             location = group.location

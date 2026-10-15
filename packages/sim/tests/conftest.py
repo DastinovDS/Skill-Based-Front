@@ -3,7 +3,7 @@
 ``ExpandBot`` sees only its ``PlayerView`` (plus the public map and ruleset), like a real bot
 (AGENTS.md, section 8). It is a test driver for ``run_headless`` and the benchmarks, not a bot of
 ``gow_bots``: every idle group in «Атака» walks to the nearest node its player does not own,
-recruits go to the capital, and it never spends more CP than it has. Under the stack limit
+recruits are queued in the capital, and it never spends more CP than it has. Under the stack limit
 (DEC-20, D) a group bigger than the smallest node capacity of the map first splits off the rest,
 which stays for a later decision.
 """
@@ -53,7 +53,12 @@ class ExpandBot:
         cmds: list[Command] = []
         capital = self.map.capital(me)
         standing = sum(g.units for g in view.groups if g.location == AtNode(capital))
-        if budget >= cost.recruit and standing < view.nodes[capital].capacity:
+        queue = view.nodes[capital].recruit_queue or 0  # DEC-25
+        if (
+            budget >= cost.recruit
+            and queue < self.rules.recruit.queue_max
+            and standing + queue < view.nodes[capital].capacity
+        ):
             cmds.append(Recruit(capital))
             budget -= cost.recruit
         foreign = [n.id for n in view.nodes if n.owner != me]

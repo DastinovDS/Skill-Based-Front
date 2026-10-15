@@ -70,7 +70,8 @@ def _rich_state(rules: Ruleset) -> GameState:
     state.nodes[1].warehouse = 3
     state.nodes[1].over_ticks = 7
     state.nodes[1].captured_tick = 120
-    state.nodes[1].recruited_tick = 125
+    state.nodes[1].recruit_queue = 2
+    state.nodes[1].recruit_progress = 17
     state.edges[0].width = 2
     state.edges[0].kind = RoadKind.FREIGHT
     gid = state.new_id()
@@ -377,7 +378,8 @@ def _states(draw: st.DrawFn) -> GameState:
         node.warehouse = draw(_small)
         node.over_ticks = draw(_small)
         node.captured_tick = draw(_opt_small)
-        node.recruited_tick = draw(_opt_small)
+        node.recruit_queue = draw(_small)
+        node.recruit_progress = draw(_small)
         node.priority = draw(st.sampled_from(list(Priority)))
         node.cut_since = draw(_opt_small)
         if draw(st.booleans()):

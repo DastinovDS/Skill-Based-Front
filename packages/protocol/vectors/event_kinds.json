@@ -22,6 +22,8 @@
     "packet_lost",
     "packet_sent",
     "priority_set",
+    "recruit_cancelled",
+    "recruit_queue_lost",
     "recruited",
     "road_upgraded",
     "stance_changed",

@@ -32,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 14
+PROTOCOL_VERSION: Final = 15
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -164,7 +164,7 @@ class AckMsg(WireModel):
     included; DEC-22, item 10); for an accepted ``transfer``, the tick the charges reach
     ``to_node``; both if nothing stops them; ``None`` otherwise.
     ``reject_code``: code of the simulation's ``Reject`` (``NOT_FOUND_OR_HIDDEN``,
-    ``NOT_ENOUGH_CP``, ``RECRUIT_COOLDOWN``, ... from SIM-04 #20).
+    ``NOT_ENOUGH_CP``, ``QUEUE_FULL``, ... from SIM-04 #20).
     """
 
     type: Literal["ack"] = "ack"

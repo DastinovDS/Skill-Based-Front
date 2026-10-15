@@ -4,7 +4,8 @@ A command is an intent, never state. It names own groups by opaque id and map no
 their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``Move(group, dest, planned)``, ``Split(group, n)``, ``Merge(groups)``, ``SetMode(group, mode)``,
 ``SetStance(stance)``, ``UpgradeRoad(node, edge, kind)``, ``Recruit(node)``, ``CancelOrder(group)``,
-``Forfeit()``; DEC-18: ``SetPriority(node, level)``, ``Transfer(from, to, n)``. The conversion
+``Forfeit()``; DEC-18: ``SetPriority(node, level)``, ``Transfer(from, to, n)``; DEC-25:
+``CancelRecruit(node)``. The conversion
 to simulation commands is PRO-03 (#46).
 
 The schema checks only the shape. Ownership, visibility, reachability and CP are checked by the
@@ -80,7 +81,16 @@ class UpgradeRoadCmd(WireModel):
 
 
 class RecruitCmd(WireModel):
+    """Put one unit into the recruit queue of the own city ``node`` (DEC-25)."""
+
     type: Literal["recruit"] = "recruit"
+    node: NodeId
+
+
+class CancelRecruitCmd(WireModel):
+    """Take the last unit off the recruit queue of the own city ``node`` (DEC-25, item 11)."""
+
+    type: Literal["cancel_recruit"] = "cancel_recruit"
     node: NodeId
 
 
@@ -120,6 +130,7 @@ type Command = Annotated[
     | SetStanceCmd
     | UpgradeRoadCmd
     | RecruitCmd
+    | CancelRecruitCmd
     | CancelOrderCmd
     | SetPriorityCmd
     | TransferCmd

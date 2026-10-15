@@ -23,6 +23,7 @@ import pytest
 
 from gow_sim.commands import (
     CancelOrder,
+    CancelRecruit,
     Command,
     Merge,
     Move,
@@ -85,6 +86,8 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
         cmds.append(SetStance([Stance.WAR, Stance.ECONOMY, Stance.BALANCE][tick // 150 % 3]))
     if tick % 100 == 0:
         cmds.append(Recruit(mapdef.capital(player)))
+    if tick % 100 == 50:  # a second unit queued and taken back (DEC-25)
+        cmds.extend((Recruit(mapdef.capital(player)), CancelRecruit(mapdef.capital(player))))
     if tick % 90 == 0:  # every own city upgrades its internal road to the lowest-key neighbour
         for node in sorted(range(len(mapdef.nodes)), key=key):
             internal = [
@@ -181,6 +184,8 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
             return UpgradeRoad(mirror_nodes[node], mirror_edges[edge])
         case Recruit(node=node):
             return Recruit(mirror_nodes[node])
+        case CancelRecruit(node=node):
+            return CancelRecruit(mirror_nodes[node])
         case SetPriority(node=node, level=level):
             return SetPriority(mirror_nodes[node], level)
         case Transfer(src=src, dst=dst, n=n):
@@ -286,12 +291,22 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
         m = mapdef.mirror_nodes[n]
         assert state.nodes[m].owner == swap[state.nodes[n].owner], f"owner of {n}"
         a, b = state.nodes[n], state.nodes[m]
-        assert (b.warehouse, b.over_ticks, b.captured_tick, b.priority, b.cut_since) == (
+        assert (
+            b.warehouse,
+            b.over_ticks,
+            b.captured_tick,
+            b.priority,
+            b.cut_since,
+            b.recruit_queue,
+            b.recruit_progress,
+        ) == (
             a.warehouse,
             a.over_ticks,
             a.captured_tick,
             a.priority,
             a.cut_since,
+            a.recruit_queue,
+            a.recruit_progress,
         ), f"node {n}"
         ab, bb = a.build, b.build
         assert (bb is None) == (ab is None), f"build of {n}"
@@ -416,6 +431,7 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         "Split",
         "SetMode",
         "Recruit",
+        "CancelRecruit",
         "SetStance",
         "CancelOrder",
         "SetPriority",
