@@ -11,10 +11,10 @@ and advance the clock. After every tick the invariants below must hold:
   ``warehouse_lost``, ``packet_lost``, the part of a delivered packet that does
   not fit the warehouse (``packet_delivered`` vs. the packet; that part is also a
   ``charges_overflow``) and ``attrition`` deaths of charged units; the charges a city pays for a
-  road level (``build_started``, DEC-16); the charges a cut-off garrison spends (``starvation``, DEC-19; units never die
-  of it). A transfer (DEC-18) only moves charges from a warehouse into a packet: it is a
-  flow, not a sink. The overflow of the capital's own production is not a sink: those charges were
-  never created;
+  road level (``build_started``, DEC-16); the charges a cut-off garrison spends (``starvation``,
+  DEC-19; units never die of it). A transfer (DEC-18) only moves charges from a warehouse into a
+  packet: it is a flow, not a sink. The overflow of the capital's own production is not a sink:
+  those charges were never created;
 - no negative counters, ``charged <= units``, road widths within their limits, every group in an
   existing node or on an existing edge, ids unique, links between groups and intents;
 - a garrison never grows without an arrival (``group_arrived``) or a recruit in its city, so an

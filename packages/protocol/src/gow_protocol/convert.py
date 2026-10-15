@@ -5,8 +5,8 @@ Server -> client:
 - ``snapshot_msg``: ``PlayerView`` (``gow_sim.view.project()``) -> ``snapshot``. Opaque ids are
   63-bit integers in the simulation and decimal strings on the wire. Some fields of the view stay
   on the server, the client does not need them: ``order.depart_tick``, ``location.back`` (a
-  bouncing group's ``progress`` falls, so interpolation works without it) and ``seen.width``,
-  ``seen.road`` (the known level and type of an edge are its ``width`` and ``kind``, DEC-17);
+  bouncing group's ``progress`` falls, so interpolation works without it) and ``seen.width``
+  (the known level of an edge is its ``width``, DEC-17);
 - ``snapshot_frame``: the same ``snapshot`` encoded straight from the ``PlayerView``, without the
   models and their validation (#155). The server sends these every tick; ``snapshot_msg``, built
   through the validating models, is their specification: tests over real matches require the two
@@ -32,10 +32,11 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
   both fight in it; the enemy's ``shots``, ``virtual`` and ``spent`` (its bonuses and charges)
   are removed, the place, the point and the losses of both sides stay;
 - everything else only to the player of the event (``player``, for ``warehouse_lost`` ``owner``),
-  enemy ones are dropped. ``fight_group`` goes only to the owner of the group; the road build
-  events ``build_started``, ``road_upgraded`` and ``build_stopped`` only to the builder (DEC-17,
-  item 6); ``priority_set`` and ``transfer_started`` only to their player (DEC-18, item 8);
-  ``starvation`` only to the owner of the city (DEC-19, item 8);
+  enemy ones are dropped. ``fight_group`` goes only to the owner of the group; the build
+  events ``build_started``, ``road_upgraded``, ``barracks_built``, ``warehouse_upgraded`` and
+  ``build_stopped`` only to the builder (DEC-17, item 6; DEC-26, item 9); ``priority_set`` and
+  ``transfer_started`` only to their player (DEC-18, item 8); ``starvation`` only to the owner of
+  the city (DEC-19, item 8);
 - ``match_ended`` is not an event on the wire: it is ``match_end``.
 
 Entity ids in event data (``group``, ``new_group``, ``packet``, ``fight``) become opaque ids of
@@ -69,11 +70,11 @@ from gow_protocol.view import (
     IntentView,
     Location,
     NodeBuild,
+    NodeBuilding,
     NodeView,
     OnEdgeLoc,
     OrderView,
     PacketView,
-    RoadGain,
     Seen,
     SelfView,
     UpgradeGain,
@@ -81,7 +82,7 @@ from gow_protocol.view import (
 )
 from gow_sim import commands as sim
 from gow_sim import view as sv
-from gow_sim.state import Event, EventValue, RoadKind
+from gow_sim.state import Event, EventValue
 from gow_sim.systems.victory import EndReason as SimEndReason
 from gow_sim.systems.victory import Outcome
 
@@ -112,6 +113,7 @@ PUBLIC_KINDS: Final = frozenset({"node_captured", "vp_awarded", "forfeit"})
 PRIVATE_KINDS: Final = frozenset(
     {
         "attrition",
+        "barracks_built",
         "build_started",
         "build_stopped",
         "charges_overflow",
@@ -121,7 +123,6 @@ PRIVATE_KINDS: Final = frozenset(
         "group_arrived",
         "group_split",
         "groups_merged",
-        "packet_captured",
         "packet_delivered",
         "packet_lost",
         "packet_sent",
@@ -134,6 +135,7 @@ PRIVATE_KINDS: Final = frozenset(
         "starvation",
         "transfer_started",
         "warehouse_lost",
+        "warehouse_upgraded",
     }
 )
 """Events only their own player gets."""
@@ -195,6 +197,12 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 recruit_queue=n.recruit_queue,
                 recruit_progress=n.recruit_progress,
                 recruit_waiting=n.recruit_waiting,
+                has_barracks=n.has_barracks,
+                warehouse_level=n.warehouse_level,
+                warehouse_cap=n.warehouse_cap,
+                building=None
+                if n.building is None
+                else NodeBuilding(kind=n.building.kind, done_tick=n.building.done_tick),
             )
             for n in view.nodes
         ),
@@ -202,14 +210,10 @@ def view_to_wire(view: sv.PlayerView) -> View:
             EdgeView(
                 id=e.id,
                 width=e.width,
-                kind=e.kind,
                 detail=e.detail,
                 upgrade_gain=None
                 if e.upgrade_gain is None
-                else UpgradeGain(
-                    fast=_road_gain(e.upgrade_gain.fast),
-                    freight=_road_gain(e.upgrade_gain.freight),
-                ),
+                else UpgradeGain(speed_pct=e.upgrade_gain.speed_pct),
                 seen=_seen(e.seen),
             )
             for e in view.edges
@@ -270,10 +274,6 @@ def view_to_wire(view: sv.PlayerView) -> View:
     )
 
 
-def _road_gain(g: sv.RoadGain | None) -> RoadGain | None:
-    return None if g is None else RoadGain(speed_pct=g.speed_pct, amount=g.amount)
-
-
 def _seen(s: sv.Sighting | None) -> Seen | None:
     if s is None:
         return None
@@ -327,6 +327,12 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "recruit_queue": n.recruit_queue,
                 "recruit_progress": n.recruit_progress,
                 "recruit_waiting": n.recruit_waiting,
+                "has_barracks": n.has_barracks,
+                "warehouse_level": n.warehouse_level,
+                "warehouse_cap": n.warehouse_cap,
+                "building": None
+                if n.building is None
+                else {"kind": n.building.kind, "done_tick": n.building.done_tick},
             }
             for n in view.nodes
         ],
@@ -334,14 +340,10 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
             {
                 "id": e.id,
                 "width": e.width,
-                "kind": e.kind,
                 "detail": e.detail,
                 "upgrade_gain": None
                 if e.upgrade_gain is None
-                else {
-                    "fast": _road_gain_data(e.upgrade_gain.fast),
-                    "freight": _road_gain_data(e.upgrade_gain.freight),
-                },
+                else {"speed_pct": e.upgrade_gain.speed_pct},
                 "seen": _seen_data(e.seen),
             }
             for e in view.edges
@@ -402,10 +404,6 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
     }
 
 
-def _road_gain_data(g: sv.RoadGain | None) -> dict[str, object] | None:
-    return None if g is None else {"speed_pct": g.speed_pct, "amount": g.amount}
-
-
 def _seen_data(s: sv.Sighting | None) -> dict[str, object] | None:
     if s is None:
         return None
@@ -451,7 +449,11 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
         case wire.SetStanceCmd(stance=stance):
             return sim.SetStance(stance)
         case wire.UpgradeRoadCmd(node=node, edge=edge, kind=kind):
-            return sim.UpgradeRoad(node, edge, None if kind is None else RoadKind(kind))
+            return sim.UpgradeRoad(node, edge, kind)  # a type: INVALID_ARGUMENT (DEC-26)
+        case wire.BuildBarracksCmd(node=node):
+            return sim.BuildBarracks(node)
+        case wire.UpgradeWarehouseCmd(node=node):
+            return sim.UpgradeWarehouse(node)
         case wire.RecruitCmd(node=node):
             return sim.Recruit(node)
         case wire.CancelRecruitCmd(node=node):

@@ -142,6 +142,9 @@ class CampaignBot(Bot):
         self._stance(ctx)
         for cmd in self.priorities(view):  # front cities first in the supply order (DEC-18)
             self.spend(ctx, cmd)
+        cmd = self.development(ctx.view, ctx.budget)  # DEC-26, item 11: before the orders
+        if cmd is not None:
+            self.spend(ctx, cmd)
         self._recall(ctx)
         self.respond(ctx)
         self._attack(ctx)

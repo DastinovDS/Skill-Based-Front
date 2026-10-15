@@ -42,6 +42,8 @@ COMMAND_TYPES = {
     "recruit",
     "cancel_order",
     "cancel_recruit",
+    "build_barracks",
+    "upgrade_warehouse",
     "set_priority",
     "transfer",
     "forfeit",
@@ -194,6 +196,8 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
         "stance": cost.stance,
         "priority": cost.priority,
         "transfer": cost.transfer,
+        "barracks": cost.barracks,
+        "warehouse": cost.warehouse,
     }
     mod = rules.terrain.defense_mod
     assert public.combat.terrain_defense_mod.model_dump() == {

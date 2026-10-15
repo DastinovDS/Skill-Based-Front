@@ -34,7 +34,11 @@
         "starve_in": null,
         "recruit_queue": 0,
         "recruit_progress": 0,
-        "recruit_waiting": false
+        "recruit_waiting": false,
+        "has_barracks": true,
+        "warehouse_level": 0,
+        "warehouse_cap": 6,
+        "building": null
       },
       {
         "id": 1,
@@ -56,7 +60,11 @@
         "starve_in": null,
         "recruit_queue": 0,
         "recruit_progress": 0,
-        "recruit_waiting": false
+        "recruit_waiting": false,
+        "has_barracks": true,
+        "warehouse_level": 0,
+        "warehouse_cap": 4,
+        "building": null
       },
       {
         "id": 2,
@@ -80,7 +88,11 @@
         "starve_in": null,
         "recruit_queue": null,
         "recruit_progress": null,
-        "recruit_waiting": null
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null
       },
       {
         "id": 3,
@@ -102,7 +114,11 @@
         "starve_in": null,
         "recruit_queue": 0,
         "recruit_progress": 0,
-        "recruit_waiting": false
+        "recruit_waiting": false,
+        "has_barracks": true,
+        "warehouse_level": 0,
+        "warehouse_cap": 3,
+        "building": null
       },
       {
         "id": 4,
@@ -126,7 +142,11 @@
         "starve_in": null,
         "recruit_queue": null,
         "recruit_progress": null,
-        "recruit_waiting": null
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null
       },
       {
         "id": 5,
@@ -150,7 +170,11 @@
         "starve_in": null,
         "recruit_queue": null,
         "recruit_progress": null,
-        "recruit_waiting": null
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null
       },
       {
         "id": 6,
@@ -174,7 +198,11 @@
         "starve_in": null,
         "recruit_queue": null,
         "recruit_progress": null,
-        "recruit_waiting": null
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null
       },
       {
         "id": 7,
@@ -199,19 +227,19 @@
         "starve_in": null,
         "recruit_queue": null,
         "recruit_progress": null,
-        "recruit_waiting": null
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null
       }
     ],
     "edges": [
       {
         "id": 0,
         "width": 2,
-        "kind": "fast",
         "detail": "presence",
-        "upgrade_gain": {
-          "fast": { "speed_pct": 50, "amount": 0 },
-          "freight": null
-        },
+        "upgrade_gain": { "speed_pct": 50 },
         "seen": {
           "tick": 400,
           "level": "presence",
@@ -223,7 +251,6 @@
       {
         "id": 1,
         "width": 1,
-        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -237,7 +264,6 @@
       {
         "id": 2,
         "width": 1,
-        "kind": "none",
         "detail": "fog",
         "upgrade_gain": null,
         "seen": null
@@ -245,7 +271,6 @@
       {
         "id": 3,
         "width": 1,
-        "kind": "none",
         "detail": "fog",
         "upgrade_gain": null,
         "seen": {
@@ -261,7 +286,6 @@
       {
         "id": 4,
         "width": 1,
-        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -275,7 +299,6 @@
       {
         "id": 5,
         "width": 3,
-        "kind": "fast",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -289,7 +312,6 @@
       {
         "id": 6,
         "width": 1,
-        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -303,7 +325,6 @@
       {
         "id": 7,
         "width": 1,
-        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -319,7 +340,6 @@
       {
         "id": 8,
         "width": 1,
-        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {

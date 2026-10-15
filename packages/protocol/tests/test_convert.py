@@ -45,7 +45,7 @@ from gow_sim import view as sv
 from gow_sim.maps import PLAYERS, MapDef, load_map
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
-from gow_sim.state import AtNode, Detail, Event, Group, Mode, RoadKind, event
+from gow_sim.state import AtNode, Detail, Event, Group, Mode, event
 from gow_sim.systems.movement import find_path
 from gow_sim.systems.victory import EndReason as SimEndReason
 from gow_sim.systems.victory import Outcome
@@ -114,10 +114,8 @@ class WireDriver:
             gains = [e for e in self.map.incident[here] if view.edges[e].upgrade_gain is not None]
             if 21 <= phase <= 30 and gains:
                 # The city upgrades a road (DEC-16); its groups wait meanwhile, so armies gather.
-                if phase == 21:
-                    edge = view.edges[gains[0]]
-                    # The first upgrade chooses the type (DEC-22): fast here, freight there.
-                    kind = None if edge.kind is not RoadKind.NONE else ("fast", "freight")[here % 2]
+                if phase == 21:  # roads have no type (DEC-26); now and then an old client's one
+                    kind = "fast" if here % 3 == 0 else None
                     cmds.append(wire.UpgradeRoadCmd(node=here, edge=gains[0], kind=kind))
                 continue
             if g.mode is not Mode.ATTACK:
@@ -155,7 +153,6 @@ def _expected_wire_view(view: PlayerView) -> dict[str, Any]:
     for place in (*data["nodes"], *data["edges"]):
         if place["seen"] is not None:
             del place["seen"]["width"]  # the edge's ``width`` carries it (DEC-17)
-            del place["seen"]["road"]  # and its ``kind`` (DEC-22)
     return data
 
 
@@ -264,8 +261,8 @@ def test_match_through_the_wire(name: str) -> None:
     assert {"fight_started", "fight_round", "fight_ended", "fight_group"} <= kinds
     assert {"recruited", "node_captured", "road_upgraded"} <= kinds
     assert all(acks.values())
-    # Typed roads went through the views (DEC-22): the wire driver builds both types.
-    assert any(e.kind is not RoadKind.NONE for e in snapshots[0].view.edges)
+    # Upgraded roads went through the views.
+    assert any(e.width > 1 for e in snapshots[0].view.edges)
 
 
 class _FrameChecker:
@@ -299,7 +296,7 @@ def _features(view: View) -> set[str]:
             p.seen is not None and p.seen.enemy_modes and p.seen.enemy_units is None for p in places
         ),
         "fog_memory": any(p.detail is Detail.FOG and p.seen is not None for p in places),
-        "road_kind": any(e.kind is not RoadKind.NONE for e in view.edges),
+        "road_level": any(e.width > 1 for e in view.edges),
         "attrition_in": any(n.attrition_in is not None for n in view.nodes),
         "grace_left": any(n.grace_left is not None for n in view.nodes),
         "priority": any(n.priority not in (None, sim.Priority.NORMAL) for n in view.nodes),

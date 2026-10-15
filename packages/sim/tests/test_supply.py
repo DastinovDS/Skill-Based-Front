@@ -2,8 +2,8 @@
 
 Expected values from mechanics.md, sections 7 and 8, SIM-01 (#17) and DEC-22 (#234), item 4
 with DEC-26 (#265), item 7: packet time ``travel_ticks * 100 // speed_pct`` with speed 100 on
-level 1, 150 / 200 on level 2 / 3 (no road types); recharge at most 1 charge per node and tick; details:
-DEC-14 default (#131).
+level 1, 150 / 200 on level 2 / 3 (no road types); recharge at most 1 charge per node and tick;
+details: DEC-14 default (#131).
 
 The map ``line6``: ``0 (capital of 0) - 1 - 2 | 3 - 4 - 5 (capital of 1)``; 2 and 3 start
 neutral, ``_line6()`` gives them to 0 and 1. Every road ``e_i`` joins ``i`` and ``i + 1``,

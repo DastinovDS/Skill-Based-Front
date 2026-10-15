@@ -75,12 +75,21 @@ class MixBot:
         self.base = ExpandBot(mapdef, rules)
         self.forfeit_at = forfeit_at
         self.decisions = 0
+        self.saving = False
+        """Saving CP for a city build (DEC-26): the decisions of ``ExpandBot`` are skipped."""
 
     def decide(self, view: PlayerView, tick: int) -> list[Command]:
         if self.forfeit_at is not None and tick >= self.forfeit_at:
             self.forfeit_at = None
             return [Forfeit()]
         k = self.decisions = self.decisions + 1
+        if k % 120 == 0:
+            self.saving = True
+        if self.saving:  # until the CP pay the barracks: then one of the city builds
+            if view.me.cp < 300:
+                return []
+            self.saving = False
+            return self._develop(view, k // 120)
         cmds: list[Command] = self.base.decide(view, tick)
         idle = [g for g in view.groups if isinstance(g.location, AtNode) and g.order is None]
         if k % 5 == 0:
@@ -112,7 +121,7 @@ class MixBot:
             cmds.extend(self._supply(view, k))
         if k % 31 == 0:  # the last unit of the capital's recruit queue comes back (DEC-25)
             cmds.append(CancelRecruit(self.map.capital(view.player)))
-        if k % 37 == 0:
+        if k % 37 == 0:  # usually rejected: no CP left, or FEATURE_DISABLED without the flag
             cmds.extend(self._develop(view, k))
         return cmds
 

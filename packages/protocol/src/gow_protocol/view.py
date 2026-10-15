@@ -46,7 +46,7 @@ from gow_protocol.base import (
     WireModel,
 )
 from gow_sim.ruleset import Stance
-from gow_sim.state import Detail, IntentKind, Mode, Priority, RoadKind
+from gow_sim.state import BuildKind, Detail, IntentKind, Mode, Priority
 
 
 class Seen(WireModel):
@@ -89,6 +89,15 @@ class NodeBuild(WireModel):
     """The tick the width grows; only for an own build."""
 
 
+class NodeBuilding(WireModel):
+    """The current build of an own city, of any kind (DEC-26, item 10)."""
+
+    kind: BuildKind
+    """``road``, ``barracks`` or ``warehouse``."""
+    done_tick: Tick
+    """The tick it ends, if nothing interrupts it."""
+
+
 class NodeView(WireModel):
     id: NodeId
     owner: PlayerId | None
@@ -120,6 +129,17 @@ class NodeView(WireModel):
     """Own city only: ticks of production of the current unit, up to ``recruit.unit_ticks``."""
     recruit_waiting: bool | None
     """Own city only: the current unit is ready and waits for a place (DEC-25, item 7)."""
+    has_barracks: bool | None
+    """Own city only: it may recruit (DEC-26: with ``city_upgrades`` the capital and the cities
+    with the barracks, without it every city). ``None`` for provinces, the enemy's and neutral
+    nodes: the enemy's barracks are hidden (DEC-26, item 10)."""
+    warehouse_level: NonNegInt | None
+    """Own city only: warehouse upgrades (DEC-26, item 2; always 0 without ``city_upgrades``)."""
+    warehouse_cap: NonNegInt | None
+    """Own city only: charges its warehouse holds (DEC-26, item 2; the node capacity without
+    ``city_upgrades``)."""
+    building: NodeBuilding | None
+    """Own city only: its current build of any kind; ``None`` without one."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -132,6 +152,11 @@ class NodeView(WireModel):
             None in recruit or self.detail is not Detail.EXACT
         ):
             raise ValueError("a recruit queue only for an own city, all three fields together")
+        city = (self.has_barracks, self.warehouse_level, self.warehouse_cap)
+        if any(v is not None for v in city) and (None in city or self.detail is not Detail.EXACT):
+            raise ValueError("barracks and warehouse only for an own city, all three together")
+        if self.building is not None and self.has_barracks is None:
+            raise ValueError("a building only for an own city")
         if (self.detail is Detail.EXACT) != (self.warehouse is not None):
             raise ValueError("warehouse is given exactly when detail is exact")
         _check_seen(self.detail, self.seen)
@@ -144,21 +169,12 @@ class NodeView(WireModel):
         return self
 
 
-class RoadGain(WireModel):
-    """What one more level of one road type adds (DEC-22, item 7)."""
+class UpgradeGain(WireModel):
+    """What the next road level would give (DEC-26, item 7): roads have no type, a level only
+    speeds the packets up; the amount per period does not grow."""
 
     speed_pct: NonNegInt
     """Packet speed gain in percentage points."""
-    amount: NonNegInt
-    """Gain in charges per road and dispatch period."""
-
-
-class UpgradeGain(WireModel):
-    """What the next road level would give, per road type (DEC-22, item 7): both types on
-    level 1, only the road's own type on level 2."""
-
-    fast: RoadGain | None
-    freight: RoadGain | None
 
 
 class EdgeView(WireModel):
@@ -166,8 +182,6 @@ class EdgeView(WireModel):
     width: Width
     """Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is
     ``fog``; in fog the last seen level, or 1 if never seen. Never above the true level."""
-    kind: RoadKind
-    """Road type the player knows, by the same rule (DEC-22, item 8): ``none`` on level 1."""
     detail: Detail
     """``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges."""
     upgrade_gain: UpgradeGain | None

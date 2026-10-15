@@ -84,6 +84,8 @@ def test_roots_are_named_definitions(schema: dict[str, Any]) -> None:
                 "recruit",
                 "cancel_order",
                 "cancel_recruit",
+                "build_barracks",
+                "upgrade_warehouse",
                 "set_priority",
                 "transfer",
                 "forfeit",

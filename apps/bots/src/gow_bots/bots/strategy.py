@@ -54,6 +54,7 @@ class ExpanderBot(StrategyBot):
         self.strike(turn, None, p["margin"], p["est_pct"])
         self.claim(turn, None)
         self.reinforce(turn)
+        self.develop(turn, 0)
         self.strengthen(turn, SPARE_CP)
         self.build_roads(turn, p["road_keep"])
         return turn.cmds
@@ -99,6 +100,7 @@ class TurtleBot(StrategyBot):
         self.reinforce(turn)
         if turn.budget >= p["spill_cp"]:
             self.claim(turn, self.spill)  # CP would burn on the cap: the bunker grows a ring
+        self.develop(turn, 0)
         self.strengthen(turn, SPARE_CP)
         self.build_roads(turn, p["road_keep"])
         return turn.cmds

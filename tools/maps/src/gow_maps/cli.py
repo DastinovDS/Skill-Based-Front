@@ -11,6 +11,7 @@ from gow_maps.mirror import HalfFormatError, mirror_file
 from gow_maps.preview import preview_path, render_preview
 from gow_maps.validate import Issue, load_config, validate_file
 from gow_sim.maps import MapFormatError, load_map
+from gow_sim.ruleset import load_ruleset
 
 _GLOB_CHARS = frozenset("*?[")
 
@@ -41,7 +42,8 @@ def _report(path: str, issues: list[Issue]) -> bool:
 
 def _validate(args: argparse.Namespace) -> int:
     config = load_config(args.config)
-    results = [_report(path, validate_file(path, config)) for path in _expand(args.files)]
+    rules = None if args.ruleset is None else load_ruleset(args.ruleset)
+    results = [_report(path, validate_file(path, config, rules)) for path in _expand(args.files)]
     return 0 if all(results) else 1
 
 
@@ -92,6 +94,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     validate = commands.add_parser("validate", help="check map files, exit 1 on any problem")
     validate.add_argument("files", nargs="+", help="map JSON files (glob patterns allowed)")
     validate.add_argument("--config", help="validator thresholds (default: built-in validate.toml)")
+    validate.add_argument(
+        "--ruleset", help="also check the start stocks against its warehouses (DEC-26, item 5)"
+    )
     validate.set_defaults(handler=_validate)
     mirror = commands.add_parser("mirror", help="build a rot180 map from a half and validate it")
     mirror.add_argument("half", help="half map, maps/src/<name>.half.json")

@@ -31,7 +31,11 @@
         "starve_in": null,
         "recruit_queue": 0,
         "recruit_progress": 0,
-        "recruit_waiting": false
+        "recruit_waiting": false,
+        "has_barracks": true,
+        "warehouse_level": 0,
+        "warehouse_cap": 5,
+        "building": null
       },
       {
         "id": 1,
@@ -53,7 +57,11 @@
         "starve_in": null,
         "recruit_queue": 2,
         "recruit_progress": 12,
-        "recruit_waiting": false
+        "recruit_waiting": false,
+        "has_barracks": true,
+        "warehouse_level": 0,
+        "warehouse_cap": 3,
+        "building": null
       },
       {
         "id": 2,
@@ -75,7 +83,11 @@
         "starve_in": null,
         "recruit_queue": null,
         "recruit_progress": null,
-        "recruit_waiting": null
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null
       },
       {
         "id": 3,
@@ -100,19 +112,19 @@
         "starve_in": null,
         "recruit_queue": null,
         "recruit_progress": null,
-        "recruit_waiting": null
+        "recruit_waiting": null,
+        "has_barracks": null,
+        "warehouse_level": null,
+        "warehouse_cap": null,
+        "building": null
       }
     ],
     "edges": [
       {
         "id": 0,
         "width": 1,
-        "kind": "none",
         "detail": "presence",
-        "upgrade_gain": {
-          "fast": { "speed_pct": 50, "amount": 0 },
-          "freight": { "speed_pct": 0, "amount": 1 }
-        },
+        "upgrade_gain": { "speed_pct": 50 },
         "seen": {
           "tick": 120,
           "level": "presence",
@@ -124,7 +136,6 @@
       {
         "id": 1,
         "width": 1,
-        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {
@@ -138,7 +149,6 @@
       {
         "id": 2,
         "width": 1,
-        "kind": "none",
         "detail": "fog",
         "upgrade_gain": null,
         "seen": {
@@ -152,7 +162,6 @@
       {
         "id": 3,
         "width": 1,
-        "kind": "none",
         "detail": "presence",
         "upgrade_gain": null,
         "seen": {

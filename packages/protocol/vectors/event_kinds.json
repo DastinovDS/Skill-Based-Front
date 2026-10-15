@@ -3,6 +3,7 @@
   "source": "gow_protocol.convert: PUBLIC_KINDS, PRIVATE_KINDS and FIGHT_KINDS (event_for_player)",
   "kinds": [
     "attrition",
+    "barracks_built",
     "build_started",
     "build_stopped",
     "charges_overflow",
@@ -17,7 +18,6 @@
     "group_split",
     "groups_merged",
     "node_captured",
-    "packet_captured",
     "packet_delivered",
     "packet_lost",
     "packet_sent",
@@ -30,6 +30,7 @@
     "starvation",
     "transfer_started",
     "vp_awarded",
-    "warehouse_lost"
+    "warehouse_lost",
+    "warehouse_upgraded"
   ]
 }
