@@ -31,11 +31,11 @@ describe('the radial menus of a city and of a group', () => {
     document.body.innerHTML = '';
   });
 
-  function render(queue: number | null = 0) {
+  function render(queue: number | null = 0, rules = DEV_RULES) {
     const hud = new HudState({
       me: 0,
       nicks: ['Danya', 'Bot'],
-      rules: DEV_RULES,
+      rules,
       map: DEFAULT_MAP,
     });
     hud.onSnapshot(snapshot);
@@ -43,13 +43,16 @@ describe('the radial menus of a city and of a group', () => {
     const orders = new OrderController({
       hud,
       map: DEFAULT_MAP,
-      rules: DEV_RULES,
+      rules,
       book: new OrderBook(),
       send: (cmd) => sent.push(cmd),
     });
     const target = document.body.appendChild(document.createElement('div'));
     mounted.push(
-      mount(CityRadial, { target, props: { orders, anchors, building: null, queue } }),
+      mount(CityRadial, {
+        target,
+        props: { orders, anchors, building: null, queue, city: hud.current?.node ?? null },
+      }),
       mount(GroupRadial, {
         target,
         props: { orders, anchors, group: hud.current?.group ?? null, mergeable: 1 },
@@ -95,6 +98,27 @@ describe('the radial menus of a city and of a group', () => {
     cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     flushSync();
     expect(sent).toEqual([{ type: 'cancel_recruit', node: home }]);
+  });
+
+  it('with city upgrades the menu builds the barracks and the warehouse (DEC-26)', () => {
+    setLocale('en');
+    const rules = {
+      ...DEV_RULES,
+      city_upgrades: { ...DEV_RULES.city_upgrades, enabled: true },
+    };
+    const { target, orders, sent } = render(0, rules);
+    orders.click({ kind: 'node', id: home }, false);
+    flushSync();
+    const items = [...target.querySelectorAll('[role="menuitem"]')];
+    expect(items.map((i) => i.textContent.replace(/\s+/g, ' ').trim())).toEqual([
+      expect.stringContaining('Recruit'),
+      expect.stringContaining('Cancel recruit'),
+      expect.stringContaining('Roads'),
+      expect.stringContaining('Barracks'),
+      expect.stringContaining('Warehouse'),
+    ]);
+    orders.chooseCity('warehouse');
+    expect(sent).toEqual([{ type: 'upgrade_warehouse', node: home }]);
   });
 
   it('the group menu dims merge for a lone group and speaks Russian too', () => {

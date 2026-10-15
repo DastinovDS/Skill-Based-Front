@@ -109,6 +109,8 @@ export const BAR_GAP = 9;
  * (10 apart); the first fills with the progress of the unit in production.
  */
 export const QUEUE_SLOT = { width: 8, height: 4, pitch: 10, pad: 1 } as const;
+/** The barracks or warehouse build of an own city (DEC-26): a thin bar above the queue mark. */
+export const BUILD_MARK = { width: 24, height: 2, gap: 4 } as const;
 
 export const VP_BADGE_RADIUS = 8.5;
 export const VP_BADGE = { fill: BG, stroke: { width: 2, color: VP } } as const;

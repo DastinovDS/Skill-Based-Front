@@ -170,7 +170,13 @@
   <SupplyMenu {orders} />
   <TransferDialog {orders} />
   <SplitMenu {orders} {anchors} />
-  <CityRadial {orders} {anchors} {building} queue={data?.node?.recruitQueue ?? null} />
+  <CityRadial
+    {orders}
+    {anchors}
+    {building}
+    queue={data?.node?.recruitQueue ?? null}
+    city={data?.node ?? null}
+  />
   <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
   <StackRadial {orders} {anchors} />
   <GroupTip group={data?.hovered ?? null} />

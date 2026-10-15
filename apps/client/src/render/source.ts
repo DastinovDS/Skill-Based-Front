@@ -17,6 +17,12 @@ export interface CapacityTicks {
   readonly graceTicks: number;
 }
 
+/** Durations of the city builds of DEC-26 in ticks. */
+export interface CityBuildTicks {
+  readonly barracks: number;
+  readonly warehouse: number;
+}
+
 export interface RenderSource {
   /** Overcrowding numbers for the pill beside an overcrowded city; without them no pill. */
   readonly capacityTicks?: CapacityTicks;
@@ -31,6 +37,12 @@ export interface RenderSource {
    * progress of the queue mark over an own city. Without it no queue mark.
    */
   readonly recruitTicks?: number;
+  /**
+   * The city development of DEC-26 when the rules have it (`ruleset_public.city_upgrades`): the
+   * durations of the barracks and warehouse builds for the build mark over an own city, and the
+   * warehouse bar of a foreign city shows only its charges (its capacity is hidden).
+   */
+  readonly cityUpgrades?: CityBuildTicks | null;
   /** The frame to draw now; `null` until the first snapshot. */
   frame(): RenderFrame | null;
   /**

@@ -33,7 +33,7 @@ import { TargetMenuState } from './targetMenuState.svelte.ts';
 import { SupplyMenuState, TransferState } from './supplyState.svelte.ts';
 
 /** A sector of the menu of a city. */
-export type CityChoice = 'recruit' | 'cancel_recruit' | 'roads';
+export type CityChoice = 'recruit' | 'cancel_recruit' | 'roads' | 'barracks' | 'warehouse';
 
 /** A sector of the menu of a group. */
 export type GroupChoice = 'split' | 'merge' | 'cancel' | 'defense';
@@ -502,6 +502,8 @@ export class OrderController implements MapInteraction {
     this.cityMenu.close();
     if (choice === 'recruit') this.recruit();
     else if (choice === 'cancel_recruit') this.cancelRecruit();
+    else if (choice === 'barracks') this.cityBuild('build_barracks');
+    else if (choice === 'warehouse') this.cityBuild('upgrade_warehouse');
     else this.toggleRoadPick();
   }
 
@@ -536,6 +538,25 @@ export class OrderController implements MapInteraction {
     this.cityMenu.close();
     if (node === null) return;
     this.#sendCommand({ type: 'recruit', node }, null);
+  }
+
+  /** The barracks or a warehouse level of the selected own city (DEC-26). */
+  cityBuild(type: 'build_barracks' | 'upgrade_warehouse'): void {
+    const node = this.recruitNode();
+    this.cityMenu.close();
+    if (node === null) return;
+    this.#sendCommand({ type, node }, null);
+  }
+
+  /** The city development of DEC-26 is in these rules (`ruleset_public.city_upgrades`). */
+  get cityUpgrades(): RulesetPublic['city_upgrades'] {
+    return this.#o.rules.city_upgrades;
+  }
+
+  /** Prices of the barracks and of a warehouse level, hundredths of CP. */
+  get cityCosts(): { readonly barracks: number; readonly warehouse: number } {
+    const { cost } = this.#o.rules;
+    return { barracks: cost.barracks, warehouse: cost.warehouse };
   }
 
   /** Take the last unit off the recruit queue of the selected city (DEC-25); free. */
@@ -633,7 +654,7 @@ export class OrderController implements MapInteraction {
     this.transfer.close();
     if (on) {
       this.stopRoadPick();
-        this.closeRadial();
+      this.closeRadial();
     }
     this.ui.patch({ supplyMode: on, transferFrom: null });
   }

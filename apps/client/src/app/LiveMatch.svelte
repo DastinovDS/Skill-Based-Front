@@ -105,6 +105,12 @@
           capacity: welcome.ruleset_public.capacity,
           roundTicks: welcome.ruleset_public.combat.round_ticks,
           recruitTicks: welcome.ruleset_public.recruit.unit_ticks,
+          cityUpgrades: welcome.ruleset_public.city_upgrades.enabled
+            ? {
+                barracks: welcome.ruleset_public.city_upgrades.barracks_ticks,
+                warehouse: welcome.ruleset_public.city_upgrades.warehouse_ticks,
+              }
+            : null,
         };
       },
       onStatus: (next) => {

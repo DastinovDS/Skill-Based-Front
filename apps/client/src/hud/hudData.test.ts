@@ -118,9 +118,7 @@ describe('buildHudData: road upgrades of cities (DEC-16)', () => {
     ...fog,
     view: {
       ...fog.view,
-      edges: fog.view.edges.map((e) =>
-        e.id === 0 ? { ...e, width: 2, upgrade_gain: gain } : e,
-      ),
+      edges: fog.view.edges.map((e) => (e.id === 0 ? { ...e, width: 2, upgrade_gain: gain } : e)),
     },
   };
   const edge0 = map.edges[0];

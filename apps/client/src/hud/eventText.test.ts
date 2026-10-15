@@ -50,23 +50,40 @@ describe('eventText', () => {
     expect(eventText(event('attrition', { node: 4, player: 0 }), 0)).toBe(
       'Overcapacity at node 4: a unit was lost',
     );
-    expect(eventText(event('road_upgraded', { edge: 2, width: 3, road: 'freight' }), 0)).toBe(
-      'Road 2 upgraded to level 3 (freight)',
+    expect(eventText(event('road_upgraded', { edge: 2, width: 3 }), 0)).toBe(
+      'Road 2 upgraded to level 3',
     );
     expect(
       eventText(
-        event('build_started', { node: 4, edge: 2, width: 2, road: 'fast', charges: 3, player: 0 }),
+        event('build_started', {
+          node: 4,
+          kind: 'road',
+          edge: 2,
+          width: 2,
+          charges: 1,
+          player: 0,
+        }),
         0,
       ),
-    ).toBe('City 4 upgrades road 2 to level 2 (fast): 3 charges spent');
+    ).toBe('City 4 upgrades road 2 to level 2: 1 charges spent');
     expect(eventText(event('build_stopped', { node: 4, edge: 2, reason: 'interrupted' }), 0)).toBe(
       'The build of road 2 was interrupted',
     );
+    // DEC-26: the barracks and the warehouse of a city.
+    expect(eventText(event('build_started', { node: 4, kind: 'barracks', player: 0 }), 0)).toBe(
+      'City 4 builds its barracks',
+    );
+    expect(eventText(event('build_stopped', { node: 4, edge: null, player: 0 }), 0)).toBe(
+      'The build in city 4 was interrupted',
+    );
+    expect(eventText(event('barracks_built', { node: 4, player: 0 }), 0)).toBe(
+      'City 4 has its barracks: it recruits now',
+    );
+    expect(eventText(event('warehouse_upgraded', { node: 4, level: 2, player: 0 }), 0)).toBe(
+      'The warehouse of city 4 is now level 2',
+    );
     expect(eventText(event('packet_lost', { edge: 1, charges: 5 }), 0)).toBe(
       'Charges lost on road 1: 5',
-    );
-    expect(eventText(event('packet_captured', { node: 3, charges: 2, player: 0 }), 0)).toBe(
-      'Cargo taken on a freight road at node 3: 2 charges',
     );
     setLocale('ru');
     expect(eventText(event('attrition', { node: 4, player: 0 }), 0)).toContain('Перегрузка');

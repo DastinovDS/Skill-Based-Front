@@ -1,5 +1,6 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import type { MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
+import type { CityBuildTicks } from './source.ts';
 import type { Point } from './camera.ts';
 import {
   barTop,
@@ -15,6 +16,7 @@ import {
   BAR_BASE,
   BAR_SEGMENT,
   BG,
+  BUILD_MARK,
   CAPITAL_RADIUS,
   CAPITAL_STAR,
   CITY_HALO,
@@ -27,6 +29,7 @@ import {
   NEUTRAL_STROKE,
   NODE_RADIUS,
   OWNER_OUTLINE,
+  PAPER,
   QUEUE_SLOT,
   RING_FILLED,
   RING_SEGMENT,
@@ -58,10 +61,24 @@ interface CityState {
   readonly progress: number;
   /** Ticks per unit (`ruleset_public.recruit.unit_ticks`); `null`: no queue mark. */
   readonly unitTicks: number | null;
+  /** Segments of the warehouse bar: the warehouse capacity (DEC-26), or the charges only. */
+  readonly warehouseCap: number | null;
+  /** Own city: share of its barracks or warehouse build done, in percent; `null`: none. */
+  readonly buildPct: number | null;
 }
 
 function stateKey(s: CityState): string {
-  return [s.owner, s.capacity, s.garrison, s.warehouse, s.queue, s.progress, s.unitTicks]
+  return [
+    s.owner,
+    s.capacity,
+    s.garrison,
+    s.warehouse,
+    s.queue,
+    s.progress,
+    s.unitTicks,
+    s.warehouseCap,
+    s.buildPct,
+  ]
     .map(String)
     .join('|');
 }
@@ -170,6 +187,8 @@ export class CityView {
         queue: null,
         progress: 0,
         unitTicks: null,
+        warehouseCap: null,
+        buildPct: null,
       });
     });
   }
@@ -178,7 +197,11 @@ export class CityView {
    * A new snapshot: owners, capacity classes, garrisons, warehouses and recruit queues;
    * `unitTicks`: ticks per recruit (`null`: no queue marks).
    */
-  update(base: SnapshotMsg, unitTicks: number | null = null): void {
+  update(
+    base: SnapshotMsg,
+    unitTicks: number | null = null,
+    cityUpgrades: CityBuildTicks | null = null,
+  ): void {
     const garrison = new Map<number, number>();
     for (const group of base.view.groups) {
       if (group.location.kind === 'node') {
@@ -186,7 +209,10 @@ export class CityView {
       }
     }
     for (const node of base.view.nodes) {
-      this.set(node.id, this.stateOf(node, garrison.get(node.id) ?? 0, unitTicks));
+      this.set(
+        node.id,
+        this.stateOf(node, garrison.get(node.id) ?? 0, unitTicks, cityUpgrades, base.tick),
+      );
     }
   }
 
@@ -205,7 +231,19 @@ export class CityView {
 
   // --- Drawing ------------------------------------------------------------------------------
 
-  private stateOf(node: NodeView, garrison: number, unitTicks: number | null): CityState {
+  private stateOf(
+    node: NodeView,
+    garrison: number,
+    unitTicks: number | null,
+    cityUpgrades: CityBuildTicks | null,
+    tick: number,
+  ): CityState {
+    const building = node.building;
+    let buildPct: number | null = null;
+    if (building !== null && building.kind !== 'road' && cityUpgrades !== null) {
+      const total = cityUpgrades[building.kind];
+      buildPct = Math.round((100 * (total - Math.max(0, building.done_tick - tick))) / total);
+    }
     return {
       owner: node.owner,
       capacity: node.capacity,
@@ -214,6 +252,10 @@ export class CityView {
       queue: node.recruit_queue,
       progress: node.recruit_progress ?? 0,
       unitTicks,
+      // DEC-26: an own city knows its warehouse capacity; a foreign one shows only its charges
+      // when the warehouse is apart from the capacity, else the capacity (DEC-22).
+      warehouseCap: node.warehouse_cap ?? (cityUpgrades === null ? node.capacity : null),
+      buildPct,
     };
   }
 
@@ -297,10 +339,12 @@ export class CityView {
     if (state.queue !== null && state.queue > 0 && state.unitTicks !== null) {
       this.drawQueue(queue, radius, state.queue, state.progress, state.unitTicks);
     }
+    if (state.buildPct !== null) this.drawBuild(queue, radius, state.buildPct);
     if (state.capacity !== null) {
       this.drawRing(ring, radius, state.capacity, kind === 'you' ? state.garrison : 0);
       if (state.warehouse !== null) {
-        this.drawBar(bar, radius, state.warehouse, state.capacity, state.owner);
+        const cap = state.warehouseCap ?? state.warehouse;
+        this.drawBar(bar, radius, state.warehouse, cap, state.owner);
       }
     }
     const badge = this.badges[id];
@@ -367,6 +411,17 @@ export class CityView {
         g.rect(slot.x, top + 1, width * slot.fill, height).fill(slot.fill >= 1 ? WARN : YOU);
       }
     }
+  }
+
+  /** The barracks or warehouse build of an own city (DEC-26): a thin bar above the queue mark. */
+  private drawBuild(g: Graphics, radius: number, pct: number): void {
+    const top = queueTop(radius) - BUILD_MARK.height - BUILD_MARK.gap;
+    const { width, height } = BUILD_MARK;
+    g.roundRect(-width / 2 - 1, top - 1, width + 2, height + 2, BAR_BASE.radius).fill(
+      BAR_BASE.color,
+    );
+    g.rect(-width / 2, top, width, height).fill(SEGMENT_EMPTY_BAR);
+    g.rect(-width / 2, top, (width * Math.min(100, Math.max(0, pct))) / 100, height).fill(PAPER);
   }
 
   private drawBar(

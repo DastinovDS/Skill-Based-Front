@@ -16,7 +16,6 @@ export const REJECT_MESSAGES = {
   NOT_ADJACENT: 'reject.NOT_ADJACENT',
   NOT_INTERNAL: 'reject.NOT_INTERNAL',
   MAX_WIDTH: 'reject.MAX_WIDTH',
-  ROAD_KIND_MISMATCH: 'reject.ROAD_KIND_MISMATCH',
   NOT_CITY: 'reject.NOT_CITY',
   NOT_SUPPLIED: 'reject.NOT_SUPPLIED',
   CITY_BUSY: 'reject.CITY_BUSY',
@@ -28,6 +27,10 @@ export const REJECT_MESSAGES = {
   NOT_CAPITAL: 'reject.NOT_CAPITAL',
   CITY_FULL: 'reject.CITY_FULL',
   QUEUE_FULL: 'reject.QUEUE_FULL',
+  FEATURE_DISABLED: 'reject.FEATURE_DISABLED',
+  ALREADY_BUILT: 'reject.ALREADY_BUILT',
+  WAREHOUSE_MAX: 'reject.WAREHOUSE_MAX',
+  NO_BARRACKS: 'reject.NO_BARRACKS',
   STACK_LIMIT: 'reject.STACK_LIMIT',
   IN_FIGHT: 'reject.IN_FIGHT',
 } as const satisfies Record<string, MessageKey>;

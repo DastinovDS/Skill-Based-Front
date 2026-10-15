@@ -39,7 +39,6 @@ export const en = {
   'event.barracks_built': 'City {node} has its barracks: it recruits now',
   'event.warehouse_upgraded': 'The warehouse of city {node} is now level {level}',
   'event.packet_lost': 'Charges lost on road {edge}: {charges}',
-  'event.packet_captured': 'Cargo taken on a freight road at node {node}: {charges} charges',
   'orders.lost': 'The connection dropped before the answer; check the map for the order.',
   'reject.unknown': 'The server refused the command',
   'reject.NOT_FOUND_OR_HIDDEN': 'That target does not exist or is out of sight',

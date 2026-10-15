@@ -39,7 +39,6 @@ export const ru = {
   'event.barracks_built': 'В городе {node} построена казарма: он нанимает юнитов',
   'event.warehouse_upgraded': 'Склад города {node} расширен до уровня {level}',
   'event.packet_lost': 'Потеряно зарядов на дороге {edge}: {charges}',
-  'event.packet_captured': 'Захвачен груз на грузовой дороге, узел {node}: зарядов {charges}',
   'orders.lost': 'Соединение оборвалось до ответа; проверь приказ на карте.',
   'reject.unknown': 'Сервер отклонил команду',
   'reject.NOT_FOUND_OR_HIDDEN': 'Этой цели нет или её не видно',
