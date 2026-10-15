@@ -5,6 +5,7 @@
   import {
     PRIORITY_SIGN,
     SUPPLY_HALF,
+    SUPPLY_RING,
     SUPPLY_SECTORS,
     type RadialItem,
     type SupplyChoice,
@@ -71,6 +72,7 @@
     closeLabel={t('supplyMenu.close')}
     modal
     {captions}
+    ring={SUPPLY_RING}
     half={SUPPLY_HALF}
   >
     {#snippet centre()}

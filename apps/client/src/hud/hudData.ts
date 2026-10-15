@@ -146,6 +146,8 @@ export interface NodeChoice {
   readonly priority: Priority | null;
   /** Warehouse charges where the view has them (own nodes and nodes seen exactly). */
   readonly warehouse: number | null;
+  /** Warehouse capacity of an own city (DEC-26); `null` where the view does not give it. */
+  readonly warehouseCap: number | null;
 }
 
 /** A road and what its next level would give, from `EdgeView.upgrade_gain` (the server's numbers). */
@@ -377,6 +379,7 @@ export function buildHudData(
       owner: ownership(n.owner, me),
       priority: n.priority,
       warehouse: n.warehouse,
+      warehouseCap: n.warehouse_cap,
     })),
     roads: view.edges.map((e) => roadInfo(ctx, e)),
     events,

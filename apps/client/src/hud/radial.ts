@@ -28,9 +28,6 @@ export const BIG_RING: RadialRing = { inner: RADIAL.inner, outer: RADIAL.outer }
 /** The menu of a group: a small ring around its icon (a few big sectors). */
 export const GROUP_RING: RadialRing = { inner: 26, outer: 96 };
 
-/** How far past the outer radius a sector still lights up (a forgiving flick, CSS px). */
-export const REACH_MARGIN = 24;
-
 /** One sector of a menu, as `Radial.svelte` draws it. */
 export interface RadialItem {
   readonly id: string;
@@ -46,6 +43,11 @@ export interface RadialItem {
   readonly key?: string;
   /** The choice that is on now: a thicker outline and a tick. */
   readonly current?: boolean;
+  /**
+   * Draw only the glyph, the `lines` and the key: no name text (it stays the accessible name of
+   * the sector). For a menu whose sectors the glyph and the price tell by themselves.
+   */
+  readonly compact?: boolean;
   /** Cannot be chosen now: dimmed, never lit by the pointer. */
   readonly disabled?: boolean;
 }
@@ -76,37 +78,27 @@ export const SECTORS: readonly {
 ];
 
 /**
- * The item whose sector centre (`angle`, screen degrees) is nearest to the pointer at (`dx`, `dy`)
- * from the middle of a menu; `null` in the dead zone. Any part of a sector selects it.
+ * The item whose drawn ring segment holds the pointer at (`dx`, `dy`) from the middle of a menu:
+ * between the inner and the outer radius and within `half` degrees of the sector's angle. The
+ * hit area is the drawn segment exactly: the hole, the gaps between sectors and everything outside
+ * the ring give `null`.
  */
-export function nearestSector<T>(
+export function sectorHit<T>(
   sectors: readonly { readonly angle: number; readonly item: T }[],
   dx: number,
   dy: number,
-  dead: number = RADIAL.dead,
-  reach: number = Infinity,
+  ring: RadialRing,
+  half: number,
 ): T | null {
   const distance = Math.hypot(dx, dy);
-  if (distance < dead || distance > reach) return null;
+  if (distance < ring.inner || distance > ring.outer) return null;
   const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-  let best: T | null = null;
-  let nearest = Infinity;
   for (const { item, angle: centre } of sectors) {
     // The angular distance to the centre of the sector, 0..180.
     const apart = Math.abs(((((angle - centre + 540) % 360) + 360) % 360) - 180);
-    if (apart < nearest) {
-      nearest = apart;
-      best = item;
-    }
+    if (apart <= half) return item;
   }
-  return best;
-}
-
-const STANCE_SECTORS = SECTORS.map((s) => ({ angle: s.angle, item: s.stance }));
-
-/** The stance whose sector is nearest to the pointer at (`dx`, `dy`) from the centre; `null` in the dead zone. */
-export function sectorAt(dx: number, dy: number): Stance | null {
-  return nearestSector(STANCE_SECTORS, dx, dy);
+  return null;
 }
 
 /** SVG path of the ring sector around `centre` degrees, relative to the middle of the menu. */
@@ -183,6 +175,9 @@ export const SUPPLY_SECTORS: readonly {
   { choice: 'transfer', angle: 180, key: '4' },
 ];
 
+/** The ring of the supply menu: small, a narrow band like the city menu's (not the big ring). */
+export const SUPPLY_RING: RadialRing = { inner: 30, outer: 112 };
+
 /** Half the angle of a supply sector: four sectors of 90 degrees with a minimal gap. */
 export const SUPPLY_HALF = 44;
 
@@ -192,10 +187,3 @@ export const PRIORITY_SIGN: Readonly<Record<Priority, string>> = {
   normal: '●',
   low: '▼',
 };
-
-const SUPPLY_CHOICES = SUPPLY_SECTORS.map((s) => ({ angle: s.angle, item: s.choice }));
-
-/** The supply choice under the pointer at (`dx`, `dy`) from the middle of the menu; `null`: dead zone. */
-export function supplySectorAt(dx: number, dy: number): SupplyChoice | null {
-  return nearestSector(SUPPLY_CHOICES, dx, dy);
-}

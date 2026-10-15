@@ -44,19 +44,38 @@ export interface TransferData {
   readonly open: boolean;
   readonly from: number;
   readonly to: number;
-  /** Charges in the warehouse of `from` (the most the slider offers); at least 1 when open. */
+  /**
+   * The most the slider offers: the charges in the warehouse of `from`, and no more than the free
+   * room of the warehouse of `to`; 0: nothing can be sent (the confirm button is off).
+   */
   readonly max: number;
+  /** The warehouse of `to` has no free room (the reason of a zero `max` the dialog tells). */
+  readonly full: boolean;
   /** The amount chosen. */
   readonly n: number;
 }
 
-const TRANSFER_CLOSED: TransferData = { open: false, from: -1, to: -1, max: 0, n: 0 };
+const TRANSFER_CLOSED: TransferData = {
+  open: false,
+  from: -1,
+  to: -1,
+  max: 0,
+  full: false,
+  n: 0,
+};
 
 export class TransferState {
   current = $state.raw<TransferData>(TRANSFER_CLOSED);
 
-  open(from: number, to: number, max: number): void {
-    this.current = { open: true, from, to, max, n: Math.min(max, Math.max(1, Math.ceil(max / 2))) };
+  open(from: number, to: number, max: number, full = false): void {
+    this.current = {
+      open: true,
+      from,
+      to,
+      max,
+      full,
+      n: Math.min(max, Math.max(1, Math.ceil(max / 2))),
+    };
   }
 
   set(n: number): void {

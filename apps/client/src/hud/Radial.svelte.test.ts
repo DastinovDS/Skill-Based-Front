@@ -67,11 +67,17 @@ describe('Radial', () => {
     expect(calls.hover).toHaveBeenCalledTimes(1);
   });
 
-  it('lights nothing in the dead zone or far outside the ring', () => {
+  it('lights nothing in the hole, past the rim or in a gap: the hit area is the drawn segment', () => {
     const { calls } = render();
-    window.dispatchEvent(new PointerEvent('pointermove', { clientX: 402, clientY: 302 }));
-    window.dispatchEvent(new PointerEvent('pointermove', { clientX: 400, clientY: -400 }));
-    expect(calls.hover).not.toHaveBeenCalledWith('a');
+    const at = (x: number, y: number) =>
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y }));
+    at(402, 302); // the hole
+    at(400, 300 - 150 - 5); // just past the outer radius of the big ring (150)
+    at(400, -400);
+    at(400 + 90 * Math.cos((330 * Math.PI) / 180), 300 + 90 * Math.sin((330 * Math.PI) / 180)); // a gap
+    expect(calls.hover).not.toHaveBeenCalled();
+    at(400, 300 - 150 + 2); // inside the rim
+    expect(calls.hover).toHaveBeenLastCalledWith('a');
   });
 
   it('shows the hover the owner keeps', () => {
@@ -88,7 +94,7 @@ describe('Radial', () => {
     expect(calls.choose).toHaveBeenCalledWith('a');
   });
 
-  it('has no click-away area unless modal; a modal one closes, or picks the sector of the click', () => {
+  it('has no click-away area unless modal; a modal one closes, or picks the sector under the click', () => {
     expect(render().target.querySelector('.backdrop')).toBeNull();
     document.body.innerHTML = '';
     const { target, calls } = render({ modal: true });
@@ -96,9 +102,12 @@ describe('Radial', () => {
     expect(backdrop).not.toBeNull();
     backdrop?.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 10, clientY: 10 }));
     expect(calls.close).toHaveBeenCalledOnce();
-    // A click in a gap of the ring, still on the first sector's side: that sector is chosen.
+    // A click on the drawn segment of the first sector chooses it.
     backdrop?.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 400, clientY: 230 }));
     expect(calls.choose).toHaveBeenCalledWith('a');
+    // In a gap or in the hole nothing is chosen: the menu closes.
+    backdrop?.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 402, clientY: 302 }));
+    expect(calls.close).toHaveBeenCalledTimes(2);
   });
 
   it('follows a moving anchor and closes when the thing is gone', async () => {

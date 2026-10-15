@@ -203,6 +203,17 @@ describe('OrderController', () => {
     expect(controller.key({ type: 'keydown', code: 'KeyZ', shiftKey: false })).toBe(false);
   });
 
+  it('X cancels the last recruit of the selected own city, not of an enemy one', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'node', id: home }, false);
+    expect(controller.key(down('KeyX'))).toBe(true);
+    expect(sent).toEqual([{ type: 'cancel_recruit', node: home }]);
+    controller.deselect();
+    controller.click({ kind: 'node', id: enemy.id }, false);
+    expect(controller.key(down('KeyX'))).toBe(true);
+    expect(sent).toHaveLength(1);
+  });
+
   it('sends the other commands as intents', () => {
     const { controller, sent } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
@@ -620,11 +631,13 @@ describe('OrderController', () => {
       controller.click({ kind: 'node', id: target }, false);
       expect(controller.ui.current.transferFrom).toBeNull();
       const stock = snapshot.view.nodes[city]?.warehouse ?? 0;
+      const there = snapshot.view.nodes[target];
+      const room = (there?.warehouse_cap ?? 0) - (there?.warehouse ?? 0);
       expect(controller.transfer.current).toMatchObject({
         open: true,
         from: city,
         to: target,
-        max: stock,
+        max: Math.min(stock, room),
       });
       controller.setTransferAmount(1);
       controller.confirmTransfer();
@@ -632,6 +645,42 @@ describe('OrderController', () => {
       expect(sent).toEqual(
         stock > 0 ? [{ type: 'transfer', from_node: city, to_node: target, n: 1 }] : [],
       );
+    });
+
+    it('the slider offers no more than the free room of the target warehouse', () => {
+      const { hud, controller } = setup();
+      const cap = snapshot.view.nodes.find((n) => n.id === target)?.warehouse_cap ?? 0;
+      const stock = snapshot.view.nodes.find((n) => n.id === city)?.warehouse ?? 0;
+      // The target holds all but 2 of its capacity (the source has more than 2 to give).
+      const filled = (held: number): SnapshotMsg => ({
+        ...snapshot,
+        view: {
+          ...snapshot.view,
+          nodes: snapshot.view.nodes.map((n) =>
+            n.id === target
+              ? { ...n, warehouse: held }
+              : n.id === city
+                ? { ...n, warehouse: 9 }
+                : n,
+          ),
+        },
+      });
+      expect(stock).toBeGreaterThanOrEqual(0);
+      hud.onSnapshot(filled(cap - 2));
+      controller.key(down('Tab'));
+      controller.click({ kind: 'node', id: city }, false);
+      controller.chooseSupply('transfer');
+      controller.click({ kind: 'node', id: target }, false);
+      expect(controller.transfer.current).toMatchObject({ open: true, max: 2, full: false });
+      // No room at all: nothing to send, the dialog says why.
+      controller.closeTransfer();
+      hud.onSnapshot(filled(cap));
+      controller.click({ kind: 'node', id: city }, false);
+      controller.chooseSupply('transfer');
+      controller.click({ kind: 'node', id: target }, false);
+      expect(controller.transfer.current).toMatchObject({ open: true, max: 0, full: true });
+      controller.confirmTransfer();
+      expect(controller.transfer.current.open).toBe(false);
     });
 
     it('the amount stays within 1..warehouse', () => {
