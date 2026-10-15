@@ -32,25 +32,28 @@ from dataclasses import dataclass
 from typing import ClassVar, Protocol
 
 from gow_sim.commands import (
+    BuildBarracks,
     CancelOrder,
     Command,
     Move,
     SetPriority,
     Split,
     UpgradeRoad,
+    UpgradeWarehouse,
     command_cost,
 )
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import RecruitLocation, Ruleset
 from gow_sim.view import (
     AtNode,
+    BuildKind,
     FightView,
     GroupView,
     IntentKind,
+    NodeView,
     OnEdge,
     PlayerView,
     Priority,
-    RoadKind,
 )
 
 __all__ = [
@@ -346,15 +349,6 @@ class Bot:
                     queue.append(other)
         return result
 
-    def front_road(self, view: PlayerView, edge: int) -> bool:
-        """A road at the front: a neighbour of one of its ends is not own (public ownership)."""
-        e = self.map.edges[edge]
-        return any(
-            view.nodes[other].owner != self.player
-            for end in (e.a, e.b)
-            for other in self.neighbors[end]
-        )
-
     def priorities(self, view: PlayerView) -> list[Command]:
         """Supply priorities (DEC-18): own cities at the front ``high``, the rest ``normal``.
 
@@ -374,25 +368,18 @@ class Bot:
                 cmds.append(SetPriority(n, want))
         return cmds
 
-    def road_kind(self, view: PlayerView, edge: int) -> RoadKind | None:
-        """The type for the next level of ``edge`` (DEC-22): ``None`` when it already has one.
-
-        Freight at the front (a captured end node does not lose the charges on the way, and a
-        front city needs volume), fast in the rear (refills arrive sooner).
-        """
-        if view.edges[edge].kind is not RoadKind.NONE:
-            return None
-        return RoadKind.FREIGHT if self.front_road(view, edge) else RoadKind.FAST
-
     def upgrade(self, view: PlayerView, node: int, edge: int) -> UpgradeRoad:
-        """``UpgradeRoad(node, edge, kind)`` with the type of ``road_kind``."""
-        return UpgradeRoad(node, edge, self.road_kind(view, edge))
+        """``UpgradeRoad(node, edge)``: roads have no type (DEC-26, item 7)."""
+        del view
+        return UpgradeRoad(node, edge)
 
     def can_upgrade(self, view: PlayerView, node: int, edge: int, supplied: list[bool]) -> bool:
-        """``UpgradeRoad(node, edge, kind)`` passes the checks of DEC-16 and DEC-22 that the view
-        shows."""
+        """``UpgradeRoad(node, edge)`` passes the checks of DEC-16 and DEC-22 that the view shows
+        (one build per city, shared with the barracks and the warehouse: DEC-26, item 8)."""
         city = view.nodes[node]
-        if city.owner != self.player or not supplied[node] or city.build is not None:
+        if city.owner != self.player or not supplied[node] or city.building is not None:
+            return False
+        if city.build is not None:
             return False
         e = view.edges[edge]
         other = self.map.edges[edge].other(node)
@@ -403,6 +390,71 @@ class Bot:
             return False
         price = self.rules.build.charges_per_level.of(e.width + 1)
         return (city.warehouse or 0) >= price
+
+    def development(self, view: PlayerView, budget: int) -> Command | None:
+        """At most one city build of DEC-26 per decision (item 11; none without
+        ``city_upgrades``), from ``budget`` CP in hundredths.
+
+        - The barracks: when the nearest own city to the enemy capital is at least two hops
+          nearer than every own city with the barracks (recruits would walk far), that city builds
+          them: their price, three recruits in the capital, buys a shorter way for every later
+          recruit.
+        - A warehouse level: in a full warehouse of a city that supplies troops (own units stand
+          there, or it is at the front), only with CP that would soon burn on the cap.
+
+        Cities without a build and without a fight, in ``node_key`` order: mirror-invariant.
+        """
+        if not self.rules.city_upgrades.enabled:
+            return None
+        cost = self.rules.orders.cost
+        want = self.wanted_barracks(view)
+        if want is not None and budget >= cost.barracks:
+            return BuildBarracks(want)
+        if budget < max(cost.warehouse, self.rules.cp.cap - cost.recruit):
+            return None
+        standing = self.standing(view)
+        for n in self._free_cities(view):
+            supplies = standing[n.id] > 0 or self.front(view, n.id)
+            if (
+                supplies
+                and n.warehouse_level is not None
+                and n.warehouse_level < self.rules.warehouse.max_level
+                and n.warehouse == n.warehouse_cap
+            ):
+                return UpgradeWarehouse(n.id)
+        return None
+
+    def wanted_barracks(self, view: PlayerView) -> int | None:
+        """The own city that should build the barracks now (``development``), or ``None``."""
+        if not self.rules.city_upgrades.enabled:
+            return None
+        far = self.hops[self.map.capital(1 - view.player)]
+        barracks = [far[n.id] for n in view.nodes if n.owner == view.player and n.has_barracks]
+        if any(
+            n.building is not None and n.building.kind is BuildKind.BARRACKS for n in view.nodes
+        ):
+            return None  # one at a time
+        for n in self._free_cities(view):
+            if not n.has_barracks:
+                near = far[n.id] + 2 <= min(barracks, default=far[n.id] + 2)
+                return n.id if near else None
+        return None
+
+    def _free_cities(self, view: PlayerView) -> list[NodeView]:
+        """Own cities without a build and without a fight, nearest to the enemy capital first
+        (ties by ``node_key``: mirror-invariant)."""
+        fights = self.fight_nodes(view)
+        far = self.hops[self.map.capital(1 - view.player)]
+        free = [
+            n
+            for n in view.nodes
+            if n.owner == view.player
+            and n.has_barracks is not None
+            and n.building is None
+            and n.build is None
+            and n.id not in fights
+        ]
+        return sorted(free, key=lambda n: (far[n.id], self.key(n.id)))
 
     def can_queue(self, view: PlayerView, node: int, standing: int) -> bool:
         """``Recruit(node)`` is accepted and sensible now (DEC-25), with ``standing`` own units
@@ -417,7 +469,10 @@ class Bot:
         n = view.nodes[node]
         if n.owner != view.player or n.recruit_queue is None:
             return False
-        if self.rules.recruit.location is RecruitLocation.CAPITAL and node != self.map.capital(
+        if self.rules.city_upgrades.enabled:  # the barracks decides where (DEC-26, item 11)
+            if not n.has_barracks:
+                return False
+        elif self.rules.recruit.location is RecruitLocation.CAPITAL and node != self.map.capital(
             view.player
         ):
             return False

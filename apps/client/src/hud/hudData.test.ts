@@ -113,14 +113,12 @@ describe('buildHudData: road upgrades of cities (DEC-16)', () => {
       ],
     },
   };
-  const gain = { fast: { speed_pct: 50, amount: 0 }, freight: null };
+  const gain = { speed_pct: 50 };
   const snapshot: SnapshotMsg = {
     ...fog,
     view: {
       ...fog.view,
-      edges: fog.view.edges.map((e) =>
-        e.id === 0 ? { ...e, width: 2, kind: 'fast' as const, upgrade_gain: gain } : e,
-      ),
+      edges: fog.view.edges.map((e) => (e.id === 0 ? { ...e, width: 2, upgrade_gain: gain } : e)),
     },
   };
   const edge0 = map.edges[0];
@@ -133,7 +131,6 @@ describe('buildHudData: road upgrades of cities (DEC-16)', () => {
       a: edge0.a,
       b: edge0.b,
       width: 2,
-      kind: 'fast',
       gain,
       charges: 4,
     });

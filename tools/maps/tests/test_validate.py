@@ -7,6 +7,7 @@ import pytest
 
 from gow_maps.cli import main
 from gow_maps.validate import ValidatorConfig, load_config, validate_file
+from gow_sim.ruleset import load_ruleset
 
 FIXTURES = Path(__file__).parent / "fixtures"
 REPO = Path(__file__).parents[3]
@@ -104,3 +105,27 @@ def test_cli_expands_glob_patterns(capsys: pytest.CaptureFixture[str]) -> None:
     assert capsys.readouterr().out.count("OK") == len(TEST_MAPS)
     assert main(["validate", str(FIXTURES / "nothing-*.json")]) == 0
     assert "no files match" in capsys.readouterr().err
+
+
+# DEC-26, item 5: start stocks against the warehouses of a ruleset with city_upgrades ----------
+
+ROOT_RULESETS = REPO / "rulesets"
+
+
+def test_warehouse_check_only_with_city_upgrades(config: ValidatorConfig) -> None:
+    """Example 20 of DEC-26: a small city with ``start_stock = 2`` fails ``warehouse`` with the
+    flag on (its warehouse starts at 1) and passes with it off (the warehouse holds 4)."""
+    mvp_map = REPO / "maps" / "arteriya.json"
+    on = load_ruleset(ROOT_RULESETS / "mvp-1.toml")
+    off = load_ruleset(ROOT_RULESETS / "mvp-0.toml")
+    issues = [i for i in validate_file(mvp_map, config, on) if i.check == "warehouse"]
+    assert issues and all("city_small" in i.message for i in issues)
+    assert validate_file(mvp_map, config, off) == []
+    assert validate_file(mvp_map, config) == []
+
+
+def test_cli_ruleset_option(capsys: pytest.CaptureFixture[str]) -> None:
+    mvp_map = str(REPO / "maps" / "pautina.json")
+    assert main(["validate", mvp_map, "--ruleset", str(ROOT_RULESETS / "mvp-0.toml")]) == 0
+    assert main(["validate", mvp_map, "--ruleset", str(ROOT_RULESETS / "mvp-1.toml")]) == 1
+    assert "[warehouse]" in capsys.readouterr().out

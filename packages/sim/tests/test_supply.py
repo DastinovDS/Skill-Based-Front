@@ -1,9 +1,9 @@
 """Supply (SIM-08): packet time table, recharge, charge conservation, canonical form.
 
-Expected values from mechanics.md, sections 7 and 8, SIM-01 (#17) and DEC-22 (#234), item 4:
-packet time ``travel_ticks * 100 // speed_pct`` with speed 100 on level 1 and on freight roads,
-150 / 200 on fast roads of level 2 / 3; recharge at most 1 charge per node and tick; details:
-DEC-14 default (#131).
+Expected values from mechanics.md, sections 7 and 8, SIM-01 (#17) and DEC-22 (#234), item 4
+with DEC-26 (#265), item 7: packet time ``travel_ticks * 100 // speed_pct`` with speed 100 on
+level 1, 150 / 200 on level 2 / 3 (no road types); recharge at most 1 charge per node and tick;
+details: DEC-14 default (#131).
 
 The map ``line6``: ``0 (capital of 0) - 1 - 2 | 3 - 4 - 5 (capital of 1)``; 2 and 3 start
 neutral, ``_line6()`` gives them to 0 and 1. Every road ``e_i`` joins ``i`` and ``i + 1``,
@@ -25,7 +25,6 @@ from gow_sim.state import (
     Group,
     Mode,
     OnEdge,
-    RoadKind,
     from_canonical,
     initial_state,
     state_hash,
@@ -47,7 +46,6 @@ RULES: Ruleset = dataclasses.replace(
         base_speed_pct=100,
         base_amount=1,
         fast_speed_pct=LevelTable((150, 200)),
-        freight_amount=LevelTable((2, 3)),
     ),
 )
 
@@ -67,17 +65,15 @@ def _group(state: GameState, owner: int, node: int, units: int, charged: int = 0
 
 
 @pytest.mark.parametrize(
-    ("level", "kind", "ticks"),
+    ("level", "ticks"),
     [
-        (1, RoadKind.NONE, 30),
-        (2, RoadKind.FAST, 20),  # 30 * 100 // 150
-        (3, RoadKind.FAST, 15),  # 30 * 100 // 200
-        (2, RoadKind.FREIGHT, 30),
-        (3, RoadKind.FREIGHT, 30),
+        (1, 30),
+        (2, 20),  # 30 * 100 // 150
+        (3, 15),  # 30 * 100 // 200
     ],
 )
-def test_packet_time_by_level_and_type(level: int, kind: RoadKind, ticks: int) -> None:
-    assert packet_ticks(_line6().map, RULES, 0, level, kind) == ticks
+def test_packet_time_by_level(level: int, ticks: int) -> None:
+    assert packet_ticks(_line6().map, RULES, 0, level) == ticks
 
 
 def test_tree_is_the_own_territory_from_the_capital() -> None:

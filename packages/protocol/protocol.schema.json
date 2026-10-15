@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 15,
+    "PROTOCOL_VERSION": 16,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -113,6 +113,38 @@
       "title": "AtNodeLoc",
       "type": "object"
     },
+    "BuildBarracksCmd": {
+      "additionalProperties": false,
+      "description": "The own city ``node`` builds the barracks (DEC-26, ``city_upgrades``): then it recruits.",
+      "properties": {
+        "type": {
+          "const": "build_barracks",
+          "default": "build_barracks",
+          "type": "string"
+        },
+        "node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "node"
+      ],
+      "title": "BuildBarracksCmd",
+      "type": "object"
+    },
+    "BuildKind": {
+      "description": "What a city builds (DEC-26, item 9): a road level, the barracks or a warehouse level.",
+      "enum": [
+        "road",
+        "barracks",
+        "warehouse"
+      ],
+      "title": "BuildKind",
+      "type": "string"
+    },
     "BuildPublic": {
       "additionalProperties": false,
       "description": "Road upgrades by a city (``build`` of the ruleset, DEC-16).",
@@ -203,6 +235,45 @@
       "title": "CapacityPublic",
       "type": "object"
     },
+    "CityUpgradesPublic": {
+      "additionalProperties": false,
+      "description": "City development (DEC-26): ``city_upgrades`` and ``warehouse`` of the ruleset.",
+      "properties": {
+        "enabled": {
+          "description": "Off: every city recruits, the warehouse holds the node capacity, no barracks and no\nwarehouse levels (the commands are rejected with ``FEATURE_DISABLED``).",
+          "type": "boolean"
+        },
+        "barracks_ticks": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "warehouse_ticks": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "warehouse_max_level": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "warehouse_gain_per_level": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "enabled",
+        "barracks_ticks",
+        "warehouse_ticks",
+        "warehouse_max_level",
+        "warehouse_gain_per_level"
+      ],
+      "title": "CityUpgradesPublic",
+      "type": "object"
+    },
     "ClientMsg": {
       "discriminator": {
         "mapping": {
@@ -288,6 +359,7 @@
     "Command": {
       "discriminator": {
         "mapping": {
+          "build_barracks": "#/$defs/BuildBarracksCmd",
           "cancel_order": "#/$defs/CancelOrderCmd",
           "cancel_recruit": "#/$defs/CancelRecruitCmd",
           "forfeit": "#/$defs/ForfeitCmd",
@@ -299,7 +371,8 @@
           "set_stance": "#/$defs/SetStanceCmd",
           "split": "#/$defs/SplitCmd",
           "transfer": "#/$defs/TransferCmd",
-          "upgrade_road": "#/$defs/UpgradeRoadCmd"
+          "upgrade_road": "#/$defs/UpgradeRoadCmd",
+          "upgrade_warehouse": "#/$defs/UpgradeWarehouseCmd"
         },
         "propertyName": "type"
       },
@@ -321,6 +394,12 @@
         },
         {
           "$ref": "#/$defs/UpgradeRoadCmd"
+        },
+        {
+          "$ref": "#/$defs/BuildBarracksCmd"
+        },
+        {
+          "$ref": "#/$defs/UpgradeWarehouseCmd"
         },
         {
           "$ref": "#/$defs/RecruitCmd"
@@ -433,6 +512,18 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
+        },
+        "barracks": {
+          "description": "``build_barracks`` (DEC-26, item 2).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "warehouse": {
+          "description": "``upgrade_warehouse``, per level (DEC-26, item 3).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -447,7 +538,9 @@
         "recruit",
         "stance",
         "priority",
-        "transfer"
+        "transfer",
+        "barracks",
+        "warehouse"
       ],
       "title": "CostsPublic",
       "type": "object"
@@ -525,14 +618,6 @@
           "minimum": 1,
           "type": "integer"
         },
-        "kind": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/RoadKind"
-            }
-          ],
-          "description": "Road type the player knows, by the same rule (DEC-22, item 8): ``none`` on level 1."
-        },
         "detail": {
           "allOf": [
             {
@@ -566,7 +651,6 @@
       "required": [
         "id",
         "width",
-        "kind",
         "detail",
         "upgrade_gain",
         "seen"
@@ -1348,6 +1432,32 @@
       "title": "NodeBuild",
       "type": "object"
     },
+    "NodeBuilding": {
+      "additionalProperties": false,
+      "description": "The current build of an own city, of any kind (DEC-26, item 10).",
+      "properties": {
+        "kind": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/BuildKind"
+            }
+          ],
+          "description": "``road``, ``barracks`` or ``warehouse``."
+        },
+        "done_tick": {
+          "description": "The tick it ends, if nothing interrupts it.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "done_tick"
+      ],
+      "title": "NodeBuilding",
+      "type": "object"
+    },
     "NodeKind": {
       "description": "Kind of a node (DEC-22, item 1; DEC-23, item 1): its capacity is ``capacity.by_kind``.",
       "enum": [
@@ -1508,6 +1618,54 @@
             }
           ],
           "description": "Own city only: the current unit is ready and waits for a place (DEC-25, item 7)."
+        },
+        "has_barracks": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Own city only: it may recruit (DEC-26: with ``city_upgrades`` the capital and the cities\nwith the barracks, without it every city). ``None`` for provinces, the enemy's and neutral\nnodes: the enemy's barracks are hidden (DEC-26, item 10)."
+        },
+        "warehouse_level": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Own city only: warehouse upgrades (DEC-26, item 2; always 0 without ``city_upgrades``)."
+        },
+        "warehouse_cap": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Own city only: charges its warehouse holds (DEC-26, item 2; the node capacity without\n``city_upgrades``)."
+        },
+        "building": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeBuilding"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Own city only: its current build of any kind; ``None`` without one."
         }
       },
       "required": [
@@ -1524,7 +1682,11 @@
         "starve_in",
         "recruit_queue",
         "recruit_progress",
-        "recruit_waiting"
+        "recruit_waiting",
+        "has_barracks",
+        "warehouse_level",
+        "warehouse_cap",
+        "building"
       ],
       "title": "NodeView",
       "type": "object"
@@ -2008,40 +2170,6 @@
       "title": "ResyncMsg",
       "type": "object"
     },
-    "RoadGain": {
-      "additionalProperties": false,
-      "description": "What one more level of one road type adds (DEC-22, item 7).",
-      "properties": {
-        "speed_pct": {
-          "description": "Packet speed gain in percentage points.",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "amount": {
-          "description": "Gain in charges per road and dispatch period.",
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "speed_pct",
-        "amount"
-      ],
-      "title": "RoadGain",
-      "type": "object"
-    },
-    "RoadKind": {
-      "description": "Type of a road (DEC-22, item 2): chosen by the first upgrade, never changes after.",
-      "enum": [
-        "none",
-        "fast",
-        "freight"
-      ],
-      "title": "RoadKind",
-      "type": "string"
-    },
     "RulesetPublic": {
       "additionalProperties": false,
       "properties": {
@@ -2078,6 +2206,9 @@
         },
         "recruit": {
           "$ref": "#/$defs/RecruitPublic"
+        },
+        "city_upgrades": {
+          "$ref": "#/$defs/CityUpgradesPublic"
         }
       },
       "required": [
@@ -2090,7 +2221,8 @@
         "economy",
         "orders",
         "capacity",
-        "recruit"
+        "recruit",
+        "city_upgrades"
       ],
       "title": "RulesetPublic",
       "type": "object"
@@ -2447,39 +2579,24 @@
     },
     "UpgradeGain": {
       "additionalProperties": false,
-      "description": "What the next road level would give, per road type (DEC-22, item 7): both types on\nlevel 1, only the road's own type on level 2.",
+      "description": "What the next road level would give (DEC-26, item 7): roads have no type, a level only\nspeeds the packets up; the amount per period does not grow.",
       "properties": {
-        "fast": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RoadGain"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "freight": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RoadGain"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "speed_pct": {
+          "description": "Packet speed gain in percentage points.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
-        "fast",
-        "freight"
+        "speed_pct"
       ],
       "title": "UpgradeGain",
       "type": "object"
     },
     "UpgradeRoadCmd": {
       "additionalProperties": false,
-      "description": "The own city ``node`` raises the internal road ``edge`` by one level (DEC-16, DEC-22).\n\n``kind`` is required by the first upgrade (level 1 -> 2) and chooses the road type; for the\nsecond it may be omitted or must equal the road's type (``ROAD_KIND_MISMATCH`` otherwise).",
+      "description": "The own city ``node`` raises the internal road ``edge`` by one level (DEC-16, DEC-22).\n\nRoads have no type (DEC-26, item 7): ``kind`` is omitted; a given one gives\n``INVALID_ARGUMENT``.",
       "properties": {
         "type": {
           "const": "upgrade_road",
@@ -2519,6 +2636,28 @@
         "kind"
       ],
       "title": "UpgradeRoadCmd",
+      "type": "object"
+    },
+    "UpgradeWarehouseCmd": {
+      "additionalProperties": false,
+      "description": "The own city ``node`` raises its warehouse by one level (DEC-26, item 3).",
+      "properties": {
+        "type": {
+          "const": "upgrade_warehouse",
+          "default": "upgrade_warehouse",
+          "type": "string"
+        },
+        "node": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "node"
+      ],
+      "title": "UpgradeWarehouseCmd",
       "type": "object"
     },
     "View": {

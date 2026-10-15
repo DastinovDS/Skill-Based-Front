@@ -67,6 +67,8 @@ def _rules() -> Ruleset:
         stance=0,
         priority=0,
         transfer=0,
+        barracks=300,
+        warehouse=200,
     )
     return dataclasses.replace(
         base,

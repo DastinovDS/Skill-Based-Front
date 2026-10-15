@@ -46,7 +46,7 @@ from gow_bots.bots.utility import prefer_planned, shots_to_take
 from gow_sim.commands import Command, Move, Recruit, SetMode, SetStance
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import Detail, GroupView, IntentKind, Mode, PlayerView, RoadKind, Stance
+from gow_sim.view import Detail, GroupView, IntentKind, Mode, PlayerView, Stance
 
 __all__ = ["MEMORY_TICKS", "StrategyBot", "Turn"]
 
@@ -375,11 +375,16 @@ class StrategyBot(Bot):
             ):
                 turn.busy.add(g.id)
 
+    def develop(self, turn: Turn, keep: int) -> None:
+        """One city build of DEC-26 (``Bot.development``) with the CP above ``keep``."""
+        cmd = self.development(turn.view, turn.budget - keep)
+        if cmd is not None:
+            self.spend(turn, cmd, keep)
+
     def build_roads(self, turn: Turn, keep: int) -> None:
         """Unthreatened own cities upgrade their internal road with the best gain (DEC-16, DEC-22).
 
-        The type of a first upgrade: ``road_kind`` (freight at the front, fast in the rear); the
-        gain of a road is its ``road_value`` for that type. Cities in ``node_key`` order, roads in
+        The gain of a road is its ``road_value``. Cities in ``node_key`` order, roads in
         edge key order: mirror-invariant. A city pays from its warehouse, so only a city whose
         warehouse covers the level builds; a road that the other end already builds is skipped.
         ``keep``: CP reserve for ``orders.cost.build``.
@@ -402,11 +407,7 @@ class StrategyBot(Bot):
                 building[best] = True
 
     def road_value(self, view: PlayerView, edge: int) -> int | None:
-        """What the next level of ``edge`` is worth: speed points plus 50 per extra charge of the
-        type it gets (``road_kind``, or its own); ``None`` when it cannot grow."""
+        """What the next level of ``edge`` is worth: its speed points (DEC-26, item 7: a level
+        only speeds the packets up); ``None`` when it cannot grow."""
         gain = view.edges[edge].upgrade_gain
-        if gain is None:
-            return None
-        kind = self.road_kind(view, edge) or view.edges[edge].kind
-        g = gain.fast if kind is RoadKind.FAST else gain.freight
-        return None if g is None else g.speed_pct + 50 * g.amount
+        return None if gain is None else gain.speed_pct

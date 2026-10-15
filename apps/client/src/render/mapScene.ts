@@ -202,7 +202,11 @@ export class MapScene {
       const edges = frame.base.view.edges;
       this.view.setRoads(edges);
       this.overlay.setRoadWidths(edges.map((edge) => edge.width));
-      this.cities.update(frame.base, this.source.recruitTicks ?? null);
+      this.cities.update(
+        frame.base,
+        this.source.recruitTicks ?? null,
+        this.source.cityUpgrades ?? null,
+      );
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.entities.setTickHz(tickHz);

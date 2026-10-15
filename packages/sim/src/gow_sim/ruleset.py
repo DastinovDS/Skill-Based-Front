@@ -98,6 +98,29 @@ class KindTable:
 
 
 @dataclass(frozen=True, slots=True)
+class CityKindTable:
+    """One integer per city kind (DEC-26, item 2); a province has no warehouse: ``of`` gives 0."""
+
+    capital: int
+    city_large: int
+    city_medium: int
+    city_small: int
+
+    def of(self, kind: NodeKind) -> int:
+        match kind:
+            case NodeKind.CAPITAL:
+                return self.capital
+            case NodeKind.CITY_LARGE:
+                return self.city_large
+            case NodeKind.CITY_MEDIUM:
+                return self.city_medium
+            case NodeKind.CITY_SMALL:
+                return self.city_small
+            case NodeKind.PROVINCE:
+                return 0
+
+
+@dataclass(frozen=True, slots=True)
 class LevelTable:
     """One integer per upgraded road level ``2..MAX_WIDTH``: ``values[level - 2]`` (DEC-22)."""
 
@@ -142,6 +165,10 @@ class OrderCosts:
     """``SetPriority``: supply priority of a city (DEC-18, item 1)."""
     transfer: int
     """``Transfer``: one-off shipment of charges between own cities (DEC-18, item 6)."""
+    barracks: int
+    """``BuildBarracks``: the barracks of a city (DEC-26, item 2; with ``city_upgrades``)."""
+    warehouse: int
+    """``UpgradeWarehouse``: one warehouse level of a city (DEC-26, item 3)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,13 +223,11 @@ class SupplyRules:
     buffer: int
     recharge_per_tick: int
     base_speed_pct: int
-    """Packet speed on a level 1 road and on a freight road (DEC-22, item 4)."""
+    """Packet speed on a level 1 road (DEC-22, item 4)."""
     base_amount: int
-    """Charges per road and dispatch period on a level 1 road and on a fast road (DEC-22)."""
+    """Charges per road and dispatch period on a road of any level (DEC-26, item 7)."""
     fast_speed_pct: LevelTable
-    """Packet speed on a fast road by its level ``2..MAX_WIDTH``."""
-    freight_amount: LevelTable
-    """Charges per dispatch period on a freight road by its level ``2..MAX_WIDTH``."""
+    """Packet speed on an upgraded road by its level ``2..MAX_WIDTH`` (DEC-26, item 7)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,6 +254,30 @@ class RecruitRules:
 
 
 @dataclass(frozen=True, slots=True)
+class CityUpgradeRules:
+    """City development (DEC-26): the barracks and a warehouse apart from the unit capacity.
+
+    ``enabled`` is the flag of the ruleset; the other numbers apply only when it is ``True``.
+    """
+
+    enabled: bool
+    barracks_ticks: int
+    """Ticks to build the barracks (item 2)."""
+    warehouse_ticks: int
+    """Ticks to raise the warehouse by one level (item 3)."""
+
+
+@dataclass(frozen=True, slots=True)
+class WarehouseRules:
+    """Warehouse capacity of a city with ``city_upgrades`` (DEC-26, item 2):
+    ``start_by_kind[kind] + level * gain_per_level``, ``level`` in ``0..max_level``."""
+
+    gain_per_level: int
+    max_level: int
+    start_by_kind: CityKindTable
+
+
+@dataclass(frozen=True, slots=True)
 class VictoryRules:
     vp_period_ticks: int
     capital_multiplier: int
@@ -249,6 +298,8 @@ class Ruleset:
     build: BuildRules
     recruit: RecruitRules
     victory: VictoryRules
+    city_upgrades: CityUpgradeRules
+    warehouse: WarehouseRules
 
 
 def load_ruleset(path: str | Path) -> Ruleset:
@@ -329,6 +380,8 @@ def parse_ruleset(data: object) -> Ruleset:
             "build",
             "recruit",
             "victory",
+            "city_upgrades",
+            "warehouse",
         ),
     )
     return Ruleset(
@@ -378,7 +431,6 @@ def parse_ruleset(data: object) -> Ruleset:
                     "base_speed_pct",
                     "base_amount",
                     "fast_speed_pct",
-                    "freight_amount",
                 ),
             )
         ),
@@ -387,6 +439,12 @@ def parse_ruleset(data: object) -> Ruleset:
             root.table("recruit", ("unit_ticks", "queue_max", "refund_started_pct", "location"))
         ),
         victory=_parse_victory(root.table("victory", ("vp_period_ticks", "capital_multiplier"))),
+        city_upgrades=_parse_city_upgrades(
+            root.table("city_upgrades", ("enabled", "barracks_ticks", "warehouse_ticks"))
+        ),
+        warehouse=_parse_warehouse(
+            root.table("warehouse", ("gain_per_level", "max_level", "start_by_kind"))
+        ),
     )
 
 
@@ -472,7 +530,6 @@ def _parse_starvation(t: "_Table") -> StarvationRules:
 
 def _parse_supply(t: "_Table") -> SupplyRules:
     speed = t.table("fast_speed_pct", _LEVEL_KEYS)
-    amount = t.table("freight_amount", _LEVEL_KEYS)
     return SupplyRules(
         dispatch_ticks=t.integer("dispatch_ticks", low=1),
         buffer=t.integer("buffer", low=0),
@@ -480,7 +537,6 @@ def _parse_supply(t: "_Table") -> SupplyRules:
         base_speed_pct=t.integer("base_speed_pct", low=1),
         base_amount=t.integer("base_amount", low=1),
         fast_speed_pct=LevelTable(tuple(speed.integer(key, low=1) for key in _LEVEL_KEYS)),
-        freight_amount=LevelTable(tuple(amount.integer(key, low=1) for key in _LEVEL_KEYS)),
     )
 
 
@@ -498,6 +554,26 @@ def _parse_recruit(t: "_Table") -> RecruitRules:
         queue_max=t.integer("queue_max", low=1),
         refund_started_pct=t.integer("refund_started_pct", low=0, high=100),
         location=RecruitLocation(t.choice("location", tuple(loc.value for loc in RecruitLocation))),
+    )
+
+
+def _parse_city_upgrades(t: "_Table") -> CityUpgradeRules:
+    return CityUpgradeRules(
+        enabled=t.boolean("enabled"),
+        barracks_ticks=t.integer("barracks_ticks", low=1),
+        warehouse_ticks=t.integer("warehouse_ticks", low=1),
+    )
+
+
+_CITY_KINDS: Final = tuple(k.value for k in NodeKind if k is not NodeKind.PROVINCE)
+
+
+def _parse_warehouse(t: "_Table") -> WarehouseRules:
+    kinds = t.table("start_by_kind", _CITY_KINDS)
+    return WarehouseRules(
+        gain_per_level=t.integer("gain_per_level", low=0),
+        max_level=t.integer("max_level", low=0),
+        start_by_kind=CityKindTable(**{k: kinds.integer(k, low=0) for k in _CITY_KINDS}),
     )
 
 
@@ -540,6 +616,12 @@ class _Table:
         if (low is not None and value < low) or (high is not None and value > high):
             bounds = f"[{'' if low is None else low}..{'' if high is None else high}]"
             raise RulesetError(f"{self._path(key)}: {value} is out of range {bounds}")
+        return value
+
+    def boolean(self, key: str) -> bool:
+        value = self._get(key)
+        if not isinstance(value, bool):
+            raise RulesetError(f"{self._path(key)}: expected true or false, got {value!r}")
         return value
 
     def choice(self, key: str, options: tuple[str, ...]) -> str:

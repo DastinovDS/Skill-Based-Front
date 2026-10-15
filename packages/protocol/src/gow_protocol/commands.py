@@ -3,9 +3,9 @@
 A command is an intent, never state. It names own groups by opaque id and map nodes and edges by
 their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``Move(group, dest, planned)``, ``Split(group, n)``, ``Merge(groups)``, ``SetMode(group, mode)``,
-``SetStance(stance)``, ``UpgradeRoad(node, edge, kind)``, ``Recruit(node)``, ``CancelOrder(group)``,
+``SetStance(stance)``, ``UpgradeRoad(node, edge)``, ``Recruit(node)``, ``CancelOrder(group)``,
 ``Forfeit()``; DEC-18: ``SetPriority(node, level)``, ``Transfer(from, to, n)``; DEC-25:
-``CancelRecruit(node)``. The conversion
+``CancelRecruit(node)``; DEC-26: ``BuildBarracks(node)``, ``UpgradeWarehouse(node)``. The conversion
 to simulation commands is PRO-03 (#46).
 
 The schema checks only the shape. Ownership, visibility, reachability and CP are checked by the
@@ -63,21 +63,36 @@ class SetStanceCmd(WireModel):
     stance: Stance
 
 
-RoadType = Literal["fast", "freight"]
-"""A road type a command may choose (DEC-22, item 2)."""
+LegacyRoadType = Literal["fast", "freight"]
+"""A road type of the clients from before DEC-26: accepted on the wire, rejected by the simulation
+with ``INVALID_ARGUMENT`` (DEC-26, item 7: roads have no type)."""
 
 
 class UpgradeRoadCmd(WireModel):
     """The own city ``node`` raises the internal road ``edge`` by one level (DEC-16, DEC-22).
 
-    ``kind`` is required by the first upgrade (level 1 -> 2) and chooses the road type; for the
-    second it may be omitted or must equal the road's type (``ROAD_KIND_MISMATCH`` otherwise).
+    Roads have no type (DEC-26, item 7): ``kind`` is omitted; a given one gives
+    ``INVALID_ARGUMENT``.
     """
 
     type: Literal["upgrade_road"] = "upgrade_road"
     node: NodeId
     edge: EdgeId
-    kind: RoadType | None = None
+    kind: LegacyRoadType | None = None
+
+
+class BuildBarracksCmd(WireModel):
+    """The own city ``node`` builds the barracks (DEC-26, ``city_upgrades``): then it recruits."""
+
+    type: Literal["build_barracks"] = "build_barracks"
+    node: NodeId
+
+
+class UpgradeWarehouseCmd(WireModel):
+    """The own city ``node`` raises its warehouse by one level (DEC-26, item 3)."""
+
+    type: Literal["upgrade_warehouse"] = "upgrade_warehouse"
+    node: NodeId
 
 
 class RecruitCmd(WireModel):
@@ -129,6 +144,8 @@ type Command = Annotated[
     | SetModeCmd
     | SetStanceCmd
     | UpgradeRoadCmd
+    | BuildBarracksCmd
+    | UpgradeWarehouseCmd
     | RecruitCmd
     | CancelRecruitCmd
     | CancelOrderCmd

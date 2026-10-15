@@ -2,7 +2,9 @@
 
 The loader rejects malformed files (types, references, ranges, neutral garrisons). This module
 checks what makes a map playable and fair: connectivity, planarity, 180-degree symmetry, node
-degree, redundant approaches to valuable cities, neutral space and road lengths.
+degree, redundant approaches to valuable cities, neutral space and road lengths. Given a ruleset
+with ``city_upgrades`` (DEC-26, item 5), also that no city starts with more charges than its
+warehouse holds (``warehouse``).
 """
 
 import math
@@ -13,7 +15,8 @@ from pathlib import Path
 
 import networkx as nx
 
-from gow_sim.maps import EdgeDef, MapDef, MapFormatError, NodeDef, load_map
+from gow_sim.maps import EdgeDef, MapDef, MapFormatError, NodeDef, NodeKind, load_map
+from gow_sim.ruleset import Ruleset
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,22 +62,26 @@ class Issue:
         return f"[{self.check}] {self.message}"
 
 
-def validate_file(path: str | Path, config: ValidatorConfig) -> list[Issue]:
+def validate_file(
+    path: str | Path, config: ValidatorConfig, rules: Ruleset | None = None
+) -> list[Issue]:
     """Load and validate one map file. A loader error is reported as the ``format`` check."""
     try:
         mapdef = load_map(path)
     except MapFormatError as exc:
         return [Issue("format", str(exc))]
-    return validate(mapdef, config)
+    return validate(mapdef, config, rules)
 
 
-def validate(mapdef: MapDef, config: ValidatorConfig) -> list[Issue]:
+def validate(mapdef: MapDef, config: ValidatorConfig, rules: Ruleset | None = None) -> list[Issue]:
+    """Every check; ``warehouse`` only with ``rules`` that have ``city_upgrades`` on."""
     graph = to_graph(mapdef)
     issues = [
         *check_planarity(mapdef),
         *check_symmetry(mapdef),
         *check_degree(mapdef, config),
         *check_travel_ticks(mapdef, config),
+        *(check_warehouse(mapdef, rules) if rules is not None else []),
     ]
     connectivity = check_connectivity(graph)
     issues += connectivity
@@ -82,6 +89,26 @@ def validate(mapdef: MapDef, config: ValidatorConfig) -> list[Issue]:
         issues += check_disjoint_paths(mapdef, graph, config)
         issues += check_neutral_space(mapdef, graph, config)
     return issues
+
+
+def check_warehouse(mapdef: MapDef, rules: Ruleset) -> list[Issue]:
+    """DEC-26, item 5: ``start_stock`` of a city is at most ``warehouse.start_by_kind[kind]``.
+
+    Only for a ruleset with ``city_upgrades.enabled``: without it the warehouse holds the node
+    capacity (DEC-22, item 1). The simulation cuts a bigger stock at the start without an event.
+    """
+    if not rules.city_upgrades.enabled:
+        return []
+    start = rules.warehouse.start_by_kind
+    return [
+        Issue(
+            "warehouse",
+            f"node {n.id} ({n.kind.value}) starts with {n.start_stock} charges, "
+            f"its warehouse holds {start.of(n.kind)}",
+        )
+        for n in mapdef.nodes
+        if n.kind is not NodeKind.PROVINCE and n.start_stock > start.of(n.kind)
+    ]
 
 
 def to_graph(mapdef: MapDef) -> "nx.Graph[int]":

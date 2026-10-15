@@ -17,7 +17,9 @@
       "recruit": 100,
       "stance": 0,
       "priority": 0,
-      "transfer": 0
+      "transfer": 0,
+      "barracks": 300,
+      "warehouse": 200
     },
     "combat": {
       "terrain_defense_mod": { "plains": -1, "forest": 0, "mountains": 1 },
@@ -30,8 +32,8 @@
     "build": {
       "ticks_per_level": 150,
       "charges_per_level": [
-        { "width": 2, "charges": 3 },
-        { "width": 3, "charges": 4 }
+        { "width": 2, "charges": 1 },
+        { "width": 3, "charges": 2 }
       ]
     },
     "economy": {
@@ -44,7 +46,14 @@
       "stance_cooldown_ticks": 100
     },
     "capacity": { "attrition_ticks": 30, "grace_ticks": 50 },
-    "recruit": { "unit_ticks": 30, "queue_max": 3, "refund_started_pct": 50 }
+    "recruit": { "unit_ticks": 30, "queue_max": 3, "refund_started_pct": 50 },
+    "city_upgrades": {
+      "enabled": false,
+      "barracks_ticks": 100,
+      "warehouse_ticks": 100,
+      "warehouse_max_level": 2,
+      "warehouse_gain_per_level": 1
+    }
   },
   "map_id": "diamond",
   "last_seq": 0,

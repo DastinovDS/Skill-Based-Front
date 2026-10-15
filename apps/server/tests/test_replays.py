@@ -28,7 +28,7 @@ from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match as SimMatch
 from gow_sim.replay import ReplayWriter, read_replay, record_headless, replay_run
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset, ruleset_hash
-from gow_sim.state import RoadKind, initial_state
+from gow_sim.state import Build, BuildKind, initial_state
 
 ROOT: Final = Path(__file__).parents[3]
 RULESETS: Final = ROOT / "rulesets" / "archive"
@@ -56,13 +56,21 @@ def full_rules() -> Ruleset:
 # The frames file --------------------------------------------------------------------------
 
 
-def test_frame_has_road_types_only_once_a_road_has_one(line3: MapDef, full_rules: Ruleset) -> None:
-    """Key ``r`` (DEC-22): road types by edge id, absent while every road is untyped."""
+def test_frame_has_no_road_types(line3: MapDef, full_rules: Ruleset) -> None:
+    """Key ``r`` (DEC-22) is gone with the road types (DEC-26): only the levels in ``w``."""
     state = initial_state(line3, full_rules)
-    assert "r" not in frame_of(state, full_rules)
-    state.edges[1].width, state.edges[1].kind = 2, RoadKind.FREIGHT
+    state.edges[1].width = 2
     frame = frame_of(state, full_rules)
-    assert (frame["w"], frame["r"]) == ([1, 2], ["none", "freight"])
+    assert frame["w"] == [1, 2] and "r" not in frame
+
+
+def test_frame_builds_are_road_builds_only(line3: MapDef, full_rules: Ruleset) -> None:
+    """Key ``b``: road builds by city; a barracks or warehouse build (DEC-26) is not drawn."""
+    state = initial_state(line3, full_rules)
+    state.nodes[0].build = Build(edge=None, owner=0, since=0, kind=BuildKind.BARRACKS)
+    assert "b" not in frame_of(state, full_rules)
+    state.nodes[0].build = Build(edge=0, owner=0, since=0)
+    assert frame_of(state, full_rules)["b"] == [[0, 0, full_rules.build.ticks_per_level]]
 
 
 def test_fifteen_minute_match_resimulates_to_the_same_result(

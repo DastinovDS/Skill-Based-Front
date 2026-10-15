@@ -67,11 +67,13 @@ split = 0 # деление группы бесплатно (DEC-20)
 merge = 0 # слияние групп бесплатно, группы сливаются и сами (DEC-20)
 attack = 0 # режим «Атака»: обычное состояние, переключение бесплатно (DEC-08)
 defense = 200 # режим «Защита»; повторное включение стоит снова (DEC-08)
-build = 0 # UpgradeRoad(node, edge, kind): плата CP за уровень дороги; 0: платят только заряды склада (DEC-16, #203)
+build = 0 # UpgradeRoad(node, edge): плата CP за уровень дороги; 0: платят только заряды склада (DEC-16, #203)
 recruit = 100 # Recruit(node): 1 CP за юнита в очереди, при постановке (DEC-25, #262; mechanics.md, раздел 3)
 stance = 0 # смена стойки бесплатна (DEC-02, #8)
 priority = 0 # SetPriority(node, level): приоритет снабжения города бесплатен (DEC-18, #230)
 transfer = 0 # Transfer(from, to, n): разовая перевозка зарядов бесплатна (DEC-18, #230)
+barracks = 300 # BuildBarracks(node): 3 CP, только при city_upgrades.enabled (DEC-26, #265)
+warehouse = 200 # UpgradeWarehouse(node): 2 CP за уровень, только при city_upgrades.enabled (DEC-26)
 
 [terrain.defense_mod]
 # Модификатор пула защитника узла по рельефу, в зарядах (DEC-07, #11, правило 1; mechanics.md, раздел 4).
@@ -127,25 +129,19 @@ per_units = 3 # ... на каждые начатые 3 юнита
 
 [supply]
 # Снабжение: пакеты по внутренним дорогам от столицы (mechanics.md, разделы 7 и 8; SIM-08, #24).
-# Скорость и объём пакета зависят от уровня и типа дороги (DEC-22, п. 4): время в пути
-# travel_ticks * 100 // speed_pct (округление вниз, не меньше 1); за период отправки по ребру
-# идёт не больше amount зарядов. Уровень 1: base_speed_pct и base_amount.
+# Скорость пакета зависит от уровня дороги (DEC-22, п. 4; типов дорог нет, DEC-26, п. 7): время в
+# пути travel_ticks * 100 // speed_pct (округление вниз, не меньше 1); за период отправки по ребру
+# идёт не больше base_amount зарядов на любом уровне.
 dispatch_ticks = 10 # период расчёта и отправки пакетов
 buffer = 2 # целевой запас узла = разряженные стоящие юниты + buffer
 recharge_per_tick = 1 # перезарядка стоящих юнитов со склада: не быстрее 1 заряда за тик
-base_speed_pct = 100 # скорость пакета на дороге уровня 1 и на грузовой
-base_amount = 1 # зарядов за период на дороге уровня 1 и на быстрой
+base_speed_pct = 100 # скорость пакета на дороге уровня 1
+base_amount = 1 # зарядов за период по ребру на любом уровне (DEC-26, п. 7)
 
 [supply.fast_speed_pct]
 # Скорость пакета на быстрой дороге, в процентах. Ключ: уровень дороги, 2..3.
 2 = 150
 3 = 200
-
-[supply.freight_amount]
-# Зарядов за период отправки на грузовой дороге. Ключ: уровень дороги, 2..3.
-# Пакет на грузовой дороге доходит, даже если ребро перестало быть внутренним (DEC-22, п. 5).
-2 = 2
-3 = 3
 
 [build]
 # Улучшение внутренней дороги своим городом (DEC-16, #203; mechanics.md, раздел 8).
@@ -153,8 +149,8 @@ ticks_per_level = 150 # 15 с на уровень
 
 [build.charges_per_level]
 # Цена уровня в зарядах склада города-строителя. Ключ: новый уровень дороги, 2..3 (DEC-22, п. 6).
-2 = 3
-3 = 4
+2 = 1
+3 = 2
 
 [recruit]
 # Очередь найма (DEC-25, #262; mechanics.md, раздел 3). Recruit(node) ставит одного юнита в
@@ -176,3 +172,28 @@ location = "any_city" # any_city | capital: где разрешён рекрут
 # по таймеру побеждает тот, у кого больше VP; при равенстве — больше городов; иначе ничья.
 vp_period_ticks = 50
 capital_multiplier = 3
+
+[city_upgrades]
+# Развитие города (DEC-26, #265; mechanics.md, разделы 3 и 8): казарма и склад отдельно от ёмкости
+# юнитов. enabled = false: рекрутирует каждый свой город (recruit.location), склад равен ёмкости
+# узла (capacity.by_kind), BuildBarracks и UpgradeWarehouse дают FEATURE_DISABLED; остальные ключи
+# этой секции и секция [warehouse] тогда не действуют. enabled = true: рекрутирует столица и города
+# с казармой (NO_BARRACKS), recruit.location не действует; склад города по [warehouse]; дорога,
+# казарма и склад занимают одну стройку города (CITY_BUSY).
+enabled = false
+barracks_ticks = 100 # BuildBarracks: казарма через 10 с, оплата orders.cost.barracks при старте
+warehouse_ticks = 100 # UpgradeWarehouse: уровень склада через 10 с, оплата orders.cost.warehouse
+
+[warehouse]
+# Ёмкость склада города при city_upgrades.enabled = true (DEC-26, п. 2):
+# start_by_kind[kind] + level * gain_per_level, level 0..max_level. У провинции склада нет.
+# Склад на старте: min(start_stock карты, ёмкость склада), излишек отбрасывается (п. 5).
+gain_per_level = 1 # +1 заряд за уровень
+max_level = 2 # два улучшения
+
+[warehouse.start_by_kind]
+# Ёмкость склада уровня 0 по виду города.
+capital = 6
+city_large = 2
+city_medium = 2
+city_small = 1

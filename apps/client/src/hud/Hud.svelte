@@ -17,7 +17,6 @@
   import KeyHints from './KeyHints.svelte';
   import type { HudPrefs } from './prefs.svelte.ts';
   import RadialMenu from './RadialMenu.svelte';
-  import RoadTypeMenu from './RoadTypeMenu.svelte';
   import SplitMenu from './SplitMenu.svelte';
   import StackRadial from './StackRadial.svelte';
   import StartBanner from './StartBanner.svelte';
@@ -167,12 +166,17 @@
     <KeyHints />
   {/if}
   <RadialMenu {orders} stance={data?.stance ?? null} />
-  <RoadTypeMenu {orders} />
   <SupplyBanner {orders} />
   <SupplyMenu {orders} />
   <TransferDialog {orders} />
   <SplitMenu {orders} {anchors} />
-  <CityRadial {orders} {anchors} {building} queue={data?.node?.recruitQueue ?? null} />
+  <CityRadial
+    {orders}
+    {anchors}
+    {building}
+    queue={data?.node?.recruitQueue ?? null}
+    city={data?.node ?? null}
+  />
   <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
   <StackRadial {orders} {anchors} />
   <GroupTip group={data?.hovered ?? null} />

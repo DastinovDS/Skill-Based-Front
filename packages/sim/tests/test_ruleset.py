@@ -30,6 +30,7 @@ from gow_sim.ruleset import (
 
 RULESETS_DIR = Path(__file__).resolve().parents[3] / "rulesets"
 MVP0 = RULESETS_DIR / "mvp-0.toml"
+MVP1 = RULESETS_DIR / "mvp-1.toml"
 TEST_SHORT = RULESETS_DIR / "test-short.toml"
 
 
@@ -128,7 +129,8 @@ def test_mvp0_terrain(mvp0: Ruleset) -> None:
 
 
 def test_mvp0_capacity_supply_build_victory(mvp0: Ruleset) -> None:
-    # DEC-22 (#234): capacity by node kind, road tables by level and type, prices 3 / 4.
+    # DEC-22 (#234): capacity by node kind, road speed by level; DEC-26 (#265): no road types,
+    # amount 1 on every level, prices 1 / 2.
     by_kind = mvp0.capacity.by_kind
     kinds = (
         NodeKind.CAPITAL,
@@ -143,10 +145,32 @@ def test_mvp0_capacity_supply_build_victory(mvp0: Ruleset) -> None:
     assert (supply.dispatch_ticks, supply.buffer, supply.recharge_per_tick) == (10, 2, 1)
     assert (supply.base_speed_pct, supply.base_amount) == (100, 1)
     assert [supply.fast_speed_pct.of(level) for level in (2, 3)] == [150, 200]
-    assert [supply.freight_amount.of(level) for level in (2, 3)] == [2, 3]
     assert mvp0.build.ticks_per_level == 150
-    assert [mvp0.build.charges_per_level.of(level) for level in (2, 3)] == [3, 4]
+    assert [mvp0.build.charges_per_level.of(level) for level in (2, 3)] == [1, 2]
     assert (mvp0.victory.vp_period_ticks, mvp0.victory.capital_multiplier) == (300, 3)
+
+
+def test_city_upgrades_of_mvp0_and_mvp1(mvp0: Ruleset) -> None:
+    """DEC-26 (#265): the numbers of the barracks and the warehouse; mvp-1 is mvp-0 with the
+    flag on (item 1)."""
+    cu = mvp0.city_upgrades
+    assert (cu.enabled, cu.barracks_ticks, cu.warehouse_ticks) == (False, 100, 100)
+    w = mvp0.warehouse
+    assert (w.gain_per_level, w.max_level) == (1, 2)
+    kinds = (NodeKind.CAPITAL, NodeKind.CITY_LARGE, NodeKind.CITY_MEDIUM, NodeKind.CITY_SMALL)
+    assert [w.start_by_kind.of(k) for k in kinds] == [6, 2, 2, 1]
+    assert w.start_by_kind.of(NodeKind.PROVINCE) == 0  # no warehouse (DEC-23)
+    assert (mvp0.orders.cost.barracks, mvp0.orders.cost.warehouse) == (300, 200)
+    expected = _raw()
+    expected["city_upgrades"]["enabled"] = True
+    assert to_canonical(load_ruleset(MVP1)) == expected
+
+
+def test_enabled_must_be_a_boolean() -> None:
+    data = _raw()
+    data["city_upgrades"]["enabled"] = 1
+    with pytest.raises(RulesetError, match=r"^city_upgrades.enabled: expected true or false"):
+        parse_ruleset(data)
 
 
 def test_level_table_rejects_unknown_level(mvp0: Ruleset) -> None:
@@ -170,7 +194,7 @@ def test_test_short_is_mvp0_with_a_60_second_match() -> None:
     assert to_canonical(short) == expected
 
 
-@pytest.mark.parametrize("path", [MVP0, TEST_SHORT], ids=lambda p: p.name)
+@pytest.mark.parametrize("path", [MVP0, MVP1, TEST_SHORT], ids=lambda p: p.name)
 def test_canonical_form_is_the_toml_data(path: Path) -> None:
     rules = load_ruleset(path)
     assert to_canonical(rules) == _raw(path)
@@ -185,7 +209,8 @@ def test_canonical_form_is_the_toml_data(path: Path) -> None:
         (("orders", "cost"), "mvoe", "orders.cost.mvoe"),
         (("terrain", "defense_mod"), "hills", "terrain.defense_mod.hills"),
         (("capacity", "by_kind"), "town", "capacity.by_kind.town"),
-        (("supply", "freight_amount"), "4", "supply.freight_amount.4"),
+        (("supply", "fast_speed_pct"), "4", "supply.fast_speed_pct.4"),
+        (("warehouse", "start_by_kind"), "province", "warehouse.start_by_kind.province"),
     ],
 )
 def test_typo_in_key_names_the_key(path: tuple[str, ...], typo: str, name: str) -> None:
@@ -261,8 +286,9 @@ def test_hash_changes_when_any_value_changes() -> None:
     base = _raw()
     base_hash = ruleset_hash(parse_ruleset(base))
     leaves = _leaves(base)
-    # Keys of SIM-01, DEC-16, DEC-22, DEC-18, DEC-19 by hand; #253: -2; DEC-24: +3; DEC-25: +2.
-    assert len(leaves) == 66
+    # Keys of SIM-01, DEC-16, DEC-22, DEC-18, DEC-19 by hand; #253: -2; DEC-24: +3; DEC-25: +2;
+    # DEC-26: +11 (2 costs, 3 city_upgrades, 6 warehouse) - 2 (supply.freight_amount).
+    assert len(leaves) == 75
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)
@@ -271,6 +297,8 @@ def test_hash_changes_when_any_value_changes() -> None:
                 "balance": "war",
                 "any_city": "capital",
             }[value]
+        elif isinstance(value, bool):
+            changed = not value
         else:
             assert isinstance(value, int)
             # +1 stays in range for every mvp-0 value (cp.start 300 < cp.cap, pct <= 99).

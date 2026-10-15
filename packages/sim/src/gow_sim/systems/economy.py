@@ -10,7 +10,8 @@ DEC-02 (mechanics.md, section 6), numbers from ``Ruleset``:
   share into charges is credited always, also at the cap.
 - The capital produces no charges of its own: charges come only from CP through the stance (no
   passive production, owner's decision of 2026-10-14, #253).
-- Charges go to the warehouse of the capital up to its capacity (``systems.capacity``); the
+- Charges go to the warehouse of the capital up to its warehouse capacity
+  (``capacity.warehouse_capacity``: the node capacity, with ``city_upgrades`` DEC-26's own); the
   excess is lost (event ``charges_overflow``). If the player does not own its capital, all of the
   produced charges are lost.
 - The stance changes at most once per ``orders.stance_cooldown_ticks``; the first change is not
@@ -26,7 +27,7 @@ from typing import Final
 
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import Event, GameState, event
-from gow_sim.systems.capacity import node_capacities
+from gow_sim.systems.capacity import warehouse_capacity
 
 CENTI: Final = 100
 """The stance share of a CP quantum is kept in hundredths of a charge (DEC-02)."""
@@ -38,7 +39,6 @@ def economy(state: GameState, rules: Ruleset) -> list[Event]:
     if not (tick > 0 and tick % rules.cp.period_ticks == 0):
         return []
     events: list[Event] = []
-    capacities: tuple[int, ...] | None = None
     for pid in sorted(state.players):
         player = state.players[pid]
         pct = rules.economy.stance_to_charges_pct.of(player.stance)
@@ -56,9 +56,8 @@ def economy(state: GameState, rules: Ruleset) -> list[Event]:
         capital = state.map.capital(pid)
         node = state.nodes[capital]
         if node.owner == pid:
-            if capacities is None:
-                capacities = node_capacities(state, rules)
-            added = min(charges, max(0, capacities[capital] - node.warehouse))
+            cap = warehouse_capacity(state, rules, capital)
+            added = min(charges, max(0, cap - node.warehouse))
         else:
             added = 0
         node.warehouse += added

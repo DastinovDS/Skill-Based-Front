@@ -22,6 +22,7 @@ from gow_sim.state import (
     PROGRESS_SCALE,
     AtNode,
     Build,
+    BuildKind,
     Detail,
     GameState,
     Group,
@@ -32,7 +33,6 @@ from gow_sim.state import (
     Order,
     Packet,
     Priority,
-    RoadKind,
     Sighting,
     StateFormatError,
     event,
@@ -73,12 +73,14 @@ def _rich_state(rules: Ruleset) -> GameState:
     state.nodes[1].recruit_queue = 2
     state.nodes[1].recruit_progress = 17
     state.edges[0].width = 2
-    state.edges[0].kind = RoadKind.FREIGHT
     gid = state.new_id()
     state.groups[gid] = Group(gid, 0, 2, 1, Mode.DEFENSE, OnEdge(edge=1, from_node=0, progress=333))
     gid = state.new_id()
     state.groups[gid] = Group(gid, 1, 1, 0, Mode.ATTACK, AtNode(3))
-    state.nodes[1].build = Build(edge=0, owner=0, since=130, kind=RoadKind.FREIGHT)
+    state.nodes[1].build = Build(edge=0, owner=0, since=130, kind=BuildKind.ROAD)
+    state.nodes[3].build = Build(edge=None, owner=1, since=131, kind=BuildKind.WAREHOUSE)
+    state.nodes[3].has_barracks = True
+    state.nodes[3].warehouse_level = 1
     gid = state.new_id()
     state.groups[gid] = Group(
         gid,
@@ -116,9 +118,7 @@ def _rich_state(rules: Ruleset) -> GameState:
     state.intents[iid] = Intent(iid, 0, IntentKind.DEFENSE, origin=1, target=None, created_tick=100)
     state.vision_memory[0].nodes[3] = Sighting(90, Detail.PRESENCE, (Mode.ATTACK,), None, None)
     state.vision_memory[1].nodes[0] = Sighting(12, Detail.EXACT, (Mode.ATTACK, Mode.DEFENSE), 4, 2)
-    state.vision_memory[1].edges[2] = Sighting(
-        40, Detail.PRESENCE, (), None, None, width=2, road=RoadKind.FAST
-    )
+    state.vision_memory[1].edges[2] = Sighting(40, Detail.PRESENCE, (), None, None, width=2)
     state.events.append(event(137, "packet_lost", edge=3, charges=1, owner=1, note=None))
     state.events.append(event(137, "captured", node=1, player=0, neutral=True))
     return state
@@ -350,7 +350,7 @@ def test_from_canonical_rejects_bad_data(
 
 _small = st.integers(min_value=0, max_value=50)
 _opt_small = st.none() | _small
-_road_kinds = st.sampled_from(list(RoadKind))
+_build_kinds = st.sampled_from(list(BuildKind))
 
 
 @st.composite
@@ -372,7 +372,6 @@ def _states(draw: st.DrawFn) -> GameState:
         player.stance_changed_tick = draw(st.none() | st.integers(min_value=0, max_value=7200))
     for edge in state.edges.values():
         edge.width = draw(st.integers(min_value=1, max_value=3))
-        edge.kind = RoadKind.NONE if edge.width == 1 else draw(_road_kinds)
     for node in state.nodes.values():
         node.owner = draw(st.none() | players)
         node.warehouse = draw(_small)
@@ -383,7 +382,11 @@ def _states(draw: st.DrawFn) -> GameState:
         node.priority = draw(st.sampled_from(list(Priority)))
         node.cut_since = draw(_opt_small)
         if draw(st.booleans()):
-            node.build = Build(draw(edges), draw(players), draw(_small), draw(_road_kinds))
+            kind = draw(_build_kinds)
+            edge = draw(edges) if kind is BuildKind.ROAD else None
+            node.build = Build(edge, draw(players), draw(_small), kind)
+        node.has_barracks = draw(st.booleans())
+        node.warehouse_level = draw(st.integers(min_value=0, max_value=2))
     for _ in range(draw(st.integers(min_value=0, max_value=6))):
         gid = state.new_id()
         units = draw(st.integers(min_value=1, max_value=20))
@@ -462,7 +465,6 @@ def _states(draw: st.DrawFn) -> GameState:
                 None,
                 None,
                 width=draw(st.integers(1, 3)),
-                road=draw(_road_kinds),
             )
     for _ in range(draw(st.integers(min_value=0, max_value=3))):
         state.events.append(

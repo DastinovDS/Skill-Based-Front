@@ -1,16 +1,16 @@
-"""Road upgrades by a city (DEC-16, #203; numbers, road types and ``upgrade_gain``: DEC-22, #234).
+"""Road upgrades by a city (DEC-16, #203; numbers: DEC-22, #234; no road types: DEC-26, #265).
 
 Expected values come from the rules, not from the code:
 
-- road parameters by level and type, DEC-22, item 4: level 1 speed 100 and amount 1; fast level
-  2 / 3: speed 150 / 200; freight level 2 / 3: amount 2 / 3. So the next level gives
-  (``upgrade_gain``, DEC-22, item 7): from level 1 fast +50 speed, freight +1 amount; from fast 2
-  +50 speed; from freight 2 +1 amount; nothing from level 3;
+- road parameters by level, DEC-22, item 4 as DEC-26, item 7 left them: level 1 speed 100,
+  level 2 / 3 speed 150 / 200, amount 1 on every level. So the next level gives (``upgrade_gain``,
+  DEC-26, item 7): +50 speed from level 1 and from level 2, nothing from level 3;
 - only internal roads can be upgraded, buffer roads by nobody (mechanics.md, section 8);
 - the build rules and the worked examples of DEC-16 (mechanics.md, section 8) that DEC-22 keeps:
   the table tests ``test_dec16_example_*`` below, with A = 3, B = 4, both own and supplied, A-B =
-  e4 of level 1 and ``max_width`` 3, ``ticks_per_level`` 150 and the DEC-22 prices 3 / 4 (the
-  examples with the old prices and the type choice: ``test_dec22.py``).
+  e4 of level 1 and ``max_width`` 3, ``ticks_per_level`` 150 and the prices 3 / 4 pinned below
+  (the rules do not depend on the prices; the examples with the prices of DEC-26:
+  ``test_dec22.py`` and ``test_dec26.py``).
 
 These numbers are pinned in ``RULES`` below. The map ``fork`` (rot180), all roads level 1 and
 ``max_width`` 3:
@@ -43,20 +43,17 @@ from gow_sim.state import (
     GameState,
     Group,
     Mode,
-    RoadKind,
     event,
     from_canonical,
     initial_state,
 )
 from gow_sim.state import to_canonical as state_to_canonical
-from gow_sim.systems.build import RoadGain, UpgradeGain, build, upgrade_gain
+from gow_sim.systems.build import UpgradeGain, build, upgrade_gain
 from gow_sim.systems.capacity import change_owner
 from gow_sim.systems.combat import combat
 
 TESTS_DIR = Path(__file__).resolve().parent
 MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
-
-FAST, FREIGHT, NONE = RoadKind.FAST, RoadKind.FREIGHT, RoadKind.NONE
 
 
 def _rules() -> Ruleset:
@@ -68,7 +65,6 @@ def _rules() -> Ruleset:
             base_speed_pct=100,
             base_amount=1,
             fast_speed_pct=LevelTable((150, 200)),
-            freight_amount=LevelTable((2, 3)),
         ),
         build=BuildRules(ticks_per_level=150, charges_per_level=LevelTable((3, 4))),
     )
@@ -89,18 +85,16 @@ def _fork(owned: bool = True) -> GameState:
 
 
 @pytest.mark.parametrize(
-    ("level", "kind", "expected"),
+    ("level", "expected"),
     [
-        (1, NONE, UpgradeGain(fast=RoadGain(50, 0), freight=RoadGain(0, 1))),
-        (2, FAST, UpgradeGain(fast=RoadGain(50, 0), freight=None)),
-        (2, FREIGHT, UpgradeGain(fast=None, freight=RoadGain(0, 1))),
-        (3, FAST, None),  # max_width: nothing to gain
-        (3, FREIGHT, None),
+        (1, UpgradeGain(speed_pct=50)),
+        (2, UpgradeGain(speed_pct=50)),
+        (3, None),  # max_width: nothing to gain
     ],
 )
-def test_upgrade_gain_table(level: int, kind: RoadKind, expected: UpgradeGain | None) -> None:
+def test_upgrade_gain_table(level: int, expected: UpgradeGain | None) -> None:
     state = _fork()
-    state.edges[1].width, state.edges[1].kind = level, kind
+    state.edges[1].width = level
     assert upgrade_gain(state, RULES, 1) == expected
 
 
@@ -112,7 +106,7 @@ def test_upgrade_gain_stops_at_the_edge_max_width() -> None:
             dataclasses.replace(e, max_width=2) if e.id == 1 else e for e in state.map.edges
         ),
     )
-    state.edges[1].width, state.edges[1].kind = 2, FAST
+    state.edges[1].width = 2
     assert upgrade_gain(state, RULES, 1) is None
 
 
@@ -136,7 +130,6 @@ def _dec16(warehouse: int = 5, width: int = 1) -> GameState:
     state.nodes[A].warehouse = warehouse
     state.nodes[B].warehouse = 5
     state.edges[AB].width = width
-    state.edges[AB].kind = NONE if width == 1 else FAST
     return state
 
 
@@ -168,7 +161,7 @@ def _kinds(events: list[Event]) -> list[tuple[int, str]]:
 
 def _start(state: GameState, tick: int = 100) -> None:
     state.tick = tick
-    outcomes, _ = _cmd(state, UpgradeRoad(A, AB, FAST))
+    outcomes, _ = _cmd(state, UpgradeRoad(A, AB))
     assert isinstance(outcomes[0], Ok)
 
 
@@ -177,7 +170,7 @@ def _start(state: GameState, tick: int = 100) -> None:
 
 def test_dec16_example_2_not_enough_charges() -> None:
     state = _dec16(warehouse=1)
-    outcomes, events = _cmd(state, UpgradeRoad(A, AB, FAST))
+    outcomes, events = _cmd(state, UpgradeRoad(A, AB))
     assert outcomes == [Reject(RejectCode.NOT_ENOUGH_CHARGES)]
     assert events == [] and state.nodes[A].warehouse == 1 and state.nodes[A].build is None
 
@@ -186,36 +179,36 @@ def test_dec16_example_2_not_enough_charges() -> None:
 def test_dec16_example_5_buffer_edge(owner: int | None) -> None:
     state = _dec16()
     state.nodes[5].owner = owner  # e5 = B-5: neutral or enemy N
-    assert _cmd(state, UpgradeRoad(B, B_OTHER, FAST))[0] == [Reject(RejectCode.NOT_INTERNAL)]
-    assert _cmd(state, UpgradeRoad(B, 6, FAST))[0] == [Reject(RejectCode.NOT_INTERNAL)]  # enemy
+    assert _cmd(state, UpgradeRoad(B, B_OTHER))[0] == [Reject(RejectCode.NOT_INTERNAL)]
+    assert _cmd(state, UpgradeRoad(B, 6))[0] == [Reject(RejectCode.NOT_INTERNAL)]  # enemy
 
 
 def test_dec16_example_6_city_busy() -> None:
     state = _dec16()
     _start(state)
-    assert _cmd(state, UpgradeRoad(A, A_OTHER, FAST))[0] == [Reject(RejectCode.CITY_BUSY)]
+    assert _cmd(state, UpgradeRoad(A, A_OTHER))[0] == [Reject(RejectCode.CITY_BUSY)]
 
 
 def test_dec16_example_7_edge_busy() -> None:
     state = _dec16()
     _start(state)
-    assert _cmd(state, UpgradeRoad(B, AB, FAST))[0] == [Reject(RejectCode.EDGE_BUSY)]
+    assert _cmd(state, UpgradeRoad(B, AB))[0] == [Reject(RejectCode.EDGE_BUSY)]
 
 
 def test_dec16_example_7_same_tick_second_command_is_edge_busy() -> None:
     state = _dec16()
-    outcomes, _ = _cmd(state, UpgradeRoad(A, AB, FAST), UpgradeRoad(B, AB, FREIGHT))
+    outcomes, _ = _cmd(state, UpgradeRoad(A, AB), UpgradeRoad(B, AB))
     assert outcomes == [Ok(cost=0), Reject(RejectCode.EDGE_BUSY)]
 
 
 def test_dec16_example_8_neighbour_roads_build_together() -> None:
     state = _dec16()
     _start(state)
-    assert _cmd(state, UpgradeRoad(B, B_OTHER, FREIGHT))[0] == [Ok(cost=0)]
+    assert _cmd(state, UpgradeRoad(B, B_OTHER))[0] == [Ok(cost=0)]
     events = _until(state, 250)
     assert _kinds(events) == [(250, "road_upgraded"), (250, "road_upgraded")]
-    assert (state.edges[AB].width, state.edges[AB].kind) == (2, FAST)
-    assert (state.edges[B_OTHER].width, state.edges[B_OTHER].kind) == (2, FREIGHT)
+    assert state.edges[AB].width == 2
+    assert state.edges[B_OTHER].width == 2
 
 
 def test_dec16_example_9_other_end_captured() -> None:
@@ -225,7 +218,6 @@ def test_dec16_example_9_other_end_captured() -> None:
     assert _kinds(events) == [(200, "build_stopped")]
     assert events[0].get("reason") == "interrupted"
     assert state.edges[AB].width == 1 and state.nodes[A].warehouse == 2  # nothing returned
-    assert state.edges[AB].kind is NONE
     assert _until(state, 400) == [] and state.edges[AB].width == 1
 
 
@@ -254,7 +246,7 @@ def test_dec16_example_12_cut_off_city_is_not_supplied() -> None:
     state = _dec16()
     for n in (1, 2):
         state.nodes[n].owner = None
-    assert _cmd(state, UpgradeRoad(A, AB, FAST))[0] == [Reject(RejectCode.NOT_SUPPLIED)]
+    assert _cmd(state, UpgradeRoad(A, AB))[0] == [Reject(RejectCode.NOT_SUPPLIED)]
 
 
 def test_dec16_example_13_held_city_keeps_building() -> None:
@@ -323,7 +315,7 @@ def test_dec16_cp_is_checked_last() -> None:
     )
     state = _dec16()
     state.players[0].cp = 99
-    cmd = UpgradeRoad(A, AB, FAST)
+    cmd = UpgradeRoad(A, AB)
     assert validate(state, rules, 0, cmd) == Reject(RejectCode.NOT_ENOUGH_CP)
     state.nodes[A].warehouse = 1
     assert validate(state, rules, 0, cmd) == Reject(RejectCode.NOT_ENOUGH_CHARGES)
@@ -336,5 +328,5 @@ def test_dec16_cp_is_checked_last() -> None:
 def test_dec16_build_roundtrips_through_the_canonical_form() -> None:
     state = _dec16()
     _start(state)
-    assert state.nodes[A].build == Build(edge=AB, owner=0, since=100, kind=FAST)
+    assert state.nodes[A].build == Build(edge=AB, owner=0, since=100)
     assert from_canonical(state_to_canonical(state)) == state

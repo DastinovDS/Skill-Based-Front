@@ -10,7 +10,9 @@ item 4: road parameters), numbers from ``Ruleset.supply``:
   city are its nearest city descendants (the way to them goes only through provinces); a packet
   goes to such a child along that whole way.
 - Target stock of a city, the same for every priority (item 2):
-  ``min(capacity, discharged standing units + supply.buffer)``.
+  ``min(warehouse capacity, discharged standing units + supply.buffer)``; the warehouse capacity
+  is the node capacity, or with ``city_upgrades`` its own (DEC-26, item 6;
+  ``capacity.warehouse_capacity``). "Capacity" of a warehouse below means that number.
 - Dispatch every ``supply.dispatch_ticks`` ticks (ticks ``t > 0`` divisible by it) in three
   passes ``high``, ``normal``, ``low`` (item 4). In the pass of level ``L`` a city is **active**
   when its priority is ``L`` or higher; the others are transit in that pass. What a pass sent
@@ -28,16 +30,14 @@ item 4: road parameters), numbers from ``Ruleset.supply``:
     transfers took, item 10; shared by the three passes and every way through the road).
   - Everything one city sent to one child in a period goes as one packet.
 
-- Road parameters by level and type (DEC-22, item 4): ``speed_pct`` is ``supply.base_speed_pct``
-  on level 1 and on a freight road, ``supply.fast_speed_pct[level]`` on a fast one; ``amount`` is
-  ``supply.base_amount`` on level 1 and on a fast road, ``supply.freight_amount[level]`` on a
-  freight one. A packet needs ``packet_ticks = travel_ticks * 100 // speed_pct`` ticks per road
-  (rounded down, at least 1), by the road at departure; the times never change afterwards.
+- Road parameters by level (DEC-22, item 4; roads have no type, DEC-26, item 7): ``speed_pct``
+  is ``supply.base_speed_pct`` on level 1 and ``supply.fast_speed_pct[level]`` on an upgraded
+  road; ``amount`` is ``supply.base_amount`` on every level. A packet needs
+  ``packet_ticks = travel_ticks * 100 // speed_pct`` ticks per road (rounded down, at least 1),
+  by the road at departure; the times never change afterwards.
 - Packet on its path (item 5): on a road that is no longer internal to its owner it is lost
-  (``packet_lost``), except on a freight road (DEC-22, item 5): there it arrives, an end node of
-  the other player takes the charges for the captor within the capacity (``packet_captured`` for
-  the captor, ``packet_lost`` with all charges for the sender), at a neutral end node they are
-  lost. At an intermediate own node it goes on at once; if the next road is no longer internal,
+  (``packet_lost``) on any level (DEC-26, item 7: no freight road, no ``packet_captured``). At
+  an intermediate own node it goes on at once; if the next road is no longer internal,
   an own city takes the charges into its warehouse, a province loses them (``packet_lost``). At
   the end of the path the charges go into the warehouse within the capacity, the excess burns
   (``charges_overflow``).
@@ -57,8 +57,7 @@ item 4: road parameters), numbers from ``Ruleset.supply``:
 Order inside the system (item 9): lost packets, packets along their path and deliveries,
 recharge, the transfer shares (item 10), dispatch. Charges are created only by the economy
 (``charges_produced``) and leave the supply chain only through recharge or the documented sinks
-``packet_lost``, ``charges_overflow`` and ``warehouse_lost``; ``packet_captured`` moves charges of
-a freight packet into the captor's warehouse.
+``packet_lost``, ``charges_overflow`` and ``warehouse_lost``.
 
 Cost per tick: O(V + E + P + G); a dispatch tick adds the tree (Dijkstra, O(E log V)) and three
 passes over the cities of the tree.
@@ -69,37 +68,34 @@ from dataclasses import dataclass
 
 from gow_sim.maps import MapDef, NodeKind
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Packet, RoadKind, event
-from gow_sim.systems.capacity import is_standing, node_capacities
+from gow_sim.state import AtNode, Event, GameState, Group, Packet, event
+from gow_sim.systems.capacity import is_standing, warehouse_capacities
 
 PASSES = (0, 1, 2)
 """Dispatch passes by priority rank: ``high``, ``normal``, ``low`` (DEC-18, item 4)."""
 
 
-def road_speed_pct(rules: Ruleset, level: int, kind: RoadKind) -> int:
-    """Packet speed in percent on a road of ``level`` and ``kind`` (DEC-22, item 4)."""
-    if kind is RoadKind.FAST and level >= 2:
+def road_speed_pct(rules: Ruleset, level: int) -> int:
+    """Packet speed in percent on a road of ``level`` (DEC-22, item 4; DEC-26, item 7)."""
+    if level >= 2:
         return rules.supply.fast_speed_pct.of(level)
     return rules.supply.base_speed_pct
 
 
-def road_amount(rules: Ruleset, level: int, kind: RoadKind) -> int:
-    """Charges per road and dispatch period on a road of ``level`` and ``kind`` (DEC-22)."""
-    if kind is RoadKind.FREIGHT and level >= 2:
-        return rules.supply.freight_amount.of(level)
+def road_amount(rules: Ruleset) -> int:
+    """Charges per road and dispatch period, the same on every level (DEC-26, item 7)."""
     return rules.supply.base_amount
 
 
-def packet_ticks(mapdef: MapDef, rules: Ruleset, edge: int, level: int, kind: RoadKind) -> int:
-    """Ticks a packet needs along ``edge`` of ``level`` and ``kind`` (see the module docstring)."""
-    pct = road_speed_pct(rules, level, kind)
+def packet_ticks(mapdef: MapDef, rules: Ruleset, edge: int, level: int) -> int:
+    """Ticks a packet needs along ``edge`` of ``level`` (see the module docstring)."""
+    pct = road_speed_pct(rules, level)
     return max(1, mapdef.edges[edge].travel_ticks * 100 // pct)  # both positive: rounded down
 
 
 def edge_packet_ticks(state: GameState, rules: Ruleset, edge: int) -> int:
-    """``packet_ticks`` of ``edge`` with its current level and type."""
-    e = state.edges[edge]
-    return packet_ticks(state.map, rules, edge, e.width, e.kind)
+    """``packet_ticks`` of ``edge`` with its current level."""
+    return packet_ticks(state.map, rules, edge, state.edges[edge].width)
 
 
 def transfer_ticks(state: GameState, rules: Ruleset, edge: int, n: int) -> int:
@@ -109,10 +105,15 @@ def transfer_ticks(state: GameState, rules: Ruleset, edge: int, n: int) -> int:
     of ``amount`` per period, the simulation carries them as one packet with the time of the last
     batch. ``ceil(n / a) = (n + a - 1) // a``, both positive.
     """
-    road = state.edges[edge]
-    amount = road_amount(rules, road.width, road.kind)
+    amount = road_amount(rules)
     batches = (n + amount - 1) // amount
     return edge_packet_ticks(state, rules, edge) + (batches - 1) * rules.supply.dispatch_ticks
+
+
+def target_stock(rules: Ruleset, warehouse_cap: int, discharged: int) -> int:
+    """Target stock of a city (DEC-18, item 2; DEC-26, item 6): its warehouse capacity, at most
+    the discharged units standing there plus ``supply.buffer``."""
+    return min(warehouse_cap, discharged + rules.supply.buffer)
 
 
 def is_city(mapdef: MapDef, node: int) -> bool:
@@ -305,7 +306,7 @@ def packet_dest_tick(packet: Packet) -> int:
 
 def supply(state: GameState, rules: Ruleset) -> list[Event]:
     """The supply system (see the module docstring). Players do not affect each other."""
-    capacities = node_capacities(state, rules)
+    capacities = warehouse_capacities(state, rules)
     events = _move_packets(state, capacities)
     garrisons = _garrisons(state)
     _recharge(state, rules, garrisons)
@@ -328,8 +329,7 @@ def _take_transfer_shares(state: GameState, rules: Ruleset) -> dict[tuple[int, i
         packet = state.packets[pid]
         if packet.share <= 0:
             continue
-        road = state.edges[packet.edge]
-        take = min(road_amount(rules, road.width, road.kind), packet.share)
+        take = min(road_amount(rules), packet.share)
         packet.share -= take
         key = (packet.owner, packet.edge)
         taken[key] = taken.get(key, 0) + take
@@ -349,9 +349,7 @@ def _move_packets(state: GameState, capacities: tuple[int, ...]) -> list[Event]:
     for pid in sorted(state.packets):
         packet = state.packets[pid]
         owner = packet.owner
-        if not _owned_by(state, packet.edge, owner) and (
-            state.edges[packet.edge].kind is not RoadKind.FREIGHT
-        ):
+        if not _owned_by(state, packet.edge, owner):
             del state.packets[pid]
             events.append(_lost(tick, pid, packet))
             continue
@@ -359,21 +357,6 @@ def _move_packets(state: GameState, capacities: tuple[int, ...]) -> list[Event]:
             continue
         node_id = mapdef.edges[packet.edge].other(packet.from_node)
         node = state.nodes[node_id]
-        receiver = node.owner
-        if receiver != owner:  # only a freight packet gets here (DEC-22, item 5)
-            del state.packets[pid]
-            if receiver is None:  # a neutral end node: the charges are lost
-                events.append(_lost(tick, pid, packet))
-                continue
-            # The captor takes the packet: the sender loses all of it, the captor gets what
-            # fits, the excess burns.
-            added = min(packet.charges, max(0, capacities[node_id] - node.warehouse))
-            node.warehouse += added
-            events.append(
-                event(tick, "packet_captured", player=receiver, node=node_id, charges=added)
-            )
-            events.append(_lost(tick, pid, packet))
-            continue
         if packet.route:
             nxt = packet.route[0]
             if _owned_by(state, nxt, owner):  # an intermediate node: on at once
@@ -502,7 +485,7 @@ def _dispatch(
     rank: dict[int, int] = {}
     for c in cities:
         discharged = sum(g.units - g.charged for g in garrisons.get(c, ()))
-        target[c] = min(capacities[c], discharged + rules.supply.buffer)
+        target[c] = target_stock(rules, capacities[c], discharged)
         rank[c] = nodes[c].priority.rank
 
     edge_left: dict[int, int] = {}
@@ -544,8 +527,7 @@ def _dispatch(
                 for e in way[k]:
                     left = edge_left.get(e)
                     if left is None:
-                        road = state.edges[e]
-                        amount_e = road_amount(rules, road.width, road.kind)
+                        amount_e = road_amount(rules)
                         left = edge_left[e] = max(0, amount_e - taken.get((player, e), 0))
                     amount = min(amount, left)
                 if amount <= 0:

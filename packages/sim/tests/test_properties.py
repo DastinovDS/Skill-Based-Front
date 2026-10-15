@@ -10,12 +10,11 @@ and advance the clock. After every tick the invariants below must hold:
   (``spent`` of ``fight_round``; a group dying by DEC-24 G3: ``fight_group`` with ``encircled``),
   ``warehouse_lost``, ``packet_lost``, the part of a delivered packet that does
   not fit the warehouse (``packet_delivered`` vs. the packet; that part is also a
-  ``charges_overflow``) and ``attrition`` deaths of charged units; plus the charges a captor takes
-  from a freight packet (``packet_captured``, DEC-22: the sender's ``packet_lost`` counts the
-  whole packet); the charges a cut-off garrison spends (``starvation``, DEC-19; units never die
-  of it). A transfer (DEC-18) only moves charges from a warehouse into a packet: it is a
-  flow, not a sink. The overflow of the capital's own production is not a sink: those charges were
-  never created;
+  ``charges_overflow``) and ``attrition`` deaths of charged units; the charges a city pays for a
+  road level (``build_started``, DEC-16); the charges a cut-off garrison spends (``starvation``,
+  DEC-19; units never die of it). A transfer (DEC-18) only moves charges from a warehouse into a
+  packet: it is a flow, not a sink. The overflow of the capital's own production is not a sink:
+  those charges were never created;
 - no negative counters, ``charged <= units``, road widths within their limits, every group in an
   existing node or on an existing edge, ids unique, links between groups and intents;
 - a garrison never grows without an arrival (``group_arrived``) or a recruit in its city, so an
@@ -23,9 +22,11 @@ and advance the clock. After every tick the invariants below must hold:
 - packets: the route and its times match, every edge of it exists (DEC-18, item 5);
 - fog: ``project()`` does not change when everything the player must not see is perturbed
   (extends the synthetic-state test of SIM-14 in ``test_view.py`` to states of real matches),
-  including the levels and types of fogged roads and enemy builds on them (DEC-17, DEC-22);
-  known levels never exceed the true ones and equal them (with the type) in sight; capacities are
-  exact (DEC-22, item 1).
+  including the levels of fogged roads and enemy builds on them (DEC-17, DEC-22), the enemy's
+  barracks, warehouse levels and city builds (DEC-26, item 10); known levels never exceed the
+  true ones and equal them in sight; capacities are exact (DEC-22, item 1).
+
+The machine plays ``mvp-0`` (``city_upgrades`` off) or ``mvp-1`` (on, DEC-26).
 
 A counterexample found by Hypothesis goes into a regression test at the end of the file.
 """
@@ -42,7 +43,9 @@ from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, initialize, rule
 
 from gow_sim.commands import (
+    BuildBarracks,
     CancelOrder,
+    CancelRecruit,
     Command,
     Forfeit,
     Merge,
@@ -56,6 +59,7 @@ from gow_sim.commands import (
     Split,
     Transfer,
     UpgradeRoad,
+    UpgradeWarehouse,
     validate,
 )
 from gow_sim.maps import PLAYERS, MapDef, load_map
@@ -72,7 +76,6 @@ from gow_sim.state import (
     OnEdge,
     Packet,
     Priority,
-    RoadKind,
 )
 from gow_sim.systems.capacity import node_capacities
 from gow_sim.view import opaque_id, project
@@ -80,6 +83,10 @@ from gow_sim.view import opaque_id, project
 ROOT = Path(__file__).resolve().parents[3]
 TESTS_DIR = Path(__file__).resolve().parent
 RULES = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+RULESETS: Final[dict[str, Ruleset]] = {
+    "mvp-0": RULES,
+    "mvp-1": load_ruleset(ROOT / "rulesets" / "mvp-1.toml"),
+}
 KEY = bytes(range(32))
 
 TEST_MAPS: Final = ("line3", "diamond", "pass", "line6", "fork", "siege")
@@ -114,8 +121,6 @@ class Ledger:
 
     start: int
     produced: int = 0
-    captured: int = 0
-    """Charges of freight packets that went into the captor's warehouse (DEC-22, item 5)."""
     shots: int = 0
     """Charges spent in fights: shots and charged units that died."""
     warehouse_lost: int = 0
@@ -124,12 +129,14 @@ class Ledger:
     attrition: int = 0
     starvation: int = 0
     """Charges a cut-off garrison spent (DEC-19): a documented sink."""
+    builds: int = 0
+    """Charges a city paid from its warehouse for a road level (DEC-16, ``build_started``)."""
 
     @property
     def lost(self) -> int:
         return (
             self.shots + self.warehouse_lost + self.packet_lost + self.packet_overflow
-            + self.attrition + self.starvation
+            + self.attrition + self.starvation + self.builds
         )  # fmt: skip
 
     def record(self, events: list[Event], packets_before: dict[int, int]) -> None:
@@ -137,8 +144,6 @@ class Ledger:
             match e.kind:
                 case "charges_produced":
                     self.produced += _int(e, "charges")
-                case "packet_captured":
-                    self.captured += _int(e, "charges")
                 case "fight_round":
                     for p in PLAYERS:
                         spent = _int(e, f"spent_{p}")
@@ -156,6 +161,8 @@ class Ledger:
                     self.packet_overflow += sent - _int(e, "charges")
                 case "attrition":
                     self.attrition += 1 if e.get("charged") else 0
+                case "build_started" if e.get("kind") == "road":
+                    self.builds += _int(e, "charges")
                 case "starvation":
                     spent = _int(e, "warehouse") + _int(e, "units")
                     assert spent > 0, f"an empty starvation event: {e}"
@@ -177,7 +184,10 @@ def check_state(state: GameState) -> None:
         assert n.warehouse >= 0 and n.over_ticks >= 0, f"node {nid}: {n}"
         assert n.owner is None or n.owner in PLAYERS, f"node {nid}: {n}"
         b = n.build
-        assert b is None or (n.owner == b.owner and nid in _ends(mapdef, b.edge)), f"node {nid}"
+        assert b is None or (
+            n.owner == b.owner and (b.edge is None or nid in _ends(mapdef, b.edge))
+        ), f"node {nid}"
+        assert 0 <= n.warehouse_level <= 2 and n.recruit_queue >= 0, f"node {nid}: {n}"
     for eid, e in state.edges.items():
         static = mapdef.edges[eid]
         assert static.base_width <= e.width <= static.max_width, f"edge {eid}: {e}"
@@ -269,8 +279,8 @@ class Tracker:
     """Kinds of events seen so far: to prove that the properties meet the sinks."""
 
     @classmethod
-    def start(cls, mapdef: MapDef) -> "Tracker":
-        match = Match(mapdef, RULES, KEY)
+    def start(cls, mapdef: MapDef, rules: Ruleset = RULES) -> "Tracker":
+        match = Match(mapdef, rules, KEY)
         check_state(match.state)
         return cls(match, Ledger(start=total_charges(match.state)))
 
@@ -293,7 +303,7 @@ class Tracker:
         check_state(m.state)
         check_garrisons(garrisons, m.state, events)
         now, ledger = total_charges(m.state), self.ledger
-        assert now == ledger.start + ledger.produced + ledger.captured - ledger.lost, (
+        assert now == ledger.start + ledger.produced - ledger.lost, (
             f"tick {m.tick}: {now} charges exist, the ledger says "
             f"{ledger.start} + {ledger.produced} produced - {ledger.lost} lost ({ledger})"
         )
@@ -363,6 +373,13 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
         if node.owner == enemy:
             node.priority = draw(st.sampled_from(list(Priority)))
             node.cut_since = draw(st.none() | st.integers(0, state.tick))
+            node.has_barracks = draw(st.booleans())  # DEC-26, item 10: hidden
+            node.warehouse_level = draw(st.integers(0, 2))
+            node.recruit_queue = draw(st.integers(0, 3))  # DEC-25, item 12: hidden
+            node.recruit_progress = draw(st.integers(0, 30))
+            b = node.build
+            if b is not None and b.edge is None and draw(st.booleans()):
+                node.build = None
     other = state.players[enemy]
     other.cp = draw(st.integers(0, 10_000))
     other.stance = draw(st.sampled_from(list(Stance)))
@@ -373,15 +390,13 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     for e, level in enumerate(edges):
         if level is Detail.FOG:
             edge = state.edges[e]
-            level = draw(st.integers(edge.width, state.map.edges[e].max_width))
-            if level > edge.width and edge.kind is RoadKind.NONE:
-                edge.kind = draw(st.sampled_from([RoadKind.FAST, RoadKind.FREIGHT]))
-            edge.width = level
+            edge.width = draw(st.integers(edge.width, state.map.edges[e].max_width))
     for node in state.nodes.values():
         b = node.build
         if (
             b is not None
             and b.owner == enemy
+            and b.edge is not None
             and edges[b.edge] is Detail.FOG
             and draw(st.booleans())
         ):
@@ -401,16 +416,19 @@ ALL_KINDS: Final = (
     "priority",
     "transfer",
     "cancel",
+    "barracks",
+    "warehouse",
+    "cancel_recruit",
 )
 
 
 def draw_command(data: st.DataObject, tracker: Tracker, player: int) -> Command:
     """A random command of ``player``: the first of a few random candidates that ``validate()``
     accepts, else the last one, so accepted and rejected commands both get exercised."""
-    state = tracker.match.state
+    state, rules = tracker.match.state, tracker.match.rules
     candidate = _candidate(data, tracker, player)
     for _ in range(4):
-        if isinstance(validate(state, RULES, player, tracker.match.resolve(player, candidate)), Ok):
+        if isinstance(validate(state, rules, player, tracker.match.resolve(player, candidate)), Ok):
             break
         candidate = _candidate(data, tracker, player)
     return candidate
@@ -443,10 +461,16 @@ def _candidate(data: st.DataObject, tracker: Tracker, player: int) -> Command:
             return SetStance(draw(st.sampled_from(list(Stance))))
         case "upgrade":
             return UpgradeRoad(
-                group(),
+                draw(st.integers(0, n_nodes - 1)),
                 draw(st.integers(0, n_edges - 1)),
-                draw(st.sampled_from([None, RoadKind.FAST, RoadKind.FREIGHT])),
+                draw(st.sampled_from([None, None, None, "fast"])),  # a type: INVALID_ARGUMENT
             )
+        case "barracks":
+            return BuildBarracks(draw(st.integers(0, n_nodes - 1)))
+        case "warehouse":
+            return UpgradeWarehouse(draw(st.integers(0, n_nodes - 1)))
+        case "cancel_recruit":
+            return CancelRecruit(draw(st.integers(0, n_nodes - 1)))
         case "recruit":
             return Recruit(draw(st.integers(0, n_nodes - 1)))
         case "priority":
@@ -471,9 +495,9 @@ class MatchMachine(RuleBasedStateMachine):
 
     tracker: Tracker
 
-    @initialize(name=st.sampled_from(sorted(MAPS)))
-    def start(self, name: str) -> None:
-        self.tracker = Tracker.start(MAPS[name])
+    @initialize(name=st.sampled_from(sorted(MAPS)), ruleset=st.sampled_from(sorted(RULESETS)))
+    def start(self, name: str, ruleset: str) -> None:
+        self.tracker = Tracker.start(MAPS[name], RULESETS[ruleset])
 
     @rule(data=st.data())
     def commands(self, data: st.DataObject) -> None:
@@ -492,7 +516,7 @@ class MatchMachine(RuleBasedStateMachine):
         not just rejected for lack of CP.
         """
         t = self.tracker
-        t.match.state.players[player].cp = RULES.cp.cap
+        t.match.state.players[player].cp = t.match.rules.cp.cap
         target = dest % len(t.match.state.map.nodes)
         ids = [g.id for g in t.match.view(player).groups]
         t.tick([t.send(player, Move(gid, target)) for gid in ids])
@@ -516,8 +540,8 @@ class MatchMachine(RuleBasedStateMachine):
         levels = ([n.detail for n in view.nodes], [e.detail for e in view.edges])
         for e in view.edges:  # DEC-17, DEC-22: known levels never exceed the true ones
             road = m.state.edges[e.id]
-            assert e.width <= road.width and e.kind in (RoadKind.NONE, road.kind)
-            assert e.detail is Detail.FOG or (e.width, e.kind) == (road.width, road.kind)
+            assert e.width <= road.width
+            assert e.detail is Detail.FOG or e.width == road.width
         capacities = node_capacities(m.state, m.rules)
         assert [n.capacity for n in view.nodes] == list(capacities)
         hidden = copy.deepcopy(m.state)

@@ -45,7 +45,7 @@ from gow_sim.commands import (
     validate,
 )
 from gow_sim.maps import load_map
-from gow_sim.ruleset import OrderCosts, Ruleset, Stance, load_ruleset
+from gow_sim.ruleset import BuildRules, LevelTable, OrderCosts, Ruleset, Stance, load_ruleset
 from gow_sim.state import (
     AtNode,
     GameState,
@@ -53,7 +53,6 @@ from gow_sim.state import (
     Mode,
     OnEdge,
     Order,
-    RoadKind,
     initial_state,
     state_hash,
 )
@@ -78,6 +77,8 @@ def _rules() -> Ruleset:
         stance=0,
         priority=0,
         transfer=0,
+        barracks=300,
+        warehouse=200,
     )
     orders = dataclasses.replace(
         base.orders, planned_delay_ticks=30, stance_cooldown_ticks=100, cost=costs
@@ -86,7 +87,9 @@ def _rules() -> Ruleset:
     capacity = dataclasses.replace(
         base.capacity, by_kind=dataclasses.replace(base.capacity.by_kind, city_small=4)
     )
-    return dataclasses.replace(base, orders=orders, capacity=capacity)
+    # Road prices pinned for these checks (the rules do not depend on them).
+    build = BuildRules(ticks_per_level=150, charges_per_level=LevelTable((3, 4)))
+    return dataclasses.replace(base, orders=orders, capacity=capacity, build=build)
 
 
 RULES = _rules()
@@ -391,26 +394,23 @@ def test_set_mode_same_mode() -> None:
 
 
 def test_upgrade_road_rules() -> None:
-    """``UpgradeRoad(node, edge, kind)`` of a city (DEC-16, DEC-22); the full tables are in
-    ``test_build.py`` and ``test_dec22.py``."""
+    """``UpgradeRoad(node, edge)`` of a city (DEC-16, DEC-22, DEC-26); the full tables are in
+    ``test_build.py``, ``test_dec22.py`` and ``test_dec26.py``."""
     state, _ = _state()
-    fast = RoadKind.FAST
     # e1 joins own 1 and neutral 3: a buffer edge (mechanics.md, section 8).
-    assert validate(state, RULES, 0, UpgradeRoad(1, 1, fast)) == Reject(RejectCode.NOT_INTERNAL)
+    assert validate(state, RULES, 0, UpgradeRoad(1, 1)) == Reject(RejectCode.NOT_INTERNAL)
     # e3 joins 5 and 6: node 0 is not an end of it.
-    assert validate(state, RULES, 0, UpgradeRoad(0, 3, fast)) == Reject(RejectCode.NOT_ADJACENT)
-    state.edges[0].width, state.edges[0].kind = 3, fast  # max_width of e0
+    assert validate(state, RULES, 0, UpgradeRoad(0, 3)) == Reject(RejectCode.NOT_ADJACENT)
+    state.edges[0].width = 3  # max_width of e0
     assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.MAX_WIDTH)
-    state.edges[0].width, state.edges[0].kind = 1, RoadKind.NONE
-    state.nodes[0].warehouse = 2  # the level 2 costs 3 charges (DEC-22, item 6)
-    assert validate(state, RULES, 0, UpgradeRoad(0, 0, fast)) == Reject(
-        RejectCode.NOT_ENOUGH_CHARGES
-    )
+    state.edges[0].width = 1
+    state.nodes[0].warehouse = 2  # the level 2 costs 3 charges in these pinned rules
+    assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.NOT_ENOUGH_CHARGES)
     state.nodes[0].warehouse = 3
-    _check(state, 0, UpgradeRoad(0, 0, fast), Ok(cost=100))  # orders.cost.build of these rules
+    _check(state, 0, UpgradeRoad(0, 0), Ok(cost=100))  # orders.cost.build of these rules
     assert state.nodes[0].warehouse == 0
-    assert validate(state, RULES, 0, UpgradeRoad(0, 0, fast)) == Reject(RejectCode.CITY_BUSY)
-    assert validate(state, RULES, 0, UpgradeRoad(1, 0, fast)) == Reject(RejectCode.EDGE_BUSY)
+    assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.CITY_BUSY)
+    assert validate(state, RULES, 0, UpgradeRoad(1, 0)) == Reject(RejectCode.EDGE_BUSY)
 
 
 def test_recruit_queues_one_unit() -> None:

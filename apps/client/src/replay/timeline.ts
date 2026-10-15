@@ -76,6 +76,10 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     recruit_queue: null, // not in the replay files (DEC-25)
     recruit_progress: null,
     recruit_waiting: null,
+    has_barracks: null, // not in the replay files (DEC-26)
+    warehouse_level: null,
+    warehouse_cap: null,
+    building: null,
   }));
   const packets: PacketView[] = frame.k.map(
     ([id, , edge, from_node, charges, depart_tick, arrive_tick]) => {
@@ -106,7 +110,6 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
       edges: frame.w.map((width, id) => ({
         id,
         width,
-        kind: frame.r?.[id] ?? 'none',
         detail: 'presence',
         upgrade_gain: null,
         seen: null,

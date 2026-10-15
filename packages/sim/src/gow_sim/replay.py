@@ -39,6 +39,7 @@ from typing import IO, Final, Self
 from gow_sim.analysis import MatchMetrics, MatchRecorder, analyze
 from gow_sim.canonical import digest
 from gow_sim.commands import (
+    BuildBarracks,
     CancelOrder,
     CancelRecruit,
     Command,
@@ -53,6 +54,7 @@ from gow_sim.commands import (
     Split,
     Transfer,
     UpgradeRoad,
+    UpgradeWarehouse,
 )
 from gow_sim.maps import MapDef, MapFormatError, load_map, map_hash
 from gow_sim.match import (
@@ -65,7 +67,7 @@ from gow_sim.match import (
     run_headless,
 )
 from gow_sim.ruleset import Ruleset, RulesetError, Stance, load_ruleset, ruleset_hash
-from gow_sim.state import Mode, Priority, RoadKind, to_canonical
+from gow_sim.state import Mode, Priority, to_canonical
 
 __all__ = [
     "CHECKPOINT_EVERY",
@@ -153,12 +155,11 @@ def encode_command(cmd: Command) -> dict[str, object]:
         case SetStance(stance=stance):
             return {"type": "set_stance", "stance": stance.value}
         case UpgradeRoad(node=node, edge=edge, kind=kind):
-            return {
-                "type": "upgrade_road",
-                "node": node,
-                "edge": edge,
-                "kind": None if kind is None else kind.value,
-            }
+            return {"type": "upgrade_road", "node": node, "edge": edge, "kind": kind}
+        case BuildBarracks(node=node):
+            return {"type": "build_barracks", "node": node}
+        case UpgradeWarehouse(node=node):
+            return {"type": "upgrade_warehouse", "node": node}
         case Recruit(node=node):
             return {"type": "recruit", "node": node}
         case CancelRecruit(node=node):
@@ -198,8 +199,12 @@ def decode_command(data: object) -> Command:
             case "upgrade_road":
                 road = d["kind"]
                 return UpgradeRoad(
-                    _int(d["node"]), _int(d["edge"]), None if road is None else RoadKind(_str(road))
+                    _int(d["node"]), _int(d["edge"]), None if road is None else _str(road)
                 )
+            case "build_barracks":
+                return BuildBarracks(_int(d["node"]))
+            case "upgrade_warehouse":
+                return UpgradeWarehouse(_int(d["node"]))
             case "recruit":
                 return Recruit(_int(d["node"]))
             case "cancel_recruit":

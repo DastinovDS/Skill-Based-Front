@@ -14,7 +14,7 @@ import type {
   ServerMsg,
   WelcomeMsg,
 } from '../protocol.gen.ts';
-import type { CapacityTicks, OrderDelays, RenderSource } from '../render/source.ts';
+import type { CapacityTicks, CityBuildTicks, OrderDelays, RenderSource } from '../render/source.ts';
 import { OrderBook } from './orderBook.ts';
 
 /** Events kept for the fight marks: they live a few seconds, so a short tail is enough. */
@@ -37,6 +37,8 @@ export interface MatchContext {
   roundTicks?: number;
   /** `ruleset_public.recruit.unit_ticks`: the progress of a recruit queue (DEC-25). */
   recruitTicks?: number;
+  /** `ruleset_public.city_upgrades` when enabled (DEC-26): the city build mark. */
+  cityUpgrades?: CityBuildTicks | null;
 }
 
 export interface MatchSessionOptions {
@@ -71,6 +73,7 @@ export class MatchSession implements RenderSource {
   orderDelays: OrderDelays | undefined;
   roundTicks: number | undefined;
   recruitTicks: number | undefined;
+  cityUpgrades: CityBuildTicks | null | undefined;
   /** The overcrowding numbers: the pill beside an overcrowded city. */
   capacityTicks: CapacityTicks | undefined;
   buffer: SnapshotBuffer;
@@ -127,6 +130,7 @@ export class MatchSession implements RenderSource {
         : { planned: orders.planned_delay_ticks, defense: orders.defense_delay_ticks };
     this.roundTicks = context.roundTicks;
     this.recruitTicks = context.recruitTicks;
+    this.cityUpgrades = context.cityUpgrades;
     this.capacityTicks =
       context.capacity === undefined
         ? undefined

@@ -11,7 +11,9 @@ Only what the client uses (AGENTS.md, section 7.1):
   order arrows (ui-style 11 and 9.7);
 - the attrition and grace ticks, for the overcrowding countdown (ui-style 12);
 - the recruit queue numbers, for the production progress over a city and the cancel refund
-  (DEC-25).
+  (DEC-25);
+- the flag and the numbers of the city development (DEC-26, item 10): the barracks and the
+  warehouse levels, their prices and durations, for the city menu.
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -42,6 +44,10 @@ class CostsPublic(WireModel):
     """``set_priority`` (DEC-18, item 1)."""
     transfer: Centi
     """``transfer`` (DEC-18, item 6)."""
+    barracks: Centi
+    """``build_barracks`` (DEC-26, item 2)."""
+    warehouse: Centi
+    """``upgrade_warehouse``, per level (DEC-26, item 3)."""
 
 
 class TerrainDefensePublic(WireModel):
@@ -134,6 +140,18 @@ class RecruitPublic(WireModel):
     yet returns all of it."""
 
 
+class CityUpgradesPublic(WireModel):
+    """City development (DEC-26): ``city_upgrades`` and ``warehouse`` of the ruleset."""
+
+    enabled: bool
+    """Off: every city recruits, the warehouse holds the node capacity, no barracks and no
+    warehouse levels (the commands are rejected with ``FEATURE_DISABLED``)."""
+    barracks_ticks: PosInt
+    warehouse_ticks: PosInt
+    warehouse_max_level: NonNegInt
+    warehouse_gain_per_level: NonNegInt
+
+
 class RulesetPublic(WireModel):
     tick_hz: PosInt
     match_ticks: PosInt
@@ -145,6 +163,7 @@ class RulesetPublic(WireModel):
     orders: OrdersPublic
     capacity: CapacityPublic
     recruit: RecruitPublic
+    city_upgrades: CityUpgradesPublic
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
@@ -170,6 +189,8 @@ class RulesetPublic(WireModel):
                 stance=cost.stance,
                 priority=cost.priority,
                 transfer=cost.transfer,
+                barracks=cost.barracks,
+                warehouse=cost.warehouse,
             ),
             combat=CombatPublic(
                 terrain_defense_mod=TerrainDefensePublic(
@@ -211,5 +232,12 @@ class RulesetPublic(WireModel):
                 unit_ticks=rules.recruit.unit_ticks,
                 queue_max=rules.recruit.queue_max,
                 refund_started_pct=rules.recruit.refund_started_pct,
+            ),
+            city_upgrades=CityUpgradesPublic(
+                enabled=rules.city_upgrades.enabled,
+                barracks_ticks=rules.city_upgrades.barracks_ticks,
+                warehouse_ticks=rules.city_upgrades.warehouse_ticks,
+                warehouse_max_level=rules.warehouse.max_level,
+                warehouse_gain_per_level=rules.warehouse.gain_per_level,
             ),
         )

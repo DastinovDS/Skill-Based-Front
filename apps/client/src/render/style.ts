@@ -71,8 +71,7 @@ export const SNOW_ALPHA = 0.45;
 export const ROAD_COLOR = { color: 0xc4cbd4, alpha: 0.8 } as const;
 export const ROAD_CASING = { color: BG, alpha: 0.4 } as const;
 export const ROAD_CASING_EXTRA = 3;
-export const ROAD_STRIPE = { color: BG, alpha: 0.5, width: 1 } as const;
-/** A fast road (DEC-22): dark chevrons every `spacing` px, `size` px long, notch at `depth`. */
+/** An upgraded road (DEC-26: it only speeds the supply up): dark chevrons every `spacing` px, `size` px long, notch at `depth`. */
 export const ROAD_CHEVRON = { color: BG, spacing: 28, size: 9, gap: 3, depth: 0.45 } as const;
 /** Road thickness grows with its level (1..3, DEC-22), so the level reads without colour: `0.5 + 1.5w`. */
 export function roadThickness(width: number): number {
@@ -110,6 +109,8 @@ export const BAR_GAP = 9;
  * (10 apart); the first fills with the progress of the unit in production.
  */
 export const QUEUE_SLOT = { width: 8, height: 4, pitch: 10, pad: 1 } as const;
+/** The barracks or warehouse build of an own city (DEC-26): a thin bar above the queue mark. */
+export const BUILD_MARK = { width: 24, height: 2, gap: 4 } as const;
 
 export const VP_BADGE_RADIUS = 8.5;
 export const VP_BADGE = { fill: BG, stroke: { width: 2, color: VP } } as const;

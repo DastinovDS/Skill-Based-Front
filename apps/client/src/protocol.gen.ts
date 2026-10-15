@@ -13,6 +13,8 @@ export type Command =
   | SetModeCmd
   | SetStanceCmd
   | UpgradeRoadCmd
+  | BuildBarracksCmd
+  | UpgradeWarehouseCmd
   | RecruitCmd
   | CancelRecruitCmd
   | CancelOrderCmd
@@ -47,9 +49,9 @@ export type PlayerId = 0 | 1;
  */
 export type Detail = 'exact' | 'presence' | 'fog';
 /**
- * Type of a road (DEC-22, item 2): chosen by the first upgrade, never changes after.
+ * What a city builds (DEC-26, item 9): a road level, the barracks or a warehouse level.
  */
-export type RoadKind = 'none' | 'fast' | 'freight';
+export type BuildKind = 'road' | 'barracks' | 'warehouse';
 export type Location = AtNodeLoc | OnEdgeLoc;
 /**
  * Publicly visible intent types (DEC-04, DEC-08).
@@ -121,14 +123,28 @@ export interface SetStanceCmd {
 /**
  * The own city ``node`` raises the internal road ``edge`` by one level (DEC-16, DEC-22).
  *
- * ``kind`` is required by the first upgrade (level 1 -> 2) and chooses the road type; for the
- * second it may be omitted or must equal the road's type (``ROAD_KIND_MISMATCH`` otherwise).
+ * Roads have no type (DEC-26, item 7): ``kind`` is omitted; a given one gives
+ * ``INVALID_ARGUMENT``.
  */
 export interface UpgradeRoadCmd {
   type: 'upgrade_road';
   node: number;
   edge: number;
   kind: ('fast' | 'freight') | null;
+}
+/**
+ * The own city ``node`` builds the barracks (DEC-26, ``city_upgrades``): then it recruits.
+ */
+export interface BuildBarracksCmd {
+  type: 'build_barracks';
+  node: number;
+}
+/**
+ * The own city ``node`` raises its warehouse by one level (DEC-26, item 3).
+ */
+export interface UpgradeWarehouseCmd {
+  type: 'upgrade_warehouse';
+  node: number;
 }
 /**
  * Put one unit into the recruit queue of the own city ``node`` (DEC-25).
@@ -246,6 +262,7 @@ export interface RulesetPublic {
   orders: OrdersPublic;
   capacity: CapacityPublic;
   recruit: RecruitPublic;
+  city_upgrades: CityUpgradesPublic;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.
@@ -277,6 +294,14 @@ export interface CostsPublic {
    * ``transfer`` (DEC-18, item 6).
    */
   transfer: number;
+  /**
+   * ``build_barracks`` (DEC-26, item 2).
+   */
+  barracks: number;
+  /**
+   * ``upgrade_warehouse``, per level (DEC-26, item 3).
+   */
+  warehouse: number;
 }
 export interface CombatPublic {
   terrain_defense_mod: TerrainDefensePublic;
@@ -375,6 +400,20 @@ export interface RecruitPublic {
   refund_started_pct: number;
 }
 /**
+ * City development (DEC-26): ``city_upgrades`` and ``warehouse`` of the ruleset.
+ */
+export interface CityUpgradesPublic {
+  /**
+   * Off: every city recruits, the warehouse holds the node capacity, no barracks and no
+   * warehouse levels (the commands are rejected with ``FEATURE_DISABLED``).
+   */
+  enabled: boolean;
+  barracks_ticks: number;
+  warehouse_ticks: number;
+  warehouse_max_level: number;
+  warehouse_gain_per_level: number;
+}
+/**
  * The player's view after tick ``tick``. Only the latest one matters (AGENTS.md, 5.3).
  */
 export interface SnapshotMsg {
@@ -467,6 +506,25 @@ export interface NodeView {
    * Own city only: the current unit is ready and waits for a place (DEC-25, item 7).
    */
   recruit_waiting: boolean | null;
+  /**
+   * Own city only: it may recruit (DEC-26: with ``city_upgrades`` the capital and the cities
+   * with the barracks, without it every city). ``None`` for provinces, the enemy's and neutral
+   * nodes: the enemy's barracks are hidden (DEC-26, item 10).
+   */
+  has_barracks: boolean | null;
+  /**
+   * Own city only: warehouse upgrades (DEC-26, item 2; always 0 without ``city_upgrades``).
+   */
+  warehouse_level: number | null;
+  /**
+   * Own city only: charges its warehouse holds (DEC-26, item 2; the node capacity without
+   * ``city_upgrades``).
+   */
+  warehouse_cap: number | null;
+  /**
+   * Own city only: its current build of any kind; ``None`` without one.
+   */
+  building: NodeBuilding | null;
 }
 /**
  * What the player sees, or last saw, of one node or edge (``gow_sim.state.Sighting``).
@@ -495,6 +553,19 @@ export interface NodeBuild {
    */
   done_tick: number | null;
 }
+/**
+ * The current build of an own city, of any kind (DEC-26, item 10).
+ */
+export interface NodeBuilding {
+  /**
+   * ``road``, ``barracks`` or ``warehouse``.
+   */
+  kind: BuildKind;
+  /**
+   * The tick it ends, if nothing interrupts it.
+   */
+  done_tick: number;
+}
 export interface EdgeView {
   id: number;
   /**
@@ -502,10 +573,6 @@ export interface EdgeView {
    * ``fog``; in fog the last seen level, or 1 if never seen. Never above the true level.
    */
   width: number;
-  /**
-   * Road type the player knows, by the same rule (DEC-22, item 8): ``none`` on level 1.
-   */
-  kind: RoadKind;
   /**
    * ``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges.
    */
@@ -517,25 +584,14 @@ export interface EdgeView {
   seen: Seen | null;
 }
 /**
- * What the next road level would give, per road type (DEC-22, item 7): both types on
- * level 1, only the road's own type on level 2.
+ * What the next road level would give (DEC-26, item 7): roads have no type, a level only
+ * speeds the packets up; the amount per period does not grow.
  */
 export interface UpgradeGain {
-  fast: RoadGain | null;
-  freight: RoadGain | null;
-}
-/**
- * What one more level of one road type adds (DEC-22, item 7).
- */
-export interface RoadGain {
   /**
    * Packet speed gain in percentage points.
    */
   speed_pct: number;
-  /**
-   * Gain in charges per road and dispatch period.
-   */
-  amount: number;
 }
 /**
  * An own group. Enemy groups appear only as ``Seen`` summaries of places.
@@ -829,6 +885,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 15;
+export const PROTOCOL_VERSION = 16;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

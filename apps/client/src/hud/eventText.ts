@@ -7,11 +7,6 @@ function num(value: unknown): number {
   return typeof value === 'number' ? value : 0;
 }
 
-/** The name of a road type in an event (`road`, DEC-22); an unknown value reads as untyped. */
-function roadName(value: unknown): string {
-  return t(value === 'fast' || value === 'freight' ? `road.${value}` : 'road.none');
-}
-
 function isStance(value: unknown): value is Stance {
   return value === 'economy' || value === 'balance' || value === 'war';
 }
@@ -58,8 +53,9 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'build_started',
   'road_upgraded',
   'build_stopped',
+  'barracks_built',
+  'warehouse_upgraded',
   'packet_lost',
-  'packet_captured',
   'priority_set',
   'transfer_started',
   'starvation',
@@ -108,25 +104,33 @@ export function eventText(event: HudEvent, me: PlayerId): string {
     case 'attrition':
       return tf('event.attrition', { node: num(data.node) });
     case 'road_upgraded':
-      return tf('event.road_upgraded', {
-        edge: num(data.edge),
-        width: num(data.width),
-        road: roadName(data.road),
-      });
+      return tf('event.road_upgraded', { edge: num(data.edge), width: num(data.width) });
     case 'build_started':
+      // DEC-26: a city builds a road level, the barracks or a warehouse level.
+      if (data.kind === 'barracks')
+        return tf('event.build_started.barracks', { node: num(data.node) });
+      if (data.kind === 'warehouse') {
+        return tf('event.build_started.warehouse', {
+          node: num(data.node),
+          level: num(data.level),
+        });
+      }
       return tf('event.build_started', {
         node: num(data.node),
         edge: num(data.edge),
         width: num(data.width),
-        road: roadName(data.road),
         charges: num(data.charges),
       });
     case 'build_stopped':
-      return tf('event.build_stopped', { edge: num(data.edge) });
+      return typeof data.edge === 'number'
+        ? tf('event.build_stopped', { edge: data.edge })
+        : tf('event.build_stopped.city', { node: num(data.node) });
+    case 'barracks_built':
+      return tf('event.barracks_built', { node: num(data.node) });
+    case 'warehouse_upgraded':
+      return tf('event.warehouse_upgraded', { node: num(data.node), level: num(data.level) });
     case 'packet_lost':
       return tf('event.packet_lost', { edge: num(data.edge), charges: num(data.charges) });
-    case 'packet_captured':
-      return tf('event.packet_captured', { node: num(data.node), charges: num(data.charges) });
     case 'priority_set':
       return tf('event.priority_set', {
         node: num(data.node),

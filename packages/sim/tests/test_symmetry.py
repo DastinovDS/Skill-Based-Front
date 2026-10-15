@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from gow_sim.commands import (
+    BuildBarracks,
     CancelOrder,
     CancelRecruit,
     Command,
@@ -36,6 +37,7 @@ from gow_sim.commands import (
     Split,
     Transfer,
     UpgradeRoad,
+    UpgradeWarehouse,
     map_group_ids,
 )
 from gow_sim.maps import load_map
@@ -59,10 +61,12 @@ TICKS = 600
 DECIDE_EVERY = 5
 
 
-@pytest.fixture(scope="module")
-def rules() -> Ruleset:
-    """mvp-0 with 50 CP to start with: CP do not limit the controller, every command is used."""
-    base = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
+@pytest.fixture(scope="module", params=["mvp-0", "mvp-1"])
+def rules(request: pytest.FixtureRequest) -> Ruleset:
+    """mvp-0 and mvp-1 (``city_upgrades`` on, DEC-26) with 50 CP to start with: CP do not limit
+    the controller, every command is used."""
+    name: str = request.param
+    base = load_ruleset(ROOT / "rulesets" / f"{name}.toml")
     return dataclasses.replace(base, cp=dataclasses.replace(base.cp, start=5000, cap=5000))
 
 
@@ -113,6 +117,10 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
             cmds.append(SetPriority(node, levels[(tick // 60 + i) % 3]))
     if tick % 80 == 0 and len(own_cities) >= 2:  # ship 2 charges to the farthest own city
         cmds.append(Transfer(own_cities[0], own_cities[-1], 2))
+    if tick % 110 == 0 and own_cities:  # DEC-26: the barracks of the last own city
+        cmds.append(BuildBarracks(own_cities[-1]))
+    if tick % 110 == 55 and own_cities:  # and a warehouse level of the first one
+        cmds.append(UpgradeWarehouse(own_cities[0]))
     idle = sorted(
         (
             g
@@ -186,6 +194,10 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
             return Recruit(mirror_nodes[node])
         case CancelRecruit(node=node):
             return CancelRecruit(mirror_nodes[node])
+        case BuildBarracks(node=node):
+            return BuildBarracks(mirror_nodes[node])
+        case UpgradeWarehouse(node=node):
+            return UpgradeWarehouse(mirror_nodes[node])
         case SetPriority(node=node, level=level):
             return SetPriority(mirror_nodes[node], level)
         case Transfer(src=src, dst=dst, n=n):
@@ -299,6 +311,8 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             b.cut_since,
             b.recruit_queue,
             b.recruit_progress,
+            b.has_barracks,
+            b.warehouse_level,
         ) == (
             a.warehouse,
             a.over_ticks,
@@ -307,14 +321,17 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             a.cut_since,
             a.recruit_queue,
             a.recruit_progress,
+            a.has_barracks,
+            a.warehouse_level,
         ), f"node {n}"
         ab, bb = a.build, b.build
         assert (bb is None) == (ab is None), f"build of {n}"
         if ab is not None and bb is not None:
-            assert (bb.edge, bb.owner, bb.since) == (
-                mapdef.mirror_edges[ab.edge],
+            assert (bb.edge, bb.owner, bb.since, bb.kind) == (
+                None if ab.edge is None else mapdef.mirror_edges[ab.edge],
                 swap[ab.owner],
                 ab.since,
+                ab.kind,
             ), f"build of {n}"
     for e in range(len(mapdef.edges)):
         assert state.edges[mapdef.mirror_edges[e]].width == state.edges[e].width
@@ -436,6 +453,8 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         "CancelOrder",
         "SetPriority",
     } <= set(kinds)
+    if rules.city_upgrades.enabled:  # DEC-26: the city development is mirrored as well
+        assert {"BuildBarracks", "UpgradeWarehouse"} <= set(kinds)
     assert moves_on_edges > 0
     # On pass the only way out is the central node 3; both players reach it at once and fight
     # there (DEC-07, rule 5; DEC-24) with equal sides, so both bounce and nothing is captured.

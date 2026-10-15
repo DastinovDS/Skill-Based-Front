@@ -5,6 +5,7 @@
  * `t()`.
  */
 import type {
+  BuildKind,
   Detail,
   EventMsg,
   GroupView,
@@ -13,7 +14,6 @@ import type {
   NodeView,
   PlayerId,
   Priority,
-  RoadKind,
   RulesetPublic,
   Seen,
   SnapshotMsg,
@@ -87,6 +87,19 @@ export interface NodeInfo {
   readonly priority: Priority | null;
   /** The recruit queue of an own city (DEC-25): units queued; `null` for the rest. */
   readonly recruitQueue: number | null;
+  /** Own city: it may recruit (DEC-26: the barracks with `city_upgrades`); `null` for the rest. */
+  readonly hasBarracks: boolean | null;
+  /** Own city: warehouse level and the charges it holds (DEC-26); `null` for the rest. */
+  readonly warehouseLevel: number | null;
+  readonly warehouseCap: number | null;
+  /** Own city: its current build of any kind and the whole seconds left; `null` without one. */
+  readonly building: BuildingInfo | null;
+}
+
+/** The current build of an own city (`NodeView.building`, DEC-26). */
+export interface BuildingInfo {
+  readonly kind: BuildKind;
+  readonly secondsLeft: number;
 }
 
 /** A road level a city builds (`NodeView.build`). */
@@ -143,9 +156,7 @@ export interface RoadInfo {
   readonly b: number;
   /** Current level (1..3, DEC-22; the wire calls it `width`). */
   readonly width: number;
-  /** Road type: `none` on level 1, then the type the first upgrade chose (DEC-22). */
-  readonly kind: RoadKind;
-  /** What the next level adds per type; `null`: the road cannot be upgraded (DEC-22, item 7). */
+  /** What the next level adds (packet speed, DEC-26, item 7); `null`: it cannot be upgraded. */
   readonly gain: UpgradeGain | null;
   /**
    * Warehouse charges the next level costs (`ruleset_public.build`, DEC-16); `null` when the road
@@ -266,6 +277,16 @@ function nodeInfo(
     graceLeft: node.grace_left,
     priority: node.priority,
     recruitQueue: node.recruit_queue,
+    hasBarracks: node.has_barracks,
+    warehouseLevel: node.warehouse_level,
+    warehouseCap: node.warehouse_cap,
+    building:
+      node.building === null
+        ? null
+        : {
+            kind: node.building.kind,
+            secondsLeft: Math.ceil(Math.max(0, node.building.done_tick - tick) / ctx.rules.tick_hz),
+          },
   };
 }
 
@@ -276,7 +297,6 @@ function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): 
     a: file?.a ?? -1,
     b: file?.b ?? -1,
     width: edge.width,
-    kind: edge.kind,
     gain: edge.upgrade_gain,
     charges: edge.upgrade_gain === null ? null : levelCharges(ctx.rules, edge.width + 1),
   };
