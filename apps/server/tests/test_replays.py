@@ -27,7 +27,7 @@ from gow_sim.commands import PlayerCommand
 from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match as SimMatch
 from gow_sim.replay import ReplayWriter, read_replay, record_headless, replay_run
-from gow_sim.ruleset import Ruleset, Stance, load_ruleset
+from gow_sim.ruleset import Ruleset, Stance, load_ruleset, ruleset_hash
 from gow_sim.state import RoadKind, initial_state
 
 ROOT: Final = Path(__file__).parents[3]
@@ -246,7 +246,15 @@ def test_replay_is_preparing_until_the_frames_are_written(
     """The root cause of #259: right after the match there is no frames file for a while, and
     that must read as "preparing", not as "does not exist"."""
     with sessions.begin() as session:
-        session.add(Match(id=5, map_id="line3", ruleset_hash="x", rated=False, status="running"))
+        session.add(
+            Match(
+                id=5,
+                map_id="line3",
+                ruleset_hash=ruleset_hash(short_rules),
+                rated=False,
+                status="running",
+            )
+        )
     seen: list[ReplayState] = []
 
     def state_now(service: ReplayService) -> ReplayState:
@@ -405,15 +413,21 @@ def _add_match(
     path: str | None,
     status: str = "saved",
 ) -> None:
+    """A ``matches`` row; with an existing frames file the row describes that file's match."""
+    map_id, ruleset_hash, ticks = "line3", "x", None
+    if path is not None and (api.replays_dir / path).is_file():
+        head = json.loads(gzip.decompress((api.replays_dir / path).read_bytes()))
+        map_id, ruleset_hash, ticks = head["map_id"], head["ruleset_hash"], head["ticks"]
     with api.sessions.begin() as session:
         session.add(
             Match(
                 id=match_id,
-                map_id="line3",
-                ruleset_hash="x",
+                map_id=map_id,
+                ruleset_hash=ruleset_hash,
                 rated=rated,
                 replay_path=path,
                 status=status,
+                ticks=ticks,
             )
         )
         session.flush()
@@ -507,12 +521,90 @@ def test_replay_that_will_never_exist_is_gone(api: Api) -> None:
         assert response.headers.get("content-encoding") != "gzip"
 
 
-def test_replay_is_found_by_its_file_before_the_path_is_saved(
+def test_stale_file_of_an_older_database_is_not_served(
     api: Api, line3: MapDef, short_rules: Ruleset
 ) -> None:
-    """The worker wrote the file but the row has no ``replay_path`` yet: it is already ready."""
+    """#280: ids restart in a new database; ``{id}.frames.json.gz`` of the old one is not ours."""
+    a, auth = _guest(api, "Alice")
+    b, _ = _guest(api, "Bobby")
+    _frames_file(api, "7.frames.json.gz", line3, short_rules)  # left by a match of an older DB
+    _add_match(api, 7, False, (a, b), None, status="running")  # the new match 7 is being played
+    assert api.client.get("/api/replays/7", headers=auth).status_code == 202
+    _add_match(api, 8, False, (a, b), None, status="saved")  # ...a new match 8 with no build
+    _frames_file(api, "8.frames.json.gz", line3, short_rules)
+    assert api.client.get("/api/replays/8", headers=auth).status_code == 410
+
+
+def test_starting_a_match_removes_a_stale_frames_file(
+    api: Api, line3: MapDef, short_rules: Ruleset, maps_dir: Path
+) -> None:
+    stale = _frames_file(api, "9.frames.json.gz", line3, short_rules)
+    service = ReplayService(api.replays_dir, RULESETS, maps_dir, api.sessions)
+    service.writer("9")
+    assert not stale.exists()
+
+
+def test_file_of_another_match_in_replay_path_is_refused(
+    api: Api, line3: MapDef, short_rules: Ruleset
+) -> None:
+    """The header of the file must agree with the row: map, ruleset and length."""
+    a, auth = _guest(api, "Alice")
+    b, _ = _guest(api, "Bobby")
+    path = _frames_file(api, "10.frames.json.gz", line3, short_rules)
+    head = json.loads(gzip.decompress(path.read_bytes()))
+    _add_match(api, 10, False, (a, b), path.name)
+    assert api.client.get("/api/replays/10", headers=auth).status_code == 200
+    changed = {
+        "map_id": ("pautina", head["ruleset_hash"], head["ticks"]),
+        "ruleset_hash": (head["map_id"], "0" * 32, head["ticks"]),
+        "ticks": (head["map_id"], head["ruleset_hash"], head["ticks"] + 1),
+    }
+    for field, (map_id, rules_hash, ticks) in changed.items():
+        with api.sessions.begin() as session:
+            match = session.get(Match, 10)
+            assert match is not None
+            match.map_id, match.ruleset_hash, match.ticks = map_id, rules_hash, ticks
+        assert api.client.get("/api/replays/10", headers=auth).status_code == 410, field
+
+
+def test_replay_is_revalidated_not_cached_blindly(
+    api: Api, line3: MapDef, short_rules: Ruleset
+) -> None:
+    """#280: ``immutable, max-age`` made a browser show the old match 1 for a new match 1."""
     a, _ = _guest(api, "Alice")
     b, _ = _guest(api, "Bobby")
-    _frames_file(api, "7.frames.json.gz", line3, short_rules)
-    _add_match(api, 7, True, (a, b), None, status="saved")
-    assert api.client.get("/api/replays/7").status_code == 200
+    path = _frames_file(api, "11.frames.json.gz", line3, short_rules)
+    _add_match(api, 11, True, (a, b), path.name)
+
+    first = api.client.get("/api/replays/11")
+    assert first.status_code == 200
+    cache = first.headers["cache-control"]
+    assert "no-cache" in cache
+    assert "max-age" not in cache
+    assert "immutable" not in cache
+    etag = first.headers["etag"]
+    again = api.client.get("/api/replays/11", headers={"If-None-Match": etag})
+    assert again.status_code == 304
+    assert again.content == b""
+    assert again.headers["etag"] == etag
+    assert "no-cache" in again.headers["cache-control"]
+
+
+def test_same_id_in_another_database_has_another_etag(
+    api: Api, line3: MapDef, short_rules: Ruleset
+) -> None:
+    """The ETag a browser kept for match 1 of the old database does not match the new match 1,
+    even when the frames file is byte for byte the same (the same bots on the same map)."""
+    a, auth = _guest(api, "Alice")
+    b, _ = _guest(api, "Bobby")
+    path = _frames_file(api, "12.frames.json.gz", line3, short_rules)
+    _add_match(api, 12, False, (a, b), path.name)
+    old = api.client.get("/api/replays/12", headers=auth).headers["etag"]
+
+    with api.sessions.begin() as session:  # the database starts over: same id, another match
+        match = session.get(Match, 12)
+        assert match is not None
+        match.created_at = match.created_at.replace(year=match.created_at.year + 1)
+    response = api.client.get("/api/replays/12", headers={**auth, "If-None-Match": old})
+    assert response.status_code == 200
+    assert response.headers["etag"] != old
