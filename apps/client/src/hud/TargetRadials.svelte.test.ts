@@ -11,7 +11,7 @@ import { DEV_RULES, devSnapshot } from './devFeed.ts';
 import GroupRadial from './GroupRadial.svelte';
 import { HudState } from './hudState.svelte.ts';
 
-const snapshot = devSnapshot(DEFAULT_MAP, DEV_RULES, 30);
+const snapshot = devSnapshot(DEFAULT_MAP, DEV_RULES, 600);
 const group = snapshot.view.groups[0];
 if (group?.location.kind !== 'node') throw new Error('the dev snapshot has no group in a node');
 const home = group.location.node;
@@ -66,38 +66,53 @@ describe('the radial menus of a city and of a group', () => {
     expect(target.querySelector('[role="menu"]')).toBeNull();
   });
 
-  it('the city menu lists recruit, cancel and roads, and recruit sends the command', () => {
+  const texts = (target: HTMLElement): string[] =>
+    [...target.querySelectorAll('[role="menuitem"]')].map((i) =>
+      i.textContent.replace(/\s+/g, ' ').trim(),
+    );
+
+  it('the city menu has recruit and roads with a glyph and a price only, and recruit sends the command', () => {
     setLocale('en');
     const { target, orders, sent } = render();
     orders.click({ kind: 'node', id: home }, false);
     flushSync();
     const items = [...target.querySelectorAll('[role="menuitem"]')];
-    expect(items.map((i) => i.textContent.replace(/\s+/g, ' ').trim())).toEqual([
-      expect.stringContaining('Recruit'),
-      expect.stringContaining('Cancel recruit'),
-      expect.stringContaining('Roads'),
-    ]);
-    expect(items[0]?.textContent).toContain('R');
-    expect(items[0]?.textContent).toContain('0 of 3 queued');
-    expect(items[1]?.getAttribute('aria-disabled')).toBe('true'); // nothing queued
-    expect(items[2]?.textContent).toContain('U');
+    // The glyph, the price (a road costs charges, not CP) and the key: no name, no description.
+    expect(texts(target)).toEqual(['+1 CPR', '≡U']);
+    expect(items.map((i) => i.getAttribute('aria-label'))).toEqual(['Recruit', 'Roads']);
+    expect(items[0]?.getAttribute('aria-disabled')).not.toBe('true');
     items[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     flushSync();
     expect(sent).toEqual([{ type: 'recruit', node: home }]);
     expect(target.querySelector('[role="menu"]')).toBeNull();
   });
 
-  it('the city menu cancels the last queued unit (DEC-25)', () => {
+  it('a sector that cannot be paid or used is off: dashed, never lit, a click does nothing', () => {
+    setLocale('en');
+    const rules = { ...DEV_RULES, cost: { ...DEV_RULES.cost, recruit: 9_999_900 } };
+    const { target, orders, sent } = render(0, rules);
+    orders.click({ kind: 'node', id: home }, false);
+    flushSync();
+    const recruit = target.querySelector('[role="menuitem"]');
+    expect(recruit?.getAttribute('aria-disabled')).toBe('true');
+    expect(recruit?.classList.contains('disabled')).toBe(true);
+    expect(recruit?.getAttribute('tabindex')).toBe('-1');
+    recruit?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    flushSync();
+    expect(sent).toEqual([]);
+    expect(texts(target)[0]).not.toMatch(/[a-z]{3}/); // still no sentence about why
+  });
+
+  it('the city menu has no cancel sector: X cancels the last queued unit of the city (DEC-25)', () => {
     setLocale('en');
     const { target, orders, sent } = render(2);
     orders.click({ kind: 'node', id: home }, false);
     flushSync();
-    const cancel = [...target.querySelectorAll('[role="menuitem"]')][1];
-    expect(cancel?.getAttribute('aria-disabled')).not.toBe('true');
-    expect(cancel?.textContent).toContain('returns 1 CP, started 0.5');
-    cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(target.querySelector('[aria-label="Cancel recruit"]')).toBeNull();
+    orders.key({ type: 'keydown', code: 'KeyX', shiftKey: false });
     flushSync();
     expect(sent).toEqual([{ type: 'cancel_recruit', node: home }]);
+    expect(target.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('with city upgrades the menu builds the barracks and the warehouse (DEC-26)', () => {
@@ -110,13 +125,13 @@ describe('the radial menus of a city and of a group', () => {
     orders.click({ kind: 'node', id: home }, false);
     flushSync();
     const items = [...target.querySelectorAll('[role="menuitem"]')];
-    expect(items.map((i) => i.textContent.replace(/\s+/g, ' ').trim())).toEqual([
-      expect.stringContaining('Recruit'),
-      expect.stringContaining('Cancel recruit'),
-      expect.stringContaining('Roads'),
-      expect.stringContaining('Barracks'),
-      expect.stringContaining('Warehouse'),
+    expect(items.map((i) => i.getAttribute('aria-label'))).toEqual([
+      'Recruit',
+      'Roads',
+      'Barracks',
+      'Warehouse',
     ]);
+    expect(texts(target).slice(2)).toEqual(['⌂3 CP', '▤2 CP']);
     orders.chooseCity('warehouse');
     expect(sent).toEqual([{ type: 'upgrade_warehouse', node: home }]);
   });

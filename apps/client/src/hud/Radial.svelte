@@ -6,8 +6,7 @@
     BIG_RING,
     halfFor,
     labelPoint,
-    nearestSector,
-    REACH_MARGIN,
+    sectorHit,
     sectorPath,
     type RadialItem,
     type RadialRing,
@@ -139,10 +138,9 @@
   });
 
   const sectors = $derived(items.map((item) => ({ angle: item.angle, item })));
-  const dead = $derived(items.length === 0 ? 0 : ring.inner * 0.7);
 
   function sectorAtPoint(x: number, y: number): RadialItem | null {
-    return nearestSector(sectors, x - middle.x, y - middle.y, dead, ring.outer + REACH_MARGIN);
+    return sectorHit(sectors, x - middle.x, y - middle.y, ring, half);
   }
 
   function onmove(event: PointerEvent): void {
@@ -164,11 +162,13 @@
   function rows(item: RadialItem): { kind: string; text: string; dy: number }[] {
     const list: { kind: string; text: string; h: number }[] = [];
     if (item.sign !== undefined) list.push({ kind: 'sign', text: item.sign, h: small ? 22 : 26 });
-    list.push({
-      kind: 'name',
-      text: item.current === true ? `✓ ${item.label}` : item.label,
-      h: small ? 18 : 20,
-    });
+    if (item.compact !== true) {
+      list.push({
+        kind: 'name',
+        text: item.current === true ? `✓ ${item.label}` : item.label,
+        h: small ? 18 : 20,
+      });
+    }
     const extra = item.lines ?? [];
     list.push(...extra.map((text) => ({ kind: 'line', text, h: 16 })));
     if (item.key !== undefined) list.push({ kind: 'key', text: item.key, h: 24 });
@@ -217,6 +217,7 @@
         class:current={item.current === true}
         class:disabled={item.disabled === true}
         role={item.current === undefined ? 'menuitem' : 'menuitemradio'}
+        aria-label={item.compact === true ? item.label : undefined}
         aria-disabled={item.disabled === true}
         aria-checked={item.current === undefined ? undefined : item.current}
         tabindex={item.disabled === true ? -1 : 0}
@@ -358,8 +359,17 @@
     stroke-width: 3;
   }
 
+  /* Off is told by more than the dimming: a dashed outline and a fainter glyph. */
   .sector.disabled {
     opacity: 0.45;
+  }
+
+  .sector.disabled path {
+    stroke-dasharray: 5 4;
+  }
+
+  .sector.disabled .sign {
+    opacity: 0.6;
   }
 
   .disc {

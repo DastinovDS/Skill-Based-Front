@@ -2,12 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { DEV_RULES } from './devFeed.ts';
 import {
   PRIORITY_SIGN,
+  BIG_RING,
   RADIAL,
+  SECTORS,
+  SUPPLY_HALF,
+  SUPPLY_RING,
   SUPPLY_SECTORS,
-  sectorAt,
+  halfFor,
+  sectorHit,
   sectorPath,
+  spreadAngles,
   stanceRates,
-  supplySectorAt,
 } from './radial.ts';
 
 describe('stanceRates', () => {
@@ -33,21 +38,36 @@ describe('stanceRates', () => {
   });
 });
 
-describe('sectorAt', () => {
-  it('cancels in the dead zone', () => {
-    expect(sectorAt(0, 0)).toBeNull();
-    expect(sectorAt(RADIAL.dead - 1, 0)).toBeNull();
-  });
+describe('sectorHit', () => {
+  const stance = SECTORS.map((x) => ({ angle: x.angle, item: x.stance }));
+  const half = halfFor(stance.length);
+  const hit = (dx: number, dy: number) => sectorHit(stance, dx, dy, BIG_RING, half);
 
   it('picks balance up, economy down left and war down right', () => {
-    expect(sectorAt(0, -80)).toBe('balance');
-    expect(sectorAt(-70, 40)).toBe('economy');
-    expect(sectorAt(70, 40)).toBe('war');
+    expect(hit(0, -80)).toBe('balance');
+    expect(hit(-70, 40)).toBe('economy');
+    expect(hit(70, 40)).toBe('war');
   });
 
-  it('keeps the sector far outside the ring (a flick)', () => {
-    expect(sectorAt(900, 500)).toBe('war');
-    expect(sectorAt(-900, 500)).toBe('economy');
+  it('hits only the drawn segment: not the hole, not past the rim, not at the edge of the ring', () => {
+    expect(hit(0, 0)).toBeNull();
+    expect(hit(0, -(BIG_RING.inner - 1))).toBeNull();
+    expect(hit(0, -BIG_RING.inner)).toBe('balance');
+    expect(hit(0, -BIG_RING.outer)).toBe('balance');
+    expect(hit(0, -(BIG_RING.outer + 1))).toBeNull();
+    expect(hit(900, 500)).toBeNull(); // a flick far outside no longer counts
+  });
+
+  it('leaves the gaps between neighbours out and takes the angles to the edge', () => {
+    // Three sectors of 120 degrees with half = 59: a gap of 2 degrees at 330 (between balance
+    // at 270 and war at 30), 90 px from the middle.
+    const at = (deg: number) => [
+      90 * Math.cos((deg * Math.PI) / 180),
+      90 * Math.sin((deg * Math.PI) / 180),
+    ];
+    expect(hit(...(at(330) as [number, number]))).toBeNull();
+    expect(hit(...(at(328.5) as [number, number]))).toBe('balance');
+    expect(hit(...(at(331.5) as [number, number]))).toBe('war');
   });
 });
 
@@ -68,16 +88,21 @@ describe('sectorPath', () => {
   });
 });
 
-describe('supplySectorAt (DEC-18)', () => {
-  it('cancels in the dead zone', () => {
-    expect(supplySectorAt(0, 0)).toBeNull();
-  });
+describe('the supply menu (DEC-18)', () => {
+  const supply = SUPPLY_SECTORS.map((x) => ({ angle: x.angle, item: x.choice }));
+  const hit = (dx: number, dy: number) => sectorHit(supply, dx, dy, SUPPLY_RING, SUPPLY_HALF);
 
   it('picks high up, normal right, low down and transfer left', () => {
-    expect(supplySectorAt(0, -80)).toBe('high');
-    expect(supplySectorAt(80, 0)).toBe('normal');
-    expect(supplySectorAt(0, 80)).toBe('low');
-    expect(supplySectorAt(-80, 0)).toBe('transfer');
+    expect(hit(0, -60)).toBe('high');
+    expect(hit(60, 0)).toBe('normal');
+    expect(hit(0, 60)).toBe('low');
+    expect(hit(-60, 0)).toBe('transfer');
+    expect(hit(0, 0)).toBeNull();
+  });
+
+  it('is a smaller ring than the big one, as small as the group menu', () => {
+    expect(SUPPLY_RING.outer).toBeLessThan(BIG_RING.outer);
+    expect(spreadAngles(4)).toEqual(SUPPLY_SECTORS.map((x) => x.angle));
   });
 
   it('has one key per sector and a shape per priority', () => {

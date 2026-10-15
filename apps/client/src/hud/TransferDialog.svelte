@@ -32,7 +32,7 @@
     } else if (event.key === 'Tab') {
       event.preventDefault();
       event.stopPropagation();
-      const order = [slider, send, cancel].filter((e) => e !== undefined);
+      const order = [slider, send, cancel].filter((e) => e !== undefined && !e.disabled);
       const at = order.findIndex((e) => e === document.activeElement);
       const next = (at + (event.shiftKey ? order.length - 1 : 1)) % order.length;
       order[next]?.focus();
@@ -68,7 +68,7 @@
           />
         </label>
       {:else}
-        <p>{t('transfer.empty')}</p>
+        <p>{t(dialog.full ? 'transfer.full' : 'transfer.empty')}</p>
       {/if}
       <p class="dim">{t('transfer.free')}</p>
       <div class="actions">
@@ -79,16 +79,15 @@
             orders.closeTransfer();
           }}>{t('transfer.cancel')}</button
         >
-        {#if dialog.max > 0}
-          <button
-            type="button"
-            class="primary"
-            bind:this={send}
-            onclick={() => {
-              orders.confirmTransfer();
-            }}>{t('transfer.send')}</button
-          >
-        {/if}
+        <button
+          type="button"
+          class="primary"
+          disabled={dialog.max < 1}
+          bind:this={send}
+          onclick={() => {
+            orders.confirmTransfer();
+          }}>{t('transfer.send')}</button
+        >
       </div>
     </div>
   </div>
@@ -166,6 +165,11 @@
   input:focus-visible {
     outline: 2px solid var(--paper);
     outline-offset: 2px;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
   }
 
   .primary {

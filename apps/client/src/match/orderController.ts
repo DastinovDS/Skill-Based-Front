@@ -33,7 +33,7 @@ import { TargetMenuState } from './targetMenuState.svelte.ts';
 import { SupplyMenuState, TransferState } from './supplyState.svelte.ts';
 
 /** A sector of the menu of a city. */
-export type CityChoice = 'recruit' | 'cancel_recruit' | 'roads' | 'barracks' | 'warehouse';
+export type CityChoice = 'recruit' | 'roads' | 'barracks' | 'warehouse';
 
 /** A sector of the menu of a group. */
 export type GroupChoice = 'split' | 'merge' | 'cancel' | 'defense';
@@ -191,17 +191,9 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.recruit.queue_max;
   }
 
-  /**
-   * What a cancel returns, hundredths of CP: all of the price for a unit not started yet, the
-   * ruleset share (`refund_started_pct`, rounded down) for the unit in production. The numbers of
-   * the ruleset for the menu line; which of the two applies is the server's answer.
-   */
-  get recruitRefund(): { readonly full: number; readonly started: number } {
-    const { cost, recruit } = this.#o.rules;
-    return {
-      full: cost.recruit,
-      started: Math.floor((cost.recruit * recruit.refund_started_pct) / 100),
-    };
+  /** Own CP now, hundredths, from the latest snapshot; `null`: not known yet. */
+  get cpNow(): number | null {
+    return this.#o.hud.current?.cp.value ?? null;
   }
 
   /** Price of switching a group to `mode`, hundredths of CP. */
@@ -505,7 +497,6 @@ export class OrderController implements MapInteraction {
   chooseCity(choice: CityChoice): void {
     this.cityMenu.close();
     if (choice === 'recruit') this.recruit();
-    else if (choice === 'cancel_recruit') this.cancelRecruit();
     else if (choice === 'barracks') this.cityBuild('build_barracks');
     else if (choice === 'warehouse') this.cityBuild('upgrade_warehouse');
     else this.toggleRoadPick();
@@ -557,10 +548,20 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.city_upgrades;
   }
 
-  /** Prices of the barracks and of a warehouse level, hundredths of CP. */
-  get cityCosts(): { readonly barracks: number; readonly warehouse: number } {
+  /** Prices of a unit, a road level, the barracks and a warehouse level, hundredths of CP. */
+  get cityCosts(): {
+    readonly recruit: number;
+    readonly road: number;
+    readonly barracks: number;
+    readonly warehouse: number;
+  } {
     const { cost } = this.#o.rules;
-    return { barracks: cost.barracks, warehouse: cost.warehouse };
+    return {
+      recruit: cost.recruit,
+      road: cost.build,
+      barracks: cost.barracks,
+      warehouse: cost.warehouse,
+    };
   }
 
   /** Take the last unit off the recruit queue of the selected city (DEC-25); free. */
@@ -797,7 +798,10 @@ export class OrderController implements MapInteraction {
         else this.deselect();
         return true;
       case 'KeyX':
-        this.cancelSelected();
+        // A selected own city: its last recruit goes; otherwise the order of the selected group.
+        if (this.#o.hud.selection?.kind === 'node') {
+          if (this.roadCity() !== null) this.cancelRecruit();
+        } else this.cancelSelected();
         return true;
       case 'KeyD':
         this.toggleDefense();
@@ -869,7 +873,11 @@ export class OrderController implements MapInteraction {
   }
 
   /** An own city of the snapshot (priority and warehouse), or `null`. */
-  #ownCity(node: number): { priority: Priority | null; warehouse: number | null } | null {
+  #ownCity(node: number): {
+    priority: Priority | null;
+    warehouse: number | null;
+    warehouseCap: number | null;
+  } | null {
     const choice = this.#o.hud.current?.nodes.find((n) => n.id === node);
     return choice?.owner === 'mine' && choice.priority !== null ? choice : null;
   }
@@ -885,7 +893,15 @@ export class OrderController implements MapInteraction {
     if (from !== null) {
       this.cancelTransferPick();
       if (node !== null && node !== from && this.#ownCity(node) !== null) {
-        this.transfer.open(from, node, this.#ownCity(from)?.warehouse ?? 0);
+        const target = this.#ownCity(node);
+        // Display arithmetic only (the server clamps too): no more than the source holds and
+        // than the free room of the target warehouse (capacity minus stock; unknown: no limit).
+        const stock = this.#ownCity(from)?.warehouse ?? 0;
+        const room =
+          target?.warehouseCap == null
+            ? null
+            : Math.max(0, target.warehouseCap - (target.warehouse ?? 0));
+        this.transfer.open(from, node, room === null ? stock : Math.min(stock, room), room === 0);
       }
       return true;
     }

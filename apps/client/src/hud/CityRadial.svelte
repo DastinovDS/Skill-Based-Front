@@ -25,80 +25,64 @@
   const cp = (centis: number): string => formatCentis(centis, getLocale());
 
   // DEC-26: with the city development the menu also builds the barracks and the warehouse.
+  // A sector shows only its glyph and its price (the name is the accessible name); the reason a
+  // sector is off is on the map and in the panel, never a line of text here.
   const upgrades = $derived(orders.cityUpgrades);
-  const count = $derived(upgrades.enabled ? 5 : 3);
+  const count = $derived(upgrades.enabled ? 4 : 2);
   const items = $derived.by<RadialItem[]>(() => {
     const angles = spreadAngles(count);
+    const costs = orders.cityCosts;
     const queued = queue ?? 0;
-    const refund = orders.recruitRefund;
+    // Own CP now; `null` (not known yet): nothing is dimmed for it.
+    const funds = orders.cpNow;
+    const poor = (centis: number): boolean => funds !== null && funds < centis;
     const noBarracks = upgrades.enabled && city?.hasBarracks === false;
     // Any build of the city (a road, the barracks or the warehouse) holds the others back.
-    const busy = city?.building ?? null;
-    const busyLine =
-      busy === null
-        ? building === null
-          ? []
-          : [tf('city.building', { seconds: building })]
-        : [tf('city.builds', { what: t(`build.${busy.kind}`), seconds: busy.secondsLeft })];
+    const busy = city?.building != null || building !== null;
+    const level = city?.warehouseLevel ?? 0;
+    const price = (centis: number): string[] =>
+      centis > 0 ? [tf('city.cost', { cost: cp(centis) })] : [];
     const list: RadialItem[] = [
       {
         id: 'recruit',
-        angle: angles[0] ?? 180,
+        angle: angles[0] ?? 270,
         sign: '+',
         label: t('city.recruit'),
-        lines: noBarracks
-          ? [t('city.no_barracks')]
-          : [
-              tf('city.cost', { cost: cp(orders.recruitCost) }),
-              tf('city.queue', { n: queued, max: orders.recruitQueueMax }),
-            ],
+        lines: price(costs.recruit),
         key: 'R',
-        disabled: noBarracks,
-      },
-      {
-        id: 'cancel_recruit',
-        angle: angles[1] ?? 60,
-        sign: '−',
-        label: t('city.cancel_recruit'),
-        lines: [tf('city.refund', { full: cp(refund.full), half: cp(refund.started) })],
-        disabled: queued === 0,
+        compact: true,
+        disabled: noBarracks || poor(costs.recruit) || queued >= orders.recruitQueueMax,
       },
       {
         id: 'roads',
-        angle: angles[2] ?? 0,
+        angle: angles[1] ?? 90,
         sign: '≡',
         label: t('city.roads'),
-        lines: busyLine,
+        lines: price(costs.road),
         key: 'U',
-        disabled: busy !== null || building !== null,
+        compact: true,
+        disabled: busy || poor(costs.road),
       },
     ];
     if (upgrades.enabled) {
-      const costs = orders.cityCosts;
-      const level = city?.warehouseLevel ?? 0;
       list.push(
         {
           id: 'barracks',
-          angle: angles[3] ?? 0,
+          angle: angles[2] ?? 0,
           sign: '⌂',
           label: t('city.barracks'),
-          lines: [tf('city.cost', { cost: cp(costs.barracks) })],
-          disabled: city?.hasBarracks !== false || busy !== null,
+          lines: price(costs.barracks),
+          compact: true,
+          disabled: city?.hasBarracks !== false || busy || poor(costs.barracks),
         },
         {
           id: 'warehouse',
-          angle: angles[4] ?? 0,
+          angle: angles[3] ?? 0,
           sign: '▤',
           label: t('city.warehouse'),
-          lines: [
-            tf('city.warehouse_level', {
-              level,
-              max: upgrades.warehouse_max_level,
-              cap: city?.warehouseCap ?? 0,
-            }),
-            tf('city.cost', { cost: cp(costs.warehouse) }),
-          ],
-          disabled: level >= upgrades.warehouse_max_level || busy !== null,
+          lines: price(costs.warehouse),
+          compact: true,
+          disabled: level >= upgrades.warehouse_max_level || busy || poor(costs.warehouse),
         },
       );
     }
