@@ -44,7 +44,8 @@ COMMAND_TYPES = {
     "cancel_recruit",
     "build_barracks",
     "upgrade_warehouse",
-    "set_priority",
+    "set_front",
+    "set_rear_min",
     "transfer",
     "forfeit",
 }
@@ -194,7 +195,8 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
         "build": cost.build,
         "recruit": cost.recruit,
         "stance": cost.stance,
-        "priority": cost.priority,
+        "front": cost.front,
+        "rear_min": cost.rear_min,
         "transfer": cost.transfer,
         "barracks": cost.barracks,
         "warehouse": cost.warehouse,
@@ -207,6 +209,10 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
     }
     assert public.combat.planned_bonus == rules.orders.planned_bonus
     assert public.combat.defense_bonus == rules.orders.defense_bonus
+    assert public.supply.model_dump() == {  # DEC-28, item 3: the rear minimum slider
+        "rear_min_max": rules.supply.rear_min_max,
+        "rear_min_default": rules.supply.rear_min_default,
+    }
 
 
 def test_ruleset_public_has_the_combat_vector_parameter_names() -> None:

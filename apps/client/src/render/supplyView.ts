@@ -4,21 +4,19 @@ import type { Point } from './camera.ts';
 import type { SupplyOverlay } from './interaction.ts';
 import type { MapLayers } from './layers.ts';
 import { arrowGeometry, dashSegments, nodePoint } from './layout.ts';
-import { ARROW_HEAD, ARROW_OUTLINE, BG, PAPER, SELECT_COLOR, SELECT_WIDTH, YOU } from './style.ts';
-import { priorityMarks, signCorners, signPoint, supplyRoutes } from './supplyLayout.ts';
+import { ARROW_HEAD, ARROW_OUTLINE, BG, SELECT_COLOR, SELECT_WIDTH, YOU } from './style.ts';
+import { supplyRoutes } from './supplyLayout.ts';
 
-/** Size of a priority sign (world px). */
-const SIGN = 18;
 /** Line of an automatic packet and of a transfer (wider and dashed: told by shape, not colour). */
 const ROUTE = { width: 2.5, alpha: 0.85 } as const;
 const TRANSFER = { width: 4.5, alpha: 0.95, dash: 10, gap: 6 } as const;
 const TARGET = { dash: 6, gap: 5, ring: 7 } as const;
 
 /**
- * The «Supply» map mode (DEC-18, item 7): a sign of the priority at each own city (up triangle,
- * circle, down triangle), the routes of own packets to their destinations (transfers dashed and
- * wider), and during a transfer pick the source ring and dashed rings around the cities a click
- * would pick. Hidden on the normal map. Redrawn only when the snapshot or the overlay changes.
+ * The «Supply» map mode (DEC-18, item 7): the routes of own packets to their destinations
+ * (transfers dashed and wider; the priority signs are gone with DEC-28), and during a transfer
+ * pick the source ring and dashed rings around the cities a click would pick. Hidden on the
+ * normal map. Redrawn only when the snapshot or the overlay changes.
  */
 export class SupplyView {
   private readonly g = new Graphics();
@@ -42,7 +40,6 @@ export class SupplyView {
     this.g.visible = supply !== null && base !== null;
     if (supply === null || base === null) return;
     this.drawRoutes(base);
-    this.drawSigns(base);
     this.drawPick(supply);
   }
 
@@ -97,22 +94,6 @@ export class SupplyView {
           });
         }
       }
-    }
-  }
-
-  private drawSigns(base: SnapshotMsg): void {
-    const g = this.g;
-    for (const mark of priorityMarks(base.view)) {
-      const city = this.point(mark.node);
-      if (city === undefined) continue;
-      const at = signPoint(city, this.radiusOf(mark.node), SIGN);
-      const corners = signCorners(mark.priority, at, SIGN);
-      if (corners.length === 0) {
-        g.circle(at.x, at.y, SIGN / 2 - 1);
-      } else {
-        g.poly(corners.flatMap((p) => [p.x, p.y]));
-      }
-      g.fill({ color: PAPER }).stroke({ width: 3, color: BG, join: 'round' });
     }
   }
 

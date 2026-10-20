@@ -13,7 +13,7 @@ about and the numbers (``PARAMS``) differ:
 - ``strengthen``: spend CP that would otherwise burn on the cap on recruits at the front;
 - ``fortify``: «Защита» on the guards that face enemies;
 - ``build_roads``: unthreatened own cities upgrade internal roads with warehouse charges (DEC-16).
-- ``prioritize``: own cities at the front get the ``high`` supply priority (DEC-18).
+- ``prioritize``: the two front markers go to own cities at the front (DEC-28).
 
 Enemy strength (DEC-04). A view gives exact enemy numbers only at ``EXACT`` detail (own nodes and
 nodes where own groups stand); next to own nodes (``PRESENCE``) it tells only whether enemy groups
@@ -197,8 +197,8 @@ class StrategyBot(Bot):
         return True
 
     def prioritize(self, turn: Turn) -> None:
-        """Front cities first in the supply order (DEC-18, ``Bot.priorities``)."""
-        for cmd in self.priorities(turn.view):
+        """Front markers on the front cities (DEC-28, ``Bot.fronts``)."""
+        for cmd in self.fronts(turn.view):
             self.spend(turn, cmd)
 
     def set_stance(self, turn: Turn, stance: Stance) -> None:

@@ -121,6 +121,8 @@ def test_supply_conserves_charges_except_documented_sinks() -> None:
     state.nodes[5].warehouse = 30
     _group(state, 0, 2, units=20)
     _group(state, 1, 3, units=20)
+    state.players[0].fronts = (2, None)  # DEC-28: the garrison city fills up, a steady demand
+    state.players[1].fronts = (3, None)
     sent = 0
     for tick in range(1, 301):
         state.tick = tick

@@ -13,7 +13,8 @@ Only what the client uses (AGENTS.md, section 7.1):
 - the recruit queue numbers, for the production progress over a city and the cancel refund
   (DEC-25);
 - the flag and the numbers of the city development (DEC-26, item 10): the barracks and the
-  warehouse levels, their prices and durations, for the city menu.
+  warehouse levels, their prices and durations, for the city menu;
+- the range and the start value of the rear minimum (DEC-28, item 3), for the supply slider.
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -40,8 +41,10 @@ class CostsPublic(WireModel):
     build: Centi
     recruit: Centi
     stance: Centi
-    priority: Centi
-    """``set_priority`` (DEC-18, item 1)."""
+    front: Centi
+    """``set_front`` (DEC-28, item 2)."""
+    rear_min: Centi
+    """``set_rear_min`` (DEC-28, item 3)."""
     transfer: Centi
     """``transfer`` (DEC-18, item 6)."""
     barracks: Centi
@@ -152,6 +155,15 @@ class CityUpgradesPublic(WireModel):
     warehouse_gain_per_level: NonNegInt
 
 
+class SupplyPublic(WireModel):
+    """The supply settings of a player (DEC-28): the range of the rear minimum slider."""
+
+    rear_min_max: NonNegInt
+    """``set_rear_min`` accepts ``0..rear_min_max``."""
+    rear_min_default: NonNegInt
+    """The rear minimum every player starts with."""
+
+
 class RulesetPublic(WireModel):
     tick_hz: PosInt
     match_ticks: PosInt
@@ -164,6 +176,7 @@ class RulesetPublic(WireModel):
     capacity: CapacityPublic
     recruit: RecruitPublic
     city_upgrades: CityUpgradesPublic
+    supply: SupplyPublic
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
@@ -187,7 +200,8 @@ class RulesetPublic(WireModel):
                 build=cost.build,
                 recruit=cost.recruit,
                 stance=cost.stance,
-                priority=cost.priority,
+                front=cost.front,
+                rear_min=cost.rear_min,
                 transfer=cost.transfer,
                 barracks=cost.barracks,
                 warehouse=cost.warehouse,
@@ -239,5 +253,9 @@ class RulesetPublic(WireModel):
                 warehouse_ticks=rules.city_upgrades.warehouse_ticks,
                 warehouse_max_level=rules.warehouse.max_level,
                 warehouse_gain_per_level=rules.warehouse.gain_per_level,
+            ),
+            supply=SupplyPublic(
+                rear_min_max=rules.supply.rear_min_max,
+                rear_min_default=rules.supply.rear_min_default,
             ),
         )

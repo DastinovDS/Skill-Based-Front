@@ -37,14 +37,13 @@ Starvation in an encirclement (DEC-19; ``starvation`` after the attrition, in th
 
 Every owner change goes through ``change_owner()``: the warehouse is emptied (no trophies,
 mechanics.md, section 9), road levels, the barracks and the warehouse level are kept (DEC-26,
-item 4), the supply priority goes back to
-``normal`` (DEC-18), the recruit queue of the former owner is lost without a refund (DEC-25,
+item 4), the recruit queue of the former owner is lost without a refund (DEC-25,
 item 10), the grace period starts.
 """
 
 from gow_sim.maps import NodeKind
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Priority, event
+from gow_sim.state import AtNode, Event, GameState, Group, event
 
 
 def is_internal(state: GameState, edge: int) -> bool:
@@ -155,8 +154,8 @@ def warehouse_capacities(state: GameState, rules: Ruleset) -> tuple[int, ...]:
 def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     """Give ``node`` to ``owner``: the warehouse is emptied, road widths stay, grace starts.
 
-    The supply priority goes back to ``normal`` (DEC-18, item 1); the recruit queue and its
-    progress are dropped (DEC-25, item 10).
+    The recruit queue and its progress are dropped (DEC-25, item 10); a front marker of the
+    former owner on the city falls back in ``systems.supply`` (DEC-28, item 2).
 
     Captures (movement SIM-05, combat SIM-09) call this; it emits ``warehouse_lost`` when
     charges were in the warehouse and ``recruit_queue_lost`` (for the former owner) when units
@@ -181,7 +180,6 @@ def change_owner(state: GameState, node: int, owner: int | None) -> list[Event]:
     n.recruit_progress = 0
     n.owner = owner
     n.warehouse = 0
-    n.priority = Priority.NORMAL
     n.cut_since = None
     n.over_ticks = 0
     n.captured_tick = state.tick

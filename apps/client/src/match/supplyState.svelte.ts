@@ -1,13 +1,10 @@
 import type { SupplyChoice } from '../hud/radial.ts';
-import type { Priority } from '../protocol.gen.ts';
 
 /** What the supply menu of an own city shows (DEC-18, item 7). */
 export interface SupplyMenuData {
   readonly open: boolean;
   /** The city; `-1` while closed. */
   readonly node: number;
-  /** Its priority now (from the snapshot). */
-  readonly priority: Priority;
   /** Warehouse charges of the city, for the transfer sector; `null` if unknown. */
   readonly warehouse: number | null;
   /** The sector under the pointer; `null`: the dead zone, or nothing yet. */
@@ -17,7 +14,6 @@ export interface SupplyMenuData {
 const MENU_CLOSED: SupplyMenuData = {
   open: false,
   node: -1,
-  priority: 'normal',
   warehouse: null,
   hover: null,
 };
@@ -26,8 +22,8 @@ const MENU_CLOSED: SupplyMenuData = {
 export class SupplyMenuState {
   current = $state.raw<SupplyMenuData>(MENU_CLOSED);
 
-  open(node: number, priority: Priority, warehouse: number | null): void {
-    this.current = { open: true, node, priority, warehouse, hover: null };
+  open(node: number, warehouse: number | null): void {
+    this.current = { open: true, node, warehouse, hover: null };
   }
 
   close(): void {

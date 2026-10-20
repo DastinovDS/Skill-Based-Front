@@ -4,7 +4,8 @@ A command is an intent, never state. It names own groups by opaque id and map no
 their public map ids. One wire command per simulation command of SIM-04 (#20):
 ``Move(group, dest, planned)``, ``Split(group, n)``, ``Merge(groups)``, ``SetMode(group, mode)``,
 ``SetStance(stance)``, ``UpgradeRoad(node, edge)``, ``Recruit(node)``, ``CancelOrder(group)``,
-``Forfeit()``; DEC-18: ``SetPriority(node, level)``, ``Transfer(from, to, n)``; DEC-25:
+``Forfeit()``; DEC-18: ``Transfer(from, to, n)``; DEC-28: ``SetFront(marker, node)``,
+``SetRearMin(n)``; DEC-25:
 ``CancelRecruit(node)``; DEC-26: ``BuildBarracks(node)``, ``UpgradeWarehouse(node)``. The conversion
 to simulation commands is PRO-03 (#46).
 
@@ -17,9 +18,9 @@ from typing import Annotated, Final, Literal
 
 from pydantic import Field, field_validator
 
-from gow_protocol.base import EdgeId, NodeId, OpaqueId, PosInt, WireModel
+from gow_protocol.base import EdgeId, NodeId, NonNegInt, OpaqueId, PosInt, WireModel
 from gow_sim.ruleset import Stance
-from gow_sim.state import Mode, Priority
+from gow_sim.state import FRONT_MARKERS, Mode
 
 MAX_MERGE_GROUPS: Final = 16
 """Wire limit on ``merge.groups`` against oversized messages; not a game rule."""
@@ -114,12 +115,21 @@ class CancelOrderCmd(WireModel):
     group: OpaqueId
 
 
-class SetPriorityCmd(WireModel):
-    """Supply priority ``level`` of the own city ``node`` (DEC-18, item 1)."""
+class SetFrontCmd(WireModel):
+    """Put the front marker ``marker`` (0 or 1) on the own city ``node``; ``node = null`` takes
+    it off the map (DEC-28, item 2). Free (``cost.front``)."""
 
-    type: Literal["set_priority"] = "set_priority"
-    node: NodeId
-    level: Priority
+    type: Literal["set_front"] = "set_front"
+    marker: Annotated[int, Field(ge=0, lt=FRONT_MARKERS)]
+    node: NodeId | None
+
+
+class SetRearMinCmd(WireModel):
+    """The own rear minimum ``n``, ``0..supply.rear_min_max`` of ``ruleset_public`` (DEC-28,
+    item 3); the range is checked by the simulation (``INVALID_ARGUMENT``)."""
+
+    type: Literal["set_rear_min"] = "set_rear_min"
+    n: NonNegInt
 
 
 class TransferCmd(WireModel):
@@ -149,7 +159,8 @@ type Command = Annotated[
     | RecruitCmd
     | CancelRecruitCmd
     | CancelOrderCmd
-    | SetPriorityCmd
+    | SetFrontCmd
+    | SetRearMinCmd
     | TransferCmd
     | ForfeitCmd,
     Field(discriminator="type"),

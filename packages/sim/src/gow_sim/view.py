@@ -13,7 +13,8 @@ PRO-01), which PRO-03 converts it into:
 - road builds of cities (DEC-16, item 8): own ones always, with the tick they finish; an enemy
   one (the city and the edge, no tick) only while the edge is not in fog (DEC-17, item 5);
 - ``EXACT`` places (own nodes, nodes where own groups stand): warehouse and enemy totals;
-- own cities: their supply priority (DEC-18, item 8) and, cut off, the ticks until the garrison
+- own front markers and rear minimum (DEC-28, ``SelfView``; never the enemy's);
+- own cities: cut off, the ticks until the garrison
   next starves (``starve_in``, DEC-19, item 8), their recruit queue and its progress (DEC-25,
   item 12), the barracks, the warehouse level and capacity and the current build of any kind
   (DEC-26, item 10); own packets with their remaining path and whether they are a transfer;
@@ -26,9 +27,9 @@ PRO-01), which PRO-03 converts it into:
 What a view never has: enemy groups as entities (only the per-place ``Sighting``), road levels
 of fogged edges newer than the last sighting, the barracks, warehouse level and city builds of
 the enemy (DEC-26, item 10), enemy builds on fogged edges, enemy packets
-(#112 default), enemy CP, stance, production and counters, supply priorities of enemy cities and
-enemy transfers (DEC-18, item 8), events, the target of an enemy's normal order (normal orders have
-no intent), sequential ids.
+(#112 default), enemy CP, stance, production and counters, the enemy's front markers and rear
+minimum (DEC-28), enemy transfers (DEC-18, item 8), events, the target of an enemy's normal
+order (normal orders have no intent), sequential ids.
 
 Ids of own groups, own packets and intents are opaque per player: keyed blake2b of
 ``(player, internal id)`` with the secret ``match_key`` of the match (``opaque_id``). They are
@@ -59,7 +60,6 @@ from gow_sim.state import (
     Location,
     Mode,
     OnEdge,
-    Priority,
     Sighting,
 )
 from gow_sim.systems.build import UpgradeGain, done_tick, upgrade_gain
@@ -94,7 +94,6 @@ __all__ = [
     "OrderView",
     "PacketView",
     "PlayerView",
-    "Priority",
     "Reach",
     "SelfView",
     "Sighting",
@@ -128,6 +127,10 @@ class SelfView:
     cp: int
     """Command points in hundredths."""
     stance: Stance
+    fronts: tuple[int | None, ...] = (None, None)
+    """The cities of the two own front markers (DEC-28, item 2), ``None``: not placed."""
+    rear_min: int = 0
+    """The own rear minimum (DEC-28, item 3)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,9 +171,6 @@ class NodeView:
     grace_left: int | None
     """Own node only: ticks the grace after a capture still lasts while the garrison exceeds the
     capacity; ``None`` otherwise."""
-    priority: Priority | None
-    """Own city only: its supply priority (DEC-18); ``None`` for provinces, the enemy's and
-    neutral nodes."""
     starve_in: int | None
     """Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8, grace
     included); ``None`` otherwise, always for the enemy's and neutral nodes."""
@@ -441,7 +441,6 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 build=_build_view(state, rules, player, n, levels.edges),
                 attrition_in=attrition_in,
                 grace_left=grace_left,
-                priority=node.priority if own_city else None,
                 starve_in=starve_in(state, rules, n) if node.owner == player else None,
                 recruit_queue=node.recruit_queue if own_city else None,
                 recruit_progress=node.recruit_progress if own_city else None,
@@ -546,7 +545,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     return PlayerView(
         tick=state.tick,
         player=player,
-        me=SelfView(cp=me.cp, stance=me.stance),
+        me=SelfView(cp=me.cp, stance=me.stance, fronts=me.fronts, rear_min=me.rear_min),
         vp=tuple(state.players[p].vp for p in PLAYERS),
         nodes=tuple(nodes),
         edges=tuple(edges),
@@ -588,7 +587,12 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
     return {
         "tick": view.tick,
         "player": view.player,
-        "me": {"cp": view.me.cp, "stance": view.me.stance.value},
+        "me": {
+            "cp": view.me.cp,
+            "stance": view.me.stance.value,
+            "fronts": list(view.me.fronts),
+            "rear_min": view.me.rear_min,
+        },
         "vp": list(view.vp),
         "nodes": [
             {
@@ -603,7 +607,6 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 else {"edge": n.build.edge, "done_tick": n.build.done_tick},
                 "attrition_in": n.attrition_in,
                 "grace_left": n.grace_left,
-                "priority": None if n.priority is None else n.priority.value,
                 "starve_in": n.starve_in,
                 "recruit_queue": n.recruit_queue,
                 "recruit_progress": n.recruit_progress,

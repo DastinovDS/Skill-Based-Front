@@ -36,13 +36,13 @@ from gow_sim.commands import (
     CancelOrder,
     Command,
     Move,
-    SetPriority,
+    SetFront,
     Split,
     UpgradeRoad,
     UpgradeWarehouse,
     command_cost,
 )
-from gow_sim.maps import MapDef
+from gow_sim.maps import MapDef, NodeKind
 from gow_sim.ruleset import RecruitLocation, Ruleset
 from gow_sim.view import (
     AtNode,
@@ -53,7 +53,6 @@ from gow_sim.view import (
     NodeView,
     OnEdge,
     PlayerView,
-    Priority,
 )
 
 __all__ = [
@@ -349,23 +348,36 @@ class Bot:
                     queue.append(other)
         return result
 
-    def priorities(self, view: PlayerView) -> list[Command]:
-        """Supply priorities (DEC-18): own cities at the front ``high``, the rest ``normal``.
+    def fronts(self, view: PlayerView) -> list[Command]:
+        """Front markers (DEC-28, item 2) on the two own supplied cities at the front nearest to
+        the enemy capital: their warehouses fill up first, the rear keeps the rear minimum.
 
-        A city is at the front when one of its neighbours is not own (public ownership): supply
-        then reaches the front before the rear. Only changes are commanded (``NO_CHANGE``
-        otherwise); cities in ``node_key`` order (mirror-invariant).
+        A city is at the front when one of its neighbours is not own (public ownership). Markers
+        already on a wanted city stay; the others move to the wanted cities left or come off the
+        map. Ties by ``node_key`` (mirror-invariant); only changes are commanded.
         """
         me = view.player
+        supplied = self.supplied(view)
+        far = self.hops[self.map.capital(1 - me)]
+        cities = [
+            n
+            for n in range(len(view.nodes))
+            if supplied[n]
+            and self.map.nodes[n].kind is not NodeKind.PROVINCE
+            and any(view.nodes[m].owner != me for m in self.neighbors[n])
+        ]
+        cities.sort(key=lambda n: (far[n] if far[n] >= 0 else len(far), self.key(n)))
+        wanted = cities[: len(view.me.fronts)]
+        fronts = list(view.me.fronts)
+        free = [n for n in wanted if n not in fronts]
         cmds: list[Command] = []
-        for n in sorted(range(len(view.nodes)), key=self.key):
-            current = view.nodes[n].priority
-            if current is None:  # not an own city
+        for i, node in enumerate(fronts):
+            if node is not None and node in wanted:
                 continue
-            front = any(view.nodes[m].owner != me for m in self.neighbors[n])
-            want = Priority.HIGH if front else Priority.NORMAL
-            if current is not want:
-                cmds.append(SetPriority(n, want))
+            new = free.pop(0) if free else None
+            if new != node:
+                fronts[i] = new
+                cmds.append(SetFront(i, new))
         return cmds
 
     def upgrade(self, view: PlayerView, node: int, edge: int) -> UpgradeRoad:

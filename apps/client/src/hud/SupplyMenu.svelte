@@ -3,7 +3,6 @@
   import type { OrderController } from '../match/orderController.ts';
   import Radial from './Radial.svelte';
   import {
-    PRIORITY_SIGN,
     SUPPLY_HALF,
     SUPPLY_RING,
     SUPPLY_SECTORS,
@@ -19,31 +18,17 @@
 
   const menu = $derived(orders.supplyMenu.current);
 
-  function sign(choice: SupplyChoice): string {
-    return choice === 'transfer' ? '⇢' : PRIORITY_SIGN[choice];
-  }
-
-  function name(choice: SupplyChoice): string {
-    return choice === 'transfer' ? t('supplyMenu.transfer') : t(`priority.${choice}`);
-  }
-
   const items = $derived<RadialItem[]>(
     SUPPLY_SECTORS.map((sector) => {
-      const current = sector.choice === menu.priority;
-      const note = current
-        ? t('supplyMenu.current')
-        : sector.choice === 'transfer' && menu.warehouse !== null
-          ? tf('supplyMenu.stock', { charges: menu.warehouse })
-          : null;
+      const note =
+        menu.warehouse !== null ? tf('supplyMenu.stock', { charges: menu.warehouse }) : null;
       return {
         id: sector.choice,
         angle: sector.angle,
-        sign: sign(sector.choice),
-        label: name(sector.choice),
+        sign: '⇢',
+        label: t('supplyMenu.transfer'),
         lines: note === null ? [] : [note],
         key: sector.key,
-        // The transfer is an action, not a level: only a priority can be "the current one".
-        ...(sector.choice === 'transfer' ? {} : { current }),
       };
     }),
   );
@@ -63,8 +48,8 @@
     onhover={(id: string | null) => {
       orders.supplyMenu.hover(id as SupplyChoice | null);
     }}
-    onchoose={(id: string) => {
-      orders.chooseSupply(id as SupplyChoice);
+    onchoose={() => {
+      orders.chooseSupply();
     }}
     onclose={() => {
       orders.closeSupplyMenu();

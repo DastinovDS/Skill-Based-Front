@@ -8,13 +8,13 @@ and advance the clock. After every tick the invariants below must hold:
   the groups) equal the charges at the start, plus the ones the capitals produced
   (``charges_produced``), minus the documented sinks: shots and killed charged units
   (``spent`` of ``fight_round``; a group dying by DEC-24 G3: ``fight_group`` with ``encircled``),
-  ``warehouse_lost``, ``packet_lost``, the part of a delivered packet that does
-  not fit the warehouse (``packet_delivered`` vs. the packet; that part is also a
-  ``charges_overflow``) and ``attrition`` deaths of charged units; the charges a city pays for a
+  ``warehouse_lost``, ``packet_lost``, ``charges_overflow`` (the part of a delivered packet that
+  does not fit the warehouse, and the production of a full capital that finds no room in the
+  rear, DEC-28, item 4.4) and ``attrition`` deaths of charged units; the charges a city pays for a
   road level (``build_started``, DEC-16); the charges a cut-off garrison spends (``starvation``,
   DEC-19; units never die of it). A transfer (DEC-18) only moves charges from a warehouse into a
-  packet: it is a flow, not a sink. The overflow of the capital's own production is not a sink:
-  those charges were never created;
+  packet: it is a flow, not a sink. ``charges_produced`` counts all of the production, the part
+  that did not fit into the capital (``spill``) included;
 - no negative counters, ``charged <= units``, road widths within their limits, every group in an
   existing node or on an existing edge, ids unique, links between groups and intents;
 - a garrison never grows without an arrival (``group_arrived``) or a recruit in its city, so an
@@ -53,8 +53,9 @@ from gow_sim.commands import (
     Ok,
     PlayerCommand,
     Recruit,
+    SetFront,
     SetMode,
-    SetPriority,
+    SetRearMin,
     SetStance,
     Split,
     Transfer,
@@ -75,7 +76,6 @@ from gow_sim.state import (
     Mode,
     OnEdge,
     Packet,
-    Priority,
 )
 from gow_sim.systems.capacity import node_capacities
 from gow_sim.view import opaque_id, project
@@ -125,7 +125,8 @@ class Ledger:
     """Charges spent in fights: shots and charged units that died."""
     warehouse_lost: int = 0
     packet_lost: int = 0
-    packet_overflow: int = 0
+    overflow: int = 0
+    """``charges_overflow``: a delivered packet that does not fit, a spill that finds no room."""
     attrition: int = 0
     starvation: int = 0
     """Charges a cut-off garrison spent (DEC-19): a documented sink."""
@@ -135,7 +136,7 @@ class Ledger:
     @property
     def lost(self) -> int:
         return (
-            self.shots + self.warehouse_lost + self.packet_lost + self.packet_overflow
+            self.shots + self.warehouse_lost + self.packet_lost + self.overflow
             + self.attrition + self.starvation + self.builds
         )  # fmt: skip
 
@@ -158,7 +159,8 @@ class Ledger:
                 case "packet_delivered":
                     sent = packets_before[_int(e, "packet")]
                     assert _int(e, "charges") <= sent, f"a packet grew on the way: {e}"
-                    self.packet_overflow += sent - _int(e, "charges")
+                case "charges_overflow":
+                    self.overflow += _int(e, "charges")
                 case "attrition":
                     self.attrition += 1 if e.get("charged") else 0
                 case "build_started" if e.get("kind") == "road":
@@ -369,9 +371,11 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
         if p.owner == enemy:
             p.charges = draw(st.integers(1, 9))
             p.transfer = draw(st.booleans())
+    other = state.players[enemy]  # DEC-28: the enemy's front markers and rear minimum are hidden
+    other.fronts = (draw(st.none() | st.integers(0, len(nodes) - 1)), None)
+    other.rear_min = draw(st.integers(0, 8))
     for node in state.nodes.values():
         if node.owner == enemy:
-            node.priority = draw(st.sampled_from(list(Priority)))
             node.cut_since = draw(st.none() | st.integers(0, state.tick))
             node.has_barracks = draw(st.booleans())  # DEC-26, item 10: hidden
             node.warehouse_level = draw(st.integers(0, 2))
@@ -413,7 +417,8 @@ ALL_KINDS: Final = (
     "stance",
     "upgrade",
     "recruit",
-    "priority",
+    "front",
+    "rear_min",
     "transfer",
     "cancel",
     "barracks",
@@ -473,10 +478,10 @@ def _candidate(data: st.DataObject, tracker: Tracker, player: int) -> Command:
             return CancelRecruit(draw(st.integers(0, n_nodes - 1)))
         case "recruit":
             return Recruit(draw(st.integers(0, n_nodes - 1)))
-        case "priority":
-            return SetPriority(
-                draw(st.integers(0, n_nodes - 1)), draw(st.sampled_from(list(Priority)))
-            )
+        case "front":
+            return SetFront(draw(st.integers(-1, 2)), draw(st.none() | st.integers(0, n_nodes - 1)))
+        case "rear_min":
+            return SetRearMin(draw(st.integers(-1, 9)))
         case "transfer":
             return Transfer(
                 draw(st.integers(0, n_nodes - 1)),

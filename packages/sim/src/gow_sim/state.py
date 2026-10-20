@@ -25,6 +25,9 @@ from gow_sim.ruleset import Ruleset, Stance
 PROGRESS_SCALE: Final = 1000
 """Edge progress is stored in thousandths of the edge (DEC-07, rule 6)."""
 
+FRONT_MARKERS: Final = 2
+"""Front markers of a player (DEC-28, item 2)."""
+
 
 class Mode(StrEnum):
     """Group mode (mechanics.md, section 3; effects: DEC-08). Roads are built by cities (DEC-16)."""
@@ -46,22 +49,6 @@ class BuildKind(StrEnum):
     ROAD = "road"
     BARRACKS = "barracks"
     WAREHOUSE = "warehouse"
-
-
-class Priority(StrEnum):
-    """Supply priority of a city (DEC-18, item 1): only the order of delivery, not the target."""
-
-    HIGH = "high"
-    NORMAL = "normal"
-    LOW = "low"
-
-    @property
-    def rank(self) -> int:
-        """``high`` 0, ``normal`` 1, ``low`` 2: a lower rank is served first (DEC-18, item 4)."""
-        return _PRIORITY_RANK[self]
-
-
-_PRIORITY_RANK: Final = {Priority.HIGH: 0, Priority.NORMAL: 1, Priority.LOW: 2}
 
 
 class Detail(StrEnum):
@@ -205,6 +192,12 @@ class PlayerState:
     cooldown (#104 default)."""
     forfeited: bool = False
     """The player gave up: a ``Forfeit`` command, also for a technical defeat (DEC-05)."""
+    fronts: tuple[int | None, ...] = (None,) * FRONT_MARKERS
+    """The own city of each of the two front markers (DEC-28, item 2), ``None``: not placed.
+    Never two markers on one city (example 8)."""
+    rear_min: int = 0
+    """Charges the own cities without a marker keep (DEC-28, item 3); ``initial_state`` sets
+    ``supply.rear_min_default``."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,8 +243,6 @@ class Node:
     warehouse_level: int = 0
     """Warehouse upgrades of the city, ``0..warehouse.max_level`` (DEC-26, item 2); kept on a
     capture, used only with ``city_upgrades``."""
-    priority: Priority = Priority.NORMAL
-    """Supply priority of the city (DEC-18, item 1); back to ``NORMAL`` on every owner change."""
     cut_since: int | None = None
     """First tick of the current continuous cut of an own city from the owner's capital
     (DEC-19, item 2); ``None`` while supplied, for provinces and neutral nodes."""
@@ -406,6 +397,7 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
                 charge_acc=0,
                 vp=0,
                 stance_changed_tick=None,
+                rear_min=rules.supply.rear_min_default,
             )
             for p in PLAYERS
         },
@@ -522,6 +514,8 @@ def _player_data(p: PlayerState) -> dict[str, object]:
         "vp": p.vp,
         "stance_changed_tick": p.stance_changed_tick,
         "forfeited": p.forfeited,
+        "fronts": list(p.fronts),
+        "rear_min": p.rear_min,
     }
 
 
@@ -534,7 +528,6 @@ def _node_data(n: Node) -> dict[str, object]:
         "captured_tick": n.captured_tick,
         "recruit_queue": n.recruit_queue,
         "recruit_progress": n.recruit_progress,
-        "priority": n.priority.value,
         "cut_since": n.cut_since,
         "build": None
         if n.build is None
@@ -720,8 +713,21 @@ def _parse_player(data: object, where: str) -> PlayerState:
     raw = _obj(
         data,
         where,
-        ("id", "cp", "stance", "charge_acc", "vp", "stance_changed_tick", "forfeited"),
+        (
+            "id",
+            "cp",
+            "stance",
+            "charge_acc",
+            "vp",
+            "stance_changed_tick",
+            "forfeited",
+            "fronts",
+            "rear_min",
+        ),
     )
+    fronts = _list(raw["fronts"], f"{where}.fronts")
+    if len(fronts) != FRONT_MARKERS:
+        raise StateFormatError(f"{where}.fronts: expected {FRONT_MARKERS} markers")
     return PlayerState(
         id=_int(raw["id"], f"{where}.id", low=0),
         cp=_int(raw["cp"], f"{where}.cp", low=0),
@@ -730,6 +736,8 @@ def _parse_player(data: object, where: str) -> PlayerState:
         vp=_int(raw["vp"], f"{where}.vp", low=0),
         stance_changed_tick=_opt_int(raw["stance_changed_tick"], f"{where}.stance_changed_tick"),
         forfeited=_bool(raw["forfeited"], f"{where}.forfeited"),
+        fronts=tuple(_opt_int(f, f"{where}.fronts") for f in fronts),
+        rear_min=_int(raw["rear_min"], f"{where}.rear_min", low=0),
     )
 
 
@@ -745,7 +753,6 @@ def _parse_node(data: object, where: str) -> Node:
             "captured_tick",
             "recruit_queue",
             "recruit_progress",
-            "priority",
             "cut_since",
             "build",
             "has_barracks",
@@ -761,7 +768,6 @@ def _parse_node(data: object, where: str) -> Node:
         recruit_queue=_int(raw["recruit_queue"], f"{where}.recruit_queue", low=0),
         recruit_progress=_int(raw["recruit_progress"], f"{where}.recruit_progress", low=0),
         build=None if raw["build"] is None else _parse_build(raw["build"], f"{where}.build"),
-        priority=Priority(_choice(raw["priority"], f"{where}.priority", Priority)),
         cut_since=_opt_int(raw["cut_since"], f"{where}.cut_since"),
         has_barracks=_bool(raw["has_barracks"], f"{where}.has_barracks"),
         warehouse_level=_int(raw["warehouse_level"], f"{where}.warehouse_level", low=0),

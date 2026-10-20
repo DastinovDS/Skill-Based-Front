@@ -26,6 +26,7 @@ from gow_sim.maps import load_map, parse_map
 from gow_sim.ruleset import CpRules, EconomyRules, Ruleset, Stance, StanceTable, load_ruleset
 from gow_sim.state import Event, GameState, initial_state
 from gow_sim.systems.economy import economy, set_stance, stance_cooldown_left
+from gow_sim.systems.supply import supply
 
 TESTS_DIR = Path(__file__).resolve().parent
 MAPS_DIR = TESTS_DIR / "maps"
@@ -196,26 +197,34 @@ def test_600_ticks(
 # Capital warehouse and capacity --------------------------------------------------------------
 
 
-def test_overflow_is_lost_with_an_event() -> None:
+def _produced(events: list[Event]) -> list[tuple[object, object, object]]:
+    return [
+        (e.get("node"), e.get("charges"), e.get("spill"))
+        for e in events
+        if e.kind == "charges_produced" and e.get("player") == 0
+    ]
+
+
+def test_overflow_goes_to_the_supply_as_spill() -> None:
     # line3: the capital holds 4 (``DEC02``).
     state = initial_state(load_map(MAPS_DIR / "line3.json"), DEC02)
     state.nodes[0].warehouse = 3
     state.players[0].stance = Stance.ECONOMY
     state.players[0].charge_acc = 50
     events = _run(state, 50, DEC02)
-    # ECONOMY: 50 + 150 hundredths = 2 charges; room for 1, 1 lost.
+    # ECONOMY: 50 + 150 hundredths = 2 charges; room for 1, the other one is spill for the supply
+    # system of the same tick (DEC-28, item 4.4), not lost here.
     assert state.nodes[0].warehouse == 4
-    produced = [e for e in events if e.kind == "charges_produced" and e.get("player") == 0]
-    lost = [e for e in events if e.kind == "charges_overflow" and e.get("player") == 0]
-    assert [(e.get("node"), e.get("charges")) for e in produced] == [(0, 1)]
-    assert [(e.get("node"), e.get("charges")) for e in lost] == [(0, 1)]
+    assert _produced(events) == [(0, 2, 1)]
+    assert not [e for e in events if e.kind == "charges_overflow"]
 
 
-def test_full_warehouse_loses_everything() -> None:
+def test_full_warehouse_spills_everything() -> None:
     state = initial_state(load_map(MAPS_DIR / "line3.json"), DEC02)  # start_stock 4 = capacity
     events = _run(state, 50, DEC02)
     assert state.nodes[0].warehouse == 4
-    assert [e.kind for e in events if e.get("player") == 0] == ["charges_overflow"]
+    assert [e.kind for e in events if e.get("player") == 0] == ["charges_produced"]
+    assert _produced(events) == [(0, 1, 1)]
 
 
 def test_capacity_does_not_count_internal_roads() -> None:
@@ -233,8 +242,13 @@ def test_lost_capital_produces_nothing_but_cp_regenerates() -> None:
     events = _run(state, 50)
     assert state.nodes[0].warehouse == 0
     assert state.players[0].cp == 350
-    lost = [e for e in events if e.kind == "charges_overflow" and e.get("player") == 0]
-    assert [e.get("charges") for e in lost] == [1]  # BALANCE: 1 charge, no passive
+    # BALANCE: 1 charge, no passive; all of it is spill, which the supply system burns.
+    assert _produced(events) == [(0, 1, 1)]
+    state.events = events
+    burnt = supply(state, ROOMY)
+    assert [(e.kind, e.get("charges")) for e in burnt if e.get("player") == 0] == [
+        ("charges_overflow", 1)
+    ]
 
 
 # Stance changes ------------------------------------------------------------------------------

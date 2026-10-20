@@ -1,0 +1,5 @@
+{
+  "type": "command",
+  "seq": 12,
+  "cmd": { "type": "set_front", "marker": 0, "node": 1 }
+}

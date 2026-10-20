@@ -13,7 +13,6 @@ import type {
   Mode,
   NodeView,
   PlayerId,
-  Priority,
   RulesetPublic,
   Seen,
   SnapshotMsg,
@@ -83,8 +82,6 @@ export interface NodeInfo {
   readonly attritionIn: number | null;
   /** Own city over its capacity right after a capture: ticks the grace still lasts. */
   readonly graceLeft: number | null;
-  /** Supply priority of an own city (DEC-18); `null` for the rest. */
-  readonly priority: Priority | null;
   /** The recruit queue of an own city (DEC-25): units queued; `null` for the rest. */
   readonly recruitQueue: number | null;
   /** Own city: it may recruit (DEC-26: the barracks with `city_upgrades`); `null` for the rest. */
@@ -142,8 +139,6 @@ export interface GroupChoice {
 export interface NodeChoice {
   readonly id: number;
   readonly owner: Ownership;
-  /** Supply priority of an own city (DEC-18); `null` for the rest. */
-  readonly priority: Priority | null;
   /** Warehouse charges where the view has them (own nodes and nodes seen exactly). */
   readonly warehouse: number | null;
   /** Warehouse capacity of an own city (DEC-26); `null` where the view does not give it. */
@@ -277,7 +272,6 @@ function nodeInfo(
     build: buildInfo(ctx, node, tick),
     attritionIn: node.attrition_in,
     graceLeft: node.grace_left,
-    priority: node.priority,
     recruitQueue: node.recruit_queue,
     hasBarracks: node.has_barracks,
     warehouseLevel: node.warehouse_level,
@@ -377,7 +371,6 @@ export function buildHudData(
     nodes: view.nodes.map((n) => ({
       id: n.id,
       owner: ownership(n.owner, me),
-      priority: n.priority,
       warehouse: n.warehouse,
       warehouseCap: n.warehouse_cap,
     })),

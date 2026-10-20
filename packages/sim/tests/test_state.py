@@ -32,7 +32,6 @@ from gow_sim.state import (
     OnEdge,
     Order,
     Packet,
-    Priority,
     Sighting,
     StateFormatError,
     event,
@@ -108,7 +107,8 @@ def _rich_state(rules: Ruleset) -> GameState:
         route_ticks=(30,),
         transfer=True,
     )
-    state.nodes[1].priority = Priority.HIGH
+    state.players[0].fronts = (1, None)
+    state.players[1].rear_min = 3
     state.nodes[1].cut_since = 120
     iid = state.new_id()
     state.intents[iid] = Intent(
@@ -370,6 +370,8 @@ def _states(draw: st.DrawFn) -> GameState:
         player.vp = draw(st.integers(min_value=0, max_value=1000))
         player.forfeited = draw(st.booleans())
         player.stance_changed_tick = draw(st.none() | st.integers(min_value=0, max_value=7200))
+        player.fronts = (draw(st.none() | nodes), draw(st.none() | nodes))
+        player.rear_min = draw(st.integers(min_value=0, max_value=8))
     for edge in state.edges.values():
         edge.width = draw(st.integers(min_value=1, max_value=3))
     for node in state.nodes.values():
@@ -379,7 +381,6 @@ def _states(draw: st.DrawFn) -> GameState:
         node.captured_tick = draw(_opt_small)
         node.recruit_queue = draw(_small)
         node.recruit_progress = draw(_small)
-        node.priority = draw(st.sampled_from(list(Priority)))
         node.cut_since = draw(_opt_small)
         if draw(st.booleans()):
             kind = draw(_build_kinds)

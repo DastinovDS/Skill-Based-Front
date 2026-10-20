@@ -1,5 +1,5 @@
 /** Text of the visible-event feed: which dictionary entry a server event maps to (CLI-08, #64). */
-import type { PlayerId, Priority, Stance } from '../protocol.gen.ts';
+import type { PlayerId, Stance } from '../protocol.gen.ts';
 import { t, tf } from '../i18n/index.ts';
 import type { HudEvent } from './hudData.ts';
 
@@ -9,10 +9,6 @@ function num(value: unknown): number {
 
 function isStance(value: unknown): value is Stance {
   return value === 'economy' || value === 'balance' || value === 'war';
-}
-
-function isPriority(value: unknown): value is Priority {
-  return value === 'high' || value === 'normal' || value === 'low';
 }
 
 /**
@@ -35,6 +31,9 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'packet_delivered',
   // A cancel of a recruit is the player's own act: the CP bar shows the refund (DEC-25).
   'recruit_cancelled',
+  // Front markers and the rear minimum (DEC-28) are the player's own settings; their UI: #293.
+  'front_set',
+  'rear_min_set',
   // The score is in the top bar already (ui-style U2): a VP line would repeat it every few seconds.
   'vp_awarded',
 ]);
@@ -56,7 +55,6 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'barracks_built',
   'warehouse_upgraded',
   'packet_lost',
-  'priority_set',
   'transfer_started',
   'starvation',
 ]);
@@ -131,11 +129,6 @@ export function eventText(event: HudEvent, me: PlayerId): string {
       return tf('event.warehouse_upgraded', { node: num(data.node), level: num(data.level) });
     case 'packet_lost':
       return tf('event.packet_lost', { edge: num(data.edge), charges: num(data.charges) });
-    case 'priority_set':
-      return tf('event.priority_set', {
-        node: num(data.node),
-        level: isPriority(data.level) ? t(`priority.${data.level}`) : '?',
-      });
     case 'starvation':
       return tf('event.starvation', {
         node: num(data.node),

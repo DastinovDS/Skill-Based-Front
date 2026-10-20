@@ -18,7 +18,8 @@ export type Command =
   | RecruitCmd
   | CancelRecruitCmd
   | CancelOrderCmd
-  | SetPriorityCmd
+  | SetFrontCmd
+  | SetRearMinCmd
   | TransferCmd
   | ForfeitCmd;
 /**
@@ -29,10 +30,6 @@ export type Mode = 'attack' | 'defense';
  * CP stance: the share of CP regeneration that goes into charges (DEC-02).
  */
 export type Stance = 'economy' | 'balance' | 'war';
-/**
- * Supply priority of a city (DEC-18, item 1): only the order of delivery, not the target.
- */
-export type Priority = 'high' | 'normal' | 'low';
 export type ServerMsg =
   | WelcomeMsg
   | SnapshotMsg
@@ -165,12 +162,21 @@ export interface CancelOrderCmd {
   group: string;
 }
 /**
- * Supply priority ``level`` of the own city ``node`` (DEC-18, item 1).
+ * Put the front marker ``marker`` (0 or 1) on the own city ``node``; ``node = null`` takes
+ * it off the map (DEC-28, item 2). Free (``cost.front``).
  */
-export interface SetPriorityCmd {
-  type: 'set_priority';
-  node: number;
-  level: Priority;
+export interface SetFrontCmd {
+  type: 'set_front';
+  marker: number;
+  node: number | null;
+}
+/**
+ * The own rear minimum ``n``, ``0..supply.rear_min_max`` of ``ruleset_public`` (DEC-28,
+ * item 3); the range is checked by the simulation (``INVALID_ARGUMENT``).
+ */
+export interface SetRearMinCmd {
+  type: 'set_rear_min';
+  n: number;
 }
 /**
  * Ship ``n`` charges from the warehouse of the own city ``from_node`` to the own city
@@ -263,6 +269,7 @@ export interface RulesetPublic {
   capacity: CapacityPublic;
   recruit: RecruitPublic;
   city_upgrades: CityUpgradesPublic;
+  supply: SupplyPublic;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.
@@ -287,9 +294,13 @@ export interface CostsPublic {
   recruit: number;
   stance: number;
   /**
-   * ``set_priority`` (DEC-18, item 1).
+   * ``set_front`` (DEC-28, item 2).
    */
-  priority: number;
+  front: number;
+  /**
+   * ``set_rear_min`` (DEC-28, item 3).
+   */
+  rear_min: number;
   /**
    * ``transfer`` (DEC-18, item 6).
    */
@@ -414,6 +425,19 @@ export interface CityUpgradesPublic {
   warehouse_gain_per_level: number;
 }
 /**
+ * The supply settings of a player (DEC-28): the range of the rear minimum slider.
+ */
+export interface SupplyPublic {
+  /**
+   * ``set_rear_min`` accepts ``0..rear_min_max``.
+   */
+  rear_min_max: number;
+  /**
+   * The rear minimum every player starts with.
+   */
+  rear_min_default: number;
+}
+/**
  * The player's view after tick ``tick``. Only the latest one matters (AGENTS.md, 5.3).
  */
 export interface SnapshotMsg {
@@ -452,6 +476,18 @@ export interface View {
 export interface SelfView {
   cp: number;
   stance: Stance;
+  /**
+   * The own cities of the two front markers (DEC-28, item 2), ``null``: not placed. The
+   * enemy's markers are never in a view (DEC-28).
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  fronts: [number | null, number | null];
+  /**
+   * The own rear minimum (DEC-28, item 3); the enemy's is never in a view.
+   */
+  rear_min: number;
 }
 export interface NodeView {
   id: number;
@@ -483,11 +519,6 @@ export interface NodeView {
    * capacity. ``None`` for every other node.
    */
   grace_left: number | null;
-  /**
-   * Own city only: its supply priority (DEC-18, item 1). ``None`` for provinces, the enemy's
-   * and neutral nodes (DEC-18, item 8).
-   */
-  priority: Priority | null;
   /**
    * Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8). ``None``
    * for every other node.
@@ -885,6 +916,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 16;
+export const PROTOCOL_VERSION = 17;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

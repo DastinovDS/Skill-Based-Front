@@ -299,7 +299,7 @@ def _features(view: View) -> set[str]:
         "road_level": any(e.width > 1 for e in view.edges),
         "attrition_in": any(n.attrition_in is not None for n in view.nodes),
         "grace_left": any(n.grace_left is not None for n in view.nodes),
-        "priority": any(n.priority not in (None, sim.Priority.NORMAL) for n in view.nodes),
+        "fronts": any(f is not None for f in view.me.fronts),
         "transfer": any(p.transfer and len(p.path) > 1 for p in view.packets),
         "starve_in": any(n.starve_in is not None for n in view.nodes),
         "recruit_queue": any(n.recruit_queue for n in view.nodes),
@@ -435,7 +435,8 @@ def test_fixture_commands_convert() -> None:
         "upgrade_road": sim.UpgradeRoad,
         "recruit": sim.Recruit,
         "cancel_order": sim.CancelOrder,
-        "set_priority": sim.SetPriority,
+        "set_front": sim.SetFront,
+        "set_rear_min": sim.SetRearMin,
         "transfer": sim.Transfer,
         "forfeit": sim.Forfeit,
     }
@@ -461,9 +462,9 @@ def test_command_fields() -> None:
         Stance.ECONOMY
     )
     assert command_from_wire(wire.RecruitCmd(node=2)) == sim.Recruit(2)
-    assert command_from_wire(
-        wire.SetPriorityCmd(node=3, level=sim.Priority.HIGH)
-    ) == sim.SetPriority(3, sim.Priority.HIGH)
+    assert command_from_wire(wire.SetFrontCmd(marker=1, node=3)) == sim.SetFront(1, 3)
+    assert command_from_wire(wire.SetFrontCmd(marker=0, node=None)) == sim.SetFront(0, None)
+    assert command_from_wire(wire.SetRearMinCmd(n=4)) == sim.SetRearMin(4)
     assert command_from_wire(wire.TransferCmd(from_node=1, to_node=4, n=3)) == sim.Transfer(1, 4, 3)
     assert command_from_wire(wire.ForfeitCmd()) == sim.Forfeit()
 
@@ -557,12 +558,12 @@ def test_move_ack_carries_the_path() -> None:
 
 
 def test_supply_control_through_the_wire() -> None:
-    """DEC-18: priority and a transfer by wire commands; the ack carries the transfer's path and
-    arrival tick, the frames carry the priority and the transfer packet (byte-equal frames), the
-    enemy gets neither the events nor the fields."""
+    """DEC-18, DEC-28: a front marker, the rear minimum and a transfer by wire commands; the ack
+    carries the transfer's path and arrival tick, the frames carry the markers and the transfer
+    packet (byte-equal frames), the enemy gets neither the events nor the fields."""
     match = _started()
     view = snapshot_msg(match.view(0)).view
-    cities = [n.id for n in view.nodes if n.priority is not None]
+    cities = [n.id for n in view.nodes if n.has_barracks is not None]  # own cities
     capital = match.state.map.capital(0)
     far = max(
         (c for c in cities if c != capital),
@@ -570,31 +571,33 @@ def test_supply_control_through_the_wire() -> None:
     )
     match.state.nodes[capital].warehouse = 5
     cmds = [
-        command_from_wire(wire.SetPriorityCmd(node=far, level=sim.Priority.HIGH)),
+        command_from_wire(wire.SetFrontCmd(marker=1, node=far)),
+        command_from_wire(wire.SetRearMinCmd(n=2)),
         command_from_wire(wire.TransferCmd(from_node=capital, to_node=far, n=3)),
     ]
     events = match.step([sim.PlayerCommand(0, i + 1, c) for i, c in enumerate(cmds)])
     acks = [ack_msg(r) for r in match.results]
-    assert [a.reject_code for a in acks] == [None, None]
+    assert [a.reject_code for a in acks] == [None, None, None]
     assert acks[0].path is None and acks[0].arrive_tick is None
-    path, arrive = acks[1].path, acks[1].arrive_tick
+    path, arrive = acks[2].path, acks[2].arrive_tick
     assert path is not None and (path[0], path[-1]) == (capital, far) and len(path) > 2
     assert arrive is not None and arrive > match.tick
     own = events_msgs(events, 0, KEY)
-    assert {m.kind for m in own} >= {"priority_set", "transfer_started"}
-    assert not {m.kind for m in events_msgs(events, 1, KEY)} & {"priority_set", "transfer_started"}
+    kinds = {"front_set", "rear_min_set", "transfer_started"}
+    assert {m.kind for m in own} >= kinds
+    assert not {m.kind for m in events_msgs(events, 1, KEY)} & kinds
     checker = _FrameChecker()
     checker.record(match, ())
-    assert checker.features >= {"priority", "transfer"}
+    assert checker.features >= {"fronts", "transfer"}
     wire_view = snapshot_msg(match.view(0)).view
     batches = sorted((p for p in wire_view.packets if p.transfer), key=lambda p: p.dest_tick)
     assert {p.path[-1] for p in batches} == {far}
     # #287: cut to the free room of ``far`` (the event has the actual amount), sent in batches.
     n = next(e.get("charges") for e in events if e.kind == "transfer_started")
     assert (batches[-1].dest_tick, sum(p.charges for p in batches)) == (arrive, n)
-    assert wire_view.nodes[far].priority is sim.Priority.HIGH
+    assert (wire_view.me.fronts[1], wire_view.me.rear_min) == (far, 2)
     enemy = snapshot_msg(match.view(1)).view
-    assert all(n.priority is None for n in enemy.nodes if n.owner == 0)
+    assert (enemy.me.fronts, enemy.me.rear_min) == ((None, None), 1)  # its own, not player 0's
     assert not any(p.transfer for p in enemy.packets)
 
 

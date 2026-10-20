@@ -585,26 +585,14 @@ describe('OrderController', () => {
       expect(controller.overlay().supply).toBeNull();
     });
 
-    it('a click on an own city opens its menu; a priority sector sends set_priority', () => {
+    it('a click on an own city opens its menu (DEC-28: the transfer only, no priorities)', () => {
       const { controller, sent } = setup();
       controller.key(down('Tab'));
       controller.click({ kind: 'node', id: city }, false);
       expect(controller.supplyMenu.current).toMatchObject({ open: true, node: city });
-      expect(controller.supplyMenu.current.priority).toBe('normal');
-      controller.chooseSupply('high');
-      expect(controller.supplyMenu.current.open).toBe(false);
-      expect(sent).toEqual([{ type: 'set_priority', node: city, level: 'high' }]);
-    });
-
-    it('keys 1..4 choose in the menu (not the modes); the current level is not resent', () => {
-      const { controller, sent } = setup();
-      controller.key(down('Tab'));
-      controller.click({ kind: 'node', id: city }, false);
-      controller.key(down('Digit2')); // normal: already the city's level
+      controller.key(down('Digit2')); // no such sector: nothing is chosen, nothing is sent
+      expect(controller.supplyMenu.current.open).toBe(true);
       expect(sent).toEqual([]);
-      controller.click({ kind: 'node', id: city }, false);
-      controller.key(down('Digit3'));
-      expect(sent).toEqual([{ type: 'set_priority', node: city, level: 'low' }]);
     });
 
     it('Esc closes the menu; an enemy node opens nothing', () => {
@@ -622,7 +610,7 @@ describe('OrderController', () => {
       const { controller, sent } = setup();
       controller.key(down('Tab'));
       controller.click({ kind: 'node', id: city }, false);
-      controller.key(down('Digit4'));
+      controller.key(down('Digit1'));
       expect(controller.ui.current.transferFrom).toBe(city);
       const overlay = controller.overlay().supply;
       expect(overlay?.source).toBe(city);
@@ -669,14 +657,14 @@ describe('OrderController', () => {
       hud.onSnapshot(filled(cap - 2));
       controller.key(down('Tab'));
       controller.click({ kind: 'node', id: city }, false);
-      controller.chooseSupply('transfer');
+      controller.chooseSupply();
       controller.click({ kind: 'node', id: target }, false);
       expect(controller.transfer.current).toMatchObject({ open: true, max: 2, full: false });
       // No room at all: nothing to send, the dialog says why.
       controller.closeTransfer();
       hud.onSnapshot(filled(cap));
       controller.click({ kind: 'node', id: city }, false);
-      controller.chooseSupply('transfer');
+      controller.chooseSupply();
       controller.click({ kind: 'node', id: target }, false);
       expect(controller.transfer.current).toMatchObject({ open: true, max: 0, full: true });
       controller.confirmTransfer();
@@ -696,11 +684,11 @@ describe('OrderController', () => {
       const { controller, sent } = setup();
       controller.key(down('Tab'));
       controller.click({ kind: 'node', id: city }, false);
-      controller.chooseSupply('transfer');
+      controller.chooseSupply();
       controller.key(down('Escape'));
       expect(controller.ui.current.transferFrom).toBeNull();
       controller.click({ kind: 'node', id: city }, false);
-      controller.chooseSupply('transfer');
+      controller.chooseSupply();
       controller.click({ kind: 'node', id: enemy.id }, false);
       expect(controller.ui.current.transferFrom).toBeNull();
       expect(controller.transfer.current.open).toBe(false);

@@ -57,7 +57,6 @@ def _rules() -> Ruleset:
         supply=dataclasses.replace(
             base.supply,
             dispatch_ticks=10,
-            buffer=2,
             base_speed_pct=100,
             base_amount=1,
             fast_speed_pct=LevelTable((150, 200)),

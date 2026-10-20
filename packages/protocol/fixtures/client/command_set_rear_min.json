@@ -1,0 +1,5 @@
+{
+  "type": "command",
+  "seq": 13,
+  "cmd": { "type": "set_rear_min", "n": 2 }
+}

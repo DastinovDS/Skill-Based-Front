@@ -16,7 +16,8 @@
       "build": 0,
       "recruit": 100,
       "stance": 0,
-      "priority": 0,
+      "front": 0,
+      "rear_min": 0,
       "transfer": 0,
       "barracks": 300,
       "warehouse": 200
@@ -53,7 +54,8 @@
       "warehouse_ticks": 100,
       "warehouse_max_level": 2,
       "warehouse_gain_per_level": 1
-    }
+    },
+    "supply": { "rear_min_max": 8, "rear_min_default": 1 }
   },
   "map_id": "diamond",
   "last_seq": 0,

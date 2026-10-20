@@ -161,8 +161,10 @@ class OrderCosts:
     build: int
     recruit: int
     stance: int
-    priority: int
-    """``SetPriority``: supply priority of a city (DEC-18, item 1)."""
+    front: int
+    """``SetFront``: moving a front marker (DEC-28, item 2)."""
+    rear_min: int
+    """``SetRearMin``: the rear minimum of the player (DEC-28, item 3)."""
     transfer: int
     """``Transfer``: one-off shipment of charges between own cities (DEC-18, item 6)."""
     barracks: int
@@ -220,7 +222,10 @@ class StarvationRules:
 @dataclass(frozen=True, slots=True)
 class SupplyRules:
     dispatch_ticks: int
-    buffer: int
+    rear_min_default: int
+    """The rear minimum every player starts with (DEC-28, item 3)."""
+    rear_min_max: int
+    """The largest rear minimum ``SetRearMin`` accepts (DEC-28, item 3)."""
     recharge_per_tick: int
     base_speed_pct: int
     """Packet speed on a level 1 road (DEC-22, item 4)."""
@@ -426,7 +431,8 @@ def parse_ruleset(data: object) -> Ruleset:
                 "supply",
                 (
                     "dispatch_ticks",
-                    "buffer",
+                    "rear_min_default",
+                    "rear_min_max",
                     "recharge_per_tick",
                     "base_speed_pct",
                     "base_amount",
@@ -530,9 +536,11 @@ def _parse_starvation(t: "_Table") -> StarvationRules:
 
 def _parse_supply(t: "_Table") -> SupplyRules:
     speed = t.table("fast_speed_pct", _LEVEL_KEYS)
+    rear_min_max = t.integer("rear_min_max", low=0)
     return SupplyRules(
         dispatch_ticks=t.integer("dispatch_ticks", low=1),
-        buffer=t.integer("buffer", low=0),
+        rear_min_default=t.integer("rear_min_default", low=0, high=rear_min_max),
+        rear_min_max=rear_min_max,
         recharge_per_tick=t.integer("recharge_per_tick", low=0),
         base_speed_pct=t.integer("base_speed_pct", low=1),
         base_amount=t.integer("base_amount", low=1),

@@ -11,9 +11,11 @@ DEC-02 (mechanics.md, section 6), numbers from ``Ruleset``:
 - The capital produces no charges of its own: charges come only from CP through the stance (no
   passive production, owner's decision of 2026-10-14, #253).
 - Charges go to the warehouse of the capital up to its warehouse capacity
-  (``capacity.warehouse_capacity``: the node capacity, with ``city_upgrades`` DEC-26's own); the
-  excess is lost (event ``charges_overflow``). If the player does not own its capital, all of the
-  produced charges are lost.
+  (``capacity.warehouse_capacity``: the node capacity, with ``city_upgrades`` DEC-26's own). The
+  excess is not lost here (DEC-28, item 4.4): the event ``charges_produced`` (``charges``: all of
+  the produced charges) carries it as ``spill``, and ``systems.supply`` spreads it over the rear
+  cities in the same tick; what finds no room there burns (``charges_overflow``). If the player
+  does not own its capital, all of the produced charges are spill and burn there.
 - The stance changes at most once per ``orders.stance_cooldown_ticks``; the first change is not
   limited (#104 default). Command validation and application (SIM-04) use
   ``stance_cooldown_left()`` and ``set_stance()``.
@@ -55,18 +57,18 @@ def economy(state: GameState, rules: Ruleset) -> list[Event]:
             continue
         capital = state.map.capital(pid)
         node = state.nodes[capital]
+        # What does not fit goes to the supply system in this tick (DEC-28, item 4.4); without
+        # the own capital nothing fits, and the supply system burns all of it.
         if node.owner == pid:
             cap = warehouse_capacity(state, rules, capital)
             added = min(charges, max(0, cap - node.warehouse))
         else:
             added = 0
         node.warehouse += added
-        if added > 0:
-            events.append(event(tick, "charges_produced", player=pid, node=capital, charges=added))
-        if charges > added:
-            events.append(
-                event(tick, "charges_overflow", player=pid, node=capital, charges=charges - added)
-            )
+        spill = charges - added
+        events.append(
+            event(tick, "charges_produced", player=pid, node=capital, charges=charges, spill=spill)
+        )
     return events
 
 
