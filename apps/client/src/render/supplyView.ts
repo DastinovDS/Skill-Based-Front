@@ -14,8 +14,9 @@ const TARGET = { dash: 6, gap: 5, ring: 7 } as const;
 
 /**
  * The «Supply» map mode (DEC-18, item 7): the routes of own packets to their destinations
- * (transfers dashed and wider; the priority signs are gone with DEC-28), and during a transfer pick the source ring and dashed rings around the cities a click
- * would pick. Hidden on the normal map. Redrawn only when the snapshot or the overlay changes.
+ * (transfers dashed and wider; the priority signs are gone with DEC-28), and during a transfer
+ * pick the source ring and dashed rings around the cities a click would pick. Hidden on the
+ * normal map. Redrawn only when the snapshot or the overlay changes.
  */
 export class SupplyView {
   private readonly g = new Graphics();
