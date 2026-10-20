@@ -113,11 +113,11 @@ run = 'uv run pytest -n auto -m slow -q --tb=short'
 
 [tasks."test:perf"]
 description = "Benchmarks and tick lag (mark perf, serial: xdist switches measurements off)"
-run = "uv run pytest -m perf -q --tb=short"
+run = "uv run pytest -m perf -q --tb=short --benchmark-columns=mean,max --benchmark-name=short"
 
 [tasks."test:bench"]
 description = "Simulation benchmarks and the budgets of section 12 (docs/perf.md)"
-run = "uv run pytest packages/sim/tests/test_benchmarks.py -q --tb=short"
+run = "uv run pytest packages/sim/tests/test_benchmarks.py -q --tb=short --benchmark-columns=mean,max --benchmark-name=short"
 
 [tasks."golden:check"]
 description = "Golden replays re-simulate and are frozen against a base (arg: git ref, default origin/develop)"
