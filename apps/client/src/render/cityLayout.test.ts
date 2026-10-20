@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BARRACKS_HOUSE,
+  barracksAt,
   barTop,
   capacityRing,
   cityRadius,
   queueSlots,
   queueTop,
   ringRadius,
+  showsBarracks,
   warehouseSegments,
 } from './cityLayout.ts';
 
@@ -95,5 +98,28 @@ describe('queueSlots (DEC-25)', () => {
   it('sits above the ring, the warehouse bar below it', () => {
     expect(queueTop(17)).toBeLessThan(-ringRadius(17));
     expect(barTop(17)).toBeGreaterThan(ringRadius(17));
+  });
+});
+
+describe('the barracks mark (DEC-26)', () => {
+  it('is drawn only for a city that is known to have one, and only with the city development on', () => {
+    expect(showsBarracks(true, true)).toBe(true);
+    expect(showsBarracks(false, true)).toBe(false);
+    // A foreign city: the enemy's barracks are hidden, the snapshot says `null`.
+    expect(showsBarracks(null, true)).toBe(false);
+    // Without the city development every city may recruit: no mark.
+    expect(showsBarracks(true, false)).toBe(false);
+  });
+
+  it('sits outside the capacity ring on the left, clear of the queue above and the warehouse bar below', () => {
+    for (const radius of [11, 14, 17, 20]) {
+      const at = barracksAt(radius);
+      expect(at.x).toBeLessThan(-(ringRadius(radius) + 7.5));
+      expect(at.y).toBe(0);
+    }
+  });
+
+  it('the house glyph fits the badge', () => {
+    for (const [x, y] of BARRACKS_HOUSE) expect(Math.hypot(x, y)).toBeLessThanOrEqual(6.5);
   });
 });

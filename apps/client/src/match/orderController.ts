@@ -117,7 +117,8 @@ export interface KeyInput {
  * the selected group, 1 / 2 set the mode (attack / defense), D toggles defense, R recruits in the
  * selected city, U toggles the road pick, Q the stance menu (hold and release over a sector, or
  * tap and click; 1 / 2 / 3 choose while it is open), S the split menu, G merge, Space the camera
- * to the next alert.
+ * to the next alert, Tab or F2 the «Supply» mode (it also lets a selected city go with its menu).
+ * At most one radial menu is open: whoever opens one closes the others (`#closeMenus`).
  */
 export class OrderController implements MapInteraction {
   readonly ui = new OrderUiState();
@@ -309,8 +310,7 @@ export class OrderController implements MapInteraction {
       target.kind === 'group' &&
       this.groupMenu.current.open &&
       this.groupMenu.current.target === target.id;
-    this.#closeTargetMenus();
-    this.splitMenu.close();
+    this.#closeMenus();
     this.#o.hud.select(target);
     this.#hover = hit;
     if (this.#o.send !== null) {
@@ -327,8 +327,7 @@ export class OrderController implements MapInteraction {
    */
   #clickStack(node: number, ids: readonly string[]): void {
     const wasOpen = this.stackMenu.current.open && this.stackMenu.current.target === node;
-    this.#closeTargetMenus();
-    this.splitMenu.close();
+    this.#closeMenus();
     const selected = this.#o.hud.selection;
     if (!(selected?.kind === 'group' && ids.includes(selected.id))) {
       this.#o.hud.select({ kind: 'node', id: node });
@@ -348,9 +347,8 @@ export class OrderController implements MapInteraction {
    * own menu (split, merge, cancel, defense), so a stacked group has a menu too.
    */
   chooseStackGroup(id: string): void {
-    this.stackMenu.close();
+    this.#closeMenus();
     const selected = this.#o.hud.selection;
-    this.splitMenu.close();
     this.#o.hud.select({ kind: 'group', id });
     if (selected?.kind === 'group' && selected.id === id && this.#o.send !== null) {
       this.groupMenu.open(id);
@@ -387,8 +385,7 @@ export class OrderController implements MapInteraction {
 
   deselect(): void {
     this.stopRoadPick();
-    this.splitMenu.close();
-    this.#closeTargetMenus();
+    this.#closeMenus();
     this.#o.hud.select(null);
   }
 
@@ -436,8 +433,7 @@ export class OrderController implements MapInteraction {
     const group = this.#selectedGroup();
     if (group === null || group.node === null || this.#o.send === null) return;
     this.stopRoadPick();
-    this.closeRadial();
-    this.groupMenu.close();
+    this.#closeMenus();
     this.splitMenu.open(group.id, group.units, group.charged);
   }
 
@@ -625,8 +621,7 @@ export class OrderController implements MapInteraction {
   openRadial(sticky: boolean): boolean {
     if (this.#o.send === null) return false;
     this.stopRoadPick();
-    this.splitMenu.close();
-    this.#closeTargetMenus();
+    this.#closeMenus();
     this.radial.open(sticky);
     return true;
   }
@@ -652,15 +647,17 @@ export class OrderController implements MapInteraction {
     return this.ui.current.supplyMode;
   }
 
-  /** Tab / F2: the «Supply» map mode on or off; leaving it closes its menu, pick and dialog. */
+  /**
+   * Tab / F2: the «Supply» map mode on or off. Either way every open menu, the road pick and the
+   * amount dialog close and a selected city is let go (its menu goes with it); a selected group
+   * stays.
+   */
   toggleSupplyMode(): void {
     const on = !this.ui.current.supplyMode;
-    this.supplyMenu.close();
+    this.#closeMenus();
     this.transfer.close();
-    if (on) {
-      this.stopRoadPick();
-      this.closeRadial();
-    }
+    this.stopRoadPick();
+    if (this.#o.hud.selection?.kind === 'node') this.#o.hud.select(null);
     this.ui.patch({ supplyMode: on, transferFrom: null });
   }
 
@@ -668,7 +665,7 @@ export class OrderController implements MapInteraction {
   openSupplyMenu(node: number): boolean {
     const city = this.#ownCity(node);
     if (city === null || city.priority === null || this.#o.send === null) return false;
-    this.radial.close();
+    this.#closeMenus();
     this.supplyMenu.open(node, city.priority, city.warehouse);
     return true;
   }
@@ -835,6 +832,17 @@ export class OrderController implements MapInteraction {
     this.cityMenu.close();
     this.groupMenu.close();
     this.stackMenu.close();
+  }
+
+  /**
+   * Closes every radial menu (stance, supply, split, city, group, stack list): at most one is open
+   * at a time, so whoever opens one calls this first.
+   */
+  #closeMenus(): void {
+    this.closeRadial();
+    this.supplyMenu.close();
+    this.splitMenu.close();
+    this.#closeTargetMenus();
   }
 
   /** The node `id` is one of the player's own cities in the snapshot on screen. */

@@ -8,6 +8,7 @@
 import {
   BAR_GAP,
   BAR_SEGMENT,
+  BARRACKS_MARK,
   QUEUE_SLOT,
   RING_GAP,
   RING_MAX_SEGMENTS,
@@ -135,4 +136,33 @@ export function queueSlots(queue: number, progress: number, unitTicks: number): 
 /** Where the queue mark sits: its top edge, from the city centre (above the ring). */
 export function queueTop(radius: number): number {
   return -(ringRadius(radius) + BAR_GAP) - QUEUE_SLOT.height - 2;
+}
+
+/**
+ * Whether an own city shows the barracks mark (DEC-26): only when the city development is on and
+ * the snapshot says the city has one. `has_barracks` is `null` for every foreign city (the enemy's
+ * barracks are hidden, AGENTS.md 4.4), so nothing is drawn there and nothing is guessed.
+ */
+export function showsBarracks(hasBarracks: boolean | null, cityDevelopment: boolean): boolean {
+  return cityDevelopment && hasBarracks === true;
+}
+
+/** Corners of the little house glyph of the barracks, relative to the middle of its mark. */
+export const BARRACKS_HOUSE: readonly (readonly [number, number])[] = [
+  [0, -4.5],
+  [4.5, -0.5],
+  [3.5, -0.5],
+  [3.5, 4],
+  [-3.5, 4],
+  [-3.5, -0.5],
+  [-4.5, -0.5],
+];
+
+/**
+ * Where the barracks mark sits: outside the capacity ring on the left of the city, clear of the VP
+ * badge (upper right), the supply sign (upper left), the queue (above) and the warehouse bar
+ * (below), from the city centre.
+ */
+export function barracksAt(radius: number): { x: number; y: number } {
+  return { x: -(ringRadius(radius) + BARRACKS_MARK.radius + 1), y: 0 };
 }
