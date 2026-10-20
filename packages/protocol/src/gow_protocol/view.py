@@ -24,8 +24,8 @@ Deliberate choices of the wire format:
   fog memory ``gow_sim.state.Sighting``. So the view has no enemy entity ids at all, which could
   otherwise track enemy groups through the fog or reveal their number. Enemy packets are never
   visible (DEC-10 default, #112).
-- Own-only data (``me``: CP and stance; ``upgrade_gain`` of own edges; orders of own groups) has
-  no enemy counterpart in the view.
+- Own-only data (``me``: CP, stance, front markers and rear minimum of DEC-28; ``upgrade_gain``
+  of own edges; orders of own groups) has no enemy counterpart in the view.
 """
 
 from typing import Annotated, Literal, Self
@@ -46,7 +46,7 @@ from gow_protocol.base import (
     WireModel,
 )
 from gow_sim.ruleset import Stance
-from gow_sim.state import BuildKind, Detail, IntentKind, Mode, Priority
+from gow_sim.state import FRONT_MARKERS, BuildKind, Detail, IntentKind, Mode
 
 
 class Seen(WireModel):
@@ -116,9 +116,6 @@ class NodeView(WireModel):
     grace_left: PosInt | None
     """Own node only: ticks the grace after a capture still lasts while the garrison exceeds the
     capacity. ``None`` for every other node."""
-    priority: Priority | None
-    """Own city only: its supply priority (DEC-18, item 1). ``None`` for provinces, the enemy's
-    and neutral nodes (DEC-18, item 8)."""
     starve_in: PosInt | None
     """Own cut-off city only: ticks until its garrison next starves (DEC-19, item 8). ``None``
     for every other node."""
@@ -145,8 +142,6 @@ class NodeView(WireModel):
     def _check(self) -> Self:
         if self.starve_in is not None and self.detail is not Detail.EXACT:
             raise ValueError("a starvation countdown only for an own city, seen exactly")
-        if self.priority is not None and self.detail is not Detail.EXACT:
-            raise ValueError("a supply priority only for an own city, which is seen exactly")
         recruit = (self.recruit_queue, self.recruit_progress, self.recruit_waiting)
         if any(v is not None for v in recruit) and (
             None in recruit or self.detail is not Detail.EXACT
@@ -323,6 +318,13 @@ class SelfView(WireModel):
 
     cp: Centi
     stance: Stance
+    fronts: Annotated[
+        tuple[NodeId | None, ...], Field(min_length=FRONT_MARKERS, max_length=FRONT_MARKERS)
+    ]
+    """The own cities of the two front markers (DEC-28, item 2), ``null``: not placed. The
+    enemy's markers are never in a view (DEC-28)."""
+    rear_min: NonNegInt
+    """The own rear minimum (DEC-28, item 3); the enemy's is never in a view."""
 
 
 class View(WireModel):

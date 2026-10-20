@@ -25,9 +25,9 @@ what DEC-20 leaves open keeps the defaults of #117 (split takes the charged unit
 Bonuses and public intents of planned orders and «Защита»: ``systems.orders`` (SIM-10).
 Road upgrades by a city (DEC-16) and, with ``city_upgrades``, the barracks and the warehouse
 levels (DEC-26): ``systems.build``; they are not public.
-Supply priority and one-off transfers (DEC-18): ``SetPriority`` and ``Transfer``; neither is
-public; a transfer is cut to the free room of the target and leaves in batches, the first in the
-tick it is applied (``systems.supply``, #287).
+Front markers and the rear minimum (DEC-28): ``SetFront`` and ``SetRearMin``; one-off transfers
+(DEC-18): ``Transfer``; none of them is public; a transfer is cut to the free room of the
+target and leaves in batches, the first in the tick it is applied (``systems.supply``, #287).
 """
 
 from collections.abc import Callable, Iterable
@@ -48,7 +48,6 @@ from gow_sim.state import (
     Mode,
     OnEdge,
     Order,
-    Priority,
     event,
 )
 from gow_sim.systems.build import builder_of, level_price, start_city_build, start_road
@@ -84,12 +83,12 @@ __all__ = [
     "Move",
     "Ok",
     "PlayerCommand",
-    "Priority",
     "Recruit",
     "Reject",
     "RejectCode",
+    "SetFront",
     "SetMode",
-    "SetPriority",
+    "SetRearMin",
     "SetStance",
     "Split",
     "Stance",
@@ -193,11 +192,19 @@ class CancelOrder:
 
 
 @dataclass(frozen=True, slots=True)
-class SetPriority:
-    """Supply priority ``level`` of the own city ``node`` (DEC-18, item 1)."""
+class SetFront:
+    """Put the front marker ``marker`` (0 or 1) on the own city ``node`` (DEC-28, item 2);
+    ``node = None`` takes the marker off the map. Never two markers on one city."""
 
-    node: int
-    level: Priority
+    marker: int
+    node: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class SetRearMin:
+    """The rear minimum ``n`` of the player, ``0..supply.rear_min_max`` (DEC-28, item 3)."""
+
+    n: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,7 +234,8 @@ type Command = (
     | Recruit
     | CancelRecruit
     | CancelOrder
-    | SetPriority
+    | SetFront
+    | SetRearMin
     | Transfer
     | Forfeit
 )
@@ -253,7 +261,8 @@ def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
             | UpgradeWarehouse()
             | Recruit()
             | CancelRecruit()
-            | SetPriority()
+            | SetFront()
+            | SetRearMin()
             | Transfer()
             | Forfeit()
         ):
@@ -393,8 +402,10 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
             return cost.cancel
         case SetStance():
             return cost.stance
-        case SetPriority():
-            return cost.priority
+        case SetFront():
+            return cost.front
+        case SetRearMin():
+            return cost.rear_min
         case Transfer():
             return cost.transfer
         case Forfeit():
@@ -552,21 +563,40 @@ def _check(
             if stance_cooldown_left(state, rules, player) > 0:
                 return Reject(RejectCode.STANCE_COOLDOWN)
             return ()
-        case SetPriority(node=node, level=level):
-            # DEC-18, item 1: the checks in this order (CP last, in ``_validate``).
-            if not 0 <= node < len(state.map.nodes):
-                return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
-            if state.nodes[node].owner != player:
-                return Reject(RejectCode.NOT_OWNER)
-            if not is_city(state.map, node):
-                return Reject(RejectCode.NOT_CITY)
-            if state.nodes[node].priority is level:
+        case SetFront(marker=marker, node=node):
+            return _check_front(state, player, marker, node)
+        case SetRearMin(n=n):
+            if not 0 <= n <= rules.supply.rear_min_max:
+                return Reject(RejectCode.INVALID_ARGUMENT)
+            if n == state.players[player].rear_min:
                 return Reject(RejectCode.NO_CHANGE)
             return ()
         case Transfer(src=src, dst=dst, n=n):
             return _check_transfer(state, rules, player, src, dst, n)
         case Forfeit():
             return Reject(RejectCode.NO_CHANGE) if state.players[player].forfeited else ()
+
+
+def _check_front(
+    state: GameState, player: int, marker: int, node: int | None
+) -> tuple[int, ...] | Reject:
+    """The checks of ``SetFront`` in this order (CP last, in ``_validate``): the marker index,
+    the node (as ``SetPriority`` of DEC-18 did), the same place, the other marker's city."""
+    fronts = state.players[player].fronts
+    if not 0 <= marker < len(fronts):
+        return Reject(RejectCode.INVALID_ARGUMENT)
+    if node is not None:
+        if not 0 <= node < len(state.map.nodes):
+            return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+        if state.nodes[node].owner != player:
+            return Reject(RejectCode.NOT_OWNER)
+        if not is_city(state.map, node):
+            return Reject(RejectCode.NOT_CITY)
+    if fronts[marker] == node:
+        return Reject(RejectCode.NO_CHANGE)
+    if node is not None and node in fronts:
+        return Reject(RejectCode.INVALID_ARGUMENT)  # one marker per city (DEC-28, example 8)
+    return ()
 
 
 def _defends(state: GameState, group: Group) -> bool:
@@ -846,9 +876,15 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             return []
         case SetStance(stance=stance):
             return set_stance(state, player, stance)
-        case SetPriority(node=node, level=level):
-            state.nodes[node].priority = level
-            return [event(tick, "priority_set", player=player, node=node, level=level.value)]
+        case SetFront(marker=marker, node=node):
+            ps = state.players[player]
+            ps.fronts = tuple(node if i == marker else f for i, f in enumerate(ps.fronts))
+            return [
+                event(tick, "front_set", player=player, marker=marker, node=node, reason="command")
+            ]
+        case SetRearMin(n=n):
+            state.players[player].rear_min = n
+            return [event(tick, "rear_min_set", player=player, n=n)]
         case Transfer(src=src, dst=dst):
             route = transfer_route(state, rules, player, src, dst)
             assert route is not None  # validated just before, on this state

@@ -48,8 +48,9 @@ from gow_sim.commands import (
     Move,
     PlayerCommand,
     Recruit,
+    SetFront,
     SetMode,
-    SetPriority,
+    SetRearMin,
     SetStance,
     Split,
     Transfer,
@@ -67,7 +68,7 @@ from gow_sim.match import (
     run_headless,
 )
 from gow_sim.ruleset import Ruleset, RulesetError, Stance, load_ruleset, ruleset_hash
-from gow_sim.state import Mode, Priority, to_canonical
+from gow_sim.state import Mode, to_canonical
 
 __all__ = [
     "CHECKPOINT_EVERY",
@@ -166,8 +167,10 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "cancel_recruit", "node": node}
         case CancelOrder(group=g):
             return {"type": "cancel_order", "group": g}
-        case SetPriority(node=node, level=level):
-            return {"type": "set_priority", "node": node, "level": level.value}
+        case SetFront(marker=marker, node=node):
+            return {"type": "set_front", "marker": marker, "node": node}
+        case SetRearMin(n=n):
+            return {"type": "set_rear_min", "n": n}
         case Transfer(src=src, dst=dst, n=n):
             return {"type": "transfer", "from": src, "to": dst, "n": n}
         case Forfeit():
@@ -211,8 +214,11 @@ def decode_command(data: object) -> Command:
                 return CancelRecruit(_int(d["node"]))
             case "cancel_order":
                 return CancelOrder(_int(d["group"]))
-            case "set_priority":
-                return SetPriority(_int(d["node"]), Priority(_str(d["level"])))
+            case "set_front":
+                node = d["node"]
+                return SetFront(_int(d["marker"]), None if node is None else _int(node))
+            case "set_rear_min":
+                return SetRearMin(_int(d["n"]))
             case "transfer":
                 return Transfer(_int(d["from"]), _int(d["to"]), _int(d["n"]))
             case "forfeit":

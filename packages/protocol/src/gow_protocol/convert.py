@@ -34,9 +34,9 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
 - everything else only to the player of the event (``player``, for ``warehouse_lost`` ``owner``),
   enemy ones are dropped. ``fight_group`` goes only to the owner of the group; the build
   events ``build_started``, ``road_upgraded``, ``barracks_built``, ``warehouse_upgraded`` and
-  ``build_stopped`` only to the builder (DEC-17, item 6; DEC-26, item 9); ``priority_set`` and
-  ``transfer_started`` only to their player (DEC-18, item 8); ``starvation`` only to the owner of
-  the city (DEC-19, item 8);
+  ``build_stopped`` only to the builder (DEC-17, item 6; DEC-26, item 9); ``front_set``,
+  ``rear_min_set`` (DEC-28) and ``transfer_started`` only to their player (DEC-18, item 8);
+  ``starvation`` only to the owner of the city (DEC-19, item 8);
 - ``match_ended`` is not an event on the wire: it is ``match_end``.
 
 Entity ids in event data (``group``, ``new_group``, ``packet``, ``fight``) become opaque ids of
@@ -120,13 +120,14 @@ PRIVATE_KINDS: Final = frozenset(
         "charges_produced",
         "cp_burned",
         "fight_group",
+        "front_set",
         "group_arrived",
         "group_split",
         "groups_merged",
         "packet_delivered",
         "packet_lost",
         "packet_sent",
-        "priority_set",
+        "rear_min_set",
         "recruit_cancelled",
         "recruit_queue_lost",
         "recruited",
@@ -177,7 +178,12 @@ def snapshot_msg(view: sv.PlayerView) -> SnapshotMsg:
 def view_to_wire(view: sv.PlayerView) -> View:
     vp = view.vp
     return View(
-        me=SelfView(cp=view.me.cp, stance=view.me.stance),
+        me=SelfView(
+            cp=view.me.cp,
+            stance=view.me.stance,
+            fronts=view.me.fronts,
+            rear_min=view.me.rear_min,
+        ),
         vp=(vp[0], vp[1]),
         nodes=tuple(
             NodeView(
@@ -192,7 +198,6 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 else NodeBuild(edge=n.build.edge, done_tick=n.build.done_tick),
                 attrition_in=n.attrition_in,
                 grace_left=n.grace_left,
-                priority=n.priority,
                 starve_in=n.starve_in,
                 recruit_queue=n.recruit_queue,
                 recruit_progress=n.recruit_progress,
@@ -307,7 +312,12 @@ def snapshot_frame(view: sv.PlayerView) -> SnapshotFrame:
 def _view_data(view: sv.PlayerView) -> dict[str, object]:
     me = view.me
     return {
-        "me": {"cp": me.cp, "stance": me.stance},
+        "me": {
+            "cp": me.cp,
+            "stance": me.stance,
+            "fronts": list(me.fronts),
+            "rear_min": me.rear_min,
+        },
         "vp": view.vp[:2],
         "nodes": [
             {
@@ -322,7 +332,6 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 else {"edge": n.build.edge, "done_tick": n.build.done_tick},
                 "attrition_in": n.attrition_in,
                 "grace_left": n.grace_left,
-                "priority": n.priority,
                 "starve_in": n.starve_in,
                 "recruit_queue": n.recruit_queue,
                 "recruit_progress": n.recruit_progress,
@@ -460,8 +469,10 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.CancelRecruit(node)
         case wire.CancelOrderCmd(group=g):
             return sim.CancelOrder(gid(g))
-        case wire.SetPriorityCmd(node=node, level=level):
-            return sim.SetPriority(node, level)
+        case wire.SetFrontCmd(marker=marker, node=node):
+            return sim.SetFront(marker, node)
+        case wire.SetRearMinCmd(n=n):
+            return sim.SetRearMin(n)
         case wire.TransferCmd(from_node=src, to_node=dst, n=n):
             return sim.Transfer(src, dst, n)
         case wire.ForfeitCmd():

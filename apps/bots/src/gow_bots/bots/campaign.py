@@ -140,7 +140,7 @@ class CampaignBot(Bot):
             if self.spend(ctx, cmd) and isinstance(cmd, Move):
                 ctx.used[cmd.group] = True
         self._stance(ctx)
-        for cmd in self.priorities(view):  # front cities first in the supply order (DEC-18)
+        for cmd in self.fronts(view):  # front markers on the front cities (DEC-28)
             self.spend(ctx, cmd)
         cmd = self.development(ctx.view, ctx.budget)  # DEC-26, item 11: before the orders
         if cmd is not None:

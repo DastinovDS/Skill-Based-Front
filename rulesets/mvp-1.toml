@@ -71,7 +71,8 @@ defense = 200 # режим «Защита»; повторное включени
 build = 0 # UpgradeRoad(node, edge): плата CP за уровень дороги; 0: платят только заряды склада (DEC-16, #203)
 recruit = 100 # Recruit(node): 1 CP за юнита в очереди, при постановке (DEC-25, #262; mechanics.md, раздел 3)
 stance = 0 # смена стойки бесплатна (DEC-02, #8)
-priority = 0 # SetPriority(node, level): приоритет снабжения города бесплатен (DEC-18, #230)
+front = 0 # SetFront(marker, node): перенос маркера фронта бесплатен (DEC-28, п. 2)
+rear_min = 0 # SetRearMin(n): смена минимума тыла бесплатна (DEC-28, п. 3)
 transfer = 0 # Transfer(from, to, n): разовая перевозка зарядов бесплатна (DEC-18, #230)
 barracks = 300 # BuildBarracks(node): 3 CP, только при city_upgrades.enabled (DEC-26, #265)
 warehouse = 200 # UpgradeWarehouse(node): 2 CP за уровень, только при city_upgrades.enabled (DEC-26)
@@ -134,7 +135,8 @@ per_units = 3 # ... на каждые начатые 3 юнита
 # пути travel_ticks * 100 // speed_pct (округление вниз, не меньше 1); за период отправки по ребру
 # идёт не больше base_amount зарядов на любом уровне.
 dispatch_ticks = 10 # период расчёта и отправки пакетов
-buffer = 2 # целевой запас узла = разряженные стоящие юниты + buffer
+rear_min_default = 1 # минимум тыла на старте: города без маркера фронта держат столько зарядов (DEC-28, п. 3)
+rear_min_max = 8 # наибольший минимум тыла SetRearMin(n), n в 0..8 (DEC-28, п. 3)
 recharge_per_tick = 1 # перезарядка стоящих юнитов со склада: не быстрее 1 заряда за тик
 base_speed_pct = 100 # скорость пакета на дороге уровня 1
 base_amount = 1 # зарядов за период по ребру на любом уровне (DEC-26, п. 7)

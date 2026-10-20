@@ -41,7 +41,8 @@ defense = 200
 build = 0
 recruit = 100
 stance = 0
-priority = 0
+front = 0
+rear_min = 0
 transfer = 0
 barracks = 300
 warehouse = 200
@@ -85,7 +86,8 @@ per_units = 3 # ... на каждые начатые 3 юнита
 
 [supply]
 dispatch_ticks = 10
-buffer = 2
+rear_min_default = 1
+rear_min_max = 8
 recharge_per_tick = 1
 base_speed_pct = 100
 base_amount = 1
