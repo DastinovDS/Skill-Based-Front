@@ -452,6 +452,7 @@ def front_fallback(
         if best is None or cand < best:
             best = cand
     way: list[int] = []
+    # TODO(#309): without an own neighbour in the tree the marker goes to the capital (default).
     node: int | None = tree.order[0] if best is None else best[2]
     while node is not None:
         way.append(node)
@@ -602,9 +603,11 @@ def _recharge(state: GameState, rules: Ruleset, garrisons: dict[int, list[Group]
             node.warehouse -= take
 
 
-def _distances(state: GameState, rules: Ruleset, player: int, src: int) -> dict[int, int]:
-    """The sum of ``packet_ticks`` of the fastest way from ``src`` to every own node it reaches
-    over own nodes (every road between two of them is internal)."""
+def _distances(
+    state: GameState, player: int, src: int, edge_ticks: tuple[int, ...]
+) -> dict[int, int]:
+    """The sum of ``packet_ticks`` (``edge_ticks``, by edge) of the fastest way from ``src`` to
+    every own node it reaches over own nodes (every road between two of them is internal)."""
     mapdef = state.map
     nodes = state.nodes
     dist: dict[int, int] = {src: 0}
@@ -619,7 +622,7 @@ def _distances(state: GameState, rules: Ruleset, player: int, src: int) -> dict[
             nxt = mapdef.edges[eid].other(node)
             if nxt in done or nodes[nxt].owner != player:
                 continue
-            cand = d + edge_packet_ticks(state, rules, eid)
+            cand = d + edge_ticks[eid]
             if nxt not in dist or cand < dist[nxt]:
                 dist[nxt] = cand
                 heapq.heappush(heap, (cand, nxt))
@@ -692,15 +695,21 @@ def _dispatch(
         (c for c in cities if c not in fronts and c != capital),
         key=lambda c: (-tree.dist[c], key(c)),
     )
+    edge_ticks: tuple[int, ...] = ()
     for c in (*marked, *rear):
         deficit = target[c] - nodes[c].warehouse - incoming[c]
         if deficit <= 0:
             continue
-        dist = _distances(state, rules, player, c)
-        donors = sorted(
-            (d for d in cities if d != c and nodes[d].warehouse > target[d]),
-            key=lambda d: (dist[d], key(d)),
-        )
+        donors = [d for d in cities if d != c and nodes[d].warehouse > target[d]]
+        if not donors:
+            continue
+        if len(donors) > 1:  # the nearest first (one Dijkstra per city with a deficit)
+            if not edge_ticks:
+                edge_ticks = tuple(
+                    edge_packet_ticks(state, rules, e) for e in range(len(mapdef.edges))
+                )
+            dist = _distances(state, player, c, edge_ticks)
+            donors.sort(key=lambda d: (dist[d], key(d)))
         for d in donors:  # item 5: the nearest donor first, never below its own target
             if deficit <= 0:
                 break
@@ -710,7 +719,9 @@ def _dispatch(
 
     events: list[Event] = []
     tick = state.tick
-    if spill > 0:  # 4.4: the full capital spills over the rear cities, nearest first
+    # 4.4: the full capital spills over the rear cities, nearest first; the room the dispatch
+    # made in the capital first; no marker cities (TODO(#309): defaults of the owner's questions).
+    if spill > 0:
         room = capacities[capital] - nodes[capital].warehouse - incoming[capital]
         back = min(spill, max(0, room))
         nodes[capital].warehouse += back
