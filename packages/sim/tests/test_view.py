@@ -49,7 +49,6 @@ from gow_sim.state import (
     OnEdge,
     Order,
     Packet,
-    Priority,
     initial_state,
     state_hash,
 )
@@ -378,8 +377,10 @@ def test_no_enemy_cp_stance_production_or_counters(rules: Ruleset) -> None:
     state.nodes[5].recruit_queue = 2  # the enemy's production is hidden (DEC-25, item 12)
     state.nodes[5].recruit_progress = 17
     assert _view(state, rules) == before
-    assert {f.name for f in dataclasses.fields(SelfView)} == {"cp", "stance"}
-    assert before.me == SelfView(cp=state.players[0].cp, stance=state.players[0].stance)
+    # Own counters only (DEC-28: the own front markers and rear minimum).
+    assert {f.name for f in dataclasses.fields(SelfView)} == {"cp", "stance", "fronts", "rear_min"}
+    me = state.players[0]
+    assert before.me == SelfView(cp=me.cp, stance=me.stance, fronts=(None, None), rear_min=1)
 
 
 def test_no_events_in_the_view(rules: Ruleset) -> None:
@@ -416,33 +417,27 @@ def test_own_entities_are_exact(rules: Ruleset) -> None:
     )
 
 
-def test_dec18_priority_only_for_own_cities(rules: Ruleset) -> None:
-    """DEC-18, item 8: an own city shows its priority; the enemy's, neutral nodes don't."""
+def test_dec28_own_front_markers_and_rear_minimum_in_the_view(rules: Ruleset) -> None:
+    """DEC-28: the view shows the own markers and rear minimum (``SelfView``)."""
     state = _state("line6", rules)
-    state.nodes[1].priority = Priority.HIGH
-    state.nodes[4].priority = Priority.LOW  # an enemy city
-    view = _view(state, rules)
-    assert [n.priority for n in view.nodes] == [
-        Priority.NORMAL,
-        Priority.HIGH,
-        None,
-        None,
-        None,
-        None,
-    ]
-    before = _view(state, rules, player=1)
-    state.nodes[1].priority = Priority.LOW
-    assert _view(state, rules, player=1) == before  # the enemy never sees it
+    state.players[0].fronts = (2, None)
+    state.players[0].rear_min = 3
+    me = _view(state, rules).me
+    assert (me.fronts, me.rear_min) == ((2, None), 3)
 
 
-def test_dec18_enemy_priority_hidden_even_in_sight(rules: Ruleset) -> None:
+def test_dec28_enemy_front_markers_and_rear_minimum_are_hidden(rules: Ruleset) -> None:
+    """DEC-28 (fog test of ``SelfView.fronts`` and ``SelfView.rear_min``): the enemy's markers
+    and rear minimum are not in the view, even when the marked city is seen exactly."""
     state = _state("line6", rules)
-    state.nodes[2].owner = 1  # an enemy city next to an own one: presence
+    state.nodes[2].owner = 1  # an enemy city next to an own one
     _add(state, 0, AtNode(2))  # own group in it: exact
     view = _view(state, rules)
-    assert view.nodes[2].detail is E and view.nodes[2].priority is None
-    state.nodes[2].priority = Priority.HIGH
+    assert view.nodes[2].detail is E
+    state.players[1].fronts = (2, 4)
+    state.players[1].rear_min = 5
     assert _view(state, rules) == view
+    assert _view(state, rules, player=1).me.fronts == (2, 4)
 
 
 def test_dec19_starve_in_only_for_own_cut_off_cities(rules: Ruleset) -> None:
@@ -782,9 +777,8 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
         if state.packets[pid].owner == enemy:
             state.packets[pid].charges = draw(st.integers(1, 9))
             state.packets[pid].transfer = draw(st.booleans())
-    for node in state.nodes.values():  # DEC-18, DEC-19: enemy priorities and starvation hidden
+    for node in state.nodes.values():  # DEC-19: enemy starvation hidden
         if node.owner == enemy:
-            node.priority = draw(st.sampled_from(list(Priority)))
             node.cut_since = draw(st.none() | st.integers(0, max(0, state.tick)))
             node.recruit_queue = draw(st.integers(0, 3))  # DEC-25: the enemy's queue is hidden
             node.recruit_progress = draw(st.integers(0, 30))
@@ -792,6 +786,8 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
     other.cp = draw(st.integers(0, 10_000))
     other.stance = draw(st.sampled_from(list(Stance)))
     other.charge_acc = draw(st.integers(0, 99))
+    other.fronts = (draw(st.none() | st.integers(0, len(nodes) - 1)), None)  # DEC-28: hidden
+    other.rear_min = draw(st.integers(0, 8))
     state.events = [Event(state.tick, "fight", (("node", 0),))]
     # DEC-17: roads in fog may be upgraded further, enemy builds on them may start or stop.
     for e, level in enumerate(edges):

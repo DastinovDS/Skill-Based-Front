@@ -16,7 +16,6 @@ import type {
   MapFile,
   OrderView,
   Mode,
-  Priority,
   RulesetPublic,
   Stance,
   SnapshotMsg,
@@ -68,8 +67,6 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
   /** City builds: node -> road, the tick it grows and its type; levels and types so far by edge. */
   const builds = new Map<number, { edge: number; done: number }>();
   const widths = new Map<number, number>();
-  /** Supply priorities the player set (DEC-18). */
-  const priorities = new Map<number, Priority>();
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
   function snapshot(): SnapshotMsg {
@@ -87,10 +84,9 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         me: { ...base.view.me, stance, cp: Math.max(0, base.view.me.cp - spent) },
         nodes: base.view.nodes.map((n) => {
           const build = builds.get(n.id);
-          const priority = n.priority === null ? null : (priorities.get(n.id) ?? n.priority);
           return build === undefined
-            ? { ...n, priority }
-            : { ...n, priority, build: { edge: build.edge, done_tick: build.done } };
+            ? n
+            : { ...n, build: { edge: build.edge, done_tick: build.done } };
         }),
         edges: base.view.edges.map((e) => {
           const ends = map.edges[e.id];
@@ -202,11 +198,6 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         }
         return code;
       }
-      case 'set_priority':
-        if (current.view.nodes[cmd.node]?.owner !== DEV_PLAYER) return 'NOT_OWNER';
-        if (current.view.nodes[cmd.node]?.priority === cmd.level) return 'NO_CHANGE';
-        priorities.set(cmd.node, cmd.level);
-        return charge(rules.cost.priority);
       case 'forfeit':
         setTimeout(() => {
           socket?.reply({

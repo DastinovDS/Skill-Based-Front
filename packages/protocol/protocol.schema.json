@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 16,
+    "PROTOCOL_VERSION": 17,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -366,8 +366,9 @@
           "merge": "#/$defs/MergeCmd",
           "move": "#/$defs/MoveCmd",
           "recruit": "#/$defs/RecruitCmd",
+          "set_front": "#/$defs/SetFrontCmd",
           "set_mode": "#/$defs/SetModeCmd",
-          "set_priority": "#/$defs/SetPriorityCmd",
+          "set_rear_min": "#/$defs/SetRearMinCmd",
           "set_stance": "#/$defs/SetStanceCmd",
           "split": "#/$defs/SplitCmd",
           "transfer": "#/$defs/TransferCmd",
@@ -411,7 +412,10 @@
           "$ref": "#/$defs/CancelOrderCmd"
         },
         {
-          "$ref": "#/$defs/SetPriorityCmd"
+          "$ref": "#/$defs/SetFrontCmd"
+        },
+        {
+          "$ref": "#/$defs/SetRearMinCmd"
         },
         {
           "$ref": "#/$defs/TransferCmd"
@@ -501,8 +505,14 @@
           "minimum": 0,
           "type": "integer"
         },
-        "priority": {
-          "description": "``set_priority`` (DEC-18, item 1).",
+        "front": {
+          "description": "``set_front`` (DEC-28, item 2).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rear_min": {
+          "description": "``set_rear_min`` (DEC-28, item 3).",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
@@ -537,7 +547,8 @@
         "build",
         "recruit",
         "stance",
-        "priority",
+        "front",
+        "rear_min",
         "transfer",
         "barracks",
         "warehouse"
@@ -1558,17 +1569,6 @@
           ],
           "description": "Own node only: ticks the grace after a capture still lasts while the garrison exceeds the\ncapacity. ``None`` for every other node."
         },
-        "priority": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Priority"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Own city only: its supply priority (DEC-18, item 1). ``None`` for provinces, the enemy's\nand neutral nodes (DEC-18, item 8)."
-        },
         "starve_in": {
           "anyOf": [
             {
@@ -1678,7 +1678,6 @@
         "build",
         "attrition_in",
         "grace_left",
-        "priority",
         "starve_in",
         "recruit_queue",
         "recruit_progress",
@@ -1965,16 +1964,6 @@
       "title": "PongMsg",
       "type": "object"
     },
-    "Priority": {
-      "description": "Supply priority of a city (DEC-18, item 1): only the order of delivery, not the target.",
-      "enum": [
-        "high",
-        "normal",
-        "low"
-      ],
-      "title": "Priority",
-      "type": "string"
-    },
     "RatingChange": {
       "additionalProperties": false,
       "description": "The rating of the receiving player before and after a rated match (RAT-02, #75).\n\nBoth numbers are the displayed rating (``r - 2 * RD``, RAT-01), rounded to integers.",
@@ -2209,6 +2198,9 @@
         },
         "city_upgrades": {
           "$ref": "#/$defs/CityUpgradesPublic"
+        },
+        "supply": {
+          "$ref": "#/$defs/SupplyPublic"
         }
       },
       "required": [
@@ -2222,7 +2214,8 @@
         "orders",
         "capacity",
         "recruit",
-        "city_upgrades"
+        "city_upgrades",
+        "supply"
       ],
       "title": "RulesetPublic",
       "type": "object"
@@ -2292,11 +2285,37 @@
         },
         "stance": {
           "$ref": "#/$defs/Stance"
+        },
+        "fronts": {
+          "description": "The own cities of the two front markers (DEC-28, item 2), ``null``: not placed. The\nenemy's markers are never in a view (DEC-28).",
+          "items": {
+            "anyOf": [
+              {
+                "maximum": 2147483647,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "rear_min": {
+          "description": "The own rear minimum (DEC-28, item 3); the enemy's is never in a view.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "cp",
-        "stance"
+        "stance",
+        "fronts",
+        "rear_min"
       ],
       "title": "SelfView",
       "type": "object"
@@ -2346,6 +2365,41 @@
         }
       ]
     },
+    "SetFrontCmd": {
+      "additionalProperties": false,
+      "description": "Put the front marker ``marker`` (0 or 1) on the own city ``node``; ``node = null`` takes\nit off the map (DEC-28, item 2). Free (``cost.front``).",
+      "properties": {
+        "type": {
+          "const": "set_front",
+          "default": "set_front",
+          "type": "string"
+        },
+        "marker": {
+          "exclusiveMaximum": 2,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "node": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "marker",
+        "node"
+      ],
+      "title": "SetFrontCmd",
+      "type": "object"
+    },
     "SetModeCmd": {
       "additionalProperties": false,
       "properties": {
@@ -2370,30 +2424,26 @@
       "title": "SetModeCmd",
       "type": "object"
     },
-    "SetPriorityCmd": {
+    "SetRearMinCmd": {
       "additionalProperties": false,
-      "description": "Supply priority ``level`` of the own city ``node`` (DEC-18, item 1).",
+      "description": "The own rear minimum ``n``, ``0..supply.rear_min_max`` of ``ruleset_public`` (DEC-28,\nitem 3); the range is checked by the simulation (``INVALID_ARGUMENT``).",
       "properties": {
         "type": {
-          "const": "set_priority",
-          "default": "set_priority",
+          "const": "set_rear_min",
+          "default": "set_rear_min",
           "type": "string"
         },
-        "node": {
+        "n": {
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
-        },
-        "level": {
-          "$ref": "#/$defs/Priority"
         }
       },
       "required": [
         "type",
-        "node",
-        "level"
+        "n"
       ],
-      "title": "SetPriorityCmd",
+      "title": "SetRearMinCmd",
       "type": "object"
     },
     "SetStanceCmd": {
@@ -2504,6 +2554,30 @@
         "war"
       ],
       "title": "StancePctPublic",
+      "type": "object"
+    },
+    "SupplyPublic": {
+      "additionalProperties": false,
+      "description": "The supply settings of a player (DEC-28): the range of the rear minimum slider.",
+      "properties": {
+        "rear_min_max": {
+          "description": "``set_rear_min`` accepts ``0..rear_min_max``.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rear_min_default": {
+          "description": "The rear minimum every player starts with.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rear_min_max",
+        "rear_min_default"
+      ],
+      "title": "SupplyPublic",
       "type": "object"
     },
     "Terrain": {

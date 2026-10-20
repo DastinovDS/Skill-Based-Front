@@ -63,7 +63,6 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       build: null,
       attrition_in: null,
       grace_left: null,
-      priority: null,
       starve_in: null,
       recruit_queue: null,
       recruit_progress: null,
@@ -77,7 +76,6 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       const city = n.kind !== 'province';
       return {
         ...base,
-        priority: city ? 'normal' : null,
         recruit_queue: city ? 0 : null,
         recruit_progress: city ? 0 : null,
         recruit_waiting: city ? false : null,
@@ -136,7 +134,12 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
     type: 'snapshot',
     tick,
     view: {
-      me: { cp: Math.min(rules.cp.cap, regen), stance: 'balance' },
+      me: {
+        cp: Math.min(rules.cp.cap, regen),
+        stance: 'balance',
+        fronts: [null, null],
+        rear_min: 1,
+      },
       vp: [Math.floor(tick / 100), Math.floor(tick / 150)],
       nodes,
       edges: map.edges.map((e) => ({

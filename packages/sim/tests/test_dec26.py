@@ -59,7 +59,7 @@ from gow_sim.state import (
     initial_state,
 )
 from gow_sim.systems.capacity import change_owner, warehouse_capacity
-from gow_sim.systems.supply import edge_packet_ticks, target_stock
+from gow_sim.systems.supply import city_target, edge_packet_ticks
 from gow_sim.view import BuildingView, BuildKind
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -88,7 +88,6 @@ def _rules(enabled: bool = True) -> Ruleset:
         supply=dataclasses.replace(
             base.supply,
             dispatch_ticks=10,
-            buffer=2,
             base_speed_pct=100,
             base_amount=1,
             fast_speed_pct=LevelTable((150, 200)),
@@ -373,8 +372,15 @@ def test_example_18_a_small_warehouse_burns_the_rest_of_a_packet() -> None:
     assert [d["charges"] for _, d in run.of("charges_overflow")] == [1]
 
 
-def test_example_19_target_stock_of_a_small_city() -> None:
-    assert target_stock(RULES, warehouse_cap=1, discharged=3) == 1  # min(1, 3 + 2)
+def test_example_19_target_of_a_small_rear_city() -> None:
+    """Example 19 [заменено DEC-28]: no ``supply.buffer``; a rear city keeps
+    ``min(rear_min, warehouse capacity)``: S with ``rear_min = 1`` keeps 1, and a warehouse of 2 at
+    ``rear_min = 3`` keeps ``min(3, 2) = 2`` (DEC-28, «Накопление: граничные случаи»)."""
+    state = _Run().state
+    state.players[0].rear_min = 1
+    assert city_target(state, 0, B, warehouse_cap=1, front=False) == 1
+    state.players[0].rear_min = 3
+    assert city_target(state, 0, B, warehouse_cap=2, front=False) == 2
 
 
 def test_example_20_the_start_stock_is_cut_to_the_warehouse() -> None:

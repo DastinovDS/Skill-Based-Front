@@ -280,6 +280,7 @@ def test_example_13_a_province_is_not_a_city() -> None:
 def test_example_14_the_new_unit_takes_a_charge_from_the_warehouse_next_tick() -> None:
     run = _Run()
     run.x.warehouse = 2
+    run.state.players[0].rear_min = 2  # DEC-28: X keeps its 2, it is not a donor
     run.step(Recruit(X))
     run.until(1029)
     assert run.recruited() == [1029]

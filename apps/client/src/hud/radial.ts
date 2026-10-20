@@ -3,7 +3,7 @@
  * table of numbers of the stance menu from the ruleset and which sector a pointer is over. Pure
  * functions, no DOM.
  */
-import type { Priority, RulesetPublic, Stance } from '../protocol.gen.ts';
+import type { RulesetPublic, Stance } from '../protocol.gen.ts';
 
 export const RADIAL = {
   /** Outer and inner radius of the ring, and the dead zone of "cancel" (CSS px). */
@@ -156,34 +156,21 @@ export function stanceRates(rules: RulesetPublic): StanceRate[] {
   });
 }
 
-/** A choice of the supply menu of an own city (DEC-18): a priority, or a transfer from it. */
-export type SupplyChoice = Priority | 'transfer';
-
 /**
- * The supply menu of an own city (DEC-18, item 7): high on top, normal on the right, low at the
- * bottom, transfer on the left; keys 1..4. The priority is told by the shape of its sign as well
- * as by its name (`PRIORITY_SIGN`), never by colour alone.
+ * A choice of the supply menu of an own city: a transfer from it (DEC-18, item 6). The three
+ * priorities are gone (DEC-28); the front markers and the rear minimum get their UI in #293.
  */
+export type SupplyChoice = 'transfer';
+
+/** The supply menu of an own city: the transfer on the left; key 1. */
 export const SUPPLY_SECTORS: readonly {
   readonly choice: SupplyChoice;
   readonly angle: number;
   readonly key: string;
-}[] = [
-  { choice: 'high', angle: 270, key: '1' },
-  { choice: 'normal', angle: 0, key: '2' },
-  { choice: 'low', angle: 90, key: '3' },
-  { choice: 'transfer', angle: 180, key: '4' },
-];
+}[] = [{ choice: 'transfer', angle: 180, key: '1' }];
 
 /** The ring of the supply menu: small, a narrow band like the city menu's (not the big ring). */
 export const SUPPLY_RING: RadialRing = { inner: 30, outer: 112 };
 
 /** Half the angle of a supply sector: four sectors of 90 degrees with a minimal gap. */
 export const SUPPLY_HALF = 44;
-
-/** The sign of a priority on the map and in the menu: up, round, down (shape, not colour). */
-export const PRIORITY_SIGN: Readonly<Record<Priority, string>> = {
-  high: '▲',
-  normal: '●',
-  low: '▼',
-};

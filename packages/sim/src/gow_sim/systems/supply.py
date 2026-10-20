@@ -418,7 +418,7 @@ def _store_spill(
     capital = state.map.capital(player)
     node = state.nodes[capital]
     room = max(0, capacities[capital] - node.warehouse - incoming_charges(state, player, capital))
-    added = min(spill, room)
+    added = min(spill, room) if node.owner == player else 0
     node.warehouse += added
     if spill > added:
         return [
@@ -646,8 +646,8 @@ def _dispatch(
 ) -> list[Event]:
     """One dispatch of ``player`` (DEC-28, items 1, 4, 5; see the module docstring)."""
     tree = supply_tree(state, rules, player)
-    if not tree.order:  # no own capital: no supply, the economy burnt the production
-        return []
+    if not tree.order:  # no own capital: no supply, the production burns
+        return _store_spill(state, player, capacities, spill) if spill > 0 else []
     mapdef = state.map
     nodes = state.nodes
     capital = tree.order[0]

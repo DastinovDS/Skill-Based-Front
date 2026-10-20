@@ -4,7 +4,9 @@
   "view": {
     "me": {
       "cp": 250,
-      "stance": "balance"
+      "stance": "balance",
+      "fronts": [1, null],
+      "rear_min": 1
     },
     "vp": [
       12,
@@ -27,7 +29,6 @@
         "build": null,
         "attrition_in": null,
         "grace_left": null,
-        "priority": "normal",
         "starve_in": null,
         "recruit_queue": 0,
         "recruit_progress": 0,
@@ -53,7 +54,6 @@
         "build": null,
         "attrition_in": null,
         "grace_left": null,
-        "priority": "normal",
         "starve_in": null,
         "recruit_queue": 2,
         "recruit_progress": 12,
@@ -79,7 +79,6 @@
         "build": null,
         "attrition_in": null,
         "grace_left": null,
-        "priority": null,
         "starve_in": null,
         "recruit_queue": null,
         "recruit_progress": null,
@@ -108,7 +107,6 @@
         "build": null,
         "attrition_in": null,
         "grace_left": null,
-        "priority": null,
         "starve_in": null,
         "recruit_queue": null,
         "recruit_progress": null,

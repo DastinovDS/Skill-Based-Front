@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEV_RULES } from './devFeed.ts';
 import {
-  PRIORITY_SIGN,
   BIG_RING,
   RADIAL,
   SECTORS,
@@ -11,7 +10,6 @@ import {
   halfFor,
   sectorHit,
   sectorPath,
-  spreadAngles,
   stanceRates,
 } from './radial.ts';
 
@@ -92,21 +90,16 @@ describe('the supply menu (DEC-18)', () => {
   const supply = SUPPLY_SECTORS.map((x) => ({ angle: x.angle, item: x.choice }));
   const hit = (dx: number, dy: number) => sectorHit(supply, dx, dy, SUPPLY_RING, SUPPLY_HALF);
 
-  it('picks high up, normal right, low down and transfer left', () => {
-    expect(hit(0, -60)).toBe('high');
-    expect(hit(60, 0)).toBe('normal');
-    expect(hit(0, 60)).toBe('low');
+  it('picks the transfer on the left (DEC-28: no priority sectors)', () => {
     expect(hit(-60, 0)).toBe('transfer');
     expect(hit(0, 0)).toBeNull();
   });
 
   it('is a smaller ring than the big one, as small as the group menu', () => {
     expect(SUPPLY_RING.outer).toBeLessThan(BIG_RING.outer);
-    expect(spreadAngles(4)).toEqual(SUPPLY_SECTORS.map((x) => x.angle));
   });
 
-  it('has one key per sector and a shape per priority', () => {
-    expect(SUPPLY_SECTORS.map((s) => s.key)).toEqual(['1', '2', '3', '4']);
-    expect(new Set(Object.values(PRIORITY_SIGN)).size).toBe(3);
+  it('has one key per sector', () => {
+    expect(SUPPLY_SECTORS.map((s) => s.key)).toEqual(['1']);
   });
 });

@@ -71,7 +71,6 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     build: builds.get(id) ?? null,
     attrition_in: null, // not in the replay files: the viewer shows no countdown
     grace_left: null,
-    priority: null, // not in the replay files (DEC-18): the viewer has no supply mode
     starve_in: null, // not in the replay files (DEC-19)
     recruit_queue: null, // not in the replay files (DEC-25)
     recruit_progress: null,
@@ -104,7 +103,8 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     type: 'snapshot',
     tick: frame.t,
     view: {
-      me: { cp: first[0], stance: first[2] },
+      // Front markers and the rear minimum are not in the replay files (DEC-28).
+      me: { cp: first[0], stance: first[2], fronts: [null, null], rear_min: 0 },
       vp: [first[1], second[1]],
       nodes,
       edges: frame.w.map((width, id) => ({

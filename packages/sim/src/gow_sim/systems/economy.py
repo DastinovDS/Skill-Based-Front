@@ -15,7 +15,7 @@ DEC-02 (mechanics.md, section 6), numbers from ``Ruleset``:
   excess is not lost here (DEC-28, item 4.4): the event ``charges_produced`` (``charges``: all of
   the produced charges) carries it as ``spill``, and ``systems.supply`` spreads it over the rear
   cities in the same tick; what finds no room there burns (``charges_overflow``). If the player
-  does not own its capital, all of the produced charges are lost (``charges_overflow``).
+  does not own its capital, all of the produced charges are spill and burn there.
 - The stance changes at most once per ``orders.stance_cooldown_ticks``; the first change is not
   limited (#104 default). Command validation and application (SIM-04) use
   ``stance_cooldown_left()`` and ``set_stance()``.
@@ -57,15 +57,14 @@ def economy(state: GameState, rules: Ruleset) -> list[Event]:
             continue
         capital = state.map.capital(pid)
         node = state.nodes[capital]
-        if node.owner != pid:
-            events.append(
-                event(tick, "charges_overflow", player=pid, node=capital, charges=charges)
-            )
-            continue
-        cap = warehouse_capacity(state, rules, capital)
-        added = min(charges, max(0, cap - node.warehouse))
+        # What does not fit goes to the supply system in this tick (DEC-28, item 4.4); without
+        # the own capital nothing fits, and the supply system burns all of it.
+        if node.owner == pid:
+            cap = warehouse_capacity(state, rules, capital)
+            added = min(charges, max(0, cap - node.warehouse))
+        else:
+            added = 0
         node.warehouse += added
-        # What did not fit goes to the supply system in this tick (DEC-28, item 4.4).
         spill = charges - added
         events.append(
             event(tick, "charges_produced", player=pid, node=capital, charges=charges, spill=spill)

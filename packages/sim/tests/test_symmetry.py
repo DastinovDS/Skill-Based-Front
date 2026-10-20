@@ -31,8 +31,9 @@ from gow_sim.commands import (
     Ok,
     PlayerCommand,
     Recruit,
+    SetFront,
     SetMode,
-    SetPriority,
+    SetRearMin,
     SetStance,
     Split,
     Transfer,
@@ -43,7 +44,7 @@ from gow_sim.commands import (
 from gow_sim.maps import load_map
 from gow_sim.match import Match
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
-from gow_sim.state import AtNode, Event, GameState, Group, Location, Mode, OnEdge, Priority
+from gow_sim.state import AtNode, Event, GameState, Group, Location, Mode, OnEdge
 from gow_sim.systems.movement import find_path, traversal_ticks
 from gow_sim.systems.supply import is_city
 from gow_sim.systems.victory import EndReason, Outcome
@@ -111,10 +112,10 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
         ),
         key=key,
     )
-    if tick % 60 == 0:  # cycle the supply priority of the own cities (DEC-18)
-        levels = list(Priority)
-        for i, node in enumerate(own_cities):
-            cmds.append(SetPriority(node, levels[(tick // 60 + i) % 3]))
+    if tick % 60 == 0 and own_cities:  # move the front markers over the own cities (DEC-28)
+        k = tick // 60
+        cmds.append(SetFront(k % 2, own_cities[k % len(own_cities)]))
+        cmds.append(SetRearMin(k % 3))
     if tick % 80 == 0 and len(own_cities) >= 2:  # ship 2 charges to the farthest own city
         cmds.append(Transfer(own_cities[0], own_cities[-1], 2))
     if tick % 110 == 0 and own_cities:  # DEC-26: the barracks of the last own city
@@ -198,8 +199,8 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
             return BuildBarracks(mirror_nodes[node])
         case UpgradeWarehouse(node=node):
             return UpgradeWarehouse(mirror_nodes[node])
-        case SetPriority(node=node, level=level):
-            return SetPriority(mirror_nodes[node], level)
+        case SetFront(marker=marker, node=node):
+            return SetFront(marker, None if node is None else mirror_nodes[node])
         case Transfer(src=src, dst=dst, n=n):
             return Transfer(mirror_nodes[src], mirror_nodes[dst], n)
         case _:
@@ -307,7 +308,6 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             b.warehouse,
             b.over_ticks,
             b.captured_tick,
-            b.priority,
             b.cut_since,
             b.recruit_queue,
             b.recruit_progress,
@@ -317,7 +317,6 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
             a.warehouse,
             a.over_ticks,
             a.captured_tick,
-            a.priority,
             a.cut_since,
             a.recruit_queue,
             a.recruit_progress,
@@ -336,6 +335,9 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     for e in range(len(mapdef.edges)):
         assert state.edges[mapdef.mirror_edges[e]].width == state.edges[e].width
     p0, p1 = state.players[0], state.players[1]
+    mirror = mapdef.mirror_nodes
+    assert p1.fronts == tuple(None if f is None else mirror[f] for f in p0.fronts), "fronts"
+    assert p1.rear_min == p0.rear_min
     assert (p0.cp, p0.stance, p0.charge_acc, p0.vp, p0.stance_changed_tick, p0.forfeited) == (
         p1.cp,
         p1.stance,
@@ -451,7 +453,8 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
         "CancelRecruit",
         "SetStance",
         "CancelOrder",
-        "SetPriority",
+        "SetFront",
+        "SetRearMin",
     } <= set(kinds)
     if rules.city_upgrades.enabled:  # DEC-26: the city development is mirrored as well
         assert {"BuildBarracks", "UpgradeWarehouse"} <= set(kinds)

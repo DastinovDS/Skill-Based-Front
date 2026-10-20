@@ -1,15 +1,7 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AlertState } from './alerts.svelte.ts';
 import { roadCandidates, type GroupChoice as GroupBrief, type Selection } from '../hud/hudData.ts';
-import type {
-  Command,
-  MapFile,
-  Mode,
-  Priority,
-  ReachMsg,
-  RulesetPublic,
-  Stance,
-} from '../protocol.gen.ts';
+import type { Command, MapFile, Mode, ReachMsg, RulesetPublic, Stance } from '../protocol.gen.ts';
 import {
   EMPTY_OVERLAY,
   type MapInteraction,
@@ -18,14 +10,7 @@ import {
   type SupplyOverlay,
 } from '../render/interaction.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
-import {
-  RADIAL,
-  SECTORS,
-  stanceRates,
-  SUPPLY_SECTORS,
-  type StanceRate,
-  type SupplyChoice,
-} from '../hud/radial.ts';
+import { RADIAL, SECTORS, stanceRates, SUPPLY_SECTORS, type StanceRate } from '../hud/radial.ts';
 import { OrderUiState, type ReachInfo } from './orderUi.svelte.ts';
 import { RadialState } from './radialState.svelte.ts';
 import { SplitState } from './splitState.svelte.ts';
@@ -93,8 +78,8 @@ export interface KeyInput {
  * call.
  *
  * The «Supply» map mode (DEC-18, item 7) is toggled by Tab (or F2). In it a click on an own city
- * opens its supply menu (a radial menu under the pointer: high, normal, low priority, or a
- * transfer from it; a click or 1..4 chooses, Esc or a click outside closes it). "Transfer" starts
+ * opens its supply menu (a radial menu under the pointer: a transfer from it, DEC-28 removed the
+ * priorities; a click or 1 chooses, Esc or a click outside closes it). "Transfer" starts
  * the transfer pick: the own cities a click would pick are ringed; a click on one opens the amount
  * dialog, which sends `transfer`. A click anywhere else, or Esc, ends the pick. The path and the
  * arrival of a transfer come from the server (`ack`); the client computes neither.
@@ -664,9 +649,9 @@ export class OrderController implements MapInteraction {
   /** Opens the supply menu of the own city `node` (a click on it in the «Supply» mode). */
   openSupplyMenu(node: number): boolean {
     const city = this.#ownCity(node);
-    if (city === null || city.priority === null || this.#o.send === null) return false;
+    if (city === null || this.#o.send === null) return false;
     this.#closeMenus();
-    this.supplyMenu.open(node, city.priority, city.warehouse);
+    this.supplyMenu.open(node, city.warehouse);
     return true;
   }
 
@@ -674,20 +659,12 @@ export class OrderController implements MapInteraction {
     this.supplyMenu.close();
   }
 
-  /** A sector of the supply menu: a new priority is sent, "transfer" starts the transfer pick. */
-  chooseSupply(choice: SupplyChoice): void {
-    const { open, node, priority } = this.supplyMenu.current;
+  /** A sector of the supply menu: "transfer" starts the transfer pick (DEC-18, item 6). */
+  chooseSupply(): void {
+    const { open, node } = this.supplyMenu.current;
     this.supplyMenu.close();
-    if (!open) return;
-    if (choice === 'transfer') {
-      this.ui.patch({ transferFrom: node });
-      return;
-    }
-    if (choice !== priority) this.setPriority(node, choice);
-  }
-
-  setPriority(node: number, level: Priority): void {
-    this.#sendCommand({ type: 'set_priority', node, level }, null);
+    // "transfer" is the only choice now (DEC-28 removed the priorities; the markers: #293).
+    if (open) this.ui.patch({ transferFrom: node });
   }
 
   /** Ends the transfer pick without a transfer. */
@@ -753,10 +730,10 @@ export class OrderController implements MapInteraction {
       }
     }
     if (this.supplyMenu.current.open) {
-      // The supply menu: 1..4 choose (not the modes), Esc closes it.
+      // The supply menu: 1 chooses (not the modes), Esc closes it.
       const sector = SUPPLY_SECTORS.find((s) => `Digit${s.key}` === input.code);
       if (sector !== undefined) {
-        this.chooseSupply(sector.choice);
+        this.chooseSupply();
         return true;
       }
       if (input.code === 'Escape') {
@@ -880,14 +857,13 @@ export class OrderController implements MapInteraction {
     }
   }
 
-  /** An own city of the snapshot (priority and warehouse), or `null`. */
+  /** An own city of the snapshot (warehouse and its capacity: only own cities have one), or `null`. */
   #ownCity(node: number): {
-    priority: Priority | null;
     warehouse: number | null;
     warehouseCap: number | null;
   } | null {
     const choice = this.#o.hud.current?.nodes.find((n) => n.id === node);
-    return choice?.owner === 'mine' && choice.priority !== null ? choice : null;
+    return choice?.owner === 'mine' && choice.warehouseCap !== null ? choice : null;
   }
 
   /**
@@ -941,7 +917,7 @@ export class OrderController implements MapInteraction {
       source === null
         ? []
         : (this.#o.hud.current?.nodes ?? [])
-            .filter((n) => n.owner === 'mine' && n.priority !== null && n.id !== source)
+            .filter((n) => n.owner === 'mine' && n.warehouseCap !== null && n.id !== source)
             .map((n) => n.id);
     const prev = this.#supplyOverlay;
     if (

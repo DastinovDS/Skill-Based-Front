@@ -94,7 +94,7 @@ def test_mvp0_order_costs(mvp0: Ruleset) -> None:
     assert cost.recruit == 100
     assert cost.cancel == 0  # any order, free since DEC-20
     assert cost.stance == 0
-    assert cost.priority == 0  # SetPriority is free (DEC-18, item 1)
+    assert (cost.front, cost.rear_min) == (0, 0)  # markers and the rear minimum: free (DEC-28)
     assert cost.transfer == 0  # Transfer is free (DEC-18, item 6)
 
 
@@ -142,7 +142,8 @@ def test_mvp0_capacity_supply_build_victory(mvp0: Ruleset) -> None:
     assert [by_kind.of(k) for k in kinds] == [10, 8, 6, 4, 3]
     assert (mvp0.capacity.attrition_ticks, mvp0.capacity.grace_ticks) == (30, 50)
     supply = mvp0.supply
-    assert (supply.dispatch_ticks, supply.buffer, supply.recharge_per_tick) == (10, 2, 1)
+    assert (supply.dispatch_ticks, supply.recharge_per_tick) == (10, 1)
+    assert (supply.rear_min_default, supply.rear_min_max) == (1, 8)  # DEC-28, item 3
     assert (supply.base_speed_pct, supply.base_amount) == (100, 1)
     assert [supply.fast_speed_pct.of(level) for level in (2, 3)] == [150, 200]
     assert mvp0.build.ticks_per_level == 150
@@ -226,8 +227,8 @@ def test_typo_in_key_names_the_key(path: tuple[str, ...], typo: str, name: str) 
 
 def test_missing_key_names_the_key() -> None:
     data = _raw()
-    del data["supply"]["buffer"]
-    with pytest.raises(RulesetError, match=r"^supply\.buffer: missing key"):
+    del data["supply"]["rear_min_max"]
+    with pytest.raises(RulesetError, match=r"^supply\.rear_min_max: missing key"):
         parse_ruleset(data)
 
 
@@ -287,8 +288,10 @@ def test_hash_changes_when_any_value_changes() -> None:
     base_hash = ruleset_hash(parse_ruleset(base))
     leaves = _leaves(base)
     # Keys of SIM-01, DEC-16, DEC-22, DEC-18, DEC-19 by hand; #253: -2; DEC-24: +3; DEC-25: +2;
-    # DEC-26: +11 (2 costs, 3 city_upgrades, 6 warehouse) - 2 (supply.freight_amount).
-    assert len(leaves) == 75
+    # DEC-26: +11 (2 costs, 3 city_upgrades, 6 warehouse) - 2 (supply.freight_amount); DEC-28:
+    # +4 (supply.rear_min_default, supply.rear_min_max, cost.front, cost.rear_min) - 2
+    # (supply.buffer, cost.priority).
+    assert len(leaves) == 77
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)

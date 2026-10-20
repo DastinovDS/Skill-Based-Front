@@ -32,8 +32,9 @@ from gow_sim.commands import (
     Forfeit,
     Merge,
     Move,
+    SetFront,
     SetMode,
-    SetPriority,
+    SetRearMin,
     SetStance,
     Split,
     Transfer,
@@ -44,7 +45,6 @@ from gow_sim.maps import MapDef, load_map
 from gow_sim.match import SIM_VERSION, Controller
 from gow_sim.replay import REPLAY_SUFFIX, record_headless
 from gow_sim.ruleset import Ruleset, Stance, archive_ruleset, load_ruleset
-from gow_sim.state import Priority
 from gow_sim.view import AtNode, GroupView, Mode, OnEdge, PlayerView
 
 TESTS = Path(__file__).resolve().parents[1]
@@ -135,15 +135,18 @@ class MixBot:
         return [BuildBarracks(node) if k % 2 else UpgradeWarehouse(node)]
 
     def _supply(self, view: PlayerView, k: int) -> list[Command]:
-        """A supply priority for the own city of rank ``k`` and a transfer from the capital to
-        it (DEC-18); rejects are part of the log."""
+        """A front marker on the own city of rank ``k``, a rear minimum (DEC-28) and a transfer
+        from the capital to it (DEC-18); rejects are part of the log."""
         me = view.player
         cities = [n.id for n in view.nodes if n.owner == me]
         if not cities:
             return []
         node = cities[k % len(cities)]
-        level = list(Priority)[k // 29 % len(Priority)]
-        return [SetPriority(node, level), Transfer(self.map.capital(me), node, 1 + k % 3)]
+        return [
+            SetFront(k // 29 % 2, node),
+            SetRearMin(k // 29 % 3),
+            Transfer(self.map.capital(me), node, 1 + k % 3),
+        ]
 
     def _merge(self, idle: list[GroupView]) -> list[Command]:
         by_node: dict[int, list[int]] = {}

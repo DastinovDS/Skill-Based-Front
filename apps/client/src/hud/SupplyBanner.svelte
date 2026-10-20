@@ -1,7 +1,6 @@
 <script lang="ts">
   import { t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
-  import { PRIORITY_SIGN } from './radial.ts';
 
   interface Props {
     orders: OrderController;
@@ -10,7 +9,6 @@
   let { orders }: Props = $props();
 
   const ui = $derived(orders.ui.current);
-  const levels = ['high', 'normal', 'low'] as const;
 </script>
 
 {#if ui.supplyMode}
@@ -22,13 +20,6 @@
       <span>{t('supply.hint')}</span>
     {/if}
     <ul class="legend">
-      {#each levels as level (level)}
-        <li>
-          <span class="sign" aria-hidden="true">{PRIORITY_SIGN[level]}</span>{t(
-            `priority.${level}`,
-          )}
-        </li>
-      {/each}
       <li><span class="line solid" aria-hidden="true"></span>{t('supply.legendAuto')}</li>
       <li><span class="line dashed" aria-hidden="true"></span>{t('supply.legendTransfer')}</li>
     </ul>
@@ -73,10 +64,6 @@
     display: flex;
     align-items: center;
     gap: 4px;
-  }
-
-  .sign {
-    color: var(--paper);
   }
 
   .line {
