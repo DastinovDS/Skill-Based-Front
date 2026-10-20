@@ -34,6 +34,7 @@ docs/balance/                      отчёты баланса
 docs/mvp/                          план MVP и список issues
 docs/qa/                           чек-листы
 deploy/                            Dockerfile-ы, Caddyfile, скрипты развёртывания (compose.yaml в корне)
+mise.toml                          версии инструментов и все команды проекта (mise)
 ```
 
 Python-пакеты собраны в uv workspace (корневой `pyproject.toml`), у каждого src-layout:
@@ -41,52 +42,55 @@ Python-пакеты собраны в uv workspace (корневой `pyproject.
 
 ## Быстрый старт
 
-Нужен [uv](https://docs.astral.sh/uv/).
+Команды проекта и версии инструментов задаёт [mise](https://mise.jdx.dev) (`mise.toml` в корне, список задач и их смысл:
+`AGENTS.md`, раздел 3). Нужны только mise и Docker (последний для стеков и E2E); Node.js, pnpm и uv mise ставит сам.
+
+**macOS** (Homebrew):
 
 ```sh
-uv sync --locked
-uv run python -c "import gow_sim, gow_protocol, gow_server, gow_bots, gow_maps"
+brew install mise
+mise trust                  # один раз на клон: mise не выполняет чужой mise.toml без доверия
+mise install                # node, pnpm, uv версий проекта
+mise run setup              # uv sync --locked и pnpm install (клиент, e2e)
 ```
 
-Если Python 3.12 не установлен: `uv python install 3.12`.
+**Windows:** `winget install jdx.mise` (или `scoop install mise`), дальше те же `mise trust`, `mise install`,
+`mise run setup` в PowerShell. Почти все задачи это обычные вызовы `uv`, `pnpm` и `docker` без bash. Исключения:
+`stack`, `stack:reset`, `stack:agent` (подставляют рулсет в окружение командой `VAR=значение команда`, нужна
+POSIX-оболочка) и `smoke` (запускает `deploy/smoke.sh`, нужен bash): запускай их из Git Bash. Остальное в Windows не
+проверялось (нет машины), если что-то не работает, заведи issue. Активировать mise в профиле оболочки не нужно:
+`mise run <задача>` подставляет нужные версии сам (для обычного терминала активация удобна: `mise activate`).
 
-Проверки Python-кода (полный список команд: `AGENTS.md`, раздел 3):
+Ежедневные команды:
 
 ```sh
-uv run ruff check . && uv run ruff format --check .
-uv run pyright
-uv run lint-imports
-uv run pytest               # всё подряд, как раньше (в CI: HYPOTHESIS_PROFILE=ci)
-uv run pytest -n auto -m "not perf and not slow"   # быстрый прогон на всех ядрах (так идёт обязательный job py)
-uv run pytest -m perf       # бенчмарки и tick lag: только последовательно, без -n
-uv run pytest -n auto -m slow   # длинные статистические матчи ботов (job py-slow)
-uv run pre-commit install   # один раз: ruff перед каждым коммитом
+mise tasks                  # все задачи с описаниями
+mise run check              # ruff, pyright, lint-imports, карты, lint и check клиента и e2e
+mise run test               # быстрый pytest (как job py) и Vitest
+mise run test:perf          # бенчмарки и tick lag, только последовательно
+mise run test:slow          # длинные матчи ботов (job py-slow)
+mise run dev                # сервер (порт 8000) и клиент (http://localhost:5173), Ctrl-C останавливает оба
+mise run test:py -- -k combat -vv   # аргументы инструмента после --
 ```
 
-Клиент: нужны Node.js 24.15+ и pnpm (версия зафиксирована в `apps/client/package.json`, поле `packageManager`;
-`corepack enable pnpm` или `npm i -g pnpm`).
+Вывод задач тихий: видно только то, что печатают инструменты. Ошибки не скрываются; `mise run -o prefix <задача>`
+подписывает строки задачами. Один раз после клона: `mise run hooks` (ruff перед каждым коммитом).
 
-```sh
-pnpm -C apps/client install --frozen-lockfile
-pnpm -C apps/client dev                              # http://localhost:5173
-pnpm -C apps/client build && pnpm -C apps/client preview   # прод-сборка под целевым CSP
-```
+Без mise те же проверки запускаются напрямую (нужны [uv](https://docs.astral.sh/uv/), Node.js 24.15+ и pnpm версии из
+поля `packageManager` в `apps/client/package.json`: `corepack enable pnpm` или `npm i -g pnpm`): команды лежат в
+`mise.toml`, в каждой задаче одна-две строки. Если Python 3.12 не установлен, uv скачает его сам
+(`uv python install 3.12`).
 
 Типы протокола в клиенте (`apps/client/src/protocol.gen.ts`) генерируются из Pydantic-моделей
-`gow_protocol`, руками не правятся. После изменения моделей:
-
-```sh
-uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol
-```
+`gow_protocol`, руками не правятся. После изменения моделей: `mise run regen:protocol`.
 
 Типы HTTP API (`apps/client/src/api.gen.ts`) генерируются из OpenAPI приложения FastAPI
-(`apps/server/openapi.json`), руками не правятся. После изменения эндпоинтов или их моделей:
+(`apps/server/openapi.json`), руками не правятся. После изменения эндпоинтов или их моделей: `mise run regen:api`
+(обе генерации сразу: `mise run regen`).
 
-```sh
-uv run python scripts/export_openapi.py && pnpm -C apps/client gen:api
-```
+Прод-сборка клиента под целевым CSP: `mise run preview`.
 
-Клиент в разработке: `uv run gow-server` (порт 8000) и `pnpm -C apps/client dev`; dev-сервер Vite
+Клиент в разработке: `mise run dev` (`uv run gow-server` на порту 8000 и `pnpm -C apps/client dev`); dev-сервер Vite
 проксирует `/api` и `/ws` на `127.0.0.1:8000`. Экраны: ник гостя (токен в `localStorage`, ключ `sbf.guest`, в адрес
 не попадает), меню, приватный матч (ссылка-приглашение `/?m=<код>`, код после чтения убирается из адресной
 строки), матч с ботом, матч, итог с реплеем. Старый dev-экран с картой и фикстурами открывается в dev-сборке
@@ -100,8 +104,8 @@ Dev-экран клиента показывает карту из бандла 
 (`navigator.languages`: первый из `ru`/`en`, для остальных языков английский), переключатель «Язык» в панели
 меняет его и запоминает выбор в `localStorage` (ключ `sbf.locale`; если хранилище недоступно, выбор
 действует до перезагрузки). Строки интерфейса лежат в `apps/client/src/i18n/ru.ts` и `en.ts`: отсутствующий
-или лишний ключ в `en.ts` — ошибка типов, а `pnpm -C apps/client check:i18n` проверяет, что в разметке
-нет строк мимо словарей и что наборы ключей совпадают (входит в `pnpm -C apps/client test`).
+или лишний ключ в `en.ts` — ошибка типов, а `mise run check:i18n` проверяет, что в разметке
+нет строк мимо словарей и что наборы ключей совпадают (входит в `mise run test:client`).
 
 ## CI
 
@@ -219,6 +223,19 @@ GOW_RULESET_PATH=rulesets/mvp-1.toml docker compose up -d   # стек на др
 docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d --wait
 ```
 
+Задачи mise для стеков (`AGENTS.md`, раздел 3; порты 80/443 у владельца заняты, поэтому у задач свои):
+
+| Задача | Для кого | Что делает |
+|---|---|---|
+| `mise run stack [рулсет]` | владелец | прод-стек (проект `skill-based-front`) на `http://localhost:8080`, HTTPS 8443, `SITE_ADDRESS=:80`, рулсет по умолчанию `mvp-1` |
+| `mise run stack:reset [рулсет]` | владелец | то же с нуля: `down`, удаление тома `gow-data` (база и реплеи), `up` |
+| `mise run stack:agent [рулсет]`, `stack:agent:down` | агенты | свой стек (проект `sbf-agent`, `http://localhost:18080`), не задевает стек владельца |
+| `mise run smoke` | оба | `deploy/smoke.sh` на проекте `sbf-agent`, в конце стек убирается |
+| `mise run e2e` | оба | свой стек `sbf-e2e` (`http://localhost:18082`, рулсет `test-short`), Playwright, стек убирается |
+
+Параллельные агенты на одной машине задают разные `SBF_AGENT_PROJECT`, `SBF_AGENT_HTTP_PORT`, `SBF_AGENT_HTTPS_PORT`
+(для `e2e`: `SBF_E2E_*`). Прямые `docker compose ...` без `-p` попадают в проект `skill-based-front`.
+
 | Сервис | Образ | Что делает |
 |---|---|---|
 | `caddy` | `deploy/caddy.Dockerfile`: сборка клиента (Node, pnpm `--frozen-lockfile`) и Caddy со статикой | единственный публичный сервис (80/443): отдаёт клиент, `/api/*` и `/ws/*` проксирует в `app` |
@@ -297,11 +314,17 @@ HTTP_PORT=8080 HTTPS_PORT=8443 deploy/deploy-test.sh   # локально: де�
 (тесты видят его только через браузер). Версия `@playwright/test` та же, что у `apps/client` (визуальные тесты).
 
 ```sh
+mise run e2e                                     # всё сразу: Chromium, свой стек sbf-e2e на :18082, тесты, стек убирается
+mise run check:e2e                               # prettier и tsc
+```
+
+То же вручную (стек на портах по умолчанию):
+
+```sh
 pnpm -C e2e install --frozen-lockfile
 pnpm -C e2e exec playwright install chromium     # один раз
 docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d --wait   # стек; HTTP_PORT=8080, если 80 занят
 E2E_BASE_URL=http://localhost:8080 pnpm -C e2e test   # по умолчанию http://localhost
-pnpm -C e2e lint && pnpm -C e2e check            # prettier и tsc
 ```
 
 `e2e/compose.e2e.yaml` включает `GOW_ENV=e2e`, рулсет `test-short` (партия 60 секунд), окно переподключения и
