@@ -1,0 +1,292 @@
+# Skill-Based Front: the single source of project commands and tool versions (#301).
+#
+#   mise install        # node, pnpm, uv (versions below)
+#   mise run setup      # dependencies of the Python workspace, the client and e2e
+#   mise tasks          # the list of tasks; `mise run <task> --help` shows the arguments
+#
+# AGENTS.md, section 3, names every task. Output is quiet by default (errors are never hidden);
+# extra arguments go after `--`, e.g. `mise run test:py -- -k combat -vv`.
+# A task whose body needs a POSIX shell (an inline `VAR=value command`) says so in its comment;
+# on Windows run those from Git Bash. Everything else is plain `program args`, which cmd also runs.
+
+min_version = "2026.8.0"
+
+[settings.task]
+# Print only what the tools print (no "$ command" echo, no timings): fewer tokens for agents.
+# A failed task still shows its tool output and a "task failed" error; `mise run -o prefix <task>`
+# brings the labels back, which helps when parallel tasks (check, test) interleave.
+output = "quiet"
+timings = false
+
+[tools]
+# apps/client/package.json and e2e/package.json: engines.node ">=24.15.0" (CI takes the newest 24).
+node = "24"
+# "packageManager" of apps/client/package.json and e2e/package.json.
+pnpm = "12.8.1"
+# uv.lock is written by uv 0.12; Python 3.12 (.python-version) is fetched by uv itself.
+uv = "0.12"
+
+# ---------------------------------------------------------------------------------------------
+# setup
+# ---------------------------------------------------------------------------------------------
+
+[tasks.setup]
+description = "Install all dependencies: Python workspace, client, e2e"
+depends = ["setup:py", "setup:client", "setup:e2e"]
+
+[tasks."setup:py"]
+description = "uv sync --locked (Python workspace)"
+run = "uv sync --locked --quiet"
+
+[tasks."setup:client"]
+description = "pnpm install of apps/client"
+run = "pnpm -C apps/client install --frozen-lockfile --loglevel warn"
+
+[tasks."setup:e2e"]
+description = "pnpm install of e2e"
+run = "pnpm -C e2e install --frozen-lockfile --loglevel warn"
+
+[tasks.hooks]
+description = "Install the pre-commit hook once per clone (ruff before every commit)"
+depends = ["setup:py"]
+run = "uv run pre-commit install"
+
+# ---------------------------------------------------------------------------------------------
+# check: the static checks CI runs (jobs py and web, plus lint of e2e)
+# ---------------------------------------------------------------------------------------------
+
+[tasks.check]
+description = "All static checks: Python, client, e2e (no tests)"
+depends = ["check:py", "check:client", "check:e2e"]
+
+[tasks."check:py"]
+description = "ruff check and format, pyright, lint-imports, map validation"
+run = [
+  "uv run ruff check --quiet .",
+  "uv run ruff format --check --quiet .",
+  "uv run pyright",
+  "uv run lint-imports --no-logo",
+  "uv run gow-maps validate maps/*.json",
+]
+
+[tasks."check:client"]
+description = "Client lint (eslint, prettier) and check (svelte-check, tsc)"
+run = [
+  "pnpm --silent -C apps/client lint",
+  "pnpm --silent -C apps/client check",
+]
+
+[tasks."check:e2e"]
+description = "e2e lint (prettier) and check (tsc)"
+run = [
+  "pnpm --silent -C e2e lint",
+  "pnpm --silent -C e2e check",
+]
+
+[tasks."check:i18n"]
+description = "Client strings only in dictionaries, same ru and en keys (also part of test:client)"
+run = "pnpm --silent -C apps/client check:i18n"
+
+# ---------------------------------------------------------------------------------------------
+# test
+# ---------------------------------------------------------------------------------------------
+
+[tasks.test]
+description = "Fast tests: pytest as job py (no perf, no slow) and Vitest"
+depends = ["test:py", "test:client"]
+
+[tasks."test:py"]
+description = "pytest -n auto -m 'not perf and not slow' (extra pytest arguments after --)"
+run = 'uv run pytest -n auto -m "not perf and not slow" -q --tb=short'
+
+[tasks."test:client"]
+description = "Vitest of the client"
+run = "pnpm --silent -C apps/client test --reporter=dot"
+
+[tasks."test:all"]
+description = "All pytest tests in one go, including slow and perf (serial)"
+run = "uv run pytest -q --tb=short"
+
+[tasks."test:slow"]
+description = "Long full-match bot tests (mark slow, job py-slow)"
+run = 'uv run pytest -n auto -m slow -q --tb=short'
+
+[tasks."test:perf"]
+description = "Benchmarks and tick lag (mark perf, serial: xdist switches measurements off)"
+run = "uv run pytest -m perf -q --tb=short --benchmark-columns=mean,max --benchmark-name=short"
+
+[tasks."test:bench"]
+description = "Simulation benchmarks and the budgets of section 12 (docs/perf.md)"
+run = "uv run pytest packages/sim/tests/test_benchmarks.py -q --tb=short --benchmark-columns=mean,max --benchmark-name=short"
+
+[tasks."golden:check"]
+description = "Golden replays re-simulate and are frozen against a base (arg: git ref, default origin/develop)"
+usage = 'arg "[base]" default="origin/develop"'
+run = [
+  "uv run python -m gow_sim.replay check packages/sim/tests/golden",
+  "uv run python scripts/check_golden_frozen.py {{usage.base}}",
+]
+
+[tasks."golden:generate"]
+description = "Create golden replays v{SIM_VERSION} after a SIM_VERSION bump (never overwrites)"
+run = "uv run python packages/sim/tests/golden/generate.py"
+
+[tasks.ci]
+description = "Everything job py and job web check, locally: check, test, perf, golden, client build"
+depends = ["check", "test", "test:perf", "golden:check", "build"]
+
+# ---------------------------------------------------------------------------------------------
+# development
+# ---------------------------------------------------------------------------------------------
+
+[tasks.dev]
+description = "Dev servers: game server (:8000) and client (http://localhost:5173), Ctrl-C stops both"
+depends = ["dev:server", "dev:client"]
+
+[tasks."dev:server"]
+description = "Game server with reload (uv run gow-server --reload)"
+run = "uv run gow-server --reload"
+
+[tasks."dev:client"]
+description = "Vite dev server of the client"
+run = "pnpm -C apps/client dev"
+
+[tasks.build]
+description = "Production build of the client"
+run = "pnpm --silent -C apps/client build"
+
+[tasks.preview]
+description = "Production build of the client served locally under the target CSP"
+depends = ["build"]
+run = "pnpm -C apps/client preview"
+
+[tasks."regen:protocol"]
+description = "Regenerate protocol.schema.json and protocol.gen.ts from the Pydantic models"
+run = [
+  "uv run python scripts/export_schema.py",
+  "pnpm --silent -C apps/client gen:protocol",
+]
+
+[tasks."regen:api"]
+description = "Regenerate openapi.json of the server and api.gen.ts"
+run = [
+  "uv run python scripts/export_openapi.py",
+  "pnpm --silent -C apps/client gen:api",
+]
+
+[tasks.regen]
+description = "Regenerate protocol and API types"
+depends = ["regen:protocol", "regen:api"]
+
+[tasks."db:migrate"]
+description = "Apply Alembic migrations (the server also does it at startup)"
+run = "uv run alembic -c apps/server/alembic.ini upgrade head"
+
+[tasks."db:revision"]
+description = "New Alembic migration from the models (arg: message)"
+usage = 'arg "<message>"'
+run = 'uv run alembic -c apps/server/alembic.ini revision --autogenerate -m "{{usage.message}}"'
+
+# ---------------------------------------------------------------------------------------------
+# maps and balance
+# ---------------------------------------------------------------------------------------------
+
+[tasks.maps]
+description = "Validate the maps (alias of maps:validate)"
+depends = ["maps:validate"]
+
+[tasks."maps:validate"]
+description = "gow-maps validate maps/*.json"
+run = "uv run gow-maps validate maps/*.json"
+
+[tasks."maps:validate-warehouse"]
+description = "Validate with the warehouse check of rulesets/mvp-1.toml (DEC-26, #265: arteriya and pautina fail now)"
+run = "uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json"
+
+[tasks."maps:preview"]
+description = "Draw maps/<name>.preview.png"
+run = "uv run gow-maps preview maps/*.json"
+
+[tasks."maps:bake"]
+description = "Bake maps/<name>.bg.png (after any map edit)"
+run = "uv run gow-maps bake maps/*.json"
+
+[tasks."maps:mirror"]
+description = "Build maps/<name>.json from maps/src/<name>.half.json (arg: name)"
+usage = 'arg "<name>"'
+run = "uv run gow-maps mirror maps/src/{{usage.name}}.half.json -o maps/{{usage.name}}.json"
+
+[tasks.tournament]
+description = "Bot tournament (defaults: all maps, all bots, 100 seeds, 8 jobs, mvp-0; override after --)"
+run = "uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-0.toml"
+
+[tasks.report]
+description = "Balance report from a tournament result (arg: file, default docs/balance/latest.jsonl)"
+usage = 'arg "[file]" default="docs/balance/latest.jsonl"'
+run = "uv run gow-bots report {{usage.file}}"
+
+# ---------------------------------------------------------------------------------------------
+# docker stacks
+#
+# Three compose projects never touch each other:
+#   skill-based-front  the owner's stack (`stack`, `stack:reset`)      http://localhost:8080
+#   sbf-agent          the agents' stack (`stack:agent`)               http://localhost:18080
+#   sbf-e2e            the stack of `e2e`                              http://localhost:18082
+# AGENTS.md forbids agents `stack` and `stack:reset`. Parallel agents on one machine set
+# SBF_AGENT_PROJECT and SBF_AGENT_HTTP_PORT / SBF_AGENT_HTTPS_PORT (the same for SBF_E2E_*).
+# ---------------------------------------------------------------------------------------------
+
+[tasks.stack]
+description = "OWNER ONLY, agents never run it: prod stack on :8080/:8443 (arg: ruleset, default mvp-1). POSIX shell"
+usage = 'arg "[ruleset]" default="mvp-1"'
+env = { SITE_ADDRESS = ":80", HTTP_PORT = "8080", HTTPS_PORT = "8443" }
+run = "GOW_RULESET_PATH=rulesets/{{usage.ruleset}}.toml docker compose up --build -d --wait"
+
+[tasks."stack:reset"]
+description = "OWNER ONLY, agents never run it: stack down, delete the gow-data volume, up again (arg: ruleset). POSIX shell"
+usage = 'arg "[ruleset]" default="mvp-1"'
+env = { SITE_ADDRESS = ":80", HTTP_PORT = "8080", HTTPS_PORT = "8443" }
+run = [
+  "docker compose down",
+  "docker volume rm --force skill-based-front_gow-data",
+  "GOW_RULESET_PATH=rulesets/{{usage.ruleset}}.toml docker compose up --build -d --wait",
+]
+
+[tasks."stack:agent"]
+description = "Agents' own stack: project sbf-agent on http://localhost:18080 (arg: ruleset, default mvp-1). POSIX shell"
+usage = 'arg "[ruleset]" default="mvp-1"'
+env = { SITE_ADDRESS = ":80", HTTP_PORT = "{{get_env(name='SBF_AGENT_HTTP_PORT', default='18080')}}", HTTPS_PORT = "{{get_env(name='SBF_AGENT_HTTPS_PORT', default='18443')}}" }
+run = "GOW_RULESET_PATH=rulesets/{{usage.ruleset}}.toml docker compose -p {{get_env(name='SBF_AGENT_PROJECT', default='sbf-agent')}} --progress quiet up --build -d --wait --wait-timeout 300"
+
+[tasks."stack:agent:down"]
+description = "Stop the agents' stack and delete its volumes (only project sbf-agent)"
+env = { HTTP_PORT = "{{get_env(name='SBF_AGENT_HTTP_PORT', default='18080')}}", HTTPS_PORT = "{{get_env(name='SBF_AGENT_HTTPS_PORT', default='18443')}}" }
+run = "docker compose -p {{get_env(name='SBF_AGENT_PROJECT', default='sbf-agent')}} --progress quiet down --volumes --remove-orphans"
+
+[tasks.smoke]
+description = "deploy/smoke.sh against the agents' project (builds, restarts, checks through Caddy; needs bash)"
+env = { COMPOSE_PROJECT_NAME = "{{get_env(name='SBF_AGENT_PROJECT', default='sbf-agent')}}", HTTP_PORT = "{{get_env(name='SBF_AGENT_HTTP_PORT', default='18080')}}", HTTPS_PORT = "{{get_env(name='SBF_AGENT_HTTPS_PORT', default='18443')}}" }
+run = "bash deploy/smoke.sh"
+depends_post = ["stack:agent:down"]
+
+[tasks."e2e:browser"]
+description = "Install the Chromium of Playwright (once, quick when present)"
+depends = ["setup:e2e"]
+run = "pnpm --silent -C e2e exec playwright install chromium"
+
+[tasks."e2e:up"]
+description = "Own e2e stack (compose project sbf-e2e, ruleset test-short) on http://localhost:18082"
+env = { HTTP_PORT = "{{get_env(name='SBF_E2E_HTTP_PORT', default='18082')}}", HTTPS_PORT = "{{get_env(name='SBF_E2E_HTTPS_PORT', default='18445')}}", SITE_ADDRESS = ":80" }
+run = "docker compose -p {{get_env(name='SBF_E2E_PROJECT', default='sbf-e2e')}} -f compose.yaml -f e2e/compose.e2e.yaml --progress quiet up --build -d --wait --wait-timeout 300"
+
+[tasks."e2e:down"]
+description = "Stop the e2e stack and delete its volumes"
+env = { HTTP_PORT = "{{get_env(name='SBF_E2E_HTTP_PORT', default='18082')}}", HTTPS_PORT = "{{get_env(name='SBF_E2E_HTTPS_PORT', default='18445')}}" }
+run = "docker compose -p {{get_env(name='SBF_E2E_PROJECT', default='sbf-e2e')}} -f compose.yaml -f e2e/compose.e2e.yaml --progress quiet down --volumes --remove-orphans"
+
+[tasks.e2e]
+description = "Playwright e2e: own stack up, two browsers play a match on test-short, stack removed (even on failure)"
+depends = ["e2e:browser", "e2e:up"]
+env = { E2E_BASE_URL = "http://localhost:{{get_env(name='SBF_E2E_HTTP_PORT', default='18082')}}" }
+run = "pnpm -C e2e test"
+depends_post = ["e2e:down"]

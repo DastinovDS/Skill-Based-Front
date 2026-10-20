@@ -71,52 +71,94 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 
 ## 3. Команды
 
-Колонка «с» — issue, после которого команда начинает работать.
+**Единственный источник команд и версий инструментов: `mise.toml` в корне** ([mise](https://mise.jdx.dev)).
+Версии node, pnpm и uv задаёт `[tools]`; `mise run <задача>` сам ставит недостающее и подставляет их в `PATH`.
+Не запускай `uv`, `pnpm`, `ruff` и остальное «голым» из системы, если для этого есть задача: версии могут разойтись.
+Список задач: `mise tasks`; аргументы задачи: `mise run <задача> --help`; лишние аргументы инструмента после `--`
+(`mise run test:py -- -k combat -vv`). Вывод по умолчанию тихий (только то, что печатают инструменты, ошибки не скрыты);
+метки задач возвращает `mise run -o prefix <задача>`.
 
-| Команда | Что делает | С |
+Новая или изменённая команда проекта правится в `mise.toml` и в этой таблице в том же PR. Если задача из таблицы
+не работает, это баг: почини её. CI пока вызывает инструменты напрямую (перевод на mise: отдельный issue); задачи
+`check`, `test`, `test:perf`, `golden:check` повторяют то, что гоняют jobs `py` и `web`.
+
+### Для агентов
+
+- **Запускай только `mise run ...`** (или `mise exec -- <команда>` для разовой команды в версиях проекта).
+  Активация mise в профиле оболочки не нужна: `mise run` и `mise exec` работают в неинтерактивной оболочке
+  (проверено: `env -i HOME=$HOME PATH=/usr/bin:/bin:/opt/homebrew/bin sh -c 'mise run check:e2e'`). Если `mise` нет в
+  `PATH`, вызови его по полному пути (Homebrew на Apple Silicon: `/opt/homebrew/bin/mise`).
+- **Новый worktree требует доверия к `mise.toml`**, иначе любая команда падает с «Config files ... are not trusted».
+  Один раз на worktree: `mise trust` (в каталоге worktree). Либо переменная окружения, которая доверяет всем конфигам
+  под каталогом: `MISE_TRUSTED_CONFIG_PATHS=/путь/к/Pet_Game-wt` (покрывает все worktree сразу). Файл `mise.toml`
+  читай до доверия, если он менялся не тобой.
+- **Стеки docker.** Стек владельца (`stack`, `stack:reset`, проект `skill-based-front`, порты 8080/8443) **агентам
+  запрещён: не запускай `stack` и `stack:reset`**, они пересоздают стек и стирают базу владельца. Для ручной проверки
+  и смоука есть свои стеки: `stack:agent` (проект `sbf-agent`, `http://localhost:18080`, останавливается
+  `stack:agent:down`), `smoke` (тот же проект) и `e2e` (проект `sbf-e2e`, порт 18082, сам убирает стек). Они не
+  пересекаются со стеком владельца ни по имени проекта, ни по портам, ни по томам. Параллельным агентам на одной
+  машине: задай разные `SBF_AGENT_PROJECT`, `SBF_AGENT_HTTP_PORT`, `SBF_AGENT_HTTPS_PORT` (и `SBF_E2E_*` для `e2e`).
+  Прямые `docker compose ...` без `-p` попадают в стек владельца: не используй их (`docker compose down` там тоже).
+  Агентам также нельзя `deploy/deploy-test.sh`, `deploy/deploy.sh`, `deploy/backup.sh`, `deploy/restore.sh`
+  (они работают с проектом `skill-based-front`).
+- Перед пушем: `mise run check` и `mise run test` (плюс `test:perf`, `golden:check` и `build`, если менял
+  симуляцию или клиент; всё вместе: `mise run ci`).
+
+### Задачи
+
+| Задача | Что делает | С |
 |---|---|---|
-| `uv sync --locked` | установить Python-зависимости | INF-01 |
-| `uv run ruff check . && uv run ruff format --check .` | линтер и формат | INF-02 |
-| `uv run pyright` | проверка типов (strict) | INF-02 |
-| `uv run lint-imports` | границы пакетов | INF-02 |
-| `uv run pytest` (`HYPOTHESIS_PROFILE=ci` в CI) | тесты, всё подряд (локально) | INF-02 |
-| `uv run pytest -n auto -m "not perf and not slow"` | быстрый параллельный прогон (pytest-xdist); так идёт обязательный job `py` | INF-02 |
-| `uv run pytest -m perf` | бенчмарки и tick lag (последовательно, не под `-n`: xdist отключает замеры); шаг job `py` | SIM-15 |
-| `uv run pytest -n auto -m slow` | длинные тесты полных матчей ботов (доли побед по нескольким seed); не обязательный job `py-slow` | BOT-04 |
-| `pnpm -C apps/client install --frozen-lockfile` | установить клиент | INF-03 |
-| `pnpm -C apps/client dev` | dev-сервер клиента | INF-03 |
-| `pnpm -C apps/client lint && pnpm -C apps/client check && pnpm -C apps/client test && pnpm -C apps/client build` | проверки клиента | INF-03 |
-| `pnpm -C apps/client check:i18n` | строки интерфейса только в словарях, одинаковые ключи ru и en (входит в `test`) | CLI-11 |
-| `pnpm -C e2e install --frozen-lockfile && pnpm -C e2e lint && pnpm -C e2e check` | установить и проверить E2E-пакет (prettier, tsc) | QA-02 |
-| `docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d --wait && pnpm -C e2e test` | E2E: два браузера играют матч по инвайту на `test-short` против настоящего стека (`E2E_BASE_URL`, если порт не 80; README, «E2E») | QA-02 |
-| `pnpm -C apps/client build && pnpm -C apps/client preview` | прод-сборка локально под целевым CSP (`apps/client/csp.ts`) | INF-03 |
-| `uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol` | перегенерация схемы и TS-типов | PRO-02 |
-| `uv run python scripts/export_openapi.py && pnpm -C apps/client gen:api` | перегенерация OpenAPI сервера (`apps/server/openapi.json`) и TS-типов HTTP API (`api.gen.ts`) | CLI-09 |
-| `uv run gow-maps validate maps/*.json` | проверка карт | MAP-02 |
-| `uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json` | плюс проверка `warehouse`: стартовый склад не больше склада рулсета с `city_upgrades` (DEC-26, п. 5); сейчас `arteriya` и `pautina` её не проходят (малые города со `start_stock = 2`, симуляция обрезает до 1, вопрос в #265) | #265 |
-| `uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json` | собрать карту из половины (половины лежат в `maps/src/`) | MAP-03 |
-| `uv run gow-maps preview maps/*.json` | нарисовать превью `maps/<name>.preview.png` | MAP-04 |
-| `uv run gow-maps bake maps/*.json` | запечь фон `maps/<name>.bg.png` (после любой правки карты) | MAP-05 |
-| `uv run pytest packages/sim/tests/test_benchmarks.py` | бенчмарки симуляции и проверка бюджетов раздела 12 (`docs/perf.md`) | SIM-15 |
-| `uv run python -m gow_sim.replay check packages/sim/tests/golden/v*/**` | проверить реплеи | SIM-16 |
-| `uv run python packages/sim/tests/golden/generate.py` | создать золотые реплеи `v{SIM_VERSION}` (после повышения `SIM_VERSION`; существующий каталог не перезаписывает) | SIM-16 |
-| `uv run python scripts/check_golden_frozen.py [base]` | золотые файлы из `base` не изменены и не удалены (CI: `HEAD^1`) | SIM-16 |
-| `uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-0.toml` | турнир ботов | BOT-04 |
-| `uv run gow-bots report docs/balance/latest.jsonl` | отчёт баланса | BOT-05 |
-| `uv run gow-server --reload` | сервер локально | SRV-01 |
-| `uv run alembic -c apps/server/alembic.ini upgrade head` | применить миграции БД (сервер делает это и сам при старте) | DB-01 |
-| `uv run alembic -c apps/server/alembic.ini revision --autogenerate -m "<что>"` | новая миграция из моделей `gow_server.models` | DB-01 |
-| `docker compose up --build -d` | прод-стек локально: `caddy` (клиент, прокси) и `app` (сервер), http://localhost | OPS-01 |
-| `deploy/smoke.sh` | собрать и поднять стек, проверить его через Caddy (здоровье, миграции, данные после перезапуска, `check-caddy.sh`, `check-ws-reload.sh`) | OPS-01 |
-| `deploy/check-caddy.sh` | заголовки безопасности (CSP равна `apps/client/csp.ts`), кэш, сжатие, маршруты работающего стека; `BASE_URL=https://...` для TLS | OPS-02 |
-| `deploy/check-ws-reload.sh` | WebSocket матча через Caddy переживает `caddy reload` (настоящий `/ws/match`, ответ 4001 на `hello` старой версии) | OPS-02 |
-| `deploy/deploy.sh [ref]` | деплой на сервере: сборка, осушение матчей (`DEPLOY_DRAIN_TIMEOUT`), бэкап `predeploy`, запуск по healthcheck, откат с восстановлением бэкапа при сбое (`docs/ops/deploy.md`) | OPS-03 |
-| `deploy/backup.sh [label]`, `deploy/restore.sh <archive>` | онлайн-бэкап тома `gow-data` (`VACUUM INTO` + реплеи) и восстановление | OPS-03 |
-| `deploy/alert-forward.sh` | пересылка алертов сервера (`match_crashed`, `tick_lag`) из лога контейнера в вебхук `ALERT_WEBHOOK_URL`; метрики: `GET /internal/metrics` внутри контейнера (`docs/ops/deploy.md`, «Наблюдаемость») | OPS-04 |
-| `uv run gow-admin show\|rename\|block\|unblock <игрок> [ник]` (в стеке: `docker compose exec app gow-admin ...`) | админ-скрипт: показать, переименовать, заблокировать или разблокировать игрока по id или нику (`docs/ops/deploy.md`, раздел 8) | MOD-01 |
-| `deploy/deploy-test.sh` | локальная проверка деплоя, отката сломанного релиза, бэкапа и восстановления в чистый том | OPS-03 |
+| `setup` | зависимости: `setup:py` (`uv sync --locked`), `setup:client`, `setup:e2e` (`pnpm install --frozen-lockfile`) | INF-01 |
+| `hooks` | один раз на клон: `pre-commit install` (ruff перед каждым коммитом) | INF-02 |
+| `check` | все статические проверки: `check:py`, `check:client`, `check:e2e` | INF-02 |
+| `check:py` | ruff (проверка и формат), pyright (strict), lint-imports (границы пакетов), `gow-maps validate` карт | INF-02 |
+| `check:client` | eslint и prettier, svelte-check и tsc клиента | INF-03 |
+| `check:e2e` | prettier и tsc пакета `e2e/` | QA-02 |
+| `check:i18n` | строки интерфейса только в словарях, одинаковые ключи ru и en (входит в `test:client`) | CLI-11 |
+| `test` | быстрый прогон: `test:py` и `test:client` | INF-02 |
+| `test:py` | `pytest -n auto -m "not perf and not slow"` (pytest-xdist; так идёт обязательный job `py`; в CI `HYPOTHESIS_PROFILE=ci`) | INF-02 |
+| `test:client` | Vitest клиента | INF-03 |
+| `test:all` | весь pytest подряд, без `-n` (медленно) | INF-02 |
+| `test:slow` | длинные тесты полных матчей ботов (метка `slow`, не обязательный job `py-slow`) | BOT-04 |
+| `test:perf` | бенчмарки и tick lag (метка `perf`), строго последовательно: xdist отключает замеры; шаг job `py` | SIM-15 |
+| `test:bench` | бенчмарки симуляции и бюджеты раздела 12 (`docs/perf.md`) | SIM-15 |
+| `golden:check` | золотые реплеи пересимулируются (`python -m gow_sim.replay check`) и не изменены относительно базы (`scripts/check_golden_frozen.py`; аргумент: git-ссылка, по умолчанию `origin/develop`; CI: `HEAD^1`) | SIM-16 |
+| `golden:generate` | создать золотые реплеи `v{SIM_VERSION}` (после повышения `SIM_VERSION`; существующий каталог не перезаписывает) | SIM-16 |
+| `ci` | то, что гоняют jobs `py` и `web`, локально: `check`, `test`, `test:perf`, `golden:check`, `build` | #301 |
+| `dev` | dev-серверы вместе: игровой сервер (`dev:server`, порт 8000) и клиент (`dev:client`, `http://localhost:5173`, Vite проксирует `/api` и `/ws`) | SRV-01 |
+| `build` | прод-сборка клиента | INF-03 |
+| `preview` | `build` и локальный просмотр прод-сборки под целевым CSP (`apps/client/csp.ts`) | INF-03 |
+| `regen`, `regen:protocol`, `regen:api` | перегенерация схемы протокола и TS-типов (`protocol.gen.ts`) и OpenAPI сервера с `api.gen.ts` | PRO-02, CLI-09 |
+| `db:migrate` | применить миграции Alembic (сервер делает это и сам при старте) | DB-01 |
+| `db:revision` | новая миграция из моделей `gow_server.models` (аргумент: сообщение) | DB-01 |
+| `maps`, `maps:validate` | `gow-maps validate maps/*.json` | MAP-02 |
+| `maps:validate-warehouse` | то же с `--ruleset rulesets/mvp-1.toml`: стартовый склад не больше склада рулсета с `city_upgrades` (DEC-26, п. 5); сейчас `arteriya` и `pautina` её не проходят (малые города со `start_stock = 2`, симуляция обрезает до 1, вопрос в #265) | #265 |
+| `maps:mirror` | собрать `maps/<имя>.json` из половины `maps/src/<имя>.half.json` (аргумент: имя) | MAP-03 |
+| `maps:preview` | нарисовать превью `maps/<имя>.preview.png` | MAP-04 |
+| `maps:bake` | запечь фон `maps/<имя>.bg.png` (после любой правки карты) | MAP-05 |
+| `tournament` | турнир ботов (по умолчанию все карты и боты, 100 seeds, 8 процессов, `mvp-0`; другое после `--`, например `-- --seeds 20 --ruleset rulesets/mvp-1.toml`) | BOT-04 |
+| `report` | отчёт баланса (аргумент: файл, по умолчанию `docs/balance/latest.jsonl`) | BOT-05 |
+| `stack` | **только владелец.** Прод-стек на `http://localhost:8080` (HTTPS 8443, `SITE_ADDRESS=:80`; порты 80/443 заняты другим проектом), аргумент: рулсет (по умолчанию `mvp-1`). Нужна POSIX-оболочка | OPS-01 |
+| `stack:reset` | **только владелец.** `docker compose down`, удаление тома `gow-data` (база и реплеи), снова `up`; владелец стирает том после каждого обновления намеренно | OPS-01 |
+| `stack:agent`, `stack:agent:down` | **стек агентов:** проект `sbf-agent`, `http://localhost:18080`, аргумент: рулсет (по умолчанию `mvp-1`); `down` удаляет его тома. Нужна POSIX-оболочка | OPS-01 |
+| `smoke` | `deploy/smoke.sh` на проекте `sbf-agent` (сборка, запуск, перезапуск с томом, проверка через Caddy, `check-caddy.sh`, `check-ws-reload.sh`; в конце стек убирается); то же делает CI job `docker`. Нужен bash | OPS-01 |
+| `e2e` | E2E: свой стек (`e2e:up`, проект `sbf-e2e`, `e2e/compose.e2e.yaml`, рулсет `test-short`, `http://localhost:18082`), Chromium Playwright (`e2e:browser`), два браузера играют матч по инвайту, стек убирается (`e2e:down`), даже если тест упал; если упал сам `e2e:up`, запусти `e2e:down` | QA-02 |
 
-Если команда из этой таблицы не работает после своего issue — это баг: почини её или обнови таблицу в том же PR.
+### Вне mise (запускаются напрямую)
+
+Скрипты развёртывания работают с сервером или с прод-проектом compose и принимают свои переменные; агентам
+запрещены те, что трогают проект `skill-based-front` (см. выше). Подробности: `docs/ops/deploy.md`.
+
+| Команда | Что делает | Почему вне mise |
+|---|---|---|
+| `deploy/deploy.sh [ref]` | деплой на сервере: сборка, осушение матчей (`DEPLOY_DRAIN_TIMEOUT`), бэкап `predeploy`, запуск по healthcheck, откат с восстановлением бэкапа при сбое | запускается на VPS, где mise нет; работает с проектом `skill-based-front` |
+| `deploy/backup.sh [label]`, `deploy/restore.sh <archive>` | онлайн-бэкап тома `gow-data` (`VACUUM INTO` + реплеи) и восстановление | то же |
+| `deploy/deploy-test.sh` | локальная проверка деплоя, отката сломанного релиза, бэкапа и восстановления в чистый том (`HTTP_PORT=8080 HTTPS_PORT=8443`) | жёстко завязан на проект `skill-based-front` (деплоит поверх стека владельца), его гоняет CI job `docker`; локально только владелец |
+| `deploy/check-caddy.sh` | заголовки безопасности (CSP равна `apps/client/csp.ts`), кэш, сжатие, маршруты работающего стека; `BASE_URL=https://...` для TLS (входит в `smoke`) | годится и для прода (`BASE_URL`), на машинах без mise |
+| `deploy/check-ws-reload.sh` | WebSocket матча через Caddy переживает `caddy reload` (входит в `smoke`) | перезагружает Caddy через `docker compose exec` в проекте из окружения |
+| `deploy/alert-forward.sh` | пересылка алертов сервера (`match_crashed`, `tick_lag`) из лога контейнера в вебхук `ALERT_WEBHOOK_URL`; метрики: `GET /internal/metrics` внутри контейнера (`docs/ops/deploy.md`, «Наблюдаемость») | демон на сервере |
+| `docker compose exec app gow-admin show\|rename\|block\|unblock <игрок> [ник]` (локально без стека: `uv run gow-admin ...`) | админ-скрипт: показать, переименовать, заблокировать или разблокировать игрока по id или нику (`docs/ops/deploy.md`, раздел 8) | работает в контейнере прода; своя база и свой набор аргументов |
+| `docker compose up --build -d` | прод-стек как есть, на 80/443 | для владельца это `stack`, для агентов `stack:agent`: голая команда попадает в проект владельца |
 
 ---
 
@@ -360,7 +402,7 @@ async def run(self) -> None:
 | поле в `PlayerView` | тест тумана на это поле |
 | протокол | `PROTOCOL_VERSION`++; перегенерация TS-типов |
 | схему БД | миграция Alembic |
-| команду из раздела 3 | обновить раздел 3 |
+| команду проекта | `mise.toml` и раздел 3 |
 
 ---
 
