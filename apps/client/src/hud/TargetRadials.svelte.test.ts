@@ -9,6 +9,7 @@ import type { MapAnchors } from '../render/anchors.ts';
 import CityRadial from './CityRadial.svelte';
 import { DEV_RULES, devSnapshot } from './devFeed.ts';
 import GroupRadial from './GroupRadial.svelte';
+import type { NodeInfo } from './hudData.ts';
 import { HudState } from './hudState.svelte.ts';
 
 const snapshot = devSnapshot(DEFAULT_MAP, DEV_RULES, 600);
@@ -31,7 +32,11 @@ describe('the radial menus of a city and of a group', () => {
     document.body.innerHTML = '';
   });
 
-  function render(queue: number | null = 0, rules = DEV_RULES) {
+  function render(
+    queue: number | null = 0,
+    rules = DEV_RULES,
+    built: Pick<NodeInfo, 'hasBarracks' | 'warehouseLevel'> | null = null,
+  ) {
     const hud = new HudState({
       me: 0,
       nicks: ['Danya', 'Bot'],
@@ -47,11 +52,21 @@ describe('the radial menus of a city and of a group', () => {
       book: new OrderBook(),
       send: (cmd) => sent.push(cmd),
     });
+    // The city the menu knows about: the selected node of the snapshot with the facts over it.
+    if (built !== null) hud.select({ kind: 'node', id: home });
+    const node = hud.current?.node ?? null;
+    const city = built === null || node === null ? node : { ...node, ...built };
     const target = document.body.appendChild(document.createElement('div'));
     mounted.push(
       mount(CityRadial, {
         target,
-        props: { orders, anchors, building: null, queue, city: hud.current?.node ?? null },
+        props: {
+          orders,
+          anchors,
+          building: null,
+          queue,
+          city,
+        },
       }),
       mount(GroupRadial, {
         target,
@@ -134,6 +149,32 @@ describe('the radial menus of a city and of a group', () => {
     expect(texts(target).slice(2)).toEqual(['⌂3 CP', '▤2 CP']);
     orders.chooseCity('warehouse');
     expect(sent).toEqual([{ type: 'upgrade_warehouse', node: home }]);
+  });
+
+  it('a built barracks and a top-level warehouse leave the city menu (DEC-26)', () => {
+    setLocale('en');
+    const rules = {
+      ...DEV_RULES,
+      city_upgrades: { ...DEV_RULES.city_upgrades, enabled: true },
+    };
+    const labels = (target: HTMLElement): (string | null)[] =>
+      [...target.querySelectorAll('[role="menuitem"]')].map((i) => i.getAttribute('aria-label'));
+    const top = rules.city_upgrades.warehouse_max_level;
+
+    const barracks = render(0, rules, { hasBarracks: true, warehouseLevel: 0 });
+    barracks.orders.click({ kind: 'node', id: home }, false);
+    flushSync();
+    expect(labels(barracks.target)).toEqual(['Recruit', 'Roads', 'Warehouse']);
+
+    const warehouse = render(0, rules, { hasBarracks: false, warehouseLevel: top });
+    warehouse.orders.click({ kind: 'node', id: home }, false);
+    flushSync();
+    expect(labels(warehouse.target)).toEqual(['Recruit', 'Roads', 'Barracks']);
+
+    const both = render(0, rules, { hasBarracks: true, warehouseLevel: top });
+    both.orders.click({ kind: 'node', id: home }, false);
+    flushSync();
+    expect(labels(both.target)).toEqual(['Recruit', 'Roads']);
   });
 
   it('the group menu dims merge for a lone group and speaks Russian too', () => {

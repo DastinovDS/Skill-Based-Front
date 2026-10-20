@@ -2,6 +2,7 @@
   import { getLocale, t, tf } from '../i18n/index.ts';
   import type { CityChoice, OrderController } from '../match/orderController.ts';
   import type { MapAnchors } from '../render/anchors.ts';
+  import { cityChoices } from './cityChoices.ts';
   import { formatCentis } from './format.ts';
   import type { NodeInfo } from './hudData.ts';
   import Radial from './Radial.svelte';
@@ -28,7 +29,10 @@
   // A sector shows only its glyph and its price (the name is the accessible name); the reason a
   // sector is off is on the map and in the panel, never a line of text here.
   const upgrades = $derived(orders.cityUpgrades);
-  const count = $derived(upgrades.enabled ? 4 : 2);
+  // A sector with nothing left to do (the barracks is built, the warehouse is at its top level)
+  // is not drawn; the others spread evenly around the ring.
+  const choices = $derived(cityChoices(upgrades, city));
+  const count = $derived(choices.length);
   const items = $derived.by<RadialItem[]>(() => {
     const angles = spreadAngles(count);
     const costs = orders.cityCosts;
@@ -39,54 +43,52 @@
     const noBarracks = upgrades.enabled && city?.hasBarracks === false;
     // Any build of the city (a road, the barracks or the warehouse) holds the others back.
     const busy = city?.building != null || building !== null;
-    const level = city?.warehouseLevel ?? 0;
     const price = (centis: number): string[] =>
       centis > 0 ? [tf('city.cost', { cost: cp(centis) })] : [];
-    const list: RadialItem[] = [
-      {
-        id: 'recruit',
-        angle: angles[0] ?? 270,
-        sign: '+',
-        label: t('city.recruit'),
-        lines: price(costs.recruit),
-        key: 'R',
-        compact: true,
-        disabled: noBarracks || poor(costs.recruit) || queued >= orders.recruitQueueMax,
-      },
-      {
-        id: 'roads',
-        angle: angles[1] ?? 90,
-        sign: '≡',
-        label: t('city.roads'),
-        lines: price(costs.road),
-        key: 'U',
-        compact: true,
-        disabled: busy || poor(costs.road),
-      },
-    ];
-    if (upgrades.enabled) {
-      list.push(
-        {
-          id: 'barracks',
-          angle: angles[2] ?? 0,
-          sign: '⌂',
-          label: t('city.barracks'),
-          lines: price(costs.barracks),
-          compact: true,
-          disabled: city?.hasBarracks !== false || busy || poor(costs.barracks),
-        },
-        {
-          id: 'warehouse',
-          angle: angles[3] ?? 0,
-          sign: '▤',
-          label: t('city.warehouse'),
-          lines: price(costs.warehouse),
-          compact: true,
-          disabled: level >= upgrades.warehouse_max_level || busy || poor(costs.warehouse),
-        },
-      );
-    }
-    return list;
+    const sector = (choice: CityChoice): Omit<RadialItem, 'angle'> => {
+      switch (choice) {
+        case 'recruit':
+          return {
+            id: 'recruit',
+            sign: '+',
+            label: t('city.recruit'),
+            lines: price(costs.recruit),
+            key: 'R',
+            compact: true,
+            disabled: noBarracks || poor(costs.recruit) || queued >= orders.recruitQueueMax,
+          };
+        case 'roads':
+          return {
+            id: 'roads',
+            sign: '≡',
+            label: t('city.roads'),
+            lines: price(costs.road),
+            key: 'U',
+            compact: true,
+            disabled: busy || poor(costs.road),
+          };
+        case 'barracks':
+          return {
+            id: 'barracks',
+            sign: '⌂',
+            label: t('city.barracks'),
+            lines: price(costs.barracks),
+            compact: true,
+            // Only a city known to lack it builds it (a built one has no sector at all).
+            disabled: city?.hasBarracks !== false || busy || poor(costs.barracks),
+          };
+        case 'warehouse':
+          return {
+            id: 'warehouse',
+            sign: '▤',
+            label: t('city.warehouse'),
+            lines: price(costs.warehouse),
+            compact: true,
+            disabled: busy || poor(costs.warehouse),
+          };
+      }
+    };
+    return choices.map((choice, i) => ({ ...sector(choice), angle: angles[i] ?? 0 }));
   });
 
   /** The ring is this wide, CSS px (a bit narrower than before: 64). */

@@ -1,0 +1,24 @@
+import type { CityChoice } from '../match/orderController.ts';
+
+/** What the radial menu of an own city needs to know about the city (a part of `NodeInfo`). */
+export interface CityState {
+  readonly hasBarracks: boolean | null;
+  readonly warehouseLevel: number | null;
+}
+
+/**
+ * The sectors of the menu of an own city, in order (DEC-26). Recruit and roads are always there;
+ * with the city development a sector that has nothing left to do is not drawn at all (it is not
+ * dimmed): the barracks once the city has one, the warehouse at its top level. An unknown state
+ * (`null`: the snapshot does not say) keeps the sector, the server decides.
+ */
+export function cityChoices(
+  development: { readonly enabled: boolean; readonly warehouse_max_level: number },
+  city: CityState | null,
+): CityChoice[] {
+  const choices: CityChoice[] = ['recruit', 'roads'];
+  if (!development.enabled) return choices;
+  if (city?.hasBarracks !== true) choices.push('barracks');
+  if ((city?.warehouseLevel ?? 0) < development.warehouse_max_level) choices.push('warehouse');
+  return choices;
+}

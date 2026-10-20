@@ -3,16 +3,20 @@ import type { MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.t
 import type { CityBuildTicks } from './source.ts';
 import type { Point } from './camera.ts';
 import {
+  BARRACKS_HOUSE,
+  barracksAt,
   barTop,
   capacityRing,
   cityRadius,
   queueSlots,
   queueTop,
   ringRadius,
+  showsBarracks,
   warehouseSegments,
   type Arc,
 } from './cityLayout.ts';
 import {
+  BARRACKS_MARK,
   BAR_BASE,
   BAR_SEGMENT,
   BG,
@@ -65,6 +69,8 @@ interface CityState {
   readonly warehouseCap: number | null;
   /** Own city: share of its barracks or warehouse build done, in percent; `null`: none. */
   readonly buildPct: number | null;
+  /** Own city with the barracks (DEC-26): the house mark is drawn. */
+  readonly barracks: boolean;
 }
 
 function stateKey(s: CityState): string {
@@ -78,6 +84,7 @@ function stateKey(s: CityState): string {
     s.unitTicks,
     s.warehouseCap,
     s.buildPct,
+    s.barracks,
   ]
     .map(String)
     .join('|');
@@ -94,7 +101,7 @@ function onCircle(radius: number, angle: number): Point {
  * a dark inner ring, neutral: grey with a thin outline), the capital star, the capacity ring of
  * segments (white for own units standing there, grey otherwise; overcrowding is the alert view's
  * pulsing ring and badge, not drawn here), the warehouse bar under the ring, the recruit queue of an
- * own city above it (DEC-25) and the VP badge. The capacity is public and exact (DEC-22: fixed by
+ * own city above it (DEC-25), the barracks house of an own city (DEC-26) and the VP badge. The capacity is public and exact (DEC-22: fixed by
  * the node kind).
  *
  * Bodies share GraphicsContexts (one per kind and radius); rings and bars are redrawn when a
@@ -109,6 +116,7 @@ export class CityView {
   private readonly rings: Graphics[];
   private readonly bars: Graphics[];
   private readonly queues: Graphics[];
+  private readonly barracks: Graphics[];
   private readonly badges: (Container | null)[];
   private readonly vpLabels: Text[] = [];
   private readonly keys: string[];
@@ -139,6 +147,7 @@ export class CityView {
     this.rings = [];
     this.bars = [];
     this.queues = [];
+    this.barracks = [];
     this.badges = [];
     for (const node of map.nodes) {
       const city = new Container({ x: node.x, y: node.y, label: `node-${String(node.id)}` });
@@ -147,6 +156,7 @@ export class CityView {
       this.rings.push(city.addChild(new Graphics()));
       this.bars.push(city.addChild(new Graphics()));
       this.queues.push(city.addChild(new Graphics()));
+      this.barracks.push(city.addChild(new Graphics()));
       if (node.vp > 0) {
         const badge = city.addChild(new Container());
         badge.addChild(new Graphics(this.badge));
@@ -189,6 +199,7 @@ export class CityView {
         unitTicks: null,
         warehouseCap: null,
         buildPct: null,
+        barracks: false,
       });
     });
   }
@@ -256,6 +267,7 @@ export class CityView {
       // when the warehouse is apart from the capacity, else the capacity (DEC-22).
       warehouseCap: node.warehouse_cap ?? (cityUpgrades === null ? node.capacity : null),
       buildPct,
+      barracks: showsBarracks(node.has_barracks, cityUpgrades !== null),
     };
   }
 
@@ -310,12 +322,14 @@ export class CityView {
     const ring = this.rings[id];
     const bar = this.bars[id];
     const queue = this.queues[id];
+    const barracks = this.barracks[id];
     if (
       node === undefined ||
       body === undefined ||
       ring === undefined ||
       bar === undefined ||
-      queue === undefined
+      queue === undefined ||
+      barracks === undefined
     ) {
       return;
     }
@@ -336,6 +350,8 @@ export class CityView {
     ring.clear();
     bar.clear();
     queue.clear();
+    barracks.clear();
+    if (state.barracks) this.drawBarracks(barracks, radius);
     if (state.queue !== null && state.queue > 0 && state.unitTicks !== null) {
       this.drawQueue(queue, radius, state.queue, state.progress, state.unitTicks);
     }
@@ -411,6 +427,15 @@ export class CityView {
         g.rect(slot.x, top + 1, width * slot.fill, height).fill(slot.fill >= 1 ? WARN : YOU);
       }
     }
+  }
+
+  /** The barracks of an own city (DEC-26): a dark badge with a house, left of the ring. */
+  private drawBarracks(g: Graphics, radius: number): void {
+    const at = barracksAt(radius);
+    g.circle(at.x, at.y, BARRACKS_MARK.radius)
+      .fill(BARRACKS_MARK.fill)
+      .stroke(BARRACKS_MARK.stroke);
+    g.poly(BARRACKS_HOUSE.flatMap(([x, y]) => [at.x + x, at.y + y])).fill(PAPER);
   }
 
   /** The barracks or warehouse build of an own city (DEC-26): a thin bar above the queue mark. */
