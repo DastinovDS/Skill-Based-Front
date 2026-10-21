@@ -1,7 +1,8 @@
-"""Supply rework: transit, front markers, rear minimum, donors (DEC-28, #290; implementation #292).
+"""Supply rework: transit, front markers, rear minimum, donors, roads for CP (DEC-28, #290;
+implementation #292 and #306; the owner's answers of #309).
 
-Table tests of the supply examples 1-9 of DEC-28 (mechanics.md, section 8, block DEC-28; the
-road examples 10-11 belong to #306). Expected values come from the decision, not from the code.
+Table tests of the examples 1-14 of DEC-28 (mechanics.md, section 8, block DEC-28; 10-11: roads,
+item 7; 12-14: the answers of #309). Expected values come from the decision, not from the code.
 The setting of the examples unless said otherwise: ``mvp-1``, warehouse of the capital K 6, of
 the cities A, B, C 2 each, ``packet_ticks`` 30 per road, ``rear_min = 1``, no markers,
 ``amount`` 1, one chain K-A-B-C.
@@ -12,6 +13,7 @@ province) with A -e4- P; the neutral provinces N = 6 and M = 7 (the centre) join
 half (player 1: 14 = K', 13 = A', ...). The roads of the chain: ``travel_ticks = 30``, level 1.
 """
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -24,13 +26,25 @@ from gow_sim.commands import (
     SetFront,
     SetRearMin,
     Transfer,
+    UpgradeRoad,
     apply_commands,
 )
-from gow_sim.maps import load_map
+from gow_sim.maps import Terrain, load_map, parse_map
 from gow_sim.ruleset import load_ruleset
-from gow_sim.state import Event, GameState, event, initial_state
+from gow_sim.state import (
+    AtNode,
+    Event,
+    GameState,
+    Group,
+    Mode,
+    Order,
+    event,
+    initial_state,
+)
+from gow_sim.systems.build import build
 from gow_sim.systems.capacity import change_owner, warehouse_capacity
-from gow_sim.systems.supply import packet_dest, supply
+from gow_sim.systems.movement import movement, path_ticks, traversal_ticks
+from gow_sim.systems.supply import edge_amount, packet_dest, supply
 
 TESTS_DIR = Path(__file__).resolve().parent
 RULES = load_ruleset(TESTS_DIR.parents[2] / "rulesets" / "mvp-1.toml")
@@ -41,7 +55,7 @@ T = 100
 
 def test_the_setting_of_the_examples() -> None:
     state = _state()
-    assert RULES.supply.dispatch_ticks == 10 and RULES.supply.base_amount == 1
+    assert RULES.supply.dispatch_ticks == 10 and RULES.supply.amount_by_level.of(1) == 1
     assert [warehouse_capacity(state, RULES, n) for n in (K, A, B, C)] == [6, 2, 2, 2]
     assert state.players[0].rear_min == 1 and state.players[0].fronts == (None, None)
 
@@ -90,7 +104,7 @@ def _stock(state: GameState, *nodes: int) -> tuple[int, ...]:
     return tuple(state.nodes[n].warehouse for n in nodes)
 
 
-def _cmd(state: GameState, cmd: SetFront | SetRearMin | Transfer) -> Ok | Reject:
+def _cmd(state: GameState, cmd: SetFront | SetRearMin | Transfer | UpgradeRoad) -> Ok | Reject:
     results, _ = apply_commands(state, RULES, [PlayerCommand(0, 0, cmd)])
     return results[0].outcome
 
@@ -252,6 +266,220 @@ def test_the_marker_city_with_less_stock_first() -> None:
     _fronts(state, A, B)
     events = _step(state)
     assert _sent(events) == [(T, K, B, 1)]  # B (0) before A (1)
+
+
+# Examples 10-11: roads for CP (item 7) --------------------------------------------------------
+
+
+def _terrain_edge(terrain: Terrain) -> GameState:
+    """The setting of examples 10 and 11: the road K-A (e0) of ``travel_ticks 60``, both ends of
+    ``terrain`` (one zone, so the time is ``travel_ticks * 100 // speed``)."""
+    state = _state()
+    mapdef = state.map
+    nodes = tuple(
+        dataclasses.replace(n, terrain=terrain) if n.id in (K, A) else n for n in mapdef.nodes
+    )
+    edges = tuple(
+        dataclasses.replace(e, travel_ticks=60) if e.id == KA else e for e in mapdef.edges
+    )
+    state.map = dataclasses.replace(mapdef, nodes=nodes, edges=edges)
+    return state
+
+
+KA = 0
+"""e0 = K-A."""
+
+
+def test_example_10_two_levels_cost_1_cp_150_ticks_each() -> None:
+    state = _state()
+    state.players[0].cp = 300
+    state.tick = T
+    assert _cmd(state, UpgradeRoad(KA)) == Ok(cost=50)
+    assert _cmd(state, UpgradeRoad(KA)) == Reject(RejectCode.EDGE_BUSY)  # one level at a time
+    state.tick = T + 149
+    assert build(state, RULES) == [] and state.edges[KA].width == 1
+    state.tick = T + 150
+    assert [e.kind for e in build(state, RULES)] == ["road_upgraded"]
+    state.tick = T + 151
+    assert _cmd(state, UpgradeRoad(KA)) == Ok(cost=50)
+    state.tick = T + 301
+    build(state, RULES)
+    assert state.edges[KA].width == 3
+    assert state.players[0].cp == 300 - 2 * 50  # 2 x 0,5 = 1 CP
+    assert edge_amount(state, RULES, KA) == 3  # amount 3 per period
+
+
+@pytest.mark.parametrize(
+    ("terrain", "level", "ticks"),
+    [
+        (Terrain.FOREST, 1, 60),
+        (Terrain.FOREST, 2, 52),  # 60 * 100 // 115
+        (Terrain.FOREST, 3, 46),  # 60 * 100 // 130
+        (Terrain.PLAINS, 3, 37),  # 125 * 130 // 100 = 162, 60 * 100 // 162
+    ],
+)
+def test_example_10_unit_speed_by_road_level(terrain: Terrain, level: int, ticks: int) -> None:
+    state = _terrain_edge(terrain)
+    assert traversal_ticks(state.map, RULES, KA, A, level) == ticks
+    state.edges[KA].width = level
+    assert path_ticks(state, RULES, (K, A)) == ticks  # the time of a path reads the level
+
+
+@pytest.mark.parametrize(("level", "ticks"), [(1, 85), (2, 75)])
+def test_example_11_mountains(level: int, ticks: int) -> None:
+    """70 * 115 // 100 = 80, 60 * 100 // 80 = 75; without the road 60 * 100 // 70 = 85."""
+    state = _terrain_edge(Terrain.MOUNTAINS)
+    assert traversal_ticks(state.map, RULES, KA, A, level) == ticks
+
+
+def _walk(state: GameState, owner: int, start: int, dest: int, upgrade_at: int | None) -> int:
+    """Ticks until a group of ``owner`` that leaves ``start`` for ``dest`` arrives; at the tick
+    ``upgrade_at`` on the way the road K-A gets level 3."""
+    gid = state.new_id()
+    state.groups[gid] = Group(gid, owner, 1, 1, Mode.ATTACK, AtNode(start))
+    state.groups[gid].order = Order((dest,), planned=False, depart_tick=state.tick + 1)
+    begin = state.tick
+    while True:
+        state.tick += 1
+        if state.tick - begin == upgrade_at:
+            state.edges[KA].width = 3
+        if any(e.kind == "group_arrived" for e in movement(state, RULES)):
+            return state.tick - begin
+
+
+def test_example_10_the_time_is_fixed_when_the_group_enters_the_edge() -> None:
+    state = _terrain_edge(Terrain.FOREST)
+    state.edges[KA].width = 3
+    assert _walk(state, 0, K, A, None) == 46
+    state = _terrain_edge(Terrain.FOREST)
+    assert _walk(state, 0, K, A, upgrade_at=10) == 60  # upgraded on the way: still level 1
+
+
+def test_example_10_the_road_speeds_up_the_enemy_too() -> None:
+    state = _terrain_edge(Terrain.FOREST)
+    state.edges[KA].width = 3
+    assert _walk(state, 1, A, K, None) == 46  # a group of player 1 on the road of player 0
+
+
+# Examples 12-14: the answers of the owner (#309) ----------------------------------------------
+
+RING_K, RING_A, RING_E, RING_B = 0, 1, 2, 3
+
+
+def _ring(eb_ticks: int) -> GameState:
+    """Example 12: the ring K-A-B and K-E-B of player 0 (A, E, B medium cities), roads of level
+    1 and 30 ticks except E-B (``eb_ticks``); a neutral province M joins B to the mirror half.
+    Node ids follow ``node_key``: A before E. K 6, A 1, E 1, B 0, a marker on B; tick ``T - 1``."""
+    w, h = 1000, 400
+    spots = [(100, 200), (250, 100), (250, 300), (400, 200), (500, 200)]
+    spots += [(w - x, h - y) for x, y in reversed(spots[:4])]
+    kinds = ["capital", "city_medium", "city_medium", "city_medium", "province"]
+    kinds += list(reversed(kinds[:4]))
+    owners: list[int | None] = [0, 0, 0, 0, None, 1, 1, 1, 1]
+    nodes = [
+        {
+            "id": i,
+            "x": x,
+            "y": y,
+            "terrain": "plains",
+            "vp": 0,
+            "kind": kinds[i],
+            "capital_of": owners[i] if kinds[i] == "capital" else None,
+            "start_owner": owners[i],
+            "start_units": 0,
+            "start_charged": 0,
+            "start_stock": 0,
+        }
+        for i, (x, y) in enumerate(spots)
+    ]
+    ends = [(0, 1), (1, 3), (0, 2), (2, 3), (3, 4), (4, 5), (5, 6), (5, 7), (6, 8), (7, 8)]
+    ticks = [30, 30, 30, eb_ticks, 30, 30, eb_ticks, 30, 30, 30]
+    edges = [
+        {"id": i, "a": a, "b": b, "base_width": 1, "max_width": 3, "travel_ticks": ticks[i]}
+        for i, (a, b) in enumerate(ends)
+    ]
+    mirror_nodes = {str(i): 8 - i for i in range(9)}
+    mirror_edges = {str(i): j for i, j in enumerate((9, 7, 8, 6, 5, 4, 3, 1, 2, 0))}
+    data = {
+        "meta": {"name": "ring", "version": 1, "symmetry": "rot180", "width": w, "height": h},
+        "nodes": nodes,
+        "edges": edges,
+        "mirror": {"nodes": mirror_nodes, "edges": mirror_edges},
+    }
+    state = initial_state(parse_map(data), RULES)
+    for node, charges in ((RING_K, 6), (RING_A, 1), (RING_E, 1), (RING_B, 0)):
+        state.nodes[node].warehouse = charges
+    _fronts(state, RING_B)
+    state.tick = T - 1
+    return state
+
+
+def _deliveries(events: list[Event], node: int) -> list[tuple[int, object]]:
+    return [
+        (e.tick, e.get("charges"))
+        for e in events
+        if e.kind == "packet_delivered" and e.get("node") == node
+    ]
+
+
+def test_example_12_a_detour_of_the_same_time_is_taken() -> None:
+    state = _ring(eb_ticks=30)
+    events = _step(state)  # tick t: deficit of B 2, donor K
+    assert _sent(events) == [(T, RING_K, RING_B, 1), (T, RING_K, RING_B, 1)]
+    ways = sorted((p.edge, *p.route) for p in state.packets.values())
+    assert ways == [(0, 1), (2, 3)]  # K-A-B first, then the detour K-E-B (60 <= 60 + 10)
+    events = _until(state, T + 70)
+    assert _deliveries(events, RING_B) == [(T + 60, 1), (T + 60, 1)]
+    assert _stock(state, RING_A, RING_E, RING_B) == (1, 1, 2)
+
+
+def test_example_12_a_detour_longer_than_a_period_waits() -> None:
+    state = _ring(eb_ticks=50)  # K-E-B: 80 ticks, more than 60 + 10
+    events = _step(state)
+    assert _sent(events) == [(T, RING_K, RING_B, 1)]
+    events = _until(state, T + 10)  # the second charge waits for the next dispatch
+    assert _sent(events) == [(T + 10, RING_K, RING_B, 1)]
+    assert all((p.edge, *p.route) == (0, 1) for p in state.packets.values())  # K-A-B
+    events = _until(state, T + 70)
+    assert _deliveries(events, RING_B) == [(T + 60, 1), (T + 70, 1)]
+
+
+def test_example_12_a_transfer_takes_no_detour() -> None:
+    state = _ring(eb_ticks=30)
+    state.players[0].fronts = (None, None)
+    state.tick = T + 1  # not a dispatch tick
+    assert isinstance(_cmd(state, Transfer(RING_K, RING_B, 2)), Ok)
+    assert sorted((p.depart_tick, p.edge, *p.route) for p in state.packets.values()) == [
+        (T + 1, 0, 1),
+        (T + 11, 0, 1),  # batches one period apart on the same way (DEC-18, item 6)
+    ]
+
+
+def test_example_13_a_marker_without_an_own_neighbour_is_removed() -> None:
+    state = _state()
+    _fronts(state, C)
+    state.tick = T
+    change_owner(state, B, 1)  # C is cut off: the marker stays on the own city
+    supply(state, RULES)
+    assert state.players[0].fronts == (C, None)
+    state.tick = T + 1
+    change_owner(state, C, 1)  # no own neighbour of C in the supply tree
+    events = supply(state, RULES)
+    assert state.players[0].fronts == (None, None)  # no jump to the capital
+    assert [
+        (e.get("marker"), e.get("node"), e.get("reason")) for e in events if e.kind == "front_set"
+    ] == [(0, None, "fallback")]
+
+
+def test_example_14_the_spill_goes_to_a_marker_city_first() -> None:
+    state = _state(K=6, A=1, B=0, C=1)
+    _fronts(state, K, B)
+    _until(state, T - 1)
+    events = _produce(state)  # tick t
+    # K holds a marker (target 6, no donor), A and C are at the minimum: 4.1 sends nothing; the
+    # spill finds no room made in K and goes to the marker city B (room 2) before the rear A.
+    assert _sent(events) == [(T, K, B, 1)]
+    assert [e for e in events if e.kind == "charges_overflow"] == []
 
 
 # Commands (DEC-28, items 2 and 3) -------------------------------------------------------------

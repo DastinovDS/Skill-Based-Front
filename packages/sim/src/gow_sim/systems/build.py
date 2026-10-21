@@ -146,7 +146,7 @@ def build(state: GameState, rules: Ruleset) -> list[Event]:
         data = {"player": b.owner, "node": nid, "kind": b.kind.value}
         if city.owner != b.owner:
             city.build = None
-            events.append(event(tick, "build_stopped", reason="interrupted", **data))
+            events.append(event(tick, "build_stopped", reason="interrupted", edge=None, **data))
             continue
         if tick < done_tick(rules, b):
             continue

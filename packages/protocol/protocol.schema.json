@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 17,
+    "PROTOCOL_VERSION": 18,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -147,24 +147,16 @@
     },
     "BuildPublic": {
       "additionalProperties": false,
-      "description": "Road upgrades by a city (``build`` of the ruleset, DEC-16).",
+      "description": "Road upgrades (``build`` of the ruleset, DEC-28, item 7): the price is ``cost.build`` per\nlevel, what a level gives is ``upgrade_gain`` of the own edges in the view.",
       "properties": {
         "ticks_per_level": {
           "maximum": 2147483647,
           "minimum": 1,
           "type": "integer"
-        },
-        "charges_per_level": {
-          "description": "One price per new level ``2..3`` (DEC-22), ascending.",
-          "items": {
-            "$ref": "#/$defs/LevelPrice"
-          },
-          "type": "array"
         }
       },
       "required": [
-        "ticks_per_level",
-        "charges_per_level"
+        "ticks_per_level"
       ],
       "title": "BuildPublic",
       "type": "object"
@@ -615,6 +607,30 @@
       "title": "EconomyPublic",
       "type": "object"
     },
+    "EdgeBuild": {
+      "additionalProperties": false,
+      "description": "A road level being built on the edge (DEC-28, item 7).",
+      "properties": {
+        "done_tick": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The tick the level grows; only for an own build."
+        }
+      },
+      "required": [
+        "done_tick"
+      ],
+      "title": "EdgeBuild",
+      "type": "object"
+    },
     "EdgeView": {
       "additionalProperties": false,
       "properties": {
@@ -657,6 +673,17 @@
               "type": "null"
             }
           ]
+        },
+        "build": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EdgeBuild"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The road level being built here (DEC-28, item 7): an own build always, an enemy one only\nwhile the edge is not in fog (DEC-17, item 5)."
         }
       },
       "required": [
@@ -664,7 +691,8 @@
         "width",
         "detail",
         "upgrade_gain",
-        "seen"
+        "seen",
+        "build"
       ],
       "title": "EdgeView",
       "type": "object"
@@ -1011,28 +1039,6 @@
         "created_tick"
       ],
       "title": "IntentView",
-      "type": "object"
-    },
-    "LevelPrice": {
-      "additionalProperties": false,
-      "description": "Charges from the city warehouse for raising a road to level ``width`` (DEC-16, DEC-22).",
-      "properties": {
-        "width": {
-          "maximum": 3,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "charges": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "width",
-        "charges"
-      ],
-      "title": "LevelPrice",
       "type": "object"
     },
     "Location": {
@@ -1413,36 +1419,6 @@
       "title": "MoveCmd",
       "type": "object"
     },
-    "NodeBuild": {
-      "additionalProperties": false,
-      "description": "A road level the city builds (DEC-16): ``edge`` is one of the city's roads.",
-      "properties": {
-        "edge": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "done_tick": {
-          "anyOf": [
-            {
-              "maximum": 2147483647,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "The tick the width grows; only for an own build."
-        }
-      },
-      "required": [
-        "edge",
-        "done_tick"
-      ],
-      "title": "NodeBuild",
-      "type": "object"
-    },
     "NodeBuilding": {
       "additionalProperties": false,
       "description": "The current build of an own city, of any kind (DEC-26, item 10).",
@@ -1453,7 +1429,7 @@
               "$ref": "#/$defs/BuildKind"
             }
           ],
-          "description": "``road``, ``barracks`` or ``warehouse``."
+          "description": "``barracks`` or ``warehouse`` (roads are built on edges, ``EdgeView.build``)."
         },
         "done_tick": {
           "description": "The tick it ends, if nothing interrupts it.",
@@ -1531,17 +1507,6 @@
             }
           ],
           "description": "Current sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one, or ``None``."
-        },
-        "build": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/NodeBuild"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "The city's road build (DEC-16): own always, an enemy one only while its edge is unfogged."
         },
         "attrition_in": {
           "anyOf": [
@@ -1675,7 +1640,6 @@
         "detail",
         "warehouse",
         "seen",
-        "build",
         "attrition_in",
         "grace_left",
         "starve_in",
@@ -2287,7 +2251,7 @@
           "$ref": "#/$defs/Stance"
         },
         "fronts": {
-          "description": "The own cities of the two front markers (DEC-28, item 2), ``null``: not placed. The\nenemy's markers are never in a view (DEC-28).",
+          "description": "The own cities of the front markers (DEC-28, item 2; ``supply.front_markers`` of\n``ruleset_public``), ``null``: not placed. The enemy's markers are never in a view.",
           "items": {
             "anyOf": [
               {
@@ -2300,8 +2264,6 @@
               }
             ]
           },
-          "maxItems": 2,
-          "minItems": 2,
           "type": "array"
         },
         "rear_min": {
@@ -2367,7 +2329,7 @@
     },
     "SetFrontCmd": {
       "additionalProperties": false,
-      "description": "Put the front marker ``marker`` (0 or 1) on the own city ``node``; ``node = null`` takes\nit off the map (DEC-28, item 2). Free (``cost.front``).",
+      "description": "Put the front marker ``marker`` (``0..supply.front_markers - 1`` of ``ruleset_public``,\nchecked by the simulation) on the own city ``node``; ``node = null`` takes it off the map\n(DEC-28, item 2). Free (``cost.front``).",
       "properties": {
         "type": {
           "const": "set_front",
@@ -2375,7 +2337,7 @@
           "type": "string"
         },
         "marker": {
-          "exclusiveMaximum": 2,
+          "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
         },
@@ -2571,11 +2533,18 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
+        },
+        "front_markers": {
+          "description": "Front markers of a player: ``set_front`` accepts ``marker`` ``0..front_markers - 1``.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "rear_min_max",
-        "rear_min_default"
+        "rear_min_default",
+        "front_markers"
       ],
       "title": "SupplyPublic",
       "type": "object"
@@ -2653,61 +2622,53 @@
     },
     "UpgradeGain": {
       "additionalProperties": false,
-      "description": "What the next road level would give (DEC-26, item 7): roads have no type, a level only\nspeeds the packets up; the amount per period does not grow.",
+      "description": "What the next road level would give (DEC-28, item 7).",
       "properties": {
         "speed_pct": {
           "description": "Packet speed gain in percentage points.",
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
+        },
+        "unit_speed_pct": {
+          "description": "Unit speed gain in percentage points (``road.speed_pct``).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "amount": {
+          "description": "Gain of charges per dispatch period (``supply.amount_by_level``).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
-        "speed_pct"
+        "speed_pct",
+        "unit_speed_pct",
+        "amount"
       ],
       "title": "UpgradeGain",
       "type": "object"
     },
     "UpgradeRoadCmd": {
       "additionalProperties": false,
-      "description": "The own city ``node`` raises the internal road ``edge`` by one level (DEC-16, DEC-22).\n\nRoads have no type (DEC-26, item 7): ``kind`` is omitted; a given one gives\n``INVALID_ARGUMENT``.",
+      "description": "Raise the own internal road ``edge`` by one level for ``cost.build`` CP (DEC-28, item 7);\nno city pays or builds it.",
       "properties": {
         "type": {
           "const": "upgrade_road",
           "default": "upgrade_road",
           "type": "string"
         },
-        "node": {
-          "maximum": 2147483647,
-          "minimum": 0,
-          "type": "integer"
-        },
         "edge": {
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
-        },
-        "kind": {
-          "anyOf": [
-            {
-              "enum": [
-                "fast",
-                "freight"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
         }
       },
       "required": [
         "type",
-        "node",
-        "edge",
-        "kind"
+        "edge"
       ],
       "title": "UpgradeRoadCmd",
       "type": "object"

@@ -319,7 +319,14 @@ def _set(data: Any, path: tuple[str | int, ...], value: object) -> None:
         ),
         (
             ("groups", 0, "location"),
-            {"kind": "edge", "edge": 0, "from_node": 0, "progress": 1001, "back": False},
+            {
+                "kind": "edge",
+                "edge": 0,
+                "from_node": 0,
+                "progress": 1001,
+                "back": False,
+                "level": 1,
+            },
             r"location\.progress: 1001 is out of range",
         ),
         (

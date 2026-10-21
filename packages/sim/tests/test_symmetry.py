@@ -93,7 +93,7 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
         cmds.append(Recruit(mapdef.capital(player)))
     if tick % 100 == 50:  # a second unit queued and taken back (DEC-25)
         cmds.extend((Recruit(mapdef.capital(player)), CancelRecruit(mapdef.capital(player))))
-    if tick % 90 == 0:  # every own city upgrades its internal road to the lowest-key neighbour
+    if tick % 90 == 0:  # every own city's road to its lowest-key own neighbour is upgraded
         for node in sorted(range(len(mapdef.nodes)), key=key):
             internal = [
                 e
@@ -103,7 +103,7 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
             ]
             if internal:
                 edge = min(internal, key=lambda e: key(mapdef.edges[e].other(node)))
-                cmds.append(UpgradeRoad(node, edge))
+                cmds.append(UpgradeRoad(edge))
     own_cities = sorted(
         (
             n
@@ -189,8 +189,8 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
     match cmd:
         case Move(group=g, dest=dest, planned=planned):
             return Move(g, mirror_nodes[dest], planned)
-        case UpgradeRoad(node=node, edge=edge):
-            return UpgradeRoad(mirror_nodes[node], mirror_edges[edge])
+        case UpgradeRoad(edge=edge):
+            return UpgradeRoad(mirror_edges[edge])
         case Recruit(node=node):
             return Recruit(mirror_nodes[node])
         case CancelRecruit(node=node):
@@ -211,9 +211,13 @@ def _mirror_location(state: GameState, loc: Location) -> Location:
     match loc:
         case AtNode(node=node):
             return AtNode(state.map.mirror_nodes[node])
-        case OnEdge(edge=edge, from_node=from_node, progress=progress, back=back):
+        case OnEdge(edge=edge, from_node=from_node, progress=progress, back=back, level=level):
             return OnEdge(
-                state.map.mirror_edges[edge], state.map.mirror_nodes[from_node], progress, back
+                state.map.mirror_edges[edge],
+                state.map.mirror_nodes[from_node],
+                progress,
+                back,
+                level,
             )
 
 
@@ -333,7 +337,14 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
                 ab.kind,
             ), f"build of {n}"
     for e in range(len(mapdef.edges)):
-        assert state.edges[mapdef.mirror_edges[e]].width == state.edges[e].width
+        road, mirrored = state.edges[e], state.edges[mapdef.mirror_edges[e]]
+        assert mirrored.width == road.width
+        assert (mirrored.build is None) == (road.build is None), f"build of edge {e}"
+        if road.build is not None and mirrored.build is not None:
+            assert (mirrored.build.owner, mirrored.build.since) == (
+                swap[road.build.owner],
+                road.build.since,
+            ), f"build of edge {e}"
     p0, p1 = state.players[0], state.players[1]
     mirror = mapdef.mirror_nodes
     assert p1.fronts == tuple(None if f is None else mirror[f] for f in p0.fronts), "fronts"

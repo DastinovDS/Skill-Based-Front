@@ -45,7 +45,7 @@ from gow_sim.commands import (
     validate,
 )
 from gow_sim.maps import load_map
-from gow_sim.ruleset import BuildRules, LevelTable, OrderCosts, Ruleset, Stance, load_ruleset
+from gow_sim.ruleset import OrderCosts, Ruleset, Stance, load_ruleset
 from gow_sim.state import (
     AtNode,
     GameState,
@@ -88,9 +88,7 @@ def _rules() -> Ruleset:
     capacity = dataclasses.replace(
         base.capacity, by_kind=dataclasses.replace(base.capacity.by_kind, city_small=4)
     )
-    # Road prices pinned for these checks (the rules do not depend on them).
-    build = BuildRules(ticks_per_level=150, charges_per_level=LevelTable((3, 4)))
-    return dataclasses.replace(base, orders=orders, capacity=capacity, build=build)
+    return dataclasses.replace(base, orders=orders, capacity=capacity)
 
 
 RULES = _rules()
@@ -254,9 +252,8 @@ def test_missing_and_hidden_give_the_same_reject() -> None:
 
 _TARGETS: dict[str, tuple[Callable[[Ids], Command], RejectCode]] = {
     "move_dest": (lambda i: Move(i.second, 99), RejectCode.NOT_FOUND_OR_HIDDEN),
-    "upgrade_edge": (lambda _: UpgradeRoad(0, 99), RejectCode.NOT_FOUND_OR_HIDDEN),
-    "upgrade_node": (lambda _: UpgradeRoad(99, 0), RejectCode.NOT_FOUND_OR_HIDDEN),
-    "upgrade_enemy_node": (lambda _: UpgradeRoad(5, 3), RejectCode.NOT_OWNER),
+    "upgrade_edge": (lambda _: UpgradeRoad(99), RejectCode.NOT_FOUND_OR_HIDDEN),
+    "upgrade_negative_edge": (lambda _: UpgradeRoad(-1), RejectCode.NOT_FOUND_OR_HIDDEN),
     "recruit_node": (lambda _: Recruit(99), RejectCode.NOT_FOUND_OR_HIDDEN),
     "recruit_enemy_node": (lambda _: Recruit(5), RejectCode.NOT_OWNER),
     "recruit_neutral": (lambda _: Recruit(3), RejectCode.NOT_OWNER),
@@ -395,23 +392,17 @@ def test_set_mode_same_mode() -> None:
 
 
 def test_upgrade_road_rules() -> None:
-    """``UpgradeRoad(node, edge)`` of a city (DEC-16, DEC-22, DEC-26); the full tables are in
+    """``UpgradeRoad(edge)`` paid with CP (DEC-28, item 7); the full tables are in
     ``test_build.py``, ``test_dec22.py`` and ``test_dec26.py``."""
     state, _ = _state()
     # e1 joins own 1 and neutral 3: a buffer edge (mechanics.md, section 8).
-    assert validate(state, RULES, 0, UpgradeRoad(1, 1)) == Reject(RejectCode.NOT_INTERNAL)
-    # e3 joins 5 and 6: node 0 is not an end of it.
-    assert validate(state, RULES, 0, UpgradeRoad(0, 3)) == Reject(RejectCode.NOT_ADJACENT)
+    assert validate(state, RULES, 0, UpgradeRoad(1)) == Reject(RejectCode.NOT_INTERNAL)
     state.edges[0].width = 3  # max_width of e0
-    assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.MAX_WIDTH)
+    assert validate(state, RULES, 0, UpgradeRoad(0)) == Reject(RejectCode.MAX_WIDTH)
     state.edges[0].width = 1
-    state.nodes[0].warehouse = 2  # the level 2 costs 3 charges in these pinned rules
-    assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.NOT_ENOUGH_CHARGES)
-    state.nodes[0].warehouse = 3
-    _check(state, 0, UpgradeRoad(0, 0), Ok(cost=100))  # orders.cost.build of these rules
-    assert state.nodes[0].warehouse == 0
-    assert validate(state, RULES, 0, UpgradeRoad(0, 0)) == Reject(RejectCode.CITY_BUSY)
-    assert validate(state, RULES, 0, UpgradeRoad(1, 0)) == Reject(RejectCode.EDGE_BUSY)
+    state.nodes[0].warehouse = 0  # no charges are needed
+    _check(state, 0, UpgradeRoad(0), Ok(cost=100))  # orders.cost.build of these rules
+    assert validate(state, RULES, 0, UpgradeRoad(0)) == Reject(RejectCode.EDGE_BUSY)
 
 
 def test_recruit_queues_one_unit() -> None:
@@ -545,7 +536,7 @@ def test_map_group_ids() -> None:
 
     assert map_group_ids(Move(1, 5, True), f) == Move(101, 5, True)
     assert map_group_ids(Merge((1, 2)), f) == Merge((101, 102))
-    assert map_group_ids(UpgradeRoad(3, 4), f) == UpgradeRoad(3, 4)  # a city, no group
+    assert map_group_ids(UpgradeRoad(4), f) == UpgradeRoad(4)  # an edge, no group
     assert map_group_ids(Split(1, 2), f) == Split(101, 2)
     assert map_group_ids(SetMode(1, Mode.DEFENSE), f) == SetMode(101, Mode.DEFENSE)
     assert map_group_ids(CancelOrder(7), f) == CancelOrder(107)

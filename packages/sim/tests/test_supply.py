@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from gow_sim.maps import load_map
-from gow_sim.ruleset import LevelTable, Ruleset, load_ruleset
+from gow_sim.ruleset import FullLevelTable, LevelTable, Ruleset, load_ruleset
 from gow_sim.state import (
     AtNode,
     Event,
@@ -44,7 +44,7 @@ RULES: Ruleset = dataclasses.replace(
     supply=dataclasses.replace(
         _MVP0.supply,
         base_speed_pct=100,
-        base_amount=1,
+        amount_by_level=FullLevelTable((1, 2, 3)),
         fast_speed_pct=LevelTable((150, 200)),
     ),
 )
