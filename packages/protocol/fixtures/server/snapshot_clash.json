@@ -341,7 +341,9 @@
           "kind": "node",
           "node": 6
         },
-        "order": null
+        "order": null,
+        "defense_bonus": null,
+        "defense_cap": null
       },
       {
         "id": "2b3c4d5e6f708192",
@@ -352,7 +354,9 @@
           "kind": "node",
           "node": 6
         },
-        "order": null
+        "order": null,
+        "defense_bonus": 1,
+        "defense_cap": 5
       },
       {
         "id": "3c4d5e6f708192a3",
@@ -363,7 +367,9 @@
           "kind": "node",
           "node": 6
         },
-        "order": null
+        "order": null,
+        "defense_bonus": null,
+        "defense_cap": null
       },
       {
         "id": "4d5e6f708192a3b4",
@@ -380,7 +386,9 @@
           "dest": 0,
           "path": [0],
           "planned": false
-        }
+        },
+        "defense_bonus": null,
+        "defense_cap": null
       },
       {
         "id": "5e6f708192a3b4c5",
@@ -397,7 +405,9 @@
           "dest": 4,
           "path": [4],
           "planned": false
-        }
+        },
+        "defense_bonus": null,
+        "defense_cap": null
       },
       {
         "id": "6f708192a3b4c5d6",
@@ -408,7 +418,9 @@
           "kind": "node",
           "node": 0
         },
-        "order": null
+        "order": null,
+        "defense_bonus": 1,
+        "defense_cap": 1
       }
     ],
     "packets": [

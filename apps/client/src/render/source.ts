@@ -8,7 +8,6 @@ import type { RenderFrame } from '../net/interpolate.ts';
 /** Delays of planned orders and of "Defense" in ticks (`ruleset_public.orders`). */
 export interface OrderDelays {
   readonly planned: number;
-  readonly defense: number;
 }
 
 /** `ruleset_public.capacity` in ticks: the arc of the overcrowding pill fills over `attritionTicks`. */

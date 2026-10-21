@@ -520,12 +520,20 @@ class Bot:
             return None
         return (seen.enemy_units, seen.enemy_charged)
 
-    def defended(self, view: PlayerView, node: int) -> bool:
-        """Whether the enemy has announced «Защита» in ``node`` (public intent, DEC-08)."""
-        return any(
-            i.owner != view.player and i.kind is IntentKind.DEFENSE and i.origin == node
+    def defended(self, view: PlayerView, node: int) -> int:
+        """The «Защита» bonus the enemy may have gathered in ``node``, before its cap (DEC-30).
+
+        The number is hidden (DEC-30, item 5); the public intent tells since when the mode is on
+        (DEC-08), so ``ticks // orders.defense_ticks_per_bonus`` since then is an upper estimate
+        (a fight in between resets it). ``0`` without an enemy «Защита» there."""
+        since = [
+            i.created_tick
             for i in view.intents
-        )
+            if i.owner != view.player and i.kind is IntentKind.DEFENSE and i.origin == node
+        ]
+        if not since:
+            return 0
+        return max(0, view.tick - min(since)) // self.rules.orders.defense_ticks_per_bonus
 
 
 def node_of(group: GroupView) -> int:

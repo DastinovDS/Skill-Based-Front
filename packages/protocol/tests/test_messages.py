@@ -166,7 +166,7 @@ def test_ruleset_public_has_the_stance_table_and_order_delays_of_mvp_0() -> None
     }
     assert public.orders.model_dump() == {
         "planned_delay_ticks": 30,
-        "defense_delay_ticks": 30,
+        "defense_ticks_per_bonus": 60,
         "stance_cooldown_ticks": 100,
     }
     # The overcrowding countdown of ui-style 12 (rulesets/mvp-0.toml, [capacity]).
@@ -208,7 +208,7 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
         "mountains": mod.mountains,
     }
     assert public.combat.planned_bonus_per_edge == rules.orders.planned_bonus_per_edge
-    assert public.combat.defense_bonus == rules.orders.defense_bonus
+    assert public.orders.defense_ticks_per_bonus == rules.orders.defense_ticks_per_bonus
     assert public.supply.model_dump() == {  # DEC-28, items 2 and 3: markers, the slider
         "rear_min_max": rules.supply.rear_min_max,
         "rear_min_default": rules.supply.rear_min_default,
@@ -219,11 +219,12 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
 
 def test_ruleset_public_has_the_combat_vector_parameter_names() -> None:
     """The vectors' ``params`` use the names of ``combat``; the plan bonus is not among them since
-    DEC-29 (it depends on the path, every vector gives its amount)."""
+    DEC-29 (it depends on the path, every vector gives its amount), the gathered «Защита» of the
+    rows (``defense_bonus``) is not a ruleset number since DEC-30."""
     params = _load(FIXTURES_DIR.parent / "vectors" / "combat.json")["params"]
     assert isinstance(params, dict)
     names = set(cast(dict[str, object], params))
-    assert names | {"planned_bonus_per_edge"} == set(CombatPublic.model_fields)
+    assert names - {"defense_bonus"} | {"planned_bonus_per_edge"} == set(CombatPublic.model_fields)
 
 
 def _schema_types(node: object) -> set[str]:

@@ -34,8 +34,9 @@ stands, the winner goes on ``combat.regroup_ticks`` after the end (item G4). A b
 Bonuses (item F): the active bonus of a group (``systems.orders.active_bonuses``) enters the
 virtual shots of its side when the group joins the fight and burns with the fight; «Защита» and
 the terrain of the node count only for a defender that has a charged unit at contact, and
-«Защита» only for groups standing there from the start. Mountains add virtual shots, plains
-silence real ones in every round (``terrain.defense_mod``).
+«Защита» only for groups standing there from the start. «Защита» brings what it has gathered,
+capped by the charged units of the group at contact; joining a fight resets its count (DEC-30).
+Mountains add virtual shots, plains silence real ones in every round (``terrain.defense_mod``).
 
 Events: ``fight_started``, ``fight_round``, ``fight_ended`` (both players, every field: the
 shots of both sides with the virtual ones apart, the spent charges and the losses; DEC-24 items
@@ -513,9 +514,11 @@ def _join(
 ) -> None:
     """``g`` joins ``fight`` with its active bonus (item F1): a planned bonus always counts,
     «Защита» only when ``defense`` (a defender of the node from the start with a charged unit,
-    item F2). The active bonus leaves the group either way: it burns with this fight."""
+    item F2). The active bonus leaves the group either way: it burns with this fight; «Защита»
+    starts gathering anew after the fight (DEC-30)."""
     fight.members[g.id] = member
     g.fight = fight.id
+    g.ticks_in_defense = 0
     b = bonus.pop(g.id, None)
     if b is None:
         return

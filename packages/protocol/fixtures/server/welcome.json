@@ -33,7 +33,6 @@
         "mountains": 1
       },
       "planned_bonus_per_edge": 1,
-      "defense_bonus": 2,
       "round_ticks": 10,
       "shots_per_round": 1,
       "regroup_ticks": 10
@@ -51,7 +50,7 @@
     },
     "orders": {
       "planned_delay_ticks": 30,
-      "defense_delay_ticks": 30,
+      "defense_ticks_per_bonus": 60,
       "stance_cooldown_ticks": 100
     },
     "capacity": {

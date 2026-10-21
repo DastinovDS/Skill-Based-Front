@@ -309,6 +309,8 @@ describe('arena', () => {
       mode: 'attack',
       location: { kind: 'node', node: 1 },
       order: null,
+      defense_bonus: null,
+      defense_cap: null,
     },
     location: { kind: 'node', node: 1 },
     ...(owner === undefined ? {} : { owner }),

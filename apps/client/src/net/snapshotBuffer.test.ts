@@ -26,6 +26,8 @@ const group = (id: string, location: Location): GroupView => ({
   mode: 'attack',
   location,
   order: null,
+  defense_bonus: null,
+  defense_cap: null,
 });
 const packet = (id: string, depart_tick: number, arrive_tick: number): PacketView => ({
   id,

@@ -4,8 +4,10 @@ Planned orders and «Защита» are public (DEC-04, DEC-08): a planned strik
 its target 30 ticks before the group leaves. For every such strike at an own city the bot
 (``respond``, before anything else, spending the CP it keeps in reserve for that):
 
-1. turns on «Защита» in the target where a charged group stands (the bonus becomes active after
-   ``defense_delay_ticks``, in time for a strike that waits ``planned_delay_ticks`` and then walks);
+1. turns on «Защита» in the target where a charged group stands, if it gathers a bonus before the
+   strike can arrive: +1 per ``orders.defense_ticks_per_bonus`` ticks in the mode (DEC-30), and
+   the strike waits ``planned_delay_ticks`` and then walks at least the quickest roads of the
+   map at the fastest terrain speed (``arrival``);
 2. reinforces the target with the nearest charged group that can walk there;
 3. remembers the origin of the strike as exposed: the group has left it or is about to, so
    ``score`` puts a viable attack on that city first (the bare spot).
@@ -14,13 +16,14 @@ The enemy «Защита» intent needs no code here: ``Bot.defended`` makes ``C
 its bonus. Without intents it plays like the base strategy.
 """
 
+import heapq
 from collections.abc import Mapping
 from typing import ClassVar, override
 
 from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import CampaignBot, Ctx
 from gow_sim.commands import Move, SetMode
-from gow_sim.maps import MapDef
+from gow_sim.maps import MapDef, Terrain
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import GroupView, IntentKind, IntentView, Mode, Stance
 
@@ -49,6 +52,11 @@ class ReactiveBot(CampaignBot):
         """Opaque ids of the intents that already got an answer."""
         self.exposed: dict[int, int] = {}
         """Origins of enemy strikes by the tick they were seen."""
+        self.fastest = max(rules.terrain.speed_pct.of(t) for t in Terrain)
+        """The fastest terrain speed in percent (#253): the travel times of ``arrival`` are lower
+        bounds."""
+        self.travel: dict[int, dict[int, int]] = {}
+        """By origin: the least travel ticks to every node over the roads of the map."""
 
     @override
     def respond(self, ctx: Ctx) -> None:
@@ -59,7 +67,7 @@ class ReactiveBot(CampaignBot):
         for intent in self.strikes(ctx):
             self.exposed[intent.origin] = ctx.tick
             if intent.id not in self.answered and intent.target is not None:
-                done = self.defend(ctx, intent.target)
+                done = self.defend(ctx, intent.target, self.arrival(intent))
                 done = self.reinforce(ctx, intent.target) or done
                 if done:
                     self.answered[intent.id] = True
@@ -79,8 +87,38 @@ class ReactiveBot(CampaignBot):
         found.sort(key=lambda i: (self.key(i.target or 0), self.key(i.origin), i.created_tick))
         return found
 
-    def defend(self, ctx: Ctx, target: int) -> bool:
-        """«Защита» for the strongest charged group standing in ``target``."""
+    def arrival(self, intent: IntentView) -> int:
+        """The earliest tick the planned strike of ``intent`` can reach its target: the delay,
+        then the quickest roads of the map at the fastest terrain speed."""
+        assert intent.target is not None
+        if intent.origin not in self.travel:
+            self.travel[intent.origin] = self._travel_from(intent.origin)
+        way = self.travel[intent.origin].get(intent.target, 0)
+        return intent.created_tick + self.rules.orders.planned_delay_ticks + way
+
+    def _travel_from(self, origin: int) -> dict[int, int]:
+        """Dijkstra over the map edges, ``travel_ticks * 100 // fastest`` per edge."""
+        best = {origin: 0}
+        queue = [(0, self.key(origin), origin)]
+        while queue:
+            ticks, _, node = heapq.heappop(queue)
+            if ticks > best[node]:
+                continue
+            for edge in self.map.edges:
+                if node not in (edge.a, edge.b):
+                    continue
+                other = edge.other(node)
+                t = ticks + edge.travel_ticks * 100 // self.fastest
+                if t < best.get(other, t + 1):
+                    best[other] = t
+                    heapq.heappush(queue, (t, self.key(other), other))
+        return best
+
+    def defend(self, ctx: Ctx, target: int, arrival: int) -> bool:
+        """«Защита» for the strongest charged group standing in ``target``, if it gathers at least
+        +1 by ``arrival`` (it is switched on in the next tick, DEC-30)."""
+        if self.rules.orders.defense_bonus(max(0, arrival - ctx.tick - 1), 1) < 1:
+            return False
         here = [
             g
             for g in self.idle_groups(ctx.view)

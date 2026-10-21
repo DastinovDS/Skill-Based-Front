@@ -179,7 +179,9 @@
           "kind": "node",
           "node": 0
         },
-        "order": null
+        "order": null,
+        "defense_bonus": 1,
+        "defense_cap": 1
       },
       {
         "id": "5d0e7c3a9b1f2468",
@@ -190,7 +192,9 @@
           "kind": "node",
           "node": 1
         },
-        "order": null
+        "order": null,
+        "defense_bonus": null,
+        "defense_cap": null
       },
       {
         "id": "9f2c4a7e1b3d5f60",
@@ -207,7 +211,9 @@
           "dest": 2,
           "path": [2],
           "planned": false
-        }
+        },
+        "defense_bonus": null,
+        "defense_cap": null
       }
     ],
     "packets": [

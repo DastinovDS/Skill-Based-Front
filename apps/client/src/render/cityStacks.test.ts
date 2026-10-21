@@ -11,6 +11,8 @@ const group = (id: string, units: number, charged: number, mode: GroupView['mode
     mode,
     order: null,
     location: { kind: 'node', node: 0 },
+    defense_bonus: null,
+    defense_cap: null,
   }) satisfies GroupView;
 const inNode = (g: GroupView, node: number, owner?: 0 | 1): RenderGroup => ({
   group: { ...g, location: { kind: 'node', node } },

@@ -18,7 +18,9 @@ priced: the ruleset has no price for them, they are the counter-play of the oppo
 
 Fight arithmetic (DEC-07, mechanics.md, section 4): the defender's pool is its charges plus the
 «Защита» bonus and the terrain modifier, both only with at least one firing charge; taking the
-node needs one shot per pooled charge (cancelling) and one per defending unit (killing).
+node needs one shot per pooled charge (cancelling) and one per defending unit (killing). The
+«Защита» bonus grows with the time in the mode, at most the charged units (DEC-30); the enemy's
+number is hidden, so the caller passes an estimate (``Bot.defended``).
 """
 
 from gow_sim.maps import Terrain
@@ -27,16 +29,19 @@ from gow_sim.ruleset import Ruleset
 __all__ = ["defender_pool", "prefer_planned", "shots_to_take"]
 
 
-def defender_pool(rules: Ruleset, terrain: Terrain, charged: int, defense: bool) -> int:
-    """Pool ``Qd`` of the defenders of a node with ``charged`` firing charges (DEC-07, rule 1)."""
+def defender_pool(rules: Ruleset, terrain: Terrain, charged: int, defense: int) -> int:
+    """Pool ``Qd`` of the defenders of a node with ``charged`` firing charges (DEC-07, rule 1).
+
+    ``defense``: the «Защита» bonus gathered by the start of the fight before its cap; the pool
+    takes at most ``charged`` of it (DEC-30, item 2)."""
     if charged <= 0:
         return 0
-    bonus = rules.orders.defense_bonus if defense else 0
+    bonus = min(defense, charged)
     return max(0, charged + bonus + rules.terrain.defense_mod.of(terrain))
 
 
 def shots_to_take(
-    rules: Ruleset, terrain: Terrain, units: int, charged: int, defense: bool = False
+    rules: Ruleset, terrain: Terrain, units: int, charged: int, defense: int = 0
 ) -> int:
     """Attacker's pool that takes a node held by ``units`` units, ``charged`` of them charged.
 

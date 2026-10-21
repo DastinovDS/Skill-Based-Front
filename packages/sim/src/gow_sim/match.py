@@ -47,7 +47,7 @@ __all__ = [
     "run_headless",
 ]
 
-SIM_VERSION: Final = 16
+SIM_VERSION: Final = 17
 """Version of the rules and the system order; replays and golden hashes are per version."""
 
 HEADLESS_MATCH_KEY: Final = b"gow_sim headless match key 0001"
@@ -57,7 +57,7 @@ type System = Callable[[GameState, Ruleset], list[Event]]
 
 
 def _combat(state: GameState, rules: Ruleset) -> list[Event]:
-    return combat(state, rules, active_bonuses(state))
+    return combat(state, rules, active_bonuses(state, rules))
 
 
 SYSTEMS: Final[tuple[tuple[str, System], ...]] = (

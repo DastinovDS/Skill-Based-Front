@@ -20,7 +20,7 @@
 |---|---|
 | `schema_version` | версия схемы файла, сейчас `2` (DEC-24; `1`: мгновенный бой DEC-07) |
 | `source` | откуда взяты правила и примеры |
-| `params` | числа правил, с которыми посчитаны примеры: `terrain_defense_mod` (`mountains` / `forest` / `plains`), `defense_bonus`, `round_ticks`, `shots_per_round`, `regroup_ticks`. Совпадают с `rulesets/mvp-0.toml` (`terrain.defense_mod`, `orders.*`, `combat.*`); это проверяет тест. Бонуса плана среди них нет: с DEC-29 он зависит от пути приказа и задан в каждом примере (`bonus.amount`, в строках таблицы +2) |
+| `params` | числа правил, с которыми посчитаны примеры: `terrain_defense_mod` (`mountains` / `forest` / `plains`), `defense_bonus`, `round_ticks`, `shots_per_round`, `regroup_ticks`. Совпадают с `rulesets/mvp-0.toml` (`terrain.defense_mod`, `combat.*`); это проверяет тест. `defense_bonus` (2, «Защита» (+2) в строках таблицы) не число рулсета: с DEC-30 это бонус, накопленный к началу боя (`orders.defense_ticks_per_bonus` тиков на единицу, не больше заряженных юнитов группы); тест ставит группе столько тиков в «Защите». Бонуса плана среди них нет: с DEC-29 он зависит от пути приказа и задан в каждом примере (`bonus.amount`, в строках таблицы +2) |
 | `vectors` | строки 1–16, `id` совпадает с номером строки таблицы |
 | `scenarios` | строки 17–23: `id` (`17`, `17б`, `17в`, `18`, …), `source_row` (строка таблицы как есть), `expected` (числа, которые строка называет; ключи у каждой строки свои, их читает `test_combat.py`) |
 

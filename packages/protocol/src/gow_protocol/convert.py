@@ -232,6 +232,8 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 order=None
                 if g.order is None
                 else OrderView(dest=g.order.dest, path=g.order.path, planned=g.order.planned),
+                defense_bonus=g.defense_bonus,
+                defense_cap=g.defense_cap,
             )
             for g in view.groups
         ),
@@ -379,6 +381,8 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "order": None
                 if g.order is None
                 else {"dest": g.order.dest, "path": g.order.path, "planned": g.order.planned},
+                "defense_bonus": g.defense_bonus,
+                "defense_cap": g.defense_cap,
             }
             for g in view.groups
         ],
