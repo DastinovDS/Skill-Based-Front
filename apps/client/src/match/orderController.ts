@@ -43,6 +43,9 @@ const MAX_MERGE = 16;
  */
 export const REACH_REFRESH_TICKS = 10;
 
+/** The selection follows a split-off group only for this many ticks after the split (2 s). */
+export const FOLLOW_SPLIT_TICKS = 20;
+
 export interface OrderControllerOptions {
   hud: HudState;
   map: MapFile;
@@ -79,12 +82,15 @@ export interface KeyInput {
  * recruit, stance, forfeit. Each goes out as an intent and comes back as `accepted` or `rejected`
  * in `ui.current.notice`.
  *
- * Road upgrades are paid with CP (DEC-28, item 7; #311): a click on an own road that the server
- * offers an upgrade for (`EdgeView.upgrade_gain`) with no build going sends `upgrade_road(edge)`
- * at once, no city involved, on the ordinary map and in the «Supply» mode alike. Under the pointer
- * such a road is lit and described (`ui.current.roadHover`: the gain, the price and the time from
- * `ruleset_public`). With a group selected (or a transfer picking its target) an order has the
- * click and a road is only the area of its city. A refusal (CP, a build already going) is a toast.
+ * Road upgrades are paid with CP (DEC-28, item 7; #311) and have a mode of their own (#315): `U`
+ * turns the road mode on or off (so do `Esc` and a second `U`), on the ordinary map and in the
+ * «Supply» mode alike. In it every own road that the server offers an upgrade for
+ * (`EdgeView.upgrade_gain`) with no build going is lit, and a click on one sends
+ * `upgrade_road(edge)` at once, no city involved; under the pointer such a road is described
+ * (`ui.current.roadHover`: the gain, the price and the time from `ruleset_public`). Out of the
+ * mode a click on a road is a click on the area of its city (an order of a selected group, a
+ * selection), never an upgrade. In the mode the road has the click even with a group selected,
+ * but not while a transfer picks its target. A refusal (CP, a build already going) is a toast.
  *
  * The «Supply» map mode (DEC-18, item 7; the map layer: DEC-28, item 8) is toggled by Tab (or F2).
  * In it a click on an own city opens its supply menu (a radial menu under the pointer: front
@@ -115,7 +121,8 @@ export interface KeyInput {
  * the selected group, 1 / 2 set the mode (attack / defense), D toggles defense, R recruits in the
  * selected city, Q the stance menu (hold and release over a sector, or
  * tap and click; 1 / 2 / 3 choose while it is open), S the split menu, G merge, Space the camera
- * to the next alert, Tab or F2 the «Supply» mode (it also lets a selected city go with its menu).
+ * to the next alert, Tab or F2 the «Supply» mode (it also lets a selected city go with its menu),
+ * U the road mode.
  * At most one radial menu is open: whoever opens one closes the others (`#closeMenus`).
  */
 export class OrderController implements MapInteraction {
@@ -149,17 +156,26 @@ export class OrderController implements MapInteraction {
   /** The group, node and size the last `reach_query` was sent for, and the tick it was sent. */
   #reachKey = '';
   #reachTick = 0;
+  /**
+   * A split the server accepted: the selected `from` group is followed by the new group `to` as
+   * soon as a snapshot shows it (`#followSplit`); `tick`: the snapshot tick it was noted at.
+   */
+  #follow: { readonly from: string; readonly to: string; readonly tick: number } | null = null;
 
   constructor(options: OrderControllerOptions) {
     this.#o = options;
     options.book.onResult = (result) => {
       this.#onResult(result);
     };
+    options.book.onSplit = (from, to) => {
+      this.#onSplit(from, to);
+    };
   }
 
   destroy(): void {
     clearTimeout(this.#noticeTimer);
     this.#o.book.onResult = null;
+    this.#o.book.onSplit = null;
   }
 
   /** Planned order: the switch, or Shift held. */
@@ -209,6 +225,7 @@ export class OrderController implements MapInteraction {
   // --- MapInteraction -----------------------------------------------------------------------
 
   overlay(): OverlayState {
+    this.#followSplit();
     this.#syncRoadHover();
     this.#syncReach();
     this.#syncTargetMenus();
@@ -249,8 +266,8 @@ export class OrderController implements MapInteraction {
 
   click(picked: PickHit | null, shift: boolean): void {
     this.#shift = shift;
-    // A click on an own road that can be raised raises it, on the ordinary map and in the «Supply»
-    // mode alike (DEC-28, item 7).
+    // In the road mode a click on an own road that can be raised raises it, on the ordinary map and
+    // in the «Supply» mode alike (DEC-28, item 7; #315). Out of the mode a road is its city's area.
     const road = this.#roadTarget(picked);
     if (road !== null) {
       this.#closeMenus();
@@ -368,6 +385,7 @@ export class OrderController implements MapInteraction {
   isIdle(): boolean {
     return (
       this.#o.hud.selection === null &&
+      !this.ui.current.roadMode &&
       this.ui.current.transferFrom === null &&
       !this.cityMenu.current.open &&
       !this.groupMenu.current.open &&
@@ -485,6 +503,36 @@ export class OrderController implements MapInteraction {
     this.#sendCommand({ type: 'merge', groups: [first, second, ...rest] }, null);
   }
 
+  /**
+   * The server made the new group `to` of a split of `from` (the `group_split` event, matched to
+   * the split this player sent): the split-off group is the one to hold next, so the selection
+   * moves to it once a snapshot shows it (before that the id names nothing on screen). A player
+   * who has selected something else meanwhile keeps their selection.
+   */
+  #onSplit(from: string, to: string): void {
+    const selection = this.#o.hud.selection;
+    if (selection?.kind !== 'group' || selection.id !== from) return;
+    this.#follow = { from, to, tick: this.#o.hud.current?.tick ?? 0 };
+    this.#followSplit();
+  }
+
+  /** Cheap, runs every frame: moves the selection to the split-off group once it is on screen. */
+  #followSplit(): void {
+    const follow = this.#follow;
+    if (follow === null) return;
+    const data = this.#o.hud.current;
+    const selection = this.#o.hud.selection;
+    const stale = data !== null && data.tick - follow.tick > FOLLOW_SPLIT_TICKS;
+    if (stale || selection?.kind !== 'group' || selection.id !== follow.from) {
+      this.#follow = null;
+      return;
+    }
+    if (data?.groups.some((g) => g.id === follow.to) !== true) return;
+    this.#follow = null;
+    this.#closeMenus();
+    this.#o.hud.select({ kind: 'group', id: follow.to });
+  }
+
   /** A sector of the menu of a city: the same as its key. */
   chooseCity(choice: CityChoice): void {
     this.cityMenu.close();
@@ -565,6 +613,31 @@ export class OrderController implements MapInteraction {
   selectedOwnCity(): number | null {
     const node = this.#o.hud.current?.node ?? null;
     return node?.owner === 'mine' ? node.id : null;
+  }
+
+  /** Own roads the server offers an upgrade for that have no build going now (the latest snapshot). */
+  upgradableRoads(): number[] {
+    return (this.#o.hud.current?.roads ?? [])
+      .filter((road) => road.gain !== null && !road.building)
+      .map((road) => road.id);
+  }
+
+  get roadMode(): boolean {
+    return this.ui.current.roadMode;
+  }
+
+  /**
+   * `U`: the road mode on or off (#315). Turning it on closes every open menu and the amount
+   * dialog and ends a transfer pick (a road click must not be taken for its target); the
+   * selection stays.
+   */
+  toggleRoadMode(): void {
+    const on = !this.ui.current.roadMode;
+    if (on) {
+      this.#closeMenus();
+      this.transfer.close();
+    }
+    this.ui.patch(on ? { roadMode: true, transferFrom: null } : { roadMode: false });
   }
 
   /**
@@ -738,6 +811,10 @@ export class OrderController implements MapInteraction {
       if (input.repeat !== true) this.toggleSupplyMode();
       return true;
     }
+    if (input.code === 'KeyU') {
+      if (input.repeat !== true) this.toggleRoadMode();
+      return true;
+    }
     if (input.code === 'KeyQ') return this.#qDown(input);
     if (this.splitMenu.current.open) {
       // The split menu: arrows change the amount, Enter splits, S (the key that opened it) or Esc
@@ -811,7 +888,9 @@ export class OrderController implements MapInteraction {
     }
     switch (input.code) {
       case 'Escape':
-        this.deselect();
+        // The menus above took their own Esc; the road mode is left before anything is dropped.
+        if (this.ui.current.roadMode) this.ui.patch({ roadMode: false });
+        else this.deselect();
         return true;
       case 'KeyX':
         // A selected own city: its last recruit goes; otherwise the order of the selected group.
@@ -1063,14 +1142,14 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * The road a click on `hit` raises now: an own road the server offers an upgrade for
-   * (`EdgeView.upgrade_gain`: own internal, below the top level) with no build going on it. An
-   * order has the click first: with a group selected, or while a transfer picks its target, a road
-   * is only the area of its city. `null`: the click does something else.
+   * The road a click on `hit` raises now: in the road mode, an own road the server offers an
+   * upgrade for (`EdgeView.upgrade_gain`: own internal, below the top level) with no build going
+   * on it. While a transfer picks its target a road is only the area of its city. `null`: the
+   * click does something else.
    */
   #roadTarget(hit: PickHit | null): number | null {
     if (hit?.kind !== 'edge' || this.#o.send === null) return null;
-    if (this.#selectedGroup() !== null || this.ui.current.transferFrom !== null) return null;
+    if (!this.ui.current.roadMode || this.ui.current.transferFrom !== null) return null;
     const road = this.#o.hud.current?.roads[hit.id];
     return road !== undefined && road.id === hit.id && road.gain !== null && !road.building
       ? road.id
@@ -1083,10 +1162,9 @@ export class OrderController implements MapInteraction {
     if (road !== this.ui.current.roadHover) this.ui.patch({ roadHover: road });
   }
 
-  /** The road lit up and described under the pointer: the one a click would raise. */
+  /** In the road mode, every own road a click would raise now: lit up (dashed band) on the map. */
   #candidates(): number[] {
-    const road = this.ui.current.roadHover;
-    return road === null ? [] : [road];
+    return this.ui.current.roadMode && this.#o.send !== null ? this.upgradableRoads() : [];
   }
 
   /**

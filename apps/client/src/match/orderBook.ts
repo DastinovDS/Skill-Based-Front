@@ -1,4 +1,4 @@
-import type { AckMsg, Command } from '../protocol.gen.ts';
+import type { AckMsg, Command, EventMsg } from '../protocol.gen.ts';
 import type { GhostArrow } from '../render/interaction.ts';
 import { GHOST_REJECT_MS } from '../render/style.ts';
 
@@ -46,6 +46,15 @@ export class OrderBook {
   /** Called for every answered command; the match UI turns it into a message. */
   onResult: ((result: CommandResult) => void) | null = null;
 
+  /**
+   * Called with `(from, to)` when a split this player sent made the new group `to` out of `from`:
+   * the server names the new group only in the `group_split` event (the `ack` has no ids).
+   */
+  onSplit: ((from: string, to: string) => void) | null = null;
+
+  /** Splits sent and not yet seen as a `group_split` event: group id -> how many are waiting. */
+  readonly #splits = new Map<string, number>();
+
   readonly #pending = new Map<number, Pending>();
   /** Accepted moves waiting for the snapshot of their tick: seq -> `applied_tick`. */
   readonly #accepted = new Map<number, { ghost: GhostOrder; tick: number }>();
@@ -86,6 +95,7 @@ export class OrderBook {
       };
     }
     this.#pending.set(seq, { cmd, ghost });
+    if (cmd.type === 'split') this.#splits.set(cmd.group, (this.#splits.get(cmd.group) ?? 0) + 1);
     // A newer order for the same group replaces the ghost of the older one.
     if (ghost !== null) this.#setGhosts([...this.#without(ghost.group), ghost]);
   }
@@ -95,6 +105,7 @@ export class OrderBook {
     if (pending === undefined) return;
     this.#pending.delete(ack.seq);
     if (ack.reject_code !== null) {
+      this.#forgetSplit(pending.cmd);
       this.#reject(pending.ghost);
       this.onResult?.({ kind: 'rejected', seq: ack.seq, cmd: pending.cmd, code: ack.reject_code });
       return;
@@ -118,8 +129,21 @@ export class OrderBook {
     const pending = this.#pending.get(seq);
     if (pending === undefined) return;
     this.#pending.delete(seq);
+    this.#forgetSplit(pending.cmd);
     this.#drop(pending.ghost);
     this.onResult?.({ kind: 'lost', seq, cmd: pending.cmd });
+  }
+
+  /**
+   * An event of the match: a `group_split` of a group this player has a split sent for names the
+   * new group (`new_group`, the id the snapshots use). Other events are not the book's.
+   */
+  onEvent(event: EventMsg): void {
+    if (event.kind !== 'group_split') return;
+    const { group, new_group: created } = event.data;
+    if (typeof group !== 'string' || typeof created !== 'string') return;
+    if (!this.#forgetSplit({ type: 'split', group, n: 0 })) return;
+    this.onSplit?.(group, created);
   }
 
   /** A frame built on the snapshot of `tick` is on screen: earlier accepted orders show in it. */
@@ -137,8 +161,19 @@ export class OrderBook {
 
   clear(): void {
     this.#pending.clear();
+    this.#splits.clear();
     this.#accepted.clear();
     this.#setGhosts([]);
+  }
+
+  /** One waiting split of the command's group is done (or never happened); `false`: none was waiting. */
+  #forgetSplit(cmd: Command): boolean {
+    if (cmd.type !== 'split') return false;
+    const waiting = this.#splits.get(cmd.group) ?? 0;
+    if (waiting === 0) return false;
+    if (waiting === 1) this.#splits.delete(cmd.group);
+    else this.#splits.set(cmd.group, waiting - 1);
+    return true;
   }
 
   #without(group: string): GhostOrder[] {

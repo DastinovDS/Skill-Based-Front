@@ -24,7 +24,7 @@
     ['X', 'help.key.cancel'],
     ['D', 'help.key.defense'],
     ['R', 'help.key.recruit'],
-    ['LMB', 'help.key.road'],
+    ['U', 'help.key.road'],
     ['S', 'help.key.split'],
     ['G', 'help.key.merge'],
     ['Q', 'help.key.stance'],

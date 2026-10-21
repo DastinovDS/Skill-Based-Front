@@ -168,12 +168,33 @@ describe('the radial menus of a city and of a group', () => {
     const warehouse = render(0, rules, { hasBarracks: false, warehouseLevel: top });
     warehouse.orders.click({ kind: 'node', id: home }, false);
     flushSync();
-    expect(labels(warehouse.target)).toEqual(['Recruit', 'Barracks']);
+    // No barracks: no recruit sector at all, not a dimmed one (#315).
+    expect(labels(warehouse.target)).toEqual(['Barracks']);
 
     const both = render(0, rules, { hasBarracks: true, warehouseLevel: top });
     both.orders.click({ kind: 'node', id: home }, false);
     flushSync();
     expect(labels(both.target)).toEqual(['Recruit']);
+  });
+
+  it('a city without the barracks shows no recruit sector; unknown or no development keeps it (#315)', () => {
+    setLocale('en');
+    const on = { ...DEV_RULES, city_upgrades: { ...DEV_RULES.city_upgrades, enabled: true } };
+    const off = { ...DEV_RULES, city_upgrades: { ...DEV_RULES.city_upgrades, enabled: false } };
+    const labels = (target: HTMLElement): (string | null)[] =>
+      [...target.querySelectorAll('[role="menuitem"]')].map((i) => i.getAttribute('aria-label'));
+    const open = (
+      rules: typeof on,
+      city: { hasBarracks: boolean | null; warehouseLevel: number },
+    ) => {
+      const env = render(0, rules, city);
+      env.orders.click({ kind: 'node', id: home }, false);
+      flushSync();
+      return labels(env.target);
+    };
+    expect(open(on, { hasBarracks: false, warehouseLevel: 0 })).toEqual(['Barracks', 'Warehouse']);
+    expect(open(on, { hasBarracks: null, warehouseLevel: 0 })).toContain('Recruit');
+    expect(open(off, { hasBarracks: false, warehouseLevel: 0 })).toEqual(['Recruit']);
   });
 
   it('the group menu dims merge for a lone group and speaks Russian too', () => {

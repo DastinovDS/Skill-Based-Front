@@ -4,7 +4,7 @@
   /** `[key, dictionary key of what it does]`: the keys themselves are not translated. */
   const HINTS = [
     ['Q', 'hints.stance'],
-    ['LMB', 'hints.road'],
+    ['U', 'hints.road'],
     ['R', 'hints.recruit'],
     ['?', 'hints.help'],
   ] as const;

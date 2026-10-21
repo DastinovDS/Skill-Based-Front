@@ -297,7 +297,12 @@ export const en = {
   'road.tip.level': 'Road: level {from} → {to}',
   'road.tip.gain': 'units +{units}%, supply +{amount}',
   'road.tip.price': '{cost} CP, {seconds} s',
-  'help.key.road': 'click an own road: upgrade it for CP',
+  'road.banner': 'Road upgrade mode [U]',
+  'road.hint': 'Click a lit road to upgrade it for CP. U or Esc: leave',
+  'road.none':
+    'Nothing to upgrade now: no own inner road below the top level, or each one is already being built',
+  'help.key.road':
+    'road upgrade mode: the roads that can be upgraded are lit, a click on one upgrades it for CP; U again or Esc: leave',
   'help.key.split': 'split the group',
   'help.key.merge': 'merge the groups in the node',
   'help.key.stance': 'CP stance',
