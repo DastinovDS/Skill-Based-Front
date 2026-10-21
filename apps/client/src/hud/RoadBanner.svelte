@@ -24,6 +24,8 @@
 <style>
   .banner {
     position: absolute;
+    /* The HUD is a flex column: without an explicit `top` the banner would stretch from its static position. */
+    top: auto;
     bottom: 12px;
     left: 50%;
     transform: translateX(-50%);
