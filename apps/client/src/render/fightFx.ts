@@ -4,9 +4,10 @@
  *
  * Pure functions, no PixiJS and no DOM. Nothing here decides what happened in a fight: places,
  * shots, losses, the winner and the capture come from the server (`view.fights` and the events
- * `fight_round` and `fight_ended`; AGENTS.md 7.1). The enemy's shots are not in the events a
- * player gets (they would show its bonuses), so only the shots that hit (the losses) are drawn for
- * the enemy; a replay has both sides and draws both.
+ * `fight_round` and `fight_ended`; AGENTS.md 7.1). Since DEC-29 (#294) the events carry the shots of
+ * both sides with the virtual (bonus) ones apart, so both fly and the bonus ones look different.
+ * An event from before that (an old replay) has no shots of the enemy: its hits (the losses) are
+ * drawn instead.
  */
 import type { EventMsg, FightView, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { RenderGroup } from '../net/interpolate.ts';
@@ -57,8 +58,10 @@ export interface RoundFx {
   readonly kind: 'round';
   readonly tick: number;
   readonly place: FightPlace;
-  /** Shots of players 0 and 1 in the round; `null`: not sent to this player (the enemy's). */
+  /** Shots of players 0 and 1 in the round; `null`: not in the event (an old replay's enemy). */
   readonly shots: readonly [number | null, number | null];
+  /** The virtual (bonus, terrain) shots among them, by player; 0 when the event has none. */
+  readonly virtual: readonly [number, number];
   readonly losses: readonly [number, number];
 }
 
@@ -111,6 +114,7 @@ export function fightFx(
       tick: event.tick,
       place,
       shots: [intField(data, 'shots_0'), intField(data, 'shots_1')],
+      virtual: [intField(data, 'virtual_0') ?? 0, intField(data, 'virtual_1') ?? 0],
       losses,
     };
   }
@@ -175,6 +179,22 @@ export function sparkLook(spark: number): { scale: number; alpha: number } {
 /** The numbers of the shots to draw for a side: a shot count, capped; unknown: none. */
 export function shotCount(shots: number | null): number {
   return shots === null ? 0 : Math.min(MAX_SHOTS, Math.max(0, shots));
+}
+
+/** The shots drawn for a side: how many fly, and how many of them are virtual (bonus) ones. */
+export interface DrawnShots {
+  readonly count: number;
+  /** The first `virtual` shots are the virtual ones (the rules fire them first). */
+  readonly virtual: number;
+}
+
+/**
+ * What to draw for `player` in a round: its shots from the event; an event without them (an old
+ * replay's enemy) falls back to the hits it made, which are the opponent's losses.
+ */
+export function drawnShots(fx: RoundFx, player: PlayerId): DrawnShots {
+  const count = shotCount(fx.shots[player] ?? fx.losses[player === 0 ? 1 : 0]);
+  return { count, virtual: Math.min(count, Math.max(0, fx.virtual[player])) };
 }
 
 // --- Sides of an arena --------------------------------------------------------------------------

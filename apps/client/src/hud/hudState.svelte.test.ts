@@ -2,7 +2,7 @@ import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { SnapshotMsg } from '../protocol.gen.ts';
-import { DEV_RULES, devEvent, devSnapshot } from './devFeed.ts';
+import { DEV_RULES, devEvent, devFightEvents, devSnapshot } from './devFeed.ts';
 import { EVENT_LIMIT, HudState, LAST_MINUTE_S, START_MS } from './hudState.svelte.ts';
 
 const map = DEFAULT_MAP;
@@ -186,5 +186,27 @@ describe('HudState: start banner, hover, toasts and the last minute', () => {
     expect(hud.toasts.current).toEqual([]);
     hud.destroy();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('feeds the fight cards from the events and the view, and forgets them on a reset', () => {
+    const hud = newState();
+    // The scripted fight of the demo: starts at tick 120, a round every 10 ticks.
+    for (let tick = 120; tick <= 145; tick += 1) {
+      for (const event of devFightEvents(map, tick)) hud.onEvent(event);
+      hud.onSnapshot(snapshot(tick));
+    }
+    const [card] = hud.current?.fights ?? [];
+    expect(card?.rows.map((r) => r.tick)).toEqual([140, 130]);
+    // Round 1 of the script: the player fires a bonus shot, the enemy a real one.
+    expect(card?.rows[1]?.own).toEqual({ shots: 1, virtual: 1, spent: 0, losses: 0 });
+    expect(card?.rows[1]?.enemy).toEqual({ shots: 1, virtual: 0, spent: 1, losses: 0 });
+    expect(card?.complete).toBe(true);
+    hud.reset();
+    expect(hud.fightLog.histories()).toEqual([]);
+    // A rejoin in the middle of the fight: the history starts at the last round of the view.
+    hud.onSnapshot(snapshot(145));
+    const [rejoined] = hud.current?.fights ?? [];
+    expect(rejoined?.rows.map((r) => r.tick)).toEqual([140]);
+    expect(rejoined?.complete).toBe(false);
   });
 });

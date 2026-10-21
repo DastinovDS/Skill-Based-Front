@@ -13,8 +13,8 @@ import {
   fightFx,
   fightPlace,
   fightResult,
+  drawnShots,
   roundProgress,
-  shotCount,
   shotLook,
   sparkLook,
   type EndFx,
@@ -413,22 +413,23 @@ export class FightView {
     }
   }
 
-  /** Shots fly from both sides to the middle of the arena; a spark where they land. */
+  /**
+   * Shots fly from both sides to the middle of the arena; a spark where they land. A real shot is
+   * a bolt with a solid head, a virtual (bonus) one a thinner, fainter bolt with a hollow
+   * diamond head: the kind is told by the shape, not by the hue.
+   */
   private drawShots(g: Graphics, fx: RoundFx, t: number): void {
     const { arena } = fx.place;
     const enemy: PlayerId = this.me === 0 ? 1 : 0;
-    // The enemy's shots are not sent to a player: for it the hits (its losses) are drawn.
-    const counts: readonly [number, number] = [
-      shotCount(fx.shots[this.me]),
-      shotCount(fx.shots[enemy] ?? fx.losses[this.me]),
-    ];
     let landed = 0;
-    counts.forEach((count, side) => {
+    ([this.me, enemy] as const).forEach((player, side) => {
+      const { count, virtual } = drawnShots(fx, player);
       const dir = side === 0 ? -1 : 1;
-      const color = ownerColor(this.me, side === 0 ? this.me : enemy);
+      const color = ownerColor(this.me, player);
       for (let i = 0; i < count; i++) {
         const look = shotLook(t, i);
         if (look.alpha <= 0) continue;
+        const bonus = i < virtual;
         const spread = (i - (count - 1) / 2) * 6;
         const x = arena.x + dir * SHOT_START * (1 - look.flight);
         const y = arena.y + spread;
@@ -436,8 +437,19 @@ export class FightView {
         g.moveTo(tail, y).lineTo(x, y);
         g.stroke({ width: 5.5, color: BG, alpha: 0.6 * look.alpha, cap: 'round' });
         g.moveTo(tail, y).lineTo(x, y);
-        g.stroke({ width: 3, color, alpha: look.alpha, cap: 'round' });
-        g.circle(x, y, 3).fill({ color: FIGHT_COLOR, alpha: look.alpha });
+        g.stroke({
+          width: bonus ? 1.8 : 3,
+          color,
+          alpha: look.alpha * (bonus ? 0.7 : 1),
+          cap: 'round',
+        });
+        if (bonus) {
+          g.poly([x - 4, y, x, y - 4, x + 4, y, x, y + 4])
+            .fill({ color: BG, alpha: look.alpha })
+            .stroke({ width: 1.8, color: FIGHT_COLOR, alpha: look.alpha, join: 'round' });
+        } else {
+          g.circle(x, y, 3).fill({ color: FIGHT_COLOR, alpha: look.alpha });
+        }
         landed = Math.max(landed, look.spark);
       }
     });

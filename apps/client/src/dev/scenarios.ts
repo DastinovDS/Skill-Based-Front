@@ -59,7 +59,10 @@ function fight(
   return event;
 }
 
-/** One round of a fight: own shots, the losses of both sides (the enemy's shots are not sent). */
+/**
+ * One round of a fight (protocol 19: both sides in the event): own shots, and the enemy's as many
+ * as it hit (its hits are the own losses), no bonus shots; the losses of both sides.
+ */
 function round(tick: number, where: Where, shots: number, l0: number, l1: number) {
   const event: EventMsg = {
     type: 'event',
@@ -69,10 +72,13 @@ function round(tick: number, where: Where, shots: number, l0: number, l1: number
       fight: `dev-fight-${String(tick)}`,
       ...place(where),
       shots_0: shots,
+      shots_1: l0,
       virtual_0: 0,
+      virtual_1: 0,
       losses_0: l0,
       losses_1: l1,
       spent_0: shots,
+      spent_1: l0,
     },
   };
   return event;
