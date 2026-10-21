@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { t, tf } from '../i18n/index.ts';
+  import { getLocale, t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
+  import { formatCentis } from './format.ts';
   import Radial from './Radial.svelte';
   import {
     frontOf,
@@ -23,6 +24,11 @@
   // city holds one marker, so the sector of the other marker is off while one stands here.
   const items = $derived.by<RadialItem[]>(() => {
     const count = orders.frontMarkers;
+    // A marker is free in DEC-28 (`orders.cost.front = 0`); a ruleset that prices it shows the price.
+    const price =
+      orders.frontCost > 0
+        ? [tf('city.cost', { cost: formatCentis(orders.frontCost, getLocale()) })]
+        : [];
     const sectors = SUPPLY_SECTORS.filter((sector) => {
       const marker = frontOf(sector.choice);
       return marker === null || marker < count;
@@ -48,7 +54,7 @@
         angle: sector.angle,
         sign: '⚑',
         label: tf(here ? 'supplyMenu.frontOff' : 'supplyMenu.front', { n: marker + 1 }),
-        lines: taken ? [t('supplyMenu.taken')] : [],
+        lines: taken ? [t('supplyMenu.taken')] : price,
         key: sector.key,
         current: here,
         disabled: taken,

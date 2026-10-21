@@ -25,6 +25,7 @@
   import TransferDialog from './TransferDialog.svelte';
   import ToastStack from './ToastStack.svelte';
   import GroupTip from './GroupTip.svelte';
+  import RoadTip from './RoadTip.svelte';
   import TopBar from './TopBar.svelte';
 
   interface Props {
@@ -76,6 +77,11 @@
         ? `node:${String(data.node.id)}`
         : 'none',
   );
+  // The own road a click would raise, under the pointer (DEC-28, item 7).
+  const roadHover = $derived.by(() => {
+    const id = orders.ui.current.roadHover;
+    return id === null ? null : (data?.roads[id] ?? null);
+  });
   const mergeable = $derived(data === null ? 0 : orders.mergeCandidates().length);
 
   // "Fit map" keeps the map out of the top bar: measure it, its height depends on the zoom of the
@@ -176,6 +182,7 @@
   <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
   <StackRadial {orders} {anchors} />
   <GroupTip group={data?.hovered ?? null} />
+  <RoadTip {orders} road={roadHover} />
   <HelpOverlay
     open={chrome.helpOpen}
     onclose={() => {

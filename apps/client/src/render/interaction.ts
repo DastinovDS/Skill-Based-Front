@@ -10,8 +10,8 @@
  * city (`stack`), a node, or a road (by id).
  *
  * `group.node`: the group is the only one in that city and the hit is its icon there. `edge.cell`:
- * the city whose area (Voronoi cell) holds the point; a click on a road that is not in the road
- * pick is a click on that city.
+ * the city whose area (Voronoi cell) holds the point; a click on a road that is not raised by it
+ * (DEC-28, item 7) is a click on that city.
  */
 export type PickHit =
   | { readonly kind: 'group'; readonly id: string; readonly node?: number }
@@ -19,7 +19,7 @@ export type PickHit =
   | { readonly kind: 'node'; readonly id: number }
   | { readonly kind: 'edge'; readonly id: number; readonly cell?: number };
 
-/** What can be selected: a group or a node (a road is only hovered, and clicked in road pick). */
+/** What can be selected: a group or a node (a road is only hovered, and clicked to raise it). */
 export type SelectionHit =
   { readonly kind: 'group'; readonly id: string } | { readonly kind: 'node'; readonly id: number };
 
@@ -64,7 +64,7 @@ export interface OverlayState {
   readonly selection: SelectionHit | null;
   readonly ghosts: readonly GhostArrow[];
   readonly preview: MovePreview | null;
-  /** Road pick (key U, DEC-16): the roads of the selected city a click would upgrade. */
+  /** The own road under the pointer that a click would raise (DEC-28, item 7): lit up. */
   readonly candidates: readonly number[];
   /** The city ringed in the first seconds of a match ("your capital is here"); `null`: none. */
   readonly beacon: number | null;

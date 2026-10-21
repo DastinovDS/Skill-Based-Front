@@ -149,6 +149,8 @@ export interface RoadInfo {
    * it cannot be upgraded. The price is `cost.build` CP per level.
    */
   readonly gain: UpgradeGain | null;
+  /** A level is being built on it now (`EdgeView.build`): it cannot be raised until it is done. */
+  readonly building: boolean;
 }
 
 export interface HudData {
@@ -178,15 +180,6 @@ export interface HudData {
 
 function nodeAt(nodes: readonly NodeView[], id: number): NodeView | undefined {
   return nodes[id];
-}
-
-/**
- * The roads city `node` may be asked to upgrade: its roads with an upgrade hint (the server sends
- * one only for own internal roads below their maximum width). Whether the command is accepted is
- * still the server's call (a road under a build, CP; DEC-28, item 7).
- */
-export function roadCandidates(roads: readonly RoadInfo[], node: number): RoadInfo[] {
-  return roads.filter((r) => (r.a === node || r.b === node) && r.gain !== null);
 }
 
 function ownership(owner: PlayerId | null, me: PlayerId): Ownership {
@@ -271,6 +264,7 @@ function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): 
     b: file?.b ?? -1,
     width: edge.width,
     gain: edge.upgrade_gain,
+    building: edge.build !== null,
   };
 }
 

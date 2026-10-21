@@ -39,8 +39,7 @@
     const funds = orders.cpNow;
     const poor = (centis: number): boolean => funds !== null && funds < centis;
     const noBarracks = upgrades.enabled && city?.hasBarracks === false;
-    // A build of the city (the barracks or the warehouse) holds the other back; roads are built on
-    // the edge for CP and take no city build (DEC-28, item 7).
+    // A build of the city (the barracks or the warehouse) holds the other back.
     const busy = city?.building != null;
     const price = (centis: number): string[] =>
       centis > 0 ? [tf('city.cost', { cost: cp(centis) })] : [];
@@ -55,16 +54,6 @@
             key: 'R',
             compact: true,
             disabled: noBarracks || poor(costs.recruit) || queued >= orders.recruitQueueMax,
-          };
-        case 'roads':
-          return {
-            id: 'roads',
-            sign: '≡',
-            label: t('city.roads'),
-            lines: price(costs.road),
-            key: 'U',
-            compact: true,
-            disabled: poor(costs.road),
           };
         case 'barracks':
           return {
@@ -101,7 +90,7 @@
   });
 </script>
 
-<!-- A click on an own city (UI round 2): its actions around the circle. R and U do the same. -->
+<!-- A click on an own city (UI round 2): its actions around the circle. R does the same. -->
 {#if menu.open && menu.target !== null}
   {@const target = menu.target}
   <Radial
