@@ -10,7 +10,6 @@
   import CityRadial from './CityRadial.svelte';
   import DevPanel from './DevPanel.svelte';
   import EdgeAlerts from './EdgeAlerts.svelte';
-  import FightBoard from './FightBoard.svelte';
   import ExitDialog from './ExitDialog.svelte';
   import GroupRadial from './GroupRadial.svelte';
   import HelpOverlay from './HelpOverlay.svelte';
@@ -165,7 +164,6 @@
   {/if}
   <EdgeAlerts threats={hud.threats} {anchors} top={topInset} />
   <AlertStack alerts={hud.alerts} />
-  <FightBoard fights={data?.fights ?? []} />
   <ToastStack toasts={hud.toasts} />
   <StartBanner {data} visible={hud.banner} />
   {#if hints}

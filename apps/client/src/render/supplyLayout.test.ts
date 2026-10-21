@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { MapFile, NodeView, PacketView, View } from '../protocol.gen.ts';
-import { edgeIndex, lanePoint, stockDots, supplyFlows, supplyScene } from './supplyLayout.ts';
+import { edgeIndex, lanePoint, supplyFlows, supplyScene } from './supplyLayout.ts';
 
 // A chain 0 - 1 - 2 of roads 0 (0-1) and 1 (1-2), plus a road 2 (1-3).
 const map = {
@@ -173,23 +173,6 @@ describe('what the layer draws (DEC-28, item 8)', () => {
     });
     // Nothing about the enemy's numbers, stock, packets or markers reaches the scene.
     expect(Object.keys(scene()).sort()).toEqual(['cut', 'flows', 'markers', 'presence', 'stocks']);
-  });
-});
-
-describe('warehouse dots', () => {
-  it('one dot per place of the warehouse, the first ones filled, centred on the city', () => {
-    expect(stockDots(2, 4, 10)).toEqual([
-      { dx: -15, filled: true },
-      { dx: -5, filled: true },
-      { dx: 5, filled: false },
-      { dx: 15, filled: false },
-    ]);
-  });
-
-  it('a stock above the capacity fills the row, an empty or unknown warehouse has no filled dot', () => {
-    expect(stockDots(9, 2, 10).every((d) => d.filled)).toBe(true);
-    expect(stockDots(0, 2, 10).some((d) => d.filled)).toBe(false);
-    expect(stockDots(3, 0, 10)).toEqual([]);
   });
 });
 

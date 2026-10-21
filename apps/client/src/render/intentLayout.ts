@@ -25,8 +25,9 @@ export function polylineLength(points: readonly Point[]): number {
 }
 
 /**
- * The axis of a ribbon through `nodes`: every leg is a quadratic curve bent to the left of the
- * travel direction by `bend` of its chord. The first leg starts `startGap` from its first point
+ * The axis of a ribbon through `nodes`: every leg is a quadratic curve bent to the side of the
+ * normal `(-dy, dx)` of the travel direction by `bend` of its chord (a negative `bend` bends to
+ * the left of the way on the screen, y down). The first leg starts `startGap` from its first point
  * and the last ends `endGap` before its last (the rim of a city); `[]` if the legs are too short.
  */
 export function ribbonAxis(
@@ -249,7 +250,7 @@ export function chevrons(
 
 /**
  * How much one smooth curve from `from` to `to` must bend (share of the chord, positive: to the
- * left of the travel direction, as `ribbonAxis` bends) to roughly follow the waypoints `via` of the
+ * side of the normal `(-dy, dx)`, as `ribbonAxis` bends) to roughly follow the waypoints `via` of the
  * server's path: the one farthest from the chord decides. Clamped to `limit`; 0 without waypoints.
  * The arrow is one curve, it never kinks at a waypoint.
  */
@@ -300,12 +301,35 @@ export function ribbonFilled(
 }
 
 /**
- * The blink of a ribbon when its delay has just run out: bright for the first and third part of
- * `ticks`, normal in between. `since`: ticks after the end of the delay (negative before it).
+ * The bend of the ribbon of an order: the bend that follows the server's path (`pathBend`) when it
+ * is pronounced (at least `min` of the chord, either side), else the fixed `arc`. So an order with
+ * no way to follow, a neighbour or the opponent's, always bends the same way (`arc` is negative:
+ * to the left on the screen) and the arrow never lies straight over the road.
  */
-export function departBlink(since: number, ticks: number): boolean {
-  if (since < 0 || since >= ticks) return false;
-  return Math.floor((since / ticks) * 4) % 2 === 0;
+export function orderBend(followed: number, min: number, arc: number): number {
+  return Math.abs(followed) >= min ? followed : arc;
+}
+
+/** The pulse of a ribbon whose delay has just run out. */
+export interface DepartPulse {
+  /** 0..1..0 over the pulse: a smooth swell, 0 before it and after it. */
+  readonly swell: number;
+  /** 0 before the pulse, up to 1 at its end and 1 from then on: how locked the order is. */
+  readonly lock: number;
+}
+
+/**
+ * One smooth pulse when the delay of a ribbon ends, instead of a blink: `swell` rises and falls
+ * once over `ticks`, `lock` climbs to 1 meanwhile and stays (the contour stays stronger).
+ * `since`: ticks after the end of the delay (negative before it). With `reduced` motion no swell,
+ * only the locked state.
+ */
+export function departPulse(since: number, ticks: number, reduced: boolean): DepartPulse {
+  if (since < 0) return { swell: 0, lock: 0 };
+  const phase = ticks <= 0 ? 1 : Math.min(1, since / ticks);
+  const lock = phase * phase * (3 - 2 * phase);
+  if (reduced || phase >= 1) return { swell: 0, lock: reduced ? 1 : lock };
+  return { swell: Math.sin(Math.PI * phase) ** 2, lock };
 }
 
 /** How much of the delay of a planned order has run: 0 at its creation, 1 once the group left. */

@@ -38,6 +38,9 @@ const running = snapshot([
   },
 ]);
 
+const [running0] = running.view.fights;
+if (running0 === undefined) throw new Error('no fight');
+
 function snapshotAt(snap: SnapshotMsg, tick: number): SnapshotMsg {
   return { ...snap, tick };
 }
@@ -70,7 +73,27 @@ function setup() {
     visit(layers.layer.effects);
     return found;
   };
-  return { layers, view, frame, texts };
+  /** The box of what is drawn (an empty Graphics sits at the origin and would count in a Container's). */
+  const extent = (): { width: number; height: number } => {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    const visit = (node: Container): void => {
+      if (!node.visible) return;
+      const b = node.children.length === 0 ? node.getBounds() : null;
+      if (b !== null && (b.width > 0 || b.height > 0)) {
+        minX = Math.min(minX, b.x);
+        minY = Math.min(minY, b.y);
+        maxX = Math.max(maxX, b.x + b.width);
+        maxY = Math.max(maxY, b.y + b.height);
+      }
+      for (const child of node.children) visit(child);
+    };
+    visit(layers.layer.effects);
+    return { width: maxX - minX, height: maxY - minY };
+  };
+  return { layers, view, frame, texts, extent };
 }
 
 describe('FightView', () => {
@@ -95,8 +118,162 @@ describe('FightView', () => {
     expect(bounds.x).toBeLessThan(place.arena.x);
     expect(bounds.x + bounds.width).toBeGreaterThan(place.arena.x);
     expect(bounds.y).toBeLessThan(place.arena.y);
-    // Own: none of the fight's groups here; the enemy's exact total from the view.
-    expect(texts()).toEqual(['0', '3']);
+    // Own: none of the fight's groups here, so no number; the enemy's exact units from the view:
+    // the discharged one (above) and the two charged ones (below).
+    expect(texts()).toEqual(['1', '2']);
+    view.destroy();
+  });
+
+  it('numbers the charged and the discharged units of both sides, none for zero', () => {
+    const { view, frame, texts } = setup();
+    const here = (units: number, charged: number): SnapshotMsg => {
+      const base = snapshot(
+        [{ ...running0, groups: ['g'], enemy_units: 4, enemy_charged: 4 }],
+        150,
+      );
+      return {
+        ...base,
+        view: {
+          ...base.view,
+          groups: [
+            {
+              id: 'g',
+              units,
+              charged,
+              mode: 'attack',
+              location: { kind: 'node', node: city },
+              order: null,
+            },
+          ],
+        },
+      };
+    };
+    view.update(frame(here(5, 2)), [], TICK_HZ, ROUND, false);
+    // Own: 3 discharged, 2 charged; the enemy: all 4 charged, no discharged number.
+    expect(texts()).toEqual(['3', '2', '4']);
+    view.update(frame(here(2, 0)), [], TICK_HZ, ROUND, false);
+    expect(texts()).toEqual(['2', '4']);
+    view.destroy();
+  });
+
+  it('draws the arrows of the last round: only a side that shot, the labels tell real and virtual', () => {
+    const { view, frame, texts, extent } = setup();
+    const fight = { ...running0, enemy_units: 0, enemy_charged: 0 };
+    const withRound = (
+      shots: [number, number],
+      virtual: [number, number],
+      tick = 150,
+    ): SnapshotMsg => {
+      const base = snapshot(
+        [{ ...fight, last_round: { tick: 146, shots, virtual, spent: [0, 0], losses: [0, 0] } }],
+        tick,
+      );
+      return base;
+    };
+    // Both sides shot, own with one virtual shot: own `2` real and `1` virtual, enemy `1` real.
+    view.update(frame(withRound([3, 1], [1, 0])), [], TICK_HZ, ROUND, false);
+    expect(texts()).toEqual(['2', '1', '1']);
+    // The enemy did not shoot: no arrow and no label for it.
+    view.update(frame(withRound([3, 0], [1, 0])), [], TICK_HZ, ROUND, false);
+    expect(texts()).toEqual(['2', '1']);
+    // Nobody shot: the circle alone.
+    const shooting = extent();
+    view.update(frame(withRound([0, 0], [0, 0])), [], TICK_HZ, ROUND, false);
+    expect(texts()).toEqual([]);
+    expect(extent().height).toBeLessThan(shooting.height);
+    view.destroy();
+  });
+
+  it('shows a fight without data of rounds (an old replay) as a circle without arrows', () => {
+    const { view, frame, texts, extent } = setup();
+    view.update(frame(running), [], TICK_HZ, ROUND, false);
+    // Nothing but the circle and its arc: the arena is no taller than a disc with its ring.
+    expect(extent().height).toBeLessThan(2 * (24 + 8));
+    expect(texts()).toEqual(['1', '2']);
+    view.destroy();
+  });
+
+  it('lets an arrow grow, holds it to the next round and drops it when no round comes', () => {
+    const { view, frame, texts, extent } = setup();
+    const fight = { ...running0, enemy_units: 0, enemy_charged: 0 };
+    const at = (tick: number): SnapshotMsg =>
+      snapshot(
+        [
+          {
+            ...fight,
+            last_round: {
+              tick: 150,
+              shots: [1, 0],
+              virtual: [0, 0],
+              spent: [0, 0],
+              losses: [0, 0],
+            },
+          },
+        ],
+        tick,
+      );
+    const height = (): number => extent().height;
+    view.update(frame(at(150)), [], TICK_HZ, ROUND, false);
+    expect(texts()).toEqual([]);
+    const sprouting = height();
+    view.update(frame(at(151)), [], TICK_HZ, ROUND, false);
+    expect(height()).toBeGreaterThan(sprouting);
+    expect(texts()).toEqual([]);
+    // Grown whole: the label is there, and stays until the next round is due.
+    view.update(frame(at(154)), [], TICK_HZ, ROUND, false);
+    expect(texts()).toEqual(['1']);
+    view.update(frame(at(159)), [], TICK_HZ, ROUND, false);
+    expect(texts()).toEqual(['1']);
+    // No round came for two rounds: the exchange is gone.
+    view.update(frame(at(175)), [], TICK_HZ, ROUND, false);
+    expect(texts()).toEqual([]);
+    view.destroy();
+  });
+
+  it('with less motion shows the arrow whole at once', () => {
+    const { view, frame, texts } = setup();
+    const fight = { ...running0, enemy_units: 0, enemy_charged: 0 };
+    const snap = snapshot(
+      [
+        {
+          ...fight,
+          last_round: { tick: 150, shots: [1, 2], virtual: [0, 0], spent: [0, 0], losses: [0, 0] },
+        },
+      ],
+      150,
+    );
+    view.update(frame(snap), [], TICK_HZ, ROUND, true);
+    expect(texts()).toEqual(['1', '2']);
+    view.destroy();
+  });
+
+  it('shows several fights at once, each with its own arena and arrows', () => {
+    const { view, frame, texts } = setup();
+    const other = map.nodes[2]?.id ?? 2;
+    const one = running0;
+    const round = (shots: [number, number]) => ({
+      tick: 146,
+      shots,
+      virtual: [0, 0] as [number, number],
+      spent: [0, 0] as [number, number],
+      losses: [0, 0] as [number, number],
+    });
+    const snap = snapshot(
+      [
+        { ...one, id: 'a', enemy_units: 0, enemy_charged: 0, last_round: round([1, 0]) },
+        {
+          ...one,
+          id: 'b',
+          node: other,
+          enemy_units: 0,
+          enemy_charged: 0,
+          last_round: round([0, 2]),
+        },
+      ],
+      150,
+    );
+    view.update(frame(snap), [], TICK_HZ, ROUND, false);
+    expect(texts()).toEqual(['1', '2']);
     view.destroy();
   });
 
