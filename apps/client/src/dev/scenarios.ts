@@ -215,10 +215,7 @@ export function frozenSource(scene: FixtureScene): RenderSource {
   return {
     frame: () => frame,
     events: () => scene.events,
-    orderDelays: {
-      planned: DEV_RULES.orders.planned_delay_ticks,
-      defense: DEV_RULES.orders.defense_delay_ticks,
-    },
+    orderDelays: { planned: DEV_RULES.orders.planned_delay_ticks },
     roundTicks: DEV_RULES.combat.round_ticks,
     recruitTicks: DEV_RULES.recruit.unit_ticks,
     capacityTicks: {

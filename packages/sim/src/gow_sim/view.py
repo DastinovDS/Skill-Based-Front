@@ -18,6 +18,8 @@ PRO-01), which PRO-03 converts it into:
   next starves (``starve_in``, DEC-19, item 8), their recruit queue and its progress (DEC-25,
   item 12), the barracks, the warehouse level and capacity and the current build of any kind
   (DEC-26, item 10); own packets with their remaining path and whether they are a transfer;
+- own groups in «Защита»: the bonus gathered so far and its cap (DEC-30; enemy groups show the
+  mode only, in the ``seen`` of places);
 - ``PRESENCE`` places (neighbours of ``EXACT`` nodes, edges touching them): whether enemy groups
   are there and their modes, no numbers;
 - ``FOG``: only the last sighting from ``GameState.vision_memory``;
@@ -30,7 +32,8 @@ What a view never has: enemy groups as entities (only the per-place ``Sighting``
 of fogged edges newer than the last sighting, the barracks, warehouse level and city builds of
 the enemy (DEC-26, item 10), enemy builds on fogged edges, enemy packets
 (#112 default), enemy CP, stance, production and counters, the enemy's front markers and rear
-minimum (DEC-28), enemy transfers (DEC-18, item 8), events, the target of an enemy's normal
+minimum (DEC-28), enemy transfers (DEC-18, item 8), the bonus an enemy «Защита» has gathered
+(DEC-30, item 5), events, the target of an enemy's normal
 order (normal orders have no intent), sequential ids.
 
 Ids of own groups, own packets and intents are opaque per player: keyed blake2b of
@@ -236,6 +239,13 @@ class GroupView:
     mode: Mode
     location: Location
     order: OrderView | None
+    defense_bonus: int | None = None
+    """In «Защита» (DEC-30): the bonus the group would bring into a fight beginning now, what it
+    has gathered at most ``defense_cap``; ``None`` in another mode. Only own groups have it:
+    the enemy sees the mode, not the number (DEC-30, item 5)."""
+    defense_cap: int | None = None
+    """In «Защита»: the cap of its bonus, the charged units of the group (DEC-30, item 2);
+    ``None`` in another mode."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -485,6 +495,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
         if g.owner != player:
             continue
         order = g.order
+        defense = g.mode is Mode.DEFENSE
         groups.append(
             GroupView(
                 id=opaque(player, gid),
@@ -495,6 +506,10 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 order=None
                 if order is None or not order.path
                 else OrderView(order.path[-1], order.path, order.planned, order.depart_tick),
+                defense_bonus=rules.orders.defense_bonus(g.ticks_in_defense, g.charged)
+                if defense
+                else None,
+                defense_cap=g.charged if defense else None,
             )
         )
 
@@ -665,6 +680,8 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                     "planned": g.order.planned,
                     "depart_tick": g.order.depart_tick,
                 },
+                "defense_bonus": g.defense_bonus,
+                "defense_cap": g.defense_cap,
             }
             for g in view.groups
         ],

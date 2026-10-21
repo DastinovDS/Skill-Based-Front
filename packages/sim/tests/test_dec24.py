@@ -117,7 +117,7 @@ class _Run:
         results, events = apply_commands(state, RULES, batch)
         state.events = events
         state.events += movement(state, RULES)
-        state.events += combat(state, RULES, active_bonuses(state))
+        state.events += combat(state, RULES, active_bonuses(state, RULES))
         state.events += supply(state, RULES)
         state.events += recruit(state, RULES)
         state.events += orders(state, RULES)

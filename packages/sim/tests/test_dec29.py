@@ -89,7 +89,7 @@ class _Run:
         self.seq += len(cmds)
         results, events = apply_commands(state, RULES, commands)
         state.events = events + movement(state, RULES)
-        state.events += combat(state, RULES, active_bonuses(state))
+        state.events += combat(state, RULES, active_bonuses(state, RULES))
         state.events += orders(state, RULES)
         return [r.outcome for r in results]
 
@@ -132,12 +132,12 @@ def test_dec29_example(row: int, edges: int, units: int, charged: int, bonus: in
     assert state.players[0].cp == cp - 200  # 2 CP, never returned (row 5 too)
     run.until(DEPART - 1)
     assert state.groups[gid].location == AtNode(0)  # waits the delay
-    assert active_bonuses(state) == {}  # not active before the departure
+    assert active_bonuses(state, RULES) == {}  # not active before the departure
     run.step()
     group = state.groups[gid]
     assert isinstance(group.location, OnEdge)  # departs, also without a bonus (row 5)
     assert group.bonus == bonus
-    active = active_bonuses(state)
+    active = active_bonuses(state, RULES)
     assert (active[gid].amount if gid in active else 0) == bonus
     assert state.players[0].cp == cp - 200
 

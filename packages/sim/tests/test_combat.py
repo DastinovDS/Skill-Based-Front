@@ -106,7 +106,7 @@ def step(state: GameState, commands: list[PlayerCommand] | None = None) -> list[
     _, applied = apply_commands(state, RULES, commands or [])
     state.events += applied
     state.events += movement(state, RULES)
-    state.events += combat(state, RULES, active_bonuses(state))
+    state.events += combat(state, RULES, active_bonuses(state, RULES))
     state.events += orders(state, RULES)
     return list(state.events)
 
@@ -150,7 +150,9 @@ def test_vector_params_are_the_pinned_ruleset() -> None:
         "forest": mod.forest,
         "plains": mod.plains,
     }
-    assert params["defense_bonus"] == RULES.orders.defense_bonus
+    # «Защита» (+2) of the rows: the bonus gathered by the start of the fight (DEC-30), placed
+    # below as the ticks that gather it.
+    assert params["defense_bonus"] == 2
     assert params["round_ticks"] == RULES.combat.round_ticks
     assert params["shots_per_round"] == RULES.combat.shots_per_round
     assert params["regroup_ticks"] == RULES.combat.regroup_ticks
@@ -187,7 +189,11 @@ def test_dec24_row(vec: dict[str, Any], a: int) -> None:
             if bonus is not None and bonus["source"] == "planned_order":
                 order = Order((1,), True, 0)
             gid = add(state, p, g["units"], g["charged"], where, mode=Mode(g["mode"]), order=order)
-            if bonus is not None:
+            if bonus is not None and bonus["source"] == "defense_mode":
+                # DEC-30: «Защита» (+N) is N bonuses gathered by the start of the fight.
+                ticks = bonus["amount"] * RULES.orders.defense_ticks_per_bonus
+                state.groups[gid].ticks_in_defense = ticks
+            elif bonus is not None:
                 state.groups[gid].bonus = bonus["amount"]
             ids[g["id"]] = gid
 
@@ -411,7 +417,8 @@ def test_row21_the_defender_withdraws() -> None:
 def test_row22_the_attack_withdraws() -> None:
     exp = SCENARIOS["22"]
     state = initial_state(line(["forest"] * 3, [0, 1, 1]), RULES)
-    d = add(state, 1, 2, 2, AtNode(1), mode=Mode.DEFENSE, bonus=RULES.orders.defense_bonus)
+    gathered = VECTORS["params"]["defense_bonus"] * RULES.orders.defense_ticks_per_bonus
+    d = add(state, 1, 2, 2, AtNode(1), mode=Mode.DEFENSE, ticks_in_defense=gathered)
     atk = add(state, 0, 3, 3, before_arrival(state, 0, 0), order=Order((1,), False, 0))
     step(state)
     contact = state.tick

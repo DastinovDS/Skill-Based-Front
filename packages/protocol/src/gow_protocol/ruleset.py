@@ -3,8 +3,8 @@
 Only what the client uses (AGENTS.md, section 7.1):
 
 - command costs, for the cost preview of an order (CLI-06, #62);
-- the combat estimate parameters (CLI-08, #64): terrain defense modifier and the planned and
-  defense bonuses (DEC-07, rule 1; same names as ``packages/protocol/vectors/combat.json``);
+- the combat parameters (CLI-08, #64): terrain defense modifier and the planned bonus per edge
+  (DEC-07, rule 1; DEC-29), the pace of the Defense bonus (DEC-30, in ``orders``);
 - the clock and the CP regeneration, for the HUD timer and the CP bar (CLI-08);
 - the road level prices and duration, for the road upgrade hint (DEC-16);
 - the stance table and the delays of planned orders, for the stance menu and the countdown on
@@ -65,7 +65,6 @@ class CombatPublic(WireModel):
     planned_bonus_per_edge: NonNegInt
     """Virtual shots of a planned order per edge of its path, at most the charged units of the
     group when it departs (DEC-29)."""
-    defense_bonus: SignedInt
     round_ticks: PosInt
     """Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight."""
     shots_per_round: PosInt
@@ -101,10 +100,12 @@ class EconomyPublic(WireModel):
 
 
 class OrdersPublic(WireModel):
-    """Delays of planned orders and modes, and the stance cooldown (``orders`` of the ruleset)."""
+    """Delays of planned orders, the growth of Defense and the stance cooldown (``orders``)."""
 
     planned_delay_ticks: NonNegInt
-    defense_delay_ticks: NonNegInt
+    defense_ticks_per_bonus: PosInt
+    """Defense gains one virtual shot per this many ticks in the mode, at most the charged units
+    of the group when a fight begins (DEC-30)."""
     stance_cooldown_ticks: NonNegInt
 
 
@@ -208,7 +209,6 @@ class RulesetPublic(WireModel):
                     mountains=defense_mod.mountains,
                 ),
                 planned_bonus_per_edge=rules.orders.planned_bonus_per_edge,
-                defense_bonus=rules.orders.defense_bonus,
                 round_ticks=rules.combat.round_ticks,
                 shots_per_round=rules.combat.shots_per_round,
                 regroup_ticks=rules.combat.regroup_ticks,
@@ -224,7 +224,7 @@ class RulesetPublic(WireModel):
             ),
             orders=OrdersPublic(
                 planned_delay_ticks=rules.orders.planned_delay_ticks,
-                defense_delay_ticks=rules.orders.defense_delay_ticks,
+                defense_ticks_per_bonus=rules.orders.defense_ticks_per_bonus,
                 stance_cooldown_ticks=rules.orders.stance_cooldown_ticks,
             ),
             capacity=CapacityPublic(

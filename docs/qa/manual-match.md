@@ -23,7 +23,7 @@ curl -s localhost:8080/api/health          # {"status":"ok"}
 
 - `e2e/compose.e2e.yaml`: `GOW_ENV=e2e`, рулсет `test-short` (партия 60 секунд), окно переподключения
   и пауза по 10 секунд. Для прогона боевого рулсета (раздел 4) добавьте третий файл с
-  `GOW_RULESET_PATH: /app/rulesets/mvp-0.toml` в `services.app.environment`.
+  `GOW_RULESET_PATH: /app/rulesets/mvp-1.toml` в `services.app.environment`.
 - Второй игрок: другой браузер, приватное окно или другой origin (`http://bob.localhost:8080`). Две вкладки
   одного origin делят гостя в `localStorage` (`sbf.guest`), это один и тот же игрок.
 - Остановить: `docker compose -f compose.yaml -f e2e/compose.e2e.yaml down` (данные остаются в томах).

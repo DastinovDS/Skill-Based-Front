@@ -69,17 +69,18 @@ def test_bot_params_stay_in_their_ranges(maps: dict[str, MapDef], mvp_rules: Rul
 @pytest.mark.parametrize(
     ("terrain", "units", "charged", "defense", "need"),
     [
-        (FOREST, 2, 2, False, 4),  # example 3: 4 charged take 2 charged defenders
-        (FOREST, 0, 0, False, 0),  # example 5: an empty node falls without a fight
-        (PLAINS, 2, 2, False, 3),  # example 8: Qd = 1, 2 charged are not enough
-        (MOUNTAINS, 2, 2, False, 5),  # example 6: Qd = 3, 3 charged bounce
-        (MOUNTAINS, 3, 0, False, 3),  # example 7: no firing charge, no terrain
-        (FOREST, 2, 2, True, 6),  # example 10: Qd = 4 with «Защита»
-        (FOREST, 2, 0, True, 2),  # example 16: «Защита» needs a firing charge
+        (FOREST, 2, 2, 0, 4),  # example 3: 4 charged take 2 charged defenders
+        (FOREST, 0, 0, 0, 0),  # example 5: an empty node falls without a fight
+        (PLAINS, 2, 2, 0, 3),  # example 8: Qd = 1, 2 charged are not enough
+        (MOUNTAINS, 2, 2, 0, 5),  # example 6: Qd = 3, 3 charged bounce
+        (MOUNTAINS, 3, 0, 0, 3),  # example 7: no firing charge, no terrain
+        (FOREST, 2, 2, 2, 6),  # example 10: Qd = 4 with «Защита» (+2 gathered, DEC-30)
+        (FOREST, 2, 0, 2, 2),  # example 16: «Защита» needs a firing charge
+        (FOREST, 2, 2, 10, 6),  # DEC-30, item 2: the bonus is capped by the 2 charged
     ],
 )
 def test_shots_to_take_follows_dec07(
-    mvp_rules: Ruleset, terrain: Terrain, units: int, charged: int, defense: bool, need: int
+    mvp_rules: Ruleset, terrain: Terrain, units: int, charged: int, defense: int, need: int
 ) -> None:
     assert shots_to_take(mvp_rules, terrain, units, charged, defense) == need
 

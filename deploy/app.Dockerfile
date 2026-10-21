@@ -69,7 +69,7 @@ ENV PATH=/app/.venv/bin:$PATH \
     GOW_PORT=8000 \
     GOW_DATABASE_URL=sqlite:////data/gow.db \
     GOW_MAPS_DIR=/app/maps \
-    GOW_RULESET_PATH=/app/rulesets/mvp-0.toml \
+    GOW_RULESET_PATH=/app/rulesets/mvp-1.toml \
     GOW_RULESETS_DIR=/data/rulesets
 
 USER 10001:10001

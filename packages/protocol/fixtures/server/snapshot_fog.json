@@ -117,7 +117,9 @@
           "kind": "node",
           "node": 0
         },
-        "order": null
+        "order": null,
+        "defense_bonus": null,
+        "defense_cap": null
       }
     ],
     "packets": [],

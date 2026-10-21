@@ -114,7 +114,7 @@ class _Run:
             self.seq += 1
         results, events = apply_commands(state, RULES, commands)
         state.events = events + movement(state, RULES)
-        state.events += combat(state, RULES, active_bonuses(state))
+        state.events += combat(state, RULES, active_bonuses(state, RULES))
         state.events += build(state, RULES)
         orders(state, RULES)
         self.fights += [e for e in state.events if e.kind in ("fight_started", "fight_ended")]
@@ -134,9 +134,9 @@ def _public(state: GameState) -> list[tuple[object, ...]]:
 
 def test_dec08_numbers_are_the_pinned_ruleset() -> None:
     o = RULES.orders
-    assert (o.planned_delay_ticks, o.defense_delay_ticks) == (30, 30)
+    assert (o.planned_delay_ticks, o.defense_ticks_per_bonus) == (30, 60)
     # 2 per edge: an order to the neighbour gets +2, as the DEC-07 and DEC-24 rows assume (DEC-29).
-    assert (o.planned_bonus_per_edge, o.defense_bonus) == (2, 2)
+    assert o.planned_bonus_per_edge == 2
     assert (o.cost.move, o.cost.planned_move, o.cost.defense, o.cost.cancel) == (100, 200, 200, 0)
 
 
@@ -277,30 +277,30 @@ def test_defense_costs_2_cp_and_is_public_at_once() -> None:
     assert _public(state) == [(1, IntentKind.DEFENSE, 1, None, 1)]
 
 
-def test_defense_bonus_is_active_after_30_ticks() -> None:
-    # Row 10: 3 vs 2 + «Защита» (+2): 1 attacker dies, 2 bounce, the defence has 2 discharged.
-    run, d, a = _defended(30)
-    assert [(f.kind, f.tick) for f in run.fights] == [("fight_started", 31), ("fight_ended", 71)]
+def test_defense_gathers_2_in_120_ticks() -> None:
+    # Row 10: 3 vs 2 + «Защита» (+2, 120 // 60, DEC-30): 1 attacker dies, 2 bounce, the defence
+    # has 2 discharged.
+    run, d, a = _defended(120)
+    assert [(f.kind, f.tick) for f in run.fights] == [("fight_started", 121), ("fight_ended", 161)]
     assert run.fights[1].get("losses_0") == 1
     assert (run.state.groups[d].units, run.state.groups[d].charged) == (2, 0)
     assert (run.state.groups[a].units, run.state.groups[a].charged) == (2, 0)
 
 
-def test_defense_bonus_is_not_active_before_30_ticks() -> None:
-    # Row 2: 3 vs 2 without the bonus: 1 defender dies, the attack (3, discharged) bounces. The
-    # bonus becomes active at 31, during the fight: it does not enter it and waits for the next
-    # one (DEC-24, F1).
-    run, d, a = _defended(29)
-    assert [(f.kind, f.tick) for f in run.fights] == [("fight_started", 30), ("fight_ended", 60)]
+def test_defense_has_no_bonus_before_60_ticks() -> None:
+    # Row 2: 3 vs 2 without the bonus (59 // 60 = 0, DEC-30): 1 defender dies, the attack (3,
+    # discharged) bounces. In the fight the count does not grow (DEC-30).
+    run, d, a = _defended(59)
+    assert [(f.kind, f.tick) for f in run.fights] == [("fight_started", 60), ("fight_ended", 90)]
     assert (run.state.groups[d].units, run.state.groups[d].charged) == (1, 0)
     assert (run.state.groups[a].units, run.state.groups[a].charged) == (3, 0)
-    assert run.state.groups[d].bonus == RULES.orders.defense_bonus
 
 
 def test_defense_bonus_is_spent_in_the_first_fight_and_the_mode_holds() -> None:
-    """After row 10 the defence (recharged here by hand) meets a second 2/2 wave: row 1, the
-    bonus is gone (2 vs 2, no losses). Re-enabling costs 2 CP again and is a new intent."""
-    run, d, _ = _defended(30)
+    """After row 10 the defence (recharged here by hand) meets a second 2/2 wave 40 ticks after
+    the end of the first fight: row 1, the bonus is gone and 40 ticks gather none (2 vs 2, no
+    losses; DEC-30). Switching «Защита» on again while in it is refused: nothing to change."""
+    run, d, _ = _defended(120)
     state = run.state
     assert state.groups[d].mode is Mode.DEFENSE
     assert _public(state) == [(1, IntentKind.DEFENSE, 1, None, 1)]
@@ -312,9 +312,9 @@ def test_defense_bonus_is_spent_in_the_first_fight_and_the_mode_holds() -> None:
     assert [(f.get("losses_0"), f.get("losses_1")) for f in second] == [(0, 0)]
     assert (state.groups[d].units, state.groups[d].charged) == (2, 0)  # 2 vs 2, no bonus
     state.players[1].cp = 300  # setup: no economy in this test
-    run.step((1, SetMode(d, Mode.DEFENSE)))
-    assert state.players[1].cp == 100
-    assert _public(state) == [(1, IntentKind.DEFENSE, 1, None, state.tick)]
+    assert run.step((1, SetMode(d, Mode.DEFENSE))) == [Reject(RejectCode.NO_CHANGE)]
+    assert state.players[1].cp == 300
+    assert _public(state) == [(1, IntentKind.DEFENSE, 1, None, 1)]
 
 
 def test_move_drops_defense_for_free() -> None:
@@ -399,7 +399,7 @@ def test_a_road_build_is_not_public() -> None:
 
 
 def test_intent_of_a_destroyed_group_is_removed() -> None:
-    # Row 3: 4 vs 2 (the «Защита» bonus is not active yet at tick 30): the defence dies at 70.
+    # Row 3: 4 vs 2 (29 ticks of «Защита» gather no bonus, DEC-30): the defence dies at 70.
     state = _state()
     d = _add(state, 1, 2, 2, 1)
     a = _add(state, 0, 4, 4, 0)

@@ -76,9 +76,8 @@ def _rules() -> Ruleset:
         orders=dataclasses.replace(
             base.orders,
             planned_delay_ticks=30,
-            defense_delay_ticks=30,
             planned_bonus_per_edge=2,
-            defense_bonus=2,
+            defense_ticks_per_bonus=60,
             cost=costs,
         ),
         capacity=dataclasses.replace(
@@ -200,7 +199,7 @@ class _Run:
         results, events = apply_commands(state, RULES, batch)
         state.events = events
         state.events += movement(state, RULES)
-        state.events += combat(state, RULES, active_bonuses(state))
+        state.events += combat(state, RULES, active_bonuses(state, RULES))
         state.events += capacity(state, RULES)
         state.events += recruit(state, RULES)
         state.events += orders(state, RULES)
@@ -236,22 +235,24 @@ def _validate_move(state: GameState, gid: int, dest: int) -> Ok | Reject:
 
 
 def test_dec20_example_1_arrival_joins_the_defending_group() -> None:
-    # G1 3/3 in «Защита» with an active +2 stands in A; G2 2/1 arrives from D (20 ticks).
+    # G1 3/3 in «Защита» with a gathered +2 stands in A; G2 2/1 arrives from D (20 ticks).
     state = _state()
     g1 = _add(state, 3, 3, A)
     g2 = _add(state, 2, 1, D)
     run = _Run(state)
-    run.step(SetMode(g1, Mode.DEFENSE))  # tick 1: the bonus is active from tick 31
-    run.until(14)
-    run.step(Move(g2, A))  # tick 15: arrives at tick 34
-    run.until(33)
+    run.step(SetMode(g1, Mode.DEFENSE))  # tick 1: +1 per 60 ticks in the mode (DEC-30)
+    run.until(114)
+    run.step(Move(g2, A))  # tick 115: arrives at tick 134
+    run.until(133)
     assert g2 in state.groups
     run.step()
     assert g2 not in state.groups
     assert _counts(state, g1) == (5, 4, Mode.DEFENSE)
-    assert (state.groups[g1].bonus, active_bonuses(state)[g1].amount) == (2, 2)
+    # The target keeps its count of «Защита» (DEC-30, merge): 134 ticks, +2.
+    assert state.groups[g1].ticks_in_defense == 134
+    assert active_bonuses(state, RULES)[g1].amount == 2
     assert state.groups[g1].intent in state.intents
-    (merged,) = run.kinds("groups_merged", 34)
+    (merged,) = run.kinds("groups_merged", 134)
     assert (merged.get("player"), merged.get("group"), merged.get("units")) == (0, g1, 5)
 
 
@@ -368,13 +369,14 @@ def test_dec20_example_9_merge_keeps_the_defense_of_the_smallest_id() -> None:
     g4 = _add(state, 1, 1, A)
     run = _Run(state)
     run.step(SetMode(g1, Mode.DEFENSE))
-    run.until(31)  # the bonus is active
+    run.until(121)  # 121 ticks in «Защита»: +2 (DEC-30)
     cp = state.players[0].cp
     assert run.step(Merge((g1, g4))) == [Ok(cost=0)]
     assert state.players[0].cp == cp
     assert g4 not in state.groups
     assert _counts(state, g1) == (3, 3, Mode.DEFENSE)
-    assert state.groups[g1].bonus == 2 and g1 in active_bonuses(state)
+    assert state.groups[g1].ticks_in_defense == 122
+    assert active_bonuses(state, RULES)[g1].amount == 2
 
 
 # C. Cancel --------------------------------------------------------------------------------------
@@ -442,13 +444,15 @@ def test_dec20_example_14_cancel_defense(cmd: str) -> None:
     g = _add(state, 2, 2, A)
     run = _Run(state)
     run.step(SetMode(g, Mode.DEFENSE))
-    run.until(31)
+    run.until(121)
     cp = state.players[0].cp
     command = CancelOrder(g) if cmd == "cancel" else SetMode(g, Mode.ATTACK)
     assert run.step(command) == [Ok(cost=0)]
     assert state.players[0].cp == cp
     assert _counts(state, g) == (2, 2, Mode.ATTACK)
-    assert (state.groups[g].bonus, state.groups[g].intent, state.intents) == (0, None, {})
+    group = state.groups[g]
+    assert (group.ticks_in_defense, group.intent, state.intents) == (0, None, {})
+    assert active_bonuses(state, RULES) == {}
 
 
 # D. Stack limit ---------------------------------------------------------------------------------

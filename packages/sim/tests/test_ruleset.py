@@ -106,8 +106,8 @@ def test_mvp0_starvation(mvp0: Ruleset) -> None:
 
 def test_mvp0_order_timing_and_bonuses(mvp0: Ruleset) -> None:
     orders = mvp0.orders
-    assert (orders.planned_delay_ticks, orders.defense_delay_ticks) == (30, 30)
-    assert (orders.planned_bonus_per_edge, orders.defense_bonus) == (1, 2)  # DEC-29, DEC-08
+    assert orders.planned_delay_ticks == 30
+    assert (orders.planned_bonus_per_edge, orders.defense_ticks_per_bonus) == (1, 60)  # DEC-29, 30
     assert orders.stance_cooldown_ticks == 100
 
 
@@ -297,8 +297,9 @@ def test_hash_changes_when_any_value_changes() -> None:
     # Keys of SIM-01, DEC-16, DEC-22, DEC-18, DEC-19 by hand; #253: -2; DEC-24: +3; DEC-25: +2;
     # DEC-26: +11 (2 costs, 3 city_upgrades, 6 warehouse) - 2 (supply.freight_amount); DEC-28:
     # +4 (supply.rear_min_default, supply.rear_min_max, cost.front, cost.rear_min) - 2
-    # (supply.buffer, cost.priority).
-    assert len(leaves) == 80
+    # (supply.buffer, cost.priority); DEC-30: +1 (orders.defense_ticks_per_bonus) - 2
+    # (orders.defense_delay_ticks, orders.defense_bonus).
+    assert len(leaves) == 79
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)

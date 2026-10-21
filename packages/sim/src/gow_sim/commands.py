@@ -493,8 +493,9 @@ def _check(
                 return group
             if group.fight is not None:
                 return Reject(RejectCode.IN_FIGHT)
-            # Re-enabling «Защита» is allowed and costs again (DEC-08): a new bonus and intent.
-            if mode == group.mode and mode is not Mode.DEFENSE:
+            # «Защита» again while in it would only reset what it gathered (DEC-30): after a
+            # fight it gathers anew by itself; switching it on after leaving it costs again.
+            if mode == group.mode:
                 return Reject(RejectCode.NO_CHANGE)
             return ()
         case UpgradeRoad(edge=eid):
@@ -772,6 +773,7 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             group.order = Order(path=ok.path[1:], planned=planned, depart_tick=tick + delay)
             if group.mode is Mode.DEFENSE:
                 group.mode = Mode.ATTACK  # a move order drops «Защита» for free (DEC-08)
+                group.ticks_in_defense = 0  # with what it gathered (DEC-30)
             if group.fight is not None:  # a defender withdraws after the next round (DEC-24)
                 _set_leaving(state, group, leaving=True)
             if planned:  # public intent now, the bonus from the departure on (DEC-08)
@@ -803,13 +805,10 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             group = state.groups[gid]
             group.mode = mode
             group.order = None  # the group stops where it stands
-            if mode is Mode.DEFENSE:  # public at once, the bonus after the delay (DEC-08)
-                group.bonus = rules.orders.defense_bonus
-                group.bonus_tick = tick + rules.orders.defense_delay_ticks
-                set_intent(state, group, IntentKind.DEFENSE)
-            else:
-                clear_bonus(group)
-                set_intent(state, group, None)
+            group.ticks_in_defense = 0  # «Защита» gathers its bonus from now on (DEC-30)
+            clear_bonus(group)
+            # «Защита» is public at once (DEC-08); its bonus grows in ``systems.orders``.
+            set_intent(state, group, IntentKind.DEFENSE if mode is Mode.DEFENSE else None)
             return []
         case UpgradeRoad(edge=eid):
             return [start_road(state, player, eid)]  # not public (DEC-16, DEC-28)
@@ -847,6 +846,7 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                 group.order = None
             else:
                 group.mode = Mode.ATTACK  # «Защита» (validated)
+                group.ticks_in_defense = 0
             clear_bonus(group)
             set_intent(state, group, None)
             return []

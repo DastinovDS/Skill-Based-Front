@@ -30,7 +30,7 @@ export interface MatchContext {
   /** `ruleset_public.tick_hz`: paces the snapshot buffer and ages fog memories. */
   tickHz: number;
   /** `ruleset_public.orders`: the delays of the countdown on order arrows. */
-  orders?: Pick<OrdersPublic, 'planned_delay_ticks' | 'defense_delay_ticks'>;
+  orders?: Pick<OrdersPublic, 'planned_delay_ticks'>;
   /** `ruleset_public.capacity`: the arc of the overcrowding pill. */
   capacity?: Pick<CapacityPublic, 'attrition_ticks' | 'grace_ticks'>;
   /** `ruleset_public.combat.round_ticks`: the round progress of a fight going on (DEC-24). */
@@ -127,7 +127,7 @@ export class MatchSession implements RenderSource {
     this.orderDelays =
       orders === undefined
         ? undefined
-        : { planned: orders.planned_delay_ticks, defense: orders.defense_delay_ticks };
+        : { planned: orders.planned_delay_ticks };
     this.roundTicks = context.roundTicks;
     this.recruitTicks = context.recruitTicks;
     this.cityUpgrades = context.cityUpgrades;

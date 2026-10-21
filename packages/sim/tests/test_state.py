@@ -284,6 +284,7 @@ _GROUP0: dict[str, Any] = {
     "intent": None,
     "bonus": 0,
     "bonus_tick": 0,
+    "ticks_in_defense": 0,
     "fight": None,
 }
 

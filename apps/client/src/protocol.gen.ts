@@ -318,7 +318,6 @@ export interface CombatPublic {
    * group when it departs (DEC-29).
    */
   planned_bonus_per_edge: number;
-  defense_bonus: number;
   /**
    * Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight.
    */
@@ -363,11 +362,15 @@ export interface StancePctPublic {
   war: number;
 }
 /**
- * Delays of planned orders and modes, and the stance cooldown (``orders`` of the ruleset).
+ * Delays of planned orders, the growth of Defense and the stance cooldown (``orders``).
  */
 export interface OrdersPublic {
   planned_delay_ticks: number;
-  defense_delay_ticks: number;
+  /**
+   * Defense gains one virtual shot per this many ticks in the mode, at most the charged units
+   * of the group when a fight begins (DEC-30).
+   */
+  defense_ticks_per_bonus: number;
   stance_cooldown_ticks: number;
 }
 /**
@@ -633,6 +636,15 @@ export interface GroupView {
   mode: Mode;
   location: Location;
   order: OrderView | null;
+  /**
+   * In Defense (DEC-30): the bonus the group would bring into a fight beginning now, what it
+   * has gathered at most ``defense_cap``; ``None`` in another mode. Enemy groups never have it.
+   */
+  defense_bonus: number | null;
+  /**
+   * In Defense: the cap of its bonus, the charged units of the group (DEC-30, item 2).
+   */
+  defense_cap: number | null;
 }
 export interface AtNodeLoc {
   kind: 'node';
@@ -958,6 +970,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 19;
+export const PROTOCOL_VERSION = 20;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

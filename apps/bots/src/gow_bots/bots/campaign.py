@@ -262,7 +262,7 @@ class CampaignBot(Bot):
         # cancelled the pool are gone for good, and the surplus killed one unit each.
         units, charged = wave.estimate
         terrain = self.map.nodes[dest].terrain
-        pool = defender_pool(self.rules, terrain, charged, False)
+        pool = defender_pool(self.rules, terrain, charged, 0)
         cancelled = min(wave.charged, pool)
         killed = max(0, wave.charged - pool)
         self.memory[dest] = (tick, max(0, units - killed), max(0, charged - cancelled))

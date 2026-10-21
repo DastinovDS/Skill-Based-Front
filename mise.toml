@@ -217,8 +217,8 @@ usage = 'arg "<name>"'
 run = "uv run gow-maps mirror maps/src/{{usage.name}}.half.json -o maps/{{usage.name}}.json"
 
 [tasks.tournament]
-description = "Bot tournament (defaults: all maps, all bots, 100 seeds, 8 jobs, mvp-0; override after --)"
-run = "uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-0.toml"
+description = "Bot tournament (defaults: all maps, all bots, 100 seeds, 8 jobs, mvp-1; override after --)"
+run = "uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-1.toml"
 
 [tasks.report]
 description = "Balance report from a tournament result (arg: file, default docs/balance/latest.jsonl)"

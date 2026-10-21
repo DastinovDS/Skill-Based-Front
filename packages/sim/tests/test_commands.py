@@ -387,8 +387,10 @@ def test_set_mode_same_mode() -> None:
         RejectCode.NO_CHANGE
     )
     state.groups[ids.capital].mode = Mode.DEFENSE
-    # Re-enabling «Защита» costs again (DEC-08).
-    assert validate(state, RULES, 0, SetMode(ids.capital, Mode.DEFENSE)) == Ok(cost=200)
+    # «Защита» while in it would only reset what it gathered (DEC-30): nothing to change.
+    assert validate(state, RULES, 0, SetMode(ids.capital, Mode.DEFENSE)) == Reject(
+        RejectCode.NO_CHANGE
+    )
 
 
 def test_upgrade_road_rules() -> None:

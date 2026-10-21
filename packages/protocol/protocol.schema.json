@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 19,
+    "PROTOCOL_VERSION": 20,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -315,11 +315,6 @@
           "minimum": 0,
           "type": "integer"
         },
-        "defense_bonus": {
-          "maximum": 2147483647,
-          "minimum": -2147483647,
-          "type": "integer"
-        },
         "round_ticks": {
           "description": "Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight.",
           "maximum": 2147483647,
@@ -341,7 +336,6 @@
       "required": [
         "terrain_defense_mod",
         "planned_bonus_per_edge",
-        "defense_bonus",
         "round_ticks",
         "shots_per_round",
         "regroup_ticks"
@@ -1036,6 +1030,32 @@
               "type": "null"
             }
           ]
+        },
+        "defense_bonus": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "In Defense (DEC-30): the bonus the group would bring into a fight beginning now, what it\nhas gathered at most ``defense_cap``; ``None`` in another mode. Enemy groups never have it."
+        },
+        "defense_cap": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "In Defense: the cap of its bonus, the charged units of the group (DEC-30, item 2)."
         }
       },
       "required": [
@@ -1044,7 +1064,9 @@
         "charged",
         "mode",
         "location",
-        "order"
+        "order",
+        "defense_bonus",
+        "defense_cap"
       ],
       "title": "GroupView",
       "type": "object"
@@ -1815,16 +1837,17 @@
     },
     "OrdersPublic": {
       "additionalProperties": false,
-      "description": "Delays of planned orders and modes, and the stance cooldown (``orders`` of the ruleset).",
+      "description": "Delays of planned orders, the growth of Defense and the stance cooldown (``orders``).",
       "properties": {
         "planned_delay_ticks": {
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
         },
-        "defense_delay_ticks": {
+        "defense_ticks_per_bonus": {
+          "description": "Defense gains one virtual shot per this many ticks in the mode, at most the charged units\nof the group when a fight begins (DEC-30).",
           "maximum": 2147483647,
-          "minimum": 0,
+          "minimum": 1,
           "type": "integer"
         },
         "stance_cooldown_ticks": {
@@ -1835,7 +1858,7 @@
       },
       "required": [
         "planned_delay_ticks",
-        "defense_delay_ticks",
+        "defense_ticks_per_bonus",
         "stance_cooldown_ticks"
       ],
       "title": "OrdersPublic",

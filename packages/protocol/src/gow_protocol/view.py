@@ -235,11 +235,23 @@ class GroupView(WireModel):
     mode: Mode
     location: Location
     order: OrderView | None
+    defense_bonus: NonNegInt | None
+    """In Defense (DEC-30): the bonus the group would bring into a fight beginning now, what it
+    has gathered at most ``defense_cap``; ``None`` in another mode. Enemy groups never have it."""
+    defense_cap: NonNegInt | None
+    """In Defense: the cap of its bonus, the charged units of the group (DEC-30, item 2)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
         if self.charged > self.units:
             raise ValueError("charged must not exceed units")
+        defense = self.mode is Mode.DEFENSE
+        if (self.defense_bonus is not None, self.defense_cap is not None) != (defense, defense):
+            raise ValueError("defense_bonus and defense_cap are set exactly in Defense")
+        if self.defense_cap is not None and not (
+            self.defense_bonus is not None and self.defense_bonus <= self.defense_cap
+        ):
+            raise ValueError("defense_bonus must not exceed defense_cap")
         return self
 
 

@@ -135,11 +135,8 @@ export class IntentView {
           this.drawTargetRing(target, intent.target, warn);
         }
       } else if (intent.kind !== 'planned_move') {
-        const progress =
-          this.delays === null
-            ? null
-            : delayProgress(intent.created_tick, frame.tick, this.delays.defense);
-        this.placeIcon(icons++, intent, from, progress);
+        // Defense has no delay since DEC-30: its bonus grows, the disc has no arc (#318).
+        this.placeIcon(icons++, intent, from, null);
       }
     }
     // Hide the icons left over from the previous frame.

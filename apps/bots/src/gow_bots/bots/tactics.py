@@ -46,7 +46,7 @@ from gow_bots.bots.utility import prefer_planned, shots_to_take
 from gow_sim.commands import Command, Move, Recruit, SetMode, SetStance, UpgradeRoad
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import Detail, GroupView, IntentKind, Mode, PlayerView, Stance
+from gow_sim.view import Detail, GroupView, Mode, PlayerView, Stance
 
 __all__ = ["MEMORY_TICKS", "StrategyBot", "Turn"]
 
@@ -358,12 +358,9 @@ class StrategyBot(Bot):
             self.recruit(turn, node, keep)
 
     def fortify(self, turn: Turn) -> None:
-        """«Защита» on guards of threatened nodes whose bonus is missing or already spent."""
-        armed = {
-            i.origin
-            for i in turn.view.intents
-            if i.owner == self.player and i.kind is IntentKind.DEFENSE
-        }
+        """«Защита» on guards of threatened nodes not in it yet: the bonus grows with the time in
+        the mode and gathers anew after a fight without paying again (DEC-30), so the earlier the
+        better and once is enough."""
         for g in turn.groups:
             node = node_of(g)
             if (
@@ -371,7 +368,7 @@ class StrategyBot(Bot):
                 and g.id not in turn.busy
                 and turn.threatened[node]
                 and g.charged > 0
-                and not (g.mode is Mode.DEFENSE and node in armed)
+                and g.mode is not Mode.DEFENSE
                 and self.spend(turn, SetMode(g.id, Mode.DEFENSE))
             ):
                 turn.busy.add(g.id)
