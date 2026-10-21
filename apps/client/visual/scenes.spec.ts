@@ -1,14 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { SCENES } from './scenes.ts';
 
-// The three recorded snapshots of packages/protocol/fixtures/server/, each on its map, frozen at
-// the tick of the snapshot (see src/dev/scenarios.ts). Reference PNGs: visual/scenes.spec.ts-snapshots/.
-const SCENES = [
-  { id: 'snapshot', tick: 120 },
-  { id: 'snapshot_fog', tick: 300 },
-  { id: 'snapshot_clash', tick: 400 },
-  { id: 'overflow', tick: 120 },
-  { id: 'fights', tick: 400 },
-] as const;
+// The dev scenes (visual/scenes.ts, built in src/dev/scenarios.ts), each on its map, frozen at the
+// tick of its snapshot. Reference PNGs: visual/scenes.spec.ts-snapshots/.
 
 for (const scene of SCENES) {
   test(`scene ${scene.id} matches the reference`, async ({ page }) => {

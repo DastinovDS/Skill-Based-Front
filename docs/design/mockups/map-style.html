@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Направления стиля карты и юнитов (#332)</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#9da7b3;--you:#5b9bff;--warn:#ffb020}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif}
+header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border)}
+h1{font-size:16px;margin:0 8px 0 0}
+.seg{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg label{padding:6px 12px;cursor:pointer;background:var(--surface2);border-right:1px solid var(--border);white-space:nowrap}
+.seg label:last-child{border-right:0}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg input:checked+span{color:#0d1117;background:var(--you);margin:-6px -12px;padding:6px 12px;display:block}
+.seg input:focus-visible+span{outline:2px solid #f0f6fc;outline-offset:-2px}
+.opt{display:flex;gap:6px;align-items:center;color:var(--dim)}
+main{max-width:1500px;margin:0 auto;padding:16px}
+#stage{display:grid;gap:12px}
+#stage.one{grid-template-columns:minmax(0,1fr)}
+#stage.all{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+figure{margin:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#000}
+figcaption{padding:6px 10px;background:var(--surface);color:var(--dim);font-size:13px}
+svg{display:block;width:100%;height:auto}
+.gray svg{filter:grayscale(1)}
+#stage.one figure{max-width:1100px;margin:0 auto;width:100%}
+#stage.small figure{max-width:660px}
+.pulse{animation:pulse .8s ease-in-out infinite}
+.chip.pulse{transform-box:fill-box;transform-origin:center;animation:chip .8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
+@keyframes chip{0%,100%{transform:scale(1)}50%{transform:scale(1.22)}}
+.rm .pulse,.rm .chip.pulse{animation:none}
+@media (prefers-reduced-motion:reduce){.pulse,.chip.pulse{animation:none}}
+.cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-top:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
+.card h2{font-size:15px;margin:0 0 6px}
+.card dl{margin:0}.card dt{color:var(--dim);font-size:12px;margin-top:8px;text-transform:uppercase;letter-spacing:.04em}.card dd{margin:2px 0 0}
+.card.sel{border-color:var(--you)}
+.note{color:var(--dim);margin:12px 0 0;font-size:13px}
+code{background:var(--surface2);padding:0 4px;border-radius:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Направления стиля карты и юнитов</h1>
+  <div class="seg" role="radiogroup" aria-label="Направление">
+    <label><input type="radio" name="dir" value="flat" checked><span>D1 Плоский</span></label>
+    <label><input type="radio" name="dir" value="paper"><span>D2 Бумажная карта</span></label>
+    <label><input type="radio" name="dir" value="soft"><span>D3 Мягкий объём</span></label>
+    <label><input type="radio" name="dir" value="all"><span>Все три</span></label>
+  </div>
+  <label class="opt"><input type="checkbox" id="gray"> серая шкала (ахроматопсия)</label>
+  <label class="opt"><input type="checkbox" id="rm"> меньше движения</label>
+  <label class="opt"><input type="checkbox" id="small"> карта в 60% (читаемость издали)</label>
+</header>
+<main>
+  <div id="stage" class="one"></div>
+  <p class="note">Одна и та же сцена на трёх языках: свои города и группа в пути, свой приказ (тонкая стрелка с шевронами), запланированный приказ противника (лента, пунктирный контур), бой на городе в виде V3 «фишки» (DEC-32: до 8 на сторону, ◇ запас бонуса, подпись «бонусная атака»), переполнение (янтарное кольцо), туман справа с призраком. Всё нарисовано кодом на этой странице, картинок и шрифтов нет. Адрес с параметрами: <code>#dir=paper&amp;gray=1&amp;small=1&amp;rm=1</code>.</p>
+  <div class="cards" id="cards"></div>
+</main>
+<script>
+'use strict';
+const W = 960, H = 600;
+const TAU = Math.PI * 2;
+
+// ---- scene data (one map, one moment) ----
+const NODES = [
+  { id: 0, x: 120, y: 300, o: 'you', t: 'plains', cap: 6, u: 6, ch: 4, st: 4, stCap: 5, vp: 2, capital: true },
+  { id: 1, x: 270, y: 150, o: 'you', t: 'forest', cap: 3, u: 0, st: 2, stCap: 3, vp: 1 },
+  { id: 2, x: 270, y: 455, o: 'you', t: 'mountains', cap: 3, u: 0, st: 1, stCap: 3, vp: 1 },
+  { id: 3, x: 430, y: 300, o: 'you', t: 'plains', cap: 4, u: 3, ch: 1, st: 2, stCap: 4, vp: 1, alert: true, fight: true },
+  { id: 4, x: 590, y: 140, o: 'none', t: 'mountains', cap: 2, vp: 1 },
+  { id: 5, x: 590, y: 460, o: 'none', t: 'forest', cap: 2, vp: 1 },
+  { id: 6, x: 730, y: 300, o: 'enemy', t: 'plains', cap: 4, vp: 1, presence: true },
+  { id: 7, x: 860, y: 150, o: 'enemy', t: 'forest', cap: 3, vp: 1, fog: true },
+  { id: 8, x: 870, y: 445, o: 'enemy', t: 'mountains', cap: 6, vp: 2, fog: true, capital: true, ghost: true },
+];
+const ROADS = [[0,1,2],[0,2,1],[0,3,3],[1,3,2],[2,3,2],[1,4,1],[3,4,1],[3,5,1],[2,5,1],[4,6,1],[5,6,1],[3,6,2],[6,7,1],[6,8,2],[4,7,1],[5,8,1]];
+const radius = (n) => (n.cap <= 2 ? 11 : n.cap <= 4 ? 14 : n.cap <= 6 ? 17 : 20);
+
+// ---- themes: tokens per direction ----
+const TH = {
+  flat: { id: 'flat', label: 'D1 Плоский, доведённый (как сейчас, с правилами порядка)', dark: true,
+    bg: '#0d1117', ink: '#f0f6fc', inkBack: '#0d1117', plate: '#161b22',
+    you: '#5b9bff', enemy: '#e5484d', warn: '#ffb020', vp: '#e3b341',
+    nStroke: '#8b949e', nFill: '#2b3139', road: '#c4cbd4', roadA: .8, roadCase: '#0d1117',
+    land: { plains: '#3a4630', forest: '#25392b', mountains: '#4a453e' }, terr: .2, stamp: .22, empty: '#59636e' },
+  paper: { id: 'paper', label: 'D2 Штабная бумажная карта', dark: false,
+    bg: '#cbbf9f', ink: '#2b2218', inkBack: '#f3ead2', plate: '#f3ead2',
+    you: '#1d5fd1', enemy: '#b52328', warn: '#b36b00', vp: '#7a5a0c',
+    nStroke: '#6b5f4a', nFill: '#e6dcc0', road: '#fbf6e6', roadA: 1, roadCase: '#3a2f22',
+    land: { plains: '#e0d5b4', forest: '#d2cfa6', mountains: '#d9ccb0' }, terr: .30, stamp: .55, empty: '#a79b7e' },
+  soft: { id: 'soft', label: 'D3 Мягкий объём', dark: true,
+    bg: '#0a0f15', ink: '#f0f6fc', inkBack: '#0d1117', plate: '#161b22',
+    you: '#5b9bff', enemy: '#e5484d', warn: '#ffb020', vp: '#e3b341',
+    nStroke: '#8b949e', nFill: '#2b3139', road: '#cfd6df', roadA: .85, roadCase: '#0d1117',
+    land: { plains: '#44543b', forest: '#2b4631', mountains: '#5a5249' }, terr: .22, stamp: .5, empty: '#59636e' },
+};
+
+// ---- geometry helpers ----
+function seeded(s) { return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+const f1 = (v) => Math.round(v * 10) / 10;
+const pts = (a) => a.map((p) => f1(p[0]) + ',' + f1(p[1])).join(' ');
+function clipPoly(poly, f, label) {
+  const out = [];
+  for (let k = 0; k < poly.length; k++) {
+    const P = poly[k], Q = poly[(k + 1) % poly.length], fp = f(P.p), fq = f(Q.p);
+    if (fp <= 0) {
+      out.push({ p: P.p, e: P.e });
+      if (fq > 0) { const t = fp / (fp - fq); out.push({ p: [P.p[0] + (Q.p[0] - P.p[0]) * t, P.p[1] + (Q.p[1] - P.p[1]) * t], e: label }); }
+    } else if (fq <= 0) {
+      const t = fp / (fp - fq); out.push({ p: [P.p[0] + (Q.p[0] - P.p[0]) * t, P.p[1] + (Q.p[1] - P.p[1]) * t], e: P.e });
+    }
+  }
+  return out;
+}
+const CELLS = NODES.map((a) => {
+  let poly = [[0, 0], [W, 0], [W, H], [0, H]].map((p) => ({ p, e: -1 }));
+  for (const b of NODES) {
+    if (b === a) continue;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, nx = b.x - a.x, ny = b.y - a.y;
+    poly = clipPoly(poly, (p) => ((p[0] - mx) * nx + (p[1] - my) * ny) / Math.hypot(nx, ny), b.id);
+  }
+  return poly;
+});
+const centroid = (poly) => poly.reduce((s, v) => [s[0] + v.p[0] / poly.length, s[1] + v.p[1] / poly.length], [0, 0]);
+function segDist(px, py, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(px - (a.x + dx * t), py - (a.y + dy * t));
+}
+function inPoly(poly, x, y) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i].p, b = poly[j].p;
+    if ((a[1] > y) !== (b[1] > y) && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) c = !c;
+  }
+  return c;
+}
+// A quadratic arc left of the direction of travel (the order ribbon, ui-style 9.7), sampled.
+function arc(ax, ay, bx, by, bend, tEnd = 1) {
+  const mx = (ax + bx) / 2, my = (ay + by) / 2, dx = bx - ax, dy = by - ay;
+  const cx = mx + dy * bend, cy = my - dx * bend, out = [];
+  for (let i = 0; i <= 24; i++) {
+    const t = (i / 24) * tEnd, u = 1 - t;
+    out.push([u * u * ax + 2 * u * t * cx + t * t * bx, u * u * ay + 2 * u * t * cy + t * t * by]);
+  }
+  return out;
+}
+const d = (a) => 'M' + a.map((p) => f1(p[0]) + ' ' + f1(p[1])).join('L');
+function arcPath(cx, cy, R, a0, a1) {
+  const x0 = cx + R * Math.cos(a0), y0 = cy + R * Math.sin(a0), x1 = cx + R * Math.cos(a1), y1 = cy + R * Math.sin(a1);
+  return `M${f1(x0)} ${f1(y0)}A${R} ${R} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${f1(x1)} ${f1(y1)}`;
+}
+function tri(cx, cy, s, k = 1) { // inverted triangle, apex down, scaled by k from the apex
+  const h = s * 0.866, ax = cx, ay = cy + h / 2;
+  return [[ax - (s * k) / 2, ay - h * k], [ax + (s * k) / 2, ay - h * k], [ax, ay]];
+}
+const star = (cx, cy, R) => Array.from({ length: 10 }, (_, i) => { const r = i % 2 ? R * 0.45 : R, a = -Math.PI / 2 + (i * Math.PI) / 5; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+function text(x, y, s, size, fill, extra = '') {
+  return `<text x="${f1(x)}" y="${f1(y)}" font-size="${size}" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="${fill}" font-variant-numeric="tabular-nums" ${extra}>${s}</text>`;
+}
+
+// ---- the scene ----
+function scene(th, uid) {
+  const I = (s) => s + '-' + uid;
+  const col = (o) => (o === 'you' ? th.you : o === 'enemy' ? th.enemy : th.nStroke);
+  const soft = th.id === 'soft', paper = th.id === 'paper';
+  const rnd = seeded(7 + uid.length);
+  let defs = '', body = '';
+
+  // defs: hatch patterns (paper: the owner is also told by the hatch angle), blur, shadow, grain
+  defs += `<pattern id="${I('hf')}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="9" stroke="#aab2bd" stroke-width="1.5" stroke-opacity=".32"/></pattern>`;
+  defs += `<pattern id="${I('hy')}" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="${th.you}" stroke-width="1.3" stroke-opacity=".5"/></pattern>`;
+  defs += `<pattern id="${I('he')}" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><line x1="0" y1="0" x2="0" y2="7" stroke="${th.enemy}" stroke-width="1.3" stroke-opacity=".5"/></pattern>`;
+  defs += `<pattern id="${I('hd')}" width="4" height="4" patternUnits="userSpaceOnUse"><line x1="0" y1="2" x2="4" y2="2" stroke="${th.ink}" stroke-width="1" stroke-opacity=".75"/></pattern>`;
+  defs += `<filter id="${I('blur')}" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="7"/></filter>`;
+  defs += `<filter id="${I('sh')}" x="-40%" y="-40%" width="180%" height="190%"><feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dy="3"/><feComponentTransfer><feFuncA type="linear" slope=".55"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+  defs += `<filter id="${I('grain')}"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="3"/><feColorMatrix values="0 0 0 0 .25  0 0 0 0 .18  0 0 0 0 .1  0 0 0 .22 0"/></filter>`;
+  defs += `<radialGradient id="${I('gy')}" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#9cc3ff"/><stop offset="1" stop-color="${th.you}"/></radialGradient>`;
+  defs += `<radialGradient id="${I('ge')}" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ff8a8e"/><stop offset="1" stop-color="${th.enemy}"/></radialGradient>`;
+  defs += `<radialGradient id="${I('gn')}" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#4a535e"/><stop offset="1" stop-color="${th.nFill}"/></radialGradient>`;
+  defs += `<radialGradient id="${I('vig')}" cx=".5" cy=".5" r=".75"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="${paper ? '#5a4a2a' : '#000'}" stop-opacity="${paper ? .45 : .5}"/></radialGradient>`;
+  CELLS.forEach((c, i) => { defs += `<clipPath id="${I('c' + i)}"><polygon points="${pts(c.map((v) => v.p))}"/></clipPath>`; });
+
+  // background + land
+  body += `<rect width="${W}" height="${H}" fill="${th.bg}"/>`;
+  NODES.forEach((n, i) => {
+    const c = CELLS[i];
+    body += `<polygon points="${pts(c.map((v) => v.p))}" fill="${th.land[n.t]}"/>`;
+  });
+  if (paper) body += `<rect width="${W}" height="${H}" filter="url(#${I('grain')})"/>`;
+
+  // terrain stamps (ui-style 9.2) and, per direction, the way the terrain is drawn
+  NODES.forEach((n, i) => {
+    const c = CELLS[i], cen = centroid(c);
+    let s = `<g clip-path="url(#${I('c' + i)})">`;
+    if (paper) { // contour lines: the cell shrunk towards its centre, wobbling
+      for (const k of [0.84, 0.68, 0.52]) {
+        s += `<polygon points="${pts(c.map((v, j) => [cen[0] + (v.p[0] - cen[0]) * k + Math.sin(j * 2.1 + k * 9) * 3, cen[1] + (v.p[1] - cen[1]) * k + Math.cos(j * 1.7 + k * 7) * 3]))}" fill="none" stroke="${th.ink}" stroke-opacity=".14" stroke-width="1" stroke-dasharray="${n.t === 'mountains' ? '' : '5 3'}"/>`;
+      }
+    }
+    const gx = n.t === 'forest' ? 34 : n.t === 'mountains' ? 52 : 30, gy = n.t === 'forest' ? 30 : n.t === 'mountains' ? 40 : 26;
+    const col0 = Math.floor(W / gx) + 1, row0 = Math.floor(H / gy) + 1;
+    for (let r = 0; r < row0; r++) for (let q = 0; q < col0; q++) {
+      const x = q * gx + (r % 2 ? gx / 2 : 0) + (rnd() - .5) * 6, y = r * gy + (rnd() - .5) * 6;
+      if (!inPoly(c, x, y)) continue;
+      if (Math.hypot(x - n.x, y - n.y) < 40) continue;
+      if (ROADS.some(([a, b]) => segDist(x, y, NODES[a], NODES[b]) < 13)) continue;
+      const a = th.stamp;
+      if (paper) {
+        if (n.t === 'forest') s += `<g stroke="${th.ink}" stroke-opacity="${a}" fill="none" stroke-width="1.1"><circle cx="${f1(x)}" cy="${f1(y - 3)}" r="4.2"/><path d="M${f1(x)} ${f1(y + 1)}v5"/></g>`;
+        else if (n.t === 'mountains') s += `<g stroke="${th.ink}" stroke-opacity="${a}" fill="none" stroke-width="1.1"><path d="M${f1(x - 11)} ${f1(y + 7)}L${f1(x)} ${f1(y - 9)}L${f1(x + 11)} ${f1(y + 7)}"/><path d="M${f1(x)} ${f1(y - 9)}L${f1(x + 2)} ${f1(y + 7)}M${f1(x - 3)} ${f1(y - 3)}l-3 8M${f1(x + 6)} ${f1(y - 1)}l-2 8"/></g>`;
+        else s += `<g fill="${th.ink}" fill-opacity="${a}"><circle cx="${f1(x - 4)}" cy="${f1(y)}" r="1.1"/><circle cx="${f1(x + 3)}" cy="${f1(y - 2)}" r="1.1"/><circle cx="${f1(x + 1)}" cy="${f1(y + 4)}" r="1.1"/></g>`;
+      } else if (soft) {
+        if (n.t === 'forest') s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(7 + rnd() * 4)}" fill="#0a1a0e" fill-opacity=".34"/><circle cx="${f1(x - 2)}" cy="${f1(y - 2)}" r="${f1(4 + rnd() * 2)}" fill="#6fae6a" fill-opacity=".16"/>`;
+        else if (n.t === 'mountains') s += `<path d="M${f1(x - 15)} ${f1(y + 9)}L${f1(x)} ${f1(y - 13)}L${f1(x)} ${f1(y + 9)}Z" fill="#fff" fill-opacity=".14"/><path d="M${f1(x)} ${f1(y - 13)}L${f1(x + 15)} ${f1(y + 9)}L${f1(x)} ${f1(y + 9)}Z" fill="#000" fill-opacity=".3"/>`;
+        else s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="12" ry="5" fill="#fff" fill-opacity=".05"/>`;
+      } else {
+        if (n.t === 'forest') s += `<path d="M${f1(x)} ${f1(y - 8)}l5 11h-10z" fill="${th.inkBack}" fill-opacity="${a}"/>`;
+        else if (n.t === 'mountains') s += `<path d="M${f1(x - 9)} ${f1(y + 5)}L${f1(x)} ${f1(y - 6)}L${f1(x + 9)} ${f1(y + 5)}" fill="none" stroke="${th.inkBack}" stroke-opacity="${a + .08}" stroke-width="2.4" stroke-linejoin="round"/>`;
+        else s += `<path d="M${f1(x - 4)} ${f1(y + 3)}l2-6M${f1(x)} ${f1(y + 3)}l0-8M${f1(x + 4)} ${f1(y + 3)}l-2-6" stroke="${th.inkBack}" stroke-opacity="${a}" stroke-width="1.6" fill="none"/>`;
+      }
+    }
+    body += s + '</g>';
+  });
+  if (soft) body += `<rect width="${W}" height="${H}" fill="url(#${I('vig')})"/>`;
+
+  // territory: owner fill (paper: hatch angle too), thin cell lines, owner border where owners differ
+  NODES.forEach((n, i) => {
+    const c = CELLS[i];
+    if (n.o !== 'none') {
+      const fill = paper ? `url(#${I(n.o === 'you' ? 'hy' : 'he')})` : col(n.o);
+      body += `<polygon points="${pts(c.map((v) => v.p))}" fill="${fill}" fill-opacity="${paper ? 1 : th.terr}"/>`;
+      if (paper) body += `<polygon points="${pts(c.map((v) => v.p))}" fill="${col(n.o)}" fill-opacity=".08"/>`;
+    }
+    body += `<polygon points="${pts(c.map((v) => v.p))}" fill="none" stroke="${th.ink}" stroke-opacity="${paper ? .22 : .14}" stroke-width="1"/>`;
+  });
+  NODES.forEach((n, i) => {
+    if (n.o === 'none') return;
+    const c = CELLS[i];
+    for (let k = 0; k < c.length; k++) {
+      const nb = NODES[c[k].e];
+      if (!nb || nb.o === n.o) continue;
+      const a = c[k].p, b = c[(k + 1) % c.length].p;
+      const line = `M${f1(a[0])} ${f1(a[1])}L${f1(b[0])} ${f1(b[1])}`;
+      if (soft) body += `<path d="${line}" stroke="${col(n.o)}" stroke-width="9" stroke-opacity=".75" filter="url(#${I('blur')})" clip-path="url(#${I('c' + i)})"/>`;
+      body += `<path d="${line}" stroke="${col(n.o)}" stroke-width="${paper ? 5 : 4}" stroke-opacity=".95" ${paper ? 'stroke-dasharray="11 4 2 4"' : ''} clip-path="url(#${I('c' + i)})"/>`;
+    }
+  });
+
+  // roads: thickness 0.5 + 1.5 w, level also by chevrons / centre line
+  ROADS.forEach(([a, b, w]) => {
+    const A = NODES[a], B = NODES[b], t = 0.5 + 1.5 * w, ln = `M${A.x} ${A.y}L${B.x} ${B.y}`;
+    body += `<path d="${ln}" stroke="${th.roadCase}" stroke-opacity="${paper ? .9 : .4}" stroke-width="${t + (paper ? 2.6 : 3)}" stroke-linecap="round"/>`;
+    body += `<path d="${ln}" stroke="${th.road}" stroke-opacity="${th.roadA}" stroke-width="${t}" stroke-linecap="round"/>`;
+    if (soft) body += `<path d="M${A.x - .6} ${A.y - .8}L${B.x - .6} ${B.y - .8}" stroke="#fff" stroke-opacity=".35" stroke-width="${f1(t * .35)}" stroke-linecap="round"/>`;
+    if (w >= 2) {
+      const len = Math.hypot(B.x - A.x, B.y - A.y), ang = Math.atan2(B.y - A.y, B.x - A.x) * 180 / Math.PI;
+      if (paper) body += `<path d="${ln}" stroke="${th.roadCase}" stroke-width="1" stroke-dasharray="6 5" stroke-opacity=".8"/>`;
+      else for (let s = 40; s < len - 40; s += 28) body += `<path d="M-3 -4l4 4l-4 4" fill="none" stroke="${th.inkBack}" stroke-width="1.8" transform="translate(${f1(A.x + (B.x - A.x) * s / len)} ${f1(A.y + (B.y - A.y) * s / len)}) rotate(${f1(ang)})"/>`;
+    }
+  });
+  // supply packets: a disc (supply) and a square (transfer, DEC-18)
+  const pk = (x, y, o, sq, n) => `<g>${sq ? `<rect x="${x - 5}" y="${y - 5}" width="10" height="10" fill="${col(o)}" stroke="${th.inkBack}" stroke-width="1.5"/>` : `<circle cx="${x}" cy="${y}" r="5" fill="${col(o)}" stroke="${th.inkBack}" stroke-opacity=".6" stroke-width="1"/>`}${n ? text(x + 11, y - 9, '×' + n, 10, th.ink, `stroke="${th.inkBack}" stroke-width="3" paint-order="stroke"`) : ''}</g>`;
+  body += pk(180, 300, 'you', false, 2) + pk(335, 223, 'you', true, 0);
+
+  // cities
+  NODES.forEach((n) => {
+    const r = radius(n), you = n.o === 'you', en = n.o === 'enemy';
+    const fillRef = soft ? `url(#${I(you ? 'gy' : en ? 'ge' : 'gn')})` : (n.o === 'none' ? th.nFill : col(n.o));
+    const outline = n.o === 'none' ? th.nStroke : th.ink;
+    let g = `<g ${soft ? `filter="url(#${I('sh')})"` : ''}>`;
+    g += `<circle r="${r + 3}" cx="${n.x}" cy="${n.y}" fill="none" stroke="${th.inkBack}" stroke-opacity="${paper ? 0 : .85}" stroke-width="3"/>`;
+    g += `<circle cx="${n.x}" cy="${n.y}" r="${r}" fill="${paper && n.o === 'none' ? th.nFill : fillRef}" stroke="${outline}" stroke-width="${n.o === 'none' ? 2 : 3}"/>`;
+    if (en) g += `<circle cx="${n.x}" cy="${n.y}" r="${r - 5}" fill="none" stroke="${paper ? th.inkBack : th.inkBack}" stroke-width="1.6"/>`;
+    if (paper && you) g += `<circle cx="${n.x}" cy="${n.y}" r="${r - 5}" fill="none" stroke="${th.inkBack}" stroke-width="1.2" stroke-opacity=".8"/>`;
+    if (n.capital && !n.u) g += `<polygon points="${pts(star(n.x, n.y, r * .55))}" fill="${th.ink === '#f0f6fc' ? th.ink : th.inkBack}" stroke="${th.inkBack === '#0d1117' ? th.inkBack : th.ink}" stroke-width="1.2"/>`;
+    // capacity ring: one segment per unit of capacity, filled = units standing here
+    const R = r + 7, seg = TAU / n.cap, gap = 0.16 * seg;
+    g += `<circle cx="${n.x}" cy="${n.y}" r="${R}" fill="none" stroke="${th.inkBack}" stroke-opacity="${paper ? .9 : .75}" stroke-width="7" ${paper ? 'stroke-opacity=".0"' : ''}/>`;
+    for (let k = 0; k < n.cap; k++) {
+      const filled = you && k < (n.u || 0), a0 = -Math.PI / 2 + k * seg + gap / 2, a1 = a0 + seg - gap;
+      g += `<path d="${arcPath(n.x, n.y, R, a0, a1)}" fill="none" stroke="${filled ? th.ink : (paper ? th.empty : '#59636e')}" stroke-width="4" ${paper && !filled ? 'stroke-opacity=".7"' : ''}/>`;
+    }
+    g += '</g>';
+    body += g;
+    // warehouse: one square per unit of capacity, coloured square = a charge (not only colour: filled vs empty frame)
+    if (you) {
+      const w = n.stCap * 6, x0 = n.x - w / 2 + 0.5, y0 = n.y + R + 9;
+      body += `<rect x="${f1(x0 - 2)}" y="${y0 - 2}" width="${w + 3}" height="8" rx="2" fill="${th.inkBack}" fill-opacity=".9"/>`;
+      for (let k = 0; k < n.stCap; k++) body += `<rect x="${f1(x0 + k * 6)}" y="${y0}" width="5" height="4" fill="${k < n.st ? th.you : 'none'}" stroke="${k < n.st ? 'none' : th.empty}" stroke-width="1"/>`;
+    }
+    // VP badge
+    body += `<circle cx="${f1(n.x + R + 3)}" cy="${f1(n.y - R - 3)}" r="8.5" fill="${th.inkBack}" stroke="${th.vp}" stroke-width="2"/>` + text(n.x + R + 3, n.y - R - 3, n.vp, 10.5, th.ink);
+  });
+
+  // units standing in a city: one inverted triangle with a dark rim, the number inside
+  const unitIcon = (cx, cy, s, units, ch, o, dashed, label) => {
+    const h = s * .866, k = ch === undefined ? 0 : Math.sqrt(ch / units);
+    const T = tri(cx, cy, s), fillC = col(o);
+    let g = `<g ${soft ? `filter="url(#${I('sh')})"` : ''}>`;
+    g += `<polygon points="${pts(T)}" fill="${th.plate}" stroke="${th.inkBack}" stroke-width="7" stroke-linejoin="round" stroke-opacity=".9"/>`;
+    g += `<polygon points="${pts(T)}" fill="${paper ? th.inkBack : th.plate}"/>`;
+    if (k > 0 && !dashed) g += `<polygon points="${pts(tri(cx, cy, s, k))}" fill="${soft ? `url(#${I(o === 'you' ? 'gy' : 'ge')})` : fillC}" ${paper ? `fill-opacity=".92"` : ''}/>`;
+    g += `<polygon points="${pts(T)}" fill="none" stroke="${dashed ? fillC : (o === 'you' ? th.ink : fillC)}" stroke-width="2.4" stroke-linejoin="round" ${dashed ? 'stroke-dasharray="5 3.5"' : ''}/>`;
+    if (o === 'enemy' && !dashed) g += `<polygon points="${pts(tri(cx, cy, s * .62))}" fill="none" stroke="${paper ? th.ink : th.ink}" stroke-width="1.5" stroke-opacity=".9" stroke-linejoin="round"/>`;
+    g += text(cx, cy - h * .12, label, s > 26 ? 12 : 11, th.ink, `stroke="${th.inkBack}" stroke-width="3" paint-order="stroke"`);
+    return g + '</g>';
+  };
+  body += unitIcon(120, 300, 30, 6, 4, 'you', false, '6');
+  body += unitIcon(430, 300, 26, 3, 1, 'you', false, '3');
+  body += unitIcon(730, 300, 24, 1, undefined, 'enemy', true, '?');
+  // a group on the road A -> D (3 units, 2 charged) with its own order: thin line, chevrons
+  const own = arc(120, 300, 430, 300, 0.1).filter((_, i) => i >= 8);
+  body += `<path d="${d(own)}" fill="none" stroke="${th.inkBack}" stroke-opacity=".7" stroke-width="6" stroke-linecap="round"/><path d="${d(own)}" fill="none" stroke="${th.you}" stroke-opacity=".9" stroke-width="3" stroke-linecap="round"/>`;
+  for (let i = 4; i < own.length - 3; i += 3) {
+    const p = own[i], q = own[i + 1], ang = Math.atan2(q[1] - p[1], q[0] - p[0]) * 180 / Math.PI;
+    body += `<path d="M-4 -5l5 5l-5 5" fill="none" stroke="${th.ink}" stroke-width="2" transform="translate(${f1(p[0])} ${f1(p[1])}) rotate(${f1(ang)})"/>`;
+  }
+  body += unitIcon(own[2][0], own[2][1], 28, 3, 2, 'you', false, '3');
+
+  // enemy planned order: an opaque ribbon, dashed outline (the order is announced, not yet sent)
+  const rib = arc(730 - 22, 300 + 8, 430 + 50, 300 - 8, -0.3), tip = rib[rib.length - 1], pre = rib[rib.length - 4];
+  const ang = Math.atan2(tip[1] - pre[1], tip[0] - pre[0]);
+  const rd = d(rib.slice(0, -2));
+  const head = (len, wid, back) => { const bx = tip[0] - Math.cos(ang) * len, by = tip[1] - Math.sin(ang) * len, nx = -Math.sin(ang), ny = Math.cos(ang); return pts([[tip[0] + Math.cos(ang) * back, tip[1] + Math.sin(ang) * back], [bx + nx * wid / 2, by + ny * wid / 2], [bx - nx * wid / 2, by - ny * wid / 2]]); };
+  body += `<path d="${rd}" fill="none" stroke="${th.enemy}" stroke-width="21" stroke-dasharray="9 5" stroke-linecap="butt"/>`;
+  body += `<path d="${rd}" fill="none" stroke="${th.plate}" stroke-opacity=".97" stroke-width="17"/><path d="${rd}" fill="none" stroke="${th.enemy}" stroke-opacity=".55" stroke-width="13"/>`;
+  body += `<polygon points="${head(28, 36, 0)}" fill="${th.plate}" stroke="${th.enemy}" stroke-width="2.2" stroke-dasharray="7 4" stroke-linejoin="round"/><polygon points="${head(26, 32, -2)}" fill="${th.enemy}" fill-opacity=".55"/>`;
+
+  // alert ring on the city under threat: dashed amber ring + "!" (shape, not only colour)
+  const dn = NODES[3], dr = radius(dn);
+  body += `<g class="pulse"><circle cx="${dn.x}" cy="${dn.y}" r="${dr + 17}" fill="none" stroke="${th.warn}" stroke-width="3" stroke-dasharray="9 6"/><circle cx="${dn.x - dr - 12}" cy="${dn.y + dr + 6}" r="9" fill="${th.warn}" stroke="${th.inkBack}" stroke-width="2"/>${text(dn.x - dr - 12, dn.y + dr + 6.5, '!', 12, '#0d1117')}</g>`;
+
+  // fog: dark overlay on hidden areas + hatched band along the border of what is seen; a ghost with an age
+  NODES.forEach((n, i) => {
+    if (!n.fog) return;
+    const c = CELLS[i];
+    body += `<polygon points="${pts(c.map((v) => v.p))}" fill="${paper ? '#6f6650' : th.bg}" fill-opacity="${paper ? .5 : .45}"/>`;
+    body += `<polygon points="${pts(c.map((v) => v.p))}" fill="none" stroke="url(#${I('hf')})" stroke-width="48" clip-path="url(#${I('c' + i)})" ${paper ? 'stroke-opacity=".9"' : ''}/>`;
+  });
+  const gh = NODES[8];
+  body += `<g opacity=".7"><polygon points="${pts(tri(gh.x - 52, gh.y - 40, 26))}" fill="none" stroke="${th.enemy}" stroke-width="2.4" stroke-dasharray="5 3.5"/>${text(gh.x - 52, gh.y - 45, '?', 13, th.ink)}</g>${text(gh.x - 52, gh.y - 62, '−0:21', 11, th.ink, `stroke="${th.inkBack}" stroke-width="3" paint-order="stroke"`)}`;
+
+  // V3 arena (DEC-32): a chip per unit, filled = charged, hatched = discharged, dashed = killed; ◇ = bonus stock
+  const ax = dn.x, ay = dn.y - 74, own_ = ['c', 'c', 'd'], en_ = ['c', 'd', 'd', 'k'];
+  const chip = (x, y, st, o, pulse) => {
+    const c = col(o);
+    const base = `<polygon points="${pts(tri(x, y, 15))}"`;
+    const cl = pulse ? ' class="chip pulse"' : ' class="chip"';
+    if (st === 'c') return `<g${cl}>${base} fill="${c}" stroke="${th.ink}" stroke-width="1.6" stroke-linejoin="round"/></g>`;
+    if (st === 'd') return `<g${cl}>${base} fill="${th.plate}" stroke="${c}" stroke-width="1.8" stroke-linejoin="round"/>${base} fill="url(#${I('hd')})" stroke="none" opacity=".8"/></g>`;
+    return `<g${cl} opacity=".55">${base} fill="none" stroke="${c}" stroke-width="1.6" stroke-dasharray="2.5 2.5" stroke-linejoin="round"/></g>`;
+  };
+  const dia = (x, y, o, n, filled) => `<g><polygon points="${x},${y - 6} ${x + 6},${y} ${x},${y + 6} ${x - 6},${y}" fill="${filled ? col(o) : 'none'}" stroke="${col(o)}" stroke-width="1.6"/>${text(x + 14, y, '×' + n, 11, th.ink)}</g>`;
+  let ar = `<g ${soft ? `filter="url(#${I('sh')})"` : ''}><rect x="${ax - 78}" y="${ay - 30}" width="156" height="66" rx="12" fill="${th.plate}" fill-opacity=".96" stroke="${th.ink}" stroke-opacity=".9" stroke-width="1.6"/><line x1="${ax}" y1="${ay - 24}" x2="${ax}" y2="${ay + 30}" stroke="${th.ink}" stroke-opacity=".4" stroke-dasharray="3 3"/>`;
+  own_.forEach((s, i) => { ar += chip(ax - 62 + i * 18, ay - 4, s, 'you', i === 2); });
+  en_.forEach((s, i) => { ar += chip(ax + 17 + i * 18, ay - 4, s, 'enemy', i >= 2); });
+  ar += dia(ax - 52, ay + 20, 'you', 2, true) + dia(ax + 28, ay + 20, 'enemy', 1, true) + '</g>';
+  // the bonus shot of the last round: a dashed arc with a diamond head and the tag "бонусная атака" (A1)
+  ar += `<path d="M${ax - 40} ${ay - 36}Q${ax} ${ay - 66} ${ax + 40} ${ay - 36}" fill="none" stroke="${th.you}" stroke-width="3" stroke-dasharray="3 5" stroke-linecap="round"/><polygon points="${ax + 40},${ay - 44} ${ax + 47},${ay - 36} ${ax + 40},${ay - 28} ${ax + 33},${ay - 36}" fill="${th.you}" stroke="${th.inkBack}" stroke-width="1.2"/>`;
+  ar += `<g><rect x="${ax - 55}" y="${ay - 71}" width="110" height="19" rx="9.5" fill="${th.plate}" stroke="${th.you}" stroke-width="1.6"/>${text(ax, ay - 61.5, '◇ бонусная атака', 11, th.ink)}</g>`;
+  body += ar;
+
+  // a chrome frame so each direction reads as a screen of the game
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${th.label}"><defs>${defs}</defs>${body}</svg>`;
+}
+
+// ---- the cards under the scene: what each direction changes ----
+const INFO = {
+  flat: { h: 'D1 Плоский, доведённый', lines: [
+    ['Идея', 'Тот же язык, что сейчас (тёмная карта, плоские фигуры), но с жёсткими правилами порядка: один набор радиусов и контуров, одна толщина обводок, квадраты заряда и склада, минимум плотности штампов.'],
+    ['В PixiJS', 'Ничего нового в рендере: правки констант в <code>style.ts</code>, штампы реже и тише, единая подложка под значки, ленты приказов не заходят на значки города. Объекты остаются в <code>Graphics</code>.'],
+    ['Запекание фонов', '<code>maps:bake</code> без изменений (или чуть тише палитра биомов, чтобы фон не спорил с территорией).'],
+    ['Библиотеки', 'Не нужны.'],
+    ['Цена по FPS', 'Нулевая: рисуется то же самое. Плотность штампов ниже даёт чуть меньше спрайтов.'],
+    ['Риск', 'Низкий. «Прототипный» вид остаётся: направление не меняет ощущение, а убирает шероховатости. Эталоны <code>visual</code> обновляются.'],
+  ] },
+  paper: { h: 'D2 Штабная бумажная карта', lines: [
+    ['Идея', 'Светлая карта на тёмном столе: бумага, контурные линии вместо рельефа, штриховка территории (угол штриховки: свои «/», противник «\\»), дороги как на карте, границы пунктиром карандашом. Классический синий и красный карандаш: читаются на бумаге лучше, чем на тёмном.'],
+    ['В PixiJS', 'Светлая подложка ломает правило «белый контур»: выделение, обводки городов и значков меняются на тёмные чернила (два набора токенов, <code>style.ts</code> становится темой). Территория: штриховка текстурой-тайлом (<code>TilingSprite</code>) вместо заливки. HUD остаётся тёмным.'],
+    ['Запекание фонов', 'Новый запекатель: бумага с зерном, контурные линии по полю высоты (marching squares по тому же шуму), штамп леса и гор вместо цвета биомов. <code>maps:bake</code> меняется целиком; файл фона того же размера.'],
+    ['Библиотеки', 'Не нужны. По желанию <code>NoiseFilter</code> из самого <code>pixi.js</code> для зерна бумаги: см. цену ниже.'],
+    ['Цена по FPS', 'Низкая: фон одна текстура, штриховка тайлом. Зерно запечь в фон, а не гонять фильтром по всему экрану (замер ниже в документе).'],
+    ['Риск', 'Высокий для обратной совместимости: перекраска всех знаков карты (контуры, выбор, подложки лент, радиальные меню над светлым полем), контраст HUD над светлой картой, новые эталоны, критерий 3:1 для значков пересчитывается. Зато лучшая читаемость сторон без цвета (угол штриховки).'],
+  ] },
+  soft: { h: 'D3 Мягкий объём', lines: [
+    ['Идея', 'Тёмная тема, но фигуры «приподняты»: города и значки с радиальным градиентом и мягкой тенью, граница территории светится, дороги с бликом, рельеф как «холмы» с освещением.'],
+    ['В PixiJS', 'Тени и градиенты запекаются в текстуры иконок (<code>generateTexture</code>) один раз на вид и размер города, а не фильтрами на каждом объекте; свечение границы: один <code>BlurFilter</code> на слой территории, слой кэшируется (<code>cacheAsTexture</code>) и пересчитывается при смене владельца. Значки юнитов становятся спрайтами (заливка по заряду маской или заранее нарезанными кадрами).'],
+    ['Запекание фонов', '<code>maps:bake</code> с затенением рельефа (hillshade по полю высоты), мягкие переходы биомов; размер файла вырастет.'],
+    ['Библиотеки', '<code>pixi-filters</code> 6.1.5 (peer <code>pixi.js &gt;=8.0.0-0</code>, MIT; проверено <code>npm view</code>): DropShadow, Glow, Outline. Нужны только для удобства: всё перечисленное делается и встроенными <code>BlurFilter</code> и текстурами. Частицы: <code>@pixi/particle-emitter</code> 5.0.10 работает только с PixiJS 7 (peer <code>&lt;8.0.0</code>), для 8 берём встроенный <code>ParticleContainer</code>.'],
+    ['Цена по FPS', 'Умеренная при запекании, высокая при фильтрах на каждом объекте: замер ниже в документе (software WebGL, 40 городов).'],
+    ['Риск', 'Средний: «мыльность» на встроенной графике, больше текстурной памяти, сложнее подсветка выбора и пул объектов. Мелкий символ с тенью на 20 px хуже читается, чем плоский.'],
+  ] },
+};
+function cards(which) {
+  const keys = which === 'all' ? ['flat', 'paper', 'soft'] : [which];
+  document.getElementById('cards').innerHTML = keys.map((k) => `<div class="card sel"><h2>${INFO[k].h}</h2><dl>${INFO[k].lines.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl></div>`).join('');
+}
+
+// ---- controls (state in the address) ----
+const $ = (s) => document.querySelector(s);
+function apply() {
+  const dir = document.querySelector('input[name=dir]:checked').value;
+  const stage = $('#stage');
+  stage.className = (dir === 'all' ? 'all' : 'one') + ($('#small').checked ? ' small' : '') + ($('#gray').checked ? ' gray' : '');
+  document.body.classList.toggle('rm', $('#rm').checked);
+  const keys = dir === 'all' ? ['flat', 'paper', 'soft'] : [dir];
+  stage.innerHTML = keys.map((k, i) => `<figure>${scene(TH[k], k + i)}<figcaption>${TH[k].label}</figcaption></figure>`).join('');
+  cards(dir);
+  const q = new URLSearchParams({ dir });
+  for (const id of ['gray', 'rm', 'small']) if ($('#' + id).checked) q.set(id, '1');
+  history.replaceState(null, '', '#' + q);
+}
+function fromHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  const r = document.querySelector(`input[name=dir][value=${q.get('dir') || 'flat'}]`);
+  if (r) r.checked = true;
+  for (const id of ['gray', 'rm', 'small']) $('#' + id).checked = q.get(id) === '1';
+}
+document.querySelectorAll('input').forEach((el) => el.addEventListener('change', apply));
+fromHash();
+apply();
+</script>
+</body>
+</html>
