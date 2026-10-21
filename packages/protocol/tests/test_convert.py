@@ -202,13 +202,8 @@ def _check_events(match: Match, events: list[Event], player: int) -> list[EventM
             assert owner == player
         else:
             assert raw.kind in PUBLIC_KINDS or raw.kind in FIGHT_KINDS
-        if raw.kind in FIGHT_KINDS:
-            other = 1 - player
-            for name in ("shots", "virtual", "spent"):
-                assert f"{name}_{other}" not in msg.data
-                data.pop(f"{name}_{other}", None)
-            if raw.kind != "fight_started":
-                assert msg.data[f"losses_{other}"] == data[f"losses_{other}"]
+        if raw.kind in FIGHT_KINDS:  # DEC-24, I2 as revised with DEC-29: every field to both
+            assert set(msg.data) == set(data)
         for key, value in msg.data.items():
             if key in ENTITY_KEYS:
                 assert value == str(opaque_id(match.match_key, player, int(str(data[key]))))
@@ -659,9 +654,10 @@ def test_event_policy() -> None:
     assert event_for_player(event(tick, "brand_new_kind", player=0), 0, KEY) is None
 
 
-def test_fight_events_hide_the_enemy_shots_and_charges() -> None:
-    """DEC-24, I2: both players get the fight events; the enemy's shots, virtual shots and spent
-    charges (its bonuses and charges) are cut out, the losses of both sides stay."""
+def test_fight_events_show_the_rounds_of_both_sides() -> None:
+    """DEC-24, I1 and I2 as revised with DEC-29 (#295): both players get the fight events whole:
+    the shots of both sides with the virtual (bonus) ones apart, the spent charges and the
+    losses. Nothing is cut out; only the fight id becomes the player's opaque id."""
     fight_round = event(
         17,
         "fight_round",
@@ -681,20 +677,39 @@ def test_fight_events_hide_the_enemy_shots_and_charges() -> None:
     for p in PLAYERS:
         msg = event_for_player(fight_round, p, KEY)
         assert msg is not None
-        o = 1 - p
-        data = dict(fight_round.data)
         assert msg.data == {
             "fight": str(opaque_id(KEY, p, 4)),
             "node": 2,
             "edge": None,
             "point": None,
-            f"shots_{p}": data[f"shots_{p}"],
-            f"virtual_{p}": data[f"virtual_{p}"],
-            f"spent_{p}": data[f"spent_{p}"],
+            "shots_0": 1,
+            "shots_1": 1,
+            "virtual_0": 0,
+            "virtual_1": 1,  # player 1's bonus shot is seen by player 0 too
             "losses_0": 0,
             "losses_1": 0,
+            "spent_0": 1,
+            "spent_1": 0,
         }
-        assert f"virtual_{o}" not in msg.data
+    ended = event(
+        57,
+        "fight_ended",
+        fight=4,
+        node=2,
+        edge=None,
+        point=None,
+        winner=0,
+        captured=True,
+        start=7,
+        shots_0=4,
+        shots_1=1,
+        losses_0=0,
+        losses_1=2,
+    )
+    for p in PLAYERS:
+        msg = event_for_player(ended, p, KEY)
+        assert msg is not None
+        assert (msg.data["shots_0"], msg.data["shots_1"]) == (4, 1)
 
 
 # Match end -----------------------------------------------------------------------------------

@@ -35,6 +35,7 @@ stop: in the tick of reaching it the group is already on the next edge with ``pr
 between ticks a group in transit is never ``AtNode`` (capacity counts only standing groups,
 #118). A path of edges of ``T1`` and ``T2`` ticks thus takes ``T1 + T2`` ticks. Only reaching
 the end of the path (the destination, or a node that is no longer own) is an ``Arrival``.
+A planned order's bonus is capped by the group's charged units when it departs (DEC-29).
 """
 
 import heapq
@@ -284,6 +285,11 @@ def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
             continue
         if state.tick < order.depart_tick:
             continue  # a planned order waits (DEC-08), an edge winner regroups (DEC-24, G4)
+        if order.planned and group.bonus > group.charged:
+            # DEC-29: the planned bonus is at most the charged units in the departure tick. A
+            # moving group's charges do not change (no recharge in transit), so capping on
+            # every step is the same as capping once when it leaves.
+            group.bonus = group.charged
         if isinstance(location, AtNode):
             eid = edge_between(mapdef, location.node, order.path[0]) if order.path else None
             if eid is None:

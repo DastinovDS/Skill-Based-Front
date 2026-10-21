@@ -107,7 +107,7 @@ def test_mvp0_starvation(mvp0: Ruleset) -> None:
 def test_mvp0_order_timing_and_bonuses(mvp0: Ruleset) -> None:
     orders = mvp0.orders
     assert (orders.planned_delay_ticks, orders.defense_delay_ticks) == (30, 30)
-    assert (orders.planned_bonus, orders.defense_bonus) == (2, 2)
+    assert (orders.planned_bonus_per_edge, orders.defense_bonus) == (1, 2)  # DEC-29, DEC-08
     assert orders.stance_cooldown_ticks == 100
 
 

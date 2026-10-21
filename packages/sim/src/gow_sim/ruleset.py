@@ -189,10 +189,17 @@ class OrderCosts:
 class OrderRules:
     planned_delay_ticks: int
     defense_delay_ticks: int
-    planned_bonus: int
+    planned_bonus_per_edge: int
+    """Virtual shots of a planned order per edge of its path (DEC-29); see ``planned_bonus``."""
     defense_bonus: int
     stance_cooldown_ticks: int
     cost: OrderCosts
+
+    def planned_bonus(self, edges: int, charged: int) -> int:
+        """The bonus of a planned order (DEC-29): ``edges`` of the path chosen at the command
+        times ``planned_bonus_per_edge``, at most the ``charged`` units of the group in the tick
+        it departs; a group without charged units gets 0."""
+        return min(edges * self.planned_bonus_per_edge, charged)
 
 
 @dataclass(frozen=True, slots=True)
@@ -434,7 +441,7 @@ def parse_ruleset(data: object) -> Ruleset:
                 (
                     "planned_delay_ticks",
                     "defense_delay_ticks",
-                    "planned_bonus",
+                    "planned_bonus_per_edge",
                     "defense_bonus",
                     "stance_cooldown_ticks",
                     "cost",
@@ -510,7 +517,7 @@ def _parse_orders(t: "_Table") -> OrderRules:
     return OrderRules(
         planned_delay_ticks=t.integer("planned_delay_ticks", low=0),
         defense_delay_ticks=t.integer("defense_delay_ticks", low=0),
-        planned_bonus=t.integer("planned_bonus", low=0),
+        planned_bonus_per_edge=t.integer("planned_bonus_per_edge", low=0),
         defense_bonus=t.integer("defense_bonus", low=0),
         stance_cooldown_ticks=t.integer("stance_cooldown_ticks", low=0),
         cost=OrderCosts(**{name: cost.integer(name, low=0) for name in names}),

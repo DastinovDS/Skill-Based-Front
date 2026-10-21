@@ -152,6 +152,20 @@ class FightMember:
     leaving: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class FightRound:
+    """The last round of a fight (DEC-24, item I1 as revised with DEC-29): by player, the shots
+    made, the virtual ones among them, the charges that left its units (``spent``) and the units
+    it lost. Public to both players, like the ``fight_round`` event of that round; the virtual
+    shots still left (``Fight.virtual``) are not."""
+
+    tick: int
+    shots: tuple[int, int]
+    virtual: tuple[int, int]
+    spent: tuple[int, int]
+    losses: tuple[int, int]
+
+
 @dataclass(slots=True)
 class Fight:
     """A fight that lasts over ticks (DEC-24): a node or an edge, rounds every ``round_ticks``.
@@ -163,6 +177,7 @@ class Fight:
     virtual shots left by player (bonuses, mountains; item F); ``mute``: real charges of the
     player silent in every round (plains, item F2); ``shots`` and ``losses``: totals of the fight
     by player (the edge winner, item G4). ``members``: the groups in the fight by group id.
+    ``last_round``: the latest round; ``None`` before the first one.
     """
 
     id: int
@@ -177,6 +192,7 @@ class Fight:
     shots: tuple[int, int]
     losses: tuple[int, int]
     members: dict[int, FightMember]
+    last_round: FightRound | None = None
 
 
 @dataclass(slots=True)
@@ -608,6 +624,17 @@ def _fight_data(f: Fight) -> dict[str, object]:
             }
             for gid, m in sorted(f.members.items())
         ],
+        "last_round": None if f.last_round is None else _round_data(f.last_round),
+    }
+
+
+def _round_data(r: FightRound) -> dict[str, object]:
+    return {
+        "tick": r.tick,
+        "shots": list(r.shots),
+        "virtual": list(r.virtual),
+        "spent": list(r.spent),
+        "losses": list(r.losses),
     }
 
 
@@ -879,6 +906,7 @@ def _parse_fight(data: object, where: str) -> Fight:
             "shots",
             "losses",
             "members",
+            "last_round",
         ),
     )
     members: dict[int, FightMember] = {}
@@ -925,6 +953,20 @@ def _parse_fight(data: object, where: str) -> Fight:
         shots=_pair(raw["shots"], f"{where}.shots"),
         losses=_pair(raw["losses"], f"{where}.losses"),
         members=members,
+        last_round=None
+        if raw["last_round"] is None
+        else _parse_round(raw["last_round"], f"{where}.last_round"),
+    )
+
+
+def _parse_round(data: object, where: str) -> FightRound:
+    raw = _obj(data, where, ("tick", "shots", "virtual", "spent", "losses"))
+    return FightRound(
+        tick=_int(raw["tick"], f"{where}.tick", low=0),
+        shots=_pair(raw["shots"], f"{where}.shots"),
+        virtual=_pair(raw["virtual"], f"{where}.virtual"),
+        spent=_pair(raw["spent"], f"{where}.spent"),
+        losses=_pair(raw["losses"], f"{where}.losses"),
     )
 
 

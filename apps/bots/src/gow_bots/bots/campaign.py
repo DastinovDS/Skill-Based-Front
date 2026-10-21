@@ -274,7 +274,7 @@ class CampaignBot(Bot):
         this tick, so an old memory does not make the bot hesitate.
         """
         view = ctx.view
-        bonus = self.rules.orders.planned_bonus
+        orders = self.rules.orders
         busy = self.fighting(view)
         for g in view.groups:
             if not isinstance(g.location, OnEdge) or g.order is None or g.id in busy:
@@ -285,7 +285,10 @@ class CampaignBot(Bot):
                 continue
             if self.enemy_at(view, dest) is None:
                 continue
-            have = g.charged + (bonus if g.order.planned else 0)
+            # The bonus was set by the whole path at the departure (DEC-29); the edges still to
+            # go are a lower bound of it.
+            bonus = orders.planned_bonus(len(g.order.path), g.charged) if g.order.planned else 0
+            have = g.charged + bonus
             if have < self.need(view, ctx.tick, dest) and self.spend(ctx, CancelOrder(g.id)):
                 ctx.used[g.id] = True
                 ctx.claimed.pop(dest, None)
@@ -294,7 +297,7 @@ class CampaignBot(Bot):
 
     def options(self, ctx: Ctx, groups: list[GroupView]) -> list[Option]:
         """Viable attacks of ``groups`` on nodes in reach, best first."""
-        view, bonus = ctx.view, self.rules.orders.planned_bonus
+        view, orders = ctx.view, self.rules.orders
         found: list[Option] = []
         for g in groups:
             if not self.may_leave(ctx, g):
@@ -303,11 +306,13 @@ class CampaignBot(Bot):
                 if view.nodes[dest].owner == self.player or dest in ctx.claimed:
                     continue
                 need = self.need(view, ctx.tick, dest)
+                edges = self.path_edges(view, node_of(g), dest, g.units)
+                bonus = orders.planned_bonus(edges, g.charged)
                 plain = g.charged >= need
-                plan = g.charged >= 1 and g.charged + bonus >= need
+                plan = bonus >= 1 and g.charged + bonus >= need
                 if not (plain or plan):
                     continue
-                planned = plan and (not plain or prefer_planned(self.rules, g.charged, need))
+                planned = plan and (not plain or prefer_planned(self.rules, g.charged, need, edges))
                 score = self.score(ctx, g, dest, need)
                 if score is not None:
                     found.append(Option(score, g, dest, planned, need))

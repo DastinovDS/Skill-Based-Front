@@ -476,11 +476,20 @@
         "edge": 5,
         "point": 1250,
         "attacker": null,
-        "start_tick": 396,
+        "start_tick": 386,
         "next_round_tick": 406,
         "groups": ["4d5e6f708192a3b4"],
         "enemy_units": 3,
-        "enemy_charged": 2
+        "enemy_charged": 2,
+        "shots": [3, 2],
+        "losses": [0, 1],
+        "last_round": {
+          "tick": 396,
+          "shots": [2, 1],
+          "virtual": [1, 0],
+          "spent": [1, 1],
+          "losses": [0, 1]
+        }
       }
     ]
   }

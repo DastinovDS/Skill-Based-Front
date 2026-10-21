@@ -175,6 +175,10 @@ def test_reactive_answers_a_visible_planned_strike_within_10_ticks(short_rules: 
 
 
 def test_reactive_holds_the_city_that_an_idle_bot_loses(short_rules: Ruleset) -> None:
+    # The strike goes to the neighbour: 2 charged + plan (+2) against 2 charged in a forest takes
+    # the city (DEC-24, row 9). Since DEC-29 a neighbour gives 1 per edge in the shipped
+    # rulesets, so the test doubles the per edge bonus to keep the strike that strong.
+    short_rules = replace(short_rules, orders=replace(short_rules.orders, planned_bonus_per_edge=2))
     mapdef = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "siege.json")
     held: dict[str, int | None] = {}
     for name in ("reactive", "idle"):

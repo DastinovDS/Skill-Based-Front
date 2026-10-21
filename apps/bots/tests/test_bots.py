@@ -87,15 +87,25 @@ def test_shots_to_take_follows_dec07(
 def test_planned_order_pays_when_the_bonus_turns_a_bounce_into_a_capture(
     mvp_rules: Ruleset,
 ) -> None:
-    # Example 9: 2 charged + plan (+2) take 2 charged defenders in a forest (need 4).
-    assert prefer_planned(mvp_rules, own_charged=2, need=4)
+    # Example 9: 2 charged + plan (+2: two edges away, DEC-29) take 2 charged defenders in a
+    # forest (need 4).
+    assert prefer_planned(mvp_rules, own_charged=2, need=4, edges=2)
+
+
+def test_planned_bonus_grows_with_the_distance(mvp_rules: Ruleset) -> None:
+    # DEC-29: a neighbour gives +1, which leaves 2 + 1 short of 4: no capture, and 1 shot is
+    # worth half the surcharge; two edges give +2 and the capture.
+    assert not prefer_planned(mvp_rules, own_charged=2, need=4, edges=1)
+    assert prefer_planned(mvp_rules, own_charged=2, need=4, edges=2)
+    # The cap: 1 charged unit gets +1 on any distance (example 4), too little for need 3.
+    assert not prefer_planned(mvp_rules, own_charged=1, need=3, edges=3)
 
 
 def test_planned_order_does_not_pay_for_shots_worth_its_surcharge(mvp_rules: Ruleset) -> None:
-    # mvp-0: the plan costs 1 CP more (200 - 100) and its 2 shots are worth 1 CP (2 charges/CP).
-    assert not prefer_planned(mvp_rules, own_charged=4, need=4)  # wins anyway
-    assert not prefer_planned(mvp_rules, own_charged=1, need=10)  # bounces anyway
-    assert not prefer_planned(mvp_rules, own_charged=3, need=0)  # an empty node
+    # mvp-0: the plan costs 1 CP more (200 - 100) and 2 shots are worth 1 CP (2 charges/CP).
+    assert not prefer_planned(mvp_rules, own_charged=4, need=4, edges=2)  # wins anyway
+    assert not prefer_planned(mvp_rules, own_charged=1, need=10, edges=2)  # bounces anyway
+    assert not prefer_planned(mvp_rules, own_charged=3, need=0, edges=2)  # an empty node
 
 
 def test_share_of_plans_follows_the_price(mvp_rules: Ruleset) -> None:
@@ -106,14 +116,14 @@ def test_share_of_plans_follows_the_price(mvp_rules: Ruleset) -> None:
             mvp_rules.orders, cost=dataclasses.replace(cost, planned_move=cost.move + 50)
         ),
     )
-    assert prefer_planned(cheap, own_charged=4, need=4)
+    assert prefer_planned(cheap, own_charged=4, need=4, edges=2)
     dear = dataclasses.replace(
         mvp_rules,
         orders=dataclasses.replace(
             mvp_rules.orders, cost=dataclasses.replace(cost, planned_move=cost.move + 500)
         ),
     )
-    assert not prefer_planned(dear, own_charged=2, need=4)
+    assert not prefer_planned(dear, own_charged=2, need=4, edges=2)
 
 
 # Baseline bots ---------------------------------------------------------------------------------

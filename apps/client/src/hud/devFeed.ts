@@ -190,6 +190,9 @@ export function devFights(map: MapFile, tick: number): SnapshotMsg['view']['figh
       groups: [],
       enemy_units: 3,
       enemy_charged: 2,
+      shots: [0, 0],
+      losses: [0, 0],
+      last_round: null,
     },
   ];
 }

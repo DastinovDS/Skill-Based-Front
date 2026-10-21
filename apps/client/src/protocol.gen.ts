@@ -313,7 +313,11 @@ export interface CostsPublic {
 }
 export interface CombatPublic {
   terrain_defense_mod: TerrainDefensePublic;
-  planned_bonus: number;
+  /**
+   * Virtual shots of a planned order per edge of its path, at most the charged units of the
+   * group when it departs (DEC-29).
+   */
+  planned_bonus_per_edge: number;
   defense_bonus: number;
   /**
    * Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight.
@@ -699,6 +703,9 @@ export interface IntentView {
  * (0..2000); the mark sits at ``point / 2000`` of the edge from ``a`` (item C3). ``groups``:
  * the own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this
  * fight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.
+ * ``shots`` and ``losses``: totals of the fight so far by player; ``last_round``: the latest
+ * round of both players, ``None`` before the first one. The virtual shots still left are not
+ * sent (DEC-24, item I1: the rounds are public, the stock is not).
  */
 export interface FightView {
   id: string;
@@ -714,6 +721,46 @@ export interface FightView {
   groups: string[];
   enemy_units: number;
   enemy_charged: number;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  shots: [number, number];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  losses: [number, number];
+  last_round: FightRoundView | null;
+}
+/**
+ * The latest round of a fight (DEC-24, item I1 as revised with DEC-29), both players, index
+ * = player id: ``shots`` made (cancelling and killing ones), ``virtual`` among them (bonuses,
+ * terrain), ``spent`` charges that left the player's units, ``losses`` in units. The same
+ * numbers as the ``fight_round`` event of that ``tick``.
+ */
+export interface FightRoundView {
+  tick: number;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  shots: [number, number];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  virtual: [number, number];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  spent: [number, number];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  losses: [number, number];
 }
 /**
  * Result of the command ``seq``: accepted (``reject_code`` is ``None``) or rejected.
@@ -911,6 +958,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 18;
+export const PROTOCOL_VERSION = 19;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

@@ -150,7 +150,6 @@ def test_vector_params_are_the_pinned_ruleset() -> None:
         "forest": mod.forest,
         "plains": mod.plains,
     }
-    assert params["planned_bonus"] == RULES.orders.planned_bonus
     assert params["defense_bonus"] == RULES.orders.defense_bonus
     assert params["round_ticks"] == RULES.combat.round_ticks
     assert params["shots_per_round"] == RULES.combat.shots_per_round

@@ -32,7 +32,7 @@
         "forest": 0,
         "mountains": 1
       },
-      "planned_bonus": 2,
+      "planned_bonus_per_edge": 1,
       "defense_bonus": 2,
       "round_ticks": 10,
       "shots_per_round": 1,

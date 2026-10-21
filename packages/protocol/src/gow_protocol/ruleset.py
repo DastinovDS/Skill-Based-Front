@@ -62,7 +62,9 @@ class TerrainDefensePublic(WireModel):
 
 class CombatPublic(WireModel):
     terrain_defense_mod: TerrainDefensePublic
-    planned_bonus: SignedInt
+    planned_bonus_per_edge: NonNegInt
+    """Virtual shots of a planned order per edge of its path, at most the charged units of the
+    group when it departs (DEC-29)."""
     defense_bonus: SignedInt
     round_ticks: PosInt
     """Ticks between the rounds of a fight (DEC-24, item B): the round progress of a fight."""
@@ -205,7 +207,7 @@ class RulesetPublic(WireModel):
                     forest=defense_mod.forest,
                     mountains=defense_mod.mountains,
                 ),
-                planned_bonus=rules.orders.planned_bonus,
+                planned_bonus_per_edge=rules.orders.planned_bonus_per_edge,
                 defense_bonus=rules.orders.defense_bonus,
                 round_ticks=rules.combat.round_ticks,
                 shots_per_round=rules.combat.shots_per_round,

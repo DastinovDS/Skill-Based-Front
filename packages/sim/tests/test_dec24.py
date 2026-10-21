@@ -26,12 +26,13 @@ from gow_sim.commands import (
     apply_commands,
     validate,
 )
-from gow_sim.maps import MapDef, parse_map
+from gow_sim.maps import PLAYERS, MapDef, parse_map
 from gow_sim.ruleset import load_ruleset
 from gow_sim.state import (
     PROGRESS_SCALE,
     AtNode,
     Event,
+    FightRound,
     GameState,
     Group,
     Mode,
@@ -293,8 +294,35 @@ def test_both_players_see_the_fight_with_exact_enemy_counters() -> None:
         assert (fight.enemy_units, fight.enemy_charged) == enemy
 
 
-def test_fog_the_enemy_virtual_shots_and_withdrawal_are_hidden() -> None:
-    """AGENTS.md 4.4: the enemy's bonuses, shots and withdrawals change nothing in the view."""
+def test_both_players_see_the_rounds_of_both_sides_with_the_enemy_bonus() -> None:
+    """I1 and I2 as revised with DEC-29 (#295): the rounds are public. The attacker 3/3 brings a
+    planned bonus of 2 (row 2 plus a plan): in the round at 11 its shot is virtual and cancels
+    the defender's real one, so the defender (player 1) sees the enemy's virtual shot."""
+    state = initial_state(_line(), RULES)
+    _add(state, 1, 2, 2, AtNode(1))
+    order = Order((1,), True, 0)
+    _add(state, 0, 3, 3, _before_arrival(state, 0, 0), order=order, bonus=2, bonus_tick=0)
+    run = _Run(state)
+    run.step()
+    for player in PLAYERS:
+        (fight,) = project(state, RULES, player, KEY).fights
+        assert fight.last_round is None  # before the first round: no data, no stock
+        assert (fight.shots, fight.losses) == ((0, 0), (0, 0))
+    while state.tick < 11:
+        run.step()
+    (rnd,) = run.kinds("fight_round")
+    expected = FightRound(11, shots=(1, 1), virtual=(1, 0), spent=(0, 1), losses=(0, 0))
+    for key in ("shots", "virtual", "spent", "losses"):  # the event carries the same numbers
+        assert (rnd.get(f"{key}_0"), rnd.get(f"{key}_1")) == getattr(expected, key)
+    for player in PLAYERS:
+        (fight,) = project(state, RULES, player, KEY).fights
+        assert fight.last_round == expected
+        assert (fight.shots, fight.losses) == ((1, 1), (0, 0))
+
+
+def test_fog_the_enemy_virtual_stock_and_withdrawal_are_hidden() -> None:
+    """AGENTS.md 4.4, I1: the rounds are public, the virtual shots still left (the stock before
+    and during the fight) are not, nor is an ordered withdrawal."""
     run, d, _ = _node_fight()
     state = run.state
     before = project(state, RULES, 0, KEY)
@@ -302,13 +330,9 @@ def test_fog_the_enemy_virtual_shots_and_withdrawal_are_hidden() -> None:
     assert fid is not None
     fight = state.fights[fid]
     fight.virtual = (fight.virtual[0], fight.virtual[1] + 4)
-    fight.shots = (fight.shots[0], fight.shots[1] + 3)
     run.step((1, Move(d, 2)))  # the defender orders a withdrawal: player 0 must not learn it
     after = project(state, RULES, 0, KEY)
-    assert after.fights[0].enemy_units == before.fights[0].enemy_units
-    assert [(f.node, f.enemy_units, f.enemy_charged, f.groups) for f in after.fights] == [
-        (f.node, f.enemy_units, f.enemy_charged, f.groups) for f in before.fights
-    ]
+    assert after.fights == before.fights
 
 
 def test_fog_an_edge_fight_shows_the_enemy_counters_even_without_vision() -> None:

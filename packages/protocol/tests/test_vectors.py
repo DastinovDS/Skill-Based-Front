@@ -108,7 +108,6 @@ def test_combat_header() -> None:
     params = _obj(data["params"])
     assert set(params) == {
         "terrain_defense_mod",
-        "planned_bonus",
         "defense_bonus",
         "round_ticks",
         "shots_per_round",
@@ -118,7 +117,6 @@ def test_combat_header() -> None:
     assert set(terrain) == TERRAINS
     for mod in terrain.values():
         _int(mod)
-    _int(params["planned_bonus"])
     _int(params["defense_bonus"])
     assert _int(params["round_ticks"]) > 0
     assert _int(params["shots_per_round"]) > 0
@@ -136,7 +134,6 @@ def test_combat_params_match_mvp0_ruleset() -> None:
     ruleset = _obj(tomllib.loads(RULESET_PATH.read_text(encoding="utf-8")))
     orders = _obj(ruleset["orders"])
     assert params["terrain_defense_mod"] == _obj(ruleset["terrain"])["defense_mod"]
-    assert params["planned_bonus"] == orders["planned_bonus"]
     assert params["defense_bonus"] == orders["defense_bonus"]
     combat = _obj(ruleset["combat"])
     for key in ("round_ticks", "shots_per_round", "regroup_ticks"):

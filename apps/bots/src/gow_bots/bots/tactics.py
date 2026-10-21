@@ -231,12 +231,13 @@ class StrategyBot(Bot):
         order (DEC-08) when the shared utility says that the bonus pays and makes them suffice.
         """
         want = need + margin
-        bonus = self.rules.orders.planned_bonus
+        edges = self.path_edges(turn.view, node_of(g), dest, g.units)
+        bonus = self.rules.orders.planned_bonus(edges, g.charged)
         planned = Move(g.id, dest, planned=True)
         sent = (
             need > 0
             and g.charged < want <= g.charged + bonus
-            and prefer_planned(self.rules, g.charged, need)
+            and prefer_planned(self.rules, g.charged, need, edges)
             and self.spend(turn, planned, keep)
         ) or (g.charged >= want and self.spend(turn, Move(g.id, dest), keep))
         if sent:

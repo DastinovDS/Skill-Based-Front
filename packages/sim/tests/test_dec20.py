@@ -77,7 +77,7 @@ def _rules() -> Ruleset:
             base.orders,
             planned_delay_ticks=30,
             defense_delay_ticks=30,
-            planned_bonus=2,
+            planned_bonus_per_edge=2,
             defense_bonus=2,
             cost=costs,
         ),
