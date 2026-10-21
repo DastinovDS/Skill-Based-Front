@@ -21,11 +21,11 @@ export const ARENA_RADIUS = 24;
  * The arena of a fight in a city floats this far above the ring of the city (its lower arrow and
  * label reach `ARENA_REACH` below the middle of the arena, so the gap clears them).
  */
-export const ARENA_GAP_NODE = 52;
+export const ARENA_GAP_NODE = 60;
 /** The arena of a fight on a road floats this far above its meeting point. */
-export const ARENA_GAP_EDGE = 58;
+export const ARENA_GAP_EDGE = 66;
 /** How far the arrows and their labels reach from the middle of the arena (top and bottom). */
-export const ARENA_REACH = 46;
+export const ARENA_REACH = 54;
 
 /** Where a fight is: the true place (a city, or the meeting point on a road) and its arena. */
 export interface FightPlace {
@@ -302,14 +302,16 @@ export function exchangeOf(round: FightRoundView | null, me: PlayerId): Exchange
 }
 
 /** Where the arrow of a side starts and ends, as shares of the arena radius (own: upper left to upper right). */
-const ARROW = { reach: 0.55, rim: 0.8, apex: 1.55 } as const;
+const ARROW = { reach: 0.85, rim: 0.45, apex: 1.45 } as const;
+/** The label of the shots sits this far beyond the top of the arc, so the arc stays in view. */
+const LABEL_LIFT = 9;
 
 export interface ExchangeArrow {
   /** The curve from the shooter's half up and over into the opponent's half, from the middle of the arena. */
   readonly line: Point[];
   /** The arrowhead at the front of the curve; `null` while it is too short to show one. */
   readonly head: [Point, Point, Point] | null;
-  /** The middle of the whole arc, where the label of the shots sits. */
+  /** Where the label of the shots sits: over the middle of the arc, just beyond it. */
   readonly label: Point;
 }
 
@@ -323,7 +325,7 @@ export function exchangeArrow(
   own: boolean,
   radius: number,
   grow: number,
-  head = { length: 9, half: 5.5 },
+  head = { length: 11, half: 6.5 },
   steps = 16,
 ): ExchangeArrow {
   // The enemy's arrow is the own one turned half way round the middle of the arena.
@@ -361,7 +363,7 @@ export function exchangeArrow(
             { x: base.x - uy * head.half, y: base.y + ux * head.half },
             { x: base.x + uy * head.half, y: base.y - ux * head.half },
           ],
-    label: at(0.5),
+    label: { x: at(0.5).x, y: at(0.5).y - turn * LABEL_LIFT },
   };
 }
 

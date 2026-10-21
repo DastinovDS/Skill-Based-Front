@@ -209,6 +209,8 @@ describe('exchange arrows', () => {
       for (const p of exchangeArrow(own, R, 1).line) {
         expect(Math.abs(p.y)).toBeLessThanOrEqual(ARENA_REACH);
       }
+      // The label is a pill 14 high: its far edge is within the reach too.
+      expect(Math.abs(exchangeArrow(own, R, 1).label.y) + 7).toBeLessThanOrEqual(ARENA_REACH);
     }
     expect(ARENA_GAP_NODE).toBeGreaterThan(ARENA_REACH);
     expect(ARENA_GAP_EDGE).toBeGreaterThan(ARENA_REACH);
