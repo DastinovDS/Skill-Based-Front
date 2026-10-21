@@ -585,12 +585,12 @@ describe('OrderController', () => {
       expect(controller.overlay().supply).toBeNull();
     });
 
-    it('a click on an own city opens its menu (DEC-28: the transfer only, no priorities)', () => {
+    it('a click on an own city opens its menu; a key with no sector chooses nothing', () => {
       const { controller, sent } = setup();
       controller.key(down('Tab'));
       controller.click({ kind: 'node', id: city }, false);
       expect(controller.supplyMenu.current).toMatchObject({ open: true, node: city });
-      controller.key(down('Digit2')); // no such sector: nothing is chosen, nothing is sent
+      controller.key(down('Digit4')); // no such sector: nothing is chosen, nothing is sent
       expect(controller.supplyMenu.current.open).toBe(true);
       expect(sent).toEqual([]);
     });
@@ -610,7 +610,7 @@ describe('OrderController', () => {
       const { controller, sent } = setup();
       controller.key(down('Tab'));
       controller.click({ kind: 'node', id: city }, false);
-      controller.key(down('Digit1'));
+      controller.key(down('Digit3'));
       expect(controller.ui.current.transferFrom).toBe(city);
       const overlay = controller.overlay().supply;
       expect(overlay?.source).toBe(city);
@@ -693,6 +693,114 @@ describe('OrderController', () => {
       expect(controller.ui.current.transferFrom).toBeNull();
       expect(controller.transfer.current.open).toBe(false);
       expect(sent).toEqual([]);
+    });
+
+    describe('front markers and the rear minimum (DEC-28, items 2 and 3)', () => {
+      const withFronts = (fronts: [number | null, number | null], rearMin = 1): SnapshotMsg => ({
+        ...snapshot,
+        view: { ...snapshot.view, me: { ...snapshot.view.me, fronts, rear_min: rearMin } },
+      });
+
+      it('key 1 of the menu puts marker 1 on the city, key 2 marker 2, and the menu closes', () => {
+        const { controller, sent } = setup();
+        controller.key(down('Tab'));
+        controller.click({ kind: 'node', id: city }, false);
+        controller.key(down('Digit1'));
+        expect(controller.supplyMenu.current.open).toBe(false);
+        controller.click({ kind: 'node', id: city }, false);
+        controller.key(down('Digit2'));
+        expect(sent).toEqual([
+          { type: 'set_front', marker: 0, node: city },
+          { type: 'set_front', marker: 1, node: city },
+        ]);
+      });
+
+      it('a click on a sector sends the same command as its key', () => {
+        const { controller, sent } = setup();
+        controller.key(down('Tab'));
+        controller.click({ kind: 'node', id: city }, false);
+        controller.chooseSupply('front1');
+        expect(sent).toEqual([{ type: 'set_front', marker: 1, node: city }]);
+      });
+
+      it('a marker standing elsewhere is moved to the city (free, no confirmation)', () => {
+        const { controller, hud, sent } = setup();
+        hud.onSnapshot(withFronts([target, null]));
+        controller.key(down('Tab'));
+        controller.click({ kind: 'node', id: city }, false);
+        controller.chooseSupply('front0');
+        expect(sent).toEqual([{ type: 'set_front', marker: 0, node: city }]);
+      });
+
+      it('the marker that stands on the city is taken off (node = null)', () => {
+        const { controller, hud, sent } = setup();
+        hud.onSnapshot(withFronts([city, null]));
+        controller.key(down('Tab'));
+        controller.click({ kind: 'node', id: city }, false);
+        expect(controller.supplyMenu.current.fronts).toEqual([city, null]);
+        controller.chooseSupply('front0');
+        expect(sent).toEqual([{ type: 'set_front', marker: 0, node: null }]);
+      });
+
+      it('a city that holds the other marker takes none: nothing is sent', () => {
+        const { controller, hud, sent } = setup();
+        hud.onSnapshot(withFronts([null, city]));
+        controller.key(down('Tab'));
+        controller.click({ kind: 'node', id: city }, false);
+        controller.key(down('Digit1'));
+        expect(sent).toEqual([]);
+      });
+
+      it('has as many markers as the view lists, and no key for a missing one', () => {
+        const { controller, hud, sent } = setup();
+        expect(controller.frontMarkers).toBe(2);
+        hud.onSnapshot({
+          ...snapshot,
+          view: {
+            ...snapshot.view,
+            me: { ...snapshot.view.me, fronts: [null] as unknown as [null, null] },
+          },
+        });
+        expect(controller.frontMarkers).toBe(1);
+        controller.key(down('Tab'));
+        controller.click({ kind: 'node', id: city }, false);
+        controller.key(down('Digit2'));
+        expect(controller.supplyMenu.current.open).toBe(true);
+        expect(sent).toEqual([]);
+        controller.key(down('Digit1'));
+        expect(sent).toEqual([{ type: 'set_front', marker: 0, node: city }]);
+      });
+
+      it('a refusal of the server is shown as for any command', () => {
+        const { controller, book } = setup();
+        controller.key(down('Tab'));
+        controller.click({ kind: 'node', id: city }, false);
+        controller.key(down('Digit1'));
+        book.onAck(ack(1, 'NOT_OWNER'));
+        expect(controller.ui.current.notice).toMatchObject({
+          kind: 'rejected',
+          code: 'NOT_OWNER',
+          cmd: { type: 'set_front' },
+        });
+      });
+
+      it('the rear minimum slider sends set_rear_min, within 0..rear_min_max, and only on a change', () => {
+        const { controller, hud, sent } = setup();
+        hud.onSnapshot(withFronts([null, null], 1));
+        expect(controller.rearMin).toBe(1);
+        expect(controller.rearMinMax).toBe(RULES.supply.rear_min_max);
+        controller.setRearMin(1);
+        expect(sent).toEqual([]);
+        controller.setRearMin(3);
+        controller.setRearMin(99);
+        controller.setRearMin(-4);
+        controller.setRearMin(Number.NaN);
+        expect(sent).toEqual([
+          { type: 'set_rear_min', n: 3 },
+          { type: 'set_rear_min', n: RULES.supply.rear_min_max },
+          { type: 'set_rear_min', n: 0 },
+        ]);
+      });
     });
 
     it('reports the arrival tick of an accepted transfer from the ack', () => {

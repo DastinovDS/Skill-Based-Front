@@ -14,7 +14,9 @@ import type {
   ClientMsg,
   Command,
   MapFile,
+  NodeView,
   OrderView,
+  PacketView,
   Mode,
   RulesetPublic,
   Stance,
@@ -55,6 +57,50 @@ export function devPath(map: MapFile, from: number, to: number): [number, ...num
   return path as [number, ...number[]];
 }
 
+/** Ticks a demo packet needs for one road of the dev screen. */
+const DEV_PACKET_TICKS = 60;
+
+/**
+ * Demo packets for the «Supply» layer (not rules): a charge pair on the first own road, a transfer
+ * the other way on the second, and, where an own road continues from the end of the first, a
+ * packet that goes on over it. They restart every `DEV_PACKET_TICKS`.
+ */
+export function devPackets(map: MapFile, nodes: readonly NodeView[], tick: number): PacketView[] {
+  const own = (id: number): boolean => nodes[id]?.owner === DEV_PLAYER;
+  const roads = map.edges.filter((e) => own(e.a) && own(e.b));
+  const depart = tick - (tick % DEV_PACKET_TICKS);
+  const leg = { depart_tick: depart, arrive_tick: depart + DEV_PACKET_TICKS };
+  const [first, second] = roads;
+  const packets: PacketView[] = [];
+  if (first !== undefined) {
+    const onward = roads.find((e) => e.id !== first.id && (e.a === first.b || e.b === first.b));
+    const far = onward === undefined ? null : onward.a === first.b ? onward.b : onward.a;
+    packets.push({
+      id: 'dev-packet-1',
+      edge: first.id,
+      from_node: first.a,
+      charges: 2,
+      ...leg,
+      path: far === null ? [first.b] : [first.b, far],
+      dest_tick: depart + DEV_PACKET_TICKS * (far === null ? 1 : 2),
+      transfer: false,
+    });
+  }
+  if (second !== undefined) {
+    packets.push({
+      id: 'dev-packet-2',
+      edge: second.id,
+      from_node: second.b,
+      charges: 1,
+      ...leg,
+      path: [second.a],
+      dest_tick: depart + DEV_PACKET_TICKS,
+      transfer: true,
+    });
+  }
+  return packets;
+}
+
 export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
   let tick = 0;
   let spent = 0;
@@ -67,6 +113,9 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
   /** City builds: node -> road, the tick it grows and its type; levels and types so far by edge. */
   const builds = new Map<number, { edge: number; done: number }>();
   const widths = new Map<number, number>();
+  /** The front markers (DEC-28, item 2) and the rear minimum (item 3). */
+  const fronts: [number | null, number | null] = [null, null];
+  let rearMin = rules.supply.rear_min_default;
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
   function snapshot(): SnapshotMsg {
@@ -81,7 +130,14 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
       ...base,
       view: {
         ...base.view,
-        me: { ...base.view.me, stance, cp: Math.max(0, base.view.me.cp - spent) },
+        me: {
+          ...base.view.me,
+          stance,
+          cp: Math.max(0, base.view.me.cp - spent),
+          fronts: [...fronts],
+          rear_min: rearMin,
+        },
+        packets: devPackets(map, base.view.nodes, tick),
         nodes: base.view.nodes.map((n) => {
           const build = builds.get(n.id);
           return build === undefined
@@ -149,6 +205,11 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
     return { code: judgeOther(cmd), path: null };
   }
 
+  function place(marker: 0 | 1, node: number | null): null {
+    fronts[marker] = node;
+    return null;
+  }
+
   /** The rest of the commands: stand-in checks good for seeing accepts and rejects in the UI. */
   function judgeOther(cmd: Command): string | null {
     const charge = (cost: number): string | null => {
@@ -198,6 +259,24 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         }
         return code;
       }
+      case 'set_front': {
+        // The checks of the real server in its order (DEC-28, item 2), without the CP: it is free.
+        if (cmd.marker !== 0 && cmd.marker !== 1) return 'INVALID_ARGUMENT';
+        if (cmd.node === null)
+          return fronts[cmd.marker] === null ? 'NO_CHANGE' : place(cmd.marker, null);
+        const node = current.view.nodes[cmd.node];
+        if (node === undefined) return 'NOT_FOUND_OR_HIDDEN';
+        if (node.owner !== DEV_PLAYER) return 'NOT_OWNER';
+        if (node.warehouse_cap === null) return 'NOT_CITY';
+        if (fronts[cmd.marker] === cmd.node) return 'NO_CHANGE';
+        if (fronts.includes(cmd.node)) return 'INVALID_ARGUMENT';
+        return place(cmd.marker, cmd.node);
+      }
+      case 'set_rear_min':
+        if (cmd.n < 0 || cmd.n > rules.supply.rear_min_max) return 'INVALID_ARGUMENT';
+        if (cmd.n === rearMin) return 'NO_CHANGE';
+        rearMin = cmd.n;
+        return null;
       case 'forfeit':
         setTimeout(() => {
           socket?.reply({

@@ -7,6 +7,8 @@ import {
   SUPPLY_HALF,
   SUPPLY_RING,
   SUPPLY_SECTORS,
+  frontOf,
+  type SupplyChoice,
   halfFor,
   sectorHit,
   sectorPath,
@@ -86,11 +88,13 @@ describe('sectorPath', () => {
   });
 });
 
-describe('the supply menu (DEC-18)', () => {
+describe('the supply menu (DEC-18, DEC-28)', () => {
   const supply = SUPPLY_SECTORS.map((x) => ({ angle: x.angle, item: x.choice }));
   const hit = (dx: number, dy: number) => sectorHit(supply, dx, dy, SUPPLY_RING, SUPPLY_HALF);
 
-  it('picks the transfer on the left (DEC-28: no priority sectors)', () => {
+  it('picks marker 1 up, marker 2 on the right and the transfer on the left', () => {
+    expect(hit(0, -60)).toBe('front0');
+    expect(hit(60, 0)).toBe('front1');
     expect(hit(-60, 0)).toBe('transfer');
     expect(hit(0, 0)).toBeNull();
   });
@@ -99,7 +103,19 @@ describe('the supply menu (DEC-18)', () => {
     expect(SUPPLY_RING.outer).toBeLessThan(BIG_RING.outer);
   });
 
-  it('has one key per sector', () => {
-    expect(SUPPLY_SECTORS.map((s) => s.key)).toEqual(['1']);
+  it('has one key per sector: 1 and 2 for the markers, 3 for the transfer', () => {
+    expect(SUPPLY_SECTORS.map((s) => [s.choice, s.key])).toEqual([
+      ['front0', '1'],
+      ['front1', '2'],
+      ['transfer', '3'],
+    ]);
+  });
+
+  it('tells the marker of a choice, none for the transfer', () => {
+    expect(['front0', 'front1', 'transfer'].map((c) => frontOf(c as SupplyChoice))).toEqual([
+      0,
+      1,
+      null,
+    ]);
   });
 });

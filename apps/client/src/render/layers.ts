@@ -10,6 +10,7 @@ export const LAYER_ORDER = [
   'intents',
   'fog',
   'effects',
+  'supply',
 ] as const;
 
 export type LayerName = (typeof LAYER_ORDER)[number];
@@ -17,7 +18,8 @@ export type LayerName = (typeof LAYER_ORDER)[number];
 /**
  * The world container (moved and scaled by the camera) with one child container per layer.
  * Layers stay empty until their issue fills them: groups and intents (CLI-04, #60), fog (CLI-05,
- * #61), effects.
+ * #61), effects. `supply` is the «Supply» map mode (DEC-28, item 8): while it is on, the groups,
+ * intents, fog and effects layers are hidden and this one draws.
  */
 export interface MapLayers {
   readonly world: Container;

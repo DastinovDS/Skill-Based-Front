@@ -10,7 +10,15 @@ import {
   type SupplyOverlay,
 } from '../render/interaction.ts';
 import type { CommandResult, OrderBook } from './orderBook.ts';
-import { RADIAL, SECTORS, stanceRates, SUPPLY_SECTORS, type StanceRate } from '../hud/radial.ts';
+import {
+  frontOf,
+  RADIAL,
+  SECTORS,
+  stanceRates,
+  SUPPLY_SECTORS,
+  type StanceRate,
+  type SupplyChoice,
+} from '../hud/radial.ts';
 import { OrderUiState, type ReachInfo } from './orderUi.svelte.ts';
 import { RadialState } from './radialState.svelte.ts';
 import { SplitState } from './splitState.svelte.ts';
@@ -77,12 +85,16 @@ export interface KeyInput {
  * speeds the supply up. Esc, U again, or a click elsewhere ends the pick too. Whether the city may build (supply, a build already going, charges) is the server's
  * call.
  *
- * The «Supply» map mode (DEC-18, item 7) is toggled by Tab (or F2). In it a click on an own city
- * opens its supply menu (a radial menu under the pointer: a transfer from it, DEC-28 removed the
- * priorities; a click or 1 chooses, Esc or a click outside closes it). "Transfer" starts
- * the transfer pick: the own cities a click would pick are ringed; a click on one opens the amount
- * dialog, which sends `transfer`. A click anywhere else, or Esc, ends the pick. The path and the
- * arrival of a transfer come from the server (`ack`); the client computes neither.
+ * The «Supply» map mode (DEC-18, item 7; the map layer: DEC-28, item 8) is toggled by Tab (or F2).
+ * In it a click on an own city opens its supply menu (a radial menu under the pointer: front
+ * marker 1 (key 1) and 2 (key 2), a transfer from the city (key 3); a click or the key chooses,
+ * Esc or a click outside closes it). A marker sector puts the marker on the city, moving it for
+ * free from wherever it stood, or takes it off when it already stands there (`set_front`, DEC-28,
+ * item 2). The rear minimum is `setRearMin` (the slider of the banner, `set_rear_min`, item 3).
+ * "Transfer" starts the transfer pick: the own cities a click would pick are ringed; a click on
+ * one opens the amount dialog, which sends `transfer`. A click anywhere else, or Esc, ends the
+ * pick. The path and the arrival of a transfer come from the server (`ack`); the client computes
+ * neither.
  *
  * Groups (DEC-20): a selected group standing in a node asks the server where it can go
  * (`reach_query`); the answer rings the nodes it reaches and, dashed, those it reaches only after a
@@ -651,7 +663,7 @@ export class OrderController implements MapInteraction {
     const city = this.#ownCity(node);
     if (city === null || this.#o.send === null) return false;
     this.#closeMenus();
-    this.supplyMenu.open(node, city.warehouse);
+    this.supplyMenu.open(node, city.warehouse, this.#o.hud.current?.fronts ?? []);
     return true;
   }
 
@@ -659,12 +671,55 @@ export class OrderController implements MapInteraction {
     this.supplyMenu.close();
   }
 
-  /** A sector of the supply menu: "transfer" starts the transfer pick (DEC-18, item 6). */
-  chooseSupply(): void {
+  /**
+   * A sector of the supply menu: a marker sector puts that front marker on the city or takes it
+   * off (DEC-28, item 2), "transfer" starts the transfer pick (DEC-18, item 6).
+   */
+  chooseSupply(choice: SupplyChoice = 'transfer'): void {
     const { open, node } = this.supplyMenu.current;
     this.supplyMenu.close();
-    // "transfer" is the only choice now (DEC-28 removed the priorities; the markers: #293).
-    if (open) this.ui.patch({ transferFrom: node });
+    if (!open) return;
+    const marker = frontOf(choice);
+    if (marker === null) this.ui.patch({ transferFrom: node });
+    else this.toggleFront(marker, node);
+  }
+
+  /** The own rear minimum now, from the latest snapshot; `null`: not known yet (DEC-28, item 3). */
+  get rearMin(): number | null {
+    return this.#o.hud.current?.rearMin ?? null;
+  }
+
+  /** The top of the rear minimum slider (`ruleset_public.supply.rear_min_max`). */
+  get rearMinMax(): number {
+    return this.#o.rules.supply.rear_min_max;
+  }
+
+  /** The number of front markers the player has (the length of `SelfView.fronts`, DEC-28, item 2). */
+  get frontMarkers(): number {
+    return this.#o.hud.current?.fronts.length ?? 0;
+  }
+
+  /**
+   * Front marker `marker` on the own city `node`, wherever it stood (moving it is free); off the
+   * map (`node = null`) when it already stands there. A city holds one marker at most, so a city
+   * with the other marker sends nothing. Whether the city is ours is the server's call.
+   */
+  toggleFront(marker: number, node: number): void {
+    const fronts = this.#o.hud.current?.fronts ?? [];
+    if (!Number.isInteger(marker) || marker < 0 || marker >= fronts.length) return;
+    if (fronts.some((at, i) => i !== marker && at === node)) return;
+    this.#sendCommand(
+      { type: 'set_front', marker, node: fronts[marker] === node ? null : node },
+      null,
+    );
+  }
+
+  /** The global rear minimum (DEC-28, item 3): clamped to `0..supply.rear_min_max`, sent only on a change. */
+  setRearMin(n: number): void {
+    if (!Number.isFinite(n)) return;
+    const value = Math.min(this.#o.rules.supply.rear_min_max, Math.max(0, Math.round(n)));
+    if (value === this.#o.hud.current?.rearMin) return;
+    this.#sendCommand({ type: 'set_rear_min', n: value }, null);
   }
 
   /** Ends the transfer pick without a transfer. */
@@ -730,10 +785,12 @@ export class OrderController implements MapInteraction {
       }
     }
     if (this.supplyMenu.current.open) {
-      // The supply menu: 1 chooses (not the modes), Esc closes it.
+      // The supply menu: 1, 2, 3 choose (not the modes), Esc closes it.
       const sector = SUPPLY_SECTORS.find((s) => `Digit${s.key}` === input.code);
       if (sector !== undefined) {
-        this.chooseSupply();
+        // A marker the player does not have (a ruleset with one) is no sector: the key is dead.
+        const marker = frontOf(sector.choice);
+        if (marker === null || marker < this.frontMarkers) this.chooseSupply(sector.choice);
         return true;
       }
       if (input.code === 'Escape') {
