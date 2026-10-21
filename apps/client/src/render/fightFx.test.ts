@@ -9,6 +9,7 @@ import {
   fightPlace,
   fightResult,
   roundProgress,
+  drawnShots,
   shotCount,
   shotLook,
   sparkLook,
@@ -53,13 +54,37 @@ describe('fightPlace', () => {
 });
 
 describe('fightFx', () => {
-  it('reads a round: where, the shots sent and the losses of both sides', () => {
+  it('reads a round: where, the shots of both sides with the virtual ones, the losses', () => {
+    const fx = fightFx(
+      event('fight_round', {
+        node: 1,
+        edge: null,
+        shots_0: 1,
+        shots_1: 2,
+        virtual_0: 0,
+        virtual_1: 1,
+        losses_0: 0,
+        losses_1: 1,
+      }),
+      map,
+      radius,
+    );
+    expect(fx).toMatchObject({
+      kind: 'round',
+      tick: 50,
+      shots: [1, 2],
+      virtual: [0, 1],
+      losses: [0, 1],
+    });
+  });
+
+  it('reads an old round (before DEC-29): the enemy has no shots, no virtual ones', () => {
     const fx = fightFx(
       event('fight_round', { node: 1, edge: null, shots_0: 1, losses_0: 0, losses_1: 1 }),
       map,
       radius,
     );
-    expect(fx).toMatchObject({ kind: 'round', tick: 50, shots: [1, null], losses: [0, 1] });
+    expect(fx).toMatchObject({ kind: 'round', shots: [1, null], virtual: [0, 0] });
   });
 
   it('reads the end: the winner, the capture and the losses of the whole fight', () => {
@@ -133,6 +158,28 @@ describe('shots of a round', () => {
     expect(shotCount(0)).toBe(0);
     expect(shotCount(2)).toBe(2);
     expect(shotCount(40)).toBe(3);
+  });
+
+  const roundFx = (shots: [number | null, number | null], virtual: [number, number]) =>
+    ({
+      kind: 'round',
+      tick: 1,
+      place: { node: 1, edge: null, at: { x: 0, y: 0 }, arena: { x: 0, y: 0 } },
+      shots,
+      virtual,
+      losses: [1, 2],
+    }) as const;
+
+  it('draws the shots of a side with the virtual ones first', () => {
+    expect(drawnShots(roundFx([2, 1], [1, 0]), 0)).toEqual({ count: 2, virtual: 1 });
+    expect(drawnShots(roundFx([2, 1], [1, 0]), 1)).toEqual({ count: 1, virtual: 0 });
+    // The virtual ones never outnumber the shots drawn.
+    expect(drawnShots(roundFx([40, 1], [9, 0]), 0)).toEqual({ count: 3, virtual: 3 });
+  });
+
+  it('draws the hits instead of the shots an old event lacks', () => {
+    // Player 1's shots are unknown: it hit player 0 `losses[0]` = 1 times.
+    expect(drawnShots(roundFx([1, null], [0, 0]), 1)).toEqual({ count: 1, virtual: 0 });
   });
 
   it('the spark grows and fades out', () => {

@@ -18,6 +18,7 @@ import {
 } from './hudData.ts';
 import { isLogged } from './eventText.ts';
 import { AlertState } from '../match/alerts.svelte.ts';
+import { FightLog, fightCards } from '../match/fightLog.ts';
 import { ThreatLog } from '../match/threats.ts';
 import { t } from '../i18n/index.ts';
 import { ToastState } from './toastState.svelte.ts';
@@ -44,6 +45,9 @@ export class HudState {
 
   /** Threats to own cities for the arcs at the screen edge: plain data, read every frame. */
   readonly threats: ThreatLog;
+
+  /** The rounds of the fights going on, for the fight board (`hud/FightBoard.svelte`). */
+  readonly fightLog = new FightLog();
 
   /** Toasts of the match (fights, captures, attrition, refused commands). */
   readonly toasts = new ToastState();
@@ -93,6 +97,7 @@ export class HudState {
     this.#snapshot = snapshot;
     this.alerts.onSnapshot(snapshot);
     this.threats.onSnapshot(snapshot);
+    this.fightLog.onSnapshot(snapshot);
     this.#startOnce(snapshot);
     this.#lastMinute(snapshot);
     this.#publish();
@@ -107,6 +112,7 @@ export class HudState {
       data: event.data,
     };
     this.threats.onEvent(event, (node) => this.#snapshot?.view.nodes[node]?.owner);
+    this.fightLog.onEvent(event);
     const toast = toastOf(entry, this.#ctx.me);
     if (toast !== null) this.toasts.push(toast);
     if (!isLogged(event.kind)) return; // bookkeeping kinds would push the real news out
@@ -139,6 +145,7 @@ export class HudState {
     this.#snapshot = null;
     this.current = null;
     this.alerts.reset();
+    this.fightLog.clear();
     this.toasts.clear();
   }
 
@@ -179,6 +186,7 @@ export class HudState {
       this.#selection,
       this.#events,
       this.#hovered,
+      fightCards(this.fightLog.histories(), this.#ctx.me),
     );
   }
 }
