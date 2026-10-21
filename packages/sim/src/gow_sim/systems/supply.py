@@ -91,7 +91,7 @@ import heapq
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from gow_sim.maps import MapDef, NodeKind
+from gow_sim.maps import MAX_WIDTH, MapDef, NodeKind
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import AtNode, Event, GameState, Group, Packet, event
 from gow_sim.systems.capacity import is_standing, warehouse_capacities
@@ -170,8 +170,12 @@ class SupplyTree:
     dist: tuple[int, ...] = ()
 
 
-def supply_tree(state: GameState, rules: Ruleset, player: int) -> SupplyTree:
-    """Build the supply tree of ``player`` (see the module docstring). Empty without capital."""
+def supply_tree(
+    state: GameState, rules: Ruleset, player: int, edge_ticks: tuple[int, ...] | None = None
+) -> SupplyTree:
+    """Build the supply tree of ``player`` (see the module docstring). Empty without capital.
+    ``edge_ticks``: ``all_packet_ticks``, if the caller has them."""
+    ticks = edge_ticks if edge_ticks is not None else all_packet_ticks(state, rules)
     mapdef = state.map
     size = len(mapdef.nodes)
     parent: list[int | None] = [None] * size
@@ -195,7 +199,7 @@ def supply_tree(state: GameState, rules: Ruleset, player: int) -> SupplyTree:
             nxt = mapdef.edges[eid].other(node)
             if done[nxt] or state.nodes[nxt].owner != player:
                 continue  # every road between two own nodes is internal
-            cand = d + edge_packet_ticks(state, rules, eid)
+            cand = d + ticks[eid]
             old = parent[nxt]
             if (
                 dist[nxt] < 0
@@ -233,16 +237,19 @@ def transfer_route(
     src: int,
     dst: int,
     usable: Callable[[int], bool] | None = None,
+    edge_ticks: tuple[int, ...] | None = None,
 ) -> TransferRoute | None:
     """The fastest way of a transfer from ``src`` to ``dst`` (DEC-18, item 6).
 
     Only own nodes, so only internal roads; ``packet_ticks`` per road (every batch takes the same
     way, the number of batches does not depend on it, #287); among ways of equal time
     the lexicographically smaller sequence of ``node_key(player, node)`` wins, as for movement.
-    ``usable``: only the roads it accepts (a detour of the dispatch, #309). ``None``: no such way.
+    ``usable``: only the roads it accepts (a detour of the dispatch, #309); ``edge_ticks``: the
+    ``packet_ticks`` of every road, if the caller has them. ``None``: no such way.
     """
     mapdef = state.map
     nodes = state.nodes
+    ticks = edge_ticks if edge_ticks is not None else all_packet_ticks(state, rules)
 
     def key(node: int) -> int:
         return mapdef.node_key(player, node)
@@ -264,7 +271,7 @@ def transfer_route(
                 continue
             if usable is not None and not usable(eid):
                 continue
-            cand = (dist + edge_packet_ticks(state, rules, eid), (*keys, key(nxt)))
+            cand = (dist + ticks[eid], (*keys, key(nxt)))
             if nxt not in best or cand < best[nxt]:
                 best[nxt] = cand
                 via[nxt] = (node, eid)
@@ -284,7 +291,72 @@ def transfer_route(
     return TransferRoute(
         nodes=tuple(path_nodes),
         edges=tuple(path_edges),
-        ticks=tuple(edge_packet_ticks(state, rules, e) for e in path_edges),
+        ticks=tuple(ticks[e] for e in path_edges),
+    )
+
+
+def all_packet_ticks(state: GameState, rules: Ruleset) -> tuple[int, ...]:
+    """``packet_ticks`` of every road with its current level, by edge id."""
+    pct = [0] + [road_speed_pct(rules, level) for level in range(1, MAX_WIDTH + 1)]
+    roads = state.edges
+    return tuple(
+        max(1, e.travel_ticks * 100 // pct[roads[e.id].width])  # both positive: rounded down
+        for e in state.map.edges
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class Ways:
+    """The fastest ways of every own node to ``dst``: ``dist`` (the sum of ``packet_ticks``) and
+    ``hop``, the next node and road of the way (see ``fastest_ways_to``)."""
+
+    dst: int
+    dist: dict[int, int]
+    hop: dict[int, tuple[int, int]]
+    """Filled on demand by ``way_from``."""
+
+
+def fastest_ways_to(state: GameState, player: int, dst: int, edge_ticks: tuple[int, ...]) -> Ways:
+    """One Dijkstra from ``dst`` over own nodes gives the way of ``transfer_route`` from every
+    own node to ``dst`` at once: the fastest one, among equal times the lexicographically
+    smaller ``node_key`` sequence from the start. Its next hop from ``v`` is the neighbour ``u``
+    on a fastest way (``dist[u] + ticks == dist[v]``) with the smallest ``node_key``: the
+    sequences all start with ``v`` and differ first at ``u`` (keys are unique), and the rest from
+    ``u`` is again the smallest one (a fastest way's part is a fastest way)."""
+    return Ways(dst, _distances(state, player, dst, edge_ticks), {})
+
+
+def way_from(
+    state: GameState, player: int, ways: Ways, src: int, edge_ticks: tuple[int, ...]
+) -> TransferRoute | None:
+    """The way from ``src`` to ``ways.dst`` (``transfer_route``); ``None`` if there is none."""
+    dist = ways.dist
+    if src == ways.dst or src not in dist:
+        return None
+    mapdef = state.map
+    path_nodes = [src]
+    path_edges: list[int] = []
+    node = src
+    while node != ways.dst:
+        step = ways.hop.get(node)
+        if step is None:
+            best: tuple[int, int, int] | None = None
+            for eid in mapdef.incident[node]:
+                u = mapdef.edges[eid].other(node)
+                du = dist.get(u)
+                if du is not None and du + edge_ticks[eid] == dist[node]:
+                    cand = (mapdef.node_key(player, u), u, eid)
+                    if best is None or cand < best:
+                        best = cand
+            assert best is not None  # a reached node has a neighbour on a fastest way
+            step = ways.hop[node] = (best[1], best[2])
+        node, eid = step
+        path_nodes.append(node)
+        path_edges.append(eid)
+    return TransferRoute(
+        nodes=tuple(path_nodes),
+        edges=tuple(path_edges),
+        ticks=tuple(edge_ticks[e] for e in path_edges),
     )
 
 
@@ -418,8 +490,11 @@ def supply(state: GameState, rules: Ruleset) -> list[Event]:
     tick = state.tick
     if tick > 0 and tick % rules.supply.dispatch_ticks == 0:
         taken = _take_transfer_shares(state, rules)
+        edge_ticks = all_packet_ticks(state, rules)  # levels do not change in this system
         for pid in sorted(state.players):
-            events.extend(_dispatch(state, rules, pid, capacities, taken, spill.get(pid, 0)))
+            events.extend(
+                _dispatch(state, rules, pid, capacities, taken, spill.get(pid, 0), edge_ticks)
+            )
     else:
         for pid in sorted(spill):
             events.extend(_store_spill(state, pid, capacities, spill[pid]))
@@ -674,9 +749,11 @@ def _dispatch(
     capacities: tuple[int, ...],
     taken: dict[tuple[int, int], int],
     spill: int,
+    edge_ticks: tuple[int, ...],
 ) -> list[Event]:
-    """One dispatch of ``player`` (DEC-28, items 1, 4, 5; see the module docstring)."""
-    tree = supply_tree(state, rules, player)
+    """One dispatch of ``player`` (DEC-28, items 1, 4, 5; see the module docstring);
+    ``edge_ticks``: ``all_packet_ticks``."""
+    tree = supply_tree(state, rules, player, edge_ticks)
     if not tree.order:  # no own capital: no supply, the production burns
         return _store_spill(state, player, capacities, spill) if spill > 0 else []
     mapdef = state.map
@@ -720,17 +797,29 @@ def _dispatch(
         period.sent[sent_key] = (route, charges + (0 if old is None else old[1]))
         return charges
 
-    def send(src: int, dst: int, charges: int) -> int:
-        """Send up to ``charges`` from ``src`` to ``dst``: the fastest way first, the rest by
-        detours over roads with throughput left that take at most ``dispatch_ticks`` more (#309);
-        how many went."""
-        route = transfer_route(state, rules, player, src, dst)
+    def open_end(node: int) -> bool:
+        """Some own road at ``node`` still has throughput left (a detour may start or end)."""
+        for eid in mapdef.incident[node]:
+            if nodes[mapdef.edges[eid].other(node)].owner == player and left(eid) > 0:
+                return True
+        return False
+
+    def send(src: int, dst: int, charges: int, ways: Ways | None = None) -> int:
+        """Send up to ``charges`` from ``src`` to ``dst``: the fastest way first (from ``ways``
+        if given), the rest by detours over roads with throughput left that take at most
+        ``dispatch_ticks`` more (#309); how many went."""
+        if ways is not None:
+            route = way_from(state, player, ways, src, edge_ticks)
+        else:
+            route = transfer_route(state, rules, player, src, dst, edge_ticks=edge_ticks)
         if route is None:
             return 0
         went = go(src, dst, route, charges)
         limit = route.total_ticks + detour_ticks
-        while went < charges:  # every detour uses up a road or the rest: the loop ends
-            detour = transfer_route(state, rules, player, src, dst, lambda e: left(e) > 0)
+        while went < charges and open_end(src) and open_end(dst):  # each detour uses up a road
+            detour = transfer_route(
+                state, rules, player, src, dst, lambda e: left(e) > 0, edge_ticks
+            )
             if detour is None or detour.total_ticks > limit:
                 break  # the rest waits for the next dispatch
             went += go(src, dst, detour, charges - went)
@@ -743,25 +832,23 @@ def _dispatch(
         (c for c in cities if c not in fronts and c != capital),
         key=lambda c: (-tree.dist[c], key(c)),
     )
-    edge_ticks: tuple[int, ...] = ()
     for c in (*marked, *rear):
         deficit = target[c] - nodes[c].warehouse - incoming[c]
         if deficit <= 0:
             continue
+        if not open_end(c):  # every road into it is used up: nothing can arrive this period
+            continue
         donors = [d for d in cities if d != c and nodes[d].warehouse > target[d]]
         if not donors:
             continue
-        if len(donors) > 1:  # the nearest first (one Dijkstra per city with a deficit)
-            if not edge_ticks:
-                edge_ticks = tuple(
-                    edge_packet_ticks(state, rules, e) for e in range(len(mapdef.edges))
-                )
-            dist = _distances(state, player, c, edge_ticks)
-            donors.sort(key=lambda d: (dist[d], key(d)))
+        ways = fastest_ways_to(state, player, c, edge_ticks)  # one Dijkstra per city with a deficit
+        donors.sort(key=lambda d: (ways.dist[d], key(d)))  # the nearest first
         for d in donors:  # item 5: the nearest donor first, never below its own target
             if deficit <= 0:
                 break
-            went = send(d, c, min(deficit, nodes[d].warehouse - target[d]))
+            if not open_end(d):  # every road out of it is used up: it sends nothing
+                continue
+            went = send(d, c, min(deficit, nodes[d].warehouse - target[d]), ways)
             nodes[d].warehouse -= went
             deficit -= went
 

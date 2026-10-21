@@ -10,9 +10,9 @@ and advance the clock. After every tick the invariants below must hold:
   (``spent`` of ``fight_round``; a group dying by DEC-24 G3: ``fight_group`` with ``encircled``),
   ``warehouse_lost``, ``packet_lost``, ``charges_overflow`` (the part of a delivered packet that
   does not fit the warehouse, and the production of a full capital that finds no room in the
-  rear, DEC-28, item 4.4) and ``attrition`` deaths of charged units; the charges a city pays for a
-  road level (``build_started``, DEC-16; none since DEC-28: roads are paid with CP); the charges a cut-off garrison spends (``starvation``,
-  DEC-19; units never die of it). A transfer (DEC-18) only moves charges from a warehouse into a
+  rear, DEC-28, item 4.4) and ``attrition`` deaths of charged units (a road level costs no
+  charges since DEC-28: CP); the charges a cut-off garrison spends (``starvation``, DEC-19; units
+  never die of it). A transfer (DEC-18) only moves charges from a warehouse into a
   packet: it is a flow, not a sink. ``charges_produced`` counts all of the production, the part
   that did not fit into the capital (``spill``) included;
 - no negative counters, ``charged <= units``, road widths within their limits, every group in an

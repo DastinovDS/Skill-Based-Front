@@ -2,11 +2,11 @@
 
 Maps, rules and hand computations: see ``packages/sim/tests/test_supply.py`` (``line6``: roads
 of 30 ticks, packet time 30 on level 1; DEC-28, item 7: a road carries 1 / 2 / 3 charges per
-period by its level, an upgraded one also faster). Dispatch every 10 ticks, ``rear_min = 1``, no markers
-unless a test sets one, recharge 1 per tick (SIM-01 starting values). Tick convention: step ``t``
-runs with ``state.tick == t``; a packet sent at tick ``t`` is delivered at ``t + packet time``.
-The scenario "no packet moves towards the capital" of SIM-08 is gone: DEC-28 donors give in
-any direction (example 7).
+period by its level, an upgraded one also faster). Dispatch every 10 ticks, ``rear_min = 1``,
+no markers unless a test sets one, recharge 1 per tick (SIM-01 starting values). Tick
+convention: step ``t`` runs with ``state.tick == t``; a packet sent at tick ``t`` is delivered at
+``t + packet time``. The scenario "no packet moves towards the capital" of SIM-08 is gone:
+DEC-28 donors give in any direction (example 7).
 """
 
 import dataclasses
