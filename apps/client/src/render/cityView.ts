@@ -227,6 +227,16 @@ export class CityView {
     }
   }
 
+  /**
+   * The «Supply» map mode (DEC-28, item 8) shows no garrison ring, warehouse bar, recruit queue or
+   * barracks mark on the city: the layer of its own draws the warehouse.
+   */
+  setSupplyMode(on: boolean): void {
+    for (const marks of [this.rings, this.bars, this.queues, this.barracks]) {
+      for (const mark of marks) mark.visible = !on;
+    }
+  }
+
   setLabelResolution(resolution: number): void {
     for (const text of this.vpLabels) {
       if (text.resolution !== resolution) text.resolution = resolution;

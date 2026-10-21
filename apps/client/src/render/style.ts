@@ -310,3 +310,38 @@ export const CHEVRON = {
 export const GHOST_SHAKE_MS = 200;
 export const GHOST_REJECT_MS = 500;
 export const GHOST_SHAKE_AMPLITUDE = 3;
+
+// --- The «Supply» layer (DEC-28, item 8) ---------------------------------------------------------
+// A flat, minimal picture: the territory is a stronger flat tint than on the normal map, the roads
+// show their level by thickness, and only what supply is about is drawn on top. Opposite flows on
+// one road use opposite lanes; the automatics is a solid arrow, a transfer a dashed and wider one.
+
+/** The territory tint of the layer (the normal map: `TERRITORY_ALPHA`): flat, no terrain under it. */
+export const SUPPLY_TERRITORY_ALPHA = 0.34;
+/** The flat floor of the layer instead of the terrain. */
+export const SUPPLY_FLOOR = 0x141a22;
+/** A flow arrow: the lane is the distance from the road axis. */
+export const SUPPLY_FLOW = {
+  lane: 8,
+  width: 3,
+  alpha: 0.95,
+  head: { length: 10, width: 11 },
+} as const;
+export const SUPPLY_TRANSFER = { width: 4.5, dash: 9, gap: 5 } as const;
+/** The number plate in the middle of a flow arrow. */
+export const SUPPLY_FLOW_LABEL = { fontSize: 11, padX: 4, height: 14, radius: 4 } as const;
+/** A packet on its road. */
+export const SUPPLY_PACKET_RADIUS = 3.5;
+/** Warehouse dots: one per unit of capacity under the city, filled for a charge held. */
+export const SUPPLY_STOCK = { radius: 2.6, pitch: 7.5, gap: 9, plate: 2.5 } as const;
+/** The front marker: a pole with a flag carrying its number, up and to the left of the city. */
+export const SUPPLY_MARKER = {
+  pole: 20,
+  flag: { width: 13, height: 11 },
+  angle: -135,
+  gap: 4,
+} as const;
+/** The dashed ring and the badge of a cut-off city (DEC-19). */
+export const SUPPLY_CUT = { gap: 9, width: 2.5, dash: 10 } as const;
+/** The mark of the enemy presence: a hollow inverted triangle, no number. */
+export const SUPPLY_PRESENCE = { side: 12, width: 2.2, angle: 45, gap: 9 } as const;

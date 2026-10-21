@@ -157,20 +157,32 @@ export function stanceRates(rules: RulesetPublic): StanceRate[] {
 }
 
 /**
- * A choice of the supply menu of an own city: a transfer from it (DEC-18, item 6). The three
- * priorities are gone (DEC-28); the front markers and the rear minimum get their UI in #293.
+ * A choice of the supply menu of an own city (DEC-28, items 2 and 6): put front marker 1 or 2 on
+ * the city (or take it off when it stands there), or start a transfer from it.
  */
-export type SupplyChoice = 'transfer';
+export type SupplyChoice = 'front0' | 'front1' | 'transfer';
 
-/** The supply menu of an own city: the transfer on the left; key 1. */
+/** The marker index (0 or 1) of a marker choice; `null` for the transfer. */
+export function frontOf(choice: SupplyChoice): number | null {
+  return choice === 'front0' ? 0 : choice === 'front1' ? 1 : null;
+}
+
+/**
+ * The supply menu of an own city: marker 1 up (key 1), marker 2 on the right (key 2), the transfer
+ * on the left (key 3). The markers come first: placing them is what the mode is mostly for.
+ */
 export const SUPPLY_SECTORS: readonly {
   readonly choice: SupplyChoice;
   readonly angle: number;
   readonly key: string;
-}[] = [{ choice: 'transfer', angle: 180, key: '1' }];
+}[] = [
+  { choice: 'front0', angle: 270, key: '1' },
+  { choice: 'front1', angle: 0, key: '2' },
+  { choice: 'transfer', angle: 180, key: '3' },
+];
 
 /** The ring of the supply menu: small, a narrow band like the city menu's (not the big ring). */
 export const SUPPLY_RING: RadialRing = { inner: 30, outer: 112 };
 
-/** Half the angle of a supply sector: four sectors of 90 degrees with a minimal gap. */
+/** Half the angle of a supply sector: sectors a quarter turn apart with a gap between them. */
 export const SUPPLY_HALF = 44;

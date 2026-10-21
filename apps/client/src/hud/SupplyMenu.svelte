@@ -3,6 +3,7 @@
   import type { OrderController } from '../match/orderController.ts';
   import Radial from './Radial.svelte';
   import {
+    frontOf,
     SUPPLY_HALF,
     SUPPLY_RING,
     SUPPLY_SECTORS,
@@ -18,20 +19,42 @@
 
   const menu = $derived(orders.supplyMenu.current);
 
-  const items = $derived<RadialItem[]>(
-    SUPPLY_SECTORS.map((sector) => {
-      const note =
-        menu.warehouse !== null ? tf('supplyMenu.stock', { charges: menu.warehouse }) : null;
+  // Marker sectors (DEC-28, item 2): put marker n on the city, or take it off where it stands. A
+  // city holds one marker, so the sector of the other marker is off while one stands here.
+  const items = $derived.by<RadialItem[]>(() => {
+    const count = orders.frontMarkers;
+    const sectors = SUPPLY_SECTORS.filter((sector) => {
+      const marker = frontOf(sector.choice);
+      return marker === null || marker < count;
+    });
+    return sectors.map((sector): RadialItem => {
+      const marker = frontOf(sector.choice);
+      if (marker === null) {
+        const note =
+          menu.warehouse !== null ? tf('supplyMenu.stock', { charges: menu.warehouse }) : null;
+        return {
+          id: sector.choice,
+          angle: sector.angle,
+          sign: '⇢',
+          label: t('supplyMenu.transfer'),
+          lines: note === null ? [] : [note],
+          key: sector.key,
+        };
+      }
+      const here = menu.fronts[marker] === menu.node;
+      const taken = menu.fronts.some((at, i) => i !== marker && at === menu.node);
       return {
         id: sector.choice,
         angle: sector.angle,
-        sign: '⇢',
-        label: t('supplyMenu.transfer'),
-        lines: note === null ? [] : [note],
+        sign: '⚑',
+        label: tf(here ? 'supplyMenu.frontOff' : 'supplyMenu.front', { n: marker + 1 }),
+        lines: taken ? [t('supplyMenu.taken')] : [],
         key: sector.key,
+        current: here,
+        disabled: taken,
       };
-    }),
-  );
+    });
+  });
   const captions = $derived([
     { text: t('supplyMenu.caption') },
     { text: t('supplyMenu.hint'), dim: true },
@@ -48,8 +71,8 @@
     onhover={(id: string | null) => {
       orders.supplyMenu.hover(id as SupplyChoice | null);
     }}
-    onchoose={() => {
-      orders.chooseSupply();
+    onchoose={(id: string) => {
+      orders.chooseSupply(id as SupplyChoice);
     }}
     onclose={() => {
       orders.closeSupplyMenu();

@@ -171,6 +171,10 @@ export interface HudData {
   readonly hovered: GroupInfo | null;
   readonly cp: CpInfo;
   readonly stance: Stance;
+  /** The own front markers: the city of each, `null`: not placed (DEC-28, item 2). */
+  readonly fronts: readonly (number | null)[];
+  /** The own rear minimum of charges in the cities without a marker (DEC-28, item 3). */
+  readonly rearMin: number;
   readonly vp: { readonly mine: number; readonly enemy: number };
   /** Whole seconds until the timer ends the match. */
   readonly secondsLeft: number;
@@ -356,6 +360,8 @@ export function buildHudData(
       regenPerSecond: (rules.cp.per_period * rules.tick_hz) / rules.cp.period_ticks,
     },
     stance: view.me.stance,
+    fronts: view.me.fronts,
+    rearMin: view.me.rear_min,
     vp: { mine: view.vp[me], enemy: view.vp[me === 0 ? 1 : 0] },
     secondsLeft: Math.ceil(Math.max(0, rules.match_ticks - tick) / rules.tick_hz),
     group: selectedGroup === undefined ? null : groupInfo(selectedGroup, view.nodes),

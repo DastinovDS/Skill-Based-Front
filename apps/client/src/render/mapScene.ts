@@ -56,6 +56,7 @@ export class MapScene {
   private source: RenderSource | null;
   private base: unknown = null;
   private destroyed = false;
+  private supplyOn = false;
   private readonly onsnapshot: ((tick: number) => void) | undefined;
 
   constructor(
@@ -87,7 +88,7 @@ export class MapScene {
       radiusOf,
     );
     this.overlay = new OverlayView(map, this.layers, me, radiusOf);
-    this.supply = new SupplyView(map, this.layers, radiusOf);
+    this.supply = new SupplyView(map, this.layers, me, radiusOf);
     this.alerts = new AlertView(map, this.layers, me, radiusOf);
     this.controller = new CameraController(
       app.canvas,
@@ -195,6 +196,9 @@ export class MapScene {
   private readonly onFrame = (): void => {
     const frame = this.source?.frame();
     if (frame === undefined || frame === null || this.source === null) return;
+    // Asked once per frame and first: the «Supply» mode swaps the picture before anything draws.
+    const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;
+    this.setSupplyMode(overlay.supply !== null);
     const announce = frame.base !== this.base;
     if (announce) {
       this.base = frame.base;
@@ -224,12 +228,27 @@ export class MapScene {
     );
     this.fog.setTickHz(tickHz);
     this.fog.update(frame.base);
-    const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
-    this.supply.update(frame.base, overlay.supply);
+    this.supply.setTickHz(tickHz);
+    this.supply.update(frame, overlay.supply);
     this.alerts.update(frame.base.view.nodes, tickHz, overlay.beacon, performance.now());
     if (announce) this.onsnapshot?.(frame.base.tick);
   };
+
+  /**
+   * The «Supply» map mode (DEC-28, item 8): a flat picture of its own. The terrain, the groups, the
+   * intents, the fog and the effects are hidden (`SupplyView` draws on the `supply` layer); the
+   * territory gets a flat tint and the cities lose the garrison, queue and barracks marks.
+   */
+  private setSupplyMode(on: boolean): void {
+    if (on === this.supplyOn) return;
+    this.supplyOn = on;
+    this.view.setSupplyMode(on);
+    this.cities.setSupplyMode(on);
+    this.entities.setSupplyMode(on);
+    const { groups, intents, fog, effects } = this.layers.layer;
+    for (const layer of [groups, intents, fog, effects]) layer.visible = !on;
+  }
 
   /** The hit under a point of the canvas, in CSS px. */
   private hitAt(at: Point): PickHit | null {
@@ -276,6 +295,7 @@ export class MapScene {
     this.overlay.setCameraScale(camera.scale);
     this.entities.setLabelResolution(resolution);
     this.alerts.setLabelResolution(resolution);
+    this.supply.setLabelResolution(resolution);
     this.effects.setLabelResolution(resolution);
     this.entities.setCameraScale(camera.scale);
     this.intents.setCameraScale(camera.scale);

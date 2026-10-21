@@ -13,6 +13,8 @@ import {
   ROAD_CHEVRON,
   ROAD_COLOR,
   TERRAIN_FILL,
+  SUPPLY_FLOOR,
+  SUPPLY_TERRITORY_ALPHA,
   TERRITORY_ALPHA,
   TERRITORY_BORDER,
   ownerColor,
@@ -60,6 +62,10 @@ export class MapView {
   private readonly stamps: TerrainView;
   private readonly mapFrame: Graphics;
   private backdrop: Sprite | null = null;
+  /** The flat floor of the «Supply» mode, hidden on the normal map. */
+  private readonly floor: Graphics;
+  private supplyMode = false;
+  private owners: readonly Owner[] = [];
   private readonly cellLines: Graphics;
   private readonly territory: Graphics;
   private readonly roads: Road[];
@@ -89,6 +95,10 @@ export class MapView {
       new Graphics().rect(0, 0, bounds.width, bounds.height).fill(BACKDROP_DIM),
     );
     this.stamps = new TerrainView(map, this.cells, background, renderer);
+    this.floor = background.addChild(
+      new Graphics().rect(0, 0, bounds.width, bounds.height).fill(SUPPLY_FLOOR),
+    );
+    this.floor.visible = false;
     this.mapFrame = background.addChild(
       new Graphics().rect(0, 0, bounds.width, bounds.height).stroke(MAP_BORDER),
     );
@@ -153,6 +163,23 @@ export class MapView {
     this.layers.layer.background.addChildAt(sprite, 0);
     this.backdrop = sprite;
     this.terrainFill.visible = false;
+    if (this.supplyMode) sprite.visible = false;
+  }
+
+  /**
+   * The «Supply» mode (DEC-28, item 8): no terrain (colours, baked background, stamps, dimming), a
+   * flat floor instead, and a stronger flat tint of the territory.
+   */
+  setSupplyMode(on: boolean): void {
+    if (on === this.supplyMode) return;
+    this.supplyMode = on;
+    this.floor.visible = on;
+    this.dim.visible = !on;
+    this.stamps.setVisible(!on);
+    if (this.backdrop !== null) this.backdrop.visible = !on;
+    // Without a baked background the flat terrain colours are the fallback (hidden with the rest).
+    if (this.backdrop === null) this.terrainFill.visible = !on;
+    this.setOwners(this.owners);
   }
 
   /** Number of terrain stamps (tests and the performance check). */
@@ -162,12 +189,14 @@ export class MapView {
 
   /** `owners[i]`: current owner of node `i` (`null`: nobody). */
   setOwners(owners: readonly Owner[]): void {
+    this.owners = owners;
+    const alpha = this.supplyMode ? SUPPLY_TERRITORY_ALPHA : TERRITORY_ALPHA;
     const g = this.territory;
     g.clear();
     owners.forEach((owner, i) => {
       const cell = this.cells[i];
       if (owner !== null && cell !== undefined) {
-        g.poly(cell).fill({ color: ownerColor(this.me, owner), alpha: TERRITORY_ALPHA });
+        g.poly(cell).fill({ color: ownerColor(this.me, owner), alpha });
       }
     });
     // The border of an area: a light line of the owner colour, one stroke per owner.
@@ -221,6 +250,7 @@ export class MapView {
     this.backdrop?.destroy();
     this.terrainFill.destroy();
     this.dim.destroy();
+    this.floor.destroy();
     this.mapFrame.destroy();
     for (const context of this.shared) context.destroy();
   }

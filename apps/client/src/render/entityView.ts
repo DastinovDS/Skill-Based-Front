@@ -162,6 +162,11 @@ export class EntityView {
     return this.icons;
   }
 
+  /** The «Supply» map mode hides the road builds drawn on the road layer (DEC-28, item 8). */
+  setSupplyMode(on: boolean): void {
+    this.buildTies.visible = !on;
+  }
+
   /** Camera scale (CSS px per world unit): triangles never get smaller than 20 px on screen. */
   setCameraScale(scale: number): void {
     if (scale === this.cameraScale) return;

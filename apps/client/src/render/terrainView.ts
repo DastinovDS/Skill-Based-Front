@@ -114,6 +114,10 @@ export class TerrainView {
     parent.addChild(this.container);
   }
 
+  setVisible(visible: boolean): void {
+    this.container.visible = visible;
+  }
+
   /** Number of stamps drawn (tests and the performance check). */
   get count(): number {
     return this.container.children.length;
