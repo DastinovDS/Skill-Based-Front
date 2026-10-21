@@ -84,7 +84,14 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         warehouse_cap: city ? DEV_CAPACITY[n.kind] : null,
         detail: 'exact',
         warehouse: n.start_stock,
-        seen: { tick, level: 'exact', enemy_modes: [], enemy_units: 0, enemy_charged: 0 },
+        seen: {
+          tick,
+          level: 'exact',
+          enemy_modes: [],
+          enemy_units: 0,
+          enemy_charged: 0,
+          enemy_range: null,
+        },
       };
     }
     if (exact.has(n.id)) {
@@ -98,6 +105,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
           enemy_modes: ['attack'],
           enemy_units: n.start_units,
           enemy_charged: n.start_charged,
+          enemy_range: null,
         },
       };
     }
@@ -112,6 +120,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
           enemy_modes: ['defense'],
           enemy_units: null,
           enemy_charged: null,
+          enemy_range: null,
         },
       };
     }
@@ -148,10 +157,15 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         id: e.id,
         width: e.base_width,
         // A road is seen when one of its ends is (as in the real fog), hidden only between two hidden cities.
-        detail: nodes[e.a]?.detail === 'fog' && nodes[e.b]?.detail === 'fog' ? 'fog' : 'exact',
+        detail: nodes[e.a]?.detail === 'fog' && nodes[e.b]?.detail === 'fog' ? 'fog' : 'presence',
         upgrade_gain: null,
-        seen: null,
+        // Each half as its city (DEC-21, item 5); the fake has no enemies on roads.
+        halves: [
+          { detail: nodes[e.a]?.detail ?? 'fog', seen: null },
+          { detail: nodes[e.b]?.detail ?? 'fog', seen: null },
+        ],
         build: null,
+        enemy_groups: [],
       })),
       groups,
       packets: [],

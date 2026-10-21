@@ -11,15 +11,17 @@ import {
   buildGeometry,
   edgeEnds,
   edgePoint,
+  LANE_OFFSET,
   nodePoint,
   roadPosition,
+  sideways,
   packetFade,
   timeLeftLabel,
   type TokenSpot,
 } from './layout.ts';
 import { symbolScale, type Point } from './camera.ts';
 import { iconPoint, stackGroups, stackKey, type CityIcon } from './cityStacks.ts';
-import { edgeMarkerPoint, nodeMarkerPoint } from './fogLayout.ts';
+import { nodeMarkerPoint } from './fogLayout.ts';
 import { EntityKit, Token } from './shapes.ts';
 import {
   BUILD_MARK_DISTANCE,
@@ -79,7 +81,8 @@ export class EntityView {
   readonly kit: EntityKit;
   private readonly enemy: PlayerId;
   private readonly enemyNodes: (Token | null)[];
-  private readonly enemyEdges: (Token | null)[];
+  /** Enemy figures on the halves of roads in sight (DEC-33), by their id. */
+  private readonly enemyFigures = new Map<string, Token>();
   private readonly enemyLayer = new Container({ label: 'enemy' });
   private readonly packetLayer = new Container({ label: 'packets' });
   private readonly groupLayer = new Container({ label: 'own-groups' });
@@ -110,7 +113,6 @@ export class EntityView {
     this.kit = new EntityKit(me);
     this.enemy = other(me);
     this.enemyNodes = map.nodes.map(() => null);
-    this.enemyEdges = map.edges.map(() => null);
 
     this.timeStyle = new TextStyle({
       fontFamily: 'system-ui, sans-serif',
@@ -128,7 +130,7 @@ export class EntityView {
   setLabelResolution(resolution: number): void {
     this.labelResolution = resolution;
     const texts: Text[] = [];
-    for (const token of [...this.enemyNodes, ...this.enemyEdges]) {
+    for (const token of [...this.enemyNodes, ...this.enemyFigures.values()]) {
       if (token !== null) texts.push(...token.labels());
     }
     for (const entry of [...this.groups.values(), ...this.packets.values()]) {
@@ -171,7 +173,7 @@ export class EntityView {
   setCameraScale(scale: number): void {
     if (scale === this.cameraScale) return;
     this.cameraScale = scale;
-    for (const token of [...this.enemyNodes, ...this.enemyEdges]) {
+    for (const token of [...this.enemyNodes, ...this.enemyFigures.values()]) {
       if (token !== null) token.setScale(symbolScale(token.side, scale));
     }
   }
@@ -205,9 +207,7 @@ export class EntityView {
     nodes.forEach((node) => {
       this.setEnemyNode(node);
     });
-    edges.forEach((edge) => {
-      this.setEnemyEdge(edge);
-    });
+    this.setEnemyFigures(edges);
     this.drawBuilds(base);
   }
 
@@ -343,18 +343,45 @@ export class EntityView {
     });
   }
 
-  private setEnemyEdge(edge: EdgeView): void {
-    const token = this.enemyToken(
-      this.enemyEdges[edge.id] ?? null,
-      edge.seen,
-      edge.detail,
-      this.enemyLayer,
-      false,
-    );
-    this.enemyEdges[edge.id] = token;
-    if (token === null) return;
-    const at = edgeMarkerPoint(this.map, edge.id);
-    if (at !== undefined) token.view.position.set(at.x, at.y);
+  /**
+   * Enemy groups on the halves of roads in sight (DEC-33): a token each at its position, on the
+   * lane of its direction, with numbers only where its half is seen exactly. Placed per snapshot
+   * (no smoothing yet); a figure that is gone is removed.
+   */
+  private setEnemyFigures(edges: readonly EdgeView[]): void {
+    const present = new Set<string>();
+    for (const edge of edges) {
+      const ends = edgeEnds(this.map, edge.id);
+      for (const figure of edge.enemy_groups) {
+        present.add(figure.id);
+        let token = this.enemyFigures.get(figure.id);
+        if (token === undefined) {
+          token = new Token(this.kit, this.labelResolution);
+          this.enemyLayer.addChild(token.view);
+          this.enemyFigures.set(figure.id, token);
+        }
+        const exact = figure.units !== null && figure.charged !== null;
+        token.set({
+          owner: this.enemy,
+          modes: [figure.mode],
+          counts: exact ? { units: figure.units ?? 0, charged: figure.charged ?? 0 } : null,
+          inside: false,
+        });
+        token.setLabel(true);
+        token.setScale(symbolScale(token.side, this.cameraScale));
+        if (ends !== undefined) {
+          const at = edgePoint(ends.a, ends.b, true, figure.pos);
+          const [from, to] = figure.toward_b ? [ends.a, ends.b] : [ends.b, ends.a];
+          const lane = sideways(from, to, at, LANE_OFFSET);
+          token.view.position.set(lane.x, lane.y);
+        }
+      }
+    }
+    for (const [id, token] of this.enemyFigures) {
+      if (present.has(id)) continue;
+      token.view.destroy({ children: true });
+      this.enemyFigures.delete(id);
+    }
   }
 
   // --- Frame-driven part --------------------------------------------------------------------

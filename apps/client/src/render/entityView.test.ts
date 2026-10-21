@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import { interpolateFrame } from '../net/interpolate.ts';
-import type { GroupView, NodeView, SnapshotMsg } from '../protocol.gen.ts';
+import type { EnemyGroup, GroupView, NodeView, SnapshotMsg } from '../protocol.gen.ts';
 import { EntityView } from './entityView.ts';
 import { createLayers } from './layers.ts';
-import { nodePoint } from './layout.ts';
+import { edgeEnds, edgePoint, nodePoint } from './layout.ts';
 
 const map = DEFAULT_MAP;
 const base = devSnapshot(map, DEV_RULES, 100);
@@ -27,6 +27,7 @@ function frameWith(groups: GroupView[], exact: boolean) {
             enemy_modes: ['attack'],
             enemy_units: exact ? 3 : null,
             enemy_charged: exact ? 1 : null,
+            enemy_range: null,
           },
         }
       : { ...n, seen: null },
@@ -138,6 +139,49 @@ describe('EntityView, the Defense bonus beside the shield (DEC-30)', () => {
     const frame = frameWith([defender(2, 3)], false);
     view.update({ ...frame, groups: frame.groups.map((g) => ({ ...g, owner: 1 as const })) });
     expect(texts(layers).filter((text) => text.startsWith('+'))).toEqual([]);
+    view.destroy();
+  });
+});
+
+describe('EntityView, enemy figures on roads (DEC-33)', () => {
+  const edge = map.edges[0];
+  if (edge === undefined) throw new Error('no roads');
+
+  function frameWithFigures(figures: EnemyGroup[]) {
+    const edges = base.view.edges.map((e) =>
+      e.id === edge?.id ? { ...e, enemy_groups: figures } : e,
+    );
+    const snapshot: SnapshotMsg = { ...base, view: { ...base.view, edges, groups: [] } };
+    return interpolateFrame(snapshot, null, snapshot.tick);
+  }
+
+  const figure: EnemyGroup = {
+    id: 'f1',
+    pos: 250,
+    toward_b: true,
+    // Without numbers: a count label would measure its text, which needs a canvas.
+    detail: 'presence',
+    mode: 'attack',
+    units: null,
+    charged: null,
+    units_range: null,
+  };
+
+  it('draws one token per figure near its position, and drops a figure that is gone', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.update(frameWithFigures([figure, { ...figure, id: 'f2', pos: 900, toward_b: false }]));
+    const enemy = layers.layer.groups.children.find((c) => c.label === 'enemy');
+    const before = enemy?.children.length ?? 0; // the enemies seen in cities, and the figures
+    expect(before).toBeGreaterThanOrEqual(2);
+    const ends = edgeEnds(map, edge.id);
+    const at = ends === undefined ? undefined : edgePoint(ends.a, ends.b, true, 250);
+    const first = enemy?.children[before - 2];
+    expect(
+      Math.hypot((first?.x ?? 0) - (at?.x ?? NaN), (first?.y ?? 0) - (at?.y ?? NaN)),
+    ).toBeLessThan(12);
+    view.update(frameWithFigures([figure]));
+    expect(enemy?.children.length).toBe(before - 1);
     view.destroy();
   });
 });
