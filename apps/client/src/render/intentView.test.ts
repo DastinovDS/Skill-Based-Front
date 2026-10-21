@@ -96,6 +96,8 @@ describe('IntentView', () => {
       mode: 'attack',
       location: { kind: 'node', node: home },
       order: { dest: far, path: [via, far], planned: true },
+      defense_bonus: null,
+      defense_cap: null,
     };
     draw([own], [group]);
     const bent = ribbons?.getLocalBounds();
@@ -154,6 +156,8 @@ describe('IntentView', () => {
       mode: 'attack',
       location: { kind: 'node', node: home },
       order: { dest: via, path: [via], planned: false },
+      defense_bonus: null,
+      defense_cap: null,
     };
     const spots = new Map([['g', nodePoint(map, home) ?? { x: 0, y: 0 }]]);
     const frame = interpolateFrame(

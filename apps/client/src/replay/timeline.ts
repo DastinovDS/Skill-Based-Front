@@ -51,6 +51,9 @@ function groupView(g: FrameGroup): GroupView {
       g.to === undefined || dest === undefined
         ? null
         : { dest, path: g.to as [number, ...number[]], planned: g.pl === 1 },
+    // Replay frames carry no gathered Defense bonus (DEC-30); the viewer shows the mode only.
+    defense_bonus: null,
+    defense_cap: null,
   };
 }
 

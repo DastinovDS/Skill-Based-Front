@@ -124,10 +124,7 @@ export class MatchSession implements RenderSource {
     this.#hud = context.hud;
     this.tickHz = context.tickHz;
     const orders = context.orders;
-    this.orderDelays =
-      orders === undefined
-        ? undefined
-        : { planned: orders.planned_delay_ticks };
+    this.orderDelays = orders === undefined ? undefined : { planned: orders.planned_delay_ticks };
     this.roundTicks = context.roundTicks;
     this.recruitTicks = context.recruitTicks;
     this.cityUpgrades = context.cityUpgrades;

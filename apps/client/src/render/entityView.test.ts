@@ -62,6 +62,8 @@ describe('EntityView, enemies seen in a city', () => {
       mode: 'attack',
       location: { kind: 'node', node: nodeId },
       order: null,
+      defense_bonus: null,
+      defense_cap: null,
     };
     const layers = createLayers();
     const view = new EntityView(map, layers, 0, 1, () => 17);

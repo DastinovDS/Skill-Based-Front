@@ -127,6 +127,8 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       mode: 'attack',
       location: { kind: 'node', node: n.id },
       order: null,
+      defense_bonus: null,
+      defense_cap: null,
     }));
 
   const regen = Math.floor((tick * rules.cp.per_period) / rules.cp.period_ticks);
