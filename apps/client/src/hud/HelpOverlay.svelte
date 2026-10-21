@@ -24,7 +24,7 @@
     ['X', 'help.key.cancel'],
     ['D', 'help.key.defense'],
     ['R', 'help.key.recruit'],
-    ['U', 'help.key.road'],
+    ['LMB', 'help.key.road'],
     ['S', 'help.key.split'],
     ['G', 'help.key.merge'],
     ['Q', 'help.key.stance'],
@@ -104,7 +104,7 @@
         <section aria-labelledby="help-keys">
           <h3 id="help-keys">{t('help.keys')}</h3>
           <dl class="keys">
-            {#each KEYS as [label, text] (label)}
+            {#each KEYS as [label, text] (text)}
               <dt><kbd>{label}</kbd></dt>
               <dd>{t(text)}</dd>
             {/each}

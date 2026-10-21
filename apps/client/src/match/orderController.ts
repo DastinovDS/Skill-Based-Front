@@ -1,6 +1,6 @@
 import type { HudState } from '../hud/hudState.svelte.ts';
 import type { AlertState } from './alerts.svelte.ts';
-import { roadCandidates, type GroupChoice as GroupBrief, type Selection } from '../hud/hudData.ts';
+import type { GroupChoice as GroupBrief, Selection } from '../hud/hudData.ts';
 import type { Command, MapFile, Mode, ReachMsg, RulesetPublic, Stance } from '../protocol.gen.ts';
 import {
   EMPTY_OVERLAY,
@@ -26,7 +26,7 @@ import { TargetMenuState } from './targetMenuState.svelte.ts';
 import { SupplyMenuState, TransferState } from './supplyState.svelte.ts';
 
 /** A sector of the menu of a city. */
-export type CityChoice = 'recruit' | 'roads' | 'barracks' | 'warehouse';
+export type CityChoice = 'recruit' | 'barracks' | 'warehouse';
 
 /** A sector of the menu of a group. */
 export type GroupChoice = 'split' | 'merge' | 'cancel' | 'defense';
@@ -79,11 +79,12 @@ export interface KeyInput {
  * recruit, stance, forfeit. Each goes out as an intent and comes back as `accepted` or `rejected`
  * in `ui.current.notice`.
  *
- * Road upgrades are paid with CP (DEC-28, item 7; the click on a road itself: #311): with an own
- * city selected (or a group standing in one), U starts the road pick. The roads of that city with
- * an upgrade hint light up; a click on one ends the pick and sends `upgrade_road(edge)`. Esc, U
- * again, or a click elsewhere ends the pick too. Whether the road may be built (a build already
- * going, CP) is the server's call.
+ * Road upgrades are paid with CP (DEC-28, item 7; #311): a click on an own road that the server
+ * offers an upgrade for (`EdgeView.upgrade_gain`) with no build going sends `upgrade_road(edge)`
+ * at once, no city involved, on the ordinary map and in the «Supply» mode alike. Under the pointer
+ * such a road is lit and described (`ui.current.roadHover`: the gain, the price and the time from
+ * `ruleset_public`). With a group selected (or a transfer picking its target) an order has the
+ * click and a road is only the area of its city. A refusal (CP, a build already going) is a toast.
  *
  * The «Supply» map mode (DEC-18, item 7; the map layer: DEC-28, item 8) is toggled by Tab (or F2).
  * In it a click on an own city opens its supply menu (a radial menu under the pointer: front
@@ -104,15 +105,15 @@ export interface KeyInput {
  * X cancels any order of the selected group (on a road it turns back, free).
  *
  * UI round 2: there is no selection card. A click on an own city opens its radial menu (recruit
- * `R`, roads `U`) centred on the city circle; a second click on an own group (the first selects
+ * `R`, with DEC-26 the barracks and the warehouse) centred on the city circle; a second click on an own group (the first selects
  * it) opens a small radial menu on the group (split `S`, merge `G`, cancel `X`, defense `D`). The
  * menus only front the keys: a key does the same without the menu. A click on the same object
  * again, any click elsewhere and Esc close the menu (a click on another node still orders the
  * selected group).
  *
- * Keys: Esc ends the road pick or deselects, X cancels the order of
+ * Keys: Esc deselects, X cancels the order of
  * the selected group, 1 / 2 set the mode (attack / defense), D toggles defense, R recruits in the
- * selected city, U toggles the road pick, Q the stance menu (hold and release over a sector, or
+ * selected city, Q the stance menu (hold and release over a sector, or
  * tap and click; 1 / 2 / 3 choose while it is open), S the split menu, G merge, Space the camera
  * to the next alert, Tab or F2 the «Supply» mode (it also lets a selected city go with its menu).
  * At most one radial menu is open: whoever opens one closes the others (`#closeMenus`).
@@ -121,7 +122,6 @@ export class OrderController implements MapInteraction {
   readonly ui = new OrderUiState();
   /** The stance menu on Q (ui-style 11). */
   readonly radial = new RadialState();
-  /** The road type menu of a first road upgrade (DEC-22). */
   /** The supply menu of an own city in the «Supply» map mode (DEC-18). */
   readonly supplyMenu = new SupplyMenuState();
   /** The amount dialog of a transfer (DEC-18). */
@@ -144,8 +144,6 @@ export class OrderController implements MapInteraction {
   #overlayKey = '';
   #overlayGhosts: OverlayState['ghosts'] = [];
   #supplyOverlay: SupplyOverlay | null = null;
-  /** The city of the road pick, or `null`. Mirrored to `ui.current.roadPick` for the panel. */
-  #pick: number | null = null;
   /** When Q went down (ms) while the menu is held open; `null`: Q is up. */
   #qDownAt: number | null = null;
   /** The group, node and size the last `reach_query` was sent for, and the tick it was sent. */
@@ -211,6 +209,7 @@ export class OrderController implements MapInteraction {
   // --- MapInteraction -----------------------------------------------------------------------
 
   overlay(): OverlayState {
+    this.#syncRoadHover();
     this.#syncReach();
     this.#syncTargetMenus();
     const reach = this.#reach();
@@ -250,6 +249,14 @@ export class OrderController implements MapInteraction {
 
   click(picked: PickHit | null, shift: boolean): void {
     this.#shift = shift;
+    // A click on an own road that can be raised raises it, on the ordinary map and in the «Supply»
+    // mode alike (DEC-28, item 7).
+    const road = this.#roadTarget(picked);
+    if (road !== null) {
+      this.#closeMenus();
+      this.upgradeRoad(road);
+      return;
+    }
     if (this.#supplyClick(picked)) return;
     if (picked === null) {
       this.deselect();
@@ -257,16 +264,10 @@ export class OrderController implements MapInteraction {
     }
     let hit: PickHit = picked;
     if (hit.kind === 'edge') {
-      // A road is clicked to upgrade it, in the road pick of a city; anywhere else it is a click
-      // on the area of the city it lies in.
-      if (this.#candidates().includes(hit.id)) {
-        this.upgradeRoad(hit.id);
-        return;
-      }
+      // A road that is not raised by this click is a click on the area of the city it lies in.
       if (hit.cell === undefined) return;
       hit = { kind: 'node', id: hit.cell };
     }
-    this.stopRoadPick();
     const group = this.#selectedGroup();
     // A click on the node the selected group stands in only lets the group go: no city menu, no
     // city selection (a click on another node stays an order).
@@ -354,6 +355,7 @@ export class OrderController implements MapInteraction {
 
   hover(hit: PickHit | null): void {
     this.#hover = hit;
+    this.#syncRoadHover();
     this.#o.hud.hoverGroup(
       hit?.kind === 'group' ? hit.id : hit?.kind === 'stack' ? { node: hit.node } : null,
     );
@@ -366,7 +368,6 @@ export class OrderController implements MapInteraction {
   isIdle(): boolean {
     return (
       this.#o.hud.selection === null &&
-      this.#pick === null &&
       this.ui.current.transferFrom === null &&
       !this.cityMenu.current.open &&
       !this.groupMenu.current.open &&
@@ -381,7 +382,6 @@ export class OrderController implements MapInteraction {
   // --- Commands -----------------------------------------------------------------------------
 
   deselect(): void {
-    this.stopRoadPick();
     this.#closeMenus();
     this.#o.hud.select(null);
   }
@@ -429,7 +429,6 @@ export class OrderController implements MapInteraction {
     }
     const group = this.#selectedGroup();
     if (group === null || group.node === null || this.#o.send === null) return;
-    this.stopRoadPick();
     this.#closeMenus();
     this.splitMenu.open(group.id, group.units, group.charged);
   }
@@ -491,8 +490,7 @@ export class OrderController implements MapInteraction {
     this.cityMenu.close();
     if (choice === 'recruit') this.recruit();
     else if (choice === 'barracks') this.cityBuild('build_barracks');
-    else if (choice === 'warehouse') this.cityBuild('upgrade_warehouse');
-    else this.toggleRoadPick();
+    else this.cityBuild('upgrade_warehouse');
   }
 
   /** A sector of the menu of a group: the same as its key. */
@@ -541,17 +539,15 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.city_upgrades;
   }
 
-  /** Prices of a unit, a road level, the barracks and a warehouse level, hundredths of CP. */
+  /** Prices of a unit, the barracks and a warehouse level, hundredths of CP. */
   get cityCosts(): {
     readonly recruit: number;
-    readonly road: number;
     readonly barracks: number;
     readonly warehouse: number;
   } {
     const { cost } = this.#o.rules;
     return {
       recruit: cost.recruit,
-      road: cost.build,
       barracks: cost.barracks,
       warehouse: cost.warehouse,
     };
@@ -565,46 +561,31 @@ export class OrderController implements MapInteraction {
     this.#sendCommand({ type: 'cancel_recruit', node }, null);
   }
 
-  /**
-   * The own city that would build a road: the selected node, or the node the selected group
-   * stands in, if it is the player's; `null` otherwise.
-   */
-  roadCity(): number | null {
+  /** The selected node, or the node the selected group stands in, if it is the player's. */
+  selectedOwnCity(): number | null {
     const node = this.#o.hud.current?.node ?? null;
     return node?.owner === 'mine' ? node.id : null;
   }
 
   /**
-   * Start the road pick of the selected own city (key U); a second call ends it. Roads are paid
-   * with CP and built on the edge (DEC-28, item 7): a road under a build is the server's
-   * `EDGE_BUSY`. The click on a road itself is #311.
+   * Raise the own road `edge` by one level (DEC-28, item 7): `upgrade_road(edge)`, paid with CP at
+   * once, no city involved. The price and the build time come from `ruleset_public`
+   * (`roadCost`, `roadBuildTicks`); whether the road may be built (CP, a build already going) is
+   * the server's call, and a refusal is a toast like any other.
    */
-  toggleRoadPick(): void {
-    this.cityMenu.close();
-    if (this.#pick !== null) {
-      this.stopRoadPick();
-      return;
-    }
-    const city = this.roadCity();
-    if (city === null) return;
-    this.#pick = city;
-    this.ui.patch({ roadPick: city });
-  }
-
-  stopRoadPick(): void {
-    if (this.#pick === null) return;
-    this.#pick = null;
-    this.ui.patch({ roadPick: null });
-  }
-
-  /** Raise the own road `edge` by one level for `cost.build` CP (DEC-28, item 7); the road pick
-   * of a city only narrows the choice to its roads. */
   upgradeRoad(edge: number): void {
-    const node = this.#pick ?? this.roadCity();
-    if (node === null) return;
-    this.stopRoadPick();
     if (this.#o.send === null) return;
     this.#sendCommand({ type: 'upgrade_road', edge }, null);
+  }
+
+  /** Price of one road level, hundredths of CP (`ruleset_public.cost.build`). */
+  get roadCost(): number {
+    return this.#o.rules.cost.build;
+  }
+
+  /** Ticks one road level takes to build (`ruleset_public.build.ticks_per_level`). */
+  get roadBuildTicks(): number {
+    return this.#o.rules.build.ticks_per_level;
   }
 
   setStance(stance: Stance): void {
@@ -619,7 +600,6 @@ export class OrderController implements MapInteraction {
   /** The menu opens only in a match, where a stance can be sent. */
   openRadial(sticky: boolean): boolean {
     if (this.#o.send === null) return false;
-    this.stopRoadPick();
     this.#closeMenus();
     this.radial.open(sticky);
     return true;
@@ -647,7 +627,7 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * Tab / F2: the «Supply» map mode on or off. Either way every open menu, the road pick and the
+   * Tab / F2: the «Supply» map mode on or off. Either way every open menu and the
    * amount dialog close and a selected city is let go (its menu goes with it); a selected group
    * stays.
    */
@@ -655,7 +635,6 @@ export class OrderController implements MapInteraction {
     const on = !this.ui.current.supplyMode;
     this.#closeMenus();
     this.transfer.close();
-    this.stopRoadPick();
     if (this.#o.hud.selection?.kind === 'node') this.#o.hud.select(null);
     this.ui.patch({ supplyMode: on, transferFrom: null });
   }
@@ -696,9 +675,14 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.supply.rear_min_max;
   }
 
-  /** The number of front markers the player has (the length of `SelfView.fronts`, DEC-28, item 2). */
+  /** The number of front markers the player has (`ruleset_public.supply.front_markers`, DEC-28, item 2). */
   get frontMarkers(): number {
-    return this.#o.hud.current?.fronts.length ?? 0;
+    return this.#o.rules.supply.front_markers;
+  }
+
+  /** The price of putting a front marker, hundredths of CP (`ruleset_public.cost.front`; 0 in DEC-28). */
+  get frontCost(): number {
+    return this.#o.rules.cost.front;
   }
 
   /**
@@ -708,10 +692,10 @@ export class OrderController implements MapInteraction {
    */
   toggleFront(marker: number, node: number): void {
     const fronts = this.#o.hud.current?.fronts ?? [];
-    if (!Number.isInteger(marker) || marker < 0 || marker >= fronts.length) return;
+    if (!Number.isInteger(marker) || marker < 0 || marker >= this.frontMarkers) return;
     if (fronts.some((at, i) => i !== marker && at === node)) return;
     this.#sendCommand(
-      { type: 'set_front', marker, node: fronts[marker] === node ? null : node },
+      { type: 'set_front', marker, node: (fronts[marker] ?? null) === node ? null : node },
       null,
     );
   }
@@ -827,13 +811,12 @@ export class OrderController implements MapInteraction {
     }
     switch (input.code) {
       case 'Escape':
-        if (this.#pick !== null) this.stopRoadPick();
-        else this.deselect();
+        this.deselect();
         return true;
       case 'KeyX':
         // A selected own city: its last recruit goes; otherwise the order of the selected group.
         if (this.#o.hud.selection?.kind === 'node') {
-          if (this.roadCity() !== null) this.cancelRecruit();
+          if (this.selectedOwnCity() !== null) this.cancelRecruit();
         } else this.cancelSelected();
         return true;
       case 'KeyD':
@@ -845,9 +828,6 @@ export class OrderController implements MapInteraction {
         return this.#modeKey('defense');
       case 'KeyR':
         this.recruit();
-        return true;
-      case 'KeyU':
-        this.toggleRoadPick();
         return true;
       case 'KeyS':
         this.toggleSplit();
@@ -1082,11 +1062,31 @@ export class OrderController implements MapInteraction {
     query(group.id);
   }
 
-  /** Roads lit up by the road pick: the city's roads with an upgrade hint (none without a pick). */
+  /**
+   * The road a click on `hit` raises now: an own road the server offers an upgrade for
+   * (`EdgeView.upgrade_gain`: own internal, below the top level) with no build going on it. An
+   * order has the click first: with a group selected, or while a transfer picks its target, a road
+   * is only the area of its city. `null`: the click does something else.
+   */
+  #roadTarget(hit: PickHit | null): number | null {
+    if (hit?.kind !== 'edge' || this.#o.send === null) return null;
+    if (this.#selectedGroup() !== null || this.ui.current.transferFrom !== null) return null;
+    const road = this.#o.hud.current?.roads[hit.id];
+    return road !== undefined && road.id === hit.id && road.gain !== null && !road.building
+      ? road.id
+      : null;
+  }
+
+  /** The road under the pointer that a click would raise, mirrored to `ui.current.roadHover`. */
+  #syncRoadHover(): void {
+    const road = this.#roadTarget(this.#hover);
+    if (road !== this.ui.current.roadHover) this.ui.patch({ roadHover: road });
+  }
+
+  /** The road lit up and described under the pointer: the one a click would raise. */
   #candidates(): number[] {
-    const roads = this.#o.hud.current?.roads;
-    if (this.#pick === null || roads === undefined) return [];
-    return roadCandidates(roads, this.#pick).map((r) => r.id);
+    const road = this.ui.current.roadHover;
+    return road === null ? [] : [road];
   }
 
   /**

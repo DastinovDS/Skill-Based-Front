@@ -4,7 +4,7 @@
   /** `[key, dictionary key of what it does]`: the keys themselves are not translated. */
   const HINTS = [
     ['Q', 'hints.stance'],
-    ['U', 'hints.road'],
+    ['LMB', 'hints.road'],
     ['R', 'hints.recruit'],
     ['?', 'hints.help'],
   ] as const;
@@ -12,7 +12,7 @@
 
 <!-- The key bar at the bottom right: the first matches only (ui-style 10.4). -->
 <ul class="hints" aria-label={t('hints.title')}>
-  {#each HINTS as [key, text] (key)}
+  {#each HINTS as [key, text] (text)}
     <li><kbd>{key}</kbd> {t(text)}</li>
   {/each}
 </ul>

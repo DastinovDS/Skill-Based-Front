@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { MapFile, SnapshotMsg } from '../protocol.gen.ts';
 import { DEV_RULES } from './devFeed.ts';
-import { buildHudData, roadCandidates, type HudContext } from './hudData.ts';
+import { buildHudData, type HudContext } from './hudData.ts';
 
 const snapshotFiles = import.meta.glob<string>(
   '../../../../packages/protocol/fixtures/server/snapshot_fog.json',
@@ -105,9 +105,15 @@ describe('buildHudData: road upgrades for CP (DEC-28, item 7)', () => {
 
   it('passes what the next level of a road gives, from the server', () => {
     const data = buildHudData(ctx, snapshot, null, []);
-    expect(data.roads[0]).toEqual({ id: 0, a: edge0.a, b: edge0.b, width: 2, gain });
-    // No upgrade hint from the server: not a candidate.
+    expect(data.roads[0]).toEqual({
+      id: 0,
+      a: edge0.a,
+      b: edge0.b,
+      width: 2,
+      gain,
+      building: false,
+    });
+    // No upgrade hint from the server: nothing to raise.
     expect(data.roads[1]).toMatchObject({ gain: null });
-    expect(roadCandidates(data.roads, edge0.a).map((r) => r.id)).toEqual([0]);
   });
 });

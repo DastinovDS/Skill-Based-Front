@@ -4,7 +4,7 @@ import { getLocale, setLocale } from '../i18n/index.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import { OrderBook } from '../match/orderBook.ts';
 import { OrderController } from '../match/orderController.ts';
-import type { Command, SnapshotMsg } from '../protocol.gen.ts';
+import type { Command, RulesetPublic, SnapshotMsg } from '../protocol.gen.ts';
 import { DEV_RULES, devSnapshot } from './devFeed.ts';
 import { HudState } from './hudState.svelte.ts';
 import SupplyBanner from './SupplyBanner.svelte';
@@ -29,11 +29,11 @@ describe('the «Supply» mode UI (DEC-28)', () => {
     document.body.innerHTML = '';
   });
 
-  function render(snapshot: SnapshotMsg = base) {
+  function render(snapshot: SnapshotMsg = base, rules: RulesetPublic = DEV_RULES) {
     const hud = new HudState({
       me: 0,
       nicks: ['Danya', 'Bot'],
-      rules: DEV_RULES,
+      rules,
       map: DEFAULT_MAP,
     });
     hud.onSnapshot(snapshot);
@@ -41,7 +41,7 @@ describe('the «Supply» mode UI (DEC-28)', () => {
     const orders = new OrderController({
       hud,
       map: DEFAULT_MAP,
-      rules: DEV_RULES,
+      rules,
       book: new OrderBook(),
       send: (cmd) => sent.push(cmd),
     });
@@ -110,6 +110,24 @@ describe('the «Supply» mode UI (DEC-28)', () => {
     expect(items[0]).toContain('marker 1');
     expect(items[1]).toContain('marker 2');
     expect(items[2]).toContain('transfer');
+  });
+
+  it('a marker is free in DEC-28: no price on its sector; a ruleset that prices it shows it', () => {
+    setLocale('en');
+    const free = render();
+    free.orders.toggleSupplyMode();
+    free.orders.click({ kind: 'node', id: city }, false);
+    flushSync();
+    expect(free.target.querySelectorAll('[role^="menuitem"]')[0]?.textContent).not.toContain('CP');
+
+    document.body.innerHTML = '';
+    const priced = render(base, { ...DEV_RULES, cost: { ...DEV_RULES.cost, front: 50 } });
+    priced.orders.toggleSupplyMode();
+    priced.orders.click({ kind: 'node', id: city }, false);
+    flushSync();
+    expect(priced.target.querySelectorAll('[role^="menuitem"]')[0]?.textContent).toContain(
+      '0.5 CP',
+    );
   });
 
   it('a marker that stands on the city offers to take it off, and the other one is off', () => {

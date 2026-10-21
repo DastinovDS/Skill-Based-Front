@@ -85,15 +85,16 @@ describe('the radial menus of a city and of a group', () => {
       i.textContent.replace(/\s+/g, ' ').trim(),
     );
 
-  it('the city menu has recruit and roads with a glyph and a price only, and recruit sends the command', () => {
+  it('the city menu has recruit with a glyph and a price only, and recruit sends the command', () => {
     setLocale('en');
     const { target, orders, sent } = render();
     orders.click({ kind: 'node', id: home }, false);
     flushSync();
     const items = [...target.querySelectorAll('[role="menuitem"]')];
-    // The glyph, the price (a road level costs 0.5 CP, DEC-28) and the key: no name, no description.
-    expect(texts(target)).toEqual(['+1 CPR', '≡0.5 CPU']);
-    expect(items.map((i) => i.getAttribute('aria-label'))).toEqual(['Recruit', 'Roads']);
+    // The glyph, the price and the key: no name, no description. Roads are not here: a click on
+    // the road itself raises it (DEC-28, item 7).
+    expect(texts(target)).toEqual(['+1 CPR']);
+    expect(items.map((i) => i.getAttribute('aria-label'))).toEqual(['Recruit']);
     expect(items[0]?.getAttribute('aria-disabled')).not.toBe('true');
     items[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     flushSync();
@@ -141,11 +142,10 @@ describe('the radial menus of a city and of a group', () => {
     const items = [...target.querySelectorAll('[role="menuitem"]')];
     expect(items.map((i) => i.getAttribute('aria-label'))).toEqual([
       'Recruit',
-      'Roads',
       'Barracks',
       'Warehouse',
     ]);
-    expect(texts(target).slice(2)).toEqual(['⌂3 CP', '▤2 CP']);
+    expect(texts(target).slice(1)).toEqual(['⌂3 CP', '▤2 CP']);
     orders.chooseCity('warehouse');
     expect(sent).toEqual([{ type: 'upgrade_warehouse', node: home }]);
   });
@@ -163,17 +163,17 @@ describe('the radial menus of a city and of a group', () => {
     const barracks = render(0, rules, { hasBarracks: true, warehouseLevel: 0 });
     barracks.orders.click({ kind: 'node', id: home }, false);
     flushSync();
-    expect(labels(barracks.target)).toEqual(['Recruit', 'Roads', 'Warehouse']);
+    expect(labels(barracks.target)).toEqual(['Recruit', 'Warehouse']);
 
     const warehouse = render(0, rules, { hasBarracks: false, warehouseLevel: top });
     warehouse.orders.click({ kind: 'node', id: home }, false);
     flushSync();
-    expect(labels(warehouse.target)).toEqual(['Recruit', 'Roads', 'Barracks']);
+    expect(labels(warehouse.target)).toEqual(['Recruit', 'Barracks']);
 
     const both = render(0, rules, { hasBarracks: true, warehouseLevel: top });
     both.orders.click({ kind: 'node', id: home }, false);
     flushSync();
-    expect(labels(both.target)).toEqual(['Recruit', 'Roads']);
+    expect(labels(both.target)).toEqual(['Recruit']);
   });
 
   it('the group menu dims merge for a lone group and speaks Russian too', () => {
