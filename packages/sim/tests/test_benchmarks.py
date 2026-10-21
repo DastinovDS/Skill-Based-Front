@@ -25,7 +25,7 @@ from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef, load_map
 from gow_sim.match import Controller, Match, MatchResult, run_headless
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, GameState, Group, Mode
+from gow_sim.state import AtNode, GameState, Group, Mode, Packet
 from gow_sim.systems.supply import supply
 from gow_sim.view import project
 
@@ -189,6 +189,66 @@ def test_bench_supply(
 
     benchmark.pedantic(partial(_supply, rules=mvp_rules), setup=setup, rounds=500)
     _check(benchmark, speed_factor, 0.1 * MS)
+
+
+def _donor_state(mapdef: MapDef, rules: Ruleset) -> GameState:
+    """A dispatch tick of a busy supply (DEC-28, #306): each player owns half of ``grid40`` (20
+    cities), every other city is a donor (4 charges over a rear minimum of 2), the others lack 2,
+    both markers sit on empty front cities, and transfer packets hold the roads next to the
+    capital, so most sends hit a road with no throughput left and look for a detour (#309)."""
+    state = Match(mapdef, rules, KEY).state
+    cols = 20
+    for n in range(2 * cols):
+        state.nodes[n].owner = 0 if n % cols < cols // 2 else 1
+    for pid in PLAYERS:
+        state.players[pid].rear_min = 2
+    for n in range(cols // 2):  # player 0 (the mirror half for player 1)
+        for node in (n, cols + n):
+            stock = 4 if (n + node // cols) % 2 else 0
+            state.nodes[node].warehouse = stock
+            state.nodes[2 * cols - 1 - node].warehouse = stock
+    fronts = (cols // 2 - 1, cols + cols // 2 - 1)  # both front cities of player 0
+    state.players[0].fronts = fronts
+    state.players[1].fronts = tuple(2 * cols - 1 - f for f in fronts)
+    for pid in PLAYERS:
+        state.nodes[mapdef.capital(pid)].warehouse = 10
+        for f in fronts:
+            state.nodes[f if pid == 0 else 2 * cols - 1 - f].warehouse = 0
+    for pid, (a, b) in ((0, (0, 1)), (0, (0, cols)), (1, (39, 38)), (1, (39, 19))):
+        eid = next(e.id for e in mapdef.edges if {e.a, e.b} == {a, b})
+        packet_id = state.new_id()
+        state.packets[packet_id] = Packet(
+            id=packet_id,
+            owner=pid,
+            edge=eid,
+            from_node=a,
+            charges=3,
+            depart_tick=0,
+            arrive_tick=1000,
+            transfer=True,
+            share=3,
+        )
+    state.groups.clear()
+    state.tick = 1000  # a dispatch tick
+    return state
+
+
+def test_bench_supply_many_donors_busy_roads(
+    benchmark: BenchmarkFixture, speed_factor: float, grid40_map: MapDef, mvp_rules: Ruleset
+) -> None:
+    """A dispatch tick at its worst (the risk noted in #292): 20 cities per player, ten deficits,
+    ten donors, used-up roads and detours. The budget of section 12 (0.1 ms) is for the state of a
+    bot match (``test_bench_supply``); this stress state has its own budget, 1 ms per dispatch
+    tick (once in ``supply.dispatch_ticks``), ``docs/perf.md``."""
+    state = _donor_state(grid40_map, mvp_rules)
+    sent = [e for e in supply(copy.deepcopy(state), mvp_rules) if e.kind == "packet_sent"]
+    assert len(sent) >= 10, "the benchmark state sends many packets"
+
+    def setup() -> tuple[tuple[object, ...], dict[str, object]]:
+        return (copy.deepcopy(state),), {}
+
+    benchmark.pedantic(partial(_supply, rules=mvp_rules), setup=setup, rounds=500)
+    _check(benchmark, speed_factor, 1.0 * MS)
 
 
 def test_bench_project(

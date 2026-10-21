@@ -93,12 +93,13 @@ def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
         ],
     }
     builds = [
-        [nid, b.edge, done_tick(rules, b)]
-        for nid, b in ((i, state.nodes[i].build) for i in sorted(state.nodes))
-        if b is not None and b.edge is not None  # road builds; the barracks and the warehouse
-    ]  # are not drawn by the viewer (DEC-26)
-    if builds:  # only while a city builds: older files without the key stay valid
-        frame["b"] = builds
+        [eid, b.owner, done_tick(rules, b)]
+        for eid, b in ((i, state.edges[i].build) for i in sorted(state.edges))
+        if b is not None  # road builds (DEC-28); the barracks and the warehouse are not drawn
+    ]
+    if builds:  # only while a road is built: older files without the key stay valid
+        frame["e"] = builds
+    # No ``b`` (road builds by cities) since DEC-28: files from before still carry it.
     # No ``r`` (road types) since DEC-26: roads have no type; files from before still carry it.
     fights = [
         [f.id, f.node, f.edge, f.point, f.attacker, f.start, f.next_round, sorted(f.members)]

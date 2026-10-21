@@ -155,8 +155,8 @@ def encode_command(cmd: Command) -> dict[str, object]:
             return {"type": "set_mode", "group": g, "mode": mode.value}
         case SetStance(stance=stance):
             return {"type": "set_stance", "stance": stance.value}
-        case UpgradeRoad(node=node, edge=edge, kind=kind):
-            return {"type": "upgrade_road", "node": node, "edge": edge, "kind": kind}
+        case UpgradeRoad(edge=edge):
+            return {"type": "upgrade_road", "edge": edge}
         case BuildBarracks(node=node):
             return {"type": "build_barracks", "node": node}
         case UpgradeWarehouse(node=node):
@@ -200,10 +200,7 @@ def decode_command(data: object) -> Command:
             case "set_stance":
                 return SetStance(Stance(_str(d["stance"])))
             case "upgrade_road":
-                road = d["kind"]
-                return UpgradeRoad(
-                    _int(d["node"]), _int(d["edge"]), None if road is None else _str(road)
-                )
+                return UpgradeRoad(_int(d["edge"]))
             case "build_barracks":
                 return BuildBarracks(_int(d["node"]))
             case "upgrade_warehouse":

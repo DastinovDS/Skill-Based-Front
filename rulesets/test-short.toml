@@ -38,7 +38,7 @@ split = 0
 merge = 0
 attack = 0
 defense = 200
-build = 0
+build = 50
 recruit = 100
 stance = 0
 front = 0
@@ -90,18 +90,23 @@ rear_min_default = 1
 rear_min_max = 8
 recharge_per_tick = 1
 base_speed_pct = 100
-base_amount = 1
+front_markers = 2
 
 [supply.fast_speed_pct]
 2 = 150
 3 = 200
 
+[supply.amount_by_level]
+1 = 1
+2 = 2
+3 = 3
+
+[road.speed_pct]
+2 = 115
+3 = 130
+
 [build]
 ticks_per_level = 150
-
-[build.charges_per_level]
-2 = 1
-3 = 2
 
 [recruit]
 unit_ticks = 30

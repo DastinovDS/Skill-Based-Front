@@ -25,9 +25,6 @@ from gow_sim.ruleset import Ruleset, Stance
 PROGRESS_SCALE: Final = 1000
 """Edge progress is stored in thousandths of the edge (DEC-07, rule 6)."""
 
-FRONT_MARKERS: Final = 2
-"""Front markers of a player (DEC-28, item 2)."""
-
 
 class Mode(StrEnum):
     """Group mode (mechanics.md, section 3; effects: DEC-08). Roads are built by cities (DEC-16)."""
@@ -76,12 +73,16 @@ class OnEdge:
     ``progress`` is in thousandths of the edge, ``0..PROGRESS_SCALE``.
     ``back``: the group bounces (DEC-07, rules 4 and 6) and goes back to ``from_node``; its
     ``progress`` falls by the steps it grew, so the way back takes as long as the way there.
+    ``level``: the road level its speed uses (see the field).
     """
 
     edge: int
     from_node: int
     progress: int
     back: bool = False
+    level: int = 1
+    """The road level when the group entered the edge (DEC-28, item 7): its time is computed then
+    and does not change if the road is upgraded meanwhile."""
 
 
 type Location = AtNode | OnEdge
@@ -192,9 +193,9 @@ class PlayerState:
     cooldown (#104 default)."""
     forfeited: bool = False
     """The player gave up: a ``Forfeit`` command, also for a technical defeat (DEC-05)."""
-    fronts: tuple[int | None, ...] = (None,) * FRONT_MARKERS
-    """The own city of each of the two front markers (DEC-28, item 2), ``None``: not placed.
-    Never two markers on one city (example 8)."""
+    fronts: tuple[int | None, ...] = ()
+    """The own city of each front marker (DEC-28, item 2; ``supply.front_markers`` of them, set by
+    ``initial_state``), ``None``: not placed. Never two markers on one city (example 8)."""
     rear_min: int = 0
     """Charges the own cities without a marker keep (DEC-28, item 3); ``initial_state`` sets
     ``supply.rear_min_default``."""
@@ -202,12 +203,13 @@ class PlayerState:
 
 @dataclass(frozen=True, slots=True)
 class Build:
-    """The build of a city (DEC-16; DEC-26, item 8: one at a time, shared by the three kinds).
+    """A build: a road level on an edge (``Edge.build``, DEC-28, item 7) or the build of a city
+    (``Node.build``, DEC-26, item 8: the barracks or a warehouse level, one at a time).
 
-    ``kind``: a road level (``UpgradeRoad(node, edge)``, ``edge`` set), the barracks or a
-    warehouse level (``edge`` is ``None``). ``owner``: the player who started it; a road build
-    holds while ``edge`` is internal for them, the others while the city is theirs. ``since``: the
-    tick the command was applied; the build ends ``build.ticks_per_level`` (road),
+    ``kind``: a road level (``UpgradeRoad(edge)``, ``edge`` set), the barracks or a warehouse
+    level (``edge`` is ``None``). ``owner``: the player who started it; a road build holds while
+    ``edge`` is internal for them, the others while the city is theirs. ``since``: the tick the
+    command was applied; the build ends ``build.ticks_per_level`` (road),
     ``city_upgrades.barracks_ticks`` or ``city_upgrades.warehouse_ticks`` ticks later.
     """
 
@@ -236,7 +238,8 @@ class Node:
     """Ticks of production of the first unit of the queue, ``0..recruit.unit_ticks``; equal to
     ``unit_ticks``: the unit is ready and waits for a place (DEC-25, items 4 and 7)."""
     build: Build | None = None
-    """The build of this city (DEC-16, DEC-26); ``None``: no build."""
+    """The barracks or warehouse build of this city (DEC-26); ``None``: no build. Roads are built
+    on the edge (``Edge.build``, DEC-28)."""
     has_barracks: bool = False
     """The city may recruit (DEC-26): with ``city_upgrades`` the capital from the start and the
     cities that built the barracks; without it every city. Kept on a capture."""
@@ -258,6 +261,8 @@ class Edge:
 
     id: int
     width: int
+    build: Build | None = None
+    """The road level being built on this edge (DEC-28, item 7); ``None``: no build."""
 
 
 @dataclass(slots=True)
@@ -398,6 +403,7 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
                 vp=0,
                 stance_changed_tick=None,
                 rear_min=rules.supply.rear_min_default,
+                fronts=(None,) * rules.supply.front_markers,
             )
             for p in PLAYERS
         },
@@ -484,7 +490,10 @@ def to_canonical(state: GameState) -> dict[str, object]:
         "next_id": state.next_id,
         "players": [_player_data(state.players[p]) for p in sorted(state.players)],
         "nodes": [_node_data(state.nodes[n]) for n in sorted(state.nodes)],
-        "edges": [{"id": e.id, "width": e.width} for e in _by_id(state.edges)],
+        "edges": [
+            {"id": e.id, "width": e.width, "build": _build_data(e.build)}
+            for e in _by_id(state.edges)
+        ],
         "groups": [_group_data(g) for g in _by_id(state.groups)],
         "packets": [_packet_data(p) for p in _by_id(state.packets)],
         "intents": [_intent_data(i) for i in _by_id(state.intents)],
@@ -529,30 +538,30 @@ def _node_data(n: Node) -> dict[str, object]:
         "recruit_queue": n.recruit_queue,
         "recruit_progress": n.recruit_progress,
         "cut_since": n.cut_since,
-        "build": None
-        if n.build is None
-        else {
-            "edge": n.build.edge,
-            "owner": n.build.owner,
-            "since": n.build.since,
-            "kind": n.build.kind.value,
-        },
+        "build": _build_data(n.build),
         "has_barracks": n.has_barracks,
         "warehouse_level": n.warehouse_level,
     }
+
+
+def _build_data(b: Build | None) -> dict[str, object] | None:
+    if b is None:
+        return None
+    return {"edge": b.edge, "owner": b.owner, "since": b.since, "kind": b.kind.value}
 
 
 def _location_data(loc: Location) -> dict[str, object]:
     match loc:
         case AtNode(node=node):
             return {"kind": "node", "node": node}
-        case OnEdge(edge=edge, from_node=from_node, progress=progress, back=back):
+        case OnEdge(edge=edge, from_node=from_node, progress=progress, back=back, level=level):
             return {
                 "kind": "edge",
                 "edge": edge,
                 "from_node": from_node,
                 "progress": progress,
                 "back": back,
+                "level": level,
             }
 
 
@@ -726,8 +735,6 @@ def _parse_player(data: object, where: str) -> PlayerState:
         ),
     )
     fronts = _list(raw["fronts"], f"{where}.fronts")
-    if len(fronts) != FRONT_MARKERS:
-        raise StateFormatError(f"{where}.fronts: expected {FRONT_MARKERS} markers")
     return PlayerState(
         id=_int(raw["id"], f"{where}.id", low=0),
         cp=_int(raw["cp"], f"{where}.cp", low=0),
@@ -785,9 +792,11 @@ def _parse_build(data: object, where: str) -> Build:
 
 
 def _parse_edge(data: object, where: str) -> Edge:
-    raw = _obj(data, where, ("id", "width"))
+    raw = _obj(data, where, ("id", "width", "build"))
     return Edge(
-        id=_int(raw["id"], f"{where}.id", low=0), width=_int(raw["width"], f"{where}.width", low=1)
+        id=_int(raw["id"], f"{where}.id", low=0),
+        width=_int(raw["width"], f"{where}.width", low=1),
+        build=None if raw["build"] is None else _parse_build(raw["build"], f"{where}.build"),
     )
 
 
@@ -801,12 +810,13 @@ def _parse_location(data: object, where: str) -> Location:
         raw = _obj(data, where, ("kind", "node"))
         return AtNode(node=_int(raw["node"], f"{where}.node", low=0))
     if kind == "edge":
-        raw = _obj(data, where, ("kind", "edge", "from_node", "progress", "back"))
+        raw = _obj(data, where, ("kind", "edge", "from_node", "progress", "back", "level"))
         return OnEdge(
             edge=_int(raw["edge"], f"{where}.edge", low=0),
             from_node=_int(raw["from_node"], f"{where}.from_node", low=0),
             progress=_int(raw["progress"], f"{where}.progress", low=0, high=PROGRESS_SCALE),
             back=_bool(raw["back"], f"{where}.back"),
+            level=_int(raw["level"], f"{where}.level", low=1),
         )
     raise StateFormatError(f"{where}.kind: expected 'node' or 'edge', got {kind!r}")
 

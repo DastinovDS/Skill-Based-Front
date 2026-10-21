@@ -26,8 +26,10 @@ export type FrameNode = [PlayerId | null, number, number];
 export type FramePacket = [number, PlayerId, number, number, number, number, number];
 /** `[id, owner, kind, origin, target]`. */
 export type FrameIntent = [number, PlayerId, string, number, number | null];
-/** `[node, edge, done_tick]`: a road build of a city (DEC-16). */
+/** `[node, edge, done_tick]`: a road build of a city, only in files from before DEC-28 (DEC-16). */
 export type FrameBuild = [number, number, number];
+/** `[edge, owner, done_tick]`: a road build on an edge (DEC-28, item 7). */
+export type FrameEdgeBuild = [number, PlayerId, number];
 
 export interface FrameGroup {
   id: number;
@@ -56,8 +58,10 @@ export interface ReplayFrame {
   g: FrameGroup[];
   k: FramePacket[];
   i: FrameIntent[];
-  /** Road builds of cities, by node id; absent while no city builds (DEC-16). */
+  /** Road builds of cities, by node id: only in files from before DEC-28 (DEC-16). */
   b?: FrameBuild[];
+  /** Road builds, by edge id; absent while no road is being built (DEC-28). */
+  e?: FrameEdgeBuild[];
   /**
    * Road types by edge id, only in files from before DEC-26 (DEC-22); read and ignored: roads have
    * no type now.
@@ -136,6 +140,7 @@ export function parseReplay(raw: unknown): ReplayFile {
         Array.isArray(f.k) &&
         Array.isArray(f.i) &&
         (f.b === undefined || Array.isArray(f.b)) &&
+        (f.e === undefined || Array.isArray(f.e)) &&
         (f.r === undefined ||
           (Array.isArray(f.r) && f.r.length === (map.edges as unknown[]).length)) &&
         (f.f === undefined || Array.isArray(f.f)),

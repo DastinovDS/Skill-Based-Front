@@ -89,7 +89,7 @@ def test_mvp0_order_costs(mvp0: Ruleset) -> None:
     assert cost.split == 0  # free since DEC-20
     assert cost.merge == 0
     assert cost.defense == 200
-    assert cost.build == 0  # UpgradeRoad: paid with warehouse charges only (DEC-16)
+    assert cost.build == 50  # UpgradeRoad(edge): 0,5 CP per level (DEC-28, item 7)
     assert cost.attack == 0
     assert cost.recruit == 100
     assert cost.cancel == 0  # any order, free since DEC-20
@@ -144,10 +144,12 @@ def test_mvp0_capacity_supply_build_victory(mvp0: Ruleset) -> None:
     supply = mvp0.supply
     assert (supply.dispatch_ticks, supply.recharge_per_tick) == (10, 1)
     assert (supply.rear_min_default, supply.rear_min_max) == (1, 8)  # DEC-28, item 3
-    assert (supply.base_speed_pct, supply.base_amount) == (100, 1)
+    assert supply.base_speed_pct == 100
     assert [supply.fast_speed_pct.of(level) for level in (2, 3)] == [150, 200]
+    assert [supply.amount_by_level.of(level) for level in (1, 2, 3)] == [1, 2, 3]  # DEC-28
+    assert supply.front_markers == 2  # DEC-28, item 2
+    assert [mvp0.road.speed_pct.of(level) for level in (2, 3)] == [115, 130]  # DEC-28, item 7
     assert mvp0.build.ticks_per_level == 150
-    assert [mvp0.build.charges_per_level.of(level) for level in (2, 3)] == [1, 2]
     assert (mvp0.victory.vp_period_ticks, mvp0.victory.capital_multiplier) == (300, 3)
 
 
@@ -178,7 +180,11 @@ def test_level_table_rejects_unknown_level(mvp0: Ruleset) -> None:
     with pytest.raises(ValueError, match="level 4"):
         mvp0.supply.fast_speed_pct.of(4)
     with pytest.raises(ValueError, match="level 1"):
-        mvp0.build.charges_per_level.of(1)
+        mvp0.road.speed_pct.of(1)
+    with pytest.raises(ValueError, match="level 0"):
+        mvp0.supply.amount_by_level.of(0)
+    with pytest.raises(ValueError, match="level 4"):
+        mvp0.supply.amount_by_level.of(4)
 
 
 def test_ruleset_is_frozen(mvp0: Ruleset) -> None:
@@ -258,9 +264,10 @@ def test_file_errors_name_the_file(tmp_path: Path) -> None:
         (("terrain", "speed_pct", "forest"), 0, "speed_pct.forest: 0 is out"),
         (("capacity", "by_kind", "city_small"), -5, "by_kind.city_small: -5 is out of range"),
         (("supply", "fast_speed_pct", "2"), 0, "fast_speed_pct.2: 0 is out of range"),
-        (("supply", "base_amount"), 0, "supply.base_amount: 0 is out of range"),
+        (("supply", "amount_by_level", "1"), 0, r"supply\.amount_by_level\.1: 0 is out"),
+        (("supply", "front_markers"), -1, "supply.front_markers: -1 is out of range"),
         (("build", "ticks_per_level"), 0, "build.ticks_per_level: 0 is out of range"),
-        (("build", "charges_per_level", "2"), -1, r"build\.charges_per_level\.2: -1 is out"),
+        (("road", "speed_pct", "2"), 0, r"road\.speed_pct\.2: 0 is out"),
         (("recruit", "location"), "anywhere", "recruit.location: expected one of"),
         (("victory", "vp_period_ticks"), 0, "victory.vp_period_ticks: 0 is out of range"),
         (("cp",), 5, "cp: expected a table"),
@@ -291,7 +298,7 @@ def test_hash_changes_when_any_value_changes() -> None:
     # DEC-26: +11 (2 costs, 3 city_upgrades, 6 warehouse) - 2 (supply.freight_amount); DEC-28:
     # +4 (supply.rear_min_default, supply.rear_min_max, cost.front, cost.rear_min) - 2
     # (supply.buffer, cost.priority).
-    assert len(leaves) == 77
+    assert len(leaves) == 80
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)

@@ -63,7 +63,6 @@ describe('the radial menus of a city and of a group', () => {
         props: {
           orders,
           anchors,
-          building: null,
           queue,
           city,
         },
@@ -92,8 +91,8 @@ describe('the radial menus of a city and of a group', () => {
     orders.click({ kind: 'node', id: home }, false);
     flushSync();
     const items = [...target.querySelectorAll('[role="menuitem"]')];
-    // The glyph, the price (a road costs charges, not CP) and the key: no name, no description.
-    expect(texts(target)).toEqual(['+1 CPR', '≡U']);
+    // The glyph, the price (a road level costs 0.5 CP, DEC-28) and the key: no name, no description.
+    expect(texts(target)).toEqual(['+1 CPR', '≡0.5 CPU']);
     expect(items.map((i) => i.getAttribute('aria-label'))).toEqual(['Recruit', 'Roads']);
     expect(items[0]?.getAttribute('aria-disabled')).not.toBe('true');
     items[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));

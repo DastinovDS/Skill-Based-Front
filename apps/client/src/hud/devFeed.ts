@@ -149,6 +149,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
         detail: nodes[e.a]?.detail === 'fog' && nodes[e.b]?.detail === 'fog' ? 'fog' : 'exact',
         upgrade_gain: null,
         seen: null,
+        build: null,
       })),
       groups,
       packets: [],

@@ -51,7 +51,7 @@ COMMANDS: list[Command] = [
     Merge((4, 5, 6)),
     SetMode(7, Mode.DEFENSE),
     SetStance(Stance.WAR),
-    UpgradeRoad(8, 9),
+    UpgradeRoad(9),
     Recruit(0),
     CancelOrder(10),
     Forfeit(),

@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from gow_sim.maps import load_map
-from gow_sim.ruleset import LevelTable, Ruleset, load_ruleset
+from gow_sim.ruleset import FullLevelTable, LevelTable, Ruleset, load_ruleset
 from gow_sim.state import (
     AtNode,
     Event,
@@ -31,7 +31,15 @@ from gow_sim.state import (
     to_canonical,
 )
 from gow_sim.systems.capacity import change_owner
-from gow_sim.systems.supply import packet_ticks, supply, supply_tree
+from gow_sim.systems.supply import (
+    all_packet_ticks,
+    fastest_ways_to,
+    packet_ticks,
+    supply,
+    supply_tree,
+    transfer_route,
+    way_from,
+)
 
 TESTS_DIR = Path(__file__).resolve().parent
 _MVP0: Ruleset = load_ruleset(TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml")
@@ -44,7 +52,7 @@ RULES: Ruleset = dataclasses.replace(
     supply=dataclasses.replace(
         _MVP0.supply,
         base_speed_pct=100,
-        base_amount=1,
+        amount_by_level=FullLevelTable((1, 2, 3)),
         fast_speed_pct=LevelTable((150, 200)),
     ),
 )
@@ -145,3 +153,35 @@ def test_canonical_roundtrip_with_packets_in_flight() -> None:
     restored = from_canonical(to_canonical(state))
     assert restored == state
     assert state_hash(restored) == state_hash(state)
+
+
+# The ways of a dispatch: one Dijkstra per city with a deficit (#306) --------------------------
+
+
+@pytest.mark.parametrize("name", ["arteriya", "pautina", "pereval"])
+def test_fastest_ways_to_equal_transfer_route(name: str) -> None:
+    """``fastest_ways_to``/``way_from`` give the way ``transfer_route`` gives (the fastest one,
+    ties by the lexicographically smaller ``node_key`` sequence from the start) for every pair of
+    own nodes, on random owners and road levels, for both players."""
+    mapdef = load_map(TESTS_DIR.parents[2] / "maps" / f"{name}.json")
+    seed = 306
+
+    def draw(n: int) -> int:  # a fixed linear congruential sequence (no ``random`` here)
+        nonlocal seed
+        seed = (seed * 1103515245 + 12345) % 2**31
+        return seed // 65536 % n
+
+    for _ in range(20):
+        state = initial_state(mapdef, _MVP0)
+        for node in state.nodes.values():
+            node.owner = (0, 0, 1, 1, None)[draw(5)]
+        for road in state.edges.values():
+            road.width = 1 + draw(mapdef.edges[road.id].max_width)
+        ticks = all_packet_ticks(state, _MVP0)
+        for player in (0, 1):
+            own = [n for n in range(len(mapdef.nodes)) if state.nodes[n].owner == player]
+            for dst in own:
+                ways = fastest_ways_to(state, player, dst, ticks)
+                for src in own:
+                    expected = transfer_route(state, _MVP0, player, src, dst)
+                    assert way_from(state, player, ways, src, ticks) == expected, (src, dst)

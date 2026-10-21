@@ -20,7 +20,7 @@ from pydantic import Field, field_validator
 
 from gow_protocol.base import EdgeId, NodeId, NonNegInt, OpaqueId, PosInt, WireModel
 from gow_sim.ruleset import Stance
-from gow_sim.state import FRONT_MARKERS, Mode
+from gow_sim.state import Mode
 
 MAX_MERGE_GROUPS: Final = 16
 """Wire limit on ``merge.groups`` against oversized messages; not a game rule."""
@@ -64,22 +64,12 @@ class SetStanceCmd(WireModel):
     stance: Stance
 
 
-LegacyRoadType = Literal["fast", "freight"]
-"""A road type of the clients from before DEC-26: accepted on the wire, rejected by the simulation
-with ``INVALID_ARGUMENT`` (DEC-26, item 7: roads have no type)."""
-
-
 class UpgradeRoadCmd(WireModel):
-    """The own city ``node`` raises the internal road ``edge`` by one level (DEC-16, DEC-22).
-
-    Roads have no type (DEC-26, item 7): ``kind`` is omitted; a given one gives
-    ``INVALID_ARGUMENT``.
-    """
+    """Raise the own internal road ``edge`` by one level for ``cost.build`` CP (DEC-28, item 7);
+    no city pays or builds it."""
 
     type: Literal["upgrade_road"] = "upgrade_road"
-    node: NodeId
     edge: EdgeId
-    kind: LegacyRoadType | None = None
 
 
 class BuildBarracksCmd(WireModel):
@@ -116,11 +106,12 @@ class CancelOrderCmd(WireModel):
 
 
 class SetFrontCmd(WireModel):
-    """Put the front marker ``marker`` (0 or 1) on the own city ``node``; ``node = null`` takes
-    it off the map (DEC-28, item 2). Free (``cost.front``)."""
+    """Put the front marker ``marker`` (``0..supply.front_markers - 1`` of ``ruleset_public``,
+    checked by the simulation) on the own city ``node``; ``node = null`` takes it off the map
+    (DEC-28, item 2). Free (``cost.front``)."""
 
     type: Literal["set_front"] = "set_front"
-    marker: Annotated[int, Field(ge=0, lt=FRONT_MARKERS)]
+    marker: NonNegInt
     node: NodeId | None
 
 

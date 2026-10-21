@@ -38,7 +38,6 @@ from gow_sim.commands import (
     Move,
     SetFront,
     Split,
-    UpgradeRoad,
     UpgradeWarehouse,
     command_cost,
 )
@@ -380,28 +379,12 @@ class Bot:
                 cmds.append(SetFront(i, new))
         return cmds
 
-    def upgrade(self, view: PlayerView, node: int, edge: int) -> UpgradeRoad:
-        """``UpgradeRoad(node, edge)``: roads have no type (DEC-26, item 7)."""
-        del view
-        return UpgradeRoad(node, edge)
-
-    def can_upgrade(self, view: PlayerView, node: int, edge: int, supplied: list[bool]) -> bool:
-        """``UpgradeRoad(node, edge)`` passes the checks of DEC-16 and DEC-22 that the view shows
-        (one build per city, shared with the barracks and the warehouse: DEC-26, item 8)."""
-        city = view.nodes[node]
-        if city.owner != self.player or not supplied[node] or city.building is not None:
-            return False
-        if city.build is not None:
-            return False
+    def can_upgrade(self, view: PlayerView, edge: int) -> bool:
+        """``UpgradeRoad(edge)`` passes the checks of DEC-28, item 7 that the view shows: an own
+        internal road below its last level (``upgrade_gain``) without a build on it. The CP are
+        the caller's (``orders.cost.build``)."""
         e = view.edges[edge]
-        other = self.map.edges[edge].other(node)
-        if e.upgrade_gain is None or node not in (self.map.edges[edge].a, self.map.edges[edge].b):
-            return False
-        busy = view.nodes[other].build
-        if busy is not None and busy.edge == edge:
-            return False
-        price = self.rules.build.charges_per_level.of(e.width + 1)
-        return (city.warehouse or 0) >= price
+        return e.upgrade_gain is not None and e.build is None
 
     def development(self, view: PlayerView, budget: int) -> Command | None:
         """At most one city build of DEC-26 per decision (item 11; none without
@@ -463,7 +446,6 @@ class Bot:
             if n.owner == view.player
             and n.has_barracks is not None
             and n.building is None
-            and n.build is None
             and n.id not in fights
         ]
         return sorted(free, key=lambda n: (far[n.id], self.key(n.id)))

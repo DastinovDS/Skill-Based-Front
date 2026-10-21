@@ -99,7 +99,7 @@ def _command(draw: st.DrawFn, player: int) -> wire.Command:
         case "stance":
             return wire.SetStanceCmd(stance=draw(st.sampled_from(list(Stance))))
         case "road":
-            return wire.UpgradeRoadCmd(node=draw(_ints), edge=draw(_ints))
+            return wire.UpgradeRoadCmd(edge=draw(_ints))
         case "recruit":
             return wire.RecruitCmd(node=draw(_ints))
         case _:

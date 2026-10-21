@@ -75,16 +75,26 @@ describe('buildTimeline', () => {
     expect(timeline.snapshots[0]?.view.fights).toEqual([]);
   });
 
-  it('fills the road builds of cities from the frame key "b" (DEC-16), none without it', () => {
+  it('fills the road builds of the edges from the frame key "e" (DEC-28), none without it', () => {
+    const first = SAMPLE.frames[0];
+    if (first === undefined) throw new Error('the sample has no frames');
+    const [built] = buildTimeline({
+      ...SAMPLE,
+      frames: [{ ...first, e: [[1, 0, 150]] }],
+    }).snapshots;
+    expect(built?.view.edges[1]?.build).toEqual({ done_tick: 150 });
+    expect(built?.view.edges.filter((e) => e.build !== null)).toHaveLength(1);
+    expect(timeline.snapshots[0]?.view.edges.every((e) => e.build === null)).toBe(true);
+  });
+
+  it('reads the road builds of cities of older files (key "b", DEC-16) as builds of the edge', () => {
     const first = SAMPLE.frames[0];
     if (first === undefined) throw new Error('the sample has no frames');
     const [built] = buildTimeline({
       ...SAMPLE,
       frames: [{ ...first, b: [[2, 1, 150]] }],
     }).snapshots;
-    expect(built?.view.nodes[2]?.build).toEqual({ edge: 1, done_tick: 150 });
-    expect(built?.view.nodes.filter((n) => n.build !== null)).toHaveLength(1);
-    expect(timeline.snapshots[0]?.view.nodes.every((n) => n.build === null)).toBe(true);
+    expect(built?.view.edges[1]?.build).toEqual({ done_tick: 150 });
   });
 
   it('reads a file from before DEC-16: a "build" group shows as attacking, its intent is dropped', () => {

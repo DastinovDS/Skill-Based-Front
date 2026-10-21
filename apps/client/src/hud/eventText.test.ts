@@ -54,18 +54,8 @@ describe('eventText', () => {
       'Road 2 upgraded to level 3',
     );
     expect(
-      eventText(
-        event('build_started', {
-          node: 4,
-          kind: 'road',
-          edge: 2,
-          width: 2,
-          charges: 1,
-          player: 0,
-        }),
-        0,
-      ),
-    ).toBe('City 4 upgrades road 2 to level 2: 1 charges spent');
+      eventText(event('build_started', { kind: 'road', edge: 2, width: 2, player: 0 }), 0),
+    ).toBe('Road 2 is being upgraded to level 2');
     expect(eventText(event('build_stopped', { node: 4, edge: 2, reason: 'interrupted' }), 0)).toBe(
       'The build of road 2 was interrupted',
     );

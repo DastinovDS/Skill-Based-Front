@@ -10,9 +10,9 @@ and advance the clock. After every tick the invariants below must hold:
   (``spent`` of ``fight_round``; a group dying by DEC-24 G3: ``fight_group`` with ``encircled``),
   ``warehouse_lost``, ``packet_lost``, ``charges_overflow`` (the part of a delivered packet that
   does not fit the warehouse, and the production of a full capital that finds no room in the
-  rear, DEC-28, item 4.4) and ``attrition`` deaths of charged units; the charges a city pays for a
-  road level (``build_started``, DEC-16); the charges a cut-off garrison spends (``starvation``,
-  DEC-19; units never die of it). A transfer (DEC-18) only moves charges from a warehouse into a
+  rear, DEC-28, item 4.4) and ``attrition`` deaths of charged units (a road level costs no
+  charges since DEC-28: CP); the charges a cut-off garrison spends (``starvation``, DEC-19; units
+  never die of it). A transfer (DEC-18) only moves charges from a warehouse into a
   packet: it is a flow, not a sink. ``charges_produced`` counts all of the production, the part
   that did not fit into the capital (``spill``) included;
 - no negative counters, ``charged <= units``, road widths within their limits, every group in an
@@ -131,7 +131,7 @@ class Ledger:
     starvation: int = 0
     """Charges a cut-off garrison spent (DEC-19): a documented sink."""
     builds: int = 0
-    """Charges a city paid from its warehouse for a road level (DEC-16, ``build_started``)."""
+    """Charges a city paid for a road level: none since DEC-28 (item 7: CP, no charges)."""
 
     @property
     def lost(self) -> int:
@@ -164,7 +164,7 @@ class Ledger:
                 case "attrition":
                     self.attrition += 1 if e.get("charged") else 0
                 case "build_started" if e.get("kind") == "road":
-                    self.builds += _int(e, "charges")
+                    assert "charges" not in dict(e.data), f"a road paid with charges: {e}"
                 case "starvation":
                     spent = _int(e, "warehouse") + _int(e, "units")
                     assert spent > 0, f"an empty starvation event: {e}"
@@ -186,13 +186,17 @@ def check_state(state: GameState) -> None:
         assert n.warehouse >= 0 and n.over_ticks >= 0, f"node {nid}: {n}"
         assert n.owner is None or n.owner in PLAYERS, f"node {nid}: {n}"
         b = n.build
-        assert b is None or (
-            n.owner == b.owner and (b.edge is None or nid in _ends(mapdef, b.edge))
-        ), f"node {nid}"
+        assert b is None or (n.owner == b.owner and b.edge is None), f"node {nid}"
         assert 0 <= n.warehouse_level <= 2 and n.recruit_queue >= 0, f"node {nid}: {n}"
     for eid, e in state.edges.items():
         static = mapdef.edges[eid]
         assert static.base_width <= e.width <= static.max_width, f"edge {eid}: {e}"
+        b = e.build  # a road build (DEC-28): on an internal road of its player below max_width
+        assert b is None or (
+            b.edge == eid
+            and e.width < static.max_width
+            and state.nodes[static.a].owner == b.owner == state.nodes[static.b].owner
+        ), f"edge {eid}: {e}"
     for gid, g in state.groups.items():
         assert g.id == gid and g.owner in PLAYERS and gid < state.next_id, f"group {gid}: {g}"
         assert g.units >= 1 and 0 <= g.charged <= g.units, f"group {gid}: {g}"
@@ -381,8 +385,7 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
             node.warehouse_level = draw(st.integers(0, 2))
             node.recruit_queue = draw(st.integers(0, 3))  # DEC-25, item 12: hidden
             node.recruit_progress = draw(st.integers(0, 30))
-            b = node.build
-            if b is not None and b.edge is None and draw(st.booleans()):
+            if node.build is not None and draw(st.booleans()):
                 node.build = None
     other = state.players[enemy]
     other.cp = draw(st.integers(0, 10_000))
@@ -395,16 +398,10 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
         if level is Detail.FOG:
             edge = state.edges[e]
             edge.width = draw(st.integers(edge.width, state.map.edges[e].max_width))
-    for node in state.nodes.values():
-        b = node.build
-        if (
-            b is not None
-            and b.owner == enemy
-            and b.edge is not None
-            and edges[b.edge] is Detail.FOG
-            and draw(st.booleans())
-        ):
-            node.build = None
+    for e, level in enumerate(edges):
+        b = state.edges[e].build
+        if b is not None and b.owner == enemy and level is Detail.FOG and draw(st.booleans()):
+            state.edges[e].build = None
 
 
 # Commands -------------------------------------------------------------------------------------
@@ -465,11 +462,7 @@ def _candidate(data: st.DataObject, tracker: Tracker, player: int) -> Command:
         case "stance":
             return SetStance(draw(st.sampled_from(list(Stance))))
         case "upgrade":
-            return UpgradeRoad(
-                draw(st.integers(0, n_nodes - 1)),
-                draw(st.integers(0, n_edges - 1)),
-                draw(st.sampled_from([None, None, None, "fast"])),  # a type: INVALID_ARGUMENT
-            )
+            return UpgradeRoad(draw(st.integers(-1, n_edges)))  # -1, n_edges: no such edge
         case "barracks":
             return BuildBarracks(draw(st.integers(0, n_nodes - 1)))
         case "warehouse":

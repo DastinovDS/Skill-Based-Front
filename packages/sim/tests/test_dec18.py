@@ -34,7 +34,7 @@ from gow_sim.commands import (
     apply_commands,
 )
 from gow_sim.maps import load_map
-from gow_sim.ruleset import KindTable, LevelTable, Ruleset, load_ruleset
+from gow_sim.ruleset import FullLevelTable, KindTable, LevelTable, Ruleset, load_ruleset
 from gow_sim.state import Event, GameState, Packet, initial_state
 from gow_sim.systems.capacity import change_owner
 from gow_sim.systems.supply import packet_dest, supply
@@ -55,7 +55,7 @@ def _rules() -> Ruleset:
             base.supply,
             dispatch_ticks=10,
             base_speed_pct=100,
-            base_amount=1,
+            amount_by_level=FullLevelTable((1, 2, 3)),
             fast_speed_pct=LevelTable((150, 200)),
         ),
         orders=dataclasses.replace(
@@ -172,9 +172,10 @@ def test_example_9_transfer_time_with_batches() -> None:
 def test_example_10_transfer_on_a_level_3_road() -> None:
     state = _state(A=5)
     _road(state, AB, 3)
-    _transfer(state, A, B, 4)
-    events = _until(state, T + 45)  # last batch: t + 3 * 10 + 15 (speed 200, amount 1; DEC-26)
-    assert _arrivals(events, B) == [(T + 15, 1), (T + 25, 1), (T + 35, 1), (T + 45, 1)]
+    batches = _transfer(state, A, B, 4)  # amount 3 on level 3 (DEC-28): batches of 3 and 1
+    assert [(p.depart_tick, p.charges) for p in batches] == [(T, 3), (T + 10, 1)]
+    events = _until(state, T + 45)  # last batch: t + 1 * 10 + 15 (speed 200)
+    assert _arrivals(events, B) == [(T + 15, 3), (T + 25, 1)]
 
 
 def test_example_11_transfer_on_a_fast_road() -> None:
@@ -250,13 +251,13 @@ def test_example_17_way_cut_ahead_charges_stay_in_the_city() -> None:
 def test_example_19_a_packet_to_a_captured_city_is_lost() -> None:
     state = _state(A=2)
     _road(state, AB, 2)
-    _transfer(state, A, B, 2)  # two batches, at t and t + 10
+    _transfer(state, A, B, 2)  # one batch: amount 2 on level 2 (DEC-28)
     _until(state, T + 10)
     change_owner(state, B, 1)
     events = _until(state, T + 30)
     assert state.nodes[B].warehouse == 0  # no freight road, nothing for the captor (DEC-26)
     lost = [(e.get("player"), e.get("charges")) for e in events if e.kind == "packet_lost"]
-    assert lost == [(0, 1), (0, 1)]
+    assert lost == [(0, 2)]
     assert not [e for e in events if e.kind == "packet_captured"]
 
 

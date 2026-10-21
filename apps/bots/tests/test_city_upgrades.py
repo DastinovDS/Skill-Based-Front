@@ -21,6 +21,8 @@ EXPANDING = ("expander",)
 builds barracks there. The campaign bots spend every CP on orders and end a match early (the
 barracks then come only when CP pile up), the turtle holds a region around its capital."""
 TICKS = 3000
+EXPANDING_TICKS = 5000
+"""The expander's new barracks recruit later since #306 (DEC-28: roads for CP, supply by level)."""
 
 
 class _Watcher:
@@ -57,7 +59,8 @@ def test_recruits_only_with_barracks_and_builds_them(
             del commands
             results.extend(r.outcome for r in match.results if isinstance(r.outcome, Reject))
 
-    run_headless(mapdef, mvp1_rules, watched, max_ticks=TICKS, observer=_Rejects())
+    ticks = EXPANDING_TICKS if bot in EXPANDING else TICKS
+    run_headless(mapdef, mvp1_rules, watched, max_ticks=ticks, observer=_Rejects())
     assert RejectCode.NO_BARRACKS not in {r.code for r in results}
     if bot in EXPANDING:
         built = [c for w in watched for c in w.cmds if isinstance(c, BuildBarracks)]

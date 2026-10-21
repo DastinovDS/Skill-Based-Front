@@ -127,17 +127,17 @@ class SelfView:
     cp: int
     """Command points in hundredths."""
     stance: Stance
-    fronts: tuple[int | None, ...] = (None, None)
-    """The cities of the two own front markers (DEC-28, item 2), ``None``: not placed."""
+    fronts: tuple[int | None, ...] = ()
+    """The cities of the own front markers (DEC-28, item 2; ``supply.front_markers`` of them),
+    ``None``: not placed."""
     rear_min: int = 0
     """The own rear minimum (DEC-28, item 3)."""
 
 
 @dataclass(frozen=True, slots=True)
 class BuildView:
-    """A road level a city builds (DEC-16, item 8)."""
+    """A road level being built on an edge (DEC-28, item 7; visibility: DEC-16, item 8)."""
 
-    edge: int
     done_tick: int | None
     """The tick the level grows; only for an own build."""
 
@@ -162,8 +162,6 @@ class NodeView:
     """Charges in the warehouse; only for ``EXACT`` nodes."""
     seen: Sighting | None
     """This tick's sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one or ``None``."""
-    build: BuildView | None
-    """The city's road build: own always, an enemy one only while its edge is not in fog."""
     attrition_in: int | None
     """Own node only: ticks until the next unit dies of overcrowding (the garrison exceeds the
     capacity and the grace after a capture is over); ``None`` otherwise, always for the enemy's
@@ -204,8 +202,11 @@ class EdgeView:
     detail: Detail
     """``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges."""
     upgrade_gain: UpgradeGain | None
-    """Only for own internal edges below ``max_width`` (DEC-26, item 7)."""
+    """Only for own internal edges below ``max_width`` (DEC-26, item 7; DEC-28, item 7)."""
     seen: Sighting | None
+    build: BuildView | None = None
+    """The road level being built here (DEC-28, item 7): an own build always, an enemy one only
+    while the edge is not in fog (DEC-17, item 5; not remembered)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -438,7 +439,6 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 detail=level,
                 warehouse=node.warehouse if level is Detail.EXACT else None,
                 seen=now_nodes[n] if level is not Detail.FOG else memory.nodes.get(n),
-                build=_build_view(state, rules, player, n, levels.edges),
                 attrition_in=attrition_in,
                 grace_left=grace_left,
                 starve_in=starve_in(state, rules, n) if node.owner == player else None,
@@ -463,6 +463,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 detail=level,
                 upgrade_gain=upgrade_gain(state, rules, e) if own else None,
                 seen=now_edges[e] if level is not Detail.FOG else memory.edges.get(e),
+                build=_build_view(state, rules, player, e, level),
             )
         )
 
@@ -558,16 +559,16 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
 
 
 def _build_view(
-    state: GameState, rules: Ruleset, player: int, node: int, edge_levels: tuple[Detail, ...]
+    state: GameState, rules: Ruleset, player: int, edge: int, level: Detail
 ) -> BuildView | None:
-    b = state.nodes[node].build
-    if b is None or b.edge is None:  # the barracks and the warehouse: ``building``, own only
+    b = state.edges[edge].build
+    if b is None:
         return None
     if b.owner == player:
-        return BuildView(edge=b.edge, done_tick=done_tick(rules, b))
-    if edge_levels[b.edge] is Detail.FOG:  # not shown and not remembered (DEC-17, item 5)
+        return BuildView(done_tick=done_tick(rules, b))
+    if level is Detail.FOG:  # not shown and not remembered (DEC-17, item 5)
         return None
-    return BuildView(edge=b.edge, done_tick=None)
+    return BuildView(done_tick=None)
 
 
 def _building_view(rules: Ruleset, b: Build | None) -> BuildingView | None:
@@ -602,9 +603,6 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "detail": n.detail.value,
                 "warehouse": n.warehouse,
                 "seen": _seen_data(n.seen),
-                "build": None
-                if n.build is None
-                else {"edge": n.build.edge, "done_tick": n.build.done_tick},
                 "attrition_in": n.attrition_in,
                 "grace_left": n.grace_left,
                 "starve_in": n.starve_in,
@@ -627,8 +625,13 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "detail": e.detail.value,
                 "upgrade_gain": None
                 if e.upgrade_gain is None
-                else {"speed_pct": e.upgrade_gain.speed_pct},
+                else {
+                    "speed_pct": e.upgrade_gain.speed_pct,
+                    "unit_speed_pct": e.upgrade_gain.unit_speed_pct,
+                    "amount": e.upgrade_gain.amount,
+                },
                 "seen": _seen_data(e.seen),
+                "build": None if e.build is None else {"done_tick": e.build.done_tick},
             }
             for e in view.edges
         ],

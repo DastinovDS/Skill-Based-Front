@@ -4,8 +4,8 @@
  * `MatchConnection` as a live match: `welcome`, a snapshot 10 times a second (`devSnapshot`), an
  * `ack` a moment after each command. It answers every command with simple stand-in checks (CP, ownership, a few reject
  * codes) and is not a rules engine: accepted orders and modes stand in the snapshots, nothing moves. A road upgrade
- * (DEC-16) shows as a build of the city that widens the road after `ruleset_public.build.ticks_per_level` ticks, with no
- * charge accounting. The path is a breadth-first search on the map, good enough for a picture.
+ * (DEC-28, item 7: for CP, on the edge) shows as a build of the road that widens it after
+ * `ruleset_public.build.ticks_per_level` ticks. The path is a breadth-first search on the map, good enough for a picture.
  */
 import { devEvent, devFightEvent, devSnapshot, DEV_PLAYER } from '../hud/devFeed.ts';
 import { MockSocket } from '../net/fakeServer.ts';
@@ -110,8 +110,8 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
   const modes = new Map<string, Mode>();
   let timer: ReturnType<typeof setInterval> | undefined;
   const orders = new Map<string, OrderView>();
-  /** City builds: node -> road, the tick it grows and its type; levels and types so far by edge. */
-  const builds = new Map<number, { edge: number; done: number }>();
+  /** Road builds: edge -> the tick it grows; levels so far by edge. */
+  const builds = new Map<number, number>();
   const widths = new Map<number, number>();
   /** The front markers (DEC-28, item 2) and the rear minimum (item 3). */
   const fronts: [number | null, number | null] = [null, null];
@@ -119,10 +119,10 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
   const timeouts = new Set<ReturnType<typeof setTimeout>>();
 
   function snapshot(): SnapshotMsg {
-    for (const [node, build] of builds) {
-      if (tick >= build.done) {
-        widths.set(build.edge, (widths.get(build.edge) ?? 0) + 1);
-        builds.delete(node);
+    for (const [edge, done] of builds) {
+      if (tick >= done) {
+        widths.set(edge, (widths.get(edge) ?? 0) + 1);
+        builds.delete(edge);
       }
     }
     const base = devSnapshot(map, rules, tick);
@@ -138,21 +138,17 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
           rear_min: rearMin,
         },
         packets: devPackets(map, base.view.nodes, tick),
-        nodes: base.view.nodes.map((n) => {
-          const build = builds.get(n.id);
-          return build === undefined
-            ? n
-            : { ...n, build: { edge: build.edge, done_tick: build.done } };
-        }),
         edges: base.view.edges.map((e) => {
           const ends = map.edges[e.id];
           const width = e.width + (widths.get(e.id) ?? 0);
+          const done = builds.get(e.id);
+          const build = done === undefined ? null : { done_tick: done };
           const inner = (n: number | undefined) =>
             n !== undefined && base.view.nodes[n]?.owner === DEV_PLAYER;
-          // The gain of a level (DEC-26, item 7): +50 speed, no type.
+          // The gain of a level (DEC-28, item 7): packet speed, unit speed, one more charge.
           return inner(ends?.a) && inner(ends?.b) && width < (ends?.max_width ?? 0)
-            ? { ...e, width, upgrade_gain: { speed_pct: 50 } }
-            : { ...e, width };
+            ? { ...e, width, build, upgrade_gain: { speed_pct: 50, unit_speed_pct: 15, amount: 1 } }
+            : { ...e, width, build };
         }),
         groups: base.view.groups.map((g) => ({
           ...g,
@@ -245,18 +241,12 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
           ? charge(rules.cost.merge)
           : 'NOT_FOUND_OR_HIDDEN';
       case 'upgrade_road': {
-        const edge = map.edges[cmd.edge];
-        if (current.view.nodes[cmd.node]?.owner !== DEV_PLAYER) return 'NOT_OWNER';
-        if (edge === undefined) return 'NOT_FOUND_OR_HIDDEN';
-        if (edge.a !== cmd.node && edge.b !== cmd.node) return 'NOT_ADJACENT';
+        // The checks of the real server in its order (DEC-28, item 7).
+        if (map.edges[cmd.edge] === undefined) return 'NOT_FOUND_OR_HIDDEN';
         if (current.view.edges[cmd.edge]?.upgrade_gain == null) return 'NOT_INTERNAL';
-        if (builds.has(cmd.node)) return 'CITY_BUSY';
-        if ([...builds.values()].some((b) => b.edge === cmd.edge)) return 'EDGE_BUSY';
-        if (cmd.kind != null) return 'INVALID_ARGUMENT'; // roads have no type (DEC-26)
+        if (builds.has(cmd.edge)) return 'EDGE_BUSY';
         const code = charge(rules.cost.build);
-        if (code === null) {
-          builds.set(cmd.node, { edge: cmd.edge, done: tick + 1 + rules.build.ticks_per_level });
-        }
+        if (code === null) builds.set(cmd.edge, tick + 1 + rules.build.ticks_per_level);
         return code;
       }
       case 'set_front': {

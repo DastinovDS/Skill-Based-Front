@@ -13,7 +13,7 @@ import type {
   IntentView,
   Location,
   MapFile,
-  NodeBuild,
+  EdgeBuild,
   NodeView,
   PacketView,
   PlayerId,
@@ -58,8 +58,10 @@ function groupView(g: FrameGroup): GroupView {
 const INTENT_KINDS: ReadonlySet<string> = new Set<IntentKind>(['planned_move', 'defense']);
 
 function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
-  const builds = new Map<number, NodeBuild>();
-  for (const [node, edge, done_tick] of frame.b ?? []) builds.set(node, { edge, done_tick });
+  // Road builds by edge: `e` since DEC-28, `b` (by the building city) in older files.
+  const builds = new Map<number, EdgeBuild>();
+  for (const [, edge, done_tick] of frame.b ?? []) builds.set(edge, { done_tick });
+  for (const [edge, , done_tick] of frame.e ?? []) builds.set(edge, { done_tick });
   const nodes: NodeView[] = frame.n.map(([owner, warehouse, capacity], id) => ({
     id,
     owner,
@@ -68,7 +70,6 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     detail: 'exact',
     warehouse,
     seen: null,
-    build: builds.get(id) ?? null,
     attrition_in: null, // not in the replay files: the viewer shows no countdown
     grace_left: null,
     starve_in: null, // not in the replay files (DEC-19)
@@ -113,6 +114,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
         detail: 'presence',
         upgrade_gain: null,
         seen: null,
+        build: builds.get(id) ?? null,
       })),
       groups: frame.g.map(groupView),
       packets,

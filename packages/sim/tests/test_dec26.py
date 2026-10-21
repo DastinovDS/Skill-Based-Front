@@ -7,9 +7,10 @@ territory, A medium (warehouse level 0, capacity 2), K the capital; the road A-B
 1, ``max_level`` 3, ``travel_ticks = 30``; CP regeneration not counted. Numbers:
 ``orders.cost.barracks = 300``, ``orders.cost.warehouse = 200``, ``barracks_ticks`` and
 ``warehouse_ticks`` 100, warehouse start capital 6 / large 2 / medium 2 / small 1, +1 per level, at
-most 2 levels; road prices ``2 = 1``, ``3 = 2``, 150 ticks per level; packet speed 150 / 200 on
-level 2 / 3, ``amount`` 1. These numbers are pinned in ``RULES`` (from ``mvp-1.toml``), so balance
-changes do not break the rule tests.
+most 2 levels; roads paid with CP since DEC-28 (``orders.cost.build = 50`` per level, rows 9-14
+and 23 recounted, row 13 gone), 150 ticks per level; packet speed 150 / 200 on level 2 / 3,
+``amount`` 1 / 2 / 3 by level (DEC-28). These numbers are pinned in ``RULES`` (from
+``mvp-1.toml``), so balance changes do not break the rule tests.
 
 Map ``dec22``: K = 0 (capital of 0) -e0- A = 1 -e1- B = 2 (medium; B starts neutral, the tests give
 it to player 0), P = 3 a province at A (e2); B -e3- 5 (medium, the tests give it to player 1).
@@ -40,6 +41,7 @@ from gow_sim.ruleset import (
     BuildRules,
     CityKindTable,
     CityUpgradeRules,
+    FullLevelTable,
     KindTable,
     LevelTable,
     RecruitLocation,
@@ -67,6 +69,8 @@ MVP1 = TESTS_DIR.parents[2] / "rulesets" / "mvp-1.toml"
 K, A, B, P, ENEMY = 0, 1, 2, 3, 5
 AB, AP = 1, 2
 T = 1000
+PRICE = 50
+"""``orders.cost.build``: 0,5 CP per road level (DEC-28, item 7)."""
 """The tick of the first command of the examples."""
 
 
@@ -78,7 +82,7 @@ def _rules(enabled: bool = True) -> Ruleset:
         orders=dataclasses.replace(
             base.orders,
             cost=dataclasses.replace(
-                base.orders.cost, barracks=300, warehouse=200, recruit=100, build=0
+                base.orders.cost, barracks=300, warehouse=200, recruit=100, build=PRICE
             ),
         ),
         capacity=dataclasses.replace(
@@ -89,10 +93,10 @@ def _rules(enabled: bool = True) -> Ruleset:
             base.supply,
             dispatch_ticks=10,
             base_speed_pct=100,
-            base_amount=1,
             fast_speed_pct=LevelTable((150, 200)),
+            amount_by_level=FullLevelTable((1, 2, 3)),
         ),
-        build=BuildRules(ticks_per_level=150, charges_per_level=LevelTable((1, 2))),
+        build=BuildRules(ticks_per_level=150),
         city_upgrades=CityUpgradeRules(enabled=enabled, barracks_ticks=100, warehouse_ticks=100),
         warehouse=WarehouseRules(
             gain_per_level=1,
@@ -251,26 +255,27 @@ def test_example_9_one_build_per_city() -> None:
     run.step(BuildBarracks(A))
     run.until(T + 49)
     assert run.step(UpgradeWarehouse(A)) == [Reject(RejectCode.CITY_BUSY)]  # tick 1050
-    assert run.step(UpgradeRoad(A, AB)) == [Reject(RejectCode.CITY_BUSY)]
+    assert run.step(UpgradeRoad(AB)) == [Ok(cost=PRICE)]  # roads take no city slot (DEC-28)
 
 
-# 10-15: roads without a type and cheaper ------------------------------------------------------
+# 10-15: roads without a type, paid with CP (DEC-28, item 7) ------------------------------------
 
 
-def test_examples_10_11_two_road_levels_from_a_warehouse_of_level_1() -> None:
+def test_examples_10_11_two_road_levels_for_cp() -> None:
     run = _Run()
     run.node(A).warehouse_level = 1  # capacity 3
     run.node(A).warehouse = 3
-    run.node(B).warehouse = 2  # B full: A forwards nothing (DEC-18 reserve, #287)
-    assert run.step(UpgradeRoad(A, AB)) == [Ok(cost=0)]
-    assert run.node(A).warehouse == 2  # level 2 costs 1
+    run.node(B).warehouse = 2  # B full: A forwards nothing (DEC-28: no deficit)
+    cp = run.state.players[0].cp
+    assert run.step(UpgradeRoad(AB)) == [Ok(cost=PRICE)]
+    assert run.node(A).warehouse == 3 and run.state.players[0].cp == cp - PRICE
     run.until(T + 149)
     assert run.state.edges[AB].width == 1
     run.until(T + 150)
     assert run.state.edges[AB].width == 2
     assert edge_packet_ticks(run.state, RULES, AB) == 20  # 30 * 100 // 150
-    assert run.step(UpgradeRoad(A, AB)) == [Ok(cost=0)]  # tick 1151
-    assert run.node(A).warehouse == 0  # level 3 costs 2
+    assert run.step(UpgradeRoad(AB)) == [Ok(cost=PRICE)]  # tick 1151
+    assert run.node(A).warehouse == 3
     run.until(T + 300)
     assert run.state.edges[AB].width == 2
     run.until(T + 301)
@@ -278,35 +283,25 @@ def test_examples_10_11_two_road_levels_from_a_warehouse_of_level_1() -> None:
     assert edge_packet_ticks(run.state, RULES, AB) == 15  # 30 * 100 // 200
 
 
-def test_example_12_the_other_end_pays_level_3() -> None:
+def test_example_12_the_warehouse_takes_no_part() -> None:
     run = _Run()
     run.node(A).warehouse = 1
-    run.node(B).warehouse = 2
     run.state.edges[AB].width = 2
-    assert _check(run.state, UpgradeRoad(A, AB)) == Reject(RejectCode.NOT_ENOUGH_CHARGES)
-    assert _check(run.state, UpgradeRoad(B, AB)) == Ok(cost=0)
+    assert _check(run.state, UpgradeRoad(AB)) == Ok(cost=PRICE)
 
 
 @pytest.mark.parametrize("rules", [RULES, OFF], ids=["on", "off"])
-def test_example_13_a_road_type_is_invalid(rules: Ruleset) -> None:
-    run = _Run(rules)
-    run.node(A).warehouse = 2
-    assert _check(run.state, UpgradeRoad(A, AB, "fast"), rules) == Reject(
-        RejectCode.INVALID_ARGUMENT
-    )
-
-
-@pytest.mark.parametrize("rules", [RULES, OFF], ids=["on", "off"])
-def test_example_14_level_3_carries_one_charge_per_period(rules: Ruleset) -> None:
+def test_example_14_level_3_carries_three_charges_per_period(rules: Ruleset) -> None:
     run = _Run(rules)
     run.state.edges[AB].width = 3
-    run.node(A).warehouse_level = 2  # capacity 4 with the flag: a surplus of 2 over the target
+    run.node(A).warehouse_level = 2  # capacity 4 with the flag
     run.node(A).warehouse = 4
-    gid = run.state.new_id()  # 3 discharged units in B: B wants more than a road carries
-    run.state.groups[gid] = Group(gid, 0, 3, 0, Mode.ATTACK, AtNode(B))
+    run.state.players[0].fronts = (B, None)  # B wants a full warehouse: more than a road carries
+    run.node(B).warehouse = 0
+    run.node(B).warehouse_level = 2  # with the flag: room 4, more than the road carries
     run.until(T + 1)  # tick 1000 is a dispatch tick
     sent = [d["charges"] for _, d in run.of("packet_sent") if d["edge"] == AB]
-    assert sent == [1]
+    assert sent == [3]
 
 
 @pytest.mark.parametrize("rules", [RULES, OFF], ids=["on", "off"])
@@ -416,12 +411,12 @@ def test_example_22_without_the_flag() -> None:
     assert warehouse_capacity(run.state, OFF, K) == 10
 
 
-def test_example_23_roads_are_cheaper_without_the_flag() -> None:
+def test_example_23_roads_for_cp_without_the_flag() -> None:
     run = _Run(OFF)
     run.node(A).warehouse = 6
     run.node(B).warehouse = 2  # B is at its target: the supply of tick 1000 leaves A alone
-    assert run.step(UpgradeRoad(A, AB)) == [Ok(cost=0)]
-    assert run.node(A).warehouse == 5
+    assert run.step(UpgradeRoad(AB)) == [Ok(cost=PRICE)]
+    assert run.node(A).warehouse == 6
     run.until(T + 150)
     assert run.state.edges[AB].width == 2
 
@@ -468,7 +463,6 @@ def test_own_city_shows_barracks_warehouse_and_building() -> None:
     assert (k.has_barracks, k.warehouse_level, k.warehouse_cap, k.building) == (True, 0, 6, None)
     assert (a.has_barracks, a.warehouse_level, a.warehouse_cap) == (False, 0, 2)
     assert a.building == BuildingView(kind=BuildKind.WAREHOUSE, done_tick=T + 100)
-    assert a.build is None  # ``build``: road builds only
     province = view.nodes[P]
     assert (province.has_barracks, province.warehouse_cap, province.building) == (None, None, None)
 

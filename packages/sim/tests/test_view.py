@@ -533,9 +533,14 @@ def test_upgrade_gain_only_on_own_internal_edges(rules: Ruleset) -> None:
     state = _state("line6", rules)
     state.edges[0].width = 2
     view0, view1 = _view(state, rules, 0), _view(state, rules, 1)
-    speeds = rules.supply.fast_speed_pct
+    speeds, units = rules.supply.fast_speed_pct, rules.road.speed_pct
+    amount = rules.supply.amount_by_level
     gain = view0.edges[0].upgrade_gain
-    assert gain == UpgradeGain(speed_pct=speeds.of(3) - speeds.of(2))  # DEC-26, item 7
+    assert gain == UpgradeGain(  # DEC-26, item 7; DEC-28, item 7
+        speed_pct=speeds.of(3) - speeds.of(2),
+        unit_speed_pct=units.of(3) - units.of(2),
+        amount=amount.of(3) - amount.of(2),
+    )
     assert [e.upgrade_gain is not None for e in view0.edges] == [True, False, False, False, False]
     assert [e.upgrade_gain is not None for e in view1.edges] == [False, False, False, False, True]
     state.edges[0].width = state.map.edges[0].max_width
@@ -854,30 +859,36 @@ def _check_place(place: NodeView | EdgeView, memory: object) -> None:
 # DEC-16, item 8 and DEC-17, item 5: road builds of cities ---------------------------------------
 
 
-def test_dec16_own_build_is_exact(rules: Ruleset) -> None:
+def test_dec28_own_build_is_exact(rules: Ruleset) -> None:
+    """The road build sits on the edge (DEC-28, item 7; ``EdgeView.build``)."""
     state = _state("line6", rules)
-    state.nodes[1].build = Build(edge=0, owner=0, since=40)
+    state.edges[0].build = Build(edge=0, owner=0, since=40)
     view = _view(state, rules)
     done = 40 + rules.build.ticks_per_level
-    assert view.nodes[1].build == BuildView(edge=0, done_tick=done)
-    assert [n.id for n in view.nodes if n.build is not None] == [1]
+    assert view.edges[0].build == BuildView(done_tick=done)
+    assert [e.id for e in view.edges if e.build is not None] == [0]
 
 
-def test_dec16_enemy_build_in_fog_is_hidden(rules: Ruleset) -> None:
+def test_dec28_enemy_build_in_fog_is_hidden(rules: Ruleset) -> None:
+    """Fog test of ``EdgeView.build`` (DEC-17, item 5): not shown and not remembered."""
     state = _state("line6", rules)
-    state.nodes[4].build = Build(edge=4, owner=1, since=40)  # e4 = 4-5: fog for player 0
+    state.edges[4].build = Build(edge=4, owner=1, since=40)  # e4 = 4-5: fog for player 0
     view = _view(state, rules)
     assert view.edges[4].detail is Detail.FOG
-    assert all(n.build is None for n in view.nodes)
-    assert _view(state, rules, player=1).nodes[4].build == BuildView(
-        edge=4, done_tick=40 + rules.build.ticks_per_level
+    assert all(e.build is None for e in view.edges)
+    assert _view(state, rules, player=1).edges[4].build == BuildView(
+        done_tick=40 + rules.build.ticks_per_level
     )
+    _add(state, 0, AtNode(4), units=1, charged=0)  # seen now ...
+    assert _view(state, rules).edges[4].build is not None
+    state.groups.clear()  # ... and in fog again: nothing remembered
+    assert _view(state, rules).edges[4].build is None
 
 
-def test_dec16_enemy_build_on_a_seen_edge_shows_city_and_edge_only(rules: Ruleset) -> None:
+def test_dec28_enemy_build_on_a_seen_edge_shows_no_end_tick(rules: Ruleset) -> None:
     state = _state("line6", rules)
-    state.nodes[4].build = Build(edge=4, owner=1, since=40)
+    state.edges[4].build = Build(edge=4, owner=1, since=40)
     _add(state, 0, AtNode(4), units=1, charged=0)  # node 4 exact, so e4 is not in fog
     view = _view(state, rules)
     assert view.edges[4].detail is Detail.PRESENCE
-    assert view.nodes[4].build == BuildView(edge=4, done_tick=None)
+    assert view.edges[4].build == BuildView(done_tick=None)

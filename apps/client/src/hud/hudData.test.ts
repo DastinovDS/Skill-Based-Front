@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
-import type { MapFile, NodeView, SnapshotMsg } from '../protocol.gen.ts';
+import type { MapFile, SnapshotMsg } from '../protocol.gen.ts';
 import { DEV_RULES } from './devFeed.ts';
 import { buildHudData, roadCandidates, type HudContext } from './hudData.ts';
 
@@ -23,16 +23,6 @@ const map: MapFile = {
   nodes: base.nodes.map((n) => ({ ...n, terrain: 'forest', vp: n.id === 1 ? 2 : n.vp })),
 };
 const ctx: HudContext = { me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map };
-
-function withNode(patch: Partial<NodeView> & { id: number }): SnapshotMsg {
-  return {
-    ...fog,
-    view: {
-      ...fog.view,
-      nodes: fog.view.nodes.map((n) => (n.id === patch.id ? { ...n, ...patch } : n)),
-    },
-  };
-}
 
 describe('buildHudData: the numbers of the snapshot', () => {
   const data = buildHudData(ctx, fog, null, []);
@@ -101,19 +91,8 @@ describe('buildHudData: selection', () => {
   });
 });
 
-describe('buildHudData: road upgrades of cities (DEC-16)', () => {
-  // Prices of mechanics.md, section 8: the price of a level is the new width.
-  const rules = {
-    ...DEV_RULES,
-    build: {
-      ticks_per_level: 150,
-      charges_per_level: [
-        { width: 2, charges: 3 },
-        { width: 3, charges: 4 },
-      ],
-    },
-  };
-  const gain = { speed_pct: 50 };
+describe('buildHudData: road upgrades for CP (DEC-28, item 7)', () => {
+  const gain = { speed_pct: 50, unit_speed_pct: 15, amount: 1 };
   const snapshot: SnapshotMsg = {
     ...fog,
     view: {
@@ -124,33 +103,11 @@ describe('buildHudData: road upgrades of cities (DEC-16)', () => {
   const edge0 = map.edges[0];
   if (edge0 === undefined) throw new Error('the map has no edge 0');
 
-  it('prices the next level of a road in charges, from the ruleset', () => {
-    const data = buildHudData({ ...ctx, rules }, snapshot, null, []);
-    expect(data.roads[0]).toEqual({
-      id: 0,
-      a: edge0.a,
-      b: edge0.b,
-      width: 2,
-      gain,
-      charges: 4,
-    });
-    // No upgrade hint from the server: no price either.
-    expect(data.roads[1]).toMatchObject({ gain: null, charges: null });
+  it('passes what the next level of a road gives, from the server', () => {
+    const data = buildHudData(ctx, snapshot, null, []);
+    expect(data.roads[0]).toEqual({ id: 0, a: edge0.a, b: edge0.b, width: 2, gain });
+    // No upgrade hint from the server: not a candidate.
+    expect(data.roads[1]).toMatchObject({ gain: null });
     expect(roadCandidates(data.roads, edge0.a).map((r) => r.id)).toEqual([0]);
-  });
-
-  it('shows the own build of a city with the seconds left, an enemy one without', () => {
-    const own = withNode({ id: 0, build: { edge: 0, done_tick: 345 } });
-    // Tick 300, 45 ticks left at 10 ticks per second: 5 s (rounded up).
-    expect(buildHudData(ctx, own, { kind: 'node', id: 0 }, []).node?.build).toEqual({
-      edge: 0,
-      secondsLeft: 5,
-    });
-    const enemy = withNode({ id: 1, build: { edge: 1, done_tick: null } });
-    expect(buildHudData(ctx, enemy, { kind: 'node', id: 1 }, []).node?.build).toEqual({
-      edge: 1,
-      secondsLeft: null,
-    });
-    expect(buildHudData(ctx, fog, { kind: 'node', id: 0 }, []).node?.build).toBeNull();
   });
 });

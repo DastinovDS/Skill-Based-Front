@@ -12,15 +12,13 @@
     orders: OrderController;
     /** What the city looks like on screen: the menu is centred on its circle and follows it. */
     anchors: MapAnchors;
-    /** The city builds a road (it cannot start another): the number of seconds left; else `null`. */
-    building: number | null;
     /** Units in the recruit queue of the city (DEC-25, from the snapshot); `null`: unknown. */
     queue: number | null;
     /** The selected city (barracks, warehouse and its build of any kind, DEC-26); `null`: none. */
     city?: NodeInfo | null;
   }
 
-  let { orders, anchors, building, queue, city = null }: Props = $props();
+  let { orders, anchors, queue, city = null }: Props = $props();
 
   const menu = $derived(orders.cityMenu.current);
   const cp = (centis: number): string => formatCentis(centis, getLocale());
@@ -41,8 +39,9 @@
     const funds = orders.cpNow;
     const poor = (centis: number): boolean => funds !== null && funds < centis;
     const noBarracks = upgrades.enabled && city?.hasBarracks === false;
-    // Any build of the city (a road, the barracks or the warehouse) holds the others back.
-    const busy = city?.building != null || building !== null;
+    // A build of the city (the barracks or the warehouse) holds the other back; roads are built on
+    // the edge for CP and take no city build (DEC-28, item 7).
+    const busy = city?.building != null;
     const price = (centis: number): string[] =>
       centis > 0 ? [tf('city.cost', { cost: cp(centis) })] : [];
     const sector = (choice: CityChoice): Omit<RadialItem, 'angle'> => {
@@ -65,7 +64,7 @@
             lines: price(costs.road),
             key: 'U',
             compact: true,
-            disabled: busy || poor(costs.road),
+            disabled: poor(costs.road),
           };
         case 'barracks':
           return {

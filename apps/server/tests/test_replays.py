@@ -65,12 +65,14 @@ def test_frame_has_no_road_types(line3: MapDef, full_rules: Ruleset) -> None:
 
 
 def test_frame_builds_are_road_builds_only(line3: MapDef, full_rules: Ruleset) -> None:
-    """Key ``b``: road builds by city; a barracks or warehouse build (DEC-26) is not drawn."""
+    """Key ``e``: road builds by edge (DEC-28); a barracks or warehouse build (DEC-26) is not
+    drawn; no ``b`` (road builds by city) any more."""
     state = initial_state(line3, full_rules)
     state.nodes[0].build = Build(edge=None, owner=0, since=0, kind=BuildKind.BARRACKS)
-    assert "b" not in frame_of(state, full_rules)
-    state.nodes[0].build = Build(edge=0, owner=0, since=0)
-    assert frame_of(state, full_rules)["b"] == [[0, 0, full_rules.build.ticks_per_level]]
+    assert "e" not in frame_of(state, full_rules)
+    state.edges[0].build = Build(edge=0, owner=0, since=0)
+    frame = frame_of(state, full_rules)
+    assert frame["e"] == [[0, 0, full_rules.build.ticks_per_level]] and "b" not in frame
 
 
 def test_fifteen_minute_match_resimulates_to_the_same_result(

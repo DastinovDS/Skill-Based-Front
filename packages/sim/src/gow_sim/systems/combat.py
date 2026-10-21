@@ -199,6 +199,8 @@ class _Arrival:
     from_node: int
     back: bool
     planned: bool
+    level: int
+    """The road level the group crossed the edge at (``OnEdge.level``, DEC-28, item 7)."""
 
 
 def combat(
@@ -228,11 +230,12 @@ def _arrivals(state: GameState) -> dict[int, _Arrival]:
             continue
         gid, node, edge = e.get("group"), e.get("node"), e.get("edge")
         from_node, back, planned = e.get("from_node"), e.get("back"), e.get("planned")
+        level = e.get("level")
         assert isinstance(gid, int) and isinstance(node, int)
         assert isinstance(edge, int) and isinstance(from_node, int)
-        assert isinstance(back, bool) and isinstance(planned, bool)
+        assert isinstance(back, bool) and isinstance(planned, bool) and isinstance(level, int)
         if gid in state.groups and state.groups[gid].location == AtNode(node):
-            result[gid] = _Arrival(node, edge, from_node, back, planned)
+            result[gid] = _Arrival(node, edge, from_node, back, planned, level)
     return result
 
 
@@ -270,7 +273,7 @@ def _edge_presence(
     loc = g.location
     if isinstance(loc, OnEdge):
         far = mapdef.edges[loc.edge].other(loc.from_node)
-        way = leg(mapdef, rules, loc.edge, far)
+        way = leg(mapdef, rules, loc.edge, far, loc.level)
         spent = way.spent(loc.progress)
         if loc.back:
             heading, progress = loc.from_node, PROGRESS_SCALE - loc.progress
@@ -282,9 +285,9 @@ def _edge_presence(
         return _presence(state, gid, loc.edge, heading, progress, loc.back, before)
     a = arrivals[gid]
     if a.back:  # one step of the bounce before home: from_node is the far end
-        before = PROGRESS_SCALE - leg(mapdef, rules, a.edge, a.from_node).progress(1)
+        before = PROGRESS_SCALE - leg(mapdef, rules, a.edge, a.from_node, a.level).progress(1)
     else:
-        way = leg(mapdef, rules, a.edge, a.node)
+        way = leg(mapdef, rules, a.edge, a.node, a.level)
         before = way.progress(way.ticks - 1)
     return _presence(state, gid, a.edge, a.node, PROGRESS_SCALE, a.back, before)
 
@@ -392,9 +395,9 @@ def _join_edge(
     a = arrivals.pop(x.gid, None)
     if a is not None:
         if a.back:
-            g.location = OnEdge(a.edge, a.node, 0, back=True)
+            g.location = OnEdge(a.edge, a.node, 0, back=True, level=a.level)
         else:
-            g.location = OnEdge(a.edge, a.from_node, PROGRESS_SCALE)
+            g.location = OnEdge(a.edge, a.from_node, PROGRESS_SCALE, level=a.level)
             g.order = Order((a.node,), a.planned, state.tick)
     _join(fight, g, FightMember(g.owner, g.units, g.charged), bonus, defense=False)
 
@@ -620,17 +623,18 @@ def _withdraw(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
             continue
         loc = g.location
         if isinstance(loc, OnEdge):
-            g.location = OnEdge(loc.edge, loc.from_node, loc.progress, back=True)
+            g.location = OnEdge(loc.edge, loc.from_node, loc.progress, back=True, level=loc.level)
             g.order = None
         elif m.edge is not None and m.from_node is not None:  # an attacker of the node
-            g.location = OnEdge(m.edge, m.from_node, PROGRESS_SCALE, back=True)
+            level = state.edges[m.edge].width  # a new start on the edge (DEC-28, item 7)
+            g.location = OnEdge(m.edge, m.from_node, PROGRESS_SCALE, back=True, level=level)
             g.order = None
         else:  # a defender with its ``Move``
             node = loc.node
             nxt = g.order.path[0] if g.order is not None and g.order.path else None
             eid = None if nxt is None else edge_between(state.map, node, nxt)
             if eid is not None:
-                g.location = OnEdge(eid, node, 0)
+                g.location = OnEdge(eid, node, 0, level=state.edges[eid].width)
         del fight.members[gid]
         g.fight = None
         events.append(_group_event(state, gid, m, g, left=True))
@@ -695,7 +699,8 @@ def _end(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
                     continue
                 if m.edge is None or m.from_node is None:
                     raise ValueError(f"group {g.id} bounces from node {node} without a way back")
-                g.location = OnEdge(m.edge, m.from_node, PROGRESS_SCALE, back=True)
+                level = state.edges[m.edge].width  # a new start on the edge (DEC-28, item 7)
+                g.location = OnEdge(m.edge, m.from_node, PROGRESS_SCALE, back=True, level=level)
                 g.order = None
     fight.losses = (losses[0], losses[1])
     events = [

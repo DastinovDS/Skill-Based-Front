@@ -118,16 +118,12 @@ export interface SetStanceCmd {
   stance: Stance;
 }
 /**
- * The own city ``node`` raises the internal road ``edge`` by one level (DEC-16, DEC-22).
- *
- * Roads have no type (DEC-26, item 7): ``kind`` is omitted; a given one gives
- * ``INVALID_ARGUMENT``.
+ * Raise the own internal road ``edge`` by one level for ``cost.build`` CP (DEC-28, item 7);
+ * no city pays or builds it.
  */
 export interface UpgradeRoadCmd {
   type: 'upgrade_road';
-  node: number;
   edge: number;
-  kind: ('fast' | 'freight') | null;
 }
 /**
  * The own city ``node`` builds the barracks (DEC-26, ``city_upgrades``): then it recruits.
@@ -162,8 +158,9 @@ export interface CancelOrderCmd {
   group: string;
 }
 /**
- * Put the front marker ``marker`` (0 or 1) on the own city ``node``; ``node = null`` takes
- * it off the map (DEC-28, item 2). Free (``cost.front``).
+ * Put the front marker ``marker`` (``0..supply.front_markers - 1`` of ``ruleset_public``,
+ * checked by the simulation) on the own city ``node``; ``node = null`` takes it off the map
+ * (DEC-28, item 2). Free (``cost.front``).
  */
 export interface SetFrontCmd {
   type: 'set_front';
@@ -337,21 +334,11 @@ export interface TerrainDefensePublic {
   mountains: number;
 }
 /**
- * Road upgrades by a city (``build`` of the ruleset, DEC-16).
+ * Road upgrades (``build`` of the ruleset, DEC-28, item 7): the price is ``cost.build`` per
+ * level, what a level gives is ``upgrade_gain`` of the own edges in the view.
  */
 export interface BuildPublic {
   ticks_per_level: number;
-  /**
-   * One price per new level ``2..3`` (DEC-22), ascending.
-   */
-  charges_per_level: LevelPrice[];
-}
-/**
- * Charges from the city warehouse for raising a road to level ``width`` (DEC-16, DEC-22).
- */
-export interface LevelPrice {
-  width: number;
-  charges: number;
 }
 /**
  * The charge production the stance menu shows (``economy`` of the ruleset, DEC-02).
@@ -436,6 +423,10 @@ export interface SupplyPublic {
    * The rear minimum every player starts with.
    */
   rear_min_default: number;
+  /**
+   * Front markers of a player: ``set_front`` accepts ``marker`` ``0..front_markers - 1``.
+   */
+  front_markers: number;
 }
 /**
  * The player's view after tick ``tick``. Only the latest one matters (AGENTS.md, 5.3).
@@ -477,13 +468,10 @@ export interface SelfView {
   cp: number;
   stance: Stance;
   /**
-   * The own cities of the two front markers (DEC-28, item 2), ``null``: not placed. The
-   * enemy's markers are never in a view (DEC-28).
-   *
-   * @minItems 2
-   * @maxItems 2
+   * The own cities of the front markers (DEC-28, item 2; ``supply.front_markers`` of
+   * ``ruleset_public``), ``null``: not placed. The enemy's markers are never in a view.
    */
-  fronts: [number | null, number | null];
+  fronts: (number | null)[];
   /**
    * The own rear minimum (DEC-28, item 3); the enemy's is never in a view.
    */
@@ -505,10 +493,6 @@ export interface NodeView {
    * Current sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one, or ``None``.
    */
   seen: Seen | null;
-  /**
-   * The city's road build (DEC-16): own always, an enemy one only while its edge is unfogged.
-   */
-  build: NodeBuild | null;
   /**
    * Own node only: ticks until the next unit dies of overcrowding (the garrison exceeds the
    * capacity and the grace after a capture is over). ``None`` for every other node.
@@ -575,21 +559,11 @@ export interface Seen {
   enemy_charged: number | null;
 }
 /**
- * A road level the city builds (DEC-16): ``edge`` is one of the city's roads.
- */
-export interface NodeBuild {
-  edge: number;
-  /**
-   * The tick the width grows; only for an own build.
-   */
-  done_tick: number | null;
-}
-/**
  * The current build of an own city, of any kind (DEC-26, item 10).
  */
 export interface NodeBuilding {
   /**
-   * ``road``, ``barracks`` or ``warehouse``.
+   * ``barracks`` or ``warehouse`` (roads are built on edges, ``EdgeView.build``).
    */
   kind: BuildKind;
   /**
@@ -613,16 +587,37 @@ export interface EdgeView {
    */
   upgrade_gain: UpgradeGain | null;
   seen: Seen | null;
+  /**
+   * The road level being built here (DEC-28, item 7): an own build always, an enemy one only
+   * while the edge is not in fog (DEC-17, item 5).
+   */
+  build: EdgeBuild | null;
 }
 /**
- * What the next road level would give (DEC-26, item 7): roads have no type, a level only
- * speeds the packets up; the amount per period does not grow.
+ * What the next road level would give (DEC-28, item 7).
  */
 export interface UpgradeGain {
   /**
    * Packet speed gain in percentage points.
    */
   speed_pct: number;
+  /**
+   * Unit speed gain in percentage points (``road.speed_pct``).
+   */
+  unit_speed_pct: number;
+  /**
+   * Gain of charges per dispatch period (``supply.amount_by_level``).
+   */
+  amount: number;
+}
+/**
+ * A road level being built on the edge (DEC-28, item 7).
+ */
+export interface EdgeBuild {
+  /**
+   * The tick the level grows; only for an own build.
+   */
+  done_tick: number | null;
 }
 /**
  * An own group. Enemy groups appear only as ``Seen`` summaries of places.
@@ -916,6 +911,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 17;
+export const PROTOCOL_VERSION = 18;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

@@ -64,12 +64,12 @@ from gow_protocol.messages import (
 )
 from gow_protocol.view import (
     AtNodeLoc,
+    EdgeBuild,
     EdgeView,
     FightView,
     GroupView,
     IntentView,
     Location,
-    NodeBuild,
     NodeBuilding,
     NodeView,
     OnEdgeLoc,
@@ -193,9 +193,6 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 detail=n.detail,
                 warehouse=n.warehouse,
                 seen=_seen(n.seen),
-                build=None
-                if n.build is None
-                else NodeBuild(edge=n.build.edge, done_tick=n.build.done_tick),
                 attrition_in=n.attrition_in,
                 grace_left=n.grace_left,
                 starve_in=n.starve_in,
@@ -218,7 +215,12 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 detail=e.detail,
                 upgrade_gain=None
                 if e.upgrade_gain is None
-                else UpgradeGain(speed_pct=e.upgrade_gain.speed_pct),
+                else UpgradeGain(
+                    speed_pct=e.upgrade_gain.speed_pct,
+                    unit_speed_pct=e.upgrade_gain.unit_speed_pct,
+                    amount=e.upgrade_gain.amount,
+                ),
+                build=None if e.build is None else EdgeBuild(done_tick=e.build.done_tick),
                 seen=_seen(e.seen),
             )
             for e in view.edges
@@ -327,9 +329,6 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "detail": n.detail,
                 "warehouse": n.warehouse,
                 "seen": _seen_data(n.seen),
-                "build": None
-                if n.build is None
-                else {"edge": n.build.edge, "done_tick": n.build.done_tick},
                 "attrition_in": n.attrition_in,
                 "grace_left": n.grace_left,
                 "starve_in": n.starve_in,
@@ -352,8 +351,13 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "detail": e.detail,
                 "upgrade_gain": None
                 if e.upgrade_gain is None
-                else {"speed_pct": e.upgrade_gain.speed_pct},
+                else {
+                    "speed_pct": e.upgrade_gain.speed_pct,
+                    "unit_speed_pct": e.upgrade_gain.unit_speed_pct,
+                    "amount": e.upgrade_gain.amount,
+                },
                 "seen": _seen_data(e.seen),
+                "build": None if e.build is None else {"done_tick": e.build.done_tick},
             }
             for e in view.edges
         ],
@@ -457,8 +461,8 @@ def command_from_wire(cmd: wire.Command) -> sim.Command:
             return sim.SetMode(gid(g), mode)
         case wire.SetStanceCmd(stance=stance):
             return sim.SetStance(stance)
-        case wire.UpgradeRoadCmd(node=node, edge=edge, kind=kind):
-            return sim.UpgradeRoad(node, edge, kind)  # a type: INVALID_ARGUMENT (DEC-26)
+        case wire.UpgradeRoadCmd(edge=edge):
+            return sim.UpgradeRoad(edge)
         case wire.BuildBarracksCmd(node=node):
             return sim.BuildBarracks(node)
         case wire.UpgradeWarehouseCmd(node=node):

@@ -8,10 +8,7 @@
       "fronts": [1, null],
       "rear_min": 1
     },
-    "vp": [
-      12,
-      9
-    ],
+    "vp": [12, 9],
     "nodes": [
       {
         "id": 0,
@@ -26,7 +23,6 @@
           "enemy_units": 0,
           "enemy_charged": 0
         },
-        "build": null,
         "attrition_in": null,
         "grace_left": null,
         "starve_in": null,
@@ -51,7 +47,6 @@
           "enemy_units": 0,
           "enemy_charged": 0
         },
-        "build": null,
         "attrition_in": null,
         "grace_left": null,
         "starve_in": null,
@@ -76,7 +71,6 @@
           "enemy_units": null,
           "enemy_charged": null
         },
-        "build": null,
         "attrition_in": null,
         "grace_left": null,
         "starve_in": null,
@@ -97,14 +91,10 @@
         "seen": {
           "tick": 120,
           "level": "presence",
-          "enemy_modes": [
-            "attack",
-            "defense"
-          ],
+          "enemy_modes": ["attack", "defense"],
           "enemy_units": null,
           "enemy_charged": null
         },
-        "build": null,
         "attrition_in": null,
         "grace_left": null,
         "starve_in": null,
@@ -122,14 +112,19 @@
         "id": 0,
         "width": 1,
         "detail": "presence",
-        "upgrade_gain": { "speed_pct": 50 },
+        "upgrade_gain": {
+          "speed_pct": 50,
+          "unit_speed_pct": 15,
+          "amount": 1
+        },
         "seen": {
           "tick": 120,
           "level": "presence",
           "enemy_modes": [],
           "enemy_units": null,
           "enemy_charged": null
-        }
+        },
+        "build": null
       },
       {
         "id": 1,
@@ -142,7 +137,8 @@
           "enemy_modes": [],
           "enemy_units": null,
           "enemy_charged": null
-        }
+        },
+        "build": null
       },
       {
         "id": 2,
@@ -155,7 +151,8 @@
           "enemy_modes": [],
           "enemy_units": null,
           "enemy_charged": null
-        }
+        },
+        "build": null
       },
       {
         "id": 3,
@@ -165,12 +162,11 @@
         "seen": {
           "tick": 120,
           "level": "presence",
-          "enemy_modes": [
-            "attack"
-          ],
+          "enemy_modes": ["attack"],
           "enemy_units": null,
           "enemy_charged": null
-        }
+        },
+        "build": null
       }
     ],
     "groups": [
@@ -209,9 +205,7 @@
         },
         "order": {
           "dest": 2,
-          "path": [
-            2
-          ],
+          "path": [2],
           "planned": false
         }
       }

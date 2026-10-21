@@ -46,7 +46,7 @@ from gow_protocol.base import (
     WireModel,
 )
 from gow_sim.ruleset import Stance
-from gow_sim.state import FRONT_MARKERS, BuildKind, Detail, IntentKind, Mode
+from gow_sim.state import BuildKind, Detail, IntentKind, Mode
 
 
 class Seen(WireModel):
@@ -81,19 +81,18 @@ class Seen(WireModel):
         return self
 
 
-class NodeBuild(WireModel):
-    """A road level the city builds (DEC-16): ``edge`` is one of the city's roads."""
+class EdgeBuild(WireModel):
+    """A road level being built on the edge (DEC-28, item 7)."""
 
-    edge: EdgeId
     done_tick: Tick | None
-    """The tick the width grows; only for an own build."""
+    """The tick the level grows; only for an own build."""
 
 
 class NodeBuilding(WireModel):
     """The current build of an own city, of any kind (DEC-26, item 10)."""
 
     kind: BuildKind
-    """``road``, ``barracks`` or ``warehouse``."""
+    """``barracks`` or ``warehouse`` (roads are built on edges, ``EdgeView.build``)."""
     done_tick: Tick
     """The tick it ends, if nothing interrupts it."""
 
@@ -108,8 +107,6 @@ class NodeView(WireModel):
     """Charges in the warehouse; only for ``EXACT`` nodes."""
     seen: Seen | None
     """Current sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one, or ``None``."""
-    build: NodeBuild | None
-    """The city's road build (DEC-16): own always, an enemy one only while its edge is unfogged."""
     attrition_in: PosInt | None
     """Own node only: ticks until the next unit dies of overcrowding (the garrison exceeds the
     capacity and the grace after a capture is over). ``None`` for every other node."""
@@ -165,11 +162,14 @@ class NodeView(WireModel):
 
 
 class UpgradeGain(WireModel):
-    """What the next road level would give (DEC-26, item 7): roads have no type, a level only
-    speeds the packets up; the amount per period does not grow."""
+    """What the next road level would give (DEC-28, item 7)."""
 
     speed_pct: NonNegInt
     """Packet speed gain in percentage points."""
+    unit_speed_pct: NonNegInt
+    """Unit speed gain in percentage points (``road.speed_pct``)."""
+    amount: NonNegInt
+    """Gain of charges per dispatch period (``supply.amount_by_level``)."""
 
 
 class EdgeView(WireModel):
@@ -182,6 +182,9 @@ class EdgeView(WireModel):
     upgrade_gain: UpgradeGain | None
     """Only for own internal edges that can still be upgraded."""
     seen: Seen | None
+    build: EdgeBuild | None
+    """The road level being built here (DEC-28, item 7): an own build always, an enemy one only
+    while the edge is not in fog (DEC-17, item 5)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -318,11 +321,9 @@ class SelfView(WireModel):
 
     cp: Centi
     stance: Stance
-    fronts: Annotated[
-        tuple[NodeId | None, ...], Field(min_length=FRONT_MARKERS, max_length=FRONT_MARKERS)
-    ]
-    """The own cities of the two front markers (DEC-28, item 2), ``null``: not placed. The
-    enemy's markers are never in a view (DEC-28)."""
+    fronts: tuple[NodeId | None, ...]
+    """The own cities of the front markers (DEC-28, item 2; ``supply.front_markers`` of
+    ``ruleset_public``), ``null``: not placed. The enemy's markers are never in a view."""
     rear_min: NonNegInt
     """The own rear minimum (DEC-28, item 3); the enemy's is never in a view."""
 
@@ -378,7 +379,6 @@ class View(WireModel):
             refs_nodes.append(intent.origin)
             if intent.target is not None:
                 refs_nodes.append(intent.target)
-        refs_edges.extend(n.build.edge for n in self.nodes if n.build is not None)
         own = {g.id for g in self.groups}
         for fight in self.fights:
             if fight.node is not None:

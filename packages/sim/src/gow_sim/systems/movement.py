@@ -8,6 +8,11 @@ Rules (mechanics.md, sections 4 and 5; DEC-07, rules 6 and 8; AGENTS.md, section
   integer formulas of crossing an edge from A to B: ``traversal_ticks`` ``T`` and ``progress``
   after ``k`` ticks. An edge of one terrain ``p`` keeps ``T = travel_ticks * 100 // p`` and
   ``progress = k * 1000 // T``.
+- Road level (DEC-28, item 7): an upgraded road multiplies the terrain speed of both zones by
+  ``road.speed_pct[level]`` (level 1: 100): the effective speed of a zone is
+  ``terrain_pct * road_pct // 100`` (rounded down). The level is read when the group enters the
+  edge (``OnEdge.level``), so an upgrade finished meanwhile does not change its time; the path
+  search and the ticks of a path use the current levels. It applies to the groups of both players.
 - ``progress`` is in thousandths of the edge from the node the group left; the group arrives on
   tick ``T``. Groups stand only in nodes.
 - A path goes only through own nodes: the path search never expands a node of another player or
@@ -91,8 +96,15 @@ class Leg:
         return (scaled + self.d - 1) // self.d
 
 
-def leg(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int) -> Leg:
-    """The ``Leg`` of going along ``edge`` into ``to_node`` (see ``Leg``).
+def road_speed_pct(rules: Ruleset, level: int) -> int:
+    """Unit speed multiplier of a road of ``level`` in percent (DEC-28, item 7): 100 on level 1."""
+    return rules.road.speed_pct.of(level) if level >= 2 else 100
+
+
+def leg(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int, level: int = 1) -> Leg:
+    """The ``Leg`` of going along ``edge`` of road ``level`` into ``to_node`` (see ``Leg``).
+
+    ``pa``, ``pb``: the effective speeds ``terrain_pct * road_pct // 100`` of the two zones.
 
     ``T = max(1, travel_ticks * 100 * d // (1000 * pa * pb))``: the exact sum of the times of the
     two zones, rounded down once, at least 1. Raises ValueError when some tick would move less
@@ -104,8 +116,9 @@ def leg(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int) -> Leg:
     border = border_permille(mapdef, edge)
     b = border if from_node == e.a else PROGRESS_SCALE - border
     speed = rules.terrain.speed_pct
-    pa = speed.of(mapdef.nodes[from_node].terrain)
-    pb = speed.of(mapdef.nodes[to_node].terrain)
+    road = road_speed_pct(rules, level)
+    pa = speed.of(mapdef.nodes[from_node].terrain) * road // 100  # positive: rounded down
+    pb = speed.of(mapdef.nodes[to_node].terrain) * road // 100
     d = b * pb + (PROGRESS_SCALE - b) * pa
     ticks = max(1, e.travel_ticks * 100 * d // (PROGRESS_SCALE * pa * pb))  # positive: round down
     if ticks * max(pa, pb) > d:
@@ -113,9 +126,9 @@ def leg(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int) -> Leg:
     return Leg(ticks, b, pa, pb, d)
 
 
-def traversal_ticks(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int) -> int:
-    """Ticks to go along ``edge`` into ``to_node``: ``T`` of its ``leg``."""
-    return leg(mapdef, rules, edge, to_node).ticks
+def traversal_ticks(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int, level: int = 1) -> int:
+    """Ticks to go along ``edge`` of road ``level`` into ``to_node``: ``T`` of its ``leg``."""
+    return leg(mapdef, rules, edge, to_node, level).ticks
 
 
 def edge_between(mapdef: MapDef, a: int, b: int) -> int | None:
@@ -146,7 +159,7 @@ def path_ticks(state: GameState, rules: Ruleset, path: tuple[int, ...]) -> int:
     for a, b in pairwise(path):
         eid = edge_between(mapdef, a, b)
         assert eid is not None  # a path of find_path
-        total += traversal_ticks(mapdef, rules, eid, b)
+        total += traversal_ticks(mapdef, rules, eid, b, state.edges[eid].width)
     return total
 
 
@@ -194,7 +207,8 @@ def _search(
                 continue
             if size > 0 and city_capacity(state, rules, nxt) < size:
                 continue  # the stack limit (DEC-20, D): the group does not fit there
-            cand = (d + traversal_ticks(mapdef, rules, eid, nxt), (*keys, key(nxt)))
+            ticks = traversal_ticks(mapdef, rules, eid, nxt, state.edges[eid].width)
+            cand = (d + ticks, (*keys, key(nxt)))
             if nxt not in best or cand < best[nxt]:
                 best[nxt] = cand
                 paths[nxt] = (*paths[node], nxt)
@@ -209,6 +223,7 @@ class Arrival:
     ``back``: the group came home from a bounce (``OnEdge.back``, DEC-07, rules 4 and 6).
     ``planned``: the order that ended here was a planned one (DEC-08); combat puts a group that
     met an enemy on the edge in its arrival tick back on the edge with that order (DEC-24, C2).
+    ``level``: the road level the group crossed the edge at (``OnEdge.level``).
     """
 
     group: int
@@ -217,6 +232,7 @@ class Arrival:
     from_node: int
     back: bool = False
     planned: bool = False
+    level: int = 1
 
 
 def movement(state: GameState, rules: Ruleset) -> list[Event]:
@@ -237,6 +253,7 @@ def movement(state: GameState, rules: Ruleset) -> list[Event]:
             from_node=a.from_node,
             back=a.back,
             planned=a.planned,
+            level=a.level,
         )
         for a in arrivals
     ]
@@ -272,18 +289,22 @@ def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
             if eid is None:
                 group.order = None
                 continue
-            location = OnEdge(edge=eid, from_node=location.node, progress=0)
+            level = state.edges[eid].width  # read when entering the edge (DEC-28, item 7)
+            location = OnEdge(edge=eid, from_node=location.node, progress=0, level=level)
         to_node = mapdef.edges[location.edge].other(location.from_node)
-        way = leg(mapdef, rules, location.edge, to_node)
+        way = leg(mapdef, rules, location.edge, to_node, location.level)
         spent = way.spent(location.progress) + 1  # ticks spent so far, with this one
         if spent < way.ticks:
-            group.location = OnEdge(location.edge, location.from_node, way.progress(spent))
+            group.location = OnEdge(
+                location.edge, location.from_node, way.progress(spent), level=location.level
+            )
             continue
         rest = order.path[1:] if order.path and order.path[0] == to_node else ()
         if rest and state.nodes[to_node].owner == group.owner and to_node not in fight_at:
             eid = edge_between(mapdef, to_node, rest[0])
             if eid is not None:  # pass through the own node
-                group.location = OnEdge(edge=eid, from_node=to_node, progress=0)
+                level = state.edges[eid].width
+                group.location = OnEdge(edge=eid, from_node=to_node, progress=0, level=level)
                 group.order = Order(rest, order.planned, order.depart_tick)
                 continue
         # The destination, a foreign or neutral node (the target of an attack or a capture), or
@@ -291,7 +312,14 @@ def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
         group.location = AtNode(to_node)
         group.order = None
         arrivals.append(
-            Arrival(gid, to_node, location.edge, location.from_node, planned=order.planned)
+            Arrival(
+                gid,
+                to_node,
+                location.edge,
+                location.from_node,
+                planned=order.planned,
+                level=location.level,
+            )
         )
     return arrivals
 
@@ -305,15 +333,21 @@ def _step_back(state: GameState, rules: Ruleset, gid: int, location: OnEdge) -> 
     """
     mapdef = state.map
     far = mapdef.edges[location.edge].other(location.from_node)
-    way = leg(mapdef, rules, location.edge, far)
+    way = leg(mapdef, rules, location.edge, far, location.level)
     spent = way.spent(location.progress) - 1  # ticks spent so far, minus this one
     group = state.groups[gid]
     if spent > 0:
-        group.location = OnEdge(location.edge, location.from_node, way.progress(spent), back=True)
+        group.location = OnEdge(
+            location.edge,
+            location.from_node,
+            way.progress(spent),
+            back=True,
+            level=location.level,
+        )
         return None
     group.location = AtNode(location.from_node)
     group.order = None
-    return Arrival(gid, location.from_node, location.edge, far, back=True)
+    return Arrival(gid, location.from_node, location.edge, far, back=True, level=location.level)
 
 
 def settle_arrivals(state: GameState, arrivals: list[Arrival]) -> list[Event]:

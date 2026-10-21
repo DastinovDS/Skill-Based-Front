@@ -119,8 +119,7 @@ class RandomLegalBot(Bot):
         if g.units >= 2:
             options.append(Split(g.id, self.rng.randint(1, g.units - 1)))
         options.append(SetMode(g.id, Mode.ATTACK if g.mode is Mode.DEFENSE else Mode.DEFENSE))
-        supplied = self.supplied(view)
-        for e in self.incident[here]:  # the city where the group stands builds (DEC-16)
-            if self.can_upgrade(view, here, e, supplied):
-                options.append(UpgradeRoad(here, e))
+        for e in self.incident[here]:  # a road at the group, paid with CP (DEC-28, item 7)
+            if self.can_upgrade(view, e):
+                options.append(UpgradeRoad(e))
         return self.rng.choice(options)
