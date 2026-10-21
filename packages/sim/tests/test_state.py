@@ -118,7 +118,14 @@ def _rich_state(rules: Ruleset) -> GameState:
     state.intents[iid] = Intent(iid, 0, IntentKind.DEFENSE, origin=1, target=None, created_tick=100)
     state.vision_memory[0].nodes[3] = Sighting(90, Detail.PRESENCE, (Mode.ATTACK,), None, None)
     state.vision_memory[1].nodes[0] = Sighting(12, Detail.EXACT, (Mode.ATTACK, Mode.DEFENSE), 4, 2)
-    state.vision_memory[1].edges[2] = Sighting(40, Detail.PRESENCE, (), None, None, width=2)
+    state.vision_memory[0].nodes[1] = Sighting(
+        91, Detail.RANGE, (Mode.DEFENSE,), None, None, enemy_range=(21, None)
+    )
+    state.vision_memory[1].halves[2, 3] = Sighting(
+        40, Detail.RANGE, (Mode.ATTACK,), None, None, enemy_range=(3, 5)
+    )
+    state.vision_memory[1].widths[2] = 2
+    state.vision_memory[0].spotted[5] = 33
     state.events.append(event(137, "packet_lost", edge=3, charges=1, owner=1, note=None))
     state.events.append(event(137, "captured", node=1, player=0, neutral=True))
     return state
@@ -159,7 +166,10 @@ def test_initial_state_follows_map_and_ruleset(name: str, rules: Ruleset) -> Non
         assert group.mode is Mode.ATTACK
     assert state.next_id == len(garrisons)
     assert state.packets == {} and state.intents == {}
-    assert all(not m.nodes and not m.edges for m in state.vision_memory.values())
+    assert all(
+        not m.nodes and not m.halves and not m.widths and not m.spotted
+        for m in state.vision_memory.values()
+    )
 
 
 def test_line3_initial_garrisons(rules: Ruleset) -> None:
@@ -467,14 +477,18 @@ def _states(draw: st.DrawFn) -> GameState:
                 draw(_opt_small),
             )
         for key in draw(st.lists(edges, max_size=2, unique=True)):
-            memory.edges[key] = Sighting(
+            low = draw(st.integers(1, 20))
+            memory.halves[key, draw(nodes)] = Sighting(
                 draw(_small),
-                Detail.PRESENCE,
-                (),
+                Detail.RANGE,
+                (Mode.ATTACK,),
                 None,
                 None,
-                width=draw(st.integers(1, 3)),
+                enemy_range=(low, draw(st.none() | st.integers(low, 30))),
             )
+            memory.widths[key] = draw(st.integers(1, 3))
+        for key in draw(st.lists(_small, max_size=2, unique=True)):
+            memory.spotted[key] = draw(_small)
     for _ in range(draw(st.integers(min_value=0, max_value=3))):
         state.events.append(
             event(

@@ -49,10 +49,16 @@ class BuildKind(StrEnum):
 
 
 class Detail(StrEnum):
-    """How much a player sees of a node or an edge (DEC-04, mechanics.md, section 10)."""
+    """How much a player sees of a node or a half of an edge (DEC-21, mechanics.md, section 10).
+
+    Better first: ``EXACT``, ``RANGE``, ``PRESENCE``, ``FOG``.
+    """
 
     EXACT = "exact"
-    """Everything, with numbers: own nodes and nodes where own groups stand."""
+    """Everything, with numbers: the sources of vision (own nodes and nodes where own groups
+    stand) and the neighbours a source sees exactly by the terrain table."""
+    RANGE = "range"
+    """The range of the enemy units (``vision.range_starts``) and their modes, no charged."""
     PRESENCE = "presence"
     """Whether enemy groups are there and their modes, without numbers."""
     FOG = "fog"
@@ -328,11 +334,13 @@ class Intent:
 
 @dataclass(frozen=True, slots=True)
 class Sighting:
-    """What a player last saw of a node or an edge (DEC-04: fog with «last seen» memory).
+    """What a player sees, or last saw, of the enemy groups of a place: a node or a half of an
+    edge (DEC-21, items 3 and 8; fog with «last seen» memory).
 
     ``enemy_modes``: distinct modes of the enemy groups seen, sorted; empty means none seen.
-    ``enemy_units`` and ``enemy_charged`` are totals, known only when ``level`` is ``EXACT``.
-    ``width``: the road level seen (DEC-17), for an edge; ``None`` for a node.
+    ``enemy_units`` and ``enemy_charged``: totals, known only when ``level`` is ``EXACT``.
+    ``enemy_range``: the range ``(low, high)`` of the total units (``high`` ``None``: open), only
+    when ``level`` is ``RANGE`` and enemies are there (DEC-21, item 4).
     """
 
     tick: int
@@ -340,15 +348,25 @@ class Sighting:
     enemy_modes: tuple[Mode, ...]
     enemy_units: int | None
     enemy_charged: int | None
-    width: int | None = None
+    enemy_range: tuple[int, int | None] | None = None
 
 
 @dataclass(slots=True)
 class VisionMemory:
-    """Last sightings of one player, by node id and by edge id."""
+    """Fog memory of one player (DEC-17, item 7; DEC-21, item 8; DEC-33, details 5 and 8).
+
+    ``nodes``: last sighting by node id. ``halves``: last sighting of the half of an edge by
+    ``(edge, node)``, the node being the end the half belongs to; positions and directions are
+    not remembered (DEC-33, detail 8). ``widths``: the road level last seen by edge id (DEC-17).
+    ``spotted``: enemy group id to the tick it came into sight, for every enemy group in sight
+    now; it keys the opaque id of a figure, so a group gets a new one each time it comes out of
+    the fog (DEC-33, detail 5).
+    """
 
     nodes: dict[int, Sighting] = field(default_factory=dict[int, Sighting])
-    edges: dict[int, Sighting] = field(default_factory=dict[int, Sighting])
+    halves: dict[tuple[int, int], Sighting] = field(default_factory=dict[tuple[int, int], Sighting])
+    widths: dict[int, int] = field(default_factory=dict[int, int])
+    spotted: dict[int, int] = field(default_factory=dict[int, int])
 
 
 type EventValue = int | str | bool | None
@@ -520,12 +538,7 @@ def to_canonical(state: GameState) -> dict[str, object]:
         "intents": [_intent_data(i) for i in _by_id(state.intents)],
         "fights": [_fight_data(f) for f in _by_id(state.fights)],
         "vision_memory": [
-            {
-                "player": p,
-                "nodes": _sightings_data(state.vision_memory[p].nodes),
-                "edges": _sightings_data(state.vision_memory[p].edges),
-            }
-            for p in sorted(state.vision_memory)
+            _memory_data(p, state.vision_memory[p]) for p in sorted(state.vision_memory)
         ],
         "events": [{"tick": e.tick, "kind": e.kind, "data": dict(e.data)} for e in state.events],
     }
@@ -675,19 +688,26 @@ def _intent_data(i: Intent) -> dict[str, object]:
     }
 
 
-def _sightings_data(sightings: dict[int, Sighting]) -> list[dict[str, object]]:
-    return [_sighting_data(key, sightings[key]) for key in sorted(sightings)]
-
-
-def _sighting_data(key: int, s: Sighting) -> dict[str, object]:
+def _memory_data(player: int, m: VisionMemory) -> dict[str, object]:
     return {
-        "id": key,
+        "player": player,
+        "nodes": [{"id": k, **_sighting_data(m.nodes[k])} for k in sorted(m.nodes)],
+        "halves": [
+            {"edge": e, "node": n, **_sighting_data(m.halves[e, n])} for e, n in sorted(m.halves)
+        ],
+        "widths": [{"id": k, "width": m.widths[k]} for k in sorted(m.widths)],
+        "spotted": [{"id": k, "tick": m.spotted[k]} for k in sorted(m.spotted)],
+    }
+
+
+def _sighting_data(s: Sighting) -> dict[str, object]:
+    return {
         "tick": s.tick,
         "level": s.level.value,
         "enemy_modes": [m.value for m in s.enemy_modes],
         "enemy_units": s.enemy_units,
         "enemy_charged": s.enemy_charged,
-        "width": s.width,
+        "enemy_range": None if s.enemy_range is None else list(s.enemy_range),
     }
 
 
@@ -1039,52 +1059,80 @@ def _parse_intent(data: object, where: str) -> Intent:
     )
 
 
-def _parse_sightings(data: object, where: str) -> dict[int, Sighting]:
-    result: dict[int, Sighting] = {}
-    for i, item in enumerate(_list(data, where)):
-        at = f"{where}[{i}]"
-        raw = _obj(
-            item,
-            at,
-            (
-                "id",
-                "tick",
-                "level",
-                "enemy_modes",
-                "enemy_units",
-                "enemy_charged",
-                "width",
-            ),
+_SIGHTING_KEYS: Final = (
+    "tick",
+    "level",
+    "enemy_modes",
+    "enemy_units",
+    "enemy_charged",
+    "enemy_range",
+)
+
+
+def _parse_sighting(raw: dict[str, object], at: str) -> Sighting:
+    span = raw["enemy_range"]
+    enemy_range: tuple[int, int | None] | None = None
+    if span is not None:
+        bounds = _list(span, f"{at}.enemy_range")
+        if len(bounds) != 2:
+            raise StateFormatError(f"{at}.enemy_range: expected [low, high]")
+        enemy_range = (
+            _int(bounds[0], f"{at}.enemy_range[0]", low=1),
+            _opt_int(bounds[1], f"{at}.enemy_range[1]"),
         )
-        key = _int(raw["id"], f"{at}.id", low=0)
-        if key in result:
-            raise StateFormatError(f"{at}.id: duplicate id {key}")
-        result[key] = Sighting(
-            tick=_int(raw["tick"], f"{at}.tick", low=0),
-            level=Detail(_choice(raw["level"], f"{at}.level", Detail)),
-            enemy_modes=tuple(
-                Mode(_choice(m, f"{at}.enemy_modes[{j}]", Mode))
-                for j, m in enumerate(_list(raw["enemy_modes"], f"{at}.enemy_modes"))
-            ),
-            enemy_units=_opt_int(raw["enemy_units"], f"{at}.enemy_units"),
-            enemy_charged=_opt_int(raw["enemy_charged"], f"{at}.enemy_charged"),
-            width=_opt_int(raw["width"], f"{at}.width"),
+    return Sighting(
+        tick=_int(raw["tick"], f"{at}.tick", low=0),
+        level=Detail(_choice(raw["level"], f"{at}.level", Detail)),
+        enemy_modes=tuple(
+            Mode(_choice(m, f"{at}.enemy_modes[{j}]", Mode))
+            for j, m in enumerate(_list(raw["enemy_modes"], f"{at}.enemy_modes"))
+        ),
+        enemy_units=_opt_int(raw["enemy_units"], f"{at}.enemy_units"),
+        enemy_charged=_opt_int(raw["enemy_charged"], f"{at}.enemy_charged"),
+        enemy_range=enemy_range,
+    )
+
+
+def _parse_memory(raw: dict[str, object], at: str) -> VisionMemory:
+    memory = VisionMemory()
+    for i, item in enumerate(_list(raw["nodes"], f"{at}.nodes")):
+        where = f"{at}.nodes[{i}]"
+        row = _obj(item, where, ("id", *_SIGHTING_KEYS))
+        key = _int(row["id"], f"{where}.id", low=0)
+        if key in memory.nodes:
+            raise StateFormatError(f"{where}.id: duplicate id {key}")
+        memory.nodes[key] = _parse_sighting(row, where)
+    for i, item in enumerate(_list(raw["halves"], f"{at}.halves")):
+        where = f"{at}.halves[{i}]"
+        row = _obj(item, where, ("edge", "node", *_SIGHTING_KEYS))
+        half = (
+            _int(row["edge"], f"{where}.edge", low=0),
+            _int(row["node"], f"{where}.node", low=0),
         )
-    return result
+        if half in memory.halves:
+            raise StateFormatError(f"{where}: duplicate half {half}")
+        memory.halves[half] = _parse_sighting(row, where)
+    for name, target in (("widths", memory.widths), ("spotted", memory.spotted)):
+        value = "width" if name == "widths" else "tick"
+        for i, item in enumerate(_list(raw[name], f"{at}.{name}")):
+            where = f"{at}.{name}[{i}]"
+            row = _obj(item, where, ("id", value))
+            key = _int(row["id"], f"{where}.id", low=0)
+            if key in target:
+                raise StateFormatError(f"{where}.id: duplicate id {key}")
+            target[key] = _int(row[value], f"{where}.{value}", low=0)
+    return memory
 
 
 def _parse_vision_memory(data: object) -> dict[int, VisionMemory]:
     result: dict[int, VisionMemory] = {}
     for i, item in enumerate(_list(data, "vision_memory")):
         at = f"vision_memory[{i}]"
-        raw = _obj(item, at, ("player", "nodes", "edges"))
+        raw = _obj(item, at, ("player", "nodes", "halves", "widths", "spotted"))
         player = _int(raw["player"], f"{at}.player", low=0)
         if player in result:
             raise StateFormatError(f"{at}.player: duplicate player {player}")
-        result[player] = VisionMemory(
-            nodes=_parse_sightings(raw["nodes"], f"{at}.nodes"),
-            edges=_parse_sightings(raw["edges"], f"{at}.edges"),
-        )
+        result[player] = _parse_memory(raw, at)
     return result
 
 

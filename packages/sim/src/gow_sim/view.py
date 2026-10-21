@@ -1,9 +1,9 @@
 """Projection (SIM-14): ``project()`` builds the ``PlayerView``, the only thing a player sees.
 
 ``PlayerView`` is everything that leaves the simulation towards a player or a bot (AGENTS.md,
-section 4.4); bots get the same view as people. It follows DEC-04 and DEC-17 (mechanics.md,
-section 10) and has the shape of the wire ``View`` of the protocol (``gow_protocol.view``,
-PRO-01), which PRO-03 converts it into:
+section 4.4); bots get the same view as people. It follows DEC-04, DEC-17, DEC-21 and DEC-33
+(mechanics.md, section 10) and has the shape of the wire ``View`` of the protocol
+(``gow_protocol.view``, PRO-01), which PRO-03 converts it into:
 
 - public to everyone: ownership of every node, VP of both players, intents of planned orders
   and «Защита» (kind, origin, target; no group id or size);
@@ -12,7 +12,8 @@ PRO-01), which PRO-03 converts it into:
   fogged edge that of its last sighting, or level 1 if never seen;
 - road builds of cities (DEC-16, item 8): own ones always, with the tick they finish; an enemy
   one (the city and the edge, no tick) only while the edge is not in fog (DEC-17, item 5);
-- ``EXACT`` places (own nodes, nodes where own groups stand): warehouse and enemy totals;
+- sources of vision (own nodes, nodes where own groups stand): the warehouse, and the enemy
+  totals like every ``EXACT`` place;
 - own front markers and rear minimum (DEC-28, ``SelfView``; never the enemy's);
 - own cities: cut off, the ticks until the garrison
   next starves (``starve_in``, DEC-19, item 8), their recruit queue and its progress (DEC-25,
@@ -20,9 +21,13 @@ PRO-01), which PRO-03 converts it into:
   (DEC-26, item 10); own packets with their remaining path and whether they are a transfer;
 - own groups in «Защита»: the bonus gathered so far and its cap (DEC-30; enemy groups show the
   mode only, in the ``seen`` of places);
-- ``PRESENCE`` places (neighbours of ``EXACT`` nodes, edges touching them): whether enemy groups
-  are there and their modes, no numbers;
-- ``FOG``: only the last sighting from ``GameState.vision_memory``;
+- neighbours of sources by the terrain table (DEC-21, item 2), and the halves of edges by the level
+  of their node (item 5): ``EXACT`` the enemy totals, ``RANGE`` the range of the enemy units,
+  ``PRESENCE`` whether enemy groups are there; the modes on every level;
+- enemy groups on the halves of edges not in fog, each as a figure (DEC-33, ``EdgeView.
+  enemy_groups``): position, direction, mode and the numbers of its half's level, with an opaque id
+  that is new each time the group comes out of the fog; a group in a fight is shown by the fight;
+- ``FOG``: only the last sighting from ``GameState.vision_memory`` (no positions, DEC-33);
 - fights going on (DEC-24, item I1): both players fight in each, so both see it with the exact
   units and charged of the enemy in it, the shots and losses of both sides so far and the latest
   round of both sides (shots with the virtual ones apart, spent charges, losses; I1 as revised
@@ -31,9 +36,11 @@ PRO-01), which PRO-03 converts it into:
   ids stay hidden. Outside a fight the bonus of an enemy group (a gathered «Защита», a waiting
   planned order) is never in a view, also not for a reinforcement on its way.
 
-What a view never has: enemy groups as entities (only the per-place ``Sighting``), road levels
+What a view never has: internal ids of enemy groups, enemy groups standing in nodes as entities
+(only the per-place ``Sighting``), positions or directions of enemy groups in fog, road levels
 of fogged edges newer than the last sighting, the barracks, warehouse level and city builds of
-the enemy (DEC-26, item 10), enemy builds on fogged edges, enemy packets
+the enemy (DEC-26, item 10), the warehouse of a node that is not a source (DEC-21, item 3),
+enemy builds on fogged edges, enemy packets
 (#112 default), enemy CP, stance, production and counters, the enemy's front markers and rear
 minimum (DEC-28), enemy transfers (DEC-18, item 8), the bonus an enemy «Защита» has gathered
 (DEC-30, item 5), events, the target of an enemy's normal
@@ -81,7 +88,16 @@ from gow_sim.systems.capacity import (
 from gow_sim.systems.movement import reachable
 from gow_sim.systems.recruit import recruit_waiting
 from gow_sim.systems.supply import is_city, packet_dest_tick, packet_path
-from gow_sim.systems.vision import compute_vision, current_sightings, known_roads
+from gow_sim.systems.vision import (
+    Vision,
+    compute_vision,
+    current_sightings,
+    edge_pos,
+    half_node,
+    heading,
+    known_roads,
+    units_range,
+)
 
 __all__ = [
     "MATCH_KEY_MAX",
@@ -92,9 +108,11 @@ __all__ = [
     "BuildingView",
     "Detail",
     "EdgeView",
+    "EnemyGroupView",
     "FightRound",
     "FightView",
     "GroupView",
+    "HalfView",
     "IntentKind",
     "IntentView",
     "Location",
@@ -125,6 +143,8 @@ MATCH_KEY_MAX: Final = 64
 
 _OPAQUE_PERSON: Final = b"gow-opaque-id"
 """blake2b personalization: opaque ids never equal other keyed digests of the same key."""
+_FIGURE_PERSON: Final = b"gow-enemy-figure"
+"""blake2b personalization of the ids of enemy figures (DEC-33, detail 5)."""
 
 
 # View types ----------------------------------------------------------------------------------
@@ -169,9 +189,10 @@ class NodeView:
     """Capacity by the node kind (DEC-22, item 1): public and exact."""
     detail: Detail
     warehouse: int | None
-    """Charges in the warehouse; only for ``EXACT`` nodes."""
+    """Charges in the warehouse; only for sources of vision (own nodes, nodes where own groups
+    stand; DEC-21, item 3), never for a neighbour seen by the terrain table."""
     seen: Sighting | None
-    """This tick's sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one or ``None``."""
+    """This tick's sighting unless ``detail`` is ``FOG``; for ``FOG`` the last one or ``None``."""
     attrition_in: int | None
     """Own node only: ticks until the next unit dies of overcrowding (the garrison exceeds the
     capacity and the grace after a capture is over); ``None`` otherwise, always for the enemy's
@@ -204,19 +225,58 @@ class NodeView:
 
 
 @dataclass(frozen=True, slots=True)
+class HalfView:
+    """A half of an edge, from its node to the border point (DEC-21, item 5; DEC-23, item 5)."""
+
+    detail: Detail
+    """The level of the node the half belongs to (a source's half is ``EXACT``)."""
+    seen: Sighting | None
+    """This tick's sighting of the enemy groups in the half (those in a fight too) unless
+    ``detail`` is ``FOG``; for ``FOG`` the last one (no positions, DEC-33, detail 8) or ``None``."""
+
+
+@dataclass(frozen=True, slots=True)
+class EnemyGroupView:
+    """An enemy group on a half of an edge not in fog (DEC-33): a figure with its position and
+    direction. A group in a fight is not a figure: the fight shows it (detail 6)."""
+
+    id: int
+    """Opaque id: keyed by the group and the tick it came into sight, so it is new each time the
+    group comes out of the fog (detail 5); never the internal id."""
+    pos: int
+    """Position in thousandths of the edge from the end ``a``, ``0..1000`` (detail 1)."""
+    toward_b: bool
+    """Goes to the end ``b`` (else to ``a``): the nearest node it goes to, a bounce or a cancel
+    included; never its target (detail 2)."""
+    detail: Detail
+    """The level of its half: ``EXACT``, ``RANGE`` or ``PRESENCE``."""
+    mode: Mode
+    units: int | None
+    """``EXACT`` only."""
+    charged: int | None
+    """``EXACT`` only."""
+    units_range: tuple[int, int | None] | None
+    """``RANGE`` only: the range of its units (``vision.range_starts``; ``None`` high: open)."""
+
+
+@dataclass(frozen=True, slots=True)
 class EdgeView:
     id: int
     width: int
     """Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is ``FOG``;
     in fog the level of the last sighting, or level 1 if never seen. Never above the true one."""
     detail: Detail
-    """``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges."""
+    """The road level visibility (DEC-17): ``PRESENCE`` while an end is a source, else ``FOG``.
+    What is seen of enemies is in ``halves`` and ``enemy_groups``."""
     upgrade_gain: UpgradeGain | None
     """Only for own internal edges below ``max_width`` (DEC-26, item 7; DEC-28, item 7)."""
-    seen: Sighting | None
+    halves: tuple[HalfView, HalfView]
+    """The half of the end ``a``, then the half of the end ``b`` (DEC-21, item 5)."""
     build: BuildView | None = None
     """The road level being built here (DEC-28, item 7): an own build always, an enemy one only
     while the edge is not in fog (DEC-17, item 5; not remembered)."""
+    enemy_groups: tuple[EnemyGroupView, ...] = ()
+    """Enemy figures on the halves not in fog (DEC-33), sorted by id."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -361,6 +421,20 @@ def check_match_key(match_key: bytes) -> None:
         raise ValueError(f"match_key must be {MATCH_KEY_MIN}..{MATCH_KEY_MAX} bytes")
 
 
+def _figure_hasher(match_key: bytes) -> Callable[[int, int, int], int]:
+    """Opaque ids of enemy figures (DEC-33, detail 5): keyed blake2b of ``(viewer, group,
+    tick it came into sight)``."""
+    check_match_key(match_key)
+    base = hashlib.blake2b(key=match_key, digest_size=8, person=_FIGURE_PERSON)
+
+    def figure(player: int, internal: int, since: int) -> int:
+        h = base.copy()
+        h.update(player.to_bytes(1, "big") + internal.to_bytes(8, "big") + since.to_bytes(8, "big"))
+        return int.from_bytes(h.digest(), "big") >> 1  # 63 bits: non-negative
+
+    return figure
+
+
 def _hasher(match_key: bytes) -> Callable[[int, int], int]:
     check_match_key(match_key)
     base = hashlib.blake2b(key=match_key, digest_size=8, person=_OPAQUE_PERSON)
@@ -452,11 +526,12 @@ def reach(
 
 
 def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> PlayerView:
-    """The view of ``player`` on ``state`` (DEC-04, DEC-17). A pure function: never writes."""
+    """The view of ``player`` on ``state`` (DEC-04, DEC-17, DEC-21, DEC-33). A pure function:
+    never writes."""
     opaque = _hasher(match_key)
     mapdef = state.map
-    levels = compute_vision(state, player)
-    now_nodes, now_edges = current_sightings(state, player, levels)
+    levels = compute_vision(state, rules, player)
+    now_nodes, now_halves = current_sightings(state, rules, player, levels)
     memory = state.vision_memory[player]
     roads = known_roads(state, player, levels)
     capacities = node_capacities(state, rules)
@@ -476,7 +551,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 owner=node.owner,
                 capacity=capacities[n],
                 detail=level,
-                warehouse=node.warehouse if level is Detail.EXACT else None,
+                warehouse=node.warehouse if levels.sources[n] else None,
                 seen=now_nodes[n] if level is not Detail.FOG else memory.nodes.get(n),
                 attrition_in=attrition_in,
                 grace_left=grace_left,
@@ -491,18 +566,36 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
             )
         )
 
+    figures = _enemy_figures(state, rules, player, match_key, levels)
+    node_levels = levels.nodes
+    fog_half = HalfView(Detail.FOG, None)
+    shared: dict[int, HalfView] = {}  # by id of the sighting: the shared empty ones share a view
     edges: list[EdgeView] = []
     for e, level in enumerate(levels.edges):
         edef = mapdef.edges[e]
         own = state.nodes[edef.a].owner == player and state.nodes[edef.b].owner == player
+        pair: list[HalfView] = []
+        for n in (edef.a, edef.b):
+            half_level = node_levels[n]
+            if half_level is Detail.FOG:
+                remembered = memory.halves.get((e, n))
+                pair.append(fog_half if remembered is None else HalfView(half_level, remembered))
+                continue
+            seen = now_halves[e, n]
+            view = shared.get(id(seen))
+            if view is None:
+                view = shared[id(seen)] = HalfView(half_level, seen)
+            pair.append(view)
+        on_edge = figures.get(e)
         edges.append(
             EdgeView(
                 id=e,
                 width=roads[e],
                 detail=level,
                 upgrade_gain=upgrade_gain(state, rules, e) if own else None,
-                seen=now_edges[e] if level is not Detail.FOG else memory.edges.get(e),
+                halves=(pair[0], pair[1]),
                 build=_build_view(state, rules, player, e, level),
+                enemy_groups=() if on_edge is None else tuple(sorted(on_edge, key=lambda v: v.id)),
             )
         )
 
@@ -615,6 +708,41 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     )
 
 
+def _enemy_figures(
+    state: GameState, rules: Ruleset, player: int, match_key: bytes, levels: Vision
+) -> dict[int, list[EnemyGroupView]]:
+    """Enemy groups on the halves of edges not in fog, by edge (DEC-33). One pass over the
+    groups; a group in a fight is left to the fight (detail 6)."""
+    figure = _figure_hasher(match_key)
+    mapdef = state.map
+    spotted = state.vision_memory[player].spotted
+    figures: dict[int, list[EnemyGroupView]] = {}
+    for gid in sorted(state.groups):
+        g = state.groups[gid]
+        loc = g.location
+        if g.owner == player or g.fight is not None or not isinstance(loc, OnEdge):
+            continue
+        level = levels.half(half_node(mapdef, loc))
+        if level is Detail.FOG:
+            continue
+        exact = level is Detail.EXACT
+        figures.setdefault(loc.edge, []).append(
+            EnemyGroupView(
+                # A group that came into sight in this very tick before the vision system ran
+                # (only a state projected outside a step) is keyed by the current tick.
+                id=figure(player, gid, spotted.get(gid, state.tick)),
+                pos=edge_pos(mapdef, loc),
+                toward_b=heading(mapdef, loc) == mapdef.edges[loc.edge].b,
+                detail=level,
+                mode=g.mode,
+                units=g.units if exact else None,
+                charged=g.charged if exact else None,
+                units_range=units_range(rules, g.units) if level is Detail.RANGE else None,
+            )
+        )
+    return figures
+
+
 def _build_view(
     state: GameState, rules: Ruleset, player: int, edge: int, level: Detail
 ) -> BuildView | None:
@@ -687,8 +815,23 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                     "unit_speed_pct": e.upgrade_gain.unit_speed_pct,
                     "amount": e.upgrade_gain.amount,
                 },
-                "seen": _seen_data(e.seen),
+                "halves": [
+                    {"detail": h.detail.value, "seen": _seen_data(h.seen)} for h in e.halves
+                ],
                 "build": None if e.build is None else {"done_tick": e.build.done_tick},
+                "enemy_groups": [
+                    {
+                        "id": f.id,
+                        "pos": f.pos,
+                        "toward_b": f.toward_b,
+                        "detail": f.detail.value,
+                        "mode": f.mode.value,
+                        "units": f.units,
+                        "charged": f.charged,
+                        "units_range": None if f.units_range is None else list(f.units_range),
+                    }
+                    for f in e.enemy_groups
+                ],
             }
             for e in view.edges
         ],
@@ -778,7 +921,7 @@ def _seen_data(s: Sighting | None) -> dict[str, object] | None:
         "enemy_modes": [m.value for m in s.enemy_modes],
         "enemy_units": s.enemy_units,
         "enemy_charged": s.enemy_charged,
-        "width": s.width,
+        "enemy_range": None if s.enemy_range is None else list(s.enemy_range),
     }
 
 

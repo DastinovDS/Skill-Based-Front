@@ -406,16 +406,16 @@ def validate(state: GameState, rules: Ruleset, player: int, cmd: Command) -> Ok 
 
     Takes ``rules`` besides the ``(state, player, cmd)`` of AGENTS.md: the costs live there.
     """
-    return _validate(state, rules, player, cmd, _visible_enemy_groups(state, player))
+    return _validate(state, rules, player, cmd, _visible_enemy_groups(state, rules, player))
 
 
-def _visible_enemy_groups(state: GameState, player: int) -> dict[int, bool]:
-    levels = compute_vision(state, player)
+def _visible_enemy_groups(state: GameState, rules: Ruleset, player: int) -> dict[int, bool]:
+    levels = compute_vision(state, rules, player)
     groups = state.groups
     return {
         gid: True
         for gid in sorted(groups)
-        if groups[gid].owner != player and is_visible(state, player, groups[gid], levels)
+        if groups[gid].owner != player and is_visible(state, rules, player, groups[gid], levels)
     }
 
 
@@ -752,7 +752,7 @@ def apply_commands(
         return [], []
     # Enemy visibility is fixed at the start of the tick: the other player's commands of this
     # tick cannot change the reject code of this player's commands.
-    seen = {p: _visible_enemy_groups(state, p) for p in sorted(state.players)}
+    seen = {p: _visible_enemy_groups(state, rules, p) for p in sorted(state.players)}
     results: list[CommandResult] = []
     events: list[Event] = []
     for pc in ordered:

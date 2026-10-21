@@ -140,6 +140,57 @@ def grid40() -> MapDef:
     )
 
 
+_TERRAIN = {"p": "plains", "f": "forest", "m": "mountains"}
+
+
+def fog_map(
+    terrains: str, edges: list[tuple[int, int]], owners: dict[int, int] | None = None
+) -> MapDef:
+    """A small map for the fog tests of DEC-21 and DEC-33, without garrisons or stock.
+
+    ``terrains``: one letter per node (``p`` plains, ``f`` forest, ``m`` mountains). Node 0 is
+    the capital of player 0 and node 1 that of player 1; the other nodes are neutral small
+    cities unless ``owners`` gives them a player. ``edges``: ``(a, b)`` pairs, edge ids in order,
+    ``travel_ticks`` 30. The mirror tables are the identity: the tests do not mirror.
+    """
+    owner_of = {0: 0, 1: 1, **(owners or {})}
+    nodes = [
+        {
+            "id": n,
+            "x": 10 * n,
+            "y": 10,
+            "terrain": _TERRAIN[t],
+            "vp": 1,
+            "kind": "capital" if n < 2 else "city_small",
+            "capital_of": n if n < 2 else None,
+            "start_owner": owner_of.get(n),
+            "start_units": 0,
+            "start_charged": 0,
+            "start_stock": 0,
+        }
+        for n, t in enumerate(terrains)
+    ]
+    return parse_map(
+        {
+            "meta": {"name": "fog", "version": 1, "symmetry": "rot180", "width": 400, "height": 20},
+            "nodes": nodes,
+            "edges": [
+                {"id": i, "a": a, "b": b, "base_width": 1, "max_width": 3, "travel_ticks": 30}
+                for i, (a, b) in enumerate(edges)
+            ],
+            "mirror": {
+                "nodes": {str(n): n for n in range(len(terrains))},
+                "edges": {str(e): e for e in range(len(edges))},
+            },
+        }
+    )
+
+
+@pytest.fixture(scope="session")
+def make_fog_map() -> Callable[..., MapDef]:
+    return fog_map
+
+
 @pytest.fixture(scope="session")
 def mvp_rules() -> Ruleset:
     return load_ruleset(MVP0)

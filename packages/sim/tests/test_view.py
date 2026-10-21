@@ -1,13 +1,15 @@
-"""Projection (SIM-14): PlayerView by DEC-04 and DEC-17, opaque ids, resolve(), determinism.
+"""Projection (SIM-14): PlayerView by DEC-04, DEC-17 and DEC-21, opaque ids, resolve(), determinism.
 
 Every rule of DEC-04 and DEC-17 (mechanics.md, section 10) has its own test below, plus the list
-of what a view must not contain (AGENTS.md, section 4.4) and the #112 default. Expected detail
-levels are worked out by hand from DEC-04 and the map file:
+of what a view must not contain (AGENTS.md, section 4.4) and the #112 default; the examples of
+DEC-21 and DEC-33 are in ``test_dec21.py`` and ``test_dec33.py``. Expected detail levels are
+worked out by hand from DEC-21 and the map file:
 
-- line6: 0 (capital of 0) -e0- 1 -e1- 2 -e2- 3 -e3- 4 -e4- 5 (capital of 1); player 0 owns 0 and
-  1, player 1 owns 4 and 5, nodes 2 and 3 are neutral; roads level 1, ``max_width`` 3; the
-  ``rules`` fixture gives capitals capacity 40 and the large cities 30 (DEC-22: by node kind).
-  Player 0 at the start: nodes 0, 1 exact, 2 presence, 3..5 fog; edges e0, e1 presence, e2..e4 fog.
+- line6: 0 (capital of 0) -e0- 1 -e1- 2 -e2- 3 -e3- 4 -e4- 5 (capital of 1), all plains; player 0
+  owns 0 and 1, player 1 owns 4 and 5, nodes 2 and 3 are neutral; roads level 1, ``max_width`` 3;
+  the ``rules`` fixture gives capitals capacity 40 and the large cities 30 (DEC-22: by node kind).
+  Player 0 at the start: nodes 0, 1 sources (exact), 2 exact (plains sees plains), 3..5 fog;
+  edges e0, e1 not in fog (an own end), e2..e4 in fog for the road level.
 """
 
 import dataclasses
@@ -49,6 +51,8 @@ from gow_sim.state import (
     OnEdge,
     Order,
     Packet,
+    Sighting,
+    VisionMemory,
     initial_state,
     state_hash,
 )
@@ -56,10 +60,8 @@ from gow_sim.systems.capacity import city_capacity
 from gow_sim.systems.vision import vision
 from gow_sim.view import (
     BuildView,
-    EdgeView,
     GroupView,
     IntentView,
-    NodeView,
     PlayerView,
     SelfView,
     UpgradeGain,
@@ -75,7 +77,7 @@ KEY = bytes(range(32))
 OTHER_KEY = bytes(range(1, 33))
 WIRE_ID = re.compile(r"[A-Za-z0-9_-]{1,32}")
 
-E, P, F = Detail.EXACT, Detail.PRESENCE, Detail.FOG
+E, R, P, F = Detail.EXACT, Detail.RANGE, Detail.PRESENCE, Detail.FOG
 
 
 @pytest.fixture(scope="module")
@@ -119,7 +121,7 @@ def test_dec04_geography_and_ownership_of_all_nodes_are_public(rules: Ruleset) -
     view = _view(state, rules)
     assert [n.id for n in view.nodes] == [0, 1, 2, 3, 4, 5]
     assert [e.id for e in view.edges] == [0, 1, 2, 3, 4]
-    assert [n.detail for n in view.nodes] == [E, E, P, F, F, F]
+    assert [n.detail for n in view.nodes] == [E, E, E, F, F, F]
     assert [e.detail for e in view.edges] == [P, P, F, F, F]
     assert [n.owner for n in view.nodes] == [0, 0, None, None, 1, 1]
 
@@ -163,7 +165,7 @@ def test_dec17_lost_edge_freezes_at_the_last_seen_width(rules: Ruleset) -> None:
     state.tick = 20
     lost = _view(state, rules).edges[4]
     assert (lost.width, lost.detail) == (2, F)  # the last sighting
-    assert lost.seen is not None and (lost.seen.tick, lost.seen.width) == (10, 2)
+    assert state.vision_memory[0].widths[4] == 2
     scout.location = AtNode(5)  # sight back: exact again
     back = _view(state, rules).edges[4]
     assert (back.width, back.detail) == (3, P)
@@ -290,20 +292,29 @@ def test_dec04_exact_in_own_nodes_and_nodes_with_own_groups(rules: Ruleset) -> N
     assert (three.seen.enemy_units, three.seen.enemy_charged) == (7, 3)
 
 
-def test_dec04_presence_in_neighbour_nodes_and_edges_without_numbers(rules: Ruleset) -> None:
+def test_dec21_neighbour_seen_by_terrain_without_its_warehouse(rules: Ruleset) -> None:
+    """DEC-21, items 2, 3 and 5 on line6 (all plains): the neighbour 2 of the own node 1 is seen
+    exactly, but its warehouse is not (only sources show it); a group on e1 past the border point
+    towards 1 is in the half of 1 (a source)."""
     state = _state("line6", rules)
     state.nodes[2].warehouse = 9
     _add(state, 1, AtNode(2), units=8, charged=8, mode=Mode.DEFENSE)
-    _add(state, 1, OnEdge(edge=1, from_node=2, progress=300), units=5, charged=5)
+    _add(state, 1, OnEdge(edge=1, from_node=2, progress=600), units=5, charged=5)
     view = _view(state, rules)
     node, edge = view.nodes[2], view.edges[1]
-    assert (node.detail, node.warehouse, edge.detail) == (P, None, P)
-    assert node.seen is not None and edge.seen is not None
-    assert node.seen.level is P and node.seen.enemy_modes == (Mode.DEFENSE,)
-    assert (node.seen.enemy_units, node.seen.enemy_charged) == (None, None)
-    assert edge.seen.enemy_modes == (Mode.ATTACK,)
-    assert (edge.seen.enemy_units, edge.seen.enemy_charged) == (None, None)
-    assert view.groups == ()  # enemy groups are never entities of the view
+    assert (node.detail, node.warehouse, edge.detail) == (E, None, P)
+    assert node.seen is not None and node.seen.level is E
+    assert (node.seen.enemy_modes, node.seen.enemy_units, node.seen.enemy_charged) == (
+        (Mode.DEFENSE,),
+        8,
+        8,
+    )
+    half1, half2 = edge.halves  # e1: a = 1, b = 2
+    assert half1.seen is not None and half2.seen is not None
+    assert (half1.detail, half1.seen.enemy_units, half1.seen.enemy_charged) == (E, 5, 5)
+    assert (half2.detail, half2.seen.enemy_units, half2.seen.enemy_modes) == (E, 0, ())
+    assert [(f.pos, f.toward_b, f.units) for f in edge.enemy_groups] == [(400, False, 5)]
+    assert view.groups == ()  # enemy groups are never own entities of the view
 
 
 def test_dec04_target_of_an_enemy_normal_order_is_not_shown(rules: Ruleset) -> None:
@@ -321,7 +332,7 @@ def test_dec04_fog_keeps_the_last_sighting(rules: Ruleset) -> None:
     scout = _add(state, 0, AtNode(3))
     enemy = _add(state, 1, AtNode(4), units=6, charged=4)
     state.tick = 5
-    vision(state, rules)  # player 0 sees node 4 as presence at tick 5
+    vision(state, rules)  # player 0 sees node 4 (plains from plains: exact) at tick 5
     scout.location = AtNode(1)
     enemy.units, enemy.mode = 20, Mode.DEFENSE
     state.tick = 9
@@ -329,8 +340,8 @@ def test_dec04_fog_keeps_the_last_sighting(rules: Ruleset) -> None:
     four, five = view.nodes[4], view.nodes[5]
     assert four.detail is F and four.warehouse is None
     assert four.seen is not None
-    assert (four.seen.tick, four.seen.level, four.seen.enemy_modes) == (5, P, (Mode.ATTACK,))
-    assert four.seen.enemy_units is None
+    assert (four.seen.tick, four.seen.level, four.seen.enemy_modes) == (5, E, (Mode.ATTACK,))
+    assert (four.seen.enemy_units, four.seen.enemy_charged) == (6, 4)
     assert five.detail is F and five.seen is None  # never seen
 
 
@@ -375,7 +386,7 @@ def test_dec04_vision_does_not_depend_on_group_size(rules: Ruleset) -> None:
     _add(small, 0, AtNode(2), units=1, charged=1)
     _add(big, 0, AtNode(2), units=50, charged=50)
     for state in (small, big):
-        assert [n.detail for n in _view(state, rules).nodes] == [E, E, E, P, F, F]
+        assert [n.detail for n in _view(state, rules).nodes] == [E, E, E, E, F, F]
 
 
 # #112 default ---------------------------------------------------------------------------------
@@ -385,7 +396,7 @@ def test_own_group_on_an_edge_gives_no_vision(rules: Ruleset) -> None:
     state = _state("line6", rules)
     _add(state, 0, OnEdge(edge=2, from_node=2, progress=900))
     view = _view(state, rules)
-    assert [n.detail for n in view.nodes] == [E, E, P, F, F, F]
+    assert [n.detail for n in view.nodes] == [E, E, E, F, F, F]
     assert [e.detail for e in view.edges] == [P, P, F, F, F]
 
 
@@ -687,20 +698,58 @@ def test_view_hash_is_the_same_in_fresh_processes() -> None:
 # Property: nothing from places the player does not see ----------------------------------------
 
 
-def _levels(state: GameState, player: int) -> tuple[list[Detail], list[Detail]]:
-    """DEC-04 levels computed independently of ``systems.vision``."""
+_SIGHT = {  # DEC-21, item 2, written out by hand: (terrain of the source, of the target)
+    ("plains", "plains"): E,
+    ("plains", "forest"): R,
+    ("plains", "mountains"): P,
+    ("forest", "plains"): R,
+    ("forest", "forest"): R,
+    ("forest", "mountains"): P,
+    ("mountains", "plains"): E,
+    ("mountains", "forest"): R,
+    ("mountains", "mountains"): R,
+}
+_ORDER = (E, R, P, F)
+
+
+def _levels(state: GameState, player: int) -> tuple[list[Detail], list[Detail], list[bool]]:
+    """DEC-21 levels computed independently of ``systems.vision``: node levels, the road level
+    visibility of edges (DEC-17) and the sources."""
     mapdef = state.map
-    exact = [state.nodes[n].owner == player for n in range(len(mapdef.nodes))]
+    source = [state.nodes[n].owner == player for n in range(len(mapdef.nodes))]
     for g in state.groups.values():
         if g.owner == player and isinstance(g.location, AtNode):
-            exact[g.location.node] = True
-    near = [
-        exact[n] or any(exact[mapdef.edges[e].other(n)] for e in mapdef.incident[n])
-        for n in range(len(mapdef.nodes))
-    ]
-    nodes = [E if exact[n] else P if near[n] else F for n in range(len(mapdef.nodes))]
-    edges = [P if exact[e.a] or exact[e.b] else F for e in mapdef.edges]
-    return nodes, edges
+            source[g.location.node] = True
+    nodes: list[Detail] = []
+    for n in range(len(mapdef.nodes)):
+        seen = [F]
+        if source[n]:
+            seen.append(E)
+        for e in mapdef.incident[n]:
+            m = mapdef.edges[e].other(n)
+            if source[m]:
+                seen.append(_SIGHT[mapdef.nodes[m].terrain.value, mapdef.nodes[n].terrain.value])
+        nodes.append(min(seen, key=_ORDER.index))
+    edges = [P if source[e.a] or source[e.b] else F for e in mapdef.edges]
+    return nodes, edges, source
+
+
+def _half(state: GameState, loc: OnEdge) -> int:
+    """The end whose half holds a group (DEC-21, item 5), border point 500."""
+    e = state.map.edges[loc.edge]
+    pos = loc.progress if loc.from_node == e.a else PROGRESS_SCALE - loc.progress
+    to = loc.from_node if loc.back else e.other(loc.from_node)
+    if to == e.b:
+        return e.b if pos >= 500 else e.a
+    return e.a if pos <= 500 else e.b
+
+
+def _place_level(state: GameState, nodes: list[Detail], g: Group) -> Detail:
+    match g.location:
+        case AtNode(node=node):
+            return nodes[node]
+        case OnEdge() as loc:
+            return nodes[_half(state, loc)]
 
 
 _MAPS = {name: load_map(TESTS_DIR / "maps" / f"{name}.json") for name in TEST_MAPS}
@@ -791,7 +840,7 @@ def _states(draw: st.DrawFn) -> tuple[GameState, int]:
 def _hide(data: st.DataObject, state: GameState, player: int) -> None:
     """Change only what ``player`` must not know; the view must stay the same."""
     draw = data.draw
-    nodes, edges = _levels(state, player)
+    nodes, edges, source = _levels(state, player)
     enemy = 1 - player
     for gid in sorted(state.groups):
         g = state.groups[gid]
@@ -799,23 +848,21 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
             continue
         if g.mode is Mode.DEFENSE:  # DEC-30, item 5: what it has gathered is hidden everywhere
             g.ticks_in_defense = draw(st.integers(0, 1000))
-        match g.location:
-            case AtNode(node=node):
-                level = nodes[node]
-            case OnEdge(edge=edge):
-                level = edges[edge]
+        level = _place_level(state, nodes, g)
+        g.order = None  # the target of a normal order is never shown (DEC-21, item 6)
         if level is F and draw(st.booleans()):
             del state.groups[gid]  # a group in fog may vanish
-        elif level is not E:  # presence and fog: sizes and orders are hidden
+        elif level is R:  # the range of the units stays, the charged are hidden
+            g.charged = draw(st.integers(0, g.units))
+        elif level is not E:  # presence and fog: sizes are hidden
             g.units = g.units + draw(st.integers(0, 5))
             g.charged = draw(st.integers(0, g.units))
-            g.order = None
     for _ in range(draw(st.integers(0, 3))):  # new enemy groups deep in fog
         fogged = [n for n, level in enumerate(nodes) if level is F]
         if fogged:
             _add(state, enemy, AtNode(draw(st.sampled_from(fogged))), draw(st.integers(1, 9)), 0)
-    for n, level in enumerate(nodes):
-        if level is not E:
+    for n in range(len(nodes)):
+        if not source[n]:  # DEC-21, item 3: the warehouse only in sources
             state.nodes[n].warehouse = draw(st.integers(0, 30))
     for pid in sorted(state.packets):
         if state.packets[pid].owner == enemy:
@@ -833,6 +880,7 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
     other.fronts = (draw(st.none() | st.integers(0, len(nodes) - 1)), None)  # DEC-28: hidden
     other.rear_min = draw(st.integers(0, 8))
     state.events = [Event(state.tick, "fight", (("node", 0),))]
+    state.vision_memory[enemy] = VisionMemory()  # the enemy's fog memory
     # DEC-17: roads in fog may be upgraded further, enemy builds on them may start or stop.
     for e, level in enumerate(edges):
         if level is F:
@@ -856,7 +904,7 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
 def test_property_nothing_leaks_from_places_out_of_sight(data: st.DataObject) -> None:
     state, player = data.draw(_states())
     view = project(state, _RULES, player, KEY)
-    nodes, edges = _levels(state, player)
+    nodes, edges, source = _levels(state, player)
 
     assert [n.detail for n in view.nodes] == nodes
     assert [e.detail for e in view.edges] == edges
@@ -868,9 +916,14 @@ def test_property_nothing_leaks_from_places_out_of_sight(data: st.DataObject) ->
     )
     memory = state.vision_memory[player]
     for n in view.nodes:
-        _check_place(n, memory.nodes.get(n.id))
+        _check_place(n.detail, n.seen, memory.nodes.get(n.id))
+        assert (n.warehouse is not None) == source[n.id]
     for e in view.edges:
-        _check_place(e, memory.edges.get(e.id))
+        edef = state.map.edges[e.id]
+        assert [h.detail for h in e.halves] == [nodes[edef.a], nodes[edef.b]]
+        for h, n in zip(e.halves, (edef.a, edef.b), strict=True):
+            _check_place(h.detail, h.seen, memory.halves.get((e.id, n)))
+    _check_figures(state, player, nodes, view)
     # DEC-17, DEC-22: known levels never exceed the true ones and equal them in sight;
     # capacities are exact everywhere.
     for e in view.edges:
@@ -884,15 +937,50 @@ def test_property_nothing_leaks_from_places_out_of_sight(data: st.DataObject) ->
     assert project(state, _RULES, player, KEY) == view
 
 
-def _check_place(place: NodeView | EdgeView, memory: object) -> None:
-    if place.detail is F:
-        assert place.seen == memory
-        if isinstance(place, NodeView):
-            assert place.warehouse is None
+def _check_place(detail: Detail, seen: Sighting | None, memory: Sighting | None) -> None:
+    if detail is F:
+        assert seen == memory
         return
-    assert place.seen is not None and place.seen.level is place.detail
-    if place.detail is P:
-        assert (place.seen.enemy_units, place.seen.enemy_charged) == (None, None)
+    assert seen is not None and seen.level is detail
+    numbers = (seen.enemy_units, seen.enemy_charged)
+    if detail is E:
+        assert None not in numbers and seen.enemy_range is None
+    else:
+        assert numbers == (None, None)
+    if detail is R:
+        assert (seen.enemy_range is None) == (not seen.enemy_modes)
+    else:
+        assert seen.enemy_range is None
+
+
+def _check_figures(state: GameState, player: int, nodes: list[Detail], view: PlayerView) -> None:
+    """DEC-33: every enemy group on a half not in fog and in no fight is a figure, nothing else."""
+    expected: list[tuple[int, int, bool, Detail, Mode]] = []
+    internal = set(state.groups)
+    for g in state.groups.values():
+        loc = g.location
+        if g.owner == player or g.fight is not None or not isinstance(loc, OnEdge):
+            continue
+        level = nodes[_half(state, loc)]
+        if level is F:
+            continue
+        e = state.map.edges[loc.edge]
+        pos = loc.progress if loc.from_node == e.a else PROGRESS_SCALE - loc.progress
+        to = loc.from_node if loc.back else e.other(loc.from_node)
+        expected.append((loc.edge, pos, to == e.b, level, g.mode))
+    shown = [
+        (e.id, f.pos, f.toward_b, f.detail, f.mode) for e in view.edges for f in e.enemy_groups
+    ]
+    assert sorted(shown) == sorted(expected)
+    for e in view.edges:
+        assert [f.id for f in e.enemy_groups] == sorted(f.id for f in e.enemy_groups)
+        for f in e.enemy_groups:
+            assert f.id not in internal
+            if f.detail is E:
+                assert f.units is not None and f.charged is not None and f.units_range is None
+            else:
+                assert (f.units, f.charged) == (None, None)
+                assert (f.units_range is not None) == (f.detail is R)
 
 
 # DEC-16, item 8 and DEC-17, item 5: road builds of cities ---------------------------------------

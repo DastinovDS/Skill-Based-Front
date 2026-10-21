@@ -23,8 +23,10 @@ and advance the clock. After every tick the invariants below must hold:
 - fog: ``project()`` does not change when everything the player must not see is perturbed
   (extends the synthetic-state test of SIM-14 in ``test_view.py`` to states of real matches),
   including the levels of fogged roads and enemy builds on them (DEC-17, DEC-22), the enemy's
-  barracks, warehouse levels and city builds (DEC-26, item 10); known levels never exceed the
-  true ones and equal them in sight; capacities are exact (DEC-22, item 1).
+  barracks, warehouse levels and city builds (DEC-26, item 10), the charged units on the range
+  level and everything of the enemy groups in fogged halves of edges (DEC-21, DEC-33); known
+  levels never exceed the true ones and equal them in sight; capacities are exact (DEC-22,
+  item 1); enemy figures never carry internal ids (DEC-33, detail 5).
 
 The machine plays ``mvp-0`` (``city_upgrades`` off) or ``mvp-1`` (on, DEC-26).
 
@@ -76,8 +78,10 @@ from gow_sim.state import (
     Mode,
     OnEdge,
     Packet,
+    VisionMemory,
 )
 from gow_sim.systems.capacity import node_capacities
+from gow_sim.systems.vision import half_node
 from gow_sim.view import opaque_id, project
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -319,14 +323,17 @@ class Tracker:
 # Fog ------------------------------------------------------------------------------------------
 
 
-type Levels = tuple[list[Detail], list[Detail]]
+type Levels = tuple[list[Detail], list[Detail], list[bool]]
+"""Node levels, the road level visibility of edges (DEC-17) and the sources (warehouse shown)."""
 
 
 def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: Levels) -> None:
     """Change only what ``player`` must not know; ``project()`` must not notice.
 
-    Hidden: numbers of enemy groups outside EXACT places, enemy groups in fog (may vanish, new
-    ones may appear), warehouses outside EXACT nodes, enemy packets, the enemy's CP, stance and
+    Hidden: numbers of enemy groups outside EXACT places (on the RANGE level only the charged:
+    the range of the units shows), enemy groups in fog, in nodes and in halves of edges (may
+    vanish, new ones may appear), the orders of enemy groups, warehouses outside the sources,
+    enemy packets, the enemy's CP, stance and
     charge accumulator, the enemy's fog memory and the events of the tick; DEC-17: widths of
     fogged edges (only upwards, roads are never torn down) and enemy builds on fogged edges;
     DEC-18: supply priorities of enemy cities and routes of enemy packets (transfers); DEC-19: the
@@ -335,7 +342,7 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     ``PlayerView.fights``), the rest of them is not.
     """
     draw = data.draw
-    nodes, edges = levels
+    nodes, edges, sources = levels
     enemy = 1 - player
     for fid in sorted(state.fights):
         f = state.fights[fid]
@@ -354,13 +361,16 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
         if g.fight is not None:
             g.order = None  # its counters are public in the fight, its order is not
             continue
-        level = nodes[g.location.node] if isinstance(g.location, AtNode) else edges[g.location.edge]
+        loc = g.location
+        level = nodes[loc.node if isinstance(loc, AtNode) else half_node(state.map, loc)]
+        g.order = None  # the target of a normal order is never shown (DEC-21, item 6)
         if level is Detail.FOG and draw(st.booleans()):
             del state.groups[gid]
+        elif level is Detail.RANGE:
+            g.charged = draw(st.integers(0, g.units))
         elif level is not Detail.EXACT:
             g.units += draw(st.integers(0, 5))
             g.charged = draw(st.integers(0, g.units))
-            g.order = None
     fogged = [n for n, level in enumerate(nodes) if level is Detail.FOG]
     for _ in range(draw(st.integers(0, 3))):
         if fogged:
@@ -368,8 +378,8 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
             node = draw(st.sampled_from(fogged))
             units = draw(st.integers(1, 9))
             state.groups[gid] = Group(gid, enemy, units, 0, Mode.ATTACK, AtNode(node))
-    for n, level in enumerate(nodes):
-        if level is not Detail.EXACT:
+    for n, source in enumerate(sources):
+        if not source:
             state.nodes[n].warehouse = draw(st.integers(0, 30))
     for p in state.packets.values():
         if p.owner == enemy:
@@ -391,8 +401,7 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     other.cp = draw(st.integers(0, 10_000))
     other.stance = draw(st.sampled_from(list(Stance)))
     other.charge_acc = draw(st.integers(0, 99))
-    state.vision_memory[enemy].nodes.clear()
-    state.vision_memory[enemy].edges.clear()
+    state.vision_memory[enemy] = VisionMemory()
     state.events = []
     for e, level in enumerate(edges):
         if level is Detail.FOG:
@@ -535,7 +544,16 @@ class MatchMachine(RuleBasedStateMachine):
         assert {g.id for g in view.groups} == own
         own_packets = {opaque_id(KEY, player, p.id) for p in _own(m.state, player)}
         assert {p.id for p in view.packets} == own_packets
-        levels = ([n.detail for n in view.nodes], [e.detail for e in view.edges])
+        levels = (
+            [n.detail for n in view.nodes],
+            [e.detail for e in view.edges],
+            [n.warehouse is not None for n in view.nodes],
+        )
+        internal = set(m.state.groups)
+        for e in view.edges:  # DEC-33: figures only on halves not in fog, never internal ids
+            for f in e.enemy_groups:
+                assert f.id not in internal
+                assert f.detail is not Detail.FOG
         for e in view.edges:  # DEC-17, DEC-22: known levels never exceed the true ones
             road = m.state.edges[e.id]
             assert e.width <= road.width

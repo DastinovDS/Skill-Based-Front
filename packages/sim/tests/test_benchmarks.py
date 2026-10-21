@@ -25,8 +25,9 @@ from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef, load_map
 from gow_sim.match import Controller, Match, MatchResult, run_headless
 from gow_sim.ruleset import Ruleset
-from gow_sim.state import AtNode, GameState, Group, Mode, Packet
+from gow_sim.state import AtNode, Detail, GameState, Group, Mode, OnEdge, Packet
 from gow_sim.systems.supply import supply
+from gow_sim.systems.vision import compute_vision
 from gow_sim.view import project
 
 pytestmark = pytest.mark.perf  # serial only: timings are meaningless under xdist
@@ -259,6 +260,35 @@ def test_bench_project(
     expand_bot: BotFactory,
 ) -> None:
     state = _Driver(grid40_map, mvp_rules, expand_bot).warm(300)
+    benchmark.pedantic(lambda: project(state, mvp_rules, 0, KEY), rounds=2000)
+    _check(benchmark, speed_factor, 0.3 * MS)
+
+
+def test_bench_project_with_enemy_figures(
+    benchmark: BenchmarkFixture,
+    speed_factor: float,
+    grid40_map: MapDef,
+    mvp_rules: Ruleset,
+    expand_bot: BotFactory,
+) -> None:
+    """DEC-33, detail 12: ``project()`` with every enemy group out of a fight as a figure on a
+    half of an edge in sight (the worst case of ``EdgeView.enemy_groups``)."""
+    state = copy.deepcopy(_Driver(grid40_map, mvp_rules, expand_bot).warm(300))
+    mapdef = state.map
+    levels = compute_vision(state, mvp_rules, 0)
+    seen = [n for n, level in enumerate(levels.nodes) if level is not Detail.FOG]
+    moved = 0
+    for gid in sorted(state.groups):
+        g = state.groups[gid]
+        if g.owner != 1 or g.fight is not None:
+            continue
+        node = seen[moved % len(seen)]
+        edge = mapdef.incident[node][moved % len(mapdef.incident[node])]
+        g.location = OnEdge(edge, mapdef.edges[edge].other(node), 900)
+        g.order = None
+        moved += 1
+    figures = sum(len(e.enemy_groups) for e in project(state, mvp_rules, 0, KEY).edges)
+    assert figures == moved >= 10
     benchmark.pedantic(lambda: project(state, mvp_rules, 0, KEY), rounds=2000)
     _check(benchmark, speed_factor, 0.3 * MS)
 

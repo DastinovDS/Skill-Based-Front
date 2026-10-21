@@ -391,7 +391,10 @@ def _assert_mirrored(state: GameState, groups: dict[int, int]) -> None:
     assert _fights(state, groups, mirror=False) == _fights(state, groups, mirror=True)
     mem0, mem1 = state.vision_memory[0], state.vision_memory[1]
     assert {mapdef.mirror_nodes[n]: s for n, s in mem0.nodes.items()} == mem1.nodes
-    assert {mapdef.mirror_edges[e]: s for e, s in mem0.edges.items()} == mem1.edges
+    assert {(me[e], mn[n]): s for (e, n), s in mem0.halves.items()} == mem1.halves
+    assert {me[e]: w for e, w in mem0.widths.items()} == mem1.widths
+    pair = {g1: g0 for g0, g1 in groups.items()}  # a group of player 1 to its mirror
+    assert {pair[g]: t for g, t in mem0.spotted.items()} == mem1.spotted
 
 
 def _new_groups(events: list[Event], player: int) -> list[int]:

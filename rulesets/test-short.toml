@@ -131,3 +131,21 @@ capital = 6
 city_large = 2
 city_medium = 2
 city_small = 1
+
+[vision]
+range_starts = [1, 3, 6, 11, 21]
+
+[vision.by_terrain.plains]
+plains = "exact"
+forest = "range"
+mountains = "presence"
+
+[vision.by_terrain.forest]
+plains = "range"
+forest = "range"
+mountains = "presence"
+
+[vision.by_terrain.mountains]
+plains = "exact"
+forest = "range"
+mountains = "range"
