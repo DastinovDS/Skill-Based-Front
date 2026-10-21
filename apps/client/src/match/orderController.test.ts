@@ -438,7 +438,7 @@ describe('OrderController', () => {
     const waiting = {
       ...group,
       id: 'waiting',
-      order: { dest: enemy.id, path: [enemy.id], planned: true },
+      order: { dest: enemy.id, path: [enemy.id], planned: true, bonus: 1 },
     } satisfies typeof group;
     hud.onSnapshot({ ...snapshot, view: { ...snapshot.view, groups: [group, twin, waiting] } });
     controller.click({ kind: 'group', id: group.id }, false);

@@ -33,7 +33,7 @@
         "mountains": 1
       },
       "planned_bonus_per_edge": 1,
-      "round_ticks": 10,
+      "round_ticks": 20,
       "shots_per_round": 1,
       "regroup_ticks": 10
     },

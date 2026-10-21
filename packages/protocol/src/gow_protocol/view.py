@@ -224,6 +224,11 @@ class OrderView(WireModel):
     path: Annotated[tuple[NodeId, ...], Field(min_length=1)]
     """Remaining nodes to ``dest``, ``dest`` included."""
     planned: bool
+    bonus: NonNegInt
+    """A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,
+    at most the charged units of the group). Before the departure a forecast by the charged units
+    now; the cap is taken in the departure tick. 0 for a normal order and once the bonus entered
+    a fight. Only own orders exist in a view (owner 2026-10-21, mockup #339)."""
 
 
 class GroupView(WireModel):
@@ -322,8 +327,11 @@ class FightView(WireModel):
     the own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this
     fight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.
     ``shots`` and ``losses``: totals of the fight so far by player; ``last_round``: the latest
-    round of both players, ``None`` before the first one. The virtual shots still left are not
-    sent (DEC-24, item I1: the rounds are public, the stock is not).
+    round of both players, ``None`` before the first one. ``virtual_left``: the virtual shots
+    (bonuses, mountains) still left by player, public to both while the fight goes on (DEC-32,
+    item 3); it grows when a reinforcement with a bonus joins and drops after each round.
+    ``mute``: by player, the charged units in the fight that do not shoot in a round because of
+    the terrain (plains: one of the defender, DEC-24, item F2), at most the side's charged units.
     """
 
     id: OpaqueId
@@ -339,6 +347,8 @@ class FightView(WireModel):
     enemy_charged: NonNegInt
     shots: tuple[NonNegInt, NonNegInt]
     losses: tuple[NonNegInt, NonNegInt]
+    virtual_left: tuple[NonNegInt, NonNegInt]
+    mute: tuple[NonNegInt, NonNegInt]
     last_round: FightRoundView | None
 
     @model_validator(mode="after")

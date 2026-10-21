@@ -189,10 +189,17 @@ function devFightPlace(map: MapFile, cycle: number) {
     : { node: null, edge: map.edges[0]?.id ?? 0, point: 900, attacker: null };
 }
 
-const pairSum = (key: 'shots' | 'losses', rounds: number): [number, number] => [
+const pairSum = (key: 'shots' | 'losses' | 'virtual', rounds: number): [number, number] => [
   DEV_ROUNDS.slice(0, rounds).reduce((n, r) => n + r[key][0], 0),
   DEV_ROUNDS.slice(0, rounds).reduce((n, r) => n + r[key][1], 0),
 ];
+
+/** The bonus shots of the demo fight still left after `rounds` rounds (DEC-32). */
+const virtualLeft = (rounds: number): [number, number] => {
+  const all = pairSum('virtual', DEV_ROUNDS.length);
+  const used = pairSum('virtual', rounds);
+  return [all[0] - used[0], all[1] - used[1]];
+};
 
 /** The fight of the demo going on at `tick`, as the view of a player lists it. */
 export function devFights(map: MapFile, tick: number): SnapshotMsg['view']['fights'] {
@@ -213,6 +220,8 @@ export function devFights(map: MapFile, tick: number): SnapshotMsg['view']['figh
       enemy_charged: 2,
       shots: pairSum('shots', done),
       losses: pairSum('losses', done),
+      virtual_left: virtualLeft(done),
+      mute: [0, 0],
       last_round:
         last === undefined
           ? null

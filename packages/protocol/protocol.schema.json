@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 20,
+    "PROTOCOL_VERSION": 21,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -853,7 +853,7 @@
     },
     "FightView": {
       "additionalProperties": false,
-      "description": "A fight going on (DEC-24, item I1): a node, or an edge with the meeting ``point``.\n\n``point``: twice the meeting position in thousandths from the end ``a`` of the edge\n(0..2000); the mark sits at ``point / 2000`` of the edge from ``a`` (item C3). ``groups``:\nthe own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this\nfight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.\n``shots`` and ``losses``: totals of the fight so far by player; ``last_round``: the latest\nround of both players, ``None`` before the first one. The virtual shots still left are not\nsent (DEC-24, item I1: the rounds are public, the stock is not).",
+      "description": "A fight going on (DEC-24, item I1): a node, or an edge with the meeting ``point``.\n\n``point``: twice the meeting position in thousandths from the end ``a`` of the edge\n(0..2000); the mark sits at ``point / 2000`` of the edge from ``a`` (item C3). ``groups``:\nthe own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this\nfight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.\n``shots`` and ``losses``: totals of the fight so far by player; ``last_round``: the latest\nround of both players, ``None`` before the first one. ``virtual_left``: the virtual shots\n(bonuses, mountains) still left by player, public to both while the fight goes on (DEC-32,\nitem 3); it grows when a reinforcement with a bonus joins and drops after each round.\n``mute``: by player, the charged units in the fight that do not shoot in a round because of\nthe terrain (plains: one of the defender, DEC-24, item F2), at most the side's charged units.",
       "properties": {
         "id": {
           "pattern": "^[A-Za-z0-9_-]{1,32}$",
@@ -953,6 +953,26 @@
           "minItems": 2,
           "type": "array"
         },
+        "virtual_left": {
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "mute": {
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
         "last_round": {
           "anyOf": [
             {
@@ -977,6 +997,8 @@
         "enemy_charged",
         "shots",
         "losses",
+        "virtual_left",
+        "mute",
         "last_round"
       ],
       "title": "FightView",
@@ -1825,12 +1847,19 @@
         },
         "planned": {
           "type": "boolean"
+        },
+        "bonus": {
+          "description": "A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,\nat most the charged units of the group). Before the departure a forecast by the charged units\nnow; the cap is taken in the departure tick. 0 for a normal order and once the bonus entered\na fight. Only own orders exist in a view (owner 2026-10-21, mockup #339).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "dest",
         "path",
-        "planned"
+        "planned",
+        "bonus"
       ],
       "title": "OrderView",
       "type": "object"

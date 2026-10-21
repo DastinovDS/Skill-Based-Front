@@ -231,7 +231,12 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 location=_location(g.location),
                 order=None
                 if g.order is None
-                else OrderView(dest=g.order.dest, path=g.order.path, planned=g.order.planned),
+                else OrderView(
+                    dest=g.order.dest,
+                    path=g.order.path,
+                    planned=g.order.planned,
+                    bonus=g.order.bonus,
+                ),
                 defense_bonus=g.defense_bonus,
                 defense_cap=g.defense_cap,
             )
@@ -276,6 +281,8 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 enemy_charged=f.enemy_charged,
                 shots=f.shots,
                 losses=f.losses,
+                virtual_left=f.virtual_left,
+                mute=f.mute,
                 last_round=None
                 if f.last_round is None
                 else FightRoundView(
@@ -380,7 +387,12 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "location": _location_data(g.location),
                 "order": None
                 if g.order is None
-                else {"dest": g.order.dest, "path": g.order.path, "planned": g.order.planned},
+                else {
+                    "dest": g.order.dest,
+                    "path": g.order.path,
+                    "planned": g.order.planned,
+                    "bonus": g.order.bonus,
+                },
                 "defense_bonus": g.defense_bonus,
                 "defense_cap": g.defense_cap,
             }
@@ -425,6 +437,8 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "enemy_charged": f.enemy_charged,
                 "shots": list(f.shots),
                 "losses": list(f.losses),
+                "virtual_left": list(f.virtual_left),
+                "mute": list(f.mute),
                 "last_round": _round_data(f.last_round),
             }
             for f in view.fights

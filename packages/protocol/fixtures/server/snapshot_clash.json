@@ -385,7 +385,8 @@
         "order": {
           "dest": 0,
           "path": [0],
-          "planned": false
+          "planned": false,
+          "bonus": 0
         },
         "defense_bonus": null,
         "defense_cap": null
@@ -404,7 +405,8 @@
         "order": {
           "dest": 4,
           "path": [4],
-          "planned": false
+          "planned": true,
+          "bonus": 1
         },
         "defense_bonus": null,
         "defense_cap": null
@@ -488,15 +490,17 @@
         "edge": 5,
         "point": 1250,
         "attacker": null,
-        "start_tick": 386,
+        "start_tick": 366,
         "next_round_tick": 406,
         "groups": ["4d5e6f708192a3b4"],
         "enemy_units": 3,
         "enemy_charged": 2,
         "shots": [3, 2],
         "losses": [0, 1],
+        "virtual_left": [1, 0],
+        "mute": [0, 0],
         "last_round": {
-          "tick": 396,
+          "tick": 386,
           "shots": [2, 1],
           "virtual": [1, 0],
           "spent": [1, 1],

@@ -299,6 +299,8 @@ describe('arena', () => {
     enemy_charged: 2,
     shots: [0, 0],
     losses: [0, 0],
+    virtual_left: [0, 0],
+    mute: [0, 0],
     last_round: null,
   };
   const group = (id: string, units: number, owner?: 0 | 1, charged = 0): RenderGroup => ({

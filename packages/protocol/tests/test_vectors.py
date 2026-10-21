@@ -191,7 +191,8 @@ def test_combat_vector_structure(vector: dict[str, object]) -> None:
     fight = _bool(expected["fight"])
     assert fight == (location != "empty_enemy_node")
     rounds = _int(expected["rounds"])
-    assert _int(expected["end_after"]) == 10 * rounds  # round_ticks = 10, the end after a round
+    round_ticks = _int(_obj(_load_combat()["params"])["round_ticks"])
+    assert _int(expected["end_after"]) == round_ticks * rounds  # the end comes after a round
     assert fight == (rounds > 0)
     for raw in _list(expected["trace"]):
         step = _obj(raw)

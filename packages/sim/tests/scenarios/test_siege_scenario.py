@@ -6,11 +6,11 @@ warehouse 3); T is linked to the own capital only through M (node 1) and borders
 capital (node 5) directly. Player 1 attacks T from its capital with 2 charged units in waves:
 a wave leaves only when the group stands at home fully charged, with no order and CP for the
 move. Nobody else moves. With equal forces a wave only burns charges on both sides (DEC-24,
-table row 1: two rounds, 20 ticks): the attacker bounces home (79 ticks) and recharges in 2
-ticks, the defender recharges from T's warehouse at 1 per tick (``supply.recharge_per_tick``)
-once the fight is over (DEC-24, H1: not during it). A wave leaves in tick 1 and meets T in tick
-79; after a fight that ends in tick ``e`` the attacker is home in ``e + 79``, full in ``e + 80``
-and meets T again in ``e + 80 + 79``.
+table row 1: two rounds, 40 ticks with ``round_ticks = 20``, DEC-32): the attacker bounces home
+(79 ticks) and recharges in 2 ticks, the defender recharges from T's warehouse at 1 per tick
+(``supply.recharge_per_tick``) once the fight is over (DEC-24, H1: not during it). A wave
+leaves in tick 1 and meets T in tick 79; after a fight that ends in tick ``e`` the attacker is
+home in ``e + 79``, full in ``e + 80`` and meets T again in ``e + 80 + 79``.
 
 Cut roads (player 1 already holds M, so T is outside the supplied territory and gets no
 packets; as a medium city its capacity is 6 (DEC-22), which holds the warehouse of 3). T starves
@@ -19,13 +19,14 @@ packets; as a medium city its capacity is 6 (DEC-22), which holds the warehouse 
 D = the defender's charged units at contact, W = T's warehouse:
 
 ====  =======  ===  ====================================================================  ===
-wave  contact  D    fight (DEC-24, rounds every 10 ticks) and what happens until the next   W
+wave  contact  D    fight (DEC-24, rounds every 20 ticks) and what happens until the next   W
 ====  =======  ===  ====================================================================  ===
-1     79       2    r1, r2 cancel (row 1), the end at 99; recharge 2 at 99, 100 (W 3 -> 1);  0
-                    starves at 101 (W 1 -> 0) and at 201 (one unit charge: D 2 -> 1)
-2     258      1    r1 at 268 cancels (1 / 0), r2 at 278 kills 1 discharged defender; the    0
-                    end at 278 (nobody can shoot); at 301 and 401 nothing left to spend
-3     437      0    r1 at 447 kills the last unit: the end at 447, T is captured            --
+1     79       2    starves at 101 in the fight (W 3 -> 2); r1, r2 cancel (row 1), the end   0
+                    at 119; recharge 2 at 119, 120 (W 2 -> 0); starves at 201 (one unit
+                    charge: D 2 -> 1)
+2     278      1    r1 at 298 cancels (1 / 0), r2 at 318 kills 1 discharged defender; the    0
+                    end at 318 (nobody can shoot); at 301 and 401 nothing left to spend
+3     477      0    r1 at 497 kills the last unit: the end at 497, T is captured            --
 ====  =======  ===  ====================================================================  ===
 
 So the city falls exactly on wave N = 3 (without starvation, SIM-09: wave 4).
@@ -33,7 +34,7 @@ So the city falls exactly on wave N = 3 (without starvation, SIM-09: wave 4).
 Open roads (M is player 0's): T is refilled over 0 -> 1 -> 2. The capital produces 1 charge
 per 50 ticks (half of the CP quantum at stance «Баланс»; no passive production since #253), a
 level 1 road carries 1 charge per 10 ticks and the chain takes 59 + 72 ticks; a wave uses 2
-charges of T per round trip of 178 ticks (the capital makes 3 in that time), and T starts with
+charges of T per round trip of 199 ticks (the capital makes 3 in that time), and T starts with
 3. So the defender meets every wave with both units charged (row 1 every time) and does not
 fall in 10 waves.
 """
@@ -112,9 +113,9 @@ def _of(fights: list[Event], kind: str) -> list[Event]:
 
 def test_cut_off_city_falls_exactly_on_wave_3() -> None:
     state, fights = _siege(cut=True, waves=10)
-    assert [f.tick for f in _of(fights, "fight_started")] == [79, 258, 437]
+    assert [f.tick for f in _of(fights, "fight_started")] == [79, 278, 477]
     ended = _of(fights, "fight_ended")
-    assert [f.tick for f in ended] == [99, 278, 447]
+    assert [f.tick for f in ended] == [119, 318, 497]
     assert [f.get("attacker") for f in ended] == [1, 1, 1]
     assert [f.get("charged_before") for f in _of(fights, "fight_group")] == [2, 1, 0]
     assert [f.get("losses_0") for f in ended] == [0, 1, 1]

@@ -26,7 +26,10 @@ PRO-01), which PRO-03 converts it into:
 - fights going on (DEC-24, item I1): both players fight in each, so both see it with the exact
   units and charged of the enemy in it, the shots and losses of both sides so far and the latest
   round of both sides (shots with the virtual ones apart, spent charges, losses; I1 as revised
-  with DEC-29); the enemy's virtual shots still left and its group ids stay hidden.
+  with DEC-29), the virtual shots still left of both sides (DEC-32, item 3) and the charges of
+  both sides silent by terrain (``mute``, DEC-24 item F2, plains); the enemy's group
+  ids stay hidden. Outside a fight the bonus of an enemy group (a gathered «Защита», a waiting
+  planned order) is never in a view, also not for a reinforcement on its way.
 
 What a view never has: enemy groups as entities (only the per-place ``Sighting``), road levels
 of fogged edges newer than the last sighting, the barracks, warehouse level and city builds of
@@ -226,6 +229,12 @@ class OrderView:
     planned: bool
     depart_tick: int
     """Not before this tick the group leaves its node (a planned order waits, DEC-08)."""
+    bonus: int = 0
+    """A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,
+    at most the charged units), ``min(Group.bonus, charged now)``. Before the departure it is a
+    forecast: the cap is taken by the charged units in the departure tick. 0 for a normal order
+    and once the bonus entered a fight. Own orders only: the enemy's bonus shows only in a fight
+    (DEC-32)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,7 +296,9 @@ class FightView:
     it, with the exact counters of the enemy in it, also on an edge where own groups give no
     vision (#112). The rounds are public (DEC-24, item I1 as revised with DEC-29): ``shots`` and
     ``losses`` of both players so far, ``last_round`` of both players with the virtual shots
-    apart. The virtual shots still left (bonuses, terrain) and the enemy's group ids are hidden."""
+    apart. The virtual shots still left (bonuses, terrain) of both players are public while the
+    fight goes on (DEC-32, item 3), and so are the charges silent by terrain (``mute``, DEC-24,
+    item F2). The enemy's group ids are hidden."""
 
     id: int
     """Opaque id (``fight`` in the fight events)."""
@@ -308,6 +319,12 @@ class FightView:
     """Shots of the fight so far by player."""
     losses: tuple[int, int]
     """Units lost in the fight so far by player."""
+    virtual_left: tuple[int, int]
+    """Virtual shots still left by player (``Fight.virtual``: bonuses, mountains; DEC-32)."""
+    mute: tuple[int, int]
+    """Charged units of the player in the fight that do not shoot in a round (plains: one of the
+    defender, DEC-24 item F2): ``min(Fight.mute, charged)``. It follows from the public terrain and
+    the counters of the fight, so the client shows it without computing it (AGENTS.md 7.1)."""
     last_round: FightRound | None
     """The latest round, by player; ``None`` before the first round."""
 
@@ -505,7 +522,13 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 location=g.location,
                 order=None
                 if order is None or not order.path
-                else OrderView(order.path[-1], order.path, order.planned, order.depart_tick),
+                else OrderView(
+                    order.path[-1],
+                    order.path,
+                    order.planned,
+                    order.depart_tick,
+                    min(g.bonus, g.charged) if order.planned else 0,
+                ),
                 defense_bonus=rules.orders.defense_bonus(g.ticks_in_defense, g.charged)
                 if defense
                 else None,
@@ -545,10 +568,12 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     for fid, f in sorted(state.fights.items()):
         mine: list[int] = []
         units = charged = 0
+        side_charged = [0, 0]
         for gid in sorted(f.members):
             g = state.groups.get(gid)
             if g is None:
                 continue
+            side_charged[g.owner] += g.charged
             if g.owner == player:
                 mine.append(opaque(player, gid))
             else:
@@ -568,6 +593,8 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 enemy_charged=charged,
                 shots=f.shots,
                 losses=f.losses,
+                virtual_left=f.virtual,
+                mute=(min(f.mute[0], side_charged[0]), min(f.mute[1], side_charged[1])),
                 last_round=f.last_round,
             )
         )
@@ -679,6 +706,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                     "path": list(g.order.path),
                     "planned": g.order.planned,
                     "depart_tick": g.order.depart_tick,
+                    "bonus": g.order.bonus,
                 },
                 "defense_bonus": g.defense_bonus,
                 "defense_cap": g.defense_cap,
@@ -724,6 +752,8 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "enemy_charged": f.enemy_charged,
                 "shots": list(f.shots),
                 "losses": list(f.losses),
+                "virtual_left": list(f.virtual_left),
+                "mute": list(f.mute),
                 "last_round": None
                 if f.last_round is None
                 else {
