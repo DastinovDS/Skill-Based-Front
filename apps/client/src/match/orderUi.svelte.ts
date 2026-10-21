@@ -32,6 +32,8 @@ export type OrderFeedback =
 export interface OrderUiData {
   /** The "planned order" switch (Shift+click also makes one order planned). */
   readonly planned: boolean;
+  /** The road mode is on (`U`): own roads that can be raised are lit and a click on one raises it. */
+  readonly roadMode: boolean;
   /** The own road under the pointer that a click would raise (DEC-28, item 7); `null`: none. */
   readonly roadHover: number | null;
   /** The «Supply» map mode is on (Tab or F2, DEC-18). */
@@ -50,6 +52,7 @@ export interface OrderUiData {
 export class OrderUiState {
   current = $state.raw<OrderUiData>({
     planned: false,
+    roadMode: false,
     roadHover: null,
     supplyMode: false,
     transferFrom: null,

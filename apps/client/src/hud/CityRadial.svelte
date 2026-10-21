@@ -27,8 +27,8 @@
   // A sector shows only its glyph and its price (the name is the accessible name); the reason a
   // sector is off is on the map and in the panel, never a line of text here.
   const upgrades = $derived(orders.cityUpgrades);
-  // A sector with nothing left to do (the barracks is built, the warehouse is at its top level)
-  // is not drawn; the others spread evenly around the ring.
+  // A sector with nothing to do (no recruit without a barracks, the barracks is built, the
+  // warehouse is at its top level) is not drawn; the others spread evenly around the ring.
   const choices = $derived(cityChoices(upgrades, city));
   const count = $derived(choices.length);
   const items = $derived.by<RadialItem[]>(() => {
@@ -38,7 +38,6 @@
     // Own CP now; `null` (not known yet): nothing is dimmed for it.
     const funds = orders.cpNow;
     const poor = (centis: number): boolean => funds !== null && funds < centis;
-    const noBarracks = upgrades.enabled && city?.hasBarracks === false;
     // A build of the city (the barracks or the warehouse) holds the other back.
     const busy = city?.building != null;
     const price = (centis: number): string[] =>
@@ -53,7 +52,7 @@
             lines: price(costs.recruit),
             key: 'R',
             compact: true,
-            disabled: noBarracks || poor(costs.recruit) || queued >= orders.recruitQueueMax,
+            disabled: poor(costs.recruit) || queued >= orders.recruitQueueMax,
           };
         case 'barracks':
           return {

@@ -204,6 +204,7 @@ export class MatchSession implements RenderSource {
       case 'event':
         this.#events = [...this.#events, msg].slice(-EVENT_TAIL);
         this.#hud?.onEvent(msg);
+        this.orders.onEvent(msg);
         break;
       case 'ack':
         this.orders.onAck(msg);

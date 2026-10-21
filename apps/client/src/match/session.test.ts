@@ -145,6 +145,26 @@ describe('MatchSession', () => {
     expect(session.orders.ghosts().map((g) => g.status)).toEqual(['rejected']);
   });
 
+  it('routes a group_split event to the order book: the new group of a split that was sent (#315)', () => {
+    const { session, socket } = setup();
+    const splits: string[][] = [];
+    session.orders.onSplit = (from, to) => splits.push([from, to]);
+    const event = (group: string) =>
+      ({
+        type: 'event',
+        tick: 22,
+        kind: 'group_split',
+        data: { player: 0, group, new_group: '77', units: 2 },
+      }) as const;
+    // An event of a split nobody sent is ignored; one that was sent names the new group.
+    socket.reply(event('dev-0'));
+    const cmd = { type: 'split', group: 'dev-0', n: 2 } as const;
+    session.orders.track(session.send(cmd), cmd);
+    socket.reply(event('dev-0'));
+    socket.reply(event('dev-0'));
+    expect(splits).toEqual([['dev-0', '77']]);
+  });
+
   it('forgets frames and the HUD picture when the connection drops, and on resync', () => {
     const { session, hud, socket } = setup();
     socket.reply(snapshot(20));

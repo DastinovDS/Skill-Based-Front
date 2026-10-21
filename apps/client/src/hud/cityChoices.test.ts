@@ -10,12 +10,18 @@ describe('cityChoices (DEC-26): what the menu of an own city offers', () => {
     ).toEqual(['recruit']);
   });
 
-  it('a city without the barracks and with a warehouse to raise offers both builds', () => {
+  it('a city without the barracks has no recruit sector at all: it offers the builds', () => {
     expect(cityChoices(on, { hasBarracks: false, warehouseLevel: 0 })).toEqual([
-      'recruit',
       'barracks',
       'warehouse',
     ]);
+    expect(cityChoices(on, { hasBarracks: false, warehouseLevel: 2 })).toEqual(['barracks']);
+  });
+
+  it('without the city development every city recruits, whatever the barracks flag says', () => {
+    const off = { ...on, enabled: false };
+    expect(cityChoices(off, { hasBarracks: false, warehouseLevel: 0 })).toEqual(['recruit']);
+    expect(cityChoices(off, null)).toEqual(['recruit']);
   });
 
   it('the barracks is gone from the menu once it is built', () => {
@@ -26,7 +32,7 @@ describe('cityChoices (DEC-26): what the menu of an own city offers', () => {
   });
 
   it('the warehouse is gone at its top level', () => {
-    expect(cityChoices(on, { hasBarracks: false, warehouseLevel: 2 })).toEqual([
+    expect(cityChoices(on, { hasBarracks: null, warehouseLevel: 2 })).toEqual([
       'recruit',
       'barracks',
     ]);

@@ -25,6 +25,7 @@
   import TransferDialog from './TransferDialog.svelte';
   import ToastStack from './ToastStack.svelte';
   import GroupTip from './GroupTip.svelte';
+  import RoadBanner from './RoadBanner.svelte';
   import RoadTip from './RoadTip.svelte';
   import TopBar from './TopBar.svelte';
 
@@ -182,6 +183,7 @@
   <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
   <StackRadial {orders} {anchors} />
   <GroupTip group={data?.hovered ?? null} />
+  <RoadBanner {orders} />
   <RoadTip {orders} road={roadHover} />
   <HelpOverlay
     open={chrome.helpOpen}
