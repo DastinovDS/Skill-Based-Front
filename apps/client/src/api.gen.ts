@@ -58,7 +58,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  '/api/maps/{map_id}/background.png': {
+  '/api/maps/{map_id}/background.webp': {
     parameters: {
       query?: never;
       header?: never;
@@ -66,7 +66,7 @@ export interface paths {
       cookie?: never;
     };
     /** Get Background */
-    get: operations['get_background_api_maps__map_id__background_png_get'];
+    get: operations['get_background_api_maps__map_id__background_webp_get'];
     put?: never;
     post?: never;
     delete?: never;
@@ -614,7 +614,7 @@ export interface operations {
       };
     };
   };
-  get_background_api_maps__map_id__background_png_get: {
+  get_background_api_maps__map_id__background_webp_get: {
     parameters: {
       query?: never;
       header?: never;

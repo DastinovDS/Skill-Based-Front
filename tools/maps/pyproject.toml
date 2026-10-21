@@ -7,6 +7,8 @@ dependencies = [
     "gow-sim",
     "matplotlib>=3.10",
     "networkx>=3.5",
+    "numpy>=2.5.3",
+    "pillow>=12.3.0",
 ]
 
 [project.scripts]

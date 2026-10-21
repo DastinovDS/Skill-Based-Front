@@ -13,7 +13,7 @@ from gow_server.logs import JsonFormatter, request_id_var
 from gow_server.settings import Settings
 from gow_sim.maps import MapFormatError
 
-PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+WEBP_BYTES = b"RIFF" + b"\x00" * 4 + b"WEBP" + b"\x00" * 16
 
 
 def test_health(client: TestClient) -> None:
@@ -73,22 +73,24 @@ def test_get_map_returns_the_file(client: TestClient, maps_dir: Path) -> None:
 
 def test_unknown_map_is_404(client: TestClient) -> None:
     assert client.get("/api/maps/nope").status_code == 404
-    assert client.get("/api/maps/nope/background.png").status_code == 404
+    assert client.get("/api/maps/nope/background.webp").status_code == 404
 
 
 def test_map_without_background_is_404(client: TestClient) -> None:
-    assert client.get("/api/maps/line3/background.png").status_code == 404
+    assert client.get("/api/maps/line3/background.webp").status_code == 404
 
 
-def test_background_png(maps_dir: Path, settings: Settings) -> None:
-    (maps_dir / "line3.bg.png").write_bytes(PNG_BYTES)
+def test_background_webp(maps_dir: Path, settings: Settings) -> None:
+    (maps_dir / "line3.bg.webp").write_bytes(WEBP_BYTES)
     with TestClient(create_app(settings)) as client:
         listed = {m["id"]: m for m in client.get("/api/maps").json()}
-        assert listed["line3"]["background_url"] == "/api/maps/line3/background.png"
-        response = client.get("/api/maps/line3/background.png")
+        assert listed["line3"]["background_url"] == "/api/maps/line3/background.webp"
+        response = client.get("/api/maps/line3/background.webp")
+        # The old PNG address is gone (#344).
+        assert client.get("/api/maps/line3/background.png").status_code == 404
     assert response.status_code == 200
-    assert response.headers["content-type"] == "image/png"
-    assert response.content == PNG_BYTES
+    assert response.headers["content-type"] == "image/webp"
+    assert response.content == WEBP_BYTES
 
 
 def test_file_name_must_match_map_id(maps_dir: Path, settings: Settings) -> None:

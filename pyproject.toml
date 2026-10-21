@@ -95,12 +95,13 @@ type = "forbidden"
 source_modules = ["gow_sim"]
 forbidden_modules = ["gow_protocol", "gow_server", "gow_bots", "gow_maps"]
 
-# gow_sim uses only the standard library (AGENTS.md, section 2); map tools may use networkx.
+# gow_sim uses only the standard library (AGENTS.md, section 2); map tools may use networkx,
+# matplotlib, numpy and Pillow (the background baker, #344).
 [[tool.importlinter.contracts]]
 name = "gow_sim does not import the map tools' third-party packages"
 type = "forbidden"
 source_modules = ["gow_sim"]
-forbidden_modules = ["networkx", "matplotlib"]
+forbidden_modules = ["networkx", "matplotlib", "numpy", "PIL"]
 
 [[tool.importlinter.contracts]]
 name = "gow_protocol does not import gow_server or gow_bots"
