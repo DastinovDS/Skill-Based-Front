@@ -1373,7 +1373,7 @@
             const last = f.sim.steps.length ? f.sim.steps[f.sim.steps.length - 1].rt * T() : 0;
             const tick = Math.round(T() * 10);
             parts.push(
-              `<b>Темп ${st.tempo.replace('.', ',')} с</b>${tick === 10 ? ' (сейчас)' : ''}: <code>round_ticks = ${tick}</code>; бой «пример ${f.id}» идёт ${last.toFixed(1).replace('.', ',')} с (${f.sim.rounds} раунд.).`,
+              `<b>Темп ${st.tempo.replace('.', ',')} с</b>${tick === 10 ? ' (сейчас)' : ''}: <code>round_ticks = ${tick}</code>; бой «пример ${f.id}» идёт ${last.toFixed(1).replace('.', ',')} с (раундов: ${f.sim.rounds}).`,
             );
           }
           parts.push(
@@ -1523,7 +1523,7 @@
           f.sim.steps.forEach((s, i) => {
             html += `<tr class="${i === nowIdx ? 'now' : ''}"><td>${(s.rt * Tt).toFixed(2)} с</td><td>${s.round}</td><td>${phaseName[s.phase]}</td><td>${cell('o', s)}</td><td>${cell('e', s)}</td><td>${outcome(s)}</td><td>${s.after.o.u} / ${s.after.o.c}</td><td>${s.after.e.u} / ${s.after.e.c}</td></tr>`;
           });
-          html += `</tbody><tfoot><tr><td colspan="8">Итог: ${f.sim.captured ? 'узел взят' : 'узел держится, атака отскакивает'}; раундов ${f.sim.rounds}, длительность ${(f.sim.rounds * Tt).toFixed(1)} с.</td></tr></tfoot>`;
+          html += `</tbody><tfoot><tr><td colspan="8">Итог: ${f.sim.captured ? 'узел взят' : 'узел держится, атака отскакивает'}; раундов ${f.sim.rounds}, длительность ${(f.sim.steps.length ? f.sim.steps[f.sim.steps.length - 1].rt * Tt : 0).toFixed(1)} с.</td></tr></tfoot>`;
           logEl.innerHTML = html;
         }
 
