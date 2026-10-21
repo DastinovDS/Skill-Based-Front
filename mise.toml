@@ -103,6 +103,27 @@ run = 'uv run pytest -n auto -m "not perf and not slow" -q --tb=short'
 description = "Vitest of the client"
 run = "pnpm --silent -C apps/client test --reporter=dot"
 
+[tasks."visual:browser"]
+description = "Install the Chromium of Playwright for the client's screenshots (once, quick when present)"
+depends = ["setup:client"]
+run = "pnpm --silent -C apps/client exec playwright install chromium"
+
+[tasks."test:visual"]
+description = "Screenshot tests of the dev scenes against the references, as job visual (not a required check; refresh: apps/client/visual/README.md)"
+depends = ["visual:browser"]
+run = "pnpm --silent -C apps/client test:visual"
+
+[tasks.shots]
+description = "PNG of every dev scene into .shots/<label>/ (arg: label, default current; no comparison, look at them with Read). POSIX shell"
+usage = 'arg "[label]" default="current"'
+depends = ["visual:browser"]
+run = "SHOTS_LABEL={{usage.label}} pnpm --silent -C apps/client shots"
+
+[tasks."shots:publish"]
+description = "Put the PNGs of .shots/ on the branch shots/<N> of origin and print markdown for the PR description (arg: issue or PR number). Needs bash"
+usage = 'arg "<number>"'
+run = "bash scripts/publish_shots.sh {{usage.number}}"
+
 [tasks."test:all"]
 description = "All pytest tests in one go, including slow and perf (serial)"
 run = "uv run pytest -q --tb=short"

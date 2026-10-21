@@ -20,6 +20,8 @@ dist/
 # Playwright output (apps/client/visual keeps its own under node_modules)
 e2e/test-results/
 apps/client/test-results/
+# Output of `mise run shots` (PNG of the dev scenes, for looking at, never committed)
+/.shots/
 e2e/playwright-report/
 
 # Runtime data (server database, replays). Anchored to the root.

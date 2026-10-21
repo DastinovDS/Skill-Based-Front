@@ -5,6 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
 // Refresh them after an intended change with `pnpm -C apps/client test:visual:update`.
 export default defineConfig({
   testDir: 'visual',
+  // shots.spec.ts is `mise run shots` (playwright.shots.config.ts): screenshots, no assertions.
+  testIgnore: '**/shots.spec.ts',
   // Software WebGL on a CI runner draws a few frames per second: give the stability check time.
   timeout: 60_000,
   expect: { timeout: 30_000 },
