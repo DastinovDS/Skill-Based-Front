@@ -7,7 +7,6 @@
       "forest": 0,
       "plains": -1
     },
-    "planned_bonus": 2,
     "defense_bonus": 2,
     "round_ticks": 10,
     "shots_per_round": 1,

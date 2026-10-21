@@ -26,7 +26,7 @@ war = 25
 [orders]
 planned_delay_ticks = 30
 defense_delay_ticks = 30
-planned_bonus = 2
+planned_bonus_per_edge = 1
 defense_bonus = 2
 stance_cooldown_ticks = 100
 

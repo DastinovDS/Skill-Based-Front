@@ -133,7 +133,9 @@ class Bot:
         self.hops: tuple[tuple[int, ...], ...] = tuple(self._bfs(n) for n in range(count))
         """``hops[a][b]``: road hops between two nodes on the whole map (-1: unreachable)."""
         self._reach_tick = -1
-        self._reach: dict[tuple[int, int, int], list[int]] = {}
+        self._reach: dict[tuple[int, int, int], tuple[dict[int, int], list[int]]] = {}
+        """By ``(start, radius, size)``: hops to each destination, the destinations in
+        ``node_key`` order."""
         self._left: dict[int, int] = {}
         """Own group id to the tick it was ordered out of a fight: no second withdrawal."""
 
@@ -171,6 +173,17 @@ class Bot:
         are neither passed nor reached (the stack limit, DEC-20, D); ``0``: no limit. In
         ``node_key`` order.
         """
+        return self._search(view, start, radius, size)[1]
+
+    def path_edges(self, view: PlayerView, start: int, dest: int, size: int = 0) -> int:
+        """Edges of the shortest path ``reachable`` finds from ``start`` to ``dest``; ``0``: no
+        path. An estimate of the edges of the ``Move`` path (the simulation takes the fastest one,
+        DEC-20), which sets the planned bonus (DEC-29)."""
+        return self._search(view, start, len(self.map.nodes), size)[0].get(dest, 0)
+
+    def _search(
+        self, view: PlayerView, start: int, radius: int, size: int
+    ) -> tuple[dict[int, int], list[int]]:
         if self._reach_tick != view.tick:
             self._reach_tick, self._reach = view.tick, {}
         cached = self._reach.get((start, radius, size))
@@ -192,7 +205,7 @@ class Bot:
                     dist[other] = dist[node] + 1
                     queue.append(other)
         del dist[start]
-        found = sorted(dist, key=self.key)
+        found = (dist, sorted(dist, key=self.key))
         self._reach[(start, radius, size)] = found
         return found
 

@@ -207,7 +207,7 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
         "forest": mod.forest,
         "mountains": mod.mountains,
     }
-    assert public.combat.planned_bonus == rules.orders.planned_bonus
+    assert public.combat.planned_bonus_per_edge == rules.orders.planned_bonus_per_edge
     assert public.combat.defense_bonus == rules.orders.defense_bonus
     assert public.supply.model_dump() == {  # DEC-28, items 2 and 3: markers, the slider
         "rear_min_max": rules.supply.rear_min_max,
@@ -218,10 +218,12 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
 
 
 def test_ruleset_public_has_the_combat_vector_parameter_names() -> None:
-    """CLI-08 feeds ``combat`` and the vectors' ``params`` to the same estimate function."""
+    """The vectors' ``params`` use the names of ``combat``; the plan bonus is not among them since
+    DEC-29 (it depends on the path, every vector gives its amount)."""
     params = _load(FIXTURES_DIR.parent / "vectors" / "combat.json")["params"]
     assert isinstance(params, dict)
-    assert set(cast(dict[str, object], params)) == set(CombatPublic.model_fields)
+    names = set(cast(dict[str, object], params))
+    assert names | {"planned_bonus_per_edge"} == set(CombatPublic.model_fields)
 
 
 def _schema_types(node: object) -> set[str]:

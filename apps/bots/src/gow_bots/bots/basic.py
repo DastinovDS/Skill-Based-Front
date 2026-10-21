@@ -109,7 +109,8 @@ class RandomLegalBot(Bot):
             terrain = self.map.nodes[dest].terrain
             need = shots_to_take(self.rules, terrain, *enemy, self.defended(view, dest))
             planned = Move(g.id, dest, planned=True)
-            if prefer_planned(self.rules, g.charged, need) and self.cost(planned) <= budget:
+            edges = self.path_edges(view, node_of(g), dest, g.units)
+            if prefer_planned(self.rules, g.charged, need, edges) and self.cost(planned) <= budget:
                 return planned
         return Move(g.id, dest)
 

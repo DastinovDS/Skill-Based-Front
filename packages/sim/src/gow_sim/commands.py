@@ -775,7 +775,9 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             if group.fight is not None:  # a defender withdraws after the next round (DEC-24)
                 _set_leaving(state, group, leaving=True)
             if planned:  # public intent now, the bonus from the departure on (DEC-08)
-                group.bonus = rules.orders.planned_bonus
+                # DEC-29: per edge of the path chosen now; ``movement`` caps it by the charged
+                # units in the tick the group departs.
+                group.bonus = (len(ok.path) - 1) * rules.orders.planned_bonus_per_edge
                 group.bonus_tick = tick + delay
                 set_intent(state, group, IntentKind.PLANNED_MOVE, ok.path[-1])
             else:

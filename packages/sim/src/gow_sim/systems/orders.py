@@ -3,8 +3,10 @@
 DEC-08, numbers from ``Ruleset.orders``:
 
 - A planned ``Move`` costs ``orders.cost.planned_move``; the group waits in its node
-  ``orders.planned_delay_ticks`` (``Order.depart_tick``), then leaves with a bonus of
-  ``orders.planned_bonus`` virtual shots for its first fight.
+  ``orders.planned_delay_ticks`` (``Order.depart_tick``), then leaves with a bonus of virtual
+  shots for its first fight: ``orders.planned_bonus_per_edge`` per edge of the path chosen at the
+  command, at most the charged units of the group in the tick it departs (DEC-29; the command
+  sets the uncapped bonus, ``movement`` caps it when the group leaves).
 - ``SetMode(DEFENSE)`` costs ``orders.cost.defense`` (again on every switch); its bonus of
   ``orders.defense_bonus`` is active ``orders.defense_delay_ticks`` later and counts only for a
   node defender with a firing charge (DEC-07, rule 1). «Защита» holds while the group stands; a

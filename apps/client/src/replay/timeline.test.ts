@@ -70,6 +70,9 @@ describe('buildTimeline', () => {
         groups: ['3', '4'],
         enemy_units: 0,
         enemy_charged: 0,
+        shots: [0, 0],
+        losses: [0, 0],
+        last_round: null,
       },
     ]);
     expect(timeline.snapshots[0]?.view.fights).toEqual([]);

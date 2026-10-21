@@ -1,7 +1,9 @@
 """Planned orders, «Защита», cancel and public intents (SIM-10, #26; DEC-08; DEC-04).
 
 Expected values come from DEC-08 (mechanics.md, section 5): a planned move costs 2 CP instead of
-1, waits 30 ticks in its node and gives +2 for the first fight; «Защита» costs 2 CP, is public at
+1, waits 30 ticks in its node and gives +2 for the first fight (the pinned ruleset has 2 per edge
+and every planned order here goes to a neighbour with 2 charged units, so DEC-29 gives +2 too;
+the distance rule itself: ``test_dec29.py``); «Защита» costs 2 CP, is public at
 once, its +2 is active after 30 ticks and spent in the first fight; a move drops it for free;
 cancelling is free (DEC-20 replaced the 1 CP of DEC-08). Fights follow the DEC-24 table (rows
 named below; a fight lasts its rounds, 10 ticks each, from the contact), forest everywhere.
@@ -133,7 +135,8 @@ def _public(state: GameState) -> list[tuple[object, ...]]:
 def test_dec08_numbers_are_the_pinned_ruleset() -> None:
     o = RULES.orders
     assert (o.planned_delay_ticks, o.defense_delay_ticks) == (30, 30)
-    assert (o.planned_bonus, o.defense_bonus) == (2, 2)
+    # 2 per edge: an order to the neighbour gets +2, as the DEC-07 and DEC-24 rows assume (DEC-29).
+    assert (o.planned_bonus_per_edge, o.defense_bonus) == (2, 2)
     assert (o.cost.move, o.cost.planned_move, o.cost.defense, o.cost.cancel) == (100, 200, 200, 0)
 
 

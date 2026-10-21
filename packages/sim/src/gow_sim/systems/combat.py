@@ -37,8 +37,11 @@ the terrain of the node count only for a defender that has a charged unit at con
 «Защита» only for groups standing there from the start. Mountains add virtual shots, plains
 silence real ones in every round (``terrain.defense_mod``).
 
-Events: ``fight_started``, ``fight_round``, ``fight_ended`` (both players), ``fight_group`` (the
-owner of the group: at the end of the fight and when the group withdraws), ``node_captured``.
+Events: ``fight_started``, ``fight_round``, ``fight_ended`` (both players, every field: the
+shots of both sides with the virtual ones apart, the spent charges and the losses; DEC-24 items
+I1, I2 as revised with DEC-29), ``fight_group`` (the owner of the group: at the end of the fight
+and when the group withdraws), ``node_captured``. The latest round stays in ``Fight.last_round``
+for the view; the virtual shots still left (``Fight.virtual``) stay hidden.
 """
 
 from collections.abc import Mapping
@@ -53,6 +56,7 @@ from gow_sim.state import (
     Event,
     Fight,
     FightMember,
+    FightRound,
     GameState,
     Group,
     OnEdge,
@@ -593,6 +597,9 @@ def _round(state: GameState, rules: Ruleset, fight: Fight) -> Event:
     fight.virtual = (sides[0].virtual, sides[1].virtual)
     fight.shots = (fight.shots[0] + result.shots[0], fight.shots[1] + result.shots[1])
     fight.losses = (fight.losses[0] + result.losses[0], fight.losses[1] + result.losses[1])
+    fight.last_round = FightRound(
+        state.tick, result.shots, result.virtual, result.spent, result.losses
+    )
     return event(
         state.tick,
         "fight_round",

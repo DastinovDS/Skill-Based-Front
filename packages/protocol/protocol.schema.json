@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 18,
+    "PROTOCOL_VERSION": 19,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -309,9 +309,10 @@
         "terrain_defense_mod": {
           "$ref": "#/$defs/TerrainDefensePublic"
         },
-        "planned_bonus": {
+        "planned_bonus_per_edge": {
+          "description": "Virtual shots of a planned order per edge of its path, at most the charged units of the\ngroup when it departs (DEC-29).",
           "maximum": 2147483647,
-          "minimum": -2147483647,
+          "minimum": 0,
           "type": "integer"
         },
         "defense_bonus": {
@@ -339,7 +340,7 @@
       },
       "required": [
         "terrain_defense_mod",
-        "planned_bonus",
+        "planned_bonus_per_edge",
         "defense_bonus",
         "round_ticks",
         "shots_per_round",
@@ -796,9 +797,69 @@
       "title": "EventMsg",
       "type": "object"
     },
+    "FightRoundView": {
+      "additionalProperties": false,
+      "description": "The latest round of a fight (DEC-24, item I1 as revised with DEC-29), both players, index\n= player id: ``shots`` made (cancelling and killing ones), ``virtual`` among them (bonuses,\nterrain), ``spent`` charges that left the player's units, ``losses`` in units. The same\nnumbers as the ``fight_round`` event of that ``tick``.",
+      "properties": {
+        "tick": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shots": {
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "virtual": {
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "spent": {
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "losses": {
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "tick",
+        "shots",
+        "virtual",
+        "spent",
+        "losses"
+      ],
+      "title": "FightRoundView",
+      "type": "object"
+    },
     "FightView": {
       "additionalProperties": false,
-      "description": "A fight going on (DEC-24, item I1): a node, or an edge with the meeting ``point``.\n\n``point``: twice the meeting position in thousandths from the end ``a`` of the edge\n(0..2000); the mark sits at ``point / 2000`` of the edge from ``a`` (item C3). ``groups``:\nthe own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this\nfight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.",
+      "description": "A fight going on (DEC-24, item I1): a node, or an edge with the meeting ``point``.\n\n``point``: twice the meeting position in thousandths from the end ``a`` of the edge\n(0..2000); the mark sits at ``point / 2000`` of the edge from ``a`` (item C3). ``groups``:\nthe own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this\nfight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.\n``shots`` and ``losses``: totals of the fight so far by player; ``last_round``: the latest\nround of both players, ``None`` before the first one. The virtual shots still left are not\nsent (DEC-24, item I1: the rounds are public, the stock is not).",
       "properties": {
         "id": {
           "pattern": "^[A-Za-z0-9_-]{1,32}$",
@@ -877,6 +938,36 @@
           "maximum": 2147483647,
           "minimum": 0,
           "type": "integer"
+        },
+        "shots": {
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "losses": {
+          "items": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "last_round": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FightRoundView"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -889,7 +980,10 @@
         "next_round_tick",
         "groups",
         "enemy_units",
-        "enemy_charged"
+        "enemy_charged",
+        "shots",
+        "losses",
+        "last_round"
       ],
       "title": "FightView",
       "type": "object"

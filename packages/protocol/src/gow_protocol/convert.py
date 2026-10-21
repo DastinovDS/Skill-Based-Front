@@ -29,8 +29,8 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
 
 - public: ``node_captured`` (ownership is public), ``vp_awarded`` (VP are public), ``forfeit``;
 - ``fight_started``, ``fight_round``, ``fight_ended`` (DEC-24, item I2): to both players, they
-  both fight in it; the enemy's ``shots``, ``virtual`` and ``spent`` (its bonuses and charges)
-  are removed, the place, the point and the losses of both sides stay;
+  both fight in it, with every field: the rounds of both sides are public (shots with the virtual
+  ones apart, spent charges, losses; I1 and I2 as revised with DEC-29);
 - everything else only to the player of the event (``player``, for ``warehouse_lost`` ``owner``),
   enemy ones are dropped. ``fight_group`` goes only to the owner of the group; the build
   events ``build_started``, ``road_upgraded``, ``barracks_built``, ``warehouse_upgraded`` and
@@ -66,6 +66,7 @@ from gow_protocol.view import (
     AtNodeLoc,
     EdgeBuild,
     EdgeView,
+    FightRoundView,
     FightView,
     GroupView,
     IntentView,
@@ -145,11 +146,7 @@ ENTITY_KEYS: Final = frozenset({"group", "new_group", "packet", "fight"})
 """Keys of ``Event.data`` that hold internal entity ids."""
 
 FIGHT_KINDS: Final = frozenset({"fight_started", "fight_round", "fight_ended"})
-"""Events of a fight (DEC-24): both players get them, without the enemy's hidden fields."""
-
-_FIGHT_HIDDEN: Final = ("shots", "virtual", "spent")
-"""Per-player fields of the fight events the other player does not get (``shots_1`` for player
-0): its shots and virtual shots would show its bonuses, ``spent`` its charges."""
+"""Events of a fight (DEC-24): both players get them whole (item I2 as revised with DEC-29)."""
 
 
 # Ids -----------------------------------------------------------------------------------------
@@ -275,6 +272,17 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 groups=tuple(opaque_to_wire(g) for g in f.groups),
                 enemy_units=f.enemy_units,
                 enemy_charged=f.enemy_charged,
+                shots=f.shots,
+                losses=f.losses,
+                last_round=None
+                if f.last_round is None
+                else FightRoundView(
+                    tick=f.last_round.tick,
+                    shots=f.last_round.shots,
+                    virtual=f.last_round.virtual,
+                    spent=f.last_round.spent,
+                    losses=f.last_round.losses,
+                ),
             )
             for f in view.fights
         ),
@@ -411,9 +419,24 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "groups": [opaque_to_wire(g) for g in f.groups],
                 "enemy_units": f.enemy_units,
                 "enemy_charged": f.enemy_charged,
+                "shots": list(f.shots),
+                "losses": list(f.losses),
+                "last_round": _round_data(f.last_round),
             }
             for f in view.fights
         ],
+    }
+
+
+def _round_data(r: sv.FightRound | None) -> dict[str, object] | None:
+    if r is None:
+        return None
+    return {
+        "tick": r.tick,
+        "shots": list(r.shots),
+        "virtual": list(r.virtual),
+        "spent": list(r.spent),
+        "losses": list(r.losses),
     }
 
 
@@ -525,15 +548,11 @@ def events_msgs(events: Iterable[Event], player: int, match_key: bytes) -> list[
 def event_for_player(e: Event, player: int, match_key: bytes) -> EventMsg | None:
     """The ``event`` message of ``e`` for ``player``, or ``None`` if the player must not see it."""
     data = dict(e.data)
-    if e.kind in FIGHT_KINDS:
-        other = 1 - player
-        for name in _FIGHT_HIDDEN:
-            data.pop(f"{name}_{other}", None)
-    elif e.kind in PRIVATE_KINDS:
+    if e.kind in PRIVATE_KINDS:
         owner = data["owner"] if e.kind == "warehouse_lost" else data["player"]
         if owner != player:
             return None
-    elif e.kind not in PUBLIC_KINDS:
+    elif e.kind not in PUBLIC_KINDS and e.kind not in FIGHT_KINDS:
         return None
     return EventMsg(tick=e.tick, kind=e.kind, data=_wire_data(data, player, match_key))
 

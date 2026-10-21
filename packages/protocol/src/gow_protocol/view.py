@@ -14,8 +14,9 @@ what a view must not contain (AGENTS.md, section 4.4):
   groups are there and their modes, no numbers;
 - ``FOG``: only the last sighting from the fog memory;
 - fights going on (DEC-24, item I1): every fight has groups of both players, so both see it with
-  the exact units and charged of the enemy in it; the enemy's virtual shots and group ids are not
-  in the view.
+  the exact units and charged of the enemy in it and the rounds of both sides (shots with the
+  virtual ones apart, spent charges, losses; I1 as revised with DEC-29); the virtual shots still
+  left and the enemy's group ids are not in the view.
 
 Deliberate choices of the wire format:
 
@@ -282,6 +283,25 @@ class IntentView(WireModel):
     created_tick: Tick
 
 
+class FightRoundView(WireModel):
+    """The latest round of a fight (DEC-24, item I1 as revised with DEC-29), both players, index
+    = player id: ``shots`` made (cancelling and killing ones), ``virtual`` among them (bonuses,
+    terrain), ``spent`` charges that left the player's units, ``losses`` in units. The same
+    numbers as the ``fight_round`` event of that ``tick``."""
+
+    tick: Tick
+    shots: tuple[NonNegInt, NonNegInt]
+    virtual: tuple[NonNegInt, NonNegInt]
+    spent: tuple[NonNegInt, NonNegInt]
+    losses: tuple[NonNegInt, NonNegInt]
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if any(v > s for v, s in zip(self.virtual, self.shots, strict=True)):
+            raise ValueError("virtual shots must not exceed shots")
+        return self
+
+
 class FightView(WireModel):
     """A fight going on (DEC-24, item I1): a node, or an edge with the meeting ``point``.
 
@@ -289,6 +309,9 @@ class FightView(WireModel):
     (0..2000); the mark sits at ``point / 2000`` of the edge from ``a`` (item C3). ``groups``:
     the own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this
     fight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.
+    ``shots`` and ``losses``: totals of the fight so far by player; ``last_round``: the latest
+    round of both players, ``None`` before the first one. The virtual shots still left are not
+    sent (DEC-24, item I1: the rounds are public, the stock is not).
     """
 
     id: OpaqueId
@@ -302,6 +325,9 @@ class FightView(WireModel):
     groups: tuple[OpaqueId, ...]
     enemy_units: NonNegInt
     enemy_charged: NonNegInt
+    shots: tuple[NonNegInt, NonNegInt]
+    losses: tuple[NonNegInt, NonNegInt]
+    last_round: FightRoundView | None
 
     @model_validator(mode="after")
     def _check(self) -> Self:

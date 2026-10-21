@@ -22,7 +22,9 @@ PRO-01), which PRO-03 converts it into:
   are there and their modes, no numbers;
 - ``FOG``: only the last sighting from ``GameState.vision_memory``;
 - fights going on (DEC-24, item I1): both players fight in each, so both see it with the exact
-  units and charged of the enemy in it; the enemy's virtual shots and group ids stay hidden.
+  units and charged of the enemy in it, the shots and losses of both sides so far and the latest
+  round of both sides (shots with the virtual ones apart, spent charges, losses; I1 as revised
+  with DEC-29); the enemy's virtual shots still left and its group ids stay hidden.
 
 What a view never has: enemy groups as entities (only the per-place ``Sighting``), road levels
 of fogged edges newer than the last sighting, the barracks, warehouse level and city builds of
@@ -55,6 +57,7 @@ from gow_sim.state import (
     Build,
     BuildKind,
     Detail,
+    FightRound,
     GameState,
     IntentKind,
     Location,
@@ -83,6 +86,7 @@ __all__ = [
     "BuildingView",
     "Detail",
     "EdgeView",
+    "FightRound",
     "FightView",
     "GroupView",
     "IntentKind",
@@ -271,7 +275,9 @@ class IntentView:
 class FightView:
     """A fight going on (DEC-24, item I1). A fight always has groups of both players, so both see
     it, with the exact counters of the enemy in it, also on an edge where own groups give no
-    vision (#112). The enemy's virtual shots (bonuses, terrain) and group ids are hidden."""
+    vision (#112). The rounds are public (DEC-24, item I1 as revised with DEC-29): ``shots`` and
+    ``losses`` of both players so far, ``last_round`` of both players with the virtual shots
+    apart. The virtual shots still left (bonuses, terrain) and the enemy's group ids are hidden."""
 
     id: int
     """Opaque id (``fight`` in the fight events)."""
@@ -288,6 +294,12 @@ class FightView:
     """Opaque ids of the own groups in the fight, sorted."""
     enemy_units: int
     enemy_charged: int
+    shots: tuple[int, int]
+    """Shots of the fight so far by player."""
+    losses: tuple[int, int]
+    """Units lost in the fight so far by player."""
+    last_round: FightRound | None
+    """The latest round, by player; ``None`` before the first round."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -539,6 +551,9 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 groups=tuple(sorted(mine)),
                 enemy_units=units,
                 enemy_charged=charged,
+                shots=f.shots,
+                losses=f.losses,
+                last_round=f.last_round,
             )
         )
 
@@ -690,6 +705,17 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "groups": list(f.groups),
                 "enemy_units": f.enemy_units,
                 "enemy_charged": f.enemy_charged,
+                "shots": list(f.shots),
+                "losses": list(f.losses),
+                "last_round": None
+                if f.last_round is None
+                else {
+                    "tick": f.last_round.tick,
+                    "shots": list(f.last_round.shots),
+                    "virtual": list(f.last_round.virtual),
+                    "spent": list(f.last_round.spent),
+                    "losses": list(f.last_round.losses),
+                },
             }
             for f in view.fights
         ],
