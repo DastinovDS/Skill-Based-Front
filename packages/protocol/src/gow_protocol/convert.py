@@ -4,9 +4,10 @@ Server -> client:
 
 - ``snapshot_msg``: ``PlayerView`` (``gow_sim.view.project()``) -> ``snapshot``. Opaque ids are
   63-bit integers in the simulation and decimal strings on the wire. Some fields of the view stay
-  on the server, the client does not need them: ``order.depart_tick``, ``location.back`` (a
-  bouncing group's ``progress`` falls, so interpolation works without it) and ``seen.width``
-  (the known level of an edge is its ``width``, DEC-17);
+  on the server, the client does not need them: ``order.depart_tick`` and ``location.back`` (a
+  bouncing group's ``progress`` falls, so interpolation works without it). Enemy figures
+  (``EdgeView.enemy_groups``, DEC-33) get wire ids like own entities; a range of units is an
+  object ``{low, high}``;
 - ``snapshot_frame``: the same ``snapshot`` encoded straight from the ``PlayerView``, without the
   models and their validation (#155). The server sends these every tick; ``snapshot_msg``, built
   through the validating models, is their specification: tests over real matches require the two
@@ -66,9 +67,11 @@ from gow_protocol.view import (
     AtNodeLoc,
     EdgeBuild,
     EdgeView,
+    EnemyGroup,
     FightRoundView,
     FightView,
     GroupView,
+    HalfView,
     IntentView,
     Location,
     NodeBuilding,
@@ -78,6 +81,7 @@ from gow_protocol.view import (
     PacketView,
     Seen,
     SelfView,
+    UnitsRange,
     UpgradeGain,
     View,
 )
@@ -217,8 +221,21 @@ def view_to_wire(view: sv.PlayerView) -> View:
                     unit_speed_pct=e.upgrade_gain.unit_speed_pct,
                     amount=e.upgrade_gain.amount,
                 ),
+                halves=(_half(e.halves[0]), _half(e.halves[1])),
                 build=None if e.build is None else EdgeBuild(done_tick=e.build.done_tick),
-                seen=_seen(e.seen),
+                enemy_groups=tuple(
+                    EnemyGroup(
+                        id=opaque_to_wire(f.id),
+                        pos=f.pos,
+                        toward_b=f.toward_b,
+                        detail=f.detail,
+                        mode=f.mode,
+                        units=f.units,
+                        charged=f.charged,
+                        units_range=_range(f.units_range),
+                    )
+                    for f in e.enemy_groups
+                ),
             )
             for e in view.edges
         ),
@@ -307,7 +324,16 @@ def _seen(s: sv.Sighting | None) -> Seen | None:
         enemy_modes=s.enemy_modes,
         enemy_units=s.enemy_units,
         enemy_charged=s.enemy_charged,
+        enemy_range=_range(s.enemy_range),
     )
+
+
+def _half(h: sv.HalfView) -> HalfView:
+    return HalfView(detail=h.detail, seen=_seen(h.seen))
+
+
+def _range(r: tuple[int, int | None] | None) -> UnitsRange | None:
+    return None if r is None else UnitsRange(low=r[0], high=r[1])
 
 
 def _location(loc: sv.Location) -> Location:
@@ -373,8 +399,21 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                     "unit_speed_pct": e.upgrade_gain.unit_speed_pct,
                     "amount": e.upgrade_gain.amount,
                 },
-                "seen": _seen_data(e.seen),
+                "halves": [{"detail": h.detail, "seen": _seen_data(h.seen)} for h in e.halves],
                 "build": None if e.build is None else {"done_tick": e.build.done_tick},
+                "enemy_groups": [
+                    {
+                        "id": opaque_to_wire(f.id),
+                        "pos": f.pos,
+                        "toward_b": f.toward_b,
+                        "detail": f.detail,
+                        "mode": f.mode,
+                        "units": f.units,
+                        "charged": f.charged,
+                        "units_range": _range_data(f.units_range),
+                    }
+                    for f in e.enemy_groups
+                ],
             }
             for e in view.edges
         ],
@@ -467,7 +506,12 @@ def _seen_data(s: sv.Sighting | None) -> dict[str, object] | None:
         "enemy_modes": s.enemy_modes,
         "enemy_units": s.enemy_units,
         "enemy_charged": s.enemy_charged,
+        "enemy_range": _range_data(s.enemy_range),
     }
+
+
+def _range_data(r: tuple[int, int | None] | None) -> dict[str, object] | None:
+    return None if r is None else {"low": r[0], "high": r[1]}
 
 
 def _location_data(loc: sv.Location) -> dict[str, object]:

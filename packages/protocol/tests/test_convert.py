@@ -155,9 +155,19 @@ def _expected_wire_view(view: PlayerView) -> dict[str, Any]:
                 del group["order"][name]
         for name in DROPPED_LOCATION_KEYS:
             group["location"].pop(name, None)
-    for place in (*data["nodes"], *data["edges"]):
-        if place["seen"] is not None:
-            del place["seen"]["width"]  # the edge's ``width`` carries it (DEC-17)
+
+    def wire_range(span: list[int | None] | None) -> dict[str, int | None] | None:
+        return None if span is None else {"low": span[0], "high": span[1]}
+
+    seen = [n["seen"] for n in data["nodes"]]
+    seen += [h["seen"] for e in data["edges"] for h in e["halves"]]
+    for s in seen:
+        if s is not None:
+            s["enemy_range"] = wire_range(s["enemy_range"])
+    for edge in data["edges"]:
+        for figure in edge["enemy_groups"]:
+            figure["id"] = str(figure["id"])
+            figure["units_range"] = wire_range(figure["units_range"])
     return data
 
 
@@ -287,7 +297,7 @@ class _FrameChecker:
 
 
 def _features(view: View) -> set[str]:
-    places = [*view.nodes, *view.edges]
+    places = [*view.nodes, *(h for e in view.edges for h in e.halves)]
     found = {
         "on_edge": any(isinstance(g.location, OnEdgeLoc) for g in view.groups),
         "planned": any(g.order is not None and g.order.planned for g in view.groups),
@@ -299,6 +309,8 @@ def _features(view: View) -> set[str]:
         "enemy_presence": any(
             p.seen is not None and p.seen.enemy_modes and p.seen.enemy_units is None for p in places
         ),
+        "enemy_range": any(p.seen is not None and p.seen.enemy_range for p in places),
+        "enemy_figures": any(e.enemy_groups for e in view.edges),
         "fog_memory": any(p.detail is Detail.FOG and p.seen is not None for p in places),
         "road_level": any(e.width > 1 for e in view.edges),
         "attrition_in": any(n.attrition_in is not None for n in view.nodes),
@@ -325,6 +337,8 @@ def test_snapshot_frames_of_a_bot_match() -> None:
         "packets",
         "upgrade_gain",
         "enemy_presence",
+        "enemy_range",
+        "enemy_figures",
         "fog_memory",
     }
 

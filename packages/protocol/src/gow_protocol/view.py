@@ -1,18 +1,23 @@
 """The player's view on the wire: the ``view`` of a ``snapshot`` message.
 
 It carries a ``PlayerView`` (``gow_sim.view.project()``, SIM-14 #30) and nothing else; the
-conversion is PRO-03 (#46). The shape follows DEC-04 (mechanics.md, section 10) and the list of
-what a view must not contain (AGENTS.md, section 4.4):
+conversion is PRO-03 (#46). The shape follows DEC-04, DEC-21 and DEC-33 (mechanics.md, section 10)
+and the list of what a view must not contain (AGENTS.md, section 4.4):
 
 - public to everyone: ownership and capacity (DEC-22) of every node, road levels and types
   (DEC-17: last seen in fog), VP of both players,
   intents of planned orders and «Защита» (origin, target, kind; no group id, no size);
 - road builds of cities (DEC-16): own ones always, with ``done_tick``; an enemy one without
   ``done_tick`` and only while its edge is not in fog (DEC-17, item 5);
-- ``EXACT`` places (own nodes, nodes where own groups stand): everything with numbers;
-- ``PRESENCE`` places (neighbours of ``EXACT`` nodes and edges touching them): whether enemy
-  groups are there and their modes, no numbers;
-- ``FOG``: only the last sighting from the fog memory;
+- sources of vision (own nodes, nodes where own groups stand): everything with numbers, the
+  warehouse included;
+- neighbours of sources by the terrain table (DEC-21, item 2) and the halves of edges by the
+  level of their node: ``exact`` the enemy totals, ``range`` the range of the enemy units,
+  ``presence`` whether enemy groups are there; the modes on every level; never the warehouse;
+- enemy groups on the halves of edges not in fog, each as a figure (``EdgeView.enemy_groups``,
+  DEC-33): position, direction, mode and the numbers of its half's level, with an opaque id that
+  is new each time the group comes out of the fog; a group in a fight is shown by the fight;
+- ``FOG``: only the last sighting from the fog memory (no positions);
 - fights going on (DEC-24, item I1): every fight has groups of both players, so both see it with
   the exact units and charged of the enemy in it and the rounds of both sides (shots with the
   virtual ones apart, spent charges, losses; I1 as revised with DEC-29); the virtual shots still
@@ -21,10 +26,10 @@ what a view must not contain (AGENTS.md, section 4.4):
 Deliberate choices of the wire format:
 
 - ``groups`` and ``packets`` are **own** entities only. What the player knows about enemy groups
-  is the per-place ``Seen`` summary (modes, and totals only where ``EXACT``), the same shape as the
-  fog memory ``gow_sim.state.Sighting``. So the view has no enemy entity ids at all, which could
-  otherwise track enemy groups through the fog or reveal their number. Enemy packets are never
-  visible (DEC-10 default, #112).
+  in nodes is the per-place ``Seen`` summary (modes, totals only where ``exact``, a range where
+  ``range``), the same shape as the fog memory ``gow_sim.state.Sighting``; on edges the figures of
+  ``EdgeView.enemy_groups``, whose ids are keyed by the sighting, not the group, so they cannot
+  track a group through the fog. Enemy packets are never visible (DEC-10 default, #112).
 - Own-only data (``me``: CP, stance, front markers and rear minimum of DEC-28; ``upgrade_gain``
   of own edges; orders of own groups) has no enemy counterpart in the view.
 """
@@ -50,12 +55,28 @@ from gow_sim.ruleset import Stance
 from gow_sim.state import BuildKind, Detail, IntentKind, Mode
 
 
+class UnitsRange(WireModel):
+    """A range of units (DEC-21, item 4; ``vision.range_starts``): ``low..high``, ``high``
+    ``null`` for the last, open range («21+»)."""
+
+    low: PosInt
+    high: PosInt | None
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.high is not None and self.high < self.low:
+            raise ValueError("high must not be below low")
+        return self
+
+
 class Seen(WireModel):
-    """What the player sees, or last saw, of one node or edge (``gow_sim.state.Sighting``).
+    """What the player sees, or last saw, of one node or half of an edge
+    (``gow_sim.state.Sighting``).
 
     ``enemy_modes``: distinct modes of the enemy groups there; empty means no enemy groups.
-    ``enemy_units`` and ``enemy_charged`` are totals, present only when ``level`` is ``EXACT``.
-    ``level`` is never ``FOG``: a place in fog is not seen, it keeps an older ``Seen``.
+    ``enemy_units`` and ``enemy_charged`` are totals, present only when ``level`` is ``exact``;
+    ``enemy_range``: the range of the total units, only when ``level`` is ``range`` and enemies
+    are there. ``level`` is never ``fog``: a place in fog is not seen, it keeps an older ``Seen``.
     """
 
     tick: Tick
@@ -63,16 +84,20 @@ class Seen(WireModel):
     enemy_modes: Annotated[tuple[Mode, ...], Field(max_length=len(Mode))]
     enemy_units: NonNegInt | None
     enemy_charged: NonNegInt | None
+    enemy_range: UnitsRange | None
 
     @model_validator(mode="after")
     def _check(self) -> Self:
         if self.level is Detail.FOG:
-            raise ValueError("level of a sighting is exact or presence, never fog")
+            raise ValueError("level of a sighting is exact, range or presence, never fog")
         if len(set(self.enemy_modes)) != len(self.enemy_modes):
             raise ValueError("enemy_modes must be distinct")
         exact = self.level is Detail.EXACT
         if exact != (self.enemy_units is not None) or exact != (self.enemy_charged is not None):
             raise ValueError("enemy_units and enemy_charged are given exactly when level is exact")
+        ranged = self.level is Detail.RANGE and bool(self.enemy_modes)
+        if ranged != (self.enemy_range is not None):
+            raise ValueError("enemy_range is given exactly on the range level with enemies")
         if (
             self.enemy_units is not None
             and self.enemy_charged is not None
@@ -105,9 +130,10 @@ class NodeView(WireModel):
     """Capacity by the node kind (DEC-22, item 1): public and exact for every node."""
     detail: Detail
     warehouse: NonNegInt | None
-    """Charges in the warehouse; only for ``EXACT`` nodes."""
+    """Charges in the warehouse; only for sources of vision (own nodes, nodes where own groups
+    stand), never for a neighbour seen by the terrain table (DEC-21, item 3)."""
     seen: Seen | None
-    """Current sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one, or ``None``."""
+    """Current sighting unless ``detail`` is ``fog``; for ``fog`` the last one, or ``None``."""
     attrition_in: PosInt | None
     """Own node only: ticks until the next unit dies of overcrowding (the garrison exceeds the
     capacity and the grace after a capture is over). ``None`` for every other node."""
@@ -150,8 +176,8 @@ class NodeView(WireModel):
             raise ValueError("barracks and warehouse only for an own city, all three together")
         if self.building is not None and self.has_barracks is None:
             raise ValueError("a building only for an own city")
-        if (self.detail is Detail.EXACT) != (self.warehouse is not None):
-            raise ValueError("warehouse is given exactly when detail is exact")
+        if self.warehouse is not None and self.detail is not Detail.EXACT:
+            raise ValueError("a warehouse only for a source of vision, seen exactly")
         _check_seen(self.detail, self.seen)
         if self.attrition_in is not None and self.grace_left is not None:
             raise ValueError("attrition_in and grace_left exclude each other")
@@ -173,25 +199,81 @@ class UpgradeGain(WireModel):
     """Gain of charges per dispatch period (``supply.amount_by_level``)."""
 
 
+class HalfView(WireModel):
+    """A half of an edge, from its node to the border point (DEC-21, item 5)."""
+
+    detail: Detail
+    """The level of the node the half belongs to (a source's half is ``exact``)."""
+    seen: Seen | None
+    """The enemy groups in the half now (those in a fight too) unless ``detail`` is ``fog``; for
+    ``fog`` the last sighting (no positions, DEC-33, detail 8), or ``None``."""
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        _check_seen(self.detail, self.seen)
+        return self
+
+
+class EnemyGroup(WireModel):
+    """An enemy group on a half of an edge not in fog (DEC-33): a figure. A group in a fight is
+    not one: the fight shows it."""
+
+    id: OpaqueId
+    """Opaque, new each time the group comes out of the fog (DEC-33, detail 5)."""
+    pos: Progress
+    """Position in thousandths of the edge from its end ``a`` (detail 1)."""
+    toward_b: bool
+    """Goes to the end ``b``, else to ``a``: the nearest node, never the target (detail 2)."""
+    detail: Detail
+    """The level of its half: ``exact``, ``range`` or ``presence``."""
+    mode: Mode
+    units: NonNegInt | None
+    """Only on ``exact``."""
+    charged: NonNegInt | None
+    """Only on ``exact``."""
+    units_range: UnitsRange | None
+    """Only on ``range``: the range of its units."""
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.detail is Detail.FOG:
+            raise ValueError("a figure is never in fog")
+        exact = self.detail is Detail.EXACT
+        if exact != (self.units is not None) or exact != (self.charged is not None):
+            raise ValueError("units and charged are given exactly when detail is exact")
+        if (self.detail is Detail.RANGE) != (self.units_range is not None):
+            raise ValueError("units_range is given exactly when detail is range")
+        if self.units is not None and self.charged is not None and self.charged > self.units:
+            raise ValueError("charged must not exceed units")
+        return self
+
+
 class EdgeView(WireModel):
     id: EdgeId
     width: Width
     """Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is
     ``fog``; in fog the last seen level, or 1 if never seen. Never above the true level."""
     detail: Detail
-    """``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges."""
+    """The road level visibility (DEC-17): ``presence`` while an end is a source of vision, else
+    ``fog``. What is seen of enemies is in ``halves`` and ``enemy_groups``."""
     upgrade_gain: UpgradeGain | None
     """Only for own internal edges that can still be upgraded."""
-    seen: Seen | None
+    halves: tuple[HalfView, HalfView]
+    """The half of the end ``a``, then the half of the end ``b`` (DEC-21, item 5)."""
     build: EdgeBuild | None
     """The road level being built here (DEC-28, item 7): an own build always, an enemy one only
     while the edge is not in fog (DEC-17, item 5)."""
+    enemy_groups: tuple[EnemyGroup, ...]
+    """Enemy figures on the halves not in fog (DEC-33)."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
-        if self.detail is Detail.EXACT:
-            raise ValueError("edge detail is presence or fog, never exact")
-        _check_seen(self.detail, self.seen)
+        if self.detail not in (Detail.PRESENCE, Detail.FOG):
+            raise ValueError("edge detail is presence or fog")
+        if self.enemy_groups and all(h.detail is Detail.FOG for h in self.halves):
+            raise ValueError("no figures on an edge with both halves in fog")
+        if len({g.id for g in self.enemy_groups}) != len(self.enemy_groups):
+            raise ValueError("ids of enemy_groups must be unique")
         return self
 
 

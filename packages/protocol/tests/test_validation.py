@@ -115,6 +115,11 @@ def _set(path: tuple[str | int, ...], key: str, value: object) -> Callable[[Json
     return change
 
 
+def _fog_halves_of_edge3(data: Json) -> None:
+    for side in (0, 1):
+        _at(data, "view", "edges", 3, "halves", side).update(detail="fog", seen=None)
+
+
 def _swap_nodes(data: Json) -> None:
     nodes = cast(list[object], _at(data, "view")["nodes"])
     nodes[0], nodes[1] = nodes[1], nodes[0]
@@ -129,6 +134,8 @@ VIEW = ("view",)
 NODE0 = ("view", "nodes", 0)
 NODE2 = ("view", "nodes", 2)
 EDGE2 = ("view", "edges", 2)
+HALF2 = ("view", "edges", 2, "halves", 0)  # the half of node 3 (presence)
+FIGURE3 = ("view", "edges", 3, "enemy_groups", 0)  # a figure on presence
 GROUP0 = ("view", "groups", 0)
 
 BAD_SERVER_FRAMES: dict[str, str | bytes] = {
@@ -167,15 +174,38 @@ BAD_SERVER_FRAMES: dict[str, str | bytes] = {
     "snapshot float cp": _snapshot(_set(("view", "me"), "cp", 2.5)),
     "snapshot nodes out of order": _snapshot(_swap_nodes),
     "snapshot duplicate group id": _snapshot(_duplicate_group),
-    "snapshot presence with numbers": _snapshot(_set((*NODE2, "seen"), "enemy_units", 1)),
+    "snapshot range with numbers": _snapshot(_set((*NODE2, "seen"), "enemy_units", 1)),
+    "snapshot presence with numbers": _snapshot(_set((*HALF2, "seen"), "enemy_units", 1)),
+    "snapshot range without enemies": _snapshot(
+        _set((*NODE2, "seen"), "enemy_range", {"low": 1, "high": 2})
+    ),
+    "snapshot range upside down": _snapshot(
+        lambda d: _at(d, *NODE2, "seen").update(
+            enemy_modes=["attack"], enemy_range={"low": 3, "high": 2}
+        )
+    ),
+    "snapshot range on exact": _snapshot(
+        _set((*NODE0, "seen"), "enemy_range", {"low": 1, "high": 2})
+    ),
+    "snapshot half level differs from detail": _snapshot(_set(HALF2, "detail", "exact")),
+    "snapshot figures with both halves in fog": _snapshot(_fog_halves_of_edge3),
+    "snapshot figure in fog": _snapshot(_set(FIGURE3, "detail", "fog")),
+    "snapshot figure presence with numbers": _snapshot(_set(FIGURE3, "units", 3)),
+    "snapshot figure range without range": _snapshot(_set(FIGURE3, "detail", "range")),
+    "snapshot figure beyond the edge": _snapshot(_set(FIGURE3, "pos", 1001)),
+    "snapshot figure with an owner": _snapshot(_set(FIGURE3, "owner", 1)),
+    "snapshot figure with a target": _snapshot(_set(FIGURE3, "dest", 0)),
+    "snapshot figure with a bad id": _snapshot(_set(FIGURE3, "id", "a b")),
+    "snapshot edge with one half": _snapshot(
+        _set(EDGE2, "halves", [{"detail": "fog", "seen": None}])
+    ),
     "snapshot exact without numbers": _snapshot(_set((*NODE0, "seen"), "enemy_units", None)),
     "snapshot enemy charged above units": _snapshot(_set((*NODE0, "seen"), "enemy_charged", 1)),
-    "snapshot fog sighting level": _snapshot(_set((*EDGE2, "seen"), "level", "fog")),
+    "snapshot fog sighting level": _snapshot(_set((*HALF2, "seen"), "level", "fog")),
     "snapshot duplicate enemy modes": _snapshot(
         _set((*NODE2, "seen"), "enemy_modes", ["attack", "attack"])
     ),
-    "snapshot warehouse of presence node": _snapshot(_set(NODE2, "warehouse", 3)),
-    "snapshot exact node without warehouse": _snapshot(_set(NODE0, "warehouse", None)),
+    "snapshot warehouse of range node": _snapshot(_set(NODE2, "warehouse", 3)),
     "snapshot visible node without sighting": _snapshot(_set(NODE0, "seen", None)),
     "snapshot level differs from detail": _snapshot(
         _set(
@@ -187,11 +217,13 @@ BAD_SERVER_FRAMES: dict[str, str | bytes] = {
                 "enemy_modes": [],
                 "enemy_units": 0,
                 "enemy_charged": 0,
+                "enemy_range": None,
             },
         )
     ),
     "snapshot exact edge": _snapshot(_set(EDGE2, "detail", "exact")),
-    "snapshot sighting from the future": _snapshot(_set((*EDGE2, "seen"), "tick", 121)),
+    "snapshot sighting from the future": _snapshot(_set((*HALF2, "seen"), "tick", 121)),
+    "snapshot stale sighting of a visible half": _snapshot(_set((*HALF2, "seen"), "tick", 60)),
     "snapshot stale sighting of a visible node": _snapshot(_set((*NODE0, "seen"), "tick", 119)),
     "snapshot charged above units": _snapshot(_set(GROUP0, "charged", 2)),
     "snapshot enemy group owner field": _snapshot(_set(GROUP0, "owner", 1)),
