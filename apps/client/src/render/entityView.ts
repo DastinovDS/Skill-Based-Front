@@ -212,29 +212,30 @@ export class EntityView {
   }
 
   /**
-   * Road builds of cities (DEC-16): bars across the road and a hammer disc of the owner near the
-   * building city; an own build (the server sends its `done_tick`) also shows the time left.
+   * Road builds (DEC-28, item 7: on the edge, paid with CP): bars across the road and a hammer
+   * disc of the owner near its end `a`; an own build (the server sends its `done_tick`) also shows
+   * the time left. The owner is the owner of the ends: only an internal road is built.
    */
   private drawBuilds(base: SnapshotMsg): void {
     const { nodes, edges } = base.view;
     const g = this.buildTies;
     g.clear();
     let used = 0;
-    for (const node of nodes) {
-      const build = node.build;
-      const owner = node.owner;
-      const edge = build === null ? undefined : this.map.edges[build.edge];
-      if (build === null || owner === null || edge === undefined) continue;
-      const other = edge.a === node.id ? edge.b : edge.a;
-      const from = nodePoint(this.map, node.id);
-      const to = nodePoint(this.map, other);
+    for (const road of edges) {
+      const build = road.build;
+      const edge = this.map.edges[road.id];
+      if (build === null || edge === undefined) continue;
+      const owner = nodes[edge.a]?.owner ?? null;
+      if (owner === null) continue;
+      const from = nodePoint(this.map, edge.a);
+      const to = nodePoint(this.map, edge.b);
       if (from === undefined || to === undefined) continue;
-      const width = edges[build.edge]?.width ?? edge.base_width;
+      const width = road.width;
       const geometry = buildGeometry(
         from,
         to,
-        this.radius(node.id),
-        this.radius(other),
+        this.radius(edge.a),
+        this.radius(edge.b),
         (roadThickness(width) + BUILD_TIE.extra) / 2,
         BUILD_TIE.spacing,
         BUILD_MARK_DISTANCE,

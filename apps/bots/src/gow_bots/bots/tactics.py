@@ -382,12 +382,15 @@ class StrategyBot(Bot):
             self.spend(turn, cmd, keep)
 
     def build_roads(self, turn: Turn, keep: int) -> None:
-        """At most one road a turn: the own internal road with the best ``road_value`` whose ends
-        are not threatened, paid with ``orders.cost.build`` CP (DEC-28, item 7) while ``keep`` CP
-        stay. Ties go to the nearer road to the own capital, then the smaller edge key:
-        mirror-invariant. Supplied roads first: a level there speeds both the packets and the
-        groups that leave the capital."""
+        """One road at a time: while no own road is being built, the own internal road with the
+        best ``road_value`` whose ends are not threatened, paid with ``orders.cost.build`` CP
+        (DEC-28, item 7) while ``keep`` CP stay. One build at a time keeps the roads at about
+        0,5 CP per ``build.ticks_per_level``, so they do not starve the recruits and the city
+        builds. Ties go to the nearer road to the own capital (a level there speeds the packets
+        and the groups that leave it), then the smaller edge key: mirror-invariant."""
         view = turn.view
+        if any(e.build is not None and e.upgrade_gain is not None for e in view.edges):
+            return  # an own road is being built (only own internal roads have a gain)
         capital = self.map.capital(self.player)
         hops = self.hops[capital]
         best: tuple[int, int, int] | None = None

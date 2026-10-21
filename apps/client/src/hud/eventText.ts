@@ -113,12 +113,8 @@ export function eventText(event: HudEvent, me: PlayerId): string {
           level: num(data.level),
         });
       }
-      return tf('event.build_started', {
-        node: num(data.node),
-        edge: num(data.edge),
-        width: num(data.width),
-        charges: num(data.charges),
-      });
+      // DEC-28, item 7: a road is paid with CP and built on the edge, no city builds it.
+      return tf('event.build_started', { edge: num(data.edge), width: num(data.width) });
     case 'build_stopped':
       return typeof data.edge === 'number'
         ? tf('event.build_stopped', { edge: data.edge })

@@ -8,19 +8,8 @@ import { OrderBook } from './orderBook.ts';
 import { NOTICE_MS, OrderController, REACH_REFRESH_TICKS } from './orderController.ts';
 
 const map = DEFAULT_MAP;
-// Road prices of DEC-16 (mechanics.md, section 8): the price of a level is the new width.
-const RULES: RulesetPublic = {
-  ...DEV_RULES,
-  build: {
-    ticks_per_level: 150,
-    charges_per_level: [
-      { width: 2, charges: 2 },
-      { width: 3, charges: 3 },
-      { width: 4, charges: 4 },
-      { width: 5, charges: 5 },
-    ],
-  },
-};
+// Roads are paid with CP (DEC-28, item 7): the ruleset gives the build time only.
+const RULES: RulesetPublic = { ...DEV_RULES, build: { ticks_per_level: 150 } };
 const snapshot = devSnapshot(map, RULES, 30);
 const group = snapshot.view.groups[0];
 if (group?.location.kind !== 'node') throw new Error('the dev snapshot has no group in a node');
@@ -226,8 +215,8 @@ describe('OrderController', () => {
     expect(sent).toEqual([
       { type: 'set_mode', group: group.id, mode: 'defense' },
       { type: 'split', group: group.id, n: 1 },
-      // The group stands in an own city: that city builds (DEC-16).
-      { type: 'upgrade_road', node: home, edge: 3, kind: null },
+      // A road for CP, no city in the command (DEC-28, item 7).
+      { type: 'upgrade_road', edge: 3 },
       { type: 'recruit', node: home },
       { type: 'set_stance', stance: 'economy' },
       { type: 'forfeit' },
@@ -379,15 +368,14 @@ describe('OrderController', () => {
     if (up1 === undefined || up2 === undefined || away === undefined) {
       throw new Error('the map lacks roads around the home city');
     }
-    // Roads have no type (DEC-26): every next level only speeds the packets up.
-    const gain = { speed_pct: 50 };
+    // What a level gives (DEC-28, item 7): packet and unit speed, one more charge per period.
+    const gain = { speed_pct: 50, unit_speed_pct: 15, amount: 1 };
 
-    function withRoads(base: SnapshotMsg, build: { edge: number; done_tick: number } | null) {
+    function withRoads(base: SnapshotMsg) {
       return {
         ...base,
         view: {
           ...base.view,
-          nodes: base.view.nodes.map((n) => (n.id === home ? { ...n, build } : n)),
           edges: base.view.edges.map((e) =>
             e.id === up2
               ? { ...e, width: 2, upgrade_gain: gain }
@@ -399,9 +387,9 @@ describe('OrderController', () => {
       };
     }
 
-    function pickSetup(build: { edge: number; done_tick: number } | null = null) {
+    function pickSetup() {
       const env = setup();
-      env.hud.onSnapshot(withRoads(snapshot, build));
+      env.hud.onSnapshot(withRoads(snapshot));
       env.controller.click({ kind: 'node', id: home }, false);
       return env;
     }
@@ -420,7 +408,7 @@ describe('OrderController', () => {
 
       // The click sends at once, without a type (DEC-26, item 7).
       controller.click({ kind: 'edge', id: up2 }, false);
-      expect(sent).toEqual([{ type: 'upgrade_road', node: home, edge: up2, kind: null }]);
+      expect(sent).toEqual([{ type: 'upgrade_road', edge: up2 }]);
       // The pick ends with the command.
       expect(controller.ui.current.roadPick).toBeNull();
       expect(controller.overlay().candidates).toEqual([]);
@@ -430,7 +418,7 @@ describe('OrderController', () => {
       const { controller, sent } = pickSetup();
       controller.key(key('KeyU'));
       controller.click({ kind: 'edge', id: up1 }, false);
-      expect(sent).toEqual([{ type: 'upgrade_road', node: home, edge: up1, kind: null }]);
+      expect(sent).toEqual([{ type: 'upgrade_road', edge: up1 }]);
       expect(controller.ui.current.roadPick).toBeNull();
     });
 
@@ -457,10 +445,8 @@ describe('OrderController', () => {
       expect(hud.selection).toEqual({ kind: 'node', id: other.id });
     });
 
-    it('does not start without an own city, nor in a city that already builds', () => {
-      const { controller } = pickSetup({ edge: up1, done_tick: 120 });
-      controller.key(key('KeyU'));
-      expect(controller.ui.current.roadPick).toBeNull();
+    it('does not start without an own city', () => {
+      const { controller } = pickSetup();
       controller.click({ kind: 'node', id: enemy.id }, false);
       controller.key(key('KeyU'));
       expect(controller.ui.current.roadPick).toBeNull();
@@ -758,7 +744,7 @@ describe('OrderController', () => {
           ...snapshot,
           view: {
             ...snapshot.view,
-            me: { ...snapshot.view.me, fronts: [null] as unknown as [null, null] },
+            me: { ...snapshot.view.me, fronts: [null] },
           },
         });
         expect(controller.frontMarkers).toBe(1);

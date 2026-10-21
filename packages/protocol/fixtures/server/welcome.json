@@ -4,7 +4,11 @@
   "ruleset_public": {
     "tick_hz": 10,
     "match_ticks": 9000,
-    "cp": { "cap": 500, "per_period": 100, "period_ticks": 50 },
+    "cp": {
+      "cap": 500,
+      "per_period": 100,
+      "period_ticks": 50
+    },
     "cost": {
       "move": 100,
       "planned_move": 200,
@@ -13,7 +17,7 @@
       "merge": 100,
       "attack": 0,
       "defense": 200,
-      "build": 0,
+      "build": 50,
       "recruit": 100,
       "stance": 0,
       "front": 0,
@@ -23,7 +27,11 @@
       "warehouse": 200
     },
     "combat": {
-      "terrain_defense_mod": { "plains": -1, "forest": 0, "mountains": 1 },
+      "terrain_defense_mod": {
+        "plains": -1,
+        "forest": 0,
+        "mountains": 1
+      },
       "planned_bonus": 2,
       "defense_bonus": 2,
       "round_ticks": 10,
@@ -31,14 +39,14 @@
       "regroup_ticks": 10
     },
     "build": {
-      "ticks_per_level": 150,
-      "charges_per_level": [
-        { "width": 2, "charges": 1 },
-        { "width": 3, "charges": 2 }
-      ]
+      "ticks_per_level": 150
     },
     "economy": {
-      "stance_to_charges_pct": { "economy": 75, "balance": 50, "war": 25 },
+      "stance_to_charges_pct": {
+        "economy": 75,
+        "balance": 50,
+        "war": 25
+      },
       "charges_per_cp": 2
     },
     "orders": {
@@ -46,8 +54,15 @@
       "defense_delay_ticks": 30,
       "stance_cooldown_ticks": 100
     },
-    "capacity": { "attrition_ticks": 30, "grace_ticks": 50 },
-    "recruit": { "unit_ticks": 30, "queue_max": 3, "refund_started_pct": 50 },
+    "capacity": {
+      "attrition_ticks": 30,
+      "grace_ticks": 50
+    },
+    "recruit": {
+      "unit_ticks": 30,
+      "queue_max": 3,
+      "refund_started_pct": 50
+    },
     "city_upgrades": {
       "enabled": false,
       "barracks_ticks": 100,
@@ -55,7 +70,11 @@
       "warehouse_max_level": 2,
       "warehouse_gain_per_level": 1
     },
-    "supply": { "rear_min_max": 8, "rear_min_default": 1 }
+    "supply": {
+      "rear_min_max": 8,
+      "rear_min_default": 1,
+      "front_markers": 2
+    }
   },
   "map_id": "diamond",
   "last_seq": 0,

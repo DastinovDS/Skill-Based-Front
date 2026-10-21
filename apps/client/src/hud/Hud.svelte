@@ -77,9 +77,6 @@
         : 'none',
   );
   const mergeable = $derived(data === null ? 0 : orders.mergeCandidates().length);
-  const building = $derived(
-    data?.node?.owner === 'mine' ? (data.node.build?.secondsLeft ?? null) : null,
-  );
 
   // "Fit map" keeps the map out of the top bar: measure it, its height depends on the zoom of the
   // page and the window.
@@ -173,7 +170,6 @@
   <CityRadial
     {orders}
     {anchors}
-    {building}
     queue={data?.node?.recruitQueue ?? null}
     city={data?.node ?? null}
   />

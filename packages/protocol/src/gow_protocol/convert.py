@@ -356,8 +356,8 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                     "unit_speed_pct": e.upgrade_gain.unit_speed_pct,
                     "amount": e.upgrade_gain.amount,
                 },
-                "build": None if e.build is None else {"done_tick": e.build.done_tick},
                 "seen": _seen_data(e.seen),
+                "build": None if e.build is None else {"done_tick": e.build.done_tick},
             }
             for e in view.edges
         ],

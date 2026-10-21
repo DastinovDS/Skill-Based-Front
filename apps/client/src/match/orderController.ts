@@ -79,11 +79,11 @@ export interface KeyInput {
  * recruit, stance, forfeit. Each goes out as an intent and comes back as `accepted` or `rejected`
  * in `ui.current.notice`.
  *
- * Road upgrades are a city's job (DEC-16): with an own city selected (or a group standing in
- * one), U starts the road pick. The roads of that city with an upgrade hint light up; a click on
- * one ends the pick and sends `upgrade_road`: roads have no type (DEC-26, item 7), a level only
- * speeds the supply up. Esc, U again, or a click elsewhere ends the pick too. Whether the city may build (supply, a build already going, charges) is the server's
- * call.
+ * Road upgrades are paid with CP (DEC-28, item 7; the click on a road itself: #311): with an own
+ * city selected (or a group standing in one), U starts the road pick. The roads of that city with
+ * an upgrade hint light up; a click on one ends the pick and sends `upgrade_road(edge)`. Esc, U
+ * again, or a click elsewhere ends the pick too. Whether the road may be built (a build already
+ * going, CP) is the server's call.
  *
  * The «Supply» map mode (DEC-18, item 7; the map layer: DEC-28, item 8) is toggled by Tab (or F2).
  * In it a click on an own city opens its supply menu (a radial menu under the pointer: front
@@ -575,8 +575,9 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * Start the road pick of the selected own city (key U); a second call ends it. A city that
-   * already builds a road does not start one: the panel says how long its build takes.
+   * Start the road pick of the selected own city (key U); a second call ends it. Roads are paid
+   * with CP and built on the edge (DEC-28, item 7): a road under a build is the server's
+   * `EDGE_BUSY`. The click on a road itself is #311.
    */
   toggleRoadPick(): void {
     this.cityMenu.close();
@@ -585,7 +586,7 @@ export class OrderController implements MapInteraction {
       return;
     }
     const city = this.roadCity();
-    if (city === null || this.#o.hud.current?.node?.build != null) return;
+    if (city === null) return;
     this.#pick = city;
     this.ui.patch({ roadPick: city });
   }
@@ -596,13 +597,14 @@ export class OrderController implements MapInteraction {
     this.ui.patch({ roadPick: null });
   }
 
-  /** The city of the road pick (or the selected own city) raises `edge` by one level (DEC-16). */
+  /** Raise the own road `edge` by one level for `cost.build` CP (DEC-28, item 7); the road pick
+   * of a city only narrows the choice to its roads. */
   upgradeRoad(edge: number): void {
     const node = this.#pick ?? this.roadCity();
     if (node === null) return;
     this.stopRoadPick();
     if (this.#o.send === null) return;
-    this.#sendCommand({ type: 'upgrade_road', node, edge, kind: null }, null);
+    this.#sendCommand({ type: 'upgrade_road', edge }, null);
   }
 
   setStance(stance: Stance): void {

@@ -76,8 +76,6 @@ export interface NodeInfo {
   /** Own units and charges standing here. */
   readonly mine: { readonly units: number; readonly charged: number };
   readonly enemy: EnemyInfo | null;
-  /** The road this city builds (DEC-16), if the snapshot shows one. */
-  readonly build: BuildInfo | null;
   /** Own city over its capacity: ticks until the next unit dies; `null` otherwise. */
   readonly attritionIn: number | null;
   /** Own city over its capacity right after a capture: ticks the grace still lasts. */
@@ -97,13 +95,6 @@ export interface NodeInfo {
 export interface BuildingInfo {
   readonly kind: BuildKind;
   readonly secondsLeft: number;
-}
-
-/** A road level a city builds (`NodeView.build`). */
-export interface BuildInfo {
-  readonly edge: number;
-  /** Whole seconds until the width grows; `null` for an enemy build (the server does not say). */
-  readonly secondsLeft: number | null;
 }
 
 export interface EnemyInfo {
@@ -153,13 +144,11 @@ export interface RoadInfo {
   readonly b: number;
   /** Current level (1..3, DEC-22; the wire calls it `width`). */
   readonly width: number;
-  /** What the next level adds (packet speed, DEC-26, item 7); `null`: it cannot be upgraded. */
-  readonly gain: UpgradeGain | null;
   /**
-   * Warehouse charges the next level costs (`ruleset_public.build`, DEC-16); `null` when the road
-   * cannot be upgraded or the ruleset has no price for that width.
+   * What the next level adds (packet and unit speed, charges per period: DEC-28, item 7); `null`:
+   * it cannot be upgraded. The price is `cost.build` CP per level.
    */
-  readonly charges: number | null;
+  readonly gain: UpgradeGain | null;
 }
 
 export interface HudData {
@@ -191,15 +180,10 @@ function nodeAt(nodes: readonly NodeView[], id: number): NodeView | undefined {
   return nodes[id];
 }
 
-/** Charges for raising a road to `width` (`build.charges_per_level`); `null` if not listed. */
-export function levelCharges(rules: RulesetPublic, width: number): number | null {
-  return rules.build.charges_per_level.find((level) => level.width === width)?.charges ?? null;
-}
-
 /**
  * The roads city `node` may be asked to upgrade: its roads with an upgrade hint (the server sends
  * one only for own internal roads below their maximum width). Whether the command is accepted is
- * still the server's call (supply, busy roads, charges).
+ * still the server's call (a road under a build, CP; DEC-28, item 7).
  */
 export function roadCandidates(roads: readonly RoadInfo[], node: number): RoadInfo[] {
   return roads.filter((r) => (r.a === node || r.b === node) && r.gain !== null);
@@ -241,16 +225,6 @@ function enemyInfo(seen: Seen | null, detail: Detail): EnemyInfo | null {
   };
 }
 
-function buildInfo(ctx: HudContext, node: NodeView, tick: number): BuildInfo | null {
-  const build = node.build;
-  if (build === null) return null;
-  const left = build.done_tick === null ? null : Math.max(0, build.done_tick - tick);
-  return {
-    edge: build.edge,
-    secondsLeft: left === null ? null : Math.ceil(left / ctx.rules.tick_hz),
-  };
-}
-
 function nodeInfo(
   ctx: HudContext,
   node: NodeView,
@@ -273,7 +247,6 @@ function nodeInfo(
       charged: here.reduce((total, g) => total + g.charged, 0),
     },
     enemy: enemyInfo(node.seen, node.detail),
-    build: buildInfo(ctx, node, tick),
     attritionIn: node.attrition_in,
     graceLeft: node.grace_left,
     recruitQueue: node.recruit_queue,
@@ -298,7 +271,6 @@ function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): 
     b: file?.b ?? -1,
     width: edge.width,
     gain: edge.upgrade_gain,
-    charges: edge.upgrade_gain === null ? null : levelCharges(ctx.rules, edge.width + 1),
   };
 }
 

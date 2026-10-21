@@ -9,6 +9,7 @@ server sends must be, on every tick of these matches, the very frame of the vali
 ``snapshot_msg`` (#155).
 """
 
+import dataclasses
 import json
 import timeit
 from collections import deque
@@ -92,6 +93,14 @@ class WireDriver:
         me, cost = self.player, self.rules.orders.cost
         cmds: list[wire.Command] = []
         capital = self.map.capital(me)
+        if (tick // 5) % 40 == 21 and view.me.cp >= cost.build:  # a road first (DEC-28: CP)
+            for g in view.groups:
+                if isinstance(g.location, AtNodeLoc):
+                    here = g.location.node
+                    gains = [e for e in self.map.incident[here] if view.edges[e].upgrade_gain]
+                    if gains:
+                        cmds.append(wire.UpgradeRoadCmd(edge=gains[0]))
+                        break
         if view.me.cp >= cost.recruit and view.nodes[capital].owner == me:
             cmds.append(wire.RecruitCmd(node=capital))
         if tick == 300:
@@ -113,11 +122,7 @@ class WireDriver:
                 continue
             gains = [e for e in self.map.incident[here] if view.edges[e].upgrade_gain is not None]
             if 21 <= phase <= 30 and gains:
-                # The city upgrades a road (DEC-16); its groups wait meanwhile, so armies gather.
-                if phase == 21:  # roads have no type (DEC-26); now and then an old client's one
-                    kind = "fast" if here % 3 == 0 else None
-                    cmds.append(wire.UpgradeRoadCmd(node=here, edge=gains[0], kind=kind))
-                continue
+                continue  # the groups at upgradable roads wait (a road: above), armies gather
             if g.mode is not Mode.ATTACK:
                 continue
             dist = self.hops[here]
@@ -222,8 +227,12 @@ def _check_events(match: Match, events: list[Event], player: int) -> list[EventM
 @pytest.mark.parametrize("name", MVP_MAPS)
 def test_match_through_the_wire(name: str) -> None:
     mapdef = load_map(ROOT / "maps" / f"{name}.json")
-    match = Match(mapdef, RULES, KEY)
-    drivers = [WireDriver(mapdef, RULES, p) for p in PLAYERS]
+    # Roads for free here: the drivers spend every CP on recruits and moves, and the test wants
+    # every message kind, ``road_upgraded`` included (the price is DEC-28's, ``test_build.py``).
+    cost = dataclasses.replace(RULES.orders.cost, build=0)
+    rules = dataclasses.replace(RULES, orders=dataclasses.replace(RULES.orders, cost=cost))
+    match = Match(mapdef, rules, KEY)
+    drivers = [WireDriver(mapdef, rules, p) for p in PLAYERS]
     seqs = dict.fromkeys(PLAYERS, 0)
     kinds: set[str] = set()
     acks: dict[str, int] = {"path": 0, "reject": 0, "ok": 0}
@@ -456,7 +465,7 @@ def test_command_fields() -> None:
     assert command_from_wire(wire.SetModeCmd(group="1", mode=Mode.DEFENSE)) == sim.SetMode(
         1, Mode.DEFENSE
     )
-    assert command_from_wire(wire.UpgradeRoadCmd(node=4, edge=8)) == sim.UpgradeRoad(4, 8)
+    assert command_from_wire(wire.UpgradeRoadCmd(edge=8)) == sim.UpgradeRoad(8)
     assert command_from_wire(wire.CancelOrderCmd(group="0")) == sim.CancelOrder(0)
     assert command_from_wire(wire.SetStanceCmd(stance=Stance.ECONOMY)) == sim.SetStance(
         Stance.ECONOMY

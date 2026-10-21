@@ -40,7 +40,7 @@ class ExpanderBot(StrategyBot):
         "hold_front": ParamRange(1, 2),  # units kept in every node next to the enemy
         "margin": ParamRange(0, 1),  # charges to spare in an attack
         "est_pct": ParamRange(30, 60),  # guess of the enemy garrison, % of the capacity
-        "road_keep": ParamRange(100, 250),  # CP in hundredths that roads never touch
+        "road_keep": ParamRange(350, 450),  # CP in hundredths that roads never touch (DEC-28)
         "war_until": ParamRange(1200, 2400),  # ticks in the «Война» stance
     }
 
@@ -68,7 +68,7 @@ class TurtleBot(StrategyBot):
         "hold_front": ParamRange(2, 4),
         "margin": ParamRange(1, 2),
         "est_pct": ParamRange(50, 80),
-        "road_keep": ParamRange(200, 400),
+        "road_keep": ParamRange(350, 450),
         "spill": ParamRange(1, 2),  # extra hops claimed while CP is about to burn
         "spill_cp": ParamRange(350, 450),
     }
