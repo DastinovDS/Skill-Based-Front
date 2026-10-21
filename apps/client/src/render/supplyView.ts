@@ -99,7 +99,7 @@ export class SupplyView {
     });
     this.flagStyle = new TextStyle({
       fontFamily: 'system-ui, sans-serif',
-      fontSize: 10,
+      fontSize: SUPPLY_MARKER.font,
       fontWeight: '800',
       fill: PAPER,
     });

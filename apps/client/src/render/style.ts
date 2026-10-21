@@ -336,10 +336,11 @@ export const SUPPLY_PACKET_RADIUS = 3.5;
 export const SUPPLY_STOCK = { radius: 2.6, pitch: 7.5, gap: 9, plate: 2.5 } as const;
 /** The front marker: a pole with a flag carrying its number, up and to the left of the city. */
 export const SUPPLY_MARKER = {
-  pole: 20,
-  flag: { width: 13, height: 11 },
+  pole: 28,
+  flag: { width: 20, height: 16 },
   angle: -135,
   gap: 4,
+  font: 12,
 } as const;
 /** The dashed ring and the badge of a cut-off city (DEC-19). */
 export const SUPPLY_CUT = { gap: 9, width: 2.5, dash: 10 } as const;
