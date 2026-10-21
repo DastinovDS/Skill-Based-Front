@@ -26,7 +26,8 @@ PRO-01), which PRO-03 converts it into:
 - fights going on (DEC-24, item I1): both players fight in each, so both see it with the exact
   units and charged of the enemy in it, the shots and losses of both sides so far and the latest
   round of both sides (shots with the virtual ones apart, spent charges, losses; I1 as revised
-  with DEC-29) and the virtual shots still left of both sides (DEC-32, item 3); the enemy's group
+  with DEC-29), the virtual shots still left of both sides (DEC-32, item 3) and the charges of
+  both sides silent by terrain (``mute``, DEC-24 item F2, plains); the enemy's group
   ids stay hidden. Outside a fight the bonus of an enemy group (a gathered «Защита», a waiting
   planned order) is never in a view, also not for a reinforcement on its way.
 
@@ -290,7 +291,8 @@ class FightView:
     vision (#112). The rounds are public (DEC-24, item I1 as revised with DEC-29): ``shots`` and
     ``losses`` of both players so far, ``last_round`` of both players with the virtual shots
     apart. The virtual shots still left (bonuses, terrain) of both players are public while the
-    fight goes on (DEC-32, item 3). The enemy's group ids are hidden."""
+    fight goes on (DEC-32, item 3), and so are the charges silent by terrain (``mute``, DEC-24,
+    item F2). The enemy's group ids are hidden."""
 
     id: int
     """Opaque id (``fight`` in the fight events)."""
@@ -313,6 +315,10 @@ class FightView:
     """Units lost in the fight so far by player."""
     virtual_left: tuple[int, int]
     """Virtual shots still left by player (``Fight.virtual``: bonuses, mountains; DEC-32)."""
+    mute: tuple[int, int]
+    """Charged units of the player in the fight that do not shoot in a round (plains: one of the
+    defender, DEC-24 item F2): ``min(Fight.mute, charged)``. It follows from the public terrain and
+    the counters of the fight, so the client shows it without computing it (AGENTS.md 7.1)."""
     last_round: FightRound | None
     """The latest round, by player; ``None`` before the first round."""
 
@@ -550,10 +556,12 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     for fid, f in sorted(state.fights.items()):
         mine: list[int] = []
         units = charged = 0
+        side_charged = [0, 0]
         for gid in sorted(f.members):
             g = state.groups.get(gid)
             if g is None:
                 continue
+            side_charged[g.owner] += g.charged
             if g.owner == player:
                 mine.append(opaque(player, gid))
             else:
@@ -574,6 +582,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 shots=f.shots,
                 losses=f.losses,
                 virtual_left=f.virtual,
+                mute=(min(f.mute[0], side_charged[0]), min(f.mute[1], side_charged[1])),
                 last_round=f.last_round,
             )
         )
@@ -731,6 +740,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "shots": list(f.shots),
                 "losses": list(f.losses),
                 "virtual_left": list(f.virtual_left),
+                "mute": list(f.mute),
                 "last_round": None
                 if f.last_round is None
                 else {

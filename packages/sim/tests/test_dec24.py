@@ -55,13 +55,14 @@ RULES = load_ruleset(TESTS_DIR / "rulesets" / "dec07.toml")
 KEY = bytes(range(32))
 
 
-def _line(n: int = 3) -> MapDef:
+def _line(n: int = 3, middle: str = "forest") -> MapDef:
+    """``0 - 1 - ... - n-1``, forest; ``middle``: the terrain of node 1."""
     nodes: list[dict[str, Any]] = [
         {
             "id": i,
             "x": 10 * i,
             "y": 10,
-            "terrain": "forest",
+            "terrain": middle if i == 1 else "forest",
             "vp": 1,
             "kind": "capital" if i in (0, n - 1) else "city_large",
             "capital_of": {0: 0, n - 1: 1}.get(i),
@@ -293,6 +294,7 @@ def test_both_players_see_the_fight_with_exact_enemy_counters() -> None:
         )
         assert (fight.enemy_units, fight.enemy_charged) == enemy
         assert fight.virtual_left == (0, 0)  # forest, no orders: no virtual shots
+        assert fight.mute == (0, 0)  # forest: every charge shoots
 
 
 def test_both_players_see_the_rounds_and_the_bonus_stock_of_both_sides() -> None:
@@ -332,16 +334,38 @@ def test_both_players_see_the_rounds_and_the_bonus_stock_of_both_sides() -> None
 
 
 def test_fog_the_bonus_stock_is_exact_for_both_players() -> None:
-    """AGENTS.md 4.4 for ``FightView.virtual_left`` (DEC-32, item 3): in a fight both numbers are
-    in the views of both players, exactly."""
+    """AGENTS.md 4.4 for ``FightView.virtual_left`` (DEC-32, item 3) and ``FightView.mute``
+    (DEC-24, item F2): in a fight both numbers of both sides are in the views of both players,
+    exactly; a silent count is at most the charged units of its side."""
     run, d, _ = _node_fight()
     state = run.state
     fid = state.groups[d].fight
     assert fid is not None
     state.fights[fid].virtual = (1, 4)
+    state.fights[fid].mute = (5, 1)  # player 0 has 3 charged in the fight
     for player in PLAYERS:
         (fight,) = project(state, RULES, player, KEY).fights
         assert fight.virtual_left == (1, 4)
+        assert fight.mute == (3, 1)
+
+
+def test_both_players_see_the_silent_charge_of_a_defender_on_plains() -> None:
+    """Row 8 of the table (DEC-24, F2; ticks of DEC-32): 2/2 attacks 2/2 on plains, one charge of
+    the defender is silent in every round. After r1 (both cancel, 1 / 1) the defender's last
+    charge is the silent one; after r2 (the attack kills a discharged unit) it is still there."""
+    state = initial_state(_line(middle="plains"), RULES)
+    _add(state, 1, 2, 2, AtNode(1))
+    _add(state, 0, 2, 2, _before_arrival(state, 0, 0), order=Order((1,), False, 0))
+    run = _Run(state)
+    run.step()
+    for player in PLAYERS:
+        (fight,) = project(state, RULES, player, KEY).fights
+        assert fight.mute == (0, 1)
+    while state.tick < 21:
+        run.step()
+    for player in PLAYERS:
+        (fight,) = project(state, RULES, player, KEY).fights
+        assert fight.mute == (0, 1)  # the defender's 1 charged unit stays silent
 
 
 def test_fog_a_withdrawal_is_hidden() -> None:

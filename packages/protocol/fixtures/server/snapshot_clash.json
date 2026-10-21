@@ -496,6 +496,7 @@
         "shots": [3, 2],
         "losses": [0, 1],
         "virtual_left": [1, 0],
+        "mute": [0, 0],
         "last_round": {
           "tick": 386,
           "shots": [2, 1],

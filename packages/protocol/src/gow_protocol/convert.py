@@ -277,6 +277,7 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 shots=f.shots,
                 losses=f.losses,
                 virtual_left=f.virtual_left,
+                mute=f.mute,
                 last_round=None
                 if f.last_round is None
                 else FightRoundView(
@@ -427,6 +428,7 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "shots": list(f.shots),
                 "losses": list(f.losses),
                 "virtual_left": list(f.virtual_left),
+                "mute": list(f.mute),
                 "last_round": _round_data(f.last_round),
             }
             for f in view.fights

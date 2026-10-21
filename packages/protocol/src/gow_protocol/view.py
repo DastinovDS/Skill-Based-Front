@@ -325,6 +325,8 @@ class FightView(WireModel):
     round of both players, ``None`` before the first one. ``virtual_left``: the virtual shots
     (bonuses, mountains) still left by player, public to both while the fight goes on (DEC-32,
     item 3); it grows when a reinforcement with a bonus joins and drops after each round.
+    ``mute``: by player, the charged units in the fight that do not shoot in a round because of
+    the terrain (plains: one of the defender, DEC-24, item F2), at most the side's charged units.
     """
 
     id: OpaqueId
@@ -341,6 +343,7 @@ class FightView(WireModel):
     shots: tuple[NonNegInt, NonNegInt]
     losses: tuple[NonNegInt, NonNegInt]
     virtual_left: tuple[NonNegInt, NonNegInt]
+    mute: tuple[NonNegInt, NonNegInt]
     last_round: FightRoundView | None
 
     @model_validator(mode="after")

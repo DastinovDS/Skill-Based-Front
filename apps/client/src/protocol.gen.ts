@@ -719,6 +719,8 @@ export interface IntentView {
  * round of both players, ``None`` before the first one. ``virtual_left``: the virtual shots
  * (bonuses, mountains) still left by player, public to both while the fight goes on (DEC-32,
  * item 3); it grows when a reinforcement with a bonus joins and drops after each round.
+ * ``mute``: by player, the charged units in the fight that do not shoot in a round because of
+ * the terrain (plains: one of the defender, DEC-24, item F2), at most the side's charged units.
  */
 export interface FightView {
   id: string;
@@ -749,6 +751,11 @@ export interface FightView {
    * @maxItems 2
    */
   virtual_left: [number, number];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  mute: [number, number];
   last_round: FightRoundView | null;
 }
 /**

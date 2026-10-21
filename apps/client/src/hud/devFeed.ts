@@ -221,6 +221,7 @@ export function devFights(map: MapFile, tick: number): SnapshotMsg['view']['figh
       shots: pairSum('shots', done),
       losses: pairSum('losses', done),
       virtual_left: virtualLeft(done),
+      mute: [0, 0],
       last_round:
         last === undefined
           ? null

@@ -73,6 +73,7 @@ describe('buildTimeline', () => {
         shots: [0, 0],
         losses: [0, 0],
         virtual_left: [0, 0],
+        mute: [0, 0],
         last_round: null,
       },
     ]);
