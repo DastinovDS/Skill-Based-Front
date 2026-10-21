@@ -26,7 +26,9 @@ PRO-01), which PRO-03 converts it into:
 - fights going on (DEC-24, item I1): both players fight in each, so both see it with the exact
   units and charged of the enemy in it, the shots and losses of both sides so far and the latest
   round of both sides (shots with the virtual ones apart, spent charges, losses; I1 as revised
-  with DEC-29); the enemy's virtual shots still left and its group ids stay hidden.
+  with DEC-29) and the virtual shots still left of both sides (DEC-32, item 3); the enemy's group
+  ids stay hidden. Outside a fight the bonus of an enemy group (a gathered «Защита», a waiting
+  planned order) is never in a view, also not for a reinforcement on its way.
 
 What a view never has: enemy groups as entities (only the per-place ``Sighting``), road levels
 of fogged edges newer than the last sighting, the barracks, warehouse level and city builds of
@@ -287,7 +289,8 @@ class FightView:
     it, with the exact counters of the enemy in it, also on an edge where own groups give no
     vision (#112). The rounds are public (DEC-24, item I1 as revised with DEC-29): ``shots`` and
     ``losses`` of both players so far, ``last_round`` of both players with the virtual shots
-    apart. The virtual shots still left (bonuses, terrain) and the enemy's group ids are hidden."""
+    apart. The virtual shots still left (bonuses, terrain) of both players are public while the
+    fight goes on (DEC-32, item 3). The enemy's group ids are hidden."""
 
     id: int
     """Opaque id (``fight`` in the fight events)."""
@@ -308,6 +311,8 @@ class FightView:
     """Shots of the fight so far by player."""
     losses: tuple[int, int]
     """Units lost in the fight so far by player."""
+    virtual_left: tuple[int, int]
+    """Virtual shots still left by player (``Fight.virtual``: bonuses, mountains; DEC-32)."""
     last_round: FightRound | None
     """The latest round, by player; ``None`` before the first round."""
 
@@ -568,6 +573,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 enemy_charged=charged,
                 shots=f.shots,
                 losses=f.losses,
+                virtual_left=f.virtual,
                 last_round=f.last_round,
             )
         )
@@ -724,6 +730,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                 "enemy_charged": f.enemy_charged,
                 "shots": list(f.shots),
                 "losses": list(f.losses),
+                "virtual_left": list(f.virtual_left),
                 "last_round": None
                 if f.last_round is None
                 else {

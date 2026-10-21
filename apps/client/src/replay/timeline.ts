@@ -134,7 +134,8 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
         })),
       // Fights (DEC-24): the viewer sees both sides, so every group of the fight is listed and
       // the enemy totals stay 0 (they are in the groups). The frames carry no round data yet
-      // (DEC-29 rounds: #295), so the totals are 0 and there is no last round.
+      // (DEC-29 rounds, DEC-32 bonus stock: #323), so the totals and the stock are 0 and there is
+      // no last round.
       fights: (frame.f ?? []).map(
         ([id, node, edge, point, attacker, start_tick, next_round_tick, groups]) => ({
           id: String(id),
@@ -149,6 +150,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
           enemy_charged: 0,
           shots: [0, 0],
           losses: [0, 0],
+          virtual_left: [0, 0],
           last_round: null,
         }),
       ),

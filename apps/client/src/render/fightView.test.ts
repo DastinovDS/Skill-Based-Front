@@ -34,6 +34,7 @@ const running = snapshot([
     enemy_charged: 2,
     shots: [0, 0],
     losses: [0, 0],
+    virtual_left: [0, 0],
     last_round: null,
   },
 ]);
@@ -227,7 +228,7 @@ describe('FightView', () => {
     view.update(frame(at(159)), [], TICK_HZ, ROUND, false);
     expect(texts()).toEqual(['1']);
     // No round came for two rounds: the exchange is gone.
-    view.update(frame(at(175)), [], TICK_HZ, ROUND, false);
+    view.update(frame(at(150 + 2 * ROUND + 5)), [], TICK_HZ, ROUND, false);
     expect(texts()).toEqual([]);
     view.destroy();
   });

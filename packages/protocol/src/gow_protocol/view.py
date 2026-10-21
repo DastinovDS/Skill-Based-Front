@@ -322,8 +322,9 @@ class FightView(WireModel):
     the own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this
     fight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.
     ``shots`` and ``losses``: totals of the fight so far by player; ``last_round``: the latest
-    round of both players, ``None`` before the first one. The virtual shots still left are not
-    sent (DEC-24, item I1: the rounds are public, the stock is not).
+    round of both players, ``None`` before the first one. ``virtual_left``: the virtual shots
+    (bonuses, mountains) still left by player, public to both while the fight goes on (DEC-32,
+    item 3); it grows when a reinforcement with a bonus joins and drops after each round.
     """
 
     id: OpaqueId
@@ -339,6 +340,7 @@ class FightView(WireModel):
     enemy_charged: NonNegInt
     shots: tuple[NonNegInt, NonNegInt]
     losses: tuple[NonNegInt, NonNegInt]
+    virtual_left: tuple[NonNegInt, NonNegInt]
     last_round: FightRoundView | None
 
     @model_validator(mode="after")

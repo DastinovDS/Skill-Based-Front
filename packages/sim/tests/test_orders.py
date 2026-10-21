@@ -5,8 +5,8 @@ Expected values come from DEC-08 (mechanics.md, section 5): a planned move costs
 and every planned order here goes to a neighbour with 2 charged units, so DEC-29 gives +2 too;
 the distance rule itself: ``test_dec29.py``); «Защита» costs 2 CP, is public at
 once, its +2 is active after 30 ticks and spent in the first fight; a move drops it for free;
-cancelling is free (DEC-20 replaced the 1 CP of DEC-08). Fights follow the DEC-24 table (rows
-named below; a fight lasts its rounds, 10 ticks each, from the contact), forest everywhere.
+cancelling is free (DEC-20 replaced the 1 CP of DEC-08). Fights follow the DEC-32 table (rows
+named below; a fight lasts its rounds, 20 ticks each, from the contact), forest everywhere.
 Details DEC-08 leaves open: defaults of #141, accepted by DEC-24 (bonuses per fight, item F1).
 
 Line map ``0 - 1 - 2`` (capitals at the ends), 30 ticks per edge, so a group that leaves node 0
@@ -202,8 +202,8 @@ def test_intent_has_no_group_id_or_size() -> None:
 @pytest.mark.parametrize(
     ("planned", "owner", "defender"),
     [
-        (True, 0, None),  # row 9: 2 + plan (+2) vs 2: the defence dies, node 1 is taken (t+40)
-        (False, 1, (2, 0)),  # row 1: 2 vs 2, no losses, the attack bounces (t+20)
+        (True, 0, None),  # row 9: 2 + plan (+2) vs 2: the defence dies, node 1 is taken (t+80)
+        (False, 1, (2, 0)),  # row 1: 2 vs 2, no losses, the attack bounces (t+40)
     ],
 )
 def test_planned_bonus_in_the_first_fight(
@@ -214,7 +214,7 @@ def test_planned_bonus_in_the_first_fight(
     a = _add(state, 0, 2, 2, 0)
     run = _Run(state)
     run.step((0, Move(a, 1, planned=planned)))
-    run.until(120)  # contact at 60 (planned) or 30, the fight lasts 40 or 20 ticks
+    run.until(150)  # contact at 60 (planned) or 30, the fight lasts 80 or 40 ticks
     assert state.nodes[1].owner == owner
     g = state.groups.get(d)
     assert (None if g is None else (g.units, g.charged)) == defender
@@ -224,10 +224,10 @@ def test_planned_bonus_in_the_first_fight(
 def test_planned_bonus_is_spent_in_the_first_fight_only() -> None:
     """Planned 2/2 leaves node 0 at 31; player 1 sends 1/1 from node 1 at 41. Progress after k
     of 30 ticks is k * 1000 // 30: at 50 it is 666 + 333 = 999, at 51 700 + 366 >= 1000, so they
-    meet at 51 (DEC-24, C2). The bonus (+2) enters the edge fight (F1): r1 at 61 the virtual
-    shot cancels the enemy's, r2 at 71 the second one kills it; 2/2 wins and goes on after the
-    regroup at 81, 9 steps to node 1 (at 89). There against 2/2 the bonus is gone: row 1, no
-    losses, the fight ends at 109 and the attack bounces."""
+    meet at 51 (DEC-24, C2). The bonus (+2) enters the edge fight (F1): r1 at 71 the virtual
+    shot cancels the enemy's, r2 at 91 the second one kills it; 2/2 wins and goes on after the
+    regroup at 101, 9 steps to node 1 (at 109). There against 2/2 the bonus is gone: row 1, no
+    losses, the fight ends at 149 (t+40, DEC-32) and the attack bounces."""
     state = _state()
     d = _add(state, 1, 2, 2, 1)
     e = _add(state, 1, 1, 1, 1)
@@ -236,12 +236,12 @@ def test_planned_bonus_is_spent_in_the_first_fight_only() -> None:
     run.step((0, Move(a, 1, planned=True)))
     run.until(40)
     run.step((1, Move(e, 0)))
-    run.until(110)
+    run.until(150)
     assert [(f.kind, f.tick, f.get("node")) for f in run.fights] == [
         ("fight_started", 51, None),
-        ("fight_ended", 71, None),
-        ("fight_started", 89, 1),
-        ("fight_ended", 109, 1),
+        ("fight_ended", 91, None),
+        ("fight_started", 109, 1),
+        ("fight_ended", 149, 1),
     ]
     assert e not in state.groups
     assert (state.groups[d].units, state.groups[d].charged) == (2, 0)
@@ -265,7 +265,7 @@ def _defended(delay: int) -> tuple[_Run, int, int]:
         run.step((1, SetMode(d, Mode.DEFENSE)))
         run.until(move_tick - 1)
         run.step((0, Move(a, 1)))
-    run.until(1 + delay + 50)  # the contact and the whole fight (at most 40 ticks)
+    run.until(1 + delay + 90)  # the contact and the whole fight (at most 80 ticks)
     return run, d, a
 
 
@@ -281,7 +281,7 @@ def test_defense_gathers_2_in_120_ticks() -> None:
     # Row 10: 3 vs 2 + «Защита» (+2, 120 // 60, DEC-30): 1 attacker dies, 2 bounce, the defence
     # has 2 discharged.
     run, d, a = _defended(120)
-    assert [(f.kind, f.tick) for f in run.fights] == [("fight_started", 121), ("fight_ended", 161)]
+    assert [(f.kind, f.tick) for f in run.fights] == [("fight_started", 121), ("fight_ended", 201)]
     assert run.fights[1].get("losses_0") == 1
     assert (run.state.groups[d].units, run.state.groups[d].charged) == (2, 0)
     assert (run.state.groups[a].units, run.state.groups[a].charged) == (2, 0)
@@ -291,7 +291,7 @@ def test_defense_has_no_bonus_before_60_ticks() -> None:
     # Row 2: 3 vs 2 without the bonus (59 // 60 = 0, DEC-30): 1 defender dies, the attack (3,
     # discharged) bounces. In the fight the count does not grow (DEC-30).
     run, d, a = _defended(59)
-    assert [(f.kind, f.tick) for f in run.fights] == [("fight_started", 60), ("fight_ended", 90)]
+    assert [(f.kind, f.tick) for f in run.fights] == [("fight_started", 60), ("fight_ended", 120)]
     assert (run.state.groups[d].units, run.state.groups[d].charged) == (1, 0)
     assert (run.state.groups[a].units, run.state.groups[a].charged) == (3, 0)
 
@@ -307,7 +307,7 @@ def test_defense_bonus_is_spent_in_the_first_fight_and_the_mode_holds() -> None:
     state.groups[d].charged = 2
     b = _add(state, 0, 2, 2, 0)
     run.step((0, Move(b, 1)))
-    run.until(state.tick + 29 + 20)  # row 1 lasts 20 ticks
+    run.until(state.tick + 29 + 40)  # row 1 lasts 40 ticks
     second = [f for f in run.fights if f.kind == "fight_ended"][1:]
     assert [(f.get("losses_0"), f.get("losses_1")) for f in second] == [(0, 0)]
     assert (state.groups[d].units, state.groups[d].charged) == (2, 0)  # 2 vs 2, no bonus
@@ -371,8 +371,8 @@ def test_cancel_defense_is_free_and_drops_the_bonus() -> None:
     assert state.players[1].cp == 100
     assert state.groups[d].mode is Mode.ATTACK
     assert state.intents == {}
-    run.until(31 + 30)  # row 2: 30 ticks
-    assert [(f.kind, f.tick) for f in run.fights] == [("fight_started", 31), ("fight_ended", 61)]
+    run.until(31 + 60)  # row 2: 60 ticks
+    assert [(f.kind, f.tick) for f in run.fights] == [("fight_started", 31), ("fight_ended", 91)]
     assert (state.groups[d].units, state.groups[d].charged) == (1, 0)
 
 
@@ -399,14 +399,14 @@ def test_a_road_build_is_not_public() -> None:
 
 
 def test_intent_of_a_destroyed_group_is_removed() -> None:
-    # Row 3: 4 vs 2 (29 ticks of «Защита» gather no bonus, DEC-30): the defence dies at 70.
+    # Row 3: 4 vs 2 (29 ticks of «Защита» gather no bonus, DEC-30): the defence dies at 110.
     state = _state()
     d = _add(state, 1, 2, 2, 1)
     a = _add(state, 0, 4, 4, 0)
     run = _Run(state)
     run.step((1, SetMode(d, Mode.DEFENSE)), (0, Move(a, 1)))
     assert len(state.intents) == 1
-    run.until(70)
+    run.until(110)
     assert d not in state.groups
     assert state.nodes[1].owner == 0
     assert state.intents == {}

@@ -82,8 +82,9 @@ def test_fifteen_minute_match_resimulates_to_the_same_result(
     within 2 MB."""
     mapdef = load_map(MAPS / "pautina.json")
     bots = [
-        BOTS["rusher"](mapdef, full_rules, seed=1, player=0),
-        BOTS["reactive"](mapdef, full_rules, seed=2, player=1),
+        # Seeds of a pair that plays the whole 15 minutes (with 2 s rounds, DEC-32).
+        BOTS["rusher"](mapdef, full_rules, seed=2, player=0),
+        BOTS["reactive"](mapdef, full_rules, seed=3, player=1),
     ]
     log = tmp_path / "7.jsonl.gz"
     played = record_headless(log, mapdef, full_rules, bots)

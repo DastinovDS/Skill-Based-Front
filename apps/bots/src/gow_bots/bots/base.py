@@ -263,12 +263,14 @@ class Bot:
         """Withdrawals from lost fights and one reinforcement per fight of an own node (DEC-24,
         item K), at most ``budget`` CP in hundredths.
 
-        Withdraw: the own side has fewer charged units than the enemy, so every round costs a
-        unit. Attackers and groups on edges cancel (free, back along the edge); defenders of an
-        own node leave by ``Move`` to a neighbouring own node only when they cannot shoot at all.
+        The stock of a side is its charged units plus its bonus shots still left
+        (``FightView.virtual_left``, public to both in a fight: DEC-32, items 3 and 8).
+        Withdraw: the own stock is smaller than the enemy's, so every round costs a unit.
+        Attackers and groups on edges cancel (free, back along the edge); defenders of an own node
+        leave by ``Move`` to a neighbouring own node only when they cannot shoot at all.
         Reinforce: an idle charged group of a neighbouring own node goes to an own node whose
-        fight it reaches before its expected end (``max`` of the charged units of the sides
-        rounds from the next one).
+        fight it reaches before its expected end (``max`` of the stocks of the sides rounds from
+        the next one, ``combat.round_ticks`` each; a rough estimate on purpose).
         """
         me = view.player
         groups = {g.id: g for g in view.groups}
@@ -278,20 +280,21 @@ class Bot:
         cmds: list[Command] = []
         for f in sorted(view.fights, key=self._fight_key):
             mine = [groups[gid] for gid in f.groups if gid in groups]
-            charged = sum(g.charged for g in mine)
-            if f.enemy_charged > charged:
+            stock = sum(g.charged for g in mine) + f.virtual_left[me]
+            enemy = f.enemy_charged + f.virtual_left[1 - me]
+            if enemy > stock:
                 for g in sorted(mine, key=lambda g: (-g.units, -g.charged, g.id)):
                     if self._left.get(g.id, -1) >= f.start_tick:
                         continue
-                    cmd = self._withdrawal(view, g, charged, fight_at)
+                    cmd = self._withdrawal(view, g, stock, fight_at)
                     if cmd is not None and self.cost(cmd) <= budget:
                         budget -= self.cost(cmd)
                         cmds.append(cmd)
                         self._left[g.id] = tick
             node = f.node
-            if node is None or view.nodes[node].owner != me or f.enemy_charged < charged:
+            if node is None or view.nodes[node].owner != me or enemy < stock:
                 continue
-            end = f.next_round_tick + (max(charged, f.enemy_charged) - 1) * round_ticks
+            end = f.next_round_tick + (max(stock, enemy) - 1) * round_ticks
             for g in idle:
                 here = node_of(g)
                 if g.charged == 0 or here == node or here in fight_at:
@@ -321,7 +324,7 @@ class Bot:
         return (1, self.edge_keys[f.edge])
 
     def _withdrawal(
-        self, view: PlayerView, g: GroupView, charged: int, fight_at: dict[int, FightView]
+        self, view: PlayerView, g: GroupView, stock: int, fight_at: dict[int, FightView]
     ) -> Command | None:
         loc = g.location
         if isinstance(loc, OnEdge):
@@ -329,7 +332,7 @@ class Bot:
         here = loc.node
         if view.nodes[here].owner != view.player:
             return CancelOrder(g.id)  # an attacker of the node
-        if charged > 0 or g.order is not None:
+        if stock > 0 or g.order is not None:
             return None
         exits = [
             n

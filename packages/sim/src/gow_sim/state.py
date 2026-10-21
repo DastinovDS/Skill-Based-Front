@@ -161,8 +161,8 @@ class FightMember:
 class FightRound:
     """The last round of a fight (DEC-24, item I1 as revised with DEC-29): by player, the shots
     made, the virtual ones among them, the charges that left its units (``spent``) and the units
-    it lost. Public to both players, like the ``fight_round`` event of that round; the virtual
-    shots still left (``Fight.virtual``) are not."""
+    it lost. Public to both players, like the ``fight_round`` event of that round, and so are the
+    virtual shots still left (``Fight.virtual``, DEC-32)."""
 
     tick: int
     shots: tuple[int, int]

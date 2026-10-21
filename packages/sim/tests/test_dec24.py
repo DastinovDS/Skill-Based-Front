@@ -1,11 +1,11 @@
 """DEC-24 beyond the worked examples (mechanics.md, section 4, «Бой во времени»): commands in a
 fight (item E), movement around a fight (items B6, D1), supply (item H1), production (DEC-25,
-item 9), bonuses (item F1), the view of a fight (item I1, with its fog test, AGENTS.md 4.4) and
-the canonical state.
+item 9), bonuses (item F1), the view of a fight (item I1 and the bonus stock of DEC-32, with
+their fog tests, AGENTS.md 4.4) and the canonical state.
 
 The setup is the line of ``test_combat.py``: ``0 - 1 - 2`` (forest, 30 ticks per edge), node 1 of
 player 1 with a 2/2 garrison, player 0's 3/3 arrives from node 0 in tick 1 (contact ``t = 1``,
-row 2 of the table: rounds at 11, 21, 31).
+row 2 of the table: rounds at 21, 41, 61 with ``round_ticks = 20``, DEC-32).
 """
 
 from pathlib import Path
@@ -287,17 +287,20 @@ def test_both_players_see_the_fight_with_exact_enemy_counters() -> None:
         view = project(state, RULES, player, KEY)
         (fight,) = view.fights
         assert (fight.node, fight.edge, fight.point, fight.attacker) == (1, None, None, 0)
-        assert (fight.start_tick, fight.next_round_tick) == (1, 11)
+        assert (fight.start_tick, fight.next_round_tick) == (1, 21)
         assert len(fight.groups) == 1 and fight.groups[0] == next(
             g.id for g in view.groups if g.units == state.groups[own].units
         )
         assert (fight.enemy_units, fight.enemy_charged) == enemy
+        assert fight.virtual_left == (0, 0)  # forest, no orders: no virtual shots
 
 
-def test_both_players_see_the_rounds_of_both_sides_with_the_enemy_bonus() -> None:
-    """I1 and I2 as revised with DEC-29 (#295): the rounds are public. The attacker 3/3 brings a
-    planned bonus of 2 (row 2 plus a plan): in the round at 11 its shot is virtual and cancels
-    the defender's real one, so the defender (player 1) sees the enemy's virtual shot."""
+def test_both_players_see_the_rounds_and_the_bonus_stock_of_both_sides() -> None:
+    """I1 and I2 as revised with DEC-29 (#295): the rounds are public; DEC-32, items 3 and 5:
+    the bonus stock of both sides too, while the fight goes on. The attacker 3/3 brings a planned
+    bonus of 2 (row 2 plus a plan): the stock is 2 from the contact, in the round at 21 its shot
+    is virtual (B4: virtual first) and cancels the defender's real one, so the stock is 1; the
+    round at 41 spends the last one."""
     state = initial_state(_line(), RULES)
     _add(state, 1, 2, 2, AtNode(1))
     order = Order((1,), True, 0)
@@ -306,33 +309,95 @@ def test_both_players_see_the_rounds_of_both_sides_with_the_enemy_bonus() -> Non
     run.step()
     for player in PLAYERS:
         (fight,) = project(state, RULES, player, KEY).fights
-        assert fight.last_round is None  # before the first round: no data, no stock
+        assert fight.last_round is None  # before the first round: no round data
         assert (fight.shots, fight.losses) == ((0, 0), (0, 0))
-    while state.tick < 11:
+        assert fight.virtual_left == (2, 0)  # the stock is there from the contact
+    while state.tick < 21:
         run.step()
     (rnd,) = run.kinds("fight_round")
-    expected = FightRound(11, shots=(1, 1), virtual=(1, 0), spent=(0, 1), losses=(0, 0))
+    expected = FightRound(21, shots=(1, 1), virtual=(1, 0), spent=(0, 1), losses=(0, 0))
     for key in ("shots", "virtual", "spent", "losses"):  # the event carries the same numbers
         assert (rnd.get(f"{key}_0"), rnd.get(f"{key}_1")) == getattr(expected, key)
     for player in PLAYERS:
         (fight,) = project(state, RULES, player, KEY).fights
         assert fight.last_round == expected
         assert (fight.shots, fight.losses) == ((1, 1), (0, 0))
+        assert fight.virtual_left == (1, 0)
+    while state.tick < 41:
+        run.step()
+    for player in PLAYERS:
+        (fight,) = project(state, RULES, player, KEY).fights
+        assert fight.last_round is not None and fight.last_round.virtual == (1, 0)
+        assert fight.virtual_left == (0, 0)  # spent
 
 
-def test_fog_the_enemy_virtual_stock_and_withdrawal_are_hidden() -> None:
-    """AGENTS.md 4.4, I1: the rounds are public, the virtual shots still left (the stock before
-    and during the fight) are not, nor is an ordered withdrawal."""
+def test_fog_the_bonus_stock_is_exact_for_both_players() -> None:
+    """AGENTS.md 4.4 for ``FightView.virtual_left`` (DEC-32, item 3): in a fight both numbers are
+    in the views of both players, exactly."""
+    run, d, _ = _node_fight()
+    state = run.state
+    fid = state.groups[d].fight
+    assert fid is not None
+    state.fights[fid].virtual = (1, 4)
+    for player in PLAYERS:
+        (fight,) = project(state, RULES, player, KEY).fights
+        assert fight.virtual_left == (1, 4)
+
+
+def test_fog_a_withdrawal_is_hidden() -> None:
+    """AGENTS.md 4.4, I1: an ordered withdrawal of the enemy is not in a view."""
     run, d, _ = _node_fight()
     state = run.state
     before = project(state, RULES, 0, KEY)
-    fid = state.groups[d].fight
-    assert fid is not None
-    fight = state.fights[fid]
-    fight.virtual = (fight.virtual[0], fight.virtual[1] + 4)
     run.step((1, Move(d, 2)))  # the defender orders a withdrawal: player 0 must not learn it
     after = project(state, RULES, 0, KEY)
     assert after.fights == before.fights
+
+
+def _without_bonuses(state: GameState, gids: list[int]) -> GameState:
+    """A copy of ``state`` where the groups ``gids`` have no bonus and no gathered «Защита»."""
+    copy = from_canonical(to_canonical(state))
+    for gid in gids:
+        copy.groups[gid].bonus = 0
+        copy.groups[gid].ticks_in_defense = 0
+    return copy
+
+
+def test_fog_an_enemy_bonus_outside_a_fight_is_hidden() -> None:
+    """DEC-32, item 3 (DEC-30, item 5): outside a fight the gathered «Защита» and the bonus of a
+    waiting planned order of an enemy group are not in a view: player 0's view is the same with
+    and without them, while player 1 sees its own «Защита» bonus."""
+    state = initial_state(_line(), RULES)
+    gathered = 2 * RULES.orders.defense_ticks_per_bonus
+    guard = _add(state, 1, 2, 2, AtNode(1), mode=Mode.DEFENSE, ticks_in_defense=gathered)
+    waiting = _add(state, 1, 2, 2, AtNode(1), order=Order((0,), True, 50), bonus=2, bonus_tick=50)
+    _add(state, 0, 1, 1, AtNode(0))
+    bare = _without_bonuses(state, [guard, waiting])
+    assert project(state, RULES, 0, KEY) == project(bare, RULES, 0, KEY)
+    assert project(state, RULES, 0, KEY).fights == ()
+    own = {g.units: g for g in project(state, RULES, 1, KEY).groups if g.mode is Mode.DEFENSE}
+    assert own[2].defense_bonus == 2  # the own view has it: the test above is not vacuous
+
+
+def test_fog_a_reinforcement_shows_its_bonus_only_when_it_joins() -> None:
+    """DEC-32, item 5: a reinforcement on its way does not reveal its bonus; the stock grows in
+    the tick it joins the fight (DEC-24, items D1 and F1), before the first round at 21."""
+    run, _, _ = _node_fight()
+    state = run.state
+    way = leg(state.map, RULES, 0, 1)
+    where = OnEdge(0, 0, way.progress(way.ticks - 10))
+    # 2 charged: a planned bonus is at most the charged units (DEC-29, ``movement``).
+    r = _add(state, 0, 2, 2, where, order=Order((1,), True, 0), bonus=2, bonus_tick=0)
+    while state.groups[r].fight is None:
+        (fight,) = project(state, RULES, 1, KEY).fights
+        assert fight.virtual_left == (0, 0)
+        bare = _without_bonuses(state, [r])
+        assert project(state, RULES, 1, KEY) == project(bare, RULES, 1, KEY)
+        run.step()
+    assert state.tick < 21
+    for player in PLAYERS:
+        (fight,) = project(state, RULES, player, KEY).fights
+        assert fight.virtual_left == (2, 0)
 
 
 def test_fog_an_edge_fight_shows_the_enemy_counters_even_without_vision() -> None:

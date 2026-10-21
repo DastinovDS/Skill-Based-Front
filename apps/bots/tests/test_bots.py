@@ -19,13 +19,19 @@ from gow_bots.bots import (
     IdleBot,
     ParamRange,
     RandomLegalBot,
+    ReactiveBot,
     choose_params,
     prefer_planned,
     shots_to_take,
 )
-from gow_sim.maps import MapDef, Terrain
+from gow_sim.commands import CancelOrder
+from gow_sim.maps import MapDef, Terrain, parse_map
 from gow_sim.match import Controller, Match, run_headless
 from gow_sim.ruleset import Ruleset
+from gow_sim.state import AtNode, Group, Mode, OnEdge, Order, initial_state
+from gow_sim.systems.combat import combat
+from gow_sim.systems.movement import leg, movement
+from gow_sim.view import PlayerView, project
 
 ROOT = Path(__file__).resolve().parents[3]
 MVP_MAPS = ("arteriya", "pautina", "pereval")
@@ -261,3 +267,61 @@ def test_bots_fight_without_in_fight_rejects(
     assert result.outcome is not None
     assert seen.fights > 0
     assert seen.codes.get("IN_FIGHT", 0) == 0
+
+
+# The bonus stock of a fight (DEC-32, item 8) ---------------------------------------------------
+
+
+def _attack_into_a_fight(rules: Ruleset, enemy_bonus: int) -> tuple[PlayerView, ReactiveBot]:
+    """Player 0's 2/2 arrives in node 1 of the line ``0 - 1 - 2`` and fights player 1's 2/2 there
+    (row 1 of the table); the defender has ``enemy_bonus`` virtual shots left."""
+    nodes = [
+        {
+            "id": i,
+            "x": 10 * i,
+            "y": 10,
+            "terrain": "forest",
+            "vp": 1,
+            "kind": "capital" if i != 1 else "city_large",
+            "capital_of": {0: 0, 2: 1}.get(i),
+            "start_owner": 0 if i == 0 else 1,
+            "start_units": 0,
+            "start_charged": 0,
+            "start_stock": 0,
+        }
+        for i in range(3)
+    ]
+    edges = [
+        {"id": i, "a": i, "b": i + 1, "base_width": 1, "max_width": 3, "travel_ticks": 30}
+        for i in range(2)
+    ]
+    mirror = {"nodes": {"0": 2, "1": 1, "2": 0}, "edges": {"0": 1, "1": 0}}
+    meta = {"name": "l", "version": 1, "symmetry": "rot180", "width": 100, "height": 20}
+    mapdef = parse_map({"meta": meta, "nodes": nodes, "edges": edges, "mirror": mirror})
+    state = initial_state(mapdef, rules)
+    state.groups[0] = Group(0, 1, 2, 2, Mode.ATTACK, AtNode(1))
+    way = leg(mapdef, rules, 0, 1)
+    there = OnEdge(0, 0, way.progress(way.ticks - 1))
+    state.groups[1] = Group(1, 0, 2, 2, Mode.ATTACK, there, order=Order((1,), False, 0))
+    state.next_id = 2
+    state.tick = 1
+    state.events = movement(state, rules)  # ``combat`` reads the arrivals of the tick
+    state.events += combat(state, rules)
+    (fight,) = state.fights.values()
+    fight.virtual = (0, enemy_bonus)
+    bot = ReactiveBot(mapdef, rules, seed=1, player=0)
+    return project(state, rules, 0, b"k" * 32), bot
+
+
+@pytest.mark.parametrize(("enemy_bonus", "withdraws"), [(0, False), (2, True)])
+def test_a_bot_counts_the_visible_bonus_stock_of_a_fight(
+    mvp_rules: Ruleset, enemy_bonus: int, withdraws: bool
+) -> None:
+    """DEC-32, item 8: the stock of a side is its charged units plus its bonus still left. 2/2
+    against 2/2 is even, the attacker stays; with 2 bonus shots of the enemy left it is lost
+    (every round costs a unit), and the attacker cancels (free, DEC-20)."""
+    view, bot = _attack_into_a_fight(mvp_rules, enemy_bonus)
+    (fight,) = view.fights
+    assert fight.virtual_left == (0, enemy_bonus)
+    cmds = bot.fight_commands(view, view.tick, budget=10_000)
+    assert cmds == ([CancelOrder(fight.groups[0])] if withdraws else [])

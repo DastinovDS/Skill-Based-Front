@@ -57,7 +57,7 @@ RULES = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
 MVP_MAPS = ("arteriya", "pautina", "pereval")
 CLIENT_FIXTURES = ROOT / "packages" / "protocol" / "fixtures" / "client"
 KEY = b"pro-03 test match key, 32 bytes!"
-TICKS = 1800  # pereval: the first fight of the scripted drivers is at tick 1568
+TICKS = 2000  # pereval: the first fight of the scripted drivers is at 1722..1822
 BOT_TICKS = 1200
 REGRESSION = 1.5
 

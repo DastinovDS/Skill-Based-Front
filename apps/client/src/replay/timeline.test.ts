@@ -72,6 +72,7 @@ describe('buildTimeline', () => {
         enemy_charged: 0,
         shots: [0, 0],
         losses: [0, 0],
+        virtual_left: [0, 0],
         last_round: null,
       },
     ]);

@@ -716,8 +716,9 @@ export interface IntentView {
  * the own groups in the fight. ``enemy_units`` and ``enemy_charged``: the enemy's totals in this
  * fight, exact. A round happens at ``next_round_tick``, every ``combat.round_ticks``.
  * ``shots`` and ``losses``: totals of the fight so far by player; ``last_round``: the latest
- * round of both players, ``None`` before the first one. The virtual shots still left are not
- * sent (DEC-24, item I1: the rounds are public, the stock is not).
+ * round of both players, ``None`` before the first one. ``virtual_left``: the virtual shots
+ * (bonuses, mountains) still left by player, public to both while the fight goes on (DEC-32,
+ * item 3); it grows when a reinforcement with a bonus joins and drops after each round.
  */
 export interface FightView {
   id: string;
@@ -743,6 +744,11 @@ export interface FightView {
    * @maxItems 2
    */
   losses: [number, number];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  virtual_left: [number, number];
   last_round: FightRoundView | null;
 }
 /**
@@ -970,6 +976,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 20;
+export const PROTOCOL_VERSION = 21;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
