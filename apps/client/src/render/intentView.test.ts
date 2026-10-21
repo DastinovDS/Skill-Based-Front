@@ -1,5 +1,5 @@
-import type { Graphics } from 'pixi.js';
-import { describe, expect, it } from 'vitest';
+import { CanvasTextMetrics, Container, Text, type Graphics } from 'pixi.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import { interpolateFrame } from '../net/interpolate.ts';
@@ -67,6 +67,19 @@ function paints(g: unknown): Paint[] {
     width: i.data.style.width ?? 0,
   }));
 }
+
+// jsdom has no canvas to measure text on: seven units a letter.
+beforeEach(() => {
+  vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+    (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+  );
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+/** Pixi's label is `null` until set, whatever its type says. */
+const labelOf = (node: { label: string | null }): string => node.label ?? '';
 
 describe('IntentView', () => {
   it('draws a ribbon from the origin to the target of a planned move', () => {
@@ -275,6 +288,88 @@ describe('IntentView: opaque arcs that pulse (#325)', () => {
       kit.destroy();
     } finally {
       setReducedMotion(null);
+    }
+  });
+});
+
+describe('IntentView, the bonus of an own plan at the head of its ribbon (DEC-29)', () => {
+  const own = intent({ owner: 0, origin: home, target: far });
+  const planned = (bonus: number, planned = true): GroupView => ({
+    id: 'g',
+    units: 2,
+    charged: 2,
+    mode: 'attack',
+    location: { kind: 'node', node: home },
+    order: { dest: far, path: [via, far], planned, bonus },
+    defense_bonus: null,
+    defense_cap: null,
+  });
+  /** The pills drawn: the text and whether it is a forecast or locked. */
+  function pills(layers: ReturnType<typeof createLayers>): { text: string; state: string }[] {
+    const found: { text: string; state: string }[] = [];
+    const visit = (node: Container): void => {
+      if (!node.visible) return;
+      if (labelOf(node).startsWith('plan-bonus-pill:')) {
+        const text = node.children.find((c): c is Text => c instanceof Text);
+        found.push({
+          text: text?.text ?? '',
+          state: labelOf(node).slice('plan-bonus-pill:'.length),
+        });
+      }
+      for (const child of node.children) visit(child);
+    };
+    visit(layers.layer.intents);
+    return found;
+  }
+
+  it('shows "+N" with the number of the server for an own planned order', () => {
+    const { layers, draw, view } = setup();
+    draw([own], [planned(2)]);
+    expect(pills(layers).map((p) => p.text)).toEqual(['+2']);
+    // It follows the view: the forecast changes with the charged units.
+    draw([own], [planned(1)]);
+    expect(pills(layers).map((p) => p.text)).toEqual(['+1']);
+    view.destroy();
+  });
+
+  it('is a forecast while the delay runs and locked once it is over', () => {
+    const { layers, draw, view } = setup();
+    draw([own], [planned(2)], 100);
+    expect(pills(layers).map((p) => p.state)).toEqual(['forecast']);
+    // The delay is 30 ticks (setup): from the tick after it the group leaves.
+    draw([own], [planned(2)], 140);
+    expect(pills(layers).map((p) => p.state)).toEqual(['locked']);
+    view.destroy();
+  });
+
+  it('shows nothing for a plan with no bonus, for an ordinary order, or without the group', () => {
+    const { layers, draw, view } = setup();
+    draw([own], [planned(0)]);
+    expect(pills(layers)).toEqual([]);
+    draw([own], [planned(2, false)]);
+    expect(pills(layers)).toEqual([]);
+    draw([own], []);
+    expect(pills(layers)).toEqual([]);
+    view.destroy();
+  });
+
+  it('shows nothing at the ribbon of the opponent: its intent has no size and no bonus', () => {
+    const { layers, draw, view } = setup();
+    draw([intent({ owner: 1, origin: far, target: home })], [planned(2)]);
+    expect(pills(layers)).toEqual([]);
+    view.destroy();
+  });
+
+  it('keeps the pill the same size on screen at any zoom', () => {
+    for (const scale of [0.6, 2]) {
+      const { layers, draw, view } = setup();
+      view.setCameraScale(scale);
+      draw([own], [planned(2)]);
+      const pill = layers.layer.intents.children
+        .flatMap((c) => (c instanceof Container ? c.children : []))
+        .find((c) => labelOf(c).startsWith('plan-bonus-pill:'));
+      expect(pill?.scale.x).toBeCloseTo(1 / scale);
+      view.destroy();
     }
   });
 });

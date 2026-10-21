@@ -145,6 +145,8 @@ export class OrderController implements MapInteraction {
   readonly #o: OrderControllerOptions;
   #shift = false;
   #hover: PickHit | null = null;
+  /** The last step of the rear minimum by key: where it started and where it was sent to. */
+  #rearStep: { readonly from: number; readonly to: number } | null = null;
   #noticeId = 0;
   #noticeTimer: ReturnType<typeof setTimeout> | undefined;
   #overlay: OverlayState = EMPTY_OVERLAY;
@@ -211,6 +213,11 @@ export class OrderController implements MapInteraction {
   /** Price of switching a group to `mode`, hundredths of CP. */
   modeCost(mode: Mode): number {
     return mode === 'attack' ? this.#o.rules.cost.attack : this.#o.rules.cost.defense;
+  }
+
+  /** Ticks for one point of the "Defense" bonus (`ruleset_public.orders.defense_ticks_per_bonus`, DEC-30). */
+  get defenseTicksPerBonus(): number {
+    return this.#o.rules.orders.defense_ticks_per_bonus;
   }
 
   /** Price of a stance change, hundredths of CP. */
@@ -781,6 +788,22 @@ export class OrderController implements MapInteraction {
     this.#sendCommand({ type: 'set_rear_min', n: value }, null);
   }
 
+  /**
+   * One step of the rear minimum up (`delta` 1) or down (-1) from where it stands (`[` and `]` on
+   * the «Supply» layer), kept within `0..supply.rear_min_max`. The snapshot that confirms a step
+   * comes a moment later: presses before it add up from the step already sent, not from the old
+   * value, so two quick presses are two steps.
+   */
+  stepRearMin(delta: number): void {
+    const now = this.rearMin;
+    if (now === null) return;
+    const sent = this.#rearStep !== null && this.#rearStep.from === now ? this.#rearStep.to : now;
+    const to = Math.min(this.#o.rules.supply.rear_min_max, Math.max(0, sent + delta));
+    if (to === sent) return;
+    this.#rearStep = { from: now, to };
+    this.setRearMin(to);
+  }
+
   /** Ends the transfer pick without a transfer. */
   cancelTransferPick(): void {
     if (this.ui.current.transferFrom !== null) this.ui.patch({ transferFrom: null });
@@ -885,6 +908,15 @@ export class OrderController implements MapInteraction {
         this.closeRadial();
         return true;
       }
+    }
+    if (
+      (input.code === 'BracketLeft' || input.code === 'BracketRight') &&
+      this.ui.current.supplyMode &&
+      !this.transfer.current.open
+    ) {
+      // On the «Supply» layer `[` and `]` lower and raise the rear minimum, one step a press.
+      if (input.repeat !== true) this.stepRearMin(input.code === 'BracketRight' ? 1 : -1);
+      return true;
     }
     switch (input.code) {
       case 'Escape':

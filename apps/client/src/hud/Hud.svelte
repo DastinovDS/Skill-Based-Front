@@ -182,7 +182,7 @@
   />
   <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
   <StackRadial {orders} {anchors} />
-  <GroupTip group={data?.hovered ?? null} />
+  <GroupTip group={data?.hovered ?? null} rules={hud.context.rules} />
   <RoadBanner {orders} />
   <RoadTip {orders} road={roadHover} />
   <HelpOverlay

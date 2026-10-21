@@ -314,7 +314,11 @@ export class MapScene {
     this.entities.setLabelResolution(resolution);
     this.alerts.setLabelResolution(resolution);
     this.supply.setLabelResolution(resolution);
-    this.effects.setLabelResolution(resolution);
+    // What is drawn at one unit a CSS px (the arenas of fights, the bonus of plans) needs the device pixel ratio only.
+    const screen = labelResolution(1, this.app.renderer.resolution);
+    this.effects.setScreenResolution(screen);
+    this.intents.setScreenResolution(screen);
+    this.effects.setCameraScale(camera.scale);
     this.entities.setCameraScale(camera.scale);
     this.intents.setCameraScale(camera.scale);
     this.alerts.setCameraScale(camera.scale);

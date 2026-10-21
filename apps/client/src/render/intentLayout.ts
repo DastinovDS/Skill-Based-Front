@@ -375,3 +375,28 @@ export function ghostLook(
   );
   return { dx, alpha: base * (1 - fade), solid: false };
 }
+
+/**
+ * The outline of a rounded rectangle centred on the origin as a closed polyline (corners cut into
+ * `steps` pieces): for a contour that is dashed with `dashAlong`.
+ */
+export function roundRectPoints(width: number, height: number, radius: number, steps = 4): Point[] {
+  const r = Math.min(radius, width / 2, height / 2);
+  const hw = width / 2;
+  const hh = height / 2;
+  const points: Point[] = [];
+  // Clockwise from the top left corner: the centres of the four corner arcs and where each starts.
+  const corners = [
+    { cx: -hw + r, cy: -hh + r, from: Math.PI },
+    { cx: hw - r, cy: -hh + r, from: -Math.PI / 2 },
+    { cx: hw - r, cy: hh - r, from: 0 },
+    { cx: -hw + r, cy: hh - r, from: Math.PI / 2 },
+  ];
+  for (const { cx, cy, from } of corners) {
+    for (let i = 0; i <= steps; i++) {
+      const angle = from + ((Math.PI / 2) * i) / steps;
+      points.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
+    }
+  }
+  return points;
+}

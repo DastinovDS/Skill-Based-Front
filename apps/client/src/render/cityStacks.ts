@@ -20,6 +20,18 @@ export interface CityStack {
   readonly charged: number;
   /** Distinct modes of the groups ("Defense" shows as the shield of the icon). */
   readonly modes: readonly Mode[];
+  /**
+   * The Defense bonus the own groups in "Defense" hold and its cap (DEC-30), the server's numbers
+   * summed over the groups; `null` for the opponent's stack (it shows the mode only, DEC-30,
+   * item 5) and when no group of the stack has the numbers.
+   */
+  readonly defense: DefenseBonus | null;
+}
+
+/** The gathered "Defense" bonus and its cap. */
+export interface DefenseBonus {
+  readonly bonus: number;
+  readonly cap: number;
 }
 
 /** A drawn city icon: the stack and where its triangle is (hit testing, anchors). */
@@ -39,7 +51,15 @@ export function stackKey(node: number, owner: PlayerId): string {
 export function stackGroups(groups: readonly RenderGroup[], me: PlayerId): CityStack[] {
   const stacks = new Map<
     string,
-    { node: number; owner: PlayerId; ids: string[]; units: number; charged: number; modes: Mode[] }
+    {
+      node: number;
+      owner: PlayerId;
+      ids: string[];
+      units: number;
+      charged: number;
+      modes: Mode[];
+      defense: DefenseBonus | null;
+    }
   >();
   for (const item of groups) {
     if (item.location.kind !== 'node') continue;
@@ -48,13 +68,21 @@ export function stackGroups(groups: readonly RenderGroup[], me: PlayerId): CityS
     const key = stackKey(node, owner);
     let stack = stacks.get(key);
     if (stack === undefined) {
-      stack = { node, owner, ids: [], units: 0, charged: 0, modes: [] };
+      stack = { node, owner, ids: [], units: 0, charged: 0, modes: [], defense: null };
       stacks.set(key, stack);
     }
     stack.ids.push(item.group.id);
     stack.units += item.group.units;
     stack.charged += item.group.charged;
     if (!stack.modes.includes(item.group.mode)) stack.modes.push(item.group.mode);
+    // Only the own groups carry the number; the opponent's stack never shows one, whatever the data.
+    const { defense_bonus: bonus, defense_cap: cap } = item.group;
+    if (owner === me && bonus !== null && cap !== null) {
+      stack.defense = {
+        bonus: (stack.defense?.bonus ?? 0) + bonus,
+        cap: (stack.defense?.cap ?? 0) + cap,
+      };
+    }
   }
   return [...stacks.values()];
 }

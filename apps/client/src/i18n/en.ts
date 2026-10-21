@@ -270,7 +270,17 @@ export const en = {
   'fight.captured': 'Captured',
   'fight.held': 'Held',
   'fight.bounced': 'Both retreated',
+  'fight.bonusAttack': 'bonus attack',
   'help.key.defense': 'group Defense on or off',
+  'defense.bonus': '+{bonus} / {cap}',
+  'defense.title': 'Defense: bonus {bonus} of {cap}',
+  'defense.rule':
+    '+1 for every {seconds} s in the mode, at most the charged units; burns after a fight; costs {cost} CP',
+  'defense.radialRule': '+1 bonus per {seconds} s in the mode, cap: charged units',
+  'defense.radialBurn': 'The bonus burns after a fight',
+  'order.bonus': 'Plan bonus ◇ +{n}',
+  'order.bonusForecast': 'Plan bonus ◇ +{n}: a forecast, the number is settled at the departure',
+  'help.key.rearMin': 'Supply layer: rear minimum lower / higher',
   'start.title': 'You are blue. Your capital is here',
   'start.capital': 'Opponent: {nick}',
   'exit.title': 'Leave the match?',
@@ -286,6 +296,14 @@ export const en = {
   'help.legend.order': 'Thin arrow: an ordinary order',
   'help.legend.planned': 'Wide dashed ribbon: a planned order, both sides see it',
   'help.legend.alert': 'Amber ring: they are coming for the city, or it is overcrowded',
+  'help.legend.chips':
+    'Fight arena: a chip per unit (filled: charged, hatched: discharged, dashed: dead), up to 8 a side, then "+N"',
+  'help.legend.stock':
+    '◇ ×N under a half of the arena: the bonus shots the side has left; both players see it while the fight lasts',
+  'help.legend.silent':
+    'An amber crossed circle on a chip: a charge that does not shoot (a defender on plains)',
+  'help.legend.bonusShot':
+    'A dashed arrow with a diamond and the caption "bonus attack": a bonus shot fired this round',
   'help.howTo': 'How to play',
   'help.howToSoon': 'Coming soon',
   'help.keys': 'Keys',

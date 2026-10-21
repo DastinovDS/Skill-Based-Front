@@ -75,3 +75,41 @@ describe('where the icon stands', () => {
     expect(stackKey(3, 1)).not.toBe(stackKey(3, 0));
   });
 });
+
+describe('stackGroups, the gathered Defense bonus (DEC-30)', () => {
+  const defending = (id: string, units: number, bonus: number | null, cap: number | null) => ({
+    ...group(id, units, units, 'defense'),
+    defense_bonus: bonus,
+    defense_cap: cap,
+  });
+
+  it('sums the bonus and the cap of the own groups in Defense, as the server sent them', () => {
+    const stacks = stackGroups(
+      [
+        inNode(defending('a', 3, 2, 3), 3),
+        inNode(defending('b', 2, 1, 2), 3),
+        inNode(group('c', 4, 4), 3),
+      ],
+      0,
+    );
+    expect(stacks[0]?.defense).toEqual({ bonus: 3, cap: 5 });
+  });
+
+  it('has none for a stack without the numbers (a group not in Defense, or an old replay)', () => {
+    expect(stackGroups([inNode(group('a', 3, 3), 3)], 0)[0]?.defense).toBeNull();
+    expect(stackGroups([inNode(defending('a', 3, null, null), 3)], 0)[0]?.defense).toBeNull();
+  });
+
+  it('never has one for the opponent: it shows the mode only, whatever the data say', () => {
+    const stacks = stackGroups(
+      [inNode(defending('a', 3, 2, 3), 3, 1), inNode(defending('b', 2, 1, 2), 3, 0)],
+      0,
+    );
+    expect(stacks.find((s) => s.owner === 1)?.defense).toBeNull();
+    expect(stacks.find((s) => s.owner === 1)?.modes).toEqual(['defense']);
+    expect(stacks.find((s) => s.owner === 0)?.defense).toEqual({ bonus: 1, cap: 2 });
+    // Seen from the other side the roles swap.
+    const swapped = stackGroups([inNode(defending('a', 3, 2, 3), 3, 1)], 1);
+    expect(swapped[0]?.defense).toEqual({ bonus: 2, cap: 3 });
+  });
+});

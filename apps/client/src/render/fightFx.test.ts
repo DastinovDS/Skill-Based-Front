@@ -5,20 +5,29 @@ import {
   ARENA_GAP_EDGE,
   ARENA_GAP_NODE,
   ARENA_REACH,
-  EXCHANGE_GROW_TICKS,
+  CAPTION_RISE,
+  CHIP,
+  GROW_SHARE,
+  PLATE,
+  arenaCenter,
   arenaSides,
-  chargeLine,
+  changedChips,
+  chipAt,
+  chipHatch,
+  chipHeight,
+  chipPulse,
+  chipsOf,
   exchangeArrow,
   exchangeLook,
   exchangeOf,
   fightFx,
   fightPlace,
   fightResult,
-  halfSlice,
-  hatchLines,
   lighten,
+  roundEffect,
   roundProgress,
   type EndFx,
+  type SideCount,
 } from './fightFx.ts';
 import { ringRadius } from './cityLayout.ts';
 
@@ -39,22 +48,39 @@ const event = (kind: string, data: EventMsg['data']): EventMsg => ({
 });
 
 describe('fightPlace', () => {
-  it('floats the arena of a fight in a city above its ring', () => {
+  it('knows the city of a fight in a city and the radius of its ring', () => {
     const place = fightPlace(map, 1, null, null, radius);
     expect(place?.at).toEqual({ x: 110, y: 120 });
-    expect(place?.arena).toEqual({ x: 110, y: 120 - ringRadius(14) - ARENA_GAP_NODE });
+    expect(place?.ring).toBe(ringRadius(14));
   });
 
-  it('puts a fight on a road at its meeting point (DEC-24, C3), the arena above it', () => {
+  it('puts a fight on a road at its meeting point (DEC-24, C3): no ring', () => {
     // point = 1134: the mark at 1134 / 2000 of the road from `a`.
     const place = fightPlace(map, null, 0, 1134, radius);
     expect(place?.at.x).toBeCloseTo(66.7);
-    expect(place?.arena.y).toBe(120 - ARENA_GAP_EDGE);
+    expect(place?.ring).toBe(0);
   });
 
   it('is unknown for an unknown place', () => {
     expect(fightPlace(map, 9, null, null, radius)).toBeUndefined();
     expect(fightPlace(map, null, null, null, radius)).toBeUndefined();
+  });
+
+  it('floats the arena above the ring by a gap fixed in screen px, whatever the zoom', () => {
+    const place = fightPlace(map, 1, null, null, radius);
+    if (place === undefined) throw new Error('no place');
+    expect(arenaCenter(place, 1)).toEqual({ x: 110, y: 120 - ringRadius(14) - ARENA_GAP_NODE });
+    // At 60% the gap is 1 / 0.6 world units: the same number of px on screen.
+    const small = arenaCenter(place, 0.6);
+    expect((120 - ringRadius(14) - small.y) * 0.6).toBeCloseTo(ARENA_GAP_NODE);
+    const road = fightPlace(map, null, 0, 1134, radius);
+    if (road === undefined) throw new Error('no place');
+    expect(arenaCenter(road, 1).y).toBe(120 - ARENA_GAP_EDGE);
+    expect(ARENA_GAP_EDGE).toBeGreaterThan(ARENA_GAP_NODE);
+  });
+
+  it('leaves room for the lower arrow and its label under the plate', () => {
+    expect(ARENA_GAP_NODE).toBeGreaterThan(PLATE.halfHeight + ARENA_REACH);
   });
 });
 
@@ -165,13 +191,24 @@ describe('exchange of the last round', () => {
     expect(exchangeOf(round([1, 0], [4, 0]), 0).own).toEqual({ real: 0, virtual: 1 });
   });
 
-  it('grows over a few ticks, holds until the next round, fades if none comes', () => {
-    expect(exchangeLook(0, 10, false)).toEqual({ grow: 0, alpha: 1 });
-    expect(exchangeLook(EXCHANGE_GROW_TICKS / 2, 10, false).grow).toBeCloseTo(0.5);
-    expect(exchangeLook(EXCHANGE_GROW_TICKS, 10, false).grow).toBe(1);
-    expect(exchangeLook(9.9, 10, false).alpha).toBe(1);
-    expect(exchangeLook(16, 10, false).alpha).toBeCloseTo(0.5);
-    expect(exchangeLook(20, 10, false).alpha).toBe(0);
+  it('grows over a share of the round, holds until the next round, fades if none comes', () => {
+    for (const ticks of [10, 20]) {
+      const grow = ticks * GROW_SHARE;
+      expect(exchangeLook(0, ticks, false)).toEqual({ grow: 0, alpha: 1 });
+      expect(exchangeLook(grow / 2, ticks, false).grow).toBeCloseTo(0.5);
+      expect(exchangeLook(grow, ticks, false).grow).toBe(1);
+      expect(exchangeLook(ticks * 1.1, ticks, false).alpha).toBe(1);
+      expect(exchangeLook(ticks * 1.6, ticks, false).alpha).toBeCloseTo(0.5);
+      expect(exchangeLook(ticks * 2, ticks, false).alpha).toBe(0);
+    }
+  });
+
+  it('measures every duration in rounds: a round of 20 ticks lasts twice as long as one of 10', () => {
+    expect(roundEffect(4, 0.8, 10)).toBeCloseTo(0.5);
+    expect(roundEffect(4, 0.8, 20)).toBeCloseTo(0.25);
+    expect(roundEffect(8, 0.8, 10)).toBeNull();
+    expect(roundEffect(-1, 0.8, 20)).toBeNull();
+    expect(roundEffect(16, 0.8, 20)).toBeNull();
   });
 
   it('with less motion is whole from the first tick', () => {
@@ -180,99 +217,159 @@ describe('exchange of the last round', () => {
 });
 
 describe('exchange arrows', () => {
-  const R = 24;
+  const { halfHeight: hh } = PLATE;
 
   it('the own arrow rises from the own half over the top into the enemy half', () => {
-    const arrow = exchangeArrow(true, R, 1);
+    const arrow = exchangeArrow(true, 1);
     const first = arrow.line[0];
     const last = arrow.line[arrow.line.length - 1];
     expect(first?.x).toBeLessThan(0);
     expect(last?.x).toBeGreaterThan(0);
-    // The arc clears the circle at the top: its label sits above the arena.
-    expect(arrow.label.y).toBeLessThan(-R);
-    expect(Math.min(...arrow.line.map((p) => p.y))).toBeLessThan(-R);
+    // The arc clears the plate at the top: its label sits above it.
+    expect(arrow.label.y).toBeLessThan(-hh);
+    expect(Math.min(...arrow.line.map((p) => p.y))).toBeLessThan(-hh);
   });
 
   it('the enemy arrow falls from its half under the bottom into the own one', () => {
-    const arrow = exchangeArrow(false, R, 1);
+    const arrow = exchangeArrow(false, 1);
     expect(arrow.line[0]?.x).toBeGreaterThan(0);
     expect(arrow.line[arrow.line.length - 1]?.x).toBeLessThan(0);
-    expect(arrow.label.y).toBeGreaterThan(R);
+    expect(arrow.label.y).toBeGreaterThan(hh);
     // The two arrows are point reflections of each other: they never overlap.
-    const own = exchangeArrow(true, R, 1);
+    const own = exchangeArrow(true, 1);
     expect(arrow.label.x).toBeCloseTo(-own.label.x);
     expect(arrow.label.y).toBeCloseTo(-own.label.y);
   });
 
-  it('stays within the reach the arena makes room for', () => {
+  it('stays within the reach the arena makes room for (plate and the caption above it)', () => {
     for (const own of [true, false]) {
-      for (const p of exchangeArrow(own, R, 1).line) {
-        expect(Math.abs(p.y)).toBeLessThanOrEqual(ARENA_REACH);
+      for (const p of exchangeArrow(own, 1).line) {
+        expect(Math.abs(p.y)).toBeLessThanOrEqual(hh + ARENA_REACH);
       }
-      // The label is a pill 14 high: its far edge is within the reach too.
-      expect(Math.abs(exchangeArrow(own, R, 1).label.y) + 7).toBeLessThanOrEqual(ARENA_REACH);
+      // The label is a pill 16 high: its far edge is within the reach too.
+      expect(Math.abs(exchangeArrow(own, 1).label.y) + 8).toBeLessThanOrEqual(hh + ARENA_REACH);
     }
-    expect(ARENA_GAP_NODE).toBeGreaterThan(ARENA_REACH);
-    expect(ARENA_GAP_EDGE).toBeGreaterThan(ARENA_REACH);
+    // The caption "bonus attack" (19 high) sits above the label of the own arrow.
+    const label = exchangeArrow(true, 1).label;
+    expect(-hh - CAPTION_RISE + 9.5).toBeLessThan(label.y - 8);
   });
 
   it('grows from the shooter: a part of the curve, the head only once it is long enough', () => {
-    const full = exchangeArrow(true, R, 1);
-    const half = exchangeArrow(true, R, 0.5);
+    const full = exchangeArrow(true, 1);
+    const half = exchangeArrow(true, 0.5);
     expect(half.line.length).toBeLessThan(full.line.length);
     expect(half.line[0]).toEqual(full.line[0]);
-    expect(exchangeArrow(true, R, 0.1).head).toBeNull();
+    expect(exchangeArrow(true, 0.1).head).toBeNull();
     expect(half.head).not.toBeNull();
     // The head points where the curve goes: its tip is the front of the line.
     expect(half.head?.[0]).toEqual(half.line[half.line.length - 1]);
+    expect(half.tip).toEqual(half.line[half.line.length - 1]);
+    expect(Math.hypot(half.direction.x, half.direction.y)).toBeCloseTo(1);
   });
 });
 
-describe('halves of the arena', () => {
-  const R = 24;
-  const count = (units: number, charged: number) => ({ units, charged });
-
-  it('puts the line between the charged (below) and the discharged (above) by their share', () => {
-    expect(chargeLine(count(4, 0), R)).toBe(R);
-    expect(chargeLine(count(4, 4), R)).toBe(-R);
-    expect(chargeLine(count(4, 2), R)).toBe(0);
-    expect(chargeLine(count(4, 1), R)).toBe(R / 2);
-    // A side with no unit has nothing to cut; a charged count above the units is the whole half.
-    expect(chargeLine(count(0, 0), R)).toBe(-R);
-    expect(chargeLine(count(2, 9), R)).toBe(-R);
+describe('chips of an arena', () => {
+  const side = (units: number, charged: number, losses = 0, mute = 0): SideCount => ({
+    units,
+    charged,
+    losses,
+    bonus: 0,
+    mute,
   });
 
-  it('cuts a slice of the half-disc inside it, on the side of the half', () => {
-    const own = halfSlice(R, true, -R, R);
-    const enemy = halfSlice(R, false, -R, R);
-    expect(own.every((p) => p.x <= 1e-9)).toBe(true);
-    expect(enemy.every((p) => p.x >= -1e-9)).toBe(true);
-    for (const p of [...own, ...enemy]) expect(Math.hypot(p.x, p.y)).toBeLessThanOrEqual(R + 1e-9);
-    const slice = halfSlice(R, true, 0, R);
-    expect(Math.min(...slice.map((p) => p.y))).toBeCloseTo(0);
-    expect(Math.max(...slice.map((p) => p.y))).toBeCloseTo(R);
+  it('draws a chip per unit that was in the fight: charged, then discharged, then dead', () => {
+    expect(chipsOf(side(4, 2, 1)).shown).toEqual([
+      'charged',
+      'charged',
+      'empty',
+      'empty',
+      'killed',
+    ]);
+    expect(chipsOf(side(0, 0)).shown).toEqual([]);
+    // A charged count above the units is the whole side.
+    expect(chipsOf(side(2, 9)).shown).toEqual(['charged', 'charged']);
   });
 
-  it('is empty when the slice has no height, whichever way it is given', () => {
-    expect(halfSlice(R, true, 5, 5)).toEqual([]);
-    expect(halfSlice(R, true, R, R)).toEqual([]);
-    expect(halfSlice(R, true, 5, -5)).toEqual(halfSlice(R, true, -5, 5));
+  it('shows eight chips at most and the rest as a "+N" with the exact number', () => {
+    const eight = chipsOf(side(8, 3));
+    expect(eight.shown).toHaveLength(8);
+    expect(eight.hidden).toBe(0);
+    const eleven = chipsOf(side(11, 9));
+    expect(eleven.shown).toHaveLength(CHIP.max);
+    expect(eleven.hidden).toBe(3);
+    // The dead count too: ten units and three dead are thirteen chips.
+    expect(chipsOf(side(10, 0, 3)).hidden).toBe(5);
   });
 
-  it('hatches only the discharged part: lines on a fixed grid between the top and the line', () => {
-    const lines = hatchLines(R, true, -R, 0, 4);
-    expect(lines.length).toBeGreaterThan(0);
-    for (const [from, to] of lines) {
-      expect(from.y).toBe(to.y);
-      expect(from.y).toBeLessThan(0);
-      expect(to.x).toBeLessThanOrEqual(0);
+  it('tells how many of the hidden chips are charged, so they do not read as discharged', () => {
+    expect(chipsOf(side(11, 9)).hiddenCharged).toBe(1);
+    expect(chipsOf(side(11, 11)).hiddenCharged).toBe(3);
+    expect(chipsOf(side(11, 4)).hiddenCharged).toBe(0);
+  });
+
+  it('marks the silent charges as the last charged chips, never more than the charged ones', () => {
+    expect(chipsOf(side(4, 3, 0, 1)).silent).toEqual([2]);
+    expect(chipsOf(side(4, 3, 0, 2)).silent).toEqual([1, 2]);
+    expect(chipsOf(side(4, 1, 0, 5)).silent).toEqual([0]);
+    expect(chipsOf(side(4, 0, 0, 1)).silent).toEqual([]);
+    // A silent charge among the hidden chips is not drawn.
+    expect(chipsOf(side(10, 10, 0, 1)).silent).toEqual([]);
+  });
+
+  it('points at the chips that changed in the last round: out of charge, and dead', () => {
+    // 4 units, 1 charged now, 1 dead; the round spent a charge and killed a unit.
+    expect(changedChips(side(4, 1, 1), { spent: 1, losses: 1 })).toEqual([1, 4]);
+    expect(changedChips(side(4, 1, 1), { spent: 0, losses: 0 })).toEqual([]);
+    expect(changedChips(side(4, 1, 1), null)).toEqual([]);
+    // The charges that went out cannot be more than the units.
+    expect(changedChips(side(2, 0, 0), { spent: 5, losses: 0 })).toEqual([0, 1]);
+  });
+
+  it('lays the chips out in two rows of four columns, a single row when four fit', () => {
+    const own = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => chipAt(i, 8, true));
+    expect(own.every((p) => p.x < 0)).toBe(true);
+    // Column-major: the pairs share a column, the next pair is a pitch further from the middle.
+    expect(own[0]?.x).toBe(own[1]?.x);
+    expect(own[1]?.y).toBeGreaterThan(own[0]?.y ?? 0);
+    expect(Math.abs(own[2]?.x ?? 0) - Math.abs(own[0]?.x ?? 0)).toBe(CHIP.pitch);
+    const enemy = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => chipAt(i, 8, false));
+    expect(enemy.every((p, i) => p.x === -(own[i]?.x ?? 0))).toBe(true);
+    // One row of up to four: all at the same height, in the middle of the two rows.
+    const row = [0, 1, 2, 3].map((i) => chipAt(i, 4, true));
+    expect(new Set(row.map((p) => p.y)).size).toBe(1);
+    expect(row[0]?.y).toBeGreaterThan(own[0]?.y ?? 0);
+    expect(row[0]?.y).toBeLessThan(own[1]?.y ?? 0);
+    // Everything stays on the plate.
+    for (const p of [...own, ...enemy]) {
+      expect(Math.abs(p.x) + CHIP.side / 2).toBeLessThan(PLATE.halfWidth);
+      expect(Math.abs(p.y) + chipHeight(CHIP.side) / 2).toBeLessThan(PLATE.halfHeight);
     }
-    // Nothing to hatch with no discharged unit; the whole half when all are discharged.
-    expect(hatchLines(R, true, -R, -R, 4)).toEqual([]);
-    expect(hatchLines(R, false, -R, R, 4).length).toBeGreaterThan(lines.length);
-    // The grid does not slide when the line moves: a shared line has the same place.
-    const shorter = hatchLines(R, true, -R, -8, 4);
-    expect(shorter.every(([a]) => lines.some(([b]) => b.y === a.y))).toBe(true);
+  });
+
+  it('hatches a chip with lines inside the triangle, narrowing towards the tip', () => {
+    const lines = chipHatch(CHIP.side, 3.5);
+    expect(lines.length).toBeGreaterThan(2);
+    const widths = lines.map(([a, b]) => b.x - a.x);
+    for (let i = 1; i < widths.length; i++) {
+      expect(widths[i]).toBeLessThan(widths[i - 1] ?? Infinity);
+    }
+    for (const [a, b] of lines) {
+      expect(a.y).toBe(b.y);
+      expect(Math.abs(a.y)).toBeLessThanOrEqual(chipHeight(CHIP.side) / 2);
+      expect(b.x).toBeLessThanOrEqual(CHIP.side / 2);
+    }
+  });
+
+  it('pulses once over a share of the round, and not with reduced motion', () => {
+    expect(chipPulse(0, 20, false)).toBe(1);
+    const mid = chipPulse(4.5, 20, false);
+    expect(mid).toBeGreaterThan(1);
+    expect(mid).toBeLessThanOrEqual(1.2);
+    expect(chipPulse(9, 20, false)).toBe(1);
+    expect(chipPulse(-1, 20, false)).toBe(1);
+    expect(chipPulse(4.5, 20, true)).toBe(1);
+    // The same swell lasts half as long in a round of 10 ticks.
+    expect(chipPulse(4.5, 10, false)).toBe(1);
   });
 
   it('lightens a colour towards white without touching white or changing the order of tones', () => {
@@ -326,20 +423,31 @@ describe('arena', () => {
         0,
       ),
     ).toEqual({
-      own: { units: 3, charged: 2 },
-      enemy: { units: 3, charged: 2 },
+      own: { units: 3, charged: 2, losses: 0, bonus: 0, mute: 0 },
+      enemy: { units: 3, charged: 2, losses: 0, bonus: 0, mute: 0 },
     });
   });
 
   it('adds the groups of the opponent when the frame shows both sides', () => {
     const both = { ...fight, enemy_units: 0, enemy_charged: 0 };
     expect(arenaSides(both, [group('a', 2, 0, 1), group('b', 4, 1, 3)], 0)).toEqual({
-      own: { units: 2, charged: 1 },
-      enemy: { units: 4, charged: 3 },
+      own: { units: 2, charged: 1, losses: 0, bonus: 0, mute: 0 },
+      enemy: { units: 4, charged: 3, losses: 0, bonus: 0, mute: 0 },
     });
   });
 
-  it('the arc fills towards the next round', () => {
+  it('takes losses, the bonus stock and the silent charges from the view, by player', () => {
+    const rich: FightView = { ...fight, losses: [2, 1], virtual_left: [3, 0], mute: [0, 1] };
+    const sides = arenaSides(rich, [group('a', 2, undefined, 2)], 0);
+    expect(sides.own).toMatchObject({ losses: 2, bonus: 3, mute: 0 });
+    expect(sides.enemy).toMatchObject({ losses: 1, bonus: 0, mute: 1 });
+    // Seen from the other player the numbers swap sides: the view's pairs are by player id.
+    const swapped = arenaSides(rich, [], 1);
+    expect(swapped.own).toMatchObject({ losses: 1, bonus: 0, mute: 1 });
+    expect(swapped.enemy).toMatchObject({ losses: 2, bonus: 3, mute: 0 });
+  });
+
+  it('the bar fills towards the next round', () => {
     expect(roundProgress(60, 50, 10)).toBe(0);
     expect(roundProgress(60, 55, 10)).toBeCloseTo(0.5);
     expect(roundProgress(60, 60, 10)).toBe(1);

@@ -1033,6 +1033,56 @@ describe('OrderController', () => {
           { type: 'set_rear_min', n: 0 },
         ]);
       });
+
+      it('[ and ] lower and raise the rear minimum by one on the supply layer only', () => {
+        const { controller, hud, sent } = setup();
+        hud.onSnapshot(withFronts([null, null], 2));
+        // Off the layer the keys are not the supply's.
+        expect(controller.key(down('BracketRight'))).toBe(false);
+        expect(sent).toEqual([]);
+        controller.key(down('Tab'));
+        expect(controller.key(down('BracketRight'))).toBe(true);
+        expect(sent).toEqual([{ type: 'set_rear_min', n: 3 }]);
+        // The snapshot confirms it; the next press goes on from there.
+        hud.onSnapshot(withFronts([null, null], 3));
+        controller.key(down('BracketLeft'));
+        expect(sent.at(-1)).toEqual({ type: 'set_rear_min', n: 2 });
+        // A held key is one step, as for the other keys.
+        controller.key(down('BracketLeft', true));
+        expect(sent).toHaveLength(2);
+      });
+
+      it('two quick presses before the snapshot are two steps, not one sent twice', () => {
+        const { controller, hud, sent } = setup();
+        hud.onSnapshot(withFronts([null, null], 1));
+        controller.key(down('Tab'));
+        controller.key(down('BracketRight'));
+        controller.key(down('BracketRight'));
+        expect(sent).toEqual([
+          { type: 'set_rear_min', n: 2 },
+          { type: 'set_rear_min', n: 3 },
+        ]);
+      });
+
+      it('stops at the ends: never below 0 and never above rear_min_max, nothing sent there', () => {
+        const { controller, hud, sent } = setup();
+        hud.onSnapshot(withFronts([null, null], 0));
+        controller.key(down('Tab'));
+        controller.key(down('BracketLeft'));
+        expect(sent).toEqual([]);
+        hud.onSnapshot(withFronts([null, null], RULES.supply.rear_min_max));
+        controller.key(down('BracketRight'));
+        expect(sent).toEqual([]);
+      });
+
+      it('does nothing while the transfer dialog is open (its own keys)', () => {
+        const { controller, hud, sent } = setup();
+        hud.onSnapshot(withFronts([null, null], 1));
+        controller.key(down('Tab'));
+        controller.transfer.open(city, target, 2);
+        controller.key(down('BracketRight'));
+        expect(sent).toEqual([]);
+      });
     });
 
     it('reports the arrival tick of an accepted transfer from the ack', () => {
