@@ -4,8 +4,9 @@ import {
   dashAlong,
   delayLeft,
   delayProgress,
-  departBlink,
+  departPulse,
   ghostLook,
+  orderBend,
   pathBend,
   polylineLength,
   polylinePrefix,
@@ -233,12 +234,74 @@ describe('ribbonFilled on a curve', () => {
   });
 });
 
-describe('departBlink', () => {
-  it('flashes twice in the first ticks after the delay ends, never before or after', () => {
-    const on = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5].map((since) => departBlink(since, 4));
-    expect(on).toEqual([true, true, false, false, true, true, false, false]);
-    expect(departBlink(-1, 4)).toBe(false);
-    expect(departBlink(4, 4)).toBe(false);
+describe('departPulse', () => {
+  it('swells once, smoothly: nothing before the delay ends, nothing after the pulse, one peak', () => {
+    expect(departPulse(-1, 8, false)).toEqual({ swell: 0, lock: 0 });
+    const swells = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((since) => departPulse(since, 8, false).swell);
+    expect(swells[0]).toBe(0);
+    expect(swells[8]).toBe(0);
+    const peak = Math.max(...swells);
+    expect(peak).toBeCloseTo(1);
+    expect(swells.indexOf(peak)).toBe(4);
+    // Rises to the middle and falls after it: one swell, not a blink.
+    for (let i = 1; i <= 4; i++) expect(swells[i]).toBeGreaterThan(swells[i - 1] ?? 1);
+    for (let i = 5; i <= 8; i++) expect(swells[i]).toBeLessThan(swells[i - 1] ?? 0);
+    // No sudden jump between two steps of half a tick.
+    for (let since = 0; since < 8; since += 0.5) {
+      const step = Math.abs(
+        departPulse(since + 0.5, 8, false).swell - departPulse(since, 8, false).swell,
+      );
+      expect(step).toBeLessThan(0.5);
+    }
+  });
+
+  it('locks while it swells and stays locked afterwards', () => {
+    const locks = [0, 2, 4, 6, 8, 20, 400].map((since) => departPulse(since, 8, false).lock);
+    expect(locks[0]).toBe(0);
+    expect(locks[4]).toBe(1);
+    expect(locks[5]).toBe(1);
+    expect(locks[6]).toBe(1);
+    for (let i = 1; i < locks.length; i++) {
+      expect(locks[i]).toBeGreaterThanOrEqual(locks[i - 1] ?? 0);
+    }
+  });
+
+  it('with less motion has no swell and locks at once', () => {
+    expect(departPulse(0, 8, true)).toEqual({ swell: 0, lock: 1 });
+    expect(departPulse(3, 8, true)).toEqual({ swell: 0, lock: 1 });
+    expect(departPulse(-1, 8, true)).toEqual({ swell: 0, lock: 0 });
+  });
+});
+
+describe('orderBend', () => {
+  it('keeps a pronounced path bend on either side', () => {
+    expect(orderBend(0.25, 0.12, -0.45)).toBe(0.25);
+    expect(orderBend(-0.2, 0.12, -0.45)).toBe(-0.2);
+  });
+
+  it('gives a straight or nearly straight way the arc to the left, always the same side', () => {
+    expect(orderBend(0, 0.12, -0.45)).toBe(-0.45);
+    expect(orderBend(0.05, 0.12, -0.45)).toBe(-0.45);
+    expect(orderBend(-0.11, 0.12, -0.45)).toBe(-0.45);
+  });
+
+  it('opposite orders along one road bend away from each other and do not overlap', () => {
+    const A = { x: 0, y: 0 };
+    const B = { x: 200, y: 0 };
+    const bend = orderBend(0, RIBBON.minBend, RIBBON.arcBend);
+    const there = ribbonAxis([A, B], 0, 0, bend);
+    const back = ribbonAxis([B, A], 0, 0, bend);
+    const sideOf = (axis: readonly { y: number }[]): number =>
+      Math.sign(axis.reduce((sum, p) => sum + p.y, 0));
+    expect(sideOf(there)).not.toBe(0);
+    expect(sideOf(there)).toBe(-sideOf(back));
+    // Travelling east (y down on the screen) the arc swings north: to the left of the way.
+    expect(sideOf(there)).toBe(-1);
+    // The middle of each arc is well off the road: farther than the half-width of the ribbon.
+    const mid = (axis: readonly { y: number }[]): number =>
+      Math.abs(axis[(axis.length - 1) / 2]?.y ?? 0);
+    expect(mid(there)).toBeGreaterThan(RIBBON.body);
+    expect(mid(there)).toBeCloseTo(mid(back));
   });
 });
 

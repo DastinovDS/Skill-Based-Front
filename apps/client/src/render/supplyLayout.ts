@@ -127,27 +127,6 @@ export function supplyScene(view: View, me: PlayerId, index: EdgeIndex): SupplyS
   return { flows: supplyFlows(view, index), stocks, markers, cut, presence };
 }
 
-// --- Warehouse dots ---------------------------------------------------------------------------
-
-/** One dot of a warehouse row: its offset from the middle of the row, filled for a charge held. */
-export interface StockDot {
-  readonly dx: number;
-  readonly filled: boolean;
-}
-
-/**
- * The dots of a warehouse: `cap` of them in a row, the first `stock` filled (an empty dot is a
- * place for a charge, so the fill reads without colour). A stock above the capacity fills the row.
- */
-export function stockDots(stock: number, cap: number, pitch: number): StockDot[] {
-  const count = Math.max(0, Math.floor(cap));
-  const filled = Math.min(count, Math.max(0, Math.floor(stock)));
-  return Array.from({ length: count }, (_, i) => ({
-    dx: (i - (count - 1) / 2) * pitch,
-    filled: i < filled,
-  }));
-}
-
 // --- Flow arrows ------------------------------------------------------------------------------
 
 /** The point of a road at `at` (0..1) of the way `from` to `to`, moved sideways by `lane`. */

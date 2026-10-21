@@ -6,7 +6,8 @@ import {
   chevrons,
   dashAlong,
   delayProgress,
-  departBlink,
+  departPulse,
+  orderBend,
   pathBend,
   ribbonAxis,
   ribbonBody,
@@ -57,13 +58,14 @@ const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x,
 
 /**
  * What the players intend, on the map (ui-style 9.7): planned orders of both sides as ribbon
- * arrows drawn the same way from the intent (`origin -> target`, a straight ribbon ending in the
- * centre of the target city: the client finds no route), filling from the start to the tip while
- * the delay runs and blinking when it ends, the ring around the target of an enemy intent
+ * arrows drawn the same way from the intent (`origin -> target`, an arc to the left of the way, or
+ * along the server's path of an own order, ending in the centre of the target city: the client
+ * finds no route), filling from the start to the tip while the delay runs and pulsing once when it
+ * ends, the ring around the target of an enemy intent
  * (`--warn` over an own city: it is coming for you), the shield disc of "Defense" with its delay
  * arc, and the thin order lines with running chevrons of own ordinary orders. Everything is
  * redrawn every frame (a few shapes): the fill and the dashes run, the positions of own groups
- * move. "Less motion" stops the running dashes and chevrons and the blink.
+ * move. "Less motion" stops the running dashes and chevrons and the pulse.
  */
 export class IntentView {
   private readonly lines = new Graphics();
@@ -158,9 +160,11 @@ export class IntentView {
   /**
    * The ribbon of a planned order, own or the opponent's: one smooth curve from the rim of the
    * start city to the centre of the target. It bends toward the server's path when the order is an
-   * own one (never a kink at each city of the path); the opponent's, whose path nobody sends, is
-   * straight. While the delay runs (`progress` < 1) the part it has filled is bright and the rest
-   * faint; `since` ticks after the end of the delay it blinks, then it stays in its colour.
+   * own one with a clearly bent path (never a kink at each city of the path); otherwise (a
+   * neighbour, the opponent's, whose path nobody sends) it is an arc to the left of the way, so it
+   * never lies straight over the road. The ribbon is opaque underneath. While the delay runs
+   * (`progress` < 1) the part it has filled is bright and the rest faint; `since` ticks after the
+   * end of the delay it pulses once and stays locked, with a stronger contour.
    */
   private drawRibbon(
     intent: WireIntent,
@@ -181,7 +185,13 @@ export class IntentView {
       .filter((id) => id !== intent.origin && id !== intent.target)
       .map((id) => nodePoint(this.map, id))
       .filter((p): p is Point => p !== undefined);
-    const bend = pathBend(origin, target, via, RIBBON.maxBend);
+    // One arc, as for a path of several nodes: it follows the server's path when that bends
+    // clearly, else it bends to the left of the way, so it never lies straight over the road.
+    const bend = orderBend(
+      pathBend(origin, target, via, RIBBON.maxBend),
+      RIBBON.minBend,
+      RIBBON.arcBend,
+    );
     const axis = ribbonAxis(
       [origin, target],
       this.radiusOf(intent.origin) + RIBBON.startGap,
@@ -201,20 +211,29 @@ export class IntentView {
       alpha: RIBBON.casing.alpha,
       join: 'round',
     });
+    // Opaque dark under the tint: the road below does not show through the ribbon.
+    g.poly(poly).fill(RIBBON.underlay);
     const left = progress === null || progress < 1;
+    // The pulse after the delay: one swell, then the order stays locked (stronger contour).
+    const pulse = departPulse(since, RIBBON.pulseTicks, reducedMotion());
+    const fillAlpha = RIBBON.fillAlpha + RIBBON.locked.fillBoost * pulse.lock;
     if (progress === null || !left) {
-      g.poly(poly).fill({ color, alpha: RIBBON.fillAlpha });
+      g.poly(poly).fill({ color, alpha: fillAlpha });
     } else {
       // The delay runs: the whole arrow is outlined faintly and fills from the start to the tip.
       g.poly(poly).fill({ color, alpha: RIBBON.idleAlpha });
       const filled = ribbonFilled(ribbon.outline, axis, progress);
-      if (filled.length >= 3) g.poly(flat(filled)).fill({ color, alpha: RIBBON.fillAlpha });
+      if (filled.length >= 3) g.poly(flat(filled)).fill({ color, alpha: fillAlpha });
     }
-    // The delay has just ended: two flashes, then the colour stays ("less motion": no flash).
-    if (!reducedMotion() && departBlink(since, RIBBON.blinkTicks)) {
-      g.poly(poly).fill({ color: PAPER, alpha: RIBBON.flashAlpha });
+    if (pulse.swell > 0) {
+      g.poly(poly).fill({ color: PAPER, alpha: RIBBON.flashAlpha * pulse.swell });
     }
-    const style = { width: RIBBON.contour.width, color, alpha: RIBBON.contour.alpha };
+    const width =
+      RIBBON.contour.width +
+      (RIBBON.locked.width - RIBBON.contour.width) * pulse.lock +
+      RIBBON.pulseWidth * pulse.swell;
+    const alpha = RIBBON.contour.alpha + (RIBBON.locked.alpha - RIBBON.contour.alpha) * pulse.lock;
+    const style = { width, color, alpha };
     // Own: solid until the group leaves, then dashes that run. The opponent's: dashed throughout.
     if (own && left) {
       g.poly(poly).stroke({ ...style, join: 'round' });

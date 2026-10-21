@@ -5,6 +5,7 @@ import type { RenderFrame } from '../net/interpolate.ts';
 import type { MapFile, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { SupplyOverlay } from './interaction.ts';
+import { warehouseSegments } from './cityLayout.ts';
 import type { MapLayers } from './layers.ts';
 import {
   EDGE_PROGRESS,
@@ -14,6 +15,7 @@ import {
   edgePoint,
   nodePoint,
 } from './layout.ts';
+import { drawWarehouseBar } from './shapes.ts';
 import {
   ARROW_OUTLINE,
   BG,
@@ -35,7 +37,6 @@ import {
 import {
   edgeIndex,
   lanePoint,
-  stockDots,
   supplyScene,
   type EdgeIndex,
   type SupplyScene,
@@ -54,7 +55,8 @@ const polar = (centre: Point, radius: number, degrees: number): Point => {
  * layer of its own. While it is on the scene hides the terrain, the groups, the intents, the fog
  * and the effects; this view draws what the supply is about and nothing else:
  *
- * - the warehouses of own cities as dots (filled: a charge held, empty: room), under the city;
+ * - the warehouses of own cities as the squares of the normal map (filled: a charge held, grey:
+ *   room), under the city;
  * - the front markers as flags with their number on the city;
  * - the own packets: a dot (a square for a transfer) gliding along its road, and one arrow per
  *   road and direction with the number of charges on it (solid: the automatics, dashed and wider:
@@ -240,25 +242,17 @@ export class SupplyView {
   }
 
   private drawStocks(scene: SupplyScene): void {
-    const g = this.plates;
-    const { radius, pitch, gap, plate } = SUPPLY_STOCK;
     for (const { node, stock, cap } of scene.stocks) {
       const at = this.point(node);
       if (at === undefined || cap <= 0) continue;
-      const y = at.y + this.radiusOf(node) + gap;
-      const dots = stockDots(stock, cap, pitch);
-      const half = ((dots.length - 1) * pitch) / 2 + radius + plate;
-      g.roundRect(
-        at.x - half,
-        y - radius - plate,
-        2 * half,
-        2 * (radius + plate),
-        radius + plate,
-      ).fill({ color: BG, alpha: 0.85 });
-      for (const dot of dots) {
-        if (dot.filled) g.circle(at.x + dot.dx, y, radius).fill(YOU);
-        else g.circle(at.x + dot.dx, y, radius - 0.6).stroke({ width: 1.3, color: PAPER });
-      }
+      // The same bar as on the normal map (`drawWarehouseBar`): a square per unit of capacity.
+      drawWarehouseBar(
+        this.plates,
+        warehouseSegments(stock, cap),
+        at.x,
+        at.y + this.radiusOf(node) + SUPPLY_STOCK.gap,
+        YOU,
+      );
     }
   }
 

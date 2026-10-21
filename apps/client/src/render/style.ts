@@ -250,26 +250,42 @@ export const WAVE_STROKE = { width: 3, alpha: 0.9 } as const;
 export const LOSS_FONT_SIZE = 13;
 
 // --- Ribbon arrows of intents and orders (9.7) ---------------------------------------------------
-// A planned order is a wide translucent ribbon, straight from the start city to the centre of the
-// target, with a big head (HOI4, Mini Motorways). Own: solid contour; the opponent: dashed 9/5,
-// which also "runs" once the group has left. While the delay runs the ribbon fills from the start
-// to the tip; when it ends the ribbon blinks and locks into its colour.
+// A planned order is a wide ribbon from the start city to the centre of the target, an arc that
+// bends to the left of the way (never a straight line over the road), with a big head (HOI4, Mini
+// Motorways). It has an opaque dark underlay: the road under it does not show through. Own: solid
+// contour; the opponent: dashed 9/5, which also "runs" once the group has left. While the delay
+// runs the ribbon fills from the start to the tip; when it ends one smooth pulse locks it in and
+// leaves the contour stronger.
 export const RIBBON = {
   /** Body width; the tail narrows to `tailRatio` of it. Head 38 x 30 at this body. */
   body: 16,
   tailRatio: 0.6,
   headWidth: 38,
   headLength: 30,
+  /** Under the tint: the road and the terrain below do not show through the ribbon (almost opaque). */
+  underlay: { color: PLATE_FILL, alpha: 0.96 },
   /** Fill of the part the delay has not reached yet, and of the filled / locked ribbon. */
-  idleAlpha: 0.1,
-  fillAlpha: 0.5,
-  /** The blink at the end of the delay: a paper-white fill for this many ticks (two flashes). */
-  flashAlpha: 0.75,
-  blinkTicks: 4,
+  idleAlpha: 0.14,
+  fillAlpha: 0.55,
+  /** The pulse at the end of the delay: one swell of a paper-white fill, `pulseTicks` long. */
+  flashAlpha: 0.5,
+  pulseTicks: 8,
+  /** Contour while the delay runs, and after the pulse (locked): the pulse leaves it stronger. */
   contour: { width: 2.2, alpha: 0.95 },
+  locked: { width: 3.2, alpha: 1, fillBoost: 0.12 },
+  /** Extra contour width at the peak of the pulse. */
+  pulseWidth: 2.2,
   casing: { width: 6, alpha: 0.45 },
   /** The ribbon bends at most this share of its chord toward the server's path (one smooth curve). */
   maxBend: 0.3,
+  /**
+   * An order with no path to follow (a neighbour, or the opponent's) is an arc bending this share of
+   * its chord; negative: to the left of the way on the screen (y down), always, so two orders
+   * against each other on one road do not lie on top of each other. A path that bends less than
+   * `minBend` of the chord gets the arc too.
+   */
+  arcBend: -0.45,
+  minBend: 0.12,
   /** The ribbon leaves the start city at radius + `startGap` and ends in the centre of the target. */
   startGap: 16,
   /** The narrow end of the body is never thinner than this on screen (CSS px). */
@@ -332,8 +348,11 @@ export const SUPPLY_TRANSFER = { width: 4.5, dash: 9, gap: 5 } as const;
 export const SUPPLY_FLOW_LABEL = { fontSize: 11, padX: 4, height: 14, radius: 4 } as const;
 /** A packet on its road. */
 export const SUPPLY_PACKET_RADIUS = 3.5;
-/** Warehouse dots: one per unit of capacity under the city, filled for a charge held. */
-export const SUPPLY_STOCK = { radius: 2.6, pitch: 7.5, gap: 9, plate: 2.5 } as const;
+/**
+ * The warehouse bar of the «Supply» layer is the bar of the normal map (`BAR_SEGMENT`); this is its
+ * distance under the city (the layer draws no capacity ring).
+ */
+export const SUPPLY_STOCK = { gap: 9 } as const;
 /** The front marker: a pole with a flag carrying its number, up and to the left of the city. */
 export const SUPPLY_MARKER = {
   pole: 28,

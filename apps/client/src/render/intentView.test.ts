@@ -1,3 +1,4 @@
+import type { Graphics } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
@@ -8,6 +9,7 @@ import { createLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
 import { setReducedMotion } from './motion.ts';
 import { EntityKit } from './shapes.ts';
+import { BG, RIBBON } from './style.ts';
 
 const map = DEFAULT_MAP;
 const base = devSnapshot(map, DEV_RULES, 100);
@@ -43,6 +45,27 @@ function setup() {
   };
   const [ribbons] = layers.layer.intents.children;
   return { layers, kit, view, draw, ribbons };
+}
+
+interface Paint {
+  readonly action: string;
+  readonly color: number;
+  readonly alpha: number;
+  readonly width: number;
+}
+
+/** The fills and strokes drawn into a Graphics, in order. */
+function paints(g: unknown): Paint[] {
+  const instructions = (g as Graphics).context.instructions as unknown as {
+    action: string;
+    data: { style: { color: number; alpha: number; width?: number } };
+  }[];
+  return instructions.map((i) => ({
+    action: i.action,
+    color: i.data.style.color,
+    alpha: i.data.style.alpha,
+    width: i.data.style.width ?? 0,
+  }));
 }
 
 describe('IntentView', () => {
@@ -154,6 +177,99 @@ describe('IntentView', () => {
       const { view, draw, ribbons, kit } = setup();
       draw([intent({ created_tick: 0 })], [], 500);
       expect(ribbons?.getLocalBounds().width).toBeGreaterThan(0);
+      view.destroy();
+      kit.destroy();
+    } finally {
+      setReducedMotion(null);
+    }
+  });
+});
+
+describe('IntentView: opaque arcs that pulse (#325)', () => {
+  const edge = map.edges[0];
+  if (edge === undefined) throw new Error('a map with a road');
+  const [a, b] = [edge.a, edge.b];
+
+  it('lays an opaque dark underlay under the tint, so the road does not show through', () => {
+    const { view, draw, ribbons, kit } = setup();
+    draw([intent({ owner: 0, origin: a, target: b })]);
+    const fills = paints(ribbons).filter((p) => p.action === 'fill');
+    const underlay = fills.find((p) => p.color === RIBBON.underlay.color);
+    expect(underlay?.alpha).toBeGreaterThanOrEqual(0.9);
+    // The underlay comes before every tint.
+    expect(fills[0]).toEqual(underlay);
+    // The enemy's arrow has it too.
+    draw([intent({ owner: 1, origin: a, target: b })]);
+    expect(paints(ribbons).some((p) => p.color === RIBBON.underlay.color && p.alpha >= 0.9)).toBe(
+      true,
+    );
+    view.destroy();
+    kit.destroy();
+  });
+
+  it('draws an order to a neighbour as an arc: opposite orders on one road do not overlap', () => {
+    const { view, draw, ribbons, kit } = setup();
+    const from = nodePoint(map, a);
+    const to = nodePoint(map, b);
+    if (from === undefined || to === undefined) throw new Error('no points');
+    const centre = (): { x: number; y: number } => {
+      const box = ribbons?.getLocalBounds();
+      return {
+        x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+      };
+    };
+    draw([intent({ owner: 0, origin: a, target: b })]);
+    const there = centre();
+    draw([intent({ owner: 1, origin: b, target: a })]);
+    const back = centre();
+    // The two arrows swing to opposite sides of the road: their middles lie apart, across it.
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    const across = Math.abs(
+      ((back.x - there.x) * (to.y - from.y) - (back.y - there.y) * (to.x - from.x)) / length,
+    );
+    expect(across).toBeGreaterThan(RIBBON.body);
+    // Each one bulges to the left of its way (y down on the screen): the cross product is negative.
+    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+    const sideOf = (p: { x: number; y: number }): number =>
+      Math.sign((to.x - from.x) * (p.y - mid.y) - (to.y - from.y) * (p.x - mid.x));
+    // there goes a -> b, bulging left: the centre is on the side of negative cross product.
+    expect(sideOf(there)).toBe(-1);
+    expect(sideOf(back)).toBe(1);
+    view.destroy();
+    kit.destroy();
+  });
+
+  it('pulses once when the delay ends and leaves the contour stronger', () => {
+    const { view, draw, ribbons, kit } = setup();
+    const widthAt = (tick: number, created = 100): number => {
+      draw([intent({ owner: 0, origin: a, target: b, created_tick: created })], [], tick);
+      const strokes = paints(ribbons).filter((p) => p.action === 'stroke' && p.color !== BG);
+      return Math.max(...strokes.map((p) => p.width));
+    };
+    // The delay is 30 ticks: it ends at 130.
+    const running = widthAt(120);
+    const peak = widthAt(134);
+    const locked = widthAt(145);
+    expect(running).toBeCloseTo(RIBBON.contour.width);
+    expect(peak).toBeGreaterThan(locked);
+    expect(locked).toBeCloseTo(RIBBON.locked.width);
+    expect(locked).toBeGreaterThan(running);
+    // It stays locked, not pulsing again.
+    expect(widthAt(300)).toBeCloseTo(RIBBON.locked.width);
+    view.destroy();
+    kit.destroy();
+  });
+
+  it('with less motion locks at once, without a pulse', () => {
+    setReducedMotion(true);
+    try {
+      const { view, draw, ribbons, kit } = setup();
+      draw([intent({ owner: 0, origin: a, target: b, created_tick: 100 })], [], 134);
+      const widths = paints(ribbons)
+        .filter((p) => p.action === 'stroke' && p.color !== BG)
+        .map((p) => p.width);
+      expect(Math.max(...widths)).toBeCloseTo(RIBBON.locked.width);
       view.destroy();
       kit.destroy();
     } finally {

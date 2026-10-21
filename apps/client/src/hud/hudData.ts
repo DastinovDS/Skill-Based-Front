@@ -20,7 +20,6 @@ import type {
   Terrain,
   UpgradeGain,
 } from '../protocol.gen.ts';
-import type { FightCard } from '../match/fightLog.ts';
 
 /** What the player picked to look at: one own group or one node. */
 export type Selection =
@@ -177,8 +176,6 @@ export interface HudData {
   readonly roads: readonly RoadInfo[];
   /** Newest first. */
   readonly events: readonly HudEvent[];
-  /** The fights going on with the rounds seen of each (DEC-24, DEC-29; `match/fightLog.ts`). */
-  readonly fights: readonly FightCard[];
 }
 
 function nodeAt(nodes: readonly NodeView[], id: number): NodeView | undefined {
@@ -305,8 +302,6 @@ export function buildHudData(
   events: readonly HudEvent[],
   /** The group (or the groups of a city) under the pointer. */
   hovered: HoverTarget = null,
-  /** The fights going on, from the fight log. */
-  fights: readonly FightCard[] = [],
 ): HudData {
   const { view, tick } = snapshot;
   const { rules, me } = ctx;
@@ -353,6 +348,5 @@ export function buildHudData(
     })),
     roads: view.edges.map((e) => roadInfo(ctx, e)),
     events,
-    fights,
   };
 }

@@ -1,6 +1,7 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import type { Mode, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
+import type { WarehouseBar } from './cityLayout.ts';
 import {
   chargeLevel,
   countLabel,
@@ -10,12 +11,15 @@ import {
   triangleSide,
 } from './layout.ts';
 import {
+  BAR_BASE,
+  BAR_SEGMENT,
   BG,
   COUNT_FONT_SIZE,
   GLYPH_COLOR,
   PACKET_RADIUS,
   PLATE_FILL,
   PLATE_INNER_RING,
+  SEGMENT_EMPTY_BAR,
   SHIELD_BADGE_SCALE,
   UNIT_DASH,
   UNIT_HALO,
@@ -41,6 +45,33 @@ export function drawModeGlyph(g: GraphicsContext, mode: Mode): GraphicsContext {
 /** A hammer, the mark of a road being built by a city (DEC-16), around (0, 0), about 10 x 10. */
 export function drawHammer(g: GraphicsContext): GraphicsContext {
   return g.rect(-1.3, -2, 2.6, 7.5).fill(GLYPH_COLOR).rect(-5, -5.5, 10, 4).fill(GLYPH_COLOR);
+}
+
+/**
+ * The warehouse bar of a city (`warehouseSegments`): a dark base with a small square per unit of
+ * capacity, `color` for a charge held, grey for room. One drawing for the map and the «Supply»
+ * layer, so the stock looks the same in both. `x` is the middle of the bar, `top` its top edge.
+ */
+export function drawWarehouseBar(
+  g: Graphics,
+  bar: WarehouseBar,
+  x: number,
+  top: number,
+  color: number,
+): void {
+  if (bar.segments.length === 0) return;
+  g.roundRect(
+    x - bar.width / 2 - 1,
+    top - 1,
+    bar.width + 2,
+    BAR_SEGMENT.height + 4,
+    BAR_BASE.radius,
+  ).fill(BAR_BASE.color);
+  for (const segment of bar.segments) {
+    g.rect(x + segment.x, top + 1, BAR_SEGMENT.width, BAR_SEGMENT.height).fill(
+      segment.filled ? color : SEGMENT_EMPTY_BAR,
+    );
+  }
 }
 
 const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x, p.y]);

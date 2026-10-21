@@ -18,7 +18,6 @@ import {
 import {
   BARRACKS_MARK,
   BAR_BASE,
-  BAR_SEGMENT,
   BG,
   BUILD_MARK,
   CAPITAL_RADIUS,
@@ -48,6 +47,7 @@ import {
   sideOf,
 } from './style.ts';
 import type { MapLayers } from './layers.ts';
+import { drawWarehouseBar } from './shapes.ts';
 
 type Kind = 'neutral' | 'you' | 'enemy';
 
@@ -467,20 +467,7 @@ export class CityView {
     owner: PlayerId | null,
   ): void {
     const bar = warehouseSegments(warehouse, capacity);
-    if (bar.segments.length === 0) return;
-    const top = barTop(radius);
     const color = owner === null ? NEUTRAL_STROKE : sideOf(this.me, owner) === 'you' ? YOU : ENEMY;
-    g.roundRect(
-      -bar.width / 2 - 1,
-      top - 1,
-      bar.width + 2,
-      BAR_SEGMENT.height + 4,
-      BAR_BASE.radius,
-    ).fill(BAR_BASE.color);
-    for (const segment of bar.segments) {
-      g.rect(segment.x, top + 1, BAR_SEGMENT.width, BAR_SEGMENT.height).fill(
-        segment.filled ? color : SEGMENT_EMPTY_BAR,
-      );
-    }
+    drawWarehouseBar(g, bar, 0, barTop(radius), color);
   }
 }
