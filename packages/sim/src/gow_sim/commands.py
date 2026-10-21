@@ -188,9 +188,9 @@ class CancelOrder:
 
 @dataclass(frozen=True, slots=True)
 class SetFront:
-    """Put the front marker ``marker`` (0 or 1) on the own city ``node`` (DEC-28, item 2);
-    ``node = None`` takes the marker off the map (TODO(#309): the default until the owner
-    answers). Never two markers on one city."""
+    """Put the front marker ``marker`` (``0..supply.front_markers - 1``) on the own city
+    ``node`` (DEC-28, item 2); ``node = None`` takes the marker off the map (owner's decision of
+    2026-10-20, #309). Never two markers on one city."""
 
     marker: int
     node: int | None

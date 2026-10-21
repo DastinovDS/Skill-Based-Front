@@ -9,7 +9,7 @@ Capacity (DEC-22, item 1, replaces the road-dependent formula of SIM-07):
   separately its warehouse (DEC-22, item 1). With ``city_upgrades`` the warehouse has its own
   capacity ``warehouse.start_by_kind[kind] + level * warehouse.gain_per_level`` (DEC-26, item 2;
   ``warehouse_capacity``); provinces have no warehouse (DEC-23).
-- Supplied territory of a player (road upgrades ``NOT_SUPPLIED`` and the supply tree): the nodes
+- Supplied territory of a player (the cut-off cities of DEC-19): the nodes
   reachable from the own capital over own nodes; every edge between two own nodes is internal,
   so this is a BFS over internal edges.
 

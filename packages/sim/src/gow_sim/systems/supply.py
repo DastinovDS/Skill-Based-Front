@@ -84,7 +84,9 @@ chain only through recharge or the documented sinks ``packet_lost``, ``charges_o
 ``warehouse_lost``.
 
 Cost per tick: O(V + E + P + G); a dispatch tick adds the tree (Dijkstra, O(E log V)), one
-Dijkstra per city with a deficit and one per send, plus one per detour.
+Dijkstra per city with a deficit that can still receive (``fastest_ways_to``: the ways of all of
+its donors at once), one per send of the spill and one per detour; a city or a donor whose roads
+are all used up in this dispatch is skipped.
 """
 
 import heapq
