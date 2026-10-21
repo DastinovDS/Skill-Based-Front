@@ -7,7 +7,7 @@
 ## Запуск
 
 ```bash
-uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-0.toml
+uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-1.toml
 ```
 
 | Ключ | Смысл |
