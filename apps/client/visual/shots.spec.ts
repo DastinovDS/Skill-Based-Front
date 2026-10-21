@@ -21,6 +21,8 @@ for (const scene of SCENES) {
   test(`shot of scene ${scene.id}`, async ({ page }) => {
     await page.goto(`/?scene=${scene.id}`);
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(scene.tick));
+    // The baked background loads on its own: the map is not ready before it.
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
     await page.screenshot({ path: join(OUT, `${scene.id}.png`) });
     await page.addStyleTag({ content: '.hud { display: none !important; }' });
     await page.locator('canvas').screenshot({ path: join(OUT, `${scene.id}-map.png`) });

@@ -160,7 +160,7 @@ uv run gow-server --reload   # перезапуск при изменении к
 | `GOW_HOST`, `GOW_PORT` | `127.0.0.1`, `8000` | адрес сервера |
 | `GOW_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `GOW_FORWARDED_ALLOW_IPS` | `127.0.0.1` | прокси (Caddy), которому доверяются заголовки `X-Forwarded-*` |
-| `GOW_MAPS_DIR` | `maps` | пул карт: `<id>.json` и необязательный фон `<id>.bg.png` |
+| `GOW_MAPS_DIR` | `maps` | пул карт: `<id>.json` и необязательный фон `<id>.bg.webp` |
 | `GOW_RULESET_PATH` | `rulesets/mvp-0.toml` (в `compose.yaml` и образе `app`: `mvp-1`) | набор правил матчей, которые запускает сервер |
 | `GOW_RULESETS_DIR`, `GOW_RULESETS_BUNDLED_DIR` | `rulesets/archive`, `rulesets/archive` | архив рулсетов по хэшу: сервер сам кладёт сюда свой рулсет при старте (каталог должен быть записываемым; в контейнере `/data/rulesets` на томе), архив из образа копируется сюда, если каталоги разные. `test-short` при `GOW_ENV=prod` сервер не принимает |
 | `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | база SQLite (WAL); путь относительно рабочего каталога |
@@ -186,7 +186,7 @@ uv run gow-server --reload   # перезапуск при изменении к
 `uv run alembic -c apps/server/alembic.ini revision --autogenerate -m "<что>"` и проверить файл миграции.
 
 HTTP API: `GET /api/health`, `GET /api/maps` (список), `GET /api/maps/{id}` (файл карты),
-`GET /api/maps/{id}/background.png` (фон, если есть). Схема: `/docs` на запущенном сервере.
+`GET /api/maps/{id}/background.webp` (фон, если есть). Схема: `/docs` на запущенном сервере.
 
 WebSocket матча: `/ws/match/{id}` (`gow_server/ws.py`, AGENTS.md, раздел 5.3). `Origin` должен быть
 собственным сайтом (`Host`) или из `GOW_WS_ALLOWED_ORIGINS`, иначе 403. Первое сообщение `hello` с

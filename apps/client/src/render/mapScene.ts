@@ -34,6 +34,8 @@ export interface SceneOptions {
   backgroundUrl?: string | null;
   /** Selection, ghost orders and preview to draw, and where clicks go (CLI-06, #62). */
   interaction?: MapInteraction | null;
+  /** Called once when the background has loaded or has failed to (tests wait for it). */
+  onbackground?: (state: 'loaded' | 'failed') => void;
   /** Called when a frame built on a new snapshot is drawn for the first time (tick of it). */
   onsnapshot?: (tick: number) => void;
 }
@@ -61,6 +63,7 @@ export class MapScene {
   private destroyed = false;
   private supplyOn = false;
   private readonly onsnapshot: ((tick: number) => void) | undefined;
+  private readonly onbackground: ((state: 'loaded' | 'failed') => void) | undefined;
 
   constructor(
     private readonly app: Application,
@@ -71,6 +74,7 @@ export class MapScene {
     this.source = options.source ?? null;
     this.interaction = options.interaction ?? null;
     this.onsnapshot = options.onsnapshot;
+    this.onbackground = options.onbackground;
     this.layers = createLayers();
     const me = options.player ?? 0;
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.
@@ -148,6 +152,11 @@ export class MapScene {
     };
   }
 
+  /** Shows a rectangle of the map (world units), for a scene that looks at one part of it. */
+  showRect(rect: { x: number; y: number; width: number; height: number }): void {
+    this.controller.showRect(rect);
+  }
+
   /** "Fit map": show the whole map. */
   fit(): void {
     this.controller.fit();
@@ -190,10 +199,14 @@ export class MapScene {
       }
       this.backgroundUrl = url;
       this.view.setBackground(texture);
+      this.onbackground?.('loaded');
     } catch (error) {
       // No background is not fatal: the flat terrain colours stay, with the stamps.
       console.warn('map background failed to load', error);
-      if (!this.destroyed) this.view.showStamps();
+      if (!this.destroyed) {
+        this.view.showStamps();
+        this.onbackground?.('failed');
+      }
     }
   }
 

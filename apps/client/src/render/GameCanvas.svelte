@@ -17,8 +17,10 @@
     interaction?: MapInteraction | null;
     /** The viewing player (own groups and packets). Default 0. */
     player?: PlayerId;
-    /** URL of the baked background PNG of the map, if it has one. */
+    /** URL of the baked background (WebP) of the map, if it has one. */
     backgroundUrl?: string | null;
+    /** The part of the map (world units) to look at at the start; default: the whole map. */
+    viewRect?: { x: number; y: number; width: number; height: number } | null;
     /** Called when the renderer cannot start (for example, no WebGL). */
     onerror?: (error: unknown) => void;
     /** Frames per second, reported twice a second (not every frame) for the dev HUD. */
@@ -31,6 +33,7 @@
     interaction = null,
     player = 0,
     backgroundUrl = null,
+    viewRect = null,
     onerror,
     onfps,
   }: Props = $props();
@@ -77,6 +80,9 @@
       return;
     }
     scene?.destroy();
+    // `data-background`: none, pending, loaded or failed; end-to-end tests wait for a baked
+    // background before a screenshot.
+    host.dataset.background = backgroundUrl === null ? 'none' : 'pending';
     // Only the map rebuilds the scene; a new source is handed to the running one below.
     scene = untrack(
       () =>
@@ -85,12 +91,16 @@
           interaction,
           player,
           backgroundUrl,
+          onbackground: (state: 'loaded' | 'failed') => {
+            host.dataset.background = state;
+          },
           onsnapshot: (tick: number) => {
             // A plain attribute: end-to-end tests wait for it before taking a screenshot.
             host.dataset.tick = String(tick);
           },
         }),
     );
+    if (viewRect !== null) scene.showRect(viewRect);
   }
 
   // Rebuild the scene when the map changes; the first build happens once init() resolves.

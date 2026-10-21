@@ -23,6 +23,11 @@ Everything is deterministic for a pinned numpy (``numpy.random.default_rng`` wit
 Pure numpy and Pillow, both already in ``uv.lock`` through matplotlib (a dependency of gow-maps);
 no generative services, no foreign assets.
 
+Historical since #344: the owner chose T2 and ``gow_maps.bake`` now draws it (this script is kept as
+the record of the choice and to regenerate the mockup). The picture "today" (``t0``) is the old
+``maps/<name>.bg.png``, which no longer exists: take it from the commit before #344 with
+``git show d885176:maps/arteriya.bg.png > /tmp/arteriya-old.bg.png`` and pass ``--current``.
+
 Run (from the repository root; about 1 minute)::
 
     uv run python docs/design/mockups/src/map_textures.py            # rewrite the data block
@@ -43,7 +48,7 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image, ImageDraw
 
-from gow_maps.bake import BIOME_COLOUR, STEP, Biome, bake_cells
+from gow_maps.bake import STEP, Biome, bake_cells
 from gow_sim.maps import load_map
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -51,6 +56,15 @@ HTML = ROOT / "docs" / "design" / "mockups" / "map-style-2.html"
 SS = 3  # supersampling of the detail layer
 CROP = (230, 130, 720, 580)  # x, y, width, height of the fragment in the mockup (world units)
 
+# The flat colours of the baker before #344 (the picture "today" of the mockup).
+BIOME_COLOUR: dict[Biome, tuple[int, int, int]] = {
+    Biome.STEPPE: (140, 170, 90),
+    Biome.SAVANNA: (180, 190, 100),
+    Biome.FOREST: (34, 139, 34),
+    Biome.JUNGLE: (25, 100, 45),
+    Biome.ROCK: (125, 115, 100),
+    Biome.SNOW: (235, 238, 240),
+}
 BIOMES = [Biome.STEPPE, Biome.SAVANNA, Biome.FOREST, Biome.JUNGLE, Biome.ROCK, Biome.SNOW]
 Arr = NDArray[np.float32]
 Rgb = tuple[int, int, int]
@@ -244,7 +258,7 @@ def biome_labels(mapdef_path: Path) -> NDArray[np.uint8]:
     mapdef = load_map(mapdef_path)
     grid = bake_cells(mapdef)
     index = {b: i for i, b in enumerate(BIOMES)}
-    small = np.array([[index[c.biome] for c in row] for row in grid], dtype=np.uint8)
+    small = np.array([[index[b] for b in row] for row in grid], dtype=np.uint8)
     return np.repeat(np.repeat(small, STEP, 0), STEP, 1)
 
 
@@ -333,6 +347,7 @@ def swatches(current: bool) -> Image.Image:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--map", default="arteriya", help="map name in maps/ (default arteriya)")
+    ap.add_argument("--current", type=Path, help="the old maps/<name>.bg.png (see the docstring)")
     ap.add_argument("--out", type=Path, help="also save the full-map PNGs here")
     ap.add_argument("--no-embed", action="store_true", help="do not rewrite the mockup")
     args = ap.parse_args()
@@ -346,7 +361,11 @@ def main() -> int:
 
     pictures: dict[str, Image.Image] = {}
     sizes: dict[str, dict[str, int]] = {}
-    current = Image.open(ROOT / "maps" / f"{args.map}.bg.png").convert("RGB")
+    old = args.current or ROOT / "maps" / f"{args.map}.bg.png"
+    if not old.is_file():
+        print(f"{old} is missing: pass the pre-#344 PNG with --current", file=sys.stderr)
+        return 1
+    current = Image.open(old).convert("RGB")
     pictures["t0"] = current
     jobs = {
         "t1": (variant_t1, 1.6, False, 255),

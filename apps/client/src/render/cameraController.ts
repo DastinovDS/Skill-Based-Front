@@ -3,6 +3,7 @@ import {
   cameraLimits,
   centerOn,
   clampCamera,
+  fitScale,
   fitCamera,
   FIT_PADDING,
   NO_INSETS,
@@ -96,6 +97,21 @@ export class CameraController {
     this.fitted = true;
     this.camera = fitCamera(this.worldSize, this.viewport, FIT_PADDING, this.insets);
     this.apply();
+  }
+
+  /** Shows a rectangle of the map (world units) in the free part of the viewport. */
+  showRect(rect: { x: number; y: number; width: number; height: number }): void {
+    const scale = fitScale(rect, this.viewport, FIT_PADDING, this.insets);
+    this.move(
+      clampCamera(
+        {
+          x: rect.x + rect.width / 2 - (this.insets.left - this.insets.right) / (2 * scale),
+          y: rect.y + rect.height / 2 - (this.insets.top - this.insets.bottom) / (2 * scale),
+          scale,
+        },
+        this.limits,
+      ),
+    );
   }
 
   /** Moves the camera to `point` (world), keeping the scale: the jump to an alert. */

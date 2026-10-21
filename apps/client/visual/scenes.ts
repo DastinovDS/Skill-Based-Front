@@ -7,4 +7,5 @@ export const SCENES = [
   { id: 'snapshot_clash', tick: 400 },
   { id: 'overflow', tick: 120 },
   { id: 'fights', tick: 400 },
+  { id: 'arteriya', tick: 2400 },
 ] as const;

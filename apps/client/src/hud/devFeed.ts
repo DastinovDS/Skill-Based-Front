@@ -41,7 +41,7 @@ const SEEN_PRESENCE = 2;
  * Capacities of the dev feed by node kind: the `mvp-0` numbers of DEC-22, only for this offline
  * fake (a real snapshot carries the server's capacity of every node).
  */
-const DEV_CAPACITY: Record<NodeKind, number> = {
+export const DEV_CAPACITY: Record<NodeKind, number> = {
   capital: 10,
   city_large: 8,
   city_medium: 6,

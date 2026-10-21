@@ -160,6 +160,7 @@
     {source}
     interaction={orders}
     backgroundUrl={backgroundUrl(map.meta.name)}
+    viewRect={fixture?.view ?? null}
     onerror={handleRendererError}
     onfps={(value: number) => {
       fps = value;
