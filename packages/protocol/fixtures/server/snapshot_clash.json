@@ -385,7 +385,8 @@
         "order": {
           "dest": 0,
           "path": [0],
-          "planned": false
+          "planned": false,
+          "bonus": 0
         },
         "defense_bonus": null,
         "defense_cap": null
@@ -404,7 +405,8 @@
         "order": {
           "dest": 4,
           "path": [4],
-          "planned": false
+          "planned": true,
+          "bonus": 1
         },
         "defense_bonus": null,
         "defense_cap": null

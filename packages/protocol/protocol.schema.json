@@ -1847,12 +1847,19 @@
         },
         "planned": {
           "type": "boolean"
+        },
+        "bonus": {
+          "description": "A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,\nat most the charged units of the group). Before the departure a forecast by the charged units\nnow; the cap is taken in the departure tick. 0 for a normal order and once the bonus entered\na fight. Only own orders exist in a view (owner 2026-10-21, mockup #339).",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "dest",
         "path",
-        "planned"
+        "planned",
+        "bonus"
       ],
       "title": "OrderView",
       "type": "object"

@@ -671,6 +671,13 @@ export interface OrderView {
    */
   path: [number, ...number[]];
   planned: boolean;
+  /**
+   * A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,
+   * at most the charged units of the group). Before the departure a forecast by the charged units
+   * now; the cap is taken in the departure tick. 0 for a normal order and once the bonus entered
+   * a fight. Only own orders exist in a view (owner 2026-10-21, mockup #339).
+   */
+  bonus: number;
 }
 /**
  * Own charges on the way along a path of roads (mechanics.md, section 7; DEC-18, item 5).

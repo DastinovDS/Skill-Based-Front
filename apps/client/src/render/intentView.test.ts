@@ -95,7 +95,7 @@ describe('IntentView', () => {
       charged: 2,
       mode: 'attack',
       location: { kind: 'node', node: home },
-      order: { dest: far, path: [via, far], planned: true },
+      order: { dest: far, path: [via, far], planned: true, bonus: 2 },
       defense_bonus: null,
       defense_cap: null,
     };
@@ -155,7 +155,7 @@ describe('IntentView', () => {
       charged: 2,
       mode: 'attack',
       location: { kind: 'node', node: home },
-      order: { dest: via, path: [via], planned: false },
+      order: { dest: via, path: [via], planned: false, bonus: 0 },
       defense_bonus: null,
       defense_cap: null,
     };

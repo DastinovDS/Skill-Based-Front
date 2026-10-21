@@ -224,6 +224,11 @@ class OrderView(WireModel):
     path: Annotated[tuple[NodeId, ...], Field(min_length=1)]
     """Remaining nodes to ``dest``, ``dest`` included."""
     planned: bool
+    bonus: NonNegInt
+    """A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,
+    at most the charged units of the group). Before the departure a forecast by the charged units
+    now; the cap is taken in the departure tick. 0 for a normal order and once the bonus entered
+    a fight. Only own orders exist in a view (owner 2026-10-21, mockup #339)."""
 
 
 class GroupView(WireModel):

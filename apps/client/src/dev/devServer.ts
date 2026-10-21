@@ -180,6 +180,7 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
         dest: cmd.dest,
         path: [...path.slice(1)] as [number, ...number[]],
         planned: cmd.planned,
+        bonus: 0, // the dev server does not model the planned bonus (DEC-29)
       });
       return { code: null, path };
     }

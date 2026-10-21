@@ -210,7 +210,8 @@
         "order": {
           "dest": 2,
           "path": [2],
-          "planned": false
+          "planned": false,
+          "bonus": 0
         },
         "defense_bonus": null,
         "defense_cap": null

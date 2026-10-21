@@ -229,6 +229,12 @@ class OrderView:
     planned: bool
     depart_tick: int
     """Not before this tick the group leaves its node (a planned order waits, DEC-08)."""
+    bonus: int = 0
+    """A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,
+    at most the charged units), ``min(Group.bonus, charged now)``. Before the departure it is a
+    forecast: the cap is taken by the charged units in the departure tick. 0 for a normal order
+    and once the bonus entered a fight. Own orders only: the enemy's bonus shows only in a fight
+    (DEC-32)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -516,7 +522,13 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 location=g.location,
                 order=None
                 if order is None or not order.path
-                else OrderView(order.path[-1], order.path, order.planned, order.depart_tick),
+                else OrderView(
+                    order.path[-1],
+                    order.path,
+                    order.planned,
+                    order.depart_tick,
+                    min(g.bonus, g.charged) if order.planned else 0,
+                ),
                 defense_bonus=rules.orders.defense_bonus(g.ticks_in_defense, g.charged)
                 if defense
                 else None,
@@ -694,6 +706,7 @@ def view_to_canonical(view: PlayerView) -> dict[str, object]:
                     "path": list(g.order.path),
                     "planned": g.order.planned,
                     "depart_tick": g.order.depart_tick,
+                    "bonus": g.order.bonus,
                 },
                 "defense_bonus": g.defense_bonus,
                 "defense_cap": g.defense_cap,

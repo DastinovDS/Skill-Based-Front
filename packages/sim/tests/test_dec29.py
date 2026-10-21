@@ -13,6 +13,7 @@ command applied at tick 1 departs at tick 31. Only the systems that act here run
 movement, combat, orders), so the charged units change only where a test changes them.
 """
 
+from dataclasses import fields
 from pathlib import Path
 from typing import Any
 
@@ -25,12 +26,14 @@ from gow_sim.state import AtNode, GameState, Group, Mode, OnEdge, initial_state
 from gow_sim.systems.combat import combat
 from gow_sim.systems.movement import movement
 from gow_sim.systems.orders import active_bonuses, orders
+from gow_sim.view import IntentView, OrderView, opaque_id, project
 
 ROOT = Path(__file__).resolve().parents[3]
 RULES = load_ruleset(ROOT / "rulesets" / "mvp-1.toml")
 N = 7
 DEPART = 1 + 30
 """The departure tick of a planned order applied at tick 1."""
+KEY = bytes(range(32))
 
 
 def _map(edges: list[tuple[int, int, int]] | None = None) -> MapDef:
@@ -203,3 +206,55 @@ def test_the_capped_bonus_enters_the_fight() -> None:
     (fight,) = state.fights.values()
     assert fight.virtual == (2, 0)
     assert state.groups[gid].bonus == 0  # it left the group: it burns with the fight
+
+
+# The forecast in the own view (owner 2026-10-21, mockup #339) -------------------------------------
+
+
+def _own_order(state: GameState, gid: int) -> OrderView:
+    view = project(state, RULES, 0, KEY)
+    (group,) = (g for g in view.groups if g.id == opaque_id(KEY, 0, gid))
+    assert group.order is not None
+    return group.order
+
+
+def test_the_own_order_shows_the_bonus_forecast() -> None:
+    """``OrderView.bonus``: 3 edges with 1 charged unit at the command show 1 (row 4 of the
+    table: the cap is the charged units); recharged to 3 during the delay the forecast is 3, and
+    it departs with 3 (the cap of the departure tick). A normal order shows 0."""
+    state = initial_state(_map(), RULES)
+    gid = _add(state, 0, 3, 1, 0)
+    plain = _add(state, 0, 2, 2, 1)
+    run = _Run(state)
+    run.step((0, Move(gid, 3, planned=True)), (0, Move(plain, 2)))
+    assert _own_order(state, gid).bonus == 1
+    assert _own_order(state, plain).bonus == 0
+    run.until(DEPART - 1)
+    state.groups[gid].charged = 3  # as supply would recharge it during the delay
+    assert _own_order(state, gid).bonus == 3
+    run.step()
+    assert isinstance(state.groups[gid].location, OnEdge)
+    assert state.groups[gid].bonus == 3
+    assert _own_order(state, gid).bonus == 3
+
+
+def test_fog_the_enemy_sees_no_planned_bonus() -> None:
+    """AGENTS.md 4.4: the bonus is in the own ``OrderView`` only. The enemy has the intent (no
+    group, no size, no bonus) and its view is the same whatever the bonus is (DEC-32: it shows
+    only in a fight)."""
+    state = initial_state(_map(), RULES)
+    gid = _add(state, 0, 3, 3, 0)
+    run = _Run(state)
+    run.step((0, Move(gid, 3, planned=True)))
+    assert [f.name for f in fields(IntentView)] == [
+        "id",
+        "owner",
+        "kind",
+        "origin",
+        "target",
+        "created_tick",
+    ]
+    enemy = project(state, RULES, 1, KEY)
+    assert len(enemy.intents) == 1 and enemy.groups == ()
+    state.groups[gid].bonus = 1
+    assert project(state, RULES, 1, KEY) == enemy

@@ -231,7 +231,12 @@ def view_to_wire(view: sv.PlayerView) -> View:
                 location=_location(g.location),
                 order=None
                 if g.order is None
-                else OrderView(dest=g.order.dest, path=g.order.path, planned=g.order.planned),
+                else OrderView(
+                    dest=g.order.dest,
+                    path=g.order.path,
+                    planned=g.order.planned,
+                    bonus=g.order.bonus,
+                ),
                 defense_bonus=g.defense_bonus,
                 defense_cap=g.defense_cap,
             )
@@ -382,7 +387,12 @@ def _view_data(view: sv.PlayerView) -> dict[str, object]:
                 "location": _location_data(g.location),
                 "order": None
                 if g.order is None
-                else {"dest": g.order.dest, "path": g.order.path, "planned": g.order.planned},
+                else {
+                    "dest": g.order.dest,
+                    "path": g.order.path,
+                    "planned": g.order.planned,
+                    "bonus": g.order.bonus,
+                },
                 "defense_bonus": g.defense_bonus,
                 "defense_cap": g.defense_cap,
             }
