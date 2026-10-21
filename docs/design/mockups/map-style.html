@@ -306,7 +306,7 @@ function scene(th, uid) {
     if (k > 0 && !dashed) g += `<polygon points="${pts(tri(cx, cy, s, k))}" fill="${soft ? `url(#${I(o === 'you' ? 'gy' : 'ge')})` : fillC}" ${paper ? `fill-opacity=".92"` : ''}/>`;
     g += `<polygon points="${pts(T)}" fill="none" stroke="${dashed ? fillC : (o === 'you' ? th.ink : fillC)}" stroke-width="2.4" stroke-linejoin="round" ${dashed ? 'stroke-dasharray="5 3.5"' : ''}/>`;
     if (o === 'enemy' && !dashed) g += `<polygon points="${pts(tri(cx, cy, s * .62))}" fill="none" stroke="${paper ? th.ink : th.ink}" stroke-width="1.5" stroke-opacity=".9" stroke-linejoin="round"/>`;
-    g += text(cx, cy - h * .12, label, s > 26 ? 12 : 11, dashed ? th.ink : (k > .5 && !paper ? th.inkBack === '#0d1117' ? '#0d1117' : th.ink : th.ink), `stroke="${th.inkBack}" stroke-width="3" paint-order="stroke"`);
+    g += text(cx, cy - h * .12, label, s > 26 ? 12 : 11, th.ink, `stroke="${th.inkBack}" stroke-width="3" paint-order="stroke"`);
     return g + '</g>';
   };
   body += unitIcon(120, 300, 30, 6, 4, 'you', false, '6');
