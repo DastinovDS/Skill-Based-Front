@@ -133,6 +133,18 @@ class LevelTable:
 
 
 @dataclass(frozen=True, slots=True)
+class FullLevelTable:
+    """One integer per road level ``1..MAX_WIDTH``: ``values[level - 1]`` (DEC-28, item 7)."""
+
+    values: tuple[int, ...]
+
+    def of(self, width: int) -> int:
+        if not 1 <= width <= len(self.values):
+            raise ValueError(f"road level {width} is out of range 1..{len(self.values)}")
+        return self.values[width - 1]
+
+
+@dataclass(frozen=True, slots=True)
 class CpRules:
     start: int
     cap: int
@@ -229,19 +241,27 @@ class SupplyRules:
     recharge_per_tick: int
     base_speed_pct: int
     """Packet speed on a level 1 road (DEC-22, item 4)."""
-    base_amount: int
-    """Charges per road and dispatch period on a road of any level (DEC-26, item 7)."""
     fast_speed_pct: LevelTable
     """Packet speed on an upgraded road by its level ``2..MAX_WIDTH`` (DEC-26, item 7)."""
+    amount_by_level: FullLevelTable
+    """Charges per road and dispatch period by the road level ``1..MAX_WIDTH`` (DEC-28, item 7)."""
+    front_markers: int
+    """Front markers of a player (DEC-28, item 2)."""
+
+
+@dataclass(frozen=True, slots=True)
+class RoadRules:
+    """Unit speed on an upgraded road (DEC-28, item 7): ``speed_pct`` by the level
+    ``2..MAX_WIDTH`` multiplies the terrain speed; level 1 is 100."""
+
+    speed_pct: LevelTable
 
 
 @dataclass(frozen=True, slots=True)
 class BuildRules:
-    """Road upgrades by a city (DEC-16): one level per command, paid from the city warehouse."""
+    """Road upgrades (DEC-28, item 7): one level per command, paid with ``orders.cost.build``."""
 
     ticks_per_level: int
-    charges_per_level: LevelTable
-    """Charges for raising a road to a level, by the new level ``2..MAX_WIDTH`` (DEC-22, item 6)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -300,6 +320,7 @@ class Ruleset:
     capacity: CapacityRules
     starvation: StarvationRules
     supply: SupplyRules
+    road: RoadRules
     build: BuildRules
     recruit: RecruitRules
     victory: VictoryRules
@@ -332,6 +353,8 @@ def to_canonical(rules: Ruleset) -> dict[str, object]:
 def _plain(value: object) -> object:
     if isinstance(value, LevelTable):
         return {str(width): v for width, v in enumerate(value.values, start=2)}
+    if isinstance(value, FullLevelTable):
+        return {str(width): v for width, v in enumerate(value.values, start=1)}
     if isinstance(value, StrEnum):
         return value.value
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
@@ -364,6 +387,7 @@ def archive_ruleset(path: str | Path, archive_dir: str | Path) -> Path:
 
 
 _LEVEL_KEYS: Final = tuple(str(width) for width in range(2, MAX_WIDTH + 1))
+_ALL_LEVEL_KEYS: Final = tuple(str(width) for width in range(1, MAX_WIDTH + 1))
 
 
 def parse_ruleset(data: object) -> Ruleset:
@@ -382,6 +406,7 @@ def parse_ruleset(data: object) -> Ruleset:
             "capacity",
             "starvation",
             "supply",
+            "road",
             "build",
             "recruit",
             "victory",
@@ -435,12 +460,14 @@ def parse_ruleset(data: object) -> Ruleset:
                     "rear_min_max",
                     "recharge_per_tick",
                     "base_speed_pct",
-                    "base_amount",
                     "fast_speed_pct",
+                    "amount_by_level",
+                    "front_markers",
                 ),
             )
         ),
-        build=_parse_build(root.table("build", ("ticks_per_level", "charges_per_level"))),
+        road=_parse_road(root.table("road", ("speed_pct",))),
+        build=_parse_build(root.table("build", ("ticks_per_level",))),
         recruit=_parse_recruit(
             root.table("recruit", ("unit_ticks", "queue_max", "refund_started_pct", "location"))
         ),
@@ -536,6 +563,7 @@ def _parse_starvation(t: "_Table") -> StarvationRules:
 
 def _parse_supply(t: "_Table") -> SupplyRules:
     speed = t.table("fast_speed_pct", _LEVEL_KEYS)
+    amount = t.table("amount_by_level", _ALL_LEVEL_KEYS)
     rear_min_max = t.integer("rear_min_max", low=0)
     return SupplyRules(
         dispatch_ticks=t.integer("dispatch_ticks", low=1),
@@ -543,17 +571,21 @@ def _parse_supply(t: "_Table") -> SupplyRules:
         rear_min_max=rear_min_max,
         recharge_per_tick=t.integer("recharge_per_tick", low=0),
         base_speed_pct=t.integer("base_speed_pct", low=1),
-        base_amount=t.integer("base_amount", low=1),
         fast_speed_pct=LevelTable(tuple(speed.integer(key, low=1) for key in _LEVEL_KEYS)),
+        amount_by_level=FullLevelTable(
+            tuple(amount.integer(key, low=1) for key in _ALL_LEVEL_KEYS)
+        ),
+        front_markers=t.integer("front_markers", low=0),
     )
+
+
+def _parse_road(t: "_Table") -> RoadRules:
+    speed = t.table("speed_pct", _LEVEL_KEYS)
+    return RoadRules(speed_pct=LevelTable(tuple(speed.integer(key, low=1) for key in _LEVEL_KEYS)))
 
 
 def _parse_build(t: "_Table") -> BuildRules:
-    price = t.table("charges_per_level", _LEVEL_KEYS)
-    return BuildRules(
-        ticks_per_level=t.integer("ticks_per_level", low=1),
-        charges_per_level=LevelTable(tuple(price.integer(key, low=0) for key in _LEVEL_KEYS)),
-    )
+    return BuildRules(ticks_per_level=t.integer("ticks_per_level", low=1))
 
 
 def _parse_recruit(t: "_Table") -> RecruitRules:

@@ -12,7 +12,7 @@ about and the numbers (``PARAMS``) differ:
 - ``reinforce``: fill the garrisons that are below their minimum from free groups or by recruiting;
 - ``strengthen``: spend CP that would otherwise burn on the cap on recruits at the front;
 - ``fortify``: «Защита» on the guards that face enemies;
-- ``build_roads``: unthreatened own cities upgrade internal roads with warehouse charges (DEC-16).
+- ``build_roads``: one unthreatened own internal road a turn is upgraded for CP (DEC-28, item 7).
 - ``prioritize``: the two front markers go to own cities at the front (DEC-28).
 
 Enemy strength (DEC-04). A view gives exact enemy numbers only at ``EXACT`` detail (own nodes and
@@ -43,7 +43,7 @@ from typing import Final
 
 from gow_bots.bots.base import Bot, node_of
 from gow_bots.bots.utility import prefer_planned, shots_to_take
-from gow_sim.commands import Command, Move, Recruit, SetMode, SetStance
+from gow_sim.commands import Command, Move, Recruit, SetMode, SetStance, UpgradeRoad
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import Detail, GroupView, IntentKind, Mode, PlayerView, Stance
@@ -382,32 +382,32 @@ class StrategyBot(Bot):
             self.spend(turn, cmd, keep)
 
     def build_roads(self, turn: Turn, keep: int) -> None:
-        """Unthreatened own cities upgrade their internal road with the best gain (DEC-16, DEC-22).
-
-        The gain of a road is its ``road_value``. Cities in ``node_key`` order, roads in
-        edge key order: mirror-invariant. A city pays from its warehouse, so only a city whose
-        warehouse covers the level builds; a road that the other end already builds is skipped.
-        ``keep``: CP reserve for ``orders.cost.build``.
-        """
+        """At most one road a turn: the own internal road with the best ``road_value`` whose ends
+        are not threatened, paid with ``orders.cost.build`` CP (DEC-28, item 7) while ``keep`` CP
+        stay. Ties go to the nearer road to the own capital, then the smaller edge key:
+        mirror-invariant. Supplied roads first: a level there speeds both the packets and the
+        groups that leave the capital."""
         view = turn.view
-        supplied = self.supplied(view)
-        building: dict[int, bool] = {}  # edges ordered in this turn
-        for node in sorted(range(len(view.nodes)), key=self.key):
-            if turn.threatened[node]:
+        capital = self.map.capital(self.player)
+        hops = self.hops[capital]
+        best: tuple[int, int, int] | None = None
+        best_edge: int | None = None
+        for e, edef in enumerate(self.map.edges):
+            value = self.road_value(view, e)
+            if value is None or not self.can_upgrade(view, e):
                 continue
-            best: int | None = None
-            best_gain = 0
-            for e in self.incident[node]:
-                value = self.road_value(view, e)
-                if value is None or e in building or value <= best_gain:
-                    continue
-                if self.can_upgrade(view, node, e, supplied):
-                    best, best_gain = e, value
-            if best is not None and self.spend(turn, self.upgrade(view, node, best), keep):
-                building[best] = True
+            if turn.threatened[edef.a] or turn.threatened[edef.b]:
+                continue
+            rank = (-value, min(hops[edef.a], hops[edef.b]), self.edge_keys[e])
+            if best is None or rank < best:
+                best, best_edge = rank, e
+        if best_edge is not None:
+            self.spend(turn, UpgradeRoad(best_edge), keep)
 
     def road_value(self, view: PlayerView, edge: int) -> int | None:
-        """What the next level of ``edge`` is worth: its speed points (DEC-26, item 7: a level
-        only speeds the packets up); ``None`` when it cannot grow."""
+        """What the next level of ``edge`` is worth (DEC-28, item 7): its packet and unit speed
+        points plus 100 per charge of throughput; ``None`` when it cannot grow."""
         gain = view.edges[edge].upgrade_gain
-        return None if gain is None else gain.speed_pct
+        if gain is None:
+            return None
+        return gain.speed_pct + gain.unit_speed_pct + 100 * gain.amount

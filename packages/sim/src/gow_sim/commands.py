@@ -23,8 +23,8 @@ cancel are free in the rulesets of DEC-20, the keys stay so that balance can bri
 Split, Merge, CancelOrder and the stack limit of ``Move`` follow DEC-20 (mechanics.md, section 3);
 what DEC-20 leaves open keeps the defaults of #117 (split takes the charged units first).
 Bonuses and public intents of planned orders and «Защита»: ``systems.orders`` (SIM-10).
-Road upgrades by a city (DEC-16) and, with ``city_upgrades``, the barracks and the warehouse
-levels (DEC-26): ``systems.build``; they are not public.
+Road upgrades paid with CP (DEC-28, item 7) and, with ``city_upgrades``, the barracks and the
+warehouse levels (DEC-26): ``systems.build``; they are not public.
 Front markers and the rear minimum (DEC-28): ``SetFront`` and ``SetRearMin``; one-off transfers
 (DEC-18): ``Transfer``; none of them is public; a transfer is cut to the free room of the
 target and leaves in batches, the first in the tick it is applied (``systems.supply``, #287).
@@ -35,11 +35,11 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from itertools import pairwise
 
-from gow_sim.maps import NodeKind
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import (
     AtNode,
     BuildKind,
+    Detail,
     Event,
     FightMember,
     GameState,
@@ -50,8 +50,8 @@ from gow_sim.state import (
     Order,
     event,
 )
-from gow_sim.systems.build import builder_of, level_price, start_city_build, start_road
-from gow_sim.systems.capacity import is_internal, supplied_territory
+from gow_sim.systems.build import start_city_build, start_road
+from gow_sim.systems.capacity import is_internal
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
 from gow_sim.systems.movement import find_path, path_ticks
 from gow_sim.systems.orders import absorb, clear_bonus, set_intent
@@ -69,7 +69,7 @@ from gow_sim.systems.supply import (
     transfer_route,
     warehouse_room,
 )
-from gow_sim.systems.vision import compute_vision, is_visible
+from gow_sim.systems.vision import compute_vision, edge_detail_level, is_visible
 
 __all__ = [
     "BuildBarracks",
@@ -143,15 +143,10 @@ class SetStance:
 
 @dataclass(frozen=True, slots=True)
 class UpgradeRoad:
-    """The own city ``node`` raises the internal ``edge`` at it by one level (DEC-16, DEC-22).
+    """Raise the own internal ``edge`` by one level for ``orders.cost.build`` CP (DEC-28, item 7):
+    no city pays or builds it."""
 
-    Roads have no type (DEC-26, item 7): ``kind`` must be ``None``; any value, a road type of a
-    client from before DEC-26 included, gives ``INVALID_ARGUMENT``.
-    """
-
-    node: int
     edge: int
-    kind: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,27 +282,20 @@ class RejectCode(StrEnum):
     STACK_LIMIT = "STACK_LIMIT"
     """A path exists, but none whose nodes (besides the start) all hold the group (DEC-20, D)."""
     INVALID_ARGUMENT = "INVALID_ARGUMENT"
-    """Malformed arguments: ``n`` out of range, fewer than two or repeated groups, same node; a
-    road type in ``UpgradeRoad`` (DEC-26, item 7: roads have no type)."""
+    """Malformed arguments: ``n`` out of range, fewer than two or repeated groups, same node."""
     NOT_SAME_NODE = "NOT_SAME_NODE"
-    NOT_ADJACENT = "NOT_ADJACENT"
-    """The city is not an end of the edge (``UpgradeRoad``, DEC-16)."""
     NOT_INTERNAL = "NOT_INTERNAL"
     """Only an internal edge of the player can be upgraded (mechanics.md, section 8)."""
     MAX_WIDTH = "MAX_WIDTH"
     """The road already has ``max_width`` (its last level, DEC-22)."""
     NOT_CITY = "NOT_CITY"
     """The node is a province, not a city (DEC-22, item 3; DEC-18, items 1 and 6; DEC-23)."""
-    NOT_SUPPLIED = "NOT_SUPPLIED"
-    """The city is not in its owner's supplied territory (DEC-16)."""
     CITY_BUSY = "CITY_BUSY"
-    """The city already builds (DEC-16: one build per city; DEC-26, item 8: shared by the road,
-    the barracks and the warehouse)."""
+    """The city already builds the barracks or a warehouse level (DEC-26, item 8)."""
     EDGE_BUSY = "EDGE_BUSY"
-    """The other end of the edge already builds it (DEC-16: one city per edge)."""
+    """A level of the road is being built already (DEC-28, item 7)."""
     NOT_ENOUGH_CHARGES = "NOT_ENOUGH_CHARGES"
-    """The city warehouse holds fewer charges than the level costs (DEC-16) or than a transfer
-    ships (DEC-18)."""
+    """The city warehouse holds fewer charges than a transfer ships (DEC-18)."""
     TARGET_FULL = "TARGET_FULL"
     """The warehouse of the transfer's target has no free room (DEC-18, item 6, #287)."""
     NO_CHANGE = "NO_CHANGE"
@@ -509,8 +497,8 @@ def _check(
             if mode == group.mode and mode is not Mode.DEFENSE:
                 return Reject(RejectCode.NO_CHANGE)
             return ()
-        case UpgradeRoad(node=node, edge=eid, kind=kind):
-            return _check_upgrade(state, rules, player, node, eid, kind)
+        case UpgradeRoad(edge=eid):
+            return _check_upgrade(state, player, eid)
         case BuildBarracks(node=node):
             return _check_city_build(state, rules, player, node, BuildKind.BARRACKS)
         case UpgradeWarehouse(node=node):
@@ -686,37 +674,20 @@ def _check_city_build(
     return ()
 
 
-def _check_upgrade(
-    state: GameState, rules: Ruleset, player: int, node: int, eid: int, kind: str | None
-) -> tuple[int, ...] | Reject:
-    """The checks of ``UpgradeRoad`` in the order of DEC-16, item 2 with the changes of DEC-22,
-    item 3 and DEC-26, item 7 (CP last, in ``_validate``)."""
-    if not 0 <= node < len(state.map.nodes):
-        return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
-    if state.nodes[node].owner != player:
-        return Reject(RejectCode.NOT_OWNER)
-    if state.map.nodes[node].kind is NodeKind.PROVINCE:
-        return Reject(RejectCode.NOT_CITY)
-    if not 0 <= eid < len(state.map.edges):
+def _check_upgrade(state: GameState, player: int, eid: int) -> tuple[int, ...] | Reject:
+    """The checks of ``UpgradeRoad(edge)`` in the order of DEC-28, item 7 (CP last, in
+    ``_validate``): no edge or an edge in fog, not internal for the player, the last level, a
+    build on it already. Builds are not limited otherwise; no city takes part."""
+    if not 0 <= eid < len(state.map.edges) or edge_detail_level(state, player, eid) is Detail.FOG:
         return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
     edge = state.map.edges[eid]
-    if node not in (edge.a, edge.b):
-        return Reject(RejectCode.NOT_ADJACENT)
-    if not is_internal(state, eid):  # the node is own, so an internal edge is the player's
+    if not is_internal(state, eid) or state.nodes[edge.a].owner != player:
         return Reject(RejectCode.NOT_INTERNAL)
     road = state.edges[eid]
     if road.width >= edge.max_width:
         return Reject(RejectCode.MAX_WIDTH)
-    if kind is not None:  # roads have no type (DEC-26, item 7)
-        return Reject(RejectCode.INVALID_ARGUMENT)
-    if not supplied_territory(state, player)[node]:
-        return Reject(RejectCode.NOT_SUPPLIED)
-    if state.nodes[node].build is not None:
-        return Reject(RejectCode.CITY_BUSY)
-    if builder_of(state, eid) is not None:
+    if road.build is not None:
         return Reject(RejectCode.EDGE_BUSY)
-    if state.nodes[node].warehouse < level_price(state, rules, eid):
-        return Reject(RejectCode.NOT_ENOUGH_CHARGES)
     return ()
 
 
@@ -838,8 +809,8 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                 clear_bonus(group)
                 set_intent(state, group, None)
             return []
-        case UpgradeRoad(node=node, edge=eid):
-            return [start_road(state, rules, player, node, eid)]  # not public (DEC-16)
+        case UpgradeRoad(edge=eid):
+            return [start_road(state, player, eid)]  # not public (DEC-16, DEC-28)
         case BuildBarracks(node=node):
             return [start_city_build(state, player, node, BuildKind.BARRACKS)]
         case UpgradeWarehouse(node=node):
@@ -866,7 +837,9 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             if isinstance(location, OnEdge):
                 # Back to the start of this edge, as long as the way travelled (DEC-20, C2): the
                 # mechanics of a bounce, without spending charges.
-                group.location = OnEdge(location.edge, location.from_node, location.progress, True)
+                group.location = OnEdge(
+                    location.edge, location.from_node, location.progress, True, location.level
+                )
                 group.order = None
             elif _waits_to_depart(state, group):
                 group.order = None

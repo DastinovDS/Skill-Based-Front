@@ -159,15 +159,17 @@ class MixBot:
         return []
 
     def _upgrade(self, view: PlayerView, idle: list[GroupView]) -> list[Command]:
-        """The city of an idle group upgrades a road (DEC-16, DEC-26); rejects are part of the
-        log. Now and then with a road type, which DEC-26 rejects (``INVALID_ARGUMENT``)."""
+        """A road at an idle group is upgraded for CP (DEC-28, item 7); rejects are part of the
+        log. Now and then a road under a build already (``EDGE_BUSY``)."""
         for g in idle:
             assert isinstance(g.location, AtNode)
             node = g.location.node
             for e in self.map.incident[node]:
-                if view.edges[e].upgrade_gain is not None:
-                    kind = "fast" if self.decisions % 85 == 0 else None
-                    return [UpgradeRoad(node, e, kind)]
+                road = view.edges[e]
+                if road.upgrade_gain is not None and (
+                    road.build is None or self.decisions % 85 == 0
+                ):
+                    return [UpgradeRoad(e)]
         return []
 
 

@@ -23,8 +23,7 @@ from typing import Annotated, Self
 
 from pydantic import Field
 
-from gow_protocol.base import Centi, NonNegInt, PosInt, SignedInt, Width, WireModel
-from gow_sim.maps import MAX_WIDTH
+from gow_protocol.base import Centi, NonNegInt, PosInt, SignedInt, WireModel
 from gow_sim.ruleset import Ruleset, Stance
 
 
@@ -80,13 +79,6 @@ class CpPublic(WireModel):
     period_ticks: PosInt
 
 
-class LevelPrice(WireModel):
-    """Charges from the city warehouse for raising a road to level ``width`` (DEC-16, DEC-22)."""
-
-    width: Width
-    charges: NonNegInt
-
-
 Percent = Annotated[int, Field(ge=0, le=100)]
 
 
@@ -124,11 +116,10 @@ class CapacityPublic(WireModel):
 
 
 class BuildPublic(WireModel):
-    """Road upgrades by a city (``build`` of the ruleset, DEC-16)."""
+    """Road upgrades (``build`` of the ruleset, DEC-28, item 7): the price is ``cost.build`` per
+    level, what a level gives is ``upgrade_gain`` of the own edges in the view."""
 
     ticks_per_level: PosInt
-    charges_per_level: tuple[LevelPrice, ...]
-    """One price per new level ``2..3`` (DEC-22), ascending."""
 
 
 class RecruitPublic(WireModel):
@@ -162,6 +153,8 @@ class SupplyPublic(WireModel):
     """``set_rear_min`` accepts ``0..rear_min_max``."""
     rear_min_default: NonNegInt
     """The rear minimum every player starts with."""
+    front_markers: NonNegInt
+    """Front markers of a player: ``set_front`` accepts ``marker`` ``0..front_markers - 1``."""
 
 
 class RulesetPublic(WireModel):
@@ -218,13 +211,7 @@ class RulesetPublic(WireModel):
                 shots_per_round=rules.combat.shots_per_round,
                 regroup_ticks=rules.combat.regroup_ticks,
             ),
-            build=BuildPublic(
-                ticks_per_level=rules.build.ticks_per_level,
-                charges_per_level=tuple(
-                    LevelPrice(width=w, charges=rules.build.charges_per_level.of(w))
-                    for w in range(2, MAX_WIDTH + 1)
-                ),
-            ),
+            build=BuildPublic(ticks_per_level=rules.build.ticks_per_level),
             economy=EconomyPublic(
                 stance_to_charges_pct=StancePctPublic(
                     economy=pct.of(Stance.ECONOMY),
@@ -257,5 +244,6 @@ class RulesetPublic(WireModel):
             supply=SupplyPublic(
                 rear_min_max=rules.supply.rear_min_max,
                 rear_min_default=rules.supply.rear_min_default,
+                front_markers=rules.supply.front_markers,
             ),
         )
