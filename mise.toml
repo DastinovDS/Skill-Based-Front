@@ -60,13 +60,13 @@ description = "All static checks: Python, client, e2e (no tests)"
 depends = ["check:py", "check:client", "check:e2e"]
 
 [tasks."check:py"]
-description = "ruff check and format, pyright, lint-imports, map validation"
+description = "ruff check and format, pyright, lint-imports, map validation (with the warehouse check of mvp-1)"
 run = [
   "uv run ruff check --quiet .",
   "uv run ruff format --check --quiet .",
   "uv run pyright",
   "uv run lint-imports --no-logo",
-  "uv run gow-maps validate maps/*.json",
+  "uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json",
 ]
 
 [tasks."check:client"]
@@ -217,11 +217,7 @@ description = "Validate the maps (alias of maps:validate)"
 depends = ["maps:validate"]
 
 [tasks."maps:validate"]
-description = "gow-maps validate maps/*.json"
-run = "uv run gow-maps validate maps/*.json"
-
-[tasks."maps:validate-warehouse"]
-description = "Validate with the warehouse check of rulesets/mvp-1.toml (DEC-26, #265: arteriya and pautina fail now)"
+description = "gow-maps validate maps/*.json, with the start-stock check against the warehouses of rulesets/mvp-1.toml (DEC-26, item 5)"
 run = "uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json"
 
 [tasks."maps:preview"]

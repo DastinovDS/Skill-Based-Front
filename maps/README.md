@@ -28,11 +28,10 @@ T2 «Прореживание» (`ui-style.md`, 26.3), WebP не больше 0,
 
 - столицы стоят в горах (mechanics.md, раздел 7: столица — единственный источник снабжения);
 - на старте у каждого игрока столица (6 юнитов, все заряжены, склад 6) и 5 городов (по 2 юнита,
-  склад 2; у карт DEC-27 у малого города склад 1, у них же по 2 свои провинции без гарнизона);
-  нейтральные города и провинции пусты; с `rulesets/mvp-1.toml` (`city_upgrades`, DEC-26) склад
-  малого города на старте обрезается до 1, и `gow-maps validate --ruleset rulesets/mvp-1.toml`
-  отмечает это как `[warehouse]` (`arteriya`, `pautina`; вопрос владельцу в #265; карты DEC-27
-  проверку проходят);
+  склад 2, у малого города склад 1; у карт DEC-27 ещё по 2 свои провинции без гарнизона);
+  нейтральные города и провинции пусты; стартовый склад города не больше склада рулсета
+  `rulesets/mvp-1.toml` (`city_upgrades`, DEC-26, п. 5): `gow-maps validate --ruleset
+  rulesets/mvp-1.toml` отмечает превышение как `[warehouse]` (#379; `mise run maps:validate`);
 - у каждого узла название (DEC-23, п. 4; превью подписывает его после вида); точка границы на всех
   дорогах в середине (`border_permille` 500), превью рисует её кружком;
 - все дороги на старте уровня 1 (DEC-22); предел улучшения `max_level` (не больше 3) задаёт
@@ -144,7 +143,7 @@ uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json
 uv run gow-maps preview maps/<name>.json
 uv run gow-maps bake maps/<name>.json
 # проверить весь пул (это же делает CI)
-uv run gow-maps validate maps/*.json
+uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json
 ```
 
 Тест `tools/maps/tests/test_pool.py` проверяет, что каждая `maps/<name>.json` в точности равна

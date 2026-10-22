@@ -39,7 +39,7 @@
 | Где | Сейчас | При `city_upgrades.enabled = true` |
 |---|---|---|
 | `nodes[].start_stock` | стартовый запас склада, в пределах ёмкости узла (`capacity.by_kind`) | в пределах ёмкости **склада** вида узла: `warehouse.start_by_kind[kind]` (столица 6, большой и средний 2, малый 1); симуляция при старте берёт `min(start_stock, warehouse_capacity)` |
-| валидатор | (нет) | проверка `warehouse` (только с рулсетом, у которого `city_upgrades.enabled`: `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json`): `start_stock <= warehouse.start_by_kind[kind]`; без `--ruleset` или с `mvp-0` не проверяется. Карты не правились: `arteriya` и `pautina` не проходят её у малых городов (`start_stock = 2`), `pereval` проходит; с `mvp-1` симуляция обрезает их склад до 1, с `mvp-0` всё как раньше (менять карты значит менять и `mvp-0`: вопрос владельцу в #265) |
+| валидатор | (нет) | проверка `warehouse` (только с рулсетом, у которого `city_upgrades.enabled`: `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json`): `start_stock <= warehouse.start_by_kind[kind]`; без `--ruleset` или с `mvp-0` не проверяется. Все шесть карт проходят её (`mise run maps:validate`): у малых городов `start_stock = 1`; у `arteriya` и `pautina` значение исправлено с 2 на 1 в #379 (до этого симуляция с `mvp-1` обрезала его до 1, с `mvp-0`, где склад равен ёмкости узла, малый город стартовал с 2) |
 | `nodes[].kind` | ёмкость юнитов по виду узла | то же; плюс склад и право рекрутировать (только столица с начала) задаёт рулсет, не карта |
 | стартовые гарнизоны | `start_units` в любом городе | без изменений: город без казармы держит стартовый гарнизон, но не рекрутирует |
 
