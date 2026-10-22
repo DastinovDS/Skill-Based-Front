@@ -65,6 +65,12 @@ from gow_sim.ruleset import Stance, load_ruleset
 ROOT: Final = Path(__file__).parents[3]
 DT: Final = 0.1
 RECV_TIMEOUT_S: Final = 5.0
+SMALL_BUFFER: Final = 256 * 1024
+"""Socket buffer (bytes) of the slow-client tests, on both ends (``small_socket``, ``sndbuf``).
+
+Small enough that a client which does not read blocks the server's sends after about 1 MB. Not
+smaller: the loopback segment is up to 64 KB, and a receive buffer of a couple of segments makes
+the kernel drop them and back off its retransmission timer for tens of seconds (#363)."""
 DRAIN_TIMEOUT_S: Final = 60.0
 """Wait for the next frame while a blocked client drains megabytes through a tiny socket buffer.
 
@@ -107,9 +113,21 @@ class Live:
             await asyncio.sleep(pause_s)
 
 
+def listening_socket(sndbuf: int) -> socket.socket:
+    """A listening socket on a free port; the connections it accepts inherit the send buffer."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, sndbuf)
+    sock.bind(("127.0.0.1", 0))
+    return sock
+
+
 @asynccontextmanager
 async def live_server(
-    settings: Settings, map_id: str = "line3", ruleset: str = "test-short", private: bool = False
+    settings: Settings,
+    map_id: str = "line3",
+    ruleset: str = "test-short",
+    private: bool = False,
+    sndbuf: int | None = None,
 ) -> AsyncGenerator[Live]:
     clock = ManualClock()
     app = create_app(settings, clock)
@@ -117,7 +135,8 @@ async def live_server(
         app, host="127.0.0.1", port=0, log_config=None, ws_max_size=WS_MAX_SIZE, lifespan="on"
     )
     server = uvicorn.Server(config)
-    task = asyncio.create_task(server.serve())
+    sockets = None if sndbuf is None else [listening_socket(sndbuf)]
+    task = asyncio.create_task(server.serve(sockets))
     while not server.started:
         await asyncio.sleep(0.01)
     port = server.servers[0].sockets[0].getsockname()[1]
@@ -146,9 +165,10 @@ def run(
     map_id: str = "line3",
     ruleset: str = "test-short",
     private: bool = False,
+    sndbuf: int | None = None,
 ) -> None:
     async def main() -> None:
-        async with live_server(settings, map_id, ruleset, private) as live:
+        async with live_server(settings, map_id, ruleset, private, sndbuf) as live:
             await scenario(live)
 
     asyncio.run(main())
@@ -181,7 +201,7 @@ def small_socket(host: str) -> socket.socket:
     """A connected client socket with a small receive buffer."""
     address, port = host.rsplit(":", 1)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, SMALL_BUFFER)
     sock.connect((address, int(port)))
     sock.setblocking(False)
     return sock
@@ -460,8 +480,9 @@ def test_match_end_reaches_both_and_closes_normally(ws_settings: Settings) -> No
 def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settings) -> None:
     """The client does not read while 1000 ticks pass on the largest map, then reads everything.
 
-    That is about 10 MB of snapshots: more than the kernel's socket buffers absorb (up to 4 MB
-    each way with autotuning), so the server's sends do block.
+    That is about 10 MB of snapshots; the socket buffers on both ends are bounded
+    (``SMALL_BUFFER``, about 1 MB together), so the server's sends block after a few dozen frames
+    and the rest are skipped, while the acks queue up and all arrive.
     """
     ticks = 1000
     settings = ws_settings.model_copy(
@@ -469,8 +490,8 @@ def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settin
     )  # the second player never comes: no technical defeat in this test
 
     async def scenario(live: Live) -> None:
-        # A tiny receive buffer and max_queue=1: the client buffers almost nothing, so TCP pushes
-        # back on the server's sends after a few frames.
+        # Bounded buffers and max_queue=1: the client buffers almost nothing, so TCP pushes back
+        # on the server's sends after a few frames.
         async with live.connect(max_queue=1, sock=small_socket(live.host)) as ws:
             await send(ws, hello(live.tokens[0]))
             start = live.runner.match.tick
@@ -478,7 +499,13 @@ def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settin
                 stance = Stance.WAR if seq % 2 else Stance.ECONOMY
                 await send(ws, CommandMsg(seq=seq, cmd=SetStanceCmd(stance=stance)))
                 await live.ticks(pause_s=0)
-            await asyncio.sleep(0.05)  # the last command reaches the server, then one more tick
+            # The server reads the commands on the same event loop and may lag behind the ticks
+            # (a loaded CI runner): wait until the last one is queued, so the extra tick applies
+            # and acks every command. A fixed pause here left the tail of the commands unacked,
+            # and the drain below waited for acks that no tick would ever produce (#363).
+            async with asyncio.timeout(DRAIN_TIMEOUT_S):
+                while live.runner.last_seq(0) < ticks:
+                    await asyncio.sleep(0.01)
             await live.ticks()
             assert live.runner.match.tick == start + ticks + 1, "the tick did not wait"
             acks: list[int] = []
@@ -492,7 +519,7 @@ def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settin
             assert acks == list(range(1, ticks + 1))
             assert snapshots < ticks, "stale snapshots were skipped"
 
-    run(settings, scenario, map_id="pautina", ruleset="mvp-0")
+    run(settings, scenario, map_id="pautina", ruleset="mvp-0", sndbuf=SMALL_BUFFER)
 
 
 def test_client_that_does_not_read_is_disconnected(
@@ -517,7 +544,7 @@ def test_client_that_does_not_read_is_disconnected(
             assert live.runner.match.tick == tick + 5, "the match goes on without the client"
 
     with caplog.at_level(logging.INFO, logger="gow_server.ws"):
-        run(settings, scenario, map_id="pautina", ruleset="mvp-0")
+        run(settings, scenario, map_id="pautina", ruleset="mvp-0", sndbuf=SMALL_BUFFER)
     assert [r.__dict__["code"] for r in closed()] == [CLOSE_POLICY]
 
 
