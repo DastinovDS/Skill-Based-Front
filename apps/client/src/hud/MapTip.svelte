@@ -15,13 +15,14 @@
   const GAP = 14;
 
   let shown = $state(false);
-  let box: HTMLElement | undefined = $state();
+  // `bind:this` sets `null` when the tip unmounts, and a pointer move can still arrive before the next effect.
+  let box: HTMLElement | null | undefined = $state();
   // The pointer position is plain data: it moves the box through the CSSOM, not through state.
   let pointer = { x: 0, y: 0 };
   let overMap = false;
 
   function place(): void {
-    if (box === undefined) return;
+    if (box === undefined || box === null) return;
     const width = box.offsetWidth;
     const height = box.offsetHeight;
     const x =
