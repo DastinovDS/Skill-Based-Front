@@ -271,6 +271,7 @@ export const en = {
   'fight.held': 'Held',
   'fight.bounced': 'Both retreated',
   'fight.bonusAttack': 'bonus attack',
+  'fight.silent': 'silent',
   'help.key.defense': 'group Defense on or off',
   'defense.bonus': '+{bonus} / {cap}',
   // A range of enemy units (DEC-21, item 4): "3-5", the last one open: "21+".

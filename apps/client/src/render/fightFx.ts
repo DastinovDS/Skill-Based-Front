@@ -39,6 +39,11 @@ export const ARENA_GAP_NODE = PLATE.halfHeight + ARENA_REACH + 8;
 /** The plate of a fight on a road floats this many px above its meeting point. */
 export const ARENA_GAP_EDGE = PLATE.halfHeight + ARENA_REACH + 18;
 
+/** A key of the place of a fight: the arena of a fight, its end and its effects share one. */
+export function placeKey(place: FightPlace): string {
+  return `${String(place.node)}/${String(place.edge)}/${String(place.at.x)},${String(place.at.y)}`;
+}
+
 /** Where a fight is: the true place (a city, or the meeting point on a road). */
 export interface FightPlace {
   readonly node: number | null;
@@ -81,6 +86,9 @@ export interface RoundFx {
   readonly tick: number;
   readonly place: FightPlace;
   readonly losses: readonly [number, number];
+  /** Shots of the round by player, and the virtual (bonus) ones among them; zeros if the event lacks them. */
+  readonly shots: readonly [number, number];
+  readonly virtual: readonly [number, number];
 }
 
 /** The end of a fight, from `fight_ended`. */
@@ -132,6 +140,8 @@ export function fightFx(
       tick: event.tick,
       place,
       losses,
+      shots: [intField(data, 'shots_0') ?? 0, intField(data, 'shots_1') ?? 0],
+      virtual: [intField(data, 'virtual_0') ?? 0, intField(data, 'virtual_1') ?? 0],
     };
   }
   const winner = data['winner'];
@@ -162,8 +172,6 @@ export function fightResult(end: EndFx): FightResult {
 
 /** The arrows of a round grow over this share of a round. */
 export const GROW_SHARE = 0.2;
-/** The loss numbers of a round stay this share of a round. */
-export const LOSS_POP_SHARE = 0.8;
 /** The end of a fight stays this share of a round (3 s at 20 ticks and 10 Hz). */
 export const END_SHARE = 1.5;
 /** A chip that changed pulses once over this share of a round. */

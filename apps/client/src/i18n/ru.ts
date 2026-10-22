@@ -269,6 +269,7 @@ export const ru = {
   'fight.held': 'Удержан',
   'fight.bounced': 'Оба отошли',
   'fight.bonusAttack': 'бонусная атака',
+  'fight.silent': 'молчит',
   'help.key.defense': '«Защита» группы: вкл или выкл',
   'defense.bonus': '+{bonus} / {cap}',
   // A range of enemy units (DEC-21, item 4): "3-5", the last one open: "21+".

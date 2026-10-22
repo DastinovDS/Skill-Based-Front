@@ -1,6 +1,11 @@
 import { Container, Graphics } from 'pixi.js';
 import type { EventMsg, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
+import { contactPoints, type Contacts } from './fightImpact.ts';
+import { fightPlace, placeKey, type FightPlace } from './fightFx.ts';
+import { HitView, type Punch } from './hitView.ts';
+import { ParticleLayer } from './particles.ts';
+import type { EnemyAnchors } from './entityView.ts';
 import type { Point } from './camera.ts';
 import {
   bounceArrow,
@@ -32,6 +37,8 @@ import {
 /** Ticks between rounds when the source does not say (`rulesets/mvp-0.toml`, DEC-32). */
 const DEFAULT_ROUND_TICKS = 20;
 const MAX_WAVES = 4;
+/** Places of fights whose contacts are remembered (a long match has many roads): past it the memory starts over. */
+const MAX_REMEMBERED_PLACES = 64;
 /** Where a bounced group goes back to, found once when its own token is on the road. */
 type BounceArrow = NonNullable<ReturnType<typeof bounceArrow>> | null;
 
@@ -49,6 +56,11 @@ type BounceArrow = NonNullable<ReturnType<typeof bounceArrow>> | null;
 export class EffectsView {
   private readonly layer = new Container({ label: 'effects' });
   private readonly fightView: FightView;
+  private readonly particles: ParticleLayer;
+  private readonly hits: HitView;
+  /** Where the two sides of each fight stood the last time they were seen (the tokens): ended fights keep it. */
+  private readonly contacts = new Map<string, Contacts>();
+  private cameraScale = 1;
   private readonly waves: Graphics[] = [];
   private readonly arrows = new Graphics();
   private captures: CaptureInfo[] = [];
@@ -65,15 +77,20 @@ export class EffectsView {
     /** The Voronoi cells of the cities (`MapView.cells`). */
     private readonly cells: readonly (readonly Point[])[],
     /** Radius of a city now (`CityView.radiusOf`). */
-    radiusOf: (node: number) => number,
+    private readonly radiusOf: (node: number) => number,
   ) {
     this.layer.addChild(this.arrows);
     layers.layer.effects.addChild(this.layer);
+    // Under the arenas: a spark over a city does not hide the plate that floats above it.
+    this.particles = new ParticleLayer(layers.layer.effects);
+    this.hits = new HitView(layers.layer.effects, map, me, labelResolution, radiusOf);
     this.fightView = new FightView(map, layers, me, labelResolution, radiusOf);
+    this.fightView.setContacts((place) => this.contactsAt(place));
   }
 
   /** Camera scale (CSS px per world unit): the arenas of fights keep their size on screen. */
   setCameraScale(scale: number): void {
+    if (scale > 0) this.cameraScale = scale;
     this.fightView.setCameraScale(scale);
   }
 
@@ -85,6 +102,7 @@ export class EffectsView {
   /** Text resolution for what is drawn at one unit a CSS px (the arenas of fights). */
   setScreenResolution(resolution: number): void {
     this.fightView.setScreenResolution(resolution);
+    this.hits.setScreenResolution(resolution);
   }
 
   update(
@@ -93,16 +111,76 @@ export class EffectsView {
     spots: ReadonlyMap<string, TokenSpot>,
     tickHz: number,
     roundTicks: number = DEFAULT_ROUND_TICKS,
-  ): void {
+    enemies: EnemyAnchors | null = null,
+  ): readonly Punch[] {
     this.readEvents(events);
     const reduced = reducedMotion();
+    this.trackContacts(frame, spots, enemies);
     this.fightView.update(frame, events, roundTicks, reduced);
+    // Effects keep their size on the screen when the map is zoomed out; zoomed in they grow with it.
+    const scale = Math.max(1, 1 / this.cameraScale);
+    this.particles.begin();
+    const punches = this.hits.update(
+      (particle) => {
+        this.particles.put(particle);
+      },
+      frame,
+      this.fightView.rounds(),
+      roundTicks,
+      (place) => this.contactsAt(place),
+      scale,
+    );
+    this.particles.end();
     this.drawWaves(frame.tick, tickHz, reduced);
     this.drawBounces(frame, spots, tickHz, reduced);
+    return punches;
+  }
+
+  /** How many particles the last frame drew (tests, the dev tools). */
+  particleCount(): { normal: number; additive: number } {
+    return this.particles.count();
+  }
+
+  /**
+   * Where the two sides of every fight in sight stand: the own token of a group in the fight, the
+   * enemy marker of the city or the figure nearest to the meeting point on the road. Remembered by place
+   * for the rounds of a fight that has just ended.
+   */
+  private trackContacts(
+    frame: RenderFrame,
+    spots: ReadonlyMap<string, TokenSpot>,
+    enemies: EnemyAnchors | null,
+  ): void {
+    for (const fight of frame.base.view.fights) {
+      const place = fightPlace(this.map, fight.node, fight.edge, fight.point, this.radiusOf);
+      if (place === undefined) continue;
+      let own: Point | undefined;
+      for (const id of fight.groups) {
+        own = spots.get(id);
+        if (own !== undefined) break;
+      }
+      let enemy: Point | undefined;
+      if (enemies !== null) {
+        enemy =
+          place.node !== null
+            ? enemies.nodePoint(place.node)
+            : place.edge === null
+              ? undefined
+              : enemies.nearestOnEdge(place.edge, place.at);
+      }
+      if (this.contacts.size > MAX_REMEMBERED_PLACES) this.contacts.clear();
+      this.contacts.set(placeKey(place), contactPoints(this.map, place, { own, enemy }));
+    }
+  }
+
+  private contactsAt(place: FightPlace): Contacts {
+    return this.contacts.get(placeKey(place)) ?? contactPoints(this.map, place, {});
   }
 
   destroy(): void {
     this.fightView.destroy();
+    this.hits.destroy();
+    this.particles.destroy();
     this.arrows.destroy();
     this.layer.destroy({ children: true });
   }

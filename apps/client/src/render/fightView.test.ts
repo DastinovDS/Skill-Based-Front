@@ -601,7 +601,10 @@ describe('FightView', () => {
 
   it('pops up the losses of a round, own on the left and the enemy on the right', () => {
     const { view, frame, texts } = setup();
+    // The shot lands 0.3 of a round after the tick: the numbers are there from then on.
     view.update(frame(snapshot([], 151)), [round(150, 1, 2, 1)], ROUND, false);
+    expect(texts()).toEqual([]);
+    view.update(frame(snapshot([], 157)), [round(150, 1, 2, 1)], ROUND, false);
     expect(texts()).toEqual(['−2', '−1']);
     view.destroy();
   });
@@ -618,21 +621,21 @@ describe('FightView', () => {
       return y;
     };
     const events = [round(150, 1, 0, 1)];
-    view.update(frame(snapshot([], 151)), events, ROUND, false);
+    view.update(frame(snapshot([], 157)), events, ROUND, false);
     const early = yOf();
-    view.update(frame(snapshot([], 160)), events, ROUND, false);
+    view.update(frame(snapshot([], 163)), events, ROUND, false);
     expect(yOf()).toBeLessThan(early);
-    view.update(frame(snapshot([], 151)), events, ROUND, true);
+    view.update(frame(snapshot([], 157)), events, ROUND, true);
     const still = yOf();
-    view.update(frame(snapshot([], 160)), events, ROUND, true);
+    view.update(frame(snapshot([], 163)), events, ROUND, true);
     expect(yOf()).toBe(still);
-    // After the numbers' life (0.8 of a round) nothing is left to read.
+    // After the numbers' life (0.5 of a round after the hit) nothing is left to read.
     view.update(frame(snapshot([], 150 + ROUND)), events, ROUND, false);
     expect(texts()).toEqual([]);
     view.destroy();
   });
 
-  it('keeps the numbers of a round for 0.8 of the round: longer when rounds are longer', () => {
+  it('keeps the numbers of a round for 0.5 of the round after the hit: longer when rounds are longer', () => {
     for (const [ticks, alive] of [
       [10, false],
       [20, true],
@@ -685,7 +688,8 @@ describe('FightView', () => {
     ];
     const count = (node: Container): number =>
       1 + node.children.reduce((sum, child) => sum + count(child), 0);
-    view.update(frame(snapshotAt(withOwn(fights, 9, 5), 152)), events, ROUND, false);
+    // The pools are warm when the loss numbers have shown once (the hit lands 6 ticks after the round).
+    view.update(frame(snapshotAt(withOwn(fights, 9, 5), 158)), events, ROUND, false);
     const warm = count(layers.layer.effects);
     for (let tick = 152; tick < 170; tick++) {
       view.update(frame(snapshotAt(withOwn(fights, 9, 5), tick)), events, ROUND, false);

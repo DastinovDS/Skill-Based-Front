@@ -132,12 +132,16 @@ function fightsSnapshot(): SnapshotMsg {
   const base = fixture('snapshot_clash');
   const [road] = base.view.fights;
   if (road === undefined) throw new Error('the clash fixture lists a fight');
+  // Each fight is in another moment of the effects of its last round (20 ticks a round, the hit
+  // lands 6 ticks after it, 3 when two shots meet): the shots of the road just met, the city 0
+  // is hit, the city 3 lost a unit, the city 1 is in the wind-up of its first round.
   const round = (
+    tick: number,
     shots: [number, number],
     virtual: [number, number],
     losses: [number, number] = [0, 1],
   ) => ({
-    tick: 396,
+    tick,
     shots,
     virtual,
     spent: [shots[0] - virtual[0], shots[1] - virtual[1]] as [number, number],
@@ -148,7 +152,7 @@ function fightsSnapshot(): SnapshotMsg {
     view: {
       ...base.view,
       fights: [
-        { ...road, last_round: round([3, 2], [1, 0]) },
+        { ...road, start_tick: 330, next_round_tick: 416, last_round: round(396, [3, 2], [1, 0]) },
         {
           ...road,
           id: 'dev-fight-city-0',
@@ -162,7 +166,9 @@ function fightsSnapshot(): SnapshotMsg {
           losses: [1, 0],
           virtual_left: [1, 2],
           mute: [0, 1],
-          last_round: round([2, 0], [0, 0], [0, 0]),
+          start_tick: 330,
+          next_round_tick: 413,
+          last_round: round(393, [2, 0], [0, 0], [0, 0]),
         },
         {
           ...road,
@@ -178,7 +184,9 @@ function fightsSnapshot(): SnapshotMsg {
           losses: [0, 2],
           virtual_left: [0, 0],
           mute: [0, 0],
-          last_round: round([0, 1], [0, 0]),
+          start_tick: 330,
+          next_round_tick: 411,
+          last_round: round(391, [0, 1], [0, 0], [1, 0]),
         },
         {
           ...road,
@@ -193,11 +201,41 @@ function fightsSnapshot(): SnapshotMsg {
           losses: [0, 0],
           virtual_left: [0, 1],
           mute: [0, 1],
+          start_tick: 397,
+          next_round_tick: 401,
           last_round: null,
         },
       ],
     },
   };
+}
+
+/** The `fight_round` events of the last rounds of the fights of the snapshot (a round is an event of its tick). */
+function fightRoundEvents(snapshot: SnapshotMsg): EventMsg[] {
+  return snapshot.view.fights.flatMap((fight) => {
+    const last = fight.last_round;
+    if (last === null) return [];
+    const event: EventMsg = {
+      type: 'event',
+      tick: last.tick,
+      kind: 'fight_round',
+      data: {
+        fight: fight.id,
+        node: fight.node,
+        edge: fight.edge,
+        point: fight.point,
+        shots_0: last.shots[0],
+        shots_1: last.shots[1],
+        virtual_0: last.virtual[0],
+        virtual_1: last.virtual[1],
+        spent_0: last.spent[0],
+        spent_1: last.spent[1],
+        losses_0: last.losses[0],
+        losses_1: last.losses[1],
+      },
+    };
+    return [event];
+  });
 }
 
 /**
@@ -355,7 +393,12 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
   { id: 'overflow', map: 'diamond', snapshot: overflowSnapshot(), events: [] },
   { id: 'ranges', map: 'diamond', snapshot: rangesSnapshot(), events: [] },
   { id: 'snapshot_fog', map: 'line3', snapshot: fixture('snapshot_fog'), events: [] },
-  { id: 'fights', map: 'siege', snapshot: fightsSnapshot(), events: [] },
+  {
+    id: 'fights',
+    map: 'siege',
+    snapshot: fightsSnapshot(),
+    events: fightRoundEvents(fightsSnapshot()),
+  },
   {
     id: 'snapshot_clash',
     map: 'siege',

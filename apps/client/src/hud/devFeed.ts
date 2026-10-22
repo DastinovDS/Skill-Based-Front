@@ -175,67 +175,122 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
   };
 }
 
-// --- A scripted fight for the demo (DEC-24, DEC-29) ----------------------------------------------
-// Every `FIGHT_CYCLE` ticks a fight starts at phase 120 and plays six rounds (a round every 10
-// ticks, the last one at phase 180 together with the end): in a city on even cycles, on a road on
-// odd ones. The first two rounds the player fires a bonus (virtual) shot. It ends held, or, every
-// third cycle, with both sides retreating.
+// --- Scripted fights for the demo (DEC-24, DEC-29) -------------------------------------------------
+// Every `FIGHT_CYCLE` ticks three fights start together (the worst frame of the fight effects:
+// three hits at once) and play six rounds, a round every `combat.round_ticks` of the ruleset (the
+// last one at `FIGHT_END` together with the end): in a city, on a road and in another city. The
+// first two rounds the player fires a bonus (virtual) shot and the shots of both sides cancel; then
+// the player puts the enemy's charges out and kills its units. The second fight is the same turned
+// round (the enemy kills the player's units), the third has a silent charge of the enemy (plains,
+// DEC-24 F2). It ends held, or, every third cycle, with both sides retreating.
 
-const FIGHT_CYCLE = 200;
-const FIGHT_START = 120;
-const FIGHT_ROUND = 10;
+const FIGHT_CYCLE = 300;
+const FIGHT_START = 100;
+const FIGHT_ROUND = DEV_RULES.combat.round_ticks;
 
-/** The rounds of the scripted fight, by player (0 is the player of the demo). */
-const DEV_ROUNDS = [
-  { shots: [1, 1], virtual: [1, 0], spent: [0, 1], losses: [0, 0] },
-  { shots: [1, 1], virtual: [1, 0], spent: [0, 1], losses: [0, 0] },
-  { shots: [1, 1], virtual: [0, 0], spent: [1, 1], losses: [0, 0] },
-  { shots: [1, 1], virtual: [0, 0], spent: [1, 1], losses: [0, 0] },
-  { shots: [1, 0], virtual: [0, 0], spent: [1, 0], losses: [0, 1] },
-  { shots: [1, 0], virtual: [0, 0], spent: [1, 0], losses: [0, 1] },
-] as const;
-const FIGHT_END = FIGHT_START + DEV_ROUNDS.length * FIGHT_ROUND;
-
-function devFightPlace(map: MapFile, cycle: number) {
-  const city = map.nodes[1]?.id ?? 0;
-  return cycle % 2 === 0
-    ? { node: city, edge: null, point: null, attacker: 1 as const }
-    : { node: null, edge: map.edges[0]?.id ?? 0, point: 900, attacker: null };
+/** One round of a scripted fight, by player (0 is the player of the demo). */
+interface DevRound {
+  readonly shots: readonly [number, number];
+  readonly virtual: readonly [number, number];
+  readonly spent: readonly [number, number];
+  readonly losses: readonly [number, number];
 }
 
-const pairSum = (key: 'shots' | 'losses' | 'virtual', rounds: number): [number, number] => [
-  DEV_ROUNDS.slice(0, rounds).reduce((n, r) => n + r[key][0], 0),
-  DEV_ROUNDS.slice(0, rounds).reduce((n, r) => n + r[key][1], 0),
+const DEV_ROUNDS: readonly DevRound[] = [
+  { shots: [1, 1], virtual: [1, 0], spent: [0, 1], losses: [0, 0] },
+  { shots: [1, 1], virtual: [1, 0], spent: [0, 1], losses: [0, 0] },
+  { shots: [1, 1], virtual: [0, 0], spent: [1, 1], losses: [0, 0] },
+  { shots: [1, 1], virtual: [0, 0], spent: [1, 1], losses: [0, 0] },
+  { shots: [1, 0], virtual: [0, 0], spent: [1, 0], losses: [0, 1] },
+  { shots: [1, 0], virtual: [0, 0], spent: [1, 0], losses: [0, 1] },
+];
+const FIGHT_END = FIGHT_START + DEV_ROUNDS.length * FIGHT_ROUND;
+
+/** The players of a round swapped: the same fight seen from the other side. */
+function turned(round: DevRound): DevRound {
+  const swap = (pair: readonly [number, number]): [number, number] => [pair[1], pair[0]];
+  return {
+    shots: swap(round.shots),
+    virtual: swap(round.virtual),
+    spent: swap(round.spent),
+    losses: swap(round.losses),
+  };
+}
+
+interface DevFight {
+  readonly id: string;
+  readonly place: { node: number | null; edge: number | null; point: number | null };
+  readonly attacker: 0 | 1 | null;
+  readonly rounds: readonly DevRound[];
+  readonly mute: readonly [number, number];
+}
+
+/** The three scripted fights of a map. */
+function devFightList(map: MapFile): DevFight[] {
+  const city = (index: number): number => map.nodes[Math.min(index, map.nodes.length - 1)]?.id ?? 0;
+  return [
+    {
+      id: 'dev-fight-0',
+      place: { node: city(1), edge: null, point: null },
+      attacker: 1,
+      rounds: DEV_ROUNDS,
+      mute: [0, 0],
+    },
+    {
+      id: 'dev-fight-1',
+      place: { node: null, edge: map.edges[0]?.id ?? 0, point: 900 },
+      attacker: null,
+      rounds: DEV_ROUNDS.map(turned),
+      mute: [0, 0],
+    },
+    {
+      id: 'dev-fight-2',
+      place: { node: city(3), edge: null, point: null },
+      attacker: 0,
+      rounds: DEV_ROUNDS,
+      mute: [0, 1],
+    },
+  ];
+}
+
+const sumOf = (
+  rounds: readonly DevRound[],
+  key: 'shots' | 'losses' | 'virtual',
+  count: number,
+): [number, number] => [
+  rounds.slice(0, count).reduce((n, r) => n + r[key][0], 0),
+  rounds.slice(0, count).reduce((n, r) => n + r[key][1], 0),
 ];
 
-/** The bonus shots of the demo fight still left after `rounds` rounds (DEC-32). */
-const virtualLeft = (rounds: number): [number, number] => {
-  const all = pairSum('virtual', DEV_ROUNDS.length);
-  const used = pairSum('virtual', rounds);
+/** The bonus shots of a scripted fight still left after `count` rounds (DEC-32). */
+const virtualLeft = (rounds: readonly DevRound[], count: number): [number, number] => {
+  const all = sumOf(rounds, 'virtual', rounds.length);
+  const used = sumOf(rounds, 'virtual', count);
   return [all[0] - used[0], all[1] - used[1]];
 };
 
-/** The fight of the demo going on at `tick`, as the view of a player lists it. */
+/** The fights of the demo going on at `tick`, as the view of a player lists them. */
 export function devFights(map: MapFile, tick: number): SnapshotMsg['view']['fights'] {
   const phase = tick % FIGHT_CYCLE;
   if (phase < FIGHT_START || phase >= FIGHT_END) return [];
   const cycle = Math.floor(tick / FIGHT_CYCLE);
   const start = cycle * FIGHT_CYCLE + FIGHT_START;
   const done = Math.floor((tick - start) / FIGHT_ROUND);
-  const last = done === 0 ? undefined : DEV_ROUNDS[done - 1];
-  return [
-    {
-      id: 'dev-fight',
-      ...devFightPlace(map, cycle),
+  return devFightList(map).map((fight) => {
+    const last = done === 0 ? undefined : fight.rounds[done - 1];
+    return {
+      id: fight.id,
+      ...fight.place,
+      attacker: fight.attacker,
       start_tick: start,
       next_round_tick: start + (done + 1) * FIGHT_ROUND,
       groups: [],
       enemy_units: 3,
       enemy_charged: 2,
-      shots: pairSum('shots', done),
-      losses: pairSum('losses', done),
-      virtual_left: virtualLeft(done),
-      mute: [0, 0],
+      shots: sumOf(fight.rounds, 'shots', done),
+      losses: sumOf(fight.rounds, 'losses', done),
+      virtual_left: virtualLeft(fight.rounds, done),
+      mute: [...fight.mute],
       last_round:
         last === undefined
           ? null
@@ -246,8 +301,8 @@ export function devFights(map: MapFile, tick: number): SnapshotMsg['view']['figh
               spent: [...last.spent],
               losses: [...last.losses],
             },
-    },
-  ];
+    };
+  });
 }
 
 /**
@@ -257,29 +312,27 @@ export function devFights(map: MapFile, tick: number): SnapshotMsg['view']['figh
 export function devFightEvents(map: MapFile, tick: number): EventMsg[] {
   const phase = tick % FIGHT_CYCLE;
   const cycle = Math.floor(tick / FIGHT_CYCLE);
-  const place = devFightPlace(map, cycle);
   const events: EventMsg[] = [];
-  if (phase === FIGHT_START) {
-    events.push({
-      type: 'event',
-      tick,
-      kind: 'fight_started',
-      data: { fight: 'dev-fight', ...place },
-    });
-  }
   const round = (phase - FIGHT_START) / FIGHT_ROUND;
-  if (Number.isInteger(round) && round >= 1 && round <= DEV_ROUNDS.length) {
-    const r = DEV_ROUNDS[round - 1];
+  for (const fight of devFightList(map)) {
+    const { place } = fight;
+    if (phase === FIGHT_START) {
+      events.push({
+        type: 'event',
+        tick,
+        kind: 'fight_started',
+        data: { fight: fight.id, ...place, attacker: fight.attacker },
+      });
+    }
+    const r = Number.isInteger(round) && round >= 1 ? fight.rounds[round - 1] : undefined;
     if (r !== undefined) {
       events.push({
         type: 'event',
         tick,
         kind: 'fight_round',
         data: {
-          fight: 'dev-fight',
-          node: place.node,
-          edge: place.edge,
-          point: place.point,
+          fight: fight.id,
+          ...place,
           shots_0: r.shots[0],
           shots_1: r.shots[1],
           virtual_0: r.virtual[0],
@@ -291,27 +344,28 @@ export function devFightEvents(map: MapFile, tick: number): EventMsg[] {
         },
       });
     }
-  }
-  if (phase === FIGHT_END) {
-    const shots = pairSum('shots', DEV_ROUNDS.length);
-    const losses = pairSum('losses', DEV_ROUNDS.length);
-    const bounced = cycle % 3 === 2;
-    events.push({
-      type: 'event',
-      tick,
-      kind: 'fight_ended',
-      data: {
-        fight: 'dev-fight',
-        ...place,
-        start: tick - (FIGHT_END - FIGHT_START),
-        winner: bounced ? null : DEV_PLAYER,
-        captured: false,
-        shots_0: shots[0],
-        shots_1: shots[1],
-        losses_0: losses[0],
-        losses_1: losses[1],
-      },
-    });
+    if (phase === FIGHT_END) {
+      const shots = sumOf(fight.rounds, 'shots', fight.rounds.length);
+      const losses = sumOf(fight.rounds, 'losses', fight.rounds.length);
+      const bounced = cycle % 3 === 2;
+      events.push({
+        type: 'event',
+        tick,
+        kind: 'fight_ended',
+        data: {
+          fight: fight.id,
+          ...place,
+          attacker: fight.attacker,
+          start: tick - (FIGHT_END - FIGHT_START),
+          winner: bounced ? null : fight.rounds === DEV_ROUNDS ? DEV_PLAYER : 1,
+          captured: false,
+          shots_0: shots[0],
+          shots_1: shots[1],
+          losses_0: losses[0],
+          losses_1: losses[1],
+        },
+      });
+    }
   }
   return events;
 }

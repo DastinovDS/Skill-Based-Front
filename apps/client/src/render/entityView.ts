@@ -54,9 +54,18 @@ interface GroupEntry extends Labelled {
 
 /** An enemy figure on a road: its token, drawn again every frame at the place the frame gives. */
 interface FigureEntry {
+  edge: number;
   token: Token;
   stamp: number;
   view: Container;
+}
+
+/** Where enemies stand on the map now (the effects of a fight go over them). */
+export interface EnemyAnchors {
+  /** The enemy marker of a city; `undefined` if none is drawn. */
+  nodePoint(node: number): Point | undefined;
+  /** The enemy figure on a road nearest to `to`; `undefined` if none is drawn there. */
+  nearestOnEdge(edge: number, to: Point): Point | undefined;
 }
 
 interface PacketEntry extends Labelled {
@@ -91,7 +100,7 @@ interface BuildMark {
  * Nothing is computed here that the server did not send: paths come from orders, enemy numbers
  * from `Seen`. `destroy()` releases every object and context.
  */
-export class EntityView {
+export class EntityView implements EnemyAnchors {
   /** Shared with the fog layer (ghosts use the same tokens); released by `destroy()`. */
   readonly kit: EntityKit;
   private readonly enemy: PlayerId;
@@ -119,6 +128,8 @@ export class EntityView {
   private icons: readonly CityIcon[] = [];
   /** The cities where an own icon stands in the middle. */
   private ownIcons: ReadonlySet<number> = new Set();
+  /** Enemy city markers that swell now (a hit): put back to their size on the next call of `punch`. */
+  private punched: Token[] = [];
 
   constructor(
     private readonly map: MapFile,
@@ -196,6 +207,47 @@ export class EntityView {
   /** The «Supply» map mode hides the road builds drawn on the road layer (DEC-28, item 8). */
   setSupplyMode(on: boolean): void {
     this.buildTape.visible = !on;
+  }
+
+  nodePoint(node: number): Point | undefined {
+    const token = this.enemyNodes[node];
+    return token?.view.visible === true ? { x: token.view.x, y: token.view.y } : undefined;
+  }
+
+  nearestOnEdge(edge: number, to: Point): Point | undefined {
+    let best: Point | undefined;
+    let bestDistance = Infinity;
+    for (const entry of this.enemyFigures.values()) {
+      if (entry.edge !== edge) continue;
+      const distance = Math.hypot(entry.view.x - to.x, entry.view.y - to.y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { x: entry.view.x, y: entry.view.y };
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Tokens that swell for a moment (a hit, E3 «token pop»): the token standing at `at` is scaled by
+   * `scale` on top of its size on screen. Runs after `update`, which sets the sizes every frame;
+   * the markers of cities are set only on a change, so these are put back here.
+   */
+  punch(punches: readonly { readonly at: Point; readonly scale: number }[]): void {
+    for (const token of this.punched) token.setScale(symbolScale(token.side, this.cameraScale));
+    this.punched = [];
+    for (const { at, scale } of punches) {
+      const near = (view: Container): boolean =>
+        view.visible && Math.abs(view.x - at.x) < 1.5 && Math.abs(view.y - at.y) < 1.5;
+      for (const entry of this.groups.values()) {
+        if (near(entry.view)) entry.view.scale.set(entry.view.scale.x * scale);
+      }
+      for (const token of this.enemyTokens()) {
+        if (!near(token.view)) continue;
+        token.view.scale.set(symbolScale(token.side, this.cameraScale) * scale);
+        this.punched.push(token);
+      }
+    }
   }
 
   /** Every token of enemies seen: in cities and on roads. */
@@ -397,7 +449,7 @@ export class EntityView {
       if (entry === undefined) {
         const token = new Token(this.kit, this.labelResolution);
         this.enemyLayer.addChild(token.view);
-        entry = { token, view: token.view, stamp: this.stamp };
+        entry = { edge, token, view: token.view, stamp: this.stamp };
         this.enemyFigures.set(figure.id, entry);
       }
       entry.stamp = this.stamp;
