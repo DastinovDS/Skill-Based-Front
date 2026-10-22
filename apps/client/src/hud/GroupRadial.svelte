@@ -20,6 +20,8 @@
 
   const menu = $derived(orders.groupMenu.current);
   const cp = (centis: number): string => formatCentis(centis, getLocale());
+  // The rule of "Defense" in the caption under the ring (DEC-30): its numbers are the ruleset's.
+  const defenseSeconds = $derived(Math.round(orders.defenseTicksPerBonus / orders.tickHz));
 
   const angles = spreadAngles(4);
   const items = $derived<RadialItem[]>([
@@ -34,7 +36,13 @@
       id: 'defense',
       angle: angles[1] ?? 0,
       label: t('group.defense'),
-      lines: [tf('group.cost', { cost: cp(orders.modeCost('defense')) })],
+      // The price, and the bonus the group has gathered (DEC-30; the server's numbers).
+      lines: [
+        tf('group.cost', { cost: cp(orders.modeCost('defense')) }),
+        ...(group?.defense == null
+          ? []
+          : [tf('defense.bonus', { bonus: group.defense.bonus, cap: group.defense.cap })]),
+      ],
       key: 'D',
       current: group?.mode === 'defense',
     },
@@ -75,5 +83,9 @@
       orders.groupMenu.close();
     }}
     closeLabel={t('group.close')}
+    captions={[
+      { text: tf('defense.radialRule', { seconds: defenseSeconds }), dim: true },
+      { text: t('defense.radialBurn'), dim: true },
+    ]}
   />
 {/if}

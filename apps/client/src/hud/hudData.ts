@@ -58,6 +58,23 @@ export interface GroupInfo {
   readonly progress: number | null;
   readonly destination: number | null;
   readonly planned: boolean;
+  /**
+   * An own group in "Defense": the bonus it has gathered and its cap, the server's numbers
+   * (DEC-30); `null` in another mode and in a file without them. The opponent's groups are not
+   * `GroupInfo`s at all: they show their mode only.
+   */
+  readonly defense: DefenseInfo | null;
+  /**
+   * The bonus of the planned order of the group, the server's number (`OrderView.bonus`, DEC-29):
+   * a forecast while the group stands in its city, 0 without a planned order.
+   */
+  readonly plannedBonus: number;
+}
+
+/** The gathered "Defense" bonus of a group (or of the groups of a city) and its cap. */
+export interface DefenseInfo {
+  readonly bonus: number;
+  readonly cap: number;
 }
 
 export type Ownership = 'mine' | 'enemy' | 'neutral';
@@ -201,6 +218,11 @@ function groupInfo(group: GroupView, nodes: readonly NodeView[]): GroupInfo {
     progress: group.location.kind === 'edge' ? group.location.progress : null,
     destination: group.order?.dest ?? null,
     planned: group.order?.planned ?? false,
+    defense:
+      group.defense_bonus !== null && group.defense_cap !== null
+        ? { bonus: group.defense_bonus, cap: group.defense_cap }
+        : null,
+    plannedBonus: group.order?.planned === true ? group.order.bonus : 0,
   };
 }
 
@@ -292,7 +314,26 @@ function groupUnderPointer(view: SnapshotMsg['view'], target: HoverTarget): Grou
     progress: null,
     destination: null,
     planned: false,
+    defense: defenseOf(here),
+    plannedBonus: here.reduce(
+      (total, g) => total + (g.order?.planned === true ? g.order.bonus : 0),
+      0,
+    ),
   };
+}
+
+/** The bonus and the cap of the groups of a city in "Defense", summed as the server sent them. */
+function defenseOf(groups: readonly GroupView[]): DefenseInfo | null {
+  let bonus = 0;
+  let cap = 0;
+  let any = false;
+  for (const g of groups) {
+    if (g.defense_bonus === null || g.defense_cap === null) continue;
+    bonus += g.defense_bonus;
+    cap += g.defense_cap;
+    any = true;
+  }
+  return any ? { bonus, cap } : null;
 }
 
 export function buildHudData(

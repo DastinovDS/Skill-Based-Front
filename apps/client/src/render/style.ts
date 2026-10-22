@@ -152,6 +152,8 @@ export const UNIT_MIN_SIDE_PX = 20;
 export const UNIT_MIN_HIT_PX = 28;
 export const UNIT_LABEL = { fill: PLATE_FILL, alpha: 0.92, padX: 4, height: 13, gap: 3 } as const;
 export const SHIELD_BADGE_SCALE = 0.9;
+/** The pill "+N / M" beside the shield of an own group in "Defense" (DEC-30); `tuck`: how far it runs under the disc. */
+export const DEFENSE_LABEL = { fontSize: 11, padX: 4, height: 15, tuck: -2 } as const;
 /** The selection outline is a copy of the triangle this much bigger (9.5). */
 export const SELECT_UNIT_SCALE = 1.45;
 

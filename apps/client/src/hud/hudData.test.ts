@@ -117,3 +117,49 @@ describe('buildHudData: road upgrades for CP (DEC-28, item 7)', () => {
     expect(data.roads[1]).toMatchObject({ gain: null });
   });
 });
+
+describe('buildHudData: Defense and plan bonuses of own groups (DEC-30, DEC-29)', () => {
+  const [own] = fog.view.groups;
+  if (own === undefined) throw new Error('the fixture has a group');
+  const withGroup = (patch: Partial<typeof own>): SnapshotMsg => ({
+    ...fog,
+    view: { ...fog.view, groups: [{ ...own, ...patch }] },
+  });
+
+  it('passes the gathered bonus and its cap of a group in Defense, as the server sent them', () => {
+    const snapshot = withGroup({ mode: 'defense', defense_bonus: 2, defense_cap: 3 });
+    const data = buildHudData(ctx, snapshot, { kind: 'group', id: own.id }, []);
+    expect(data.group?.defense).toEqual({ bonus: 2, cap: 3 });
+    // The same for the tip of the pointer.
+    expect(buildHudData(ctx, snapshot, null, [], own.id).hovered?.defense).toEqual({
+      bonus: 2,
+      cap: 3,
+    });
+  });
+
+  it('has no bonus for a group that is not in Defense', () => {
+    const data = buildHudData(ctx, withGroup({}), { kind: 'group', id: own.id }, []);
+    expect(data.group?.defense).toBeNull();
+  });
+
+  it('passes the bonus of a planned order, and 0 for an ordinary order or none', () => {
+    const order = (planned: boolean, bonus: number) => ({
+      dest: 1,
+      path: [1] as [number, ...number[]],
+      planned,
+      bonus,
+    });
+    const info = (patch: Partial<typeof own>) =>
+      buildHudData(ctx, withGroup(patch), { kind: 'group', id: own.id }, []).group;
+    expect(info({ order: order(true, 2) })?.plannedBonus).toBe(2);
+    expect(info({ order: order(false, 0) })?.plannedBonus).toBe(0);
+    expect(info({ order: null })?.plannedBonus).toBe(0);
+  });
+
+  it('gives the opponent in Defense as a mode only: no bonus number anywhere in what is known of it', () => {
+    const data = buildHudData(ctx, fog, { kind: 'node', id: 2 }, []);
+    expect(data.node?.enemy?.modes).toEqual(['defense']);
+    const keys = Object.keys(data.node?.enemy ?? {});
+    expect(keys.filter((key) => /defense|bonus|cap/i.test(key))).toEqual([]);
+  });
+});

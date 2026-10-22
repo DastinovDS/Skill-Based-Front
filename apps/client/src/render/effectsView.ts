@@ -28,8 +28,8 @@ import {
   ownerColor,
 } from './style.ts';
 
-/** Ticks between rounds when the source does not say (`rulesets/mvp-0.toml`). */
-const DEFAULT_ROUND_TICKS = 10;
+/** Ticks between rounds when the source does not say (`rulesets/mvp-0.toml`, DEC-32). */
+const DEFAULT_ROUND_TICKS = 20;
 const MAX_WAVES = 4;
 /** Where a bounced group goes back to, found once when its own token is on the road. */
 type BounceArrow = NonNullable<ReturnType<typeof bounceArrow>> | null;
@@ -71,8 +71,14 @@ export class EffectsView {
     this.fightView = new FightView(map, layers, me, labelResolution, radiusOf);
   }
 
-  setLabelResolution(resolution: number): void {
-    this.fightView.setLabelResolution(resolution);
+  /** Camera scale (CSS px per world unit): the arenas of fights keep their size on screen. */
+  setCameraScale(scale: number): void {
+    this.fightView.setCameraScale(scale);
+  }
+
+  /** Text resolution for what is drawn at one unit a CSS px (the arenas of fights). */
+  setScreenResolution(resolution: number): void {
+    this.fightView.setScreenResolution(resolution);
   }
 
   update(
@@ -84,7 +90,7 @@ export class EffectsView {
   ): void {
     this.readEvents(events);
     const reduced = reducedMotion();
-    this.fightView.update(frame, events, tickHz, roundTicks, reduced);
+    this.fightView.update(frame, events, roundTicks, reduced);
     this.drawWaves(frame.tick, tickHz, reduced);
     this.drawBounces(frame, spots, tickHz, reduced);
   }

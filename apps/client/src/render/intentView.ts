@@ -1,4 +1,4 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { RenderFrame, RenderGroup } from '../net/interpolate.ts';
 import type { IntentView as WireIntent, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
@@ -13,6 +13,7 @@ import {
   ribbonBody,
   ribbonFilled,
   ribbonOutline,
+  roundRectPoints,
 } from './intentLayout.ts';
 import type { MapLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
@@ -35,6 +36,15 @@ import {
   WARN,
 } from './style.ts';
 
+/** One pill of the bonus of an own planned order. */
+interface BonusPill {
+  readonly view: Container;
+  readonly plate: Graphics;
+  readonly text: Text;
+  /** What the plate was drawn for: the number, forecast or not, the width; redrawn only when it changes. */
+  key: string;
+}
+
 function around(distance: number, degrees: number): Point {
   const rad = (degrees * Math.PI) / 180;
   return { x: distance * Math.cos(rad), y: distance * Math.sin(rad) };
@@ -42,6 +52,8 @@ function around(distance: number, degrees: number): Point {
 
 /** Radius of the delay arc around the disc of "Defense" (the disc has radius 9, 9.7). */
 const ARC_RADIUS = 9 + DEFENSE_ARC.gap + DEFENSE_ARC.width / 2;
+/** The pill "◇ +N" at the head of an own planned ribbon (screen px): the diamond, the padding, the height. */
+const BONUS_PILL = { diamond: 5, gap: 4, padX: 7, height: 20, rise: 24, back: 8 } as const;
 /** A ring is drawn as this many corners. */
 const RING_CORNERS = 40;
 
@@ -74,6 +86,17 @@ export class IntentView {
   private readonly arcs = new Graphics();
   private readonly icons = new Container({ label: 'intent-icons' });
   private readonly iconPool: Container[] = [];
+  /** The pills of the bonus of own planned orders, a pool; drawn at one unit a screen px. */
+  private readonly bonusLayer = new Container({ label: 'plan-bonus' });
+  private readonly bonusPills: BonusPill[] = [];
+  private readonly bonusStyle = new TextStyle({
+    fontFamily: 'system-ui, sans-serif',
+    fontSize: 12,
+    fontWeight: '700',
+    fill: PAPER,
+  });
+  private bonusUsed = 0;
+  private resolution = 1;
   private cameraScale = 1;
   /** The chain of nodes of each own ordinary order, kept while the order lives (`orderTrack.ts`). */
   private readonly chains = new Map<string, number[]>();
@@ -89,7 +112,13 @@ export class IntentView {
   ) {
     // Order lines go under the tokens of the groups they belong to; arrows of intents on top.
     layers.layer.groups.addChildAt(this.lines, 0);
-    layers.layer.intents.addChild(this.ribbons, this.rings, this.icons, this.arcs);
+    layers.layer.intents.addChild(this.ribbons, this.rings, this.icons, this.arcs, this.bonusLayer);
+  }
+
+  /** Texture pixels per text unit for what is drawn at one unit a CSS px (the bonus pills). */
+  setScreenResolution(resolution: number): void {
+    this.resolution = resolution;
+    for (const pill of this.bonusPills) pill.text.resolution = resolution;
   }
 
   /** Camera scale (CSS px per world unit): the ribbon keeps its narrow tail readable. */
@@ -117,6 +146,7 @@ export class IntentView {
     this.ribbons.clear();
     this.rings.clear();
     this.arcs.clear();
+    this.bonusUsed = 0;
     let icons = 0;
     for (const intent of intents) {
       const from = nodePoint(this.map, intent.origin);
@@ -144,6 +174,10 @@ export class IntentView {
       const icon = this.iconPool[i];
       if (icon !== undefined) icon.visible = false;
     }
+    for (let i = this.bonusUsed; i < this.bonusPills.length; i++) {
+      const pill = this.bonusPills[i];
+      if (pill !== undefined) pill.view.visible = false;
+    }
   }
 
   destroy(): void {
@@ -152,6 +186,8 @@ export class IntentView {
     this.rings.destroy();
     this.arcs.destroy();
     this.icons.destroy({ children: true });
+    this.bonusLayer.destroy({ children: true });
+    this.bonusStyle.destroy();
   }
 
   /**
@@ -200,6 +236,12 @@ export class IntentView {
     const g = this.ribbons;
     const color = ownerColor(this.me, intent.owner);
     const own = intent.owner === this.me;
+    // The bonus of the plan (DEC-29) is the server's number and only the owner's view has it
+    // (the opponent's intent has no size and no bonus): "◇ +N" at the head, dashed while a forecast.
+    const bonus = own ? (item?.group.order?.bonus ?? 0) : 0;
+    if (bonus > 0) {
+      this.placeBonus(this.bonusUsed++, ribbon, bonus, progress === null || progress < 1, color);
+    }
     const poly = flat(ribbon.outline);
     // The tail dot (own) or the hollow diamond (opponent) repeat the side without colour.
     g.poly(poly).stroke({
@@ -262,6 +304,91 @@ export class IntentView {
         .fill(PLATE_FILL)
         .stroke({ width: 2, color });
     }
+  }
+
+  private bonusPill(index: number): BonusPill {
+    let pill = this.bonusPills[index];
+    if (pill === undefined) {
+      const view = this.bonusLayer.addChild(new Container({ label: 'plan-bonus-pill' }));
+      const plate = view.addChild(new Graphics());
+      const text = view.addChild(
+        new Text({
+          text: '',
+          style: this.bonusStyle,
+          anchor: { x: 0, y: 0.5 },
+          resolution: this.resolution,
+        }),
+      );
+      pill = { view, plate, text, key: '' };
+      this.bonusPills.push(pill);
+    }
+    return pill;
+  }
+
+  /**
+   * The pill "◇ +N" over the head of an own planned ribbon, N the server's bonus of the order
+   * (`OrderView.bonus`). Before the group leaves it is a forecast (the cap is taken at the
+   * departure): the outline is dashed, then it turns solid. Drawn at one unit a screen px.
+   */
+  private placeBonus(
+    index: number,
+    ribbon: { tip: Point; body: readonly Point[] },
+    bonus: number,
+    forecast: boolean,
+    color: number,
+  ): void {
+    const pill = this.bonusPill(index);
+    const label = `+${String(bonus)}`;
+    if (pill.text.text !== label) pill.text.text = label;
+    const { diamond, gap, padX, height } = BONUS_PILL;
+    const width = padX * 2 + diamond * 2 + gap + pill.text.width;
+    const key = `${label}|${forecast ? 'f' : 's'}|${String(Math.round(width))}|${String(color)}`;
+    if (pill.key !== key) {
+      pill.key = key;
+      // Forecast or locked: the dashed or the solid outline, told in the label for the tests too.
+      pill.view.label = forecast ? 'plan-bonus-pill:forecast' : 'plan-bonus-pill:locked';
+      const g = pill.plate.clear();
+      const left = -width / 2;
+      g.roundRect(left, -height / 2, width, height, height / 2).fill({
+        color: PLATE_FILL,
+        alpha: 0.96,
+      });
+      if (forecast) {
+        for (const dash of dashAlong(
+          roundRectPoints(width, height, height / 2),
+          3.5,
+          2.5,
+          0,
+          true,
+        )) {
+          const [first, ...rest] = dash;
+          if (first === undefined) continue;
+          g.moveTo(first.x, first.y);
+          for (const p of rest) g.lineTo(p.x, p.y);
+        }
+        g.stroke({ width: 1.6, color, cap: 'round' });
+      } else {
+        g.roundRect(left, -height / 2, width, height, height / 2).stroke({ width: 1.8, color });
+      }
+      const cx = left + padX + diamond;
+      g.poly([cx - diamond, 0, cx, -diamond, cx + diamond, 0, cx, diamond]).stroke({
+        width: 1.6,
+        color: PAPER,
+        join: 'round',
+      });
+      pill.text.position.set(left + padX + diamond * 2 + gap, 0);
+    }
+    const base = ribbon.body[ribbon.body.length - 1] ?? ribbon.tip;
+    const length = Math.hypot(ribbon.tip.x - base.x, ribbon.tip.y - base.y) || 1;
+    const ux = (ribbon.tip.x - base.x) / length;
+    const uy = (ribbon.tip.y - base.y) / length;
+    const k = 1 / this.cameraScale;
+    pill.view.scale.set(k);
+    pill.view.position.set(
+      ribbon.tip.x - ux * BONUS_PILL.back * k,
+      ribbon.tip.y + (-uy * BONUS_PILL.back - BONUS_PILL.rise) * k,
+    );
+    pill.view.visible = true;
   }
 
   /** The dotted ring around the target of an enemy intent; two rings and `--warn` over my city. */

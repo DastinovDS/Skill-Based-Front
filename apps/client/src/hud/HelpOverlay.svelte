@@ -29,6 +29,7 @@
     ['G', 'help.key.merge'],
     ['Q', 'help.key.stance'],
     ['Tab / F2', 'help.key.supply'],
+    ['[ / ]', 'help.key.rearMin'],
     ['Space', 'help.key.alert'],
     ['H', 'help.key.fit'],
     ['?', 'help.key.help'],
@@ -93,6 +94,34 @@
                 <circle cx="14" cy="12" r="8" class="alertring" />
               </svg>
               {t('help.legend.alert')}
+            </li>
+            <li>
+              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                <path d="M2 4h10l-5 9z" class="you" />
+                <path d="M16 4h10l-5 9z" class="thin" />
+                <path d="M2 15h10l-5 8z" class="dashed" />
+              </svg>
+              {t('help.legend.chips')}
+            </li>
+            <li>
+              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                <path d="M14 4l8 8-8 8-8-8z" class="thin" />
+              </svg>
+              {t('help.legend.stock')}
+            </li>
+            <li>
+              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                <circle cx="14" cy="12" r="7" class="silent" />
+                <path d="M9 17L19 7" class="silent" />
+              </svg>
+              {t('help.legend.silent')}
+            </li>
+            <li>
+              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                <path d="M2 18q12-18 20-6" class="dashed" />
+                <path d="M22 12l-3 -4 -3 4 3 4z" class="thin" />
+              </svg>
+              {t('help.legend.bonusShot')}
             </li>
           </ul>
           <p class="link">
@@ -256,6 +285,24 @@
     stroke: var(--warn);
     stroke-width: 2;
     stroke-dasharray: 4 3;
+  }
+
+  /* A dead chip and the arrow of a bonus shot: dashed, so the shape tells without the hue. */
+  .dashed {
+    fill: none;
+    stroke: var(--you);
+    stroke-width: 1.8;
+    stroke-dasharray: 3 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* A charge that does not shoot: the amber crossed circle. */
+  .silent {
+    fill: none;
+    stroke: var(--warn);
+    stroke-width: 2;
+    stroke-linecap: round;
   }
 
   .link {

@@ -113,20 +113,26 @@ function overflowSnapshot(): SnapshotMsg {
 }
 
 /**
- * The `snapshot_clash` fixture with four fights going on at once (ui-style 9.9): charged and
- * discharged units on both sides, a round where both sides shot (one with a virtual bonus shot),
- * one where only a side did, and one without round data (an old replay). Made here, not a fixture of the protocol.
+ * The `snapshot_clash` fixture with four fights going on at once (ui-style 9.9, 27): charged,
+ * discharged and dead units on both sides, a round where both sides shot (one with a bonus shot),
+ * one where only a side did, one without round data (an old replay), more than eight chips on a
+ * side ("+N"), the stock of bonus shots of both sides and a silent charge (plains, DEC-24 F2).
+ * Made here, not a fixture of the protocol.
  */
 function fightsSnapshot(): SnapshotMsg {
   const base = fixture('snapshot_clash');
   const [road] = base.view.fights;
   if (road === undefined) throw new Error('the clash fixture lists a fight');
-  const round = (shots: [number, number], virtual: [number, number]) => ({
+  const round = (
+    shots: [number, number],
+    virtual: [number, number],
+    losses: [number, number] = [0, 1],
+  ) => ({
     tick: 396,
     shots,
     virtual,
-    spent: shots,
-    losses: [0, 1] as [number, number],
+    spent: [shots[0] - virtual[0], shots[1] - virtual[1]] as [number, number],
+    losses,
   });
   return {
     ...base,
@@ -142,9 +148,12 @@ function fightsSnapshot(): SnapshotMsg {
           point: null,
           attacker: 1,
           groups: ['6f708192a3b4c5d6'],
-          enemy_units: 5,
-          enemy_charged: 1,
-          last_round: round([2, 0], [0, 0]),
+          enemy_units: 11,
+          enemy_charged: 9,
+          losses: [1, 0],
+          virtual_left: [1, 2],
+          mute: [0, 1],
+          last_round: round([2, 0], [0, 0], [0, 0]),
         },
         {
           ...road,
@@ -153,9 +162,13 @@ function fightsSnapshot(): SnapshotMsg {
           edge: null,
           point: null,
           attacker: 1,
-          groups: ['1a2b3c4d5e6f7081'],
+          // Own: four units and twelve, sixteen chips: eight and "+8".
+          groups: ['1a2b3c4d5e6f7081', '2b3c4d5e6f708192'],
           enemy_units: 2,
           enemy_charged: 0,
+          losses: [0, 2],
+          virtual_left: [0, 0],
+          mute: [0, 0],
           last_round: round([0, 1], [0, 0]),
         },
         {
@@ -168,6 +181,9 @@ function fightsSnapshot(): SnapshotMsg {
           groups: ['3c4d5e6f708192a3'],
           enemy_units: 3,
           enemy_charged: 3,
+          losses: [0, 0],
+          virtual_left: [0, 1],
+          mute: [0, 1],
           last_round: null,
         },
       ],

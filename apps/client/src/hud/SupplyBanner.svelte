@@ -53,6 +53,8 @@
           }}
         />
         <output>{shown}</output>
+        <!-- The keys do the same as the slider: one step a press. -->
+        <span class="keys" aria-hidden="true"><kbd>[</kbd><kbd>]</kbd></span>
       </label>
     {/if}
     <ul class="legend">
@@ -99,6 +101,23 @@
   .rear input {
     width: 140px;
     accent-color: var(--you);
+  }
+
+  .rear .keys {
+    display: flex;
+    gap: 3px;
+  }
+
+  .rear kbd {
+    min-width: 1.4em;
+    padding: 0 4px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 12px;
+    text-align: center;
   }
 
   .rear output {
