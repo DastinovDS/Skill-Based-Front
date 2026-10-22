@@ -30,6 +30,15 @@ export function waveLook(t: number): { scale: number; alpha: number } {
   return { scale: t * (2 - t), alpha: 1 - t };
 }
 
+/** How long the flag over a captured city stays (ui-style 29.1: the wave, then the flag). */
+export const FLAG_MS = 1600;
+
+/** The flag of a capture stays whole, then fades over its last 1.0 s of 1.6 s. */
+export function flagLook(t: number): { alpha: number } {
+  const hold = 0.375;
+  return { alpha: t <= hold ? 1 : Math.max(0, 1 - (t - hold) / (1 - hold)) };
+}
+
 /** Corners of a star with `points` tips, alternating `outer` and `inner` radius, as x, y, x, y... */
 export function starPolygon(outer: number, inner: number, points: number): number[] {
   const out: number[] = [];

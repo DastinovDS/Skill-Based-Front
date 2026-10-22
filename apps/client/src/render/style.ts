@@ -247,8 +247,6 @@ export const FOG_VEIL = {
   blurResolution: 0.25,
   margin: 40,
 } as const;
-/** The thin light line along the front of the haze (where the veil meets what is seen): readable without hue. */
-export const FOG_FRONT = { width: 1.5, color: PAPER, alpha: 0.3 } as const;
 /** The tick across a road at its border point (DEC-21, item 5): a short light line, `overhang` px past the road on each side. */
 export const BORDER_MARK = { width: 2, color: 0xe6edf3, alpha: 0.55, overhang: 5 } as const;
 /** Opacity of a fresh memory ghost (the marker of what was last seen in a hidden place). */
@@ -326,6 +324,18 @@ export const WAVE_MS = 500;
 export const WAVE_FILL_ALPHA = 0.28;
 export const WAVE_STROKE = { width: 3, alpha: 0.9 } as const;
 export const LOSS_FONT_SIZE = 13;
+
+// --- Fight effects on the map, E3 "Expressive" (ui-style 27.3, 29; #351) -----------------------------
+/**
+ * How strong the fight effects are: "Stronger" (owner, 2026-10-21) is 1.6. The sparks, shards, the
+ * size of flashes and rings and the length of rays and traces all follow it. The fallback "medium" is
+ * 1.0: one change here, if the frame budget does not hold (AGENTS.md 12, ui-style 22).
+ */
+export const FIGHT_FX_STRENGTH = 1.6;
+/** Distance between the two groups of a fight when their tokens do not tell it (world units, as it stands now). */
+export const FIGHT_GAP = 46;
+/** The hot white of a flash, of sparks and of the contact ring. */
+export const FLASH_COLOR = 0xffffff;
 
 // --- Ribbon arrows of intents and orders (9.7) ---------------------------------------------------
 // A planned order is a wide ribbon from the start city to the centre of the target, an arc that

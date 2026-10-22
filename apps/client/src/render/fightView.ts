@@ -15,9 +15,7 @@ import {
   CAPTION_RISE,
   CHIP,
   END_SHARE,
-  LOSS_POP_SHARE,
   PLATE,
-  arenaCenter,
   arenaSides,
   changedChips,
   chipAt,
@@ -44,6 +42,7 @@ import {
   type SideCount,
   type SideShots,
 } from './fightFx.ts';
+import { HIT_SHARE, NUMBER_SHARE, sinceShare, type Contacts } from './fightImpact.ts';
 import { dashAlong } from './intentLayout.ts';
 import { dashSegments } from './layout.ts';
 import type { MapLayers } from './layers.ts';
@@ -66,6 +65,8 @@ const MAX_ENDS = 6;
 const CHIPS_PER_ARENA = 2 * CHIP.max;
 /** The minus sign (U+2212) in front of a loss number. */
 const MINUS = '−';
+/** Where "-N" stands from the middle of the token that lost the units (world units at 100%). */
+const POP_OFFSET = { x: 17, y: 18 } as const;
 /** The tone of the discharged units and the hatching on their chips. */
 const REST_LIGHTEN = 0.6;
 /** The plate: its inner margin and the rows of the bottom strip (px from the middle). */
@@ -104,18 +105,8 @@ type FightData = RenderFrame['base']['view']['fights'][number];
 const ARROW_REACH = { top: 30, bottom: 28, caption: 28 } as const;
 const END_REACH = { top: 32, bottom: 4 } as const;
 
-/** A key of the place of a fight: the arena of a fight and its end share one. */
-function usualSpot(place: FightPlace, scale: number): ArenaSpot {
-  const centre = arenaCenter(place, scale);
-  return { x: centre.x, y: centre.y, moved: 0 };
-}
-
 /** An arena that moved this far (px) from its usual spot gets a dotted line to its place. */
 const TETHER_MIN = 8;
-
-function placeKey(place: FightPlace): string {
-  return `${String(place.node)}/${String(place.edge)}/${String(place.at.x)},${String(place.at.y)}`;
-}
 
 type Side = 'own' | 'enemy';
 const SIDES: readonly Side[] = ['own', 'enemy'];
@@ -275,13 +266,17 @@ export class FightView {
   };
   private readonly seen = new Map<string, Seen>();
   private effects: FightFx[] = [];
+  private roundFx: RoundFx[] = [];
+  /** Where the two sides of a fight stand on the map: the loss numbers rise over the group that lost them. */
+  private contactsOf: (place: FightPlace) => Contacts = (place) => ({
+    own: place.at,
+    enemy: place.at,
+  });
   private eventsSeen: readonly EventMsg[] | null = null;
   private eventCount = -1;
   private cameraScale = 1;
   /** The canvas in scaled-world px (`setViewport`); `null` until the camera is known. */
   private view: Rect | null = null;
-  /** Where the arena of each place stands now: the loss numbers and the end labels follow it. */
-  private readonly spots = new Map<string, ArenaSpot>();
 
   constructor(
     private readonly map: MapFile,
@@ -446,6 +441,16 @@ export class FightView {
     if (scale > 0) this.cameraScale = scale;
   }
 
+  /** Where the groups of a fight stand (`EffectsView`: their tokens): the numbers of losses go over them. */
+  setContacts(contactsOf: (place: FightPlace) => Contacts): void {
+    this.contactsOf = contactsOf;
+  }
+
+  /** The rounds of the events: what happened in each (the hits are drawn from them). */
+  rounds(): readonly RoundFx[] {
+    return this.roundFx;
+  }
+
   /**
    * The canvas as a rectangle in scaled-world px (the world times the camera scale, so the middle
    * of the canvas is `camera * scale`): the arenas stay inside it when they can.
@@ -508,14 +513,12 @@ export class FightView {
       items.push({ kind: 'end', fx, place: fx.place, phase });
     }
     const spots = this.layout(items);
-    this.spots.clear();
     let ends = 0;
     items.forEach((item, index) => {
       const arena = this.arena(index);
       const spot = spots[index];
       if (spot === undefined) return;
       this.placeArena(arena, item.place, spot, k);
-      if (!this.spots.has(placeKey(item.place))) this.spots.set(placeKey(item.place), spot);
       if (item.kind === 'live') {
         const { fight, sides, exchange, age } = item;
         this.drawFight(arena, {
@@ -594,9 +597,12 @@ export class FightView {
     this.eventsSeen = events;
     this.eventCount = events.length;
     this.effects = [];
+    this.roundFx = [];
     for (const event of events) {
       const fx = fightFx(event, this.map, this.radiusOf);
-      if (fx !== null) this.effects.push(fx);
+      if (fx === null) continue;
+      this.effects.push(fx);
+      if (fx.kind === 'round') this.roundFx.push(fx);
     }
   }
 
@@ -605,15 +611,6 @@ export class FightView {
       const item = pool[i];
       if (item !== undefined) item.view.visible = false;
     }
-  }
-
-  /**
-   * The world position of a point `dx`, `dy` px from the middle of the arena of `place` (where it
-   * stands now: the usual spot over the place if no arena is there).
-   */
-  private around(place: FightPlace, dx: number, dy: number, k: number): Point {
-    const spot = this.spots.get(placeKey(place)) ?? usualSpot(place, this.cameraScale);
-    return { x: spot.x + dx * k, y: spot.y + dy * k };
   }
 
   // --- Arena -------------------------------------------------------------------------------------
@@ -1192,7 +1189,8 @@ export class FightView {
     let pops = 0;
     for (const fx of this.effects) {
       if (fx.kind !== 'round') continue;
-      const pop = roundEffect(tick - fx.tick, LOSS_POP_SHARE, roundTicks);
+      // "-N" rises over the group that lost the units from the moment the shot lands.
+      const pop = sinceShare(tick - fx.tick, HIT_SHARE, NUMBER_SHARE, roundTicks);
       if (pop !== null) pops = this.placePops(fx, pop, pops, reduced, k);
     }
     for (let i = pops; i < this.pops.length; i++) {
@@ -1201,10 +1199,13 @@ export class FightView {
     }
   }
 
-  /** The losses of a round pop up beside the half of the side that lost them. */
+  /** The losses of a round pop up over the group of the side that lost them. */
   private placePops(fx: RoundFx, phase: number, used: number, reduced: boolean, k: number): number {
     const enemy: PlayerId = this.me === 0 ? 1 : 0;
     const look = numbersLook(phase, reduced);
+    const contacts = this.contactsOf(fx.place);
+    // The text is laid out at one unit a px of screen (`k` undoes the zoom of the map).
+    const scale = Math.max(1, k);
     let next = used;
     ([this.me, enemy] as const).forEach((player, side) => {
       const losses = fx.losses[player];
@@ -1213,13 +1214,11 @@ export class FightView {
       const label = `${MINUS}${String(losses)}`;
       if (pop.text.text !== label) pop.text.text = label;
       pop.text.alpha = look.alpha;
-      const at = this.around(
-        fx.place,
-        (side === 0 ? -1 : 1) * (PLATE.halfWidth + 18),
-        -look.rise,
-        k,
+      const at = side === 0 ? contacts.own : contacts.enemy;
+      pop.text.position.set(
+        at.x + POP_OFFSET.x * scale,
+        at.y - POP_OFFSET.y * scale - look.rise * k,
       );
-      pop.text.position.set(at.x, at.y);
       pop.text.scale.set(k);
       pop.text.visible = true;
     });
