@@ -55,6 +55,10 @@ MAPS = [
     ROOT / "maps" / "pereval.json",
     ROOT / "maps" / "pautina.json",
     ROOT / "maps" / "arteriya.json",
+    # DEC-27, item 1: free coordinates, mirrored rules; provinces of DEC-23.
+    ROOT / "maps" / "hrebet.json",
+    ROOT / "maps" / "perekrestki.json",
+    ROOT / "maps" / "trakt.json",
     TESTS_DIR / "maps" / "diamond.json",
     TESTS_DIR / "maps" / "pass.json",
 ]
