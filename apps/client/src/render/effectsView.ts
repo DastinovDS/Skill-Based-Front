@@ -5,6 +5,7 @@ import { contactPoints, type Contacts } from './fightImpact.ts';
 import { fightPlace, placeKey, type FightPlace } from './fightFx.ts';
 import { HitView, type Punch } from './hitView.ts';
 import { ParticleLayer } from './particles.ts';
+import { ShotView } from './shotView.ts';
 import type { EnemyAnchors } from './entityView.ts';
 import type { Point } from './camera.ts';
 import {
@@ -66,6 +67,7 @@ export class EffectsView {
   private readonly fightView: FightView;
   private readonly particles: ParticleLayer;
   private readonly hits: HitView;
+  private readonly shots: ShotView;
   /** Where the two sides of each fight stood the last time they were seen (the tokens): ended fights keep it. */
   private readonly contacts = new Map<string, Contacts>();
   private cameraScale = 1;
@@ -101,8 +103,14 @@ export class EffectsView {
         .stroke({ width: 1.4, color: PAPER, join: 'round' });
     this.flagContext = [flag(0), flag(1)];
     layers.layer.effects.addChild(this.layer);
-    // Under the arenas: a spark over a city does not hide the plate that floats above it.
-    this.particles = new ParticleLayer(layers.layer.effects);
+    // The tails of the tracers (shot style 1) lie under the particles (their heads, glows and sparks), which lie
+    // under the arenas: a spark over a city does not hide the plate that floats above it.
+    this.shots = new ShotView(layers.layer.effects, me);
+    const enemy: PlayerId = me === 0 ? 1 : 0;
+    this.particles = new ParticleLayer(layers.layer.effects, {
+      own: ownerColor(me, me),
+      enemy: ownerColor(me, enemy),
+    });
     this.hits = new HitView(layers.layer.effects, map, me, labelResolution, radiusOf);
     this.fightView = new FightView(map, layers, me, labelResolution, radiusOf);
     this.fightView.setContacts((place) => this.contactsAt(place));
@@ -145,6 +153,16 @@ export class EffectsView {
         this.particles.put(particle);
       },
       frame,
+      this.fightView.rounds(),
+      roundTicks,
+      (place) => this.contactsAt(place),
+      scale,
+    );
+    this.shots.update(
+      (particle) => {
+        this.particles.put(particle);
+      },
+      frame.tick,
       this.fightView.rounds(),
       roundTicks,
       (place) => this.contactsAt(place),
@@ -206,6 +224,7 @@ export class EffectsView {
   destroy(): void {
     this.fightView.destroy();
     this.hits.destroy();
+    this.shots.destroy();
     this.particles.destroy();
     this.arrows.destroy();
     this.layer.destroy({ children: true });

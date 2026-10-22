@@ -2,7 +2,8 @@
  * The particle core of the map effects (ui-style 20, item 7; 22; 27, 29; #351): two built-in
  * `ParticleContainer`s for every effect of every fight (one normal, one additive: the blend mode
  * belongs to a container), one atlas of baked white shapes that a particle tints, no filters.
- * The shots of #352 use the same core: more kinds are added to `SHAPES`, nothing else changes.
+ * The shots of #352 use the same core: the four heads of a tracer (a square or a diamond, own or the
+ * opponent's) are more frames of the atlas, baked in the colours of the sides and drawn untinted.
  *
  * Nothing here knows about fights. A frame is `begin()`, any number of `put()`, `end()`; the
  * particles are pooled (a fixed number, the surplus of a frame is dropped) and a particle that is
@@ -13,10 +14,29 @@
  */
 import { Container, Particle, ParticleContainer, Rectangle, Texture } from 'pixi.js';
 import type { Point } from './camera.ts';
+import { BG, ENEMY, PAPER, PLATE_FILL, YOU } from './style.ts';
 
-/** What a particle looks like. Baked white (a tint colours it): the form says what it is, not the hue. */
+/**
+ * What a particle looks like. Baked white (a tint colours it): the form says what it is, not the hue.
+ * The four heads are the exception: a head of a shot (ui-style 29.1) is a real shot, a filled square
+ * ■ (the charge, ui-style 21), or a bonus one, a hollow diamond ◇, in the colour of its side with
+ * the second, dark (square) or light (diamond) contour of the opponent; baked in colour, tint white.
+ */
+export type HeadKind = 'headOwn' | 'headEnemy' | 'headOwnBonus' | 'headEnemyBonus';
 export type ParticleKind =
-  'dot' | 'square' | 'triangle' | 'diamond' | 'ring' | 'dashRing' | 'cross' | 'glow';
+  'dot' | 'square' | 'triangle' | 'diamond' | 'ring' | 'dashRing' | 'cross' | 'glow' | HeadKind;
+
+/** The colours of the two sides, for the heads of the shots. */
+export interface SideColors {
+  readonly own: number;
+  readonly enemy: number;
+}
+
+/** The head of a shot of a side: a square, or a diamond for a bonus shot. */
+export function headKind(side: 'own' | 'enemy', bonus: boolean): HeadKind {
+  if (side === 'own') return bonus ? 'headOwnBonus' : 'headOwn';
+  return bonus ? 'headEnemyBonus' : 'headEnemy';
+}
 
 /** A particle of a frame: `size` is the width of its shape in world units, `aspect` stretches the height. */
 export interface ParticleSpec {
@@ -126,10 +146,73 @@ const SHAPES: readonly ParticleKind[] = [
   'dashRing',
   'cross',
   'glow',
+  'headOwn',
+  'headEnemy',
+  'headOwnBonus',
+  'headEnemyBonus',
 ];
 const COLUMNS = 4;
 
-function drawShape(c: CanvasRenderingContext2D, kind: ParticleKind): void {
+const css = (color: number): string => `#${(color & 0xffffff).toString(16).padStart(6, '0')}`;
+
+function drawHead(c: CanvasRenderingContext2D, kind: HeadKind, colors: SideColors): void {
+  const m = CELL / 2;
+  const enemy = kind === 'headEnemy' || kind === 'headEnemyBonus';
+  const color = css(enemy ? colors.enemy : colors.own);
+  c.lineJoin = 'round';
+  if (kind === 'headOwn' || kind === 'headEnemy') {
+    // The charge: a filled square with a light contour; the opponent's has a second, dark one inside,
+    // the own one a light patch (so the side reads without the hue).
+    const half = 25;
+    c.fillStyle = color;
+    c.strokeStyle = css(PAPER);
+    c.lineWidth = 6;
+    c.fillRect(m - half, m - half, 2 * half, 2 * half);
+    c.strokeRect(m - half, m - half, 2 * half, 2 * half);
+    if (enemy) {
+      c.strokeStyle = css(BG);
+      c.lineWidth = 4;
+      c.strokeRect(m - half + 9, m - half + 9, 2 * half - 18, 2 * half - 18);
+    } else {
+      c.fillStyle = 'rgba(255,255,255,0.55)';
+      c.fillRect(m - half + 5, m - half + 5, half * 0.8, half * 0.8);
+    }
+    return;
+  }
+  // The bonus shot: a hollow diamond (dark inside, so it reads over the road), the opponent's with a second light contour.
+  const r = CELL / 2 - 4;
+  const diamond = (k: number): void => {
+    c.beginPath();
+    c.moveTo(m, m - r * k);
+    c.lineTo(m + r * k, m);
+    c.lineTo(m, m + r * k);
+    c.lineTo(m - r * k, m);
+    c.closePath();
+  };
+  diamond(1);
+  c.fillStyle = css(PLATE_FILL);
+  c.fill();
+  c.strokeStyle = color;
+  c.lineWidth = 8;
+  c.stroke();
+  if (enemy) {
+    diamond(0.5);
+    c.strokeStyle = css(PAPER);
+    c.lineWidth = 4;
+    c.stroke();
+  }
+}
+
+function drawShape(c: CanvasRenderingContext2D, kind: ParticleKind, colors: SideColors): void {
+  if (
+    kind === 'headOwn' ||
+    kind === 'headEnemy' ||
+    kind === 'headOwnBonus' ||
+    kind === 'headEnemyBonus'
+  ) {
+    drawHead(c, kind, colors);
+    return;
+  }
   const m = CELL / 2;
   const r = CELL / 2 - 3;
   c.fillStyle = '#fff';
@@ -202,7 +285,10 @@ function drawShape(c: CanvasRenderingContext2D, kind: ParticleKind): void {
 }
 
 /** The shapes of every kind as frames of one texture; without a canvas (tests) every frame is a white pixel. */
-function bakeAtlas(): { base: Texture; frames: Readonly<Record<ParticleKind, Texture>> } {
+function bakeAtlas(colors: SideColors): {
+  base: Texture;
+  frames: Readonly<Record<ParticleKind, Texture>>;
+} {
   const rows = Math.ceil(SHAPES.length / COLUMNS);
   // No canvas in a test (jsdom has none and says so on every try): white pixels instead of the shapes.
   const canvas =
@@ -222,7 +308,7 @@ function bakeAtlas(): { base: Texture; frames: Readonly<Record<ParticleKind, Tex
   SHAPES.forEach((kind, i) => {
     c.save();
     c.translate((i % COLUMNS) * CELL, Math.floor(i / COLUMNS) * CELL);
-    drawShape(c, kind);
+    drawShape(c, kind, colors);
     c.restore();
   });
   const base = Texture.from(canvas);
@@ -254,12 +340,13 @@ interface Pool {
  * `put()` draws a particle of the frame into the right one, and `end()` hides what is left.
  */
 export class ParticleLayer {
-  private readonly atlas = bakeAtlas();
+  private readonly atlas: ReturnType<typeof bakeAtlas>;
   private readonly normal: Pool;
   private readonly additive: Pool;
   private readonly root = new Container({ label: 'particles' });
 
-  constructor(parent: Container) {
+  constructor(parent: Container, colors: SideColors = { own: YOU, enemy: ENEMY }) {
+    this.atlas = bakeAtlas(colors);
     this.normal = this.pool('particles-normal', false);
     this.additive = this.pool('particles-add', true);
     parent.addChild(this.root);

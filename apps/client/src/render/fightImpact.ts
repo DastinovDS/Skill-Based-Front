@@ -62,6 +62,8 @@ export interface Impact {
   readonly victim: Side | null;
   /** Only bonus (virtual) shots made it: drawn dashed and with hollow diamonds (ui-style 21). */
   readonly bonus: boolean;
+  /** The same for the shot of each side (two shots that cancel can differ: a bonus one against a real one). */
+  readonly bonusBy: Readonly<Record<Side, boolean>>;
   /** Units the victim lost in the round (`-N`). */
   readonly losses: number;
   /** When it lands, a share of a round after the tick. */
@@ -85,6 +87,7 @@ export function impactsOf(fx: RoundFx, me: PlayerId): Impact[] {
         shooter: null,
         victim: null,
         bonus: bonus(me) && bonus(enemy),
+        bonusBy: { own: bonus(me), enemy: bonus(enemy) },
         losses: 0,
         at: CANCEL_SHARE,
       },
@@ -103,11 +106,20 @@ export function impactsOf(fx: RoundFx, me: PlayerId): Impact[] {
       shooter,
       victim: shooter === 'own' ? 'enemy' : 'own',
       bonus: bonus(player),
+      bonusBy: {
+        own: shooter === 'own' && bonus(player),
+        enemy: shooter === 'enemy' && bonus(player),
+      },
       losses,
       at: HIT_SHARE,
     });
   }
   return out;
+}
+
+/** Differs the bursts and the sparks of rounds and fights standing side by side; the same on every frame of a round. */
+export function fxSeed(fx: RoundFx): number {
+  return (fx.tick * 7 + (fx.place.node ?? 100 + (fx.place.edge ?? 0))) % 997;
 }
 
 /** Progress 0..1 of a share-long effect that starts `from` (a share of a round) after the tick `age` ticks ago. */

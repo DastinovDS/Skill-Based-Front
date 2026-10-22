@@ -7,7 +7,6 @@ import {
   ARENA_REACH,
   CAPTION_RISE,
   CHIP,
-  GROW_SHARE,
   PLATE,
   arenaCenter,
   arenaSides,
@@ -17,8 +16,7 @@ import {
   chipHeight,
   chipPulse,
   chipsOf,
-  exchangeArrow,
-  exchangeLook,
+  exchangeAlpha,
   exchangeOf,
   fightFx,
   fightPlace,
@@ -79,8 +77,10 @@ describe('fightPlace', () => {
     expect(ARENA_GAP_EDGE).toBeGreaterThan(ARENA_GAP_NODE);
   });
 
-  it('leaves room for the lower arrow and its label under the plate', () => {
+  it('leaves room for the ring of the city under the plate, and for the caption of a bonus shot over it', () => {
     expect(ARENA_GAP_NODE).toBeGreaterThan(PLATE.halfHeight + ARENA_REACH);
+    // The caption (19 high) sits over the plate within the reach the arena makes room for.
+    expect(CAPTION_RISE + 9.5).toBeLessThanOrEqual(ARENA_REACH);
   });
 });
 
@@ -186,7 +186,7 @@ describe('exchange of the last round', () => {
     });
   });
 
-  it('gives a side that did not shoot no arrow, and a fight without a round none at all', () => {
+  it('gives a side that did not shoot nothing, and a fight without a round none at all', () => {
     expect(exchangeOf(round([0, 2], [0, 0]), 0).own).toBeNull();
     expect(exchangeOf(round([0, 2], [0, 0]), 0).enemy).toEqual({ real: 2, virtual: 0 });
     expect(exchangeOf(round([0, 0], [0, 0]), 0)).toEqual({ own: null, enemy: null });
@@ -197,15 +197,13 @@ describe('exchange of the last round', () => {
     expect(exchangeOf(round([1, 0], [4, 0]), 0).own).toEqual({ real: 0, virtual: 1 });
   });
 
-  it('grows over a share of the round, holds until the next round, fades if none comes', () => {
+  it('keeps the caption of a bonus shot until the next round is due, fades it if none comes', () => {
     for (const ticks of [10, 20]) {
-      const grow = ticks * GROW_SHARE;
-      expect(exchangeLook(0, ticks, false)).toEqual({ grow: 0, alpha: 1 });
-      expect(exchangeLook(grow / 2, ticks, false).grow).toBeCloseTo(0.5);
-      expect(exchangeLook(grow, ticks, false).grow).toBe(1);
-      expect(exchangeLook(ticks * 1.1, ticks, false).alpha).toBe(1);
-      expect(exchangeLook(ticks * 1.6, ticks, false).alpha).toBeCloseTo(0.5);
-      expect(exchangeLook(ticks * 2, ticks, false).alpha).toBe(0);
+      expect(exchangeAlpha(-1, ticks)).toBe(0);
+      expect(exchangeAlpha(0, ticks)).toBe(1);
+      expect(exchangeAlpha(ticks * 1.1, ticks)).toBe(1);
+      expect(exchangeAlpha(ticks * 1.6, ticks)).toBeCloseTo(0.5);
+      expect(exchangeAlpha(ticks * 2, ticks)).toBe(0);
     }
   });
 
@@ -215,62 +213,6 @@ describe('exchange of the last round', () => {
     expect(roundEffect(8, 0.8, 10)).toBeNull();
     expect(roundEffect(-1, 0.8, 20)).toBeNull();
     expect(roundEffect(16, 0.8, 20)).toBeNull();
-  });
-
-  it('with less motion is whole from the first tick', () => {
-    expect(exchangeLook(0, 10, true).grow).toBe(1);
-  });
-});
-
-describe('exchange arrows', () => {
-  const { halfHeight: hh } = PLATE;
-
-  it('the own arrow rises from the own half over the top into the enemy half', () => {
-    const arrow = exchangeArrow(true, 1);
-    const first = arrow.line[0];
-    const last = arrow.line[arrow.line.length - 1];
-    expect(first?.x).toBeLessThan(0);
-    expect(last?.x).toBeGreaterThan(0);
-    // The arc clears the plate at the top: its label sits above it.
-    expect(arrow.label.y).toBeLessThan(-hh);
-    expect(Math.min(...arrow.line.map((p) => p.y))).toBeLessThan(-hh);
-  });
-
-  it('the enemy arrow falls from its half under the bottom into the own one', () => {
-    const arrow = exchangeArrow(false, 1);
-    expect(arrow.line[0]?.x).toBeGreaterThan(0);
-    expect(arrow.line[arrow.line.length - 1]?.x).toBeLessThan(0);
-    expect(arrow.label.y).toBeGreaterThan(hh);
-    // The two arrows are point reflections of each other: they never overlap.
-    const own = exchangeArrow(true, 1);
-    expect(arrow.label.x).toBeCloseTo(-own.label.x);
-    expect(arrow.label.y).toBeCloseTo(-own.label.y);
-  });
-
-  it('stays within the reach the arena makes room for (plate and the caption above it)', () => {
-    for (const own of [true, false]) {
-      for (const p of exchangeArrow(own, 1).line) {
-        expect(Math.abs(p.y)).toBeLessThanOrEqual(hh + ARENA_REACH);
-      }
-      // The label is a pill 16 high: its far edge is within the reach too.
-      expect(Math.abs(exchangeArrow(own, 1).label.y) + 8).toBeLessThanOrEqual(hh + ARENA_REACH);
-    }
-    // The caption "bonus attack" (19 high) sits above the label of the own arrow.
-    const label = exchangeArrow(true, 1).label;
-    expect(-hh - CAPTION_RISE + 9.5).toBeLessThan(label.y - 8);
-  });
-
-  it('grows from the shooter: a part of the curve, the head only once it is long enough', () => {
-    const full = exchangeArrow(true, 1);
-    const half = exchangeArrow(true, 0.5);
-    expect(half.line.length).toBeLessThan(full.line.length);
-    expect(half.line[0]).toEqual(full.line[0]);
-    expect(exchangeArrow(true, 0.1).head).toBeNull();
-    expect(half.head).not.toBeNull();
-    // The head points where the curve goes: its tip is the front of the line.
-    expect(half.head?.[0]).toEqual(half.line[half.line.length - 1]);
-    expect(half.tip).toEqual(half.line[half.line.length - 1]);
-    expect(Math.hypot(half.direction.x, half.direction.y)).toBeCloseTo(1);
   });
 });
 

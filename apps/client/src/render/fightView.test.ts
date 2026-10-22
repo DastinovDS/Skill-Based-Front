@@ -165,16 +165,7 @@ function setup() {
     });
     return { width: maxX - minX, height: maxY - minY };
   };
-  /** The arrows drawn, by side and kind (the label of the arrows of an arena). */
-  const arrowKinds = (): string[] => {
-    const found: string[] = [];
-    walk((node) => {
-      const label = labelOf(node);
-      if (label.startsWith('arrows:')) found.push(label.slice(7));
-    });
-    return found;
-  };
-  return { layers, view, frame, texts, chips, badges, arenaViews, extent, arrowKinds, walk };
+  return { layers, view, frame, texts, chips, badges, arenaViews, extent, walk };
 }
 
 describe('FightView', () => {
@@ -372,27 +363,18 @@ describe('FightView', () => {
     view.destroy();
   });
 
-  it('draws the arrows of the last round: only a side that shot, the labels tell real and virtual', () => {
-    const { view, frame, texts, extent } = setup();
+  it('draws no arrows and no labels of the shots over the plate: the shots are the tracers on the map', () => {
+    const { view, frame, texts, walk } = setup();
     const withRound = (shots: [number, number], virtual: [number, number]): SnapshotMsg =>
       snapshot([
         fightAt({ enemy_units: 0, enemy_charged: 0, last_round: roundOf(146, shots, virtual) }),
       ]);
-    const labels = (): string[] =>
-      texts().filter(
-        (text) => !text.startsWith('×') && !text.startsWith('+') && text !== 'bonus attack',
-      );
-    // Both sides shot, own with one virtual shot: own `2` real and `1` virtual, enemy `1` real.
     view.update(frame(withRound([3, 1], [1, 0])), [], ROUND, false);
-    expect(labels()).toEqual(['2', '1', '1']);
-    // The enemy did not shoot: no arrow and no label for it.
-    view.update(frame(withRound([3, 0], [1, 0])), [], ROUND, false);
-    expect(labels()).toEqual(['2', '1']);
-    // Nobody shot: the plate alone.
-    const shooting = extent();
-    view.update(frame(withRound([0, 0], [0, 0])), [], ROUND, false);
-    expect(labels()).toEqual([]);
-    expect(extent().height).toBeLessThan(shooting.height);
+    // Nothing but the stocks and the caption of the bonus shot: no "2", "1", "1" of the labels of shots.
+    expect(texts().filter((text) => !text.startsWith('×'))).toEqual(['bonus attack']);
+    walk((node) => {
+      expect(labelOf(node).startsWith('arrows')).toBe(false);
+    });
     view.destroy();
   });
 
@@ -416,28 +398,11 @@ describe('FightView', () => {
     view.destroy();
   });
 
-  it('draws a bonus shot with another arrow than a real one', () => {
-    const { view, frame, arrowKinds } = setup();
-    const at = (shots: [number, number], virtual: [number, number]): SnapshotMsg =>
-      snapshot([fightAt({ last_round: roundOf(146, shots, virtual) })]);
-    // A real shot of both sides: plain arrows. The own shot a bonus one: the other arrow, for it only.
-    view.update(frame(at([1, 1], [0, 0])), [], ROUND, false);
-    expect(arrowKinds()).toEqual(['own-plain,enemy-plain']);
-    view.update(frame(at([1, 1], [1, 0])), [], ROUND, false);
-    expect(arrowKinds()).toEqual(['own-bonus,enemy-plain']);
-    // A side that shot real and bonus shots in one round keeps the plain arrow: its label tells the split.
-    view.update(frame(at([2, 0], [1, 0])), [], ROUND, false);
-    expect(arrowKinds()).toEqual(['own-plain']);
-    view.update(frame(at([0, 0], [0, 0])), [], ROUND, false);
-    expect(arrowKinds()).toEqual(['']);
-    view.destroy();
-  });
-
-  it('shows a fight without data of rounds (an old replay) with chips and no arrows or caption', () => {
+  it('shows a fight without data of rounds (an old replay) with chips and no caption', () => {
     const { view, frame, texts, chips } = setup();
     view.update(frame(running), [], ROUND, false);
     expect(chips()).toHaveLength(3);
-    // Nothing but the stock at zero: no label of shots, no caption.
+    // Nothing but the stock at zero: no caption.
     expect(texts().sort()).toEqual(['×0', '×0']);
     view.destroy();
   });
@@ -480,38 +445,36 @@ describe('FightView', () => {
     expect(gap(1)).toBeGreaterThan(PLATE.halfHeight);
   });
 
-  it('lets an arrow grow over a share of the round, whatever its length (10 and 20 ticks)', () => {
+  it('keeps the caption of a bonus shot from the tick of the round, whatever its length (10 and 20 ticks)', () => {
     for (const ticks of [10, 20]) {
       const { view, frame, texts } = setup();
       const at = (tick: number): SnapshotMsg =>
         snapshot(
-          [fightAt({ enemy_units: 0, enemy_charged: 0, last_round: roundOf(150, [1, 0]) })],
+          [fightAt({ enemy_units: 0, enemy_charged: 0, last_round: roundOf(150, [1, 0], [1, 0]) })],
           tick,
         );
-      const labels = (): string[] => texts().filter((text) => text === '1');
+      const caption = (): boolean => texts().includes('bonus attack');
+      // Before the round nothing is said; at its tick the caption is there.
+      view.update(frame(at(149)), [], ticks, false);
+      expect(caption()).toBe(false);
       view.update(frame(at(150)), [], ticks, false);
-      expect(labels()).toEqual([]);
-      // Half way through the growth (a fifth of the round): no label yet; grown whole: there.
-      view.update(frame(at(150 + ticks * 0.1)), [], ticks, false);
-      expect(labels()).toEqual([]);
-      view.update(frame(at(150 + ticks * 0.2)), [], ticks, false);
-      expect(labels()).toEqual(['1']);
+      expect(caption()).toBe(true);
       // It holds until the next round is due and is gone two rounds after the shots.
       view.update(frame(at(150 + ticks * 0.9)), [], ticks, false);
-      expect(labels()).toEqual(['1']);
+      expect(caption()).toBe(true);
       view.update(frame(at(150 + ticks * 2)), [], ticks, false);
-      expect(labels()).toEqual([]);
+      expect(caption()).toBe(false);
       view.destroy();
     }
   });
 
-  it('with less motion shows the arrow whole at once', () => {
+  it('with less motion the caption is there at once too', () => {
     const { view, frame, texts } = setup();
     const snap = snapshot([
-      fightAt({ enemy_units: 0, enemy_charged: 0, last_round: roundOf(150, [1, 2]) }),
+      fightAt({ enemy_units: 0, enemy_charged: 0, last_round: roundOf(150, [1, 2], [1, 0]) }),
     ]);
     view.update(frame(snap), [], ROUND, true);
-    expect(texts().filter((text) => text === '1' || text === '2')).toEqual(['1', '2']);
+    expect(texts()).toContain('bonus attack');
     view.destroy();
   });
 

@@ -10,6 +10,7 @@ import {
   burstProgress,
   contactParticle,
   contactProgress,
+  fxSeed,
   impactParticles,
   impactsOf,
   inFirstRound,
@@ -144,7 +145,7 @@ export class HitView {
       const age = tick - fx.tick;
       if (age < 0 || age > ROUND_END_SHARE * roundTicks) continue;
       const contacts = contactsOf(fx.place);
-      const seed = (fx.tick * 7 + (fx.place.node ?? 100 + (fx.place.edge ?? 0))) % 997;
+      const seed = fxSeed(fx);
       for (const impact of impactsOf(fx, this.me)) {
         const u = burstProgress(age, impact, roundTicks);
         if (u === null) continue;

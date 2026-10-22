@@ -24,6 +24,9 @@
   // `?menus` lets a fixture scene open the menus of the map (orders go nowhere): the screenshots
   // of the radial menus (`mise run shots`) use it. Without it a fixture only selects.
   const menusOn = params.has('menus');
+  // `?at=<tick>` freezes a fixture scene at another render tick (also a fractional one): a round of a fight frame by frame.
+  const atParam = Number(params.get('at'));
+  const at = params.has('at') && Number.isFinite(atParam) ? atParam : undefined;
   const fixtureScene = (id: string | null) => FIXTURE_SCENES.find((scene) => scene.id === id);
   let rendererFailed = $state(false);
   let sceneId = $state(
@@ -70,7 +73,7 @@
       : null,
   );
   const source = $derived(
-    match === null ? (fixture === undefined ? null : frozenSource(fixture)) : match.session,
+    match === null ? (fixture === undefined ? null : frozenSource(fixture, at)) : match.session,
   );
 
   $effect(() => {
