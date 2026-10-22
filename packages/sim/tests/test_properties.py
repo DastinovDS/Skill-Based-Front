@@ -337,19 +337,17 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     charge accumulator, the enemy's fog memory and the events of the tick; DEC-17: widths of
     fogged edges (only upwards, roads are never torn down) and enemy builds on fogged edges;
     DEC-18: supply priorities of enemy cities and routes of enemy packets (transfers); DEC-19: the
-    starvation countdown of enemy cities. DEC-24: the enemy's virtual shots and shots in a fight,
-    the withdrawals of its groups there; its groups in a fight are visible (their counters are in
-    ``PlayerView.fights``), the rest of them is not.
+    starvation countdown of enemy cities. DEC-24: the withdrawals of the enemy's groups in a fight
+    (its shots and virtual shots there are public, DEC-29, DEC-32); its groups in a fight are
+    visible (their counters are in ``PlayerView.fights``), the rest of them is not.
     """
     draw = data.draw
     nodes, edges, sources = levels
     enemy = 1 - player
     for fid in sorted(state.fights):
         f = state.fights[fid]
-        virtual, shots = list(f.virtual), list(f.shots)
-        virtual[enemy] = draw(st.integers(0, 5))
-        shots[enemy] = draw(st.integers(0, 9))
-        f.virtual, f.shots = (virtual[0], virtual[1]), (shots[0], shots[1])
+        # The shots and the virtual shots left of both sides are public (DEC-24, item I1 as
+        # revised with DEC-29; DEC-32, item 3): not perturbed.
         for gid in sorted(f.members):
             m = f.members[gid]
             if m.player == enemy:
