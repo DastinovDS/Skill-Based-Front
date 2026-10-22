@@ -242,6 +242,7 @@ export class FogView {
     const length = Math.hypot(b.x - a.x, b.y - a.y);
     const split = BORDER_PERMILLE / 1000;
     const shade = new Graphics(this.edgeContext());
+    shade.label = 'fog-half-shade';
     const start = half === 0 ? a : { x: a.x + (b.x - a.x) * split, y: a.y + (b.y - a.y) * split };
     shade.position.set(start.x, start.y);
     shade.rotation = Math.atan2(b.y - a.y, b.x - a.x);
