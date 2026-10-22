@@ -116,17 +116,21 @@ def check_only_visible(snapshot: SnapshotMsg) -> None:
     for node in view.nodes:
         if node.detail is not Detail.EXACT:
             assert node.warehouse is None  # no numbers outside EXACT nodes
-        if node.detail is Detail.PRESENCE:
+        if node.detail in (Detail.RANGE, Detail.PRESENCE):
             assert node.seen is not None
-            assert node.seen.enemy_units is None
+            assert node.seen.enemy_units is None  # numbers only at EXACT (DEC-21, item 3)
         if node.detail is Detail.FOG and node.seen is not None:
             assert node.seen.tick < snapshot.tick  # an old memory, not a current sighting
     for group in view.groups:  # own groups only, and they stand on seen nodes
         if isinstance(group.location, AtNodeLoc):
             assert view.nodes[group.location.node].detail is Detail.EXACT
-    for edge in view.edges:
-        if edge.detail is Detail.FOG and edge.seen is not None:
-            assert edge.seen.tick < snapshot.tick
+    for edge in view.edges:  # DEC-21, item 5: halves of edges; DEC-33: figures only in sight
+        for half in edge.halves:
+            if half.detail is Detail.FOG and half.seen is not None:
+                assert half.seen.tick < snapshot.tick
+        visible = {half.detail for half in edge.halves if half.detail is not Detail.FOG}
+        for figure in edge.enemy_groups:
+            assert figure.detail in visible  # a half in fog shows no figure
 
 
 @dataclass
