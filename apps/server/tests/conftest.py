@@ -16,6 +16,18 @@ from gow_server.settings import Settings
 SIM_TEST_MAPS = Path(__file__).parents[3] / "packages" / "sim" / "tests" / "maps"
 
 
+@pytest.fixture(autouse=True)
+def _replays_in_tmp(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A test that does not set ``replays_dir`` writes replays to a temporary directory.
+
+    ``Settings`` reads ``GOW_REPLAYS_DIR``; without this the default ``data/replays`` is the
+    working tree of the developer (#363). An explicit ``replays_dir=`` still wins.
+    """
+    monkeypatch.setenv("GOW_REPLAYS_DIR", str(tmp_path_factory.mktemp("replays")))
+
+
 @pytest.fixture
 def maps_dir(tmp_path: Path) -> Path:
     directory = tmp_path / "maps"

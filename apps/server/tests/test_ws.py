@@ -513,9 +513,13 @@ def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settin
             # (a loaded CI runner): wait until the last one is queued, so the extra tick applies
             # and acks every command. A fixed pause here left the tail of the commands unacked
             # and the drain below waiting for acks that no tick would ever produce (#363).
-            async with asyncio.timeout(DRAIN_TIMEOUT_S):
-                while live.runner.last_seq(0) < ticks:
-                    await asyncio.sleep(0.01)
+            try:
+                async with asyncio.timeout(30.0):
+                    while live.runner.last_seq(0) < ticks:
+                        await asyncio.sleep(0.01)
+            except TimeoutError:
+                await diag363(live, ws, -1, live.runner.last_seq(0))
+                raise
             await live.ticks()
             assert live.runner.match.tick == start + ticks + 1, "the tick did not wait"
             acks: list[int] = []

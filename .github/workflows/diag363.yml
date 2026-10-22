@@ -1,4 +1,4 @@
-# TEMPORARY (#363): loops the slow client test under CPU load; validation of the test fix.
+# TEMPORARY (#363) v3: loops the slow client test under CPU load; validation of the test fix.
 name: diag363
 on:
   push:
@@ -38,4 +38,5 @@ jobs:
             if uv run pytest -q -s -p no:cacheprovider "$T" > /tmp/out.$i 2>&1; then r=ok; else r=FAIL; fi
             echo "run $i $r $(( $(date +%s) - s ))s"
             grep -A40 DIAG363 /tmp/out.$i || true
+            if [ $r = FAIL ]; then tail -80 /tmp/out.$i | cut -c1-220; fi
           done
