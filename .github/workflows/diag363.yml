@@ -1,0 +1,41 @@
+# TEMPORARY (#363): loops the slow client test under CPU load and prints diagnostics on a stall.
+name: diag363
+on:
+  push:
+    branches: ['fix/363-**']
+    paths: ['.github/workflows/diag363.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  loop:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [alone, loaded, loaded2, suite]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: loop
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          T="apps/server/tests/test_ws.py::test_slow_client_does_not_slow_the_tick_and_loses_no_ack"
+          if [ "$MODE" = loaded ]; then for b in 1 2 3 4; do (while :; do :; done) & done; fi
+          if [ "$MODE" = loaded2 ]; then for b in 1 2 3 4 5 6 7 8; do (while :; do :; done) & done; fi
+          if [ "$MODE" = suite ]; then
+            (uv run pytest -n 4 -q -p no:cacheprovider -m "not perf and not slow" --deselect "$T" packages apps/bots > /tmp/bg.log 2>&1 &) 
+          fi
+          for i in $(seq 1 15); do
+            s=$(date +%s)
+            if uv run pytest -q -s -p no:cacheprovider "$T" > /tmp/out.$i 2>&1; then r=ok; else r=FAIL; fi
+            echo "run $i $r $(( $(date +%s) - s ))s"
+            grep -A40 DIAG363 /tmp/out.$i || true
+          done
