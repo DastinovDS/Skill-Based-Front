@@ -1,9 +1,24 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import { fogHatching } from './regionLayout.ts';
 import type { Point } from './camera.ts';
-import type { EdgeView, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
+import type {
+  EdgeView,
+  HalfView,
+  MapFile,
+  NodeView,
+  PlayerId,
+  SnapshotMsg,
+} from '../protocol.gen.ts';
 import { edgeEnds, triangleHeight, triangleSide } from './layout.ts';
-import { ageLabel, edgeMarkerPoint, ghostAlpha, nodeMarkerPoint } from './fogLayout.ts';
+import {
+  ageLabel,
+  BORDER_PERMILLE,
+  borderPoint,
+  ghostAlpha,
+  halfMarkerPoint,
+  nodeMarkerPoint,
+} from './fogLayout.ts';
+import { knownOfSeen } from './rangeLabel.ts';
 import { symbolScale } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { Token, type EntityKit } from './shapes.ts';
@@ -16,6 +31,7 @@ import {
   FOG_ROAD_ALPHA,
   GHOST_AGE_FONT_SIZE,
   GHOST_AGE_STROKE,
+  BORDER_MARK,
   GLYPH_COLOR,
   GHOST_HIDE_S,
   roadThickness,
@@ -64,14 +80,8 @@ class Ghost {
       this.hide();
       return;
     }
-    const exact =
-      memory.level === 'exact' && memory.enemy_units !== null && memory.enemy_charged !== null;
-    this.token.set({
-      owner: enemy,
-      modes: memory.enemy_modes,
-      counts: exact ? { units: memory.enemy_units ?? 0, charged: memory.enemy_charged ?? 0 } : null,
-      ghost: true,
-    });
+    const { counts, range } = knownOfSeen(memory);
+    this.token.set({ owner: enemy, modes: memory.enemy_modes, counts, range, ghost: true });
     this.token.setLabel(true);
     this.setScale(symbolScale(this.token.side, cameraScale));
     this.view.alpha = alpha;
@@ -104,9 +114,13 @@ export class FogView {
   private readonly regions = new Graphics();
   private readonly hatching = new Graphics();
   private hiddenKey = '';
-  private readonly edgeShades: (Graphics | null)[];
+  /** The shade of the half of a road that is in fog, by `edge * 2 + half`. */
+  private readonly halfShades: (Graphics | null)[];
   private readonly nodeGhosts: (Ghost | null)[];
-  private readonly edgeGhosts: (Ghost | null)[];
+  /** The memory of a half of a road in fog, by `edge * 2 + half`. */
+  private readonly halfGhosts: (Ghost | null)[];
+  /** A tick across every road at its border point (DEC-21, item 5). */
+  private readonly borders = new Graphics();
   private readonly shadeLayer = new Container({ label: 'fog-shades' });
   private readonly ghostLayer = new Container({ label: 'fog-ghosts' });
   private readonly ageStyle: TextStyle;
@@ -135,10 +149,10 @@ export class FogView {
       stroke: GHOST_AGE_STROKE,
     });
     this.shadeLayer.addChild(this.regions, this.hatching);
-    this.edgeShades = map.edges.map(() => null);
+    this.halfShades = map.edges.flatMap(() => [null, null]);
     this.nodeGhosts = map.nodes.map(() => null);
-    this.edgeGhosts = map.edges.map(() => null);
-    layers.layer.fog.addChild(this.shadeLayer, this.ghostLayer);
+    this.halfGhosts = map.edges.flatMap(() => [null, null]);
+    layers.layer.fog.addChild(this.shadeLayer, this.borders, this.ghostLayer);
   }
 
   /** Ticks per second, for the age of a memory; set when the ruleset is known. */
@@ -153,7 +167,7 @@ export class FogView {
   setCameraScale(scale: number): void {
     if (scale === this.cameraScale) return;
     this.cameraScale = scale;
-    for (const ghost of [...this.nodeGhosts, ...this.edgeGhosts]) {
+    for (const ghost of [...this.nodeGhosts, ...this.halfGhosts]) {
       if (ghost !== null && ghost.view.visible) {
         ghost.setScale(symbolScale(ghost.token.side, scale));
       }
@@ -162,7 +176,7 @@ export class FogView {
 
   setLabelResolution(resolution: number): void {
     this.labelResolution = resolution;
-    for (const ghost of [...this.nodeGhosts, ...this.edgeGhosts]) {
+    for (const ghost of [...this.nodeGhosts, ...this.halfGhosts]) {
       if (ghost === null) continue;
       for (const text of ghost.labels()) {
         if (text.resolution !== resolution) text.resolution = resolution;
@@ -177,7 +191,13 @@ export class FogView {
     const { nodes, edges } = base.view;
     this.setRegions(nodes);
     for (const node of nodes) this.setNode(node, base.tick);
+    this.borders.clear();
     for (const edge of edges) this.setEdge(edge, base.tick);
+    this.borders.stroke({
+      width: BORDER_MARK.width,
+      color: BORDER_MARK.color,
+      alpha: BORDER_MARK.alpha,
+    });
   }
 
   destroy(): void {
@@ -185,6 +205,7 @@ export class FogView {
     // contexts and the style.
     this.regions.destroy();
     this.hatching.destroy();
+    this.borders.destroy();
     this.shadeLayer.destroy({ children: true });
     this.ghostLayer.destroy({ children: true });
     for (const context of this.contexts) context.destroy();
@@ -207,18 +228,25 @@ export class FogView {
     return this.edgeShadeContext;
   }
 
-  private edgeShade(id: number): Graphics | null {
-    const existing = this.edgeShades[id];
+  /**
+   * The shade of one half of a road: from the end `a` to the border point (half 0) or from there
+   * to the end `b` (half 1).
+   */
+  private halfShade(id: number, half: 0 | 1): Graphics | null {
+    const index = id * 2 + half;
+    const existing = this.halfShades[index];
     if (existing !== undefined && existing !== null) return existing;
     const ends = edgeEnds(this.map, id);
     if (ends === undefined) return null;
     const { a, b } = ends;
     const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const split = BORDER_PERMILLE / 1000;
     const shade = new Graphics(this.edgeContext());
-    shade.position.set(a.x, a.y);
+    const start = half === 0 ? a : { x: a.x + (b.x - a.x) * split, y: a.y + (b.y - a.y) * split };
+    shade.position.set(start.x, start.y);
     shade.rotation = Math.atan2(b.y - a.y, b.x - a.x);
-    shade.scale.x = length;
-    this.edgeShades[id] = this.shadeLayer.addChild(shade);
+    shade.scale.x = length * (half === 0 ? split : 1 - split);
+    this.halfShades[index] = this.shadeLayer.addChild(shade);
     return shade;
   }
 
@@ -297,31 +325,48 @@ export class FogView {
     this.showGhost(this.nodeGhosts, node.id, memory, tick, at);
   }
 
+  /**
+   * One road: a shade on each half in fog (by the half's own `detail`, not the road's), the tick at
+   * the border point, and the memory of each half in fog (DEC-21, item 8; DEC-33, detail 8: no
+   * position, a ghost at the border point with its age).
+   */
   private setEdge(edge: EdgeView, tick: number): void {
-    const hidden = edge.detail === 'fog';
+    const border = borderPoint(this.map, edge.id);
+    const ends = edgeEnds(this.map, edge.id);
+    if (border !== undefined && ends !== undefined) {
+      const length = Math.hypot(ends.b.x - ends.a.x, ends.b.y - ends.a.y);
+      if (length > 0) {
+        const reach = roadThickness(edge.width) / 2 + BORDER_MARK.overhang;
+        const nx = (-(ends.b.y - ends.a.y) / length) * reach;
+        const ny = ((ends.b.x - ends.a.x) / length) * reach;
+        this.borders.moveTo(border.x - nx, border.y - ny).lineTo(border.x + nx, border.y + ny);
+      }
+    }
+    edge.halves.forEach((half, i) => {
+      const side = i === 0 ? 0 : 1;
+      this.setHalf(edge, half, side, tick);
+    });
+  }
+
+  private setHalf(edge: EdgeView, half: HalfView, side: 0 | 1, tick: number): void {
+    const hidden = half.detail === 'fog';
     if (hidden) {
-      const shade = this.edgeShade(edge.id);
+      const shade = this.halfShade(edge.id, side);
       if (shade !== null) {
         shade.visible = true;
         shade.scale.y = roadThickness(edge.width);
       }
     } else {
-      const shade = this.edgeShades[edge.id];
+      const shade = this.halfShades[edge.id * 2 + side];
       if (shade !== undefined && shade !== null) shade.visible = false;
     }
-    // The memory of a hidden half of the road (DEC-21, item 8; DEC-33, detail 8: no position):
-    // the newer one, drawn at the border point in the middle of the road.
-    let memory: NonNullable<Memory> | null = null;
-    for (const half of edge.halves) {
-      const seen = this.remembered(half.detail === 'fog', half.seen);
-      if (seen !== null && (memory === null || seen.tick > memory.tick)) memory = seen;
-    }
-    const existing = this.edgeGhosts[edge.id] ?? null;
-    const at = edgeMarkerPoint(this.map, edge.id);
+    const memory = this.remembered(hidden, half.seen);
+    const existing = this.halfGhosts[edge.id * 2 + side] ?? null;
+    const at = halfMarkerPoint(this.map, edge.id, side);
     if (memory === null || at === undefined) {
       existing?.hide();
       return;
     }
-    this.showGhost(this.edgeGhosts, edge.id, memory, tick, at);
+    this.showGhost(this.halfGhosts, edge.id * 2 + side, memory, tick, at);
   }
 }

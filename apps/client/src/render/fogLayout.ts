@@ -28,12 +28,30 @@ export function nodeMarkerPoint(
   return { x: point.x + radius + RING_GAP + 8 + width / 2, y: point.y + 6 };
 }
 
-/** Centre of the enemy marker (or the memory ghost) of a road: the middle, beside the road. */
-export function edgeMarkerPoint(map: MapFile, id: number): Point | undefined {
+/**
+ * The border point of every road, in thousandths from the end `a` (`border_permille`, DEC-21,
+ * item 5; DEC-23). The map files do not carry it yet and the default is 500 (map-format.md), so
+ * it is a constant here; it moves into the map file reading together with `border_permille`.
+ */
+export const BORDER_PERMILLE = 500;
+
+/** The border point of a road: where its two halves meet. */
+export function borderPoint(map: MapFile, id: number): Point | undefined {
   const ends = edgeEnds(map, id);
   if (ends === undefined) return undefined;
-  const middle = edgePoint(ends.a, ends.b, true, 500);
-  return sideways(ends.a, ends.b, middle, EDGE_MARKER_OFFSET);
+  return edgePoint(ends.a, ends.b, true, BORDER_PERMILLE);
+}
+
+/**
+ * Centre of the memory ghost of a half of a road (DEC-33, detail 8): at the border point, beside
+ * the road, the half of the end `a` (0) to the left of the a → b way and the half of the end `b`
+ * (1) to the right, so that two memories do not sit on top of each other.
+ */
+export function halfMarkerPoint(map: MapFile, id: number, half: 0 | 1): Point | undefined {
+  const ends = edgeEnds(map, id);
+  const at = borderPoint(map, id);
+  if (ends === undefined || at === undefined) return undefined;
+  return sideways(ends.a, ends.b, at, half === 0 ? EDGE_MARKER_OFFSET : -EDGE_MARKER_OFFSET);
 }
 
 /**

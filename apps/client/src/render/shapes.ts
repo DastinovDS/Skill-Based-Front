@@ -236,6 +236,11 @@ export interface TokenSpec {
   counts: { units: number; charged: number } | null;
   /** An own group in "Defense": the bonus it holds and its cap, shown as "+N / M" by the shield (DEC-30). */
   defense?: DefenseBonus | null;
+  /**
+   * The range of the units where only that is known («3-5», DEC-21, item 4), already written out
+   * (`rangeLabel`): shown in the pill under the tip instead of the "?", no charges, `counts` is `null`.
+   */
+  range?: string | null;
   ghost?: boolean;
   inside?: boolean;
 }
@@ -246,7 +251,7 @@ function specKey(spec: TokenSpec): string {
     spec.counts === null ? '-' : `${String(spec.counts.units)}/${String(spec.counts.charged)}`;
   const defense =
     spec.defense == null ? '-' : `${String(spec.defense.bonus)}/${String(spec.defense.cap)}`;
-  return `${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${defense}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}`;
+  return `${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${defense}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}|${spec.range ?? ''}`;
 }
 
 /**
@@ -348,7 +353,8 @@ export class Token {
     const shapes = this.kit.triangles.get(side);
     if (shapes === undefined) return;
     const h = triangleHeight(side);
-    this.counted = counts !== null;
+    const range = spec.range ?? null;
+    this.counted = counts !== null || range !== null;
 
     this.halo.context = shapes.halo;
     this.halo.visible = spec.inside === true;
@@ -367,7 +373,7 @@ export class Token {
         ? shapes.own
         : shapes.enemy;
 
-    this.question.visible = counts === null;
+    this.question.visible = counts === null && range === null;
     // Centre of mass of the triangle, a third of the height above the middle of the box.
     this.question.position.set(0, -h / 6);
 
@@ -400,10 +406,12 @@ export class Token {
       );
     }
 
-    if (counts !== null) {
-      const inside = spec.inside === true;
+    const text = counts !== null ? countLabel(counts.units) : range;
+    if (text !== null) {
+      // A range is wider than a number: always in the pill under the tip.
+      const inside = spec.inside === true && counts !== null;
       this.count.style = inside ? this.kit.insideStyle : this.kit.textStyle;
-      this.count.text = countLabel(counts.units);
+      this.count.text = text;
       this.pill.clear();
       if (inside) {
         // At the centre of mass of the triangle, where the "?" of an unknown group sits too.

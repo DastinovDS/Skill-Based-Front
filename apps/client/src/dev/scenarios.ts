@@ -7,7 +7,16 @@
 import { DEV_RULES } from '../hud/devFeed.ts';
 import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
 import { interpolateFrame, type RenderFrame } from '../net/interpolate.ts';
-import type { EventMsg, SnapshotMsg } from '../protocol.gen.ts';
+import type {
+  Detail,
+  EdgeView,
+  EnemyGroup,
+  EventMsg,
+  HalfView,
+  NodeView,
+  Seen,
+  SnapshotMsg,
+} from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
 import { ARTERIYA_TICK, ARTERIYA_VIEW, arteriyaSnapshot } from './arteriyaScene.ts';
 
@@ -191,6 +200,119 @@ function fightsSnapshot(): SnapshotMsg {
   };
 }
 
+/**
+ * What DEC-21 and DEC-33 show about enemies (#359), on the `diamond` map at tick 600: a city seen
+ * as a range («21+»), figures on road halves seen exactly, as a range and as presence, and the
+ * memory of cities and halves in fog (a range, exact numbers, presence) with their ages. The
+ * border point is the tick across each road. Made here, not a fixture of the protocol.
+ */
+function rangesSnapshot(): SnapshotMsg {
+  const base = fixture('snapshot');
+  const tick = 600;
+  const seen = (
+    ago: number,
+    level: Seen['level'],
+    modes: Seen['enemy_modes'],
+    fields: Partial<Seen> = {},
+  ): Seen => ({
+    tick: tick - ago,
+    level,
+    enemy_modes: modes,
+    enemy_units: null,
+    enemy_charged: null,
+    enemy_range: null,
+    ...fields,
+  });
+  const nodes = base.view.nodes.map((node): NodeView => {
+    if (node.id === 2) {
+      // In fog: the last sighting, a range.
+      return {
+        ...node,
+        detail: 'fog',
+        seen: seen(210, 'range', ['attack'], { enemy_range: { low: 3, high: 5 } }),
+      };
+    }
+    if (node.id === 3) {
+      return {
+        ...node,
+        detail: 'range',
+        seen: seen(0, 'range', ['attack'], { enemy_range: { low: 21, high: null } }),
+      };
+    }
+    return {
+      ...node,
+      seen: seen(
+        0,
+        node.detail,
+        [],
+        node.detail === 'exact' ? { enemy_units: 0, enemy_charged: 0 } : {},
+      ),
+    };
+  });
+  const figure = (
+    id: string,
+    pos: number,
+    toward_b: boolean,
+    detail: EnemyGroup['detail'],
+    fields: Partial<EnemyGroup> = {},
+  ): EnemyGroup => ({
+    id,
+    pos,
+    toward_b,
+    detail,
+    mode: 'attack',
+    units: null,
+    charged: null,
+    units_range: null,
+    ...fields,
+  });
+  const half = (detail: Detail, memory: Seen | null): HalfView => ({ detail, seen: memory });
+  const edges = base.view.edges.map((edge): EdgeView => {
+    switch (edge.id) {
+      case 1:
+        // 0-2: the half of the city 2 is in fog; its memory is exact numbers.
+        return {
+          ...edge,
+          halves: [
+            half('exact', seen(0, 'exact', [], { enemy_units: 0, enemy_charged: 0 })),
+            half('fog', seen(450, 'exact', ['attack'], { enemy_units: 4, enemy_charged: 2 })),
+          ],
+          enemy_groups: [],
+        };
+      case 2:
+        // 3-2: the half of 3 is seen as a range with a figure in it, the half of 2 is in fog.
+        return {
+          ...edge,
+          halves: [
+            half('range', seen(0, 'range', ['attack'], { enemy_range: { low: 6, high: 10 } })),
+            half('fog', seen(120, 'presence', ['defense'])),
+          ],
+          enemy_groups: [figure('r1', 350, false, 'range', { units_range: { low: 6, high: 10 } })],
+        };
+      case 3:
+        // 3-1: both halves seen, an exact figure going to 3 and a range one going to 1.
+        return {
+          ...edge,
+          halves: [
+            half('range', seen(0, 'range', ['attack'], { enemy_range: { low: 1, high: 2 } })),
+            half('exact', seen(0, 'exact', ['attack'], { enemy_units: 4, enemy_charged: 3 })),
+          ],
+          enemy_groups: [
+            figure('e1', 750, false, 'exact', { units: 4, charged: 3 }),
+            figure('r2', 250, true, 'range', { units_range: { low: 1, high: 2 } }),
+          ],
+        };
+      default:
+        return { ...edge, enemy_groups: [] };
+    }
+  });
+  return {
+    ...base,
+    tick,
+    view: { ...base.view, nodes, edges, packets: [], fights: [] },
+  };
+}
+
 /** The real map of the `arteriya` scene (the only scene with a baked background). */
 function arteriyaMap() {
   const map = BUNDLED_MAPS.find((m) => m.meta.name === 'arteriya');
@@ -231,6 +353,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     cityUpgrades: true,
   },
   { id: 'overflow', map: 'diamond', snapshot: overflowSnapshot(), events: [] },
+  { id: 'ranges', map: 'diamond', snapshot: rangesSnapshot(), events: [] },
   { id: 'snapshot_fog', map: 'line3', snapshot: fixture('snapshot_fog'), events: [] },
   { id: 'fights', map: 'siege', snapshot: fightsSnapshot(), events: [] },
   {

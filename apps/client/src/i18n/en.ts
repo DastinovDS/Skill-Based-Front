@@ -273,6 +273,9 @@ export const en = {
   'fight.bonusAttack': 'bonus attack',
   'help.key.defense': 'group Defense on or off',
   'defense.bonus': '+{bonus} / {cap}',
+  // A range of enemy units (DEC-21, item 4): "3-5", the last one open: "21+".
+  'range.closed': '{low}-{high}',
+  'range.open': '{low}+',
   'defense.title': 'Defense: bonus {bonus} of {cap}',
   'defense.rule':
     '+1 for every {seconds} s in the mode, at most the charged units; burns after a fight; costs {cost} CP',

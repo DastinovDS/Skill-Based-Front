@@ -191,6 +191,8 @@ export const FOG_HATCH_SPACING = 9;
 export const FOG_BAND_WIDTH = 24;
 /** A hidden road stays a solid line, shaded dark (the dark cell and the hatched border carry the state too). */
 export const FOG_ROAD_ALPHA = 0.55;
+/** The tick across a road at its border point (DEC-21, item 5): a short light line, `overhang` px past the road on each side. */
+export const BORDER_MARK = { width: 2, color: 0xe6edf3, alpha: 0.55, overhang: 5 } as const;
 /** Opacity of a fresh memory ghost (the marker of what was last seen in a hidden place). */
 export const GHOST_ALPHA = 0.6;
 /** Ghosts fade linearly from `GHOST_FADE_START_S` to nothing at `GHOST_HIDE_S` seconds after the sighting (9.8). */
