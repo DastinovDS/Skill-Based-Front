@@ -110,6 +110,12 @@ describe('the «Supply» mode UI (DEC-28)', () => {
     expect(items[0]).toContain('marker 1');
     expect(items[1]).toContain('marker 2');
     expect(items[2]).toContain('transfer');
+    // Marker 1 up, marker 2 on the right, the transfer on the left: each with its icon (#350).
+    const icons = [...target.querySelectorAll('[role^="menuitem"] .glyph')];
+    expect(icons.map((i) => i.getAttribute('data-icon'))).toEqual(['front1', 'front2', 'transfer']);
+    expect(icons.every((i) => Number(i.querySelector('svg')?.getAttribute('width')) >= 20)).toBe(
+      true,
+    );
   });
 
   it('a marker is free in DEC-28: no price on its sector; a ruleset that prices it shows it', () => {

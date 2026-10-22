@@ -27,6 +27,7 @@
   const items = $derived<RadialItem[]>([
     {
       id: 'split',
+      icon: 'split',
       angle: angles[0] ?? 270,
       label: t('group.split'),
       key: 'S',
@@ -34,6 +35,7 @@
     },
     {
       id: 'defense',
+      icon: 'defense',
       angle: angles[1] ?? 0,
       label: t('group.defense'),
       // The price, and the bonus the group has gathered (DEC-30; the server's numbers).
@@ -48,6 +50,7 @@
     },
     {
       id: 'cancel',
+      icon: 'cancel',
       angle: angles[2] ?? 90,
       label: t('group.cancel'),
       key: 'X',
@@ -55,6 +58,7 @@
     },
     {
       id: 'merge',
+      icon: 'merge',
       angle: angles[3] ?? 180,
       label: t('group.merge'),
       key: 'G',

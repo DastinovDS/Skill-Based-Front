@@ -85,7 +85,17 @@ describe('the radial menus of a city and of a group', () => {
       i.textContent.replace(/\s+/g, ' ').trim(),
     );
 
-  it('the city menu has recruit with a glyph and a price only, and recruit sends the command', () => {
+  /** The icons drawn in the sectors of a menu: the name of each (`data-icon`) and its size in px. */
+  const icons = (target: HTMLElement): { name: string | null; size: number }[] =>
+    [...target.querySelectorAll('[role^="menuitem"]')].map((item) => {
+      const icon = item.querySelector('.glyph');
+      return {
+        name: icon?.getAttribute('data-icon') ?? null,
+        size: Number(icon?.querySelector('svg')?.getAttribute('width') ?? 0),
+      };
+    });
+
+  it('the city menu has recruit with an icon and a price only, and recruit sends the command', () => {
     setLocale('en');
     const { target, orders, sent } = render();
     orders.click({ kind: 'node', id: home }, false);
@@ -93,7 +103,8 @@ describe('the radial menus of a city and of a group', () => {
     const items = [...target.querySelectorAll('[role="menuitem"]')];
     // The glyph, the price and the key: no name, no description. Roads are not here: a click on
     // the road itself raises it (DEC-28, item 7).
-    expect(texts(target)).toEqual(['+1 CPR']);
+    expect(texts(target)).toEqual(['1 CPR']);
+    expect(icons(target).map((i) => i.name)).toEqual(['recruit']);
     expect(items.map((i) => i.getAttribute('aria-label'))).toEqual(['Recruit']);
     expect(items[0]?.getAttribute('aria-disabled')).not.toBe('true');
     items[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -145,7 +156,10 @@ describe('the radial menus of a city and of a group', () => {
       'Barracks',
       'Warehouse',
     ]);
-    expect(texts(target).slice(1)).toEqual(['⌂3 CP', '▤2 CP']);
+    expect(texts(target).slice(1)).toEqual(['3 CP', '2 CP']);
+    // Every sector has its icon (#350), at least 20 px.
+    expect(icons(target).map((i) => i.name)).toEqual(['recruit', 'barracks', 'warehouse']);
+    expect(icons(target).every((i) => i.size >= 20)).toBe(true);
     orders.chooseCity('warehouse');
     expect(sent).toEqual([{ type: 'upgrade_warehouse', node: home }]);
   });
@@ -205,6 +219,10 @@ describe('the radial menus of a city and of a group', () => {
     flushSync();
     const items = [...target.querySelectorAll('[role="menuitem"], [role="menuitemradio"]')];
     expect(items).toHaveLength(4);
+    // Every sector of the group menu has an icon (#350), at least 20 px.
+    expect(icons(target)).toHaveLength(4);
+    expect(icons(target).map((i) => i.name)).toEqual(['split', 'defense', 'cancel', 'merge']);
+    expect(icons(target).every((i) => i.size >= 20)).toBe(true);
     const merge = items.find((i) => i.textContent.includes('Слить'));
     expect(merge?.getAttribute('aria-disabled')).toBe('true');
     expect(hud.current?.group?.id).toBe(group.id);

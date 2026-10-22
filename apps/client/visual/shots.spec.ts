@@ -39,3 +39,47 @@ test('shot of the replay viewer', async ({ page }) => {
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '300');
   await page.screenshot({ path: join(OUT, 'replay.png') });
 });
+
+// The radial menus (#350): `/?scene=snapshot_fog&menus` lets a frozen scene open them (orders go
+// nowhere), each menu opened the way the player does. `menu-<name>.png` is the whole screen,
+// `menu-<name>-gray.png` the same in grey scale (the icons must read without the hue).
+const MENUS = [
+  { name: 'stance', open: 'Q key' },
+  { name: 'city', open: 'click on the ring of the city' },
+  { name: 'group', open: 'two clicks on the group' },
+  { name: 'supply', open: 'Tab, then a click on the city' },
+] as const;
+
+for (const menu of MENUS) {
+  test(`shot of the ${menu.name} menu (${menu.open})`, async ({ page }) => {
+    await page.goto('/?scene=snapshot_fog&menus');
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '300');
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    switch (menu.name) {
+      case 'stance':
+        await page.keyboard.down('KeyQ');
+        await page.waitForTimeout(80);
+        await page.keyboard.up('KeyQ');
+        break;
+      case 'city':
+        await page.mouse.click(335, 360);
+        break;
+      case 'group':
+        await page.mouse.click(335, 430);
+        await page.waitForTimeout(300);
+        await page.mouse.click(335, 430);
+        break;
+      case 'supply':
+        await page.keyboard.press('Tab');
+        await page.mouse.click(335, 360);
+        break;
+    }
+    // Away from the menu, so that no sector is lit by the pointer; the menu grows in 140 ms.
+    await page.mouse.move(1000, 700);
+    await expect(page.locator('[role="menu"]')).toBeVisible();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: join(OUT, `menu-${menu.name}.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.screenshot({ path: join(OUT, `menu-${menu.name}-gray.png`) });
+  });
+}

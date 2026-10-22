@@ -47,7 +47,7 @@
         case 'recruit':
           return {
             id: 'recruit',
-            sign: '+',
+            icon: 'recruit',
             label: t('city.recruit'),
             lines: price(costs.recruit),
             key: 'R',
@@ -57,7 +57,7 @@
         case 'barracks':
           return {
             id: 'barracks',
-            sign: '⌂',
+            icon: 'barracks',
             label: t('city.barracks'),
             lines: price(costs.barracks),
             compact: true,
@@ -67,7 +67,7 @@
         case 'warehouse':
           return {
             id: 'warehouse',
-            sign: '▤',
+            icon: 'warehouse',
             label: t('city.warehouse'),
             lines: price(costs.warehouse),
             compact: true,

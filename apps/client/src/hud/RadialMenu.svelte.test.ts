@@ -66,6 +66,15 @@ describe('RadialMenu', () => {
     expect(text[1]).toContain('+12 charges per minute');
     expect(text[2]).toContain('+9 CP per minute');
     expect(text[2]).toContain('+6 charges per minute');
+    // An icon in every sector (#350): the shape tells the stance as well as the order does.
+    expect(items.map((i) => i.querySelector('.glyph')?.getAttribute('data-icon'))).toEqual([
+      'stanceEconomy',
+      'stanceBalance',
+      'stanceWar',
+    ]);
+    expect(
+      items.every((i) => Number(i.querySelector('.glyph svg')?.getAttribute('width')) >= 20),
+    ).toBe(true);
     // No hint lines under the ring.
     expect(target.querySelector('.caption')).toBeNull();
   });
