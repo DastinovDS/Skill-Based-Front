@@ -7,8 +7,10 @@ import {
   ghostAlpha,
   sameVeil,
   veilCities,
+  veilFrontier,
   veilPolygon,
 } from './fogLayout.ts';
+import { voronoiCells } from './voronoi.ts';
 
 /** Two nodes 1000 apart on the x axis and one road between them (#366). */
 function line(border: number | undefined): MapFile {
@@ -133,5 +135,33 @@ describe('veilPolygon', () => {
       { x: 105, y: 65 },
       { x: 40, y: 65 },
     ]);
+  });
+});
+
+describe('veilFrontier', () => {
+  // Two cities side by side on a 100 x 100 map: the front is the one edge between their cells.
+  const cells = voronoiCells(
+    [
+      { x: 25, y: 50 },
+      { x: 75, y: 50 },
+    ],
+    { width: 100, height: 100 },
+  );
+
+  it('is the edge between a hidden city and one in sight, once', () => {
+    const front = veilFrontier(cells, [1]);
+    expect(front).toHaveLength(1);
+    for (const end of [front[0]?.a, front[0]?.b]) expect(end?.x).toBeCloseTo(50);
+  });
+
+  it('is the same edge whichever side is hidden, and empty when both or none are', () => {
+    expect(veilFrontier(cells, [0])).toHaveLength(1);
+    expect(veilFrontier(cells, [0, 1])).toEqual([]);
+    expect(veilFrontier(cells, [])).toEqual([]);
+  });
+
+  it('does not mark the border of the map as a front', () => {
+    const front = veilFrontier(cells, [1]);
+    expect(front.every((s) => s.a.x > 1 && s.a.x < 99)).toBe(true);
   });
 });

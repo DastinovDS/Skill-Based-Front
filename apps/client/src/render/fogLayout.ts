@@ -7,6 +7,7 @@
 import type { MapFile, NodeView } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { edgeEnds, edgePoint, nodePoint, sideways } from './layout.ts';
+import { cellEdges, type Segment } from './regionLayout.ts';
 import { GHOST_ALPHA, GHOST_FADE_START_S, GHOST_HIDE_S, RING_GAP } from './style.ts';
 
 /** Enemy markers on an edge sit this far from the road, to the left of the a → b way. */
@@ -109,4 +110,23 @@ export function veilPolygon(
     x: p.x <= eps ? p.x - margin : p.x >= bounds.width - eps ? p.x + margin : p.x,
     y: p.y <= eps ? p.y - margin : p.y >= bounds.height - eps ? p.y + margin : p.y,
   }));
+}
+
+/**
+ * The front of the haze: the edges of the cells between a hidden city and a city in sight. The
+ * soft edge of the veil reads only by brightness, which is weak where the terrain is as dark as
+ * the veil (and in grey scale), so a thin light line marks the front (not hatching, ui-style 26.3).
+ * Each shared edge once, from the hidden side; the map border is not a front.
+ */
+export function veilFrontier(
+  cells: readonly (readonly Point[])[],
+  hidden: readonly number[],
+): Segment[] {
+  const covered = new Set(hidden);
+  const lines: Segment[] = [];
+  for (const edge of cellEdges(cells)) {
+    if (!covered.has(edge.cell) || edge.neighbour === null || covered.has(edge.neighbour)) continue;
+    lines.push({ a: edge.a, b: edge.b });
+  }
+  return lines;
 }

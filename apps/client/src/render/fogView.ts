@@ -18,6 +18,7 @@ import {
   nodeMarkerPoint,
   sameVeil,
   veilCities,
+  veilFrontier,
   veilPolygon,
 } from './fogLayout.ts';
 import { knownOfSeen } from './rangeLabel.ts';
@@ -25,6 +26,7 @@ import { symbolScale } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { Token, type EntityKit } from './shapes.ts';
 import {
+  FOG_FRONT,
   FOG_VEIL,
   GHOST_AGE_FONT_SIZE,
   GHOST_AGE_STROKE,
@@ -128,6 +130,8 @@ export class FogView {
   private readonly veilMask = new Graphics({ label: 'fog-veil-mask' });
   private readonly veilClip = new Container({ label: 'fog-veil-clip' });
   private readonly veilCache = new Container({ label: 'fog-veil', visible: false });
+  /** A thin light line along the front of the haze (drawn with the veil, not blurred). */
+  private readonly front = new Graphics({ label: 'fog-front' });
   private hiddenCities: number[] = [];
   /**
    * The "?" of the roads that were never seen: one Graphics for all of them (a Container with a
@@ -176,7 +180,7 @@ export class FogView {
     this.veilClip.mask = this.veilMask;
     this.veilCache.addChild(this.veilClip);
     this.veilCache.cacheAsTexture({ resolution: 1, antialias: true });
-    this.shadeLayer.addChild(this.veilCache);
+    this.shadeLayer.addChild(this.veilCache, this.front);
     this.nodeGhosts = map.nodes.map(() => null);
     this.halfGhosts = map.edges.flatMap(() => [null, null]);
     layers.layer.fog.addChild(this.shadeLayer, this.borders, this.unknownMarks, this.ghostLayer);
@@ -322,6 +326,10 @@ export class FogView {
     veil.fill({ color: FOG_VEIL.color, alpha: FOG_VEIL.alpha });
     this.veilCache.visible = drawn > 0;
     this.veilCache.updateCacheTexture();
+    const front = this.front.clear();
+    const lines = veilFrontier(this.cells, hidden);
+    for (const { a, b } of lines) front.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    if (lines.length > 0) front.stroke(FOG_FRONT);
   }
 
   // --- Snapshot-driven part -----------------------------------------------------------------

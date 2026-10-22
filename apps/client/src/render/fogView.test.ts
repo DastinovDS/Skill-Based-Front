@@ -327,6 +327,16 @@ describe('FogView, the haze F1 over the hidden cities', () => {
     expect(veilCellCount(layers)).toBe(0);
   });
 
+  it('draws a thin light front where the haze meets what is seen, not hatching', () => {
+    view.update(withFog([1]));
+    const front = layers.layer.fog.children
+      .find((c) => c.label === 'fog-shades')
+      ?.children.find((c) => c.label === 'fog-front') as Graphics | undefined;
+    expect(front?.context.instructions.length).toBeGreaterThan(0);
+    view.update(withFog([]));
+    expect(front?.context.instructions.length).toBe(0);
+  });
+
   it('leaves the border tick, the "?" and the ghosts of the memories above the veil', () => {
     view.update(withFog([1], seen()));
     const order = layers.layer.fog.children.map((c) => c.label);

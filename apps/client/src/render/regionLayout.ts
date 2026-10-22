@@ -1,6 +1,6 @@
 /**
  * Geometry of the regions of the map (ui-style.md 9.1, 9.2, 9.8): where terrain stamps go, the
- * border between areas of different owners, and the hatching along the border of the fog.
+ * border between areas of different owners (the veil of the fog is in `fogView.ts`).
  *
  * Pure functions, no PixiJS and no DOM. The cells are the Voronoi cells of `voronoi.ts` (convex).
  */
