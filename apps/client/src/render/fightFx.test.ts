@@ -99,7 +99,13 @@ describe('fightFx', () => {
       map,
       radius,
     );
-    expect(fx).toMatchObject({ kind: 'round', tick: 50, losses: [0, 1] });
+    expect(fx).toMatchObject({
+      kind: 'round',
+      tick: 50,
+      losses: [0, 1],
+      shots: [1, 2],
+      virtual: [0, 1],
+    });
   });
 
   it('reads the end: the winner, the capture and the losses of the whole fight', () => {

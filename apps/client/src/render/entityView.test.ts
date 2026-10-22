@@ -548,3 +548,58 @@ describe('EntityView, the road build (R1, #345)', () => {
     view.destroy();
   });
 });
+
+describe('EntityView, where the groups of a fight stand and the token pop (E3, #351)', () => {
+  it('tells where an enemy marker stands in a city, and nowhere else', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.update(frameWith([], true));
+    const city = nodePoint(map, nodeId);
+    expect(view.nodePoint(nodeId)).toEqual({ x: city?.x, y: city?.y });
+    const other = map.nodes.find((n) => n.id !== nodeId)?.id ?? 0;
+    expect(view.nodePoint(other)).toBeUndefined();
+    view.destroy();
+  });
+
+  it('swells the token standing at a point for a frame, and puts the marker back', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.update(frameWith([], true));
+    const at = view.nodePoint(nodeId);
+    if (at === undefined) throw new Error('no marker');
+    const token = enemyTokenAt(layers);
+    const size = token?.scale.x ?? NaN;
+    view.punch([{ at, scale: 1.4 }]);
+    expect(token?.scale.x).toBeCloseTo(size * 1.4);
+    // A punch somewhere else leaves it alone, and the next call puts it back.
+    view.punch([{ at: { x: at.x + 50, y: at.y }, scale: 2 }]);
+    expect(token?.scale.x).toBeCloseTo(size);
+    view.destroy();
+  });
+
+  it('swells an own group token and gets its size back with the next frame', () => {
+    const own: GroupView = {
+      id: 'g',
+      units: 2,
+      charged: 2,
+      mode: 'attack',
+      location: { kind: 'node', node: nodeId },
+      order: null,
+      defense_bonus: null,
+      defense_cap: null,
+    };
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.update(frameWith([own], false));
+    const spot = view.groupPoints().get('g');
+    if (spot === undefined) throw new Error('no spot');
+    const token = layers.layer.groups.children
+      .find((c) => c.label === 'own-groups')
+      ?.children.find((c) => c.visible);
+    view.punch([{ at: spot, scale: 1.5 }]);
+    expect(token?.scale.x).toBeCloseTo(spot.scale * 1.5);
+    view.update(frameWith([own], false));
+    expect(token?.scale.x).toBeCloseTo(spot.scale);
+    view.destroy();
+  });
+});

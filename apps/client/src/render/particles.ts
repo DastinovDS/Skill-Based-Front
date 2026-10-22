@@ -204,7 +204,11 @@ function drawShape(c: CanvasRenderingContext2D, kind: ParticleKind): void {
 /** The shapes of every kind as frames of one texture; without a canvas (tests) every frame is a white pixel. */
 function bakeAtlas(): { base: Texture; frames: Readonly<Record<ParticleKind, Texture>> } {
   const rows = Math.ceil(SHAPES.length / COLUMNS);
-  const canvas = typeof document === 'undefined' ? null : document.createElement('canvas');
+  // No canvas in a test (jsdom has none and says so on every try): white pixels instead of the shapes.
+  const canvas =
+    typeof document === 'undefined' || /jsdom/i.test(navigator.userAgent)
+      ? null
+      : document.createElement('canvas');
   const c = canvas?.getContext('2d') ?? null;
   if (canvas === null || c === null) {
     const frames = Object.fromEntries(SHAPES.map((k) => [k, Texture.WHITE])) as Record<

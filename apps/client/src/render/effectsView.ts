@@ -1,4 +1,4 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, GraphicsContext } from 'pixi.js';
 import type { EventMsg, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 import { contactPoints, type Contacts } from './fightImpact.ts';
@@ -11,7 +11,9 @@ import {
   bounceArrow,
   bounceInfo,
   captureInfo,
+  FLAG_MS,
   effectProgress,
+  flagLook,
   scaledPolygon,
   waveLook,
   type BounceInfo,
@@ -26,17 +28,23 @@ import {
   BG,
   BOUNCE_LENGTH,
   BOUNCE_MS,
+  FIGHT_FX_STRENGTH,
+  FLASH_COLOR,
   ORDER_GHOST_DASH,
   ORDER_GHOST_GAP,
   WAVE_FILL_ALPHA,
   WAVE_MS,
   WAVE_STROKE,
+  PAPER,
   ownerColor,
 } from './style.ts';
 
 /** Ticks between rounds when the source does not say (`rulesets/mvp-0.toml`, DEC-32). */
 const DEFAULT_ROUND_TICKS = 20;
 const MAX_WAVES = 4;
+/** A token this close to the place of a fight (world units) is a group of that fight: the token of a city, a marker beside it, a figure on its road. */
+const CONTACT_REACH = 80;
+const near = (a: Point, b: Point): boolean => Math.hypot(a.x - b.x, a.y - b.y) <= CONTACT_REACH;
 /** Places of fights whose contacts are remembered (a long match has many roads): past it the memory starts over. */
 const MAX_REMEMBERED_PLACES = 64;
 /** Where a bounced group goes back to, found once when its own token is on the road. */
@@ -63,6 +71,9 @@ export class EffectsView {
   private cameraScale = 1;
   private readonly waves: Graphics[] = [];
   private readonly arrows = new Graphics();
+  /** The flag over a captured city, one drawing per owner, pooled. */
+  private readonly flags: Graphics[] = [];
+  private readonly flagContext: readonly [GraphicsContext, GraphicsContext];
   private captures: CaptureInfo[] = [];
   private bounces: BounceInfo[] = [];
   private readonly arrowAt = new Map<string, BounceArrow>();
@@ -80,6 +91,15 @@ export class EffectsView {
     private readonly radiusOf: (node: number) => number,
   ) {
     this.layer.addChild(this.arrows);
+    const flag = (owner: PlayerId): GraphicsContext =>
+      new GraphicsContext()
+        .moveTo(0, 14)
+        .lineTo(0, -6)
+        .stroke({ width: 2, color: PAPER, cap: 'round' })
+        .poly([0, -6, 14, -1, 0, 4])
+        .fill(ownerColor(me, owner))
+        .stroke({ width: 1.4, color: PAPER, join: 'round' });
+    this.flagContext = [flag(0), flag(1)];
     layers.layer.effects.addChild(this.layer);
     // Under the arenas: a spark over a city does not hide the plate that floats above it.
     this.particles = new ParticleLayer(layers.layer.effects);
@@ -130,8 +150,10 @@ export class EffectsView {
       (place) => this.contactsAt(place),
       scale,
     );
+    this.captureRings(frame.tick, tickHz, scale);
     this.particles.end();
     this.drawWaves(frame.tick, tickHz, reduced);
+    this.drawFlags(frame.tick, tickHz, scale);
     this.drawBounces(frame, spots, tickHz, reduced);
     return punches;
   }
@@ -156,8 +178,11 @@ export class EffectsView {
       if (place === undefined) continue;
       let own: Point | undefined;
       for (const id of fight.groups) {
-        own = spots.get(id);
-        if (own !== undefined) break;
+        const spot = spots.get(id);
+        if (spot !== undefined && near(spot, place.at)) {
+          own = { x: spot.x, y: spot.y };
+          break;
+        }
       }
       let enemy: Point | undefined;
       if (enemies !== null) {
@@ -167,6 +192,7 @@ export class EffectsView {
             : place.edge === null
               ? undefined
               : enemies.nearestOnEdge(place.edge, place.at);
+        if (enemy !== undefined && !near(enemy, place.at)) enemy = undefined;
       }
       if (this.contacts.size > MAX_REMEMBERED_PLACES) this.contacts.clear();
       this.contacts.set(placeKey(place), contactPoints(this.map, place, { own, enemy }));
@@ -183,6 +209,7 @@ export class EffectsView {
     this.particles.destroy();
     this.arrows.destroy();
     this.layer.destroy({ children: true });
+    for (const context of this.flagContext) context.destroy();
   }
 
   private readEvents(events: readonly EventMsg[]): void {
@@ -202,6 +229,56 @@ export class EffectsView {
     for (const key of this.arrowAt.keys()) {
       if (!live.has(key)) this.arrowAt.delete(key);
     }
+  }
+
+  // --- Capture: the ring and the flag over the city (E3) ---------------------------------------
+
+  /** A white ring leaves the captured city with the wave over its cell: as far as the strength of the effects. */
+  private captureRings(tick: number, tickHz: number, scale: number): void {
+    let used = 0;
+    for (const capture of this.captures) {
+      const t = effectProgress(tick - capture.tick, WAVE_MS, tickHz);
+      if (t === null || used >= MAX_WAVES) continue;
+      used++;
+      const ease = t * (2 - t);
+      this.particles.put({
+        kind: 'ring',
+        x: capture.at.x,
+        y: capture.at.y,
+        size: 2 * (8 + 28 * FIGHT_FX_STRENGTH * ease) * scale,
+        color: FLASH_COLOR,
+        alpha: 0.8 * (1 - t),
+      });
+    }
+  }
+
+  private drawFlags(tick: number, tickHz: number, scale: number): void {
+    let used = 0;
+    for (const capture of this.captures) {
+      const t = effectProgress(tick - capture.tick, FLAG_MS, tickHz);
+      if (t === null || used >= MAX_WAVES) continue;
+      const flag = this.flag(used++);
+      const radius = this.radiusOf(capture.node);
+      flag.context = this.flagContext[capture.player];
+      flag.position.set(capture.at.x + (radius + 6) * scale, capture.at.y - (radius + 14) * scale);
+      flag.scale.set(scale);
+      flag.alpha = flagLook(t).alpha;
+      flag.visible = true;
+    }
+    for (let i = used; i < this.flags.length; i++) {
+      const flag = this.flags[i];
+      if (flag !== undefined) flag.visible = false;
+    }
+  }
+
+  private flag(index: number): Graphics {
+    let flag = this.flags[index];
+    if (flag === undefined) {
+      flag = this.layer.addChild(new Graphics(this.flagContext[0]));
+      flag.label = 'capture-flag';
+      this.flags.push(flag);
+    }
+    return flag;
   }
 
   // --- Capture: the wave over the cell -------------------------------------------------------
