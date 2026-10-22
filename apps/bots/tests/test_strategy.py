@@ -16,7 +16,16 @@ from gow_sim.commands import Command, Move, Recruit, SetMode, SetStance, Upgrade
 from gow_sim.maps import MapDef
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset
-from gow_sim.view import AtNode, Detail, Mode, NodeView, PlayerView, Sighting, Stance
+from gow_sim.view import (
+    AtNode,
+    Detail,
+    EnemyGroupView,
+    Mode,
+    NodeView,
+    PlayerView,
+    Sighting,
+    Stance,
+)
 
 MVP_MAPS = ("arteriya", "pautina", "pereval")
 STRATEGY = ("expander", "turtle")
@@ -226,7 +235,7 @@ def test_turtle_stays_in_its_region_while_cp_do_not_burn(
         match.step([])
 
 
-# The estimate of enemy strength (DEC-04) ----------------------------------------------------------
+# The estimate of enemy strength (DEC-04, DEC-21) --------------------------------------------------
 
 
 def _estimate(
@@ -278,6 +287,48 @@ def test_estimate_of_presence_is_the_larger_of_memory_and_the_capacity_guess(
         mapdef, mvp_rules, Detail.PRESENCE, seen, tick=100 + MEMORY_TICKS + 1, memory=(5, 5, 90)
     )
     assert stale == (3, 3)  # a sighting older than MEMORY_TICKS is forgotten
+
+
+def test_estimate_of_a_range_is_its_top(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
+    """DEC-21, item 4: «3-5» counts as 5 units, all charged; «21+» as 21; a larger fresh memory
+    wins."""
+    mapdef = maps["pautina"]
+    three_five = Sighting(100, Detail.RANGE, (Mode.ATTACK,), None, None, (3, 5))
+    assert _estimate(mapdef, mvp_rules, Detail.RANGE, three_five) == (5, 5)
+    open_range = Sighting(100, Detail.RANGE, (Mode.ATTACK,), None, None, (21, None))
+    assert _estimate(mapdef, mvp_rules, Detail.RANGE, open_range) == (21, 21)
+    assert _estimate(mapdef, mvp_rules, Detail.RANGE, three_five, memory=(7, 1, 90)) == (7, 7)
+
+
+def test_an_enemy_figure_heading_to_an_own_node_threatens_it(
+    maps: dict[str, MapDef], mvp_rules: Ruleset
+) -> None:
+    """DEC-33: a bot reads ``EdgeView.enemy_groups`` from its view; a figure going to an own node
+    makes it threatened, one going away does not."""
+    mapdef = maps["pautina"]
+    view = Match(mapdef, mvp_rules, KEY).view(0)
+    bot = ExpanderBot(mapdef, mvp_rules, seed=0, player=0)
+    capital = mapdef.capital(0)
+    assert not bot.begin(view, 0).threatened[capital]
+    edge = mapdef.incident[capital][0]
+    toward_capital = mapdef.edges[edge].b == capital
+
+    def with_figure(toward_b: bool) -> PlayerView:
+        figure = EnemyGroupView(1, 600, toward_b, Detail.EXACT, Mode.ATTACK, 2, 2, None)
+        edges = list(view.edges)
+        edges[edge] = dataclasses.replace(edges[edge], enemy_groups=(figure,))
+        return dataclasses.replace(view, edges=tuple(edges))
+
+    assert (
+        ExpanderBot(mapdef, mvp_rules, seed=0, player=0)
+        .begin(with_figure(toward_capital), 0)
+        .threatened[capital]
+    )
+    assert (
+        not ExpanderBot(mapdef, mvp_rules, seed=0, player=0)
+        .begin(with_figure(not toward_capital), 0)
+        .threatened[capital]
+    )
 
 
 def test_strategy_bots_are_registered_and_refuse_foreign_views(

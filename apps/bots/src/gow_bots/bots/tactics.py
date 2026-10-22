@@ -15,13 +15,16 @@ about and the numbers (``PARAMS``) differ:
 - ``build_roads``: one unthreatened own internal road a turn is upgraded for CP (DEC-28, item 7).
 - ``prioritize``: the two front markers go to own cities at the front (DEC-28).
 
-Enemy strength (DEC-04). A view gives exact enemy numbers only at ``EXACT`` detail (own nodes and
-nodes where own groups stand); next to own nodes (``PRESENCE``) it tells only whether enemy groups
-are there and their modes. ``StrategyBot.estimate`` therefore returns, for an enemy node:
+Enemy strength (DEC-21). A view gives exact enemy numbers at ``EXACT`` detail (own nodes, nodes
+where own groups stand, neighbours seen exactly by terrain); ``RANGE`` gives the range of the
+units, ``PRESENCE`` only whether enemy groups are there and their modes. ``StrategyBot.estimate``
+therefore returns, for an enemy node:
 
 - ``(0, 0)`` when the node is observed now (not ``FOG``) and no enemy group is there: it falls
   without a fight (DEC-07, example 5);
 - the exact numbers of this tick when they are in the view;
+- on ``RANGE`` the top of the range (the start of the open last one), all of it charged, or the
+  memory below if it is larger;
 - otherwise (enemies present, numbers unknown) the larger of the last exact sighting, if it is
   not older than ``MEMORY_TICKS``, and ``capacity * est_pct // 100`` (at least 1) units, all of
   them taken as charged. ``est_pct`` is a parameter of the bot: a cautious bot guesses high.
@@ -120,6 +123,12 @@ class StrategyBot(Bot):
         for n, who in enumerate(owner):
             if who == me:
                 threatened[n] = any(self._hostile(view, owner, m) for m in self.neighbors[n])
+        for e in view.edges:  # DEC-33: an enemy group on the way to an own node threatens it
+            edef = self.map.edges[e.id]
+            for f in e.enemy_groups:
+                target = edef.b if f.toward_b else edef.a
+                if owner[target] == me:
+                    threatened[target] = True
         turn = Turn(
             view=view,
             tick=tick,
@@ -171,6 +180,13 @@ class StrategyBot(Bot):
                 return (0, 0)
             if seen.enemy_units is not None and seen.enemy_charged is not None:
                 return (seen.enemy_units, seen.enemy_charged)
+            if seen.enemy_range is not None:
+                low, high = seen.enemy_range
+                top = low if high is None else high
+                mem = self.memory.get(node)
+                if mem is not None and turn.tick - mem[2] <= MEMORY_TICKS:
+                    top = max(top, mem[0])
+                return (top, top)
         units = max(1, n.capacity * est_pct // 100)
         mem = self.memory.get(node)
         if mem is not None and turn.tick - mem[2] <= MEMORY_TICKS:

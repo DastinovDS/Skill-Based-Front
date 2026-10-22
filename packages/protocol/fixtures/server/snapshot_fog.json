@@ -21,7 +21,8 @@
           "level": "exact",
           "enemy_modes": [],
           "enemy_units": 0,
-          "enemy_charged": 0
+          "enemy_charged": 0,
+          "enemy_range": null
         },
         "attrition_in": null,
         "grace_left": null,
@@ -45,7 +46,8 @@
           "level": "presence",
           "enemy_modes": ["attack"],
           "enemy_units": null,
-          "enemy_charged": null
+          "enemy_charged": null,
+          "enemy_range": null
         },
         "attrition_in": null,
         "grace_left": null,
@@ -69,7 +71,8 @@
           "level": "presence",
           "enemy_modes": ["defense"],
           "enemy_units": null,
-          "enemy_charged": null
+          "enemy_charged": null,
+          "enemy_range": null
         },
         "attrition_in": null,
         "grace_left": null,
@@ -89,22 +92,57 @@
         "width": 1,
         "detail": "presence",
         "upgrade_gain": null,
-        "seen": {
-          "tick": 300,
-          "level": "presence",
-          "enemy_modes": [],
-          "enemy_units": null,
-          "enemy_charged": null
-        },
-        "build": null
+        "halves": [
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 300,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          },
+          {
+            "detail": "presence",
+            "seen": {
+              "tick": 300,
+              "level": "presence",
+              "enemy_modes": [],
+              "enemy_units": null,
+              "enemy_charged": null,
+              "enemy_range": null
+            }
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
       },
       {
         "id": 1,
         "width": 1,
         "detail": "fog",
         "upgrade_gain": null,
-        "seen": null,
-        "build": null
+        "halves": [
+          {
+            "detail": "fog",
+            "seen": null
+          },
+          {
+            "detail": "presence",
+            "seen": {
+              "tick": 300,
+              "level": "presence",
+              "enemy_modes": [],
+              "enemy_units": null,
+              "enemy_charged": null,
+              "enemy_range": null
+            }
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
       }
     ],
     "groups": [

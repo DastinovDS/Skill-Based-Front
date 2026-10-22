@@ -60,6 +60,7 @@ function seen(level: Detail, ago: number, enemyModes: Seen['enemy_modes'] = []):
     enemy_modes: enemyModes,
     enemy_units: exact ? 0 : null,
     enemy_charged: exact ? 0 : null,
+    enemy_range: null,
   };
 }
 
@@ -100,6 +101,12 @@ export function arteriyaSnapshot(map: MapFile): SnapshotMsg {
     };
   });
 
+  const half = (node: number, ago: number | undefined): EdgeView['halves'][number] => {
+    const detail = nodes[node]?.detail ?? 'fog';
+    if (detail !== 'fog') return { detail, seen: seen(detail, 0) };
+    return { detail, seen: ago === undefined ? null : seen('presence', ago) };
+  };
+
   const edges: EdgeView[] = map.edges.map((e) => {
     const sight = isExact(e.a) || isExact(e.b);
     const bothOwn = OWN.includes(e.a) && OWN.includes(e.b);
@@ -113,9 +120,11 @@ export function arteriyaSnapshot(map: MapFile): SnapshotMsg {
         sight && bothOwn && width < e.max_width
           ? { speed_pct: 50, unit_speed_pct: 15, amount: 1 }
           : null,
-      seen: sight ? seen('presence', 0) : ago === undefined ? null : seen('presence', ago),
+      // Each half as its city (DEC-21, item 5); a hidden half keeps the memory of the road.
+      halves: [half(e.a, ago), half(e.b, ago)],
       // The road 4-13 is being built: 12 s to go (DEC-28, item 7).
       build: e.id === 16 ? { done_tick: T + 120 } : null,
+      enemy_groups: [],
     };
   });
 

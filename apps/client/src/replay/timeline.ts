@@ -117,8 +117,13 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
         width,
         detail: 'presence',
         upgrade_gain: null,
-        seen: null,
+        // Both sides' groups are drawn as groups: nothing is seen as an enemy here.
+        halves: [
+          { detail: 'presence', seen: null },
+          { detail: 'presence', seen: null },
+        ],
         build: builds.get(id) ?? null,
+        enemy_groups: [],
       })),
       groups: frame.g.map(groupView),
       packets,

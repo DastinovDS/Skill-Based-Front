@@ -42,9 +42,11 @@ export type ServerMsg =
   | ReachMsg;
 export type PlayerId = 0 | 1;
 /**
- * How much a player sees of a node or an edge (DEC-04, mechanics.md, section 10).
+ * How much a player sees of a node or a half of an edge (DEC-21, mechanics.md, section 10).
+ *
+ * Better first: ``EXACT``, ``RANGE``, ``PRESENCE``, ``FOG``.
  */
-export type Detail = 'exact' | 'presence' | 'fog';
+export type Detail = 'exact' | 'range' | 'presence' | 'fog';
 /**
  * What a city builds (DEC-26, item 9): a road level, the barracks or a warehouse level.
  */
@@ -493,11 +495,12 @@ export interface NodeView {
   capacity: number;
   detail: Detail;
   /**
-   * Charges in the warehouse; only for ``EXACT`` nodes.
+   * Charges in the warehouse; only for sources of vision (own nodes, nodes where own groups
+   * stand), never for a neighbour seen by the terrain table (DEC-21, item 3).
    */
   warehouse: number | null;
   /**
-   * Current sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one, or ``None``.
+   * Current sighting unless ``detail`` is ``fog``; for ``fog`` the last one, or ``None``.
    */
   seen: Seen | null;
   /**
@@ -549,11 +552,13 @@ export interface NodeView {
   building: NodeBuilding | null;
 }
 /**
- * What the player sees, or last saw, of one node or edge (``gow_sim.state.Sighting``).
+ * What the player sees, or last saw, of one node or half of an edge
+ * (``gow_sim.state.Sighting``).
  *
  * ``enemy_modes``: distinct modes of the enemy groups there; empty means no enemy groups.
- * ``enemy_units`` and ``enemy_charged`` are totals, present only when ``level`` is ``EXACT``.
- * ``level`` is never ``FOG``: a place in fog is not seen, it keeps an older ``Seen``.
+ * ``enemy_units`` and ``enemy_charged`` are totals, present only when ``level`` is ``exact``;
+ * ``enemy_range``: the range of the total units, only when ``level`` is ``range`` and enemies
+ * are there. ``level`` is never ``fog``: a place in fog is not seen, it keeps an older ``Seen``.
  */
 export interface Seen {
   tick: number;
@@ -564,6 +569,15 @@ export interface Seen {
   enemy_modes: Mode[];
   enemy_units: number | null;
   enemy_charged: number | null;
+  enemy_range: UnitsRange | null;
+}
+/**
+ * A range of units (DEC-21, item 4; ``vision.range_starts``): ``low..high``, ``high``
+ * ``null`` for the last, open range («21+»).
+ */
+export interface UnitsRange {
+  low: number;
+  high: number | null;
 }
 /**
  * The current build of an own city, of any kind (DEC-26, item 10).
@@ -586,19 +600,30 @@ export interface EdgeView {
    */
   width: number;
   /**
-   * ``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges.
+   * The road level visibility (DEC-17): ``presence`` while an end is a source of vision, else
+   * ``fog``. What is seen of enemies is in ``halves`` and ``enemy_groups``.
    */
   detail: Detail;
   /**
    * Only for own internal edges that can still be upgraded.
    */
   upgrade_gain: UpgradeGain | null;
-  seen: Seen | null;
+  /**
+   * The half of the end ``a``, then the half of the end ``b`` (DEC-21, item 5).
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  halves: [HalfView, HalfView];
   /**
    * The road level being built here (DEC-28, item 7): an own build always, an enemy one only
    * while the edge is not in fog (DEC-17, item 5).
    */
   build: EdgeBuild | null;
+  /**
+   * Enemy figures on the halves not in fog (DEC-33).
+   */
+  enemy_groups: EnemyGroup[];
 }
 /**
  * What the next road level would give (DEC-28, item 7).
@@ -618,6 +643,20 @@ export interface UpgradeGain {
   amount: number;
 }
 /**
+ * A half of an edge, from its node to the border point (DEC-21, item 5).
+ */
+export interface HalfView {
+  /**
+   * The level of the node the half belongs to (a source's half is ``exact``).
+   */
+  detail: Detail;
+  /**
+   * The enemy groups in the half now (those in a fight too) unless ``detail`` is ``fog``; for
+   * ``fog`` the last sighting (no positions, DEC-33, detail 8), or ``None``.
+   */
+  seen: Seen | null;
+}
+/**
  * A road level being built on the edge (DEC-28, item 7).
  */
 export interface EdgeBuild {
@@ -625,6 +664,41 @@ export interface EdgeBuild {
    * The tick the level grows; only for an own build.
    */
   done_tick: number | null;
+}
+/**
+ * An enemy group on a half of an edge not in fog (DEC-33): a figure. A group in a fight is
+ * not one: the fight shows it.
+ */
+export interface EnemyGroup {
+  /**
+   * Opaque, new each time the group comes out of the fog (DEC-33, detail 5).
+   */
+  id: string;
+  /**
+   * Position in thousandths of the edge from its end ``a`` (detail 1).
+   */
+  pos: number;
+  /**
+   * Goes to the end ``b``, else to ``a``: the nearest node, never the target (detail 2).
+   */
+  toward_b: boolean;
+  /**
+   * The level of its half: ``exact``, ``range`` or ``presence``.
+   */
+  detail: Detail;
+  mode: Mode;
+  /**
+   * Only on ``exact``.
+   */
+  units: number | null;
+  /**
+   * Only on ``exact``.
+   */
+  charged: number | null;
+  /**
+   * Only on ``range``: the range of its units.
+   */
+  units_range: UnitsRange | null;
 }
 /**
  * An own group. Enemy groups appear only as ``Seen`` summaries of places.
@@ -990,6 +1064,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 21;
+export const PROTOCOL_VERSION = 22;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

@@ -116,7 +116,10 @@ export function supplyScene(view: View, me: PlayerId, index: EdgeIndex): SupplyS
     }
   }
   for (const edge of view.edges) {
-    if (edge.detail !== 'fog' && edge.seen !== null && edge.seen.enemy_modes.length > 0) {
+    const seen = edge.halves.some(
+      (half) => half.detail !== 'fog' && half.seen !== null && half.seen.enemy_modes.length > 0,
+    );
+    if (seen || edge.enemy_groups.length > 0) {
       presence.push({ kind: 'edge', id: edge.id });
     }
   }

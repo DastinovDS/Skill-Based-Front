@@ -11,6 +11,7 @@ import dataclasses
 import tomllib
 from dataclasses import dataclass
 from enum import StrEnum
+from itertools import pairwise
 from pathlib import Path
 from typing import Final, cast
 
@@ -322,6 +323,73 @@ class VictoryRules:
     capital_multiplier: int
 
 
+class Sight(StrEnum):
+    """What a source of vision shows of a neighbouring node (DEC-21, item 2): the detail levels
+    ``exact``, ``range`` and ``presence`` of ``gow_sim.state.Detail`` (never fog)."""
+
+    EXACT = "exact"
+    RANGE = "range"
+    PRESENCE = "presence"
+
+
+@dataclass(frozen=True, slots=True)
+class SightTable:
+    """One ``Sight`` per terrain of the target node."""
+
+    plains: Sight
+    forest: Sight
+    mountains: Sight
+
+    def of(self, terrain: Terrain) -> Sight:
+        match terrain:
+            case Terrain.PLAINS:
+                return self.plains
+            case Terrain.FOREST:
+                return self.forest
+            case Terrain.MOUNTAINS:
+                return self.mountains
+
+
+@dataclass(frozen=True, slots=True)
+class SightByTerrain:
+    """``by_terrain.<terrain of the source>.<terrain of the target>`` (DEC-21, item 2)."""
+
+    plains: SightTable
+    forest: SightTable
+    mountains: SightTable
+
+    def of(self, source: Terrain, target: Terrain) -> Sight:
+        match source:
+            case Terrain.PLAINS:
+                table = self.plains
+            case Terrain.FOREST:
+                table = self.forest
+            case Terrain.MOUNTAINS:
+                table = self.mountains
+        return table.of(target)
+
+
+@dataclass(frozen=True, slots=True)
+class VisionRules:
+    """Vision by terrain (DEC-21): the level a source gives of a neighbouring node and the
+    ranges of units shown on the ``range`` level."""
+
+    range_starts: tuple[int, ...]
+    """Lower bounds of the unit ranges, ascending, the first one 1 (DEC-21, item 4): ``[1, 3, 6,
+    11, 21]`` gives 1..2, 3..5, 6..10, 11..20 and 21+."""
+    by_terrain: SightByTerrain
+
+    def range_of(self, units: int) -> tuple[int, int | None]:
+        """The range ``(low, high)`` holding ``units >= 1``; ``high`` is ``None`` for the last,
+        open range. Depends only on the number (no noise, DEC-21, item 4)."""
+        starts = self.range_starts
+        i = len(starts) - 1
+        while i > 0 and starts[i] > units:
+            i -= 1
+        high = starts[i + 1] - 1 if i + 1 < len(starts) else None
+        return (starts[i], high)
+
+
 @dataclass(frozen=True, slots=True)
 class Ruleset:
     tick_hz: int
@@ -340,6 +408,7 @@ class Ruleset:
     victory: VictoryRules
     city_upgrades: CityUpgradeRules
     warehouse: WarehouseRules
+    vision: VisionRules
 
 
 def load_ruleset(path: str | Path) -> Ruleset:
@@ -371,6 +440,9 @@ def _plain(value: object) -> object:
         return {str(width): v for width, v in enumerate(value.values, start=1)}
     if isinstance(value, StrEnum):
         return value.value
+    if isinstance(value, tuple):
+        items: tuple[object, ...] = value  # pyright: ignore[reportUnknownVariableType]
+        return [_plain(item) for item in items]
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {f.name: _plain(getattr(value, f.name)) for f in dataclasses.fields(value)}
     return value
@@ -426,6 +498,7 @@ def parse_ruleset(data: object) -> Ruleset:
             "victory",
             "city_upgrades",
             "warehouse",
+            "vision",
         ),
     )
     return Ruleset(
@@ -491,6 +564,7 @@ def parse_ruleset(data: object) -> Ruleset:
         warehouse=_parse_warehouse(
             root.table("warehouse", ("gain_per_level", "max_level", "start_by_kind"))
         ),
+        vision=_parse_vision(root.table("vision", ("range_starts", "by_terrain"))),
     )
 
 
@@ -629,6 +703,26 @@ def _parse_warehouse(t: "_Table") -> WarehouseRules:
     )
 
 
+def _parse_vision(t: "_Table") -> VisionRules:
+    starts = t.integers("range_starts", low=1)
+    if not starts or starts[0] != 1:
+        raise RulesetError("vision.range_starts: the first range must start at 1")
+    if any(b <= a for a, b in pairwise(starts)):
+        raise RulesetError("vision.range_starts: expected strictly ascending integers")
+    keys = tuple(terrain.value for terrain in Terrain)
+    sights = tuple(s.value for s in Sight)
+    by = t.table("by_terrain", keys)
+
+    def row(source: str) -> SightTable:
+        r = by.table(source, keys)
+        return SightTable(**{k: Sight(r.choice(k, sights)) for k in keys})
+
+    return VisionRules(
+        range_starts=starts,
+        by_terrain=SightByTerrain(**{k: row(k) for k in keys}),
+    )
+
+
 def _parse_victory(t: "_Table") -> VictoryRules:
     return VictoryRules(
         vp_period_ticks=t.integer("vp_period_ticks", low=1),
@@ -669,6 +763,20 @@ class _Table:
             bounds = f"[{'' if low is None else low}..{'' if high is None else high}]"
             raise RulesetError(f"{self._path(key)}: {value} is out of range {bounds}")
         return value
+
+    def integers(self, key: str, low: int | None = None) -> tuple[int, ...]:
+        value = self._get(key)
+        if not isinstance(value, list | tuple):
+            raise RulesetError(f"{self._path(key)}: expected a list of integers, got {value!r}")
+        items: list[object] = list(value)  # pyright: ignore[reportUnknownArgumentType]
+        result: list[int] = []
+        for i, item in enumerate(items):
+            if isinstance(item, bool) or not isinstance(item, int):
+                raise RulesetError(f"{self._path(key)}[{i}]: expected an integer, got {item!r}")
+            if low is not None and item < low:
+                raise RulesetError(f"{self._path(key)}[{i}]: {item} is out of range [{low}..]")
+            result.append(item)
+        return tuple(result)
 
     def boolean(self, key: str) -> bool:
         value = self._get(key)

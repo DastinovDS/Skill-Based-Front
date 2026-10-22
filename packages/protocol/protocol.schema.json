@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 21,
+    "PROTOCOL_VERSION": 22,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -572,9 +572,10 @@
       "type": "object"
     },
     "Detail": {
-      "description": "How much a player sees of a node or an edge (DEC-04, mechanics.md, section 10).",
+      "description": "How much a player sees of a node or a half of an edge (DEC-21, mechanics.md, section 10).\n\nBetter first: ``EXACT``, ``RANGE``, ``PRESENCE``, ``FOG``.",
       "enum": [
         "exact",
+        "range",
         "presence",
         "fog"
       ],
@@ -646,7 +647,7 @@
               "$ref": "#/$defs/Detail"
             }
           ],
-          "description": "``PRESENCE`` or ``FOG``: DEC-04 never shows numbers on edges."
+          "description": "The road level visibility (DEC-17): ``presence`` while an end is a source of vision, else\n``fog``. What is seen of enemies is in ``halves`` and ``enemy_groups``."
         },
         "upgrade_gain": {
           "anyOf": [
@@ -659,15 +660,14 @@
           ],
           "description": "Only for own internal edges that can still be upgraded."
         },
-        "seen": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Seen"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "halves": {
+          "description": "The half of the end ``a``, then the half of the end ``b`` (DEC-21, item 5).",
+          "items": {
+            "$ref": "#/$defs/HalfView"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
         },
         "build": {
           "anyOf": [
@@ -679,6 +679,13 @@
             }
           ],
           "description": "The road level being built here (DEC-28, item 7): an own build always, an enemy one only\nwhile the edge is not in fog (DEC-17, item 5)."
+        },
+        "enemy_groups": {
+          "description": "Enemy figures on the halves not in fog (DEC-33).",
+          "items": {
+            "$ref": "#/$defs/EnemyGroup"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -686,8 +693,9 @@
         "width",
         "detail",
         "upgrade_gain",
-        "seen",
-        "build"
+        "halves",
+        "build",
+        "enemy_groups"
       ],
       "title": "EdgeView",
       "type": "object"
@@ -703,6 +711,87 @@
       ],
       "title": "EndReason",
       "type": "string"
+    },
+    "EnemyGroup": {
+      "additionalProperties": false,
+      "description": "An enemy group on a half of an edge not in fog (DEC-33): a figure. A group in a fight is\nnot one: the fight shows it.",
+      "properties": {
+        "id": {
+          "description": "Opaque, new each time the group comes out of the fog (DEC-33, detail 5).",
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        },
+        "pos": {
+          "description": "Position in thousandths of the edge from its end ``a`` (detail 1).",
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "toward_b": {
+          "description": "Goes to the end ``b``, else to ``a``: the nearest node, never the target (detail 2).",
+          "type": "boolean"
+        },
+        "detail": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Detail"
+            }
+          ],
+          "description": "The level of its half: ``exact``, ``range`` or ``presence``."
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        },
+        "units": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Only on ``exact``."
+        },
+        "charged": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Only on ``exact``."
+        },
+        "units_range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitsRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Only on ``range``: the range of its units."
+        }
+      },
+      "required": [
+        "id",
+        "pos",
+        "toward_b",
+        "detail",
+        "mode",
+        "units",
+        "charged",
+        "units_range"
+      ],
+      "title": "EnemyGroup",
+      "type": "object"
     },
     "ErrorMsg": {
       "additionalProperties": false,
@@ -1091,6 +1180,37 @@
         "defense_cap"
       ],
       "title": "GroupView",
+      "type": "object"
+    },
+    "HalfView": {
+      "additionalProperties": false,
+      "description": "A half of an edge, from its node to the border point (DEC-21, item 5).",
+      "properties": {
+        "detail": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Detail"
+            }
+          ],
+          "description": "The level of the node the half belongs to (a source's half is ``exact``)."
+        },
+        "seen": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Seen"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The enemy groups in the half now (those in a fight too) unless ``detail`` is ``fog``; for\n``fog`` the last sighting (no positions, DEC-33, detail 8), or ``None``."
+        }
+      },
+      "required": [
+        "detail",
+        "seen"
+      ],
+      "title": "HalfView",
       "type": "object"
     },
     "HelloMsg": {
@@ -1633,7 +1753,7 @@
               "type": "null"
             }
           ],
-          "description": "Charges in the warehouse; only for ``EXACT`` nodes."
+          "description": "Charges in the warehouse; only for sources of vision (own nodes, nodes where own groups\nstand), never for a neighbour seen by the terrain table (DEC-21, item 3)."
         },
         "seen": {
           "anyOf": [
@@ -1644,7 +1764,7 @@
               "type": "null"
             }
           ],
-          "description": "Current sighting for ``EXACT`` and ``PRESENCE``; for ``FOG`` the last one, or ``None``."
+          "description": "Current sighting unless ``detail`` is ``fog``; for ``fog`` the last one, or ``None``."
         },
         "attrition_in": {
           "anyOf": [
@@ -2332,7 +2452,7 @@
     },
     "Seen": {
       "additionalProperties": false,
-      "description": "What the player sees, or last saw, of one node or edge (``gow_sim.state.Sighting``).\n\n``enemy_modes``: distinct modes of the enemy groups there; empty means no enemy groups.\n``enemy_units`` and ``enemy_charged`` are totals, present only when ``level`` is ``EXACT``.\n``level`` is never ``FOG``: a place in fog is not seen, it keeps an older ``Seen``.",
+      "description": "What the player sees, or last saw, of one node or half of an edge\n(``gow_sim.state.Sighting``).\n\n``enemy_modes``: distinct modes of the enemy groups there; empty means no enemy groups.\n``enemy_units`` and ``enemy_charged`` are totals, present only when ``level`` is ``exact``;\n``enemy_range``: the range of the total units, only when ``level`` is ``range`` and enemies\nare there. ``level`` is never ``fog``: a place in fog is not seen, it keeps an older ``Seen``.",
       "properties": {
         "tick": {
           "maximum": 2147483647,
@@ -2372,6 +2492,16 @@
               "type": "null"
             }
           ]
+        },
+        "enemy_range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitsRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -2379,7 +2509,8 @@
         "level",
         "enemy_modes",
         "enemy_units",
-        "enemy_charged"
+        "enemy_charged",
+        "enemy_range"
       ],
       "title": "Seen",
       "type": "object"
@@ -2764,6 +2895,35 @@
         "n"
       ],
       "title": "TransferCmd",
+      "type": "object"
+    },
+    "UnitsRange": {
+      "additionalProperties": false,
+      "description": "A range of units (DEC-21, item 4; ``vision.range_starts``): ``low..high``, ``high``\n``null`` for the last, open range («21+»).",
+      "properties": {
+        "low": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "high": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "low",
+        "high"
+      ],
+      "title": "UnitsRange",
       "type": "object"
     },
     "UpgradeGain": {

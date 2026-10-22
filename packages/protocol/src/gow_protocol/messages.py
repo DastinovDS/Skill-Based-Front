@@ -32,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 21
+PROTOCOL_VERSION: Final = 22
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -142,7 +142,8 @@ class SnapshotMsg(WireModel):
 
     @model_validator(mode="after")
     def _check_ticks(self) -> Self:
-        for place in (*self.view.nodes, *self.view.edges):
+        halves = [h for e in self.view.edges for h in e.halves]
+        for place in (*self.view.nodes, *halves):
             seen = place.seen
             if seen is None:
                 continue

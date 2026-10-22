@@ -309,7 +309,13 @@ export class FogView {
       const shade = this.edgeShades[edge.id];
       if (shade !== undefined && shade !== null) shade.visible = false;
     }
-    const memory = this.remembered(hidden, edge.seen);
+    // The memory of a hidden half of the road (DEC-21, item 8; DEC-33, detail 8: no position):
+    // the newer one, drawn at the border point in the middle of the road.
+    let memory: NonNullable<Memory> | null = null;
+    for (const half of edge.halves) {
+      const seen = this.remembered(half.detail === 'fog', half.seen);
+      if (seen !== null && (memory === null || seen.tick > memory.tick)) memory = seen;
+    }
     const existing = this.edgeGhosts[edge.id] ?? null;
     const at = edgeMarkerPoint(this.map, edge.id);
     if (memory === null || at === undefined) {

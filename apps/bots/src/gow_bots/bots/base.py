@@ -512,13 +512,18 @@ class Bot:
     def enemy_at(self, view: PlayerView, node: int) -> tuple[int, int] | None:
         """``(units, charged)`` of the enemy in ``node`` as far as the view tells.
 
-        Exact numbers from this tick or the last ``EXACT`` sighting; ``(0, 0)`` when the node was
-        seen without enemies (or never seen); ``None`` when enemies were seen without numbers
-        (``PRESENCE``, DEC-04).
+        Exact numbers from this tick or the last ``EXACT`` sighting; on ``RANGE`` (DEC-21) the top
+        of the range of units (its start for the open last range), all taken as charged; ``(0,
+        0)`` when the node was seen without enemies (or never seen); ``None`` when enemies were
+        seen without numbers (``PRESENCE``).
         """
         seen = view.nodes[node].seen
         if seen is None or not seen.enemy_modes:
             return (0, 0)
+        if seen.enemy_range is not None:
+            low, high = seen.enemy_range
+            top = low if high is None else high
+            return (top, top)
         if seen.enemy_units is None or seen.enemy_charged is None:
             return None
         return (seen.enemy_units, seen.enemy_charged)

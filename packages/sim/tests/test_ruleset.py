@@ -298,8 +298,9 @@ def test_hash_changes_when_any_value_changes() -> None:
     # DEC-26: +11 (2 costs, 3 city_upgrades, 6 warehouse) - 2 (supply.freight_amount); DEC-28:
     # +4 (supply.rear_min_default, supply.rear_min_max, cost.front, cost.rear_min) - 2
     # (supply.buffer, cost.priority); DEC-30: +1 (orders.defense_ticks_per_bonus) - 2
-    # (orders.defense_delay_ticks, orders.defense_bonus).
-    assert len(leaves) == 79
+    # (orders.defense_delay_ticks, orders.defense_bonus); DEC-21: +10 (vision.range_starts and
+    # the 9 cells of vision.by_terrain).
+    assert len(leaves) == 89
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)
@@ -307,7 +308,13 @@ def test_hash_changes_when_any_value_changes() -> None:
             changed: object = {
                 "balance": "war",
                 "any_city": "capital",
+                "exact": "range",
+                "range": "presence",
+                "presence": "exact",
             }[value]
+        elif isinstance(value, list):
+            starts: list[int] = value  # pyright: ignore[reportUnknownVariableType]
+            changed = [*starts, starts[-1] + 1]
         elif isinstance(value, bool):
             changed = not value
         else:

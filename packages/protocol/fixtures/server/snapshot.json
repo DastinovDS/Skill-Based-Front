@@ -21,7 +21,8 @@
           "level": "exact",
           "enemy_modes": [],
           "enemy_units": 0,
-          "enemy_charged": 0
+          "enemy_charged": 0,
+          "enemy_range": null
         },
         "attrition_in": null,
         "grace_left": null,
@@ -45,7 +46,8 @@
           "level": "exact",
           "enemy_modes": [],
           "enemy_units": 0,
-          "enemy_charged": 0
+          "enemy_charged": 0,
+          "enemy_range": null
         },
         "attrition_in": null,
         "grace_left": null,
@@ -62,14 +64,15 @@
         "id": 2,
         "owner": null,
         "capacity": 2,
-        "detail": "presence",
+        "detail": "range",
         "warehouse": null,
         "seen": {
           "tick": 120,
-          "level": "presence",
+          "level": "range",
           "enemy_modes": [],
           "enemy_units": null,
-          "enemy_charged": null
+          "enemy_charged": null,
+          "enemy_range": null
         },
         "attrition_in": null,
         "grace_left": null,
@@ -93,7 +96,8 @@
           "level": "presence",
           "enemy_modes": ["attack", "defense"],
           "enemy_units": null,
-          "enemy_charged": null
+          "enemy_charged": null,
+          "enemy_range": null
         },
         "attrition_in": null,
         "grace_left": null,
@@ -117,56 +121,139 @@
           "unit_speed_pct": 15,
           "amount": 1
         },
-        "seen": {
-          "tick": 120,
-          "level": "presence",
-          "enemy_modes": [],
-          "enemy_units": null,
-          "enemy_charged": null
-        },
-        "build": null
+        "halves": [
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 120,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          },
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 120,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
       },
       {
         "id": 1,
         "width": 1,
         "detail": "presence",
         "upgrade_gain": null,
-        "seen": {
-          "tick": 120,
-          "level": "presence",
-          "enemy_modes": [],
-          "enemy_units": null,
-          "enemy_charged": null
-        },
-        "build": null
+        "halves": [
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 120,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          },
+          {
+            "detail": "range",
+            "seen": {
+              "tick": 120,
+              "level": "range",
+              "enemy_modes": [],
+              "enemy_units": null,
+              "enemy_charged": null,
+              "enemy_range": null
+            }
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
       },
       {
         "id": 2,
         "width": 1,
         "detail": "fog",
         "upgrade_gain": null,
-        "seen": {
-          "tick": 60,
-          "level": "presence",
-          "enemy_modes": [],
-          "enemy_units": null,
-          "enemy_charged": null
-        },
-        "build": null
+        "halves": [
+          {
+            "detail": "presence",
+            "seen": {
+              "tick": 120,
+              "level": "presence",
+              "enemy_modes": [],
+              "enemy_units": null,
+              "enemy_charged": null,
+              "enemy_range": null
+            }
+          },
+          {
+            "detail": "range",
+            "seen": {
+              "tick": 120,
+              "level": "range",
+              "enemy_modes": [],
+              "enemy_units": null,
+              "enemy_charged": null,
+              "enemy_range": null
+            }
+          }
+        ],
+        "build": null,
+        "enemy_groups": []
       },
       {
         "id": 3,
         "width": 1,
         "detail": "presence",
         "upgrade_gain": null,
-        "seen": {
-          "tick": 120,
-          "level": "presence",
-          "enemy_modes": ["attack"],
-          "enemy_units": null,
-          "enemy_charged": null
-        },
-        "build": null
+        "halves": [
+          {
+            "detail": "presence",
+            "seen": {
+              "tick": 120,
+              "level": "presence",
+              "enemy_modes": ["attack"],
+              "enemy_units": null,
+              "enemy_charged": null,
+              "enemy_range": null
+            }
+          },
+          {
+            "detail": "exact",
+            "seen": {
+              "tick": 120,
+              "level": "exact",
+              "enemy_modes": [],
+              "enemy_units": 0,
+              "enemy_charged": 0,
+              "enemy_range": null
+            }
+          }
+        ],
+        "build": null,
+        "enemy_groups": [
+          {
+            "id": "930417",
+            "pos": 300,
+            "toward_b": true,
+            "detail": "presence",
+            "mode": "attack",
+            "units": null,
+            "charged": null,
+            "units_range": null
+          }
+        ]
       }
     ],
     "groups": [
