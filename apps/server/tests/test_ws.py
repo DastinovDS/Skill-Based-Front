@@ -86,7 +86,6 @@ class Live:
     tokens: list[str]
     """Guest tokens of the two players of ``runner``, and of a third guest."""
     runner: MatchRunner
-    server: Any = None
 
     @property
     def manager(self) -> MatchManager:
@@ -154,7 +153,7 @@ async def live_server(
         rules = load_ruleset(ROOT / "rulesets" / f"{ruleset}.toml")
         players = (created[0]["player_id"], created[1]["player_id"])
         runner = manager.create(map_id, entry.definition, rules, players, private=private)
-        yield Live(app, clock, host, [c["token"] for c in created], runner, server)
+        yield Live(app, clock, host, [c["token"] for c in created], runner)
     finally:
         server.should_exit = True
         await task
@@ -478,41 +477,12 @@ def test_match_end_reaches_both_and_closes_normally(ws_settings: Settings) -> No
 # Slow clients ----------------------------------------------------------------------------------
 
 
-async def diag363(live: Live, ws: ClientConnection, acks: int, snaps: int) -> None:
-    import subprocess
-
-    out = [f"DIAG363 stall: acks={acks} snaps={snaps}"]
-    for conn in live.server.server_state.connections:
-        t = conn.transport
-        out.append(
-            f"server conn: writable={conn.writable.is_set()} read_paused={conn.read_paused} "
-            f"wbuf={t.get_write_buffer_size()} limits={t.get_write_buffer_limits()} "
-            f"closing={t.is_closing()} queue={conn.queue.qsize()} pending_ping={conn.pending_ping_payload}"
-        )
-    box = live.runner._outboxes.get(0)
-    if box is not None:
-        out.append(f"outbox backlog={box.backlog} snap={box._snapshot is not None} overflowed={box.overflowed}")
-    ct = ws.transport
-    out.append(
-        f"client: wbuf={ct.get_write_buffer_size()} closing={ct.is_closing()} "
-        f"proto_state={ws.protocol.state} queue={len(ws.recv_messages.frames.queue)} "
-        f"paused={ws.recv_messages.paused}"
-    )
-    for task in asyncio.all_tasks():
-        out.append(f"task {task.get_name()} {task.get_coro()!r} done={task.done()}")
-    port = live.host.rsplit(":", 1)[1]
-    out.append(subprocess.run(f"ss -tmin '( sport = :{port} or dport = :{port} )' 2>&1", shell=True, capture_output=True, text=True).stdout)
-    out.append(subprocess.run("uname -r", shell=True, capture_output=True, text=True).stdout)
-    out.append(subprocess.run("sysctl net.ipv4.tcp_rmem net.ipv4.tcp_wmem net.core.rmem_max net.core.wmem_max net.ipv4.tcp_moderate_rcvbuf 2>&1", shell=True, capture_output=True, text=True).stdout)
-    out.append(subprocess.run("ip link show lo 2>&1 | head -2; nproc; uptime", shell=True, capture_output=True, text=True).stdout)
-    print("\n".join(out), flush=True)
-
-
 def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settings) -> None:
     """The client does not read while 1000 ticks pass on the largest map, then reads everything.
 
-    That is about 10 MB of snapshots: more than the kernel's socket buffers absorb (up to 4 MB
-    each way with autotuning), so the server's sends do block.
+    That is about 10 MB of snapshots; the socket buffers on both ends are bounded
+    (``SMALL_BUFFER``, about 1 MB together), so the server's sends block after a few dozen frames
+    and the rest are skipped, while the acks queue up and all arrive.
     """
     ticks = 1000
     settings = ws_settings.model_copy(
@@ -520,8 +490,8 @@ def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settin
     )  # the second player never comes: no technical defeat in this test
 
     async def scenario(live: Live) -> None:
-        # A tiny receive buffer and max_queue=1: the client buffers almost nothing, so TCP pushes
-        # back on the server's sends after a few frames.
+        # Bounded buffers and max_queue=1: the client buffers almost nothing, so TCP pushes back
+        # on the server's sends after a few frames.
         async with live.connect(max_queue=1, sock=small_socket(live.host)) as ws:
             await send(ws, hello(live.tokens[0]))
             start = live.runner.match.tick
@@ -531,25 +501,17 @@ def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settin
                 await live.ticks(pause_s=0)
             # The server reads the commands on the same event loop and may lag behind the ticks
             # (a loaded CI runner): wait until the last one is queued, so the extra tick applies
-            # and acks every command. A fixed pause here left the tail of the commands unacked
-            # and the drain below waiting for acks that no tick would ever produce (#363).
-            try:
-                async with asyncio.timeout(30.0):
-                    while live.runner.last_seq(0) < ticks:
-                        await asyncio.sleep(0.01)
-            except TimeoutError:
-                await diag363(live, ws, -1, live.runner.last_seq(0))
-                raise
+            # and acks every command. A fixed pause here left the tail of the commands unacked,
+            # and the drain below waited for acks that no tick would ever produce (#363).
+            async with asyncio.timeout(DRAIN_TIMEOUT_S):
+                while live.runner.last_seq(0) < ticks:
+                    await asyncio.sleep(0.01)
             await live.ticks()
             assert live.runner.match.tick == start + ticks + 1, "the tick did not wait"
             acks: list[int] = []
             snapshots = 0
             while len(acks) < ticks:
-                try:
-                    msg = await recv(ws, 8.0)
-                except TimeoutError:
-                    await diag363(live, ws, len(acks), snapshots)
-                    msg = await recv(ws, DRAIN_TIMEOUT_S)
+                msg = await recv(ws, DRAIN_TIMEOUT_S)
                 if isinstance(msg, AckMsg):
                     acks.append(msg.seq)
                 elif isinstance(msg, SnapshotMsg):
