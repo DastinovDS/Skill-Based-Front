@@ -1,14 +1,15 @@
 /**
  * Timing and geometry of the fight animation (DEC-24, DEC-32; ui-style 9.9, 27, 29): the arena
- * over a fight going on (A1, "chips": a chip for every unit of a fight), the exchange of blows of
- * the last round, the losses that pop up after a round and the way a fight ends.
+ * over a fight going on (A1, "chips": a chip for every unit of a fight), who shot in the last round
+ * (the shots themselves are the tracers of `shotLayout.ts`), the losses that pop up after a round and
+ * the way a fight ends.
  *
  * Pure functions, no PixiJS and no DOM. Nothing here decides what happened in a fight: places,
  * the units of the sides, their losses, the bonus stock and the silent charges, the shots of the
  * last round, the winner and the capture come from the server (`view.fights`, its `last_round`,
  * and the events `fight_round` and `fight_ended`; AGENTS.md 7.1). Since DEC-29 (#294) the last
  * round of the view carries the shots of both sides with the virtual (bonus) ones apart. A fight
- * without it (an old replay: #323) has no arrows and no stock.
+ * without it (an old replay: #323) has no shots and no stock.
  *
  * The arena is drawn in screen pixels (ui-style 27.2, item 7): every size here, but a place on the
  * map, is in CSS px, and the view scales the arena by `1 / cameraScale` so it neither shrinks at
@@ -30,11 +31,11 @@ import { fightPoint } from './layout.ts';
 export const PLATE = { halfWidth: 96, halfHeight: 42 } as const;
 /** A chip is a triangle of this side (px): close to the 20 px of a significant symbol (ui-style 22). */
 export const CHIP = { side: 18, pitch: 20, max: 8, columns: 4 } as const;
-/** How far the arrows and their labels reach beyond the plate (px), top and bottom. */
+/** How far the arena keeps from what it floats over (px): room for the caption and the end label above it, and for the ring below. */
 export const ARENA_REACH = 36;
-/** The bonus caption sits this far over the plate (px): above the label of the own arrow. */
-export const CAPTION_RISE = 46;
-/** The plate floats this many px (screen) above the ring of a city; its lower arrow clears it. */
+/** The bonus caption sits this far over the plate (px). */
+export const CAPTION_RISE = 22;
+/** The plate floats this many px (screen) above the ring of a city. */
 export const ARENA_GAP_NODE = PLATE.halfHeight + ARENA_REACH + 8;
 /** The plate of a fight on a road floats this many px above its meeting point. */
 export const ARENA_GAP_EDGE = PLATE.halfHeight + ARENA_REACH + 18;
@@ -170,8 +171,6 @@ export function fightResult(end: EndFx): FightResult {
 
 // --- Time ----------------------------------------------------------------------------------------
 
-/** The arrows of a round grow over this share of a round. */
-export const GROW_SHARE = 0.2;
 /** The end of a fight stays this share of a round (3 s at 20 ticks and 10 Hz). */
 export const END_SHARE = 1.5;
 /** A chip that changed pulses once over this share of a round. */
@@ -186,21 +185,16 @@ export function roundEffect(age: number, share: number, roundTicks: number): num
 }
 
 /**
- * The arrows of the last round of a fight: they grow from the shooter to the opponent over
- * `GROW_SHARE` of a round, then stay until the next round replaces them; if no next round comes
- * (the fight stalls) they fade between one and two rounds after the shots. `age`: ticks since the
- * round (fractional); `reduced` motion: no growing, the arrow is there whole.
+ * How visible the caption of a bonus shot is `age` ticks after the round (fractional): fully until a
+ * round and a fifth are over, then it fades over four fifths of a round (if no next round comes and
+ * replaces it, a fight that stalls).
  */
-export function exchangeLook(
-  age: number,
-  roundTicks: number,
-  reduced: boolean,
-): { grow: number; alpha: number } {
+export function exchangeAlpha(age: number, roundTicks: number): number {
+  if (age < 0) return 0;
   const round = Math.max(1, roundTicks);
-  const grow = reduced ? 1 : Math.min(1, Math.max(0, age / (round * GROW_SHARE)));
   const hold = round * 1.2;
   const fade = round * 0.8;
-  return { grow, alpha: Math.min(1, Math.max(0, 1 - (age - hold) / fade)) };
+  return Math.min(1, Math.max(0, 1 - (age - hold) / fade));
 }
 
 /** The swell of a chip that changed: one pulse, scale 1 to 1.2 and back; 1 outside of it. */
@@ -367,7 +361,7 @@ export function lighten(color: number, amount: number): number {
   return (mix(16) << 16) | (mix(8) << 8) | mix(0);
 }
 
-// --- The exchange of blows of the last round ------------------------------------------------------
+// --- Who shot in the last round ------------------------------------------------------------------
 
 /** The shots one side made in a round: real ones, and the virtual (bonus, terrain) ones. */
 export interface SideShots {
@@ -375,7 +369,7 @@ export interface SideShots {
   readonly virtual: number;
 }
 
-/** The exchange of the last round: a side that did not shoot has `null` (no arrow). */
+/** The exchange of the last round: a side that did not shoot has `null`. */
 export interface Exchange {
   readonly own: SideShots | null;
   readonly enemy: SideShots | null;
@@ -384,7 +378,7 @@ export interface Exchange {
 /**
  * Who shot what in `round` (`FightView.last_round`, indexed by player). `shots` counts the virtual
  * ones too, so the real ones are the rest. `null` round (a fight with no round yet, or a replay
- * file without the data of rounds): nobody shot, no arrows.
+ * file without the data of rounds): nobody shot.
  */
 export function exchangeOf(round: FightRoundView | null, me: PlayerId): Exchange {
   if (round === null) return { own: null, enemy: null };
@@ -396,84 +390,6 @@ export function exchangeOf(round: FightRoundView | null, me: PlayerId): Exchange
     return { real: shots - virtual, virtual };
   };
   return { own: side(me), enemy: side(enemy) };
-}
-
-/**
- * Where an arrow starts and ends, in px from the middle of the plate: the own arrow rises from the
- * top edge of its half (`rim` above the middle), arches `apex` over the middle and comes down into
- * the other half; `reach` is the distance of its ends from the middle line.
- */
-const ARROW = {
-  reach: 0.78 * PLATE.halfWidth,
-  rim: PLATE.halfHeight - 1,
-  apex: PLATE.halfHeight + 16,
-} as const;
-/** The label of the shots sits this far beyond the top of the arc, so the arc stays in view. */
-const LABEL_LIFT = 10;
-
-export interface ExchangeArrow {
-  /** The curve from the shooter's half up and over into the opponent's half, from the middle of the plate. */
-  readonly line: Point[];
-  /** The front of the curve and the unit vector of its direction there. */
-  readonly tip: Point;
-  readonly direction: Point;
-  /** The arrowhead at the front of the curve; `null` while it is too short to show one. */
-  readonly head: [Point, Point, Point] | null;
-  /** Where the label of the shots sits: over the middle of the arc, just beyond it. */
-  readonly label: Point;
-}
-
-/**
- * The arrow of one side as a curve (a quadratic arc): the own arrow rises from the own (left)
- * half over the top into the enemy's (right) half, the enemy's falls from its half under the
- * bottom into the own one, so the two are one exchange and never overlap. `grow` (0..1) is how
- * much of it is drawn; the head sits at the front.
- */
-export function exchangeArrow(
-  own: boolean,
-  grow: number,
-  head = { length: 11, half: 6.5 },
-  steps = 16,
-): ExchangeArrow {
-  // The enemy's arrow is the own one turned half way round the middle of the plate.
-  const turn = own ? 1 : -1;
-  const p = (x: number, y: number): Point => ({ x: turn * x, y: turn * y });
-  const start = p(-ARROW.reach, -ARROW.rim);
-  const end = p(ARROW.reach, -ARROW.rim);
-  // The apex of a quadratic curve is half way between the chord and the control point.
-  const control = p(0, 2 * -ARROW.apex + ARROW.rim);
-  const at = (t: number): Point => {
-    const w = 1 - t;
-    return {
-      x: w * w * start.x + 2 * w * t * control.x + t * t * end.x,
-      y: w * w * start.y + 2 * w * t * control.y + t * t * end.y,
-    };
-  };
-  const t = Math.min(1, Math.max(0, grow));
-  const line: Point[] = [];
-  const n = Math.max(1, Math.ceil(steps * t));
-  for (let i = 0; i <= n; i++) line.push(at((t * i) / n));
-  const tip = at(t);
-  const dx = 2 * (1 - t) * (control.x - start.x) + 2 * t * (end.x - control.x);
-  const dy = 2 * (1 - t) * (control.y - start.y) + 2 * t * (end.y - control.y);
-  const len = Math.hypot(dx, dy) || 1;
-  const ux = dx / len;
-  const uy = dy / len;
-  const base = { x: tip.x - ux * head.length, y: tip.y - uy * head.length };
-  return {
-    line,
-    tip,
-    direction: { x: ux, y: uy },
-    head:
-      t < 0.2
-        ? null
-        : [
-            tip,
-            { x: base.x - uy * head.half, y: base.y + ux * head.half },
-            { x: base.x + uy * head.half, y: base.y - ux * head.half },
-          ],
-    label: { x: at(0.5).x, y: at(0.5).y - turn * LABEL_LIFT },
-  };
 }
 
 /** Share 0..1 of the way to the next round: the arc around the arena fills over a round. */

@@ -127,8 +127,15 @@ function overflowSnapshot(): SnapshotMsg {
  * one where only a side did, one without round data (an old replay), more than eight chips on a
  * side ("+N"), the stock of bonus shots of both sides and a silent charge (plains, DEC-24 F2).
  * Made here, not a fixture of the protocol.
+ *
+ * `moment` picks the tick the scene is frozen at, so that the tracers of the shots (#352) are seen in the
+ * air, not only after the hit: `phases` (400) has each fight in the moment of its effects after the
+ * hit; `kill` (395): a shot of the enemy about to kill a unit of the own group in city 3, an own bonus
+ * shot half way to city 0, the shots on the road not yet fired; `flight` (398): the two shots on the
+ * road (an own bonus shot against a real one) a moment before they meet, the own bonus shot about to
+ * land in city 0, the kill in city 3 just landed.
  */
-function fightsSnapshot(): SnapshotMsg {
+function fightsSnapshot(moment: 'phases' | 'kill' | 'flight' = 'phases'): SnapshotMsg {
   const base = fixture('snapshot_clash');
   const [road] = base.view.fights;
   if (road === undefined) throw new Error('the clash fixture lists a fight');
@@ -147,12 +154,21 @@ function fightsSnapshot(): SnapshotMsg {
     spent: [shots[0] - virtual[0], shots[1] - virtual[1]] as [number, number],
     losses,
   });
+  // The rounds of the moments with a shot in the air: bonus shots (all of a side's shots virtual) where
+  // the tracers differ from the real ones.
+  const bonus = moment !== 'phases';
   return {
     ...base,
+    tick: { phases: 400, kill: 395, flight: 398 }[moment],
     view: {
       ...base.view,
       fights: [
-        { ...road, start_tick: 330, next_round_tick: 416, last_round: round(396, [3, 2], [1, 0]) },
+        {
+          ...road,
+          start_tick: 330,
+          next_round_tick: 416,
+          last_round: bonus ? round(396, [1, 1], [1, 0]) : round(396, [3, 2], [1, 0]),
+        },
         {
           ...road,
           id: 'dev-fight-city-0',
@@ -168,7 +184,9 @@ function fightsSnapshot(): SnapshotMsg {
           mute: [0, 1],
           start_tick: 330,
           next_round_tick: 413,
-          last_round: round(393, [2, 0], [0, 0], [0, 0]),
+          last_round: bonus
+            ? round(393, [1, 0], [1, 0], [0, 0])
+            : round(393, [2, 0], [0, 0], [0, 0]),
         },
         {
           ...road,
@@ -201,7 +219,7 @@ function fightsSnapshot(): SnapshotMsg {
           losses: [0, 0],
           virtual_left: [0, 1],
           mute: [0, 1],
-          start_tick: 397,
+          start_tick: moment === 'phases' ? 397 : 394,
           next_round_tick: 401,
           last_round: null,
         },
@@ -399,6 +417,19 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     snapshot: fightsSnapshot(),
     events: fightRoundEvents(fightsSnapshot()),
   },
+  // The same four fights with their shots in the air (tracers, #352).
+  {
+    id: 'fights_kill',
+    map: 'siege',
+    snapshot: fightsSnapshot('kill'),
+    events: fightRoundEvents(fightsSnapshot('kill')),
+  },
+  {
+    id: 'fights_flight',
+    map: 'siege',
+    snapshot: fightsSnapshot('flight'),
+    events: fightRoundEvents(fightsSnapshot('flight')),
+  },
   {
     id: 'snapshot_clash',
     map: 'siege',
@@ -417,9 +448,15 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
 /** The scene that is not a fixture: a live match against the dev server (`dev/devServer.ts`). */
 export const DEMO_SCENE = 'demo';
 
-/** A frozen scene: the snapshot at its own tick, no animation, so screenshots are stable. */
-export function frozenSource(scene: FixtureScene): RenderSource {
-  const frame: RenderFrame = interpolateFrame(scene.snapshot, null, scene.snapshot.tick);
+/**
+ * A frozen scene: the snapshot at its own tick, no animation, so screenshots are stable. `at` freezes the
+ * rendering at another tick (`?at=397.5`; fractional too): the effects of the fights are functions of the
+ * render tick, so a round can be looked at frame by frame (`mise run shots`, the shots of #352).
+ */
+export function frozenSource(scene: FixtureScene, at?: number): RenderSource {
+  // `interpolateFrame` holds the tick inside the snapshot: a later render tick is the snapshot taken then.
+  const snapshot = at === undefined ? scene.snapshot : { ...scene.snapshot, tick: at };
+  const frame: RenderFrame = interpolateFrame(snapshot, null, snapshot.tick);
   return {
     frame: () => frame,
     events: () => scene.events,

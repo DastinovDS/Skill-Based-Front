@@ -112,17 +112,41 @@ describe('impactsOf: what a round did, by its fields', () => {
   it('cancels when both sides shot, and lands halfway in time', () => {
     const impacts = impactsOf(round([1, 1]), 0);
     expect(impacts).toEqual([
-      { kind: 'cancel', shooter: null, victim: null, bonus: false, losses: 0, at: CANCEL_SHARE },
+      {
+        kind: 'cancel',
+        shooter: null,
+        victim: null,
+        bonus: false,
+        bonusBy: { own: false, enemy: false },
+        losses: 0,
+        at: CANCEL_SHARE,
+      },
     ]);
   });
 
   it('kills when one side shot and the other lost a unit', () => {
     expect(impactsOf(round([1, 0], [0, 1]), 0)).toEqual([
-      { kind: 'kill', shooter: 'own', victim: 'enemy', bonus: false, losses: 1, at: HIT_SHARE },
+      {
+        kind: 'kill',
+        shooter: 'own',
+        victim: 'enemy',
+        bonus: false,
+        bonusBy: { own: false, enemy: false },
+        losses: 1,
+        at: HIT_SHARE,
+      },
     ]);
     // The same round seen from the other player: the enemy shot the own unit.
     expect(impactsOf(round([1, 0], [0, 1]), 1)).toEqual([
-      { kind: 'kill', shooter: 'enemy', victim: 'own', bonus: false, losses: 1, at: HIT_SHARE },
+      {
+        kind: 'kill',
+        shooter: 'enemy',
+        victim: 'own',
+        bonus: false,
+        bonusBy: { own: false, enemy: false },
+        losses: 1,
+        at: HIT_SHARE,
+      },
     ]);
   });
 
@@ -136,6 +160,14 @@ describe('impactsOf: what a round did, by its fields', () => {
     expect(impactsOf(round([2, 0], [0, 0], [1, 0]), 0)[0]?.bonus).toBe(false);
     expect(impactsOf(round([1, 1], [0, 0], [1, 1]), 0)[0]?.bonus).toBe(true);
     expect(impactsOf(round([1, 1], [0, 0], [1, 0]), 0)[0]?.bonus).toBe(false);
+  });
+
+  it('tells the bonus of each side apart: two shots that meet can be a bonus one and a real one', () => {
+    const [impact] = impactsOf(round([1, 1], [0, 0], [1, 0]), 0);
+    expect(impact?.bonusBy).toEqual({ own: true, enemy: false });
+    expect(impact?.bonus).toBe(false);
+    const [enemyShot] = impactsOf(round([0, 1], [0, 0], [0, 1]), 0);
+    expect(enemyShot?.bonusBy).toEqual({ own: false, enemy: true });
   });
 
   it('draws nothing for a round nobody shot in (an old event has no shots)', () => {
@@ -205,6 +237,7 @@ describe('the particles of an impact', () => {
     shooter: 'own',
     victim: 'enemy',
     bonus: false,
+    bonusBy: { own: false, enemy: false },
     losses: 1,
     at: HIT_SHARE,
     ...over,

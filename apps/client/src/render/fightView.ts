@@ -23,8 +23,7 @@ import {
   chipHeight,
   chipPulse,
   chipsOf,
-  exchangeArrow,
-  exchangeLook,
+  exchangeAlpha,
   exchangeOf,
   fightFx,
   fightPlace,
@@ -40,10 +39,8 @@ import {
   type FightResult,
   type RoundFx,
   type SideCount,
-  type SideShots,
 } from './fightFx.ts';
 import { HIT_SHARE, NUMBER_SHARE, sinceShare, type Contacts } from './fightImpact.ts';
-import { dashAlong } from './intentLayout.ts';
 import { dashSegments } from './layout.ts';
 import type { MapLayers } from './layers.ts';
 import { drawModeGlyph } from './shapes.ts';
@@ -77,8 +74,6 @@ const BAR_WIDTH = 2 * PLATE.halfWidth - 24;
 /** Where the "+N" and its small charged count sit on the strip (px from the middle line). */
 const MORE_X = PLATE.halfWidth - 38;
 const HIDDEN_CHARGED_X = PLATE.halfWidth - 22;
-/** The label of the shots on an arrow: glyph, gap and padding (px). */
-const LABEL = { glyph: 8, gap: 2, between: 5, padX: 5, height: 16, radius: 6 } as const;
 /** A silent charge's badge sits at the lower right of its chip. */
 const BADGE_OFFSET = { x: 8, y: 7 } as const;
 
@@ -101,8 +96,8 @@ type ArenaItem =
 
 type FightData = RenderFrame['base']['view']['fights'][number];
 
-/** What an arena needs beyond its plate (px): arrows, labels and the caption; the end label. */
-const ARROW_REACH = { top: 30, bottom: 28, caption: 28 } as const;
+/** What an arena needs beyond its plate (px): the caption of a bonus shot; the end label. */
+const CAPTION_REACH = { top: 4, bottom: 4, caption: 28 } as const;
 const END_REACH = { top: 32, bottom: 4 } as const;
 
 /** An arena that moved this far (px) from its usual spot gets a dotted line to its place. */
@@ -111,12 +106,12 @@ const TETHER_MIN = 8;
 type Side = 'own' | 'enemy';
 const SIDES: readonly Side[] = ['own', 'enemy'];
 
-/** The arena over a fight: the plate with its chips, stocks and bar, the arrows of the last round. */
+/** The arena over a fight: the plate with its chips, stocks and bar, the caption of a bonus shot. */
 interface Arena {
   readonly view: Container;
   /**
-   * The arrows, their labels and the caption: on a layer over every plate, at the same place and
-   * scale as `view`, so the arrow of one fight is never hidden under the plate of another.
+   * The caption of a bonus shot: on a layer over every plate, at the same place and scale as
+   * `view`, so the caption of one fight is never hidden under the plate of another.
    */
   readonly top: Container;
   /** A dotted line down to a fight on a road, and a cross there. */
@@ -137,19 +132,7 @@ interface Arena {
   readonly loss: Readonly<Record<Side, Text>>;
   readonly track: Graphics;
   readonly fill: Graphics;
-  readonly arrows: Graphics;
-  readonly labels: Readonly<Record<Side, ShotLabel>>;
   readonly caption: Caption;
-}
-
-/** The label of the shots of one side on its arrow: a disc and a number, a diamond and a number. */
-interface ShotLabel {
-  readonly view: Container;
-  readonly pill: Graphics;
-  readonly real: Text;
-  readonly virtual: Text;
-  /** What the pill was drawn for: the numbers and widths; it is redrawn only when they change. */
-  key: string;
 }
 
 /** The caption "bonus attack" over the plate in a round with a virtual shot. */
@@ -211,13 +194,11 @@ function chipCorners(side: number): Point[] {
  * exact number (and a small number of the charged ones hidden in it). A charged chip that does
  * not shoot (the plains, DEC-24 F2) has an amber crossed badge. Under each half is the stock of
  * bonus shots left of that side (a diamond and "×N", dashed and dim at 0), along the bottom a bar
- * fills until the next round. The last round of the fight (`FightView.last_round`) shows as an
- * exchange of blows over the plate: an arc arrow in the colour of the side that shot, with a label
- * of the shots (a disc: real shots, a diamond: virtual ones); a bonus shot draws a different arrow
- * (a glow, a dashed stem, a diamond head) and the caption "bonus attack" over the plate (the
- * source of the bonus is not told); a side that did not shoot has no arrow. A chip that changed in
- * the round, or joined with a reinforcement, pulses once. A fight without round data (an old
- * replay: #323) has chips and no arrows and no stock. Every `fight_round` event also pops up the
+ * fills until the next round. A round with a bonus (virtual) shot (`FightView.last_round`) puts the
+ * caption "bonus attack" over the plate (the source of the bonus is not told); the shots themselves
+ * are the tracers on the map between the groups (`ShotView`, Ш1, #352), not on the plate. A chip that
+ * changed in the round, or joined with a reinforcement, pulses once. A fight without round data (an
+ * old replay: #323) has chips, no caption and no stock. Every `fight_round` event also pops up the
  * losses of the round. The end of a fight (`fight_ended`) shows its plate again with the losses of
  * the whole fight, the winner's half outlined, and a word with a glyph: captured, held or both
  * bounced. A fight on a road floats above its meeting point with a dotted line down to it.
@@ -225,7 +206,7 @@ function chipCorners(side: number): Point[] {
  * The arena is drawn in screen pixels (ui-style 27.2, item 7): every container is scaled by
  * `1 / cameraScale`, so chips do not shrink at 60% and the text is laid out at one unit a pixel.
  * Every duration is a share of a round (`roundTicks`), nothing is in fixed seconds. With "less
- * motion" no arrow grows, no chip pulses and no number rises.
+ * motion" no chip pulses and no number rises.
  *
  * Everything is a function of the render tick (`frame.tick`, fractional between snapshots), so a
  * paused scene shows a fight in the state of that tick. The objects are pooled: nothing is created
@@ -256,7 +237,6 @@ export class FightView {
     more: TextStyle;
     small: TextStyle;
     stock: TextStyle;
-    shots: TextStyle;
     caption: TextStyle;
     own: TextStyle;
     enemy: TextStyle;
@@ -299,7 +279,6 @@ export class FightView {
       more: text(GLYPH_COLOR, 12),
       small: text(GLYPH_COLOR, 10),
       stock: text(GLYPH_COLOR, 12),
-      shots: text(GLYPH_COLOR, 12, false),
       caption: text(GLYPH_COLOR, 12, false),
       own: text(ownerColor(me, me), LOSS_FONT_SIZE),
       enemy: text(ownerColor(me, enemy), LOSS_FONT_SIZE),
@@ -386,7 +365,7 @@ export class FightView {
         g.circle(0, 0, 2.6).fill(colorOf(side)).stroke({ width: 1, color: GLYPH_COLOR }),
       );
     this.dotContext = { own: dot('own'), enemy: dot('enemy') };
-    // Bottom to top: arenas (each with its arrows and labels), results, the loss numbers.
+    // Bottom to top: arenas (each with the caption of a bonus shot), results, the loss numbers.
     this.layer.addChild(this.arenaLayer, this.endLayer, this.shotLayer, this.popLayer);
     layers.layer.effects.addChild(this.layer);
   }
@@ -472,8 +451,6 @@ export class FightView {
           arena.more[side],
           arena.moreCharged[side],
           arena.loss[side],
-          arena.labels[side].real,
-          arena.labels[side].virtual,
         ]),
         arena.caption.text,
       ]),
@@ -536,7 +513,6 @@ export class FightView {
           exchange,
           age,
           roundTicks,
-          reduced,
         });
       } else {
         this.drawEnded(arena, item.fx, item.phase);
@@ -569,14 +545,13 @@ export class FightView {
     const slots = items.map((item): ArenaSlot => {
       const base = { at: item.place.at, ring: item.place.ring, road: item.place.node === null };
       if (item.kind === 'end') return { ...base, top: END_REACH.top, bottom: END_REACH.bottom };
-      // The arrows over (own) and under (the enemy's) the plate and the caption of a bonus shot.
+      // The caption of a bonus shot over the plate (the shots themselves fly on the map, not over the plate).
       const round = item.fight.last_round;
-      if (round === null) return { ...base, top: 4, bottom: 4 };
-      const bonus = round.virtual.some((n) => n > 0);
+      const bonus = round !== null && round.virtual.some((n) => n > 0);
       return {
         ...base,
-        top: ARROW_REACH.top + (bonus ? ARROW_REACH.caption : 0),
-        bottom: ARROW_REACH.bottom,
+        top: CAPTION_REACH.top + (bonus ? CAPTION_REACH.caption : 0),
+        bottom: CAPTION_REACH.bottom,
       };
     });
     const cities: Obstacle[] = this.map.nodes.map((node) => ({
@@ -652,8 +627,6 @@ export class FightView {
       track.alpha = 0.18;
       const fill = view.addChild(new Graphics(this.barContext));
       const top = this.shotLayer.addChild(new Container({ label: 'arena-shots' }));
-      const arrows = top.addChild(new Graphics());
-      const labels = pair(() => this.shotLabel(top));
       const caption = this.captionLabel(top);
       for (const g of [...Object.values(stockMark), ...Object.values(moreDot), tint]) {
         g.visible = false;
@@ -674,8 +647,6 @@ export class FightView {
         loss,
         track,
         fill,
-        arrows,
-        labels,
         caption,
       };
       this.arenas.push(arena);
@@ -774,7 +745,7 @@ export class FightView {
     return result;
   }
 
-  /** The arena of a fight going on: chips, stocks, the bar to the next round, the last exchange. */
+  /** The arena of a fight going on: chips, stocks, the bar to the next round, the caption of a bonus shot. */
   private drawFight(
     arena: Arena,
     look: {
@@ -784,7 +755,6 @@ export class FightView {
       exchange: ReturnType<typeof exchangeOf>;
       age: number;
       roundTicks: number;
-      reduced: boolean;
     },
   ): void {
     arena.plate.visible = true;
@@ -827,7 +797,7 @@ export class FightView {
     arena.fill.position.set(x0, BAR_Y);
     arena.fill.scale.x = Math.max(0.0001, look.progress);
     arena.fill.visible = look.progress > 0;
-    this.drawExchange(arena, look.exchange, look.age, look.roundTicks, look.reduced);
+    this.drawBonusCaption(arena, look.exchange, look.age, look.roundTicks);
   }
 
   /** The strip under the chips of a side: the bonus stock, "+N", the charged ones among the hidden. */
@@ -900,7 +870,6 @@ export class FightView {
     }
     arena.track.visible = false;
     arena.fill.visible = false;
-    arena.arrows.clear();
     arena.top.visible = false;
     const winner = fx.winner === null ? null : fx.winner === this.me ? 'own' : 'enemy';
     const g = arena.tint.clear();
@@ -935,181 +904,22 @@ export class FightView {
     }
   }
 
-  // --- The exchange of blows ---------------------------------------------------------------------
+  // --- The caption of a bonus shot ----------------------------------------------------------------
 
   /**
-   * The arrows of the last round of a fight over the plate: own over the top, the enemy's under the
-   * bottom, each only if that side shot; a bonus shot draws the other arrow and the caption.
+   * The caption "bonus attack" over the plate while the last round of a fight is fresh, if a side
+   * shot a bonus (virtual) shot in it. The shots themselves are the tracers on the map (`ShotView`).
    */
-  private drawExchange(
+  private drawBonusCaption(
     arena: Arena,
     exchange: ReturnType<typeof exchangeOf>,
     age: number,
     roundTicks: number,
-    reduced: boolean,
   ): void {
-    const look = exchangeLook(age, roundTicks, reduced);
-    const g = arena.arrows.clear();
-    for (const side of SIDES) arena.labels[side].view.visible = false;
     arena.caption.view.visible = false;
-    arena.arrows.label = 'arrows:';
-    if (look.alpha <= 0 || look.grow <= 0) return;
-    const enemy: PlayerId = this.me === 0 ? 1 : 0;
-    let bonus = false;
-    const kinds: string[] = [];
-    for (const side of SIDES) {
-      const own = side === 'own';
-      const shots = exchange[side];
-      if (shots === null) continue;
-      const color = ownerColor(this.me, own ? this.me : enemy);
-      // A round of bonus shots only is drawn with the bonus arrow; a mixed one with the plain arrow
-      // and the counts of its label.
-      const virtual = shots.virtual > 0 && shots.real === 0;
-      if (shots.virtual > 0) bonus = true;
-      kinds.push(`${side}-${virtual ? 'bonus' : 'plain'}`);
-      const arrow = exchangeArrow(own, look.grow);
-      const [first, ...rest] = arrow.line;
-      if (first === undefined) continue;
-      const trace = (): void => {
-        g.moveTo(first.x, first.y);
-        for (const p of rest) g.lineTo(p.x, p.y);
-      };
-      trace();
-      g.stroke({ width: 6.5, color: BG, alpha: 0.6 * look.alpha, cap: 'round', join: 'round' });
-      if (virtual) this.drawBonusArrow(g, arrow, color, look.alpha);
-      else this.drawPlainArrow(g, arrow, color, look.alpha, trace);
-      if (look.grow >= 1 || reduced) {
-        this.drawLabel(arena.labels[side], arrow.label, shots, color, look.alpha);
-      }
-    }
-    // What the arrows are, by side: the label is how the tests (and the dev tools) tell them apart.
-    arena.arrows.label = `arrows:${kinds.join(',')}`;
-    if (bonus && (look.grow >= 1 || reduced)) this.drawCaption(arena.caption, look.alpha);
-  }
-
-  private drawPlainArrow(
-    g: Graphics,
-    arrow: ReturnType<typeof exchangeArrow>,
-    color: number,
-    alpha: number,
-    trace: () => void,
-  ): void {
-    trace();
-    g.stroke({ width: 3.5, color, alpha, cap: 'round', join: 'round' });
-    if (arrow.head !== null) {
-      g.poly(flat(arrow.head))
-        .fill({ color, alpha })
-        .stroke({ width: 1.5, color: BG, alpha: 0.7 * alpha, join: 'round' });
-    }
-  }
-
-  /**
-   * The arrow of a bonus (virtual) shot (A1): a wide glow, a dashed stem and a diamond for a head,
-   * so its silhouette differs from the plain arrow's without the hue.
-   */
-  private drawBonusArrow(
-    g: Graphics,
-    arrow: ReturnType<typeof exchangeArrow>,
-    color: number,
-    alpha: number,
-  ): void {
-    const [first, ...rest] = arrow.line;
-    if (first === undefined) return;
-    g.moveTo(first.x, first.y);
-    for (const p of rest) g.lineTo(p.x, p.y);
-    g.stroke({ width: 7, color, alpha: 0.35 * alpha, cap: 'round', join: 'round' });
-    for (const dash of dashAlong(arrow.line, 4, 3, 0)) {
-      const [from, ...tail] = dash;
-      if (from === undefined) continue;
-      g.moveTo(from.x, from.y);
-      for (const p of tail) g.lineTo(p.x, p.y);
-    }
-    g.stroke({ width: 2, color: GLYPH_COLOR, alpha, cap: 'round' });
-    if (arrow.head !== null) {
-      const { tip, direction: d } = arrow;
-      const c = { x: tip.x - d.x * 6, y: tip.y - d.y * 6 };
-      g.poly([
-        tip.x,
-        tip.y,
-        c.x - d.y * 6,
-        c.y + d.x * 6,
-        c.x - d.x * 6,
-        c.y - d.y * 6,
-        c.x + d.y * 6,
-        c.y - d.x * 6,
-      ])
-        .fill({ color: BG, alpha })
-        .stroke({ width: 2.2, color, alpha, join: 'round' });
-    }
-  }
-
-  private shotLabel(parent: Container): ShotLabel {
-    const view = parent.addChild(new Container({ label: 'fight-shot-label', visible: false }));
-    const pill = view.addChild(new Graphics());
-    return {
-      view,
-      pill,
-      real: this.text(view, this.styles.shots, { x: 0, y: 0.5 }),
-      virtual: this.text(view, this.styles.shots, { x: 0, y: 0.5 }),
-      key: '',
-    };
-  }
-
-  /**
-   * The label of the shots of a side, centred on `at`: a disc and the number of real shots, a
-   * diamond and the number of virtual ones (the shape tells which is which, not the hue), in a
-   * dark pill outlined in the colour of the shooter. A kind with no shot is left out.
-   */
-  private drawLabel(
-    label: ShotLabel,
-    at: Point,
-    shots: SideShots,
-    color: number,
-    alpha: number,
-  ): void {
-    const parts = [
-      { glyph: 'disc', text: label.real, count: shots.real },
-      { glyph: 'diamond', text: label.virtual, count: shots.virtual },
-    ] as const;
-    const shown = parts.filter((part) => part.count > 0);
-    for (const part of parts) {
-      const value = String(part.count);
-      if (part.count > 0 && part.text.text !== value) part.text.text = value;
-      part.text.visible = part.count > 0;
-    }
-    const widths = shown.map((part) => LABEL.glyph + LABEL.gap + part.text.width);
-    const total =
-      widths.reduce((sum, w) => sum + w, 0) +
-      LABEL.between * Math.max(0, shown.length - 1) +
-      2 * LABEL.padX;
-    const key = `${shown.map((part) => `${part.glyph}${String(part.count)}`).join(',')}|${String(
-      total,
-    )}|${String(color)}`;
-    if (label.key !== key) {
-      label.key = key;
-      const g = label.pill.clear();
-      g.roundRect(-total / 2, -LABEL.height / 2, total, LABEL.height, LABEL.radius)
-        .fill({ color: PLATE_FILL, alpha: 0.95 })
-        .stroke({ width: 1.8, color });
-      let x = -total / 2 + LABEL.padX;
-      shown.forEach((part, i) => {
-        const cx = x + LABEL.glyph / 2;
-        if (part.glyph === 'disc') {
-          g.circle(cx, 0, 3.3).fill(GLYPH_COLOR);
-        } else {
-          g.poly([cx - 4, 0, cx, -4, cx + 4, 0, cx, 4]).stroke({
-            width: 1.6,
-            color: GLYPH_COLOR,
-            join: 'round',
-          });
-        }
-        part.text.position.set(x + LABEL.glyph + LABEL.gap, 0);
-        x += (widths[i] ?? 0) + LABEL.between;
-      });
-    }
-    label.view.position.set(at.x, at.y);
-    label.view.alpha = alpha;
-    label.view.visible = true;
+    const alpha = exchangeAlpha(age, roundTicks);
+    const bonus = SIDES.some((side) => (exchange[side]?.virtual ?? 0) > 0);
+    if (alpha > 0 && bonus) this.drawCaption(arena.caption, alpha);
   }
 
   private captionLabel(parent: Container): Caption {
