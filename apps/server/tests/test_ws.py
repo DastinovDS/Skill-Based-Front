@@ -481,8 +481,8 @@ async def diag363(live: Live, ws: ClientConnection, acks: int, snaps: int) -> No
     for task in asyncio.all_tasks():
         out.append(f"task {task.get_name()} {task.get_coro()!r} done={task.done()}")
     port = live.host.rsplit(":", 1)[1]
-    out.append(subprocess.run(["ss", "-tmin", f"( sport = :{port} or dport = :{port} )"], capture_output=True, text=True).stdout)
-    out.append(subprocess.run(["uname", "-r"], capture_output=True, text=True).stdout)
+    out.append(subprocess.run(f"ss -tmin '( sport = :{port} or dport = :{port} )' 2>&1", shell=True, capture_output=True, text=True).stdout)
+    out.append(subprocess.run("uname -r", shell=True, capture_output=True, text=True).stdout)
     out.append(subprocess.run("sysctl net.ipv4.tcp_rmem net.ipv4.tcp_wmem net.core.rmem_max net.core.wmem_max net.ipv4.tcp_moderate_rcvbuf 2>&1", shell=True, capture_output=True, text=True).stdout)
     out.append(subprocess.run("ip link show lo 2>&1 | head -2; nproc; uptime", shell=True, capture_output=True, text=True).stdout)
     print("\n".join(out), flush=True)
