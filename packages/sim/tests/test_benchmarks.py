@@ -8,7 +8,8 @@ once and skips the budget checks.
 
 Step budget: 40 nodes and 40 groups (``grid40`` of ``conftest.py``: 10 garrisons and 10 extra
 groups per player), both players driven by ``ExpandBot``; the controllers and projections run in
-the untimed setup, so the timed part is ``Match.step`` alone.
+the untimed setup, so the timed part is ``Match.step`` alone. The maps of DEC-27 (45..55 nodes)
+are checked against the same budgets on ``grid55`` (55 nodes, 56 groups; DEC-27, item 7).
 """
 
 import copy
@@ -114,7 +115,10 @@ def _check(
 
 
 class _Driver:
-    """A match on grid40 with 40 groups, driven by two controllers; restarts when it ends."""
+    """A match on a grid map, driven by two controllers; restarts when it ends.
+
+    Every garrison gets a second group: 40 groups on ``grid40``, 56 on ``grid55``.
+    """
 
     def __init__(self, mapdef: MapDef, rules: Ruleset, bots: BotFactory) -> None:
         self.map, self.rules, self.bots = mapdef, rules, bots
@@ -129,7 +133,8 @@ class _Driver:
             if isinstance(g.location, AtNode):  # a second group in every garrisoned node
                 gid = state.new_id()
                 state.groups[gid] = Group(gid, g.owner, 2, 1, Mode.ATTACK, g.location)
-        assert len(state.groups) == 40 and len(state.map.nodes) == 40
+        garrisons = sum(1 for n in state.map.nodes if n.start_units)
+        assert len(state.groups) == 2 * garrisons
         return match
 
     def commands(self) -> list[PlayerCommand]:
@@ -158,14 +163,21 @@ def _supply(state: GameState, rules: Ruleset) -> None:
     supply(state, rules)
 
 
+@pytest.fixture(params=["grid40", "grid55"])
+def grid_map(request: pytest.FixtureRequest) -> MapDef:
+    """The budgets of section 12 on 40 nodes and, by DEC-27, item 7, on 55 nodes."""
+    mapdef: MapDef = request.getfixturevalue(f"{request.param}_map")
+    return mapdef
+
+
 def test_bench_step(
     benchmark: BenchmarkFixture,
     speed_factor: float,
-    grid40_map: MapDef,
+    grid_map: MapDef,
     mvp_rules: Ruleset,
     expand_bot: BotFactory,
 ) -> None:
-    driver = _Driver(grid40_map, mvp_rules, expand_bot)
+    driver = _Driver(grid_map, mvp_rules, expand_bot)
     driver.warm(50)
 
     def setup() -> tuple[tuple[object, ...], dict[str, object]]:
@@ -178,11 +190,11 @@ def test_bench_step(
 def test_bench_supply(
     benchmark: BenchmarkFixture,
     speed_factor: float,
-    grid40_map: MapDef,
+    grid_map: MapDef,
     mvp_rules: Ruleset,
     expand_bot: BotFactory,
 ) -> None:
-    state = _Driver(grid40_map, mvp_rules, expand_bot).warm(300)
+    state = _Driver(grid_map, mvp_rules, expand_bot).warm(300)
     assert state.packets, "the benchmark state has packets on the way"
 
     def setup() -> tuple[tuple[object, ...], dict[str, object]]:
@@ -255,11 +267,11 @@ def test_bench_supply_many_donors_busy_roads(
 def test_bench_project(
     benchmark: BenchmarkFixture,
     speed_factor: float,
-    grid40_map: MapDef,
+    grid_map: MapDef,
     mvp_rules: Ruleset,
     expand_bot: BotFactory,
 ) -> None:
-    state = _Driver(grid40_map, mvp_rules, expand_bot).warm(300)
+    state = _Driver(grid_map, mvp_rules, expand_bot).warm(300)
     benchmark.pedantic(lambda: project(state, mvp_rules, 0, KEY), rounds=2000)
     _check(benchmark, speed_factor, 0.3 * MS)
 
@@ -267,13 +279,13 @@ def test_bench_project(
 def test_bench_project_with_enemy_figures(
     benchmark: BenchmarkFixture,
     speed_factor: float,
-    grid40_map: MapDef,
+    grid_map: MapDef,
     mvp_rules: Ruleset,
     expand_bot: BotFactory,
 ) -> None:
     """DEC-33, detail 12: ``project()`` with every enemy group out of a fight as a figure on a
     half of an edge in sight (the worst case of ``EdgeView.enemy_groups``)."""
-    state = copy.deepcopy(_Driver(grid40_map, mvp_rules, expand_bot).warm(300))
+    state = copy.deepcopy(_Driver(grid_map, mvp_rules, expand_bot).warm(300))
     mapdef = state.map
     levels = compute_vision(state, mvp_rules, 0)
     seen = [n for n, level in enumerate(levels.nodes) if level is not Detail.FOG]
