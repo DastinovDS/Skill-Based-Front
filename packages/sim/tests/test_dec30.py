@@ -48,6 +48,7 @@ def _map() -> MapDef:
     nodes: list[dict[str, Any]] = [
         {
             "id": i,
+            "name": f"n{i}",
             "x": 100 * i,
             "y": 10,
             "terrain": "forest",
@@ -62,7 +63,7 @@ def _map() -> MapDef:
         for i in range(3)
     ]
     edges = [
-        {"id": k, "a": k, "b": k + 1, "base_width": 1, "max_width": 3, "travel_ticks": 30}
+        {"id": k, "a": k, "b": k + 1, "max_level": 3, "travel_ticks": 30, "border_permille": 500}
         for k in range(2)
     ]
     return parse_map(

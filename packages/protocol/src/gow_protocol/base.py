@@ -24,7 +24,7 @@ from typing import Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from gow_sim.maps import MAX_WIDTH, PLAYERS
+from gow_sim.maps import MAX_LEVEL, PLAYERS
 from gow_sim.state import PROGRESS_SCALE
 
 MAX_INT: Final = 2**31 - 1
@@ -58,7 +58,7 @@ type PlayerId = Annotated[int, Field(ge=0, le=1, json_schema_extra={"enum": list
 
 A ``type`` alias and the ``enum`` make it a named ``PlayerId = 0 | 1`` in the JSON Schema and in
 TypeScript, instead of ``number``."""
-Width = Annotated[int, Field(ge=1, le=MAX_WIDTH)]
+Width = Annotated[int, Field(ge=1, le=MAX_LEVEL)]
 Progress = Annotated[int, Field(ge=0, le=PROGRESS_SCALE)]
 """Position on an edge in thousandths, as ``gow_sim.state.OnEdge.progress``."""
 Centi = NonNegInt

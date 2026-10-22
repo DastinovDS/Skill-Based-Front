@@ -60,6 +60,7 @@ def _line(n: int = 3, middle: str = "forest") -> MapDef:
     nodes: list[dict[str, Any]] = [
         {
             "id": i,
+            "name": f"n{i}",
             "x": 10 * i,
             "y": 10,
             "terrain": middle if i == 1 else "forest",
@@ -74,7 +75,7 @@ def _line(n: int = 3, middle: str = "forest") -> MapDef:
         for i in range(n)
     ]
     edges = [
-        {"id": i, "a": i, "b": i + 1, "base_width": 1, "max_width": 3, "travel_ticks": 30}
+        {"id": i, "a": i, "b": i + 1, "max_level": 3, "travel_ticks": 30, "border_permille": 500}
         for i in range(n - 1)
     ]
     return parse_map(

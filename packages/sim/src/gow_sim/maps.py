@@ -19,11 +19,22 @@ from gow_sim.canonical import digest
 PLAYERS: Final = (0, 1)
 """Player ids of a 1v1 match (MVP)."""
 
-MAX_WIDTH: Final = 3
-"""Highest road level the format allows: levels 1..3, two upgrades (DEC-22, item 2).
+MAX_LEVEL: Final = 3
+"""Highest road level the format allows: levels 1..3, two upgrades (DEC-22, item 2; DEC-23,
+item 6). Every road starts at level 1 without a type, so the map has no starting level."""
 
-The map fields keep the names ``base_width`` and ``max_width`` until DEC-23 (#235) renames
-``max_width`` to ``max_level``; every road starts at level 1 (``base_width`` must be 1)."""
+BORDER_MIN: Final = 100
+BORDER_MAX: Final = 900
+"""Range of ``border_permille`` of an edge, thousandths from its end ``a`` (DEC-23, item 5)."""
+
+BORDER_SELF_MIRROR: Final = 500
+"""``border_permille`` of an edge that is its own mirror (DEC-23, item 7)."""
+
+ROAD_START_LEVEL: Final = 1
+"""Level of every road at the start of a match (DEC-22, item 2): roads have no type."""
+
+NAME_MAX_LEN: Final = 24
+"""Longest node name (DEC-23, item 4); the validator checks it (``names``), not the loader."""
 
 SYMMETRIES: Final = ("rot180",)
 
@@ -42,10 +53,7 @@ class NodeKind(StrEnum):
     CITY_MEDIUM = "city_medium"
     CITY_SMALL = "city_small"
     PROVINCE = "province"
-    """A node without a city (DEC-23, item 2): no road upgrades from it (``NOT_CITY``).
-
-    TODO(#235): the other province rules (no warehouse, transit packets, no recruit) come with
-    the DEC-23 implementation; the MVP maps have no provinces yet."""
+    """A node without a city (DEC-23, item 2): no warehouse, no recruit, packets pass in transit."""
 
 
 class MapFormatError(ValueError):
@@ -64,6 +72,8 @@ class MapMeta:
 @dataclass(frozen=True, slots=True)
 class NodeDef:
     id: int
+    name: str
+    """Name of the node (DEC-23, item 4): unique in the map, not translated."""
     x: int
     y: int
     terrain: Terrain
@@ -81,9 +91,11 @@ class EdgeDef:
     id: int
     a: int
     b: int
-    base_width: int
-    max_width: int
+    max_level: int
+    """Last road level an upgrade reaches, ``1..MAX_LEVEL``; every road starts at level 1."""
     travel_ticks: int
+    border_permille: int
+    """The border point in thousandths from ``a`` (DEC-23, item 5): splits the edge into halves."""
 
     def other(self, node: int) -> int:
         """The opposite end of the edge from ``node``."""
@@ -213,6 +225,7 @@ def _parse_meta(data: object) -> MapMeta:
 
 _NODE_KEYS: Final = (
     "id",
+    "name",
     "x",
     "y",
     "terrain",
@@ -246,6 +259,7 @@ def _parse_node(data: object, where: str, index: int, meta: MapMeta) -> NodeDef:
     units = _int(raw["start_units"], f"{where}.start_units", low=0)
     node = NodeDef(
         id=node_id,
+        name=_name(raw["name"], f"{where}.name"),
         x=_int(raw["x"], f"{where}.x", low=0, high=meta.width),
         y=_int(raw["y"], f"{where}.y", low=0, high=meta.height),
         terrain=Terrain(str(terrain)),
@@ -276,7 +290,7 @@ def _parse_node(data: object, where: str, index: int, meta: MapMeta) -> NodeDef:
 
 
 def _parse_edge(data: object, where: str, index: int, node_count: int) -> EdgeDef:
-    raw = _obj(data, where, ("id", "a", "b", "base_width", "max_width", "travel_ticks"))
+    raw = _obj(data, where, ("id", "a", "b", "max_level", "travel_ticks", "border_permille"))
     edge_id = _int(raw["id"], f"{where}.id")
     if edge_id != index:
         raise MapFormatError(
@@ -286,15 +300,15 @@ def _parse_edge(data: object, where: str, index: int, node_count: int) -> EdgeDe
     b = _int(raw["b"], f"{where}.b", low=0, high=node_count - 1)
     if a == b:
         raise MapFormatError(f"{where}: an edge must join two different nodes, got a == b == {a}")
-    max_width = _int(raw["max_width"], f"{where}.max_width", low=1, high=MAX_WIDTH)
     return EdgeDef(
         id=edge_id,
         a=a,
         b=b,
-        # Every road starts at level 1 without a type (DEC-22, item 2).
-        base_width=_int(raw["base_width"], f"{where}.base_width", low=1, high=1),
-        max_width=max_width,
+        max_level=_int(raw["max_level"], f"{where}.max_level", low=1, high=MAX_LEVEL),
         travel_ticks=_int(raw["travel_ticks"], f"{where}.travel_ticks", low=1),
+        border_permille=_int(
+            raw["border_permille"], f"{where}.border_permille", low=BORDER_MIN, high=BORDER_MAX
+        ),
     )
 
 
@@ -369,6 +383,13 @@ def _int(value: object, where: str, low: int | None = None, high: int | None = N
     if (low is not None and value < low) or (high is not None and value > high):
         bounds = f"[{'' if low is None else low}..{'' if high is None else high}]"
         raise MapFormatError(f"{where}: {value} is out of range {bounds}")
+    return value
+
+
+def _name(value: object, where: str) -> str:
+    # Length, spaces at the ends and uniqueness (DEC-23, item 4) are the validator check `names`.
+    if not isinstance(value, str):
+        raise MapFormatError(f"{where}: expected a string, got {value!r}")
     return value
 
 

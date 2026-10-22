@@ -146,7 +146,7 @@ def test_initial_state_follows_map_and_ruleset(name: str, rules: Ruleset) -> Non
         assert state.nodes[node["id"]].owner == node["start_owner"]
         assert state.nodes[node["id"]].warehouse == node["start_stock"]
     for edge in raw["edges"]:
-        assert state.edges[edge["id"]].width == edge["base_width"]
+        assert state.edges[edge["id"]].width == 1  # every road starts at level 1 (DEC-22)
     mirror = {int(k): v for k, v in raw["mirror"]["nodes"].items()}
     garrisons = sorted(
         (n for n in raw["nodes"] if n["start_units"] > 0),

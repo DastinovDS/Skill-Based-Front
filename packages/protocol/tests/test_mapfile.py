@@ -45,7 +45,11 @@ def test_every_map_is_a_map_file(path: Path) -> None:
         ("nodes", "vp", True),
         ("nodes", "terrain", "swamp"),
         ("nodes", "capital_of", 2),
-        ("edges", "max_width", 6),
+        ("edges", "max_level", 6),
+        ("edges", "border_permille", 50),
+        ("edges", "border_permille", 950),
+        ("nodes", "name", ""),
+        ("nodes", "name", 7),
     ],
 )
 def test_bad_value_is_rejected(section: str, field: str, value: object) -> None:

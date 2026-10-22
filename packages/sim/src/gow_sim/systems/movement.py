@@ -49,13 +49,11 @@ from gow_sim.systems.capacity import change_owner, city_capacity
 
 
 def border_permille(mapdef: MapDef, edge: int) -> int:
-    """The border point of ``edge`` in thousandths from its end ``a`` (DEC-21, DEC-23).
+    """The border point of ``edge`` in thousandths from its end ``a`` (DEC-21, DEC-23, item 5).
 
-    The single source of the border point for every rule. Maps have no such field yet, so it is
-    the midpoint; the map field of DEC-23 plugs in here.
+    The single source of the border point for every rule: the map field ``border_permille``.
     """
-    del mapdef, edge
-    return PROGRESS_SCALE // 2
+    return mapdef.edges[edge].border_permille
 
 
 @dataclass(frozen=True, slots=True)

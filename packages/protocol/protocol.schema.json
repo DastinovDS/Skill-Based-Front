@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 23,
+    "PROTOCOL_VERSION": 24,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -1335,14 +1335,8 @@
           "minimum": 0,
           "type": "integer"
         },
-        "base_width": {
-          "description": "Road level at the start: always 1 (DEC-22).",
-          "maximum": 3,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "max_width": {
-          "description": "Highest road level, at most 3 (DEC-22).",
+        "max_level": {
+          "description": "Highest road level, at most 3 (DEC-23, item 6); every road starts at level 1 (DEC-22).",
           "maximum": 3,
           "minimum": 1,
           "type": "integer"
@@ -1351,15 +1345,21 @@
           "maximum": 2147483647,
           "minimum": 1,
           "type": "integer"
+        },
+        "border_permille": {
+          "description": "Border point in thousandths from ``a`` (DEC-23, item 5): where the halves of the edge meet\n(vision DEC-21, territory on the map).",
+          "maximum": 900,
+          "minimum": 100,
+          "type": "integer"
         }
       },
       "required": [
         "id",
         "a",
         "b",
-        "base_width",
-        "max_width",
-        "travel_ticks"
+        "max_level",
+        "travel_ticks",
+        "border_permille"
       ],
       "title": "MapEdgeFile",
       "type": "object"
@@ -1472,6 +1472,12 @@
           "minimum": 0,
           "type": "integer"
         },
+        "name": {
+          "description": "Name of the node shown by the interface (DEC-23, item 4): not translated.",
+          "maxLength": 24,
+          "minLength": 1,
+          "type": "string"
+        },
         "x": {
           "maximum": 2147483647,
           "minimum": 0,
@@ -1536,6 +1542,7 @@
       },
       "required": [
         "id",
+        "name",
         "x",
         "y",
         "terrain",

@@ -1,9 +1,11 @@
 """Map validator (MAP-02): design checks on top of the gow_sim.maps loader.
 
 The loader rejects malformed files (types, references, ranges, neutral garrisons). This module
-checks what makes a map playable and fair: connectivity, planarity, 180-degree symmetry, node
-degree, redundant approaches to valuable cities, neutral space and road lengths. Given a ruleset
-with ``city_upgrades`` (DEC-26, item 5), also that no city starts with more charges than its
+checks what makes a map playable and fair: connectivity, planarity, symmetry of the rules (the
+graph and the attributes, not the picture: DEC-27, item 1), node names and border points
+(DEC-23, items 4, 5, 7), node degree, redundant approaches to valuable cities, neutral space,
+road lengths and, when switched on, the map size (DEC-27, item 5). Given a ruleset with
+``city_upgrades`` (DEC-26, item 5), also that no city starts with more charges than its
 warehouse holds (``warehouse``).
 """
 
@@ -15,7 +17,16 @@ from pathlib import Path
 
 import networkx as nx
 
-from gow_sim.maps import EdgeDef, MapDef, MapFormatError, NodeDef, NodeKind, load_map
+from gow_sim.maps import (
+    BORDER_SELF_MIRROR,
+    NAME_MAX_LEN,
+    EdgeDef,
+    MapDef,
+    MapFormatError,
+    NodeDef,
+    NodeKind,
+    load_map,
+)
 from gow_sim.ruleset import Ruleset
 
 
@@ -30,6 +41,10 @@ class ValidatorConfig:
     neutral_max_distance_diff: int
     travel_ticks_per_100_units: int
     travel_tolerance_pct: int
+    size_check: bool
+    """Run the check ``size`` (DEC-27, item 5): off by default, on for the 45..55 node maps."""
+    min_nodes: int
+    max_nodes: int
 
 
 def load_config(path: str | Path | None = None) -> ValidatorConfig:
@@ -44,13 +59,16 @@ def load_config(path: str | Path | None = None) -> ValidatorConfig:
     missing = [n for n in names if n not in raw]
     if unknown or missing:
         raise ValueError(f"validator config: unknown keys {unknown}, missing keys {missing}")
-    values: dict[str, int] = {}
-    for name in names:
-        value = raw[name]
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            raise ValueError(f"validator config: {name} must be a non-negative integer")
-        values[name] = value
-    return ValidatorConfig(**values)
+    values: dict[str, int | bool] = {}
+    for field in fields(ValidatorConfig):
+        value = raw[field.name]
+        if field.type is bool:
+            if not isinstance(value, bool):
+                raise ValueError(f"validator config: {field.name} must be true or false")
+        elif isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"validator config: {field.name} must be a non-negative integer")
+        values[field.name] = value
+    return ValidatorConfig(**values)  # pyright: ignore[reportArgumentType]
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,8 +95,11 @@ def validate(mapdef: MapDef, config: ValidatorConfig, rules: Ruleset | None = No
     """Every check; ``warehouse`` only with ``rules`` that have ``city_upgrades`` on."""
     graph = to_graph(mapdef)
     issues = [
+        *(check_size(mapdef, config) if config.size_check else []),
+        *check_names(mapdef),
         *check_planarity(mapdef),
         *check_symmetry(mapdef),
+        *check_border(mapdef),
         *check_degree(mapdef, config),
         *check_travel_ticks(mapdef, config),
         *(check_warehouse(mapdef, rules) if rules is not None else []),
@@ -109,6 +130,68 @@ def check_warehouse(mapdef: MapDef, rules: Ruleset) -> list[Issue]:
         for n in mapdef.nodes
         if n.kind is not NodeKind.PROVINCE and n.start_stock > start.of(n.kind)
     ]
+
+
+def check_size(mapdef: MapDef, config: ValidatorConfig) -> list[Issue]:
+    """DEC-27, item 5: ``min_nodes..max_nodes`` nodes (45..55 for the maps of DEC-27)."""
+    count = len(mapdef.nodes)
+    if config.min_nodes <= count <= config.max_nodes:
+        return []
+    return [Issue("size", f"{count} nodes, need {config.min_nodes}..{config.max_nodes}")]
+
+
+def check_names(mapdef: MapDef) -> list[Issue]:
+    """DEC-23, item 4: 1..24 characters without spaces at the ends, unique in the map."""
+    issues: list[Issue] = []
+    seen: dict[str, int] = {}
+    for node in mapdef.nodes:
+        name = node.name
+        if not 1 <= len(name) <= NAME_MAX_LEN:
+            issues.append(Issue("names", f"node {node.id}: name {name!r} is not 1..{NAME_MAX_LEN}"))
+        elif name != name.strip():
+            issues.append(Issue("names", f"node {node.id}: name {name!r} has spaces at the ends"))
+        if name in seen:
+            issues.append(Issue("names", f"nodes {seen[name]} and {node.id} share name {name!r}"))
+        else:
+            seen[name] = node.id
+    return issues
+
+
+def expected_border(mapdef: MapDef, edge: EdgeDef) -> int:
+    """``border_permille`` the mirror of ``edge`` must have (DEC-23, item 7).
+
+    The same value when the mirror's end ``a`` is the mirror of ``edge.a``, else ``1000 - value``;
+    an edge that is its own mirror has 500.
+    """
+    mirror = mapdef.edges[mapdef.mirror_edges[edge.id]]
+    if mirror.id == edge.id:
+        return BORDER_SELF_MIRROR
+    if mirror.a == mapdef.mirror_nodes[edge.a]:
+        return edge.border_permille
+    return 1000 - edge.border_permille
+
+
+def check_border(mapdef: MapDef) -> list[Issue]:
+    """DEC-23, items 5 and 7: the border point is mirrored with the direction of the edge.
+
+    The range 100..900 is the loader's (a map out of it does not load: ``format``).
+    """
+    issues: list[Issue] = []
+    for edge in mapdef.edges:
+        mirror = mapdef.edges[mapdef.mirror_edges[edge.id]]
+        if mirror.id < edge.id:
+            continue  # each pair once
+        expected = expected_border(mapdef, edge)
+        if mirror.border_permille != expected:
+            what = "is its own mirror" if mirror.id == edge.id else f"mirrors edge {edge.id}"
+            issues.append(
+                Issue(
+                    "border",
+                    f"edge {mirror.id} {what}: border_permille {mirror.border_permille},"
+                    f" expected {expected}",
+                )
+            )
+    return issues
 
 
 def to_graph(mapdef: MapDef) -> "nx.Graph[int]":
@@ -198,26 +281,22 @@ def _swap(player: int | None) -> int | None:
 
 
 _NODE_FIELDS = ("terrain", "vp", "kind", "start_units", "start_charged", "start_stock")
-_EDGE_FIELDS = ("base_width", "max_width", "travel_ticks")
+_EDGE_FIELDS = ("max_level", "travel_ticks")
 
 
 def check_symmetry(mapdef: MapDef) -> list[Issue]:
-    """The ``mirror`` table describes a 180-degree rotation that swaps the players."""
+    """The ``mirror`` table swaps the players and keeps the rules (DEC-27, item 1).
+
+    The graph and the attributes of nodes and edges are mirrored; the coordinates are free (no
+    ``(width - x, height - y)``) and the names differ. ``border_permille`` with the direction of
+    the edge: the check ``border``.
+    """
     issues: list[Issue] = []
-    width, height = mapdef.meta.width, mapdef.meta.height
     for node in mapdef.nodes:
         m = mapdef.nodes[mapdef.mirror_nodes[node.id]]
         if m.id < node.id:
             continue  # each pair once
         pair = f"nodes {node.id} and {m.id}"
-        if (m.x, m.y) != (width - node.x, height - node.y):
-            issues.append(
-                Issue(
-                    "symmetry",
-                    f"{pair}: position {(m.x, m.y)} is not the rotation of {(node.x, node.y)},"
-                    f" expected {(width - node.x, height - node.y)}",
-                )
-            )
         issues += _differences(pair, node, m, _NODE_FIELDS)
         for name in ("capital_of", "start_owner"):
             mine, theirs = getattr(node, name), getattr(m, name)
@@ -272,7 +351,12 @@ def edge_length(mapdef: MapDef, edge: EdgeDef) -> float:
 
 
 def check_travel_ticks(mapdef: MapDef, config: ValidatorConfig) -> list[Issue]:
-    """travel_ticks matches the road length within the configured tolerance (at least 1 tick)."""
+    """travel_ticks matches the drawn road length within the tolerance (DEC-27, item 4).
+
+    ``|travel_ticks - e| * 100 <= travel_tolerance_pct * e``, ``e = length * 30 / 100``; never
+    less than 1 tick, so that rounding a very short road to whole ticks passes. Mirrored edges have
+    one ``travel_ticks`` (``symmetry``), so their drawn lengths also agree within the tolerance.
+    """
     issues: list[Issue] = []
     for edge in mapdef.edges:
         expected = expected_travel_ticks(edge_length(mapdef, edge), config)

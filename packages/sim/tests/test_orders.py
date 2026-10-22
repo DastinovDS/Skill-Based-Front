@@ -58,6 +58,7 @@ def _line() -> MapDef:
     nodes: list[dict[str, Any]] = [
         {
             "id": i,
+            "name": f"n{i}",
             "x": 10 * i,
             "y": 10,
             "terrain": "forest",
@@ -72,7 +73,7 @@ def _line() -> MapDef:
         for i in range(3)
     ]
     edges = [
-        {"id": i, "a": i, "b": i + 1, "base_width": 1, "max_width": 2, "travel_ticks": 30}
+        {"id": i, "a": i, "b": i + 1, "max_level": 2, "travel_ticks": 30, "border_permille": 500}
         for i in range(2)
     ]
     return parse_map(

@@ -92,17 +92,21 @@ BROKEN: list[tuple[str, Path_, object, str]] = [
         4,
         "start_charged: 4 is out of range [0..3]",
     ),
-    # DEC-22: every road starts at level 1, levels 1..3.
-    (
-        "base width > 1",
-        ("edges", 0, "base_width"),
-        2,
-        "edges[0].base_width: 2 is out of range [1..1]",
-    ),
-    ("max width > 3", ("edges", 0, "max_width"), 4, "edges[0].max_width: 4 is out of range [1..3]"),
+    # DEC-23, table of examples: rows 5, 6, 10, 12; and the old road fields (item 9).
+    ("border 50", ("edges", 0, "border_permille"), 50, "edges[0].border_permille: 50 is out of"),
+    ("border 901", ("edges", 0, "border_permille"), 901, "edges[0].border_permille: 901 is out"),
+    ("no border", ("edges", 0, "border_permille"), _DELETE, "missing keys ['border_permille']"),
+    ("base_capacity", ("nodes", 1, "base_capacity"), 4, "nodes[1]: unknown keys ['base_capacity']"),
+    ("max_level 4", ("edges", 0, "max_level"), 4, "edges[0].max_level: 4 is out of range [1..3]"),
+    ("max_level 0", ("edges", 0, "max_level"), 0, "edges[0].max_level: 0 is out of range [1..3]"),
+    ("base_width", ("edges", 0, "base_width"), 1, "edges[0]: unknown keys ['base_width']"),
+    ("max_width", ("edges", 0, "max_width"), 3, "edges[0]: unknown keys ['max_width']"),
+    ("no name", ("nodes", 1, "name"), _DELETE, "nodes[1]: missing keys ['name']"),
+    ("name not str", ("nodes", 1, "name"), 7, "nodes[1].name: expected a string, got 7"),
     ("unknown kind", ("nodes", 1, "kind"), "town", "nodes[1].kind: expected one of"),
     ("capital kind", ("nodes", 1, "kind"), "capital", "nodes[1].kind: 'capital' exactly for"),
     ("not capital kind", ("nodes", 0, "kind"), "city_large", "nodes[0].kind: 'capital' exactly"),
+    # DEC-23, table of examples, row 1 (row 2 and 3: tests below).
     ("province vp", ("nodes", 1, "kind"), "province", "nodes[1]: a province has vp 0"),
     ("zero travel", ("edges", 0, "travel_ticks"), 0, "edges[0].travel_ticks: 0 is out of range"),
     ("outside map", ("nodes", 2, "x"), 401, "nodes[2].x: 401 is out of range [0..400]"),
@@ -118,7 +122,7 @@ BROKEN: list[tuple[str, Path_, object, str]] = [
     ("id out of order", ("nodes", 1, "id"), 5, "nodes[1].id: node ids must be 0..N-1"),
     # Structure and invariants the simulation relies on.
     ("unknown key", ("nodes", 1, "vpp"), 1, "nodes[1]: unknown keys ['vpp']"),
-    ("missing key", ("edges", 0, "max_width"), _DELETE, "edges[0]: missing keys ['max_width']"),
+    ("missing key", ("edges", 0, "max_level"), _DELETE, "edges[0]: missing keys ['max_level']"),
     (
         "second capital",
         ("nodes", 2, "capital_of"),
@@ -179,3 +183,29 @@ def test_invalid_json_is_rejected(tmp_path: Path) -> None:
     path.write_text("{", encoding="utf-8")
     with pytest.raises(MapFormatError, match="invalid JSON"):
         load_map(path)
+
+
+def test_province_with_a_garrison_is_rejected() -> None:
+    # DEC-23, table of examples, row 2: a province with start_units = 2.
+    data = _broken(("nodes", 1, "kind"), "province")
+    data["nodes"][1].update(vp=0, start_owner=0, start_units=2, start_charged=2)
+    with pytest.raises(MapFormatError, match=r"nodes\[1\]: a province has vp 0 and no garrison"):
+        parse_map(data)
+
+
+def test_capital_kind_without_capital_of_is_rejected() -> None:
+    # DEC-23, table of examples, row 3.
+    data = _broken(("nodes", 1, "kind"), "capital")
+    with pytest.raises(MapFormatError, match=r"nodes\[1\]\.kind: 'capital' exactly"):
+        parse_map(data)
+
+
+def test_names_and_border_points_are_read() -> None:
+    # DEC-23, items 4 and 5; the example fragment of the DEC-23 block.
+    data = _raw("line3")
+    data["nodes"][1].update(kind="province", vp=0, name="Брод", start_owner=0)
+    data["edges"][0]["border_permille"] = 400
+    mapdef = parse_map(data)
+    assert mapdef.nodes[1].name == "Брод"
+    assert (mapdef.edges[0].border_permille, mapdef.edges[1].border_permille) == (400, 500)
+    assert (mapdef.edges[0].max_level, mapdef.edges[0].travel_ticks) == (3, 30)

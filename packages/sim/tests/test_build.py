@@ -13,10 +13,10 @@ Expected values come from the rules, not from the code:
   order: ``NOT_FOUND_OR_HIDDEN``, ``NOT_INTERNAL``, ``MAX_WIDTH``, ``EDGE_BUSY``,
   ``NOT_ENOUGH_CP``; no ``NOT_SUPPLIED``, no ``CITY_BUSY``, any number of builds at a time. The
   table tests ``test_dec16_example_*`` follow the worked examples of DEC-16 with A = 3, B = 4,
-  both own, A-B = e4 of level 1 and ``max_width`` 3, ``ticks_per_level`` 150 and
+  both own, A-B = e4 of level 1 and ``max_level`` 3, ``ticks_per_level`` 150 and
   ``orders.cost.build`` 50 (DEC-28, item 7).
 
-The map ``fork`` (rot180), all roads level 1 and ``max_width`` 3:
+The map ``fork`` (rot180), all roads level 1 and ``max_level`` 3:
 
     0 (capital of 0) -e0- 1 -e2- 3 -e4- 4 -e5- 5 ...
     0 -e1- 2 -e3- 3;   4 -e6- 6
@@ -91,7 +91,7 @@ def _fork(owned: bool = True) -> GameState:
     [
         (1, UpgradeGain(speed_pct=50, unit_speed_pct=15, amount=1)),
         (2, UpgradeGain(speed_pct=50, unit_speed_pct=15, amount=1)),
-        (3, None),  # max_width: nothing to gain
+        (3, None),  # max_level: nothing to gain
     ],
 )
 def test_upgrade_gain_table(level: int, expected: UpgradeGain | None) -> None:
@@ -100,12 +100,12 @@ def test_upgrade_gain_table(level: int, expected: UpgradeGain | None) -> None:
     assert upgrade_gain(state, RULES, 1) == expected
 
 
-def test_upgrade_gain_stops_at_the_edge_max_width() -> None:
+def test_upgrade_gain_stops_at_the_edge_max_level() -> None:
     state = _fork()
     state.map = dataclasses.replace(
         state.map,
         edges=tuple(
-            dataclasses.replace(e, max_width=2) if e.id == 1 else e for e in state.map.edges
+            dataclasses.replace(e, max_level=2) if e.id == 1 else e for e in state.map.edges
         ),
     )
     state.edges[1].width = 2
@@ -114,7 +114,7 @@ def test_upgrade_gain_stops_at_the_edge_max_width() -> None:
 
 # DEC-16: the worked examples of mechanics.md, section 8, under DEC-28, item 7 ------------------
 # Owners: 0..5 player 0 (capital 0), 6 and 7 player 1. A = 3, B = 4: A-B = e4 (level 1,
-# max_width 3). Other roads used below: e3 (A-2), e5 (B-5), e6 (B-6, into the enemy city 6).
+# max_level 3). Other roads used below: e3 (A-2), e5 (B-5), e6 (B-6, into the enemy city 6).
 
 A, B = 3, 4
 AB = 4

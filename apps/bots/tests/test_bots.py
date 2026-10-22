@@ -278,6 +278,7 @@ def _attack_into_a_fight(rules: Ruleset, enemy_bonus: int) -> tuple[PlayerView, 
     nodes = [
         {
             "id": i,
+            "name": f"n{i}",
             "x": 10 * i,
             "y": 10,
             "terrain": "forest",
@@ -292,7 +293,7 @@ def _attack_into_a_fight(rules: Ruleset, enemy_bonus: int) -> tuple[PlayerView, 
         for i in range(3)
     ]
     edges = [
-        {"id": i, "a": i, "b": i + 1, "base_width": 1, "max_width": 3, "travel_ticks": 30}
+        {"id": i, "a": i, "b": i + 1, "max_level": 3, "travel_ticks": 30, "border_permille": 500}
         for i in range(2)
     ]
     mirror = {"nodes": {"0": 2, "1": 1, "2": 0}, "edges": {"0": 1, "1": 0}}

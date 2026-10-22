@@ -176,7 +176,7 @@ def test_fastest_ways_to_equal_transfer_route(name: str) -> None:
         for node in state.nodes.values():
             node.owner = (0, 0, 1, 1, None)[draw(5)]
         for road in state.edges.values():
-            road.width = 1 + draw(mapdef.edges[road.id].max_width)
+            road.width = 1 + draw(mapdef.edges[road.id].max_level)
         ticks = all_packet_ticks(state, _MVP0)
         for player in (0, 1):
             own = [n for n in range(len(mapdef.nodes)) if state.nodes[n].owner == player]

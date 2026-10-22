@@ -2,7 +2,7 @@ import { Container, Graphics, GraphicsContext, Sprite, type Renderer, type Textu
 import type { Detail, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
-import { BORDER_PERMILLE } from './fogLayout.ts';
+import { borderPermille } from './fogLayout.ts';
 import { cellEdges, territoryBorders } from './regionLayout.ts';
 import {
   laneDashes,
@@ -173,7 +173,8 @@ export class MapView {
     });
 
     this.setOwners(map.nodes.map((node) => node.start_owner));
-    this.setRoads(map.edges.map((edge) => ({ width: edge.base_width })));
+    // Every road starts at level 1 (DEC-22): the map has no starting level.
+    this.setRoads(map.edges.map(() => ({ width: 1 })));
   }
 
   /**
@@ -285,7 +286,7 @@ export class MapView {
     const key = `${String(level)}|${kind.kind === 'buffer' ? 'b' : String(kind.owner)}|${fog[0] ? 'f' : 's'}${fog[1] ? 'f' : 's'}`;
     if (key === road.key) return;
     road.key = key;
-    const segments = roadSegments(kind, fog, BORDER_PERMILLE / 1000);
+    const segments = roadSegments(kind, fog, borderPermille(this.map, i) / 1000);
     if ([...road.stretches, ...segments].some((s) => isDashed(s.style))) this.dashesDirty = true;
     road.stretches = segments;
     road.level = level;

@@ -65,7 +65,7 @@ from gow_sim.commands import (
     UpgradeWarehouse,
     validate,
 )
-from gow_sim.maps import PLAYERS, MapDef, load_map
+from gow_sim.maps import PLAYERS, ROAD_START_LEVEL, MapDef, load_map
 from gow_sim.match import Controller, Match
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 from gow_sim.state import (
@@ -194,11 +194,11 @@ def check_state(state: GameState) -> None:
         assert 0 <= n.warehouse_level <= 2 and n.recruit_queue >= 0, f"node {nid}: {n}"
     for eid, e in state.edges.items():
         static = mapdef.edges[eid]
-        assert static.base_width <= e.width <= static.max_width, f"edge {eid}: {e}"
-        b = e.build  # a road build (DEC-28): on an internal road of its player below max_width
+        assert ROAD_START_LEVEL <= e.width <= static.max_level, f"edge {eid}: {e}"
+        b = e.build  # a road build (DEC-28): on an internal road of its player below max_level
         assert b is None or (
             b.edge == eid
-            and e.width < static.max_width
+            and e.width < static.max_level
             and state.nodes[static.a].owner == b.owner == state.nodes[static.b].owner
         ), f"edge {eid}: {e}"
     for gid, g in state.groups.items():
@@ -408,7 +408,7 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     for e, level in enumerate(edges):
         if level is Detail.FOG:
             edge = state.edges[e]
-            edge.width = draw(st.integers(edge.width, state.map.edges[e].max_width))
+            edge.width = draw(st.integers(edge.width, state.map.edges[e].max_level))
     for e, level in enumerate(edges):
         b = state.edges[e].build
         if b is not None and b.owner == enemy and level is Detail.FOG and draw(st.booleans()):

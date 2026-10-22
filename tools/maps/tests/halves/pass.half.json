@@ -1,15 +1,15 @@
 {
   "meta": {"name": "pass", "version": 1, "width": 600, "height": 400},
   "nodes": [
-    {"id": "capital", "x": 100, "y": 200, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 0, "start_owner": 0, "start_units": 4, "start_charged": 4, "start_stock": 4},
-    {"id": "front", "x": 200, "y": 200, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
-    {"id": "peak", "x": 300, "y": 80, "terrain": "mountains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
-    {"id": "pass", "x": 300, "y": 200, "terrain": "mountains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0}
+    {"id": "capital", "name": "n0", "mirror_name": "n6", "x": 100, "y": 200, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 0, "start_owner": 0, "start_units": 4, "start_charged": 4, "start_stock": 4},
+    {"id": "front", "name": "n1", "mirror_name": "n5", "x": 200, "y": 200, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
+    {"id": "peak", "name": "n2", "mirror_name": "n4", "x": 300, "y": 80, "terrain": "mountains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
+    {"id": "pass", "name": "n3", "x": 300, "y": 200, "terrain": "mountains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0}
   ],
   "edges": [
-    {"a": "capital", "b": "front", "base_width": 1, "max_width": 3},
-    {"a": "front", "b": "pass", "base_width": 1, "max_width": 1},
-    {"a": "peak", "b": "pass", "base_width": 1, "max_width": 1}
+    {"a": "capital", "b": "front", "max_level": 3},
+    {"a": "front", "b": "pass", "max_level": 1},
+    {"a": "peak", "b": "pass", "max_level": 1}
   ],
   "cross_edges": []
 }

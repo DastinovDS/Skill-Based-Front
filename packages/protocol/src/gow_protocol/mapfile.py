@@ -8,10 +8,17 @@ ranges between fields, the mirror table and the design checks stay with the load
 every bundled map.
 """
 
-from typing import Literal
+from typing import Annotated, Literal
+
+from pydantic import Field, StringConstraints
 
 from gow_protocol.base import EdgeId, MapId, NodeId, NonNegInt, PlayerId, PosInt, Width, WireModel
-from gow_sim.maps import NodeKind, Terrain
+from gow_sim.maps import BORDER_MAX, BORDER_MIN, NAME_MAX_LEN, NodeKind, Terrain
+
+NodeName = Annotated[str, StringConstraints(min_length=1, max_length=NAME_MAX_LEN)]
+"""Name of a node (DEC-23, item 4); uniqueness and spaces at the ends: ``gow-maps validate``."""
+BorderPermille = Annotated[int, Field(ge=BORDER_MIN, le=BORDER_MAX)]
+"""Border point of an edge in thousandths from its end ``a`` (DEC-23, item 5)."""
 
 
 class MapMetaFile(WireModel):
@@ -28,6 +35,8 @@ class MapMetaFile(WireModel):
 class MapNodeFile(WireModel):
     id: NodeId
     """Equals the index in ``nodes``."""
+    name: NodeName
+    """Name of the node shown by the interface (DEC-23, item 4): not translated."""
     x: NonNegInt
     y: NonNegInt
     terrain: Terrain
@@ -46,11 +55,12 @@ class MapEdgeFile(WireModel):
     """Equals the index in ``edges``."""
     a: NodeId
     b: NodeId
-    base_width: Width
-    """Road level at the start: always 1 (DEC-22)."""
-    max_width: Width
-    """Highest road level, at most 3 (DEC-22)."""
+    max_level: Width
+    """Highest road level, at most 3 (DEC-23, item 6); every road starts at level 1 (DEC-22)."""
     travel_ticks: PosInt
+    border_permille: BorderPermille
+    """Border point in thousandths from ``a`` (DEC-23, item 5): where the halves of the edge meet
+    (vision DEC-21, territory on the map)."""
 
 
 class MapMirrorFile(WireModel):

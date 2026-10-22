@@ -1,4 +1,4 @@
-"""Map preview PNG (MAP-04): roads, cities, owners, terrain and VP at a glance."""
+"""Map preview PNG (MAP-04): roads, border points, nodes, names, owners, terrain and VP."""
 
 # matplotlib's inline types leave ``**kwargs`` of most Axes methods unannotated, so strict
 # pyright reports every call as partially unknown. The rest of the strict checks stay on.
@@ -48,16 +48,20 @@ def render_preview(mapdef: MapDef, out: str | Path) -> None:
     for edge in mapdef.edges:
         a, b = mapdef.nodes[edge.a], mapdef.nodes[edge.b]
         xs, ys = [a.x, b.x], [a.y, b.y]
-        # Light underlay: how wide the road can be upgraded; dark line: width at the start.
+        # Light underlay: the last level of the road; dark line: level 1, where every road starts.
         ax.plot(
             xs,
             ys,
             color="#d8d2c2",
-            linewidth=2.2 * edge.max_width,
+            linewidth=2.2 * edge.max_level,
             solid_capstyle="round",
             zorder=1,
         )
-        ax.plot(xs, ys, color="#5b5446", linewidth=1.2 * edge.base_width, zorder=2)
+        ax.plot(xs, ys, color="#5b5446", linewidth=1.2, zorder=2)
+        # The border point (DEC-23, item 5): a small hollow dot on the road.
+        t = edge.border_permille / 1000
+        bx, by = a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t
+        ax.scatter([bx], [by], s=14, c="white", edgecolors="#5b5446", linewidths=0.8, zorder=2)
 
     for node in mapdef.nodes:
         capital = node.capital_of is not None
@@ -72,7 +76,9 @@ def render_preview(mapdef: MapDef, out: str | Path) -> None:
             zorder=3,
         )
         # Node kind (DEC-22): S, M, L city; P province; the capital is the star.
-        label = f"{node.id}{_KIND_MARK[node.kind]}" + (f"\nvp{node.vp}" if node.vp != 1 else "")
+        label = f"{node.id}{_KIND_MARK[node.kind]} {node.name}" + (
+            f"\nvp{node.vp}" if node.vp != 1 else ""
+        )
         ax.annotate(
             label, (node.x, node.y), xytext=(7, 7), textcoords="offset points", fontsize=7, zorder=4
         )
@@ -136,8 +142,9 @@ def render_preview(mapdef: MapDef, out: str | Path) -> None:
     neutral = sum(1 for n in mapdef.nodes if n.start_owner is None)
     ax.set_title(
         f"{mapdef.meta.name} v{mapdef.meta.version}: {len(mapdef.nodes)} узлов, "
-        f"{len(mapdef.edges)} дорог, нейтральных {neutral}. "
-        "Подпись: id, вид (S/M/L: малый, средний, большой город), vp; заряжено/юнитов",
+        f"{len(mapdef.edges)} дорог, нейтральных {neutral}.\n"
+        "Подпись: id, вид (S/M/L: малый, средний, большой город, P: провинция), название, vp;"
+        " заряжено/юнитов. Кружок на дороге: точка границы",
         fontsize=9,
     )
     fig.tight_layout()

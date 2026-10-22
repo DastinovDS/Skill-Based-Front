@@ -399,7 +399,7 @@ def test_upgrade_road_rules() -> None:
     state, _ = _state()
     # e1 joins own 1 and neutral 3: a buffer edge (mechanics.md, section 8).
     assert validate(state, RULES, 0, UpgradeRoad(1)) == Reject(RejectCode.NOT_INTERNAL)
-    state.edges[0].width = 3  # max_width of e0
+    state.edges[0].width = 3  # max_level of e0
     assert validate(state, RULES, 0, UpgradeRoad(0)) == Reject(RejectCode.MAX_WIDTH)
     state.edges[0].width = 1
     state.nodes[0].warehouse = 0  # no charges are needed

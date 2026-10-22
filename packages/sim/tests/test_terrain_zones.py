@@ -48,6 +48,7 @@ def _line(terrains: list[str], owners: list[int | None]) -> MapDef:
     nodes: list[dict[str, Any]] = [
         {
             "id": i,
+            "name": f"n{i}",
             "x": 10 * i,
             "y": 10,
             "terrain": terrains[i],
@@ -64,7 +65,7 @@ def _line(terrains: list[str], owners: list[int | None]) -> MapDef:
     nodes[0]["capital_of"], nodes[-1]["capital_of"] = 0, 1
     nodes[0]["kind"] = nodes[-1]["kind"] = "capital"
     edges = [
-        {"id": i, "a": i, "b": i + 1, "base_width": 1, "max_width": 3, "travel_ticks": 30}
+        {"id": i, "a": i, "b": i + 1, "max_level": 3, "travel_ticks": 30, "border_permille": 500}
         for i in range(n - 1)
     ]
     mirror = {
@@ -123,9 +124,18 @@ def _progress_by_tick(terrains: list[str]) -> dict[int, int]:
     return seen
 
 
-def test_the_border_point_is_the_midpoint_until_maps_have_it() -> None:
+def test_the_border_point_comes_from_the_map() -> None:
+    # DEC-23, item 5 (#366): the edge field border_permille, in thousandths from the end a.
     mapdef = _line(["plains", "mountains", "forest"], [0, 0, 1])
     assert border_permille(mapdef, 0) == 500
+    edges = (dataclasses.replace(mapdef.edges[0], border_permille=300), *mapdef.edges[1:])
+    moved = dataclasses.replace(mapdef, edges=edges)
+    assert border_permille(moved, 0) == 300
+    # Rule 2, travel_ticks 30, plains 125 -> mountains 70: b = 300 from the plains end gives
+    # D = 300 * 70 + 700 * 125 = 108500, T = 30 * 100 * 108500 // (1000 * 125 * 70) = 37
+    # (b = 500: 33, example 1); the other way b = 700 from the mountains end, the same D.
+    assert traversal_ticks(moved, RULES, 0, 1) == 37
+    assert traversal_ticks(moved, RULES, 0, 0) == 37
 
 
 def test_example_1_plains_to_mountains() -> None:

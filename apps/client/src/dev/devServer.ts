@@ -146,7 +146,7 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
           const inner = (n: number | undefined) =>
             n !== undefined && base.view.nodes[n]?.owner === DEV_PLAYER;
           // The gain of a level (DEC-28, item 7): packet speed, unit speed, one more charge.
-          return inner(ends?.a) && inner(ends?.b) && width < (ends?.max_width ?? 0)
+          return inner(ends?.a) && inner(ends?.b) && width < (ends?.max_level ?? 0)
             ? { ...e, width, build, upgrade_gain: { speed_pct: 50, unit_speed_pct: 15, amount: 1 } }
             : { ...e, width, build };
         }),
