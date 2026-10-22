@@ -196,7 +196,7 @@ function chipCorners(side: number): Point[] {
  * bonus shots left of that side (a diamond and "×N", dashed and dim at 0), along the bottom a bar
  * fills until the next round. A round with a bonus (virtual) shot (`FightView.last_round`) puts the
  * caption "bonus attack" over the plate (the source of the bonus is not told); the shots themselves
- * are the tracers on the map between the groups (`ShotView`, Ш1, #352), not on the plate. A chip that
+ * are the tracers on the map between the groups (`ShotView`, shot style 1, #352), not on the plate. A chip that
  * changed in the round, or joined with a reinforcement, pulses once. A fight without round data (an
  * old replay: #323) has chips, no caption and no stock. Every `fight_round` event also pops up the
  * losses of the round. The end of a fight (`fight_ended`) shows its plate again with the losses of

@@ -373,7 +373,7 @@ describe('FightView', () => {
     // Nothing but the stocks and the caption of the bonus shot: no "2", "1", "1" of the labels of shots.
     expect(texts().filter((text) => !text.startsWith('×'))).toEqual(['bonus attack']);
     walk((node) => {
-      expect((node.label ?? '').startsWith('arrows')).toBe(false);
+      expect(labelOf(node).startsWith('arrows')).toBe(false);
     });
     view.destroy();
   });

@@ -5,7 +5,7 @@ import { fightPlace, type RoundFx } from './fightFx.ts';
 import { CANCEL_SHARE, HIT_SHARE, type Contacts } from './fightImpact.ts';
 import type { ParticleSpec } from './particles.ts';
 import { ShotView } from './shotView.ts';
-import { SPARKS, TRACER_END_SHARE, tracerBudget } from './shotLayout.ts';
+import { GLOW_SPOT_COUNT, SPARKS, TRACER_END_SHARE, tracerBudget } from './shotLayout.ts';
 import { FIGHT_FX_STRENGTH } from './style.ts';
 
 const map = {
@@ -91,7 +91,8 @@ describe('ShotView: the form of a tracer by the fields of the round', () => {
     const { run, view } = setup();
     const real = run([fx([1, 0], [0, 1])], 102.5);
     expect(real.filter((p) => p.kind === 'diamond')).toHaveLength(0);
-    expect(real.filter((p) => p.kind === 'glow')).toHaveLength(1);
+    // The glow of the head and the soft spots along the tail.
+    expect(real.filter((p) => p.kind === 'glow')).toHaveLength(1 + GLOW_SPOT_COUNT);
     expect(real.filter((p) => p.kind === 'square').length).toBeGreaterThan(0);
     const bonus = run([fx([1, 0], [0, 0], [1, 0])], 102.5);
     expect(bonus.filter((p) => p.kind === 'diamond')).toHaveLength(3);
@@ -182,9 +183,10 @@ describe('ShotView: pools', () => {
     const many = Array.from({ length: 12 }, (_, i) => ({ ...fx([1, 1]), tick: 100 + 0 * i }));
     run(many, 101);
     expect(view.shown()).toBeLessThanOrEqual(16);
-    const before = parent.getChildAt(0)?.children.length ?? 0;
+    const layer = parent.getChildAt(0);
+    const before = layer.children.length;
     run(many, 101.5);
-    expect(parent.getChildAt(0)?.children.length).toBe(before);
+    expect(layer.children).toHaveLength(before);
     run([], 101.5);
     expect(view.shown()).toBe(0);
     view.destroy();

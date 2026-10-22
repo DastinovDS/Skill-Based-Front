@@ -1,5 +1,5 @@
 /**
- * The shots of a round on the map, Ш1 "Tracers" at strength "Stronger" (ui-style 29.1, 29.4; #352):
+ * The shots of a round on the map, shot style 1 "Tracers" at strength "Stronger" (ui-style 29.1, 29.4; #352):
  * a curved comet that leaves the group that shot, tapers into a tail and lands on the other group; two
  * shots that meet bend round each other (a lens of two arcs) and meet in the middle; a bonus shot is
  * a hollow tail with three diamonds trailing it; the path stays a moment after the hit and fades.
@@ -115,13 +115,15 @@ export function arcTangent(shot: Pick<Shot, 'p0' | 'ctrl' | 'b'>, s: number): Po
  * The shots of an impact: one from the shooter to the victim (a kill or a charge put out), or two for
  * shots that cancel, each ending in the middle between the groups. A shot leaves and lands
  * `TOKEN_REACH` from the middle of a group (less if the groups stand closer than that). A path shorter
- * than `MIN_REACH` times the strength factor is lengthened behind the shooter; the arc bends to the
+ * than `MIN_REACH` times the strength factor (and `scale`, more when the map is zoomed out, so that the
+ * trail keeps its size on the screen) is lengthened behind the shooter; the arc bends to the
  * left of the way, so that the two shots of a cancel bend to the opposite sides of the road and make a lens.
  */
 export function shotsOf(
   impact: Impact,
   contacts: Contacts,
   strength: number = FIGHT_FX_STRENGTH,
+  scale = 1,
 ): Shot[] {
   const cancel = impact.kind === 'cancel';
   const shooters: readonly Side[] = cancel
@@ -143,11 +145,12 @@ export function shotsOf(
       ? { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }
       : along(to, dir, -(reach + 1));
     const chord = len(sub(b, a));
-    const extra = Math.max(0, MIN_REACH * kk - chord);
+    // The least way and the least bend keep their size on the screen when the map is zoomed out (`scale`).
+    const extra = Math.max(0, MIN_REACH * kk * scale - chord);
     const p0 = along(a, dir, -extra);
     const length = chord + extra;
     const normal = { x: -dir.y, y: dir.x };
-    const sag = Math.max(BEND * length, MIN_BEND);
+    const sag = Math.max(BEND * length, MIN_BEND * scale);
     const mid = { x: (p0.x + b.x) / 2, y: (p0.y + b.y) / 2 };
     // The apex of a quadratic arc is half way between the chord and the control point.
     const ctrl = along(mid, normal, 2 * sag);
@@ -287,10 +290,13 @@ export function echoesOf(
   }));
 }
 
-/** Particles a tracer has at most in flight: the head and its glow, the sparks, the echoes. */
+/** Soft glow spots along a tail (`ShotView`). */
+export const GLOW_SPOT_COUNT = 3;
+
+/** Particles a tracer has at most in flight: the head and its glow, the glow along the tail, the sparks, the echoes. */
 export function tracerBudget(
   shot: Pick<Shot, 'bonus'>,
   strength: number = FIGHT_FX_STRENGTH,
 ): number {
-  return 2 + sparkCount(strength) + (shot.bonus ? ECHOES.length : 0);
+  return 2 + GLOW_SPOT_COUNT + sparkCount(strength) + (shot.bonus ? ECHOES.length : 0);
 }

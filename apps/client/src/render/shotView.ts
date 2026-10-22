@@ -1,11 +1,12 @@
 import { Container, Graphics } from 'pixi.js';
 import type { PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
-import type { FightPlace, RoundFx } from './fightFx.ts';
+import { lighten, type FightPlace, type RoundFx } from './fightFx.ts';
 import { fxSeed, impactsOf, type Contacts, type Side } from './fightImpact.ts';
 import { dashAlong } from './intentLayout.ts';
 import { burst, headKind, type Emit } from './particles.ts';
 import {
+  GLOW_SPOT_COUNT,
   TAIL_SEGMENTS,
   TRACER_END_SHARE,
   arcAt,
@@ -35,13 +36,17 @@ const PATH_WIDTH = { real: 2.2, bonus: 1.6 } as const;
 /** How much wider than the tail its dark underlay is, world units at 100%. */
 const UNDERLAY_PAD = 4;
 const UNDERLAY_ALPHA = 0.5;
-/** The tail is this opaque at the head. */
+/** The tail is this opaque at the head, and the share of that at its tail end; how much lighter than its colour the head end is. */
 const TAIL_ALPHA = 0.95;
+const TAIL_FLOOR = 0.25;
+const TAIL_HOT = 0.35;
+/** The glow along a tail: this many soft additive spots, as far apart as this share of the path. */
+const GLOW_STEP = 0.11;
 
 const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x, p.y]);
 
 /**
- * The tracers of the map (Ш1, ui-style 29.1, 29.4; #352): the curved comets of the shots of the rounds
+ * The tracers of the map (shot style 1, ui-style 29.1, 29.4; #352): the curved comets of the shots of the rounds
  * that are still playing. A real shot has a solid tail that tapers (eight segments, each a little more
  * opaque than the one behind it, over a dark underlay) with a white core (the opponent's: dark), a glow
  * along it and a head that is a square ■; a bonus shot has a hollow tail, two thin lines, three diamonds trailing it and a
@@ -96,7 +101,7 @@ export class ShotView {
       const contacts = contactsOf(fx.place);
       const seed = fxSeed(fx);
       for (const impact of impactsOf(fx, this.me)) {
-        for (const shot of shotsOf(impact, contacts, strength)) {
+        for (const shot of shotsOf(impact, contacts, strength, scale)) {
           if (used >= MAX_SHOTS) break;
           const phase = shotPhase(age, shot, roundTicks);
           if (phase === null) continue;
@@ -210,9 +215,11 @@ export class ShotView {
       for (let j = 0; j < TAIL_SEGMENTS; j++) {
         const [l0, l1, r0, r1] = [tail.left[j], tail.left[j + 1], tail.right[j], tail.right[j + 1]];
         if (l0 === undefined || l1 === undefined || r0 === undefined || r1 === undefined) continue;
+        const t = (j + 1) / TAIL_SEGMENTS;
         g.poly(flat([l0, l1, r1, r0].map(local))).fill({
-          color,
-          alpha: TAIL_ALPHA * ((j + 1) / TAIL_SEGMENTS),
+          // Hotter towards the head, as the glow of a tracer is.
+          color: lighten(color, TAIL_HOT * t),
+          alpha: TAIL_ALPHA * (TAIL_FLOOR + (1 - TAIL_FLOOR) * t),
         });
       }
       trace(tail.axis.slice(2));
@@ -239,6 +246,19 @@ export class ShotView {
           alpha: echo.alpha,
         });
       }
+    }
+    // The glow along the tail: soft additive spots that fade away from the head.
+    for (let k = 1; k <= GLOW_SPOT_COUNT; k++) {
+      const at = arcAt(shot, Math.max(0, phase.s - k * GLOW_STEP * kk));
+      emit({
+        kind: 'glow',
+        x: at.x,
+        y: at.y,
+        size: HEAD_GLOW * kk * scale * (1 - 0.2 * k),
+        color,
+        alpha: 0.4 * bright * (1 - k / (GLOW_SPOT_COUNT + 1)),
+        add: true,
+      });
     }
     emit({
       kind: 'glow',

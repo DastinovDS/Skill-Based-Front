@@ -103,7 +103,7 @@ export class EffectsView {
         .stroke({ width: 1.4, color: PAPER, join: 'round' });
     this.flagContext = [flag(0), flag(1)];
     layers.layer.effects.addChild(this.layer);
-    // The tails of the tracers (Ш1) lie under the particles (their heads, glows and sparks), which lie
+    // The tails of the tracers (shot style 1) lie under the particles (their heads, glows and sparks), which lie
     // under the arenas: a spark over a city does not hide the plate that floats above it.
     this.shots = new ShotView(layers.layer.effects, me);
     const enemy: PlayerId = me === 0 ? 1 : 0;

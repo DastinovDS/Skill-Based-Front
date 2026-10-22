@@ -149,6 +149,20 @@ describe('at the distance of 46 the trail is lengthened, the groups stay where t
     expect(sparkCount(1)).toBeLessThan(SPARKS);
   });
 
+  it('keeps the lengthening and the bend the same size on the screen when the map is zoomed out', () => {
+    const at = (scale: number): Shot | undefined =>
+      impactsOf(round([1, 0], [0, 1]), 0).flatMap((i) =>
+        shotsOf(i, contacts(), FIGHT_FX_STRENGTH, scale),
+      )[0];
+    const near = at(1);
+    const far = at(1 / 0.6);
+    expect(far?.length ?? 0).toBeCloseTo((near?.length ?? 0) / 0.6, 5);
+    // The bend too: the sag over the chord of the longer path is larger, never smaller.
+    const sag = (shot: Shot | undefined): number =>
+      shot === undefined ? 0 : Math.abs(arcAt(shot, 0.5).y - 100);
+    expect(sag(far)).toBeGreaterThan(sag(near));
+  });
+
   it('keeps the arc bent: the sag is never less than the least bend', () => {
     const [shot] = shotsFor(round([1, 0], [0, 1]));
     if (shot === undefined) throw new Error('a shot');
@@ -266,8 +280,8 @@ describe('the sparks and the echoes', () => {
   });
 
   it('keep the particles of a tracer in a small budget', () => {
-    expect(tracerBudget(shot)).toBeLessThanOrEqual(8);
-    expect(tracerBudget(bonus)).toBeLessThanOrEqual(11);
+    expect(tracerBudget(shot)).toBeLessThanOrEqual(11);
+    expect(tracerBudget(bonus)).toBeLessThanOrEqual(14);
     expect(tracerBudget(bonus)).toBeGreaterThan(tracerBudget(shot));
   });
 });
