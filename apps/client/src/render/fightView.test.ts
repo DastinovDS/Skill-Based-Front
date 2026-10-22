@@ -236,6 +236,27 @@ describe('FightView', () => {
     view.destroy();
   });
 
+  it('keeps the plate of a fight that has just ended clear of the live one at the same city (#360)', () => {
+    const { view, frame, arenaViews } = setup();
+    // One fight goes on in the city, another has just ended there.
+    view.update(frame(snapshot([fightAt({ id: 'a' })], 160)), [ended(160, 0, true)], ROUND, false);
+    const arenas = arenaViews();
+    expect(arenas).toHaveLength(2);
+    const k = arenas[0]?.scale.x ?? 1;
+    const [live, end] = arenas;
+    if (live === undefined || end === undefined) throw new Error('no arena');
+    const apartX = Math.abs(live.x - end.x) >= 2 * PLATE.halfWidth * k;
+    const apartY = Math.abs(live.y - end.y) >= 2 * PLATE.halfHeight * k;
+    expect(apartX || apartY).toBe(true);
+    // The live fight keeps the usual spot; the one that ended moved off it.
+    const place = fightPlace(map, city, null, null, radiusOf);
+    if (place === undefined) throw new Error('no place');
+    const usual = arenaCenter(place, 1);
+    expect(live.x).toBeCloseTo(usual.x);
+    expect(live.y).toBeCloseTo(usual.y);
+    view.destroy();
+  });
+
   it('draws a chip per unit: charged, discharged and dead, own on the left, the enemy on the right', () => {
     const { view, frame, chips } = setup();
     // Own: 5 units, 2 charged, 1 dead; the enemy: 4 units, all charged.
