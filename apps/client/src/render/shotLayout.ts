@@ -26,14 +26,14 @@ import { FIGHT_FX_STRENGTH } from './style.ts';
 /** How far from the middle of a group its shot leaves and lands: about the edge of the token. */
 export const TOKEN_REACH = 14;
 /** A path shorter than this is lengthened behind the shooter (risk 1, before the strength factor). */
-export const MIN_REACH = 36;
+export const MIN_REACH = 46;
 /** The sag of the arc over the chord, and the least it may be (so that a short path still bends). */
 export const BEND = 0.3;
 export const MIN_BEND = 7;
 /** The tail covers this much of the path behind the head (before the strength factor). */
 export const TAIL_SHARE = 0.55;
 /** Width of the tail at the head (before the strength factor). */
-export const TAIL_WIDTH = 11;
+export const TAIL_WIDTH = 13;
 /** The tail is cut into this many segments, one polygon. */
 export const TAIL_SEGMENTS = 8;
 /** The path fades this share of a round after the hit (0.5 s of 2 s). */
