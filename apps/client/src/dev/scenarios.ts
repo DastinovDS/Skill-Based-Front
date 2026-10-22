@@ -206,6 +206,8 @@ export interface FixtureScene {
   events: readonly EventMsg[];
   /** The part of the map (world units) the camera looks at; without it the whole map is shown. */
   view?: { x: number; y: number; width: number; height: number };
+  /** The city development of DEC-26 is on (the barracks marks are drawn); off when absent. */
+  cityUpgrades?: boolean;
 }
 
 export const FIXTURE_SCENES: readonly FixtureScene[] = [
@@ -217,12 +219,16 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     // The last round of the fight in the city 4 (its shots in the air), 12 ticks ago.
     events: [round(ARTERIYA_TICK - 12, { node: 4 }, 2, 0, 1)],
     view: ARTERIYA_VIEW,
+    // As in `mvp-1`: the own capital and the enemy city 5 next door show the barracks (DEC-31).
+    cityUpgrades: true,
   },
   {
     id: 'snapshot',
     map: 'diamond',
     snapshot: fixture('snapshot'),
     events: [fight(118, { edge: 3, point: 1200 }, 1, 2)],
+    // The enemy capital 3 is next to the own city 0: its barracks are seen (DEC-31).
+    cityUpgrades: true,
   },
   { id: 'overflow', map: 'diamond', snapshot: overflowSnapshot(), events: [] },
   { id: 'snapshot_fog', map: 'line3', snapshot: fixture('snapshot_fog'), events: [] },
@@ -254,6 +260,13 @@ export function frozenSource(scene: FixtureScene): RenderSource {
     orderDelays: { planned: DEV_RULES.orders.planned_delay_ticks },
     roundTicks: DEV_RULES.combat.round_ticks,
     recruitTicks: DEV_RULES.recruit.unit_ticks,
+    cityUpgrades:
+      scene.cityUpgrades === true
+        ? {
+            barracks: DEV_RULES.city_upgrades.barracks_ticks,
+            warehouse: DEV_RULES.city_upgrades.warehouse_ticks,
+          }
+        : null,
     capacityTicks: {
       attritionTicks: DEV_RULES.capacity.attrition_ticks,
       graceTicks: DEV_RULES.capacity.grace_ticks,

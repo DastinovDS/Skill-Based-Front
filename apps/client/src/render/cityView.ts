@@ -69,7 +69,7 @@ interface CityState {
   readonly warehouseCap: number | null;
   /** Own city: share of its barracks or warehouse build done, in percent; `null`: none. */
   readonly buildPct: number | null;
-  /** Own city with the barracks (DEC-26): the house mark is drawn. */
+  /** A city known to have the barracks (own, DEC-26, or an enemy's next door, DEC-31): the house. */
   readonly barracks: boolean;
 }
 
@@ -101,7 +101,8 @@ function onCircle(radius: number, angle: number): Point {
  * a dark inner ring, neutral: grey with a thin outline), the capital star, the capacity ring of
  * segments (white for own units standing there, grey otherwise; overcrowding is the alert view's
  * pulsing ring and badge, not drawn here), the warehouse bar under the ring, the recruit queue of an
- * own city above it (DEC-25), the barracks house of an own city (DEC-26) and the VP badge. The capacity is public and exact (DEC-22: fixed by
+ * own city above it (DEC-25), the barracks house of an own city (DEC-26) or of an enemy city next to
+ * an own node (DEC-31) and the VP badge. The capacity is public and exact (DEC-22: fixed by
  * the node kind).
  *
  * Bodies share GraphicsContexts (one per kind and radius); rings and bars are redrawn when a
@@ -156,7 +157,7 @@ export class CityView {
       this.rings.push(city.addChild(new Graphics()));
       this.bars.push(city.addChild(new Graphics()));
       this.queues.push(city.addChild(new Graphics()));
-      this.barracks.push(city.addChild(new Graphics()));
+      this.barracks.push(city.addChild(new Graphics({ label: 'barracks' })));
       if (node.vp > 0) {
         const badge = city.addChild(new Container());
         badge.addChild(new Graphics(this.badge));
@@ -361,7 +362,7 @@ export class CityView {
     bar.clear();
     queue.clear();
     barracks.clear();
-    if (state.barracks) this.drawBarracks(barracks, radius);
+    if (state.barracks) this.drawBarracks(barracks, radius, kind === 'enemy' ? ENEMY : YOU);
     if (state.queue !== null && state.queue > 0 && state.unitTicks !== null) {
       this.drawQueue(queue, radius, state.queue, state.progress, state.unitTicks);
     }
@@ -439,12 +440,16 @@ export class CityView {
     }
   }
 
-  /** The barracks of an own city (DEC-26): a dark badge with a house, left of the ring. */
-  private drawBarracks(g: Graphics, radius: number): void {
+  /**
+   * The barracks (DEC-26; an enemy city next door, DEC-31): a dark badge with a house, left of the
+   * ring, the same shape for both sides (the house says «barracks»); its rim takes the colour of
+   * the owner, so an enemy's barracks never look like an own one.
+   */
+  private drawBarracks(g: Graphics, radius: number, rim: number): void {
     const at = barracksAt(radius);
     g.circle(at.x, at.y, BARRACKS_MARK.radius)
       .fill(BARRACKS_MARK.fill)
-      .stroke(BARRACKS_MARK.stroke);
+      .stroke({ ...BARRACKS_MARK.stroke, color: rim });
     g.poly(BARRACKS_HOUSE.flatMap(([x, y]) => [at.x + x, at.y + y])).fill(PAPER);
   }
 

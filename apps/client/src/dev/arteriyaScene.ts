@@ -48,6 +48,8 @@ const LEVEL: Readonly<Record<number, number>> = { 1: 3, 14: 2, 6: 2, 2: 2, 3: 2 
 /** Fog memory, ticks ago: a city or road not listed here and out of sight was never seen. */
 const SEEN_NODE: Readonly<Record<number, number>> = { 15: 210, 14: 950, 8: 1500, 11: 2000 };
 const SEEN_EDGE: Readonly<Record<number, number>> = { 3: 210, 18: 950, 11: 1500 };
+/** Enemy cities with the barracks built; seen only next to an own node (DEC-31): here city 5. */
+const ENEMY_BARRACKS = [5, 30];
 
 const T = ARTERIYA_TICK;
 const id = (n: number) => n.toString(16).padStart(16, '0');
@@ -69,6 +71,14 @@ export function arteriyaSnapshot(map: MapFile): SnapshotMsg {
   const isExact = (node: number) => OWN.includes(node) || STATIONED.includes(node);
   const nextToExact = (node: number) =>
     map.edges.some((e) => (e.a === node && isExact(e.b)) || (e.b === node && isExact(e.a)));
+  const nextToOwn = (node: number) =>
+    map.edges.some(
+      (e) => (e.a === node && OWN.includes(e.b)) || (e.b === node && OWN.includes(e.a)),
+    );
+  const barracks = (node: number): boolean | null => {
+    if (owner(node) === 0) return map.nodes[node]?.kind === 'capital';
+    return owner(node) === 1 && nextToOwn(node) ? ENEMY_BARRACKS.includes(node) : null;
+  };
 
   const nodes: NodeView[] = map.nodes.map((n) => {
     const capacity = DEV_CAPACITY[n.kind];
@@ -94,7 +104,7 @@ export function arteriyaSnapshot(map: MapFile): SnapshotMsg {
       recruit_queue: mine ? 0 : null,
       recruit_progress: mine ? 0 : null,
       recruit_waiting: mine ? false : null,
-      has_barracks: mine ? n.kind === 'capital' : null,
+      has_barracks: n.kind === 'province' ? null : barracks(n.id),
       warehouse_level: mine ? 0 : null,
       warehouse_cap: mine ? capacity : null,
       building: null,
