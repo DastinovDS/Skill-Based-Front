@@ -231,6 +231,7 @@ export class MapScene {
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.entities.setTickHz(tickHz);
+    this.entities.setBuildTicks(this.source.roadBuildTicks ?? 0);
     this.overlay.setTickHz(tickHz);
     const delays = this.source.orderDelays ?? null;
     this.intents.setDelays(delays);

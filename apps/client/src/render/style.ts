@@ -69,16 +69,51 @@ export const STAMP_ROAD_CLEARANCE = 12;
 /** The snow cap of a mountain stamp. */
 export const SNOW_ALPHA = 0.45;
 
-// --- Roads, width 1..5 (9.3) ---------------------------------------------------------------------
-export const ROAD_COLOR = { color: 0xc4cbd4, alpha: 0.8 } as const;
-export const ROAD_CASING = { color: BG, alpha: 0.4 } as const;
-export const ROAD_CASING_EXTRA = 3;
-/** An upgraded road (DEC-26: it only speeds the supply up): dark chevrons every `spacing` px, `size` px long, notch at `depth`. */
-export const ROAD_CHEVRON = { color: BG, spacing: 28, size: 9, gap: 3, depth: 0.45 } as const;
-/** Road thickness grows with its level (1..3, DEC-22), so the level reads without colour: `0.5 + 1.5w`. */
-export function roadThickness(width: number): number {
-  return 0.5 + 1.5 * width;
+// --- Roads, level 1..3 = the number of lanes (ui-style 26, R1 "Lanes", #345) ---------------------
+// The level reads without colour: one, two or three parallel lanes. An own (internal) road has
+// solid light lanes on a band of the owner's colour; a buffer road (the ends have different
+// owners, or one of them none) has dashed grey lanes on a dark casing and no band; a half in fog
+// has dotted lanes. Nothing here is animated.
+export const ROAD_LANE = { width: 2, gap: 1.7 } as const;
+/** The lanes and the band under them of a road between two cities of one owner. */
+export const ROAD_OWN = { lane: 0xe6edf3, laneAlpha: 0.95, bandAlpha: 0.62, casing: 3.6 } as const;
+/** A buffer road: dashed lanes, a dark casing and no band of an owner. */
+export const ROAD_BUFFER = {
+  lane: 0xaab2bd,
+  laneAlpha: 0.95,
+  dash: 7,
+  gap: 5,
+  casingAlpha: 0.4,
+  casing: 3.6,
+} as const;
+/** A half of a road in fog: dotted lanes (the dark cell and the hatched border carry the state too). */
+export const ROAD_FOG = {
+  lane: 0xaab2bd,
+  laneAlpha: 0.75,
+  dash: 1.5,
+  gap: 4.5,
+  casingAlpha: 0.3,
+  casing: 3,
+} as const;
+/** Width of the lanes of a road of `level` (1..3): `n` lanes and the gaps between them. */
+export function roadLanesWidth(level: number): number {
+  const lanes = Math.max(1, Math.round(level));
+  return lanes * ROAD_LANE.width + (lanes - 1) * ROAD_LANE.gap;
 }
+/** The outer width of the casing or band of an own road of `level`: what the border tick reaches over. */
+export function roadSpan(level: number): number {
+  return roadLanesWidth(level) + ROAD_OWN.casing;
+}
+/** The "?" on a road that was never seen (its level is 1 by DEC-17): a small dashed disc. */
+export const ROAD_UNKNOWN = {
+  radius: 6.5,
+  fill: { color: BG, alpha: 0.92 },
+  stroke: { width: 1.2, color: NEUTRAL_STROKE },
+  /** The share of a dash of the rim in its step (the rest is the gap). */
+  dash: 0.5,
+  /** The question mark drawn with strokes: the hook (radius, how far above the centre), the stem, the dot. */
+  glyph: { hook: 2.3, up: 2.2, stem: 1.6, dot: 4.2, dotRadius: 0.95, width: 1.7 },
+} as const;
 
 // --- Cities (9.4) -------------------------------------------------------------------------------
 /** Radius when the capacity is not known (a map without a snapshot). */
@@ -158,8 +193,21 @@ export const DEFENSE_LABEL = { fontSize: 11, padX: 4, height: 15, tuck: -2, drop
 /** The selection outline is a copy of the triangle this much bigger (9.5). */
 export const SELECT_UNIT_SCALE = 1.45;
 
-/** A packet is a small disc without an outline (9.6); an opponent one has a dark centre. */
-export const PACKET_RADIUS = 5;
+/**
+ * A packet of the automatic supply is a small square with a tail of two fainter squares behind it
+ * (a charge is a square, ui-style 21); a one-off transfer a bigger square with a double outline.
+ * An opponent one (a replay shows both) has a dark centre.
+ */
+export const PACKET_SIDE = 8;
+export const PACKET_OUTLINE = { width: 1.5, color: BG } as const;
+export const PACKET_TRANSFER = { side: 11, ring: 15, ringWidth: 1.2, outline: 1.6 } as const;
+/** The tail: two squares behind the packet, `distance` from it along the road, fainter and smaller. */
+export const PACKET_TAIL = [
+  { distance: 8, side: 6, alpha: 0.6 },
+  { distance: 14, side: 5, alpha: 0.3 },
+] as const;
+/** A transfer is bigger: its tail starts this much further back. */
+export const PACKET_TAIL_TRANSFER_EXTRA = 4;
 /** Inside this distance past a city rim a packet shrinks and fades into the city icon. */
 export const PACKET_FADE_MARGIN = 8;
 export const PACKET_MIN_SCALE = 0.3;
@@ -180,7 +228,7 @@ export const FIGHT_COLOR = PAPER;
 
 // --- Fog of war (CLI-05, #61; softer in 9.8) -----------------------------------------------------
 // A hidden area is darkened (no solid hatching) and hatched at 45 degrees only in a band along the
-// border of what is seen, so the border reads without colour; a hidden road is a solid line shaded dark;
+// border of what is seen, so the border reads without colour; a hidden half of a road has dotted lanes (`ROAD_FOG`);
 // a memory ghost is faded AND carries the age of the sighting.
 
 export const FOG_COLOR = BG;
@@ -189,8 +237,6 @@ export const FOG_ALPHA = 0.45;
 export const FOG_HATCH = { width: 1.5, color: 0xaab2bd, alpha: 0.3 } as const;
 export const FOG_HATCH_SPACING = 9;
 export const FOG_BAND_WIDTH = 24;
-/** A hidden road stays a solid line, shaded dark (the dark cell and the hatched border carry the state too). */
-export const FOG_ROAD_ALPHA = 0.55;
 /** The tick across a road at its border point (DEC-21, item 5): a short light line, `overhang` px past the road on each side. */
 export const BORDER_MARK = { width: 2, color: 0xe6edf3, alpha: 0.55, overhang: 5 } as const;
 /** Opacity of a fresh memory ghost (the marker of what was last seen in a hidden place). */
@@ -233,15 +279,30 @@ export const PREVIEW_WIDTH = 2;
  */
 export const PICK_BAND = { extra: 6, dash: 10, gap: 7, alpha: 0.85 } as const;
 
-// --- Road builds of cities (DEC-16) -----------------------------------------------------------
-// A road being built is crossed by short bars across it ("ties"), and a hammer disc of the owner
-// sits on it near the building city (the disc carries the owner's ring shape, as intent icons do);
-// an own build also shows the time left, `m:ss`.
+// --- Road builds (DEC-16, DEC-28 item 7; R1, #345) ----------------------------------------------
+// A road being built carries a hazard tape under its lanes: stripes of the warning colour on a
+// dark band, the part that is done is a solid band over it. A plate with the level change ("1 to 2")
+// sits in the middle of the road; an own build also shows the time left under the plate, `m:ss`.
 
-export const BUILD_TIE = { width: 3, color: PAPER, spacing: 12, extra: 8 } as const;
-export const BUILD_TIE_CASING = { width: 5, color: BG, alpha: 0.8 } as const;
-/** Distance of the hammer disc from the centre of the building city, along the road. */
-export const BUILD_MARK_DISTANCE = 46;
+export const ROAD_TAPE = {
+  /** The tape is this much wider than the casing of the road. */
+  extra: 5,
+  /** One warning stripe and the dark gap after it, along the road. */
+  period: 11,
+  stripe: 5.5,
+  base: { color: BG, alpha: 0.8 },
+  stripeColor: { color: WARN, alpha: 0.9 },
+  done: { color: WARN, alpha: 0.55 },
+} as const;
+export const BUILD_PLATE = {
+  width: 34,
+  height: 16,
+  radius: 8,
+  stroke: { width: 1.5, color: WARN },
+  fontSize: 11,
+  /** The time left, under the plate. */
+  timeGap: 12,
+} as const;
 export const BUILD_TIME_FONT_SIZE = 10;
 
 // --- Fight, bounce, capture (9.9) ----------------------------------------------------------------
@@ -334,7 +395,7 @@ export const GHOST_SHAKE_AMPLITUDE = 3;
 
 // --- The «Supply» layer (DEC-28, item 8) ---------------------------------------------------------
 // A flat, minimal picture: the territory is a stronger flat tint than on the normal map, the roads
-// show their level by thickness, and only what supply is about is drawn on top. Opposite flows on
+// show their level by lanes, and only what supply is about is drawn on top. Opposite flows on
 // one road use opposite lanes; the automatics is a solid arrow, a transfer a dashed and wider one.
 
 /** The territory tint of the layer (the normal map: `TERRITORY_ALPHA`): flat, no terrain under it. */
@@ -351,8 +412,8 @@ export const SUPPLY_FLOW = {
 export const SUPPLY_TRANSFER = { width: 4.5, dash: 9, gap: 5 } as const;
 /** The number plate in the middle of a flow arrow. */
 export const SUPPLY_FLOW_LABEL = { fontSize: 11, padX: 4, height: 14, radius: 4 } as const;
-/** A packet on its road. */
-export const SUPPLY_PACKET_RADIUS = 3.5;
+/** A packet on its road: a square (a charge, ui-style 21); a transfer a bigger one with a double outline. */
+export const SUPPLY_PACKET = { side: 7, transferSide: 10, transferRing: 14 } as const;
 /**
  * The warehouse bar of the «Supply» layer is the bar of the normal map (`BAR_SEGMENT`); this is its
  * distance under the city (the layer draws no capacity ring).

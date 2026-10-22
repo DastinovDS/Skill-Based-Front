@@ -109,22 +109,37 @@ describe('arrows of intents', () => {
   });
 });
 
-describe('road builds of cities', () => {
-  it('puts bars across the road between the rims, and the mark near the building city', () => {
-    const geometry = buildGeometry(A, B, 20, 20, 6, 20, 15);
-    expect(geometry?.ties.map(([a, b]) => [a.x, a.y, b.x, b.y])).toEqual([
-      [30, 6, 30, -6],
-      [50, 6, 50, -6],
-      [70, 6, 70, -6],
+describe('the tape of a road being built (R1, #345)', () => {
+  it('lays a band of the width over the whole road, centred on it, and the done part from the start', () => {
+    const geometry = buildGeometry(A, B, 12, 10, 5, 0.25);
+    expect(geometry?.band).toEqual([
+      { x: 0, y: -6 },
+      { x: 100, y: -6 },
+      { x: 100, y: 6 },
+      { x: 0, y: 6 },
     ]);
-    expect(geometry?.mark).toEqual({ x: 35, y: 0 });
-    // Built from the other end: the mark sits at that end.
-    expect(buildGeometry(B, A, 20, 20, 6, 20, 15)?.mark).toEqual({ x: 65, y: 0 });
+    expect(geometry?.done?.map((p) => p.x)).toEqual([0, 25, 25, 0]);
+    expect(geometry?.mid).toEqual({ x: 50, y: 0 });
   });
 
-  it('never puts the mark past the middle, and draws nothing between overlapping cities', () => {
-    expect(buildGeometry(A, B, 20, 20, 6, 20, 80)?.mark).toEqual({ x: 50, y: 0 });
-    expect(buildGeometry(A, { x: 30, y: 0 }, 20, 20, 6, 20, 15)).toBeNull();
+  it('draws nothing done for a build that has just begun, and all of it when it is over', () => {
+    expect(buildGeometry(A, B, 12, 10, 5, 0)?.done).toBeNull();
+    expect(buildGeometry(A, B, 12, 10, 5, 1)?.done?.map((p) => p.x)).toEqual([0, 100, 100, 0]);
+    // A progress outside 0..1 is cut, not drawn past the road.
+    expect(buildGeometry(A, B, 12, 10, 5, 7)?.done?.map((p) => p.x)).toEqual([0, 100, 100, 0]);
+  });
+
+  it('puts the stripes in the world frame of the road, whatever its direction', () => {
+    const up = buildGeometry(A, { x: 0, y: 100 }, 12, 10, 5, 0);
+    expect(up?.mid).toEqual({ x: 0, y: 50 });
+    const xs = up?.stripes.flat().map((p) => p.x) ?? [];
+    // Across a road along +y the width runs along x (the band is 12 wide, centred on x = 0).
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(-6);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(6);
+  });
+
+  it('has no tape for a road without length', () => {
+    expect(buildGeometry(A, A, 12, 10, 5, 0.5)).toBeNull();
   });
 
   it('shows the time left as m:ss, rounded up', () => {

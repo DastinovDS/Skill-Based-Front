@@ -23,14 +23,17 @@ import {
 import { symbolScale, type Point } from './camera.ts';
 import { iconPoint, stackGroups, stackKey, type CityIcon } from './cityStacks.ts';
 import { nodeMarkerPoint } from './fogLayout.ts';
+import { buildProgress } from './roadLayout.ts';
 import { knownOfFigure, knownOfSeen } from './rangeLabel.ts';
 import { EntityKit, Token } from './shapes.ts';
 import {
-  BUILD_MARK_DISTANCE,
-  BUILD_TIE,
-  BUILD_TIE_CASING,
+  BUILD_PLATE,
   BUILD_TIME_FONT_SIZE,
-  roadThickness,
+  PACKET_TAIL,
+  PACKET_TAIL_TRANSFER_EXTRA,
+  PACKET_TRANSFER,
+  ROAD_TAPE,
+  roadSpan,
 } from './style.ts';
 
 function other(player: PlayerId): PlayerId {
@@ -57,16 +60,19 @@ interface FigureEntry {
 }
 
 interface PacketEntry extends Labelled {
+  /** The squares behind the packet (`PACKET_TAIL`), nearest first. */
+  tail: Graphics[];
   dot: Graphics;
   label: Text;
+  transfer: boolean;
   stamp: number;
   view: Container;
 }
 
-/** The hammer disc on a road a city builds, with the time left for an own build. */
+/** The plate with the level change on a road being built, with the time left for an own build. */
 interface BuildMark {
   view: Container;
-  disc: Graphics;
+  level: Text;
   time: Text;
 }
 
@@ -75,8 +81,8 @@ interface BuildMark {
  * 9.6): warehouse bars, own groups as inverted triangles (no trail: the arrow of their order is the intent view's), own packets gliding
  * along roads into and out of the city icons, what is known about enemies (a marker per city or
  * road, with numbers only where the snapshot has them), intents of both players as arrows, road
- * builds of cities (DEC-16: bars across the road and a hammer disc, the time left for an own
- * build). Fight, bounce and capture effects are `EffectsView`.
+ * builds (DEC-28, item 7: a hazard tape under the lanes of the road with the part done, a plate
+ * "1 to 2" in its middle, the time left for an own build). Fight, bounce and capture effects are `EffectsView`.
  *
  * Two kinds of input. `update(frame)` runs every frame: moving things (groups, packets, order
  * lines). Things that change only with a snapshot (bars, enemy markers, intent
@@ -95,11 +101,14 @@ export class EntityView {
   private readonly enemyLayer = new Container({ label: 'enemy' });
   private readonly packetLayer = new Container({ label: 'packets' });
   private readonly groupLayer = new Container({ label: 'own-groups' });
-  private readonly buildTies = new Graphics();
+  private readonly buildTape = new Graphics();
   private readonly buildLayer = new Container({ label: 'builds' });
   private readonly buildMarks: BuildMark[] = [];
   private readonly timeStyle: TextStyle;
+  private readonly levelStyle: TextStyle;
   private tickHz = 10;
+  /** Ticks a road level takes to build (`ruleset_public.build.ticks_per_level`): the part done. */
+  private buildTicks = 0;
   private cameraScale = 1;
   private readonly groups = new Map<string, GroupEntry>();
   private readonly packets = new Map<string, PacketEntry>();
@@ -130,8 +139,14 @@ export class EntityView {
       fill: 0xf0f6fc,
       stroke: { color: 0x0d1117, width: 3, join: 'round' },
     });
-    // Road builds lie on the roads, under the groups.
-    layers.layer.roads.addChild(this.buildTies);
+    this.levelStyle = new TextStyle({
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: BUILD_PLATE.fontSize,
+      fontWeight: '700',
+      fill: 0xf0f6fc,
+    });
+    // The tape of a road build lies under the lanes: first in the layer of the roads.
+    layers.layer.roads.addChildAt(this.buildTape, 0);
     layers.layer.groups.addChild(this.enemyLayer, this.packetLayer, this.groupLayer);
     layers.layer.intents.addChild(this.buildLayer);
   }
@@ -143,10 +158,17 @@ export class EntityView {
     for (const entry of [...this.groups.values(), ...this.packets.values()]) {
       texts.push(...entry.labels());
     }
-    for (const mark of this.buildMarks) texts.push(mark.time);
+    for (const mark of this.buildMarks) texts.push(mark.level, mark.time);
     for (const text of texts) {
       if (text.resolution !== resolution) text.resolution = resolution;
     }
+  }
+
+  /** Ticks a road level takes to build (`ruleset_public.build.ticks_per_level`); 0: unknown, no part done. */
+  setBuildTicks(ticks: number): void {
+    if (ticks === this.buildTicks) return;
+    this.buildTicks = ticks;
+    if (this.base !== null) this.drawBuilds(this.base);
   }
 
   /** Ticks per second (`ruleset_public.tick_hz`), for the time left of own road builds. */
@@ -173,7 +195,7 @@ export class EntityView {
 
   /** The «Supply» map mode hides the road builds drawn on the road layer (DEC-28, item 8). */
   setSupplyMode(on: boolean): void {
-    this.buildTies.visible = !on;
+    this.buildTape.visible = !on;
   }
 
   /** Every token of enemies seen: in cities and on roads. */
@@ -189,6 +211,12 @@ export class EntityView {
     if (scale === this.cameraScale) return;
     this.cameraScale = scale;
     for (const token of this.enemyTokens()) token.setScale(symbolScale(token.side, scale));
+    for (const mark of this.buildMarks) mark.view.scale.set(this.plateScale());
+  }
+
+  /** The plate of a build keeps the minimum size of a symbol on screen (ui-style 22). */
+  private plateScale(): number {
+    return symbolScale(BUILD_PLATE.height, this.cameraScale);
   }
 
   update(frame: RenderFrame): void {
@@ -206,12 +234,13 @@ export class EntityView {
   destroy(): void {
     // Containers and their children first: they reference the shared contexts, which Graphics
     // leaves alone. The two Graphics below own their contexts and are destroyed without options.
-    this.buildTies.destroy();
+    this.buildTape.destroy();
     for (const container of [this.buildLayer, this.enemyLayer, this.packetLayer, this.groupLayer]) {
       container.destroy({ children: true });
     }
     this.kit.destroy();
     this.timeStyle.destroy();
+    this.levelStyle.destroy();
   }
 
   // --- Snapshot-driven part -----------------------------------------------------------------
@@ -225,44 +254,46 @@ export class EntityView {
   }
 
   /**
-   * Road builds (DEC-28, item 7: on the edge, paid with CP): bars across the road and a hammer
-   * disc of the owner near its end `a`; an own build (the server sends its `done_tick`) also shows
-   * the time left. The owner is the owner of the ends: only an internal road is built.
+   * Road builds (DEC-28, item 7: on the edge, paid with CP): a hazard tape along the whole road
+   * (stripes on a dark band, a solid band over the part that is done) under its lanes, and a plate
+   * "level to level+1" in the middle of the road. An own build (the server sends its `done_tick`)
+   * also shows the time left and the part done; an enemy one in sight only the tape.
    */
   private drawBuilds(base: SnapshotMsg): void {
-    const { nodes, edges } = base.view;
-    const g = this.buildTies;
+    const { edges } = base.view;
+    const g = this.buildTape;
     g.clear();
     let used = 0;
     for (const road of edges) {
       const build = road.build;
       const edge = this.map.edges[road.id];
       if (build === null || edge === undefined) continue;
-      const owner = nodes[edge.a]?.owner ?? null;
-      if (owner === null) continue;
       const from = nodePoint(this.map, edge.a);
       const to = nodePoint(this.map, edge.b);
       if (from === undefined || to === undefined) continue;
-      const width = road.width;
+      const progress =
+        build.done_tick === null ? 0 : buildProgress(build.done_tick, base.tick, this.buildTicks);
       const geometry = buildGeometry(
         from,
         to,
-        this.radius(edge.a),
-        this.radius(edge.b),
-        (roadThickness(width) + BUILD_TIE.extra) / 2,
-        BUILD_TIE.spacing,
-        BUILD_MARK_DISTANCE,
+        roadSpan(road.width) + ROAD_TAPE.extra,
+        ROAD_TAPE.period,
+        ROAD_TAPE.stripe,
+        progress,
       );
       if (geometry === null) continue;
-      for (const [a, b] of geometry.ties) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-      g.stroke(BUILD_TIE_CASING);
-      for (const [a, b] of geometry.ties) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-      g.stroke({ width: BUILD_TIE.width, color: BUILD_TIE.color });
+      g.poly(geometry.band.flatMap((p) => [p.x, p.y])).fill(ROAD_TAPE.base);
+      for (const stripe of geometry.stripes) g.poly(stripe.flatMap((p) => [p.x, p.y]));
+      g.fill(ROAD_TAPE.stripeColor);
+      if (geometry.done !== null) {
+        g.poly(geometry.done.flatMap((p) => [p.x, p.y])).fill(ROAD_TAPE.done);
+      }
 
       const mark = this.buildMark(used++);
-      mark.disc.context = this.kit.iconDisc[owner];
-      mark.view.position.set(geometry.mark.x, geometry.mark.y);
+      mark.view.position.set(geometry.mid.x, geometry.mid.y);
       mark.view.visible = true;
+      const change = `${String(road.width)}\u2192${String(road.width + 1)}`;
+      if (mark.level.text !== change) mark.level.text = change;
       const time =
         build.done_tick === null ? '' : timeLeftLabel(build.done_tick - base.tick, this.tickHz);
       mark.time.visible = time !== '';
@@ -278,8 +309,16 @@ export class EntityView {
     let mark = this.buildMarks[index];
     if (mark === undefined) {
       const view = this.buildLayer.addChild(new Container({ label: 'build' }));
-      const disc = view.addChild(new Graphics(this.kit.iconDisc[0]));
-      view.addChild(new Graphics(this.kit.hammer));
+      view.scale.set(this.plateScale());
+      view.addChild(new Graphics(this.kit.buildPlate));
+      const level = view.addChild(
+        new Text({
+          text: '',
+          style: this.levelStyle,
+          anchor: 0.5,
+          resolution: this.labelResolution,
+        }),
+      );
       const time = view.addChild(
         new Text({
           text: '',
@@ -288,15 +327,11 @@ export class EntityView {
           resolution: this.labelResolution,
         }),
       );
-      time.position.set(0, 11);
-      mark = { view, disc, time };
+      time.position.set(0, BUILD_PLATE.height / 2 + BUILD_PLATE.timeGap - 4);
+      mark = { view, level, time };
       this.buildMarks.push(mark);
     }
     return mark;
-  }
-
-  private radius(node: number): number {
-    return this.radiusOf(node);
   }
 
   /** The token for what the player knows about enemies in a place; `null`: nothing to show. */
@@ -498,7 +533,15 @@ export class EntityView {
       const far = packetFade(length - travelled, this.radiusOf(fromIsA ? edge.b : edge.a));
       entry.view.scale.set(Math.min(near.scale, far.scale));
       entry.view.alpha = Math.min(near.alpha, far.alpha);
-      // The number of charges matters only when it is more than the one dot.
+      // The tail lies behind the packet, along the road against its way.
+      const way = fromIsA ? 1 : -1;
+      const ux = length > 0 ? (way * (ends.b.x - ends.a.x)) / length : 0;
+      const uy = length > 0 ? (way * (ends.b.y - ends.a.y)) / length : 0;
+      const extra = packet.transfer ? PACKET_TAIL_TRANSFER_EXTRA : 0;
+      PACKET_TAIL.forEach((step, i) => {
+        entry.tail[i]?.position.set(-ux * (step.distance + extra), -uy * (step.distance + extra));
+      });
+      // The number of charges matters only when it is more than the one square.
       const text = packet.charges > 1 ? `\u00d7${String(packet.charges)}` : '';
       if (entry.label.text !== text) entry.label.text = text;
     }
@@ -510,7 +553,15 @@ export class EntityView {
     let entry = this.packets.get(packet.id);
     if (entry === undefined) {
       const view = this.packetLayer.addChild(new Container({ label: `packet-${packet.id}` }));
-      const dot = view.addChild(new Graphics(this.kit.packet[item.owner ?? this.me]));
+      const owner = item.owner ?? this.me;
+      // The far square of the tail first, so that the packet lies on top.
+      const tail = [...this.kit.packetTail[owner]]
+        .reverse()
+        .map((context) => view.addChild(new Graphics(context)))
+        .reverse();
+      const dot = view.addChild(
+        new Graphics(packet.transfer ? this.kit.packetTransfer[owner] : this.kit.packet[owner]),
+      );
       const label = view.addChild(
         new Text({
           text: '',
@@ -519,8 +570,16 @@ export class EntityView {
           resolution: this.labelResolution,
         }),
       );
-      label.position.set(8, 0);
-      entry = { dot, label, view, stamp: this.stamp, labels: () => [label] };
+      label.position.set(packet.transfer ? PACKET_TRANSFER.ring / 2 + 3 : 8, 0);
+      entry = {
+        tail,
+        dot,
+        label,
+        transfer: packet.transfer,
+        view,
+        stamp: this.stamp,
+        labels: () => [label],
+      };
       this.packets.set(packet.id, entry);
     }
     return entry;

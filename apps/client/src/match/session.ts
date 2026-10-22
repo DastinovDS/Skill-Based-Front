@@ -39,6 +39,8 @@ export interface MatchContext {
   recruitTicks?: number;
   /** `ruleset_public.city_upgrades` when enabled (DEC-26): the city build mark. */
   cityUpgrades?: CityBuildTicks | null;
+  /** `ruleset_public.build.ticks_per_level`: the part done of the tape of an own road build (DEC-28). */
+  roadBuildTicks?: number;
 }
 
 export interface MatchSessionOptions {
@@ -74,6 +76,7 @@ export class MatchSession implements RenderSource {
   roundTicks: number | undefined;
   recruitTicks: number | undefined;
   cityUpgrades: CityBuildTicks | null | undefined;
+  roadBuildTicks: number | undefined;
   /** The overcrowding numbers: the pill beside an overcrowded city. */
   capacityTicks: CapacityTicks | undefined;
   buffer: SnapshotBuffer;
@@ -128,6 +131,7 @@ export class MatchSession implements RenderSource {
     this.roundTicks = context.roundTicks;
     this.recruitTicks = context.recruitTicks;
     this.cityUpgrades = context.cityUpgrades;
+    this.roadBuildTicks = context.roadBuildTicks;
     this.capacityTicks =
       context.capacity === undefined
         ? undefined
