@@ -33,7 +33,7 @@ from gow_sim.commands import (
     Split,
     validate,
 )
-from gow_sim.maps import load_map
+from gow_sim.maps import NodeKind, load_map
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 from gow_sim.state import (
     PROGRESS_SCALE,
@@ -896,8 +896,17 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
             node.build = None  # the barracks and warehouse builds of the enemy: never shown
     for node in state.nodes.values():  # DEC-26, item 10: the enemy's barracks and levels hidden
         if node.owner == enemy:
-            node.has_barracks = draw(st.booleans())
+            if not _borders_own(state, player, node.id):  # DEC-31: seen next to an own node
+                node.has_barracks = draw(st.booleans())
             node.warehouse_level = draw(st.integers(0, 2))
+
+
+def _borders_own(state: GameState, player: int, node: int) -> bool:
+    """``node`` is joined by an edge of the map to a node of ``player`` (DEC-31, item 1)."""
+    return any(
+        node in (e.a, e.b) and player in (state.nodes[e.a].owner, state.nodes[e.b].owner)
+        for e in state.map.edges
+    )
 
 
 @given(data=st.data())
@@ -932,6 +941,19 @@ def test_property_nothing_leaks_from_places_out_of_sight(data: st.DataObject) ->
         assert e.detail is F or e.width == road.width
     for n in view.nodes:
         assert n.capacity == city_capacity(state, _RULES, n.id)
+    # DEC-26, item 10; DEC-31: the barracks of own cities and of enemy cities next to an own
+    # node, whatever the detail; the rest of the enemy city stays hidden.
+    for n in view.nodes:
+        node = state.nodes[n.id]
+        city = state.map.nodes[n.id].kind is not NodeKind.PROVINCE
+        enemy_city = city and node.owner == 1 - player
+        next_door = enemy_city and _borders_own(state, player, n.id)
+        seen = (city and node.owner == player) or next_door
+        assert n.has_barracks == (node.has_barracks if seen else None)
+        if enemy_city:
+            assert (n.warehouse_level, n.warehouse_cap, n.building, n.recruit_queue) == (
+                (None,) * 4
+            )
 
     _hide(data, state, player)
     assert project(state, _RULES, player, KEY) == view

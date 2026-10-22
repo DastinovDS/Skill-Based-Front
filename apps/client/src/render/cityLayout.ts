@@ -139,9 +139,10 @@ export function queueTop(radius: number): number {
 }
 
 /**
- * Whether an own city shows the barracks mark (DEC-26): only when the city development is on and
- * the snapshot says the city has one. `has_barracks` is `null` for every foreign city (the enemy's
- * barracks are hidden, AGENTS.md 4.4), so nothing is drawn there and nothing is guessed.
+ * Whether a city shows the barracks mark (DEC-26): only when the city development is on and the
+ * snapshot says the city has one. Own cities and enemy cities next to an own node (DEC-31, the
+ * server decides) carry `has_barracks`; it is `null` for the other foreign cities (AGENTS.md 4.4),
+ * so the mark goes away with the neighbourhood and nothing is guessed.
  */
 export function showsBarracks(hasBarracks: boolean | null, cityDevelopment: boolean): boolean {
   return cityDevelopment && hasBarracks === true;

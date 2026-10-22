@@ -389,7 +389,11 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     for node in state.nodes.values():
         if node.owner == enemy:
             node.cut_since = draw(st.none() | st.integers(0, state.tick))
-            node.has_barracks = draw(st.booleans())  # DEC-26, item 10: hidden
+            if not any(  # DEC-26, item 10: hidden unless next to an own node (DEC-31)
+                state.nodes[state.map.edges[e].other(node.id)].owner == player
+                for e in state.map.incident[node.id]
+            ):
+                node.has_barracks = draw(st.booleans())
             node.warehouse_level = draw(st.integers(0, 2))
             node.recruit_queue = draw(st.integers(0, 3))  # DEC-25, item 12: hidden
             node.recruit_progress = draw(st.integers(0, 30))

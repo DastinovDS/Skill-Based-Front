@@ -115,6 +115,7 @@ export const BUILD_MARK = { width: 24, height: 2, gap: 4 } as const;
  * The barracks of an own city (DEC-26): a round dark badge with a little house in it (the shape
  * tells it, not the colour), on the left of the capacity ring.
  */
+/** The barracks badge; the rim is drawn in the owner's colour (`YOU` or `ENEMY`, DEC-31). */
 export const BARRACKS_MARK = { radius: 7.5, fill: BG, stroke: { width: 2, color: YOU } } as const;
 
 export const VP_BADGE_RADIUS = 8.5;

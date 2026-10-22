@@ -105,7 +105,7 @@ describe('the barracks mark (DEC-26)', () => {
   it('is drawn only for a city that is known to have one, and only with the city development on', () => {
     expect(showsBarracks(true, true)).toBe(true);
     expect(showsBarracks(false, true)).toBe(false);
-    // A foreign city: the enemy's barracks are hidden, the snapshot says `null`.
+    // A foreign city not next to an own node (DEC-31): the snapshot says `null`.
     expect(showsBarracks(null, true)).toBe(false);
     // Without the city development every city may recruit: no mark.
     expect(showsBarracks(true, false)).toBe(false);

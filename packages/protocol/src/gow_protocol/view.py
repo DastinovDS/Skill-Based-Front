@@ -151,9 +151,11 @@ class NodeView(WireModel):
     recruit_waiting: bool | None
     """Own city only: the current unit is ready and waits for a place (DEC-25, item 7)."""
     has_barracks: bool | None
-    """Own city only: it may recruit (DEC-26: with ``city_upgrades`` the capital and the cities
-    with the barracks, without it every city). ``None`` for provinces, the enemy's and neutral
-    nodes: the enemy's barracks are hidden (DEC-26, item 10)."""
+    """Own city: it may recruit (DEC-26: with ``city_upgrades`` the capital and the cities with
+    the barracks, without it every city). A city of the enemy joined by an edge of the map to any
+    own node, at any ``detail`` (DEC-31): its barracks are built (``false`` while there are none
+    or they are being built; no memory). ``None`` for provinces, neutral nodes and the other
+    cities of the enemy (DEC-26, item 10)."""
     warehouse_level: NonNegInt | None
     """Own city only: warehouse upgrades (DEC-26, item 2; always 0 without ``city_upgrades``)."""
     warehouse_cap: NonNegInt | None
@@ -172,9 +174,13 @@ class NodeView(WireModel):
         ):
             raise ValueError("a recruit queue only for an own city, all three fields together")
         city = (self.has_barracks, self.warehouse_level, self.warehouse_cap)
-        if any(v is not None for v in city) and (None in city or self.detail is not Detail.EXACT):
+        if any(v is not None for v in city[1:]) and (
+            None in city or self.detail is not Detail.EXACT
+        ):
             raise ValueError("barracks and warehouse only for an own city, all three together")
-        if self.building is not None and self.has_barracks is None:
+        if self.has_barracks is not None and self.owner is None:
+            raise ValueError("barracks only for an own city or a city of the enemy (DEC-31)")
+        if self.building is not None and self.warehouse_level is None:
             raise ValueError("a building only for an own city")
         if self.warehouse is not None and self.detail is not Detail.EXACT:
             raise ValueError("a warehouse only for a source of vision, seen exactly")
