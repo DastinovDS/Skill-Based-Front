@@ -319,6 +319,9 @@ def _features(view: View) -> set[str]:
         "transfer": any(p.transfer and len(p.path) > 1 for p in view.packets),
         "starve_in": any(n.starve_in is not None for n in view.nodes),
         "recruit_queue": any(n.recruit_queue for n in view.nodes),
+        "enemy_barracks": any(
+            n.has_barracks is not None and n.warehouse_level is None for n in view.nodes
+        ),
     }
     return {name for name, present in found.items() if present}
 
@@ -385,6 +388,26 @@ def test_snapshot_frame_of_an_overcrowded_own_city() -> None:
     wire = snapshot_msg(match.view(0)).view.nodes[node]
     assert (wire.attrition_in, wire.grace_left) == (None, match.rules.capacity.grace_ticks)
     assert snapshot_msg(match.view(1)).view.nodes[node].grace_left is None  # the enemy sees none
+
+
+def test_snapshot_frame_of_enemy_barracks_next_door() -> None:
+    """DEC-31: an enemy city joined by an edge to an own node carries ``has_barracks`` alone
+    (the direct frame equals the validated one); the warehouse level and the build stay hidden."""
+    match = _started()
+    state = match.state
+    capital = state.map.capital(1)
+    near = state.map.edges[state.map.incident[capital][0]].other(capital)
+    state.nodes[near].owner = 0
+    checker = _FrameChecker()
+    checker.record(match, ())
+    assert checker.features >= {"enemy_barracks"}
+    node = snapshot_msg(match.view(0)).view.nodes[capital]
+    assert (node.has_barracks, node.warehouse_level, node.warehouse_cap, node.building) == (
+        True,
+        None,
+        None,
+        None,
+    )
 
 
 class _Keeper:
@@ -581,7 +604,7 @@ def test_supply_control_through_the_wire() -> None:
     packet (byte-equal frames), the enemy gets neither the events nor the fields."""
     match = _started()
     view = snapshot_msg(match.view(0)).view
-    cities = [n.id for n in view.nodes if n.has_barracks is not None]  # own cities
+    cities = [n.id for n in view.nodes if n.warehouse_level is not None]  # own cities
     capital = match.state.map.capital(0)
     far = max(
         (c for c in cities if c != capital),

@@ -105,7 +105,7 @@
         "recruit_queue": null,
         "recruit_progress": null,
         "recruit_waiting": null,
-        "has_barracks": null,
+        "has_barracks": true,
         "warehouse_level": null,
         "warehouse_cap": null,
         "building": null

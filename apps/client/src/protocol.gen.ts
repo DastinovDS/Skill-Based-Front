@@ -532,9 +532,11 @@ export interface NodeView {
    */
   recruit_waiting: boolean | null;
   /**
-   * Own city only: it may recruit (DEC-26: with ``city_upgrades`` the capital and the cities
-   * with the barracks, without it every city). ``None`` for provinces, the enemy's and neutral
-   * nodes: the enemy's barracks are hidden (DEC-26, item 10).
+   * Own city: it may recruit (DEC-26: with ``city_upgrades`` the capital and the cities with
+   * the barracks, without it every city). A city of the enemy joined by an edge of the map to any
+   * own node, at any ``detail`` (DEC-31): its barracks are built (``false`` while there are none
+   * or they are being built; no memory). ``None`` for provinces, neutral nodes and the other
+   * cities of the enemy (DEC-26, item 10).
    */
   has_barracks: boolean | null;
   /**
@@ -1064,6 +1066,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 22;
+export const PROTOCOL_VERSION = 23;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

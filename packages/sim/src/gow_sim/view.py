@@ -19,6 +19,8 @@ section 4.4); bots get the same view as people. It follows DEC-04, DEC-17, DEC-2
   next starves (``starve_in``, DEC-19, item 8), their recruit queue and its progress (DEC-25,
   item 12), the barracks, the warehouse level and capacity and the current build of any kind
   (DEC-26, item 10); own packets with their remaining path and whether they are a transfer;
+- enemy cities joined by an edge of the map to any own node: whether their barracks are built
+  (DEC-31; by the current owners and the public graph, no memory);
 - own groups in «Защита»: the bonus gathered so far and its cap (DEC-30; enemy groups show the
   mode only, in the ``seen`` of places);
 - neighbours of sources by the terrain table (DEC-21, item 2), and the halves of edges by the level
@@ -38,8 +40,9 @@ section 4.4); bots get the same view as people. It follows DEC-04, DEC-17, DEC-2
 
 What a view never has: internal ids of enemy groups, enemy groups standing in nodes as entities
 (only the per-place ``Sighting``), positions or directions of enemy groups in fog, road levels
-of fogged edges newer than the last sighting, the barracks, warehouse level and city builds of
-the enemy (DEC-26, item 10), the warehouse of a node that is not a source (DEC-21, item 3),
+of fogged edges newer than the last sighting, the barracks of enemy cities not next to an own
+node, the barracks builds, warehouse level and city builds of the enemy (DEC-26, item 10;
+DEC-31), the warehouse of a node that is not a source (DEC-21, item 3),
 enemy builds on fogged edges, enemy packets
 (#112 default), enemy CP, stance, production and counters, the enemy's front markers and rear
 minimum (DEC-28), enemy transfers (DEC-18, item 8), the bonus an enemy «Защита» has gathered
@@ -211,9 +214,10 @@ class NodeView:
     recruit_waiting: bool | None
     """Own city only: the current unit is ready and waits for a place (DEC-25, item 7)."""
     has_barracks: bool | None
-    """Own city only: it may recruit (DEC-26): with ``city_upgrades`` the capital and the cities
-    with the barracks, without it every city. ``None`` for provinces, the enemy's and neutral
-    nodes: the enemy's barracks are hidden (DEC-26, item 10)."""
+    """Own city: it may recruit (DEC-26): with ``city_upgrades`` the capital and the cities with
+    the barracks, without it every city. A city of the enemy joined by an edge to any own node
+    (DEC-31): its barracks are built (``False`` while there are none or they are being built).
+    ``None`` for provinces, neutral nodes and the other cities of the enemy (DEC-26, item 10)."""
     warehouse_level: int | None
     """Own city only: warehouse upgrades, ``0..warehouse.max_level`` (always 0 without
     ``city_upgrades``)."""
@@ -525,6 +529,19 @@ def reach(
 # Projection ----------------------------------------------------------------------------------
 
 
+def _borders_enemy_city(state: GameState, player: int, node: int) -> bool:
+    """``node`` is a city of the enemy joined by an edge of the map to any own node, a province
+    too (DEC-31): its built barracks are seen. The public graph and the current owners decide,
+    not the vision and no memory (DEC-31, items 1 and 3)."""
+    mapdef = state.map
+    owner = state.nodes[node].owner
+    if owner is None or owner == player or not is_city(mapdef, node):
+        return False
+    return any(
+        state.nodes[mapdef.edges[e].other(node)].owner == player for e in mapdef.incident[node]
+    )
+
+
 def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> PlayerView:
     """The view of ``player`` on ``state`` (DEC-04, DEC-17, DEC-21, DEC-33). A pure function:
     never writes."""
@@ -540,6 +557,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
     for n, level in enumerate(levels.nodes):
         node = state.nodes[n]
         own_city = node.owner == player and is_city(mapdef, n)
+        barracks_seen = own_city or _borders_enemy_city(state, player, n)
         attrition_in, grace_left = (
             overflow_countdown(state, rules, n, capacities[n])
             if node.owner == player
@@ -559,7 +577,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 recruit_queue=node.recruit_queue if own_city else None,
                 recruit_progress=node.recruit_progress if own_city else None,
                 recruit_waiting=recruit_waiting(state, rules, n) if own_city else None,
-                has_barracks=node.has_barracks if own_city else None,
+                has_barracks=node.has_barracks if barracks_seen else None,
                 warehouse_level=node.warehouse_level if own_city else None,
                 warehouse_cap=warehouse_capacity(state, rules, n) if own_city else None,
                 building=_building_view(rules, node.build) if own_city else None,

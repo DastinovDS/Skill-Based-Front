@@ -469,9 +469,11 @@ def test_own_city_shows_barracks_warehouse_and_building() -> None:
 
 def test_fog_the_enemy_city_development_is_hidden() -> None:
     """DEC-26, item 10: the enemy's barracks, warehouse level and builds never reach the view,
-    not even with an own group in the enemy city (exact detail)."""
+    not even with an own group in the enemy city (exact detail). B is neutral here: with an own
+    node next to it the enemy city shows its built barracks (DEC-31, ``test_dec31.py``)."""
     run = _Run()
     state = run.state
+    state.nodes[B].owner = None
     gid = state.new_id()
     state.groups[gid] = Group(gid, 0, 1, 1, Mode.ATTACK, AtNode(ENEMY))  # 5 seen exactly
     before = run.match.view(0)

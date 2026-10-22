@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 22,
+    "PROTOCOL_VERSION": 23,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -1851,7 +1851,7 @@
               "type": "null"
             }
           ],
-          "description": "Own city only: it may recruit (DEC-26: with ``city_upgrades`` the capital and the cities\nwith the barracks, without it every city). ``None`` for provinces, the enemy's and neutral\nnodes: the enemy's barracks are hidden (DEC-26, item 10)."
+          "description": "Own city: it may recruit (DEC-26: with ``city_upgrades`` the capital and the cities with\nthe barracks, without it every city). A city of the enemy joined by an edge of the map to any\nown node, at any ``detail`` (DEC-31): its barracks are built (``false`` while there are none\nor they are being built; no memory). ``None`` for provinces, neutral nodes and the other\ncities of the enemy (DEC-26, item 10)."
         },
         "warehouse_level": {
           "anyOf": [
