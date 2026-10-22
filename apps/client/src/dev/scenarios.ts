@@ -383,6 +383,7 @@ export function frozenSource(scene: FixtureScene): RenderSource {
     orderDelays: { planned: DEV_RULES.orders.planned_delay_ticks },
     roundTicks: DEV_RULES.combat.round_ticks,
     recruitTicks: DEV_RULES.recruit.unit_ticks,
+    roadBuildTicks: DEV_RULES.build.ticks_per_level,
     cityUpgrades:
       scene.cityUpgrades === true
         ? {

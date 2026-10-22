@@ -10,7 +10,8 @@ import {
   WARN,
   YOU,
   ownerColor,
-  roadThickness,
+  roadLanesWidth,
+  roadSpan,
   sideOf,
 } from './style.ts';
 
@@ -58,8 +59,13 @@ describe('sides', () => {
   });
 });
 
-describe('roadThickness', () => {
-  it('is 0.5 + 1.5w for widths 1..5 (ui-style.md 9.3), so the levels stay apart', () => {
-    expect([1, 2, 3, 4, 5].map(roadThickness)).toEqual([2, 3.5, 5, 6.5, 8]);
+describe('the lanes of a road (R1, #345)', () => {
+  it('is 2 per lane and 1.7 between lanes, so level 1..3 is one, two or three lanes', () => {
+    expect([1, 2, 3].map(roadLanesWidth)).toEqual([2, 5.7, 9.4]);
+  });
+
+  it('adds the casing of an own road to the width of its lanes', () => {
+    expect(roadSpan(1)).toBeCloseTo(5.6);
+    expect(roadSpan(3)).toBeCloseTo(13);
   });
 });

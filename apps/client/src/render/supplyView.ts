@@ -27,7 +27,7 @@ import {
   SUPPLY_FLOW,
   SUPPLY_FLOW_LABEL,
   SUPPLY_MARKER,
-  SUPPLY_PACKET_RADIUS,
+  SUPPLY_PACKET,
   SUPPLY_PRESENCE,
   SUPPLY_STOCK,
   SUPPLY_TRANSFER,
@@ -58,7 +58,7 @@ const polar = (centre: Point, radius: number, degrees: number): Point => {
  * - the warehouses of own cities as the squares of the normal map (filled: a charge held, grey:
  *   room), under the city;
  * - the front markers as flags with their number on the city;
- * - the own packets: a dot (a square for a transfer) gliding along its road, and one arrow per
+ * - the own packets: a square (a charge, ui-style 21; a bigger one with a second outline for a transfer) gliding along its road, and one arrow per
  *   road and direction with the number of charges on it (solid: the automatics, dashed and wider:
  *   a transfer), so the flows to one city may come by different roads;
  * - own cities cut off from the capital: a dashed ring and the time to the next starvation;
@@ -354,11 +354,10 @@ export class SupplyView {
     }
   }
 
-  /** Every frame: the own packets on their roads (a dot, or a square for a transfer). */
+  /** Every frame: the own packets on their roads: a square (a charge), a bigger one with a double outline for a transfer. */
   private drawPackets(frame: RenderFrame): void {
     const g = this.dots;
     g.clear();
-    const r = SUPPLY_PACKET_RADIUS;
     for (const { packet, owner, progress } of frame.packets) {
       if (owner !== undefined && owner !== this.me) continue;
       const ends = edgeEnds(this.map, packet.edge);
@@ -373,9 +372,15 @@ export class SupplyView {
         Math.min(1, Math.max(0, progress / EDGE_PROGRESS)),
         SUPPLY_FLOW.lane,
       );
-      if (packet.transfer) g.rect(at.x - r, at.y - r, 2 * r, 2 * r);
-      else g.circle(at.x, at.y, r);
-      g.fill(PAPER).stroke({ width: 1.5, color: BG });
+      const side = packet.transfer ? SUPPLY_PACKET.transferSide : SUPPLY_PACKET.side;
+      g.rect(at.x - side / 2, at.y - side / 2, side, side)
+        .fill(PAPER)
+        .stroke({ width: 1.5, color: BG });
+      if (packet.transfer) {
+        // The second outline, apart from the square: a transfer is told from a packet by its shape.
+        const ring = SUPPLY_PACKET.transferRing;
+        g.rect(at.x - ring / 2, at.y - ring / 2, ring, ring).stroke({ width: 1.2, color: PAPER });
+      }
     }
   }
 }

@@ -21,7 +21,13 @@ export function createDevMatch(
   const session = new MatchSession({
     matchId: 'dev',
     token: 'dev',
-    context: { hud, tickHz: rules.tick_hz, orders: rules.orders, capacity: rules.capacity },
+    context: {
+      hud,
+      tickHz: rules.tick_hz,
+      orders: rules.orders,
+      capacity: rules.capacity,
+      roadBuildTicks: rules.build.ticks_per_level,
+    },
     onServerMessage: (msg) => {
       if (msg.type === 'reach') onReach?.(msg);
     },

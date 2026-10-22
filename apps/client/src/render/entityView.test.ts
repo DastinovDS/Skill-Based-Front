@@ -1,12 +1,13 @@
-import { CanvasTextMetrics, Container, Text } from 'pixi.js';
+import { CanvasTextMetrics, Container, Graphics, Text } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import { interpolateFrame } from '../net/interpolate.ts';
-import type { EnemyGroup, GroupView, NodeView, SnapshotMsg } from '../protocol.gen.ts';
+import type { EnemyGroup, GroupView, NodeView, PacketView, SnapshotMsg } from '../protocol.gen.ts';
 import { EntityView } from './entityView.ts';
 import { createLayers } from './layers.ts';
 import { edgeEnds, edgePoint, nodePoint } from './layout.ts';
+import { PACKET_SIDE, PACKET_TRANSFER, ROAD_TAPE, YOU } from './style.ts';
 
 const map = DEFAULT_MAP;
 const base = devSnapshot(map, DEV_RULES, 100);
@@ -297,6 +298,253 @@ describe('EntityView, ranges and moving figures (DEC-21, DEC-33)', () => {
     const step2 = (last.x - middle.x) * dx + (last.y - middle.y) * dy;
     expect(step1).toBeGreaterThan(0);
     expect(step2).toBeCloseTo(step1);
+    view.destroy();
+  });
+});
+
+describe('EntityView, supply packets (a charge is a square, ui-style 21)', () => {
+  const edge = map.edges[0];
+  if (edge === undefined) throw new Error('no roads');
+
+  interface Drawn {
+    readonly action: string;
+    readonly type: string;
+    readonly color: number;
+    readonly alpha: number;
+    readonly width: number;
+  }
+  /** Every fill and stroke of a Graphics: the kind of shape, its colour and opacity, its width. */
+  function drawn(g: Graphics): Drawn[] {
+    const instructions = g.context.instructions as unknown as {
+      action: string;
+      data: {
+        style: { color: number; alpha: number };
+        path: { shapePath: { shapePrimitives: { shape: { type: string; width?: number } }[] } };
+      };
+    }[];
+    return instructions
+      .filter((i) => i.action === 'fill' || i.action === 'stroke')
+      .flatMap((i) =>
+        i.data.path.shapePath.shapePrimitives.map((p) => ({
+          action: i.action,
+          type: p.shape.type,
+          color: i.data.style.color,
+          alpha: i.data.style.alpha,
+          width: p.shape.width ?? 0,
+        })),
+      );
+  }
+
+  function frameWithPacket(transfer: boolean) {
+    const packet: PacketView = {
+      id: 'p1',
+      edge: edge?.id ?? 0,
+      from_node: edge?.a ?? 0,
+      charges: 1,
+      depart_tick: 100,
+      arrive_tick: 200,
+      path: [edge?.b ?? 0],
+      dest_tick: 200,
+      transfer,
+    };
+    const snapshot: SnapshotMsg = {
+      ...base,
+      view: { ...base.view, packets: [packet], groups: [] },
+    };
+    return interpolateFrame(snapshot, null, 150);
+  }
+  const packetView = (layers: ReturnType<typeof createLayers>): Container => {
+    const layer = layers.layer.groups.children.find((c) => c.label === 'packets');
+    const found = layer?.children[0];
+    if (found === undefined) throw new Error('no packet drawn');
+    return found;
+  };
+
+  it('draws a packet as a filled square of its owner with a tail of two fainter squares', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.update(frameWithPacket(false));
+    const [far, near, dot] = packetView(layers).children as Graphics[];
+    expect(dot).toBeDefined();
+    const square = drawn(dot as Graphics);
+    expect(square.map((s) => [s.action, s.type])).toEqual([
+      ['fill', 'rectangle'],
+      ['stroke', 'rectangle'],
+    ]);
+    expect(square[0]?.color).toBe(YOU);
+    expect(square[0]?.width).toBe(PACKET_SIDE);
+    // Smaller and fainter the farther behind: the nearer square first in the list of the tail.
+    expect(drawn(near as Graphics)[0]).toMatchObject({ type: 'rectangle', alpha: 0.6, width: 6 });
+    expect(drawn(far as Graphics)[0]).toMatchObject({ type: 'rectangle', alpha: 0.3, width: 5 });
+    view.destroy();
+  });
+
+  it('puts the tail behind the packet, against its way, whichever end it leaves from', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const ends = edgeEnds(map, edge.id);
+    if (ends === undefined) throw new Error('no ends');
+    const way = { x: ends.b.x - ends.a.x, y: ends.b.y - ends.a.y };
+    view.update(frameWithPacket(false));
+    const [far, first] = packetView(layers).children as Graphics[];
+    let near = first;
+    // Leaving `a` for `b`: both squares of the tail are on the side of `a`.
+    expect((near?.x ?? 0) * way.x + (near?.y ?? 0) * way.y).toBeLessThan(0);
+    expect(Math.hypot(near?.x ?? 0, near?.y ?? 0)).toBeCloseTo(8);
+    expect(Math.hypot(far?.x ?? 0, far?.y ?? 0)).toBeCloseTo(14);
+    // Leaving `b` for `a`: the other way round.
+    const back = frameWithPacket(false);
+    const packet = back.packets[0];
+    if (packet === undefined) throw new Error('no packet');
+    packet.packet = { ...packet.packet, from_node: edge.b };
+    view.update(back);
+    near = packetView(layers).children[1] as Graphics | undefined;
+    expect((near?.x ?? 0) * way.x + (near?.y ?? 0) * way.y).toBeGreaterThan(0);
+    view.destroy();
+  });
+
+  it('tells a transfer by a bigger square with a second outline apart from it', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.update(frameWithPacket(true));
+    const dot = packetView(layers).children[2] as Graphics;
+    const shapes = drawn(dot);
+    expect(shapes.map((s) => [s.action, s.type, s.width])).toEqual([
+      ['fill', 'rectangle', PACKET_TRANSFER.side],
+      ['stroke', 'rectangle', PACKET_TRANSFER.side],
+      ['stroke', 'rectangle', PACKET_TRANSFER.ring],
+    ]);
+    view.destroy();
+  });
+
+  it('draws no circle for a packet, whoever it belongs to', () => {
+    for (const transfer of [false, true]) {
+      const layers = createLayers();
+      const view = new EntityView(map, layers, 0, 1, () => 17);
+      view.update(frameWithPacket(transfer));
+      const graphics = packetView(layers).children.filter(
+        (c): c is Graphics => c instanceof Graphics,
+      );
+      expect(graphics).toHaveLength(3);
+      for (const g of graphics) {
+        expect(drawn(g).filter((s) => s.type === 'circle')).toEqual([]);
+      }
+      view.destroy();
+    }
+  });
+});
+
+describe('EntityView, the road build (R1, #345)', () => {
+  const edge = map.edges[0];
+  if (edge === undefined) throw new Error('no roads');
+
+  beforeEach(() => {
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+    );
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function frameWithBuild(width: number, doneTick: number | null, tick = 100) {
+    const edges = base.view.edges.map((e) =>
+      e.id === edge?.id ? { ...e, width, build: { done_tick: doneTick } } : e,
+    );
+    const snapshot: SnapshotMsg = { ...base, tick, view: { ...base.view, edges, groups: [] } };
+    return interpolateFrame(snapshot, null, tick);
+  }
+  const plates = (layers: ReturnType<typeof createLayers>): Container[] => {
+    const layer = layers.layer.intents.children.find((c) => c.label === 'builds');
+    return (layer?.children ?? []).filter((c) => c.visible);
+  };
+  const texts = (item: Container): string[] =>
+    item.children.filter((c): c is Text => c instanceof Text && c.visible).map((c) => c.text);
+  const tape = (layers: ReturnType<typeof createLayers>): Graphics =>
+    layers.layer.roads.children[0] as Graphics;
+  /** The polygons the tape fills, in order, with their colour, opacity and corner points. */
+  function filled(g: Graphics) {
+    const instructions = g.context.instructions as unknown as {
+      action: string;
+      data: {
+        style: { color: number; alpha: number };
+        path: { shapePath: { shapePrimitives: { shape: { points: number[] } }[] } };
+      };
+    }[];
+    return instructions
+      .filter((i) => i.action === 'fill')
+      .map((i) => ({
+        color: i.data.style.color,
+        alpha: i.data.style.alpha,
+        polygons: i.data.path.shapePath.shapePrimitives.map((p) => p.shape.points),
+      }));
+  }
+
+  it('draws the tape under the lanes: a dark band, the warning stripes, the part done on top', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.setBuildTicks(150);
+    // 75 of the 150 ticks are left: half is done.
+    view.update(frameWithBuild(1, 175));
+    const fills = filled(tape(layers));
+    expect(fills.map((f) => [f.color, f.alpha])).toEqual([
+      [ROAD_TAPE.base.color, ROAD_TAPE.base.alpha],
+      [ROAD_TAPE.stripeColor.color, ROAD_TAPE.stripeColor.alpha],
+      [ROAD_TAPE.done.color, ROAD_TAPE.done.alpha],
+    ]);
+    expect(fills[1]?.polygons.length).toBeGreaterThan(3);
+    const ends = edgeEnds(map, edge.id);
+    if (ends === undefined) throw new Error('no ends');
+    const length = Math.hypot(ends.b.x - ends.a.x, ends.b.y - ends.a.y);
+    const [done] = fills[2]?.polygons ?? [];
+    // The first side of the done polygon runs along the road: half its length.
+    expect(
+      Math.hypot((done?.[2] ?? 0) - (done?.[0] ?? 0), (done?.[3] ?? 0) - (done?.[1] ?? 0)),
+    ).toBeCloseTo(length / 2);
+    // The tape lies first in the layer of the roads: under the casings and the lanes.
+    expect(layers.layer.roads.children[0]).toBe(tape(layers));
+    view.destroy();
+  });
+
+  it('shows no part done for an enemy build (no `done_tick`), and none without the duration', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.setBuildTicks(150);
+    view.update(frameWithBuild(1, null));
+    expect(filled(tape(layers))).toHaveLength(2);
+    view.setBuildTicks(0);
+    view.update(frameWithBuild(1, 175, 101));
+    expect(filled(tape(layers))).toHaveLength(2);
+    view.destroy();
+  });
+
+  it('puts a plate with the change of level in the middle of the road, and the time left of an own build', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.setTickHz(10);
+    view.update(frameWithBuild(2, 175));
+    const [plate, ...rest] = plates(layers);
+    expect(rest).toEqual([]);
+    expect(texts(plate as Container).sort()).toEqual(['0:08', '2→3']);
+    const ends = edgeEnds(map, edge.id);
+    expect(plate?.x).toBeCloseTo(((ends?.a.x ?? 0) + (ends?.b.x ?? 0)) / 2);
+    expect(plate?.y).toBeCloseTo(((ends?.a.y ?? 0) + (ends?.b.y ?? 0)) / 2);
+    // An enemy build: the plate without a time.
+    view.update(frameWithBuild(1, null, 101));
+    expect(texts(plates(layers)[0] as Container)).toEqual(['1→2']);
+    view.destroy();
+  });
+
+  it('removes the plate when the build is over, and keeps it at least 20 px high on screen', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.update(frameWithBuild(1, 175));
+    view.setCameraScale(0.5);
+    // 16 world units high: 20 px needs a scale of at least 20 / (16 * 0.5).
+    expect(plates(layers)[0]?.scale.x).toBeGreaterThanOrEqual(20 / (16 * 0.5) - 1e-9);
+    view.update(interpolateFrame({ ...base, tick: 102 }, null, 102));
+    expect(plates(layers)).toEqual([]);
+    expect(filled(tape(layers))).toEqual([]);
     view.destroy();
   });
 });

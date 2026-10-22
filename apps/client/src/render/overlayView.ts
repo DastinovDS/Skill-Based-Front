@@ -34,7 +34,7 @@ import {
   PREVIEW_GAP,
   PREVIEW_WIDTH,
   REACH_RING,
-  roadThickness,
+  roadSpan,
   SELECT_COLOR,
   SELECT_RING_GAP,
   SELECT_UNIT_SCALE,
@@ -251,7 +251,7 @@ export class OverlayView {
     }
     // One stroke for all: the band is as wide as the widest road plus a margin.
     g.stroke({
-      width: roadThickness(5) + PICK_BAND.extra,
+      width: roadSpan(3) + PICK_BAND.extra,
       color: SELECT_COLOR,
       alpha: PICK_BAND.alpha,
       cap: 'butt',

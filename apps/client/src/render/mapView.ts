@@ -1,43 +1,61 @@
 import { Container, Graphics, GraphicsContext, Sprite, type Renderer, type Texture } from 'pixi.js';
-import type { MapFile, PlayerId } from '../protocol.gen.ts';
+import type { Detail, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
+import { BORDER_PERMILLE } from './fogLayout.ts';
 import { cellEdges, territoryBorders } from './regionLayout.ts';
 import {
+  dashRuns,
+  laneOffsets,
+  roadKind,
+  roadSegments,
+  type RoadSegment,
+  type RoadStyle,
+} from './roadLayout.ts';
+import {
   BACKDROP_DIM,
+  BG,
   CELL_BORDER,
   CELL_LINE,
   MAP_BORDER,
-  ROAD_CASING,
-  ROAD_CASING_EXTRA,
-  ROAD_CHEVRON,
-  ROAD_COLOR,
+  ROAD_BUFFER,
+  ROAD_FOG,
+  ROAD_LANE,
+  ROAD_OWN,
   TERRAIN_FILL,
   SUPPLY_FLOOR,
   SUPPLY_TERRITORY_ALPHA,
   TERRITORY_ALPHA,
   TERRITORY_BORDER,
   ownerColor,
-  roadThickness,
+  roadLanesWidth,
 } from './style.ts';
 import { TerrainView } from './terrainView.ts';
 import { voronoiCells } from './voronoi.ts';
 
 type Owner = PlayerId | null;
 
-/** One road: its parts are unit shapes along +x, scaled by the road's length and thickness. */
+/**
+ * One road: up to two stretches (the halves, when exactly one of them is in fog), each a band
+ * under the lanes and the lanes themselves. All four are placed along the road by `place`.
+ */
 interface Road {
-  readonly holder: Container;
-  readonly body: Graphics;
-  /** The chevrons of an upgraded road; created on first need. */
-  chevrons: Graphics | null;
+  readonly casings: readonly [Graphics, Graphics];
+  readonly lanes: readonly [Graphics, Graphics];
+  readonly a: Point;
   readonly length: number;
-  width: number;
+  readonly angle: number;
+  /** What is drawn now (level, kind, halves in fog): a new look that gives the same key changes nothing. */
+  key: string;
 }
 
-/** A road as a snapshot shows it: its level (the wire `width`); roads have no type (DEC-26). */
+/**
+ * A road as a snapshot shows it: its level (the wire `width`, lanes: DEC-22; roads have no type,
+ * DEC-26) and, when the view has them, its halves (`detail` 'fog': dotted). `EdgeView` fits.
+ */
 export interface RoadLook {
   readonly width: number;
+  readonly halves?: readonly { readonly detail: Detail }[];
 }
 
 /**
@@ -45,17 +63,19 @@ export interface RoadLook {
  * stamps, the territory of the owners with its border line, and the roads. Cities are `CityView`.
  *
  * Owners and roads come from the map start fields now and from snapshots later (CLI-04, #60)
- * through `setOwners` and `setRoads`. A road is always a solid line and reads without colour
- * (DEC-22): the level shows in its thickness and an upgraded road carries chevrons (double ones on
- * level 3): an upgrade only speeds the supply up (DEC-26, item 7). Identical shapes share one GraphicsContext
- * (the unit road rectangle and the chevrons of a given length);
- * `destroy()` releases every object and context created here.
+ * through `setOwners` and `setRoads`. A road reads without colour (R1 "Lanes", #345): its level
+ * is the number of parallel lanes (an upgrade only speeds the supply up, DEC-26, item 7), a road
+ * between two cities of one owner has solid lanes on a band of the owner's colour, a buffer road
+ * dashed lanes without the band, and a half in fog dotted lanes. Redrawn only when the level, an
+ * owner or a half in fog changes, not every frame. Identical shapes share one GraphicsContext (a
+ * unit rectangle, the lanes of a level, the dashes of a given length); `destroy()` releases every
+ * object and context created here.
  */
 export class MapView {
   private readonly shared: GraphicsContext[] = [];
-  private readonly roadContext: GraphicsContext;
-  private readonly casingContext: GraphicsContext;
-  private readonly chevronContexts = new Map<string, GraphicsContext>();
+  private readonly casingContexts = new Map<RoadStyle, GraphicsContext>();
+  private readonly laneContexts = new Map<string, GraphicsContext>();
+  private readonly looks: (RoadLook | undefined)[] = [];
   readonly cells: Point[][];
   private readonly terrainFill: Graphics;
   private readonly dim: Graphics;
@@ -74,9 +94,8 @@ export class MapView {
   private readonly cellLines: Graphics;
   private readonly territory: Graphics;
   private readonly roads: Road[];
-  private readonly casings: Graphics[];
   private readonly casingLayer: Container;
-  private readonly bodyLayer: Container;
+  private readonly laneLayer: Container;
   private readonly layers: MapLayers;
 
   constructor(
@@ -89,11 +108,6 @@ export class MapView {
   ) {
     const bounds = { width: map.meta.width, height: map.meta.height };
     this.cells = voronoiCells(map.nodes, bounds);
-
-    // A unit rectangle along +x; each road scales it to its length and thickness.
-    this.roadContext = this.context((g) => g.rect(0, -0.5, 1, 1).fill(ROAD_COLOR));
-    // A dark edge under each road keeps it visible on the snow of the baked background.
-    this.casingContext = this.context((g) => g.rect(0, -0.5, 1, 1).fill(ROAD_CASING));
 
     this.layers = layers;
     const background = layers.layer.background;
@@ -115,43 +129,30 @@ export class MapView {
     this.cellLines = layers.layer.territory.addChild(this.drawCellLines());
     this.territory = layers.layer.territory.addChild(new Graphics());
 
-    // All casings first, so no casing covers a neighbouring road.
+    // All casings first, so no casing covers the lanes of a neighbouring road.
     this.casingLayer = layers.layer.roads.addChild(new Container({ label: 'road-casings' }));
-    this.bodyLayer = layers.layer.roads.addChild(new Container({ label: 'road-bodies' }));
-    const placed = (
-      parent: Container,
-      context: GraphicsContext,
-      edge: MapFile['edges'][number],
-    ) => {
-      const a = map.nodes[edge.a];
-      const b = map.nodes[edge.b];
-      const part = new Graphics(context);
-      let length = 0;
-      if (a !== undefined && b !== undefined) {
-        length = Math.hypot(b.x - a.x, b.y - a.y);
-        part.position.set(a.x, a.y);
-        part.rotation = Math.atan2(b.y - a.y, b.x - a.x);
-        part.scale.x = length;
-      }
-      parent.addChild(part);
-      return { part, length };
-    };
-    this.casings = map.edges.map((edge) => placed(this.casingLayer, this.casingContext, edge).part);
+    this.laneLayer = layers.layer.roads.addChild(new Container({ label: 'road-lanes' }));
+    const hidden = this.context((g) => g);
     this.roads = map.edges.map((edge) => {
       const a = map.nodes[edge.a];
       const b = map.nodes[edge.b];
-      // The holder carries the position and rotation; its parts are unit shapes scaled to the road.
-      const holder = new Container({ label: `road-${String(edge.id)}` });
-      let length = 0;
-      if (a !== undefined && b !== undefined) {
-        length = Math.hypot(b.x - a.x, b.y - a.y);
-        holder.position.set(a.x, a.y);
-        holder.rotation = Math.atan2(b.y - a.y, b.x - a.x);
-        holder.scale.x = length;
-      }
-      const body = holder.addChild(new Graphics(this.roadContext));
-      this.bodyLayer.addChild(holder);
-      return { holder, body, chevrons: null, length, width: 0 };
+      const origin = a === undefined ? { x: 0, y: 0 } : { x: a.x, y: a.y };
+      const length = a === undefined || b === undefined ? 0 : Math.hypot(b.x - a.x, b.y - a.y);
+      const angle = a === undefined || b === undefined ? 0 : Math.atan2(b.y - a.y, b.x - a.x);
+      const part = (parent: Container): Graphics => {
+        const g = parent.addChild(new Graphics(hidden));
+        g.rotation = angle;
+        g.visible = false;
+        return g;
+      };
+      return {
+        casings: [part(this.casingLayer), part(this.casingLayer)] as const,
+        lanes: [part(this.laneLayer), part(this.laneLayer)] as const,
+        a: origin,
+        length,
+        angle,
+        key: '',
+      };
     });
 
     this.setOwners(map.nodes.map((node) => node.start_owner));
@@ -233,37 +234,149 @@ export class MapView {
         });
       }
     }
-  }
-
-  /** `roads[i]`: current level of edge `i` (levels 1..3, DEC-22). */
-  setRoads(roads: readonly RoadLook[]): void {
-    roads.forEach(({ width }, i) => {
-      const road = this.roads[i];
-      const casing = this.casings[i];
-      if (road === undefined || casing === undefined) return;
-      const thickness = roadThickness(width);
-      casing.scale.y = thickness + ROAD_CASING_EXTRA;
-      if (road.width === width) return;
-      road.width = width;
-      road.body.scale.y = thickness;
-      // An upgraded road: chevrons along it, double on level 3.
-      if (width > 1) {
-        const context = this.chevronContext(road.length, width >= 3 ? 2 : 1);
-        if (road.chevrons === null) road.chevrons = road.holder.addChild(new Graphics(context));
-        else road.chevrons.context = context;
-        road.chevrons.scale.y = thickness;
-        road.chevrons.visible = true;
-      } else if (road.chevrons !== null) {
-        road.chevrons.visible = false;
-      }
+    // A road between two cities of one owner looks different from a buffer road.
+    this.roads.forEach((_, i) => {
+      this.drawRoad(i);
     });
   }
 
+  /**
+   * `roads[i]`: the current level of edge `i` (1..3, DEC-22) and its halves in fog. A road whose
+   * look did not change is not redrawn.
+   */
+  setRoads(roads: readonly RoadLook[]): void {
+    roads.forEach((look, i) => {
+      this.looks[i] = look;
+      this.drawRoad(i);
+    });
+  }
+
+  /** The look of road `i` from its level, the owners of its ends and its halves in fog. */
+  private drawRoad(i: number): void {
+    const road = this.roads[i];
+    const look = this.looks[i];
+    const edge = this.map.edges[i];
+    if (road === undefined || look === undefined || edge === undefined) return;
+    const level = Math.min(3, Math.max(1, Math.round(look.width)));
+    const kind = roadKind(this.owners[edge.a] ?? null, this.owners[edge.b] ?? null);
+    const fog: [boolean, boolean] = [
+      look.halves?.[0]?.detail === 'fog',
+      look.halves?.[1]?.detail === 'fog',
+    ];
+    const key = `${String(level)}|${kind.kind === 'buffer' ? 'b' : String(kind.owner)}|${fog[0] ? 'f' : 's'}${fog[1] ? 'f' : 's'}`;
+    if (key === road.key) return;
+    road.key = key;
+    const segments = roadSegments(kind, fog, BORDER_PERMILLE / 1000);
+    for (const slot of [0, 1] as const) {
+      const segment = segments[slot];
+      const casing = road.casings[slot];
+      const lanes = road.lanes[slot];
+      casing.visible = segment !== undefined;
+      lanes.visible = segment !== undefined;
+      if (segment !== undefined) this.placeSegment(road, segment, level, casing, lanes);
+    }
+  }
+
+  /** Put the band and the lanes of one stretch of a road where it belongs. */
+  private placeSegment(
+    road: Road,
+    segment: RoadSegment,
+    level: number,
+    casing: Graphics,
+    lanes: Graphics,
+  ): void {
+    const length = (segment.to - segment.from) * road.length;
+    const start = {
+      x: road.a.x + Math.cos(road.angle) * segment.from * road.length,
+      y: road.a.y + Math.sin(road.angle) * segment.from * road.length,
+    };
+    casing.position.set(start.x, start.y);
+    lanes.position.set(start.x, start.y);
+    // The band: a unit rectangle scaled to the stretch and to the width of the lanes plus the casing.
+    casing.context = this.casingContext(segment.style);
+    casing.scale.set(length, roadLanesWidth(level) + this.casingExtra(segment.style));
+    if (segment.style === 'own0' || segment.style === 'own1') {
+      // Solid lanes of a level are drawn once over a unit length.
+      lanes.context = this.solidLanes(level);
+      lanes.scale.set(length, 1);
+    } else {
+      // Dashes cannot be stretched: one drawing per whole length, scaled by the rounding only.
+      const span = Math.max(1, Math.round(length));
+      lanes.context = this.dashedLanes(segment.style, level, span);
+      lanes.scale.set(length / span, 1);
+    }
+  }
+
+  private casingExtra(style: RoadStyle): number {
+    return style === 'fog'
+      ? ROAD_FOG.casing
+      : style === 'buffer'
+        ? ROAD_BUFFER.casing
+        : ROAD_OWN.casing;
+  }
+
+  /** The band under the lanes: owner's colour on an own road, dark on a buffer road and in fog. */
+  private casingContext(style: RoadStyle): GraphicsContext {
+    let context = this.casingContexts.get(style);
+    if (context === undefined) {
+      const fill =
+        style === 'own0'
+          ? { color: ownerColor(this.me, 0), alpha: ROAD_OWN.bandAlpha }
+          : style === 'own1'
+            ? { color: ownerColor(this.me, 1), alpha: ROAD_OWN.bandAlpha }
+            : {
+                color: BG,
+                alpha: style === 'fog' ? ROAD_FOG.casingAlpha : ROAD_BUFFER.casingAlpha,
+              };
+      context = this.context((g) => g.rect(0, -0.5, 1, 1).fill(fill));
+      this.casingContexts.set(style, context);
+    }
+    return context;
+  }
+
+  /** The solid lanes of `level` along x from 0 to 1 (scaled to the length of the stretch). */
+  private solidLanes(level: number): GraphicsContext {
+    const key = `solid:${String(level)}`;
+    let context = this.laneContexts.get(key);
+    if (context === undefined) {
+      context = this.context((g) => {
+        for (const offset of laneOffsets(level)) {
+          g.rect(0, offset - ROAD_LANE.width / 2, 1, ROAD_LANE.width);
+        }
+        return g.fill({ color: ROAD_OWN.lane, alpha: ROAD_OWN.laneAlpha });
+      });
+      this.laneContexts.set(key, context);
+    }
+    return context;
+  }
+
+  /** The lanes of `level` as dashes (buffer) or dots (fog) along a stretch `span` long. */
+  private dashedLanes(
+    style: 'buffer' | 'fog' | RoadStyle,
+    level: number,
+    span: number,
+  ): GraphicsContext {
+    const key = `${style}:${String(level)}:${String(span)}`;
+    let context = this.laneContexts.get(key);
+    if (context === undefined) {
+      const spec = style === 'fog' ? ROAD_FOG : ROAD_BUFFER;
+      context = this.context((g) => {
+        for (const offset of laneOffsets(level)) {
+          for (const [from, to] of dashRuns(span, spec.dash, spec.gap)) {
+            g.rect(from, offset - ROAD_LANE.width / 2, to - from, ROAD_LANE.width);
+          }
+        }
+        return g.fill({ color: spec.lane, alpha: spec.laneAlpha });
+      });
+      this.laneContexts.set(key, context);
+    }
+    return context;
+  }
+
   destroy(): void {
-    for (const road of this.roads) road.holder.destroy({ children: true });
-    for (const casing of this.casings) casing.destroy();
-    this.casingLayer.destroy();
-    this.bodyLayer.destroy();
+    // The stretches use shared contexts (a Graphics leaves those alone): the layers first.
+    this.casingLayer.destroy({ children: true });
+    this.laneLayer.destroy({ children: true });
     this.cellLines.destroy();
     this.territory.destroy();
     this.stamps?.destroy();
@@ -278,33 +391,6 @@ export class MapView {
   private context(draw: (g: GraphicsContext) => GraphicsContext): GraphicsContext {
     const context = draw(new GraphicsContext());
     this.shared.push(context);
-    return context;
-  }
-
-  /**
-   * Chevrons of a fast road of `length`, in the unit space of the road (x 0..1 along it, y
-   * -0.5..0.5 across, scaled by the thickness): `count` arrowheads per mark.
-   */
-  private chevronContext(length: number, count: number): GraphicsContext {
-    const span = Math.max(1, Math.round(length));
-    const key = `${String(span)}:${String(count)}`;
-    let context = this.chevronContexts.get(key);
-    if (context === undefined) {
-      const { spacing, size, gap, depth } = ROAD_CHEVRON;
-      context = this.context((g) => {
-        const mark = count * size + (count - 1) * gap;
-        for (let at = spacing / 2; at + mark < span - spacing / 4; at += spacing) {
-          for (let c = 0; c < count; c++) {
-            const x0 = (at + c * (size + gap)) / span;
-            const x1 = (at + c * (size + gap) + size) / span;
-            const notch = (at + c * (size + gap) + size * depth) / span;
-            g.poly([x0, -0.4, x1, 0, x0, 0.4, notch, 0]);
-          }
-        }
-        return g.fill(ROAD_CHEVRON.color);
-      });
-      this.chevronContexts.set(key, context);
-    }
     return context;
   }
 

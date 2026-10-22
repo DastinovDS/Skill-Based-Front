@@ -16,9 +16,14 @@ import {
   BAR_BASE,
   BAR_SEGMENT,
   BG,
+  BUILD_PLATE,
   COUNT_FONT_SIZE,
   GLYPH_COLOR,
-  PACKET_RADIUS,
+  PACKET_OUTLINE,
+  PACKET_SIDE,
+  PACKET_TAIL,
+  PACKET_TRANSFER,
+  PAPER,
   PLATE_FILL,
   PLATE_INNER_RING,
   SEGMENT_EMPTY_BAR,
@@ -43,11 +48,6 @@ export function drawModeGlyph(g: GraphicsContext, mode: Mode): GraphicsContext {
     case 'defense':
       return g.poly([-4.5, -5, 4.5, -5, 4.5, 1, 0, 5.5, -4.5, 1]).fill(GLYPH_COLOR);
   }
-}
-
-/** A hammer, the mark of a road being built by a city (DEC-16), around (0, 0), about 10 x 10. */
-export function drawHammer(g: GraphicsContext): GraphicsContext {
-  return g.rect(-1.3, -2, 2.6, 7.5).fill(GLYPH_COLOR).rect(-5, -5.5, 10, 4).fill(GLYPH_COLOR);
 }
 
 /**
@@ -99,9 +99,15 @@ interface TriangleShapes {
 export class EntityKit {
   readonly contexts: GraphicsContext[] = [];
   readonly triangles: ReadonlyMap<number, TriangleShapes>;
+  /** A packet of the automatic supply: a square (a charge, ui-style 21). */
   readonly packet: Readonly<Record<PlayerId, GraphicsContext>>;
+  /** A one-off transfer: a bigger square with a double outline. */
+  readonly packetTransfer: Readonly<Record<PlayerId, GraphicsContext>>;
+  /** The squares of the tail behind a packet, nearest first (`PACKET_TAIL`). */
+  readonly packetTail: Readonly<Record<PlayerId, readonly GraphicsContext[]>>;
   readonly glyph: Readonly<Record<Mode, GraphicsContext>>;
-  readonly hammer: GraphicsContext;
+  /** The plate with the level change on a road being built. */
+  readonly buildPlate: GraphicsContext;
   readonly iconDisc: Readonly<Record<PlayerId, GraphicsContext>>;
   readonly textStyle: TextStyle;
   /** The number inside a triangle (a city icon): dark stroke, so it reads on the fill and the plate. */
@@ -160,19 +166,49 @@ export class EntityKit {
       });
     }
     this.triangles = triangles;
+    const square = (g: GraphicsContext, side: number): GraphicsContext =>
+      g.rect(-side / 2, -side / 2, side, side);
     const packet = (owner: PlayerId): GraphicsContext =>
       this.context((g) => {
-        g.circle(0, 0, PACKET_RADIUS).fill(ownerColor(me, owner));
+        square(g, PACKET_SIDE).fill(ownerColor(me, owner)).stroke(PACKET_OUTLINE);
         // The opponent's packet has a dark centre: the side is not told by the hue alone.
-        if (owner !== me) g.circle(0, 0, PACKET_RADIUS * 0.4).fill(BG);
+        if (owner !== me) square(g, PACKET_SIDE * 0.4).fill(BG);
         return g;
       });
+    const transfer = (owner: PlayerId): GraphicsContext =>
+      this.context((g) => {
+        const color = ownerColor(me, owner);
+        const { side, ring, ringWidth, outline } = PACKET_TRANSFER;
+        square(g, side).fill(color).stroke({ width: outline, color: PAPER });
+        if (owner !== me) square(g, side * 0.4).fill(BG);
+        // The second outline, apart from the square: a transfer is told from a packet by its shape.
+        return square(g, ring).stroke({ width: ringWidth, color });
+      });
+    const tail = (owner: PlayerId): GraphicsContext[] =>
+      PACKET_TAIL.map((step) =>
+        this.context((g) =>
+          square(g, step.side).fill({ color: ownerColor(me, owner), alpha: step.alpha }),
+        ),
+      );
     this.packet = { 0: packet(0), 1: packet(1) };
+    this.packetTransfer = { 0: transfer(0), 1: transfer(1) };
+    this.packetTail = { 0: tail(0), 1: tail(1) };
     this.glyph = {
       attack: this.context((g) => drawModeGlyph(g, 'attack')),
       defense: this.context((g) => drawModeGlyph(g, 'defense')),
     };
-    this.hammer = this.context(drawHammer);
+    this.buildPlate = this.context((g) =>
+      g
+        .roundRect(
+          -BUILD_PLATE.width / 2,
+          -BUILD_PLATE.height / 2,
+          BUILD_PLATE.width,
+          BUILD_PLATE.height,
+          BUILD_PLATE.radius,
+        )
+        .fill(BG)
+        .stroke(BUILD_PLATE.stroke),
+    );
     const disc = (owner: PlayerId): GraphicsContext =>
       this.context((g) => {
         g.circle(0, 0, 9)

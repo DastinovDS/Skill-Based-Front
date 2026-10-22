@@ -42,6 +42,11 @@ export interface RenderSource {
    * warehouse bar of a foreign city shows only its charges (its capacity is hidden).
    */
   readonly cityUpgrades?: CityBuildTicks | null;
+  /**
+   * Ticks one road level takes to build (`ruleset_public.build.ticks_per_level`): the part done of
+   * the tape of an own build. Without it the tape shows no part done.
+   */
+  readonly roadBuildTicks?: number;
   /** The frame to draw now; `null` until the first snapshot. */
   frame(): RenderFrame | null;
   /**

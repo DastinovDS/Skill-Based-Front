@@ -105,6 +105,7 @@
           capacity: welcome.ruleset_public.capacity,
           roundTicks: welcome.ruleset_public.combat.round_ticks,
           recruitTicks: welcome.ruleset_public.recruit.unit_ticks,
+          roadBuildTicks: welcome.ruleset_public.build.ticks_per_level,
           cityUpgrades: welcome.ruleset_public.city_upgrades.enabled
             ? {
                 barracks: welcome.ruleset_public.city_upgrades.barracks_ticks,
