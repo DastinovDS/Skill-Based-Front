@@ -1,6 +1,6 @@
 /**
  * Geometry of the regions of the map (ui-style.md 9.1, 9.2, 9.8): where terrain stamps go, the
- * border between areas of different owners, and the hatching along the border of the fog.
+ * border between areas of different owners (the veil of the fog is in `fogView.ts`).
  *
  * Pure functions, no PixiJS and no DOM. The cells are the Voronoi cells of `voronoi.ts` (convex).
  */
@@ -203,7 +203,7 @@ export function territoryBorders(
   return borders;
 }
 
-// --- Fog hatching ----------------------------------------------------------------------------
+// --- Clipping --------------------------------------------------------------------------------
 
 /** Sutherland-Hodgman: the part of `subject` inside the convex polygon `clip`. */
 export function clipToConvex(subject: readonly Point[], clip: readonly Point[]): Point[] {
@@ -232,66 +232,4 @@ export function clipToConvex(subject: readonly Point[], clip: readonly Point[]):
     result = next;
   });
   return result;
-}
-
-/**
- * Lines at 45 degrees (x + y = const, `spacing` apart on the x + y axis) inside a convex polygon,
- * as segments. The lines are global, so bands of neighbouring edges hatch in step.
- */
-export function hatchInside(polygon: readonly Point[], spacing: number): Segment[] {
-  if (polygon.length < 3 || spacing <= 0) return [];
-  const sums = polygon.map((p) => p.x + p.y);
-  const segments: Segment[] = [];
-  const first = Math.ceil(Math.min(...sums) / spacing);
-  const last = Math.floor(Math.max(...sums) / spacing);
-  for (let k = first; k <= last; k++) {
-    const c = k * spacing;
-    const hits: Point[] = [];
-    polygon.forEach((p, i) => {
-      const q = polygon[(i + 1) % polygon.length];
-      if (q === undefined) return;
-      const fp = p.x + p.y - c;
-      const fq = q.x + q.y - c;
-      if (fp === fq || fp * fq > 0) return;
-      const t = fp / (fp - fq);
-      hits.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
-    });
-    if (hits.length < 2) continue;
-    hits.sort((u, v) => u.x - v.x);
-    const a = hits[0];
-    const b = hits[hits.length - 1];
-    if (a !== undefined && b !== undefined && Math.hypot(b.x - a.x, b.y - a.y) > 0.5) {
-      segments.push({ a, b });
-    }
-  }
-  return segments;
-}
-
-/**
- * The hatching along the border of the visible area: in every hidden cell, a band `width` wide
- * along each edge shared with a cell that is not hidden, hatched at 45 degrees.
- */
-export function fogHatching(
-  cells: readonly (readonly Point[])[],
-  hidden: readonly boolean[],
-  width: number,
-  spacing: number,
-): Segment[] {
-  const segments: Segment[] = [];
-  for (const edge of cellEdges(cells)) {
-    const cell = cells[edge.cell];
-    if (hidden[edge.cell] !== true || edge.neighbour === null || hidden[edge.neighbour] === true) {
-      continue;
-    }
-    if (cell === undefined) continue;
-    const d = inward(edge.a, edge.b, centroid(cell), width);
-    const band = [
-      edge.a,
-      edge.b,
-      { x: edge.b.x + d.x, y: edge.b.y + d.y },
-      { x: edge.a.x + d.x, y: edge.a.y + d.y },
-    ];
-    segments.push(...hatchInside(clipToConvex(band, cell), spacing));
-  }
-  return segments;
 }

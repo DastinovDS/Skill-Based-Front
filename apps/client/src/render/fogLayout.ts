@@ -4,9 +4,10 @@
  * Pure functions, no PixiJS and no DOM. Nothing here decides what is visible: the server does
  * (`detail` of a node or an edge); the client only draws that level.
  */
-import type { MapFile } from '../protocol.gen.ts';
+import type { MapFile, NodeView } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { edgeEnds, edgePoint, nodePoint, sideways } from './layout.ts';
+import { cellEdges, type Segment } from './regionLayout.ts';
 import { GHOST_ALPHA, GHOST_FADE_START_S, GHOST_HIDE_S, RING_GAP } from './style.ts';
 
 /** Enemy markers on an edge sit this far from the road, to the left of the a → b way. */
@@ -76,4 +77,56 @@ export function ghostAlpha(ageSeconds: number): number {
   if (ageSeconds <= GHOST_FADE_START_S) return GHOST_ALPHA;
   if (ageSeconds >= GHOST_HIDE_S) return 0;
   return (GHOST_ALPHA * (GHOST_HIDE_S - ageSeconds)) / (GHOST_HIDE_S - GHOST_FADE_START_S);
+}
+
+/**
+ * The cities under the veil of the haze (F1): those whose `detail` is `fog`, by id. Only what the
+ * `PlayerView` says is hidden; the veil never depends on `seen` (the memory is a ghost, not a shade).
+ */
+export function veilCities(nodes: readonly Pick<NodeView, 'id' | 'detail'>[]): number[] {
+  return nodes
+    .filter((node) => node.detail === 'fog')
+    .map((node) => node.id)
+    .sort((a, b) => a - b);
+}
+
+/** The same set of hidden cities: the haze is redrawn only when this is false. */
+export function sameVeil(a: readonly number[], b: readonly number[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
+/**
+ * A Voronoi cell for the veil: every vertex that lies on the edge of the map `[0, width] x [0, height]`
+ * moves `margin` outward along that edge's normal, so that the blur does not thin the veil at the
+ * edge of the map (the map mask cuts what is outside). Inner vertices stay.
+ */
+export function veilPolygon(
+  cell: readonly Point[],
+  bounds: { readonly width: number; readonly height: number },
+  margin: number,
+): Point[] {
+  const eps = 1e-6;
+  return cell.map((p) => ({
+    x: p.x <= eps ? p.x - margin : p.x >= bounds.width - eps ? p.x + margin : p.x,
+    y: p.y <= eps ? p.y - margin : p.y >= bounds.height - eps ? p.y + margin : p.y,
+  }));
+}
+
+/**
+ * The front of the haze: the edges of the cells between a hidden city and a city in sight. The
+ * soft edge of the veil reads only by brightness, which is weak where the terrain is as dark as
+ * the veil (and in grey scale), so a thin light line marks the front (not hatching, ui-style 26.3).
+ * Each shared edge once, from the hidden side; the map border is not a front.
+ */
+export function veilFrontier(
+  cells: readonly (readonly Point[])[],
+  hidden: readonly number[],
+): Segment[] {
+  const covered = new Set(hidden);
+  const lines: Segment[] = [];
+  for (const edge of cellEdges(cells)) {
+    if (!covered.has(edge.cell) || edge.neighbour === null || covered.has(edge.neighbour)) continue;
+    lines.push({ a: edge.a, b: edge.b });
+  }
+  return lines;
 }
