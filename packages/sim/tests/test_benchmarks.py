@@ -171,9 +171,9 @@ def grid_map(request: pytest.FixtureRequest) -> MapDef:
 
 
 def _project_budget(mapdef: MapDef) -> float:
-    """0.3 ms (section 12). On 55 nodes ``project()`` does not fit it (#371, about 0.42 ms on
-    the reference machine); TODO(#371): 0.45 ms until the owner picks a budget or a faster
-    ``project()``."""
+    """0.3 ms (section 12) on 40 nodes; 0.45 ms on the 45..55 node maps of DEC-27 (``grid55``):
+    ``project()`` does not fit 0.3 ms there (about 0.42 ms on the reference machine), and the
+    owner accepted 0.45 ms on 2026-10-22 (#371)."""
     return (0.45 if len(mapdef.nodes) > 40 else 0.3) * MS
 
 
