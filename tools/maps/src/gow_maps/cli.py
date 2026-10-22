@@ -106,7 +106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     preview = commands.add_parser("preview", help="draw maps/<id>.preview.png next to each map")
     preview.add_argument("files", nargs="+", help="map JSON files (glob patterns allowed)")
     preview.set_defaults(handler=_preview)
-    bake = commands.add_parser("bake", help="draw the background maps/<id>.bg.png of each map")
+    bake = commands.add_parser("bake", help="draw the background maps/<id>.bg.webp of each map")
     bake.add_argument("files", nargs="+", help="map JSON files (glob patterns allowed)")
     bake.add_argument(
         "--seed", type=int, help="noise seed (default: derived from the map name and version)"

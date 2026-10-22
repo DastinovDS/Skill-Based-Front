@@ -1,4 +1,4 @@
-"""Map pool served over HTTP: ``maps/<id>.json`` plus an optional background ``<id>.bg.png``.
+"""Map pool served over HTTP: ``maps/<id>.json`` plus an optional background ``<id>.bg.webp``.
 
 The map graph is public to both players (mechanics.md, section 10, DEC-04), so the file is
 served as is. Maps are loaded and checked once at startup; a broken map stops the server.
@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from gow_sim.maps import MapDef, MapFormatError, load_map
 
-BACKGROUND_SUFFIX = ".bg.png"
+BACKGROUND_SUFFIX = ".bg.webp"
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,7 +82,7 @@ async def list_maps(catalog: Catalog) -> list[MapSummary]:
             version=entry.definition.meta.version,
             width=entry.definition.meta.width,
             height=entry.definition.meta.height,
-            background_url=f"/api/maps/{entry.id}/background.png" if entry.background else None,
+            background_url=f"/api/maps/{entry.id}/background.webp" if entry.background else None,
         )
         for entry in catalog.all()
     ]
@@ -94,12 +94,12 @@ async def get_map(map_id: str, catalog: Catalog) -> Response:
     return Response(content=_entry(catalog, map_id).raw_json, media_type="application/json")
 
 
-@router.get("/{map_id}/background.png", response_class=FileResponse)
+@router.get("/{map_id}/background.webp", response_class=FileResponse)
 async def get_background(map_id: str, catalog: Catalog) -> FileResponse:
     background = _entry(catalog, map_id).background
     if background is None:
         raise HTTPException(status_code=404, detail="map has no background")
-    return FileResponse(background, media_type="image/png")
+    return FileResponse(background, media_type="image/webp")
 
 
 def _entry(catalog: MapCatalog, map_id: str) -> MapEntry:

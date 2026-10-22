@@ -59,7 +59,12 @@ export class MapView {
   readonly cells: Point[][];
   private readonly terrainFill: Graphics;
   private readonly dim: Graphics;
-  private readonly stamps: TerrainView;
+  /**
+   * Stamps of the terrain: only for a map without a baked background. The background carries its
+   * own details (trees, tufts, stones), so a map with one gets no stamp sprites (#344).
+   */
+  private stamps: TerrainView | null = null;
+  private readonly stampParent: Container;
   private readonly mapFrame: Graphics;
   private backdrop: Sprite | null = null;
   /** The flat floor of the «Supply» mode, hidden on the normal map. */
@@ -78,7 +83,9 @@ export class MapView {
     private readonly map: MapFile,
     layers: MapLayers,
     private readonly me: PlayerId,
-    renderer: Renderer,
+    private readonly renderer: Renderer,
+    /** A baked background is on its way (`setBackground`): the stamps are not created. */
+    bakedBackground = false,
   ) {
     const bounds = { width: map.meta.width, height: map.meta.height };
     this.cells = voronoiCells(map.nodes, bounds);
@@ -90,11 +97,11 @@ export class MapView {
 
     this.layers = layers;
     const background = layers.layer.background;
+    this.stampParent = background;
     this.terrainFill = background.addChild(this.drawTerrain());
     this.dim = background.addChild(
       new Graphics().rect(0, 0, bounds.width, bounds.height).fill(BACKDROP_DIM),
     );
-    this.stamps = new TerrainView(map, this.cells, background, renderer);
     this.floor = background.addChild(
       new Graphics().rect(0, 0, bounds.width, bounds.height).fill(SUPPLY_FLOOR),
     );
@@ -102,6 +109,7 @@ export class MapView {
     this.mapFrame = background.addChild(
       new Graphics().rect(0, 0, bounds.width, bounds.height).stroke(MAP_BORDER),
     );
+    if (!bakedBackground) this.showStamps();
     // A thin line round every area, also between areas of one owner or nobody: under the tint and
     // the stronger border of the owners, under the roads.
     this.cellLines = layers.layer.territory.addChild(this.drawCellLines());
@@ -151,7 +159,7 @@ export class MapView {
   }
 
   /**
-   * Put the baked background (maps/<id>.bg.png, 1 px per world unit, origin 0,0) under the map.
+   * Put the baked background (maps/<id>.bg.webp, 1 px per world unit, origin 0,0) under the map.
    * It replaces the flat terrain colours; without it (no file yet) those stay as the fallback.
    */
   setBackground(texture: Texture): void {
@@ -167,6 +175,18 @@ export class MapView {
   }
 
   /**
+   * The fallback of a map whose background did not load: the flat terrain colours get the stamps
+   * the baked background would have carried (ui-style.md 9.2). Nothing happens if they are there.
+   */
+  showStamps(): void {
+    if (this.stamps !== null || this.backdrop !== null) return;
+    // Between the dimming and the floor, as when they were always there.
+    const at = this.stampParent.getChildIndex(this.floor);
+    this.stamps = new TerrainView(this.map, this.cells, this.stampParent, this.renderer, at);
+    this.stamps.setVisible(!this.supplyMode);
+  }
+
+  /**
    * The «Supply» mode (DEC-28, item 8): no terrain (colours, baked background, stamps, dimming), a
    * flat floor instead, and a stronger flat tint of the territory.
    */
@@ -175,7 +195,7 @@ export class MapView {
     this.supplyMode = on;
     this.floor.visible = on;
     this.dim.visible = !on;
-    this.stamps.setVisible(!on);
+    this.stamps?.setVisible(!on);
     if (this.backdrop !== null) this.backdrop.visible = !on;
     // Without a baked background the flat terrain colours are the fallback (hidden with the rest).
     if (this.backdrop === null) this.terrainFill.visible = !on;
@@ -184,7 +204,7 @@ export class MapView {
 
   /** Number of terrain stamps (tests and the performance check). */
   get stampCount(): number {
-    return this.stamps.count;
+    return this.stamps?.count ?? 0;
   }
 
   /** `owners[i]`: current owner of node `i` (`null`: nobody). */
@@ -246,7 +266,7 @@ export class MapView {
     this.bodyLayer.destroy();
     this.cellLines.destroy();
     this.territory.destroy();
-    this.stamps.destroy();
+    this.stamps?.destroy();
     this.backdrop?.destroy();
     this.terrainFill.destroy();
     this.dim.destroy();

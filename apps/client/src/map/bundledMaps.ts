@@ -33,9 +33,9 @@ export const DEFAULT_MAP: MapFile = (() => {
   return map;
 })();
 
-// Baked backgrounds `maps/<id>.bg.png` (MAP-05, #70). The server serves the same files at
-// `/api/maps/{id}/background.png`; the dev screen takes them from the repository through Vite.
-const backgrounds = import.meta.glob<string>('../../../../maps/*.bg.png', {
+// Baked backgrounds `maps/<id>.bg.webp` (MAP-05, #70, #344). The server serves the same files at
+// `/api/maps/{id}/background.webp`; the dev screen takes them from the repository through Vite.
+const backgrounds = import.meta.glob<string>('../../../../maps/*.bg.webp', {
   eager: true,
   import: 'default',
   query: '?url',
@@ -43,6 +43,6 @@ const backgrounds = import.meta.glob<string>('../../../../maps/*.bg.png', {
 
 /** URL of the baked background of a bundled map, or `null` if it has none (the test maps). */
 export function backgroundUrl(mapName: string): string | null {
-  const found = Object.entries(backgrounds).find(([path]) => path.endsWith(`/${mapName}.bg.png`));
+  const found = Object.entries(backgrounds).find(([path]) => path.endsWith(`/${mapName}.bg.webp`));
   return found === undefined ? null : found[1];
 }

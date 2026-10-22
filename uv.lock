@@ -199,6 +199,8 @@ dependencies = [
     { name = "gow-sim" },
     { name = "matplotlib" },
     { name = "networkx" },
+    { name = "numpy" },
+    { name = "pillow" },
 ]
 
 [package.metadata]
@@ -206,6 +208,8 @@ requires-dist = [
     { name = "gow-sim", editable = "packages/sim" },
     { name = "matplotlib", specifier = ">=3.10" },
     { name = "networkx", specifier = ">=3.5" },
+    { name = "numpy", specifier = ">=2.5.3" },
+    { name = "pillow", specifier = ">=12.3.0" },
 ]
 
 [[package]]

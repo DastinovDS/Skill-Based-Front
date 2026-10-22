@@ -1,26 +1,28 @@
-"""Map background baker (MAP-05, DEC-27): land biomes by terrain, no water, determinism, PNGs."""
+"""Map background baker (MAP-05, DEC-27, #344): land biomes by terrain, no water, WebP."""
 
+import io
 import json
 import math
-import struct
-import zlib
+import time
 from functools import cache
 from pathlib import Path
 
+import numpy as np
 import pytest
+from numpy.typing import NDArray
+from PIL import Image
 
 from gow_maps.bake import (
-    BIOME_COLOUR,
+    MAX_WEBP_BYTES,
     STEP,
     TERRAIN_BIOMES,
     WARP,
     Biome,
-    Cell,
     background_path,
+    bake_background,
     bake_cells,
-    encode_png,
     map_seed,
-    render_rgb,
+    render_background,
 )
 from gow_maps.cli import main
 from gow_sim.maps import MapDef, load_map
@@ -30,7 +32,7 @@ MAPS = ROOT / "maps"
 TEST_MAPS = ROOT / "packages" / "sim" / "tests" / "maps"
 POOL = ["arteriya", "pautina", "pereval"]
 ALL_MAPS = [MAPS / f"{name}.json" for name in POOL] + sorted(TEST_MAPS.glob("*.json"))
-MAX_PNG_BYTES = 1_500_000  # issue MAP-05: every background is at most 1.5 MB
+BAKE_SECONDS = 10  # #344: baking one map takes at most 10 s (CPU time, a loaded machine is slower)
 LAND = frozenset(biome for biomes in TERRAIN_BIOMES.values() for biome in biomes)
 
 
@@ -40,28 +42,16 @@ def _map(path: Path) -> MapDef:
 
 
 @cache
-def _cells(path: Path) -> list[list[Cell]]:
+def _cells(path: Path) -> list[list[Biome]]:
     return bake_cells(_map(path))
 
 
-def _decode_png(data: bytes) -> tuple[int, int, bytes]:
-    """Width, height and RGB pixels of an 8-bit RGB PNG whose rows all use filter 0."""
-    assert data[:8] == b"\x89PNG\r\n\x1a\n"
-    pos, idat, header = 8, b"", b""
-    while pos < len(data):
-        (length,) = struct.unpack(">I", data[pos : pos + 4])
-        kind, body = data[pos + 4 : pos + 8], data[pos + 8 : pos + 8 + length]
-        if kind == b"IHDR":
-            header = body
-        elif kind == b"IDAT":
-            idat += body
-        pos += 12 + length
-    width, height, depth, colour_type = struct.unpack(">IIBB", header[:10])
-    assert (depth, colour_type) == (8, 2)
-    raw = zlib.decompress(idat)
-    stride = width * 3 + 1
-    assert all(raw[r * stride] == 0 for r in range(height))
-    return width, height, b"".join(raw[r * stride + 1 : (r + 1) * stride] for r in range(height))
+def _decode(data: bytes) -> NDArray[np.uint8]:
+    """Pixels (height x width x 3) of a WebP file; the format and the RGB mode are asserted."""
+    with Image.open(io.BytesIO(data)) as image:
+        assert image.format == "WEBP"
+        assert image.mode == "RGB"
+        return np.asarray(image)
 
 
 def _centre(gx: int, gy: int) -> tuple[float, float]:
@@ -88,13 +78,13 @@ def test_node_area_has_the_node_terrain(path: Path) -> None:
         assert reach > STEP  # the check below looks at some cells around every node
         allowed = TERRAIN_BIOMES[node.terrain]
         for gy, row in enumerate(cells):
-            for gx, cell in enumerate(row):
+            for gx, biome in enumerate(row):
                 x, y = _centre(gx, gy)
                 if math.hypot(node.x - x, node.y - y) < reach:
-                    assert cell.biome in allowed, (node.id, gx, gy, cell.biome)
+                    assert biome in allowed, (node.id, gx, gy, biome)
         # The city itself always stands on land of its own terrain.
         own = cells[min(node.y // STEP, len(cells) - 1)][min(node.x // STEP, len(cells[0]) - 1)]
-        assert own.biome in TERRAIN_BIOMES[node.terrain]
+        assert own in TERRAIN_BIOMES[node.terrain]
 
 
 def test_there_is_no_water_biome() -> None:
@@ -112,14 +102,15 @@ def test_there_is_no_water_biome() -> None:
 
 @pytest.mark.parametrize("path", ALL_MAPS, ids=lambda p: p.stem)
 def test_every_cell_is_land(path: Path) -> None:
-    assert {cell.biome for row in _cells(path) for cell in row} <= LAND
+    assert {biome for row in _cells(path) for biome in row} <= LAND
 
 
 def test_bake_is_deterministic() -> None:
     mapdef = _map(TEST_MAPS / "line3.json")
-    assert render_rgb(mapdef) == render_rgb(mapdef)
-    assert render_rgb(mapdef, seed=1) == render_rgb(mapdef, seed=1)
-    assert render_rgb(mapdef, seed=1) != render_rgb(mapdef, seed=2)
+    first = render_background(mapdef)
+    assert np.array_equal(first, render_background(mapdef))
+    assert np.array_equal(render_background(mapdef, seed=1), render_background(mapdef, seed=1))
+    assert not np.array_equal(render_background(mapdef, seed=1), render_background(mapdef, seed=2))
 
 
 def test_default_seed_depends_on_name_and_version(tmp_path: Path) -> None:
@@ -133,12 +124,11 @@ def test_default_seed_depends_on_name_and_version(tmp_path: Path) -> None:
     assert len(seeds) == 3
 
 
-def test_png_has_the_map_size_and_pixels() -> None:
+def test_picture_has_the_map_size_and_rgb_pixels() -> None:
     mapdef = _map(TEST_MAPS / "line3.json")
-    rgb = render_rgb(mapdef)
-    assert len(rgb) == mapdef.meta.width * mapdef.meta.height * 3
-    png = encode_png(mapdef.meta.width, mapdef.meta.height, rgb)
-    assert _decode_png(png) == (mapdef.meta.width, mapdef.meta.height, rgb)
+    pixels = render_background(mapdef)
+    assert pixels.shape == (mapdef.meta.height, mapdef.meta.width, 3)
+    assert pixels.dtype == np.uint8
 
 
 def test_width_must_be_a_multiple_of_step(tmp_path: Path) -> None:
@@ -153,34 +143,64 @@ def test_width_must_be_a_multiple_of_step(tmp_path: Path) -> None:
     assert main(["bake", str(path)]) == 1
 
 
+@pytest.fixture(scope="module")
+def fresh() -> dict[str, NDArray[np.uint8]]:
+    """A fresh bake of every MVP map (about 5 s each), shared by the tests below."""
+    return {name: render_background(_map(MAPS / f"{name}.json")) for name in POOL}
+
+
+def _blocks(pixels: NDArray[np.uint8], size: int = 16) -> NDArray[np.float64]:
+    """Mean colour of every ``size x size`` block: lossy-coding noise averages out."""
+    h, w, _ = pixels.shape
+    cut = pixels[: h // size * size, : w // size * size].astype(np.float64)
+    return cut.reshape(h // size, size, w // size, size, 3).mean(axis=(1, 3))
+
+
 @pytest.mark.parametrize("name", POOL)
-def test_committed_background_is_up_to_date(name: str) -> None:
+def test_committed_background_is_up_to_date(name: str, fresh: dict[str, NDArray[np.uint8]]) -> None:
     path = MAPS / f"{name}.json"
-    png = background_path(path).read_bytes()
-    assert len(png) <= MAX_PNG_BYTES
+    data = background_path(path).read_bytes()
+    assert background_path(path).name == f"{name}.bg.webp"
+    assert len(data) <= MAX_WEBP_BYTES  # #344: at most 0.5 MB
     mapdef = _map(path)
-    # Compared as pixels, not bytes: zlib builds may compress the same pixels differently.
-    assert _decode_png(png) == (mapdef.meta.width, mapdef.meta.height, render_rgb(mapdef))
-
-
-def _is_land_pixel(pixel: bytes) -> bool:
-    # A land pixel is a biome colour times the detail shade (1 +- 0.09), rounded.
-    return any(
-        all(c * 0.9 - 1 <= p <= min(255, c * 1.1 + 1) for p, c in zip(pixel, colour, strict=True))
-        for biome, colour in BIOME_COLOUR.items()
-        if biome in LAND
-    )
+    committed = _decode(data)  # WebP, RGB
+    assert committed.shape == (mapdef.meta.height, mapdef.meta.width, 3)
+    # Compared as block means with a tolerance, not as bytes: libwebp of another Pillow wheel
+    # may code the same pixels differently. A stale file (the map was edited without `bake`)
+    # moves whole biome areas, which is far beyond the tolerance.
+    diff = np.abs(_blocks(committed) - _blocks(fresh[name]))
+    assert diff.mean() < 1.5
+    assert diff.max() < 25
 
 
 @pytest.mark.parametrize("name", POOL)
 def test_committed_background_has_no_water_pixels(name: str) -> None:
-    # Example 12 of DEC-27: not a single sea, shallow water or beach pixel. The colours of the
-    # three water biomes of the old baker (deep sea, shallow sea, beach) match no land colour.
-    water_or_beach = [bytes(c) for c in [(0, 105, 148), (0, 133, 148), (238, 214, 175)]]
-    assert not any(_is_land_pixel(pixel) for pixel in water_or_beach)
-    _, _, rgb = _decode_png(background_path(MAPS / f"{name}.json").read_bytes())
-    pixels = {rgb[i : i + 3] for i in range(0, len(rgb), 3)}
-    assert all(_is_land_pixel(pixel) for pixel in pixels)
+    # Example 12 of DEC-27: not a single sea, shallow water or beach pixel. Water is blue (the
+    # old deep and shallow sea (0, 105, 148) and (0, 133, 148)), a beach is sand (238, 214, 175);
+    # the land palette has neither (snow is a cold white: blue exceeds red and green by 12 at most).
+    pixels = _decode(background_path(MAPS / f"{name}.json").read_bytes()).astype(np.int16)
+    red, green, blue = pixels[..., 0], pixels[..., 1], pixels[..., 2]
+    assert not (blue - np.maximum(red, green) > 25).any()  # blue water
+    assert not ((red > 215) & (red - blue > 40)).any()  # sand
+
+
+def test_render_stays_within_the_time_budget() -> None:
+    mapdef = _map(MAPS / "arteriya.json")  # 1600 x 1000, the largest map of the pool
+    started = time.process_time()
+    pixels = render_background(mapdef)
+    data = io.BytesIO()
+    Image.fromarray(pixels, "RGB").save(data, "WEBP", quality=85, method=6)
+    assert time.process_time() - started < BAKE_SECONDS
+
+
+def test_bake_refuses_a_file_over_the_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("gow_maps.bake.MAX_WEBP_BYTES", 100)
+    out = tmp_path / "line3.bg.webp"
+    with pytest.raises(ValueError, match="over the budget"):
+        bake_background(_map(TEST_MAPS / "line3.json"), out)
+    assert not out.exists()
 
 
 def test_cli_bake_writes_next_to_the_map(
@@ -189,8 +209,10 @@ def test_cli_bake_writes_next_to_the_map(
     path = tmp_path / "line3.json"
     path.write_bytes((TEST_MAPS / "line3.json").read_bytes())
     assert main(["bake", str(tmp_path / "*.json"), "--seed", "7"]) == 0
-    out = tmp_path / "line3.bg.png"
+    out = tmp_path / "line3.bg.webp"
     assert background_path(path) == out
     assert f"wrote {out}" in capsys.readouterr().out
     mapdef = load_map(path)
-    assert _decode_png(out.read_bytes())[2] == render_rgb(mapdef, seed=7)
+    decoded = _decode(out.read_bytes())
+    assert decoded.shape == (mapdef.meta.height, mapdef.meta.width, 3)
+    assert np.abs(_blocks(decoded) - _blocks(render_background(mapdef, seed=7))).mean() < 1.5

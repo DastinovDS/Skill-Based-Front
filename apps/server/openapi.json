@@ -93,13 +93,13 @@
         }
       }
     },
-    "/api/maps/{map_id}/background.png": {
+    "/api/maps/{map_id}/background.webp": {
       "get": {
         "tags": [
           "maps"
         ],
         "summary": "Get Background",
-        "operationId": "get_background_api_maps__map_id__background_png_get",
+        "operationId": "get_background_api_maps__map_id__background_webp_get",
         "parameters": [
           {
             "name": "map_id",

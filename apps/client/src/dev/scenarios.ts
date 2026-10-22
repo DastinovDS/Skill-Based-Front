@@ -5,9 +5,11 @@
  * screenshots from them. The live `demo` scene is the dev server's match (CLI-06, #62).
  */
 import { DEV_RULES } from '../hud/devFeed.ts';
+import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
 import { interpolateFrame, type RenderFrame } from '../net/interpolate.ts';
 import type { EventMsg, SnapshotMsg } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
+import { ARTERIYA_TICK, ARTERIYA_VIEW, arteriyaSnapshot } from './arteriyaScene.ts';
 
 const files = import.meta.glob<SnapshotMsg>(
   '../../../../packages/protocol/fixtures/server/snapshot*.json',
@@ -173,15 +175,33 @@ function fightsSnapshot(): SnapshotMsg {
   };
 }
 
+/** The real map of the `arteriya` scene (the only scene with a baked background). */
+function arteriyaMap() {
+  const map = BUNDLED_MAPS.find((m) => m.meta.name === 'arteriya');
+  if (map === undefined) throw new Error('maps/arteriya.json is not bundled');
+  return map;
+}
+
 export interface FixtureScene {
   id: string;
   /** `meta.name` of the map the snapshot was written for. */
   map: string;
   snapshot: SnapshotMsg;
   events: readonly EventMsg[];
+  /** The part of the map (world units) the camera looks at; without it the whole map is shown. */
+  view?: { x: number; y: number; width: number; height: number };
 }
 
 export const FIXTURE_SCENES: readonly FixtureScene[] = [
+  {
+    // The real map with its baked background (#344): the scene to judge the map style by.
+    id: 'arteriya',
+    map: 'arteriya',
+    snapshot: arteriyaSnapshot(arteriyaMap()),
+    // The last round of the fight in the city 4 (its shots in the air), 12 ticks ago.
+    events: [round(ARTERIYA_TICK - 12, { node: 4 }, 2, 0, 1)],
+    view: ARTERIYA_VIEW,
+  },
   {
     id: 'snapshot',
     map: 'diamond',

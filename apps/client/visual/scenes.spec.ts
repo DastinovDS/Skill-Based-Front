@@ -9,6 +9,8 @@ for (const scene of SCENES) {
     await page.goto(`/?scene=${scene.id}`);
     // The renderer marks the canvas host once a frame of the snapshot is drawn.
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(scene.tick));
+    // The baked background loads on its own: the map is not ready before it.
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
     // The HUD is not part of the map: hide it (it shows the changing FPS).
     await page.addStyleTag({ content: '.hud { display: none !important; }' });
     await expect(page.locator('canvas')).toHaveScreenshot(`${scene.id}.png`, {

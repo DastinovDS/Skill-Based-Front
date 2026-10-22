@@ -93,16 +93,16 @@ else
 fi
 
 echo "== baked map backgrounds are bundled into the client"
-# maps/*.bg.png reach the client only through Vite's import.meta.glob at image build time; when the
+# maps/*.bg.webp reach the client only through Vite's import.meta.glob at image build time; when the
 # Docker context misses them the glob is empty and the map is drawn without its background.
-bg="$(grep -oE '/assets/[A-Za-z0-9_.-]+\.bg-[A-Za-z0-9_-]+\.png' "$tmp/asset.b" | head -n 1 || true)"
+bg="$(grep -oE '/assets/[A-Za-z0-9_.-]+\.bg-[A-Za-z0-9_-]+\.webp' "$tmp/asset.b" | head -n 1 || true)"
 if [ -z "$bg" ]; then
-	fail "the client bundle references no baked map background (/assets/<map>.bg-<hash>.png)"
+	fail "the client bundle references no baked map background (/assets/<map>.bg-<hash>.webp)"
 else
 	status="$(fetch bg "$bg")"
 	[ "$status" = 200 ] || fail "GET $bg returned $status"
 	case "$(header bg Content-Type)" in
-	image/png*) ;;
+	image/webp*) ;;
 	*) fail "$bg: Content-Type is '$(header bg Content-Type)'" ;;
 	esac
 fi

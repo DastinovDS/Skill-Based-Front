@@ -69,6 +69,8 @@ export class TerrainView {
     cells: readonly (readonly Point[])[],
     parent: Container,
     renderer: Renderer,
+    /** Index in `parent` to insert the container at; the top by default. */
+    at?: number,
   ) {
     const stamp = new Map<Terrain, { texture: Texture; anchor: Point }>();
     for (const terrain of ['forest', 'mountains', 'plains'] as const) {
@@ -111,7 +113,8 @@ export class TerrainView {
         this.container.addChild(sprite);
       }
     }
-    parent.addChild(this.container);
+    if (at === undefined) parent.addChild(this.container);
+    else parent.addChildAt(this.container, at);
   }
 
   setVisible(visible: boolean): void {

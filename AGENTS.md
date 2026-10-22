@@ -64,7 +64,7 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 | `gow_bots.bots` | `gow_sim.view`, `gow_sim.commands`, `gow_sim.maps`, `gow_sim.ruleset` | — | прямой импорт `gow_sim.state`, `gow_sim.systems`, `gow_sim.match` (иначе бот видит скрытое) |
 | `gow_bots` (харнесс) | `gow_sim` целиком | `matplotlib` (только отчёты) | `gow_server`, `gow_protocol` |
 | `gow_server` | всё выше | `fastapi`, `uvicorn`, `sqlalchemy`, `alembic`, `pydantic-settings` | — |
-| `gow_maps` | `gow_sim.maps`, `gow_sim.ruleset` (проверка `warehouse`, DEC-26) | `networkx`, `matplotlib` | `gow_server` |
+| `gow_maps` | `gow_sim.maps`, `gow_sim.ruleset` (проверка `warehouse`, DEC-26) | `networkx`, `matplotlib`, `numpy`, `Pillow` | `gow_server` |
 | клиент | `src/protocol.gen.ts`, `src/api.gen.ts` | `pixi.js`, `svelte`, `howler` | собственные копии правил игры |
 
 ---
@@ -138,7 +138,7 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 | `maps:validate-warehouse` | то же с `--ruleset rulesets/mvp-1.toml`: стартовый склад не больше склада рулсета с `city_upgrades` (DEC-26, п. 5); сейчас `arteriya` и `pautina` её не проходят (малые города со `start_stock = 2`, симуляция обрезает до 1, вопрос в #265) | #265 |
 | `maps:mirror` | собрать `maps/<имя>.json` из половины `maps/src/<имя>.half.json` (аргумент: имя) | MAP-03 |
 | `maps:preview` | нарисовать превью `maps/<имя>.preview.png` | MAP-04 |
-| `maps:bake` | запечь фон `maps/<имя>.bg.png` (после любой правки карты) | MAP-05 |
+| `maps:bake` | запечь фон `maps/<имя>.bg.webp`: numpy и Pillow, текстура T2, WebP до 0,5 МБ (после любой правки карты) | MAP-05, #344 |
 | `tournament` | турнир ботов (по умолчанию все карты и боты, 100 seeds, 8 процессов, `mvp-1`; другое после `--`, например `-- --seeds 20`; `mvp-0` только тестовый рулсет, турниры на нём не гоняем) | BOT-04 |
 | `report` | отчёт баланса (аргумент: файл, по умолчанию `docs/balance/latest.jsonl`) | BOT-05 |
 | `stack` | **только владелец.** Прод-стек на `http://localhost:8080` (HTTPS 8443, `SITE_ADDRESS=:80`; порты 80/443 заняты другим проектом), аргумент: рулсет (по умолчанию `mvp-1`). Нужна POSIX-оболочка | OPS-01 |

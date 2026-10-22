@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     forwarded_allow_ips: str = "127.0.0.1"
     """Proxies trusted for X-Forwarded-* headers (uvicorn ``--forwarded-allow-ips``): Caddy."""
     maps_dir: Path = Path("maps")
-    """Directory with the map pool: ``<id>.json`` and optional background ``<id>.bg.png``."""
+    """Directory with the map pool: ``<id>.json`` and optional background ``<id>.bg.webp``."""
     ruleset_path: Path = Path("rulesets/mvp-0.toml")
     """The ruleset of every match this server starts (loaded once at startup)."""
     database_url: str = "sqlite:///data/gow.db"

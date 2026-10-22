@@ -229,7 +229,7 @@ description = "Draw maps/<name>.preview.png"
 run = "uv run gow-maps preview maps/*.json"
 
 [tasks."maps:bake"]
-description = "Bake maps/<name>.bg.png (after any map edit)"
+description = "Bake maps/<name>.bg.webp: numpy and Pillow, texture T2 (after any map edit)"
 run = "uv run gow-maps bake maps/*.json"
 
 [tasks."maps:mirror"]
