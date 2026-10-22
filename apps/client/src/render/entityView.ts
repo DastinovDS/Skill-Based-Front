@@ -1,11 +1,12 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import {
   EDGE_LENGTH,
+  type RenderEnemy,
   type RenderFrame,
   type RenderGroup,
   type RenderPacket,
 } from '../net/interpolate.ts';
-import type { EdgeView, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
+import type { MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { MapLayers } from './layers.ts';
 import {
   buildGeometry,
@@ -22,6 +23,7 @@ import {
 import { symbolScale, type Point } from './camera.ts';
 import { iconPoint, stackGroups, stackKey, type CityIcon } from './cityStacks.ts';
 import { nodeMarkerPoint } from './fogLayout.ts';
+import { knownOfFigure, knownOfSeen } from './rangeLabel.ts';
 import { EntityKit, Token } from './shapes.ts';
 import {
   BUILD_MARK_DISTANCE,
@@ -45,6 +47,13 @@ interface GroupEntry extends Labelled {
   stamp: number;
   view: Container;
   owner: PlayerId;
+}
+
+/** An enemy figure on a road: its token, drawn again every frame at the place the frame gives. */
+interface FigureEntry {
+  token: Token;
+  stamp: number;
+  view: Container;
 }
 
 interface PacketEntry extends Labelled {
@@ -82,7 +91,7 @@ export class EntityView {
   private readonly enemy: PlayerId;
   private readonly enemyNodes: (Token | null)[];
   /** Enemy figures on the halves of roads in sight (DEC-33), by their id. */
-  private readonly enemyFigures = new Map<string, Token>();
+  private readonly enemyFigures = new Map<string, FigureEntry>();
   private readonly enemyLayer = new Container({ label: 'enemy' });
   private readonly packetLayer = new Container({ label: 'packets' });
   private readonly groupLayer = new Container({ label: 'own-groups' });
@@ -130,9 +139,7 @@ export class EntityView {
   setLabelResolution(resolution: number): void {
     this.labelResolution = resolution;
     const texts: Text[] = [];
-    for (const token of [...this.enemyNodes, ...this.enemyFigures.values()]) {
-      if (token !== null) texts.push(...token.labels());
-    }
+    for (const token of this.enemyTokens()) texts.push(...token.labels());
     for (const entry of [...this.groups.values(), ...this.packets.values()]) {
       texts.push(...entry.labels());
     }
@@ -169,13 +176,19 @@ export class EntityView {
     this.buildTies.visible = !on;
   }
 
+  /** Every token of enemies seen: in cities and on roads. */
+  private enemyTokens(): Token[] {
+    const tokens: Token[] = [];
+    for (const token of this.enemyNodes) if (token !== null) tokens.push(token);
+    for (const entry of this.enemyFigures.values()) tokens.push(entry.token);
+    return tokens;
+  }
+
   /** Camera scale (CSS px per world unit): triangles never get smaller than 20 px on screen. */
   setCameraScale(scale: number): void {
     if (scale === this.cameraScale) return;
     this.cameraScale = scale;
-    for (const token of [...this.enemyNodes, ...this.enemyFigures.values()]) {
-      if (token !== null) token.setScale(symbolScale(token.side, scale));
-    }
+    for (const token of this.enemyTokens()) token.setScale(symbolScale(token.side, scale));
   }
 
   update(frame: RenderFrame): void {
@@ -186,6 +199,7 @@ export class EntityView {
     this.stamp++;
     this.spots = this.updateGroups(frame.groups);
     this.placeEnemyNodes();
+    this.updateEnemyFigures(frame.enemies);
     this.updatePackets(frame);
   }
 
@@ -203,11 +217,10 @@ export class EntityView {
   // --- Snapshot-driven part -----------------------------------------------------------------
 
   private applyBase(base: SnapshotMsg): void {
-    const { nodes, edges } = base.view;
+    const { nodes } = base.view;
     nodes.forEach((node) => {
       this.setEnemyNode(node);
     });
-    this.setEnemyFigures(edges);
     this.drawBuilds(base);
   }
 
@@ -302,14 +315,8 @@ export class EntityView {
     }
     const token = current ?? new Token(this.kit, this.labelResolution);
     if (current === null) parent.addChild(token.view);
-    const exact =
-      seen.level === 'exact' && seen.enemy_units !== null && seen.enemy_charged !== null;
-    token.set({
-      owner: this.enemy,
-      modes: seen.enemy_modes,
-      counts: exact ? { units: seen.enemy_units ?? 0, charged: seen.enemy_charged ?? 0 } : null,
-      inside,
-    });
+    const { counts, range } = knownOfSeen(seen);
+    token.set({ owner: this.enemy, modes: seen.enemy_modes, counts, range, inside });
     token.setLabel(true);
     token.setScale(symbolScale(token.side, this.cameraScale));
     token.view.visible = true;
@@ -345,43 +352,33 @@ export class EntityView {
 
   /**
    * Enemy groups on the halves of roads in sight (DEC-33): a token each at its position, on the
-   * lane of its direction, with numbers only where its half is seen exactly. Placed per snapshot
-   * (no smoothing yet); a figure that is gone is removed.
+   * lane of its direction. The position comes from the frame, between two snapshots (a figure
+   * that is gone is removed, a new `id` is a new figure). Numbers only where its half is seen
+   * exactly; where it is seen as a range, the range («3-5»), never charges.
    */
-  private setEnemyFigures(edges: readonly EdgeView[]): void {
-    const present = new Set<string>();
-    for (const edge of edges) {
-      const ends = edgeEnds(this.map, edge.id);
-      for (const figure of edge.enemy_groups) {
-        present.add(figure.id);
-        let token = this.enemyFigures.get(figure.id);
-        if (token === undefined) {
-          token = new Token(this.kit, this.labelResolution);
-          this.enemyLayer.addChild(token.view);
-          this.enemyFigures.set(figure.id, token);
-        }
-        const exact = figure.units !== null && figure.charged !== null;
-        token.set({
-          owner: this.enemy,
-          modes: [figure.mode],
-          counts: exact ? { units: figure.units ?? 0, charged: figure.charged ?? 0 } : null,
-          inside: false,
-        });
-        token.setLabel(true);
-        token.setScale(symbolScale(token.side, this.cameraScale));
-        if (ends !== undefined) {
-          const at = edgePoint(ends.a, ends.b, true, figure.pos);
-          const [from, to] = figure.toward_b ? [ends.a, ends.b] : [ends.b, ends.a];
-          const lane = sideways(from, to, at, LANE_OFFSET);
-          token.view.position.set(lane.x, lane.y);
-        }
+  private updateEnemyFigures(enemies: readonly RenderEnemy[]): void {
+    for (const { edge, figure, pos } of enemies) {
+      let entry = this.enemyFigures.get(figure.id);
+      if (entry === undefined) {
+        const token = new Token(this.kit, this.labelResolution);
+        this.enemyLayer.addChild(token.view);
+        entry = { token, view: token.view, stamp: this.stamp };
+        this.enemyFigures.set(figure.id, entry);
       }
+      entry.stamp = this.stamp;
+      const { token } = entry;
+      const { counts, range } = knownOfFigure(figure);
+      token.set({ owner: this.enemy, modes: [figure.mode], counts, range, inside: false });
+      token.setLabel(true);
+      token.setScale(symbolScale(token.side, this.cameraScale));
+      const ends = edgeEnds(this.map, edge);
+      if (ends === undefined) continue;
+      const at = edgePoint(ends.a, ends.b, true, pos);
+      const [from, to] = figure.toward_b ? [ends.a, ends.b] : [ends.b, ends.a];
+      const lane = sideways(from, to, at, LANE_OFFSET);
+      token.view.position.set(lane.x, lane.y);
     }
-    for (const [id, token] of this.enemyFigures) {
-      if (present.has(id)) continue;
-      token.view.destroy({ children: true });
-      this.enemyFigures.delete(id);
-    }
+    sweep(this.enemyFigures, this.stamp);
   }
 
   // --- Frame-driven part --------------------------------------------------------------------

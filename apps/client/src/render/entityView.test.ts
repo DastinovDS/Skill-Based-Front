@@ -185,3 +185,118 @@ describe('EntityView, enemy figures on roads (DEC-33)', () => {
     view.destroy();
   });
 });
+
+describe('EntityView, ranges and moving figures (DEC-21, DEC-33)', () => {
+  const edge = map.edges[0];
+  if (edge === undefined) throw new Error('no roads');
+
+  beforeEach(() => {
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+    );
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const figure = (fields: Partial<EnemyGroup> = {}): EnemyGroup => ({
+    id: 'f1',
+    pos: 200,
+    toward_b: true,
+    detail: 'range',
+    mode: 'attack',
+    units: null,
+    charged: null,
+    units_range: { low: 3, high: 5 },
+    ...fields,
+  });
+  function snapshotWith(tick: number, figures: EnemyGroup[]): SnapshotMsg {
+    const edges = base.view.edges.map((e) =>
+      e.id === edge?.id ? { ...e, enemy_groups: figures } : { ...e, enemy_groups: [] },
+    );
+    return { ...base, tick, view: { ...base.view, edges, groups: [] } };
+  }
+  const texts = (layers: ReturnType<typeof createLayers>): string[] => {
+    const found: string[] = [];
+    const visit = (item: Container): void => {
+      if (!item.visible) return;
+      if (item instanceof Text && item.text !== '') found.push(item.text);
+      for (const child of item.children) visit(child);
+    };
+    visit(layers.layer.groups);
+    return found;
+  };
+
+  it('writes the range of a figure seen as a range, and nothing about its charges', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    // Even if the data had charges at this level, the range token does not show them.
+    const snapshot = snapshotWith(100, [figure({ charged: 7 })]);
+    view.update(interpolateFrame(snapshot, null, 100));
+    expect(texts(layers)).toContain('3-5');
+    expect(texts(layers)).not.toContain('7');
+    // Open range: «21+».
+    view.update(
+      interpolateFrame(
+        snapshotWith(110, [figure({ units_range: { low: 21, high: null } })]),
+        null,
+        110,
+      ),
+    );
+    expect(texts(layers)).toContain('21+');
+    view.destroy();
+  });
+
+  it('writes the range of a city seen as a range', () => {
+    const nodes: NodeView[] = base.view.nodes.map((n) =>
+      n.id === nodeId
+        ? {
+            ...n,
+            detail: 'range',
+            seen: {
+              tick: 100,
+              level: 'range',
+              enemy_modes: ['attack'],
+              enemy_units: null,
+              enemy_charged: null,
+              enemy_range: { low: 6, high: 10 },
+            },
+          }
+        : { ...n, seen: null },
+    );
+    const snapshot: SnapshotMsg = { ...base, view: { ...base.view, nodes, groups: [] } };
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    view.update(interpolateFrame(snapshot, null, snapshot.tick));
+    expect(texts(layers)).toContain('6-10');
+    view.destroy();
+  });
+
+  it('moves a figure smoothly between two snapshots, along the road, and keeps its token', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const a = snapshotWith(100, [figure({ pos: 200 })]);
+    const b = snapshotWith(110, [figure({ pos: 400 })]);
+    const enemy = layers.layer.groups.children.find((c) => c.label === 'enemy');
+    const ends = edgeEnds(map, edge.id);
+    if (ends === undefined) throw new Error('no ends');
+    const along = (frameTick: number) => {
+      view.update(interpolateFrame(a, b, frameTick));
+      const token = enemy?.children[enemy.children.length - 1];
+      return { token, x: token?.x ?? NaN, y: token?.y ?? NaN };
+    };
+    const first = along(100);
+    const middle = along(105);
+    const last = along(110);
+    expect(middle.token).toBe(first.token);
+    expect(last.token).toBe(first.token);
+    // Each step moves the same way along the road (the lane offset stays the same).
+    const dx = ends.b.x - ends.a.x;
+    const dy = ends.b.y - ends.a.y;
+    const step1 = (middle.x - first.x) * dx + (middle.y - first.y) * dy;
+    const step2 = (last.x - middle.x) * dx + (last.y - middle.y) * dy;
+    expect(step1).toBeGreaterThan(0);
+    expect(step2).toBeCloseTo(step1);
+    view.destroy();
+  });
+});

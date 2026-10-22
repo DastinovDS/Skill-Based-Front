@@ -6,7 +6,14 @@
  * (a group that changed edge, appeared or vanished) stays as in the earlier snapshot until the
  * later one becomes the base. Progress is in thousandths of an edge, as on the wire.
  */
-import type { GroupView, Location, PacketView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
+import type {
+  EnemyGroup,
+  GroupView,
+  Location,
+  PacketView,
+  PlayerId,
+  SnapshotMsg,
+} from '../protocol.gen.ts';
 
 /** A full edge in thousandths (`OnEdgeLoc.progress`). */
 export const EDGE_LENGTH = 1000;
@@ -27,6 +34,15 @@ export interface RenderPacket {
   progress: number;
 }
 
+/** An enemy figure on a half of a road in sight (DEC-33) and where to draw it now. */
+export interface RenderEnemy {
+  /** The road it is on. */
+  edge: number;
+  figure: EnemyGroup;
+  /** Position in thousandths from the end `a`; fractional between two snapshots. */
+  pos: number;
+}
+
 export interface RenderFrame {
   /** Render time in ticks (fractional). */
   tick: number;
@@ -34,6 +50,8 @@ export interface RenderFrame {
   base: SnapshotMsg;
   groups: RenderGroup[];
   packets: RenderPacket[];
+  /** The enemy figures of the base snapshot, each at its place now. */
+  enemies: RenderEnemy[];
 }
 
 const lerp = (from: number, to: number, alpha: number): number => from + (to - from) * alpha;
@@ -72,6 +90,30 @@ export function packetProgress(packet: PacketView, tick: number): number {
 }
 
 /**
+ * Position of an enemy figure between its place in `a` and in `b`, `alpha` in [0, 1] (DEC-33).
+ *
+ * The figure is the same one only when `b` has the same `id` on the same road going the same way:
+ * the server gives a group that comes out of the fog a new `id` (detail 5), so a figure that is
+ * gone (arrived, or went into the fog) or whose `id` changed stays where it was in `a` and the
+ * line is not drawn through the gap. No extrapolation either.
+ */
+export function interpolateEnemy(
+  a: RenderEnemy,
+  next: ReadonlyMap<string, RenderEnemy>,
+  alpha: number,
+): RenderEnemy {
+  const b = next.get(a.figure.id);
+  if (b === undefined || b.edge !== a.edge || b.figure.toward_b !== a.figure.toward_b) return a;
+  return { ...a, pos: lerp(a.pos, b.pos, alpha) };
+}
+
+function enemiesOf(snapshot: SnapshotMsg): RenderEnemy[] {
+  return snapshot.view.edges.flatMap((edge) =>
+    edge.enemy_groups.map((figure) => ({ edge: edge.id, figure, pos: figure.pos })),
+  );
+}
+
+/**
  * The frame at render time `tick` between `a` and `b` (`null`: nothing newer yet, hold `a`).
  * `tick` is clamped to [a.tick, b.tick].
  */
@@ -80,6 +122,8 @@ export function interpolateFrame(a: SnapshotMsg, b: SnapshotMsg | null, tick: nu
   const at = Math.min(end, Math.max(a.tick, tick));
   const alpha = b === null || b.tick === a.tick ? 0 : (at - a.tick) / (b.tick - a.tick);
   const next = new Map(b?.view.groups.map((g) => [g.id, g]));
+  const enemies = enemiesOf(a);
+  const ahead = new Map((b === null ? [] : enemiesOf(b)).map((enemy) => [enemy.figure.id, enemy]));
   return {
     tick: at,
     base: a,
@@ -88,5 +132,6 @@ export function interpolateFrame(a: SnapshotMsg, b: SnapshotMsg | null, tick: nu
       location: interpolateLocation(group.location, next.get(group.id)?.location ?? null, alpha),
     })),
     packets: a.view.packets.map((packet) => ({ packet, progress: packetProgress(packet, at) })),
+    enemies: enemies.map((enemy) => interpolateEnemy(enemy, ahead, alpha)),
   };
 }

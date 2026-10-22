@@ -271,6 +271,9 @@ export const ru = {
   'fight.bonusAttack': 'бонусная атака',
   'help.key.defense': '«Защита» группы: вкл или выкл',
   'defense.bonus': '+{bonus} / {cap}',
+  // A range of enemy units (DEC-21, item 4): "3-5", the last one open: "21+".
+  'range.closed': '{low}-{high}',
+  'range.open': '{low}+',
   'defense.title': 'Защита: бонус {bonus} из {cap}',
   'defense.rule':
     '+1 за каждые {seconds} с в режиме, не больше числа заряженных юнитов; сгорает после боя; цена {cost} CP',
