@@ -27,8 +27,11 @@ const MAX_SHOTS = 16;
 /** How wide the glow of a tail is, and the width of its white (opponent: dark) core, world units at 100%. */
 const GLOW_WIDTH = 8;
 const CORE_WIDTH = 1.3;
-/** Size of a head (width of its baked shape in the atlas cell, world units at 100%) and of the glow behind it. */
-const HEAD_SIZE = { square: 18, diamond: 24 } as const;
+/**
+ * Size of a head (the width of the atlas cell, world units at 100%) and of the glow behind it. The baked square
+ * fills 56 of the 64 px of its cell: 20 px, the least of a significant symbol (ui-style 22).
+ */
+const HEAD_SIZE = { square: 23, diamond: 28 } as const;
 const HEAD_GLOW = 2 * 1.4 * 14;
 /** The width of the two thin lines of a bonus tail and of the faded path. */
 const EDGE_WIDTH = 1.5;
