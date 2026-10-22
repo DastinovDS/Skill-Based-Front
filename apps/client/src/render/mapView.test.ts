@@ -1,5 +1,5 @@
 import { Graphics, type Renderer } from 'pixi.js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { Detail } from '../protocol.gen.ts';
 import { createLayers, type MapLayers } from './layers.ts';
@@ -48,6 +48,33 @@ function fillsOf(g: Graphics): Fill[] {
     }));
 }
 
+interface Quad {
+  readonly points: { x: number; y: number }[];
+  readonly color: number;
+}
+
+/** The quadrilaterals a Graphics fills (the dashes), each with the colour of its fill. */
+function quadsOf(g: Graphics): Quad[] {
+  const instructions = g.context.instructions as unknown as {
+    action: string;
+    data: {
+      style: { color: number };
+      path: { shapePath: { shapePrimitives: { shape: { points: number[] } }[] } };
+    };
+  }[];
+  return instructions
+    .filter((i) => i.action === 'fill')
+    .flatMap((i) =>
+      i.data.path.shapePath.shapePrimitives.map((p) => {
+        const flat = p.shape.points;
+        return {
+          color: i.data.style.color,
+          points: [0, 2, 4, 6].map((k) => ({ x: flat[k] ?? NaN, y: flat[k + 1] ?? NaN })),
+        };
+      }),
+    );
+}
+
 describe('MapView, the roads of R1', () => {
   let layers: MapLayers;
   let view: MapView;
@@ -57,12 +84,38 @@ describe('MapView, the roads of R1', () => {
       (layers.layer.roads.children.find((c) => c.label === label)?.children ?? []) as Graphics[];
     const per = map.edges.length;
     expect(group('road-casings')).toHaveLength(per * 2);
+    // The first of the lanes is the one Graphics of all the dashes.
+    expect(group('road-lanes')).toHaveLength(per * 2 + 1);
     return {
       casings: group('road-casings').slice(0, 2),
-      lanes: group('road-lanes').slice(0, 2),
+      lanes: group('road-lanes').slice(1, 3),
     };
   };
   const laneRects = (g: Graphics): Rect[] => fillsOf(g).flatMap((f) => f.rects);
+
+  // The road 0 in the world: its ends and where a point stands along it and across it.
+  const a0 = map.nodes[edge.a] ?? { x: 0, y: 0 };
+  const b0 = map.nodes[edge.b] ?? { x: 0, y: 0 };
+  const length0 = Math.hypot(b0.x - a0.x, b0.y - a0.y);
+  const ux = (b0.x - a0.x) / length0;
+  const uy = (b0.y - a0.y) / length0;
+  const along = (p: { x: number; y: number }) => (p.x - a0.x) * ux + (p.y - a0.y) * uy;
+  const across = (p: { x: number; y: number }) => -(p.x - a0.x) * uy + (p.y - a0.y) * ux;
+  /** The dashes of the road 0: quadrilaterals on its line, away from the cities where other roads begin. */
+  const dashesOfRoad0 = (): Quad[] => {
+    const layer = layers.layer.roads.children.find((c) => c.label === 'road-lanes');
+    const dashes = layer?.children[0] as Graphics;
+    return quadsOf(dashes).filter((quad) => {
+      const middle = (along(quad.points[0] ?? a0) + along(quad.points[2] ?? a0)) / 2;
+      return (
+        middle > 40 && middle < length0 - 40 && quad.points.every((p) => Math.abs(across(p)) < 6)
+      );
+    });
+  };
+  /** The lengths along the road and the offsets across it that the dashes have. */
+  const dashLength = (quad: Quad) =>
+    Math.abs(along(quad.points[1] ?? a0) - along(quad.points[0] ?? a0));
+  const laneAt = (quad: Quad) => +across(quad.points[0] ?? a0).toFixed(2);
 
   beforeEach(() => {
     layers = createLayers();
@@ -109,9 +162,14 @@ describe('MapView, the roads of R1', () => {
     for (const pair of [owners(0, 1), owners(0, null), owners(null, null)]) {
       view.setOwners(pair);
       const { casings, lanes } = parts();
-      const rects = laneRects(lanes[0] as Graphics);
-      expect(rects.length).toBeGreaterThan(4);
-      expect(rects[0]?.width).toBe(ROAD_BUFFER.dash);
+      // The dashes of all roads are drawn together; the solid lanes of this road are not.
+      expect(lanes[0]?.visible).toBe(false);
+      const dashes = dashesOfRoad0();
+      expect(dashes.length).toBeGreaterThan(4);
+      expect(dashes[0]?.color).toBe(ROAD_BUFFER.lane);
+      expect(dashLength(dashes[0] as Quad)).toBeCloseTo(ROAD_BUFFER.dash);
+      // Two lanes, the level 2 (3.7 apart across the road, the width of a lane to each side).
+      expect([...new Set(dashes.map(laneAt))].sort((p, q) => p - q)).toEqual([-2.85, 0.85]);
       expect(fillsOf(casings[0] as Graphics)[0]).toMatchObject({
         color: BG,
         alpha: ROAD_BUFFER.casingAlpha,
@@ -123,10 +181,12 @@ describe('MapView, the roads of R1', () => {
     view.setRoads(map.edges.map(() => ({ width: 1 })));
     view.setOwners(owners(0, 0));
     expect(laneRects(parts().lanes[0] as Graphics)).toHaveLength(1);
+    expect(dashesOfRoad0()).toEqual([]);
     view.setOwners(owners(0, 1));
-    expect(laneRects(parts().lanes[0] as Graphics)[0]?.width).toBe(ROAD_BUFFER.dash);
+    expect(dashesOfRoad0().length).toBeGreaterThan(4);
     view.setOwners(owners(0, 0));
     expect(laneRects(parts().lanes[0] as Graphics)).toHaveLength(1);
+    expect(dashesOfRoad0()).toEqual([]);
   });
 
   it('dots the lanes of a road in fog, whoever its ends belong to', () => {
@@ -134,10 +194,11 @@ describe('MapView, the roads of R1', () => {
     view.setRoads(map.edges.map(() => ({ width: 2, halves: halves('fog', 'fog') })));
     const { casings, lanes } = parts();
     // Both halves alike: one stretch over the whole road, the second one is not drawn.
-    expect(lanes[1]?.visible).toBe(false);
-    const rects = laneRects(lanes[0] as Graphics);
-    expect(rects[0]?.width).toBe(ROAD_FOG.dash);
-    expect(rects.length).toBeGreaterThan(10);
+    expect(lanes.map((l) => l.visible)).toEqual([false, false]);
+    const dots = dashesOfRoad0();
+    expect(dots.length).toBeGreaterThan(10);
+    expect(dots[0]?.color).toBe(ROAD_FOG.lane);
+    expect(dashLength(dots[0] as Quad)).toBeCloseTo(ROAD_FOG.dash);
     expect(fillsOf(casings[0] as Graphics)[0]).toMatchObject({
       color: BG,
       alpha: ROAD_FOG.casingAlpha,
@@ -148,19 +209,21 @@ describe('MapView, the roads of R1', () => {
     view.setOwners(owners(0, 0));
     view.setRoads(map.edges.map(() => ({ width: 1, halves: halves('exact', 'fog') })));
     const { casings, lanes } = parts();
-    expect(lanes.map((l) => l.visible)).toEqual([true, true]);
+    // The half in sight has its solid lane, the half in fog the dots and no solid lane.
+    expect(lanes.map((l) => l.visible)).toEqual([true, false]);
     expect(laneRects(lanes[0] as Graphics)).toHaveLength(1);
-    expect(laneRects(lanes[1] as Graphics)[0]?.width).toBe(ROAD_FOG.dash);
+    const dots = dashesOfRoad0();
+    expect(dots.length).toBeGreaterThan(5);
+    // Every dot lies in the half of the end b: past the border point (the middle of the road).
+    expect(
+      Math.min(...dots.map((d) => along(d.points[0] as { x: number; y: number }))),
+    ).toBeGreaterThanOrEqual(length0 / 2 - 1e-6);
     // The second stretch begins where the first ends.
-    const a = map.nodes[edge.a];
-    const b = map.nodes[edge.b];
-    const length = Math.hypot((b?.x ?? 0) - (a?.x ?? 0), (b?.y ?? 0) - (a?.y ?? 0));
-    expect(casings[0]?.scale.x).toBeCloseTo(length / 2);
-    expect(casings[1]?.scale.x).toBeCloseTo(length / 2);
+    expect(casings[0]?.scale.x).toBeCloseTo(length0 / 2);
+    expect(casings[1]?.scale.x).toBeCloseTo(length0 / 2);
     const first = casings[0] as Graphics;
     const second = casings[1] as Graphics;
-    const along = Math.hypot(second.x - first.x, second.y - first.y);
-    expect(along).toBeCloseTo(length / 2);
+    expect(Math.hypot(second.x - first.x, second.y - first.y)).toBeCloseTo(length0 / 2);
   });
 
   it('does not redraw a road whose look did not change', () => {
@@ -170,5 +233,14 @@ describe('MapView, the roads of R1', () => {
     view.setRoads(map.edges.map(() => ({ width: 2 })));
     view.setOwners(owners(0, 0));
     expect((parts().lanes[0] as Graphics).context).toBe(before);
+    // Nor the dashes of the buffer roads: they are drawn again only when one of them changes.
+    const layer = layers.layer.roads.children.find((c) => c.label === 'road-lanes');
+    const dashes = layer?.children[0] as Graphics;
+    const redraw = vi.spyOn(dashes, 'clear');
+    view.setRoads(map.edges.map(() => ({ width: 2 })));
+    view.setOwners(owners(0, 0));
+    expect(redraw).not.toHaveBeenCalled();
+    view.setOwners(owners(0, 1));
+    expect(redraw).toHaveBeenCalledTimes(1);
   });
 });

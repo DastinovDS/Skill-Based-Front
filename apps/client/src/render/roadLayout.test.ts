@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildProgress,
   dashRuns,
+  laneDashes,
   laneOffsets,
   neverSeen,
   roadKind,
@@ -138,5 +139,37 @@ describe('the stripes of the tape', () => {
   it('draws nothing for a road without length or width', () => {
     expect(tapeStripes(0, 12, 11, 5)).toEqual([]);
     expect(tapeStripes(50, 0, 11, 5)).toEqual([]);
+  });
+});
+
+describe('the dashes of the lanes of a stretch of road', () => {
+  const origin = { x: 10, y: 20 };
+
+  it('cuts every lane into dashes and puts them on the line of the road', () => {
+    const quads = laneDashes(origin, 0, 25, 2, 10, 5, 2);
+    // Two lanes of two dashes each (0-10 and 15-25 along the road).
+    expect(quads).toHaveLength(4);
+    const first = quads[0] ?? [];
+    expect(first.map((p) => [p.x, +p.y.toFixed(2)])).toEqual([
+      [10, 20 - 1.85 - 1],
+      [20, 20 - 1.85 - 1],
+      [20, 20 - 1.85 + 1],
+      [10, 20 - 1.85 + 1],
+    ]);
+  });
+
+  it('follows the angle of the road, across it and along it', () => {
+    // A road running down the page (+y): the lanes lie on the sides of it (x), the dashes along y.
+    const [quad] = laneDashes(origin, Math.PI / 2, 10, 1, 4, 2, 2);
+    expect(quad?.map((p) => [+p.x.toFixed(2), +p.y.toFixed(2)])).toEqual([
+      [11, 20],
+      [11, 24],
+      [9, 24],
+      [9, 20],
+    ]);
+  });
+
+  it('has no dash for a stretch without length', () => {
+    expect(laneDashes(origin, 0, 0, 3, 10, 5, 2)).toEqual([]);
   });
 });

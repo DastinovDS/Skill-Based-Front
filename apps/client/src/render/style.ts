@@ -109,8 +109,10 @@ export const ROAD_UNKNOWN = {
   radius: 6.5,
   fill: { color: BG, alpha: 0.92 },
   stroke: { width: 1.2, color: NEUTRAL_STROKE },
-  dash: 2,
-  fontSize: 10,
+  /** The share of a dash of the rim in its step (the rest is the gap). */
+  dash: 0.5,
+  /** The question mark drawn with strokes: the hook (radius, how far above the centre), the stem, the dot. */
+  glyph: { hook: 2.3, up: 2.2, stem: 1.6, dot: 4.2, dotRadius: 0.95, width: 1.7 },
 } as const;
 
 // --- Cities (9.4) -------------------------------------------------------------------------------

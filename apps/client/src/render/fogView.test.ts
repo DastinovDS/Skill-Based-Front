@@ -1,4 +1,4 @@
-import { CanvasTextMetrics, Container, Text } from 'pixi.js';
+import { CanvasTextMetrics, Container, Graphics, Text } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
@@ -60,9 +60,25 @@ const textsOf = (item: Container): string[] => {
   visit(item);
   return found;
 };
-const unknownMarks = (layers: MapLayers): Container[] => {
-  const layer = layers.layer.fog.children.find((c) => c.label === 'fog-unknown-roads');
-  return (layer?.children ?? []).filter((c) => c.visible);
+/** The centres and radii of the discs of the "?" marks of the roads never seen. */
+const unknownDiscs = (layers: MapLayers): { x: number; y: number; radius: number }[] => {
+  const marks = layers.layer.fog.children.find((c) => c.label === 'fog-unknown-roads') as
+    Graphics | undefined;
+  const instructions = (marks?.context.instructions ?? []) as unknown as {
+    action: string;
+    data: {
+      path: {
+        shapePath: {
+          shapePrimitives: { shape: { type: string; x: number; y: number; radius: number } }[];
+        };
+      };
+    };
+  }[];
+  return instructions
+    .filter((i) => i.action === 'fill')
+    .flatMap((i) => i.data.path.shapePath.shapePrimitives)
+    .map((p) => p.shape)
+    .filter((shape) => shape.type === 'circle' && shape.radius > 3);
 };
 
 describe('FogView, the memory of the halves of a road', () => {
@@ -179,37 +195,37 @@ describe('FogView, the "?" of a road that was never seen', () => {
 
   it('puts a "?" at the border point of a road in fog that has no sighting at all', () => {
     view.update(withRoad('fog', half('fog', null), half('fog', null)));
-    const [mark, ...rest] = unknownMarks(layers);
+    const [mark, ...rest] = unknownDiscs(layers);
     expect(rest).toEqual([]);
     const border = borderPoint(map, road.id);
     expect(mark?.x).toBeCloseTo(border?.x ?? NaN);
     expect(mark?.y).toBeCloseTo(border?.y ?? NaN);
-    const text = mark?.children.find((c): c is Text => c instanceof Text);
-    expect(text?.text).toBe('?');
+    // At the camera scale 1 the 13 units of the disc would be 13 px: it is drawn 20 px wide.
+    expect((mark?.radius ?? 0) * 2).toBeCloseTo(20);
   });
 
   it('does not mark a road that is in sight, or one that was seen before (a sighting of a half)', () => {
     view.update(withRoad('presence', half('exact', null), half('fog', null)));
-    expect(unknownMarks(layers)).toEqual([]);
+    expect(unknownDiscs(layers)).toEqual([]);
     view.update(withRoad('fog', half('fog', seen({ enemy_modes: [] })), half('fog', null)));
-    expect(unknownMarks(layers)).toEqual([]);
+    expect(unknownDiscs(layers)).toEqual([]);
   });
 
-  it('takes the "?" away when the road is seen, and brings it back when it is not (same mark)', () => {
+  it('takes the "?" away when the road is seen, and brings it back when it is not', () => {
     view.update(withRoad('fog', half('fog', null), half('fog', null)));
-    const [mark] = unknownMarks(layers);
+    expect(unknownDiscs(layers)).toHaveLength(1);
     view.update(withRoad('presence', half('exact', null), half('exact', null)));
-    expect(unknownMarks(layers)).toEqual([]);
+    expect(unknownDiscs(layers)).toEqual([]);
     view.update(withRoad('fog', half('fog', null), half('fog', null)));
-    expect(unknownMarks(layers)[0]).toBe(mark);
+    expect(unknownDiscs(layers)).toHaveLength(1);
   });
 
   it('keeps the "?" at least 20 px wide on screen when the map is zoomed out', () => {
     view.update(withRoad('fog', half('fog', null), half('fog', null)));
     view.setCameraScale(0.5);
     // 13 world units wide: 20 px needs a scale of at least 20 / (13 * 0.5).
-    expect(unknownMarks(layers)[0]?.scale.x).toBeGreaterThanOrEqual(20 / (13 * 0.5) - 1e-9);
+    expect((unknownDiscs(layers)[0]?.radius ?? 0) * 2).toBeGreaterThanOrEqual(20 / 0.5 - 1e-9);
     view.setCameraScale(4);
-    expect(unknownMarks(layers)[0]?.scale.x).toBe(1);
+    expect((unknownDiscs(layers)[0]?.radius ?? 0) * 2).toBeCloseTo(13);
   });
 });

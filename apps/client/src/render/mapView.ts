@@ -5,7 +5,7 @@ import type { MapLayers } from './layers.ts';
 import { BORDER_PERMILLE } from './fogLayout.ts';
 import { cellEdges, territoryBorders } from './regionLayout.ts';
 import {
-  dashRuns,
+  laneDashes,
   laneOffsets,
   roadKind,
   roadSegments,
@@ -35,13 +35,20 @@ import { voronoiCells } from './voronoi.ts';
 
 type Owner = PlayerId | null;
 
+/** Dashed (buffer) and dotted (fog) lanes are drawn together; the solid ones per stretch. */
+const isDashed = (style: RoadStyle): boolean => style === 'buffer' || style === 'fog';
+
 /**
  * One road: up to two stretches (the halves, when exactly one of them is in fog), each a band
  * under the lanes and the lanes themselves. All four are placed along the road by `place`.
  */
 interface Road {
   readonly casings: readonly [Graphics, Graphics];
+  /** The solid lanes of an own road; dashed and dotted lanes are drawn together, see `dashes`. */
   readonly lanes: readonly [Graphics, Graphics];
+  /** The stretches drawn now and the level: what the dashes layer draws of this road. */
+  stretches: readonly RoadSegment[];
+  level: number;
   readonly a: Point;
   readonly length: number;
   readonly angle: number;
@@ -96,6 +103,13 @@ export class MapView {
   private readonly roads: Road[];
   private readonly casingLayer: Container;
   private readonly laneLayer: Container;
+  /**
+   * The dashed lanes of the buffer roads and the dotted lanes of the halves in fog: one Graphics
+   * for all of them, redrawn when one of them changes. Per road they would be hundreds of small
+   * rectangles each, too many vertices to batch, so every road would cost a draw call of its own.
+   */
+  private readonly dashes: Graphics;
+  private dashesDirty = false;
   private readonly layers: MapLayers;
 
   constructor(
@@ -132,6 +146,7 @@ export class MapView {
     // All casings first, so no casing covers the lanes of a neighbouring road.
     this.casingLayer = layers.layer.roads.addChild(new Container({ label: 'road-casings' }));
     this.laneLayer = layers.layer.roads.addChild(new Container({ label: 'road-lanes' }));
+    this.dashes = this.laneLayer.addChild(new Graphics());
     const hidden = this.context((g) => g);
     this.roads = map.edges.map((edge) => {
       const a = map.nodes[edge.a];
@@ -148,6 +163,8 @@ export class MapView {
       return {
         casings: [part(this.casingLayer), part(this.casingLayer)] as const,
         lanes: [part(this.laneLayer), part(this.laneLayer)] as const,
+        stretches: [],
+        level: 1,
         a: origin,
         length,
         angle,
@@ -238,6 +255,7 @@ export class MapView {
     this.roads.forEach((_, i) => {
       this.drawRoad(i);
     });
+    this.flushDashes();
   }
 
   /**
@@ -249,6 +267,7 @@ export class MapView {
       this.looks[i] = look;
       this.drawRoad(i);
     });
+    this.flushDashes();
   }
 
   /** The look of road `i` from its level, the owners of its ends and its halves in fog. */
@@ -267,13 +286,51 @@ export class MapView {
     if (key === road.key) return;
     road.key = key;
     const segments = roadSegments(kind, fog, BORDER_PERMILLE / 1000);
+    if ([...road.stretches, ...segments].some((s) => isDashed(s.style))) this.dashesDirty = true;
+    road.stretches = segments;
+    road.level = level;
     for (const slot of [0, 1] as const) {
       const segment = segments[slot];
       const casing = road.casings[slot];
       const lanes = road.lanes[slot];
       casing.visible = segment !== undefined;
-      lanes.visible = segment !== undefined;
+      lanes.visible = segment !== undefined && !isDashed(segment.style);
       if (segment !== undefined) this.placeSegment(road, segment, level, casing, lanes);
+    }
+  }
+
+  /** Redraw the dashed and dotted lanes of all roads, if any of them changed. */
+  private flushDashes(): void {
+    if (!this.dashesDirty) return;
+    this.dashesDirty = false;
+    const g = this.dashes.clear();
+    for (const style of ['buffer', 'fog'] as const) {
+      const spec = style === 'fog' ? ROAD_FOG : ROAD_BUFFER;
+      let any = false;
+      for (const road of this.roads) {
+        for (const stretch of road.stretches) {
+          if (stretch.style !== style) continue;
+          const along = stretch.from * road.length;
+          const origin = {
+            x: road.a.x + Math.cos(road.angle) * along,
+            y: road.a.y + Math.sin(road.angle) * along,
+          };
+          const quads = laneDashes(
+            origin,
+            road.angle,
+            (stretch.to - stretch.from) * road.length,
+            road.level,
+            spec.dash,
+            spec.gap,
+            ROAD_LANE.width,
+          );
+          for (const quad of quads) {
+            g.poly(quad.flatMap((p) => [p.x, p.y]));
+            any = true;
+          }
+        }
+      }
+      if (any) g.fill({ color: spec.lane, alpha: spec.laneAlpha });
     }
   }
 
@@ -295,15 +352,10 @@ export class MapView {
     // The band: a unit rectangle scaled to the stretch and to the width of the lanes plus the casing.
     casing.context = this.casingContext(segment.style);
     casing.scale.set(length, roadLanesWidth(level) + this.casingExtra(segment.style));
-    if (segment.style === 'own0' || segment.style === 'own1') {
+    if (!isDashed(segment.style)) {
       // Solid lanes of a level are drawn once over a unit length.
       lanes.context = this.solidLanes(level);
       lanes.scale.set(length, 1);
-    } else {
-      // Dashes cannot be stretched: one drawing per whole length, scaled by the rounding only.
-      const span = Math.max(1, Math.round(length));
-      lanes.context = this.dashedLanes(segment.style, level, span);
-      lanes.scale.set(length / span, 1);
     }
   }
 
@@ -344,29 +396,6 @@ export class MapView {
           g.rect(0, offset - ROAD_LANE.width / 2, 1, ROAD_LANE.width);
         }
         return g.fill({ color: ROAD_OWN.lane, alpha: ROAD_OWN.laneAlpha });
-      });
-      this.laneContexts.set(key, context);
-    }
-    return context;
-  }
-
-  /** The lanes of `level` as dashes (buffer) or dots (fog) along a stretch `span` long. */
-  private dashedLanes(
-    style: 'buffer' | 'fog' | RoadStyle,
-    level: number,
-    span: number,
-  ): GraphicsContext {
-    const key = `${style}:${String(level)}:${String(span)}`;
-    let context = this.laneContexts.get(key);
-    if (context === undefined) {
-      const spec = style === 'fog' ? ROAD_FOG : ROAD_BUFFER;
-      context = this.context((g) => {
-        for (const offset of laneOffsets(level)) {
-          for (const [from, to] of dashRuns(span, spec.dash, spec.gap)) {
-            g.rect(from, offset - ROAD_LANE.width / 2, to - from, ROAD_LANE.width);
-          }
-        }
-        return g.fill({ color: spec.lane, alpha: spec.laneAlpha });
       });
       this.laneContexts.set(key, context);
     }

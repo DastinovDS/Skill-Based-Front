@@ -72,6 +72,37 @@ export function dashRuns(length: number, dash: number, gap: number): [number, nu
   return runs;
 }
 
+/**
+ * The dashes of the lanes of a road stretch as quadrilaterals in the world: the stretch starts at
+ * `origin` and runs `length` along `angle` (radians); each of the `level` lanes (`laneOffsets`)
+ * is cut into dashes of `dash` with `gap` between them, `width` wide.
+ */
+export function laneDashes(
+  origin: Point,
+  angle: number,
+  length: number,
+  level: number,
+  dash: number,
+  gap: number,
+  width: number,
+): Point[][] {
+  const ux = Math.cos(angle);
+  const uy = Math.sin(angle);
+  const at = (along: number, across: number): Point => ({
+    x: origin.x + ux * along - uy * across,
+    y: origin.y + uy * along + ux * across,
+  });
+  const quads: Point[][] = [];
+  for (const offset of laneOffsets(level)) {
+    const near = offset - width / 2;
+    const far = offset + width / 2;
+    for (const [from, to] of dashRuns(length, dash, gap)) {
+      quads.push([at(from, near), at(to, near), at(to, far), at(from, far)]);
+    }
+  }
+  return quads;
+}
+
 /** What the fog layer needs to know of a road. */
 export interface RoadFog {
   readonly detail: Detail;
