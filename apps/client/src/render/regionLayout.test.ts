@@ -3,8 +3,6 @@ import {
   cellEdges,
   clipToConvex,
   distanceToSegment,
-  fogHatching,
-  hatchInside,
   insideConvex,
   stampPoints,
   territoryBorders,
@@ -145,7 +143,7 @@ describe('cellEdges: the neighbour across an edge', () => {
   );
 });
 
-describe('fog hatching', () => {
+describe('clipping', () => {
   it('clips a polygon to a convex one', () => {
     const half = clipToConvex(square, [
       { x: 50, y: -10 },
@@ -154,32 +152,5 @@ describe('fog hatching', () => {
       { x: 50, y: 110 },
     ]);
     expect(half.every((p) => p.x >= 49.999)).toBe(true);
-  });
-
-  it('hatches at 45 degrees inside the polygon', () => {
-    const lines = hatchInside(square, 20);
-    expect(lines.length).toBeGreaterThan(4);
-    for (const { a, b } of lines) {
-      expect(a.x + a.y).toBeCloseTo(b.x + b.y);
-      expect(insideConvex(square, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })).toBe(true);
-    }
-  });
-
-  it('hatches only a band along the border of the seen area', () => {
-    const cells = voronoiCells(
-      [
-        { x: 25, y: 50 },
-        { x: 75, y: 50 },
-      ],
-      { width: 100, height: 100 },
-    );
-    const lines = fogHatching(cells, [false, true], 20, 5);
-    expect(lines.length).toBeGreaterThan(3);
-    for (const { a, b } of lines) {
-      expect(Math.min(a.x, b.x)).toBeGreaterThanOrEqual(49.99);
-      expect(Math.max(a.x, b.x)).toBeLessThanOrEqual(70.01);
-    }
-    expect(fogHatching(cells, [true, true], 20, 5)).toEqual([]);
-    expect(fogHatching(cells, [false, false], 20, 5)).toEqual([]);
   });
 });

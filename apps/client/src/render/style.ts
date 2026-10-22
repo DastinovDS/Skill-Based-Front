@@ -226,17 +226,27 @@ export const INTENT_ICON_ANGLE = -135;
 /** Red means only "opponent" (6), so a fight mark is paper white. */
 export const FIGHT_COLOR = PAPER;
 
-// --- Fog of war (CLI-05, #61; softer in 9.8) -----------------------------------------------------
-// A hidden area is darkened (no solid hatching) and hatched at 45 degrees only in a band along the
-// border of what is seen, so the border reads without colour; a hidden half of a road has dotted lanes (`ROAD_FOG`);
-// a memory ghost is faded AND carries the age of the sighting.
+// --- Fog of war (CLI-05, #61; the haze F1, #346) -----------------------------------------------
+// A hidden area is a cool grey veil with a soft edge, no hatching (ui-style 26.3): the cells of the
+// hidden cities are filled, blurred once and cached as one texture, redrawn only when the set of
+// the hidden cities changes. What is not known of a place is carried by the dotted half of a road
+// (`ROAD_FOG`), the "?" of a road never seen, the memory ghosts and the tick at the border point.
 
-export const FOG_COLOR = BG;
-export const FOG_ALPHA = 0.45;
-/** Hatching in the band along the border of the visible area. */
-export const FOG_HATCH = { width: 1.5, color: 0xaab2bd, alpha: 0.3 } as const;
-export const FOG_HATCH_SPACING = 9;
-export const FOG_BAND_WIDTH = 24;
+/**
+ * The veil: `color` at `alpha` over the hidden cells, blurred by `blur` px (world units). The blur
+ * runs at `blurResolution` of the cache texture on `blurQuality` passes: the edge is soft anyway
+ * and a quarter of the pixels cost about a quarter of the rebuild (measured in #346); it is not
+ * redrawn per frame. `margin` is how far the cells are pushed past the map edge so that the veil
+ * stays dense up to it (the mask of the map cuts it there).
+ */
+export const FOG_VEIL = {
+  color: 0x252d38,
+  alpha: 0.66,
+  blur: 9,
+  blurQuality: 2,
+  blurResolution: 0.25,
+  margin: 40,
+} as const;
 /** The tick across a road at its border point (DEC-21, item 5): a short light line, `overhang` px past the road on each side. */
 export const BORDER_MARK = { width: 2, color: 0xe6edf3, alpha: 0.55, overhang: 5 } as const;
 /** Opacity of a fresh memory ghost (the marker of what was last seen in a hidden place). */

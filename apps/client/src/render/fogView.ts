@@ -1,5 +1,4 @@
-import { Container, Graphics, Text, TextStyle } from 'pixi.js';
-import { fogHatching } from './regionLayout.ts';
+import { BlurFilter, Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { Point } from './camera.ts';
 import type {
   EdgeView,
@@ -17,17 +16,16 @@ import {
   ghostAlpha,
   halfMarkerPoint,
   nodeMarkerPoint,
+  sameVeil,
+  veilCities,
+  veilPolygon,
 } from './fogLayout.ts';
 import { knownOfSeen } from './rangeLabel.ts';
 import { symbolScale } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { Token, type EntityKit } from './shapes.ts';
 import {
-  FOG_ALPHA,
-  FOG_COLOR,
-  FOG_HATCH,
-  FOG_BAND_WIDTH,
-  FOG_HATCH_SPACING,
+  FOG_VEIL,
   GHOST_AGE_FONT_SIZE,
   GHOST_AGE_STROKE,
   BORDER_MARK,
@@ -99,24 +97,38 @@ class Ghost {
 }
 
 /**
- * The fog layer (CLI-05, #61): what the snapshot says is hidden, drawn as hidden.
+ * The fog layer (CLI-05, #61; the haze F1, #346): what the snapshot says is hidden, drawn as hidden.
  *
  * The server decides visibility: a node or an edge with `detail: 'fog'` is hidden, anything else
- * is (at least partly) seen. The client darkens the Voronoi cell of a hidden city (softly, 9.8)
- * and hatches a band along the border of what is seen, so the border reads without colour; the
- * half of a road in fog has dotted lanes (`MapView`), and a road never seen carries a "?" at its
- * border point (its level is the 1 of DEC-17, not a known one). It puts a "last seen" ghost on a hidden place when the snapshot
- * still carries a `Seen` with enemy groups in it: the enemy token, faded, with its age as
- * `-m:ss`. A place that is seen again loses its shade and its ghost on the next snapshot.
- * Nothing is inferred: no ghost without a `Seen`, no numbers the `Seen` has not got.
+ * is (at least partly) seen. The client lays a cool grey veil over the Voronoi cell of every hidden
+ * city: the cells are filled in one Graphics, blurred by one `BlurFilter` and cached as a texture
+ * (`cacheAsTexture`), so a frame draws one sprite; the cache is rebuilt only when the SET of hidden
+ * cities changes (a snapshot with the same set costs nothing). The veil darkens what lies under the
+ * fog layer: the terrain, the roads and the cities; the intents lie above it (`LAYER_ORDER`). The half
+ * of a road in fog has dotted lanes (`MapView`), and a road never seen carries a "?" at its border
+ * point (its level is the 1 of DEC-17, not a known one). It puts a "last seen" ghost on a hidden
+ * place when the snapshot still carries a `Seen` with enemy groups in it: the enemy token, faded,
+ * with its age as `-m:ss`. A place that is seen again loses its veil and its ghost on the next
+ * snapshot. Nothing is inferred: no ghost without a `Seen`, no numbers the `Seen` has not got.
  *
  * Redrawn once per snapshot (`update` does nothing when `base` is the same object); the "?" of the
  * roads never seen are one Graphics. `destroy()` releases everything.
  */
 export class FogView {
-  private readonly regions = new Graphics();
-  private readonly hatching = new Graphics();
-  private hiddenKey = '';
+  /** The veil: the hidden cells filled; blurred and cached through `veilCache`. */
+  private readonly veil = new Graphics({ label: 'fog-veil-cells' });
+  private readonly blur = new BlurFilter({
+    strength: FOG_VEIL.blur,
+    quality: FOG_VEIL.blurQuality,
+    resolution: FOG_VEIL.blurResolution,
+  });
+  /** The blur is a filter of this container, INSIDE the cached one: it runs only when the cache is built. */
+  private readonly veilBlur = new Container({ label: 'fog-veil-blur' });
+  /** The map edge cuts the veil (and what the blur spreads past it). */
+  private readonly veilMask = new Graphics({ label: 'fog-veil-mask' });
+  private readonly veilClip = new Container({ label: 'fog-veil-clip' });
+  private readonly veilCache = new Container({ label: 'fog-veil', visible: false });
+  private hiddenCities: number[] = [];
   /**
    * The "?" of the roads that were never seen: one Graphics for all of them (a Container with a
    * Graphics and a Text per road was the cost of a tenth of the frame in the software renderer),
@@ -157,7 +169,14 @@ export class FogView {
       fill: GLYPH_COLOR,
       stroke: GHOST_AGE_STROKE,
     });
-    this.shadeLayer.addChild(this.regions, this.hatching);
+    this.veilMask.rect(0, 0, map.meta.width, map.meta.height).fill(0xffffff);
+    this.veilBlur.filters = [this.blur];
+    this.veilBlur.addChild(this.veil);
+    this.veilClip.addChild(this.veilBlur, this.veilMask);
+    this.veilClip.mask = this.veilMask;
+    this.veilCache.addChild(this.veilClip);
+    this.veilCache.cacheAsTexture({ resolution: 1, antialias: true });
+    this.shadeLayer.addChild(this.veilCache);
     this.nodeGhosts = map.nodes.map(() => null);
     this.halfGhosts = map.edges.flatMap(() => [null, null]);
     layers.layer.fog.addChild(this.shadeLayer, this.borders, this.unknownMarks, this.ghostLayer);
@@ -217,10 +236,9 @@ export class FogView {
   }
 
   destroy(): void {
-    this.regions.destroy();
-    this.hatching.destroy();
     this.borders.destroy();
     this.shadeLayer.destroy({ children: true });
+    this.blur.destroy();
     this.unknownMarks.destroy();
     this.ghostLayer.destroy({ children: true });
     this.ageStyle.destroy();
@@ -284,23 +302,26 @@ export class FogView {
     g.fill(GLYPH_COLOR);
   }
 
-  /** Darken the cells of hidden cities and hatch the band along the border of the seen area. */
+  /**
+   * The veil over the cells of the hidden cities. Redrawn (and the cache rebuilt) only when the set
+   * of hidden cities changes; with none hidden the veil is not drawn at all.
+   */
   private setRegions(nodes: readonly NodeView[]): void {
-    const hidden = nodes.map((node) => node.detail === 'fog');
-    const key = hidden.map((h) => (h ? '1' : '0')).join('');
-    if (key === this.hiddenKey) return;
-    this.hiddenKey = key;
-    const regions = this.regions.clear();
-    hidden.forEach((isHidden, i) => {
-      const cell = this.cells[i];
-      if (isHidden && cell !== undefined) regions.poly([...cell]);
-    });
-    regions.fill({ color: FOG_COLOR, alpha: FOG_ALPHA });
-    const hatching = this.hatching.clear();
-    for (const { a, b } of fogHatching(this.cells, hidden, FOG_BAND_WIDTH, FOG_HATCH_SPACING)) {
-      hatching.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    const hidden = veilCities(nodes);
+    if (sameVeil(hidden, this.hiddenCities)) return;
+    this.hiddenCities = hidden;
+    const veil = this.veil.clear();
+    const bounds = { width: this.map.meta.width, height: this.map.meta.height };
+    let drawn = 0;
+    for (const id of hidden) {
+      const cell = this.cells[id];
+      if (cell === undefined) continue;
+      veil.poly(veilPolygon(cell, bounds, FOG_VEIL.margin));
+      drawn++;
     }
-    hatching.stroke(FOG_HATCH);
+    veil.fill({ color: FOG_VEIL.color, alpha: FOG_VEIL.alpha });
+    this.veilCache.visible = drawn > 0;
+    this.veilCache.updateCacheTexture();
   }
 
   // --- Snapshot-driven part -----------------------------------------------------------------

@@ -1,14 +1,18 @@
 import { Container } from 'pixi.js';
 
-/** Layer names from bottom to top (AGENTS.md §7.2). */
+/**
+ * Layer names from bottom to top (AGENTS.md §7.2). The intents lie ABOVE the fog (layers Sl2 «Over
+ * the haze», ui-style 27): a ribbon is public (DEC-04) and must not dim; the groups stay under it
+ * (an enemy group in fog is not there at all). `supply` is above everything.
+ */
 export const LAYER_ORDER = [
   'background',
   'territory',
   'roads',
   'nodes',
   'groups',
-  'intents',
   'fog',
+  'intents',
   'effects',
   'supply',
 ] as const;

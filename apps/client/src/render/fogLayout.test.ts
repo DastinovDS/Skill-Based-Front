@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { MapFile } from '../protocol.gen.ts';
-import { ageLabel, borderPermille, borderPoint, ghostAlpha } from './fogLayout.ts';
+import {
+  ageLabel,
+  borderPermille,
+  borderPoint,
+  ghostAlpha,
+  sameVeil,
+  veilCities,
+  veilPolygon,
+} from './fogLayout.ts';
 
 /** Two nodes 1000 apart on the x axis and one road between them (#366). */
 function line(border: number | undefined): MapFile {
@@ -64,5 +72,66 @@ describe('ghostAlpha (9.8)', () => {
     expect(ghostAlpha(119)).toBeLessThan(0.02);
     expect(ghostAlpha(120)).toBe(0);
     expect(ghostAlpha(500)).toBe(0);
+  });
+});
+
+describe('veilCities (the haze F1)', () => {
+  const node = (id: number, detail: 'fog' | 'presence' | 'range' | 'exact') => ({ id, detail });
+
+  it('takes the cities whose detail is fog, by id, and nothing else', () => {
+    const nodes = [node(3, 'fog'), node(0, 'exact'), node(2, 'fog'), node(1, 'presence')];
+    expect(veilCities(nodes)).toEqual([2, 3]);
+  });
+
+  it('is empty when every city is in sight', () => {
+    expect(veilCities([node(0, 'exact'), node(1, 'range')])).toEqual([]);
+  });
+
+  it('does not look at the memory: a remembered city and one never seen are the same cell', () => {
+    const remembered = { ...node(1, 'fog'), seen: { tick: 5 } };
+    const unknown = { ...node(1, 'fog'), seen: null };
+    expect(veilCities([remembered])).toEqual(veilCities([unknown]));
+  });
+});
+
+describe('sameVeil', () => {
+  it('is true for the same cities in the same order, false for any other set', () => {
+    expect(sameVeil([1, 2], [1, 2])).toBe(true);
+    expect(sameVeil([], [])).toBe(true);
+    expect(sameVeil([1, 2], [1, 3])).toBe(false);
+    expect(sameVeil([1, 2], [1, 2, 3])).toBe(false);
+  });
+});
+
+describe('veilPolygon', () => {
+  const bounds = { width: 100, height: 60 };
+
+  it('pushes the vertices on the edge of the map outward and leaves the inner ones', () => {
+    const cell = [
+      { x: 0, y: 0 },
+      { x: 50, y: 0 },
+      { x: 60, y: 30 },
+      { x: 0, y: 60 },
+    ];
+    expect(veilPolygon(cell, bounds, 10)).toEqual([
+      { x: -10, y: -10 },
+      { x: 50, y: -10 },
+      { x: 60, y: 30 },
+      { x: -10, y: 70 },
+    ]);
+  });
+
+  it('moves the far edges outward too and keeps the vertex count', () => {
+    const cell = [
+      { x: 100, y: 10 },
+      { x: 100, y: 60 },
+      { x: 40, y: 60 },
+    ];
+    const out = veilPolygon(cell, bounds, 5);
+    expect(out).toEqual([
+      { x: 105, y: 10 },
+      { x: 105, y: 65 },
+      { x: 40, y: 65 },
+    ]);
   });
 });
