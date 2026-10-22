@@ -178,12 +178,38 @@ def test_cli_expands_glob_patterns(capsys: pytest.CaptureFixture[str]) -> None:
 # DEC-26, item 5: start stocks against the warehouses of a ruleset with city_upgrades ----------
 
 ROOT_RULESETS = REPO / "rulesets"
+MVP_MAPS = sorted((REPO / "maps").glob("*.json"))
 
 
-def test_warehouse_check_only_with_city_upgrades(config: ValidatorConfig) -> None:
+def _with_small_stock(tmp_path: Path, stock: int) -> Path:
+    """Example 20 of DEC-26: the map ``arteriya`` with ``start_stock = stock`` in its small cities.
+
+    A copy in ``tmp_path`` (the file name must equal ``meta.name``): the test does not depend on
+    the committed maps, which satisfy the check (#379).
+    """
+    data = json.loads((REPO / "maps" / "arteriya.json").read_text(encoding="utf-8"))
+    small = [n for n in data["nodes"] if n["kind"] == "city_small" and n["start_owner"] is not None]
+    assert small
+    for node in small:
+        node["start_stock"] = stock
+    path = tmp_path / "arteriya.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("path", MVP_MAPS, ids=[p.stem for p in MVP_MAPS])
+def test_mvp_maps_pass_the_warehouse_check_of_mvp_1(path: Path, config: ValidatorConfig) -> None:
+    """The committed maps start within the warehouses of the ruleset with ``city_upgrades``
+    (DEC-26, item 5; #379): no small city holds more than ``warehouse.start_by_kind`` (1)."""
+    rules = load_ruleset(ROOT_RULESETS / "mvp-1.toml")
+    assert rules.city_upgrades.enabled
+    assert validate_file(path, config, rules) == []
+
+
+def test_warehouse_check_only_with_city_upgrades(config: ValidatorConfig, tmp_path: Path) -> None:
     """Example 20 of DEC-26: a small city with ``start_stock = 2`` fails ``warehouse`` with the
     flag on (its warehouse starts at 1) and passes with it off (the warehouse holds 4)."""
-    mvp_map = REPO / "maps" / "arteriya.json"
+    mvp_map = _with_small_stock(tmp_path, 2)
     on = load_ruleset(ROOT_RULESETS / "mvp-1.toml")
     off = load_ruleset(ROOT_RULESETS / "mvp-0.toml")
     issues = [i for i in validate_file(mvp_map, config, on) if i.check == "warehouse"]
@@ -192,11 +218,13 @@ def test_warehouse_check_only_with_city_upgrades(config: ValidatorConfig) -> Non
     assert validate_file(mvp_map, config) == []
 
 
-def test_cli_ruleset_option(capsys: pytest.CaptureFixture[str]) -> None:
-    mvp_map = str(REPO / "maps" / "pautina.json")
+def test_cli_ruleset_option(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    mvp_map = str(_with_small_stock(tmp_path, 2))
     assert main(["validate", mvp_map, "--ruleset", str(ROOT_RULESETS / "mvp-0.toml")]) == 0
     assert main(["validate", mvp_map, "--ruleset", str(ROOT_RULESETS / "mvp-1.toml")]) == 1
     assert "[warehouse]" in capsys.readouterr().out
+    good = str(_with_small_stock(tmp_path, 1))
+    assert main(["validate", good, "--ruleset", str(ROOT_RULESETS / "mvp-1.toml")]) == 0
 
 
 # DEC-27, table of examples (mechanics.md, section 9): a 400 x 400 map -------------------------

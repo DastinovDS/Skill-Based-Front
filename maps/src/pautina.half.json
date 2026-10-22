@@ -1,11 +1,11 @@
 {
   "meta": {"name": "pautina", "version": 2, "width": 1140, "height": 1000},
   "nodes": [
-    {"id": "c0r0", "name": "Вербовка", "mirror_name": "Ивняк", "x": 132, "y": 142, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
+    {"id": "c0r0", "name": "Вербовка", "mirror_name": "Ивняк", "x": 132, "y": 142, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 1},
     {"id": "c0r1", "name": "Полевое", "mirror_name": "Нивы", "x": 110, "y": 315, "terrain": "plains", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
     {"id": "c0r2", "name": "Паучий Замок", "mirror_name": "Сетяной Замок", "x": 120, "y": 500, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 0, "start_owner": 0, "start_units": 6, "start_charged": 6, "start_stock": 6},
     {"id": "c0r3", "name": "Липовка", "mirror_name": "Кленовка", "x": 120, "y": 693, "terrain": "forest", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
-    {"id": "c0r4", "name": "Овражное", "mirror_name": "Балка", "x": 112, "y": 870, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
+    {"id": "c0r4", "name": "Овражное", "mirror_name": "Балка", "x": 112, "y": 870, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 1},
     {"id": "c1r0", "name": "Росстань", "mirror_name": "Развилка", "x": 290, "y": 124, "terrain": "plains", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
     {"id": "c1r1", "name": "Тенёта", "mirror_name": "Силки", "x": 308, "y": 305, "terrain": "forest", "vp": 1, "kind": "city_large", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
     {"id": "c1r2", "name": "Стан", "mirror_name": "Табор", "x": 300, "y": 500, "terrain": "plains", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},

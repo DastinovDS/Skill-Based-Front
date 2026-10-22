@@ -111,7 +111,7 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 | `setup` | зависимости: `setup:py` (`uv sync --locked`), `setup:client`, `setup:e2e` (`pnpm install --frozen-lockfile`) | INF-01 |
 | `hooks` | один раз на клон: `pre-commit install` (ruff перед каждым коммитом) | INF-02 |
 | `check` | все статические проверки: `check:py`, `check:client`, `check:e2e` | INF-02 |
-| `check:py` | ruff (проверка и формат), pyright (strict), lint-imports (границы пакетов), `gow-maps validate` карт | INF-02 |
+| `check:py` | ruff (проверка и формат), pyright (strict), lint-imports (границы пакетов), `gow-maps validate` карт (в том числе стартовый склад против `rulesets/mvp-1.toml`, DEC-26, п. 5) | INF-02 |
 | `check:client` | eslint и prettier, svelte-check и tsc клиента | INF-03 |
 | `check:e2e` | prettier и tsc пакета `e2e/` | QA-02 |
 | `check:i18n` | строки интерфейса только в словарях, одинаковые ключи ru и en (входит в `test:client`) | CLI-11 |
@@ -134,8 +134,7 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 | `regen`, `regen:protocol`, `regen:api` | перегенерация схемы протокола и TS-типов (`protocol.gen.ts`) и OpenAPI сервера с `api.gen.ts` | PRO-02, CLI-09 |
 | `db:migrate` | применить миграции Alembic (сервер делает это и сам при старте) | DB-01 |
 | `db:revision` | новая миграция из моделей `gow_server.models` (аргумент: сообщение) | DB-01 |
-| `maps`, `maps:validate` | `gow-maps validate maps/*.json` | MAP-02 |
-| `maps:validate-warehouse` | то же с `--ruleset rulesets/mvp-1.toml`: стартовый склад не больше склада рулсета с `city_upgrades` (DEC-26, п. 5); сейчас `arteriya` и `pautina` её не проходят (малые города со `start_stock = 2`, симуляция обрезает до 1, вопрос в #265) | #265 |
+| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json`: валидатор карт и стартовый склад не больше склада рулсета с `city_upgrades` (DEC-26, п. 5) | MAP-02, #379 |
 | `maps:mirror` | собрать `maps/<имя>.json` из половины `maps/src/<имя>.half.json` (аргумент: имя) | MAP-03 |
 | `maps:preview` | нарисовать превью `maps/<имя>.preview.png` | MAP-04 |
 | `maps:bake` | запечь фон `maps/<имя>.bg.webp`: numpy и Pillow, текстура T2, WebP до 0,5 МБ (после любой правки карты) | MAP-05, #344 |

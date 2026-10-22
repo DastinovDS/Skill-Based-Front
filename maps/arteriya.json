@@ -2,9 +2,9 @@
   "meta": {"name": "arteriya", "version": 2, "symmetry": "rot180", "width": 1600, "height": 1000},
   "nodes": [
     {"id": 0, "name": "Каменец", "x": 150, "y": 500, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 0, "start_owner": 0, "start_units": 6, "start_charged": 6, "start_stock": 6},
-    {"id": 1, "name": "Еловец", "x": 130, "y": 190, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
-    {"id": 2, "name": "Ковыль", "x": 130, "y": 810, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
-    {"id": 3, "name": "Застава", "x": 330, "y": 500, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
+    {"id": 1, "name": "Еловец", "x": 130, "y": 190, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 1},
+    {"id": 2, "name": "Ковыль", "x": 130, "y": 810, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 1},
+    {"id": 3, "name": "Застава", "x": 330, "y": 500, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 1},
     {"id": 4, "name": "Распутье", "x": 500, "y": 500, "terrain": "plains", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
     {"id": 5, "name": "Арка", "x": 660, "y": 500, "terrain": "plains", "vp": 2, "kind": "city_medium", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
     {"id": 6, "name": "Лесная Падь", "x": 290, "y": 250, "terrain": "forest", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},
@@ -28,9 +28,9 @@
     {"id": 24, "name": "Чаща", "x": 1310, "y": 750, "terrain": "forest", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 2},
     {"id": 25, "name": "Ворота", "x": 940, "y": 500, "terrain": "plains", "vp": 2, "kind": "city_medium", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
     {"id": 26, "name": "Перекрёсток", "x": 1100, "y": 500, "terrain": "plains", "vp": 1, "kind": "city_medium", "capital_of": null, "start_owner": null, "start_units": 0, "start_charged": 0, "start_stock": 0},
-    {"id": 27, "name": "Подворье", "x": 1270, "y": 500, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 2},
-    {"id": 28, "name": "Ракитное", "x": 1470, "y": 190, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 2},
-    {"id": 29, "name": "Борок", "x": 1470, "y": 810, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 2},
+    {"id": 27, "name": "Подворье", "x": 1270, "y": 500, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 1},
+    {"id": 28, "name": "Ракитное", "x": 1470, "y": 190, "terrain": "plains", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 1},
+    {"id": 29, "name": "Борок", "x": 1470, "y": 810, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 1, "start_units": 2, "start_charged": 2, "start_stock": 1},
     {"id": 30, "name": "Кремнёв", "x": 1450, "y": 500, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 1, "start_owner": 1, "start_units": 6, "start_charged": 6, "start_stock": 6}
   ],
   "edges": [

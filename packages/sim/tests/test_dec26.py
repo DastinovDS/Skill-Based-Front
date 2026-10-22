@@ -379,12 +379,20 @@ def test_example_19_target_of_a_small_rear_city() -> None:
 
 
 def test_example_20_the_start_stock_is_cut_to_the_warehouse() -> None:
+    # Example 20: a small city with `start_stock = 2`. The committed maps do not have one (#379),
+    # so the stock is set here on the own small cities of arteriya.
     mapdef = load_map(TESTS_DIR.parents[2] / "maps" / "arteriya.json")
-    small = [n for n in mapdef.nodes if n.kind is NodeKind.CITY_SMALL and n.start_stock == 2]
-    assert small, "the MVP maps give small cities a start stock of 2"
-    state = initial_state(mapdef, RULES)
-    assert {state.nodes[n.id].warehouse for n in small} == {1}
-    assert {initial_state(mapdef, OFF).nodes[n.id].warehouse for n in small} == {2}
+    small = {
+        n.id for n in mapdef.nodes if n.kind is NodeKind.CITY_SMALL and n.start_owner is not None
+    }
+    assert small
+    nodes = tuple(
+        dataclasses.replace(n, start_stock=2) if n.id in small else n for n in mapdef.nodes
+    )
+    stocked = dataclasses.replace(mapdef, nodes=nodes)
+    state = initial_state(stocked, RULES)
+    assert {state.nodes[i].warehouse for i in small} == {1}  # the warehouse of a small city
+    assert {initial_state(stocked, OFF).nodes[i].warehouse for i in small} == {2}  # flag off
 
 
 def test_example_21_a_transfer_into_a_small_warehouse() -> None:
