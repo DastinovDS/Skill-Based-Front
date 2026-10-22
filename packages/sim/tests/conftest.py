@@ -141,6 +141,68 @@ def grid40() -> MapDef:
     )
 
 
+def _grid55_own(node_id: int) -> bool:
+    """Player 0 owns columns 0-2 of ``grid55`` except node 2 (row 0, column 2): 14 nodes."""
+    return node_id % 11 <= 2 and node_id != 2
+
+
+def grid55() -> MapDef:
+    """A rot180 grid of 5 x 11 nodes (55 nodes, 94 edges; DEC-27, item 7): the size of the new
+    maps. Each player owns 14 nodes: its three edge columns without one corner; the centre node
+    is its own mirror. Garrisons and stock as in ``grid40``."""
+    rows, cols = 5, 11
+    count = rows * cols
+    nodes: list[dict[str, object]] = []
+    for node_id in range(count):
+        row, col = divmod(node_id, cols)
+        owner = 0 if _grid55_own(node_id) else 1 if _grid55_own(count - 1 - node_id) else None
+        capital = 0 if node_id == 2 * cols else 1 if node_id == count - 1 - 2 * cols else None
+        nodes.append(
+            {
+                "id": node_id,
+                "name": f"n{node_id}",
+                "x": 60 + 80 * col,
+                "y": 60 + 80 * row,
+                "terrain": ["plains", "forest", "mountains"][(row + min(col, cols - 1 - col)) % 3],
+                "vp": 3 if capital is not None else 1,
+                "kind": "city_small" if capital is None else "capital",
+                "capital_of": capital,
+                "start_owner": owner,
+                "start_units": 3 if owner is not None else 0,
+                "start_charged": 2 if owner is not None else 0,
+                "start_stock": 4 if capital is not None else (1 if owner is not None else 0),
+            }
+        )
+    pairs = [(r * cols + c, r * cols + c + 1) for r in range(rows) for c in range(cols - 1)]
+    pairs += [(r * cols + c, (r + 1) * cols + c) for r in range(rows - 1) for c in range(cols)]
+    edges = [
+        {"id": i, "a": a, "b": b, "max_level": 3, "travel_ticks": 24, "border_permille": 500}
+        for i, (a, b) in enumerate(pairs)
+    ]
+    mirror_node = {n: count - 1 - n for n in range(count)}
+    index = {frozenset(p): i for i, p in enumerate(pairs)}
+    mirror_edge = {
+        i: index[frozenset((mirror_node[a], mirror_node[b]))] for i, (a, b) in enumerate(pairs)
+    }
+    return parse_map(
+        {
+            "meta": {
+                "name": "grid55",
+                "version": 1,
+                "symmetry": "rot180",
+                "width": 920,
+                "height": 440,
+            },
+            "nodes": nodes,
+            "edges": edges,
+            "mirror": {
+                "nodes": {str(k): v for k, v in mirror_node.items()},
+                "edges": {str(k): v for k, v in mirror_edge.items()},
+            },
+        }
+    )
+
+
 _TERRAIN = {"p": "plains", "f": "forest", "m": "mountains"}
 
 
@@ -213,3 +275,8 @@ def expand_bot() -> Callable[[MapDef, Ruleset], Controller]:
 @pytest.fixture(scope="session")
 def grid40_map() -> MapDef:
     return grid40()
+
+
+@pytest.fixture(scope="session")
+def grid55_map() -> MapDef:
+    return grid55()

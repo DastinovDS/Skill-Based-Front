@@ -63,11 +63,15 @@ def is_standing(group: Group) -> bool:
 
 
 def standing_units(state: GameState, node: int, player: int) -> int:
-    """Units of ``player`` standing in ``node``: what the capacity limits."""
+    """Units of ``player`` standing in ``node``: what the capacity limits.
+
+    A sum, so the order of the groups does not matter (no ``sorted``); ``project()`` calls it for
+    every own city, so it stays cheap (#266: ``grid55``).
+    """
     total = 0
-    for gid in sorted(state.groups):
-        group = state.groups[gid]
-        if group.owner == player and is_standing(group) and group.location == AtNode(node):
+    for group in state.groups.values():
+        location = group.location  # standing: is_standing(group), the group is in a node
+        if group.owner == player and isinstance(location, AtNode) and location.node == node:
             total += group.units
     return total
 

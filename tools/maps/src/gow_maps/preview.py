@@ -76,8 +76,9 @@ def render_preview(mapdef: MapDef, out: str | Path) -> None:
             zorder=3,
         )
         # Node kind (DEC-22): S, M, L city; P province; the capital is the star.
+        usual_vp = 0 if node.kind is NodeKind.PROVINCE else 1  # shown only when it differs
         label = f"{node.id}{_KIND_MARK[node.kind]} {node.name}" + (
-            f"\nvp{node.vp}" if node.vp != 1 else ""
+            f"\nvp{node.vp}" if node.vp != usual_vp else ""
         )
         ax.annotate(
             label, (node.x, node.y), xytext=(7, 7), textcoords="offset points", fontsize=7, zorder=4

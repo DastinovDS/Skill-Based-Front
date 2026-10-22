@@ -30,7 +30,7 @@ from gow_sim.maps import MapDef, load_map
 ROOT = Path(__file__).parents[3]
 MAPS = ROOT / "maps"
 TEST_MAPS = ROOT / "packages" / "sim" / "tests" / "maps"
-POOL = ["arteriya", "pautina", "pereval"]
+POOL = ["arteriya", "hrebet", "pautina", "perekrestki", "pereval", "trakt"]
 ALL_MAPS = [MAPS / f"{name}.json" for name in POOL] + sorted(TEST_MAPS.glob("*.json"))
 BAKE_SECONDS = 10  # #344: baking one map takes at most 10 s (CPU time, a loaded machine is slower)
 LAND = frozenset(biome for biomes in TERRAIN_BIOMES.values() for biome in biomes)
