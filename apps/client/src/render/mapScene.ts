@@ -319,6 +319,14 @@ export class MapScene {
     this.effects.setScreenResolution(screen);
     this.intents.setScreenResolution(screen);
     this.effects.setCameraScale(camera.scale);
+    // The canvas in the px of the world times the scale: the arenas of fights keep inside it.
+    const { width, height } = this.app.renderer.screen;
+    this.effects.setViewport({
+      left: camera.x * camera.scale - width / 2,
+      right: camera.x * camera.scale + width / 2,
+      top: camera.y * camera.scale - height / 2,
+      bottom: camera.y * camera.scale + height / 2,
+    });
     this.entities.setCameraScale(camera.scale);
     this.intents.setCameraScale(camera.scale);
     this.alerts.setCameraScale(camera.scale);

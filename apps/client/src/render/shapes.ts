@@ -392,8 +392,12 @@ export class Token {
         .fill({ color: PLATE_FILL, alpha: 0.95 })
         .stroke({ width: 1.2, color: ownerColor(this.kit.me, owner) });
       this.defenseText.position.set(left + DEFENSE_LABEL.padX, 0);
-      // To the right of the shield disc, which overlaps the near end of the pill.
-      this.defenseLabel.position.set(side / 2 + this.shield.scale.x * 9, -h / 2);
+      // To the right of the shield disc, which overlaps the near end of the pill, and a little lower:
+      // the capacity badge and the counters of a city (the grace, #360) sit at the top right.
+      this.defenseLabel.position.set(
+        side / 2 + this.shield.scale.x * 9,
+        -h / 2 + DEFENSE_LABEL.drop,
+      );
     }
 
     if (counts !== null) {

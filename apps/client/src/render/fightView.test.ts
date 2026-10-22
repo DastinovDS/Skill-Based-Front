@@ -204,6 +204,38 @@ describe('FightView', () => {
     view.destroy();
   });
 
+  it('moves the arenas of fights in one place apart, so that the plates do not cover each other (#360)', () => {
+    const { view, frame, arenaViews } = setup();
+    const snap = snapshot([fightAt({ id: 'a' }), fightAt({ id: 'b' }), fightAt({ id: 'c' })]);
+    view.update(frame(snap), [], ROUND, false);
+    const arenas = arenaViews();
+    expect(arenas).toHaveLength(3);
+    const k = arenas[0]?.scale.x ?? 1;
+    const plates = arenas.map((arena) => ({
+      left: arena.x - PLATE.halfWidth * k,
+      right: arena.x + PLATE.halfWidth * k,
+      top: arena.y - PLATE.halfHeight * k,
+      bottom: arena.y + PLATE.halfHeight * k,
+    }));
+    for (let i = 0; i < plates.length; i++) {
+      for (let j = i + 1; j < plates.length; j++) {
+        const a = plates[i];
+        const b = plates[j];
+        if (a === undefined || b === undefined) throw new Error('no plate');
+        const apart =
+          a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+        expect(apart).toBe(true);
+      }
+    }
+    // The first fight stays where a lone fight would stand.
+    const place = fightPlace(map, city, null, null, radiusOf);
+    if (place === undefined) throw new Error('no place');
+    const usual = arenaCenter(place, 1);
+    expect(arenas[0]?.x).toBeCloseTo(usual.x);
+    expect(arenas[0]?.y).toBeCloseTo(usual.y);
+    view.destroy();
+  });
+
   it('draws a chip per unit: charged, discharged and dead, own on the left, the enemy on the right', () => {
     const { view, frame, chips } = setup();
     // Own: 5 units, 2 charged, 1 dead; the enemy: 4 units, all charged.

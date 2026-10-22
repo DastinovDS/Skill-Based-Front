@@ -2,6 +2,14 @@ import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import { t } from '../i18n/index.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 import type { EventMsg, FightRoundView, MapFile, PlayerId } from '../protocol.gen.ts';
+import {
+  layoutArenas,
+  type ArenaSlot,
+  type ArenaSpot,
+  type Obstacle,
+  type Rect,
+} from './arenaLayout.ts';
+import { ringRadius } from './cityLayout.ts';
 import { numbersLook } from './effectsLayout.ts';
 import {
   CAPTION_RISE,
@@ -72,6 +80,42 @@ const HIDDEN_CHARGED_X = PLATE.halfWidth - 22;
 const LABEL = { glyph: 8, gap: 2, between: 5, padX: 5, height: 16, radius: 6 } as const;
 /** A silent charge's badge sits at the lower right of its chip. */
 const BADGE_OFFSET = { x: 8, y: 7 } as const;
+
+/** What the view draws in one arena: a fight going on, or the end of one. */
+type ArenaItem =
+  | {
+      readonly kind: 'live';
+      readonly fight: FightData;
+      readonly place: FightPlace;
+      readonly sides: ArenaSides;
+      readonly exchange: ReturnType<typeof exchangeOf>;
+      readonly age: number;
+    }
+  | {
+      readonly kind: 'end';
+      readonly fx: EndFx;
+      readonly place: FightPlace;
+      readonly phase: number;
+    };
+
+type FightData = RenderFrame['base']['view']['fights'][number];
+
+/** What an arena needs beyond its plate (px): arrows, labels and the caption; the end label. */
+const ARROW_REACH = { top: 30, bottom: 28, caption: 28 } as const;
+const END_REACH = { top: 32, bottom: 4 } as const;
+
+/** A key of the place of a fight: the arena of a fight and its end share one. */
+function usualSpot(place: FightPlace, scale: number): ArenaSpot {
+  const centre = arenaCenter(place, scale);
+  return { x: centre.x, y: centre.y, moved: 0 };
+}
+
+/** An arena that moved this far (px) from its usual spot gets a dotted line to its place. */
+const TETHER_MIN = 8;
+
+function placeKey(place: FightPlace): string {
+  return `${String(place.node)}/${String(place.edge)}/${String(place.at.x)},${String(place.at.y)}`;
+}
 
 type Side = 'own' | 'enemy';
 const SIDES: readonly Side[] = ['own', 'enemy'];
@@ -234,6 +278,10 @@ export class FightView {
   private eventsSeen: readonly EventMsg[] | null = null;
   private eventCount = -1;
   private cameraScale = 1;
+  /** The canvas in scaled-world px (`setViewport`); `null` until the camera is known. */
+  private view: Rect | null = null;
+  /** Where the arena of each place stands now: the loss numbers and the end labels follow it. */
+  private readonly spots = new Map<string, ArenaSpot>();
 
   constructor(
     private readonly map: MapFile,
@@ -399,6 +447,14 @@ export class FightView {
   }
 
   /**
+   * The canvas as a rectangle in scaled-world px (the world times the camera scale, so the middle
+   * of the canvas is `camera * scale`): the arenas stay inside it when they can.
+   */
+  setViewport(rect: Rect | null): void {
+    this.view = rect;
+  }
+
+  /**
    * Texture pixels per text unit. The arena is drawn at one unit a CSS px, so this is the device
    * pixel ratio rounded up, not the zoom of the map.
    */
@@ -432,51 +488,65 @@ export class FightView {
   ): void {
     this.readEvents(events);
     const k = 1 / this.cameraScale;
-    let arenas = 0;
     const live = new Set<string>();
+    // What to draw, the fights going on first: they have the best places on the screen.
+    const items: ArenaItem[] = [];
     for (const fight of frame.base.view.fights) {
-      if (arenas >= MAX_ARENAS) break;
+      if (items.length >= MAX_ARENAS) break;
       const place = fightPlace(this.map, fight.node, fight.edge, fight.point, this.radiusOf);
       if (place === undefined) continue;
       live.add(fight.id);
       const sides = arenaSides(fight, frame.groups, this.me);
-      const arena = this.arena(arenas++);
-      this.placeArena(arena, place, k);
       const exchange = exchangeOf(fight.last_round, this.me);
       const age = fight.last_round === null ? 0 : frame.tick - fight.last_round.tick;
-      this.drawFight(arena, {
-        sides,
-        pulses: this.pulses(
-          fight.id,
-          sides,
-          fight.last_round,
-          age,
-          frame.tick,
-          roundTicks,
-          reduced,
-        ),
-        progress: roundProgress(fight.next_round_tick, frame.tick, roundTicks),
-        exchange,
-        age,
-        roundTicks,
-        reduced,
-      });
+      items.push({ kind: 'live', fight, place, sides, exchange, age });
     }
-    for (const id of this.seen.keys()) {
-      if (!live.has(id)) this.seen.delete(id);
-    }
-    let ends = 0;
     for (const fx of this.effects) {
       if (fx.kind !== 'end') continue;
       const phase = roundEffect(frame.tick - fx.tick, END_SHARE, roundTicks);
-      if (phase === null || arenas >= MAX_ARENAS) continue;
-      const arena = this.arena(arenas++);
-      this.placeArena(arena, fx.place, k);
-      this.drawEnded(arena, fx, phase);
-      if (!fx.legacy && ends < MAX_ENDS) this.drawEnd(this.endLabel(ends++), fx, phase, k);
+      if (phase === null || items.length >= MAX_ARENAS) continue;
+      items.push({ kind: 'end', fx, place: fx.place, phase });
     }
-    this.hide(this.arenas, arenas);
-    for (let i = arenas; i < this.arenas.length; i++) {
+    const spots = this.layout(items);
+    this.spots.clear();
+    let ends = 0;
+    items.forEach((item, index) => {
+      const arena = this.arena(index);
+      const spot = spots[index];
+      if (spot === undefined) return;
+      this.placeArena(arena, item.place, spot, k);
+      if (!this.spots.has(placeKey(item.place))) this.spots.set(placeKey(item.place), spot);
+      if (item.kind === 'live') {
+        const { fight, sides, exchange, age } = item;
+        this.drawFight(arena, {
+          sides,
+          pulses: this.pulses(
+            fight.id,
+            sides,
+            fight.last_round,
+            age,
+            frame.tick,
+            roundTicks,
+            reduced,
+          ),
+          progress: roundProgress(fight.next_round_tick, frame.tick, roundTicks),
+          exchange,
+          age,
+          roundTicks,
+          reduced,
+        });
+      } else {
+        this.drawEnded(arena, item.fx, item.phase);
+        if (!item.fx.legacy && ends < MAX_ENDS) {
+          this.drawEnd(this.endLabel(ends++), item.fx, item.phase, spot, k);
+        }
+      }
+    });
+    for (const id of this.seen.keys()) {
+      if (!live.has(id)) this.seen.delete(id);
+    }
+    this.hide(this.arenas, items.length);
+    for (let i = items.length; i < this.arenas.length; i++) {
       const arena = this.arenas[i];
       if (arena !== undefined) arena.top.visible = false;
     }
@@ -485,6 +555,32 @@ export class FightView {
       if (label !== undefined) label.view.visible = false;
     }
     this.drawPops(frame.tick, roundTicks, reduced, k);
+  }
+
+  /**
+   * Where each arena stands (#360): over its place when that spot is free, else at the free spot
+   * nearest to it, clear of the other plates, of the cities and of the edge of the screen.
+   */
+  private layout(items: readonly ArenaItem[]): ArenaSpot[] {
+    if (items.length === 0) return [];
+    const slots = items.map((item): ArenaSlot => {
+      const base = { at: item.place.at, ring: item.place.ring, road: item.place.node === null };
+      if (item.kind === 'end') return { ...base, top: END_REACH.top, bottom: END_REACH.bottom };
+      // The arrows over (own) and under (the enemy's) the plate and the caption of a bonus shot.
+      const round = item.fight.last_round;
+      if (round === null) return { ...base, top: 4, bottom: 4 };
+      const bonus = round.virtual.some((n) => n > 0);
+      return {
+        ...base,
+        top: ARROW_REACH.top + (bonus ? ARROW_REACH.caption : 0),
+        bottom: ARROW_REACH.bottom,
+      };
+    });
+    const cities: Obstacle[] = this.map.nodes.map((node) => ({
+      at: { x: node.x, y: node.y },
+      ring: ringRadius(this.radiusOf(node.id)),
+    }));
+    return layoutArenas(slots, cities, this.cameraScale, this.view);
   }
 
   destroy(): void {
@@ -511,10 +607,13 @@ export class FightView {
     }
   }
 
-  /** The world position of a point `dx`, `dy` px from the middle of the arena of `place`. */
+  /**
+   * The world position of a point `dx`, `dy` px from the middle of the arena of `place` (where it
+   * stands now: the usual spot over the place if no arena is there).
+   */
   private around(place: FightPlace, dx: number, dy: number, k: number): Point {
-    const centre = arenaCenter(place, this.cameraScale);
-    return { x: centre.x + dx * k, y: centre.y + dy * k };
+    const spot = this.spots.get(placeKey(place)) ?? usualSpot(place, this.cameraScale);
+    return { x: spot.x + dx * k, y: spot.y + dy * k };
   }
 
   // --- Arena -------------------------------------------------------------------------------------
@@ -587,26 +686,41 @@ export class FightView {
     return arena;
   }
 
-  private placeArena(arena: Arena, place: FightPlace, k: number): void {
-    const centre = arenaCenter(place, this.cameraScale);
+  private placeArena(arena: Arena, place: FightPlace, spot: ArenaSpot, k: number): void {
     for (const part of [arena.view, arena.top]) {
-      part.position.set(centre.x, centre.y);
+      part.position.set(spot.x, spot.y);
       part.scale.set(k);
       part.alpha = 1;
       part.visible = true;
     }
-    // A dotted line down to the true place of a fight on a road, and a cross there.
+    // A dotted line to the true place of a fight on a road (with a cross there), or of a fight in
+    // a city whose arena had to move off its usual spot.
     const g = arena.tether.clear();
-    if (place.node === null) {
-      const dy = (place.at.y - centre.y) / k;
-      for (let y = PLATE.halfHeight + 4; y < dy - 5; y += 7) {
-        g.moveTo(0, y).lineTo(0, Math.min(dy - 5, y + 3.5));
-      }
-      g.stroke({ width: 1.5, color: FIGHT_COLOR, alpha: 0.8 });
-      g.moveTo(-4, dy - 4)
-        .lineTo(4, dy + 4)
-        .moveTo(4, dy - 4)
-        .lineTo(-4, dy + 4)
+    const road = place.node === null;
+    if (!road && spot.moved < TETHER_MIN) return;
+    const dx = (place.at.x - spot.x) / k;
+    const dy = (place.at.y - spot.y) / k;
+    const dist = Math.hypot(dx, dy);
+    if (dist === 0) return;
+    const ux = dx / dist;
+    const uy = dy / dist;
+    // From the edge of the plate to the cross, or to the ring of the city.
+    const out = Math.min(
+      ux === 0 ? Infinity : PLATE.halfWidth / Math.abs(ux),
+      uy === 0 ? Infinity : (PLATE.halfHeight + 2) / Math.abs(uy),
+    );
+    const from = out + 2;
+    const to = road ? dist - 5 : dist - place.ring / k - 4;
+    for (let d = from; d < to; d += 7) {
+      const end = Math.min(to, d + 3.5);
+      g.moveTo(ux * d, uy * d).lineTo(ux * end, uy * end);
+    }
+    g.stroke({ width: 1.5, color: FIGHT_COLOR, alpha: 0.8 });
+    if (road) {
+      g.moveTo(dx - 4, dy - 4)
+        .lineTo(dx + 4, dy + 4)
+        .moveTo(dx + 4, dy - 4)
+        .lineTo(dx - 4, dy + 4)
         .stroke({ width: 2, color: FIGHT_COLOR, cap: 'round' });
     }
   }
@@ -1046,7 +1160,7 @@ export class FightView {
     return label;
   }
 
-  private drawEnd(label: EndLabel, fx: EndFx, phase: number, k: number): void {
+  private drawEnd(label: EndLabel, fx: EndFx, phase: number, spot: ArenaSpot, k: number): void {
     const result = fightResult(fx);
     const word = t(RESULT_KEY[result]);
     label.text.visible = true;
@@ -1065,7 +1179,7 @@ export class FightView {
     }
     // The label sits above the plate, centred on it, and fades out in the last third.
     const width = 24 + label.text.width + 8;
-    const at = this.around(fx.place, -width / 2 + 12, -PLATE.halfHeight - 20, k);
+    const at = { x: spot.x + (-width / 2 + 12) * k, y: spot.y + (-PLATE.halfHeight - 20) * k };
     label.view.position.set(at.x, at.y);
     label.view.scale.set(k);
     label.view.alpha = numbersLook(phase, true).alpha;

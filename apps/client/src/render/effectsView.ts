@@ -12,6 +12,7 @@ import {
   type BounceInfo,
   type CaptureInfo,
 } from './effectsLayout.ts';
+import type { Rect } from './arenaLayout.ts';
 import { FightView } from './fightView.ts';
 import type { MapLayers } from './layers.ts';
 import { dashSegments, edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
@@ -74,6 +75,11 @@ export class EffectsView {
   /** Camera scale (CSS px per world unit): the arenas of fights keep their size on screen. */
   setCameraScale(scale: number): void {
     this.fightView.setCameraScale(scale);
+  }
+
+  /** The canvas in scaled-world px: the arenas of fights keep inside it (#360). */
+  setViewport(rect: Rect | null): void {
+    this.fightView.setViewport(rect);
   }
 
   /** Text resolution for what is drawn at one unit a CSS px (the arenas of fights). */
