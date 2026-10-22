@@ -98,6 +98,7 @@ def grid40() -> MapDef:
         nodes.append(
             {
                 "id": node_id,
+                "name": f"n{node_id}",
                 "x": 50 + 40 * col,
                 "y": 100 + 200 * (node_id // cols),
                 "terrain": ["plains", "forest", "mountains"][min(col, cols - 1 - col) % 3],
@@ -113,7 +114,7 @@ def grid40() -> MapDef:
     pairs = [(r * cols + c, r * cols + c + 1) for r in range(2) for c in range(cols - 1)]
     pairs += [(c, cols + c) for c in range(cols)]
     edges = [
-        {"id": i, "a": a, "b": b, "base_width": 1, "max_width": 3, "travel_ticks": 30}
+        {"id": i, "a": a, "b": b, "max_level": 3, "travel_ticks": 30, "border_permille": 500}
         for i, (a, b) in enumerate(pairs)
     ]
     mirror_node = {n: 2 * cols - 1 - n for n in range(2 * cols)}
@@ -157,6 +158,7 @@ def fog_map(
     nodes = [
         {
             "id": n,
+            "name": f"n{n}",
             "x": 10 * n,
             "y": 10,
             "terrain": _TERRAIN[t],
@@ -175,7 +177,14 @@ def fog_map(
             "meta": {"name": "fog", "version": 1, "symmetry": "rot180", "width": 400, "height": 20},
             "nodes": nodes,
             "edges": [
-                {"id": i, "a": a, "b": b, "base_width": 1, "max_width": 3, "travel_ticks": 30}
+                {
+                    "id": i,
+                    "a": a,
+                    "b": b,
+                    "max_level": 3,
+                    "travel_ticks": 30,
+                    "border_permille": 500,
+                }
                 for i, (a, b) in enumerate(edges)
             ],
             "mirror": {

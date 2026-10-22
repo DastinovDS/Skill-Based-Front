@@ -155,7 +155,7 @@ export function devSnapshot(map: MapFile, rules: RulesetPublic, tick: number): S
       nodes,
       edges: map.edges.map((e) => ({
         id: e.id,
-        width: e.base_width,
+        width: 1, // every road starts at level 1 (DEC-22)
         // A road is seen when one of its ends is (as in the real fog), hidden only between two hidden cities.
         detail: nodes[e.a]?.detail === 'fog' && nodes[e.b]?.detail === 'fog' ? 'fog' : 'presence',
         upgrade_gain: null,

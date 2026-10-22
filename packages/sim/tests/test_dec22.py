@@ -18,7 +18,7 @@ tests (``test_ruleset.py`` checks that mvp-0 carries them now).
 Map ``dec22`` (rot180): K = 0 (capital of 0) -e0- A = 1 -e1- B = 2 (medium cities, B starts
 neutral, the tests give it to player 0); P = 3 a neutral province at A (e2); B -e3- 5 (a medium
 city the tests give to player 1); the mirror half 7 (capital of 1) -e4- 6 -e5- 5, 6 -e6- 4.
-Roads ``travel_ticks`` 30 (e3: 60), ``max_width`` 3.
+Roads ``travel_ticks`` 30 (e3: 60), ``max_level`` 3.
 """
 
 import dataclasses

@@ -6,7 +6,7 @@ DEC-21 and DEC-33 are in ``test_dec21.py`` and ``test_dec33.py``. Expected detai
 worked out by hand from DEC-21 and the map file:
 
 - line6: 0 (capital of 0) -e0- 1 -e1- 2 -e2- 3 -e3- 4 -e4- 5 (capital of 1), all plains; player 0
-  owns 0 and 1, player 1 owns 4 and 5, nodes 2 and 3 are neutral; roads level 1, ``max_width`` 3;
+  owns 0 and 1, player 1 owns 4 and 5, nodes 2 and 3 are neutral; roads level 1, ``max_level`` 3;
   the ``rules`` fixture gives capitals capacity 40 and the large cities 30 (DEC-22: by node kind).
   Player 0 at the start: nodes 0, 1 sources (exact), 2 exact (plains sees plains), 3..5 fog;
   edges e0, e1 not in fog (an own end), e2..e4 in fog for the road level.
@@ -33,7 +33,7 @@ from gow_sim.commands import (
     Split,
     validate,
 )
-from gow_sim.maps import NodeKind, load_map
+from gow_sim.maps import ROAD_START_LEVEL, NodeKind, load_map
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
 from gow_sim.state import (
     PROGRESS_SCALE,
@@ -591,7 +591,7 @@ def test_upgrade_gain_only_on_own_internal_edges(rules: Ruleset) -> None:
     )
     assert [e.upgrade_gain is not None for e in view0.edges] == [True, False, False, False, False]
     assert [e.upgrade_gain is not None for e in view1.edges] == [False, False, False, False, True]
-    state.edges[0].width = state.map.edges[0].max_width
+    state.edges[0].width = state.map.edges[0].max_level
     assert _view(state, rules, 0).edges[0].upgrade_gain is None
 
 
@@ -798,7 +798,7 @@ def _states(draw: st.DrawFn) -> tuple[GameState, int]:
         node.warehouse = draw(st.integers(0, 30))
     for edge in state.edges.values():
         static = state.map.edges[edge.id]
-        _upgrade(edge, draw(st.integers(static.base_width, static.max_width)))
+        _upgrade(edge, draw(st.integers(ROAD_START_LEVEL, static.max_level)))
     for _ in range(draw(st.integers(0, 3))):  # earlier ticks leave fog memory
         state.groups = {}
         for _ in range(draw(st.integers(0, 6))):
@@ -806,7 +806,7 @@ def _states(draw: st.DrawFn) -> tuple[GameState, int]:
         vision(state, _RULES)
         state.tick += draw(st.integers(1, 20))
         for edge in state.edges.values():  # roads are upgraded, never torn down
-            level = draw(st.integers(edge.width, state.map.edges[edge.id].max_width))
+            level = draw(st.integers(edge.width, state.map.edges[edge.id].max_level))
             _upgrade(edge, level)
     state.groups = {}
     for _ in range(draw(st.integers(0, 8))):
@@ -885,7 +885,7 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
     for e, level in enumerate(edges):
         if level is F:
             edge = state.edges[e]
-            level = data.draw(st.integers(edge.width, state.map.edges[e].max_width))
+            level = data.draw(st.integers(edge.width, state.map.edges[e].max_level))
             _upgrade(edge, level)
     for node in state.nodes.values():
         b = node.build

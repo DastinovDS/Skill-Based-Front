@@ -120,6 +120,7 @@ def _map(detour: bool = True) -> MapDef:
         nodes.append(
             {
                 "id": n,
+                "name": f"n{n}",
                 "x": x if player != 1 else 1200 - x,
                 "y": y if player != 1 else 600 - y,
                 "terrain": "forest",
@@ -135,7 +136,7 @@ def _map(detour: bool = True) -> MapDef:
     roads = [r for r in _ROADS if detour or (r[0], r[1]) not in _DETOUR]
     half_edges = len(roads)
     edges = [
-        {"id": i, "a": a, "b": b, "base_width": 1, "max_width": 3, "travel_ticks": t}
+        {"id": i, "a": a, "b": b, "max_level": 3, "travel_ticks": t, "border_permille": 500}
         for i, (a, b, t) in enumerate(roads)
     ]
     edges += [
@@ -143,9 +144,9 @@ def _map(detour: bool = True) -> MapDef:
             "id": half_edges + i,
             "a": _mirror(a),
             "b": _mirror(b),
-            "base_width": 1,
-            "max_width": 3,
+            "max_level": 3,
             "travel_ticks": t,
+            "border_permille": 500,
         }
         for i, (a, b, t) in enumerate(roads)
     ]

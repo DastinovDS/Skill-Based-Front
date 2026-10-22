@@ -93,7 +93,7 @@ import heapq
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from gow_sim.maps import MAX_WIDTH, MapDef, NodeKind
+from gow_sim.maps import MAX_LEVEL, MapDef, NodeKind
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import AtNode, Event, GameState, Group, Packet, event
 from gow_sim.systems.capacity import is_standing, warehouse_capacities
@@ -299,7 +299,7 @@ def transfer_route(
 
 def all_packet_ticks(state: GameState, rules: Ruleset) -> tuple[int, ...]:
     """``packet_ticks`` of every road with its current level, by edge id."""
-    pct = [0] + [road_speed_pct(rules, level) for level in range(1, MAX_WIDTH + 1)]
+    pct = [0] + [road_speed_pct(rules, level) for level in range(1, MAX_LEVEL + 1)]
     roads = state.edges
     return tuple(
         max(1, e.travel_ticks * 100 // pct[roads[e.id].width])  # both positive: rounded down

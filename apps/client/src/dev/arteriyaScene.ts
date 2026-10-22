@@ -127,7 +127,7 @@ export function arteriyaSnapshot(map: MapFile): SnapshotMsg {
       width,
       detail: sight ? 'presence' : 'fog',
       upgrade_gain:
-        sight && bothOwn && width < e.max_width
+        sight && bothOwn && width < e.max_level
           ? { speed_pct: 50, unit_speed_pct: 15, amount: 1 }
           : null,
       // Each half as its city (DEC-21, item 5); a hidden half keeps the memory of the road.

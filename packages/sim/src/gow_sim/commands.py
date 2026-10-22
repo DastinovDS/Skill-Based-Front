@@ -287,7 +287,7 @@ class RejectCode(StrEnum):
     NOT_INTERNAL = "NOT_INTERNAL"
     """Only an internal edge of the player can be upgraded (mechanics.md, section 8)."""
     MAX_WIDTH = "MAX_WIDTH"
-    """The road already has ``max_width`` (its last level, DEC-22)."""
+    """The road already has ``max_level`` (its last level, DEC-22; the code keeps its name)."""
     NOT_CITY = "NOT_CITY"
     """The node is a province, not a city (DEC-22, item 3; DEC-18, items 1 and 6; DEC-23)."""
     CITY_BUSY = "CITY_BUSY"
@@ -685,7 +685,7 @@ def _check_upgrade(state: GameState, player: int, eid: int) -> tuple[int, ...] |
     if not is_internal(state, eid) or state.nodes[edge.a].owner != player:
         return Reject(RejectCode.NOT_INTERNAL)
     road = state.edges[eid]
-    if road.width >= edge.max_width:
+    if road.width >= edge.max_level:
         return Reject(RejectCode.MAX_WIDTH)
     if road.build is not None:
         return Reject(RejectCode.EDGE_BUSY)

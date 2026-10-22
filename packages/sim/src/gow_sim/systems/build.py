@@ -3,7 +3,7 @@ barracks or a warehouse level of a city.
 
 - ``UpgradeRoad(edge)`` (SIM-04 validates it) raises the own internal ``edge`` by one level for
   ``orders.cost.build`` CP (DEC-28, item 7), charged at the start by ``apply_commands``; no city
-  pays or builds it. Levels are ``1..max_width`` (at most 3). ``start_road()`` puts the build on
+  pays or builds it. Levels are ``1..max_level`` (at most 3). ``start_road()`` puts the build on
   the edge (``Edge.build``); event ``build_started``. One build per edge (``EDGE_BUSY``), any
   number of builds at a time.
 - With ``city_upgrades`` (DEC-26, items 2, 3, 8): ``BuildBarracks(node)`` and
@@ -52,9 +52,9 @@ class UpgradeGain:
 
 
 def upgrade_gain(state: GameState, rules: Ruleset, edge: int) -> UpgradeGain | None:
-    """Gain of raising ``edge`` by one level; ``None`` when it already has ``max_width``."""
+    """Gain of raising ``edge`` by one level; ``None`` when it already has ``max_level``."""
     level = state.edges[edge].width
-    if level >= state.map.edges[edge].max_width:
+    if level >= state.map.edges[edge].max_level:
         return None
     return UpgradeGain(
         speed_pct=road_speed_pct(rules, level + 1) - road_speed_pct(rules, level),
@@ -136,7 +136,7 @@ def build(state: GameState, rules: Ruleset) -> list[Event]:
         if tick < done_tick(rules, b):
             continue
         road.build = None
-        road.width += 1  # validated below max_width; nothing else changes levels
+        road.width += 1  # validated below max_level; nothing else changes levels
         events.append(event(tick, "road_upgraded", player=b.owner, edge=eid, width=road.width))
     for nid in sorted(state.nodes):
         city = state.nodes[nid]

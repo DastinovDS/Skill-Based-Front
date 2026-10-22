@@ -19,7 +19,7 @@ from enum import StrEnum
 from typing import Final, Protocol, cast
 
 from gow_sim.canonical import digest
-from gow_sim.maps import PLAYERS, MapDef, NodeKind, map_to_data, parse_map
+from gow_sim.maps import PLAYERS, ROAD_START_LEVEL, MapDef, NodeKind, map_to_data, parse_map
 from gow_sim.ruleset import Ruleset, Stance
 
 PROGRESS_SCALE: Final = 1000
@@ -282,8 +282,8 @@ class Node:
 class Edge:
     """Dynamic part of an edge; the static part is ``GameState.map.edges[id]``.
 
-    ``width``: the road level ``1..max_width`` (DEC-22; the name follows the map field until
-    DEC-23 renames it). Roads have no type (DEC-26, item 7).
+    ``width``: the road level ``1..max_level`` (DEC-22; DEC-23, item 6: the map field is
+    ``max_level``, the state keeps the name ``width``). Roads have no type (DEC-26, item 7).
     """
 
     id: int
@@ -457,7 +457,7 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
             )
             for n in mapdef.nodes
         },
-        edges={e.id: Edge(id=e.id, width=e.base_width) for e in mapdef.edges},
+        edges={e.id: Edge(id=e.id, width=ROAD_START_LEVEL) for e in mapdef.edges},
         groups={},
         packets={},
         intents={},

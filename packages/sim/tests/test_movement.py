@@ -59,6 +59,7 @@ RULES = _rules()
 def _node(i: int, terrain: str, owner: int | None, capital: int | None = None) -> dict[str, Any]:
     return {
         "id": i,
+        "name": f"n{i}",
         "x": 10 * i,
         "y": 10,
         "terrain": terrain,
@@ -79,7 +80,14 @@ def _line(terrains: list[str], owners: list[int | None], travel: list[int]) -> M
     nodes[0]["capital_of"], nodes[-1]["capital_of"] = 0, 1
     nodes[0]["kind"] = nodes[-1]["kind"] = "capital"
     edges = [
-        {"id": i, "a": i, "b": i + 1, "base_width": 1, "max_width": 3, "travel_ticks": travel[i]}
+        {
+            "id": i,
+            "a": i,
+            "b": i + 1,
+            "max_level": 3,
+            "travel_ticks": travel[i],
+            "border_permille": 500,
+        }
         for i in range(n - 1)
     ]
     mirror = {

@@ -15,7 +15,14 @@ min_disjoint_paths = 2
 min_neutral_pct = 20
 neutral_max_distance_diff = 1
 
-# travel_ticks дороги согласован с её длиной: ожидается длина * travel_ticks_per_100_units / 100
-# тиков (100 единиц мира = 3 секунды), допуск travel_tolerance_pct процентов, не меньше 1 тика.
+# travel_ticks дороги согласован с нарисованной длиной (DEC-27, п. 4): ожидается
+# длина * travel_ticks_per_100_units / 100 тиков (100 единиц мира = 3 секунды), допуск
+# travel_tolerance_pct процентов, не меньше 1 тика.
 travel_ticks_per_100_units = 30
-travel_tolerance_pct = 25
+travel_tolerance_pct = 15
+
+# Размер карты (DEC-27, п. 5): от min_nodes до max_nodes узлов. Проверка по умолчанию выключена
+# (size_check = false), чтобы проходили прежние карты; включается своим файлом порогов (--config).
+size_check = false
+min_nodes = 45
+max_nodes = 55

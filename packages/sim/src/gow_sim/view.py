@@ -273,7 +273,7 @@ class EdgeView:
     """The road level visibility (DEC-17): ``PRESENCE`` while an end is a source, else ``FOG``.
     What is seen of enemies is in ``halves`` and ``enemy_groups``."""
     upgrade_gain: UpgradeGain | None
-    """Only for own internal edges below ``max_width`` (DEC-26, item 7; DEC-28, item 7)."""
+    """Only for own internal edges below ``max_level`` (DEC-26, item 7; DEC-28, item 7)."""
     halves: tuple[HalfView, HalfView]
     """The half of the end ``a``, then the half of the end ``b`` (DEC-21, item 5)."""
     build: BuildView | None = None

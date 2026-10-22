@@ -68,15 +68,17 @@ def test_grid_covers_the_world_rectangle(path: Path) -> None:
 @pytest.mark.parametrize("path", ALL_MAPS, ids=lambda p: p.stem)
 def test_node_area_has_the_node_terrain(path: Path) -> None:
     # Near a node (closer than half the distance to any other node, minus the border warp)
-    # every cell belongs to that node's area, so its biome comes from the node's terrain.
+    # every cell belongs to that node's area, so its biome comes from the node's terrain. The
+    # warp moves a point by up to WARP on each axis, so by up to WARP * sqrt(2) in all.
     mapdef, cells = _map(path), _cells(path)
+    checked = 0
     for node in mapdef.nodes:
         others = min(
             math.hypot(node.x - o.x, node.y - o.y) for o in mapdef.nodes if o.id != node.id
         )
-        reach = others / 2 - WARP - STEP
-        assert reach > STEP  # the check below looks at some cells around every node
+        reach = others / 2 - WARP * math.sqrt(2) - STEP
         allowed = TERRAIN_BIOMES[node.terrain]
+        checked += reach > STEP  # a node closer to a neighbour has no such guaranteed area
         for gy, row in enumerate(cells):
             for gx, biome in enumerate(row):
                 x, y = _centre(gx, gy)
@@ -85,6 +87,8 @@ def test_node_area_has_the_node_terrain(path: Path) -> None:
         # The city itself always stands on land of its own terrain.
         own = cells[min(node.y // STEP, len(cells) - 1)][min(node.x // STEP, len(cells[0]) - 1)]
         assert own in TERRAIN_BIOMES[node.terrain]
+    if path.parent == MAPS:  # the pool maps are roomy: most nodes have such an area
+        assert checked * 2 > len(mapdef.nodes)
 
 
 def test_there_is_no_water_biome() -> None:

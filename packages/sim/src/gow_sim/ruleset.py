@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Final, cast
 
 from gow_sim.canonical import digest
-from gow_sim.maps import MAX_WIDTH, NodeKind, Terrain
+from gow_sim.maps import MAX_LEVEL, NodeKind, Terrain
 
 
 class RulesetError(ValueError):
@@ -123,7 +123,7 @@ class CityKindTable:
 
 @dataclass(frozen=True, slots=True)
 class LevelTable:
-    """One integer per upgraded road level ``2..MAX_WIDTH``: ``values[level - 2]`` (DEC-22)."""
+    """One integer per upgraded road level ``2..MAX_LEVEL``: ``values[level - 2]`` (DEC-22)."""
 
     values: tuple[int, ...]
 
@@ -135,7 +135,7 @@ class LevelTable:
 
 @dataclass(frozen=True, slots=True)
 class FullLevelTable:
-    """One integer per road level ``1..MAX_WIDTH``: ``values[level - 1]`` (DEC-28, item 7)."""
+    """One integer per road level ``1..MAX_LEVEL``: ``values[level - 1]`` (DEC-28, item 7)."""
 
     values: tuple[int, ...]
 
@@ -257,9 +257,9 @@ class SupplyRules:
     base_speed_pct: int
     """Packet speed on a level 1 road (DEC-22, item 4)."""
     fast_speed_pct: LevelTable
-    """Packet speed on an upgraded road by its level ``2..MAX_WIDTH`` (DEC-26, item 7)."""
+    """Packet speed on an upgraded road by its level ``2..MAX_LEVEL`` (DEC-26, item 7)."""
     amount_by_level: FullLevelTable
-    """Charges per road and dispatch period by the road level ``1..MAX_WIDTH`` (DEC-28, item 7)."""
+    """Charges per road and dispatch period by the road level ``1..MAX_LEVEL`` (DEC-28, item 7)."""
     front_markers: int
     """Front markers of a player (DEC-28, item 2)."""
 
@@ -267,7 +267,7 @@ class SupplyRules:
 @dataclass(frozen=True, slots=True)
 class RoadRules:
     """Unit speed on an upgraded road (DEC-28, item 7): ``speed_pct`` by the level
-    ``2..MAX_WIDTH`` multiplies the terrain speed; level 1 is 100."""
+    ``2..MAX_LEVEL`` multiplies the terrain speed; level 1 is 100."""
 
     speed_pct: LevelTable
 
@@ -472,8 +472,8 @@ def archive_ruleset(path: str | Path, archive_dir: str | Path) -> Path:
     return target
 
 
-_LEVEL_KEYS: Final = tuple(str(width) for width in range(2, MAX_WIDTH + 1))
-_ALL_LEVEL_KEYS: Final = tuple(str(width) for width in range(1, MAX_WIDTH + 1))
+_LEVEL_KEYS: Final = tuple(str(width) for width in range(2, MAX_LEVEL + 1))
+_ALL_LEVEL_KEYS: Final = tuple(str(width) for width in range(1, MAX_LEVEL + 1))
 
 
 def parse_ruleset(data: object) -> Ruleset:

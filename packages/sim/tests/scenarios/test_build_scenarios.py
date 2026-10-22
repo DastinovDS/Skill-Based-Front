@@ -1,8 +1,8 @@
 """Road upgrades (DEC-16, #203; DEC-22, #234; paid with CP, DEC-28, item 7) on the map ``fork``: a
-road grows level by level to max_width, both sides mirrored.
+road grows level by level to max_level, both sides mirrored.
 
 Map: see ``packages/sim/tests/test_capacity.py``; e1 joins the capital 0 and 2, level 1,
-max_width 3; its rot180 mirror is e7 (7 - 5). Rules: a level 150 ticks after its command, one
+max_level 3; its rot180 mirror is e7 (7 - 5). Rules: a level 150 ticks after its command, one
 command and one payment per level, ``orders.cost.build`` 50 (DEC-28, item 7), no charges; roads
 have no type (DEC-26, item 7); capacities do not change (DEC-22, item 1). Tick convention: step
 ``t`` runs with ``state.tick == t``; the systems run in the fixed order (AGENTS.md, section 4.2),
@@ -45,7 +45,7 @@ def _int(e: Event, key: str) -> int:
     return value
 
 
-def test_road_grows_by_the_ruleset_and_stops_at_max_width() -> None:
+def test_road_grows_by_the_ruleset_and_stops_at_max_level() -> None:
     state = initial_state(load_map(TESTS_DIR / "maps" / "fork.json"), RULES)
     for p in (0, 1):
         state.nodes[CAPITAL[p]].warehouse = 7
@@ -74,5 +74,5 @@ def test_road_grows_by_the_ruleset_and_stops_at_max_width() -> None:
     assert stopped == []
     assert state.players[0].cp == state.players[1].cp == 0  # no regen here: 2 x 50 paid
     assert state.nodes[CAPITAL[0]].warehouse == state.nodes[CAPITAL[1]].warehouse == 7
-    assert state.edges[EDGE[0]].width == 3  # nothing after max_width, up to tick 1000
+    assert state.edges[EDGE[0]].width == 3  # nothing after max_level, up to tick 1000
     assert node_capacities(state, RULES) == capacities  # roads do not change capacity

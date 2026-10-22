@@ -29,17 +29,19 @@ export function nodeMarkerPoint(
 }
 
 /**
- * The border point of every road, in thousandths from the end `a` (`border_permille`, DEC-21,
- * item 5; DEC-23). The map files do not carry it yet and the default is 500 (map-format.md), so
- * it is a constant here; it moves into the map file reading together with `border_permille`.
+ * The border point of road `id` in thousandths from its end `a`: `border_permille` of the map
+ * file (DEC-21, item 5; DEC-23, item 5). 500 (the middle) for a map without the field: the map of
+ * a replay frames file written before DEC-23 (replay-frames.md keeps the map as it was).
  */
-export const BORDER_PERMILLE = 500;
+export function borderPermille(map: MapFile, id: number): number {
+  return (map.edges[id] as Partial<MapFile['edges'][number]> | undefined)?.border_permille ?? 500;
+}
 
 /** The border point of a road: where its two halves meet. */
 export function borderPoint(map: MapFile, id: number): Point | undefined {
   const ends = edgeEnds(map, id);
   if (ends === undefined) return undefined;
-  return edgePoint(ends.a, ends.b, true, BORDER_PERMILLE);
+  return edgePoint(ends.a, ends.b, true, borderPermille(map, id));
 }
 
 /**

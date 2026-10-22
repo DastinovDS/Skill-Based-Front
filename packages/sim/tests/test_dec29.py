@@ -40,6 +40,7 @@ def _map(edges: list[tuple[int, int, int]] | None = None) -> MapDef:
     nodes: list[dict[str, Any]] = [
         {
             "id": i,
+            "name": f"n{i}",
             "x": 10 * i,
             "y": 10,
             "terrain": "forest",
@@ -55,7 +56,7 @@ def _map(edges: list[tuple[int, int, int]] | None = None) -> MapDef:
     ]
     pairs = edges or [(i, i + 1, 30) for i in range(N - 1)]
     edge_list = [
-        {"id": k, "a": a, "b": b, "base_width": 1, "max_width": 3, "travel_ticks": t}
+        {"id": k, "a": a, "b": b, "max_level": 3, "travel_ticks": t, "border_permille": 500}
         for k, (a, b, t) in enumerate(pairs)
     ]
     mirror_nodes = {str(i): N - 1 - i for i in range(N)}

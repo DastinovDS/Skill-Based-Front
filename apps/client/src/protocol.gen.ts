@@ -1023,6 +1023,10 @@ export interface MapNodeFile {
    * Equals the index in ``nodes``.
    */
   id: number;
+  /**
+   * Name of the node shown by the interface (DEC-23, item 4): not translated.
+   */
+  name: string;
   x: number;
   y: number;
   terrain: Terrain;
@@ -1045,14 +1049,15 @@ export interface MapEdgeFile {
   a: number;
   b: number;
   /**
-   * Road level at the start: always 1 (DEC-22).
+   * Highest road level, at most 3 (DEC-23, item 6); every road starts at level 1 (DEC-22).
    */
-  base_width: number;
-  /**
-   * Highest road level, at most 3 (DEC-22).
-   */
-  max_width: number;
+  max_level: number;
   travel_ticks: number;
+  /**
+   * Border point in thousandths from ``a`` (DEC-23, item 5): where the halves of the edge meet
+   * (vision DEC-21, territory on the map).
+   */
+  border_permille: number;
 }
 /**
  * Symmetry table: id (as a JSON string key) -> id of the mirrored node or edge.
@@ -1066,6 +1071,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 23;
+export const PROTOCOL_VERSION = 24;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

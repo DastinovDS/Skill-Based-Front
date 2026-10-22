@@ -32,7 +32,7 @@ projection (SIM-14). ``vision()`` is the last system of a tick and refreshes the
 from dataclasses import dataclass
 from typing import Final
 
-from gow_sim.maps import MapDef
+from gow_sim.maps import ROAD_START_LEVEL, MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import (
     PROGRESS_SCALE,
@@ -272,7 +272,7 @@ def known_roads(state: GameState, player: int, levels: Vision) -> tuple[int, ...
     """Road levels as ``player`` knows them (DEC-17; DEC-22, item 8).
 
     ``result[edge_id]``: exact for edges not in fog; for a fogged edge that of its last
-    sighting, else ``base_width`` of the map (level 1). Never above the true level.
+    sighting, else level 1, where every road starts (DEC-22). Never above the true level.
     """
     memory = state.vision_memory[player].widths
     roads: list[int] = []
@@ -280,7 +280,7 @@ def known_roads(state: GameState, player: int, levels: Vision) -> tuple[int, ...
         if level is not Detail.FOG:
             roads.append(state.edges[e].width)
         else:
-            roads.append(memory.get(e, state.map.edges[e].base_width))
+            roads.append(memory.get(e, ROAD_START_LEVEL))
     return tuple(roads)
 
 

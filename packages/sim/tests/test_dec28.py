@@ -379,6 +379,7 @@ def _ring(eb_ticks: int) -> GameState:
     nodes = [
         {
             "id": i,
+            "name": f"n{i}",
             "x": x,
             "y": y,
             "terrain": "plains",
@@ -395,7 +396,7 @@ def _ring(eb_ticks: int) -> GameState:
     ends = [(0, 1), (1, 3), (0, 2), (2, 3), (3, 4), (4, 5), (5, 6), (5, 7), (6, 8), (7, 8)]
     ticks = [30, 30, 30, eb_ticks, 30, 30, eb_ticks, 30, 30, 30]
     edges = [
-        {"id": i, "a": a, "b": b, "base_width": 1, "max_width": 3, "travel_ticks": ticks[i]}
+        {"id": i, "a": a, "b": b, "max_level": 3, "travel_ticks": ticks[i], "border_permille": 500}
         for i, (a, b) in enumerate(ends)
     ]
     mirror_nodes = {str(i): 8 - i for i in range(9)}
