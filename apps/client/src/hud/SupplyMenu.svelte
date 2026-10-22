@@ -41,7 +41,7 @@
         return {
           id: sector.choice,
           angle: sector.angle,
-          sign: '⇢',
+          icon: sector.icon,
           label: t('supplyMenu.transfer'),
           lines: note === null ? [] : [note],
           key: sector.key,
@@ -52,7 +52,7 @@
       return {
         id: sector.choice,
         angle: sector.angle,
-        sign: '⚑',
+        icon: sector.icon,
         label: tf(here ? 'supplyMenu.frontOff' : 'supplyMenu.front', { n: marker + 1 }),
         lines: taken ? [t('supplyMenu.taken')] : price,
         key: sector.key,

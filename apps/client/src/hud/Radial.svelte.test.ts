@@ -56,6 +56,28 @@ describe('Radial', () => {
     expect(sectors[1]?.getAttribute('aria-disabled')).toBe('true');
   });
 
+  it('draws the icon of a sector over its name, at the size of the ring, and none without one', () => {
+    const withIcons: RadialItem[] = [
+      { id: 'a', angle: angles[0] ?? 270, label: 'Alpha', icon: 'defense' },
+      { id: 'b', angle: angles[1] ?? 30, label: 'Beta' },
+    ];
+    // The big ring (the stance menu) draws 28 px, a narrow one 24 px: never under 20.
+    const big = render({ items: withIcons });
+    const bigIcons = big.target.querySelectorAll('.sector .glyph');
+    expect(bigIcons).toHaveLength(1);
+    expect(bigIcons[0]?.getAttribute('data-icon')).toBe('defense');
+    expect(bigIcons[0]?.querySelector('svg')?.getAttribute('width')).toBe('28');
+    void unmount(mounted as Record<string, unknown>);
+    mounted = undefined;
+    document.body.innerHTML = '';
+    const small = render({ items: withIcons, ring: { inner: 26, outer: 96 } });
+    expect(small.target.querySelector('.sector .glyph svg')?.getAttribute('width')).toBe('24');
+    // The icon is decorative: the name of the sector is its text.
+    expect(small.target.querySelector('.sector .glyph svg')?.getAttribute('aria-hidden')).toBe(
+      'true',
+    );
+  });
+
   it('lights the sector under the pointer by angle, and not a disabled one', () => {
     const { calls } = render();
     // Straight up from the middle (400, 300): the first sector.

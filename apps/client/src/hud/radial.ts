@@ -4,6 +4,7 @@
  * functions, no DOM.
  */
 import type { RulesetPublic, Stance } from '../protocol.gen.ts';
+import type { MenuIconName } from './icons.ts';
 
 export const RADIAL = {
   /** Outer and inner radius of the ring, and the dead zone of "cancel" (CSS px). */
@@ -35,8 +36,11 @@ export interface RadialItem {
   readonly angle: number;
   /** Its name; the current choice is marked with a tick by the caller (`current`). */
   readonly label: string;
-  /** A big glyph over the name: the shape tells the choice as well as the colour. */
-  readonly sign?: string;
+  /**
+   * The icon over the name (set I1 "line", `icons.ts`): the shape tells the choice as well as the
+   * colour. Every sector of a menu has one, but the list of the groups of a city.
+   */
+  readonly icon?: MenuIconName;
   /** Small lines under the name (a price, a number from the ruleset). */
   readonly lines?: readonly string[];
   /** The key that does the same (not translated); drawn as a key cap. */
@@ -71,10 +75,11 @@ export const SECTORS: readonly {
   readonly stance: Stance;
   readonly angle: number;
   readonly key: string;
+  readonly icon: MenuIconName;
 }[] = [
-  { stance: 'economy', angle: 150, key: '1' },
-  { stance: 'balance', angle: 270, key: '2' },
-  { stance: 'war', angle: 30, key: '3' },
+  { stance: 'economy', angle: 150, key: '1', icon: 'stanceEconomy' },
+  { stance: 'balance', angle: 270, key: '2', icon: 'stanceBalance' },
+  { stance: 'war', angle: 30, key: '3', icon: 'stanceWar' },
 ];
 
 /**
@@ -175,10 +180,11 @@ export const SUPPLY_SECTORS: readonly {
   readonly choice: SupplyChoice;
   readonly angle: number;
   readonly key: string;
+  readonly icon: MenuIconName;
 }[] = [
-  { choice: 'front0', angle: 270, key: '1' },
-  { choice: 'front1', angle: 0, key: '2' },
-  { choice: 'transfer', angle: 180, key: '3' },
+  { choice: 'front0', angle: 270, key: '1', icon: 'front1' },
+  { choice: 'front1', angle: 0, key: '2', icon: 'front2' },
+  { choice: 'transfer', angle: 180, key: '3', icon: 'transfer' },
 ];
 
 /** The ring of the supply menu: small, a narrow band like the city menu's (not the big ring). */

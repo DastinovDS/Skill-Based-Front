@@ -4,6 +4,10 @@
  * `Icon.svelte` draws them with `currentColor`. The licence notices are in
  * `apps/client/THIRD_PARTY_NOTICES.md` and on the legal page. An icon without an entry there is a
  * review error.
+ *
+ * `MENU_ICONS` below are not Lucide: the 13 icons of the radial menus (set I1 "line", #350,
+ * ui-style 28) are drawn for this project in the same language (24x24 grid, 2 px stroke, round
+ * ends), so they need no licence notice.
  */
 
 /** One drawn element of an icon (24x24 grid, 2 px stroke). */
@@ -17,6 +21,14 @@ export type IconShape =
       readonly width: number;
       readonly height: number;
       readonly rx: number;
+    }
+  | {
+      /** A short label drawn as text (a digit in a flag): filled, not stroked, centred on `x`, `y`. */
+      readonly tag: 'text';
+      readonly x: number;
+      readonly y: number;
+      readonly size: number;
+      readonly content: string;
     };
 
 const path = (d: string): IconShape => ({ tag: 'path', d });
@@ -29,6 +41,21 @@ const rect = (x: number, y: number, width: number, height: number, rx: number): 
   height,
   rx,
 });
+
+const text = (x: number, y: number, size: number, content: string): IconShape => ({
+  tag: 'text',
+  x,
+  y,
+  size,
+  content,
+});
+
+/** The flag of a front marker (DEC-28): a staff and a pennant, a digit in the pennant. */
+const flag = (n: string): readonly IconShape[] => [
+  path('M6 21V4'),
+  path('M6 5h12l-3.2 4.2L18 13.4H6'),
+  text(11.4, 9.3, 6.6, n),
+];
 
 export const ICONS = {
   menu: [path('M4 12h16'), path('M4 18h16'), path('M4 6h16')],
@@ -117,3 +144,53 @@ export const ICONS = {
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type IconName = keyof typeof ICONS;
+
+/**
+ * The icons of the radial menus (set I1 "line", mockup `docs/design/mockups/objects-style.html`,
+ * block 4): the city (recruit, barracks, warehouse), the group (split, Defense, cancel, merge), the
+ * stance (economy, balance, war) and the supply (transfer, markers 1 and 2). Own drawings.
+ */
+export const MENU_ICONS = {
+  recruit: [rect(7, 6, 10, 15, 2), path('M10 3h4v3h-4z'), path('M12 11v6'), path('M9 14h6')],
+  barracks: [path('M3.5 11 12 4l8.5 7'), path('M5.5 9.5V20h13V9.5'), path('M10 20v-5.5h4V20')],
+  warehouse: [rect(8.5, 3.5, 7, 7, 0), rect(3.5, 13.5, 7, 7, 0), rect(13.5, 13.5, 7, 7, 0)],
+  split: [
+    path('M12 21v-8'),
+    path('M12 13 6 6'),
+    path('M12 13l6-7'),
+    path('M6 10V6h4'),
+    path('M14 6h4v4'),
+  ],
+  defense: [path('M12 3 5 6v6c0 4.3 3 7.4 7 9 4-1.6 7-4.7 7-9V6z')],
+  cancel: [circle(12, 12, 9), path('M8.5 8.5l7 7'), path('M15.5 8.5l-7 7')],
+  merge: [path('M6 4l6 7 6-7'), path('M12 11v9'), path('M8.5 17 12 20.5 15.5 17')],
+  stanceEconomy: [rect(4, 15, 16, 5, 1.5), rect(6, 9.5, 12, 4.5, 1.5), rect(8, 4.5, 8, 4, 1.5)],
+  stanceBalance: [
+    path('M12 4v16'),
+    path('M5 8h14'),
+    path('M8 20h8'),
+    path('M5 8 2.5 14h5z'),
+    path('M19 8l-2.5 6h5z'),
+  ],
+  stanceWar: [
+    circle(12, 12, 6.5),
+    path('M12 2.5v5'),
+    path('M12 16.5v5'),
+    path('M2.5 12h5'),
+    path('M16.5 12h5'),
+    circle(12, 12, 1.2),
+  ],
+  transfer: [rect(3, 8.5, 7, 7, 0), path('M12.5 12H21'), path('M17.5 8l4 4-4 4')],
+  front1: flag('1'),
+  front2: flag('2'),
+} as const satisfies Record<string, readonly IconShape[]>;
+
+export type MenuIconName = keyof typeof MENU_ICONS;
+
+/** Every icon `Icon.svelte` can draw. */
+export type AnyIconName = IconName | MenuIconName;
+
+/** The shapes of an icon by name. */
+export function shapesOf(name: AnyIconName): readonly IconShape[] {
+  return name in MENU_ICONS ? MENU_ICONS[name as MenuIconName] : ICONS[name as IconName];
+}

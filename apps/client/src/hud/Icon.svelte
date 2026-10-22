@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { ICONS, type IconName } from './icons.ts';
+  import { shapesOf, type AnyIconName } from './icons.ts';
 
   interface Props {
-    name: IconName;
+    name: AnyIconName;
     /** Side in px; the stroke scales with it. */
     size?: number;
   }
@@ -24,11 +24,23 @@
   aria-hidden="true"
   focusable="false"
 >
-  {#each ICONS[name] as shape, index (index)}
+  {#each shapesOf(name) as shape, index (index)}
     {#if shape.tag === 'path'}
       <path d={shape.d} />
     {:else if shape.tag === 'circle'}
       <circle cx={shape.cx} cy={shape.cy} r={shape.r} />
+    {:else if shape.tag === 'text'}
+      <!-- A digit in a flag: filled, drawn with the font of the page. -->
+      <text
+        x={shape.x}
+        y={shape.y}
+        font-size={shape.size}
+        font-weight="800"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="currentColor"
+        stroke="none">{shape.content}</text
+      >
     {:else}
       <rect x={shape.x} y={shape.y} width={shape.width} height={shape.height} rx={shape.rx} />
     {/if}

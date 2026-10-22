@@ -24,6 +24,7 @@
       return {
         id: sector.stance,
         angle: sector.angle,
+        icon: sector.icon,
         label: t(`stance.${sector.stance}`),
         lines:
           rate === undefined

@@ -19,7 +19,11 @@
   // Dev screen: a bundled map with the camera and a scene (a protocol fixture frozen at its tick,
   // or a live match against the dev server). The lobby replaces it.
   // `?scene=<id>` opens a scene right away (the Playwright reference screenshots use it).
-  const requested = new URLSearchParams(window.location.search).get('scene');
+  const params = new URLSearchParams(window.location.search);
+  const requested = params.get('scene');
+  // `?menus` lets a fixture scene open the menus of the map (orders go nowhere): the screenshots
+  // of the radial menus (`mise run shots`) use it. Without it a fixture only selects.
+  const menusOn = params.has('menus');
   const fixtureScene = (id: string | null) => FIXTURE_SCENES.find((scene) => scene.id === id);
   let rendererFailed = $state(false);
   let sceneId = $state(
@@ -98,9 +102,12 @@
     new OrderController({
       hud,
       map,
-      rules: DEV_RULES,
+      // With `?menus` the city development is on too: the city menu shows all three sectors.
+      rules: menusOn
+        ? { ...DEV_RULES, city_upgrades: { ...DEV_RULES.city_upgrades, enabled: true } }
+        : DEV_RULES,
       book: match?.session.orders ?? new OrderBook(),
-      send: match === null ? null : (cmd) => match.session.send(cmd),
+      send: match === null ? (menusOn ? () => 0 : null) : (cmd) => match.session.send(cmd),
       alerts: hud.alerts,
       focusNode: (node) => canvas?.focusNode(node),
       queryReach: (group) => match?.session.queryReach(group),

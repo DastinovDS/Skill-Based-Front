@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { reducedMotion } from '../render/motion.ts';
+  import Icon from './Icon.svelte';
   import { pointerAt } from './pointer.ts';
   import {
     BIG_RING,
@@ -158,10 +159,13 @@
     else if (found.disabled !== true) onchoose(found.id);
   }
 
-  /** Lines of a sector: the glyph, the name, the small lines, the key; centred on the label point. */
+  /** Side of the icon of a sector, px: 24 in the small rings, 28 in the big one (never under 20). */
+  const iconSize = $derived(small ? 24 : 28);
+
+  /** Lines of a sector: the icon, the name, the small lines, the key; centred on the label point. */
   function rows(item: RadialItem): { kind: string; text: string; dy: number }[] {
     const list: { kind: string; text: string; h: number }[] = [];
-    if (item.sign !== undefined) list.push({ kind: 'sign', text: item.sign, h: small ? 22 : 26 });
+    if (item.icon !== undefined) list.push({ kind: 'icon', text: item.icon, h: iconSize + 2 });
     if (item.compact !== true) {
       list.push({
         kind: 'name',
@@ -233,7 +237,16 @@
       >
         <path d={sectorPath(item.angle, half, ring)} />
         {#each rows(item) as row, i (i)}
-          {#if row.kind === 'key'}
+          {#if row.kind === 'icon' && item.icon !== undefined}
+            <!-- The icon is centred on the row (dy is the baseline of a text row: 5 below its middle). -->
+            <g
+              class="glyph"
+              data-icon={item.icon}
+              transform="translate({spot.x - iconSize / 2} {spot.y + row.dy - 5 - iconSize / 2})"
+            >
+              <Icon name={item.icon} size={iconSize} />
+            </g>
+          {:else if row.kind === 'key'}
             <rect
               x={spot.x - 10}
               y={spot.y + row.dy - 13}
@@ -368,7 +381,7 @@
     stroke-dasharray: 5 4;
   }
 
-  .sector.disabled .sign {
+  .sector.disabled .glyph {
     opacity: 0.6;
   }
 
@@ -378,10 +391,9 @@
     stroke-width: 1.5;
   }
 
-  .sign {
-    fill: var(--paper);
-    font-size: 20px;
-    font-weight: 700;
+  /* The icon draws with `currentColor`: the paper colour of the names, light on dark and on the lit sector. */
+  .glyph {
+    color: var(--paper);
   }
 
   .name {
