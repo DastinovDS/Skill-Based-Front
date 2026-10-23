@@ -159,7 +159,7 @@ deploy/                            — Dockerfile-ы, Caddyfile, скрипты 
 | `deploy/check-caddy.sh` | заголовки безопасности (CSP равна `apps/client/csp.ts`), кэш, сжатие, маршруты работающего стека; `BASE_URL=https://...` для TLS (входит в `smoke`) | годится и для прода (`BASE_URL`), на машинах без mise |
 | `deploy/check-ws-reload.sh` | WebSocket матча через Caddy переживает `caddy reload` (входит в `smoke`) | перезагружает Caddy через `docker compose exec` в проекте из окружения |
 | `deploy/alert-forward.sh` | пересылка алертов сервера (`match_crashed`, `tick_lag`) из лога контейнера в вебхук `ALERT_WEBHOOK_URL`; метрики: `GET /internal/metrics` внутри контейнера (`docs/ops/deploy.md`, «Наблюдаемость») | демон на сервере |
-| `docker compose exec app gow-admin show\|rename\|block\|unblock <игрок> [ник]` (локально без стека: `uv run gow-admin ...`) | админ-скрипт: показать, переименовать, заблокировать или разблокировать игрока по id или нику (`docs/ops/deploy.md`, раздел 8) | работает в контейнере прода; своя база и свой набор аргументов |
+| `docker compose exec app gow-admin show\|rename\|block\|unblock\|reset-password <игрок> [ник]` (локально без стека: `uv run gow-admin ...`) | админ-скрипт: показать, переименовать, заблокировать или разблокировать игрока по id или нику, сбросить пароль (ввод на терминале, #374) (`docs/ops/deploy.md`, раздел 8) | работает в контейнере прода; своя база и свой набор аргументов |
 | `docker compose up --build -d` | прод-стек как есть, на 80/443 | для владельца это `stack`, для агентов `stack:agent`: голая команда попадает в проект владельца |
 
 ---

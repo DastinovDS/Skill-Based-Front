@@ -20,11 +20,13 @@
 | Данные | Где | Срок |
 |---|---|---|
 | ник, `created_at`, SHA-256 токена (`players`, `identity.py`) | БД `/data/gow.db` | до удаления по запросу |
+| хэш пароля, если игрок его задал: `scrypt$n$r$p$соль$хэш` (`players.password_hash`, `passwords.py`, #374); сам пароль не хранится, не пишется в журнал и не возвращается в ошибках 422; восстановления пароля нет | БД | до удаления по запросу или сброса (`gow-admin reset-password`) |
 | токен и ник | `localStorage["sbf.guest"]` в браузере (`guestStore.ts`) | пока игрок не очистит |
 | язык интерфейса | `localStorage["sbf.locale"]` (`locale.ts`) | то же |
 | рейтинг, матчи, стороны (`ratings`, `matches`, `match_players`) | БД | до удаления по запросу |
 | реплеи (`*.jsonl.gz`, `*.frames.json.gz`) | `/data/replays`, ника не содержат | бессрочно |
 | IP при создании гостя | память процесса, `SlidingWindowLimiter` (окно `GOW_GUEST_RATE_WINDOW_S`, 1 ч) | до окна или перезапуска |
+| IP и `nick_key` попыток входа по паролю (`abuse.Limits.login_ip`, `login_nick`) | память процесса (окна `GOW_LOGIN_IP_RATE_WINDOW_S`, `GOW_LOGIN_NICK_RATE_WINDOW_S`, 10 мин) | до окна или перезапуска |
 | журнал сервера (`app.py`, `logs.py`) | stderr контейнера: метод, путь без query, статус, время, request id; без IP и токенов | ротация |
 | журнал Caddy | access log не настроен (`deploy/Caddyfile` без `log`); служебный журнал может содержать IP в ошибках | ротация |
 
@@ -33,20 +35,22 @@ Cookie, аналитики, сторонних сервисов и сбора о
 ## Удаление гостя по запросу
 
 Физически удалять строку `players` нельзя (внешний ключ из `match_players`, а `player_id` не может быть NULL),
-поэтому гостя обезличивают: меняют ник и хэш токена, удаляют рейтинг. Матчи остаются без связи с человеком.
+поэтому гостя обезличивают: меняют ник и хэш токена, удаляют хэш пароля и рейтинг. Матчи остаются без связи с человеком.
 Перед правкой сделайте бэкап: `deploy/backup.sh before-delete`.
 
 ```bash
 docker compose exec app python - <<'PY'
 import os, sqlite3, sys
+from gow_server.nicks import skeleton
 nick = "<NICK>"  # ник из запроса
 db = sqlite3.connect("/data/gow.db")
-row = db.execute("SELECT id FROM players WHERE nick_key = ?", (nick.casefold(),)).fetchone()
+row = db.execute("SELECT id FROM players WHERE nick_key = ?", (skeleton(nick),)).fetchone()
 if row is None:
     sys.exit("no such nick")
 with db:
     db.execute(
-        "UPDATE players SET nick = ?, nick_key = ?, token_hash = ? WHERE id = ?",
+        "UPDATE players SET nick = ?, nick_key = ?, token_hash = ?, password_hash = NULL"
+        " WHERE id = ?",
         (f"deleted-{row[0]}", f"deleted-{row[0]}", os.urandom(32), row[0]),
     )
     db.execute("DELETE FROM ratings WHERE player_id = ?", (row[0],))
@@ -54,7 +58,7 @@ print("anonymized player", row[0])
 PY
 ```
 
-Подтверждение владения ником (у гостя нет e-mail): по согласованию, например матч в оговорённое время.
+Подтверждение владения ником (у аккаунта нет e-mail): по согласованию, например матч в оговорённое время.
 
 ## MANUAL: что остаётся человеку
 
