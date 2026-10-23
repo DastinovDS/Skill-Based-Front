@@ -211,8 +211,8 @@ describe('the radial menus of a city and of a group', () => {
     expect(open(off, { hasBarracks: false, warehouseLevel: 0 })).toEqual(['Recruit']);
   });
 
-  it('the group menu dims merge for a lone group and speaks Russian too', () => {
-    setLocale('ru');
+  it('the group menu dims merge for a lone group', () => {
+    setLocale('en');
     const { target, orders, hud } = render();
     orders.click({ kind: 'group', id: group.id }, false);
     orders.click({ kind: 'group', id: group.id }, false); // the second click opens the menu
@@ -223,7 +223,7 @@ describe('the radial menus of a city and of a group', () => {
     expect(icons(target)).toHaveLength(4);
     expect(icons(target).map((i) => i.name)).toEqual(['split', 'defense', 'cancel', 'merge']);
     expect(icons(target).every((i) => i.size >= 20)).toBe(true);
-    const merge = items.find((i) => i.textContent.includes('Слить'));
+    const merge = items.find((i) => i.textContent.includes('Merge'));
     expect(merge?.getAttribute('aria-disabled')).toBe('true');
     expect(hud.current?.group?.id).toBe(group.id);
   });

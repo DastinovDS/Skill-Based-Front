@@ -50,7 +50,7 @@ describe('RoadBanner: the road mode on U says it is on and how to leave (#315)',
     return { target, orders };
   }
 
-  it('is absent out of the mode and shows the keys to leave in it, in both languages', () => {
+  it('is absent out of the mode and shows the keys to leave in it', () => {
     setLocale('en');
     const { target, orders } = render(true);
     expect(target.textContent).toBe('');
@@ -59,9 +59,6 @@ describe('RoadBanner: the road mode on U says it is on and how to leave (#315)',
     expect(target.textContent.replace(/\s+/g, ' ').trim()).toBe(
       'Road upgrade mode [U] Click a lit road to upgrade it for CP. U or Esc: leave',
     );
-    setLocale('ru');
-    flushSync();
-    expect(target.textContent).toContain('Режим улучшения дорог [U]');
     orders.key({ type: 'keydown', code: 'Escape', shiftKey: false });
     flushSync();
     expect(target.textContent).toBe('');

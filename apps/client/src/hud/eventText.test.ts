@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { getLocale, setLocale } from '../i18n/index.ts';
+import { getLocale, LOCALES, setLocale } from '../i18n/index.ts';
 import { eventText, HIDDEN_EVENT_KINDS, isLogged, LOGGED_EVENT_KINDS } from './eventText.ts';
 import type { HudEvent } from './hudData.ts';
 import { toastOf } from './toasts.ts';
@@ -35,9 +35,9 @@ describe('eventText', () => {
   });
 
   it('uses the road text for a fight on an edge', () => {
-    setLocale('ru');
+    setLocale('en');
     const fight = { node: null, edge: 5, losses_0: 0, losses_1: 0 };
-    expect(eventText(event('fight_ended', fight), 0)).toContain('дороге 5');
+    expect(eventText(event('fight_ended', fight), 0)).toContain('on road 5');
   });
 
   it('does not show an unknown kind (never a raw kind name)', () => {
@@ -75,8 +75,6 @@ describe('eventText', () => {
     expect(eventText(event('packet_lost', { edge: 1, charges: 5 }), 0)).toBe(
       'Charges lost on road 1: 5',
     );
-    setLocale('ru');
-    expect(eventText(event('attrition', { node: 4, player: 0 }), 0)).toContain('Перегрузка');
   });
 });
 
@@ -114,8 +112,8 @@ describe('event kinds of the server', () => {
     }
   });
 
-  it('each shown kind has a line in ru and en, and never a raw kind name', () => {
-    for (const locale of ['ru', 'en'] as const) {
+  it('each shown kind has a line in every language, and never a raw kind name', () => {
+    for (const locale of LOCALES) {
       setLocale(locale);
       for (const kind of LOGGED_EVENT_KINDS) {
         // Enough fields for every text; the values do not matter, the line must exist.

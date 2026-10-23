@@ -90,13 +90,4 @@ describe('the list of the groups standing in a city', () => {
     expect(hud.selection).toEqual({ kind: 'group', id: second.id });
     expect(target.querySelector('[role="menu"]')).toBeNull();
   });
-
-  it('speaks Russian too', () => {
-    setLocale('ru');
-    const { target, orders } = render();
-    orders.click({ kind: 'stack', node: home, ids: [first.id, second.id] }, false);
-    flushSync();
-    expect(target.textContent).toContain('Юниты 2');
-    expect(target.textContent).toContain('заряжено 1');
-  });
 });

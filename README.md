@@ -101,9 +101,12 @@ The client dev screen shows a map from the bundle (`maps/*.json`, before MAP-04 
 the wheel zooms at the cursor. The FPS counter in the panel updates twice a second.
 
 Interface language: English (`en`); the i18n mechanism stays, so more languages can be added later: a new locale is a new
-dictionary with the same set of keys. UI strings live in the dictionaries in `apps/client/src/i18n/` (`en.ts`): a missing
-or extra key in a dictionary is a type error, and `mise run check:i18n` checks that the markup has no
-strings outside the dictionaries and that the key sets of all dictionaries match (part of `mise run test:client`).
+dictionary with the same set of keys, an entry in `LOCALES` (`apps/client/src/i18n/locale.ts`) and `DICTIONARIES`, and a
+legal content file. Any browser language and any saved `sbf.locale` value that is not supported (for example the former
+`ru`) give English; the language selector is shown only while there is more than one locale. UI strings live in the
+dictionaries in `apps/client/src/i18n/` (`en.ts` is the reference set of keys): a missing or extra key in a dictionary is a
+type error, and `mise run check:i18n` checks that the markup has no strings outside the dictionaries and that the key sets
+of all dictionaries match (part of `mise run test:client`).
 
 ## CI
 

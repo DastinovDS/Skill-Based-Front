@@ -157,13 +157,4 @@ describe('the «Supply» mode UI (DEC-28)', () => {
     flushSync();
     expect(sent).toEqual([{ type: 'set_front', marker: 0, node: city }]);
   });
-
-  it('speaks Russian too', () => {
-    setLocale('ru');
-    const { target, orders } = render();
-    orders.toggleSupplyMode();
-    flushSync();
-    expect(target.textContent).toContain('Минимум тыла');
-    expect(target.textContent).toContain('маркер фронта');
-  });
 });

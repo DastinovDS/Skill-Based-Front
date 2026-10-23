@@ -16,9 +16,7 @@ test('a match against a bot starts and ends with a forfeit', async ({ browser, b
   await player.close();
 });
 
-test('the production build renders, the language switches, the legal pages open', async ({
-  page,
-}) => {
+test('the production build renders, the legal pages open', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
 
@@ -26,11 +24,8 @@ test('the production build renders, the language switches, the legal pages open'
   await page.goto('/');
   await expect(page.getByLabel('Your nick')).toBeVisible();
 
-  await page.getByLabel('Language').selectOption('ru');
-  await expect(page.getByText('Выбери ник и играй прямо в браузере.')).toBeVisible();
-  await page.reload();
-  await expect(page.getByText('Выбери ник и играй прямо в браузере.')).toBeVisible();
-  await page.getByLabel('Язык').selectOption('en');
+  // The game ships English only: no language selector.
+  await expect(page.getByLabel('Language')).toHaveCount(0);
 
   // The footer links open a new tab, so that following one never ends a running match.
   const [legal] = await Promise.all([
@@ -46,4 +41,22 @@ test('the production build renders, the language switches, the legal pages open'
   await expect(legal.getByLabel('Your nick')).toBeVisible();
 
   expect(errors).toEqual([]);
+});
+
+test.describe('a Russian browser with a saved Russian choice', () => {
+  test.use({ locale: 'ru-RU' });
+
+  test('still gets the English interface and no language selector', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    // A choice saved while the game still had a Russian interface.
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sbf.locale', 'ru');
+    });
+    await page.goto('/');
+    await expect(page.getByLabel('Your nick')).toBeVisible();
+    await expect(page.getByLabel('Language')).toHaveCount(0);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    expect(errors).toEqual([]);
+  });
 });

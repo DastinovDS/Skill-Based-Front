@@ -106,8 +106,8 @@ describe('RadialMenu', () => {
     expect(target.querySelector('[role="menu"]')).toBeNull();
   });
 
-  it('follows the pointer to a sector in a held menu, and speaks Russian too', () => {
-    setLocale('ru');
+  it('follows the pointer to a sector in a held menu', () => {
+    setLocale('en');
     const { target, orders } = render();
     window.dispatchEvent(new PointerEvent('pointermove', { clientX: 500, clientY: 400 }));
     orders.openRadial(false);
@@ -116,7 +116,7 @@ describe('RadialMenu', () => {
     window.dispatchEvent(new PointerEvent('pointermove', { clientX: 500, clientY: 320 }));
     flushSync();
     expect(orders.radial.current.hover).toBe('balance');
-    expect(target.querySelector('.sector.hover')?.textContent).toContain('Баланс');
-    expect(target.textContent).toContain('CP в минуту');
+    expect(target.querySelector('.sector.hover')?.textContent).toContain('Balance');
+    expect(target.textContent).toContain('CP per minute');
   });
 });

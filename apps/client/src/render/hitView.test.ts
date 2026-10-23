@@ -176,9 +176,6 @@ describe('HitView', () => {
     const later = fightAt({ mute: [0, 1], start_tick: 100, next_round_tick: 190 });
     run(152, [later], [round(150, [0, 0])]);
     expect(visible(Text)).toEqual([]);
-    setLocale('ru');
-    run(152, [quiet], [round(150, [0, 0])]);
-    expect(visible(Text).map((t) => t.text)).toEqual(['молчит']);
     view.destroy();
   });
 

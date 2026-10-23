@@ -2,13 +2,12 @@ import { en } from './en.ts';
 import type { Locale } from './locale.ts';
 import { localeState } from './localeState.svelte.ts';
 import type { MessageKey, Messages } from './messages.ts';
-import { ru } from './ru.ts';
 
 export type { Locale } from './locale.ts';
-export { isLocale, LOCALES } from './locale.ts';
+export { hasLocaleChoice, isLocale, LOCALES } from './locale.ts';
 export type { MessageKey } from './messages.ts';
 
-export const DICTIONARIES: Readonly<Record<Locale, Messages>> = { ru, en };
+export const DICTIONARIES: Readonly<Record<Locale, Messages>> = { en };
 
 /** The UI string for `key` in `locale`. An unknown key is a type error, not a runtime fallback. */
 export function translate(locale: Locale, key: MessageKey): string {

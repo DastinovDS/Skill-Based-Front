@@ -389,12 +389,9 @@ describe('FightView', () => {
     // The enemy's bonus shot counts as well: the caption does not tell whose it is, or where from.
     view.update(frame(at([0, 1])), [], ROUND, false);
     expect(texts()).toContain('bonus attack');
-    setLocale('ru');
-    view.update(frame(at([1, 0])), [], ROUND, false);
-    expect(texts()).toContain('бонусная атака');
     // A round without shots has no caption even if the stock is there.
     view.update(frame(at([0, 0], [0, 0])), [], ROUND, false);
-    expect(texts()).not.toContain('бонусная атака');
+    expect(texts()).not.toContain('bonus attack');
     view.destroy();
   });
 
@@ -618,9 +615,6 @@ describe('FightView', () => {
     expect(texts()).toContain('Held');
     view.update(frame(snapshot([], 160)), [ended(160, null, false)], ROUND, false);
     expect(texts()).toContain('Both retreated');
-    setLocale('ru');
-    view.update(frame(snapshot([], 160)), [ended(160, null, false)], ROUND, false);
-    expect(texts()).toContain('Оба отошли');
     // The losses of the whole fight sit in the halves of the plate: own left, enemy right.
     expect(texts()).toContain('−1');
     expect(texts()).toContain('−2');
