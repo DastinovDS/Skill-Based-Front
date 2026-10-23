@@ -1,24 +1,24 @@
 ---
-name: Решение по правилам (decision)
-about: Правило не описано или неоднозначно (AGENTS.md §0.3). Решение записывается в mechanics.md со статусом [принято].
+name: Rules decision
+about: A rule is not described or is ambiguous (AGENTS.md §0.3). The decision is recorded in mechanics.md with the status [accepted] ([принято] in the not yet translated mechanics.md).
 title: "[DEC-??] "
 labels: ["type:decision", "area:design"]
 ---
 
-**Приоритет:** P? · **Размер:** XS (≤ 2 часа)
-**Блокирует:** <!-- ID (#номер) задач, которые ждут решения; в их коде оставлен # TODO(#<номер этого issue>) -->
+**Priority:** P? · **Size:** XS (≤ 2 hours)
+**Blocks:** <!-- IDs (#number) of tasks waiting for the decision; their code has # TODO(#<number of this issue>) left in it -->
 
-### Контекст
-<!-- Какое правило не описано или неоднозначно, в каком разделе mechanics.md, где это всплыло. -->
+### Context
+<!-- Which rule is not described or is ambiguous, in which section of mechanics.md, where it came up. -->
 
-### Решение по умолчанию
-<!-- Конкретное предложение с числами и флагом в рулсете, чтобы работу можно было продолжить. -->
+### Default decision
+<!-- A concrete proposal with numbers and a ruleset flag, so that work can continue. -->
 
-### Альтернативы
+### Alternatives
 - 
 
-### Критерии приёмки
-- [ ] Решение записано в `docs/design/mechanics.md` со статусом [принято] и отражено в `rulesets/*.toml`.
+### Acceptance criteria
+- [ ] The decision is recorded in `docs/design/mechanics.md` with the status [accepted] ([принято] until mechanics.md is translated) and reflected in `rulesets/*.toml`.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md` → "Definition of Done".

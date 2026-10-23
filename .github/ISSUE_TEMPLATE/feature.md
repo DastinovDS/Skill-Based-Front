@@ -1,25 +1,25 @@
 ---
-name: Задача (feature)
-about: Новая функциональность или работа по плану MVP. Одно issue — один PR.
+name: Feature
+about: New functionality or work from the MVP plan. One issue, one PR.
 title: "[ID] "
 labels: ["type:feature"]
 ---
 
-**Веха:** M? · **Приоритет:** P? · **Размер:** XS / S / M / L · **Трек:** any
-**Зависит от:** <!-- ID (#номер) или «—» -->
+**Milestone:** M? · **Priority:** P? · **Size:** XS / S / M / L · **Track:** any
+**Depends on:** <!-- ID (#number) or "none" -->
 
-### Контекст
-<!-- Зачем это нужно. Ссылка на раздел docs/design/mechanics.md, если задача касается правил игры. -->
+### Context
+<!-- Why this is needed. A link to a section of docs/design/mechanics.md if the task touches the game rules. -->
 
-### Задачи
+### Tasks
 - [ ] 
 
-### Критерии приёмки
-<!-- Проверяемые условия. Ожидаемые значения в тестах берутся из mechanics.md и таблиц DEC, а не из вывода кода. -->
+### Acceptance criteria
+<!-- Verifiable conditions. Expected values in tests come from mechanics.md and the DEC tables, not from the output of the code. -->
 - [ ] 
 
-### Вне рамок
-<!-- Что сознательно не делаем в этом issue. -->
+### Out of scope
+<!-- What we deliberately do not do in this issue. -->
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md` → "Definition of Done".

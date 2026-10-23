@@ -1,26 +1,26 @@
 Closes #
 
-<!-- Ветка: feature/<номер>-<slug> (исправления: fix/<номер>-<slug>) от develop.
-     Коммиты: <type>(<scope>): <сообщение> (#<номер>). Подробнее: AGENTS.md, раздел 11. -->
+<!-- Branch: feature/<number>-<slug> (fixes: fix/<number>-<slug>) from develop.
+     Commits: <type>(<scope>): <message> (#<number>). Details: AGENTS.md, section 11. -->
 
-### Что сделано
+### What was done
 - 
 
-### Критерии приёмки
-<!-- Скопируй критерии из issue и отметь. Невыполненный критерий — без галочки и с причиной. -->
+### Acceptance criteria
+<!-- Copy the criteria from the issue and tick them. An unmet criterion: no tick, with a reason. -->
 - [ ] 
 
-### Отклонения, вопросы, новые зависимости
-<!-- Отклонения от issue; вопросы, заведённые как issues (# TODO(#N) в коде);
-     обоснование каждой новой зависимости Python или npm. Если нет — «нет». -->
+### Deviations, questions, new dependencies
+<!-- Deviations from the issue; questions filed as issues (# TODO(#N) in the code);
+     the justification of every new Python or npm dependency. If none: "none". -->
 
 ### Definition of Done
-- [ ] Все критерии приёмки issue выполнены и отмечены в PR.
-- [ ] CI зелёный: ruff, pyright strict, lint-imports, pytest, lint и check клиента, Vitest, дрейф протокола.
-- [ ] Новые правила покрыты тестами с ожидаемыми значениями из mechanics.md.
-- [ ] При изменении правил или протокола повышены версии и перегенерированы артефакты (раздел 10).
-- [ ] mechanics.md, AGENTS.md или README обновлены, если изменилось поведение или команды.
-- [ ] В коде нет `TODO` без номера issue.
+- [ ] All acceptance criteria of the issue are met and ticked in the PR.
+- [ ] CI is green: ruff, pyright strict, lint-imports, pytest, lint and check of the client, Vitest, protocol drift.
+- [ ] New rules are covered by tests with expected values from mechanics.md.
+- [ ] When rules or the protocol change, versions are raised and artifacts are regenerated (section 10).
+- [ ] mechanics.md, AGENTS.md or the README are updated if behavior or commands changed.
+- [ ] There is no `TODO` without an issue number in the code.
 
-<!-- После мержа: в этом репозитории `Closes #N` не закрывает issue автоматически.
-     Закрой его вручную: gh issue close <N> --comment "Done in #<PR>". -->
+<!-- After the merge: in this repository `Closes #N` does not close the issue automatically.
+     Close it by hand: gh issue close <N> --comment "Done in #<PR>". -->

@@ -1,158 +1,159 @@
-# Оркестрация: правила для сессий-оркестраторов
+# Orchestration: rules for orchestrator sessions
 
-Документ для ИИ-сессии, которая **планирует работу и запускает агентов-исполнителей**, пока исполнители делают всю работу с репозиторием.
-Правила репозитория (`AGENTS.md`) обязательны и для оркестратора, и для агентов; здесь только то, что касается организации работы.
-Исполнителю достаточно брифа и `AGENTS.md`, этот документ ему читать не нужно.
+A document for an AI session that **plans the work and launches executor agents**, while the executors do all the work with the repository.
+The repository rules (`AGENTS.md`) are mandatory for both the orchestrator and the agents; this document covers only how the work is organized.
+An executor needs only the brief and `AGENTS.md`; it does not need to read this document.
 
 ---
 
-## 1. Роли
+## 1. Roles
 
-| Кто | Решает и делает | Не делает |
+| Who | Decides and does | Does not do |
 |---|---|---|
-| Владелец | объём работы, дизайн и правила игры, приоритеты, ручные проверки (игра, железо, юридические вопросы) | не выбирает модель и число агентов |
-| Оркестратор | план и очередь задач, модель и параллельность, брифы, проверка результата по внешнему состоянию (`git`, `gh`, CI), ответы владельцу | не меняет репозиторий и GitHub (код, документы, issues, PR, мерж, пересборка стека) |
-| Агент-исполнитель | вся работа с репозиторием и GitHub: код, документы, issues, комментарии, PR, мерж, закрытие issue | не решает вопросы дизайна: неоднозначность оформляет вопросом (`AGENTS.md`, раздел 0, п. 3) |
+| Owner | the scope of work, design and game rules, priorities, manual checks (the game, hardware, legal questions) | does not choose the model or the number of agents |
+| Orchestrator | the plan and the task queue, the model and parallelism, briefs, checking results against external state (`git`, `gh`, CI), answers to the owner | does not change the repository or GitHub (code, documents, issues, PRs, merging, rebuilding the stack) |
+| Executor agent | all work with the repository and GitHub: code, documents, issues, comments, PRs, merging, closing issues | does not decide design questions: it turns an ambiguity into a question (`AGENTS.md`, section 0, item 3) |
 
-- Оркестратор читает код, чтобы ответить владельцу (разбор бага, что делает функция), но не пишет.
-- Не запускай агента на каждую мелочь: мелкие правки репозитория складывай в бриф ближайшего агента. Совсем простое отдавай Haiku.
-- Состояние работы проверяй снаружи: `git log`, `git worktree list`, `gh pr list`, `gh pr checks`. Не по пересказам агентов и не по их транскриптам.
-- Если владелец сказал «пока только обсуждаем», агентов не запускай: заканчивай ответ списком открытых вопросов и рекомендацией по каждому.
-- Решения о стоимости, которые превышают остаток лимита, и вопросы объёма и дизайна идут к владельцу. Остальное (модель, параллельность) оркестратор решает сам: объявляет, что запускает и зачем, а не спрашивает.
+- **Language.** The repository and GitHub are English only: code, identifiers, comments, commits, documents, issues, PRs and review comments. Briefs to agents are written in English. The orchestrator talks to the owner in the owner's language (outside the repository); everything the orchestrator asks an agent to write down goes into the repository in English.
+- The orchestrator reads code to answer the owner (analyzing a bug, what a function does) but does not write it.
+- Do not launch an agent for every trifle: put small repository edits into the brief of the nearest agent. Give truly simple things to Haiku.
+- Check the state of work from outside: `git log`, `git worktree list`, `gh pr list`, `gh pr checks`. Not from agents' retellings or their transcripts.
+- If the owner said "for now we are only discussing", do not launch agents: end the answer with a list of open questions and a recommendation for each.
+- Cost decisions that exceed the remaining limit and questions of scope and design go to the owner. The rest (model, parallelism) the orchestrator decides itself: it announces what it launches and why, and does not ask.
 
 ---
 
-## 2. Выбор модели
+## 2. Choosing a model
 
-| Модель | Для чего |
+| Model | For what |
 |---|---|
-| Opus | симуляция, правила, протокол, боты, DEC-документы, где ещё нужно проектировать (открытые вопросы, новые модели правил) |
-| Sonnet | клиент (интерфейс, PixiJS, Svelte), документы с уже принятыми решениями, запись принятых DEC, мелкий сервер, мерж, уборка, исправление тестов |
-| Haiku | тривиальные правки issues и чек-листов, переименования, мелкие правки текста, пересборка стека по инструкции, read-only анализ (реплеи, мозговые штурмы) |
+| Opus | simulation, rules, protocol, bots, DEC documents where design is still needed (open questions, new rule models) |
+| Sonnet | the client (interface, PixiJS, Svelte), documents with decisions already accepted, recording accepted DECs, a small server task, merging, cleanup, fixing tests |
+| Haiku | trivial edits of issues and checklists, renames, small text edits, rebuilding the stack from instructions, read-only analysis (replays, brainstorms) |
 
-Параллельность: по умолчанию один Opus и один Sonnet. Два Opus одновременно быстро выжигают пятичасовое окно. Когда окно израсходовано примерно наполовину, запускай только небольшие задачи Sonnet.
+Parallelism: by default one Opus and one Sonnet. Two Opus at once quickly burn through the five-hour window. When the window is about half used, launch only small Sonnet tasks.
 
 ---
 
-## 3. Бюджет
+## 3. Budget
 
-Лимиты (пятичасовое окно и недельный) реальны, исчерпание останавливает работу до сброса.
+The limits (the five-hour window and the weekly one) are real; running out stops work until the reset.
 
-| Правило | Как |
+| Rule | How |
 |---|---|
-| Цена до запуска | в сообщении о запуске назвать ожидаемую цену в процентах недельного лимита |
-| Ориентиры | задача правил на Opus: 10-20%; пакет клиента на Sonnet: 4-6%; документы: 1-3%; мелочь на Haiku: меньше 1% |
-| Когда | тяжёлую работу на Opus ставить в начало недели |
-| Мягкие пороги | около 75% недели: предупредить владельца и предложить более дешёвые варианты; около 90%: рекомендовать только срочные баги; решает владелец |
-| Простой агента | не возобновлять агента, простоявшего больше часа: кэш остыл, возобновление заново читает всю историю по полной цене; запускать нового с заметкой из PR (раздел 4) |
-| Обрыв | агента, оборванного лимитом, возобновлять сразу после сброса, если прошло меньше часа; иначе нового |
-| Контекст оркестратора | при большом контексте (около 300 тысяч токенов) предложить новую сессию: состояние лежит в issues и заметках (раздел 8) |
-| Чтение | бриф называет точные разделы; `mechanics.md` целиком не читать (около 2000 строк), `AGENTS.md` целиком только там, где задаче это нужно |
+| Price before launch | the launch message names the expected price in percent of the weekly limit |
+| Guides | a rules task on Opus: 10-20%; a client package on Sonnet: 4-6%; documents: 1-3%; a small thing on Haiku: under 1% |
+| When | put heavy Opus work at the start of the week |
+| Soft thresholds | around 75% of the week: warn the owner and offer cheaper options; around 90%: recommend urgent bugs only; the owner decides |
+| Idle agent | do not resume an agent that has been idle for more than an hour: the cache has gone cold, resuming reads the whole history again at full price; launch a new one with the note from the PR (section 4) |
+| Cut-off | resume an agent cut off by a limit right after the reset if less than an hour has passed; otherwise launch a new one |
+| Orchestrator context | at a large context (around 300 thousand tokens) propose a new session: the state lives in issues and notes (section 8) |
+| Reading | the brief names exact sections; do not read `mechanics.md` in full (about 2000 lines), read `AGENTS.md` in full only where the task needs it |
 
-Лимиты и пороги мягкие: никаких жёстких дневных квот.
+The limits and thresholds are soft: there are no hard daily quotas.
 
 ---
 
-## 4. Шаблон брифа агенту
+## 4. Brief template for an agent
 
-Бриф короткий. Он называет задачу, разделы для чтения и особенности, а общий порядок работы берётся из раздела 5 этого документа и `AGENTS.md`.
+The brief is short. It names the task, the sections to read and the specifics; the general way of working comes from section 5 of this document and `AGENTS.md`. **Briefs are written in English.**
 
 ```
-Задача: issue #<N> (<название>). Один PR.
-Читай: AGENTS.md разделы 0, 3, 11 (+ <нужные разделы>);
-       docs/design/mechanics.md только разделы <номера и названия>, целиком не читать;
-       issue целиком.
-Что сделать: <кратко; критерии приёмки берёшь из issue>.
-Вне рамок: <что не трогать>.
-Ожидаемые значения тестов: из mechanics.md и таблиц DEC, не из вывода кода.
-Особенности: <зависимости, версии, соседние PR, что нельзя трогать>.
-Процесс: работай автономно, вопросов владельцу не задавай; рабочий процесс по docs/process/orchestration.md, раздел 5.
-Отчёт: по каждому issue: номер, URL PR, смержен ли, критерии приёмки, отклонения,
-новые issues; затем QUESTIONS (вопросы, на которые ждёшь решения) и RISKS (риски, допущения).
+Task: issue #<N> (<title>). One PR.
+Read: AGENTS.md sections 0, 3, 11 (+ <needed sections>);
+      docs/design/mechanics.md only sections <numbers and titles>, do not read it in full;
+      the whole issue.
+What to do: <briefly; take the acceptance criteria from the issue>.
+Out of scope: <what not to touch>.
+Expected test values: from mechanics.md and the DEC tables, not from the code's output.
+Specifics: <dependencies, versions, neighbouring PRs, what must not be touched>.
+Process: work autonomously, do not ask the owner questions; workflow per docs/process/orchestration.md, section 5.
+Report: for each issue: number, PR URL, merged or not, acceptance criteria, deviations,
+new issues; then QUESTIONS (questions you are waiting for a decision on) and RISKS (risks, assumptions).
 ```
 
-Правила брифа:
+Brief rules:
 
-- **Один агент Opus: одна задача и один PR.** Большие пакеты режь, а не отдавай одним агентом.
-- **Изменение правил:** симуляция, протокол и боты делает Opus, **клиентскую часть** изменения делает отдельный агент Sonnet **после мержа** серверной части.
-- **Ранний пуш.** Агент пушит WIP рано и часто, чтобы обрыв по лимиту ничего не стёр.
-- **Заметка в PR.** При каждом пуше WIP агент обновляет в описании PR блок «сделано / осталось / следующий шаг». Новый агент продолжает по этой заметке.
-- **Тесты.** Ожидаемые значения берутся из `mechanics.md` и таблиц DEC (`AGENTS.md`, раздел 0, п. 4).
-- **Отчёт** заканчивается блоками `QUESTIONS:` и `RISKS:` (могут быть пустыми). Для задач, где нужен человек (ручная проверка, вердикт владельца), добавляется блок `MANUAL:`.
-- Если несколько issue в одном брифе, агент делает их строго по очереди, каждое отдельным PR.
-- **Задача, меняющая вид:** бриф называет сцены `visual/scenes.ts`, которые агент смотрит до и после (`mise run shots`), и требует ссылки на кадры в PR (`AGENTS.md`, раздел 7.5). Крупное визуальное решение в бриф не попадает, пока владелец не выбрал вариант (раздел 7).
-
----
-
-## 5. Рабочий процесс агента
-
-Подробности веток и коммитов: `AGENTS.md`, раздел 11; команды проверок: раздел 3.
-
-1. Прочитать issue целиком и нужные разделы `mechanics.md`. Основной checkout держать на `develop`, работу в нём не вести.
-2. `git fetch origin`, затем отдельный worktree и ветка: `git worktree add ../<каталог-worktree>/<ID> -b feature/<N>-<slug> origin/develop` (`fix/` для исправлений).
-3. Реализовать задачи и критерии приёмки; запустить применимые проверки из `AGENTS.md`, раздел 3, и добиться зелёного результата.
-4. Коммиты: `<type>(<scope>): <сообщение> (#<N>)`, на английском.
-5. Перед пушем: `git fetch && git rebase origin/develop` (другие агенты мержат параллельно), при конфликтах повторить проверки.
-6. Пуш, затем `gh pr create --base develop`: описание на русском по шаблону `.github/pull_request_template.md`, с `Closes #<N>`, критериями приёмки с галочками (невыполненный без галочки и с причиной), отклонениями и обоснованием новых зависимостей.
-7. Дождаться CI: `gh pr checks <PR> --watch`; красное чинить. Обязательные проверки: `py`, `web`, `docker`; в PR только с документами могут запуститься лишь `changes`.
-8. Squash-мерж только при зелёных проверках, автослияние не включать: `gh pr merge <PR> --squash --delete-branch --subject "<type>(<scope>): <English message> (#<N>)"`. Заголовок PR может быть русским, но коммит в `develop` обязан быть английским conventional. Если выдан отказ «Base branch was modified»: rebase, пуш, снова CI, повтор. Если команда вернула ошибку только из-за того, что локальную ветку держит worktree, проверить, что состояние PR `MERGED`.
-9. Только после `MERGED`: закрыть issue (`Closes #N` в этом репозитории не закрывает issue надёжно): `gh issue close <N> --comment "Done in #<PR>"`; убрать worktree и локальную ветку (`git worktree remove`, `git branch -D`); в основном checkout `git checkout develop && git pull --ff-only`.
-
-### Параллельные изменения правил
-
-Задачи, меняющие правила, сталкиваются на `SIM_VERSION`, `PROTOCOL_VERSION`, схеме протокола, сгенерированных TS-типах и золотых каталогах `tests/golden/v*/`.
-
-- Такие задачи идут **последовательно**.
-- Если всё же пересеклись, тот, кто мержит вторым, делает rebase, **повышает версии заново**, перегенерирует золотые реплеи и типы.
-- Существующие золотые каталоги не трогать никогда.
-
-### Задачи, требующие человека
-
-Агент делает всё, что можно автоматизировать или проверить локально (скрипты, локальный запуск, чек-листы, runbook'и), явно помечает ручной остаток в документах и перечисляет его в `MANUAL:`. Личные данные оператора не выдумываются: только явные плейсхолдеры. Для решения «да или нет» от владельца агент готовит материалы и рекомендацию, а поле решения оставляет «ожидает решения владельца».
+- **One Opus agent: one task and one PR.** Cut big packages up instead of handing them to one agent.
+- **A rules change:** simulation, protocol and bots are done by Opus; the **client part** of the change is done by a separate Sonnet agent **after the merge** of the server part.
+- **Early push.** The agent pushes WIP early and often, so a limit cut-off erases nothing.
+- **A note in the PR.** On every WIP push the agent updates the block "done / left / next step" in the PR description. A new agent continues from this note.
+- **Tests.** Expected values come from `mechanics.md` and the DEC tables (`AGENTS.md`, section 0, item 4).
+- **The report** ends with the blocks `QUESTIONS:` and `RISKS:` (they may be empty). For tasks that need a human (a manual check, the owner's verdict) a block `MANUAL:` is added.
+- If a brief has several issues, the agent does them strictly one after another, each in its own PR.
+- **A task that changes the look:** the brief names the scenes of `visual/scenes.ts` the agent looks at before and after (`mise run shots`) and requires links to the frames in the PR (`AGENTS.md`, section 7.5). A major visual decision does not go into a brief until the owner has chosen a variant (section 7).
 
 ---
 
-## 6. Безопасность и окружение
+## 5. The agent's workflow
 
-| Правило | Пояснение |
+Details of branches and commits: `AGENTS.md`, section 11; commands of the checks: section 3.
+
+1. Read the whole issue and the needed sections of `mechanics.md`. Keep the main checkout on `develop` and do no work in it.
+2. `git fetch origin`, then a separate worktree and branch: `git worktree add ../<worktree-directory>/<ID> -b feature/<N>-<slug> origin/develop` (`fix/` for fixes).
+3. Implement the tasks and acceptance criteria; run the applicable checks from `AGENTS.md`, section 3, and get them green.
+4. Commits: `<type>(<scope>): <message> (#<N>)`, in English.
+5. Before pushing: `git fetch && git rebase origin/develop` (other agents merge in parallel); on conflicts repeat the checks.
+6. Push, then `gh pr create --base develop`: the description in English per the template `.github/pull_request_template.md`, with `Closes #<N>`, the acceptance criteria with ticks (an unmet one without a tick and with a reason), deviations and the justification of new dependencies.
+7. Wait for CI: `gh pr checks <PR> --watch`; fix what is red. The required checks are `py`, `web`, `docker`; in a documentation-only PR only `changes` may run.
+8. Squash-merge only when the checks are green, do not enable auto-merge: `gh pr merge <PR> --squash --delete-branch --subject "<type>(<scope>): <message> (#<N>)"`. The commit into `develop` must be a conventional English commit. If you get the refusal "Base branch was modified": rebase, push, CI again, retry. If the command returned an error only because a worktree holds the local branch, check that the PR state is `MERGED`.
+9. Only after `MERGED`: close the issue (`Closes #N` does not reliably close issues in this repository): `gh issue close <N> --comment "Done in #<PR>"`; remove the worktree and the local branch (`git worktree remove`, `git branch -D`); in the main checkout `git checkout develop && git pull --ff-only`.
+
+### Parallel rules changes
+
+Tasks that change rules collide on `SIM_VERSION`, `PROTOCOL_VERSION`, the protocol schema, the generated TS types and the golden directories `tests/golden/v*/`.
+
+- Such tasks go **sequentially**.
+- If they still overlap, whoever merges second does a rebase, **raises the versions again**, and regenerates the golden replays and types.
+- Existing golden directories are never touched.
+
+### Tasks that need a human
+
+The agent does everything that can be automated or checked locally (scripts, a local run, checklists, runbooks), explicitly marks the manual remainder in the documents and lists it in `MANUAL:`. The operator's personal data is not invented: only explicit placeholders. For a yes-or-no decision from the owner the agent prepares the materials and a recommendation and leaves the decision field "awaiting the owner's decision" ("ожидает решения владельца" in the not yet translated docs).
+
+---
+
+## 6. Safety and environment
+
+| Rule | Explanation |
 |---|---|
-| Чужие процессы | не останавливать, не пересобирать и не менять чужие процессы, контейнеры и рабочий стек владельца |
-| Свои процессы | останавливать только то, что запустил сам, по PID или id; никакого `pkill` и `killall` по шаблону имени |
-| Временные файлы | с уникальным префиксом (id задачи или issue); чужие файлы не перезаписывать и не удалять |
-| Браузер | работать только в своих вкладках, чужие не закрывать |
-| Порты | не занимать порты, которые уже слушает кто-то другой; для локального стека брать свободные |
-| Отказ системы разрешений | остановить эту линию работы, обходных путей не искать, в отчёте привести точный текст отказа |
-| Секреты | в коммиты, issues, PR и логи не попадают; токены не в URL |
-| Локальные настройки инструмента | каталог локальных настроек (`.claude/` и подобные) не коммитить, не читать и не менять |
-| Зависимости | новые Python и npm зависимости только с обоснованием в описании PR |
-| Git | не делать force-push в `develop` и `main`; автослияние не включать |
-| Публичность | репозиторий публичный: ни личных данных, ни локальных путей, ни адресов локальной сети в коммитах, документах и issues |
+| Other people's processes | do not stop, rebuild or change other people's processes, containers and the owner's working stack |
+| Your own processes | stop only what you started yourself, by PID or id; no `pkill` and `killall` by a name pattern |
+| Temporary files | with a unique prefix (the task or issue id); do not overwrite or delete other people's files |
+| Browser | work only in your own tabs, do not close other people's |
+| Ports | do not take ports that someone else is already listening on; take free ones for a local stack |
+| A permission system denial | stop that line of work, do not look for workarounds, quote the exact text of the denial in the report |
+| Secrets | do not go into commits, issues, PRs and logs; tokens not in URLs |
+| Local tool settings | do not commit, read or change the directory of local settings (`.claude/` and the like) |
+| Dependencies | new Python and npm dependencies only with a justification in the PR description |
+| Git | no force-push to `develop` and `main`; do not enable auto-merge |
+| Publicity | the repository is public: no personal data, no local paths, no local network addresses in commits, documents and issues |
 
 ---
 
-## 7. Обратная связь владельца
+## 7. The owner's feedback
 
-- Фидбэк после игры приходит пачкой. **Каждый пункт** попадает в чек-лист трекингового issue, ни один не теряется. Чек-лист заводит и ведёт агент (простое отдаётся Haiku).
-- Перед правкой правил формулируй решение **в точности** по тексту DEC. Расхождение между пересказом и записью в `mechanics.md` недопустимо.
-- Решения записываются в `docs/design/mechanics.md` со статусом `[принято]`, `[предложено]` или `[заменено DEC-N]`.
-- **Сначала DEC, потом код.** Реализация без записанного решения не начинается.
-- Открытые вопросы оформляются issues и перечисляются владельцу списком с рекомендацией по каждому.
-- Прежние решения не возвращаются: если новая идея отменяет старое DEC, это новое DEC со статусом `[заменено DEC-N]` у старого.
-- **Крупное визуальное решение: сначала макет, потом код** (практика владельца, 2026-10-21; образцы: `docs/design/mockups/fight-arena.html` и issue #327, `docs/design/mockups/map-style.html` и issue #332). Крупное решение это новый стиль карты или юнитов, новая форма значков, новый вид арены или экрана, всё, что меняет вид большинства кадров или стоит больше дня. Перед кодом агент делает: (1) самодостаточный интерактивный HTML-макет с переключаемыми вариантами в `docs/design/mockups/` (один файл, без сети, нарисован кодом); **по умолчанию минимум 3-4 варианта дизайна на каждый элемент плюс нынешний вид для сравнения** (владелец, 2026-10-21); (2) issue с таблицей вариантов (нужны ли DEC, протокол, симуляция, клиент; оценка; цена по FPS; риск), рекомендацией, 2-3 кадрами макета и полем решения «**ожидает решения владельца**». Issue не закрывается до выбора, код начинается только после него. Мелкие правки (цвет, унификация формы, отступы, исправление наложения) идут сразу в код. Подробности и цикл проверки видом (`mise run shots`): `docs/design/ui-style.md`, раздел 23.
-- **После заморозки механики** новые идеи идут в очередь после релиза, баги чинятся сразу.
-- После каждого изменения правил: быстрый турнир ботов на нескольких seed (дымовая проверка), полный прогон перед закрытой игрой (`AGENTS.md`, раздел 8).
+- Feedback after a game comes in a batch. **Every item** goes into the checklist of a tracking issue, none is lost. The agent creates and maintains the checklist (simple things go to Haiku).
+- Before editing the rules, state the decision **exactly** per the text of the DEC. A discrepancy between a retelling and the record in `mechanics.md` is unacceptable.
+- Decisions are recorded in `docs/design/mechanics.md` with the status `[accepted]`, `[proposed]` or `[superseded by DEC-N]` (until `mechanics.md` is translated, the statuses there read `[принято]`, `[предложено]`, `[заменено DEC-N]`).
+- **First the DEC, then the code.** Implementation does not start without a recorded decision.
+- Open questions are turned into issues and listed to the owner with a recommendation for each.
+- Earlier decisions are not brought back: if a new idea cancels an old DEC, it is a new DEC with the status `[superseded by DEC-N]` on the old one.
+- **A major visual decision: first a mockup, then code** (the owner's practice, 2026-10-21; examples: `docs/design/mockups/fight-arena.html` and issue #327, `docs/design/mockups/map-style.html` and issue #332). A major decision is a new map or unit style, a new icon shape, a new look of an arena or a screen, anything that changes the look of most frames or costs more than a day. Before the code the agent makes: (1) a self-contained interactive HTML mockup with switchable variants in `docs/design/mockups/` (one file, no network, drawn by code); **by default at least 3-4 design variants per element plus the current look for comparison** (the owner, 2026-10-21); (2) an issue with a table of variants (whether DEC, protocol, simulation, client are needed; an estimate; the FPS cost; the risk), a recommendation, 2-3 frames of the mockup and the decision field "**awaiting the owner's decision**". The issue is not closed until a choice is made, and code starts only after it. Small edits (color, unifying a shape, spacing, fixing an overlap) go straight into code. Details and the loop for checking the look (`mise run shots`): `docs/design/ui-style.md`, section 23.
+- **After the mechanics are frozen** new ideas go to the queue after the release, bugs are fixed at once.
+- After every rules change: a quick bot tournament on several seeds (a smoke check), a full run before a closed game (`AGENTS.md`, section 8).
 
 ---
 
-## 8. Где хранится состояние
+## 8. Where the state is kept
 
-| Что | Где |
+| What | Where |
 |---|---|
-| Объём и ход работы | трекинговые issues на GitHub (например «Объём первого релиза»): чек-листы, ссылки на PR и DEC |
-| Фидбэк и открытые вопросы | issues с чек-листами и метками `question` |
-| Правила игры и решения | `docs/design/mechanics.md` |
-| Отчёты баланса, решения, чек-листы | `docs/balance/`, `docs/adr/`, `docs/qa/` |
-| Заметки текущей сессии оркестратора | могут жить вне репозитория (личные заметки инструмента); на них не должна держаться работа: всё, что нужно другому оркестратору, пишется в issues |
+| Scope and progress of work | tracking issues on GitHub (for example "Scope of the first release"): checklists, links to PRs and DECs |
+| Feedback and open questions | issues with checklists and the label `question` |
+| Game rules and decisions | `docs/design/mechanics.md` |
+| Balance reports, decisions, checklists | `docs/balance/`, `docs/adr/`, `docs/qa/` |
+| Notes of the current orchestrator session | may live outside the repository (the tool's personal notes); work must not depend on them: everything another orchestrator needs is written in issues |
 
-Новая сессия оркестратора начинает с трекинговых issues и внешнего состояния (`git log`, `gh pr list`, `git worktree list`), затем читает этот документ и `AGENTS.md`.
-Незавершённые worktree (например, отложенные задачи баланса) оставляй, пока работа не возобновлена: удалять их нужно только по решению владельца.
+A new orchestrator session starts with the tracking issues and the external state (`git log`, `gh pr list`, `git worktree list`), then reads this document and `AGENTS.md`.
+Leave unfinished worktrees (for example postponed balance tasks) alone until the work resumes: they are removed only by the owner's decision.

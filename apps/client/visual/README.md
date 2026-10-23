@@ -1,61 +1,61 @@
-# Скриншот-тесты карты (CLI-04, #60)
+# Map screenshot tests (CLI-04, #60)
 
-Playwright открывает dev-экран клиента с фиксированной сценой (`/?scene=<id>`) и сравнивает
-канвас с эталоном. Сцены собраны в `src/dev/scenarios.ts` из фикстур протокола
-`packages/protocol/fixtures/server/snapshot*.json`, каждая на своей карте и «заморожена» на тике
-снапшота (без анимации):
+Playwright opens the client's dev screen with a fixed scene (`/?scene=<id>`) and compares the
+canvas with a reference. The scenes are assembled in `src/dev/scenarios.ts` from the protocol fixtures
+`packages/protocol/fixtures/server/snapshot*.json`, each on its own map and "frozen" at the tick of the
+snapshot (no animation):
 
-| Сцена            | Карта     | Что показывает                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `snapshot`       | `diamond` | свои группы в городе и на дороге, пакет, «Защита» и запланированный приказ противника, присутствие противника без чисел, отметка боя, «+N / M» накопленного бонуса «Защиты» у щита своей группы (#318), домик казармы своих городов и вражеской столицы рядом со своим городом (DEC-31, #319; рамка значка в цвете владельца)                                                                                                                                                                                                                                                                                                        |
-| `snapshot_fog`   | `line3`   | склад с полной полоской, намерение противника, город в тумане: дымка F1 (вуаль с мягким краем и светлой линией границы), призрак памяти с возрастом `-0:21`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `snapshot_clash` | `siege`   | три группы в одном городе (одна иконка с суммой юнитов), противник с точными числами, режимы «защита» и «стройка» противника, стрелки обеих сторон, идущий бой с раундом в полёте и три завершённых (захвачен, удержан, обе отошли)                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `overflow`       | `diamond` | два своих города переполнены (ui-style 12): отсчёт потери юнита `1,8 с` и отсрочка после захвата `3,0 с`, две строки тревог                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `ranges`         | `diamond` | что DEC-21 и DEC-33 показывают о противнике (#359): город с диапазоном «21+», фигурки на половинах дорог точно («4»), диапазоном («1-2», «6-10») и без чисел, память города (диапазон «3-5») и половин дорог в тумане (точные числа, присутствие) призраками в точке границы с возрастом, засечка точки границы на каждой дороге, тень на половинах в тумане                                                                                                                                                                                                                                                                         |
-| `fights`         | `siege`   | четыре боя одновременно (#325, #330): арена-плашка с фишками на каждого юнита (заряжен, разряжен со штриховкой, убит пунктиром), «+N» при больше 8, запас ◇ ×N обеих сторон, янтарный значок молчащего заряда, подпись «бонусная атака» над плашкой боя с бонусным выстрелом; плашки не перекрывают друг друга и города (раскладка `arenaLayout.ts`, #360), сдвинутая плашка соединена пунктиром с местом боя; эффекты Э3 (#351) каждого боя в своей фазе после удара: гашение на дороге (✕ и лучи), удар по заряду в городе, убийство с осколками ▽ и «−1», замах и молчащий заряд (янтарный знак), тающие пути трассеров Ш1 (#352) |
-| `fights_kill`    | `siege`   | те же четыре боя в тик 395, выстрелы в воздухе (#352): реальный трассер стороны противника перед убийством в городе внизу, бонусный трассер (полый ромб, эхо) своей стороны на полпути в городе слева, на дороге выстрелов ещё нет                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `fights_flight`  | `siege`   | те же бои в тик 398 (#352): на дороге бонусный выстрел своей стороны и реальный противника перед встречей (две дуги линзой), бонусный трассер у цели в городе слева, убийство только что долетело, замах в городе вверху                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Scene            | Map       | What it shows                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `snapshot`       | `diamond` | own groups in a city and on a road, a packet, the enemy's "Defense" and scheduled order, the enemy's presence without numbers, a fight marker, the accumulated "Defense" bonus "+N / M" by the shield of an own group (#318), the barracks house of own cities and of an enemy capital next to an own city (DEC-31, #319; the icon frame in the owner's color)                                                                                                                                                                                                                                                                                                                                                                     |
+| `snapshot_fog`   | `line3`   | a warehouse with a full bar, an enemy intent, a city in the fog: the F1 haze (a veil with a soft edge and a light border line), a memory ghost with the age `-0:21`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `snapshot_clash` | `siege`   | three groups in one city (one icon with the sum of units), the enemy with exact numbers, the enemy's "Defense" and "Building" modes, arrows of both sides, a fight in progress with a round in flight and three finished ones (captured, held, both withdrew)                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `overflow`       | `diamond` | two own cities overflowing (ui-style 12): a unit-loss countdown `1.8 s` and a grace period after capture `3.0 s`, two alert lines                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `ranges`         | `diamond` | what DEC-21 and DEC-33 show about the enemy (#359): a city with the range "21+", figures on road halves exactly ("4"), as a range ("1-2", "6-10") and without numbers, the memory of a city (range "3-5") and of road halves in the fog (exact numbers, presence) as ghosts at the border point with an age, a tick mark of the border point on every road, a shade on halves in the fog                                                                                                                                                                                                                                                                                                                                           |
+| `fights`         | `siege`   | four fights at once (#325, #330): an arena plate with a chip for each unit (charged, discharged with hatching, killed with a dashed outline), "+N" above 8, the reserve ◇ ×N of both sides, an amber icon of a silent charge, the caption "bonus attack" above the plate of a fight with a bonus shot; the plates do not overlap each other or the cities (the layout of `arenaLayout.ts`, #360), a shifted plate is linked to the place of the fight by a dashed line; the Э3 effects (#351) of each fight in its phase after the hit: extinguishing on a road (✕ and rays), a hit on a charge in a city, a kill with shards ▽ and "−1", a wind-up and a silent charge (an amber sign), the fading paths of the Ш1 tracers (#352) |
+| `fights_kill`    | `siege`   | the same four fights at tick 395, shots in the air (#352): a real tracer of the enemy's side before the kill in the city below, a bonus tracer (a hollow diamond, an echo) of the own side halfway in the city on the left, no shots yet on the road                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `fights_flight`  | `siege`   | the same fights at tick 398 (#352): on the road the own side's bonus shot and the enemy's real one before they meet (two arcs as a lens), a bonus tracer at the target in the city on the left, the kill has just arrived, a wind-up in the city above                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
-Команды (из корня репозитория; `mise run` сам ставит Chromium Playwright, если его нет):
+Commands (from the repository root; `mise run` installs Playwright Chromium itself if it is missing):
 
-- `mise run test:visual`: сравнить с эталонами (dev-сервер поднимается сам на порту 5199), как job `visual` в CI;
-- `mise run shots [метка]`: снять PNG всех сцен (список: `visual/scenes.ts`) и просмотра реплея в `.shots/<метка>/`
-  (по умолчанию `current`; каталог в `.gitignore`, `SHOTS_DIR` переносит его) без сравнения: для агента и владельца,
-  чтобы посмотреть вид глазами. Имена стабильны: `<сцена>.png` весь экран с HUD, `<сцена>-map.png` только карта,
-  `replay.png`. Dev-сервер на свободном порту, его останавливает Playwright;
-- `mise run shots:publish <номер>`: PNG из `.shots/` на ветку `shots/<номер>` и готовые markdown-ссылки для описания PR;
-- `pnpm -C apps/client test:visual:update`: записать эталоны заново после намеренной правки вида (команда `mise run`
-  для этого нет: обновление всегда осознанное).
+- `mise run test:visual`: compare with the references (the dev server starts itself on port 5199), like the job `visual` in CI;
+- `mise run shots [label]`: take a PNG of all scenes (the list: `visual/scenes.ts`) and of the replay viewer in `.shots/<label>/`
+  (`current` by default; the directory is in `.gitignore`, `SHOTS_DIR` moves it) without comparing: for the agent and the owner,
+  to look at the appearance with their own eyes. The names are stable: `<scene>.png` the whole screen with the HUD, `<scene>-map.png` the map only,
+  `replay.png`. The dev server runs on a free port, Playwright stops it;
+- `mise run shots:publish <number>`: PNGs from `.shots/` to the branch `shots/<number>` and ready markdown links for the PR description;
+- `pnpm -C apps/client test:visual:update`: write the references anew after an intended change of look (there is no `mise run` command
+  for this: an update is always deliberate).
 
-## Правка вида: цикл агента
+## Changing the look: the agent's loop
 
-1. `mise run shots before`, до правки.
-2. Правка кода, `mise run shots after`.
-3. Прочитать (Read) пары `.shots/before/<сцена>.png` и `.shots/after/<сцена>.png` по всем сценам, которых коснулась правка,
-   и сцену `snapshot_fog` (туман) и `fights` (бой) всегда. Правка не закончена, пока кадр не выглядит так, как задумано:
-   наложения, контраст, что передаётся только цветом (AGENTS.md, 7.4).
-4. `mise run test:visual`. Упавшее сравнение либо регрессия (чинить), либо намеренная правка: тогда
-   `pnpm -C apps/client test:visual:update` для darwin и Linux-эталоны (контейнер Playwright, ниже), оба набора
-   коммитятся вместе с правкой.
-5. `mise run shots:publish <номер PR или issue>`, ссылки в описание PR: «до» и «после», какие сцены смотрел и что увидел.
-   После мержа PR: `git push origin --delete shots/<номер>`.
+1. `mise run shots before`, before the edit.
+2. Edit the code, `mise run shots after`.
+3. Read (Read) the pairs `.shots/before/<scene>.png` and `.shots/after/<scene>.png` for all scenes the edit touched,
+   and always the scenes `snapshot_fog` (fog) and `fights` (fight). The edit is not finished until the frame looks as intended:
+   overlaps, contrast, anything conveyed by color alone (AGENTS.md, 7.4).
+4. `mise run test:visual`. A failed comparison is either a regression (fix it) or an intended change: then
+   `pnpm -C apps/client test:visual:update` for darwin and the Linux references (the Playwright container, below); both sets
+   are committed together with the edit.
+5. `mise run shots:publish <PR or issue number>`, put the links into the PR description: "before" and "after", which scenes were viewed and what was seen.
+   After the PR is merged: `git push origin --delete shots/<number>`.
 
-Радиальные меню (#350): `mise run shots` снимает и их, на сцене `snapshot_fog` с параметром `?menus` (для замороженной
-сцены приказы уходят в никуда, меню открываются как у игрока, развитие городов включено): `menu-stance.png` (клавиша Q),
-`menu-city.png` (клик по кольцу города), `menu-group.png` (два клика по группе), `menu-supply.png` (Tab и клик по городу)
-и те же кадры в серой шкале `menu-<имя>-gray.png`. Эталонов `visual` у них нет (HUD в эталонах скрыт).
+Radial menus (#350): `mise run shots` takes them too, on the scene `snapshot_fog` with the parameter `?menus` (in a frozen
+scene orders go nowhere, the menus open as for a player, city development is on): `menu-stance.png` (key Q),
+`menu-city.png` (a click on a city ring), `menu-group.png` (two clicks on a group), `menu-supply.png` (Tab and a click on a city)
+and the same frames in grayscale `menu-<name>-gray.png`. They have no `visual` references (the HUD is hidden in the references).
 
-`?at=<тик>` (например `/?scene=fights&at=397.5`) замораживает сцену-фикстуру на другом тике кадра, в том числе дробном: эффекты боя
-это функции тика, так раунд смотрят покадрово (кадры выстрелов в описании #352 сняты так). Эталоны этого параметра не имеют.
+`?at=<tick>` (for example `/?scene=fights&at=397.5`) freezes a fixture scene at another tick of the frame, a fractional one too: fight effects
+are functions of the tick, so a round is viewed frame by frame (the shot frames in the description of #352 were taken this way). References have no such parameter.
 
-Новая сцена: добавить в `src/dev/scenarios.ts` и в `visual/scenes.ts` (тест `src/dev/sceneList.test.ts` напомнит),
-записать эталон.
+A new scene: add it to `src/dev/scenarios.ts` and to `visual/scenes.ts` (the test `src/dev/sceneList.test.ts` will remind you),
+and record a reference.
 
-Эталоны лежат в `visual/scenes.spec.ts-snapshots/` отдельно для каждой платформы
-(`-darwin`, `-linux`): шрифт и растеризатор отличаются. Допуск: 1% пикселей.
+The references live in `visual/scenes.spec.ts-snapshots/` separately for each platform
+(`-darwin`, `-linux`): the font and the rasterizer differ. The tolerance: 1% of pixels.
 
-Linux-эталоны для CI пишутся в контейнере Playwright той же версии, что в `package.json`
-(из корня репозитория):
+The Linux references for CI are written in a Playwright container of the same version as in `package.json`
+(from the repository root):
 
 ```sh
 docker run --rm -v "$PWD":/src:ro -v "$PWD/apps/client/visual":/out mcr.microsoft.com/playwright:v1.63.0-noble \
@@ -64,11 +64,11 @@ docker run --rm -v "$PWD":/src:ro -v "$PWD/apps/client/visual":/out mcr.microsof
   && CI=1 pnpm exec playwright test --update-snapshots; cp -r visual/scenes.spec.ts-snapshots/. /out/scenes.spec.ts-snapshots/'
 ```
 
-CI запускает их отдельной задачей `visual` (не входит в обязательные `py`, `web`, `docker`).
-Упавшее сравнение кладёт фактические кадры и разницу в артефакт `visual-diff`.
+CI runs them as a separate job `visual` (not part of the required `py`, `web`, `docker`).
+A failed comparison puts the actual frames and the difference into the artifact `visual-diff`.
 
-## Просмотр реплея (CLI-10, #66)
+## Replay viewer (CLI-10, #66)
 
-`visual/replay.spec.ts` открывает `/?replay=dev` (встроенный образец `src/replay/siege.frames.json`:
-короткий матч на карте `siege`, записан `gow_server.frames.build_frames` и распакован) и проверяет,
-что кнопки скорости, пауза и ползунок двигают настоящий рендер. Эталонного скриншота нет.
+`visual/replay.spec.ts` opens `/?replay=dev` (the built-in sample `src/replay/siege.frames.json`:
+a short match on the map `siege`, recorded by `gow_server.frames.build_frames` and unpacked) and checks
+that the speed buttons, the pause and the slider drive the real renderer. There is no reference screenshot.

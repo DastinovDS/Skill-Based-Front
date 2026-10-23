@@ -1,31 +1,31 @@
 ---
-name: Ошибка (bug)
-about: Поведение расходится с mechanics.md, AGENTS.md или ожиданием. Исправление — ветка fix/<номер>-<slug>.
+name: Bug
+about: Behavior differs from mechanics.md, AGENTS.md or expectations. The fix goes in a branch fix/<number>-<slug>.
 title: "[bug] "
 labels: ["bug"]
 ---
 
-### Что произошло
-<!-- Коротко: что сломалось. -->
+### What happened
+<!-- Briefly: what broke. -->
 
-### Как воспроизвести
+### How to reproduce
 1. 
 
-<!-- Если есть: seed, карта, рулсет, реплей (.jsonl.gz), тик, команда из AGENTS.md §3. -->
+<!-- If available: seed, map, ruleset, replay (.jsonl.gz), tick, a command from AGENTS.md §3. -->
 
-### Ожидалось
-<!-- Со ссылкой на источник правды: раздел mechanics.md, решение DEC, раздел AGENTS.md. -->
+### Expected
+<!-- With a link to the source of truth: a section of mechanics.md, a DEC decision, a section of AGENTS.md. -->
 
-### На самом деле
-<!-- Вывод, ошибка, скриншот. Токены и секреты вырезать. -->
+### Actual
+<!-- Output, error, screenshot. Cut out tokens and secrets. -->
 
-### Окружение
-- Коммит или версия: 
-- `SIM_VERSION` / `PROTOCOL_VERSION` (если известны): 
-- ОС, браузер (для клиента): 
+### Environment
+- Commit or version: 
+- `SIM_VERSION` / `PROTOCOL_VERSION` (if known): 
+- OS, browser (for the client): 
 
-### Критерии приёмки
-- [ ] Есть тест, который падает до исправления и проходит после.
+### Acceptance criteria
+- [ ] There is a test that fails before the fix and passes after it.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md` → "Definition of Done".
