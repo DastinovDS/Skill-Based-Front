@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from gow_sim.canonical import canonical_json
@@ -502,6 +502,10 @@ def _states(draw: st.DrawFn) -> GameState:
     return state
 
 
+# too_slow is suppressed: a state is built from hundreds of draws, so on a machine under heavy load
+# (load average far above the core count) generation takes longer than the health check allows and
+# the test fails without any bug (#378). Examples and assertions are unchanged.
+@settings(suppress_health_check=[HealthCheck.too_slow])
 @given(_states())
 def test_roundtrip_random_states(state: GameState) -> None:
     data = to_canonical(state)

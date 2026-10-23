@@ -134,18 +134,25 @@ def test_scripted_client_plays_a_full_match_against_a_bot(bot_settings: Settings
                 await ws.send(encode(CommandMsg(seq=1, cmd=SetStanceCmd(stance=Stance.WAR))))
                 await asyncio.sleep(0.05)
                 acks: list[AckMsg] = []
-                end: MatchEndMsg | None = None
+
+                async def read_until_end() -> MatchEndMsg:
+                    # Read while the ticks run. A client that reads only after the loop makes
+                    # the server wait on a full socket buffer; on a loaded machine the loop
+                    # outlasts ``ws_send_timeout_s`` (5 s) and the server drops the client (#378).
+                    while True:
+                        msg = decode_server(await ws.recv())
+                        if isinstance(msg, AckMsg):
+                            acks.append(msg)
+                        elif isinstance(msg, MatchEndMsg):
+                            return msg
+
+                reader = asyncio.create_task(read_until_end())
                 for _ in range(runner.match.rules.match_ticks + 10):  # 60 s of match time
                     live.clock.advance(DT)
                     await asyncio.sleep(0.001)
-                    if runner.finished:
+                    if runner.finished or reader.done():
                         break
-                while end is None:
-                    msg = await recv(ws)
-                    if isinstance(msg, AckMsg):
-                        acks.append(msg)
-                    elif isinstance(msg, MatchEndMsg):
-                        end = msg
+                end = await asyncio.wait_for(reader, 6 * TIMEOUT_S)  # a hang guard only
             assert acks[0].seq == 1 and acks[0].reject_code is None
             assert end.reason is not EndReason.DISCONNECT
             assert runner.finished and runner.bot_decisions > 100
