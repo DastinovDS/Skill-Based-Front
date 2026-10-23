@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { initialLocale, LOCALE_STORAGE_KEY, pickLocale, saveLocale } from './locale.ts';
+import {
+  hasLocaleChoice,
+  initialLocale,
+  LOCALE_STORAGE_KEY,
+  pickLocale,
+  saveLocale,
+} from './locale.ts';
 
 function memoryStorage(entries: Record<string, string> = {}): Storage {
   const data = new Map(Object.entries(entries));
@@ -27,10 +33,11 @@ const blocked = (): Storage => {
 
 describe('pickLocale', () => {
   it.each([
-    [['ru-RU', 'en-US'], 'ru'],
-    [['RU'], 'ru'],
+    [['en-US'], 'en'],
+    [['EN'], 'en'],
     [['en-GB', 'ru'], 'en'],
-    [['de-DE', 'ru-RU'], 'ru'],
+    [['ru-RU', 'en-US'], 'en'],
+    [['ru'], 'en'],
     [['de-DE', 'fr'], 'en'],
     [[], 'en'],
   ] as const)('%j → %s', (languages, expected) => {
@@ -46,24 +53,35 @@ describe('initialLocale', () => {
 
   it('ignores an unknown saved value', () => {
     const storage = memoryStorage({ [LOCALE_STORAGE_KEY]: 'uk' });
-    expect(initialLocale(() => storage, ['ru-RU'])).toBe('ru');
+    expect(initialLocale(() => storage, ['de-DE'])).toBe('en');
+  });
+
+  it('falls back to en for a saved language that is no longer supported (ru)', () => {
+    const storage = memoryStorage({ [LOCALE_STORAGE_KEY]: 'ru' });
+    expect(initialLocale(() => storage, ['ru-RU'])).toBe('en');
   });
 
   it('falls back to the browser languages when storage throws', () => {
-    expect(initialLocale(blocked, ['ru-RU'])).toBe('ru');
+    expect(initialLocale(blocked, ['ru-RU', 'en-US'])).toBe('en');
   });
 });
 
 describe('saveLocale', () => {
   it('stores the choice', () => {
     const storage = memoryStorage();
-    saveLocale(() => storage, 'ru');
-    expect(storage.getItem(LOCALE_STORAGE_KEY)).toBe('ru');
+    saveLocale(() => storage, 'en');
+    expect(storage.getItem(LOCALE_STORAGE_KEY)).toBe('en');
   });
 
   it('does not throw when storage is blocked', () => {
     expect(() => {
-      saveLocale(blocked, 'ru');
+      saveLocale(blocked, 'en');
     }).not.toThrow();
+  });
+});
+
+describe('hasLocaleChoice', () => {
+  it('is false while only one language ships', () => {
+    expect(hasLocaleChoice()).toBe(false);
   });
 });

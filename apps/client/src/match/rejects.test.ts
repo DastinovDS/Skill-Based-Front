@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { en } from '../i18n/en.ts';
-import { ru } from '../i18n/ru.ts';
 import { REJECT_MESSAGES, rejectMessageKey } from './rejects.ts';
 
 // The Python source of the codes: a code added there without a message here fails this test.
@@ -23,11 +22,10 @@ describe('reject messages', () => {
     expect(Object.keys(REJECT_MESSAGES).sort()).toEqual([...codes].sort());
   });
 
-  it('exist in both languages', () => {
+  it('exist in the dictionary', () => {
     for (const code of Object.keys(REJECT_MESSAGES)) {
       const key = rejectMessageKey(code);
       expect(en[key].length).toBeGreaterThan(0);
-      expect(ru[key].length).toBeGreaterThan(0);
     }
   });
 

@@ -4,7 +4,7 @@ import { chargeDots, formatCentis, formatClock } from './format.ts';
 describe('formatCentis', () => {
   it('turns hundredths into units with the locale separator', () => {
     expect(formatCentis(350, 'en')).toBe('3.5');
-    expect(formatCentis(350, 'ru')).toBe('3,5');
+    expect(formatCentis(350, 'de')).toBe('3,5');
     expect(formatCentis(500, 'en')).toBe('5');
     expect(formatCentis(20, 'en')).toBe('0.2');
   });

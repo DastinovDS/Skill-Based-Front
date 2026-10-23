@@ -75,12 +75,4 @@ describe('ReplayViewer controls', () => {
     button(root, 'Back').click();
     expect(back).toHaveBeenCalledOnce();
   });
-
-  it('speaks Russian', () => {
-    setLocale('ru');
-    const target = document.body.appendChild(document.createElement('div'));
-    viewer = mount(ReplayViewer, { target, props: { file: SAMPLE } });
-    flushSync();
-    expect(button(target, 'Играть')).toBeTruthy();
-  });
 });

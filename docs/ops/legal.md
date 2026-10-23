@@ -1,13 +1,13 @@
 # Правовой минимум (LEG-01, #87)
 
-Это не юридическая консультация. Тексты на `/impressum` и `/privacy` (ru и en) собраны по фактическому
+Это не юридическая консультация. Тексты на `/impressum` и `/privacy` (English only since 2026-10-23) собраны по фактическому
 поведению кода и содержат заглушки. **Перед публикацией сайта их должен проверить юрист**, а владелец
 обязан подставить настоящие данные оператора.
 
 ## Что сделано в коде
 
 - Страницы `/impressum` и `/privacy`: `apps/client/src/legal/LegalPage.svelte`, тексты по языкам в
-  `apps/client/src/i18n/legal/{ru,en}.ts` (Caddy отдаёт `index.html` на любой неизвестный путь).
+  `apps/client/src/i18n/legal/en.ts` (Caddy отдаёт `index.html` на любой неизвестный путь).
 - Ссылки в подвале на каждом экране (в том числе на приветственном и в матче): `LegalFooter.svelte`,
   монтируется в `main.ts`. Ссылки открываются в новой вкладке, чтобы не прервать матч.
 - Пока в тексте осталась заглушка вида `<OPERATOR_NAME>`, страница показывает пометку «Черновик».
@@ -63,7 +63,7 @@ PY
 
 ## MANUAL: что остаётся человеку
 
-- Подставить в `apps/client/src/i18n/legal/{ru,en}.ts` данные оператора: `<OPERATOR_NAME>`, `<STREET_AND_NUMBER>`,
+- Подставить в `apps/client/src/i18n/legal/en.ts` данные оператора: `<OPERATOR_NAME>`, `<STREET_AND_NUMBER>`,
   `<POSTAL_CODE_AND_CITY>`, `<COUNTRY>`, `<EMAIL>`, `<PHONE>`, `<VAT_ID_OR_REMOVE_THIS_SECTION>`,
   `<HOSTING_PROVIDER>`, `<HOSTING_LOCATION>`, `<CONFIRM_DPA>`, `<SUPERVISORY_AUTHORITY>`, `<DATE>`.
 - Подтвердить `<LOG_RETENTION_DAYS>` по реальному объёму логов на VPS (ротация идёт по размеру, а не по времени)
@@ -71,7 +71,12 @@ PY
 - Юридическая проверка текстов (Impressum по § 5 DDG, политика по GDPR, оценка хранения в `localStorage` без
   баннера согласия); при необходимости добавить немецкий текст: добавить `de` в `LOCALES`, словарь и
   `i18n/legal/de.ts`.
+- MANUAL (#387): the privacy policy and the Impressum exist in English only now (the Russian texts were removed).
+  The lawyer decides whether an English-only privacy policy and Impressum are sufficient for an operator in Germany,
+  or whether a German text (`de`, see above) is required. The policy still names the `sbf.locale` key in the table of
+  what the browser stores; with a single language the client no longer writes it (it only reads and ignores an old
+  value), so the lawyer may drop that row.
 - Заключить договор об обработке данных с хостинг-провайдером (AVV/DPA).
 - MANUAL (#375): юрист проверяет абзац о статистике игры в разделе «Матчи, рейтинг и реплеи» политики
-  (ru и en) и строку таблицы выше: правовое основание (баланс и разбор партий, ст. 6(1)(f) GDPR),
+  (only the English text now) и строку таблицы выше: правовое основание (баланс и разбор партий, ст. 6(1)(f) GDPR),
   срок хранения «как у реплеев», нужно ли отдельное упоминание в «Ваших правах».

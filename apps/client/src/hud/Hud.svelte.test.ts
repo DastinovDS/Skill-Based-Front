@@ -174,11 +174,9 @@ describe('Hud', () => {
     expect(target.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
-  it.each([
-    ['en', 'Not enough CP'],
-    ['ru', 'Не хватает CP'],
-  ] as const)('shows a refused command as a toast in %s', (locale, text) => {
-    setLocale(locale);
+  it('shows a refused command as a toast', () => {
+    const text = 'Not enough CP';
+    setLocale('en');
     const { target, state, orders, book } = render();
     const snapshot = devSnapshot(DEFAULT_MAP, DEV_RULES, 30);
     state.onSnapshot(snapshot);

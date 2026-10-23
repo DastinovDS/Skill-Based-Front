@@ -1,6 +1,7 @@
-import type { Messages } from './messages.ts';
-
-// English UI dictionary. `satisfies Messages` makes a missing or an extra key a type error.
+// English UI dictionary, the reference set of keys (`messages.ts`). Every user-visible string of
+// the client lives here (AGENTS.md §7.4). Another language is a file with the same keys that ends
+// in `} satisfies Messages;` (a missing or an extra key is then a type error), listed in
+// `LOCALES` (`locale.ts`) and in `DICTIONARIES` (`index.ts`).
 export const en = {
   'app.title': 'Skill-Based Front',
   'hud.map': 'Map',
@@ -414,4 +415,4 @@ export const en = {
   'transfer.full': 'The destination warehouse has no free room.',
   'transfer.free': 'Free. The server tells the path and the arrival time.',
   'transfer.accepted': 'Transfer of {n} charges to node {node}: arrives in {seconds} s',
-} satisfies Messages;
+};

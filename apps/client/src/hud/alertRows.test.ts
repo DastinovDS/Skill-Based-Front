@@ -39,10 +39,10 @@ describe('alertRows', () => {
   });
 
   it('writes the overcrowding row of one city like ui-style 12.3', () => {
-    setLocale('ru');
+    setLocale('en');
     const [row] = alertRows([overflow(7)], []);
     if (row === undefined) throw new Error('no row');
-    expect(alertRowText(row, 10)).toBe('Переполнен город 7: 6 из 4. Минус юнит через 2,4 с');
+    expect(alertRowText(row, 10)).toBe('City 7 is overcrowded: 6 of 4. a unit is lost in 2.4 s');
   });
 
   it('shows the grace instead of the loss while it lasts', () => {

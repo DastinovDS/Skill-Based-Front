@@ -69,13 +69,6 @@ describe('GroupTip: the Defense bonus and the bonus of a plan (DEC-30, DEC-29)',
     expect(text).toContain('costs 2 CP');
   });
 
-  it('follows the language of the page', () => {
-    setLocale('ru');
-    const text = tipOf([group({ mode: 'defense', defense_bonus: 1, defense_cap: 3 })]);
-    expect(text).toContain('Защита: бонус 1 из 3');
-    expect(text).toContain('каждые 6 с');
-  });
-
   it('says nothing of the bonus for a group not in Defense', () => {
     const text = tipOf([group({})]);
     expect(text).not.toContain('Defense');
