@@ -242,6 +242,10 @@ description = "Balance report from a tournament result (arg: file, default docs/
 usage = 'arg "[file]" default="docs/balance/latest.jsonl"'
 run = "uv run gow-bots report {{usage.file}}"
 
+[tasks.stats]
+description = "Player statistics of replay files as a table: stance, APM, supply, planned orders, CP spent (args after the task name: replay files and options)"
+run = "uv run gow-bots stats"
+
 # ---------------------------------------------------------------------------------------------
 # docker stacks
 #

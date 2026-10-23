@@ -36,7 +36,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import IO, Final, Self
 
-from gow_sim.analysis import MatchMetrics, MatchRecorder, analyze
+from gow_sim.analysis import MatchLog, MatchMetrics, MatchRecorder, analyze
 from gow_sim.canonical import digest
 from gow_sim.commands import (
     BuildBarracks,
@@ -89,6 +89,7 @@ __all__ = [
     "main",
     "read_replay",
     "record_headless",
+    "replay_log",
     "replay_match",
     "replay_run",
 ]
@@ -571,15 +572,24 @@ def replay_match(
     return match
 
 
+def replay_log(
+    path: str | Path,
+    rulesets_dir: str | Path = DEFAULT_RULESETS_DIR,
+    maps_dir: str | Path = DEFAULT_MAPS_DIR,
+) -> MatchLog:
+    """The ``MatchLog`` of a replay (``analyze`` and ``analyze_stats`` read it)."""
+    recorder = MatchRecorder()
+    replay_match(path, rulesets_dir, maps_dir, recorder)
+    return recorder.log()
+
+
 def analyze_replay(
     path: str | Path,
     rulesets_dir: str | Path = DEFAULT_RULESETS_DIR,
     maps_dir: str | Path = DEFAULT_MAPS_DIR,
 ) -> MatchMetrics:
     """``analyze`` of the match of a replay (a bot tournament match or a real one)."""
-    recorder = MatchRecorder()
-    replay_match(path, rulesets_dir, maps_dir, recorder)
-    return analyze(recorder.log())
+    return analyze(replay_log(path, rulesets_dir, maps_dir))
 
 
 def _find_ruleset(rules_hash: str, rulesets_dir: Path) -> Ruleset:
