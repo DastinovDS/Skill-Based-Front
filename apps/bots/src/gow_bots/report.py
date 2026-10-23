@@ -96,6 +96,11 @@ class Row:
     sieges_won: tuple[int, int]
     captures: tuple[int, int]
     captures_by_minute: tuple[tuple[int, ...], tuple[int, ...]]
+    stock_mean_centi: tuple[int | None, int | None] | None = None
+    """Charge stock fields (#310); ``None`` in a file written before they existed."""
+    stock_peak: tuple[int, int] | None = None
+    charges_produced: tuple[int, int] | None = None
+    charges_burned: tuple[int, int] | None = None
 
     @property
     def outcome(self) -> tuple[int | None, str, tuple[int, int], tuple[int, int]]:
@@ -106,6 +111,18 @@ class Row:
 def _pair(raw: dict[str, Any], key: str) -> tuple[int, int]:
     value = raw[key]
     return (int(value[0]), int(value[1]))
+
+
+def _stock_mean(raw: dict[str, Any]) -> tuple[int | None, int | None] | None:
+    value = raw.get("stock_mean_centi")
+    if value is None:
+        return None
+    first, second = value
+    return (None if first is None else int(first), None if second is None else int(second))
+
+
+def _opt_pair(raw: dict[str, Any], key: str) -> tuple[int, int] | None:
+    return _pair(raw, key) if key in raw else None
 
 
 def _parse_row(raw: dict[str, Any]) -> Row:
@@ -133,6 +150,10 @@ def _parse_row(raw: dict[str, Any]) -> Row:
             tuple(int(x) for x in minutes[0]),
             tuple(int(x) for x in minutes[1]),
         ),
+        stock_mean_centi=_stock_mean(raw),
+        stock_peak=_opt_pair(raw, "stock_peak"),
+        charges_produced=_opt_pair(raw, "charges_produced"),
+        charges_burned=_opt_pair(raw, "charges_burned"),
     )
 
 
@@ -369,6 +390,59 @@ def _section_bots(ps: Sequence[Persp], bots: Sequence[str]) -> str:
     )
 
 
+def _stock_cells(ps: Sequence[Persp]) -> list[str]:
+    """Charge stock columns of a group of perspectives; rows without the fields are skipped."""
+    means: list[int] = []
+    peaks: list[int] = []
+    produced = burned = 0
+    for p in ps:
+        row, side = p.row, p.side
+        if row.stock_peak is None or row.stock_mean_centi is None:
+            continue
+        mean = row.stock_mean_centi[side]
+        if mean is not None:
+            means.append(mean)
+        peaks.append(row.stock_peak[side])
+        if row.charges_produced is not None and row.charges_burned is not None:
+            produced += row.charges_produced[side]
+            burned += row.charges_burned[side]
+    if not peaks:
+        return ["0", "n/a", "n/a", "n/a", "n/a", "n/a"]
+    n = len(peaks)
+    return [
+        str(n),
+        f"{sum(means) / (100 * len(means)):.2f}" if means else "n/a",
+        f"{sum(peaks) / n:.2f}",
+        str(max(peaks)),
+        f"{produced / n:.2f}",
+        f"{burned * 100 / produced:.1f}% ({burned}/{produced})" if produced else "n/a",
+    ]
+
+
+def _section_stock(ps: Sequence[Persp], rows: Sequence[Row], bots: Sequence[str]) -> str:
+    header = [
+        "matches",
+        "mean stock",
+        "mean peak",
+        "highest peak",
+        "produced per match",
+        "burned share (burned/produced)",
+    ]
+    by_bot = [[f"**{b}**", *_stock_cells([p for p in ps if p.bot == b])] for b in bots]
+    maps = sorted({r.map for r in rows})
+    by_map = [[m, *_stock_cells([p for p in ps if p.row.map == m])] for m in maps]
+    intro = (
+        "Charge stock of a player = warehouses of its cities + charges in its packets on roads + "
+        "charged units (sampled after every tick, definition in [README.md](README.md)). "
+        "*Mean stock* is the mean over matches of the per-match mean; *mean peak* and *highest "
+        "peak* are over the per-match peaks. *Burned share* = `charges_overflow` / "
+        "`charges_produced` summed over all matches of the group (so a rich match weighs more "
+        "than a poor one). All matches count, mirror matches included. A tournament file written "
+        "before #310 has no such fields: the cells show n/a.\n\n"
+    )
+    return intro + _table(["bot", *header], by_bot) + "\n\n" + _table(["map", *header], by_map)
+
+
 def _section_late(rows: Sequence[Row]) -> str:
     body: list[list[str]] = []
     for m in [*sorted({r.map for r in rows}), None]:
@@ -579,6 +653,7 @@ def render_report(rows: Sequence[Row], source: str, prefix: str) -> str:
         ("Матрица пар стратегий", _section_pairs(ps, bots)),
         ("Преимущество стороны", _section_sides(rows)),
         ("Метрики по ботам", _section_bots(ps, bots)),
+        ("Charge stock and burned share (#310)", _section_stock(ps, rows, bots)),
         ("Разнообразие стратегий", _section_diversity(ps, bots)),
         ("Захваты в конце матча", _section_late(rows)),
         ("Уникальные исходы", _section_outcomes(rows)),

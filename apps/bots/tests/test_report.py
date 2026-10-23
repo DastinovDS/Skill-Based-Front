@@ -149,3 +149,51 @@ def test_cli_reports_a_bad_input_cleanly(tmp_path: Path) -> None:
     assert main(["report", str(tmp_path / "missing.jsonl"), "--out-dir", str(tmp_path)]) == 2
     bad = _write(tmp_path / "bad.jsonl", [])
     assert main(["report", str(bad), "--out-dir", str(tmp_path)]) == 2
+
+
+def _stock_rows() -> list[dict[str, Any]]:
+    """Two matches of rusher (side 0) against expander (side 1) on one map, worked by hand."""
+    first = _row("alpha", 0, "rusher", "expander") | {
+        "stock_mean_centi": [400, 200],
+        "stock_peak": [6, 3],
+        "charges_produced": [10, 8],
+        "charges_burned": [2, 0],
+        "burned_permille": [200, 0],
+    }
+    second = _row("alpha", 1, "rusher", "expander") | {
+        "stock_mean_centi": [600, 100],
+        "stock_peak": [8, 5],
+        "charges_produced": [10, 4],
+        "charges_burned": [3, 1],
+        "burned_permille": [300, 250],
+    }
+    return [first, second]
+
+
+def test_report_prints_the_charge_stock_columns(tmp_path: Path) -> None:
+    text = render_report(load_rows(_write(tmp_path / "s.jsonl", _stock_rows())), "s.jsonl", "s")
+    assert "## Charge stock and burned share (#310)" in text
+    assert (
+        "| bot | matches | mean stock | mean peak | highest peak | produced per match "
+        "| burned share (burned/produced) |"
+    ) in text
+    # rusher: mean stock (400 + 600) / (2 * 100) = 5.00, peaks (6 + 8) / 2 = 7.00, highest 8,
+    # produced (10 + 10) / 2 = 10.00, burned 2 + 3 = 5 of 20 = 25.0%
+    assert "| **rusher** | 2 | 5.00 | 7.00 | 8 | 10.00 | 25.0% (5/20) |" in text
+    # expander: (200 + 100) / 200 = 1.50, (3 + 5) / 2 = 4.00, highest 5, (8 + 4) / 2 = 6.00, 1/12
+    assert "| **expander** | 2 | 1.50 | 4.00 | 5 | 6.00 | 8.3% (1/12) |" in text
+    # the map: all four perspectives, (400 + 200 + 600 + 100) / 400 = 3.25, (6 + 3 + 8 + 5) / 4 =
+    # 5.50, highest 8, (10 + 8 + 10 + 4) / 4 = 8.00, burned 6 of 32 = 18.75%
+    assert "| alpha | 4 | 3.25 | 5.50 | 8 | 8.00 | 18.8% (6/32) |" in text
+
+
+def test_report_reads_a_file_without_the_charge_stock_fields(tournament: Path) -> None:
+    text = render_report(load_rows(tournament), "t.jsonl", "t")
+    assert "## Charge stock and burned share (#310)" in text
+    assert "| **rusher** | 0 | n/a | n/a | n/a | n/a | n/a |" in text
+
+
+def test_cli_report_writes_the_charge_stock_section(tmp_path: Path) -> None:
+    path = _write(tmp_path / "s.jsonl", _stock_rows())
+    assert main(["report", str(path), "--out-dir", str(tmp_path), "--name", "s"]) == 0
+    assert "| **rusher** | 2 | 5.00 |" in (tmp_path / "s.md").read_text(encoding="utf-8")

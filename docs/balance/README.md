@@ -78,6 +78,14 @@ uv run gow-bots stats a.jsonl.gz b.jsonl.gz --rulesets rulesets/archive --maps m
 | `captures_by_minute` | [[int, ...], [int, ...]] | захваты игрока по минутам матча; минута `m`: тики `m*60*tick_hz < t <= (m+1)*60*tick_hz`; длина `ceil(ticks / (60*tick_hz))`, не меньше 1 |
 | `accepted` | [int, int] | принятые команды всех видов |
 | `rejected` | [int, int] | отклонённые команды |
+| `stock_mean_centi` | [int или null, ...] | среднее суммарного запаса зарядов в сотых долях заряда (#310, раздел «Charge stock and burned share»); `null` без замеров |
+| `stock_peak` | [int, int] | пик суммарного запаса зарядов (#310) |
+| `charges_produced` | [int, int] | произведено зарядов: сумма `charges` событий `charges_produced` (#310) |
+| `charges_burned` | [int, int] | сгорело зарядов: сумма `charges` событий `charges_overflow` (#310) |
+| `burned_permille` | [int или null, ...] | доля сгоревшего в промилле, `charges_burned * 1000 // charges_produced`; `null` без производства (#310) |
+
+Поля `stock_*`, `charges_*` и `burned_permille` добавлены в #310 без смены `schema`: ничего не удалено и
+не изменило смысл. Файлы турниров старше #310 их не содержат, отчёт показывает по ним «нет данных».
 
 Определения метрик заданы в `packages/sim/src/gow_sim/analysis.py` (модульная строка документации).
 «Запланированный» и «атакующий» приказ в журнале событий не виден (`Move` не оставляет события),
@@ -115,6 +123,51 @@ JSONL `gow-bots analyze` и таблица `gow-bots stats`. В строки т�
 восстанавливается: это траты по командам. Решения по спорным местам приняты по умолчанию
 (комментарий в #375): чистые траты с возвратами, `Forfeit` вне APM, офлайн-инструмент без
 показа в игре и без серверного API.
+
+## Charge stock and burned share (#310)
+
+A balance statistic of how much a player stores and how much of the production is wasted. It is
+**not a game rule**: no DEC, no ruleset field, nothing in `mechanics.md` changes, and the
+simulation does not know about it (the state hash and `SIM_VERSION` are untouched). It exists to
+check on tournaments the conclusions of DEC-28 about accumulation (`mechanics.md`, section 8,
+"Накопление: граничные случаи"): a quiet phase runs into the storage and the surplus burns. Code:
+`gow_sim.analysis` (`charge_stock`, `MatchRecorder`, `MatchMetrics`), the module docstring there
+has the same text.
+
+**Charge stock** of a player at the end of tick `t`:
+
+```
+stock(t) = sum of warehouse of the cities the player owns
+         + sum of charges of the player's packets on roads
+         + sum of charged of the player's groups (at nodes and on edges)
+```
+
+A charge is counted once: a charge that left a warehouse in a packet, or was taken by a unit
+(recharge), is no longer in the warehouse. A captured city's warehouse is zeroed by the
+simulation (`warehouse_lost`), so it drops out of the stock of the old owner at once. Enemy
+charges are never counted.
+
+`MatchRecorder` samples `stock(t)` after every tick `t = 1..ticks` into `MatchLog.stock` (about
+30 integer additions per tick; the cost against the step budget is in the PR). Per match and player:
+
+| Value | Formula (integers, rounded down) |
+|---|---|
+| `stock_peak` | `max(stock(t))` over the samples; 0 without samples |
+| `stock_mean_centi` | `sum(stock(t)) * 100 // n`, `n` the number of samples; in hundredths of a charge (`375` is 3.75 charges); `null` when `n = 0` |
+| `charges_produced` | sum of `charges` of the player's `charges_produced` events: everything the economy made, the spill that does not fit into the capital included |
+| `charges_burned` | sum of `charges` of the player's `charges_overflow` events: charges that found no room in a warehouse (the spill of the capital, or the end of a packet's path) |
+| `burned_permille` | `charges_burned * 1000 // charges_produced`, per mille; `null` when nothing was produced |
+
+Only `charges_overflow` is burning. Charges that disappear in other ways (`packet_lost` on a road
+that stopped being internal, `warehouse_lost` on a capture, starvation, use in a fight) are not
+counted as burned, and the start stock of the map is never produced, so it never burns. The
+burned share is therefore between 0 and 1000 per mille.
+
+The tournament report (`gow-bots report`, section "Charge stock and burned share") aggregates the rows per bot and
+per map: mean of `stock_mean_centi` and of `stock_peak`, the highest peak, and the **burned share
+of the group** = total `charges_burned` / total `charges_produced` over its matches (not the mean
+of per-match shares, so a match with little production does not count as much as one with a lot).
+`gow-bots analyze` prints the same fields for a real match.
 
 ## Отчёт
 
