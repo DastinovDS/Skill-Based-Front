@@ -13,6 +13,7 @@ from gow_sim.analysis import (
     MoveRecord,
     analyze,
     analyze_stats,
+    charge_stock,
 )
 from gow_sim.commands import (
     BuildBarracks,
@@ -33,10 +34,10 @@ from gow_sim.commands import (
     UpgradeWarehouse,
 )
 from gow_sim.maps import load_map
-from gow_sim.match import SIM_VERSION, Match
+from gow_sim.match import SIM_VERSION, Match, run_headless
 from gow_sim.replay import REPLAY_SUFFIX, analyze_replay, read_replay, replay_log
 from gow_sim.ruleset import KindTable, Ruleset, Stance, load_ruleset
-from gow_sim.state import AtNode, Event, Group, Mode, event
+from gow_sim.state import AtNode, Event, Group, Mode, Packet, event
 
 TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parents[2]
@@ -50,6 +51,7 @@ def _log(
     moves: list[MoveRecord] | None = None,
     ticks: int = 100,
     commands: list[CommandRecord] | None = None,
+    stock: tuple[tuple[int, ...], tuple[int, ...]] = ((), ()),
 ) -> MatchLog:
     # Nodes: 0 is the capital of player 0, 1 and 2 are neutral, 3 is the capital of player 1.
     return MatchLog(
@@ -63,6 +65,7 @@ def _log(
         vp=(5, 3),
         accepted=(4, 2),
         rejected=(1, 0),
+        stock=stock,
     )
 
 
@@ -148,6 +151,11 @@ def test_replays_of_real_matches_are_analyzed() -> None:
             assert sum(per.apm_by_minute) == per.commands
             assert per.orders == m.orders[p]
             assert per.cp_total == sum(c for _, c in per.cp_by_category) >= 0
+        # The charge stock (#310): one sample per tick, and burning is a part of production.
+        for p in (0, 1):
+            assert len(log.stock[p]) == log.ticks
+            assert 0 <= m.charges_burned[p] <= m.charges_produced[p]
+            assert (m.stock_mean_centi[p] or 0) <= m.stock_peak[p] * 100
 
 
 # Player statistics (#375) ---------------------------------------------------------------------
@@ -418,3 +426,102 @@ def test_analyze_replay_is_analyze_of_the_replay_log() -> None:
     file = next(GOLDEN.glob(f"*-short-forfeit{REPLAY_SUFFIX}"))  # the shortest golden match
     archive, maps = ROOT / "rulesets" / "archive", ROOT / "maps"
     assert analyze_replay(file, archive, maps) == analyze(replay_log(file, archive, maps))
+
+
+# Charge stock and burned share (#310) -----------------------------------------------------------
+#
+# Definitions: the docstring of ``gow_sim.analysis`` and ``docs/balance/README.md``. Expected
+# values are worked out by hand from the definition.
+
+
+def test_stock_mean_peak_and_burned_share_from_a_hand_made_log() -> None:
+    # Player 0 samples 2, 4, 6, 3: sum 15, mean 15 / 4 = 3.75 -> 375 hundredths, peak 6.
+    # Player 1 samples 0, 0, 0, 1: sum 1, mean 0.25 -> 25, peak 1.
+    # Player 0 produced 3 + 3 = 6 and burned 2 + 1 = 3: 3 * 1000 // 6 = 500 per mille.
+    # Player 1 produced 3 and burned 1: 1000 // 3 = 333 (rounded down). Charges lost on a road
+    # (``packet_lost``) are no burning.
+    events = [
+        event(10, "charges_produced", player=0, node=0, charges=3, spill=2),
+        event(10, "charges_overflow", player=0, node=0, charges=2),
+        event(10, "charges_produced", player=1, node=3, charges=3, spill=1),
+        event(10, "charges_overflow", player=1, node=3, charges=1),
+        event(60, "charges_produced", player=0, node=0, charges=3, spill=1),
+        event(60, "charges_overflow", player=0, node=1, charges=1),
+        event(60, "packet_lost", packet=9, player=0, edge=0, charges=5),
+    ]
+    m = analyze(_log(events, ticks=4, stock=((2, 4, 6, 3), (0, 0, 0, 1))))
+    assert m.stock_mean_centi == (375, 25)
+    assert m.stock_peak == (6, 1)
+    assert m.charges_produced == (6, 3)
+    assert m.charges_burned == (3, 1)
+    assert m.burned_permille == (500, 333)
+
+
+def test_stock_metrics_without_samples_or_production_are_undefined() -> None:
+    m = analyze(_log([], ticks=0))
+    assert m.stock_mean_centi == (None, None)
+    assert m.stock_peak == (0, 0)
+    assert m.burned_permille == (None, None)
+    assert (m.charges_produced, m.charges_burned) == ((0, 0), (0, 0))
+    data = analyze(_log([], ticks=1, stock=((7,), (0,)))).to_json()
+    assert data["stock_mean_centi"] == [700, 0]
+    assert data["stock_peak"] == [7, 0]
+    assert data["burned_permille"] == [None, None]
+
+
+def test_charge_stock_sums_warehouses_packets_and_charged_units() -> None:
+    # Map dec18: player 0 owns K = 0, A = 1, B = 2, C = 3; player 1 owns the mirror cities.
+    match = Match(load_map(TESTS / "maps" / "dec18.json"), _script_rules(), bytes(range(32)))
+    state = match.state
+    for node, charges in ((K, 3), (A, 1), (B, 0), (C, 2)):
+        state.nodes[node].warehouse = charges  # player 0: 3 + 1 + 0 + 2 = 6
+    mirror = [n for n, node in sorted(state.nodes.items()) if node.owner == 1]
+    state.nodes[mirror[0]].warehouse = 4  # player 1: 4
+    for owner, units, charged, node in ((0, 3, 2, K), (1, 2, 1, mirror[0]), (0, 1, 0, A)):
+        gid = state.new_id()
+        state.groups[gid] = Group(gid, owner, units, charged, Mode.ATTACK, AtNode(node))
+    for owner, charges in ((0, 2), (1, 5)):  # packets: 2 for player 0, 5 for player 1
+        pid = state.new_id()
+        state.packets[pid] = Packet(pid, owner, 0, K, charges, 1, 31)
+    # player 0: warehouses 6 + packets 2 + charged units 2 (the uncharged unit adds nothing) = 10
+    # player 1: warehouses 4 + packets 5 + charged units 1 = 10
+    assert charge_stock(state) == (10, 10)
+    recorder = MatchRecorder()
+    recorder.begin(match)
+    recorder.record(match, [])
+    state.nodes[K].warehouse = 0  # player 0 drops to 7
+    recorder.record(match, [])
+    assert recorder.log().stock == ((10, 7), (10, 10))
+
+
+def test_an_idle_match_stock_and_burning_by_hand() -> None:
+    # Map dec28, ruleset mvp-1, two idle players, 700 ticks. A quantum comes every 50 ticks:
+    # balance stance, 100 * 50 // 100 = 50 hundredths of CP into charges, times 2 charges per CP
+    # = 100 hundredths = 1 charge per quantum, at ticks 50, 100, ..., 700: 14 charges.
+    # Storage of a player: capital 6 + three medium cities 2 each = 12. Nothing leaves it (no
+    # units, no fights), so the stock at tick t is min(12, t // 50) and the 13th and 14th
+    # charge (ticks 650 and 700) burn, wherever the supply keeps the rest (packets count).
+    # Samples of t = 1..700: 49 zeros, then 50 ticks each at 1..11, then 12 for ticks
+    # 600..700 (101 ticks): sum = 50 * (1 + ... + 11) + 12 * 101 = 3300 + 1212 = 4512,
+    # mean = 4512 * 100 // 700 = 644 (6.44 charges), peak 12, burned 2 * 1000 // 14 = 142.
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-1.toml")
+    mapdef = load_map(TESTS / "maps" / "dec28.json")
+
+    class Idle:
+        def decide(self, view: object, tick: int) -> list[Command]:
+            del view, tick
+            return []
+
+    recorder = MatchRecorder()
+    run_headless(mapdef, rules, [Idle(), Idle()], max_ticks=700, observer=recorder)
+    log = recorder.log()
+    m = analyze(log)
+    assert log.ticks == 700
+    assert [len(s) for s in log.stock] == [700, 700]
+    assert log.stock[0][48:50] == (0, 1)  # ticks 49 and 50
+    assert max(log.stock[0]) == 12
+    assert m.stock_mean_centi == (644, 644)
+    assert m.stock_peak == (12, 12)
+    assert m.charges_produced == (14, 14)
+    assert m.charges_burned == (2, 2)
+    assert m.burned_permille == (142, 142)

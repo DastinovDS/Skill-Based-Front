@@ -25,6 +25,20 @@ Definitions (all counts per player id, sides ``0`` and ``1``):
 - ``winner`` / ``reason`` come from the ``match_ended`` event; a match stopped by the caller
   before it ended has ``winner = None`` and ``reason = "unfinished"``. ``vp`` and ``cities`` are
   the final values.
+- **Charge stock** (#310, a balance statistic, not a game rule): the total charges of a player at
+  the end of a tick = the warehouses of the cities it owns + the charges in its packets on roads
+  + the charged units of its groups (``charge_stock``). ``MatchRecorder`` samples it after every
+  tick (``MatchLog.stock``, tick ``t`` is entry ``t - 1``); ``stock_peak`` is the largest sample
+  and ``stock_mean_centi = sum * 100 // samples`` the mean in hundredths of a charge (rounded
+  down; ``None`` without samples). A charge is counted in one place only: a charge that left a
+  warehouse as a packet or was taken by a unit is no longer in the warehouse.
+- **Burned share** (#310): ``charges_produced`` is the sum of ``charges`` of the player's
+  ``charges_produced`` events (all that the economy made, spill included), ``charges_burned`` the
+  sum of ``charges`` of its ``charges_overflow`` events (what found no room in a warehouse),
+  ``burned_permille = charges_burned * 1000 // charges_produced`` (per mille, rounded down;
+  ``None`` without production). The other sinks (``packet_lost``, ``warehouse_lost``, starvation)
+  are not burning and are not counted. Charges that never were produced (the start stock) never
+  burn, so the share cannot exceed 1000.
 
 Player statistics (#375), the actions of a player instead of the outcome: ``analyze_stats(log)``
 returns ``MatchStats``, one ``PlayerStats`` per side. They come from the command journal of the
@@ -71,7 +85,7 @@ from gow_sim.commands import Forfeit, Move, Ok, PlayerCommand
 from gow_sim.maps import PLAYERS
 from gow_sim.match import Match
 from gow_sim.ruleset import Stance
-from gow_sim.state import Event
+from gow_sim.state import Event, GameState
 
 __all__ = [
     "CP_CATEGORIES",
@@ -85,6 +99,7 @@ __all__ = [
     "PlayerStats",
     "analyze",
     "analyze_stats",
+    "charge_stock",
 ]
 
 UNFINISHED: Final = "unfinished"
@@ -170,6 +185,25 @@ class MatchLog:
     """Accepted commands (all kinds) by player id."""
     rejected: tuple[int, ...]
     """Rejected commands by player id."""
+    stock: tuple[tuple[int, ...], ...]
+    """Charge stock samples by player id: entry ``t - 1`` of a player is the stock at the end of
+    tick ``t`` (``charge_stock``); every player has one entry per tick played."""
+
+
+def charge_stock(state: GameState) -> tuple[int, ...]:
+    """Total charges of every player by player id (module docstring, charge stock).
+
+    The sum does not depend on the iteration order, so the dicts are read as they are.
+    """
+    total = _zeros()
+    for node in state.nodes.values():
+        if node.owner is not None:
+            total[node.owner] += node.warehouse
+    for packet in state.packets.values():
+        total[packet.owner] += packet.charges
+    for group in state.groups.values():
+        total[group.owner] += group.charged
+    return tuple(total[p] for p in PLAYERS)
 
 
 class MatchRecorder:
@@ -184,6 +218,7 @@ class MatchRecorder:
         self._initial: tuple[int | None, ...] = ()
         self._accepted = _zeros()
         self._rejected = _zeros()
+        self._stock: dict[int, list[int]] = {p: [] for p in PLAYERS}
 
     def begin(self, match: Match) -> None:
         if self._match is not None:
@@ -217,6 +252,8 @@ class MatchRecorder:
                 assert isinstance(node, int) and isinstance(player, int)
                 self._owners[node] = player
         self._events.extend(match.state.events)
+        for p, charges in zip(PLAYERS, charge_stock(match.state), strict=True):
+            self._stock[p].append(charges)
 
     def log(self) -> MatchLog:
         """The log of the match as far as it was played."""
@@ -234,6 +271,7 @@ class MatchRecorder:
             vp=tuple(match.state.players[p].vp for p in PLAYERS),
             accepted=tuple(self._accepted[p] for p in PLAYERS),
             rejected=tuple(self._rejected[p] for p in PLAYERS),
+            stock=tuple(tuple(self._stock[p]) for p in PLAYERS),
         )
 
 
@@ -260,6 +298,14 @@ class MatchMetrics:
     captures_by_minute: tuple[tuple[int, ...], ...]
     accepted: tuple[int, ...]
     rejected: tuple[int, ...]
+    stock_mean_centi: tuple[int | None, ...]
+    """Mean charge stock in hundredths of a charge; ``None`` without samples."""
+    stock_peak: tuple[int, ...]
+    """Largest charge stock sample."""
+    charges_produced: tuple[int, ...]
+    charges_burned: tuple[int, ...]
+    burned_permille: tuple[int | None, ...]
+    """``charges_burned * 1000 // charges_produced``; ``None`` without production."""
 
     def to_json(self) -> dict[str, object]:
         """Plain JSON data; per-player values are lists indexed by player id."""
@@ -280,6 +326,11 @@ class MatchMetrics:
             "captures_by_minute": [list(m) for m in self.captures_by_minute],
             "accepted": list(self.accepted),
             "rejected": list(self.rejected),
+            "stock_mean_centi": list(self.stock_mean_centi),
+            "stock_peak": list(self.stock_peak),
+            "charges_produced": list(self.charges_produced),
+            "charges_burned": list(self.charges_burned),
+            "burned_permille": list(self.burned_permille),
         }
 
 
@@ -293,6 +344,8 @@ def analyze(log: MatchLog) -> MatchMetrics:
     by_minute: dict[int, list[int]] = {p: [0] * minutes for p in PLAYERS}
     winner: int | None = None
     reason = UNFINISHED
+    produced = _zeros()
+    burned = _zeros()
     fought: set[int] = set()  # nodes whose fight started or ended in the tick being read
     fight_tick = -1
     for e in log.events:
@@ -318,6 +371,10 @@ def analyze(log: MatchLog) -> MatchMetrics:
                         sieges[player] += 1
                 owners[node] = player
                 by_minute[player][min((e.tick - 1) // minute_ticks, minutes - 1)] += 1
+            case "charges_produced" | "charges_overflow":
+                player, charges = e.get("player"), e.get("charges")
+                assert isinstance(player, int) and isinstance(charges, int)
+                (produced if e.kind == "charges_produced" else burned)[player] += charges
             case "match_ended":
                 w, why = e.get("winner"), e.get("reason")
                 assert (w is None or isinstance(w, int)) and isinstance(why, str)
@@ -351,6 +408,15 @@ def analyze(log: MatchLog) -> MatchMetrics:
         captures_by_minute=tuple(tuple(by_minute[p]) for p in PLAYERS),
         accepted=log.accepted,
         rejected=log.rejected,
+        stock_mean_centi=tuple(
+            sum(log.stock[p]) * 100 // len(log.stock[p]) if log.stock[p] else None for p in PLAYERS
+        ),
+        stock_peak=tuple(max(log.stock[p], default=0) for p in PLAYERS),
+        charges_produced=tuple(produced[p] for p in PLAYERS),
+        charges_burned=tuple(burned[p] for p in PLAYERS),
+        burned_permille=tuple(
+            burned[p] * 1000 // produced[p] if produced[p] else None for p in PLAYERS
+        ),
     )
 
 
