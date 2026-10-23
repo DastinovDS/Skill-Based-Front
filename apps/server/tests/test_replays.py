@@ -7,7 +7,7 @@ import shutil
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, cast
+from typing import Any, Final, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -28,7 +28,14 @@ from gow_sim.maps import MapDef, load_map
 from gow_sim.match import Match as SimMatch
 from gow_sim.replay import ReplayWriter, read_replay, record_headless, replay_run
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset, ruleset_hash
-from gow_sim.state import Build, BuildKind, initial_state
+from gow_sim.state import (
+    Build,
+    BuildKind,
+    Fight,
+    FightMember,
+    FightRound,
+    initial_state,
+)
 
 ROOT: Final = Path(__file__).parents[3]
 RULESETS: Final = ROOT / "rulesets" / "archive"
@@ -75,6 +82,78 @@ def test_frame_builds_are_road_builds_only(line3: MapDef, full_rules: Ruleset) -
     assert frame["e"] == [[0, 0, full_rules.build.ticks_per_level]] and "b" not in frame
 
 
+def _fight(round_: FightRound | None) -> Fight:
+    return Fight(
+        id=3,
+        node=1,
+        edge=None,
+        point=None,
+        attacker=0,
+        start=40,
+        next_round=60,
+        virtual=(2, 0),
+        mute=(0, 1),
+        shots=(5, 3),
+        losses=(1, 2),
+        members={7: FightMember(1, 2, 1), 4: FightMember(0, 3, 3)},
+        last_round=round_,
+    )
+
+
+def test_frame_fight_carries_the_round_data(line3: MapDef, full_rules: Ruleset) -> None:
+    """Key ``f`` (DEC-24, #323): totals, virtual shots left (DEC-32) and the last round, by
+    player; the numbers are those set in the fight above, written out by hand."""
+    state = initial_state(line3, full_rules)
+    state.tick = 60
+    state.fights[3] = _fight(
+        FightRound(tick=50, shots=(3, 2), virtual=(1, 0), spent=(2, 2), losses=(1, 1))
+    )
+    assert frame_of(state, full_rules)["f"] == [
+        [
+            3, 1, None, None, 0, 40, 60, [4, 7],
+            [[5, 3], [1, 2], [2, 0], [50, [3, 2], [1, 0], [2, 2], [1, 1]]],
+        ]
+    ]  # fmt: skip
+
+
+def test_frame_fight_before_the_first_round_has_no_last_round(
+    line3: MapDef, full_rules: Ruleset
+) -> None:
+    state = initial_state(line3, full_rules)
+    state.fights[3] = _fight(None)
+    state.fights[3].shots = state.fights[3].losses = (0, 0)
+    frame = frame_of(state, full_rules)
+    assert frame["f"] == [[3, 1, None, None, 0, 40, 60, [4, 7], [[0, 0], [0, 0], [2, 0], None]]]
+    assert "f" not in frame_of(initial_state(line3, full_rules), full_rules)  # no fights, no key
+
+
+def test_round_data_of_many_fights_stays_in_the_size_budget(
+    line3: MapDef, full_rules: Ruleset
+) -> None:
+    """Worst case for #323: six fights in every one of the 1801 frames of 15 minutes, with
+    counters that change from frame to frame. Measured with random counters on a real match:
+    about 380 KB; the budget is 2 MB (AGENTS.md, section 12)."""
+    state = initial_state(line3, full_rules)
+    frames: list[dict[str, object]] = []
+    for tick in range(0, 9001, 5):
+        state.tick = tick
+        for i in range(6):
+            n = (tick * 7 + i * 13) % 61
+            fight = _fight(
+                FightRound(
+                    tick - 5, (n % 7, (n + 3) % 7), (n % 3, n % 2), (n % 5, n % 4), (n % 3, 1)
+                )
+            )
+            fight.id = i
+            fight.shots = (n, 60 - n)
+            fight.losses = (n // 2, (60 - n) // 2)
+            fight.members = {tick % 500 + i: FightMember(0, 3, 2), 600 + i: FightMember(1, 2, 1)}
+            state.fights[i] = fight
+        frames.append(frame_of(state, full_rules))
+    data = json.dumps(frames, separators=(",", ":")).encode()
+    assert len(gzip.compress(data)) <= FRAMES_BUDGET
+
+
 def test_fifteen_minute_match_resimulates_to_the_same_result(
     tmp_path: Path, full_rules: Ruleset
 ) -> None:
@@ -117,6 +196,39 @@ def test_fifteen_minute_match_resimulates_to_the_same_result(
     assert any(f["g"] for f in doc["frames"])
     assert doc["events"], "events are part of the file"
     assert doc["events"][-1][1] == "match_ended"
+    _check_fight_rounds(doc)
+
+
+def _check_fight_rounds(doc: dict[str, Any]) -> None:
+    """The round data of ``f`` (#323) against the ``fight_round`` events of the same file: the
+    last round of a fight in a frame is its latest ``fight_round`` event up to that tick, and
+    the totals are the sums of the rounds so far."""
+    rounds: dict[int, list[list[Any]]] = {}
+    for tick, kind, data in doc["events"]:
+        if kind == "fight_round":
+            rounds.setdefault(data["fight"], []).append([tick, data])
+    checked = 0
+    for frame in doc["frames"]:
+        for fight in frame.get("f", []):
+            assert len(fight) == 9, "the round data is the ninth element"
+            shots, losses, virtual_left, last = fight[8]
+            played = [(t, d) for t, d in rounds.get(fight[0], []) if t <= frame["t"]]
+            assert shots == [sum(d[f"shots_{p}"] for _, d in played) for p in (0, 1)]
+            assert losses == [sum(d[f"losses_{p}"] for _, d in played) for p in (0, 1)]
+            assert len(virtual_left) == 2 and min(virtual_left) >= 0
+            if not played:
+                assert last is None
+                continue
+            tick, d = played[-1]
+            assert last == [
+                tick,
+                [d["shots_0"], d["shots_1"]],
+                [d["virtual_0"], d["virtual_1"]],
+                [d["spent_0"], d["spent_1"]],
+                [d["losses_0"], d["losses_1"]],
+            ]
+            checked += 1
+    assert checked > 0, "no fight round in this match: the check above was empty"
 
 
 def test_log_with_a_wrong_hash_is_refused(
@@ -467,6 +579,25 @@ def test_rated_replay_is_public(api: Api, line3: MapDef, short_rules: Ruleset) -
     stored = json.loads(gzip.decompress(path.read_bytes()))
     assert response.json() == stored  # httpx unzips Content-Encoding: gzip, like a browser
     assert stored["format"] == FORMAT
+
+
+def test_replay_file_without_round_data_is_served_as_it_is(
+    api: Api, line3: MapDef, short_rules: Ruleset
+) -> None:
+    """A file written before #323 (fights without the ninth element) stays valid: the server
+    only checks the header, so the viewer gets the stored bytes; the viewer shows an empty arena."""
+    a, _ = _guest(api, "Alice")
+    b, _ = _guest(api, "Bobby")
+    path = _frames_file(api, "4.frames.json.gz", line3, short_rules)
+    doc = json.loads(gzip.decompress(path.read_bytes()))
+    old_fight = [1, 1, None, None, 0, 40, 60, [1, 2]]
+    doc["frames"][0]["f"] = [old_fight]
+    path.write_bytes(gzip.compress(json.dumps(doc).encode()))
+    _add_match(api, 4, True, (a, b), path.name)
+
+    response = api.client.get("/api/replays/4")
+    assert response.status_code == 200
+    assert response.json()["frames"][0]["f"] == [old_fight]
 
 
 def test_unrated_replay_is_for_the_participants(
