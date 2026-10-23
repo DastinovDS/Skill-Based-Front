@@ -1,11 +1,14 @@
 /**
- * The guest identity kept between visits: the token the server issued once (ID-01) and the nick.
+ * The guest identity kept between visits: the token the server issued (ID-01; a password change
+ * or a login replaces it, #374) and the nick.
  * `localStorage` may be missing or throw (private mode, blocked site data): then the guest lives
  * until the page closes and a new nick is asked next time. The token is never put in a URL.
  */
 export interface SavedGuest {
   token: string;
   nick: string;
+  /** The account has a password (#374): decides what "Log out" warns about while offline. */
+  hasPassword: boolean;
 }
 
 export const GUEST_STORAGE_KEY = 'sbf.guest';
@@ -24,7 +27,8 @@ export function loadGuest(storage: () => Storage): SavedGuest | null {
       typeof value.nick === 'string' &&
       value.token !== ''
     ) {
-      return { token: value.token, nick: value.nick };
+      const hasPassword = 'hasPassword' in value && value.hasPassword === true;
+      return { token: value.token, nick: value.nick, hasPassword };
     }
   } catch {
     // No storage or damaged content: ask for a nick again.

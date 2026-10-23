@@ -6,9 +6,11 @@
  * without a DOM.
  */
 import { SvelteURLSearchParams } from 'svelte/reactivity';
-import { Api, ApiError, type ActiveMatch, type ApiErrorCode, type BotLevel } from '../api/http.ts';
+import { Api, ApiError, type ActiveMatch, type BotLevel } from '../api/http.ts';
 import { forgetGuest, loadGuest, saveGuest } from '../api/guestStore.ts';
 import type { MessageKey } from '../i18n/index.ts';
+import { loginFailure, passwordFailure, type AccountFailure } from './account.ts';
+import { apiErrorKey } from './apiErrors.ts';
 import type { MatchEndMsg, PlayerId } from '../protocol.gen.ts';
 
 export type Screen =
@@ -21,6 +23,8 @@ export type Screen =
   /** The public lobby: open matches of other players (LOB-01). */
   | { readonly name: 'lobby' }
   | { readonly name: 'bot' }
+  /** Set or change the password of the account (#374). */
+  | { readonly name: 'password' }
   /** The matchmaking queue (MM-01): searching, confirming, then the rated match. */
   | { readonly name: 'queue' }
   /** The waiting room of an invite (host and guest). */
@@ -40,8 +44,11 @@ export type Screen =
     };
 
 export interface Guest {
+  /** Replaced by a password change and by a login: the server keeps one token per player. */
   readonly token: string;
   readonly nick: string;
+  /** An account (can log in from another device) rather than a guest that is lost on logout. */
+  readonly hasPassword: boolean;
 }
 
 export interface AppStateOptions {
@@ -53,22 +60,7 @@ export interface AppStateOptions {
   replaceUrl?: (url: string) => void;
 }
 
-/** The UI string for an API failure. */
-const API_ERRORS: Record<ApiErrorCode, MessageKey> = {
-  unauthorized: 'error.api.unauthorized',
-  blocked: 'error.api.blocked',
-  not_found: 'error.api.not_found',
-  conflict: 'error.api.conflict',
-  invalid: 'error.api.invalid',
-  rate_limited: 'error.api.rate_limited',
-  unavailable: 'error.api.unavailable',
-  network: 'error.api.network',
-  server: 'error.api.server',
-};
-
-export function apiErrorKey(error: unknown): MessageKey {
-  return API_ERRORS[error instanceof ApiError ? error.code : 'network'];
-}
+export { apiErrorKey };
 
 export class AppState {
   screen = $state.raw<Screen>({ name: 'boot' });
@@ -103,10 +95,13 @@ export class AppState {
     if (saved !== null) {
       try {
         const me = await this.api.me(saved.token);
-        this.guest = { token: saved.token, nick: me.nick };
+        this.guest = { token: saved.token, nick: me.nick, hasPassword: me.has_password };
+        saveGuest(this.#storage, this.guest);
       } catch (error) {
         if (error instanceof ApiError && error.code === 'unauthorized') {
+          // Another device logged in to this account (a new token) or the guest is gone.
           forgetGuest(this.#storage);
+          this.notice = 'error.api.unauthorized';
         } else {
           // The server cannot be reached: keep the guest, the next action shows the failure.
           this.guest = saved;
@@ -121,13 +116,90 @@ export class AppState {
     this.notice = null;
     try {
       const created = await this.api.createGuest(nick);
-      this.guest = { token: created.token, nick };
+      this.guest = { token: created.token, nick, hasPassword: false };
       saveGuest(this.#storage, this.guest);
     } catch (error) {
       this.notice = apiErrorKey(error);
       return;
     }
     await this.#proceed();
+  }
+
+  /**
+   * Registration from a clean screen (#374): a guest, then at once its password. Returns why it
+   * failed, or null. If only the password step fails, the guest stays (nick taken, no password):
+   * the menu says so and offers "Set password".
+   */
+  async registerAccount(nick: string, password: string): Promise<AccountFailure | null> {
+    this.notice = null;
+    let token: string;
+    try {
+      token = (await this.api.createGuest(nick)).token;
+    } catch (error) {
+      return { key: apiErrorKey(error) };
+    }
+    let hasPassword = false;
+    try {
+      token = (await this.api.setPassword(token, password)).token;
+      hasPassword = true;
+    } catch {
+      this.notice = 'error.account.registerNoPassword';
+    }
+    this.#remember({ token, nick, hasPassword });
+    await this.#proceed();
+    return null;
+  }
+
+  /** Log in with nick and password; the token of the account on other devices stops working. */
+  async login(nick: string, password: string): Promise<AccountFailure | null> {
+    this.notice = null;
+    let token: string;
+    try {
+      token = (await this.api.login(nick, password)).token;
+    } catch (error) {
+      return loginFailure(error);
+    }
+    // The nick may be typed in another spelling than the account has: ask for the real one.
+    let shown = nick;
+    try {
+      shown = (await this.api.me(token)).nick;
+    } catch {
+      // The typed nick will do until the next start.
+    }
+    this.#remember({ token, nick: shown, hasPassword: true });
+    await this.#proceed();
+    return null;
+  }
+
+  /**
+   * Set the password of a guest, or change it (the old one is asked then). The server answers
+   * with a NEW token and the old one dies at once: it is saved before anything else is asked.
+   */
+  async setPassword(password: string, oldPassword: string): Promise<AccountFailure | null> {
+    const guest = this.#requireGuest();
+    try {
+      const renewed = await this.api.setPassword(
+        guest.token,
+        password,
+        guest.hasPassword ? oldPassword : undefined,
+      );
+      this.#remember({ ...guest, token: renewed.token, hasPassword: true });
+      return null;
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'unauthorized') {
+        this.#fail(error);
+        return null;
+      }
+      return passwordFailure(error);
+    }
+  }
+
+  /** "Log out": this device forgets the token. The account (with a password) can log in again. */
+  logout(): void {
+    this.forget();
+    this.activeMatch = null;
+    this.pendingInvite = null;
+    this.go({ name: 'welcome' });
   }
 
   /**
@@ -205,6 +277,11 @@ export class AppState {
   forget(): void {
     forgetGuest(this.#storage);
     this.guest = null;
+  }
+
+  #remember(guest: Guest): void {
+    this.guest = guest;
+    saveGuest(this.#storage, guest);
   }
 
   #takeInviteFromUrl(): void {
