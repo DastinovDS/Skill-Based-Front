@@ -147,8 +147,9 @@ A charge is counted once: a charge that left a warehouse in a packet, or was tak
 simulation (`warehouse_lost`), so it drops out of the stock of the old owner at once. Enemy
 charges are never counted.
 
-`MatchRecorder` samples `stock(t)` after every tick `t = 1..ticks` into `MatchLog.stock` (about
-30 integer additions per tick; the cost against the step budget is in the PR). Per match and player:
+`MatchRecorder` samples `stock(t)` after every tick `t = 1..ticks` into `MatchLog.stock` (a loop
+over nodes, packets and groups: about 8 microseconds per tick on a loaded development machine, about
+1% of a headless match). Per match and player:
 
 | Value | Formula (integers, rounded down) |
 |---|---|
