@@ -1,365 +1,363 @@
 # Skill-Based Front
 
-Соревновательная стратегия 1v1 в браузере, партия от 10 до 15 минут. Карта: граф городов и дорог.
-Юнит работает как «батарейка»: заряжен или разряжен. Столица производит заряды, дороги их развозят,
-юнит без заряда беззащитен.
+A competitive 1v1 strategy game in the browser, a match takes 10 to 15 minutes. The map is a graph of cities and roads.
+A unit works like a "battery": charged or discharged. The capital produces charges, roads carry them,
+a unit without a charge is defenseless.
 
-Архитектура: авторитарный сервер на Python (FastAPI), чистая детерминированная симуляция,
-туман войны на сервере, веб-клиент на TypeScript (Svelte 5 + PixiJS 8).
+Architecture: an authoritative Python server (FastAPI), a pure deterministic simulation,
+fog of war on the server, a web client in TypeScript (Svelte 5 + PixiJS 8).
 
-## Документы
+## Documents
 
-- [`docs/design/mechanics.md`](docs/design/mechanics.md): правила игры, единственный источник правды о механике.
-- [`AGENTS.md`](AGENTS.md): обязательные правила для агентов и разработчиков (структура, команды, детерминизм, процесс).
-  `CLAUDE.md` подключает его для Claude Code.
-- [`docs/mvp/MVP_PLAN.md`](docs/mvp/MVP_PLAN.md): план MVP (вехи, оценки, риски);
-  [`docs/mvp/MVP_ISSUES.md`](docs/mvp/MVP_ISSUES.md): все issues плана; `docs/mvp/issue_map.json`: ID → номер issue.
-- [`docs/adr/`](docs/adr/): архитектурные решения, начиная с [`0001-architecture.md`](docs/adr/0001-architecture.md).
-- [`docs/design/archive/DESIGN-v1.md`](docs/design/archive/DESIGN-v1.md): первая версия дизайн-документа (устарела).
+- [`docs/design/mechanics.md`](docs/design/mechanics.md): the game rules, the only source of truth about the mechanics.
+- [`AGENTS.md`](AGENTS.md): mandatory rules for agents and developers (structure, commands, determinism, process).
+  `CLAUDE.md` pulls it in for Claude Code.
+- [`docs/mvp/MVP_PLAN.md`](docs/mvp/MVP_PLAN.md): the MVP plan (milestones, estimates, risks);
+  [`docs/mvp/MVP_ISSUES.md`](docs/mvp/MVP_ISSUES.md): all issues of the plan; `docs/mvp/issue_map.json`: ID → issue number.
+- [`docs/adr/`](docs/adr/): architecture decisions, starting with [`0001-architecture.md`](docs/adr/0001-architecture.md).
+- [`docs/design/archive/DESIGN-v1.md`](docs/design/archive/DESIGN-v1.md): the first version of the design document (outdated).
 
-## Структура репозитория
+## Repository structure
 
 ```
-packages/sim/        gow_sim       правила игры: чистая детерминированная симуляция
-packages/protocol/   gow_protocol  Pydantic-модели сообщений клиент <-> сервер, фикстуры, тест-векторы
-apps/server/         gow_server    FastAPI: HTTP (лобби, рейтинг) + WebSocket (матчи)
-apps/bots/           gow_bots      боты и турнирный харнесс
-apps/client/                       веб-клиент: TypeScript + Vite + Svelte 5 + PixiJS 8
-tools/maps/          gow_maps      офлайн-инструменты для карт: валидатор, отзеркаливание, превью
-maps/                              карты MVP (JSON, превью)
-rulesets/                          наборы правил (*.toml) и архив сыгранных по хэшу
-docs/design/                       механика, формат карты, архив старого дизайна
-docs/adr/                          архитектурные решения
-docs/balance/                      отчёты баланса
-docs/mvp/                          план MVP и список issues
-docs/qa/                           чек-листы
-deploy/                            Dockerfile-ы, Caddyfile, скрипты развёртывания (compose.yaml в корне)
-mise.toml                          версии инструментов и все команды проекта (mise)
+packages/sim/        gow_sim       game rules: pure deterministic simulation
+packages/protocol/   gow_protocol  Pydantic models of client <-> server messages, fixtures, test vectors
+apps/server/         gow_server    FastAPI: HTTP (lobby, rating) + WebSocket (matches)
+apps/bots/           gow_bots      bots and the tournament harness
+apps/client/                       web client: TypeScript + Vite + Svelte 5 + PixiJS 8
+tools/maps/          gow_maps      offline map tools: validator, mirroring, previews
+maps/                              MVP maps (JSON, previews)
+rulesets/                          rulesets (*.toml) and the archive of played ones by hash
+docs/design/                       mechanics, map format, archive of the old design
+docs/adr/                          architecture decisions
+docs/balance/                      balance reports
+docs/mvp/                          the MVP plan and the list of issues
+docs/qa/                           checklists
+deploy/                            Dockerfiles, Caddyfile, deployment scripts (compose.yaml is in the root)
+mise.toml                          tool versions and all project commands (mise)
 ```
 
-Python-пакеты собраны в uv workspace (корневой `pyproject.toml`), у каждого src-layout:
-`<каталог>/src/<пакет>/__init__.py`. Версия Python зафиксирована в `.python-version` (3.12).
+Python packages are collected in a uv workspace (the root `pyproject.toml`), each with a src layout:
+`<directory>/src/<package>/__init__.py`. The Python version is pinned in `.python-version` (3.12).
 
-## Быстрый старт
+## Quick start
 
-Команды проекта и версии инструментов задаёт [mise](https://mise.jdx.dev) (`mise.toml` в корне, список задач и их смысл:
-`AGENTS.md`, раздел 3). Нужны только mise и Docker (последний для стеков и E2E); Node.js, pnpm и uv mise ставит сам.
+Project commands and tool versions are set by [mise](https://mise.jdx.dev) (`mise.toml` in the root, the list of tasks and what they mean:
+`AGENTS.md`, section 3). You need only mise and Docker (the latter for stacks and E2E); mise installs Node.js, pnpm and uv itself.
 
 **macOS** (Homebrew):
 
 ```sh
 brew install mise
-mise trust                  # один раз на клон: mise не выполняет чужой mise.toml без доверия
-mise install                # node, pnpm, uv версий проекта
-mise run setup              # uv sync --locked и pnpm install (клиент, e2e)
+mise trust                  # once per clone: mise does not run someone else's mise.toml without trust
+mise install                # node, pnpm, uv of the project versions
+mise run setup              # uv sync --locked and pnpm install (client, e2e)
 ```
 
-**Windows:** `winget install jdx.mise` (или `scoop install mise`), дальше те же `mise trust`, `mise install`,
-`mise run setup` в PowerShell. Почти все задачи это обычные вызовы `uv`, `pnpm` и `docker` без bash. Исключения:
-`stack`, `stack:reset`, `stack:agent` (подставляют рулсет в окружение командой `VAR=значение команда`, нужна
-POSIX-оболочка) и `smoke` (запускает `deploy/smoke.sh`, нужен bash): запускай их из Git Bash. Остальное в Windows не
-проверялось (нет машины), если что-то не работает, заведи issue. Активировать mise в профиле оболочки не нужно:
-`mise run <задача>` подставляет нужные версии сам (для обычного терминала активация удобна: `mise activate`).
+**Windows:** `winget install jdx.mise` (or `scoop install mise`), then the same `mise trust`, `mise install`,
+`mise run setup` in PowerShell. Almost all tasks are plain calls of `uv`, `pnpm` and `docker` without bash. The exceptions:
+`stack`, `stack:reset`, `stack:agent` (they put the ruleset into the environment with `VAR=value command`, which needs a
+POSIX shell) and `smoke` (it runs `deploy/smoke.sh`, which needs bash): run them from Git Bash. The rest has not been
+tested on Windows (no machine); if something does not work, open an issue. There is no need to activate mise in the shell profile:
+`mise run <task>` puts the right versions in place itself (for an ordinary terminal activation is handy: `mise activate`).
 
-Ежедневные команды:
+Daily commands:
 
 ```sh
-mise tasks                  # все задачи с описаниями
-mise run check              # ruff, pyright, lint-imports, карты, lint и check клиента и e2e
-mise run test               # быстрый pytest (как job py) и Vitest
-mise run test:perf          # бенчмарки и tick lag, только последовательно
-mise run test:slow          # длинные матчи ботов (job py-slow)
-mise run dev                # сервер (порт 8000) и клиент (http://localhost:5173), Ctrl-C останавливает оба
-mise run test:py -- -k combat -vv   # аргументы инструмента после --
+mise tasks                  # all tasks with descriptions
+mise run check              # ruff, pyright, lint-imports, maps, lint and check of the client and e2e
+mise run test               # quick pytest (like the job py) and Vitest
+mise run test:perf          # benchmarks and tick lag, sequential only
+mise run test:slow          # long bot matches (the job py-slow)
+mise run dev                # server (port 8000) and client (http://localhost:5173), Ctrl-C stops both
+mise run test:py -- -k combat -vv   # tool arguments after --
 ```
 
-Вывод задач тихий: видно только то, что печатают инструменты. Ошибки не скрываются; `mise run -o prefix <задача>`
-подписывает строки задачами. Один раз после клона: `mise run hooks` (ruff перед каждым коммитом).
+Task output is quiet: you see only what the tools print. Errors are not hidden; `mise run -o prefix <task>`
+labels the lines with the tasks. Once after cloning: `mise run hooks` (ruff before every commit).
 
-Без mise те же проверки запускаются напрямую (нужны [uv](https://docs.astral.sh/uv/), Node.js 24.15+ и pnpm версии из
-поля `packageManager` в `apps/client/package.json`: `corepack enable pnpm` или `npm i -g pnpm`): команды лежат в
-`mise.toml`, в каждой задаче одна-две строки. Если Python 3.12 не установлен, uv скачает его сам
+Without mise the same checks run directly (you need [uv](https://docs.astral.sh/uv/), Node.js 24.15+ and the pnpm version from the
+`packageManager` field in `apps/client/package.json`: `corepack enable pnpm` or `npm i -g pnpm`): the commands are in
+`mise.toml`, one or two lines per task. If Python 3.12 is not installed, uv downloads it itself
 (`uv python install 3.12`).
 
-Типы протокола в клиенте (`apps/client/src/protocol.gen.ts`) генерируются из Pydantic-моделей
-`gow_protocol`, руками не правятся. После изменения моделей: `mise run regen:protocol`.
+The protocol types in the client (`apps/client/src/protocol.gen.ts`) are generated from the Pydantic models of
+`gow_protocol` and are not edited by hand. After changing the models: `mise run regen:protocol`.
 
-Типы HTTP API (`apps/client/src/api.gen.ts`) генерируются из OpenAPI приложения FastAPI
-(`apps/server/openapi.json`), руками не правятся. После изменения эндпоинтов или их моделей: `mise run regen:api`
-(обе генерации сразу: `mise run regen`).
+The HTTP API types (`apps/client/src/api.gen.ts`) are generated from the OpenAPI of the FastAPI app
+(`apps/server/openapi.json`) and are not edited by hand. After changing endpoints or their models: `mise run regen:api`
+(both generations at once: `mise run regen`).
 
-Прод-сборка клиента под целевым CSP: `mise run preview`.
+A production build of the client under the target CSP: `mise run preview`.
 
-Клиент в разработке: `mise run dev` (`uv run gow-server` на порту 8000 и `pnpm -C apps/client dev`); dev-сервер Vite
-проксирует `/api` и `/ws` на `127.0.0.1:8000`. Экраны: ник гостя (токен в `localStorage`, ключ `sbf.guest`, в адрес
-не попадает), меню, приватный матч (ссылка-приглашение `/?m=<код>`, код после чтения убирается из адресной
-строки), матч с ботом, матч, итог с реплеем. Старый dev-экран с картой и фикстурами открывается в dev-сборке
-по `/?dev` и `/?scene=<id>`.
+The client in development: `mise run dev` (`uv run gow-server` on port 8000 and `pnpm -C apps/client dev`); the Vite dev server
+proxies `/api` and `/ws` to `127.0.0.1:8000`. Screens: the guest nick (the token is in `localStorage`, key `sbf.guest`, it never
+reaches the address), the menu, a private match (an invite link `/?m=<code>`, the code is removed from the address
+bar after it is read), a match with a bot, a match, the result with a replay. The old dev screen with a map and fixtures opens in a dev build
+at `/?dev` and `/?scene=<id>`.
 
-Dev-экран клиента показывает карту из бандла (`maps/*.json`, до MAP-04 тестовые карты
-`packages/sim/tests/maps/`): выбор карты и «Вписать карту» в панели, перетаскивание сдвигает карту,
-колесо меняет масштаб у курсора. Счётчик FPS в панели обновляется дважды в секунду.
+The client dev screen shows a map from the bundle (`maps/*.json`, before MAP-04 the test maps
+`packages/sim/tests/maps/`): choosing a map and "Fit map" in the panel, dragging moves the map,
+the wheel zooms at the cursor. The FPS counter in the panel updates twice a second.
 
-Языки интерфейса: русский и английский. При первом визите язык берётся из настроек браузера
-(`navigator.languages`: первый из `ru`/`en`, для остальных языков английский), переключатель «Язык» в панели
-меняет его и запоминает выбор в `localStorage` (ключ `sbf.locale`; если хранилище недоступно, выбор
-действует до перезагрузки). Строки интерфейса лежат в `apps/client/src/i18n/ru.ts` и `en.ts`: отсутствующий
-или лишний ключ в `en.ts` — ошибка типов, а `mise run check:i18n` проверяет, что в разметке
-нет строк мимо словарей и что наборы ключей совпадают (входит в `mise run test:client`).
+Interface language: English (`en`); the i18n mechanism stays, so more languages can be added later: a new locale is a new
+dictionary with the same set of keys. UI strings live in the dictionaries in `apps/client/src/i18n/` (`en.ts`): a missing
+or extra key in a dictionary is a type error, and `mise run check:i18n` checks that the markup has no
+strings outside the dictionaries and that the key sets of all dictionaries match (part of `mise run test:client`).
 
 ## CI
 
-GitHub Actions, `.github/workflows/ci.yml`. Запускается на PR в `develop` и `main`, на push в `develop`
-и вручную (`workflow_dispatch`).
+GitHub Actions, `.github/workflows/ci.yml`. It runs on PRs into `develop` and `main`, on pushes to `develop`
+and manually (`workflow_dispatch`).
 
-**Обязательные проверки** (PR мержится только когда все зелёные):
+**Required checks** (a PR is merged only when all are green):
 
-| Проверка | Что делает |
+| Check | What it does |
 |---|---|
-| `py` | `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `gow-maps validate`, `pytest -n auto -m "not perf and not slow"` (pytest-xdist, `HYPOTHESIS_PROFILE=ci`), затем `pytest -m perf` последовательно (бюджеты производительности), реплеи и `check_golden_frozen` |
-| `web` | `pnpm -C apps/client install --frozen-lockfile`, шаги `protocol-drift` и `api-drift` (перегенерация схемы протокола с `protocol.gen.ts` и OpenAPI сервера с `api.gen.ts`, падают при отличии от закоммиченных), `lint`, `check`, `test`, `build` |
-| `docker` | `hadolint` для `deploy/*.Dockerfile`, затем `deploy/smoke.sh`: сборка образов, `docker compose up`, проверки через Caddy |
+| `py` | `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `gow-maps validate`, `pytest -n auto -m "not perf and not slow"` (pytest-xdist, `HYPOTHESIS_PROFILE=ci`), then `pytest -m perf` sequentially (performance budgets), replays and `check_golden_frozen` |
+| `web` | `pnpm -C apps/client install --frozen-lockfile`, the steps `protocol-drift` and `api-drift` (regenerate the protocol schema with `protocol.gen.ts` and the server OpenAPI with `api.gen.ts`, fail if they differ from the committed ones), `lint`, `check`, `test`, `build` |
+| `docker` | `hadolint` for `deploy/*.Dockerfile`, then `deploy/smoke.sh`: build the images, `docker compose up`, checks through Caddy |
 
-- Не обязательный job `py-slow` идёт параллельно с `py` на тех же путях: `pytest -n auto -m slow`, то есть длинные
-  тесты полных матчей (доли побед ботов против `random_legal` по 3 и 10 seed на карту, разнообразие по seed,
-  турнирный харнесс на всех ботах). Он не задерживает мерж, но его красный результат нужно разобрать до релиза.
-  Метки pytest: `perf` (замеры времени, не запускаются под xdist), `slow` (длинные матчи); обе описаны в
+- The not required job `py-slow` runs in parallel with `py` on the same paths: `pytest -n auto -m slow`, that is the long
+  tests of full matches (win shares of bots against `random_legal` over 3 and 10 seeds per map, diversity across seeds,
+  the tournament harness on all bots). It does not delay the merge, but its red result must be analyzed before a release.
+  The pytest marks: `perf` (timing measurements, not run under xdist), `slow` (long matches); both are described in
   `pyproject.toml`.
-- Не обязательный job `e2e` (QA-02, #84): собирает стек (`compose.yaml` + `e2e/compose.e2e.yaml`) и гоняет
-  Playwright из `e2e/` в настоящем Chromium. Не обязательный по той же причине, что и `visual`: собирает оба
-  образа второй раз, рисует WebGL программно, играет настоящие матчи по 60 секунд (около 5 минут), поэтому он
-  самый долгий и самый чувствительный к среде; его красный результат разбирается до релиза. Артефакт `e2e-results`
-  (трассы и скриншоты упавших тестов).
-- Вспомогательный job `changes` смотрит на изменённые пути в PR. Если в PR нет изменений для `py`, `web` или `docker`
-  (например, правка только документации), соответствующий job пропускается, а GitHub считает пропущенный job
-  успешным: обязательная проверка не зависает в ожидании. Если сам `changes` упал, все проверки запускаются целиком.
-  На push в `develop` и при ручном запуске проверяется всё.
-- Версии: Python из `.python-version`, pnpm из поля `packageManager`, Node из поля `engines.node`
-  в `apps/client/package.json`.
+- The not required job `e2e` (QA-02, #84): builds the stack (`compose.yaml` + `e2e/compose.e2e.yaml`) and runs
+  Playwright from `e2e/` in a real Chromium. It is not required for the same reason as `visual`: it builds both
+  images a second time, renders WebGL in software, plays real 60-second matches (about 5 minutes), so it is
+  the longest and the most sensitive to the environment; its red result is analyzed before a release. The artifact `e2e-results`
+  (traces and screenshots of failed tests).
+- The helper job `changes` looks at the changed paths in a PR. If a PR has no changes for `py`, `web` or `docker`
+  (for example a documentation-only edit), the matching job is skipped, and GitHub counts a skipped job as
+  successful: a required check does not hang waiting. If `changes` itself failed, all checks run in full.
+  On a push to `develop` and on a manual run everything is checked.
+- Versions: Python from `.python-version`, pnpm from the `packageManager` field, Node from the `engines.node` field
+  in `apps/client/package.json`.
 
-**Branch protection не включена.** Для приватного репозитория на бесплатном плане GitHub API отвечает
-`403 Upgrade to GitHub Pro or make this repository public to enable this feature` (и для branch protection,
-и для rulesets). Пока это так, правило «мерж только при зелёных `py`, `web` и `docker`» держится на процессе (AGENTS.md, раздел 11).
-После перехода на Pro или открытия репозитория: Settings → Branches → правило для `develop`
-(и `main`) с обязательными проверками `py`, `web` и `docker`, без обязательных ревью, без `enforce_admins`.
+**Branch protection is not enabled.** For a private repository on the free plan the GitHub API answers
+`403 Upgrade to GitHub Pro or make this repository public to enable this feature` (for both branch protection
+and rulesets). While that holds, the rule "merge only when `py`, `web` and `docker` are green" rests on the process (AGENTS.md, section 11).
+After moving to Pro or making the repository public: Settings → Branches → a rule for `develop`
+(and `main`) with the required checks `py`, `web` and `docker`, without required reviews, without `enforce_admins`.
 
-## Сервер
+## Server
 
 ```sh
 uv run gow-server            # http://127.0.0.1:8000/api/health
-uv run gow-server --reload   # перезапуск при изменении кода
+uv run gow-server --reload   # restart on code changes
 ```
 
-Сервер всегда запускается с одним воркером (`AGENTS.md`, раздел 5.1). Логи: JSON-строки в stderr,
-у каждого запроса `request_id` (заголовок `X-Request-ID`). Настройки: переменные окружения `GOW_*`
+The server always starts with one worker (`AGENTS.md`, section 5.1). Logs: JSON lines on stderr,
+every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW_*` environment variables
 (`apps/server/src/gow_server/settings.py`):
 
-| Переменная | По умолчанию | Значение |
+| Variable | Default | Meaning |
 |---|---|---|
-| `GOW_ENV` | `dev` | `dev`, `e2e` или `prod` |
-| `GOW_HOST`, `GOW_PORT` | `127.0.0.1`, `8000` | адрес сервера |
+| `GOW_ENV` | `dev` | `dev`, `e2e` or `prod` |
+| `GOW_HOST`, `GOW_PORT` | `127.0.0.1`, `8000` | the server address |
 | `GOW_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `GOW_FORWARDED_ALLOW_IPS` | `127.0.0.1` | прокси (Caddy), которому доверяются заголовки `X-Forwarded-*` |
-| `GOW_MAPS_DIR` | `maps` | пул карт: `<id>.json` и необязательный фон `<id>.bg.webp` |
-| `GOW_RULESET_PATH` | `rulesets/mvp-0.toml` (в `compose.yaml` и образе `app`: `mvp-1`) | набор правил матчей, которые запускает сервер |
-| `GOW_RULESETS_DIR`, `GOW_RULESETS_BUNDLED_DIR` | `rulesets/archive`, `rulesets/archive` | архив рулсетов по хэшу: сервер сам кладёт сюда свой рулсет при старте (каталог должен быть записываемым; в контейнере `/data/rulesets` на томе), архив из образа копируется сюда, если каталоги разные. `test-short` при `GOW_ENV=prod` сервер не принимает |
-| `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | база SQLite (WAL); путь относительно рабочего каталога |
-| `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `10`, `3600` | не больше N новых гостей с одного IP за окно в секундах |
-| `GOW_MATCH_CREATE_RATE_LIMIT`, `GOW_MATCH_CREATE_RATE_WINDOW_S` | `10`, `600` | MOD-01: не больше N созданных матчей (приглашения и матчи с ботом вместе) на игрока за окно |
-| `GOW_QUEUE_RATE_LIMIT`, `GOW_QUEUE_RATE_WINDOW_S` | `20`, `60` | MOD-01: не больше N входов в очередь подбора (`POST /api/queue`) на игрока за окно |
-| `GOW_QUEUE_WINDOW_BASE`, `GOW_QUEUE_WINDOW_PER_S`, `GOW_QUEUE_WINDOW_MAX` | `100`, `5`, `400` | MM-01: окно подбора по рейтингу `база + k·ожидание` (секунды) с потолком (mechanics.md, раздел 19) |
-| `GOW_QUEUE_PASS_S`, `GOW_QUEUE_CONFIRM_S` | `1`, `15` | MM-01: не чаще одного прохода подбора в N секунд; время на подтверждение найденной пары |
-| `GOW_QUEUE_BOT_OFFER_S`, `GOW_QUEUE_STALE_S` | `60`, `15` | MM-01: через сколько секунд ожидания предложить бота; игрок, чей клиент молчит столько секунд, выходит из очереди |
-| `GOW_NICK_CHANGE_RATE_LIMIT`, `GOW_NICK_CHANGE_RATE_WINDOW_S` | `3`, `86400` | MOD-01: не больше N смен ника (`PUT /api/me/nick`) на игрока за окно |
-| `GOW_LOGIN_IP_RATE_LIMIT`, `GOW_LOGIN_IP_RATE_WINDOW_S` | `20`, `600` | #374: не больше N попыток входа (`POST /api/login`) с одного IP за окно |
-| `GOW_LOGIN_NICK_RATE_LIMIT`, `GOW_LOGIN_NICK_RATE_WINDOW_S` | `10`, `600` | #374: не больше N попыток входа в один ник (по `nick_key`) за окно |
-| `GOW_PASSWORD_RATE_LIMIT`, `GOW_PASSWORD_RATE_WINDOW_S` | `5`, `3600` | #374: не больше N заданий и смен пароля на игрока за окно |
-| `GOW_SCRYPT_N`, `GOW_SCRYPT_R`, `GOW_SCRYPT_P`, `GOW_SCRYPT_MAXMEM` | `32768`, `8`, `1`, `67108864` | #374: параметры `hashlib.scrypt` новых хэшей паролей (память около `128·N·r` байт, `MAXMEM` должен быть больше); хэш хранит свои параметры |
-| `GOW_NICK_BLOCKLIST_FILE` | пусто | MOD-01: файл с дополнительными запрещёнными словами для ников (по слову в строке, `#` комментарий); в контейнере `/data/nick-blocklist.txt` |
-| `GOW_INVITE_TTL_S` | `1800` | срок жизни приглашения в приватный матч (секунды) |
-| `GOW_READY_TIMEOUT_S` | `120` | SRV-09: время на готовность после входа гостя в приглашение; потом приглашение снимается (неявка) |
-| `GOW_WS_ALLOWED_ORIGINS` | `[]` | JSON-список `Origin`, кроме собственного сайта, которым можно открывать WebSocket матча |
-| `GOW_WS_HELLO_TIMEOUT_S`, `GOW_WS_SEND_TIMEOUT_S` | `5`, `5` | ожидание `hello`; отправка дольше этого: клиент не читает, отключение |
-| `GOW_MONITOR_INTERVAL_S` | `30` | OPS-04: период проверки отставания тиков (порог алерта 10% от периода тика) |
-| `GOW_RECONNECT_WINDOW_S`, `GOW_PAUSE_MAX_S` | `60`, `60` | DEC-05: время на переподключение до технического поражения (команда `Forfeit` в журнале); максимум единственной паузы игрока в приватном матче |
-| `GOW_WS_MSG_RATE`, `GOW_WS_MSG_BURST` | `20`, `60` | token bucket сообщений одного соединения (в секунду, пачка); больше: флуд, отключение |
+| `GOW_FORWARDED_ALLOW_IPS` | `127.0.0.1` | the proxy (Caddy) whose `X-Forwarded-*` headers are trusted |
+| `GOW_MAPS_DIR` | `maps` | the map pool: `<id>.json` and an optional background `<id>.bg.webp` |
+| `GOW_RULESET_PATH` | `rulesets/mvp-0.toml` (in `compose.yaml` and the `app` image: `mvp-1`) | the ruleset of the matches the server runs |
+| `GOW_RULESETS_DIR`, `GOW_RULESETS_BUNDLED_DIR` | `rulesets/archive`, `rulesets/archive` | the archive of rulesets by hash: the server puts its own ruleset here on start (the directory must be writable; in the container `/data/rulesets` on the volume), the archive from the image is copied here if the directories differ. The server does not accept `test-short` when `GOW_ENV=prod` |
+| `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | the SQLite database (WAL); the path is relative to the working directory |
+| `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `10`, `3600` | no more than N new guests from one IP per window in seconds |
+| `GOW_MATCH_CREATE_RATE_LIMIT`, `GOW_MATCH_CREATE_RATE_WINDOW_S` | `10`, `600` | MOD-01: no more than N created matches (invites and bot matches together) per player per window |
+| `GOW_QUEUE_RATE_LIMIT`, `GOW_QUEUE_RATE_WINDOW_S` | `20`, `60` | MOD-01: no more than N entries into the matchmaking queue (`POST /api/queue`) per player per window |
+| `GOW_QUEUE_WINDOW_BASE`, `GOW_QUEUE_WINDOW_PER_S`, `GOW_QUEUE_WINDOW_MAX` | `100`, `5`, `400` | MM-01: the matchmaking rating window `base + k·wait` (seconds) with a cap (mechanics.md, section 19) |
+| `GOW_QUEUE_PASS_S`, `GOW_QUEUE_CONFIRM_S` | `1`, `15` | MM-01: no more than one matchmaking pass per N seconds; the time to confirm a found pair |
+| `GOW_QUEUE_BOT_OFFER_S`, `GOW_QUEUE_STALE_S` | `60`, `15` | MM-01: after how many seconds of waiting to offer a bot; a player whose client is silent for that many seconds leaves the queue |
+| `GOW_NICK_CHANGE_RATE_LIMIT`, `GOW_NICK_CHANGE_RATE_WINDOW_S` | `3`, `86400` | MOD-01: no more than N nick changes (`PUT /api/me/nick`) per player per window |
+| `GOW_LOGIN_IP_RATE_LIMIT`, `GOW_LOGIN_IP_RATE_WINDOW_S` | `20`, `600` | #374: no more than N login attempts (`POST /api/login`) from one IP per window |
+| `GOW_LOGIN_NICK_RATE_LIMIT`, `GOW_LOGIN_NICK_RATE_WINDOW_S` | `10`, `600` | #374: no more than N login attempts to one nick (by `nick_key`) per window |
+| `GOW_PASSWORD_RATE_LIMIT`, `GOW_PASSWORD_RATE_WINDOW_S` | `5`, `3600` | #374: no more than N password settings and changes per player per window |
+| `GOW_SCRYPT_N`, `GOW_SCRYPT_R`, `GOW_SCRYPT_P`, `GOW_SCRYPT_MAXMEM` | `32768`, `8`, `1`, `67108864` | #374: the `hashlib.scrypt` parameters of new password hashes (memory is about `128·N·r` bytes, `MAXMEM` must be larger); a hash stores its own parameters |
+| `GOW_NICK_BLOCKLIST_FILE` | empty | MOD-01: a file of additional forbidden words for nicks (one word per line, `#` is a comment); in the container `/data/nick-blocklist.txt` |
+| `GOW_INVITE_TTL_S` | `1800` | the lifetime of an invite to a private match (seconds) |
+| `GOW_READY_TIMEOUT_S` | `120` | SRV-09: the time to get ready after a guest joins an invite; after that the invite is withdrawn (no-show) |
+| `GOW_WS_ALLOWED_ORIGINS` | `[]` | a JSON list of `Origin`s, other than the site itself, that may open the match WebSocket |
+| `GOW_WS_HELLO_TIMEOUT_S`, `GOW_WS_SEND_TIMEOUT_S` | `5`, `5` | the wait for `hello`; a send longer than this: the client is not reading, disconnect |
+| `GOW_MONITOR_INTERVAL_S` | `30` | OPS-04: the period of the tick lag check (the alert threshold is 10% of the tick period) |
+| `GOW_RECONNECT_WINDOW_S`, `GOW_PAUSE_MAX_S` | `60`, `60` | DEC-05: the time to reconnect before a technical defeat (the `Forfeit` command in the log); the maximum of a player's single pause in a private match |
+| `GOW_WS_MSG_RATE`, `GOW_WS_MSG_BURST` | `20`, `60` | the message token bucket of one connection (per second, burst); more than that: flood, disconnect |
 
-База: SQLite, модели в `gow_server/models.py`, миграции Alembic в `gow_server/migrations/versions/`.
-Сервер применяет миграции при старте; вручную: `uv run alembic -c apps/server/alembic.ini upgrade head`.
-Изменение схемы: поправить модели, затем
-`uv run alembic -c apps/server/alembic.ini revision --autogenerate -m "<что>"` и проверить файл миграции.
+The database: SQLite, models in `gow_server/models.py`, Alembic migrations in `gow_server/migrations/versions/`.
+The server applies migrations on start; by hand: `uv run alembic -c apps/server/alembic.ini upgrade head`.
+A schema change: edit the models, then
+`uv run alembic -c apps/server/alembic.ini revision --autogenerate -m "<what>"` and check the migration file.
 
-HTTP API: `GET /api/health`, `GET /api/maps` (список), `GET /api/maps/{id}` (файл карты),
-`GET /api/maps/{id}/background.webp` (фон, если есть). Схема: `/docs` на запущенном сервере.
+HTTP API: `GET /api/health`, `GET /api/maps` (the list), `GET /api/maps/{id}` (the map file),
+`GET /api/maps/{id}/background.webp` (the background, if there is one). The schema: `/docs` on a running server.
 
-WebSocket матча: `/ws/match/{id}` (`gow_server/ws.py`, AGENTS.md, раздел 5.3). `Origin` должен быть
-собственным сайтом (`Host`) или из `GOW_WS_ALLOWED_ORIGINS`, иначе 403. Первое сообщение `hello` с
-гостевым токеном. Коды закрытия: 4001 другая версия протокола, 4004 нет матча (или токен чужой,
-неизвестный), 4009 тот же игрок открыл новое соединение, 1008 нет `hello`, флуд или клиент не читает,
-1000 после `match_end`.
+The match WebSocket: `/ws/match/{id}` (`gow_server/ws.py`, AGENTS.md, section 5.3). The `Origin` must be
+the site itself (`Host`) or one from `GOW_WS_ALLOWED_ORIGINS`, otherwise 403. The first message is `hello` with
+the guest token. Close codes: 4001 another protocol version, 4004 no such match (or the token is someone else's,
+unknown), 4009 the same player opened a new connection, 1008 no `hello`, flood or the client is not reading,
+1000 after `match_end`.
 
-Гостевая идентичность (ID-01):
+Guest identity (ID-01):
 
-- `POST /api/guest` с телом `{"nick": "..."}` → `201 {"player_id", "token"}`. Токен показывается один раз,
-  в базе только его SHA-256. `409`: ник занят, `422`: ник не прошёл проверку, `429`: лимит гостей с IP.
-- Запросы от имени игрока: заголовок `Authorization: Bearer <token>` (пример: `GET /api/me`).
-  Токен в URL не принимается и в логи не пишется. Нет токена или он неверный: `401`.
-- Аккаунт (#374) это гость с паролем. `POST /api/account/password {password, old_password?}` (с токеном) задаёт
-  пароль гостю или меняет его (`old_password` нужен, если пароль уже есть) → `200 {player_id, token}`: токен
-  новый, старый перестаёт работать. `403 wrong password`, `422` пароль не 10..128 символов после NFKC.
-  `POST /api/login {nick, password}` → `200 {player_id, token}` того же игрока (прежний токен перестаёт
-  работать); `401 wrong nick or password` одинаково для неизвестного ника, гостя без пароля и неверного
-  пароля; `403` заблокирован; `429` лимиты по IP и по нику. `GET /api/me` → `{player_id, nick, has_password}`.
-  Ответ `422` не повторяет присланные значения (`input`). Восстановления пароля нет, сброс: `gow-admin reset-password`.
-- `GET /api/me/active-match` → `{match_id, map_id}` идущего матча игрока или `null` (#189). По нему клиент
-  после перезагрузки страницы возвращается в матч: WebSocket с тем же токеном в окне переподключения (DEC-05).
-- Ник: 3–16 символов после нормализации NFC; буквы любого алфавита, цифры, `_` и `-`. Пробелы, знаки,
-  эмодзи и «пустые» буквы-заполнители запрещены. Уникальность без учёта регистра: колонка
-  `nick_key = nick.casefold()` с уникальным индексом (`Straße` и `STRASSE` считаются одним ником).
-  Клиент показывает ник только как текст (`AGENTS.md`, раздел 7.4).
+- `POST /api/guest` with the body `{"nick": "..."}` → `201 {"player_id", "token"}`. The token is shown once,
+  the database holds only its SHA-256. `409`: the nick is taken, `422`: the nick failed validation, `429`: the guest limit per IP.
+- Requests on behalf of a player: the header `Authorization: Bearer <token>` (example: `GET /api/me`).
+  A token in the URL is not accepted and is not written to logs. No token or a wrong one: `401`.
+- An account (#374) is a guest with a password. `POST /api/account/password {password, old_password?}` (with a token) sets
+  a guest's password or changes it (`old_password` is needed if a password already exists) → `200 {player_id, token}`: the token is
+  new, the old one stops working. `403 wrong password`, `422` the password is not 10..128 characters after NFKC.
+  `POST /api/login {nick, password}` → `200 {player_id, token}` of the same player (the previous token stops
+  working); `401 wrong nick or password` is the same for an unknown nick, a guest without a password and a wrong
+  password; `403` blocked; `429` limits per IP and per nick. `GET /api/me` → `{player_id, nick, has_password}`.
+  A `422` response does not repeat the submitted values (`input`). There is no password recovery, reset with `gow-admin reset-password`.
+- `GET /api/me/active-match` → `{match_id, map_id}` of the player's running match or `null` (#189). With it the client
+  returns to the match after a page reload: a WebSocket with the same token within the reconnect window (DEC-05).
+- A nick: 3-16 characters after NFC normalization; letters of any alphabet, digits, `_` and `-`. Spaces, punctuation,
+  emoji and "empty" filler letters are forbidden. Uniqueness is case-insensitive: the column
+  `nick_key = nick.casefold()` with a unique index (`Straße` and `STRASSE` count as one nick).
+  The client shows a nick only as text (`AGENTS.md`, section 7.4).
 
 ## Docker
 
-Прод-стек: `compose.yaml` в корне, образы в `deploy/`. Нужен Docker с Compose v2.
+The production stack: `compose.yaml` in the root, images in `deploy/`. You need Docker with Compose v2.
 
 ```sh
-cp .env.example .env              # необязательно: без .env игра поднимается на http://localhost
+cp .env.example .env              # optional: without .env the game comes up on http://localhost
 docker compose up --build -d      # http://localhost, http://localhost/api/health
-deploy/smoke.sh                   # сборка, запуск и проверка стека (то же делает CI job `docker`)
-deploy/check-caddy.sh             # только заголовки, кэш и маршруты уже запущенного стека
-docker compose logs -f app        # логи сервера (JSON-строки)
-docker compose down               # остановить; данные остаются в томах
-GOW_RULESET_PATH=rulesets/mvp-0.toml docker compose up -d   # стек на другом рулсете (по умолчанию mvp-1)
-# партия 60 секунд (рулсет test-short) для ручной проверки и E2E: docs/qa/manual-match.md
+deploy/smoke.sh                   # build, start and check the stack (the CI job `docker` does the same)
+deploy/check-caddy.sh             # only the headers, cache and routes of an already running stack
+docker compose logs -f app        # server logs (JSON lines)
+docker compose down               # stop; data stays in the volumes
+GOW_RULESET_PATH=rulesets/mvp-0.toml docker compose up -d   # the stack on another ruleset (mvp-1 by default)
+# a 60-second match (the ruleset test-short) for a manual check and E2E: docs/qa/manual-match.md
 docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d --wait
 ```
 
-Задачи mise для стеков (`AGENTS.md`, раздел 3; порты 80/443 у владельца заняты, поэтому у задач свои):
+mise tasks for stacks (`AGENTS.md`, section 3; ports 80/443 are taken on the owner's machine, so the tasks have their own):
 
-| Задача | Для кого | Что делает |
+| Task | For whom | What it does |
 |---|---|---|
-| `mise run stack [рулсет]` | владелец | прод-стек (проект `skill-based-front`) на `http://localhost:8080`, HTTPS 8443, `SITE_ADDRESS=:80`, рулсет по умолчанию `mvp-1` |
-| `mise run stack:reset [рулсет]` | владелец | то же с нуля: `down`, удаление тома `gow-data` (база и реплеи), `up` |
-| `mise run stack:agent [рулсет]`, `stack:agent:down` | агенты | свой стек (проект `sbf-agent`, `http://localhost:18080`), не задевает стек владельца |
-| `mise run smoke` | оба | `deploy/smoke.sh` на проекте `sbf-agent`, в конце стек убирается |
-| `mise run e2e` | оба | свой стек `sbf-e2e` (`http://localhost:18082`, рулсет `test-short`), Playwright, стек убирается |
+| `mise run stack [ruleset]` | owner | the production stack (project `skill-based-front`) on `http://localhost:8080`, HTTPS 8443, `SITE_ADDRESS=:80`, the default ruleset is `mvp-1` |
+| `mise run stack:reset [ruleset]` | owner | the same from scratch: `down`, removal of the volume `gow-data` (database and replays), `up` |
+| `mise run stack:agent [ruleset]`, `stack:agent:down` | agents | their own stack (project `sbf-agent`, `http://localhost:18080`), does not touch the owner's stack |
+| `mise run smoke` | both | `deploy/smoke.sh` on the project `sbf-agent`, the stack is removed at the end |
+| `mise run e2e` | both | its own stack `sbf-e2e` (`http://localhost:18082`, ruleset `test-short`), Playwright, the stack is removed |
 
-Параллельные агенты на одной машине задают разные `SBF_AGENT_PROJECT`, `SBF_AGENT_HTTP_PORT`, `SBF_AGENT_HTTPS_PORT`
-(для `e2e`: `SBF_E2E_*`). Прямые `docker compose ...` без `-p` попадают в проект `skill-based-front`.
+Parallel agents on one machine set different `SBF_AGENT_PROJECT`, `SBF_AGENT_HTTP_PORT`, `SBF_AGENT_HTTPS_PORT`
+(for `e2e`: `SBF_E2E_*`). Direct `docker compose ...` without `-p` lands in the project `skill-based-front`.
 
-| Сервис | Образ | Что делает |
+| Service | Image | What it does |
 |---|---|---|
-| `caddy` | `deploy/caddy.Dockerfile`: сборка клиента (Node, pnpm `--frozen-lockfile`) и Caddy со статикой | единственный публичный сервис (80/443): отдаёт клиент, `/api/*` и `/ws/*` проксирует в `app` |
-| `app` | `deploy/app.Dockerfile`: uv (`uv sync --locked --no-dev`), только пакеты, нужные `gow-server` | сервер, один воркер uvicorn; порт 8000 только во внутренней сети |
+| `caddy` | `deploy/caddy.Dockerfile`: a client build (Node, pnpm `--frozen-lockfile`) and Caddy with static files | the only public service (80/443): serves the client, proxies `/api/*` and `/ws/*` to `app` |
+| `app` | `deploy/app.Dockerfile`: uv (`uv sync --locked --no-dev`), only the packages `gow-server` needs | the server, one uvicorn worker; port 8000 only on the internal network |
 
-- **Данные:** том `gow-data` смонтирован в `/data` контейнера `app`: SQLite (`/data/gow.db` с файлами WAL)
-  и реплеи (`/data/replays/`). Миграции сервер применяет при старте. Всё, что сервер пишет на диск, должно
-  лежать в `/data`: корневая файловая система контейнера только для чтения. `/app/data` ведёт в `/data`,
-  поэтому настройки с путём по умолчанию относительно рабочего каталога (`data/...`) тоже попадают в том.
-  Тома `caddy-data` (TLS-сертификаты, ACME-аккаунт) и `caddy-config` не удаляйте без нужды.
-  `docker compose down --volumes` удаляет базу.
-- **Сеть:** `app` подключён только к сети `internal` без выхода наружу, на хост его порт не публикуется.
-  Поэтому `GOW_FORWARDED_ALLOW_IPS=*`: заголовки `X-Forwarded-*` приходят только от Caddy, а Caddy заменяет
-  присланный клиентом `X-Forwarded-For` настоящим адресом.
-- **Безопасность:** оба контейнера работают не от root (uid 10001 `app`, uid 10002 `caddy`), с `cap_drop: ALL`
-  и `no-new-privileges`. Caddy слушает 80/443 без `CAP_NET_BIND_SERVICE` благодаря
-  `net.ipv4.ip_unprivileged_port_start=0` в `compose.yaml`.
-- **Базовые образы** закреплены версией и digest в `deploy/*.Dockerfile`; как обновить, написано там же.
+- **Data:** the volume `gow-data` is mounted at `/data` of the `app` container: SQLite (`/data/gow.db` with WAL files)
+  and replays (`/data/replays/`). The server applies migrations on start. Everything the server writes to disk must
+  live in `/data`: the root file system of the container is read-only. `/app/data` leads to `/data`,
+  so settings with a default path relative to the working directory (`data/...`) also land in the volume.
+  Do not delete the volumes `caddy-data` (TLS certificates, the ACME account) and `caddy-config` without need.
+  `docker compose down --volumes` deletes the database.
+- **Network:** `app` is connected only to the network `internal` with no way out, its port is not published to the host.
+  That is why `GOW_FORWARDED_ALLOW_IPS=*`: the `X-Forwarded-*` headers come only from Caddy, and Caddy replaces the
+  `X-Forwarded-For` sent by the client with the real address.
+- **Security:** both containers run as non-root (uid 10001 `app`, uid 10002 `caddy`), with `cap_drop: ALL`
+  and `no-new-privileges`. Caddy listens on 80/443 without `CAP_NET_BIND_SERVICE` thanks to
+  `net.ipv4.ip_unprivileged_port_start=0` in `compose.yaml`.
+- **Base images** are pinned by version and digest in `deploy/*.Dockerfile`; how to update them is written there.
 
-Переменные (`.env`, образец `.env.example`):
+Variables (`.env`, sample `.env.example`):
 
-| Переменная | По умолчанию | Значение |
+| Variable | Default | Meaning |
 |---|---|---|
-| `SITE_ADDRESS` | `http://localhost` | адрес сайта для Caddy: `http://localhost` без TLS (локально, e2e), `https://localhost` с локальным TLS, доменное имя включает автоматический HTTPS (раздел «Caddy») |
-| `HTTP_PORT`, `HTTPS_PORT` | `80`, `443` | порты на хосте, например `HTTP_PORT=8080`, если 80 занят |
-| `GOW_ENV`, `GOW_LOG_LEVEL`, `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S`, `GOW_RECONNECT_WINDOW_S`, `GOW_PAUSE_MAX_S`, `GOW_MONITOR_INTERVAL_S` | `prod`, `INFO`, `10`, `3600`, `60`, `60`, `30` | настройки сервера (раздел «Сервер»); `e2e` только для прогона Playwright |
+| `SITE_ADDRESS` | `http://localhost` | the site address for Caddy: `http://localhost` without TLS (local, e2e), `https://localhost` with local TLS, a domain name turns on automatic HTTPS (the "Caddy" section) |
+| `HTTP_PORT`, `HTTPS_PORT` | `80`, `443` | ports on the host, for example `HTTP_PORT=8080` if 80 is taken |
+| `GOW_ENV`, `GOW_LOG_LEVEL`, `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S`, `GOW_RECONNECT_WINDOW_S`, `GOW_PAUSE_MAX_S`, `GOW_MONITOR_INTERVAL_S` | `prod`, `INFO`, `10`, `3600`, `60`, `60`, `30` | server settings (the "Server" section); `e2e` only for a Playwright run |
 
-В `app` попадают только переменные, перечисленные в `compose.yaml` (`Settings` запрещает неизвестные поля):
-новая настройка сервера для прода добавляется и туда, и в `.env.example`.
+Only the variables listed in `compose.yaml` reach `app` (`Settings` forbids unknown fields):
+a new server setting for production is added both there and in `.env.example`.
 
 ### Caddy
 
 `deploy/Caddyfile` (OPS-02, #81):
 
-| Путь | Что делает | Кэш |
+| Path | What it does | Cache |
 |---|---|---|
-| `/api/*` | прокси в `app:8000`, сжатие | заголовки сервера |
-| `/ws/*` | прокси WebSocket в `app:8000`; при `caddy reload` открытые соединения живут ещё до 15 минут (`stream_close_delay`, партия длится 12) | — |
-| `/assets/*` | файлы сборки Vite с хэшем в имени, сжатие zstd/gzip; нет файла — 404 | `public, max-age=31536000, immutable` |
-| остальное | `index.html` и файлы из `apps/client/public`; неизвестный путь отдаёт `index.html` (`try_files`) | `no-cache` (проверка по ETag при каждой загрузке) |
+| `/api/*` | a proxy to `app:8000`, compression | the server's headers |
+| `/ws/*` | a WebSocket proxy to `app:8000`; on `caddy reload` open connections live for up to 15 more minutes (`stream_close_delay`, a match lasts 12) | none |
+| `/assets/*` | Vite build files with a hash in the name, zstd/gzip compression; no file: 404 | `public, max-age=31536000, immutable` |
+| the rest | `index.html` and files from `apps/client/public`; an unknown path serves `index.html` (`try_files`) | `no-cache` (an ETag check on every load) |
 
-- **Заголовки на всех ответах:** `Content-Security-Policy` из `apps/client/csp.ts` (включая `frame-ancestors 'none'`),
-  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` (камера, микрофон,
-  геолокация, платежи, USB выключены). CSP не копируется руками: образ `caddy` генерирует `/etc/caddy/csp.caddy`
-  из `csp.ts` при сборке, а `deploy/check-caddy.sh` сравнивает отданный заголовок с `csp.ts`.
-- **TLS:** с доменом в `SITE_ADDRESS` Caddy сам получает и продлевает сертификат Let's Encrypt (тома `caddy-data`)
-  и перенаправляет HTTP на HTTPS. `Strict-Transport-Security: max-age=31536000` отправляется только по HTTPS и
-  никогда для `localhost`/`127.0.0.1` (иначе браузер начнёт требовать HTTPS от всех локальных проектов).
-- **Локальный TLS:** `SITE_ADDRESS=https://localhost` включает внутренний CA Caddy (браузер предупреждает о
-  самоподписанном сертификате, в хранилище доверия он не ставится). Если 80/443 заняты:
-  `SITE_ADDRESS=https://localhost HTTP_PORT=8080 HTTPS_PORT=8443 docker compose up -d`, затем
-  `BASE_URL=https://localhost:8443 deploy/check-caddy.sh`. Перенаправление с HTTP ведёт на порт 443.
-- **Проверки:** `deploy/check-caddy.sh` (заголовки, кэш, сжатие, маршруты; только чтение, годится и для прода:
-  `BASE_URL=https://game.example.com`) и `deploy/check-ws-reload.sh` (WebSocket матча `/ws/match/...`
-  переживает `caddy reload`: после перезагрузки сервер отвечает на том же соединении кодом 4001 на `hello`
-  старой версии; матч и гость не нужны, но скрипт перезагружает Caddy через `docker compose exec`).
+- **Headers on all responses:** `Content-Security-Policy` from `apps/client/csp.ts` (including `frame-ancestors 'none'`),
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` (camera, microphone,
+  geolocation, payments, USB are off). The CSP is not copied by hand: the `caddy` image generates `/etc/caddy/csp.caddy`
+  from `csp.ts` at build time, and `deploy/check-caddy.sh` compares the served header with `csp.ts`.
+- **TLS:** with a domain in `SITE_ADDRESS` Caddy gets and renews a Let's Encrypt certificate itself (the volume `caddy-data`)
+  and redirects HTTP to HTTPS. `Strict-Transport-Security: max-age=31536000` is sent only over HTTPS and
+  never for `localhost`/`127.0.0.1` (otherwise the browser starts demanding HTTPS from all local projects).
+- **Local TLS:** `SITE_ADDRESS=https://localhost` turns on Caddy's internal CA (the browser warns about a
+  self-signed certificate, it is not put into the trust store). If 80/443 are taken:
+  `SITE_ADDRESS=https://localhost HTTP_PORT=8080 HTTPS_PORT=8443 docker compose up -d`, then
+  `BASE_URL=https://localhost:8443 deploy/check-caddy.sh`. The redirect from HTTP leads to port 443.
+- **Checks:** `deploy/check-caddy.sh` (headers, cache, compression, routes; read-only, suitable for production too:
+  `BASE_URL=https://game.example.com`) and `deploy/check-ws-reload.sh` (the match WebSocket `/ws/match/...`
+  survives `caddy reload`: after the reload the server answers on the same connection with code 4001 to a `hello`
+  of an old version; no match or guest is needed, but the script reloads Caddy through `docker compose exec`).
 
-### Сервер, деплой и бэкапы
+### Server, deploy and backups
 
-Подготовка VPS, первый деплой, откат, бэкапы и восстановление: `docs/ops/deploy.md` (OPS-03, #82).
+VPS preparation, the first deploy, rollback, backups and restore: `docs/ops/deploy.md` (OPS-03, #82).
 
 ```sh
-deploy/deploy.sh origin/main      # на сервере: сборка, бэкап predeploy, запуск по healthcheck, откат при сбое
-deploy/backup.sh                  # онлайн-бэкап тома gow-data в $BACKUP_DIR (по умолчанию ./backups)
-deploy/restore.sh <archive>       # восстановление (останавливает app)
-HTTP_PORT=8080 HTTPS_PORT=8443 deploy/deploy-test.sh   # локально: деплой, откат, бэкап и восстановление
+deploy/deploy.sh origin/main      # on the server: build, predeploy backup, start by healthcheck, rollback on failure
+deploy/backup.sh                  # online backup of the volume gow-data into $BACKUP_DIR (./backups by default)
+deploy/restore.sh <archive>       # restore (stops app)
+HTTP_PORT=8080 HTTPS_PORT=8443 deploy/deploy-test.sh   # locally: deploy, rollback, backup and restore
 ```
 
-Что добавят следующие issues: осушение матчей при деплое (после SRV-02, #47); метрики и оповещения
+What the following issues will add: draining matches on deploy (after SRV-02, #47); metrics and alerts
 (OPS-04, #83).
 
 ## E2E
 
-`e2e/`: Playwright против настоящего стека (QA-02, #84). Свой пакет (`e2e/package.json`, свой lock-файл):
-клиенту нужны Svelte и Vite, E2E нужны только Playwright и TypeScript, и они не зависят от сборки клиента
-(тесты видят его только через браузер). Версия `@playwright/test` та же, что у `apps/client` (визуальные тесты).
+`e2e/`: Playwright against the real stack (QA-02, #84). Its own package (`e2e/package.json`, its own lock file):
+the client needs Svelte and Vite, E2E needs only Playwright and TypeScript, and they do not depend on the client build
+(the tests see it only through the browser). The `@playwright/test` version is the same as in `apps/client` (visual tests).
 
 ```sh
-mise run e2e                                     # всё сразу: Chromium, свой стек sbf-e2e на :18082, тесты, стек убирается
-mise run check:e2e                               # prettier и tsc
+mise run e2e                                     # all at once: Chromium, its own stack sbf-e2e on :18082, tests, the stack is removed
+mise run check:e2e                               # prettier and tsc
 ```
 
-То же вручную (стек на портах по умолчанию):
+The same by hand (the stack on default ports):
 
 ```sh
 pnpm -C e2e install --frozen-lockfile
-pnpm -C e2e exec playwright install chromium     # один раз
-docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d --wait   # стек; HTTP_PORT=8080, если 80 занят
-E2E_BASE_URL=http://localhost:8080 pnpm -C e2e test   # по умолчанию http://localhost
+pnpm -C e2e exec playwright install chromium     # once
+docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d --wait   # the stack; HTTP_PORT=8080 if 80 is taken
+E2E_BASE_URL=http://localhost:8080 pnpm -C e2e test   # http://localhost by default
 ```
 
-`e2e/compose.e2e.yaml` включает `GOW_ENV=e2e`, рулсет `test-short` (партия 60 секунд), окно переподключения и
-паузу по 10 секунд и большой лимит гостей: стек для E2E нельзя использовать как прод.
+`e2e/compose.e2e.yaml` turns on `GOW_ENV=e2e`, the ruleset `test-short` (a 60-second match), a reconnect window and a
+pause of 10 seconds each and a large guest limit: the E2E stack must not be used as production.
 
-Тесты (`e2e/tests/`), в каждом свои гости в изолированных контекстах браузера:
+The tests (`e2e/tests/`), each with its own guests in isolated browser contexts:
 
-| Файл | Что проверяет |
+| File | What it checks |
 |---|---|
-| `invite-match.spec.ts` | два гостя: инвайт, «Готов», по три приказа у каждого (движение, запланированное движение, стойка), матч до конца по таймеру, согласованный итог, «Смотреть реплей» у обоих, проигрывание, пауза и позиция; отдельно пауза (сервер не шлёт снапшоты), обрыв сокета с переподключением и сдача |
-| `bot-and-pages.spec.ts` | матч с ботом и сдача; прод-сборка рисует форму ника без ошибок страницы, язык, правовые страницы |
+| `invite-match.spec.ts` | two guests: an invite, "Ready", three orders each (a move, a scheduled move, a stance), a match to the end by the timer, a consistent result, "Watch the replay" for both, playback, pause and position; separately a pause (the server sends no snapshots), a socket drop with reconnection and a surrender |
+| `bot-and-pages.spec.ts` | a match with a bot and a surrender; the production build renders the nick form without page errors, the language, the legal pages |
 
-Приказы на карте кликаются по настоящему канвасу: координаты считает `e2e/support/player.ts` теми же функциями камеры и
-раскладки, что и клиент (`apps/client/src/render/camera.ts`, `layout.ts`), а принятие приказа проверяется по `ack` в
-журнале сокета (сокет проходит через `page.routeWebSocket`, клиент и сервер общаются как обычно). Один тест на
-матч, повторов (`retries`) нет: ложный проход скрыл бы нестабильность.
+Orders on the map are clicked on the real canvas: the coordinates are computed by `e2e/support/player.ts` with the same camera and
+layout functions as the client (`apps/client/src/render/camera.ts`, `layout.ts`), and the acceptance of an order is checked by the `ack` in
+the socket log (the socket goes through `page.routeWebSocket`, the client and the server talk as usual). One test per
+match, no retries (`retries`): a false pass would hide instability.
 
-## Прототип на Pygame
+## Pygame prototype
 
-Первый прототип (старый дизайн: пять ресурсов, здания, три типа юнитов, бой через урон и броню) в
-рабочем дереве больше не лежит. Он сохранён в теге `v0-pygame-prototype` этого репозитория
-(`git show v0-pygame-prototype --stat`, `git checkout v0-pygame-prototype`) и в репозитории
-`DastinovDS/Game-of-War`. В новой симуляции этот код не переиспользуется; формулы генератора карт
-перенесены в `tools/maps/src/gow_maps/bake.py` (MAP-05).
+The first prototype (the old design: five resources, buildings, three unit types, combat through damage and armor) no longer
+lives in the working tree. It is kept in the tag `v0-pygame-prototype` of this repository
+(`git show v0-pygame-prototype --stat`, `git checkout v0-pygame-prototype`) and in the repository
+`DastinovDS/Game-of-War`. The new simulation does not reuse this code; the map generator formulas
+were moved to `tools/maps/src/gow_maps/bake.py` (MAP-05).
 
-Первая версия дизайн-документа Skill-Based Front лежит в `docs/design/archive/DESIGN-v1.md`
-(в репозитории прототипа файл не отслеживался git и скопирован из рабочей копии отдельно).
+The first version of the Skill-Based Front design document is in `docs/design/archive/DESIGN-v1.md`
+(in the prototype repository the file was not tracked by git and was copied separately from the working copy).

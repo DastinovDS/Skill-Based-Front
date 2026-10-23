@@ -84,7 +84,7 @@ run = [
 ]
 
 [tasks."check:i18n"]
-description = "Client strings only in dictionaries, same ru and en keys (also part of test:client)"
+description = "Client strings only in dictionaries, same keys in every locale dictionary (also part of test:client)"
 run = "pnpm --silent -C apps/client check:i18n"
 
 # ---------------------------------------------------------------------------------------------
