@@ -14,6 +14,7 @@ import type {
   Location,
   MapFile,
   EdgeBuild,
+  FightView,
   NodeView,
   PacketView,
   PlayerId,
@@ -139,11 +140,14 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
           created_tick: frame.t,
         })),
       // Fights (DEC-24): the viewer sees both sides, so every group of the fight is listed and
-      // the enemy totals stay 0 (they are in the groups). The frames carry no round data yet
-      // (DEC-29 rounds, DEC-32 bonus stock: #323), so the totals and the stock are 0 and there is
-      // no last round.
-      fights: (frame.f ?? []).map(
-        ([id, node, edge, point, attacker, start_tick, next_round_tick, groups]) => ({
+      // the enemy totals stay 0 (they are in the groups). The round data (shots, losses, the
+      // bonus stock and the last round) is the ninth element of the record (#323); a record of
+      // an older file has none, so its arena is empty. The silent charges are not in the frames.
+      fights: (frame.f ?? []).map((record): FightView => {
+        const [id, node, edge, point, attacker, start_tick, next_round_tick, groups] = record;
+        const rounds = record[8];
+        const last = rounds?.[3] ?? null;
+        return {
           id: String(id),
           node,
           edge,
@@ -154,13 +158,21 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
           groups: groups.map(String),
           enemy_units: 0,
           enemy_charged: 0,
-          shots: [0, 0],
-          losses: [0, 0],
-          virtual_left: [0, 0],
+          shots: rounds ? [...rounds[0]] : [0, 0],
+          losses: rounds ? [...rounds[1]] : [0, 0],
+          virtual_left: rounds ? [...rounds[2]] : [0, 0],
           mute: [0, 0],
-          last_round: null,
-        }),
-      ),
+          last_round: last
+            ? {
+                tick: last[0],
+                shots: [...last[1]],
+                virtual: [...last[2]],
+                spent: [...last[3]],
+                losses: [...last[4]],
+              }
+            : null,
+        };
+      }),
     },
   };
 }

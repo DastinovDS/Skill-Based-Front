@@ -31,4 +31,67 @@ describe('parseReplay', () => {
     const broken = { ...SAMPLE, frames: [{ ...SAMPLE.frames[0], b: 3 }] };
     expect(() => parseReplay(broken)).toThrow(expect.objectContaining({ code: 'invalid' }));
   });
+
+  describe('fight records of the frame key "f" (#323)', () => {
+    const OLD = [7, null, 1, 1250, null, 40, 50, [3, 4]];
+    const NEW = [
+      ...OLD,
+      [
+        [2, 1],
+        [0, 1],
+        [1, 0],
+        [40, [1, 1], [0, 1], [1, 1], [0, 1]],
+      ],
+    ];
+    const withFights = (f: unknown[]) => ({
+      ...SAMPLE,
+      frames: [{ ...SAMPLE.frames[0], f }],
+    });
+
+    it('accepts a record of eight elements (an old file) and of nine (with the round data)', () => {
+      expect(() => parseReplay(withFights([OLD]))).not.toThrow();
+      expect(() => parseReplay(withFights([NEW]))).not.toThrow();
+      expect(() => parseReplay(withFights([OLD, NEW]))).not.toThrow();
+    });
+
+    it('accepts a fight before the first round: last_round is null', () => {
+      const first = [...OLD, [[0, 0], [0, 0], [1, 1], null]];
+      expect(() => parseReplay(withFights([first]))).not.toThrow();
+    });
+
+    it.each([
+      ['a record of seven elements', OLD.slice(0, 7)],
+      ['a record of ten elements', [...NEW, 0]],
+      ['a ninth element that is not a list', [...OLD, 3]],
+      [
+        'a ninth element of three parts',
+        [
+          ...OLD,
+          [
+            [0, 0],
+            [0, 0],
+            [0, 0],
+          ],
+        ],
+      ],
+      ['a pair of three numbers', [...OLD, [[0, 0, 0], [0, 0], [0, 0], null]]],
+      ['a float in a pair', [...OLD, [[0.5, 0], [0, 0], [0, 0], null]]],
+      [
+        'a last round with a missing part',
+        [
+          ...OLD,
+          [
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [40, [0, 0]],
+          ],
+        ],
+      ],
+    ])('refuses %s', (_name, record) => {
+      expect(() => parseReplay(withFights([record]))).toThrow(
+        expect.objectContaining({ code: 'invalid' }),
+      );
+    });
+  });
 });

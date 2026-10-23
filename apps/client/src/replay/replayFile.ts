@@ -71,20 +71,40 @@ export interface ReplayFrame {
   f?: FrameFight[];
 }
 
+/** A pair `[player 0, player 1]`. */
+export type PlayerPair = [number, number];
+
+/**
+ * The round data of a fight (#323), the ninth element of its record: `shots` and `losses` (the
+ * totals of the fight so far), `virtual_left` (the bonus shots left, DEC-32) and `last_round`:
+ * `null` before the first round, else `[tick, shots, virtual, spent, losses]`.
+ */
+export type FrameFightRounds = [
+  PlayerPair,
+  PlayerPair,
+  PlayerPair,
+  [number, PlayerPair, PlayerPair, PlayerPair, PlayerPair] | null,
+];
+
 /**
  * `[id, node, edge, point, attacker, start, next_round, groups]` of a fight (DEC-24): `point` is
- * twice the meeting position from the end `a` of the edge (0..2000), `null` in a node.
+ * twice the meeting position from the end `a` of the edge (0..2000), `null` in a node. A record of
+ * nine elements has the round data (#323) at the end; one of eight is from an older file (the
+ * arena stays empty).
  */
-export type FrameFight = [
-  number,
-  number | null,
-  number | null,
-  number | null,
-  PlayerId | null,
-  number,
-  number,
-  number[],
-];
+export type FrameFight =
+  | [number, number | null, number | null, number | null, PlayerId | null, number, number, number[]]
+  | [
+      number,
+      number | null,
+      number | null,
+      number | null,
+      PlayerId | null,
+      number,
+      number,
+      number[],
+      FrameFightRounds,
+    ];
 
 /** `[tick, kind, data]`; `data` is the flat object of the simulation event. */
 export type FileEvent = [number, string, Record<string, boolean | number | string | null>];
@@ -107,6 +127,25 @@ export interface ReplayFile {
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 const isInt = (v: unknown): v is number => Number.isInteger(v);
+const isPair = (v: unknown): v is PlayerPair =>
+  Array.isArray(v) && v.length === 2 && v.every(isInt);
+
+/** Whether `v` is the round data of a fight record (#323). */
+const isFightRounds = (v: unknown): v is FrameFightRounds =>
+  Array.isArray(v) &&
+  v.length === 4 &&
+  isPair(v[0]) &&
+  isPair(v[1]) &&
+  isPair(v[2]) &&
+  (v[3] === null ||
+    (Array.isArray(v[3]) &&
+      v[3].length === 5 &&
+      isInt(v[3][0]) &&
+      [1, 2, 3, 4].every((i) => isPair((v[3] as unknown[])[i]))));
+
+/** A fight record of an old file (eight elements) or of a new one (nine, with the round data). */
+const isFightRecord = (v: unknown): v is FrameFight =>
+  Array.isArray(v) && (v.length === 8 || (v.length === 9 && isFightRounds(v[8])));
 
 /** The parsed JSON as a `ReplayFile`; throws `ReplayError`. */
 export function parseReplay(raw: unknown): ReplayFile {
@@ -143,7 +182,7 @@ export function parseReplay(raw: unknown): ReplayFile {
         (f.e === undefined || Array.isArray(f.e)) &&
         (f.r === undefined ||
           (Array.isArray(f.r) && f.r.length === (map.edges as unknown[]).length)) &&
-        (f.f === undefined || Array.isArray(f.f)),
+        (f.f === undefined || (Array.isArray(f.f) && f.f.every(isFightRecord))),
     );
   if (!sound) throw new ReplayError('invalid');
   return raw as unknown as ReplayFile;
