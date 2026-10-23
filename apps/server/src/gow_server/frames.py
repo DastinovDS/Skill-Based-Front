@@ -23,7 +23,7 @@ from gow_sim.maps import PLAYERS, map_hash, map_to_data
 from gow_sim.match import SIM_VERSION, Match
 from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, replay_run
 from gow_sim.ruleset import Ruleset, ruleset_hash
-from gow_sim.state import AtNode, GameState, Group, OnEdge
+from gow_sim.state import AtNode, Fight, FightRound, GameState, Group, OnEdge
 from gow_sim.systems.build import done_tick
 from gow_sim.systems.capacity import node_capacities
 
@@ -68,6 +68,34 @@ def _group(g: Group) -> dict[str, object]:
     return out
 
 
+def _pair(pair: tuple[int, int]) -> list[int]:
+    return [pair[0], pair[1]]
+
+
+def _round(r: FightRound | None) -> list[object] | None:
+    """The last round of a fight: ``[tick, shots, virtual, spent, losses]``, pairs by player."""
+    if r is None:
+        return None
+    return [r.tick, _pair(r.shots), _pair(r.virtual), _pair(r.spent), _pair(r.losses)]
+
+
+def _fight(f: Fight) -> list[object]:
+    """A fight (DEC-24) with its round data (#323): the full-reveal view shows both sides, so the
+    totals, the virtual shots left (DEC-32) and the last round are written as the simulation
+    holds them, by player."""
+    return [
+        f.id,
+        f.node,
+        f.edge,
+        f.point,
+        f.attacker,
+        f.start,
+        f.next_round,
+        sorted(f.members),
+        [_pair(f.shots), _pair(f.losses), _pair(f.virtual), _round(f.last_round)],
+    ]
+
+
 def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
     """The full state at ``state.tick`` as one frame (``docs/design/replay-frames.md``)."""
     capacities = node_capacities(state, rules)
@@ -101,10 +129,7 @@ def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
         frame["e"] = builds
     # No ``b`` (road builds by cities) since DEC-28: files from before still carry it.
     # No ``r`` (road types) since DEC-26: roads have no type; files from before still carry it.
-    fights = [
-        [f.id, f.node, f.edge, f.point, f.attacker, f.start, f.next_round, sorted(f.members)]
-        for f in (state.fights[i] for i in sorted(state.fights))
-    ]
+    fights = [_fight(state.fights[i]) for i in sorted(state.fights)]
     if fights:  # DEC-24, only while a fight goes on: older files without the key stay valid
         frame["f"] = fights
     return frame
