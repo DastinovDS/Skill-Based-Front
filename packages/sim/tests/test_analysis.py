@@ -415,6 +415,6 @@ def test_scripted_match_statistics() -> None:
 
 
 def test_analyze_replay_is_analyze_of_the_replay_log() -> None:
-    file = GOLDEN / f"pereval-short-forfeit{REPLAY_SUFFIX}"  # the shortest golden match
+    file = next(GOLDEN.glob(f"*-short-forfeit{REPLAY_SUFFIX}"))  # the shortest golden match
     archive, maps = ROOT / "rulesets" / "archive", ROOT / "maps"
     assert analyze_replay(file, archive, maps) == analyze(replay_log(file, archive, maps))

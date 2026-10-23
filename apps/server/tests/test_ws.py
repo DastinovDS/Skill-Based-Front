@@ -213,7 +213,7 @@ def hello(token: str, version: int = PROTOCOL_VERSION) -> HelloMsg:
 
 @pytest.fixture
 def ws_settings(maps_dir: Path, tmp_path: Path) -> Settings:
-    shutil.copy(ROOT / "maps" / "pautina.json", maps_dir)
+    shutil.copy(ROOT / "maps" / "web.json", maps_dir)
     return Settings(
         maps_dir=maps_dir,
         database_url=f"sqlite:///{tmp_path / 'gow.db'}",
@@ -519,7 +519,7 @@ def test_slow_client_does_not_slow_the_tick_and_loses_no_ack(ws_settings: Settin
             assert acks == list(range(1, ticks + 1))
             assert snapshots < ticks, "stale snapshots were skipped"
 
-    run(settings, scenario, map_id="pautina", ruleset="mvp-0", sndbuf=SMALL_BUFFER)
+    run(settings, scenario, map_id="web", ruleset="mvp-0", sndbuf=SMALL_BUFFER)
 
 
 def test_client_that_does_not_read_is_disconnected(
@@ -544,7 +544,7 @@ def test_client_that_does_not_read_is_disconnected(
             assert live.runner.match.tick == tick + 5, "the match goes on without the client"
 
     with caplog.at_level(logging.INFO, logger="gow_server.ws"):
-        run(settings, scenario, map_id="pautina", ruleset="mvp-0", sndbuf=SMALL_BUFFER)
+        run(settings, scenario, map_id="web", ruleset="mvp-0", sndbuf=SMALL_BUFFER)
     assert [r.__dict__["code"] for r in closed()] == [CLOSE_POLICY]
 
 

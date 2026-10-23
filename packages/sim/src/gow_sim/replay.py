@@ -2,7 +2,7 @@
 
 A replay is a ``.jsonl.gz`` file (stdlib ``gzip``), one JSON value per line (AGENTS.md, 4.5)::
 
-    {"sim_version":1,"ruleset_hash":"..","python_version":"3.12.1","map_id":"arteriya",
+    {"sim_version":1,"ruleset_hash":"..","python_version":"3.12.1","map_id":"artery",
      "map_hash":"..","match_key":"<hex>"}                      header, the first line
     {"tick":0,"hash":".."}                                     checkpoint: state_hash after tick
     [1,0,0,{"type":"move","group":3,"dest":5,"planned":false}] command: [tick, player, seq, cmd]

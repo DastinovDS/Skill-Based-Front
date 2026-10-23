@@ -346,7 +346,7 @@ def swatches(current: bool) -> Image.Image:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--map", default="arteriya", help="map name in maps/ (default arteriya)")
+    ap.add_argument("--map", default="artery", help="map name in maps/ (default artery)")
     ap.add_argument("--current", type=Path, help="the old maps/<name>.bg.png (see the docstring)")
     ap.add_argument("--out", type=Path, help="also save the full-map PNGs here")
     ap.add_argument("--no-embed", action="store_true", help="do not rewrite the mockup")

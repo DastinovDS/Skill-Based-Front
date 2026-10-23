@@ -50,7 +50,7 @@ from gow_sim.state import Detail
 ROOT: Final = Path(__file__).parents[3]
 DT: Final = 0.1
 RECV_TIMEOUT_S: Final = 5.0
-MAP_ID: Final = "pautina"
+MAP_ID: Final = "web"
 
 
 class Client:
@@ -182,7 +182,7 @@ async def invite_to_match(live: Live) -> tuple[str, str, str]:
 
 
 def test_two_clients_play_a_match_by_invite(maps_dir: Path, tmp_path: Path) -> None:
-    shutil.copy(ROOT / "maps" / "pautina.json", maps_dir)
+    shutil.copy(ROOT / "maps" / "web.json", maps_dir)
     settings = Settings(
         maps_dir=maps_dir,
         database_url=f"sqlite:///{tmp_path / 'gow.db'}",
@@ -190,7 +190,7 @@ def test_two_clients_play_a_match_by_invite(maps_dir: Path, tmp_path: Path) -> N
         replays_dir=tmp_path / "replays",
         rulesets_dir=ROOT / "rulesets" / "archive",
     )
-    mapdef = load_map(ROOT / "maps" / "pautina.json")
+    mapdef = load_map(ROOT / "maps" / "web.json")
     neighbours: dict[int, list[int]] = {}
     for edge in mapdef.edges:
         neighbours.setdefault(edge.a, []).append(edge.b)

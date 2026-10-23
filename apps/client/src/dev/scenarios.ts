@@ -18,7 +18,7 @@ import type {
   SnapshotMsg,
 } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
-import { ARTERIYA_TICK, ARTERIYA_VIEW, arteriyaSnapshot } from './arteriyaScene.ts';
+import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 
 const files = import.meta.glob<SnapshotMsg>(
   '../../../../packages/protocol/fixtures/server/snapshot*.json',
@@ -369,10 +369,10 @@ function rangesSnapshot(): SnapshotMsg {
   };
 }
 
-/** The real map of the `arteriya` scene (the only scene with a baked background). */
-function arteriyaMap() {
-  const map = BUNDLED_MAPS.find((m) => m.meta.name === 'arteriya');
-  if (map === undefined) throw new Error('maps/arteriya.json is not bundled');
+/** The real map of the `artery` scene (the only scene with a baked background). */
+function arteryMap() {
+  const map = BUNDLED_MAPS.find((m) => m.meta.name === 'artery');
+  if (map === undefined) throw new Error('maps/artery.json is not bundled');
   return map;
 }
 
@@ -391,12 +391,12 @@ export interface FixtureScene {
 export const FIXTURE_SCENES: readonly FixtureScene[] = [
   {
     // The real map with its baked background (#344): the scene to judge the map style by.
-    id: 'arteriya',
-    map: 'arteriya',
-    snapshot: arteriyaSnapshot(arteriyaMap()),
+    id: 'artery',
+    map: 'artery',
+    snapshot: arterySnapshot(arteryMap()),
     // The last round of the fight in the city 4 (its shots in the air), 12 ticks ago.
-    events: [round(ARTERIYA_TICK - 12, { node: 4 }, 2, 0, 1)],
-    view: ARTERIYA_VIEW,
+    events: [round(ARTERY_TICK - 12, { node: 4 }, 2, 0, 1)],
+    view: ARTERY_VIEW,
     // As in `mvp-1`: the own capital and the enemy city 5 next door show the barracks (DEC-31).
     cityUpgrades: true,
   },

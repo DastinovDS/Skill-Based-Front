@@ -28,9 +28,9 @@ describe('Api', () => {
   });
 
   it('asks for the active match with the token in the header', async () => {
-    const fetchFn = respond(200, { match_id: '5', map_id: 'pereval' });
+    const fetchFn = respond(200, { match_id: '5', map_id: 'pass' });
     const found = await new Api(fetchFn).activeMatch('tok');
-    expect(found).toEqual({ match_id: '5', map_id: 'pereval' });
+    expect(found).toEqual({ match_id: '5', map_id: 'pass' });
     const [url, init] = vi.mocked(fetchFn).mock.calls[0] ?? [];
     expect(url).toBe('/api/me/active-match');
     expect(init?.headers).toMatchObject({ Authorization: 'Bearer tok' });
@@ -41,9 +41,9 @@ describe('Api', () => {
     const fetchFn = respond(201, {});
     const api = new Api(fetchFn);
     await api.createBotMatch('t', 'hard', null);
-    await api.createBotMatch('t', 'easy', 'pereval');
+    await api.createBotMatch('t', 'easy', 'pass');
     const bodies = vi.mocked(fetchFn).mock.calls.map(([, init]) => init?.body);
-    expect(bodies).toEqual(['{"level":"hard"}', '{"level":"easy","map_id":"pereval"}']);
+    expect(bodies).toEqual(['{"level":"hard"}', '{"level":"easy","map_id":"pass"}']);
   });
 
   it.each([
@@ -184,14 +184,14 @@ describe('guest store', () => {
     );
     const api = new Api(fetchFn);
     await api.createInvite('t', null, true);
-    await api.createInvite('t', 'pereval');
+    await api.createInvite('t', 'pass');
     expect(await api.lobby('t')).toEqual([{ code: 'c' }]);
     fetchFn.mockResolvedValueOnce(new Response(null, { status: 204 }));
     await expect(api.cancelInvite('t', 'a/b')).resolves.toBeUndefined();
     const calls = fetchFn.mock.calls as unknown as [string, RequestInit][];
     expect(calls.map(([url, init]) => [init.method, url, init.body])).toEqual([
       ['POST', '/api/matches', '{"public":true}'],
-      ['POST', '/api/matches', '{"map_id":"pereval"}'],
+      ['POST', '/api/matches', '{"map_id":"pass"}'],
       ['GET', '/api/lobby', undefined],
       ['DELETE', '/api/matches/a%2Fb', undefined],
     ]);

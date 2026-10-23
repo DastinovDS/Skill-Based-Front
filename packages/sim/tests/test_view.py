@@ -72,7 +72,7 @@ from gow_sim.view import (
 
 TESTS_DIR = Path(__file__).resolve().parent
 MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
-TEST_MAPS = ("line3", "diamond", "pass", "line6", "fork", "siege")
+TEST_MAPS = ("line3", "diamond", "choke", "line6", "fork", "siege")
 KEY = bytes(range(32))
 OTHER_KEY = bytes(range(1, 33))
 WIRE_ID = re.compile(r"[A-Za-z0-9_-]{1,32}")

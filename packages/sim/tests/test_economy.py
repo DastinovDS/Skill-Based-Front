@@ -229,7 +229,7 @@ def test_full_warehouse_spills_everything() -> None:
 
 def test_capacity_does_not_count_internal_roads() -> None:
     # pass: capital 0 is joined to own node 1 by e0; roads add nothing (DEC-22): capacity 4.
-    state = initial_state(load_map(MAPS_DIR / "pass.json"), DEC02)
+    state = initial_state(load_map(MAPS_DIR / "choke.json"), DEC02)
     state.nodes[0].warehouse = 3
     state.edges[0].width = 3
     _run(state, 50, DEC02)

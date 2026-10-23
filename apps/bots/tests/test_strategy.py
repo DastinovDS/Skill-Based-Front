@@ -27,7 +27,7 @@ from gow_sim.view import (
     Stance,
 )
 
-MVP_MAPS = ("arteriya", "pautina", "pereval")
+MVP_MAPS = ("artery", "web", "pass")
 STRATEGY = ("expander", "turtle")
 CLASSES: dict[str, type[StrategyBot]] = {"expander": ExpanderBot, "turtle": TurtleBot}
 KEY = bytes(range(32))
@@ -83,7 +83,7 @@ def test_params_stay_in_their_ranges_and_depend_on_the_seed(
     cls = CLASSES[name]
     seen: set[tuple[tuple[str, int], ...]] = set()
     for seed in range(30):
-        bot = cls(maps["pautina"], mvp_rules, seed=seed, player=1)
+        bot = cls(maps["web"], mvp_rules, seed=seed, player=1)
         for key, r in cls.PARAMS.items():
             assert r.low <= bot.params[key] <= r.high
         seen.add(tuple(sorted(bot.params.items())))
@@ -96,7 +96,7 @@ def test_one_pair_over_seeds_gives_different_matches(
     maps: dict[str, MapDef], mvp_rules: Ruleset, name: str
 ) -> None:
     # The first 250 s of mvp-0: the 60 s of test-short end before the parameters matter.
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     hashes = {
         run_headless(
             mapdef,
@@ -152,7 +152,7 @@ def test_self_play_on_a_symmetric_map_is_a_draw_on_vp(
 def test_expander_spends_the_start_cp_on_neutral_nodes(
     maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     view = Match(mapdef, mvp_rules, KEY).view(0)
     bot = ExpanderBot(mapdef, mvp_rules, seed=0, player=0)
     cmds = bot.decide(view, 0)
@@ -166,7 +166,7 @@ def test_expander_spends_the_start_cp_on_neutral_nodes(
 
 
 def test_expander_builds_roads_in_the_rear(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
-    mapdef = maps["arteriya"]
+    mapdef = maps["artery"]
     rec = _Recorder(ExpanderBot(mapdef, mvp_rules, seed=2, player=0))
     run_headless(mapdef, mvp_rules, [rec, BOTS["idle"](mapdef, mvp_rules, seed=0, player=1)])
     upgrades = [c for c in rec.cmds if isinstance(c, UpgradeRoad)]
@@ -177,7 +177,7 @@ def test_expander_builds_roads_in_the_rear(maps: dict[str, MapDef], mvp_rules: R
 
 
 def test_expander_takes_empty_enemy_nodes(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     result = run_headless(
         mapdef,
         mvp_rules,
@@ -209,7 +209,7 @@ def _front_view(mapdef: MapDef, rules: Ruleset) -> tuple[PlayerView, int]:
 def test_turtle_sets_defense_on_the_front_group(
     maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     view, front = _front_view(mapdef, mvp_rules)
     bot = TurtleBot(mapdef, mvp_rules, seed=0, player=0)
     cmds = bot.decide(view, 0)
@@ -223,7 +223,7 @@ def test_turtle_sets_defense_on_the_front_group(
 def test_turtle_stays_in_its_region_while_cp_do_not_burn(
     maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
-    mapdef = maps["pereval"]
+    mapdef = maps["pass"]
     bot = TurtleBot(mapdef, mvp_rules, seed=5, player=0)
     rec = _Recorder(bot)
     match = Match(mapdef, mvp_rules, KEY)
@@ -261,7 +261,7 @@ def _estimate(
 def test_estimate_of_an_observed_empty_node_is_zero(
     maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     empty = Sighting(100, Detail.PRESENCE, (), None, None)
     assert _estimate(mapdef, mvp_rules, Detail.PRESENCE, empty) == (0, 0)
 
@@ -270,13 +270,13 @@ def test_estimate_uses_exact_numbers_when_the_view_has_them(
     maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
     exact = Sighting(100, Detail.EXACT, (Mode.DEFENSE,), 4, 3)
-    assert _estimate(maps["pautina"], mvp_rules, Detail.EXACT, exact) == (4, 3)
+    assert _estimate(maps["web"], mvp_rules, Detail.EXACT, exact) == (4, 3)
 
 
 def test_estimate_of_presence_is_the_larger_of_memory_and_the_capacity_guess(
     maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     seen = Sighting(100, Detail.PRESENCE, (Mode.ATTACK,), None, None)
     # Capacity 6, est_pct 50: 3 units, all charged, when nothing better is known.
     assert _estimate(mapdef, mvp_rules, Detail.PRESENCE, seen) == (3, 3)
@@ -292,7 +292,7 @@ def test_estimate_of_presence_is_the_larger_of_memory_and_the_capacity_guess(
 def test_estimate_of_a_range_is_its_top(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
     """DEC-21, item 4: «3-5» counts as 5 units, all charged; «21+» as 21; a larger fresh memory
     wins."""
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     three_five = Sighting(100, Detail.RANGE, (Mode.ATTACK,), None, None, (3, 5))
     assert _estimate(mapdef, mvp_rules, Detail.RANGE, three_five) == (5, 5)
     open_range = Sighting(100, Detail.RANGE, (Mode.ATTACK,), None, None, (21, None))
@@ -305,7 +305,7 @@ def test_an_enemy_figure_heading_to_an_own_node_threatens_it(
 ) -> None:
     """DEC-33: a bot reads ``EdgeView.enemy_groups`` from its view; a figure going to an own node
     makes it threatened, one going away does not."""
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     view = Match(mapdef, mvp_rules, KEY).view(0)
     bot = ExpanderBot(mapdef, mvp_rules, seed=0, player=0)
     capital = mapdef.capital(0)
@@ -335,6 +335,6 @@ def test_strategy_bots_are_registered_and_refuse_foreign_views(
     maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
     assert BOTS["expander"] is ExpanderBot and BOTS["turtle"] is TurtleBot
-    view = Match(maps["pautina"], mvp_rules, KEY).view(1)
+    view = Match(maps["web"], mvp_rules, KEY).view(1)
     with pytest.raises(ValueError, match="player 0"):
-        ExpanderBot(maps["pautina"], mvp_rules, seed=0, player=0).decide(view, 0)
+        ExpanderBot(maps["web"], mvp_rules, seed=0, player=0).decide(view, 0)

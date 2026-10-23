@@ -159,7 +159,7 @@ def test_fifteen_minute_match_resimulates_to_the_same_result(
 ) -> None:
     """A real 15-minute match (DEC-22): same hash and outcome after the re-simulation, file
     within 2 MB."""
-    mapdef = load_map(MAPS / "pautina.json")
+    mapdef = load_map(MAPS / "web.json")
     bots = [
         # Seeds of a pair that plays the whole 15 minutes (with 2 s rounds, DEC-32).
         BOTS["rusher"](mapdef, full_rules, seed=2, player=0),
@@ -183,7 +183,7 @@ def test_fifteen_minute_match_resimulates_to_the_same_result(
     assert doc["format"] == FORMAT
     assert doc["state_hash"] == played.state_hash
     assert doc["vp"] == list(played.vp)
-    assert doc["map"]["meta"]["name"] == "pautina"
+    assert doc["map"]["meta"]["name"] == "web"
     ticks = [f["t"] for f in doc["frames"]]
     assert ticks == list(range(0, 9001, 5))  # 2 frames a second, tick 0 and the last tick
     assert len(doc["frames"][0]["n"]) == len(mapdef.nodes)
@@ -697,7 +697,7 @@ def test_file_of_another_match_in_replay_path_is_refused(
     _add_match(api, 10, False, (a, b), path.name)
     assert api.client.get("/api/replays/10", headers=auth).status_code == 200
     changed = {
-        "map_id": ("pautina", head["ruleset_hash"], head["ticks"]),
+        "map_id": ("web", head["ruleset_hash"], head["ticks"]),
         "ruleset_hash": (head["map_id"], "0" * 32, head["ticks"]),
         "ticks": (head["map_id"], head["ruleset_hash"], head["ticks"] + 1),
     }

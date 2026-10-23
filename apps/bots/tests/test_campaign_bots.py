@@ -28,7 +28,7 @@ from gow_sim.ruleset import Ruleset
 from gow_sim.view import AtNode, Mode
 
 ROOT = Path(__file__).resolve().parents[3]
-MVP_MAPS = ("arteriya", "pautina", "pereval")
+MVP_MAPS = ("artery", "web", "pass")
 CLASSES: dict[str, type[Bot]] = {
     "rusher": RusherBot,
     "strangler": StranglerBot,

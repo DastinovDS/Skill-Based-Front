@@ -1,5 +1,5 @@
 {
-  "meta": {"name": "pass", "version": 1, "symmetry": "rot180", "width": 600, "height": 400},
+  "meta": {"name": "choke", "version": 1, "symmetry": "rot180", "width": 600, "height": 400},
   "nodes": [
     {"id": 0, "name": "n0", "x": 100, "y": 200, "terrain": "mountains", "vp": 1, "kind": "capital", "capital_of": 0, "start_owner": 0, "start_units": 4, "start_charged": 4, "start_stock": 4},
     {"id": 1, "name": "n1", "x": 200, "y": 200, "terrain": "forest", "vp": 1, "kind": "city_small", "capital_of": null, "start_owner": 0, "start_units": 2, "start_charged": 2, "start_stock": 2},

@@ -5,7 +5,7 @@ import type { MapFile } from '../../apps/client/src/protocol.gen.ts';
 import { Player } from './player.ts';
 
 /** The map the invite tests play on: any of the maps of the pool works, this one is mid-sized. */
-export const MAP_ID = 'pautina';
+export const MAP_ID = 'web';
 
 /** A nick that no other test (or an earlier run against the same stack) used: 3 to 16 characters. */
 export function nick(prefix: string): string {

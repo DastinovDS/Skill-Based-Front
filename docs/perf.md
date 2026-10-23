@@ -36,11 +36,11 @@ uv run pytest --benchmark-disable                             # один про�
 | `test_bench_supply_many_donors_busy_roads` | `supply` в тике отправки на стрессовом состоянии (#306): по 20 городов у игрока на `grid40`, десять с дефицитом, десять доноров, маркеры на пустых городах фронта, перевозки заняли дороги у столицы, поэтому почти каждая отправка упирается в исчерпанную пропускную способность и ищет объезд (#309) | ≤ 1 мс, принято владельцем 2026-10-21 (отправка раз в `supply.dispatch_ticks` тиков; бюджет раздела 12 «0,1 мс» относится к `test_bench_supply`) |
 | `test_bench_project` | одна `project()` на том же состоянии | ≤ 0,3 мс |
 | `test_bench_step[grid55]`, `test_bench_supply[grid55]`, `test_bench_project[grid55]`, `test_bench_project_with_enemy_figures[grid55]` | то же на `grid55` (5 × 11, 55 узлов, 94 ребра, 56 групп): размер карт DEC-27 (#266, п. 7) | шаг и снабжение: бюджеты 40 узлов; проекция: 0,45 мс, принято владельцем 2026-10-22 (#371; 0,3 мс на 55 узлах превышен: 0,32 мс, с фигурками 0,41 мс) |
-| `test_bench_full_headless_match` | `run_headless` двух `ExpandBot` до конца партии на `pautina` (самая большая карта MVP по рёбрам) | ≤ 8 с |
-| `apps/bots/tests/test_benchmarks.py::test_bench_decide` | `decide()` каждого бота из `gow_bots.bots.BOTS` на видах партии `random_legal` на `pautina` после 300..1500 тиков | в среднем ≤ 1 мс |
-| `apps/server/tests/test_match_load.py` | 30 матчей на `pautina` (`mvp-0`) в одном цикле событий, старты в случайные моменты, по два скриптовых клиента на матч (приказы по протоколу, проекции обоих игроков); часы замедлены в `speed_factor` раз, то есть нагрузка эталона. Отставание тика: насколько позже срока начался шаг (`MatchRunner.lag_sum`). `speed_factor` меряется до и после прогона, берётся больший; две попытки, проходит лучшая (общий раннер CI временами замедляется посреди прогона) | среднее < 10% тика, без сбросов расписания |
-| `packages/protocol/tests/test_convert.py::test_snapshot_frame_costs_no_more_than_project` | `snapshot_frame` (снапшот вместе с кодированием в JSON) против `project()` на виде партии `rusher` на `pautina` после 300 тиков; отношение на одной машине, без `speed_factor` | не дороже `project()` (× `REGRESSION`) |
-| `apps/bots/tests/test_benchmarks.py::test_bench_decide_strategy_views` | `decide()` `expander` и `turtle` на видах их собственной партии на `pautina` после 300..1500 тиков (много групп, стройки, контакт с врагом) | в среднем ≤ 1 мс |
+| `test_bench_full_headless_match` | `run_headless` двух `ExpandBot` до конца партии на `web` (самая большая карта MVP по рёбрам) | ≤ 8 с |
+| `apps/bots/tests/test_benchmarks.py::test_bench_decide` | `decide()` каждого бота из `gow_bots.bots.BOTS` на видах партии `random_legal` на `web` после 300..1500 тиков | в среднем ≤ 1 мс |
+| `apps/server/tests/test_match_load.py` | 30 матчей на `web` (`mvp-0`) в одном цикле событий, старты в случайные моменты, по два скриптовых клиента на матч (приказы по протоколу, проекции обоих игроков); часы замедлены в `speed_factor` раз, то есть нагрузка эталона. Отставание тика: насколько позже срока начался шаг (`MatchRunner.lag_sum`). `speed_factor` меряется до и после прогона, берётся больший; две попытки, проходит лучшая (общий раннер CI временами замедляется посреди прогона) | среднее < 10% тика, без сбросов расписания |
+| `packages/protocol/tests/test_convert.py::test_snapshot_frame_costs_no_more_than_project` | `snapshot_frame` (снапшот вместе с кодированием в JSON) против `project()` на виде партии `rusher` на `web` после 300 тиков; отношение на одной машине, без `speed_factor` | не дороже `project()` (× `REGRESSION`) |
+| `apps/bots/tests/test_benchmarks.py::test_bench_decide_strategy_views` | `decide()` `expander` и `turtle` на видах их собственной партии на `web` после 300..1500 тиков (много групп, стройки, контакт с врагом) | в среднем ≤ 1 мс |
 
 ## Регрессия
 
@@ -102,12 +102,12 @@ Pydantic и их валидации (`gow_protocol.convert`, `gow_protocol.codec
 
 | Карта | `project()` | было: `snapshot_msg` + `encode` | стало: `snapshot_frame` (с кодированием) |
 |---|---|---|---|
-| arteriya | 0,26 мс | 0,48 + 0,16 мс | 0,10 мс |
-| pautina | 0,18 мс | 0,39 + 0,17 мс | 0,15 мс |
-| pereval | 0,22 мс | 0,40 + 0,15 мс | 0,13 мс |
+| artery | 0,26 мс | 0,48 + 0,16 мс | 0,10 мс |
+| web | 0,18 мс | 0,39 + 0,17 мс | 0,15 мс |
+| pass | 0,22 мс | 0,40 + 0,15 мс | 0,13 мс |
 
 Снапшот с кодированием стал в 3–6 раз дешевле и не дороже `project()` (≈ 0,4–0,8 от неё; было
-≈ 2,5). 30 матчей на `pautina` (`test_match_load.py`, время эталона):
+≈ 2,5). 30 матчей на `web` (`test_match_load.py`, время эталона):
 
 | Сценарий | Было | Стало |
 |---|---|---|
@@ -135,6 +135,6 @@ Pydantic и их валидации (`gow_protocol.convert`, `gow_protocol.codec
 | Прогон | Матчей | Время | Load average | На 1000 матчей |
 |---|---|---|---|---|
 | первые 1000 матчей турнира `--seeds 100` (3 карты) | 1000 | 324 с | 2,6 в начале, до 7–9 | 5,4 мин |
-| полный турнир `--seeds 100`, по одной карте подряд | 7500 | 3494 с (arteriya 925, pautina 1359, pereval 1210) | 9–12 | 7,8 мин |
+| полный турнир `--seeds 100`, по одной карте подряд | 7500 | 3494 с (artery 925, web 1359, pass 1210) | 9–12 | 7,8 мин |
 
 Бюджет 20 минут на 1000 матчей выдержан в обоих замерах; замер на простаивающей машине не делался.

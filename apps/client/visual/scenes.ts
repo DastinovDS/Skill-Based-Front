@@ -10,5 +10,5 @@ export const SCENES = [
   { id: 'fights', tick: 400 },
   { id: 'fights_kill', tick: 395 },
   { id: 'fights_flight', tick: 398 },
-  { id: 'arteriya', tick: 2400 },
+  { id: 'artery', tick: 2400 },
 ] as const;

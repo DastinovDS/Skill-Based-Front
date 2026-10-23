@@ -186,11 +186,11 @@ class Game:
 
 
 GAMES = (
-    Game("arteriya-mvp0", "arteriya", "mvp-0"),
-    Game("pautina-mvp0", "pautina", "mvp-0"),
-    Game("pereval-short-forfeit", "pereval", "test-short", forfeit_at=400),
-    Game("arteriya-mvp1", "arteriya", "mvp-1"),
-    Game("pereval-mvp1", "pereval", "mvp-1"),
+    Game("artery-mvp0", "artery", "mvp-0"),
+    Game("web-mvp0", "web", "mvp-0"),
+    Game("pass-short-forfeit", "pass", "test-short", forfeit_at=400),
+    Game("artery-mvp1", "artery", "mvp-1"),
+    Game("pass-mvp1", "pass", "mvp-1"),
 )
 
 

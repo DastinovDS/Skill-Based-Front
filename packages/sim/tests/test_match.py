@@ -27,7 +27,7 @@ from gow_sim.view import PlayerView, opaque_id, project, resolve
 ROOT = Path(__file__).resolve().parents[3]
 TESTS_DIR = Path(__file__).resolve().parent
 KEY = bytes(range(32))
-MVP_MAPS = ("arteriya", "pautina", "pereval")
+MVP_MAPS = ("artery", "web", "pass")
 
 type BotFactory = Callable[[MapDef, Ruleset], Controller]
 
@@ -151,7 +151,7 @@ def test_full_headless_match_on_mvp_maps(
 
 
 def test_headless_match_is_deterministic(mvp_rules: Ruleset, expand_bot: BotFactory) -> None:
-    mapdef = _map("pautina")
+    mapdef = _map("web")
     runs = [
         run_headless(mapdef, mvp_rules, [expand_bot(mapdef, mvp_rules) for _ in range(2)], 1000)
         for _ in range(2)

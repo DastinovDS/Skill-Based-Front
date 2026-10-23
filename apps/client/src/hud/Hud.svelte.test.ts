@@ -64,8 +64,8 @@ describe('Hud', () => {
         dev:
           options.dev === true
             ? {
-                maps: ['pereval'],
-                mapName: 'pereval',
+                maps: ['artery'],
+                mapName: 'artery',
                 scenes: ['demo'],
                 sceneId: 'demo',
                 fps: 60,
@@ -136,10 +136,10 @@ describe('Hud', () => {
 
   it('puts the map and scene pickers and the frame rate in the dev panel of the dev screen only', () => {
     setLocale('en');
-    expect(render().target.textContent).not.toContain('pereval');
+    expect(render().target.textContent).not.toContain('artery');
     document.body.innerHTML = '';
     const { target } = render({ dev: true });
-    expect(target.textContent).toContain('pereval');
+    expect(target.textContent).toContain('artery');
     expect(target.textContent).toContain('FPS: 60');
   });
 

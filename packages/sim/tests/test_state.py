@@ -43,7 +43,7 @@ from gow_sim.state import (
 
 TESTS_DIR = Path(__file__).resolve().parent
 MAPS_DIR = TESTS_DIR / "maps"
-TEST_MAPS = ["line3", "diamond", "pass"]
+TEST_MAPS = ["line3", "diamond", "choke"]
 MVP0 = TESTS_DIR.parents[2] / "rulesets" / "mvp-0.toml"
 
 

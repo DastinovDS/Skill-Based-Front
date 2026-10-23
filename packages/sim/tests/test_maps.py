@@ -10,7 +10,7 @@ import pytest
 from gow_sim.maps import MapDef, MapFormatError, Terrain, load_map, parse_map
 
 MAPS_DIR = Path(__file__).parent / "maps"
-TEST_MAPS = ["line3", "diamond", "pass"]
+TEST_MAPS = ["line3", "diamond", "choke"]
 
 
 def _raw(name: str) -> dict[str, Any]:

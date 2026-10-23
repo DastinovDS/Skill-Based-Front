@@ -22,7 +22,7 @@ from gow_sim.view import AtNode, Mode, PlayerView
 
 ROOT = Path(__file__).resolve().parents[3]
 MVP0 = ROOT / "rulesets" / "mvp-0.toml"
-MVP_MAPS = ("arteriya", "pautina", "pereval")
+MVP_MAPS = ("artery", "web", "pass")
 
 
 class ExpandBot:
