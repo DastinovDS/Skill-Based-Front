@@ -4,6 +4,7 @@
     gow-admin rename <player> <new-nick>
     gow-admin block <player>
     gow-admin unblock <player>
+    gow-admin reset-password <player>
 
 ``<player>`` is the numeric id or the nick (any spelling with the same skeleton). In the
 production stack: ``docker compose exec app gow-admin block 42``. It works on the database in
@@ -11,11 +12,16 @@ production stack: ``docker compose exec app gow-admin block 42``. It works on th
 request (403) and on the next match WebSocket connection; a match already running goes on until it
 ends or the player disconnects. ``rename`` checks the nick format and uniqueness, but not the
 reserved and forbidden lists: the operator decides. A rename does not change the token.
+``reset-password`` asks for a new password twice on the terminal (never as an argument, never
+printed: ``docker compose exec`` gives it a terminal) and logs the player out everywhere: they log
+in with the nick and the new password the operator passed on (#374, players have no recovery).
 """
 
 import argparse
+import getpass
+import secrets
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -23,6 +29,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.models import Player, utcnow
 from gow_server.nicks import skeleton, validate_nick
+from gow_server.passwords import PasswordHasher, normalize
 from gow_server.settings import Settings
 
 
@@ -82,11 +89,38 @@ def set_blocked(session: Session, ref: str, *, blocked: bool) -> str:
     return describe(player)
 
 
-def run(sessions: sessionmaker[Session], argv: Sequence[str]) -> str:
-    """Execute one command; returns the line to print. Raises ``AdminError``."""
+def reset_password(
+    session: Session, ref: str, passwords: PasswordHasher, read_password: Callable[[str], str]
+) -> str:
+    player = find_player(session, ref)
+    first = read_password("New password: ")
+    if read_password("Repeat the password: ") != first:
+        raise AdminError("passwords do not match")
+    try:
+        password = normalize(first)
+    except ValueError as exc:
+        raise AdminError(str(exc)) from None
+    player.password_hash = passwords.hash(password)
+    # A token nobody has: every device is logged out and logs in with the new password.
+    player.token_hash = secrets.token_bytes(32)
+    session.commit()
+    return f"{describe(player)}, password reset, logged out everywhere"
+
+
+def run(
+    sessions: sessionmaker[Session],
+    argv: Sequence[str],
+    *,
+    passwords: PasswordHasher | None = None,
+    read_password: Callable[[str], str] = getpass.getpass,
+) -> str:
+    """Execute one command; returns the line to print. Raises ``AdminError``.
+
+    ``passwords`` defaults to the hasher of ``Settings()``; ``read_password`` reads a password
+    without echo (tests pass their own)."""
     parser = argparse.ArgumentParser(prog="gow-admin", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("show", "block", "unblock"):
+    for name in ("show", "block", "unblock", "reset-password"):
         sub.add_parser(name).add_argument("player", help="id or nick")
     renamer = sub.add_parser("rename")
     renamer.add_argument("player", help="id or nick")
@@ -100,6 +134,9 @@ def run(sessions: sessionmaker[Session], argv: Sequence[str]) -> str:
                 return rename(session, args.player, args.nick)
             case "block":
                 return set_blocked(session, args.player, blocked=True)
+            case "reset-password":
+                hasher = passwords or PasswordHasher(Settings())
+                return reset_password(session, args.player, hasher, read_password)
             case _:
                 return set_blocked(session, args.player, blocked=False)
 

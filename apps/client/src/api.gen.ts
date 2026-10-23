@@ -109,6 +109,55 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/account/password': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Set Password
+     * @description Set the password of a guest (it becomes an account: nick, rating and history stay) or
+     *     change it (``old_password`` needed, 403 ``wrong password`` otherwise).
+     *
+     *     The token is replaced: the response carries the new one, the old one stops working (other
+     *     devices are logged out). Rate limited per player. 422 if the password is not 10..128
+     *     characters after NFKC normalization.
+     */
+    post: operations['set_password_api_account_password_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/login': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Login
+     * @description A new token of the account with this nick (any spelling with the same ``nick_key``).
+     *
+     *     401 ``wrong nick or password`` for an unknown nick, a guest without a password and a wrong
+     *     password alike, after the same scrypt work; 403 for a blocked account (only with the right
+     *     password). Rate limited per client IP and per nick. The previous token stops working.
+     */
+    post: operations['login_api_login_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/me/active-match': {
     parameters: {
       query?: never;
@@ -447,6 +496,13 @@ export interface components {
       /** Matches */
       matches: components['schemas']['LobbyEntry'][];
     };
+    /** Login */
+    Login: {
+      /** Nick */
+      nick: string;
+      /** Password */
+      password: string;
+    };
     /** MapSummary */
     MapSummary: {
       /** Id */
@@ -466,11 +522,23 @@ export interface components {
       player_id: number;
       /** Nick */
       nick: string;
+      /** Has Password */
+      has_password: boolean;
     };
     /** NickChange */
     NickChange: {
       /** Nick */
       nick: string;
+    };
+    /**
+     * PasswordSet
+     * @description A new password; ``old_password`` is required when the account already has one.
+     */
+    PasswordSet: {
+      /** Password */
+      password: string;
+      /** Old Password */
+      old_password?: string | null;
     };
     /** QueueStatus */
     QueueStatus: {
@@ -692,6 +760,72 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['Me'];
+        };
+      };
+    };
+  };
+  set_password_api_account_password_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PasswordSet'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GuestCreated'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  login_api_login_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['Login'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GuestCreated'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
         };
       };
     };

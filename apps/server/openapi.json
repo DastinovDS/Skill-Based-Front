@@ -195,6 +195,95 @@
         ]
       }
     },
+    "/api/account/password": {
+      "post": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Set Password",
+        "description": "Set the password of a guest (it becomes an account: nick, rating and history stay) or\nchange it (``old_password`` needed, 403 ``wrong password`` otherwise).\n\nThe token is replaced: the response carries the new one, the old one stops working (other\ndevices are logged out). Rate limited per player. 422 if the password is not 10..128\ncharacters after NFKC normalization.",
+        "operationId": "set_password_api_account_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordSet"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/login": {
+      "post": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Login",
+        "description": "A new token of the account with this nick (any spelling with the same ``nick_key``).\n\n401 ``wrong nick or password`` for an unknown nick, a guest without a password and a wrong\npassword alike, after the same scrypt work; 403 for a blocked account (only with the right\npassword). Rate limited per client IP and per nick. The previous token stops working.",
+        "operationId": "login_api_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me/active-match": {
       "get": {
         "tags": [
@@ -1005,6 +1094,27 @@
         ],
         "title": "LobbyOut"
       },
+      "Login": {
+        "properties": {
+          "nick": {
+            "type": "string",
+            "maxLength": 1024,
+            "title": "Nick"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1024,
+            "title": "Password"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nick",
+          "password"
+        ],
+        "title": "Login"
+      },
       "MapSummary": {
         "properties": {
           "id": {
@@ -1054,12 +1164,17 @@
           "nick": {
             "type": "string",
             "title": "Nick"
+          },
+          "has_password": {
+            "type": "boolean",
+            "title": "Has Password"
           }
         },
         "type": "object",
         "required": [
           "player_id",
-          "nick"
+          "nick",
+          "has_password"
         ],
         "title": "Me"
       },
@@ -1076,6 +1191,33 @@
           "nick"
         ],
         "title": "NickChange"
+      },
+      "PasswordSet": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "old_password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Password"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "PasswordSet",
+        "description": "A new password; ``old_password`` is required when the account already has one."
       },
       "QueueStatus": {
         "properties": {
@@ -1221,7 +1363,7 @@
     "securitySchemes": {
       "HTTPBearer": {
         "type": "http",
-        "description": "Guest token from POST /api/guest",
+        "description": "Token from POST /api/guest, /api/login or /api/account/password",
         "scheme": "bearer"
       }
     }
