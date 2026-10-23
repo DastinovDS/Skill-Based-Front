@@ -11,6 +11,7 @@
   import InviteScreen from './InviteScreen.svelte';
   import MatchScreen from './MatchScreen.svelte';
   import MenuScreen from './MenuScreen.svelte';
+  import PasswordScreen from './PasswordScreen.svelte';
   import QueueScreen from './QueueScreen.svelte';
   import ResultScreen from './ResultScreen.svelte';
   import WelcomeScreen from './WelcomeScreen.svelte';
@@ -42,6 +43,8 @@
     invited={app.pendingInvite !== null}
     notice={app.notice}
     onsubmit={(nick: string) => app.register(nick)}
+    onlogin={(nick: string, password: string) => app.login(nick, password)}
+    onregister={(nick: string, password: string) => app.registerAccount(nick, password)}
   />
 {:else if screen.name === 'menu'}
   <MenuScreen
@@ -64,9 +67,12 @@
     onbot={() => {
       app.go({ name: 'bot' });
     }}
-    onchangenick={() => {
-      app.forget();
-      app.menu();
+    hasPassword={guest.hasPassword}
+    onpassword={() => {
+      app.go({ name: 'password' });
+    }}
+    onlogout={() => {
+      app.logout();
     }}
   />
 {:else if screen.name === 'create'}
@@ -109,6 +115,14 @@
   <BotScreen
     api={app.api}
     onstart={(level: BotLevel, mapId: string | null) => app.playBot(level, mapId)}
+    onback={() => {
+      app.menu();
+    }}
+  />
+{:else if screen.name === 'password'}
+  <PasswordScreen
+    hasPassword={guest.hasPassword}
+    onsubmit={(password: string, oldPassword: string) => app.setPassword(password, oldPassword)}
     onback={() => {
       app.menu();
     }}

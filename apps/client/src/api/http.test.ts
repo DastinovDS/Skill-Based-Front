@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Api, ApiError } from './http.ts';
+import { Api, ApiError, parseRetryAfter } from './http.ts';
 import { forgetGuest, GUEST_STORAGE_KEY, loadGuest, saveGuest } from './guestStore.ts';
 
 function respond(status: number, body: unknown = {}): typeof fetch {
@@ -67,6 +67,74 @@ describe('Api', () => {
   });
 });
 
+describe('Api accounts (#374)', () => {
+  it('logs in with nick and password in the body, no token, and returns the new token', async () => {
+    const fetchFn = respond(200, { player_id: 3, token: 'fresh' });
+    const guest = await new Api(fetchFn).login('Nick', 'correct horse');
+    expect(guest).toEqual({ playerId: 3, token: 'fresh' });
+    const [url, init] = vi.mocked(fetchFn).mock.calls[0] ?? [];
+    expect(url).toBe('/api/login');
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBe('{"nick":"Nick","password":"correct horse"}');
+    expect(init?.headers).not.toHaveProperty('Authorization');
+  });
+
+  it('sets a password with the token in the header, the old password only when given', async () => {
+    const fetchFn = respond(200, { player_id: 3, token: 'fresh' });
+    const api = new Api(fetchFn);
+    await api.setPassword('tok', 'new password');
+    const changed = await api.setPassword('tok', 'newer password', 'new password');
+    expect(changed.token).toBe('fresh');
+    const calls = vi.mocked(fetchFn).mock.calls;
+    expect(calls.map(([url, init]) => [url, init?.body])).toEqual([
+      ['/api/account/password', '{"password":"new password"}'],
+      ['/api/account/password', '{"password":"newer password","old_password":"new password"}'],
+    ]);
+    expect(calls[0]?.[1]?.headers).toMatchObject({ Authorization: 'Bearer tok' });
+  });
+
+  it('tells a wrong old password from a blocked account (both 403)', async () => {
+    const wrong = await new Api(respond(403, { detail: 'wrong password' }))
+      .setPassword('t', 'x')
+      .catch((e: unknown) => e);
+    expect(wrong).toMatchObject({ code: 'wrong_password', status: 403 });
+    const blocked = await new Api(respond(403, { detail: 'account is blocked' }))
+      .login('n', 'p')
+      .catch((e: unknown) => e);
+    expect(blocked).toMatchObject({ code: 'blocked', status: 403 });
+    const bare = await new Api(() => Promise.resolve(new Response(null, { status: 403 })))
+      .login('n', 'p')
+      .catch((e: unknown) => e);
+    expect(bare).toMatchObject({ code: 'blocked' });
+  });
+
+  it('keeps the wait of a 429 from Retry-After', async () => {
+    const limited = (headers: Record<string, string>): typeof fetch =>
+      vi.fn(() =>
+        Promise.resolve(new Response('{"detail":"too many logins"}', { status: 429, headers })),
+      );
+    const timed = await new Api(limited({ 'Retry-After': '540' }))
+      .login('n', 'p')
+      .catch((e: unknown) => e);
+    expect(timed).toMatchObject({ code: 'rate_limited', retryAfterS: 540 });
+    const untimed = await new Api(limited({})).login('n', 'p').catch((e: unknown) => e);
+    expect(untimed).toMatchObject({ code: 'rate_limited', retryAfterS: null });
+  });
+
+  it.each([
+    ['120', 120],
+    [' 7 ', 7],
+    ['0', null],
+    ['-5', null],
+    ['1.5', null],
+    ['Wed, 21 Oct 2026 07:28:00 GMT', null],
+    ['', null],
+    [null, null],
+  ])('reads Retry-After %j as %j', (header, seconds) => {
+    expect(parseRetryAfter(header)).toBe(seconds);
+  });
+});
+
 describe('guest store', () => {
   function memory(): Storage {
     const data = new Map<string, string>();
@@ -84,10 +152,16 @@ describe('guest store', () => {
   it('round-trips and forgets', () => {
     const storage = memory();
     expect(loadGuest(() => storage)).toBeNull();
-    saveGuest(() => storage, { token: 't', nick: 'Nick' });
-    expect(loadGuest(() => storage)).toEqual({ token: 't', nick: 'Nick' });
+    saveGuest(() => storage, { token: 't', nick: 'Nick', hasPassword: true });
+    expect(loadGuest(() => storage)).toEqual({ token: 't', nick: 'Nick', hasPassword: true });
     forgetGuest(() => storage);
     expect(loadGuest(() => storage)).toBeNull();
+  });
+
+  it('reads a saved guest from before accounts as one without a password', () => {
+    const storage = memory();
+    storage.setItem(GUEST_STORAGE_KEY, '{"token":"t","nick":"Old"}');
+    expect(loadGuest(() => storage)).toEqual({ token: 't', nick: 'Old', hasPassword: false });
   });
 
   it('ignores damaged content and a failing storage', () => {
@@ -99,7 +173,7 @@ describe('guest store', () => {
     };
     expect(loadGuest(broken)).toBeNull();
     expect(() => {
-      saveGuest(broken, { token: 't', nick: 'n' });
+      saveGuest(broken, { token: 't', nick: 'n', hasPassword: false });
       forgetGuest(broken);
     }).not.toThrow();
   });

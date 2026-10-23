@@ -231,4 +231,207 @@ describe('AppState', () => {
     app.closeReplay();
     expect(app.screen.name).toBe('welcome'); // no guest here: the nick form is the menu's stand-in
   });
+
+  describe('accounts (#374)', () => {
+    const me = (nick: string, hasPassword: boolean) => () =>
+      Promise.resolve({ player_id: 1, nick, has_password: hasPassword });
+    const saved = (storage: Storage): unknown =>
+      JSON.parse(storage.getItem(GUEST_STORAGE_KEY) ?? 'null');
+
+    it('login: keeps the token and the real nick of the account, then opens the menu', async () => {
+      const login = vi.fn(() => Promise.resolve({ playerId: 1, token: 'fresh' }));
+      const { app, storage } = setup('', memory(), {
+        login,
+        me: me('RealNick', true),
+        activeMatch: () => Promise.resolve(null),
+      });
+      await app.start();
+      expect(await app.login('realnick', 'a long password')).toBeNull();
+      expect(login).toHaveBeenCalledWith('realnick', 'a long password');
+      expect(app.guest).toEqual({ token: 'fresh', nick: 'RealNick', hasPassword: true });
+      expect(saved(storage)).toEqual({ token: 'fresh', nick: 'RealNick', hasPassword: true });
+      expect(app.screen.name).toBe('menu');
+    });
+
+    it('login: a wrong nick or password stays on the form and saves nothing', async () => {
+      const { app, storage } = setup('', memory(), {
+        login: () => Promise.reject(new ApiError('unauthorized', 401)),
+      });
+      await app.start();
+      expect(await app.login('nick', 'bad password')).toEqual({ key: 'error.account.wrongLogin' });
+      expect(app.guest).toBeNull();
+      expect(app.screen.name).toBe('welcome');
+      expect(storage.getItem(GUEST_STORAGE_KEY)).toBeNull();
+    });
+
+    it('login: an invite link opened before it is joined right after', async () => {
+      const joinInvite = vi.fn(() => Promise.resolve(invite('abc')));
+      const { app } = setup('?m=abc', memory(), {
+        login: () => Promise.resolve({ playerId: 1, token: 'fresh' }),
+        me: me('Nick', true),
+        activeMatch: () => Promise.resolve(null),
+        joinInvite,
+      });
+      await app.start();
+      await app.login('Nick', 'a long password');
+      expect(joinInvite).toHaveBeenCalledWith('fresh', 'abc');
+      expect(app.screen).toEqual({ name: 'invite', code: 'abc' });
+    });
+
+    it('login: works with the typed nick when the nick lookup fails', async () => {
+      const { app } = setup('', memory(), {
+        login: () => Promise.resolve({ playerId: 1, token: 'fresh' }),
+        me: () => Promise.reject(new ApiError('network', 0)),
+        activeMatch: () => Promise.resolve(null),
+      });
+      await app.start();
+      await app.login('Typed', 'a long password');
+      expect(app.guest).toEqual({ token: 'fresh', nick: 'Typed', hasPassword: true });
+    });
+
+    it('registration: a guest, then its password; the NEW token is the one kept', async () => {
+      const setPassword = vi.fn(() => Promise.resolve({ playerId: 2, token: 'renewed' }));
+      const { app, storage } = setup('', memory(), {
+        createGuest: () => Promise.resolve({ playerId: 2, token: 'first' }),
+        setPassword,
+        activeMatch: () => Promise.resolve(null),
+      });
+      await app.start();
+      expect(await app.registerAccount('Newbie', 'a long password')).toBeNull();
+      expect(setPassword).toHaveBeenCalledWith('first', 'a long password');
+      expect(app.guest).toEqual({ token: 'renewed', nick: 'Newbie', hasPassword: true });
+      expect(saved(storage)).toEqual({ token: 'renewed', nick: 'Newbie', hasPassword: true });
+      expect(app.screen.name).toBe('menu');
+    });
+
+    it('registration: a taken nick fails before any password is sent', async () => {
+      const setPassword = vi.fn();
+      const { app, storage } = setup('', memory(), {
+        createGuest: () => Promise.reject(new ApiError('conflict', 409)),
+        setPassword,
+      });
+      await app.start();
+      expect(await app.registerAccount('Taken', 'a long password')).toEqual({
+        key: 'error.api.conflict',
+      });
+      expect(setPassword).not.toHaveBeenCalled();
+      expect(storage.getItem(GUEST_STORAGE_KEY)).toBeNull();
+      expect(app.screen.name).toBe('welcome');
+    });
+
+    it('registration: if only the password fails, the guest stays and the menu says so', async () => {
+      const { app, storage } = setup('', memory(), {
+        createGuest: () => Promise.resolve({ playerId: 2, token: 'first' }),
+        setPassword: () => Promise.reject(new ApiError('rate_limited', 429, 60)),
+        activeMatch: () => Promise.resolve(null),
+      });
+      await app.start();
+      expect(await app.registerAccount('Newbie', 'a long password')).toBeNull();
+      expect(app.guest).toEqual({ token: 'first', nick: 'Newbie', hasPassword: false });
+      expect(saved(storage)).toEqual({ token: 'first', nick: 'Newbie', hasPassword: false });
+      expect(app.screen.name).toBe('menu');
+      expect(app.notice).toBe('error.account.registerNoPassword');
+    });
+
+    it('sets the password of a guest without an old one and saves the new token', async () => {
+      const setPassword = vi.fn(() => Promise.resolve({ playerId: 1, token: 'renewed' }));
+      const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"old","nick":"Me"}' });
+      const { app } = setup('', storage, {
+        me: me('Me', false),
+        activeMatch: () => Promise.resolve(null),
+        setPassword,
+      });
+      await app.start();
+      expect(await app.setPassword('a long password', 'ignored')).toBeNull();
+      expect(setPassword).toHaveBeenCalledWith('old', 'a long password', undefined);
+      expect(app.guest).toEqual({ token: 'renewed', nick: 'Me', hasPassword: true });
+      expect(saved(storage)).toEqual({ token: 'renewed', nick: 'Me', hasPassword: true });
+    });
+
+    it('changes the password with the old one; a wrong old one keeps the token', async () => {
+      const setPassword = vi
+        .fn<
+          (
+            token: string,
+            password: string,
+            old?: string,
+          ) => Promise<{ playerId: number; token: string }>
+        >()
+        .mockRejectedValueOnce(new ApiError('wrong_password', 403))
+        .mockResolvedValueOnce({ playerId: 1, token: 'renewed' });
+      const storage = memory({
+        [GUEST_STORAGE_KEY]: '{"token":"old","nick":"Me","hasPassword":true}',
+      });
+      const { app } = setup('', storage, {
+        me: me('Me', true),
+        activeMatch: () => Promise.resolve(null),
+        setPassword,
+      });
+      await app.start();
+      expect(await app.setPassword('another long one', 'wrong')).toEqual({
+        key: 'error.api.wrong_password',
+      });
+      expect(app.guest?.token).toBe('old');
+      expect(await app.setPassword('another long one', 'right one')).toBeNull();
+      expect(setPassword).toHaveBeenLastCalledWith('old', 'another long one', 'right one');
+      expect(app.guest?.token).toBe('renewed');
+      expect(saved(storage)).toMatchObject({ token: 'renewed', hasPassword: true });
+    });
+
+    it('a password change with an unknown token forgets the guest', async () => {
+      const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"old","nick":"Me"}' });
+      const { app } = setup('', storage, {
+        me: me('Me', false),
+        activeMatch: () => Promise.resolve(null),
+        setPassword: () => Promise.reject(new ApiError('unauthorized', 401)),
+      });
+      await app.start();
+      expect(await app.setPassword('a long password', '')).toBeNull();
+      expect(app.guest).toBeNull();
+      expect(app.screen.name).toBe('welcome');
+      expect(storage.getItem(GUEST_STORAGE_KEY)).toBeNull();
+    });
+
+    it('logout: the device forgets the token and shows the welcome screen', async () => {
+      const storage = memory({
+        [GUEST_STORAGE_KEY]: '{"token":"old","nick":"Me","hasPassword":true}',
+      });
+      const { app } = setup('', storage, {
+        me: me('Me', true),
+        activeMatch: () => Promise.resolve({ match_id: '1', map_id: 'pereval' }),
+      });
+      await app.start();
+      app.go({ name: 'menu' });
+      app.logout();
+      expect(app.guest).toBeNull();
+      expect(app.activeMatch).toBeNull();
+      expect(app.screen.name).toBe('welcome');
+      expect(storage.getItem(GUEST_STORAGE_KEY)).toBeNull();
+    });
+
+    it('the token replaced by a login elsewhere is refused at the start: back to welcome with a note', async () => {
+      const storage = memory({
+        [GUEST_STORAGE_KEY]: '{"token":"stale","nick":"Me","hasPassword":true}',
+      });
+      const { app } = setup('', storage, {
+        me: () => Promise.reject(new ApiError('unauthorized', 401)),
+      });
+      await app.start();
+      expect(app.screen.name).toBe('welcome');
+      expect(app.notice).toBe('error.api.unauthorized');
+      expect(storage.getItem(GUEST_STORAGE_KEY)).toBeNull();
+    });
+
+    it('with the server unreachable at the start, the saved guest and its password flag stay', async () => {
+      const storage = memory({
+        [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me","hasPassword":true}',
+      });
+      const { app } = setup('', storage, {
+        me: () => Promise.reject(new ApiError('network', 0)),
+        activeMatch: () => Promise.resolve(null),
+      });
+      await app.start();
+      expect(app.guest).toEqual({ token: 't', nick: 'Me', hasPassword: true });
+    });
+  });
 });

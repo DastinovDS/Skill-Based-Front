@@ -21,13 +21,15 @@ export type ApiErrorCode =
   | 'unauthorized'
   /** 403: the account is blocked by the operator (MOD-01). */
   | 'blocked'
+  /** 403 `wrong password`: the old password of a password change is wrong (#374). */
+  | 'wrong_password'
   /** 404: no such invite, expired, or not yours; not in the matchmaking queue. */
   | 'not_found'
   /** 409: nick taken, own invite, invite full, waiting for the second player, bot match running. */
   | 'conflict'
-  /** 422: nick or map rejected. */
+  /** 422: nick, map or password rejected. */
   | 'invalid'
-  /** 429: too many guests from this address, matches created or nick changes (MOD-01). */
+  /** 429: too many guests, matches created, nick or password changes, logins (MOD-01, #374). */
   | 'rate_limited'
   /** 503: no maps or the server is restarting. */
   | 'unavailable'
@@ -39,6 +41,8 @@ export class ApiError extends Error {
   constructor(
     readonly code: ApiErrorCode,
     readonly status: number,
+    /** 429: seconds from the `Retry-After` header, when the server named them. */
+    readonly retryAfterS: number | null = null,
   ) {
     super(`api error: ${code} (${String(status)})`);
     this.name = 'ApiError';
@@ -55,6 +59,29 @@ const STATUS_CODES: Readonly<Record<number, ApiErrorCode>> = {
   503: 'unavailable',
 };
 
+/** `Retry-After` in seconds: the HTTP-date form is not used by the server and counts as unknown. */
+export function parseRetryAfter(header: string | null): number | null {
+  if (header === null || !/^\d+$/.test(header.trim())) return null;
+  const seconds = Number(header);
+  return seconds > 0 ? seconds : null;
+}
+
+/** The error of a failed response; the body only tells the two 403 answers apart. */
+async function errorOf(response: Response): Promise<ApiError> {
+  let code = STATUS_CODES[response.status] ?? 'server';
+  if (response.status === 403) {
+    try {
+      const body = (await response.json()) as { detail?: unknown };
+      if (body.detail === 'wrong password') code = 'wrong_password';
+    } catch {
+      // No readable body: a plain 403 is the blocked account.
+    }
+  }
+  const retryAfter =
+    response.status === 429 ? parseRetryAfter(response.headers.get('Retry-After')) : null;
+  return new ApiError(code, response.status, retryAfter);
+}
+
 export interface Guest {
   playerId: number;
   token: string;
@@ -69,6 +96,29 @@ export class Api {
 
   async createGuest(nick: string): Promise<Guest> {
     const body = await this.#request<Schemas['GuestCreated']>('POST', '/api/guest', null, { nick });
+    return { playerId: body.player_id, token: body.token };
+  }
+
+  /** Log in with nick and password (#374). The previous token of the player stops working. */
+  async login(nick: string, password: string): Promise<Guest> {
+    const body = await this.#request<Schemas['GuestCreated']>('POST', '/api/login', null, {
+      nick,
+      password,
+    });
+    return { playerId: body.player_id, token: body.token };
+  }
+
+  /**
+   * Set the password of a guest, or change it (`oldPassword` is needed then). The answer carries a
+   * NEW token and the old one is dead at once: the caller must store the new one (#374).
+   */
+  async setPassword(token: string, password: string, oldPassword?: string): Promise<Guest> {
+    const body = await this.#request<Schemas['GuestCreated']>(
+      'POST',
+      '/api/account/password',
+      token,
+      { password, ...(oldPassword === undefined ? {} : { old_password: oldPassword }) },
+    );
     return { playerId: body.player_id, token: body.token };
   }
 
@@ -166,7 +216,7 @@ export class Api {
       throw new ApiError('network', 0);
     }
     if (!response.ok) {
-      throw new ApiError(STATUS_CODES[response.status] ?? 'server', response.status);
+      throw await errorOf(response);
     }
     if (response.status === 204) return undefined as T;
     try {
