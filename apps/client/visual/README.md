@@ -72,3 +72,6 @@ A failed comparison puts the actual frames and the difference into the artifact 
 `visual/replay.spec.ts` opens `/?replay=dev` (the built-in sample `src/replay/siege.frames.json`:
 a short match on the map `siege`, recorded by `gow_server.frames.build_frames` and unpacked) and checks
 that the speed buttons, the pause and the slider drive the real renderer. There is no reference screenshot.
+`/?replay=dev-fights` plays `src/replay/siege-fights.frames.json` (rusher against rusher on `siege`, recorded the same way, 464 ticks)
+with fights and their round data (#323); `mise run shots` takes `replay-fights-385.png` and `replay-fights-460.png` of it (the arena
+with a killed unit, the "bonus attack" caption). There is no reference screenshot.

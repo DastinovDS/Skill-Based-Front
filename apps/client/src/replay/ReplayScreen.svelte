@@ -38,6 +38,10 @@
     if (import.meta.env.DEV && id === 'dev') {
       return parseReplay((await import('./siege.frames.json')).default);
     }
+    // `?replay=dev-fights`: a recording with fights (rounds, kills) for the fight arena (#323).
+    if (import.meta.env.DEV && id === 'dev-fights') {
+      return parseReplay((await import('./siege-fights.frames.json')).default);
+    }
     return loadReplayWhenReady(id, token, { signal, onPreparing });
   }
 

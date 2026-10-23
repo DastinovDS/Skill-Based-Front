@@ -40,6 +40,19 @@ test('shot of the replay viewer', async ({ page }) => {
   await page.screenshot({ path: join(OUT, 'replay.png') });
 });
 
+// A replay with fights (#323): the arena with the round data of the file (shots, losses, the
+// last round) in a fight of a node at ticks 385 (a round just fought) and 460 (a short fight).
+// `replay-fights-<tick>.png`; the sample is `src/replay/siege-fights.frames.json`.
+for (const tick of ['385', '460']) {
+  test(`shot of the replay viewer with a fight at tick ${tick}`, async ({ page }) => {
+    await page.goto('/?replay=dev-fights');
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '0');
+    await page.getByLabel('Position in the match').fill(tick);
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', tick);
+    await page.screenshot({ path: join(OUT, `replay-fights-${tick}.png`) });
+  });
+}
+
 // The radial menus (#350): `/?scene=snapshot_fog&menus` lets a frozen scene open them (orders go
 // nowhere), each menu opened the way the player does. `menu-<name>.png` is the whole screen,
 // `menu-<name>-gray.png` the same in grey scale (the icons must read without the hue).

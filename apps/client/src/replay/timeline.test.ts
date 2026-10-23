@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SAMPLE } from './fixture.ts';
+import { SAMPLE, SAMPLE_FIGHTS } from './fixture.ts';
 import { parseReplay } from './replayFile.ts';
 import { buildTimeline } from './timeline.ts';
 
@@ -78,6 +78,123 @@ describe('buildTimeline', () => {
       },
     ]);
     expect(timeline.snapshots[0]?.view.fights).toEqual([]);
+  });
+
+  describe('round data of the fights (#323)', () => {
+    const first = SAMPLE.frames[0];
+    if (first === undefined) throw new Error('the sample has no frames');
+    const fightsOf = (...f: NonNullable<typeof first.f>) =>
+      buildTimeline({ ...SAMPLE, frames: [{ ...first, f }] }).snapshots[0]?.view.fights;
+
+    it('fills shots, losses, the bonus stock and the last round from the ninth element', () => {
+      const [fight] =
+        fightsOf([
+          7,
+          3,
+          null,
+          null,
+          1,
+          40,
+          60,
+          [3, 4],
+          [
+            [3, 1],
+            [0, 2],
+            [2, 0],
+            [50, [2, 1], [1, 0], [1, 1], [0, 1]],
+          ],
+        ]) ?? [];
+      expect(fight).toMatchObject({
+        id: '7',
+        node: 3,
+        attacker: 1,
+        groups: ['3', '4'],
+        shots: [3, 1],
+        losses: [0, 2],
+        virtual_left: [2, 0],
+        mute: [0, 0],
+        last_round: {
+          tick: 50,
+          shots: [2, 1],
+          virtual: [1, 0],
+          spent: [1, 1],
+          losses: [0, 1],
+        },
+      });
+    });
+
+    it('keeps last_round null before the first round', () => {
+      const [fight] =
+        fightsOf([7, 3, null, null, 1, 40, 50, [3, 4], [[0, 0], [0, 0], [1, 1], null]]) ?? [];
+      expect(fight?.virtual_left).toEqual([1, 1]);
+      expect(fight?.last_round).toBeNull();
+    });
+
+    it('gives an empty arena for a record of an older file (eight elements)', () => {
+      const [fight] = fightsOf([7, 3, null, null, 1, 40, 50, [3, 4]]) ?? [];
+      expect(fight).toMatchObject({
+        shots: [0, 0],
+        losses: [0, 0],
+        virtual_left: [0, 0],
+        mute: [0, 0],
+        last_round: null,
+      });
+    });
+
+    it('does not share arrays with the file: a second snapshot is not changed by the first', () => {
+      const record: NonNullable<typeof first.f>[number] = [
+        7,
+        3,
+        null,
+        null,
+        1,
+        40,
+        60,
+        [3, 4],
+        [[3, 1], [0, 2], [2, 0], null],
+      ];
+      const [fight] = fightsOf(record) ?? [];
+      fight?.shots.fill(9);
+      expect(record[8][0]).toEqual([3, 1]);
+    });
+
+    it('plays the round data of a recorded match (siege-fights sample)', () => {
+      const snapshots = buildTimeline(SAMPLE_FIGHTS).snapshots;
+      const at = (tick: number) => snapshots.find((s) => s.tick === tick)?.view.fights ?? [];
+      // Fight 28 in node 1: before its first round (tick 384 is the first) there is nothing yet.
+      expect(at(380)[0]).toMatchObject({ id: '28', node: 1, shots: [0, 0], last_round: null });
+      // The round of tick 384: player 1 shot once and lost one unit, player 0 shot none.
+      expect(at(385)[0]).toMatchObject({
+        id: '28',
+        shots: [0, 1],
+        losses: [1, 0],
+        virtual_left: [0, 0],
+        last_round: {
+          tick: 384,
+          shots: [0, 1],
+          virtual: [0, 0],
+          spent: [0, 1],
+          losses: [1, 0],
+        },
+      });
+      // Fight 30: both shot once; one of player 0's shots was a bonus (virtual) one.
+      expect(at(460)[0]).toMatchObject({ id: '30', virtual_left: [0, 0], shots: [1, 1] });
+      const last = at(460)[0]?.last_round;
+      expect(last?.virtual).toEqual([1, 0]);
+    });
+
+    it('goes through the file loader: a parsed replay with a fight plays the round data', () => {
+      const file = parseReplay({
+        ...SAMPLE,
+        frames: [
+          {
+            ...first,
+            f: [[7, 3, null, null, 1, 40, 60, [3, 4], [[3, 1], [0, 2], [2, 0], null]]],
+          },
+        ],
+      });
+      expect(buildTimeline(file).snapshots[0]?.view.fights[0]?.shots).toEqual([3, 1]);
+    });
   });
 
   it('fills the road builds of the edges from the frame key "e" (DEC-28), none without it', () => {
