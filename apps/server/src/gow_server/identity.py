@@ -1,9 +1,13 @@
-"""Guest identity and nicknames (ID-01).
+"""Guest identity, nicknames (ID-01) and passwords (#374).
 
 - ``POST /api/guest {nick}`` creates a guest and returns ``{player_id, token}`` once.
 - The token is ``secrets.token_urlsafe(32)``; the database keeps only its SHA-256.
 - HTTP requests authenticate with ``Authorization: Bearer <token>``; the token is never read
   from the URL and never logged (AGENTS.md, sections 5.3 and 5.4).
+- An account is a guest with a password: ``POST /api/account/password`` sets or changes it,
+  ``POST /api/login {nick, password}`` gives a new token of the same player on another device.
+  Both replace the token (one ``token_hash`` per player): the previous device is logged out.
+  A wrong nick and a wrong password get the same 401 after the same scrypt work.
 
 The endpoints are ``def``: they use the synchronous database (AGENTS.md, section 9).
 """
@@ -14,7 +18,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -23,6 +27,7 @@ from gow_server.db import DbSession
 from gow_server.lifecycle import MatchLifecycle, MatchState
 from gow_server.models import Player
 from gow_server.nicks import NickPolicy, skeleton, validate_nick
+from gow_server.passwords import PasswordHasher, normalize
 from gow_server.ratelimit import SlidingWindowLimiter
 
 
@@ -55,6 +60,34 @@ class GuestCreated(BaseModel):
 class Me(BaseModel):
     player_id: int
     nick: str
+    has_password: bool
+    """``False`` for a guest; ``True`` once a password is set (``POST /api/account/password``)."""
+
+
+LONGEST_INPUT = 1024
+"""Upper bound of a nick or password that is only compared (login, old password): longer input
+is a 422, not a long scrypt run."""
+
+
+class PasswordSet(BaseModel):
+    """A new password; ``old_password`` is required when the account already has one."""
+
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    password: str
+    old_password: str | None = Field(default=None, max_length=LONGEST_INPUT)
+
+    @field_validator("password")
+    @classmethod
+    def _check_password(cls, value: str) -> str:
+        return normalize(value)
+
+
+class Login(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    nick: str = Field(max_length=LONGEST_INPUT)
+    password: str = Field(max_length=LONGEST_INPUT)
 
 
 class ActiveMatch(BaseModel):
@@ -75,7 +108,7 @@ class NickChange(BaseModel):
         return validate_nick(value)
 
 
-bearer = HTTPBearer(description="Guest token from POST /api/guest")
+bearer = HTTPBearer(description="Token from POST /api/guest, /api/login or /api/account/password")
 
 
 def current_player(
@@ -123,13 +156,7 @@ def create_guest(
     limiter: Annotated[SlidingWindowLimiter, Depends(_guest_limiter)],
     policy: Policy,
 ) -> GuestCreated:
-    # request.client is the real client address: uvicorn resolves X-Forwarded-For only from
-    # the trusted proxies in GOW_FORWARDED_ALLOW_IPS.
-    enforce(
-        limiter,
-        request.client.host if request.client else "unknown",
-        "too many guests from this address",
-    )
+    enforce(limiter, _client_ip(request), "too many guests from this address")
     _check_policy(policy, body.nick)
     key = nick_key(body.nick)
     if session.execute(select(Player.id).where(Player.nick_key == key)).first() is not None:
@@ -148,7 +175,91 @@ def create_guest(
 
 @router.get("/me")
 def me(player: CurrentPlayer) -> Me:
-    return Me(player_id=player.id, nick=player.nick)
+    return _me(player)
+
+
+def _passwords(request: Request) -> PasswordHasher:
+    hasher: PasswordHasher = request.app.state.passwords
+    return hasher
+
+
+Passwords = Annotated[PasswordHasher, Depends(_passwords)]
+
+
+@router.post("/account/password")
+def set_password(
+    body: PasswordSet,
+    request: Request,
+    response: Response,
+    player: CurrentPlayer,
+    session: DbSession,
+    passwords: Passwords,
+) -> GuestCreated:
+    """Set the password of a guest (it becomes an account: nick, rating and history stay) or
+    change it (``old_password`` needed, 403 ``wrong password`` otherwise).
+
+    The token is replaced: the response carries the new one, the old one stops working (other
+    devices are logged out). Rate limited per player. 422 if the password is not 10..128
+    characters after NFKC normalization.
+    """
+    limits: Limits = request.app.state.limits
+    enforce(limits.password, str(player.id), "too many password changes")
+    if player.password_hash is not None and (
+        body.old_password is None or not passwords.verify(body.old_password, player.password_hash)
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="wrong password")
+    player.password_hash = passwords.hash(body.password)
+    return _issue_token(player, session, response)
+
+
+@router.post("/login")
+def login(
+    body: Login, request: Request, response: Response, session: DbSession, passwords: Passwords
+) -> GuestCreated:
+    """A new token of the account with this nick (any spelling with the same ``nick_key``).
+
+    401 ``wrong nick or password`` for an unknown nick, a guest without a password and a wrong
+    password alike, after the same scrypt work; 403 for a blocked account (only with the right
+    password). Rate limited per client IP and per nick. The previous token stops working.
+    """
+    limits: Limits = request.app.state.limits
+    enforce(limits.login_ip, _client_ip(request), "too many logins")
+    try:
+        key: str | None = nick_key(body.nick)
+    except ValueError:  # not a valid nick: no account has it
+        key = None
+    enforce(limits.login_nick, key or body.nick.casefold(), "too many logins")
+    player = (
+        None
+        if key is None
+        else session.execute(select(Player).where(Player.nick_key == key)).scalar_one_or_none()
+    )
+    stored = None if player is None else player.password_hash
+    if not passwords.verify(body.password, stored) or player is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="wrong nick or password"
+        )
+    if player.blocked_at is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="account is blocked")
+    return _issue_token(player, session, response)
+
+
+def _issue_token(player: Player, session: DbSession, response: Response) -> GuestCreated:
+    token = secrets.token_urlsafe(32)
+    player.token_hash = hash_token(token)
+    session.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return GuestCreated(player_id=player.id, token=token)
+
+
+def _client_ip(request: Request) -> str:
+    # request.client is the real client address: uvicorn resolves X-Forwarded-For only from
+    # the trusted proxies in GOW_FORWARDED_ALLOW_IPS.
+    return request.client.host if request.client else "unknown"
+
+
+def _me(player: Player) -> Me:
+    return Me(player_id=player.id, nick=player.nick, has_password=player.password_hash is not None)
 
 
 @router.get("/me/active-match")
@@ -192,7 +303,7 @@ def change_nick(
     except IntegrityError:
         session.rollback()
         raise _nick_taken() from None
-    return Me(player_id=player.id, nick=player.nick)
+    return _me(player)
 
 
 def _check_policy(policy: NickPolicy, nick: str) -> None:

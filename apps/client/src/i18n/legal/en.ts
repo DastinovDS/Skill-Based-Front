@@ -41,9 +41,9 @@ export const en = {
         ],
       },
       {
-        heading: 'Guest account',
+        heading: 'Guest account and password',
         body: [
-          'To play you pick a nickname (3 to 16 characters). The server stores the nickname, the time of registration and a SHA-256 hash of a random token it issues. The token itself is not stored on the server. There is no e-mail, password or real name. Do not use your real name as a nickname.',
+          'To play you pick a nickname (3 to 16 characters). The server stores the nickname, the time of registration and a SHA-256 hash of a random token it issues. The token itself is not stored on the server. If you set a password, the server stores only its hash (scrypt with a random salt); the password itself is neither stored nor logged. Logging in with nickname and password issues a new token and the previous one stops working. There is no password recovery: a forgotten password means you cannot log in from another device. There is no e-mail or real name. Do not use your real name as a nickname.',
           'Purpose: playing, telling players apart, the rating. Legal basis: Art. 6(1)(b) GDPR (providing the game) and Art. 6(1)(f) GDPR (operating a rated game). Storage: until you ask for deletion (see "Your rights"); there is no automatic deletion of inactive guests.',
         ],
       },
@@ -57,7 +57,7 @@ export const en = {
       {
         heading: 'IP address and server logs',
         body: [
-          'The server briefly uses your IP address to limit how many guests can be created from one address. For this the address is kept in the memory of the server process only (by default for one hour), it is never written to the database or to a file and is gone after a restart.',
+          'The server briefly uses your IP address to limit how many guests can be created from one address and how many password logins can be tried. For this the address is kept in the memory of the server process only (by default for at most one hour), it is never written to the database or to a file and is gone after a restart.',
           'The game server writes a technical log: time, HTTP method, path without query string and secret parts, status code, duration and a random request number. It contains no IP address, no token and no nickname.',
           'The web server (Caddy) writes no access log. Its operational log can contain an IP address in error messages (for example a failed TLS handshake). Logs are kept by the container runtime, rotated by size and overwritten; they are removed when the containers are replaced during a deployment. Maximum retention of logs with IP addresses: <LOG_RETENTION_DAYS> days (the operator confirms this value against the real server configuration).',
         ],
@@ -86,7 +86,7 @@ export const en = {
         heading: 'Your rights',
         body: [
           'You have the right of access, rectification, erasure, restriction of processing, data portability and objection (Art. 15 to 21 GDPR), and the right to lodge a complaint with a supervisory authority: <SUPERVISORY_AUTHORITY>.',
-          'To have your guest deleted, write to <EMAIL> and name your nickname. Because a guest has no e-mail or password, we may ask you to show that the account is yours (for example a match played at an agreed time). On deletion the nickname and the token hash are replaced and the rating is removed; the matches stay without a link to you.',
+          'To have your guest deleted, write to <EMAIL> and name your nickname. Because an account has no e-mail, we may ask you to show that the account is yours (for example a match played at an agreed time). On deletion the nickname and the token hash are replaced, the password hash and the rating are removed; the matches stay without a link to you.',
         ],
       },
       {

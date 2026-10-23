@@ -79,7 +79,7 @@ describe('AppState', () => {
   it('goes straight to the menu with a saved guest, and checks it with the server', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
     const { app } = setup('', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Old' }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Old', has_password: false }),
     });
     await app.start();
     expect(app.screen.name).toBe('menu');
@@ -99,7 +99,7 @@ describe('AppState', () => {
   it('opens your own invite link as the waiting room instead of failing the join', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Host"}' });
     const { app } = setup('?m=abc', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Host' }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Host', has_password: false }),
       joinInvite: () => Promise.reject(new ApiError('conflict', 409)),
       invite: () => Promise.resolve(invite('abc')),
     });
@@ -110,7 +110,7 @@ describe('AppState', () => {
   it('falls back to the menu with a message when the invite is full or gone', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
     const full = setup('?m=abc', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me' }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
       joinInvite: () => Promise.reject(new ApiError('conflict', 409)),
       invite: () => Promise.reject(new ApiError('not_found', 404)),
     });
@@ -118,7 +118,7 @@ describe('AppState', () => {
     expect(full.app.screen.name).toBe('menu');
     expect(full.app.notice).toBe('error.invite.full');
     const gone = setup('?m=abc', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me' }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
       joinInvite: () => Promise.reject(new ApiError('not_found', 404)),
     });
     await gone.app.start();
@@ -131,7 +131,7 @@ describe('AppState', () => {
     const joinInvite = vi.fn(() => Promise.resolve(invite('abc')));
     const activeMatch = vi.fn(() => Promise.resolve({ match_id: '42', map_id: 'pereval' }));
     const { app } = setup('?m=abc', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me' }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
       activeMatch,
       joinInvite,
     });
@@ -144,7 +144,7 @@ describe('AppState', () => {
 
   it('opens the menu when there is no running match or the question fails', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
-    const me = () => Promise.resolve({ player_id: 1, nick: 'Me' });
+    const me = () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false });
     const none = setup('', storage, { me, activeMatch: () => Promise.resolve(null) });
     await none.app.start();
     expect(none.app.screen.name).toBe('menu');
@@ -165,7 +165,7 @@ describe('AppState', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValue(running);
     const { app } = setup('', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me' }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
       activeMatch,
     });
     await app.start();
@@ -182,7 +182,7 @@ describe('AppState', () => {
       Promise.resolve({ match_id: 'm1', map_id: 'pereval', level: 'hard' as const, player: 0 }),
     );
     const { app } = setup('', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Me' }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
       createInvite: () => Promise.resolve(invite('xyz')),
       createBotMatch,
     });
@@ -198,7 +198,7 @@ describe('AppState', () => {
     const createInvite = vi.fn(() => Promise.resolve({ ...invite('pub'), public: true }));
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Old"}' });
     const { app } = setup('', storage, {
-      me: () => Promise.resolve({ player_id: 1, nick: 'Old' }),
+      me: () => Promise.resolve({ player_id: 1, nick: 'Old', has_password: false }),
       createInvite,
     });
     await app.start();

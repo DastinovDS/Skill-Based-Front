@@ -54,6 +54,26 @@ class Settings(BaseSettings):
     nick_change_rate_limit: int = 3
     nick_change_rate_window_s: int = 86400
     """At most ``nick_change_rate_limit`` nick changes per player within the window (MOD-01)."""
+    login_ip_rate_limit: int = 20
+    login_ip_rate_window_s: int = 600
+    """At most ``login_ip_rate_limit`` logins (right or wrong) per client IP within the window
+    (#374): password guessing from one address."""
+    login_nick_rate_limit: int = 10
+    login_nick_rate_window_s: int = 600
+    """At most ``login_nick_rate_limit`` logins per nick (by ``nick_key``) within the window:
+    password guessing for one account from many addresses."""
+    password_rate_limit: int = 5
+    password_rate_window_s: int = 3600
+    """At most ``password_rate_limit`` password sets or changes per player within the window
+    (guessing the old password with a stolen token)."""
+    scrypt_n: int = 2**15
+    scrypt_r: int = 8
+    scrypt_p: int = 1
+    scrypt_maxmem: int = 64 * 1024 * 1024
+    """``hashlib.scrypt`` parameters of new password hashes (#374). Memory is about
+    ``128 * n * r`` bytes (32 MiB by default), so ``scrypt_maxmem`` must stay above it; a hash keeps
+    its own ``n``, ``r``, ``p``, so raising them later does not break existing passwords. Target:
+    50..100 ms per hash on the server."""
     nick_blocklist_file: Path | None = None
     """Extra forbidden words for nicks, one per line (``#`` comments), added to the built-in list
     (``gow_server.nicks``). In a container put it on the volume: ``/data/nick-blocklist.txt``."""

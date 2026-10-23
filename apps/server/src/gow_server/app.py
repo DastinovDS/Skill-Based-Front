@@ -9,6 +9,8 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import sessionmaker
 
 from gow_server import alerts, botmatch, identity, internal, invites, maps, matchqueue, replays, ws
@@ -19,6 +21,7 @@ from gow_server.lifecycle import MatchLifecycle, abort_orphans, archive_rulesets
 from gow_server.logs import request_id_var
 from gow_server.matches import MatchManager
 from gow_server.nicks import NickPolicy, load_blocklist
+from gow_server.passwords import PasswordHasher
 from gow_server.ratelimit import SlidingWindowLimiter
 from gow_server.settings import Settings
 from gow_sim.ruleset import load_ruleset
@@ -109,6 +112,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.state.nick_policy = NickPolicy(
         load_blocklist(settings.nick_blocklist_file) if settings.nick_blocklist_file else ()
     )
+    app.state.passwords = PasswordHasher(settings)
 
     app.state.invite_limiter = SlidingWindowLimiter(
         settings.invite_rate_limit, settings.invite_rate_window_s, match_clock
@@ -141,6 +145,18 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             return response
         finally:
             request_id_var.reset(token)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(  # pyright: ignore[reportUnusedFunction]
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        # FastAPI's default 422 echoes every rejected value ("input"): a password, a token. The
+        # client gets where and why, never what it sent (#374, AGENTS.md, section 5.5).
+        detail = [
+            {"type": error["type"], "loc": error["loc"], "msg": error["msg"]}
+            for error in exc.errors()
+        ]
+        return JSONResponse(status_code=422, content={"detail": detail})
 
     @app.get("/api/health")
     async def health() -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]

@@ -37,7 +37,11 @@ class Player(Base):
     """``gow_server.nicks.skeleton(nick)``: uniqueness that ignores case, accents and look-alike
     letters (SQLite NOCASE covers only ASCII)."""
     token_hash: Mapped[bytes] = mapped_column(LargeBinary(32), unique=True)
-    """SHA-256 of the token; the token itself is never stored (AGENTS.md, section 5.4)."""
+    """SHA-256 of the token; the token itself is never stored (AGENTS.md, section 5.4). A login
+    and a password change replace it (#374): one device at a time."""
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    """``gow_server.passwords``: ``scrypt$n$r$p$salt$hash``, never the password itself (#374).
+    ``None`` for a guest: the account is reachable only by its token."""
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     blocked_at: Mapped[datetime | None]
     """Set by ``gow-admin block`` (MOD-01): the account no longer authenticates (HTTP 403; on the
