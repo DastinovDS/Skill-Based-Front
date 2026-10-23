@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SAMPLE } from './fixture.ts';
+import { SAMPLE, SAMPLE_FIGHTS } from './fixture.ts';
 import { parseReplay } from './replayFile.ts';
 import { buildTimeline } from './timeline.ts';
 
@@ -156,6 +156,31 @@ describe('buildTimeline', () => {
       const [fight] = fightsOf(record) ?? [];
       fight?.shots.fill(9);
       expect(record[8][0]).toEqual([3, 1]);
+    });
+
+    it('plays the round data of a recorded match (siege-fights sample)', () => {
+      const snapshots = buildTimeline(SAMPLE_FIGHTS).snapshots;
+      const at = (tick: number) => snapshots.find((s) => s.tick === tick)?.view.fights ?? [];
+      // Fight 28 in node 1: before its first round (tick 384 is the first) there is nothing yet.
+      expect(at(380)[0]).toMatchObject({ id: '28', node: 1, shots: [0, 0], last_round: null });
+      // The round of tick 384: player 1 shot once and lost one unit, player 0 shot none.
+      expect(at(385)[0]).toMatchObject({
+        id: '28',
+        shots: [0, 1],
+        losses: [1, 0],
+        virtual_left: [0, 0],
+        last_round: {
+          tick: 384,
+          shots: [0, 1],
+          virtual: [0, 0],
+          spent: [0, 1],
+          losses: [1, 0],
+        },
+      });
+      // Fight 30: both shot once; one of player 0's shots was a bonus (virtual) one.
+      expect(at(460)[0]).toMatchObject({ id: '30', virtual_left: [0, 0], shots: [1, 1] });
+      const last = at(460)[0]?.last_round;
+      expect(last?.virtual).toEqual([1, 0]);
     });
 
     it('goes through the file loader: a parsed replay with a fight plays the round data', () => {

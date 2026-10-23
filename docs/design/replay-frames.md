@@ -121,7 +121,7 @@ Deltas are not needed; if the format grows (more nodes, more groups), the size t
 `SnapshotMsg` с полным раскрытием; владельцы групп и пакетов отдельными таблицами),
 `replayPlayer.ts` (`RenderSource`: пауза, ×1/×4/×16, перемотка, интерполяция CLI-02),
 `ReplayViewer.svelte` (управление). Адрес: `/?replay=<id матча>` (`replayUrl`), в dev-сборке
-`/?replay=dev` играет образец `siege.frames.json`.
+`/?replay=dev` играет образец `siege.frames.json`. In a dev build `/?replay=dev-fights` plays `siege-fights.frames.json`: a recording with fights and round data (#323). The viewer shows the fights like a live match (arena, rounds, tracers): `shots`, `losses`, `virtual_left` and `last_round` of `FightView` come from the ninth element of the fight record (a record of eight elements, that is an old file, gives an empty arena); `mute` is built as zeros.
 
 Загрузка: `loadReplayWhenReady` (`loadReplay.ts`) повторяет запрос, пока сервер отвечает `202`
 (паузы 2 с, 3 с, 4,5 с, затем 5 с; не дольше 5 минут, потом ошибка «слишком долго»), а
