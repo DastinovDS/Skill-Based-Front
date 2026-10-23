@@ -1,7 +1,9 @@
 """``gow-bots``: the command line of the bot tooling (AGENTS.md, section 3).
 
 ``gow-bots tournament`` plays a tournament and writes JSONL (``gow_bots.tournament``);
-``gow-bots analyze`` prints the metrics of replay files, e.g. real matches (``gow_sim.analysis``);
+``gow-bots analyze`` prints the metrics and the player statistics (``stats`` key) of replay
+files, e.g. real matches, as JSONL (``gow_sim.analysis``);
+``gow-bots stats`` prints the player statistics of replay files as a table (``gow_bots.stats``);
 ``gow-bots report`` turns a tournament file into a Markdown balance report (``gow_bots.report``).
 """
 
@@ -15,8 +17,10 @@ from pathlib import Path
 
 from gow_bots.bots import BOTS
 from gow_bots.report import write_report
+from gow_bots.stats import render_stats
 from gow_bots.tournament import build_tasks, run_tournament
-from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, ReplayError, analyze_replay
+from gow_sim.analysis import analyze, analyze_stats
+from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, ReplayError, replay_log
 
 DEFAULT_OUT = "docs/balance/latest.jsonl"
 DEFAULT_REPORT_DIR = "docs/balance"
@@ -34,10 +38,12 @@ def _parser() -> argparse.ArgumentParser:
     t.add_argument("--ruleset", default="rulesets/mvp-0.toml")
     t.add_argument("--out", default=DEFAULT_OUT, help=f"result file (default {DEFAULT_OUT})")
     t.add_argument("--replays", default=None, help="folder to record a replay of every match")
-    a = sub.add_parser("analyze", help="print the metrics of replay files as JSONL")
-    a.add_argument("replays", nargs="+", help="replay files")
-    a.add_argument("--rulesets", default=str(DEFAULT_RULESETS_DIR), help="ruleset archive")
-    a.add_argument("--maps", default=str(DEFAULT_MAPS_DIR), help="map folder")
+    a = sub.add_parser("analyze", help="print the metrics and statistics of replay files as JSONL")
+    s = sub.add_parser("stats", help="print the player statistics of replay files as a table")
+    for p in (a, s):
+        p.add_argument("replays", nargs="+", help="replay files")
+        p.add_argument("--rulesets", default=str(DEFAULT_RULESETS_DIR), help="ruleset archive")
+        p.add_argument("--maps", default=str(DEFAULT_MAPS_DIR), help="map folder")
     r = sub.add_parser("report", help="build a Markdown balance report with charts from JSONL")
     r.add_argument("file", help="tournament result (JSONL)")
     r.add_argument("--out-dir", default=DEFAULT_REPORT_DIR, help="folder (default docs/balance)")
@@ -62,17 +68,21 @@ def _tournament(args: argparse.Namespace) -> int:
     return 0
 
 
-def _analyze(args: argparse.Namespace) -> int:
+def _analyze(args: argparse.Namespace, *, table: bool) -> int:
     failed = 0
-    for file in args.replays:
+    for n, file in enumerate(args.replays):
         try:
-            metrics = analyze_replay(file, args.rulesets, args.maps)
+            log = replay_log(file, args.rulesets, args.maps)
         except ReplayError as exc:
             failed += 1
             print(f"ERROR {exc}", file=sys.stderr)
             continue
-        row = {"replay": Path(file).name, **metrics.to_json()}
-        print(json.dumps(row, separators=(",", ":"), ensure_ascii=True))
+        metrics, stats = analyze(log), analyze_stats(log)
+        if table:
+            print(("\n" if n else "") + render_stats(Path(file).name, metrics, stats))
+        else:
+            row = {"replay": Path(file).name, **metrics.to_json(), "stats": stats.to_json()}
+            print(json.dumps(row, separators=(",", ":"), ensure_ascii=True))
     return 1 if failed else 0
 
 
@@ -87,7 +97,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "tournament":
             return _tournament(args)
-        return _report(args) if args.command == "report" else _analyze(args)
+        if args.command == "report":
+            return _report(args)
+        return _analyze(args, table=args.command == "stats")
     except (ValueError, OSError) as exc:  # unknown bot, bad map or ruleset file
         print(f"error: {exc}", file=sys.stderr)
         return 2

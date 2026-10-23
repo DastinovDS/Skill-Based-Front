@@ -37,7 +37,13 @@ uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --
 uv run gow-bots analyze path/to/match.jsonl.gz --rulesets rulesets/archive --maps maps
 ```
 
-Печатает такую же JSON-строку с метриками (без полей идентификации матча, но с `replay`).
+Печатает такую же JSON-строку с метриками (без полей идентификации матча, но с `replay`) и ключом
+`stats` со статистикой игроков (раздел «Статистика игроков»). Таблица для чтения человеком:
+
+```bash
+mise run stats path/to/match.jsonl.gz            # аргументы после имени задачи: файлы и опции
+uv run gow-bots stats a.jsonl.gz b.jsonl.gz --rulesets rulesets/archive --maps maps
+```
 
 ## Формат строки (`schema` = 1)
 
@@ -74,6 +80,39 @@ uv run gow-bots analyze path/to/match.jsonl.gz --rulesets rulesets/archive --map
 Определения метрик заданы в `packages/sim/src/gow_sim/analysis.py` (модульная строка документации).
 «Запланированный» и «атакующий» приказ в журнале событий не виден (`Move` не оставляет события),
 поэтому `MatchRecorder` классифицирует приказ в момент применения.
+
+## Статистика игроков (#375)
+
+Метрики выше описывают исход и бои; статистика игроков описывает, **как играл человек или бот**.
+Источник: журнал команд матча (все присланные команды с вердиктом `validate` и ценой, которую
+списала симуляция) и события, которые симуляция уже пишет (`stance_changed`, `transfer_started`,
+`recruit_cancelled`). Новых событий нет, `state_hash` не меняется. Код: `gow_sim.analysis`
+(`analyze_stats`, `PlayerStats`), модульная строка документации там же; вывод: ключ `stats` в
+JSONL `gow-bots analyze` и таблица `gow-bots stats`. В строки турнира статистика не входит
+(`MatchMetrics` не менялся). Реплей нужно пересимулировать, поэтому нужны рулсет и карта (архив
+`rulesets/archive/<hash>.toml`). Метрика запаса зарядов (#310) считает состояние, а не действия:
+это отдельные поля, общего с ними только `MatchRecorder`/`MatchLog`.
+
+`stats.players[p]` (по стороне `p`, 0 или 1):
+
+| Поле | Смысл |
+|---|---|
+| `stance_timeline` | список `[тик, стойка]`: первая запись `[0, economy.start_stance]`, затем каждый принятый `SetStance` |
+| `stance_ticks` | тики в каждой стойке; стойка, выставленная в тик `t`, работает с тика `t` (`apply_commands` идёт перед `economy`), стартовая стойка с тика 1; сумма равна `ticks` |
+| `commands` | все присланные команды игрока, кроме `Forfeit`; `rejected` из них отклонено (в `MatchMetrics.rejected` `Forfeit` входит) |
+| `apm_avg` | `commands * 60 * tick_hz / ticks`, 3 знака; `null` при `ticks = 0` |
+| `apm_by_minute`, `apm_peak` | команды по минутам матча (минута `m`: тики `m*60*tick_hz < t <= (m+1)*60*tick_hz`, последняя минута может быть короче) и максимум по ним |
+| `supply` | тики принятых `SetFront` (`set_front`), `SetRearMin` (`set_rear_min`), `Transfer` (`transfer`); `transfer_charges`: сумма зарядов из `transfer_started` (перевозка обрезается по свободному месту цели, поэтому может быть меньше `n` команды) |
+| `orders`, `planned_orders` | принятые `Move` и из них запланированные |
+| `planned_share` | `planned_orders / orders`, 4 знака; `null` без приказов |
+| `planned_attack_share` | как в `MatchMetrics` |
+| `cp_by_category` | траты CP в сотых долях по принятым командам и ценам `orders.cost` рулсета: `move`, `planned_move`, `mode` (`SetMode`), `recruit` (найм минус возвраты `CancelRecruit`), `road` (`UpgradeRoad`), `barracks`, `warehouse`, `transfer`, `other` (`Split`, `Merge`, `CancelOrder`, `SetStance`, `SetFront`, `SetRearMin`: в рулсетах MVP бесплатны) |
+| `cp_refunded`, `cp_total` | возврат за отмену найма (уже вычтен из `recruit`) и сумма категорий |
+
+Отклонённая команда ничего не стоит. Реальный баланс CP (реген, сгорание на потолке) не
+восстанавливается: это траты по командам. Решения по спорным местам приняты по умолчанию
+(комментарий в #375): чистые траты с возвратами, `Forfeit` вне APM, офлайн-инструмент без
+показа в игре и без серверного API.
 
 ## Отчёт
 
