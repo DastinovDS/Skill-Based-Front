@@ -89,7 +89,7 @@ r.json())` работает без библиотек. Реплеи рейтин
 | `b` | ~~стройки дорог городами (DEC-16), по id узла~~ **[заменено DEC-28, #306]**: сервер ключ не пишет (дорогу строит не город); он есть только в файлах `sim_version` 3..14, клиент читает его как стройку ребра `edge`; `FORMAT` остаётся 1 | `[node, edge, done_tick]`: город, ребро, тик повышения уровня |
 | `e` | стройки дорог (DEC-28, `sim_version` 15 и новее), по id ребра; ключа нет, пока ничего не строится | `[edge, owner, done_tick]`: ребро, игрок, тик повышения уровня |
 | `r` | ~~тип дорог по id ребра (DEC-22)~~ **[заменено DEC-26, #265]**: сервер ключ не пишет (типа дорог нет); он есть только в файлах `sim_version` 5..11, клиент читает и не использует его; `FORMAT` остаётся 1 | `none`, `fast` или `freight` |
-| `f` | идущие бои (DEC-24), по `id`; ключа нет, пока боёв нет (и в файлах до DEC-24, `sim_version` до 10) | `[id, node, edge, point, attacker, start, next_round, [group, ...], [shots, losses, virtual_left, last_round]]`: `node` или `edge` (другое `null`); `point` на ребре: удвоенная точка встречи в тысячных от конца `a` (0..2000, отметка на доле `point / 2000`), в узле `null`; `attacker` в узле, иначе `null`; тик начала и тик следующего раунда; id групп боя обоих игроков. Девятый элемент (данные раундов, #323) есть только в файлах, записанных после #323: пары `[игрок 0, игрок 1]` `shots`, `losses` (итоги боя на сейчас, `FightView.shots` и `losses`), `virtual_left` (остаток бонусных выстрелов, `FightView.virtual_left`, DEC-32); `last_round`: `null` до первого раунда, иначе `[tick, shots, virtual, spent, losses]` с парами по игрокам (`FightView.last_round`, как событие `fight_round`). Молчащих зарядов (`FightView.mute`) в кадрах нет: клиент реплея собирает их нулями |
+| `f` | идущие бои (DEC-24), по `id`; ключа нет, пока боёв нет (и в файлах до DEC-24, `sim_version` до 10) | `[id, node, edge, point, attacker, start, next_round, [group, ...], [shots, losses, virtual_left, last_round]]`: `node` или `edge` (другое `null`); `point` на ребре: удвоенная точка встречи в тысячных от конца `a` (0..2000, отметка на доле `point / 2000`), в узле `null`; `attacker` в узле, иначе `null`; тик начала и тик следующего раунда; id групп боя обоих игроков. The ninth element (round data, #323) exists only in files written after #323 (a fight record of eight elements is an older file: the arena is empty). It holds pairs `[player 0, player 1]`: `shots` and `losses` (fight totals so far, `FightView.shots` and `losses`) and `virtual_left` (virtual shots left, `FightView.virtual_left`, DEC-32); `last_round` is `null` before the first round, otherwise `[tick, shots, virtual, spent, losses]` with a pair per player (`FightView.last_round`, same numbers as the `fight_round` event). The silent charges (`FightView.mute`) are not in the frames: the replay client builds them as zeros |
 
 Группа: `{"id", "o": owner, "u": units, "c": charged, "m": mode, ...}`, плюс
 
@@ -107,12 +107,13 @@ r.json())` работает без библиотек. Реплеи рейтин
 ## Размер
 
 Бюджет `AGENTS.md` 12: ≤ 2 МБ на полный матч в 15 минут (DEC-22, 1801 кадр). Измерено: матч
-9000 тиков на `pautina`, боты rusher и reactive: около 47 КБ (gzip; 1,9 МБ JSON до сжатия). Данные
-раундов боя (#323) добавили к такому матчу 236 байт (47450 до, 47686 после; на пяти других матчах
-от 0 до 249 байт: `arteriya` 59874 и 60123, `hrebet` 67538 и 67747). Худший случай, шесть боёв в
-каждом из 1801 кадров со случайными счётчиками: около 380 КБ. Дельты поэтому не нужны; если формат
-вырастет (больше узлов, больше групп), тест `apps/server/tests/test_replays.py` покажет это раньше
-релиза.
+9000 тиков на `pautina`, боты rusher и reactive: около 47 КБ (gzip; 1,9 МБ JSON до сжатия).
+
+Round data of fights (#323) added 236 bytes to that match (47450 before, 47686 after). On other
+full matches the growth is 0 to 249 bytes (`arteriya` 59874 and 60123, `hrebet` 67538 and
+67747). Worst case, six fights in each of the 1801 frames with random counters: about 380 KB.
+Deltas are not needed; if the format grows (more nodes, more groups), the size tests in
+`apps/server/tests/test_replays.py` show it before a release.
 
 ## Просмотр в клиенте
 
@@ -132,10 +133,10 @@ r.json())` работает без библиотек. Реплеи рейтин
 
 ## Изменение формата
 
-Совместимое дополнение (новый необязательный ключ кадра или новый элемент в конце записи) `format` не
-повышает: клиент, который его не знает, игнорирует, а новый клиент отличает старый файл по
-отсутствию поля. Так добавлены ключи `e` и `f` и девятый элемент записи боя (#323: данные
-раундов; запись боя из восьми элементов это файл до #323, арена в нём пустая).
+A compatible addition (a new optional frame key or a new trailing element of a record) does not raise
+`format`: a client that does not know it ignores it, and a new client tells an old file by the
+missing field. This is how the keys `e` and `f` and the ninth element of the fight record (#323:
+round data) were added; a fight record of eight elements is a file from before #323.
 
 Любая несовместимая правка: новый `format`, и сервер умеет писать только текущий. Старые файлы на
 диске остаются; клиент просмотра поддерживает версии, которые встречаются в `data/replays/`.
