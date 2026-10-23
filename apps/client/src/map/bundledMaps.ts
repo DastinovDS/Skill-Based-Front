@@ -22,9 +22,9 @@ const testMaps = byName(testFiles);
 
 export const BUNDLED_MAPS: readonly MapFile[] = [...mvpMaps, ...testMaps];
 
-/** The map the dev screen opens with: the first MVP map, or the "pass" test map before MAP-04. */
+/** The map the dev screen opens with: the first MVP map, or the "choke" test map before MAP-04. */
 export const DEFAULT_MAP: MapFile = (() => {
-  const map = mvpMaps[0] ?? testMaps.find((m) => m.meta.name === 'pass') ?? testMaps[0];
+  const map = mvpMaps[0] ?? testMaps.find((m) => m.meta.name === 'choke') ?? testMaps[0];
   if (map === undefined) {
     throw new Error(
       'no maps are bundled: maps/*.json and packages/sim/tests/maps/*.json are empty',

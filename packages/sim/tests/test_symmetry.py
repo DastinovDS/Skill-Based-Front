@@ -7,7 +7,7 @@ anything: each of its commands is the rot180 mirror of player 0's command with t
 groups of the two players are paired by the ``seq`` of the command that made them.
 
 The loop is the full ``Match.step`` (SIM-15): every system in the fixed order, including
-``build``, ``orders`` and ``victory``. Fights (DEC-07, SIM-09) happen: on ``pass`` both players
+``build``, ``orders`` and ``victory``. Fights (DEC-07, SIM-09) happen: on ``choke`` both players
 reach the central node 3 at once. Public intents and bonuses are compared mirrored too. If the
 match ends, it ends symmetrically: a draw.
 Tie-breaks by group id inside a player stay mirrored because the pairing of groups keeps the id
@@ -60,7 +60,7 @@ MAPS = [
     ROOT / "maps" / "crossroads.json",
     ROOT / "maps" / "highway.json",
     TESTS_DIR / "maps" / "diamond.json",
-    TESTS_DIR / "maps" / "pass.json",
+    TESTS_DIR / "maps" / "choke.json",
 ]
 TICKS = 600
 DECIDE_EVERY = 5
@@ -477,8 +477,8 @@ def test_mirrored_commands_give_the_mirrored_state(path: Path, rules: Ruleset) -
     if rules.city_upgrades.enabled:  # DEC-26: the city development is mirrored as well
         assert {"BuildBarracks", "UpgradeWarehouse"} <= set(kinds)
     assert moves_on_edges > 0
-    # On pass the only way out is the central node 3; both players reach it at once and fight
+    # On choke the only way out is the central node 3; both players reach it at once and fight
     # there (DEC-07, rule 5; DEC-24) with equal sides, so both bounce and nothing is captured.
-    assert captures >= (0 if path.stem == "pass" else 2)
-    if path.stem == "pass":
+    assert captures >= (0 if path.stem == "choke" else 2)
+    if path.stem == "choke":
         assert fights > 0

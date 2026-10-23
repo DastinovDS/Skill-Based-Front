@@ -23,7 +23,7 @@ def _json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("name", ["line3", "pass"])
+@pytest.mark.parametrize("name", ["line3", "choke"])
 def test_half_reproduces_hand_made_test_map(name: str) -> None:
     # The MAP-01 test maps were written by hand with the same id scheme.
     full = mirror_half(_json(HALVES / f"{name}.half.json"), CONFIG)
@@ -54,8 +54,8 @@ def test_self_mirrored_cross_edge() -> None:
 
 def test_names_of_the_half_and_the_copy() -> None:
     # DEC-23, item 8: the half node has name and mirror_name, the centre node only name.
-    mapdef = parse_map(mirror_half(_json(HALVES / "pass.half.json"), CONFIG))
-    half = _json(HALVES / "pass.half.json")["nodes"]
+    mapdef = parse_map(mirror_half(_json(HALVES / "choke.half.json"), CONFIG))
+    half = _json(HALVES / "choke.half.json")["nodes"]
     names = [n.name for n in mapdef.nodes]
     assert names[:3] == [n["name"] for n in half[:3]]
     assert names[4:] == [n["mirror_name"] for n in reversed(half[:3])]
@@ -122,7 +122,7 @@ def test_missing_travel_ticks_from_the_mean_length() -> None:
 
 def test_self_mirror_flag() -> None:
     # DEC-27, item 6: a self-mirrored node anywhere, not only at the exact centre.
-    half = _json(HALVES / "pass.half.json")
+    half = _json(HALVES / "choke.half.json")
     half["nodes"][3] |= {"self_mirror": True, "x": 320, "y": 190}  # the pass, off the centre
     mapdef = parse_map(mirror_half(half, CONFIG))
     assert len(mapdef.nodes) == 7
@@ -132,7 +132,7 @@ def test_self_mirror_flag() -> None:
 
 
 def test_road_between_two_self_mirrored_nodes_is_written_once() -> None:
-    half = _json(HALVES / "pass.half.json")
+    half = _json(HALVES / "choke.half.json")
     second = {**half["nodes"][3], "id": "ridge", "name": "ridge", "x": 300, "y": 300}
     half["nodes"].append(second | {"self_mirror": True})
     half["edges"].append({"a": "pass", "b": "ridge", "max_level": 1})
@@ -145,7 +145,7 @@ def test_road_between_two_self_mirrored_nodes_is_written_once() -> None:
 
 
 def test_dump_map_round_trips() -> None:
-    full = mirror_half(_json(HALVES / "pass.half.json"), CONFIG)
+    full = mirror_half(_json(HALVES / "choke.half.json"), CONFIG)
     assert json.loads(dump_map(full)) == full
 
 
@@ -196,14 +196,14 @@ def test_duplicate_cross_edge_is_rejected() -> None:
 
 
 def test_centre_node_in_cross_edge_is_rejected() -> None:
-    half = _json(HALVES / "pass.half.json")
+    half = _json(HALVES / "choke.half.json")
     half["cross_edges"] = [{"a": "front", "b": "pass", "max_level": 1}]
     with pytest.raises(HalfFormatError, match="the centre node joins the other half"):
         mirror_half(half, CONFIG)
 
 
 def test_two_centre_nodes_are_rejected() -> None:
-    half = _json(HALVES / "pass.half.json")
+    half = _json(HALVES / "choke.half.json")
     half["nodes"].append({**half["nodes"][3], "id": "second"})
     with pytest.raises(HalfFormatError, match="only one node can stand at the centre"):
         mirror_half(half, CONFIG)

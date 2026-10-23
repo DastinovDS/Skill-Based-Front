@@ -13,7 +13,7 @@ Expected values come from the rules, not from the code:
 - Split, Merge, CancelOrder and commands to a moving or waiting group: DEC-20 (mechanics.md,
   section 3; the full table of its worked examples is ``test_dec20.py``).
 
-The map is ``tests/maps/pass.json``: 0 -e0- 1 -e1- 3, 3 -e2- 2, 3 -e5- 4, 3 -e4- 5 -e3- 6.
+The map is ``tests/maps/choke.json``: 0 -e0- 1 -e1- 3, 3 -e2- 2, 3 -e5- 4, 3 -e4- 5 -e3- 6.
 Player 0 owns 0 and 1, player 1 owns 5 and 6; 2, 3, 4 are neutral. Player 0 sees 0 and 1 exactly
 and 3 as presence (DEC-04); 2, 4, 5, 6 are in fog for it.
 """
@@ -119,7 +119,7 @@ MISSING = 999
 
 
 def _state() -> tuple[GameState, Ids]:
-    state = initial_state(load_map(TESTS_DIR / "maps" / "pass.json"), RULES)
+    state = initial_state(load_map(TESTS_DIR / "maps" / "choke.json"), RULES)
     state.tick = TICK
     by_node = {g.location: g.id for g in state.groups.values()}  # start garrisons, one per node
 

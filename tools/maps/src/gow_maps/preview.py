@@ -13,7 +13,7 @@ from matplotlib.lines import Line2D
 from gow_sim.maps import MapDef, NodeKind, Terrain
 
 _OWNER_COLOUR = {0: "#2f6fdf", 1: "#d9453b", None: "#b5b5b5"}
-_OWNER_LABEL = {0: "игрок 0", 1: "игрок 1", None: "нейтральный"}
+_OWNER_LABEL = {0: "player 0", 1: "player 1", None: "neutral"}
 # Terrain is shown by shape, the owner by colour: the preview does not rely on colour alone.
 _TERRAIN_MARKER = {Terrain.PLAINS: "o", Terrain.FOREST: "s", Terrain.MOUNTAINS: "^"}
 _KIND_MARK = {
@@ -23,7 +23,11 @@ _KIND_MARK = {
     NodeKind.CITY_SMALL: " S",
     NodeKind.PROVINCE: " P",
 }
-_TERRAIN_LABEL = {Terrain.PLAINS: "равнина", Terrain.FOREST: "лес", Terrain.MOUNTAINS: "горы"}
+_TERRAIN_LABEL = {
+    Terrain.PLAINS: "plains",
+    Terrain.FOREST: "forest",
+    Terrain.MOUNTAINS: "mountains",
+}
 
 
 def preview_path(map_path: str | Path) -> Path:
@@ -129,7 +133,7 @@ def render_preview(mapdef: MapDef, out: str | Path) -> None:
             markersize=12,
             markerfacecolor="white",
             markeredgecolor="black",
-            label="столица",
+            label="capital",
         )
     )
     ax.legend(
@@ -142,10 +146,10 @@ def render_preview(mapdef: MapDef, out: str | Path) -> None:
     )
     neutral = sum(1 for n in mapdef.nodes if n.start_owner is None)
     ax.set_title(
-        f"{mapdef.meta.name} v{mapdef.meta.version}: {len(mapdef.nodes)} узлов, "
-        f"{len(mapdef.edges)} дорог, нейтральных {neutral}.\n"
-        "Подпись: id, вид (S/M/L: малый, средний, большой город, P: провинция), название, vp;"
-        " заряжено/юнитов. Кружок на дороге: точка границы",
+        f"{mapdef.meta.name} v{mapdef.meta.version}: {len(mapdef.nodes)} nodes, "
+        f"{len(mapdef.edges)} roads, neutral {neutral}.\n"
+        "Label: id, kind (S/M/L: small, medium, large city, P: province), name, vp;"
+        " charged/units. Circle on a road: border point",
         fontsize=9,
     )
     fig.tight_layout()

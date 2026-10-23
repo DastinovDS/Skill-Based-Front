@@ -93,7 +93,7 @@ RULESETS: Final[dict[str, Ruleset]] = {
 }
 KEY = bytes(range(32))
 
-TEST_MAPS: Final = ("line3", "diamond", "pass", "line6", "fork", "siege")
+TEST_MAPS: Final = ("line3", "diamond", "choke", "line6", "fork", "siege")
 MVP_MAPS: Final = ("artery", "web", "pass")
 MAPS: Final[dict[str, MapDef]] = {
     **{n: load_map(TESTS_DIR / "maps" / f"{n}.json") for n in TEST_MAPS},

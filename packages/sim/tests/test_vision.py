@@ -92,7 +92,7 @@ def test_diamond_start(rules: Ruleset) -> None:
 
 
 def test_pass_start(rules: Ruleset) -> None:
-    state = _state("pass", rules)
+    state = _state("choke", rules)
     # Mountains from the forest: presence only.
     assert _levels(state, 0) == ([E, E, F, P, F, F, F], [P, P, F, F, F, F])
     assert _levels(state, 1) == ([F, F, F, P, F, E, E], [F, F, F, P, P, F])
@@ -100,7 +100,7 @@ def test_pass_start(rules: Ruleset) -> None:
 
 def test_standing_group_makes_its_node_exact(rules: Ruleset) -> None:
     # A group of player 0 stands in the neutral pass node 3 (ownership unchanged).
-    state = _state("pass", rules)
+    state = _state("choke", rules)
     _add(state, 0, AtNode(3))
     assert state.nodes[3].owner is None
     # From the mountains of 3: mountains 2 and 4 a range, forest 5 a range.
@@ -112,7 +112,7 @@ def test_standing_group_makes_its_node_exact(rules: Ruleset) -> None:
 def test_group_on_edge_gives_no_vision(rules: Ruleset) -> None:
     # TODO(#112): default of the question, literal DEC-04. Player 0 lost both of its nodes; its
     # group on e1 (1 -> 3) stands nowhere, so it sees nothing, not even its own edge.
-    state = _state("pass", rules)
+    state = _state("choke", rules)
     state.nodes[0].owner = 1
     state.nodes[1].owner = 1
     state.groups.clear()
@@ -134,7 +134,7 @@ def test_single_node_and_edge_queries(rules: Ruleset) -> None:
 
 
 def test_levels_are_mirror_symmetric(rules: Ruleset) -> None:
-    for name in ("line3", "diamond", "pass"):
+    for name in ("line3", "diamond", "choke"):
         state = _state(name, rules)
         mapdef = state.map
         v0, v1 = compute_vision(state, rules, 0), compute_vision(state, rules, 1)
@@ -150,7 +150,7 @@ def test_levels_are_mirror_symmetric(rules: Ruleset) -> None:
 
 
 def test_enemy_groups_in_nodes(rules: Ruleset) -> None:
-    state = _state("pass", rules)
+    state = _state("choke", rules)
     in_presence = _add(state, 1, AtNode(3))  # neighbour of own node 1
     in_fog = _add(state, 1, AtNode(4))
     in_exact = _add(state, 1, AtNode(1))  # enemy group inside own node 1
@@ -163,7 +163,7 @@ def test_enemy_groups_in_nodes(rules: Ruleset) -> None:
 
 
 def test_enemy_groups_on_edges(rules: Ruleset) -> None:
-    state = _state("pass", rules)
+    state = _state("choke", rules)
     # e1 = 1 - 3: in the half of 3 (presence) and in the half of the own node 1.
     in_half_3 = _add(state, 1, OnEdge(edge=1, from_node=3, progress=200))
     in_half_1 = _add(state, 1, OnEdge(edge=1, from_node=3, progress=700))
@@ -185,7 +185,7 @@ def test_enemy_groups_on_edges(rules: Ruleset) -> None:
 
 
 def test_own_entities_are_always_visible(rules: Ruleset) -> None:
-    state = _state("pass", rules)
+    state = _state("choke", rules)
     far_group = _add(state, 0, OnEdge(edge=3, from_node=5, progress=10))  # e3: 5 - 6, fog
     pid = state.new_id()
     packet = Packet(pid, 0, edge=3, from_node=5, charges=1, depart_tick=0, arrive_tick=5)
@@ -196,14 +196,14 @@ def test_own_entities_are_always_visible(rules: Ruleset) -> None:
 
 def test_enemy_packets_are_never_visible(rules: Ruleset) -> None:
     # TODO(#112): default of the question. e0 joins the two own nodes of player 0.
-    state = _state("pass", rules)
+    state = _state("choke", rules)
     packet = Packet(state.new_id(), 1, edge=0, from_node=0, charges=2, depart_tick=0, arrive_tick=9)
     assert edge_detail_level(state, 0, 0) is P
     assert not is_visible(state, rules, 0, packet)
 
 
 def test_intents_are_public(rules: Ruleset) -> None:
-    state = _state("pass", rules)
+    state = _state("choke", rules)
     far = Intent(state.new_id(), 1, IntentKind.PLANNED_MOVE, origin=6, target=5, created_tick=0)
     defense = Intent(state.new_id(), 1, IntentKind.DEFENSE, origin=6, target=None, created_tick=0)
     assert detail_level(state, rules, 0, 6) is F
@@ -215,7 +215,7 @@ def test_intents_are_public(rules: Ruleset) -> None:
 
 
 def test_vision_records_sightings(rules: Ruleset) -> None:
-    state = _state("pass", rules)
+    state = _state("choke", rules)
     state.tick = 40
     _add(state, 1, AtNode(3), Mode.DEFENSE)
     _add(state, 1, AtNode(3), Mode.ATTACK)
@@ -254,7 +254,7 @@ def test_range_sighting_has_the_range_of_the_units(rules: Ruleset) -> None:
 
 
 def test_exact_sighting_has_enemy_totals(rules: Ruleset) -> None:
-    state = _state("pass", rules)
+    state = _state("choke", rules)
     state.tick = 7
     _add(state, 1, AtNode(1), Mode.ATTACK)  # 3 units, 2 charged
     _add(state, 1, AtNode(1), Mode.DEFENSE)
@@ -263,7 +263,7 @@ def test_exact_sighting_has_enemy_totals(rules: Ruleset) -> None:
 
 
 def test_memory_keeps_last_sighting_in_fog(rules: Ruleset) -> None:
-    state = _state("pass", rules)
+    state = _state("choke", rules)
     state.tick = 10
     _add(state, 1, AtNode(3), Mode.DEFENSE)
     vision(state, rules)

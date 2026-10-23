@@ -91,7 +91,7 @@ def test_border_mirrored_with_the_direction(tmp_path: Path, config: ValidatorCon
     [
         ("", "[names] node 1: name '' is not 1..24"),
         ("x" * 25, "is not 1..24"),
-        (" Брод", "[names] node 1: name ' Брод' has spaces at the ends"),
+        (" Ford", "[names] node 1: name ' Ford' has spaces at the ends"),
     ],
 )
 def test_bad_names(tmp_path: Path, config: ValidatorConfig, name: str, issue: str) -> None:
@@ -104,7 +104,7 @@ def test_bad_names(tmp_path: Path, config: ValidatorConfig, name: str, issue: st
 
 def test_name_of_24_characters_passes(tmp_path: Path, config: ValidatorConfig) -> None:
     data = json.loads((REPO / "packages/sim/tests/maps/line3.json").read_text(encoding="utf-8"))
-    data["nodes"][1]["name"] = "Ж" * 24
+    data["nodes"][1]["name"] = "X" * 24
     assert validate_file(_write(tmp_path, "m.json", data), config) == []
 
 
