@@ -9,7 +9,7 @@ from gow_sim.maps import MapDef, load_map
 from gow_sim.ruleset import Ruleset, load_ruleset
 
 ROOT: Final = Path(__file__).resolve().parents[3]
-MVP_MAPS: Final = ("arteriya", "pautina", "pereval")
+MVP_MAPS: Final = ("artery", "web", "pass")
 
 
 @pytest.fixture(scope="session")

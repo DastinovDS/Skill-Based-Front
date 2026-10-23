@@ -43,7 +43,7 @@ Json = dict[str, object]
 
 @pytest.fixture
 def live_settings(maps_dir: Path, tmp_path: Path) -> Settings:
-    shutil.copy(ROOT / "maps" / "pautina.json", maps_dir)
+    shutil.copy(ROOT / "maps" / "web.json", maps_dir)
     return Settings(
         maps_dir=maps_dir,
         database_url=f"sqlite:///{tmp_path / 'gow.db'}",
@@ -77,13 +77,13 @@ class Live:
         return await self.http.post(f"/api/matches/{code}/{action}", headers=headers)
 
     async def invite(self, headers: dict[str, str]) -> str:
-        response = await self.http.post("/api/matches", json={"map_id": "pautina"}, headers=headers)
+        response = await self.http.post("/api/matches", json={"map_id": "web"}, headers=headers)
         assert response.status_code == 201, response.text
         return str(response.json()["code"])
 
     async def bot_match(self, headers: dict[str, str]) -> httpx2.Response:
         return await self.http.post(
-            "/api/bot-matches", json={"level": "easy", "map_id": "pautina"}, headers=headers
+            "/api/bot-matches", json={"level": "easy", "map_id": "web"}, headers=headers
         )
 
     async def run_until(self, condition: Callable[[], bool], step: float = DT) -> None:
@@ -372,7 +372,7 @@ def test_end_reason_of_a_technical_defeat(connect: bool, expected: str) -> None:
     async def scenario() -> None:
         rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
         runner = MatchRunner(
-            "t", "pautina", load_map(ROOT / "maps" / "pautina.json"), rules, (1, 2), ManualClock()
+            "t", "web", load_map(ROOT / "maps" / "web.json"), rules, (1, 2), ManualClock()
         )
         assert runner.end_reason() is None
         if connect:
@@ -388,7 +388,7 @@ def test_end_reason_of_a_normal_end() -> None:
     async def scenario() -> None:
         rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
         runner = MatchRunner(
-            "t", "pautina", load_map(ROOT / "maps" / "pautina.json"), rules, (1, 2), ManualClock()
+            "t", "web", load_map(ROOT / "maps" / "web.json"), rules, (1, 2), ManualClock()
         )
         runner.submit(0, 1, ForfeitCmd())
         runner.step()
@@ -449,7 +449,7 @@ async def _play_rated(live: Live, mapdef: MapDef, accounts: tuple[int, int], los
     rules = load_ruleset(live.settings.ruleset_path)
     record = lifecycle.open_record()
     runner = await lifecycle.start(
-        record, "pautina", mapdef, rules, accounts, private=False, rated=True
+        record, "web", mapdef, rules, accounts, private=False, rated=True
     )
     assert runner.submit(loser, 1, ForfeitCmd())
     pk = int(runner.match_id)
@@ -465,7 +465,7 @@ def _ratings(live: Live, accounts: tuple[int, int]) -> list[Rating]:
 def test_two_rated_matches_in_a_row_and_no_double_counting(live_settings: Settings) -> None:
     async def scenario() -> None:
         async with live_server(live_settings) as live:
-            mapdef = load_map(live.settings.maps_dir / "pautina.json")
+            mapdef = load_map(live.settings.maps_dir / "web.json")
             alice = await live.account(await live.guest("alice"))
             bob = await live.account(await live.guest("bob"))
 

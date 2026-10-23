@@ -21,11 +21,11 @@ The picture covers exactly the world rectangle ``[0, width] x [0, height]`` at o
 unit, so the client stretches nothing: the sprite sits at ``(0, 0)`` with the map's own size.
 
 The result is deterministic for a pinned numpy and Pillow: every random field comes from
-``numpy.random.default_rng`` seeded by the map name and version (or an explicit seed), the biome
-noise offsets from ``random.Random`` with the same seed. The picture is not required to be
-symmetric (DEC-27, item 1): every cell looks up its own nearest node. The file is lossy WebP
-(libwebp of the Pillow wheel), so its bytes may differ between platforms: compare pixels with a
-tolerance, never bytes (``tools/maps/tests/test_bake.py``).
+``numpy.random.default_rng`` seeded by the map name and version, a pinned seed or an explicit
+seed, the biome noise offsets from ``random.Random`` with the same seed. The picture is not
+required to be symmetric (DEC-27, item 1): every cell looks up its own nearest node. The file is
+lossy WebP (libwebp of the Pillow wheel), so its bytes may differ between platforms: compare pixels
+with a tolerance, never bytes (``tools/maps/tests/test_bake.py``).
 """
 
 import hashlib
@@ -129,8 +129,27 @@ def background_path(map_path: str | Path) -> Path:
     return path.with_name(f"{path.stem}.bg.webp")
 
 
+# Seeds of the maps that were renamed in #390 (the Russian ids became English): they keep the seed
+# of the old ``name:version`` so the baked backgrounds stayed the same pictures. Any new map, or a
+# map not listed here, uses the default seed. Keyed by the current map name.
+PINNED_SEEDS: dict[str, int] = {
+    "artery": 16042865726214378278,  # arteriya:2
+    "web": 11212474857736785236,  # pautina:2
+    "pass": 10994672548035436809,  # pereval:2
+    "ridge": 1700639690546766349,  # hrebet:1
+    "crossroads": 8978241204212138798,  # perekrestki:1
+    "highway": 4785048121517087569,  # trakt:1
+}
+
+
 def map_seed(mapdef: MapDef) -> int:
-    """Default seed: stable across runs and Python versions (no ``hash()``)."""
+    """Seed of a map: pinned (``PINNED_SEEDS``) or derived from name and version.
+
+    The derived seed is stable across runs and Python versions (no ``hash()``).
+    """
+    pinned = PINNED_SEEDS.get(mapdef.meta.name)
+    if pinned is not None:
+        return pinned
     key = f"{mapdef.meta.name}:{mapdef.meta.version}".encode()
     return int.from_bytes(hashlib.blake2b(key, digest_size=8).digest(), "big")
 

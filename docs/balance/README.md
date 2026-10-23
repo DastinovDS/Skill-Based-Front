@@ -4,6 +4,8 @@
 Отчёт по этому файлу строит `gow-bots report` (BOT-05, #38); этот документ описывает формат,
 на который он опирается.
 
+> Map ids were renamed to English in #390 (`arteriya` is `artery`, `pautina` is `web`, `pereval` is `pass`, `hrebet` is `ridge`, `perekrestki` is `crossroads`, `trakt` is `highway`); the tournament results and reports in this folder keep the old ids on purpose, they are history and are not rewritten.
+
 ## Запуск
 
 ```bash

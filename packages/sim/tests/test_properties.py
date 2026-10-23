@@ -94,7 +94,7 @@ RULESETS: Final[dict[str, Ruleset]] = {
 KEY = bytes(range(32))
 
 TEST_MAPS: Final = ("line3", "diamond", "pass", "line6", "fork", "siege")
-MVP_MAPS: Final = ("arteriya", "pautina", "pereval")
+MVP_MAPS: Final = ("artery", "web", "pass")
 MAPS: Final[dict[str, MapDef]] = {
     **{n: load_map(TESTS_DIR / "maps" / f"{n}.json") for n in TEST_MAPS},
     **{n: load_map(ROOT / "maps" / f"{n}.json") for n in MVP_MAPS},
@@ -578,7 +578,7 @@ TestMatchMachine.settings = settings(stateful_step_count=20)
 # Full matches between bots --------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", ["siege", "diamond", "arteriya", "pautina", "pereval"])
+@pytest.mark.parametrize("name", ["siege", "diamond", "artery", "web", "pass"])
 def test_ledger_holds_in_a_full_bot_match(
     name: str, expand_bot: Callable[[MapDef, Ruleset], Controller]
 ) -> None:

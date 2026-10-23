@@ -51,7 +51,7 @@ r.json())` работает без библиотек. Реплеи рейтин
 
 ```json
 {
-  "format": 1, "sim_version": 1, "ruleset_hash": "...", "map_id": "arteriya", "map_hash": "...",
+  "format": 1, "sim_version": 1, "ruleset_hash": "...", "map_id": "artery", "map_hash": "...",
   "tick_hz": 10, "frame_every": 5, "ticks": 9000,
   "outcome": {"winner": 0, "reason": "vp"}, "vp": [31, 24], "state_hash": "...",
   "map": { ...формат карты, docs/design/map-format.md... },
@@ -107,10 +107,10 @@ r.json())` работает без библиотек. Реплеи рейтин
 ## Размер
 
 Бюджет `AGENTS.md` 12: ≤ 2 МБ на полный матч в 15 минут (DEC-22, 1801 кадр). Измерено: матч
-9000 тиков на `pautina`, боты rusher и reactive: около 47 КБ (gzip; 1,9 МБ JSON до сжатия).
+9000 тиков на `web`, боты rusher и reactive: около 47 КБ (gzip; 1,9 МБ JSON до сжатия).
 
 Round data of fights (#323) added 236 bytes to that match (47450 before, 47686 after). On other
-full matches the growth is 0 to 249 bytes (`arteriya` 59874 and 60123, `hrebet` 67538 and
+full matches the growth is 0 to 249 bytes (`artery` 59874 and 60123, `ridge` 67538 and
 67747). Worst case, six fights in each of the 1801 frames with random counters: about 380 KB.
 Deltas are not needed; if the format grows (more nodes, more groups), the size tests in
 `apps/server/tests/test_replays.py` show it before a release.

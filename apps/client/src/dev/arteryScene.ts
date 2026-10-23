@@ -1,5 +1,5 @@
 /**
- * The `arteriya` scene of the dev screen (#344): one moment of a game on the real map with its
+ * The `artery` scene of the dev screen (#344): one moment of a game on the real map with its
  * baked background, as in the style mockups (`docs/design/mockups/map-style-2.html`, the fragment
  * of nodes 3-16). The test maps of the other scenes have no background, so the background, the
  * shading, the fog and the roads of the map style are seen only here. Own and enemy cities and
@@ -22,10 +22,10 @@ import type {
 } from '../protocol.gen.ts';
 
 /** The tick the scene is frozen at (4 minutes into the game, so the fog memory has ages). */
-export const ARTERIYA_TICK = 2400;
+export const ARTERY_TICK = 2400;
 
 /** The part of the map the mockups show, world units: where the camera looks. */
-export const ARTERIYA_VIEW = { x: 230, y: 130, width: 720, height: 580 } as const;
+export const ARTERY_VIEW = { x: 230, y: 130, width: 720, height: 580 } as const;
 
 const OWN = [0, 1, 2, 3, 4, 6, 9, 12, 13];
 const ENEMY = [5, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30];
@@ -51,7 +51,7 @@ const SEEN_EDGE: Readonly<Record<number, number>> = { 3: 210, 18: 950, 11: 1500 
 /** Enemy cities with the barracks built; seen only next to an own node (DEC-31): here city 5. */
 const ENEMY_BARRACKS = [5, 30];
 
-const T = ARTERIYA_TICK;
+const T = ARTERY_TICK;
 const id = (n: number) => n.toString(16).padStart(16, '0');
 
 function seen(level: Detail, ago: number, enemyModes: Seen['enemy_modes'] = []): Seen {
@@ -66,7 +66,7 @@ function seen(level: Detail, ago: number, enemyModes: Seen['enemy_modes'] = []):
   };
 }
 
-export function arteriyaSnapshot(map: MapFile): SnapshotMsg {
+export function arterySnapshot(map: MapFile): SnapshotMsg {
   const owner = (node: number) => (OWN.includes(node) ? 0 : ENEMY.includes(node) ? 1 : null);
   const isExact = (node: number) => OWN.includes(node) || STATIONED.includes(node);
   const nextToExact = (node: number) =>

@@ -7,7 +7,7 @@ import LobbyScreen from './LobbyScreen.svelte';
 const entry = (code: string, nick: string): LobbyEntry => ({
   code,
   host_nick: nick,
-  map_id: 'pereval',
+  map_id: 'pass',
   age_s: 1,
 });
 

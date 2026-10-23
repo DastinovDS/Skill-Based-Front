@@ -74,7 +74,7 @@ describe('QueueScreen', () => {
 
   it('confirms a found opponent and starts the match', async () => {
     const confirmQueue = vi.fn(() =>
-      Promise.resolve(searching({ state: 'started', match_id: '7', map_id: 'pereval' })),
+      Promise.resolve(searching({ state: 'started', match_id: '7', map_id: 'pass' })),
     );
     const onstart = vi.fn();
     render({ joinQueue: () => Promise.resolve(found()), confirmQueue }, { onstart });
@@ -84,7 +84,7 @@ describe('QueueScreen', () => {
     button(translate('en', 'queue.confirm'))?.click();
     await settle();
     expect(confirmQueue).toHaveBeenCalledWith('t');
-    expect(onstart).toHaveBeenCalledWith('7', 'pereval');
+    expect(onstart).toHaveBeenCalledWith('7', 'pass');
   });
 
   it('goes back to the menu when dropped from the queue', async () => {

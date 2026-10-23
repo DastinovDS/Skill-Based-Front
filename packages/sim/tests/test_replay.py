@@ -143,7 +143,7 @@ def test_replay_run_shows_every_tick_to_an_observer() -> None:
 
 def test_aborted_writer_leaves_a_log_cut_at_the_last_flushed_checkpoint(tmp_path: Path) -> None:
     """``flush_at_checkpoints``: a log that was never closed is readable up to a checkpoint."""
-    mapdef = load_map(MAPS / "arteriya.json")
+    mapdef = load_map(MAPS / "artery.json")
     rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
     match = Match(mapdef, rules, HEADLESS_MATCH_KEY)
     writer = ReplayWriter(tmp_path / "cut.jsonl.gz", flush_at_checkpoints=True)

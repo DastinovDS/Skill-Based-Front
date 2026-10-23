@@ -34,7 +34,7 @@ from gow_sim.systems.movement import leg, movement
 from gow_sim.view import PlayerView, project
 
 ROOT = Path(__file__).resolve().parents[3]
-MVP_MAPS = ("arteriya", "pautina", "pereval")
+MVP_MAPS = ("artery", "web", "pass")
 
 FOREST, PLAINS, MOUNTAINS = Terrain.FOREST, Terrain.PLAINS, Terrain.MOUNTAINS
 
@@ -62,7 +62,7 @@ def test_empty_range_is_rejected() -> None:
 
 
 def test_bot_params_stay_in_their_ranges(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     for seed in range(20):
         bot = RandomLegalBot(mapdef, mvp_rules, seed=seed, player=1)
         for key, r in RandomLegalBot.PARAMS.items():
@@ -137,7 +137,7 @@ def test_share_of_plans_follows_the_price(mvp_rules: Ruleset) -> None:
 
 
 def test_idle_bot_sends_nothing(maps: dict[str, MapDef], mvp_rules: Ruleset) -> None:
-    mapdef = maps["arteriya"]
+    mapdef = maps["artery"]
     result = run_headless(mapdef, mvp_rules, _pair("idle", mapdef, mvp_rules, 0), max_ticks=200)
     assert result.accepted == result.rejected == (0, 0)
 
@@ -145,7 +145,7 @@ def test_idle_bot_sends_nothing(maps: dict[str, MapDef], mvp_rules: Ruleset) -> 
 def test_bot_refuses_the_view_of_the_other_side(
     maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
-    mapdef = maps["arteriya"]
+    mapdef = maps["artery"]
     match = Match(mapdef, mvp_rules, bytes(range(32)))
     with pytest.raises(ValueError, match="player 0"):
         IdleBot(mapdef, mvp_rules, seed=0, player=0).decide(match.view(1), 0)
@@ -168,7 +168,7 @@ def test_one_bot_pair_over_100_seeds_gives_at_least_30_final_hashes(
     maps: dict[str, MapDef], short_rules: Ruleset
 ) -> None:
     # Full matches on test-short (mvp-0 with a 60 s timer) to keep the test fast.
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     hashes = {
         run_headless(mapdef, short_rules, _pair("random_legal", mapdef, short_rules, s)).state_hash
         for s in range(100)
@@ -213,7 +213,7 @@ def test_match_is_the_same_in_fresh_processes() -> None:
         "bots = [BOTS['random_legal'](m, r, seed=42, player=p) for p in (0, 1)]\n"
         "print(run_headless(m, r, bots).state_hash)\n"
     )
-    args = [str(ROOT / "maps" / "pereval.json"), str(ROOT / "rulesets" / "test-short.toml")]
+    args = [str(ROOT / "maps" / "pass.json"), str(ROOT / "rulesets" / "test-short.toml")]
     outputs = {
         subprocess.run(
             [sys.executable, "-c", script, *args],
@@ -257,7 +257,7 @@ def test_bots_fight_without_in_fight_rejects(
     maps: dict[str, MapDef], mvp_rules: Ruleset, a: str, b: str
 ) -> None:
     """Groups in a fight get only withdrawals (IN_FIGHT never comes back); fights happen."""
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     seen = _Rejects()
     bots = [
         BOTS[a](mapdef, mvp_rules, seed=1, player=0),

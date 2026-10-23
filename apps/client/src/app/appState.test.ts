@@ -8,7 +8,7 @@ const invite = (code: string): Invite => ({
   code,
   state: 'joined',
   public: false,
-  map_id: 'pereval',
+  map_id: 'pass',
   host_nick: 'Host',
   guest_nick: 'Guest',
   you_ready: false,
@@ -129,7 +129,7 @@ describe('AppState', () => {
   it('returns to the running match after a reload, before the invite and the menu (#189)', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
     const joinInvite = vi.fn(() => Promise.resolve(invite('abc')));
-    const activeMatch = vi.fn(() => Promise.resolve({ match_id: '42', map_id: 'pereval' }));
+    const activeMatch = vi.fn(() => Promise.resolve({ match_id: '42', map_id: 'pass' }));
     const { app } = setup('?m=abc', storage, {
       me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
       activeMatch,
@@ -137,7 +137,7 @@ describe('AppState', () => {
     });
     await app.start();
     expect(activeMatch).toHaveBeenCalledWith('t');
-    expect(app.screen).toEqual({ name: 'match', matchId: '42', mapId: 'pereval' });
+    expect(app.screen).toEqual({ name: 'match', matchId: '42', mapId: 'pass' });
     expect(joinInvite).not.toHaveBeenCalled();
     expect(app.pendingInvite).toBeNull();
   });
@@ -179,7 +179,7 @@ describe('AppState', () => {
   it('creates an invite and a bot match, and moves on to the right screens', async () => {
     const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
     const createBotMatch = vi.fn(() =>
-      Promise.resolve({ match_id: 'm1', map_id: 'pereval', level: 'hard' as const, player: 0 }),
+      Promise.resolve({ match_id: 'm1', map_id: 'pass', level: 'hard' as const, player: 0 }),
     );
     const { app } = setup('', storage, {
       me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
@@ -189,9 +189,9 @@ describe('AppState', () => {
     await app.start();
     await app.createInvite(null);
     expect(app.screen).toEqual({ name: 'invite', code: 'xyz' });
-    await app.playBot('hard', 'pereval');
-    expect(createBotMatch).toHaveBeenCalledWith('t', 'hard', 'pereval');
-    expect(app.screen).toEqual({ name: 'match', matchId: 'm1', mapId: 'pereval' });
+    await app.playBot('hard', 'pass');
+    expect(createBotMatch).toHaveBeenCalledWith('t', 'hard', 'pass');
+    expect(app.screen).toEqual({ name: 'match', matchId: 'm1', mapId: 'pass' });
   });
 
   it('creates a public match and goes to its waiting room', async () => {
@@ -202,8 +202,8 @@ describe('AppState', () => {
       createInvite,
     });
     await app.start();
-    await app.createInvite('pereval', true);
-    expect(createInvite).toHaveBeenCalledWith('t', 'pereval', true);
+    await app.createInvite('pass', true);
+    expect(createInvite).toHaveBeenCalledWith('t', 'pass', true);
     expect(app.screen).toEqual({ name: 'invite', code: 'pub' });
   });
 
@@ -398,7 +398,7 @@ describe('AppState', () => {
       });
       const { app } = setup('', storage, {
         me: me('Me', true),
-        activeMatch: () => Promise.resolve({ match_id: '1', map_id: 'pereval' }),
+        activeMatch: () => Promise.resolve({ match_id: '1', map_id: 'pass' }),
       });
       await app.start();
       app.go({ name: 'menu' });

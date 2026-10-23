@@ -3,7 +3,7 @@
 Same method as ``packages/sim/tests/test_benchmarks.py`` (``docs/perf.md``): the budget of the
 reference machine is scaled by ``speed_factor`` (the same pure-Python workload and reference
 time), and the benchmark fails more than 50% above it. The timed part is ``decide`` on views of a
-``random_legal`` match on ``pautina`` (the MVP map with the most edges) after 300..1500 ticks.
+``random_legal`` match on ``web`` (the MVP map with the most edges) after 300..1500 ticks.
 """
 
 import timeit
@@ -91,13 +91,13 @@ def _play(mapdef: MapDef, rules: Ruleset, names: tuple[str, str]) -> list[Player
 
 @pytest.fixture(scope="module")
 def views(maps: dict[str, MapDef], mvp_rules: Ruleset) -> list[PlayerView]:
-    return _play(maps["pautina"], mvp_rules, ("random_legal", "random_legal"))
+    return _play(maps["web"], mvp_rules, ("random_legal", "random_legal"))
 
 
 @pytest.fixture(scope="module")
 def strategy_views(maps: dict[str, MapDef], mvp_rules: Ruleset) -> list[PlayerView]:
     """Views of a match of the strategy bots: many own groups, builds and contact with the enemy."""
-    return _play(maps["pautina"], mvp_rules, ("expander", "turtle"))
+    return _play(maps["web"], mvp_rules, ("expander", "turtle"))
 
 
 @pytest.mark.parametrize("name", sorted(BOTS))
@@ -109,7 +109,7 @@ def test_bench_decide(
     mvp_rules: Ruleset,
     name: str,
 ) -> None:
-    _bench(benchmark, speed_factor, views, maps["pautina"], mvp_rules, name)
+    _bench(benchmark, speed_factor, views, maps["web"], mvp_rules, name)
 
 
 @pytest.mark.parametrize("name", ["expander", "turtle"])
@@ -122,7 +122,7 @@ def test_bench_decide_strategy_views(
     name: str,
 ) -> None:
     """BOT-02: the strategy bots on the views of their own matches (the busiest case)."""
-    _bench(benchmark, speed_factor, strategy_views, maps["pautina"], mvp_rules, name)
+    _bench(benchmark, speed_factor, strategy_views, maps["web"], mvp_rules, name)
 
 
 def _bench(

@@ -324,7 +324,7 @@ def test_on_edge_order_keeps_the_rest_of_the_path() -> None:
     assert state.groups[gid].order == Order(path=(2, 3), planned=False, depart_tick=1)
 
 
-@pytest.mark.parametrize("name", ["pereval", "pautina", "arteriya"])
+@pytest.mark.parametrize("name", ["pass", "web", "artery"])
 def test_mvp_maps_fit_the_progress_scale(name: str) -> None:
     """Every edge of the MVP maps, both ways, takes at most PROGRESS_SCALE ticks on mvp-0."""
     mapdef = load_map(TESTS_DIR.parents[2] / "maps" / f"{name}.json")

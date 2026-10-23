@@ -45,7 +45,7 @@ class _Watcher:
 def test_recruits_only_with_barracks_and_builds_them(
     bot: str, maps: dict[str, MapDef], mvp1_rules: Ruleset
 ) -> None:
-    mapdef = maps["arteriya"]
+    mapdef = maps["artery"]
     watched = [
         _Watcher(BOTS[bot](mapdef, mvp1_rules, seed=s, player=p)) for p, s in ((0, 3), (1, 4))
     ]
@@ -77,7 +77,7 @@ def test_recruits_only_with_barracks_and_builds_them(
 def test_no_city_development_without_the_flag(
     bot: str, maps: dict[str, MapDef], mvp_rules: Ruleset
 ) -> None:
-    mapdef = maps["pautina"]
+    mapdef = maps["web"]
     watched = [_Watcher(BOTS[bot](mapdef, mvp_rules, seed=1, player=p)) for p in (0, 1)]
     run_headless(mapdef, mvp_rules, watched, max_ticks=1500)
     assert not [

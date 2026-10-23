@@ -9,14 +9,10 @@ from gow_bots.cli import main
 from gow_sim.match import SIM_VERSION
 
 ROOT = Path(__file__).resolve().parents[3]
-REPLAY = (
-    ROOT
-    / "packages"
-    / "sim"
-    / "tests"
-    / "golden"
-    / f"v{SIM_VERSION}"
-    / "pereval-short-forfeit.jsonl.gz"
+REPLAY = next(
+    (ROOT / "packages" / "sim" / "tests" / "golden" / f"v{SIM_VERSION}").glob(
+        "*-short-forfeit.jsonl.gz"
+    )
 )
 
 

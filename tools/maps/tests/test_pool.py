@@ -18,8 +18,8 @@ from gow_sim.maps import NodeKind, load_map
 from gow_sim.ruleset import load_ruleset
 
 MAPS = Path(__file__).parents[3] / "maps"
-MVP = ["arteriya", "pautina", "pereval"]
-DEC27 = ["hrebet", "perekrestki", "trakt"]
+MVP = ["artery", "web", "pass"]
+DEC27 = ["ridge", "crossroads", "highway"]
 POOL = sorted(MVP + DEC27)
 CONFIG = load_config()
 SIZE = dataclasses.replace(CONFIG, size_check=True)  # DEC-27, item 5: 45..55 nodes
@@ -89,16 +89,16 @@ def test_preview_is_committed(name: str) -> None:
 
 
 def test_render_preview(tmp_path: Path) -> None:
-    out = tmp_path / "pereval.preview.png"
-    render_preview(load_map(MAPS / "pereval.json"), out)
+    out = tmp_path / "pass.preview.png"
+    render_preview(load_map(MAPS / "pass.json"), out)
     assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 def test_cli_preview(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    map_path = tmp_path / "pereval.json"
-    map_path.write_bytes((MAPS / "pereval.json").read_bytes())
+    map_path = tmp_path / "pass.json"
+    map_path.write_bytes((MAPS / "pass.json").read_bytes())
     assert main(["preview", str(map_path)]) == 0
-    assert (tmp_path / "pereval.preview.png").exists()
+    assert (tmp_path / "pass.preview.png").exists()
     broken = tmp_path / "broken.json"
     broken.write_text("{}", encoding="utf-8")
     assert main(["preview", str(broken)]) == 1

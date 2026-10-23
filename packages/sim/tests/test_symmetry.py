@@ -52,13 +52,13 @@ from gow_sim.systems.victory import EndReason, Outcome
 ROOT = Path(__file__).resolve().parents[3]
 TESTS_DIR = Path(__file__).resolve().parent
 MAPS = [
-    ROOT / "maps" / "pereval.json",
-    ROOT / "maps" / "pautina.json",
-    ROOT / "maps" / "arteriya.json",
+    ROOT / "maps" / "pass.json",
+    ROOT / "maps" / "web.json",
+    ROOT / "maps" / "artery.json",
     # DEC-27, item 1: free coordinates, mirrored rules; provinces of DEC-23.
-    ROOT / "maps" / "hrebet.json",
-    ROOT / "maps" / "perekrestki.json",
-    ROOT / "maps" / "trakt.json",
+    ROOT / "maps" / "ridge.json",
+    ROOT / "maps" / "crossroads.json",
+    ROOT / "maps" / "highway.json",
     TESTS_DIR / "maps" / "diamond.json",
     TESTS_DIR / "maps" / "pass.json",
 ]

@@ -73,7 +73,7 @@ class MapMeta:
 class NodeDef:
     id: int
     name: str
-    """Name of the node (DEC-23, item 4): unique in the map, not translated."""
+    """Name of the node (DEC-23, item 4): unique in the map, an English place name."""
     x: int
     y: int
     terrain: Terrain

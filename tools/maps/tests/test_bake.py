@@ -30,7 +30,7 @@ from gow_sim.maps import MapDef, load_map
 ROOT = Path(__file__).parents[3]
 MAPS = ROOT / "maps"
 TEST_MAPS = ROOT / "packages" / "sim" / "tests" / "maps"
-POOL = ["arteriya", "hrebet", "pautina", "perekrestki", "pereval", "trakt"]
+POOL = ["artery", "ridge", "web", "crossroads", "pass", "highway"]
 ALL_MAPS = [MAPS / f"{name}.json" for name in POOL] + sorted(TEST_MAPS.glob("*.json"))
 BAKE_SECONDS = 10  # #344: baking one map takes at most 10 s (CPU time, a loaded machine is slower)
 LAND = frozenset(biome for biomes in TERRAIN_BIOMES.values() for biome in biomes)
@@ -189,7 +189,7 @@ def test_committed_background_has_no_water_pixels(name: str) -> None:
 
 
 def test_render_stays_within_the_time_budget() -> None:
-    mapdef = _map(MAPS / "arteriya.json")  # 1600 x 1000, the largest map of the pool
+    mapdef = _map(MAPS / "artery.json")  # 1600 x 1000, the largest map of the pool
     started = time.process_time()
     pixels = render_background(mapdef)
     data = io.BytesIO()

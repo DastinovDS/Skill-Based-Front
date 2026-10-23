@@ -158,7 +158,7 @@ def test_canonical_roundtrip_with_packets_in_flight() -> None:
 # The ways of a dispatch: one Dijkstra per city with a deficit (#306) --------------------------
 
 
-@pytest.mark.parametrize("name", ["arteriya", "pautina", "pereval"])
+@pytest.mark.parametrize("name", ["artery", "web", "pass"])
 def test_fastest_ways_to_equal_transfer_route(name: str) -> None:
     """``fastest_ways_to``/``way_from`` give the way ``transfer_route`` gives (the fastest one,
     ties by the lexicographically smaller ``node_key`` sequence from the start) for every pair of

@@ -126,7 +126,7 @@ def _play(mapdef: MapDef, rules: Ruleset) -> tuple[float, float, list[MatchRunne
         tasks: list[asyncio.Task[None]] = []
         for i in range(MATCHES):
             await clock.sleep(rng.uniform(0, dt))
-            runner = MatchRunner(f"m{i}", "pautina", mapdef, rules, (2 * i, 2 * i + 1), clock)
+            runner = MatchRunner(f"m{i}", "web", mapdef, rules, (2 * i, 2 * i + 1), clock)
             clients = [_Wanderer(mapdef, runner, p, seed=2 * i + p) for p in (0, 1)]
             tasks += [asyncio.create_task(c.play()) for c in clients]
             tasks.append(asyncio.create_task(runner.run()))
@@ -145,7 +145,7 @@ def _play(mapdef: MapDef, rules: Ruleset) -> tuple[float, float, list[MatchRunne
 
 
 def test_thirty_matches_keep_tick_lag_under_ten_percent() -> None:
-    mapdef = load_map(ROOT / "maps" / "pautina.json")
+    mapdef = load_map(ROOT / "maps" / "web.json")
     rules = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
     dt = 1.0 / rules.tick_hz
     failures: list[str] = []

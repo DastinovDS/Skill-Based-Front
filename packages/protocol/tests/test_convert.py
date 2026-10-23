@@ -54,10 +54,10 @@ from gow_sim.view import PlayerView, opaque_id, view_to_canonical
 
 ROOT = Path(__file__).resolve().parents[3]
 RULES = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
-MVP_MAPS = ("arteriya", "pautina", "pereval")
+MVP_MAPS = ("artery", "web", "pass")
 CLIENT_FIXTURES = ROOT / "packages" / "protocol" / "fixtures" / "client"
 KEY = b"pro-03 test match key, 32 bytes!"
-TICKS = 2000  # pereval: the first fight of the scripted drivers is at 1722..1822
+TICKS = 2000  # pass: the first fight of the scripted drivers is at 1722..1822
 BOT_TICKS = 1200
 REGRESSION = 1.5
 
@@ -330,7 +330,7 @@ def test_snapshot_frames_of_a_bot_match() -> None:
     """Strategic bots against each other: their frames equal the validated ones. Under the stack
     limit (DEC-20) their armies split into smaller waves that take targets with plain orders, so
     planned orders and their intents are set up in ``test_snapshot_frame_of_rare_view_parts``."""
-    mapdef = load_map(ROOT / "maps" / "arteriya.json")
+    mapdef = load_map(ROOT / "maps" / "artery.json")
     bots = ("rusher", "turtle")
     controllers = [BOTS[bot](mapdef, RULES, seed=7, player=p) for p, bot in enumerate(bots)]
     checker = _FrameChecker()
@@ -428,7 +428,7 @@ def test_snapshot_frame_costs_no_more_than_project() -> None:
 
     A ratio on the same machine, so no ``speed_factor``; ``REGRESSION`` as in the benchmarks.
     """
-    mapdef = load_map(ROOT / "maps" / "pautina.json")
+    mapdef = load_map(ROOT / "maps" / "web.json")
     controllers = [BOTS["rusher"](mapdef, RULES, seed=1, player=p) for p in PLAYERS]
     keeper = _Keeper()
     run_headless(mapdef, RULES, controllers, max_ticks=300, match_key=KEY, observer=keeper)
@@ -533,7 +533,7 @@ def test_distinct_unknown_ids_stay_distinct() -> None:
     assert all(g < 0 for g in cmd.groups)
 
 
-def _started(name: str = "pautina") -> Match:
+def _started(name: str = "web") -> Match:
     match = Match(load_map(ROOT / "maps" / f"{name}.json"), RULES, KEY)
     match.step()
     return match

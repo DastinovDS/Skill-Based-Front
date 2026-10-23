@@ -470,7 +470,7 @@ def test_detail_11_bots_get_the_same_view(
 ) -> None:
     """A controller gets ``project()`` of the state, ``enemy_groups`` included (the bots of
     ``gow_bots`` read them from the view only, AGENTS.md, section 2)."""
-    mapdef = load_map(ROOT / "maps" / "pereval.json")
+    mapdef = load_map(ROOT / "maps" / "pass.json")
     recorders = [_Recorder(expand_bot(mapdef, mvp_rules), p, mvp_rules) for p in (0, 1)]
     run_headless(
         mapdef, mvp_rules, recorders, max_ticks=1500, match_key=KEY, observer=_Observer(recorders)

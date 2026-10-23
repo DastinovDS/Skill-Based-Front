@@ -50,7 +50,7 @@ TIMEOUT_S: Final = 5.0
 
 @pytest.fixture
 def bot_settings(maps_dir: Path, tmp_path: Path) -> Settings:
-    shutil.copy(ROOT / "maps" / "pautina.json", maps_dir)
+    shutil.copy(ROOT / "maps" / "web.json", maps_dir)
     return Settings(
         maps_dir=maps_dir,
         database_url=f"sqlite:///{tmp_path / 'gow.db'}",
@@ -115,10 +115,10 @@ async def recv(ws: ClientConnection) -> ServerMsg:
 def test_scripted_client_plays_a_full_match_against_a_bot(bot_settings: Settings) -> None:
     async def scenario() -> None:
         async with live_server(bot_settings) as live:
-            created = await live.start(level="expert", map_id="pautina")
+            created = await live.start(level="expert", map_id="web")
             assert created.status_code == 201, created.text
             info = created.json()
-            assert (info["level"], info["map_id"]) == ("expert", "pautina")
+            assert (info["level"], info["map_id"]) == ("expert", "web")
             runner = live.manager.get(info["match_id"])
             assert runner is not None
             assert runner.private and runner.bot is not None
@@ -200,12 +200,12 @@ class _Slow:
 
 
 def _runner(controller: Controller | None = None, **kwargs: object) -> MatchRunner:
-    mapdef = load_map(ROOT / "maps" / "pautina.json")
+    mapdef = load_map(ROOT / "maps" / "web.json")
     rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
     seat = BotSeat(1, controller or BOTS["idle"](mapdef, rules, seed=1, player=1))
     return MatchRunner(
         "m",
-        "pautina",
+        "web",
         mapdef,
         rules,
         (7, BOT_ACCOUNT),

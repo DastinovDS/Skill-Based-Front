@@ -182,17 +182,17 @@ MVP_MAPS = sorted((REPO / "maps").glob("*.json"))
 
 
 def _with_small_stock(tmp_path: Path, stock: int) -> Path:
-    """Example 20 of DEC-26: the map ``arteriya`` with ``start_stock = stock`` in its small cities.
+    """Example 20 of DEC-26: the map ``artery`` with ``start_stock = stock`` in its small cities.
 
     A copy in ``tmp_path`` (the file name must equal ``meta.name``): the test does not depend on
     the committed maps, which satisfy the check (#379).
     """
-    data = json.loads((REPO / "maps" / "arteriya.json").read_text(encoding="utf-8"))
+    data = json.loads((REPO / "maps" / "artery.json").read_text(encoding="utf-8"))
     small = [n for n in data["nodes"] if n["kind"] == "city_small" and n["start_owner"] is not None]
     assert small
     for node in small:
         node["start_stock"] = stock
-    path = tmp_path / "arteriya.json"
+    path = tmp_path / "artery.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     return path
 
@@ -302,7 +302,7 @@ def test_dec27_example_3_edge_without_mirror(tmp_path: Path, config: ValidatorCo
 )
 def test_dec27_size_examples(config: ValidatorConfig, count: int, issues: list[str]) -> None:
     # Rows 10 and 11: the size check with the thresholds 45..55 switched on.
-    mapdef = load_map(REPO / "maps" / "pautina.json")
+    mapdef = load_map(REPO / "maps" / "web.json")
     nodes = (mapdef.nodes * 2)[:count]
     on = dataclasses.replace(config, size_check=True)
     assert [i.check for i in check_size(dataclasses.replace(mapdef, nodes=nodes), on)] == issues
