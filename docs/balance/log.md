@@ -1,12 +1,12 @@
-# Журнал балансировки
+# Balance log
 
-Каждая итерация: рулсет, прогон, результат по критериям гейта BAL-02 (#40), гипотезы и
-следующий шаг. Критерии гейта: issue #40 и `docs/design/mechanics.md`, раздел 17. Отчёт
-последнего прогона: [latest.md](latest.md), формат данных: [README.md](README.md).
+Each iteration: the ruleset, the run, the result against the BAL-02 gate criteria (#40), hypotheses and
+the next step. The gate criteria: issue #40 and `docs/design/mechanics.md`, section 17. The report of the
+latest run: [latest.md](latest.md), the data format: [README.md](README.md).
 
-## Итерация 0: BAL-01 (#39), первый прогон `mvp-0`
+## Iteration 0: BAL-01 (#39), the first `mvp-0` run
 
-### Прогон
+### Run
 
 ```bash
 uv run gow-bots tournament --maps maps/*.json --bots expander reactive rusher strangler turtle \
@@ -14,94 +14,94 @@ uv run gow-bots tournament --maps maps/*.json --bots expander reactive rusher st
 uv run gow-bots report docs/balance/latest.jsonl
 ```
 
-- Рулсет `mvp-0` (хэш `3c114c6a3fde5be635a73d1cd7ff1783`), `SIM_VERSION` 1, карты arteriya, pautina,
-  pereval, сиды 0..99, 7500 матчей. `idle` и `random_legal` исключены: все критерии гейта
-  считаются по стратегическим ботам («Idle и Random не учитываются», #40); их компетентность
-  проверена в BOT-01 и BOT-05.
-- Прогон собран из трёх запусков по одной карте (`--maps maps/<карта>.json`) и склеен в порядке
-  карт: строки упорядочены по `(карта, сид, бот0, бот1)`, поэтому файл совпадает с одним запуском
-  на трёх картах. Время: `docs/perf.md`, раздел «Турнир ботов».
+- Ruleset `mvp-0` (hash `3c114c6a3fde5be635a73d1cd7ff1783`), `SIM_VERSION` 1, maps arteriya, pautina,
+  pereval, seeds 0..99, 7500 matches. `idle` and `random_legal` are excluded: all gate criteria
+  are computed over the strategic bots ("Idle and Random are not counted", #40); their competence
+  was checked in BOT-01 and BOT-05.
+- The run was assembled from three runs, one per map (`--maps maps/<map>.json`), and joined in map
+  order: the rows are ordered by `(map, seed, bot0, bot1)`, so the file matches a single run
+  on the three maps. Timing: `docs/perf.md`, section "Bot tournament".
 
-### Результат по критериям гейта
+### Result against the gate criteria
 
-| Критерий (#40) | Значение | Итог |
+| Criterion (#40) | Value | Outcome |
 |---|---|---|
-| Ни один стратегический бот не выигрывает у остальных стратегических больше 65% | rusher 0.90 [0.89; 0.91], expander 0.68 [0.66; 0.69]; strangler 0.51, reactive 0.41, turtle 0.00 | **не пройден** |
-| Сторона 0 на каждой карте < 55%, 95% интервал включает 50% (зеркальные матчи) | arteriya 0.53 [0.48; 0.58], pautina 0.54 [0.48; 0.59], pereval 0.52 [0.47; 0.57]; по всем матчам 0.51 [0.49; 0.53] на каждой карте | пройден |
-| Доля запланированных атак у стратегических ботов 20–70% | expander 0.13, rusher 0.08, strangler 0.05, reactive 0.04, turtle 0.00 | **не пройден** |
-| Turtle выигрывает у Expander < 40% | 0.00 [0.00; 0.01] | пройден (вырожденно, см. ниже) |
-| Захват в последние 3 минуты в ≥ 30% матчей | 0.61 (4550/7500) | пройден |
-| Итоговый рулсет `rulesets/mvp.toml` | — | задача BAL-02 |
+| No strategic bot beats the other strategic bots more than 65% | rusher 0.90 [0.89; 0.91], expander 0.68 [0.66; 0.69]; strangler 0.51, reactive 0.41, turtle 0.00 | **failed** |
+| Side 0 on each map < 55%, the 95% interval includes 50% (mirror matches) | arteriya 0.53 [0.48; 0.58], pautina 0.54 [0.48; 0.59], pereval 0.52 [0.47; 0.57]; over all matches 0.51 [0.49; 0.53] on each map | passed |
+| The share of scheduled attacks among the strategic bots 20-70% | expander 0.13, rusher 0.08, strangler 0.05, reactive 0.04, turtle 0.00 | **failed** |
+| Turtle beats Expander < 40% | 0.00 [0.00; 0.01] | passed (degenerately, see below) |
+| A capture in the last 3 minutes in >= 30% of matches | 0.61 (4550/7500) | passed |
+| The final ruleset `rulesets/mvp.toml` | - | the BAL-02 task |
 
-Дополнительно (отчёт BOT-05): rusher бьёт всех значимо (доминирующая стратегия), циклов
-«камень-ножницы-бумага» нет; проверка компетентности «reactive бьёт rusher чаще expander» не
-выполнена: 0.02 [0.01; 0.03] против 0.10 [0.08; 0.12] (#166). Ничьих 0.05, почти все матчи идут
-до таймера (`vp` 6716 из 7500, `capital` 433). Ячеек без вариативности 0/75.
+Additionally (the BOT-05 report): rusher beats everyone significantly (a dominant strategy), there are no
+rock-paper-scissors cycles; the competence check "reactive beats rusher more often than expander does" was not
+met: 0.02 [0.01; 0.03] against 0.10 [0.08; 0.12] (#166). Draws 0.05, almost all matches go
+to the timer (`vp` 6716 of 7500, `capital` 433). Cells without variability 0/75.
 
-### Вердикт
+### Verdict
 
-Гейт на `mvp-0` **не пройден**: 3 из 5 числовых критериев выполнены (стороны, конец партии,
-Turtle против Expander), 2 нет (доминирующая стратегия, доля запланированных атак). Механика на
-этих числах схлопывается в одну стратегию: «стойка Война и захват нейтральных узлов как можно
-быстрее». Это прежде всего свойство рулсета, а не только слабость ботов (доказательства ниже);
-итерации BAL-02 начинать с рулсета, параллельно чинить Reactive и Turtle.
+The gate on `mvp-0` is **failed**: 3 of the 5 numeric criteria are met (sides, the end of the match,
+Turtle against Expander), 2 are not (a dominant strategy, the share of scheduled attacks). On
+these numbers the mechanics collapse into a single strategy: "the War stance and capturing neutral nodes as fast
+as possible". This is first of all a property of the ruleset, not only a weakness of the bots (evidence below);
+start the BAL-02 iterations from the ruleset and fix Reactive and Turtle in parallel.
 
-### Разбор: рулсет или боты
+### Analysis: ruleset or bots
 
-**1. Узкое место: CP, а не заряды (рулсет).** Победы ботов упорядочены строго по стойке:
-rusher (Война всю партию) 0.90 > expander (Война первые 1200–2400 тиков, затем Баланс) 0.68 >
-strangler и reactive (Баланс) 0.51 и 0.41 > turtle (Экономия) 0.00. Матчи решаются по VP, то есть
-числом узлов: rusher в конце держит 25–31 узел против 2–7 у соперников. Нейтральный город в MVP
-пуст (mechanics.md, раздел 9), захват стоит только приказ (1 CP) и заряды на него не нужны, а
-Война оставляет в CP 75% регена против 25% у Экономии. Заряды почти не ограничивают: успех осад у
-campaign-ботов 0.85–0.89. Проверка (10 сидов, тот же набор, не коммитится): `war = 40` вместо 25
-снижает rusher до 0.81 [0.75; 0.85] (значимой доминации больше нет), expander до 0.59, reactive
-против rusher растёт с 0.02 до 0.22 [0.13; 0.34], стороны без перекоса.
+**1. The bottleneck: CP, not charges (ruleset).** The bots' wins are ordered strictly by stance:
+rusher (War the whole match) 0.90 > expander (War for the first 1200-2400 ticks, then Balance) 0.68 >
+strangler and reactive (Balance) 0.51 and 0.41 > turtle (Economy) 0.00. Matches are decided on VP, that is by
+the number of nodes: at the end rusher holds 25-31 nodes against 2-7 for its opponents. A neutral city in the MVP
+is empty (mechanics.md, section 9), a capture costs only an order (1 CP) and needs no charges, and
+War leaves 75% of the regeneration in CP against 25% for Economy. Charges hardly limit anything: the success of sieges for
+the campaign bots is 0.85-0.89. A check (10 seeds, the same set, not committed): `war = 40` instead of 25
+lowers rusher to 0.81 [0.75; 0.85] (no significant domination any more), expander to 0.59, reactive
+against rusher grows from 0.02 to 0.22 [0.13; 0.34], the sides show no skew.
 
-**2. Запланированный приказ ровно окупается и поэтому почти не выбирается (рулсет + метрика).**
-`prefer_planned` (`apps/bots/src/gow_bots/bots/utility.py`, общая функция всех ботов, AGENTS.md
-раздел 8) берёт план, когда сэкономленные выстрелы дороже надбавки:
-`saved * 100 > (planned_move - move) * charges_per_cp`, то есть `saved > 2` при `mvp-0`. Бонус
-`planned_bonus = 2`, поэтому `saved = min(2, need) <= 2`, и план выбирается только когда он
-превращает отскок в захват. Проверка `planned_bonus = 3` (10 сидов): доля растёт лишь до
-0.17 / 0.10 / 0.07 / 0.06 (expander, rusher, strangler, reactive), rusher остаётся доминирующим
-(0.88). Причина: метрика считает атакой любой `Move` на чужой или нейтральный узел, а большинство
-таких приказов идут в пустые нейтральные узлы (`need = 0`, бонус не нужен). Пока захват нейтралей
-бесплатен по зарядам, 20% недостижимы одной ценой плана.
+**2. A scheduled order exactly pays for itself and therefore is almost never chosen (ruleset + metric).**
+`prefer_planned` (`apps/bots/src/gow_bots/bots/utility.py`, the common function of all bots, AGENTS.md
+section 8) takes the plan when the saved shots are worth more than the surcharge:
+`saved * 100 > (planned_move - move) * charges_per_cp`, that is `saved > 2` with `mvp-0`. The bonus
+`planned_bonus = 2`, so `saved = min(2, need) <= 2`, and the plan is chosen only when it
+turns a bounce into a capture. A check with `planned_bonus = 3` (10 seeds): the share grows only to
+0.17 / 0.10 / 0.07 / 0.06 (expander, rusher, strangler, reactive), rusher stays dominant
+(0.88). The reason: the metric counts any `Move` to an enemy or neutral node as an attack, and most
+of those orders go to empty neutral nodes (`need = 0`, no bonus is needed). While capturing neutrals
+is free in charges, 20% cannot be reached by the price of the plan alone.
 
-**3. Reactive против Rusher (#166): в основном следствие пункта 2, плюс слабость бота.** Reactive
-отвечает только на публичные запланированные удары; rusher против reactive отдаёт 1.4
-запланированных приказа на 77.9 атакующих за матч (около 2%), то есть отвечать почти не на что.
-Без намерений Reactive играет базовую кампанию в Балансе и держит в резерве 200–300 CP «на ответ»,
-то есть ещё сильнее голодает по CP. Итог 2.3 узла против 30.2 к концу. Поправка ботов (не
-рулсета) для #166: не держать резерв, пока нет видимых планов врага; отвечать и на видимое
-сосредоточение групп у своих городов.
+**3. Reactive against Rusher (#166): mostly a consequence of point 2, plus a weakness of the bot.** Reactive
+responds only to public scheduled strikes; against reactive, rusher issues 1.4
+scheduled orders per 77.9 attacking orders per match (about 2%), so there is almost nothing to respond to.
+Without intents Reactive plays the basic campaign in Balance and keeps 200-300 CP in reserve "for a response",
+that is it starves for CP even more. The result is 2.3 nodes against 30.2 at the end. A correction of the bots (not
+of the ruleset) for #166: do not keep the reserve while there are no visible enemy plans; respond also to a visible
+concentration of groups near your own cities.
 
-**4. Turtle 0.00 против всех: замысел подтверждён, но бот вырожден (бот + пункт 1).** Все
-поражения по VP, ни одной потерянной столицы. Против expander 9.7 узла против 22.9 (то, что гейт и
-хочет проверить: удержание городов бьёт бункер). Но против rusher Turtle к концу держит 1.8 узла,
-то есть не удерживает даже свой регион: в Экономии у него около 3 CP в минуту, «Защита» стоит 2 CP,
-атакующих приказов 8–9 за матч против 35–78 у остальных. Склады полны, но потратить заряды нечем.
-Слабость бота: стойка Экономия всю партию без переключения. Механика: пункт 1 (заряды не
-конвертируются в силу без CP). Критерий «Turtle < 40% против Expander» сейчас выполняется
-вырожденно и должен перепроверяться после правок пункта 1.
+**4. Turtle 0.00 against everyone: the idea is confirmed, but the bot is degenerate (bot + point 1).** All
+defeats are on VP, not a single lost capital. Against expander 9.7 nodes against 22.9 (what the gate
+wants to check: holding cities beats a bunker). But against rusher Turtle holds 1.8 nodes at the end,
+that is it does not hold even its own region: in Economy it has about 3 CP per minute, "Defense" costs 2 CP,
+attacking orders are 8-9 per match against 35-78 for the others. The warehouses are full, but there is nothing to spend the charges on.
+A weakness of the bot: the Economy stance the whole match without switching. The mechanics: point 1 (charges are not
+converted into strength without CP). The criterion "Turtle < 40% against Expander" is currently met
+degenerately and must be rechecked after the fixes of point 1.
 
-**5. Найденный баг правил: #175.** При `war = 40` один матч из 750 (pautina, сид 0, strangler
-против expander) падает в `combat` на инварианте «группа стоит в узле без прибытия», турнир
-обрывается целиком. На `mvp-0` падения нет. Блокирует итерации со сменой стоек; чинить до BAL-02
-или первой задачей в нём.
+**5. A rules bug found: #175.** With `war = 40` one match of 750 (pautina, seed 0, strangler
+against expander) fails in `combat` on the invariant "a group stands in a node with no arrival", and the
+whole tournament aborts. On `mvp-0` there is no failure. It blocks iterations that change the stances; fix it before BAL-02
+or as the first task in it.
 
-### Гипотезы и кандидаты для BAL-02
+### Hypotheses and candidates for BAL-02
 
-| # | Гипотеза | Кандидаты (ключи `mvp-0`) | Ожидание |
+| # | Hypothesis | Candidates (`mvp-0` keys) | Expectation |
 |---|---|---|---|
-| H1 | Война слишком выгодна: CP единственный узкий ресурс | `economy.stance_to_charges_pct.war` 25 → 40 (проверено: rusher 0.81); вместе с `economy` 75 → 60 | rusher и expander < 65%, Turtle и Reactive получают CP |
-| H2 | Захват пустых нейтралей слишком дешёв, поэтому VP решает скорость клейма | в рулсете прямого ключа нет; варианты: гарнизоны нейтральных городов (правка карт или правила, только через DEC и mechanics.md) или `recruit.location = "capital"` (рекрут только в столице, меньше дешёвых тел на фронте) | меньше узлов у rusher, бой за узлы важнее скорости клейма |
-| H3 | План ровно окупается | `orders.planned_bonus` 2 → 3 (проверено: доля до 0.17), либо `orders.cost.planned_move` 200 → 150 | доля запланированных атак растёт; одна она до 20% не дотянет без H2 |
-| H4 | Метрика «доля запланированных атак» разбавлена захватами пустых нейтралей | считать долю только по атакам на занятые узлы (`need > 0`); это смена определения метрики в `gow_sim.analysis`, нужна запись в mechanics.md, раздел 17, а не правка чисел | измеряется то, что задумано в разделе 5 |
-| H5 | Бункер не удерживает регион из-за голода по CP | `orders.cost.defense` 200 → 100, `orders.defense_bonus` 2 → 3 | Turtle держит регион против rusher, но всё ещё проигрывает expander по VP |
+| H1 | War is too profitable: CP is the only narrow resource | `economy.stance_to_charges_pct.war` 25 -> 40 (checked: rusher 0.81); together with `economy` 75 -> 60 | rusher and expander < 65%, Turtle and Reactive get CP |
+| H2 | Capturing empty neutrals is too cheap, so VP is decided by the speed of claiming | there is no direct key in the ruleset; options: garrisons of neutral cities (a change of maps or rules, only through a DEC and mechanics.md) or `recruit.location = "capital"` (recruit only in the capital, fewer cheap bodies at the front) | fewer nodes for rusher, the fight for nodes matters more than the speed of claiming |
+| H3 | The plan exactly pays for itself | `orders.planned_bonus` 2 -> 3 (checked: the share up to 0.17), or `orders.cost.planned_move` 200 -> 150 | the share of scheduled attacks grows; alone it will not reach 20% without H2 |
+| H4 | The metric "share of scheduled attacks" is diluted by captures of empty neutrals | count the share only over attacks on occupied nodes (`need > 0`); this is a change of the metric definition in `gow_sim.analysis`, it needs an entry in mechanics.md, section 17, and not an edit of numbers | what is intended in section 5 gets measured |
+| H5 | The bunker does not hold the region because of the CP starvation | `orders.cost.defense` 200 -> 100, `orders.defense_bonus` 2 -> 3 | Turtle holds the region against rusher, but still loses to expander on VP |
 
-Порядок: сначала #175, затем H1 (одна правка, уже видна в данных), затем H2 или H3 по отдельности,
-каждая итерация с турниром `--seeds 100` и отчётом в PR (AGENTS.md, раздел 10). Ботовые поправки
-(#166 для Reactive, переключение стойки у Turtle) идут отдельными PR, чтобы не смешивать эффект
-бота и рулсета в одной итерации.
+The order: first #175, then H1 (one edit, already visible in the data), then H2 or H3 separately,
+each iteration with a `--seeds 100` tournament and a report in the PR (AGENTS.md, section 10). The bot fixes
+(#166 for Reactive, stance switching for Turtle) go in separate PRs, so that the effect of the bot and of the ruleset
+is not mixed in one iteration.
