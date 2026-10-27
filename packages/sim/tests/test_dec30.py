@@ -1,13 +1,13 @@
-"""DEC-30: the bonus of «Защита» grows (mechanics.md, section 5, «Накопление бонуса «Защиты»
-(DEC-30, #316)»).
+"""DEC-30: the bonus of "Defense" grows (mechanics.md, section 5, accumulation of the "Defense"
+bonus (DEC-30, #316)).
 
-+1 virtual shot per ``orders.defense_ticks_per_bonus`` ticks the group stands in «Защита», at most
++1 virtual shot per ``orders.defense_ticks_per_bonus`` ticks the group stands in "Defense", at most
 its charged units at the start of the fight; after the fight the bonus burns, the mode stays and
 gathers anew without paying again. Bonus of a fight: ``min(charged, ticks // 60)`` with the
 ruleset ``mvp-1``. Expected values: the table of examples of DEC-30 and its details.
 
 Map: a line ``0 - 1 - 2`` of forest (no terrain modifier): player 0's capital 0, player 1's city 1
-with the defender and capital 2. The defender switches «Защита» on at tick 1; the attacker is put
+with the defender and capital 2. The defender switches "Defense" on at tick 1; the attacker is put
 on edge 0 one tick before it arrives, so the contact is exactly ``ticks`` after the switch. The
 bonus of the defence is read from the virtual shots of its side at contact. Only the systems that
 act here run (commands, movement, combat, orders).
@@ -121,7 +121,7 @@ class _Run:
 
 
 def _defended(units: int, charged: int) -> tuple[_Run, int]:
-    """The defender in node 1 switches «Защита» on at tick 1."""
+    """The defender in node 1 switches "Defense" on at tick 1."""
     state = initial_state(_map(), RULES)
     gid = state.new_id()
     state.groups[gid] = Group(gid, DEFENDER, units, charged, Mode.ATTACK, AtNode(1))
@@ -139,7 +139,7 @@ def test_mvp1_gathers_one_per_60_ticks() -> None:
 # The table of examples ---------------------------------------------------------------------------
 
 EXAMPLES = [
-    # (row, ticks in «Защита» at the start of the fight, units, charged, bonus of the fight)
+    # (row, ticks in "Defense" at the start of the fight, units, charged, bonus of the fight)
     (1, 30, 3, 3, 0),
     (2, 60, 3, 3, 1),
     (3, 130, 3, 3, 2),
@@ -155,7 +155,7 @@ EXAMPLES = [
 def test_dec30_example(row: int, ticks: int, units: int, charged: int, bonus: int) -> None:
     del row
     run, d = _defended(units, charged)
-    run.until(ticks)  # «Защита» since tick 1: the contact in tick 1 + ticks
+    run.until(ticks)  # "Defense" since tick 1: the contact in tick 1 + ticks
     assert RULES.orders.defense_bonus(run.state.groups[d].ticks_in_defense, charged) == bonus
     fight = run.attack()
     assert fight.virtual[DEFENDER] == bonus
@@ -163,7 +163,7 @@ def test_dec30_example(row: int, ticks: int, units: int, charged: int, bonus: in
 
 
 def test_dec30_example_7_the_bonus_burns_and_gathers_anew() -> None:
-    """Row 7: after the first fight the group stays in «Защита»; the second fight 90 ticks after
+    """Row 7: after the first fight the group stays in "Defense"; the second fight 90 ticks after
     the end of the first gets 1 (90 // 60), what the first one gathered is gone."""
     run, d = _defended(3, 3)
     run.until(130)

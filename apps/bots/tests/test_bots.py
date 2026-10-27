@@ -1,5 +1,5 @@
 """BOT-01: the controller interface, the baseline bots, seed variability and the shared utility
-«обычный или запланированный приказ».
+an ordinary or a scheduled order.
 
 Expected fight numbers come from the DEC-07 table of mechanics.md, section 4 (example numbers in
 the comments); prices from ``rulesets/mvp-0.toml`` (DEC-08, DEC-02).
@@ -80,8 +80,8 @@ def test_bot_params_stay_in_their_ranges(maps: dict[str, MapDef], mvp_rules: Rul
         (PLAINS, 2, 2, 0, 3),  # example 8: Qd = 1, 2 charged are not enough
         (MOUNTAINS, 2, 2, 0, 5),  # example 6: Qd = 3, 3 charged bounce
         (MOUNTAINS, 3, 0, 0, 3),  # example 7: no firing charge, no terrain
-        (FOREST, 2, 2, 2, 6),  # example 10: Qd = 4 with «Защита» (+2 gathered, DEC-30)
-        (FOREST, 2, 0, 2, 2),  # example 16: «Защита» needs a firing charge
+        (FOREST, 2, 2, 2, 6),  # example 10: Qd = 4 with Defense (+2 gathered, DEC-30)
+        (FOREST, 2, 0, 2, 2),  # example 16: Defense needs a firing charge
         (FOREST, 2, 2, 10, 6),  # DEC-30, item 2: the bonus is capped by the 2 charged
     ],
 )

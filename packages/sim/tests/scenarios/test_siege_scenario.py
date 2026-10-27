@@ -1,4 +1,4 @@
-"""Scenario «осада на истощение» (SIM-09, #25; mechanics.md, section 4, «Осада на истощение»).
+"""Scenario "siege of attrition" (SIM-09, #25; mechanics.md, section 4, "Siege of attrition").
 
 Map ``tests/maps/siege.json``, ruleset ``tests/rulesets/siege.toml`` (a pinned copy of mvp-0),
 all nodes forest (terrain modifier 0). Player 0 holds the city T (node 2: 2 units, both charged,
@@ -32,7 +32,7 @@ wave  contact  D    fight (DEC-24, rounds every 20 ticks) and what happens until
 So the city falls exactly on wave N = 3 (without starvation, SIM-09: wave 4).
 
 Open roads (M is player 0's): T is refilled over 0 -> 1 -> 2. The capital produces 1 charge
-per 50 ticks (half of the CP quantum at stance «Баланс»; no passive production since #253), a
+per 50 ticks (half of the CP quantum at stance "Balance"; no passive production since #253), a
 level 1 road carries 1 charge per 10 ticks and the chain takes 59 + 72 ticks; a wave uses 2
 charges of T per round trip of 199 ticks (the capital makes 3 in that time), and T starts with
 3. So the defender meets every wave with both units charged (row 1 every time) and does not

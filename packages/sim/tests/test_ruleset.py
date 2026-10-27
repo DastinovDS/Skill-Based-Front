@@ -1,6 +1,6 @@
 """Ruleset (SIM-01): mvp-0 values, strict loading, stable hash, archive.
 
-Expected values come from the SIM-01 (#17) table «Значения и примечания» and the DEC blocks of
+Expected values come from the SIM-01 (#17) table "Values and notes" and the DEC blocks of
 docs/design/mechanics.md, not from the loader output.
 """
 

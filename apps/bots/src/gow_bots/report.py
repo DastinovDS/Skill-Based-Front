@@ -17,8 +17,6 @@ Conventions:
   sieges, captures) but not for win rates.
 """
 
-# The report text is Russian: RUF001 flags Cyrillic words that look like Latin ones.
-# ruff: noqa: RUF001
 # matplotlib's inline types leave ``**kwargs`` of most Axes methods unannotated, so strict
 # pyright reports every call as partially unknown. The rest of the strict checks stay on.
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
@@ -266,7 +264,7 @@ def _beats(ps: Sequence[Persp], a: str, b: str) -> tuple[bool, bool]:
 
 
 def _matrix(ps: Sequence[Persp], bots: Sequence[str], *, full: bool) -> str:
-    header = ["строка бьёт столбец", *bots]
+    header = ["row beats column", *bots]
     body: list[list[str]] = []
     for a in bots:
         cells = [f"**{a}**"]
@@ -286,19 +284,19 @@ def _section_overview(rows: Sequence[Row]) -> str:
     draws = sum(r.winner is None for r in rows)
     seeds = sorted({r.seed for r in rows})
     lines = [
-        f"- Матчей: {len(rows)}; карты: {', '.join(maps)}; боты: {', '.join(_bots_of(rows))}.",
-        f"- Сиды: {seeds[0]}..{seeds[-1]} ({len(seeds)} шт.).",
-        f"- Рулсет `{_one(r.ruleset_hash for r in rows)}`, `SIM_VERSION` "
+        f"- Matches: {len(rows)}; maps: {', '.join(maps)}; bots: {', '.join(_bots_of(rows))}.",
+        f"- Seeds: {seeds[0]}..{seeds[-1]} ({len(seeds)}).",
+        f"- Ruleset `{_one(r.ruleset_hash for r in rows)}`, `SIM_VERSION` "
         f"{_one(str(r.sim_version) for r in rows)}.",
-        f"- Без победителя (ничья или не закончен): {draws} ({_share(draws, len(rows))}).",
-        "- Причины окончания: " + ", ".join(f"`{k}` {v}" for k, v in sorted(reasons.items())) + ".",
+        f"- No winner (a draw or not finished): {draws} ({_share(draws, len(rows))}).",
+        "- End reasons: " + ", ".join(f"`{k}` {v}" for k, v in sorted(reasons.items())) + ".",
     ]
     return "\n".join(lines)
 
 
 def _one(values: Iterable[str]) -> str:
     unique = sorted(set(values))
-    return unique[0] if len(unique) == 1 else "разные: " + ", ".join(unique)
+    return unique[0] if len(unique) == 1 else "different: " + ", ".join(unique)
 
 
 def _section_pairs(ps: Sequence[Persp], bots: Sequence[str]) -> str:
@@ -306,12 +304,12 @@ def _section_pairs(ps: Sequence[Persp], bots: Sequence[str]) -> str:
         [f"**{a}**", *("-" if a == b else _draw_cell(ps, a, b) for b in bots)] for a in bots
     ]
     return (
-        "Win-rate строки против столбца на обеих сторонах, 95% интервал Уилсона в скобках: "
-        "`доля [нижняя; верхняя]`. Ничья считается не победой.\n\n"
+        "Win rate of the row against the column on both sides, 95% Wilson interval in brackets: "
+        "`share [lower; upper]`. A draw does not count as a win.\n\n"
         + _matrix(ps, bots, full=True)
-        + "\n\nДоля ничьих в паре (по всем картам):\n\n"
+        + "\n\nShare of draws in the pair (all maps):\n\n"
         + _table(["", *bots], rate_rows)
-        + "\n\n![матрица пар](PREFIX-pairs.png)"
+        + "\n\n![pair matrix](PREFIX-pairs.png)"
     )
 
 
@@ -330,14 +328,14 @@ def _section_sides(rows: Sequence[Row]) -> str:
         return [label, _side_cell(mirror), _side_cell(every)]
 
     out.extend(line(m, [r for r in rows if r.map == m]) for m in maps)
-    out.append(line("все карты", rows))
-    table = _table(["карта", "зеркальные матчи: сторона 0", "все матчи: сторона 0"], out)
+    out.append(line("all maps", rows))
+    table = _table(["map", "mirror matches: side 0", "all matches: side 0"], out)
     return (
-        "Доля побед стороны 0 среди матчей с победителем (`побед стороны 0 / решённых`, "
-        "интервал Уилсона). Зеркальные матчи (бот против себя) измеряют перекос карты без разницы "
-        "ботов; в полном турнире каждая пара играет обеими сторонами, поэтому второй столбец "
-        "показывает перекос после усреднения по ботам. Интервал, содержащий 0.5, не даёт "
-        "оснований говорить о перекосе.\n\n" + table + "\n\n![сторона](PREFIX-sides.png)"
+        "Share of wins of side 0 among matches with a winner (`side 0 wins / decided`, Wilson "
+        "interval). Mirror matches (a bot against itself) measure the skew of the map without "
+        "any difference between bots; in a full tournament every pair plays both sides, so the "
+        "second column shows the skew after averaging over bots. An interval that contains 0.5 "
+        "gives no grounds to speak of a skew.\n\n" + table + "\n\n![side](PREFIX-sides.png)"
     )
 
 
@@ -372,21 +370,20 @@ def _section_bots(ps: Sequence[Persp], bots: Sequence[str]) -> str:
             ]
         )
     header = [
-        "бот",
-        "матчей против других",
-        "win-rate [95%]",
-        "ничьи",
-        "доля запланированных атак",
-        "успех осад (взято/попыток)",
-        "захватов за матч",
-        f"доля захватов в последние {LATE_MINUTES} мин",
+        "bot",
+        "matches against others",
+        "win rate [95%]",
+        "draws",
+        "share of scheduled attacks",
+        "siege success (taken/attempts)",
+        "captures per match",
+        f"share of captures in the last {LATE_MINUTES} min",
     ]
     return (
-        "Win-rate считается против других ботов (без зеркальных матчей); остальные метрики по "
-        "всем матчам бота. «Запланированная атака» = приказ `Move` с `planned=true` на чужой "
-        "или нейтральный узел; «успех осады» = захваты узлов врага / попытки осады.\n\n"
-        + _table(header, body)
-        + "\n\n![боты по картам](PREFIX-bots.png)"
+        "Win rate is counted against other bots (no mirror matches); the other metrics over "
+        'all matches of the bot. A "scheduled attack" is a `Move` order with `planned=true` to '
+        'an enemy or neutral node; "siege success" is captures of enemy nodes / siege attempts.'
+        "\n\n" + _table(header, body) + "\n\n![bots by map](PREFIX-bots.png)"
     )
 
 
@@ -456,21 +453,21 @@ def _section_late(rows: Sequence[Row]) -> str:
         )
         body.append(
             [
-                m or "все карты",
+                m or "all maps",
                 str(len(rs)),
                 f"{_share(late, len(rs))} ({late}/{len(rs)})",
                 f"{_share(late_caps, caps)} ({late_caps}/{caps})",
             ]
         )
     header = [
-        "карта",
-        "матчей",
-        f"матчей с захватом в последние {LATE_MINUTES} мин",
-        f"доля захватов в последние {LATE_MINUTES} мин",
+        "map",
+        "matches",
+        f"matches with a capture in the last {LATE_MINUTES} min",
+        f"share of captures in the last {LATE_MINUTES} min",
     ]
     return (
-        f"Матч, в котором в последние {LATE_MINUTES} минуты никто ничего не берёт, обычно "
-        "застыл. Матч, закончившийся раньше, считается по своим последним минутам.\n\n"
+        f"A match in which nobody takes anything in the last {LATE_MINUTES} minutes has usually "
+        "frozen. A match that ended earlier is counted by its own last minutes.\n\n"
         + _table(header, body)
     )
 
@@ -487,7 +484,7 @@ def _section_outcomes(rows: Sequence[Row]) -> str:
         )
         body.append(
             [
-                m or "все карты",
+                m or "all maps",
                 str(len(rs)),
                 str(len({r.state_hash for r in rs})),
                 str(len({r.outcome for r in rs})),
@@ -495,16 +492,16 @@ def _section_outcomes(rows: Sequence[Row]) -> str:
             ]
         )
     return (
-        "`state_hash` различает любые два финальных состояния; «исход» = `(победитель, причина, "
-        "VP, города)`. «Ячейка без вариативности» = карта + упорядоченная пара, где все сиды "
-        "дали одно и то же финальное состояние (бот не зависит от сида).\n\n"
+        '`state_hash` tells any two final states apart; an "outcome" is `(winner, reason, '
+        'VP, cities)`. A "cell without variability" is a map + an ordered pair where all seeds '
+        "gave the same final state (the bot does not depend on the seed).\n\n"
         + _table(
             [
-                "карта",
-                "матчей",
-                "уникальных состояний",
-                "уникальных исходов",
-                "ячеек без вариативности",
+                "map",
+                "matches",
+                "unique states",
+                "unique outcomes",
+                "cells without variability",
             ],
             body,
         )
@@ -524,11 +521,13 @@ def _section_maps(ps: Sequence[Persp], rows: Sequence[Row], bots: Sequence[str])
         for b in bots
     ]
     maps = sorted({r.map for r in rows})
-    parts.append("Win-rate бота против остальных по картам:\n\n" + _table(["бот", *maps], overall))
+    parts.append(
+        "Win rate of the bot against the others by map:\n\n" + _table(["bot", *maps], overall)
+    )
     for m in maps:
         sub = [p for p in ps if p.row.map == m]
         n = len([r for r in rows if r.map == m])
-        parts.append(f"### {m} ({n} матчей)\n\n" + _matrix(sub, bots, full=False))
+        parts.append(f"### {m} ({n} matches)\n\n" + _matrix(sub, bots, full=False))
     return "\n\n".join(parts)
 
 
@@ -545,9 +544,9 @@ def _section_diversity(ps: Sequence[Persp], bots: Sequence[str]) -> str:
         for a in bots
     ]
     lines.append(
-        "Кого бот бьёт (больше побед, чем у соперника в их матчах); «значимо» = интервал Уилсона "
-        "доли среди решённых матчей не содержит 0.5.\n\n"
-        + _table(["бот", "бьёт", "бьёт значимо"], body)
+        'Whom the bot beats (more wins than the opponent in their matches); "significant" means '
+        "the Wilson interval of the share among decided matches does not contain 0.5.\n\n"
+        + _table(["bot", "beats", "beats significantly"], body)
         + "\n"
     )
     others = [a for a in bots if len(bots) > 1 and len(beaten[a]) == len(bots) - 1]
@@ -558,24 +557,25 @@ def _section_diversity(ps: Sequence[Persp], bots: Sequence[str]) -> str:
     ranked = sorted(bots, key=lambda a: -(rates[a].value or 0.0))
     spread = (rates[ranked[0]].value or 0.0) - (rates[ranked[-1]].value or 0.0)
     lines.append(
-        f"- Доминирующая стратегия (бьёт всех остальных): {', '.join(others) or 'нет'}"
-        f"; значимо: {', '.join(sure_dom) or 'нет'}."
+        f"- Dominant strategy (beats all the others): {', '.join(others) or 'none'}"
+        f"; significantly: {', '.join(sure_dom) or 'none'}."
     )
     lines.append(
-        f"- Лучший средний win-rate: {ranked[0]} {rates[ranked[0]].fmt()}; худший: "
-        f"{ranked[-1]} {rates[ranked[-1]].fmt()}; разброс {spread:.2f}."
+        f"- Best average win rate: {ranked[0]} {rates[ranked[0]].fmt()}; worst: "
+        f"{ranked[-1]} {rates[ranked[-1]].fmt()}; spread {spread:.2f}."
     )
     cycles = _cycles(bots, lambda a, b: _beats(ps, a, b))
     if cycles:
         lines.append(
-            f"- Циклы «камень-ножницы-бумага» (A бьёт B, B бьёт C, C бьёт A): {len(cycles)}; "
-            f"значимых по всем трём рёбрам: {sum(c[1] for c in cycles)}."
+            f"- Rock-paper-scissors cycles (A beats B, B beats C, C beats A): {len(cycles)}; "
+            f"significant on all three edges: {sum(c[1] for c in cycles)}."
         )
         lines.extend(
-            f"  - {' > '.join(c[0])} > {c[0][0]}" + (" (значимый)" if c[1] else "") for c in cycles
+            f"  - {' > '.join(c[0])} > {c[0][0]}" + (" (significant)" if c[1] else "")
+            for c in cycles
         )
     else:
-        lines.append("- Циклов «камень-ножницы-бумага» нет.")
+        lines.append("- No rock-paper-scissors cycles.")
     return "\n".join(lines)
 
 
@@ -601,11 +601,12 @@ def _section_checks(ps: Sequence[Persp], bots: Sequence[str]) -> str:
         rate = Rate(sum(p.row.sieges_won[p.side] >= 1 for p in mine), len(mine))
         ok = (rate.value or 0.0) >= STRANGLER_MIN_RATE
         lines.append(
-            f"- {_mark(ok)} `strangler` берёт хотя бы один город осадой в матче против "
-            f"`expander` в {rate.fmt()} матчей (порог {STRANGLER_MIN_RATE:.0%}, n={rate.n})."
+            f"- {_mark(ok)} `strangler` takes at least one city by siege in a match against "
+            f"`expander` in {rate.fmt()} of matches "
+            f"(threshold {STRANGLER_MIN_RATE:.0%}, n={rate.n})."
         )
     else:
-        lines.append("- [нет данных] проверка `strangler` против `expander`: нет этих ботов.")
+        lines.append("- [no data] check of `strangler` against `expander`: these bots are missing.")
 
     if {_REACTIVE, _EXPANDER, _RUSHER} <= have:
         reactive = _win_rate(_pair_ps(ps, _REACTIVE, _RUSHER))
@@ -613,24 +614,24 @@ def _section_checks(ps: Sequence[Persp], bots: Sequence[str]) -> str:
         ok = (reactive.value or 0.0) > (expander.value or 0.0)
         apart = reactive.ci[0] > expander.ci[1] or expander.ci[0] > reactive.ci[1]
         lines.append(
-            f"- {_mark(ok)} `reactive` выигрывает у `rusher` чаще, чем `expander`: "
-            f"{reactive.fmt()} против {expander.fmt()}"
-            + ("; интервалы не пересекаются." if apart else "; интервалы пересекаются.")
+            f"- {_mark(ok)} `reactive` beats `rusher` more often than `expander` does: "
+            f"{reactive.fmt()} against {expander.fmt()}"
+            + ("; the intervals do not overlap." if apart else "; the intervals overlap.")
         )
     else:
-        lines.append("- [нет данных] проверка `reactive` и `expander` против `rusher`.")
+        lines.append("- [no data] check of `reactive` and `expander` against `rusher`.")
 
     if _TURTLE in have:
         versus = [p for p in ps if p.bot == _TURTLE and p.opp != _TURTLE]
         rate = _win_rate(versus)
         draws = sum(p.row.winner is None for p in versus)
         lines.append(
-            f"- Win-rate `turtle` против остальных: {rate.fmt()}, "
-            f"ничьих {_share(draws, len(versus))}"
+            f"- Win rate of `turtle` against the others: {rate.fmt()}, "
+            f"draws {_share(draws, len(versus))}"
             f" (n={rate.n})."
         )
         lines.append(
-            "  - по соперникам: "
+            "  - by opponent: "
             + ", ".join(
                 f"{b} {_win_rate(_pair_ps(ps, _TURTLE, b)).short()}" for b in bots if b != _TURTLE
             )
@@ -640,7 +641,7 @@ def _section_checks(ps: Sequence[Persp], bots: Sequence[str]) -> str:
 
 
 def _mark(ok: bool) -> str:
-    return "[выполнено]" if ok else "[НЕ выполнено]"
+    return "[done]" if ok else "[NOT done]"
 
 
 def render_report(rows: Sequence[Row], source: str, prefix: str) -> str:
@@ -648,21 +649,21 @@ def render_report(rows: Sequence[Row], source: str, prefix: str) -> str:
     ps = _persps(rows)
     bots = _bots_of(rows)
     sections: list[tuple[str, str]] = [
-        ("Обзор", _section_overview(rows)),
-        ("Проверки компетентности ботов", _section_checks(ps, bots)),
-        ("Матрица пар стратегий", _section_pairs(ps, bots)),
-        ("Преимущество стороны", _section_sides(rows)),
-        ("Метрики по ботам", _section_bots(ps, bots)),
+        ("Overview", _section_overview(rows)),
+        ("Bot competence checks", _section_checks(ps, bots)),
+        ("Strategy pair matrix", _section_pairs(ps, bots)),
+        ("Side advantage", _section_sides(rows)),
+        ("Metrics by bot", _section_bots(ps, bots)),
         ("Charge stock and burned share (#310)", _section_stock(ps, rows, bots)),
-        ("Разнообразие стратегий", _section_diversity(ps, bots)),
-        ("Захваты в конце матча", _section_late(rows)),
-        ("Уникальные исходы", _section_outcomes(rows)),
-        ("Разбивка по картам", _section_maps(ps, rows, bots)),
+        ("Strategy diversity", _section_diversity(ps, bots)),
+        ("Captures at the end of the match", _section_late(rows)),
+        ("Unique outcomes", _section_outcomes(rows)),
+        ("Breakdown by map", _section_maps(ps, rows, bots)),
     ]
     head = (
-        f"# Баланс-отчёт: `{source}`\n\n"
-        "Сгенерирован `uv run gow-bots report` (BOT-05, #38); формат входа: "
-        "[README.md](README.md). Не редактировать руками.\n"
+        f"# Balance report: `{source}`\n\n"
+        "Generated by `uv run gow-bots report` (BOT-05, #38); input format: "
+        "[README.md](README.md). Do not edit by hand.\n"
     )
     body = "\n\n".join(f"## {title}\n\n{text}" for title, text in sections)
     return (head + "\n" + body + "\n").replace("PREFIX", prefix)
@@ -713,7 +714,7 @@ def _draw_charts(
                 )
     ax.set_xticks(range(n), labels=bots, rotation=30, ha="right")
     ax.set_yticks(range(n), labels=bots)
-    ax.set_title("win-rate строки против столбца (95% Уилсон)")
+    ax.set_title("win rate of row against column (95% Wilson)")
     fig.colorbar(image, ax=ax, fraction=0.046)
     fig.tight_layout()
     paths.append(out / f"{prefix}-pairs.png")
@@ -738,19 +739,19 @@ def _draw_charts(
     ax.axhline(0.5, color="#555555", linewidth=0.8, linestyle="--")
     ax.set_xticks(range(n), labels=bots)
     ax.set_ylim(0, 1)
-    ax.set_ylabel("win-rate против остальных")
-    ax.set_title("win-rate ботов по картам (95% Уилсон)")
+    ax.set_ylabel("win rate against the others")
+    ax.set_title("win rate of bots by map (95% Wilson)")
     ax.legend()
     fig.tight_layout()
     paths.append(out / f"{prefix}-bots.png")
     _save(fig, paths[-1])
 
     # 3. side advantage: share of side 0 among decisive matches, mirror and all
-    labels = [*maps, "все"]
+    labels = [*maps, "all"]
     fig = Figure(figsize=(max(5.0, 1.8 * len(labels) + 1), 4.0), dpi=100)
     FigureCanvasAgg(fig)
     ax = fig.add_subplot()
-    for k, (title, mirror_only) in enumerate((("зеркальные матчи", True), ("все матчи", False))):
+    for k, (title, mirror_only) in enumerate((("mirror matches", True), ("all matches", False))):
         rates: list[Rate] = []
         for m in [*maps, None]:
             decided = [
@@ -771,8 +772,8 @@ def _draw_charts(
     ax.axhline(0.5, color="#555555", linewidth=0.8, linestyle="--")
     ax.set_xticks(range(len(labels)), labels=labels)
     ax.set_ylim(0, 1)
-    ax.set_ylabel("доля побед стороны 0 среди решённых")
-    ax.set_title("преимущество стороны (95% Уилсон)")
+    ax.set_ylabel("share of wins of side 0 among decided")
+    ax.set_title("side advantage (95% Wilson)")
     ax.legend()
     fig.tight_layout()
     paths.append(out / f"{prefix}-sides.png")

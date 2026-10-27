@@ -253,7 +253,7 @@ def test_example_9_a_cut_off_city_takes_no_part_in_the_supply() -> None:
 
 
 def test_rear_city_target_is_capped_by_its_warehouse() -> None:
-    """«Накопление: граничные случаи»: a warehouse of 2 at ``rear_min = 3`` keeps 2."""
+    """ "Accumulation: edge cases": a warehouse of 2 at ``rear_min = 3`` keeps 2."""
     state = _state("KAB", K=6)
     state.players[0].rear_min = 3
     _until(state, T + 200)

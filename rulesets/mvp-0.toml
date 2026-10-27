@@ -1,243 +1,243 @@
-# Рулсет mvp-0: стартовые числа и флаги правил MVP.
+# Ruleset mvp-0: the starting numbers and rule flags of the MVP.
 #
-# Источник правил: docs/design/mechanics.md (решения DEC, раздел 21).
-# Значения и имена ключей: SIM-01 (#17), таблица «Значения и примечания».
-# Загрузчик: gow_sim.ruleset.load_ruleset(). Неизвестный или отсутствующий ключ, дробное число
-# и значение вне диапазона: ошибка загрузки с именем ключа. Хэш рулсета (ruleset_hash) считается
-# по значениям, а не по тексту: комментарии и порядок ключей на него не влияют.
+# Source of the rules: docs/design/mechanics.md (DEC decisions, section 21).
+# Values and key names: SIM-01 (#17), the table "Values and notes".
+# Loader: gow_sim.ruleset.load_ruleset(). An unknown or missing key, a fractional number
+# and a value out of range: a load error naming the key. The ruleset hash (ruleset_hash) is computed
+# from the values, not the text: comments and the order of keys do not affect it.
 #
-# Единицы (AGENTS.md, §4.1):
-# - все длительности: целое число тиков, 10 тиков = 1 секунда;
-# - CP: в сотых долях (100 = 1 CP);
-# - только целые числа, никаких float.
+# Units (AGENTS.md, section 4.1):
+# - all durations: an integer number of ticks, 10 ticks = 1 second;
+# - CP: in hundredths (100 = 1 CP);
+# - integers only, no float.
 #
-# Числа меняются только через этот файл и балансировку (BAL-02, #40), а не в коде систем.
+# Numbers change only through this file and balancing (BAL-02, #40), not in the code of the systems.
 
-# Часы и длина партии (DEC-03, #9; DEC-22, #234; mechanics.md, разделы 1 и 11).
-tick_hz = 10 # тиков в секунду
-match_ticks = 9000 # партия 15 минут (DEC-22, #234): 30 начислений VP
+# Clock and match length (DEC-03, #9; DEC-22, #234; mechanics.md, sections 1 and 11).
+tick_hz = 10 # ticks per second
+match_ticks = 9000 # a 15-minute match (DEC-22, #234): 30 VP awards
 
 [cp]
-# Командные очки (DEC-02, #8; mechanics.md, разделы 6 и 14). Плоский реген, не растёт от территории.
-start = 300 # стартовый запас: 3 CP (SIM-01, #17)
-cap = 500 # потолок: 5 CP; на потолке излишек CP сгорает (DEC-02)
-per_period = 100 # квант регена: 1 CP ...
-period_ticks = 50 # ... раз в 50 тиков (5 с); квант делится по стойке (DEC-02)
+# Command points (DEC-02, #8; mechanics.md, sections 6 and 14). Flat regeneration, does not grow with territory.
+start = 300 # starting stock: 3 CP (SIM-01, #17)
+cap = 500 # ceiling: 5 CP; at the ceiling the excess CP burns off (DEC-02)
+per_period = 100 # regeneration quantum: 1 CP ...
+period_ticks = 50 # ... every 50 ticks (5 s); the quantum is split by stance (DEC-02)
 
 [economy]
-# Модель экономики и стойка CP (DEC-02, #8; mechanics.md, разделы 6 и 7).
-# Плоская экономика: снабжение производит только столица, и только из CP по стойке
-# (пассивного производства нет, решение владельца 2026-10-14, #253).
-# Раз в cp.period_ticks квант cp.per_period делится по стойке: доля в заряды
-# (value * pct // 100, округление вниз) копится в аккумуляторе в сотых долях заряда
-# по курсу charges_per_cp и превращается в целые заряды; остальное идёт в CP.
-# Доля стойки в заряды начисляется всегда, даже на потолке CP.
-charges_per_cp = 2 # курс: 1 CP -> 2 заряда
-# Стойка обоих игроков в начале партии: economy | balance | war.
-# TODO(#104): DEC-02 не задаёт стартовую стойку; до решения действует значение по умолчанию из #104.
+# Economy model and CP stance (DEC-02, #8; mechanics.md, sections 6 and 7).
+# Flat economy: only the capital produces supply, and only from CP by stance
+# (there is no passive production, owner's decision 2026-10-14, #253).
+# Once per cp.period_ticks the quantum cp.per_period is split by stance: the share going to charges
+# (value * pct // 100, rounded down) accumulates in an accumulator in hundredths of a charge
+# at the rate charges_per_cp and turns into whole charges; the rest goes to CP.
+# The stance's share for charges is always credited, even at the CP ceiling.
+charges_per_cp = 2 # rate: 1 CP -> 2 charges
+# Stance of both players at the start of the match: economy | balance | war.
+# TODO(#104): DEC-02 does not set the starting stance; until decided, the default from #104 applies.
 start_stance = "balance"
 
 [economy.stance_to_charges_pct]
-# Доля кванта регена CP, уходящая в заряды, в процентах (mechanics.md, раздел 6).
-economy = 75 # «Экономия»
-balance = 50 # «Баланс»
-war = 25 # «Война»
+# The share of the CP regeneration quantum that goes into charges, in percent (mechanics.md, section 6).
+economy = 75 # "Economy"
+balance = 50 # "Balance"
+war = 25 # "War"
 
 [orders]
-# Режимы и запланированные приказы (DEC-08, #12; mechanics.md, раздел 5).
-# Запланированный приказ: намерение видно всем сразу, группа стоит в исходном узле
-# planned_delay_ticks, затем выступает с бонусом на первый бой: planned_bonus_per_edge
-# за каждое ребро пути приказа, не больше заряженных юнитов группы в тик выступления
-# (DEC-29, #291; mechanics.md, раздел 5).
-# «Защита»: включение видно всем как намерение; бонус растёт на 1 за каждые
-# defense_ticks_per_bonus тиков в режиме, не больше заряженных юнитов группы в начале
-# боя, и сгорает с боем, режим остаётся и копит заново (DEC-30, #316); держится, пока
-# группа стоит; приказ на движение снимает её без доплаты.
-# Как бонусы входят в пул боя: DEC-07, правило 1 (mechanics.md, раздел 4).
-planned_delay_ticks = 30 # 3 с
-planned_bonus_per_edge = 1 # виртуальных зарядов на ребро пути (DEC-29)
-defense_ticks_per_bonus = 60 # +1 к бонусу «Защиты» за 60 тиков (6 с) в режиме (DEC-30)
-stance_cooldown_ticks = 100 # смена стойки не чаще раза в 100 тиков (DEC-02, #8)
+# Modes and scheduled orders (DEC-08, #12; mechanics.md, section 5).
+# A scheduled order: the intent is visible to everyone at once, the group stands in the source node
+# for planned_delay_ticks, then sets out with a bonus for the first fight: planned_bonus_per_edge
+# for each edge of the order's path, at most the group's charged units at the tick it sets out
+# (DEC-29, #291; mechanics.md, section 5).
+# "Defense": switching it on is visible to everyone as an intent; the bonus grows by 1 for every
+# defense_ticks_per_bonus ticks in the mode, at most the group's charged units at the start of
+# the fight, and burns up with the fight, the mode stays and accumulates again (DEC-30, #316); it holds while
+# the group stands; a move order removes it with no extra charge.
+# How bonuses enter the fight pool: DEC-07, rule 1 (mechanics.md, section 4).
+planned_delay_ticks = 30 # 3 s
+planned_bonus_per_edge = 1 # virtual charges per edge of the path (DEC-29)
+defense_ticks_per_bonus = 60 # +1 to the "Defense" bonus per 60 ticks (6 s) in the mode (DEC-30)
+stance_cooldown_ticks = 100 # the stance changes at most once per 100 ticks (DEC-02, #8)
 
 [orders.cost]
-# Стоимость команд в сотых CP (100 = 1 CP). Полная таблица: SIM-01 (#17), DEC-08 (#12).
-move = 100 # обычный приказ на движение
-planned_move = 200 # запланированный приказ: 2 CP вместо 1 (DEC-08)
-cancel = 0 # CancelOrder: отмена любого приказа бесплатна, на ребре разворот (DEC-20)
-split = 0 # деление группы бесплатно (DEC-20)
-merge = 0 # слияние групп бесплатно, группы сливаются и сами (DEC-20)
-attack = 0 # режим «Атака»: обычное состояние, переключение бесплатно (DEC-08)
-defense = 200 # режим «Защита»; включение после выхода из режима стоит снова (DEC-08), после боя бонус копится заново без оплаты (DEC-30)
-build = 50 # UpgradeRoad(edge): 0,5 CP за уровень дороги, при старте, без возврата (DEC-28, п. 7)
-recruit = 100 # Recruit(node): 1 CP за юнита в очереди, при постановке (DEC-25, #262; mechanics.md, раздел 3)
-stance = 0 # смена стойки бесплатна (DEC-02, #8)
-front = 0 # SetFront(marker, node): перенос маркера фронта бесплатен (DEC-28, п. 2)
-rear_min = 0 # SetRearMin(n): смена минимума тыла бесплатна (DEC-28, п. 3)
-transfer = 0 # Transfer(from, to, n): разовая перевозка зарядов бесплатна (DEC-18, #230)
-barracks = 300 # BuildBarracks(node): 3 CP, только при city_upgrades.enabled (DEC-26, #265)
-warehouse = 200 # UpgradeWarehouse(node): 2 CP за уровень, только при city_upgrades.enabled (DEC-26)
+# Cost of commands in hundredths of CP (100 = 1 CP). The full table: SIM-01 (#17), DEC-08 (#12).
+move = 100 # an ordinary move order
+planned_move = 200 # a scheduled order: 2 CP instead of 1 (DEC-08)
+cancel = 0 # CancelOrder: cancelling any order is free, on an edge it is a turn-around (DEC-20)
+split = 0 # splitting a group is free (DEC-20)
+merge = 0 # merging groups is free, groups also merge on their own (DEC-20)
+attack = 0 # the "Attack" mode: the normal state, switching is free (DEC-08)
+defense = 200 # the "Defense" mode; switching it on again after leaving the mode costs again (DEC-08), after a fight the bonus accumulates again with no payment (DEC-30)
+build = 50 # UpgradeRoad(edge): 0.5 CP per road level, at the start, no refund (DEC-28, item 7)
+recruit = 100 # Recruit(node): 1 CP per unit in the queue, when queued (DEC-25, #262; mechanics.md, section 3)
+stance = 0 # changing the stance is free (DEC-02, #8)
+front = 0 # SetFront(marker, node): moving a front marker is free (DEC-28, item 2)
+rear_min = 0 # SetRearMin(n): changing the rear minimum is free (DEC-28, item 3)
+transfer = 0 # Transfer(from, to, n): a one-off transfer of charges is free (DEC-18, #230)
+barracks = 300 # BuildBarracks(node): 3 CP, only with city_upgrades.enabled (DEC-26, #265)
+warehouse = 200 # UpgradeWarehouse(node): 2 CP per level, only with city_upgrades.enabled (DEC-26)
 
 [terrain.defense_mod]
-# Модификатор пула защитника узла по рельефу, в зарядах (DEC-07, #11, правило 1; mechanics.md, раздел 4).
-# Действует только на защитника узла и только если у него есть хотя бы один стреляющий заряд;
-# в бою на ребре и при одновременном прибытии в нейтральный узел рельефа нет.
+# Terrain modifier of the node defender's pool, in charges (DEC-07, #11, rule 1; mechanics.md, section 4).
+# Applies only to the node's defender and only if it has at least one firing charge;
+# in a fight on an edge and on simultaneous arrival at a neutral node there is no terrain effect.
 mountains = 1
 forest = 0
 plains = -1
 
 [terrain.speed_pct]
-# Скорость движения в зоне узла по его рельефу, в процентах (mechanics.md, раздел 4, «Скорость по
-# рельефу по зонам», #253). Ребро делится точкой границы: участок у узла A идёт со скоростью
-# рельефа A, участок у узла B со скоростью рельефа B. Ребро в одном рельефе p проходится за
-# travel_ticks * 100 // p тиков (округление вниз).
-plains = 125 # быстрее
-forest = 100 # обычная
-mountains = 70 # медленнее
+# Movement speed in a node's zone by its terrain, in percent (mechanics.md, section 4, "Speed by
+# terrain by zones", #253). An edge is split by the border point: the part near node A moves at the speed
+# of A's terrain, the part near node B at the speed of B's terrain. An edge in a single terrain p takes
+# travel_ticks * 100 // p ticks (rounded down).
+plains = 125 # faster
+forest = 100 # normal
+mountains = 70 # slower
 
 [combat]
-# Бой во времени (DEC-24, #261; темп DEC-32, #327; mechanics.md, раздел 4). Бой начинается в тике
-# контакта t и идёт раундами в тиках t + k * round_ticks (k = 1, 2, ...): в раунде каждая сторона
-# делает min(запас, shots_per_round) выстрелов, сначала виртуальные (бонусы, горы). Победитель
-# боя на ребре продолжает приказ через regroup_ticks после конца боя (перестроение).
-round_ticks = 20 # раунд: 2 с (DEC-32)
-shots_per_round = 1 # выстрелов стороны за раунд
-regroup_ticks = 10 # перестроение победителя на ребре: 1 с
+# A fight over time (DEC-24, #261; pace DEC-32, #327; mechanics.md, section 4). A fight starts at the tick
+# of contact t and runs in rounds at ticks t + k * round_ticks (k = 1, 2, ...): in a round each side
+# makes min(stock, shots_per_round) shots, virtual ones first (bonuses, mountains). The winner
+# of a fight on an edge continues its order regroup_ticks after the fight ends (regrouping).
+round_ticks = 20 # a round: 2 s (DEC-32)
+shots_per_round = 1 # shots of a side per round
+regroup_ticks = 10 # regrouping of the winner on an edge: 1 s
 
 [capacity]
-# Ёмкость узла (DEC-22, #234; mechanics.md, раздел 8): ограничивает число стоящих в узле юнитов и
-# при city_upgrades.enabled = false отдельно запас склада (при true склад по [warehouse], DEC-26).
-# Фиксирована видом узла из карты (capacity.by_kind), не зависит от дорог, владельца и снабжения.
-attrition_ticks = 30 # гарнизон сверх ёмкости дольше 30 тиков подряд теряет одного юнита
-grace_ticks = 50 # отсрочка истощения после захвата города
+# Node capacity (DEC-22, #234; mechanics.md, section 8): limits the number of units standing in a node and,
+# with city_upgrades.enabled = false, separately the warehouse stock (with true the warehouse follows [warehouse], DEC-26).
+# Fixed by the node kind from the map (capacity.by_kind), independent of roads, owner and supply.
+attrition_ticks = 30 # a garrison over capacity for more than 30 ticks in a row loses one unit
+grace_ticks = 50 # grace period of attrition after a city is captured
 
 [capacity.by_kind]
-# Ёмкость по виду узла `kind` из карты (DEC-22, п. 1; DEC-23, п. 1).
-capital = 10 # столица
-city_large = 8 # большой город
-city_medium = 6 # средний город
-city_small = 4 # малый город
-province = 3 # провинция (узел без города, DEC-23)
+# Capacity by the node `kind` from the map (DEC-22, item 1; DEC-23, item 1).
+capital = 10 # capital
+city_large = 8 # large city
+city_medium = 6 # medium city
+city_small = 4 # small city
+province = 3 # province (a node without a city, DEC-23)
 
 [starvation]
-# Голод в окружении (DEC-19, #231; mechanics.md, раздел 7). Свой город, отрезанный от своей
-# столицы (нет пути по своим узлам), тратит заряды гарнизона: на тиках
-# cut_since + grace_ticks + k * period_ticks гарнизон теряет charges * ceil(U / per_units) зарядов,
-# U: стоящие в городе юниты владельца. Сначала склад, потом заряды юнитов. Юниты не гибнут.
-# Провинции и нейтральные узлы не голодают.
-grace_ticks = 100 # отсрочка после отрезания: 10 с
-period_ticks = 100 # потребление раз в 10 с
-charges = 1 # зарядов ...
-per_units = 3 # ... на каждые начатые 3 юнита
+# Starvation when cut off (DEC-19, #231; mechanics.md, section 7). A city of one's own, cut off from one's own
+# capital (no path through one's own nodes), spends the garrison's charges: at the ticks
+# cut_since + grace_ticks + k * period_ticks the garrison loses charges * ceil(U / per_units) charges,
+# U: the owner's units standing in the city. The warehouse first, then the units' charges. Units do not die.
+# Provinces and neutral nodes do not starve.
+grace_ticks = 100 # grace period after being cut off: 10 s
+period_ticks = 100 # consumption once per 10 s
+charges = 1 # charges ...
+per_units = 3 # ... per each started 3 units
 
 [supply]
-# Снабжение: пакеты по внутренним дорогам от столицы (mechanics.md, разделы 7 и 8; SIM-08, #24).
-# Скорость пакета зависит от уровня дороги (DEC-22, п. 4; типов дорог нет, DEC-26, п. 7): время в
-# пути travel_ticks * 100 // speed_pct (округление вниз, не меньше 1); за период отправки по ребру
-# идёт не больше amount_by_level[уровень] зарядов (DEC-28, п. 7).
-dispatch_ticks = 10 # период расчёта и отправки пакетов
-rear_min_default = 1 # минимум тыла на старте: города без маркера фронта держат столько зарядов (DEC-28, п. 3)
-rear_min_max = 8 # наибольший минимум тыла SetRearMin(n), n в 0..8 (DEC-28, п. 3)
-recharge_per_tick = 1 # перезарядка стоящих юнитов со склада: не быстрее 1 заряда за тик
-base_speed_pct = 100 # скорость пакета на дороге уровня 1
-front_markers = 2 # маркеров фронта у игрока (DEC-28, п. 2)
+# Supply: packets along internal roads from the capital (mechanics.md, sections 7 and 8; SIM-08, #24).
+# Packet speed depends on the road level (DEC-22, item 4; there are no road types, DEC-26, item 7): the travel
+# time is travel_ticks * 100 // speed_pct (rounded down, at least 1); per dispatch period at most
+# amount_by_level[level] charges go along an edge (DEC-28, item 7).
+dispatch_ticks = 10 # period of computing and dispatching packets
+rear_min_default = 1 # rear minimum at the start: cities without a front marker keep this many charges (DEC-28, item 3)
+rear_min_max = 8 # the largest rear minimum SetRearMin(n), n in 0..8 (DEC-28, item 3)
+recharge_per_tick = 1 # recharging standing units from the warehouse: at most 1 charge per tick
+base_speed_pct = 100 # packet speed on a level 1 road
+front_markers = 2 # front markers per player (DEC-28, item 2)
 
 [supply.fast_speed_pct]
-# Скорость пакета на улучшенной дороге, в процентах. Ключ: уровень дороги, 2..3.
+# Packet speed on an upgraded road, in percent. Key: road level, 2..3.
 2 = 150
 3 = 200
 
 [supply.amount_by_level]
-# Пропускная способность дороги: зарядов за период отправки по ребру. Ключ: уровень дороги, 1..3
-# (DEC-28, п. 7: +1 за каждый уровень выше первого).
+# Road throughput: charges per dispatch period along an edge. Key: road level, 1..3
+# (DEC-28, item 7: +1 for each level above the first).
 1 = 1
 2 = 2
 3 = 3
 
 [road.speed_pct]
-# Скорость юнитов на улучшенной дороге, в процентах (DEC-28, п. 7). Ключ: уровень дороги, 2..3;
-# уровень 1: 100. Умножает скорость рельефа: эффективная скорость зоны ребра
-# terrain.speed_pct * road.speed_pct // 100 (округление вниз), время считается при выходе на ребро.
+# Unit speed on an upgraded road, in percent (DEC-28, item 7). Key: road level, 2..3;
+# level 1: 100. Multiplies the terrain speed: the effective speed of an edge zone is
+# terrain.speed_pct * road.speed_pct // 100 (rounded down), the time is computed when entering the edge.
 2 = 115 # +15%
 3 = 130 # +30%
 
 [build]
-# Улучшение своей внутренней дороги за CP (DEC-28, п. 7; mechanics.md, раздел 8).
-# UpgradeRoad(edge) поднимает уровень ребра на один: orders.cost.build списывается при старте,
-# уровень растёт через ticks_per_level тиков. Уровни 1..3, очереди и отмены нет; число строек не
-# ограничено, на ребре одна стройка за раз; захват конца ребра прерывает стройку.
-ticks_per_level = 150 # 15 с на уровень
+# Upgrading one's own internal road for CP (DEC-28, item 7; mechanics.md, section 8).
+# UpgradeRoad(edge) raises the edge level by one: orders.cost.build is charged at the start,
+# the level rises after ticks_per_level ticks. Levels 1..3, there is no queue and no cancelling; the number of constructions is not
+# limited, one construction at a time on an edge; capturing an end of the edge interrupts the construction.
+ticks_per_level = 150 # 15 s per level
 
 [recruit]
-# Очередь найма (DEC-25, #262; mechanics.md, раздел 3). Recruit(node) ставит одного юнита в
-# очередь своего города, CP (orders.cost.recruit) списываются при постановке. Город делает одного
-# юнита за раз: unit_ticks тиков прогресса, пока в городе нет боя (DEC-24). Готовый юнит появляется
-# разряженным новой группой и сливается с группой города (DEC-20); заряд он берёт обычной
-# перезарядкой со склада. CancelRecruit(node) снимает последний юнит очереди: не начатый
-# возвращает CP полностью, юнит в производстве: refund_started_pct процентов (округление вниз).
-unit_ticks = 30 # 3 с на юнита
-queue_max = 3 # юнитов в очереди города, включая текущий; иначе отказ QUEUE_FULL
-refund_started_pct = 50 # возврат за отменённый юнит в производстве: половина
-location = "any_city" # any_city | capital: где разрешён рекрут
+# Recruit queue (DEC-25, #262; mechanics.md, section 3). Recruit(node) puts one unit into the
+# queue of one's own city, CP (orders.cost.recruit) are charged when queued. A city makes one
+# unit at a time: unit_ticks ticks of progress while there is no fight in the city (DEC-24). A finished unit appears
+# discharged as a new group and merges with the city's group (DEC-20); it takes a charge by the usual
+# recharge from the warehouse. CancelRecruit(node) removes the last unit of the queue: an unstarted one
+# refunds CP in full, a unit in production: refund_started_pct percent (rounded down).
+unit_ticks = 30 # 3 s per unit
+queue_max = 3 # units in a city's queue, including the current one; otherwise QUEUE_FULL is rejected
+refund_started_pct = 50 # refund for a cancelled unit in production: half
+location = "any_city" # any_city | capital: where recruiting is allowed
 
 [victory]
-# Условие победы (DEC-03, #9; mechanics.md, раздел 11).
-# VP начисляются раз в vp_period_ticks за каждый свой город: значение `vp` из карты,
-# для столицы умноженное на capital_multiplier.
-# Правила без чисел (заданы DEC-03, флагов нет): захват вражеской столицы — мгновенная победа;
-# по таймеру побеждает тот, у кого больше VP; при равенстве — больше городов; иначе ничья.
-vp_period_ticks = 300 # раз в 30 секунд; решение владельца 2026-10-07 (#211): меньше чисел в интерфейсе
+# Victory condition (DEC-03, #9; mechanics.md, section 11).
+# VP are awarded once per vp_period_ticks for each city of one's own: the `vp` value from the map,
+# multiplied by capital_multiplier for the capital.
+# Rules without numbers (set by DEC-03, no flags): capturing the enemy capital is an instant win;
+# on the timer the one with more VP wins; on a tie, the one with more cities; otherwise a draw.
+vp_period_ticks = 300 # once per 30 seconds; owner's decision 2026-10-07 (#211): fewer numbers in the interface
 capital_multiplier = 3
 
 [city_upgrades]
-# Развитие города (DEC-26, #265; mechanics.md, разделы 3 и 8): казарма и склад отдельно от ёмкости
-# юнитов. enabled = false: рекрутирует каждый свой город (recruit.location), склад равен ёмкости
-# узла (capacity.by_kind), BuildBarracks и UpgradeWarehouse дают FEATURE_DISABLED; остальные ключи
-# этой секции и секция [warehouse] тогда не действуют. enabled = true: рекрутирует столица и города
-# с казармой (NO_BARRACKS), recruit.location не действует; склад города по [warehouse];
-# казарма и склад занимают одну стройку города (CITY_BUSY).
+# City development (DEC-26, #265; mechanics.md, sections 3 and 8): barracks and warehouse separate from the unit
+# capacity. enabled = false: every city of one's own recruits (recruit.location), the warehouse equals the capacity
+# of the node (capacity.by_kind), BuildBarracks and UpgradeWarehouse give FEATURE_DISABLED; the other keys
+# of this section and the [warehouse] section then have no effect. enabled = true: the capital and cities
+# with a barracks recruit (NO_BARRACKS), recruit.location has no effect; a city's warehouse follows [warehouse];
+# a barracks and a warehouse take one construction slot of the city (CITY_BUSY).
 enabled = false
-barracks_ticks = 100 # BuildBarracks: казарма через 10 с, оплата orders.cost.barracks при старте
-warehouse_ticks = 100 # UpgradeWarehouse: уровень склада через 10 с, оплата orders.cost.warehouse
+barracks_ticks = 100 # BuildBarracks: the barracks appears after 10 s, orders.cost.barracks is paid at the start
+warehouse_ticks = 100 # UpgradeWarehouse: the warehouse level after 10 s, orders.cost.warehouse is paid at the start
 
 [warehouse]
-# Ёмкость склада города при city_upgrades.enabled = true (DEC-26, п. 2):
-# start_by_kind[kind] + level * gain_per_level, level 0..max_level. У провинции склада нет.
-# Склад на старте: min(start_stock карты, ёмкость склада), излишек отбрасывается (п. 5).
-gain_per_level = 1 # +1 заряд за уровень
-max_level = 2 # два улучшения
+# Warehouse capacity of a city with city_upgrades.enabled = true (DEC-26, item 2):
+# start_by_kind[kind] + level * gain_per_level, level 0..max_level. A province has no warehouse.
+# The warehouse at the start: min(the map's start_stock, the warehouse capacity), the excess is discarded (item 5).
+gain_per_level = 1 # +1 charge per level
+max_level = 2 # two upgrades
 
 [warehouse.start_by_kind]
-# Ёмкость склада уровня 0 по виду города.
+# Warehouse capacity at level 0 by city kind.
 capital = 6
 city_large = 2
 city_medium = 2
 city_small = 1
 
 [vision]
-# Обзор по рельефу (DEC-21, #233; mechanics.md, раздел 10). Источник обзора: свой узел или узел,
-# где стоит своя группа; в нём всё точно. Соседний с источником узел получает уровень по паре
-# «рельеф источника -> рельеф цели» (by_terrain), из нескольких источников лучший:
-# exact (числа) лучше range (диапазон суммы юнитов, без зарядов) лучше presence (враг есть и
-# режимы, без чисел). Не соседний ни с одним источником узел: туман с памятью.
-# Половина ребра (до точки границы) видна по уровню своего узла; вражеские группы в ней видны с
-# положением и направлением (DEC-33, #296).
-# Нижние границы диапазонов юнитов: 1..2, 3..5, 6..10, 11..20, 21+ (первая обязательно 1).
+# Vision by terrain (DEC-21, #233; mechanics.md, section 10). A vision source: one's own node or a node
+# where one's own group stands; in it everything is exact. A node adjacent to a source gets a level by the pair
+# "source terrain -> target terrain" (by_terrain), the best of several sources:
+# exact (numbers) is better than range (a range of the unit total, no charges) is better than presence (an enemy is there and
+# the modes, no numbers). A node adjacent to no source: fog with memory.
+# A half of an edge (up to the border point) is visible by the level of its node; enemy groups in it are visible with
+# position and direction (DEC-33, #296).
+# Lower bounds of the unit ranges: 1..2, 3..5, 6..10, 11..20, 21+ (the first must be 1).
 range_starts = [1, 3, 6, 11, 21]
 
 [vision.by_terrain.plains]
-# Источник на равнине.
+# The source is on plains.
 plains = "exact"
 forest = "range"
 mountains = "presence"
 
 [vision.by_terrain.forest]
-# Источник в лесу: лес всегда диапазон, никогда не точно.
+# The source is in a forest: a forest is always a range, never exact.
 plains = "range"
 forest = "range"
 mountains = "presence"
 
 [vision.by_terrain.mountains]
-# Источник в горах: горы видят равнину точно.
+# The source is in mountains: mountains see plains exactly.
 plains = "exact"
 forest = "range"
 mountains = "range"

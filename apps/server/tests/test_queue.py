@@ -1,6 +1,6 @@
 """MM-01: matchmaking queue (pairing rules, window over time, confirmation), and its HTTP API.
 
-Expected pairs follow the rules of mechanics.md, section 19, "Очередь матчмейкинга": window
+Expected pairs follow the rules of mechanics.md, section 19, "Matchmaking queue": window
 ``100 + 5 * waited`` rating points, at most 400, both windows must hold the other's rating,
 the closest partner first, front of the queue first, never the same pair twice in a row.
 """

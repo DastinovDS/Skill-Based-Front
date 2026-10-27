@@ -22,7 +22,7 @@ Costs are in hundredths of CP from ``orders.cost`` (DEC-08, DEC-01, DEC-02); spl
 cancel are free in the rulesets of DEC-20, the keys stay so that balance can bring a price back.
 Split, Merge, CancelOrder and the stack limit of ``Move`` follow DEC-20 (mechanics.md, section 3);
 what DEC-20 leaves open keeps the defaults of #117 (split takes the charged units first).
-Bonuses and public intents of planned orders and «Защита»: ``systems.orders`` (SIM-10).
+Bonuses and public intents of planned orders and "Defense": ``systems.orders`` (SIM-10).
 Road upgrades paid with CP (DEC-28, item 7) and, with ``city_upgrades``, the barracks and the
 warehouse levels (DEC-26): ``systems.build``; they are not public.
 Front markers and the rear minimum (DEC-28): ``SetFront`` and ``SetRearMin``; one-off transfers
@@ -125,7 +125,7 @@ class Split:
 @dataclass(frozen=True, slots=True)
 class Merge:
     """Merge two or more groups standing in one node into the one with the smallest id; it keeps
-    its mode and «Защита» with the bonus (DEC-20, B2)."""
+    its mode and "Defense" with the bonus (DEC-20, B2)."""
 
     groups: tuple[int, ...]
 
@@ -181,7 +181,7 @@ class CancelRecruit:
 class CancelOrder:
     """Cancel any order of ``group`` (DEC-20, C): a planned order while it waits to depart, a move
     order on an edge (the group turns back to the start of the current edge, ``OnEdge.back``),
-    or «Защита» (the same as ``SetMode(ATTACK)``)."""
+    or "Defense" (the same as ``SetMode(ATTACK)``)."""
 
     group: int
 
@@ -493,7 +493,7 @@ def _check(
                 return group
             if group.fight is not None:
                 return Reject(RejectCode.IN_FIGHT)
-            # «Защита» again while in it would only reset what it gathered (DEC-30): after a
+            # "Defense" again while in it would only reset what it gathered (DEC-30): after a
             # fight it gathers anew by itself; switching it on after leaving it costs again.
             if mode == group.mode:
                 return Reject(RejectCode.NO_CHANGE)
@@ -603,7 +603,7 @@ def _member(state: GameState, group: Group) -> FightMember:
 def _check_cancel_in_fight(state: GameState, group: Group) -> tuple[int, ...] | Reject:
     """``CancelOrder`` of a group in a fight (DEC-24, E): the withdrawal of an attacker of a node
     or of a group on an edge; for a defender of a node, the cancel of its withdrawal ``Move`` or
-    of its waiting planned order. A returning group has no order (E2), «Защита» is a mode (E4)."""
+    of its waiting planned order. A returning group has no order (E2), "Defense" is a mode (E4)."""
     member = _member(state, group)
     location = group.location
     if _defends(state, group):
@@ -772,7 +772,7 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             delay = rules.orders.planned_delay_ticks if planned else 0
             group.order = Order(path=ok.path[1:], planned=planned, depart_tick=tick + delay)
             if group.mode is Mode.DEFENSE:
-                group.mode = Mode.ATTACK  # a move order drops «Защита» for free (DEC-08)
+                group.mode = Mode.ATTACK  # a move order drops "Defense" for free (DEC-08)
                 group.ticks_in_defense = 0  # with what it gathered (DEC-30)
             if group.fight is not None:  # a defender withdraws after the next round (DEC-24)
                 _set_leaving(state, group, leaving=True)
@@ -795,7 +795,7 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             state.groups[new] = Group(new, player, n, charged, Mode.ATTACK, group.location)
             return [event(tick, "group_split", player=player, group=gid, new_group=new, units=n)]
         case Merge(groups=gids):
-            # The smallest id keeps its mode, «Защита» with its bonus and intent (DEC-20, B2).
+            # The smallest id keeps its mode, "Defense" with its bonus and intent (DEC-20, B2).
             keep = state.groups[min(gids)]
             for gid in sorted(gids):
                 if gid != keep.id:
@@ -805,9 +805,9 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             group = state.groups[gid]
             group.mode = mode
             group.order = None  # the group stops where it stands
-            group.ticks_in_defense = 0  # «Защита» gathers its bonus from now on (DEC-30)
+            group.ticks_in_defense = 0  # "Defense" gathers its bonus from now on (DEC-30)
             clear_bonus(group)
-            # «Защита» is public at once (DEC-08); its bonus grows in ``systems.orders``.
+            # "Defense" is public at once (DEC-08); its bonus grows in ``systems.orders``.
             set_intent(state, group, IntentKind.DEFENSE if mode is Mode.DEFENSE else None)
             return []
         case UpgradeRoad(edge=eid):
@@ -845,7 +845,7 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             elif _waits_to_depart(state, group):
                 group.order = None
             else:
-                group.mode = Mode.ATTACK  # «Защита» (validated)
+                group.mode = Mode.ATTACK  # "Defense" (validated)
                 group.ticks_in_defense = 0
             clear_bonus(group)
             set_intent(state, group, None)

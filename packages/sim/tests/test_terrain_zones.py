@@ -1,6 +1,6 @@
 """Terrain speed by zone (owner's decision of 2026-10-14, #252, #253).
 
-Table tests of exactly the 6 worked examples of the block «Скорость по рельефу по зонам»
+Table tests of exactly the 6 worked examples of the block "Speed by terrain by zones"
 (mechanics.md, section 4). Expected values come from that table, not from the code. The setting:
 ``travel_ticks = 30``, the border point at 500; ``terrain.speed_pct`` plains 125, forest 100,
 mountains 70 (pinned in ``RULES``); «after ``k`` ticks»: ``progress`` after ``k`` ticks on the edge.

@@ -121,15 +121,15 @@ class Group:
     order: Order | None = None
     """Current movement order; ``None`` when the group has none."""
     intent: int | None = None
-    """Id of the group's public ``Intent`` (SIM-10): planned order or «Защита». The link
+    """Id of the group's public ``Intent`` (SIM-10): planned order or "Defense". The link
     lives only here, the intent itself names no group (DEC-04)."""
     bonus: int = 0
     """Virtual shots of a planned order the group brings into its next fight (DEC-08, DEC-29,
-    SIM-10); 0: none. «Защита» has its own counter, ``ticks_in_defense``."""
+    SIM-10); 0: none. "Defense" has its own counter, ``ticks_in_defense``."""
     bonus_tick: int = 0
     """The tick from which ``bonus`` is active: the departure of the planned order."""
     ticks_in_defense: int = 0
-    """Ticks the group has stood in «Защита» outside a fight (DEC-30): 0 when the mode is
+    """Ticks the group has stood in "Defense" outside a fight (DEC-30): 0 when the mode is
     switched on and when the group joins a fight, +1 at the end of every tick it stands in the
     mode in no fight (``systems.orders``); always 0 outside the mode. The bonus is computed from
     it when a fight begins (``OrderRules.defense_bonus``), so it is a count of ticks, not of

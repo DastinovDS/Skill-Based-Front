@@ -1,8 +1,8 @@
 # Map format
 
-An MVP map is a JSON file in `maps/`. The loader: `gow_sim.maps.load_map(path) -> MapDef` (MAP-01, #13).
+A map is a JSON file in `maps/` (the server pool) or in `maps/fixtures/` (the three MVP maps `artery`, `web`, `pass`, kept as test fixtures since #372). The loader: `gow_sim.maps.load_map(path) -> MapDef` (MAP-01, #13).
 The map design checks (connectivity, planarity, rule symmetry, names, border points,
-neutral space) are run by the offline validator `uv run gow-maps validate maps/*.json` (MAP-02, #14).
+neutral space) are run by the offline validator `uv run gow-maps validate maps/*.json maps/fixtures/*.json` (MAP-02, #14).
 
 The game rules that rely on map fields are described in [`mechanics.md`](mechanics.md): terrain
 (section 4), roads (section 8), cities and capacity (section 9), VP (section 11).
@@ -39,7 +39,7 @@ The game rules that rely on map fields are described in [`mechanics.md`](mechani
 | Where | Now | With `city_upgrades.enabled = true` |
 |---|---|---|
 | `nodes[].start_stock` | the starting warehouse stock, within the node capacity (`capacity.by_kind`) | within the **warehouse** capacity of the node kind: `warehouse.start_by_kind[kind]` (capital 6, large and medium 2, small 1); at start the simulation takes `min(start_stock, warehouse_capacity)` |
-| validator | (none) | the `warehouse` check (only with a ruleset that has `city_upgrades.enabled`: `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json`): `start_stock <= warehouse.start_by_kind[kind]`; it is not checked without `--ruleset` or with `mvp-0`. All six maps pass it (`mise run maps:validate`): small cities have `start_stock = 1`; in `artery` and `web` the value was fixed from 2 to 1 in #379 (before that the simulation with `mvp-1` clipped it to 1, with `mvp-0`, where the warehouse equals the node capacity, a small city started with 2) |
+| validator | (none) | the `warehouse` check (only with a ruleset that has `city_upgrades.enabled`: `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json`): `start_stock <= warehouse.start_by_kind[kind]`; it is not checked without `--ruleset` or with `mvp-0`. All six maps (the pool and the fixtures) pass it (`mise run maps:validate`): small cities have `start_stock = 1`; in `artery` and `web` the value was fixed from 2 to 1 in #379 (before that the simulation with `mvp-1` clipped it to 1, with `mvp-0`, where the warehouse equals the node capacity, a small city started with 2) |
 | `nodes[].kind` | unit capacity by node kind | the same; plus the warehouse and the right to recruit (only the capital from the start) are set by the ruleset, not by the map |
 | starting garrisons | `start_units` in any city | unchanged: a city without a barracks keeps its starting garrison but does not recruit |
 
@@ -142,8 +142,8 @@ The old fields `base_width`, `max_width` and `base_capacity` are rejected by the
 
 ### Node kinds in the MVP maps (before DEC-23)
 
-The three MVP maps got `kind` from their previous data by one rule (a replacement of `base_capacity` and of the contribution
-of roads, #238), until the DEC-23 maps issue (#266) reworks them. They got the node names (DEC-23, item 4)
+The three MVP maps (`artery`, `web`, `pass`; since #372 test fixtures in `maps/fixtures/`, no longer in the server pool) got `kind` from their previous data by one rule (a replacement of `base_capacity` and of the contribution
+of roads, #238); the DEC-27 maps of #266 replaced them in the pool. They got the node names (DEC-23, item 4)
 in #366, and their border points are all 500:
 
 - the capital: `capital`;
@@ -224,7 +224,7 @@ check: `tools/maps/tests/fixtures/`.
 
 ## Half of a map and mirroring
 
-The MVP maps are drawn as a half, the script builds the other half (MAP-03, #15):
+The maps of the pool are drawn as a half, the script builds the other half (MAP-03, #15; the halves of the three fixtures lie in `maps/fixtures/src/`, those maps are frozen and the script is not run on them):
 
 ```bash
 uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json
@@ -291,7 +291,7 @@ and its character are described in [`maps/README.md`](../../maps/README.md).
 ## The map pool on the server
 
 At start the server (`gow_server.maps`, SRV-01) loads all `maps/*.json` (without subdirectories:
-`maps/src/` holds the halves) through `load_map`. The file name must match `meta.name`:
+`maps/src/` holds the halves, `maps/fixtures/` the MVP maps, which the server does not serve) through `load_map`. The file name must match `meta.name`:
 `maps/<id>.json`. A broken map or a name mismatch stops the server from starting.
 
 The map background (MAP-05) lies next to it: `maps/<id>.bg.webp`. It is optional; the PNG previews from MAP-04 (other
@@ -348,5 +348,5 @@ Tiny maps for the simulation scenario tests live in `packages/sim/tests/maps/`:
 | `diamond.json` | a 1v1 diamond: two capitals and two neutral cities on the flanks (`vp` 2) |
 | `choke.json` | a "pass": each player has a capital and a forward city, between them the only passage through a mountain node of the ridge |
 
-The client dev screen (CLI-03, #59) bundles `maps/*.json` and these test maps
+The client dev screen (CLI-03, #59) bundles `maps/*.json`, the fixtures `maps/fixtures/*.json` and these test maps
 (`apps/client/src/map/bundledMaps.ts`), so editing them also triggers the `web` check in CI.

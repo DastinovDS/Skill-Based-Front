@@ -59,5 +59,5 @@ Details and mandatory rules: `AGENTS.md`, sections 2, 4, 5, 6 and 7.
 - **A simulation in TypeScript, shared by the client and the server (Node.js).** One language, but bots, tournaments
   and analytics are more convenient to write in Python, and a shared simulation pushes game logic into the client.
   Rejected.
-- **ECS or a game engine on the server.** Excessive for a graph of 25-40 nodes and dozens of groups;
+- **ECS or a game engine on the server.** Excessive for a graph of 45..55 nodes (the DEC-27 maps; 25-40 when this ADR was written) and dozens of groups;
   a functional core was chosen: systems as functions over the state. Rejected.

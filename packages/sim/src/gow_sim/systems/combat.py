@@ -1,4 +1,4 @@
-"""Combat: fights over time by DEC-24 (mechanics.md, section 4, «Бой во времени»).
+"""Combat: fights over time by DEC-24 (mechanics.md, section 4, "Fight over time").
 
 Every charge is one shot: it either cancels an enemy shot or kills one enemy unit (DEC-07, rules
 1-3, 5-7 and 9 hold inside a round). A fight is a ``Fight`` in ``GameState.fights`` that lasts
@@ -32,9 +32,9 @@ stands, the winner goes on ``combat.regroup_ticks`` after the end (item G4). A b
 (``OnEdge.back``) goes back along the group's own steps; the order is dropped.
 
 Bonuses (item F): the active bonus of a group (``systems.orders.active_bonuses``) enters the
-virtual shots of its side when the group joins the fight and burns with the fight; «Защита» and
+virtual shots of its side when the group joins the fight and burns with the fight; "Defense" and
 the terrain of the node count only for a defender that has a charged unit at contact, and
-«Защита» only for groups standing there from the start. «Защита» brings what it has gathered,
+"Defense" only for groups standing there from the start. "Defense" brings what it has gathered,
 capped by the charged units of the group at contact; joining a fight resets its count (DEC-30).
 Mountains add virtual shots, plains silence real ones in every round (``terrain.defense_mod``).
 
@@ -513,8 +513,8 @@ def _join(
     fight: Fight, g: Group, member: FightMember, bonus: dict[int, Bonus], *, defense: bool
 ) -> None:
     """``g`` joins ``fight`` with its active bonus (item F1): a planned bonus always counts,
-    «Защита» only when ``defense`` (a defender of the node from the start with a charged unit,
-    item F2). The active bonus leaves the group either way: it burns with this fight; «Защита»
+    "Defense" only when ``defense`` (a defender of the node from the start with a charged unit,
+    item F2). The active bonus leaves the group either way: it burns with this fight; "Defense"
     starts gathering anew after the fight (DEC-30)."""
     fight.members[g.id] = member
     g.fight = fight.id

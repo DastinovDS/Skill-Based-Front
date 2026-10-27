@@ -134,7 +134,7 @@ def test_combat_params_match_mvp0_ruleset() -> None:
     ruleset = _obj(tomllib.loads(RULESET_PATH.read_text(encoding="utf-8")))
     orders = _obj(ruleset["orders"])
     assert params["terrain_defense_mod"] == _obj(ruleset["terrain"])["defense_mod"]
-    # «Защита» (+2) of the rows is a bonus gathered by the start of the fight (DEC-30), not a
+    # "Defense" (+2) of the rows is a bonus gathered by the start of the fight (DEC-30), not a
     # number of the ruleset; the ruleset has the pace of gathering.
     assert _int(orders["defense_ticks_per_bonus"]) > 0
     combat = _obj(ruleset["combat"])

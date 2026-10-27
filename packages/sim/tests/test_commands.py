@@ -3,7 +3,7 @@
 Expected values come from the rules, not from the code:
 
 - costs in hundredths of CP, DEC-08 (mechanics.md, section 5) and DEC-01 (section 3): move 1 CP,
-  planned move 2 CP, «Атака» free, «Защита» 2 CP, UpgradeRoad 1 CP, recruit 1 CP, stance change
+  planned move 2 CP, "Attack" free, "Defense" 2 CP, UpgradeRoad 1 CP, recruit 1 CP, stance change
   free (DEC-02); the planned delay is 30 ticks (DEC-08). Cancel, split and merge are free since
   DEC-20, but ``RULES`` below pins them at the former 1 CP: the keys stay so that balance can bring
   a price back, and the CP plumbing must still work. These numbers are pinned in ``RULES``;
@@ -334,7 +334,7 @@ def test_move_sets_the_order() -> None:
     )
     second, capital = state.groups[ids.second], state.groups[ids.capital]
     assert second.order == Order(path=(3,), planned=False, depart_tick=TICK)
-    assert second.mode is Mode.ATTACK  # a move order drops «Защита» for free (DEC-08)
+    assert second.mode is Mode.ATTACK  # a move order drops "Defense" for free (DEC-08)
     assert capital.order == Order(path=(1,), planned=True, depart_tick=TICK + 30)
     assert state.players[0].cp == 300 - 100 - 200
 
@@ -387,7 +387,7 @@ def test_set_mode_same_mode() -> None:
         RejectCode.NO_CHANGE
     )
     state.groups[ids.capital].mode = Mode.DEFENSE
-    # «Защита» while in it would only reset what it gathered (DEC-30): nothing to change.
+    # "Defense" while in it would only reset what it gathered (DEC-30): nothing to change.
     assert validate(state, RULES, 0, SetMode(ids.capital, Mode.DEFENSE)) == Reject(
         RejectCode.NO_CHANGE
     )

@@ -3,11 +3,11 @@
 Expected values are worked out by hand from DEC-02 (mechanics.md, section 6):
 
 - every 50 ticks a quantum of 100 hundredths of CP is split by the stance: 75 / 50 / 25 % into
-  charges («Экономия» / «Баланс» / «Война»), the rest into CP;
+  charges ("Economy" / "Balance" / "War"), the rest into CP;
 - the charge share is converted at 1 CP -> 2 charges into an accumulator in hundredths of a
   charge, every whole 100 is one charge;
 - no passive production (owner's decision of 2026-10-14, #253): charges come only from the
-  stance share; 600 ticks give 18 / 12 / 6 charges in «Экономия» / «Баланс» / «Война»;
+  stance share; 600 ticks give 18 / 12 / 6 charges in "Economy" / "Balance" / "War";
 - CP cap 5 (500): the CP excess burns, the charge share is credited always;
 - stance change at most once per 100 ticks; the first change is free (#104 default).
 

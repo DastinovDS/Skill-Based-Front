@@ -6,8 +6,8 @@ values come from the decision, not from the code:
 - capacity by node kind (DEC-22): A (6, medium city), B (4, small city), C (8, large city),
   D and E (6), province P (3); A, B, D, E, P own, C neutral;
 - roads A-B, B-C (the fastest way A-C), A-D, D-E, E-C, A-P, P-C;
-- split, merge and cancel cost 0, a move 1 CP, a planned move 2 CP, «Защита» 2 CP; the planned
-  delay and the delay of the «Защита» bonus are 30 ticks, both bonuses +2 (DEC-08, DEC-20).
+- split, merge and cancel cost 0, a move 1 CP, a planned move 2 CP, "Defense" 2 CP; the planned
+  delay and the delay of the "Defense" bonus are 30 ticks, both bonuses +2 (DEC-08, DEC-20).
 
 These numbers are pinned in ``RULES``. The map ``dec20`` is built below (rot180): K = 0 (capital
 of 0, joined to A), A = 1, B = 2, D = 3, E = 4, P = 5, C = 6 in the centre; the mirror half is
@@ -236,7 +236,7 @@ def _validate_move(state: GameState, gid: int, dest: int) -> Ok | Reject:
 
 
 def test_dec20_example_1_arrival_joins_the_defending_group() -> None:
-    # G1 3/3 in «Защита» with a gathered +2 stands in A; G2 2/1 arrives from D (20 ticks).
+    # G1 3/3 in "Defense" with a gathered +2 stands in A; G2 2/1 arrives from D (20 ticks).
     state = _state()
     g1 = _add(state, 3, 3, A)
     g2 = _add(state, 2, 1, D)
@@ -249,7 +249,7 @@ def test_dec20_example_1_arrival_joins_the_defending_group() -> None:
     run.step()
     assert g2 not in state.groups
     assert _counts(state, g1) == (5, 4, Mode.DEFENSE)
-    # The target keeps its count of «Защита» (DEC-30, merge): 134 ticks, +2.
+    # The target keeps its count of "Defense" (DEC-30, merge): 134 ticks, +2.
     assert state.groups[g1].ticks_in_defense == 134
     assert active_bonuses(state, RULES)[g1].amount == 2
     assert state.groups[g1].intent in state.intents
@@ -370,7 +370,7 @@ def test_dec20_example_9_merge_keeps_the_defense_of_the_smallest_id() -> None:
     g4 = _add(state, 1, 1, A)
     run = _Run(state)
     run.step(SetMode(g1, Mode.DEFENSE))
-    run.until(121)  # 121 ticks in «Защита»: +2 (DEC-30)
+    run.until(121)  # 121 ticks in "Defense": +2 (DEC-30)
     cp = state.players[0].cp
     assert run.step(Merge((g1, g4))) == [Ok(cost=0)]
     assert state.players[0].cp == cp

@@ -4,13 +4,13 @@ Both play the priorities of ``gow_bots.bots.tactics`` and differ in what they wa
 
 - ``ExpanderBot`` plays for VP through territory (mechanics.md, section 11): it spends CP on
   capturing neutral nodes (and enemy nodes that stand empty) as early as possible, in the
-  «Война» stance (75% of the CP income stays CP), holds only the capital and the nodes next to
-  the enemy, and puts spare groups in the rear on «Строительство» of roads. After ``war_until``
-  ticks, when the map is divided, it switches to «Баланс» to get charges for fights.
+  War stance (75% of the CP income stays CP), holds only the capital and the nodes next to
+  the enemy, and puts spare groups in the rear on road construction. After ``war_until``
+  ticks, when the map is divided, it switches to the Balance stance to get charges for fights.
 - ``TurtleBot`` is the bunker of Topic 2 (mechanics.md, section 12): it keeps a small region
-  around its capital (nodes within ``radius`` road hops), stays in the «Экономия» stance (75% of
+  around its capital (nodes within ``radius`` road hops), stays in the Economy stance (75% of
   the income goes to charges, the warehouses fill up), keeps big garrisons on the front with
-  «Защита» on, attacks only when sure to win (a large ``margin``). Its result against the
+  Defense on, attacks only when sure to win (a large ``margin``). Its result against the
   expanding bots is the test of the claim that VP for holding cities beat the bunker.
 
 Parameters are drawn from the match seed (``choose_params``); the ranges are chosen so that
@@ -41,7 +41,7 @@ class ExpanderBot(StrategyBot):
         "margin": ParamRange(0, 1),  # charges to spare in an attack
         "est_pct": ParamRange(30, 60),  # guess of the enemy garrison, % of the capacity
         "road_keep": ParamRange(350, 450),  # CP in hundredths that roads never touch (DEC-28)
-        "war_until": ParamRange(1200, 2400),  # ticks in the «Война» stance
+        "war_until": ParamRange(1200, 2400),  # ticks in the War stance
     }
 
     @override

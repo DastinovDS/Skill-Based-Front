@@ -1,9 +1,9 @@
-"""Planned orders, «Защита», cancel and public intents (SIM-10, #26; DEC-08; DEC-04).
+"""Planned orders, "Defense", cancel and public intents (SIM-10, #26; DEC-08; DEC-04).
 
 Expected values come from DEC-08 (mechanics.md, section 5): a planned move costs 2 CP instead of
 1, waits 30 ticks in its node and gives +2 for the first fight (the pinned ruleset has 2 per edge
 and every planned order here goes to a neighbour with 2 charged units, so DEC-29 gives +2 too;
-the distance rule itself: ``test_dec29.py``); «Защита» costs 2 CP, is public at
+the distance rule itself: ``test_dec29.py``); "Defense" costs 2 CP, is public at
 once, its +2 is active after 30 ticks and spent in the first fight; a move drops it for free;
 cancelling is free (DEC-20 replaced the 1 CP of DEC-08). Fights follow the DEC-32 table (rows
 named below; a fight lasts its rounds, 20 ticks each, from the contact), forest everywhere.
@@ -250,11 +250,11 @@ def test_planned_bonus_is_spent_in_the_first_fight_only() -> None:
     assert state.nodes[1].owner == 1
 
 
-# «Защита» -------------------------------------------------------------------------------------
+# "Defense" -------------------------------------------------------------------------------------
 
 
 def _defended(delay: int) -> tuple[_Run, int, int]:
-    """Defence 2/2 in node 1 switches to «Защита» at tick 1; attack 3/3 arrives at 1 + delay."""
+    """Defence 2/2 in node 1 switches to "Defense" at tick 1; attack 3/3 arrives at 1 + delay."""
     state = _state()
     d = _add(state, 1, 2, 2, 1)
     a = _add(state, 0, 3, 3, 0)
@@ -279,7 +279,7 @@ def test_defense_costs_2_cp_and_is_public_at_once() -> None:
 
 
 def test_defense_gathers_2_in_120_ticks() -> None:
-    # Row 10: 3 vs 2 + «Защита» (+2, 120 // 60, DEC-30): 1 attacker dies, 2 bounce, the defence
+    # Row 10: 3 vs 2 + "Defense" (+2, 120 // 60, DEC-30): 1 attacker dies, 2 bounce, the defence
     # has 2 discharged.
     run, d, a = _defended(120)
     assert [(f.kind, f.tick) for f in run.fights] == [("fight_started", 121), ("fight_ended", 201)]
@@ -300,7 +300,7 @@ def test_defense_has_no_bonus_before_60_ticks() -> None:
 def test_defense_bonus_is_spent_in_the_first_fight_and_the_mode_holds() -> None:
     """After row 10 the defence (recharged here by hand) meets a second 2/2 wave 40 ticks after
     the end of the first fight: row 1, the bonus is gone and 40 ticks gather none (2 vs 2, no
-    losses; DEC-30). Switching «Защита» on again while in it is refused: nothing to change."""
+    losses; DEC-30). Switching "Defense" on again while in it is refused: nothing to change."""
     run, d, _ = _defended(120)
     state = run.state
     assert state.groups[d].mode is Mode.DEFENSE
@@ -400,7 +400,7 @@ def test_a_road_build_is_not_public() -> None:
 
 
 def test_intent_of_a_destroyed_group_is_removed() -> None:
-    # Row 3: 4 vs 2 (29 ticks of «Защита» gather no bonus, DEC-30): the defence dies at 110.
+    # Row 3: 4 vs 2 (29 ticks of "Defense" gather no bonus, DEC-30): the defence dies at 110.
     state = _state()
     d = _add(state, 1, 2, 2, 1)
     a = _add(state, 0, 4, 4, 0)

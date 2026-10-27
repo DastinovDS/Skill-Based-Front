@@ -1,4 +1,4 @@
-# Nightly backup (OPS-03, #82): docs/ops/deploy.md, section "Бэкапы". Install:
+# Nightly backup (OPS-03, #82): docs/ops/deploy.md, section "Backups". Install:
 #   sudo cp deploy/systemd/gow-backup.* /etc/systemd/system/ && sudo systemctl enable --now gow-backup.timer
 [Unit]
 Description=Skill-Based Front: backup of the gow-data volume

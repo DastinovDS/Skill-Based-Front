@@ -216,7 +216,7 @@ def test_turtle_sets_defense_on_the_front_group(
     assert SetStance(Stance.ECONOMY) in cmds
     defended = {c.group for c in cmds if isinstance(c, SetMode) and c.mode is Mode.DEFENSE}
     assert defended == {g.id for g in view.groups if g.location == AtNode(front)}
-    # The bunker pays 2 CP for «Защита» before it spends anything on expansion.
+    # The bunker pays 2 CP for Defense before it spends anything on expansion.
     assert sum(isinstance(c, Move) for c in cmds) <= 1
 
 

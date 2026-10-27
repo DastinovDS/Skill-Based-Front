@@ -192,7 +192,7 @@ class OrderRules:
     planned_bonus_per_edge: int
     """Virtual shots of a planned order per edge of its path (DEC-29); see ``planned_bonus``."""
     defense_ticks_per_bonus: int
-    """«Защита» gains one virtual shot per this many ticks in the mode (DEC-30); see
+    """The "Defense" mode gains one virtual shot per this many ticks (DEC-30); see
     ``defense_bonus``."""
     stance_cooldown_ticks: int
     cost: OrderCosts
@@ -204,7 +204,7 @@ class OrderRules:
         return min(edges * self.planned_bonus_per_edge, charged)
 
     def defense_bonus(self, ticks: int, charged: int) -> int:
-        """The bonus of «Защита» (DEC-30): one per ``defense_ticks_per_bonus`` of the ``ticks``
+        """The bonus of "Defense" (DEC-30): one per ``defense_ticks_per_bonus`` of the ``ticks``
         the group has stood in the mode (rounded down, ``ticks >= 0``), at most the ``charged``
         units of the group when the fight begins."""
         return min(ticks // self.defense_ticks_per_bonus, charged)

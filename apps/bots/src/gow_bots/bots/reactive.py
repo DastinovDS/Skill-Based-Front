@@ -1,10 +1,10 @@
 """``ReactiveBot``: answers the visible intents of the enemy (BOT-03).
 
-Planned orders and «Защита» are public (DEC-04, DEC-08): a planned strike shows its origin and
+Planned orders and Defense are public (DEC-04, DEC-08): a planned strike shows its origin and
 its target 30 ticks before the group leaves. For every such strike at an own city the bot
 (``respond``, before anything else, spending the CP it keeps in reserve for that):
 
-1. turns on «Защита» in the target where a charged group stands, if it gathers a bonus before the
+1. turns on Defense in the target where a charged group stands, if it gathers a bonus before the
    strike can arrive: +1 per ``orders.defense_ticks_per_bonus`` ticks in the mode (DEC-30), and
    the strike waits ``planned_delay_ticks`` and then walks at least the quickest roads of the
    map at the fastest terrain speed (``arrival``);
@@ -12,7 +12,7 @@ its target 30 ticks before the group leaves. For every such strike at an own cit
 3. remembers the origin of the strike as exposed: the group has left it or is about to, so
    ``score`` puts a viable attack on that city first (the bare spot).
 
-The enemy «Защита» intent needs no code here: ``Bot.defended`` makes ``CampaignBot.need`` count
+The enemy Defense intent needs no code here: ``Bot.defended`` makes ``CampaignBot.need`` count
 its bonus. Without intents it plays like the base strategy.
 """
 
@@ -42,7 +42,7 @@ class ReactiveBot(CampaignBot):
         "radius": ParamRange(2, 3),
         "margin": ParamRange(0, 1),
         "guard": ParamRange(1, 2),
-        "reserve": ParamRange(200, 300),  # CP kept for «Защита» and reinforcements
+        "reserve": ParamRange(200, 300),  # CP kept for Defense and reinforcements
         "recruit_keep": ParamRange(250, 350),
     }
 
@@ -115,7 +115,7 @@ class ReactiveBot(CampaignBot):
         return best
 
     def defend(self, ctx: Ctx, target: int, arrival: int) -> bool:
-        """«Защита» for the strongest charged group standing in ``target``, if it gathers at least
+        """Defense for the strongest charged group standing in ``target``, if it gathers at least
         +1 by ``arrival`` (it is switched on in the next tick, DEC-30)."""
         if self.rules.orders.defense_bonus(max(0, arrival - ctx.tick - 1), 1) < 1:
             return False

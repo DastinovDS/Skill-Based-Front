@@ -1,7 +1,7 @@
 """DEC-31 (#319): the barracks of an enemy city next to an own node are seen, example by example.
 
 Expected values are the table of worked examples of DEC-31 (mechanics.md, section 10) and its
-«Детали»: ruleset ``mvp-1`` (``city_upgrades.enabled = true``), the view is player 0's.
+"Details": ruleset ``mvp-1`` (``city_upgrades.enabled = true``), the view is player 0's.
 
 Map ``dec22``: K = 0 (capital of 0) - A = 1 - M = 2 - E = 5 - F = 6 - 7 (capital of 1), the
 province P = 3 at A and the province Q = 4 at F. Player 0 owns K, A and M, player 1 owns E, F and
@@ -101,14 +101,14 @@ def test_example_5_no_memory_once_the_own_neighbour_is_lost() -> None:
 
 
 def test_a_neutral_city_next_to_an_own_node_stays_unknown() -> None:
-    """Детали: neutral cities are ``None`` (they have no barracks)."""
+    """Details: neutral cities are ``None`` (they have no barracks)."""
     match = _match()
     match.state.nodes[M].owner = None  # neutral M next to the own A
     assert match.view(0).nodes[M].has_barracks is None
 
 
 def test_without_city_upgrades_a_neighbour_shows_true() -> None:
-    """Детали: with ``city_upgrades.enabled = false`` every city has the barracks (DEC-26,
+    """Details: with ``city_upgrades.enabled = false`` every city has the barracks (DEC-26,
     item 1), so the enemy city next to an own node shows ``True``."""
     match = _match(OFF)
     view = match.view(0)

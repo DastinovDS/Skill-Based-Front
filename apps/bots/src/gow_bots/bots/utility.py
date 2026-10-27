@@ -1,10 +1,10 @@
 """The shared utility of all bots: a normal or a planned order (AGENTS.md, section 8; BOT-01).
 
-Every bot decides «обычный или запланированный приказ» with ``prefer_planned``, and the answer
+Every bot decides an ordinary or a scheduled order with ``prefer_planned``, and the answer
 depends only on the prices of the ruleset, so the share of planned orders in a tournament is set by
 the ruleset (the calibration of mechanics.md, section 5: 20..70% of attacks), not by bot code.
 
-The price model (mechanics.md, section 5, «Как рассчитать бонус»): a planned order buys
+The price model (mechanics.md, section 5, "How to calculate the bonus"): a planned order buys
 virtual shots delivered to the fight, for ``orders.cost.planned_move - orders.cost.move`` extra
 CP. Their number grows with the distance (DEC-29): ``orders.planned_bonus_per_edge`` per edge of
 the path, at most the charged units of the group (``OrderRules.planned_bonus``), so a deep strike
@@ -17,9 +17,9 @@ that would otherwise be burnt for nothing. The delay of the plan and its public 
 priced: the ruleset has no price for them, they are the counter-play of the opponent.
 
 Fight arithmetic (DEC-07, mechanics.md, section 4): the defender's pool is its charges plus the
-«Защита» bonus and the terrain modifier, both only with at least one firing charge; taking the
+Defense bonus and the terrain modifier, both only with at least one firing charge; taking the
 node needs one shot per pooled charge (cancelling) and one per defending unit (killing). The
-«Защита» bonus grows with the time in the mode, at most the charged units (DEC-30); the enemy's
+Defense bonus grows with the time in the mode, at most the charged units (DEC-30); the enemy's
 number is hidden, so the caller passes an estimate (``Bot.defended``).
 """
 
@@ -32,7 +32,7 @@ __all__ = ["defender_pool", "prefer_planned", "shots_to_take"]
 def defender_pool(rules: Ruleset, terrain: Terrain, charged: int, defense: int) -> int:
     """Pool ``Qd`` of the defenders of a node with ``charged`` firing charges (DEC-07, rule 1).
 
-    ``defense``: the «Защита» bonus gathered by the start of the fight before its cap; the pool
+    ``defense``: the Defense bonus gathered by the start of the fight before its cap; the pool
     takes at most ``charged`` of it (DEC-30, item 2)."""
     if charged <= 0:
         return 0

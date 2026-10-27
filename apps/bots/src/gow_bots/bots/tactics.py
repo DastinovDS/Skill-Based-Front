@@ -11,7 +11,7 @@ about and the numbers (``PARAMS``) differ:
 - ``strike``: attack enemy nodes next to own territory when the force suffices;
 - ``reinforce``: fill the garrisons that are below their minimum from free groups or by recruiting;
 - ``strengthen``: spend CP that would otherwise burn on the cap on recruits at the front;
-- ``fortify``: «Защита» on the guards that face enemies;
+- ``fortify``: Defense on the guards that face enemies;
 - ``build_roads``: one unthreatened own internal road a turn is upgraded for CP (DEC-28, item 7).
 - ``prioritize``: the two front markers go to own cities at the front (DEC-28).
 
@@ -374,7 +374,7 @@ class StrategyBot(Bot):
             self.recruit(turn, node, keep)
 
     def fortify(self, turn: Turn) -> None:
-        """«Защита» on guards of threatened nodes not in it yet: the bonus grows with the time in
+        """Defense on guards of threatened nodes not in it yet: the bonus grows with the time in
         the mode and gathers anew after a fight without paying again (DEC-30), so the earlier the
         better and once is enough."""
         for g in turn.groups:

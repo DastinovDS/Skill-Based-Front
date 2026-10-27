@@ -19,7 +19,7 @@
 - A ready unit appears when the owner's standing units in the city are fewer than its capacity;
   otherwise it waits with full progress (``recruit_waiting`` of the view) and appears in the first
   tick there is a place. It never appears during a fight in the city.
-- The unit appears discharged, as a new group in mode «Атака» (event ``recruited``); the
+- The unit appears discharged, as a new group in mode "Attack" (event ``recruited``); the
   ``orders`` system merges it into the group of the city in the same tick (DEC-20, A1). It takes
   a charge later, by the usual recharge from the city warehouse (``supply`` runs before
   ``recruit``, so its first recharge is in the next tick).

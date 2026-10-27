@@ -41,7 +41,7 @@ FORMAT: Final = 1
 """Version of the frames file format; the viewer checks it."""
 
 FRAMES_PER_SECOND: Final = 2
-"""Full-state frames per second of the match (the issue: "2 раза в секунду")."""
+"""Full-state frames per second of the match (the issue: "2 times per second")."""
 
 
 class FramesError(ValueError):

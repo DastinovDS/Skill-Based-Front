@@ -203,9 +203,9 @@ def test_capital_kind_without_capital_of_is_rejected() -> None:
 def test_names_and_border_points_are_read() -> None:
     # DEC-23, items 4 and 5; the example fragment of the DEC-23 block.
     data = _raw("line3")
-    data["nodes"][1].update(kind="province", vp=0, name="Брод", start_owner=0)
+    data["nodes"][1].update(kind="province", vp=0, name="Ford", start_owner=0)
     data["edges"][0]["border_permille"] = 400
     mapdef = parse_map(data)
-    assert mapdef.nodes[1].name == "Брод"
+    assert mapdef.nodes[1].name == "Ford"
     assert (mapdef.edges[0].border_permille, mapdef.edges[1].border_permille) == (400, 500)
     assert (mapdef.edges[0].max_level, mapdef.edges[0].travel_ticks) == (3, 30)

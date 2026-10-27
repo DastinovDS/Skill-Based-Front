@@ -158,7 +158,7 @@ def test_vector_params_are_the_pinned_ruleset() -> None:
         "forest": mod.forest,
         "plains": mod.plains,
     }
-    # «Защита» (+2) of the rows: the bonus gathered by the start of the fight (DEC-30), placed
+    # "Defense" (+2) of the rows: the bonus gathered by the start of the fight (DEC-30), placed
     # below as the ticks that gather it.
     assert params["defense_bonus"] == 2
     assert params["round_ticks"] == RULES.combat.round_ticks
@@ -198,7 +198,7 @@ def test_dec24_row(vec: dict[str, Any], a: int) -> None:
                 order = Order((1,), True, 0)
             gid = add(state, p, g["units"], g["charged"], where, mode=Mode(g["mode"]), order=order)
             if bonus is not None and bonus["source"] == "defense_mode":
-                # DEC-30: «Защита» (+N) is N bonuses gathered by the start of the fight.
+                # DEC-30: "Defense" (+N) is N bonuses gathered by the start of the fight.
                 ticks = bonus["amount"] * RULES.orders.defense_ticks_per_bonus
                 state.groups[gid].ticks_in_defense = ticks
             elif bonus is not None:
@@ -442,7 +442,7 @@ def test_row22_the_attack_withdraws() -> None:
         exp["defense"]["units"],
         exp["defense"]["charged"],
     )
-    assert defender.bonus == 0  # «Защита» burned with the fight
+    assert defender.bonus == 0  # "Defense" burned with the fight
     assert state.nodes[1].owner == 1
 
 

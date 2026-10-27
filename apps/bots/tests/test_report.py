@@ -1,8 +1,5 @@
 """The balance report (BOT-05): statistics and output on a tiny synthetic tournament."""
 
-# The report text is Russian: RUF001 flags Cyrillic words that look like Latin ones.
-# ruff: noqa: RUF001
-
 import json
 from itertools import product
 from pathlib import Path
@@ -104,16 +101,16 @@ def test_load_rows_rejects_bad_files(tmp_path: Path) -> None:
 def test_report_numbers_follow_the_rows(tournament: Path) -> None:
     text = render_report(load_rows(tournament), "t.jsonl", "t")
     # strangler vs expander: strangler always wins, 16 matches, each takes a siege
-    assert "[выполнено] `strangler` берёт хотя бы один город осадой" in text
+    assert "[done] `strangler` takes at least one city by siege" in text
     assert "1.00 [0.81; 1.00]" in text
     # reactive wins every match against rusher, expander none
-    assert "[выполнено] `reactive` выигрывает у `rusher` чаще" in text
+    assert "[done] `reactive` beats `rusher` more often" in text
     # reactive > rusher > strangler > reactive is the only cycle; expander loses to everyone
     assert "reactive > rusher > strangler > reactive" in text
-    assert "Циклы «камень-ножницы-бумага» (A бьёт B, B бьёт C, C бьёт A): 1;" in text
-    assert "Доминирующая стратегия (бьёт всех остальных): нет" in text
-    assert "![матрица пар](t-pairs.png)" in text
-    for title in ("Преимущество стороны", "Разбивка по картам", "Уникальные исходы"):
+    assert "Rock-paper-scissors cycles (A beats B, B beats C, C beats A): 1;" in text
+    assert "Dominant strategy (beats all the others): none" in text
+    assert "![pair matrix](t-pairs.png)" in text
+    for title in ("Side advantage", "Breakdown by map", "Unique outcomes"):
         assert f"## {title}" in text
 
 
@@ -121,8 +118,8 @@ def test_report_flags_a_failed_competence_check(tmp_path: Path) -> None:
     rows = [_row("alpha", s, "expander", "strangler") | {"sieges_won": [0, 0]} for s in range(4)]
     rows += [_row("alpha", s, "strangler", "expander") | {"sieges_won": [0, 0]} for s in range(4)]
     text = render_report(load_rows(_write(tmp_path / "f.jsonl", rows)), "f.jsonl", "f")
-    assert "[НЕ выполнено] `strangler` берёт хотя бы один город осадой" in text
-    assert "[нет данных] проверка `reactive`" in text
+    assert "[NOT done] `strangler` takes at least one city by siege" in text
+    assert "[no data] check of `reactive`" in text
 
 
 def test_report_counts_unique_outcomes_and_side_advantage(tournament: Path) -> None:

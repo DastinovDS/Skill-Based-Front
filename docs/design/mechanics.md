@@ -8,7 +8,7 @@
 > balancing changes the ruleset, not this document. What is postponed beyond the MVP is listed in
 > [`docs/mvp/MVP_PLAN.md`](../mvp/MVP_PLAN.md), the section "What is not in the MVP".
 >
-> The terms match the glossary of `AGENTS.md` (section 20).
+> The terms match the glossary of `AGENTS.md` (section 15).
 
 ## How to read the statuses
 
@@ -2359,9 +2359,9 @@ Alternatives (not chosen):
 
 The owner's decision of 2026-10-14 (#252): maps should look less symmetric and more interesting, be
 a bit larger, and the water on the background is confusing. Changes of the format and the tools:
-`docs/design/map-format.md`, section "Format changes per DEC-27". The owner accepted all items
+`docs/design/map-format.md`, section "Format changes under DEC-27". The owner accepted all items
 (2026-10-14, #266), including those that were proposals with a default value. The decision is
-accepted and awaits implementation (#266 stays open as the implementation issue).
+accepted and implemented (#266, closed 2026-10-22; validator and script #366, DEC-27 maps only in the server pool since #372).
 
 1. **[accepted]** **Symmetry of the rules, not of the picture.** These stay mirrored:
    - the graph (the `mirror` table, the ends of edges);
@@ -2414,7 +2414,7 @@ accepted and awaits implementation (#266 stays open as the implementation issue)
 9. **The Windows and Mac discrepancy: found (#269).** The owner saw water on the background only on Windows,
    on Mac it was not there. The cause: the `caddy` image built the client, copying into the context only
    `maps/*.json`, without `maps/*.bg.png` (`deploy/caddy.Dockerfile`; since #344 the backgrounds are `maps/*.bg.webp`); the client takes the backgrounds from
-   `import.meta.glob('maps/*.bg.png')` at build time, so in the Docker stack (on Mac) the glob is empty and the
+   `import.meta.glob('maps/*.bg.png')` at build time (`*.bg.webp` since #344), so in the Docker stack (on Mac) the glob is empty and the
    map is drawn in flat terrain colors, while the client from the repository (the Vite dev server) sees the background.
    The server serves the background correctly (`GET /api/maps/{id}/background.png`, since #344 `background.webp`, answers 200), but the client does not
    request that address. Fixed: the Dockerfile copies the backgrounds too, the check
@@ -2696,7 +2696,7 @@ The zone borders are the same as for the halves of DEC-21, item 5: a group belon
 7. **[accepted]** **A group leaves a node and enters a node.** A group standing in a visible node is given in the `seen` of the node (as now, as a sum per DEC-21); from the moment it leaves onto the edge it is a separate figure with `pos` near the end of this node. Arrival at a node: the figure disappears from the list, the group enters the sum of the node in the same frame (for an arrival with auto-merge, DEC-20, nothing changes). **Recommendation:** this way.
 8. **[accepted]** **Memory on leaving into the fog.** The "last seen" memory (DEC-21, item 8) stores per half: the level, the shown values, the modes and the tick; **there are no positions and directions in memory** (less state in `state_hash()`, no "ghost moving without data"). In the fog the client draws a memory marker of the half (for example at the border point), not a moving figure. **Recommendation:** this way.
 9. **[accepted]** **Speed and road level (a leak).** The speed of a group on an edge depends on the road level (section 4, item 9; the level is taken on leaving onto the edge), so from the travel time through a visible half the road level can be estimated even if the edge is in the fog per DEC-17. **Recommendation:** accept the leak (the estimate is rough: it needs a time measurement and knowledge of the terrain; DEC-17 protects the display of the width, not a deduction from speed); `EdgeView.width` and the width memory are still updated only per DEC-17. Alternative: do not show the position on edges where the width is in the fog (it would break example 4 and the owner's decision).
-10. **[accepted]** **Versions.** `SIM_VERSION`++ (the per-half form of the `Sighting` memory changes `state_hash()`; in one bump together with DEC-21: #296 is not implemented yet) and `PROTOCOL_VERSION`++ (the list in `EdgeView`, AGENTS.md, section 6; regenerating `protocol.gen.ts`). The ruleset is unchanged: there are no numbers in DEC-33, we do not introduce a flag (as with DEC-04 and DEC-17). **Recommendation:** this way, in #296.
+10. **[accepted]** **Versions.** `SIM_VERSION`++ (the per-half form of the `Sighting` memory changes `state_hash()`; in one bump together with DEC-21: implemented in #296) and `PROTOCOL_VERSION`++ (the list in `EdgeView`, AGENTS.md, section 6; regenerating `protocol.gen.ts`). The ruleset is unchanged: there are no numbers in DEC-33, we do not introduce a flag (as with DEC-04 and DEC-17). **Recommendation:** this way, in #296.
 11. **[accepted]** **Replay and bots.** The file of full replay frames shows the real state, DEC-33 does not change it. Bots get the same `PlayerView` and can read `enemy_groups`; direct access to the state is still forbidden (AGENTS.md, section 2). **Recommendation:** this way.
 12. **[accepted]** **Budgets.** `project()` walks the groups once; the list is bounded by the number of enemy groups in the visible halves, it fits in the 0.3 ms budget (AGENTS.md, section 12); to be checked with a `project()` benchmark in #296. **Recommendation:** this way.
 
