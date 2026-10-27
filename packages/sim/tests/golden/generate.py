@@ -199,7 +199,7 @@ def generate(out: Path, archive: Path) -> list[Path]:
     (out / "maps").mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for game in GAMES:
-        map_file = ROOT / "maps" / f"{game.map_id}.json"
+        map_file = ROOT / "maps" / "fixtures" / f"{game.map_id}.json"
         rules_file = ROOT / "rulesets" / f"{game.ruleset}.toml"
         archive_ruleset(rules_file, archive)
         shutil.copyfile(map_file, out / "maps" / map_file.name)

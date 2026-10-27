@@ -26,7 +26,7 @@ apps/server/         gow_server    FastAPI: HTTP (lobby, rating) + WebSocket (ma
 apps/bots/           gow_bots      bots and the tournament harness
 apps/client/                       web client: TypeScript + Vite + Svelte 5 + PixiJS 8
 tools/maps/          gow_maps      offline map tools: validator, mirroring, previews
-maps/                              MVP maps (JSON, previews)
+maps/                              map pool of the server (JSON, previews); `maps/fixtures/`: MVP maps for tests
 rulesets/                          rulesets (*.toml) and the archive of played ones by hash
 docs/design/                       mechanics, map format, archive of the old design
 docs/adr/                          architecture decisions
@@ -96,7 +96,7 @@ reaches the address), the menu, a private match (an invite link `/?m=<code>`, th
 bar after it is read), a match with a bot, a match, the result with a replay. The old dev screen with a map and fixtures opens in a dev build
 at `/?dev` and `/?scene=<id>`.
 
-The client dev screen shows a map from the bundle (`maps/*.json`, before MAP-04 the test maps
+The client dev screen shows a map from the bundle (`maps/*.json`, the fixtures `maps/fixtures/*.json`, before MAP-04 the test maps
 `packages/sim/tests/maps/`): choosing a map and "Fit map" in the panel, dragging moves the map,
 the wheel zooms at the cursor. The FPS counter in the panel updates twice a second.
 
@@ -161,7 +161,7 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_HOST`, `GOW_PORT` | `127.0.0.1`, `8000` | the server address |
 | `GOW_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `GOW_FORWARDED_ALLOW_IPS` | `127.0.0.1` | the proxy (Caddy) whose `X-Forwarded-*` headers are trusted |
-| `GOW_MAPS_DIR` | `maps` | the map pool: `<id>.json` and an optional background `<id>.bg.webp` |
+| `GOW_MAPS_DIR` | `maps` | the map pool: `<id>.json` and an optional background `<id>.bg.webp` (not recursive: `maps/fixtures/` is not served) |
 | `GOW_RULESET_PATH` | `rulesets/mvp-0.toml` (in `compose.yaml` and the `app` image: `mvp-1`) | the ruleset of the matches the server runs |
 | `GOW_RULESETS_DIR`, `GOW_RULESETS_BUNDLED_DIR` | `rulesets/archive`, `rulesets/archive` | the archive of rulesets by hash: the server puts its own ruleset here on start (the directory must be writable; in the container `/data/rulesets` on the volume), the archive from the image is copied here if the directories differ. The server does not accept `test-short` when `GOW_ENV=prod` |
 | `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | the SQLite database (WAL); the path is relative to the working directory |

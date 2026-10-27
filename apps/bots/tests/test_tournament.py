@@ -15,7 +15,7 @@ from gow_sim.replay import analyze_replay
 from gow_sim.ruleset import load_ruleset, ruleset_hash
 
 ROOT = Path(__file__).resolve().parents[3]
-MAP = ROOT / "maps" / "artery.json"
+MAP = ROOT / "maps" / "fixtures" / "artery.json"
 SHORT = ROOT / "rulesets" / "test-short.toml"
 SEEDS = 2
 
@@ -83,5 +83,5 @@ def test_smoke_tournament_is_reproducible_and_its_replays_agree(
     replay = (
         tmp_path / "replays" / f"artery__{row['bot0']}_vs_{row['bot1']}__{row['seed']}.jsonl.gz"
     )
-    metrics = analyze_replay(replay, archive, ROOT / "maps").to_json()
+    metrics = analyze_replay(replay, archive, ROOT / "maps" / "fixtures").to_json()
     assert {k: row[k] for k in metrics} == metrics

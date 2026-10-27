@@ -137,12 +137,12 @@ def test_replays_of_real_matches_are_analyzed() -> None:
     assert files
     for file in files:
         final = read_replay(file).checkpoints[-1].tick
-        log = replay_log(file, ROOT / "rulesets" / "archive", ROOT / "maps")
+        log = replay_log(file, ROOT / "rulesets" / "archive", ROOT / "maps" / "fixtures")
         m, stats = analyze(log), analyze_stats(log)
         assert m.ticks == final or m.reason != UNFINISHED  # a match may end before the log does
         assert m.accepted[0] + m.rejected[0] >= m.orders[0]
         assert m.sieges_won[0] <= m.captures[0]
-        again = replay_log(file, ROOT / "rulesets" / "archive", ROOT / "maps")
+        again = replay_log(file, ROOT / "rulesets" / "archive", ROOT / "maps" / "fixtures")
         assert m == analyze(again)
         assert stats == analyze_stats(again)
         # The statistics agree with the metrics and with themselves (#375).
@@ -424,7 +424,7 @@ def test_scripted_match_statistics() -> None:
 
 def test_analyze_replay_is_analyze_of_the_replay_log() -> None:
     file = next(GOLDEN.glob(f"*-short-forfeit{REPLAY_SUFFIX}"))  # the shortest golden match
-    archive, maps = ROOT / "rulesets" / "archive", ROOT / "maps"
+    archive, maps = ROOT / "rulesets" / "archive", ROOT / "maps" / "fixtures"
     assert analyze_replay(file, archive, maps) == analyze(replay_log(file, archive, maps))
 
 

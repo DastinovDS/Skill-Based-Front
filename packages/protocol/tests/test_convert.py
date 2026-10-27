@@ -231,7 +231,7 @@ def _check_events(match: Match, events: list[Event], player: int) -> list[EventM
 
 @pytest.mark.parametrize("name", MVP_MAPS)
 def test_match_through_the_wire(name: str) -> None:
-    mapdef = load_map(ROOT / "maps" / f"{name}.json")
+    mapdef = load_map(ROOT / "maps" / "fixtures" / f"{name}.json")
     # Roads for free here: the drivers spend every CP on recruits and moves, and the test wants
     # every message kind, ``road_upgraded`` included (the price is DEC-28's, ``test_build.py``).
     cost = dataclasses.replace(RULES.orders.cost, build=0)
@@ -330,7 +330,7 @@ def test_snapshot_frames_of_a_bot_match() -> None:
     """Strategic bots against each other: their frames equal the validated ones. Under the stack
     limit (DEC-20) their armies split into smaller waves that take targets with plain orders, so
     planned orders and their intents are set up in ``test_snapshot_frame_of_rare_view_parts``."""
-    mapdef = load_map(ROOT / "maps" / "artery.json")
+    mapdef = load_map(ROOT / "maps" / "fixtures" / "artery.json")
     bots = ("rusher", "turtle")
     controllers = [BOTS[bot](mapdef, RULES, seed=7, player=p) for p, bot in enumerate(bots)]
     checker = _FrameChecker()
@@ -428,7 +428,7 @@ def test_snapshot_frame_costs_no_more_than_project() -> None:
 
     A ratio on the same machine, so no ``speed_factor``; ``REGRESSION`` as in the benchmarks.
     """
-    mapdef = load_map(ROOT / "maps" / "web.json")
+    mapdef = load_map(ROOT / "maps" / "fixtures" / "web.json")
     controllers = [BOTS["rusher"](mapdef, RULES, seed=1, player=p) for p in PLAYERS]
     keeper = _Keeper()
     run_headless(mapdef, RULES, controllers, max_ticks=300, match_key=KEY, observer=keeper)
@@ -534,7 +534,7 @@ def test_distinct_unknown_ids_stay_distinct() -> None:
 
 
 def _started(name: str = "web") -> Match:
-    match = Match(load_map(ROOT / "maps" / f"{name}.json"), RULES, KEY)
+    match = Match(load_map(ROOT / "maps" / "fixtures" / f"{name}.json"), RULES, KEY)
     match.step()
     return match
 
@@ -791,7 +791,7 @@ def test_forfeit_ends_the_match_on_the_wire() -> None:
 def test_reach_msg_promises_what_a_move_gets(name: str) -> None:
     """Every ``reach`` node is a move the simulation accepts, arriving after ``ticks``; every
     ``split`` node is ``STACK_LIMIT``. A foreign or unknown group gets empty lists."""
-    match = Match(load_map(ROOT / "maps" / f"{name}.json"), RULES, KEY)
+    match = Match(load_map(ROOT / "maps" / "fixtures" / f"{name}.json"), RULES, KEY)
     match.step()
     for player in PLAYERS:
         for g in match.view(player).groups:

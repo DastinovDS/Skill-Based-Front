@@ -13,8 +13,10 @@ from gow_protocol.mapfile import MapFile
 from gow_sim.maps import map_to_data, parse_map
 
 ROOT = Path(__file__).resolve().parents[3]
-MAPS = sorted((ROOT / "maps").glob("*.json")) + sorted(
-    (ROOT / "packages" / "sim" / "tests" / "maps").glob("*.json")
+MAPS = (
+    sorted((ROOT / "maps").glob("*.json"))
+    + sorted((ROOT / "maps" / "fixtures").glob("*.json"))
+    + sorted((ROOT / "packages" / "sim" / "tests" / "maps").glob("*.json"))
 )
 
 

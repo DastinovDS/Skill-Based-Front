@@ -15,7 +15,7 @@ MVP_MAPS: Final = ("artery", "web", "pass")
 @pytest.fixture(scope="session")
 def maps() -> dict[str, MapDef]:
     """The MVP maps by name."""
-    return {name: load_map(ROOT / "maps" / f"{name}.json") for name in MVP_MAPS}
+    return {name: load_map(ROOT / "maps" / "fixtures" / f"{name}.json") for name in MVP_MAPS}
 
 
 @pytest.fixture(scope="session")

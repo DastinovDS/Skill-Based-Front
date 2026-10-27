@@ -23,7 +23,7 @@ CROP = (70, 130, 840, 580)  # x, y, width, height of the fragment in the mockup 
 
 
 def main() -> int:
-    lab = biome_labels(ROOT / "maps" / "artery.json")
+    lab = biome_labels(ROOT / "maps" / "fixtures" / "artery.json")
     mask, density = variant_t2(lab)
     pic = Image.fromarray(compose(mask, density, 2.4, 40, True, 255), "RGB")
     x0, y0, cw, ch = CROP

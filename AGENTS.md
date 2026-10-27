@@ -47,7 +47,7 @@ apps/bots/           gow_bots      bots (gow_bots.bots) and the tournament harne
 apps/client/                       TypeScript + Vite + Svelte 5 + PixiJS 8
 e2e/                               Playwright E2E against the real stack (its own package, compose.e2e.yaml)
 tools/maps/          gow_maps      validator, mirroring script, previews and backgrounds of maps (offline)
-maps/                              MVP maps (JSON, previews, backgrounds)
+maps/                              map pool of the server (JSON, previews, backgrounds); `maps/fixtures/`: MVP maps, test fixtures outside the pool
 rulesets/                          rulesets (*.toml) and the archive of played ones by hash
 docs/design/                       mechanics.md, map format, archive
 docs/adr/  docs/balance/  docs/qa/ decisions, balance reports, checklists
@@ -133,7 +133,7 @@ does not work, that is a bug: fix it. CI still calls the tools directly (moving 
 | `regen`, `regen:protocol`, `regen:api` | regenerate the protocol schema and TS types (`protocol.gen.ts`) and the server OpenAPI with `api.gen.ts` | PRO-02, CLI-09 |
 | `db:migrate` | apply Alembic migrations (the server also does this on start) | DB-01 |
 | `db:revision` | a new migration from the `gow_server.models` models (argument: message) | DB-01 |
-| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json`: the map validator, and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5) | MAP-02, #379 |
+| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json`: the map validator (the pool and the fixtures), and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5) | MAP-02, #379 |
 | `maps:mirror` | build `maps/<name>.json` from the half `maps/src/<name>.half.json` (argument: name) | MAP-03 |
 | `maps:preview` | draw the preview `maps/<name>.preview.png` | MAP-04 |
 | `maps:bake` | bake the background `maps/<name>.bg.webp`: numpy and Pillow, texture T2, WebP up to 0.5 MB (after any map edit) | MAP-05, #344 |

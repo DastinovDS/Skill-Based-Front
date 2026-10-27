@@ -41,7 +41,7 @@ TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parents[2]
 GOLDEN = TESTS / "golden" / f"v{SIM_VERSION}"
 ARCHIVE = ROOT / "rulesets" / "archive"
-MAPS = ROOT / "maps"
+MAPS = ROOT / "maps" / "fixtures"
 REPLAYS = sorted(GOLDEN.glob(f"*{REPLAY_SUFFIX}"))
 
 COMMANDS: list[Command] = [

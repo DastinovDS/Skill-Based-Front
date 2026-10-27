@@ -25,6 +25,8 @@ RUN --mount=type=cache,target=/pnpm/store \
 # Backgrounds too: Vite bundles maps/*.bg.webp with `import.meta.glob`; without them the glob is
 # empty and the production client draws flat terrain colours (bug #269).
 COPY maps/*.json maps/*.bg.webp /repo/maps/
+# The MVP maps, test fixtures (#372): not in the server pool, but the dev screen and its scenes bundle them.
+COPY maps/fixtures/*.json maps/fixtures/*.bg.webp /repo/maps/fixtures/
 COPY packages/sim/tests/maps/ /repo/packages/sim/tests/maps/
 COPY apps/client/ ./
 # The client build, then the Content-Security-Policy header for Caddy, generated from

@@ -50,7 +50,7 @@ TIMEOUT_S: Final = 5.0
 
 @pytest.fixture
 def bot_settings(maps_dir: Path, tmp_path: Path) -> Settings:
-    shutil.copy(ROOT / "maps" / "web.json", maps_dir)
+    shutil.copy(ROOT / "maps" / "fixtures" / "web.json", maps_dir)
     return Settings(
         maps_dir=maps_dir,
         database_url=f"sqlite:///{tmp_path / 'gow.db'}",
@@ -200,7 +200,7 @@ class _Slow:
 
 
 def _runner(controller: Controller | None = None, **kwargs: object) -> MatchRunner:
-    mapdef = load_map(ROOT / "maps" / "web.json")
+    mapdef = load_map(ROOT / "maps" / "fixtures" / "web.json")
     rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
     seat = BotSeat(1, controller or BOTS["idle"](mapdef, rules, seed=1, player=1))
     return MatchRunner(

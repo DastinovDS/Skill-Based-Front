@@ -178,7 +178,9 @@ def test_cli_expands_glob_patterns(capsys: pytest.CaptureFixture[str]) -> None:
 # DEC-26, item 5: start stocks against the warehouses of a ruleset with city_upgrades ----------
 
 ROOT_RULESETS = REPO / "rulesets"
-MVP_MAPS = sorted((REPO / "maps").glob("*.json"))
+MVP_MAPS = sorted((REPO / "maps").glob("*.json")) + sorted(
+    (REPO / "maps" / "fixtures").glob("*.json")
+)
 
 
 def _with_small_stock(tmp_path: Path, stock: int) -> Path:
@@ -187,7 +189,7 @@ def _with_small_stock(tmp_path: Path, stock: int) -> Path:
     A copy in ``tmp_path`` (the file name must equal ``meta.name``): the test does not depend on
     the committed maps, which satisfy the check (#379).
     """
-    data = json.loads((REPO / "maps" / "artery.json").read_text(encoding="utf-8"))
+    data = json.loads((REPO / "maps" / "fixtures" / "artery.json").read_text(encoding="utf-8"))
     small = [n for n in data["nodes"] if n["kind"] == "city_small" and n["start_owner"] is not None]
     assert small
     for node in small:
@@ -302,7 +304,7 @@ def test_dec27_example_3_edge_without_mirror(tmp_path: Path, config: ValidatorCo
 )
 def test_dec27_size_examples(config: ValidatorConfig, count: int, issues: list[str]) -> None:
     # Rows 10 and 11: the size check with the thresholds 45..55 switched on.
-    mapdef = load_map(REPO / "maps" / "web.json")
+    mapdef = load_map(REPO / "maps" / "fixtures" / "web.json")
     nodes = (mapdef.nodes * 2)[:count]
     on = dataclasses.replace(config, size_check=True)
     assert [i.check for i in check_size(dataclasses.replace(mapdef, nodes=nodes), on)] == issues

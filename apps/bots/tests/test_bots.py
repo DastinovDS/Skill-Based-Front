@@ -213,7 +213,10 @@ def test_match_is_the_same_in_fresh_processes() -> None:
         "bots = [BOTS['random_legal'](m, r, seed=42, player=p) for p in (0, 1)]\n"
         "print(run_headless(m, r, bots).state_hash)\n"
     )
-    args = [str(ROOT / "maps" / "pass.json"), str(ROOT / "rulesets" / "test-short.toml")]
+    args = [
+        str(ROOT / "maps" / "fixtures" / "pass.json"),
+        str(ROOT / "rulesets" / "test-short.toml"),
+    ]
     outputs = {
         subprocess.run(
             [sys.executable, "-c", script, *args],

@@ -346,14 +346,14 @@ def swatches(current: bool) -> Image.Image:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--map", default="artery", help="map name in maps/ (default artery)")
+    ap.add_argument("--map", default="artery", help="map name in maps/fixtures/ (default artery)")
     ap.add_argument("--current", type=Path, help="the old maps/<name>.bg.png (see the docstring)")
     ap.add_argument("--out", type=Path, help="also save the full-map PNGs here")
     ap.add_argument("--no-embed", action="store_true", help="do not rewrite the mockup")
     args = ap.parse_args()
 
     started = time.time()
-    map_path = ROOT / "maps" / f"{args.map}.json"
+    map_path = ROOT / "maps" / "fixtures" / f"{args.map}.json"
     lab = biome_labels(map_path)
     h, w = lab.shape
     x0, y0, cw, ch = CROP
@@ -361,7 +361,7 @@ def main() -> int:
 
     pictures: dict[str, Image.Image] = {}
     sizes: dict[str, dict[str, int]] = {}
-    old = args.current or ROOT / "maps" / f"{args.map}.bg.png"
+    old = args.current or ROOT / "maps" / "fixtures" / f"{args.map}.bg.png"
     if not old.is_file():
         print(f"{old} is missing: pass the pre-#344 PNG with --current", file=sys.stderr)
         return 1

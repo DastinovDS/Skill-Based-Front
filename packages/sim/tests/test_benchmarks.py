@@ -315,7 +315,7 @@ def test_bench_project_with_enemy_figures(
 def test_bench_full_headless_match(
     benchmark: BenchmarkFixture, speed_factor: float, mvp_rules: Ruleset, expand_bot: BotFactory
 ) -> None:
-    mapdef = load_map(ROOT / "maps" / "web.json")  # the MVP map with the most edges
+    mapdef = load_map(ROOT / "maps" / "fixtures" / "web.json")  # the MVP map with the most edges
 
     def play() -> MatchResult:
         return run_headless(mapdef, mvp_rules, [expand_bot(mapdef, mvp_rules) for _ in PLAYERS])

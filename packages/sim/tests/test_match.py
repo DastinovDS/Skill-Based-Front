@@ -34,7 +34,7 @@ type BotFactory = Callable[[MapDef, Ruleset], Controller]
 
 def _map(name: str) -> MapDef:
     path = TESTS_DIR / "maps" / f"{name}.json"
-    return load_map(path if path.exists() else ROOT / "maps" / f"{name}.json")
+    return load_map(path if path.exists() else ROOT / "maps" / "fixtures" / f"{name}.json")
 
 
 def test_system_order_is_fixed() -> None:

@@ -33,4 +33,6 @@ data/
 apps/client/dist/
 maps/src/
 maps/*.preview.png
+maps/fixtures/src/
+maps/fixtures/*.preview.png
 maps/README.md

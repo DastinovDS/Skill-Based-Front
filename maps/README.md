@@ -1,10 +1,14 @@
-# MVP maps
+# Maps
 
-A pool of six maps with rule symmetry (MAP-04, #16; DEC-27): the graph and the attributes of nodes and roads are mirrored,
+Six maps with rule symmetry (MAP-04, #16; DEC-27): the graph and the attributes of nodes and roads are mirrored,
 the sides swap places by the `mirror` table, so every map is fair for both sides.
-Three DEC-27 maps (#266): 49..51 nodes, about half of the nodes are provinces (DEC-23), the coordinates of the
-mirrored half are free, the picture is not rotated. Three MVP maps (31..34 nodes, no provinces,
-the picture rotated by 180°) remain in the pool for now. The format:
+The pool of the server (`maps/*.json`: lobby, queue, bot matches, `GET /api/maps`, the default of `mise run tournament`)
+holds the three DEC-27 maps (#266): 49..51 nodes, about half of the nodes are provinces (DEC-23), the coordinates of the
+mirrored half are free, the picture is not rotated. The three MVP maps (31..34 nodes, no provinces,
+the picture rotated by 180°) left the pool (#372, owner decision) and are test fixtures in `maps/fixtures/`
+(with their previews, backgrounds and halves in `maps/fixtures/src/`): many tests and the client dev scene `artery`
+stand on their graphs. The server does not serve them (it loads `maps/*.json` without subdirectories), the validator
+still checks them, and they are frozen: `maps:preview`, `maps:bake` and `maps:mirror` work on the pool only. The format:
 [`docs/design/map-format.md`](../docs/design/map-format.md).
 
 Map ids and the names of cities and provinces are English (part 3 of the switch of the repository to English, #390): the names
@@ -25,9 +29,9 @@ texture T2 "Thinning" ("Прореживание" in `ui-style.md`, 26.3), WebP 
 | `ridge.json` | "ridge" | 2000 × 1240 | 51 (26) | 82 | 8 each (6 cities, 2 provinces) | 35, contested 11 (22%) | 8 roads |
 | `crossroads.json` | "crossroads" | 2000 × 1240 | 49 (22) | 92 | 8 each (6 cities, 2 provinces) | 33, contested 11 (22%) | 9 roads |
 | `highway.json` | "highway" | 2000 × 1240 | 49 (26) | 78 | 8 each (6 cities, 2 provinces) | 33, contested 11 (22%) | 9 roads |
-| `pass.json` | "pass" | 1600 × 1000 | 33 | 52 | 6 each | 21, contested 7 (21%) | 8 roads |
-| `web.json` | "web" | 1140 × 1000 | 34 | 61 | 6 each | 22, contested 14 (41%) | 5 roads |
-| `artery.json` | "artery" | 1600 × 1000 | 31 | 44 | 6 each | 19, contested 7 (22%) | 7 roads |
+| `fixtures/pass.json` | "pass" | 1600 × 1000 | 33 | 52 | 6 each | 21, contested 7 (21%) | 8 roads |
+| `fixtures/web.json` | "web" | 1140 × 1000 | 34 | 61 | 6 each | 22, contested 14 (41%) | 5 roads |
+| `fixtures/artery.json` | "artery" | 1600 × 1000 | 31 | 44 | 6 each | 19, contested 7 (22%) | 7 roads |
 
 A "contested" node: no starting owner, and its distances (in roads) to the two capitals differ
 by at most 1 (the `neutral_space` check of the validator, threshold 20%).
@@ -101,7 +105,7 @@ is supplied quickly, the flanks allow bypassing and cutting off the forward citi
 
 ## Pass (`pass`)
 
-![Pass](pass.preview.png)
+![Pass](fixtures/pass.preview.png)
 
 A mountain ridge of 7 mountain nodes runs through the center from north to south. It can be crossed only
 in three places: the northern pass (vp 2), the central "Gates" (vp 3) and the southern pass (vp 2). The road
@@ -115,7 +119,7 @@ Each player has a developed rear (upgrade to 3): the supply near the capital can
 
 ## Web (`web`)
 
-![Web](web.preview.png)
+![Web](fixtures/web.preview.png)
 
 A 6 × 5 grid of narrow roads (all roads upgrade only to level 2, near the capital to 3) with
 diagonals and two "knots" on extra links. About 28 independent cycles: almost any
@@ -128,7 +132,7 @@ troops better across many directions and finds an unclosed detour wins.
 
 ## Artery (`artery`)
 
-![Artery](artery.preview.png)
+![Artery](fixtures/artery.preview.png)
 
 One main axis over a plain from the capital through the "Heart" (vp 3) to the enemy capital: the axis
 roads upgrade to level 3 (before DEC-22 they started at width 3). Along it from the north and the south run
@@ -141,7 +145,8 @@ without shared roads lead to the axis cities with vp 2, one of them through a fl
 
 ## How to edit a map
 
-A map is not edited by hand: you edit a half in `maps/src/`, and a script builds the rest.
+A map of the pool is not edited by hand: you edit a half in `maps/src/`, and a script builds the rest
+(the fixtures are frozen: their halves in `maps/fixtures/src/` are only the proof that the files are built by the script).
 
 ```bash
 # 1. edit maps/src/<name>.half.json and raise meta.version
@@ -150,15 +155,15 @@ uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json
 # 3. redraw the preview and the background
 uv run gow-maps preview maps/<name>.json
 uv run gow-maps bake maps/<name>.json
-# check the whole pool (CI does the same)
-uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json
+# check the whole pool and the fixtures (CI does the same)
+uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json
 ```
 
 The seed of a background comes from the map name and `meta.version`, so raising the version of a new map changes its picture.
 The six maps of the pool have their seed pinned in `PINNED_SEEDS` (`tools/maps/src/gow_maps/bake.py`): they were renamed in #390
 and keep the pictures they had, whatever their version is.
 
-The test `tools/maps/tests/test_pool.py` checks that every `maps/<name>.json` is exactly equal to the
+The test `tools/maps/tests/test_pool.py` checks that every map (`maps/<name>.json`, `maps/fixtures/<name>.json`) is exactly equal to the
 result of the script on its half and passes the validator; the MVP maps have 25-40 nodes, the DEC-27
 maps also pass the `size` check (45..55 nodes) and the warehouses of `mvp-1` (`warehouse`). The simulation's
 symmetry test (`packages/sim/tests/test_symmetry.py`) runs all six maps.

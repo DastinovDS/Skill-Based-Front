@@ -29,9 +29,12 @@ from gow_sim.maps import MapDef, load_map
 
 ROOT = Path(__file__).parents[3]
 MAPS = ROOT / "maps"
+FIXTURES = MAPS / "fixtures"  # the MVP maps, frozen test fixtures (#372)
 TEST_MAPS = ROOT / "packages" / "sim" / "tests" / "maps"
 POOL = ["artery", "ridge", "web", "crossroads", "pass", "highway"]
-ALL_MAPS = [MAPS / f"{name}.json" for name in POOL] + sorted(TEST_MAPS.glob("*.json"))
+MVP = ["artery", "web", "pass"]
+FILES = {name: (FIXTURES if name in MVP else MAPS) / f"{name}.json" for name in POOL}
+ALL_MAPS = [FILES[name] for name in POOL] + sorted(TEST_MAPS.glob("*.json"))
 BAKE_SECONDS = 10  # #344: baking one map takes at most 10 s (CPU time, a loaded machine is slower)
 LAND = frozenset(biome for biomes in TERRAIN_BIOMES.values() for biome in biomes)
 
@@ -87,7 +90,7 @@ def test_node_area_has_the_node_terrain(path: Path) -> None:
         # The city itself always stands on land of its own terrain.
         own = cells[min(node.y // STEP, len(cells) - 1)][min(node.x // STEP, len(cells[0]) - 1)]
         assert own in TERRAIN_BIOMES[node.terrain]
-    if path.parent == MAPS:  # the pool maps are roomy: most nodes have such an area
+    if path.parent in (MAPS, FIXTURES):  # the pool maps are roomy: most nodes have such an area
         assert checked * 2 > len(mapdef.nodes)
 
 
@@ -150,7 +153,7 @@ def test_width_must_be_a_multiple_of_step(tmp_path: Path) -> None:
 @pytest.fixture(scope="module")
 def fresh() -> dict[str, NDArray[np.uint8]]:
     """A fresh bake of every MVP map (about 5 s each), shared by the tests below."""
-    return {name: render_background(_map(MAPS / f"{name}.json")) for name in POOL}
+    return {name: render_background(_map(FILES[name])) for name in POOL}
 
 
 def _blocks(pixels: NDArray[np.uint8], size: int = 16) -> NDArray[np.float64]:
@@ -162,7 +165,7 @@ def _blocks(pixels: NDArray[np.uint8], size: int = 16) -> NDArray[np.float64]:
 
 @pytest.mark.parametrize("name", POOL)
 def test_committed_background_is_up_to_date(name: str, fresh: dict[str, NDArray[np.uint8]]) -> None:
-    path = MAPS / f"{name}.json"
+    path = FILES[name]
     data = background_path(path).read_bytes()
     assert background_path(path).name == f"{name}.bg.webp"
     assert len(data) <= MAX_WEBP_BYTES  # #344: at most 0.5 MB
@@ -182,14 +185,14 @@ def test_committed_background_has_no_water_pixels(name: str) -> None:
     # Example 12 of DEC-27: not a single sea, shallow water or beach pixel. Water is blue (the
     # old deep and shallow sea (0, 105, 148) and (0, 133, 148)), a beach is sand (238, 214, 175);
     # the land palette has neither (snow is a cold white: blue exceeds red and green by 12 at most).
-    pixels = _decode(background_path(MAPS / f"{name}.json").read_bytes()).astype(np.int16)
+    pixels = _decode(background_path(FILES[name]).read_bytes()).astype(np.int16)
     red, green, blue = pixels[..., 0], pixels[..., 1], pixels[..., 2]
     assert not (blue - np.maximum(red, green) > 25).any()  # blue water
     assert not ((red > 215) & (red - blue > 40)).any()  # sand
 
 
 def test_render_stays_within_the_time_budget() -> None:
-    mapdef = _map(MAPS / "artery.json")  # 1600 x 1000, the largest map of the pool
+    mapdef = _map(FILES["artery"])  # 1600 x 1000, the largest map of the pool
     started = time.process_time()
     pixels = render_background(mapdef)
     data = io.BytesIO()

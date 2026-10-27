@@ -372,7 +372,7 @@ function rangesSnapshot(): SnapshotMsg {
 /** The real map of the `artery` scene (the only scene with a baked background). */
 function arteryMap() {
   const map = BUNDLED_MAPS.find((m) => m.meta.name === 'artery');
-  if (map === undefined) throw new Error('maps/artery.json is not bundled');
+  if (map === undefined) throw new Error('maps/fixtures/artery.json is not bundled');
   return map;
 }
 

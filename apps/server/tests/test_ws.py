@@ -213,7 +213,7 @@ def hello(token: str, version: int = PROTOCOL_VERSION) -> HelloMsg:
 
 @pytest.fixture
 def ws_settings(maps_dir: Path, tmp_path: Path) -> Settings:
-    shutil.copy(ROOT / "maps" / "web.json", maps_dir)
+    shutil.copy(ROOT / "maps" / "fixtures" / "web.json", maps_dir)
     return Settings(
         maps_dir=maps_dir,
         database_url=f"sqlite:///{tmp_path / 'gow.db'}",
