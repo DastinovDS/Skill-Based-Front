@@ -1,18 +1,18 @@
 <!doctype html>
 <!--
-  Статичный макет визуального стиля клиента (docs/design/ui-style.md v2, issues #202 и #208).
-  Самодостаточный: без внешних шрифтов, картинок и скриптов. Открыть в браузере как файл.
-  Это иллюстрация, а не код клиента: числа и геометрия взяты из гайда, реализация в волне 3.
-  Все глифы нарисованы здесь же простыми фигурами, чужие иконки не копировались.
+  A static mockup of the client's visual style (docs/design/ui-style.md v2, issues #202 and #208).
+  Self-contained: no external fonts, images or scripts. Open in a browser as a file.
+  This is an illustration, not client code: the numbers and geometry are taken from the guide, the implementation is in wave 3.
+  All glyphs are drawn right here with simple shapes, no third-party icons were copied.
 -->
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Макет стиля клиента</title>
+    <title>Client style mockup</title>
     <style>
       :root {
-        /* Токены палитры (ui-style.md v2, раздел 6). */
+        /* Palette tokens (ui-style.md v2, section 6). */
         --bg: #0d1117;
         --surface: rgb(22 27 34 / 92%);
         --surface-solid: #161b22;
@@ -69,7 +69,7 @@
         width: 100%;
         height: 100%;
       }
-      /* --- Верхняя панель ------------------------------------------------------------------- */
+      /* --- Top bar ------------------------------------------------------------------- */
       .topbar {
         position: absolute;
         left: 0;
@@ -182,7 +182,7 @@
         border-left: 1px solid var(--border);
         font-weight: 700;
       }
-      /* --- Предупреждение об истощении ------------------------------------------------------ */
+      /* --- Starvation warning ------------------------------------------------------ */
       .alert {
         position: absolute;
         top: 52px;
@@ -197,7 +197,7 @@
         border-radius: 999px;
         font-weight: 600;
       }
-      /* --- Тосты событий ------------------------------------------------------------------- */
+      /* --- Event toasts ------------------------------------------------------------------- */
       .toasts {
         position: absolute;
         top: 52px;
@@ -224,7 +224,7 @@
       .toast.old {
         opacity: 0.55;
       }
-      /* --- Карточка выделения -------------------------------------------------------------- */
+      /* --- Selection card -------------------------------------------------------------- */
       .card {
         position: absolute;
         left: 10px;
@@ -310,7 +310,7 @@
         font-size: 12px;
         color: var(--text-dim);
       }
-      /* --- Листы легенды ------------------------------------------------------------------- */
+      /* --- Legend sheets ------------------------------------------------------------------- */
       .sheet {
         width: 1280px;
         max-width: 100%;
@@ -337,7 +337,7 @@
         margin: 6px 0 0;
         max-width: 1280px;
       }
-      /* --- v2: перетягивание VP, стопка тревог, подсказка ---------------------------------- */
+      /* --- v2: VP tug of war, alert stack, tooltip ---------------------------------- */
       .nick {
         font-weight: 600;
         font-size: 14px;
@@ -393,7 +393,7 @@
         border-radius: 6px;
         font-size: 13px;
       }
-      /* --- v2: экраны вне матча ----------------------------------------------------------- */
+      /* --- v2: screens outside a match ----------------------------------------------------------- */
       .shell {
         position: relative;
         width: 1280px;
@@ -540,26 +540,26 @@
     </style>
   </head>
   <body>
-    <h1>Макет визуального стиля клиента</h1>
+    <h1>Client visual style mockup</h1>
     <p class="lead">
-      Иллюстрация к <code>docs/design/ui-style.md</code> v2. Экран матча после упрощения: верхняя
-      панель с «перетягиванием» VP и никами, карта на весь экран, стопка тревог, тосты, подсказка
-      по наведению, карточка выделения только когда что-то выбрано. Ниже: радиальное меню, стрелки,
-      легенда, меню, очередь и экран итога. Числа условные (рулсет <code>mvp-0</code>); свои всегда
-      синие, противник красный, тревоги янтарные.
+      An illustration for <code>docs/design/ui-style.md</code> v2. The match screen after simplification: a top
+      bar with the VP "tug of war" and nicks, a full-screen map, a stack of alerts, toasts, a hover
+      tooltip, a selection card only when something is selected. Below: the radial menu, arrows,
+      legend, menu, queue and the result screen. The numbers are illustrative (ruleset <code>mvp-0</code>); own units are always
+      blue, the enemy is red, alerts are amber.
     </p>
 
-    <section class="screen" aria-label="Экран матча">
-      <svg class="map" id="map" viewBox="0 0 1280 720" role="img" aria-label="Карта"></svg>
+    <section class="screen" aria-label="Match screen">
+      <svg class="map" id="map" viewBox="0 0 1280 720" role="img" aria-label="Map"></svg>
 
       <header class="topbar">
         <div class="cluster">
-          <button class="btn icon" title="Меню: язык, справка, вписать карту">
+          <button class="btn icon" title="Menu: language, help, fit the map">
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
               <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.8" />
             </svg>
           </button>
-          <div class="cp" title="Командные очки: 2,4 из 5, следующее через 2 с">
+          <div class="cp" title="Command points: 2.4 of 5, the next in 2 s">
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
               <path
                 d="M9 1.5 16 5.5v7L9 16.5 2 12.5v-7Z"
@@ -576,9 +576,9 @@
               <div class="cp-seg"></div>
               <div class="cp-seg"></div>
             </div>
-            <span class="cp-num">2,4<span class="dim"> / 5 CP</span></span>
+            <span class="cp-num">2.4<span class="dim"> / 5 CP</span></span>
           </div>
-          <button class="btn stance-chip" title="Стойка: открыть радиальное меню">
+          <button class="btn stance-chip" title="Stance: open the radial menu">
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
               <path
                 d="M8 2v12M3 14h10M2 6h12M4 6l-2 4h4ZM12 6l-2 4h4Z"
@@ -588,11 +588,11 @@
                 stroke-linejoin="round"
               />
             </svg>
-            Баланс <kbd>Q</kbd>
+            Balance <kbd>Q</kbd>
           </button>
         </div>
         <div class="cluster">
-          <div class="score" title="Очки победы: перетягивание">
+          <div class="score" title="Victory points: tug of war">
             <span class="side"
               ><svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true">
                 <path d="M1 1h12L7 11Z" fill="var(--you)" stroke="#fff" stroke-width="1.5" />
@@ -617,19 +617,19 @@
           </div>
         </div>
         <div class="cluster right">
-          <button class="btn icon" title="Звук: вкл">
+          <button class="btn icon" title="Sound: on">
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
               <path d="M2 6h3l4-3v10l-4-3H2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
               <path d="M11.5 5.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" stroke-width="1.5" />
             </svg>
           </button>
-          <button class="btn icon" title="Пауза (только приватные матчи)">
+          <button class="btn icon" title="Pause (private matches only)">
             <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
               <path d="M4 2v10M10 2v10" stroke="currentColor" stroke-width="2.2" />
             </svg>
           </button>
-          <button class="btn icon" title="Справка и легенда (?)">?</button>
-          <button class="btn exit" title="Выйти из матча">
+          <button class="btn icon" title="Help and legend (?)">?</button>
+          <button class="btn exit" title="Leave the match">
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
               <path
                 d="M6 2H3v12h3M10 4.5 13.5 8 10 11.5M13.5 8H6"
@@ -639,7 +639,7 @@
                 stroke-linejoin="round"
               />
             </svg>
-            Выйти
+            Exit
           </button>
         </div>
       </header>
@@ -651,7 +651,7 @@
             <circle cx="14" cy="14" r="11" fill="none" stroke="var(--warn)" stroke-width="4" stroke-dasharray="55 70" transform="rotate(-90 14 14)" />
             <text x="14" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">!</text>
           </svg>
-          Переполнен город 7: 6 из 4. Минус юнит через 2,4 с
+          City 7 is over capacity: 6 of 4. One unit is lost in 2.4 s
           <kbd>Space</kbd>
         </div>
         <div class="alert">
@@ -660,89 +660,89 @@
             <circle cx="14" cy="14" r="11" fill="none" stroke="var(--warn)" stroke-width="4" stroke-dasharray="28 70" transform="rotate(-90 14 14)" />
             <path d="M8 14h11M15 10l4 4-4 4" fill="none" stroke="#fff" stroke-width="1.8" />
           </svg>
-          На город 9 идут: выступят через 3 с
+          Heading for city 9: they set out in 3 s
           <kbd>Space</kbd>
         </div>
       </div>
 
       <div class="toasts" aria-live="polite">
-        <div class="toast bad">⚔ Бой у города 9: ты −1, враг −2</div>
-        <div class="toast good">✓ Дорога 12 улучшена до ширины 3</div>
-        <div class="toast old">✕ Приказ не принят: не хватает CP</div>
+        <div class="toast bad">⚔ Fight at city 9: you −1, enemy −2</div>
+        <div class="toast good">✓ Road 12 upgraded to width 3</div>
+        <div class="toast old">✕ Order rejected: not enough CP</div>
       </div>
 
-      <aside class="card" aria-label="Выделенная группа">
+      <aside class="card" aria-label="Selected group">
         <h3>
           <svg width="18" height="16" viewBox="0 0 18 16" aria-hidden="true">
             <path d="M1 1h16L9 15Z" fill="var(--you)" stroke="#fff" stroke-width="1.6" />
           </svg>
-          Группа в городе 7
+          Group in city 7
         </h3>
         <div class="facts">
-          <span><b>6</b> <span class="dim">юнитов</span></span>
-          <span><b>2</b> <span class="dim">заряжено</span></span>
-          <span class="dim">лес: защита +0</span>
+          <span><b>6</b> <span class="dim">units</span></span>
+          <span><b>2</b> <span class="dim">charged</span></span>
+          <span class="dim">forest: defense +0</span>
         </div>
         <div class="modes">
-          <div class="mode on">▲ Атака <kbd>1</kbd></div>
-          <div class="mode">⛉ Защита <kbd>2</kbd><span class="dim">2 CP</span></div>
+          <div class="mode on">▲ Attack <kbd>1</kbd></div>
+          <div class="mode">⛉ Defense <kbd>2</kbd><span class="dim">2 CP</span></div>
         </div>
         <div class="row">
-          <span>Клик: приказ <b>1 CP</b></span>
-          <span><kbd>Shift</kbd>+клик: запланированный <b>2 CP</b></span>
+          <span>Click: order <b>1 CP</b></span>
+          <span><kbd>Shift</kbd>+click: scheduled <b>2 CP</b></span>
         </div>
       </aside>
 
       <div class="tip" role="tooltip">
-        <b>Город 11 · противник</b>
-        <span><span class="dim">Ёмкость</span> 4</span>
-        <span><span class="dim">Рельеф</span> горы: защита +1, вход 70%</span>
-        <span><span class="dim">VP</span> +1 за 30 с</span>
-        <span><span class="dim">Видели</span> сейчас</span>
+        <b>City 11 · enemy</b>
+        <span><span class="dim">Capacity</span> 4</span>
+        <span><span class="dim">Terrain</span> mountains: defense +1, entry 70%</span>
+        <span><span class="dim">VP</span> +1 per 30 s</span>
+        <span><span class="dim">Seen</span> now</span>
       </div>
 
       <div class="hint-bar">
-        <span><kbd>Q</kbd> стойка</span><span><kbd>U</kbd> дорога</span
-        ><span><kbd>R</kbd> набор</span><span><kbd>?</kbd> справка</span>
+        <span><kbd>Q</kbd> stance</span><span><kbd>U</kbd> road</span
+        ><span><kbd>R</kbd> recruit</span><span><kbd>?</kbd> help</span>
       </div>
     </section>
     <p class="note">
-      Снизу вверх: местность штампами (равнина, лес, горы), территория, дороги ширины 1..5,
-      города с кольцом ёмкости, юниты-треугольники, стрелки приказов, туман. Город 7 (слева
-      вверху) переполнен: два янтарных сегмента и отсчёт. Выделенная группа обведена белым.
-      Справа подсказка по наведению на город 11 (У5).
+      Bottom to top: terrain as stamps (plains, forest, mountains), territory, roads of width 1..5,
+      cities with a capacity ring, triangle units, order arrows, fog. City 7 (top
+      left) is over capacity: two amber segments and a countdown. The selected group is outlined in white.
+      On the right the hover tooltip for city 11 (IM5).
     </p>
 
-    <h2>Радиальное меню стойки (зажата Q)</h2>
+    <h2>The radial stance menu (Q held)</h2>
     <div class="two">
-      <div class="sheet"><svg id="radial" viewBox="0 0 632 420" role="img" aria-label="Радиальное меню"></svg></div>
-      <div class="sheet"><svg id="arrows" viewBox="0 0 632 420" role="img" aria-label="Стрелки приказов"></svg></div>
+      <div class="sheet"><svg id="radial" viewBox="0 0 632 420" role="img" aria-label="Radial menu"></svg></div>
+      <div class="sheet"><svg id="arrows" viewBox="0 0 632 420" role="img" aria-label="Order arrows"></svg></div>
     </div>
 
-    <h2>Легенда: юниты, города, дороги, туман</h2>
-    <div class="sheet"><svg id="legend" viewBox="0 0 1280 470" role="img" aria-label="Легенда"></svg></div>
+    <h2>Legend: units, cities, roads, fog</h2>
+    <div class="sheet"><svg id="legend" viewBox="0 0 1280 470" role="img" aria-label="Legend"></svg></div>
 
-    <h2>Меню и очередь (раздел 13)</h2>
+    <h2>Menu and queue (section 13)</h2>
     <div class="two">
-      <section class="shell" aria-label="Меню" style="width: 632px">
+      <section class="shell" aria-label="Menu" style="width: 632px">
         <div class="shell-head">
-          <div class="brand">Skill-Based Front<small>Столица производит заряды, дороги их развозят</small></div>
+          <div class="brand">Skill-Based Front<small>The capital produces charges, roads carry them</small></div>
           <div class="who"><b>Danya</b><span class="dim">1480</span></div>
         </div>
         <div class="panel" style="width: 420px">
-          <button class="primary">▶ Играть рейтинговый</button>
+          <button class="primary">▶ Ranked match</button>
           <div class="tiles">
-            <div class="tile">С другом<span>ссылка-приглашение</span></div>
-            <div class="tile">Публичное лобби<span>открытые матчи</span></div>
-            <div class="tile">С ботом<span>без рейтинга</span></div>
-            <div class="tile">Как играть<span>2 минуты</span></div>
+            <div class="tile">With a friend<span>invite link</span></div>
+            <div class="tile">Public lobby<span>open matches</span></div>
+            <div class="tile">With a bot<span>unrated</span></div>
+            <div class="tile">How to play<span>2 minutes</span></div>
           </div>
-          <div class="links"><span>Сменить ник</span><span>Реплеи</span><span>Настройки</span></div>
+          <div class="links"><span>Change nick</span><span>Replays</span><span>Settings</span></div>
         </div>
       </section>
-      <section class="shell" aria-label="Очередь" style="width: 632px">
+      <section class="shell" aria-label="Queue" style="width: 632px">
         <div class="shell-head">
-          <div class="brand">Поиск соперника<small>Рейтинговый матч</small></div>
+          <div class="brand">Looking for an opponent<small>Ranked match</small></div>
           <div class="who"><b>Danya</b><span class="dim">1480</span></div>
         </div>
         <div class="panel center" style="width: 420px">
@@ -751,51 +751,51 @@
             <circle cx="70" cy="70" r="60" fill="none" stroke="var(--you)" stroke-width="8" stroke-dasharray="90 290" stroke-linecap="round" transform="rotate(-60 70 70)" />
             <text x="70" y="78" text-anchor="middle" font-size="26" font-weight="700" fill="#e6edf3">0:42</text>
           </svg>
-          <div>Ищем соперника · в очереди 3</div>
-          <div class="dim" style="font-size: 13px; margin-top: 4px">Ищем шире: ±250 рейтинга</div>
+          <div>Looking for an opponent · 3 in the queue</div>
+          <div class="dim" style="font-size: 13px; margin-top: 4px">Searching wider: ±250 rating</div>
           <div class="tile" style="margin-top: 12px; text-align: left">
-            Соперника пока нет<span>Сыграй с ботом без рейтинга, очередь отменится</span>
+            No opponent yet<span>Play a bot without rating, the queue will be cancelled</span>
           </div>
-          <div class="links" style="justify-content: center"><span>Отменить поиск</span></div>
+          <div class="links" style="justify-content: center"><span>Cancel search</span></div>
         </div>
       </section>
     </div>
-    <p class="note">Одна главная кнопка на экран, вторичные действия карточками, третичные ссылками.
-      Очередь: таймер вверх внутри кольца, при найденном сопернике кольцо становится отсчётом
-      подтверждения, звук и заголовок вкладки «(!) Соперник найден».</p>
+    <p class="note">One main button per screen, secondary actions as cards, tertiary ones as links.
+      Queue: a count-up timer inside the ring; when an opponent is found the ring becomes the
+      confirmation countdown, with a sound and the tab title "(!) Opponent found".</p>
 
-    <h2>Экран итога (У1, раздел 13.6)</h2>
-    <section class="shell" aria-label="Экран итога">
+    <h2>The result screen (IM1, section 13.6)</h2>
+    <section class="shell" aria-label="Result screen">
       <div class="shell-head">
         <div class="brand">Skill-Based Front</div>
         <div class="who"><b>Danya</b><span class="dim">1480 → 1496</span></div>
       </div>
       <div class="panel wide">
-        <p class="verdict">Победа</p>
-        <div class="dim">Время вышло: решают очки победы</div>
+        <p class="verdict">Victory</p>
+        <div class="dim">Time is up: victory points decide</div>
         <div style="margin-top: 6px; font-size: 16px; font-weight: 600">
-          Danya 134 : 96 Guest <span class="dim">· arteriya · 12:00 · рейтинг +16 ▲</span>
+          Danya 134 : 96 Guest <span class="dim">· arteriya · 12:00 · rating +16 ▲</span>
         </div>
         <div class="kpis">
-          <div class="kpi"><b>9</b><span>городов в конце</span></div>
-          <div class="kpi"><b>14</b><span>юнитов потеряно</span></div>
-          <div class="kpi"><b>212</b><span>зарядов доставлено</span></div>
-          <div class="kpi"><b>+41</b><span>пик разницы VP</span></div>
+          <div class="kpi"><b>9</b><span>cities at the end</span></div>
+          <div class="kpi"><b>14</b><span>units lost</span></div>
+          <div class="kpi"><b>212</b><span>charges delivered</span></div>
+          <div class="kpi"><b>+41</b><span>VP difference peak</span></div>
         </div>
-        <svg id="vpchart" viewBox="0 0 720 170" role="img" aria-label="Разница VP по времени" style="display: block; width: 100%; height: auto"></svg>
+        <svg id="vpchart" viewBox="0 0 720 170" role="img" aria-label="VP difference over time" style="display: block; width: 100%; height: auto"></svg>
         <div class="btnrow">
-          <button class="primary" style="height: 44px">Ещё раз</button>
-          <button class="btn">Смотреть реплей</button>
-          <button class="btn">В меню</button>
+          <button class="primary" style="height: 44px">Play again</button>
+          <button class="btn">Watch the replay</button>
+          <button class="btn">To the menu</button>
         </div>
       </div>
     </section>
-    <p class="note">График разницы VP: выше нуля синий, ниже красный; захваты своих отмечены над
-      графиком, чужих под ним; заштрихованы периоды боёв. Наведение показывает время и счёт, клик
-      открывает реплей на этом тике. Данные из файла кадров реплея.</p>
+    <p class="note">The VP difference graph: above zero blue, below zero red; own captures are marked above
+      the graph, the enemy's below it; fight periods are hatched. Hover shows the time and the score, a click
+      opens the replay at that tick. The data comes from the replay frames file.</p>
 
     <script>
-      // Простая генерация SVG для макета. Не код клиента.
+      // Simple SVG generation for the mockup. Not client code.
       const NS = 'http://www.w3.org/2000/svg';
       const C = {
         you: '#5b9bff',
@@ -820,7 +820,7 @@
       }
       const pts = (list) => list.map((p) => p.join(',')).join(' ');
 
-      // --- Узоры местности: тёмные штампы низкого контраста поверх приглушённой подложки ----
+      // --- Terrain patterns: dark low-contrast stamps over a muted backing ----
       function defs(svg) {
         const d = el(svg, 'defs');
         const forest = el(d, 'pattern', {
@@ -912,7 +912,7 @@
         el(svg, 'polygon', { points: pts(poly), fill: 'none', stroke: C.ink, 'stroke-opacity': 0.5 });
       }
 
-      // --- Дороги: толщина 1 + 3·w, внутри w−1 тёмных полос, ширина 1 пунктиром ---------
+      // --- Roads: thickness 1 + 3·w, w−1 dark lanes inside, width 1 dashed ---------
       function road(svg, a, b, w) {
         const t = 1 + 3 * w;
         const dx = b[0] - a[0];
@@ -938,7 +938,7 @@
         }
       }
 
-      // --- Город: радиус по классу ёмкости, кольцо гарнизона из сегментов ----------------
+      // --- City: radius by capacity class, a garrison ring of segments ----------------
       function cityRadius(capacity) {
         if (capacity <= 2) return 13;
         if (capacity <= 4) return 17;
@@ -971,7 +971,7 @@
           }
           el(g, 'polygon', { points: pts(s), fill: C.paper, stroke: C.ink, 'stroke-width': 1.4 });
         }
-        // Кольцо ёмкости: N сегментов; заполнено столько, сколько юнитов стоит (только свои).
+        // The capacity ring: N segments; as many are filled as there are units standing (own only).
         const n = o.capacity;
         const gap = 0.16;
         const ringR = r + 8;
@@ -993,7 +993,7 @@
             'stroke-width': 4,
           });
         }
-        // Переполнение: лишние сегменты красным снаружи, с отсчётом.
+        // Overflow: the extra segments in red outside, with a countdown.
         const over = (o.garrison ?? 0) - n;
         if (over > 0) {
           for (let i = 0; i < over; i++) {
@@ -1008,9 +1008,9 @@
           el(g, 'rect', { x: px - 4, y: py - 13, width: 70, height: 24, rx: 12, fill: '#3a2808', stroke: C.warn, 'stroke-width': 1.5 });
           el(g, 'circle', { cx: px + 9, cy: py - 1, r: 7, fill: 'none', stroke: '#5a4208', 'stroke-width': 3 });
           el(g, 'path', { d: arc(px + 9, py - 1, 7, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * 0.8), fill: 'none', stroke: C.warn, 'stroke-width': 3 });
-          el(g, 'text', { x: px + 22, y: py + 4, fill: '#fff', 'font-size': 12, 'font-weight': 700 }, '−1 2,4с');
+          el(g, 'text', { x: px + 22, y: py + 4, fill: '#fff', 'font-size': 12, 'font-weight': 700 }, '−1 2.4s');
         }
-        // Склад: сегментная полоска над кольцом (как сейчас, тем же языком сегментов).
+        // Warehouse: a segmented bar above the ring (as now, in the same segment language).
         if (o.warehouse !== undefined) {
           const w = 6 * n + 2;
           const bx = x - w / 2;
@@ -1032,7 +1032,7 @@
         return { r, ringR };
       }
 
-      // --- Юнит: перевёрнутый треугольник, размер по числу юнитов, заливка по зарядам ------
+      // --- Unit: an inverted triangle, size by unit count, fill by charges ------
       function side(units) {
         if (units <= 3) return 24;
         if (units <= 7) return 30;
@@ -1051,7 +1051,7 @@
         el(g, 'polygon', { points: pts(tri), fill: C.plate, stroke: C.ink, 'stroke-width': 6, 'stroke-linejoin': 'round' });
         el(g, 'polygon', { points: pts(tri), fill: C.plate });
         if (o.units !== undefined && o.charged !== undefined) {
-          // Заряд как уровень «жидкости» от острия: площадь пропорциональна доле заряженных.
+          // Charge as a "liquid" level from the tip: the area is proportional to the share of charged units.
           const k = Math.sqrt(o.charged / o.units);
           if (k > 0) {
             const lvl = tip - h * k;
@@ -1102,7 +1102,7 @@
         return g;
       }
 
-      // --- Стрелка в духе HOI4: широкая полупрозрачная лента по кривой, крупный наконечник --
+      // --- An arrow in the HOI4 spirit: a wide translucent ribbon along a curve, a large head --
       function bezier(p0, p1, p2, t) {
         const u = 1 - t;
         return [u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]];
@@ -1123,7 +1123,7 @@
         const steps = 32;
         const centre = [];
         for (let i = 0; i <= steps; i++) centre.push(bezier(start, mid, end, i / steps));
-        // Наконечник начинается за headL до конца кривой.
+        // The head starts headL before the end of the curve.
         let acc = 0;
         let cut = centre.length - 1;
         for (let i = centre.length - 1; i > 0; i--) {
@@ -1138,7 +1138,7 @@
           const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
           const nx = -(b[1] - a[1]) / l;
           const ny = (b[0] - a[0]) / l;
-          // Хвост уже: лента сужается от 60% до 100% ширины.
+          // The tail is narrower: the ribbon tapers from 60% to 100% of the width.
           const w = (body / 2) * (0.6 + 0.4 * (i / cut));
           left.push([centre[i][0] + nx * w, centre[i][1] + ny * w]);
           right.push([centre[i][0] - nx * w, centre[i][1] - ny * w]);
@@ -1165,14 +1165,14 @@
           ...(o.owner === 1 ? { 'stroke-dasharray': '9 5' } : {}),
         });
         if (o.progress !== undefined) {
-          // Сколько задержки прошло: светлая полоса вдоль оси от хвоста.
+          // How much of the delay has passed: a light stripe along the axis from the tail.
           const upto = Math.round(cut * o.progress);
           el(svg, 'polyline', { points: pts(centre.slice(0, upto + 1)), fill: 'none', stroke: C.paper, 'stroke-opacity': 0.75, 'stroke-width': 3, 'stroke-linecap': 'round' });
         }
         return tipP;
       }
 
-      // Обычный приказ: тонкая линия с шевронами, видна только своему игроку.
+      // An ordinary order: a thin line with chevrons, visible only to its own player.
       function orderLine(svg, path) {
         el(svg, 'polyline', { points: pts(path), fill: 'none', stroke: C.ink, 'stroke-opacity': 0.5, 'stroke-width': 6, 'stroke-linecap': 'round' });
         el(svg, 'polyline', { points: pts(path), fill: 'none', stroke: C.you, 'stroke-opacity': 0.9, 'stroke-width': 3, 'stroke-linecap': 'round' });
@@ -1205,7 +1205,7 @@
         el(svg, 'path', { d: arc(at[0], at[1], 17, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * progress), fill: 'none', stroke: color, 'stroke-width': 3 });
       }
 
-      // === Экран матча ===================================================================
+      // === Match screen ===================================================================
       const map = document.getElementById('map');
       defs(map);
       el(map, 'rect', { width: 1280, height: 720, fill: '#0d1117' });
@@ -1231,7 +1231,7 @@
       road(map, N.B, N.E, 1);
       road(map, N.G, N.F, 2);
 
-      // Стройка: столица улучшает дорогу к городу снизу (DEC-16), штриховка растёт к концу стройки.
+      // Construction: the capital upgrades the road to the city below (DEC-16), the hatching grows toward the end of construction.
       (() => {
         const [a, c] = [N.A, N.C];
         const t = 0.55;
@@ -1242,30 +1242,30 @@
         el(map, 'path', { d: `M${bx - 5} ${by - 5}h10v4h-10ZM${bx - 1.3} ${by - 1}h2.6v6.5h-2.6Z`, fill: C.paper });
       })();
 
-      // Туман над глубоким тылом врага (до городов, чтобы города остались видны).
+      // Fog over the enemy's deep rear (before the cities, so the cities stay visible).
       el(map, 'polygon', { points: pts([[1040, 330], [1280, 320], [1280, 720], [1060, 720], [1010, 520]]), fill: 'url(#fog)' });
       el(map, 'polygon', { points: pts([[820, 470], [1010, 520], [1060, 720], [820, 720]]), fill: 'url(#fog)' });
 
-      // Пакеты снабжения: едут по оси дороги, у города «въезжают» в значок и тают.
+      // Supply packets: they ride along the road axis and "drive into" the icon at a city and fade.
       packet(map, [255, 333], 1, 1, '×2');
       packet(map, [330, 273]);
       packet(map, [398, 226], 0.55, 0.7);
 
-      city(map, N.A, { owner: 0, capacity: 7, garrison: 3, warehouse: 4, capital: true, vp: 0, label: 'столица' });
-      city(map, N.B, { owner: 0, capacity: 4, garrison: 6, warehouse: 1, label: 'город 7' });
+      city(map, N.A, { owner: 0, capacity: 7, garrison: 3, warehouse: 4, capital: true, vp: 0, label: 'capital' });
+      city(map, N.B, { owner: 0, capacity: 4, garrison: 6, warehouse: 1, label: 'city 7' });
       city(map, N.C, { owner: 0, capacity: 3, garrison: 0, warehouse: 2 });
-      city(map, N.D, { owner: null, capacity: 2, vp: 2, label: 'город 9' });
-      city(map, N.E, { owner: 1, capacity: 4, vp: 1, label: 'город 11' });
+      city(map, N.D, { owner: null, capacity: 2, vp: 2, label: 'city 9' });
+      city(map, N.E, { owner: 1, capacity: 4, vp: 1, label: 'city 11' });
       city(map, N.F, { owner: 1, capacity: 7, capital: true });
       city(map, N.G, { owner: 1, capacity: 3 });
 
-      // Свои стрелки и юниты.
+      // Own arrows and units.
       bandArrow(map, N.B, N.E, { owner: 0, startGap: 40, endGap: 46, bend: -0.12, progress: 0.55 });
       bandArrow(map, N.E, N.D, { owner: 1, startGap: 44, endGap: 40, bend: 0.16 });
       el(map, 'circle', { cx: N.D[0], cy: N.D[1], r: 36, fill: 'none', stroke: C.enemy, 'stroke-width': 2, 'stroke-dasharray': '6 5' });
       intentIcon(map, [N.E[0] + 30, N.E[1] - 44], 1, 0.4);
 
-      // Движущаяся группа C → D: след, шеврон вперёд, обычный приказ тонкой линией.
+      // A moving group C → D: a trail, a chevron forward, an ordinary order as a thin line.
       const mv = [560, 476];
       orderLine(map, [mv, [N.D[0] - 14, N.D[1] + 12]]);
       el(map, 'line', { x1: 488, y1: 524, x2: mv[0] - 6, y2: mv[1] + 4, stroke: 'url(#trail)', 'stroke-width': 10, 'stroke-linecap': 'round' });
@@ -1276,11 +1276,11 @@
       unit(map, [N.E[0] - 2, N.E[1] + 64], { owner: 1, presence: true, mode: 'defense', size: 30 });
       unit(map, [N.D[0] + 60, N.D[1] - 30], { owner: 1, units: 4, charged: 4, label: '4/4', size: 30 });
 
-      // Призрак в тумане: блёклый треугольник с возрастом, гаснет к 2 минутам.
+      // A ghost in the fog: a faded triangle with an age, fades out by 2 minutes.
       unit(map, [N.G[0] + 2, N.G[1] + 62], { owner: 1, presence: true, size: 28, alpha: 0.42 });
       el(map, 'text', { x: N.G[0] + 2, y: N.G[1] + 100, 'text-anchor': 'middle', fill: C.paper, 'fill-opacity': 0.75, 'font-size': 11, 'font-weight': 700 }, '−1:10');
 
-      // === Радиальное меню ===============================================================
+      // === Radial menu ===============================================================
       const radial = document.getElementById('radial');
       el(radial, 'rect', { width: 632, height: 420, fill: '#1c2a20' });
       el(radial, 'rect', { width: 632, height: 420, fill: 'url(#forest)' });
@@ -1290,9 +1290,9 @@
       const R = 150;
       const r0 = 34;
       const sectors = [
-        { name: 'Экономия', key: '1', a: 150, cp: '+3 CP/мин', ch: '+18 зар./мин', on: false, glyph: 'coins' },
-        { name: 'Баланс', key: '2', a: 270, cp: '+6 CP/мин', ch: '+12 зар./мин', on: true, glyph: 'scale' },
-        { name: 'Война', key: '3', a: 30, cp: '+9 CP/мин', ch: '+6 зар./мин', on: false, hover: true, glyph: 'swords' },
+        { name: 'Economy', key: '1', a: 150, cp: '+3 CP/min', ch: '+18 charges/min', on: false, glyph: 'coins' },
+        { name: 'Balance', key: '2', a: 270, cp: '+6 CP/min', ch: '+12 charges/min', on: true, glyph: 'scale' },
+        { name: 'War', key: '3', a: 30, cp: '+9 CP/min', ch: '+6 charges/min', on: false, hover: true, glyph: 'swords' },
       ];
       const rad = (deg) => (deg * Math.PI) / 180;
       for (const s of sectors) {
@@ -1324,13 +1324,13 @@
         el(radial, 'text', { x: tx, y: ty + 51, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 11 }, s.key);
       }
       el(radial, 'circle', { cx, cy, r: r0 - 4, fill: C.ink, stroke: '#3b4450' });
-      el(radial, 'text', { x: cx, y: cy + 4, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 11 }, 'отмена');
+      el(radial, 'text', { x: cx, y: cy + 4, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 11 }, 'cancel');
       el(radial, 'line', { x1: cx, y1: cy, x2: cx + 120, y2: cy + 96, stroke: C.paper, 'stroke-opacity': 0.5, 'stroke-dasharray': '3 3' });
       el(radial, 'path', { d: `M${cx + 120} ${cy + 96} l0 14 l4 -4 l4 7 l3 -1.5 l-4 -7 l5 -1 Z`, fill: C.paper, stroke: C.ink });
-      el(radial, 'text', { x: 316, y: 388, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'Белая рамка и галочка: текущая стойка. Курсор над «Война»: отпустить Q, чтобы выбрать.');
-      el(radial, 'text', { x: 316, y: 406, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'Столица в любой стойке даёт ещё +12 зарядов/мин.');
+      el(radial, 'text', { x: 316, y: 388, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'White frame and check mark: the current stance. Cursor over "War": release Q to select.');
+      el(radial, 'text', { x: 316, y: 406, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'The capital in any stance gives another +12 charges/min.');
 
-      // === Стрелки приказов ===============================================================
+      // === Order arrows ===============================================================
       const ar = document.getElementById('arrows');
       defs(ar);
       el(ar, 'rect', { width: 632, height: 420, fill: '#3a4630' });
@@ -1341,68 +1341,68 @@
       for (const k of ['a', 'b', 'c', 'd']) city(ar, P[k], { owner: k === 'a' || k === 'c' ? 0 : null, capacity: 3 });
       bandArrow(ar, P.a, P.b, { owner: 0, startGap: 34, endGap: 36, bend: -0.12, progress: 0.4 });
       bandArrow(ar, [P.d[0], P.d[1] + 0], [P.c[0] + 0, P.c[1]], { owner: 1, startGap: 34, endGap: 36, bend: -0.12 });
-      el(ar, 'text', { x: 305, y: 52, 'text-anchor': 'middle', fill: C.paper, 'font-size': 13, 'font-weight': 700 }, 'Свой запланированный: сплошной контур, ось показывает задержку');
-      el(ar, 'text', { x: 305, y: 400, 'text-anchor': 'middle', fill: C.paper, 'font-size': 13, 'font-weight': 700 }, 'Чужой запланированный: пунктирный контур, цвет врага');
+      el(ar, 'text', { x: 305, y: 52, 'text-anchor': 'middle', fill: C.paper, 'font-size': 13, 'font-weight': 700 }, 'Own scheduled: a solid outline, the axis shows the delay');
+      el(ar, 'text', { x: 305, y: 400, 'text-anchor': 'middle', fill: C.paper, 'font-size': 13, 'font-weight': 700 }, 'Enemy scheduled: a dashed outline, the enemy color');
       orderLine(ar, [[120, 205], [480, 205]]);
-      el(ar, 'text', { x: 305, y: 232, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'Обычный приказ: тонкая линия с шевронами (виден только вам)');
+      el(ar, 'text', { x: 305, y: 232, 'text-anchor': 'middle', fill: '#aab2bd', 'font-size': 12 }, 'Ordinary order: a thin line with chevrons (visible only to you)');
 
-      // === Легенда ========================================================================
+      // === Legend ========================================================================
       const lg = document.getElementById('legend');
       defs(lg);
       el(lg, 'rect', { width: 1280, height: 470, fill: '#0d1117' });
       const label = (x, y, t, o = {}) =>
         el(lg, 'text', { x, y, fill: o.dim ? '#8b949e' : C.paper, 'font-size': o.size ?? 12, 'font-weight': o.bold ? 700 : 400, 'text-anchor': o.anchor ?? 'middle' }, t);
 
-      label(24, 30, 'Юниты: размер по числу юнитов, заливка от острия по доле заряженных', { anchor: 'start', bold: true, size: 14 });
+      label(24, 30, 'Units: size by unit count, fill from the tip by the share of charged', { anchor: 'start', bold: true, size: 14 });
       const sizes = [
         ['1-3', 3, 3], ['4-7', 6, 3], ['8-15', 12, 9], ['16+', 20, 5],
       ];
       sizes.forEach(([t, u, c], i) => {
         unit(lg, [70 + i * 90, 85], { owner: 0, units: u, charged: c, label: `${c}/${u}` });
-        label(70 + i * 90, 140, `${t} юн.`, { dim: true });
+        label(70 + i * 90, 140, `${t} units`, { dim: true });
       });
       [[0, 4], [2, 4], [4, 4]].forEach(([c, u], i) => {
         unit(lg, [440 + i * 70, 85], { owner: 0, units: u, charged: c, label: `${c}/${u}`, size: 30 });
       });
-      label(510, 140, 'пусто, половина, полный', { dim: true });
+      label(510, 140, 'empty, half, full', { dim: true });
       unit(lg, [690, 85], { owner: 1, units: 4, charged: 3, label: '3/4', size: 30 });
-      label(690, 140, 'враг: двойной контур', { dim: true });
+      label(690, 140, 'enemy: 2 outlines', { dim: true });
       unit(lg, [800, 85], { owner: 1, presence: true, size: 30 });
-      label(800, 140, 'враг без чисел', { dim: true });
+      label(800, 140, 'enemy: no numbers', { dim: true });
       unit(lg, [915, 85], { owner: 0, units: 4, charged: 4, mode: 'defense', size: 30, label: '4/4' });
-      label(915, 140, 'режим «Защита»', { dim: true });
+      label(915, 140, '"Defense" mode', { dim: true });
       unit(lg, [1025, 85], { owner: 0, units: 4, charged: 1, size: 30, label: '1/4', selected: true });
-      label(1025, 140, 'выделена', { dim: true });
+      label(1025, 140, 'selected', { dim: true });
       unit(lg, [1170, 85], { owner: 1, presence: true, size: 28, alpha: 0.42 });
       label(1170, 125, '−1:10', { bold: true });
-      label(1170, 140, 'призрак гаснет к 2:00', { dim: true });
+      label(1170, 140, 'ghost fades by 2:00', { dim: true });
 
-      label(24, 185, 'Города: размер по классу ёмкости, кольцо: стоят / ёмкость, полоска: склад', { anchor: 'start', bold: true, size: 14 });
+      label(24, 185, 'Cities: size by capacity class, ring: standing / capacity, bar: warehouse', { anchor: 'start', bold: true, size: 14 });
       [[2, 1, 1], [4, 3, 2], [6, 6, 5], [8, 4, 3]].forEach(([cap, gar, wh], i) => {
         city(lg, [80 + i * 130, 260], { owner: 0, capacity: cap, garrison: gar, warehouse: wh });
-        label(80 + i * 130, 330, `ёмкость ${cap}`, { dim: true });
+        label(80 + i * 130, 330, `capacity ${cap}`, { dim: true });
       });
       city(lg, [620, 260], { owner: 0, capacity: 3, garrison: 5, warehouse: 1 });
-      label(620, 330, 'переполнен: отсчёт', { dim: true });
+      label(620, 330, 'over capacity: countdown', { dim: true });
       city(lg, [770, 260], { owner: null, capacity: 3, vp: 2 });
-      label(770, 330, 'нейтральный, 2 VP', { dim: true });
+      label(770, 330, 'neutral, 2 VP', { dim: true });
       city(lg, [920, 260], { owner: 1, capacity: 4 });
-      label(920, 330, 'враг: внутреннее кольцо', { dim: true });
+      label(920, 330, 'enemy: inner ring', { dim: true });
       city(lg, [1070, 260], { owner: 0, capacity: 7, capital: true, garrison: 2 });
-      label(1070, 330, 'столица', { dim: true });
+      label(1070, 330, 'capital', { dim: true });
 
-      label(24, 375, 'Дороги: толщина и число полос растут с шириной; ширина 1 пунктиром', { anchor: 'start', bold: true, size: 14 });
+      label(24, 375, 'Roads: thickness and lane count grow with width; width 1 is dashed', { anchor: 'start', bold: true, size: 14 });
       for (let w = 1; w <= 5; w++) {
         road(lg, [40 + (w - 1) * 160, 420], [160 + (w - 1) * 160, 420], w);
-        label(100 + (w - 1) * 160, 452, `ширина ${w}`, { dim: true });
+        label(100 + (w - 1) * 160, 452, `width ${w}`, { dim: true });
       }
-      label(860, 404, 'Местность штампами:', { anchor: 'start', bold: true });
-      [['plains', 'равнина'], ['forest', 'лес'], ['mountains', 'горы']].forEach(([t, name], i) => {
+      label(860, 404, 'Terrain as stamps:', { anchor: 'start', bold: true });
+      [['plains', 'plains'], ['forest', 'forest'], ['mountains', 'mountains']].forEach(([t, name], i) => {
         el(lg, 'rect', { x: 860 + i * 130, y: 414, width: 110, height: 36, fill: TERRAIN_BASE[t], rx: 4 });
         el(lg, 'rect', { x: 860 + i * 130, y: 414, width: 110, height: 36, fill: `url(#${t})`, rx: 4 });
         label(915 + i * 130, 466, name, { dim: true });
       });
-      // === Экран итога: разница VP по времени ================================================
+      // === Result screen: VP difference over time ================================================
       (() => {
         const svg = document.getElementById('vpchart');
         const W = 720, H = 170, x0 = 34, x1 = 712, mid = 92, k = 1.4;
@@ -1431,14 +1431,14 @@
         for (const [i, t] of [[0, '0:00'], [6.3, '4:00'], [12.6, '8:00'], [19, '12:00']]) {
           el(svg, 'text', { x: X(i), y: 166, 'text-anchor': i === 19 ? 'end' : i === 0 ? 'start' : 'middle', fill: '#8b949e', 'font-size': 10 }, t);
         }
-        el(svg, 'text', { x: 6, y: mid - 40, fill: '#9cc0ff', 'font-size': 10 }, 'ты');
-        el(svg, 'text', { x: 6, y: mid + 46, fill: '#f0a0a3', 'font-size': 10 }, 'враг');
-        // Курсор наведения.
+        el(svg, 'text', { x: 6, y: mid - 40, fill: '#9cc0ff', 'font-size': 10 }, 'you');
+        el(svg, 'text', { x: 6, y: mid + 46, fill: '#f0a0a3', 'font-size': 10 }, 'enemy');
+        // Hover cursor.
         const hi = 15;
         el(svg, 'line', { x1: X(hi), y1: 20, x2: X(hi), y2: 150, stroke: C.paper, 'stroke-opacity': 0.6 });
         el(svg, 'rect', { x: X(hi) + 6, y: 24, width: 116, height: 34, rx: 5, fill: C.ink, stroke: '#30363d' });
-        el(svg, 'text', { x: X(hi) + 12, y: 38, fill: C.paper, 'font-size': 11, 'font-weight': 700 }, '9:28 · ты +31');
-        el(svg, 'text', { x: X(hi) + 12, y: 52, fill: '#8b949e', 'font-size': 10 }, 'клик: реплей отсюда');
+        el(svg, 'text', { x: X(hi) + 12, y: 38, fill: C.paper, 'font-size': 11, 'font-weight': 700 }, '9:28 · you +31');
+        el(svg, 'text', { x: X(hi) + 12, y: 52, fill: '#8b949e', 'font-size': 10 }, 'click: replay from here');
       })();
     </script>
   </body>

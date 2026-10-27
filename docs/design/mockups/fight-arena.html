@@ -1,21 +1,21 @@
 <!doctype html>
 <!--
-  Макет арены боя: варианты темпа и показа бонусов (issue #327, на выбор владельца).
-  Самодостаточный: без внешних шрифтов, картинок и скриптов. Открыть в браузере как файл.
-  Это иллюстрация, а не код клиента: правила боя повторены ниже малым движком (DEC-24, п. B) и
-  проверены по таблице примеров раздела 4 mechanics.md (строки 6, 9, 10, 15; проверка внизу страницы).
-  Варианты B1 и B2 меняют правила: их исход здесь гипотеза до DEC, а не решение.
-  Состояние выбора лежит в адресе (#ex=9&tempo=1.5&rules=cur&show=a12&view=v1&n=1&t=2.3&pause=1),
-  по нему можно открыть макет в нужном кадре.
+  Fight arena mockup: variants of pace and bonus display (issue #327, for the owner to choose).
+  Self-contained: no external fonts, images or scripts. Open in a browser as a file.
+  This is an illustration, not client code: the fight rules are repeated below by a small engine (DEC-24, item B) and
+  checked against the table of examples in section 4 of mechanics.md (rows 6, 9, 10, 15; the check is at the bottom of the page).
+  Variants B1 and B2 change the rules: their outcome here is a hypothesis pending a DEC, not a decision.
+  The state of the choices lives in the address (#ex=9&tempo=1.5&rules=cur&show=a12&view=v1&n=1&t=2.3&pause=1),
+  so the mockup can be opened at the right frame.
 -->
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Макет арены боя</title>
+    <title>Fight arena mockup</title>
     <style>
       :root {
-        /* Токены палитры (ui-style.md, раздел 6). */
+        /* Palette tokens (ui-style.md, section 6). */
         --bg: #0d1117;
         --surface: #161b22;
         --surface-2: #21262d;
@@ -264,27 +264,27 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>Арена боя: варианты темпа и показа бонусов</h1>
+      <h1>Fight arena: variants of pace and bonus display</h1>
       <p class="lead">
-        Один и тот же бой (примеры 6, 9, 10, 15 из таблицы раздела 4 «Бой во времени» mechanics.md)
-        проигрывается по раундам на фрагменте карты. Слева синий: <b class="own">ты</b> (атакуешь),
-        справа красный: <b class="foe">противник</b> (защищается, город его). Переключатели ниже
-        меняют темп, показ бонусов, правила и форму арены; метки у вариантов говорят, что им нужно:
-        <span class="tag free">без правил и протокола</span>
-        <span class="tag proto">нужен протокол</span>
-        <span class="tag rules">меняет правила, нужен DEC</span>. Ничего в игре этот макет не
-        меняет. Размеры в единицах мира игры (радиус арены 24); макет масштабируется по ширине
-        страницы.
+        One and the same fight (examples 6, 9, 10, 15 from the table of section 4 "Fight over time" of mechanics.md)
+        is played round by round on a map fragment. On the left, blue: <b class="own">you</b> (attacking),
+        on the right, red: <b class="foe">the enemy</b> (defending, the city is theirs). The switches below
+        change the pace, the bonus display, the rules and the arena shape; the labels on the variants say what they need:
+        <span class="tag free">no rules or protocol</span>
+        <span class="tag proto">needs the protocol</span>
+        <span class="tag rules">changes the rules, needs a DEC</span>. This mockup changes nothing in the
+        game. Sizes are in game world units (arena radius 24); the mockup scales to the width of
+        the page.
       </p>
 
       <div class="panel" id="panel"></div>
       <p class="desc" id="desc"></p>
 
       <div class="bar">
-        <button id="play" type="button">Пауза</button>
-        <button id="restart" type="button">Заново</button>
-        <button id="step" type="button">Следующий выстрел</button>
-        <label for="seek" class="note">Время</label>
+        <button id="play" type="button">Pause</button>
+        <button id="restart" type="button">Restart</button>
+        <button id="step" type="button">Next shot</button>
+        <label for="seek" class="note">Time</label>
         <input id="seek" type="range" min="0" max="1000" value="0" />
         <output id="clock" for="seek"></output>
       </div>
@@ -294,85 +294,85 @@
           id="scene"
           xmlns="http://www.w3.org/2000/svg"
           role="img"
-          aria-label="Арена боя на фрагменте карты"
+          aria-label="Fight arena on a map fragment"
         ></svg>
       </div>
 
-      <h2>Журнал боя первого примера на сцене</h2>
+      <h2>The log of the first fight on the scene</h2>
       <p class="note">
-        Время считается от контакта; раунд идёт раз в выбранный темп. Ожидаемые значения по строкам
-        таблицы раздела 4 проверены автоматически (строка ниже); для B1 и B2 журнал это гипотеза.
+        Time is counted from contact; a round runs once per the chosen pace. The expected values by the rows
+        of the table in section 4 are checked automatically (the line below); for B1 and B2 the log is a hypothesis.
       </p>
       <table id="log"></table>
       <p id="check" class="note"></p>
 
-      <h2>Что нужно каждому варианту</h2>
+      <h2>What each variant needs</h2>
       <table>
         <thead>
           <tr>
-            <th>Вариант</th>
+            <th>Variant</th>
             <th>DEC</th>
-            <th>Протокол</th>
-            <th>Симуляция</th>
-            <th>Клиент</th>
+            <th>Protocol</th>
+            <th>Simulation</th>
+            <th>Client</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>Темп 1,5 с или 2 с</td>
-            <td>да: правка числа DEC-24 п. B1 (<code>combat.round_ticks</code> 10 → 15 или 20)</td>
-            <td>нет</td>
-            <td>число в рулсете, <code>SIM_VERSION</code>++, золотые реплеи</td>
-            <td>арка и стрелки идут по тикам, правок нет</td>
+            <td>Pace 1.5 s or 2 s</td>
+            <td>yes: a change of a number in DEC-24 item B1 (<code>combat.round_ticks</code> 10 → 15 or 20)</td>
+            <td>no</td>
+            <td>a number in the ruleset, <code>SIM_VERSION</code>++, golden replays</td>
+            <td>the arc and arrows follow ticks, no changes</td>
           </tr>
           <tr>
-            <td>A1: другая стрелка и подпись «бонус»</td>
-            <td>нет</td>
-            <td>нет (источник в подписи: да, см. ниже)</td>
-            <td>нет</td>
-            <td>стрелка и подпись в <code>fightView.ts</code></td>
+            <td>A1: a different arrow and the caption "bonus"</td>
+            <td>no</td>
+            <td>no (the source in the caption: yes, see below)</td>
+            <td>no</td>
+            <td>the arrow and the caption in <code>fightView.ts</code></td>
           </tr>
           <tr>
-            <td>A2: полоса последних 3 раундов</td>
-            <td>нет</td>
-            <td>нет (клиент копит события; после реконнекта история пуста)</td>
-            <td>нет</td>
-            <td>буфер событий боя и полоса</td>
+            <td>A2: a strip of the last 3 rounds</td>
+            <td>no</td>
+            <td>no (the client accumulates events; after a reconnect the history is empty)</td>
+            <td>no</td>
+            <td>a buffer of fight events and the strip</td>
           </tr>
           <tr>
-            <td>Источник бонуса в подписи (план, Защита, горы)</td>
-            <td>нет</td>
-            <td>да: сейчас в <code>fight_round</code> только число виртуальных, не источник</td>
-            <td>поле в событии раунда</td>
-            <td>подпись</td>
+            <td>The bonus source in the caption (plan, Defense, mountains)</td>
+            <td>no</td>
+            <td>yes: now <code>fight_round</code> carries only the number of virtual shots, not the source</td>
+            <td>a field in the round event</td>
+            <td>the caption</td>
           </tr>
           <tr>
-            <td>Запас бонуса ◇ на арене</td>
-            <td>да: меняет решение I1 (запас до боя не раскрывается)</td>
-            <td>да: запас стороны в <code>PlayerView.fights</code></td>
-            <td>отдать запас в вид</td>
-            <td>значок запаса</td>
+            <td>The ◇ bonus stock on the arena</td>
+            <td>yes: changes decision I1 (the stock is not revealed before a fight)</td>
+            <td>yes: the side's stock in <code>PlayerView.fights</code></td>
+            <td>put the stock into the view</td>
+            <td>the stock icon</td>
           </tr>
           <tr>
-            <td>B1: бонусные атаки фазой в конце раунда</td>
-            <td>да: правило раунда (п. B4)</td>
-            <td>да: событие раунда с двумя фазами</td>
-            <td>новая система раунда, <code>SIM_VERSION</code>++, боты</td>
-            <td>две фазы анимации и подпись</td>
+            <td>B1: bonus attacks as a phase at the end of the round</td>
+            <td>yes: the round rule (item B4)</td>
+            <td>yes: a round event with two phases</td>
+            <td>a new round system, <code>SIM_VERSION</code>++, bots</td>
+            <td>two animation phases and the caption</td>
           </tr>
           <tr>
-            <td>B2: один бонусный залп в первом раунде</td>
-            <td>да: правила бонусов (п. F1)</td>
-            <td>да: залп в событии раунда 1</td>
-            <td>как B1</td>
-            <td>залп и подпись</td>
+            <td>B2: one bonus volley in the first round</td>
+            <td>yes: the bonus rules (item F1)</td>
+            <td>yes: a volley in the event of round 1</td>
+            <td>as B1</td>
+            <td>the volley and the caption</td>
           </tr>
           <tr>
-            <td>Форма арены V1, V2, V3</td>
-            <td>нет</td>
-            <td>нет</td>
-            <td>нет</td>
-            <td>только <code>fightView.ts</code>, <code>fightFx.ts</code></td>
+            <td>Arena shape V1, V2, V3</td>
+            <td>no</td>
+            <td>no</td>
+            <td>no</td>
+            <td>only <code>fightView.ts</code>, <code>fightFx.ts</code></td>
           </tr>
         </tbody>
       </table>
@@ -382,46 +382,46 @@
       (() => {
         'use strict';
         // ENGINE_START
-        // Малый движок боя: DEC-24, п. B (раунд: каждая сторона min(запас, 1) выстрелов, сначала
-        // виртуальные, встречные гасятся, лишние убивают, сначала разряженных). o: атакующий (ты),
-        // e: защитник. u: юниты, c: заряженные, v: виртуальные выстрелы (бонусы, горы).
+        // The small fight engine: DEC-24, item B (a round: each side makes min(stock, 1) shots, virtual
+        // ones first, oncoming shots cancel, extra ones kill, uncharged units first). o: the attacker (you),
+        // e: the defender. u: units, c: charged, v: virtual shots (bonuses, mountains).
         const SCENARIOS = {
           6: {
             id: 6,
-            label: 'Пример 6: атака 3 заряж. против 2 заряж., горы (+1 защите)',
+            label: 'Example 6: attack 3 charged vs 2 charged, mountains (+1 defense)',
             terrain: 'mountains',
             o: { u: 3, c: 3, v: 0 },
             e: { u: 2, c: 2, v: 1 },
-            src: { o: null, e: 'горы' },
+            src: { o: null, e: 'mountains' },
           },
           9: {
             id: 9,
-            label: 'Пример 9: атака 2 заряж. + план (+2) против 2 заряж.',
+            label: 'Example 9: attack 2 charged + plan (+2) vs 2 charged',
             terrain: 'forest',
             o: { u: 2, c: 2, v: 2 },
             e: { u: 2, c: 2, v: 0 },
-            src: { o: 'план', e: null },
+            src: { o: 'plan', e: null },
           },
           10: {
             id: 10,
-            label: 'Пример 10: атака 3 заряж. против 2 заряж. + «Защита» (+2)',
+            label: 'Example 10: attack 3 charged vs 2 charged + "Defense" (+2)',
             terrain: 'forest',
             o: { u: 3, c: 3, v: 0 },
             e: { u: 2, c: 2, v: 2 },
-            src: { o: null, e: 'Защита' },
+            src: { o: null, e: 'Defense' },
           },
           15: {
             id: 15,
-            label: 'Пример 15: атака 3 заряж. + план (+2) против 1 разряж.',
+            label: 'Example 15: attack 3 charged + plan (+2) vs 1 uncharged',
             terrain: 'forest',
             o: { u: 3, c: 3, v: 2 },
             e: { u: 1, c: 0, v: 0 },
-            src: { o: 'план', e: null },
+            src: { o: 'plan', e: null },
           },
         };
-        // Ожидаемое по таблице раздела 4 (числа переписаны из mechanics.md, не из вывода движка):
-        // rounds: раундов; charged: заряженные (ты, враг) после раунда k (null: в таблице не указано);
-        // final: [юнитов, заряженных] после боя; captured: узел взят.
+        // Expected per the table of section 4 (the numbers are copied from mechanics.md, not from the engine output):
+        // rounds: the number of rounds; charged: the charged (you, enemy) after round k (null: not given in the table);
+        // final: [units, charged] after the fight; captured: the node is taken.
         const EXPECT = {
           6: {
             rounds: 3,
@@ -450,14 +450,14 @@
           },
           15: { rounds: 1, charged: [[3, 0]], final: { o: [3, 3], e: [0, 0] }, captured: true },
         };
-        const BONUS_PHASE_AT = 0.55; // доля раунда, на которой идёт бонусная фаза (B1, B2)
+        const BONUS_PHASE_AT = 0.55; // the share of the round at which the bonus phase runs (B1, B2)
 
         const snap = (S) => ({ o: { ...S.o }, e: { ...S.e } });
         const spend = (side, kind) => {
           if (kind === 'virt') side.v--;
           else if (kind === 'real') side.c--;
         };
-        // Выстрел без пары убивает юнита, сначала разряженного (правило 3).
+        // A shot without a pair kills a unit, an uncharged one first (rule 3).
         const hit = (target) => {
           if (target.u <= 0) return false;
           if (target.u > target.c) target.u--;
@@ -467,7 +467,7 @@
           }
           return true;
         };
-        // Бонусный выстрел (B1, B2): гасит заряд противника, а если зарядов нет, убивает юнита.
+        // A bonus shot (B1, B2): cancels an enemy charge, and if there are no charges, kills a unit.
         const quenchOrKill = (target) => {
           if (target.u <= 0) return 'none';
           if (target.c > 0) {
@@ -567,33 +567,33 @@
           };
         }
 
-        // Проверка по таблице: возвращает список расхождений.
+        // The check against the table: returns the list of mismatches.
         function checkTable() {
           const bad = [];
           for (const id of Object.keys(EXPECT)) {
             const want = EXPECT[id];
             const sim = simulate(SCENARIOS[id], 'cur');
             if (sim.rounds !== want.rounds)
-              bad.push(`${id}: раундов ${sim.rounds}, надо ${want.rounds}`);
+              bad.push(`${id}: rounds ${sim.rounds}, expected ${want.rounds}`);
             want.charged.forEach((pair, i) => {
               if (pair === null) return;
               const st = sim.steps[i];
               if (!st || st.after.o.c !== pair[0] || st.after.e.c !== pair[1])
-                bad.push(`${id}: после раунда ${i + 1} заряженных не ${pair.join('/')}`);
+                bad.push(`${id}: after round ${i + 1} the charged are not ${pair.join('/')}`);
             });
             for (const k of ['o', 'e']) {
               const f = sim.final[k];
               if (f.u !== want.final[k][0] || f.c !== want.final[k][1])
-                bad.push(`${id}: итог ${k} ${f.u}/${f.c}, надо ${want.final[k].join('/')}`);
+                bad.push(`${id}: result ${k} ${f.u}/${f.c}, expected ${want.final[k].join('/')}`);
             }
-            if (sim.captured !== want.captured) bad.push(`${id}: захват`);
+            if (sim.captured !== want.captured) bad.push(`${id}: capture`);
           }
           return bad;
         }
         // ENGINE_END
 
         // ---------------------------------------------------------------------------------------
-        // Палитра и общие помощники рисования
+        // The palette and common drawing helpers
         const COL = { o: '#5b9bff', e: '#e5484d' };
         const PAPER = '#f0f6fc';
         const BG = '#0d1117';
@@ -628,7 +628,7 @@
           `<rect x="${r2(x - w / 2)}" y="${r2(y - h / 2)}" width="${r2(w)}" height="${h}" rx="${r2(h / 2.4)}" fill="${PLATE}" fill-opacity="${0.94 * alpha}" stroke="${stroke}" stroke-opacity="${alpha}" stroke-width="1.4"/>`;
         const textW = (s, size = 10) => s.length * size * 0.56;
 
-        // Сторона арены в кружке: заряженные заливают половину снизу, разряженные выше (штриховка).
+        // A side of the arena in a circle: the charged fill the half from below, the uncharged above (hatching).
         function halfSlice(R, own, y0, y1, steps = 10) {
           const top = clamp(Math.min(y0, y1), -R, R);
           const bottom = clamp(Math.max(y0, y1), -R, R);
@@ -675,7 +675,7 @@
           return out;
         }
 
-        // Счётчик «значок и число»: разряженные полая окружность, заряженные залитая.
+        // A counter "icon and number": uncharged is a hollow circle, charged is a filled one.
         const dotGlyph = (kind, x, y, color) =>
           kind === 'rest' ? ring(x, y, 3.3, color, 1.5) : disc(x, y, 3.6, color);
         function countInline(kind, n, x, y) {
@@ -694,7 +694,7 @@
           );
         }
 
-        // Стрелки обмена: квадратичная кривая из половины стреляющего в половину противника.
+        // Exchange arrows: a quadratic curve from the shooter's half to the enemy's half.
         function arrowGeom(own, g, grow, head) {
           const turn = own ? 1 : -1;
           const P = (x, y) => ({ x: turn * x, y: turn * y });
@@ -736,7 +736,7 @@
           let out = `<g opacity="${alpha}">`;
           out += `<path d="${d}" fill="none" stroke="${BG}" stroke-opacity=".7" stroke-width="6" stroke-linecap="round"/>`;
           if (bonusStyle && kind === 'virt') {
-            // A1: широкое свечение, пунктирный стержень, голова-ромб: силуэт отличается от обычной.
+            // A1: a wide glow, a dashed shaft, a diamond head: the silhouette differs from the ordinary one.
             out += `<path d="${d}" fill="none" stroke="${color}" stroke-opacity=".35" stroke-width="7" stroke-linecap="round"/>`;
             out += `<path d="${d}" fill="none" stroke="${PAPER}" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round"/>`;
             if (a.show) {
@@ -762,7 +762,7 @@
           out += '</g>';
           return { svg: out, label: a.label };
         }
-        // Плашка выстрелов на стрелке: залитый круг и число (реальные), пустой ромб и число (виртуальные).
+        // The shots plate on an arrow: a filled circle and a number (real), an empty diamond and a number (virtual).
         function shotLabel(x, y, shots, color, alpha) {
           const parts = [];
           if (shots.real > 0) parts.push(['real', shots.real]);
@@ -779,7 +779,7 @@
           }
           return out + '</g>';
         }
-        // Подпись над ареной: плашка с ромбом и словом.
+        // The caption above the arena: a plate with a diamond and a word.
         function captionPill(x, y, s, color, alpha = 1) {
           const w = 24 + textW(s, 11);
           return (
@@ -792,7 +792,7 @@
         }
 
         // ---------------------------------------------------------------------------------------
-        // Состояние боя в момент t (секунды от контакта)
+        // The state of the fight at the moment t (seconds from contact)
         function stateAt(sim, T, t) {
           let idx = -1;
           for (let i = 0; i < sim.steps.length; i++) if (sim.steps[i].rt * T <= t + 1e-9) idx = i;
@@ -809,12 +809,12 @@
           };
         }
 
-        // Полоса истории A2: последние 3 шага, затухающие.
+        // The A2 history strip: the last 3 steps, fading.
         function historySVG(sim, T, st, x, y) {
           const rows = [];
           for (let i = st.idx; i >= 0 && rows.length < 3; i--) rows.push(sim.steps[i]);
           if (!rows.length) return '';
-          const w = 128;
+          const w = 146;
           const h = rows.length * 15 + 8;
           let out = `<g transform="translate(${r2(x)},${r2(y - h / 2)})">`;
           out += `<rect width="${w}" height="${h}" rx="5" fill="${PLATE}" fill-opacity=".9" stroke="#30363d"/>`;
@@ -822,7 +822,7 @@
             const op = [1, 0.62, 0.32][i];
             const yy = 11 + i * 15;
             out += `<g opacity="${op}">`;
-            out += textPlain(7, yy, s.phase === 'bonus' ? 'бонус' : `р${s.round}`, 'tx-d');
+            out += textPlain(7, yy, s.phase === 'bonus' ? 'bonus' : `r${s.round}`, 'tx-d');
             const shot = (side) => {
               const sh = s.shots[side];
               if (sh.virt > 0) return { k: 'virt', n: sh.virt };
@@ -839,7 +839,7 @@
               if (sh.n > 1) g += textPlain(gx + 2, yy, String(sh.n), 'tx-d', 'start', COL[side]);
               return g;
             };
-            out += glyph('o', 44);
+            out += glyph('o', 49);
             const oKills = s.res.e.lost + s.res.e.quench;
             const eKills = s.res.o.lost + s.res.o.quench;
             const sym =
@@ -850,30 +850,30 @@
                   : !oKills && eKills
                     ? '←'
                     : '⇄';
-            out += textPlain(62, yy, sym, 'tx-d', 'middle', PAPER);
-            out += glyph('e', 78);
+            out += textPlain(67, yy, sym, 'tx-d', 'middle', PAPER);
+            out += glyph('e', 83);
             let res = '';
             if (s.res.e.lost)
-              res = textPlain(93, yy, `−${s.res.e.lost} юн.`, 'tx-d', 'start', '#ff7b80');
+              res = textPlain(98, yy, `−${s.res.e.lost} units`, 'tx-d', 'start', '#ff7b80');
             else if (s.res.o.lost)
-              res = textPlain(93, yy, `−${s.res.o.lost} юн.`, 'tx-d', 'start', COL.o);
+              res = textPlain(98, yy, `−${s.res.o.lost} units`, 'tx-d', 'start', COL.o);
             else if (s.res.e.quench)
-              res = textPlain(93, yy, `заряд −${s.res.e.quench}`, 'tx-d', 'start', '#ff7b80');
+              res = textPlain(98, yy, `charge −${s.res.e.quench}`, 'tx-d', 'start', '#ff7b80');
             else if (s.res.o.quench)
-              res = textPlain(93, yy, `заряд −${s.res.o.quench}`, 'tx-d', 'start', COL.o);
-            else res = textPlain(93, yy, 'погаш.', 'tx-d', 'start', PAPER);
+              res = textPlain(98, yy, `charge −${s.res.o.quench}`, 'tx-d', 'start', COL.o);
+            else res = textPlain(98, yy, 'canc.', 'tx-d', 'start', PAPER);
             out += res + '</g>';
           });
           return out + '</g>';
         }
 
-        // Итоговое слово боя.
+        // The closing word of the fight.
         function resultWord(sim) {
-          if (sim.captured) return 'Захвачен';
-          return 'Удержан';
+          if (sim.captured) return 'Captured';
+          return 'Held';
         }
 
-        // Итог боя: слово и значок (флаг: узел взят, щит: узел удержан), как в арене игры.
+        // The fight result: a word and an icon (a flag: the node is taken, a shield: the node is held), as in the game arena.
         function resultPill(x, y, word, captured) {
           const w = 26 + textW(word, 11);
           const gx = x - w / 2 + 12;
@@ -884,7 +884,7 @@
         }
 
         // ---------------------------------------------------------------------------------------
-        // Три вида арены. Каждый возвращает { svg, reach } в координатах от центра арены.
+        // Three arena views. Each returns { svg, reach } in coordinates from the arena center.
         const HEAD = { length: 11, half: 6.5 };
 
         function drawArena(view, ctx) {
@@ -901,7 +901,7 @@
           let top;
           let sideX;
           if (view === 'v3') {
-            // V3: «фишки»: у каждого юнита свой значок ▽, заряд виден по одному.
+            // V3: "chips": each unit has its own ▽ icon, the charge is visible one by one.
             const slots = Math.min(8, Math.max(sim.init.o.u, sim.init.e.u));
             const cols = Math.max(2, Math.ceil(slots / 2));
             const pitch = 17;
@@ -956,7 +956,7 @@
               if (sim.init[side].u > 8)
                 body += text(sign * (hw - 6), hh - 4, `+${sim.init[side].u - 8}`, 'tx-s');
             }
-            // Полоса до следующего раунда под плашкой.
+            // The bar to the next round under the plate.
             const prog = ctx.progress;
             if (prog !== null) {
               const bw = hw * 2 - 22;
@@ -987,7 +987,7 @@
               body += diamond((R + 5) * Math.cos(a), (R + 5) * Math.sin(a), 4.6, PAPER, BG, 1.4);
             }
             if (!big) {
-              // Числа сидят ниже концов стрелок (стрелки входят в половины на высоте -0,45 R).
+              // The numbers sit below the arrow ends (arrows enter the halves at the height -0.45 R).
               const x = R * 0.44;
               body +=
                 countInline('rest', S.o.u - S.o.c, -x, -R * 0.02) +
@@ -1006,7 +1006,7 @@
             }
           }
 
-          // Запас бонуса (нужен протокол и DEC).
+          // The bonus stock (needs the protocol and a DEC).
           if (opt.res) {
             const ry = view === 'v2' ? 27 : 0;
             const rx = view === 'v3' ? sideX + 15 : view === 'v2' ? 56 : sideX + 14;
@@ -1024,7 +1024,7 @@
             if (view === 'v3') sideX += 30;
           }
 
-          // Стрелки последнего шага и их плашки.
+          // The arrows of the last step and their plates.
           const last = st.last;
           let labels = '';
           let arrows = '';
@@ -1048,14 +1048,14 @@
               labels += shotLabel(a.label.x, a.label.y, sh, COL[side], 1);
             }
           }
-          // Подписи над ареной.
+          // Captions above the arena.
           let caps = '';
           const capY = -(top + 22);
           const showEnd = st.ended && t >= st.endT + 0.3;
           if (!showEnd && last) {
             if (last.phase === 'bonus') {
               const total = last.shots.o.virt + last.shots.e.virt;
-              const word = opt.rules === 'b2' ? `бонусный залп ×${total}` : 'бонусные атаки';
+              const word = opt.rules === 'b2' ? `bonus volley ×${total}` : 'bonus attacks';
               const srcs = [];
               if (opt.src)
                 for (const side of ['o', 'e'])
@@ -1071,7 +1071,7 @@
                 const n = last.shots[side].virt;
                 if (!n) continue;
                 const src = opt.src && sc.src[side] ? `: ${sc.src[side]}` : '';
-                const word = `бонус${src}`;
+                const word = `bonus${src}`;
                 const w = 24 + textW(word, 11);
                 const x = (side === 'o' ? -1 : 1) * (w / 2 + 2);
                 caps += captionPill(x, capY, word, COL[side]);
@@ -1081,7 +1081,7 @@
           if (showEnd) {
             caps += resultPill(0, capY, resultWord(sim), sim.captured);
           }
-          // Потери раунда: числа сбоку, поднимаются и гаснут.
+          // Round losses: numbers at the side, they rise and fade.
           let pops = '';
           if (last && st.age < 1.5) {
             for (const side of ['o', 'e']) {
@@ -1101,7 +1101,7 @@
         }
 
         // ---------------------------------------------------------------------------------------
-        // Карта: фрагмент в стиле игры (провинции по местности, дороги, города)
+        // The map: a fragment in the game style (provinces by terrain, roads, cities)
         const SCENE = { w: 960, h: 400 };
         function mapSVG(slots, fights, t) {
           const terrainOf = (i) => (fights[i] ? SCENARIOS[fights[i].id].terrain : 'forest');
@@ -1136,7 +1136,7 @@
             poly(L, b1, TERRAIN[leftTerrain]) +
             poly(b1, b2, TERRAIN[midTerrain]) +
             poly(b2, Rr, TERRAIN[rightTerrain]);
-          // Дороги.
+          // Roads.
           const xs =
             slots.length === 1
               ? [40, 200, 330, 480, 630, 780, 920]
@@ -1145,7 +1145,7 @@
           const road = xs.map((x, i) => `${x} ${ys[i]}`).join('L');
           out += `<path d="M${road}" fill="none" stroke="#1d2229" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>`;
           out += `<path d="M${road}" fill="none" stroke="#586069" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`;
-          // Города: свой слева, чужой справа, боевые посередине.
+          // Cities: own on the left, the enemy's on the right, the fighting ones in the middle.
           const city = (x, y, r, owner, label) => {
             const c = owner === 'o' ? COL.o : owner === 'e' ? COL.e : '#2b3139';
             const ringc = owner === 'n' ? '#8b949e' : c;
@@ -1173,11 +1173,11 @@
         }
 
         // ---------------------------------------------------------------------------------------
-        // Состояние страницы и разметка переключателей
+        // The page state and the markup of the switches
         const OPTIONS = [
           {
             id: 'ex',
-            title: 'Бой',
+            title: 'Fight',
             kind: 'select',
             opts: Object.values(SCENARIOS)
               .sort((a, b) => a.id - b.id)
@@ -1185,60 +1185,60 @@
           },
           {
             id: 'n',
-            title: 'Сцена',
+            title: 'Scene',
             opts: [
-              ['1', 'Один бой'],
-              ['3', 'Три боя рядом'],
+              ['1', 'One fight'],
+              ['3', 'Three fights side by side'],
             ],
           },
           {
             id: 'tempo',
-            title: 'Темп раунда',
-            tag: ['rules', 'число рулсета, нужен DEC'],
+            title: 'Round pace',
+            tag: ['rules', 'a ruleset number, needs a DEC'],
             opts: [
-              ['1', '1 с (сейчас)'],
-              ['1.5', '1,5 с'],
-              ['2', '2 с'],
+              ['1', '1 s (now)'],
+              ['1.5', '1.5 s'],
+              ['2', '2 s'],
             ],
           },
           {
             id: 'show',
-            title: 'Показ бонусов без правил',
-            tag: ['free', 'клиент'],
+            title: 'Bonus display without rules',
+            tag: ['free', 'client'],
             opts: [
-              ['a0', 'Сейчас (#326)'],
-              ['a1', 'A1: стрелка и подпись'],
-              ['a2', 'A2: история'],
+              ['a0', 'As now (#326)'],
+              ['a1', 'A1: arrow and caption'],
+              ['a2', 'A2: history'],
               ['a12', 'A1 + A2'],
             ],
           },
           {
             id: 'rules',
-            title: 'Правила бонусов',
-            tag: ['rules', 'меняет правила, нужен DEC'],
+            title: 'Bonus rules',
+            tag: ['rules', 'changes the rules, needs a DEC'],
             opts: [
-              ['cur', 'Как сейчас (DEC-24)'],
-              ['b1', 'B1: фаза в конце раунда'],
-              ['b2', 'B2: залп в раунде 1'],
+              ['cur', 'As now (DEC-24)'],
+              ['b1', 'B1: a phase at the end of the round'],
+              ['b2', 'B2: a volley in round 1'],
             ],
           },
           {
             id: 'zoom',
-            title: 'Масштаб карты',
+            title: 'Map zoom',
             opts: [
-              ['fit', 'По ширине'],
+              ['fit', 'Fit width'],
               ['1', '×1'],
               ['2', '×2'],
             ],
           },
           {
             id: 'view',
-            title: 'Вид арены',
+            title: 'Arena view',
             opts: [
-              ['v1', 'V1: круг из половин'],
-              ['v2', 'V2: круг крупнее, счётчики по краю'],
-              ['v3', 'V3: фишки по юнитам'],
-              ['all', 'Сравнить все три (три боя)'],
+              ['v1', 'V1: a circle of halves'],
+              ['v2', 'V2: a larger circle, counters at the edge'],
+              ['v3', 'V3: chips per unit'],
+              ['all', 'Compare all three (three fights)'],
             ],
           },
         ];
@@ -1276,7 +1276,7 @@
                 h.set(k, st[k]);
             history.replaceState(null, '', '#' + h.toString());
           } catch {
-            /* адрес не обязателен */
+            /* the address is optional */
           }
         };
         readHash();
@@ -1353,13 +1353,13 @@
                 return l;
               };
               g.appendChild(
-                chk('src', 'Источник бонуса в подписи (план, Защита, горы)', [
+                chk('src', 'The bonus source in the caption (plan, Defense, mountains)', [
                   'proto',
-                  'нужен протокол',
+                  'needs the protocol',
                 ]),
               );
               g.appendChild(
-                chk('res', 'Запас бонуса ◇ на арене', ['proto', 'протокол и DEC (п. I1)']),
+                chk('res', 'The ◇ bonus stock on the arena', ['proto', 'protocol and a DEC (item I1)']),
               );
             }
             panel.appendChild(g);
@@ -1373,14 +1373,14 @@
             const last = f.sim.steps.length ? f.sim.steps[f.sim.steps.length - 1].rt * T() : 0;
             const tick = Math.round(T() * 10);
             parts.push(
-              `<b>Темп ${st.tempo.replace('.', ',')} с</b>${tick === 10 ? ' (сейчас)' : ''}: <code>round_ticks = ${tick}</code>; бой «пример ${f.id}» идёт ${last.toFixed(1).replace('.', ',')} с (раундов: ${f.sim.rounds}).`,
+              `<b>Pace ${st.tempo} s</b>${tick === 10 ? ' (now)' : ''}: <code>round_ticks = ${tick}</code>; the fight "example ${f.id}" lasts ${last.toFixed(1)} s (rounds: ${f.sim.rounds}).`,
             );
           }
           parts.push(
             {
-              cur: 'Правила как в DEC-24: виртуальный выстрел заменяет реальный и идёт первым в раунде.',
-              b1: '<b>B1</b> (гипотеза до DEC): раунд = обычный обмен реальными выстрелами, затем фаза «бонусные атаки»: бонус гасит заряд противника, а если зарядов нет, убивает юнита; бонусы друг друга гасят.',
-              b2: '<b>B2</b> (гипотеза до DEC): после обычного обмена раунда 1 все бонусы обеих сторон стреляют одним залпом; дальше раунды без бонусов.',
+              cur: 'Rules as in DEC-24: a virtual shot replaces a real one and goes first in the round.',
+              b1: '<b>B1</b> (a hypothesis pending a DEC): a round = the ordinary exchange of real shots, then a "bonus attacks" phase: a bonus cancels an enemy charge, and if there are no charges, kills a unit; bonuses cancel each other.',
+              b2: '<b>B2</b> (a hypothesis pending a DEC): after the ordinary exchange of round 1 all bonuses of both sides fire in one volley; after that the rounds have no bonuses.',
             }[st.rules],
           );
           const a = st.show;
@@ -1388,10 +1388,10 @@
             parts.push(
               [
                 a.includes('1')
-                  ? '<b>A1</b>: бонусная стрелка с пунктирным стержнем и ромбовой головой, подпись «бонус» над ареной в раунде.'
+                  ? '<b>A1</b>: a bonus arrow with a dashed shaft and a diamond head, the caption "bonus" above the arena in the round.'
                   : '',
                 a.includes('2')
-                  ? '<b>A2</b>: справа полоса последних 3 раундов (что стреляло, что погашено, кто убит), старые бледнеют.'
+                  ? '<b>A2</b>: on the right a strip of the last 3 rounds (what fired, what was cancelled, who was killed), old ones fade.'
                   : '',
               ]
                 .filter(Boolean)
@@ -1401,7 +1401,7 @@
         };
 
         // ---------------------------------------------------------------------------------------
-        // Сцена
+        // The scene
         let fights = [];
         let slots = [];
         function setup() {
@@ -1443,12 +1443,12 @@
           </defs>`;
           svg += mapSVG(slots, fights, clock);
           const cropOn = st.crop === '1';
-          const names = { cur: 'правила как сейчас', b1: 'B1', b2: 'B2' };
-          const showName = { a0: 'показ как сейчас', a1: 'A1', a2: 'A2', a12: 'A1 + A2' }[st.show];
+          const names = { cur: 'rules as now', b1: 'B1', b2: 'B2' };
+          const showName = { a0: 'display as now', a1: 'A1', a2: 'A2', a12: 'A1 + A2' }[st.show];
           svg += textPlain(
             cropOn ? (slots.length === 3 ? 30 : 280) : 12,
             cropOn ? 14 : 16,
-            `Темп ${st.tempo.replace('.', ',')} с · ${names[st.rules]} · ${showName} · ${st.view === 'all' ? 'V1, V2, V3' : st.view.toUpperCase()}${st.src === '1' ? ' · источник' : ''}${st.res === '1' ? ' · запас' : ''}`,
+            `Pace ${st.tempo} s · ${names[st.rules]} · ${showName} · ${st.view === 'all' ? 'V1, V2, V3' : st.view.toUpperCase()}${st.src === '1' ? ' · source' : ''}${st.res === '1' ? ' · stock' : ''}`,
             'tx-d',
           );
           fights.forEach((f, i) => {
@@ -1474,7 +1474,7 @@
               bonusTick,
             });
             svg += `<g transform="translate(${ax},${ay})">${out.svg}</g>`;
-            if (slots.length === 3) svg += text(ax, 370, `пример ${f.id}`, 'tx-d');
+            if (slots.length === 3) svg += text(ax, 370, `example ${f.id}`, 'tx-d');
           });
           const vb =
             st.crop === '1'
@@ -1488,7 +1488,7 @@
           scene.innerHTML = svg;
           const cl = cycleLen();
           seek.value = String(Math.round((clock / cl) * 1000));
-          clockOut.textContent = `${clock.toFixed(1)} с из ${cl.toFixed(1)} с`;
+          clockOut.textContent = `${clock.toFixed(1)} s of ${cl.toFixed(1)} s`;
           renderLog();
         }
 
@@ -1504,26 +1504,26 @@
           const cell = (side, s) => {
             const sh = s.shots[side];
             const parts = [];
-            if (sh.real) parts.push(`${sh.real} реальн.`);
-            if (sh.virt) parts.push(`${sh.virt} бонус.`);
+            if (sh.real) parts.push(`${sh.real} real`);
+            if (sh.virt) parts.push(`${sh.virt} bonus`);
             return parts.length ? parts.join(', ') : '—';
           };
           const outcome = (s) => {
             const r = [];
-            if (s.matched) r.push('погашены');
-            if (s.res.e.lost) r.push(`ты убил ${s.res.e.lost}`);
-            if (s.res.e.quench) r.push('ты погасил заряд врага');
-            if (s.res.o.lost) r.push(`враг убил ${s.res.o.lost}`);
-            if (s.res.o.quench) r.push('враг погасил твой заряд');
+            if (s.matched) r.push('cancelled');
+            if (s.res.e.lost) r.push(`you killed ${s.res.e.lost}`);
+            if (s.res.e.quench) r.push('you cancelled an enemy charge');
+            if (s.res.o.lost) r.push(`the enemy killed ${s.res.o.lost}`);
+            if (s.res.o.quench) r.push('the enemy cancelled your charge');
             return r.join('; ') || '—';
           };
-          const phaseName = { mix: 'раунд', ord: 'обмен', bonus: 'бонусные атаки' };
+          const phaseName = { mix: 'round', ord: 'exchange', bonus: 'bonus attacks' };
           let html =
-            '<thead><tr><th>Время</th><th>Раунд</th><th>Фаза</th><th class="own">Ты</th><th class="foe">Враг</th><th>Итог шага</th><th>Осталось: ты (юнитов / заряж.)</th><th>враг</th></tr></thead><tbody>';
+            '<thead><tr><th>Time</th><th>Round</th><th>Phase</th><th class="own">You</th><th class="foe">Enemy</th><th>Step result</th><th>Left: you (units / charged)</th><th>enemy</th></tr></thead><tbody>';
           f.sim.steps.forEach((s, i) => {
-            html += `<tr class="${i === nowIdx ? 'now' : ''}"><td>${(s.rt * Tt).toFixed(2)} с</td><td>${s.round}</td><td>${phaseName[s.phase]}</td><td>${cell('o', s)}</td><td>${cell('e', s)}</td><td>${outcome(s)}</td><td>${s.after.o.u} / ${s.after.o.c}</td><td>${s.after.e.u} / ${s.after.e.c}</td></tr>`;
+            html += `<tr class="${i === nowIdx ? 'now' : ''}"><td>${(s.rt * Tt).toFixed(2)} s</td><td>${s.round}</td><td>${phaseName[s.phase]}</td><td>${cell('o', s)}</td><td>${cell('e', s)}</td><td>${outcome(s)}</td><td>${s.after.o.u} / ${s.after.o.c}</td><td>${s.after.e.u} / ${s.after.e.c}</td></tr>`;
           });
-          html += `</tbody><tfoot><tr><td colspan="8">Итог: ${f.sim.captured ? 'узел взят' : 'узел держится, атака отскакивает'}; раундов ${f.sim.rounds}, длительность ${(f.sim.steps.length ? f.sim.steps[f.sim.steps.length - 1].rt * Tt : 0).toFixed(1)} с.</td></tr></tfoot>`;
+          html += `</tbody><tfoot><tr><td colspan="8">Result: ${f.sim.captured ? 'the node is taken' : 'the node holds, the attack bounces'}; rounds ${f.sim.rounds}, duration ${(f.sim.steps.length ? f.sim.steps[f.sim.steps.length - 1].rt * Tt : 0).toFixed(1)} s.</td></tr></tfoot>`;
           logEl.innerHTML = html;
         }
 
@@ -1542,7 +1542,7 @@
         }
         document.getElementById('play').onclick = (e) => {
           playing = !playing;
-          e.target.textContent = playing ? 'Пауза' : 'Играть';
+          e.target.textContent = playing ? 'Pause' : 'Play';
           st.pause = playing ? '0' : '1';
           writeHash();
         };
@@ -1552,7 +1552,7 @@
         };
         document.getElementById('step').onclick = () => {
           playing = false;
-          document.getElementById('play').textContent = 'Играть';
+          document.getElementById('play').textContent = 'Play';
           const Tt = T();
           const times = fights.flatMap((f) => f.sim.steps.map((s) => s.rt * Tt));
           const next = times.filter((x) => x > clock + 1e-6).sort((a, b) => a - b)[0];
@@ -1561,7 +1561,7 @@
         };
         seek.oninput = () => {
           playing = false;
-          document.getElementById('play').textContent = 'Играть';
+          document.getElementById('play').textContent = 'Play';
           clock = (parseFloat(seek.value) / 1000) * cycleLen();
           render();
         };
@@ -1578,17 +1578,17 @@
           requestAnimationFrame(frame);
         }
 
-        // Проверка по таблице: итог на странице.
+        // The check against the table: the result on the page.
         const bad = checkTable();
         const checkEl = document.getElementById('check');
         checkEl.innerHTML = bad.length
-          ? `<span class="bad">Движок макета расходится с таблицей: ${bad.join('; ')}</span>`
-          : '<span class="ok">Проверка: движок макета воспроизводит строки 6, 9, 10 и 15 таблицы раздела 4 (раунды, заряженные после раундов, итог).</span>';
+          ? `<span class="bad">The mockup engine disagrees with the table: ${bad.join('; ')}</span>`
+          : '<span class="ok">Check: the mockup engine reproduces rows 6, 9, 10 and 15 of the table in section 4 (rounds, the charged after the rounds, the result).</span>';
 
         setup();
         buildPanel();
         describe();
-        document.getElementById('play').textContent = playing ? 'Пауза' : 'Играть';
+        document.getElementById('play').textContent = playing ? 'Pause' : 'Play';
         render();
         requestAnimationFrame(frame);
         window.addEventListener('hashchange', () => {

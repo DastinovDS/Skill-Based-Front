@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Приказы, бой на карте и арена в новом стиле карты</title>
+<title>Orders, the fight on the map and the arena in the new map style</title>
 <style>
 :root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#9da7b3;--you:#5b9bff;--enemy:#e5484d;--warn:#ffb020;--ok:#3fb950}
 *{box-sizing:border-box}
@@ -63,13 +63,13 @@ table.t td.ok{color:var(--ok)}table.t td.bad{color:var(--enemy)}
 <body>
 <header>
   <div class="row">
-    <h1>Приказы, бой, арена: новый стиль (#339)</h1>
-    <label class="opt"><input type="checkbox" id="gray"> серая шкала</label>
-    <label class="opt"><input type="checkbox" id="rm"> меньше движения (приказы)</label>
-    <label class="opt">масштаб карты <select id="sc"><option value="60">60%</option><option value="100" selected>100%</option><option value="200">200%</option></select></label>
-    <button id="play" title="пауза и пуск">⏸</button><button id="restart" title="сначала">⏮</button>
-    <label class="opt">скорость <select id="speed"><option value="0.25">0,25</option><option value="0.5">0,5</option><option value="1" selected>1</option><option value="2">2</option></select></label>
-    <label class="opt"><span id="tlab">0,0 с</span><input type="range" id="scrub" min="0" max="100" step="1" value="0" aria-label="время сцены"></label>
+    <h1>Orders, fight, arena: the new style (#339)</h1>
+    <label class="opt"><input type="checkbox" id="gray"> grayscale</label>
+    <label class="opt"><input type="checkbox" id="rm"> reduced motion (orders)</label>
+    <label class="opt">map scale <select id="sc"><option value="60">60%</option><option value="100" selected>100%</option><option value="200">200%</option></select></label>
+    <button id="play" title="pause and play">⏸</button><button id="restart" title="restart">⏮</button>
+    <label class="opt">speed <select id="speed"><option value="0.25">0.25</option><option value="0.5">0.5</option><option value="1" selected>1</option><option value="2">2</option></select></label>
+    <label class="opt"><span id="tlab">0.0 s</span><input type="range" id="scrub" min="0" max="100" step="1" value="0" aria-label="scene time"></label>
   </div>
   <div class="row tabs" id="tabs"></div>
   <div class="row" id="axes"></div>
@@ -601,14 +601,14 @@ function drawOrd(ctx) {
 }
 
 SCENES.push({
-  id: 'ord', name: '1 Обычный приказ', crop: { x: 240, y: 140, w: 440, h: 480 },
-  scenarios: [{ id: 'ok', name: 'принят' }, { id: 'reject', name: 'отклонён' }, { id: 'cancel', name: 'отмена в пути' }],
+  id: 'ord', name: '1 Ordinary order', crop: { x: 240, y: 140, w: 440, h: 480 },
+  scenarios: [{ id: 'ok', name: 'accepted' }, { id: 'reject', name: 'rejected' }, { id: 'cancel', name: 'canceled on the way' }],
   T: (scn) => ORD_T[scn] || 14,
   axes: [
-    { id: 'path', title: 'Вид стрелки', v: ['Сейчас', 'П1 Трубка', 'П2 Маршрут', 'П3 Подсветка дороги', 'П4 Лёгкая'], rec: 2 },
-    { id: 'ghost', title: 'До ответа сервера', v: ['Сейчас', 'Г1 Пунктир', 'Г2 Кольцо отправки', 'Г3 Цель отмечена'], rec: 3 },
+    { id: 'path', title: 'Look of the arrow', v: ['Now', 'OR1 Tube', 'OR2 Route', 'OR3 Road highlight', 'OR4 Light'], rec: 2 },
+    { id: 'ghost', title: 'Before the server’s reply', v: ['Now', 'GH1 Dashes', 'GH2 Dispatch ring', 'GH3 Target marked'], rec: 3 },
   ],
-  intro: 'Свой обычный приказ: группа из города 3 идёт через 4 и 12 в 7 (путь из <code>ack.path</code>), группа из 6 идёт в соседний 7. Видит только владелец (раздел 10 mechanics.md). Клиент пути не ищет и время не считает: числа берутся из <code>ack</code> (в макете скорость 60 ед/с условная).',
+  intro: 'Your own ordinary order: a group from city 3 goes through 4 and 12 to 7 (the path from <code>ack.path</code>), a group from 6 goes to the adjacent 7. Only the owner sees it (section 10 of mechanics.md). The client does not search for the path and does not count the time: the numbers come from the <code>ack</code> (in the mockup the speed of 60 units/s is nominal).',
   draw: drawOrd,
 });
 // ======================================================================================================
@@ -644,9 +644,9 @@ function pillAside(I, axis, label, stroke) {      // a plate beside the middle o
   let nx = -a.dy, ny = a.dx; if ((a.x - mx) * nx + (a.y - my) * ny < 0) { nx = -nx; ny = -ny; }
   return pill(I, a.x + nx * 20, a.y + ny * 20, label, stroke, 46);
 }
-const secs = (s) => f1(s).toFixed(1).replace('.', ',') + ' с';
+const secs = (s) => f1(s).toFixed(1) + ' s';
 let clipN = 0;
-// the target marker of an enemy intent: today a dotted ring (two over my city), E1 a reticle, E2 a ring with "!", E3 a reticle with a pulse
+// the target marker of an enemy intent: today a dotted ring (two over my city), IN1 a reticle, IN2 a ring with "!", IN3 a reticle with a pulse
 function targetMarker(ctx, o, e, t) {
   const { I, rm } = ctx, n = NODES[o.nodes[o.nodes.length - 1]], mine = n.o === 'you', color = mine ? C.warn : C.enemy, R = radiusOf(n) + 20;
   const ring = (r, w, dash) => `<circle cx="${n.x}" cy="${n.y}" r="${r}" stroke="${color}" stroke-opacity=".95" stroke-width="${w}" stroke-dasharray="${dash}" stroke-linecap="round"/>`;
@@ -657,7 +657,7 @@ function targetMarker(ctx, o, e, t) {
   const ph = rm ? .5 : pulse1((t % .8) / .8);
   return `<circle cx="${n.x}" cy="${n.y}" r="${f1(R + 4 * ph)}" stroke="${color}" stroke-opacity="${f1(.15 + .35 * ph)}" stroke-width="${f1(5 + 3 * ph)}"/>` + `<circle cx="${n.x}" cy="${n.y}" r="${R}" stroke="${C.bg}" stroke-opacity=".6" stroke-width="5"/>` + ring(R, 2.2, 'none') + ring(R - 8, 1.6, 'none') + [0, 1, 2, 3].map((i) => tick(i * Math.PI / 2)).join('');
 }
-// the marker of the side at the tail: today a dot (own) / a hollow diamond (enemy); E1: a plate with the size ("?" when unknown)
+// the marker of the side at the tail: today a dot (own) / a hollow diamond (enemy); IN1: a plate with the size ("?" when unknown)
 function tailMarker(ctx, o, e, start) {
   const { I } = ctx, own = o.owner === 'you', c = col(o.owner);
   if (e === 0) return own ? `<circle cx="${f1(start.x)}" cy="${f1(start.y)}" r="4" fill="${c}" stroke="${C.plate}" stroke-width="1.5"/>` : `<polygon points="${f1(start.x)},${f1(start.y - 5.5)} ${f1(start.x + 5.5)},${f1(start.y)} ${f1(start.x)},${f1(start.y + 5.5)} ${f1(start.x - 5.5)},${f1(start.y)}" fill="${C.plate}" stroke="${c}" stroke-width="2"/>`;
@@ -735,7 +735,7 @@ function planRibbonSvg(ctx, o, ps, v, e, t) {
   if (own && ctx.sel.bonus === 1 && ps.phase !== 'done') s += pill(I, rib.tip.x - rib.dirx * 8, rib.tip.y - 24, '◇ +' + o.bonus, C.paper, 46);
   return s + '</g>';
 }
-// E3 "Reticle": the enemy intent is a thin dashed arrow, the attention goes to the target
+// IN3 "Reticle": the enemy intent is a thin dashed arrow, the attention goes to the target
 function planEnemyThin(ctx, o, ps, t) {
   const { rm } = ctx, c = col(o.owner), { axis } = ribbonFor(o, 12), d = dpath(axis.slice(0, -1)), run = rm ? 0 : t, prep = ps.phase === 'prep';
   const tip = axis[axis.length - 1], pre = axis[axis.length - 4], a = Math.atan2(tip.y - pre.y, tip.x - pre.x);
@@ -806,15 +806,15 @@ function drawPlanned(ctx, list, opt = {}) {
 function stillTokens(I, list) { return list.map(([n, u, ch]) => tokenG(I, NODES[n].x, NODES[n].y, 26, u, ch, 'you', { label: String(u) })).join(''); }
 
 SCENES.push({
-  id: 'plan', name: '2 Запланированный приказ', crop: { x: 270, y: 290, w: 460, h: 330 },
-  scenarios: [{ id: 'both', name: 'свой и противника' }, { id: 'own', name: 'только свой' }, { id: 'enemy', name: 'только противника' }],
+  id: 'plan', name: '2 Scheduled order', crop: { x: 270, y: 290, w: 460, h: 330 },
+  scenarios: [{ id: 'both', name: 'own and the opponent’s' }, { id: 'own', name: 'own only' }, { id: 'enemy', name: 'opponent’s only' }],
   T: () => 11,
   axes: [
-    { id: 'rib', title: 'Лента: подготовка, закрепление, выступление', v: ['Сейчас', 'Л1 Заряженная трубка', 'Л2 Тонкая и кольцо', 'Л3 Штриховка', 'Л4 Шевроны'], rec: 4 },
-    { id: 'side', title: 'Свой против намерения противника', v: ['Сейчас', 'С1 Знак размера', 'С2 Два яруса', 'С3 Прицел'], rec: 3 },
-    { id: 'bonus', title: 'Бонус на головке', v: ['нет', 'есть (нужен протокол)'], rec: 0 },
+    { id: 'rib', title: 'Ribbon: preparation, pinning, departure', v: ['Now', 'SC1 Charged tube', 'SC2 Thin ribbon and a ring', 'SC3 Hatching', 'SC4 Chevrons'], rec: 4 },
+    { id: 'side', title: 'Own against the opponent’s intent', v: ['Now', 'IN1 Size sign', 'IN2 Two tiers', 'IN3 Crosshair'], rec: 3 },
+    { id: 'bonus', title: 'Bonus on the head', v: ['no', 'yes (protocol needed)'], rec: 0 },
   ],
-  intro: 'Свой запланированный приказ 3→12 (через 4, бонус по DEC-29) и намерение противника 5→4: подготовка 3 с, одна плавная пульсация закрепления (8 тиков), выступление; лента остаётся, пока идёт приказ. У противника не видны размер и состав: только откуда, куда и тип. Ползунок времени вверху: подготовка 0-3 с, закрепление 3-3,8 с.',
+  intro: 'Your own scheduled order 3→12 (through 4, a bonus by DEC-29) and the opponent’s intent 5→4: preparation 3 s, one smooth pinning pulse (8 ticks), departure; the ribbon stays while the order is in progress. The size and composition of the opponent’s are not visible: only from where, to where and the kind. The time slider at the top: preparation 0-3 s, pinning 3-3.8 s.',
   draw(ctx) {
     const list = ctx.scn === 'own' ? [PLAN[0]] : ctx.scn === 'enemy' ? [PLAN[1]] : PLAN;
     const r = drawPlanned(ctx, list);
@@ -842,15 +842,15 @@ const CROSS = {
   ],
 };
 SCENES.push({
-  id: 'cross', name: '3 Встречные, пересечения, слои', crop: (scn) => (scn === 'opp' ? { x: 390, y: 380, w: 380, h: 240 } : scn === 'cross' ? { x: 420, y: 140, w: 460, h: 440 } : { x: 300, y: 380, w: 600, h: 300 }),
-  scenarios: [{ id: 'opp', name: 'встречные по одной дороге' }, { id: 'cross', name: 'пересекающиеся' }, { id: 'layer', name: 'поверх дороги, границы, в дымке' }],
+  id: 'cross', name: '3 Counter ribbons, crossings, layers', crop: (scn) => (scn === 'opp' ? { x: 390, y: 380, w: 380, h: 240 } : scn === 'cross' ? { x: 420, y: 140, w: 460, h: 440 } : { x: 300, y: 380, w: 600, h: 300 }),
+  scenarios: [{ id: 'opp', name: 'counter ones on one road' }, { id: 'cross', name: 'crossing' }, { id: 'layer', name: 'over a road, the border, in the haze' }],
   T: () => 9,
   axes: [
-    { id: 'sep', title: 'Как разводятся ленты', v: ['Сейчас', 'Р1 Полосы вдоль дороги', 'Р2 Низкие дуги', 'Р3 Единая полоса'], rec: 2 },
-    { id: 'lay', title: 'Слои: дорога, граница, дымка', v: ['Сейчас', 'Сл1 Стекло', 'Сл2 Над дымкой', 'Сл3 Просвет в дымке', 'Сл4 Полая в дымке'], rec: 4 },
+    { id: 'sep', title: 'How the ribbons are separated', v: ['Now', 'CR1 Lanes along the road', 'CR2 Low arcs', 'CR3 Single stripe'], rec: 2 },
+    { id: 'lay', title: 'Layers: road, border, haze', v: ['Now', 'LY1 Glass', 'LY2 Over the haze', 'LY3 Gap in the haze', 'LY4 Hollow in the haze'], rec: 4 },
   ],
-  intro: 'Встречные и пересекающиеся запланированные приказы и лента поверх дороги R1, границы территории и дымки F1. Вид ленты и метки противника берутся из сцены 2 (оси «Лента» и «Свой против намерения противника»), здесь выбираются разведение лент и порядок слоёв. Сценарии: два встречных приказа по одной дороге (4⇄5), два пересекающихся (свой 4→8 через 12 и 7, противника 14→12), лента через границу и дымку (свой 3→5, противника 15→4).',
-  note: (s) => `Сейчас выбрано в сцене 2: лента «${SCENES[1].axes[0].v[s.sel.rib]}», противник «${SCENES[1].axes[1].v[s.sel.side]}». У встречных лент приказ противника не показывает размер: только «откуда, куда, тип».`,
+  intro: 'Counter and crossing scheduled orders and a ribbon over an R1 road, the territory border and the F1 haze. The look of the ribbon and of the opponent’s marks come from scene 2 (the axes "Ribbon" and "Own against the opponent’s intent"), here the separation of the ribbons and the order of the layers are chosen. The scenarios: two counter orders on one road (4⇄5), two crossing ones (your own 4→8 through 12 and 7, the opponent’s 14→12), a ribbon across the border and the haze (your own 3→5, the opponent’s 15→4).',
+  note: (s) => `Currently chosen in scene 2: the ribbon "${SCENES[1].axes[0].v[s.sel.rib]}", the opponent "${SCENES[1].axes[1].v[s.sel.side]}". On counter ribbons the opponent’s order does not show the size: only "from where, to where, the kind".`,
   draw(ctx) {
     const list = CROSS[ctx.scn] || CROSS.opp;
     return drawPlanned(ctx, list, { X: ctx.sel.sep, Y: ctx.sel.lay, hideEnemyMarch: true });
@@ -860,7 +860,7 @@ SCENES.push({
 // Scene 4: a fight on the map (without the arena itself). The engine below plays the rules of DEC-24 and DEC-32 round by round
 // (one shot per side per round, virtual first, cancelling shots, the discharged die first, plains: one charge of the defender is
 // silent, mountains: +1 virtual shot, round = 2 s), so the animation shows what the server would say. Axes: "fx" (the style of the
-// effects) and "k" (their strength). The arena of the fight is drawn small (A1 of scene 6; the current circle arena for "now").
+// effects) and "k" (their strength). The arena of the fight is drawn small (AR1 of scene 6; the current circle arena for "now").
 // ======================================================================================================
 const ROUND_S = 2.0;                                 // combat.round_ticks = 20 at tick_hz 10 (DEC-32)
 function simulateFight(cfg) {                        // sides: 0 = attacker, 1 = defender; {u, c, v}: units, charged, virtual stock
@@ -886,12 +886,12 @@ function simulateFight(cfg) {                        // sides: 0 = attacker, 1 =
 }
 // a table check against mechanics.md DEC-24/DEC-32 (rounds, charged after the rounds), run on the page in scene 6
 const FIGHT_TABLE = [
-  { n: 2, a: { u: 3, c: 3, v: 0 }, d: { u: 2, c: 2, v: 0 }, t: 'f', rounds: 3, res: 'у защиты 1 разряж.; атака (3, разряж.) отскакивает' },
-  { n: 3, a: { u: 4, c: 4, v: 0 }, d: { u: 2, c: 2, v: 0 }, t: 'f', rounds: 4, res: 'защита уничтожена, узел взят' },
-  { n: 6, a: { u: 3, c: 3, v: 0 }, d: { u: 2, c: 2, v: 0 }, t: 'm', rounds: 3, res: 'потерь нет, отскок' },
-  { n: 8, a: { u: 2, c: 2, v: 0 }, d: { u: 2, c: 2, v: 0 }, t: 'p', rounds: 2, res: 'у защиты 1 заряж.; атака (2, разряж.) отскакивает' },
-  { n: 9, a: { u: 2, c: 2, v: 2 }, d: { u: 2, c: 2, v: 0 }, t: 'f', rounds: 4, res: 'узел взят, у атаки 2 разряж.' },
-  { n: 15, a: { u: 3, c: 3, v: 2 }, d: { u: 1, c: 0, v: 0 }, t: 'f', rounds: 1, res: 'узел взят, у атаки 3 заряж.' },
+  { n: 2, a: { u: 3, c: 3, v: 0 }, d: { u: 2, c: 2, v: 0 }, t: 'f', rounds: 3, res: 'defense has 1 discharged; the attack (3, discharged) bounces' },
+  { n: 3, a: { u: 4, c: 4, v: 0 }, d: { u: 2, c: 2, v: 0 }, t: 'f', rounds: 4, res: 'defense destroyed, node taken' },
+  { n: 6, a: { u: 3, c: 3, v: 0 }, d: { u: 2, c: 2, v: 0 }, t: 'm', rounds: 3, res: 'no losses, bounce' },
+  { n: 8, a: { u: 2, c: 2, v: 0 }, d: { u: 2, c: 2, v: 0 }, t: 'p', rounds: 2, res: 'defense has 1 charged; the attack (2, discharged) bounces' },
+  { n: 9, a: { u: 2, c: 2, v: 2 }, d: { u: 2, c: 2, v: 0 }, t: 'f', rounds: 4, res: 'node taken, the attack has 2 discharged' },
+  { n: 15, a: { u: 3, c: 3, v: 2 }, d: { u: 1, c: 0, v: 0 }, t: 'f', rounds: 1, res: 'node taken, the attack has 3 charged' },
 ];
 
 const FIGHTS = {
@@ -1119,15 +1119,15 @@ function arenaView(f, fs) {
 }
 
 SCENES.push({
-  id: 'fight', name: '4 Бой на карте', crop: (scn) => FIGHT_CROP[scn] || FIGHT_CROP.hold,
-  scenarios: [{ id: 'hold', name: 'узел: оборона держит, отскок' }, { id: 'cap', name: 'узел: захват' }, { id: 'edge', name: 'ребро: точка встречи' }, { id: 'three', name: 'три боя сразу' }],
+  id: 'fight', name: '4 Fight on the map', crop: (scn) => FIGHT_CROP[scn] || FIGHT_CROP.hold,
+  scenarios: [{ id: 'hold', name: 'node: the defense holds, bounce' }, { id: 'cap', name: 'node: capture' }, { id: 'edge', name: 'edge: meeting point' }, { id: 'three', name: 'three fights at once' }],
   T: (scn) => FIGHT_T[scn] || 14,
   axes: [
-    { id: 'fx', title: 'Стиль эффектов', v: ['Сейчас', 'Э1 Тихий', 'Э2 Штабной', 'Э3 Выразительный', 'Э4 Символы'], rec: 2 },
-    { id: 'k', title: 'Сила', v: ['слабее', 'средне', 'сильнее'], rec: 1 },
+    { id: 'fx', title: 'Effect style', v: ['Now', 'FX1 Quiet', 'FX2 Staff', 'FX3 Expressive', 'FX4 Symbols'], rec: 2 },
+    { id: 'k', title: 'Strength', v: ['weaker', 'medium', 'stronger'], rec: 1 },
   ],
-  intro: 'Бой на карте по правилам DEC-24 и DEC-32: сближение групп, контакт, раунды по 2 с (по выстрелу с каждой стороны, сначала бонусные: подпись «бонусная атака» по A1), гибель юнитов, отскок, захват узла, бой на ребре в точке встречи. Движок макета проигрывает правила раунд за раундом (числа проверяются таблицей в сцене 6), поэтому анимация показывает то, что сказал бы сервер. Арена показана маленькой (V3 из сцены 6; у «Сейчас» нынешний круг).',
-  note: (s) => `Сила применяется к «Э2» и «Э3» (длина и яркость следов, число искр). «Три боя сразу» нужна для оценки цены кадра: у «Э3» одновременно до 3 наборов искр.`,
+  intro: 'A fight on the map by the DEC-24 and DEC-32 rules: groups closing in, contact, rounds of 2 s (one shot from each side, the bonus ones first: the caption "bonus attack" per A1), unit deaths, bounce, node capture, a fight on an edge at the meeting point. The mockup engine plays the rules round by round (the numbers are checked by the table in scene 6), so the animation shows what the server would say. The arena is shown small (V3 from scene 6; for "Now" the current circle).',
+  note: (s) => `The strength applies to "FX2" and "FX3" (the length and brightness of the trails, the number of sparks). "Three fights at once" is needed to estimate the frame price: "FX3" has up to 3 sets of sparks at once.`,
   draw: drawFights,
 });
 // ======================================================================================================
@@ -1143,7 +1143,7 @@ function chipList(side, max = 8) {
   return { shown, hidden, hiddenCharged: hidden.filter((x) => x === 'c').length, hiddenKilled: hidden.filter((x) => x === 'k').length, total: all.length };
 }
 const ARENA_INFO_NOTE = '';
-// one chip: ▽ for the triangle styles, a battery for A3; `pulse`: this chip changed in the last round (one swell, scale 1 -> 1.2 -> 1)
+// one chip: ▽ for the triangle styles, a battery for AR3; `pulse`: this chip changed in the last round (one swell, scale 1 -> 1.2 -> 1)
 function chipSvg(I, kind, state, who, x, y, size, pulse) {
   const c = SIDE_COL[who], sc = 1 + .2 * pulse;
   let g = `<g transform="translate(${f1(x)} ${f1(y)}) scale(${f1(sc)})">`;
@@ -1175,15 +1175,15 @@ function moreTag(list, x, y, who, I) {
 }
 const sideStock = (n) => n;
 function arenaDraw(ctx, variant, view, x, y, t, f, scale = 1) {
-  const I = ctx.I, mc = chipList(view.mine), ec = chipList(view.enemy), word = view.result ? ({ captured: 'Захвачен', held: 'Удержан', both: 'Оба отошли' }[view.result]) : '';
+  const I = ctx.I, mc = chipList(view.mine), ec = chipList(view.enemy), word = view.result ? ({ captured: 'Captured', held: 'Held', both: 'Both withdrew' }[view.result]) : '';
   const pulseOf = view.last && view.lastAge < 1.0 && !ctx.rm ? pulse1(view.lastAge / .9) : 0;
   let g = `<g transform="translate(${f1(x)} ${f1(y)}) scale(${scale})" opacity="${view.ended ? f1(clamp(1 - Math.max(0, view.since - 2.4) / .6)) : 1}">`;
   const timer = view.ended ? 0 : view.timer;
-  const exchange = (px, py, w) => {                  // A1: an arc arrow over the plate for a round with a virtual shot, and the caption
+  const exchange = (px, py, w) => {                  // AR1: an arc arrow over the plate for a round with a virtual shot, and the caption
     let s = '';
     if (view.last && view.lastAge < 1.4 && !view.ended) {
       const virt = view.last.virtual[0] + view.last.virtual[1] > 0;
-      if (virt) s += `<g filter="url(#${I('shd')})"><rect x="${f1(px - 58)}" y="${f1(py - 10)}" width="116" height="19" rx="9.5" fill="${C.plate}" stroke="${C.you}" stroke-width="1.6"/>${text(px, py - .3, '◇ бонусная атака', 11, C.paper)}</g>`;
+      if (virt) s += `<g filter="url(#${I('shd')})"><rect x="${f1(px - 58)}" y="${f1(py - 10)}" width="116" height="19" rx="9.5" fill="${C.plate}" stroke="${C.you}" stroke-width="1.6"/>${text(px, py - .3, '◇ bonus attack', 11, C.paper)}</g>`;
     }
     return s;
   };
@@ -1248,7 +1248,7 @@ function arenaDraw(ctx, variant, view, x, y, t, f, scale = 1) {
     }
     g += exchange(0, -hh - 16, hw);
     if (word) g += pill(I, 0, -hh - 16, word, C.paper, 84, 11);
-  } else {                                           // A3 batteries: two rows (mine above, the enemy below), a battery per unit, the stock at the end of the row
+  } else {                                           // AR3 batteries: two rows (mine above, the enemy below), a battery per unit, the stock at the end of the row
     const pitch = 15, hw = 8 * pitch / 2 + 46, hh = 36;
     g += `<g filter="url(#${I('shd')})"><rect x="${-hw}" y="${-hh}" width="${hw * 2}" height="${hh * 2}" rx="12" fill="${C.plate}" fill-opacity=".96" stroke="${C.paper}" stroke-opacity=".85" stroke-width="1.6"/></g>`;
     g += `<rect x="${-hw + 7}" y="${-hh + 8}" width="3" height="${hh * 2 - 16}" rx="1.5" fill="${C.paper}" fill-opacity=".18"/><rect x="${-hw + 7}" y="${f1(hh - 8 - (hh * 2 - 16) * timer)}" width="3" height="${f1((hh * 2 - 16) * timer)}" rx="1.5" fill="${C.paper}"/>`;
@@ -1268,11 +1268,11 @@ function arenaDraw(ctx, variant, view, x, y, t, f, scale = 1) {
 
 // ---- scene 6: cases and the check ----
 const CASES = [
-  { name: 'Пример 2 (лес)', cfg: { terrain: 'f', a: { u: 3, c: 3, v: 0 }, d: { u: 2, c: 2, v: 0 } } },
-  { name: 'Пример 9 (план +2)', cfg: { terrain: 'f', a: { u: 2, c: 2, v: 2 }, d: { u: 2, c: 2, v: 0 } } },
-  { name: 'Равнина: молчащий заряд (пример 8)', cfg: { terrain: 'p', a: { u: 2, c: 2, v: 0 }, d: { u: 2, c: 2, v: 0 } } },
-  { name: 'Горы: +1 ◇ защите', cfg: { terrain: 'm', a: { u: 3, c: 3, v: 0 }, d: { u: 2, c: 2, v: 0 } } },
-  { name: 'Больше 8 юнитов', cfg: { terrain: 'f', a: { u: 11, c: 9, v: 1 }, d: { u: 10, c: 3, v: 0 } } },
+  { name: 'Example 2 (forest)', cfg: { terrain: 'f', a: { u: 3, c: 3, v: 0 }, d: { u: 2, c: 2, v: 0 } } },
+  { name: 'Example 9 (plan +2)', cfg: { terrain: 'f', a: { u: 2, c: 2, v: 2 }, d: { u: 2, c: 2, v: 0 } } },
+  { name: 'Plains: a silent charge (example 8)', cfg: { terrain: 'p', a: { u: 2, c: 2, v: 0 }, d: { u: 2, c: 2, v: 0 } } },
+  { name: 'Mountains: +1 ◇ to the defense', cfg: { terrain: 'm', a: { u: 3, c: 3, v: 0 }, d: { u: 2, c: 2, v: 0 } } },
+  { name: 'More than 8 units', cfg: { terrain: 'f', a: { u: 11, c: 9, v: 1 }, d: { u: 10, c: 3, v: 0 } } },
 ];
 function caseFight(i) { return prepFight({ id: 'x', kind: 'node', node: 12, from: 7, t0: 1.0, ...CASES[i].cfg }); }
 const FIGHT_EXPECT = {                               // finals from the tables of mechanics.md (DEC-24, examples 2, 3, 6, 8, 9, 15): attacker [units, charged], defender [units, charged]
@@ -1280,52 +1280,52 @@ const FIGHT_EXPECT = {                               // finals from the tables o
   8: { rounds: 2, att: [2, 0], def: [1, 1] }, 9: { rounds: 4, att: [2, 0], def: [0, 0] }, 15: { rounds: 1, att: [3, 3], def: [0, 0] },
 };
 function checkTableHtml() {
-  let h = '<table class="t"><tr><th>Пример (mechanics.md)</th><th>Раундов: по таблице / движок</th><th>Итог: атака [юниты, заряжено] / защита</th><th></th></tr>';
+  let h = '<table class="t"><tr><th>Example (mechanics.md)</th><th>Rounds: by the table / engine</th><th>Result: attack [units, charged] / defense</th><th></th></tr>';
   for (const r of FIGHT_TABLE) {
     const sim = simulateFight({ kind: 'node', terrain: r.t, a: r.a, d: r.d }), e = FIGHT_EXPECT[r.n], fa = sim.final[0], fd = sim.final[1];
     const ok = sim.rounds.length === e.rounds && fa.u === e.att[0] && fa.c === e.att[1] && fd.u === e.def[0] && fd.c === e.def[1];
-    h += `<tr><td>${r.n}: ${r.res}</td><td>${e.rounds} / ${sim.rounds.length}</td><td>таблица [${e.att}] / [${e.def}]; движок [${fa.u},${fa.c}] / [${fd.u},${fd.c}]</td><td class="${ok ? 'ok' : 'bad'}">${ok ? 'совпало' : 'РАСХОЖДЕНИЕ'}</td></tr>`;
+    h += `<tr><td>${r.n}: ${r.res}</td><td>${e.rounds} / ${sim.rounds.length}</td><td>table [${e.att}] / [${e.def}]; engine [${fa.u},${fa.c}] / [${fd.u},${fd.c}]</td><td class="${ok ? 'ok' : 'bad'}">${ok ? 'match' : 'MISMATCH'}</td></tr>`;
   }
   return h + '</table>';
 }
 // what can be derived from the fields of FightView and what cannot
 function derivationHtml(i) {
   const f = caseFight(i), rows = [];
-  let h = `<table class="t"><tr><th>После раунда</th><th>Движок (истина)</th><th>Фишки из полей вида (units + losses, charged, ◇)</th><th>Сходится</th></tr>`;
-  const sideTxt = (s) => `${s.u} юн., ${s.c} заряж., ◇${s.v}`;
+  let h = `<table class="t"><tr><th>After the round</th><th>Engine (the truth)</th><th>Chips from the view fields (units + losses, charged, ◇)</th><th>Match</th></tr>`;
+  const sideTxt = (s) => `${s.u} units, ${s.c} charged, ◇${s.v}`;
   for (let k = 0; k <= f.n; k++) {
     const S = k ? f.sim.rounds[k - 1].after : f.sim.init;
     const v = arenaView(f, { S, k, evt: null, evtAge: 9, evtK: -1, timer: 0, ended: false, since: 0 });
     const ml = chipList(v.mine), el = chipList(v.enemy);
     const okM = ml.shown.filter((x) => x === 'c').length + ml.hiddenCharged === S[1].c, okE = el.shown.filter((x) => x === 'c').length + el.hiddenCharged === S[0].c;
     const cnt = (l) => `${l.shown.filter((x) => x === 'c').length}●${l.shown.filter((x) => x === 'd').length}○${l.shown.filter((x) => x === 'k').length}✕` + (l.hidden.length ? ` +${l.hidden.length}${l.hiddenCharged ? '(●' + l.hiddenCharged + ')' : ''}` : '');
-    h += `<tr><td>${k ? 'р' + k : 'контакт'}</td><td>свои: ${sideTxt(S[1])}<br>враг: ${sideTxt(S[0])}</td><td>свои: ${cnt(ml)}, ◇×${v.stock[0]}<br>враг: ${cnt(el)}, ◇×${v.stock[1]}</td><td class="${okM && okE ? 'ok' : 'bad'}">${okM && okE ? 'да' : 'нет'}</td></tr>`;
+    h += `<tr><td>${k ? 'r' + k : 'contact'}</td><td>own: ${sideTxt(S[1])}<br>enemy: ${sideTxt(S[0])}</td><td>own: ${cnt(ml)}, ◇×${v.stock[0]}<br>enemy: ${cnt(el)}, ◇×${v.stock[1]}</td><td class="${okM && okE ? 'ok' : 'bad'}">${okM && okE ? 'yes' : 'no'}</td></tr>`;
   }
   h += '</table>';
   const mute = f.sim.mute;
   const notes = [];
-  if (mute[1]) notes.push(`<div class="chk bad">Молчащий заряд: на равнине один заряженный юнит защитника не стреляет в каждом раунде (DEC-24, п. F2), но фишка рисуется заряженной. Зритель видит «заряжен, но не стреляет». Из полей <code>FightView</code> это не вывести (<code>enemy_charged</code> и заряд своей группы это все заряды). Нужно поле «молчащих зарядов» у каждой стороны в <code>PlayerView.fights</code> (протокол, в #329) и знак на такой фишке (на макете: серая точка под фишкой).</div>`);
-  if (f.sim.init.some((s) => s.u > 8)) notes.push(`<div class="chk bad">Больше 8 юнитов: скрытые «+N» не показывают, заряжены они или нет. При порядке «заряжены, разряжены, убиты» видны первые восемь, и ряд из восьми заряженных фишек плюс «+3» читается как «11 заряжено». Предложение: у метки «+N» мелким числом, сколько скрытых заряжены (макет: «+3» и точка с числом).</div>`);
-  if (f.sim.init.every((s) => s.u <= 8)) notes.push(`<div class="chk good">До 8 юнитов у каждой стороны: число фишек = юниты + потери (<code>units + losses</code>), заряженные = <code>charged</code>, убитые = <code>losses</code>; все три совпадают с движком на каждом шаге.</div>`);
-  if (mute[0] === 0 && f.sim.init[1].v === 0 && CASES[i].cfg.terrain === 'm') notes.push(`<div class="chk good">Горы: защита получает +1 ◇ при контакте (DEC-24, п. F2), запас виден с первого снапшота (DEC-32, п. 3): на макете ◇×1 у защиты до первого раунда.</div>`);
+  if (mute[1]) notes.push(`<div class="chk bad">A silent charge: on plains one charged defender unit does not shoot in each round (DEC-24, item F2), but the chip is drawn charged. The viewer sees "charged but not shooting". This cannot be derived from the <code>FightView</code> fields (<code>enemy_charged</code> and the charge of your own group are all the charges). A field of "silent charges" is needed for each side in <code>PlayerView.fights</code> (protocol, in #329) and a sign on such a chip (in the mockup: a gray dot under the chip).</div>`);
+  if (f.sim.init.some((s) => s.u > 8)) notes.push(`<div class="chk bad">More than 8 units: the hidden "+N" do not show whether they are charged or not. With the order "charged, discharged, killed" the first eight are visible, and a row of eight charged chips plus "+3" reads as "11 charged". A proposal: a small number on the "+N" mark showing how many of the hidden ones are charged (mockup: "+3" and a dot with a number).</div>`);
+  if (f.sim.init.every((s) => s.u <= 8)) notes.push(`<div class="chk good">Up to 8 units per side: the number of chips = units + losses (<code>units + losses</code>), the charged = <code>charged</code>, the killed = <code>losses</code>; all three match the engine at every step.</div>`);
+  if (mute[0] === 0 && f.sim.init[1].v === 0 && CASES[i].cfg.terrain === 'm') notes.push(`<div class="chk good">Mountains: the defense gets +1 ◇ on contact (DEC-24, item F2), the stock is visible from the first snapshot (DEC-32, item 3): in the mockup ◇×1 at the defense before the first round.</div>`);
   return h + notes.join('');
 }
 SCENES.push({
-  id: 'arena', name: '6 Арена V3 и проверка', crop: { x: 370, y: 130, w: 400, h: 330 },
-  scenarios: [{ id: 'play', name: 'ход боя' }],
+  id: 'arena', name: '6 Arena V3 and the check', crop: { x: 370, y: 130, w: 400, h: 330 },
+  scenarios: [{ id: 'play', name: 'course of the fight' }],
   T: () => 14,
   axes: [
-    { id: 'arena', title: 'Вид арены', v: ['Сейчас (круг)', 'А1 Фишки (DEC-32)', 'А2 Фишки 2×4 крупно', 'А3 Батарейки'], rec: 1 },
-    { id: 'case', title: 'Случай', v: CASES.map((c) => c.name), rec: 0 },
+    { id: 'arena', title: 'Arena view', v: ['Now (circle)', 'AR1 Chips (DEC-32)', 'AR2 Chips 2×4 large', 'AR3 Batteries'], rec: 1 },
+    { id: 'case', title: 'Case', v: CASES.map((c) => c.name), rec: 0 },
   ],
-  intro: 'Арена боя по DEC-32 (V3 «фишки», запас ◇ обеих сторон, подпись «бонусная атака», раунд 2 с) в новом стиле. Арена рисуется только из того, что несёт <code>PlayerView.fights</code>; под картинкой проверка: движок макета против таблиц DEC-24 и сверка фишек с полями вида.',
+  intro: 'The fight arena by DEC-32 (V3 "chips", the ◇ stock of both sides, the caption "bonus attack", a 2 s round) in the new style. The arena is drawn only from what <code>PlayerView.fights</code> carries; under the picture is the check: the mockup engine against the DEC-24 tables and a reconciliation of the chips with the view fields.',
   draw(ctx) {
     const f = caseFight(ctx.sel.case), fs = fstate(f, ctx.t), v = arenaView(f, fs), P = fpos(f, ctx.t);
     const under = tokenG(ctx.I, f.center.x, f.center.y, 28, fs.S[1].u, fs.S[1].c, 'you', { label: String(fs.S[1].u) }) + (P.aGone || fs.S[0].u === 0 ? '' : tokenG(ctx.I, P.a.x, P.a.y, 28, fs.S[0].u, fs.S[0].c, 'enemy', { label: String(fs.S[0].u) }));
     const over = arenaDraw(ctx, ctx.sel.arena, v, 560, 245, ctx.t, f, 1.3);
     return { under, over };
   },
-  panel: (s) => `<h2 class="sec">Проверка 1: движок против таблиц mechanics.md</h2><p class="note">Правила раунда (DEC-24, п. B4, F2; DEC-32, п. 1-2) в движке макета, проверка строк таблицы примеров DEC-24/DEC-32 (<code>round_ticks = 20</code>: раунды и итоги те же, меняются только тики).</p>${checkTableHtml()}<h2 class="sec">Проверка 2: что фишки показывают верно, по случаю «${CASES[s.sel.case].name}»</h2><p class="note">Фишки строятся только из полей вида: число фишек = <code>units + losses</code>, заряженные = <code>charged</code>, убитые = <code>losses</code>, ◇ = запас (DEC-32, п. 3).</p>${derivationHtml(s.sel.case)}`,
+  panel: (s) => `<h2 class="sec">Check 1: the engine against the mechanics.md tables</h2><p class="note">The round rules (DEC-24, item B4, F2; DEC-32, items 1-2) in the mockup engine, a check of the rows of the DEC-24/DEC-32 examples table (<code>round_ticks = 20</code>: the rounds and the results are the same, only the ticks change).</p>${checkTableHtml()}<h2 class="sec">Check 2: what the chips show correctly, for the case "${CASES[s.sel.case].name}"</h2><p class="note">The chips are built only from the view fields: the number of chips = <code>units + losses</code>, the charged = <code>charged</code>, the killed = <code>losses</code>, ◇ = the stock (DEC-32, item 3).</p>${derivationHtml(s.sel.case)}`,
 });
 // ======================================================================================================
 // Scene 5: an enemy group in the visible zone (DEC-33, #296; the DEC is in PR #338 while this mockup is written): in the half of an
@@ -1415,115 +1415,115 @@ function drawEnemy(ctx) {
   return { under, over };
 }
 SCENES.push({
-  id: 'enemy', name: '5 Враг в зоне видимости', crop: { x: 480, y: 410, w: 400, h: 190 }, zoom: 1.5,
-  scenarios: [{ id: 'in', name: 'входит из тумана' }, { id: 'out', name: 'уходит в туман' }, { id: 'turn', name: 'разворачивается' }],
+  id: 'enemy', name: '5 Enemy in the vision zone', crop: { x: 480, y: 410, w: 400, h: 190 }, zoom: 1.5,
+  scenarios: [{ id: 'in', name: 'enters from the fog' }, { id: 'out', name: 'leaves into the fog' }, { id: 'turn', name: 'turns around' }],
   T: () => EN_T,
   axes: [
-    { id: 'mv', title: 'Вид фигурки', v: ['Сейчас (DEC-21)', 'Ф1 Шевроны сзади', 'Ф2 Указатель', 'Ф3 Бусина со следом', 'Ф4 Стрелка на дороге'], rec: 1 },
-    { id: 'rev', title: 'Вход и уход в дымку', v: ['Жёстко', 'Из-под дымки', 'Растворение', 'Растворение и метки'], rec: 3 },
-    { id: 'lvl', title: 'Уровень половины', v: ['EXACT', 'RANGE', 'PRESENCE'], rec: 0 },
+    { id: 'mv', title: 'Look of the figure', v: ['Now (DEC-21)', 'EF1 Chevrons behind', 'EF2 Pointer', 'EF3 Bead with a trail', 'EF4 Arrow on the road'], rec: 1 },
+    { id: 'rev', title: 'Entering and leaving the haze', v: ['Hard', 'From under the haze', 'Dissolve', 'Dissolve and marks'], rec: 3 },
+    { id: 'lvl', title: 'Half level', v: ['EXACT', 'RANGE', 'PRESENCE'], rec: 0 },
   ],
-  intro: 'Враждебная группа в зоне видимости узла 5 (DEC-33, PR #338): на половине ребра 5-15 до точки границы фигурка едет плавно и с направлением; на точке границы она входит из тумана и там же исчезает (в тумане половины 15 её не видно вовсе). В узле 5 группа становится меткой узла по его уровню (DEC-21). Числа: EXACT «4» и заряд, RANGE «3-5» без заряда, PRESENCE «?». Цель обычного приказа не видна никогда: направление только «к ближайшему концу ребра» (<code>toward_b</code>), без пути. <b>Нужен протокол DEC-33</b> (список <code>EdgeView.enemy_groups</code>: <code>pos</code>, <code>toward_b</code>, сведения по уровню).',
-  note: () => 'Тонкая пунктирная отметка справа на дороге: точка границы (500‰). Видимая зона: слева от неё. В «Сейчас» (DEC-21) половина ребра показывает только «в половине есть враг» меткой в её середине, без движения и направления.',
+  intro: 'A hostile group in the vision zone of node 5 (DEC-33, PR #338): on the half of edge 5-15 up to the border point the figure moves smoothly and with a direction; at the border point it enters from the fog and disappears at the same place (in the fog of half 15 it is not visible at all). In node 5 the group becomes a node mark by its level (DEC-21). The numbers: EXACT "4" and the charge, RANGE "3-5" without a charge, PRESENCE "?". The target of an ordinary order is never visible: the direction is only "toward the nearest end of the edge" (<code>toward_b</code>), without a path. <b>The DEC-33 protocol is needed</b> (the list <code>EdgeView.enemy_groups</code>: <code>pos</code>, <code>toward_b</code>, the information by level).',
+  note: () => 'A thin dashed mark on the right of the road: the border point (500‰). The visible zone: to the left of it. In "Now" (DEC-21) the half of the edge shows only "there is an enemy in the half" as a mark in its middle, without movement and direction.',
   draw: drawEnemy,
 });
 // ======================================================================================================
 // The cards of the variants: what changes in PixiJS, the price by FPS (an estimate by the number of objects against the measure of
 // ui-style 24.4, not a new measure), the risk, days, whether a DEC, protocol or simulation is needed.
 // ======================================================================================================
-const FPS_NOTE = 'Оценка по числу объектов PixiJS за кадр и замеру ui-style 24.4 (плоское рисование 1,00; запечённые спрайты 0,84; кэшированный слой 0,66; фильтр на каждом объекте 1,55). Не замер: перед реализацией прототип с замером на встроенной графике.';
-const card = (h, pix, fps, risk, est, dec, more = [], need = '') => ({ h, need, l: [...more, ['В PixiJS', pix], ['Цена по FPS', fps], ['Риск', risk], ['Оценка', est], ['DEC, протокол, симуляция', dec]] });
-const NONE = 'нет, нет, нет';
+const FPS_NOTE = 'An estimate from the number of PixiJS objects per frame and the ui-style 24.4 measurement (flat drawing 1.00; baked sprites 0.84; a cached layer 0.66; a filter on every object 1.55). Not a measurement: before implementation, a prototype with a measurement on integrated graphics.';
+const card = (h, pix, fps, risk, est, dec, more = [], need = '') => ({ h, need, l: [...more, ['In PixiJS', pix], ['FPS price', fps], ['Risk', risk], ['Estimate', est], ['DEC, protocol, simulation', dec]] });
+const NONE = 'no, no, no';
 INFO.path = [
-  card('Сейчас', '<code>IntentView.drawOrders</code>: один <code>Graphics</code>, очищается и рисуется каждый кадр: подложка, линия 3, бегущие шевроны, головка и кольцо на цели; пройденная часть текущего ребра бледная.', 'База 1,00.', 'Выглядит «технично» рядом с новым шейдингом: плоская линия поверх объёмной дороги R1, шевроны спорят с полосами уровня.', '', NONE),
-  card('П1 Трубка', 'Те же функции <code>intentLayout.ts</code> (<code>chevrons</code> заменяются бегущими «огнями» через <code>dashAlong</code>), три штриха на путь (подложка, тело, блик со смещением), головка с тенью (тень запечена в текстуру головки). Файлы: <code>intentView.ts</code>, <code>style.ts</code>.', 'Около 1,05: три прохода штриха вместо двух, один <code>Graphics</code> на кадр.', 'Низкий. Слабее различима на светлой местности (снег); не говорит, сколько осталось.', 'S, 1 день.', NONE),
-  card('П2 Маршрут', 'Путь точками (<code>dashAlong</code> с коротким штрихом и круглым концом, ~60-80 штрихов на приказ), кольца на непройденных узлах пути, головка на кольце цели и плашка со временем до прихода: <code>ack.arrive_tick</code> минус текущий тик, один <code>Text</code> из пула на приказ, обновление раз в секунду. Запоминать <code>arrive_tick</code> по группе при <code>ack</code>. Файлы: <code>intentView.ts</code>, <code>intentLayout.ts</code>, <code>style.ts</code>.', 'Около 1,05-1,10: больше штрихов, один <code>Text</code> на приказ; точки не фильтры.', 'Низкий. Виден весь путь и сколько узлов впереди; на 60% точки сливаются в линию (ширина 4 остаётся); время берётся из <code>ack</code>, клиент его не считает сам (AGENTS.md, 7.1).', 'S-M, 1-2 дня.', NONE),
-  card('П3 Подсветка дороги', 'Три широких штриха по рёбрам пути (15, 10 и 3 единицы, без фильтра; «свечение» набором прозрачных штрихов), бегущий огонёк штрихом со смещением, кольцо на цели. Файлы те же.', 'Около 1,10: большая площадь заливки при трёх проходах.', 'Средний: закрывает полосы R1 (уровень дороги под подсветкой нечитаем) и границу территории; нужен приоритет слоёв.', 'S, 1 день.', NONE),
-  card('П4 Лёгкая', 'Тонкий пунктир 1,8 с подложкой, маленькая головка, без кольца и шевронов.', 'Около 0,98.', 'Средний: на 60% и на лесе почти не виден; не годится новичку, подходит как режим «минимум чернил».', 'S, до 1 дня.', NONE),
+  card('Now', '<code>IntentView.drawOrders</code>: one <code>Graphics</code>, cleared and redrawn every frame: a backing, a line of 3, running chevrons, a head and a ring on the target; the passed part of the current edge is pale.', 'Baseline 1.00.', 'Looks "technical" next to the new shading: a flat line over a voluminous R1 road, the chevrons compete with the level lanes.', '', NONE),
+  card('OR1 Tube', 'The same <code>intentLayout.ts</code> functions (<code>chevrons</code> are replaced by running "lights" through <code>dashAlong</code>), three strokes per path (a backing, a body, an offset highlight), a head with a shadow (the shadow is baked into the head texture). Files: <code>intentView.ts</code>, <code>style.ts</code>.', 'About 1.05: three stroke passes instead of two, one <code>Graphics</code> per frame.', 'Low. Less distinguishable on light terrain (snow); does not say how much is left.', 'S, 1 day.', NONE),
+  card('OR2 Route', 'The path in dots (<code>dashAlong</code> with a short stroke and a round end, ~60-80 strokes per order), rings on the unpassed nodes of the path, a head on the ring of the target and a plate with the time to arrival: <code>ack.arrive_tick</code> minus the current tick, one <code>Text</code> from a pool per order, updated once a second. Remember <code>arrive_tick</code> per group at the <code>ack</code>. Files: <code>intentView.ts</code>, <code>intentLayout.ts</code>, <code>style.ts</code>.', 'About 1.05-1.10: more strokes, one <code>Text</code> per order; the dots are not filters.', 'Low. The whole path and how many nodes lie ahead are visible; at 60% the dots merge into a line (the width of 4 remains); the time is taken from the <code>ack</code>, the client does not count it itself (AGENTS.md, 7.1).', 'S-M, 1-2 days.', NONE),
+  card('OR3 Road highlight', 'Three wide strokes along the edges of the path (15, 10 and 3 units, no filter; a "glow" by a set of transparent strokes), a running light as an offset stroke, a ring on the target. The same files.', 'About 1.10: a large fill area with three passes.', 'Medium: covers the R1 lanes (the road level under the highlight is unreadable) and the territory border; a layer priority is needed.', 'S, 1 day.', NONE),
+  card('OR4 Light', 'A thin dash of 1.8 with a backing, a small head, no ring and no chevrons.', 'About 0.98.', 'Medium: at 60% and on forest almost invisible; not suitable for a beginner, suitable as a "minimum ink" mode.', 'S, up to 1 day.', NONE),
 ];
-INFO.path[2].l.splice(0, 0, ['Почему рекомендовано', 'П2: самый читаемый путь через несколько узлов и ближайший узел, время приходит от сервера, не тяжелее нынешнего.']);
+INFO.path[2].l.splice(0, 0, ['Why recommended', 'OR2: the most readable path through several nodes and the nearest node, the time comes from the server, not heavier than now.']);
 INFO.ghost = [
-  card('Сейчас', '<code>overlayView.drawGhosts</code> рисует только отклонённый приказ: пунктирная прямая стрелка, трясётся 200 мс и гаснет к 500 мс; до ответа и после принятия ничего (картинка приказа приходит снимком).', 'База.', 'До ответа нет отклика на клик: сеть 100-300 мс игрок видит «ничего не произошло».', '', NONE),
-  card('Г1 Пунктир', 'Бледная точечная прямая до цели и полое кольцо на цели; при <code>ack</code> призрак растворяется, путь прорисовывается; отказ: янтарный, трясётся, крестик на цели. Прямая может не совпасть с настоящим путём.', 'Около 1,0 (две формы на приказ).', 'Средний: клиент не знает путь до <code>ack</code>, прямая линия может вести через чужую территорию и не совпасть с путём сервера (вводит в заблуждение).', 'S, 0,5 дня.', NONE),
-  card('Г2 Кольцо отправки', 'Вращающаяся дуга вокруг самой группы (одна <code>Graphics</code> на группу, поворот <code>rotation</code>) и полое кольцо на цели; при <code>ack</code> путь прорисовывается от группы; отказ: янтарное кольцо, крестик на фигуре.', 'Около 1,0.', 'Низкий. Отклик на группе, ложного пути нет; кольцо на цели видно на любом масштабе.', 'S, 0,5 дня.', NONE),
-  card('Г3 Цель отмечена', 'Одна плавная пульсация ореола на цели и плашка «...» (один <code>Text</code> из пула); при <code>ack</code> в плашке время прихода, путь прорисовывается; отказ: плашка «✕» янтарная.', 'Около 1,0.', 'Низкий. Нет ложного пути; при «меньше движения» плашка статична.', 'S, 0,5 дня.', NONE),
+  card('Now', '<code>overlayView.drawGhosts</code> draws only a rejected order: a dashed straight arrow, shakes for 200 ms and fades by 500 ms; nothing before the reply and after acceptance (the picture of the order arrives with a snapshot).', 'Baseline.', 'There is no feedback on a click before the reply: with a network of 100-300 ms the player sees "nothing happened".', '', NONE),
+  card('GH1 Dashes', 'A pale dotted straight line to the target and a hollow ring on the target; at the <code>ack</code> the ghost dissolves, the path is drawn; a rejection: amber, shakes, a cross on the target. The straight line may not match the real path.', 'About 1.0 (two shapes per order).', 'Medium: the client does not know the path before the <code>ack</code>, a straight line may lead through foreign territory and not match the server’s path (misleading).', 'S, 0.5 day.', NONE),
+  card('GH2 Dispatch ring', 'A rotating arc around the group itself (one <code>Graphics</code> per group, <code>rotation</code> turn) and a hollow ring on the target; at the <code>ack</code> the path is drawn from the group; a rejection: an amber ring, a cross on the figure.', 'About 1.0.', 'Low. The feedback is on the group, there is no false path; the ring on the target is visible at any scale.', 'S, 0.5 day.', NONE),
+  card('GH3 Target marked', 'One smooth pulse of a halo on the target and a plate "..." (one <code>Text</code> from a pool); at the <code>ack</code> the plate shows the arrival time, the path is drawn; a rejection: an amber "✕" plate.', 'About 1.0.', 'Low. No false path; with "reduced motion" the plate is static.', 'S, 0.5 day.', NONE),
 ];
-INFO.ghost[3].l.splice(0, 0, ['Почему рекомендовано', 'Г3 (или Г2): без ложного пути; отклик на цели и в плашке с временем приходит вместе с П2.']);
+INFO.ghost[3].l.splice(0, 0, ['Why recommended', 'GH3 (or GH2): no false path; the feedback on the target and in the plate with the time arrives together with OR2.']);
 INFO.rib = [
-  card('Сейчас', '<code>IntentView.drawRibbon</code>: широкий многоугольник (тело 16, голова 38×30) на почти непрозрачной тёмной подложке, заливка 0,14 → 0,55 от начала к острию за задержку, одна пульсация 8 тиков, контур 2,2 → 3,2, у противника пунктир.', 'База 1,00 (один <code>Graphics</code> на кадр).', 'Тяжёлая тёмная полоса поверх объёмных объектов и дорог: закрывает рельеф и дорогу, читается как заплатка; состояние подготовки читается только заливкой.', '', NONE),
-  card('Л1 Заряженная трубка', 'Тот же многоугольник тем же кодом, внутри узкий «заряд» (вторая лента 50% ширины) заливается за задержку (маска по <code>ribbonFilled</code>), пульсация: набухание белого блика и свечения (запечённый спрайт головки), после выступления хвост «съедается» за группой.', 'Около 1,05: 3-4 многоугольника на ленту.', 'Средний: «съедание хвоста» требует хранить пройденную долю (из позиции группы, как <code>splitOrder</code>); тёмная подложка остаётся.', 'M, 2 дня.', NONE),
-  card('Л2 Тонкая и кольцо', 'Лента 9 вместо 16 (меньше чернил), задержка показана дугой отсчёта вокруг группы и плашкой «2,1 с» (<code>Graphics</code> дуга и один <code>Text</code>), лента полая до закрепления.', 'Около 1,03.', 'Низкий-средний: две части вида (кольцо и лента), читается чуть сложнее; зато лента не закрывает карту.', 'S-M, 1,5 дня.', NONE),
-  card('Л3 Штриховка', 'Тело ленты закрашено штриховкой (<code>fill({ texture })</code> с запечённым узором) до закрепления, сплошное после; шов прогресса и плашка времени у головки.', 'Около 1,05 (текстурная заливка).', 'Средний: заливка узором в мировых координатах требует проверки в прототипе; штриховка на 60% превращается в серую полосу.', 'M, 2 дня.', NONE),
-  card('Л4 Шевроны', 'Лента из ~10-16 шевронов (многоугольников) вдоль оси; задержка зажигает шевроны по одному (число зажжённых = доля задержки), закрепление: вспышка всех, выступление: шевроны ползут. Голова одна. Пул многоугольников, перерисовка раз в кадр у ползущих.', 'Около 1,10: до 16 многоугольников на ленту; без подложки площадь заливки меньше нынешней.', 'Низкий-средний: на 60% шевроны по 5 px сливаются (ширина и пунктир головки остаются); в серой шкале «зажжён / полый» читается.', 'M, 2-3 дня.', NONE),
+  card('Now', '<code>IntentView.drawRibbon</code>: a wide polygon (body 16, head 38×30) on an almost opaque dark backing, a fill of 0.14 → 0.55 from the start to the tip over the delay, one pulse of 8 ticks, an outline 2.2 → 3.2, dashed for the opponent.', 'Baseline 1.00 (one <code>Graphics</code> per frame).', 'A heavy dark strip over voluminous objects and roads: it covers the relief and the road, reads as a patch; the preparation state reads only by the fill.', '', NONE),
+  card('SC1 Charged tube', 'The same polygon by the same code, inside a narrow "charge" (a second ribbon of 50% width) filled over the delay (a mask by <code>ribbonFilled</code>), the pulse: a swelling of a white highlight and glow (a baked head sprite), after departure the tail is "eaten" behind the group.', 'About 1.05: 3-4 polygons per ribbon.', 'Medium: "eating the tail" requires storing the passed share (from the group position, like <code>splitOrder</code>); the dark backing remains.', 'M, 2 days.', NONE),
+  card('SC2 Thin ribbon and a ring', 'A ribbon of 9 instead of 16 (less ink), the delay shown by a countdown arc around the group and a plate "2.1 s" (a <code>Graphics</code> arc and one <code>Text</code>), the ribbon is hollow until pinning.', 'About 1.03.', 'Low-medium: two parts of the look (a ring and a ribbon), slightly harder to read; but the ribbon does not cover the map.', 'S-M, 1.5 days.', NONE),
+  card('SC3 Hatching', 'The ribbon body is filled with hatching (<code>fill({ texture })</code> with a baked pattern) until pinning, solid after; a progress seam and a time plate at the head.', 'About 1.05 (a texture fill).', 'Medium: a pattern fill in world coordinates needs a check in a prototype; hatching at 60% turns into a gray strip.', 'M, 2 days.', NONE),
+  card('SC4 Chevrons', 'A ribbon of ~10-16 chevrons (polygons) along the axis; the delay lights the chevrons one by one (the number lit = the share of the delay), pinning: a flash of all, departure: the chevrons crawl. One head. A pool of polygons, redrawn every frame for the crawling ones.', 'About 1.10: up to 16 polygons per ribbon; without a backing the fill area is smaller than now.', 'Low-medium: at 60% the 5 px chevrons merge (the width and the dashes of the head remain); in grayscale "lit / hollow" reads.', 'M, 2-3 days.', NONE),
 ];
-INFO.rib[4].l.splice(0, 0, ['Почему рекомендовано', 'Л4: направление читается без головы, подготовка видна числом зажжённых шевронов (без цвета), не закрывает дорогу и границу.']);
+INFO.rib[4].l.splice(0, 0, ['Why recommended', 'SC4: the direction reads without a head, the preparation is visible by the number of lit chevrons (without color), it does not cover the road and the border.']);
 INFO.side = [
-  card('Сейчас', 'Противник: пунктирный контур 9/5, ромб на хвосте; цель: пунктирное кольцо (два кольца <code>--warn</code> над моим городом) радиусом r+20.', 'База.', 'Метка хвоста ромб = «бонус» в языке значков (ui-style 21); лента противника весит столько же, сколько своя.', '', NONE),
-  card('С1 Знак размера', 'Плашка у хвоста: у своей число юнитов в ▽ с контуром, у противника «?» в пунктирном ▽ (размер не виден: DEC-04); цель: прицельное кольцо с четырьмя засечками.', 'Около 1,02 (один знак на ленту).', 'Низкий. Явно говорит «размер скрыт»; пересекается с токеном группы у города.', 'S, 1 день.', NONE),
-  card('С2 Два яруса', 'Лента противника тоньше на 28% и лежит под своей; кольцо цели с «!» в янтарном круге над моим городом.', 'Около 1,0.', 'Низкий. Сторона читается толщиной и ярусом; на встречных лентах своя всегда сверху.', 'S, 0,5 дня.', NONE),
-  card('С3 Прицел', 'Лента противника заменена тонкой пунктирной стрелкой (1,8-3 px), главный знак: прицельное кольцо с засечками и пульсацией (период 0,8 с, как у тревоги) на цели; над моим городом янтарное.', 'Около 1,02 (одна пульсация на цель).', 'Средний: лента противника слабее и её легче не заметить; весь вес на цели (там, где решение игрока); пульсация только пока приказ жив, при «меньше движения» статичное.', 'S, 1 день.', NONE),
+  card('Now', 'The opponent: a dashed outline 9/5, a rhombus on the tail; the target: a dashed ring (two <code>--warn</code> rings over my city) of radius r+20.', 'Baseline.', 'The tail mark rhombus = "bonus" in the language of icons (ui-style 21); the opponent’s ribbon weighs as much as your own.', '', NONE),
+  card('IN1 Size sign', 'A plate at the tail: for your own the number of units in a ▽ with an outline, for the opponent "?" in a dashed ▽ (the size is not visible: DEC-04); the target: a crosshair ring with four ticks.', 'About 1.02 (one sign per ribbon).', 'Low. Says explicitly "the size is hidden"; overlaps with the group token at the city.', 'S, 1 day.', NONE),
+  card('IN2 Two tiers', 'The opponent’s ribbon is 28% thinner and lies under your own; the target ring with "!" in an amber circle over my city.', 'About 1.0.', 'Low. The side reads by thickness and tier; on counter ribbons your own is always on top.', 'S, 0.5 day.', NONE),
+  card('IN3 Crosshair', 'The opponent’s ribbon is replaced by a thin dashed arrow (1.8-3 px), the main sign: a crosshair ring with ticks and a pulse (a period of 0.8 s, like the alarm) on the target; over my city amber.', 'About 1.02 (one pulse per target).', 'Medium: the opponent’s ribbon is weaker and easier to miss; all the weight is on the target (where the player’s decision is); the pulse only while the order is alive, static with "reduced motion".', 'S, 1 day.', NONE),
 ];
-INFO.side[3].l.splice(0, 0, ['Почему рекомендовано', 'С3: угроза читается на моём городе, а не на длинной полосе через карту; лента противника не спорит с картой.']);
+INFO.side[3].l.splice(0, 0, ['Why recommended', 'IN3: the threat reads on my city, not on a long strip across the map; the opponent’s ribbon does not compete with the map.']);
 INFO.bonus = [
-  card('нет', 'Ничего.', 'База.', 'Игрок не видит, какой бонус даст план (DEC-29: число рёбер пути, не больше числа заряженных).', '', NONE),
-  card('есть', 'Плашка «◇ +N» у головки своей ленты (один <code>Text</code>). Нужно поле в <code>OrderView</code> (текущий бонус плана к выступлению), клиент его не считает: потолок по заряженным считается на сервере в тик выступления (DEC-29).', 'Около 1,01.', 'Средний: до выступления это прогноз (заряды могут измениться), надо решить, что показывать; без протокола вариант не делается.', 'S клиента после протокола.', 'не нужен DEC (правило DEC-29 есть); протокол: да (поле, <code>PROTOCOL_VERSION</code>++); симуляция: чтение поля, <code>SIM_VERSION</code> не меняется', [], 'нужен протокол'),
+  card('no', 'Nothing.', 'Baseline.', 'The player does not see what bonus the plan will give (DEC-29: the number of edges of the path, not more than the number of charged).', '', NONE),
+  card('yes', 'A plate "◇ +N" at the head of your own ribbon (one <code>Text</code>). A field in <code>OrderView</code> is needed (the current plan bonus for departure), the client does not count it: the cap by the charged is counted on the server at the departure tick (DEC-29).', 'About 1.01.', 'Medium: before departure it is a forecast (the charges may change), it must be decided what to show; without the protocol the variant cannot be done.', 'S of the client after the protocol.', 'no DEC needed (the DEC-29 rule exists); protocol: yes (a field, <code>PROTOCOL_VERSION</code>++); simulation: reading the field, <code>SIM_VERSION</code> does not change', [], 'protocol needed'),
 ];
 INFO.sep = [
-  card('Сейчас', 'Дуга влево по ходу с изгибом 45% хорды (<code>RIBBON.arcBend</code>); встречные по одной дороге изгибаются в разные стороны.', 'База.', 'Дуги огромные (стрелка 15→4 уходит на 70 ед. от дороги), пересекающиеся накладываются.', '', NONE),
-  card('Р1 Полосы вдоль дороги', 'Ленты прямые, сдвинуты в стороны от оси дороги (<code>shift</code> ±9, тело 12); пересечения: прямые хорды.', 'Около 1,0.', 'Средний: лента лежит у дороги и не показывает путь через узлы; на пересечениях прямые хорды длинные.', 'S, 1 день.', NONE),
-  card('Р2 Низкие дуги', 'Изгиб 22% вместо 45%, тело 12, своя лента сверху, противник под ней.', 'Около 1,0.', 'Низкий. Компактнее; встречные чуть ближе, но не накладываются.', 'S, 0,5 дня.', NONE),
-  card('Р3 Единая полоса', 'Для встречных по одной дороге: подложка-полоса и крест в точке, где они встретятся; пересекающиеся как Р2.', 'Около 1,02.', 'Средний: крест «обещает» бой, которого может не быть (оба могут отменить приказ).', 'S-M, 1-2 дня.', NONE),
+  card('Now', 'An arc to the left along the way with a bend of 45% of the chord (<code>RIBBON.arcBend</code>); counter ones on one road bend to different sides.', 'Baseline.', 'The arcs are huge (the arrow 15→4 goes 70 units away from the road), the crossing ones overlap.', '', NONE),
+  card('CR1 Lanes along the road', 'The ribbons are straight, shifted to the sides of the road axis (<code>shift</code> ±9, body 12); crossings: straight chords.', 'About 1.0.', 'Medium: the ribbon lies by the road and does not show the path through the nodes; on crossings the straight chords are long.', 'S, 1 day.', NONE),
+  card('CR2 Low arcs', 'A bend of 22% instead of 45%, body 12, your own ribbon on top, the opponent under it.', 'About 1.0.', 'Low. More compact; counter ones are slightly closer, but do not overlap.', 'S, 0.5 day.', NONE),
+  card('CR3 Single stripe', 'For counter ones on one road: a backing strip and a cross at the point where they will meet; crossing ones as CR2.', 'About 1.02.', 'Medium: the cross "promises" a fight that may not happen (both can cancel the order).', 'S-M, 1-2 days.', NONE),
 ];
-INFO.sep[2].l.splice(0, 0, ['Почему рекомендовано', 'Р2: минимальная правка (число в <code>RIBBON</code>), встречные и пересечения читаются.']);
+INFO.sep[2].l.splice(0, 0, ['Why recommended', 'CR2: a minimal edit (a number in <code>RIBBON</code>), counter and crossing ones read.']);
 INFO.lay = [
-  card('Сейчас', 'Слой <code>intents</code> под слоем <code>fog</code> (<code>layers.ts</code>), у ленты непрозрачная подложка.', 'База.', 'Подложка закрывает дорогу R1 и границу; в дымке лента темнеет вместе с ней.', '', NONE),
-  card('Сл1 Стекло', 'Прозрачность ленты 0,66 (<code>alpha</code> контейнера): дорога и граница видны сквозь ленту.', 'Около 1,0 (<code>alpha</code> контейнера).', 'Средний: контраст ленты падает, лента на светлом фоне бледнеет.', 'S, 0,5 дня.', NONE),
-  card('Сл2 Над дымкой', 'Слой <code>intents</code> поднят над <code>fog</code> в <code>LAYER_ORDER</code>.', 'Около 1,0, даже дешевле.', 'Низкий. Лента не тускнеет, но «ничего не скрыто» ломает смысл тумана для самой ленты (хотя намерение публично, DEC-04).', 'S, 0,5 дня.', NONE),
-  card('Сл3 Просвет в дымке', 'Над дымкой и мягкий светлый штрих под лентой (размытие, кэшируется при смене приказов).', 'Около 1,1: слой с размытием, его нельзя пересчитывать каждый кадр.', 'Средний: лента «светится» поверх тумана, шумно рядом с несколькими приказами.', 'S-M, 1 день.', NONE),
-  card('Сл4 Полая в дымке', 'Лента сплошная там, где игрок видит, и полая (контур 2 px, 8% заливки) внутри клеток тумана: два набора многоугольников и маска зоны видимости из <code>regionLayout.ts</code> (<code>mask</code> на <code>Graphics</code>).', 'Около 1,03: два <code>Graphics</code> и маска (трафарет).', 'Низкий-средний: нужны полигоны зоны видимости (есть у <code>fogView.ts</code>); в серой шкале «сплошная / полая» читается.', 'M, 1,5-2 дня.', NONE),
+  card('Now', 'The <code>intents</code> layer under the <code>fog</code> layer (<code>layers.ts</code>), the ribbon has an opaque backing.', 'Baseline.', 'The backing covers the R1 road and the border; in the haze the ribbon darkens together with it.', '', NONE),
+  card('LY1 Glass', 'Ribbon transparency 0.66 (the container <code>alpha</code>): the road and the border are visible through the ribbon.', 'About 1.0 (the container <code>alpha</code>).', 'Medium: the ribbon contrast drops, on a light background the ribbon fades.', 'S, 0.5 day.', NONE),
+  card('LY2 Over the haze', 'The <code>intents</code> layer is raised above <code>fog</code> in <code>LAYER_ORDER</code>.', 'About 1.0, even cheaper.', 'Low. The ribbon does not dim, but "nothing is hidden" breaks the meaning of the fog for the ribbon itself (although the intent is public, DEC-04).', 'S, 0.5 day.', NONE),
+  card('LY3 Gap in the haze', 'Above the haze and a soft light stroke under the ribbon (blur, cached when the orders change).', 'About 1.1: a layer with a blur, it cannot be recomputed every frame.', 'Medium: the ribbon "glows" over the fog, noisy next to several orders.', 'S-M, 1 day.', NONE),
+  card('LY4 Hollow in the haze', 'The ribbon is solid where the player sees and hollow (outline 2 px, 8% fill) inside the fog cells: two sets of polygons and a visibility zone mask from <code>regionLayout.ts</code> (<code>mask</code> on <code>Graphics</code>).', 'About 1.03: two <code>Graphics</code> and a mask (a stencil).', 'Low-medium: the visibility zone polygons are needed (<code>fogView.ts</code> has them); in grayscale "solid / hollow" reads.', 'M, 1.5-2 days.', NONE),
 ];
-INFO.lay[4].l.splice(0, 0, ['Почему рекомендовано', 'Сл4: показывает, где игрок видит сам, а где лишь знает намерение; запасной Сл2 (полдня).']);
+INFO.lay[4].l.splice(0, 0, ['Why recommended', 'LY4: shows where the player sees for themselves and where they only know the intent; the fallback LY2 (half a day).']);
 INFO.fx = [
-  card('Сейчас', 'Арена круглая и пулы чисел (<code>fightView.ts</code>), на карте: крест точки встречи, короткая стрелка отскока 1 с, волна захвата 0,5 с. Обмена ударами на карте нет, он внутри арены.', 'База: на 3 боя ~30 <code>Graphics</code> в пулах (арены, числа).', 'Бой на карте почти не виден: контакт и гибель юнитов видны только по арене; нет сближения.', '', NONE),
-  card('Э1 Тихий', 'Кольцо вспышки на токене, по которому попали (один <code>Graphics</code>, пул), числа «−N», отскок: пунктир, захват: кольцо границы. Никаких следов выстрелов.', 'Около 1,00: +2 объекта на бой (кольцо и число).', 'Низкий. Бой «тихий», но обмен ударами читается только по арене.', 'S, 1 день.', NONE),
-  card('Э2 Штабной', 'Следы выстрелов: линия с квадратным (заряд) или ромбовым (бонус) наконечником, у гасящихся выстрелов встреча посередине с кольцом; гибель: осколки (3-6 квадратиков), отскок: пунктирная стрелка, захват: волна и флажок. Пул ~10 объектов на бой, анимируются положение, масштаб и альфа.', 'Около 1,03 на 3 боя (оценка): ~10 объектов на бой, у активных перерисовка каждый кадр, без фильтров и частиц.', 'Низкий. Читается как схема; «сильнее» делает следы длиннее и ярче.', 'M, 2 дня.', NONE),
-  card('Э3 Выразительный', 'Следы со свечением (три штриха), вспышка при попадании (аддитивный спрайт), искры и осколки: <code>ParticleContainer</code> одним на все бои (6-16 частиц на попадание, ~100 спрайтов в худшем кадре на 3 боя), хлопок токена по масштабу, ударная волна захвата с заливкой клетки.', 'Около 1,10-1,25 в худшем кадре (три попадания разом), в среднем около 1,03. Частицы только встроенным <code>ParticleContainer</code> (один вызов отрисовки на все бои); аддитивные вспышки пулом спрайтов; фильтров нет.', 'Средний: шумно при 3 боях, может спорить с ареной и тревогами; обязателен замер на встроенной графике (программный WebGL искажает).', 'M-L, 3 дня.', NONE),
-  card('Э4 Символы', 'Заштрихованная зона боя (круг вокруг узла или полоса на ребре) пока бой идёт (одна текстурная заливка и маска на бой) и журнал раундов маленькими знаками по кругу: ● гасящий раунд, ✕ раунд с потерей.', 'Около 1,02: один заштрихованный спрайт на бой, знаки перерисовываются раз в раунд.', 'Низкий-средний: зона закрывает дороги у узла; журнал на 60% мелкий; зато без движения («меньше движения» не нужен).', 'M, 2 дня.', NONE),
+  card('Now', 'The arena is round and the number pools (<code>fightView.ts</code>), on the map: a meeting point cross, a short bounce arrow of 1 s, a capture wave of 0.5 s. There is no exchange of blows on the map, it is inside the arena.', 'Baseline: for 3 fights ~30 <code>Graphics</code> in pools (arenas, numbers).', 'The fight on the map is almost invisible: contact and unit deaths are visible only by the arena; there is no closing in.', '', NONE),
+  card('FX1 Quiet', 'A flash ring on the token that was hit (one <code>Graphics</code>, a pool), numbers "−N", bounce: a dashed line, capture: a border ring. No shot trails.', 'About 1.00: +2 objects per fight (a ring and a number).', 'Low. The fight is "quiet", but the exchange of blows reads only by the arena.', 'S, 1 day.', NONE),
+  card('FX2 Staff', 'Shot trails: a line with a square (charge) or rhombus (bonus) tip, for shots that cancel each other a meeting in the middle with a ring; death: fragments (3-6 small squares), bounce: a dashed arrow, capture: a wave and a flag. A pool of ~10 objects per fight, position, scale and alpha are animated.', 'About 1.03 for 3 fights (an estimate): ~10 objects per fight, the active ones are redrawn every frame, no filters and particles.', 'Low. Reads as a diagram; "stronger" makes the trails longer and brighter.', 'M, 2 days.', NONE),
+  card('FX3 Expressive', 'Trails with a glow (three strokes), a flash on a hit (an additive sprite), sparks and fragments: one <code>ParticleContainer</code> for all fights (6-16 particles per hit, ~100 sprites in the worst frame for 3 fights), a token pop by scale, a capture shockwave with a cell fill.', 'About 1.10-1.25 in the worst frame (three hits at once), on average about 1.03. Particles only by the built-in <code>ParticleContainer</code> (one draw call for all fights); additive flashes by a sprite pool; no filters.', 'Medium: noisy with 3 fights, may compete with the arena and the alarms; a measurement on integrated graphics is mandatory (software WebGL distorts).', 'M-L, 3 days.', NONE),
+  card('FX4 Symbols', 'A hatched fight zone (a circle around the node or a strip on the edge) while the fight goes on (one texture fill and a mask per fight) and a log of rounds as small signs around the circle: ● a canceling round, ✕ a round with a loss.', 'About 1.02: one hatched sprite per fight, the signs are redrawn once per round.', 'Low-medium: the zone covers the roads at the node; the log is small at 60%; but no motion ("reduced motion" is not needed).', 'M, 2 days.', NONE),
 ];
-INFO.fx[2].l.splice(0, 0, ['Почему рекомендовано', 'Э2: бой виден на карте (где, кто кого, бонус отличим формой наконечника), цена мала. Э3 как «сильнее» второй шаг после замера.']);
+INFO.fx[2].l.splice(0, 0, ['Why recommended', 'FX2: the fight is visible on the map (where, who against whom, the bonus is told apart by the tip shape), the price is small. FX3 as "stronger" is a second step after a measurement.']);
 INFO.k = [
-  card('слабее', 'Коэффициент 0,5 к длине и яркости следов и числу искр в Э2 и Э3.', 'Минус около 30% к цене Э3.', '', '', NONE),
-  card('средне', 'Коэффициент 1.', 'См. стиль.', '', '', NONE),
-  card('сильнее', 'Коэффициент 1,6.', 'Плюс около 40% к цене Э3 (число частиц растёт).', 'Для слабой графики опасно.', '', NONE),
+  card('weaker', 'A coefficient of 0.5 on the length and brightness of the trails and the number of sparks in FX2 and FX3.', 'Minus about 30% of the FX3 price.', '', '', NONE),
+  card('medium', 'A coefficient of 1.', 'See the style.', '', '', NONE),
+  card('stronger', 'A coefficient of 1.6.', 'Plus about 40% of the FX3 price (the number of particles grows).', 'Dangerous for weak graphics.', '', NONE),
 ];
 INFO.mv = [
-  card('Сейчас (DEC-21)', 'Метка в середине половины ребра (пунктирный ▽ «?» или с числом по уровню), без движения и направления.', 'База.', 'Перескакивает из половины в половину; направления нет.', '', NONE),
-  card('Ф1 Шевроны сзади', 'Токен-▽ (контур пунктиром при PRESENCE) и три шеврона за ним по направлению <code>toward_b</code>; интерполяция положения между снапшотами (как у своих групп, 2-3 снапшота назад).', 'Около 1,01 на группу (один токен и три шеврона из пула).', 'Низкий. Направление читается без цвета; шевроны сливаются на 60%.', 'M, 2 дня клиента после протокола.', 'DEC-33 принят (PR #338); протокол: <code>EdgeView.enemy_groups</code> (<code>pos</code>, <code>toward_b</code>, сведения по уровню, непрозрачный id), <code>PROTOCOL_VERSION</code>++; симуляция: <code>SIM_VERSION</code>++ (память по половинам) в #296', [], 'нужен протокол DEC-33'),
-  card('Ф2 Указатель', 'Токен-▽, сплошной указатель-головка спереди и плашка с уровнем под ним («4 · 3●», «3-5», «?»).', 'Около 1,03 (токен, головка, <code>Text</code> плашки).', 'Средний: плашка добавляет шум при нескольких группах в одной половине.', 'M, 2 дня клиента после протокола.', 'как Ф1', [], 'нужен протокол DEC-33'),
-  card('Ф3 Бусина со следом', 'Круглая бусина на дороге с наконечником, точечный след от точки входа (в видимой половине), плашка над ней.', 'Около 1,02.', 'Средний: бусина не похожа на группы в других местах (язык значков, ui-style 21); след обрывается на границе половины.', 'M, 2 дня клиента после протокола.', 'как Ф1', [], 'нужен протокол DEC-33'),
-  card('Ф4 Стрелка на дороге', 'Только короткий штрих с головкой вдоль дороги и маленькая подпись уровня.', 'Около 1,0.', 'Средний: меньше всего чернил, но не «группа» по языку значков; на 60% почти не видна.', 'S-M, 1,5 дня клиента после протокола.', 'как Ф1', [], 'нужен протокол DEC-33'),
+  card('Now (DEC-21)', 'A mark in the middle of the edge half (a dashed ▽ "?" or with a number by the level), without movement and direction.', 'Baseline.', 'Jumps from half to half; there is no direction.', '', NONE),
+  card('EF1 Chevrons behind', 'A ▽ token (a dashed outline at PRESENCE) and three chevrons behind it along the <code>toward_b</code> direction; interpolation of the position between snapshots (like your own groups, 2-3 snapshots behind).', 'About 1.01 per group (one token and three chevrons from a pool).', 'Low. The direction reads without color; the chevrons merge at 60%.', 'M, 2 days of the client after the protocol.', 'DEC-33 accepted (PR #338); protocol: <code>EdgeView.enemy_groups</code> (<code>pos</code>, <code>toward_b</code>, information by level, an opaque id), <code>PROTOCOL_VERSION</code>++; simulation: <code>SIM_VERSION</code>++ (memory by halves) in #296', [], 'DEC-33 protocol needed'),
+  card('EF2 Pointer', 'A ▽ token, a solid pointer-head in front and a plate with the level under it ("4 · 3●", "3-5", "?").', 'About 1.03 (a token, a head, a plate <code>Text</code>).', 'Medium: the plate adds noise with several groups in one half.', 'M, 2 days of the client after the protocol.', 'as EF1', [], 'DEC-33 protocol needed'),
+  card('EF3 Bead with a trail', 'A round bead on the road with a tip, a dotted trail from the entry point (in the visible half), a plate above it.', 'About 1.02.', 'Medium: the bead does not look like groups elsewhere (the language of icons, ui-style 21); the trail breaks off at the border of the half.', 'M, 2 days of the client after the protocol.', 'as EF1', [], 'DEC-33 protocol needed'),
+  card('EF4 Arrow on the road', 'Only a short stroke with a head along the road and a small level caption.', 'About 1.0.', 'Medium: the least ink, but not a "group" by the language of icons; at 60% almost invisible.', 'S-M, 1.5 days of the client after the protocol.', 'as EF1', [], 'DEC-33 protocol needed'),
 ];
-INFO.mv[1].l.splice(0, 0, ['Почему рекомендовано', 'Ф1: тот же ▽, что у групп, плюс направление; без новых форм.']);
+INFO.mv[1].l.splice(0, 0, ['Why recommended', 'EF1: the same ▽ as for groups, plus a direction; no new shapes.']);
 INFO.rev = [
-  card('Жёстко', 'Фигурка появляется и исчезает ровно на точке границы без перехода.', 'База.', 'Нарушает правило ui-style 20 (нет миганий); как «включение/выключение» читается как ошибка.', '', NONE),
-  card('Из-под дымки', 'Фигурка в слое под дымкой и обрезана по зоне видимости: вуаль с мягким краем (9 px) сама делает вход плавным. Без дополнительных объектов.', 'Около 1,0.', 'Низкий. Выход чуть «резкий» там, где вуаль тоньше; нет отметки «вошёл».', 'S, 0,5 дня (после Ф).', 'как Ф1', [], 'нужен протокол DEC-33'),
-  card('Растворение', 'Фигурка над дымкой, прозрачность от 0 до 1 на 24 единицах внутри видимой половины от точки границы (<code>alpha</code> спрайта; не в тумане, ничего сверх DEC-33 не раскрывается).', 'Около 1,0.', 'Низкий. Ясная граница видимости; требует положения от точки границы (есть <code>pos</code>).', 'S, 0,5 дня (после Ф).', 'как Ф1', [], 'нужен протокол DEC-33'),
-  card('Растворение и метки', 'Растворение, плюс на входе одно кольцо расходится от точки границы и засечка остаётся 2 с, на выходе остаётся метка памяти половины (пунктирный ▽ с возрастом): по DEC-33, п. 8 в памяти положения нет, поэтому метка в точке границы.', 'Около 1,01 (кольцо и метка из пула).', 'Низкий-средний: метка памяти напоминает призрак группы; не путать с «последний раз видели» узла (возраст и угасание те же, ui-style 9.8).', 'S-M, 1 день (после Ф).', 'как Ф1', [], 'нужен протокол DEC-33'),
+  card('Hard', 'The figure appears and disappears exactly at the border point without a transition.', 'Baseline.', 'Breaks the ui-style 20 rule (no blinking); as "switching on/off" it reads as an error.', '', NONE),
+  card('From under the haze', 'The figure is in the layer under the haze and clipped by the visibility zone: a veil with a soft edge (9 px) makes the entry smooth by itself. No additional objects.', 'About 1.0.', 'Low. The exit is slightly "sharp" where the veil is thinner; there is no "entered" mark.', 'S, 0.5 day (after EF).', 'as EF1', [], 'DEC-33 protocol needed'),
+  card('Dissolve', 'The figure is above the haze, the opacity from 0 to 1 over 24 units inside the visible half from the border point (the sprite <code>alpha</code>; not in the fog, nothing beyond DEC-33 is revealed).', 'About 1.0.', 'Low. A clear border of visibility; requires the position from the border point (<code>pos</code> exists).', 'S, 0.5 day (after EF).', 'as EF1', [], 'DEC-33 protocol needed'),
+  card('Dissolve and marks', 'The dissolve, plus on entry one ring spreads from the border point and a tick stays for 2 s, on exit a memory mark of the half stays (a dashed ▽ with an age): by DEC-33, item 8, there is no position in memory, so the mark is at the border point.', 'About 1.01 (a ring and a mark from a pool).', 'Low-medium: the memory mark resembles a group ghost; do not confuse with the "last seen" of a node (the age and the fading are the same, ui-style 9.8).', 'S-M, 1 day (after EF).', 'as EF1', [], 'DEC-33 protocol needed'),
 ];
-INFO.rev[3].l.splice(0, 0, ['Почему рекомендовано', 'Растворение и метки: вход и выход видны, правило «в тумане не видно» не нарушено.']);
+INFO.rev[3].l.splice(0, 0, ['Why recommended', 'Dissolve and marks: the entry and the exit are visible, the rule "not visible in the fog" is not broken.']);
 INFO.lvl = [
-  card('EXACT', 'Число юнитов и заряд (заливка ▽ от острия).', '', '', '', NONE),
-  card('RANGE', 'Диапазон «3-5», заряд не показывается (DEC-21, п. 3).', '', '', '', NONE),
-  card('PRESENCE', 'Пунктирный ▽ и «?»: есть враг, чисел нет.', '', '', '', NONE),
+  card('EXACT', 'The number of units and the charge (a ▽ fill from the tip).', '', '', '', NONE),
+  card('RANGE', 'A range "3-5", the charge is not shown (DEC-21, item 3).', '', '', '', NONE),
+  card('PRESENCE', 'A dashed ▽ and "?": there is an enemy, no numbers.', '', '', '', NONE),
 ];
 INFO.arena = [
-  card('Сейчас (круг)', 'Круг из двух половин (<code>fightView.ts</code>): заряженные снизу, разряженные выше, числа, дуга до раунда, стрелки обмена с плашкой.', 'База.', 'Число юнитов читается, но не каждый юнит; DEC-32 заменяет круг на V3.', '', NONE),
-  card('А1 Фишки (DEC-32)', 'Плашка из двух половин, фишка ▽ на юнита (до 8, две строки по 4), «+N» с числом скрытых заряженных, запас ◇ под каждой половиной, полоса до следующего раунда. Фишки: спрайты из <code>generateTexture</code> (3 состояния × 2 стороны), плашка и текст из пула.', 'Около 1,0 на арену (≈20 спрайтов и 4 текста из пулов, перерисовка при смене раунда, не каждый кадр).', 'Средний: фишка 15 ед. меньше 20 px (AGENTS.md, ui-style 22), на 60% мельче 10 px.', 'M, 2-3 дня (#330).', 'DEC-32 принят; протокол: запас ◇ (в #329); для молчащего заряда нужно ещё поле (ниже)', [], ''),
-  card('А2 Фишки 2×4 крупно', 'Та же логика, фишки 19 ед. в сетке 2×4, запас ◇ отдельными ромбиками, полоса раунда по верхней кромке.', 'Около 1,0 (те же объекты, плашка крупнее).', 'Низкий-средний: плашка 204×92 ед. закрывает больше карты; при 3 боях рядом тесно.', 'M, 2-3 дня (#330).', 'как А1', [], ''),
-  card('А3 Батарейки', 'Юнит это «батарейка» (метафора проекта): заряжен, разряжен (штриховка), убит (пунктир с крестом); две строки (свои сверху, противник снизу), запас ◇ в конце строки, полоса раунда слева.', 'Около 1,0.', 'Средний: до 8 батареек в строку, плашка 212×72 ед. широкая; хорошо читается заряд, хуже связь «сторона слева и справа» из DEC-32.', 'M, 2-3 дня (#330).', 'как А1', [], ''),
+  card('Now (circle)', 'A circle of two halves (<code>fightView.ts</code>): the charged below, the discharged above, numbers, an arc to the round, exchange arrows with a plate.', 'Baseline.', 'The number of units reads, but not every unit; DEC-32 replaces the circle with V3.', '', NONE),
+  card('AR1 Chips (DEC-32)', 'A plate of two halves, a ▽ chip per unit (up to 8, two rows of 4), "+N" with the number of hidden charged ones, the ◇ stock under each half, a bar to the next round. The chips: sprites from <code>generateTexture</code> (3 states × 2 sides), the plate and the text from a pool.', 'About 1.0 per arena (≈20 sprites and 4 texts from pools, redrawn on a round change, not every frame).', 'Medium: a chip of 15 units is smaller than 20 px (AGENTS.md, ui-style 22), at 60% smaller than 10 px.', 'M, 2-3 days (#330).', 'DEC-32 accepted; protocol: the ◇ stock (in #329); for a silent charge one more field is needed (below)', [], ''),
+  card('AR2 Chips 2×4 large', 'The same logic, chips of 19 units in a 2×4 grid, the ◇ stock as separate small rhombi, a round bar along the top edge.', 'About 1.0 (the same objects, a larger plate).', 'Low-medium: the plate of 204×92 units covers more of the map; with 3 fights nearby it is crowded.', 'M, 2-3 days (#330).', 'as AR1', [], ''),
+  card('AR3 Batteries', 'A unit is a "battery" (the project’s metaphor): charged, discharged (hatching), killed (dashed with a cross); two rows (your own on top, the opponent below), the ◇ stock at the end of the row, a round bar on the left.', 'About 1.0.', 'Medium: up to 8 batteries per row, the plate of 212×72 units is wide; the charge reads well, the "side on the left and on the right" link from DEC-32 is worse.', 'M, 2-3 days (#330).', 'as AR1', [], ''),
 ];
-INFO.arena[1].l.splice(0, 0, ['Почему рекомендовано', 'А2 (крупные фишки 19-20 ед. закрывают правило 20 px) или А1 с размером в экранных пикселях, а не в единицах карты; А3 если владелец хочет метафору «батарейка».']);
-INFO.case = CASES.map((c) => ({ h: c.name, l: [['Что проверяется', 'Строка таблицы DEC-24 или частный случай; результат проверки: под картинкой.']] }));
+INFO.arena[1].l.splice(0, 0, ['Why recommended', 'AR2 (large chips of 19-20 units satisfy the 20 px rule) or AR1 sized in screen pixels rather than in map units; AR3 if the owner wants the "battery" metaphor.']);
+INFO.case = CASES.map((c) => ({ h: c.name, l: [['What is checked', 'A row of the DEC-24 table or a special case; the result of the check: under the picture.']] }));
 // ======================================================================================================
 // The shell: scene tabs, axes with variants ("side by side"), the clock, state in the address
 // ======================================================================================================
@@ -1568,7 +1568,7 @@ function toHash() {
 
 let figs = [];
 function buildHeader() {
-  $('#tabs').innerHTML = `<div class="seg" role="tablist" aria-label="Элемент">${SCENES.map((s) => `<label><input type="radio" name="scene" value="${s.id}"><span>${s.name}</span></label>`).join('')}</div>`;
+  $('#tabs').innerHTML = `<div class="seg" role="tablist" aria-label="Element">${SCENES.map((s) => `<label><input type="radio" name="scene" value="${s.id}"><span>${s.name}</span></label>`).join('')}</div>`;
   $('#tabs').addEventListener('change', (ev) => { if (ev.target.name === 'scene') { st.scene = ev.target.value; const cs = curScene(); st.act = cs.axes[0].id; st.cmp = ''; st.t = 0; render(); } });
   $('#axes').addEventListener('change', (ev) => {
     const el = ev.target;
@@ -1597,8 +1597,8 @@ function render() {
   const sc = curScene(), cs = sc.axes;
   if (!cs.some((a) => a.id === st.act)) st.act = cs[0].id;
   $('#tabs').querySelectorAll('input').forEach((r) => (r.checked = r.value === st.scene));
-  $('#axes').innerHTML = cs.map((a) => `<div class="blk${st.act === a.id ? ' act' : ''}"><b>${a.title}</b><div class="seg" role="radiogroup" aria-label="${a.title}">${a.v.map((n, i) => `<label><input type="radio" name="${a.id}" value="${i}" ${st.sel[a.id] === i ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div><label class="cmp"><input type="checkbox" data-cmp="${a.id}" ${st.cmp === a.id ? 'checked' : ''}> рядом</label></div>`).join('')
-    + `<div class="blk"><b>Сценарий</b><div class="seg" role="radiogroup" aria-label="Сценарий">${sc.scenarios.map((x) => `<label><input type="radio" name="scn" value="${x.id}" ${st.scn[sc.id] === x.id ? 'checked' : ''}><span>${x.name}</span></label>`).join('')}</div></div>`;
+  $('#axes').innerHTML = cs.map((a) => `<div class="blk${st.act === a.id ? ' act' : ''}"><b>${a.title}</b><div class="seg" role="radiogroup" aria-label="${a.title}">${a.v.map((n, i) => `<label><input type="radio" name="${a.id}" value="${i}" ${st.sel[a.id] === i ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div><label class="cmp"><input type="checkbox" data-cmp="${a.id}" ${st.cmp === a.id ? 'checked' : ''}> side by side</label></div>`).join('')
+    + `<div class="blk"><b>Scenario</b><div class="seg" role="radiogroup" aria-label="Scenario">${sc.scenarios.map((x) => `<label><input type="radio" name="scn" value="${x.id}" ${st.scn[sc.id] === x.id ? 'checked' : ''}><span>${x.name}</span></label>`).join('')}</div></div>`;
   for (const id of ['gray', 'rm']) $('#' + id).checked = !!st[id];
   $('#sc').value = st.sc; $('#speed').value = String(st.speed);
   const ax = st.cmp ? cs.find((a) => a.id === st.cmp) : null;
@@ -1611,9 +1611,9 @@ function render() {
   $('#extra').innerHTML = sc.panel ? sc.panel(st) : '';
   if (sc.afterRender) sc.afterRender(st);
   const act = cs.find((a) => a.id === st.act), info = (INFO[st.act] || []);
-  $('#cards').innerHTML = info.map((c, i) => `<div class="card${act && act.rec === i ? ' rec' : ''}"><h3>${c.h}${act && act.rec === i ? '<span class="badge">рекомендация</span>' : ''}${c.need ? `<span class="badge warn">${c.need}</span>` : ''}</h3><dl>${c.l.filter(([, b]) => b).map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl></div>`).join('');
+  $('#cards').innerHTML = info.map((c, i) => `<div class="card${act && act.rec === i ? ' rec' : ''}"><h3>${c.h}${act && act.rec === i ? '<span class="badge">recommended</span>' : ''}${c.need ? `<span class="badge warn">${c.need}</span>` : ''}</h3><dl>${c.l.filter(([, b]) => b).map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl></div>`).join('');
   const hash = toHash();
-  $('#pick').innerHTML = `Адрес кадра: <code>orders-style.html#${hash}</code>. Выбор владельца пишется в issue #339 (поле решения): ${SCENES.map((s) => s.axes.map((a) => `${a.title} <b>${a.v[st.sel[a.id]]}</b>`).join(', ')).join('; ')}.`;
+  $('#pick').innerHTML = `Frame address: <code>orders-style.html#${hash}</code>. The owner’s choice is recorded in issue #339 (the decision field): ${SCENES.map((s) => s.axes.map((a) => `${a.title} <b>${a.v[st.sel[a.id]]}</b>`).join(', ')).join('; ')}.`;
   clock.last = null; syncPlay(); frame();
 }
 const clock = { last: null };
@@ -1629,7 +1629,7 @@ function frame(ts) {
     const r = sc.draw({ t: st.t, I: (s) => s + '_' + f.uid, sel: f.sel, scn, rm: !!st.rm, scale: st.sc / 100, uid: f.uid });
     f.u.innerHTML = r.under || ''; f.o.innerHTML = r.over || '';
   }
-  $('#tlab').textContent = f1(st.t).toString().replace('.', ',') + ' с';
+  $('#tlab').textContent = f1(st.t).toString() + ' s';
   $('#scrub').value = String(Math.round((st.t / T) * 100));
 }
 function loop(ts) { frame(ts); requestAnimationFrame(loop); }

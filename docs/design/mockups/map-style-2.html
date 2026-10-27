@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Стиль карты, раунд 2: объём, текстуры, туман, дороги</title>
+<title>Map style, round 2: volume, textures, fog, roads</title>
 <style>
 :root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#9da7b3;--you:#5b9bff;--enemy:#e5484d;--warn:#ffb020;--ok:#3fb950}
 *{box-sizing:border-box}
@@ -64,27 +64,27 @@ code{background:var(--surface2);padding:0 4px;border-radius:4px;font-size:12.5px
 <body>
 <header>
   <div class="row">
-    <h1>Стиль карты, раунд 2 (#332)</h1>
-    <label class="opt"><input type="checkbox" id="gray"> серая шкала</label>
-    <label class="opt"><input type="checkbox" id="rm"> меньше движения</label>
-    <label class="opt">масштаб карты <select id="sc"><option value="60">60%</option><option value="100" selected>100%</option><option value="200">200%</option></select></label>
-    <label class="opt"><input type="checkbox" id="sheen"> блик дороги из D3 (для вариантов дорог 0-2)</label>
+    <h1>Map style, round 2 (#332)</h1>
+    <label class="opt"><input type="checkbox" id="gray"> grayscale</label>
+    <label class="opt"><input type="checkbox" id="rm"> reduced motion</label>
+    <label class="opt">map scale <select id="sc"><option value="60">60%</option><option value="100" selected>100%</option><option value="200">200%</option></select></label>
+    <label class="opt"><input type="checkbox" id="sheen"> road highlight from D3 (for road variants 0-2)</label>
   </div>
   <div class="row" id="blocks"></div>
 </header>
 <main>
-  <p class="note">Четыре независимых блока на одной сцене (фрагмент реальной карты <code>arteriya</code>). В каждом блоке выберите вариант; галочка «рядом» показывает все варианты блока одним рядом, остальные блоки остаются как выбраны. Выбор владельца (2026-10-21) по #332: берём шейдинг D3 (градиенты, мягкие тени, свечение границ, блики), <b>без полу-3D ландшафта</b> (hillshade и «холмов с освещением» нет). Ничего в игре не меняется: код игры, <code>maps:bake</code> и правила не тронуты. Кадр по адресу: <code>#sh=1&amp;tx=2&amp;fg=2&amp;rd=1&amp;sc=100&amp;gray=1&amp;rm=1</code>.</p>
+  <p class="note">Four independent blocks on one scene (a fragment of the real map <code>arteriya</code>). In each block pick a variant; the "side by side" checkbox shows all variants of the block in one row, the other blocks stay as selected. The owner’s choice (2026-10-21) on #332: take the D3 shading (gradients, soft shadows, border glow, highlights), <b>no semi-3D landscape</b> (no hillshade and no "lit hills"). Nothing changes in the game: the game code, <code>maps:bake</code> and the rules are untouched. A frame by address: <code>#sh=1&amp;tx=2&amp;fg=2&amp;rd=1&amp;sc=100&amp;gray=1&amp;rm=1</code>.</p>
   <div id="stage"></div>
   <p class="note" id="stagenote"></p>
   <div class="cards" id="cards"></div>
-  <h2 class="sec">Дороги: уровни и состояния на чистом фоне (Б4)</h2>
-  <p class="note">Каждая строка вариант дорог (0 нынешний, R1, R2, R3). Колонки: своя внутренняя дорога уровней 1, 2, 3; буферная (концы у разных владельцев) уровня 2; вражеская внутренняя в обзоре; в тумане: последний увиденный уровень 2 и ни разу не виденная (уровень 1 по DEC-17); стройка 1→2; пакет снабжения и разовая перевозка. Серая шкала и «меньше движения» действуют и здесь. Вуаль тумана (Б3) здесь не рисуется: видно, как стиль дороги сам несёт состояние.</p>
+  <h2 class="sec">Roads: levels and states on a clean background (BL4)</h2>
+  <p class="note">Each row is a road variant (0 now, R1, R2, R3). Columns: your own internal road of levels 1, 2, 3; a buffer road (ends with different owners) of level 2; an enemy internal road in view; in the fog: the last seen level 2 and a never seen road (level 1 by DEC-17); construction 1→2; a supply packet and a one-off transfer. Grayscale and "reduced motion" apply here too. The fog veil (BL3) is not drawn here: you can see how the road style itself carries the state.</p>
   <div id="roadm" class="roadm"></div>
-  <h2 class="sec">Мелкие знаки в натуральную величину (1:1, не зависит от масштаба карты)</h2>
-  <p class="note">Проверка риска «мыльности» (ui-style 24.2): знаки карты на трёх фонах (тёмный лес, равнина, снег: худший случай для белого контура). Значимый символ не мельче 20 px, число не мельче 10 px. Строки: сила шейдинга Б1 (0, 1, 2). Смотреть без увеличения, при масштабе браузера 100%.</p>
+  <h2 class="sec">Small signs at natural size (1:1, independent of the map scale)</h2>
+  <p class="note">A check of the "soapiness" risk (ui-style 24.2): map signs on three backgrounds (dark forest, plains, snow: the worst case for a white outline). A meaningful symbol is not smaller than 20 px, a number not smaller than 10 px. Rows: BL1 shading strength (0, 1, 2). Look without zoom, at browser scale 100%.</p>
   <div class="strip" id="strip"></div>
-  <h2 class="sec">Образцы биомов: нынешний запекатель и «чистые» текстуры</h2>
-  <p class="note">Тот же набор биомов (степь, саванна, лес, джунгли, скалы, снег). Новые образцы нарисованы скриптом <code>docs/design/mockups/src/map_textures.py</code> (numpy и Pillow, детерминированно): плоские тона без освещения и теней рельефа; детали (травинки, кроны, камни) нарисованы как плоские знаки.</p>
+  <h2 class="sec">Biome samples: the current baker and the "clean" textures</h2>
+  <p class="note">The same set of biomes (steppe, savanna, forest, jungle, rocks, snow). The new samples are drawn by the script <code>docs/design/mockups/src/map_textures.py</code> (numpy and Pillow, deterministic): flat tones without lighting or relief shadows; details (grass blades, crowns, stones) are drawn as flat signs.</p>
   <div class="swatch" id="swatch"></div>
   <div class="pick" id="pick"></div>
 </main>
@@ -209,9 +209,9 @@ const inView = (x, y, m = 0) => x > VB.x - m && x < VB.x + VB.w + m && y > VB.y 
 // No relief shading (the owner's choice 2026-10-21): only cities, groups, badges, borders, ribbons, roads.
 // ======================================================================================================
 const SHP = [
-  { name: 'Сейчас' },
-  { name: 'Сдержанный', lt: .16, dk: .14, shDy: 1.5, shStd: 1, shOp: .5, rim: .3, gloss: 0, glowStd: 3, glowOp: .5, glowW: 6, tube: .3 },
-  { name: 'Выраженный', lt: .5, dk: .3, shDy: 3, shStd: 2.2, shOp: .68, rim: .5, gloss: .34, glowStd: 5.5, glowOp: .85, glowW: 10, tube: .55 },
+  { name: 'Now' },
+  { name: 'Restrained', lt: .16, dk: .14, shDy: 1.5, shStd: 1, shOp: .5, rim: .3, gloss: 0, glowStd: 3, glowOp: .5, glowW: 6, tube: .3 },
+  { name: 'Pronounced', lt: .5, dk: .3, shDy: 3, shStd: 2.2, shOp: .68, rim: .5, gloss: .34, glowStd: 5.5, glowOp: .85, glowW: 10, tube: .55 },
 ];
 
 function shadeDefs(I, sh) {
@@ -410,7 +410,7 @@ function arenaG(I, sh, filt, fillOf) {
   en_.forEach((s, i) => { a += chip(ax + 17 + i * 18, ay - 4, s, 'enemy', i >= 2); });
   a += dia(ax - 52, ay + 20, 'you', 2) + dia(ax + 28, ay + 20, 'enemy', 1) + '</g>';
   a += `<path d="M${ax - 40} ${ay - 36}Q${ax} ${ay - 66} ${ax + 40} ${ay - 36}" stroke="${C.you}" stroke-width="3" stroke-dasharray="3 5" stroke-linecap="round"/><polygon points="${ax + 40},${ay - 44} ${ax + 47},${ay - 36} ${ax + 40},${ay - 28} ${ax + 33},${ay - 36}" fill="${fillOf('you', C.you)}" stroke="${C.bg}" stroke-width="1.2"/>`;
-  a += `<g ${filt('shd')}><rect x="${ax - 55}" y="${ay - 71}" width="110" height="19" rx="9.5" fill="${C.plate}" stroke="${C.you}" stroke-width="1.6"/>${text(ax, ay - 61.5, '◇ бонусная атака', 11, C.paper)}</g>`;
+  a += `<g ${filt('shd')}><rect x="${ax - 55}" y="${ay - 71}" width="110" height="19" rx="9.5" fill="${C.plate}" stroke="${C.you}" stroke-width="1.6"/>${text(ax, ay - 61.5, '◇ bonus attack', 11, C.paper)}</g>`;
   return a;
 }
 
@@ -617,141 +617,141 @@ function stripSvg(sh, bg, uid) {
 }
 
 const BLOCKS = [
-  { id: 'sh', n: 1, title: 'Шейдинг объектов', v: ['Сейчас', 'Сдержанный', 'Выраженный'] },
-  { id: 'tx', n: 2, title: 'Текстуры и переходы', v: ['Сейчас', 'T1 Рваный край', 'T2 Прореживание', 'T3 Градиент'] },
-  { id: 'fg', n: 3, title: 'Туман', v: ['Сейчас', 'F1 Дымка', 'F2 Память', 'F3 Линия обзора'] },
-  { id: 'rd', n: 4, title: 'Дороги', v: ['Сейчас', 'R1 Полосы', 'R2 Таблички', 'R3 Трубка'] },
+  { id: 'sh', n: 1, title: 'Object shading', v: ['Now', 'Restrained', 'Pronounced'] },
+  { id: 'tx', n: 2, title: 'Textures and transitions', v: ['Now', 'T1 Ragged edge', 'T2 Thinning', 'T3 Gradient'] },
+  { id: 'fg', n: 3, title: 'Fog', v: ['Now', 'F1 Haze', 'F2 Memory', 'F3 Line of sight'] },
+  { id: 'rd', n: 4, title: 'Roads', v: ['Now', 'R1 Lanes', 'R2 Plates', 'R3 Tube'] },
 ];
 const REC = { sh: 1, tx: 2, fg: 2, rd: 1 };          // the recommendation per block (also in the issue)
 
 // ---- the cards under the stage: what a variant means for PixiJS, the baker, the budget ----
 const INFO = {
   sh: [
-    { h: 'Б1-0 Сейчас (D1, плоский)', l: [['Что это', 'Нынешний плоский язык из ui-style 9: однотонные фигуры, белые контуры, тёмные подложки.'], ['Цена', 'Базовая: 1,00 в замере 24.4.']] },
-    { h: 'Б1-1 Сдержанный', l: [
-      ['Идея', 'Градиент заливки сверху вниз (светлее на 16% вверху, темнее на 14% внизу), мягкая тень 1,5 px, светлая кромка сверху на городах и треугольниках; свечение границы территории слабое (размытие 3 px); лента приказа как трубка из двух слоёв. Освещения рельефа нет.'],
-      ['В PixiJS', 'Города, треугольники юнитов, значки VP и фишки арены становятся спрайтами из <code>renderer.generateTexture</code> с градиентом и тенью, запечёнными один раз на (вид, размер, владелец, доля заряда); заряд: маска или нарезка кадров. Граница: слой границ с <code>BlurFilter</code>, пересчёт только при смене владельца, <code>cacheAsTexture</code>. Правки: <code>shapes.ts</code>, <code>cityView.ts</code>, <code>entityView.ts</code>, <code>intentView.ts</code>, <code>mapView.ts</code>, <code>style.ts</code>.'],
-      ['Запекание фонов', 'Не меняется.'],
-      ['Библиотеки', 'Нет: <code>generateTexture</code>, <code>BlurFilter</code>, <code>cacheAsTexture</code> есть в <code>pixi.js</code> 8.21 (проверено в ui-style 24.3).'],
-      ['Цена по FPS', 'Ориентир по замеру ui-style 24.4: спрайты с запечённой тенью 0,84 от плоского, кэшированный слой свечения 0,66; итог около 0,8-1,0. Это оценка по замеру, не новый замер.'],
-      ['Риск', 'Низкий-средний. Число на 24 px и контур различимы (полоса «мелкие знаки» ниже); нужен кадр в серой шкале и эталоны <code>visual</code> заново.'],
-      ['Оценка', 'M, 3-4 дня. DEC нет, протокола нет, симуляции нет.'],
+    { h: 'BL1-0 Now (D1, flat)', l: [['What it is', 'The current flat language from ui-style 9: solid-color shapes, white outlines, dark backings.'], ['Price', 'Baseline: 1.00 in the 24.4 measurement.']] },
+    { h: 'BL1-1 Restrained', l: [
+      ['Idea', 'A top-to-bottom fill gradient (16% lighter at the top, 14% darker at the bottom), a soft 1.5 px shadow, a light top rim on cities and triangles; the territory border glow is weak (3 px blur); the order ribbon is a two-layer tube. No relief lighting.'],
+      ['In PixiJS', 'Cities, unit triangles, VP icons and arena chips become sprites from <code>renderer.generateTexture</code> with a gradient and a shadow, baked once per (kind, size, owner, charge share); the charge: a mask or frame slicing. The border: a border layer with <code>BlurFilter</code>, recomputed only when the owner changes, <code>cacheAsTexture</code>. Edits: <code>shapes.ts</code>, <code>cityView.ts</code>, <code>entityView.ts</code>, <code>intentView.ts</code>, <code>mapView.ts</code>, <code>style.ts</code>.'],
+      ['Background baking', 'Unchanged.'],
+      ['Libraries', 'None: <code>generateTexture</code>, <code>BlurFilter</code>, <code>cacheAsTexture</code> exist in <code>pixi.js</code> 8.21 (checked in ui-style 24.3).'],
+      ['FPS price', 'A guide from the ui-style 24.4 measurement: sprites with a baked shadow 0.84 of flat, a cached glow layer 0.66; in total about 0.8-1.0. This is an estimate from the measurement, not a new measurement.'],
+      ['Risk', 'Low-medium. A number at 24 px and the outline are distinguishable (the "small signs" strip below); a grayscale frame and new <code>visual</code> references are needed.'],
+      ['Estimate', 'M, 3-4 days. No DEC, no protocol, no simulation.'],
     ] },
-    { h: 'Б1-2 Выраженный', l: [
-      ['Идея', 'Радиальный градиент (светлее на 50%, темнее на 30%), блик (эллипс 34%) на городах, тень 3 px, подсвеченная кромка треугольников, свечение границы шире (размытие 5,5 px, 10 px) и ярче, жёлоб ленты приказа с бликом, свечение тревоги. Это шейдинг D3 без рельефа.'],
-      ['В PixiJS', 'Те же приёмы, что в Б1-1, текстуры больше (тень шире, блик), свечение границы шире (слой с кэшем в тот же размер).'],
-      ['Запекание фонов', 'Не меняется (hillshade D3 не берём: решение владельца).'],
-      ['Библиотеки', 'Нет.'],
-      ['Цена по FPS', 'Около 0,9-1,1 (оценка по 24.4): больше текстурной памяти (тень и блик расширяют спрайт на 6-8 px с каждой стороны).'],
-      ['Риск', 'Средний: «мыльность» мелких знаков (раздел 24.2) проверяется полосой ниже: на светлом фоне (снег) тень 3 px и блик снижают чёткость контура; тревога и ленты спорят с боем арены.'],
-      ['Оценка', 'L, 5-6 дней (спрайты 3, свечение и кэш 1, FPS и эталоны 1-2). DEC нет, протокола нет.'],
+    { h: 'BL1-2 Pronounced', l: [
+      ['Idea', 'A radial gradient (50% lighter, 30% darker), a highlight (a 34% ellipse) on cities, a 3 px shadow, a lit rim on triangles, a wider border glow (blur 5.5 px, 10 px) and brighter, an order ribbon trough with a highlight, an alarm glow. This is the D3 shading without relief.'],
+      ['In PixiJS', 'The same techniques as in BL1-1, bigger textures (a wider shadow, a highlight), a wider border glow (a cached layer of the same size).'],
+      ['Background baking', 'Unchanged (we do not take the D3 hillshade: the owner’s decision).'],
+      ['Libraries', 'None.'],
+      ['FPS price', 'About 0.9-1.1 (an estimate from 24.4): more texture memory (the shadow and the highlight widen a sprite by 6-8 px on each side).'],
+      ['Risk', 'Medium: the "soapiness" of small signs (section 24.2) is checked by the strip below: on a light background (snow) a 3 px shadow and a highlight reduce the outline sharpness; the alarm and the ribbons compete with the arena fight.'],
+      ['Estimate', 'L, 5-6 days (sprites 3, glow and cache 1, FPS and references 1-2). No DEC, no protocol.'],
     ] },
   ],
   tx: [
-    { h: 'Б2-0 Сейчас', l: [
-      ['Что это', 'Фон <code>maps/arteriya.bg.png</code> как запечён: шесть плоских цветов биомов, шум яркости ±9%, блоки 4 px (<code>STEP</code>), стыки биомов ступенчатые и резкие; поверх штампы <code>TerrainView</code> (ёлки, пики, травинки), около 1300 спрайтов на карту (расчёт по правилам <code>TerrainView</code>).'],
-      ['Цена по FPS', 'База: фон одна текстура, штампы спрайтами.'],
+    { h: 'BL2-0 Now', l: [
+      ['What it is', 'The background <code>maps/arteriya.bg.png</code> as baked: six flat biome colors, brightness noise ±9%, 4 px blocks (<code>STEP</code>), biome joints stepped and sharp; on top the <code>TerrainView</code> stamps (fir trees, peaks, grass blades), about 1300 sprites per map (calculated by the <code>TerrainView</code> rules).'],
+      ['FPS price', 'Baseline: the background is one texture, the stamps are sprites.'],
     ] },
-    { h: 'Б2-1 Рваный край', l: [
-      ['Идея', 'Улучшенные «чистые» текстуры (две плоские тональности в пятнах, плоские кроны, камни и травинки знаками, без освещения) и граница биомов по шумовой маске: рваный край в 3-20 px, перо 1 px, детали обрываются на краю. Читается как карта-схема, чёткие области.'],
-      ['В PixiJS', 'Ничего: фон остаётся одной текстурой. Штампы <code>TerrainView</code> можно выключить (текстура несёт рельеф): минус около 1300 спрайтов.'],
-      ['Запекание фонов', 'Новый запекатель (<code>gow_maps.bake</code>): поле биомов как сейчас, маска по шуму, спрайты деталей; шум и размытие на numpy (2-3 с на карту 1600×1000 на этой машине), формат WebP или JPEG: PNG из шума весит 2,2 МБ против 0,3 МБ (раздел «Размеры» ниже).'],
-      ['Библиотеки', 'Два пути. (а) Без новых зависимостей: чистый Python, PNG через zlib (правило ui-style 22 «запекатель на стандартной библиотеке» сохраняется); файл 2,2-2,6 МБ на карту против 0,12 МБ сейчас; шум в 3 октавы на 1600×1000 в чистом Python: 0,6 с (измерено), размытие весов и спрайты деталей не меряли, оценка: десятки секунд на карту. (б) numpy и Pillow: они уже в <code>uv.lock</code> через matplotlib (зависимость <code>gow-maps</code>), нужно объявить их в <code>tools/maps/pyproject.toml</code> и снять правило ui-style 22; WebP 0,27-0,29 МБ, JPEG 0,30-0,35 МБ, 2-3 с на карту.'],
-      ['Цена по FPS', 'Не выше нынешней (фон одна текстура 1600×1000, 6,4 МБ в видеопамяти при 1 px на единицу; при 2 px: 25,6 МБ); при выключенных штампах чуть дешевле.'],
-      ['Риск', 'Низкий-средний: форматы фона (<code>.bg.png</code> → <code>.bg.webp</code>) меняют путь на сервере и в клиенте; на границе лес-равнина деревья по краю заметно «слипаются».'],
-      ['Оценка', 'M-L, 3-5 дней: запекатель 2-3, формат и сервер 1, эталоны 1. DEC нет, протокола нет.'],
+    { h: 'BL2-1 Ragged edge', l: [
+      ['Idea', 'Improved "clean" textures (two flat tones in patches, flat crowns, stones and grass blades as signs, no lighting) and a biome border by a noise mask: a ragged edge of 3-20 px, a 1 px feather, the details break off at the edge. Reads as a schematic map, with clear areas.'],
+      ['In PixiJS', 'Nothing: the background stays one texture. The <code>TerrainView</code> stamps can be turned off (the texture carries the relief): minus about 1300 sprites.'],
+      ['Background baking', 'A new baker (<code>gow_maps.bake</code>): the biome field as now, a noise mask, detail sprites; noise and blur on numpy (2-3 s per 1600×1000 map on this machine), WebP or JPEG format: a PNG of noise weighs 2.2 MB against 0.3 MB (section "Sizes" below).'],
+      ['Libraries', 'Two ways. (a) No new dependencies: pure Python, PNG through zlib (the ui-style 22 rule "the baker on the standard library" is kept); a file of 2.2-2.6 MB per map against 0.12 MB now; 3-octave noise on 1600×1000 in pure Python: 0.6 s (measured), the weight blur and the detail sprites were not measured, an estimate: tens of seconds per map. (b) numpy and Pillow: they are already in <code>uv.lock</code> through matplotlib (a dependency of <code>gow-maps</code>), they must be declared in <code>tools/maps/pyproject.toml</code> and the ui-style 22 rule lifted; WebP 0.27-0.29 MB, JPEG 0.30-0.35 MB, 2-3 s per map.'],
+      ['FPS price', 'Not higher than now (the background is one 1600×1000 texture, 6.4 MB of video memory at 1 px per unit; at 2 px: 25.6 MB); a bit cheaper with the stamps off.'],
+      ['Risk', 'Low-medium: the background formats (<code>.bg.png</code> → <code>.bg.webp</code>) change the path on the server and in the client; on a forest-plains border the trees at the edge visibly "stick together".'],
+      ['Estimate', 'M-L, 3-5 days: the baker 2-3, the format and the server 1, references 1. No DEC, no protocol.'],
     ] },
-    { h: 'Б2-2 Прореживание деталей', l: [
-      ['Идея', 'Те же текстуры; цвета земли стыкуются узкой полосой (около 14 px, полоса «гуляет» по шуму), а детали (деревья, травинки, камни) на краю редеют и уменьшаются: лес разрежается у кромки, камни рассыпаются у подножия. Самый «природный» переход без размытия.'],
-      ['В PixiJS', 'Как Б2-1.'],
-      ['Запекание фонов', 'Как Б2-1 плюс поле плотности деталей из размытых весов биомов (σ 11 px); размер файла как у Б2-1.'],
-      ['Библиотеки', 'Как Б2-1.'],
-      ['Цена по FPS', 'Как Б2-1.'],
-      ['Риск', 'Низкий-средний, как Б2-1; детали на 60% масштаба сливаются в фактуру (это хорошо для читаемости объектов поверх).'],
-      ['Оценка', 'M-L, 3-5 дней (то же, плюс подбор плотности). DEC нет, протокола нет.'],
+    { h: 'BL2-2 Thinning', l: [
+      ['Idea', 'The same textures; the ground colors meet in a narrow stripe (about 14 px, the stripe "wanders" along the noise), and the details (trees, grass blades, stones) thin out and shrink at the edge: the forest thins at the rim, the stones scatter at the foot. The most "natural" transition without blur.'],
+      ['In PixiJS', 'As BL2-1.'],
+      ['Background baking', 'As BL2-1 plus a detail density field from the blurred biome weights (σ 11 px); the file size as BL2-1.'],
+      ['Libraries', 'As BL2-1.'],
+      ['FPS price', 'As BL2-1.'],
+      ['Risk', 'Low-medium, as BL2-1; at 60% scale the details merge into a texture (good for the readability of objects on top).'],
+      ['Estimate', 'M-L, 3-5 days (the same, plus tuning the density). No DEC, no protocol.'],
     ] },
-    { h: 'Б2-3 Градиент с зерном', l: [
-      ['Идея', 'Широкая мягкая смесь цветов (σ 22 px), детали бледные и редкие, зерно поверх. Самый тихий фон: объекты поверх читаются лучше всего, но «текстур» почти не видно, края размыты.'],
-      ['В PixiJS', 'Как Б2-1; зерно запечено в фон (не <code>NoiseFilter</code> на экране).'],
-      ['Запекание фонов', 'Как Б2-1, проще (без спрайтов на краю).'],
-      ['Библиотеки', 'Как Б2-1.'],
-      ['Цена по FPS', 'Как Б2-1. Если зерно делать фильтром на экране: замеры 24.4 для встроенной графики нет (в программном рендере 0,64), запекать безопаснее.'],
-      ['Риск', 'Средний по «узнаваемости»: размытые границы читаются как «мыло» (то, чего хочет избежать раздел 24.2) на крупном масштабе.'],
-      ['Оценка', 'M, 2-3 дня. DEC нет, протокола нет.'],
+    { h: 'BL2-3 Gradient with grain', l: [
+      ['Idea', 'A wide soft color blend (σ 22 px), pale and sparse details, grain on top. The quietest background: objects on top read best, but the "textures" are almost invisible, the edges are blurred.'],
+      ['In PixiJS', 'As BL2-1; the grain is baked into the background (not an on-screen <code>NoiseFilter</code>).'],
+      ['Background baking', 'As BL2-1, simpler (no sprites at the edge).'],
+      ['Libraries', 'As BL2-1.'],
+      ['FPS price', 'As BL2-1. If the grain is made by an on-screen filter: the 24.4 measurements have no number for integrated graphics (0.64 in software rendering), baking is safer.'],
+      ['Risk', 'Medium for "recognizability": blurred borders read as "soap" (what section 24.2 wants to avoid) at a large scale.'],
+      ['Estimate', 'M, 2-3 days. No DEC, no protocol.'],
     ] },
   ],
   fg: [
-    { h: 'Б3-0 Сейчас', l: [['Что это', 'Затемнение клетки скрытого города на 45%, штриховка 45° полосой 24 единицы вдоль границы видимого, дорога в тумане темнеет на 55%, призрак с возрастом. Полоса 24 в единицах карты (на малом масштабе её не видно: ui-style 3.2, R7).']] },
-    { h: 'Б3-1 Дымка', l: [
-      ['Идея', 'Холодная серо-синяя вуаль 66% с мягким краем (размытие 9 px) вместо штриховки: фон обесцвечивается и темнеет, край плывёт. Одна подача для «видели» и «не видели».'],
-      ['Данные', '<code>node.detail</code>, <code>edge.detail</code>: ничего сверх раздела 10, вуаль закрывает клетки узлов в тумане и рёбра в тумане; владелец территории виден (публичен).'],
-      ['В PixiJS', 'Слой тумана: полигоны клеток и рёбер в <code>Graphics</code> → один <code>BlurFilter</code> и <code>cacheAsTexture</code>; пересчёт только когда меняется набор клеток в тумане (раз на снапшот, как <code>hiddenKey</code> сейчас). Правки: <code>fogView.ts</code>, <code>style.ts</code>.'],
-      ['Запекание фонов', 'Не меняется.'],
-      ['Библиотеки', 'Нет.'],
-      ['Цена по FPS', 'Кэшированный слой: около 0,66 от плоского (замер 24.4); без кэша 1,9: кэш обязателен.'],
-      ['Риск', 'Низкий. Серая шкала: граница видна только перепадом яркости (штриховки нет): проверить.'],
-      ['Оценка', 'S, 1 день. DEC нет, протокола нет.'],
+    { h: 'BL3-0 Now', l: [['What it is', 'The cell of a hidden city darkened by 45%, 45° hatching in a 24-unit stripe along the border of the visible, a road in the fog darkens by 55%, a ghost with an age. The stripe of 24 is in map units (at a small scale it is not visible: ui-style 3.2, R7).']] },
+    { h: 'BL3-1 Haze', l: [
+      ['Idea', 'A cold gray-blue veil of 66% with a soft edge (blur 9 px) instead of hatching: the background desaturates and darkens, the edge floats. One look for "seen" and "never seen".'],
+      ['Data', '<code>node.detail</code>, <code>edge.detail</code>: nothing beyond section 10; the veil covers the cells of nodes in the fog and the edges in the fog; the territory owner is visible (public).'],
+      ['In PixiJS', 'A fog layer: polygons of cells and edges in <code>Graphics</code> → one <code>BlurFilter</code> and <code>cacheAsTexture</code>; recomputed only when the set of cells in the fog changes (once per snapshot, like <code>hiddenKey</code> now). Edits: <code>fogView.ts</code>, <code>style.ts</code>.'],
+      ['Background baking', 'Unchanged.'],
+      ['Libraries', 'None.'],
+      ['FPS price', 'A cached layer: about 0.66 of flat (measurement 24.4); 1.9 without the cache: the cache is mandatory.'],
+      ['Risk', 'Low. Grayscale: the border is visible only by a brightness step (no hatching): to check.'],
+      ['Estimate', 'S, 1 day. No DEC, no protocol.'],
     ] },
-    { h: 'Б3-2 Память против неизвестности', l: [
-      ['Идея', 'Три состояния вместо двух. Видно сейчас: ясно. «Последний раз видели» (<code>seen</code> с тиком): лёгкая вуаль с мелкой штриховкой, чем старше сведения, тем темнее (34% → 60% за 120 с, как угасает призрак). «Ни разу не видели» (<code>seen = null</code>): тёмная вуаль 80% с точечной сеткой и знак «?» у города; дорога ни разу не виденная: уровень 1.'],
-      ['Данные', 'Всё есть в <code>PlayerView</code> сегодня: <code>NodeView.seen</code> и <code>EdgeView.seen</code> (null или последнее наблюдение с тиком), <code>detail</code>, <code>width</code> (DEC-17: последний увиденный уровень или 1). Показ «ни разу не видели» не раскрывает ничего: игрок сам знает, где не был. Протокол и DEC не нужны.'],
-      ['В PixiJS', 'Два слоя вуали (память и неизвестное), узорные заливки <code>TilingSprite</code> или запечённые текстуры тайла, один <code>BlurFilter</code> 3 px и кэш; возраст сведений красит вуаль (раз в секунду). Правки: <code>fogView.ts</code>, <code>style.ts</code>, <code>regionLayout.ts</code> (<code>fogHatching</code>).'],
-      ['Запекание фонов', 'Не меняется.'],
-      ['Библиотеки', 'Нет.'],
-      ['Цена по FPS', 'Слои кэшируются, узор тайлом: около 0,7-0,9 от плоского (оценка по 24.4, <code>TilingSprite</code> для штриховки в замере не участвовал: замерить в прототипе).'],
-      ['Риск', 'Низкий-средний: больше состояний на экране, нужна подсказка в легенде; «?» не должен спорить с VP-значком.'],
-      ['Оценка', 'M, 2-3 дня. DEC нет, протокола нет.'],
+    { h: 'BL3-2 Memory against the unknown', l: [
+      ['Idea', 'Three states instead of two. Visible now: clear. "Last seen" (<code>seen</code> with a tick): a light veil with fine hatching, the older the information, the darker (34% → 60% over 120 s, as the ghost fades). "Never seen" (<code>seen = null</code>): a dark 80% veil with a dot grid and a "?" sign at the city; a never seen road: level 1.'],
+      ['Data', 'All of it is in <code>PlayerView</code> today: <code>NodeView.seen</code> and <code>EdgeView.seen</code> (null or the last observation with a tick), <code>detail</code>, <code>width</code> (DEC-17: the last seen level or 1). Showing "never seen" reveals nothing: the player knows where they have not been. No protocol or DEC needed.'],
+      ['In PixiJS', 'Two veil layers (memory and unknown), pattern fills <code>TilingSprite</code> or baked tile textures, one 3 px <code>BlurFilter</code> and a cache; the age of the information colors the veil (once a second). Edits: <code>fogView.ts</code>, <code>style.ts</code>, <code>regionLayout.ts</code> (<code>fogHatching</code>).'],
+      ['Background baking', 'Unchanged.'],
+      ['Libraries', 'None.'],
+      ['FPS price', 'The layers are cached, the pattern is a tile: about 0.7-0.9 of flat (an estimate from 24.4, <code>TilingSprite</code> for hatching was not part of the measurement: measure in a prototype).'],
+      ['Risk', 'Low-medium: more states on screen, a hint in the legend is needed; the "?" must not compete with the VP icon.'],
+      ['Estimate', 'M, 2-3 days. No DEC, no protocol.'],
     ] },
-    { h: 'Б3-3 Линия обзора', l: [
-      ['Идея', 'Зернистая вуаль, пунктирная «линия обзора» по границе видимого и засечка на дороге в точке границы (<code>border_permille</code>, по умолчанию 500: середина ребра). Дороги плавно уходят в туман от видимого конца к скрытому. Граница читается без цвета.'],
-      ['Данные', '<code>node.detail</code> концов ребра, середина ребра (DEC-23, точка границы публична). Сегодня половины ребра не передаются; если нужна граница обзора по половинам DEC-21 (<code>EXACT</code> или <code>RANGE</code> на половине): <b>нужен протокол/DEC-21 в PlayerView</b> (#233, делает #329); как основной вариант не предлагается.'],
-      ['В PixiJS', 'Вуаль и зерно запечь в текстуру клетки (маска из полигонов, <code>cacheAsTexture</code>); линия обзора: <code>Graphics</code> по сегментам границы, пунктир; засечки: короткие линии по рёбрам с концами в разных состояниях; градиент дороги: спрайт с градиентной текстурой на ребро, масштаб по длине.'],
-      ['Запекание фонов', 'Не меняется.'],
-      ['Библиотеки', 'Нет.'],
-      ['Цена по FPS', 'Около 0,8-1,0 (оценка): зерно запечено в текстуру, градиентов на рёбрах около десятка; если зерно фильтром на экране, цена на встроенной графике неизвестна (24.4: 0,64 только в программном рендере).'],
-      ['Риск', 'Средний: больше мелких знаков на дорогах (засечки, градиент) спорят с блоком 4; пунктир линии на 60% масштабе мельчает.'],
-      ['Оценка', 'M, 3 дня. DEC нет (середина ребра), протокола нет.'],
+    { h: 'BL3-3 Line of sight', l: [
+      ['Idea', 'A grainy veil, a dashed "line of sight" along the border of the visible, and a tick on the road at the border point (<code>border_permille</code>, 500 by default: the middle of the edge). Roads fade smoothly into the fog from the visible end to the hidden one. The border reads without color.'],
+      ['Data', '<code>node.detail</code> of the edge ends, the middle of the edge (DEC-23, the border point is public). Today the halves of an edge are not sent; if the line of sight by the DEC-21 halves is needed (<code>EXACT</code> or <code>RANGE</code> on a half): <b>protocol/DEC-21 in PlayerView is needed</b> (#233, done by #329); not proposed as the main variant.'],
+      ['In PixiJS', 'Bake the veil and the grain into a cell texture (a mask from polygons, <code>cacheAsTexture</code>); the line of sight: <code>Graphics</code> along the border segments, dashed; ticks: short lines across edges with ends in different states; the road gradient: a sprite with a gradient texture per edge, scaled by length.'],
+      ['Background baking', 'Unchanged.'],
+      ['Libraries', 'None.'],
+      ['FPS price', 'About 0.8-1.0 (an estimate): the grain is baked into a texture, there are about ten gradients on edges; if the grain is an on-screen filter, the price on integrated graphics is unknown (24.4: 0.64 only in software rendering).'],
+      ['Risk', 'Medium: more small signs on the roads (ticks, gradient) compete with block 4; the dashes of the line shrink at 60% scale.'],
+      ['Estimate', 'M, 3 days. No DEC (the middle of the edge), no protocol.'],
     ] },
   ],
   rd: [
-    { h: 'Б4-0 Сейчас', l: [['Что это', 'Подложка и жила (толщина 0,5+1,5×уровень), шевроны с уровня 2, пакет снабжения кружком (разовая перевозка квадратом), стройка: перекладины и диск с молотком и временем. Своя внутренняя дорога и буферная выглядят одинаково; ни разу не виденная дорога выглядит как виденная.']] },
-    { h: 'Б4-1 Полосы', l: [
-      ['Идея', 'Уровень = число параллельных полос (1, 2, 3), не только толщина. Внутренняя дорога: сплошные светлые полосы с подложкой цвета владельца; буферная: пунктирные серые полосы без подложки. В тумане: точечный пунктир, ни разу не виденная: «?» на середине. Стройка: полосатая лента (желтая диагональ) с долей готового и плашкой «1→2» и временем. Пакет снабжения: квадрат (заряд = квадрат, ui-style 21) с хвостом; разовая перевозка: крупный квадрат с двойным контуром.'],
-      ['Данные', 'Владельцы концов (публичны), <code>edge.width</code>, <code>edge.build</code>, <code>detail</code>, <code>seen</code>. Протокол и DEC не нужны.'],
-      ['В PixiJS', '<code>mapView.ts</code>: <code>GraphicsContext</code> на (уровень, внутренняя или буферная, состояние) вместо одного контекста; перерисовка при смене уровня, не каждый кадр; стройка: <code>buildGeometry</code> (<code>layout.ts</code>), плашка вместо диска; пакеты: квадраты в <code>entityView.ts</code>.'],
-      ['Запекание фонов', 'Не меняется.'],
-      ['Библиотеки', 'Нет.'],
-      ['Цена по FPS', 'Около 1,0: статичные <code>Graphics</code>, перерисовка по событию; полосы втрое больше штрихов на ребро, но рёбер около 44.'],
-      ['Риск', 'Низкий. Две-три полосы на масштабе 60% слипаются, различие остаётся по ширине и пунктиру (смотреть режим 60%).'],
-      ['Оценка', 'M, 2-3 дня. DEC нет, протокола нет.'],
+    { h: 'BL4-0 Now', l: [['What it is', 'A backing and a core (thickness 0.5+1.5×level), chevrons from level 2, a supply packet as a circle (a one-off transfer as a square), construction: crossbars and a disc with a hammer and the time. Your own internal road and a buffer one look the same; a never seen road looks like a seen one.']] },
+    { h: 'BL4-1 Lanes', l: [
+      ['Idea', 'Level = the number of parallel lanes (1, 2, 3), not just thickness. An internal road: solid light lanes with a backing in the owner color; a buffer one: dashed gray lanes without a backing. In the fog: a dotted line, a never seen one: "?" in the middle. Construction: a striped ribbon (a yellow diagonal) with the share done and a "1→2" plate and the time. A supply packet: a square (charge = square, ui-style 21) with a tail; a one-off transfer: a large square with a double outline.'],
+      ['Data', 'The owners of the ends (public), <code>edge.width</code>, <code>edge.build</code>, <code>detail</code>, <code>seen</code>. No protocol or DEC needed.'],
+      ['In PixiJS', '<code>mapView.ts</code>: a <code>GraphicsContext</code> per (level, internal or buffer, state) instead of one context; a redraw on a level change, not every frame; construction: <code>buildGeometry</code> (<code>layout.ts</code>), a plate instead of a disc; packets: squares in <code>entityView.ts</code>.'],
+      ['Background baking', 'Unchanged.'],
+      ['Libraries', 'None.'],
+      ['FPS price', 'About 1.0: static <code>Graphics</code>, a redraw on an event; lanes are three times more strokes per edge, but there are about 44 edges.'],
+      ['Risk', 'Low. Two or three lanes stick together at 60% scale, the difference stays in the width and the dashes (look at the 60% mode).'],
+      ['Estimate', 'M, 2-3 days. No DEC, no protocol.'],
     ] },
-    { h: 'Б4-2 Таблички', l: [
-      ['Идея', 'Одна линия плюс табличка на середине: 1-3 точки = уровень; пустые точки = последний увиденный (память), «?» = ни разу не виден; рядом пунктирный круг = стройка с временем. Внутренняя: подложка владельца; буферная разделена точкой границы пополам цветами концов (свой синий, чужой красный, нейтральный серый) и пунктиром. Пакет: «вагон» с квадратиками зарядов.'],
-      ['Данные', 'Как Б4-1.'],
-      ['В PixiJS', 'Таблички: контейнер на ребро (около 44), точки <code>Graphics</code>; число редко меняется; вагоны вращаются по направлению ребра.'],
-      ['Запекание фонов', 'Не меняется.'],
-      ['Библиотеки', 'Нет.'],
-      ['Цена по FPS', 'Около 1,0-1,05: на ребро добавляется контейнер; в замере 24.4 не участвовал (оценка).'],
-      ['Риск', 'Средний: таблички добавляют ещё 44 мелких знака на карту (R1 из раздела 3.2: наложения), на 60% масштабе точки мельче 20 px; зато уровень читается без догадки.'],
-      ['Оценка', 'M, 3 дня. DEC нет, протокола нет.'],
+    { h: 'BL4-2 Plates', l: [
+      ['Idea', 'One line plus a plate in the middle: 1-3 dots = the level; empty dots = last seen (memory), "?" = never seen; next to it a dashed circle = construction with the time. Internal: an owner backing; a buffer one is split in half at the border point by the colors of its ends (your own blue, the opponent red, neutral gray) and dashed. A packet: a "wagon" with small squares of charges.'],
+      ['Data', 'As BL4-1.'],
+      ['In PixiJS', 'Plates: a container per edge (about 44), dots as <code>Graphics</code>; the number rarely changes; wagons rotate along the edge direction.'],
+      ['Background baking', 'Unchanged.'],
+      ['Libraries', 'None.'],
+      ['FPS price', 'About 1.0-1.05: a container is added per edge; it was not part of the 24.4 measurement (an estimate).'],
+      ['Risk', 'Medium: the plates add 44 more small signs to the map (R1 from section 3.2: overlaps), at 60% scale the dots are smaller than 20 px; but the level reads without guessing.'],
+      ['Estimate', 'M, 3 days. No DEC, no protocol.'],
     ] },
-    { h: 'Б4-3 Трубка', l: [
-      ['Идея', 'Дорога как мягкая трубка (градиент поперёк, блик D3), своя внутренняя светится цветом владельца и по ней бежит свет: число огоньков = уровню (анимация потока снабжения, только по внутренним). Буферная: серая, прерывистая. В тумане: бледный точечный контур. Пакет: светящийся квадрат.'],
-      ['Данные', 'Как Б4-1.'],
-      ['В PixiJS', 'Трубка: спрайт с градиентной текстурой на уровень и владельца, масштаб по длине; свечение: слой с кэшем (как граница в Б1); огоньки: <code>TilingSprite</code> с прокруткой <code>tilePosition</code> (без перерисовки); режим «меньше движения» отключает прокрутку.'],
-      ['Запекание фонов', 'Не меняется.'],
-      ['Библиотеки', 'Нет.'],
-      ['Цена по FPS', 'Умеренная: прокрутка около 20 <code>TilingSprite</code> каждый кадр плюс слой свечения (с кэшем 0,66, без кэша 1,9, замер 24.4); анимацию замерить в прототипе до решения.'],
-      ['Риск', 'Средний-высокий: анимация на каждой своей дороге спорит с пакетами и боем, режим «меньше движения» обязателен; на светлом фоне свечение теряется; серая шкала: владелец по подложке теряется, остаётся толщина и пунктир.'],
-      ['Оценка', 'L, 4-6 дней (трубка и свет 3, анимация и режим 1-2, эталоны 1). DEC нет, протокола нет.'],
+    { h: 'BL4-3 Tube', l: [
+      ['Idea', 'A road as a soft tube (a cross gradient, the D3 highlight), your own internal road glows in the owner color and a light runs along it: the number of lights = the level (an animation of the supply flow, internal roads only). A buffer one: gray, broken. In the fog: a pale dotted outline. A packet: a glowing square.'],
+      ['Data', 'As BL4-1.'],
+      ['In PixiJS', 'The tube: a sprite with a gradient texture per level and owner, scaled by length; the glow: a layer with a cache (as the border in BL1); the lights: a <code>TilingSprite</code> with a scrolling <code>tilePosition</code> (no redraw); the "reduced motion" mode turns the scrolling off.'],
+      ['Background baking', 'Unchanged.'],
+      ['Libraries', 'None.'],
+      ['FPS price', 'Moderate: scrolling about 20 <code>TilingSprite</code> every frame plus the glow layer (0.66 with a cache, 1.9 without, measurement 24.4); measure the animation in a prototype before the decision.'],
+      ['Risk', 'Medium-high: an animation on every own road competes with the packets and the fight, the "reduced motion" mode is mandatory; on a light background the glow is lost; grayscale: the owner is lost with the backing, the thickness and the dashes remain.'],
+      ['Estimate', 'L, 4-6 days (the tube and the light 3, the animation and the mode 1-2, references 1). No DEC, no protocol.'],
     ] },
   ],
 };
 const NOTES = {
-  sh: 'Шейдинг только на объектах (города, группы, значки, граница, ленты); плоский рельеф: hillshade из D3 не берётся (решение владельца 2026-10-21). Полосой «мелкие знаки» ниже проверена читаемость на 20-30 px.',
-  tx: 'Фон под сценой: Б2-0 это настоящий кадр <code>maps/arteriya.bg.png</code> (с нынешними штампами); Б2-1..3 нарисованы <code>docs/design/mockups/src/map_textures.py</code> по тому же полю биомов. Масштаб 200% показывает края.',
-  fg: 'Туман: узлы 8, 14, 15, 16 и рёбра между ними скрыты. 15 виден «21 с назад» (с призраком врага), 14 и 8 видели давно, 16 не видели ни разу. Рёбра 5–15 (уровень 2) и 8–14 (уровень 1) в памяти; 14–15 и 15–16 ни разу не виденные: показан уровень 1 (DEC-17).',
-  rd: 'Дороги: 3–4 уровень 3, 4–12 уровень 2 (свои внутренние); 4–13 стройка уровня 2 (своя, с временем); 4–5, 6–7, 12–7 буферные; в тумане 5–15 (последний уровень 2), 8–14 (1), 7–8 (1), и ни разу не виденные 14–15 и 15–16 (уровень 1 по DEC-17). Пакеты: два пакета снабжения и одна перевозка.',
+  sh: 'Shading only on objects (cities, groups, icons, the border, ribbons); a flat relief: the D3 hillshade is not taken (the owner’s decision 2026-10-21). The "small signs" strip below checks readability at 20-30 px.',
+  tx: 'The background under the scene: BL2-0 is the real frame <code>maps/arteriya.bg.png</code> (with the current stamps); BL2-1..3 are drawn by <code>docs/design/mockups/src/map_textures.py</code> over the same biome field. The 200% scale shows the edges.',
+  fg: 'Fog: nodes 8, 14, 15, 16 and the edges between them are hidden. 15 is seen "21 s ago" (with an enemy ghost), 14 and 8 were seen long ago, 16 was never seen. Edges 5–15 (level 2) and 8–14 (level 1) are in memory; 14–15 and 15–16 were never seen: level 1 is shown (DEC-17).',
+  rd: 'Roads: 3–4 level 3, 4–12 level 2 (your own internal); 4–13 construction to level 2 (your own, with the time); 4–5, 6–7, 12–7 buffer; in the fog 5–15 (last level 2), 8–14 (1), 7–8 (1), and the never seen 14–15 and 15–16 (level 1 by DEC-17). Packets: two supply packets and one transfer.',
 };
 
 // ---- the matrix of roads on a clean background: every variant, every level and state ----
@@ -762,13 +762,13 @@ function fakeEdge(x, y, len, p) {
 }
 function roadMatrix(st_) {
   const cols = [
-    ['Своя, ур. 1', { w: 1, internal: 1, owner: 'you' }], ['Своя, ур. 2', { w: 2, internal: 1, owner: 'you' }], ['Своя, ур. 3', { w: 3, internal: 1, owner: 'you' }],
-    ['Буферная, ур. 2', { w: 2, ao: 'you', bo: 'enemy' }], ['Вражеская, ур. 2', { w: 2, internal: 1, owner: 'enemy', ao: 'enemy', bo: 'enemy' }],
-    ['Туман: был ур. 2', { w: 2, tier: 'mem', ao: 'enemy', bo: 'enemy', internal: 1, owner: 'enemy' }], ['Туман: не видели', { w: 1, tier: 'never', ao: 'enemy', bo: 'none' }],
-    ['Стройка 1→2', { w: 1, internal: 1, owner: 'you', build: { to: 2, progress: .55, left: '0:12' } }],
+    ['Own, lvl 1', { w: 1, internal: 1, owner: 'you' }], ['Own, lvl 2', { w: 2, internal: 1, owner: 'you' }], ['Own, lvl 3', { w: 3, internal: 1, owner: 'you' }],
+    ['Buffer, lvl 2', { w: 2, ao: 'you', bo: 'enemy' }], ['Enemy, lvl 2', { w: 2, internal: 1, owner: 'enemy', ao: 'enemy', bo: 'enemy' }],
+    ['Fog: was lvl 2', { w: 2, tier: 'mem', ao: 'enemy', bo: 'enemy', internal: 1, owner: 'enemy' }], ['Fog: never seen', { w: 1, tier: 'never', ao: 'enemy', bo: 'none' }],
+    ['Construction 1→2', { w: 1, internal: 1, owner: 'you', build: { to: 2, progress: .55, left: '0:12' } }],
   ];
   const cw = 132, W = cols.length * cw + 150;
-  let html = `<div class="r"><span></span><svg width="${W}" height="20" viewBox="0 0 ${W} 20">${cols.map(([n], i) => `<text x="${i * cw + 56}" y="13" font-size="12" fill="#9da7b3" text-anchor="middle">${n}</text>`).join('')}<text x="${cols.length * cw + 70}" y="13" font-size="12" fill="#9da7b3" text-anchor="middle">Пакет, перевозка</text></svg></div>`;
+  let html = `<div class="r"><span></span><svg width="${W}" height="20" viewBox="0 0 ${W} 20">${cols.map(([n], i) => `<text x="${i * cw + 56}" y="13" font-size="12" fill="#9da7b3" text-anchor="middle">${n}</text>`).join('')}<text x="${cols.length * cw + 70}" y="13" font-size="12" fill="#9da7b3" text-anchor="middle">Packet, transfer</text></svg></div>`;
   for (let r = 0; r < 4; r++) {
     const o = { sh: 0, rd: r, sheen: st_.sheen, rm: st_.rm }, I = (x) => x + '_m' + r;
     const edges = cols.map(([, p], i) => fakeEdge(i * cw + 16, 34, cw - 32, p));
@@ -803,7 +803,7 @@ function toHash() {
 }
 
 function buildHeader() {
-  $('#blocks').innerHTML = BLOCKS.map((b) => `<div class="blk" data-b="${b.id}"><b>${b.n} ${b.title}</b><div class="seg" role="radiogroup" aria-label="${b.title}">${b.v.map((n, i) => `<label><input type="radio" name="${b.id}" value="${i}"><span>${n}</span></label>`).join('')}</div><label class="cmp"><input type="checkbox" data-cmp="${b.id}"> рядом</label></div>`).join('');
+  $('#blocks').innerHTML = BLOCKS.map((b) => `<div class="blk" data-b="${b.id}"><b>${b.n} ${b.title}</b><div class="seg" role="radiogroup" aria-label="${b.title}">${b.v.map((n, i) => `<label><input type="radio" name="${b.id}" value="${i}"><span>${n}</span></label>`).join('')}</div><label class="cmp"><input type="checkbox" data-cmp="${b.id}"> side by side</label></div>`).join('');
   $('#blocks').addEventListener('change', (ev) => {
     const el = ev.target;
     if (el.dataset.cmp) { st.cmp = el.checked ? el.dataset.cmp : ''; st.act = el.dataset.cmp; } else { st[el.name] = +el.value; st.act = el.name; }
@@ -827,24 +827,24 @@ function render() {
   const stage = $('#stage');
   stage.className = st.gray ? 'gray' : '';
   stage.innerHTML = variants.map((v, i) => {
-    const label = BLOCKS.map((b) => `Б${b.n} ${b.v[v[b.id]]}`).join(' · ');
+    const label = BLOCKS.map((b) => `BL${b.n} ${b.v[v[b.id]]}`).join(' · ');
     const o = { sh: v.sh, tx: v.tx, fg: v.fg, rd: v.rd, sheen: st.sheen, rm: st.rm, scale: st.sc / 100, label };
     return `<figure>${scene(o, 'f' + i)}<figcaption>${label}</figcaption></figure>`;
   }).join('');
-  $('#stagenote').innerHTML = `<b>Сцена</b> (фрагмент <code>arteriya</code>, узлы 3-16, 720×580 единиц): бой за город 4 (арена DEC-32, тревога), группа в пути 3→4 со своим приказом, запланированный приказ противника 5→4 лентой, враг в городе 5 известен только присутствием, туман справа, дороги уровней 1-3 и стройка. ${NOTES[st.act]}`;
+  $('#stagenote').innerHTML = `<b>Scene</b> (a fragment of <code>arteriya</code>, nodes 3-16, 720×580 units): a fight for city 4 (DEC-32 arena, alarm), a group on the way 3→4 with its own order, the opponent’s scheduled order 5→4 as a ribbon, the enemy in city 5 known only by presence, fog on the right, roads of levels 1-3 and construction. ${NOTES[st.act]}`;
   const blk = BLOCKS.find((b) => b.id === st.act);
-  $('#cards').innerHTML = INFO[st.act].map((c, i) => `<div class="card${REC[st.act] === i ? ' rec' : ''}"><h3>${c.h}${REC[st.act] === i ? '<span class="badge">рекомендация</span>' : ''}</h3><dl>${c.l.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl></div>`).join('');
+  $('#cards').innerHTML = INFO[st.act].map((c, i) => `<div class="card${REC[st.act] === i ? ' rec' : ''}"><h3>${c.h}${REC[st.act] === i ? '<span class="badge">recommended</span>' : ''}</h3><dl>${c.l.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl></div>`).join('');
   $('#roadm').className = 'roadm' + (st.gray ? ' gray' : '');
   $('#roadm').innerHTML = roadMatrix(st);
-  $('#strip').innerHTML = [0, 1, 2].map((s) => `<span>${s === 0 ? 'Б1-0' : s === 1 ? 'Б1-1' : 'Б1-2'}</span>` + ['#28472f', '#6c8a4c', '#d3dbe1'].map((bg, k) => stripSvg(s, bg, `s${s}${k}`)).join('')).join('');
+  $('#strip').innerHTML = [0, 1, 2].map((s) => `<span>${s === 0 ? 'BL1-0' : s === 1 ? 'BL1-1' : 'BL1-2'}</span>` + ['#28472f', '#6c8a4c', '#d3dbe1'].map((bg, k) => stripSvg(s, bg, `s${s}${k}`)).join('')).join('');
   if (window.TEX) {
-    const names = ['степь', 'саванна', 'лес', 'джунгли', 'скалы', 'снег'];
-    $('#swatch').innerHTML = `<span>сейчас</span><img alt="образцы биомов, нынешний запекатель" src="${TEX.swatch.now}"><span>новые</span><img alt="образцы биомов, чистые текстуры" src="${TEX.swatch.new}"><span></span><span class="cap">${names.map((n) => `<span>${n}</span>`).join('')}</span>`;
-    const kb = (n) => (n / 1048576 >= 1 ? (n / 1048576).toFixed(1) + ' МБ' : Math.round(n / 1024) + ' КБ');
-    $('#pickTail').innerHTML = `Размер фона целой карты 1600×1000 (PNG / JPEG / WebP): ` + ['t0', 't1', 't2', 't3'].map((k, i) => `Б2-${i}: ${kb(TEX.sizes[k].png)} / ${kb(TEX.sizes[k].jpeg)} / ${kb(TEX.sizes[k].webp)}`).join('; ') + '.';
+    const names = ['steppe', 'savanna', 'forest', 'jungle', 'rocks', 'snow'];
+    $('#swatch').innerHTML = `<span>now</span><img alt="biome samples, the current baker" src="${TEX.swatch.now}"><span>new</span><img alt="biome samples, clean textures" src="${TEX.swatch.new}"><span></span><span class="cap">${names.map((n) => `<span>${n}</span>`).join('')}</span>`;
+    const kb = (n) => (n / 1048576 >= 1 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB');
+    $('#pickTail').innerHTML = `Size of a whole-map 1600×1000 background (PNG / JPEG / WebP): ` + ['t0', 't1', 't2', 't3'].map((k, i) => `BL2-${i}: ${kb(TEX.sizes[k].png)} / ${kb(TEX.sizes[k].jpeg)} / ${kb(TEX.sizes[k].webp)}`).join('; ') + '.';
   }
   const hash = toHash();
-  $('#pickHead').innerHTML = `Ваш выбор сейчас: ${BLOCKS.map((b) => `Б${b.n} <b>${b.v[st[b.id]]}</b>`).join(', ')}. Адрес кадра: <code>map-style-2.html#${hash}</code>. Рекомендация: ${BLOCKS.map((b) => `Б${b.n} ${b.v[REC[b.id]]}`).join(', ')}.`;
+  $('#pickHead').innerHTML = `Your choice now: ${BLOCKS.map((b) => `BL${b.n} <b>${b.v[st[b.id]]}</b>`).join(', ')}. Frame address: <code>map-style-2.html#${hash}</code>. Recommendation: ${BLOCKS.map((b) => `BL${b.n} ${b.v[REC[b.id]]}`).join(', ')}.`;
 }
 window.addEventListener('load', () => {
   $('#pick').innerHTML = '<div id="pickHead"></div><div id="pickTail" class="note"></div>';

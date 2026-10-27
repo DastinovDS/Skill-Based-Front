@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Направления стиля карты и юнитов (#332)</title>
+<title>Map and unit style directions (#332)</title>
 <style>
 :root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#9da7b3;--you:#5b9bff;--warn:#ffb020}
 *{box-sizing:border-box}
@@ -44,20 +44,20 @@ code{background:var(--surface2);padding:0 4px;border-radius:4px}
 </head>
 <body>
 <header>
-  <h1>Направления стиля карты и юнитов</h1>
-  <div class="seg" role="radiogroup" aria-label="Направление">
-    <label><input type="radio" name="dir" value="flat" checked><span>D1 Плоский</span></label>
-    <label><input type="radio" name="dir" value="paper"><span>D2 Бумажная карта</span></label>
-    <label><input type="radio" name="dir" value="soft"><span>D3 Мягкий объём</span></label>
-    <label><input type="radio" name="dir" value="all"><span>Все три</span></label>
+  <h1>Map and unit style directions</h1>
+  <div class="seg" role="radiogroup" aria-label="Direction">
+    <label><input type="radio" name="dir" value="flat" checked><span>D1 Flat</span></label>
+    <label><input type="radio" name="dir" value="paper"><span>D2 Paper map</span></label>
+    <label><input type="radio" name="dir" value="soft"><span>D3 Soft volume</span></label>
+    <label><input type="radio" name="dir" value="all"><span>All three</span></label>
   </div>
-  <label class="opt"><input type="checkbox" id="gray"> серая шкала (ахроматопсия)</label>
-  <label class="opt"><input type="checkbox" id="rm"> меньше движения</label>
-  <label class="opt"><input type="checkbox" id="small"> карта в 60% (читаемость издали)</label>
+  <label class="opt"><input type="checkbox" id="gray"> grayscale (achromatopsia)</label>
+  <label class="opt"><input type="checkbox" id="rm"> reduced motion</label>
+  <label class="opt"><input type="checkbox" id="small"> map at 60% (readability from a distance)</label>
 </header>
 <main>
   <div id="stage" class="one"></div>
-  <p class="note">Одна и та же сцена на трёх языках: свои города и группа в пути, свой приказ (тонкая стрелка с шевронами), запланированный приказ противника (лента, пунктирный контур), бой на городе в виде V3 «фишки» (DEC-32: до 8 на сторону, ◇ запас бонуса, подпись «бонусная атака»), переполнение (янтарное кольцо), туман справа с призраком. Всё нарисовано кодом на этой странице, картинок и шрифтов нет. Адрес с параметрами: <code>#dir=paper&amp;gray=1&amp;small=1&amp;rm=1</code>.</p>
+  <p class="note">The same scene in three visual languages: own cities and a group on the move, own order (a thin arrow with chevrons), the enemy's scheduled order (a ribbon, dashed outline), a fight at a city as the V3 "chips" (DEC-32: up to 8 per side, ◇ bonus stock, the caption "bonus attack"), overflow (an amber ring), fog on the right with a ghost. Everything is drawn by code on this page, there are no images or fonts. URL with parameters: <code>#dir=paper&amp;gray=1&amp;small=1&amp;rm=1</code>.</p>
   <div class="cards" id="cards"></div>
 </main>
 <script>
@@ -82,17 +82,17 @@ const radius = (n) => (n.cap <= 2 ? 11 : n.cap <= 4 ? 14 : n.cap <= 6 ? 17 : 20)
 
 // ---- themes: tokens per direction ----
 const TH = {
-  flat: { id: 'flat', label: 'D1 Плоский, доведённый (как сейчас, с правилами порядка)', dark: true,
+  flat: { id: 'flat', label: 'D1 Flat, refined (as now, with ordering rules)', dark: true,
     bg: '#0d1117', ink: '#f0f6fc', inkBack: '#0d1117', plate: '#161b22',
     you: '#5b9bff', enemy: '#e5484d', warn: '#ffb020', vp: '#e3b341',
     nStroke: '#8b949e', nFill: '#2b3139', road: '#c4cbd4', roadA: .8, roadCase: '#0d1117',
     land: { plains: '#3a4630', forest: '#25392b', mountains: '#4a453e' }, terr: .2, stamp: .22, empty: '#59636e' },
-  paper: { id: 'paper', label: 'D2 Штабная бумажная карта', dark: false,
+  paper: { id: 'paper', label: 'D2 Staff paper map', dark: false,
     bg: '#cbbf9f', ink: '#2b2218', inkBack: '#f3ead2', plate: '#f3ead2',
     you: '#1d5fd1', enemy: '#b52328', warn: '#b36b00', vp: '#7a5a0c',
     nStroke: '#6b5f4a', nFill: '#e6dcc0', road: '#fbf6e6', roadA: 1, roadCase: '#3a2f22',
     land: { plains: '#e0d5b4', forest: '#d2cfa6', mountains: '#d9ccb0' }, terr: .30, stamp: .55, empty: '#a79b7e' },
-  soft: { id: 'soft', label: 'D3 Мягкий объём', dark: true,
+  soft: { id: 'soft', label: 'D3 Soft volume', dark: true,
     bg: '#0a0f15', ink: '#f0f6fc', inkBack: '#0d1117', plate: '#161b22',
     you: '#5b9bff', enemy: '#e5484d', warn: '#ffb020', vp: '#e3b341',
     nStroke: '#8b949e', nFill: '#2b3139', road: '#cfd6df', roadA: .85, roadCase: '#0d1117',
@@ -359,9 +359,9 @@ function scene(th, uid) {
   own_.forEach((s, i) => { ar += chip(ax - 62 + i * 18, ay - 4, s, 'you', i === 2); });
   en_.forEach((s, i) => { ar += chip(ax + 17 + i * 18, ay - 4, s, 'enemy', i >= 2); });
   ar += dia(ax - 52, ay + 20, 'you', 2, true) + dia(ax + 28, ay + 20, 'enemy', 1, true) + '</g>';
-  // the bonus shot of the last round: a dashed arc with a diamond head and the tag "бонусная атака" (A1)
+  // the bonus shot of the last round: a dashed arc with a diamond head and the tag "bonus attack" (A1)
   ar += `<path d="M${ax - 40} ${ay - 36}Q${ax} ${ay - 66} ${ax + 40} ${ay - 36}" fill="none" stroke="${th.you}" stroke-width="3" stroke-dasharray="3 5" stroke-linecap="round"/><polygon points="${ax + 40},${ay - 44} ${ax + 47},${ay - 36} ${ax + 40},${ay - 28} ${ax + 33},${ay - 36}" fill="${th.you}" stroke="${th.inkBack}" stroke-width="1.2"/>`;
-  ar += `<g><rect x="${ax - 55}" y="${ay - 71}" width="110" height="19" rx="9.5" fill="${th.plate}" stroke="${th.you}" stroke-width="1.6"/>${text(ax, ay - 61.5, '◇ бонусная атака', 11, th.ink)}</g>`;
+  ar += `<g><rect x="${ax - 55}" y="${ay - 71}" width="110" height="19" rx="9.5" fill="${th.plate}" stroke="${th.you}" stroke-width="1.6"/>${text(ax, ay - 61.5, '◇ bonus attack', 11, th.ink)}</g>`;
   body += ar;
 
   // a chrome frame so each direction reads as a screen of the game
@@ -370,29 +370,29 @@ function scene(th, uid) {
 
 // ---- the cards under the scene: what each direction changes ----
 const INFO = {
-  flat: { h: 'D1 Плоский, доведённый', lines: [
-    ['Идея', 'Тот же язык, что сейчас (тёмная карта, плоские фигуры), но с жёсткими правилами порядка: один набор радиусов и контуров, одна толщина обводок, квадраты заряда и склада, минимум плотности штампов.'],
-    ['В PixiJS', 'Ничего нового в рендере: правки констант в <code>style.ts</code>, штампы реже и тише, единая подложка под значки, ленты приказов не заходят на значки города. Объекты остаются в <code>Graphics</code>.'],
-    ['Запекание фонов', '<code>maps:bake</code> без изменений (или чуть тише палитра биомов, чтобы фон не спорил с территорией).'],
-    ['Библиотеки', 'Не нужны.'],
-    ['Цена по FPS', 'Нулевая: рисуется то же самое. Плотность штампов ниже даёт чуть меньше спрайтов.'],
-    ['Риск', 'Низкий. «Прототипный» вид остаётся: направление не меняет ощущение, а убирает шероховатости. Эталоны <code>visual</code> обновляются.'],
+  flat: { h: 'D1 Flat, refined', lines: [
+    ['Idea', 'The same language as now (dark map, flat shapes), but with strict ordering rules: one set of radii and outlines, one stroke width, squares for charge and warehouse, minimal stamp density.'],
+    ['In PixiJS', 'Nothing new in the renderer: tweaks to constants in <code>style.ts</code>, stamps sparser and quieter, a single backing plate under icons, order ribbons do not run over city icons. Objects stay in <code>Graphics</code>.'],
+    ['Background baking', '<code>maps:bake</code> unchanged (or a slightly quieter biome palette so the background does not compete with the territory).'],
+    ['Libraries', 'Not needed.'],
+    ['FPS cost', 'Zero: the same things are drawn. Lower stamp density gives slightly fewer sprites.'],
+    ['Risk', 'Low. The "prototype" look stays: the direction does not change the feel, it removes the rough edges. The <code>visual</code> references are updated.'],
   ] },
-  paper: { h: 'D2 Штабная бумажная карта', lines: [
-    ['Идея', 'Светлая карта на тёмном столе: бумага, контурные линии вместо рельефа, штриховка территории (угол штриховки: свои «/», противник «\\»), дороги как на карте, границы пунктиром карандашом. Классический синий и красный карандаш: читаются на бумаге лучше, чем на тёмном.'],
-    ['В PixiJS', 'Светлая подложка ломает правило «белый контур»: выделение, обводки городов и значков меняются на тёмные чернила (два набора токенов, <code>style.ts</code> становится темой). Территория: штриховка текстурой-тайлом (<code>TilingSprite</code>) вместо заливки. HUD остаётся тёмным.'],
-    ['Запекание фонов', 'Новый запекатель: бумага с зерном, контурные линии по полю высоты (marching squares по тому же шуму), штамп леса и гор вместо цвета биомов. <code>maps:bake</code> меняется целиком; файл фона того же размера.'],
-    ['Библиотеки', 'Не нужны. По желанию <code>NoiseFilter</code> из самого <code>pixi.js</code> для зерна бумаги: см. цену ниже.'],
-    ['Цена по FPS', 'Низкая: фон одна текстура, штриховка тайлом. Зерно запечь в фон, а не гонять фильтром по всему экрану (замер ниже в документе).'],
-    ['Риск', 'Высокий для обратной совместимости: перекраска всех знаков карты (контуры, выбор, подложки лент, радиальные меню над светлым полем), контраст HUD над светлой картой, новые эталоны, критерий 3:1 для значков пересчитывается. Зато лучшая читаемость сторон без цвета (угол штриховки).'],
+  paper: { h: 'D2 Staff paper map', lines: [
+    ['Idea', 'A light map on a dark table: paper, contour lines instead of relief, hatching of the territory (hatch angle: own "/", enemy "\\"), roads as on a map, borders dashed in pencil. Classic blue and red pencil: they read better on paper than on dark.'],
+    ['In PixiJS', 'A light backing breaks the "white outline" rule: selection, city outlines and icon outlines change to dark ink (two token sets, <code>style.ts</code> becomes a theme). Territory: hatching with a tile texture (<code>TilingSprite</code>) instead of a fill. The HUD stays dark.'],
+    ['Background baking', 'A new baker: paper with grain, contour lines from the height field (marching squares over the same noise), a stamp of forest and mountains instead of biome color. <code>maps:bake</code> changes entirely; the background file has the same size.'],
+    ['Libraries', 'Not needed. Optionally <code>NoiseFilter</code> from <code>pixi.js</code> itself for paper grain: see the cost below.'],
+    ['FPS cost', 'Low: the background is one texture, hatching is a tile. Bake the grain into the background instead of running a filter over the whole screen (measurement below in the document).'],
+    ['Risk', 'High for backward compatibility: every map sign is recolored (outlines, selection, ribbon backings, radial menus over a light field), HUD contrast over a light map, new references, the 3:1 criterion for icons is recomputed. In return, better readability of the sides without color (the hatch angle).'],
   ] },
-  soft: { h: 'D3 Мягкий объём', lines: [
-    ['Идея', 'Тёмная тема, но фигуры «приподняты»: города и значки с радиальным градиентом и мягкой тенью, граница территории светится, дороги с бликом, рельеф как «холмы» с освещением.'],
-    ['В PixiJS', 'Тени и градиенты запекаются в текстуры иконок (<code>generateTexture</code>) один раз на вид и размер города, а не фильтрами на каждом объекте; свечение границы: один <code>BlurFilter</code> на слой территории, слой кэшируется (<code>cacheAsTexture</code>) и пересчитывается при смене владельца. Значки юнитов становятся спрайтами (заливка по заряду маской или заранее нарезанными кадрами).'],
-    ['Запекание фонов', '<code>maps:bake</code> с затенением рельефа (hillshade по полю высоты), мягкие переходы биомов; размер файла вырастет.'],
-    ['Библиотеки', '<code>pixi-filters</code> 6.1.5 (peer <code>pixi.js &gt;=8.0.0-0</code>, MIT; проверено <code>npm view</code>): DropShadow, Glow, Outline. Нужны только для удобства: всё перечисленное делается и встроенными <code>BlurFilter</code> и текстурами. Частицы: <code>@pixi/particle-emitter</code> 5.0.10 работает только с PixiJS 7 (peer <code>&lt;8.0.0</code>), для 8 берём встроенный <code>ParticleContainer</code>.'],
-    ['Цена по FPS', 'Умеренная при запекании, высокая при фильтрах на каждом объекте: замер ниже в документе (software WebGL, 40 городов).'],
-    ['Риск', 'Средний: «мыльность» на встроенной графике, больше текстурной памяти, сложнее подсветка выбора и пул объектов. Мелкий символ с тенью на 20 px хуже читается, чем плоский.'],
+  soft: { h: 'D3 Soft volume', lines: [
+    ['Idea', 'Dark theme, but the shapes are "raised": cities and icons with a radial gradient and a soft shadow, the territory border glows, roads with a highlight, relief as lit "hills".'],
+    ['In PixiJS', 'Shadows and gradients are baked into icon textures (<code>generateTexture</code>) once per kind and city size, not by filters on every object; border glow: one <code>BlurFilter</code> on the territory layer, the layer is cached (<code>cacheAsTexture</code>) and recomputed when the owner changes. Unit icons become sprites (charge fill by a mask or by pre-cut frames).'],
+    ['Background baking', '<code>maps:bake</code> with relief shading (hillshade from the height field), soft biome transitions; the file size will grow.'],
+    ['Libraries', '<code>pixi-filters</code> 6.1.5 (peer <code>pixi.js &gt;=8.0.0-0</code>, MIT; checked with <code>npm view</code>): DropShadow, Glow, Outline. Needed only for convenience: everything listed can be done with the built-in <code>BlurFilter</code> and textures. Particles: <code>@pixi/particle-emitter</code> 5.0.10 works only with PixiJS 7 (peer <code>&lt;8.0.0</code>), for 8 we use the built-in <code>ParticleContainer</code>.'],
+    ['FPS cost', 'Moderate when baked, high with filters on every object: measurement below in the document (software WebGL, 40 cities).'],
+    ['Risk', 'Medium: "softness" on the built-in graphics, more texture memory, harder selection highlight and object pool. A small symbol with a shadow at 20 px reads worse than a flat one.'],
   ] },
 };
 function cards(which) {
