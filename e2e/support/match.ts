@@ -4,8 +4,8 @@ import { expect } from '@playwright/test';
 import type { MapFile } from '../../apps/client/src/protocol.gen.ts';
 import { Player } from './player.ts';
 
-/** The map the invite tests play on: a map of the e2e pool (`maps/fixtures/`, see compose.e2e.yaml), mid-sized. */
-export const MAP_ID = 'web';
+/** The map the invite tests play on: a map of the server pool (`maps/*.json`, DEC-27). */
+export const MAP_ID = 'ridge';
 
 /** A nick that no other test (or an earlier run against the same stack) used: 3 to 16 characters. */
 export function nick(prefix: string): string {

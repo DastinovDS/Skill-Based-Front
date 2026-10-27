@@ -16,17 +16,41 @@ function neighbours(map: MapFile, id: number): number[] {
   return map.edges.flatMap((edge) => (edge.a === id ? [edge.b] : edge.b === id ? [edge.a] : []));
 }
 
-/** A pair of orders for `side` that do not touch each other (see `giveOrders`). */
-function orderPlan(map: MapFile, side: 0 | 1, capital: number): OrderPlan {
+/**
+ * Capacity of a node by its kind: the table `capacity.by_kind` of `rulesets/test-short.toml` (the
+ * e2e ruleset). A group goes only through nodes that hold all of it (DEC-20, STACK_LIMIT).
+ */
+const CAPACITY: Readonly<Record<string, number>> = {
+  capital: 10,
+  city_large: 8,
+  city_medium: 6,
+  city_small: 4,
+  province: 3,
+};
+
+/**
+ * A pair of orders for `side` that do not touch each other (see `giveOrders`). A node of the plan
+ * is one the server accepts the order for on any map of the pool: the first group (the capital's)
+ * goes to a neighbour that holds it, the second one starts in an own city that has a garrison (a
+ * province has none, DEC-23) and ends in a node that holds it.
+ */
+function orderPlan(map: MapFile, side: 0 | 1, capital: MapFile['nodes'][number]): OrderPlan {
   const plain = (id: number): boolean => {
     const node = map.nodes[id];
     return node?.start_owner === side && node.capital_of === null;
   };
-  for (const first of neighbours(map, capital).filter(plain)) {
+  const holds = (id: number, units: number): boolean =>
+    (CAPACITY[map.nodes[id]?.kind ?? ''] ?? 0) >= units;
+  for (const first of neighbours(map, capital.id).filter(
+    (id) => plain(id) && holds(id, capital.start_units),
+  )) {
     for (const second of map.nodes
-      .map((node) => node.id)
-      .filter((id) => plain(id) && id !== first)) {
-      const target = neighbours(map, second).find((id) => plain(id) && id !== first);
+      .filter((node) => plain(node.id) && node.id !== first && node.start_units > 0)
+      .map((node) => node.id)) {
+      const units = map.nodes[second]?.start_units ?? 0;
+      const target = neighbours(map, second).find(
+        (id) => plain(id) && id !== first && holds(id, units),
+      );
       if (target !== undefined) return { first, second, target };
     }
   }
@@ -42,7 +66,7 @@ async function giveOrders(player: Player, map: MapFile): Promise<void> {
   // goes from `second` to `target`. Own units in a city are one icon on it, and a click on the
   // icon of a city is a click on the city, so the second order may aim at any city; it still must
   // not aim at the capital or at `first`, where the first group is (or soon will be).
-  const { first, second, target } = orderPlan(map, side, capital.id);
+  const { first, second, target } = orderPlan(map, side, capital);
 
   // 1. A normal move out of the capital.
   await player.moveGroup(map, capital.id, first);
