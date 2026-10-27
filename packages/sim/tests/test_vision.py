@@ -1,4 +1,4 @@
-"""Vision (SIM-03): detail levels of DEC-21 on the test maps, is_visible, fog memory.
+"""Vision (SIM-03): detail levels of DEC-21 and DEC-10 on the test maps, is_visible, fog memory.
 
 Expected levels are worked out by hand from the terrain table of DEC-21, item 2 (mechanics.md,
 section 10) and the map files (terrain: p plains, f forest, m mountains):
@@ -109,18 +109,41 @@ def test_standing_group_makes_its_node_exact(rules: Ruleset) -> None:
     assert _levels(state, 1) == ([F, F, F, P, F, E, E], [F, F, F, P, P, F])
 
 
-def test_group_on_edge_gives_no_vision(rules: Ruleset) -> None:
-    # TODO(#112): default of the question, literal DEC-04. Player 0 lost both of its nodes; its
-    # group on e1 (1 -> 3) stands nowhere, so it sees nothing, not even its own edge.
+def test_group_on_edge_sees_its_own_edge(rules: Ruleset) -> None:
+    # DEC-10 (#112), items 1, 2, 4, 5. Player 0 lost both of its nodes; its group on e1 (1 -> 3)
+    # stands nowhere: no node gets a level, but its own edge leaves the fog and both halves of it
+    # are presence. The other edges of 1 and 3 stay in fog.
     state = _state("choke", rules)
     state.nodes[0].owner = 1
     state.nodes[1].owner = 1
     state.groups.clear()
     own = _add(state, 0, OnEdge(edge=1, from_node=1, progress=500))
     enemy = _add(state, 1, OnEdge(edge=1, from_node=3, progress=100))
-    assert _levels(state, 0) == ([F] * 7, [F] * 6)
+    elsewhere = _add(state, 1, OnEdge(edge=0, from_node=0, progress=900))  # e0 = 0 - 1
+    standing = _add(state, 1, AtNode(3))
+    assert _levels(state, 0) == ([F] * 7, [F, P, F, F, F, F])
+    v = compute_vision(state, rules, 0)
+    assert (v.half(1, 1), v.half(1, 3), v.half(0, 1), v.half(2, 3)) == (P, P, F, F)
+    assert v.sources == (False,) * 7
+    assert v.edge_sources == (False, True, False, False, False, False)
+    assert edge_detail_level(state, 0, 1) is P
+    assert visible_edges(state, 0) == (1,)
+    assert visible_nodes(state, rules, 0) == ()
     assert is_visible(state, rules, 0, own)
-    assert not is_visible(state, rules, 0, enemy)
+    assert is_visible(state, rules, 0, enemy)
+    assert not is_visible(state, rules, 0, elsewhere)
+    assert not is_visible(state, rules, 0, standing)
+
+
+def test_edge_source_keeps_a_better_level_of_the_half(rules: Ruleset) -> None:
+    # DEC-10, item 2: the half of an exact or range node keeps its level. diamond: e0 = 0 - 1,
+    # node 1 (forest) is a range for player 0, node 0 its exact capital.
+    state = _state("diamond", rules)
+    _add(state, 0, OnEdge(edge=2, from_node=3, progress=300))  # e2 = 3 - 2 (fog for player 0)
+    v = compute_vision(state, rules, 0)
+    assert _levels(state, 0) == ([E, R, R, F], [P, P, P, F])
+    assert (v.half(2, 3), v.half(2, 2)) == (P, R)  # the half of the fogged 3, of the range 2
+    assert (v.half(0, 0), v.half(0, 1)) == (E, R)
 
 
 def test_single_node_and_edge_queries(rules: Ruleset) -> None:
@@ -186,20 +209,29 @@ def test_enemy_groups_on_edges(rules: Ruleset) -> None:
 
 def test_own_entities_are_always_visible(rules: Ruleset) -> None:
     state = _state("choke", rules)
-    far_group = _add(state, 0, OnEdge(edge=3, from_node=5, progress=10))  # e3: 5 - 6, fog
     pid = state.new_id()
     packet = Packet(pid, 0, edge=3, from_node=5, charges=1, depart_tick=0, arrive_tick=5)
-    assert edge_detail_level(state, 0, 3) is F
-    assert is_visible(state, rules, 0, far_group)
+    state.packets[pid] = packet
+    assert edge_detail_level(state, 0, 3) is F  # e3: 5 - 6; an own packet gives no vision
     assert is_visible(state, rules, 0, packet)
+    far_group = _add(state, 0, OnEdge(edge=3, from_node=5, progress=10))
+    assert edge_detail_level(state, 0, 3) is P  # an own group on it does (DEC-10, item 5)
+    assert is_visible(state, rules, 0, far_group)
 
 
 def test_enemy_packets_are_never_visible(rules: Ruleset) -> None:
-    # TODO(#112): default of the question. e0 joins the two own nodes of player 0.
+    # DEC-10, item 6. e0 joins the two own nodes of player 0.
     state = _state("choke", rules)
     packet = Packet(state.new_id(), 1, edge=0, from_node=0, charges=2, depart_tick=0, arrive_tick=9)
     assert edge_detail_level(state, 0, 0) is P
     assert not is_visible(state, rules, 0, packet)
+    # Nor on the edge of an own group: e3 = 5 - 6, between two enemy nodes.
+    _add(state, 0, OnEdge(edge=3, from_node=5, progress=500))
+    on_own_edge = Packet(
+        state.new_id(), 1, edge=3, from_node=6, charges=2, depart_tick=0, arrive_tick=9
+    )
+    assert edge_detail_level(state, 0, 3) is P
+    assert not is_visible(state, rules, 0, on_own_edge)
 
 
 def test_intents_are_public(rules: Ruleset) -> None:

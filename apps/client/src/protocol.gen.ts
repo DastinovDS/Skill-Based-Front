@@ -602,8 +602,9 @@ export interface EdgeView {
    */
   width: number;
   /**
-   * The road level visibility (DEC-17): ``presence`` while an end is a source of vision, else
-   * ``fog``. What is seen of enemies is in ``halves`` and ``enemy_groups``.
+   * The road level visibility (DEC-17): ``presence`` while an end is a source of vision or an
+   * own group is on the edge (DEC-10, item 5), else ``fog``. What is seen of enemies is in
+   * ``halves`` and ``enemy_groups``.
    */
   detail: Detail;
   /**
@@ -649,7 +650,8 @@ export interface UpgradeGain {
  */
 export interface HalfView {
   /**
-   * The level of the node the half belongs to (a source's half is ``exact``).
+   * The level of the node the half belongs to (a source's half is ``exact``), at least
+   * ``presence`` while an own group is on the edge (DEC-10, item 2).
    */
   detail: Detail;
   /**
@@ -1071,6 +1073,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 24;
+export const PROTOCOL_VERSION = 25;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

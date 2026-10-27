@@ -389,15 +389,20 @@ def test_dec04_vision_does_not_depend_on_group_size(rules: Ruleset) -> None:
         assert [n.detail for n in _view(state, rules).nodes] == [E, E, E, E, F, F]
 
 
-# #112 default ---------------------------------------------------------------------------------
+# DEC-10 (#112): a group on an edge sees its own edge -------------------------------------------
 
 
-def test_own_group_on_an_edge_gives_no_vision(rules: Ruleset) -> None:
+def test_own_group_on_an_edge_sees_its_edge_only(rules: Ruleset) -> None:
     state = _state("line6", rules)
     _add(state, 0, OnEdge(edge=2, from_node=2, progress=900))
     view = _view(state, rules)
+    # The nodes keep the levels of the node sources (item 4); the edge leaves the fog (item 5).
     assert [n.detail for n in view.nodes] == [E, E, E, F, F, F]
-    assert [e.detail for e in view.edges] == [P, P, F, F, F]
+    assert [e.detail for e in view.edges] == [P, P, P, F, F]
+    # The half of 2 keeps the level of 2, the half of 3 is at least presence (item 2); the other
+    # edge of 3 stays in fog.
+    assert [h.detail for h in view.edges[2].halves] == [E, P]
+    assert [h.detail for h in view.edges[3].halves] == [F, F]
 
 
 def test_enemy_packets_are_never_visible(rules: Ruleset) -> None:
@@ -714,12 +719,13 @@ _ORDER = (E, R, P, F)
 
 def _levels(state: GameState, player: int) -> tuple[list[Detail], list[Detail], list[bool]]:
     """DEC-21 levels computed independently of ``systems.vision``: node levels, the road level
-    visibility of edges (DEC-17) and the sources."""
+    visibility of edges (DEC-17; an own group on the edge too, DEC-10) and the sources."""
     mapdef = state.map
     source = [state.nodes[n].owner == player for n in range(len(mapdef.nodes))]
     for g in state.groups.values():
         if g.owner == player and isinstance(g.location, AtNode):
             source[g.location.node] = True
+    on_edge = _edge_sources(state, player)
     nodes: list[Detail] = []
     for n in range(len(mapdef.nodes)):
         seen = [F]
@@ -730,8 +736,23 @@ def _levels(state: GameState, player: int) -> tuple[list[Detail], list[Detail], 
             if source[m]:
                 seen.append(_SIGHT[mapdef.nodes[m].terrain.value, mapdef.nodes[n].terrain.value])
         nodes.append(min(seen, key=_ORDER.index))
-    edges = [P if source[e.a] or source[e.b] else F for e in mapdef.edges]
+    edges = [P if source[e.a] or source[e.b] or on_edge[e.id] else F for e in mapdef.edges]
     return nodes, edges, source
+
+
+def _edge_sources(state: GameState, player: int) -> list[bool]:
+    """``result[edge]``: an own group is on the edge (DEC-10, item 1)."""
+    on_edge = [False] * len(state.map.edges)
+    for g in state.groups.values():
+        if g.owner == player and isinstance(g.location, OnEdge):
+            on_edge[g.location.edge] = True
+    return on_edge
+
+
+def _half_level(nodes: list[Detail], on_edge: list[bool], edge: int, node: int) -> Detail:
+    """The level of the half of ``edge`` at ``node``: that of the node, at least ``PRESENCE``
+    while an own group is on the edge (DEC-10, item 2)."""
+    return P if nodes[node] is F and on_edge[edge] else nodes[node]
 
 
 def _half(state: GameState, loc: OnEdge) -> int:
@@ -744,12 +765,12 @@ def _half(state: GameState, loc: OnEdge) -> int:
     return e.a if pos <= 500 else e.b
 
 
-def _place_level(state: GameState, nodes: list[Detail], g: Group) -> Detail:
+def _place_level(state: GameState, nodes: list[Detail], on_edge: list[bool], g: Group) -> Detail:
     match g.location:
         case AtNode(node=node):
             return nodes[node]
         case OnEdge() as loc:
-            return nodes[_half(state, loc)]
+            return _half_level(nodes, on_edge, loc.edge, _half(state, loc))
 
 
 _MAPS = {name: load_map(TESTS_DIR / "maps" / f"{name}.json") for name in TEST_MAPS}
@@ -841,6 +862,7 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
     """Change only what ``player`` must not know; the view must stay the same."""
     draw = data.draw
     nodes, edges, source = _levels(state, player)
+    on_edge = _edge_sources(state, player)
     enemy = 1 - player
     for gid in sorted(state.groups):
         g = state.groups[gid]
@@ -848,7 +870,7 @@ def _hide(data: st.DataObject, state: GameState, player: int) -> None:
             continue
         if g.mode is Mode.DEFENSE:  # DEC-30, item 5: what it has gathered is hidden everywhere
             g.ticks_in_defense = draw(st.integers(0, 1000))
-        level = _place_level(state, nodes, g)
+        level = _place_level(state, nodes, on_edge, g)
         g.order = None  # the target of a normal order is never shown (DEC-21, item 6)
         if level is F and draw(st.booleans()):
             del state.groups[gid]  # a group in fog may vanish
@@ -914,6 +936,7 @@ def test_property_nothing_leaks_from_places_out_of_sight(data: st.DataObject) ->
     state, player = data.draw(_states())
     view = project(state, _RULES, player, KEY)
     nodes, edges, source = _levels(state, player)
+    on_edge = _edge_sources(state, player)
 
     assert [n.detail for n in view.nodes] == nodes
     assert [e.detail for e in view.edges] == edges
@@ -929,7 +952,10 @@ def test_property_nothing_leaks_from_places_out_of_sight(data: st.DataObject) ->
         assert (n.warehouse is not None) == source[n.id]
     for e in view.edges:
         edef = state.map.edges[e.id]
-        assert [h.detail for h in e.halves] == [nodes[edef.a], nodes[edef.b]]
+        assert [h.detail for h in e.halves] == [
+            _half_level(nodes, on_edge, e.id, edef.a),
+            _half_level(nodes, on_edge, e.id, edef.b),
+        ]
         for h, n in zip(e.halves, (edef.a, edef.b), strict=True):
             _check_place(h.detail, h.seen, memory.halves.get((e.id, n)))
     _check_figures(state, player, nodes, view)
@@ -983,7 +1009,7 @@ def _check_figures(state: GameState, player: int, nodes: list[Detail], view: Pla
         loc = g.location
         if g.owner == player or g.fight is not None or not isinstance(loc, OnEdge):
             continue
-        level = nodes[_half(state, loc)]
+        level = _half_level(nodes, _edge_sources(state, player), loc.edge, _half(state, loc))
         if level is F:
             continue
         e = state.map.edges[loc.edge]

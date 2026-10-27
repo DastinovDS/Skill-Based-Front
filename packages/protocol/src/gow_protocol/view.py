@@ -1,7 +1,8 @@
 """The player's view on the wire: the ``view`` of a ``snapshot`` message.
 
 It carries a ``PlayerView`` (``gow_sim.view.project()``, SIM-14 #30) and nothing else; the
-conversion is PRO-03 (#46). The shape follows DEC-04, DEC-21 and DEC-33 (mechanics.md, section 10)
+conversion is PRO-03 (#46). The shape follows DEC-04, DEC-21, DEC-33 and DEC-10 (mechanics.md,
+section 10)
 and the list of what a view must not contain (AGENTS.md, section 4.4):
 
 - public to everyone: ownership and capacity (DEC-22) of every node, road levels and types
@@ -12,8 +13,9 @@ and the list of what a view must not contain (AGENTS.md, section 4.4):
 - sources of vision (own nodes, nodes where own groups stand): everything with numbers, the
   warehouse included;
 - neighbours of sources by the terrain table (DEC-21, item 2) and the halves of edges by the
-  level of their node: ``exact`` the enemy totals, ``range`` the range of the enemy units,
-  ``presence`` whether enemy groups are there; the modes on every level; never the warehouse;
+  level of their node, at least ``presence`` on an edge an own group is on (DEC-10): ``exact`` the
+  enemy totals, ``range`` the range of the enemy units, ``presence`` whether enemy groups are
+  there; the modes on every level; never the warehouse;
 - enemy groups on the halves of edges not in fog, each as a figure (``EdgeView.enemy_groups``,
   DEC-33): position, direction, mode and the numbers of its half's level, with an opaque id that
   is new each time the group comes out of the fog; a group in a fight is shown by the fight;
@@ -29,7 +31,7 @@ Deliberate choices of the wire format:
   in nodes is the per-place ``Seen`` summary (modes, totals only where ``exact``, a range where
   ``range``), the same shape as the fog memory ``gow_sim.state.Sighting``; on edges the figures of
   ``EdgeView.enemy_groups``, whose ids are keyed by the sighting, not the group, so they cannot
-  track a group through the fog. Enemy packets are never visible (DEC-10 default, #112).
+  track a group through the fog. Enemy packets are never visible, on any edge (DEC-10, item 6).
 - Own-only data (``me``: CP, stance, front markers and rear minimum of DEC-28; ``upgrade_gain``
   of own edges; orders of own groups) has no enemy counterpart in the view.
 """
@@ -209,7 +211,8 @@ class HalfView(WireModel):
     """A half of an edge, from its node to the border point (DEC-21, item 5)."""
 
     detail: Detail
-    """The level of the node the half belongs to (a source's half is ``exact``)."""
+    """The level of the node the half belongs to (a source's half is ``exact``), at least
+    ``presence`` while an own group is on the edge (DEC-10, item 2)."""
     seen: Seen | None
     """The enemy groups in the half now (those in a fight too) unless ``detail`` is ``fog``; for
     ``fog`` the last sighting (no positions, DEC-33, detail 8), or ``None``."""
@@ -260,8 +263,9 @@ class EdgeView(WireModel):
     """Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is
     ``fog``; in fog the last seen level, or 1 if never seen. Never above the true level."""
     detail: Detail
-    """The road level visibility (DEC-17): ``presence`` while an end is a source of vision, else
-    ``fog``. What is seen of enemies is in ``halves`` and ``enemy_groups``."""
+    """The road level visibility (DEC-17): ``presence`` while an end is a source of vision or an
+    own group is on the edge (DEC-10, item 5), else ``fog``. What is seen of enemies is in
+    ``halves`` and ``enemy_groups``."""
     upgrade_gain: UpgradeGain | None
     """Only for own internal edges that can still be upgraded."""
     halves: tuple[HalfView, HalfView]

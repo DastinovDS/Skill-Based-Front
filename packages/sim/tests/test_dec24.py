@@ -426,7 +426,8 @@ def test_fog_a_reinforcement_shows_its_bonus_only_when_it_joins() -> None:
 
 
 def test_fog_an_edge_fight_shows_the_enemy_counters_even_without_vision() -> None:
-    """I1 (#112): a group on an edge gives no vision, but its fight shows the enemy exactly."""
+    """I1: a group on an edge shows only presence on its edge (DEC-10), but its fight shows the
+    enemy exactly."""
     state = initial_state(_line(), RULES)
     _add(state, 0, 2, 2, OnEdge(0, 0, 14 * 1000 // 30), order=Order((1,), False, 0))
     _add(state, 1, 3, 1, OnEdge(0, 1, 14 * 1000 // 30), order=Order((0,), False, 0))

@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 24,
+    "PROTOCOL_VERSION": 25,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -647,7 +647,7 @@
               "$ref": "#/$defs/Detail"
             }
           ],
-          "description": "The road level visibility (DEC-17): ``presence`` while an end is a source of vision, else\n``fog``. What is seen of enemies is in ``halves`` and ``enemy_groups``."
+          "description": "The road level visibility (DEC-17): ``presence`` while an end is a source of vision or an\nown group is on the edge (DEC-10, item 5), else ``fog``. What is seen of enemies is in\n``halves`` and ``enemy_groups``."
         },
         "upgrade_gain": {
           "anyOf": [
@@ -1192,7 +1192,7 @@
               "$ref": "#/$defs/Detail"
             }
           ],
-          "description": "The level of the node the half belongs to (a source's half is ``exact``)."
+          "description": "The level of the node the half belongs to (a source's half is ``exact``), at least\n``presence`` while an own group is on the edge (DEC-10, item 2)."
         },
         "seen": {
           "anyOf": [
