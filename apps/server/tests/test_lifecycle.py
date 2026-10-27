@@ -43,7 +43,7 @@ Json = dict[str, object]
 
 @pytest.fixture
 def live_settings(maps_dir: Path, tmp_path: Path) -> Settings:
-    shutil.copy(ROOT / "maps" / "web.json", maps_dir)
+    shutil.copy(ROOT / "maps" / "fixtures" / "web.json", maps_dir)
     return Settings(
         maps_dir=maps_dir,
         database_url=f"sqlite:///{tmp_path / 'gow.db'}",
@@ -372,7 +372,12 @@ def test_end_reason_of_a_technical_defeat(connect: bool, expected: str) -> None:
     async def scenario() -> None:
         rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
         runner = MatchRunner(
-            "t", "web", load_map(ROOT / "maps" / "web.json"), rules, (1, 2), ManualClock()
+            "t",
+            "web",
+            load_map(ROOT / "maps" / "fixtures" / "web.json"),
+            rules,
+            (1, 2),
+            ManualClock(),
         )
         assert runner.end_reason() is None
         if connect:
@@ -388,7 +393,12 @@ def test_end_reason_of_a_normal_end() -> None:
     async def scenario() -> None:
         rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
         runner = MatchRunner(
-            "t", "web", load_map(ROOT / "maps" / "web.json"), rules, (1, 2), ManualClock()
+            "t",
+            "web",
+            load_map(ROOT / "maps" / "fixtures" / "web.json"),
+            rules,
+            (1, 2),
+            ManualClock(),
         )
         runner.submit(0, 1, ForfeitCmd())
         runner.step()

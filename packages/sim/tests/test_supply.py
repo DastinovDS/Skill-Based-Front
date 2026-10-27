@@ -163,7 +163,7 @@ def test_fastest_ways_to_equal_transfer_route(name: str) -> None:
     """``fastest_ways_to``/``way_from`` give the way ``transfer_route`` gives (the fastest one,
     ties by the lexicographically smaller ``node_key`` sequence from the start) for every pair of
     own nodes, on random owners and road levels, for both players."""
-    mapdef = load_map(TESTS_DIR.parents[2] / "maps" / f"{name}.json")
+    mapdef = load_map(TESTS_DIR.parents[2] / "maps" / "fixtures" / f"{name}.json")
     seed = 306
 
     def draw(n: int) -> int:  # a fixed linear congruential sequence (no ``random`` here)

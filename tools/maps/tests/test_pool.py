@@ -1,7 +1,8 @@
 """Map pool (MAP-04; DEC-27, #266): maps built from halves, all passing the validator.
 
-The three MVP maps of 31..34 nodes stay in the pool next to the three maps of DEC-27 (45..55 nodes
-with provinces, free coordinates of the mirror half).
+The server pool ``maps/*.json`` holds the three maps of DEC-27 (45..55 nodes with provinces, free
+coordinates of the mirror half). The three MVP maps of 31..34 nodes are test fixtures in
+``maps/fixtures/`` (#372): not served, but still built from their halves and still validated.
 """
 
 import dataclasses
@@ -18,30 +19,46 @@ from gow_sim.maps import NodeKind, load_map
 from gow_sim.ruleset import load_ruleset
 
 MAPS = Path(__file__).parents[3] / "maps"
+FIXTURES = MAPS / "fixtures"
 MVP = ["artery", "web", "pass"]
 DEC27 = ["ridge", "crossroads", "highway"]
 POOL = sorted(MVP + DEC27)
+
+
+def _file(name: str) -> Path:
+    return (FIXTURES if name in MVP else MAPS) / f"{name}.json"
+
+
+def _half(name: str) -> Path:
+    return (FIXTURES if name in MVP else MAPS) / "src" / f"{name}.half.json"
+
+
 CONFIG = load_config()
 SIZE = dataclasses.replace(CONFIG, size_check=True)  # DEC-27, item 5: 45..55 nodes
 
 
 def test_pool_is_exactly_the_known_maps() -> None:
-    assert sorted(p.stem for p in MAPS.glob("*.json")) == POOL
+    # The server pool is only the DEC-27 maps; the MVP maps are fixtures (#372).
+    assert sorted(p.stem for p in MAPS.glob("*.json")) == sorted(DEC27)
+    assert sorted(p.stem for p in FIXTURES.glob("*.json")) == sorted(MVP)
     assert sorted(p.name for p in (MAPS / "src").glob("*.json")) == [
-        f"{name}.half.json" for name in POOL
+        f"{name}.half.json" for name in sorted(DEC27)
+    ]
+    assert sorted(p.name for p in (FIXTURES / "src").glob("*.json")) == [
+        f"{name}.half.json" for name in sorted(MVP)
     ]
 
 
 @pytest.mark.parametrize("name", POOL)
 def test_map_passes_the_validator(name: str) -> None:
-    assert validate_file(MAPS / f"{name}.json", CONFIG) == []
+    assert validate_file(_file(name), CONFIG) == []
 
 
 @pytest.mark.parametrize("name", POOL)
 def test_map_is_built_from_its_half(name: str) -> None:
-    # maps/<name>.json is exactly what `gow-maps mirror` makes of maps/src/<name>.half.json.
-    half = json.loads((MAPS / "src" / f"{name}.half.json").read_text(encoding="utf-8"))
-    built = json.loads((MAPS / f"{name}.json").read_text(encoding="utf-8"))
+    # The map is exactly what `gow-maps mirror` makes of its half (maps/src/ or maps/fixtures/src/).
+    half = json.loads(_half(name).read_text(encoding="utf-8"))
+    built = json.loads(_file(name).read_text(encoding="utf-8"))
     assert mirror_half(half, CONFIG) == built
 
 
@@ -49,12 +66,12 @@ def test_map_is_built_from_its_half(name: str) -> None:
 def test_dec27_map_passes_the_size_check_and_the_warehouses(name: str) -> None:
     # DEC-27, item 5: 45..55 nodes; DEC-26, item 5: no city starts above its warehouse (mvp-1).
     rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-1.toml")
-    assert validate_file(MAPS / f"{name}.json", SIZE, rules) == []
+    assert validate_file(_file(name), SIZE, rules) == []
 
 
 @pytest.mark.parametrize("name", DEC27)
 def test_dec27_map_has_provinces_and_free_positions(name: str) -> None:
-    mapdef = load_map(MAPS / f"{name}.json")
+    mapdef = load_map(_file(name))
     provinces = [n for n in mapdef.nodes if n.kind is NodeKind.PROVINCE]
     assert len(provinces) * 3 >= len(mapdef.nodes)  # DEC-23: about half of the nodes
     # DEC-27, item 1: the picture is not a rotation, most mirror pairs are off (w - x, h - y).
@@ -70,7 +87,7 @@ def test_dec27_map_has_provinces_and_free_positions(name: str) -> None:
 
 @pytest.mark.parametrize("name", POOL)
 def test_map_size_and_start(name: str) -> None:
-    mapdef = load_map(MAPS / f"{name}.json")
+    mapdef = load_map(_file(name))
     assert mapdef.meta.name == name  # the server requires maps/<id>.json
     # mechanics.md, section 1: 25-40 nodes (DEC-27: 45..55), each player starts with real
     # territory.
@@ -84,19 +101,19 @@ def test_map_size_and_start(name: str) -> None:
 
 @pytest.mark.parametrize("name", POOL)
 def test_preview_is_committed(name: str) -> None:
-    path = preview_path(MAPS / f"{name}.json")
+    path = preview_path(_file(name))
     assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 def test_render_preview(tmp_path: Path) -> None:
     out = tmp_path / "pass.preview.png"
-    render_preview(load_map(MAPS / "pass.json"), out)
+    render_preview(load_map(FIXTURES / "pass.json"), out)
     assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 def test_cli_preview(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     map_path = tmp_path / "pass.json"
-    map_path.write_bytes((MAPS / "pass.json").read_bytes())
+    map_path.write_bytes((FIXTURES / "pass.json").read_bytes())
     assert main(["preview", str(map_path)]) == 0
     assert (tmp_path / "pass.preview.png").exists()
     broken = tmp_path / "broken.json"

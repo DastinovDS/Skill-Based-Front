@@ -39,7 +39,7 @@ from gow_sim.state import (
 
 ROOT: Final = Path(__file__).parents[3]
 RULESETS: Final = ROOT / "rulesets" / "archive"
-MAPS: Final = ROOT / "maps"
+MAPS: Final = ROOT / "maps" / "fixtures"
 DT: Final = 0.1
 FRAMES_BUDGET: Final = 2 * 1024 * 1024
 """AGENTS.md, section 12: the frames file of a whole match (15 minutes, DEC-22)."""

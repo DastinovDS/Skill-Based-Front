@@ -37,7 +37,7 @@ NOT_FOUND: Final = sim.RejectCode.NOT_FOUND_OR_HIDDEN.value
 
 def _warm_match() -> Match:
     """A match after ``WARMUP_TICKS`` of bot play: groups of both players, on nodes and edges."""
-    mapdef = load_map(ROOT / "maps" / "artery.json")
+    mapdef = load_map(ROOT / "maps" / "fixtures" / "artery.json")
     rules = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
     match = Match(mapdef, rules, KEY)
     bots = [BOTS["rusher"](mapdef, rules, seed=3, player=p) for p in PLAYERS]

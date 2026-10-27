@@ -118,7 +118,7 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run pyright
       - run: uv run lint-imports
-      - run: uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json
+      - run: uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json
       # pytest-xdist: the tests are independent (own tmp_path, in-memory servers, ManualClock),
       # a runner has 2 cores. Timing tests (mark `perf`: benchmarks, tick lag) and the long
       # full-match tests (mark `slow`, job `py-slow`) are not run here.

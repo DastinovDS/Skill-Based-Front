@@ -381,7 +381,7 @@ def test_example_19_target_of_a_small_rear_city() -> None:
 def test_example_20_the_start_stock_is_cut_to_the_warehouse() -> None:
     # Example 20: a small city with `start_stock = 2`. The committed maps do not have one (#379),
     # so the stock is set here on the own small cities of artery.
-    mapdef = load_map(TESTS_DIR.parents[2] / "maps" / "artery.json")
+    mapdef = load_map(TESTS_DIR.parents[2] / "maps" / "fixtures" / "artery.json")
     small = {
         n.id for n in mapdef.nodes if n.kind is NodeKind.CITY_SMALL and n.start_owner is not None
     }

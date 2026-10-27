@@ -327,7 +327,7 @@ def test_on_edge_order_keeps_the_rest_of_the_path() -> None:
 @pytest.mark.parametrize("name", ["pass", "web", "artery"])
 def test_mvp_maps_fit_the_progress_scale(name: str) -> None:
     """Every edge of the MVP maps, both ways, takes at most PROGRESS_SCALE ticks on mvp-0."""
-    mapdef = load_map(TESTS_DIR.parents[2] / "maps" / f"{name}.json")
+    mapdef = load_map(TESTS_DIR.parents[2] / "maps" / "fixtures" / f"{name}.json")
     rules = load_ruleset(MVP0)
     for e in mapdef.edges:
         for to_node in (e.a, e.b):

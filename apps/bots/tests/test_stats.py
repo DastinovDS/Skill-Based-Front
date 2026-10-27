@@ -25,7 +25,7 @@ def test_analyze_adds_the_statistics_of_both_players(capsys: pytest.CaptureFixtu
                 "--rulesets",
                 str(ROOT / "rulesets" / "archive"),
                 "--maps",
-                str(ROOT / "maps"),
+                str(ROOT / "maps" / "fixtures"),
             ]
         )
         == 0
@@ -45,7 +45,7 @@ def test_stats_prints_a_table_per_replay(capsys: pytest.CaptureFixture[str]) -> 
         "--rulesets",
         str(ROOT / "rulesets" / "archive"),
         "--maps",
-        str(ROOT / "maps"),
+        str(ROOT / "maps" / "fixtures"),
     ]
     assert main(argv) == 0
     lines = capsys.readouterr().out.splitlines()

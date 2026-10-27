@@ -1,13 +1,17 @@
 import type { MapFile } from '../protocol.gen.ts';
 
 // Maps bundled into the client for the dev screen, until the lobby loads them from the server
-// (`GET /api/maps/{id}`). The MVP pool `maps/*.json` (MAP-04, #16) comes first, then the tiny test
-// maps of the simulation (MAP-01, #13). The files stay where they are, Vite bundles them from
+// (`GET /api/maps/{id}`). The maps of the server pool `maps/*.json` (DEC-27) and the MVP maps that
+// stay as test fixtures in `maps/fixtures/` (#372) come first (all sorted by name), then the tiny
+// test maps of the simulation (MAP-01, #13). The files stay where they are, Vite bundles them from
 // there (see `server.fs.allow` in vite.config.ts).
-const mvpFiles = import.meta.glob<MapFile>('../../../../maps/*.json', {
-  eager: true,
-  import: 'default',
-});
+const mvpFiles = import.meta.glob<MapFile>(
+  ['../../../../maps/*.json', '../../../../maps/fixtures/*.json'],
+  {
+    eager: true,
+    import: 'default',
+  },
+);
 const testFiles = import.meta.glob<MapFile>('../../../../packages/sim/tests/maps/*.json', {
   eager: true,
   import: 'default',
@@ -33,13 +37,17 @@ export const DEFAULT_MAP: MapFile = (() => {
   return map;
 })();
 
-// Baked backgrounds `maps/<id>.bg.webp` (MAP-05, #70, #344). The server serves the same files at
-// `/api/maps/{id}/background.webp`; the dev screen takes them from the repository through Vite.
-const backgrounds = import.meta.glob<string>('../../../../maps/*.bg.webp', {
-  eager: true,
-  import: 'default',
-  query: '?url',
-});
+// Baked backgrounds `maps/<id>.bg.webp` (MAP-05, #70, #344), those of the fixtures in `maps/fixtures/`.
+// The server serves the pool ones at `/api/maps/{id}/background.webp`; the dev screen takes them
+// from the repository through Vite.
+const backgrounds = import.meta.glob<string>(
+  ['../../../../maps/*.bg.webp', '../../../../maps/fixtures/*.bg.webp'],
+  {
+    eager: true,
+    import: 'default',
+    query: '?url',
+  },
+);
 
 /** URL of the baked background of a bundled map, or `null` if it has none (the test maps). */
 export function backgroundUrl(mapName: string): string | null {

@@ -10,9 +10,11 @@ from fastapi.testclient import TestClient
 
 from gow_server.app import create_app
 from gow_server.logs import JsonFormatter, request_id_var
+from gow_server.maps import MapCatalog
 from gow_server.settings import Settings
 from gow_sim.maps import MapFormatError
 
+ROOT = Path(__file__).resolve().parents[3]
 WEBP_BYTES = b"RIFF" + b"\x00" * 4 + b"WEBP" + b"\x00" * 16
 
 
@@ -103,3 +105,10 @@ def test_broken_map_stops_startup(maps_dir: Path, settings: Settings) -> None:
     (maps_dir / "broken.json").write_text("{", encoding="utf-8")
     with pytest.raises(MapFormatError, match=r"broken\.json"), TestClient(create_app(settings)):
         pass
+
+
+def test_the_pool_of_the_repository_is_the_dec27_maps() -> None:
+    # #372: the MVP maps in maps/fixtures/ are not served (the catalog is not recursive).
+    catalog = MapCatalog.load(ROOT / "maps")
+    assert [entry.id for entry in catalog.all()] == ["crossroads", "highway", "ridge"]
+    assert all(entry.background is not None for entry in catalog.all())
