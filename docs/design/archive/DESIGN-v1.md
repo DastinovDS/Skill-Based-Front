@@ -1,292 +1,292 @@
-> **Устарело, см. [`../mechanics.md`](../mechanics.md).** Первая версия дизайн-документа, сохранена как архив.
-> Правила игры задаёт только `docs/design/mechanics.md`; при расхождении этот файл не действует.
+> **Outdated, see [`../mechanics.md`](../mechanics.md).** The first version of the design document, kept as an archive.
+> The rules of the game are set only by `docs/design/mechanics.md`; where this file disagrees with it, this file is not in force.
 
-# Skill-Based Front — дизайн-документ
+# Skill-Based Front: design document
 
-> Статус: концепт. Ничего из описанного не реализовано. Документ фиксирует решения,
-> принятые в ходе проработки, вместе с причинами — чтобы через месяц не пришлось
-> заново выводить, почему сделано именно так.
-
----
-
-## 1. Что это
-
-Соревновательная стратегия в реальном времени на графе провинций. Одна партия —
-10–15 минут. Ядро игры — **логистика**: побеждает не тот, у кого больше войск,
-а тот, чья сеть снабжения способна прокормить бой в нужном месте в нужный момент.
-
-Ближайшие родственники по ощущениям: го (накапливающаяся доска, жизнь и смерть групп),
-Clash Royale (считаемая экономика действий), Unity of Command (снабжение и котлы).
-Прямых аналогов у комбинации нет.
-
-### Целевая аудитория — честно
-
-Это **не** массовая стратегическая аудитория. Массовая покупает Manor Lords, Civ и
-кампании Total War — фантазию управления, а не проверку навыка. Аудитория этой игры —
-меньшинство, играющее в лигу StarCraft, AoE2, го и шахматы. Она лояльна и живёт
-десятилетиями, но её требования противоположны массовым: симметричные карты вместо
-красивых случайных, отсутствие рандома вместо «драматичных моментов», рейтинг и
-реплеи вместо кампании.
-
-Выбор сделан сознательно. Полумеры тут не работают.
+> Status: concept. Nothing described here is implemented. The document records the decisions
+> made during the design work, together with the reasons, so that a month from now there is no need
+> to work out again why it was done this way.
 
 ---
 
-## 2. Рамки
+## 1. What this is
 
-| Параметр | Решение |
+A competitive real-time strategy game on a graph of provinces. One match takes
+10-15 minutes. The core of the game is **logistics**: the winner is not the one with more troops,
+but the one whose supply network can feed a fight in the right place at the right moment.
+
+The closest relatives in feel: go (an accumulating board, life and death of groups),
+Clash Royale (a countable economy of actions), Unity of Command (supply and encirclements).
+The combination has no direct analogues.
+
+### Target audience: honestly
+
+This is **not** the mass strategy audience. The mass audience buys Manor Lords, Civ and
+Total War campaigns: the fantasy of management, not a test of skill. The audience of this game is
+a minority that plays StarCraft ladder, AoE2, go and chess. It is loyal and lives for
+decades, but its demands are the opposite of the mass ones: symmetric maps instead of
+beautiful random ones, no randomness instead of "dramatic moments", rating and
+replays instead of a campaign.
+
+The choice is made deliberately. Half-measures do not work here.
+
+---
+
+## 2. Frame
+
+| Parameter | Decision |
 |---|---|
-| Длина партии | 10–15 минут |
-| Размер карты | 25–40 узлов |
-| Старт | у каждого игрока уже значимая территория, соприкосновение с первых секунд |
-| Режим | приоритет 1v1 и командные; FFA под вопросом (см. открытые вопросы) |
-| Карты | пул авторских карт с N-кратной поворотной симметрией, не процедурная генерация |
-| Монетизация | никакого P2W; реалистично — разовая покупка |
+| Match length | 10-15 minutes |
+| Map size | 25-40 nodes |
+| Start | each player already has a significant territory, contact from the first seconds |
+| Mode | priority 1v1 and team modes; FFA is in question (see open questions) |
+| Maps | a pool of hand-made maps with N-fold rotational symmetry, not procedural generation |
+| Monetization | no P2W; realistically a one-time purchase |
 
-**Почему не 2.5–4 часа** (изначальная идея): это худшая из возможных длительностей.
-Слишком долго, чтобы зайти вечером, и слишком долго, чтобы пережить ливеров. Данные
-по вебу: типичная сессия 11–20 минут, за заход играют в 2–3 игры. OpenFront живёт на
-20–40 минутах. Глубина не берётся из длины — у го и шахмат партии короче.
+**Why not 2.5-4 hours** (the original idea): it is the worst possible duration.
+Too long to jump in for an evening, and too long to survive quitters. Web data:
+a typical session is 11-20 minutes, people play 2-3 games per visit. OpenFront lives on
+20-40 minutes. Depth does not come from length: go and chess matches are shorter.
 
-**Почему фиксированные карты.** Глубина шахмат и го не в правилах, а в накопленном
-знании: дебютная теория, дзёсэки, стандартные формы. Знание накапливается только если
-позиции повторяются. Случайная генерация физически не даёт мете сформироваться — каждая
-партия с нуля, и игрок может стать быстрее, но не умнее.
-
----
-
-## 3. Принципы (инварианты дизайна)
-
-Нарушение любого из них ломает то, ради чего игра делается.
-
-1. **Глубина из последствий простых правил, а не из скрытых констант.**
-   Скрытое правило узнаётся сообществом один раз и превращается в налог на новичка.
-   Период полураспада — дни (плюс python-сборка распаковывается за пять минут).
-   Скрытое **состояние** — наоборот, генерируется заново каждую партию. Правила
-   публичны полностью; неизвестно только положение дел у противника.
-
-2. **Различай сущности по отношению к топологии, а не по векторам статов.**
-   Шесть фигур в шахматах различаются тем, *как ходят*, а не атакой и здоровьем.
-   Пятнадцать юнитов с разными статами дают решаемый баланс, а не глубину.
-
-3. **Всё, за чем следит игрок, должно выводиться из формы его территории.**
-   Пять независимых счётчиков — это пять объектов в голове. Три проекции одного
-   состояния доски — почти один.
-
-4. **CP никогда не растут от территории.** Ни от городов, ни от зданий, ни от армий.
-   Это главный тормоз против снежного кома: вдвое большая империя имеет ровно столько же
-   действий в минуту. Тот же тормоз, что делает го игрой — нельзя положить два камня за ход.
-
-5. **Атрибутируемость.** Игрок обязан уметь сказать «я проиграл из-за хода на восьмой
-   минуте». Отсюда: никакого рандома в бою, симметричный старт, реплей с раскрытием.
-
-6. **Жёсткие целочисленные правила.** Бинарные правила учатся с первой партии и дают
-   чистую дедукцию. Непрерывные величины размывают вывод.
-
-7. **Исполнительский скилл вырезается активно.** Никакого микроконтроля, никакой
-   точности размещения, никакой гонки APM. Весь скилл — решенческий.
-
-### Антипаттерны
-
-- Расширение ростера юнитов — даёт сложность, не глубину, и рождает доминирующую стратегию.
-- Древа технологий — сводятся к одному оптимальному пути.
-- Ресурс, оптимальную трату которого можно заучить — это билд-ордер, то есть исполнение, а не решение.
-- Специальное правило «против окопов» — лечить надо условием победы, а не механикой боя.
+**Why fixed maps.** The depth of chess and go is not in the rules but in accumulated
+knowledge: opening theory, joseki, standard shapes. Knowledge accumulates only if
+positions repeat. Random generation physically does not let a meta form: every
+match starts from scratch, and a player can become faster but not smarter.
 
 ---
 
-## 4. Ядро: один юнит, три режима
+## 3. Principles (design invariants)
 
-Тип юнита **один**. Вся выразительность — в том, что группа сейчас делает и где стоит.
+Violating any of them breaks what the game is being made for.
 
-Группа в каждый момент в одном из трёх режимов:
+1. **Depth comes from the consequences of simple rules, not from hidden constants.**
+   A hidden rule is learned by the community once and turns into a tax on newcomers.
+   Its half-life is days (plus a python build is unpacked in five minutes).
+   Hidden **state**, on the contrary, is generated anew every match. The rules
+   are fully public; only the state of affairs on the opponent's side is unknown.
 
-| Режим | Что делает |
+2. **Distinguish entities by their relation to the topology, not by stat vectors.**
+   The six pieces in chess differ in *how they move*, not in attack and health.
+   Fifteen units with different stats give a solvable balance, not depth.
+
+3. **Everything the player tracks must be derived from the shape of their territory.**
+   Five independent counters are five objects in the head. Three projections of one
+   state of the board are almost one.
+
+4. **CP never grow from territory.** Not from cities, not from buildings, not from armies.
+   This is the main brake against a snowball: an empire twice as big has exactly the same
+   number of actions per minute. The same brake that makes go a game: you cannot place two stones in one turn.
+
+5. **Attributability.** A player must be able to say "I lost because of a move at the eighth
+   minute". Hence: no randomness in combat, a symmetric start, a replay with reveal.
+
+6. **Hard integer rules.** Binary rules are learned from the first match and give
+   clean deduction. Continuous quantities blur the inference.
+
+7. **Execution skill is actively cut out.** No micro-management, no
+   placement precision, no APM race. All the skill is in decisions.
+
+### Antipatterns
+
+- Expanding the unit roster gives complexity, not depth, and breeds a dominant strategy.
+- Tech trees reduce to a single optimal path.
+- A resource whose optimal spending can be memorized is a build order, that is, execution and not a decision.
+- A special rule "against trenches": the cure must be the victory condition, not the combat mechanics.
+
+---
+
+## 4. The core: one unit, three modes
+
+There is **one** unit type. All the expressiveness is in what the group is doing now and where it stands.
+
+At any moment a group is in one of three modes:
+
+| Mode | What it does |
 |---|---|
-| **Бой** | обычное состояние, полный боевой расход снабжения |
-| **Готовность** | окопался: та же сила от вдвое меньшего снабжения; публично объявлен; привязан к месту |
-| **Работа** | строит/расширяет дороги; драться не может; атакованный в этом режиме резко ослаблен |
+| **Combat** | the ordinary state, full combat supply consumption |
+| **Readiness** | dug in: the same strength for half the supply; publicly announced; tied to the place |
+| **Work** | builds/widens roads; cannot fight; if attacked in this mode, sharply weakened |
 
-### Треугольник контр
+### The triangle of counters
 
 ```
-    Атака  ──бьёт──▶  Работа
+    Attack ──beats──▶  Work
       ▲                  │
-      │                  бьёт
-     бьёт                │
+      │                  beats
+     beats               │
       │                  ▼
-   Готовность ◀──────────┘
+   Readiness ◀───────────┘
 ```
 
-- **Атака бьёт Работу** — строящаяся группа не готова.
-- **Готовность бьёт Атаку** — окопавшийся воюет вдвое дешевле.
-- **Работа бьёт Готовность** — строительство не штурмует укрепление, оно его
-  **обесценивает**: поднимаешь пропускную способность обходного маршрута, артерия
-  смещается, и окопавшаяся группа сидит на ветке, которая больше ничего не несёт.
+- **Attack beats Work**: a group that is building is not ready.
+- **Readiness beats Attack**: a dug-in group fights at half the cost.
+- **Work beats Readiness**: construction does not storm a fortification, it
+  **devalues** it: you raise the throughput of the bypass route, the artery
+  shifts, and the dug-in group sits on a branch that no longer carries anything.
 
-Полный неперехoдный треугольник без единого стата и без второго типа юнита.
-Тематически честный: линию Мажино не штурмуют, её обходят, а обход — инженерная работа.
+A full non-transitive triangle without a single stat and without a second unit type.
+Thematically honest: the Maginot Line is not stormed, it is bypassed, and a bypass is engineering work.
 
-### Переключение режимов
+### Switching modes
 
-Вход в Готовность занимает время. Отмена — **асимметрична**:
+Entering Readiness takes time. Cancelling is **asymmetric**:
 
-- вне контакта: сгорает потраченное время;
-- под угрозой (враг рядом или подходит): стоит CP и идёт медленнее.
+- out of contact: the time spent is lost;
+- under threat (the enemy is near or approaching): costs CP and goes slower.
 
-Решение принимается **до того, как известно наверняка**, нужна ли была подготовка.
-Это задача предсказания, а не реакции.
+The decision is made **before it is known for certain** whether the preparation was needed.
+This is a task of prediction, not of reaction.
 
-Побочный эффект: раз подготовка публична, а выход дорог, **ошибочная подготовка
-наказывается дважды** — ты объявил обязательство, которое не снять, и противник бьёт
-в другом месте. Готовность становится чтением, а не безопасной опцией по умолчанию.
-Это же делает возможным **дорогой блеф**: громко закрепиться в A, чтобы противник
-стянулся, а ударить скрыто в B. В теории игр только дорогие сигналы что-то значат.
+A side effect: since the preparation is public and leaving is expensive, **a mistaken
+preparation is punished twice**: you announced a commitment that cannot be lifted, and the opponent strikes
+elsewhere. Readiness becomes a read, not a safe default option.
+The same makes an **expensive bluff** possible: dig in loudly at A so that the opponent
+draws in, and strike covertly at B. In game theory only expensive signals mean anything.
 
 ---
 
-## 5. Экономика действий (CP)
+## 5. Action economy (CP)
 
-Единственная тратимая валюта. Восстанавливается с фиксированной скоростью
-(ориентир: 1 за 4–6 секунд), копится до потолка (ориентир: 4–5).
+The only spendable currency. It regenerates at a fixed rate
+(guideline: 1 per 4-6 seconds) and accumulates up to a cap (guideline: 4-5).
 
-За CP платится **всё**, что игрок делает:
+CP pay for **everything** the player does:
 
-- приказ на движение;
-- деление и слияние групп;
-- отход под контактом;
-- отмена Готовности под угрозой.
+- a movement order;
+- splitting and merging groups;
+- retreating under contact;
+- cancelling Readiness under threat.
 
-Строительство **не стоит CP** — оно стоит того, что группа не воюет и не готовится.
-Издержка упущенной возможности достаточна.
+Construction **does not cost CP**: it costs the fact that the group does not fight and does not prepare.
+The opportunity cost is enough.
 
-**Инициатива = CP.** Выиграл размен — получил действия. Не абстрактный процентный
-бонус (который схлопнулся бы в «всегда атакуй»), а право действовать чаще. Это прямой
-аналог positive elixir trade: темп становится считаемым и потому обучаемым.
+**Initiative = CP.** Won a trade: got actions. Not an abstract percentage
+bonus (which would collapse into "always attack"), but the right to act more often. This is a direct
+analogue of positive elixir trade: tempo becomes countable and therefore learnable.
 
-Раз CP не хватает на всё, sente/gote возникает автоматически: угроза, требующая ответа,
-стоит противнику действия в другом месте. Специальный «счётчик инициативы» не нужен —
-нужен дефицит.
-
----
-
-## 6. Снабжение
-
-### Модель — тело, а не переключатель
-
-Артерии и капилляры. Поток идёт из городов по графу, чем дальше — тем хуже.
-Математически это max-flow / min-cut, но игроку это объясняется метафорой кровеносной
-системы, и объяснять больше ничего не надо.
-
-Из задачи о потоке **бесплатно** выпадает всё, что иначе пришлось бы писать руками:
-
-- окружение — это буквально минимальный разрез;
-- отсечение может быть **частичным**: снизил поток на 40% — придушил, не убив;
-- избыточность связей = «глаза» го (теорема Менгера: защита от разреза — несколько
-  непересекающихся путей);
-- перерастяжение наказывает себя само;
-- узкие места не проектируются, а возникают как min-cut'ы топологии.
-
-### Снабжение — это бюджет, который тратят
-
-**Критично.** Если снабжение — статическое свойство, которое читают, то у каждого боя
-предопределённый победитель, известный заранее и навсегда: ни истощения, ни драмы,
-ни решения.
-
-Поэтому:
-
-- **Ширина дороги — это потолок скорости доставки**, а не сила.
-- Сеть производит N в секунду; группы потребляют на содержание; **бой потребляет кратно больше**.
-- Затяжной бой жжёт обе стороны быстрее, чем сети восполняют → **обоюдное истощение
-  возникает само**.
-- Армия на узкой ветке может *стоять*, но не может долго *воевать*.
-
-### Главное следствие: фронты конкурируют за один бюджет
-
-Группа на широкой артерии может быть слабее группы на узкой дороге, если на артерию
-завязаны ещё три фронта. Вопрос не «чья дорога шире», а **«чья сеть может позволить
-себе этот бой прямо сейчас»**.
-
-Отсюда: **открытие второго фронта ослабляет первый, не сдвинув туда ни одного юнита.**
-Это единственный способ сдвинуть запечатанный фронт, и это же — механическая, а не
-психологическая инициатива.
-
-### Сила
-
-```
-сила = min(размер группы, доставленное снабжение)
-```
-
-Размер — потолок потребления. Снабжение — топливо. Большая группа без снабжения —
-это большая группа голодных.
-
-Следствия:
-- Собирать больше, чем сеть может прокормить, **бессмысленно** — излишек добавляет ртов, не силы.
-- Переполнение сверх ёмкости узла **медленно выгорает** — нечем кормить.
-- Центральный стратегический акт — **уморить** армию, а не разбить её.
-
-### Ресурсов нет
-
-Отдельных ресурсов (Money/Metal/Oil/Food/Fossils) **нет**. Производство новых групп
-привязано к потоку, доходящему до города. На экране остаются CP и доска.
-
-Самые глубокие скилловые игры в истории имеют ноль ресурсов. Ресурсы — источник
-нагрузки, а не глубины. Единственное исключение: ресурс добавляет глубину, если его
-ценность зависит от позиции. У нас эту роль играет сам поток.
+Since CP are not enough for everything, sente/gote arises automatically: a threat that demands a response
+costs the opponent an action elsewhere. A special "initiative counter" is not needed:
+what is needed is scarcity.
 
 ---
 
-## 7. Карта
+## 6. Supply
 
-### Две разные ширины
+### The model is a body, not a switch
 
-Это различение критично, без него всё ломается.
+Arteries and capillaries. The flow goes from the cities along the graph, the farther the worse.
+Mathematically this is max-flow / min-cut, but to the player it is explained with the metaphor of the circulatory
+system, and nothing more needs explaining.
 
-| | Что это | Что определяет | Кто меняет |
+From the flow problem **for free** falls out everything that otherwise would have to be written by hand:
+
+- encirclement is literally a minimum cut;
+- cutting off can be **partial**: reduced the flow by 40%: choked without killing;
+- redundancy of links = the "eyes" of go (Menger's theorem: protection against a cut is several
+  disjoint paths);
+- overextension punishes itself;
+- bottlenecks are not designed but arise as min-cuts of the topology.
+
+### Supply is a budget that gets spent
+
+**Critical.** If supply is a static property that is read, then every fight has
+a predetermined winner, known in advance and forever: no exhaustion, no drama,
+no decision.
+
+Therefore:
+
+- **Road width is a ceiling on delivery speed**, not strength.
+- The network produces N per second; groups consume for upkeep; **combat consumes many times more**.
+- A drawn-out fight burns both sides faster than the networks replenish → **mutual exhaustion
+  arises by itself**.
+- An army on a narrow branch can *stand* but cannot *fight* for long.
+
+### The main consequence: fronts compete for one budget
+
+A group on a wide artery can be weaker than a group on a narrow road if three more fronts
+depend on the artery. The question is not "whose road is wider" but **"whose network can afford
+this fight right now"**.
+
+Hence: **opening a second front weakens the first without moving a single unit there.**
+This is the only way to move a sealed front, and it is also a mechanical, not a
+psychological, initiative.
+
+### Strength
+
+```
+strength = min(group size, delivered supply)
+```
+
+Size is the ceiling of consumption. Supply is the fuel. A big group without supply
+is a big group of hungry mouths.
+
+Consequences:
+- Gathering more than the network can feed is **pointless**: the excess adds mouths, not strength.
+- Overflow beyond the capacity of a node **slowly burns away**: there is nothing to feed it with.
+- The central strategic act is to **starve** an army, not to defeat it.
+
+### There are no resources
+
+There are **no** separate resources (Money/Metal/Oil/Food/Fossils). The production of new groups
+is tied to the flow that reaches a city. What remains on the screen is CP and the board.
+
+The deepest skill games in history have zero resources. Resources are a source
+of load, not of depth. The only exception: a resource adds depth if its
+value depends on position. Here that role is played by the flow itself.
+
+---
+
+## 7. The map
+
+### Two different widths
+
+This distinction is critical, without it everything breaks.
+
+| | What it is | What it determines | Who changes it |
 |---|---|---|---|
-| **Ширина рельефа** | насколько широка земля | **фронт** — сколько юнитов физически дерутся одновременно | никто, задано картой |
-| **Ширина дороги** | что построено на этом рельефе | **пропускная способность** снабжения + гейт на проход групп | игроки, до предела рельефа |
+| **Terrain width** | how wide the land is | the **front**: how many units physically fight at once | nobody, set by the map |
+| **Road width** | what is built on that terrain | the **throughput** of supply + a gate on the passage of groups | the players, up to the limit of the terrain |
 
-Рельеф публичен всегда — это география. Поэтому потолок угрозы по каждому направлению
-известен всем с первой секунды; **насколько противник этот потолок выбрал** — предмет разведки.
+Terrain is always public: it is geography. So the ceiling of the threat in each direction
+is known to everyone from the first second; **how much the opponent has used up that ceiling** is the subject of scouting.
 
-Узкий фронт режет **обе стороны**: на рельефе шириной 1 дерётся один против одного,
-и гарнизон из пяти бесполезен. Это Фермопилы — проход не даёт защитнику силы,
-он обнуляет численное превосходство.
+A narrow front cuts **both sides**: on terrain of width 1 it is one against one,
+and a garrison of five is useless. This is Thermopylae: the pass does not give the defender strength,
+it nullifies numerical superiority.
 
-### Кто строит дорогу
+### Who builds the road
 
-**Тот, кто владеет обоими концами ребра. На спорном ребре — никто.**
+**The one who owns both ends of the edge. On a contested edge, nobody.**
 
-Ширина одна на ребро. Не «максимум из двух» (это дарило бы врагу твою инвестицию) и
-не две независимые половины (двойной учёт внутри своей территории + именно оттуда
-берётся асимметрия «я оставлю дорогу узкой и меня не возьмут»).
+There is one width per edge. Not "the maximum of the two" (that would give the enemy your investment) and
+not two independent halves (double counting inside your own territory, and it is exactly from there that
+the asymmetry "I will leave the road narrow and they will not take me" comes).
 
-Следствия:
+Consequences:
 
-- **Строить можно только в тылу.** Шоссе для вторжения не подготовишь.
-- **Последний переход — узкое место у всех симметрично.** Никто не улучшает себе
-  условия штурма. Где вообще возможна война, решает **карта**, а не игроки.
-- **Консолидация перестаёт быть отдельным правилом.** Взял узел → ребро стало
-  внутренним → можешь наконец строить. Ритм наступления (прорыв → пауза →
-  консолидация → бросок) возникает из одного ограничения.
-- **Цикл экспансии:** занял узел → построил к нему дорогу → пошёл дальше. Оторвался
-  от сети — дальше идти нечем.
+- **You can build only in the rear.** You cannot prepare a highway for an invasion.
+- **The last crossing is a bottleneck for everyone, symmetrically.** Nobody improves the
+  conditions of their own assault. Where war is possible at all is decided by the **map**, not by the players.
+- **Consolidation stops being a separate rule.** Took a node → the edge became
+  internal → you can finally build. The rhythm of the offensive (breakthrough → pause →
+  consolidation → thrust) arises from a single restriction.
+- **The expansion cycle:** occupied a node → built a road to it → went further. Cut off
+  from the network, you have nothing to go further with.
 
-### Ёмкость узлов
+### Node capacity
 
-У вершин тоже есть ёмкость. Без неё дэсболл в столице неуязвим: он сидит прямо на
-источнике снабжения, и поток его не ограничивает.
+Vertices also have capacity. Without it a deathball in the capital is invulnerable: it sits right on
+the source of supply, and the flow does not limit it.
 
 ```
-ёмкость = база_города + Σ f(ширина дороги i)
+capacity = city_base + Σ f(width of road i)
 ```
 
-Считаются **только те рёбра, что ведут в твою связную снабжаемую территорию.**
+**Only those edges that lead into your connected supplied territory** are counted.
 
-f — вогнутая, чтобы вознаграждалась застройка **всех** подходов, а не одного:
+f is concave, so that building up **all** approaches is rewarded, not just one:
 
-| ширина ребра | вклад |
+| edge width | contribution |
 |---|---|
 | 1 | +1.0 |
 | 2 | +1.5 |
@@ -294,319 +294,318 @@ f — вогнутая, чтобы вознаграждалась застрой
 | 4 | +2.3 |
 | 5 | +2.6 |
 
-Таблица, а не функция: тюнится руками, читается глазами, никакой плавающей точки в сети.
+A table, not a function: tuned by hand, read by eye, no floating point in the network.
 
-(Почему не max — две другие дороги становятся мусором. Почему не sum — одна дорога
-шириной 9 равна трём по 3. Почему не min — одна просёлочная дорога обнуляет город,
-и появляется стимул не владеть узлами с большим числом связей.)
+(Why not max: the other two roads become junk. Why not sum: one road
+of width 9 equals three of width 3. Why not min: one dirt road zeroes out a city,
+and there appears an incentive not to own nodes with a large number of links.)
 
-**Ключевое следствие — осада как удушение.** Отрезая подход, атакующий уменьшает
-гарнизон, который город способен держать. Три дороги → ёмкость 6; взял одну → 4;
-взял вторую → 2. Гарнизон вываливается за предел и **кровоточит** (истощение во
-времени, не мгновенное выселение — у защитника есть окно на решение).
+**The key consequence is siege as strangulation.** By cutting off an approach, the attacker reduces the
+garrison the city is able to hold. Three roads → capacity 6; took one → 4;
+took the second → 2. The garrison spills over the limit and **bleeds** (attrition over
+time, not an instant eviction: the defender has a window to decide).
 
-Это буквальный перевод го-шных **дыханий**: связные подходы и есть либерти, снимаешь
-по одному, и группа умирает не от удара, а от потери формы.
+This is a literal translation of the go **breaths** (liberties): the connected approaches are the liberties, you remove
+them one by one, and the group dies not from a blow but from the loss of shape.
 
-**Второе следствие.** Город ёмкостью 8 с тремя дорогами по 3: восемь поместятся, но
-ни одна дорога не проведёт больше трёх за раз. Значит собрать кулак — это логистическая
-операция, видимая и медленная. И **чтобы массировать, надо сначала владеть подходами**.
+**The second consequence.** A city of capacity 8 with three roads of 3: eight fit, but
+no road will pass more than three at a time. So gathering a fist is a logistical
+operation, visible and slow. And **to mass, you must first own the approaches**.
 
-**Третье.** Узел высокой степени — естественная крепость (много слагаемых), но и самый
-уязвимый (много подходов прикрывать). Лучшая позиция — самая трудная в удержании.
+**The third.** A high-degree node is a natural fortress (many summands), but also the most
+vulnerable (many approaches to cover). The best position is the hardest to hold.
 
-### Строительство новых рёбер игроками
+### Players building new edges
 
-Разрешено. Это самый го-шный элемент: карта перестаёт быть доской и становится позицией.
-Оно же даёт зубы плечу «Работа бьёт Готовность» — обход доступен всегда, просто дорого.
+Allowed. It is the most go-like element: the map stops being a board and becomes a position.
+It also gives teeth to the "Work beats Readiness" arm: a bypass is always available, just expensive.
 
-Четыре ограничения, без которых ломается всё остальное:
+Four restrictions without which everything else breaks:
 
-1. **Планарность — ребро не может пересекать существующее.** Окружение имеет смысл
-   только на планарном графе; ребро, перепрыгивающее через чужую территорию, убивает
-   всю го-аналогию. Побочно: построенная дорога съедает геометрическое пространство,
-   закрывая возможность других дорог — в том числе противнику.
-2. **Стройка публична с первой секунды** — как Готовность. Это главный *медленный
-   видимый ультиматум* игры: противник смотрит, как к нему роют путь, и должен решить,
-   мешать или принять.
-3. **Лимит степени узла** (4–5). Иначе шесть дорог в столицу возвращают дэсболл через
-   чёрный ход, а карта к десятой минуте превращается в нечитаемую паутину.
-4. **Рельеф решает, где можно и почём.** Только геометрически близкие узлы; горы дорого
-   или невозможно.
+1. **Planarity: an edge cannot cross an existing one.** Encirclement makes sense
+   only on a planar graph; an edge jumping over foreign territory kills
+   the whole go analogy. As a side effect: a built road eats up geometric space,
+   closing the possibility of other roads, including the opponent's.
+2. **Construction is public from the first second**, like Readiness. This is the main *slow
+   visible ultimatum* of the game: the opponent watches a path being dug toward them and must decide
+   whether to interfere or accept.
+3. **A node degree limit** (4-5). Otherwise six roads into the capital bring the deathball back through
+   the back door, and by the tenth minute the map turns into an unreadable web.
+4. **Terrain decides where it is possible and at what price.** Only geometrically close nodes; mountains
+   expensive or impossible.
 
-Темп: расширение существующей дороги — быстро; новое ребро — долго, 1–3 штуки за партию.
-Событие, а не рутина.
+Tempo: widening an existing road is fast; a new edge is long, 1-3 per match.
+An event, not a routine.
 
-Сноса дорог **нет**: захватив узел, ты уже перекрыл поток через него. Отдельная
-механика дала бы лишнюю кнопку и обязанность чинить.
+There is **no** demolition of roads: by capturing a node you have already blocked the flow through it. A separate
+mechanic would give an extra button and a duty to repair.
 
-### Требования к картам
+### Requirements for maps
 
-- **N-кратная поворотная симметрия** под N игроков (для 1v1 — поворот на 180°).
-  Не зеркальная. Позиции топологически идентичны → «я проиграл карте» исчезает как класс.
-- **От любой базы к любому важному узлу — минимум два-три достаточно широких маршрута.**
-  Иначе крупная армия обязана появиться в единственном месте, и партия вырождается
-  в толкание по коридору.
-- **Значимое нейтральное пространство между стартовыми позициями.** Это то, что делает
-  пассивность наказуемой (см. условие победы). Если карта поделена с первой секунды,
-  окопы становятся валидной стратегией.
-- **Ценность и трудность снабжения скоррелированы положительно.** Столицы на периферии,
-  ценность в центре, куда артерии всех дотягиваются с трудом. Иначе доминирующая
-  позиция берётся один раз и держится вечно.
-- Разнообразие — **из пула карт**, не из генератора. Одна с узкими перевалами, другая
-  паутиной, третья с жирной центральной артерией. Одни и те же правила, разная игра.
-
----
-
-## 8. Бой
-
-### Где происходит
-
-**Встречный бой на ребре.** Две группы столкнулись между узлами. Фронт = ширина рельефа
-ребра. Обе тянут снабжение издалека. Итог — граница едет, проигравший откатывается.
-
-**Штурм узла.** Атакующий дошёл до города. Фронт = ширина рельефа того ребра, по
-которому пришёл. Ключевая асимметрия: **защитник сидит на источнике снабжения,
-атакующий — на конце трубы.** Отсюда ценность городов, без специальных бонусов обороне.
-
-### Тик
-
-Для каждой точки контакта, каждый тик:
-
-1. **Задействовано** = min(юнитов на месте, ширина рельефа). Лишние — резерв.
-2. **Доставлено снабжения** = min по дорогам маршрута, с учётом того, сколько сеть
-   уже тратит на другие фронты.
-3. **Сила** = min(задействовано, доставлено). В Готовности снабжения нужно вдвое меньше
-   на ту же силу.
-4. **Потери** каждой стороны ∝ силе противника. Обе стороны кровоточат всегда.
-5. **Модификатор дефицита:** кто не добирает снабжения — несёт потери с повышенным
-   коэффициентом. Логистическая война летальна, а не просто медленна.
-6. **Граница** едет в сторону слабого со скоростью ∝ разнице сил. Равенство — стоит.
-
-Всё детерминировано, бросков нет.
-
-### Граница — состояние боя, а не состояние карты
-
-Точка контакта существует **только там, где прямо сейчас идёт бой** — это одно число
-(«насколько продавили»), живущее у активного столкновения и исчезающее вместе с ним.
-
-На остальных рёбрах никакой границы не хранится: есть только принадлежность узлов, и
-территория рисуется по ней. Перетягивание каната остаётся, но оно эфемерно — пока
-дерутся, полоса ползает и её видно; перестали — граница схлопывается к нейтральной
-линии. Карта в покое остаётся простой, сложность возникает только там, где на неё смотрят.
-
-**Границу двигают войска, а не снабжение.** Снабжение решает, кто может себе позволить
-давить, и потому видно не в *положении* границы, а в её *движении*.
-
-### Резервы
-
-Резерв автоматически замещает выбывших — без приказов, без микро.
-**Задействованные жгут боевую ставку, резерв — только содержание.** Поэтому держать
-резерв осмысленно, а сваливать всю армию на узкий фронт — нет: сила по ширине рельефа,
-расход по всей толпе.
-
-### Чем кончается
-
-Три исхода: уничтожение; отход (приказ, стоит CP, медленнее под контактом); граница
-дошла до узла → штурм.
-
-**Автоматического бегства нет.** Не заплатил за отход — группа гибнет. Это упирается
-в дефицит CP: спасти всех нельзя, надо выбирать, кого бросить. Здесь же живёт го-шная
-**жертва** — отдать группу ради темпа в другом месте становится настоящим ходом.
-
-### Что делает игрок
-
-Мало: подвести подкрепление, отойти, сменить режим. А **лучший ход обычно не в этом
-бою** — открыть второй фронт, чтобы вражеская сеть разделила бюджет.
-
-**Бой — индикатор логистики, а не самостоятельное событие.** Он не решает, он
-показывает решение, принятое пять минут назад. Поэтому он может и должен быть простым.
-
-### Разбор примера
-
-Ребро A–B: рельеф 3, дорога 1 (спорное, никто не строит). C–B и D–B: по 3.
-
-A штурмует B в лоб:
-- дорога 1 → крупную группу не провести, надо дробиться (CP) и идти по одному;
-- фронт 3, но снабжение A через дорогу 1 → **сила A = 1**;
-- B на своём узле: полное снабжение из C и D, ёмкость ~5, фронт режет до 3 → **сила B = 3**.
-
-3 против 1, A перемалывают.
-
-A берёт D, затем C. Ёмкость B просела, приток упал, остался подход шириной 1:
-- **сила B = min(гарнизон, 1) = 1**, паритет;
-- у A три тела против одного-двух, размен идёт в его пользу.
-
-Город падает **не потому, что A пробил дорогу, а потому что перерезал две другие.**
+- **N-fold rotational symmetry** for N players (for 1v1, a 180° rotation).
+  Not mirror. The positions are topologically identical → "I lost to the map" disappears as a class.
+- **From any base to any important node, at least two or three sufficiently wide routes.**
+  Otherwise a large army is obliged to appear in a single place, and the match degenerates
+  into pushing along a corridor.
+- **Significant neutral space between the starting positions.** This is what makes
+  passivity punishable (see the victory condition). If the map is divided from the first second,
+  trenches become a valid strategy.
+- **The value and the difficulty of supply are positively correlated.** Capitals on the periphery,
+  value in the center, which everyone's arteries reach with difficulty. Otherwise the dominant
+  position is taken once and held forever.
+- Variety comes **from a pool of maps**, not from a generator. One with narrow passes, another
+  a web, a third with a fat central artery. The same rules, a different game.
 
 ---
 
-## 9. Информация
+## 8. Combat
 
-### Лестница — одно правило, четыре уровня
+### Where it takes place
 
-Принцип: **издалека видно состояние, вблизи — величину.**
+**A meeting engagement on an edge.** Two groups collided between nodes. Front = the terrain width of
+the edge. Both draw supply from afar. The outcome: the border moves, the loser rolls back.
 
-1. **Всем и всегда:** география — узлы и ширины рельефа.
-2. **Всем и всегда:** объявленные подготовки и стройки. **Факт, не сила.** Видно, ЧТО
-   позиция подготовлена, не НАСКОЛЬКО она сильна — иначе публичность сливает всё
-   распределение сил и разведка теряет смысл. А так маленькая подготовленная группа
-   неотличима от большой, и блеф работает.
-3. **Рядом с твоей территорией:** владение, наличие войск, статус. Без чисел.
-4. **Твой узел или узел, куда зашла твоя группа:** всё точно.
+**Assault on a node.** The attacker reached a city. Front = the terrain width of the edge
+they came along. The key asymmetry: **the defender sits on the source of supply,
+the attacker at the end of the pipe.** Hence the value of cities, without special bonuses to defense.
 
-Фронтовые рёбра видны обоим по определению. **Внутренние дороги противника** — предмет
-разведки: сколько он вложил в тыл, видно только там, куда дотягивается обзор.
+### The tick
 
-### Обзор: меньше группа — дальше видит
+For every point of contact, every tick:
 
-Группа размера 1 видит широко, группа размера 10 — узко. Разведка — это мелкие
-рассеянные отряды на просёлках, а не колонна на шоссе.
+1. **Engaged** = min(units in place, terrain width). The rest are reserve.
+2. **Supply delivered** = the min over the roads of the route, taking into account how much the network
+   already spends on other fronts.
+3. **Strength** = min(engaged, delivered). In Readiness half the supply is needed
+   for the same strength.
+4. **Losses** of each side ∝ the enemy's strength. Both sides always bleed.
+5. **Deficit modifier:** whoever does not get enough supply takes losses with an increased
+   coefficient. Logistical war is lethal, not merely slow.
+6. **The border** moves toward the weaker at a speed ∝ the difference in strength. Equality: it stands.
 
-Зачем: обзор, привязанный к ширине артерий, дал бы **компаундинг** — кто вложился,
-тот ещё и видит больше. Инверсия разворачивает снежный ком: собравший массу **слепнет**,
-а рассеянный получает асимметричное оружие. И решение «делить или сливать» становится
-трёхмерным: делёж стоит CP, но покупает подвижность по капиллярам **и** обзор.
+All deterministic, no dice rolls.
 
-Роль разведчика возникает без отдельного типа юнита.
+### The border is a state of the fight, not a state of the map
 
-### Инверсия видимости
+The point of contact exists **only where a fight is going on right now**: it is a single number
+("how far it has been pushed"), living with the active engagement and disappearing along with it.
 
-**Обязательство публично, импровизация приватна.** Обычное движение скрыто до контакта
-или попадания в обзор; подготовка и стройка — публичны.
+On the other edges no border is stored: there is only the ownership of nodes, and
+territory is drawn from it. The tug of war remains, but it is ephemeral: while
+they fight, the strip crawls and is visible; when they stop, the border collapses to the neutral
+line. The map at rest stays simple, complexity appears only where it is looked at.
 
-Публичная подготовка — не ловушка, а **запрет зоны**: враг видит и может обойти.
-Цена возникает сама: объявив, где ты силён, ты объявил, где тебя нет.
+**The border is moved by troops, not by supply.** Supply decides who can afford
+to press, and therefore shows not in the *position* of the border but in its *movement*.
 
-### Дедукция — главная награда системы
+### Reserves
 
-Жёсткий лимит по ширине + туман дают **ограниченную задачу на вывод**: география
-публична, значит противник, не видя группу, знает множество мест, где она может быть.
-Каждое наблюдение сужает множество.
+The reserve automatically replaces the fallen: no orders, no micro.
+**The engaged burn the combat rate, the reserve only upkeep.** That is why keeping
+a reserve makes sense, and dumping the whole army onto a narrow front does not: strength is by the width of the terrain,
+the consumption is by the whole crowd.
 
-Механики спасают друг друга: туман делает ширину интересной, а ширина делает туман
-**честным** — большая армия не возникает из ниоткуда, ты всегда мог вычислить, откуда
-она придёт.
+### How it ends
 
-Это и есть «система, которую игрок изучает» — но изучает он живого противника, и задача
-генерируется заново каждую партию. Скрытые константы дали бы неделю ощущения вместо лет;
-хуже того, **они убивают дедукцию**, потому что дедуктивный скилл существует только
-поверх известной модели мира.
+Three outcomes: destruction; retreat (an order, costs CP, slower under contact); the border
+reached a node → assault.
 
-### Реплей с раскрытием — обязателен
+**There is no automatic flight.** Did not pay for the retreat: the group dies. This runs
+into the CP deficit: not everyone can be saved, you have to choose whom to abandon. Here also lives the go
+**sacrifice**: giving up a group for tempo elsewhere becomes a real move.
 
-После матча показывать истинную картину потоков во времени. Превращает каждое поражение
-в урок вместо догадки, обучает за недели вместо месяцев и убивает суеверия. Для скилловой
-игры это часть ядра, а не украшение.
+### What the player does
 
----
+Little: bring up reinforcements, retreat, change mode. And **the best move is usually not in this
+fight**: open a second front so that the enemy network splits its budget.
 
-## 10. Условие победы
+**Combat is an indicator of logistics, not a standalone event.** It does not decide, it
+shows the decision made five minutes ago. That is why it can and must be simple.
 
-**VP капают за удержание городов во времени.** Не за уничтожение противника.
+### Worked example
 
-Это несущая конструкция, а не деталь. Именно она делает пассивность проигрышем:
+Edge A-B: terrain 3, road 1 (contested, nobody builds). C-B and D-B: 3 each.
 
-Игрок, запечатавший все подходы узкими дорогами, непробиваем — и держит ровно то, с чего
-начал. Всё нейтральное пространство достаётся сопернику без единого боя. Через шесть
-минут тот владеет вдвое большей картой и набирает очки вдвое быстрее.
+A storms B head-on:
+- road 1 → a large group cannot be passed through, it must be split (CP) and go one at a time;
+- front 3, but A's supply through road 1 → **A's strength = 1**;
+- B at its own node: full supply from C and D, capacity ~5, the front cuts to 3 → **B's strength = 3**.
 
-**Черепаху не надо вскрывать, её надо перерасти.**
+3 against 1, A is ground down.
 
-Плюс узкая сеть душит самого окопавшегося: он не может агрегировать собственное
-производство, у него нет глубины обороны (ёмкость везде минимальна), и одна трещина
-осыпает всю конструкцию.
+A takes D, then C. B's capacity sagged, the inflow dropped, one approach of width 1 remains:
+- **B's strength = min(garrison, 1) = 1**, parity;
+- A has three bodies against one or two, the trade goes in its favor.
 
-Узкий фронт **должен** оставаться непробиваемым в лоб — это хорошая и реалистичная
-механика. Задача не в том, чтобы дать ключ к этой двери, а в том, чтобы сидение за
-дверью не было выигрышной стратегией. Этим занимаются условие победы, нейтральная земля
-и строительство дорог.
-
----
-
-## 11. Открытые вопросы
-
-**1. 1v1 или FFA — решать раньше остального.**
-Инверсия видимости плохо живёт в FFA: публичная подготовка видна не только твоей цели,
-но и третьим лицам, которые немедленно ею воспользуются. Планировать становится
-самоубийственно. В 1v1 и командных механика чистая. От этого выбора зависят карты,
-баланс и режимы.
-
-**2. Платформа.** Разбор рынка дал две реалистичные ниши:
-- *Веб/.io* — сессии 15–30 минут, ноль установки, прямая конкуренция с OpenFront за счёт
-  глубины. Сильнейший попутный ветер (Poki: 100M MAU против 10M в 2020), но требует
-  веб-клиента.
-- *Steam, разовая покупка 15–25 €* — сингл против ИИ + лобби. Тренд среднего ценника
-  ($30–50 вырос на 60% на PC) и стратегического ренессанса работает. Но нужен сильный ИИ,
-  и статистика жёсткая: из 20 282 релизов 2025 года порог 1000 отзывов перешли 2.99%.
-
-Комбинация (веб как бесплатная воронка → Steam как монетизация) оправдана: 62% веб-игроков
-покупали игру, найденную в браузере.
-
-Чего на карте трендов **нет** — десктопного клиента для соревновательных партий на три часа.
-
-**3. Автоматическое бегство** — делать или нет. Сейчас решено «нет» (решение игрока,
-упирается в CP). Может оказаться слишком жёстким; кандидат в плейтест-рычаги.
-
-**4. Рандомизированные модификаторы на партию** как отдельный казуальный режим:
-известен диапазон, неизвестен сегодняшний розыгрыш → разведка ruleset'а становится
-частью партии. Механика возобновляемая и в стратегиях не встречается. Но платит
-атрибутируемостью, поэтому — **не** в рейтинге.
-
-**5. Все числа.** Реген CP, потолок CP, боевая ставка расхода, коэффициент дефицита,
-скорость движения границы, время постройки ребра, базовые ёмкости городов. Ничего
-не откалибровано.
+The city falls **not because A broke through the road, but because it cut the other two.**
 
 ---
 
-## 12. Что проверять на плейтестах
+## 9. Information
 
-**Тест доминирующей стратегии.** 20 партий вживую. Если больше 70% идут по одному
-дебюту — глубины нет, независимо от количества систем в игре.
+### The ladder: one rule, four levels
 
-**Ботовый self-play как глубиномер.** Три примитивных бота с фиксированными стратегиями
-(экспансия / раннее давление / отсечение снабжения), сотня прогонов. Смотреть **не** на
-то, кто выиграл, а на **разброс исходов**: конфигурация с наибольшей дисперсией
-победителей — та, где стратегическое пространство шире. Бот, берущий 65%+ против всех,
-означает неверно выбранное ограничение.
+The principle: **from afar the state is visible, up close the magnitude.**
 
-**Красные флаги:**
-- побеждает масса одного юнита или чистая экономика → топология не влияет на исход;
-- окопное равновесие: оба закопались, никто не ходит;
-- инициатива растёт снежным комом;
-- ранняя игра схлопывается в «все строят» → нужно ограничивать **места** строительства,
-  а не цену.
+1. **To everyone, always:** geography: nodes and terrain widths.
+2. **To everyone, always:** announced preparations and constructions. **A fact, not strength.** What is visible is THAT
+   a position is prepared, not HOW strong it is: otherwise publicity leaks the whole distribution of forces and scouting
+   loses its meaning. This way a small prepared group is indistinguishable from a big one, and the bluff works.
+3. **Near your territory:** ownership, presence of troops, status. No numbers.
+4. **Your node, or a node your group has entered:** everything exactly.
 
-**Тест на билд-ордер.** Добавил величину — проверь, можно ли записать оптимальную
-последовательность первых двух минут текстом. Если можно — она добавила исполнения,
-а не решений. Убирай.
+Front-line edges are visible to both by definition. **The opponent's internal roads** are the subject
+of scouting: how much they invested in the rear is visible only where vision reaches.
 
-**Тест на суеверие.** Для любого неочевидного фактора: может ли игрок поставить
-внутриигровой эксперимент, изолирующий эту переменную? Если нет — он породит не знание,
-а суеверия.
+### Vision: the smaller the group, the farther it sees
 
-**Первые рычаги, если окопы доминируют:** скорость начисления VP и объём нейтрального
-пространства. **Не** механика боя.
+A group of size 1 sees wide, a group of size 10 sees narrow. Scouting is small
+scattered detachments on dirt roads, not a column on a highway.
+
+Why: vision tied to the width of the arteries would give **compounding**: whoever invested
+also sees more. The inversion turns the snowball around: the one who gathered mass goes **blind**,
+and the scattered one gets an asymmetric weapon. And the decision "split or merge" becomes
+three-dimensional: splitting costs CP, but buys mobility along the capillaries **and** vision.
+
+The role of the scout arises without a separate unit type.
+
+### Inversion of visibility
+
+**A commitment is public, improvisation is private.** Ordinary movement is hidden until contact
+or until it enters vision; preparation and construction are public.
+
+A public preparation is not a trap but a **zone ban**: the enemy sees it and can go around.
+The price arises by itself: by announcing where you are strong, you have announced where you are not.
+
+### Deduction is the main reward of the system
+
+A hard limit by width + fog give a **bounded inference problem**: geography
+is public, so an opponent who does not see the group knows the set of places where it can be.
+Every observation narrows the set.
+
+The mechanics rescue each other: fog makes width interesting, and width makes fog
+**fair**: a big army does not appear out of nowhere, you could always work out where
+it would come from.
+
+This is the "system the player studies", but what they study is a live opponent, and the task
+is generated anew every match. Hidden constants would give a week of feeling instead of years;
+worse, **they kill deduction**, because deductive skill exists only
+on top of a known model of the world.
+
+### A replay with reveal is mandatory
+
+After the match, show the true picture of the flows over time. It turns every defeat
+into a lesson instead of a guess, teaches in weeks instead of months and kills superstitions. For a skill
+game it is part of the core, not a decoration.
 
 ---
 
-## 13. Требования к интерфейсу
+## 10. The victory condition
 
-Не косметика — часть дизайна.
+**VP drip for holding cities over time.** Not for destroying the opponent.
 
-- **Полоска боя показывает поток, а не HP.** «Твой 7 / его 4». Проигрывающий должен
-  мгновенно понимать не только что он проигрывает, но и что делать: не досылать войска
-  в мясорубку, а резать артерию.
-- **Перед вводом войск видно свою силу точно и оценку чужой.** Иначе каждый бой —
-  слепая ставка, а вся конструкция строилась ради обратного.
-- **При наведении на ребро — маржинальная выгода, а не ширина.** «Улучшить: +1.5 ёмкости
-  города, +2 потока». Вогнутая формула работает как дизайн, только если игрок видит её
-  результат; иначе это скрытое правило.
-- **Выведенный лимит армии показывать явно.** «Снабжение держит 14, у тебя 16, идёт
-  истощение».
-- **Границы дышат.** Толщина «труб» и движение границы — визуальный язык логистики.
-  Сдвиги должны быть **реакцией на события**, чтобы игрок всегда мог назвать причину,
-  а не фоновым дрейфом.
-- **Ранняя экспансия даёт то же ощущение закрашивания карты**, что Territorial.io и
-  OpenFront — но за картинкой стоит настоящая логистика: территория растёт потому, что
-  построена дорога, а не потому, что кликнули.
+This is a load-bearing structure, not a detail. It is what makes passivity a loss:
+
+A player who sealed all approaches with narrow roads is unbreakable, and holds exactly what they
+started with. All the neutral space goes to the opponent without a single fight. After six
+minutes the opponent owns a map twice as big and scores points twice as fast.
+
+**A turtle does not need to be cracked, it needs to be outgrown.**
+
+Besides, a narrow network chokes the dug-in player themselves: they cannot aggregate their own
+production, they have no depth of defense (capacity is minimal everywhere), and a single crack
+brings down the whole construction.
+
+A narrow front **must** stay unbreakable head-on: this is a good and realistic
+mechanic. The task is not to give a key to this door, but to make sitting behind the
+door not a winning strategy. This is handled by the victory condition, neutral land
+and road building.
+
+---
+
+## 11. Open questions
+
+**1. 1v1 or FFA: decide before everything else.**
+The inversion of visibility lives badly in FFA: a public preparation is visible not only to your target
+but also to third parties, who will immediately use it. Planning becomes
+suicidal. In 1v1 and team modes the mechanic is clean. Maps,
+balance and modes depend on this choice.
+
+**2. Platform.** The market analysis gave two realistic niches:
+- *Web/.io*: sessions of 15-30 minutes, zero installation, direct competition with OpenFront through
+  depth. The strongest tailwind (Poki: 100M MAU versus 10M in 2020), but it requires
+  a web client.
+- *Steam, a one-time purchase of 15-25 €*: single player against AI + lobby. The trend of the mid price point
+  ($30-50 grew by 60% on PC) and the strategy renaissance works. But a strong AI is needed,
+  and the statistics are harsh: of 20 282 releases in 2025, the threshold of 1000 reviews was passed by 2.99%.
+
+The combination (web as a free funnel → Steam as monetization) is justified: 62% of web players
+bought a game they found in the browser.
+
+What is **not** on the trend map is a desktop client for competitive three-hour matches.
+
+**3. Automatic flight:** to do it or not. Currently decided "no" (the player's decision,
+it runs into CP). It may turn out too harsh; a candidate for playtest levers.
+
+**4. Randomized modifiers per match** as a separate casual mode:
+the range is known, today's draw is unknown → scouting the ruleset becomes
+part of the match. A renewable mechanic that does not occur in strategy games. But it pays
+with attributability, therefore **not** in the rating.
+
+**5. All the numbers.** CP regen, CP cap, the combat consumption rate, the deficit coefficient,
+the speed of border movement, the edge construction time, the base capacities of cities. Nothing
+is calibrated.
+
+---
+
+## 12. What to check in playtests
+
+**The dominant strategy test.** 20 live matches. If more than 70% follow one
+opening, there is no depth, regardless of the number of systems in the game.
+
+**Bot self-play as a depth gauge.** Three primitive bots with fixed strategies
+(expansion / early pressure / supply cutting), a hundred runs. Look **not** at
+who won but at the **spread of outcomes**: the configuration with the greatest variance
+of winners is the one where the strategic space is wider. A bot taking 65%+ against everyone
+means a wrongly chosen restriction.
+
+**Red flags:**
+- a mass of one unit or a pure economy wins → topology does not affect the outcome;
+- a trench equilibrium: both dug in, nobody moves;
+- initiative snowballs;
+- the early game collapses into "everyone builds" → you need to restrict the **places** of construction,
+  not the price.
+
+**The build order test.** You added a quantity: check whether the optimal
+sequence of the first two minutes can be written down as text. If it can, it added execution,
+not decisions. Remove it.
+
+**The superstition test.** For any non-obvious factor: can a player set up
+an in-game experiment isolating this variable? If not, it will breed not knowledge
+but superstitions.
+
+**The first levers, if trenches dominate:** the rate of VP accrual and the volume of neutral
+space. **Not** the combat mechanics.
+
+---
+
+## 13. Interface requirements
+
+Not cosmetics but part of the design.
+
+- **The combat bar shows the flow, not HP.** "Your 7 / his 4". The loser must
+  instantly understand not only that they are losing but also what to do: not to send more troops
+  into the meat grinder but to cut the artery.
+- **Before committing troops, your own strength is visible exactly and an estimate of the enemy's.** Otherwise every fight is
+  a blind bet, and the whole construction was built for the opposite.
+- **On hovering over an edge, the marginal benefit, not the width.** "Upgrade: +1.5 city
+  capacity, +2 flow". The concave formula works as design only if the player sees its
+  result; otherwise it is a hidden rule.
+- **Show the derived army limit explicitly.** "Supply holds 14, you have 16, attrition
+  is under way".
+- **Borders breathe.** The thickness of the "pipes" and the movement of the border are the visual language of logistics.
+  Shifts must be a **reaction to events**, so that the player can always name the cause,
+  and not a background drift.
+- **Early expansion gives the same feeling of painting over the map** as Territorial.io and
+  OpenFront, but behind the picture there is real logistics: territory grows because
+  a road was built, not because of a click.
