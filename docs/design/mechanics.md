@@ -1,2243 +1,2243 @@
-# Skill-Based Front: механика
+# Skill-Based Front: mechanics
 
-> **Единственный источник правды о правилах игры** (см. `AGENTS.md`, раздел 0).
-> Основа документа: сводка обсуждений механики (модель «юнит-батарейка»). Решения DEC-issues
-> вписаны в соответствующие разделы; их сводный список: раздел 21.
+> **The single source of truth about the game rules** (see `AGENTS.md`, section 0).
+> The basis of the document: a digest of the mechanics discussions (the "battery unit" model). The decisions of the DEC issues
+> are written into the matching sections; their summary list: section 21.
 >
-> Все числа правил живут в `rulesets/*.toml` (SIM-01, #17). Числа здесь: стартовые значения;
-> балансировка меняет рулсет, а не этот документ. Что отложено за рамки MVP, перечислено в
-> [`docs/mvp/MVP_PLAN.md`](../mvp/MVP_PLAN.md), раздел «Что не входит в MVP».
+> All the numbers of the rules live in `rulesets/*.toml` (SIM-01, #17). The numbers here are the starting values;
+> balancing changes the ruleset, not this document. What is postponed beyond the MVP is listed in
+> [`docs/mvp/MVP_PLAN.md`](../mvp/MVP_PLAN.md), the section "What is not in the MVP".
 >
-> Термины совпадают с глоссарием `AGENTS.md` (раздел 20).
+> The terms match the glossary of `AGENTS.md` (section 20).
 
-## Как читать статусы
+## How to read the statuses
 
-| Метка | Значение |
+| Label | Meaning |
 |---|---|
-| **[принято]** | решение подтверждено владельцем проекта |
-| **[по умолчанию]** | значение по умолчанию из DEC-issue; код реализует его, пока DEC-issue не сменит статус на [принято] или не запишет другое решение |
-| **[предложено]** | предложение из обсуждения, владелец не возражал, но явно не подтвердил |
-| **[открыто]** | вопрос не решён, есть варианты |
-| **[отказались]** | вариант рассмотрен и заменён другим (см. раздел 16) |
-| **[заменено DEC-N]** | принятый текст отменён более поздним решением DEC-N; текст сохранён зачёркнутым для истории, действует блок DEC-N |
+| **[accepted]** | the decision is confirmed by the owner of the project |
+| **[default]** | the default value from a DEC issue; the code implements it until the DEC issue changes the status to [accepted] or records another decision |
+| **[proposed]** | a proposal from the discussion; the owner did not object but did not explicitly confirm it |
+| **[open]** | the question is not settled, there are options |
+| **[rejected]** | the option was considered and replaced by another one (see section 16) |
+| **[superseded by DEC-N]** | the accepted text is cancelled by a later decision DEC-N; the text is kept struck through for history, the DEC-N block is in force |
 
-Если решение DEC-issue уточняет пункт со статусом [предложено] или [открыто], рядом с пунктом стоит
-ссылка на DEC, а действующее правило записано в блоке DEC в том же разделе. При расхождении
-действует блок DEC.
+If the decision of a DEC issue refines an item with the status [proposed] or [open], next to the item there is
+a reference to the DEC, and the rule in force is written in the DEC block in the same section. If they disagree,
+the DEC block is in force.
 
-Если более позднее решение отменяет принятый текст, этот текст зачёркивается (`~~...~~`) и
-помечается **[заменено DEC-N]** со ссылкой на блок, где записано действующее правило. Блоки
-«Как это считает симуляция» с такой меткой описывают код до реализации нового решения.
-
----
-
-## 1. Рамки
-
-- **[принято]** Длина партии — 10–15 минут. Точная длина в MVP: 15 минут (DEC-22, раздел 8; было 12 минут по DEC-03, раздел 11).
-- **[предложено]** Размер карты — 25–40 узлов. **[заменено DEC-27 по размеру]**: новые карты 45..55 узлов (#266: `hrebet`, `perekrestki`, `trakt`). У каждого игрока на старте уже есть значимая территория.
-- **[предложено]** Пул авторских карт с N-кратной поворотной симметрией вместо процедурной генерации. Причина: повторяющиеся позиции позволяют накапливать знание (дебютную теорию), а случайные карты — нет. DEC-27 (#266): симметрия правил (граф и атрибуты), а не картинки; координаты узлов свободны.
-- **[принято]** Никакого pay-to-win.
-- **[открыто]** 1v1 / командные или FFA (см. открытые вопросы, п. 1). MVP: только 1v1 (`docs/mvp/MVP_PLAN.md`).
+If a later decision cancels an accepted text, that text is struck through (`~~...~~`) and
+marked **[superseded by DEC-N]** with a reference to the block where the rule in force is written. The blocks
+"How the simulation computes this" with such a label describe the code before the new decision was implemented.
 
 ---
 
-## 2. Инварианты дизайна
+## 1. Scope
 
-Правила, нарушение которых ломает основную идею игры.
-
-1. **Доход не растёт от территории.** Ни CP, ни снабжение. Это главный тормоз против снежного кома.
-2. **Правила публичны, скрыто только состояние противника.** Никаких скрытых констант: их узнают за неделю, после чего они становятся налогом на новичков.
-3. **Никакого рандома в бою.** Игрок должен понимать, почему проиграл.
-4. **Всё, за чем следит игрок, выводится из карты.** Минимум отдельных счётчиков.
-5. **Целочисленные аддитивные правила.** Исход боя должен считаться в уме.
-6. **Никакого микроконтроля.** Скилл — в решениях, а не в скорости рук.
+- **[accepted]** The match length is 10-15 minutes. The exact length in the MVP: 15 minutes (DEC-22, section 8; it was 12 minutes under DEC-03, section 11).
+- **[proposed]** The map size is 25-40 nodes. **[superseded by DEC-27 for the size]**: the new maps have 45..55 nodes (#266: `ridge`, `crossroads`, `highway`). Each player already has a meaningful territory at the start.
+- **[proposed]** A pool of hand-made maps with N-fold rotational symmetry instead of procedural generation. The reason: repeating positions let players accumulate knowledge (opening theory), random maps do not. DEC-27 (#266): the symmetry of the rules (the graph and its attributes), not of the picture; the node coordinates are free.
+- **[accepted]** No pay-to-win.
+- **[open]** 1v1 / team or FFA (see the open questions, item 1). MVP: 1v1 only (`docs/mvp/MVP_PLAN.md`).
 
 ---
 
-## 3. Юнит и заряд
+## 2. Design invariants
 
-- **[принято]** Тип юнита **один**.
-- **[принято]** Юнит — это «батарейка». У него два состояния: **заряжен** (есть снабжение) или **разряжен**.
-- **[принято]** Сила юнита = его заряд. Разряженный юнит в бою силы не имеет.
-- ~~**[принято]** Деление и слияние групп стоит CP.~~ **[заменено DEC-20]**: деление, слияние и отмена любых приказов бесплатны, группы сливаются сами (блок DEC-20 ниже).
-- ~~**[открыто]** Какие юниты уходят при делении, какой режим у новой и у слитой группы, можно ли командовать группой в пути: вопрос #117. До решения (SIM-04): `Split(group, n)` отдаёт новой группе сначала заряженных (`min(n, charged)`), новая группа в «Атаке» и без приказа; `Merge(groups)` собирает стоящие в одном узле группы в группу с наименьшим id, режим «Атака», приказы и стройка снимаются; команды группе на ребре отклоняются (`GROUP_ON_EDGE`), группе, ждущей выступления по запланированному приказу, все команды, кроме отмены (`GROUP_BUSY`).~~ **[заменено DEC-20]**: блок DEC-20 ниже; что не задано там, по умолчанию из #117 (деление отдаёт сначала заряженных).
-- ~~**[принято]** Собирать группы можно только в городах, поэтому размер группы ограничен ёмкостью города.~~ **[заменено DEC-20, DEC-23]**: группы стоят в городах и провинциях, размер группы на пути ограничен ёмкостью узлов (лимит стека, DEC-20). Отдельного штрафа за большие группы нет.
-- **[предложено]** Интерфейс: зелёная или красная точка над юнитом (заряжен / разряжен). Это основной индикатор всей экономики.
+The rules whose violation breaks the main idea of the game.
 
-### Режимы юнита
+1. **Income does not grow from territory.** Neither CP nor supply. This is the main brake against a snowball.
+2. **The rules are public, only the enemy's state is hidden.** No hidden constants: they are found out within a week, after which they become a tax on newcomers.
+3. **No randomness in a fight.** A player must understand why they lost.
+4. **Everything a player watches is derived from the map.** As few separate counters as possible.
+5. **Integer additive rules.** The outcome of a fight must be computable in your head.
+6. **No micro-management.** Skill is in the decisions, not in the speed of the hands.
 
-- ~~**[принято]** Три режима: **Атака / Защита / Строительство** (на доске — А / З / С).~~ **[заменено DEC-16]**
-- **[принято]** Два режима: **Атака / Защита** (DEC-16, раздел 8). Дороги улучшает город, а не группа.
-- ~~**[открыто]** «Строитель улучшает дороги»: это отдельный тип юнита или режим «С» у обычного юнита? Отдельный тип юнита нарушает принцип «один юнит» и меняет треугольник режимов.
-  В плане MVP дороги улучшает режим «Строительство» обычного юнита (SIM-11, #27); эффекты режимов: DEC-08, раздел 5.~~
-  **[заменено DEC-16]**: ни отдельный юнит, ни режим. Улучшение дороги: функция своего города за заряды его склада (раздел 8).
+---
 
-### Появление новых юнитов (DEC-01, #7) **[принято]**
+## 3. Unit and charge
 
-Рекрут в любом своём городе со свободной ёмкостью: ~~команда `Recruit(node)` создаёт одного разряженного юнита новой группой за 1 CP; не чаще одного юнита на город за 20 тиков, иначе отказ `RECRUIT_COOLDOWN`.~~ **[заменено DEC-25]**: `Recruit(node)` ставит юнита в очередь производства города, CP при постановке (блок DEC-25 ниже). Флаг `recruit.location = any_city | capital`. **[заменено DEC-26 при `city_upgrades.enabled = true`]**: рекрутирует столица и города с казармой (блок «Казарма (DEC-26)» ниже), `recruit.location` не применяется.
+- **[accepted]** There is **one** unit type.
+- **[accepted]** A unit is a "battery". It has two states: **charged** (there is supply) or **discharged**.
+- **[accepted]** The strength of a unit = its charge. A discharged unit has no strength in a fight.
+- ~~**[accepted]** Splitting and merging groups costs CP.~~ **[superseded by DEC-20]**: splitting, merging and cancelling any orders are free, groups merge by themselves (the DEC-20 block below).
+- ~~**[open]** Which units leave when a group is split, what mode the new and the merged group have, whether a group can be commanded on the way: question #117. Until it is decided (SIM-04): `Split(group, n)` gives the new group the charged units first (`min(n, charged)`), the new group is in "Attack" and without an order; `Merge(groups)` gathers the groups standing in one node into the group with the smallest id, mode "Attack", orders and construction are removed; commands to a group on an edge are rejected (`GROUP_ON_EDGE`), to a group that waits to set out on a scheduled order all commands except cancel (`GROUP_BUSY`).~~ **[superseded by DEC-20]**: the DEC-20 block below; what is not set there, by the default from #117 (splitting gives the charged units first).
+- ~~**[accepted]** Groups can be gathered only in cities, so the size of a group is limited by the capacity of a city.~~ **[superseded by DEC-20, DEC-23]**: groups stand in cities and provinces, the size of a group on the way is limited by the capacity of the nodes (the stack limit, DEC-20). There is no separate penalty for big groups.
+- **[proposed]** Interface: a green or red dot above a unit (charged / discharged). This is the main indicator of the whole economy.
 
-Значения в `rulesets/mvp-0.toml`: ~~`recruit.cooldown_ticks`~~ **[заменено DEC-25]**: `recruit.unit_ticks`, `recruit.queue_max`, `recruit.refund_started_pct`; `recruit.location`, `orders.cost.recruit` (в сотых CP).
+### Unit modes
 
-~~Как это считает симуляция (SIM-12, #28): юнит появляется при применении команды (в начале тика), новая группа в «Атаке», один юнит без заряда. Свободная ёмкость: своих юнитов, стоящих в городе, меньше его ёмкости (раздел 9; группы на рёбрах в транзите не считаются). Кулдаун принадлежит городу: рекрут на тике `t` разрешает следующий в этом городе с тика `t + cooldown_ticks`. Отказы проверяются в порядке: город не существует (`NOT_FOUND_OR_HIDDEN`), не свой (`NOT_OWNER`), не столица при `recruit.location = capital` (`NOT_CAPITAL`), нет места (`CITY_FULL`), кулдаун (`RECRUIT_COOLDOWN`), не хватает CP (`NOT_ENOUGH_CP`).~~ **[заменено DEC-25]**: как это считает симуляция: блок DEC-25 ниже, «Реализация». Группы на рёбрах в транзите ёмкость по-прежнему не занимают.
+- ~~**[accepted]** Three modes: **Attack / Defense / Building** (on the board: A / D / B).~~ **[superseded by DEC-16]**
+- **[accepted]** Two modes: **Attack / Defense** (DEC-16, section 8). Roads are upgraded by a city, not by a group.
+- ~~**[open]** "A builder upgrades roads": is it a separate unit type or a mode "B" of an ordinary unit? A separate unit type breaks the "one unit" principle and changes the triangle of modes.
+  In the MVP plan roads are upgraded by the "Building" mode of an ordinary unit (SIM-11, #27); the effects of the modes: DEC-08, section 5.~~
+  **[superseded by DEC-16]**: neither a separate unit nor a mode. Upgrading a road: a function of one's own city, paid with the charges of its warehouse (section 8).
 
-Альтернативы (не выбраны):
-- Только в столице (медленнее выход на фронт, сильнее роль логистики).
-- Рекрут за заряды со склада вместо CP.
+### Appearance of new units (DEC-01, #7) **[accepted]**
 
-### Очередь найма (DEC-25, #262) **[принято]**
+Recruiting in any own city with free capacity: ~~the command `Recruit(node)` creates one discharged unit as a new group for 1 CP; no more than one unit per city per 20 ticks, otherwise the rejection `RECRUIT_COOLDOWN`.~~ **[superseded by DEC-25]**: `Recruit(node)` puts a unit into the production queue of the city, CP at queueing (the DEC-25 block below). The flag `recruit.location = any_city | capital`. **[superseded by DEC-26 with `city_upgrades.enabled = true`]**: the capital and the cities with a barracks recruit (the block "Barracks (DEC-26)" below), `recruit.location` does not apply.
 
-Решение владельца 2026-10-14 (#252). Заменяет мгновенный рекрут и кулдаун DEC-01 (выше). Пункты
-**[принято]** владельцем 2026-10-14: он выбрал производство 3 с на юнита (альтернатива вопроса 1) и
-очередь до 3, остальные рекомендации принял. Реализовано в #278 (`SIM_VERSION` 11,
-`PROTOCOL_VERSION` 15), блок «Реализация» после примеров.
+Values in `rulesets/mvp-0.toml`: ~~`recruit.cooldown_ticks`~~ **[superseded by DEC-25]**: `recruit.unit_ticks`, `recruit.queue_max`, `recruit.refund_started_pct`; `recruit.location`, `orders.cost.recruit` (in hundredths of CP).
 
-1. **[принято]** У каждого своего города очередь производства юнитов. Прогресс текущего юнита и
-   длина очереди видны владельцу над городом.
-2. **[принято]** CP списываются при постановке юнита в очередь (`orders.cost.recruit`, 100 сотых).
-3. **[принято]** Отмена ещё не начатого юнита возвращает CP полностью; отмена юнита в
-   производстве: половину. CP в сотых, округление вниз: возврат
-   `orders.cost.recruit * recruit.refund_started_pct // 100` (100 * 50 // 100 = 50, то есть 0,5 CP).
-4. **[принято]** **Производство.** Город делает одного юнита за раз, `recruit.unit_ticks = 30`
-   (3 с). В производстве: первый юнит очереди. Прогресс
-   `Node.recruit_progress` растёт на 1 в каждом тике, когда очередь не пуста и в городе нет боя
-   (п. 9); юнит готов, когда прогресс равен `unit_ticks`. Система `recruit` (порядок систем не
-   меняется) идёт после `apply_commands`, поэтому юнит, поставленный в пустую очередь в тике `t`,
-   получает первый тик прогресса в `t` и появляется в тике `t + unit_ticks - 1`; следующий начинает
-   в следующем тике. Кулдаун `recruit.cooldown_ticks` удаляется.
-5. **[принято]** **Юнит** появляется разряженным, новой группой в «Атаке», в тот же тик
-   сливается по DEC-20, п. A1. Заряд склада для появления не нужен. Заряд он берёт позже, обычной
-   перезарядкой стоящих юнитов со склада города (`supply.recharge_per_tick`, раздел 7), если на складе
-   есть заряд. Система `supply` идёт раньше `recruit`, поэтому первая перезарядка нового юнита в
-   следующем тике.
-6. **[принято]** **Длина очереди:** не больше `recruit.queue_max = 3` юнитов на город,
-   включая текущий; иначе отказ `QUEUE_FULL` (новый код).
-7. **[принято]** **Ёмкость.** При постановке: стоящие юниты владельца в городе плюс очередь
-   меньше ёмкости (DEC-22), иначе `CITY_FULL`. Готовый юнит, которому нет места (город заполнили
-   пришедшие группы), ждёт с полным прогрессом и появляется в первом тике, когда место есть.
-   Юнит не пропадает, CP не возвращаются.
-8. **[принято]** **Где:** только свой город (провинция: `NOT_CITY`, DEC-23), с учётом
-   `recruit.location` (`any_city | capital`); при `city_upgrades.enabled = true` вместо этого: только
-   город с казармой (`NO_BARRACKS`, DEC-26, блок «Казарма» ниже). Отрезанный город (DEC-19) производит как обычно
-   (DEC-19, п. 9).
-9. **[принято]** **Бой в городе** (DEC-24, раздел 4): пока в городе идёт бой, прогресс стоит;
-   ставить в очередь и отменять можно. Готовый юнит не появляется посреди боя.
-10. **[принято]** **Захват города:** очередь и прогресс пропадают, CP не возвращаются (как склад:
-    при захвате он обнуляется, трофеев нет). Новый владелец начинает с пустой очереди. Событие
-    `recruit_queue_lost` (узел, число юнитов) получает только прежний владелец.
-11. **[принято]** **Команды.** `Recruit(node)`: поставить одного юнита в очередь (при
-    `city_upgrades.enabled = true` вместо `NOT_CAPITAL` проверяется `NO_BARRACKS`, DEC-26). Отказы в порядке
-    проверки: `NOT_FOUND_OR_HIDDEN`, `NOT_OWNER`, `NOT_CITY`, `NOT_CAPITAL`, `QUEUE_FULL`,
-    `CITY_FULL`, `NOT_ENOUGH_CP`. `CancelRecruit(node)` (новая, бесплатная): снять **последний**
-    юнит очереди; он в производстве, только если он единственный в очереди. Отказы:
-    `NOT_FOUND_OR_HIDDEN`, `NOT_OWNER`, `NOTHING_TO_CANCEL` (очередь пуста). Возврат сверх потолка
-    CP сгорает, как реген на потолке (событие `cp_burned`).
-12. **[принято]** **Вид игрока.** У своего города в `NodeView`: `recruit_queue` (число юнитов в
-    очереди), `recruit_progress` (тики текущего), `recruit_waiting` (готов, но нет места). У чужих и
-    нейтральных узлов `None`: производство противника скрыто (AGENTS.md, 4.4). Тест тумана на
-    каждое поле. События `recruited` (как сейчас), `recruit_cancelled` (узел, возврат) только
-    владельцу.
-13. **[принято]** **Боты:** ставят в очередь не больше, чем успеет произвестись до следующего
-    решения, с учётом CP; обрабатывают `QUEUE_FULL`; очередь держат в тыловых городах (риск
-    потери при захвате, п. 10).
+~~How the simulation computes this (SIM-12, #28): a unit appears when the command is applied (at the start of the tick), the new group is in "Attack", one unit without a charge. Free capacity: the own units standing in the city are fewer than its capacity (section 9; groups on edges in transit do not count). The cooldown belongs to the city: a recruit at tick `t` allows the next one in this city from tick `t + cooldown_ticks`. The rejections are checked in the order: the city does not exist (`NOT_FOUND_OR_HIDDEN`), not own (`NOT_OWNER`), not the capital when `recruit.location = capital` (`NOT_CAPITAL`), no room (`CITY_FULL`), cooldown (`RECRUIT_COOLDOWN`), not enough CP (`NOT_ENOUGH_CP`).~~ **[superseded by DEC-25]**: how the simulation computes this: the DEC-25 block below, "Implementation". Groups on edges in transit still do not occupy capacity.
 
-Числа в рулсете (секция `[recruit]`): `unit_ticks = 30`, `queue_max = 3`,
-`refund_started_pct = 50`; `cooldown_ticks` удаляется; `orders.cost.recruit = 100` без изменений.
+Alternatives (not chosen):
+- Only in the capital (a slower arrival at the front, a stronger role of logistics).
+- Recruiting for charges from the warehouse instead of CP.
 
-Разобранные примеры. Город X (средний, ёмкость 6), в нём стоит 1 юнит владельца, `recruit.location
-= any_city`, CP 300, числа выше. Тесты реализации: ровно эта таблица.
+### Recruit queue (DEC-25, #262) **[accepted]**
 
-| # | Ситуация | Итог |
+The owner's decision of 2026-10-14 (#252). It replaces the instant recruit and the cooldown of DEC-01 (above). The items
+**[accepted]** by the owner on 2026-10-14: he chose production of 3 s per unit (the alternative of question 1) and
+a queue of up to 3, and accepted the other recommendations. Implemented in #278 (`SIM_VERSION` 11,
+`PROTOCOL_VERSION` 15), the block "Implementation" after the examples.
+
+1. **[accepted]** Every own city has a unit production queue. The progress of the current unit and
+   the length of the queue are visible to the owner above the city.
+2. **[accepted]** CP are charged when a unit is put into the queue (`orders.cost.recruit`, 100 hundredths).
+3. **[accepted]** Cancelling a unit that has not started refunds the CP in full; cancelling a unit
+   in production: a half. CP are in hundredths, rounded down: the refund is
+   `orders.cost.recruit * recruit.refund_started_pct // 100` (100 * 50 // 100 = 50, that is 0.5 CP).
+4. **[accepted]** **Production.** A city makes one unit at a time, `recruit.unit_ticks = 30`
+   (3 s). In production: the first unit of the queue. The progress
+   `Node.recruit_progress` grows by 1 on every tick when the queue is not empty and there is no fight in the city
+   (item 9); the unit is ready when the progress equals `unit_ticks`. The `recruit` system (the order of systems does not
+   change) goes after `apply_commands`, so a unit put into an empty queue at tick `t`
+   gets the first tick of progress at `t` and appears at tick `t + unit_ticks - 1`; the next one
+   starts on the next tick. The cooldown `recruit.cooldown_ticks` is removed.
+5. **[accepted]** **The unit** appears discharged, as a new group in "Attack", on the same tick
+   merges under DEC-20, item A1. A warehouse charge is not needed for it to appear. It takes a charge later, by the usual
+   recharge of the standing units from the warehouse of the city (`supply.recharge_per_tick`, section 7), if the warehouse
+   has a charge. The `supply` system goes before `recruit`, so the first recharge of a new unit is on the
+   next tick.
+6. **[accepted]** **Queue length:** no more than `recruit.queue_max = 3` units per city,
+   including the current one; otherwise the rejection `QUEUE_FULL` (a new code).
+7. **[accepted]** **Capacity.** When queueing: the owner's standing units in the city plus the queue are
+   fewer than the capacity (DEC-22), otherwise `CITY_FULL`. A ready unit that has no room (the city was filled
+   by arrived groups) waits with full progress and appears on the first tick when there is room.
+   The unit is not lost, CP are not refunded.
+8. **[accepted]** **Where:** only an own city (a province: `NOT_CITY`, DEC-23), taking into account
+   `recruit.location` (`any_city | capital`); with `city_upgrades.enabled = true` instead: only a
+   city with a barracks (`NO_BARRACKS`, DEC-26, the block "Barracks" below). A cut-off city (DEC-19) produces as usual
+   (DEC-19, item 9).
+9. **[accepted]** **A fight in the city** (DEC-24, section 4): while a fight goes on in the city, the progress stands;
+   queueing and cancelling are possible. A ready unit does not appear in the middle of a fight.
+10. **[accepted]** **Capture of the city:** the queue and the progress are lost, CP are not refunded (like the warehouse:
+    on capture it is zeroed, there are no spoils). The new owner starts with an empty queue. The event
+    `recruit_queue_lost` (node, number of units) is received only by the former owner.
+11. **[accepted]** **Commands.** `Recruit(node)`: put one unit into the queue (with
+    `city_upgrades.enabled = true`, instead of `NOT_CAPITAL`, `NO_BARRACKS` is checked, DEC-26). The rejections in the order
+    of checking: `NOT_FOUND_OR_HIDDEN`, `NOT_OWNER`, `NOT_CITY`, `NOT_CAPITAL`, `QUEUE_FULL`,
+    `CITY_FULL`, `NOT_ENOUGH_CP`. `CancelRecruit(node)` (new, free): remove the **last**
+    unit of the queue; it is in production only if it is the only one in the queue. The rejections:
+    `NOT_FOUND_OR_HIDDEN`, `NOT_OWNER`, `NOTHING_TO_CANCEL` (the queue is empty). A refund above the CP
+    ceiling burns, like regeneration at the ceiling (the event `cp_burned`).
+12. **[accepted]** **Player view.** For an own city in `NodeView`: `recruit_queue` (the number of units in
+    the queue), `recruit_progress` (the ticks of the current one), `recruit_waiting` (ready but no room). For foreign and
+    neutral nodes `None`: the enemy's production is hidden (AGENTS.md, 4.4). A fog test for
+    each field. The events `recruited` (as now), `recruit_cancelled` (node, refund) only to
+    the owner.
+13. **[accepted]** **Bots:** queue no more than can be produced before the next
+    decision, taking CP into account; handle `QUEUE_FULL`; keep the queue in the rear cities (the risk of
+    losing it on capture, item 10).
+
+Numbers in the ruleset (the section `[recruit]`): `unit_ticks = 30`, `queue_max = 3`,
+`refund_started_pct = 50`; `cooldown_ticks` is removed; `orders.cost.recruit = 100` unchanged.
+
+Worked examples. City X (medium, capacity 6), 1 unit of the owner stands in it, `recruit.location
+= any_city`, CP 300, the numbers above. Implementation tests: exactly this table.
+
+| # | Situation | Result |
 |---|---|---|
-| 1 | `Recruit(X)` в тике 1000, очередь пуста | CP 200, очередь 1; юнит появляется в тике 1029 и сливается с группой X (DEC-20) |
-| 2 | три `Recruit(X)` в тике 1000 | CP 0, очередь 3; юниты в тиках 1029, 1059, 1089 |
-| 3 | как 2, `CancelRecruit(X)` в тике 1020 | снят третий (не начат): CP +100 = 100; очередь 2, первый по-прежнему появится в 1029 |
-| 4 | как 1, `CancelRecruit(X)` в тике 1020 | снят текущий: CP +50 = 250; очередь пуста, прогресс 0 |
-| 5 | в очереди 3 юнита; `Recruit(X)` | `QUEUE_FULL` |
-| 6 | в X стоят 5 юнитов, очередь 1; `Recruit(X)` | `CITY_FULL` (5 + 1 = 6, не меньше ёмкости) |
-| 7 | как 1, в тике 1020 в X пришла своя группа, стоят 6 юнитов; в тике 1050 группа из 2 юнитов ушла | в тике 1029 юнит готов, но ждёт (`recruit_waiting`); появляется в тике 1050 |
-| 8 | как 1, в X бой с тика 1010, бой кончился в тике 1040 (X удержан) | прогресс 10 к тику 1009, стоит в тиках 1010..1039; нужно ещё 20: юнит в тике 1059 |
-| 9 | как 2, X захвачен в тике 1020 | очередь пропала, CP 0 (не возвращаются), `recruit_queue_lost` с 3 юнитами |
-| 10 | как 1, X отрезан от столицы (DEC-19) с тика 990 | производство идёт, юнит в тике 1029 |
+| 1 | `Recruit(X)` at tick 1000, the queue is empty | CP 200, queue 1; the unit appears at tick 1029 and merges with the group of X (DEC-20) |
+| 2 | three `Recruit(X)` at tick 1000 | CP 0, queue 3; the units at ticks 1029, 1059, 1089 |
+| 3 | as 2, `CancelRecruit(X)` at tick 1020 | the third is removed (not started): CP +100 = 100; queue 2, the first still appears at 1029 |
+| 4 | as 1, `CancelRecruit(X)` at tick 1020 | the current one is removed: CP +50 = 250; the queue is empty, progress 0 |
+| 5 | 3 units in the queue; `Recruit(X)` | `QUEUE_FULL` |
+| 6 | 5 units stand in X, queue 1; `Recruit(X)` | `CITY_FULL` (5 + 1 = 6, not less than the capacity) |
+| 7 | as 1, at tick 1020 an own group arrived in X, 6 units stand; at tick 1050 a group of 2 units left | at tick 1029 the unit is ready but waits (`recruit_waiting`); appears at tick 1050 |
+| 8 | as 1, a fight in X from tick 1010, the fight ended at tick 1040 (X held) | progress 10 by tick 1009, stands at ticks 1010..1039; 20 more are needed: the unit at tick 1059 |
+| 9 | as 2, X captured at tick 1020 | the queue is lost, CP 0 (not refunded), `recruit_queue_lost` with 3 units |
+| 10 | as 1, X cut off from the capital (DEC-19) since tick 990 | production goes on, the unit at tick 1029 |
 | 11 | CP 50; `Recruit(X)` | `NOT_ENOUGH_CP` |
-| 12 | CP 450, очередь 2; `CancelRecruit(X)` | возврат 100: 500 (потолок), сгорают 50 (`cp_burned`) |
-| 13 | `Recruit(P)`, P: своя провинция | `NOT_CITY` |
-| 14 | как 1, на складе X 2 заряда | юнит появляется в тике 1029 разряженным (группа X: 2 юнита, 1 заряж.); в тике 1030 берёт заряд со склада (склад 1), группа X: 2 юнита, 2 заряж. |
-| 15 | как 14, склад X пуст | юнит остаётся разряженным, пока на склад не придёт заряд |
+| 12 | CP 450, queue 2; `CancelRecruit(X)` | refund 100: 500 (the ceiling), 50 burn (`cp_burned`) |
+| 13 | `Recruit(P)`, P: an own province | `NOT_CITY` |
+| 14 | as 1, 2 charges in the warehouse of X | the unit appears at tick 1029 discharged (group X: 2 units, 1 charged); at tick 1030 it takes a charge from the warehouse (warehouse 1), group X: 2 units, 2 charged |
+| 15 | as 14, the warehouse of X is empty | the unit stays discharged until a charge arrives at the warehouse |
 
-Что меняет реализация: состояние `Node.recruit_queue`, `Node.recruit_progress` (вместо
-`recruited_tick`) и `SIM_VERSION`; команда `CancelRecruit`, код `QUEUE_FULL`, поля `NodeView` и
-события, `PROTOCOL_VERSION`; клиент: прогресс над своим городом, число в очереди, отмена; боты;
-рулсеты (`mvp-0`, тестовые).
+What the implementation changes: the state `Node.recruit_queue`, `Node.recruit_progress` (instead of
+`recruited_tick`) and `SIM_VERSION`; the command `CancelRecruit`, the code `QUEUE_FULL`, the `NodeView` fields and
+events, `PROTOCOL_VERSION`; the client: progress above an own city, the number in the queue, cancelling; bots;
+rulesets (`mvp-0`, the test ones).
 
-Пример 14 уточнён при реализации (#278): исходный юнит X заряжен (иначе со склада в 2 заряда он
-зарядился бы раньше тика 1029); «1 заряж.» было числом группы в тике появления, после перезарядки
-в тике 1030 заряжены оба.
+Example 14 was refined during implementation (#278): the original unit of X is charged (otherwise from a warehouse of 2 charges it
+would have charged before tick 1029); "1 charged" was the number of the group at the tick of appearance, after the recharge
+at tick 1030 both are charged.
 
-**Реализация** (#278; `gow_sim.systems.recruit`, `SIM_VERSION` 11, `PROTOCOL_VERSION` 15):
+**Implementation** (#278; `gow_sim.systems.recruit`, `SIM_VERSION` 11, `PROTOCOL_VERSION` 15):
 
-- Состояние города: `Node.recruit_queue` (юнитов в очереди, включая текущий) и
-  `Node.recruit_progress` (тики текущего, `0..unit_ticks`); `recruited_tick` и кулдаун удалены.
-- **[предложено]** «В производстве» (п. 3, полвозврата) юнит, только если он единственный в очереди
-  **и** у него уже есть прогресс. Единственный юнит без прогресса (поставлен в городе с боем, где
-  прогресс стоит) ещё не начат: возврат полный. Альтернатива: первый в очереди всегда «в
-  производстве», даже без прогресса.
-- Система `recruit` обходит города по игрокам, у каждого в порядке `node_key` (AGENTS.md, 4.1,
-  правило 6): id новых групп одного игрока зеркальны. Место для готового юнита: стоящих юнитов
-  владельца в городе меньше ёмкости.
-- Постановка в очередь события не даёт (ответ: `ack`); событие `recruited` в тике появления.
-  `recruit_cancelled` (игрок, узел, `cp`: возврат до потолка), `recruit_queue_lost` (игрок: прежний
-  владелец, узел, `units`) только владельцу; `cp_burned` при возврате сверх потолка.
-- Отказ `IN_FIGHT` для `Recruit` в городе с боем (временный, DEC-24, «Как это считает симуляция»,
-  п. 9) снят: ставить и отменять в бою можно, прогресс стоит.
-- `ruleset_public.recruit` (`unit_ticks`, `queue_max`, `refund_started_pct`) для полосы прогресса и
-  строки возврата в меню города. Клиент: над своим городом слоты очереди, первый заполняется
-  прогрессом (полный: готов и ждёт места); радиальное меню города: «Нанять» (R), «Отменить найм».
-- Боты ставят по одному юниту на город (очередь пуста), не в городе с боем, и выбирают тыловой
-  город раньше фронтового (п. 13).
+- The state of a city: `Node.recruit_queue` (units in the queue, including the current one) and
+  `Node.recruit_progress` (the ticks of the current one, `0..unit_ticks`); `recruited_tick` and the cooldown are removed.
+- **[proposed]** "In production" (item 3, a half refund) is a unit only if it is the only one in the queue
+  **and** it already has progress. A single unit without progress (queued in a city with a fight, where the
+  progress stands) has not started yet: the refund is full. An alternative: the first in the queue is always "in
+  production", even without progress.
+- The `recruit` system walks the cities by player, for each in the order of `node_key` (AGENTS.md, 4.1,
+  rule 6): the ids of the new groups of one player are mirrored. Room for a ready unit: the owner's standing
+  units in the city are fewer than the capacity.
+- Queueing gives no event (the answer: `ack`); the event `recruited` at the tick of appearance.
+  `recruit_cancelled` (player, node, `cp`: the refund up to the ceiling), `recruit_queue_lost` (player: the former
+  owner, node, `units`) only to the owner; `cp_burned` when the refund is above the ceiling.
+- The rejection `IN_FIGHT` for `Recruit` in a city with a fight (temporary, DEC-24, "How the simulation computes this",
+  item 9) is removed: queueing and cancelling in a fight are possible, the progress stands.
+- `ruleset_public.recruit` (`unit_ticks`, `queue_max`, `refund_started_pct`) for the progress bar and
+  the refund line in the city menu. The client: above an own city the queue slots, the first one is filled
+  with progress (full: ready and waiting for room); the radial menu of the city: "Recruit" (R), "Cancel recruit".
+- Bots queue one unit per city (the queue is empty), not in a city with a fight, and choose a rear
+  city before a front one (item 13).
 
-Альтернативы (не выбраны):
-- Производство 5 с на юнита (`recruit.unit_ticks = 50`) и очередь до 5 (`recruit.queue_max = 5`): предлагались первыми, владелец выбрал 3 с и 3.
-- Юнит приходит заряженным за заряд склада города (дороже, но рекрут сразу боеспособен).
-- Захват возвращает CP за очередь, как отмена (меньше риска держать очередь у фронта).
-- Отмена снимает текущий юнит, а не последний (чаще половинный возврат).
-- Производство и во время боя (подкрепление прямо в бой, разряженное, гибнет первым).
+Alternatives (not chosen):
+- Production of 5 s per unit (`recruit.unit_ticks = 50`) and a queue of up to 5 (`recruit.queue_max = 5`): proposed first, the owner chose 3 s and 3.
+- A unit comes charged for a charge of the city warehouse (more expensive, but a recruit is combat-ready at once).
+- Capture refunds the CP for the queue, like cancelling (less risk in keeping a queue near the front).
+- Cancelling removes the current unit, not the last one (a half refund more often).
+- Production during a fight too (reinforcements straight into the fight, discharged, die first).
 
-### Казарма (DEC-26, #265) **[принято]**
+### Barracks (DEC-26, #265) **[accepted]**
 
-Решение владельца 2026-10-14 (#252), все детали приняты (#265). Часть блока DEC-26 (раздел 8: флаг,
-склад, дороги, общая стройка города, команды, вид игрока, разобранные примеры). Казарма действует
-только при `city_upgrades.enabled = true`; **при `false` рекрутирует каждый свой город** (DEC-01,
-DEC-25 выше как записано, с учётом `recruit.location`).
+The owner's decision of 2026-10-14 (#252), all the details are accepted (#265). A part of the DEC-26 block (section 8: the flag,
+the warehouse, roads, the common construction of a city, commands, the player view, worked examples). The barracks works
+only with `city_upgrades.enabled = true`; **with `false` every own city recruits** (DEC-01,
+DEC-25 above as written, taking `recruit.location` into account).
 
-1. **[принято]** На старте рекрутирует только столица (казарма у неё с начала матча). Любой другой
-   свой город (не провинция, DEC-23) получает возможность рекрутировать улучшением «казарма».
-2. **[принято]** Цена казармы: 3 CP (`orders.cost.barracks = 300`, в сотых CP). Время стройки
-   `city_upgrades.barracks_ticks = 100` (10 с). Команда `BuildBarracks(node)`,
-   оплата при старте, отмены и возврата CP нет. Общая стройка города и прерывание при захвате:
-   раздел 8, DEC-26, п. 8.
-3. **[принято]** При захвате казарма переходит новому владельцу (он может рекрутировать в городе
-   сразу). Очередь найма прежнего владельца пропадает, как в DEC-25, п. 10.
-4. **[принято]** `Recruit(node)` при включённом флаге: после `NOT_CITY` новая проверка
-   `NO_BARRACKS` (казармы нет); `NOT_CAPITAL` и `recruit.location` при `true` не применяются (кто
-   рекрутирует, определяет казарма). Остальные проверки DEC-25, п. 11, в прежнем порядке.
-   Отрезанный город с казармой рекрутирует как обычно (DEC-19, п. 9).
-5. **[принято]** Казарма не требует снабжаемой территории. Пока казармы нет (в том числе пока
-   она строится), ставить юнитов в очередь нельзя (`NO_BARRACKS`).
-6. **[принято]** Видимость: `NodeView.has_barracks` только у своих городов, ~~у чужих `None`~~ **[заменено DEC-31]**: у чужого города, соседнего со своим узлом, видна построенная казарма (раздел 10, блок DEC-31); у остальных чужих `None`
-   (раздел 8, п. 10).
-7. **[принято]** Боты: `Recruit` только там, где `has_barracks`.
+1. **[accepted]** At the start only the capital recruits (it has a barracks from the beginning of the match). Any other
+   own city (not a province, DEC-23) gets the ability to recruit by the "barracks" upgrade.
+2. **[accepted]** The price of a barracks: 3 CP (`orders.cost.barracks = 300`, in hundredths of CP). The construction time is
+   `city_upgrades.barracks_ticks = 100` (10 s). The command `BuildBarracks(node)`,
+   paid at the start, there is no cancelling and no CP refund. The common construction of a city and its interruption on capture:
+   section 8, DEC-26, item 8.
+3. **[accepted]** On capture the barracks goes to the new owner (they can recruit in the city
+   at once). The recruit queue of the former owner is lost, as in DEC-25, item 10.
+4. **[accepted]** `Recruit(node)` with the flag on: after `NOT_CITY` the new check
+   `NO_BARRACKS` (there is no barracks); `NOT_CAPITAL` and `recruit.location` do not apply with `true` (who
+   recruits is determined by the barracks). The other checks of DEC-25, item 11, in the same order.
+   A cut-off city with a barracks recruits as usual (DEC-19, item 9).
+5. **[accepted]** A barracks does not require supplied territory. While there is no barracks (including while
+   it is under construction), units cannot be queued (`NO_BARRACKS`).
+6. **[accepted]** Visibility: `NodeView.has_barracks` only for own cities, ~~`None` for foreign ones~~ **[superseded by DEC-31]**: for a foreign city adjacent to an own node a built barracks is visible (section 10, the DEC-31 block); for the other foreign ones `None`
+   (section 8, item 10).
+7. **[accepted]** Bots: `Recruit` only where `has_barracks`.
 
-Числа: `orders.cost.barracks = 300`, `city_upgrades.barracks_ticks = 100` (секция
-`[city_upgrades]`, раздел 8). Разобранные примеры: раздел 8, DEC-26, строки 2-6, 16 и 22.
+Numbers: `orders.cost.barracks = 300`, `city_upgrades.barracks_ticks = 100` (the section
+`[city_upgrades]`, section 8). Worked examples: section 8, DEC-26, rows 2-6, 16 and 22.
 
-### Группы и приказы: автослияние, бесплатные деление, слияние и отмена, лимит стека (DEC-20, #232) **[принято]**
+### Groups and orders: auto-merge, free split, merge and cancel, stack limit (DEC-20, #232) **[accepted]**
 
-Плейтест 2026-10-12: армия из столицы игнорировала ёмкость («дэтбол»), платные деление, слияние и отмена мешали управлять. Решение владельца. Заменяет открытый вопрос #117, п. 1 вопроса #141 и принятые тексты о цене деления, слияния и отмены (разделы 3, 5, 6, DEC-08).
+Playtest of 2026-10-12: the army from the capital ignored the capacity ("deathball"), the paid split, merge and cancel got in the way of control. The owner's decision. It replaces the open question #117, item 1 of question #141 and the accepted texts about the price of split, merge and cancel (sections 3, 5, 6, DEC-08).
 
-Группы сливаются сами, деление, слияние и отмена любых приказов бесплатны, а размер группы
-ограничен ёмкостью узлов на её пути. Пункты, помеченные раньше «(по умолчанию)», подтверждены
-владельцем 2026-10-12 (#239).
+Groups merge by themselves, split, merge and cancelling any orders are free, and the size of a group
+is limited by the capacity of the nodes on its way. The items earlier marked "(default)" were confirmed by
+the owner on 2026-10-12 (#239).
 
-**A. Автослияние.**
+**A. Auto-merge.**
 
-1. Своя группа, которая **закончила движение в своём узле** (прибыла в цель, вернулась после отскока
-   или отмены) или **появилась рекрутом**, сливается с **целевой группой** узла: своей стоящей там
-   группой с наименьшим id без приказа (не ждущей выступления по запланированному приказу). Узел:
-   город или провинция (владелец 2026-10-12: автослияние действует и в провинциях).
-2. Не сливаются: группа в транзите (проходит узел по пути), группа, ждущая выступления, группы на
-   рёбрах. Если целевой группы нет, а закончивших движение в узле в этом тике несколько, они
-   сливаются в ту из них, у которой меньший id.
-3. **Когда:** в конце тика, в системе `orders` (после боя и всех систем, которые двигают группы).
-   В бою группы остаются отдельными (DEC-07, правило 7), сливаются выжившие.
-4. **Что сохраняется:** `units` и `charged` суммируются; режим, «Защита» с её бонусом, ~~задержкой~~
-   **[заменено DEC-30]** счётчиком накопления и намерением берутся от целевой группы. Пришедшая группа всегда в «Атаке» (приказ на движение
-   снимает «Защиту», DEC-08), бонус её запланированного приказа к этому моменту сгорел (конец
-   приказа, #141 по умолчанию).
-5. Слияние может дать группу больше ёмкости узла. Тогда действуют гибель сверх ёмкости (#118) и
-   лимит стека (раздел D); интерфейс подсказывает разделить группу. Такая группа выходит из узла
-   только после деления: стартовая армия сверх ёмкости задумана, деление бесплатно (владелец 2026-10-12).
-6. Событие `groups_merged` получает только владелец.
+1. An own group that **finished moving in an own node** (arrived at the target, came back after a bounce
+   or a cancel) or **appeared by a recruit** merges with the **target group** of the node: the own group
+   standing there with the smallest id and without an order (not waiting to set out on a scheduled order). A node:
+   a city or a province (the owner, 2026-10-12: auto-merge works in provinces too).
+2. These do not merge: a group in transit (passes through the node on the way), a group waiting to set out, groups on
+   edges. If there is no target group, and several groups finished moving in the node on this tick, they
+   merge into the one with the smaller id.
+3. **When:** at the end of the tick, in the `orders` system (after the fight and all the systems that move groups).
+   In a fight the groups stay separate (DEC-07, rule 7), the survivors merge.
+4. **What is kept:** `units` and `charged` are summed; the mode, "Defense" with its bonus, ~~the delay~~
+   **[superseded by DEC-30]** the accumulation counter and the intent are taken from the target group. The arrived group is always in "Attack" (an order
+   to move removes "Defense", DEC-08), the bonus of its scheduled order has burned by then (the end of the
+   order, #141 by default).
+5. A merge can give a group larger than the capacity of the node. Then the death above capacity (#118) and
+   the stack limit (section D) apply; the interface suggests splitting the group. Such a group leaves the node
+   only after a split: a starting army above the capacity is intended, splitting is free (the owner, 2026-10-12).
+6. The event `groups_merged` is received only by the owner.
 
-**B. Деление и слияние вручную: бесплатно** (`orders.cost.split = 0`, `orders.cost.merge = 0`).
+**B. Split and merge by hand: free** (`orders.cost.split = 0`, `orders.cost.merge = 0`).
 
-1. `Split(group, n)` как в SIM-04 (#117 по умолчанию): `1 <= n < units`, новой группе сначала
-   заряженные (`min(n, charged)`), новая группа в «Атаке» без приказа, исходная сохраняет режим и
-   приказ. Автослияние срабатывает только по событиям п. A1, поэтому разделённые группы не
-   сливаются обратно, пока одна из них не сдвинется. Клиент (#315): после деления выделяется
-   **отделённая** группа (размер, выставленный ползунком), а не остаток. Её id клиент берёт из
-   события `group_split` (`new_group`, то же непрозрачное id, что в снапшотах; `ack` ид не несёт),
-   сопоставив его с отправленным `split` той же группы; выделение переходит на неё, как только
-   снапшот её показывает, и только если выделена исходная группа.
-2. `Merge(groups)`: две и больше своих групп, стоящих в одном узле, ни одна не ждёт выступления
-   (`GROUP_BUSY`). Результат в группе с наименьшим id; её режим и «Защита» с бонусом сохраняются,
-   как при автослиянии (заменяет #117 по умолчанию: «Атака»); намерения остальных групп снимаются.
-3. Остальные команды группе на ребре, кроме `CancelOrder`, по-прежнему отклоняются
+1. `Split(group, n)` as in SIM-04 (#117 by default): `1 <= n < units`, the new group gets the
+   charged units first (`min(n, charged)`), the new group is in "Attack" without an order, the original keeps its mode and
+   order. Auto-merge fires only on the events of item A1, so the split groups do not
+   merge back until one of them moves. The client (#315): after a split the **split-off** group is selected
+   (the size set by the slider), not the remainder. The client takes its id from
+   the event `group_split` (`new_group`, the same opaque id as in snapshots; `ack` carries no id),
+   matching it with the sent `split` of the same group; the selection moves to it as soon as
+   a snapshot shows it, and only if the original group is selected.
+2. `Merge(groups)`: two or more own groups standing in one node, none waits to set out
+   (`GROUP_BUSY`). The result is in the group with the smallest id; its mode and "Defense" with the bonus are kept,
+   as in auto-merge (replaces #117 by default: "Attack"); the intents of the other groups are removed.
+3. The other commands to a group on an edge, except `CancelOrder`, are still rejected
    (`GROUP_ON_EDGE`).
 
-**C. Отмена любого приказа: бесплатно** (`orders.cost.cancel = 0`). `CancelOrder(group)`:
+**C. Cancelling any order: free** (`orders.cost.cancel = 0`). `CancelOrder(group)`:
 
-1. Запланированный приказ во время задержки: приказ и намерение снимаются, группа стоит. CP за сам
-   приказ не возвращаются.
-2. Группа на ребре с приказом на движение (обычным или запланированным после выступления):
-   разворачивается с текущего места и идёт назад к узлу, из которого вышла на **это** ребро
-   (начало текущего ребра, а не начало всего пути: решение владельца 2026-10-12), столько тиков, сколько прошла по
-   ребру. Механика та же, что у отскока (`OnEdge.back`, DEC-07, правила 4 и 6, #133), но заряды не
-   тратятся. Приказ, бонус плана и намерение снимаются. Если узел возврата за это время стал
-   чужим, прибытие обычное, с боем (DEC-07, правило 4).
-3. «Защита»: группа в «Атаке», бонус и намерение снимаются. `SetMode(ATTACK)` даёт то же и тоже
-   бесплатен (решает #141, п. 1).
-4. После боя отменять нечего: отскакивающая группа (приказ сгорел в бою) и стоящая группа без
-   приказа и без «Защиты» получают `NOTHING_TO_CANCEL`. Команды применяются в начале тика, до
-   движения и боя, поэтому отмена, применённая в тике `t`, успевает раньше встречи и прибытия тика
-   `t`. Победитель встречи на ребре идёт дальше со своим приказом, его отменить можно.
+1. A scheduled order during the delay: the order and the intent are removed, the group stands. The CP for the order itself
+   are not refunded.
+2. A group on an edge with an order to move (an ordinary one or a scheduled one after setting out):
+   turns around from the current place and goes back to the node it left onto **this** edge
+   (the start of the current edge, not the start of the whole path: the owner's decision of 2026-10-12), for as many ticks as it walked
+   along the edge. The mechanics are the same as for a bounce (`OnEdge.back`, DEC-07, rules 4 and 6, #133), but charges
+   are not spent. The order, the plan bonus and the intent are removed. If the node of return became
+   foreign in the meantime, the arrival is ordinary, with a fight (DEC-07, rule 4).
+3. "Defense": the group goes to "Attack", the bonus and the intent are removed. `SetMode(ATTACK)` gives the same and is also
+   free (settles #141, item 1).
+4. After a fight there is nothing to cancel: a bouncing group (the order burned in the fight) and a standing group without an
+   order and without "Defense" get `NOTHING_TO_CANCEL`. The commands are applied at the start of the tick, before
+   the movement and the fight, so a cancel applied at tick `t` is in time before the meeting and the arrival of tick
+   `t`. The winner of a meeting on an edge goes on with its order, which can be cancelled.
 
-**D. Лимит стека.**
+**D. Stack limit.**
 
-1. `Move` (обычный и запланированный) принимается, только если есть путь, на котором ёмкость
-   (DEC-22: фиксированная и публичная) каждого узла пути, кроме стартового (промежуточные и цель),
-   не меньше `units` группы. `find_path` ищет путь только по таким узлам: тот же Дейкстра по времени
-   прохода и тот же тай-брейк, поэтому выбранный путь может быть длиннее самого быстрого.
-2. Отказы: путь без ограничения есть, с ограничением нет: `STACK_LIMIT` (новый код); пути нет
-   вообще: `NO_PATH`, как сейчас.
-3. Проверка один раз, при команде: размер группы в пути не меняется (команды группе на ребре,
-   кроме отмены, запрещены), ёмкость фиксирована.
-4. Другие группы в узлах пути не учитываются: общий гарнизон сверх ёмкости решает гибель (#118).
-5. Интерфейс подсвечивает узлы, достижимые выбранной группой, и время пути до них; считает это
-   сервер (см. «Влияние на реализацию»), клиент не считает.
-6. Если цель недостижима из-за лимита стека (`STACK_LIMIT`), интерфейс предлагает разделить группу
-   (клавиша `S`). Лимит против стартовой армии задуман, деление бесплатно (владелец 2026-10-12).
+1. `Move` (ordinary and scheduled) is accepted only if there is a path on which the capacity
+   (DEC-22: fixed and public) of every node of the path except the starting one (the intermediate ones and the target)
+   is not less than the `units` of the group. `find_path` searches for a path only through such nodes: the same Dijkstra by the
+   passing time and the same tie-break, so the chosen path can be longer than the fastest one.
+2. Rejections: a path without the restriction exists, with it none: `STACK_LIMIT` (a new code); no path
+   at all: `NO_PATH`, as now.
+3. The check is once, at the command: the size of the group on the way does not change (commands to a group on an edge,
+   except cancel, are forbidden), the capacity is fixed.
+4. Other groups in the nodes of the path are not counted: a common garrison above the capacity is settled by the death (#118).
+5. The interface highlights the nodes reachable by the selected group and the travel time to them; the server computes this
+   (see "Impact on the implementation"), the client does not compute it.
+6. If the target is unreachable because of the stack limit (`STACK_LIMIT`), the interface suggests splitting the group
+   (the key `S`). The limit against a starting army is intended, splitting is free (the owner, 2026-10-12).
 
-Числа в рулсете: `orders.cost.split = 0`, `orders.cost.merge = 0`, `orders.cost.cancel = 0` (было
-100 у каждого; ключи остаются, чтобы баланс мог вернуть плату без кода).
+Numbers in the ruleset: `orders.cost.split = 0`, `orders.cost.merge = 0`, `orders.cost.cancel = 0` (it was
+100 for each; the keys stay so that balance can bring the fee back without code).
 
-Разобранные примеры. Узлы (ёмкость): A (6), B (4), C (8), D (6), E (6), провинция P (3); рёбра
-A-B, B-C (самый быстрый путь A-C), A-D, D-E, E-C, A-P, P-C; A, B, D, E, P свои, C нейтральный.
-Тесты реализации: ровно эта таблица.
+Worked examples. Nodes (capacity): A (6), B (4), C (8), D (6), E (6), province P (3); edges
+A-B, B-C (the fastest path A-C), A-D, D-E, E-C, A-P, P-C; A, B, D, E, P are own, C is neutral.
+Implementation tests: exactly this table.
 
-| # | Ситуация | Итог |
+| # | Situation | Result |
 |---|---|---|
-| 1 | G1 (3 юнита, 3 заряж., «Защита» с активным бонусом) стоит в A; G2 (2, 1 заряж.) прибывает в A | G1: 5 юнитов, 4 заряж., «Защита», бонус +2 сохранён; G2 удалена |
-| 2 | G1 ждёт выступления по запланированному приказу в A; G2 прибывает | G2 остаётся отдельной: целевой группы нет |
-| 3 | `Recruit(A)`, в A стоит G1 (4, 4 заряж.) | в конце тика G1: 5 юнитов, 4 заряж. |
-| 4 | G2 проходит A транзитом | слияния нет |
-| 5 | в пустой свой A в одном тике приходят G3 и G2 (id G2 < G3) | одна группа G2, «Атака» |
-| 6 | G2 прибывает в A, где стоит G1, и в том же тике A атакует противник | бой: G1 и G2 отдельно; выжившие сливаются в конце тика (с DEC-24: в конце боя) |
-| 7 | G1 (5, 5 заряж.) стоит в A (ёмкость 6); G2 (3, 3 заряж.) прибывает | G1: 8 юнитов; гибель сверх ёмкости по #118; дальше G1 ходит только туда, где ёмкость каждого узла пути не меньше 8 |
-| 8 | `Split(G1, 2)`, G1: 5 юнитов, 3 заряж. | новая группа 2 юнита, 2 заряж., «Атака»; G1: 3 юнита, 1 заряж.; 0 CP; обратно не сливаются |
-| 9 | `Merge(G1, G4)`, G1 в «Защите», G4 в «Атаке», id G1 < G4 | результат G1 в «Защите» с бонусом; 0 CP |
-| 10 | обычный `Move` A→B, группа сделала 10 шагов по ребру A-B; `CancelOrder` | 10 шагов назад, стоит в A без приказа; 0 CP |
-| 11 | запланированный приказ в задержке; `CancelOrder` | приказ и намерение сняты; 0 CP; 2 CP за приказ не возвращаются |
-| 12 | путь A→B→C, группа на ребре B-C; `CancelOrder` | возврат в B (начало текущего ребра), стоп |
-| 13 | группа отскакивает после боя; `CancelOrder` | `NOTHING_TO_CANCEL` |
-| 14 | группа в «Защите»; `CancelOrder` или `SetMode(ATTACK)` | «Атака», бонус и намерение сняты; 0 CP |
-| 15 | группа 5 юнитов в A; `Move` в B | `STACK_LIMIT` (ёмкость B 4) |
-| 16 | группа 5 юнитов в A; `Move` в C | принят путь A-D-E-C: на A-B-C мешает B (4), на A-P-C мешает P (3) |
-| 17 | группа 3 юнита в A; `Move` в C | принят самый быстрый путь A-B-C |
-| 18 | группа 3 юнита в A; `Move` в P | принят |
-| 19 | группа 4 юнита в A; `Move` в P | `STACK_LIMIT` (ёмкость провинции 3) |
-| 20 | как 16, но рёбер A-D, D-E, E-C нет | `STACK_LIMIT` |
-| 21 | отмена на ребре A-B, за время возврата A захвачен | прибытие в A с боем (DEC-07, правило 4); не взяв A, группа гибнет (DEC-24, п. G3) |
+| 1 | G1 (3 units, 3 charged, "Defense" with an active bonus) stands in A; G2 (2, 1 charged) arrives in A | G1: 5 units, 4 charged, "Defense", the bonus +2 kept; G2 removed |
+| 2 | G1 waits to set out on a scheduled order in A; G2 arrives | G2 stays separate: there is no target group |
+| 3 | `Recruit(A)`, G1 (4, 4 charged) stands in A | at the end of the tick G1: 5 units, 4 charged |
+| 4 | G2 passes A in transit | no merge |
+| 5 | into an empty own A on one tick come G3 and G2 (id G2 < G3) | one group G2, "Attack" |
+| 6 | G2 arrives in A where G1 stands, and on the same tick the enemy attacks A | fight: G1 and G2 separately; the survivors merge at the end of the tick (with DEC-24: at the end of the fight) |
+| 7 | G1 (5, 5 charged) stands in A (capacity 6); G2 (3, 3 charged) arrives | G1: 8 units; death above capacity per #118; after that G1 goes only where the capacity of every node of the path is not less than 8 |
+| 8 | `Split(G1, 2)`, G1: 5 units, 3 charged | the new group 2 units, 2 charged, "Attack"; G1: 3 units, 1 charged; 0 CP; they do not merge back |
+| 9 | `Merge(G1, G4)`, G1 in "Defense", G4 in "Attack", id G1 < G4 | the result is G1 in "Defense" with the bonus; 0 CP |
+| 10 | an ordinary `Move` A→B, the group made 10 steps along the edge A-B; `CancelOrder` | 10 steps back, stands in A without an order; 0 CP |
+| 11 | a scheduled order in the delay; `CancelOrder` | the order and the intent removed; 0 CP; the 2 CP for the order are not refunded |
+| 12 | path A→B→C, the group is on the edge B-C; `CancelOrder` | return to B (the start of the current edge), stop |
+| 13 | the group bounces after a fight; `CancelOrder` | `NOTHING_TO_CANCEL` |
+| 14 | the group is in "Defense"; `CancelOrder` or `SetMode(ATTACK)` | "Attack", the bonus and the intent removed; 0 CP |
+| 15 | a group of 5 units in A; `Move` to B | `STACK_LIMIT` (the capacity of B is 4) |
+| 16 | a group of 5 units in A; `Move` to C | the path A-D-E-C is accepted: on A-B-C B (4) is in the way, on A-P-C P (3) is in the way |
+| 17 | a group of 3 units in A; `Move` to C | the fastest path A-B-C is accepted |
+| 18 | a group of 3 units in A; `Move` to P | accepted |
+| 19 | a group of 4 units in A; `Move` to P | `STACK_LIMIT` (the capacity of a province is 3) |
+| 20 | as 16, but the edges A-D, D-E, E-C do not exist | `STACK_LIMIT` |
+| 21 | a cancel on the edge A-B, A was captured during the return | arrival in A with a fight (DEC-07, rule 4); not having taken A, the group dies (DEC-24, item G3) |
 
-Что меняет реализация (симуляция и `SIM_VERSION`, протокол и `PROTOCOL_VERSION`, клиент, боты, рулсеты): список в #232.
+What the implementation changes (the simulation and `SIM_VERSION`, the protocol and `PROTOCOL_VERSION`, the client, bots, rulesets): the list is in #232.
 
-Реализация: #242 (`SIM_VERSION` 7, `PROTOCOL_VERSION` 11). Детали, которые блок не задаёт словами:
+Implementation: #242 (`SIM_VERSION` 7, `PROTOCOL_VERSION` 11). The details that the block does not set in words:
 
-- Отмена на ребре с `progress = 0` (группа только что прошла свой узел транзитом): ноль тиков
-  назад, прибытие в начало ребра в том же тике (через `OnEdge.back`, поэтому потерянный узел даёт
-  бой, как в п. C2).
-- Тик прибытия приказа (`ack.arrive_tick`): тик применения, плюс задержка запланированного
-  приказа, плюс сумма времён рёбер пути, минус 1 (первый шаг делается в тике приказа или
-  выступления).
-- Достижимые узлы и время пути считает сервер по запросу клиента `reach_query` (ответ `reach`:
-  узлы, куда `Move` группы примут сейчас, со временем пути, и узлы с отказом `STACK_LIMIT`).
-  Запрос идёт под общим лимитом сообщений соединения.
-- Событие автослияния `groups_merged` несёт узел (`node`), как и ручное слияние, только владельцу.
-- Рекрут, которому в том же тике дан приказ на движение, уже ушёл из узла и не сливается.
+- A cancel on an edge with `progress = 0` (the group has just passed its node in transit): zero ticks
+  back, the arrival at the start of the edge on the same tick (through `OnEdge.back`, so a lost node gives
+  a fight, as in item C2).
+- The arrival tick of an order (`ack.arrive_tick`): the tick of application, plus the delay of a scheduled
+  order, plus the sum of the edge times of the path, minus 1 (the first step is made on the tick of the order
+  or of setting out).
+- The reachable nodes and the travel time are computed by the server on the client request `reach_query` (the answer `reach`:
+  the nodes where the group's `Move` would be accepted now, with the travel time, and the nodes with the rejection `STACK_LIMIT`).
+  The request goes under the common message limit of the connection.
+- The auto-merge event `groups_merged` carries the node (`node`), like a manual merge, only to the owner.
+- A recruit that is given an order to move on the same tick has already left the node and does not merge.
 
-Альтернативы (не выбраны):
-- **Бой фронтом** (на потом, по слову владельца): в бою с каждой стороны участвуют не больше юнитов, чем ёмкость узла боя; остальные ждут. Лимит стека тогда не нужен, большая группа просто не реализует силу.
-- Отменённый приказ останавливает группу в ближайшем городе пути (первый вариант владельца, заменён разворотом).
-- Отмена разворачивает группу к началу всего пути, а не текущего ребра.
-- Слияние вручную даёт «Атаку» (#117 по умолчанию) или «Защиту», если она была хоть у одной группы.
-- Автослияние только в городах, без провинций.
-- Лимит стека только по цели, без промежуточных узлов.
+Alternatives (not chosen):
+- **A front fight** (for later, at the owner's word): in a fight each side takes part with no more units than the capacity of the node of the fight; the rest wait. The stack limit is then not needed, a big group simply does not realize its strength.
+- A cancelled order stops the group in the nearest city of the path (the owner's first option, replaced by the turn-around).
+- A cancel turns the group to the start of the whole path, not of the current edge.
+- A manual merge gives "Attack" (#117 by default) or "Defense" if at least one group had it.
+- Auto-merge only in cities, without provinces.
+- The stack limit only by the target, without the intermediate nodes.
 
 ---
 
-## 4. Бой
+## 4. Combat
 
-### Правила
+### Rules
 
-- **[принято]** Заряды сторон гасят друг друга **попарно**. Юниты при этом разряжаются, но не умирают.
-- **[принято]** **Каждый лишний заряд убивает одного юнита противника.**
-- **[принято]** Незаряженный юнит против заряженного — погибает.
-- **[принято]** Итог: при равных зарядах обе стороны просто разряжаются. Чтобы убить, нужен перевес.
+- **[accepted]** The charges of the two sides cancel each other **in pairs**. The units are discharged by this, but do not die.
+- **[accepted]** **Each surplus charge kills one enemy unit.**
+- **[accepted]** A discharged unit against a charged one dies.
+- **[accepted]** Result: with equal charges both sides are simply discharged. To kill, you need a surplus.
 
-По сути это главное правило «Дипломатии» (равные силы отскакивают, для выбивания нужен +1), перенесённое в реальное время.
+In essence this is the main rule of "Diplomacy" (equal forces bounce, dislodging needs +1), moved to real time.
 
-### Что происходит после отскока
+### What happens after a bounce
 
-- **[предложено]** После отскока **атакующий возвращается в узел, откуда пришёл**. Обе стороны разряжены, никто не погиб. Точное правило отскока: DEC-07, правило 4. Если этот узел за время отскока стал чужим и группа его не взяла, она гибнет (DEC-24, п. G3, [принято]).
+- **[proposed]** After a bounce **the attacker returns to the node it came from**. Both sides are discharged, nobody died. The exact bounce rule: DEC-07, rule 4. If this node became enemy-held during the bounce and the group did not take it, it dies (DEC-24, item G3, [accepted]).
 
-Без этого правила защитник мгновенно перезаряжается со склада, а разряженный атакующий погибает на следующем тике. Атаковать равными силами становится самоубийством.
+Without this rule the defender instantly recharges from the warehouse, and the discharged attacker dies on the next tick. Attacking with equal forces becomes suicide.
 
-### Осада на истощение (следствие)
+### Siege of attrition (a consequence)
 
-Если правило отскока принять, осада работает сама:
+If the bounce rule is accepted, the siege works by itself:
 
-1. Атакующий отрезает дороги в город, чтобы склад перестал пополняться.
-2. Каждая волна атаки разряжает защитников, и они тратят заряды со склада.
-3. Атакующий отходит домой, перезаряжается, возвращается.
-4. Когда склад пуст, защитникам нечем перезарядиться, и следующая волна их уничтожает.
+1. The attacker cuts the roads into the city so that the warehouse stops being replenished.
+2. Each wave of attack discharges the defenders, and they spend charges from the warehouse.
+3. The attacker withdraws home, recharges, comes back.
+4. When the warehouse is empty, the defenders have nothing to recharge with, and the next wave destroys them.
 
-Важно: при отскоке обе стороны теряют заряды поровну. Осада окупается только если **дороги защитника перерезаны**. Без этого она — просто обоюдное сжигание бюджета.
+Important: on a bounce both sides lose charges equally. The siege pays off only if the **defender's roads are cut**. Without that it is just both sides burning their budget.
 
-### Рельеф
+### Terrain
 
-- **[принято]** Рельеф действует **асимметрично**: как модификатор защитника.
-- **[предложено]** Один тип рельефа на провинцию. Он влияет на оборону этой провинции и на скорость движения в её зоне (блок «Скорость по рельефу по зонам» ниже).
+- **[accepted]** Terrain acts **asymmetrically**: as a modifier of the defender.
+- **[proposed]** One terrain type per province. It affects the defense of this province and the movement speed in its zone (the block "Speed by terrain by zones" below).
 
-| Рельеф | Защитник | Скорость в зоне |
+| Terrain | Defender | Speed in the zone |
 |---|---|---|
-| Горы | +1 заряд | медленнее |
-| Лес | 0 | обычная |
-| Равнина | −1 заряд | быстрее |
+| Mountains | +1 charge | slower |
+| Forest | 0 | normal |
+| Plains | −1 charge | faster |
 
-- **[открыто]** Точные величины скорости. Стартовые значения рулсета `mvp-0`: `terrain.speed_pct` (до #253 `terrain.entry_speed_pct`) в SIM-01 (#17).
+- **[open]** The exact speed values. Starting values of the `mvp-0` ruleset: `terrain.speed_pct` (before #253 `terrain.entry_speed_pct`) in SIM-01 (#17).
 
-Как это считает симуляция (SIM-05, #21; `gow_sim.systems.movement`): ~~проход ребра в узел длится
-`travel_ticks * 100 // pct` тиков, где `pct`: `terrain.entry_speed_pct` рельефа узла входа
-(округление вниз, не меньше 1 тика; больше 1000 тиков нельзя, иначе `progress` в тысячных не
-различает тики). После k тиков из T `progress = k * 1000 // T`.~~ **[заменено решением 2026-10-14, #253]**:
-время прохода ребра и `progress` по зонам рельефа (блок ниже). Путь: Дейкстра по этому времени
-только через свои узлы: первый чужой или нейтральный узел: конец пути, цель атаки или захвата; если
-свой узел на пути потерян, группа останавливается в нём. При равном времени выбирается путь с
-лексикографически меньшей последовательностью `node_key(player, node)`, поэтому зеркальная позиция
-даёт зеркальный путь. Шаг идёт в две фазы: сначала все группы продвигаются и фиксируются прибытия,
-затем пустой нейтральный узел, где стоят группы только одного игрока, захватывается; остальное
-разрешает бой (DEC-07, правила 5, 6, 8). Группа, получившая приказ в тике t, делает первый шаг в
-том же тике. Промежуточный свой узел она проходит без остановки: в тике прибытия в него она уже на
-следующем ребре с `progress = 0` (транзит, #118), поэтому путь из рёбер T1 и T2 занимает T1 + T2.
-Лимит стека (DEC-20, раздел 3): путь ищется только через узлы, ёмкость которых не меньше размера группы.
+How the simulation computes this (SIM-05, #21; `gow_sim.systems.movement`): ~~crossing an edge into a node takes
+`travel_ticks * 100 // pct` ticks, where `pct`: `terrain.entry_speed_pct` of the terrain of the entry node
+(rounded down, at least 1 tick; more than 1000 ticks is not allowed, otherwise `progress` in thousandths does not
+distinguish ticks). After k ticks of T `progress = k * 1000 // T`.~~ **[superseded by the decision of 2026-10-14, #253]**:
+the edge crossing time and `progress` by terrain zones (block below). Path: Dijkstra by this time
+only through own nodes: the first enemy or neutral node: the end of the path, the target of an attack or capture; if
+an own node on the path is lost, the group stops in it. With equal times the path with the
+lexicographically smaller sequence of `node_key(player, node)` is chosen, so a mirrored position
+gives a mirrored path. A step goes in two phases: first all groups advance and the arrivals are fixed,
+then an empty neutral node where groups of only one player stand is captured; the rest
+is resolved by the fight (DEC-07, rules 5, 6, 8). A group that received an order in tick t makes its first step in
+the same tick. It passes an intermediate own node without stopping: in the tick of arrival into it it is already on
+the next edge with `progress = 0` (transit, #118), so a path of edges T1 and T2 takes T1 + T2.
+Stack limit (DEC-20, section 3): the path is searched only through nodes whose capacity is not less than the size of the group.
 
-### Скорость по рельефу по зонам (решение владельца 2026-10-14, #252, #253) **[принято]**
+### Speed by terrain by zones (owner's decision 2026-10-14, #252, #253) **[accepted]**
 
-Отзывы владельца 2026-10-14: всё ребро шло со скоростью рельефа узла назначения, поэтому приказ из
-равнины в горы сразу медленный, а из гор в равнину сразу быстрый. Решение: модификатор скорости
-действует только в зоне своего рельефа. Заменяет «рельеф узла входа» в блоке SIM-05 выше и в
-DEC-22, п. 10.
+The owner's feedback of 2026-10-14: the whole edge went at the speed of the terrain of the destination node, so an order from
+plains to mountains is slow at once, and from mountains to plains fast at once. Decision: the speed modifier
+acts only in the zone of its own terrain. Replaces "the terrain of the entry node" in the SIM-05 block above and in
+DEC-22, item 10.
 
-1. **Зоны.** Ребро делится точкой границы `border_permille` (DEC-21, DEC-23: в тысячных от конца
-   `a`): поле ребра в карте (#366; одна функция симуляции, `movement.border_permille`, даёт её всем
-   правилам; у карт до DEC-23 точка границы была серединой, 500). Участок
-   от узла A до точки границы идёт со скоростью рельефа A, участок от точки границы до узла B: со
-   скоростью рельефа B. Скорость: `terrain.speed_pct` (ключ переименован из `entry_speed_pct`,
-   числа те же: равнина 125, лес 100, горы 70).
-2. **Время прохода ребра из A в B.** `b`: точка границы в тысячных от A (`border_permille`, если A:
-   конец `a`, иначе `1000 - border_permille`); `pA`, `pB`: `terrain.speed_pct` рельефа A и B;
+1. **Zones.** The edge is divided by the border point `border_permille` (DEC-21, DEC-23: in thousandths from the end
+   `a`): the edge field in the map (#366; one simulation function, `movement.border_permille`, gives it to all
+   rules; for maps before DEC-23 the border point was the middle, 500). The section
+   from node A to the border point goes at the speed of the terrain of A, the section from the border point to node B: at the
+   speed of the terrain of B. Speed: `terrain.speed_pct` (the key was renamed from `entry_speed_pct`,
+   the numbers are the same: plains 125, forest 100, mountains 70).
+2. **Time to cross the edge from A to B.** `b`: the border point in thousandths from A (`border_permille` if A is
+   the end `a`, otherwise `1000 - border_permille`); `pA`, `pB`: `terrain.speed_pct` of the terrain of A and B;
    `D = b * pB + (1000 - b) * pA`.
-   `T = max(1, travel_ticks * 100 * D // (1000 * pA * pB))`: точное значение
-   `travel_ticks * 100 * (b / pA + (1000 - b) / pB) / 1000` (сумма времён двух участков),
-   округлённое вниз один раз, в конце; не меньше 1 тика. Ребро в одном рельефе `p`: `D = 1000 * p`,
-   `T = travel_ticks * 100 // p`, как раньше.
-3. **Положение** после `k` тиков на ребре (`0 <= k <= T`), `progress` в тысячных от A:
-   - на участке A, пока `k * D <= T * b * pB`: `progress = k * D // (T * pB)`;
-   - на участке B: `progress = b + (k * D - T * b * pB) // (T * pA)`;
+   `T = max(1, travel_ticks * 100 * D // (1000 * pA * pB))`: the exact value
+   `travel_ticks * 100 * (b / pA + (1000 - b) / pB) / 1000` (the sum of the times of the two sections),
+   rounded down once, at the end; at least 1 tick. An edge in one terrain `p`: `D = 1000 * p`,
+   `T = travel_ticks * 100 // p`, as before.
+3. **Position** after `k` ticks on the edge (`0 <= k <= T`), `progress` in thousandths from A:
+   - on section A, while `k * D <= T * b * pB`: `progress = k * D // (T * pB)`;
+   - on section B: `progress = b + (k * D - T * b * pB) // (T * pA)`;
 
-   округление вниз (все числа неотрицательные); при `k = T` получается ровно 1000. Скорости
-   участков относятся как `pA` к `pB`; время целиком (`T` тиков) делится между участками в
-   пропорции точного времени п. 2. Ребро в одном рельефе: `progress = k * 1000 // T`, как раньше.
-4. **Ограничение.** На каждом участке группа за тик проходит не меньше одной тысячной:
-   `T * max(pA, pB) <= D`, иначе `progress` не различает тики (для ребра в одном рельефе это
-   прежнее `T <= 1000`). Ребро, которое нарушает ограничение, симуляция отвергает (ошибка);
-   рёбра карт MVP проверяет тест.
-5. **Отскок и отмена на ребре** (DEC-07, правила 4 и 6; DEC-20): группа идёт назад по тем же шагам,
-   `progress` убывает по формуле п. 3 направления «туда», поэтому отскок длится столько, сколько
-   группа шла по ребру (из узла: `T` ребра в этот узел).
-6. **Встреча на ребре** (DEC-07, правило 6, #175) без изменений: положения считаются в тысячных от
-   своих узлов выхода, встреча в тике, когда сумма `progress` впервые достигла 1000.
-7. **Время пути приказа:** сумма `T` рёбер пути (транзит через свои узлы без остановки). Поиск пути
-   идёт по этому времени; время считает сервер: `ReachNode.ticks` в ответе `reach` и
+   rounded down (all numbers are non-negative); at `k = T` exactly 1000 results. The speeds of the
+   sections relate as `pA` to `pB`; the whole time (`T` ticks) is divided between the sections in
+   the proportion of the exact time of item 2. An edge in one terrain: `progress = k * 1000 // T`, as before.
+4. **Restriction.** On each section the group covers at least one thousandth per tick:
+   `T * max(pA, pB) <= D`, otherwise `progress` does not distinguish ticks (for an edge in one terrain this is
+   the former `T <= 1000`). An edge that violates the restriction is rejected by the simulation (an error);
+   the edges of the MVP maps are checked by a test.
+5. **Bounce and cancel on an edge** (DEC-07, rules 4 and 6; DEC-20): the group goes back along the same steps,
+   `progress` decreases by the formula of item 3 of the "forward" direction, so the bounce lasts as long as
+   the group walked on the edge (from a node: `T` of the edge into this node).
+6. **Meeting on an edge** (DEC-07, rule 6, #175) unchanged: positions are counted in thousandths from
+   their exit nodes, the meeting is in the tick when the sum of `progress` first reached 1000.
+7. **Travel time of an order:** the sum of `T` of the edges of the path (transit through own nodes without stopping). Path search
+   goes by this time; the server computes the time: `ReachNode.ticks` in the `reach` response and
    `ack.arrive_tick` (DEC-20).
-8. Снабжение (пакеты и перевозки) от рельефа не зависит (DEC-22, п. 4).
-9. **Дорога** (DEC-28, п. 7): улучшенная дорога умножает скорость обеих зон:
-   `pA = terrain_pct(A) * road_pct // 100`, `pB` так же (`[road.speed_pct]`, уровень 1: 100),
-   дальше формулы пп. 2-3 без изменений; уровень берётся при выходе группы на ребро.
+8. Supply (packets and transfers) does not depend on terrain (DEC-22, item 4).
+9. **Road** (DEC-28, item 7): an upgraded road multiplies the speed of both zones:
+   `pA = terrain_pct(A) * road_pct // 100`, `pB` likewise (`[road.speed_pct]`, level 1: 100),
+   then the formulas of items 2-3 unchanged; the level is taken when the group enters the edge.
 
-Разобранные примеры: `travel_ticks = 30`, точка границы 500; равнина 125, лес 100, горы 70; «после
-`k` тиков»: `progress` после `k` тиков на ребре. Тесты реализации: ровно эта таблица
+Worked examples: `travel_ticks = 30`, border point 500; plains 125, forest 100, mountains 70; "after
+`k` ticks": `progress` after `k` ticks on the edge. Implementation tests: exactly this table
 (`packages/sim/tests/test_terrain_zones.py`).
 
-| # | Ситуация | Итог |
+| # | Situation | Result |
 |---|---|---|
-| 1 | равнина A → горы B | `D = 97500`, `T = 33` (было 42); после 5 тиков 211, после 11: 464, после 12: 503 (точка границы пройдена на 12-м тике); прибытие на 33-м тике |
-| 2 | горы A → равнина B | `T = 33` (было 24); после 10 тиков 236, после 21: 496, после 22: 535 |
-| 3 | лес → лес, равнина → равнина, горы → горы | `T` = 30, 24, 42, как раньше; лес → лес после 10 тиков 333 (`k * 1000 // 30`) |
-| 4 | как 1, группа отскакивает после 20 тиков на ребре (`progress` 692) | после первого тика отскока 669 (положение после 19 тиков); дома через 20 тиков |
-| 5 | путь равнина A → горы B → лес C, оба ребра 30, обычный приказ в тике `t` | B → C: `D = 85000`, `T = 36`; `reach`: C за 69 тиков (33 + 36); `ack.arrive_tick = t + 68` (первый шаг в тике приказа) |
-| 6 | группа X идёт из A (равнина) в B (горы), группа Y из B в A, обе вышли в одном тике | после 16 тиков 598 + 378 = 976; после 17: 621 + 401 = 1022: встреча на 17-м тике (по прежнему правилу на 16-м) |
+| 1 | plains A → mountains B | `D = 97500`, `T = 33` (was 42); after 5 ticks 211, after 11: 464, after 12: 503 (the border point is passed on the 12th tick); arrival on the 33rd tick |
+| 2 | mountains A → plains B | `T = 33` (was 24); after 10 ticks 236, after 21: 496, after 22: 535 |
+| 3 | forest → forest, plains → plains, mountains → mountains | `T` = 30, 24, 42, as before; forest → forest after 10 ticks 333 (`k * 1000 // 30`) |
+| 4 | as 1, the group bounces after 20 ticks on the edge (`progress` 692) | after the first tick of the bounce 669 (the position after 19 ticks); home in 20 ticks |
+| 5 | path plains A → mountains B → forest C, both edges 30, ordinary order in tick `t` | B → C: `D = 85000`, `T = 36`; `reach`: C in 69 ticks (33 + 36); `ack.arrive_tick = t + 68` (the first step in the tick of the order) |
+| 6 | group X goes from A (plains) to B (mountains), group Y from B to A, both set out in the same tick | after 16 ticks 598 + 378 = 976; after 17: 621 + 401 = 1022: the meeting is on the 17th tick (by the old rule on the 16th) |
 
-Альтернативы (не выбраны):
-- Округлять время каждого участка отдельно (`T = T_A + T_B`): ребро в одном рельефе с нечётным
-  временем меняло бы время на тик.
-- Хранить в состоянии тики, проведённые на ребре, вместо их восстановления из `progress`: больше
-  состояния, а ограничение п. 4 всё равно нужно для отображения.
+Alternatives (not chosen):
+- Round the time of each section separately (`T = T_A + T_B`): an edge in one terrain with an odd
+  time would change the time by a tick.
+- Store in the state the ticks spent on the edge instead of restoring them from `progress`: more
+  state, and the restriction of item 4 is needed anyway for display.
 
-### Разрешение боя (DEC-07, #11) **[принято]**
+### Fight resolution (DEC-07, #11) **[accepted]**
 
-> **Частично заменено DEC-24 (#261), блок «Бой во времени» ниже:** бой идёт раундами, а не
-> целиком в тике прибытия (правило 8); повторного отскока нет (правило 4). Правила 1-3, 5-7, 9 действуют
-> внутри раунда; итоги таблицы ниже остаются верными для боя без подкреплений и отхода.
+> **Partially superseded by DEC-24 (#261), the block "Fight over time" below:** the fight goes in rounds, not
+> entirely in the arrival tick (rule 8); there is no repeated bounce (rule 4). Rules 1-3, 5-7, 9 apply
+> inside a round; the results of the table below stay true for a fight without reinforcements and retreat.
 
-Правила боя выше не доопределены: порядок гашения виртуальных зарядов, судьба лишнего заряда, бой
-на ребре, одновременное прибытие, несколько групп, отскок в потерянный узел. Правила и таблица ниже
-закрывают эти случаи. Тесты SIM-09 (#25): ровно эта таблица; она же хранится как данные в
-`packages/protocol/vectors/combat.json` (SIM-09; оценку боя в клиенте CLI-08, #64, сняли, #252).
+The fight rules above leave some things undefined: the order of cancelling virtual charges, the fate of a surplus charge, a fight
+on an edge, simultaneous arrival, several groups, a bounce into a lost node. The rules and the table below
+close these cases. SIM-09 tests (#25): exactly this table; it is also stored as data in
+`packages/protocol/vectors/combat.json` (SIM-09; the fight estimate in the CLI-08 client, #64, was removed, #252).
 
-Главное правило: каждый заряд — один «выстрел». Он либо гасит заряд противника, либо убивает
-одного юнита противника. Разряженный юнит не стреляет.
+The main rule: each charge is one "shot". It either cancels an enemy charge or kills
+one enemy unit. A discharged unit does not shoot.
 
-1. Пул стороны Q = заряды стреляющих юнитов + бонус запланированного приказа или «Защиты» + рельеф.
-   Стреляют юниты в режимах «Атака» и «Защита»; ~~заряды юнитов в «Строительстве» не считаются.~~
-   **[заменено DEC-16]**: режима «Строительство» нет, стреляют все заряженные юниты (раздел 8).
-   Бонус «Защиты» и рельеф действуют только на защитника узла и только если у него есть хотя бы
-   один стреляющий заряд: горы +1, равнина −1 (один заряженный юнит не может стрелять, но свой заряд сохраняет).
-2. Гашение: c = min(Qa, Qd); каждая сторона тратит c выстрелов — сначала виртуальные (бонус, рельеф), потом реальные.
-3. Перевес s = |Qa − Qd| у сильной стороны убивает до s юнитов противника. После гашения у противника
-   все юниты разряжены (кроме «равнинного» случая), поэтому первыми гибнут разряженные. Каждое убийство
-   тратит выстрел — тоже сначала виртуальный. Выстрелы сверх числа юнитов противника не тратятся;
-   неизрасходованный бонус сгорает после боя.
-4. Если у защитника не осталось юнитов — узел переходит атакующему. Иначе атакующий отскакивает:
-   возвращается по тому же ребру в исходный узел (путь занимает travel_ticks); приказ и бонус сгорают.
-   ~~Если исходный узел за это время стал чужим — прибытие туда обычное, со своим боем.~~ **[заменено DEC-24]**:
-   прибытие с боем, но группа, не взявшая узел, гибнет, второго отскока нет (DEC-24, п. G3).
-5. Одновременное прибытие обеих сторон в нейтральный узел (нейтральных гарнизонов в MVP нет) — симметричный
-   бой без рельефа и без «защитника»; если обе стороны не уничтожены — обе отскакивают, узел остаётся нейтральным.
-6. Встреча на ребре: `progress` хранится в тысячных долях ребра; встречные группы встречаются, когда сумма
-   progress ≥ 1000. Симметричный бой без рельефа; проигравший отскакивает в свой исходный узел, выживший
-   победитель продолжает путь; при равенстве отскакивают оба. Отскок с середины ребра длится столько,
-   сколько группа уже прошла. Встречи на рёбрах разрешаются раньше прибытий в том же тике.
-7. Несколько групп одной стороны в бою суммируются, но остаются отдельными группами (бесплатного слияния нет; выжившие сливаются после боя по DEC-20, раздел 3).
-   Гибнут сначала разряженные юниты любой группы, затем юниты группы с наибольшим `units`; выстрелы тратятся
-   с группы с наибольшим `charged`; при равенстве — по id внутри игрока.
-8. ~~Бой разрешается в тике прибытия:~~ **[заменено DEC-24]**: бой начинается в тике прибытия и идёт раундами (DEC-24, п. B). Сначала вычисляются все движения и прибытия, затем все бои: порядок игроков не влияет на исход.
-9. Автоматического бегства нет: разряженные остаются, пока игрок не отведёт их приказом.
+1. The pool of a side Q = charges of the shooting units + the bonus of a scheduled order or "Defense" + terrain.
+   Units in the modes "Attack" and "Defense" shoot; ~~charges of units in "Building" do not count.~~
+   **[superseded by DEC-16]**: there is no "Building" mode, all charged units shoot (section 8).
+   The "Defense" bonus and terrain act only on the defender of a node and only if it has at least
+   one shooting charge: mountains +1, plains −1 (a single charged unit cannot shoot, but keeps its charge).
+2. Cancelling: c = min(Qa, Qd); each side spends c shots: first virtual ones (bonus, terrain), then real ones.
+3. The surplus s = |Qa − Qd| of the stronger side kills up to s enemy units. After cancelling, the opponent's
+   units are all discharged (except the "plains" case), so discharged ones die first. Each kill
+   spends a shot, also virtual first. Shots beyond the number of enemy units are not spent;
+   the unspent bonus burns after the fight.
+4. If the defender has no units left, the node passes to the attacker. Otherwise the attacker bounces:
+   it returns along the same edge to the source node (the path takes travel_ticks); the order and the bonus burn.
+   ~~If the source node became enemy-held in the meantime, the arrival there is ordinary, with its own fight.~~ **[superseded by DEC-24]**:
+   the arrival with a fight, but a group that did not take the node dies, there is no second bounce (DEC-24, item G3).
+5. Simultaneous arrival of both sides into a neutral node (there are no neutral garrisons in the MVP): a symmetric
+   fight without terrain and without a "defender"; if both sides are not destroyed, both bounce, the node stays neutral.
+6. A meeting on an edge: `progress` is stored in thousandths of the edge; groups going toward each other meet when the sum of
+   progress ≥ 1000. A symmetric fight without terrain; the loser bounces to its source node, the surviving
+   winner continues its path; on a tie both bounce. A bounce from the middle of an edge takes as long
+   as the group has already walked. Meetings on edges are resolved before arrivals in the same tick.
+7. Several groups of one side in a fight add up, but stay separate groups (there is no free merge; survivors merge after the fight per DEC-20, section 3).
+   Discharged units of any group die first, then units of the group with the largest `units`; shots are spent
+   from the group with the largest `charged`; on a tie: by id inside the player.
+8. ~~The fight is resolved in the arrival tick:~~ **[superseded by DEC-24]**: the fight starts in the arrival tick and goes in rounds (DEC-24, item B). First all movements and arrivals are computed, then all fights: the order of players does not affect the outcome.
+9. There is no automatic flight: discharged units stay until the player pulls them back with an order.
 
-Разобранные примеры (лес, без приказов, если не сказано иное):
+Worked examples (forest, no orders unless said otherwise):
 
-| # | Атака | Защита | Итог |
+| # | Attack | Defense | Result |
 |---|---|---|---|
-| 1 | 2 заряж. | 2 заряж. | обе разряжены, потерь нет, атака отскакивает |
-| 2 | 3 заряж. | 2 заряж. | убит 1 защитник; атака (3, все разряжены) отскакивает; у защиты 1 разряженный |
-| 3 | 4 заряж. | 2 заряж. | защита уничтожена, узел взят 4 разряженными |
-| 4 | 1 заряж. | 10 разряж. | убит 1; атака разряжена и отскакивает |
-| 5 | 2 заряж. | пустой вражеский узел | узел взят, заряды не тратятся |
-| 6 | 3 заряж. | 2 заряж., горы | Qd = 3: все разряжены, потерь нет, отскок |
-| 7 | 2 заряж. | 3 разряж., горы | рельеф не действует; убиты 2, отскок |
-| 8 | 2 заряж. | 2 заряж., равнина | Qd = 1: убит 1 разряженный защитник; у защиты остался 1 заряженный; отскок |
-| 9 | 2 заряж. + план (+2) | 2 заряж. | гасятся виртуальные +2; реальные 2 убивают 2; узел взят |
-| 10 | 3 заряж. | 2 заряж. + «Защита» (+2) | убит 1 атакующий; 2 разряженных отскакивают; у защиты 2 юнита, оба разряжены |
-| 11 | ребро: 2 заряж. | ребро: 2 заряж. | обе разряжены, обе отскакивают |
-| 12 | ребро: 3 заряж. | ребро: 1 заряж. | противник уничтожен; у победителя 1 заряженный, путь продолжается |
-| 13 | одновременно в нейтральный: 3 заряж. | 2 заряж. | убит 1; обе стороны отскакивают; узел нейтральный |
-| 14 | одновременно в нейтральный: 4 заряж. | 2 заряж. | вторая сторона уничтожена; узел взят |
-| 15 | 3 заряж. + план (+2) | 1 разряж. | убит 1 (потрачен виртуальный выстрел); узел взят, у атаки 3 заряженных |
-| 16 | 3 заряж. | 2 разряж. + «Защита» (+2) | бонус не действует (нет стреляющих зарядов); убиты 2; узел взят, у атаки 1 заряженный |
+| 1 | 2 charged | 2 charged | both discharged, no losses, the attack bounces |
+| 2 | 3 charged | 2 charged | 1 defender killed; the attack (3, all discharged) bounces; the defense has 1 discharged |
+| 3 | 4 charged | 2 charged | the defense is destroyed, the node is taken by 4 discharged |
+| 4 | 1 charged | 10 discharged | 1 killed; the attack is discharged and bounces |
+| 5 | 2 charged | empty enemy node | the node is taken, no charges are spent |
+| 6 | 3 charged | 2 charged, mountains | Qd = 3: all discharged, no losses, bounce |
+| 7 | 2 charged | 3 discharged, mountains | terrain does not act; 2 killed, bounce |
+| 8 | 2 charged | 2 charged, plains | Qd = 1: 1 discharged defender killed; the defense keeps 1 charged; bounce |
+| 9 | 2 charged + plan (+2) | 2 charged | virtual +2 cancel; the real 2 kill 2; the node is taken |
+| 10 | 3 charged | 2 charged + "Defense" (+2) | 1 attacker killed; 2 discharged bounce; the defense has 2 units, both discharged |
+| 11 | edge: 2 charged | edge: 2 charged | both discharged, both bounce |
+| 12 | edge: 3 charged | edge: 1 charged | the opponent is destroyed; the winner has 1 charged, the path continues |
+| 13 | simultaneous into a neutral: 3 charged | 2 charged | 1 killed; both sides bounce; the node is neutral |
+| 14 | simultaneous into a neutral: 4 charged | 2 charged | the second side is destroyed; the node is taken |
+| 15 | 3 charged + plan (+2) | 1 discharged | 1 killed (a virtual shot is spent); the node is taken, the attack has 3 charged |
+| 16 | 3 charged | 2 discharged + "Defense" (+2) | the bonus does not act (no shooting charges); 2 killed; the node is taken, the attack has 1 charged |
 
-«Защита» (+2) в строках 10 и 16 **[заменено DEC-30]**: бонус 2, накопленный к началу боя (при `orders.defense_ticks_per_bonus = 60` это не меньше 120 тиков в режиме и не меньше 2 заряженных юнитов; раздел 5, блок DEC-30). Исходы строк не меняются.
+"Defense" (+2) in rows 10 and 16 **[superseded by DEC-30]**: a bonus of 2 accumulated by the start of the fight (with `orders.defense_ticks_per_bonus = 60` this is at least 120 ticks in the mode and at least 2 charged units; section 5, the DEC-30 block). The outcomes of the rows do not change.
 
-~~Как это считает симуляция (SIM-09, #25)~~ **[заменено DEC-24, #268]**: мгновенный бой ниже
-описан до DEC-24; реализация боя во времени: блок «Как это считает симуляция (DEC-24)» в конце
-раздела «Бой во времени». Как это считало SIM-09 (`gow_sim.systems.combat`): система `combat` идёт сразу
-после `movement` и берёт прибытия тика из событий `group_arrived`. Сначала встречи на рёбрах
-(прибывшая в этом тике группа стоит на своём ребре с `progress = 1000`), затем узлы. Встреча
-по правилу 6 случается один раз, в тике, когда группы проходят друг мимо друга: сумма `progress`
-достигла 1000 в этом тике, а в его начале была меньше 1000 (#175). Без этого отскакивающая
-группа, проигравшая встречу, шла бы домой навстречу продолжающему путь победителю и на каждом
-следующем тике снова билась бы с ним, а ничья 0 на 0 разворачивала бы победителя вопреки
-правилу 6. Отскок группы, которая в этом тике прошла свой узел и стоит на следующем ребре с
-`progress = 0`, длится ноль тиков: она сразу стоит в этом узле. Группа, которая отскоком
-возвращается в ставший чужим узел и в тике прибытия встретила врага на ребре, всё равно прибывает
-туда (её отскок ведёт туда же) и бьётся там по правилу 4 (#175). Ядро боя
-`resolve_fight()` получает бонусы сторон входным параметром (источник: SIM-10, #26). Отскок
-(`OnEdge.back`): группа идёт назад по своим следам, `progress` убывает теми же шагами, поэтому
-отскок длится столько, сколько группа шла по ребру (из узла: время прохода ребра в этот узел).
-Смена владельца: только `change_owner()`. Детали, которые таблица не задаёт, по умолчанию из
-вопроса #133 **[открыто]**: бонусы нескольких групп стороны складываются, бонус плана действует и
-без стреляющих зарядов; равнина −1 выключает реальный заряд; группа для выстрела и для потери
-выбирается заново на каждый выстрел (среди разряженных первыми гибнут юниты группы с наибольшим
-`units`); две отскакивающие группы не встречаются. Id стартовых групп выдаются по
-`node_key(player, node)`, поэтому тай-брейк по id внутри игрока зеркален. Тесты: каждая строка
-таблицы через настоящие `movement` и `combat` на закреплённом `packages/sim/tests/rulesets/dec07.toml`.
-Сценарий «осада на истощение» (`packages/sim/tests/scenarios/test_siege_scenario.py`, карта
-`packages/sim/tests/maps/siege.json`, закреплённый `packages/sim/tests/rulesets/siege.toml`): волны
-равных сил по городу с перерезанными дорогами (склад 3, 2 защитника) берут его ровно на 3-й волне
-(с голодом DEC-19; до него: на 4-й; расчёт в описании теста), при открытых дорогах город держит 10 волн без потерь.
+~~How the simulation computes this (SIM-09, #25)~~ **[superseded by DEC-24, #268]**: the instant fight below
+is described as before DEC-24; the implementation of the fight over time: the block "How the simulation computes this (DEC-24)" at the end of
+the section "Fight over time". How SIM-09 computed it (`gow_sim.systems.combat`): the `combat` system runs right
+after `movement` and takes the tick's arrivals from the `group_arrived` events. First the meetings on edges
+(a group that arrived in this tick stands on its edge with `progress = 1000`), then nodes. A meeting
+by rule 6 happens once, in the tick when the groups pass each other: the sum of `progress`
+reached 1000 in this tick, and was below 1000 at its start (#175). Without this a bouncing
+group that lost the meeting would walk home toward the winner continuing its path and on each
+following tick would fight it again, and a 0 against 0 draw would turn the winner back against
+rule 6. The bounce of a group that in this tick passed its node and stands on the next edge with
+`progress = 0` takes zero ticks: it stands in this node at once. A group that returns by a bounce
+to a node that became enemy-held and met an enemy on an edge in the arrival tick still arrives
+there (its bounce leads there as well) and fights there by rule 4 (#175). The fight core
+`resolve_fight()` gets the sides' bonuses as an input parameter (source: SIM-10, #26). The bounce
+(`OnEdge.back`): the group goes back along its own track, `progress` decreases by the same steps, so the
+bounce takes as long as the group walked on the edge (from a node: the time to cross the edge into this node).
+Owner change: only `change_owner()`. The details that the table does not set, by default from the
+question #133 **[open]**: the bonuses of several groups of a side add up, the plan bonus acts even
+without shooting charges; plains −1 switches off a real charge; the group for a shot and for a loss is
+chosen anew for each shot (among discharged ones the units of the group with the largest
+`units` die first); two bouncing groups do not meet. The ids of the starting groups are issued by
+`node_key(player, node)`, so the tie-break by id inside a player is mirrored. Tests: each row of the
+table through the real `movement` and `combat` on the pinned `packages/sim/tests/rulesets/dec07.toml`.
+The "siege of attrition" scenario (`packages/sim/tests/scenarios/test_siege_scenario.py`, the map
+`packages/sim/tests/maps/siege.json`, the pinned `packages/sim/tests/rulesets/siege.toml`): waves of
+equal forces against a city with cut roads (warehouse 3, 2 defenders) take it exactly on the 3rd wave
+(with the starvation of DEC-19; before it: on the 4th; the calculation is in the test description), with open roads the city holds 10 waves without losses.
 
-Формат `combat.json`: `packages/protocol/vectors/README.md`. Модификаторы рельефа в `rulesets/mvp-0.toml`: `terrain.defense_mod`; бонусы плана и «Защиты»: DEC-08, раздел 5.
+The `combat.json` format: `packages/protocol/vectors/README.md`. Terrain modifiers in `rulesets/mvp-0.toml`: `terrain.defense_mod`; plan and "Defense" bonuses: DEC-08, section 5.
 
-Альтернативы (не выбраны):
-- Лишний заряд убивает, не тратясь (волны атак сильнее, осада дешевле).
-- Рельеф действует на защитника и без зарядов (осада на истощение почти невозможна в горах).
+Alternatives (not chosen):
+- A surplus charge kills without being spent (attack waves are stronger, the siege is cheaper).
+- Terrain acts on the defender even without charges (the siege of attrition is almost impossible in the mountains).
 
-### Бой во времени (DEC-24, #261) **[принято]**
+### Fight over time (DEC-24, #261) **[accepted]**
 
-Решение владельца 2026-10-14 (#252). Заменяет правило 8 DEC-07 (бой целиком в тике прибытия) и
-повторный отскок правила 4; поглощает открытые #133 и пп. 2-4 #141 (их значения по умолчанию
-записаны ниже). Правила 1-3, 5-7 и 9 DEC-07 действуют внутри раунда. Все пункты
-**[принято]** владельцем 2026-10-14: он принял все 14 рекомендаций вопросов к #261. До
-реализации код работает по DEC-07.
+The owner's decision of 2026-10-14 (#252). Replaces rule 8 of DEC-07 (the fight entirely in the arrival tick) and
+the repeated bounce of rule 4; absorbs the open #133 and items 2-4 of #141 (their default values are
+written below). Rules 1-3, 5-7 and 9 of DEC-07 apply inside a round. All items are
+**[accepted]** by the owner on 2026-10-14: he accepted all 14 recommendations of the questions to #261. Until
+the implementation the code works by DEC-07.
 
-**A. Решения владельца [принято]**
+**A. The owner's decisions [accepted]**
 
-1. Бой не мгновенный: он длится несколько секунд **по правилам** (раунды по тикам), клиент
-   показывает анимацию раундов. Это не визуальная задержка: пока бой идёт, его можно усилить и из
-   него можно уйти (пп. D, E).
-2. **Отскок не идёт по цепочке.** Группа, вернувшаяся отскоком в ставший чужим узел (правило 4) и
-   не взявшая его, гибнет (окружение); второго отскока на дальний конец ребра, к врагу, нет (сейчас
-   `movement._step_back` пишет `from_node = far`). **[принято]** То же для возврата по отмене
-   (DEC-20, C2) и отхода (п. E2): у всех один механизм `OnEdge.back`.
-3. Бой на ребре несёт точку встречи (п. C3) в событиях и в виде игрока; клиент рисует отметку и
-   анимацию в ней, а не в середине дороги.
-4. Оценки боя в HUD нет (снята в #254). `packages/protocol/vectors/combat.json` остаётся для тестов
-   симуляции и пересобирается по примерам ниже (новая схема: раунды и длительность).
+1. The fight is not instant: it lasts several seconds **by the rules** (rounds in ticks), the client
+   shows an animation of the rounds. This is not a visual delay: while the fight goes on, it can be reinforced and
+   it can be left (items D, E).
+2. **The bounce does not chain.** A group that returned by a bounce into a node that became enemy-held (rule 4) and
+   did not take it dies (encirclement); there is no second bounce to the far end of the edge, toward the enemy (now
+   `movement._step_back` writes `from_node = far`). **[accepted]** The same for a return by cancel
+   (DEC-20, C2) and a retreat (item E2): all of them use one mechanism `OnEdge.back`.
+3. A fight on an edge carries the meeting point (item C3) in the events and in the player view; the client draws the mark and
+   the animation there, not in the middle of the road.
+4. There is no fight estimate in the HUD (removed in #254). `packages/protocol/vectors/combat.json` stays for the tests
+   of the simulation and is rebuilt from the examples below (new schema: rounds and duration).
 
-**B. Раунды**
+**B. Rounds**
 
-1. Числа: ~~`combat.round_ticks = 10` (1 с)~~ **[заменено DEC-32]**: `combat.round_ticks = 20` (2 с), `combat.shots_per_round = 1`.
-2. Бой начинается в тике контакта `t` (п. C). Раунды идут в тиках `t + k * round_ticks`,
-   `k = 1, 2, ...`: первый через раунд после контакта (подход подкреплений, анимация сближения).
-3. Запас стороны: виртуальные выстрелы `V` (бонусы и горы, п. F) и реальные `R`: заряженные юниты
-   её групп в бою (на равнине без одного, п. F2).
-4. В раунде стороны стреляют одновременно: каждая делает `f = min(V + R, shots_per_round)`
-   выстрелов, сначала виртуальные. Встречные гасятся: каждая сторона тратит `min(fa, fb)` (правило
-   2); лишние выстрелы стороны убивают по юниту противника, сначала разряженных (правило 3);
-   выстрел сверх числа юнитов противника не тратится. Группа для выстрела и для потери выбирается
-   по правилу 7 заново на каждый выстрел (#133, п. 3).
-5. **Конец боя:** после раунда, в котором ни одна сторона больше не может выстрелить по живому
-   противнику (у каждой `V + R = 0` или у противника нет юнитов), либо когда у стороны не осталось
-   групп в бою (уничтожены или ушли, п. E). Если при контакте никто не может выстрелить (например,
-   0 зарядов на 0), бой кончается в тике контакта без раундов.
-6. Пока бой идёт, его группы не двигаются.
-7. Следствие: без подкреплений и отхода итог совпадает с DEC-07. Сторона делает меньше лимита
-   выстрелов, только когда выпустила весь запас, поэтому лишние выстрелы противника попадают в уже
-   разряженных, как при мгновенном расчёте. Итоговые строки таблицы DEC-07 остаются верными;
-   при `shots_per_round = 1` раундов столько, сколько выстрелов сделала сторона, стрелявшая дольше.
+1. Numbers: ~~`combat.round_ticks = 10` (1 s)~~ **[superseded by DEC-32]**: `combat.round_ticks = 20` (2 s), `combat.shots_per_round = 1`.
+2. The fight starts in the contact tick `t` (item C). Rounds go in the ticks `t + k * round_ticks`,
+   `k = 1, 2, ...`: the first one a round after the contact (time for reinforcements to arrive, the approach animation).
+3. The reserve of a side: virtual shots `V` (bonuses and mountains, item F) and real ones `R`: the charged units
+   of its groups in the fight (on plains minus one, item F2).
+4. In a round the sides shoot simultaneously: each makes `f = min(V + R, shots_per_round)`
+   shots, virtual first. Opposing shots cancel: each side spends `min(fa, fb)` (rule
+   2); the surplus shots of a side kill an enemy unit each, discharged ones first (rule 3);
+   a shot beyond the number of enemy units is not spent. The group for a shot and for a loss is chosen
+   by rule 7 anew for each shot (#133, item 3).
+5. **End of the fight:** after a round in which neither side can shoot at a living
+   opponent any more (each has `V + R = 0` or the opponent has no units), or when a side has no
+   groups left in the fight (destroyed or left, item E). If at contact nobody can shoot (for example,
+   0 charges against 0), the fight ends in the contact tick without rounds.
+6. While the fight goes on, its groups do not move.
+7. A consequence: without reinforcements and retreat the result matches DEC-07. A side makes fewer shots than the limit
+   only when it has fired its whole reserve, so the opponent's surplus shots hit the already
+   discharged, as in the instant calculation. The result rows of the DEC-07 table stay true;
+   with `shots_per_round = 1` there are as many rounds as the side that shot longer made shots.
 
-**C. Начало боя**
+**C. Start of the fight**
 
-1. **Узел.** Группа закончила движение в чужом узле, где стоят группы владельца: бой, атакующий:
-   пришедший. Пустой вражеский узел берётся сразу, без боя (DEC-07, строка 5). Нейтральный узел:
-   пришли оба игрока в одном тике: симметричный бой (правило 5); один: захват сразу.
-2. **Ребро.** Встреча как сейчас (DEC-07, правило 6; #175): в тике, когда сумма `progress`
-   встречных групп впервые достигла 1000. Встречу начинают пары, где хотя бы одна группа идёт
-   вперёд, а не возвращается (#133, п. 5). Группы боя останавливаются, каждая на своём `progress`
-   (прибывшая в этом тике стоит на ребре с 1000). Детекцию не меняем, следствие разобрано в п. G5.
-3. **Точка боя** на ребре: `point = pos_0 + pos_1`, где `pos_p`: положение встретившейся группы
-   игрока `p` в тысячных от конца `a` ребра. Это удвоенная середина, целое 0..2000 без деления,
-   поэтому зеркальное (у зеркального ребра с обратным `a`: `2000 - point`). Клиент рисует отметку на
-   доле `point / 2000` длины ребра от `a`. Несколько встреч на ребре в одном тике: один бой,
-   `point` = наименьшее + наибольшее положение встретившихся групп.
-4. На ребре одновременно идёт не больше одного боя: группа, дошедшая до точки идущего боя,
-   вступает в него (п. D2); новые встречи по п. C2 на таком ребре не считаются (в примере 23 X2
-   проходит мимо стоящей Y раньше точки боя и вступает только в точке).
-5. Порядок в тике (порядок систем прежний): `movement` фиксирует прибытия и встречи; `combat`
-   создаёт новые бои, принимает подкрепления, играет раунды этого тика, завершает бои. Встречи на
-   ребре раньше прибытий в узлы того же тика, как сейчас.
+1. **Node.** A group finished moving in an enemy node where the owner's groups stand: a fight, the attacker is
+   the one who arrived. An empty enemy node is taken at once, without a fight (DEC-07, row 5). A neutral node:
+   both players arrived in one tick: a symmetric fight (rule 5); one: a capture at once.
+2. **Edge.** The meeting as now (DEC-07, rule 6; #175): in the tick when the sum of `progress`
+   of the groups going toward each other first reached 1000. The meeting is started by pairs where at least one group goes
+   forward and does not return (#133, item 5). The groups of the fight stop, each at its `progress`
+   (one that arrived in this tick stands on the edge at 1000). We do not change the detection, the consequence is covered in item G5.
+3. **The fight point** on an edge: `point = pos_0 + pos_1`, where `pos_p` is the position of the met group
+   of player `p` in thousandths from the end `a` of the edge. This is the doubled middle, an integer 0..2000 with no division,
+   hence mirror-symmetric (for a mirrored edge with the reversed `a`: `2000 - point`). The client draws the mark at
+   the fraction `point / 2000` of the edge length from `a`. Several meetings on an edge in one tick: one fight,
+   `point` = the smallest + the largest position of the met groups.
+4. On an edge no more than one fight goes at a time: a group that reached the point of a running fight
+   joins it (item D2); new meetings by item C2 on such an edge are not counted (in example 23 X2
+   passes by the standing Y before the fight point and joins only at the point).
+5. Order in the tick (the order of the systems is the same): `movement` fixes the arrivals and meetings; `combat`
+   creates new fights, accepts reinforcements, plays the rounds of this tick, finishes fights. Meetings on an
+   edge are before the arrivals into nodes of the same tick, as now.
 
-**D. Подкрепления**
+**D. Reinforcements**
 
-1. **Узел.** Группа любого игрока, закончившая движение в узле с боем, вступает в бой за свою
-   сторону в тике прибытия, до раунда этого тика. Узел с боем не проходится транзитом: группа,
-   путь которой идёт через него, останавливается в нём, приказ кончается, она вступает в бой. Поиск
-   пути (`find_path`, `reach`) не ведёт через узел с боем, как через чужой: он может быть только
-   целью.
-2. **Ребро.** Группа на ребре с боем (любого игрока, вперёд или возвратом), положение которой
-   дошло до точки боя или прошло её (`2 * pos >= point` у идущей от `a`, `2 * pos <= point` у
-   идущей от `b`), останавливается на своём `progress` и вступает в бой.
-3. Вступившая группа приносит свои заряды и активный бонус плана (п. F1).
+1. **Node.** A group of any player that finished moving in a node with a fight joins the fight for its side
+   in the arrival tick, before the round of this tick. A node with a fight is not passed in transit: a group
+   whose path goes through it stops in it, the order ends, it joins the fight. Path
+   search (`find_path`, `reach`) does not lead through a node with a fight, as through an enemy one: it can only be
+   the target.
+2. **Edge.** A group on an edge with a fight (of any player, forward or returning) whose position
+   reached the fight point or passed it (`2 * pos >= point` for one going from `a`, `2 * pos <= point` for
+   one going from `b`) stops at its `progress` and joins the fight.
+3. A joining group brings its charges and the active plan bonus (item F1).
 
-**E. Отход**
+**E. Retreat**
 
-1. Защитник узла уходит обычным `Move` (`orders.cost.move`, путь из узла как обычно).
-   Запланированный `Move` в бою: отказ `IN_FIGHT`.
-2. Атакующий в узле и любая группа на ребре уходят по `CancelOrder` (бесплатно, DEC-20): назад к
-   началу текущего ребра по своим следам, как отскок. Возвращающаяся группа приказа не имеет
-   (`NOTHING_TO_CANCEL`) и остаётся в бою до конца.
-3. Группа уходит после ближайшего раунда: она в нём стреляет и может погибнуть, потом выходит из
-   боя и движется. Цена отхода: один раунд под огнём.
-4. Остальные команды группе в бою: `IN_FIGHT` (новый код): деление, слияние, режим, `Move`
-   атакующему. Группа, ждущая выступления по запланированному приказу, в бою стоит и выступает
-   после конца боя, если жива.
-5. Ушли все группы стороны: бой кончается в этом тике; если ушёл защитник, узел берёт атакующий
-   (п. G1).
+1. The defender of a node leaves by an ordinary `Move` (`orders.cost.move`, the path from the node as usual).
+   A scheduled `Move` in a fight: the rejection `IN_FIGHT`.
+2. The attacker in a node and any group on an edge leave by `CancelOrder` (free, DEC-20): back to
+   the start of the current edge along their own track, like a bounce. A returning group has no order
+   (`NOTHING_TO_CANCEL`) and stays in the fight until the end.
+3. A group leaves after the nearest round: it shoots in it and may die, then leaves the
+   fight and moves. The price of a retreat: one round under fire.
+4. Other commands to a group in a fight: `IN_FIGHT` (a new code): split, merge, mode, `Move`
+   for the attacker. A group waiting to set out on a scheduled order stands in the fight and sets out
+   after the fight ends, if alive.
+5. All groups of a side left: the fight ends in this tick; if the defender left, the attacker takes the node
+   (item G1).
 
-**F. Бонусы и рельеф**
+**F. Bonuses and terrain**
 
-1. Бонусы плана (~~`orders.planned_bonus`~~ **[заменено DEC-29]**: по дистанции, `orders.planned_bonus_per_edge`) и «Защиты» (~~`orders.defense_bonus`~~ **[заменено DEC-30]**: накопленный бонус, `orders.defense_ticks_per_bonus`) действуют на бой, а не
-   на раунд: виртуальные выстрелы входят в `V` стороны, когда группа вступает в бой (в начале или
-   подкреплением), и сгорают в конце боя, потраченные или нет. Бонусы нескольких групп
-   складываются; бонус плана действует и без стреляющих зарядов (#133, п. 1). «Защита» входит,
-   только если группа стоит в узле с начала боя; ~~«Защита», ставшая активной во время боя, в него не
-   входит и ждёт следующего (#141, п. 3)~~ **[заменено DEC-30]**: в бою бонус не растёт, накопление идёт заново после боя. В примерах ниже «Защита» (+2) означает бонус 2, накопленный к началу боя (DEC-30). Бой в задержке запланированного приказа бонус не тратит
-   (#141, п. 2).
-2. Условие правила 1 («у защитника есть стреляющий заряд») проверяется один раз, в тике контакта.
-   Выполнено: бонус «Защиты» и горы (+1 виртуальный выстрел, `terrain.defense_mod`) входят в `V`
-   защитника; на равнине в каждом раунде один заряженный юнит защитника молчит (реальных выстрелов
-   не больше `charged - 1`; #133, п. 2). Не выполнено: ни «Защиты», ни рельефа до конца боя.
-3. На ребре и в нейтральном узле рельефа нет, как сейчас.
+1. The plan bonuses (~~`orders.planned_bonus`~~ **[superseded by DEC-29]**: by distance, `orders.planned_bonus_per_edge`) and "Defense" (~~`orders.defense_bonus`~~ **[superseded by DEC-30]**: the accumulated bonus, `orders.defense_ticks_per_bonus`) act on the fight, not
+   on a round: virtual shots enter the `V` of a side when a group joins the fight (at the start or as
+   a reinforcement), and burn at the end of the fight, spent or not. The bonuses of several groups
+   add up; the plan bonus acts even without shooting charges (#133, item 1). "Defense" enters
+   only if the group has stood in the node since the start of the fight; ~~"Defense" that became active during the fight does not
+   enter it and waits for the next one (#141, item 3)~~ **[superseded by DEC-30]**: in a fight the bonus does not grow, the accumulation starts anew after the fight. In the examples below "Defense" (+2) means a bonus of 2 accumulated by the start of the fight (DEC-30). A fight during the delay of a scheduled order does not spend the bonus
+   (#141, item 2).
+2. The condition of rule 1 ("the defender has a shooting charge") is checked once, in the contact tick.
+   Met: the "Defense" bonus and mountains (+1 virtual shot, `terrain.defense_mod`) enter the `V`
+   of the defender; on plains in each round one charged unit of the defender stays silent (real shots
+   no more than `charged - 1`; #133, item 2). Not met: neither "Defense" nor terrain until the end of the fight.
+3. On an edge and in a neutral node there is no terrain, as now.
 
-**G. Конец боя**
+**G. End of the fight**
 
-1. **Узел с защитником.** Если в узле не осталось юнитов защитника, узел переходит атакующему в
-   тике конца боя (`change_owner`). До этого узел за защитником: VP, снабжение, столица (победа
-   захватом столицы в тике конца боя; двойное поражение: #136). Иначе атакующие отскакивают
-   (правило 4), приказ и бонус сгорают.
-2. **Нейтральный узел:** уцелели обе стороны: обе отскакивают; одна: она берёт узел.
-3. **[принято]** Возвращающаяся группа (п. A2), не взявшая свой бывший узел, гибнет.
-4. **Ребро:** побеждает сторона, сделавшая за бой больше выстрелов; поровну: ничья. Проигравший (и
-   обе стороны при ничьей) отскакивает с места боя по своим следам, первый шаг в тике после конца
-   боя; возвращающаяся группа просто продолжает путь домой. Победитель продолжает приказ через
-   `combat.regroup_ticks = 10` (перестроение): первый шаг в тике `конец + regroup_ticks`. Без
-   подкреплений и отхода это правило 6 DEC-07 (больший пул побеждает).
-5. **Зачем перестроение.** Встреча засчитывается, когда группы уже прошли друг мимо друга
-   (`pos` победителя за точкой встречи), поэтому без паузы победитель при равной скорости всегда
-   доходит до дома проигравшего раньше него, берёт пустой дом, а проигравший гибнет по п. G3
-   (случай из игры, #252). С паузой в раунд проигравший успевает домой (пример 19). Альтернатива:
-   засчитывать встречу на тик раньше; она меняет только перекрытие в один тик и случай не лечит.
+1. **A node with a defender.** If no defender units are left in the node, the node passes to the attacker in
+   the tick of the end of the fight (`change_owner`). Until then the node belongs to the defender: VP, supply, capital (victory
+   by capturing the capital in the tick of the end of the fight; double defeat: #136). Otherwise the attackers bounce
+   (rule 4), the order and the bonus burn.
+2. **A neutral node:** both sides survived: both bounce; one: it takes the node.
+3. **[accepted]** A returning group (item A2) that did not take its former node dies.
+4. **Edge:** the side that made more shots during the fight wins; equal: a draw. The loser (and
+   both sides on a draw) bounces from the fight place along their own track, the first step in the tick after the end of the
+   fight; a returning group simply continues its way home. The winner continues the order after
+   `combat.regroup_ticks = 10` (regrouping): the first step in the tick `end + regroup_ticks`. Without
+   reinforcements and retreat this is rule 6 of DEC-07 (the larger pool wins).
+5. **Why regrouping.** A meeting is counted when the groups have already passed each other
+   (the winner's `pos` is beyond the meeting point), so without a pause the winner at equal speed always
+   reaches the loser's home before the loser, takes the empty home, and the loser dies by item G3
+   (a case from the game, #252). With a pause of a round the loser makes it home (example 19). Alternative:
+   count the meeting one tick earlier; it changes only the overlap by one tick and does not cure the case.
 
-**H. Снабжение и другие системы в узле боя**
+**H. Supply and other systems in a fight node**
 
-1. Пакеты и перевозки доходят на склад узла боя как обычно, но перезарядки групп в бою нет, **пока
-   бой длится**: иначе склад становится запасом выстрелов защитника и осада на истощение (раздел 4)
-   не работает. После конца боя группы, стоящие в узле, перезаряжаются со склада как обычно
+1. Packets and transfers reach the warehouse of the fight node as usual, but there is no recharging of groups in a fight **while
+   the fight lasts**: otherwise the warehouse becomes the defender's reserve of shots and the siege of attrition (section 4)
+   does not work. After the fight ends, the groups standing in the node recharge from the warehouse as usual
    (`supply.recharge_per_tick`).
-2. Голод (DEC-19) идёт по расписанию; заряды, снятые с юнитов, выпадают из боя.
-3. Гибель сверх ёмкости (#118) как сейчас: считает стоящих юнитов владельца узла.
-4. Производство юнитов в городе с боем стоит (DEC-25, п. 9).
+2. Starvation (DEC-19) goes on schedule; charges taken off units drop out of the fight.
+3. Death above capacity (#118) as now: it counts the standing units of the owner of the node.
+4. Unit production in a city with a fight stands still (DEC-25, item 9).
 
-**I. Видимость**
+**I. Visibility**
 
-1. В бою всегда есть группы обоих игроков, поэтому бой видят оба. Новое поле `PlayerView.fights`
-   (тест тумана): место (узел или ребро и `point`), атакующий, тик начала, тик следующего раунда,
-   свои группы боя и у противника число юнитов и заряженных в этом бою, точно (и на ребре, где
-   группа сама обзора не даёт, #112). ~~Виртуальный запас противника (бонусы, рельеф) скрыт, как
-   сейчас скрыт его `pool`.~~ **[заменено, пересмотр рекомендации 13 к #261, 2026-10-17, #295]**: бонусы противника в бою **не скрываются**: арена боя показывает по каждому раунду выстрелы каждой стороны, включая виртуальные бонусные (отдельно от реальных), погашенные заряды и убитых юнитов. Это изменение правила тумана и протокола: реализация (#294, клиент #295) меняет `PlayerView.fights` и события раунда и повышает `PROTOCOL_VERSION`; тест тумана переписывается. ~~**[принято]** (подтверждено владельцем 2026-10-17) Раскрываются данные раундов (события `fight_round`), а не запас до начала боя.~~ **[заменено DEC-32]**: пока бой идёт, оставшийся запас бонуса обеих сторон виден обоим игрокам (`PlayerView.fights`), вне боя скрыт. **[принято]** (оркестратор, техническое, 2026-10-21; #329, для #330): в `PlayerView.fights` также молчащие заряды обеих сторон (п. F2, равнина), см. DEC-32, п. 13.
-2. События вместо одного `fight`: `fight_started` (место, `point`, атакующий), `fight_round`
-   (выстрелы и потери сторон), `fight_ended` (итог, захват, отскоки, гибель по п. G3);
-   `fight_group` в конце боя. Получают оба игрока; ~~поля противника `pool`, `unspent` и
-   виртуальные выстрелы вырезаются, как сейчас.~~ **[заменено, п. I.1]**: поля раунда противника (выстрелы, виртуальные, погашенные, убитые) не вырезаются.
-3. Подход подкреплений противника виден по обычным правилам обзора (DEC-21).
+1. In a fight there are always groups of both players, so both see the fight. A new field `PlayerView.fights`
+   (a fog test): the place (a node or an edge and `point`), the attacker, the start tick, the tick of the next round,
+   the player's own groups of the fight and, for the opponent, the number of units and charged in this fight, exact (also on an edge, where
+   a group gives no vision itself, #112). ~~The opponent's virtual reserve (bonuses, terrain) is hidden, as
+   its `pool` is hidden now.~~ **[superseded, revision of recommendation 13 to #261, 2026-10-17, #295]**: the opponent's bonuses in a fight are **not hidden**: the fight arena shows for each round the shots of each side, including virtual bonus ones (separately from real ones), cancelled charges and killed units. This is a change of the fog rule and of the protocol: the implementation (#294, client #295) changes `PlayerView.fights` and the round events and raises `PROTOCOL_VERSION`; the fog test is rewritten. ~~**[accepted]** (confirmed by the owner 2026-10-17) The data of the rounds (`fight_round` events) is revealed, not the reserve before the start of the fight.~~ **[superseded by DEC-32]**: while the fight goes on, the remaining bonus reserve of both sides is visible to both players (`PlayerView.fights`), outside a fight it is hidden. **[accepted]** (the orchestrator, technical, 2026-10-21; #329, for #330): `PlayerView.fights` also has the silent charges of both sides (item F2, plains), see DEC-32, item 13.
+2. Events instead of a single `fight`: `fight_started` (place, `point`, attacker), `fight_round`
+   (shots and losses of the sides), `fight_ended` (result, capture, bounces, death by item G3);
+   `fight_group` at the end of the fight. Both players receive them; ~~the opponent's fields `pool`, `unspent` and
+   virtual shots are cut out, as now.~~ **[superseded, item I.1]**: the opponent's round fields (shots, virtual, cancelled, killed) are not cut out.
+3. The approach of the opponent's reinforcements is visible by the ordinary vision rules (DEC-21).
 
-**J. Детерминизм и симметрия**
+**J. Determinism and symmetry**
 
-1. Бой: сущность `Fight` в `GameState` (`dict[int, Fight]`, обход по id), у группы поле `fight`.
-   Бои не пересекаются по группам, поэтому порядок обхода на итог не влияет.
-2. Раунд одновременный для обеих сторон; выбор группы для выстрела и потери только внутри игрока
-   (правило 7, тай-брейк по id, id стартовых групп по `node_key`). Тай-брейков между игроками нет,
-   `point` без округления.
-3. Все длительности в тиках из рулсета; `SIM_VERSION` растёт, золотые реплеи новой версии.
+1. A fight: the entity `Fight` in `GameState` (`dict[int, Fight]`, iterated by id), a group has the field `fight`.
+   Fights do not intersect by groups, so the iteration order does not affect the outcome.
+2. A round is simultaneous for both sides; the choice of the group for a shot and for a loss only inside a player
+   (rule 7, the tie-break by id, the ids of the starting groups by `node_key`). There are no tie-breaks between players,
+   `point` without rounding.
+3. All durations are in ticks from the ruleset; `SIM_VERSION` grows, golden replays of the new version.
 
-**K. Боты**
+**K. Bots**
 
-- обрабатывают `IN_FIGHT`; группам в бою дают только отход;
-- подкрепляют бой, если своя группа успевает до его конца (остаток раундов по `PlayerView.fights`),
-  и уходят из проигранного боя;
-- оценка исхода прежняя (п. B7), ко времени атаки прибавляется длительность боя;
-- не ведут группы через узел с боем (сервер такой путь и не проложит).
+- handle `IN_FIGHT`; groups in a fight are given only a retreat;
+- reinforce a fight if their own group gets there before its end (the remaining rounds by `PlayerView.fights`),
+  and leave a lost fight;
+- the outcome estimate is as before (item B7), the duration of the fight is added to the attack time;
+- do not lead groups through a node with a fight (the server would not lay such a path anyway).
 
-**L. Что поглощает.** #133 (DEC-13): пп. 1, 2, 3, 5 вошли в пп. B4, C2, F1, F2;
-п. 4 (отскок по своим следам) и п. 6 (транзит) без изменений; п. 7 (повторный отскок) заменён
-п. G3 [принято]. #141 (DEC-15): п. 1 решён DEC-20; пп. 2, 3 вошли в п. F1; п. 4 («бонус тратится в
-первом бою тика») снимается: бой длится дольше тика, бонус сгорает в конце боя; п. 5 (жизнь
-намерений) без изменений: намерение плана живёт, пока победитель на ребре продолжает путь. Оба
-issue закрываются вместе с #261.
+**L. What it absorbs.** #133 (DEC-13): items 1, 2, 3, 5 went into items B4, C2, F1, F2;
+item 4 (bounce along their own track) and item 6 (transit) unchanged; item 7 (repeated bounce) is replaced by
+item G3 [accepted]. #141 (DEC-15): item 1 is settled by DEC-20; items 2, 3 went into item F1; item 4 ("the bonus is spent in the
+first fight of the tick") is removed: the fight lasts longer than a tick, the bonus burns at the end of the fight; item 5 (the life of
+intents) is unchanged: the plan's intent lives while the winner on the edge continues the path. Both
+issues are closed together with #261.
 
-Числа в рулсете (новая секция `[combat]`): ~~`round_ticks = 10`~~ **[заменено DEC-32]**: `round_ticks = 20`; `shots_per_round = 1`,
+Numbers in the ruleset (a new section `[combat]`): ~~`round_ticks = 10`~~ **[superseded by DEC-32]**: `round_ticks = 20`; `shots_per_round = 1`,
 `regroup_ticks = 10`.
 
-> **Тики этих таблиц [заменено DEC-32]:** таблицы ниже посчитаны при `round_ticks = 10` (код до #329). Раунды и исходы остаются верными, длительность при `round_ticks = 20` (раунд N в тике `t + 20 * N`) и пересчитанные тики событий: таблицы в блоке DEC-32 ниже; тесты (`test_combat.py`) и `combat.json` с #329 берут ожидаемые значения оттуда.
+> **The ticks of these tables [superseded by DEC-32]:** the tables below are computed with `round_ticks = 10` (the code before #329). The rounds and outcomes stay true, the duration at `round_ticks = 20` (round N in the tick `t + 20 * N`) and the recomputed event ticks: the tables in the DEC-32 block below; the tests (`test_combat.py`) and `combat.json` since #329 take the expected values from there.
 
-**Разобранные примеры.** Числа выше; `t`: тик контакта; рN: раунд N в тике `t + 10 * N`; «гаш.»:
-встречные выстрелы погасили друг друга; в скобках заряженные после раунда (атака / защита). Лес,
-без приказов, если не сказано иное. Строки 1-16: строки DEC-07 с тем же итогом. ~~Тесты реализации
-и `combat.json`: ровно эти таблицы.~~ **[заменено DEC-32, #329]**: тесты и `combat.json` по таблицам блока DEC-32 (те же раунды и исходы, тики при `round_ticks = 20`).
+**Worked examples.** The numbers are above; `t`: the contact tick; rN: round N in the tick `t + 10 * N`; "canc.":
+opposing shots cancelled each other; in parentheses the charged after the round (attack / defense). Forest,
+no orders unless said otherwise. Rows 1-16: the DEC-07 rows with the same outcome. ~~The implementation tests
+and `combat.json`: exactly these tables.~~ **[superseded by DEC-32, #329]**: the tests and `combat.json` follow the tables of the DEC-32 block (the same rounds and outcomes, the ticks at `round_ticks = 20`).
 
-| # | Атака | Защита | Раунды | Итог; конец боя |
+| # | Attack | Defense | Rounds | Result; end of the fight |
 |---|---|---|---|---|
-| 1 | 2 заряж. | 2 заряж. | р1 гаш. (1 / 1); р2 гаш. (0 / 0) | потерь нет, атака отскакивает; `t+20` |
-| 2 | 3 заряж. | 2 заряж. | р1 гаш. (2 / 1); р2 гаш. (1 / 0); р3 атака убивает 1 | у защиты 1 разряж.; атака (3, разряж.) отскакивает; `t+30` |
-| 3 | 4 заряж. | 2 заряж. | р1, р2 гаш. (2 / 0); р3, р4 убито по 1 | защита уничтожена, узел взят 4 разряж.; `t+40` |
-| 4 | 1 заряж. | 10 разряж. | р1 убит 1 | атака разряжена, отскакивает; у защиты 9; `t+10` |
-| 5 | 2 заряж. | пустой вражеский узел | нет | узел взят в тике `t`, заряды целы |
-| 6 | 3 заряж. | 2 заряж., горы | `V` защиты 1. р1 гаш. (защита виртуальным; 2 / 2); р2 гаш. (1 / 1); р3 гаш. (0 / 0) | потерь нет, отскок; `t+30` |
-| 7 | 2 заряж. | 3 разряж., горы | рельеф не входит (п. F2). р1, р2 убито по 1 | у защиты 1; отскок; `t+20` |
-| 8 | 2 заряж. | 2 заряж., равнина | один заряд защиты молчит. р1 гаш. (1 / 1, молчит); р2 атака убивает 1 разряж. | у защиты 1 заряж.; атака (2, разряж.) отскакивает; `t+20` |
-| 9 | 2 заряж. + план (+2) | 2 заряж. | `V` атаки 2. р1 гаш. (атака виртуальным; 2 / 1); р2 гаш. (атака виртуальным; 2 / 0); р3, р4 атака убивает по 1 | узел взят, у атаки 2 разряж.; `t+40` |
-| 10 | 3 заряж. | 2 заряж. + «Защита» (+2) | `V` защиты 2. р1, р2 гаш. (защита виртуальными; 1 / 2); р3 гаш. (0 / 1); р4 защита убивает 1 | атака (2, разряж.) отскакивает; у защиты 2 разряж.; `t+40` |
-| 11 | ребро: 2 заряж. | ребро: 2 заряж. | р1 гаш.; р2 гаш. | выстрелов 2 и 2: ничья, обе отскакивают с места боя; `t+20` |
-| 12 | ребро: 3 заряж. | ребро: 1 заряж. | р1 гаш. (2 / 0); р2 убит 1 | противник уничтожен; у победителя 1 заряж.; бой до `t+20`, путь дальше с `t+30` |
-| 13 | нейтральный, одновременно: 3 заряж. | 2 заряж. | р1, р2 гаш.; р3 убит 1 | обе стороны отскакивают, узел нейтральный; `t+30` |
-| 14 | нейтральный, одновременно: 4 заряж. | 2 заряж. | р1, р2 гаш.; р3, р4 убито по 1 | вторая сторона уничтожена, узел взят; `t+40` |
-| 15 | 3 заряж. + план (+2) | 1 разряж. | р1 убит 1 виртуальным выстрелом | узел взят, у атаки 3 заряж.; `t+10` |
-| 16 | 3 заряж. | 2 разряж. + «Защита» (+2) | «Защита» не входит (п. F2). р1, р2 убито по 1 | узел взят, у атаки 1 заряж.; `t+20` |
+| 1 | 2 charged | 2 charged | r1 canc. (1 / 1); r2 canc. (0 / 0) | no losses, the attack bounces; `t+20` |
+| 2 | 3 charged | 2 charged | r1 canc. (2 / 1); r2 canc. (1 / 0); r3 the attack kills 1 | the defense has 1 discharged; the attack (3, discharged) bounces; `t+30` |
+| 3 | 4 charged | 2 charged | r1, r2 canc. (2 / 0); r3, r4 1 killed each | the defense is destroyed, the node is taken by 4 discharged; `t+40` |
+| 4 | 1 charged | 10 discharged | r1 1 killed | the attack is discharged, bounces; the defense has 9; `t+10` |
+| 5 | 2 charged | empty enemy node | none | the node is taken in tick `t`, the charges are intact |
+| 6 | 3 charged | 2 charged, mountains | `V` of the defense 1. r1 canc. (the defense by the virtual one; 2 / 2); r2 canc. (1 / 1); r3 canc. (0 / 0) | no losses, bounce; `t+30` |
+| 7 | 2 charged | 3 discharged, mountains | terrain does not enter (item F2). r1, r2 1 killed each | the defense has 1; bounce; `t+20` |
+| 8 | 2 charged | 2 charged, plains | one charge of the defense is silent. r1 canc. (1 / 1, silent); r2 the attack kills 1 discharged | the defense has 1 charged; the attack (2, discharged) bounces; `t+20` |
+| 9 | 2 charged + plan (+2) | 2 charged | `V` of the attack 2. r1 canc. (the attack by the virtual one; 2 / 1); r2 canc. (the attack by the virtual one; 2 / 0); r3, r4 the attack kills 1 each | the node is taken, the attack has 2 discharged; `t+40` |
+| 10 | 3 charged | 2 charged + "Defense" (+2) | `V` of the defense 2. r1, r2 canc. (the defense by the virtual ones; 1 / 2); r3 canc. (0 / 1); r4 the defense kills 1 | the attack (2, discharged) bounces; the defense has 2 discharged; `t+40` |
+| 11 | edge: 2 charged | edge: 2 charged | r1 canc.; r2 canc. | shots 2 and 2: a draw, both bounce from the fight place; `t+20` |
+| 12 | edge: 3 charged | edge: 1 charged | r1 canc. (2 / 0); r2 1 killed | the opponent is destroyed; the winner has 1 charged; the fight until `t+20`, the path continues from `t+30` |
+| 13 | neutral, simultaneous: 3 charged | 2 charged | r1, r2 canc.; r3 1 killed | both sides bounce, the node is neutral; `t+30` |
+| 14 | neutral, simultaneous: 4 charged | 2 charged | r1, r2 canc.; r3, r4 1 killed each | the second side is destroyed, the node is taken; `t+40` |
+| 15 | 3 charged + plan (+2) | 1 discharged | r1 1 killed by a virtual shot | the node is taken, the attack has 3 charged; `t+10` |
+| 16 | 3 charged | 2 discharged + "Defense" (+2) | "Defense" does not enter (item F2). r1, r2 1 killed each | the node is taken, the attack has 1 charged; `t+20` |
 
-Новые примеры. Ребро a-b: лес на обоих концах, `travel_ticks = 30`, `T = 30`, `progress` после
-`k` тиков `k * 1000 // 30`; X, X2: группы игрока 0, вышли из a; Y: группа игрока 1, вышла из b.
+New examples. Edge a-b: forest at both ends, `travel_ticks = 30`, `T = 30`, `progress` after
+`k` ticks `k * 1000 // 30`; X, X2: groups of player 0, set out from a; Y: a group of player 1, set out from b.
 
-| # | Ситуация | Ход | Итог |
+| # | Situation | Course | Result |
 |---|---|---|---|
-| 17 | **Отскок без цепочки** (случай из игры). L (1, разряж.) отскоком возвращается в свой город H; пока она шла, W (2, разряж.) противника занял пустой H. L приходит в H в тике `t` | никто не может выстрелить: бой кончается в `t` без раундов | L не взяла H и гибнет (п. G3); до DEC-24 L уходила вторым отскоком к врагу |
-| 17б | как 17, у W 1 заряж. | р1 W убивает L | L гибнет; `t+10` |
-| 17в | как 17, но W уже ушёл, H пуст | нет | L берёт H в тике `t` (строка 5) |
-| 18 | **Точка боя.** X (3 заряж.), Y (1, 1 заряж.) вышел на 4 тика позже | 17-й тик X: 566 + 433 = 999; 18-й (тик `t`): 600 + 466 = 1066: контакт. `pos_0 = 600`, `pos_1 = 1000 - 466 = 534`, `point = 1134` (567 тысячных от a); X стоит на 600, Y на 466. р1 гаш.; р2 Y уничтожен | бой до `t+20`; X (1 заряж.) делает 19-й шаг в тике `t+30` и приходит в b в тике `t+41` |
-| 19 | **Гонка домой.** Как 18, но Y: 2 юнита, 2 заряж., b: пустой город игрока 1 | р1, р2 гаш.; р3 X убивает 1. Выстрелов 3 и 2: X победил, бой до `t+30` | Y (1, разряж.) отскакивает 14 шагов с `t+31`, дома в `t+44`. X идёт с `t+40` (12 шагов), в b в `t+51`: 0 зарядов на 0, бой кончается сразу, X отскакивает. Без перестроения X был бы в b в `t+42`, взял бы пустой b, и Y погиб бы в `t+44` (п. G3) |
-| 20 | **Подкрепление в узел.** Атака 3 заряж., защита 2 заряж.; в `t+15` в узел приходит своя группа защиты G (2, 2 заряж.) | р1 гаш. (2 / 1); G вступает (2 / 3); р2 гаш. (1 / 2); р3 гаш. (0 / 1); р4 защита убивает 1 | атака (2, разряж.) отскакивает; у защиты 4 юнита, разряж.; `t+40`. Без G: строка 2 |
-| 21 | **Отход защитника.** Атака 4 заряж., защита 2 заряж.; в `t+12` защитник получает `Move` в свой соседний узел (1 CP) | р1 гаш. (3 / 1); р2 гаш. (2 / 0); после р2 защита уходит | узел взят в `t+20` атакой (4, 2 заряж.); защита сохранила 2 юнита (в строке 3 уничтожена) |
-| 22 | **Отход атаки.** Как строка 10; в `t+11` атака даёт `CancelOrder` | р1 гаш. (2 / защита `V` 1); р2 гаш. (1 / `V` 0, 2 заряж.); после р2 атака уходит назад | атака без потерь: 3 юнита, 1 заряж. (в строке 10 потеряла 1); бонус «Защиты» сгорел; бой до `t+20`, узел у защиты |
-| 23 | **Подкрепление на ребре.** Как строка 11 (X 2 заряж., Y 2 заряж., точка из 18: `point = 1134`); X2 (1, 1 заряж.) вышел на 5 тиков позже X | в `t+4` X2 на 566 (`2 * 566 = 1132 < 1134`), в `t+5` на 600: вступает, стоит на 600. р1 гаш. (2 / 1); р2 гаш. (1 / 0); р3 игрок 0 убивает 1 | бой до `t+30`; выстрелов 3 и 2: игрок 0 победил; Y (1, разряж.) отскакивает; X и X2 идут дальше с `t+40`. Без X2: ничья, строка 11 |
+| 17 | **A bounce without a chain** (a case from the game). L (1, discharged) returns by a bounce to its city H; while it was walking, the opponent's W (2, discharged) took the empty H. L arrives in H in tick `t` | nobody can shoot: the fight ends in `t` without rounds | L did not take H and dies (item G3); before DEC-24 L went away by a second bounce toward the enemy |
+| 17b | as 17, W has 1 charged | r1 W kills L | L dies; `t+10` |
+| 17c | as 17, but W has already left, H is empty | none | L takes H in tick `t` (row 5) |
+| 18 | **The fight point.** X (3 charged), Y (1, 1 charged) set out 4 ticks later | the 17th tick of X: 566 + 433 = 999; the 18th (tick `t`): 600 + 466 = 1066: contact. `pos_0 = 600`, `pos_1 = 1000 - 466 = 534`, `point = 1134` (567 thousandths from a); X stands at 600, Y at 466. r1 canc.; r2 Y is destroyed | the fight until `t+20`; X (1 charged) makes the 19th step in tick `t+30` and arrives in b in tick `t+41` |
+| 19 | **The race home.** As 18, but Y: 2 units, 2 charged, b: an empty city of player 1 | r1, r2 canc.; r3 X kills 1. Shots 3 and 2: X won, the fight until `t+30` | Y (1, discharged) bounces 14 steps from `t+31`, home in `t+44`. X goes from `t+40` (12 steps), in b in `t+51`: 0 charges against 0, the fight ends at once, X bounces. Without regrouping X would be in b in `t+42`, would take the empty b, and Y would die in `t+44` (item G3) |
+| 20 | **A reinforcement into a node.** Attack 3 charged, defense 2 charged; in `t+15` the defense's own group G (2, 2 charged) arrives in the node | r1 canc. (2 / 1); G joins (2 / 3); r2 canc. (1 / 2); r3 canc. (0 / 1); r4 the defense kills 1 | the attack (2, discharged) bounces; the defense has 4 units, discharged; `t+40`. Without G: row 2 |
+| 21 | **The defender's retreat.** Attack 4 charged, defense 2 charged; in `t+12` the defender gets a `Move` into its neighboring node (1 CP) | r1 canc. (3 / 1); r2 canc. (2 / 0); after r2 the defense leaves | the node is taken in `t+20` by the attack (4, 2 charged); the defense kept 2 units (in row 3 it is destroyed) |
+| 22 | **The attack's retreat.** As row 10; in `t+11` the attack gives `CancelOrder` | r1 canc. (2 / defense `V` 1); r2 canc. (1 / `V` 0, 2 charged); after r2 the attack goes back | the attack without losses: 3 units, 1 charged (in row 10 it lost 1); the "Defense" bonus burned; the fight until `t+20`, the node stays with the defense |
+| 23 | **A reinforcement on an edge.** As row 11 (X 2 charged, Y 2 charged, the point from 18: `point = 1134`); X2 (1, 1 charged) set out 5 ticks later than X | in `t+4` X2 at 566 (`2 * 566 = 1132 < 1134`), in `t+5` at 600: joins, stands at 600. r1 canc. (2 / 1); r2 canc. (1 / 0); r3 player 0 kills 1 | the fight until `t+30`; shots 3 and 2: player 0 won; Y (1, discharged) bounces; X and X2 go on from `t+40`. Without X2: a draw, row 11 |
 
-Что меняет реализация: состояние (`Fight`, `Group.fight`), системы `combat` и `movement`
-(остановка в бою, транзит, `_step_back` без второго отскока), `orders` (жизнь бонусов), `supply`
-(без перезарядки в бою), `recruit` (DEC-25), `SIM_VERSION` и золотые реплеи; `combat.json` по
-таблицам выше; протокол (`PlayerView.fights`, события, `IN_FIGHT`) и `PROTOCOL_VERSION`; клиент
-(анимация раундов, отметка в точке боя); боты; рулсеты (`mvp-0`, тестовые). Сценарий осады
-(`test_siege_scenario.py`) пересчитывается.
+What the implementation changes: the state (`Fight`, `Group.fight`), the systems `combat` and `movement`
+(stopping in a fight, transit, `_step_back` without a second bounce), `orders` (the life of bonuses), `supply`
+(no recharging in a fight), `recruit` (DEC-25), `SIM_VERSION` and golden replays; `combat.json` by
+the tables above; the protocol (`PlayerView.fights`, events, `IN_FIGHT`) and `PROTOCOL_VERSION`; the client
+(round animation, the mark at the fight point); bots; rulesets (`mvp-0`, test ones). The siege scenario
+(`test_siege_scenario.py`) is recomputed.
 
-Альтернативы (не выбраны):
-- `shots_per_round = 2`: бои вдвое короче (2 на 2 за 1 с, 10 на 10 за 5 с), меньше времени на
-  подкрепление и отход.
-- Первый раунд в тике контакта: бой 1 на 0 мгновенный, как раньше.
-- Непрерывный огонь: каждый заряженный юнит стреляет раз в `round_ticks` (большие армии решают бой
-  быстрее, итог зависит от порядка выстрелов внутри раунда).
-- Перезарядка со склада во время боя (склад: запас выстрелов защитника, осада почти невозможна).
-- Победитель на ребре идёт дальше сразу, без перестроения (проигравший теряет пустой дом и гибнет).
-- Отход бесплатный и мгновенный (бой без потерь для того, кто вовремя ушёл).
+Alternatives (not chosen):
+- `shots_per_round = 2`: fights twice as short (2 against 2 in 1 s, 10 against 10 in 5 s), less time for
+  reinforcement and retreat.
+- The first round in the contact tick: a 1 against 0 fight is instant, as before.
+- Continuous fire: each charged unit shoots once per `round_ticks` (big armies decide the fight
+  faster, the result depends on the order of shots inside a round).
+- Recharging from the warehouse during a fight (the warehouse: the defender's reserve of shots, the siege is almost impossible).
+- The winner on an edge goes on at once, without regrouping (the loser loses its empty home and dies).
+- A retreat that is free and instant (a fight without losses for whoever left in time).
 
-**Как это считает симуляция (DEC-24, реализация #268; `gow_sim.systems.combat`, `SIM_VERSION` 10; темп и запас бонуса в виде: DEC-32, #329, `SIM_VERSION` 18, `PROTOCOL_VERSION` 21)**
+**How the simulation computes this (DEC-24, implementation #268; `gow_sim.systems.combat`, `SIM_VERSION` 10; the pace and the bonus reserve in the view: DEC-32, #329, `SIM_VERSION` 18, `PROTOCOL_VERSION` 21)**
 
-Порядок в тике (п. C5) внутри системы `combat`: встречи на рёбрах без боя, подкрепления на рёбрах,
-узлы по id (подкрепления, новые бои, захват пустого вражеского узла), затем бои по id: раунд этого
-тика, отход после раунда, конец боя. Бой: `Fight` в `GameState.fights` (id из общего счётчика групп,
-пакетов и намерений, в виде игрока непрозрачный), у группы `Group.fight`, у боя `members` (по группе:
-игрок, счётчики при вступлении, ребро и узел, по которым она пришла в узел боя, флаги «возвращается»,
-«пришла», «уходит»), запас виртуальных выстрелов сторон, молчащие заряды (равнина), выстрелы и потери
-сторон за бой. Всё это входит в канонический вид и `state_hash`. Числа: секция `[combat]` рулсета
-(с DEC-32 `round_ticks = 20` в `mvp-0`, `mvp-1`, `test-short` и тестовых рулсетах `dec07`, `siege`).
+The order in a tick (item C5) inside the `combat` system: meetings on edges without a fight, reinforcements on edges,
+nodes by id (reinforcements, new fights, capture of an empty enemy node), then fights by id: the round of this
+tick, the retreat after the round, the end of the fight. A fight: `Fight` in `GameState.fights` (the id from the common counter of groups,
+packets and intents, opaque in the player view), a group has `Group.fight`, a fight has `members` (per group:
+the player, the counters at joining, the edge and the node by which it came into the fight node, the flags "returning",
+"arrived", "leaving"), the reserve of virtual shots of the sides, the silent charges (plains), the shots and losses of the
+sides over the fight. All this is part of the canonical form and of `state_hash`. Numbers: the `[combat]` section of the ruleset
+(with DEC-32 `round_ticks = 20` in `mvp-0`, `mvp-1`, `test-short` and in the test rulesets `dec07`, `siege`).
 
-Детали, которые таблицы не задают (значения реализации):
+Details that the tables do not set (implementation values):
 
-1. **Вступление в бой на ребре** (п. D2): группа вступает в тике, в котором её положение дошло до
-   точки боя или прошло её, а в начале тика было по эту сторону точки. Группа, которая уже стояла за
-   точкой (например, победитель прошлого боя на этом ребре), не вступает. Группа, прибывшая в узел в
-   тике встречи или вступления, возвращается на ребро: вперёд на 1000 со своим приказом в этот узел,
-   возвратом на 0 у своего узла. Пустой нейтральный узел, захваченный `movement` в этом тике до боя,
-   остаётся захваченным (как до DEC-24).
-2. **Бонусы** (п. F1): активный бонус группы снимается с неё при вступлении в бой, даже если в этом
-   бою он не действует («Защита» без заряженного юнита у защитника, строка 16): он сгорает с боем.
-   Неактивный (ждущий запланированный приказ; ~~«Защита» до задержки~~ **[заменено DEC-30]**: накопление «Защиты» сбрасывается при вступлении в бой, DEC-30) остаётся на группе до следующего
-   боя.
-3. **Отход защитника** (п. E1, E3): после раунда группа стоит на первом ребре пути своего `Move` с
-   `progress = 0`, первый шаг в следующем тике. `CancelOrder` защитника в бою отменяет его `Move`
-   отхода или ждущий запланированный приказ, группа остаётся в бою; «Защиту» в бою не отменить
-   (`IN_FIGHT`, это режим, п. E4). Повторный `CancelOrder` уходящей группы: `NOTHING_TO_CANCEL`.
-4. **[предложено] Ребро, на котором ушла одна сторона.** Если у стороны не осталось групп в бою
-   (уничтожены или ушли), вторая сторона победила, независимо от числа выстрелов, и продолжает путь
-   через `regroup_ticks` (п. G4 сравнивает выстрелы, только пока обе стороны в бою). Альтернатива:
-   сравнивать выстрелы и тогда (оставшаяся сторона с меньшим числом выстрелов отскочила бы от пустого
-   места).
-5. **[предложено] Возвращающийся победитель на ребре** (отскок, отмена, отход) не перестраивается:
-   у него нет приказа, он идёт домой со следующего тика.
-6. **Проигравший на ребре** отскакивает со своего `progress`, первый шаг в тике после конца боя (п.
-   G4); с `progress = 0` (группа прошла свой узел в тике встречи) он стоит в этом узле в следующем
-   тике. Мгновенного отскока в узел (#175) больше нет.
-7. **Гибель по п. G3** входит в потери стороны (`losses` в `fight_ended`); заряды погибшей группы
-   пропадают вместе с ней (`fight_group` с `encircled`).
-8. **Слияние после боя** (DEC-20, A; DEC-07, правило 7): группы, которые пришли в узел боя (в начале
-   или подкреплением), и атакующие, взявшие узел, сливаются в конце боя по обычному правилу
-   автослияния; группы, стоявшие в узле с начала боя, не сливаются.
-9. ~~**[предложено] Найм в городе с боем** (DEC-25, п. 9): пока очереди найма нет и найм мгновенный,
-   `Recruit` в узле с боем отклоняется кодом `IN_FIGHT`.~~ **[заменено DEC-25, #278]**: `Recruit` в
-   городе с боем принимается, прогресс очереди стоит до конца боя (DEC-25, п. 9).
-10. **Голод и гибель сверх ёмкости** (п. H2, H3) идут по расписанию; группа, погибшая от них, выпадает
-    из боя, и бой без групп стороны кончается в ближайшем тике `combat`.
+1. **Joining a fight on an edge** (item D2): a group joins in the tick in which its position reached
+   the fight point or passed it, and at the start of the tick was on this side of the point. A group that already stood beyond
+   the point (for example, the winner of the previous fight on this edge) does not join. A group that arrived in a node in
+   the tick of the meeting or of joining returns to the edge: forward at 1000 with its order into this node,
+   back at 0 at its own node. An empty neutral node captured by `movement` in this tick before the fight
+   stays captured (as before DEC-24).
+2. **Bonuses** (item F1): the active bonus of a group is taken off it when it joins a fight, even if in that
+   fight it does not act ("Defense" without a charged defender unit, row 16): it burns with the fight.
+   An inactive one (a waiting scheduled order; ~~"Defense" before the delay~~ **[superseded by DEC-30]**: the accumulation of "Defense" is reset when joining a fight, DEC-30) stays on the group until the next
+   fight.
+3. **The defender's retreat** (item E1, E3): after a round the group stands on the first edge of the path of its `Move` with
+   `progress = 0`, the first step in the next tick. The defender's `CancelOrder` in a fight cancels its retreat `Move`
+   or a waiting scheduled order, the group stays in the fight; "Defense" cannot be cancelled in a fight
+   (`IN_FIGHT`, it is a mode, item E4). A repeated `CancelOrder` of a leaving group: `NOTHING_TO_CANCEL`.
+4. **[proposed] An edge on which one side left.** If a side has no groups left in the fight
+   (destroyed or left), the other side won, regardless of the number of shots, and continues the path
+   after `regroup_ticks` (item G4 compares shots only while both sides are in the fight). Alternative:
+   compare shots then too (the remaining side with fewer shots would bounce from an empty
+   place).
+5. **[proposed] A returning winner on an edge** (bounce, cancel, retreat) does not regroup:
+   it has no order, it goes home from the next tick.
+6. **The loser on an edge** bounces from its `progress`, the first step in the tick after the end of the fight (item
+   G4); with `progress = 0` (the group passed its node in the tick of the meeting) it stands in this node in the next
+   tick. There is no instant bounce into a node (#175) any more.
+7. **Death by item G3** is part of the side's losses (`losses` in `fight_ended`); the charges of the dead group
+   vanish with it (`fight_group` with `encircled`).
+8. **Merge after the fight** (DEC-20, A; DEC-07, rule 7): groups that came into the fight node (at the start
+   or as a reinforcement) and the attackers that took the node merge at the end of the fight by the ordinary
+   auto-merge rule; groups that stood in the node since the start of the fight do not merge.
+9. ~~**[proposed] Recruiting in a city with a fight** (DEC-25, item 9): while there is no recruit queue and recruiting is instant,
+   `Recruit` in a node with a fight is rejected with the code `IN_FIGHT`.~~ **[superseded by DEC-25, #278]**: `Recruit` in a
+   city with a fight is accepted, the progress of the queue stands until the end of the fight (DEC-25, item 9).
+10. **Starvation and death above capacity** (items H2, H3) go on schedule; a group that died of them drops out
+    of the fight, and a fight in which a side has no groups ends in the nearest `combat` tick.
 
-События (п. I2): `fight_started` (`fight`, `node`, `edge`, `point`, `attacker`), `fight_round`
-(`shots_p`, `virtual_p`: выстрелы раунда и виртуальные среди них, `losses_p`, `spent_p`: заряды,
-ушедшие с юнитов стороны), `fight_ended` (`winner`, `captured`, `start`, `shots_p`, `losses_p` за
-весь бой), `fight_group` (в конце боя и при отходе группы: счётчики при вступлении и сейчас,
-`destroyed`, `bounce`, `left`, `encircled`, `arrived`). ~~Игроку противника не уходят `shots`,
-`virtual` и `spent` чужой стороны.~~ **[заменено, п. I1 и I2 в редакции DEC-29; #294, `SIM_VERSION`
-16, `PROTOCOL_VERSION` 19]**: события боя уходят обоим игрокам целиком. Вид игрока
-`PlayerView.fights`: место, `point`, атакующий, тик начала и следующего раунда, свои группы, у
-противника юниты и заряженные этого боя; с #294 также выстрелы и потери сторон за бой (`shots`,
-`losses`) и последний раунд обеих сторон (`last_round`: тик, `shots`, `virtual`, `spent`, `losses`,
-те же числа, что в `fight_round`). ~~Остаток виртуальных выстрелов (`Fight.virtual`) в вид не входит:
-бонус раскрывается, когда он выстрелил.~~ **[заменено DEC-32, #329]**: остаток (`Fight.virtual`) входит в вид обоих игроков, пока бой идёт:
-`FightView.virtual_left`, пара по id игрока, точно (бонусы и горы); молчащие заряды сторон
-(`Fight.mute`, п. F2) там же: `FightView.mute`, не больше заряженных стороны (DEC-32, п. 13). Тесты:
-`packages/sim/tests/test_combat.py` (таблицы DEC-32, ожидаемые значения из `combat.json`),
-`test_dec24.py` (команды, движение, снабжение, вид и туман, в том числе запас бонуса: оба числа
-видны обоим в бою, бонус чужой группы вне боя и подкрепления в пути не виден), сценарий осады.
+Events (item I2): `fight_started` (`fight`, `node`, `edge`, `point`, `attacker`), `fight_round`
+(`shots_p`, `virtual_p`: the shots of the round and the virtual ones among them, `losses_p`, `spent_p`: the charges
+that left the side's units), `fight_ended` (`winner`, `captured`, `start`, `shots_p`, `losses_p` over the
+whole fight), `fight_group` (at the end of the fight and when a group retreats: the counters at joining and now,
+`destroyed`, `bounce`, `left`, `encircled`, `arrived`). ~~The opponent's player does not get the other side's `shots`,
+`virtual` and `spent`.~~ **[superseded, items I1 and I2 as edited by DEC-29; #294, `SIM_VERSION`
+16, `PROTOCOL_VERSION` 19]**: the fight events go to both players in full. The player view
+`PlayerView.fights`: the place, `point`, the attacker, the start tick and the tick of the next round, the own groups, for the
+opponent the units and charged of this fight; since #294 also the shots and losses of the sides over the fight (`shots`,
+`losses`) and the last round of both sides (`last_round`: tick, `shots`, `virtual`, `spent`, `losses`,
+the same numbers as in `fight_round`). ~~The remainder of virtual shots (`Fight.virtual`) is not part of the view:
+the bonus is revealed when it has fired.~~ **[superseded by DEC-32, #329]**: the remainder (`Fight.virtual`) is part of the view of both players while the fight goes on:
+`FightView.virtual_left`, a pair by player id, exact (bonuses and mountains); the silent charges of the sides
+(`Fight.mute`, item F2) are in the same place: `FightView.mute`, no more than the side's charged (DEC-32, item 13). Tests:
+`packages/sim/tests/test_combat.py` (the DEC-32 tables, the expected values from `combat.json`),
+`test_dec24.py` (commands, movement, supply, view and fog, including the bonus reserve: both numbers are
+visible to both in a fight, the bonus of a foreign group outside a fight and reinforcements on the way are not visible), the siege scenario.
 
-### Арена боя: раунд 2 с, запас бонуса виден в бою (DEC-32, #327) **[принято]**
+### The fight arena: a 2 s round, the bonus reserve visible in a fight (DEC-32, #327) **[accepted]**
 
-Решение владельца 2026-10-21 (фидбэк после #326: бой идёт слишком быстро, ситуацию не успеть прочитать, бонусные атаки непонятны, «бонусы во время боя не должны быть секретом»; выбор по макету `docs/design/mockups/fight-arena.html`). Реализация: sim, protocol, bots #329 (реализовано, `SIM_VERSION` 18, `PROTOCOL_VERSION` 21); клиент #330. Блок меняет число `combat.round_ticks` и вид игрока; **правила боя DEC-24 не меняются**.
+The owner's decision of 2026-10-21 (feedback after #326: the fight goes too fast, the situation cannot be read in time, bonus attacks are unclear, "bonuses during a fight must not be a secret"; chosen from the mockup `docs/design/mockups/fight-arena.html`). Implementation: sim, protocol, bots #329 (implemented, `SIM_VERSION` 18, `PROTOCOL_VERSION` 21); client #330. The block changes the number `combat.round_ticks` and the player view; **the DEC-24 fight rules do not change**.
 
-**Решение владельца [принято].**
+**The owner's decision [accepted].**
 
-1. **Темп.** ~~`combat.round_ticks = 10` (1 с)~~ **[заменено DEC-32]**: `combat.round_ticks = 20` (2 с; `tick_hz = 10`). Рулсеты `mvp-0` и `mvp-1`. Бой из примеров 9 и 10 длится 4 раунда: 8 с вместо 4 с.
-2. **Правила бонусов остаются как в DEC-24, п. B4**: каждая сторона делает `min(V + R, shots_per_round)` выстрелов за раунд, сначала виртуальные; источники и размеры бонусов прежние (план, DEC-29; «Защита», DEC-30; горы). Владелец сначала выбрал вариант B1 макета (отдельная фаза «бонусные атаки» после обычного обмена), затем отозвал выбор: бой с бонусами должен идти **дольше** боя без них, а общая длительность боя следует из **суммарного числа зарядов** (реальных и бонусных). Текущее правило это даёт: бонус добавляет выстрелы стороне и продлевает её стрельбу на раунд за каждый выстрел, пока у противника есть юниты. Варианты B1 и B2 **не приняты**: они укорачивали бой (среднее число раундов на малых конфигурациях макета: 3,44 сейчас, 2,20 у B1, 1,63 у B2, #327).
-3. **Запас бонуса виден в бою.** Пересмотр п. I1 DEC-24 (его последнее предложение, подтверждённое 2026-10-17: ~~раскрываются данные раундов, а не запас до начала боя~~ **[заменено DEC-32]**): пока бой идёт, оставшийся запас виртуальных выстрелов каждой стороны (`Fight.virtual`) входит в `PlayerView.fights` для **обоих** игроков, точным числом. Вне боя без изменений: накопленная «Защита» (DEC-30, п. 5) и ждущий бонус плана чужой группы скрыты, подкрепление в пути бонус не раскрывает. Запас сгорает в конце боя (DEC-24, п. F1) и исчезает из вида вместе с боем.
-4. **Клиент** (#330):
-   - **A1:** бонусный (виртуальный) выстрел рисуется другой стрелкой (широкое свечение, пунктирный стержень, голова-ромб) и подписью «бонусная атака» над ареной в раунде, где виртуальные выстрелы стреляют; источник бонуса в подписи не указывается (протокол его не несёт);
-   - **V3:** арена «фишками»: капсула на каждого юнита (заряжен: залит; разряжен: пустой со штриховкой; убит: пунктир), изменившийся в раунде пульсирует; до 8 фишек на сторону, дальше «+N» с точным числом остальных (состояние не только цветом, AGENTS.md, 7.4);
-   - значок запаса бонуса ◇ с числом на арене, у каждой стороны;
-   - длительность анимации раунда считается от `round_ticks` и `tick_hz`, не зашитыми секундами.
+1. **Pace.** ~~`combat.round_ticks = 10` (1 s)~~ **[superseded by DEC-32]**: `combat.round_ticks = 20` (2 s; `tick_hz = 10`). The rulesets `mvp-0` and `mvp-1`. The fight from examples 9 and 10 lasts 4 rounds: 8 s instead of 4 s.
+2. **The bonus rules stay as in DEC-24, item B4**: each side makes `min(V + R, shots_per_round)` shots per round, virtual first; the sources and sizes of the bonuses are as before (plan, DEC-29; "Defense", DEC-30; mountains). The owner first chose variant B1 of the mockup (a separate "bonus attacks" phase after the ordinary exchange), then withdrew the choice: a fight with bonuses must last **longer** than a fight without them, and the total duration of the fight follows from the **total number of charges** (real and bonus ones). The current rule gives this: a bonus adds shots to a side and extends its shooting by a round per shot while the opponent has units. Variants B1 and B2 are **not accepted**: they shortened the fight (the average number of rounds on the small configurations of the mockup: 3.44 now, 2.20 with B1, 1.63 with B2, #327).
+3. **The bonus reserve is visible in a fight.** A revision of item I1 of DEC-24 (its last proposal, confirmed 2026-10-17: ~~the data of the rounds is revealed, not the reserve before the start of the fight~~ **[superseded by DEC-32]**): while the fight goes on, the remaining reserve of virtual shots of each side (`Fight.virtual`) is part of `PlayerView.fights` for **both** players, as an exact number. Outside a fight unchanged: the accumulated "Defense" (DEC-30, item 5) and the waiting plan bonus of a foreign group are hidden, a reinforcement on the way does not reveal the bonus. The reserve burns at the end of the fight (DEC-24, item F1) and disappears from the view together with the fight.
+4. **Client** (#330):
+   - **A1:** a bonus (virtual) shot is drawn with a different arrow (a wide glow, a dashed shaft, a diamond head) and the caption "bonus attack" above the arena in a round where virtual shots fire; the source of the bonus is not named in the caption (the protocol does not carry it);
+   - **V3:** the arena with "chips": a capsule per unit (charged: filled; discharged: empty with hatching; killed: dashed), one that changed in the round pulses; up to 8 chips per side, then "+N" with the exact number of the rest (state not by color alone, AGENTS.md, 7.4);
+   - the bonus reserve icon ◇ with a number on the arena, at each side;
+   - the duration of the round animation is computed from `round_ticks` and `tick_hz`, not hardcoded seconds.
 
-**Что не меняется** (проверено по тексту DEC-24): п. B4 (формула выстрелов раунда, сначала виртуальные), B5 (конец боя), B7, F1 и F2 (как бонус входит в `V`, условие защитника, горы +1, равнина минус один молчащий заряд), события `fight_round` (там уже есть число виртуальных выстрелов раунда), `shots_per_round = 1`, `regroup_ticks = 10` (см. п. 6). Раундов и исходов в таблице примеров столько же, сколько в таблицах DEC-24 (строки 1-23); меняются только тики.
+**What does not change** (checked against the DEC-24 text): item B4 (the formula of the round's shots, virtual first), B5 (the end of the fight), B7, F1 and F2 (how the bonus enters `V`, the defender condition, mountains +1, plains minus one silent charge), the `fight_round` events (they already have the number of virtual shots of the round), `shots_per_round = 1`, `regroup_ticks = 10` (see item 6). The rounds and outcomes in the table of examples are the same as in the DEC-24 tables (rows 1-23); only the ticks change.
 
-**Детали [принято]** (подтверждено владельцем 2026-10-21; простейшее, согласованное с DEC-24):
+**Details [accepted]** (confirmed by the owner 2026-10-21; the simplest, consistent with DEC-24):
 
-5. **[принято]** **Что в виде.** Для каждой из двух сторон боя точное число оставшихся бонусных выстрелов (реализация #329: `FightView.virtual_left`, пара по id игрока). Оно видно с первого снапшота после `fight_started`, растёт в тике вступления группы-подкрепления с бонусом (DEC-24, п. F1), убывает после каждого раунда, равно 0, когда бонус потрачен. События боя не меняются: источник бонуса в протокол не добавляется (в подписи его нет). Тест тумана на новое поле (AGENTS.md, 4.4): оба числа видны обоим игрокам в бою; вне боя и до вступления подкрепления чужого бонуса в виде нет. Альтернатива: класть запас в `fight_started`; не нужно, вид игрока уже обновляется раз в снапшот.
-6. **[принято]** **`combat.regroup_ticks` остаётся 10.** Перестроение нужно, чтобы проигравший на ребре успел домой раньше победителя (п. G5, пример 19); сдвиг между ними не зависит от длины раунда (пример 19 ниже: запас 7 тиков, как был). Слова «пауза в раунд» в п. G5 теперь означают не равенство раунду. Альтернатива: 20 (равно раунду): запас вырос бы до 17 тиков, но победитель на ребре ждал бы 2 с и рейды стали бы медленнее.
-7. **[принято]** **`test-short`: `round_ticks = 20`**, как у `mvp-0`: тест `test_test_short_is_mvp0_with_a_60_second_match` требует, чтобы `test-short` отличался от `mvp-0` только `match_ticks`, и e2e проверяет те же правила, что игра. Альтернатива: оставить 10 в `test-short` и ослабить тест; тогда e2e не ловит дефекты длительности анимации.
-8. **[принято]** **Боты** (`fight_commands`): оценка стороны в бою учитывает видимый запас бонуса: запас стороны = заряженные + бонус (сейчас бонус в оценке не участвует, у противника он до #329 не виден). Оценка конца боя `next_round_tick + (max(запасов) - 1) * round_ticks` остаётся грубой (точная модель не нужна); `round_ticks` берётся из рулсета. Проверяется турниром.
-9. **[принято]** **Тест-векторы.** `packages/protocol/vectors/combat.json`: `params.round_ticks = 20`, `end_after` строк 1-16 и тики сценариев 17-23 по таблицам этого блока; `schema_version` не меняется (структура та же); жёсткое `10 * rounds` в `packages/protocol/tests/test_vectors.py` заменить на `round_ticks`. Ожидаемые значения: из таблиц ниже.
-10. **[принято]** **Версии.** `SIM_VERSION`++ (длительность боя меняет ход партий) и новые золотые реплеи, `PROTOCOL_VERSION`++ (новое поле вида). Идёт после #317 (общие версии): кто мержит вторым, повышает версии заново (`docs/process/orchestration.md`, раздел 5).
-11. **[принято]** **Следствия длинного раунда для баланса** (правила не меняются, проверяются турниром ботов на `mvp-1` и отчётом): окно подкреплений и отхода вдвое длиннее (отход: до 2 с под огнём, п. E3); задержка запланированного приказа 30 тиков (`orders.planned_delay_ticks`) теперь короче раунда с половиной: противник успевает меньше раундов; склад узла боя и найм стоят дольше (п. H1, DEC-25, п. 9); осада на истощение и голод (DEC-19) идут дольше внутри боя; партия 15 минут не меняется.
-12. **[открыто]** (не принято владельцем 2026-10-21, остаётся открытым вариантом) **Вариант B3 «бонусы в конце»** (макет #327: правила). Сторона делает один выстрел за раунд, как сейчас, но **сначала реальным, виртуальным только когда реальные кончились** (п. B4 меняет порядок «сначала виртуальные» на «сначала реальные»). Длина боя не меняется, бонус перестаёт экономить заряды. Перебор 1089 малых конфигураций макета (по 1-4 юнита у стороны, любые заряды, бонус 0-3 не больше числа заряженных): число раундов и тот, кто берёт узел, совпали во всех; итоговое состояние (юниты и заряды обеих сторон) совпало в 821 (75%). В таблице примеров различается один пример: **15** (атака 3 заряж. + план +2 против 1 разряж.: у атаки остаётся 2 заряженных, а не 3; реальный выстрел идёт первым, бонус сгорает); у примеров 6, 9, 10 итог и число раундов те же, виртуальные выстрелы приходятся на последние раунды. Плюс B3: бонусные выстрелы все в конце боя, подпись «бонусная атака» естественнее. Минус: он ослабляет экономию зарядов, которую дают и план (DEC-29), и «Защита» (DEC-30, только что перенастроенная); без турнира баланс оценить нельзя. **Рекомендация: не принимать сейчас.** Требование владельца о длительности уже выполнено текущим правилом; A1 даёт подпись без смены правил. Вернуться к B3, если после реализации DEC-32 и DEC-30 игроки всё ещё не понимают, почему бонус стреляет раньше реальных зарядов. Если владелец примет: новое DEC (замена п. B4), `SIM_VERSION`++, золотые, пересчёт примеров (строка 15, заряды после раундов 6, 9, 10), турнир и отчёт. **Не принято владельцем 2026-10-21, остаётся открытым вариантом; в код не входит.**
-13. **[принято]** (оркестратор, техническое, 2026-10-21; источник: комментарий агента макета арены в #330) **Молчащие заряды в виде.** В `PlayerView.fights` для каждой стороны число заряженных юнитов, которые не стреляют в раунде из-за рельефа (п. F2 DEC-24: на равнине один заряд защитника): `FightView.mute`, пара по id игрока, `min(Fight.mute, заряженные стороны в бою)`. Нового не раскрывает: следует из публичного рельефа узла, условия п. F2 в тике контакта и заряженных сторон, которые вид боя уже показывает точно; клиент (#330) показывает его, не считая сам (AGENTS.md, 7.1). Тест тумана: оба числа у обоих игроков (`test_dec24.py`). Меняет только протокол (`PROTOCOL_VERSION` 21 вместе с п. 5), не правила (`SIM_VERSION` не растёт).
+5. **[accepted]** **What is in the view.** For each of the two sides of the fight, the exact number of remaining bonus shots (implementation #329: `FightView.virtual_left`, a pair by player id). It is visible from the first snapshot after `fight_started`, grows in the tick when a reinforcement group with a bonus joins (DEC-24, item F1), decreases after each round, equals 0 when the bonus is spent. The fight events do not change: the source of the bonus is not added to the protocol (it is not in the caption). A fog test for the new field (AGENTS.md, 4.4): both numbers are visible to both players in a fight; outside a fight and before a reinforcement joins the foreign bonus is not in the view. Alternative: put the reserve into `fight_started`; not needed, the player view is already refreshed once per snapshot.
+6. **[accepted]** **`combat.regroup_ticks` stays 10.** Regrouping is needed so that the loser on an edge makes it home before the winner (item G5, example 19); the offset between them does not depend on the round length (example 19 below: a margin of 7 ticks, as it was). The words "a pause of a round" in item G5 now do not mean equality with the round. Alternative: 20 (equal to the round): the margin would grow to 17 ticks, but the winner on an edge would wait 2 s and raids would become slower.
+7. **[accepted]** **`test-short`: `round_ticks = 20`**, like `mvp-0`: the test `test_test_short_is_mvp0_with_a_60_second_match` requires `test-short` to differ from `mvp-0` only in `match_ticks`, and e2e checks the same rules as the game. Alternative: leave 10 in `test-short` and weaken the test; then e2e does not catch defects of the animation duration.
+8. **[accepted]** **Bots** (`fight_commands`): the estimate of a side in a fight accounts for the visible bonus reserve: the reserve of a side = charged + bonus (now the bonus does not take part in the estimate, the opponent's one is not visible before #329). The estimate of the end of the fight `next_round_tick + (max(reserves) - 1) * round_ticks` stays rough (an exact model is not needed); `round_ticks` is taken from the ruleset. Checked by a tournament.
+9. **[accepted]** **Test vectors.** `packages/protocol/vectors/combat.json`: `params.round_ticks = 20`, `end_after` of rows 1-16 and the ticks of scenarios 17-23 by the tables of this block; `schema_version` does not change (the structure is the same); the hard-coded `10 * rounds` in `packages/protocol/tests/test_vectors.py` is replaced by `round_ticks`. Expected values: from the tables below.
+10. **[accepted]** **Versions.** `SIM_VERSION`++ (the fight duration changes the course of matches) and new golden replays, `PROTOCOL_VERSION`++ (a new view field). Goes after #317 (shared versions): whoever merges second raises the versions anew (`docs/process/orchestration.md`, section 5).
+11. **[accepted]** **Consequences of a long round for balance** (the rules do not change, checked by a bot tournament on `mvp-1` and a report): the window for reinforcements and retreat is twice as long (retreat: up to 2 s under fire, item E3); the delay of a scheduled order of 30 ticks (`orders.planned_delay_ticks`) is now shorter than a round and a half: the opponent gets fewer rounds; the warehouse of a fight node and recruiting stand still longer (item H1, DEC-25, item 9); the siege of attrition and starvation (DEC-19) go longer inside a fight; the 15-minute match does not change.
+12. **[open]** (not accepted by the owner on 2026-10-21, stays an open variant) **Variant B3 "bonuses at the end"** (mockup #327: rules). A side makes one shot per round, as now, but **a real one first, a virtual one only when the real ones have run out** (item B4 changes the order "virtual first" to "real first"). The length of the fight does not change, the bonus stops saving charges. A brute-force check of 1089 small configurations of the mockup (1-4 units per side, any charges, a bonus of 0-3 not above the number of charged): the number of rounds and who takes the node matched in all; the final state (units and charges of both sides) matched in 821 (75%). In the table of examples one example differs: **15** (attack 3 charged + plan +2 against 1 discharged: the attack keeps 2 charged, not 3; the real shot goes first, the bonus burns); for examples 6, 9, 10 the result and the number of rounds are the same, the virtual shots fall on the last rounds. A plus of B3: the bonus shots are all at the end of the fight, the caption "bonus attack" is more natural. A minus: it weakens the saving of charges that both the plan (DEC-29) and "Defense" (DEC-30, just retuned) give; without a tournament the balance cannot be estimated. **Recommendation: do not accept now.** The owner's requirement about the duration is already met by the current rule; A1 gives the caption without a change of rules. Return to B3 if after the implementation of DEC-32 and DEC-30 players still do not understand why the bonus shoots before the real charges. If the owner accepts: a new DEC (replacing item B4), `SIM_VERSION`++, golden replays, a recomputation of the examples (row 15, charges after rounds in 6, 9, 10), a tournament and a report. **Not accepted by the owner on 2026-10-21, stays an open variant; not part of the code.**
+13. **[accepted]** (the orchestrator, technical, 2026-10-21; source: a comment of the arena mockup agent in #330) **Silent charges in the view.** In `PlayerView.fights` for each side the number of charged units that do not shoot in a round because of terrain (item F2 of DEC-24: on plains one charge of the defender): `FightView.mute`, a pair by player id, `min(Fight.mute, the side's charged in the fight)`. It reveals nothing new: it follows from the public terrain of the node, the condition of item F2 in the contact tick and the side's charged, which the fight view already shows exactly; the client (#330) shows it without computing it itself (AGENTS.md, 7.1). A fog test: both numbers for both players (`test_dec24.py`). It changes only the protocol (`PROTOCOL_VERSION` 21 together with item 5), not the rules (`SIM_VERSION` does not grow).
 
-**Разобранные примеры при `round_ticks = 20`.** Раунды и исходы те же, что в таблицах DEC-24 выше; `t`: тик контакта; рN: раунд N в тике `t + 20 * N`; в скобках заряженные после раунда (атака / защита). Лес, без приказов, если не сказано иное. Тесты реализации и `combat.json` после реализации: ровно эти таблицы (таблицы DEC-24 выше описывают `round_ticks = 10`, код до #329).
+**Worked examples at `round_ticks = 20`.** The rounds and outcomes are the same as in the DEC-24 tables above; `t`: the contact tick; rN: round N in the tick `t + 20 * N`; in parentheses the charged after the round (attack / defense). Forest, no orders unless said otherwise. Implementation tests and `combat.json` after the implementation: exactly these tables (the DEC-24 tables above describe `round_ticks = 10`, the code before #329).
 
-| # | Атака | Защита | Раунды | Итог; конец боя |
+| # | Attack | Defense | Rounds | Result; end of the fight |
 |---|---|---|---|---|
-| 1 | 2 заряж. | 2 заряж. | р1 гаш. (1 / 1); р2 гаш. (0 / 0) | потерь нет, атака отскакивает; `t+40` |
-| 2 | 3 заряж. | 2 заряж. | р1 гаш. (2 / 1); р2 гаш. (1 / 0); р3 атака убивает 1 | у защиты 1 разряж.; атака (3, разряж.) отскакивает; `t+60` |
-| 3 | 4 заряж. | 2 заряж. | р1, р2 гаш. (2 / 0); р3, р4 убито по 1 | защита уничтожена, узел взят 4 разряж.; `t+80` |
-| 4 | 1 заряж. | 10 разряж. | р1 убит 1 | атака разряжена, отскакивает; у защиты 9; `t+20` |
-| 5 | 2 заряж. | пустой вражеский узел | нет | узел взят в тике `t`, заряды целы |
-| 6 | 3 заряж. | 2 заряж., горы | `V` защиты 1. р1 гаш. (защита виртуальным; 2 / 2); р2 гаш. (1 / 1); р3 гаш. (0 / 0) | потерь нет, отскок; `t+60` |
-| 7 | 2 заряж. | 3 разряж., горы | рельеф не входит (п. F2). р1, р2 убито по 1 | у защиты 1; отскок; `t+40` |
-| 8 | 2 заряж. | 2 заряж., равнина | один заряд защиты молчит. р1 гаш. (1 / 1, молчит); р2 атака убивает 1 разряж. | у защиты 1 заряж.; атака (2, разряж.) отскакивает; `t+40` |
-| 9 | 2 заряж. + план (+2) | 2 заряж. | `V` атаки 2. р1 гаш. (атака виртуальным; 2 / 1); р2 гаш. (атака виртуальным; 2 / 0); р3, р4 атака убивает по 1 | узел взят, у атаки 2 разряж.; `t+80` |
-| 10 | 3 заряж. | 2 заряж. + «Защита» (+2) | `V` защиты 2. р1, р2 гаш. (защита виртуальными; 1 / 2); р3 гаш. (0 / 1); р4 защита убивает 1 | атака (2, разряж.) отскакивает; у защиты 2 разряж.; `t+80` |
-| 11 | ребро: 2 заряж. | ребро: 2 заряж. | р1 гаш.; р2 гаш. | выстрелов 2 и 2: ничья, обе отскакивают с места боя; `t+40` |
-| 12 | ребро: 3 заряж. | ребро: 1 заряж. | р1 гаш. (2 / 0); р2 убит 1 | противник уничтожен; у победителя 1 заряж.; бой до `t+40`, путь дальше с `t+50` |
-| 13 | нейтральный, одновременно: 3 заряж. | 2 заряж. | р1, р2 гаш.; р3 убит 1 | обе стороны отскакивают, узел нейтральный; `t+60` |
-| 14 | нейтральный, одновременно: 4 заряж. | 2 заряж. | р1, р2 гаш.; р3, р4 убито по 1 | вторая сторона уничтожена, узел взят; `t+80` |
-| 15 | 3 заряж. + план (+2) | 1 разряж. | р1 убит 1 виртуальным выстрелом | узел взят, у атаки 3 заряж.; `t+20` |
-| 16 | 3 заряж. | 2 разряж. + «Защита» (+2) | «Защита» не входит (п. F2). р1, р2 убито по 1 | узел взят, у атаки 1 заряж.; `t+40` |
+| 1 | 2 charged | 2 charged | r1 canc. (1 / 1); r2 canc. (0 / 0) | no losses, the attack bounces; `t+40` |
+| 2 | 3 charged | 2 charged | r1 canc. (2 / 1); r2 canc. (1 / 0); r3 the attack kills 1 | the defense has 1 discharged; the attack (3, discharged) bounces; `t+60` |
+| 3 | 4 charged | 2 charged | r1, r2 canc. (2 / 0); r3, r4 1 killed each | the defense is destroyed, the node is taken by 4 discharged; `t+80` |
+| 4 | 1 charged | 10 discharged | r1 1 killed | the attack is discharged, bounces; the defense has 9; `t+20` |
+| 5 | 2 charged | empty enemy node | none | the node is taken in tick `t`, the charges are intact |
+| 6 | 3 charged | 2 charged, mountains | `V` of the defense 1. r1 canc. (the defense by the virtual one; 2 / 2); r2 canc. (1 / 1); r3 canc. (0 / 0) | no losses, bounce; `t+60` |
+| 7 | 2 charged | 3 discharged, mountains | terrain does not enter (item F2). r1, r2 1 killed each | the defense has 1; bounce; `t+40` |
+| 8 | 2 charged | 2 charged, plains | one charge of the defense is silent. r1 canc. (1 / 1, silent); r2 the attack kills 1 discharged | the defense has 1 charged; the attack (2, discharged) bounces; `t+40` |
+| 9 | 2 charged + plan (+2) | 2 charged | `V` of the attack 2. r1 canc. (the attack by the virtual one; 2 / 1); r2 canc. (the attack by the virtual one; 2 / 0); r3, r4 the attack kills 1 each | the node is taken, the attack has 2 discharged; `t+80` |
+| 10 | 3 charged | 2 charged + "Defense" (+2) | `V` of the defense 2. r1, r2 canc. (the defense by the virtual ones; 1 / 2); r3 canc. (0 / 1); r4 the defense kills 1 | the attack (2, discharged) bounces; the defense has 2 discharged; `t+80` |
+| 11 | edge: 2 charged | edge: 2 charged | r1 canc.; r2 canc. | shots 2 and 2: a draw, both bounce from the fight place; `t+40` |
+| 12 | edge: 3 charged | edge: 1 charged | r1 canc. (2 / 0); r2 1 killed | the opponent is destroyed; the winner has 1 charged; the fight until `t+40`, the path continues from `t+50` |
+| 13 | neutral, simultaneous: 3 charged | 2 charged | r1, r2 canc.; r3 1 killed | both sides bounce, the node is neutral; `t+60` |
+| 14 | neutral, simultaneous: 4 charged | 2 charged | r1, r2 canc.; r3, r4 1 killed each | the second side is destroyed, the node is taken; `t+80` |
+| 15 | 3 charged + plan (+2) | 1 discharged | r1 1 killed by a virtual shot | the node is taken, the attack has 3 charged; `t+20` |
+| 16 | 3 charged | 2 discharged + "Defense" (+2) | "Defense" does not enter (item F2). r1, r2 1 killed each | the node is taken, the attack has 1 charged; `t+40` |
 
-Новые примеры (то же устройство, что в таблице DEC-24 выше). Ребро a-b: лес на обоих концах, `travel_ticks = 30`, `T = 30`, `progress` после `k` тиков `k * 1000 // 30`; X, X2: группы игрока 0, вышли из a; Y: группа игрока 1, вышла из b. Тики событий (подкрепление, приказ) сдвинуты так, чтобы они приходились на те же промежутки между раундами, что в DEC-24 (раунд теперь 20 тиков).
+New examples (the same layout as in the DEC-24 table above). Edge a-b: forest at both ends, `travel_ticks = 30`, `T = 30`, `progress` after `k` ticks `k * 1000 // 30`; X, X2: groups of player 0, set out from a; Y: a group of player 1, set out from b. The ticks of events (reinforcement, order) are shifted so that they fall into the same intervals between rounds as in DEC-24 (a round is now 20 ticks).
 
-| # | Ситуация | Ход | Итог |
+| # | Situation | Course | Result |
 |---|---|---|---|
-| 17 | **Отскок без цепочки** (случай из игры). L (1, разряж.) отскоком возвращается в свой город H; пока она шла, W (2, разряж.) противника занял пустой H. L приходит в H в тике `t` | никто не может выстрелить: бой кончается в `t` без раундов | L не взяла H и гибнет (п. G3); до DEC-24 L уходила вторым отскоком к врагу |
-| 17б | как 17, у W 1 заряж. | р1 W убивает L | L гибнет; `t+20` |
-| 17в | как 17, но W уже ушёл, H пуст | нет | L берёт H в тике `t` (строка 5) |
-| 18 | **Точка боя.** X (3 заряж.), Y (1, 1 заряж.) вышел на 4 тика позже | 17-й тик X: 566 + 433 = 999; 18-й (тик `t`): 600 + 466 = 1066: контакт. `pos_0 = 600`, `pos_1 = 1000 - 466 = 534`, `point = 1134` (567 тысячных от a); X стоит на 600, Y на 466. р1 гаш.; р2 Y уничтожен | бой до `t+40`; X (1 заряж.) делает 19-й шаг в тике `t+50` и приходит в b в тике `t+61` |
-| 19 | **Гонка домой.** Как 18, но Y: 2 юнита, 2 заряж., b: пустой город игрока 1 | р1, р2 гаш.; р3 X убивает 1. Выстрелов 3 и 2: X победил, бой до `t+60` | Y (1, разряж.) отскакивает 14 шагов с `t+61`, дома в `t+74`. X идёт с `t+70` (12 шагов), в b в `t+81`: 0 зарядов на 0, бой кончается сразу, X отскакивает. Без перестроения X был бы в b в `t+72`, взял бы пустой b, и Y погиб бы в `t+74` (п. G3). Запас 7 тиков, как при `round_ticks = 10` |
-| 20 | **Подкрепление в узел.** Атака 3 заряж., защита 2 заряж.; в `t+30` (между р1 и р2) в узел приходит своя группа защиты G (2, 2 заряж.) | р1 гаш. (2 / 1); G вступает (2 / 3); р2 гаш. (1 / 2); р3 гаш. (0 / 1); р4 защита убивает 1 | атака (2, разряж.) отскакивает; у защиты 4 юнита, разряж.; `t+80`. Без G: строка 2 |
-| 21 | **Отход защитника.** Атака 4 заряж., защита 2 заряж.; в `t+24` (между р1 и р2) защитник получает `Move` в свой соседний узел (1 CP) | р1 гаш. (3 / 1); р2 гаш. (2 / 0); после р2 защита уходит | узел взят в `t+40` атакой (4, 2 заряж.); защита сохранила 2 юнита (в строке 3 уничтожена) |
-| 22 | **Отход атаки.** Как строка 10; в `t+22` (между р1 и р2) атака даёт `CancelOrder` | р1 гаш. (2 / защита `V` 1); р2 гаш. (1 / `V` 0, 2 заряж.); после р2 атака уходит назад | атака без потерь: 3 юнита, 1 заряж. (в строке 10 потеряла 1); бонус «Защиты» сгорел; бой до `t+40`, узел у защиты |
-| 23 | **Подкрепление на ребре.** Как строка 11 (X 2 заряж., Y 2 заряж., точка из 18: `point = 1134`); X2 (1, 1 заряж.) вышел на 5 тиков позже X | в `t+4` X2 на 566 (`2 * 566 = 1132 < 1134`), в `t+5` на 600: вступает (до р1 в `t+20`), стоит на 600. р1 гаш. (2 / 1); р2 гаш. (1 / 0); р3 игрок 0 убивает 1 | бой до `t+60`; выстрелов 3 и 2: игрок 0 победил; Y (1, разряж.) отскакивает; X и X2 идут дальше с `t+70`. Без X2: ничья, строка 11 |
+| 17 | **A bounce without a chain** (a case from the game). L (1, discharged) returns by a bounce to its city H; while it was walking, the opponent's W (2, discharged) took the empty H. L arrives in H in tick `t` | nobody can shoot: the fight ends in `t` without rounds | L did not take H and dies (item G3); before DEC-24 L went away by a second bounce toward the enemy |
+| 17b | as 17, W has 1 charged | r1 W kills L | L dies; `t+20` |
+| 17c | as 17, but W has already left, H is empty | none | L takes H in tick `t` (row 5) |
+| 18 | **The fight point.** X (3 charged), Y (1, 1 charged) set out 4 ticks later | the 17th tick of X: 566 + 433 = 999; the 18th (tick `t`): 600 + 466 = 1066: contact. `pos_0 = 600`, `pos_1 = 1000 - 466 = 534`, `point = 1134` (567 thousandths from a); X stands at 600, Y at 466. r1 canc.; r2 Y is destroyed | the fight until `t+40`; X (1 charged) makes the 19th step in tick `t+50` and arrives in b in tick `t+61` |
+| 19 | **The race home.** As 18, but Y: 2 units, 2 charged, b: an empty city of player 1 | r1, r2 canc.; r3 X kills 1. Shots 3 and 2: X won, the fight until `t+60` | Y (1, discharged) bounces 14 steps from `t+61`, home in `t+74`. X goes from `t+70` (12 steps), in b in `t+81`: 0 charges against 0, the fight ends at once, X bounces. Without regrouping X would be in b in `t+72`, would take the empty b, and Y would die in `t+74` (item G3). A margin of 7 ticks, as at `round_ticks = 10` |
+| 20 | **A reinforcement into a node.** Attack 3 charged, defense 2 charged; in `t+30` (between r1 and r2) the defense's own group G (2, 2 charged) arrives in the node | r1 canc. (2 / 1); G joins (2 / 3); r2 canc. (1 / 2); r3 canc. (0 / 1); r4 the defense kills 1 | the attack (2, discharged) bounces; the defense has 4 units, discharged; `t+80`. Without G: row 2 |
+| 21 | **The defender's retreat.** Attack 4 charged, defense 2 charged; in `t+24` (between r1 and r2) the defender gets a `Move` into its neighboring node (1 CP) | r1 canc. (3 / 1); r2 canc. (2 / 0); after r2 the defense leaves | the node is taken in `t+40` by the attack (4, 2 charged); the defense kept 2 units (in row 3 it is destroyed) |
+| 22 | **The attack's retreat.** As row 10; in `t+22` (between r1 and r2) the attack gives `CancelOrder` | r1 canc. (2 / defense `V` 1); r2 canc. (1 / `V` 0, 2 charged); after r2 the attack goes back | the attack without losses: 3 units, 1 charged (in row 10 it lost 1); the "Defense" bonus burned; the fight until `t+40`, the node stays with the defense |
+| 23 | **A reinforcement on an edge.** As row 11 (X 2 charged, Y 2 charged, the point from 18: `point = 1134`); X2 (1, 1 charged) set out 5 ticks later than X | in `t+4` X2 at 566 (`2 * 566 = 1132 < 1134`), in `t+5` at 600: joins (before r1 in `t+20`), stands at 600. r1 canc. (2 / 1); r2 canc. (1 / 0); r3 player 0 kills 1 | the fight until `t+60`; shots 3 and 2: player 0 won; Y (1, discharged) bounces; X and X2 go on from `t+70`. Without X2: a draw, row 11 |
 
-**Сверка с макетом** (`docs/design/mockups/fight-arena.html`, функция `simulate`, правила «как сейчас»; расчёт движка и ручной расчёт). Примеры 1-4, 6, 7, 9-16: раунды, заряженные после раундов и итоговые юниты и заряды совпали с таблицами; встроенная проверка макета (`checkTable`, примеры 6, 9, 10, 15) расхождений не даёт. Движок макета не моделирует равнину (молчащий заряд, пример 8), движение, подкрепления и отход (примеры 17-23): они посчитаны вручную по правилам DEC-24 (раунды те же, что в таблицах DEC-24, тики сдвинуты по `round_ticks = 20`; для 19 по шагам из таблицы выше). Расхождений нет.
+**Cross-check with the mockup** (`docs/design/mockups/fight-arena.html`, the function `simulate`, the rules "as now"; the engine's calculation and a manual calculation). Examples 1-4, 6, 7, 9-16: the rounds, the charged after rounds and the final units and charges matched the tables; the mockup's built-in check (`checkTable`, examples 6, 9, 10, 15) gives no discrepancies. The mockup engine does not model plains (the silent charge, example 8), movement, reinforcements and retreat (examples 17-23): they were computed manually by the DEC-24 rules (the rounds are the same as in the DEC-24 tables, the ticks shifted by `round_ticks = 20`; for 19 by the steps from the table above). There are no discrepancies.
 
-Что меняет реализация (#329 реализовано, #330 клиент реализован): рулсеты (`mvp-0`, `mvp-1`, `test-short`), `PlayerView.fights` (запас бонуса обеих сторон), тест тумана, `SIM_VERSION` и `PROTOCOL_VERSION`, золотые реплеи, `combat.json`, боты (оценка), турнир на `mvp-1`; клиент (A1, V3, ◇, анимация от `round_ticks`).
+What the implementation changes (#329 implemented, #330 client implemented): rulesets (`mvp-0`, `mvp-1`, `test-short`), `PlayerView.fights` (the bonus reserve of both sides), the fog test, `SIM_VERSION` and `PROTOCOL_VERSION`, golden replays, `combat.json`, bots (the estimate), a tournament on `mvp-1`; the client (A1, V3, ◇, the animation from `round_ticks`).
 
-Альтернативы (не выбраны):
-- Темп 1,5 с (`round_ticks = 15`): рекомендация макета; владелец выбрал 2 с.
-- B1 (фаза «бонусные атаки» после обмена) и B2 (общий залп бонусов в раунде 1): укорачивают бой и меняют экономику зарядов; владелец требует, чтобы бонус удлинял бой.
-- A2 (лента последних раундов): не выбрана; клиент остаётся с A1.
-- Вид арены V1, V2: выбран V3.
-- Источник бонуса в подписи («план», «Защита», «горы»): не выбран, протокол не меняется.
+Alternatives (not chosen):
+- A pace of 1.5 s (`round_ticks = 15`): the mockup's recommendation; the owner chose 2 s.
+- B1 (a "bonus attacks" phase after the exchange) and B2 (a common volley of bonuses in round 1): they shorten the fight and change the charge economy; the owner requires the bonus to lengthen the fight.
+- A2 (a strip of the last rounds): not chosen; the client stays with A1.
+- Arena view V1, V2: V3 is chosen.
+- The bonus source in the caption ("plan", "Defense", "mountains"): not chosen, the protocol does not change.
 
 ---
 
-## 5. Приказы: обычные и запланированные
+## 5. Orders: ordinary and scheduled
 
-- **[принято]** Два вида приказов: **обычные** и **запланированные**.
-- **[принято]** Запланированный приказ дороже по CP.
-- **[принято]** Запланированные приказы **видны всем игрокам**. Видно **намерение, а не состав** группы.
-- **[принято]** Обычные приказы видны только в зоне обзора противника.
-- ~~**[принято]** Отмена запланированного приказа стоит дополнительно CP или времени.~~ **[заменено DEC-20]**: отмена любого приказа бесплатна; цена плана: уплаченные CP и потерянная задержка (раздел 3).
-- ~~**[принято]** Бонус за запланированный приказ — **фиксированный** (не множитель).~~ **[заменено DEC-29]**: бонус по-прежнему не множитель, но не фиксирован: равен числу рёбер пути приказа, с потолком по заряженным юнитам группы (блок DEC-29 ниже).
-- **[открыто]** ~~Размер бонуса.~~ **[заменено DEC-29]**: бонус по дистанции. Прежняя стартовая точка, +2 заряда группе (см. раздел 14). В MVP: +2 на первый бой (DEC-08 ниже).
+- **[accepted]** Two kinds of orders: **ordinary** and **scheduled**.
+- **[accepted]** A scheduled order costs more CP.
+- **[accepted]** Scheduled orders are **visible to all players**. What is visible is the **intent, not the composition** of the group.
+- **[accepted]** Ordinary orders are visible only within the enemy's vision range.
+- ~~**[accepted]** Cancelling a scheduled order costs extra CP or time.~~ **[superseded by DEC-20]**: cancelling any order is free; the price of a plan: the CP paid and the lost delay (section 3).
+- ~~**[accepted]** The bonus for a scheduled order is **fixed** (not a multiplier).~~ **[superseded by DEC-29]**: the bonus is still not a multiplier, but it is not fixed: it equals the number of edges of the order's path, capped by the group's charged units (DEC-29 block below).
+- **[open]** ~~Bonus size.~~ **[superseded by DEC-29]**: bonus by distance. The earlier starting point, +2 charges to the group (see section 14). In the MVP: +2 for the first fight (DEC-08 below).
 
-### Почему не ×2
+### Why not ×2
 
-Множитель растёт вместе с размером группы: группа из 2 получает +2, группа из 10 — +10. Он поощряет большие армии и работает против ограничения на размер групп. Кроме того, множитель вместе со слагаемыми от рельефа делает исход непредсказуемым в уме: `(n − 1) × 2` и `n × 2 − 1` дают разные числа.
+A multiplier grows with the size of the group: a group of 2 gets +2, a group of 10 gets +10. It rewards big armies and works against the limit on group size. Besides, a multiplier together with the terrain terms makes the outcome impossible to work out in your head: `(n − 1) × 2` and `n × 2 − 1` give different numbers.
 
-Фиксированный бонус решает маленькую точную операцию и мало что меняет для большой группы. Он поощряет точность, а не массу.
+A fixed bonus solves a small precise operation and changes little for a big group. It rewards precision, not mass.
 
-### Как рассчитать бонус
+### How to calculate the bonus
 
-Раз CP покупают заряды (раздел 6), бонус за план можно оценить в той же валюте. Запланированная операция — это «заряды, доставленные прямо к месту удара в обход логистики».
+Since CP buy charges (section 6), the bonus for a plan can be priced in the same currency. A scheduled operation is "charges delivered straight to the point of the strike, bypassing logistics".
 
-- Если план дешевле, чем купить те же заряды в столице, планировать будут всегда.
-- Если сильно дороже — не будут никогда.
-- Ориентир: доплата за план ≈ стоимости бонусных зарядов по курсу столицы. Мгновенная доставка уравновешивается тем, что приказ видит противник.
+- If the plan is cheaper than buying the same charges in the capital, people will always plan.
+- If it is much more expensive, they never will.
+- Rule of thumb: the surcharge for a plan ≈ the cost of the bonus charges at the capital's rate. Instant delivery is balanced by the fact that the enemy sees the order.
 
-Калибровка — ботовым self-play: если запланированных больше ~70% всех атак, план слишком дешёвый; если меньше ~20% — слишком дорогой.
+Calibration by bot self-play: if scheduled orders are more than ~70% of all attacks, the plan is too cheap; if less than ~20%, it is too expensive.
 
-### Открытые вопросы по приказам
+### Open questions about orders
 
-- **[открыто]** Действует ли бонус запланированного приказа на **защиту** (заранее подготовленная позиция), или только на движущиеся армии? Изначально идея была в том, что подготовленная защита перехватывает инициативу у обычной атаки.
-- **[открыто]** Даёт ли выигранный размен CP (идея «инициатива = CP»)? В плоской экономике это допустимо только как разовая награда.
+- **[open]** Does the bonus of a scheduled order apply to **defense** (a position prepared in advance), or only to moving armies? The original idea was that a prepared defense takes the initiative away from an ordinary attack.
+- **[open]** Does a won exchange give CP (the "initiative = CP" idea)? In a flat economy this is acceptable only as a one-off reward.
 
-Подготовленную защиту в MVP даёт режим «Защита» с ~~тем же бонусом +2~~ **[заменено DEC-30]** накапливаемым бонусом (блок DEC-30 ниже; DEC-08 ниже, DEC-07 правило 1).
+In the MVP, a prepared defense is given by the "Defense" mode with ~~the same +2 bonus~~ **[superseded by DEC-30]** an accumulating bonus (DEC-30 block below; DEC-08 below, DEC-07 rule 1).
 
-### Режимы и запланированные приказы (DEC-08, #12) **[принято]**
+### Modes and scheduled orders (DEC-08, #12) **[accepted]**
 
-Доопределяет разделы 3 и 5: время подготовки, отмена, эффекты режимов.
+Extends sections 3 and 5: preparation time, cancelling, mode effects.
 
-Запланированный приказ: группа стоит в исходном узле `orders.planned_delay_ticks` (30 тиков = 3 с), намерение уже видно всем; затем выступает с бонусом +2 на первый бой (~~бонус +2~~ **[заменено DEC-29]**: бонус по дистанции, блок DEC-29 ниже). Стоимость, 2 CP вместо 1. «Защита»: включение видно всем как намерение, ~~бонус +2 активен через 30 тиков и расходуется в первом бою~~ **[заменено DEC-30]**: бонус растёт, пока группа стоит в «Защите», блок DEC-30 ниже; повторное включение (после выхода из режима) стоит снова (2 CP). «Защита» держится, пока группа стоит; приказ на движение снимает её без доплаты. «Атака», обычное состояние без эффектов (переключение бесплатно). ~~«Строительство» (1 CP): заряды группы в бою не считаются.~~ **[заменено DEC-16]**: режима «Строительство» нет, дорогу улучшает город (раздел 8). ~~Отмена запланированного приказа во время задержки стоит 1 CP.~~ **[заменено DEC-20]**: отмена бесплатна (раздел 3). Полная таблица стоимостей, в SIM-01.
+A scheduled order: the group stands in the source node for `orders.planned_delay_ticks` (30 ticks = 3 s), the intent is already visible to everyone; then it sets out with a +2 bonus for the first fight (~~bonus +2~~ **[superseded by DEC-29]**: bonus by distance, DEC-29 block below). The cost is 2 CP instead of 1. "Defense": switching it on is visible to everyone as an intent, ~~the +2 bonus is active after 30 ticks and is spent in the first fight~~ **[superseded by DEC-30]**: the bonus grows while the group stands in "Defense", DEC-30 block below; switching it on again (after leaving the mode) costs again (2 CP). "Defense" holds while the group stands; an order to move removes it with no extra charge. "Attack", the ordinary state without effects (switching is free). ~~"Building" (1 CP): the group's charges do not count in a fight.~~ **[superseded by DEC-16]**: there is no "Building" mode, a city upgrades the road (section 8). ~~Cancelling a scheduled order during the delay costs 1 CP.~~ **[superseded by DEC-20]**: cancelling is free (section 3). The full cost table is in SIM-01.
 
-SIM-01: #17; значения попадают в `rulesets/mvp-0.toml` (`orders.cost` в сотых CP).
-Задержки и бонусы: `orders.planned_delay_ticks`, ~~`orders.defense_delay_ticks`~~ **[заменено DEC-30]**, ~~`orders.planned_bonus`~~ **[заменено DEC-29]** (`orders.planned_bonus_per_edge`), ~~`orders.defense_bonus`~~ **[заменено DEC-30]** (`orders.defense_ticks_per_bonus`).
+SIM-01: #17; the values go into `rulesets/mvp-0.toml` (`orders.cost` in hundredths of CP).
+Delays and bonuses: `orders.planned_delay_ticks`, ~~`orders.defense_delay_ticks`~~ **[superseded by DEC-30]**, ~~`orders.planned_bonus`~~ **[superseded by DEC-29]** (`orders.planned_bonus_per_edge`), ~~`orders.defense_bonus`~~ **[superseded by DEC-30]** (`orders.defense_ticks_per_bonus`).
 
-Как это считает симуляция (SIM-10, #26; `gow_sim.systems.orders`): запланированный `Move` сразу
-создаёт публичное намерение (`Intent`: владелец, тип, узел группы, цель; без id и размера группы,
-DEC-04), бонус ~~`orders.planned_bonus`~~ **[заменено DEC-29]** (по дистанции, `orders.planned_bonus_per_edge`) активен с тика выступления. `SetMode(DEFENSE)` создаёт
-намерение сразу, ~~бонус `orders.defense_bonus` активен через `orders.defense_delay_ticks`~~ **[заменено DEC-30]** (бонус накапливается, `orders.defense_ticks_per_bonus`); действует
-только на защитника узла со стреляющим зарядом (DEC-07, правило 1). ~~`UpgradeRoad` создаёт публичное
-намерение стройки (из узла группы по ребру).~~ **[заменено DEC-16]**: стройка не публична, намерения
-стройки нет (раздел 8). `CancelOrder` снимает запланированный приказ во время
-задержки или «Защиту» за `orders.cost.cancel` (DEC-20: 0; отмена на ребре: разворот, раздел 3). Бой получает активные бонусы (`active_bonuses`),
-бонус сгорает в первом бою тика; система `orders` в конце шага (после `build`) снимает потраченные
-бонусы и намерения закончившихся приказов и режимов. Детали, которые DEC-08 не задаёт, по
-умолчанию из вопроса #141 **[открыто]**: бонус плана сгорает и с концом приказа без боя; бой во
-время задержки бонус плана не тратит; ~~бой до активации «Защиты» бонус не тратит; после боя группа остаётся в «Защите» без
-бонуса, повторное включение запускает задержку заново~~ **[заменено DEC-30]**: накопление, после боя режим остаётся и накопление идёт заново без доплаты; ~~`SetMode(ATTACK)` из «Защиты» бесплатен, а
-`CancelOrder` «Защиты» стоит 1 CP.~~ **[заменено DEC-20]**: оба бесплатны (п. 1 #141 решён, остальные пункты #141 остаются значениями по умолчанию).
+How the simulation computes this (SIM-10, #26; `gow_sim.systems.orders`): a scheduled `Move` immediately
+creates a public intent (`Intent`: owner, kind, the group's node, target; without the group's id and size,
+DEC-04), the bonus ~~`orders.planned_bonus`~~ **[superseded by DEC-29]** (by distance, `orders.planned_bonus_per_edge`) is active from the tick of setting out. `SetMode(DEFENSE)` creates the
+intent immediately, ~~the `orders.defense_bonus` bonus is active after `orders.defense_delay_ticks`~~ **[superseded by DEC-30]** (the bonus accumulates, `orders.defense_ticks_per_bonus`); it applies
+only to the defender of a node with a firing charge (DEC-07, rule 1). ~~`UpgradeRoad` creates a public
+construction intent (from the group's node along the edge).~~ **[superseded by DEC-16]**: construction is not public, there is no
+construction intent (section 8). `CancelOrder` removes a scheduled order during the
+delay, or "Defense", for `orders.cost.cancel` (DEC-20: 0; cancelling on an edge: a turn-around, section 3). The fight receives the active bonuses (`active_bonuses`),
+the bonus burns up in the first fight of the tick; the `orders` system at the end of the step (after `build`) removes the spent
+bonuses and the intents of finished orders and modes. Details that DEC-08 does not set are
+by default from question #141 **[open]**: the plan bonus burns up also when the order ends without a fight; a fight during
+the delay does not spend the plan bonus; ~~a fight before "Defense" is activated does not spend the bonus; after a fight the group stays in "Defense" without
+a bonus, switching it on again restarts the delay~~ **[superseded by DEC-30]**: accumulation, after a fight the mode stays and accumulation starts over with no extra charge; ~~`SetMode(ATTACK)` out of "Defense" is free, while
+`CancelOrder` of "Defense" costs 1 CP.~~ **[superseded by DEC-20]**: both are free (item 1 of #141 is resolved, the other items of #141 remain defaults).
 
-Альтернативы (не выбраны):
-- Бонус «Защиты» действует на каждый бой, пока режим включён (сильнее оборона, слабее осада).
-- Асимметричная отмена: бесплатно вне угрозы, дорого под угрозой.
+Alternatives (not chosen):
+- The "Defense" bonus applies to every fight while the mode is on (stronger defense, weaker siege).
+- Asymmetric cancelling: free outside a threat, expensive under a threat.
 
-### Бонус запланированного приказа по дистанции (DEC-29, #291) **[принято]**
+### Scheduled order bonus by distance (DEC-29, #291) **[accepted]**
 
-Решение владельца 2026-10-17. ~~Бонус запланированного приказа фиксирован: `orders.planned_bonus = 2` виртуальных зарядов на первый бой (DEC-08, выше).~~ **[заменено DEC-29]**: бонус зависит от дальности удара. Реализация: #294. Что не менялось: цена 2 CP (`orders.cost.planned_move = 200`), задержка `orders.planned_delay_ticks = 30`, бонус сгорает в первом бою или с концом приказа, намерение видно всем (размер и состав скрыты), «Защита» и `orders.defense_bonus = 2` (DEC-08).
+The owner's decision 2026-10-17. ~~The scheduled order bonus is fixed: `orders.planned_bonus = 2` virtual charges for the first fight (DEC-08, above).~~ **[superseded by DEC-29]**: the bonus depends on the range of the strike. Implementation: #294. What did not change: the price 2 CP (`orders.cost.planned_move = 200`), the delay `orders.planned_delay_ticks = 30`, the bonus burns up in the first fight or when the order ends, the intent is visible to everyone (size and composition hidden), "Defense" and `orders.defense_bonus = 2` (DEC-08).
 
-**Решение владельца [принято].** Бонус равен числу рёбер на самом быстром пути от узла-источника приказа до цели (соседний узел: 1, плюс 1 за каждое следующее ребро), с потолком: число **заряженных** юнитов группы. Компромисс: глубокий удар виден противнику заранее, пока группа стоит в задержке.
+**The owner's decision [accepted].** The bonus equals the number of edges on the fastest path from the order's source node to the target (a neighboring node: 1, plus 1 for each further edge), capped by: the number of **charged** units in the group. The trade-off: a deep strike is visible to the enemy in advance, while the group stands in the delay.
 
-**Детали [принято]** (подтверждено владельцем 2026-10-17):
+**Details [accepted]** (confirmed by the owner 2026-10-17):
 
-- **Какой путь.** Тот, по которому идёт приказ (`Move`, DEC-20: самый быстрый по времени путь с учётом лимита стека; он же в `ack.path`). Отдельного графа для бонуса нет: враждебные узлы и туман на число рёбер не влияют. Бонус `edges * orders.planned_bonus_per_edge`, `planned_bonus_per_edge = 1` (ключ заменяет `orders.planned_bonus`).
-- **Когда измеряется потолок.** В тик выступления (конец задержки), по числу заряженных юнитов группы в этот момент: за 30 тиков группа перезаряжается со склада (`supply.recharge_per_tick`). Число рёбер берётся из пути, выбранного при команде. Если за задержку группу разделили (DEC-20), потолок считается по оставшемуся составу.
-- **Нулевой бонус.** Группа без заряженных юнитов в тик выступления бонуса не получает (0); приказ выполняется, CP не возвращаются.
-- **[принято]** (решение владельца 2026-10-21, макет #339, «Бонус на головке: есть») **Прогноз бонуса в своём приказе.** Вид игрока несёт бонус в приказе своей группы (`OrderView.bonus`, #329): `min(бонус пути, заряженные группы сейчас)` для запланированного приказа, 0 для обычного и после того, как бонус вошёл в бой. До выступления это прогноз: потолок берётся в тик выступления (п. «Когда измеряется потолок»), поэтому число может измениться, если за задержку изменятся заряженные. Клиент показывает «◇ +N» на головке своей ленты плана, не считая сам (AGENTS.md, 7.1). Противник получает только намерение без размера и бонуса; бонус плана раскрывается лишь в бою (DEC-32). Тест тумана: `test_dec29.py`. Меняет только протокол (`PROTOCOL_VERSION` 21 вместе с DEC-32), не правила.
+- **Which path.** The one the order takes (`Move`, DEC-20: the fastest path by time, taking the stack limit into account; the same one is in `ack.path`). There is no separate graph for the bonus: hostile nodes and fog do not affect the number of edges. The bonus is `edges * orders.planned_bonus_per_edge`, `planned_bonus_per_edge = 1` (the key replaces `orders.planned_bonus`).
+- **When the cap is measured.** At the tick of setting out (the end of the delay), by the number of charged units in the group at that moment: over 30 ticks the group recharges from the warehouse (`supply.recharge_per_tick`). The number of edges is taken from the path chosen at the command. If the group was split during the delay (DEC-20), the cap is computed from the remaining composition.
+- **Zero bonus.** A group with no charged units at the tick of setting out gets no bonus (0); the order is carried out, the CP are not refunded.
+- **[accepted]** (the owner's decision 2026-10-21, mockup #339, "Bonus on the head: yes") **Bonus forecast in your own order.** The player view carries the bonus in the order of your own group (`OrderView.bonus`, #329): `min(path bonus, group's charged units right now)` for a scheduled order, 0 for an ordinary one and after the bonus has entered a fight. Before setting out this is a forecast: the cap is taken at the tick of setting out (item "When the cap is measured"), so the number can change if the charged units change during the delay. The client shows "◇ +N" on the head of its own plan ribbon, without computing it itself (AGENTS.md, 7.1). The enemy gets only the intent with no size and no bonus; the plan bonus is revealed only in a fight (DEC-32). Fog test: `test_dec29.py`. Changes only the protocol (`PROTOCOL_VERSION` 21 together with DEC-32), not the rules.
 
-**Примеры** (рулсет `mvp-1`):
+**Examples** (ruleset `mvp-1`):
 
-| № | Число рёбер пути | Заряженных юнитов в тик выступления | Бонус |
+| # | Number of edges of the path | Charged units at the tick of setting out | Bonus |
 |---|---|---|---|
-| 1 | 1 (соседний узел) | 3 | 1 |
+| 1 | 1 (a neighboring node) | 3 | 1 |
 | 2 | 2 | 3 | 2 |
-| 3 | 4 | 3 | 3 (потолок: заряженные) |
-| 4 | 3 | 1 (из 4 юнитов) | 1 |
+| 3 | 4 | 3 | 3 (cap: charged units) |
+| 4 | 3 | 1 (out of 4 units) | 1 |
 | 5 | 3 | 0 | 0 |
 | 6 | 2 | 5 | 2 |
 
-Раньше бонус был 2 в каждой строке, от дальности не зависел.
+The bonus used to be 2 in every row, independent of distance.
 
-Ключи рулсета (пишет реализация, #294): добавить `orders.planned_bonus_per_edge = 1` (**[принято]** (подтверждено владельцем 2026-10-17)), удалить `orders.planned_bonus`; остальное в `[orders]` без изменений.
+Ruleset keys (written by the implementation, #294): add `orders.planned_bonus_per_edge = 1` (**[accepted]** (confirmed by the owner 2026-10-17)), remove `orders.planned_bonus`; the rest of `[orders]` is unchanged.
 
-Как это считает симуляция (#294, `SIM_VERSION` 16): `Move(planned=True)` ставит группе бонус
-`(len(path) - 1) * orders.planned_bonus_per_edge` по пути из `ack.path`; система `movement` в тик
-выступления (первый шаг после задержки) обрезает его до числа заряженных юнитов группы (в пути
-заряды группы не меняются, поэтому обрезка на каждом шаге равна обрезке при выходе). Функция
-правила: `OrderRules.planned_bonus(edges, charged)`, её же используют боты. Группа без заряженных
-получает 0, поэтому п. F1 DEC-24 «бонус плана действует и без стреляющих зарядов» с DEC-29
-относится только к группе, у которой в тик выступления был заряженный юнит. Тесты:
-`packages/sim/tests/test_dec29.py` (строки таблицы примеров; прогноз в своём `OrderView.bonus` и его туман, #329).
+How the simulation computes this (#294, `SIM_VERSION` 16): `Move(planned=True)` gives the group a bonus of
+`(len(path) - 1) * orders.planned_bonus_per_edge` along the path from `ack.path`; the `movement` system at the tick
+of setting out (the first step after the delay) caps it at the number of charged units of the group (on the way
+the group's charges do not change, so the cap at every step equals the cap at departure). The rule
+function: `OrderRules.planned_bonus(edges, charged)`, the bots use it too. A group with no charged units
+gets 0, so item F1 of DEC-24 "the plan bonus works even without firing charges" applies, with DEC-29,
+only to a group that had a charged unit at the tick of setting out. Tests:
+`packages/sim/tests/test_dec29.py` (the rows of the examples table; the forecast in your own `OrderView.bonus` and its fog, #329).
 
-Альтернативы (не выбраны):
-- Плоский бонус +2 (DEC-08): не зависит от дальности, не отличает рейд от соседней атаки.
-- Множитель от размера группы: поощряет большие армии (раздел 5, «Почему не x2»).
+Alternatives (not chosen):
+- A flat +2 bonus (DEC-08): does not depend on distance, does not tell a raid from a neighboring attack.
+- A multiplier by group size: rewards big armies (section 5, "Why not x2").
 
-### Накопление бонуса «Защиты» (DEC-30, #316) **[принято]**
+### Accumulation of the "Defense" bonus (DEC-30, #316) **[accepted]**
 
-Решение владельца 2026-10-21 (фидбэк плейтеста). Заменяет в DEC-08 часть про «Защиту»: ~~бонус +2 активен через 30 тиков (`orders.defense_delay_ticks`, `orders.defense_bonus`)~~ **[заменено DEC-30]**. Реализация: sim, protocol и боты #317, клиент #318.
+The owner's decision 2026-10-21 (playtest feedback). Replaces the "Defense" part of DEC-08: ~~the +2 bonus is active after 30 ticks (`orders.defense_delay_ticks`, `orders.defense_bonus`)~~ **[superseded by DEC-30]**. Implementation: sim, protocol and bots #317, client #318.
 
-**Причина.** «Защита» нивелировала запланированный приказ: бонус +2 без потолка по заряженным юнитам; активация в 30 тиков равна задержке запланированного приказа (30 тиков), поэтому реакция на видимое намерение всегда успевала; после DEC-29 удар по соседнему узлу даёт +1 против +2 у защиты.
+**Reason.** "Defense" cancelled out the scheduled order: a +2 bonus with no cap by charged units; activation in 30 ticks equals the scheduled order's delay (30 ticks), so the reaction to a visible intent was always in time; after DEC-29 a strike on a neighboring node gives +1 against the defense's +2.
 
-**Решение владельца [принято].**
+**The owner's decision [accepted].**
 
-1. **Бонус растёт.** +1 за каждые `orders.defense_ticks_per_bonus` тиков, которые группа стоит в «Защите» (начальное значение 60, примерно время прохода одного ребра; баланс позже, после умных ботов). Отдельной задержки включения нет: `orders.defense_delay_ticks` и `orders.defense_bonus` снимаются.
-2. **Потолок:** число заряженных юнитов группы в начале боя (как потолок DEC-29).
-3. **После боя** накопленный бонус сгорает, режим остаётся, накопление начинается заново без повторной оплаты.
-4. **Цена включения** 2 CP (`orders.cost.defense = 200`), без изменений.
-5. **Видимость.** Противник видит режим «Защита» как раньше (намерение публично с момента включения, режим виден с уровня `PRESENCE`, раздел 10, DEC-21, п. 7), но не накопленное число; в бою бонус раскрывается по DEC-24 п. 13 (пересмотр DEC-29, раздел 4, п. I.1); с DEC-32 (#329) оставшийся запас боя виден обоим, пока бой идёт (`FightView.virtual_left`).
+1. **The bonus grows.** +1 for every `orders.defense_ticks_per_bonus` ticks that the group stands in "Defense" (initial value 60, roughly the time to traverse one edge; balance later, after smart bots). There is no separate switch-on delay: `orders.defense_delay_ticks` and `orders.defense_bonus` are removed.
+2. **Cap:** the number of charged units in the group at the start of the fight (like the DEC-29 cap).
+3. **After a fight** the accumulated bonus burns up, the mode stays, accumulation starts over with no repeat payment.
+4. **The price of switching on** is 2 CP (`orders.cost.defense = 200`), unchanged.
+5. **Visibility.** The enemy sees the "Defense" mode as before (the intent is public from the moment of switching on, the mode is visible from the `PRESENCE` level, section 10, DEC-21, item 7), but not the accumulated number; in a fight the bonus is revealed per DEC-24 item 13 (revision of DEC-29, section 4, item I.1); with DEC-32 (#329) the remaining reserve of the fight is visible to both while the fight goes on (`FightView.virtual_left`).
 
-Бонус боя: `min(charged, ticks_in_defense // orders.defense_ticks_per_bonus)`, где `charged` берётся в тике вступления в бой, `ticks_in_defense` это число тиков в «Защите» с включения режима или с конца последнего боя (`//` на неотрицательных, округление вниз).
+The fight bonus: `min(charged, ticks_in_defense // orders.defense_ticks_per_bonus)`, where `charged` is taken at the tick of entering the fight, `ticks_in_defense` is the number of ticks in "Defense" since the mode was switched on or since the end of the last fight (`//` on non-negative numbers, rounding down).
 
-**Что не меняется** (проверено по тексту DEC-08, DEC-07 и DEC-24): бонус действует только на защитника узла, у которого есть хотя бы один стреляющий (заряженный) юнит, условие проверяется в тике контакта (DEC-07, правило 1; DEC-24, F2); бонус входит в бой, только если группа стоит в узле с начала боя (DEC-24, F1); режим держится, пока группа стоит, приказ на движение снимает его без доплаты (DEC-08), `SetMode(ATTACK)` и `CancelOrder` бесплатны (DEC-20), режим в бою сменить нельзя (`IN_FIGHT`, DEC-24, п. E4; G, п. 3); бонус не растёт во время боя (в `V` он входит один раз при вступлении, DEC-24, F1).
+**What does not change** (checked against the text of DEC-08, DEC-07 and DEC-24): the bonus applies only to the defender of a node that has at least one firing (charged) unit, the condition is checked at the tick of contact (DEC-07, rule 1; DEC-24, F2); the bonus enters a fight only if the group has stood in the node since the start of the fight (DEC-24, F1); the mode holds while the group stands, an order to move removes it with no extra charge (DEC-08), `SetMode(ATTACK)` and `CancelOrder` are free (DEC-20), the mode cannot be changed in a fight (`IN_FIGHT`, DEC-24, item E4; G, item 3); the bonus does not grow during a fight (it enters `V` once on joining, DEC-24, F1).
 
-**Детали [принято]** (подтверждено владельцем 2026-10-21; простейшее, согласованное с DEC-20 и DEC-24):
+**Details [accepted]** (confirmed by the owner 2026-10-21; the simplest, consistent with DEC-20 and DEC-24):
 
-- **[принято]** **Счётчик.** У группы счётчик `ticks_in_defense`: 0 при включении режима, +1 за каждый тик, пока группа стоит в узле в «Защите» и не в бою. Сброс в 0: выход из режима (`SetMode(ATTACK)`, `CancelOrder`), приказ на движение, вступление в любой бой (бонус боя фиксируется в этот тик и дальше не растёт).
-- **[принято]** **Слияние** (DEC-20, A4, B2): режим, «Защита» и её счётчик берутся от целевой группы (как сейчас её «Защита» с бонусом); пришедшая группа в «Атаке» накопление не добавляет. Потолок считается по заряженным юнитам слитой группы в начале боя.
-- **[принято]** **Деление** (DEC-20, B1): новая группа в «Атаке», счётчик 0; исходная сохраняет режим и счётчик. Потолок считается по её заряженным юнитам в начале боя (поэтому деление может срезать бонус потолком).
-- **[принято]** **Подкрепление.** Группа, вступившая в бой подкреплением, получает сброс счётчика, как любая вступившая в бой; бонус входит в `V`, только если группа стоит в узле с начала боя (DEC-24, F1), иначе сгорает (DEC-24, G, п. 2).
-- **[принято]** **Округление:** вниз, целыми числами (AGENTS.md, 4.1, п. 3); накопленное число хранится не как бонус, а как счётчик тиков, чтобы смена ключа в рулсете не требовала пересчёта состояния.
-- **[принято]** **Вид игрока:** своей группе `PlayerView` отдаёт текущий накопленный бонус и потолок (`GroupView.defense_bonus` и `defense_cap`, #317); у чужой группы только режим, числа нет (тест тумана на новое поле).
+- **[accepted]** **Counter.** A group has a counter `ticks_in_defense`: 0 when the mode is switched on, +1 for every tick while the group stands in a node in "Defense" and not in a fight. Reset to 0: leaving the mode (`SetMode(ATTACK)`, `CancelOrder`), an order to move, joining any fight (the fight bonus is fixed at that tick and does not grow further).
+- **[accepted]** **Merging** (DEC-20, A4, B2): the mode, "Defense" and its counter are taken from the target group (as its "Defense" with the bonus is now); an arriving group in "Attack" adds no accumulation. The cap is computed from the charged units of the merged group at the start of the fight.
+- **[accepted]** **Splitting** (DEC-20, B1): the new group is in "Attack", counter 0; the original keeps the mode and the counter. The cap is computed from its charged units at the start of the fight (so a split can cut the bonus by the cap).
+- **[accepted]** **Reinforcement.** A group that joined a fight as a reinforcement gets its counter reset, like any group that joined a fight; the bonus enters `V` only if the group has stood in the node since the start of the fight (DEC-24, F1), otherwise it burns up (DEC-24, G, item 2).
+- **[accepted]** **Rounding:** down, whole numbers (AGENTS.md, 4.1, item 3); the accumulated number is stored not as a bonus but as a tick counter, so that changing a key in the ruleset does not require recomputing the state.
+- **[accepted]** **Player view:** for your own group `PlayerView` gives the current accumulated bonus and the cap (`GroupView.defense_bonus` and `defense_cap`, #317); for an enemy group only the mode, no number (a fog test for the new field).
 
-**Примеры** (рулсет `mvp-1`, `orders.defense_ticks_per_bonus = 60`, защитник в узле со стреляющим зарядом; бонус = `min(заряженные, тиков // 60)`):
+**Examples** (ruleset `mvp-1`, `orders.defense_ticks_per_bonus = 60`, a defender in a node with a firing charge; bonus = `min(charged, ticks // 60)`):
 
-| № | Тиков в «Защите» к началу боя | Заряженных юнитов | Бонус боя |
+| # | Ticks in "Defense" at the start of the fight | Charged units | Fight bonus |
 |---|---|---|---|
 | 1 | 30 | 3 | 0 (30 // 60 = 0) |
 | 2 | 60 | 3 | 1 |
 | 3 | 130 | 3 | 2 (130 // 60 = 2) |
-| 4 | 600 | 3 | 3 (потолок: заряженные, 600 // 60 = 10) |
-| 5 | 180 | 1 (из 4 юнитов) | 1 (потолок, 180 // 60 = 3) |
-| 6 | 300 | 0 | 0 (нет стреляющих зарядов: бонус не действует, DEC-24, F2) |
-| 7 | первый бой кончился, группа осталась в «Защите»; второй бой через 90 тиков после конца первого | 3 | 1 (счёт заново: 90 // 60 = 1; накопленное первого боя сгорело) |
+| 4 | 600 | 3 | 3 (cap: charged units, 600 // 60 = 10) |
+| 5 | 180 | 1 (out of 4 units) | 1 (cap, 180 // 60 = 3) |
+| 6 | 300 | 0 | 0 (no firing charges: the bonus does not apply, DEC-24, F2) |
+| 7 | the first fight ended, the group stayed in "Defense"; the second fight 90 ticks after the end of the first | 3 | 1 (counting afresh: 90 // 60 = 1; what the first fight accumulated burned up) |
 
-Раньше бонус был +2 с 30-го тика, и дальше от времени и числа заряженных юнитов не зависел.
+The bonus used to be +2 from the 30th tick, and after that did not depend on time or on the number of charged units.
 
-Ключи рулсета (пишет реализация, #317): добавить `orders.defense_ticks_per_bonus = 60` (**[принято]** владельцем 2026-10-21 как начальное значение, баланс позже), удалить `orders.defense_delay_ticks`, `orders.defense_bonus`; `orders.cost.defense = 200` и остальное в `[orders]` без изменений. Затронуты `rulesets/mvp-0.toml`, `rulesets/mvp-1.toml`, `rulesets/test-short.toml`.
+Ruleset keys (written by the implementation, #317): add `orders.defense_ticks_per_bonus = 60` (**[accepted]** by the owner 2026-10-21 as the initial value, balance later), remove `orders.defense_delay_ticks`, `orders.defense_bonus`; `orders.cost.defense = 200` and the rest of `[orders]` are unchanged. Affected: `rulesets/mvp-0.toml`, `rulesets/mvp-1.toml`, `rulesets/test-short.toml`.
 
-Как это считает симуляция (#317, `SIM_VERSION` 17, `PROTOCOL_VERSION` 20): счётчик
-`Group.ticks_in_defense` ставится в 0 командой `SetMode(DEFENSE)`, выходом из режима
-(`SetMode(ATTACK)`, `CancelOrder`, `Move`) и вступлением в бой (`systems.combat`, `_join`); система
-`orders` в конце тика прибавляет 1 каждой группе в «Защите», которая стоит в узле не в бою. Поэтому
-в тике контакта счётчик равен числу тиков с включения режима (или с конца последнего боя): команда
-в тике `s`, контакт в тике `s + 60` дают 60, бонус 1. Бонус боя считает `active_bonuses` в тике
-контакта функцией правила `OrderRules.defense_bonus(ticks, charged)` (её же используют боты);
-`Group.bonus` остаётся только бонусом плана. `SetMode(DEFENSE)` группе, уже стоящей в «Защите»,
-отклоняется `NO_CHANGE` (раньше разрешалось и стоило 2 CP заново): повторное включение только
-обнулило бы накопленное, а после боя накопление идёт заново само. Вид игрока: `GroupView.defense_bonus`
-(бонус боя, начавшегося сейчас, то есть накопленное с потолком) и `defense_cap` (потолок: заряженные
-юниты), оба `null` вне «Защиты»; `ruleset_public.orders.defense_ticks_per_bonus` вместо
-`defense_delay_ticks`, `combat.defense_bonus` снят. Боты: оценка пула защитника берёт накопленное
-противником сверху по публичному тику намерения «Защиты» (`(tick - created_tick) // 60`, с потолком
-по заряженным), `ReactiveBot` включает «Защиту» в ответ на видимый план, только если до самого
-раннего прибытия удара она успеет накопить хотя бы +1. Тесты: `packages/sim/tests/test_dec30.py`
-(таблица примеров и детали), туман: `test_view.py`.
+How the simulation computes this (#317, `SIM_VERSION` 17, `PROTOCOL_VERSION` 20): the counter
+`Group.ticks_in_defense` is set to 0 by the command `SetMode(DEFENSE)`, by leaving the mode
+(`SetMode(ATTACK)`, `CancelOrder`, `Move`) and by joining a fight (`systems.combat`, `_join`); the
+`orders` system at the end of the tick adds 1 to every group in "Defense" that stands in a node and is not in a fight. So
+at the tick of contact the counter equals the number of ticks since the mode was switched on (or since the end of the last fight): a command
+at tick `s`, contact at tick `s + 60` give 60, bonus 1. The fight bonus is computed by `active_bonuses` at the tick of
+contact with the rule function `OrderRules.defense_bonus(ticks, charged)` (the bots use it too);
+`Group.bonus` remains only the plan bonus. `SetMode(DEFENSE)` for a group that already stands in "Defense"
+is rejected with `NO_CHANGE` (it used to be allowed and cost 2 CP again): switching on again would only
+reset what was accumulated, and after a fight accumulation starts over by itself. Player view: `GroupView.defense_bonus`
+(the bonus of a fight starting now, that is, what is accumulated, with the cap) and `defense_cap` (the cap: charged
+units), both `null` outside "Defense"; `ruleset_public.orders.defense_ticks_per_bonus` instead of
+`defense_delay_ticks`, `combat.defense_bonus` removed. Bots: the estimate of the defender's pool adds what the
+enemy has accumulated, judged from the public tick of the "Defense" intent (`(tick - created_tick) // 60`, capped
+by the charged units), `ReactiveBot` switches on "Defense" in reply to a visible plan only if, before the very
+earliest arrival of the strike, it will manage to accumulate at least +1. Tests: `packages/sim/tests/test_dec30.py`
+(the examples table and details), fog: `test_view.py`.
 
-Альтернативы (не выбраны):
-- Прежнее правило DEC-08: +2 через 30 тиков (совпадает с задержкой плана, реакция всегда успевает, нет потолка).
-- Бонус не сгорает после боя (оборона сильнее, осада тяжелее; владелец выбрал сгорание).
+Alternatives (not chosen):
+- The earlier DEC-08 rule: +2 after 30 ticks (coincides with the plan's delay, the reaction is always in time, no cap).
+- The bonus does not burn up after a fight (stronger defense, harder siege; the owner chose burning up).
 
-
----
-
-## 6. CP (командные очки)
-
-- **[предложено]** CP остаются в игре (был вопрос, не убрать ли их совсем).
-- ~~**[принято]** За CP платятся: приказы (запланированные дороже), деление и слияние групп, отмена запланированных приказов.~~ **[заменено DEC-20]**: за CP платятся приказы на движение (запланированные дороже), «Защита» и рекрут; деление, слияние, отмена (DEC-20), приоритет и перевозка (DEC-18) бесплатны.
-- **[предложено]** CP одинаковы у обоих игроков и **не растут от территории**.
-- **[предложено]** CP также являются экономикой: за них покупаются заряды в столице (см. раздел 7).
-
-Ключевое уточнение из обсуждения: проблема не в том, что CP — это одновременно внимание и экономика. Проблема в доходе, **растущем от территории**. Если доход плоский, CP может быть и тем и другим.
-
-### Стойка вместо кликанья
-
-- **[предложено]** Чтобы не нажимать «купить заряды» каждые пять секунд, распределение CP задаётся стойкой, которую меняют редко (действующее правило: DEC-02 ниже):
-
-| Стойка | CP на приказы | CP на снабжение |
-|---|---|---|
-| Экономия | 25% | 75% |
-| Баланс | 50% | 50% |
-| Война | 75% | 25% |
-
-- ~~**[предложено]** Плюс небольшое пассивное производство зарядов в столице, чтобы игрок, потративший всё на приказы, не оставался совсем без снабжения.~~ **[заменено решением 2026-10-14, #253]**: пассивного производства нет, заряды только из CP через стойку (блок DEC-02 ниже).
-- **[открыто]** Запасной вариант: два отдельных плоских потока (CP и заряды) без конвертации. Проще, но пропадает дилемма «действовать или кормить».
-
-### Модель экономики и стойка CP (DEC-02, #8) **[принято]**
-
-Плоская экономика: снабжение производит только столица. ~~Пассивно 1 заряд за 50 тиков;~~ **[заменено решением 2026-10-14, #253]**: пассивного производства нет (ниже). Стойка в трёх положениях (25 / 50 / 75% регена CP уходит в заряды по курсу 1 CP → 2 заряда). Начисление квантом: раз в 50 тиков 100 сотых CP делятся по стойке; доля в заряды копится в аккумуляторе (в сотых долях заряда) и превращается в целые заряды. На потолке CP излишек CP сгорает; доля стойки в заряды начисляется всегда. Смена стойки бесплатна, не чаще раза в 100 тиков.
-
-Соответствие положений таблице стойки выше: «Экономия»: 75% в заряды, «Баланс»: 50%, «Война»: 25%
-(`economy.stance_to_charges_pct` в SIM-01, #17).
-
-**Без пассивного производства (решение владельца 2026-10-14, #252, #253) [принято].** Столица не
-производит заряды сама по себе: заряды появляются только из CP, долей кванта регена по стойке. Ключи
-`economy.passive_period_ticks` и `economy.passive_amount` удалены из рулсета и из `ruleset_public`
-протокола. Даже «Война» отдаёт в заряды 25% кванта, поэтому игрок без снабжения не остаётся.
-Пример: за 600 тиков (12 квантов) столица получает в «Экономии» 18 зарядов, в «Балансе» 12, в
-«Войне» 6 (до решения: на 12 больше в каждой стойке). Тест: `packages/sim/tests/test_economy.py`.
-
-Значения в `rulesets/mvp-0.toml`: секции `[cp]`, `[economy]`, `orders.stance_cooldown_ticks`, `orders.cost.stance`.
-
-Как это считает симуляция (SIM-06, #22; `gow_sim.systems.economy`): квант ~~и пассивное производство
-начисляются~~ начисляется на тиках t > 0, кратных периоду (первый квант на тике 50; за 600 тиков 12 квантов).
-Доля в заряды: `per_period * pct // 100` (округление вниз), в аккумулятор идёт `доля * charges_per_cp`
-сотых заряда. Заряды зачисляются на склад столицы в пределах её ёмкости (раздел 9), ~~излишек теряется
-(событие `charges_overflow`)~~ **[заменено DEC-28]**: излишек растекается по тыловым городам, сгорает (`charges_overflow`) только когда полны все склады (раздел 8, DEC-28, п. 4.4); сгоревшие на потолке CP: событие `cp_burned`. Если столица не своя,
-произведённые заряды теряются, CP регенерируют как обычно.
-
-- **[открыто]** Стартовая стойка обоих игроков и действует ли кулдаун на первую смену: вопрос #104. До решения: `economy.start_stance = "balance"`, первая смена разрешена сразу.
-
-Альтернативы (не выбраны):
-- Вогнутая модель (города дают небольшой доход с убывающей отдачей) — реализуется, только если BAL-02 провалится.
-- Два независимых плоских потока (CP и заряды) без конвертации.
 
 ---
 
-## 7. Снабжение
+## 6. CP (command points)
 
-- **[принято]** Снабжение — это «пакеты», которые идут из столицы и городов в другие города.
-- **[принято]** У каждого города есть **склад**. Юниты в городе заряжаются с его склада.
-- Три уровня приоритета и порядок доставки DEC-18 **[заменено DEC-28]**: маркеры фронта, минимум тыла, транзит, доноры (раздел 8, блок DEC-28).
-- ~~**[принято]** Все потоки **автоматические**. Игрок никогда не направляет пакеты вручную.~~ **[заменено DEC-18]**: потоки автоматические, игрок задаёт приоритет города и может разово перевезти заряды (блок DEC-18 ниже).
-- ~~**[принято]** Вместимость склада зависит от развития дорог вокруг города.~~ **[заменено DEC-22]**: ёмкость склада фиксирована видом узла (раздел 8).
+- **[proposed]** CP stay in the game (there was a question whether to drop them altogether).
+- ~~**[accepted]** CP pay for: orders (scheduled ones cost more), splitting and merging groups, cancelling scheduled orders.~~ **[superseded by DEC-20]**: CP pay for move orders (scheduled ones cost more), "Defense" and recruiting; splitting, merging, cancelling (DEC-20), priority and transfer (DEC-18) are free.
+- **[proposed]** CP are the same for both players and **do not grow with territory**.
+- **[proposed]** CP are also the economy: they buy charges in the capital (see section 7).
 
-### Кто производит снабжение
+The key clarification from the discussion: the problem is not that CP are both attention and economy at once. The problem is income that **grows with territory**. If income is flat, CP can be both.
 
-- **[предложено]** **Плоская экономика: снабжение производит только столица**, заряды покупаются за CP (действующее правило: DEC-02, раздел 6). Остальные города — склады, места для войск и источники VP, но не производители.
+### Stance instead of clicking
 
-Почему это убирает снежный ком: у игрока с вдвое большей территорией такой же доход, а защищать надо вдвое больший периметр. Территория даёт не доход, а:
+- **[proposed]** To avoid pressing "buy charges" every five seconds, the split of CP is set by a stance that is changed rarely (the current rule: DEC-02 below):
 
-- **VP** (ради них воюют);
-- **досягаемость** (передовой склад ближе к фронту, заряды доходят быстрее);
-- **ёмкость** (больше мест для войск и зарядов).
-
-Камбэк остаётся возможным: проигравший землю теряет темп набора VP, но не доход.
-
-**Риск:** столица — единственный источник, и отрезать её — катастрофа. Смягчение: склады дают отрезанному региону запас времени (группа умирает постепенно, а не мгновенно). Столицы на картах стоит ставить в выигрышном рельефе (горы).
-
-- **[открыто]** Если плоская экономика окажется слишком статичной (никому не нужно расширяться), есть промежуточные варианты:
-
-| Модель | Доход от городов | Снежный ком |
+| Stance | CP for orders | CP for supply |
 |---|---|---|
-| Плоская | нет, только столица | нет |
-| Вогнутая | маленький, с убывающей отдачей (≈ √ от числа городов) | контролируемый |
-| Линейная | каждый город даёт одинаково | классический 4X |
+| Economy | 25% | 75% |
+| Balance | 50% | 50% |
+| War | 75% | 25% |
 
-Рекомендация: начать с плоской, переходить к вогнутой только если игроки перестанут расширяться.
+- ~~**[proposed]** Plus a small passive production of charges in the capital, so that a player who spent everything on orders is not left completely without supply.~~ **[superseded by the decision of 2026-10-14, #253]**: there is no passive production, charges come only from CP through the stance (DEC-02 block below).
+- **[open]** A fallback option: two separate flat flows (CP and charges) without conversion. Simpler, but the dilemma "act or feed" disappears.
 
-- ~~**[открыто]** Рычаг приоритета: пометить город как приоритетный, чтобы заряды шли туда первыми. Одна кнопка вместо панели управления потоками.~~ **[заменено DEC-18]**: три уровня приоритета (блок ниже).
+### Economy model and CP stance (DEC-02, #8) **[accepted]**
 
-### Управление снабжением: приоритеты и перевозка (DEC-18, #230) **[принято]**
+A flat economy: only the capital produces supply. ~~Passively 1 charge per 50 ticks;~~ **[superseded by the decision of 2026-10-14, #253]**: there is no passive production (below). The stance has three positions (25 / 50 / 75% of the CP regen goes into charges at the rate 1 CP → 2 charges). Credited in a quantum: once per 50 ticks 100 hundredths of CP are divided by the stance; the share going to charges accumulates in an accumulator (in hundredths of a charge) and turns into whole charges. At the CP cap the excess CP burns up; the stance's share into charges is always credited. Changing the stance is free, not more often than once per 100 ticks.
 
-Плейтест 2026-10-12: снабжение целиком автоматическое, игрок не может сказать «сначала фронт» и быстро перебросить запас, промежуточные города оставляют заряды себе. Решение владельца: режим карты «Снабжение», три уровня приоритета у города, промежуточные города работают как транзит, разовая перевозка A→B бесплатно. Заменяет принятый текст «Все потоки автоматические» (выше) и открытый вопрос #131 (его значения вошли сюда как базовый алгоритм).
+How the positions match the stance table above: "Economy": 75% into charges, "Balance": 50%, "War": 25%
+(`economy.stance_to_charges_pct` in SIM-01, #17).
 
-> **DEC-28 (#290, 2026-10-17):** пп. 1, 2, 4 (приоритет города, целевой запас, три прохода отправки) и режим карты п. 7
-> **[заменено DEC-28]** (блок в разделе 8): два маркера фронта вместо трёх приоритетов, цель города: полный склад у фронта и
-> `rear_min` в тылу, транзит через города, доноры. Пп. 3 (дерево как метрика расстояния), 5 (пакет и путь;
-> в конце пути заряды кладутся на склад), 6 (перевозка), 8-10 действуют; слова «приоритет», `high`, `normal`, `low`
-> в них читать по DEC-28. Реализация #292: примеры 1-7, 20-22 и 25-28 (приоритеты, цели, резерв
-> пересылки) **[заменено DEC-28]**, их место заняли примеры блока DEC-28; примеры 8-17, 19, 23 и
-> 29-33 действуют (в тестах 9, 17 и 23 город назначения держит маркер фронта, чтобы автоматика не
-> увезла пришедшие заряды дальше, DEC-28, п. 6).
+**No passive production (the owner's decision 2026-10-14, #252, #253) [accepted].** The capital does not
+produce charges by itself: charges appear only from CP, from the shares of the regen quantum by stance. The keys
+`economy.passive_period_ticks` and `economy.passive_amount` are removed from the ruleset and from the protocol's `ruleset_public`.
+Even "War" gives 25% of the quantum to charges, so a player is not left without supply.
+Example: over 600 ticks (12 quanta) the capital gets 18 charges in "Economy", 12 in "Balance", and
+6 in "War" (before the decision: 12 more in every stance). Test: `packages/sim/tests/test_economy.py`.
 
-> **DEC-26 (#265):** при `city_upgrades.enabled = true` везде, где ниже «ёмкость» относится к заряду
-> (пп. 2, 4, 5, 6 и примеры), берётся `warehouse_capacity` города (склад отдельно от ёмкости юнитов,
-> раздел 8); примеры ниже даны для `enabled = false` (склад равен ёмкости узла).
+Values in `rulesets/mvp-0.toml`: the sections `[cp]`, `[economy]`, `orders.stance_cooldown_ticks`, `orders.cost.stance`.
 
-Снабжение остаётся автоматическим, у игрока появляются два рычага: приоритет города и разовая
-перевозка. Ответы владельца 2026-10-12 (#239): приоритет задаёт только порядок доставки (пп. 2 и 4), перевозка
-внутри отрезанного кармана разрешена (п. 6), режимы карты переключаются на `Tab` (п. 7). Пропускную способность
-перевозки (п. 6, раньше «по умолчанию») владелец решил 2026-10-14 (#252): перевозка делит её с
-автоматической отправкой (п. 10). Решения владельца 2026-10-15 (#287) **[принято]**: резерв
-города при пересылке (п. 4), объём перевозки по свободному месту получателя и доставка перевозки
-партиями (п. 6); примеры 26-33.
+How the simulation computes this (SIM-06, #22; `gow_sim.systems.economy`): the quantum ~~and passive production
+are~~ is credited on ticks t > 0 that are multiples of the period (the first quantum at tick 50; 12 quanta over 600 ticks).
+The share into charges: `per_period * pct // 100` (rounding down), `share * charges_per_cp`
+hundredths of a charge go into the accumulator. Charges are credited to the capital's warehouse within its capacity (section 9), ~~the excess is lost
+(event `charges_overflow`)~~ **[superseded by DEC-28]**: the excess spreads to the rear cities, burns up (`charges_overflow`) only when all warehouses are full (section 8, DEC-28, item 4.4); CP that burned up at the cap: event `cp_burned`. If the capital is not yours, the
+produced charges are lost, CP regenerate as usual.
 
-1. ~~**Приоритет города.**~~ **[заменено DEC-28]** Команда `SetPriority(node, level)`, `level`: `high` | `normal` | `low`
-   (высокий, обычный, низкий). Бесплатно (`orders.cost.priority = 0`). У всех городов на старте
-   `normal`; при смене владельца приоритет сбрасывается в `normal`. Проверки по порядку: узла нет
-   (`NOT_FOUND_OR_HIDDEN`); узел не свой (`NOT_OWNER`); узел не город, то есть провинция DEC-23
-   (`NOT_CITY`, новый код); уровень тот же (`NO_CHANGE`); CP меньше `orders.cost.priority`
-   (`NOT_ENOUGH_CP`, при 0 не срабатывает).
-2. ~~**Целевой запас города**~~ **[заменено DEC-28]** один для всех уровней: `min(ёмкость, разряженные + supply.buffer)`
-   («разряженные»: разряженные юниты владельца, стоящие в городе, как в SIM-08). Приоритет цель не
-   меняет и склад до ёмкости не наполняет (владелец 2026-10-12: нужно больше дефицита снабжения); он
-   задаёт только порядок доставки (п. 4). Ключа `supply.low_buffer` нет.
-3. **Дерево снабжения** как в SIM-08 (значения #131 по умолчанию входят сюда и становятся
-   правилом): Дейкстра от своей столицы по своим узлам, соединённым внутренними рёбрами; метрика:
-   время пакета по ребру (`packet_ticks` по уровню дороги, DEC-22, DEC-26); при равенстве родитель с
-   меньшим `node_key(player, node)`. Отрезанные узлы в дерево не входят. Провинции (DEC-23) входят
-   в дерево как транзит: склада и цели у них нет. **Дети города** в снабжении: ближайшие
-   города-потомки в дереве (путь к ним идёт только через провинции); пакет идёт к такому городу
-   по этому пути целиком, не останавливаясь в провинциях.
-4. ~~**Отправка**~~ **[заменено DEC-28]** раз в `supply.dispatch_ticks` (тики `t > 0`, кратные периоду) тремя проходами:
-   `high`, затем `normal`, затем `low`: высокий приоритет обслуживается раньше обычного, обычный
-   раньше низкого. В проходе уровня `L` **активны** города с уровнем не ниже `L` (`high` выше
-   `normal` выше `low`); остальные в этом проходе только транзит. Отправленное в проходе в
-   следующих проходах считается «в пути».
-   - Собственный дефицит активного города: `цель - склад - в пути к нему`; неактивного:
-     `-(склад + в пути к нему)`. Неактивный город не держит запас для себя: всё, что в нём лежит,
-     доступно потомкам (транзит).
-   - Дефицит поддерева снизу вверх: `max(0, собственный + сумма дефицитов поддеревьев детей)`.
-   - ~~Города по порядку дерева (от столицы) отдают `склад - (цель, если активен, иначе 0)` детям с
-     дефицитом поддерева больше 0 (за вычетом уже отправленного в прежних проходах периода).~~
-     **[заменено решением владельца 2026-10-15, #287]**: города по порядку дерева (от столицы)
-     отдают детям с дефицитом поддерева больше 0 `склад - резерв` (склад уже без отправленного в
-     прежних проходах периода). **Резерв** активного города: `min(цель, ёмкость_склада // 2)`,
-     то есть не больше цели и не больше половины ёмкости склада (округление вниз); неактивного: 0,
-     как раньше. Ёмкость склада 1 держит 0 (чистый транзит), 2 и 3 держат 1, 4 держит 2,
-     столица 6 держит 3 (если цель не меньше). Причина: с маленькими складами `mvp-1` (1..2) цель
-     равнялась всему складу, малый город ничего не пересылал и перекрывал снабжение всем
-     городам за ним. Собственный дефицит (что город просит, ниже) не меняется: город, у которого
-     резерв меньше цели, в одном периоде может и отдавать детям, и просить у родителя (конвейер,
-     примеры 26-28: в проходе `low` обычные города активны снова, и отданное в проходе `normal`
-     освобождает место).
-     **Порядок детей:** ключ ребёнка: наименьшая тройка `(ранг уровня, склад, node_key(player, node))`
-     среди активных городов его поддерева (включая его самого) с собственным дефицитом больше 0;
-     ранг `high` 0, `normal` 1, `low` 2; склад: заряды на складе города без «в пути». Дети идут по
-     возрастанию ключа: выше приоритет первым; при равном уровне первым город с НАИМЕНЬШИМ числом
-     зарядов на складе; при равном складе меньший `node_key` (AGENTS.md, 4.1, правило 6).
-     Ребёнок получает не больше своего дефицита
-     поддерева, не больше свободного места `ёмкость - склад - в пути к нему` и не больше остатка
-     пропускной способности каждого ребра пути за этот период (`amount` ребра, DEC-22, за вычетом
-     взятого перевозками, п. 10; остаток общий для всех трёх проходов и всех путей через ребро).
-   - Всё, что один город отправил одному ребёнку за период, идёт одним пакетом.
-   - Равный приоритет: ближний к столице город держит свою цель первым (#287: свой резерв).
-   - Если все города `normal`, работает одно правило уровня: первым получает город с наименьшим
-     числом зарядов на складе (тест; порядок «по убыванию дефицита» из SIM-08 снят).
-5. **Пакет и путь.** Пакет хранит путь (рёбра) и текущее ребро. Время каждого ребра
-   `packet_ticks(edge)` считается при отправке по текущим уровням и дальше не меняется.
-   - Пакет на ребре, которое перестало быть внутренним для его владельца, теряется (`packet_lost`),
-     ~~кроме грузовой дороги (DEC-22, п. 5)~~ **[заменено DEC-26]**: исключений нет, грузовой дороги нет.
-   - Пакет, дошедший до промежуточного узла, сразу идёт дальше. Если следующее ребро пути уже не
-     внутреннее: в своём городе заряды кладутся на склад (в пределах ёмкости, излишек:
-     `charges_overflow`), в провинции теряются (`packet_lost`).
-   - В конце пути заряды кладутся на склад в пределах ёмкости, излишек сгорает (`charges_overflow`).
-6. **Перевозка.** Команда `Transfer(from, to, n)`: разово переслать `n` зарядов со склада города
-   `from` на склад города `to` по своим внутренним дорогам. Бесплатно (`orders.cost.transfer = 0`).
-   - Проверки по порядку: `from` нет (`NOT_FOUND_OR_HIDDEN`); не свой (`NOT_OWNER`); `to` нет
-     (`NOT_FOUND_OR_HIDDEN`); не свой (`NOT_OWNER`); `from` или `to` не город (`NOT_CITY`);
-     `from == to` или `n < 1` (`INVALID_ARGUMENT`); нет пути по своим узлам через внутренние рёбра
-     (`NO_PATH`); на складе `from` меньше `n` (`NOT_ENOUGH_CHARGES`); **(#287)** на складе `to`
-     нет свободного места (`TARGET_FULL`, новый код, см. объём ниже); CP (`NOT_ENOUGH_CP`).
-   - **Объём (#287) [принято]:** при применении команды `n` урезается до свободного места склада
-     `to`: `n' = min(n, ёмкость_склада(to) - склад(to) - в пути к to)` («в пути»: заряды своих
-     пакетов, чей путь кончается в `to`, как в п. 4); при `0` отказ `TARGET_FULL`. Дальше везде
-     `n'`. Раньше заряды сверх свободного места сгорали при прибытии (`charges_overflow`).
-     Фактический объём клиент видит в событии `transfer_started` (`charges`); в `ack` поля объёма
-     нет, протокол не меняется; `ack.arrive_tick` считается по `n'`.
-   - Путь: ~~самый быстрый для этого `n` по времени из п. 6 ниже~~ **[заменено #287]**: самый
-     быстрый по сумме `packet_ticks` рёбер (число партий от пути не зависит: `amount` одинаков на
-     всех уровнях, DEC-26), при равенстве лексикографически
-     меньшая последовательность `node_key`, как у движения. Перевозка идёт в любую сторону, в том
-     числе к столице и внутри отрезанного от столицы кармана (владелец 2026-10-12).
-   - `n'` зарядов списываются со склада `from` при применении команды (начало тика `t`), ~~пакет
-     выходит в том же тике~~ **[заменено #287]**: первая партия выходит в том же тике.
-   - ~~Время на ребре `e`: `packet_ticks(e) + (ceil(n / amount(e)) - 1) * supply.dispatch_ticks`,
-     где `ceil(n / a) = (n + a - 1) // a`: `n` зарядов идут партиями по `amount` за период, а
-     симуляция ведёт их одним пакетом со временем последней партии.~~ **[заменено решением
-     владельца 2026-10-15, #287]**: **партии.** Перевозка идёт `B = ceil(n' / amount)` партиями,
-     `ceil(n / a) = (n + a - 1) // a`: партия `k = 0 .. B - 1` из `min(amount, осталось)`
-     зарядов выходит из `from` в тике `t + k * supply.dispatch_ticks` отдельным пакетом и идёт
-     по всему пути сама, `packet_ticks` на каждом ребре (как пакет автоматики). До выхода партия
-     ждёт в `from` (в виде игрока: свой пакет перевозки в начале первого ребра, `depart_tick` в
-     будущем) и пропускную способность не берёт. Прибытие последней партии:
-     `t + (B - 1) * supply.dispatch_ticks + сумма packet_ticks(e) по пути`; его сервер сообщает в
+- **[open]** The starting stance of both players and whether the cooldown applies to the first change: question #104. Until decided: `economy.start_stance = "balance"`, the first change is allowed at once.
+
+Alternatives (not chosen):
+- A concave model (cities give a small income with diminishing returns): implemented only if BAL-02 fails.
+- Two independent flat flows (CP and charges) without conversion.
+
+---
+
+## 7. Supply
+
+- **[accepted]** Supply is "packets" that go from the capital and cities to other cities.
+- **[accepted]** Every city has a **warehouse**. Units in a city are charged from its warehouse.
+- The three priority levels and the delivery order of DEC-18 **[superseded by DEC-28]**: front markers, rear minimum, transit, donors (section 8, DEC-28 block).
+- ~~**[accepted]** All flows are **automatic**. The player never directs packets by hand.~~ **[superseded by DEC-18]**: flows are automatic, the player sets a city's priority and can transfer charges once (DEC-18 block below).
+- ~~**[accepted]** The warehouse capacity depends on the development of the roads around the city.~~ **[superseded by DEC-22]**: the warehouse capacity is fixed by the kind of node (section 8).
+
+### Who produces supply
+
+- **[proposed]** **Flat economy: only the capital produces supply**, charges are bought for CP (the current rule: DEC-02, section 6). The other cities are warehouses, places for troops and sources of VP, but not producers.
+
+Why this removes the snowball: a player with twice the territory has the same income, while having to defend twice the perimeter. Territory gives not income, but:
+
+- **VP** (what the fighting is for);
+- **reach** (a forward warehouse is closer to the front, charges arrive faster);
+- **capacity** (more places for troops and charges).
+
+A comeback stays possible: the one who loses land loses the pace of collecting VP, but not income.
+
+**Risk:** the capital is the only source, and cutting it off is a catastrophe. Mitigation: warehouses give a cut-off region a reserve of time (a group dies gradually, not instantly). Capitals on maps should be placed on winning terrain (mountains).
+
+- **[open]** If the flat economy turns out too static (nobody needs to expand), there are intermediate options:
+
+| Model | Income from cities | Snowball |
+|---|---|---|
+| Flat | none, only the capital | no |
+| Concave | small, with diminishing returns (≈ √ of the number of cities) | controlled |
+| Linear | every city gives the same | classic 4X |
+
+Recommendation: start with flat, move to concave only if players stop expanding.
+
+- ~~**[open]** A priority lever: mark a city as a priority so that charges go there first. One button instead of a flow control panel.~~ **[superseded by DEC-18]**: three priority levels (block below).
+
+### Supply management: priorities and transfers (DEC-18, #230) **[accepted]**
+
+Playtest 2026-10-12: supply is entirely automatic, the player cannot say "the front first" and quickly move a stock, intermediate cities keep the charges for themselves. The owner's decision: a "Supply" map mode, three priority levels for a city, intermediate cities work as transit, a one-off transfer A→B is free. Replaces the accepted text "All flows are automatic" (above) and the open question #131 (its values came in here as the base algorithm).
+
+> **DEC-28 (#290, 2026-10-17):** items 1, 2, 4 (city priority, target stock, three dispatch passes) and the map mode, item 7,
+> **[superseded by DEC-28]** (block in section 8): two front markers instead of three priorities, the city's target: a full warehouse at the front and
+> `rear_min` in the rear, transit through cities, donors. Items 3 (the tree as a distance metric), 5 (packet and path;
+> at the end of the path charges are put into the warehouse), 6 (transfer), 8-10 stay in force; read the words "priority", `high`, `normal`, `low`
+> in them per DEC-28. Implementation #292: examples 1-7, 20-22 and 25-28 (priorities, targets, the forwarding
+> reserve) **[superseded by DEC-28]**, their place was taken by the examples of the DEC-28 block; examples 8-17, 19, 23 and
+> 29-33 stay in force (in the tests of 9, 17 and 23 the destination city holds a front marker so that automation does not
+> carry the arrived charges further, DEC-28, item 6).
+
+> **DEC-26 (#265):** with `city_upgrades.enabled = true`, wherever below "capacity" refers to a charge
+> (items 2, 4, 5, 6 and the examples), the city's `warehouse_capacity` is taken (the warehouse is separate from the unit capacity,
+> section 8); the examples below are given for `enabled = false` (the warehouse equals the node's capacity).
+
+Supply stays automatic, and the player gets two levers: a city's priority and a one-off
+transfer. The owner's answers 2026-10-12 (#239): priority sets only the order of delivery (items 2 and 4), transfer
+inside a cut-off pocket is allowed (item 6), map modes switch on `Tab` (item 7). The throughput of a
+transfer (item 6, earlier "by default") was decided by the owner 2026-10-14 (#252): a transfer shares it with
+automatic dispatch (item 10). The owner's decisions 2026-10-15 (#287) **[accepted]**: the city's
+reserve when forwarding (item 4), the transfer volume by the receiver's free room and delivery of a transfer
+in batches (item 6); examples 26-33.
+
+1. ~~**City priority.**~~ **[superseded by DEC-28]** The command `SetPriority(node, level)`, `level`: `high` | `normal` | `low`
+   (high, normal, low). Free (`orders.cost.priority = 0`). All cities start with
+   `normal`; when the owner changes, the priority is reset to `normal`. Checks in order: the node does not exist
+   (`NOT_FOUND_OR_HIDDEN`); the node is not yours (`NOT_OWNER`); the node is not a city, that is, it is a DEC-23 province
+   (`NOT_CITY`, a new code); the same level (`NO_CHANGE`); CP less than `orders.cost.priority`
+   (`NOT_ENOUGH_CP`, does not trigger at 0).
+2. ~~**City target stock**~~ **[superseded by DEC-28]** the same for all levels: `min(capacity, discharged + supply.buffer)`
+   ("discharged": the owner's discharged units standing in the city, as in SIM-08). Priority does not change the target
+   and does not fill the warehouse to capacity (the owner 2026-10-12: more supply deficit is needed); it
+   sets only the order of delivery (item 4). There is no key `supply.low_buffer`.
+3. **Supply tree** as in SIM-08 (the default values of #131 come in here and become
+   the rule): Dijkstra from your capital over your nodes joined by internal edges; the metric:
+   the packet time over an edge (`packet_ticks` by road level, DEC-22, DEC-26); on a tie the parent with
+   the smaller `node_key(player, node)`. Cut-off nodes are not in the tree. Provinces (DEC-23) are in
+   the tree as transit: they have no warehouse and no target. **Children of a city** in supply: the nearest
+   descendant cities in the tree (the path to them goes only through provinces); a packet goes to such a city
+   along that path in full, without stopping in provinces.
+4. ~~**Dispatch**~~ **[superseded by DEC-28]** once per `supply.dispatch_ticks` (ticks `t > 0` that are multiples of the period) in three passes:
+   `high`, then `normal`, then `low`: high priority is served before normal, normal
+   before low. In the pass of level `L` the cities with a level not lower than `L` are **active** (`high` is higher than
+   `normal`, which is higher than `low`); the others are only transit in this pass. What was sent in a pass counts
+   as "in transit" in the following passes.
+   - The own deficit of an active city: `target - warehouse - in transit to it`; of an inactive one:
+     `-(warehouse + in transit to it)`. An inactive city does not hold a stock for itself: everything lying in it
+     is available to its descendants (transit).
+   - The deficit of a subtree, bottom up: `max(0, own + sum of the deficits of the children's subtrees)`.
+   - ~~Cities in tree order (from the capital) give `warehouse - (target if active, otherwise 0)` to children with
+     a subtree deficit above 0 (minus what was already sent in earlier passes of the period).~~
+     **[superseded by the owner's decision 2026-10-15, #287]**: cities in tree order (from the capital)
+     give to children with a subtree deficit above 0 `warehouse - reserve` (the warehouse already without what was sent in
+     earlier passes of the period). The **reserve** of an active city: `min(target, warehouse_capacity // 2)`,
+     that is, no more than the target and no more than half the warehouse capacity (rounding down); of an inactive one: 0,
+     as before. Warehouse capacity 1 keeps 0 (pure transit), 2 and 3 keep 1, 4 keeps 2,
+     the capital with 6 keeps 3 (if the target is not smaller). Reason: with the small warehouses of `mvp-1` (1..2) the target
+     equalled the whole warehouse, a small city forwarded nothing and blocked the supply of all
+     the cities behind it. The own deficit (what the city asks for, below) does not change: a city whose
+     reserve is less than its target can both give to children and ask its parent in one period (a conveyor,
+     examples 26-28: in the `low` pass the normal cities are active again, and what was given in the `normal` pass
+     frees up room).
+     **Order of children:** a child's key: the smallest triple `(level rank, warehouse, node_key(player, node))`
+     among the active cities of its subtree (including itself) with an own deficit above 0;
+     the rank of `high` is 0, `normal` 1, `low` 2; warehouse: the charges in the city's warehouse without those "in transit". Children go in
+     ascending order of key: higher priority first; at equal level the first is the city with the LEAST number of
+     charges in the warehouse; at equal warehouse the smaller `node_key` (AGENTS.md, 4.1, rule 6).
+     A child gets no more than its subtree
+     deficit, no more than the free room `capacity - warehouse - in transit to it` and no more than the remainder of
+     the throughput of every edge of the path for this period (the edge's `amount`, DEC-22, minus
+     what transfers took, item 10; the remainder is shared by all three passes and all paths through the edge).
+   - Everything that one city sent to one child in a period goes as one packet.
+   - Equal priority: the city nearest to the capital holds its target first (#287: its own reserve).
+   - If all cities are `normal`, one level rule works: the first to receive is the city with the smallest
+     number of charges in the warehouse (a test; the "by descending deficit" order from SIM-08 is removed).
+5. **Packet and path.** A packet stores the path (edges) and the current edge. The time of each edge
+   `packet_ticks(edge)` is computed at dispatch by the current levels and does not change afterwards.
+   - A packet on an edge that has stopped being internal for its owner is lost (`packet_lost`),
+     ~~except on a freight road (DEC-22, item 5)~~ **[superseded by DEC-26]**: there are no exceptions, there is no freight road.
+   - A packet that reached an intermediate node goes on at once. If the next edge of the path is no longer
+     internal: in your own city the charges are put into the warehouse (within capacity, the excess:
+     `charges_overflow`), in a province they are lost (`packet_lost`).
+   - At the end of the path the charges are put into the warehouse within capacity, the excess burns up (`charges_overflow`).
+6. **Transfer.** The command `Transfer(from, to, n)`: send once `n` charges from the warehouse of city
+   `from` to the warehouse of city `to` along your internal roads. Free (`orders.cost.transfer = 0`).
+   - Checks in order: `from` does not exist (`NOT_FOUND_OR_HIDDEN`); not yours (`NOT_OWNER`); `to` does not exist
+     (`NOT_FOUND_OR_HIDDEN`); not yours (`NOT_OWNER`); `from` or `to` is not a city (`NOT_CITY`);
+     `from == to` or `n < 1` (`INVALID_ARGUMENT`); no path over your nodes through internal edges
+     (`NO_PATH`); the warehouse of `from` has fewer than `n` (`NOT_ENOUGH_CHARGES`); **(#287)** the warehouse of `to`
+     has no free room (`TARGET_FULL`, a new code, see the volume below); CP (`NOT_ENOUGH_CP`).
+   - **Volume (#287) [accepted]:** when the command is applied, `n` is cut down to the free room of the warehouse of
+     `to`: `n' = min(n, warehouse_capacity(to) - warehouse(to) - in transit to to)` ("in transit": the charges of your own
+     packets whose path ends in `to`, as in item 4); at `0` the command is rejected with `TARGET_FULL`. After that everywhere
+     `n'`. Before, charges above the free room burned up on arrival (`charges_overflow`).
+     The client sees the actual volume in the event `transfer_started` (`charges`); the `ack` has no volume
+     field, the protocol does not change; `ack.arrive_tick` is computed from `n'`.
+   - Path: ~~the fastest for this `n` by the time from item 6 below~~ **[superseded by #287]**: the
+     fastest by the sum of `packet_ticks` of the edges (the number of batches does not depend on the path: `amount` is the same at
+     all levels, DEC-26), on a tie the lexicographically
+     smaller sequence of `node_key`, as for movement. A transfer goes in any direction, including
+     toward the capital and inside a pocket cut off from the capital (the owner 2026-10-12).
+   - `n'` charges are written off from the warehouse of `from` when the command is applied (the start of tick `t`), ~~the packet
+     sets out in the same tick~~ **[superseded by #287]**: the first batch sets out in the same tick.
+   - ~~The time on edge `e`: `packet_ticks(e) + (ceil(n / amount(e)) - 1) * supply.dispatch_ticks`,
+     where `ceil(n / a) = (n + a - 1) // a`: `n` charges go in batches of `amount` per period, while the
+     simulation moves them as one packet with the time of the last batch.~~ **[superseded by the decision of the
+     owner 2026-10-15, #287]**: **batches.** A transfer goes in `B = ceil(n' / amount)` batches,
+     `ceil(n / a) = (n + a - 1) // a`: batch `k = 0 .. B - 1` of `min(amount, remaining)`
+     charges leaves `from` at tick `t + k * supply.dispatch_ticks` as a separate packet and goes
+     the whole path by itself, `packet_ticks` on each edge (like an automation packet). Before leaving, a batch
+     waits in `from` (in the player view: your own transfer packet at the start of the first edge, `depart_tick` in
+     the future) and takes no throughput. The arrival of the last batch:
+     `t + (B - 1) * supply.dispatch_ticks + the sum of packet_ticks(e) over the path`; the server reports it in
      `ack.arrive_tick`.
-   - **[предложено]** Ждущая партия, чьё первое ребро перестало быть внутренним: если `from` всё
-     ещё свой, заряды возвращаются на склад `from` (в пределах ёмкости склада, излишек
-     `charges_overflow`; событие `packet_delivered` в `from`), иначе теряются (`packet_lost`).
-     Отменить перевозку командой нельзя. ~~Перевозка не занимает
-     пропускную способность автоматической отправки (по умолчанию).~~ **[заменено решением
-     2026-10-14, #253]**: перевозка делит пропускную способность ребра с автоматической отправкой (п. 10).
-   - В пути перевозка подчиняется п. 5. Пришедшие заряды лежат на складе `to` как обычные:
-     автоматическая отправка может увезти излишек дальше, поэтому для накопления город ставят в
+   - **[proposed]** A waiting batch whose first edge has stopped being internal: if `from` is
+     still yours, the charges return to the warehouse of `from` (within the warehouse capacity, the excess
+     `charges_overflow`; the event `packet_delivered` in `from`), otherwise they are lost (`packet_lost`).
+     A transfer cannot be cancelled by a command. ~~A transfer does not take
+     the throughput of automatic dispatch (by default).~~ **[superseded by the decision of
+     2026-10-14, #253]**: a transfer shares the edge's throughput with automatic dispatch (item 10).
+   - On the way a transfer obeys item 5. The arrived charges lie in the warehouse of `to` as ordinary ones:
+     automatic dispatch can carry the excess further, so to accumulate, a city is set to
      `high`.
-7. ~~**Режим карты «Снабжение»**~~ **[заменено DEC-28, п. 8]** (клиент, логики игры в нём нет): режимы карты переключаются на `Tab`
-   (альтернатива `F2`), «Снабжение» один из них; клавиша `S` занята делением группы (DEC-20). Режим
-   показывает приоритеты городов (метка различается формой, не только цветом), склады,
-   дерево снабжения, свои пакеты и перевозки. Клик по своему городу меняет приоритет по кругу;
-   перетаскивание от города A к городу B с ползунком `n`: перевозка. Путь и тик прибытия перевозки
-   клиент получает в `ack`, сам не считает.
-8. **Видимость.** Приоритеты, перевозки и пакеты противника не видны (DEC-04, #112 по умолчанию);
-   события `priority_set`, `transfer_started` и события пакетов получает только владелец. Новые поля
-   `PlayerView` (приоритет своего города, свои перевозки): только с тестом тумана.
-9. **Порядок внутри системы `supply`:** потеря пакетов, движение пакетов по пути и доставка,
-   перезарядка, доля перевозок (п. 10), отправка (три прохода). Перевозки создаются в `apply_commands`.
-10. **Перевозка и автоматика делят `amount` ребра** (решение владельца 2026-10-14, #252, #253)
-    **[принято]**. Ребро пропускает за период отправки `amount` зарядов (DEC-22, п. 4), и перевозка
-    берёт их первой.
-    - Пакет перевозки, вышедший на ребро (при применении команды или дальше по пути в
-      промежуточном узле), несёт на этом ребре **долю** `n` (все свои заряды). В каждом тике
-      отправки (тик `t > 0`, кратный `supply.dispatch_ticks`), пока пакет на ребре, перевозка берёт
-      из `amount` ребра `min(amount, доля)`, и доля уменьшается на столько же. Тик выхода на
-      ребро считается, если он сам тик отправки (перевозка создаётся в `apply_commands`, а
-      пакет переходит на следующее ребро в начале системы `supply`, оба раньше отправки).
-    - Автоматическая отправка (п. 4) получает по ребру остаток периода:
-      `max(0, amount - взятое перевозками этого игрока по этому ребру в этом тике)`.
-    - Перевозка первая, поэтому её время по формуле п. 6 от автоматики не зависит, и сервер
-      сообщает его в `ack` при применении команды.
-    - **#287:** каждая партия перевозки (п. 6) отдельный пакет со своей долей (свои заряды, не
-      больше `amount`); партия, ещё ждущая в `from`, доли не берёт. Партии одной перевозки
-      выходят с шагом в период отправки, поэтому на каждом ребре пути одна перевозка берёт не
-      больше `amount` за период.
-    - **[предложено]** Перевозки на одном ребре друг друга не задерживают: каждая идёт своими
-      партиями по формуле п. 6, взятое ими складывается, автоматике остаётся `max(0, ...)`.
-      Очередь перевозок сделала бы время перевозки зависимым от чужих перевозок на рёбрах дальше
-      по пути, и `ack` не мог бы назвать его заранее.
-    - Пакет перевозки ушёл с ребра (дальше по пути, на склад или потерян): его доля на этом ребре
-      пропадает; на следующем ребре пути доля снова `n`.
-    - Ребро внутреннее только для одного игрока, поэтому перевозки одного игрока не влияют на
-      снабжение другого (тай-брейков между игроками нет).
+7. ~~**"Supply" map mode**~~ **[superseded by DEC-28, item 8]** (the client, there is no game logic in it): map modes switch on `Tab`
+   (alternative `F2`), "Supply" is one of them; the `S` key is taken by splitting a group (DEC-20). The mode
+   shows city priorities (the label differs by shape, not only by color), warehouses,
+   the supply tree, your own packets and transfers. A click on your own city changes the priority in a cycle;
+   dragging from city A to city B with a slider `n`: a transfer. The path and the arrival tick of a transfer
+   the client gets in the `ack`, it does not compute them itself.
+8. **Visibility.** The enemy's priorities, transfers and packets are not visible (DEC-04, #112 by default);
+   the events `priority_set`, `transfer_started` and packet events are received only by the owner. New fields of
+   `PlayerView` (the priority of your own city, your own transfers): only with a fog test.
+9. **Order inside the `supply` system:** loss of packets, movement of packets along the path and delivery,
+   recharge, the share of transfers (item 10), dispatch (three passes). Transfers are created in `apply_commands`.
+10. **A transfer and automation share the edge's `amount`** (the owner's decision 2026-10-14, #252, #253)
+    **[accepted]**. An edge passes `amount` charges per dispatch period (DEC-22, item 4), and a transfer
+    takes them first.
+    - A transfer packet that has set out onto an edge (when the command is applied or further along the path in an
+      intermediate node) carries on that edge a **share** of `n` (all its charges). On every
+      dispatch tick (tick `t > 0` that is a multiple of `supply.dispatch_ticks`), while the packet is on the edge, the transfer takes
+      `min(amount, share)` from the edge's `amount`, and the share decreases by the same. The tick of setting out onto
+      the edge counts if it is itself a dispatch tick (a transfer is created in `apply_commands`, and
+      the packet moves to the next edge at the start of the `supply` system, both before dispatch).
+    - Automatic dispatch (item 4) gets for the edge the remainder of the period:
+      `max(0, amount - what this player's transfers took on this edge in this tick)`.
+    - A transfer goes first, so its time by the formula of item 6 does not depend on automation, and the server
+      reports it in the `ack` when the command is applied.
+    - **#287:** every batch of a transfer (item 6) is a separate packet with its own share (its own charges, no
+      more than `amount`); a batch still waiting in `from` takes no share. The batches of one transfer
+      set out with a step of the dispatch period, so on every edge of the path one transfer takes no
+      more than `amount` per period.
+    - **[proposed]** Transfers on one edge do not delay each other: each goes in its own
+      batches by the formula of item 6, what they took is added up, and automation is left `max(0, ...)`.
+      A queue of transfers would make the time of a transfer depend on other transfers on edges further
+      along the path, and the `ack` could not name it in advance.
+    - A transfer packet left the edge (further along the path, onto a warehouse, or lost): its share on this edge
+      disappears; on the next edge of the path the share is `n` again.
+    - An edge is internal for only one player, so one player's transfers do not affect
+      the other's supply (there are no tie-breaks between players).
 
-Разобранные примеры. Карта: столица K (ёмкость 10); города A, B, C (ёмкость 6), рёбра K-A, A-B,
-A-C; провинция P только в примерах 8, 15 и 20; примеры 23-25: п. 10; все рёбра `travel_ticks = 30`, уровень 1
-(`speed_pct` 100, `amount` 1; с DEC-28 `amount` по уровню 1 / 2 / 3), если не сказано иное; `buffer = 2`,
-`dispatch_ticks = 10`; `node_key` растёт в порядке K, A, B, C; юнитов нет, если не сказано иное;
-примеры 26-28: склад отдельно от ёмкости (DEC-26, `city_upgrades.enabled = true`), ёмкость склада
-K 6, остальных дана в примере; перевозки в тике `t`, не кратном периоду, если не сказано иное;
-склады даны на момент отправки (после перезарядки); «итог» описывает один период отправки. Тесты реализации: ровно эта таблица.
+Worked examples. The map: capital K (capacity 10); cities A, B, C (capacity 6), edges K-A, A-B,
+A-C; province P only in examples 8, 15 and 20; examples 23-25: item 10; all edges have `travel_ticks = 30`, level 1
+(`speed_pct` 100, `amount` 1; with DEC-28 `amount` by level 1 / 2 / 3), unless said otherwise; `buffer = 2`,
+`dispatch_ticks = 10`; `node_key` grows in the order K, A, B, C; there are no units unless said otherwise;
+examples 26-28: the warehouse is separate from capacity (DEC-26, `city_upgrades.enabled = true`), the warehouse capacity of
+K is 6, of the others is given in the example; transfers at tick `t` that is not a multiple of the period, unless said otherwise;
+warehouses are given at the moment of dispatch (after recharge); the "outcome" describes one dispatch period. The implementation's tests: exactly this table.
 
-| # | Ситуация | Итог |
+| # | Situation | Outcome |
 |---|---|---|
-| 1 | все `normal`; склад K 5, остальные 0 | цель K 2, излишек 3; дефицит поддерева A 2 + 2 + 2 = 6; K отправляет A 1 заряд (`amount` 1) |
-| 2 | все `normal`; склад A 3, K 0 | цель A 2, излишек 1; B и C с равным складом 0 и дефицитом 2: B (меньший `node_key`) получает 1 |
-| 3 | как 2, C `high` | проход `high`: A неактивен, отдаёт C 1; проход `normal`: излишек A 0 (склад 2 = цель), B ничего; итог: пакет A-C 1, склад A 2 |
-| 4 | цепь K-A-B без C: A `low`, B `normal`; склад A 2; A-B уровня 3 (`amount` 1; пересчитано DEC-26, раньше грузовая `amount` 3) | проход `normal`: A неактивен (транзит), B получает 1 (больше `amount` ребра не пропускает); склад A 1; проход `low`: A активен, цель 2, склад 1: ничего не отдаёт |
-| 5 | как 4, A `normal` | A держит цель 2, B ничего |
-| 6 | цепь K-A-B без C: A и B `high`; склад A 4; A-B уровня 3 (`amount` 1; пересчитано DEC-26, раньше грузовая `amount` 3) | A держит цель 2 (ближний к столице первым), излишек 2 для B (дефицит 2), но ребро пропускает 1: пакет A-B 1, склад A 3 |
-| 7 | цепь K-A-B без C: B `high`, склад B 1; A `normal`, склад A 3 | цель B 2, дефицит 1; проход `high`: A неактивен (цель 0), отдаёт B 1; проход `normal`: излишек A 0; склад A 2 |
-| 8 | K-P-B, P провинция; склад K 5 | K отправляет B 1 заряд пакетом по пути K-P-B; в P не останавливается; в пути 60 тиков |
-| 9 | `Transfer(A, B, 4)`, склад A 5 | склад A 1 в тике `t`; ~~на складе B +4 на тике `t + 30 + 3 * 10 = t + 60`~~ **[пересчитано #287: партии]** партии по 1 выходят в `t`, `t + 10`, `t + 20`, `t + 30`; на складе B +1 в тиках `t + 30`, `t + 40`, `t + 50`, `t + 60`; `ack.arrive_tick = t + 3 * 10 + 30 = t + 60` |
-| 10 | как 9, A-B уровня 3 (`speed_pct` 200, ~~`amount` 1; пересчитано DEC-26, раньше грузовая~~ `amount` 3: **[пересчитано DEC-28]**, #306) | ~~прибытие партий `t + 15`, `t + 25`, `t + 35`, последней `t + 3 * 10 + 15 = t + 45` (#287)~~ партии 3 и 1 выходят в `t` и `t + 10`; прибытие `t + 15` (3 заряда) и последней `t + 1 * 10 + 15 = t + 25` |
-| 11 | `Transfer(A, B, 1)`, A-B быстрая уровня 3 (`speed_pct` 200) | прибытие `t + 15` |
-| 12 | `Transfer(A, B, 6)`, склад A 5 | `NOT_ENOUGH_CHARGES` |
-| 13 | `Transfer(A, E, 1)`, E вражеский | `NOT_OWNER` |
-| 14 | `Transfer(A, X, 1)`, X свой, но путь к нему только через чужой узел | `NO_PATH` |
-| 15 | `Transfer(P, B, 1)`, P провинция | `NOT_CITY` |
-| 16 | `Transfer(K, B, 3)` по K-A-B; пакет на A-B (уровень 1), A захвачен | пакет потерян (`packet_lost`). #287: в тике `t + 55` на A-B все три партии (вышли на A-B в `t + 30`, `t + 40`, `t + 50`), A захвачен: три `packet_lost` по 1 |
-| 17 | `Transfer(K, C, 3)` по K-A-C; пакет на K-A, C захвачен | пакет доходит до A; A-C не внутреннее: 3 заряда на склад A. #287: C захвачен в `t + 10`; партии доходят до A в `t + 30`, `t + 40`, `t + 50`, каждая кладёт 1 на склад A, итого 3 |
-| 18 | `Transfer(A, B, 3)`, склад B 5 | ~~B получает 1, 2 сгорают (`charges_overflow`)~~ **[заменено #287]**: объём урезан до свободного места, пример 29 |
-| 19 | пакет 2 заряда на A-B, B захвачен до прибытия (пересчитано DEC-26: раньше доходил по грузовой дороге) | пакет потерян (`packet_lost`), `packet_captured` нет. #287: ~~`Transfer(A, B, 2)` по A-B уровня 2 идёт двумя партиями; B захвачен в `t + 10`, обе партии уже на A-B: два `packet_lost` по 1~~ **[пересчитано DEC-28]**, #306: по A-B уровня 2 (`amount` 2) одна партия из 2; B захвачен в `t + 10`: один `packet_lost` с 2 |
-| 20 | `SetPriority(P, high)`, P провинция | `NOT_CITY` |
-| 21 | C `high`, C захвачен и отбит обратно | приоритет C `normal` |
-| 22 | все `normal`; склад A 3, B 1, C 0; K 0 | излишек A 1; дефициты B 1, C 2; C с наименьшим складом первым: пакет A-C 1, B ничего |
-| 23 | `Transfer(K, A, 2)` в тике отправки `t`, склад K 5 (после команды 3); производства нет | перевозка берёт 1 из `amount` K-A в тике `t` и 1 в `t + 10` (#287: первая и вторая партии): K ничего не отправляет; в тике `t + 20` K отправляет A 1 заряд; ~~перевозка на складе A в тике `t + 40`~~ **[пересчитано #287]** партии на складе A в тиках `t + 30` и `t + 40` |
-| 24 | ~~как 23, K-A грузовая уровня 3 (`amount` 3)~~ **[удалён DEC-26]**: грузовой дороги нет | (строка оставлена, чтобы не сдвигать номера) |
-| 25 | пакет перевозки K → B (1 заряд) дошёл до A в тике отправки и перешёл на A-B; склад A 3, K 0 | перевозка берёт 1 из `amount` A-B; излишек A 1 уходит не B (ребро занято), а C: пакет A-C 1 |
-| 26 | цепь K-A-B без C; ёмкость склада A 1, B 2; склады K 6, A 1, B 0 | проход `high`: все неактивны, дефицитов нет; проход `normal`: K A ничего (свободного места в A 0), A держит `min(1, 1 // 2) = 0`: пакет A-B 1, склад A 0; проход `low` (`normal` активны снова): свободное место A 1, дефицит поддерева A: свой 1 + B `2 - 0 - 1 = 1`: K отправляет A 1. Итог: пакеты K-A 1 и A-B 1. Раньше A держал цель 1, и не уходило ничего |
-| 27 | как 26, следующий период: склад A 0, в пути K-A 1 и A-B 1 | свободное место A `1 - 0 - 1 = 0`: K ничего не отправляет, A отдавать нечего (транзит со складом 1 держит в пути к себе не больше 1 заряда: вопрос владельцу в #287) |
-| 28 | цепь K-A-B без C; ёмкость склада A 2, B 2; склады K 6, A 2, B 0 | проход `normal`: A держит `min(2, 2 // 2) = 1`: пакет A-B 1, склад A 1; проход `low`: свободное место A 1, дефицит A свой 1 + B 1: K отправляет A 1. Итог: пакеты K-A 1 и A-B 1 |
-| 29 | `Transfer(A, B, 3)`, склад A 3, склад B 5 | объём `min(3, 6 - 5 - 0) = 1`: склад A 2; B получает 1 в тике `t + 30`, ничего не сгорает; `transfer_started` с `charges` 1, `ack.arrive_tick = t + 30` |
-| 30 | `Transfer(A, B, 1)`, склад A 3, склад B 6 | `TARGET_FULL` |
-| 31 | `Transfer(A, B, 3)`, склад A 3, склад B 2, к B в пути пакет 2 | объём `min(3, 6 - 2 - 2) = 2`: склад A 1 |
-| 32 | `Transfer(K, B, 3)` по K-A-B, склад K 5 | партии по 1 выходят из K в тиках `t`, `t + 10`, `t + 20` и идут `30 + 30` тиков: B +1 в `t + 60`, `t + 70`, `t + 80`; `ack.arrive_tick = t + 2 * 10 + 60 = t + 80` (раньше `t + 100`: формула п. 6 добавляла ожидание партий на каждом ребре) |
-| 33 | `Transfer(A, B, 3)`, склад A 3; в тике `t + 5` B захвачен | первая партия на A-B теряется (`packet_lost` 1); две ждущие партии в тике `t + 6` возвращаются на склад A (**[предложено]**, п. 6): склад A 2 |
+| 1 | all `normal`; warehouse of K 5, the others 0 | target of K 2, excess 3; deficit of the subtree of A 2 + 2 + 2 = 6; K sends A 1 charge (`amount` 1) |
+| 2 | all `normal`; warehouse of A 3, K 0 | target of A 2, excess 1; B and C with an equal warehouse 0 and deficit 2: B (the smaller `node_key`) gets 1 |
+| 3 | as 2, C `high` | the `high` pass: A is inactive, gives C 1; the `normal` pass: the excess of A 0 (warehouse 2 = target), B gets nothing; outcome: packet A-C 1, warehouse of A 2 |
+| 4 | chain K-A-B without C: A `low`, B `normal`; warehouse of A 2; A-B of level 3 (`amount` 1; recalculated DEC-26, earlier a freight road `amount` 3) | the `normal` pass: A is inactive (transit), B gets 1 (the edge passes no more than `amount`); warehouse of A 1; the `low` pass: A is active, target 2, warehouse 1: gives nothing |
+| 5 | as 4, A `normal` | A holds its target 2, B gets nothing |
+| 6 | chain K-A-B without C: A and B `high`; warehouse of A 4; A-B of level 3 (`amount` 1; recalculated DEC-26, earlier a freight road `amount` 3) | A holds its target 2 (the one nearest the capital first), excess 2 for B (deficit 2), but the edge passes 1: packet A-B 1, warehouse of A 3 |
+| 7 | chain K-A-B without C: B `high`, warehouse of B 1; A `normal`, warehouse of A 3 | target of B 2, deficit 1; the `high` pass: A is inactive (target 0), gives B 1; the `normal` pass: the excess of A 0; warehouse of A 2 |
+| 8 | K-P-B, P a province; warehouse of K 5 | K sends B 1 charge as a packet along the path K-P-B; does not stop in P; 60 ticks on the way |
+| 9 | `Transfer(A, B, 4)`, warehouse of A 5 | warehouse of A 1 at tick `t`; ~~in the warehouse of B +4 at tick `t + 30 + 3 * 10 = t + 60`~~ **[recalculated #287: batches]** batches of 1 set out at `t`, `t + 10`, `t + 20`, `t + 30`; in the warehouse of B +1 at ticks `t + 30`, `t + 40`, `t + 50`, `t + 60`; `ack.arrive_tick = t + 3 * 10 + 30 = t + 60` |
+| 10 | as 9, A-B of level 3 (`speed_pct` 200, ~~`amount` 1; recalculated DEC-26, earlier freight~~ `amount` 3: **[recalculated DEC-28]**, #306) | ~~arrival of the batches `t + 15`, `t + 25`, `t + 35`, the last `t + 3 * 10 + 15 = t + 45` (#287)~~ batches of 3 and 1 set out at `t` and `t + 10`; arrival `t + 15` (3 charges) and of the last `t + 1 * 10 + 15 = t + 25` |
+| 11 | `Transfer(A, B, 1)`, A-B fast, level 3 (`speed_pct` 200) | arrival `t + 15` |
+| 12 | `Transfer(A, B, 6)`, warehouse of A 5 | `NOT_ENOUGH_CHARGES` |
+| 13 | `Transfer(A, E, 1)`, E is an enemy node | `NOT_OWNER` |
+| 14 | `Transfer(A, X, 1)`, X is yours, but the path to it goes only through an enemy node | `NO_PATH` |
+| 15 | `Transfer(P, B, 1)`, P a province | `NOT_CITY` |
+| 16 | `Transfer(K, B, 3)` along K-A-B; a packet on A-B (level 1), A is captured | the packet is lost (`packet_lost`). #287: at tick `t + 55` all three batches are on A-B (they set out onto A-B at `t + 30`, `t + 40`, `t + 50`), A is captured: three `packet_lost` of 1 each |
+| 17 | `Transfer(K, C, 3)` along K-A-C; a packet on K-A, C is captured | the packet reaches A; A-C is not internal: 3 charges into the warehouse of A. #287: C is captured at `t + 10`; the batches reach A at `t + 30`, `t + 40`, `t + 50`, each puts 1 into the warehouse of A, 3 in total |
+| 18 | `Transfer(A, B, 3)`, warehouse of B 5 | ~~B gets 1, 2 burn up (`charges_overflow`)~~ **[superseded by #287]**: the volume is cut to the free room, example 29 |
+| 19 | a packet of 2 charges on A-B, B is captured before arrival (recalculated DEC-26: earlier it arrived over the freight road) | the packet is lost (`packet_lost`), no `packet_captured`. #287: ~~`Transfer(A, B, 2)` along A-B of level 2 goes in two batches; B is captured at `t + 10`, both batches are already on A-B: two `packet_lost` of 1 each~~ **[recalculated DEC-28]**, #306: along A-B of level 2 (`amount` 2) one batch of 2; B is captured at `t + 10`: one `packet_lost` with 2 |
+| 20 | `SetPriority(P, high)`, P a province | `NOT_CITY` |
+| 21 | C `high`, C is captured and recaptured | the priority of C is `normal` |
+| 22 | all `normal`; warehouse of A 3, B 1, C 0; K 0 | excess of A 1; deficits of B 1, C 2; C with the smallest warehouse first: packet A-C 1, B gets nothing |
+| 23 | `Transfer(K, A, 2)` at the dispatch tick `t`, warehouse of K 5 (after the command 3); no production | the transfer takes 1 from the `amount` of K-A at tick `t` and 1 at `t + 10` (#287: the first and second batches): K sends nothing; at tick `t + 20` K sends A 1 charge; ~~the transfer is in the warehouse of A at tick `t + 40`~~ **[recalculated #287]** the batches are in the warehouse of A at ticks `t + 30` and `t + 40` |
+| 24 | ~~as 23, K-A a freight road of level 3 (`amount` 3)~~ **[removed DEC-26]**: there is no freight road | (the row is left so as not to shift the numbers) |
+| 25 | a transfer packet K → B (1 charge) reached A at the dispatch tick and moved onto A-B; warehouse of A 3, K 0 | the transfer takes 1 from the `amount` of A-B; the excess of A 1 goes not to B (the edge is busy) but to C: packet A-C 1 |
+| 26 | chain K-A-B without C; warehouse capacity of A 1, B 2; warehouses K 6, A 1, B 0 | the `high` pass: all are inactive, no deficits; the `normal` pass: K sends A nothing (free room in A 0), A holds `min(1, 1 // 2) = 0`: packet A-B 1, warehouse of A 0; the `low` pass (`normal` are active again): free room of A 1, deficit of the subtree of A: its own 1 + B `2 - 0 - 1 = 1`: K sends A 1. Outcome: packets K-A 1 and A-B 1. Before, A held a target of 1, and nothing went out |
+| 27 | as 26, the next period: warehouse of A 0, in transit K-A 1 and A-B 1 | free room of A `1 - 0 - 1 = 0`: K sends nothing, A has nothing to give (transit with a warehouse of 1 holds no more than 1 charge in transit to itself: a question for the owner in #287) |
+| 28 | chain K-A-B without C; warehouse capacity of A 2, B 2; warehouses K 6, A 2, B 0 | the `normal` pass: A holds `min(2, 2 // 2) = 1`: packet A-B 1, warehouse of A 1; the `low` pass: free room of A 1, deficit of A its own 1 + B 1: K sends A 1. Outcome: packets K-A 1 and A-B 1 |
+| 29 | `Transfer(A, B, 3)`, warehouse of A 3, warehouse of B 5 | volume `min(3, 6 - 5 - 0) = 1`: warehouse of A 2; B gets 1 at tick `t + 30`, nothing burns up; `transfer_started` with `charges` 1, `ack.arrive_tick = t + 30` |
+| 30 | `Transfer(A, B, 1)`, warehouse of A 3, warehouse of B 6 | `TARGET_FULL` |
+| 31 | `Transfer(A, B, 3)`, warehouse of A 3, warehouse of B 2, a packet of 2 in transit to B | volume `min(3, 6 - 2 - 2) = 2`: warehouse of A 1 |
+| 32 | `Transfer(K, B, 3)` along K-A-B, warehouse of K 5 | batches of 1 set out from K at ticks `t`, `t + 10`, `t + 20` and travel `30 + 30` ticks: B +1 at `t + 60`, `t + 70`, `t + 80`; `ack.arrive_tick = t + 2 * 10 + 60 = t + 80` (earlier `t + 100`: the formula of item 6 added the waiting of the batches on every edge) |
+| 33 | `Transfer(A, B, 3)`, warehouse of A 3; at tick `t + 5` B is captured | the first batch on A-B is lost (`packet_lost` 1); the two waiting batches at tick `t + 6` return to the warehouse of A (**[proposed]**, item 6): warehouse of A 2 |
 
-Что меняет реализация (симуляция и `SIM_VERSION`, протокол и `PROTOCOL_VERSION`, клиент, боты, рулсеты): список в #230.
+What the implementation changes (simulation and `SIM_VERSION`, protocol and `PROTOCOL_VERSION`, client, bots, rulesets): the list is in #230.
 
-Реализация: #243 (`SIM_VERSION` 6, `PROTOCOL_VERSION` 10). Симуляция: `gow_sim.systems.supply`
-(дети-города через провинции, три прохода, пакет с путём `Packet.route`), команды `SetPriority` и
-`Transfer` в `gow_sim.commands`, табличные тесты `packages/sim/tests/test_dec18.py`. Вид игрока:
-`NodeView.priority` своего города, у своих пакетов оставшийся путь `path`, `dest_tick` и признак
-`transfer`. Клиент (минимум до #236): режим «Снабжение» на `Tab`/`F2`, клик по своему городу
-открывает радиальное меню (три приоритета и «перевезти»), перевозка: город назначения кликом, число
-зарядов ползунком. Дерево снабжения клиент пока не рисует: его считает сервер, а в виде игрока его
-нет (вынесено в #236). Боты ставят `high` городам у границы.
+Implementation: #243 (`SIM_VERSION` 6, `PROTOCOL_VERSION` 10). Simulation: `gow_sim.systems.supply`
+(city children through provinces, three passes, a packet with a path `Packet.route`), the commands `SetPriority` and
+`Transfer` in `gow_sim.commands`, table tests `packages/sim/tests/test_dec18.py`. Player view:
+`NodeView.priority` of your own city, for your own packets the remaining path `path`, `dest_tick` and the flag
+`transfer`. Client (the minimum, until #236): the "Supply" mode on `Tab`/`F2`, a click on your own city
+opens a radial menu (three priorities and "transfer"), a transfer: the destination city by a click, the number
+of charges by a slider. The client does not draw the supply tree yet: the server computes it, and it is not in the player view
+(moved to #236). Bots set `high` for cities at the border.
 
-Реализация решений 2026-10-15: #287 (`SIM_VERSION` 13, `PROTOCOL_VERSION` без изменений: код
-отказа строкой, объём в событии). `gow_sim.systems.supply`: `forward_reserve`, `warehouse_room`,
-`send_transfer` (партии: пакеты с `depart_tick` в будущем); тесты: примеры 26-33 в
+Implementation of the decisions of 2026-10-15: #287 (`SIM_VERSION` 13, `PROTOCOL_VERSION` unchanged:
+the rejection code as a string, the volume in the event). `gow_sim.systems.supply`: `forward_reserve`, `warehouse_room`,
+`send_transfer` (batches: packets with `depart_tick` in the future); tests: examples 26-33 in
 `packages/sim/tests/test_dec18.py`.
 
-Альтернативы (не выбраны):
-- Только приоритет без перевозки (меньше управления, но нет быстрой переброски запаса).
-- Приоритет `high` наполняет склад до ёмкости, `low` ничего не держит (первая версия DEC-18; снято владельцем 2026-10-12: нужно больше дефицита снабжения, приоритет только порядок доставки).
-- ~~Перевозка занимает пропускную способность дорог наравне с автоматикой (точнее, но сложнее объяснить и посчитать).~~ Выбрано владельцем 2026-10-14 (п. 10).
-- Перевозка не занимает пропускную способность автоматики (значение по умолчанию до 2026-10-14).
-- Автоматика берёт `amount` первой, перевозка получает остаток (время перевозки тогда неизвестно заранее).
-- Перевозка только из снабжаемой территории (как `NOT_SUPPLIED` у стройки).
-- Перевозка как «Защита»: публичное намерение (раскрывает план противнику).
+Alternatives (not chosen):
+- Only priority without a transfer (less control, but no quick move of a stock).
+- Priority `high` fills the warehouse to capacity, `low` holds nothing (the first version of DEC-18; removed by the owner 2026-10-12: more supply deficit is needed, priority is only the order of delivery).
+- ~~A transfer takes the throughput of roads on a par with automation (more exact, but harder to explain and compute).~~ Chosen by the owner 2026-10-14 (item 10).
+- A transfer does not take the throughput of automation (the default value until 2026-10-14).
+- Automation takes `amount` first, a transfer gets the remainder (the time of a transfer is then not known in advance).
+- A transfer only from the supplied territory (like `NOT_SUPPLIED` for construction).
+- A transfer like "Defense": a public intent (reveals the plan to the enemy).
 
-### Голод в окружении (DEC-19, #231) **[принято]**
+### Starvation when cut off (DEC-19, #231) **[accepted]**
 
-Решение владельца 2026-10-12. Заменяет падение ёмкости отрезанного города (раздел 9, SIM-07) вместе с DEC-22.
+The owner's decision 2026-10-12. Replaces the capacity drop of a cut-off city (section 9, SIM-07) together with DEC-22.
 
-Отрезанный от столицы город постепенно «съедает» заряды гарнизона. Юниты от этого не гибнут, они
-только остаются разряженными и становятся лёгкой добычей. Падение ёмкости при отрезании
-убирается: ёмкость фиксирована (DEC-22).
+A city cut off from the capital gradually "eats" the garrison's charges. Units do not die from it, they
+only stay discharged and become easy prey. The capacity drop on being cut off
+is removed: capacity is fixed (DEC-22).
 
-1. **Отрезанный город:** свой город вне связной снабжаемой территории владельца (SIM-07,
-   `supplied_territory`): от него нет пути по своим узлам до своей столицы. Провинции (DEC-23) не
-   голодают: склада у них нет, заряды юнитов в них не тратятся. Нейтральные узлы не голодают.
-2. **Отсчёт.** `Node.cut_since`: первый тик текущего непрерывного отрезания. Сбрасывается, когда
-   город снова в снабжаемой территории или меняет владельца. Если после захвата город отрезан для
-   нового владельца, отсчёт начинается с тика захвата.
-3. **Потребление** на тиках `t = cut_since + starvation.grace_ticks + k * starvation.period_ticks`,
-   `k = 0, 1, 2, ...`: гарнизон тратит `starvation.charges * ceil(U / starvation.per_units)`
-   зарядов, где `U`: стоящие в городе юниты владельца (группы на рёбрах, в том числе транзитом,
-   не считаются), `ceil(U / k) = (U + k - 1) // k`. При `U = 0` ничего не тратится.
-4. **Откуда:** сначала склад города; остаток с зарядов стоящих юнитов, по одному заряду с группы с
-   наибольшим `charged`, при равенстве с меньшим id (как выстрелы, DEC-07, правило 7). Недостача
-   не копится и не переносится на следующий раз.
-5. **Юниты от голода не гибнут.** Гибель сверх ёмкости (#118) остаётся: её вызывает ёмкость, а не
-   окружение.
-6. **Ёмкость при отрезании не меняется** (DEC-22); склад отрезанного города не урезается. DEC-26: уровень склада и казарма отрезание не меняет.
-   Перезарядка юнитов со склада в отрезанном городе идёт как обычно.
-7. **Система.** Голод считает система `capacity` после гибели сверх ёмкости; она идёт после боя и до
-   `supply`, поэтому в тике потребления склад сначала тратится голодом, потом перезаряжает юнитов.
-8. **Видимость.** Событие `starvation` (игрок, узел, заряды со склада, заряды с юнитов) получает
-   только владелец. Своему отрезанному городу вид показывает `starve_in`: тиков до следующего
-   потребления (с учётом отсрочки); у чужих и нейтральных узлов `None` (новое поле `PlayerView`,
-   тест тумана). Отрезан ли вражеский город, игрок выводит из публичного владения (DEC-04), это не
-   утечка.
-   **Уточнение (решение владельца 2026-10-14, #252, #253) [принято]:** `starve_in = None` и у
-   своего отрезанного города, если тратить нечего: склад пуст и у стоящих в городе юнитов
-   владельца нет зарядов (п. 4). Тогда в интерфейсе нет ни пульсации, ни отсчёта. Расписание
-   потребления (`cut_since`, п. 3) от этого не меняется: появились заряды (пакет, перевозка,
-   заряженная группа пришла), и `starve_in` снова показывает время до ближайшего тика того же
-   расписания. **[предложено]** По той же причине `None` и у отрезанного города без стоящих юнитов
-   (`U = 0`, п. 3: тратить некому, ничего не теряется), даже если склад не пуст.
-9. Рекрут и стройка без изменений (DEC-26: рекрут идёт, если у города есть казарма; казарма и склад строятся и в отрезанном городе, дорога нет): рекрут в отрезанном городе разрешён (DEC-01), стройка нет
+1. **A cut-off city:** your own city outside the owner's connected supplied territory (SIM-07,
+   `supplied_territory`): there is no path from it over your nodes to your capital. Provinces (DEC-23) do not
+   starve: they have no warehouse, the charges of units in them are not spent. Neutral nodes do not starve.
+2. **The countdown.** `Node.cut_since`: the first tick of the current continuous cut-off. Reset when the
+   city is in the supplied territory again or changes owner. If after a capture the city is cut off for
+   the new owner, the countdown starts from the tick of the capture.
+3. **Consumption** at ticks `t = cut_since + starvation.grace_ticks + k * starvation.period_ticks`,
+   `k = 0, 1, 2, ...`: the garrison spends `starvation.charges * ceil(U / starvation.per_units)`
+   charges, where `U`: the owner's units standing in the city (groups on edges, including in transit,
+   do not count), `ceil(U / k) = (U + k - 1) // k`. At `U = 0` nothing is spent.
+4. **From where:** first the city's warehouse; the remainder from the charges of standing units, one charge at a time from the group with
+   the largest `charged`, on a tie from the one with the smaller id (like shots, DEC-07, rule 7). A shortfall
+   does not accumulate and is not carried over to the next time.
+5. **Units do not die from starvation.** Death above capacity (#118) remains: it is caused by capacity, not by
+   being cut off.
+6. **Capacity does not change when cut off** (DEC-22); the warehouse of a cut-off city is not cut down. DEC-26: the warehouse level and the barracks are not changed by being cut off.
+   Recharging units from the warehouse in a cut-off city goes as usual.
+7. **System.** Starvation is computed by the `capacity` system after death above capacity; it runs after the fight and before
+   `supply`, so at the consumption tick the warehouse is first spent by starvation, then recharges the units.
+8. **Visibility.** The event `starvation` (player, node, charges from the warehouse, charges from units) is received
+   only by the owner. For your own cut-off city the view shows `starve_in`: ticks to the next
+   consumption (taking the grace period into account); for enemy and neutral nodes `None` (a new `PlayerView` field,
+   fog test). Whether an enemy city is cut off, the player infers from public ownership (DEC-04), this is not
+   a leak.
+   **Clarification (the owner's decision 2026-10-14, #252, #253) [accepted]:** `starve_in = None` also for
+   your own cut-off city if there is nothing to spend: the warehouse is empty and the owner's units standing in the city
+   have no charges (item 4). Then the interface has neither a pulse nor a countdown. The consumption schedule
+   (`cut_since`, item 3) does not change because of this: charges appeared (a packet, a transfer,
+   a charged group arrived), and `starve_in` again shows the time to the nearest tick of the same
+   schedule. **[proposed]** For the same reason `None` also for a cut-off city without standing units
+   (`U = 0`, item 3: no one to spend, nothing is lost), even if the warehouse is not empty.
+9. Recruiting and construction are unchanged (DEC-26: recruiting goes if the city has a barracks; the barracks and the warehouse are also built in a cut-off city, the road is not): recruiting in a cut-off city is allowed (DEC-01), construction is not
    (`NOT_SUPPLIED`, DEC-16).
 
-Числа в рулсете (новая секция `[starvation]`): `grace_ticks = 100` (10 с), `period_ticks = 100`
-(10 с), `charges = 1`, `per_units = 3` (1 заряд на каждые начатые 3 юнита).
+Numbers in the ruleset (a new section `[starvation]`): `grace_ticks = 100` (10 s), `period_ticks = 100`
+(10 s), `charges = 1`, `per_units = 3` (1 charge for every started 3 units).
 
-Разобранные примеры. Город X (ёмкость 6) отрезан с тика 1000 (`cut_since = 1000`); числа рулсета
-выше; гарнизон стоит в X; гибель сверх ёмкости действует (гарнизоны примеров её не превышают).
-Тесты реализации: ровно эта таблица.
+Worked examples. City X (capacity 6) is cut off from tick 1000 (`cut_since = 1000`); the ruleset numbers
+as above; the garrison stands in X; death above capacity is in force (the garrisons of the examples do not exceed it).
+The implementation's tests: exactly this table.
 
-| # | Ситуация | Итог |
+| # | Situation | Outcome |
 |---|---|---|
-| 1 | 3 юнита, все заряжены; склад 2 | 1100: склад 1; 1200: склад 0; 1300: заряженных 2; 1400: 1; 1500: 0; дальше ничего не меняется, юниты живы |
-| 2 | юнитов нет, склад 5 | ничего не тратится |
-| 3 | 5 юнитов, все заряжены; склад 0 | 1100: −2 (`ceil(5 / 3) = 2`), заряженных 3; 1200: 1; 1300: 0 (недостача 1 не переносится); юниты живы |
-| 4 | 4 юнита, все заряжены; склад 1 | 1100: тратится 2: склад 0 и один заряд юнита, заряженных 3 |
-| 5 | группы G1 (3 заряж.) и G2 (2 заряж.), id G1 < G2; склад 0 | 1100: тратится 2 (`ceil(5 / 3)`): первый с G1 (3 > 2), второй снова с G1 (2 = 2, меньший id); G1 1, G2 2 |
-| 6 | связь восстановлена на тике 1150, снова отрезан на тике 1180 | потребление на 1100; новый отсчёт с 1180; следующее на 1280 |
-| 7 | на тике 1100 через X транзитом идёт своя группа | она не считается в `U` |
-| 8 | провинция P отрезана, в ней 3 заряженных юнита | голода нет |
-| 9 | игрок захватил город Y на тике 2000, Y не связан с его столицей | `cut_since = 2000`; первое потребление 2100 |
-| 10 | на тике 1100 склад 0, все юниты разряжены | ничего не меняется, никто не гибнет |
-| 11 | 3 юнита, разряжены; склад 0; тик 1150 | `starve_in = None` (тратить нечего, п. 8) |
-| 12 | как 11, на тике 1160 пакет кладёт на склад 1 заряд | `starve_in = 40` (следующее потребление на 1200, расписание прежнее) |
-| 13 | юнитов нет, склад 5; тик 1150 | `starve_in = None` (тратить некому, п. 8, [предложено]) |
+| 1 | 3 units, all charged; warehouse 2 | 1100: warehouse 1; 1200: warehouse 0; 1300: charged 2; 1400: 1; 1500: 0; after that nothing changes, the units are alive |
+| 2 | no units, warehouse 5 | nothing is spent |
+| 3 | 5 units, all charged; warehouse 0 | 1100: −2 (`ceil(5 / 3) = 2`), charged 3; 1200: 1; 1300: 0 (the shortfall 1 is not carried over); the units are alive |
+| 4 | 4 units, all charged; warehouse 1 | 1100: 2 are spent: warehouse 0 and one charge of a unit, charged 3 |
+| 5 | groups G1 (3 charged) and G2 (2 charged), id G1 < G2; warehouse 0 | 1100: 2 are spent (`ceil(5 / 3)`): the first from G1 (3 > 2), the second again from G1 (2 = 2, the smaller id); G1 1, G2 2 |
+| 6 | the connection is restored at tick 1150, cut off again at tick 1180 | consumption at 1100; a new countdown from 1180; the next at 1280 |
+| 7 | at tick 1100 your own group passes through X in transit | it does not count in `U` |
+| 8 | province P is cut off, it has 3 charged units | no starvation |
+| 9 | the player captured city Y at tick 2000, Y is not connected to their capital | `cut_since = 2000`; the first consumption 2100 |
+| 10 | at tick 1100 warehouse 0, all units discharged | nothing changes, nobody dies |
+| 11 | 3 units, discharged; warehouse 0; tick 1150 | `starve_in = None` (nothing to spend, item 8) |
+| 12 | as 11, at tick 1160 a packet puts 1 charge into the warehouse | `starve_in = 40` (the next consumption at 1200, the schedule is the same) |
+| 13 | no units, warehouse 5; tick 1150 | `starve_in = None` (no one to spend, item 8, [proposed]) |
 
-Что меняет реализация (симуляция и `SIM_VERSION`, протокол и `PROTOCOL_VERSION`, клиент, боты, рулсеты): список в #231.
+What the implementation changes (simulation and `SIM_VERSION`, protocol and `PROTOCOL_VERSION`, client, bots, rulesets): the list is in #231.
 
-Реализация: #244 (`SIM_VERSION` 7, `PROTOCOL_VERSION` 11). `Node.cut_since`, голод в системе
-`capacity` после гибели сверх ёмкости (`gow_sim.systems.capacity.starvation`, порядок систем не
-менялся), секция `[starvation]` рулсета, событие `starvation` (`warehouse`, `units`) только
-владельцу, `NodeView.starve_in`; табличные тесты `packages/sim/tests/test_dec19.py`. ~~В примере 3
-(7 юнитов в городе ёмкости 6) тест выключает гибель сверх ёмкости: пример её не учитывает.~~
-Пример 3 исправлен в #253: прежние 7 юнитов в городе ёмкости 6 гибли бы сверх ёмкости (#118), и
-тест отключал эту гибель; теперь 5 юнитов, тест идёт на настоящих правилах. Примеры 11-13
-(`starve_in` без зарядов): #253.
-Сценарий «осада на истощение» пересчитан: город с перерезанными дорогами падает на 3-й волне.
+Implementation: #244 (`SIM_VERSION` 7, `PROTOCOL_VERSION` 11). `Node.cut_since`, starvation in the
+`capacity` system after death above capacity (`gow_sim.systems.capacity.starvation`, the order of systems did not
+change), the ruleset section `[starvation]`, the event `starvation` (`warehouse`, `units`) only to the
+owner, `NodeView.starve_in`; table tests `packages/sim/tests/test_dec19.py`. ~~In example 3
+(7 units in a city of capacity 6) the test turns off death above capacity: the example does not account for it.~~
+Example 3 was fixed in #253: the former 7 units in a city of capacity 6 would have died above capacity (#118), and
+the test turned this death off; now it is 5 units, and the test runs on the real rules. Examples 11-13
+(`starve_in` without charges): #253.
+The "siege of attrition" scenario is recalculated: a city with its roads cut falls on the 3rd wave.
 
-Альтернативы (не выбраны):
-- Оставить падение ёмкости при отрезании (непрозрачно, конфликтует с фиксированной ёмкостью DEC-22).
-- Голодные юниты гибнут, когда зарядов нет (слишком жёстко: окружение решало бы без боя).
-- Потребление на каждого юнита, а не на начатые 3 (сильнее наказывает большие гарнизоны).
-- Голод и в провинциях (заряды юнитов в провинции тоже тратятся).
+Alternatives (not chosen):
+- Keep the capacity drop when cut off (opaque, conflicts with the fixed capacity of DEC-22).
+- Starving units die when there are no charges (too harsh: encirclement would decide without a fight).
+- Consumption per unit, not per started 3 (punishes big garrisons more).
+- Starvation in provinces too (the charges of units in a province are also spent).
 
-### Как это считает симуляция (SIM-08, #24)
+### How the simulation computes this (SIM-08, #24)
 
-> Блок описывает код до реализации DEC-18 (#230, реализован в #243), DEC-19 (#231), DEC-22 (#234) и DEC-26 (#265: «ёмкость» склада ниже при `city_upgrades.enabled` своя, `supply.target_stock`; типов дорог нет); действующие правила: блоки выше и раздел 8. Ширина ниже: уровень дороги, «не больше `width` зарядов»: `amount` (DEC-22). Значения #131 вошли в DEC-18 как базовый алгоритм; порядок «по убыванию дефицита» ниже снят DEC-18.
+> This block describes the code before the implementation of DEC-18 (#230, implemented in #243), DEC-19 (#231), DEC-22 (#234) and DEC-26 (#265: the warehouse "capacity" below, with `city_upgrades.enabled`, is its own, `supply.target_stock`; there are no road types); the current rules: the blocks above and section 8. Width below: the road level, "no more than `width` charges": `amount` (DEC-22). The values of #131 came into DEC-18 as the base algorithm; the "by descending deficit" order below was removed by DEC-18.
 
-`gow_sim.systems.supply`, числа: секция `[supply]` рулсета.
+`gow_sim.systems.supply`, numbers: the `[supply]` section of the ruleset.
 
-- Поток идёт только наружу по дереву кратчайших путей от своей столицы по связной снабжаемой
-  территории (раздел 9): у каждого узла один родитель в сторону столицы. Пакеты идут только по
-  внутренним рёбрам дерева от родителя к ребёнку, поэтому циклов и движения к столице нет.
-- Целевой запас узла: `min(ёмкость, разряженные стоящие юниты + supply.buffer)`; дефицит поддерева
-  считается снизу вверх раз в `supply.dispatch_ticks`. Узел отправляет детям всё сверх целевого
-  запаса, в порядке убывания дефицита поддерева (тай-брейк по `node_key`), не больше `width`
-  зарядов на ребро за период (один пакет).
-- Время в пути: `travel_ticks * 100 // supply.packet_speed_pct[width]` (округление вниз, не меньше
-  1 тика), по ширине в момент отправки.
-- Пакет на ребре, которое перестало быть внутренним для его владельца, теряется (событие
-  `packet_lost`); заряды сверх ёмкости склада при прибытии теряются (`charges_overflow`).
-- Перезарядка: стоящие в узле юниты владельца берут заряды со склада, не больше
-  `supply.recharge_per_tick` на узел за тик; юниты на рёбрах не заряжаются.
-- Детали (вопрос #131, DEC-14, закрыт: значения вошли в DEC-18, пп. 3 и 4): дерево по времени пакета, при равенстве
-  родитель с меньшим `node_key`; ребёнку уходит не больше его свободного места
-  (`ёмкость - склад - заряды в пути к нему`); собственный дефицит `цель - склад - в пути` может быть
-  отрицательным и сначала покрывает детей (дефицит поддерева: `max(0, собственный + Σ детей)`);
-  первой заряжается группа с наименьшим id; порядок внутри системы: потеря пакетов, доставка,
-  перезарядка, отправка.
+- The flow goes only outward along the tree of shortest paths from your capital over the connected supplied
+  territory (section 9): every node has one parent toward the capital. Packets go only along the
+  internal edges of the tree from parent to child, so there are no cycles and no movement toward the capital.
+- The node's target stock: `min(capacity, discharged standing units + supply.buffer)`; the subtree deficit
+  is computed bottom up once per `supply.dispatch_ticks`. A node sends to its children everything above the target
+  stock, in descending order of subtree deficit (tie-break by `node_key`), no more than `width`
+  charges per edge per period (one packet).
+- Travel time: `travel_ticks * 100 // supply.packet_speed_pct[width]` (rounding down, at least
+  1 tick), by the width at the moment of dispatch.
+- A packet on an edge that has stopped being internal for its owner is lost (the event
+  `packet_lost`); charges above the warehouse capacity on arrival are lost (`charges_overflow`).
+- Recharge: the owner's units standing in a node take charges from the warehouse, no more than
+  `supply.recharge_per_tick` per node per tick; units on edges are not charged.
+- Details (question #131, DEC-14, closed: the values came into DEC-18, items 3 and 4): the tree by packet time, on a tie
+  the parent with the smaller `node_key`; a child gets no more than its free room
+  (`capacity - warehouse - charges in transit to it`); the own deficit `target - warehouse - in transit` can be
+  negative and first covers the children (subtree deficit: `max(0, own + Σ of children)`);
+  the group with the smallest id is charged first; the order inside the system: loss of packets, delivery,
+  recharge, dispatch.
 
 ---
 
-## 8. Дороги
+## 8. Roads
 
-- **[принято]** Дороги **не ограничивают число юнитов**. ~~Они влияют только на скорость и объём доставки снабжения.~~ **[заменено DEC-28]**: улучшенная дорога ускоряет и юниты (`[road.speed_pct]`: уровень 2 +15%, 3 +30%), а не только снабжение (блок DEC-28 ниже, п. 7).
-- **[принято]** Улучшать дорогу можно только **внутри своей территории** (оба конца ребра твои).
-- **[принято]** Дорога, ведущая из своего города в чужой или нейтральный, — **буферная**, улучшать её нельзя никому.
+- **[accepted]** Roads **do not limit the number of units**. ~~They affect only the speed and volume of supply delivery.~~ **[superseded by DEC-28]**: an upgraded road speeds up units too (`[road.speed_pct]`: level 2 +15%, level 3 +30%), not only supply (DEC-28 block below, item 7).
+- **[accepted]** A road can be upgraded only **inside your own territory** (both ends of the edge are yours).
+- **[accepted]** A road that leads from your own city to an enemy or neutral one is a **buffer** road, nobody can upgrade it.
 
-Следствия:
+Consequences:
 
-- Подготовить шоссе для вторжения заранее нельзя: последний переход всегда узкое место, для обеих сторон одинаково.
-- После захвата города ребро становится внутренним, и его можно улучшать. Ритм наступления (прорыв → пауза → укрепление → следующий бросок) возникает сам.
-- Дедукция через туман сохраняется в мягкой форме: сколько тел у противника на фронте, неизвестно, но число **заряженных** ограничено тем, сколько зарядов туда доходит по дорогам.
+- You cannot prepare a highway for an invasion in advance: the last crossing is always the bottleneck, the same for both sides.
+- After a city is captured, the edge becomes internal and can be upgraded. The rhythm of the offensive (breakthrough → pause → consolidation → next thrust) emerges by itself.
+- Deduction through the fog is kept in a soft form: how many bodies the enemy has at the front is unknown, but the number of **charged** ones is limited by how many charges reach there along the roads.
 
-### Улучшение дорог как функция города (DEC-16, #203) **[принято]**
+### Road upgrade as a function of the city (DEC-16, #203) **[accepted]**
 
-> **Числа и связь с ёмкостью заменены DEC-22 (#234), блок ниже:** не больше трёх уровней, тип дороги
-> при первом улучшении, цены `2 = 3`, `3 = 4`, ёмкость от дорог не зависит; провинция строить не
-> может (`NOT_CITY`). Остальные пункты DEC-16 действуют.
+> **The numbers and the link to capacity are superseded by DEC-22 (#234), block below:** at most three levels, road type
+> at the first upgrade, prices `2 = 3`, `3 = 4`, capacity does not depend on roads; a province cannot
+> build (`NOT_CITY`). The other items of DEC-16 stand.
 >
-> **DEC-26 (#265), действует при любом значении флага:** тип дороги и цены DEC-22 заменены (дороги
-> без типа, цены `2 = 1`, `3 = 2`). Только при `city_upgrades.enabled = true` стройка города
-> становится общей для дороги, казармы и склада (пп. 2 и 5 ниже: `CITY_BUSY` для любой из трёх);
-> остальные пункты действуют.
+> **DEC-26 (#265), in force for any value of the flag:** the road type and the DEC-22 prices are replaced (roads
+> without a type, prices `2 = 1`, `3 = 2`). Only with `city_upgrades.enabled = true` does the city's construction
+> become shared by the road, the barracks and the warehouse (items 2 and 5 below: `CITY_BUSY` for any of the three);
+> the other items stand.
 >
-> **DEC-28 (#290):** оплата зарядами склада города и условие «платит город» **[заменено DEC-28]**: дорога платится CP
-> кликом по внутренней дороге (`UpgradeRoad(edge)`, 0,5 CP за уровень), стройка по-прежнему занимает
-> `build.ticks_per_level`; пп. 2-3 и 5 ниже читать по блоку DEC-28 (раздел 8).
+> **DEC-28 (#290):** payment by the charges of the city warehouse and the condition "the city pays" **[superseded by DEC-28]**: a road is paid for in CP
+> by a click on an internal road (`UpgradeRoad(edge)`, 0.5 CP per level), construction still takes
+> `build.ticks_per_level`; read items 2-3 and 5 below according to the DEC-28 block (section 8).
 
-Подход принят владельцем после плейтеста 2026-10-07; числа: значения по умолчанию, живут в
-рулсете. Заменяет стройку группой в режиме «Строительство» (DEC-08, SIM-11 ниже, вопрос #124).
-Причина: группу приходилось переключать в отдельный режим и держать без дела, третий режим
-усложнял бой и интерфейс, а цена в CP не была связана с зарядами (раздел 13, п. 1).
+The approach was accepted by the owner after the playtest of 2026-10-07; the numbers are defaults, they live in
+the ruleset. Replaces construction by a group in the "Building" mode (DEC-08, SIM-11 below, question #124).
+Reason: a group had to be switched into a separate mode and kept idle, a third mode
+complicated the fight and the interface, and the price in CP was not tied to charges (section 13, item 1).
 
-Улучшение дороги: функция своего города, оплата зарядами его склада. Режим «Строительство»
-удаляется: остаются «Атака» и «Защита», в бою стреляют все заряженные юниты.
+Road upgrade: a function of your own city, paid for with the charges of its warehouse. The "Building" mode
+is removed: "Attack" and "Defense" remain, in a fight all charged units shoot.
 
-1. **Команда** `UpgradeRoad(node, edge)`: город `node` поднимает ширину ребра `edge` на один
-   уровень. ~~Интерфейс: клик по своему городу, клавиша U, выбор дороги (раздел 18).~~ **[заменено DEC-28]**: команда `UpgradeRoad(edge)` без города, интерфейс: клик по своей внутренней дороге (блок DEC-28 ниже, п. 7).
-2. **Проверки по порядку** (первая сработавшая даёт отказ, состояние не меняется): узла нет
-   (`NOT_FOUND_OR_HIDDEN`); узел не свой (`NOT_OWNER`); ребра нет (`NOT_FOUND_OR_HIDDEN`); `node` не
-   конец `edge` (`NOT_ADJACENT`); ребро не внутреннее для игрока, то есть буферное или чужое
-   (`NOT_INTERNAL`); ширина равна `max_width` (`MAX_WIDTH`); город не в связной снабжаемой
-   территории своего владельца, раздел 9 (`NOT_SUPPLIED`); у города уже идёт стройка любого ребра
-   (`CITY_BUSY`); это ребро уже строит другой его конец (`EDGE_BUSY`); на складе города меньше
-   `build.charges_per_level[w + 1]` зарядов, где `w`: текущая ширина (`NOT_ENOUGH_CHARGES`); CP
-   меньше `orders.cost.build` (`NOT_ENOUGH_CP`, при значении 0 не срабатывает).
-3. **Оплата при старте.** Команда применяется в начале тика `t`: со склада `node` списывается
-   `build.charges_per_level[w + 1]` зарядов, с CP `orders.cost.build`; событие `build_started`
-   (игрок, узел, ребро, целевая ширина, заряды). Списание идёт раньше перезарядки того же тика
-   (`apply_commands` раньше `supply`).
-4. **Длительность.** Ширина растёт на 1 на тике `t + build.ticks_per_level` в системе `build`
-   (событие `road_upgraded`), и стройка заканчивается. Следующий уровень: новая команда и новая
-   оплата, очереди нет. ~~Ёмкость городов и скорость пакетов по новой ширине: как в SIM-11 ниже.~~
-   **[заменено DEC-22]**: новый уровень меняет только скорость и объём снабжения.
-5. **Одновременность.** Одна стройка на город, одно ребро строит только один город. Разные города
-   одного игрока строят разные рёбра одновременно, в том числе рёбра с общим концом (A строит
-   A-B, B строит B-C). Команды одного игрока в одном тике проверяются по очереди `(player, seq)`,
-   поэтому вторая команда на то же ребро получает `EDGE_BUSY`. Игроки друг другу не мешают:
-   внутреннее ребро и его концы принадлежат одному игроку.
-6. **Прерывание.** В каждом тике система `build` проверяет, что ребро ещё внутреннее для игрока,
-   начавшего стройку. Если нет (захвачен город-строитель или другой конец), стройка снимается:
-   событие `build_stopped` (`reason = "interrupted"`), ширина не меняется, заряды не возвращаются.
-   Бой идёт раньше `build`, поэтому захват на тике завершения отменяет повышение. Больше ничего
-   стройку не прерывает: ни бой в городе без смены владельца, ни потеря снабжения (город отрезан
-   от столицы, ребро осталось внутренним), ни опустевший склад, ни движение групп.
-7. **Отмены нет.** Заряды потрачены при старте; ошибка стоит не больше 5 зарядов и 15 секунд.
-8. **Видимость.** Стройка не публична: публичного намерения стройки нет. Свою стройку игрок видит
-   точно (город, ребро, тик окончания). Стройку противника игрок видит по DEC-17 (раздел 10, п. 5):
-   ребро и город-строитель, только пока строящееся ребро не в тумане; в тумане стройка не видна и
-   не запоминается, о результате игрок узнаёт по ширине (DEC-17, п. 1 и 2). Видна ли ширина ребра,
-   на котором стоит своя группа, зависит от обзора группы на ребре (#112, DEC-10). События
-   `build_started`, `road_upgraded`, `build_stopped` получает только владелец (DEC-17, п. 6).
+1. **Command** `UpgradeRoad(node, edge)`: the city `node` raises the width of the edge `edge` by one
+   level. ~~Interface: click your own city, key U, choose a road (section 18).~~ **[superseded by DEC-28]**: the command `UpgradeRoad(edge)` without a city, interface: a click on your own internal road (DEC-28 block below, item 7).
+2. **Checks in order** (the first one that fires gives the rejection, the state does not change): the node does not
+   exist (`NOT_FOUND_OR_HIDDEN`); the node is not yours (`NOT_OWNER`); the edge does not exist (`NOT_FOUND_OR_HIDDEN`); `node` is not an
+   end of `edge` (`NOT_ADJACENT`); the edge is not internal for the player, that is buffer or foreign
+   (`NOT_INTERNAL`); the width equals `max_width` (`MAX_WIDTH`); the city is not in the connected supplied
+   territory of its owner, section 9 (`NOT_SUPPLIED`); the city already has a construction of any edge going
+   (`CITY_BUSY`); this edge is already being built by its other end (`EDGE_BUSY`); the city warehouse has fewer than
+   `build.charges_per_level[w + 1]` charges, where `w`: the current width (`NOT_ENOUGH_CHARGES`); CP
+   is less than `orders.cost.build` (`NOT_ENOUGH_CP`, does not fire at value 0).
+3. **Payment at the start.** The command is applied at the start of tick `t`: from the warehouse of `node` are deducted
+   `build.charges_per_level[w + 1]` charges, from CP `orders.cost.build`; event `build_started`
+   (player, node, edge, target width, charges). The deduction goes before the recharge of the same tick
+   (`apply_commands` is before `supply`).
+4. **Duration.** The width grows by 1 at tick `t + build.ticks_per_level` in the system `build`
+   (event `road_upgraded`), and the construction ends. The next level: a new command and a new
+   payment, there is no queue. ~~City capacity and packet speed by the new width: as in SIM-11 below.~~
+   **[superseded by DEC-22]**: a new level changes only the speed and volume of supply.
+5. **Simultaneity.** One construction per city, one edge is built by only one city. Different cities
+   of one player build different edges at the same time, including edges with a common end (A builds
+   A-B, B builds B-C). Commands of one player in one tick are checked in turn `(player, seq)`,
+   so a second command on the same edge gets `EDGE_BUSY`. Players do not interfere with each other:
+   an internal edge and its ends belong to one player.
+6. **Interruption.** On every tick the system `build` checks that the edge is still internal for the player
+   who started the construction. If not (the builder city or the other end was captured), the construction is removed:
+   event `build_stopped` (`reason = "interrupted"`), the width does not change, the charges are not returned.
+   The fight goes before `build`, so a capture on the completion tick cancels the upgrade. Nothing else
+   interrupts the construction: not a fight in the city without a change of owner, not a loss of supply (the city is cut off
+   from the capital, the edge stayed internal), not an emptied warehouse, not the movement of groups.
+7. **No cancel.** The charges are spent at the start; a mistake costs no more than 5 charges and 15 seconds.
+8. **Visibility.** The construction is not public: there is no public intent of a construction. A player sees their own construction
+   exactly (city, edge, end tick). A player sees the enemy's construction per DEC-17 (section 10, item 5):
+   the edge and the builder city, only while the edge under construction is not in the fog; in the fog the construction is not visible and
+   not remembered, the player learns about the result from the width (DEC-17, items 1 and 2). Whether the width of the edge
+   with one's own group on it is visible depends on the vision of the group on the edge (#112, DEC-10). The events
+   `build_started`, `road_upgraded`, `build_stopped` go only to the owner (DEC-17, item 6).
 
-Числа в рулсете (вносит реализация, дальше их меняет только баланс):
-`build.ticks_per_level = 150` (без изменений, 15 с на уровень); ~~новая таблица
-`build.charges_per_level` с ключом «новая ширина»: `2 = 2`, `3 = 3`, `4 = 4`, `5 = 5` (все ширины
-2..5 обязательны);~~ **[заменено DEC-22]**: ~~`2 = 3`, `3 = 4`~~ **[заменено DEC-26]**: `2 = 1`, `3 = 2`; `orders.cost.build = 0` (было 100; ключ остаётся, чтобы баланс мог вернуть плату
-CP без кода).
+Numbers in the ruleset (put in by the implementation, afterwards only balance changes them):
+`build.ticks_per_level = 150` (unchanged, 15 s per level); ~~a new table
+`build.charges_per_level` keyed by "new width": `2 = 2`, `3 = 3`, `4 = 4`, `5 = 5` (all widths
+2..5 are required);~~ **[superseded by DEC-22]**: ~~`2 = 3`, `3 = 4`~~ **[superseded by DEC-26]**: `2 = 1`, `3 = 2`; `orders.cost.build = 0` (was 100; the key stays so that balance can bring back the CP
+fee without code).
 
-Почему так:
-- ~~Цена уровня равна новой ширине: цена растёт, а прирост ёмкости убывает (+0,5 / +0,5 / +0,3 /
-  +0,3, раздел 9), поэтому выгоднее развивать все подходы, а не один. Уровень 2 за 2 заряда равен
-  прежней цене 1 CP по курсу DEC-02. Вся дорога от 1 до 5 стоит 14 зарядов: около 35 с дохода
-  столицы в «Балансе» (2 заряда за 50 тиков).~~ **[заменено DEC-22]**
-- ~~Склад обычного города (база 3, две дороги ширины 1) держит 5 зарядов, так что любой уровень
-  оплачивается; у тупика (ёмкость 4) уровень 5 оплачивает другой конец ребра.~~ **[заменено DEC-22]**: ёмкость от дорог не зависит, цены и обоснование: блок DEC-22.
-- Без CP: одна валюта на действие, CP остаются вниманием на войска. Плата со склада конкурирует с
-  перезарядкой гарнизона, и решение «строить или держать заряды» остаётся пространственным
-  (раздел 13, п. 3).
-- `NOT_SUPPLIED`: ёмкость и снабжение считаются только в снабжаемой территории, поэтому
-  улучшение в отрезанном кармане ничего не даёт, пока он отрезан, а склад кармана: его
-  единственная оборона. Начатую стройку отрезание не прерывает: блокада часто временная, а одно
-  условие прерывания проще.
-- Без отмены и без возврата при захвате: одно правило «заряды стройки потрачены при старте».
+Why this way:
+- ~~The price of a level equals the new width: the price grows while the capacity gain shrinks (+0.5 / +0.5 / +0.3 /
+  +0.3, section 9), so it is better to develop all approaches, not one. Level 2 for 2 charges equals
+  the former price of 1 CP at the DEC-02 rate. The whole road from 1 to 5 costs 14 charges: about 35 s of the income
+  of the capital in "Balance" (2 charges per 50 ticks).~~ **[superseded by DEC-22]**
+- ~~The warehouse of an ordinary city (base 3, two roads of width 1) holds 5 charges, so any level
+  can be paid for; for a dead end (capacity 4) level 5 is paid for by the other end of the edge.~~ **[superseded by DEC-22]**: capacity does not depend on roads, prices and rationale: DEC-22 block.
+- No CP: one currency per action, CP stay attention for troops. The fee from the warehouse competes with the
+  recharge of the garrison, and the decision "build or hold charges" stays spatial
+  (section 13, item 3).
+- `NOT_SUPPLIED`: capacity and supply are counted only in the supplied territory, so an
+  upgrade in a cut-off pocket gives nothing while it is cut off, and the warehouse of the pocket is its
+  only defense. A construction already started is not interrupted by the cut-off: a blockade is often temporary, and a single
+  interruption condition is simpler.
+- No cancel and no refund on capture: one rule, "the construction charges are spent at the start".
 
-Разобранные примеры. A, B, C: свои города в снабжаемой территории; ребро A-B внутреннее, ширина
-1, `max_width` 3; `ticks_per_level` 150, цены 2 / 3 / 4 / 5. Тесты реализации: ровно эта таблица.
-(Цены здесь условные: правила таблицы от цен не зависят, `test_build.py` закрепляет свои 3 / 4;
-действующие цены DEC-26 `2 = 1`, `3 = 2` проверяют примеры DEC-22 и DEC-26.)
+Worked examples. A, B, C: own cities in the supplied territory; edge A-B is internal, width
+1, `max_width` 3; `ticks_per_level` 150, prices 2 / 3 / 4 / 5. Implementation tests: exactly this table.
+(The prices here are nominal: the rules of the table do not depend on prices, `test_build.py` fixes its own 3 / 4;
+the actual DEC-26 prices `2 = 1`, `3 = 2` are checked by the examples of DEC-22 and DEC-26.)
 
-| # | Ситуация | Итог |
+| # | Situation | Outcome |
 |---|---|---|
-| 1 | тик 100: `UpgradeRoad(A, A-B)`, склад A = 5 | склад A = 3, `build_started`; тик 250: ширина 2, `road_upgraded`, стройки нет. **[заменено DEC-28]**: `UpgradeRoad(A-B)`, CP -0,5, склад не меняется |
-| 2 | то же, склад A = 1 | `NOT_ENOUGH_CHARGES`, склад 1. **[заменено DEC-28]**: CP меньше 0,5: `NOT_ENOUGH_CP` |
-| 3 | A-B ширины 2, склад A = 3 | склад 0; через 150 тиков ширина 3 |
-| 4 | A-B ширины 3 (`max_width`) | `MAX_WIDTH` |
-| 5 | ребро A-N, N нейтральный или вражеский | `NOT_INTERNAL` |
-| 6 | A строит A-B; `UpgradeRoad(A, A-C)` | `CITY_BUSY`. **[заменено DEC-28]**: принято, идут обе стройки (число строек не ограничено) |
-| 7 | A строит A-B; `UpgradeRoad(B, A-B)` | `EDGE_BUSY` (DEC-28: `UpgradeRoad(A-B)` ещё раз) |
-| 8 | A строит A-B; `UpgradeRoad(B, B-C)` | принято, идут обе стройки |
-| 9 | A строит A-B с тика 100; тик 200: B захвачен | `build_stopped` (`interrupted`), ширина 1, заряды не вернулись |
-| 10 | A строит A-B с тика 100; тик 250: A захвачен | бой раньше `build`: ширина 1, `build_stopped` |
-| 11 | A строит A-B с тика 100; тик 200: A и B отрезаны от столицы, A-B внутреннее | стройка идёт; тик 250: ширина 2 |
-| 12 | A отрезан от столицы в момент команды | `NOT_SUPPLIED`. **[заменено DEC-28]**: принято, `NOT_SUPPLIED` для дороги нет |
-| 13 | A строит A-B; бой в A, защитник удержал город | стройка идёт |
-| 14 | A строит A-B; склад A опустел на перезарядке | стройка идёт (DEC-28: склад в стройке не участвует) |
+| 1 | tick 100: `UpgradeRoad(A, A-B)`, warehouse A = 5 | warehouse A = 3, `build_started`; tick 250: width 2, `road_upgraded`, no construction. **[superseded by DEC-28]**: `UpgradeRoad(A-B)`, CP -0.5, the warehouse does not change |
+| 2 | same, warehouse A = 1 | `NOT_ENOUGH_CHARGES`, warehouse 1. **[superseded by DEC-28]**: CP less than 0.5: `NOT_ENOUGH_CP` |
+| 3 | A-B of width 2, warehouse A = 3 | warehouse 0; after 150 ticks width 3 |
+| 4 | A-B of width 3 (`max_width`) | `MAX_WIDTH` |
+| 5 | edge A-N, N neutral or enemy | `NOT_INTERNAL` |
+| 6 | A builds A-B; `UpgradeRoad(A, A-C)` | `CITY_BUSY`. **[superseded by DEC-28]**: accepted, both constructions run (the number of constructions is not limited) |
+| 7 | A builds A-B; `UpgradeRoad(B, A-B)` | `EDGE_BUSY` (DEC-28: `UpgradeRoad(A-B)` once more) |
+| 8 | A builds A-B; `UpgradeRoad(B, B-C)` | accepted, both constructions run |
+| 9 | A builds A-B from tick 100; tick 200: B captured | `build_stopped` (`interrupted`), width 1, the charges were not returned |
+| 10 | A builds A-B from tick 100; tick 250: A captured | the fight is before `build`: width 1, `build_stopped` |
+| 11 | A builds A-B from tick 100; tick 200: A and B cut off from the capital, A-B internal | the construction runs; tick 250: width 2 |
+| 12 | A is cut off from the capital at the moment of the command | `NOT_SUPPLIED`. **[superseded by DEC-28]**: accepted, there is no `NOT_SUPPLIED` for a road |
+| 13 | A builds A-B; a fight in A, the defender held the city | the construction runs |
+| 14 | A builds A-B; the warehouse of A emptied on recharge | the construction runs (DEC-28: the warehouse does not take part in construction) |
 
-Заменённые принятые тексты (зачёркнуты, помечены [заменено DEC-16]): раздел 3, режимы юнита и
-вопрос «Строитель»; DEC-07, правило 1 (раздел 4); DEC-08 и описание SIM-10 (раздел 5); блок SIM-11
-и вопрос #124 ниже; лестница информации, п. 2 (раздел 10; публичные стройки в DEC-04 уже
-заменены DEC-17); раздел 15, п. 8; глоссарий.
-Таблица DEC-07 и `packages/protocol/vectors/combat.json` не меняются: режима «Строительство» в них
-нет. Что меняет реализация (симуляция и `SIM_VERSION`, протокол и `PROTOCOL_VERSION`, клиент,
-боты, рулсеты): список в #203.
+Replaced accepted texts (struck through, marked [superseded by DEC-16]): section 3, unit modes and
+the question "Builder"; DEC-07, rule 1 (section 4); DEC-08 and the description of SIM-10 (section 5); the SIM-11 block
+and question #124 below; the information ladder, item 2 (section 10; public constructions in DEC-04 are already
+replaced by DEC-17); section 15, item 8; the glossary.
+The DEC-07 table and `packages/protocol/vectors/combat.json` do not change: the "Building" mode is not in
+them. What the implementation changes (simulation and `SIM_VERSION`, protocol and `PROTOCOL_VERSION`, client,
+bots, rulesets): the list in #203.
 
-Альтернативы (не выбраны):
-- Оставить режим «Строительство» (SIM-11 и детали #124).
-- Цена в CP за уровень вместо зарядов; постоянная цена уровня.
-- Отмена `CancelBuild(node)` с возвратом зарядов на склад в пределах ёмкости.
-- Стройка видна противнику как публичное намерение (как было до DEC-16 и DEC-17); очередь из нескольких уровней; стройка из
-  отрезанного города.
+Alternatives (not chosen):
+- Keep the "Building" mode (SIM-11 and the details of #124).
+- A price in CP per level instead of charges; a constant price per level.
+- A cancel `CancelBuild(node)` with the charges returned to the warehouse within capacity.
+- The construction visible to the enemy as a public intent (as before DEC-16 and DEC-17); a queue of several levels; construction from a
+  cut-off city.
 
-### Дороги двух типов, фиксированная ёмкость, партия 15 минут (DEC-22, #234) **[принято]**
+### Roads of two types, fixed capacity, a 15-minute match (DEC-22, #234) **[accepted]**
 
-Плейтест 2026-10-12: партия ощущалась скомканной, дороги никто не улучшал, ёмкость от дорог смешивала снабжение и размер гарнизона. Решение владельца. Заменяет ёмкость от дорог (разделы 7, 9), числа DEC-16 и его связь с ёмкостью, п. 3 DEC-17, длину партии DEC-03.
+Playtest 2026-10-12: the match felt cramped, nobody upgraded roads, capacity from roads mixed supply and garrison size. The owner's decision. Replaces capacity from roads (sections 7, 9), the numbers of DEC-16 and its link to capacity, item 3 of DEC-17, the match length of DEC-03.
 
-Ёмкость узла больше не зависит от дорог: она фиксирована картой. Дороги влияют только на
-снабжение, у них до трёх уровней и ~~два типа на выбор~~ **[заменено DEC-26]**: типов нет. Партия длится 15 минут. Модель DEC-16
-(город платит зарядами склада) сохраняется, меняются её числа. Пункты, помеченные раньше
-«(по умолчанию)», подтверждены владельцем 2026-10-12 (#239).
+The capacity of a node no longer depends on roads: it is fixed by the map. Roads affect only
+supply, they have up to three levels and ~~two types to choose from~~ **[superseded by DEC-26]**: there are no types. A match lasts 15 minutes. The DEC-16 model
+(the city pays with warehouse charges) is kept, its numbers change. The items earlier marked
+"(default)" were confirmed by the owner on 2026-10-12 (#239).
 
-> **DEC-26 (#265, раздел 8 ниже):** пункты о типе дороги и её ценах (пп. 2-8 и числа в рулсете)
-> заменены **при любом значении флага** и зачёркнуты. Склад равен ёмкости узла (п. 1) заменён только
-> при `city_upgrades.enabled = true`: при `false` (значение в `mvp-0.toml`) п. 1 действует как записано.
+> **DEC-26 (#265, section 8 below):** the items about the road type and its prices (items 2-8 and the numbers in the ruleset)
+> are replaced **for any value of the flag** and struck through. "The warehouse equals the node capacity" (item 1) is replaced only
+> with `city_upgrades.enabled = true`: with `false` (the value in `mvp-0.toml`) item 1 stands as written.
 
-1. **Ёмкость фиксирована.** Ёмкость узла: `capacity.by_kind[kind]`, где `kind`: вид узла из карты
-   (DEC-23: столица, большой, средний, малый город, провинция). Не зависит от дорог, владельца и
-   снабжения, поэтому публична и точна для всех узлов. Как и раньше, одно число отдельно ограничивает
-   стоящих юнитов и отдельно склад (у провинции склада нет). Гибель сверх ёмкости и отсрочка после
-   захвата без изменений (#118). Одно число для склада и юнитов: **[заменено DEC-26 при `city_upgrades.enabled = true`]** (склад отдельно, п. 2 DEC-26; при `false` действует). Отрезание ёмкость не меняет; давление окружения: голод (DEC-19).
-2. **Дорога: уровень.** Уровень `1..max_level`, `max_level <= 3` (поле карты, DEC-23): три
-   уровня, то есть два улучшения (владелец 2026-10-12). Уровень сохраняется при захватах (сноса нет).
-   ~~Уровень 1: обычная дорога без типа. Первое улучшение (1 → 2) выбирает тип: `fast` (быстрая) или
-   `freight` (грузовая); уровень 3 того же типа. Тип не меняется.~~ **[заменено DEC-26]**: типа нет,
-   улучшение только ускоряет доставку снабжения (раздел 8, DEC-26, п. 7).
-3. **Команда** ~~`UpgradeRoad(node, edge, kind)`~~ **[заменено DEC-26]**: ~~`UpgradeRoad(node, edge)`~~ **[заменено DEC-28]**: `UpgradeRoad(edge)`, отказы и оплата по блоку DEC-28, п. 7; текст пункта ниже описывает прежнюю команду.
-   Проверки DEC-16, п. 2 по порядку с изменениями: после `NOT_OWNER`: узел не город, то есть
-   провинция (`NOT_CITY`); после `MAX_WIDTH` (код остаётся, проверяет `max_level`):
-   ~~на уровне 1 тип не задан или неизвестен (`INVALID_ARGUMENT`), на уровне 2 тип задан и не равен
-   типу дороги (`ROAD_KIND_MISMATCH`, новый код)~~ **[заменено DEC-26]**: тип не задаётся, если задан,
-   `INVALID_ARGUMENT`; кода `ROAD_KIND_MISMATCH` нет; дальше `NOT_SUPPLIED`, `CITY_BUSY`,
-   `EDGE_BUSY`, `NOT_ENOUGH_CHARGES`, `NOT_ENOUGH_CP`, как в DEC-16. Оплата при старте,
-   длительность, одновременность, прерывание и отсутствие отмены: DEC-16, пп. 3-7 без изменений.
-4. **Параметры снабжения ребра** (DEC-18): `speed_pct` (скорость пакета) и `amount` (зарядов на
-   ребро за период отправки). ~~Таблица по типам: быстрая, уровни 2 и 3: 150 и 200 при `amount` 1;
-   грузовая, уровни 2 и 3: 100 при `amount` 2 и 3.~~ **[заменено DEC-26]**: типов нет, `amount`
-   равен 1 на любом уровне (пропускная способность не растёт):
+1. **Capacity is fixed.** The capacity of a node: `capacity.by_kind[kind]`, where `kind`: the kind of node from the map
+   (DEC-23: capital, large, medium, small city, province). It does not depend on roads, owner or
+   supply, so it is public and exact for all nodes. As before, one number limits
+   the standing units and, separately, the warehouse (a province has no warehouse). Death above capacity and the grace period after
+   a capture are unchanged (#118). One number for the warehouse and the units: **[superseded by DEC-26 with `city_upgrades.enabled = true`]** (the warehouse separately, item 2 of DEC-26; with `false` it stands). A cut-off does not change capacity; the pressure of encirclement: starvation (DEC-19).
+2. **Road: level.** Level `1..max_level`, `max_level <= 3` (a map field, DEC-23): three
+   levels, that is two upgrades (owner, 2026-10-12). The level is kept across captures (nothing is demolished).
+   ~~Level 1: an ordinary road without a type. The first upgrade (1 → 2) chooses the type: `fast` (fast) or
+   `freight` (freight); level 3 of the same type. The type does not change.~~ **[superseded by DEC-26]**: there is no type,
+   an upgrade only speeds up supply delivery (section 8, DEC-26, item 7).
+3. **Command** ~~`UpgradeRoad(node, edge, kind)`~~ **[superseded by DEC-26]**: ~~`UpgradeRoad(node, edge)`~~ **[superseded by DEC-28]**: `UpgradeRoad(edge)`, rejections and payment per the DEC-28 block, item 7; the text of the item below describes the former command.
+   The checks of DEC-16, item 2, in order, with changes: after `NOT_OWNER`: the node is not a city, that is
+   a province (`NOT_CITY`); after `MAX_WIDTH` (the code stays, it checks `max_level`):
+   ~~at level 1 the type is not set or unknown (`INVALID_ARGUMENT`), at level 2 the type is set and not equal to
+   the road type (`ROAD_KIND_MISMATCH`, a new code)~~ **[superseded by DEC-26]**: the type is not set, if it is set,
+   `INVALID_ARGUMENT`; there is no code `ROAD_KIND_MISMATCH`; then `NOT_SUPPLIED`, `CITY_BUSY`,
+   `EDGE_BUSY`, `NOT_ENOUGH_CHARGES`, `NOT_ENOUGH_CP`, as in DEC-16. Payment at the start,
+   duration, simultaneity, interruption and the absence of cancel: DEC-16, items 3-7 unchanged.
+4. **Supply parameters of an edge** (DEC-18): `speed_pct` (packet speed) and `amount` (charges per
+   edge per dispatch period). ~~A table by type: fast, levels 2 and 3: 150 and 200 at `amount` 1;
+   freight, levels 2 and 3: 100 at `amount` 2 and 3.~~ **[superseded by DEC-26]**: there are no types, `amount`
+   equals 1 at any level (the throughput does not grow):
 
-   | Дорога | `speed_pct` | `amount` |
+   | Road | `speed_pct` | `amount` |
    |---|---|---|
-   | уровень 1 | 100 | 1 |
-   | уровень 2 | 150 | ~~1~~ 2 **[заменено DEC-28]** |
-   | уровень 3 | 200 | ~~1~~ 3 **[заменено DEC-28]** |
+   | level 1 | 100 | 1 |
+   | level 2 | 150 | ~~1~~ 2 **[superseded by DEC-28]** |
+   | level 3 | 200 | ~~1~~ 3 **[superseded by DEC-28]** |
 
-   Время пакета на ребре: `packet_ticks = max(1, travel_ticks * 100 // speed_pct)` (округление
-   вниз).
-5. ~~**Грузовая дорога: отправленное доходит.** Пакет (и перевозка DEC-18) на грузовом ребре не
-   теряется, когда ребро перестаёт быть внутренним для его владельца: он доходит до конца ребра.
-   Если узел там по-прежнему свой, пакет идёт дальше по пути или ложится на склад. Если узел
-   захвачен противником, заряды ложатся на склад этого узла новому владельцу в пределах ёмкости
-   (излишек сгорает), путь пакета заканчивается; захватчик получает событие `packet_captured`,
-   отправитель `packet_lost`. Если узел нейтральный или провинция, заряды теряются. Пакет на
-   обычной или быстрой дороге теряется, как сейчас.~~ **[заменено DEC-26]**: грузовой дороги нет,
-   пакет на ребре, переставшем быть внутренним, теряется (`packet_lost`) на любом уровне; события
-   `packet_captured` нет.
-6. ~~**Цена улучшения** в зарядах склада города-строителя~~ **[заменено DEC-28]**: 0,5 CP за уровень (`orders.cost.build = 50`), провинция и склад не участвуют. Прежняя запись (ключ: новый уровень): ~~`2 = 3`, `3 = 4`~~
-   **[заменено DEC-26]**: `2 = 1`, `3 = 2` (`build.charges_per_level`);
-   `build.ticks_per_level = 150` (15 с, без изменений); `orders.cost.build = 0`. Самый малый город
-   (ёмкость 4) оплачивает любой уровень (при `city_upgrades.enabled = true` склад отдельно: DEC-26, п. 7). Провинция строить не может (склада нет), поэтому дорога
-   между двумя провинциями не улучшается (владелец 2026-10-12).
-7. **Подсказка улучшения** (`upgrade_gain`): ~~прирост `speed_pct` и `amount` для каждого из двух
-   типов на уровне 1 и для своего типа на уровне 2 (вместо прироста ёмкости)~~ **[заменено
-   DEC-26]**: только прирост `speed_pct` следующего уровня (`amount` не растёт).
-8. **Туман** (DEC-17): уровень ребра виден, пока ребро не в тумане; в тумане последний увиденный;
-   ребро, которое игрок ни разу не видел: уровень 1. ~~Тип ребра виден так же; ни разу не виденное:
-   без типа.~~ **[заменено DEC-26]**: типа нет, `Sighting.road` и тип ребра в виде игрока удаляются.
-   `capacity_stale` убирается (п. 1).
-9. **Длина партии: 15 минут.** `match_ticks = 9000`; VP по-прежнему каждые 300 тиков: 30 начислений,
-   последнее на последнем тике. `test-short` без изменений (600 тиков).
-10. **Скорость движения по рельефу** уже есть (~~`terrain.entry_speed_pct`, рельеф узла входа~~
-    **[заменено решением 2026-10-14, #253]**: `terrain.speed_pct` по зонам ребра, раздел 4:
-    равнина 125, то есть время ×0,8; лес 100; горы 70, время примерно ×1,43). DEC-22 правило не менял;
-    интерфейс обязан показывать время пути приказа. Считает его сервер (DEC-20, «Влияние»).
+   Packet time on an edge: `packet_ticks = max(1, travel_ticks * 100 // speed_pct)` (rounded
+   down).
+5. ~~**Freight road: what was sent arrives.** A packet (and a DEC-18 transfer) on a freight edge is not
+   lost when the edge stops being internal for its owner: it reaches the end of the edge.
+   If the node there is still yours, the packet goes on along the path or lands in the warehouse. If the node is
+   captured by the enemy, the charges land in the warehouse of that node for the new owner within capacity
+   (the surplus burns up), the packet's path ends; the captor gets the event `packet_captured`,
+   the sender `packet_lost`. If the node is neutral or a province, the charges are lost. A packet on an
+   ordinary or fast road is lost, as now.~~ **[superseded by DEC-26]**: there is no freight road,
+   a packet on an edge that stopped being internal is lost (`packet_lost`) at any level; there is no event
+   `packet_captured`.
+6. ~~**The price of an upgrade** in warehouse charges of the builder city~~ **[superseded by DEC-28]**: 0.5 CP per level (`orders.cost.build = 50`), the province and the warehouse do not take part. The former entry (key: new level): ~~`2 = 3`, `3 = 4`~~
+   **[superseded by DEC-26]**: `2 = 1`, `3 = 2` (`build.charges_per_level`);
+   `build.ticks_per_level = 150` (15 s, unchanged); `orders.cost.build = 0`. The smallest city
+   (capacity 4) pays for any level (with `city_upgrades.enabled = true` the warehouse is separate: DEC-26, item 7). A province cannot build (it has no warehouse), so a road
+   between two provinces is not upgraded (owner, 2026-10-12).
+7. **Upgrade hint** (`upgrade_gain`): ~~the gain of `speed_pct` and `amount` for each of the two
+   types at level 1 and for its own type at level 2 (instead of the capacity gain)~~ **[superseded by
+   DEC-26]**: only the `speed_pct` gain of the next level (`amount` does not grow).
+8. **Fog** (DEC-17): the level of an edge is visible while the edge is not in the fog; in the fog the last one seen;
+   an edge the player has never seen: level 1. ~~The edge type is visible the same way; never seen:
+   no type.~~ **[superseded by DEC-26]**: there is no type, `Sighting.road` and the edge type in the player view are removed.
+   `capacity_stale` is dropped (item 1).
+9. **Match length: 15 minutes.** `match_ticks = 9000`; VP still every 300 ticks: 30 awards,
+   the last one on the last tick. `test-short` unchanged (600 ticks).
+10. **Movement speed by terrain** already exists (~~`terrain.entry_speed_pct`, the terrain of the entry node~~
+    **[superseded by the decision of 2026-10-14, #253]**: `terrain.speed_pct` by the zones of the edge, section 4:
+    plain 125, that is time ×0.8; forest 100; mountains 70, time about ×1.43). DEC-22 did not change the rule;
+    the interface must show the travel time of an order. The server computes it (DEC-20, "Impact").
 
-Числа в рулсете: `match_ticks = 9000`; новая секция `[capacity.by_kind]`: `capital = 10`,
-`city_large = 8`, `city_medium = 6`, `city_small = 4`, `province = 3`; удаляются
-`[capacity.width_gain_centi]` и `[supply.packet_speed_pct]`; новые `supply.base_speed_pct = 100`,
+Numbers in the ruleset: `match_ticks = 9000`; a new section `[capacity.by_kind]`: `capital = 10`,
+`city_large = 8`, `city_medium = 6`, `city_small = 4`, `province = 3`; removed are
+`[capacity.width_gain_centi]` and `[supply.packet_speed_pct]`; new `supply.base_speed_pct = 100`,
 `supply.base_amount = 1`, `[supply.fast_speed_pct]` `2 = 150`, `3 = 200`, ~~`[supply.freight_amount]`
-`2 = 2`, `3 = 3`~~ **[заменено DEC-26]**: секции `[supply.freight_amount]` нет; `[build.charges_per_level]`
-~~`2 = 3`, `3 = 4`~~ **[заменено DEC-26]**: `2 = 1`, `3 = 2` (ключи 4 и 5 удаляются);
-`build.ticks_per_level = 150`, `orders.cost.build = 0` без изменений.
+`2 = 2`, `3 = 3`~~ **[superseded by DEC-26]**: there is no section `[supply.freight_amount]`; `[build.charges_per_level]`
+~~`2 = 3`, `3 = 4`~~ **[superseded by DEC-26]**: `2 = 1`, `3 = 2` (keys 4 and 5 are removed);
+`build.ticks_per_level = 150`, `orders.cost.build = 0` unchanged.
 
-Разобранные примеры (пересчитаны DEC-26: дороги без типа, цены `2 = 1`, `3 = 2`; строки 3-6 и
-9-14 заменены; **[заменено DEC-28]**, #306: дорога платится CP, `orders.cost.build = 50`, склад не
-меняется, строки 3-6, 8, 9 и 12-14 пересчитаны). A, B: свои города в снабжаемой территории,
-ёмкость 6; ребро A-B внутреннее, уровень 1, `max_level` 3, `travel_ticks = 30`. Тесты реализации:
-ровно эта таблица.
+Worked examples (recomputed by DEC-26: roads without a type, prices `2 = 1`, `3 = 2`; rows 3-6 and
+9-14 replaced; **[superseded by DEC-28]**, #306: a road is paid for in CP, `orders.cost.build = 50`, the warehouse does not
+change, rows 3-6, 8, 9 and 12-14 recomputed). A, B: own cities in the supplied territory,
+capacity 6; edge A-B is internal, level 1, `max_level` 3, `travel_ticks = 30`. Implementation tests:
+exactly this table.
 
-| # | Ситуация | Итог |
+| # | Situation | Outcome |
 |---|---|---|
-| 1 | средний город: свой, отрезанный, нейтральный, с любыми дорогами | ёмкость 6 |
-| 2 | столица | ёмкость 10 |
-| 3 | тик 100: ~~`UpgradeRoad(A, A-B)`, склад A 5~~ `UpgradeRoad(A-B)`, CP 1 | ~~склад A 4~~ CP 0,5, склад A не меняется; тик 250: уровень 2; пакет идёт 20 тиков (`30 * 100 // 150`) |
-| 4 | ~~`UpgradeRoad(A, A-B, fast)`: тип задан~~ **[заменено DEC-28]**: у команды нет ни города, ни типа | ~~`INVALID_ARGUMENT`~~ |
-| 5 | A-B уровня 1, ~~склад A 0~~ CP 0,49 | ~~`NOT_ENOUGH_CHARGES` (уровень 2 стоит 1)~~ `NOT_ENOUGH_CP` (уровень стоит 0,5 CP) |
-| 6 | A-B уровня 2; ~~`UpgradeRoad(A, A-B)`, склад A 2~~ `UpgradeRoad(A-B)` | ~~склад 0~~ CP -0,5; через 150 тиков уровень 3: пакет 15 тиков |
-| 7 | A-B уровня 3 | `MAX_WIDTH` |
-| 8 | ~~`UpgradeRoad(P, P-A)`~~ `UpgradeRoad(P-A)`, P своя провинция | ~~`NOT_CITY`~~ принято: платящего города нет, дорогу у провинции улучшают тоже (DEC-28, п. 7) |
-| 9 | A-B уровня 3; отправка за период | не больше ~~1 заряда~~ 3 зарядов по ребру за период (~~`amount` 1 на любом уровне~~ `amount` 1 / 2 / 3 по уровню, DEC-28) |
-| 10 | пакет 2 заряда на A-B, B захвачен противником до прибытия | пакет потерян: `packet_lost` отправителю, `packet_captured` нет |
-| 11 | пакет на A-B, захвачен A, B свой | пакет потерян (`packet_lost`) |
-| 12 | A-B уровня 2, ~~склад A 1~~ склад A 0 | ~~`NOT_ENOUGH_CHARGES` (уровень 3 стоит 2)~~ принято: склад не участвует (DEC-28) |
-| 13 | A-B уровня 1, ~~склад A 1~~ CP 0,5 | ~~склад 0~~ CP 0; через 150 тиков уровень 2 |
-| 14 | A-B уровня 2 (стройка уровня 3 идёт ~~у A~~); ~~`UpgradeRoad(B, A-B)`~~ `UpgradeRoad(A-B)` ещё раз | `EDGE_BUSY` (DEC-28, п. 7) |
-| 15 | партия без досрочной победы | конец на тике 9000, 30 начислений VP |
+| 1 | a medium city: own, cut off, neutral, with any roads | capacity 6 |
+| 2 | the capital | capacity 10 |
+| 3 | tick 100: ~~`UpgradeRoad(A, A-B)`, warehouse A 5~~ `UpgradeRoad(A-B)`, CP 1 | ~~warehouse A 4~~ CP 0.5, warehouse A does not change; tick 250: level 2; a packet takes 20 ticks (`30 * 100 // 150`) |
+| 4 | ~~`UpgradeRoad(A, A-B, fast)`: the type is set~~ **[superseded by DEC-28]**: the command has neither a city nor a type | ~~`INVALID_ARGUMENT`~~ |
+| 5 | A-B of level 1, ~~warehouse A 0~~ CP 0.49 | ~~`NOT_ENOUGH_CHARGES` (level 2 costs 1)~~ `NOT_ENOUGH_CP` (a level costs 0.5 CP) |
+| 6 | A-B of level 2; ~~`UpgradeRoad(A, A-B)`, warehouse A 2~~ `UpgradeRoad(A-B)` | ~~warehouse 0~~ CP -0.5; after 150 ticks level 3: a packet takes 15 ticks |
+| 7 | A-B of level 3 | `MAX_WIDTH` |
+| 8 | ~~`UpgradeRoad(P, P-A)`~~ `UpgradeRoad(P-A)`, P an own province | ~~`NOT_CITY`~~ accepted: there is no paying city, a road at a province is upgraded too (DEC-28, item 7) |
+| 9 | A-B of level 3; dispatch per period | no more than ~~1 charge~~ 3 charges along the edge per period (~~`amount` 1 at any level~~ `amount` 1 / 2 / 3 by level, DEC-28) |
+| 10 | a packet of 2 charges on A-B, B captured by the enemy before arrival | the packet is lost: `packet_lost` to the sender, no `packet_captured` |
+| 11 | a packet on A-B, A captured, B own | the packet is lost (`packet_lost`) |
+| 12 | A-B of level 2, ~~warehouse A 1~~ warehouse A 0 | ~~`NOT_ENOUGH_CHARGES` (level 3 costs 2)~~ accepted: the warehouse does not take part (DEC-28) |
+| 13 | A-B of level 1, ~~warehouse A 1~~ CP 0.5 | ~~warehouse 0~~ CP 0; after 150 ticks level 2 |
+| 14 | A-B of level 2 (the construction of level 3 runs ~~at A~~); ~~`UpgradeRoad(B, A-B)`~~ `UpgradeRoad(A-B)` once more | `EDGE_BUSY` (DEC-28, item 7) |
+| 15 | a match without an early victory | ends at tick 9000, 30 VP awards |
 
-Что меняет реализация (симуляция и `SIM_VERSION`, протокол и `PROTOCOL_VERSION`, клиент, боты, рулсеты): список в #234.
+What the implementation changes (simulation and `SIM_VERSION`, protocol and `PROTOCOL_VERSION`, client, bots, rulesets): the list in #234.
 
-Реализация: #238 (`SIM_VERSION` 5, `PROTOCOL_VERSION` 9). До DEC-23 карты MVP получили вид узла
-по правилу `docs/design/map-format.md` («Вид узлов в картах MVP»); остальные правила провинции
-(склад, транзит, рекрут) вводит реализация DEC-23. Поле карты с #366 называется `max_level`
-(DEC-23, п. 6); уровень дороги в состоянии и в `EdgeView` по-прежнему `width`, код отказа
-`MAX_WIDTH`.
+Implementation: #238 (`SIM_VERSION` 5, `PROTOCOL_VERSION` 9). Before DEC-23 the MVP maps got the node kind
+by the rule of `docs/design/map-format.md` ("Node kinds in the MVP maps"); the other rules of the province
+(warehouse, transit, recruit) are introduced by the implementation of DEC-23. Since #366 the map field is called `max_level`
+(DEC-23, item 6); the road level in the state and in `EdgeView` is still `width`, the rejection code
+is `MAX_WIDTH`.
 
-Альтернативы (не выбраны):
-- Оставить ёмкость от дорог (раздел 9): смешивает два решения, плейтест показал, что дороги не улучшают.
-- Ёмкость числом прямо в карте вместо вида узла (баланс тогда требует правки карт, а не рулсета).
-- Один тип дороги с ростом и скорости, и объёма (нет выбора). Позже DEC-26 всё же убрал выбор типа,
-  но оставил рост только скорости.
-- Четыре уровня (три улучшения) вместо трёх.
-- Грузовая дорога без «доходит при захвате» (тогда грузовая просто медленнее быстрой).
-- Партия 12 минут (DEC-03).
+Alternatives (not chosen):
+- Keep capacity from roads (section 9): it mixes two decisions, the playtest showed that roads are not upgraded.
+- Capacity as a number right in the map instead of the node kind (balance would then require editing maps, not the ruleset).
+- One road type with growth of both speed and volume (no choice). Later DEC-26 still removed the choice of type,
+  but kept the growth of speed only.
+- Four levels (three upgrades) instead of three.
+- A freight road without "arrives on capture" (then the freight road is simply slower than the fast one).
+- A 12-minute match (DEC-03).
 
-### Развитие города: казарма, склад отдельно от ёмкости, дороги без типа (DEC-26, #265) **[принято]**
+### City development: barracks, warehouse separate from capacity, roads without a type (DEC-26, #265) **[accepted]**
 
-Решение владельца 2026-10-14 (#252). Города перестают быть равными с первой секунды: рекрутирует
-сначала только столица, склад мал и растёт улучшениями, дороги только ускоряют доставку. Блок
-казармы (кто рекрутирует): раздел 3, «Казарма (DEC-26)». Владелец принял все пункты (2026-10-14,
-#265) с двумя изменениями: цены дорог **1 и 2** заряда (в предложении было 2 и 3), и изменение
-дорог **действует всегда, не за флагом** (в предложении было за флагом). Казарма и отдельный склад
-по-прежнему за флагом. Реализовано в #265 (`SIM_VERSION` 12, `PROTOCOL_VERSION` 16), блок
-«Реализация» после примеров.
+The owner's decision of 2026-10-14 (#252). Cities stop being equal from the first second: at first only the capital
+recruits, the warehouse is small and grows by upgrades, roads only speed up delivery. The barracks
+block (who recruits): section 3, "Barracks (DEC-26)". The owner accepted all items (2026-10-14,
+#265) with two changes: the road prices are **1 and 2** charges (the proposal had 2 and 3), and the change to
+roads **always applies, not behind a flag** (the proposal had it behind a flag). The barracks and the separate warehouse
+stay behind a flag. Implemented in #265 (`SIM_VERSION` 12, `PROTOCOL_VERSION` 16), the
+"Implementation" block after the examples.
 
-1. **[принято]** **Флаг** `city_upgrades.enabled` (булево, секция `[city_upgrades]` рулсета), чтобы
-   сравнивать правила на плейтестах. Он охватывает **только казарму и склад отдельно от ёмкости**.
-   - **`false`:** рекрутирует каждый свой город (DEC-01, DEC-25), ёмкость склада равна ёмкости
-     узла (DEC-22, п. 1). Команды `BuildBarracks` и `UpgradeWarehouse` дают `FEATURE_DISABLED`
-     (новый код), ключи `[city_upgrades]` и `[warehouse]` не читаются.
-   - **`true`:** пп. 2-6 и 8-11 ниже и блок казармы в разделе 3; пункт DEC-22, п. 1 («склад равен
-     ёмкости»), и `recruit.location` не действуют.
-   - **Дороги (п. 7) от флага не зависят:** при любом значении дороги без типа и цены `2 = 1`,
-     `3 = 2`. Пункты DEC-22 о типе дороги и её ценах заменены везде (зачёркнуты без оговорок).
-   - `rulesets/mvp-0.toml` остаётся с `enabled = false`, для плейтестов нового режима
-     `rulesets/mvp-1.toml` с `true`. Изменение дорог меняет правила обоих (`SIM_VERSION`++,
-     золотые реплеи новой версии; mvp-0 с `false` отличается от прежнего только дорогами).
-2. **[принято]** **Склад отдельно от ёмкости юнитов.** Ёмкость юнитов остаётся по виду узла
-   (`capacity.by_kind`, DEC-22: 10 / 8 / 6 / 4 / 3). Ёмкость склада города:
+1. **[accepted]** **Flag** `city_upgrades.enabled` (boolean, section `[city_upgrades]` of the ruleset), to
+   compare the rules in playtests. It covers **only the barracks and the warehouse separate from capacity**.
+   - **`false`:** every own city recruits (DEC-01, DEC-25), the warehouse capacity equals the capacity of the
+     node (DEC-22, item 1). The commands `BuildBarracks` and `UpgradeWarehouse` give `FEATURE_DISABLED`
+     (a new code), the keys `[city_upgrades]` and `[warehouse]` are not read.
+   - **`true`:** items 2-6 and 8-11 below and the barracks block in section 3; the DEC-22 item, item 1 ("the warehouse equals
+     capacity"), and `recruit.location` do not apply.
+   - **Roads (item 7) do not depend on the flag:** with any value roads are without a type and prices are `2 = 1`,
+     `3 = 2`. The DEC-22 items about the road type and its prices are replaced everywhere (struck through without reservations).
+   - `rulesets/mvp-0.toml` stays with `enabled = false`, for playtests of the new mode
+     `rulesets/mvp-1.toml` with `true`. The change to roads changes the rules of both (`SIM_VERSION`++,
+     golden replays of the new version; mvp-0 with `false` differs from the previous one only in roads).
+2. **[accepted]** **The warehouse separate from unit capacity.** Unit capacity stays by node kind
+   (`capacity.by_kind`, DEC-22: 10 / 8 / 6 / 4 / 3). The capacity of a city warehouse:
    `warehouse_capacity = warehouse.start_by_kind[kind] + level * warehouse.gain_per_level`,
-   `level` у города `0..warehouse.max_level` (`warehouse.gain_per_level = 1`,
-   `warehouse.max_level = 2`: два улучшения). У провинции склада нет (DEC-23).
+   `level` of a city is `0..warehouse.max_level` (`warehouse.gain_per_level = 1`,
+   `warehouse.max_level = 2`: two upgrades). A province has no warehouse (DEC-23).
 
-   | Вид узла | Ёмкость юнитов | Склад, уровень 0 | уровень 1 | уровень 2 |
+   | Node kind | Unit capacity | Warehouse, level 0 | level 1 | level 2 |
    |---|---|---|---|---|
-   | столица (`capital`) | 10 | 6 | 7 | 8 |
-   | большой город (`city_large`) | 8 | 2 | 3 | 4 |
-   | средний город (`city_medium`) | 6 | 2 | 3 | 4 |
-   | малый город (`city_small`) | 4 | 1 | 2 | 3 |
-   | провинция (`province`) | 3 | нет | нет | нет |
+   | capital (`capital`) | 10 | 6 | 7 | 8 |
+   | large city (`city_large`) | 8 | 2 | 3 | 4 |
+   | medium city (`city_medium`) | 6 | 2 | 3 | 4 |
+   | small city (`city_small`) | 4 | 1 | 2 | 3 |
+   | province (`province`) | 3 | none | none | none |
 
-3. **[принято]** **Улучшение склада** оплачивается CP: команда `UpgradeWarehouse(node)`, цена
-   `orders.cost.warehouse` за каждый из двух уровней (в сотых CP): `200` (2 CP), одна цена на оба
-   уровня, время `city_upgrades.warehouse_ticks = 100` (10 с, как у казармы).
-   Оплата при старте стройки (как DEC-16, п. 3), отмены и возврата нет.
-4. **[принято]** **Захват.** Казарма и уровень склада переходят новому владельцу. Склад по-прежнему
-   обнуляется при смене владельца (раздел 9, SIM-07: `warehouse_lost`), поэтому при захвате
-   «излишка над ёмкостью» не бывает. Нейтральный город уровней не имеет (казармы нет, склад
-   уровня 0): улучшает только владелец.
-5. **[принято]** **Старт матча.** Склад города на старте: `min(start_stock, warehouse_capacity)`
-   (излишек отбрасывается без события). Проверка валидатора карт `warehouse`: `start_stock` не
-   больше `warehouse.start_by_kind[kind]` (запускается с рулсетом, `gow-maps validate --ruleset`).
-   Карты MVP её проходят: у малых городов `start_stock = 1` (`arteriya` и `pautina` исправлены в #379, до этого
-   у малых городов было 2 при стартовом складе 1), проверка входит в `mise run maps:validate`.
-6. **[принято]** **Где работает ёмкость склада** (во всех местах, где раньше стояло «ёмкость» для
-   заряда): целевой запас города `min(warehouse_capacity, разряженные + supply.buffer)` и «свободное
-   место» при отправке (DEC-18, пп. 2 и 4); излишек при доставке пакета и перевозки сгорает
-   (`charges_overflow`, DEC-18, пп. 5 и 6); пакет, пришедший в провинцию, теряется, как раньше.
-   Ёмкость юнитов (гибель сверх ёмкости #118, лимит стека DEC-20, `CITY_FULL`, очередь DEC-25) не
-   меняется.
-7. **[принято]** **Дороги без типа и дешевле, при любом значении флага.** Улучшение дороги только
-   ускоряет доставку снабжения; тип при первом улучшении не выбирается, «грузовой» дороги нет.
-   Заменяет DEC-22, пп. 2-8 (типы и цены) для всех рулсетов.
-   - Команда `UpgradeRoad(node, edge)` без `kind`; если `kind` задан, `INVALID_ARGUMENT` (на месте
-     проверки типа DEC-22, после `MAX_WIDTH`). Отказов `ROAD_KIND_MISMATCH` нет, типа ребра нет
-     (`Edge.road` и `Sighting.road` удаляются).
-   - Скорость пакета: `supply.fast_speed_pct[level]` для всех улучшенных дорог (уровень 2: 150,
-     уровень 3: 200), время `max(1, travel_ticks * 100 // speed_pct)`. ~~Объём `amount` на любом
-     уровне `supply.base_amount = 1` (следствие решения: пропускная способность не растёт);~~
-     **[заменено DEC-28]**: `amount` 1 / 2 / 3 по уровню дороги; `supply.freight_amount` удаляется.
-   - Правило «пакет на грузовой дороге доходит при захвате» (DEC-22, п. 5) не действует: пакет на
-     ребре, ставшем не внутренним, теряется (`packet_lost`); события `packet_captured` нет.
-   - ~~Цены дорог в зарядах склада города-строителя~~ **[заменено DEC-28]**: дорога платится CP (блок DEC-28). Прежняя запись (ключ: новый уровень):
-     `build.charges_per_level`: `2 = 1`, `3 = 2` (было 3 и 4; владелец снизил предложенные 2 и 3);
-     `build.ticks_per_level = 150` и `orders.cost.build = 0` без изменений. Отдельного ключа
-     `city_upgrades.road_charges` нет. Следствие при `city_upgrades.enabled = true`: стартовый склад
-     среднего и большого города 2, малого 1, поэтому они оплачивают оба уровня (1 и 2 заряда),
-     малый город без улучшения склада только уровень 2; уровень 3 за него платит второй конец ребра
-     или он сам после улучшения склада. При `false` склад равен ёмкости (минимум 4), любой город
-     оплачивает любой уровень.
-8. **[принято]** **Одна стройка на город, общая (при `enabled = true`):** ~~дорога,~~ казарма и склад занимают одну и ту же
-   стройку города (**[заменено DEC-28]**: дорога строится на ребре за CP и стройку города не занимает); пока она идёт, любая из трёх команд даёт `CITY_BUSY`. Прерывание, как DEC-16,
-   п. 6: захват города (или другого конца ребра у дороги) снимает стройку, `build_stopped`
-   (`reason = "interrupted"`), заряды и CP не возвращаются. Ни бой без смены владельца, ни потеря
-   снабжения стройку не прерывают. Отмены нет. Казарма и склад не требуют снабжаемой территории
-   (`NOT_SUPPLIED` только у дороги, DEC-16).
-9. **[принято]** **Команды и отказы** (по порядку проверки; состояние при отказе не меняется):
+3. **[accepted]** **The warehouse upgrade** is paid for in CP: the command `UpgradeWarehouse(node)`, the price
+   `orders.cost.warehouse` for each of the two levels (in hundredths of CP): `200` (2 CP), one price for both
+   levels, time `city_upgrades.warehouse_ticks = 100` (10 s, as for the barracks).
+   Payment at the start of the construction (as DEC-16, item 3), there is no cancel and no refund.
+4. **[accepted]** **Capture.** The barracks and the warehouse level pass to the new owner. The warehouse is still
+   zeroed on a change of owner (section 9, SIM-07: `warehouse_lost`), so on a capture
+   there is no "surplus over capacity". A neutral city has no levels (no barracks, warehouse
+   of level 0): only the owner upgrades.
+5. **[accepted]** **Match start.** The warehouse of a city at the start: `min(start_stock, warehouse_capacity)`
+   (the surplus is discarded without an event). The map validator check `warehouse`: `start_stock` is not
+   greater than `warehouse.start_by_kind[kind]` (it runs with the ruleset, `gow-maps validate --ruleset`).
+   The MVP maps pass it: small cities have `start_stock = 1` (`artery` and `web` were fixed in #379, before that
+   small cities had 2 with a starting warehouse of 1), the check is part of `mise run maps:validate`.
+6. **[accepted]** **Where the warehouse capacity works** (in all places where "capacity" used to stand for a
+   charge): the target stock of a city `min(warehouse_capacity, discharged + supply.buffer)` and the "free
+   room" on dispatch (DEC-18, items 2 and 4); the surplus on delivery of a packet and of a transfer burns up
+   (`charges_overflow`, DEC-18, items 5 and 6); a packet that arrived in a province is lost, as before.
+   Unit capacity (death above capacity #118, stack limit DEC-20, `CITY_FULL`, the DEC-25 queue) does not
+   change.
+7. **[accepted]** **Roads without a type and cheaper, with any value of the flag.** A road upgrade only
+   speeds up supply delivery; the type is not chosen at the first upgrade, there is no "freight" road.
+   Replaces DEC-22, items 2-8 (types and prices) for all rulesets.
+   - The command `UpgradeRoad(node, edge)` without `kind`; if `kind` is set, `INVALID_ARGUMENT` (in place of
+     the DEC-22 type check, after `MAX_WIDTH`). There are no `ROAD_KIND_MISMATCH` rejections, there is no edge type
+     (`Edge.road` and `Sighting.road` are removed).
+   - Packet speed: `supply.fast_speed_pct[level]` for all upgraded roads (level 2: 150,
+     level 3: 200), time `max(1, travel_ticks * 100 // speed_pct)`. ~~The volume `amount` at any
+     level is `supply.base_amount = 1` (a consequence of the decision: the throughput does not grow);~~
+     **[superseded by DEC-28]**: `amount` 1 / 2 / 3 by road level; `supply.freight_amount` is removed.
+   - The rule "a packet on a freight road arrives on capture" (DEC-22, item 5) does not apply: a packet on an
+     edge that became non-internal is lost (`packet_lost`); there is no event `packet_captured`.
+   - ~~Road prices in warehouse charges of the builder city~~ **[superseded by DEC-28]**: a road is paid for in CP (DEC-28 block). The former entry (key: new level):
+     `build.charges_per_level`: `2 = 1`, `3 = 2` (was 3 and 4; the owner lowered the proposed 2 and 3);
+     `build.ticks_per_level = 150` and `orders.cost.build = 0` unchanged. There is no separate key
+     `city_upgrades.road_charges`. A consequence with `city_upgrades.enabled = true`: the starting warehouse
+     of a medium and a large city is 2, of a small one 1, so they pay for both levels (1 and 2 charges),
+     a small city without a warehouse upgrade only level 2; level 3 for it is paid by the other end of the edge
+     or by itself after a warehouse upgrade. With `false` the warehouse equals capacity (at least 4), any city
+     pays for any level.
+8. **[accepted]** **One construction per city, shared (with `enabled = true`):** ~~road,~~ the barracks and the warehouse occupy the same
+   construction of the city (**[superseded by DEC-28]**: a road is built on an edge for CP and does not occupy the city's construction); while it runs, any of the three commands gives `CITY_BUSY`. Interruption, as DEC-16,
+   item 6: a capture of the city (or of the other end of the edge for a road) removes the construction, `build_stopped`
+   (`reason = "interrupted"`), the charges and CP are not returned. Neither a fight without a change of owner nor a loss of
+   supply interrupts the construction. There is no cancel. The barracks and the warehouse do not require a supplied territory
+   (`NOT_SUPPLIED` is only for a road, DEC-16).
+9. **[accepted]** **Commands and rejections** (in order of checking; on a rejection the state does not change):
 
-   | Команда | Проверки |
+   | Command | Checks |
    |---|---|
-   | `BuildBarracks(node)` | `FEATURE_DISABLED`; `NOT_FOUND_OR_HIDDEN`; `NOT_OWNER`; `NOT_CITY` (провинция); `ALREADY_BUILT` (казарма есть, в том числе столица); `CITY_BUSY`; `NOT_ENOUGH_CP` (меньше `orders.cost.barracks`, 300) |
-   | `UpgradeWarehouse(node)` | `FEATURE_DISABLED`; `NOT_FOUND_OR_HIDDEN`; `NOT_OWNER`; `NOT_CITY`; `WAREHOUSE_MAX` (уровень равен `warehouse.max_level`); `CITY_BUSY`; `NOT_ENOUGH_CP` |
-   | ~~`UpgradeRoad(node, edge)`~~ `UpgradeRoad(edge)` | ~~проверки DEC-16, п. 2 без изменений, кроме типа: `INVALID_ARGUMENT` при заданном `kind` (после `MAX_WIDTH`); цены `build.charges_per_level` (`2 = 1`, `3 = 2`); при любом значении флага~~ **[заменено DEC-28]**: `NOT_FOUND_OR_HIDDEN`, `NOT_INTERNAL`, `MAX_WIDTH`, `EDGE_BUSY`, `NOT_ENOUGH_CP` (DEC-28, п. 7) |
-   | `Recruit(node)` | раздел 3, «Казарма (DEC-26)»: новый код `NO_BARRACKS` |
+   | `BuildBarracks(node)` | `FEATURE_DISABLED`; `NOT_FOUND_OR_HIDDEN`; `NOT_OWNER`; `NOT_CITY` (province); `ALREADY_BUILT` (there is a barracks, including the capital); `CITY_BUSY`; `NOT_ENOUGH_CP` (less than `orders.cost.barracks`, 300) |
+   | `UpgradeWarehouse(node)` | `FEATURE_DISABLED`; `NOT_FOUND_OR_HIDDEN`; `NOT_OWNER`; `NOT_CITY`; `WAREHOUSE_MAX` (the level equals `warehouse.max_level`); `CITY_BUSY`; `NOT_ENOUGH_CP` |
+   | ~~`UpgradeRoad(node, edge)`~~ `UpgradeRoad(edge)` | ~~the checks of DEC-16, item 2 unchanged, except the type: `INVALID_ARGUMENT` when `kind` is set (after `MAX_WIDTH`); prices `build.charges_per_level` (`2 = 1`, `3 = 2`); with any value of the flag~~ **[superseded by DEC-28]**: `NOT_FOUND_OR_HIDDEN`, `NOT_INTERNAL`, `MAX_WIDTH`, `EDGE_BUSY`, `NOT_ENOUGH_CP` (DEC-28, item 7) |
+   | `Recruit(node)` | section 3, "Barracks (DEC-26)": a new code `NO_BARRACKS` |
 
-   Новые коды: `FEATURE_DISABLED`, `ALREADY_BUILT`, `WAREHOUSE_MAX`, `NO_BARRACKS`
-   (`ROAD_KIND_MISMATCH` удаляется). Событие при старте `build_started` получает поле `kind`
-   (`road` | `barracks` | `warehouse`); новые события
-   `barracks_built`, `warehouse_upgraded` (узел, новый уровень); `road_upgraded` как раньше.
-   Все только владельцу.
-10. **[принято]** **Вид игрока.** У своего города в `NodeView`: `has_barracks` (булево),
-    `warehouse_level`, `warehouse_cap` (ёмкость склада), `building` (`kind` и тиков до конца
-    текущей стройки, как свою стройку дороги). У чужих и нейтральных узлов все эти поля `None`:
-    казарма и уровень склада скрыты в тумане (AGENTS.md, 4.4; публична только ёмкость юнитов по
-    виду узла). **[заменено DEC-31]**: `has_barracks` чужого города, соседнего со своим узлом, видно (раздел 10, блок DEC-31); остальные поля остаются `None`. Тест тумана на каждое поле. События владельцу только. Поля рулсета для клиента (цены, флаг,
-    таблицы склада) входят в `ruleset_public`.
-11. **[принято]** **Боты.** Не ставят `Recruit` в городе без `has_barracks`; обрабатывают
-    `NO_BARRACKS`, `CITY_BUSY`, `FEATURE_DISABLED`; строят казарму в городе у фронта или в
-    развитом тылу, склад улучшают в городах, которые снабжают войска; цену казармы (3 CP) сравнивают
-    с очередью найма; `UpgradeRoad` вызывают без типа (при любом значении флага). При `enabled = false` казарм и склада в поведении нет.
+   New codes: `FEATURE_DISABLED`, `ALREADY_BUILT`, `WAREHOUSE_MAX`, `NO_BARRACKS`
+   (`ROAD_KIND_MISMATCH` is removed). The start event `build_started` gets the field `kind`
+   (`road` | `barracks` | `warehouse`); new events
+   `barracks_built`, `warehouse_upgraded` (node, new level); `road_upgraded` as before.
+   All to the owner only.
+10. **[accepted]** **Player view.** For an own city in `NodeView`: `has_barracks` (boolean),
+    `warehouse_level`, `warehouse_cap` (warehouse capacity), `building` (`kind` and ticks to the end
+    of the current construction, like one's own road construction). For foreign and neutral nodes all these fields are `None`:
+    the barracks and the warehouse level are hidden in the fog (AGENTS.md, 4.4; only the unit capacity by
+    node kind is public). **[superseded by DEC-31]**: `has_barracks` of a foreign city adjacent to your own node is visible (section 10, DEC-31 block); the other fields stay `None`. A fog test for every field. Events go to the owner only. The ruleset fields for the client (prices, flag,
+    warehouse tables) go into `ruleset_public`.
+11. **[accepted]** **Bots.** They do not issue `Recruit` in a city without `has_barracks`; they handle
+    `NO_BARRACKS`, `CITY_BUSY`, `FEATURE_DISABLED`; they build a barracks in a city at the front or in a
+    developed rear, upgrade the warehouse in cities that supply troops; they compare the barracks price (3 CP)
+    with the recruit queue; they call `UpgradeRoad` without a type (with any value of the flag). With `enabled = false` there are no barracks and warehouse in the behavior.
 
-Числа в рулсете. Новая секция `[city_upgrades]` (кроме `enabled` читается только при `enabled = true`):
-`enabled = false`, `barracks_ticks = 100`, `warehouse_ticks = 100`; секция `[warehouse]`:
+Numbers in the ruleset. A new section `[city_upgrades]` (except `enabled` it is read only with `enabled = true`):
+`enabled = false`, `barracks_ticks = 100`, `warehouse_ticks = 100`; section `[warehouse]`:
 `gain_per_level = 1`, `max_level = 2`, `[warehouse.start_by_kind]` `capital = 6`, `city_large = 2`,
 `city_medium = 2`, `city_small = 1`; `orders.cost.barracks = 300`, `orders.cost.warehouse = 200`.
-Для дорог при любом значении флага: `[build.charges_per_level]` `2 = 1`, `3 = 2`;
-`[supply.freight_amount]` удаляется (`supply.base_amount = 1` на любом уровне).
+For roads, with any value of the flag: `[build.charges_per_level]` `2 = 1`, `3 = 2`;
+`[supply.freight_amount]` is removed (`supply.base_amount = 1` at any level).
 
-Разобранные примеры (`city_upgrades.enabled = true`, кроме строк 13-15, 22 и 23, числа выше). A, B: свои
-города в снабжаемой территории, A средний (склад уровня 0, ёмкость 2), K столица; ребро A-B
-внутреннее, уровень 1, `max_level` 3, `travel_ticks = 30`; реген CP не учитывается. Тесты
-реализации: ровно эта таблица.
+Worked examples (`city_upgrades.enabled = true`, except rows 13-15, 22 and 23, numbers above). A, B: own
+cities in the supplied territory, A is medium (warehouse of level 0, capacity 2), K is the capital; edge A-B
+is internal, level 1, `max_level` 3, `travel_ticks = 30`; CP regeneration is not counted. Implementation
+tests: exactly this table.
 
-| # | Ситуация | Итог |
+| # | Situation | Outcome |
 |---|---|---|
-| 1 | ёмкость склада по виду и уровню | таблица п. 2: столица 6 / 7 / 8, большой и средний 2 / 3 / 4, малый 1 / 2 / 3 |
-| 2 | `Recruit(A)`, у A нет казармы | `NO_BARRACKS` |
-| 3 | `BuildBarracks(A)` в тике 1000, CP 500 | CP 200, `build_started`; казарма в тике 1100 (`barracks_built`); `Recruit(A)` в тике 1100 даёт `NO_BARRACKS` (`apply_commands` раньше `build`), в тике 1101 принят |
-| 4 | `BuildBarracks(K)`, K столица | `ALREADY_BUILT` |
+| 1 | warehouse capacity by kind and level | the table of item 2: capital 6 / 7 / 8, large and medium 2 / 3 / 4, small 1 / 2 / 3 |
+| 2 | `Recruit(A)`, A has no barracks | `NO_BARRACKS` |
+| 3 | `BuildBarracks(A)` at tick 1000, CP 500 | CP 200, `build_started`; the barracks at tick 1100 (`barracks_built`); `Recruit(A)` at tick 1100 gives `NO_BARRACKS` (`apply_commands` is before `build`), at tick 1101 it is accepted |
+| 4 | `BuildBarracks(K)`, K is the capital | `ALREADY_BUILT` |
 | 5 | `BuildBarracks(A)`, CP 200 | `NOT_ENOUGH_CP` (200 < 300) |
-| 6 | `BuildBarracks(P)`, P провинция | `NOT_CITY` |
-| 7 | `UpgradeWarehouse(A)` в тике 1000, CP 500 | CP 300; в тике 1100 уровень 1, ёмкость склада 3 |
-| 8 | как 7, второй `UpgradeWarehouse(A)` в тике 1101 | CP 100; в тике 1201 уровень 2, ёмкость 4; третий: `WAREHOUSE_MAX` |
-| 9 | в тике 1050 при стройке казармы: `UpgradeWarehouse(A)` или ~~`UpgradeRoad(A, A-B)`~~ | `CITY_BUSY`; **[заменено DEC-28]**: `UpgradeRoad(A-B)` принят (дорога не занимает стройку города) |
-| 10 | A: склад уровня 1 (ёмкость 3), склад 3; склад B 2 (полон: A ничего не пересылает, ~~резерв DEC-18 #287~~ дефицита нет, DEC-28); ~~`UpgradeRoad(A, A-B)`~~ `UpgradeRoad(A-B)` в тике 1000 | ~~склад 2 (цена уровня 2: 1 заряд)~~ **[заменено DEC-28]**: CP -0,5, склад 3; в тике 1150 уровень 2; пакет `30 * 100 // 150 = 20` тиков |
-| 11 | как 10, второе улучшение (тик 1151)~~, склад A 2~~ | ~~склад 0 (цена уровня 3: 2 заряда)~~ **[заменено DEC-28]**: CP -0,5, склад 3; уровень 3 в тике 1301; пакет `30 * 100 // 200 = 15` тиков |
-| 12 | A уровня 0, склад 1, ребро уровня 2; ~~`UpgradeRoad(A, A-B)`~~ `UpgradeRoad(A-B)` | ~~`NOT_ENOUGH_CHARGES` (уровень 3 стоит 2, на складе 1); улучшить может B~~ **[заменено DEC-28]**: принят, склад не участвует |
-| 13 | ~~`UpgradeRoad(A, A-B, fast)` (при любом значении флага)~~ **[заменено DEC-28]**: у команды нет типа | ~~`INVALID_ARGUMENT` (тип не задаётся)~~ |
-| 14 | ребро A-B уровня 3: объём (при любом значении флага) | ~~`amount = 1`~~ **[заменено DEC-28]**: `amount = 3` за период отправки (грузовой дороги нет) |
-| 15 | пакет 2 заряда на A-B, B захвачен до прибытия (при любом значении флага) | пакет потерян (`packet_lost`); `packet_captured` нет |
-| 16 | B средний: казарма, склад уровня 2 (ёмкость 4), склад 3; захвачен противником | у нового владельца: казарма, уровень 2, ёмкость 4, склад 0 (`warehouse_lost` прежнему); очередь найма пропала (DEC-25, п. 10); `Recruit(B)` ему сразу разрешён |
-| 17 | `UpgradeWarehouse(A)` в тике 1000, A захвачен в тике 1050 | `build_stopped` (`interrupted`), CP не возвращаются, уровень 0 |
-| 18 | малый город S, склад 0, ёмкость 1; пакет из 2 зарядов дошёл | склад 1, один заряд сгорает (`charges_overflow`) |
-| 19 | ~~S, стоят 3 разряженных юнита, `supply.buffer = 2`~~ **[заменено DEC-28]** | ~~целевой запас `min(1, 3 + 2) = 1`~~ цель тылового города `min(rear_min, 1)`: при `rear_min = 1` равна 1 |
-| 20 | старт: S, `start_stock = 2` | склад 1; валидатор с рулсетом: `FAIL [warehouse]` |
-| 21 | `Transfer(A, B, 3)`, B средний уровня 0, склад B 1 | ~~B получает 1, два сгорают (`charges_overflow`)~~ **[заменено DEC-18, #287]**: объём урезан до свободного места B: 1; B получает 1, склад A 2, ничего не сгорает |
-| 22 | `city_upgrades.enabled = false`: `BuildBarracks(A)`; `Recruit(A)`; склад среднего и столицы | `FEATURE_DISABLED`; рекрут разрешён; ёмкость склада 6 и 10 (как DEC-22) |
-| 23 | `enabled = false`, A средний (склад 6), A-B уровня 1; ~~`UpgradeRoad(A, A-B)`~~ `UpgradeRoad(A-B)` в тике 1000, склад A 6 | ~~склад 5 (дороги без типа и дешевле при любом флаге)~~ **[заменено DEC-28]**: CP -0,5, склад 6 (дороги за CP при любом флаге); в тике 1150 уровень 2 |
+| 6 | `BuildBarracks(P)`, P is a province | `NOT_CITY` |
+| 7 | `UpgradeWarehouse(A)` at tick 1000, CP 500 | CP 300; at tick 1100 level 1, warehouse capacity 3 |
+| 8 | as 7, a second `UpgradeWarehouse(A)` at tick 1101 | CP 100; at tick 1201 level 2, capacity 4; the third: `WAREHOUSE_MAX` |
+| 9 | at tick 1050 during the barracks construction: `UpgradeWarehouse(A)` or ~~`UpgradeRoad(A, A-B)`~~ | `CITY_BUSY`; **[superseded by DEC-28]**: `UpgradeRoad(A-B)` is accepted (a road does not occupy the city's construction) |
+| 10 | A: warehouse of level 1 (capacity 3), warehouse 3; warehouse B 2 (full: A forwards nothing, ~~the DEC-18 reserve #287~~ there is no deficit, DEC-28); ~~`UpgradeRoad(A, A-B)`~~ `UpgradeRoad(A-B)` at tick 1000 | ~~warehouse 2 (the price of level 2: 1 charge)~~ **[superseded by DEC-28]**: CP -0.5, warehouse 3; at tick 1150 level 2; a packet takes `30 * 100 // 150 = 20` ticks |
+| 11 | as 10, the second upgrade (tick 1151)~~, warehouse A 2~~ | ~~warehouse 0 (the price of level 3: 2 charges)~~ **[superseded by DEC-28]**: CP -0.5, warehouse 3; level 3 at tick 1301; a packet takes `30 * 100 // 200 = 15` ticks |
+| 12 | A of level 0, warehouse 1, the edge of level 2; ~~`UpgradeRoad(A, A-B)`~~ `UpgradeRoad(A-B)` | ~~`NOT_ENOUGH_CHARGES` (level 3 costs 2, the warehouse has 1); B can upgrade~~ **[superseded by DEC-28]**: accepted, the warehouse does not take part |
+| 13 | ~~`UpgradeRoad(A, A-B, fast)` (with any value of the flag)~~ **[superseded by DEC-28]**: the command has no type | ~~`INVALID_ARGUMENT` (the type is not set)~~ |
+| 14 | edge A-B of level 3: volume (with any value of the flag) | ~~`amount = 1`~~ **[superseded by DEC-28]**: `amount = 3` per dispatch period (there is no freight road) |
+| 15 | a packet of 2 charges on A-B, B captured before arrival (with any value of the flag) | the packet is lost (`packet_lost`); no `packet_captured` |
+| 16 | B is medium: barracks, warehouse of level 2 (capacity 4), warehouse 3; captured by the enemy | for the new owner: barracks, level 2, capacity 4, warehouse 0 (`warehouse_lost` to the previous one); the recruit queue is gone (DEC-25, item 10); `Recruit(B)` is allowed for them at once |
+| 17 | `UpgradeWarehouse(A)` at tick 1000, A captured at tick 1050 | `build_stopped` (`interrupted`), CP are not returned, level 0 |
+| 18 | a small city S, warehouse 0, capacity 1; a packet of 2 charges arrived | warehouse 1, one charge burns up (`charges_overflow`) |
+| 19 | ~~S, 3 discharged units stand, `supply.buffer = 2`~~ **[superseded by DEC-28]** | ~~target stock `min(1, 3 + 2) = 1`~~ the target of a rear city `min(rear_min, 1)`: at `rear_min = 1` it equals 1 |
+| 20 | start: S, `start_stock = 2` | warehouse 1; the validator with the ruleset: `FAIL [warehouse]` |
+| 21 | `Transfer(A, B, 3)`, B medium of level 0, warehouse B 1 | ~~B gets 1, two burn up (`charges_overflow`)~~ **[superseded by DEC-18, #287]**: the volume is cut to the free room of B: 1; B gets 1, warehouse A 2, nothing burns up |
+| 22 | `city_upgrades.enabled = false`: `BuildBarracks(A)`; `Recruit(A)`; the warehouse of a medium city and of the capital | `FEATURE_DISABLED`; recruiting is allowed; warehouse capacity 6 and 10 (as DEC-22) |
+| 23 | `enabled = false`, A is medium (warehouse 6), A-B of level 1; ~~`UpgradeRoad(A, A-B)`~~ `UpgradeRoad(A-B)` at tick 1000, warehouse A 6 | ~~warehouse 5 (roads without a type and cheaper with any flag)~~ **[superseded by DEC-28]**: CP -0.5, warehouse 6 (roads for CP with any flag); at tick 1150 level 2 |
 
-Что меняет реализация (симуляция и `SIM_VERSION`, протокол и `PROTOCOL_VERSION`, клиент, боты,
-рулсеты, карты, валидатор): состояние `Node.has_barracks`, `Node.warehouse_level`, общая стройка
-города; команды `BuildBarracks`, `UpgradeWarehouse`, `UpgradeRoad` без типа (удаляются `kind`,
-`RoadType`, `ROAD_KIND_MISMATCH`, тип ребра в `PlayerView`, ключ `r` в кадрах реплея
-`docs/design/replay-frames.md`, `supply.freight_amount`); коды и события выше; `NodeView`; клиент
-(меню города: казарма, склад, дороги без типа; ёмкость склада в подсказке); боты;
-`rulesets/mvp-0.toml` (флаг `false`) и новый `mvp-1.toml` (`true`), оба с ценами дорог `2 = 1`,
-`3 = 2`; карты (`start_stock`); золотые реплеи новой версии для обоих рулсетов (изменение дорог
-действует всегда).
+What the implementation changes (simulation and `SIM_VERSION`, protocol and `PROTOCOL_VERSION`, client, bots,
+rulesets, maps, validator): the state `Node.has_barracks`, `Node.warehouse_level`, the shared construction
+of a city; the commands `BuildBarracks`, `UpgradeWarehouse`, `UpgradeRoad` without a type (removed are `kind`,
+`RoadType`, `ROAD_KIND_MISMATCH`, the edge type in `PlayerView`, the key `r` in replay frames
+`docs/design/replay-frames.md`, `supply.freight_amount`); the codes and events above; `NodeView`; the client
+(city menu: barracks, warehouse, roads without a type; warehouse capacity in the tooltip); bots;
+`rulesets/mvp-0.toml` (flag `false`) and a new `mvp-1.toml` (`true`), both with road prices `2 = 1`,
+`3 = 2`; maps (`start_stock`); golden replays of the new version for both rulesets (the change to roads
+always applies).
 
-**Реализация** (#265; `SIM_VERSION` 12, `PROTOCOL_VERSION` 16; золотые реплеи `v12` на `mvp-0`,
-`test-short` и `mvp-1`):
+**Implementation** (#265; `SIM_VERSION` 12, `PROTOCOL_VERSION` 16; golden replays `v12` on `mvp-0`,
+`test-short` and `mvp-1`):
 
-- Состояние города: `Node.has_barracks`, `Node.warehouse_level`; стройка города `Node.build` общая,
-  `Build.kind`: `road` | `barracks` | `warehouse` (у казармы и склада `edge` пустой). Ёмкость
-  склада: `capacity.warehouse_capacity`; цель снабжения `supply.target_stock`.
-- **[предложено]** Без флага `Node.has_barracks` у каждого города истинен (каждый город
-  рекрутирует, DEC-01), и `NodeView.has_barracks`, `warehouse_level` (0), `warehouse_cap` (ёмкость
-  узла), `building` показываются своим городам при любом флаге: клиент и боты читают одно поле.
-- **[предложено]** Ключи `[city_upgrades]` и `[warehouse]` обязательны в каждом рулсете и входят в
-  `ruleset_hash` при любом флаге; при `false` они не действуют (п. 1: «не читаются» понято как «не
-  применяются»).
-- **[предложено]** `UpgradeRoad` на проводе и в журнале реплея сохраняет необязательное поле `kind`
-  (`fast` | `freight` старых клиентов): заданное, оно даёт `INVALID_ARGUMENT` (п. 7), а не ошибку
-  разбора сообщения.
-- События: `build_started` получает `kind` (у дороги ещё `edge`, `width`, `charges`, поле `road`
-  удалено; у склада `level`), `build_stopped` получает `kind`, `road_upgraded` без `road`;
-  `barracks_built`, `warehouse_upgraded` (`level`) только владельцу; `packet_captured` удалено.
-- Кадры реплея: ключа `r` нет, `b` только для строек дорог (`replay-frames.md`).
-- Валидатор: проверка `warehouse` только с `--ruleset`, у которого флаг включён. **Карты не
-  правились** (вопрос владельцу): `arteriya` и `pautina` её не проходят (малые города со
-  `start_stock = 2`), с `mvp-1` их склад обрезается до 1 при старте, `mvp-0` не меняется.
-- Боты (п. 11): `Bot.development` строит казарму в своём городе, который на две дороги ближе к
-  столице противника, чем любая казарма (цена 3 CP вместо трёх наймов в столице), и расширяет полный
-  склад города с войсками или у фронта, только CP у потолка; `Recruit` только где `has_barracks`.
-  Наступающие боты (rusher, strangler, reactive) тратят CP на приказы и до казармы доходят редко.
-- Клиент: меню города при флаге: «Нанять», «Отменить найм», ~~«Дороги»~~ **[заменено DEC-28, #311]**
-  (дорогу улучшают кликом по ней), «Казарма», «Склад»;
-  выбор типа дороги и грузовые полосы удалены, улучшенная дорога рисуется с шевронами.
-  ~~«Нанять» всегда есть, без казармы серый~~ **[заменено #315]**: в городе без казармы
-  (`has_barracks = false` при `city_upgrades.enabled`) сектора «Нанять» нет вообще; при неизвестном
-  `has_barracks` (`null`) и при выключенном флаге сектор есть.
+- The state of a city: `Node.has_barracks`, `Node.warehouse_level`; the construction of a city `Node.build` is shared,
+  `Build.kind`: `road` | `barracks` | `warehouse` (for a barracks and a warehouse `edge` is empty). Warehouse
+  capacity: `capacity.warehouse_capacity`; the supply target `supply.target_stock`.
+- **[proposed]** Without the flag `Node.has_barracks` is true for every city (every city
+  recruits, DEC-01), and `NodeView.has_barracks`, `warehouse_level` (0), `warehouse_cap` (node
+  capacity), `building` are shown to own cities with any flag: the client and bots read one field.
+- **[proposed]** The keys `[city_upgrades]` and `[warehouse]` are required in every ruleset and go into
+  `ruleset_hash` with any flag; with `false` they do not apply (item 1: "are not read" is understood as "are not
+  applied").
+- **[proposed]** `UpgradeRoad` on the wire and in the replay log keeps the optional field `kind`
+  (`fast` | `freight` of old clients): when set, it gives `INVALID_ARGUMENT` (item 7), not a message
+  parse error.
+- Events: `build_started` gets `kind` (for a road also `edge`, `width`, `charges`, the field `road`
+  is removed; for a warehouse `level`), `build_stopped` gets `kind`, `road_upgraded` without `road`;
+  `barracks_built`, `warehouse_upgraded` (`level`) to the owner only; `packet_captured` is removed.
+- Replay frames: there is no key `r`, `b` only for road constructions (`replay-frames.md`).
+- Validator: the check `warehouse` only with a `--ruleset` whose flag is on. **The maps were not
+  edited** (a question to the owner): `artery` and `web` do not pass it (small cities with
+  `start_stock = 2`), with `mvp-1` their warehouse is cut to 1 at the start, `mvp-0` does not change.
+- Bots (item 11): `Bot.development` builds a barracks in its own city that is two roads closer to the
+  enemy capital than any barracks (the price of 3 CP instead of three recruits in the capital), and expands the full
+  warehouse of a city with troops or at the front, only with CP at the ceiling; `Recruit` only where `has_barracks`.
+  The attacking bots (rusher, strangler, reactive) spend CP on orders and rarely get to a barracks.
+- Client: the city menu with the flag: "Recruit", "Cancel recruit", ~~"Roads"~~ **[superseded by DEC-28, #311]**
+  (a road is upgraded by a click on it), "Barracks", "Warehouse";
+  the choice of road type and the freight lanes are removed, an upgraded road is drawn with chevrons.
+  ~~"Recruit" is always there, grey without a barracks~~ **[superseded by #315]**: in a city without a barracks
+  (`has_barracks = false` with `city_upgrades.enabled`) there is no "Recruit" sector at all; with an unknown
+  `has_barracks` (`null`) and with the flag off the sector is there.
 
-Альтернативы (не выбраны):
-- **Улучшение склада только при полном складе, тратит эти заряды** (в игре «заряды вложены в
-  склад»; не требует CP, но конкурирует с перезарядкой гарнизона; владелец выбрал оплату CP).
-- Флаг без дорог (дороги остаются двух типов при `enabled = true`): проще, но оставляет
-  грузовую дорогу, которую владелец решил убрать. ~~Дороги за флагом (предложено)~~ **[заменено]**:
-  владелец решил, что дороги меняются для всех рулсетов, флаг только для казармы и склада.
-- Цены дорог 2 и 3 (предложение): склад и дороги связаны слишком жёстко (малый город с складом 1 не
-  оплатил бы ни один уровень, средний не оплатил бы уровень 3); владелец выбрал 1 и 2.
-- Ёмкость склада равна ёмкости юнитов (как DEC-22): склад столицы 10 и малого города 4.
-- Казарма в каждом городе с первой секунды (DEC-01): все города равны.
+Alternatives (not chosen):
+- **A warehouse upgrade only when the warehouse is full, spending those charges** (in the game "the charges are invested in the
+  warehouse"; needs no CP, but competes with the recharge of the garrison; the owner chose payment in CP).
+- A flag without roads (roads stay of two types with `enabled = true`): simpler, but leaves the
+  freight road, which the owner decided to remove. ~~Roads behind a flag (proposed)~~ **[superseded]**:
+  the owner decided that roads change for all rulesets, the flag is only for the barracks and the warehouse.
+- Road prices 2 and 3 (the proposal): the warehouse and roads are tied too rigidly (a small city with a warehouse of 1 would
+  pay for no level, a medium one would not pay for level 3); the owner chose 1 and 2.
+- Warehouse capacity equal to unit capacity (as DEC-22): the warehouse of the capital 10 and of a small city 4.
+- A barracks in every city from the first second (DEC-01): all cities are equal.
 
-### Переработка снабжения и дорог (DEC-28, #290) **[принято]**
+### Rework of supply and roads (DEC-28, #290) **[accepted]**
 
-Решение владельца 2026-10-17. Заменяет три уровня приоритета и порядок доставки DEC-18 (раздел 7, пп. 1, 2, 4), плату за дорогу зарядами склада города (DEC-16, DEC-26, п. 7), пропускную способность 1 на любом уровне (DEC-22, п. 4; DEC-26, п. 7) и сгорание заряда столицы сверх ёмкости (раздел 6). Остаются: дерево снабжения как метрика расстояния (DEC-18, п. 3), разовая перевозка (DEC-18, пп. 6 и 10), голод в окружении (DEC-19), провинции как транзит. Что реализация меняет в коде, рулсетах и протоколе: #292 (sim, protocol, bots), #293 (клиент). Детали, которых владелец не фиксировал, были помечены [предложено]; владелец 2026-10-17 подтвердил их все, они [принято] (подтверждено владельцем 2026-10-17).
+The owner's decision of 2026-10-17. Replaces the three priority levels and the delivery order of DEC-18 (section 7, items 1, 2, 4), the payment for a road with the charges of the city warehouse (DEC-16, DEC-26, item 7), the throughput of 1 at any level (DEC-22, item 4; DEC-26, item 7) and the burning of a capital charge above capacity (section 6). What stays: the supply tree as a distance metric (DEC-18, item 3), the one-off transfer (DEC-18, items 6 and 10), starvation in encirclement (DEC-19), provinces as transit. What the implementation changes in code, rulesets and protocol: #292 (sim, protocol, bots), #293 (client). The details the owner did not fix were marked [proposed]; the owner confirmed all of them on 2026-10-17, they are [accepted] (confirmed by the owner on 2026-10-17).
 
-**Решения владельца [принято]**
+**The owner's decisions [accepted]**
 
-1. **Транзит.** Пакет идёт через свои города как через провинции, прямо к городу с дефицитом, и склад промежуточных городов не трогает. Свободное место (`ёмкость склада - склад - в пути`) проверяется только в пункте назначения. Пропускная способность рёбер пути (п. 7 ниже) действует как раньше. Это снимает медленную эстафету через склады ёмкости 1 (DEC-18, пример 27).
-2. **Два маркера фронта вместо трёх приоритетов.** У игрока два маркера. Перенос маркера бесплатен (`orders.cost.front = 0`). Город с маркером наполняет склад до полного (цель = `warehouse_capacity`). Если город с маркером потерян, маркер сам отходит к ближайшему своему городу в сторону столицы (дальше от противника); вперёд маркер переносит только игрок. Уровней приоритета и команды `SetPriority` нет; ключ `supply.buffer` (цель «разряженные + 2») снимается.
-3. **Минимум тыла.** Одна настройка на игрока: города без маркера держат не меньше `rear_min` зарядов (цель тылового города `min(rear_min, warehouse_capacity)`). **[принято]** (подтверждено владельцем 2026-10-17) По умолчанию 1 (`supply.rear_min_default = 1`), диапазон `0..supply.rear_min_max` (максимальная ёмкость склада по рулсету, у `mvp-1` 8: столица с двумя улучшениями), смена бесплатна (`orders.cost.rear_min = 0`), команда `SetRearMin(n)`.
-4. **Порядок доставки** (раз в `supply.dispatch_ticks`, пересчитывается при каждой отправке, поэтому смена маркера действует сразу):
-   1. Города с маркером, до полного склада. **[принято]** (подтверждено владельцем 2026-10-17) Между двумя маркерами первым идёт город с меньшим числом зарядов на складе, при равенстве меньший `node_key(player, node)` (как равный приоритет в DEC-18).
-   2. Тыловые города до `rear_min`: от самого дальнего от столицы к ближнему. Расстояние: сумма `packet_ticks` по самому быстрому пути по своим внутренним рёбрам (метрика дерева, DEC-18, п. 3); при равенстве меньший `node_key` (AGENTS.md, 4.1, правило 6).
-   3. Остальной запас остаётся в столице.
-   4. Столица полна: излишек растекается ~~по тыловым городам~~ **[уточнено решением владельца 2026-10-20, #309]**: сначала по городам с маркером со свободным местом (порядок как в п. 4.1), затем по тыловым городам со свободным местом (`ёмкость склада - склад - в пути`), от ближнего к столице к дальнему, при равенстве расстояния меньший `node_key`. Заряд сгорает (`charges_overflow`), только когда полны все склады игрока. Заряды производства, не поместившиеся в столицу, идут в проход 4 того же тика; **[принято]** (подтверждено владельцем 2026-10-17) остаток сверх пропускной способности рёбер сгорает (редкий случай: производство столицы до 2 зарядов за 50 тиков, отправка раз в 10 тиков).
-5. **Доноры.** Дефицит (`цель - склад - в пути`) закрывает ближайший донор с запасом выше **своей** цели (расстояние как в п. 4, при равенстве меньший `node_key` донора); если донор не покрыл дефицит, берётся следующий (**[принято]** (решение владельца 2026-10-20, #309) путь донора, упёршийся в исчерпанную пропускную способность, может пойти объездом: «Реализация снабжения», «Объезд занятой дороги»). Цель донора: город с маркером: полный склад; тыловой город: `min(rear_min, warehouse_capacity)`; столица: **[принято]** (подтверждено владельцем 2026-10-17) 0 (весь запас её донорский; с маркером на столице: полный склад). Донор никогда не отдаёт ниже своей цели, поэтому заряды не гоняются туда-обратно. Следствие: после переноса маркера бывший город фронта с полным складом (его цель упала до минимума) кормит новый (пример 2).
-6. **Разовая перевозка** (DEC-18, пп. 6 и 10) остаётся: бесплатна, минимум и цели игнорирует, делит `amount` ребра с автоматикой. Автоматика потом может вернуть заряды, если у отправителя дефицит, а получатель стал донором (пример 7); чтобы удержать запас, ставят маркер.
-7. **Дороги за CP.** Улучшение платится CP кликом по внутренней дороге: `UpgradeRoad(edge)` без города; цена за уровень 0,5 CP (`orders.cost.build = 50` в сотых CP), оплата при старте, возврата нет, стройка занимает `build.ticks_per_level = 150` тиков. Заряды склада не списываются, ключ `build.charges_per_level` и условие «склад города оплатил» снимаются. За каждый уровень выше первого:
-   - **скорость юнитов +15%:** множитель дороги умножает скорость рельефа (как `terrain.speed_pct`, раздел 4): `[road.speed_pct]` `2 = 115`, `3 = 130` (уровень 1: 100), эффективная скорость `terrain_pct * road_pct // 100` (округление вниз), время `travel_ticks * 100 // эффективная скорость`;
-   - **пропускная способность снабжения +1:** `[supply.amount_by_level]` `1 = 1`, `2 = 2`, `3 = 3` зарядов за период отправки по ребру (заменяет `supply.base_amount`);
-   - скорость пакета как раньше: `supply.fast_speed_pct` `2 = 150`, `3 = 200` (на старте, для настройки баланса).
+1. **Transit.** A packet goes through own cities as through provinces, straight to the city with a deficit, and does not touch the warehouse of intermediate cities. The free room (`warehouse capacity - stock - in transit`) is checked only at the destination. The throughput of the edges of the path (item 7 below) works as before. This removes the slow relay through warehouses of capacity 1 (DEC-18, example 27).
+2. **Two front markers instead of three priorities.** A player has two markers. Moving a marker is free (`orders.cost.front = 0`). A city with a marker fills its warehouse to full (target = `warehouse_capacity`). If a city with a marker is lost, the marker itself retreats to the nearest own city toward the capital (farther from the enemy); only the player moves a marker forward. There are no priority levels and no command `SetPriority`; the key `supply.buffer` (the target "discharged + 2") is removed.
+3. **Rear minimum.** One setting per player: cities without a marker hold at least `rear_min` charges (the target of a rear city is `min(rear_min, warehouse_capacity)`). **[accepted]** (confirmed by the owner on 2026-10-17) The default is 1 (`supply.rear_min_default = 1`), the range is `0..supply.rear_min_max` (the maximum warehouse capacity by the ruleset, 8 for `mvp-1`: the capital with two upgrades), changing it is free (`orders.cost.rear_min = 0`), the command `SetRearMin(n)`.
+4. **Delivery order** (once per `supply.dispatch_ticks`, recomputed at every dispatch, so a change of marker works at once):
+   1. Cities with a marker, up to a full warehouse. **[accepted]** (confirmed by the owner on 2026-10-17) Between two markers the city with fewer charges in the warehouse goes first, on a tie the smaller `node_key(player, node)` (like equal priority in DEC-18).
+   2. Rear cities up to `rear_min`: from the farthest from the capital to the nearest. Distance: the sum of `packet_ticks` along the fastest path over own internal edges (the tree metric, DEC-18, item 3); on a tie the smaller `node_key` (AGENTS.md, 4.1, rule 6).
+   3. The remaining stock stays in the capital.
+   4. The capital is full: the surplus spreads ~~over the rear cities~~ **[refined by the owner's decision of 2026-10-20, #309]**: first over cities with a marker that have free room (order as in item 4.1), then over rear cities that have free room (`warehouse capacity - stock - in transit`), from the nearest to the capital to the farthest, on equal distance the smaller `node_key`. A charge burns up (`charges_overflow`) only when all warehouses of the player are full. The production charges that did not fit into the capital go into pass 4 of the same tick; **[accepted]** (confirmed by the owner on 2026-10-17) the remainder above the throughput of the edges burns up (a rare case: the capital produces up to 2 charges per 50 ticks, dispatch once per 10 ticks).
+5. **Donors.** A deficit (`target - stock - in transit`) is covered by the nearest donor with a stock above **its own** target (distance as in item 4, on a tie the smaller `node_key` of the donor); if the donor did not cover the deficit, the next one is taken (**[accepted]** (the owner's decision of 2026-10-20, #309) a donor's path that runs into an exhausted throughput may go by a detour: "Supply implementation", "Detour around a busy road"). The donor's target: a city with a marker: a full warehouse; a rear city: `min(rear_min, warehouse_capacity)`; the capital: **[accepted]** (confirmed by the owner on 2026-10-17) 0 (its whole stock is a donor stock; with a marker on the capital: a full warehouse). A donor never gives below its target, so charges are not driven back and forth. A consequence: after a marker is moved, the former front city with a full warehouse (its target dropped to the minimum) feeds the new one (example 2).
+6. **One-off transfer** (DEC-18, items 6 and 10) stays: free, it ignores the minimum and targets, shares the `amount` of the edge with the automation. The automation may then return the charges if the sender has a deficit and the receiver became a donor (example 7); to keep the stock, place a marker.
+7. **Roads for CP.** An upgrade is paid for in CP by a click on an internal road: `UpgradeRoad(edge)` without a city; the price per level is 0.5 CP (`orders.cost.build = 50` in hundredths of CP), payment at the start, no refund, the construction takes `build.ticks_per_level = 150` ticks. Warehouse charges are not deducted, the key `build.charges_per_level` and the condition "the city warehouse paid" are removed. For each level above the first:
+   - **unit speed +15%:** the road multiplier multiplies the terrain speed (like `terrain.speed_pct`, section 4): `[road.speed_pct]` `2 = 115`, `3 = 130` (level 1: 100), the effective speed `terrain_pct * road_pct // 100` (rounded down), the time `travel_ticks * 100 // effective speed`;
+   - **supply throughput +1:** `[supply.amount_by_level]` `1 = 1`, `2 = 2`, `3 = 3` charges per dispatch period along the edge (replaces `supply.base_amount`);
+   - packet speed as before: `supply.fast_speed_pct` `2 = 150`, `3 = 200` (at the start, for balance tuning).
 
-   **[принято]** (подтверждено владельцем 2026-10-17) Детали команды: отказы по порядку `NOT_FOUND_OR_HIDDEN` (ребра нет или не видно), `NOT_INTERNAL` (ребро не внутреннее для игрока), `MAX_WIDTH`, `EDGE_BUSY` (на ребре уже идёт стройка), `NOT_ENOUGH_CP`; `NOT_SUPPLIED` и `CITY_BUSY` для дороги нет (платящего города нет), число одновременных строек не ограничено. Захват любого конца ребра снимает стройку (`build_stopped`, `reason = "interrupted"`), CP не возвращаются (как DEC-16, п. 6). Время движения юнитов считается при выходе на ребро и дальше не меняется (как время пакета); уровень дороги действует на юниты любого игрока, как рельеф.
-8. **Режим карты «Снабжение»** (клиент, логики игры в нём нет; спецификация для клиентской задачи #293). Отдельный минималистичный слой вместо рисунка поверх обычной карты:
-   - показывает: плоскую заливку территории (цвет игрока плюс контур), заполнение складов (заполненные и пустые точки), два маркера фронта, стрелки потоков с объёмом (число зарядов), уровень дороги шириной линии, отрезанные города с таймером голода (`starve_in`, DEC-19), пакеты в пути;
-   - не показывает: фон рельефа, свои юниты, арены боёв; противник только территорией и присутствием (без складов, пакетов, маркеров: DEC-04, DEC-17);
-   - маркеры переносятся кликом по своему городу; минимум тыла задаётся ползунком; состояние не только цветом (AGENTS.md, 7.4).
-9. **Накопление: граничные случаи** (ниже, отдельный раздел).
+   **[accepted]** (confirmed by the owner on 2026-10-17) Command details: rejections in order `NOT_FOUND_OR_HIDDEN` (there is no edge or it is not visible), `NOT_INTERNAL` (the edge is not internal for the player), `MAX_WIDTH`, `EDGE_BUSY` (a construction already runs on the edge), `NOT_ENOUGH_CP`; there is no `NOT_SUPPLIED` and `CITY_BUSY` for a road (there is no paying city), the number of simultaneous constructions is not limited. A capture of either end of the edge removes the construction (`build_stopped`, `reason = "interrupted"`), CP are not returned (as DEC-16, item 6). The travel time of units is computed when they step onto the edge and does not change afterwards (like packet time); the road level affects the units of any player, like terrain.
+8. **The map mode "Supply"** (client, there is no game logic in it; the specification for the client task #293). A separate minimalist layer instead of a drawing over the ordinary map:
+   - shows: a flat fill of the territory (the player's color plus an outline), the filling of warehouses (filled and empty dots), the two front markers, flow arrows with the volume (the number of charges), the road level by line width, cut-off cities with a starvation timer (`starve_in`, DEC-19), packets in transit;
+   - does not show: the terrain background, own units, fight arenas; the enemy only by territory and presence (no warehouses, packets, markers: DEC-04, DEC-17);
+   - markers are moved by a click on your own city; the rear minimum is set by a slider; the state is not conveyed by color alone (AGENTS.md, 7.4).
+9. **Accumulation: edge cases** (below, a separate section).
 
-**Что и где считается.** Дерево, расстояния, цели, дефициты, порядок и доноры считает симуляция (`gow_sim.systems.supply`); клиент показывает маркеры, потоки и пакеты из вида игрока. Новые поля вида игрока (маркеры, `rear_min`) только с тестом тумана; маркеры и минимум противника не видны. `SIM_VERSION`++ и `PROTOCOL_VERSION`++ делает реализация.
+**What is computed and where.** The tree, distances, targets, deficits, order and donors are computed by the simulation (`gow_sim.systems.supply`); the client shows markers, flows and packets from the player view. New fields of the player view (markers, `rear_min`) only with a fog test; the enemy's markers and minimum are not visible. `SIM_VERSION`++ and `PROTOCOL_VERSION`++ are done by the implementation.
 
-**Ключи рулсета (пишет реализация, #292).** Добавить: `supply.rear_min_default = 1`, `supply.rear_min_max = 8` (оба **[принято]** (подтверждено владельцем 2026-10-17)), `[supply.amount_by_level]` `1 = 1`, `2 = 2`, `3 = 3`, `[road.speed_pct]` `2 = 115`, `3 = 130`, `orders.cost.front = 0`, `orders.cost.rear_min = 0`; изменить `orders.cost.build = 50`. Удалить: `supply.buffer`, `supply.base_amount`, `[build.charges_per_level]`, `orders.cost.priority`. Без изменений: `supply.dispatch_ticks`, `supply.recharge_per_tick`, `supply.base_speed_pct`, `[supply.fast_speed_pct]`, `build.ticks_per_level`. **[предложено]** (#306) Число маркеров фронта тоже число правил (AGENTS.md, 4.1, правило 7): `supply.front_markers = 2` (было константой `FRONT_MARKERS` в коде), клиент читает его из `ruleset_public.supply.front_markers`. Реализация дорог (#306): секция `[road]` с таблицей `speed_pct` (ключи 2..3; уровень 1 всегда 100), `[supply.amount_by_level]` с ключами 1..3.
+**Ruleset keys (written by the implementation, #292).** Add: `supply.rear_min_default = 1`, `supply.rear_min_max = 8` (both **[accepted]** (confirmed by the owner on 2026-10-17)), `[supply.amount_by_level]` `1 = 1`, `2 = 2`, `3 = 3`, `[road.speed_pct]` `2 = 115`, `3 = 130`, `orders.cost.front = 0`, `orders.cost.rear_min = 0`; change `orders.cost.build = 50`. Remove: `supply.buffer`, `supply.base_amount`, `[build.charges_per_level]`, `orders.cost.priority`. Unchanged: `supply.dispatch_ticks`, `supply.recharge_per_tick`, `supply.base_speed_pct`, `[supply.fast_speed_pct]`, `build.ticks_per_level`. **[proposed]** (#306) The number of front markers is also a rule number (AGENTS.md, 4.1, rule 7): `supply.front_markers = 2` (it was the constant `FRONT_MARKERS` in the code), the client reads it from `ruleset_public.supply.front_markers`. Roads implementation (#306): a section `[road]` with the table `speed_pct` (keys 2..3; level 1 is always 100), `[supply.amount_by_level]` with keys 1..3.
 
-**Примеры.** Если не сказано иное: `mvp-1`, склад столицы K 6, городов A, B, C по 2 (ёмкость склада), `packet_ticks` 30 на ребро, `rear_min = 1`, маркеров нет, `amount` 1, одна цепь K-A-B-C.
+**Examples.** Unless said otherwise: `mvp-1`, the capital's warehouse K 6, cities A, B, C of 2 each (warehouse capacity), `packet_ticks` 30 per edge, `rear_min = 1`, no markers, `amount` 1, one chain K-A-B-C.
 
-| № | Состояние | Результат |
+| # | State | Result |
 |---|---|---|
-| 1 | цепь K-A-B, склад A 1, склад B 2; маркер на B; склады K 6, A 1, B 0 | A держит минимум 1 и не донор (цель 1, склад 1). Тик отправки `t`: дефицит B 2; донор K: пакет K-A-B 1, склад A не меняется (транзит), прибудет `t + 60`. Тик `t + 10`: дефицит B `2 - 0 - 1 = 1`: второй пакет, прибудет `t + 70`. B полон в `t + 70`, A всё время 1 (раньше пакет вставал в A с ёмкостью 1) |
-| 2 | маркер на B; склады K 3, A 1, B 2, C 1 | игрок переносит маркер B на C (0 CP). Цели: A 1, B 1, C 2; дефицит C 1. Доноры: B (склад 2, цель 1, расстояние 30 тиков), K (склад 3, цель 0, 90 тиков): ближайший B отдаёт 1: C полон в `t + 30`, B 1, K не отправляет ничего |
-| 3 | маркеров нет, `rear_min = 2`; склады K 5, A 0, B 0, C 0 | порядок: C (дальний), B, A. Отправки за 5 периодов (`amount` 1, одно ребро K-A): C, C, B, B, A. Итог C 2, B 2, A 1, K 0 |
-| 4 | маркеров нет; склады K 6 (полон), A 1, B 1, C 1; столица производит заряд | проход 4: ближайший тыловой город со свободным местом A (место 1): пакет K-A 1. Следующий заряд: A с учётом «в пути» полон, идёт B, затем C. Когда K, A, B, C полны: заряд сгорает (`charges_overflow`) |
-| 5 | цепь K-A-B, маркеров нет; склады K 0, A 2, B 0 | цель A 1, B 1: дефицит B 1; донор A (2 > 1) отдаёт 1: A 1, B 1. Обратно A не берёт: B не выше своей цели |
-| 6 | цепь K-A-B, маркер на B, `rear_min = 0`; склады K 0, A 2, B 0 | цель A 0: A донор со всем запасом 2; B получает 2 (по одному за период) |
-| 7 | цепь K-A-B, `rear_min = 1`; склады K 0, A 1, B 1; `Transfer(A, B, 1)` | перевозка разрешена (минимум игнорируется): A 0, B 2. Следующая отправка: дефицит A 1, ближайший донор B (2 > 1): заряд возвращается. С маркером на B перевозка остаётся |
-| 8 | маркеры на B и C; C захвачен | маркер C отходит к ближайшему своему городу в тылу: B уже с маркером, поэтому [принято] на A (на одном городе не больше одного маркера) |
-| 9 | город D отрезан от столицы (нет пути по своим внутренним рёбрам) | D в снабжении не участвует: не получает, не отдаёт, голод по DEC-19 |
-| 10 | дорога A-B уровня 1 -> 3 за два улучшения | стоимость 2 x 0,5 = 1 CP, каждый уровень строится 150 тиков; юниты в лесу (100 %): `travel_ticks 60` -> уровень 2: `60 * 100 // 115 = 52`, уровень 3: `60 * 100 // 130 = 46`; на равнине (125 %): `125 * 130 // 100 = 162`, `60 * 100 // 162 = 37`; `amount` 3 за период |
-| 11 | горы (70 %), дорога уровня 2, `travel_ticks 60` | эффективная скорость `70 * 115 // 100 = 80`, время `60 * 100 // 80 = 75` (без дороги `60 * 100 // 70 = 85`) |
-| 12 | **[принято]** (решение владельца 2026-10-20, #309) кольцо K-A-B и K-E-B (E: средний город), все дороги уровня 1 по 30 тиков; маркер на B; склады K 6, A 1, E 1, B 0 | дефицит B 2, донор K. Самый быстрый путь K-A-B (60 тиков; при равенстве времени меньший `node_key`: A раньше E) пропускает 1 заряд; второй заряд идёт объездом K-E-B (60 тиков, не больше `60 + 10`): два пакета в тике `t`, оба прибывают в `t + 60`. Если E-B 50 тиков, объезд K-E-B 80 тиков больше `60 + 10`: второй заряд ждёт и уходит по K-A-B в `t + 10`, прибытие `t + 70` |
-| 13 | **[принято]** (решение владельца 2026-10-20, #309) маркер на C; B захвачен (C отрезан), затем C захвачен | у C нет своего соседа в дереве снабжения: маркер снимается (`front_set`, `node = null`, `reason = "fallback"`); на столицу он не прыгает |
-| 14 | **[принято]** (решение владельца 2026-10-20, #309) маркеры на K и B; склады K 6 (полон), A 1, B 0, C 1; столица производит заряд | K с маркером не донор (цель 6), A и C на минимуме: проход 4.1 ничего не отправляет. Излишек 1: место в K отправкой не освобождено, первый город с маркером со свободным местом: B (место 2): пакет K-A-B 1 (раньше: в тыловой A) |
+| 1 | chain K-A-B, warehouse A 1, warehouse B 2; a marker on B; warehouses K 6, A 1, B 0 | A holds the minimum 1 and is not a donor (target 1, warehouse 1). Dispatch tick `t`: deficit of B 2; donor K: packet K-A-B 1, warehouse A does not change (transit), arrives at `t + 60`. Tick `t + 10`: deficit of B `2 - 0 - 1 = 1`: a second packet, arrives at `t + 70`. B is full at `t + 70`, A is 1 all the time (before, the packet stopped in A of capacity 1) |
+| 2 | a marker on B; warehouses K 3, A 1, B 2, C 1 | the player moves the marker from B to C (0 CP). Targets: A 1, B 1, C 2; deficit of C 1. Donors: B (warehouse 2, target 1, distance 30 ticks), K (warehouse 3, target 0, 90 ticks): the nearest, B, gives 1: C is full at `t + 30`, B 1, K sends nothing |
+| 3 | no markers, `rear_min = 2`; warehouses K 5, A 0, B 0, C 0 | order: C (the farthest), B, A. Dispatches over 5 periods (`amount` 1, one edge K-A): C, C, B, B, A. Result C 2, B 2, A 1, K 0 |
+| 4 | no markers; warehouses K 6 (full), A 1, B 1, C 1; the capital produces a charge | pass 4: the nearest rear city with free room is A (room 1): packet K-A 1. The next charge: A, counting "in transit", is full, B goes, then C. When K, A, B, C are full: the charge burns up (`charges_overflow`) |
+| 5 | chain K-A-B, no markers; warehouses K 0, A 2, B 0 | target A 1, B 1: deficit of B 1; donor A (2 > 1) gives 1: A 1, B 1. A does not take it back: B is not above its target |
+| 6 | chain K-A-B, a marker on B, `rear_min = 0`; warehouses K 0, A 2, B 0 | target A 0: A is a donor with its whole stock of 2; B gets 2 (one per period) |
+| 7 | chain K-A-B, `rear_min = 1`; warehouses K 0, A 1, B 1; `Transfer(A, B, 1)` | the transfer is allowed (the minimum is ignored): A 0, B 2. The next dispatch: deficit of A 1, the nearest donor B (2 > 1): the charge comes back. With a marker on B the transfer stays |
+| 8 | markers on B and C; C captured | the marker of C retreats to the nearest own city in the rear: B already has a marker, so [accepted] to A (no more than one marker per city) |
+| 9 | city D is cut off from the capital (no path over own internal edges) | D does not take part in supply: does not receive, does not give, starvation by DEC-19 |
+| 10 | road A-B of level 1 -> 3 in two upgrades | cost 2 x 0.5 = 1 CP, each level is built in 150 ticks; units in a forest (100 %): `travel_ticks 60` -> level 2: `60 * 100 // 115 = 52`, level 3: `60 * 100 // 130 = 46`; on a plain (125 %): `125 * 130 // 100 = 162`, `60 * 100 // 162 = 37`; `amount` 3 per period |
+| 11 | mountains (70 %), a road of level 2, `travel_ticks 60` | effective speed `70 * 115 // 100 = 80`, time `60 * 100 // 80 = 75` (without the road `60 * 100 // 70 = 85`) |
+| 12 | **[accepted]** (the owner's decision of 2026-10-20, #309) a ring K-A-B and K-E-B (E: a medium city), all roads of level 1 at 30 ticks; a marker on B; warehouses K 6, A 1, E 1, B 0 | deficit of B 2, donor K. The fastest path K-A-B (60 ticks; on equal time the smaller `node_key`: A before E) passes 1 charge; the second charge goes by the detour K-E-B (60 ticks, no more than `60 + 10`): two packets at tick `t`, both arrive at `t + 60`. If E-B is 50 ticks, the detour K-E-B of 80 ticks is more than `60 + 10`: the second charge waits and leaves by K-A-B at `t + 10`, arrival `t + 70` |
+| 13 | **[accepted]** (the owner's decision of 2026-10-20, #309) a marker on C; B captured (C is cut off), then C captured | C has no own neighbor in the supply tree: the marker is removed (`front_set`, `node = null`, `reason = "fallback"`); it does not jump to the capital |
+| 14 | **[accepted]** (the owner's decision of 2026-10-20, #309) markers on K and B; warehouses K 6 (full), A 1, B 0, C 1; the capital produces a charge | K with a marker is not a donor (target 6), A and C are at the minimum: pass 4.1 sends nothing. Surplus 1: the room in K was not freed by a dispatch, the first city with a marker that has free room: B (room 2): packet K-A-B 1 (before: to the rear city A) |
 
-#### Накопление: граничные случаи
+#### Accumulation: edge cases
 
-Хранилище игрока: сумма ёмкостей складов всех своих городов плюс заряженные юниты (заряд юнита живёт в юните). Всё, что не помещается, сгорает (`charges_overflow`), и это единственный «потолок» накопления.
+A player's storage: the sum of the capacities of the warehouses of all own cities plus charged units (a unit's charge lives in the unit). Everything that does not fit burns up (`charges_overflow`), and this is the only "ceiling" of accumulation.
 
-- **Склады это хранилище, его можно купить.** У `mvp-1` склады столицы 6, больших и средних городов 2, малых 1; уровень склада даёт +1 за 2 CP (`orders.cost.warehouse = 200`, DEC-26). Пример: столица и четыре города 2 + 2 + 2 + 1 хранят 13 зарядов плюс гарнизоны; два улучшения добавляют 2.
-- **Излишек у столицы это цель для глубокого удара.** Когда столица полна, запас растекается по ближайшим к ней тыловым городам (п. 4.4). Противник, захвативший такой город, обнуляет склад (DEC-26, п. 4: `warehouse_lost`), то есть копить у столицы рискованно; расплачивается игрок, который не воевал и копил.
-- **Высокий глобальный минимум это сознательный выбор.** При `rear_min = 3` каждый тыловой город держит до 3 зарядов, запаса в столице остаётся меньше, но фронт всё равно обслуживается первым (п. 4.1): минимум уменьшает запас столицы и прочность тыла, а не снабжение фронта. Пример: склад тылового города 2 при `rear_min = 3`: цель `min(3, 2) = 2`, выше склада минимум не поднимает.
-- **Потеря территории сжимает хранилище.** Захват двух городов по 2 уменьшает хранилище на 4 (захваченный склад обнуляется), и излишек сгорает раньше: при полных складах всё производство столицы горит.
-- **Тихая фаза не проблема.** Накопление без боёв упирается в хранилище и сгорание (выше), а таймер партии 15 минут и VP (раздел 11) заставляют отстающую сторону действовать. Дополнительного налога на копилку нет.
+- **Warehouses are the storage, it can be bought.** In `mvp-1` the warehouses are 6 for the capital, 2 for large and medium cities, 1 for small ones; a warehouse level gives +1 for 2 CP (`orders.cost.warehouse = 200`, DEC-26). Example: the capital and four cities 2 + 2 + 2 + 1 hold 13 charges plus garrisons; two upgrades add 2.
+- **The surplus at the capital is a target for a deep strike.** When the capital is full, the stock spreads over the rear cities nearest to it (item 4.4). An enemy that captures such a city zeroes the warehouse (DEC-26, item 4: `warehouse_lost`), so hoarding at the capital is risky; the player who did not fight and hoarded pays for it.
+- **A high global minimum is a deliberate choice.** At `rear_min = 3` every rear city holds up to 3 charges, less stock stays in the capital, but the front is still served first (item 4.1): the minimum reduces the capital's stock and the durability of the rear, not the supply of the front. Example: the warehouse of a rear city is 2 at `rear_min = 3`: the target is `min(3, 2) = 2`, the minimum does not raise it above the warehouse.
+- **Loss of territory shrinks the storage.** A capture of two cities of 2 each reduces the storage by 4 (a captured warehouse is zeroed), and the surplus burns up earlier: with full warehouses all the capital's production burns up.
+- **A quiet phase is not a problem.** Accumulation without fights runs into the storage and the burning (above), and the match timer of 15 minutes and VP (section 11) force the trailing side to act. There is no additional tax on hoarding.
 
-**Реализация снабжения** (#292; `SIM_VERSION` 14, `PROTOCOL_VERSION` 17; дороги п. 7 и ответы #309: #306,
-`SIM_VERSION` 15, `PROTOCOL_VERSION` 18; клиент: #293, #311).
-`gow_sim.systems.supply` (`city_target`, `front_fallback`, проходы 4.1, 4.2, 4.4 и доноры в
-`_dispatch`), команды `SetFront(marker, node)` и `SetRearMin(n)` в `gow_sim.commands`, состояние
-`PlayerState.fronts` и `PlayerState.rear_min`, вид игрока `SelfView.fronts` и `SelfView.rear_min`
-(только свои; тест тумана), `ruleset_public.supply` (`rear_min_max`, `rear_min_default`,
-`front_markers`), табличные тесты `packages/sim/tests/test_dec28.py` (примеры 1-12). Детали
-реализации, которых решение не задавало; вопросы #309, владелец ответил 2026-10-20:
-- **[принято]** (решение владельца 2026-10-20, #309) `SetFront(marker, node)`: `marker` от 0 до
-  `supply.front_markers - 1`; `node = null` снимает маркер с карты. Отказы по порядку:
-  `INVALID_ARGUMENT` (номер маркера), `NOT_FOUND_OR_HIDDEN`, `NOT_OWNER`, `NOT_CITY` (провинция),
-  `NO_CHANGE` (маркер уже там или уже снят), `INVALID_ARGUMENT` (на городе другой маркер, пример 8),
-  `NOT_ENOUGH_CP`. `SetRearMin(n)`: `INVALID_ARGUMENT` вне `0..supply.rear_min_max`, `NO_CHANGE`,
-  `NOT_ENOUGH_CP`. События `front_set` (`marker`, `node`, `reason`: `command` или `fallback`) и
-  `rear_min_set` получает только владелец.
-- **[принято]** (решение владельца 2026-10-20, #309) Отход маркера (п. 2): к первому своему городу
-  на самом быстром пути от потерянного города к столице по дереву снабжения (выход из потерянного
-  города через своего соседа с наименьшим `расстояние + packet_ticks`, при равенстве меньший
-  `node_key`), пропуская город другого маркера. Если у потерянного города нет своего соседа в
-  дереве снабжения (окружение, отрезанный карман), маркер **снимается** (прыжка на столицу нет).
-  Маркеры отходят в порядке номера. Отход считается в начале системы `supply` того же тика.
-- Путь пакета автоматики: как у перевозки (самый быстрый по `packet_ticks`, при равенстве
-  лексикографически меньшая последовательность `node_key`).
-- **[принято]** (решение владельца 2026-10-20, #309) Излишек столицы (п. 4.4): экономика кладёт в
-  столицу, что помещается, остальное передаёт в `supply` того же тика полем `spill` события
-  `charges_produced` (`charges`: всё произведённое). Излишек сначала занимает место, которое в
-  этом тике освободила отправка из столицы (проходы 4.1, 4.2 и доноры), затем идёт в города с
-  маркером со свободным местом (`ёмкость склада - склад - в пути`; порядок как в п. 4.1: меньше
-  зарядов на складе первым, при равенстве меньший `node_key`), затем в тыловые города от
-  ближнего к столице. Сгорает (`charges_overflow`) только остаток. Без своей столицы сгорает всё
-  произведённое.
-- **[принято]** (решение владельца 2026-10-20, #309) **Объезд занятой дороги.** Если самый быстрый
-  путь автоматической отправки (донор или излишек столицы) упирается в дорогу без остатка
-  пропускной способности в этой отправке, ищется самый быстрый путь по своим внутренним дорогам с
-  остатком; он берётся, только если его время не больше времени самого быстрого пути плюс
-  `supply.dispatch_ticks` (не медленнее ожидания следующей отправки); иначе заряд ждёт следующую
-  отправку. Если по основному пути проходит часть зарядов, остаток может уйти объездом по тому же
-  правилу. Разовая перевозка (`Transfer`) объездов не ищет. Детали, которых владелец не задал:
-  - **[принято]** (подтверждено владельцем 2026-10-21) Самый быстрый путь (основной) ищется без учёта пропускной способности; объезд:
-    тот же поиск (`packet_ticks`, при равенстве лексикографически меньшая последовательность
-    `node_key`) только по дорогам, у которых в этой отправке остался хотя бы 1 заряд пропускной
-    способности.
-  - **[принято]** (подтверждено владельцем 2026-10-21) Разбиение: по основному пути уходит `min(заряды, наименьший остаток дорог
-    пути)`; на остаток снова ищется объезд, и так, пока заряды не кончатся или подходящего объезда
-    нет. Каждая отправка исчерпывает хотя бы одну дорогу, поэтому цикл конечен. Порог всех
-    объездов один: время основного пути плюс `supply.dispatch_ticks`.
-  - **[принято]** (подтверждено владельцем 2026-10-21) Каждый путь даёт свой пакет (одна пара «откуда, куда» может дать в одной
-    отправке несколько пакетов по разным путям).
-  - **[принято]** (подтверждено владельцем 2026-10-21) Порядок доноров не меняется (ближайший по метрике дерева первым): объезд
-    ближнего донора идёт раньше основного пути дальнего.
+**Supply implementation** (#292; `SIM_VERSION` 14, `PROTOCOL_VERSION` 17; roads item 7 and the answers of #309: #306,
+`SIM_VERSION` 15, `PROTOCOL_VERSION` 18; client: #293, #311).
+`gow_sim.systems.supply` (`city_target`, `front_fallback`, passes 4.1, 4.2, 4.4 and donors in
+`_dispatch`), the commands `SetFront(marker, node)` and `SetRearMin(n)` in `gow_sim.commands`, the state
+`PlayerState.fronts` and `PlayerState.rear_min`, the player view `SelfView.fronts` and `SelfView.rear_min`
+(own only; a fog test), `ruleset_public.supply` (`rear_min_max`, `rear_min_default`,
+`front_markers`), table tests `packages/sim/tests/test_dec28.py` (examples 1-12). The implementation
+details that the decision did not set; the questions of #309, the owner answered on 2026-10-20:
+- **[accepted]** (the owner's decision of 2026-10-20, #309) `SetFront(marker, node)`: `marker` from 0 to
+  `supply.front_markers - 1`; `node = null` removes the marker from the map. Rejections in order:
+  `INVALID_ARGUMENT` (the marker number), `NOT_FOUND_OR_HIDDEN`, `NOT_OWNER`, `NOT_CITY` (province),
+  `NO_CHANGE` (the marker is already there or already removed), `INVALID_ARGUMENT` (the city has another marker, example 8),
+  `NOT_ENOUGH_CP`. `SetRearMin(n)`: `INVALID_ARGUMENT` outside `0..supply.rear_min_max`, `NO_CHANGE`,
+  `NOT_ENOUGH_CP`. The events `front_set` (`marker`, `node`, `reason`: `command` or `fallback`) and
+  `rear_min_set` are received only by the owner.
+- **[accepted]** (the owner's decision of 2026-10-20, #309) The retreat of a marker (item 2): to the first own city
+  on the fastest path from the lost city to the capital along the supply tree (the exit from the lost
+  city through an own neighbor with the smallest `distance + packet_ticks`, on a tie the smaller
+  `node_key`), skipping the city of another marker. If the lost city has no own neighbor in the
+  supply tree (encirclement, a cut-off pocket), the marker is **removed** (there is no jump to the capital).
+  Markers retreat in the order of their number. The retreat is computed at the start of the system `supply` of the same tick.
+- The path of an automation packet: as for a transfer (the fastest by `packet_ticks`, on a tie the
+  lexicographically smaller sequence of `node_key`).
+- **[accepted]** (the owner's decision of 2026-10-20, #309) The capital's surplus (item 4.4): the economy puts into the
+  capital what fits, and passes the rest to `supply` of the same tick in the field `spill` of the event
+  `charges_produced` (`charges`: everything produced). The surplus first takes the room that was freed in
+  this tick by a dispatch from the capital (passes 4.1, 4.2 and donors), then goes to cities with a
+  marker that have free room (`warehouse capacity - stock - in transit`; order as in item 4.1: fewer
+  charges in the warehouse first, on a tie the smaller `node_key`), then to rear cities from the
+  nearest to the capital. Only the remainder burns up (`charges_overflow`). Without an own capital everything
+  produced burns up.
+- **[accepted]** (the owner's decision of 2026-10-20, #309) **Detour around a busy road.** If the fastest
+  path of an automatic dispatch (a donor or the capital's surplus) runs into a road without a remainder of
+  throughput in this dispatch, the fastest path over own internal roads with a remainder is searched for;
+  it is taken only if its time is no more than the time of the fastest path plus
+  `supply.dispatch_ticks` (not slower than waiting for the next dispatch); otherwise the charge waits for the next
+  dispatch. If part of the charges passes along the main path, the remainder may go by a detour by the same
+  rule. A one-off transfer (`Transfer`) does not look for detours. The details the owner did not set:
+  - **[accepted]** (confirmed by the owner on 2026-10-21) The fastest (main) path is searched for without regard to throughput; the detour:
+    the same search (`packet_ticks`, on a tie the lexicographically smaller sequence of
+    `node_key`) only over roads that have at least 1 charge of throughput
+    left in this dispatch.
+  - **[accepted]** (confirmed by the owner on 2026-10-21) Splitting: along the main path goes `min(charges, the smallest remainder of the roads of the
+    path)`; for the remainder a detour is searched for again, and so on until the charges run out or there is no suitable
+    detour. Every dispatch exhausts at least one road, so the loop is finite. The threshold of all
+    detours is the same: the time of the main path plus `supply.dispatch_ticks`.
+  - **[accepted]** (confirmed by the owner on 2026-10-21) Each path gives its own packet (one pair "from, to" may give several packets in one
+    dispatch along different paths).
+  - **[accepted]** (confirmed by the owner on 2026-10-21) The order of donors does not change (the nearest by the tree metric first): the detour of
+    a near donor goes before the main path of a far one.
 
-**Реализация клиента** (#293; улучшение дороги кликом: #311). Режим «Снабжение» (`Tab` или `F2`) это
-отдельный слой карты `supply` (`render/supplyView.ts`, чистая часть `render/supplyLayout.ts`): пока он
-включён, рельеф, группы, намерения, туман и эффекты скрыты, территория заливается плоско сильнее
-обычной. Рисуется только из вида игрока: склады своих городов точками (заполнена: заряд, пуста: место;
-у провинции и у чужого города склада нет), маркеры фронта флажком с номером, по стрелке на каждую
-дорогу и направление с числом зарядов (сумма своих пакетов по их остатку маршрута: сплошная, разовая
-перевозка пунктиром; потоки к одному городу по разным дорогам рисуются каждый своей стрелкой),
-пакеты в пути (круг, перевозка квадрат), отрезанный свой город пунктирным кольцом и таймером
-`starve_in`, противник только полым треугольником «он здесь» там, где виден сейчас. Уровень дороги
-читается толщиной линии. Клик по своему городу открывает радиальное меню: маркер 1 (клавиша `1`),
-маркер 2 (`2`), перевозка (`3`); сектор маркера ставит или переносит маркер (`set_front`, 0 CP) либо
-снимает его (`node = null`), если он уже на этом городе; город с другим маркером сектор не даёт
-(на одном городе один маркер, пример 8). Минимум тыла это ползунок в плашке режима
-(`0..ruleset_public.supply.rear_min_max`), команда `set_rear_min` уходит при отпускании. Число
-маркеров клиент берёт из `ruleset_public.supply.front_markers` (#311; раньше из длины
-`SelfView.fronts`); ненулевая цена маркера (`ruleset_public.cost.front`) показывается в секторе
-меню (в DEC-28 она 0, и сектор без цены). Отказы сервера показываются тостом, как у других
-команд.
+**Client implementation** (#293; a road upgrade by click: #311). The "Supply" mode (`Tab` or `F2`) is
+a separate map layer `supply` (`render/supplyView.ts`, the pure part `render/supplyLayout.ts`): while it is
+on, terrain, groups, intents, fog and effects are hidden, the territory is filled flat, stronger than
+the ordinary one. It draws only from the player view: the warehouses of own cities as dots (filled: a charge, empty: room;
+a province and a foreign city have no warehouse), front markers as a flag with a number, one arrow
+per road and direction with the number of charges (the sum of own packets by the remainder of their route: solid, a one-off
+transfer dashed; flows to one city along different roads are each drawn with its own arrow),
+packets in transit (a circle, a transfer a square), a cut-off own city with a dashed ring and a timer
+`starve_in`, the enemy only with a hollow triangle "it is here" where it is visible now. The road level
+is read by line thickness. A click on an own city opens a radial menu: marker 1 (key `1`),
+marker 2 (`2`), transfer (`3`); a marker sector places or moves the marker (`set_front`, 0 CP) or
+removes it (`node = null`) if it is already on this city; a city with another marker does not give the sector
+(one marker per city, example 8). The rear minimum is a slider in the mode banner
+(`0..ruleset_public.supply.rear_min_max`), the command `set_rear_min` is sent on release. The number of
+markers the client takes from `ruleset_public.supply.front_markers` (#311; before, from the length of
+`SelfView.fronts`); a nonzero price of a marker (`ruleset_public.cost.front`) is shown in the menu
+sector (in DEC-28 it is 0, and the sector has no price). Server rejections are shown by a toast, like for other
+commands.
 
-**Улучшение дороги в клиенте** (#311, #315, п. 7). У улучшения дорог свой режим: клавиша `U`
-включает и выключает его (`Esc` тоже выходит из него, раньше снятия выбора), на обычной карте и в
-режиме «Снабжение» одинаково (`Tab` режим дорог не выключает). В режиме подсвечены все свои дороги,
-на которые сервер прислал `EdgeView.upgrade_gain` (своя внутренняя ниже верхнего уровня) и на
-которых нет стройки (`EdgeView.build`): штриховая полоса (форма, не только цвет); клиент своих
-условий не вычисляет. Клик по такой дороге шлёт `upgrade_road(edge)` сразу, без города и выбора;
-режим остаётся включённым для следующей дороги. Выбранная группа клику по дороге не мешает (режим
-включён явно); во время выбора цели перевозки дорога остаётся «областью города». **Без режима
-клик по дороге дорогу не улучшает**: это клик по области города (приказ выбранной группе, выбор
-города), так что мгновенное улучшение кликом из #311 отменено; `Shift`+клик занят запланированным
-приказом. Плашка внизу карты называет режим и клавиши выхода (если улучшать нечего, говорит об этом).
-Под курсором дорога режима после паузы показывает подсказку: «уровень N → N+1», прирост из
-`upgrade_gain` (скорость юнитов, снабжение), цена `cost.build` и время `build.ticks_per_level` из
-`ruleset_public` (клиент их не считает). Ход стройки это значок и время на дороге
-(`EdgeView.build`). Старый путь «город, `U`, выбор дороги» и сектор «Дороги» в меню города
-удалены; `U` теперь только режим дорог.
+**Road upgrade in the client** (#311, #315, item 7). Road upgrade has its own mode: the key `U`
+turns it on and off (`Esc` also leaves it, before clearing the selection), the same on the ordinary map and in the
+"Supply" mode (`Tab` does not turn the road mode off). In the mode all own roads are lit
+for which the server sent `EdgeView.upgrade_gain` (an own internal one below the top level) and
+which have no construction (`EdgeView.build`): a dashed strip (a shape, not only color); the client does not compute its own
+conditions. A click on such a road sends `upgrade_road(edge)` at once, without a city and a choice;
+the mode stays on for the next road. A selected group does not interfere with a click on a road (the mode is
+turned on explicitly); during the choice of a transfer target a road stays a "city area". **Without the mode
+a click on a road does not upgrade it**: it is a click on the city area (an order to the selected group, the choice of a
+city), so the instant upgrade by click from #311 is cancelled; `Shift`+click is taken by a scheduled
+order. The banner at the bottom of the map names the mode and the exit keys (if there is nothing to upgrade, it says so).
+Under the cursor a road of the mode shows a tooltip after a pause: "level N → N+1", the gain from
+`upgrade_gain` (unit speed, supply), the price `cost.build` and the time `build.ticks_per_level` from
+`ruleset_public` (the client does not compute them). The progress of a construction is an icon and a time on the road
+(`EdgeView.build`). The old path "city, `U`, choose a road" and the "Roads" sector in the city menu
+are removed; `U` is now only the road mode.
 
-**Реализация дорог** (п. 7, #306; `SIM_VERSION` 15, `PROTOCOL_VERSION` 18). Команда
-`UpgradeRoad(edge)` (`gow_sim.commands`, на проводе `{"type": "upgrade_road", "edge"}`), стройка
-на ребре `Edge.build` (`gow_sim.systems.build`), скорость юнитов `movement.road_speed_pct` и
-`movement.leg(..., level)`, пропускная способность `supply.road_amount(rules, level)`; ключи
-рулсета `[road.speed_pct]`, `[supply.amount_by_level]`, `supply.front_markers`; табличные тесты
-`test_dec28.py` (примеры 10-14), `test_build.py`, `test_dec22.py`, `test_dec26.py`. Детали, которых
-решение не задаёт:
-- **[принято]** (подтверждено владельцем 2026-10-21) `NOT_FOUND_OR_HIDDEN`: ребра нет или оно в тумане у игрока (внутреннее ребро
-  в тумане не бывает, так что ответ ничего не раскрывает); `NOT_INTERNAL`: ребро видно, но его
-  концы не оба свои. Коды `NOT_ADJACENT` и `NOT_SUPPLIED` больше ничем не выдаются и удалены;
-  `CITY_BUSY` остаётся у казармы и склада (DEC-26, п. 8).
-- **[принято]** (подтверждено владельцем 2026-10-21) Дорогу между провинциями или у провинции тоже улучшают (платящего города нет;
-  DEC-22, п. 6 о провинции заменён).
-- **[принято]** (подтверждено владельцем 2026-10-21) Уровень, по которому считается время юнита (`OnEdge.level`), берётся при
-  выходе на ребро: при отправлении, при транзите через свой узел, при отходе защитника по своему
-  приказу (DEC-24, E3) и при отскоке или отходе атакующего из узла боя (новый выход на ребро:
-  уровень на этот момент). Группа, которая разворачивается на самом ребре (отскок на ребре,
-  отмена, отход из боя на ребре), сохраняет свой уровень, поэтому отскок длится столько, сколько
-  группа шла (раздел 4, п. 5). Поиск пути и время пути приказа (`reach`, `ack.arrive_tick`)
-  считаются по текущим уровням.
-- **[принято]** (подтверждено владельцем 2026-10-21) Перевозка (DEC-18, п. 6) идёт партиями по наименьшему `amount` дорог своего
-  пути на момент команды; каждая партия берёт `min(amount, share)` текущего уровня своей дороги
-  (п. 10).
-- **[предложено]** События: `build_started` дороги (`player`, `kind = road`, `edge`, `width`: новый
-  уровень; без `node` и `charges`), `road_upgraded` (`player`, `edge`, `width`), `build_stopped`
-  дороги (`player`, `kind`, `edge`, `reason`); их получает только владелец. `group_arrived`
-  получает поле `level` (уровень, с которым группа шла).
-- **[предложено]** Вид игрока: стройка дороги в `EdgeView.build` (`done_tick` своей стройки;
-  чужая видна без тика, пока ребро не в тумане, и не запоминается; тест тумана), `NodeView.build`
-  удалено; подсказка `upgrade_gain` даёт приросты `speed_pct` (пакет), `unit_speed_pct` (юниты) и
-  `amount`. `ruleset_public.build` без цен зарядами (цена: `cost.build`),
-  `ruleset_public.supply.front_markers`. Кадры реплея: ключ `e` (`[edge, owner, done_tick]`)
-  вместо `b` (`replay-frames.md`).
-- Пункты DEC-26 «Реализация» про общую стройку города для дороги и про поле `kind` у
-  `UpgradeRoad` заменены этим блоком.
-- **[принято]** (подтверждено владельцем 2026-10-21) Боты (`gow_bots`): одна стройка дороги за раз на игрока, из CP сверх резерва
-  `road_keep` (у `expander` и `turtle` 350..450, чтобы дороги не съедали казарму и наём);
-  выбор: наибольший прирост (`speed_pct + unit_speed_pct + 100 * amount`), при равенстве ближе к
-  столице, затем меньший ключ ребра.
+**Roads implementation** (item 7, #306; `SIM_VERSION` 15, `PROTOCOL_VERSION` 18). The command
+`UpgradeRoad(edge)` (`gow_sim.commands`, on the wire `{"type": "upgrade_road", "edge"}`), the construction
+on an edge `Edge.build` (`gow_sim.systems.build`), unit speed `movement.road_speed_pct` and
+`movement.leg(..., level)`, supply throughput `supply.road_amount(rules, level)`; the ruleset keys
+`[road.speed_pct]`, `[supply.amount_by_level]`, `supply.front_markers`; table tests
+`test_dec28.py` (examples 10-14), `test_build.py`, `test_dec22.py`, `test_dec26.py`. The details the
+decision does not set:
+- **[accepted]** (confirmed by the owner on 2026-10-21) `NOT_FOUND_OR_HIDDEN`: there is no edge or it is in the player's fog (an internal edge
+  is never in the fog, so the answer reveals nothing); `NOT_INTERNAL`: the edge is visible but its
+  ends are not both own. The codes `NOT_ADJACENT` and `NOT_SUPPLIED` are no longer issued by anything and are removed;
+  `CITY_BUSY` stays for the barracks and the warehouse (DEC-26, item 8).
+- **[accepted]** (confirmed by the owner on 2026-10-21) A road between provinces or at a province is upgraded too (there is no paying city;
+  DEC-22, item 6 about the province is replaced).
+- **[accepted]** (confirmed by the owner on 2026-10-21) The level by which a unit's time is computed (`OnEdge.level`) is taken when
+  stepping onto the edge: on departure, on transit through an own node, on a defender's retreat by its own
+  order (DEC-24, E3) and on a bounce or retreat of an attacker from a fight node (a new step onto the edge:
+  the level at that moment). A group that turns around on the edge itself (a bounce on an edge,
+  a cancel, a retreat from a fight on an edge) keeps its level, so a bounce lasts as long as
+  the group walked (section 4, item 5). Pathfinding and the travel time of an order (`reach`, `ack.arrive_tick`)
+  are computed by the current levels.
+- **[accepted]** (confirmed by the owner on 2026-10-21) A transfer (DEC-18, item 6) goes in batches by the smallest `amount` of the roads of its
+  path at the moment of the command; each batch takes `min(amount, share)` of the current level of its road
+  (item 10).
+- **[proposed]** Events: `build_started` of a road (`player`, `kind = road`, `edge`, `width`: the new
+  level; without `node` and `charges`), `road_upgraded` (`player`, `edge`, `width`), `build_stopped`
+  of a road (`player`, `kind`, `edge`, `reason`); only the owner receives them. `group_arrived`
+  gets the field `level` (the level with which the group walked).
+- **[proposed]** Player view: the road construction in `EdgeView.build` (`done_tick` of one's own construction;
+  a foreign one is visible without a tick while the edge is not in the fog, and is not remembered; a fog test), `NodeView.build`
+  is removed; the hint `upgrade_gain` gives the gains of `speed_pct` (packet), `unit_speed_pct` (units) and
+  `amount`. `ruleset_public.build` without charge prices (the price: `cost.build`),
+  `ruleset_public.supply.front_markers`. Replay frames: the key `e` (`[edge, owner, done_tick]`)
+  instead of `b` (`replay-frames.md`).
+- The DEC-26 "Implementation" items about the shared city construction for a road and about the field `kind` of
+  `UpgradeRoad` are replaced by this block.
+- **[accepted]** (confirmed by the owner on 2026-10-21) Bots (`gow_bots`): one road construction at a time per player, from CP above the reserve
+  `road_keep` (350..450 for `expander` and `turtle`, so that roads do not eat the barracks and recruiting);
+  the choice: the largest gain (`speed_pct + unit_speed_pct + 100 * amount`), on a tie the one closer to the
+  capital, then the smaller edge key.
 
-Альтернативы (не выбраны):
-- Оставить три уровня приоритета и плату дорог зарядами склада (DEC-18, DEC-26): сложнее объяснить, малые склады ломают транзит.
-- Доставка «только в цель» без доноров: фронт ждал бы столицу, старый фронт при переносе маркера простаивал бы с полным складом.
-- Сгорание заряда столицы сверх ёмкости при свободных складах тыла (раздел 6 до DEC-28).
-
----
-
-### Как это считает симуляция (SIM-11, #27)
-
-> Зачёркнутые пункты описывали стройку группой до реализации DEC-16 (#209, `SIM_VERSION` 3); действующее
-> правило: блок DEC-16 выше. Незачёркнутые пункты действуют и для стройки городом.
-
-- ~~`UpgradeRoad(group, edge)` (1 CP, `orders.cost.build`) переводит стоящую на конце внутреннего ребра свою группу в «Строительство» на этом ребре. Буферное ребро и ребро противника: отказ `NOT_INTERNAL`; ребро шириной `max_width`: отказ `MAX_WIDTH`.~~ **[заменено DEC-16]**
-- ~~Ширина ребра растёт на 1 каждые `build.ticks_per_level` тиков стройки, до `max_width` ребра.~~ **[заменено DEC-16]**: один уровень на команду. Ёмкость городов пересчитывается по новой ширине (раздел 9), скорость пакетов берётся из `supply.packet_speed_pct` новой ширины.
-- ~~Стройку прерывают уход группы (приказ на движение), бой с её участием, смена режима и слияние; прогресс текущего уровня теряется.~~ **[заменено DEC-16]**
-- ~~Подсказка «что даст улучшение» (раздел 18): `upgrade_gain(edge)` = прирост ёмкости каждого конца в сотых (`capacity.width_gain_centi[w + 1] − [w]`) и прирост скорости пакетов в процентных пунктах (`supply.packet_speed_pct[w + 1] − [w]`); у ребра шириной `max_width` подсказки нет.~~ **[заменено DEC-22]**: подсказка показывает прирост скорости и объёма по типам (DEC-22, п. 7).
-- ~~**[открыто]** Детали стройки: вопрос #124. До решения: `UpgradeRoad` на тике `t` даёт +1 на тике `t + ticks_per_level`, дальше через каждые `ticks_per_level`; прогресс у каждой группы свой, строители одного ребра не складываются и не мешают друг другу; достроенная дорога заканчивает стройку (событие `build_stopped`), группа остаётся в «Строительстве»; стройка снимается и тогда, когда ребро перестало быть внутренним или группа больше не стоит на его конце; при делении строит только исходная группа; размер и заряды группы не влияют.~~ **[заменено DEC-16]**: вопрос #124 закрыт как заменённый.
-
-### Строительство новых рёбер игроками
-
-> Вне MVP: строительство новых рёбер отложено (`docs/mvp/MVP_PLAN.md`, «Что не входит в MVP»).
-
-- **[предложено]** Разрешено, с ограничениями:
-  1. **Планарность:** новое ребро не может пересекать существующее. Иначе окружение теряет смысл.
-  2. **Стройка видна всем с первой секунды**, как запланированный приказ.
-  3. **Лимит степени узла** (4–5 рёбер).
-  4. Рельеф определяет, где можно строить и сколько это стоит.
-  5. Новое ребро строится долго: 1–3 штуки за партию.
-- **[предложено]** Сноса дорог нет: захват узла и так перекрывает поток через него.
-
-### Режимы доставки
-
-> Вне MVP: режимы доставки «пакеты / прокачка» отложены.
-
-- ~~**[открыто]** «Большие пакеты» против «быстрой прокачки» (Topic 4). Если оставлять, то не на каждой дороге (это ~60 решений на карте), а как стойку на фронт или на всю сеть. Рекомендация — отложить до первого плейтеста.~~ **[заменено DEC-22]**: выбор сделан на уровне дороги: быстрая или грузовая при первом улучшении.
+Alternatives (not chosen):
+- Keep the three priority levels and the payment for roads with warehouse charges (DEC-18, DEC-26): harder to explain, small warehouses break transit.
+- Delivery "to the target only" without donors: the front would wait for the capital, the old front would sit idle with a full warehouse when a marker is moved.
+- Burning a capital charge above capacity while rear warehouses are free (section 6 before DEC-28).
 
 ---
 
-## 9. Города
+### How the simulation computes this (SIM-11, #27)
 
-- ~~**[принято]** Ёмкость города (и для юнитов, и для склада) зависит от развития дорог вокруг него.~~ **[заменено DEC-22]**: ёмкость фиксирована видом узла из карты (раздел 8).
-- ~~**[предложено]** Формула: `ёмкость = база_города + Σ f(ширина дороги i)`, где f вогнутая, чтобы выгодно было развивать **все** подходы, а не один.~~ **[заменено DEC-22]**; таблица ниже действует только для кода до реализации DEC-22.
+> The struck-through items described construction by a group before the implementation of DEC-16 (#209, `SIM_VERSION` 3); the rule
+> in force: the DEC-16 block above. The items not struck through apply to construction by a city too.
 
-| Ширина дороги | Вклад в ёмкость |
+- ~~`UpgradeRoad(group, edge)` (1 CP, `orders.cost.build`) puts an own group standing at the end of an internal edge into "Building" on this edge. A buffer edge and an enemy edge: the rejection `NOT_INTERNAL`; an edge of width `max_width`: the rejection `MAX_WIDTH`.~~ **[superseded by DEC-16]**
+- ~~The width of an edge grows by 1 every `build.ticks_per_level` ticks of construction, up to the `max_width` of the edge.~~ **[superseded by DEC-16]**: one level per command. The capacity of cities is recomputed by the new width (section 9), the packet speed is taken from `supply.packet_speed_pct` of the new width.
+- ~~Construction is interrupted by the group leaving (a move order), a fight involving it, a change of mode and a merge; the progress of the current level is lost.~~ **[superseded by DEC-16]**
+- ~~A hint "what the upgrade gives" (section 18): `upgrade_gain(edge)` = the capacity gain of each end in hundredths (`capacity.width_gain_centi[w + 1] − [w]`) and the packet speed gain in percentage points (`supply.packet_speed_pct[w + 1] − [w]`); an edge of width `max_width` has no hint.~~ **[superseded by DEC-22]**: the hint shows the gain of speed and volume by type (DEC-22, item 7).
+- ~~**[open]** Construction details: question #124. Until decided: `UpgradeRoad` at tick `t` gives +1 at tick `t + ticks_per_level`, then every `ticks_per_level`; each group has its own progress, builders of one edge do not add up and do not interfere with each other; a finished road ends the construction (event `build_stopped`), the group stays in "Building"; the construction is removed also when the edge stopped being internal or the group no longer stands at its end; on a split only the original group builds; the size and charges of the group do not matter.~~ **[superseded by DEC-16]**: question #124 is closed as superseded.
+
+### Construction of new edges by players
+
+> Outside the MVP: the construction of new edges is postponed (`docs/mvp/MVP_PLAN.md`, "What is not in the MVP").
+
+- **[proposed]** Allowed, with restrictions:
+  1. **Planarity:** a new edge cannot cross an existing one. Otherwise encirclement loses its meaning.
+  2. **The construction is visible to everyone from the first second**, like a scheduled order.
+  3. **A limit on node degree** (4-5 edges).
+  4. Terrain determines where one can build and how much it costs.
+  5. A new edge takes long to build: 1-3 per match.
+- **[proposed]** There is no demolition of roads: the capture of a node already blocks the flow through it.
+
+### Delivery modes
+
+> Outside the MVP: the delivery modes "packets / pumping" are postponed.
+
+- ~~**[open]** "Big packets" versus "fast pumping" (Topic 4). If kept, then not on every road (that is about 60 decisions on the map), but as a stance for the front or for the whole network. Recommendation: postpone until the first playtest.~~ **[superseded by DEC-22]**: the choice is made at the level of a road: fast or freight at the first upgrade.
+
+---
+
+## 9. Cities
+
+- ~~**[accepted]** The capacity of a city (both for units and for the warehouse) depends on the development of the roads around it.~~ **[superseded by DEC-22]**: capacity is fixed by the node kind from the map (section 8).
+- ~~**[proposed]** Formula: `capacity = city_base + Σ f(width of road i)`, where f is concave, so that it pays to develop **all** approaches, not just one.~~ **[superseded by DEC-22]**; the table below applies only to code before DEC-22 is implemented.
+
+| Road width | Contribution to capacity |
 |---|---|
 | 1 | +1.0 |
 | 2 | +1.5 |
@@ -2245,757 +2245,757 @@ CP без кода).
 | 4 | +2.3 |
 | 5 | +2.6 |
 
-- ~~**[предложено]** Считаются только дороги, ведущие в твою связную снабжаемую территорию. Отрезая подходы к городу, атакующий уменьшает его ёмкость.~~ **[заменено DEC-19, DEC-22]**: отрезание ёмкость не меняет, давление окружения: голод (раздел 7). Если гарнизон превысил ёмкость, лишние юниты постепенно гибнут (а не выселяются мгновенно).
-- **[принято]** Раз группы собираются только в городах, все места, где может появиться большая армия, известны заранее.
-- ~~**[принято]** Упрощение MVP (план MVP, MAP-01, #13): **каждый узел карты — город со складом**; деревень и пустых перекрёстков нет.~~ **[заменено DEC-23]**: есть провинции, узлы без города (блок DEC-23 ниже). Нейтральные города на старте пусты: без гарнизона и с пустым складом. Формат карты: [`map-format.md`](map-format.md).
+- ~~**[proposed]** Only roads leading into your connected supplied territory count. By cutting off the approaches to a city, the attacker reduces its capacity.~~ **[superseded by DEC-19, DEC-22]**: cutting off does not change capacity; the pressure of encirclement is starvation (section 7). If the garrison exceeds capacity, the excess units die off gradually (rather than being evicted at once).
+- **[accepted]** Since groups assemble only in cities, all places where a big army can appear are known in advance.
+- ~~**[accepted]** MVP simplification (MVP plan, MAP-01, #13): **every map node is a city with a warehouse**; there are no villages and no empty crossroads.~~ **[superseded by DEC-23]**: there are provinces, nodes without a city (the DEC-23 block below). Neutral cities are empty at the start: no garrison and an empty warehouse. Map format: [`map-format.md`](map-format.md).
 
-### Как это считает симуляция (SIM-07, #23)
+### How the simulation computes this (SIM-07, #23)
 
-> Зачёркнутые пункты описывают ёмкость от дорог до реализации DEC-22 (#234); действующее правило:
-> ёмкость по виду узла (раздел 8), голод в окружении (DEC-19, раздел 7).
+> The struck-through items describe capacity from roads before DEC-22 (#234) was implemented; the current rule:
+> capacity by node kind (section 8), starvation in encirclement (DEC-19, section 7).
 
-- Связная снабжаемая территория игрока: узлы, достижимые от своей столицы по своим узлам (все рёбра
-  между своими узлами внутренние). Если столица не своя, территория пуста.
-- ~~Ёмкость узла = `base_capacity` + (Σ `capacity.width_gain_centi[ширина]` по внутренним рёбрам узла) // 100,
-  если узел в снабжаемой территории своего владельца; отрезанный свой узел и нейтральный узел: только
-  `base_capacity`. Одно число отдельно ограничивает стоящих в городе юнитов и отдельно склад.~~ **[заменено DEC-22]**
-- ~~Ёмкость пересчитывается только при изменении владельцев узлов или ширин дорог.~~ **[заменено DEC-22]**
-- При смене владельца склад обнуляется (событие `warehouse_lost`), ширины дорог сохраняются,
-  начинается отсрочка `capacity.grace_ticks`. DEC-26: казарма и уровень склада сохраняются.
-- **[открыто]** Детали истощения: вопрос #118. До решения: считаются только стоящие в узле (не на ребре)
-  юниты владельца; на `capacity.attrition_ticks`-м тике подряд сверх ёмкости гибнет один юнит, и отсчёт
-  начинается заново; тики отсрочки после захвата не считаются; гибнет разряженный юнит группы
-  с наименьшим id, иначе заряженный юнит самой большой группы (как DEC-07, правило 7); склад сверх
-  упавшей ёмкости не урезается (после DEC-22 ёмкость не падает).
+- The connected supplied territory of a player: the nodes reachable from the own capital through own nodes (all edges
+  between own nodes are internal). If the capital is not own, the territory is empty.
+- ~~Capacity of a node = `base_capacity` + (Σ `capacity.width_gain_centi[width]` over the internal edges of the node) // 100,
+  if the node is in the supplied territory of its owner; a cut-off own node and a neutral node: only
+  `base_capacity`. One number limits separately the units standing in the city and separately the warehouse.~~ **[superseded by DEC-22]**
+- ~~Capacity is recomputed only when the owners of nodes or the widths of roads change.~~ **[superseded by DEC-22]**
+- On a change of owner the warehouse is zeroed (event `warehouse_lost`), road widths are kept,
+  the grace period `capacity.grace_ticks` starts. DEC-26: the barracks and the warehouse level are kept.
+- **[open]** Details of attrition: question #118. Until decided: only the owner's units standing in the node (not on an edge)
+  count; on every `capacity.attrition_ticks`-th consecutive tick above capacity one unit dies, and the count
+  starts anew; the grace ticks after a capture do not count; a discharged unit of the group
+  with the lowest id dies, otherwise a charged unit of the largest group (like DEC-07, rule 7); the warehouse above the
+  fallen capacity is not trimmed (after DEC-22 capacity does not fall).
 
-### Переработка карт: провинции, виды городов, названия, точка границы (DEC-23, #235) **[принято]**
+### Map rework: provinces, city kinds, names, border point (DEC-23, #235) **[accepted]**
 
-Решение владельца 2026-10-12. Заменяет упрощение MVP «каждый узел: город со складом» (выше). Изменения формата: `map-format.md`, раздел «Изменения формата по DEC-23».
+The owner's decision of 2026-10-12. Replaces the MVP simplification "every node is a city with a warehouse" (above). Format changes: `map-format.md`, section "Format changes per DEC-23".
 
-Карта получает провинции (узлы без города), классы городов, названия и точку границы на каждом
-ребре. Здесь записаны правила и формат; сами карты переделывает отдельный issue (критерии ниже).
-Пункты, помеченные раньше «(по умолчанию)», подтверждены владельцем 2026-10-12 (#239).
+A map gets provinces (nodes without a city), city classes, names and a border point on every
+edge. The rules and the format are recorded here; the maps themselves are redone by a separate issue (criteria below).
+Items previously marked "(default)" were confirmed by the owner on 2026-10-12 (#239).
 
-1. **Вид узла** `kind`: `capital` (столица), `city_large`, `city_medium`, `city_small` (большой,
-   средний, малый город), `province` (провинция). Ёмкость по виду из рулсета (DEC-22, п. 1):
-   10 / 8 / 6 / 4 / 3. `base_capacity` из карты удаляется: числа правил живут в рулсете
-   (AGENTS.md, 4.1, правило 7).
-2. **Провинция:** узел без города, только позиция.
-   - Склада нет: склад всегда 0, пакеты в ней не останавливаются, только проходят транзитом
-     (DEC-18, п. 3), перезарядки нет, голода нет (DEC-19).
-   - Ёмкость 3: ограничивает только стоящих юнитов и лимит стека (DEC-20, D).
-   - VP 0, рекрута нет (`NOT_CITY`), ~~строить дороги не может (`NOT_CITY`, DEC-22, п. 6)~~ **[заменено DEC-28]**: дорогу у провинции улучшают за CP, как любую свою внутреннюю (DEC-28, п. 7), ~~приоритета~~ маркера
-     фронта (DEC-28, #292) и перевозок нет (`NOT_CITY`, DEC-18).
-   - Как обычный узел: рельеф (бой, скорость входа, обзор DEC-21), захват, владение, внутренние и
-     буферные рёбра, связность снабжаемой территории (захват провинции может отрезать города).
-   - Ограничения карты: `vp = 0`, `capital_of = null`, `start_units = 0`, `start_charged = 0`,
-     `start_stock = 0`; `start_owner` любой (своя провинция на старте разрешена).
-3. **Столица:** `kind = capital` тогда и только тогда, когда `capital_of` не `null`.
-4. **Название** `name`: у каждого узла одно название, строка 1..24 символа без пробелов по краям,
-   уникальная в карте. Названия не переводятся (данные карты, одно название на узел). Интерфейс
-   подписывает ими города и использует в тостах и событиях вместо «Узел 22».
-5. **Точка границы** `border_permille` у каждого ребра: целое 100..900, тысячные длины ребра от
-   конца `a`; 500: середина. Задаёт половины ребра для обзора (DEC-21, п. 5) и границу территорий на
-   карте (взвешенная диаграмма: граница между соседними узлами проходит через точку границы их
-   ребра).
-6. **Дороги:** `base_width` удаляется (все дороги начинают с уровня 1 без типа, DEC-22);
-   `max_width` переименовывается в `max_level`, 1..3.
-7. **Зеркало.** Зеркальный узел: тот же `kind`, своё (другое) `name`. Зеркальное ребро `m(e)`
-   соединяет `m(a)` и `m(b)`; если его конец `a` равен `m(e.a)`, то
-   `border_permille(m(e)) = border_permille(e)`, иначе `1000 - border_permille(e)`. Ребро, зеркальное
-   само себе, имеет `border_permille = 500`.
-8. **Половина карты** (`maps/src/*.half.json`): у узла `name` и `mirror_name` (название зеркальной
-   копии; у центрального узла только `name`); у ребра `border_permille` необязателен (по умолчанию
-   500), скрипт пишет его в готовую карту всегда. Копия обычного ребра получает то же значение;
-   копия `cross_edge` (от `b` к зеркалу `a`) получает `1000 - border_permille`; `cross_edge` с
-   `a == b` требует 500, иначе ошибка скрипта.
-9. **Загрузчик** строгий, как сейчас: `kind`, `name`, `border_permille`, `max_level` обязательны;
-   `base_capacity`, `base_width`, `max_width` запрещены (старая карта не загружается).
-10. **Валидатор:** новые проверки `names` (п. 4), `border` (диапазон п. 5 и симметрия п. 7),
-    `kinds` (пп. 2 и 3); проверка `symmetry` сравнивает `kind` и `border_permille` с учётом
-    направления, `name` не сравнивает. Остальные проверки без изменений.
+1. **Node kind** `kind`: `capital` (capital), `city_large`, `city_medium`, `city_small` (large,
+   medium, small city), `province` (province). Capacity by kind from the ruleset (DEC-22, item 1):
+   10 / 8 / 6 / 4 / 3. `base_capacity` is removed from the map: the rule numbers live in the ruleset
+   (AGENTS.md, 4.1, rule 7).
+2. **Province:** a node without a city, only a position.
+   - No warehouse: the warehouse is always 0, packets do not stop in it, they only pass through
+     (DEC-18, item 3), there is no recharge, no starvation (DEC-19).
+   - Capacity 3: it limits only the standing units and the stack limit (DEC-20, D).
+   - VP 0, no recruiting (`NOT_CITY`), ~~cannot build roads (`NOT_CITY`, DEC-22, item 6)~~ **[superseded by DEC-28]**: a road at a province is upgraded for CP like any other own internal one (DEC-28, item 7), and there is no ~~priority~~ front marker
+     (DEC-28, #292) and no transfers (`NOT_CITY`, DEC-18).
+   - Like an ordinary node: terrain (fight, entry speed, vision DEC-21), capture, ownership, internal and
+     buffer edges, connectivity of the supplied territory (capturing a province can cut cities off).
+   - Map constraints: `vp = 0`, `capital_of = null`, `start_units = 0`, `start_charged = 0`,
+     `start_stock = 0`; `start_owner` is any (an own province at the start is allowed).
+3. **Capital:** `kind = capital` if and only if `capital_of` is not `null`.
+4. **Name** `name`: every node has one name, a string of 1..24 characters without spaces at the edges,
+   unique within the map. Names are not translated (map data, one name per node). The interface
+   labels cities with them and uses them in toasts and events instead of "Node 22".
+5. **Border point** `border_permille` on every edge: an integer 100..900, thousandths of the edge length from
+   the end `a`; 500: the middle. It sets the halves of the edge for vision (DEC-21, item 5) and the border of territories on
+   the map (a weighted diagram: the border between neighboring nodes passes through the border point of their
+   edge).
+6. **Roads:** `base_width` is removed (all roads start at level 1 without a type, DEC-22);
+   `max_width` is renamed to `max_level`, 1..3.
+7. **Mirror.** A mirrored node: the same `kind`, its own (different) `name`. The mirrored edge `m(e)`
+   connects `m(a)` and `m(b)`; if its end `a` equals `m(e.a)`, then
+   `border_permille(m(e)) = border_permille(e)`, otherwise `1000 - border_permille(e)`. An edge that is the mirror of
+   itself has `border_permille = 500`.
+8. **Half of a map** (`maps/src/*.half.json`): a node has `name` and `mirror_name` (the name of the mirrored
+   copy; the central node has only `name`); an edge has `border_permille` optional (by default
+   500), the script always writes it into the finished map. The copy of an ordinary edge gets the same value;
+   the copy of a `cross_edge` (from `b` to the mirror of `a`) gets `1000 - border_permille`; a `cross_edge` with
+   `a == b` requires 500, otherwise a script error.
+9. **The loader** is strict, as now: `kind`, `name`, `border_permille`, `max_level` are required;
+   `base_capacity`, `base_width`, `max_width` are forbidden (an old map does not load).
+10. **Validator:** new checks `names` (item 4), `border` (the range of item 5 and the symmetry of item 7),
+    `kinds` (items 2 and 3); the `symmetry` check compares `kind` and `border_permille` taking the
+    direction into account, and does not compare `name`. The other checks are unchanged.
 
-Пример фрагмента карты:
+An example of a map fragment:
 
 ```json
-{"id": 4, "x": 340, "y": 500, "terrain": "forest", "kind": "province", "name": "Брод",
+{"id": 4, "x": 340, "y": 500, "terrain": "forest", "kind": "province", "name": "Ford",
  "vp": 0, "capital_of": null, "start_owner": 0, "start_units": 0, "start_charged": 0, "start_stock": 0}
 {"id": 7, "a": 4, "b": 9, "max_level": 3, "travel_ticks": 45, "border_permille": 400}
 ```
 
-Разобранные примеры для загрузчика и валидатора. Тесты: «плохие» фикстуры по одной на строку.
+Worked examples for the loader and the validator. Tests: "bad" fixtures, one per row.
 
-| # | Карта | Итог |
+| # | Map | Result |
 |---|---|---|
-| 1 | провинция с `vp = 1` | ошибка загрузки (`nodes[i].vp`) |
-| 2 | провинция с `start_units = 2` | ошибка загрузки |
-| 3 | `kind = capital` без `capital_of` | ошибка загрузки |
-| 4 | два узла с одним `name` | `FAIL [names]` |
-| 5 | `border_permille = 50` | ошибка загрузки (диапазон 100..900) |
-| 6 | ребро без `border_permille` в готовой карте | ошибка загрузки (обязательное поле) |
-| 7 | ребро a→b с 400, его зеркало с концом `a = m(a)` и 400 | `OK` |
-| 8 | то же, зеркало с концом `a = m(b)` и 400 | `FAIL [border]` (ожидается 600) |
-| 9 | ребро, зеркальное само себе, с 400 | `FAIL [border]` |
-| 10 | узел с `base_capacity` | ошибка загрузки (неизвестный ключ) |
-| 11 | зеркальные узлы разного `kind` | `FAIL [symmetry]` |
-| 12 | `max_level = 4` | ошибка загрузки |
+| 1 | a province with `vp = 1` | load error (`nodes[i].vp`) |
+| 2 | a province with `start_units = 2` | load error |
+| 3 | `kind = capital` without `capital_of` | load error |
+| 4 | two nodes with the same `name` | `FAIL [names]` |
+| 5 | `border_permille = 50` | load error (range 100..900) |
+| 6 | an edge without `border_permille` in a finished map | load error (required field) |
+| 7 | an edge a→b with 400, its mirror with end `a = m(a)` and 400 | `OK` |
+| 8 | the same, the mirror with end `a = m(b)` and 400 | `FAIL [border]` (600 expected) |
+| 9 | an edge that is the mirror of itself, with 400 | `FAIL [border]` |
+| 10 | a node with `base_capacity` | load error (unknown key) |
+| 11 | mirrored nodes of different `kind` | `FAIL [symmetry]` |
+| 12 | `max_level = 4` | load error |
 
-Что меняет реализация (симуляция и `SIM_VERSION`, протокол и `PROTOCOL_VERSION`, клиент, боты, рулсеты): список в #235.
+What the implementation changes (simulation and `SIM_VERSION`, protocol and `PROTOCOL_VERSION`, client, bots, rulesets): the list is in #235.
 
-**Реализация формата** (#366; `SIM_VERSION` 20, `PROTOCOL_VERSION` 24): загрузчик, `MapFile`,
-валидатор (`names`, `border`), скрипт отзеркаливания, клиент берёт точку границы из карты; три карты
-MVP получили названия, точки границы 500. Отличие от п. 10: проверку `kinds` (пп. 2, 3) делает
-загрузчик (ошибка `format`, как в примерах 1-3), симметрию точки границы проверка `border`, а не
-`symmetry`. Правила провинции в симуляции действуют с DEC-22, DEC-18, DEC-19, DEC-25 (ёмкость,
-`NOT_CITY`, транзит пакетов, склад 0). Карты с провинциями: #266.
+**Implementation of the format** (#366; `SIM_VERSION` 20, `PROTOCOL_VERSION` 24): the loader, `MapFile`,
+the validator (`names`, `border`), the mirroring script, the client takes the border point from the map; the three MVP
+maps got names, border points 500. Difference from item 10: the `kinds` check (items 2, 3) is done by the
+loader (error `format`, as in examples 1-3), the symmetry of the border point is checked by `border`, not
+`symmetry`. The province rules in the simulation apply with DEC-22, DEC-18, DEC-19, DEC-25 (capacity,
+`NOT_CITY`, transit of packets, warehouse 0). Maps with provinces: #266.
 
-Альтернативы (не выбраны):
-- Ёмкость числом в карте (`capacity`) вместо вида узла: баланс правил оказался бы в файлах карт.
-- Провинции со складом ёмкости 0 (лишняя сущность «склад, который ничего не хранит»).
-- Точка границы всегда в середине (без поля): нельзя сделать «длинный подход» к горной крепости.
-- Названия по ключам i18n (две версии на узел); владелец: одно название на узел.
+Alternatives (not chosen):
+- Capacity as a number in the map (`capacity`) instead of the node kind: the balance of the rules would end up in the map files.
+- Provinces with a warehouse of capacity 0 (a superfluous entity "a warehouse that stores nothing").
+- The border point always in the middle (no field): a "long approach" to a mountain fortress is impossible.
+- Names by i18n keys (two versions per node); the owner: one name per node.
 
-### Карты: симметрия правил без симметрии картинки, размер, без воды (DEC-27, #266) **[принято]**, асимметричные карты **[отложено]**
+### Maps: symmetry of the rules without symmetry of the picture, size, no water (DEC-27, #266) **[accepted]**, asymmetric maps **[deferred]**
 
-Решение владельца 2026-10-14 (#252): карты должны выглядеть менее симметрично и интереснее, быть
-чуть больше, а вода на фоне сбивает с толку. Изменения формата и инструментов:
-`docs/design/map-format.md`, раздел «Изменения формата по DEC-27». Владелец принял все пункты
-(2026-10-14, #266), в том числе те, что были предложениями со значением по умолчанию. Решение
-принято, ждёт реализации (#266 остаётся открытым как issue реализации).
+The owner's decision of 2026-10-14 (#252): maps should look less symmetric and more interesting, be
+a bit larger, and the water on the background is confusing. Changes of the format and the tools:
+`docs/design/map-format.md`, section "Format changes per DEC-27". The owner accepted all items
+(2026-10-14, #266), including those that were proposals with a default value. The decision is
+accepted and awaits implementation (#266 stays open as the implementation issue).
 
-1. **[принято]** **Симметрия правил, а не картинки.** Зеркальными остаются:
-   - граф (таблица `mirror`, концы рёбер);
-   - атрибуты узлов: `kind`, `terrain`, `vp`, `capital_of` и `start_owner` (меняются местами у
-     игроков), `start_units`, `start_charged`, `start_stock`;
-   - атрибуты дорог: `travel_ticks`, `max_level`, `border_permille` с учётом направления
-     (DEC-23, п. 7).
+1. **[accepted]** **Symmetry of the rules, not of the picture.** These stay mirrored:
+   - the graph (the `mirror` table, the ends of edges);
+   - the node attributes: `kind`, `terrain`, `vp`, `capital_of` and `start_owner` (swapped between
+     the players), `start_units`, `start_charged`, `start_stock`;
+   - the road attributes: `travel_ticks`, `max_level`, `border_permille` taking the direction into account
+     (DEC-23, item 7).
 
-   **Координаты узлов `x`, `y` свободны:** требования `(width - x, height - y)` у зеркального узла
-   больше нет. Вся игра (рулсет, `node_key`, тест зеркальности, вид игрока) читает граф и
-   атрибуты, а не координаты, поэтому карта остаётся честной для обеих сторон, в том числе
-   рейтинговая (AGENTS.md, 4.1, правило 6: тай-брейки по узлам через `node_key(player, node)`
-   работают без изменений). Картинка (позиции, форма дорог на экране, фон) может различаться.
-2. **[принято]** **Карты чуть больше** прежних (31..34 узла, мир 1140..1600 на 1000).
-   **[принято]** 45..55 узлов с провинциями DEC-23; мир по размеру пропорционально (ширина и
-   высота кратны 4, требование `bake`), конкретные размеры задаёт issue карт.
-3. **[принято]** **Воды пока нет:** из запечённых фонов (`uv run gow-maps bake`) убираются море,
-   мелководье и пляж; фон весь суша, остаются биомы по рельефу узлов (равнина, лес, горы). Владелец
-   находит воду запутывающей. Правил игры это не меняет (фон только для красоты).
-4. **[принято]** **Длина нарисованной дороги согласована с `travel_ticks`** (иначе при свободных
-   координатах дорога на экране врёт о времени пути): допуск 15 процентов, проверка валидатора
-   `travel_ticks` (сейчас 25 процентов, `travel_tolerance_pct = 25`; станет `15`). Ожидаемое время
-   `e = длина * travel_ticks_per_100_units / 100` (30, то есть 100 единиц мира = 3 секунды), условие
-   `|travel_ticks - e| * 100 <= travel_tolerance_pct * e`; валидатор офлайн-инструмент, `float`
-   в нём допустим (правило целых действует для `gow_sim`). Зеркальные рёбра имеют один
-   `travel_ticks`, поэтому их нарисованные длины тоже различаются не больше чем на допуск.
-5. **[принято]** **Проверки валидатора:** `symmetry` сравнивает граф и атрибуты узлов и рёбер
-   (в том числе `terrain`, `vp`, стартовые поля и `border_permille` с направлением), **координаты
-   не сравнивает**; `planarity` остаётся и теперь существенна (свободные координаты легче дают
-   пересечения; проверяются фактические координаты, дорога не проходит через чужой город);
-   новая проверка `size` по порогам `min_nodes = 45`, `max_nodes = 55` в `validate.toml`, по
-   умолчанию выключена, чтобы три карты MVP (31..34 узла) проходили; для новых карт запуск с
-   `--config` на пороги. Остальные проверки без изменений.
-6. **[принято]** **Скрипт `gow-maps mirror`:** узел половины получает необязательные
-   `mirror_x`, `mirror_y` (координаты копии); без них копия в `(width - x, height - y)`, как
-   сейчас (старые половины работают). Узел, зеркальный сам себе, задаётся флагом
-   `self_mirror: true` и произвольными координатами (сейчас только точный центр). Дорога `cross_edge`
-   и `edges` как сейчас. `meta.symmetry` остаётся `"rot180"`: это замена местами игроков и узлов по
-   таблице `mirror`, а не геометрический поворот.
-7. **[принято]** **Производительность:** бюджеты AGENTS.md, раздел 12 заданы на 40 узлах;
-   карта в 55 узлов проверяется отдельным бенчмарком (`grid55`, как `grid40` из `conftest.py`):
-   шаг без проекций в среднем не больше 0,3 мс, p99 не больше 1 мс, проекция не больше 0,3 мс
-   (линейная прикидка по `docs/perf.md`: 0,15 мс на 40 узлах дают около 0,21 мс на 55, это оценка, не измерение).
-   Если не помещается, меняется бюджет или карта, а не правило. Замер `grid55` (#266) не уложил
-   проекцию в 0,3 мс, поэтому **[принято]** (владелец, 2026-10-22, #371): на картах 45..55 узлов
-   бюджет `project()` 0,45 мс; бюджеты шага и снабжения, а также 0,3 мс для 40 узлов не меняются.
-8. **[отложено]** **Настоящие асимметричные карты** (разный граф или разные атрибуты у сторон):
-   только позже и только для нерейтинговых матчей. Им нужен новый тай-брейк вместо зеркального
-   `node_key` (AGENTS.md, 4.1, правило 6) и свой тест честности; без этого в MVP они не вводятся.
-9. **Расхождение Windows и Mac: найдено (#269).** Владелец видел воду на фоне только на Windows,
-   на Mac её не было. Причина: образ `caddy` собирал клиент, копируя в контекст только
-   `maps/*.json`, без `maps/*.bg.png` (`deploy/caddy.Dockerfile`; с #344 фоны `maps/*.bg.webp`); клиент берёт фоны из
-   `import.meta.glob('maps/*.bg.png')` при сборке, поэтому в Docker-стеке (на Mac) глоб пуст и
-   карта рисуется плоскими цветами рельефа, а клиент из репозитория (dev-сервер Vite) фон видит.
-   Сервер отдаёт фон правильно (`GET /api/maps/{id}/background.png`, с #344 `background.webp`, отвечает 200), но клиент к
-   этому адресу не обращается. Исправлено: Dockerfile копирует и фоны, проверка
-   `deploy/check-caddy.sh` ловит пустой глоб.
+   **The node coordinates `x`, `y` are free:** the requirement `(width - x, height - y)` for a mirrored node
+   is gone. The whole game (the ruleset, `node_key`, the mirror test, the player view) reads the graph and
+   the attributes, not the coordinates, so the map stays fair for both sides, including the ranked
+   one (AGENTS.md, 4.1, rule 6: tie-breaks between nodes through `node_key(player, node)`
+   work without changes). The picture (positions, the shape of roads on the screen, the background) may differ.
+2. **[accepted]** **Maps a bit larger** than before (31..34 nodes, world 1140..1600 by 1000).
+   **[accepted]** 45..55 nodes with the provinces of DEC-23; the world scales proportionally (width and
+   height are multiples of 4, a `bake` requirement), the specific sizes are set by the maps issue.
+3. **[accepted]** **No water for now:** the sea, shallows and beach are removed from the baked backgrounds (`uv run gow-maps bake`);
+   the background is all land, only the biomes by node terrain remain (plains, forest, mountains). The owner
+   finds water confusing. This does not change the game rules (the background is only for looks).
+4. **[accepted]** **The length of the drawn road agrees with `travel_ticks`** (otherwise with free
+   coordinates the road on the screen lies about the travel time): a tolerance of 15 percent, the validator check
+   `travel_ticks` (now 25 percent, `travel_tolerance_pct = 25`; it will become `15`). The expected time
+   `e = length * travel_ticks_per_100_units / 100` (30, that is, 100 world units = 3 seconds), the condition
+   `|travel_ticks - e| * 100 <= travel_tolerance_pct * e`; the validator is an offline tool, `float`
+   is allowed in it (the integer rule applies to `gow_sim`). Mirrored edges have one
+   `travel_ticks`, so their drawn lengths also differ by no more than the tolerance.
+5. **[accepted]** **Validator checks:** `symmetry` compares the graph and the attributes of nodes and edges
+   (including `terrain`, `vp`, the start fields and `border_permille` with direction), and **does not compare
+   the coordinates**; `planarity` stays and is now essential (free coordinates produce
+   crossings more easily; the actual coordinates are checked, a road does not pass through a foreign city);
+   the new check `size` with the thresholds `min_nodes = 45`, `max_nodes = 55` in `validate.toml`, off by
+   default so that the three MVP maps (31..34 nodes) pass; for new maps run with
+   `--config` for the thresholds. The other checks are unchanged.
+6. **[accepted]** **The script `gow-maps mirror`:** a node of the half gets the optional
+   `mirror_x`, `mirror_y` (the coordinates of the copy); without them the copy is at `(width - x, height - y)`, as
+   now (old halves work). A node that is the mirror of itself is set by the flag
+   `self_mirror: true` and arbitrary coordinates (now only the exact center). The `cross_edge` road
+   and `edges` as now. `meta.symmetry` stays `"rot180"`: it is a swap of players and nodes
+   by the `mirror` table, not a geometric rotation.
+7. **[accepted]** **Performance:** the budgets of AGENTS.md, section 12 are set for 40 nodes;
+   a 55-node map is checked by a separate benchmark (`grid55`, like `grid40` from `conftest.py`):
+   a step without projections on average no more than 0.3 ms, p99 no more than 1 ms, a projection no more than 0.3 ms
+   (a linear estimate from `docs/perf.md`: 0.15 ms on 40 nodes gives about 0.21 ms on 55, this is an estimate, not a measurement).
+   If it does not fit, the budget or the map is changed, not the rule. The `grid55` measurement (#266) did not fit
+   the projection into 0.3 ms, so **[accepted]** (the owner, 2026-10-22, #371): on maps of 45..55 nodes
+   the `project()` budget is 0.45 ms; the budgets of the step and of supply, as well as 0.3 ms for 40 nodes, do not change.
+8. **[deferred]** **Real asymmetric maps** (a different graph or different attributes for the sides):
+   only later and only for unranked matches. They need a new tie-break instead of the mirrored
+   `node_key` (AGENTS.md, 4.1, rule 6) and their own fairness test; without this they are not introduced in the MVP.
+9. **The Windows and Mac discrepancy: found (#269).** The owner saw water on the background only on Windows,
+   on Mac it was not there. The cause: the `caddy` image built the client, copying into the context only
+   `maps/*.json`, without `maps/*.bg.png` (`deploy/caddy.Dockerfile`; since #344 the backgrounds are `maps/*.bg.webp`); the client takes the backgrounds from
+   `import.meta.glob('maps/*.bg.png')` at build time, so in the Docker stack (on Mac) the glob is empty and the
+   map is drawn in flat terrain colors, while the client from the repository (the Vite dev server) sees the background.
+   The server serves the background correctly (`GET /api/maps/{id}/background.png`, since #344 `background.webp`, answers 200), but the client does not
+   request that address. Fixed: the Dockerfile copies the backgrounds too, the check
+   `deploy/check-caddy.sh` catches an empty glob.
 
-Разобранные примеры. Карта 400 на 400, `travel_ticks_per_100_units = 30`. Тесты валидатора: «плохие»
-фикстуры по одной на строку.
+Worked examples. A 400 by 400 map, `travel_ticks_per_100_units = 30`. Validator tests: "bad"
+fixtures, one per row.
 
-| # | Карта | Итог |
+| # | Map | Result |
 |---|---|---|
-| 1 | узел 3 в (120, 80), зеркальный узел 17 в (260, 310) при тех же атрибутах | `OK` (раньше нужно было (280, 320)) |
-| 2 | зеркальные узлы с разным `terrain` | `FAIL [symmetry]` |
-| 3 | граф: у ребра нет зеркального | `FAIL [symmetry]` |
-| 4 | ребро длиной 200 единиц: `e = 60`; `travel_ticks = 60` | `OK` |
-| 5 | то же, `travel_ticks = 69` и `51` | `OK` (допуск 15 процентов: `900 <= 15 * 60`) |
-| 6 | то же, `travel_ticks = 70` и `50` | `FAIL [travel_ticks]` (`1000 > 900`) |
-| 7 | пара зеркальных рёбер с `travel_ticks = 60`: одно длиной 200, другое 180 (`e = 54`) | `OK` (`6 * 100 = 600 <= 15 * 54 = 810`) |
-| 8 | как 7, второе длиной 150 (`e = 45`) | `FAIL [travel_ticks]` (`15 * 100 = 1500 > 675`) |
-| 9 | дорога зеркального узла пересекает другую дорогу | `FAIL [planarity]` |
-| 10 | карта в 50 узлов с `--config` порогов `size` | `OK` |
-| 11 | карта в 34 узла с порогами `size` 45..55 | `FAIL [size]` |
-| 12 | фон `bake` | ни одного пикселя моря, мелководья и пляжа; размер картинки ровно `width x height` |
+| 1 | node 3 at (120, 80), mirrored node 17 at (260, 310) with the same attributes | `OK` (before, (280, 320) was needed) |
+| 2 | mirrored nodes with different `terrain` | `FAIL [symmetry]` |
+| 3 | graph: an edge has no mirrored one | `FAIL [symmetry]` |
+| 4 | an edge of length 200 units: `e = 60`; `travel_ticks = 60` | `OK` |
+| 5 | the same, `travel_ticks = 69` and `51` | `OK` (tolerance 15 percent: `900 <= 15 * 60`) |
+| 6 | the same, `travel_ticks = 70` and `50` | `FAIL [travel_ticks]` (`1000 > 900`) |
+| 7 | a pair of mirrored edges with `travel_ticks = 60`: one of length 200, the other 180 (`e = 54`) | `OK` (`6 * 100 = 600 <= 15 * 54 = 810`) |
+| 8 | as 7, the second of length 150 (`e = 45`) | `FAIL [travel_ticks]` (`15 * 100 = 1500 > 675`) |
+| 9 | a road of the mirrored node crosses another road | `FAIL [planarity]` |
+| 10 | a 50-node map with `--config` of the `size` thresholds | `OK` |
+| 11 | a 34-node map with the `size` thresholds 45..55 | `FAIL [size]` |
+| 12 | the `bake` background | not a single pixel of sea, shallows and beach; the image size exactly `width x height` |
 
-Что меняет реализация (инструменты карт, карты; п. 9 и `gow_maps.bake` без воды сделаны в #269): `gow_maps.validate`
-(`symmetry` без координат, `travel_ticks` 15 процентов, `size`), `gow_maps.mirror` (`mirror_x`,
-`mirror_y`, `self_mirror`), `gow_maps.bake` (без воды), новые или переделанные карты, `grid55` в
-бенчмарках, `maps/README.md`; симуляция и протокол не меняются (карта публична и читается как
-раньше). Сделано: валидатор и скрипт в #366 (вместе с форматом DEC-23); карты 45..55 узлов
-(«Хребет», «Перекрёстки», «Тракт»: 49..51 узел, около половины провинций, свободные координаты
-зеркальной половины), `grid55` и `maps/README.md`: #266. Три карты MVP пока остаются в пуле. Замер
-`grid55` (п. 7): шаг и снабжение помещаются в бюджеты 40 узлов, проекция нет (0,32 мс, с
-фигурками врага DEC-33 0,41 мс на эталоне): бюджет `grid55` для проекции 0,45 мс принят
-владельцем 2026-10-22 (#371).
+What the implementation changes (map tools, maps; item 9 and `gow_maps.bake` without water were done in #269): `gow_maps.validate`
+(`symmetry` without coordinates, `travel_ticks` 15 percent, `size`), `gow_maps.mirror` (`mirror_x`,
+`mirror_y`, `self_mirror`), `gow_maps.bake` (without water), new or reworked maps, `grid55` in
+the benchmarks, `maps/README.md`; the simulation and the protocol do not change (the map is public and is read as
+before). Done: the validator and the script in #366 (together with the DEC-23 format); maps of 45..55 nodes
+("Ridge", "Crossroads", "Highway": 49..51 nodes, about half provinces, free coordinates of the
+mirrored half), `grid55` and `maps/README.md`: #266. The three MVP maps stay in the pool for now. The
+`grid55` measurement (item 7): the step and supply fit into the 40-node budgets, the projection does not (0.32 ms, with the
+enemy figures of DEC-33 0.41 ms on the reference machine): the `grid55` budget for the projection of 0.45 ms was accepted by the
+owner on 2026-10-22 (#371).
 
-Альтернативы (не выбраны):
-- Оставить координаты зеркальными, менять только фон (картинка осталась бы зеркальной).
-- Асимметричные карты и в рейтинге (нужен новый тай-брейк и доказательство честности).
-- Оставить воду на фоне как украшение (владелец: запутывает).
-- Допуск `travel_ticks` 25 процентов (дорога на экране могла бы быть на четверть длиннее или
-  короче, чем время пути).
+Alternatives (not chosen):
+- Keep the coordinates mirrored, change only the background (the picture would stay mirrored).
+- Asymmetric maps in the ranked mode too (a new tie-break and a proof of fairness are needed).
+- Keep water on the background as decoration (the owner: it is confusing).
+- A `travel_ticks` tolerance of 25 percent (the road on the screen could be a quarter longer or
+  shorter than the travel time).
 
-### Трофеи со складов
+### Spoils from warehouses
 
-> Вне MVP: трофеев нет; при смене владельца склад обнуляется (SIM-07, #23).
+> Outside the MVP: there are no spoils; on a change of owner the warehouse is zeroed (SIM-07, #23).
 
-- **[отказались, предварительно]** Идея «содержимое склада переходит захватчику» не работает как общая награда: при осаде на истощение склад к моменту захвата пуст. Трофей срабатывает только при быстром захвате.
-- **[открыто]** Варианты:
-  1. Убрать трофей совсем. В плоской экономике заставить противника сжечь бюджет — это уже урон. **Рекомендуется.**
-  2. Оставить как награду именно за внезапный захват (делает тыловые склады целями).
-  3. Фиксированные разовые CP за захват (например +2), одинаково работающие при осаде и при быстром ударе.
+- **[rejected, provisionally]** The idea "the contents of the warehouse pass to the capturer" does not work as a general reward: in a siege of attrition the warehouse is empty by the time of capture. The spoils work only on a quick capture.
+- **[open]** Options:
+  1. Remove the spoils altogether. In a flat economy, forcing the opponent to burn his budget is already damage. **Recommended.**
+  2. Keep it as a reward precisely for a surprise capture (it makes rear warehouses targets).
+  3. A fixed one-off CP for a capture (for example +2), working the same in a siege and in a quick strike.
 
 ---
 
-## 10. Информация и туман войны
+## 10. Information and fog of war
 
-- **[принято]** Туман войны есть.
-- **[принято]** Запланированные приказы видны всем, обычные — только в зоне обзора.
-- **[принято]** В запланированном приказе видно намерение, но не состав.
-- **[предложено]** Лестница информации — одно правило: **издалека видно состояние, вблизи — величину.** Для MVP уточнена в DEC-04 и DEC-17 ниже (отличие: владение всеми узлами и VP обеих сторон публичны).
-  1. Всем и всегда: география и рельеф.
-  2. Всем и всегда: запланированные приказы ~~и стройки~~ (факт, без силы). Стройки противника видны только в обзоре: DEC-17 ниже; публичного намерения стройки нет (DEC-16, раздел 8).
-  3. Рядом с твоей территорией: владение, наличие войск, статус. Без чисел. Уточнено DEC-21 ниже: сколько видно о соседях, зависит от рельефа.
-  4. Твой узел или узел, где стоит твоя группа: всё точно.
-- **[предложено]** Обзор обратно пропорционален размеру группы: маленькая видит дальше. Роль разведчика возникает без отдельного типа юнита, а собравший большую армию видит хуже. Вне MVP (DEC-04).
-- **[предложено]** Реплей после матча с раскрытием настоящего состояния.
+- **[accepted]** There is fog of war.
+- **[accepted]** Scheduled orders are visible to everyone, ordinary ones only within vision.
+- **[accepted]** A scheduled order shows the intent, but not the composition.
+- **[proposed]** The information ladder is one rule: **from afar the state is visible, up close the magnitude.** For the MVP it is refined in DEC-04 and DEC-17 below (difference: the ownership of all nodes and the VP of both sides are public).
+  1. To everyone, always: geography and terrain.
+  2. To everyone, always: scheduled orders ~~and construction~~ (the fact, without strength). The enemy's construction is visible only within vision: DEC-17 below; there is no public intent of construction (DEC-16, section 8).
+  3. Near your territory: ownership, presence of troops, status. Without numbers. Refined by DEC-21 below: how much is visible about neighbors depends on terrain.
+  4. Your node or a node where your group stands: everything exactly.
+- **[proposed]** Vision is inversely proportional to the size of a group: a small one sees farther. The role of a scout appears without a separate unit type, and whoever has gathered a big army sees worse. Outside the MVP (DEC-04).
+- **[proposed]** A replay after the match revealing the real state.
 
-### Правила видимости в MVP (DEC-04, #10) **[принято]**
+### Visibility rules in the MVP (DEC-04, #10) **[accepted]**
 
-Уточняет лестницу информации выше до уровня, достаточного для кода. Отличие от лестницы: владение всеми узлами и VP обеих сторон публичны — иначе табло VP раскрывало бы скрытое косвенно.
+Refines the information ladder above to a level sufficient for code. Difference from the ladder: the ownership of all nodes and the VP of both sides are public, otherwise the VP scoreboard would reveal the hidden indirectly.
 
-Всем и всегда: география, рельеф, ~~ширины дорог~~, владение ~~и ёмкость~~ всех узлов, VP обеих сторон, намерения запланированных приказов ~~и строек~~ (откуда → куда, тип; без размера и без id группы). Точно: свои узлы и узлы, где стоят свои группы. ~~В соседних с ними узлах и на примыкающих рёбрах: есть ли вражеские группы и их режим, но не число юнитов и зарядов.~~ **[заменено DEC-21]**: сведения о соседях по таблице рельефа, на рёбрах по половинам. У вражеской группы с обычным приказом цель не показывается. Остальное — туман с памятью «последний раз видели». Обзор от размера группы в MVP не делаем.
+To everyone, always: geography, terrain, ~~road widths~~, ownership ~~and capacity~~ of all nodes, the VP of both sides, the intents of scheduled orders ~~and of construction~~ (from where → to where, the kind; without the size and without the group id). Exactly: own nodes and nodes where own groups stand. ~~In the nodes next to them and on the adjoining edges: whether there are enemy groups and their mode, but not the number of units and charges.~~ **[superseded by DEC-21]**: information about neighbors by the terrain table, on edges by halves. An enemy group with an ordinary order does not show its target. The rest is fog with the "last seen" memory. Vision depending on group size is not done in the MVP.
 
-Каждое правило этого блока: отдельный тест в SIM-14 (#30).
+Every rule of this block: a separate test in SIM-14 (#30).
 
-> **Заменено DEC-21 (#233), блок ниже:** сведения о вражеских группах в соседних узлах и на рёбрах зависят от рельефа и точки границы ребра; ёмкость всех узлов публична (DEC-22).
+> **Superseded by DEC-21 (#233), block below:** the information about enemy groups in neighboring nodes and on edges depends on terrain and on the border point of the edge; the capacity of all nodes is public (DEC-22).
 >
-> **Заменено DEC-17 (#204), блок ниже:** зачёркнутые части больше не публичны. Ширины дорог, ёмкость городов противника и его стройки видны только в обзоре, вне обзора игрок видит последнее увиденное состояние. Владение всех узлов и VP по-прежнему публичны.
+> **Superseded by DEC-17 (#204), block below:** the struck-through parts are no longer public. Road widths, the capacity of enemy cities and its construction are visible only within vision, outside vision the player sees the last seen state. The ownership of all nodes and the VP are still public.
 
-- **[открыто]** Даёт ли обзор своя группа на ребре и видны ли вражеские пакеты: вопрос #112. До решения (буквальное чтение блока выше, SIM-03): обзор дают только свои узлы и узлы, где стоят свои группы; вражеские пакеты не видны. DEC-21 и DEC-33 этот вопрос не решают.
+- **[open]** Whether an own group on an edge gives vision and whether enemy packets are visible: question #112. Until decided (a literal reading of the block above, SIM-03): vision is given only by own nodes and nodes where own groups stand; enemy packets are not visible. DEC-21 and DEC-33 do not settle this question.
 
-Альтернативы (не выбраны):
-- Скрытое владение дальними узлами и скрытые VP противника (ближе к лестнице выше, но табло становится бесполезным).
+Alternatives (not chosen):
+- Hidden ownership of distant nodes and hidden enemy VP (closer to the ladder above, but the scoreboard becomes useless).
 
-### Туман войны для дорог (DEC-17, #204) **[принято]**
+### Fog of war for roads (DEC-17, #204) **[accepted]**
 
-Плейтест владельца 2026-10-07: улучшение дорог противника было видно сквозь туман. Решение: ширины дорог, ёмкость городов противника и его стройки видны только в зоне обзора; вне обзора игрок видит последнее увиденное состояние. Заменяет соответствующие части DEC-04 (зачёркнуты выше). Стройку дорог городом вводит DEC-16 (#203); правила видимости ниже от способа стройки не зависят.
+The owner's playtest of 2026-10-07: the enemy's road upgrades were visible through the fog. Decision: road widths, the capacity of enemy cities and its construction are visible only within the vision zone; outside vision the player sees the last seen state. Replaces the corresponding parts of DEC-04 (struck through above). Road construction by a city is introduced by DEC-16 (#203); the visibility rules below do not depend on the way of construction.
 
-1. **Видимое ребро.** Ширина ребра видна точно, пока ребро не в тумане для игрока: уровень ребра `PRESENCE` по DEC-04 (хотя бы один конец виден точно: свой узел или узел, где стоит своя группа). Отдельного правила обзора для ширин нет: одна функция уровня ребра (`compute_vision`) решает и «есть ли враг», и ширину.
-   - Свои внутренние рёбра видны всегда (оба конца свои).
-   - Буферное ребро со своим концом видно точно; улучшить его нельзя никому (раздел 8).
-   - Ребро между двумя соседними с моей территорией узлами (оба уровня `PRESENCE`) в тумане, как и по DEC-04.
-2. **Ребро в тумане.** Показывается ширина на последнем тике, когда ребро было не в тумане (память «последний раз видели»). Ребро, которое игрок ни разу не видел: `base_width` из файла карты (файл карты публичен, на старте ширина равна `base_width`). Сноса дорог нет, поэтому известная ширина не больше настоящей и равна ей вне тумана.
-3. ~~**Ёмкость узла.** Та же формула SIM-07 (раздел 9), но по ширинам, которые знает игрок (пункты 1 и 2). Владение публично, поэтому снабжаемая территория и «отрезан ли город» считаются точно; скрыт только вклад ширин. Своя и нейтральная ёмкость точные; ёмкость вражеского узла точная, если все его внутренние рёбра видны, иначе это оценка по последним увиденным ширинам (не больше настоящей). Признак «оценка» (`capacity_stale`): узел в снабжаемой территории своего владельца и хотя бы одно его внутреннее ребро в тумане для игрока. Ёмкость в памяти не хранится, она выводится из известных ширин и текущего владения.~~ **[заменено DEC-22]**: ёмкость фиксирована видом узла, публична и точна; `capacity_stale` не нужен.
-4. **Владение и VP** публичны, как в DEC-04. География, рельеф, `base_width` и `max_width` из файла карты публичны.
-5. **Стройки.** Намерение стройки противника (и любой видимый признак стройки дороги по DEC-16) показывается, только пока строящееся ребро не в тумане для игрока; в тумане оно не показывается и не запоминается, о результате игрок узнаёт по ширине (пункты 1 и 2). Свои стройки игрок видит всегда. Запланированные приказы и «Защита» остаются публичными (DEC-04, DEC-08). Пока режим «Строительство» существует, режим вражеской группы в узле уровня `PRESENCE` виден по DEC-04; он не говорит, какое ребро строится.
-6. **События** стройки (`road_upgraded`, `build_stopped` и будущие события DEC-16) получает только свой игрок. Противник узнаёт новую ширину только через вид по пунктам 1 и 2.
-7. **Память.** Известная ширина хранится в памяти тумана `GameState.vision_memory` рядом с `Sighting` ребра и обновляется системой `vision` в конце тика для каждого ребра не в тумане. Память входит в `state_hash()`, поэтому реплей воспроизводим, а `project()` остаётся чистой функцией. Реплей после матча показывает настоящее состояние.
-8. **Связь с #112.** Ширина следует уровню ребра: если #112 решит, что группа на ребре даёт обзор этого ребра, его ширина станет видна без отдельного правила. Вражеские пакеты, если #112 их откроет, можно показывать только на рёбрах не в тумане: скорость пакета зависит от ширины.
+1. **Visible edge.** The width of an edge is seen exactly while the edge is not in the fog for the player: edge level `PRESENCE` per DEC-04 (at least one end is seen exactly: an own node or a node where an own group stands). There is no separate vision rule for widths: one edge-level function (`compute_vision`) decides both "is there an enemy" and the width.
+   - Own internal edges are always visible (both ends are own).
+   - A buffer edge with an own end is seen exactly; nobody can upgrade it (section 8).
+   - An edge between two nodes neighboring my territory (both of level `PRESENCE`) is in the fog, as per DEC-04.
+2. **An edge in the fog.** The width on the last tick when the edge was not in the fog is shown (the "last seen" memory). An edge the player has never seen: `base_width` from the map file (the map file is public, at the start the width equals `base_width`). There is no demolition of roads, so the known width is not greater than the real one and equals it outside the fog.
+3. ~~**Node capacity.** The same SIM-07 formula (section 9), but by the widths the player knows (items 1 and 2). Ownership is public, so the supplied territory and "is the city cut off" are computed exactly; only the contribution of widths is hidden. Own and neutral capacity is exact; the capacity of an enemy node is exact if all its internal edges are visible, otherwise it is an estimate by the last seen widths (not greater than the real one). The "estimate" flag (`capacity_stale`): the node is in the supplied territory of its owner and at least one of its internal edges is in the fog for the player. Capacity is not stored in memory, it is derived from the known widths and the current ownership.~~ **[superseded by DEC-22]**: capacity is fixed by the node kind, is public and exact; `capacity_stale` is not needed.
+4. **Ownership and VP** are public, as in DEC-04. Geography, terrain, `base_width` and `max_width` from the map file are public.
+5. **Construction.** The intent of the enemy's construction (and any visible sign of road construction per DEC-16) is shown only while the edge under construction is not in the fog for the player; in the fog it is not shown and not remembered, the player learns the result from the width (items 1 and 2). The player always sees their own construction. Scheduled orders and "Defense" stay public (DEC-04, DEC-08). While the "Building" mode exists, the mode of an enemy group in a node of level `PRESENCE` is visible per DEC-04; it does not tell which edge is being built.
+6. **Events** of construction (`road_upgraded`, `build_stopped` and the future events of DEC-16) are received only by the own player. The opponent learns the new width only through the view per items 1 and 2.
+7. **Memory.** The known width is stored in the fog memory `GameState.vision_memory` next to the `Sighting` of the edge and is updated by the `vision` system at the end of the tick for every edge not in the fog. The memory is part of `state_hash()`, so the replay is reproducible and `project()` stays a pure function. A replay after the match shows the real state.
+8. **Link to #112.** The width follows the edge level: if #112 decides that a group on an edge gives vision of that edge, its width becomes visible without a separate rule. Enemy packets, if #112 opens them, can be shown only on edges not in the fog: the speed of a packet depends on the width.
 
-Флага в рулсете нет: правила видимости не содержат чисел, как и DEC-04. Каждое правило блока: отдельный тест тумана при реализации (список изменений: #204).
+There is no flag in the ruleset: the visibility rules contain no numbers, as with DEC-04. Every rule of the block: a separate fog test at implementation (the list of changes: #204).
 
-Альтернативы (не выбраны):
-- Ширина в тумане всегда `base_width`, без памяти: противоречит требованию «последнее увиденное состояние».
-- Скрыть ёмкость вражеских узлов вне точного обзора: теряется то, что игрок честно знает из публичного владения.
-- Отдельная память «последняя увиденная ёмкость»: лишнее состояние, расходится с публичным владением после захвата.
+Alternatives (not chosen):
+- The width in the fog is always `base_width`, without memory: contradicts the requirement "the last seen state".
+- Hide the capacity of enemy nodes outside exact vision: it loses what the player honestly knows from the public ownership.
+- A separate memory "last seen capacity": extra state, diverges from the public ownership after a capture.
 
-### Обзор по рельефу и точка границы ребра (DEC-21, #233) **[принято]**
+### Vision by terrain and the border point of an edge (DEC-21, #233) **[accepted]**
 
-Плейтест 2026-10-12: о соседях по DEC-04 видно только «есть враг», рельеф на обзор не влиял. Решение владельца и уточнение того же дня. Заменяет часть DEC-04 (соседние узлы без чисел, зачёркнуто выше) и вместе с DEC-22 п. 3 DEC-17.
+Playtest of 2026-10-12: under DEC-04 only "there is an enemy" is visible about neighbors, terrain did not affect vision. The owner's decision and a clarification of the same day. Replaces part of DEC-04 (neighboring nodes without numbers, struck through above) and, together with DEC-22, item 3 of DEC-17.
 
-Сколько видно о противнике в соседнем узле, зависит от рельефа: откуда смотрю и куда. Вместо
-случайного шума показываются диапазоны. Точное число открывается, когда вражеская группа пересекает
-точку границы ребра в сторону моего узла. Пункты, помеченные раньше «(по умолчанию)», подтверждены
-владельцем 2026-10-12 (#239). Обзор шире, чем в DEC-04, задуман; проверить на плейтесте. Каждый
-пункт: отдельный тест тумана.
+How much is visible about the enemy in a neighboring node depends on terrain: where I look from and where to. Instead of
+random noise, ranges are shown. The exact number is revealed when an enemy group crosses the
+border point of an edge toward my node. Items previously marked "(default)" were confirmed by the
+owner on 2026-10-12 (#239). The vision is wider than in DEC-04 by design; to be checked in a playtest. Every
+item: a separate fog test.
 
-1. **Источники обзора** без изменений (DEC-04): свои узлы и узлы, где стоят свои группы. В
-   источниках всё видно точно. Группа на ребре обзора не даёт (#112 по умолчанию, вопрос остаётся
-   открытым).
-2. **Уровень сведений о соседнем узле.** Узел, соседний с источником по ребру, получает уровень по
-   паре рельефов «рельеф источника → рельеф узла» из таблицы ниже. Если источников рядом несколько,
-   берётся лучший уровень: `EXACT` лучше `RANGE`, `RANGE` лучше `PRESENCE`. Узел, не соседний ни с
-   одним источником: туман (`FOG`) с памятью «последний раз видели».
+1. **Vision sources** are unchanged (DEC-04): own nodes and nodes where own groups stand. At the
+   sources everything is seen exactly. A group on an edge gives no vision (#112 by default, the question stays
+   open).
+2. **The level of information about a neighboring node.** A node adjacent to a source by an edge gets a level by the
+   pair of terrains "source terrain → node terrain" from the table below. If there are several sources nearby,
+   the best level is taken: `EXACT` is better than `RANGE`, `RANGE` is better than `PRESENCE`. A node not adjacent to any
+   source: fog (`FOG`) with the "last seen" memory.
 
-   | Источник \ цель | равнина | лес | горы |
+   | Source \ target | plains | forest | mountains |
    |---|---|---|---|
-   | **равнина** | `EXACT` | `RANGE` | `PRESENCE` |
-   | **лес** | `RANGE` | `RANGE` | `PRESENCE` |
-   | **горы** | `EXACT` | `RANGE` | `RANGE` |
+   | **plains** | `EXACT` | `RANGE` | `PRESENCE` |
+   | **forest** | `RANGE` | `RANGE` | `PRESENCE` |
+   | **mountains** | `EXACT` | `RANGE` | `RANGE` |
 
-   Правила владельца: равнина и равнина видят друг друга точно; горы видят равнину точно; с равнины
-   и из леса в горах видно только присутствие; лес всегда диапазон, никогда не точно; остальное
-   диапазон.
-3. **Что видно о вражеских группах места** (узла или половины ребра, п. 5), по уровню:
-   - `EXACT`: `units` и `charged` (суммы по всем вражеским группам места), режимы;
-   - `RANGE`: диапазон суммы `units` и режимы; `charged` не показывается (владелец 2026-10-12);
-   - `PRESENCE`: есть ли враг и режимы, без чисел;
-   - `FOG`: последнее увиденное (уровень, значения, тик).
+   The owner's rules: plains and plains see each other exactly; mountains see plains exactly; from plains
+   and from forest only presence is seen in mountains; forest is always a range, never exact; the rest is a
+   range.
+3. **What is visible about the enemy groups of a place** (a node or a half of an edge, item 5), by level:
+   - `EXACT`: `units` and `charged` (sums over all enemy groups of the place), the modes;
+   - `RANGE`: the range of the sum of `units` and the modes; `charged` is not shown (the owner, 2026-10-12);
+   - `PRESENCE`: whether an enemy is there and the modes, without numbers;
+   - `FOG`: the last seen (level, values, tick).
 
-   Склад вражеского города не виден ни на каком уровне: склад виден только в источниках (свой узел,
-   узел со своей группой), как сейчас.
-4. **Диапазоны.** Нижние границы `vision.range_starts = [1, 3, 6, 11, 21]` дают диапазоны 1..2,
-   3..5, 6..10, 11..20 и 21+ (в интерфейсе «1-2», «3-5», «6-10», «11-20», «21+»). 0 юнитов:
-   врага нет. Диапазон зависит только от числа: без шума, одинаково в каждом тике.
-5. **Рёбра и точка границы.**
-   - Ширина дороги (DEC-17, DEC-22; тип дороги убран DEC-26) без изменений: ребро не в тумане, если хотя бы один его
-     конец: источник. Ребро между двумя не-источниками в тумане при любых уровнях концов
-     (**ширина**; для групп на нём: **[уточнено DEC-33]**, половина видимого узла видна и без источника на ребре).
-   - Точка границы ребра `border_permille` (DEC-23: в тысячных от конца `a`, по умолчанию 500)
-     делит ребро на половину `a` и половину `b`. Положение группы на ребре в тысячных от `a`:
-     `progress`, если она вышла из `a`, иначе `1000 - progress`. Группа относится к половине узла,
-     к которому она сейчас идёт, если по ходу движения она уже на точке границы или за ней; иначе к
-     половине другого конца. Для отскакивающей группы и группы, отменившей приказ (DEC-20), «узел,
-     к которому идёт»: узел возврата.
-   - На ребре не в тумане половина источника видна как `EXACT`; другая половина: с уровнем её узла
-     (п. 2). Отсюда правило владельца: точное число открывается, когда вражеская группа пересекает
-     точку границы в сторону моего узла (или узла, где стоит моя группа), а до этого действует
-     таблица рельефа.
-   - ~~Внутри половины не показываются ни положение, ни направление движения (владелец 2026-10-12): только
-     то, что в половине есть враг, и сведения по уровню.~~ **[заменено DEC-33]**: в половине видимого узла
-     вражеская группа видна с непрерывным положением и направлением движения (блок DEC-33 ниже).
-6. **Цель обычного приказа противника не показывается никогда** (DEC-04). Движение противника видно
-   только в обзоре: по местам из пп. 2 и 5.
-7. **Запланированные приказы и «Защита»** остаются публичными намерениями (DEC-04, DEC-08); режим
-   «Защита» виден на уровне `PRESENCE` и выше, не скрывается.
-8. **Память.** `Sighting` хранит уровень (`EXACT`, `RANGE`, `PRESENCE`), показанные значения
-   (`units` или диапазон, `charged` только для `EXACT`), режимы и тик; у ребра: по половинам,
-   плюс ширина и тип (DEC-17, DEC-22). В тумане показывается последнее увиденное.
-9. **Ёмкость** узлов публична и точна (DEC-22): `capacity_stale` из DEC-17, п. 3 больше не нужен.
-10. Реплей после матча показывает настоящее состояние. Боты получают тот же `PlayerView`.
+   The warehouse of an enemy city is not visible at any level: a warehouse is visible only at the sources (an own node,
+   a node with an own group), as now.
+4. **Ranges.** The lower bounds `vision.range_starts = [1, 3, 6, 11, 21]` give the ranges 1..2,
+   3..5, 6..10, 11..20 and 21+ (in the interface "1-2", "3-5", "6-10", "11-20", "21+"). 0 units:
+   no enemy. A range depends only on the number: no noise, the same on every tick.
+5. **Edges and the border point.**
+   - The road width (DEC-17, DEC-22; the road type was removed by DEC-26) is unchanged: an edge is not in the fog if at least one of its
+     ends is a source. An edge between two non-sources is in the fog at any levels of the ends
+     (**width**; for groups on it: **[clarified by DEC-33]**, the half of a visible node is visible even without a source on the edge).
+   - The border point of an edge `border_permille` (DEC-23: in thousandths from the end `a`, 500 by default)
+     divides the edge into the half of `a` and the half of `b`. The position of a group on the edge in thousandths from `a`:
+     `progress` if it left `a`, otherwise `1000 - progress`. A group belongs to the half of the node
+     it is now heading to if along the movement it is already at the border point or beyond it; otherwise to
+     the half of the other end. For a bouncing group and a group that cancelled its order (DEC-20), "the node it is heading to"
+     is the return node.
+   - On an edge not in the fog the half of the source is visible as `EXACT`; the other half: with the level of its node
+     (item 2). Hence the owner's rule: the exact number is revealed when an enemy group crosses
+     the border point toward my node (or a node where my group stands), and before that the
+     terrain table applies.
+   - ~~Inside a half neither the position nor the direction of movement is shown (the owner, 2026-10-12): only
+     that there is an enemy in the half, and the information by level.~~ **[superseded by DEC-33]**: in the half of a visible node
+     an enemy group is visible with a continuous position and direction of movement (the DEC-33 block below).
+6. **The target of an enemy's ordinary order is never shown** (DEC-04). The enemy's movement is visible
+   only within vision: by the places of items 2 and 5.
+7. **Scheduled orders and "Defense"** stay public intents (DEC-04, DEC-08); the mode
+   "Defense" is visible at level `PRESENCE` and higher, it is not hidden.
+8. **Memory.** `Sighting` stores the level (`EXACT`, `RANGE`, `PRESENCE`), the shown values
+   (`units` or a range, `charged` only for `EXACT`), the modes and the tick; for an edge: by halves,
+   plus the width and the type (DEC-17, DEC-22). In the fog the last seen is shown.
+9. **The capacity** of nodes is public and exact (DEC-22): `capacity_stale` from DEC-17, item 3 is no longer needed.
+10. A replay after the match shows the real state. Bots get the same `PlayerView`.
 
-Числа и таблица в рулсете (новая секция `[vision]`): `range_starts = [1, 3, 6, 11, 21]`; таблица
-`[vision.by_terrain.<рельеф источника>]` с ключами рельефа цели и значениями `"exact"`, `"range"`,
-`"presence"` (значения из таблицы п. 2). Таблица в рулсете публична, как и все правила (раздел 2,
-инвариант 2).
+The numbers and the table in the ruleset (a new section `[vision]`): `range_starts = [1, 3, 6, 11, 21]`; the table
+`[vision.by_terrain.<source terrain>]` with the target terrain keys and the values `"exact"`, `"range"`,
+`"presence"` (the values from the table of item 2). The table in the ruleset is public, like all the rules (section 2,
+invariant 2).
 
-Разобранные примеры. Свой город M, вражеский город E, ребро M-E (`a` = M, точка границы 500, если
-не сказано иное); в E вражеская группа 4 юнита, 3 заряж., «Атака». Тесты тумана: ровно эта таблица.
+Worked examples. My city M, an enemy city E, the edge M-E (`a` = M, border point 500 unless
+stated otherwise); in E there is an enemy group of 4 units, 3 charged, "Attack". Fog tests: exactly this table.
 
-| # | Ситуация | Что видит владелец M |
+| # | Situation | What the owner of M sees |
 |---|---|---|
-| 1 | M равнина, E равнина | E: 4 юнита, 3 заряж., «Атака» |
-| 2 | M горы, E равнина | E: 4 и 3 |
-| 3 | M равнина, E лес | E: «3-5», без зарядов |
-| 4 | M лес, E равнина | E: «3-5» |
-| 5 | M горы, E горы | E: «3-5» |
-| 6 | M равнина, E горы | E: враг есть, «Атака», без чисел |
-| 7 | M лес, E горы | E: враг есть, без чисел |
-| 8 | E лес; соседи E: свой M1 (равнина) и свой M2 (горы) | E: «3-5» (оба источника дают `RANGE`) |
-| 9 | E равнина; соседи E: свой M1 (лес) и свой M2 (горы) | E: 4 и 3 (лучший: `EXACT` от гор) |
-| 10 | E не сосед ни одного источника | туман: последнее увиденное (уровень, значения, тик) |
-| 11 | E лес; группа из E идёт в M, прошла 400‰ ребра | в половине E: «3-5» |
-| 12 | как 11, группа прошла 500‰ | в половине M: 4 юнита, 3 заряж. |
-| 13 | точка границы 700 от M (`a` = M); группа из E идёт в M | половина E, пока группа не прошла 300‰ от E; с 300‰: точно |
-| 14 | группа отскочила от M и идёт обратно в E, сейчас на 400‰ от M | в половине M: точно |
-| 15 | вражеская группа с обычным приказом выходит из E | цель не показывается; группа видна в половине E по уровню E |
-| 16 | E: запланированный приказ E→M | намерение E→M видно всем, как сейчас |
-| 17 | E в «Защите» | режим виден (уровень `PRESENCE` и выше), намерение «Защиты» публично |
-| 18 | ребро E-F, E и F соседи M, оба не источники | ~~ребро в тумане: групп на нём не видно, ширина и тип последние увиденные~~ **[заменено DEC-33]**: ширина последняя увиденная (DEC-17); обе половины видимых узлов видны, группы на них с положением и направлением (пример 4 в DEC-33) |
-| 19 | в E 1, 2, 3, 10, 25 юнитов, уровень `RANGE` | «1-2», «1-2», «3-5», «6-10», «21+» |
-| 20 | в E две вражеские группы 2 и 2 юнита, уровень `RANGE` | «3-5» (по сумме) |
-| 21 | своя группа стоит в нейтральном N (лес); E (равнина) сосед N | N: источник, всё точно; E по паре лес → равнина: «3-5» |
-| 22 | склад E при любом уровне | не виден |
+| 1 | M plains, E plains | E: 4 units, 3 charged, "Attack" |
+| 2 | M mountains, E plains | E: 4 and 3 |
+| 3 | M plains, E forest | E: "3-5", no charges |
+| 4 | M forest, E plains | E: "3-5" |
+| 5 | M mountains, E mountains | E: "3-5" |
+| 6 | M plains, E mountains | E: an enemy is there, "Attack", no numbers |
+| 7 | M forest, E mountains | E: an enemy is there, no numbers |
+| 8 | E forest; neighbors of E: own M1 (plains) and own M2 (mountains) | E: "3-5" (both sources give `RANGE`) |
+| 9 | E plains; neighbors of E: own M1 (forest) and own M2 (mountains) | E: 4 and 3 (the best: `EXACT` from mountains) |
+| 10 | E is not a neighbor of any source | fog: the last seen (level, values, tick) |
+| 11 | E forest; a group from E goes to M, has passed 400‰ of the edge | in the half of E: "3-5" |
+| 12 | as 11, the group has passed 500‰ | in the half of M: 4 units, 3 charged |
+| 13 | border point 700 from M (`a` = M); a group from E goes to M | the half of E until the group has passed 300‰ from E; from 300‰: exact |
+| 14 | a group bounced off M and goes back to E, now at 400‰ from M | in the half of M: exact |
+| 15 | an enemy group with an ordinary order leaves E | the target is not shown; the group is visible in the half of E by the level of E |
+| 16 | E: a scheduled order E→M | the intent E→M is visible to everyone, as now |
+| 17 | E in "Defense" | the mode is visible (level `PRESENCE` and higher), the intent of "Defense" is public |
+| 18 | the edge E-F, E and F are neighbors of M, both not sources | ~~the edge is in the fog: groups on it are not visible, the width and the type are the last seen~~ **[superseded by DEC-33]**: the width is the last seen (DEC-17); both halves of the visible nodes are visible, the groups on them with position and direction (example 4 in DEC-33) |
+| 19 | E has 1, 2, 3, 10, 25 units, level `RANGE` | "1-2", "1-2", "3-5", "6-10", "21+" |
+| 20 | E has two enemy groups of 2 and 2 units, level `RANGE` | "3-5" (by the sum) |
+| 21 | an own group stands in a neutral N (forest); E (plains) is a neighbor of N | N: a source, all exact; E by the pair forest → plains: "3-5" |
+| 22 | the warehouse of E at any level | not visible |
 
-Что меняет реализация (симуляция и `SIM_VERSION`, протокол и `PROTOCOL_VERSION`, клиент, боты, рулсеты): список в #233.
+What the implementation changes (simulation and `SIM_VERSION`, protocol and `PROTOCOL_VERSION`, client, bots, rulesets): the list is in #233.
 
-Альтернативы (не выбраны):
-- Случайный шум чисел в каждом тике (нарушает инвариант 3 «никакого рандома» по духу и не проверяется в уме).
-- Диапазон и для `charged` (больше сведений; можно включить без изменения формы диапазонов).
-- ~~Показ положения и направления вражеской группы внутри половины ребра.~~ **[выбрано DEC-33]**.
-- Раскрытие точного числа при отдаче приказа (нет окна неопределённости).
-- Обзор от размера группы (раздел 10, вне MVP).
+Alternatives (not chosen):
+- Random noise on the numbers in every tick (violates invariant 3 "no randomness" in spirit and cannot be checked in one's head).
+- A range for `charged` too (more information; it can be turned on without changing the form of the ranges).
+- ~~Showing the position and direction of an enemy group inside a half of an edge.~~ **[chosen by DEC-33]**.
+- Revealing the exact number when an order is given (no window of uncertainty).
+- Vision by group size (section 10, outside the MVP).
 
-### Вражеские казармы видны у соседних городов (DEC-31, #316) **[принято]**
+### Enemy barracks are visible at neighboring cities (DEC-31, #316) **[accepted]**
 
-Решение владельца 2026-10-21 (фидбэк плейтеста). Меняет туман казарм DEC-25 и DEC-26: ~~казарма чужого города скрыта~~ **[заменено DEC-31]** (пометки в разделе 3, «Казарма», п. 6, и в разделе 8, блок DEC-26, п. 10; AGENTS.md, 4.4). Реализация: #319.
+The owner's decision of 2026-10-21 (playtest feedback). Changes the fog of barracks of DEC-25 and DEC-26: ~~the barracks of a foreign city is hidden~~ **[superseded by DEC-31]** (notes in section 3, "Barracks", item 6, and in section 8, the DEC-26 block, item 10; AGENTS.md, 4.4). Implementation: #319.
 
-**Решение владельца [принято].**
+**The owner's decision [accepted].**
 
-1. **Кто виден.** У вражеского города, связанного дорогой (ребром графа карты) с любым своим узлом, игрок видит, построена ли казарма. Соседство считается по рёбрам файла карты, а не по обзору и не по туману (граф публичен, раздел 10, DEC-04).
-2. **Что видно.** Только построенная казарма. Остаются скрытыми: стройка казармы, очередь найма (DEC-25, п. 12), склад и его уровень, ёмкость склада, стройки (DEC-26, п. 10).
-3. **Памяти нет.** Город перестал быть соседним (свой узел рядом потерян) или сменил владельца: сведения о казарме пропали.
-4. **Речь о городах.** Владелец написал «в провинциях», но у провинций казарм нет (DEC-23, раздел 9: узел без города и склада, `Recruit` отклоняется `NOT_CITY`); правило записано для городов. Свой узел-источник соседства может быть и городом, и провинцией.
+1. **Who is visible.** For an enemy city connected by a road (an edge of the map graph) to any own node, the player sees whether the barracks is built. Adjacency is counted by the edges of the map file, not by vision and not by the fog (the graph is public, section 10, DEC-04).
+2. **What is visible.** Only a built barracks. Still hidden: the construction of a barracks, the recruit queue (DEC-25, item 12), the warehouse and its level, the warehouse capacity, construction (DEC-26, item 10).
+3. **There is no memory.** The city stopped being adjacent (the own node next to it is lost) or changed owner: the information about the barracks disappears.
+4. **This is about cities.** The owner wrote "in provinces", but provinces have no barracks (DEC-23, section 9: a node without a city and a warehouse, `Recruit` is rejected with `NOT_CITY`); the rule is written for cities. The own node that is the source of adjacency may be both a city and a province.
 
-**Детали [принято]** (подтверждено владельцем 2026-10-21):
+**Details [accepted]** (confirmed by the owner on 2026-10-21):
 
-- **[принято]** Для соседнего чужого города `NodeView.has_barracks` равно `True` (построена) или `False` (нет казармы или она ещё строится), у остальных чужих городов и у нейтральных `None` (неизвестно; нейтральные казарм не имеют). `Sighting` не расширяется: поле считается проекцией из текущего владения и графа карты.
-- **[принято]** При `city_upgrades.enabled = false` казарма есть у каждого города (DEC-26, п. 1), поэтому соседний вражеский город показывает `True`.
+- **[accepted]** For an adjacent foreign city `NodeView.has_barracks` is `True` (built) or `False` (no barracks or it is still under construction), for the other foreign cities and for neutral ones `None` (unknown; neutral ones have no barracks). `Sighting` is not extended: the field is computed as a projection from the current ownership and the map graph.
+- **[accepted]** With `city_upgrades.enabled = false` every city has a barracks (DEC-26, item 1), so an adjacent enemy city shows `True`.
 
-**Примеры** (рулсет `mvp-1`, `city_upgrades.enabled = true`; E вражеский город):
+**Examples** (ruleset `mvp-1`, `city_upgrades.enabled = true`; E is an enemy city):
 
-| № | Ситуация | Что видит игрок |
+| No. | Situation | What the player sees |
 |---|---|---|
-| 1 | у E построена казарма, E связан ребром с моим городом M | `has_barracks = True` |
-| 2 | у E казарма строится (или её нет), E связан ребром с моим узлом | `False`; стройки, очереди и склада не видно |
-| 3 | у E казарма, ближайший мой узел через один чужой узел (ребра E-мой узел нет) | `None` |
-| 4 | как 1, но E связан только с моей провинцией | `True` (источником соседства служит любой свой узел) |
-| 5 | как 1, M захвачен, других своих узлов у E нет | `None` (памяти нет) |
+| 1 | E has a built barracks, E is connected by an edge to my city M | `has_barracks = True` |
+| 2 | E has a barracks under construction (or none), E is connected by an edge to my node | `False`; construction, queue and warehouse are not visible |
+| 3 | E has a barracks, my nearest node is across one foreign node (there is no edge between E and my node) | `None` |
+| 4 | as 1, but E is connected only to my province | `True` (any own node serves as the source of adjacency) |
+| 5 | as 1, M is captured, E has no other own nodes of mine linked to it | `None` (there is no memory) |
 
-Тест тумана: ровно эта таблица, плюс поля склада и очереди найма остаются `None` в строках 1 и 4.
+Fog test: exactly this table, plus the warehouse and recruit queue fields stay `None` in rows 1 and 4.
 
-**Реализация** (#319; `PROTOCOL_VERSION` 23, `SIM_VERSION` не меняется: правило только проекции,
-состояние и шаг те же, золотые реплеи прежние): `gow_sim.view.project()` считает соседство по
-`MapDef.incident` и текущим владельцам; `NodeView.has_barracks` вражеского города может прийти при
-любом `detail` без полей склада (валидатор протокола); клиент рисует тот же домик, что у своего
-города. Тесты: `packages/sim/tests/test_dec31.py` (примеры 1-5 и детали), property-тест тумана в
-`test_view.py`, кадр протокола в `test_convert.py`.
+**Implementation** (#319; `PROTOCOL_VERSION` 23, `SIM_VERSION` does not change: the rule is projection-only,
+the state and the step are the same, the golden replays are the same): `gow_sim.view.project()` computes adjacency from
+`MapDef.incident` and the current owners; `NodeView.has_barracks` of an enemy city can arrive at
+any `detail` without the warehouse fields (the protocol validator); the client draws the same little house as for its own
+city. Tests: `packages/sim/tests/test_dec31.py` (examples 1-5 and the details), the fog property test in
+`test_view.py`, the protocol frame in `test_convert.py`.
 
-Альтернативы (не выбраны):
-- Показывать казарму только по обычному обзору (DEC-21): соседний город часто остаётся в тумане, и казарму не видно.
-- Помнить последнюю увиденную казарму (`Sighting`): сведения не пропадали бы при потере соседства.
+Alternatives (not chosen):
+- Show the barracks only by ordinary vision (DEC-21): a neighboring city often stays in the fog, and the barracks is not visible.
+- Remember the last seen barracks (`Sighting`): the information would not disappear when adjacency is lost.
 
-### Видимое движение вражеских групп в зоне видимости узла (DEC-33, #296) **[принято]**
+### Visible movement of enemy groups in the vision zone of a node (DEC-33, #296) **[accepted]**
 
-Решение владельца 2026-10-21 (по скриншоту плейтеста): «всё, что за полем зрения (в тумане), я не вижу; вижу, как вражеские юниты входят в узел и выходят из него, то есть все их движения только в моей зоне видимости; с таблицей рельефа видно больше или меньше информации». Заменяет в DEC-21, п. 5, фразу «внутри половины не показываются ни положение, ни направление движения» (зачёркнута выше). Реализация вместе с DEC-21: #296.
+The owner's decision of 2026-10-21 (from a playtest screenshot): "everything beyond the field of view (in the fog) I do not see; I see how enemy units enter a node and leave it, that is, all their movements only in my vision zone; with the terrain table more or less information is visible". Replaces in DEC-21, item 5, the phrase "neither the position nor the direction of movement is shown inside a half" (struck through above). Implementation together with DEC-21: #296.
 
-**Решение владельца [принято].**
+**The owner's decision [accepted].**
 
-1. **Зона видимости узла.** Видимый узел: источник обзора (DEC-21, п. 1) или узел с уровнем `EXACT`, `RANGE` или `PRESENCE` по таблице DEC-21, п. 2. Зона видимости видимого узла: его половины рёбер, то есть от узла до точки границы `border_permille` каждого ребра (DEC-23, п. 5); зона совпадает с территорией узла на карте. Узел `FOG` зоны не даёт.
-2. **Что видно в зоне.** В половине ребра, принадлежащей видимому узлу, вражеская группа видна с **непрерывным положением и направлением движения**: фигурка едет плавно (вход в зону через точку границы, движение к узлу, выход из узла и уход до точки границы). Сведения о числах по уровню этой половины, как в DEC-21, пп. 3 и 5: половина источника `EXACT`; половина видимого соседа по его уровню (`EXACT`, `RANGE`); `PRESENCE`: фигурка без чисел.
-3. **Туман.** Половина узла в тумане не видна вовсе: на точке границы группа исчезает в туман (дальше память «последний раз видели», DEC-21, п. 8) и появляется из тумана на точке границы.
-4. **Не меняется.**
-   - Цель обычного приказа противника скрыта (DEC-21, п. 6): направление показывает только ближайший узел ребра, к которому идёт группа.
-   - Склад и содержимое городов (DEC-21, п. 3), стройки и очередь найма.
-   - Уровень дороги в тумане (DEC-17): ширина ребра видна, только пока ребро не в тумане по уровню ребра; половина видимого узла на ребре между двумя не-источниками ширину не открывает (пример 4 ниже; утечка через скорость: пункт 9 «Детали»).
-   - Группа на ребре обзора не даёт (#112 остаётся открытым).
-   - Вражеские пакеты снабжения не видны (DEC-04, #112 по умолчанию).
+1. **The vision zone of a node.** A visible node: a vision source (DEC-21, item 1) or a node with level `EXACT`, `RANGE` or `PRESENCE` by the DEC-21 table, item 2. The vision zone of a visible node: its halves of edges, that is, from the node to the border point `border_permille` of each edge (DEC-23, item 5); the zone coincides with the territory of the node on the map. A `FOG` node gives no zone.
+2. **What is visible in the zone.** In the half of an edge belonging to a visible node, an enemy group is visible with a **continuous position and direction of movement**: the figure moves smoothly (entering the zone through the border point, moving toward the node, leaving the node and going away to the border point). The information about numbers by the level of this half, as in DEC-21, items 3 and 5: the half of a source is `EXACT`; the half of a visible neighbor by its level (`EXACT`, `RANGE`); `PRESENCE`: a figure without numbers.
+3. **Fog.** The half of a node in the fog is not visible at all: at the border point the group disappears into the fog (further the "last seen" memory, DEC-21, item 8) and appears out of the fog at the border point.
+4. **Unchanged.**
+   - The target of an enemy's ordinary order is hidden (DEC-21, item 6): the direction is shown only by the nearest node of the edge the group is heading to.
+   - The warehouse and the contents of cities (DEC-21, item 3), construction and the recruit queue.
+   - The road level in the fog (DEC-17): the width of an edge is visible only while the edge is not in the fog by the edge level; the half of a visible node on an edge between two non-sources does not reveal the width (example 4 below; the leak through speed: item 9 of "Details").
+   - A group on an edge gives no vision (#112 stays open).
+   - Enemy supply packets are not visible (DEC-04, #112 by default).
 
-Границы зон те же, что и у половин DEC-21, п. 5: группа относится к половине узла, к которому она идёт, если на точке границы или за ней, иначе к половине другого конца (в точности на точке границы: к половине узла, к которому идёт; для отскакивающей и отменившей приказ группы, DEC-20, это узел возврата).
+The zone borders are the same as for the halves of DEC-21, item 5: a group belongs to the half of the node it is heading to if it is at the border point or beyond it, otherwise to the half of the other end (exactly at the border point: to the half of the node it is heading to; for a bouncing group and a group that cancelled its order, DEC-20, this is the return node).
 
-**Детали [принято]** (владелец принял все пункты как рекомендовано 2026-10-21; тест тумана на каждое поле и пункт; реализовано #296):
+**Details [accepted]** (the owner accepted all items as recommended on 2026-10-21; a fog test for every field and item; implemented in #296):
 
-1. **[принято]** **Точность положения.** `PlayerView` отдаёт положение группы целым в тысячных ребра от конца `a` (`pos`, 0..1000, как у `progress` в DEC-21, п. 5), без округления. **Рекомендация:** точные тысячные; клиент интерполирует между кадрами (раздел 18), грубее ничего не скрывает (скорость публична по правилам, раздел 4), но даёт дёрганье.
-2. **[принято]** **Направление.** Одно булево поле: «к концу `b`» или «к концу `a`» (`toward_b`), то есть ближайший узел ребра, к которому идёт группа (в том числе при отскоке и отмене приказа, DEC-20: настоящее направление движения; при развороте поле меняется, причина не раскрывается). Никаких путей, целей и остатка маршрута. **Рекомендация:** так.
-3. **[принято]** **Форма в `PlayerView`.** Новый список в `EdgeView` (имя `enemy_groups`): по элементу на вражескую группу в видимой половине: `id`, `pos`, `toward_b`, режим и сведения по уровню половины. Сведения по группе, а не суммой: `EXACT` даёт `units` и `charged` группы, `RANGE` даёт диапазон её `units` (границы `vision.range_starts`, DEC-21, п. 4), `PRESENCE` не даёт чисел. Сумма по месту (DEC-21, п. 3 и 20) остаётся для узла; для половины ребра её заменяет список. **Рекомендация:** так (разные группы едут в разных точках, суммой их не нарисовать). Цена: разделение 2+2 юнита видно на `EXACT` и `RANGE`; принято как плата за непрерывное положение.
-4. **[принято]** **Несколько групп в одной половине.** Каждая отдельной фигуркой со своим `pos`; порядок в списке по `id`. Две группы в одной точке рисуются отдельно (клиент). **Рекомендация:** так.
-5. **[принято]** **Непрозрачный id фигурки.** Нужен клиенту для плавной интерполяции между кадрами. Правило: id вражеской фигурки keyed blake2b от секретного `match_key` (AGENTS.md, 4.4), внутреннего id группы и тика, когда она появилась в зоне, поэтому **после ухода в туман и нового появления id другой**: игрок не отслеживает группу сквозь туман и не узнаёт, что две фигурки были одной группой. **Рекомендация:** так; тест: группа выходит из зоны и возвращается, id различаются; внутренний id в `PlayerView` не попадает.
-6. **[принято]** **Группа в бою на ребре.** Бой публичен и точен (DEC-24, п. I.1, `PlayerView.fights`: место и `point`), группа в бою стоит в точке боя. Фигурка в списке половины для неё **не дублируется**: её показывает бой; в узле и половине её сведения по уровню остаются в сумме места, как сейчас. **Рекомендация:** так (иначе дубль и расхождение чисел: бой показывает точные числа даже при уровне `RANGE`).
-7. **[принято]** **Группа выходит из узла и входит в узел.** Стоящая в видимом узле группа даётся в `seen` узла (как сейчас, суммой по DEC-21); с момента выхода на ребро она отдельная фигурка с `pos` у конца этого узла. Прибытие в узел: фигурка исчезает из списка, группа входит в сумму узла в том же кадре (на прибытие с автослиянием, DEC-20, ничего не меняется). **Рекомендация:** так.
-8. **[принято]** **Память при уходе в туман.** Память «последний раз видели» (DEC-21, п. 8) хранит по половине: уровень, показанные значения, режимы и тик; **положения и направления в памяти нет** (меньше состояния в `state_hash()`, нет «призрака, едущего без данных»). В тумане клиент рисует метку памяти половины (например в точке границы), а не едущую фигурку. **Рекомендация:** так.
-9. **[принято]** **Скорость и уровень дороги (утечка).** Скорость группы на ребре зависит от уровня дороги (раздел 4, п. 9; уровень берётся при выходе на ребро), поэтому по времени проезда видимой половины можно оценить уровень дороги, даже если ребро в тумане по DEC-17. **Рекомендация:** принять утечку (оценка грубая: нужен замер времени и знание рельефа; DEC-17 защищает показ ширины, не вывод по скорости); `EdgeView.width` и память ширины по-прежнему обновляются только по DEC-17. Альтернатива: не показывать положение на рёбрах, где ширина в тумане (сломает пример 4 и решение владельца).
-10. **[принято]** **Версии.** `SIM_VERSION`++ (форма памяти `Sighting` по половинам меняет `state_hash()`; одним повышением вместе с DEC-21: реализации #296 ещё нет) и `PROTOCOL_VERSION`++ (список в `EdgeView`, AGENTS.md, раздел 6; перегенерация `protocol.gen.ts`). Рулсет без изменений: чисел в DEC-33 нет, флага не вводим (как у DEC-04 и DEC-17). **Рекомендация:** так, в #296.
-11. **[принято]** **Реплей и боты.** Файл полных кадров реплея показывает настоящее состояние, DEC-33 его не меняет. Боты получают тот же `PlayerView` и могут читать `enemy_groups`; прямой доступ к состоянию по-прежнему запрещён (AGENTS.md, раздел 2). **Рекомендация:** так.
-12. **[принято]** **Бюджеты.** `project()` обходит группы один раз; список ограничен числом вражеских групп в видимых половинах, укладывается в бюджет 0,3 мс (AGENTS.md, раздел 12); проверить бенчмарком `project()` в #296. **Рекомендация:** так.
+1. **[accepted]** **Position precision.** `PlayerView` gives the position of a group as an integer in thousandths of the edge from the end `a` (`pos`, 0..1000, like `progress` in DEC-21, item 5), without rounding. **Recommendation:** exact thousandths; the client interpolates between frames (section 18), anything coarser hides nothing (the speed is public by the rules, section 4) but gives jerkiness.
+2. **[accepted]** **Direction.** One boolean field: "toward the end `b`" or "toward the end `a`" (`toward_b`), that is, the nearest node of the edge the group is heading to (including a bounce and an order cancellation, DEC-20: the real direction of movement; on a turnaround the field changes, the reason is not revealed). No paths, targets or the rest of the route. **Recommendation:** this way.
+3. **[accepted]** **The shape in `PlayerView`.** A new list in `EdgeView` (the name `enemy_groups`): one element per enemy group in a visible half: `id`, `pos`, `toward_b`, the mode and the information by the level of the half. The information per group, not as a sum: `EXACT` gives the group's `units` and `charged`, `RANGE` gives the range of its `units` (the bounds `vision.range_starts`, DEC-21, item 4), `PRESENCE` gives no numbers. The sum over a place (DEC-21, items 3 and 20) stays for a node; for a half of an edge the list replaces it. **Recommendation:** this way (different groups travel at different points, they cannot be drawn as a sum). The price: a split of 2+2 units is visible at `EXACT` and `RANGE`; accepted as the cost of a continuous position.
+4. **[accepted]** **Several groups in one half.** Each as a separate figure with its own `pos`; the order in the list by `id`. Two groups at one point are drawn separately (the client). **Recommendation:** this way.
+5. **[accepted]** **The opaque id of a figure.** The client needs it for smooth interpolation between frames. The rule: the id of an enemy figure is keyed blake2b of the secret `match_key` (AGENTS.md, 4.4), the internal id of the group and the tick when it appeared in the zone, therefore **after leaving into the fog and reappearing the id is different**: the player does not track a group through the fog and does not learn that two figures were one group. **Recommendation:** this way; test: a group leaves the zone and returns, the ids differ; the internal id does not reach `PlayerView`.
+6. **[accepted]** **A group in a fight on an edge.** A fight is public and exact (DEC-24, item I.1, `PlayerView.fights`: the place and `point`), a group in a fight stands at the point of the fight. The figure in the list of the half is **not duplicated** for it: the fight shows it; in the node and the half its information by level stays in the sum of the place, as now. **Recommendation:** this way (otherwise a duplicate and a divergence of numbers: the fight shows exact numbers even at level `RANGE`).
+7. **[accepted]** **A group leaves a node and enters a node.** A group standing in a visible node is given in the `seen` of the node (as now, as a sum per DEC-21); from the moment it leaves onto the edge it is a separate figure with `pos` near the end of this node. Arrival at a node: the figure disappears from the list, the group enters the sum of the node in the same frame (for an arrival with auto-merge, DEC-20, nothing changes). **Recommendation:** this way.
+8. **[accepted]** **Memory on leaving into the fog.** The "last seen" memory (DEC-21, item 8) stores per half: the level, the shown values, the modes and the tick; **there are no positions and directions in memory** (less state in `state_hash()`, no "ghost moving without data"). In the fog the client draws a memory marker of the half (for example at the border point), not a moving figure. **Recommendation:** this way.
+9. **[accepted]** **Speed and road level (a leak).** The speed of a group on an edge depends on the road level (section 4, item 9; the level is taken on leaving onto the edge), so from the travel time through a visible half the road level can be estimated even if the edge is in the fog per DEC-17. **Recommendation:** accept the leak (the estimate is rough: it needs a time measurement and knowledge of the terrain; DEC-17 protects the display of the width, not a deduction from speed); `EdgeView.width` and the width memory are still updated only per DEC-17. Alternative: do not show the position on edges where the width is in the fog (it would break example 4 and the owner's decision).
+10. **[accepted]** **Versions.** `SIM_VERSION`++ (the per-half form of the `Sighting` memory changes `state_hash()`; in one bump together with DEC-21: #296 is not implemented yet) and `PROTOCOL_VERSION`++ (the list in `EdgeView`, AGENTS.md, section 6; regenerating `protocol.gen.ts`). The ruleset is unchanged: there are no numbers in DEC-33, we do not introduce a flag (as with DEC-04 and DEC-17). **Recommendation:** this way, in #296.
+11. **[accepted]** **Replay and bots.** The file of full replay frames shows the real state, DEC-33 does not change it. Bots get the same `PlayerView` and can read `enemy_groups`; direct access to the state is still forbidden (AGENTS.md, section 2). **Recommendation:** this way.
+12. **[accepted]** **Budgets.** `project()` walks the groups once; the list is bounded by the number of enemy groups in the visible halves, it fits in the 0.3 ms budget (AGENTS.md, section 12); to be checked with a `project()` benchmark in #296. **Recommendation:** this way.
 
-Числа в рулсете не нужны. Тесты тумана при реализации: ровно эта таблица плюс по одному тесту на каждый пункт «Детали» выше.
+No numbers in the ruleset are needed. Fog tests at implementation: exactly this table plus one test for each item of "Details" above.
 
-Разобранные примеры. Свой город M (равнина, источник) и ребро M-E, `a` = M, точка границы 500, если не сказано иное; `pos` в тысячных от `a`; вражеская группа 4 юнита, 3 заряж., «Атака», едет из E к M.
+Worked examples. My city M (plains, a source) and the edge M-E, `a` = M, border point 500 unless stated otherwise; `pos` in thousandths from `a`; the enemy group is 4 units, 3 charged, "Attack", travels from E to M.
 
-| # | Ситуация | Что видит владелец M |
+| # | Situation | What the owner of M sees |
 |---|---|---|
-| 1 | E равнина (`EXACT`), группа на `pos` 800 | фигурка на 800, к `a`, 4 и 3 (половина E видна по уровню E) |
-| 2 | как 1, `pos` 500 (на точке границы) | фигурка на 500, к `a`, 4 и 3 (половина M, источник) |
-| 3 | E горы (`PRESENCE`), группа на `pos` 800 | фигурка на 800, к `a`, без чисел |
-| 4 | M источник; E и F видимые соседи (лес, лес, `RANGE`), ребро E-F между не-источниками, группа едет из E в F, `pos` на ребре E-F 300 (от E) | фигурка на 300, к F, «3-5»; ширина ребра E-F последняя увиденная (DEC-17) |
-| 5 | F соседом M не является (`FOG`), E видимый (лес), группа идёт из E в F: до точки границы E-F | фигурка в половине E; на точке границы исчезает; в половине F фигурки нет; память F: последнее увиденное (DEC-21, п. 8) |
-| 6 | как 5, группа возвращается из F в E | в половине F не видна; на точке границы появляется в половине E с новым `id` (пункт 5 «Детали») |
-| 7 | E и F оба `FOG`, ребро E-F | половин нет: групп не видно |
-| 8 | группа едет из E в M с обычным приказом на Z через M | фигурка к M; цель Z не показывается (DEC-21, п. 6) |
-| 9 | группа на `pos` 400 развернулась (отскок, отмена) | фигурка на 400, `toward_b` меняется на противоположное, причины не видно |
-| 10 | точка границы 700 от M; группа из E едет к M, ребро M-E | при `pos` > 700 половина E (по уровню E), при `pos` ≤ 700 (включая 700) половина M, точно |
-| 11 | в половине E две вражеские группы, на 800 и 650 | две фигурки с разными `id` и своими сведениями (пункты 3 и 4 «Детали») |
-| 12 | группа в бою на ребре, в половине E | видна в бою (`fights`, `point`), отдельной фигурки нет |
-| 13 | своя группа стоит на ребре E-F, ни одного источника рядом | своя группа обзора не даёт (#112): фигурок нет |
+| 1 | E plains (`EXACT`), the group at `pos` 800 | a figure at 800, toward `a`, 4 and 3 (the half of E is visible by the level of E) |
+| 2 | as 1, `pos` 500 (at the border point) | a figure at 500, toward `a`, 4 and 3 (the half of M, a source) |
+| 3 | E mountains (`PRESENCE`), the group at `pos` 800 | a figure at 800, toward `a`, no numbers |
+| 4 | M is a source; E and F are visible neighbors (forest, forest, `RANGE`), the edge E-F between non-sources, the group travels from E to F, `pos` on the edge E-F 300 (from E) | a figure at 300, toward F, "3-5"; the width of the edge E-F is the last seen (DEC-17) |
+| 5 | F is not a neighbor of M (`FOG`), E is visible (forest), the group goes from E to F: up to the border point E-F | a figure in the half of E; it disappears at the border point; there is no figure in the half of F; the memory of F: the last seen (DEC-21, item 8) |
+| 6 | as 5, the group returns from F to E | not visible in the half of F; it appears at the border point in the half of E with a new `id` (item 5 of "Details") |
+| 7 | E and F both `FOG`, the edge E-F | there are no halves: no groups are visible |
+| 8 | a group travels from E to M with an ordinary order to Z through M | a figure toward M; the target Z is not shown (DEC-21, item 6) |
+| 9 | a group at `pos` 400 turned around (bounce, cancellation) | a figure at 400, `toward_b` changes to the opposite, the reason is not visible |
+| 10 | border point 700 from M; a group from E travels to M, the edge M-E | at `pos` > 700 the half of E (by the level of E), at `pos` ≤ 700 (including 700) the half of M, exact |
+| 11 | in the half of E two enemy groups, at 800 and 650 | two figures with different `id` and their own information (items 3 and 4 of "Details") |
+| 12 | a group in a fight on an edge, in the half of E | visible in the fight (`fights`, `point`), there is no separate figure |
+| 13 | an own group stands on the edge E-F, no sources nearby | an own group gives no vision (#112): no figures |
 
-Что меняет реализация (симуляция и `SIM_VERSION`, протокол и `PROTOCOL_VERSION`, клиент, боты): список в #296.
+What the implementation changes (simulation and `SIM_VERSION`, protocol and `PROTOCOL_VERSION`, client, bots): the list is in #296.
 
-Альтернативы (не выбраны):
-- Положение только в половине источника (владелец выбрал зону узла, а не только источника).
-- Положение только без направления (направление нужно, чтобы отличить «входит» от «выходит»).
-- Грубое положение (тик за тиком дёргается; секрета не добавляет).
-
----
-
-## 11. Условие победы
-
-- **[предложено]** VP начисляются за удержание городов во времени, а не за уничтожение противника.
-
-Это главное средство против бункерной стратегии: игрок, запечатавший себя в маленьком регионе, держит мало городов и проигрывает по очкам, даже если его не взяли.
-
-- **[предложено]** На картах должно быть значимое нейтральное пространство между стартовыми позициями. Без него окопаться становится выгодно.
-- **[открыто]** Ценность захвата падает к концу партии: город, взятый на 3-й минуте, приносит VP 12 минут, на 13-й — 2 минуты. Конец партии может замереть. Варианты: победа по достижению порога VP вместо таймера, или дополнительный вес за города, удержанные в момент окончания партии. В MVP: таймер (DEC-03 ниже); запасные варианты только по итогам BAL-02.
-
-### Условие победы и длина партии (DEC-03, #9) **[принято]**
-
-~~Партия 12 минут (7200 тиков).~~ **[заменено DEC-22]**: 15 минут (9000 тиков). VP начисляются каждые 300 тиков (30 секунд) за каждый свой город (значение `vp` из карты, столица ×3); за партию ~~24 начисления~~ 30 начислений. Захват вражеской столицы — мгновенная победа. По таймеру побеждает тот, у кого больше VP; при равенстве — больше городов; иначе ничья.
-
-Значения в `rulesets/mvp-0.toml`: `tick_hz`, `match_ticks`, `victory.vp_period_ticks` (300), `victory.capital_multiplier` (3).
-
-Решение владельца 2026-10-07 (#211): период начисления увеличен с 50 до 300 тиков, потому что огромные числа VP тяжело читать. Значения за город не менялись, соотношение между игроками сохраняется; меняется только частота начисления (и шаг счёта в интерфейсе). Конец партии (~~7200~~ 9000 тиков, DEC-22) и 600 тиков `test-short` кратны периоду, последнее начисление приходится на последний тик.
-
-Уточнения реализации (SIM-13, #29), `gow_sim.systems.victory`:
-- Проигрывает сразу игрок, который сдался (`Forfeit`, в том числе техническое поражение сервера) или чья столица принадлежит противнику. Нейтральная столица не считается захваченной.
-- Если в одном тике проиграли оба (обе сдачи или обе столицы сменили владельца), это ничья. Единственный зеркально-симметричный ответ; открыт вопрос владельцу: #136.
-- Последний тик партии (`match_ticks`) начисляет VP как обычно, потом определяется победитель. Нейтральный город не считается ничьим городом при сравнении числа городов.
-- Результат не хранится в состоянии: `outcome(state, rules)` вычисляется из него, система `victory` пишет событие `match_ended` (`winner`: id игрока или `null` при ничьей; `reason`: `capital`, `forfeit`, `vp`, `cities`, `draw`, `double_defeat`).
-
-Альтернативы (не выбраны):
-- Порог VP вместо таймера или бонус за финальное удержание — только если BAL-02 покажет замирание конца партии.
+Alternatives (not chosen):
+- The position only in the half of a source (the owner chose the zone of a node, not only of a source).
+- The position only without the direction (the direction is needed to tell "enters" from "leaves").
+- A coarse position (jerks tick by tick; adds no secrecy).
 
 ---
 
-## 12. Бункер (Topic 2)
+## 11. Victory condition
 
-Преимущество защитника по умолчанию — это задумано. Вопрос в том, выигрывает ли бункер партию. Сейчас против него работают:
+- **[proposed]** VP are awarded for holding cities over time, not for destroying the opponent.
 
-- VP за удержание (бункер держит мало городов);
-- ~~ёмкость склада зависит от дорог (у бункера с узкими дорогами склад маленький);~~ **[заменено DEC-22]**: ёмкость фиксирована видом узла;
-- осада на истощение (при перерезанных дорогах склад не пополняется);
-- строительство новых рёбер (обход).
+This is the main remedy against the bunker strategy: a player who sealed themselves in a small region holds few cities and loses on points even if nobody took them.
 
-Если на плейтестах бункер всё-таки доминирует, в первую очередь крутить **скорость начисления VP и объём нейтральной территории**, а не механику боя.
+- **[proposed]** Maps must have a meaningful neutral space between the starting positions. Without it, digging in becomes profitable.
+- **[open]** The value of a capture falls toward the end of the match: a city taken in the 3rd minute earns VP for 12 minutes, in the 13th for 2 minutes. The end of the match may freeze. Options: a victory on reaching a VP threshold instead of a timer, or an extra weight for the cities held at the moment the match ends. In the MVP: the timer (DEC-03 below); fallback options only based on the results of BAL-02.
 
-- **[открыто]** Дополнительного рычага против бункера пока нет (владелец 2026-10-12, #239): вернуться после плейтеста раунда 2.
+### Victory condition and match length (DEC-03, #9) **[accepted]**
+
+~~A 12-minute match (7200 ticks).~~ **[superseded by DEC-22]**: 15 minutes (9000 ticks). VP are awarded every 300 ticks (30 seconds) for each of your cities (the `vp` value from the map, the capital ×3); per match ~~24 awards~~ 30 awards. Capturing the enemy capital is an instant victory. On the timer the one with more VP wins; on a tie, the one with more cities; otherwise a draw.
+
+Values in `rulesets/mvp-0.toml`: `tick_hz`, `match_ticks`, `victory.vp_period_ticks` (300), `victory.capital_multiplier` (3).
+
+The owner's decision of 2026-10-07 (#211): the award period was increased from 50 to 300 ticks, because huge VP numbers are hard to read. The values per city did not change, the ratio between the players is preserved; only the frequency of the award changes (and the step of the score in the interface). The end of the match (~~7200~~ 9000 ticks, DEC-22) and the 600 ticks of `test-short` are multiples of the period, the last award falls on the last tick.
+
+Implementation details (SIM-13, #29), `gow_sim.systems.victory`:
+- A player loses at once if they surrendered (`Forfeit`, including a technical defeat by the server) or if their capital belongs to the opponent. A neutral capital does not count as captured.
+- If both lost in one tick (both surrendered or both capitals changed owner), it is a draw. The only mirror-symmetric answer; a question to the owner is open: #136.
+- The last tick of the match (`match_ticks`) awards VP as usual, then the winner is determined. A neutral city does not count as anyone's city when comparing the number of cities.
+- The result is not stored in the state: `outcome(state, rules)` is computed from it, the `victory` system writes the event `match_ended` (`winner`: a player id or `null` on a draw; `reason`: `capital`, `forfeit`, `vp`, `cities`, `draw`, `double_defeat`).
+
+Alternatives (not chosen):
+- A VP threshold instead of a timer or a bonus for the final hold: only if BAL-02 shows that the end of the match freezes.
 
 ---
 
-## 13. Как не сделать экономический симулятор
+## 12. Bunker (Topic 2)
 
-1. **Одна единица измерения — заряд.** Склад — в зарядах, дорога — в зарядах за тик, стоимость — в зарядах. Один заряд — это то, что нужно одному юниту. Единственная конвертация — покупка зарядов за CP в столице по фиксированному курсу.
-2. **Все потоки автоматические.** Пакеты в пути — анимация, а не объект управления. **[заменено DEC-18]**: игрок задаёт приоритет города и может разово перевезти заряды, сами пакеты не управляются. **[заменено DEC-28]**: вместо приоритета два маркера фронта и минимум тыла.
-3. **Экономические решения только пространственные:** где улучшить дорогу и где поставить войска (при `city_upgrades.enabled`, DEC-26, ещё где построить казарму и какой склад расширить). ~~Максимум один дополнительный рычаг — приоритет города (DEC-18: приоритет и разовая перевозка).~~ **[заменено DEC-28]**: приоритетов нет, рычаги снабжения: два маркера фронта, минимум тыла и разовая перевозка (раздел 8, блок DEC-28).
-4. **Показывать состояние, а не потоки:** точка заряда над юнитом, полоска заполнения склада, толщина дороги. Никаких таблиц и отдельных экранов.
-5. **Тест одной фразой:** *«Столица производит заряды, дороги их развозят, юнит без заряда беззащитен».* Новая механика, которая не укладывается в эту фразу, — повод её пересмотреть.
+The defender's advantage by default is intended. The question is whether the bunker wins the match. Right now the following work against it:
+
+- VP for holding (the bunker holds few cities);
+- ~~warehouse capacity depends on roads (a bunker with narrow roads has a small warehouse);~~ **[superseded by DEC-22]**: capacity is fixed by the kind of node;
+- siege of attrition (with cut roads the warehouse is not replenished);
+- building new edges (a bypass).
+
+If the bunker still dominates in playtests, first turn **the VP award rate and the amount of neutral territory**, not the combat mechanics.
+
+- **[open]** There is no additional lever against the bunker yet (the owner 2026-10-12, #239): come back after the round 2 playtest.
 
 ---
 
-## 14. Стартовые числа для первого плейтеста
+## 13. How not to make an economic simulator
 
-Ничего не откалибровано, это точка отсчёта.
+1. **One unit of measurement: the charge.** The warehouse is in charges, a road is in charges per tick, a cost is in charges. One charge is what one unit needs. The only conversion is buying charges for CP in the capital at a fixed rate.
+2. **All flows are automatic.** Packets on the way are an animation, not an object of control. **[superseded by DEC-18]**: the player sets a city priority and can transfer charges once, the packets themselves are not controlled. **[superseded by DEC-28]**: instead of a priority, two front markers and a rear minimum.
+3. **Economic decisions are only spatial:** where to upgrade a road and where to put troops (with `city_upgrades.enabled`, DEC-26, also where to build a barracks and which warehouse to expand). ~~At most one additional lever: the city priority (DEC-18: priority and a one-off transfer).~~ **[superseded by DEC-28]**: there are no priorities, the supply levers are: two front markers, a rear minimum and a one-off transfer (section 8, the DEC-28 block).
+4. **Show the state, not the flows:** a charge dot above a unit, a fill bar of the warehouse, the thickness of a road. No tables and no separate screens.
+5. **A one-phrase test:** *"The capital produces charges, roads carry them, a unit without a charge is defenseless."* A new mechanic that does not fit this phrase is a reason to reconsider it.
 
-Действующие стартовые значения рулсета `rulesets/mvp-0.toml` (длительности в тиках, CP в сотых долях) перечислены в SIM-01 (#17). Реген «1 CP за 5 сек» там записан как 100 сотых CP за 50 тиков, потолок 5 CP как 500.
+---
 
-| Параметр | Значение |
+## 14. Starting numbers for the first playtest
+
+Nothing is calibrated, this is a point of reference.
+
+The current starting values of the ruleset `rulesets/mvp-0.toml` (durations in ticks, CP in hundredths) are listed in SIM-01 (#17). The regen "1 CP per 5 s" is recorded there as 100 hundredths of CP per 50 ticks, the cap of 5 CP as 500.
+
+| Parameter | Value |
 |---|---|
-| Реген CP | 1 за 5 сек |
-| Потолок CP | 5 |
-| Покупка в столице | 1 CP → 2 заряда |
-| Обычный приказ | 1 CP |
-| Запланированный приказ | 2 CP, ~~+2 заряда группе~~ **[заменено DEC-29]**: бонус по числу рёбер пути, потолок: заряженные юниты (раздел 5) |
-| Деление / слияние | ~~1 CP~~ 0 (DEC-20) |
-| Рельеф | горы +1, лес 0, равнина −1 (защитнику) |
-| Новое ребро | 1–3 за партию |
-| Лимит степени узла | 4–5 |
+| CP regen | 1 per 5 s |
+| CP cap | 5 |
+| Purchase in the capital | 1 CP → 2 charges |
+| Ordinary order | 1 CP |
+| Scheduled order | 2 CP, ~~+2 charges to the group~~ **[superseded by DEC-29]**: a bonus by the number of edges of the path, cap: charged units (section 5) |
+| Split / merge | ~~1 CP~~ 0 (DEC-20) |
+| Terrain | mountains +1, forest 0, plains −1 (for the defender) |
+| New edge | 1-3 per match |
+| Node degree limit | 4-5 |
 
 ---
 
-## 15. Открытые вопросы (сводно)
+## 15. Open questions (summary)
 
-1. **1v1 или FFA.** Видимость запланированных приказов плохо работает в FFA: их видят не только цель, но и третьи игроки. В 1v1 и командных режимах механика чистая. Решать раньше остального — от этого зависят карты и баланс. *MVP: только 1v1.*
-2. **Плоская экономика** — подтвердить или выбрать вогнутую модель. *MVP: плоская (DEC-02).*
-3. **Стойка CP** — три положения или два отдельных потока без конвертации. *MVP: три положения (DEC-02).*
-4. **Правило отскока** — атакующий возвращается в исходный узел? От этого зависит осада. *MVP: да (DEC-07, правило 4).*
-5. **Размер бонуса** за запланированный приказ. ~~*MVP: +2 на первый бой (DEC-08).*~~ **[заменено DEC-29]** *MVP: число рёбер пути, потолок: заряженные юниты (DEC-29).*
-6. **Бонус плана на защите** — действует или только на движущиеся армии. *MVP: подготовленная защита: режим «Защита», ~~+2 (DEC-08)~~ **[заменено DEC-30]** накапливаемый бонус (DEC-30).*
-7. **Инициатива = CP** за выигранный размен — нужна ли.
-8. **Строитель** — отдельный юнит или режим. ~~*MVP: режим «Строительство» (DEC-08, SIM-11).*~~ *MVP: ни то ни другое, улучшение дороги: функция города за заряды склада (DEC-16).*
-9. **Трофеи со складов** — убрать, оставить как награду за скорость или заменить разовыми CP. *MVP: трофеев нет, склад обнуляется при захвате (SIM-07).*
-10. **Режимы доставки** (пакеты / прокачка) — нужны ли вообще. ~~*Вне MVP.*~~ ~~*MVP: вместо режимов два типа дорог, быстрая и грузовая (DEC-22).*~~ *MVP: режимов и типов нет, улучшенная дорога только быстрее (DEC-26).*
-11. **Приоритет города**, нужен ли этот рычаг. ~~*MVP: три уровня приоритета и разовая перевозка (DEC-18).*~~ **[заменено DEC-28]** *MVP: два маркера фронта, минимум тыла и разовая перевозка (DEC-28).*
-12. **Ценность поздних захватов** — порог VP или вес финального удержания. *MVP: таймер (DEC-03); запасные варианты только по итогам BAL-02.*
-13. **Автоматическое бегство** разряженных юнитов — сейчас его нет (группа, за отход которой не заплатили, гибнет). Может оказаться слишком жёстким. *MVP: бегства нет (DEC-07, правило 9).*
-14. **Гекс-координаты** на доске (оси x/y/z и формула `(x+y+z)/2`) — что это: расстояние на гексах, размещение провинций или что-то другое?
-15. **Все числа** из раздела 14. *Стартовые значения `mvp-0`: SIM-01.*
+1. **1v1 or FFA.** The visibility of scheduled orders works badly in FFA: they are seen not only by the target but by third players too. In 1v1 and team modes the mechanic is clean. Decide before the rest: maps and balance depend on it. *MVP: only 1v1.*
+2. **Flat economy**: confirm it or choose a concave model. *MVP: flat (DEC-02).*
+3. **CP stance**: three positions or two separate flows without conversion. *MVP: three positions (DEC-02).*
+4. **The bounce rule**: does the attacker return to the source node? The siege depends on it. *MVP: yes (DEC-07, rule 4).*
+5. **The size of the bonus** for a scheduled order. ~~*MVP: +2 for the first fight (DEC-08).*~~ **[superseded by DEC-29]** *MVP: the number of edges of the path, cap: charged units (DEC-29).*
+6. **The plan bonus on defense**: does it apply, or only to moving armies. *MVP: prepared defense: the mode "Defense", ~~+2 (DEC-08)~~ **[superseded by DEC-30]** an accumulating bonus (DEC-30).*
+7. **Initiative = CP** for a won exchange: is it needed.
+8. **The builder**: a separate unit or a mode. ~~*MVP: the mode "Building" (DEC-08, SIM-11).*~~ *MVP: neither; the road upgrade is a city function for warehouse charges (DEC-16).*
+9. **Warehouse trophies**: remove, keep as a reward for speed, or replace with one-off CP. *MVP: no trophies, the warehouse is zeroed on capture (SIM-07).*
+10. **Delivery modes** (packets / pumping): are they needed at all. ~~*Outside the MVP.*~~ ~~*MVP: instead of modes, two road types, fast and cargo (DEC-22).*~~ *MVP: no modes and no types, an upgraded road is only faster (DEC-26).*
+11. **City priority**: is this lever needed. ~~*MVP: three priority levels and a one-off transfer (DEC-18).*~~ **[superseded by DEC-28]** *MVP: two front markers, a rear minimum and a one-off transfer (DEC-28).*
+12. **The value of late captures**: a VP threshold or a weight of the final hold. *MVP: the timer (DEC-03); fallback options only based on the results of BAL-02.*
+13. **Automatic flight** of discharged units: there is none now (a group whose retreat was not paid for dies). It may turn out too harsh. *MVP: no flight (DEC-07, rule 9).*
+14. **Hex coordinates** on the board (axes x/y/z and the formula `(x+y+z)/2`): what is this: a distance on hexes, the placement of provinces, or something else?
+15. **All the numbers** from section 14. *Starting values of `mvp-0`: SIM-01.*
 
 ---
 
-## 16. От чего отказались и почему
+## 16. What was rejected and why
 
-| Вариант | Чем заменён | Причина |
+| Option | Replaced by | Reason |
 |---|---|---|
-| Партии 2.5–4 часа | 10–15 минут | слишком долго для сессии, ломается при выходе игрока из партии |
-| 5 ресурсов (Money, Metal, Oil, Food, Fossils) | один заряд | ресурсы добавляют нагрузку, а не глубину |
-| Несколько типов юнитов | один юнит + режимы | роли переносятся в режимы и рельеф |
-| Случайная генерация карт | пул симметричных авторских карт | без повторяющихся позиций не формируется знание |
-| Скрытые механики, которые открываются с опытом | скрытое состояние при публичных правилах | скрытые константы узнают за неделю |
-| ×2 зарядов за запланированный приказ | фиксированный бонус | множитель поощряет большие армии |
-| Дороги ограничивают число юнитов | ~~дороги влияют только на снабжение~~ **[заменено DEC-28]**: улучшенная дорога ускоряет и юниты | размер группы и так ограничен ёмкостью города |
-| Две независимые ширины у половин ребра | одна ширина, улучшается только внутри своей территории | двойной учёт и лазейка «оставлю свою половину узкой» |
-| Граница как точка равновесия снабжения | границу двигают войска | иначе территорию можно отжимать без боя |
-| +0.5 CP за город (рекомендуется отказаться) | плоская экономика | доход, растущий от территории, — это снежный ком; симуляция это и показала: «в долгосрочной перспективе игрок с преимуществом по городам неизбежно побеждает» |
-| Отдельный штраф за большие группы | ёмкость города | лимит уже возникает сам |
-| Ширины дорог, ёмкость всех узлов и стройки видны всем всегда (DEC-04) | видны только в обзоре, вне обзора последнее увиденное (DEC-17) | плейтест 2026-10-07: улучшение дорог противника было видно сквозь туман |
-| Режим «Строительство» у группы (DEC-08, SIM-11) | улучшение дороги городом за заряды склада (DEC-16) | группу приходилось переключать и держать без дела, третий режим усложнял бой, цена в CP не была связана с зарядами |
-| Только автоматическое снабжение | ~~приоритет города и разовая перевозка (DEC-18)~~ **[заменено DEC-28]**: маркеры фронта, минимум тыла и разовая перевозка | плейтест 2026-10-12: нельзя было сказать «сначала фронт», промежуточные города копили заряды |
-| Падение ёмкости отрезанного города | голод в окружении: гарнизон тратит заряды, юниты не гибнут (DEC-19) | падение ёмкости было непрозрачным и пропадает с фиксированной ёмкостью |
-| Деление, слияние и отмена за CP | бесплатно, автослияние, лимит стека по ёмкости пути (DEC-20) | плейтест 2026-10-12: «дэтбол» из столицы, платное управление группами мешало |
-| О соседях только «есть враг» (DEC-04) | сведения по рельефу, диапазоны, точное число за точкой границы ребра (DEC-21) | плейтест 2026-10-12: решения вслепую, рельеф не влиял на обзор |
-| Ёмкость от дорог, ширина 1..5, партия 12 минут | ёмкость по виду узла, дороги до 3 уровней двух типов, 15 минут (DEC-22) | дороги не улучшали, ёмкость смешивала два решения, партия ощущалась скомканной |
-| Каждый узел: город со складом (MAP-01) | провинции без склада, виды городов, названия (DEC-23) | позиционная игра и разная ценность городов |
-| Два типа дорог: быстрая и грузовая (DEC-22), все города рекрутируют и одна цифра для склада и юнитов | дороги без типа и дешевле (всегда), казарма и отдельный склад за флагом (DEC-26) | плейтест 2026-10-14: решение «какой тип» ничего не меняло, города слишком равны с первой секунды |
+| Matches of 2.5-4 hours | 10-15 minutes | too long for a session, breaks when a player leaves the match |
+| 5 resources (Money, Metal, Oil, Food, Fossils) | one charge | resources add load, not depth |
+| Several unit types | one unit + modes | roles are moved into modes and terrain |
+| Random map generation | a pool of symmetric hand-made maps | without repeating positions no knowledge forms |
+| Hidden mechanics that open up with experience | hidden state with public rules | hidden constants are found out within a week |
+| ×2 charges for a scheduled order | a fixed bonus | a multiplier rewards big armies |
+| Roads limit the number of units | ~~roads affect only supply~~ **[superseded by DEC-28]**: an upgraded road speeds up units too | group size is already limited by city capacity |
+| Two independent widths for the halves of an edge | one width, upgraded only inside your own territory | double counting and the loophole "I'll leave my half narrow" |
+| The border as a supply equilibrium point | troops move the border | otherwise territory could be squeezed out without a fight |
+| +0.5 CP per city (recommended to drop) | flat economy | income that grows with territory is a snowball; the simulation showed it: "in the long run the player with a city advantage inevitably wins" |
+| A separate penalty for big groups | city capacity | the limit already arises by itself |
+| Road widths, the capacity of all nodes and construction are always visible to everyone (DEC-04) | visible only in vision range, outside it the last seen (DEC-17) | playtest 2026-10-07: the enemy's road upgrades were visible through the fog |
+| The "Building" mode of a group (DEC-08, SIM-11) | a road upgrade by a city for warehouse charges (DEC-16) | the group had to be switched and kept idle, a third mode complicated combat, the price in CP was not tied to charges |
+| Only automatic supply | ~~city priority and a one-off transfer (DEC-18)~~ **[superseded by DEC-28]**: front markers, a rear minimum and a one-off transfer | playtest 2026-10-12: it was impossible to say "front first", intermediate cities hoarded charges |
+| A capacity drop of a cut-off city | starvation in an encirclement: the garrison spends charges, units do not die (DEC-19) | the capacity drop was opaque and disappears with fixed capacity |
+| Split, merge and cancel for CP | free, auto-merge, a stack limit by the capacity of the path (DEC-20) | playtest 2026-10-12: a "deathball" from the capital, paid group management got in the way |
+| Of the neighbors only "there is an enemy" (DEC-04) | information by terrain, ranges, the exact number beyond the border point of an edge (DEC-21) | playtest 2026-10-12: decisions in the blind, terrain did not affect vision |
+| Capacity from roads, width 1..5, a 12-minute match | capacity by the kind of node, roads up to 3 levels of two types, 15 minutes (DEC-22) | roads did not get upgraded, capacity mixed two decisions, the match felt rushed |
+| Every node: a city with a warehouse (MAP-01) | provinces without a warehouse, kinds of cities, names (DEC-23) | positional play and different value of cities |
+| Two road types: fast and cargo (DEC-22), all cities recruit and one number for the warehouse and units | roads without a type and cheaper (always), a barracks and a separate warehouse behind a flag (DEC-26) | playtest 2026-10-14: the decision "which type" changed nothing, cities are too equal from the first second |
 
 ---
 
-## 17. Что проверять на плейтестах
+## 17. What to check in playtests
 
-- **Доминирующая стратегия.** Если больше 70% партий идут по одному сценарию, глубины нет.
-- **Ботовый self-play.** Три простых бота (экспансия / раннее давление / отсечение снабжения). Смотреть на разброс исходов: если один бот выигрывает больше ~65% у всех, где-то перекос.
-- **Доля запланированных приказов** среди атак: ориентир 20–70%.
-- **Окупается ли осада:** берутся ли города на истощение, если дороги перерезаны.
-- **Бункер:** выигрывает ли игрок, запечатавший себя в маленьком регионе.
-- **Конец партии:** есть ли атаки в последние минуты.
-- **Тест на суеверие:** для любого неочевидного фактора — может ли игрок внутри игры поставить эксперимент и проверить его? Если нет, игроки будут придумывать ложные объяснения.
-
----
-
-## 18. Интерфейс (минимум)
-
-- Точка заряда над юнитом (зелёная / красная).
-- Полоска заполнения склада у города.
-- Толщина дороги = её пропускная способность.
-- Дорога в тумане рисуется с последней увиденной толщиной и помечается как устаревшая не только цветом; ~~ёмкость города по устаревшим данным показана как оценка (DEC-17).~~ **[заменено DEC-22]**: ёмкость фиксирована видом узла и показывается точно.
-- ~~Перед атакой видно свои заряды точно и оценку зарядов противника.~~ **[заменено #252]**: оценка боя в интерфейсе снята владельцем, свои заряды видны точно.
-- При наведении на дорогу — что даст улучшение, а не просто текущая ширина. ~~Например «+1.5 ёмкости города».~~ **[заменено DEC-22, DEC-28]**: ёмкость от дорог не зависит; подсказка показывает прирост скорости юнитов и снабжения и цену в CP.
-- Развитие города (DEC-26, при `city_upgrades.enabled`): в меню города «Казарма» и «Склад» (уровень, ёмкость склада, цена); над своим городом тонкая полоса идущей стройки казармы или склада; полоса склада по ёмкости склада. ~~Найм без казармы неактивен («нет казармы»).~~ **[заменено #315]**: в городе без казармы (`has_barracks = false`) сектора «Нанять» в меню нет совсем (не серый); если казарма неизвестна (`null`) или `city_upgrades.enabled = false`, сектор есть, решает сервер. Построенная казарма и склад максимального уровня из меню исчезают (сектора не показываются). Своя казарма видна на городе значком-домиком (форма, не цвет); ~~у чужого города казарма скрыта туманом (AGENTS.md 4.4)~~ **[заменено DEC-31]**: у вражеского города, соседнего со своим узлом, построенная казарма видна тем же домиком; у остальных чужих скрыта (AGENTS.md 4.4), клиент ничего не додумывает. Открыто не больше одного радиального меню.
-- Улучшение дороги (DEC-16): ~~клик по своему городу, клавиша U, выбор дороги (без выбора типа, DEC-26); подсказка показывает прирост скорости и цену в зарядах.~~ **[заменено DEC-28, #315]**: режим улучшения дорог на `U` (`Esc` или ещё раз `U`: выход): подсвечены свои дороги, которые можно улучшить, клик по такой дороге шлёт `upgrade_road`; без режима клик по дороге ничего не улучшает; цена в CP (0,5 CP за уровень), город не участвует (клиент: #311, #315, раздел 8, «Улучшение дороги в клиенте»). При `city_upgrades.enabled = true` меню города получает казарму и склад (DEC-26).
-- Арена боя на карте (DEC-24, DEC-29, DEC-32, #295, #325, #330; ui-style 9.9, 27): плашка из двух половин (своя слева, противник справа), на каждого юнита боя фишка ▽ (`units + losses`: заряжен залит, разряжен пустой со штриховкой, убит пунктиром; у противника второй тёмный контур), до 8 фишек на сторону, дальше «+N» с точным числом скрытых и малым числом скрытых заряженных; янтарный перечёркнутый кружок на заряженной фишке, которая не стреляет (`FightView.mute`, п. F2); под каждой половиной запас бонусных выстрелов ◇ ×N (`FightView.virtual_left`, пунктирный и тусклый при 0), вдоль нижней кромки полоса до следующего раунда. Изменившаяся в раунде фишка (погас заряд, убит юнит, пришло подкрепление) пульсирует один раз; какая именно, из вида не узнать, это визуальное соглашение. Обмен ударами последнего раунда дугами над плашкой цветом стреляющего (залитый круг: реальные выстрелы, пустой ромб: виртуальные), стрелки нет у стороны, не стрелявшей; раунд, где сторона стреляла только виртуальным, рисуется другой стрелкой (свечение, пунктирный стержень, голова-ромб), и над плашкой стоит подпись «бонусная атака» (источник бонуса не указывается). Арена рисуется в экранных пикселях (не мельчает на 60%), все длительности (рост стрелок, подъём и затухание чисел, пульсация, показ итога) считаются долями раунда от `ruleset_public.combat.round_ticks`. Окна-доски нет. Клиент ничего не считает и не выводит: все числа из `PlayerView.fights` и событий (ui-style 9.9, 27).
-- «Защита» (DEC-30, #318): у иконки своей группы (города) в «Защите» рядом со щитом «+N / M» (`GroupView.defense_bonus` и `defense_cap`, при нескольких группах сумма); подсказка при наведении: бонус, правило (+1 за `orders.defense_ticks_per_bonus` тиков в режиме, потолок: заряженные, сгорает после боя, цена) и те же строки подписью под меню группы. У чужой группы только щит режима, числа нет.
-- Бонус запланированного приказа (DEC-29): у головки ленты своего плана «◇ +N» (`OrderView.bonus`, число сервера); пока группа стоит в городе, это прогноз (контур пунктиром, подсказка группы так и говорит), с выступления контур сплошной. Противник видит только намерение.
-- Очередь найма (DEC-25): над своим городом слоты очереди, первый заполняется прогрессом (полный: юнит готов и ждёт места); в меню города «Нанять» (R) с числом в очереди и «Отменить найм» с возвратом.
-- Сдвиги границы — только в ответ на события, чтобы игрок всегда мог назвать причину.
-- `Tab` (альтернатива `F2`) также снимает выделение города и закрывает его меню.
-- На слое «Снабжение» `[` и `]` убавляют и прибавляют минимум тыла на единицу (как ползунок, #330).
-- Режимы карты на `Tab` (альтернатива `F2`), в том числе «Снабжение»: ~~приоритеты городов и перевозки (DEC-18)~~ **[заменено DEC-28]**: два маркера фронта, минимум тыла и перевозки; деление группы на `S` (DEC-20).
-- Время пути приказа и подсветка узлов, достижимых выбранной группой (DEC-20, DEC-22); считает сервер.
-- Диапазоны «3-5» вместо чисел там, где обзор по рельефу их не даёт (DEC-21); таймер голода у отрезанного города (DEC-19).
-- Решения владельца по интерфейсу после раунда 2: трекинг #236.
+- **A dominant strategy.** If more than 70% of matches follow one scenario, there is no depth.
+- **Bot self-play.** Three simple bots (expansion / early pressure / supply cut-off). Look at the spread of outcomes: if one bot wins more than ~65% against all others, there is a skew somewhere.
+- **The share of scheduled orders** among attacks: the guideline is 20-70%.
+- **Does the siege pay off:** are cities taken by attrition if the roads are cut.
+- **The bunker:** does a player who sealed themselves in a small region win.
+- **The end of the match:** are there attacks in the last minutes.
+- **The superstition test:** for any non-obvious factor, can a player inside the game set up an experiment and check it? If not, players will invent false explanations.
 
 ---
 
-## 19. Матч на сервере: разрыв соединения и рейтинг
+## 18. Interface (minimum)
 
-Правила этого раздела: настройки сервера и метаигры, а не рулсета симуляции.
-
-### Разрыв соединения и паузы (DEC-05, #49) **[принято]**
-
-60 секунд на переподключение, матч при этом продолжается; затем техническое поражение (записывается в журнал реплея как команда `Forfeit`). В рейтинговых матчах пауз нет; в приватных (по инвайту-ссылке) — одна пауза до 60 секунд на игрока. Матч из публичного лобби (LOB-01, #76) играется с незнакомцем, поэтому пауз в нём нет, как в рейтинговом: пауза в нём была бы способом затянуть игру. Настройки сервера, а не рулсета.
-
-Значения задаются в настройках сервера (SRV-04, #50), в `rulesets/*.toml` их нет.
-
-Альтернативы (не выбраны):
-- Бот берёт управление на время отключения.
-
-### Какие матчи рейтинговые (DEC-06, #74) **[принято]**
-
-Рейтинговые только матчи из очереди матчмейкинга. Матчи из лобби, по инвайту и против бота рейтинг не меняют, но сохраняются в истории. Техническое поражение и сдача — поражение.
-
-### Рейтинг Glicko-2 (RAT-01, #73)
-
-Рейтинг игрока — тройка Glicko-2 `(r, RD, σ)` (`gow_server.rating`, по статье Глицкмана). Новый игрок: 1500 / 350 / 0,06, τ = 0,5. Каждый рейтинговый матч — отдельный «период»: оба игрока обновляются после матча против друг друга (победа 1, ничья 0,5, поражение 0). Рост RD от простоя не реализован: RD меняется только в матчах. Показываемый рейтинг — `r − 2·RD`. Это настройка метаигры, не рулсета: симуляция рейтинг не видит.
-
-Обновление (RAT-02, #75): сразу после рейтингового матча, в той же транзакции БД, что и запись результата (вне тика). Победа 1, ничья 0,5 (в том числе `double_defeat`), поражение 0; техническое поражение (`disconnect`, `no_show`) и сдача — поражение. Матч считается один раз: флаг `matches.rating_applied` занимается одним атомарным `UPDATE`, повторная обработка рейтинг не меняет. Прерванный матч (`aborted`) не рейтингуется. Рейтинговым матч становится только в `lifecycle.start(rated=True)` между двумя аккаунтами: против бота флаг игнорируется. Показываемый рейтинг до и после пишется в `match_players.rating_before/after`; игрок получает его в `match_end.rating` (`before`, `after`, целые) и видит на экране итога. Обе стороны считаются от рейтингов на старте матча (у игрока не бывает двух активных матчей), сервер пересчитывает их в транзакции.
-
-### Очередь матчмейкинга (MM-01, #77)
-
-Рейтинговый матч (DEC-06) находится через очередь (`gow_server.matchqueue`, `POST/GET/DELETE /api/queue`). Это правила метаигры: числа — настройки сервера (`GOW_QUEUE_*`, README), не рулсета.
-
-- **Окно.** Игрок, ждущий `t` секунд, принимает соперника с рейтингом в пределах `100 + 5·t`, но не больше 400. Пара составляется, только если окно каждого принимает рейтинг другого. Сравнивается `r` Glicko-2 (оценка силы), а не показываемый `r − 2·RD`: у новичка RD велик, и показываемый рейтинг занижен.
-- **Проход** — не чаще раза в секунду. Очередь обходится с начала; каждый ещё не сведённый игрок берёт допустимого соперника с самой близкой разницей рейтинга, при равной разнице — того, кто ближе к началу очереди. Одну и ту же пару не сводят дважды подряд: последний предложенный соперник игрока пропускается.
-- **Подтверждение.** «Соперник найден» → 15 секунд на подтверждение обоими. Неподтвердивший выходит из очереди; подтвердивший возвращается в её начало, время ожидания (и окно) сохраняется. Отказ (выход из очереди) действует так же сразу. Матч создаётся только после двух подтверждений.
-- **Матч**: случайная карта пула, стороны — случайно (без зависимости от порядка в очереди), рейтинговый (`lifecycle.start(rated=True)`), не приватный: пауз нет (DEC-05).
-- **Бот.** Через 60 секунд ожидания игроку предлагается матч с ботом без рейтинга (SRV-06); принятие предложения выводит его из очереди.
-- Место в очереди занимает игрока, как матч (SRV-09): пока он в очереди, создать или принять другой матч нельзя (409), и наоборот. Клиент опрашивает статус раз в секунду; игрок, чей клиент молчит 15 секунд (закрытая вкладка), выходит из очереди. Очередь живёт в памяти процесса: перезапуск сервера её очищает.
+- A charge dot above a unit (green / red).
+- A fill bar of the warehouse at a city.
+- Road thickness = its throughput.
+- A road in the fog is drawn with the last seen thickness and is marked as stale not by color alone; ~~the capacity of a city from stale data is shown as an estimate (DEC-17).~~ **[superseded by DEC-22]**: capacity is fixed by the kind of node and is shown exactly.
+- ~~Before an attack your own charges are seen exactly, and an estimate of the enemy's charges.~~ **[superseded by #252]**: the fight estimate in the interface was removed by the owner, your own charges are seen exactly.
+- On hover over a road: what the upgrade will give, not just the current width. ~~For example "+1.5 city capacity".~~ **[superseded by DEC-22, DEC-28]**: capacity does not depend on roads; the tooltip shows the gain in unit and supply speed and the price in CP.
+- City development (DEC-26, with `city_upgrades.enabled`): in the city menu "Barracks" and "Warehouse" (level, warehouse capacity, price); above your own city a thin bar of the barracks or warehouse construction in progress; the warehouse bar by warehouse capacity. ~~Recruiting without a barracks is inactive ("no barracks").~~ **[superseded by #315]**: in a city without a barracks (`has_barracks = false`) there is no "Recruit" sector in the menu at all (not grayed out); if the barracks is unknown (`null`) or `city_upgrades.enabled = false`, the sector is there, the server decides. A built barracks and a warehouse of the maximum level disappear from the menu (the sectors are not shown). Your own barracks is visible on the city by a house icon (a shape, not a color); ~~at an enemy city the barracks is hidden by the fog (AGENTS.md 4.4)~~ **[superseded by DEC-31]**: at an enemy city adjacent to your own node a built barracks is visible by the same house; at the other enemy cities it is hidden (AGENTS.md 4.4), the client does not infer anything. No more than one radial menu is open.
+- Road upgrade (DEC-16): ~~a click on your own city, the key U, choosing a road (without choosing a type, DEC-26); the tooltip shows the speed gain and the price in charges.~~ **[superseded by DEC-28, #315]**: a road upgrade mode on `U` (`Esc` or `U` again: leave): your own roads that can be upgraded are highlighted, a click on such a road sends `upgrade_road`; without the mode a click on a road upgrades nothing; the price is in CP (0.5 CP per level), the city takes no part (client: #311, #315, section 8, "Road upgrade in the client"). With `city_upgrades.enabled = true` the city menu gets the barracks and the warehouse (DEC-26).
+- The fight arena on the map (DEC-24, DEC-29, DEC-32, #295, #325, #330; ui-style 9.9, 27): a plaque of two halves (yours on the left, the opponent on the right), for each unit of the fight a ▽ token (`units + losses`: charged is filled, discharged is empty with hatching, killed is dashed; the opponent's has a second dark outline), up to 8 tokens per side, beyond that "+N" with the exact number of hidden tokens and the small number of hidden charged ones; an amber crossed-out circle on a charged token that does not fire (`FightView.mute`, item F2); under each half a reserve of bonus shots ◇ ×N (`FightView.virtual_left`, dashed and dim at 0), along the bottom edge a bar to the next round. A token that changed in a round (a charge went out, a unit was killed, reinforcement came) pulses once; which one exactly cannot be learned from the view, this is a visual convention. The exchange of blows of the last round is shown as arcs above the plaque in the color of the shooter (a filled circle: real shots, an empty diamond: virtual ones), there is no arrow on a side that did not shoot; a round where a side shot only virtual ones is drawn with a different arrow (glow, dashed shaft, diamond head), and above the plaque stands the caption "bonus attack" (the source of the bonus is not shown). The arena is drawn in screen pixels (it does not shrink at 60%), all durations (growth of the arrows, rise and fade of the numbers, pulsation, showing the result) are counted as fractions of a round from `ruleset_public.combat.round_ticks`. There is no board window. The client computes and derives nothing: all numbers come from `PlayerView.fights` and events (ui-style 9.9, 27).
+- "Defense" (DEC-30, #318): next to the icon of your own group (city) in "Defense" there is a shield "+N / M" (`GroupView.defense_bonus` and `defense_cap`, with several groups the sum); the tooltip on hover: the bonus, the rule (+1 per `orders.defense_ticks_per_bonus` ticks in the mode, cap: charged units, burns after a fight, the price) and the same lines as a caption under the group menu. For an enemy group only the mode shield, no number.
+- The bonus of a scheduled order (DEC-29): at the head of the ribbon of your own plan "◇ +N" (`OrderView.bonus`, the server's number); while the group stands in the city, this is a forecast (a dashed outline, the group tooltip says so), from setting out the outline is solid. The opponent sees only the intent.
+- The recruit queue (DEC-25): above your own city the queue slots, the first is filled by progress (full: the unit is ready and waits for room); in the city menu "Recruit" (R) with the number in the queue and "Cancel recruiting" with a refund.
+- Border shifts only in response to events, so that the player can always name the reason.
+- `Tab` (an alternative to `F2`) also clears the city selection and closes its menu.
+- On the "Supply" layer `[` and `]` lower and raise the rear minimum by one (like a slider, #330).
+- Map modes on `Tab` (an alternative to `F2`), including "Supply": ~~city priorities and transfers (DEC-18)~~ **[superseded by DEC-28]**: two front markers, a rear minimum and transfers; splitting a group on `S` (DEC-20).
+- The travel time of an order and the highlight of the nodes reachable by the selected group (DEC-20, DEC-22); computed by the server.
+- Ranges "3-5" instead of numbers where the terrain vision does not give them (DEC-21); a starvation timer at a cut-off city (DEC-19).
+- The owner's interface decisions after round 2: tracking #236.
 
 ---
 
-## 20. Глоссарий
+## 19. Match on the server: disconnect and rating
 
-Совпадает с глоссарием `AGENTS.md` (раздел 15). Меняется только вместе с ним.
+The rules of this section: settings of the server and of the meta-game, not of the simulation ruleset.
 
-| Термин | В коде | Значение |
+### Disconnect and pauses (DEC-05, #49) **[accepted]**
+
+60 seconds to reconnect, the match keeps going meanwhile; then a technical defeat (recorded in the replay log as the command `Forfeit`). In rated matches there are no pauses; in private ones (by an invite link) one pause of up to 60 seconds per player. A match from the public lobby (LOB-01, #76) is played with a stranger, so there are no pauses in it, as in a rated one: a pause in it would be a way to drag the game out. Server settings, not the ruleset.
+
+The values are set in the server settings (SRV-04, #50), they are not in `rulesets/*.toml`.
+
+Alternatives (not chosen):
+- A bot takes control for the time of the disconnect.
+
+### Which matches are rated (DEC-06, #74) **[accepted]**
+
+Rated are only the matches from the matchmaking queue. Matches from the lobby, by invite and against a bot do not change the rating but are saved in the history. A technical defeat and a surrender are a defeat.
+
+### Glicko-2 rating (RAT-01, #73)
+
+A player's rating is a Glicko-2 triple `(r, RD, σ)` (`gow_server.rating`, after Glickman's paper). A new player: 1500 / 350 / 0.06, τ = 0.5. Each rated match is a separate "period": both players are updated after the match against each other (a win 1, a draw 0.5, a loss 0). RD growth from idleness is not implemented: RD changes only in matches. The displayed rating is `r − 2·RD`. This is a meta-game setting, not a ruleset one: the simulation does not see the rating.
+
+The update (RAT-02, #75): right after a rated match, in the same DB transaction as the result record (outside a tick). A win 1, a draw 0.5 (including `double_defeat`), a loss 0; a technical defeat (`disconnect`, `no_show`) and a surrender are a defeat. A match is counted once: the flag `matches.rating_applied` is taken by a single atomic `UPDATE`, repeated processing does not change the rating. An aborted match (`aborted`) is not rated. A match becomes rated only in `lifecycle.start(rated=True)` between two accounts: against a bot the flag is ignored. The displayed rating before and after is written to `match_players.rating_before/after`; the player gets it in `match_end.rating` (`before`, `after`, integers) and sees it on the result screen. Both sides are computed from the ratings at the start of the match (a player never has two active matches), the server recomputes them in the transaction.
+
+### Matchmaking queue (MM-01, #77)
+
+A rated match (DEC-06) is found through the queue (`gow_server.matchqueue`, `POST/GET/DELETE /api/queue`). These are meta-game rules: the numbers are server settings (`GOW_QUEUE_*`, README), not the ruleset.
+
+- **Window.** A player who has waited `t` seconds accepts an opponent whose rating is within `100 + 5·t`, but not more than 400. A pair is formed only if each one's window accepts the other's rating. What is compared is the Glicko-2 `r` (the strength estimate), not the displayed `r − 2·RD`: a newcomer has a large RD, and the displayed rating is understated.
+- **The pass** happens at most once a second. The queue is traversed from the start; each player not yet matched takes the eligible opponent with the closest rating difference, and with an equal difference the one closer to the start of the queue. The same pair is not matched twice in a row: the last offered opponent of a player is skipped.
+- **Confirmation.** "Opponent found" → 15 seconds for both to confirm. The one who did not confirm leaves the queue; the one who confirmed returns to its start, the waiting time (and the window) is kept. A refusal (leaving the queue) works the same at once. The match is created only after two confirmations.
+- **The match**: a random map of the pool, sides chosen randomly (independent of the order in the queue), rated (`lifecycle.start(rated=True)`), not private: no pauses (DEC-05).
+- **Bot.** After 60 seconds of waiting the player is offered an unrated match with a bot (SRV-06); accepting the offer takes them out of the queue.
+- A place in the queue occupies the player, like a match (SRV-09): while they are in the queue, they cannot create or accept another match (409), and vice versa. The client polls the status once a second; a player whose client is silent for 15 seconds (a closed tab) leaves the queue. The queue lives in process memory: a server restart clears it.
+
+---
+
+## 20. Glossary
+
+Matches the glossary of `AGENTS.md` (section 15). Changes only together with it.
+
+| Term | In code | Meaning |
 |---|---|---|
-| тик | `tick` | шаг симуляции, 10 в секунду |
-| рулсет | `Ruleset` | все числа и флаги правил, `rulesets/*.toml` |
-| город / узел | `Node` | вершина графа; узел: город со складом или провинция (DEC-23) |
-| провинция | `kind = province` | узел без города: без склада, ёмкость 3, без VP, только позиция (DEC-23) |
-| дорога / ребро | `Edge` | связь узлов; `width`: уровень дороги 1..3; ~~тип быстрая или грузовая с уровня 2 (DEC-22)~~ типа нет, улучшение только ускоряет доставку (DEC-26) |
-| точка границы | `border_permille` | точка на ребре в тысячных от конца `a`; делит ребро на половины для обзора (DEC-21, DEC-23) |
-| внутреннее ребро | `is_internal` | оба конца у одного владельца; только его можно улучшать и только по нему идёт снабжение |
-| буферное ребро | `is_buffer` | концы у разных владельцев или один нейтральный |
-| группа | `Group` | юниты одного игрока в одном месте: `units`, `charged` |
-| заряд | `charged` | заряженный юнит; каждый заряд — один «выстрел» |
-| склад | `warehouse` | запас зарядов города; при `city_upgrades.enabled` ёмкость склада отдельно от ёмкости юнитов и растёт улучшениями (DEC-26) |
-| очередь найма | `recruit_queue` | юниты, которых город производит по одному за `recruit.unit_ticks`; CP при постановке, отмена последнего с возвратом (DEC-25) |
-| казарма | `has_barracks` | город может рекрутировать; при `city_upgrades.enabled` у столицы с начала, у других городов улучшением за 3 CP (DEC-26) |
-| ёмкость | `capacity` | сколько юнитов (и зарядов при `enabled = false`) держит узел; фиксирована видом узла (DEC-22); ёмкость склада отдельно (DEC-26) |
-| ~~приоритет~~ | ~~`priority`~~ | ~~уровень снабжения города: высокий, обычный, низкий (DEC-18)~~ **[заменено DEC-28]** |
-| маркер фронта | `front` | один из двух маркеров игрока: город наполняет склад до полного (DEC-28) |
-| минимум тыла | `rear_min` | сколько зарядов держат города без маркера (DEC-28) |
-| перевозка | `Transfer` | разовая пересылка зарядов между своими городами (DEC-18) |
-| голод | `starvation` | отрезанный от столицы гарнизон тратит заряды (DEC-19) |
-| пакет | `Packet` | заряды в пути по дороге |
-| отскок | `bounce` | атакующий без победы возвращается в исходный узел разряженным |
-| запланированный приказ | `planned=True` | дороже, виден всем как намерение, выступает с задержкой, даёт одноразовый бонус |
-| намерение | `Intent` | видимая всем часть запланированного приказа: откуда, куда, тип — без размера и id группы |
-| режимы | `Mode.ATTACK / DEFENSE` | «Атака», «Защита»; «Строительство» (`BUILD`) снято DEC-16 |
-| стройка | ~~`UpgradeRoad(node, edge)`~~ `UpgradeRoad(edge)` | улучшение своей внутренней дороги на один уровень ~~своим городом за заряды его склада (DEC-16)~~ за CP, без города (DEC-28, п. 7) |
-| CP | `cp` | командные очки; плоский реген, не растут от территории; хранятся в сотых долях |
-| стойка | `Stance.ECONOMY / BALANCE / WAR` | доля регена CP, уходящая в заряды |
-| вид игрока | `PlayerView` | отфильтрованное туманом состояние для игрока или бота |
-| VP | `vp` | очки победы за удержание городов |
+| tick | `tick` | a simulation step, 10 per second |
+| ruleset | `Ruleset` | all numbers and flags of the rules, `rulesets/*.toml` |
+| city / node | `Node` | a vertex of the graph; a node is a city with a warehouse or a province (DEC-23) |
+| province | `kind = province` | a node without a city: no warehouse, capacity 3, no VP, position only (DEC-23) |
+| road / edge | `Edge` | a link between nodes; `width`: road level 1..3; ~~type fast or cargo from level 2 (DEC-22)~~ there is no type, an upgrade only speeds up delivery (DEC-26) |
+| border point | `border_permille` | a point on an edge in thousandths from the end `a`; splits the edge into halves for vision (DEC-21, DEC-23) |
+| internal edge | `is_internal` | both ends belong to one owner; only it can be upgraded and only along it does supply go |
+| buffer edge | `is_buffer` | the ends belong to different owners, or one is neutral |
+| group | `Group` | units of one player in one place: `units`, `charged` |
+| charge | `charged` | a charged unit; each charge is one "shot" |
+| warehouse | `warehouse` | a city's stock of charges; with `city_upgrades.enabled` the warehouse capacity is separate from the unit capacity and grows with upgrades (DEC-26) |
+| recruit queue | `recruit_queue` | the units a city produces one per `recruit.unit_ticks`; CP at queueing, cancelling the last one refunds (DEC-25) |
+| barracks | `has_barracks` | the city can recruit; with `city_upgrades.enabled` the capital has it from the start, other cities get it by an upgrade for 3 CP (DEC-26) |
+| capacity | `capacity` | how many units (and charges when `enabled = false`) a node holds; fixed by the kind of node (DEC-22); warehouse capacity is separate (DEC-26) |
+| ~~priority~~ | ~~`priority`~~ | ~~the supply level of a city: high, normal, low (DEC-18)~~ **[superseded by DEC-28]** |
+| front marker | `front` | one of a player's two markers: a city fills its warehouse to full (DEC-28) |
+| rear minimum | `rear_min` | how many charges the cities without a marker keep (DEC-28) |
+| transfer | `Transfer` | a one-off shipment of charges between your own cities (DEC-18) |
+| starvation | `starvation` | a garrison cut off from the capital spends charges (DEC-19) |
+| packet | `Packet` | charges travelling along a road |
+| bounce | `bounce` | an attacker without a win returns to the source node discharged |
+| scheduled order | `planned=True` | more expensive, visible to everyone as an intent, sets out with a delay, gives a one-off bonus |
+| intent | `Intent` | the part of a scheduled order visible to everyone: from where, to where, the kind, without the size and group id |
+| modes | `Mode.ATTACK / DEFENSE` | "Attack", "Defense"; "Building" (`BUILD`) was removed by DEC-16 |
+| construction | ~~`UpgradeRoad(node, edge)`~~ `UpgradeRoad(edge)` | upgrading your own internal road by one level ~~by your own city for charges of its warehouse (DEC-16)~~ for CP, without a city (DEC-28, item 7) |
+| CP | `cp` | command points; flat regeneration, they do not grow with territory; stored in hundredths |
+| stance | `Stance.ECONOMY / BALANCE / WAR` | the share of CP regeneration that goes into charges |
+| player view | `PlayerView` | the state filtered by fog for a player or a bot |
+| VP | `vp` | victory points for holding cities |
 
-Синонимы из ранних обсуждений: «провинция» в разделах 4 и 15 означает узел; с DEC-23 провинция: узел без города. Детали внутренних рёбер,
-ёмкости и снабжения, которых нет в разделах 7, 8 и 9, заданы в плане MVP: SIM-07 (#23) и SIM-08 (#24).
+Synonyms from early discussions: "province" in sections 4 and 15 means a node; since DEC-23 a province is a node without a city. The details of internal edges,
+capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan: SIM-07 (#23) and SIM-08 (#24).
 
 ---
 
-## 21. Решения DEC
+## 21. DEC decisions
 
-| DEC | Issue | Тема | Где записано | Статус |
+| DEC | Issue | Topic | Where recorded | Status |
 |---|---|---|---|---|
-| DEC-01 | #7 | как появляются новые юниты | раздел 3 | [принято]; мгновенный рекрут и кулдаун [заменено DEC-25]; «любой город» [заменено DEC-26 при `city_upgrades.enabled = true`] |
-| DEC-02 | #8 | модель экономики и стойка CP | раздел 6 | [принято]; пассивное производство снято 2026-10-14 (#253) |
-| DEC-03 | #9 | условие победы и длина партии | раздел 11 | [принято]; длина партии [заменено DEC-22] |
-| DEC-04 | #10 | правила видимости в MVP | раздел 10 | [принято]; части [заменено DEC-17, DEC-21] |
-| DEC-05 | #49 | разрыв соединения и паузы | раздел 19 | [принято] |
-| DEC-06 | #74 | какие матчи рейтинговые | раздел 19 | [принято] |
-| DEC-07 | #11 | разрешение боя (таблица разобранных примеров) | раздел 4 | [принято]; правило 8 и повторный отскок [заменено DEC-24] |
-| DEC-08 | #12 | режимы и запланированные приказы | раздел 5 | [принято]; «Строительство» [заменено DEC-16]; цена отмены [заменено DEC-20]; бонус «Защиты» [заменено DEC-30] |
-| DEC-13 | #124 | стройка дорог группой: отсчёт, строители, прерывание | раздел 8 | [заменено DEC-16] |
-| DEC-11 | #117 | деление и слияние групп, команды группе в пути | раздел 3 | [заменено DEC-20] |
-| DEC-14 | #131 | детали снабжения SIM-08 | раздел 7 | [заменено DEC-18] |
-| DEC-16 | #203 | улучшение дорог как функция города за заряды склада | раздел 8 | [принято]; числа и связь с ёмкостью [заменено DEC-22]; часть [заменено DEC-28] |
-| DEC-17 | #204 | туман войны для дорог: ширины, ёмкость и стройки противника | раздел 10 | [принято]; п. 3 [заменено DEC-22] |
-| DEC-18 | #230 | управление снабжением: приоритеты и перевозка | раздел 7 | [принято]; перевозка делит `amount` ребра с автоматикой, п. 10 (2026-10-14, #253); часть [заменено DEC-28] |
-| DEC-19 | #231 | голод в окружении | раздел 7 | [принято]; `starve_in` без зарядов, пример 3 (2026-10-14, #253) |
-| DEC-20 | #232 | группы и приказы: автослияние, бесплатные деление, слияние, отмена, лимит стека | раздел 3 | [принято] |
-| DEC-21 | #233 | обзор по рельефу и точка границы ребра | раздел 10 | [принято]; п. 5 про положение и направление в половине ребра [заменено DEC-33]; реализовано #296 (`SIM_VERSION` 19, `PROTOCOL_VERSION` 22) |
-| DEC-22 | #234 | дороги двух типов, фиксированная ёмкость, партия 15 минут | раздел 8 | [принято]; типы и цены дорог [заменено DEC-26] (всегда); склад равен ёмкости [заменено DEC-26 при `city_upgrades.enabled = true`] |
-| DEC-23 | #235 | переработка карт: провинции, виды городов, названия, точка границы | раздел 9 | [принято]; реализовано: формат (#366, `SIM_VERSION` 20, `PROTOCOL_VERSION` 24), карты с провинциями (#266) |
-| DEC-24 | #261 | бой во времени: раунды, подкрепления, отход, отскок без цепочки, точка боя | раздел 4 | [принято] (2026-10-14, все 14 рекомендаций); поглощает #133, #141; `round_ticks = 10` и п. I1 про остаток бонуса [заменено DEC-32, реализовано #329] |
-| DEC-25 | #262 | очередь найма | раздел 3 | [принято] (2026-10-14: 3 с на юнита, очередь 3); реализовано #278 |
-| DEC-26 | #265 | развитие города: дороги без типа и дешевле (всегда); казарма и склад отдельно от ёмкости (за флагом `city_upgrades.enabled`) | разделы 3 и 8 | [принято] (2026-10-14, все детали; цены дорог 1 и 2, дороги не за флагом); реализовано #265 (`SIM_VERSION` 12, `PROTOCOL_VERSION` 16); часть [заменено DEC-28] |
-| DEC-27 | #266 | карты: симметрия правил без симметрии картинки, размер, без воды | раздел 9 | [принято] (2026-10-14, все детали); асимметричные карты [отложено]; реализовано: фон без воды #269, валидатор и скрипт #366, карты и `grid55` #266; бюджет проекции на 55 узлах 0,45 мс [принято] 2026-10-22 (#371) |
-| DEC-28 | #290 | переработка снабжения и дорог: транзит, маркеры фронта, минимум тыла, доноры, дороги за CP | разделы 6, 7, 8 | [принято] (2026-10-17); детали [принято] 2026-10-17; заменяет приоритеты DEC-18, плату дорог DEC-16, DEC-26; снабжение реализовано #292 (`SIM_VERSION` 14, `PROTOCOL_VERSION` 17); ждут реализации дороги (#306) и клиент (#293) |
-| DEC-29 | #291 | бонус запланированного приказа по дистанции; пересмотр DEC-24 п. 13 (бонусы противника в бою видны) | разделы 4, 5 | [принято] (2026-10-17); детали [принято] 2026-10-17; `orders.planned_bonus` [заменено DEC-29]; реализовано (#294, `SIM_VERSION` 16; клиент: #295, арена на карте: #325); прогноз бонуса в своём приказе (`OrderView.bonus`) [принято] 2026-10-21, реализован #329 |
-| DEC-30 | #316 | накопление бонуса «Защиты»: +1 за `orders.defense_ticks_per_bonus` тиков, потолок по заряженным, сгорание после боя | раздел 5 | [принято] (2026-10-21); заменяет часть DEC-08 про «Защиту»; детали [принято] 2026-10-21; реализовано (#317, `SIM_VERSION` 17, `PROTOCOL_VERSION` 20); клиент реализован (#318) |
-| DEC-31 | #316 | вражеские казармы видны у соседних городов (только построенная, без памяти) | раздел 10 | [принято] (2026-10-21); меняет туман казарм DEC-25 и DEC-26; детали [принято] 2026-10-21; реализовано (#319, `PROTOCOL_VERSION` 23) |
-| DEC-32 | #327 | арена боя: раунд 2 с (`combat.round_ticks = 20`), запас бонуса виден обеим сторонам в бою (пересмотр DEC-24, п. I1); правила бонусов не меняются (B1, B2 не приняты); клиент A1, V3, ◇ | раздел 4 | [принято] (2026-10-21); детали [принято] 2026-10-21; п. 13 (молчащие заряды в виде боя) [принято] оркестратором 2026-10-21; вариант B3 «бонусы в конце» [открыто], не принят владельцем 2026-10-21; реализовано (#329, `SIM_VERSION` 18, `PROTOCOL_VERSION` 21); клиент реализован (#330) |
-| DEC-33 | #296 | видимое движение вражеских групп в зоне видимости узла: непрерывное положение и направление в половинах видимых узлов | раздел 10 | [принято] (2026-10-21); детали [принято] 2026-10-21 (все как рекомендовано); заменяет часть DEC-21, п. 5; реализовано вместе с DEC-21 (#296, `SIM_VERSION` 19, `PROTOCOL_VERSION` 22); клиент: диапазоны, точка границы, память половин и плавное движение фигурок сделаны в #359, точка границы из карты (`border_permille`) с #366, вид фигурки ждёт #354 |
+| DEC-01 | #7 | how new units appear | section 3 | [accepted]; instant recruit and cooldown [superseded by DEC-25]; "any city" [superseded by DEC-26 with `city_upgrades.enabled = true`] |
+| DEC-02 | #8 | the economy model and the CP stance | section 6 | [accepted]; passive production removed 2026-10-14 (#253) |
+| DEC-03 | #9 | victory condition and match length | section 11 | [accepted]; match length [superseded by DEC-22] |
+| DEC-04 | #10 | visibility rules in the MVP | section 10 | [accepted]; parts [superseded by DEC-17, DEC-21] |
+| DEC-05 | #49 | disconnect and pauses | section 19 | [accepted] |
+| DEC-06 | #74 | which matches are rated | section 19 | [accepted] |
+| DEC-07 | #11 | combat resolution (a table of worked examples) | section 4 | [accepted]; rule 8 and the repeated bounce [superseded by DEC-24] |
+| DEC-08 | #12 | modes and scheduled orders | section 5 | [accepted]; "Building" [superseded by DEC-16]; the cancel price [superseded by DEC-20]; the "Defense" bonus [superseded by DEC-30] |
+| DEC-13 | #124 | road construction by a group: countdown, builders, interruption | section 8 | [superseded by DEC-16] |
+| DEC-11 | #117 | splitting and merging groups, commands to a group on the way | section 3 | [superseded by DEC-20] |
+| DEC-14 | #131 | supply details SIM-08 | section 7 | [superseded by DEC-18] |
+| DEC-16 | #203 | road upgrade as a city function for warehouse charges | section 8 | [accepted]; the numbers and the link to capacity [superseded by DEC-22]; part [superseded by DEC-28] |
+| DEC-17 | #204 | fog of war for roads: widths, capacity and the enemy's construction | section 10 | [accepted]; item 3 [superseded by DEC-22] |
+| DEC-18 | #230 | supply control: priorities and transfer | section 7 | [accepted]; a transfer shares the `amount` of the edge with the automatics, item 10 (2026-10-14, #253); part [superseded by DEC-28] |
+| DEC-19 | #231 | starvation in an encirclement | section 7 | [accepted]; `starve_in` without charges, example 3 (2026-10-14, #253) |
+| DEC-20 | #232 | groups and orders: auto-merge, free split, merge, cancel, stack limit | section 3 | [accepted] |
+| DEC-21 | #233 | terrain vision and the border point of an edge | section 10 | [accepted]; item 5 on position and direction in an edge half [superseded by DEC-33]; implemented #296 (`SIM_VERSION` 19, `PROTOCOL_VERSION` 22) |
+| DEC-22 | #234 | roads of two types, fixed capacity, a 15-minute match | section 8 | [accepted]; road types and prices [superseded by DEC-26] (always); warehouse equals capacity [superseded by DEC-26 with `city_upgrades.enabled = true`] |
+| DEC-23 | #235 | map rework: provinces, kinds of cities, names, the border point | section 9 | [accepted]; implemented: the format (#366, `SIM_VERSION` 20, `PROTOCOL_VERSION` 24), maps with provinces (#266) |
+| DEC-24 | #261 | fight over time: rounds, reinforcements, retreat, a bounce without a chain, the fight point | section 4 | [accepted] (2026-10-14, all 14 recommendations); absorbs #133, #141; `round_ticks = 10` and item I1 on the remaining bonus [superseded by DEC-32, implemented #329] |
+| DEC-25 | #262 | recruit queue | section 3 | [accepted] (2026-10-14: 3 s per unit, a queue of 3); implemented #278 |
+| DEC-26 | #265 | city development: roads without a type and cheaper (always); barracks and warehouse separate from capacity (behind the flag `city_upgrades.enabled`) | sections 3 and 8 | [accepted] (2026-10-14, all details; road prices 1 and 2, roads not behind the flag); implemented #265 (`SIM_VERSION` 12, `PROTOCOL_VERSION` 16); part [superseded by DEC-28] |
+| DEC-27 | #266 | maps: symmetry of rules without symmetry of the picture, size, no water | section 9 | [accepted] (2026-10-14, all details); asymmetric maps [deferred]; implemented: the background without water #269, the validator and script #366, the maps and `grid55` #266; the projection budget on 55 nodes 0.45 ms [accepted] 2026-10-22 (#371) |
+| DEC-28 | #290 | supply and roads rework: transit, front markers, rear minimum, donors, roads for CP | sections 6, 7, 8 | [accepted] (2026-10-17); details [accepted] 2026-10-17; replaces the priorities of DEC-18, the road payment of DEC-16, DEC-26; supply implemented #292 (`SIM_VERSION` 14, `PROTOCOL_VERSION` 17); roads (#306) and the client (#293) await implementation |
+| DEC-29 | #291 | the bonus of a scheduled order by distance; revision of DEC-24 item 13 (the opponent's bonuses in a fight are visible) | sections 4, 5 | [accepted] (2026-10-17); details [accepted] 2026-10-17; `orders.planned_bonus` [superseded by DEC-29]; implemented (#294, `SIM_VERSION` 16; client: #295, the arena on the map: #325); the bonus forecast in your own order (`OrderView.bonus`) [accepted] 2026-10-21, implemented #329 |
+| DEC-30 | #316 | accumulating the "Defense" bonus: +1 per `orders.defense_ticks_per_bonus` ticks, the cap by charged units, burns after a fight | section 5 | [accepted] (2026-10-21); replaces the part of DEC-08 about "Defense"; details [accepted] 2026-10-21; implemented (#317, `SIM_VERSION` 17, `PROTOCOL_VERSION` 20); client implemented (#318) |
+| DEC-31 | #316 | enemy barracks are visible at neighboring cities (only a built one, no memory) | section 10 | [accepted] (2026-10-21); changes the barracks fog of DEC-25 and DEC-26; details [accepted] 2026-10-21; implemented (#319, `PROTOCOL_VERSION` 23) |
+| DEC-32 | #327 | the fight arena: a 2 s round (`combat.round_ticks = 20`), the bonus reserve is visible to both sides in a fight (revision of DEC-24, item I1); the bonus rules do not change (B1, B2 not accepted); client A1, V3, ◇ | section 4 | [accepted] (2026-10-21); details [accepted] 2026-10-21; item 13 (mute charges in the fight view) [accepted] by the orchestrator 2026-10-21; variant B3 "bonuses at the end" [open], not accepted by the owner 2026-10-21; implemented (#329, `SIM_VERSION` 18, `PROTOCOL_VERSION` 21); client implemented (#330) |
+| DEC-33 | #296 | visible movement of enemy groups in a node's vision zone: continuous position and direction in the halves of visible nodes | section 10 | [accepted] (2026-10-21); details [accepted] 2026-10-21 (all as recommended); replaces part of DEC-21, item 5; implemented together with DEC-21 (#296, `SIM_VERSION` 19, `PROTOCOL_VERSION` 22); client: ranges, the border point, the half memory and the smooth movement of figures are done in #359, the border point from the map (`border_permille`) since #366, the look of the figure awaits #354 |
 
-Как закрыть DEC-issue: подтвердить значение по умолчанию или выбрать альтернативу, заменить статус
-в блоке раздела и в этой таблице на [принято] (или записать другое решение) и отразить числа в
-`rulesets/mvp-0.toml`, если DEC их задаёт.
+How to close a DEC issue: confirm the default value or choose an alternative, replace the status
+in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in
+`rulesets/mvp-0.toml`, if the DEC sets them.

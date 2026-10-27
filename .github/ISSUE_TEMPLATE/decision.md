@@ -1,6 +1,6 @@
 ---
 name: Rules decision
-about: A rule is not described or is ambiguous (AGENTS.md §0.3). The decision is recorded in mechanics.md with the status [accepted] ([принято] in the not yet translated mechanics.md).
+about: A rule is not described or is ambiguous (AGENTS.md §0.3). The decision is recorded in mechanics.md with the status [accepted].
 title: "[DEC-??] "
 labels: ["type:decision", "area:design"]
 ---
@@ -18,7 +18,7 @@ labels: ["type:decision", "area:design"]
 - 
 
 ### Acceptance criteria
-- [ ] The decision is recorded in `docs/design/mechanics.md` with the status [accepted] ([принято] until mechanics.md is translated) and reflected in `rulesets/*.toml`.
+- [ ] The decision is recorded in `docs/design/mechanics.md` with the status [accepted] and reflected in `rulesets/*.toml`.
 
 ---
 Definition of Done: see `AGENTS.md` → "Definition of Done".
