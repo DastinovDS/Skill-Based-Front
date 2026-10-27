@@ -7,3 +7,4 @@
 - `issues.yaml`: the only source of the plan. After edits:
   `pip install pyyaml && python build_plan.py` checks the dependency graph (cycles, priorities,
   milestone order), recomputes the estimate and the schedule and rewrites `out/MVP_PLAN.md`, `out/MVP_ISSUES.md`, `out/issues.json`.
+  `out/` is not committed (gitignored); the committed `MVP_PLAN.md`, `MVP_ISSUES.md` and `issues.json` in this directory are copies of the generated files.
