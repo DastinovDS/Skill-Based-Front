@@ -1,140 +1,140 @@
-# Бюджеты производительности и эталонная машина
+# Performance budgets and the reference machine
 
-Бюджеты перечислены в `AGENTS.md`, раздел 12. Здесь: на какой машине они заданы, как их меряют и
-что считается регрессией.
+The budgets are listed in `AGENTS.md`, section 12. Here: on which machine they were set, how they are measured and
+what counts as a regression.
 
-## Эталонная машина
+## The reference machine
 
-| Параметр | Значение |
+| Parameter | Value |
 |---|---|
-| Процессор | Apple M4, 10 ядер |
-| Память | 16 ГБ |
-| ОС | macOS 15.7 |
-| Python | CPython 3.12 (`uv run`, без отладчика и профайлера) |
+| CPU | Apple M4, 10 cores |
+| Memory | 16 GB |
+| OS | macOS 15.7 |
+| Python | CPython 3.12 (`uv run`, without a debugger and a profiler) |
 
-Раннеры GitHub Actions (`ubuntu-latest`, CI `py`) примерно в 2,5 раза медленнее эталона; бюджеты
-там масштабируются (ниже).
+The GitHub Actions runners (`ubuntu-latest`, CI `py`) are about 2.5 times slower than the reference; the budgets
+there are scaled (below).
 
-## Как мерить
+## How to measure
 
-Бенчмарки: `packages/sim/tests/test_benchmarks.py` (`pytest-benchmark`) и `apps/bots/tests/test_benchmarks.py`, плюс
-`apps/server/tests/test_match_load.py` (отставание тиков), плюс отношение цены снапшота к `project()`
-(`packages/protocol/tests/test_convert.py::test_snapshot_frame_costs_no_more_than_project`). Все они помечены `pytest.mark.perf`: они входят в обычный
-`uv run pytest`, а в CI идут отдельным последовательным шагом `uv run pytest -m perf`. Под `pytest-xdist` (`-n`)
-`pytest-benchmark` сам отключает замеры, поэтому с `-n` бюджеты не проверяются: в основной параллельный прогон
-CI эти тесты не входят (`-m "not perf and not slow"`).
+Benchmarks: `packages/sim/tests/test_benchmarks.py` (`pytest-benchmark`) and `apps/bots/tests/test_benchmarks.py`, plus
+`apps/server/tests/test_match_load.py` (tick lag), plus the ratio of the snapshot cost to `project()`
+(`packages/protocol/tests/test_convert.py::test_snapshot_frame_costs_no_more_than_project`). All of them are marked `pytest.mark.perf`: they are part of the ordinary
+`uv run pytest`, and in CI they run as a separate sequential step `uv run pytest -m perf`. Under `pytest-xdist` (`-n`)
+`pytest-benchmark` itself disables the measurements, so with `-n` the budgets are not checked: these tests are not part of the main parallel run of
+CI (`-m "not perf and not slow"`).
 
 ```sh
-uv run pytest packages/sim/tests/test_benchmarks.py            # таблица времени и проверка бюджетов
-uv run pytest --benchmark-disable                             # один прогон без замеров и без проверок
+uv run pytest packages/sim/tests/test_benchmarks.py            # a time table and the budget checks
+uv run pytest --benchmark-disable                             # one run without measurements and without checks
 ```
 
-| Бенчмарк | Что меряется | Бюджет |
+| Benchmark | What is measured | Budget |
 |---|---|---|
-| `test_bench_step` | `Match.step` без проекций, карта 40 узлов (`grid40` из `conftest.py`) с 40 группами, оба игрока под `ExpandBot`; контроллеры и проекции в нетаймированном `setup` | в среднем ≤ 0,3 мс, p99 ≤ 1 мс |
-| `test_bench_supply` | система `supply` на состоянии после 300 тиков той же партии, с пакетами в пути | ≤ 0,1 мс |
-| `test_bench_supply_many_donors_busy_roads` | `supply` в тике отправки на стрессовом состоянии (#306): по 20 городов у игрока на `grid40`, десять с дефицитом, десять доноров, маркеры на пустых городах фронта, перевозки заняли дороги у столицы, поэтому почти каждая отправка упирается в исчерпанную пропускную способность и ищет объезд (#309) | ≤ 1 мс, принято владельцем 2026-10-21 (отправка раз в `supply.dispatch_ticks` тиков; бюджет раздела 12 «0,1 мс» относится к `test_bench_supply`) |
-| `test_bench_project` | одна `project()` на том же состоянии | ≤ 0,3 мс |
-| `test_bench_step[grid55]`, `test_bench_supply[grid55]`, `test_bench_project[grid55]`, `test_bench_project_with_enemy_figures[grid55]` | то же на `grid55` (5 × 11, 55 узлов, 94 ребра, 56 групп): размер карт DEC-27 (#266, п. 7) | шаг и снабжение: бюджеты 40 узлов; проекция: 0,45 мс, принято владельцем 2026-10-22 (#371; 0,3 мс на 55 узлах превышен: 0,32 мс, с фигурками 0,41 мс) |
-| `test_bench_full_headless_match` | `run_headless` двух `ExpandBot` до конца партии на `web` (самая большая карта MVP по рёбрам) | ≤ 8 с |
-| `apps/bots/tests/test_benchmarks.py::test_bench_decide` | `decide()` каждого бота из `gow_bots.bots.BOTS` на видах партии `random_legal` на `web` после 300..1500 тиков | в среднем ≤ 1 мс |
-| `apps/server/tests/test_match_load.py` | 30 матчей на `web` (`mvp-0`) в одном цикле событий, старты в случайные моменты, по два скриптовых клиента на матч (приказы по протоколу, проекции обоих игроков); часы замедлены в `speed_factor` раз, то есть нагрузка эталона. Отставание тика: насколько позже срока начался шаг (`MatchRunner.lag_sum`). `speed_factor` меряется до и после прогона, берётся больший; две попытки, проходит лучшая (общий раннер CI временами замедляется посреди прогона) | среднее < 10% тика, без сбросов расписания |
-| `packages/protocol/tests/test_convert.py::test_snapshot_frame_costs_no_more_than_project` | `snapshot_frame` (снапшот вместе с кодированием в JSON) против `project()` на виде партии `rusher` на `web` после 300 тиков; отношение на одной машине, без `speed_factor` | не дороже `project()` (× `REGRESSION`) |
-| `apps/bots/tests/test_benchmarks.py::test_bench_decide_strategy_views` | `decide()` `expander` и `turtle` на видах их собственной партии на `web` после 300..1500 тиков (много групп, стройки, контакт с врагом) | в среднем ≤ 1 мс |
+| `test_bench_step` | `Match.step` without projections, a 40-node map (`grid40` from `conftest.py`) with 40 groups, both players under `ExpandBot`; the controllers and projections are in the untimed `setup` | on average ≤ 0.3 ms, p99 ≤ 1 ms |
+| `test_bench_supply` | the `supply` system on the state after 300 ticks of the same match, with packets on the way | ≤ 0.1 ms |
+| `test_bench_supply_many_donors_busy_roads` | `supply` in a dispatch tick on a stress state (#306): 20 cities per player on `grid40`, ten with a deficit, ten donors, markers on empty front cities, the transfers took the roads near the capital, so almost every dispatch runs into an exhausted throughput and looks for a detour (#309) | ≤ 1 ms, accepted by the owner 2026-10-21 (the dispatch is once per `supply.dispatch_ticks` ticks; the section 12 budget "0.1 ms" refers to `test_bench_supply`) |
+| `test_bench_project` | one `project()` on the same state | ≤ 0.3 ms |
+| `test_bench_step[grid55]`, `test_bench_supply[grid55]`, `test_bench_project[grid55]`, `test_bench_project_with_enemy_figures[grid55]` | the same on `grid55` (5 × 11, 55 nodes, 94 edges, 56 groups): the size of the DEC-27 maps (#266, item 7) | step and supply: the 40-node budgets; projection: 0.45 ms, accepted by the owner 2026-10-22 (#371; 0.3 ms on 55 nodes is exceeded: 0.32 ms, with figures 0.41 ms) |
+| `test_bench_full_headless_match` | `run_headless` of two `ExpandBot` to the end of the match on `web` (the biggest MVP map by edges) | ≤ 8 s |
+| `apps/bots/tests/test_benchmarks.py::test_bench_decide` | `decide()` of every bot from `gow_bots.bots.BOTS` on the views of a `random_legal` match on `web` after 300..1500 ticks | on average ≤ 1 ms |
+| `apps/server/tests/test_match_load.py` | 30 matches on `web` (`mvp-0`) in one event loop, starts at random moments, two scripted clients per match (orders by the protocol, projections of both players); the clock is slowed down by `speed_factor` times, that is the load of the reference. Tick lag: how much later than the deadline a step started (`MatchRunner.lag_sum`). `speed_factor` is measured before and after the run, the larger one is taken; two attempts, the better one passes (the shared CI runner sometimes slows down in the middle of a run) | mean < 10% of a tick, no schedule resets |
+| `packages/protocol/tests/test_convert.py::test_snapshot_frame_costs_no_more_than_project` | `snapshot_frame` (a snapshot together with the JSON encoding) against `project()` on the view of a `rusher` match on `web` after 300 ticks; a ratio on one machine, without `speed_factor` | no more expensive than `project()` (× `REGRESSION`) |
+| `apps/bots/tests/test_benchmarks.py::test_bench_decide_strategy_views` | `decide()` of `expander` and `turtle` on the views of their own match on `web` after 300..1500 ticks (many groups, construction, contact with the enemy) | on average ≤ 1 ms |
 
-## Регрессия
+## Regression
 
-Бюджет на текущей машине: бюджет эталона × `speed_factor`. `speed_factor` в
-`test_benchmarks.py` — время фиксированной нагрузки на чистом Python (словари, объекты со
-`__slots__`, сортировка по ключу, цикл; код симуляции она не вызывает), делённое на её время на
-эталоне (`REFERENCE_WORKLOAD_S`, лучший из 30 прогонов). Бенчмарк падает, если результат больше
-масштабированного бюджета больше чем на 50% (`REGRESSION = 1.5`): медленный раннер CI и шум не
-ломают сборку, настоящая регрессия ломает. Сменилась эталонная машина — перемерь
-`REFERENCE_WORKLOAD_S` и таблицу замеров ниже.
+The budget on the current machine: the reference budget × `speed_factor`. `speed_factor` in
+`test_benchmarks.py` is the time of a fixed workload in pure Python (dictionaries, objects with
+`__slots__`, sorting by key, a loop; it does not call the simulation code), divided by its time on the
+reference (`REFERENCE_WORKLOAD_S`, the best of 30 runs). A benchmark fails if the result exceeds
+the scaled budget by more than 50% (`REGRESSION = 1.5`): a slow CI runner and noise
+do not break the build, a real regression does. If the reference machine changes, re-measure
+`REFERENCE_WORKLOAD_S` and the table of measurements below.
 
-Для сравнения двух версий кода на одной машине есть штатное сравнение `pytest-benchmark`:
+For comparing two versions of the code on one machine there is the standard `pytest-benchmark` comparison:
 
 ```sh
-uv run pytest packages/sim/tests/test_benchmarks.py --benchmark-autosave             # на старой версии
+uv run pytest packages/sim/tests/test_benchmarks.py --benchmark-autosave             # on the old version
 uv run pytest packages/sim/tests/test_benchmarks.py --benchmark-compare --benchmark-compare-fail=mean:50%
 ```
 
-Сохранённые результаты лежат в `.benchmarks/` и не коммитятся (зависят от машины).
+The saved results are in `.benchmarks/` and are not committed (they depend on the machine).
 
-## Замеры (SIM-15)
+## Measurements (SIM-15)
 
-| Что | Эталон | CI `py` |
+| What | Reference | CI `py` |
 |---|---|---|
-| шаг, 40 узлов, 40 групп | ≈ 0,15 мс (p99 ≈ 0,25 мс) | ≈ 0,36 мс |
-| `supply` | ≈ 0,05 мс | ≈ 0,13 мс |
-| `supply`, стрессовое состояние (#306) | ≈ 0,5 мс (до #306 тот же расчёт без объездов ≈ 1,1 мс) | — |
-| `project()` | ≈ 0,11 мс | ≈ 0,26 мс |
-| `grid40` и `grid55` (#266, CI `py`, `speed_factor` 2,28, пересчёт на эталон): шаг | 0,18 и 0,25 мс | 0,42 и 0,57 мс |
-| то же: снабжение | 0,07 и 0,10 мс | 0,17 и 0,24 мс |
-| то же: `project()` (с DEC-21 и DEC-33 дороже прежнего замера; после упрощения `standing_units` в #266, до него 0,27 и 0,42 мс) | 0,22 и 0,32 мс | 0,50 и 0,73 мс |
-| то же: `project()` с фигурками врага (DEC-33; до #266 0,35 и 0,51 мс) | 0,29 и 0,41 мс | 0,66 и 0,93 мс |
-| решение `random_legal` (BOT-01) | ≈ 0,04 мс | — |
-| полная партия headless (7200 тиков) | ≈ 1,4 с | ≈ 3,2 с |
+| step, 40 nodes, 40 groups | ≈ 0.15 ms (p99 ≈ 0.25 ms) | ≈ 0.36 ms |
+| `supply` | ≈ 0.05 ms | ≈ 0.13 ms |
+| `supply`, stress state (#306) | ≈ 0.5 ms (before #306 the same computation without detours ≈ 1.1 ms) | - |
+| `project()` | ≈ 0.11 ms | ≈ 0.26 ms |
+| `grid40` and `grid55` (#266, CI `py`, `speed_factor` 2.28, recalculated to the reference): step | 0.18 and 0.25 ms | 0.42 and 0.57 ms |
+| the same: supply | 0.07 and 0.10 ms | 0.17 and 0.24 ms |
+| the same: `project()` (more expensive than the earlier measurement with DEC-21 and DEC-33; after simplifying `standing_units` in #266, before it 0.27 and 0.42 ms) | 0.22 and 0.32 ms | 0.50 and 0.73 ms |
+| the same: `project()` with enemy figures (DEC-33; before #266 0.35 and 0.51 ms) | 0.29 and 0.41 ms | 0.66 and 0.93 ms |
+| the `random_legal` decision (BOT-01) | ≈ 0.04 ms | - |
+| a full headless match (7200 ticks) | ≈ 1.4 s | ≈ 3.2 s |
 
-Сервер (SRV-02), машина под нагрузкой (`speed_factor` ≈ 1,1–1,5): среднее отставание тика ≈ 2% тика,
-максимум ≈ 30%. Самым дорогим в тике матча был `snapshot_msg` (построение `View` с валидацией Pydantic):
-≈ 0,64 мс на игрока при `speed_factor` ≈ 1,5, дороже самой `project()` (≈ 0,30 мс там же). Если все
-30 матчей должны тикнуть в один момент (худший случай, замер на `ManualClock`), среднее отставание
-было ≈ 46% тика при `speed_factor` ≈ 1,5.
+The server (SRV-02), a machine under load (`speed_factor` ≈ 1.1-1.5): the mean tick lag ≈ 2% of a tick,
+the maximum ≈ 30%. The most expensive thing in a match tick was `snapshot_msg` (building the `View` with Pydantic validation):
+≈ 0.64 ms per player at `speed_factor` ≈ 1.5, more expensive than `project()` itself (≈ 0.30 ms there). If all
+30 matches have to tick at the same moment (the worst case, measured on `ManualClock`), the mean lag
+was ≈ 46% of a tick at `speed_factor` ≈ 1.5.
 
-### Дешёвый снапшот (#155)
+### The cheap snapshot (#155)
 
-Сервер отправляет `snapshot_frame`: JSON снапшота пишется прямо из `PlayerView`, без моделей
-Pydantic и их валидации (`gow_protocol.convert`, `gow_protocol.codec.SnapshotFrame`). Гарантии
-моделей (форма DEC-04, ловушка утечек) сохранены так:
+The server sends `snapshot_frame`: the snapshot JSON is written straight from `PlayerView`, without the Pydantic
+models and their validation (`gow_protocol.convert`, `gow_protocol.codec.SnapshotFrame`). The guarantees of the
+models (the DEC-04 shape, the leak trap) are kept like this:
 
-- `snapshot_msg` (через валидирующие модели) остаётся спецификацией: тесты `test_convert.py`
-  на каждом тике реальных партий (драйвер протокола на трёх картах MVP, партия `rusher` против
-  `turtle`, редкие части вида: намерение без цели, точные числа врага) требуют, чтобы кадр
-  `snapshot_frame` совпадал с `encode(snapshot_msg(view))` байт в байт;
-- сервер вне `prod` (`GOW_ENV=dev`, `e2e`, тесты сервера) декодирует и валидирует каждый кадр,
-  который отправляет (`MatchRunner(validate_snapshots=True)`): невалидный кадр роняет матч, как
-  любая ошибка; в `prod` проверка выключена.
+- `snapshot_msg` (through the validating models) stays the specification: the `test_convert.py` tests
+  on every tick of real matches (the protocol driver on three MVP maps, a `rusher` match against
+  `turtle`, rare parts of the view: an intent without a target, exact enemy numbers) require that the frame
+  `snapshot_frame` equal `encode(snapshot_msg(view))` byte for byte;
+- outside `prod` (`GOW_ENV=dev`, `e2e`, the server tests) the server decodes and validates every frame
+  it sends (`MatchRunner(validate_snapshots=True)`): an invalid frame crashes the match, like
+  any error; in `prod` the check is off.
 
-Замеры до и после на машине разработчика (Apple M4) под чужой нагрузкой (load average 10–38,
-`speed_factor` ≈ 1,7–2,8, поэтому важны отношения, а не абсолютные числа). На игрока, вид после
-600 тиков партии `rusher` против `turtle`:
+Measurements before and after on the developer's machine (Apple M4) under someone else's load (load average 10-38,
+`speed_factor` ≈ 1.7-2.8, so the ratios matter, not the absolute numbers). Per player, the view after
+600 ticks of a `rusher` against `turtle` match:
 
-| Карта | `project()` | было: `snapshot_msg` + `encode` | стало: `snapshot_frame` (с кодированием) |
+| Map | `project()` | was: `snapshot_msg` + `encode` | now: `snapshot_frame` (with encoding) |
 |---|---|---|---|
-| artery | 0,26 мс | 0,48 + 0,16 мс | 0,10 мс |
-| web | 0,18 мс | 0,39 + 0,17 мс | 0,15 мс |
-| pass | 0,22 мс | 0,40 + 0,15 мс | 0,13 мс |
+| artery | 0.26 ms | 0.48 + 0.16 ms | 0.10 ms |
+| web | 0.18 ms | 0.39 + 0.17 ms | 0.15 ms |
+| pass | 0.22 ms | 0.40 + 0.15 ms | 0.13 ms |
 
-Снапшот с кодированием стал в 3–6 раз дешевле и не дороже `project()` (≈ 0,4–0,8 от неё; было
-≈ 2,5). 30 матчей на `web` (`test_match_load.py`, время эталона):
+The snapshot with encoding became 3-6 times cheaper and no more expensive than `project()` (≈ 0.4-0.8 of it; it was
+≈ 2.5). 30 matches on `web` (`test_match_load.py`, the reference time):
 
-| Сценарий | Было | Стало |
+| Scenario | Was | Now |
 |---|---|---|
-| тики разнесены (тест), среднее отставание | 2,1%, 2,5%, 25,1% (три прогона) | 0,5%, 0,6%, 0,7% |
-| то же, максимум | 25–148% | 5–6% |
-| все 30 матчей тикают в один момент (`ManualClock`), среднее отставание | 20–23% | 12–13% |
-| то же, время сервера на тик (шаги и кодирование всех кадров) | 48–56% тика | 25–26% тика |
+| ticks spread out (the test), mean lag | 2.1%, 2.5%, 25.1% (three runs) | 0.5%, 0.6%, 0.7% |
+| the same, maximum | 25-148% | 5-6% |
+| all 30 matches tick at the same moment (`ManualClock`), mean lag | 20-23% | 12-13% |
+| the same, server time per tick (the steps and the encoding of all frames) | 48-56% of a tick | 25-26% of a tick |
 
-Прогон «было» с 25% повторяет падение CI (26,5% при `speed_factor` 1,14): при прежней цене снапшота
-загрузка сервера была около половины тика, и любое замедление раннера давало очередь. Худший
-случай с одновременными тиками остаётся выше 10%; это не бюджет раздела 12 (старты матчей
-случайны), но запас на него теперь вдвое больше.
+The "was" run with 25% reproduces the CI failure (26.5% at `speed_factor` 1.14): at the former snapshot cost
+the server load was about half a tick, and any slowdown of the runner produced a queue. The worst
+case with simultaneous ticks stays above 10%; this is not a section 12 budget (match starts are
+random), but the margin for it is now twice as large.
 
-## Турнир ботов (BOT-04)
+## The bot tournament (BOT-04)
 
-Бюджет (AGENTS.md, раздел 12): 1000 матчей на 8 ядрах не дольше 20 минут. Один матч `mvp-0`
-(7200 тиков, `random_legal` против `random_legal`) занимает около 1,3 с одного ядра, плюс запуск
-процесса (`spawn`, один матч на процесс). Оценка для 1000 матчей на 8 ядрах: около 3 минут.
-Замер на машине разработчика при load average 22 на 10 ядрах (чужие задачи): 96 матчей за 52 с
-(`--jobs 8`), то есть 1000 матчей около 9 минут, в бюджете и при такой нагрузке.
+The budget (AGENTS.md, section 12): 1000 matches on 8 cores in no more than 20 minutes. One `mvp-0` match
+(7200 ticks, `random_legal` against `random_legal`) takes about 1.3 s of one core, plus the process
+start (`spawn`, one match per process). The estimate for 1000 matches on 8 cores: about 3 minutes.
+A measurement on the developer's machine at load average 22 on 10 cores (someone else's tasks): 96 matches in 52 s
+(`--jobs 8`), that is 1000 matches in about 9 minutes, within the budget even at such a load.
 
-Замер BAL-01 (#39) на эталонной машине (Apple M4, 10 ядер, 16 ГБ, macOS 15.7.3), `mvp-0`, 5
-стратегических ботов, `--jobs 8`; машина не простаивала (параллельно работали другие агенты):
+The BAL-01 measurement (#39) on the reference machine (Apple M4, 10 cores, 16 GB, macOS 15.7.3), `mvp-0`, 5
+strategic bots, `--jobs 8`; the machine was not idle (other agents worked in parallel):
 
-| Прогон | Матчей | Время | Load average | На 1000 матчей |
+| Run | Matches | Time | Load average | Per 1000 matches |
 |---|---|---|---|---|
-| первые 1000 матчей турнира `--seeds 100` (3 карты) | 1000 | 324 с | 2,6 в начале, до 7–9 | 5,4 мин |
-| полный турнир `--seeds 100`, по одной карте подряд | 7500 | 3494 с (artery 925, web 1359, pass 1210) | 9–12 | 7,8 мин |
+| the first 1000 matches of the `--seeds 100` tournament (3 maps) | 1000 | 324 s | 2.6 at the start, up to 7-9 | 5.4 min |
+| the full `--seeds 100` tournament, one map after another | 7500 | 3494 s (artery 925, web 1359, pass 1210) | 9-12 | 7.8 min |
 
-Бюджет 20 минут на 1000 матчей выдержан в обоих замерах; замер на простаивающей машине не делался.
+The budget of 20 minutes per 1000 matches was met in both measurements; a measurement on an idle machine was not made.

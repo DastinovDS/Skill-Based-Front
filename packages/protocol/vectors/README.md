@@ -1,63 +1,63 @@
-# Тест-векторы
+# Test vectors
 
-Общие данные для тестов симуляции (Python) и клиента (TypeScript). Ожидаемые значения берутся
-только из `docs/design/mechanics.md` и таблиц DEC, а не из вывода кода (`AGENTS.md`, раздел 0).
-Изменил правило в mechanics.md: сначала поправь вектор, потом код.
+Shared data for the tests of the simulation (Python) and the client (TypeScript). The expected values come
+only from `docs/design/mechanics.md` and the DEC tables, not from the output of the code (`AGENTS.md`, section 0).
+If you changed a rule in mechanics.md: fix the vector first, then the code.
 
-Структуру файлов проверяет `packages/protocol/tests/test_vectors.py`.
+The structure of the files is checked by `packages/protocol/tests/test_vectors.py`.
 
-## `combat.json`: бой во времени (DEC-24, #261; темп DEC-32, #327; итоги DEC-07, #11)
+## `combat.json`: a fight over time (DEC-24, #261; the pace DEC-32, #327; the totals DEC-07, #11)
 
-Разобранные примеры из mechanics.md, раздел 4, «Арена боя (DEC-32)», таблицы при `round_ticks = 20`
-(правила и раунды «Боя во времени», DEC-24): строки 1–16 (итоги таблицы DEC-07, с раундами и
-длительностью) в `vectors`, строки 17–23 (отскок без цепочки, точка боя, гонка домой, подкрепления,
-отход) в `scenarios`. По ним тестируется бой в симуляции
-(`packages/sim/tests/test_combat.py`). Оценку боя в клиенте (CLI-08, #64) сняли (#252), клиент эти
-векторы не читает.
+Worked examples from mechanics.md, section 4, "The fight arena (DEC-32)", the tables at `round_ticks = 20`
+(the rules and rounds of "Fight over time", DEC-24): rows 1-16 (the totals of the DEC-07 table, with the rounds and
+the duration) in `vectors`, rows 17-23 (a bounce without a chain, the meeting point, a race home, reinforcements,
+a retreat) in `scenarios`. The fight in the simulation is tested against them
+(`packages/sim/tests/test_combat.py`). The fight estimate in the client (CLI-08, #64) was removed (#252), the client does not read these
+vectors.
 
-Верхний уровень:
+The top level:
 
-| Поле | Значение |
+| Field | Value |
 |---|---|
-| `schema_version` | версия схемы файла, сейчас `2` (DEC-24; `1`: мгновенный бой DEC-07) |
-| `source` | откуда взяты правила и примеры |
-| `params` | числа правил, с которыми посчитаны примеры: `terrain_defense_mod` (`mountains` / `forest` / `plains`), `defense_bonus`, `round_ticks`, `shots_per_round`, `regroup_ticks` (с DEC-32 `round_ticks = 20`). Совпадают с `rulesets/mvp-0.toml` (`terrain.defense_mod`, `combat.*`); это проверяет тест. `defense_bonus` (2, «Защита» (+2) в строках таблицы) не число рулсета: с DEC-30 это бонус, накопленный к началу боя (`orders.defense_ticks_per_bonus` тиков на единицу, не больше заряженных юнитов группы); тест ставит группе столько тиков в «Защите». Бонуса плана среди них нет: с DEC-29 он зависит от пути приказа и задан в каждом примере (`bonus.amount`, в строках таблицы +2) |
-| `vectors` | строки 1–16, `id` совпадает с номером строки таблицы |
-| `scenarios` | строки 17–23: `id` (`17`, `17б`, `17в`, `18`, …), `source_row` (строка таблицы как есть), `expected` (числа, которые строка называет; ключи у каждой строки свои, их читает `test_combat.py`) |
+| `schema_version` | the file schema version, currently `2` (DEC-24; `1`: the instant fight DEC-07) |
+| `source` | where the rules and examples come from |
+| `params` | the rule numbers the examples are computed with: `terrain_defense_mod` (`mountains` / `forest` / `plains`), `defense_bonus`, `round_ticks`, `shots_per_round`, `regroup_ticks` (with DEC-32 `round_ticks = 20`). They match `rulesets/mvp-0.toml` (`terrain.defense_mod`, `combat.*`); a test checks this. `defense_bonus` (2, "Defense" (+2) in the table rows) is not a ruleset number: with DEC-30 it is the bonus accumulated by the start of the fight (`orders.defense_ticks_per_bonus` ticks per unit, at most the charged units of the group); the test gives the group that many ticks in "Defense". The plan bonus is not among them: with DEC-29 it depends on the path of the order and is set in each example (`bonus.amount`, +2 in the table rows) |
+| `vectors` | rows 1-16, `id` equals the table row number |
+| `scenarios` | rows 17-23: `id` (`17`, `17б`, `17в`, `18`, ...), `source_row` (the table row as is), `expected` (the numbers the row names; every row has its own keys, `test_combat.py` reads them) |
 
-Пример (`vectors[i]`). Стороны всегда называются `a` и `b`: в бою за узел `a` атакует, `b` защищает.
+An example (`vectors[i]`). The sides are always called `a` and `b`: in a fight for a node `a` attacks, `b` defends.
 
-| Поле | Значение |
+| Field | Value |
 |---|---|
-| `id` | номер строки таблицы |
-| `source_row` | ячейки строки таблицы как есть: `attack`, `defense`, `rounds`, `result` |
-| `location` | `node_attack` (атака на занятый вражеский узел), `edge_meeting` (встреча на ребре), `neutral_arrival` (одновременное прибытие в нейтральный узел), `empty_enemy_node` (вражеский узел без юнитов) |
-| `terrain` | рельеф узла: `mountains`, `forest`, `plains`; `null`, если рельеф по правилам не участвует (ребро, нейтральный узел) |
-| `node_owner_before` | владелец узла до боя: `a`, `b`, `neutral`; `null` для ребра |
-| `sides.<a\|b>.role` | `attacker`, `defender` или `symmetric` (бой без защитника: ребро и нейтральный узел) |
-| `sides.<a\|b>.bonus` | `null` или `{source, amount}`, где `source` — `planned_order` (запланированный приказ) или `defense_mode` (режим «Защита», уже активный). Действует ли он, решают правила (п. F) |
-| `sides.<a\|b>.groups` | группы стороны: `id` (уникален внутри вектора), `units`, `charged`, `mode` (`attack`, `defense`) |
-| `expected.fight` | начинается ли бой (`false`: пустой вражеский узел берётся сразу) |
-| `expected.end_after` | тик конца боя минус тик контакта `t` («`t+N`» таблицы; `0` без боя) |
-| `expected.rounds` | сколько раундов сыграно (`end_after / round_ticks`) |
-| `expected.trace` | заряженные сторон после раунда, где таблица их называет: `{round, charged: {a, b}}` |
-| `expected.shots` | выстрелы сторон за бой, где таблица их называет (ребро), иначе `null` |
-| `expected.losses` | сколько юнитов потеряла каждая сторона |
-| `expected.groups` | те же группы после боя: `id`, `units`, `charged`; уничтоженная группа остаётся в списке с `units = 0` |
-| `expected.bounce` | отскакивает ли сторона в конце боя |
-| `expected.node_owner_after` | владелец узла после боя: `a`, `b`, `neutral`; `null` для ребра |
-| `expected.continues_on_edge` | для `edge_meeting`: продолжает ли сторона путь по ребру; иначе `null` |
-| `expected.goes_on_after` | первый шаг победителя на ребре после перестроения, тиков от `t` (строка 12), иначе `null` |
-| `note` | раунды и итог строки текстом |
+| `id` | the table row number |
+| `source_row` | the cells of the table row as is: `attack`, `defense`, `rounds`, `result` |
+| `location` | `node_attack` (an attack on an occupied enemy node), `edge_meeting` (a meeting on an edge), `neutral_arrival` (a simultaneous arrival at a neutral node), `empty_enemy_node` (an enemy node without units) |
+| `terrain` | the terrain of the node: `mountains`, `forest`, `plains`; `null` if the terrain does not take part by the rules (an edge, a neutral node) |
+| `node_owner_before` | the owner of the node before the fight: `a`, `b`, `neutral`; `null` for an edge |
+| `sides.<a\|b>.role` | `attacker`, `defender` or `symmetric` (a fight without a defender: an edge and a neutral node) |
+| `sides.<a\|b>.bonus` | `null` or `{source, amount}`, where `source` is `planned_order` (a scheduled order) or `defense_mode` (the "Defense" mode, already active). Whether it works is decided by the rules (item F) |
+| `sides.<a\|b>.groups` | the groups of the side: `id` (unique within the vector), `units`, `charged`, `mode` (`attack`, `defense`) |
+| `expected.fight` | whether a fight starts (`false`: an empty enemy node is taken at once) |
+| `expected.end_after` | the tick the fight ends minus the contact tick `t` ("`t+N`" of the table; `0` without a fight) |
+| `expected.rounds` | how many rounds were played (`end_after / round_ticks`) |
+| `expected.trace` | the charged of the sides after a round, where the table names them: `{round, charged: {a, b}}` |
+| `expected.shots` | the shots of the sides for the fight, where the table names them (an edge), otherwise `null` |
+| `expected.losses` | how many units each side lost |
+| `expected.groups` | the same groups after the fight: `id`, `units`, `charged`; a destroyed group stays in the list with `units = 0` |
+| `expected.bounce` | whether a side bounces at the end of the fight |
+| `expected.node_owner_after` | the owner of the node after the fight: `a`, `b`, `neutral`; `null` for an edge |
+| `expected.continues_on_edge` | for `edge_meeting`: whether a side continues its way along the edge; otherwise `null` |
+| `expected.goes_on_after` | the winner's first step on the edge after regrouping, in ticks from `t` (row 12), otherwise `null` |
+| `note` | the rounds and the result of the row as text |
 
-Инварианты, которые проверяет тест: `id` уникальны и идут 1…16; у каждой группы `0 ≤ charged ≤ units`;
-`expected.groups` содержит ровно группы из входа; потери стороны равны разнице суммы `units` до и после
-боя; заряды не появляются из ниоткуда; длительность кратна раунду.
+The invariants the test checks: the `id`s are unique and run 1...16; for every group `0 ≤ charged ≤ units`;
+`expected.groups` contains exactly the groups of the input; the losses of a side equal the difference of the sum of `units` before and after
+the fight; charges do not appear from nowhere; the duration is a multiple of a round.
 
-## `event_kinds.json`: виды событий, которые сервер шлёт игроку (#184)
+## `event_kinds.json`: the event kinds the server sends to a player (#184)
 
-Список `kinds` (по алфавиту) совпадает с `PUBLIC_KINDS`, `PRIVATE_KINDS` и `FIGHT_KINDS` из
-`gow_protocol.convert`: остальные события симуляции (`match_ended`) игроку не уходят. Это проверяет
-`packages/protocol/tests/test_vectors.py`. Клиент (`apps/client/src/hud/eventText.test.ts`) требует,
-чтобы у каждого вида была строка в обоих словарях или он был явно скрыт из ленты. Добавил вид
-события в протокол: добавь его сюда и реши, показывать ли его в ленте.
+The list `kinds` (alphabetical) matches `PUBLIC_KINDS`, `PRIVATE_KINDS` and `FIGHT_KINDS` from
+`gow_protocol.convert`: the other simulation events (`match_ended`) do not go to the player. This is checked by
+`packages/protocol/tests/test_vectors.py`. The client (`apps/client/src/hud/eventText.test.ts`) requires
+that every kind have a string in both dictionaries or be explicitly hidden from the feed. If you added an event kind
+to the protocol: add it here and decide whether to show it in the feed.

@@ -1,128 +1,128 @@
-# Баланс: турнир ботов и формат результата
+# Balance: the bot tournament and the result format
 
-Турнир (BOT-04, #37) гоняет ботов друг против друга на картах и пишет по строке JSONL на матч.
-Отчёт по этому файлу строит `gow-bots report` (BOT-05, #38); этот документ описывает формат,
-на который он опирается.
+The tournament (BOT-04, #37) runs bots against each other on maps and writes one JSONL line per match.
+The report on this file is built by `gow-bots report` (BOT-05, #38); this document describes the format
+the report relies on.
 
 > Map ids were renamed to English in #390 (`arteriya` is `artery`, `pautina` is `web`, `pereval` is `pass`, `hrebet` is `ridge`, `perekrestki` is `crossroads`, `trakt` is `highway`); the tournament results and reports in this folder keep the old ids on purpose, they are history and are not rewritten.
 
-## Запуск
+## Running
 
 ```bash
 uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-1.toml
 ```
 
-| Ключ | Смысл |
+| Key | Meaning |
 |---|---|
-| `--maps` | файлы карт (шелл раскрывает глоб; нераскрытый глоб тоже работает) |
-| `--bots` | имена из `gow_bots.bots.BOTS` или `all` (весь реестр, новые боты подхватываются сами) |
-| `--seeds N` | `N` сидов на карту и пару: `seed-base .. seed-base + N - 1` |
-| `--seed-base` | первый сид, по умолчанию 0 |
-| `--jobs` | число процессов, по умолчанию число ядер |
-| `--ruleset` | рулсет, по умолчанию `rulesets/mvp-0.toml` |
-| `--out` | файл результата, по умолчанию `docs/balance/latest.jsonl` |
-| `--replays DIR` | дополнительно записать реплей каждого матча в `DIR` |
+| `--maps` | map files (the shell expands the glob; an unexpanded glob works too) |
+| `--bots` | names from `gow_bots.bots.BOTS` or `all` (the whole registry, new bots are picked up by themselves) |
+| `--seeds N` | `N` seeds per map and pair: `seed-base .. seed-base + N - 1` |
+| `--seed-base` | the first seed, 0 by default |
+| `--jobs` | the number of processes, the number of cores by default |
+| `--ruleset` | the ruleset, `rulesets/mvp-0.toml` by default |
+| `--out` | the result file, `docs/balance/latest.jsonl` by default |
+| `--replays DIR` | additionally write the replay of every match into `DIR` |
 
-Матчей: `карты x боты x боты x сиды`. Играет каждая **упорядоченная** пара `(бот стороны 0, бот
-стороны 1)`: каждая пара встречается обеими сторонами, каждый бот играет и сам с собой (это даёт
-оценку перекоса сторон карты). Сид матча общий для обоих ботов; параметры бота выбираются из
-`(имя, сид, сторона)` (AGENTS.md, раздел 8).
+Matches: `maps x bots x bots x seeds`. Every **ordered** pair `(the bot of side 0, the bot of
+side 1)` plays: each pair meets from both sides, each bot also plays itself (this gives an
+estimate of the skew between the sides of a map). The match seed is shared by both bots; the bot's parameters are chosen from
+`(name, seed, side)` (AGENTS.md, section 8).
 
-Один матч = один процесс (`ProcessPoolExecutor`, `max_tasks_per_child=1`, старт `spawn`). Порядок
-строк фиксирован: `(карта, сид, бот0, бот1)`, где карты и боты отсортированы по имени. Результат
-зависит только от аргументов и кода: повторный запуск даёт тот же файл байт в байт (в строках нет
-времени и путей). Файл пишется в `<out>.tmp` и переименовывается по окончании.
+One match = one process (`ProcessPoolExecutor`, `max_tasks_per_child=1`, the `spawn` start). The order of
+lines is fixed: `(map, seed, bot0, bot1)`, where maps and bots are sorted by name. The result
+depends only on the arguments and the code: a repeated run gives the same file byte for byte (there is no
+time or paths in the lines). The file is written to `<out>.tmp` and renamed when finished.
 
-Метрики реального матча (реплей PT-01 / REL-01) тем же кодом:
+The metrics of a real match (a PT-01 / REL-01 replay) by the same code:
 
 ```bash
 uv run gow-bots analyze path/to/match.jsonl.gz --rulesets rulesets/archive --maps maps
 ```
 
-Печатает такую же JSON-строку с метриками (без полей идентификации матча, но с `replay`) и ключом
-`stats` со статистикой игроков (раздел «Статистика игроков»). Таблица для чтения человеком:
+It prints the same kind of JSON line with the metrics (without the match identification fields, but with `replay`) and the key
+`stats` with the player statistics (section "Player statistics"). A table for a human to read:
 
 ```bash
-mise run stats path/to/match.jsonl.gz            # аргументы после имени задачи: файлы и опции
+mise run stats path/to/match.jsonl.gz            # arguments after the task name: files and options
 uv run gow-bots stats a.jsonl.gz b.jsonl.gz --rulesets rulesets/archive --maps maps
 ```
 
-## Формат строки (`schema` = 1)
+## The line format (`schema` = 1)
 
-Одна строка = один JSON-объект, ASCII, без пробелов. Поля с `[a, b]` индексируются id игрока
-(0 и 1, то есть стороной). Значение `null` в списке: метрики нет (деление на ноль).
+One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are indexed by the player id
+(0 and 1, that is by the side). The value `null` in a list: there is no metric (division by zero).
 
-| Поле | Тип | Смысл |
+| Field | Type | Meaning |
 |---|---|---|
-| `schema` | int | версия формата строки; растёт при удалении или смене смысла поля |
-| `map` | str | имя карты (`meta.name`) |
-| `map_hash` | str | хэш карты |
-| `ruleset_hash` | str | хэш рулсета |
-| `sim_version` | int | `SIM_VERSION` движка |
-| `seed` | int | сид матча (ботов) |
-| `bot0`, `bot1` | str | имена ботов стороны 0 и 1 |
-| `state_hash` | str | `state_hash` финального состояния (проверка воспроизводимости) |
-| `winner` | int или null | победившая сторона; `null`: ничья или матч не закончен |
-| `reason` | str | причина окончания: `capital`, `forfeit`, `vp`, `cities`, `draw`, `double_defeat` (значения `EndReason`) или `unfinished` |
-| `ticks` | int | последний сыгранный тик |
-| `duration_s` | float | `ticks / tick_hz`, секунды игрового времени |
-| `vp` | [int, int] | итоговые очки победы |
-| `cities` | [int, int] | число узлов у игрока в конце |
-| `orders` | [int, int] | принятые приказы `Move` |
-| `attack_orders` | [int, int] | из них атакующие: цель не принадлежала игроку на момент приказа |
-| `planned_attack_orders` | [int, int] | из атакующих запланированные (`planned=true`) |
-| `planned_attack_share` | [float или null, ...] | `planned_attack_orders / attack_orders`, 4 знака; `null` без атак |
-| `sieges` | [int, int] | попытки осады: бой за узел врага с игроком как атакующим, либо вход в пустой узел врага |
-| `sieges_won` | [int, int] | успехи осад: захваты узлов врага (нейтральные не считаются) |
-| `captures` | [int, int] | все захваты узлов, включая нейтральные |
-| `captures_by_minute` | [[int, ...], [int, ...]] | захваты игрока по минутам матча; минута `m`: тики `m*60*tick_hz < t <= (m+1)*60*tick_hz`; длина `ceil(ticks / (60*tick_hz))`, не меньше 1 |
-| `accepted` | [int, int] | принятые команды всех видов |
-| `rejected` | [int, int] | отклонённые команды |
-| `stock_mean_centi` | [int или null, ...] | среднее суммарного запаса зарядов в сотых долях заряда (#310, раздел «Charge stock and burned share»); `null` без замеров |
-| `stock_peak` | [int, int] | пик суммарного запаса зарядов (#310) |
-| `charges_produced` | [int, int] | произведено зарядов: сумма `charges` событий `charges_produced` (#310) |
-| `charges_burned` | [int, int] | сгорело зарядов: сумма `charges` событий `charges_overflow` (#310) |
-| `burned_permille` | [int или null, ...] | доля сгоревшего в промилле, `charges_burned * 1000 // charges_produced`; `null` без производства (#310) |
+| `schema` | int | the line format version; grows when a field is removed or changes meaning |
+| `map` | str | the map name (`meta.name`) |
+| `map_hash` | str | the map hash |
+| `ruleset_hash` | str | the ruleset hash |
+| `sim_version` | int | `SIM_VERSION` of the engine |
+| `seed` | int | the match seed (of the bots) |
+| `bot0`, `bot1` | str | the bot names of side 0 and 1 |
+| `state_hash` | str | `state_hash` of the final state (a reproducibility check) |
+| `winner` | int or null | the winning side; `null`: a draw or the match is not finished |
+| `reason` | str | the reason for the end: `capital`, `forfeit`, `vp`, `cities`, `draw`, `double_defeat` (the values of `EndReason`) or `unfinished` |
+| `ticks` | int | the last played tick |
+| `duration_s` | float | `ticks / tick_hz`, seconds of game time |
+| `vp` | [int, int] | the final victory points |
+| `cities` | [int, int] | the number of nodes the player owns at the end |
+| `orders` | [int, int] | accepted `Move` orders |
+| `attack_orders` | [int, int] | of them attacking: the target did not belong to the player at the moment of the order |
+| `planned_attack_orders` | [int, int] | of the attacking ones the scheduled (`planned=true`) |
+| `planned_attack_share` | [float or null, ...] | `planned_attack_orders / attack_orders`, 4 digits; `null` without attacks |
+| `sieges` | [int, int] | siege attempts: a fight for an enemy node with the player as the attacker, or an entry into an empty enemy node |
+| `sieges_won` | [int, int] | successful sieges: captures of enemy nodes (neutral ones do not count) |
+| `captures` | [int, int] | all captures of nodes, neutral ones included |
+| `captures_by_minute` | [[int, ...], [int, ...]] | the player's captures by match minute; minute `m`: ticks `m*60*tick_hz < t <= (m+1)*60*tick_hz`; the length is `ceil(ticks / (60*tick_hz))`, at least 1 |
+| `accepted` | [int, int] | accepted commands of all kinds |
+| `rejected` | [int, int] | rejected commands |
+| `stock_mean_centi` | [int or null, ...] | the mean of the total charge stock in hundredths of a charge (#310, section "Charge stock and burned share"); `null` without samples |
+| `stock_peak` | [int, int] | the peak of the total charge stock (#310) |
+| `charges_produced` | [int, int] | charges produced: the sum of `charges` of the `charges_produced` events (#310) |
+| `charges_burned` | [int, int] | charges burned: the sum of `charges` of the `charges_overflow` events (#310) |
+| `burned_permille` | [int or null, ...] | the share burned in per mille, `charges_burned * 1000 // charges_produced`; `null` without production (#310) |
 
-Поля `stock_*`, `charges_*` и `burned_permille` добавлены в #310 без смены `schema`: ничего не удалено и
-не изменило смысл. Файлы турниров старше #310 их не содержат, отчёт показывает по ним «нет данных».
+The fields `stock_*`, `charges_*` and `burned_permille` were added in #310 without changing `schema`: nothing was removed and
+nothing changed meaning. Tournament files older than #310 do not contain them, the report shows "no data" for them.
 
-Определения метрик заданы в `packages/sim/src/gow_sim/analysis.py` (модульная строка документации).
-«Запланированный» и «атакующий» приказ в журнале событий не виден (`Move` не оставляет события),
-поэтому `MatchRecorder` классифицирует приказ в момент применения.
+The metric definitions are set in `packages/sim/src/gow_sim/analysis.py` (the module docstring).
+A "scheduled" and an "attacking" order is not visible in the event log (`Move` leaves no event),
+so `MatchRecorder` classifies an order at the moment it is applied.
 
-## Статистика игроков (#375)
+## Player statistics (#375)
 
-Метрики выше описывают исход и бои; статистика игроков описывает, **как играл человек или бот**.
-Источник: журнал команд матча (все присланные команды с вердиктом `validate` и ценой, которую
-списала симуляция) и события, которые симуляция уже пишет (`stance_changed`, `transfer_started`,
-`recruit_cancelled`). Новых событий нет, `state_hash` не меняется. Код: `gow_sim.analysis`
-(`analyze_stats`, `PlayerStats`), модульная строка документации там же; вывод: ключ `stats` в
-JSONL `gow-bots analyze` и таблица `gow-bots stats`. В строки турнира статистика не входит
-(`MatchMetrics` не менялся). Реплей нужно пересимулировать, поэтому нужны рулсет и карта (архив
-`rulesets/archive/<hash>.toml`). Метрика запаса зарядов (#310) считает состояние, а не действия:
-это отдельные поля, общего с ними только `MatchRecorder`/`MatchLog`.
+The metrics above describe the outcome and the fights; the player statistics describe **how a human or a bot played**.
+The source: the command log of the match (all the commands sent with the `validate` verdict and the price
+the simulation charged) and the events the simulation already writes (`stance_changed`, `transfer_started`,
+`recruit_cancelled`). There are no new events, `state_hash` does not change. The code: `gow_sim.analysis`
+(`analyze_stats`, `PlayerStats`), the module docstring is there too; the output: the key `stats` in the
+JSONL of `gow-bots analyze` and the table of `gow-bots stats`. The statistics are not part of the tournament lines
+(`MatchMetrics` was not changed). The replay has to be re-simulated, so the ruleset and the map are needed (the archive
+`rulesets/archive/<hash>.toml`). The charge stock metric (#310) counts the state, not the actions:
+these are separate fields, the only thing they share is `MatchRecorder`/`MatchLog`.
 
-`stats.players[p]` (по стороне `p`, 0 или 1):
+`stats.players[p]` (by side `p`, 0 or 1):
 
-| Поле | Смысл |
+| Field | Meaning |
 |---|---|
-| `stance_timeline` | список `[тик, стойка]`: первая запись `[0, economy.start_stance]`, затем каждый принятый `SetStance` |
-| `stance_ticks` | тики в каждой стойке; стойка, выставленная в тик `t`, работает с тика `t` (`apply_commands` идёт перед `economy`), стартовая стойка с тика 1; сумма равна `ticks` |
-| `commands` | все присланные команды игрока, кроме `Forfeit`; `rejected` из них отклонено (в `MatchMetrics.rejected` `Forfeit` входит) |
-| `apm_avg` | `commands * 60 * tick_hz / ticks`, 3 знака; `null` при `ticks = 0` |
-| `apm_by_minute`, `apm_peak` | команды по минутам матча (минута `m`: тики `m*60*tick_hz < t <= (m+1)*60*tick_hz`, последняя минута может быть короче) и максимум по ним |
-| `supply` | тики принятых `SetFront` (`set_front`), `SetRearMin` (`set_rear_min`), `Transfer` (`transfer`); `transfer_charges`: сумма зарядов из `transfer_started` (перевозка обрезается по свободному месту цели, поэтому может быть меньше `n` команды) |
-| `orders`, `planned_orders` | принятые `Move` и из них запланированные |
-| `planned_share` | `planned_orders / orders`, 4 знака; `null` без приказов |
-| `planned_attack_share` | как в `MatchMetrics` |
-| `cp_by_category` | траты CP в сотых долях по принятым командам и ценам `orders.cost` рулсета: `move`, `planned_move`, `mode` (`SetMode`), `recruit` (найм минус возвраты `CancelRecruit`), `road` (`UpgradeRoad`), `barracks`, `warehouse`, `transfer`, `other` (`Split`, `Merge`, `CancelOrder`, `SetStance`, `SetFront`, `SetRearMin`: в рулсетах MVP бесплатны) |
-| `cp_refunded`, `cp_total` | возврат за отмену найма (уже вычтен из `recruit`) и сумма категорий |
+| `stance_timeline` | a list of `[tick, stance]`: the first entry is `[0, economy.start_stance]`, then every accepted `SetStance` |
+| `stance_ticks` | ticks in each stance; a stance set in tick `t` works from tick `t` (`apply_commands` goes before `economy`), the starting stance from tick 1; the sum equals `ticks` |
+| `commands` | all the commands the player sent, except `Forfeit`; `rejected` of them were rejected (`Forfeit` is counted in `MatchMetrics.rejected`) |
+| `apm_avg` | `commands * 60 * tick_hz / ticks`, 3 digits; `null` at `ticks = 0` |
+| `apm_by_minute`, `apm_peak` | commands by match minute (minute `m`: ticks `m*60*tick_hz < t <= (m+1)*60*tick_hz`, the last minute may be shorter) and the maximum of them |
+| `supply` | ticks of the accepted `SetFront` (`set_front`), `SetRearMin` (`set_rear_min`), `Transfer` (`transfer`); `transfer_charges`: the sum of charges from `transfer_started` (a shipment is cut by the free space of the target, so it can be less than the command's `n`) |
+| `orders`, `planned_orders` | accepted `Move` and of them the scheduled ones |
+| `planned_share` | `planned_orders / orders`, 4 digits; `null` without orders |
+| `planned_attack_share` | as in `MatchMetrics` |
+| `cp_by_category` | CP spending in hundredths by accepted commands and the prices `orders.cost` of the ruleset: `move`, `planned_move`, `mode` (`SetMode`), `recruit` (recruiting minus the `CancelRecruit` refunds), `road` (`UpgradeRoad`), `barracks`, `warehouse`, `transfer`, `other` (`Split`, `Merge`, `CancelOrder`, `SetStance`, `SetFront`, `SetRearMin`: free in the MVP rulesets) |
+| `cp_refunded`, `cp_total` | the refund for cancelling a recruit (already subtracted from `recruit`) and the sum of the categories |
 
-Отклонённая команда ничего не стоит. Реальный баланс CP (реген, сгорание на потолке) не
-восстанавливается: это траты по командам. Решения по спорным местам приняты по умолчанию
-(комментарий в #375): чистые траты с возвратами, `Forfeit` вне APM, офлайн-инструмент без
-показа в игре и без серверного API.
+A rejected command costs nothing. The real CP balance (regeneration, burning at the cap) is not
+reconstructed: these are spendings by commands. The decisions on the disputed points were made by default
+(a comment in #375): net spending with refunds, `Forfeit` outside APM, an offline tool without
+display in the game and without a server API.
 
 ## Charge stock and burned share (#310)
 
@@ -130,7 +130,7 @@ A balance statistic of how much a player stores and how much of the production i
 **not a game rule**: no DEC, no ruleset field, nothing in `mechanics.md` changes, and the
 simulation does not know about it (the state hash and `SIM_VERSION` are untouched). It exists to
 check on tournaments the conclusions of DEC-28 about accumulation (`mechanics.md`, section 8,
-"Накопление: граничные случаи"): a quiet phase runs into the storage and the surplus burns. Code:
+"Accumulation: edge cases"): a quiet phase runs into the storage and the surplus burns. Code:
 `gow_sim.analysis` (`charge_stock`, `MatchRecorder`, `MatchMetrics`), the module docstring there
 has the same text.
 
@@ -170,24 +170,24 @@ of the group** = total `charges_burned` / total `charges_produced` over its matc
 of per-match shares, so a match with little production does not count as much as one with a lot).
 `gow-bots analyze` prints the same fields for a real match.
 
-## Отчёт
+## Report
 
 ```bash
-uv run gow-bots report docs/balance/latest.jsonl            # пишет latest.md и latest-*.png рядом
+uv run gow-bots report docs/balance/latest.jsonl            # writes latest.md and latest-*.png next to it
 uv run gow-bots report run.jsonl --out-dir /tmp/rep --name run
 ```
 
-Отчёт (`gow_bots.report`, matplotlib только здесь) строит по файлу турнира:
-проверки компетентности ботов из BOT-05, матрицу пар с 95% интервалами Уилсона, преимущество
-стороны (зеркальные матчи), метрики по ботам (доля запланированных атак, успех осад, захваты в
-последние 3 минуты), разнообразие стратегий (доминирующая стратегия, циклы «камень-ножницы-бумага»),
-число уникальных исходов и разбивку по картам. Выход зависит только от строк файла.
+The report (`gow_bots.report`, matplotlib only here) builds from a tournament file:
+the bot competence checks from BOT-05, the matrix of pairs with 95% Wilson intervals, the side
+advantage (mirrored matches), the metrics per bot (the share of scheduled attacks, the siege success, the captures in
+the last 3 minutes), the strategy diversity (a dominant strategy, "rock-paper-scissors" cycles),
+the number of unique outcomes and the breakdown by map. The output depends only on the lines of the file.
 
-Закоммичен прогон BAL-01 (#39): `latest.jsonl` (3 карты, 5 стратегических ботов без `idle` и
-`random_legal`, 100 сидов, 7500 матчей, `mvp-0`) и построенные по нему `latest.md`, `latest-*.png`.
-Вердикт по критериям гейта и гипотезы для итераций BAL-02 (#40): [log.md](log.md).
+The BAL-01 run (#39) is committed: `latest.jsonl` (3 maps, 5 strategic bots without `idle` and
+`random_legal`, 100 seeds, 7500 matches, `mvp-0`) and `latest.md`, `latest-*.png` built from it.
+The verdict by the gate criteria and the hypotheses for the iterations of BAL-02 (#40): [log.md](log.md).
 
-## Бюджет
+## Budget
 
-AGENTS.md, раздел 12: 1000 матчей на 8 ядрах эталонной машины не дольше 20 минут. Матч
-`mvp-0` с ботами из BOT-01 занимает около 1.3 секунды одного ядра; замер полного турнира: `docs/perf.md`.
+AGENTS.md, section 12: 1000 matches on 8 cores of the reference machine in no more than 20 minutes. A match
+of `mvp-0` with the bots from BOT-01 takes about 1.3 seconds of one core; the measurement of a full tournament: `docs/perf.md`.

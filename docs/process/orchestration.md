@@ -109,7 +109,7 @@ Tasks that change rules collide on `SIM_VERSION`, `PROTOCOL_VERSION`, the protoc
 
 ### Tasks that need a human
 
-The agent does everything that can be automated or checked locally (scripts, a local run, checklists, runbooks), explicitly marks the manual remainder in the documents and lists it in `MANUAL:`. The operator's personal data is not invented: only explicit placeholders. For a yes-or-no decision from the owner the agent prepares the materials and a recommendation and leaves the decision field "awaiting the owner's decision" ("ожидает решения владельца" in the not yet translated docs).
+The agent does everything that can be automated or checked locally (scripts, a local run, checklists, runbooks), explicitly marks the manual remainder in the documents and lists it in `MANUAL:`. The operator's personal data is not invented: only explicit placeholders. For a yes-or-no decision from the owner the agent prepares the materials and a recommendation and leaves the decision field "awaiting the owner's decision".
 
 ---
 

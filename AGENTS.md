@@ -368,11 +368,11 @@ async def run(self) -> None:
 
 ### 7.5 Visual loop and the process for visual decisions
 
-Style guide: `docs/design/ui-style.md` (section 23 "Visual decision process"; "Процесс визуальных решений" in the not yet translated `ui-style.md`). In short:
+Style guide: `docs/design/ui-style.md` (section 23 "Visual decision process"). In short:
 
 - **An agent that changes the look** (map, figures, colors, HUD) looks at the result themselves: `mise run shots before` before the edit, `mise run shots after` after it, then reads the PNGs from `.shots/before/` and `.shots/after/` (Read) and edits until it looks right. The PR description names the scenes viewed and what was seen; the before and after PNGs are attached (how: `apps/client/visual/README.md`). "The frame opens" alone does not count as a check.
 - **The `visual` references** (`mise run test:visual`) are updated by the author of an intended change of look per `apps/client/visual/README.md`; a snapshot that changed unintentionally is a regression.
-- **A major visual decision** (a new map or unit style, a change of icon shape, a new arena look, a rework of a screen) does not start with code: first a self-contained interactive HTML mockup with switchable variants in `docs/design/mockups/` (example: `fight-arena.html`, #327) and an issue with a table of variants (whether DEC, protocol, simulation, client are needed, an estimate) and a recommendation; the decision field is "awaiting the owner's decision" ("ожидает решения владельца" in the not yet translated docs); code after the owner chooses. Small edits (color, unifying a shape, spacing) go straight into code. Details: `docs/process/orchestration.md`, section 7.
+- **A major visual decision** (a new map or unit style, a change of icon shape, a new arena look, a rework of a screen) does not start with code: first a self-contained interactive HTML mockup with switchable variants in `docs/design/mockups/` (example: `fight-arena.html`, #327) and an issue with a table of variants (whether DEC, protocol, simulation, client are needed, an estimate) and a recommendation; the decision field is "awaiting the owner's decision"; code after the owner chooses. Small edits (color, unifying a shape, spacing) go straight into code. Details: `docs/process/orchestration.md`, section 7.
 
 ---
 
