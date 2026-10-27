@@ -11,7 +11,7 @@ in an issue or a PR instead of working around the rule silently.
 ## 0. Before you start
 
 1. Read the whole issue: tasks, **acceptance criteria**, "out of scope", dependencies. One issue, one PR.
-2. Read the relevant section of `docs/design/mechanics.md`. It is the only source of truth about the game rules; DEC-issue decisions are recorded there with the status [accepted] (`[принято]` in the not yet translated `mechanics.md`).
+2. Read the relevant section of `docs/design/mechanics.md`. It is the only source of truth about the game rules; DEC-issue decisions are recorded there with the status [accepted].
 3. **Do not invent rules.** If a rule is not described or is ambiguous:
    - use the default from the matching DEC-issue;
    - if there is no such DEC, do not guess: open an issue with the question, leave `# TODO(#<number>)`, and list the question in the PR description.

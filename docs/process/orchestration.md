@@ -135,7 +135,7 @@ The agent does everything that can be automated or checked locally (scripts, a l
 
 - Feedback after a game comes in a batch. **Every item** goes into the checklist of a tracking issue, none is lost. The agent creates and maintains the checklist (simple things go to Haiku).
 - Before editing the rules, state the decision **exactly** per the text of the DEC. A discrepancy between a retelling and the record in `mechanics.md` is unacceptable.
-- Decisions are recorded in `docs/design/mechanics.md` with the status `[accepted]`, `[proposed]` or `[superseded by DEC-N]` (until `mechanics.md` is translated, the statuses there read `[принято]`, `[предложено]`, `[заменено DEC-N]`).
+- Decisions are recorded in `docs/design/mechanics.md` with the status `[accepted]`, `[proposed]` or `[superseded by DEC-N]`.
 - **First the DEC, then the code.** Implementation does not start without a recorded decision.
 - Open questions are turned into issues and listed to the owner with a recommendation for each.
 - Earlier decisions are not brought back: if a new idea cancels an old DEC, it is a new DEC with the status `[superseded by DEC-N]` on the old one.
