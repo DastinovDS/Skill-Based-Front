@@ -6,7 +6,7 @@ DEC-10 (mechanics.md, section 10) and has the shape of the wire ``View`` of the 
 (``gow_protocol.view``, PRO-01), which PRO-03 converts it into:
 
 - public to everyone: ownership of every node, VP of both players, intents of planned orders
-  and «Защита» (kind, origin, target; no group id or size);
+  and "Defense" (kind, origin, target; no group id or size);
 - node capacities: fixed by the node kind (DEC-22, item 1), public and exact for every node;
 - road levels (DEC-17; DEC-22, item 8; roads have no type, DEC-26): exact on edges not in fog (an
   end is a source or an own group is on the edge, DEC-10, item 5); on a fogged edge that of its
@@ -22,7 +22,7 @@ DEC-10 (mechanics.md, section 10) and has the shape of the wire ``View`` of the 
   (DEC-26, item 10); own packets with their remaining path and whether they are a transfer;
 - enemy cities joined by an edge of the map to any own node: whether their barracks are built
   (DEC-31; by the current owners and the public graph, no memory);
-- own groups in «Защита»: the bonus gathered so far and its cap (DEC-30; enemy groups show the
+- own groups in "Defense": the bonus gathered so far and its cap (DEC-30; enemy groups show the
   mode only, in the ``seen`` of places);
 - neighbours of sources by the terrain table (DEC-21, item 2), and the halves of edges by the level
   of their node (item 5): ``EXACT`` the enemy totals, ``RANGE`` the range of the enemy units,
@@ -37,7 +37,7 @@ DEC-10 (mechanics.md, section 10) and has the shape of the wire ``View`` of the 
   round of both sides (shots with the virtual ones apart, spent charges, losses; I1 as revised
   with DEC-29), the virtual shots still left of both sides (DEC-32, item 3) and the charges of
   both sides silent by terrain (``mute``, DEC-24 item F2, plains); the enemy's group
-  ids stay hidden. Outside a fight the bonus of an enemy group (a gathered «Защита», a waiting
+  ids stay hidden. Outside a fight the bonus of an enemy group (a gathered "Defense", a waiting
   planned order) is never in a view, also not for a reinforcement on its way.
 
 What a view never has: internal ids of enemy groups, enemy groups standing in nodes as entities
@@ -47,7 +47,7 @@ node, the barracks builds, warehouse level and city builds of the enemy (DEC-26,
 DEC-31), the warehouse of a node that is not a source (DEC-21, item 3), enemy builds on fogged
 edges, enemy packets (on any edge, DEC-10, item 6), enemy CP, stance, production and counters,
 the enemy's front markers and rear minimum (DEC-28), enemy transfers (DEC-18, item 8), the bonus
-an enemy «Защита» has gathered (DEC-30, item 5), events, the target of an enemy's normal order
+an enemy "Defense" has gathered (DEC-30, item 5), events, the target of an enemy's normal order
 (normal orders have no intent), sequential ids.
 
 Ids of own groups, own packets and intents are opaque per player: keyed blake2b of
@@ -316,11 +316,11 @@ class GroupView:
     location: Location
     order: OrderView | None
     defense_bonus: int | None = None
-    """In «Защита» (DEC-30): the bonus the group would bring into a fight beginning now, what it
+    """In "Defense" (DEC-30): the bonus the group would bring into a fight beginning now, what it
     has gathered at most ``defense_cap``; ``None`` in another mode. Only own groups have it:
     the enemy sees the mode, not the number (DEC-30, item 5)."""
     defense_cap: int | None = None
-    """In «Защита»: the cap of its bonus, the charged units of the group (DEC-30, item 2);
+    """In "Defense": the cap of its bonus, the charged units of the group (DEC-30, item 2);
     ``None`` in another mode."""
 
 
@@ -346,7 +346,7 @@ class PacketView:
 
 @dataclass(frozen=True, slots=True)
 class IntentView:
-    """Public part of a planned order or «Защита»: no group id and no group size."""
+    """Public part of a planned order or "Defense": no group id and no group size."""
 
     id: int
     """Opaque id."""

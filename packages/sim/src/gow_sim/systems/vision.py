@@ -27,7 +27,7 @@ known level never exceeds the true one. The half of a visible node on an edge be
 non-sources does not show the level (DEC-33, item 4).
 
 Public to everyone regardless of level: geography, terrain, the map, ownership of all nodes, VP,
-intents of planned orders and «Защита». That part is the projection's job (SIM-14).
+intents of planned orders and "Defense". That part is the projection's job (SIM-14).
 
 ``is_visible()`` is the single visibility check for command validation (SIM-04) and the
 projection (SIM-14). ``vision()`` is the last system of a tick and refreshes the fog memory.
@@ -198,7 +198,7 @@ def is_visible(
 ) -> bool:
     """Whether ``player`` may know that ``entity`` exists.
 
-    - Intents (planned orders and «Защита») are public (DEC-04). Own groups and packets are
+    - Intents (planned orders and "Defense") are public (DEC-04). Own groups and packets are
       always visible.
     - An enemy group is visible in a node not in fog and in a half of an edge not in fog: the
       half of a node not in fog (DEC-21, DEC-33) or any half of an edge an own group is on
