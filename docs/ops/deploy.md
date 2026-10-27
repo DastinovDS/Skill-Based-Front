@@ -1,262 +1,262 @@
-# Развёртывание на VPS, деплой, бэкапы (OPS-03, #82)
+# VPS deployment, deploys, backups (OPS-03, #82)
 
-Плейсхолдеры: `<VPS_HOST>` (IP или имя сервера), `<DOMAIN>` (домен игры), `<REPO_URL>` (URL репозитория
-для `git clone`). Реальных значений в репозитории нет.
+Placeholders: `<VPS_HOST>` (the server IP or name), `<DOMAIN>` (the game domain), `<REPO_URL>` (the repository URL
+for `git clone`). There are no real values in the repository.
 
-Что проверено локально (`HTTP_PORT=8080 HTTPS_PORT=8443 deploy/deploy-test.sh`, также в CI job `docker`):
-деплой, откат сломанного релиза с сохранением данных, бэкап работающего сервера и восстановление в чистый том.
-Что требует настоящего сервера, помечено **[вручную]**.
+What was checked locally (`HTTP_PORT=8080 HTTPS_PORT=8443 deploy/deploy-test.sh`, also in the CI job `docker`):
+a deploy, a rollback of a broken release with the data kept, a backup of a running server and a restore into a clean volume.
+What needs a real server is marked **[manual]**.
 
-## 1. Подготовка VPS [вручную]
+## 1. Preparing the VPS [manual]
 
-Hetzner Cloud, Debian 13 или Ubuntu 24.04, от 2 ГБ RAM (сборка образа клиента). Сразу при создании
-добавьте SSH-ключ и Hetzner Cloud Firewall: входящие только 22/tcp, 80/tcp, 443/tcp, 443/udp.
+Hetzner Cloud, Debian 13 or Ubuntu 24.04, from 2 GB RAM (building the client image). Right at creation
+add an SSH key and a Hetzner Cloud Firewall: incoming only 22/tcp, 80/tcp, 443/tcp, 443/udp.
 
 ```sh
 ssh root@<VPS_HOST>
 apt-get update && apt-get -y upgrade
 apt-get -y install ca-certificates curl git ufw unattended-upgrades rsync
-# Docker Engine и Compose v2 из официального репозитория: https://docs.docker.com/engine/install/debian/
-# (для Ubuntu: .../install/ubuntu/), пакеты docker-ce docker-compose-plugin docker-buildx-plugin.
+# Docker Engine and Compose v2 from the official repository: https://docs.docker.com/engine/install/debian/
+# (for Ubuntu: .../install/ubuntu/), packages docker-ce docker-compose-plugin docker-buildx-plugin.
 
-# Пользователь без root. Группа docker равна root по правам: на сервере с одним сервисом это
-# осознанный компромисс; альтернатива: rootless Docker.
+# A non-root user. The docker group is equal to root in rights: on a server with a single service this is a
+# deliberate compromise; the alternative: rootless Docker.
 adduser --disabled-password --gecos "" gow
 usermod -aG docker gow
 install -d -m 700 -o gow -g gow /home/gow/.ssh
 install -m 600 -o gow -g gow /root/.ssh/authorized_keys /home/gow/.ssh/authorized_keys
 install -d -m 700 -o gow -g gow /var/backups/skill-based-front
 
-# Ротация логов контейнеров, иначе они заполнят диск.
+# Container log rotation, otherwise they fill the disk.
 printf '{ "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" } }\n' \
   > /etc/docker/daemon.json && systemctl restart docker
 
-# Файрвол. Docker публикует порты в обход ufw, но наружу опубликованы только 80/443 Caddy.
+# Firewall. Docker publishes ports bypassing ufw, but only Caddy's 80/443 are published outward.
 ufw default deny incoming && ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp \
   && ufw allow 443/udp && ufw --force enable
 
-# SSH: только ключи, без root. Сначала проверьте вход `ssh gow@<VPS_HOST>` из второго терминала.
+# SSH: keys only, no root. First check the login `ssh gow@<VPS_HOST>` from a second terminal.
 printf 'PermitRootLogin no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n' \
   > /etc/ssh/sshd_config.d/10-hardening.conf && sshd -t && systemctl reload ssh
 
 dpkg-reconfigure -f noninteractive unattended-upgrades
 ```
 
-Чек-лист харденинга: [ ] вход по SSH только ключом и не под root; [ ] ufw и Cloud Firewall пропускают только
-22, 80, 443; [ ] `docker compose ps`: порт наружу публикует только `caddy`; [ ] автообновления безопасности
-включены; [ ] `.env` с правами 600 и не в git; [ ] бэкапы копируются за пределы сервера (раздел 4).
+Hardening checklist: [ ] SSH login only by key and not as root; [ ] ufw and the Cloud Firewall let through only
+22, 80, 443; [ ] `docker compose ps`: only `caddy` publishes a port outward; [ ] automatic security updates
+are enabled; [ ] `.env` has mode 600 and is not in git; [ ] backups are copied off the server (section 4).
 
-## 2. Первый деплой [вручную]
+## 2. The first deploy [manual]
 
-DNS: A (и AAAA) запись `<DOMAIN>` указывает на `<VPS_HOST>`, до запуска Caddy (иначе ACME не выдаст сертификат).
+DNS: the A (and AAAA) record `<DOMAIN>` points to `<VPS_HOST>`, before Caddy starts (otherwise ACME will not issue a certificate).
 
 ```sh
 ssh gow@<VPS_HOST>
-git clone <REPO_URL> ~/skill-based-front && cd ~/skill-based-front   # приватный репозиторий: deploy key только на чтение
+git clone <REPO_URL> ~/skill-based-front && cd ~/skill-based-front   # private repository: a read-only deploy key
 cp .env.example .env && chmod 600 .env
-# В .env: SITE_ADDRESS=<DOMAIN>, DEPLOY_BASE_URL=https://<DOMAIN>, BACKUP_DIR=/var/backups/skill-based-front
+# In .env: SITE_ADDRESS=<DOMAIN>, DEPLOY_BASE_URL=https://<DOMAIN>, BACKUP_DIR=/var/backups/skill-based-front
 deploy/deploy.sh origin/main
-BASE_URL=https://<DOMAIN> deploy/check-caddy.sh   # нужен Node для сравнения CSP; можно запустить с ноутбука
+BASE_URL=https://<DOMAIN> deploy/check-caddy.sh   # needs Node to compare the CSP; can be run from a laptop
 sudo cp deploy/systemd/gow-backup.* /etc/systemd/system/ && sudo systemctl enable --now gow-backup.timer
 ```
 
-Секреты и настройки живут только в `~/skill-based-front/.env` на сервере (`.gitignore` исключает `.env*`,
-`.dockerignore` не пускает их в образ). Сейчас секретов нет: токены гостей создаёт сервер, сертификаты Caddy.
+Secrets and settings live only in `~/skill-based-front/.env` on the server (`.gitignore` excludes `.env*`,
+`.dockerignore` keeps them out of the image). There are no secrets now: guest tokens are created by the server, certificates by Caddy.
 
-## 3. Обычный деплой и откат
+## 3. A regular deploy and rollback
 
 ```sh
-ssh gow@<VPS_HOST> 'cd ~/skill-based-front && deploy/deploy.sh origin/main'   # или тег релиза
+ssh gow@<VPS_HOST> 'cd ~/skill-based-front && deploy/deploy.sh origin/main'   # or a release tag
 ```
 
-`deploy/deploy.sh [ref]`: чистая рабочая копия → `git checkout --detach ref` → текущие образы помечаются
-`:previous` → сборка → осушение матчей → бэкап `predeploy` → `docker compose up --wait` (healthcheck контейнеров) и
-`GET $DEPLOY_BASE_URL/api/health`. Если новая версия не поднялась: возврат к прежнему коммиту и образам,
-восстановление бэкапа `predeploy` (новая версия могла успеть применить миграцию), запуск, выход с кодом 1.
-Изменения данных за время неудачного запуска теряются.
+`deploy/deploy.sh [ref]`: a clean working copy → `git checkout --detach ref` → the current images are tagged
+`:previous` → build → draining matches → the `predeploy` backup → `docker compose up --wait` (container healthchecks) and
+`GET $DEPLOY_BASE_URL/api/health`. If the new version did not come up: a return to the previous commit and images,
+a restore of the `predeploy` backup (the new version could have applied a migration), a start, exit with code 1.
+Data changes made during the failed start are lost.
 
-Осушение матчей (SRV-02, #47): после сборки и до бэкапа `deploy.sh` просит работающий сервер не начинать
-новых матчей (`POST /internal/drain` изнутри контейнера `app`, эндпоинт отвечает только на loopback и без заголовков прокси (#194),
-Caddy его не проксирует) и ждёт, пока число активных матчей не станет 0, не дольше
-`DEPLOY_DRAIN_TIMEOUT` секунд (по умолчанию 1200: матч 15 минут, DEC-22, плюс запас). По таймауту деплой
-продолжается, оставшиеся матчи обрываются переключением. Если деплой остановился до переключения
-(например, упал бэкап), осушение отменяется (`DELETE /internal/drain`). Сервер старше #47 эндпоинта не
-имеет: тогда предупреждение, и деплой идёт без осушения. Состояние вручную:
+Draining matches (SRV-02, #47): after the build and before the backup `deploy.sh` asks the running server not to start
+new matches (`POST /internal/drain` from inside the `app` container, the endpoint answers only on loopback and without proxy headers (#194),
+Caddy does not proxy it) and waits until the number of active matches becomes 0, for no longer than
+`DEPLOY_DRAIN_TIMEOUT` seconds (1200 by default: a 15-minute match, DEC-22, plus a reserve). On timeout the deploy
+goes on, and the remaining matches are cut off by the switch. If the deploy stopped before the switch
+(for example, the backup failed), draining is cancelled (`DELETE /internal/drain`). A server older than #47 has no
+such endpoint: then a warning, and the deploy goes on without draining. The state by hand:
 `docker compose exec app python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:8000/internal/drain').read())"`.
 
-Ручной откат на конкретную версию: `deploy/deploy.sh <предыдущий-тег>`; если схема БД новее кода,
-затем `deploy/restore.sh <бэкап predeploy этого деплоя>`.
+A manual rollback to a specific version: `deploy/deploy.sh <previous-tag>`; if the DB schema is newer than the code,
+then `deploy/restore.sh <the predeploy backup of this deploy>`.
 
-## 4. Бэкапы
+## 4. Backups
 
-- `deploy/backup.sh [label]` пишет `$BACKUP_DIR/gow-<UTC время>-<label>.tar.gz`: `gow.db` (снимок
-  `VACUUM INTO`, безопасно при работающем сервере и WAL; перед упаковкой `PRAGMA integrity_check`) и
-  `replays/`. Хранятся `BACKUP_KEEP` (по умолчанию 14) последних архивов каждой метки.
-- Ночной бэкап: `deploy/systemd/gow-backup.timer` (03:30 UTC, метка `nightly`). Проверка:
+- `deploy/backup.sh [label]` writes `$BACKUP_DIR/gow-<UTC time>-<label>.tar.gz`: `gow.db` (a `VACUUM INTO`
+  snapshot, safe with a running server and WAL; `PRAGMA integrity_check` before packing) and
+  `replays/`. The last `BACKUP_KEEP` (14 by default) archives of each label are kept.
+- The nightly backup: `deploy/systemd/gow-backup.timer` (03:30 UTC, label `nightly`). Check:
   `systemctl list-timers gow-backup.timer`, `journalctl -u gow-backup`.
-- **[вручную] Копия вне сервера.** Бэкап на том же диске не спасает от потери VPS. Например, Hetzner
-  Storage Box (`<STORAGE_BOX_USER>@<STORAGE_BOX_HOST>`, SSH-ключ пользователя `gow`): добавить в
-  `gow-backup.service` строку
+- **[manual] A copy off the server.** A backup on the same disk does not protect against losing the VPS. For example, a Hetzner
+  Storage Box (`<STORAGE_BOX_USER>@<STORAGE_BOX_HOST>`, the SSH key of the user `gow`): add to
+  `gow-backup.service` the line
   `ExecStartPost=/usr/bin/rsync -a /var/backups/skill-based-front/ <STORAGE_BOX_USER>@<STORAGE_BOX_HOST>:skill-based-front/`
-  и следить за местом на стороне хранилища.
+  and watch the space on the storage side.
 
-## 5. Восстановление
+## 5. Restore
 
 ```sh
 deploy/restore.sh /var/backups/skill-based-front/gow-<...>.tar.gz
 ```
 
-Скрипт останавливает `app`, проверяет архив (`integrity_check`, применённые миграции), заменяет базу
-(вместе с `-wal`/`-shm`) и реплеи, запускает стек. На чистой машине: разделы 1 и 2 без `deploy.sh`,
-скопировать архив (`scp`), `docker compose build`, затем `deploy/restore.sh <архив>`.
+The script stops `app`, checks the archive (`integrity_check`, applied migrations), replaces the database
+(together with `-wal`/`-shm`) and the replays, starts the stack. On a clean machine: sections 1 and 2 without `deploy.sh`,
+copy the archive (`scp`), `docker compose build`, then `deploy/restore.sh <archive>`.
 
-**[вручную] Проверка на чистой машине** (раз перед релизом и раз в квартал): новый VPS или локальная
-машина, восстановить последний `nightly`, открыть игру, убедиться, что известный гость есть
-(`GET /api/me` с его токеном). Локально то же делает шаг 3 `deploy/deploy-test.sh` (проект compose
-`gow-restore-test` с новым томом).
+**[manual] A check on a clean machine** (once before a release and once a quarter): a new VPS or a local
+machine, restore the latest `nightly`, open the game, make sure a known guest is there
+(`GET /api/me` with their token). Locally the same is done by step 3 of `deploy/deploy-test.sh` (the compose project
+`gow-restore-test` with a new volume).
 
-## 6. Что остаётся сделать вручную
+## 6. What remains to be done by hand
 
-- [ ] VPS, DNS `<DOMAIN>`, Cloud Firewall, шаги раздела 1.
-- [ ] Первый деплой, сертификат Let's Encrypt (Caddy получает сам), `check-caddy.sh` по `https://<DOMAIN>`.
-- [ ] Таймер ночного бэкапа и копия вне сервера.
-- [ ] Восстановление на чистой машине из настоящего ночного бэкапа.
-- [ ] Внешняя проверка доступности `https://<DOMAIN>/api/health` (раздел 7).
-- [ ] Вебхук для алертов, `ALERT_WEBHOOK_URL` в `.env`, служба `gow-alerts` (раздел 7).
-- [ ] Решение владельца: сбор ошибок внешним сервисом (Sentry и аналоги), раздел 7.
+- [ ] The VPS, the DNS for `<DOMAIN>`, the Cloud Firewall, the steps of section 1.
+- [ ] The first deploy, the Let's Encrypt certificate (Caddy gets it itself), `check-caddy.sh` against `https://<DOMAIN>`.
+- [ ] The nightly backup timer and the copy off the server.
+- [ ] A restore on a clean machine from a real nightly backup.
+- [ ] An external availability check of `https://<DOMAIN>/api/health` (section 7).
+- [ ] A webhook for alerts, `ALERT_WEBHOOK_URL` in `.env`, the service `gow-alerts` (section 7).
+- [ ] The owner's decision: collecting errors with an external service (Sentry and the like), section 7.
 
-## 7. Наблюдаемость (OPS-04, #83)
+## 7. Observability (OPS-04, #83)
 
-### Логи
+### Logs
 
-Сервер пишет JSON-строки в stderr контейнера `app` (поля `ts`, `level`, `logger`, `msg`, `request_id`, поля события).
-Журнал запросов без query string, токены и коды приглашений в логи не попадают (тесты в `apps/server/tests`).
-Смотреть: `docker compose logs -f app`; матч целиком: `docker compose logs app | grep '"match_id": "<id>"'`.
-Ротацию логов Docker включает раздел 1. Исключение в матче пишется с traceback и `match_id`
-(`"msg": "match crashed"`), остальные матчи идут дальше; исключения HTTP-обработчиков пишет uvicorn (`uvicorn.error`) в том же JSON.
+The server writes JSON lines to the stderr of the `app` container (the fields `ts`, `level`, `logger`, `msg`, `request_id`, the event fields).
+The request log has no query string, tokens and invite codes do not get into the logs (tests in `apps/server/tests`).
+To view: `docker compose logs -f app`; a whole match: `docker compose logs app | grep '"match_id": "<id>"'`.
+Docker log rotation is enabled by section 1. An exception in a match is written with a traceback and `match_id`
+(`"msg": "match crashed"`), the other matches go on; exceptions of HTTP handlers are written by uvicorn (`uvicorn.error`) in the same JSON.
 
-### Метрики
+### Metrics
 
-`GET /internal/metrics` (формат Prometheus). Эндпоинт отвечает только на loopback, как `/internal/drain`; Caddy проксирует
-лишь `/api/*` и `/ws/*`, и `deploy/check-caddy.sh` проверяет, что метрики снаружи недоступны. Новых зависимостей нет
-(`apps/server/src/gow_server/metrics.py`). Снять вручную:
+`GET /internal/metrics` (the Prometheus format). The endpoint answers only on loopback, like `/internal/drain`; Caddy proxies
+only `/api/*` and `/ws/*`, and `deploy/check-caddy.sh` checks that the metrics are unreachable from outside. There are no new dependencies
+(`apps/server/src/gow_server/metrics.py`). To take them by hand:
 
 ```sh
 docker compose exec app python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:8000/internal/metrics').read().decode())"
 ```
 
-| Метрика | Что это |
+| Metric | What it is |
 |---|---|
-| `gow_matches_active` | матчей идёт сейчас |
-| `gow_matches_started_total`, `_finished_total`, `_crashed_total` | счётчики матчей |
-| `gow_tick_lag_seconds` (histogram) | насколько позже срока начался тик; порог алерта 10% периода тика = 10 мс при 10 Гц |
-| `gow_step_seconds` (histogram) | длительность одного тика; p99: `histogram_quantile(0.99, rate(gow_step_seconds_bucket[5m]))` |
-| `gow_bot_overruns_total`, `gow_bot_skipped_total` | решения бота дольше бюджета и пропущенные из-за них вызовы (за матч то же пишется в лог `match finished`) |
-| `gow_ws_connections` | открытых WebSocket-соединений матчей |
-| `gow_outbox_backlog_max` | самая длинная неотправленная очередь соединения (клиент не читает) |
-| `gow_queue_size` | игроков в очереди матчмейкинга: ищут соперника или подтверждают найденную пару (MM-01) |
+| `gow_matches_active` | matches running now |
+| `gow_matches_started_total`, `_finished_total`, `_crashed_total` | match counters |
+| `gow_tick_lag_seconds` (histogram) | how much later than scheduled a tick started; the alert threshold is 10% of the tick period = 10 ms at 10 Hz |
+| `gow_step_seconds` (histogram) | the duration of one tick; p99: `histogram_quantile(0.99, rate(gow_step_seconds_bucket[5m]))` |
+| `gow_bot_overruns_total`, `gow_bot_skipped_total` | bot decisions longer than the budget and the calls skipped because of them (per match the same is written to the `match finished` log) |
+| `gow_ws_connections` | open match WebSocket connections |
+| `gow_outbox_backlog_max` | the longest unsent queue of a connection (the client is not reading) |
+| `gow_queue_size` | players in the matchmaking queue: looking for an opponent or confirming a found pair (MM-01) |
 
-Prometheus внутрь контейнера не достаёт (эндпоинт loopback). Для сбора рядом с приложением нужен небольшой сборщик в контейнере или
-одноразовый опрос по `cron`; пока достаточно ручного снятия и логов. [решение владельца]
+Prometheus cannot reach inside the container (the endpoint is loopback). To collect, a small collector inside the container is needed next to the application, or
+a one-off poll by `cron`; for now manual collection and the logs are enough. [owner's decision]
 
-### Алерты
+### Alerts
 
-Сервер пишет алерт строкой ERROR логгера `gow_server.alerts` с полем `alert`:
+The server writes an alert as an ERROR line of the logger `gow_server.alerts` with the field `alert`:
 
-- `match_crashed`: матч упал с исключением (рядом запись `match crashed` с traceback и тем же `match_id`);
-- `tick_lag`: среднее отставание тиков матча за окно `GOW_MONITOR_INTERVAL_S` больше 10% периода тика или цикл сбросил расписание.
+- `match_crashed`: a match crashed with an exception (next to it a `match crashed` record with a traceback and the same `match_id`);
+- `tick_lag`: the average tick lag of a match over the window `GOW_MONITOR_INTERVAL_S` is more than 10% of the tick period or the loop reset the schedule.
 
-Один и тот же алерт для одного матча не чаще раза в 5 минут. Контейнер `app` не имеет выхода наружу (`internal`-сеть),
-поэтому доставляет алерты хостовый `deploy/alert-forward.sh`: читает лог контейнера и шлёт каждую строку алерта POST-ом
-(`application/json`, тело: запись лога) на `ALERT_WEBHOOK_URL`. Адрес вебхука секретный (в `.env`, в curl передаётся через stdin).
+The same alert for one match no more often than once in 5 minutes. The `app` container has no way out (the `internal` network),
+so the alerts are delivered by the host-side `deploy/alert-forward.sh`: it reads the container log and sends every alert line by POST
+(`application/json`, body: the log record) to `ALERT_WEBHOOK_URL`. The webhook address is secret (in `.env`, passed to curl through stdin).
 
 ```sh
 echo 'ALERT_WEBHOOK_URL=https://<WEBHOOK_HOST>/<TOKEN>' >> .env
 sudo cp deploy/systemd/gow-alerts.service /etc/systemd/system/ && sudo systemctl enable --now gow-alerts
 ```
 
-Проверка без сервера: `echo '{"alert": "test", "msg": "probe"}' | deploy/alert-forward.sh -`.
-Формат тела: для Slack/Telegram и т.п. нужен небольшой переходник на стороне получателя (ntfy, n8n, Pipedream).
+A check without a server: `echo '{"alert": "test", "msg": "probe"}' | deploy/alert-forward.sh -`.
+The body format: for Slack/Telegram and the like a small adapter on the receiver side is needed (ntfy, n8n, Pipedream).
 
-### Ошибки и внешние сервисы [решение владельца]
+### Errors and external services [owner's decision]
 
-Сбор ошибок сделан по логам (выше). Внешний SaaS (Sentry, GlitchTip, Bugsnag) без решения владельца не подключён:
-он получит данные игроков и требует dependency в сервере и клиенте (`@sentry/browser` ещё и ослабляет CSP: `connect-src`).
-Самохостинг GlitchTip совместим с Sentry SDK. Ошибки клиента пока видны только в консоли браузера.
+Error collection is done from the logs (above). An external SaaS (Sentry, GlitchTip, Bugsnag) is not connected without the owner's decision:
+it would receive player data and requires a dependency in the server and the client (`@sentry/browser` also weakens the CSP: `connect-src`).
+Self-hosted GlitchTip is compatible with the Sentry SDK. Client errors are visible only in the browser console for now.
 
-### Внешняя проверка доступности [вручную]
+### External availability check [manual]
 
-Нужна снаружи VPS (иначе падение самого VPS не заметить): UptimeRobot, Better Stack или Healthchecks.io по
-`https://<DOMAIN>/api/health` (ожидается 200 и `{"status":"ok"}`), интервал 1 минута, оповещение владельцу.
+It is needed from outside the VPS (otherwise the failure of the VPS itself goes unnoticed): UptimeRobot, Better Stack or Healthchecks.io against
+`https://<DOMAIN>/api/health` (expect 200 and `{"status":"ok"}`), an interval of 1 minute, a notification to the owner.
 
-## 8. Защита от злоупотреблений и модерация (MOD-01, #79)
+## 8. Abuse protection and moderation (MOD-01, #79)
 
-### Лимиты
+### Limits
 
-Все лимиты в памяти одного процесса (рестарт сервера обнуляет счётчики) и настраиваются через `GOW_*`
-(`.env`, `compose.yaml`, таблица в README). Превышение: HTTP 429 с заголовком `Retry-After`.
+All limits live in the memory of one process (a server restart zeroes the counters) and are configured through `GOW_*`
+(`.env`, `compose.yaml`, the table in the README). Exceeding: HTTP 429 with the `Retry-After` header.
 
-| Что | Ключ | По умолчанию | Где |
+| What | Key | Default | Where |
 |---|---|---|---|
-| Создание гостей | IP клиента | 10 в час | `POST /api/guest` (ID-01) |
-| Создание матчей (приглашения и матчи с ботом вместе) | игрок | 10 за 10 минут | `POST /api/matches`, `POST /api/bot-matches` |
-| Смена ника | игрок | 3 в сутки | `PUT /api/me/nick` |
-| Вход по нику и паролю | IP клиента | 20 за 10 минут | `POST /api/login` (#374) |
-| Вход по нику и паролю | `nick_key` | 10 за 10 минут | `POST /api/login`: перебор пароля одного аккаунта с разных IP |
-| Задание и смена пароля | игрок | 5 в час | `POST /api/account/password` |
-| Вход в очередь подбора | игрок | 20 в минуту | `POST /api/queue` (MM-01) |
-| Команды в матче | соединение | 20/с, пачка 60 | WebSocket, флуд ведёт к отключению (SRV-03) |
-| Активный матч | игрок | 1 | `409` (SRV-09) |
+| Creating guests | client IP | 10 per hour | `POST /api/guest` (ID-01) |
+| Creating matches (invites and bot matches together) | player | 10 per 10 minutes | `POST /api/matches`, `POST /api/bot-matches` |
+| Changing the nick | player | 3 per day | `PUT /api/me/nick` |
+| Login by nick and password | client IP | 20 per 10 minutes | `POST /api/login` (#374) |
+| Login by nick and password | `nick_key` | 10 per 10 minutes | `POST /api/login`: guessing the password of one account from different IPs |
+| Setting and changing the password | player | 5 per hour | `POST /api/account/password` |
+| Joining the matchmaking queue | player | 20 per minute | `POST /api/queue` (MM-01) |
+| Commands in a match | connection | 20/s, burst 60 | WebSocket, flooding leads to a disconnect (SRV-03) |
+| Active match | player | 1 | `409` (SRV-09) |
 
-**Лимит по IP работает только при настоящем адресе клиента.** Сервер берёт адрес из `request.client`, а uvicorn
-подставляет туда `X-Forwarded-For` только от доверенных прокси (`GOW_FORWARDED_ALLOW_IPS`). В `compose.yaml`
-стоит `*`: контейнер `app` доступен лишь из внутренней сети, то есть только Caddy, а Caddy заменяет присланный
-клиентом `X-Forwarded-For` настоящим адресом. Если запускать сервер без Caddy на публичном порту, оставьте
-значение по умолчанию `127.0.0.1`: иначе клиент подделает адрес и обойдёт лимит. Если за Caddy стоит ещё один
-прокси (Cloudflare и подобные), в Caddy нужно настроить `trusted_proxies`, иначе лимит увидит адрес этого
-прокси и посчитает всех игроков одним клиентом.
+**The per-IP limit works only with the real client address.** The server takes the address from `request.client`, and uvicorn
+puts `X-Forwarded-For` there only from trusted proxies (`GOW_FORWARDED_ALLOW_IPS`). In `compose.yaml`
+it is set to `*`: the `app` container is reachable only from the internal network, that is only by Caddy, and Caddy replaces the
+`X-Forwarded-For` sent by the client with the real address. If you run the server without Caddy on a public port, keep the
+default `127.0.0.1`: otherwise a client will forge the address and bypass the limit. If there is one more proxy behind Caddy
+(Cloudflare and the like), `trusted_proxies` must be configured in Caddy, otherwise the limit will see the address of that
+proxy and count all players as one client.
 
-### Ники
+### Nicks
 
-Правила (`gow_server/nicks.py`, обоснование в докстринге модуля):
+The rules (`gow_server/nicks.py`, the rationale is in the module docstring):
 
-- формат: 3–16 символов, буквы одного письма (смесь латиницы и кириллицы в одном нике запрещена), цифры, `_`, `-`;
-- уникальность по «скелету»: регистр, диакритика, `_`/`-` и похожие буквы не делают ник новым
-  (`Cap` и кириллическое `Сар`, `Ilya` и `llya`, `Pro100` и `Pr0lOO` считаются одним ником). Таблица похожих букв
-  ручная и покрывает кириллицу и греческий против латиницы, это не полный `confusables.txt` Unicode TR39;
-- зарезервированные ники (`admin`, `moderator`, `support`, `админ`, ... с цифрами на конце) и запрещённые слова
-  (короткий встроенный список, сравнение по скелету, поэтому `sh1t` и `f_u_c_k` тоже отсекаются). Список
-  ищет подстроки, поэтому безобидный ник иногда попадает под запрет: тогда переименуйте игрока `gow-admin rename`.
-  Свои слова: файл `GOW_NICK_BLOCKLIST_FILE` (по слову в строке, например `/data/nick-blocklist.txt` на томе).
+- format: 3 to 16 characters, letters of one script (a mix of Latin and Cyrillic in one nick is forbidden), digits, `_`, `-`;
+- uniqueness by "skeleton": case, diacritics, `_`/`-` and look-alike letters do not make a nick new
+  (`Cap` and the Cyrillic `Сар`, `Ilya` and `llya`, `Pro100` and `Pr0lOO` are counted as one nick). The look-alike table is
+  manual and covers Cyrillic and Greek against Latin, it is not the full Unicode TR39 `confusables.txt`;
+- reserved nicks (`admin`, `moderator`, `support`, `админ`, ... with digits at the end) and forbidden words
+  (a short built-in list, compared by skeleton, so `sh1t` and `f_u_c_k` are cut off too). The list
+  looks for substrings, so a harmless nick sometimes falls under the ban: then rename the player with `gow-admin rename`.
+  Your own words: the file `GOW_NICK_BLOCKLIST_FILE` (one word per line, for example `/data/nick-blocklist.txt` on the volume).
 
-Миграция `0004` пересчитывает `nick_key` существующих игроков по новому правилу; если два ника теперь совпадают,
-у более позднего ключ получает суффикс `#<id>`, и его стоит переименовать.
+Migration `0004` recomputes the `nick_key` of existing players by the new rule; if two nicks now coincide,
+the key of the later one gets the suffix `#<id>`, and it is worth renaming.
 
-### Админ-скрипт `gow-admin`
+### The admin script `gow-admin`
 
 ```sh
-docker compose exec app gow-admin show <игрок>            # id или ник
-docker compose exec app gow-admin rename <игрок> <ник>
-docker compose exec app gow-admin block <игрок>
-docker compose exec app gow-admin unblock <игрок>
-docker compose exec app gow-admin reset-password <игрок>   # новый пароль вводится дважды, без эха
+docker compose exec app gow-admin show <player>            # id or nick
+docker compose exec app gow-admin rename <player> <nick>
+docker compose exec app gow-admin block <player>
+docker compose exec app gow-admin unblock <player>
+docker compose exec app gow-admin reset-password <player>   # the new password is entered twice, no echo
 ```
 
-Заблокированный аккаунт получает 403 на каждый HTTP-запрос и отказ при следующем подключении к WebSocket матча;
-уже идущий матч доходит до конца или до технического поражения по таймеру переподключения. `rename` проверяет формат
-и уникальность, но не списки запрещённых слов (решает оператор). Без Docker: `uv run gow-admin ...` с тем же
-`GOW_DATABASE_URL`. Скрипт работает с базой при запущенном сервере (SQLite WAL).
+A blocked account gets 403 on every HTTP request and a refusal at the next connection to a match WebSocket;
+a match already in progress goes on to the end or to a technical defeat by the reconnect timer. `rename` checks the format
+and uniqueness, but not the lists of forbidden words (the operator decides). Without Docker: `uv run gow-admin ...` with the same
+`GOW_DATABASE_URL`. The script works with the database while the server is running (SQLite WAL).
 
-`reset-password` (#374): у игроков восстановления пароля нет, сброс делает оператор. Пароль не передаётся аргументом
-и не печатается: скрипт спрашивает его дважды на терминале (`docker compose exec` даёт терминал). Старый токен
-перестаёт работать на всех устройствах; игрок входит по нику и новому паролю, который оператор передал ему
-(по согласованию, как при удалении по запросу, `docs/ops/legal.md`). Пароль: 10..128 символов после NFKC.
-Параметры scrypt новых хэшей: `GOW_SCRYPT_N` (2^15), `GOW_SCRYPT_R` (8), `GOW_SCRYPT_P` (1), `GOW_SCRYPT_MAXMEM`
-(64 МБ); хэш хранит свои параметры, поэтому их можно повысить без сброса паролей. `[вручную]` Замерить время
-хэша на VPS (ориентир 50..100 мс) и при необходимости поменять `GOW_SCRYPT_N`. Лимиты входа: таблица выше.
+`reset-password` (#374): players have no password recovery, the reset is done by the operator. The password is not passed as an argument
+and is not printed: the script asks for it twice on the terminal (`docker compose exec` gives a terminal). The old token
+stops working on all devices; the player logs in with the nick and the new password that the operator passed to them
+(by agreement, as with deletion on request, `docs/ops/legal.md`). The password: 10..128 characters after NFKC.
+The scrypt parameters of new hashes: `GOW_SCRYPT_N` (2^15), `GOW_SCRYPT_R` (8), `GOW_SCRYPT_P` (1), `GOW_SCRYPT_MAXMEM`
+(64 MB); a hash stores its own parameters, so they can be raised without resetting passwords. `[manual]` Measure the hash time
+on the VPS (a target of 50..100 ms) and change `GOW_SCRYPT_N` if needed. The login limits: the table above.
 
-### Что не сделано
+### What is not done
 
-Жалобы игроков на ники и логирование блокировок не входят в issue: блокировки видны в логе контейнера только как
-403 в запросах. `[вручную]` Первый список запрещённых слов составлен автором кода: владельцу стоит просмотреть его
-и дополнить под свою аудиторию.
+Player reports about nicks and logging of blocks are not part of the issue: blocks are visible in the container log only as
+403 in requests. `[manual]` The first list of forbidden words was compiled by the author of the code: the owner should review it
+and extend it for their audience.

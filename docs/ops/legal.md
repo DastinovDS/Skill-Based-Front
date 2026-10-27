@@ -1,49 +1,49 @@
-# Правовой минимум (LEG-01, #87)
+# Legal minimum (LEG-01, #87)
 
-Это не юридическая консультация. Тексты на `/impressum` и `/privacy` (English only since 2026-10-23) собраны по фактическому
-поведению кода и содержат заглушки. **Перед публикацией сайта их должен проверить юрист**, а владелец
-обязан подставить настоящие данные оператора.
+This is not legal advice. The texts at `/impressum` and `/privacy` (English only since 2026-10-23) are assembled from the actual
+behavior of the code and contain placeholders. **A lawyer must review them before the site is published**, and the owner
+must fill in the real operator data.
 
-## Что сделано в коде
+## What is done in the code
 
-- Страницы `/impressum` и `/privacy`: `apps/client/src/legal/LegalPage.svelte`, тексты по языкам в
-  `apps/client/src/i18n/legal/en.ts` (Caddy отдаёт `index.html` на любой неизвестный путь).
-- Ссылки в подвале на каждом экране (в том числе на приветственном и в матче): `LegalFooter.svelte`,
-  монтируется в `main.ts`. Ссылки открываются в новой вкладке, чтобы не прервать матч.
-- Пока в тексте осталась заглушка вида `<OPERATOR_NAME>`, страница показывает пометку «Черновик».
-  Когда все заглушки заменены, пометка исчезает сама.
-- Логи контейнеров: `compose.yaml`, драйвер `json-file`, ротация по размеру (`max-size: 10m`,
-  `max-file: 3`), записи удаляются вместе с контейнером при деплое.
+- The pages `/impressum` and `/privacy`: `apps/client/src/legal/LegalPage.svelte`, the texts per language in
+  `apps/client/src/i18n/legal/en.ts` (Caddy serves `index.html` for any unknown path).
+- Footer links on every screen (including the welcome screen and the match): `LegalFooter.svelte`,
+  mounted in `main.ts`. The links open in a new tab so as not to interrupt a match.
+- While a placeholder like `<OPERATOR_NAME>` remains in the text, the page shows a "Draft" note.
+  When all placeholders are replaced, the note disappears by itself.
+- Container logs: `compose.yaml`, the `json-file` driver, rotation by size (`max-size: 10m`,
+  `max-file: 3`), the records are removed together with the container on deploy.
 
-## Какие данные обрабатывает приложение (проверено по коду)
+## What data the application processes (checked against the code)
 
-| Данные | Где | Срок |
+| Data | Where | Retention |
 |---|---|---|
-| ник, `created_at`, SHA-256 токена (`players`, `identity.py`) | БД `/data/gow.db` | до удаления по запросу |
-| хэш пароля, если игрок его задал: `scrypt$n$r$p$соль$хэш` (`players.password_hash`, `passwords.py`, #374); сам пароль не хранится, не пишется в журнал и не возвращается в ошибках 422; восстановления пароля нет | БД | до удаления по запросу или сброса (`gow-admin reset-password`) |
-| токен и ник | `localStorage["sbf.guest"]` в браузере (`guestStore.ts`) | пока игрок не очистит |
-| язык интерфейса | `localStorage["sbf.locale"]` (`locale.ts`) | то же |
-| рейтинг, матчи, стороны (`ratings`, `matches`, `match_players`) | БД | до удаления по запросу |
-| реплеи (`*.jsonl.gz`, `*.frames.json.gz`) | `/data/replays`, ника не содержат | бессрочно |
-| статистика игры из журнала команд матча (стойка, частота команд, действия снабжения, доля запланированных приказов, траты CP): `gow-bots analyze` и `gow-bots stats` считают её офлайн из реплея; никуда не сохраняется; привязка к игроку только по стороне матча (`match_players`), для баланса и разбора партий (#375) | вывод команды, в БД и на сервере не хранится | как у реплеев |
-| IP при создании гостя | память процесса, `SlidingWindowLimiter` (окно `GOW_GUEST_RATE_WINDOW_S`, 1 ч) | до окна или перезапуска |
-| IP и `nick_key` попыток входа по паролю (`abuse.Limits.login_ip`, `login_nick`) | память процесса (окна `GOW_LOGIN_IP_RATE_WINDOW_S`, `GOW_LOGIN_NICK_RATE_WINDOW_S`, 10 мин) | до окна или перезапуска |
-| журнал сервера (`app.py`, `logs.py`) | stderr контейнера: метод, путь без query, статус, время, request id; без IP и токенов | ротация |
-| журнал Caddy | access log не настроен (`deploy/Caddyfile` без `log`); служебный журнал может содержать IP в ошибках | ротация |
+| nick, `created_at`, SHA-256 of the token (`players`, `identity.py`) | DB `/data/gow.db` | until deletion on request |
+| the password hash, if the player set one: `scrypt$n$r$p$salt$hash` (`players.password_hash`, `passwords.py`, #374); the password itself is not stored, not logged and not returned in 422 errors; there is no password recovery | DB | until deletion on request or a reset (`gow-admin reset-password`) |
+| token and nick | `localStorage["sbf.guest"]` in the browser (`guestStore.ts`) | until the player clears it |
+| interface language | `localStorage["sbf.locale"]` (`locale.ts`) | the same |
+| rating, matches, sides (`ratings`, `matches`, `match_players`) | DB | until deletion on request |
+| replays (`*.jsonl.gz`, `*.frames.json.gz`) | `/data/replays`, contain no nick | indefinitely |
+| game statistics from the match command log (stance, command rate, supply actions, the share of scheduled orders, CP spending): `gow-bots analyze` and `gow-bots stats` compute them offline from a replay; not stored anywhere; tied to a player only by the match side (`match_players`), for balance and match review (#375) | the command output, not stored in the DB or on the server | as for replays |
+| IP when a guest is created | process memory, `SlidingWindowLimiter` (window `GOW_GUEST_RATE_WINDOW_S`, 1 h) | until the window ends or a restart |
+| IP and `nick_key` of password login attempts (`abuse.Limits.login_ip`, `login_nick`) | process memory (windows `GOW_LOGIN_IP_RATE_WINDOW_S`, `GOW_LOGIN_NICK_RATE_WINDOW_S`, 10 min) | until the window ends or a restart |
+| server log (`app.py`, `logs.py`) | the container stderr: method, path without query, status, time, request id; without IPs and tokens | rotation |
+| Caddy log | the access log is not configured (`deploy/Caddyfile` has no `log`); the service log may contain IPs in errors | rotation |
 
-Cookie, аналитики, сторонних сервисов и сбора ошибок нет; CSP `default-src 'self'` запрещает внешние запросы.
+There are no cookies, analytics, third-party services or error collection; the CSP `default-src 'self'` forbids external requests.
 
-## Удаление гостя по запросу
+## Deleting a guest on request
 
-Физически удалять строку `players` нельзя (внешний ключ из `match_players`, а `player_id` не может быть NULL),
-поэтому гостя обезличивают: меняют ник и хэш токена, удаляют хэш пароля и рейтинг. Матчи остаются без связи с человеком.
-Перед правкой сделайте бэкап: `deploy/backup.sh before-delete`.
+The `players` row cannot be physically deleted (a foreign key from `match_players`, and `player_id` cannot be NULL),
+so the guest is anonymized: the nick and the token hash are replaced, the password hash and the rating are deleted. The matches stay without a link to the person.
+Make a backup before the edit: `deploy/backup.sh before-delete`.
 
 ```bash
 docker compose exec app python - <<'PY'
 import os, sqlite3, sys
 from gow_server.nicks import skeleton
-nick = "<NICK>"  # ник из запроса
+nick = "<NICK>"  # the nick from the request
 db = sqlite3.connect("/data/gow.db")
 row = db.execute("SELECT id FROM players WHERE nick_key = ?", (skeleton(nick),)).fetchone()
 if row is None:
@@ -59,24 +59,24 @@ print("anonymized player", row[0])
 PY
 ```
 
-Подтверждение владения ником (у аккаунта нет e-mail): по согласованию, например матч в оговорённое время.
+Confirming ownership of a nick (the account has no e-mail): by agreement, for example a match at an agreed time.
 
-## MANUAL: что остаётся человеку
+## MANUAL: what remains for a human
 
-- Подставить в `apps/client/src/i18n/legal/en.ts` данные оператора: `<OPERATOR_NAME>`, `<STREET_AND_NUMBER>`,
+- Fill in the operator data in `apps/client/src/i18n/legal/en.ts`: `<OPERATOR_NAME>`, `<STREET_AND_NUMBER>`,
   `<POSTAL_CODE_AND_CITY>`, `<COUNTRY>`, `<EMAIL>`, `<PHONE>`, `<VAT_ID_OR_REMOVE_THIS_SECTION>`,
   `<HOSTING_PROVIDER>`, `<HOSTING_LOCATION>`, `<CONFIRM_DPA>`, `<SUPERVISORY_AUTHORITY>`, `<DATE>`.
-- Подтвердить `<LOG_RETENTION_DAYS>` по реальному объёму логов на VPS (ротация идёт по размеру, а не по времени)
-  или ввести ограничение по времени (например, `journald` или ежедневный `docker compose restart`/пересоздание).
-- Юридическая проверка текстов (Impressum по § 5 DDG, политика по GDPR, оценка хранения в `localStorage` без
-  баннера согласия); при необходимости добавить немецкий текст: добавить `de` в `LOCALES`, словарь и
+- Confirm `<LOG_RETENTION_DAYS>` against the real log volume on the VPS (rotation goes by size, not by time)
+  or introduce a time limit (for example, `journald` or a daily `docker compose restart`/recreation).
+- Legal review of the texts (the Impressum under § 5 DDG, the policy under GDPR, an assessment of storing in `localStorage` without
+  a consent banner); if needed add a German text: add `de` to `LOCALES`, a dictionary and
   `i18n/legal/de.ts`.
 - MANUAL (#387): the privacy policy and the Impressum exist in English only now (the Russian texts were removed).
   The lawyer decides whether an English-only privacy policy and Impressum are sufficient for an operator in Germany,
   or whether a German text (`de`, see above) is required. The policy still names the `sbf.locale` key in the table of
   what the browser stores; with a single language the client no longer writes it (it only reads and ignores an old
   value), so the lawyer may drop that row.
-- Заключить договор об обработке данных с хостинг-провайдером (AVV/DPA).
-- MANUAL (#375): юрист проверяет абзац о статистике игры в разделе «Матчи, рейтинг и реплеи» политики
-  (only the English text now) и строку таблицы выше: правовое основание (баланс и разбор партий, ст. 6(1)(f) GDPR),
-  срок хранения «как у реплеев», нужно ли отдельное упоминание в «Ваших правах».
+- Conclude a data processing agreement with the hosting provider (AVV/DPA).
+- MANUAL (#375): the lawyer reviews the paragraph about game statistics in the section "Matches, rating and replays" of the policy
+  (only the English text now) and the table row above: the legal basis (balance and match review, Art. 6(1)(f) GDPR),
+  the retention "as for replays", whether a separate mention in "Your rights" is needed.

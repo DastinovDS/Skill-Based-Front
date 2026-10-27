@@ -1,215 +1,215 @@
-# Аудит безопасности и утечек тумана (QA-04, #86)
+# Security and fog leak audit (QA-04, #86)
 
-Аудит кода, а не документации: каждый пункт проверен чтением исходников и, где можно, на живом
-локальном стеке или тестом. Отметка `[x]` значит «проверено», рядом написано чем.
+An audit of the code, not of the documentation: every item was checked by reading the sources and, where possible, on a live
+local stack or with a test. The mark `[x]` means "checked", and next to it is written how.
 
-Прогон 2026-10-07, `develop` на `2d521e9` (+ исправления #196 и #198). Стенд: `compose.yaml`,
-проект `sbf-qa04`, `HTTP_PORT=8080 HTTPS_PORT=8443`, `SITE_ADDRESS=http://localhost`, `GOW_ENV=prod`,
-рулсет `mvp-0`. Только локальный и статический анализ, внешние системы не затрагивались.
+Run of 2026-10-07, `develop` at `2d521e9` (+ the fixes #196 and #198). Test bed: `compose.yaml`,
+project `sbf-qa04`, `HTTP_PORT=8080 HTTPS_PORT=8443`, `SITE_ADDRESS=http://localhost`, `GOW_ENV=prod`,
+ruleset `mvp-0`. Only local and static analysis, no external systems were touched.
 
-## 1. Итог
+## 1. Summary
 
-Критических и высоких находок нет. Две средние исправлены отдельными PR, одна низкая заведена,
-одна низкая исправлена в PR этого аудита, остальное принято как осознанный риск.
+There are no critical or high findings. Two medium ones were fixed in separate PRs, one low one was filed,
+one low one was fixed in the PR of this audit, the rest was accepted as a deliberate risk.
 
-| # | Серьёзность | Находка | Статус |
+| # | Severity | Finding | Status |
 |---|---|---|---|
-| F1 | Средняя | В журнале сервера IP клиента и query string каждого рукопожатия WebSocket (строка uvicorn в `uvicorn.error`), вопреки AGENTS.md 5.3 и `docs/ops/legal.md` | исправлено: #193, PR #198 |
-| F2 | Средняя (защита в глубину) | `/internal/*` (осушение, метрики) открывается заголовком `X-Forwarded-For: 127.0.0.1` от любого узла внутренней сети: uvicorn доверяет всем прокси (`GOW_FORWARDED_ALLOW_IPS="*"`) | исправлено: #194, PR #196 |
-| F3 | Низкая | Нет лимита одновременных соединений с одного адреса: WebSocket до `hello` живёт 5 с без аутентификации, у uvicorn нет `limit_concurrency` | заведено: #199 (P2) |
-| F4 | Низкая | Dev-зависимость клиента `source-map-js` 1.2.1 (GHSA-68fv-2mgg-jv7q, «high» в базе: DoS при разборе чужой source map). Только сборка и тесты (`postcss`, `jsdom`), в прод-бандл не попадает | исправлено в этом PR: lockfile, 1.2.2 |
-| F5 | Инфо | `GET /api/replays/{id}` отвечает 404, 401 или 403: по последовательному id видно, есть ли неранговый матч и готов ли его реплей (содержимое недоступно) | принято |
-| F6 | Инфо | Заголовки `Server: Caddy` и `Server: uvicorn` раскрывают ПО | принято |
-| F7 | Инфо | Ответ 422 FastAPI возвращает клиенту его собственный ввод (`input`); в журнал он не попадает, токенов в телах HTTP нет | принято |
-| F8 | Инфо | Токен гостя лежит в `localStorage`: XSS мог бы его прочитать. Смягчено строгим CSP и отсутствием `{@html}`/`innerHTML` (раздел 6) | принято |
-| F9 | Инфо | Проверка `Origin` сравнивает `host:port` с `Host`, но не схему (`http` и `https` одного хоста равны) | принято |
+| F1 | Medium | The server log holds the client IP and the query string of every WebSocket handshake (a uvicorn line in `uvicorn.error`), contrary to AGENTS.md 5.3 and `docs/ops/legal.md` | fixed: #193, PR #198 |
+| F2 | Medium (defense in depth) | `/internal/*` (drain, metrics) opens with the header `X-Forwarded-For: 127.0.0.1` from any node of the internal network: uvicorn trusts all proxies (`GOW_FORWARDED_ALLOW_IPS="*"`) | fixed: #194, PR #196 |
+| F3 | Low | There is no limit on simultaneous connections from one address: a WebSocket lives 5 s without authentication before `hello`, and uvicorn has no `limit_concurrency` | filed: #199 (P2) |
+| F4 | Low | The client dev dependency `source-map-js` 1.2.1 (GHSA-68fv-2mgg-jv7q, "high" in the database: DoS when parsing a foreign source map). Build and tests only (`postcss`, `jsdom`), it does not get into the prod bundle | fixed in this PR: lockfile, 1.2.2 |
+| F5 | Info | `GET /api/replays/{id}` answers 404, 401 or 403: from a sequential id one can see whether an unranked match exists and whether its replay is ready (the content is not accessible) | accepted |
+| F6 | Info | The headers `Server: Caddy` and `Server: uvicorn` reveal the software | accepted |
+| F7 | Info | The FastAPI 422 response returns the client its own input (`input`); it does not get into the log, there are no tokens in HTTP bodies | accepted |
+| F8 | Info | The guest token is stored in `localStorage`: XSS could read it. Mitigated by a strict CSP and the absence of `{@html}`/`innerHTML` (section 6) | accepted |
+| F9 | Info | The `Origin` check compares `host:port` with `Host`, but not the scheme (`http` and `https` of one host are equal) | accepted |
 
-Подробности F1 и F2 (воспроизведение на стенде) в issues #193 и #194.
+Details of F1 and F2 (reproduction on the test bed) are in the issues #193 and #194.
 
-## 2. Чек-лист issue
+## 2. Issue checklist
 
-- [x] **Вид игрока не содержит скрытого** (id и счётчики включительно): раздел 3.
-- [x] **Ошибки не различают «нет» и «не видно»**: раздел 3.4.
-- [x] **Токены не в URL и не в журналах**: раздел 4 (нашлась F1, исправлена).
-- [x] **Проверка Origin**: раздел 4.
-- [x] **Лимиты частоты**: раздел 5 (F3 заведена).
-- [x] **CSP**: раздел 6.
-- [x] **Фаззинг `ClientMsg`**: раздел 5.2, новый тест `packages/protocol/tests/test_command_fuzz.py`.
-- [x] **«Мапхак»: чтение всех сообщений WebSocket за матч**: раздел 3.5, автоматическая запись через
-  Caddy вместо глаз в DevTools (сообщения те же, проверка строже).
+- [x] **The player view contains nothing hidden** (ids and counters included): section 3.
+- [x] **Errors do not tell "does not exist" from "not visible"**: section 3.4.
+- [x] **Tokens are not in URLs and not in logs**: section 4 (F1 was found, fixed).
+- [x] **Origin check**: section 4.
+- [x] **Rate limits**: section 5 (F3 filed).
+- [x] **CSP**: section 6.
+- [x] **Fuzzing of `ClientMsg`**: section 5.2, the new test `packages/protocol/tests/test_command_fuzz.py`.
+- [x] **"Maphack": reading all WebSocket messages of a match**: section 3.5, an automatic recording through
+  Caddy instead of eyes in DevTools (the messages are the same, the check is stricter).
 
-## 3. Туман войны
+## 3. Fog of war
 
-### 3.1 Проекция `project()` (`packages/sim/src/gow_sim/view.py`)
+### 3.1 The `project()` projection (`packages/sim/src/gow_sim/view.py`)
 
-- [x] Свои группы и пакеты: только `owner == player`; чужих групп как сущностей нет, только `seen`
-  у места. Чужие пакеты не видны никогда (#112).
-- [x] Склад только у `EXACT`; на `PRESENCE` у `seen` нет чисел (`systems/vision.py:_sighting`);
-  в `FOG` только память `vision_memory`, на рёбрах чисел нет никогда.
-- [x] `me` содержит только свои CP и стойку; CP, стойки, производства противника в виде нет.
-- [x] Намерения: тип, откуда, куда, тик создания; без id и размера группы. Цели обычного приказа нет:
-  у обычного приказа нет намерения.
-- [x] Id групп, пакетов и намерений: keyed blake2b с секретным `match_key` (32 байта
-  `secrets.token_bytes`, не в журнале, не в `repr`), 63 бита, на проводе 18-19 цифр. Порядок в
-  кортежах по непрозрачному id, а не по порядку создания.
-- [x] Владельцы и VP публичны по DEC-04. Уровни дорог по DEC-17 (#210) и DEC-22 (#238; типов
-  нет после DEC-26, #265): точные только на ребре не в тумане, в тумане последние увиденные
-  (`Sighting.width`), иначе уровень 1; казарма, склад и стройки чужих городов скрыты (DEC-26); ёмкость задана видом узла и публична (DEC-22);
-  стройки противника видны только на рёбрах не в тумане. Тесты: `test_view.py` (`test_dec17_*`,
-  property-тест с изменением уровней и типов в тумане), `test_properties.py` (`MatchMachine.fog`).
-- Покрытие тестами: `packages/sim/tests/test_view.py` (`test_property_nothing_leaks_from_places_out_of_sight`:
-  изменение скрытого не меняет вид), `test_properties.py` (`MatchMachine.fog`).
+- [x] Own groups and packets: only `owner == player`; there are no foreign groups as entities, only `seen`
+  of a place. Foreign packets are never visible (#112).
+- [x] The warehouse only at `EXACT`; at `PRESENCE` `seen` has no numbers (`systems/vision.py:_sighting`);
+  in `FOG` only the memory `vision_memory`, there are never numbers on edges.
+- [x] `me` contains only own CP and stance; there are no CP, stance, production of the opponent in the view.
+- [x] Intents: kind, from, to, creation tick; without the group id and size. There is no target of an ordinary order:
+  an ordinary order has no intent.
+- [x] Ids of groups, packets and intents: keyed blake2b with the secret `match_key` (32 bytes of
+  `secrets.token_bytes`, not in the log, not in `repr`), 63 bits, 18-19 digits on the wire. The order in
+  tuples is by the opaque id, not by the order of creation.
+- [x] Owners and VP are public per DEC-04. Road levels per DEC-17 (#210) and DEC-22 (#238; there are no
+  types after DEC-26, #265): exact only on an edge not in the fog, in the fog the last seen ones
+  (`Sighting.width`), otherwise level 1; the barracks, warehouse and construction of foreign cities are hidden (DEC-26); the capacity is set by the kind of node and is public (DEC-22);
+  the opponent's construction is visible only on edges not in the fog. Tests: `test_view.py` (`test_dec17_*`,
+  a property test with changing levels and types in the fog), `test_properties.py` (`MatchMachine.fog`).
+- Test coverage: `packages/sim/tests/test_view.py` (`test_property_nothing_leaks_from_places_out_of_sight`:
+  a change of the hidden does not change the view), `test_properties.py` (`MatchMachine.fog`).
 
-### 3.2 Провод: `snapshot_frame` (#155) против строгих моделей
+### 3.2 The wire: `snapshot_frame` (#155) against strict models
 
-- [x] `gow_protocol.convert._view_data` пишет ровно поля `view_to_wire` в том же порядке; серверные
-  поля `depart_tick`, `build_edge`, `back` в кадр не попадают.
-- [x] `test_convert.py` на реальных матчах трёх карт MVP и бот-матче сравнивает кадр байт в байт с
-  `encode(snapshot_msg(view))`, а JSON кадра с каноническим видом; ищет в каждом кадре id вражеских
-  групп и пакетов в пространствах id обоих игроков.
-- [x] Вне `prod` сервер валидирует каждый кадр (`MatchManager(validate_snapshots=env != "prod")`).
+- [x] `gow_protocol.convert._view_data` writes exactly the fields of `view_to_wire` in the same order; the server
+  fields `depart_tick`, `build_edge`, `back` do not get into the frame.
+- [x] `test_convert.py` on real matches of the three MVP maps and a bot match compares the frame byte for byte with
+  `encode(snapshot_msg(view))`, and the frame JSON with the canonical view; it searches every frame for the ids of enemy
+  groups and packets in the id spaces of both players.
+- [x] Outside `prod` the server validates every frame (`MatchManager(validate_snapshots=env != "prod")`).
 
-### 3.3 События, `ack`, `welcome`, `match_end`
+### 3.3 Events, `ack`, `welcome`, `match_end`
 
-- [x] Политика событий: белый список (`convert.py`). Публичны `node_captured`, `vp_awarded`,
-  `forfeit`; события боя `fight_started`, `fight_round`, `fight_ended` (DEC-24) обоим
-  участникам целиком: выстрелы обеих сторон (виртуальные отдельно), погашенные заряды и потери
-  (пересмотр п. I1 и I2 с DEC-29, #294; до него поля `shots_*`/`virtual_*`/`spent_*` противника
-  вырезались); остальное только своему игроку; неизвестный вид не уходит никогда.
-- [x] Id сущностей в событиях (`group`, `new_group`, `packet`, `fight`) переводятся в непрозрачные
-  id игрока. Вид игрока `fights` (DEC-24, п. I1): у противника итоги боя (юниты и заряженные),
-  выстрелы и потери сторон за бой и последний раунд обеих сторон (`last_round`); без id его групп
-  и без запаса виртуальных выстрелов (бонусы до их траты в раунде не раскрываются).
-- [x] `ack`: путь приказа строится только по публичным владельцам, `travel_ticks` и рельефу
-  (`movement.find_path`); от ширин дорог не зависит, поэтому скрытые ширины (DEC-17) через путь не утекают.
-- [x] `welcome`: `RulesetPublic`, `map_id`, `last_seq`; `match_end`: исход, VP, свой рейтинг.
+- [x] The event policy: a whitelist (`convert.py`). `node_captured`, `vp_awarded`,
+  `forfeit` are public; the fight events `fight_started`, `fight_round`, `fight_ended` (DEC-24) go to both
+  participants in full: the shots of both sides (virtual ones separately), the burned charges and the losses
+  (a revision of items I1 and I2 with DEC-29, #294; before it the opponent's fields `shots_*`/`virtual_*`/`spent_*`
+  were cut out); everything else only to its own player; an unknown kind never leaves.
+- [x] Entity ids in events (`group`, `new_group`, `packet`, `fight`) are turned into the player's opaque
+  ids. The player view `fights` (DEC-24, item I1): for the opponent the fight totals (units and charged),
+  the shots and losses of the sides for the fight and the last round of both sides (`last_round`); without the id of its groups
+  and without the reserve of virtual shots (bonuses are not revealed before they are spent in a round).
+- [x] `ack`: the path of an order is built only from the public owners, `travel_ticks` and terrain
+  (`movement.find_path`); it does not depend on road widths, so the hidden widths (DEC-17) do not leak through the path.
+- [x] `welcome`: `RulesetPublic`, `map_id`, `last_seq`; `match_end`: the outcome, VP, the own rating.
 
-### 3.4 Одинаковые ответы для «нет» и «не видно»
+### 3.4 Identical answers for "does not exist" and "not visible"
 
-- [x] `resolve()` знает только свои группы; любой чужой или выдуманный id становится
-  отрицательным внутренним id, и `validate()` отвечает `NOT_FOUND_OR_HIDDEN`. `NOT_OWNER` с провода
-  недостижим: непрозрачных id вражеских групп клиент не получает.
-- [x] Узлы и рёбра публичны, поэтому `NOT_OWNER` для узла ничего не раскрывает.
-- [x] WebSocket: неизвестный токен, чужой матч, неизвестный или законченный матч, заблокированный
-  аккаунт закрываются одним кодом 4004.
-- [x] Новый тест `test_command_fuzz.py` проверяет на живом матче, что чужие и выдуманные id всегда дают
+- [x] `resolve()` knows only own groups; any foreign or invented id becomes a
+  negative internal id, and `validate()` answers `NOT_FOUND_OR_HIDDEN`. `NOT_OWNER` is unreachable
+  from the wire: the client does not receive opaque ids of enemy groups.
+- [x] Nodes and edges are public, so `NOT_OWNER` for a node reveals nothing.
+- [x] WebSocket: an unknown token, a foreign match, an unknown or finished match, a blocked
+  account are closed with a single code 4004.
+- [x] The new test `test_command_fuzz.py` checks on a live match that foreign and invented ids always give
   `NOT_FOUND_OR_HIDDEN`.
 
-### 3.5 Мапхак: все сообщения WebSocket за матч
+### 3.5 Maphack: all WebSocket messages of a match
 
-Гость, бот-матч (`pereval`, бот `normal`) через Caddy, клиент на `websockets` читает и пишет всё,
-что видел бы DevTools, 300 секунд игры (3003 тика) и сдача. Записано 4430 сообщений: `welcome` 1,
-`snapshot` 3003, `ack` 1137, `event` 288, `match_end` 1. Проверки по каждому сообщению:
+A guest, a bot match (`pereval`, bot `normal`) through Caddy, a client on `websockets` reads and writes everything
+DevTools would see, 300 seconds of play (3003 ticks) and a forfeit. 4430 messages were recorded: `welcome` 1,
+`snapshot` 3003, `ack` 1137, `event` 288, `match_end` 1. Checks on every message:
 
-- набор ключей вида, группы, намерения ровно как в схеме, у `me` только `cp` и `stance`;
-- склад не `null` только у `EXACT`, на `PRESENCE` числа врага `null`, свежие `seen` с текущим тиком;
-- все id длиной 18-19 цифр, коротких (последовательных) нет; 34 своих id, 1 id намерения;
-- все id в событиях встречались среди своих групп и пакетов;
-- виды событий только из белого списка; в событиях боя нет `shots_1`/`virtual_1`/`spent_1`
-  противника (до DEC-24: `pool_1`/`unspent_1` в `fight`);
-- коды отказов только о своих действиях (`CITY_FULL`, `NOT_ENOUGH_CP`, `RECRUIT_COOLDOWN`; после
-  DEC-25 вместо кулдауна `QUEUE_FULL`).
+- the set of keys of the view, groups, intents exactly as in the schema, `me` has only `cp` and `stance`;
+- the warehouse is not `null` only at `EXACT`, at `PRESENCE` the enemy numbers are `null`, fresh `seen` with the current tick;
+- all ids are 18-19 digits long, there are no short (sequential) ones; 34 own ids, 1 intent id;
+- all ids in events were met among own groups and packets;
+- the event kinds are only from the whitelist; the fight events have no opponent `shots_1`/`virtual_1`/`spent_1`
+  (before DEC-24: `pool_1`/`unspent_1` in `fight`);
+- the rejection codes are only about own actions (`CITY_FULL`, `NOT_ENOUGH_CP`, `RECRUIT_COOLDOWN`; after
+  DEC-25 `QUEUE_FULL` instead of the cooldown).
 
-Нарушений нет. Взгляд глазами в DevTools браузера это не заменяет полностью, но на уровне сообщений
-проверено всё, что он показал бы.
+No violations. This does not fully replace a look with the eyes in the browser DevTools, but at the message level
+everything it would have shown was checked.
 
-### 3.6 Реплеи
+### 3.6 Replays
 
-- [x] `GET /api/replays/{id}` отдаёт только файл кадров, и только когда `matches.replay_path`
-  заполнен: это делает `ReplayService.finalize` после законченного матча. Идущий матч отвечает 404.
-- [x] Журнал команд `{id}.jsonl.gz` с `match_key` не отдаётся никогда; путь файла проверяется на
-  нахождение внутри `replays_dir`.
-- [x] Неранговые реплеи только участникам (`Authorization: Bearer`), ранговые публичны по дизайну.
-  Побочный канал статусов: F5.
+- [x] `GET /api/replays/{id}` serves only the frames file, and only when `matches.replay_path`
+  is filled: `ReplayService.finalize` does this after a finished match. A running match answers 404.
+- [x] The command log `{id}.jsonl.gz` with the `match_key` is never served; the file path is checked to
+  lie inside `replays_dir`.
+- [x] Unranked replays only to the participants (`Authorization: Bearer`), ranked ones are public by design.
+  The status side channel: F5.
 
-## 4. Аутентификация и журналы
+## 4. Authentication and logs
 
-- [x] Токен `secrets.token_urlsafe(32)`, в БД только SHA-256 (`models.Player.token_hash`, 32 байта),
-  IP в БД не хранится.
-- [x] Токен только в `hello` (WebSocket) и `Authorization: Bearer` (HTTP); в клиенте нигде не попадает
-  в URL (`net/matchConnection.ts`, `api/http.ts`, `replay/loadReplay.ts`).
-- [x] `hello` за 5 с (`ws_hello_timeout_s`), иначе 1008; поиск токена в потоке (`asyncio.to_thread`).
-- [x] Модели протокола `extra="forbid"`, `strict`, `hide_input_in_errors=True`, у адаптеров тоже;
-  ошибки `hello` пишутся только числом (`exc.error_count()`); у `HelloMsg.token` `repr=False`.
-  HTTP-модели гостя тоже `extra="forbid"`, `hide_input_in_errors=True`.
-- [x] Журнал доступа: middleware пишет шаблон маршрута (`/api/matches/{code}/join`), без query;
-  access log uvicorn выключен. **F1**: строка рукопожатия WebSocket из `uvicorn.error` писала
-  `IP:порт` и query string. Исправлено фильтром `DropWebSocketHandshake` (#198), тест на настоящем
+- [x] The token is `secrets.token_urlsafe(32)`, only its SHA-256 is in the DB (`models.Player.token_hash`, 32 bytes),
+  the IP is not stored in the DB.
+- [x] The token only in `hello` (WebSocket) and `Authorization: Bearer` (HTTP); in the client it never gets
+  into a URL (`net/matchConnection.ts`, `api/http.ts`, `replay/loadReplay.ts`).
+- [x] `hello` within 5 s (`ws_hello_timeout_s`), otherwise 1008; the token lookup in a thread (`asyncio.to_thread`).
+- [x] Protocol models `extra="forbid"`, `strict`, `hide_input_in_errors=True`, the adapters too;
+  `hello` errors are written only as a number (`exc.error_count()`); `HelloMsg.token` has `repr=False`.
+  The guest HTTP models are also `extra="forbid"`, `hide_input_in_errors=True`.
+- [x] The access log: the middleware writes the route template (`/api/matches/{code}/join`), without the query;
+  the uvicorn access log is off. **F1**: the WebSocket handshake line from `uvicorn.error` wrote
+  `IP:port` and the query string. Fixed with the filter `DropWebSocketHandshake` (#198), a test on a real
   uvicorn.
-- [x] Проверка `Origin`: на стенде `Origin: http://evil.example` получает 403 (и запись `ws origin
-  refused` без адреса), свой origin проходит. Тесты `test_ws.py`. Схема не сравнивается: F9.
-- [x] `X-Forwarded-For`: Caddy заменяет входящий заголовок адресом клиента (на стенде подменённый
-  `6.6.6.6` до сервера не дошёл), поэтому лимит гостей на IP не обходится подменой.
-- [x] `/internal/*`: Caddy его не проксирует; на стенде `/internal/metrics`, `/api/../internal/...`,
-  `/api/%2e%2e/...`, `/api/..%2f...`, `/ws/../...` получают `index.html` клиента. **F2**: изнутри
-  сети `X-Forwarded-For: 127.0.0.1` проходил проверку loopback; теперь запрос с заголовком прокси
-  получает 404 (#196).
+- [x] The `Origin` check: on the test bed `Origin: http://evil.example` gets 403 (and the record `ws origin
+  refused` without an address), the own origin passes. Tests `test_ws.py`. The scheme is not compared: F9.
+- [x] `X-Forwarded-For`: Caddy replaces the incoming header with the client address (on the test bed a forged
+  `6.6.6.6` did not reach the server), so the per-IP guest limit cannot be bypassed by forging.
+- [x] `/internal/*`: Caddy does not proxy it; on the test bed `/internal/metrics`, `/api/../internal/...`,
+  `/api/%2e%2e/...`, `/api/..%2f...`, `/ws/../...` get the client `index.html`. **F2**: from inside the
+  network `X-Forwarded-For: 127.0.0.1` passed the loopback check; now a request with a proxy header
+  gets 404 (#196).
 
-## 5. Ввод и лимиты
+## 5. Input and limits
 
-### 5.1 Лимиты (MOD-01 и раньше)
+### 5.1 Limits (MOD-01 and earlier)
 
-- [x] Гости: 10 в час на IP (`SlidingWindowLimiter`); матчи (приглашения и боты): 10 за 10 минут на
-  игрока; приглашения: 10 в минуту на аккаунт; смена ника: 3 в сутки; очередь: 20 в минуту.
-- [x] WebSocket: token bucket 20 сообщений/с, всплеск 60, переполнение: `RATE_LIMITED` и 1008;
-  сообщение не больше 64 КиБ (`ws_max_size`); очередь надёжных сообщений 4096, медленный клиент
-  отключается; `send` с таймаутом.
-- [x] Целые на проводе ограничены int32, id матчей и файлов проверяются регуляркой.
-- F3: нет лимита одновременных соединений с адреса (#199).
+- [x] Guests: 10 per hour per IP (`SlidingWindowLimiter`); matches (invites and bots): 10 per 10 minutes per
+  player; invites: 10 per minute per account; nick change: 3 per day; queue: 20 per minute.
+- [x] WebSocket: a token bucket of 20 messages/s, burst 60, overflow: `RATE_LIMITED` and 1008;
+  a message of at most 64 KiB (`ws_max_size`); the reliable message queue is 4096, a slow client
+  is disconnected; `send` with a timeout.
+- [x] Integers on the wire are limited to int32, match and file ids are checked with a regular expression.
+- F3: there is no limit on simultaneous connections from an address (#199).
 
-### 5.2 Фаззинг
+### 5.2 Fuzzing
 
-- [x] Кодек: Hypothesis в `packages/protocol/tests/test_validation.py` (любые байты, текст, JSON и
-  мутации фикстур дают только `ValidationError`, ошибка не содержит токен).
-- [x] Новое: `packages/protocol/tests/test_command_fuzz.py`. Любая команда, прошедшая схему (id свои,
-  вражеские в обоих пространствах, случайные, числа до `MAX_INT`), идёт путём сервера до
-  `Match.step` на живом матче и получает `ack`, не роняя матч. Падение матча закончило бы его для
-  обоих и позволило бы уйти от поражения в рейтинговом матче. Проверено мутацией: без проверки
-  границ узла в `Recruit` тест падает с `KeyError`.
+- [x] The codec: Hypothesis in `packages/protocol/tests/test_validation.py` (any bytes, text, JSON and
+  mutations of the fixtures give only `ValidationError`, the error contains no token).
+- [x] New: `packages/protocol/tests/test_command_fuzz.py`. Any command that passed the schema (own ids,
+  enemy ones in both spaces, random ones, numbers up to `MAX_INT`) goes the server's way to
+  `Match.step` on a live match and gets an `ack`, without crashing the match. A match crash would end it for
+  both and would let a player escape a defeat in a ranked match. Checked by mutation: without the node
+  bounds check in `Recruit` the test fails with `KeyError`.
 
-## 6. Клиент, CSP и заголовки
+## 6. Client, CSP and headers
 
-- [x] CSP на стенде совпадает с `apps/client/csp.ts`: `default-src 'self'`, `script-src 'self'`
-  (без `unsafe-eval`/`unsafe-inline`), `style-src 'self'`, `worker-src 'none'`, `object-src 'none'`,
+- [x] The CSP on the test bed equals `apps/client/csp.ts`: `default-src 'self'`, `script-src 'self'`
+  (without `unsafe-eval`/`unsafe-inline`), `style-src 'self'`, `worker-src 'none'`, `object-src 'none'`,
   `base-uri 'none'`, `frame-ancestors 'none'`, `connect-src 'self'`.
-- [x] `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` на
-  статике и на `/api`; HSTS только по HTTPS и не для `localhost` (`deploy/Caddyfile`, проверяет
-  `deploy/check-caddy.sh` с `BASE_URL=https://...`).
-- [x] В `apps/client/src` нет `{@html}`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `eval`,
-  `new Function` (кроме комментария про `pixi.js/unsafe-eval`); ники выводятся интерполяцией Svelte.
-- [x] В прод-образе нет `.map` файлов.
+- [x] `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` on
+  statics and on `/api`; HSTS only over HTTPS and not for `localhost` (`deploy/Caddyfile`, checked by
+  `deploy/check-caddy.sh` with `BASE_URL=https://...`).
+- [x] There is no `{@html}`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `eval`,
+  `new Function` in `apps/client/src` (except a comment about `pixi.js/unsafe-eval`); nicks are output by Svelte interpolation.
+- [x] There are no `.map` files in the prod image.
 
-## 7. Контейнеры
+## 7. Containers
 
-Проверено `docker inspect` на стенде:
+Checked with `docker inspect` on the test bed:
 
-| | пользователь | rootfs | capabilities | no-new-privileges | порты на хосте |
+| | user | rootfs | capabilities | no-new-privileges | ports on the host |
 |---|---|---|---|---|---|
-| `app` | 10001 (`gow`) | только чтение, `/tmp` tmpfs | `cap_drop: ALL` | да | нет, только сеть `internal` (`internal: true`) |
-| `caddy` | 10002 (`caddy`) | только чтение, `/tmp` tmpfs | `cap_drop: ALL`, файловая capability снята | да | 80/443 (на стенде 8080/8443) |
+| `app` | 10001 (`gow`) | read-only, `/tmp` tmpfs | `cap_drop: ALL` | yes | none, only the network `internal` (`internal: true`) |
+| `caddy` | 10002 (`caddy`) | read-only, `/tmp` tmpfs | `cap_drop: ALL`, the file capability removed | yes | 80/443 (on the test bed 8080/8443) |
 
-Базовые образы закреплены по версии и digest.
+The base images are pinned by version and digest.
 
-## 8. Секреты и зависимости
+## 8. Secrets and dependencies
 
-- [x] Секреты в истории: проход регулярками (приватные ключи, токены AWS, GitHub, Slack, Discord,
-  Google, `sk-...`, JWT, присваивания `password/secret/api_key/token = "..."`, учётные данные в URL)
-  по `git log -p --all`, 186 коммитов: 0 совпадений. Из файлов окружения в git только `.env.example`
-  без секретов; `ALERT_WEBHOOK_URL` передаётся `curl` через stdin (`deploy/alert-forward.sh`).
-- [x] Python: `uvx pip-audit` по `uv export --locked --all-packages` (170 пакетов): уязвимостей нет.
-- [x] Клиент: `pnpm audit --prod`: уязвимостей нет; `pnpm audit` (с dev): F4, исправлено.
+- [x] Secrets in the history: a pass with regular expressions (private keys, AWS, GitHub, Slack, Discord,
+  Google tokens, `sk-...`, JWT, assignments `password/secret/api_key/token = "..."`, credentials in URLs)
+  over `git log -p --all`, 186 commits: 0 matches. Of the environment files only `.env.example` is in git,
+  without secrets; `ALERT_WEBHOOK_URL` is passed to `curl` through stdin (`deploy/alert-forward.sh`).
+- [x] Python: `uvx pip-audit` over `uv export --locked --all-packages` (170 packages): no vulnerabilities.
+- [x] Client: `pnpm audit --prod`: no vulnerabilities; `pnpm audit` (with dev): F4, fixed.
 
-## 9. Как повторить
+## 9. How to repeat
 
 ```sh
 export HTTP_PORT=8080 HTTPS_PORT=8443
 docker compose -p sbf-qa04 up --build -d
-# Origin и журнал (F1): после исправления в журнале нет строк '"WebSocket ' от uvicorn.error
+# Origin and the log (F1): after the fix there are no lines '"WebSocket ' from uvicorn.error in the log
 docker compose -p sbf-qa04 logs app | grep uvicorn.error
-# /internal не проксируется: везде index.html клиента, не метрики
+# /internal is not proxied: everywhere the client index.html, not the metrics
 for p in /internal/metrics /api/../internal/metrics /api/%2e%2e/internal/metrics; do
   curl -s --path-as-is "http://localhost:8080$p" | grep -c gow_matches_active; done
-# F2: из сети internal подмена XFF больше не открывает /internal (404)
+# F2: from the internal network a forged XFF no longer opens /internal (404)
 docker exec sbf-qa04-caddy-1 wget -qO- --header 'X-Forwarded-For: 127.0.0.1' http://app:8000/internal/drain
 uvx pip-audit -r <(uv export --locked --all-packages --no-emit-workspace --no-hashes -q) --no-deps --disable-pip
 pnpm -C apps/client audit
@@ -218,9 +218,9 @@ uv run pytest packages/protocol/tests/test_command_fuzz.py packages/protocol/tes
 docker compose -p sbf-qa04 down -v
 ```
 
-## 10. Остаток вручную
+## 10. What remains to do by hand
 
-- Просмотр сообщений WebSocket глазами в DevTools браузера (автоматическая запись в разделе 3.5
-  покрывает то же на уровне сообщений).
-- HTTPS-режим (HSTS, сертификат) на настоящем домене: `BASE_URL=https://<домен> deploy/check-caddy.sh`
-  после развёртывания (OPS-03, QA-03).
+- Viewing the WebSocket messages with the eyes in the browser DevTools (the automatic recording in section 3.5
+  covers the same at the message level).
+- The HTTPS mode (HSTS, certificate) on a real domain: `BASE_URL=https://<domain> deploy/check-caddy.sh`
+  after the deployment (OPS-03, QA-03).

@@ -22,7 +22,7 @@ name (`PINNED_SEEDS` in `tools/maps/src/gow_maps/bake.py`).
 Next to a map lie the preview `<id>.preview.png` (for people) and the background `<id>.bg.webp` (MAP-05, #70, #344; the server
 serves it, the client draws it). After any map edit: `uv run gow-maps preview maps/*.json` and
 `uv run gow-maps bake maps/*.json` (or `mise run maps:bake`). The background is all land, no water (DEC-27, #269), with the
-texture T2 "Thinning" ("Прореживание" in `ui-style.md`, 26.3), WebP no larger than 0.5 MB, baking one map takes up to 10 s.
+texture T2 "Thinning" (`ui-style.md`, 26.3), WebP no larger than 0.5 MB, baking one map takes up to 10 s.
 
 | File | Map id (`meta.name`) | World | Nodes (provinces) | Roads | Own at start | Neutral, of them contested | Path capital → capital |
 |---|---|---|---|---|---|---|---|
@@ -51,7 +51,7 @@ Common to all maps:
   delivery (DEC-26);
 - a city's capacity is set by its kind `kind` (capital 10, large 8, medium 6, small 4, DEC-22);
   the rule by which three maps got their kinds before the DEC-23 rework: `docs/design/map-format.md`,
-  "Вид узлов в картах MVP" (the kinds of nodes in the MVP maps); the preview labels the kind with a letter (S, M, L);
+  "Node kinds in the MVP maps (before DEC-23)"; the preview labels the kind with a letter (S, M, L);
 - `vp` 1, key cities in the center have 2 to 3 (from each capital there are at least two paths without shared roads
   to each such city).
 

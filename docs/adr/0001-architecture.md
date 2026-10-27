@@ -1,63 +1,63 @@
-# ADR 0001. Архитектура: авторитарный сервер, чистая симуляция, Python + TypeScript, туман на сервере
+# ADR 0001. Architecture: an authoritative server, a pure simulation, Python + TypeScript, fog on the server
 
-- Статус: принято
-- Дата: 2026-09-30
+- Status: accepted
+- Date: 2026-09-30
 - Issue: DOC-01 (#2)
 
-## Контекст
+## Context
 
-Skill-Based Front: соревновательная стратегия 1v1 в браузере, партия от 10 до 15 минут, рейтинг Glicko-2
-и реплеи (`docs/mvp/MVP_PLAN.md`). Правила игры (`docs/design/mechanics.md`) целочисленные и без
-случайности, скрыто только состояние противника. Из этого следуют требования:
+Skill-Based Front: a competitive 1v1 strategy game in the browser, a match of 10 to 15 minutes, a Glicko-2 rating
+and replays (`docs/mvp/MVP_PLAN.md`). The game rules (`docs/design/mechanics.md`) are integer-based and without
+randomness, only the opponent's state is hidden. The requirements follow from this:
 
-- честность: клиент не должен знать того, чего игрок не видит, и не должен влиять на исход;
-- воспроизводимость: один и тот же журнал команд даёт один и тот же матч (реплеи, отладка, турниры ботов);
-- баланс проверяется на ботах тысячами матчей до того, как появится клиент;
-- в команде два разработчика: трек A (Python) и трек B (TypeScript и инструменты).
+- fairness: the client must not know what the player does not see, and must not influence the outcome;
+- reproducibility: the same command log gives the same match (replays, debugging, bot tournaments);
+- balance is checked on bots over thousands of matches before the client exists;
+- the team has two developers: track A (Python) and track B (TypeScript and tools).
 
-Прототип на Pygame (тег `v0-pygame-prototype`) реализует старый дизайн, держит логику в клиенте и не подходит
-как основа.
+The Pygame prototype (the tag `v0-pygame-prototype`) implements the old design, keeps the logic in the client and does not fit
+as a basis.
 
-## Решение
+## Decision
 
-1. **Сервер авторитарен.** Вся логика игры выполняется на сервере. Клиент рисует снапшоты и
-   отправляет намерения (например, `Move(group, dest, planned)`), никогда не состояние.
-   Исключений нет: оценку боя в HUD сняли (#252), логики игры в клиенте нет совсем.
-2. **Симуляция: чистая детерминированная библиотека `gow_sim` на Python.** Шаг матча меняет только
-   своё состояние; время задаётся тиками (10 в секунду); только целые числа; без `random`, `time`,
-   сети, I/O и обходов `set`. Все числа правил берутся из рулсета (`rulesets/*.toml`).
-   Одну и ту же библиотеку используют сервер, боты, турнирный харнесс, реплеи и тесты.
-3. **Туман войны считается на сервере.** Единственное, что покидает симуляцию в сторону игрока или
-   бота: результат `project(state, player) -> PlayerView`. Боты получают тот же `PlayerView`, что и люди.
-4. **Языки и стек.** Сервер, симуляция, протокол, боты и инструменты карт: Python 3.12 в одном
-   uv workspace (FastAPI, Pydantic 2, SQLAlchemy 2, SQLite). Клиент: TypeScript + Vite + Svelte 5
-   (интерфейс) + PixiJS 8 (карта). Протокол описан Pydantic-моделями; TypeScript-типы генерируются
-   из схемы и не редактируются руками.
-5. **Один серверный процесс** с одним `asyncio`-таском на матч; внутри шага симуляции нет `await`.
+1. **The server is authoritative.** All game logic runs on the server. The client draws snapshots and
+   sends intents (for example, `Move(group, dest, planned)`), never a state.
+   There are no exceptions: the fight estimate in the HUD was removed (#252), there is no game logic in the client at all.
+2. **The simulation: a pure deterministic library `gow_sim` in Python.** A match step changes only its own
+   state; time is set in ticks (10 per second); integers only; no `random`, `time`,
+   network, I/O or `set` iteration. All the numbers of the rules come from the ruleset (`rulesets/*.toml`).
+   The same library is used by the server, bots, the tournament harness, replays and tests.
+3. **Fog of war is computed on the server.** The only thing that leaves the simulation toward a player or
+   a bot: the result of `project(state, player) -> PlayerView`. Bots get the same `PlayerView` as humans.
+4. **Languages and stack.** The server, simulation, protocol, bots and map tools: Python 3.12 in one
+   uv workspace (FastAPI, Pydantic 2, SQLAlchemy 2, SQLite). The client: TypeScript + Vite + Svelte 5
+   (the interface) + PixiJS 8 (the map). The protocol is described by Pydantic models; the TypeScript types are generated
+   from the schema and are not edited by hand.
+5. **One server process** with one `asyncio` task per match; there is no `await` inside a simulation step.
 
-Детали и обязательные правила: `AGENTS.md`, разделы 2, 4, 5, 6 и 7.
+Details and mandatory rules: `AGENTS.md`, sections 2, 4, 5, 6 and 7.
 
-## Последствия
+## Consequences
 
-- Читерство через клиент (скрытое состояние, подмена исхода) исключено архитектурно; утечки тумана
-  проверяются тестами проекции и аудитом (SIM-14, SIM-17, QA-04).
-- Реплей: заголовок и журнал команд; пересимуляция даёт точные кадры. Изменение правил требует
-  повышения `SIM_VERSION` и новых золотых реплеев.
-- Баланс проверяется турниром ботов headless, без сервера и клиента (M2 до M3/M4).
-- Задержка ввода равна задержке сети плюс тик; клиент интерполирует снапшоты, без предсказания.
-  Для стратегии с приказами это приемлемо.
-- Python ограничивает производительность шага: бюджеты в `AGENTS.md`, раздел 12; при нехватке:
-  профилирование и оптимизация горячих функций, а не смена архитектуры.
-- Два языка требуют генерации типов протокола и проверки дрейфа схемы в CI (PRO-02).
+- Cheating through the client (hidden state, a forged outcome) is ruled out architecturally; fog leaks
+  are checked by projection tests and the audit (SIM-14, SIM-17, QA-04).
+- A replay: a header and a command log; re-simulation gives exact frames. A change of rules requires
+  raising `SIM_VERSION` and new golden replays.
+- Balance is checked by a headless bot tournament, without the server and the client (M2 before M3/M4).
+- The input latency equals the network latency plus a tick; the client interpolates snapshots, without prediction.
+  For a strategy game with orders this is acceptable.
+- Python limits the step performance: the budgets are in `AGENTS.md`, section 12; when short of it:
+  profiling and optimization of hot functions, not a change of architecture.
+- Two languages require generating the protocol types and checking schema drift in CI (PRO-02).
 
-## Рассмотренные альтернативы
+## Alternatives considered
 
-- **Lockstep (детерминированная симуляция у каждого клиента).** Экономит трафик, но каждый клиент
-  знает полное состояние: туман войны не защищён. Отклонено.
-- **Логика в клиенте, сервер как ретранслятор** (как в прототипе). Нельзя доверять исходу и нельзя
-  спрятать состояние противника. Отклонено.
-- **Симуляция на TypeScript, общая для клиента и сервера (Node.js).** Один язык, но ботов, турниры
-  и аналитику удобнее писать на Python, и общая симуляция подталкивает к логике игры в клиенте.
-  Отклонено.
-- **ECS или игровой движок на сервере.** Для графа из 25-40 узлов и десятков групп избыточно;
-  выбрано функциональное ядро: системы как функции над состоянием. Отклонено.
+- **Lockstep (a deterministic simulation on every client).** Saves traffic, but every client
+  knows the full state: fog of war is not protected. Rejected.
+- **Logic in the client, the server as a relay** (as in the prototype). The outcome cannot be trusted and the opponent's state cannot
+  be hidden. Rejected.
+- **A simulation in TypeScript, shared by the client and the server (Node.js).** One language, but bots, tournaments
+  and analytics are more convenient to write in Python, and a shared simulation pushes game logic into the client.
+  Rejected.
+- **ECS or a game engine on the server.** Excessive for a graph of 25-40 nodes and dozens of groups;
+  a functional core was chosen: systems as functions over the state. Rejected.
