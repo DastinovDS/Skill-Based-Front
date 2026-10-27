@@ -1,4 +1,4 @@
-"""Private match by invite link (SRV-05, mechanics.md section "Приватный матч").
+"""Private match by invite link (SRV-05; pauses and reconnection: mechanics.md, section 19).
 
 Flow: the host calls ``POST /api/matches`` and gets an invite ``code`` to put into a link; the
 guest calls ``POST /api/matches/{code}/join``; both call ``POST /api/matches/{code}/ready``.

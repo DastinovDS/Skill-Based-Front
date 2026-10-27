@@ -57,7 +57,7 @@ All nine client commands, through the interface, the `ack` answer is looked at i
 - [x] Move (a click on an own group, then on a node): the path in `ack`, a ghost on the map. E2E and by hand.
 - [x] A scheduled order (the "Planned order" tick), more expensive, visible as an intent. E2E and by hand (`mvp-0`).
 - [x] Cancelling an order (`orders.cancel`): accepted while the order has not yet set out; after it set out the server answers `NOTHING_TO_CANCEL`, the interface shows "Rejected (cancel order)".
-- [x] Splitting a group, merging groups, recruiting in the capital, changing the mode (Attack, Defense, Build), upgrading a road (a click on a road with a group selected at its end): all accepted on `mvp-0`.
+- [x] Splitting a group, merging groups, recruiting in the capital, changing the mode (Attack, Defense; "Build" was removed by DEC-16), upgrading a road (a click on a road with a group selected at its end): all accepted on `mvp-0`.
 - [x] The CP stance (Economy, Balance, War): accepted, the button is pressed. E2E.
 - [x] A rejection is shown to the human (not enough CP, the target is in the fog): text from the dictionary, not a code.
 - [ ] A fight on a road and in a city, a siege, a capital capture through a human's eyes: a live opponent and time are needed. A city capture by a bot is visible in the events, the fight computation is checked by the simulation scenario tests. **By hand, stays open.**

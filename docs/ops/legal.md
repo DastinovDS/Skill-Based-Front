@@ -6,8 +6,8 @@ must fill in the real operator data.
 
 ## What is done in the code
 
-- The pages `/impressum` and `/privacy`: `apps/client/src/legal/LegalPage.svelte`, the texts per language in
-  `apps/client/src/i18n/legal/en.ts` (Caddy serves `index.html` for any unknown path).
+- The pages `/impressum` and `/privacy`: `apps/client/src/legal/LegalPage.svelte`, the text in
+  `apps/client/src/i18n/legal/en.ts` (English only since #387; one content file per language if more are added) (Caddy serves `index.html` for any unknown path).
 - Footer links on every screen (including the welcome screen and the match): `LegalFooter.svelte`,
   mounted in `main.ts`. The links open in a new tab so as not to interrupt a match.
 - While a placeholder like `<OPERATOR_NAME>` remains in the text, the page shows a "Draft" note.
@@ -22,7 +22,7 @@ must fill in the real operator data.
 | nick, `created_at`, SHA-256 of the token (`players`, `identity.py`) | DB `/data/gow.db` | until deletion on request |
 | the password hash, if the player set one: `scrypt$n$r$p$salt$hash` (`players.password_hash`, `passwords.py`, #374); the password itself is not stored, not logged and not returned in 422 errors; there is no password recovery | DB | until deletion on request or a reset (`gow-admin reset-password`) |
 | token and nick | `localStorage["sbf.guest"]` in the browser (`guestStore.ts`) | until the player clears it |
-| interface language | `localStorage["sbf.locale"]` (`locale.ts`) | the same |
+| interface language | `localStorage["sbf.locale"]` (`locale.ts`); written only when the viewer picks a language, and the selector is hidden while only `en` exists (#387), so currently not written | the same |
 | rating, matches, sides (`ratings`, `matches`, `match_players`) | DB | until deletion on request |
 | replays (`*.jsonl.gz`, `*.frames.json.gz`) | `/data/replays`, contain no nick | indefinitely |
 | game statistics from the match command log (stance, command rate, supply actions, the share of scheduled orders, CP spending): `gow-bots analyze` and `gow-bots stats` compute them offline from a replay; not stored anywhere; tied to a player only by the match side (`match_players`), for balance and match review (#375) | the command output, not stored in the DB or on the server | as for replays |

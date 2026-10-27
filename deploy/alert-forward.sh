@@ -10,7 +10,7 @@
 #
 # ALERT_WEBHOOK_URL may be set in the environment or in .env. It is a secret: it is given to curl
 # on stdin, never as an argument, and never printed. Install as a service:
-# deploy/systemd/gow-alerts.service, docs/ops/deploy.md, section "Наблюдаемость".
+# deploy/systemd/gow-alerts.service, docs/ops/deploy.md, section "Observability".
 set -euo pipefail
 
 if [ -f .env ]; then set -a; . ./.env; set +a; fi

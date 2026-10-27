@@ -529,11 +529,11 @@ class Bot:
         return (seen.enemy_units, seen.enemy_charged)
 
     def defended(self, view: PlayerView, node: int) -> int:
-        """The «Защита» bonus the enemy may have gathered in ``node``, before its cap (DEC-30).
+        """The Defense bonus the enemy may have gathered in ``node``, before its cap (DEC-30).
 
         The number is hidden (DEC-30, item 5); the public intent tells since when the mode is on
         (DEC-08), so ``ticks // orders.defense_ticks_per_bonus`` since then is an upper estimate
-        (a fight in between resets it). ``0`` without an enemy «Защита» there."""
+        (a fight in between resets it). ``0`` without an enemy Defense there."""
         since = [
             i.created_tick
             for i in view.intents

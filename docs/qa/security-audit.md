@@ -64,7 +64,7 @@ Details of F1 and F2 (reproduction on the test bed) are in the issues #193 and #
 
 - [x] `gow_protocol.convert._view_data` writes exactly the fields of `view_to_wire` in the same order; the server
   fields `depart_tick`, `build_edge`, `back` do not get into the frame.
-- [x] `test_convert.py` on real matches of the three MVP maps and a bot match compares the frame byte for byte with
+- [x] `test_convert.py` on real matches of the three MVP maps (`artery`, `web`, `pass`, fixtures in `maps/fixtures/` since #372) and a bot match compares the frame byte for byte with
   `encode(snapshot_msg(view))`, and the frame JSON with the canonical view; it searches every frame for the ids of enemy
   groups and packets in the id spaces of both players.
 - [x] Outside `prod` the server validates every frame (`MatchManager(validate_snapshots=env != "prod")`).
@@ -97,7 +97,7 @@ Details of F1 and F2 (reproduction on the test bed) are in the issues #193 and #
 
 ### 3.5 Maphack: all WebSocket messages of a match
 
-A guest, a bot match (`pereval`, bot `normal`) through Caddy, a client on `websockets` reads and writes everything
+A guest, a bot match (`pass`, bot `normal`) through Caddy, a client on `websockets` reads and writes everything
 DevTools would see, 300 seconds of play (3003 ticks) and a forfeit. 4430 messages were recorded: `welcome` 1,
 `snapshot` 3003, `ack` 1137, `event` 288, `match_end` 1. Checks on every message:
 

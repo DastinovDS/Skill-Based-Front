@@ -1,12 +1,12 @@
-# Рулсет test-short: короткая партия для e2e (SIM-01, #17; AGENTS.md, раздел 5.4).
+# Ruleset test-short: a short match for e2e (SIM-01, #17; AGENTS.md, section 5.4).
 #
-# Совпадает с mvp-0.toml во всём, кроме match_ticks: партия 60 секунд вместо 15 минут.
-# Смысл ключей описан в mvp-0.toml. Меняешь mvp-0.toml: поменяй и этот файл
-# (тест packages/sim/tests/test_ruleset.py сверяет их).
-# Доступен только в dev и e2e окружении (AGENTS.md, раздел 5.4).
+# Identical to mvp-0.toml in everything except match_ticks: a 60-second match instead of 15 minutes.
+# The meaning of the keys is described in mvp-0.toml. If you change mvp-0.toml, change this file too
+# (the test packages/sim/tests/test_ruleset.py compares them).
+# Available only in the dev and e2e environments (AGENTS.md, section 5.4).
 
 tick_hz = 10
-match_ticks = 600 # партия 60 секунд
+match_ticks = 600 # a 60-second match
 
 [cp]
 start = 300
@@ -16,7 +16,7 @@ period_ticks = 50
 
 [economy]
 charges_per_cp = 2
-start_stance = "balance" # TODO(#104): как в mvp-0.toml
+start_stance = "balance" # TODO(#104): as in mvp-0.toml
 
 [economy.stance_to_charges_pct]
 economy = 75
@@ -73,15 +73,15 @@ city_small = 4
 province = 3
 
 [starvation]
-# Голод в окружении (DEC-19, #231; mechanics.md, раздел 7). Свой город, отрезанный от своей
-# столицы (нет пути по своим узлам), тратит заряды гарнизона: на тиках
-# cut_since + grace_ticks + k * period_ticks гарнизон теряет charges * ceil(U / per_units) зарядов,
-# U: стоящие в городе юниты владельца. Сначала склад, потом заряды юнитов. Юниты не гибнут.
-# Провинции и нейтральные узлы не голодают.
-grace_ticks = 100 # отсрочка после отрезания: 10 с
-period_ticks = 100 # потребление раз в 10 с
-charges = 1 # зарядов ...
-per_units = 3 # ... на каждые начатые 3 юнита
+# Starvation when cut off (DEC-19, #231; mechanics.md, section 7). A city of one's own, cut off from one's own
+# capital (no path through one's own nodes), spends the garrison's charges: at the ticks
+# cut_since + grace_ticks + k * period_ticks the garrison loses charges * ceil(U / per_units) charges,
+# U: the owner's units standing in the city. The warehouse first, then the units' charges. Units do not die.
+# Provinces and neutral nodes do not starve.
+grace_ticks = 100 # grace period after being cut off: 10 s
+period_ticks = 100 # consumption once per 10 s
+charges = 1 # charges ...
+per_units = 3 # ... per each started 3 units
 
 [supply]
 dispatch_ticks = 10

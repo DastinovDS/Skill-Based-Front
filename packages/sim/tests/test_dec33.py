@@ -1,9 +1,9 @@
 """DEC-33 (#296): enemy groups move visibly in the zone of a visible node, example by example.
 
 Expected values are the table of worked examples of DEC-33 (mechanics.md, section 10) plus one
-test per item of «Детали»: own city M (player 0, plains, a source) and the edge M-E with ``a`` = M,
+test per item of "Details": own city M (player 0, plains, a source) and the edge M-E with ``a`` = M,
 the border point 500 unless said otherwise, ``pos`` in thousandths from ``a``; an enemy group of
-4 units, 3 charged, «Атака» goes from E to M. The view is player 0's (``EdgeView.enemy_groups``).
+4 units, 3 charged, "Attack" goes from E to M. The view is player 0's (``EdgeView.enemy_groups``).
 """
 
 from collections.abc import Callable, Sequence
@@ -286,7 +286,7 @@ def test_example_13_own_group_on_an_edge_gives_no_sight(
     assert _figures(state, rules, 2) == ()
 
 
-# «Детали», one test per item --------------------------------------------------------------------
+# "Details", one test per item --------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(("from_node", "progress", "pos"), [(0, 637, 637), (1, 637, 363)])

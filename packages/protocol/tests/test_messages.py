@@ -219,7 +219,7 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
 
 def test_ruleset_public_has_the_combat_vector_parameter_names() -> None:
     """The vectors' ``params`` use the names of ``combat``; the plan bonus is not among them since
-    DEC-29 (it depends on the path, every vector gives its amount), the gathered «Защита» of the
+    DEC-29 (it depends on the path, every vector gives its amount), the gathered "Defense" of the
     rows (``defense_bonus``) is not a ruleset number since DEC-30."""
     params = _load(FIXTURES_DIR.parent / "vectors" / "combat.json")["params"]
     assert isinstance(params, dict)

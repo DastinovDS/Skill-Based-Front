@@ -147,8 +147,8 @@ def test_example_8_packet_goes_through_a_province_without_stopping() -> None:
 
 
 def _keep(state: GameState, node: int) -> None:
-    """A front marker on ``node``: it keeps what it gets (DEC-28, item 6: "чтобы удержать запас,
-    ставят маркер"); without it the automatic dispatch would pass the surplus on."""
+    """A front marker on ``node``: it keeps what it gets (DEC-28, item 6: "to hold a stock,
+    place a marker"); without it the automatic dispatch would pass the surplus on."""
     state.players[0].fronts = (node, None)
 
 

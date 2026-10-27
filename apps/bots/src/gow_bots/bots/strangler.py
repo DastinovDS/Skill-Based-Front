@@ -8,7 +8,7 @@ of the nodes and the known road levels only, and the Strangler attacks the most 
 can take. A city taken that
 way is held (``hold`` units stay), the enemy cities that are already cut are besieged in waves:
 after a bounce the estimate of a cut city drops (``CampaignBot._starve``), so the next wave is
-cheaper, which is the «осада на истощение» of mechanics.md, section 4.
+cheaper, which is the "Siege of attrition" of mechanics.md, section 4.
 """
 
 from collections import deque

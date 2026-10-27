@@ -2,7 +2,7 @@
 
 Expected values are the table of worked examples of DEC-21 (mechanics.md, section 10): own city
 M (player 0), enemy city E (player 1), edge M-E with ``a`` = M and the border point 500 unless
-said otherwise; in E an enemy group of 4 units, 3 charged, «Атака». The view is player 0's. The
+said otherwise; in E an enemy group of 4 units, 3 charged, "Attack". The view is player 0's. The
 terrain table of item 2 is the ``vision.by_terrain`` of ``mvp-0``; the ranges of item 4 its
 ``vision.range_starts``. Example 18 is replaced by DEC-33 (``test_dec33.py``, example 4); its road
 level part is checked here.
@@ -90,7 +90,7 @@ def _seen(view: PlayerView, node: int) -> Sighting | None:
         ("p", "f", R, Sighting(10, R, ATTACK, None, None, (3, 5))),  # 3: «3-5», no charged
         ("f", "p", R, Sighting(10, R, ATTACK, None, None, (3, 5))),  # 4
         ("m", "m", R, Sighting(10, R, ATTACK, None, None, (3, 5))),  # 5
-        ("p", "m", P, Sighting(10, P, ATTACK, None, None)),  # 6: enemy, «Атака», no numbers
+        ("p", "m", P, Sighting(10, P, ATTACK, None, None)),  # 6: enemy, "Attack", no numbers
         ("f", "m", P, Sighting(10, P, ATTACK, None, None)),  # 7
     ],
     ids=["ex1", "ex2", "ex3", "ex4", "ex5", "ex6", "ex7"],
@@ -238,7 +238,7 @@ def test_example_16_planned_order_is_public(make_fog_map: MakeMap, rules: Rulese
 
 
 def test_example_17_defense_is_seen_from_presence(make_fog_map: MakeMap, rules: Ruleset) -> None:
-    """E in «Защита»: the mode is seen on ``PRESENCE`` (plains -> mountains), the intent public."""
+    """E in "Defense": the mode is seen on ``PRESENCE`` (plains -> mountains), the intent public."""
     state = _state(_me(make_fog_map, "p", "m"), rules)
     _group(state, 1, AtNode(E_NODE), mode=Mode.DEFENSE)
     iid = state.new_id()

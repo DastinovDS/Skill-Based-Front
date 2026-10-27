@@ -1,5 +1,5 @@
-"""DEC-29: the bonus of a planned order by distance (mechanics.md, section 5, «Бонус
-запланированного приказа по дистанции (DEC-29, #291)»).
+"""DEC-29: the bonus of a planned order by distance (mechanics.md, section 5, "Scheduled order bonus
+by distance (DEC-29, #291)").
 
 The bonus is the number of edges of the path of the order (the path of ``Move``, the one in
 ``ack.path``, chosen at the command) times ``orders.planned_bonus_per_edge``, at most the charged
@@ -155,7 +155,7 @@ def test_the_bonus_is_the_rule_function_of_the_ruleset() -> None:
 
 
 def test_the_path_is_the_fastest_one_not_the_one_with_fewest_edges() -> None:
-    """«Какой путь»: the path of ``Move`` (the fastest, DEC-20), not a graph of its own. The
+    """ "Which path": the path of ``Move`` (the fastest, DEC-20), not a graph of its own. The
     direct road 0-3 takes 300 ticks, the way 0-1-2-3 90: three edges, bonus 3."""
     pairs = [(0, 1, 30), (1, 2, 30), (2, 3, 30), (0, 3, 300), (3, 4, 30), (4, 5, 30), (5, 6, 30)]
     state = initial_state(_map(pairs), RULES)
@@ -178,7 +178,7 @@ def test_the_path_is_the_fastest_one_not_the_one_with_fewest_edges() -> None:
 def test_the_cap_is_measured_in_the_departure_tick(
     at_command: int, at_departure: int, bonus: int
 ) -> None:
-    """«Когда измеряется потолок»: by the charged units in the departure tick, not at the
+    """ "When the cap is measured": by the charged units in the departure tick, not at the
     command. The test sets the charged units as supply or starvation would during the delay."""
     state = initial_state(_map(), RULES)
     gid = _add(state, 0, 3, at_command, 0)

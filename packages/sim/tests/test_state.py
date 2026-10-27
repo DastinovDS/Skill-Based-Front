@@ -154,7 +154,7 @@ def test_initial_state_follows_map_and_ruleset(name: str, rules: Ruleset) -> Non
     )
     assert len(state.groups) == len(garrisons)
     # One group per garrison, ids player by player in node_key order (mirror-symmetric id
-    # tie-breaks, DEC-07 rule 7), in the normal mode «Атака» (DEC-08).
+    # tie-breaks, DEC-07 rule 7), in the normal mode "Attack" (DEC-08).
     for gid, node in enumerate(garrisons):
         group = state.groups[gid]
         assert group.location == AtNode(node["id"])

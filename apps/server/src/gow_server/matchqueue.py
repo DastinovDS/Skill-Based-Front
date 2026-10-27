@@ -6,7 +6,7 @@ confirm (``POST /api/queue/confirm``). When both confirmed, the match starts on 
 the pool and ``GET /api/queue`` tells both the ``match_id`` for ``/ws/match/{match_id}``.
 ``DELETE /api/queue`` leaves the queue (or declines a found pair).
 
-Rules (mechanics.md, section 19, "Очередь матчмейкинга"):
+Rules (mechanics.md, section 19, "Matchmaking queue"):
 
 - The window of a player is ``window_base + window_per_s * waited`` rating points, at most
   ``window_max``. Two players are paired only if each one's window holds the other's rating.

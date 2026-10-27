@@ -6,7 +6,7 @@ and the list of what a view must not contain (AGENTS.md, section 4.4):
 
 - public to everyone: ownership and capacity (DEC-22) of every node, road levels and types
   (DEC-17: last seen in fog), VP of both players,
-  intents of planned orders and «Защита» (origin, target, kind; no group id, no size);
+  intents of planned orders and "Defense" (origin, target, kind; no group id, no size);
 - road builds of cities (DEC-16): own ones always, with ``done_tick``; an enemy one without
   ``done_tick`` and only while its edge is not in fog (DEC-17, item 5);
 - sources of vision (own nodes, nodes where own groups stand): everything with numbers, the

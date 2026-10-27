@@ -1,6 +1,6 @@
 """``RusherBot``: early pressure and planned strikes on weak cities (BOT-03).
 
-It does not wait for the economy: the stance is «Война» (more CP for orders, fewer charges), the
+It does not wait for the economy: the stance is War (more CP for orders, fewer charges), the
 capital keeps at most one unit at home, and the first strong group goes for the enemy. Targets
 are enemy cities, never a neutral one while an enemy city is in reach; among them the weak ones
 (small ``need``, by the estimate of ``CampaignBot``) and the ones closer to the enemy capital

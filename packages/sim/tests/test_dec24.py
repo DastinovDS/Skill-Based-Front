@@ -1,4 +1,4 @@
-"""DEC-24 beyond the worked examples (mechanics.md, section 4, «Бой во времени»): commands in a
+"""DEC-24 beyond the worked examples (mechanics.md, section 4, "Fight over time"): commands in a
 fight (item E), movement around a fight (items B6, D1), supply (item H1), production (DEC-25,
 item 9), bonuses (item F1), the view of a fight (item I1 and the bonus stock of DEC-32, with
 their fog tests, AGENTS.md 4.4) and the canonical state.
@@ -380,7 +380,7 @@ def test_fog_a_withdrawal_is_hidden() -> None:
 
 
 def _without_bonuses(state: GameState, gids: list[int]) -> GameState:
-    """A copy of ``state`` where the groups ``gids`` have no bonus and no gathered «Защита»."""
+    """A copy of ``state`` where the groups ``gids`` have no bonus and no gathered "Defense"."""
     copy = from_canonical(to_canonical(state))
     for gid in gids:
         copy.groups[gid].bonus = 0
@@ -389,9 +389,9 @@ def _without_bonuses(state: GameState, gids: list[int]) -> GameState:
 
 
 def test_fog_an_enemy_bonus_outside_a_fight_is_hidden() -> None:
-    """DEC-32, item 3 (DEC-30, item 5): outside a fight the gathered «Защита» and the bonus of a
+    """DEC-32, item 3 (DEC-30, item 5): outside a fight the gathered "Defense" and the bonus of a
     waiting planned order of an enemy group are not in a view: player 0's view is the same with
-    and without them, while player 1 sees its own «Защита» bonus."""
+    and without them, while player 1 sees its own "Defense" bonus."""
     state = initial_state(_line(), RULES)
     gathered = 2 * RULES.orders.defense_ticks_per_bonus
     guard = _add(state, 1, 2, 2, AtNode(1), mode=Mode.DEFENSE, ticks_in_defense=gathered)

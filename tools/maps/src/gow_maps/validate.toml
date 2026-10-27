@@ -1,28 +1,28 @@
-# Пороги валидатора карт (MAP-02, #14). Это требования к дизайну карт, а не числа правил игры:
-# симуляция их не читает. Описание проверок: docs/design/map-format.md, раздел «Валидатор».
+# Thresholds of the map validator (MAP-02, #14). These are requirements on the map design, not numbers of the game rules:
+# the simulation does not read them. A description of the checks: docs/design/map-format.md, section "Validator".
 
-# Не больше 5 дорог у города (mechanics.md, раздел 14: лимит степени узла 4–5).
+# At most 5 roads at a city (mechanics.md, section 14: the node degree limit is 4 or 5).
 max_degree = 5
 
-# От каждой столицы к каждому городу с vp >= disjoint_paths_min_vp ведут не меньше
-# min_disjoint_paths путей без общих дорог: одним разрезом такой город не отрезать.
+# From each capital to each city with vp >= disjoint_paths_min_vp there lead at least
+# min_disjoint_paths paths with no common roads: such a city cannot be cut off with a single cut.
 disjoint_paths_min_vp = 2
 min_disjoint_paths = 2
 
-# Нейтральное пространство (mechanics.md, раздел 11): не меньше min_neutral_pct процентов узлов
-# без стартового владельца, у которых расстояния до двух столиц (в дорогах) отличаются
-# не больше чем на neutral_max_distance_diff.
+# Neutral space (mechanics.md, section 11): at least min_neutral_pct percent of the nodes
+# with no starting owner, whose distances to the two capitals (in roads) differ
+# by at most neutral_max_distance_diff.
 min_neutral_pct = 20
 neutral_max_distance_diff = 1
 
-# travel_ticks дороги согласован с нарисованной длиной (DEC-27, п. 4): ожидается
-# длина * travel_ticks_per_100_units / 100 тиков (100 единиц мира = 3 секунды), допуск
-# travel_tolerance_pct процентов, не меньше 1 тика.
+# A road's travel_ticks is consistent with the drawn length (DEC-27, item 4): the expected value is
+# length * travel_ticks_per_100_units / 100 ticks (100 world units = 3 seconds), the tolerance is
+# travel_tolerance_pct percent, at least 1 tick.
 travel_ticks_per_100_units = 30
 travel_tolerance_pct = 15
 
-# Размер карты (DEC-27, п. 5): от min_nodes до max_nodes узлов. Проверка по умолчанию выключена
-# (size_check = false), чтобы проходили прежние карты; включается своим файлом порогов (--config).
+# Map size (DEC-27, item 5): from min_nodes to max_nodes nodes. The check is off by default
+# (size_check = false) so that the earlier maps pass; it is switched on by its own thresholds file (--config).
 size_check = false
 min_nodes = 45
 max_nodes = 55

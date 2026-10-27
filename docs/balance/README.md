@@ -183,7 +183,7 @@ advantage (mirrored matches), the metrics per bot (the share of scheduled attack
 the last 3 minutes), the strategy diversity (a dominant strategy, "rock-paper-scissors" cycles),
 the number of unique outcomes and the breakdown by map. The output depends only on the lines of the file.
 
-The BAL-01 run (#39) is committed: `latest.jsonl` (3 maps, 5 strategic bots without `idle` and
+The BAL-01 run (#39) is committed: `latest.jsonl` (the 3 MVP maps, now fixtures in `maps/fixtures/` since #372, 5 strategic bots without `idle` and
 `random_legal`, 100 seeds, 7500 matches, `mvp-0`) and `latest.md`, `latest-*.png` built from it.
 The verdict by the gate criteria and the hypotheses for the iterations of BAL-02 (#40): [log.md](log.md).
 

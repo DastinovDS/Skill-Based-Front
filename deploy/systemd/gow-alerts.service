@@ -1,4 +1,4 @@
-# Alerts of the server to a webhook (OPS-04, #83): docs/ops/deploy.md, section "Наблюдаемость". Install:
+# Alerts of the server to a webhook (OPS-04, #83): docs/ops/deploy.md, section "Observability". Install:
 #   sudo cp deploy/systemd/gow-alerts.service /etc/systemd/system/ && sudo systemctl enable --now gow-alerts
 # Needs ALERT_WEBHOOK_URL in /home/gow/skill-based-front/.env.
 [Unit]

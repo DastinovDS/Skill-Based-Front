@@ -107,7 +107,7 @@ Keys that are not in the table (for example, the fog memory `vision_memory`) do 
 ## Size
 
 The budget of `AGENTS.md` 12: ≤ 2 MB for a full 15-minute match (DEC-22, 1801 frames). Measured: a match
-of 9000 ticks on `web`, bots rusher and reactive: about 47 KB (gzip; 1.9 MB of JSON before compression).
+of 9000 ticks on `web` (an MVP map, a fixture in `maps/fixtures/` since #372), bots rusher and reactive: about 47 KB (gzip; 1.9 MB of JSON before compression).
 
 Round data of fights (#323) added 236 bytes to that match (47450 before, 47686 after). On other
 full matches the growth is 0 to 249 bytes (`artery` 59874 and 60123, `ridge` 67538 and

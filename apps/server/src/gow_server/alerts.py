@@ -3,7 +3,7 @@
 An alert is one ERROR record of the ``gow_server.alerts`` logger with an ``alert`` field (its
 kind). Delivery is not the server's job: the ``app`` container has no route to the outside
 world (compose.yaml), so ``deploy/alert-forward.sh`` on the host reads these records from the
-container log and posts them to a webhook (docs/ops/deploy.md, "Наблюдаемость").
+container log and posts them to a webhook (docs/ops/deploy.md, "Observability").
 """
 
 import asyncio

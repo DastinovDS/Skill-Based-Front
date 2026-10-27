@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "source": "docs/design/mechanics.md, раздел 4, «Арена боя (DEC-32, #327)»: разобранные примеры при `round_ticks = 20` (правила и раунды «Боя во времени», DEC-24, #261; итоги DEC-07); примеры 1–16 в vectors, 17–23 в scenarios",
+  "source": "docs/design/mechanics.md, section 4, \"The fight arena (DEC-32, #327)\": the worked examples at `round_ticks = 20` (the rules and rounds of \"Fight over time\", DEC-24, #261; the outcomes of DEC-07); examples 1-16 in vectors, 17-23 in scenarios",
   "params": {
     "terrain_defense_mod": {
       "mountains": 1,
@@ -16,10 +16,10 @@
     {
       "id": 1,
       "source_row": {
-        "attack": "2 заряж.",
-        "defense": "2 заряж.",
-        "rounds": "р1 гаш. (1 / 1); р2 гаш. (0 / 0)",
-        "result": "потерь нет, атака отскакивает; `t+40`"
+        "attack": "2 charged",
+        "defense": "2 charged",
+        "rounds": "r1 canc. (1 / 1); r2 canc. (0 / 0)",
+        "result": "no losses, the attack bounces; `t+40`"
       },
       "location": "node_attack",
       "terrain": "forest",
@@ -99,15 +99,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: р1 гаш. (1 / 1); р2 гаш. (0 / 0). Итог: потерь нет, атака отскакивает; `t+40`."
+      "note": "Rounds: r1 canc. (1 / 1); r2 canc. (0 / 0). Result: no losses, the attack bounces; `t+40`."
     },
     {
       "id": 2,
       "source_row": {
-        "attack": "3 заряж.",
-        "defense": "2 заряж.",
-        "rounds": "р1 гаш. (2 / 1); р2 гаш. (1 / 0); р3 атака убивает 1",
-        "result": "у защиты 1 разряж.; атака (3, разряж.) отскакивает; `t+60`"
+        "attack": "3 charged",
+        "defense": "2 charged",
+        "rounds": "r1 canc. (2 / 1); r2 canc. (1 / 0); r3 the attack kills 1",
+        "result": "the defense has 1 discharged; the attack (3, discharged) bounces; `t+60`"
       },
       "location": "node_attack",
       "terrain": "forest",
@@ -187,15 +187,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: р1 гаш. (2 / 1); р2 гаш. (1 / 0); р3 атака убивает 1. Итог: у защиты 1 разряж.; атака (3, разряж.) отскакивает; `t+60`."
+      "note": "Rounds: r1 canc. (2 / 1); r2 canc. (1 / 0); r3 the attack kills 1. Result: the defense has 1 discharged; the attack (3, discharged) bounces; `t+60`."
     },
     {
       "id": 3,
       "source_row": {
-        "attack": "4 заряж.",
-        "defense": "2 заряж.",
-        "rounds": "р1, р2 гаш. (2 / 0); р3, р4 убито по 1",
-        "result": "защита уничтожена, узел взят 4 разряж.; `t+80`"
+        "attack": "4 charged",
+        "defense": "2 charged",
+        "rounds": "r1, r2 canc. (2 / 0); r3, r4 1 killed each",
+        "result": "the defense is destroyed, the node is taken by 4 discharged; `t+80`"
       },
       "location": "node_attack",
       "terrain": "forest",
@@ -268,15 +268,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: р1, р2 гаш. (2 / 0); р3, р4 убито по 1. Итог: защита уничтожена, узел взят 4 разряж.; `t+80`."
+      "note": "Rounds: r1, r2 canc. (2 / 0); r3, r4 1 killed each. Result: the defense is destroyed, the node is taken by 4 discharged; `t+80`."
     },
     {
       "id": 4,
       "source_row": {
-        "attack": "1 заряж.",
-        "defense": "10 разряж.",
-        "rounds": "р1 убит 1",
-        "result": "атака разряжена, отскакивает; у защиты 9; `t+20`"
+        "attack": "1 charged",
+        "defense": "10 discharged",
+        "rounds": "r1 1 killed",
+        "result": "the attack is discharged, bounces; the defense has 9; `t+20`"
       },
       "location": "node_attack",
       "terrain": "forest",
@@ -341,15 +341,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: р1 убит 1. Итог: атака разряжена, отскакивает; у защиты 9; `t+20`."
+      "note": "Rounds: r1 1 killed. Result: the attack is discharged, bounces; the defense has 9; `t+20`."
     },
     {
       "id": 5,
       "source_row": {
-        "attack": "2 заряж.",
-        "defense": "пустой вражеский узел",
-        "rounds": "нет",
-        "result": "узел взят в тике `t`, заряды целы"
+        "attack": "2 charged",
+        "defense": "empty enemy node",
+        "rounds": "none",
+        "result": "the node is taken in tick `t`, the charges are intact"
       },
       "location": "empty_enemy_node",
       "terrain": "forest",
@@ -401,15 +401,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: нет. Итог: узел взят в тике `t`, заряды целы."
+      "note": "Rounds: none. Result: the node is taken in tick `t`, the charges are intact."
     },
     {
       "id": 6,
       "source_row": {
-        "attack": "3 заряж.",
-        "defense": "2 заряж., горы",
-        "rounds": "`V` защиты 1. р1 гаш. (защита виртуальным; 2 / 2); р2 гаш. (1 / 1); р3 гаш. (0 / 0)",
-        "result": "потерь нет, отскок; `t+60`"
+        "attack": "3 charged",
+        "defense": "2 charged, mountains",
+        "rounds": "`V` of the defense 1. r1 canc. (the defense by the virtual one; 2 / 2); r2 canc. (1 / 1); r3 canc. (0 / 0)",
+        "result": "no losses, bounce; `t+60`"
       },
       "location": "node_attack",
       "terrain": "mountains",
@@ -496,15 +496,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: `V` защиты 1. р1 гаш. (защита виртуальным; 2 / 2); р2 гаш. (1 / 1); р3 гаш. (0 / 0). Итог: потерь нет, отскок; `t+60`."
+      "note": "Rounds: `V` of the defense 1. r1 canc. (the defense by the virtual one; 2 / 2); r2 canc. (1 / 1); r3 canc. (0 / 0). Result: no losses, bounce; `t+60`."
     },
     {
       "id": 7,
       "source_row": {
-        "attack": "2 заряж.",
-        "defense": "3 разряж., горы",
-        "rounds": "рельеф не входит (п. F2). р1, р2 убито по 1",
-        "result": "у защиты 1; отскок; `t+40`"
+        "attack": "2 charged",
+        "defense": "3 discharged, mountains",
+        "rounds": "terrain does not enter (item F2). r1, r2 1 killed each",
+        "result": "the defense has 1; bounce; `t+40`"
       },
       "location": "node_attack",
       "terrain": "mountains",
@@ -569,15 +569,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: рельеф не входит (п. F2). р1, р2 убито по 1. Итог: у защиты 1; отскок; `t+40`."
+      "note": "Rounds: terrain does not enter (item F2). r1, r2 1 killed each. Result: the defense has 1; bounce; `t+40`."
     },
     {
       "id": 8,
       "source_row": {
-        "attack": "2 заряж.",
-        "defense": "2 заряж., равнина",
-        "rounds": "один заряд защиты молчит. р1 гаш. (1 / 1, молчит); р2 атака убивает 1 разряж.",
-        "result": "у защиты 1 заряж.; атака (2, разряж.) отскакивает; `t+40`"
+        "attack": "2 charged",
+        "defense": "2 charged, plains",
+        "rounds": "one charge of the defense is silent. r1 canc. (1 / 1, silent); r2 the attack kills 1 discharged",
+        "result": "the defense has 1 charged; the attack (2, discharged) bounces; `t+40`"
       },
       "location": "node_attack",
       "terrain": "plains",
@@ -650,15 +650,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: один заряд защиты молчит. р1 гаш. (1 / 1, молчит); р2 атака убивает 1 разряж.. Итог: у защиты 1 заряж.; атака (2, разряж.) отскакивает; `t+40`."
+      "note": "Rounds: one charge of the defense is silent. r1 canc. (1 / 1, silent); r2 the attack kills 1 discharged. Result: the defense has 1 charged; the attack (2, discharged) bounces; `t+40`."
     },
     {
       "id": 9,
       "source_row": {
-        "attack": "2 заряж. + план (+2)",
-        "defense": "2 заряж.",
-        "rounds": "`V` атаки 2. р1 гаш. (атака виртуальным; 2 / 1); р2 гаш. (атака виртуальным; 2 / 0); р3, р4 атака убивает по 1",
-        "result": "узел взят, у атаки 2 разряж.; `t+80`"
+        "attack": "2 charged + plan (+2)",
+        "defense": "2 charged",
+        "rounds": "`V` of the attack 2. r1 canc. (the attack by the virtual one; 2 / 1); r2 canc. (the attack by the virtual one; 2 / 0); r3, r4 the attack kills 1 each",
+        "result": "the node is taken, the attack has 2 discharged; `t+80`"
       },
       "location": "node_attack",
       "terrain": "forest",
@@ -741,15 +741,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: `V` атаки 2. р1 гаш. (атака виртуальным; 2 / 1); р2 гаш. (атака виртуальным; 2 / 0); р3, р4 атака убивает по 1. Итог: узел взят, у атаки 2 разряж.; `t+80`."
+      "note": "Rounds: `V` of the attack 2. r1 canc. (the attack by the virtual one; 2 / 1); r2 canc. (the attack by the virtual one; 2 / 0); r3, r4 the attack kills 1 each. Result: the node is taken, the attack has 2 discharged; `t+80`."
     },
     {
       "id": 10,
       "source_row": {
-        "attack": "3 заряж.",
-        "defense": "2 заряж. + «Защита» (+2)",
-        "rounds": "`V` защиты 2. р1, р2 гаш. (защита виртуальными; 1 / 2); р3 гаш. (0 / 1); р4 защита убивает 1",
-        "result": "атака (2, разряж.) отскакивает; у защиты 2 разряж.; `t+80`"
+        "attack": "3 charged",
+        "defense": "2 charged + \"Defense\" (+2)",
+        "rounds": "`V` of the defense 2. r1, r2 canc. (the defense by the virtual ones; 1 / 2); r3 canc. (0 / 1); r4 the defense kills 1",
+        "result": "the attack (2, discharged) bounces; the defense has 2 discharged; `t+80`"
       },
       "location": "node_attack",
       "terrain": "forest",
@@ -832,15 +832,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: `V` защиты 2. р1, р2 гаш. (защита виртуальными; 1 / 2); р3 гаш. (0 / 1); р4 защита убивает 1. Итог: атака (2, разряж.) отскакивает; у защиты 2 разряж.; `t+80`."
+      "note": "Rounds: `V` of the defense 2. r1, r2 canc. (the defense by the virtual ones; 1 / 2); r3 canc. (0 / 1); r4 the defense kills 1. Result: the attack (2, discharged) bounces; the defense has 2 discharged; `t+80`."
     },
     {
       "id": 11,
       "source_row": {
-        "attack": "ребро: 2 заряж.",
-        "defense": "ребро: 2 заряж.",
-        "rounds": "р1 гаш.; р2 гаш.",
-        "result": "выстрелов 2 и 2: ничья, обе отскакивают с места боя; `t+40`"
+        "attack": "edge: 2 charged",
+        "defense": "edge: 2 charged",
+        "rounds": "r1 canc.; r2 canc.",
+        "result": "shots 2 and 2: a draw, both bounce from the fight place; `t+40`"
       },
       "location": "edge_meeting",
       "terrain": null,
@@ -911,15 +911,15 @@
         },
         "goes_on_after": null
       },
-      "note": "Раунды: р1 гаш.; р2 гаш.. Итог: выстрелов 2 и 2: ничья, обе отскакивают с места боя; `t+40`."
+      "note": "Rounds: r1 canc.; r2 canc.. Result: shots 2 and 2: a draw, both bounce from the fight place; `t+40`."
     },
     {
       "id": 12,
       "source_row": {
-        "attack": "ребро: 3 заряж.",
-        "defense": "ребро: 1 заряж.",
-        "rounds": "р1 гаш. (2 / 0); р2 убит 1",
-        "result": "противник уничтожен; у победителя 1 заряж.; бой до `t+40`, путь дальше с `t+50`"
+        "attack": "edge: 3 charged",
+        "defense": "edge: 1 charged",
+        "rounds": "r1 canc. (2 / 0); r2 1 killed",
+        "result": "the opponent is destroyed; the winner has 1 charged; the fight until `t+40`, the path continues from `t+50`"
       },
       "location": "edge_meeting",
       "terrain": null,
@@ -995,15 +995,15 @@
         },
         "goes_on_after": 50
       },
-      "note": "Раунды: р1 гаш. (2 / 0); р2 убит 1. Итог: противник уничтожен; у победителя 1 заряж.; бой до `t+40`, путь дальше с `t+50`."
+      "note": "Rounds: r1 canc. (2 / 0); r2 1 killed. Result: the opponent is destroyed; the winner has 1 charged; the fight until `t+40`, the path continues from `t+50`."
     },
     {
       "id": 13,
       "source_row": {
-        "attack": "нейтральный, одновременно: 3 заряж.",
-        "defense": "2 заряж.",
-        "rounds": "р1, р2 гаш.; р3 убит 1",
-        "result": "обе стороны отскакивают, узел нейтральный; `t+60`"
+        "attack": "neutral, simultaneous: 3 charged",
+        "defense": "2 charged",
+        "rounds": "r1, r2 canc.; r3 1 killed",
+        "result": "both sides bounce, the node is neutral; `t+60`"
       },
       "location": "neutral_arrival",
       "terrain": null,
@@ -1068,15 +1068,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: р1, р2 гаш.; р3 убит 1. Итог: обе стороны отскакивают, узел нейтральный; `t+60`."
+      "note": "Rounds: r1, r2 canc.; r3 1 killed. Result: both sides bounce, the node is neutral; `t+60`."
     },
     {
       "id": 14,
       "source_row": {
-        "attack": "нейтральный, одновременно: 4 заряж.",
-        "defense": "2 заряж.",
-        "rounds": "р1, р2 гаш.; р3, р4 убито по 1",
-        "result": "вторая сторона уничтожена, узел взят; `t+80`"
+        "attack": "neutral, simultaneous: 4 charged",
+        "defense": "2 charged",
+        "rounds": "r1, r2 canc.; r3, r4 1 killed each",
+        "result": "the second side is destroyed, the node is taken; `t+80`"
       },
       "location": "neutral_arrival",
       "terrain": null,
@@ -1141,15 +1141,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: р1, р2 гаш.; р3, р4 убито по 1. Итог: вторая сторона уничтожена, узел взят; `t+80`."
+      "note": "Rounds: r1, r2 canc.; r3, r4 1 killed each. Result: the second side is destroyed, the node is taken; `t+80`."
     },
     {
       "id": 15,
       "source_row": {
-        "attack": "3 заряж. + план (+2)",
-        "defense": "1 разряж.",
-        "rounds": "р1 убит 1 виртуальным выстрелом",
-        "result": "узел взят, у атаки 3 заряж.; `t+20`"
+        "attack": "3 charged + plan (+2)",
+        "defense": "1 discharged",
+        "rounds": "r1 1 killed by a virtual shot",
+        "result": "the node is taken, the attack has 3 charged; `t+20`"
       },
       "location": "node_attack",
       "terrain": "forest",
@@ -1217,15 +1217,15 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: р1 убит 1 виртуальным выстрелом. Итог: узел взят, у атаки 3 заряж.; `t+20`."
+      "note": "Rounds: r1 1 killed by a virtual shot. Result: the node is taken, the attack has 3 charged; `t+20`."
     },
     {
       "id": 16,
       "source_row": {
-        "attack": "3 заряж.",
-        "defense": "2 разряж. + «Защита» (+2)",
-        "rounds": "«Защита» не входит (п. F2). р1, р2 убито по 1",
-        "result": "узел взят, у атаки 1 заряж.; `t+40`"
+        "attack": "3 charged",
+        "defense": "2 discharged + \"Defense\" (+2)",
+        "rounds": "\"Defense\" does not enter (item F2). r1, r2 1 killed each",
+        "result": "the node is taken, the attack has 1 charged; `t+40`"
       },
       "location": "node_attack",
       "terrain": "forest",
@@ -1293,13 +1293,13 @@
         "continues_on_edge": null,
         "goes_on_after": null
       },
-      "note": "Раунды: «Защита» не входит (п. F2). р1, р2 убито по 1. Итог: узел взят, у атаки 1 заряж.; `t+40`."
+      "note": "Rounds: \"Defense\" does not enter (item F2). r1, r2 1 killed each. Result: the node is taken, the attack has 1 charged; `t+40`."
     }
   ],
   "scenarios": [
     {
       "id": "17",
-      "source_row": "Отскок без цепочки. L (1, разряж.) отскоком возвращается в свой город H; пока она шла, W (2, разряж.) противника занял пустой H. L приходит в H в тике t. Никто не может выстрелить: бой кончается в t без раундов. L не взяла H и гибнет (п. G3)",
+      "source_row": "A bounce without a chain. L (1, discharged) returns by a bounce to its city H; while it was walking, the opponent's W (2, discharged) took the empty H. L arrives in H in tick t. Nobody can shoot: the fight ends in t without rounds. L did not take H and dies (item G3)",
       "expected": {
         "end_after": 0,
         "l_dies": true,
@@ -1312,7 +1312,7 @@
     },
     {
       "id": "17б",
-      "source_row": "Как 17, у W 1 заряж. р1 W убивает L. L гибнет; t+20",
+      "source_row": "As 17, W has 1 charged. r1 W kills L. L dies; t+20",
       "expected": {
         "end_after": 20,
         "l_dies": true,
@@ -1324,7 +1324,7 @@
     },
     {
       "id": "17в",
-      "source_row": "Как 17, но W уже ушёл, H пуст. L берёт H в тике t (строка 5)",
+      "source_row": "As 17, but W has already left, H is empty. L takes H in tick t (row 5)",
       "expected": {
         "end_after": null,
         "l_dies": false,
@@ -1333,7 +1333,7 @@
     },
     {
       "id": "18",
-      "source_row": "Точка боя. X (3 заряж.), Y (1, 1 заряж.) вышел на 4 тика позже. 17-й тик X: 566 + 433 = 999; 18-й (тик t): 600 + 466 = 1066: контакт. pos_0 = 600, pos_1 = 1000 - 466 = 534, point = 1134 (567 тысячных от a); X стоит на 600, Y на 466. р1 гаш.; р2 Y уничтожен. Бой до t+40; X (1 заряж.) делает 19-й шаг в тике t+50 и приходит в b в тике t+61",
+      "source_row": "The fight point. X (3 charged), Y (1, 1 charged) set out 4 ticks later. The 17th tick of X: 566 + 433 = 999; the 18th (tick t): 600 + 466 = 1066: contact. pos_0 = 600, pos_1 = 1000 - 466 = 534, point = 1134 (567 thousandths from a); X stands at 600, Y at 466. r1 canc.; r2 Y is destroyed. The fight until t+40; X (1 charged) makes the 19th step in tick t+50 and arrives in b in tick t+61",
       "expected": {
         "contact_tick_of_x": 18,
         "x_progress": 600,
@@ -1347,7 +1347,7 @@
     },
     {
       "id": "19",
-      "source_row": "Гонка домой. Как 18, но Y: 2 юнита, 2 заряж., b: пустой город игрока 1. р1, р2 гаш.; р3 X убивает 1. Выстрелов 3 и 2: X победил, бой до t+60. Y (1, разряж.) отскакивает 14 шагов с t+61, дома в t+74. X идёт с t+70 (12 шагов), в b в t+81: 0 зарядов на 0, бой кончается сразу, X отскакивает",
+      "source_row": "The race home. As 18, but Y: 2 units, 2 charged, b: an empty city of player 1. r1, r2 canc.; r3 X kills 1. Shots 3 and 2: X won, the fight until t+60. Y (1, discharged) bounces 14 steps from t+61, home in t+74. X goes from t+70 (12 steps), in b in t+81: 0 charges against 0, the fight ends at once, X bounces",
       "expected": {
         "shots": {
           "x": 3,
@@ -1365,7 +1365,7 @@
     },
     {
       "id": "20",
-      "source_row": "Подкрепление в узел. Атака 3 заряж., защита 2 заряж.; в t+30 (между р1 и р2) в узел приходит своя группа защиты G (2, 2 заряж.). р1 гаш. (2 / 1); G вступает (2 / 3); р2 гаш. (1 / 2); р3 гаш. (0 / 1); р4 защита убивает 1. Атака (2, разряж.) отскакивает; у защиты 4 юнита, разряж.; t+80",
+      "source_row": "A reinforcement into a node. Attack 3 charged, defense 2 charged; in t+30 (between r1 and r2) the defense's own group G (2, 2 charged) arrives in the node. r1 canc. (2 / 1); G joins (2 / 3); r2 canc. (1 / 2); r3 canc. (0 / 1); r4 the defense kills 1. The attack (2, discharged) bounces; the defense has 4 units, discharged; t+80",
       "expected": {
         "g_arrives_after": 30,
         "trace": [
@@ -1402,7 +1402,7 @@
     },
     {
       "id": "21",
-      "source_row": "Отход защитника. Атака 4 заряж., защита 2 заряж.; в t+24 (между р1 и р2) защитник получает Move в свой соседний узел (1 CP). р1 гаш. (3 / 1); р2 гаш. (2 / 0); после р2 защита уходит. Узел взят в t+40 атакой (4, 2 заряж.); защита сохранила 2 юнита",
+      "source_row": "The defender's retreat. Attack 4 charged, defense 2 charged; in t+24 (between r1 and r2) the defender gets a Move into its neighboring node (1 CP). r1 canc. (3 / 1); r2 canc. (2 / 0); after r2 the defense leaves. The node is taken in t+40 by the attack (4, 2 charged); the defense kept 2 units",
       "expected": {
         "order_after": 24,
         "trace": [
@@ -1432,7 +1432,7 @@
     },
     {
       "id": "22",
-      "source_row": "Отход атаки. Как строка 10; в t+22 (между р1 и р2) атака даёт CancelOrder. р1 гаш. (2 / защита V 1); р2 гаш. (1 / V 0, 2 заряж.); после р2 атака уходит назад. Атака без потерь: 3 юнита, 1 заряж.; бонус «Защиты» сгорел; бой до t+40, узел у защиты",
+      "source_row": "The attack's retreat. As row 10; in t+22 (between r1 and r2) the attack gives CancelOrder. r1 canc. (2 / defense V 1); r2 canc. (1 / V 0, 2 charged); after r2 the attack goes back. The attack without losses: 3 units, 1 charged; the \"Defense\" bonus burned; the fight until t+40, the node stays with the defense",
       "expected": {
         "cancel_after": 22,
         "end_after": 40,
@@ -1448,7 +1448,7 @@
     },
     {
       "id": "23",
-      "source_row": "Подкрепление на ребре. Как строка 11 (X 2 заряж., Y 2 заряж., точка из 18: point = 1134); X2 (1, 1 заряж.) вышел на 5 тиков позже X. В t+4 X2 на 566 (2 * 566 = 1132 < 1134), в t+5 на 600: вступает (до р1 в t+20), стоит на 600. р1 гаш. (2 / 1); р2 гаш. (1 / 0); р3 игрок 0 убивает 1. Бой до t+60; выстрелов 3 и 2: игрок 0 победил; Y (1, разряж.) отскакивает; X и X2 идут дальше с t+70",
+      "source_row": "A reinforcement on an edge. As row 11 (X 2 charged, Y 2 charged, the point from 18: point = 1134); X2 (1, 1 charged) set out 5 ticks later than X. In t+4 X2 at 566 (2 * 566 = 1132 < 1134), in t+5 at 600: joins (before r1 in t+20), stands at 600. r1 canc. (2 / 1); r2 canc. (1 / 0); r3 player 0 kills 1. The fight until t+60; shots 3 and 2: player 0 won; Y (1, discharged) bounces; X and X2 go on from t+70",
       "expected": {
         "x2_at_4": 566,
         "x2_joins_after": 5,

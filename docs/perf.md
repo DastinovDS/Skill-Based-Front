@@ -96,6 +96,8 @@ models (the DEC-04 shape, the leak trap) are kept like this:
   it sends (`MatchRunner(validate_snapshots=True)`): an invalid frame crashes the match, like
   any error; in `prod` the check is off.
 
+`artery`, `web` and `pass` are the MVP maps (31..34 nodes), test fixtures in `maps/fixtures/` since #372; the DEC-27 maps of the pool have 45..55 nodes and the projection budget in AGENTS.md, section 12.
+
 Measurements before and after on the developer's machine (Apple M4) under someone else's load (load average 10-38,
 `speed_factor` ≈ 1.7-2.8, so the ratios matter, not the absolute numbers). Per player, the view after
 600 ticks of a `rusher` against `turtle` match:

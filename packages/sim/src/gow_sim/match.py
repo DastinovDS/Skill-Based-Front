@@ -6,7 +6,7 @@ sees ``state.tick == t`` (``t`` starts at 1; tick 0 is the initial state). Then,
     apply_commands -> economy -> movement -> combat -> capacity -> supply -> recruit -> build
     -> orders -> victory -> vision
 
-``combat`` gets the bonuses of planned orders and «Защита» (``systems.orders.active_bonuses``).
+``combat`` gets the bonuses of planned orders and "Defense" (``systems.orders.active_bonuses``).
 The events of every system are appended to ``state.events`` as soon as the system returns, so a
 later system reads the events of the tick that came before it (``combat`` the arrivals of
 ``movement``, ``orders`` the fights). The match ends with the ``match_ended`` event of ``victory``

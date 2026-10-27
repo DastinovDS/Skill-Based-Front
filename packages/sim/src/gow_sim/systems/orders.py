@@ -1,4 +1,4 @@
-"""Planned orders, «Защита» and public intents (SIM-10; mechanics.md, section 5, DEC-08; DEC-04).
+"""Planned orders, "Defense" and public intents (SIM-10; mechanics.md, section 5, DEC-08; DEC-04).
 
 DEC-08, numbers from ``Ruleset.orders``:
 
@@ -12,27 +12,27 @@ DEC-08, numbers from ``Ruleset.orders``:
   (``Group.ticks_in_defense``, +1 here at the end of every such tick), and brings
   ``min(charged, ticks // orders.defense_ticks_per_bonus)`` into a fight it is in from the start;
   it counts only for a node defender with a firing charge (DEC-07, rule 1). Joining a fight
-  resets the count, the mode stays and gathers anew after the fight. «Защита» holds while the
+  resets the count, the mode stays and gathers anew after the fight. "Defense" holds while the
   group stands; a move order drops it for free, with what it gathered.
 - ``CancelOrder`` of any order costs ``orders.cost.cancel`` (0 since DEC-20): a planned order
-  during the delay, a move order on an edge (the group turns back), «Защита».
-- A planned order and «Защита» are public: an ``Intent`` with the owner, the kind, the node of
+  during the delay, a move order on an edge (the group turns back), "Defense".
+- A planned order and "Defense" are public: an ``Intent`` with the owner, the kind, the node of
   the group and the target, without the group id or size (DEC-04). The group keeps the link
   (``Group.intent``); the intent names no group. Road builds are not public (DEC-16).
 
 Commands (SIM-04) set bonuses and intents when applied (``set_intent``, ``clear_bonus``).
 Around combat: the combat system gets ``active_bonuses(state, rules)`` and takes the bonus of a
-group that joins a fight off the group (it burns with the fight, DEC-24 F1; for «Защита» the
+group that joins a fight off the group (it burns with the fight, DEC-24 F1; for "Defense" the
 count of ticks goes back to 0); the ``orders`` system at the end of the step (after ``build``)
 removes the bonuses and intents whose order or mode ended in a system: arrival, bounce, death,
-attrition, and counts the ticks of «Защита».
+attrition, and counts the ticks of "Defense".
 
 Auto-merge (DEC-20, A), also at the end of the step, after the bonuses: an own group that
 finished its movement in an own node in this tick (arrived at its target, came back from a bounce
 or a cancel: ``group_arrived``) or appeared by a recruit (``recruited``) joins the target group of
 the node: the own group standing there with the smallest id, without an order (not waiting to
 depart) and not one of the groups that finished in this tick. Without a target the groups that
-finished there join the one with the smallest id. The target keeps its mode, «Защита» with its
+finished there join the one with the smallest id. The target keeps its mode, "Defense" with its
 count of ticks, bonus and intent; the others lose theirs (DEC-30). Groups in transit, waiting
 groups and groups on edges never merge.
 The target group is chosen among one player's groups only, so the players stay symmetric.
@@ -71,7 +71,7 @@ def clear_bonus(group: Group) -> None:
 def absorb(state: GameState, keep: Group, gid: int) -> None:
     """Move the units and charges of group ``gid`` into ``keep`` and remove it with its intent.
 
-    ``keep`` stays as it is otherwise: mode, «Защита», bonus, order and intent (DEC-20, A4, B2).
+    ``keep`` stays as it is otherwise: mode, "Defense", bonus, order and intent (DEC-20, A4, B2).
     """
     other = state.groups[gid]
     set_intent(state, other, None)
@@ -83,7 +83,7 @@ def absorb(state: GameState, keep: Group, gid: int) -> None:
 def active_bonuses(state: GameState, rules: Ruleset) -> dict[int, Bonus]:
     """The bonuses the groups bring into a fight in this tick: the ``bonuses`` of ``combat``.
 
-    A planned order from its departure; «Защита» as gathered so far, at most the charged units
+    A planned order from its departure; "Defense" as gathered so far, at most the charged units
     of the group now, in the tick the fight begins (DEC-30). A group in a fight has none: its
     bonus entered the fight when it joined."""
     result: dict[int, Bonus] = {}
@@ -106,7 +106,7 @@ def orders(state: GameState, rules: Ruleset) -> list[Event]:
 
     The bonuses that entered a fight left their groups there (``systems.combat``, DEC-24 F1):
     they burn with the fight. A planned bonus not yet used ends with its order; an inactive one
-    (a planned order still waiting) is kept. A group standing in «Защита» in no fight counts one
+    (a planned order still waiting) is kept. A group standing in "Defense" in no fight counts one
     more tick (DEC-30). Reads the ``group_arrived``, ``recruited`` and ``fight_group`` events of
     the tick from ``state.events``. Emits ``groups_merged`` for every auto-merge.
     """

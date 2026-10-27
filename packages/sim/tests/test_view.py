@@ -347,7 +347,7 @@ def test_dec04_fog_keeps_the_last_sighting(rules: Ruleset) -> None:
 
 @pytest.mark.parametrize("where", [2, 1], ids=["presence", "exact"])
 def test_dec30_the_gathered_defense_of_the_enemy_is_hidden(rules: Ruleset, where: int) -> None:
-    """DEC-30, item 5: the enemy sees «Защита» as a mode, not what it has gathered; the view of
+    """DEC-30, item 5: the enemy sees "Defense" as a mode, not what it has gathered; the view of
     player 0 is the same whatever the count of the enemy group."""
     state = _state("line6", rules)
     _add(state, 0, AtNode(0))
@@ -448,7 +448,7 @@ def test_own_entities_are_exact(rules: Ruleset) -> None:
     state.packets[pid] = Packet(pid, 0, 0, from_node=0, charges=2, depart_tick=1, arrive_tick=8)
     view = _view(state, rules)
     by_id = {v.id: v for v in view.groups}
-    # «Защита» just switched on: nothing gathered yet, the cap is the charged units (DEC-30).
+    # "Defense" just switched on: nothing gathered yet, the cap is the charged units (DEC-30).
     assert by_id[opaque_id(KEY, 0, g.id)] == GroupView(
         opaque_id(KEY, 0, g.id), 5, 3, Mode.DEFENSE, AtNode(1), None, 0, 3
     )

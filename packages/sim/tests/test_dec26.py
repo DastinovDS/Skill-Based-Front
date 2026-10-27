@@ -368,9 +368,9 @@ def test_example_18_a_small_warehouse_burns_the_rest_of_a_packet() -> None:
 
 
 def test_example_19_target_of_a_small_rear_city() -> None:
-    """Example 19 [заменено DEC-28]: no ``supply.buffer``; a rear city keeps
+    """Example 19 [superseded by DEC-28]: no ``supply.buffer``; a rear city keeps
     ``min(rear_min, warehouse capacity)``: S with ``rear_min = 1`` keeps 1, and a warehouse of 2 at
-    ``rear_min = 3`` keeps ``min(3, 2) = 2`` (DEC-28, «Накопление: граничные случаи»)."""
+    ``rear_min = 3`` keeps ``min(3, 2) = 2`` (DEC-28, "Accumulation: edge cases")."""
     state = _Run().state
     state.players[0].rear_min = 1
     assert city_target(state, 0, B, warehouse_cap=1, front=False) == 1
