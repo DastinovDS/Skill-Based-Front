@@ -38,7 +38,7 @@ recommendation are ready, there is no choice, there is no code. **[replaced]**: 
 | 14.1 Sound, onboarding, package F | [proposed] | not checked |
 | 20-23 (animation, icons, constraints, process) | 23 [accepted] (the owner's practice of 2026-10-21), 20-22 [proposed] | new |
 | 24 Style directions | [accepted] 2026-10-21: D3 for the shading, without relief (refined by section 26); #332 closed | waits for implementation: #347 |
-| 26 Map style, round 2 | [accepted] 2026-10-21 (26.3): BL1-1 with the highlight of the borders of the "pronounced" one, T2 (the baker on numpy and Pillow, WebP), F1 "Haze", R1 "Stripes", the packet as a square; #335 closed | waits for implementation: #344 (the baker, T2, the `arteriya` scene), #347 (shading, borders); **implemented: roads R1 "Stripes" and the square packet (26.1) #345, PR #367; fog F1 "Haze" (9.8) #346, PR #368** |
+| 26 Map style, round 2 | [accepted] 2026-10-21 (26.3): BL1-1 with the highlight of the borders of the "pronounced" one, T2 (the baker on numpy and Pillow, WebP), F1 "Haze", R1 "Stripes", the packet as a square; #335 closed | waits for implementation: #344 (the baker, T2, the `artery` scene), #347 (shading, borders); **implemented: roads R1 "Stripes" and the square packet (26.1) #345, PR #367; fog F1 "Haze" (9.8) #346, PR #368** |
 | 27 Orders, fight on the map, arena | [accepted] 2026-10-21 (27.3, shots: 29.4): orders and ribbons as now, IN3 "Sight", the bonus "◇ +N" on the head, LY2 "Over the haze", FX3, EF2 "Pointer" with "Dissolve and marks", arena AR1; #339 closed | waits for implementation: #330 (arena AR1, in progress), #353 (IN3, bonus), #354 (EF2, after #296); **implemented: fight effects FX3 #351, PR #373; layers LY2 "Over the haze" #346, PR #368; shots SH1 instead of the exchange arrows of the arena #352, PR #376** |
 | 28 Map objects and menu icons | [accepted] 2026-10-21 (28.1): U1 and the row of squares U4, C1, B1, I1 (B2 later, no issue is opened); #337 closed | waits for implementation: #347 (U1), #348 (U4, C1), #349 (B1); implemented (menu icons I1): PR #362 |
 | 29 Shots in a fight | [accepted] 2026-10-21 (29.4): SH1 "Tracers", the strength "Stronger", the distance of the groups as now (46) | the strength "Stronger" and the common part (pools, the effects layer, the particle core) **implemented: #351, PR #373**; tracers SH1 **implemented: #352, PR #376** |
@@ -196,7 +196,7 @@ and a live match against a bot on a local server (Russian language, a map with a
 | K7 | The menu: four identical blue buttons | **not done**: five buttons, the main action is not highlighted |
 | K8 | The queue is text only | **not done** (IM11) |
 | K9 | The replay: "Player 1", "Player 2", a timeline without events | **not done** in the sample `?replay=dev` ("Player 1 34 : 34 Player 2", a slider without marks); the replays of real matches with nicks were not re-shot |
-| K10 | The waiting room: the map is named by an id, there is no preview | **not done** ("Map: pautina") |
+| K10 | The waiting room: the map is named by an id, there is no preview | **not done** ("Map: web") |
 | K11 | Screens outside the match: a 420 px card on an empty background | **not done**: the same frame on all five screens |
 | K12, K13 | Legal, loading and error states | not re-shot |
 | K14 | Scattered buttons of the top bar | **done**: stance, sound, pause, help, "Exit" in one panel |
@@ -788,7 +788,7 @@ The hierarchy (Overwatch 2 Match Summary, VALORANT):
 
 1. The outcome word 40 px ("Victory" in the `--you` color, "Defeat" `--enemy`, "Draw" `--text`) and
    the reason in a line below.
-2. A line "Danya 96 : 134 Guest · arteriya · 12:00", the rating change as an arrow (if ranked).
+2. A line "Danya 96 : 134 Guest · artery · 12:00", the rating change as an arrow (if ranked).
 3. A row of 4 numbers with a caption: "Cities at the end", "Units lost", "Charges delivered", "VP peak".
 4. A graph of the VP difference over time (LoL Gold Diff): above zero a blue fill, below a red one; the marks of
    own captures above the graph, the other side's under it; hover shows the time and the values; a click opens
@@ -842,7 +842,7 @@ The same frame 13.1, the text of width 680 px, 16 px, line height 1.5; the langu
 
 - The palette is checked for three kinds of color blindness (section 6); achromatopsia relies on outlines.
 - The contrast of text is 4.5:1, of icons and borders 3:1 (XAG 102, WCAG 1.4.11), computed against the
-  lightest place of the background behind the panel (the snow on `arteriya`).
+  lightest place of the background behind the panel (the snow on `artery`).
 - The interface scale 100/125/150% (section 7).
 - "Reduced motion": a setting plus `prefers-reduced-motion`; it turns off the pulse, flashes, waves,
   the running dashes; the numbers and the toasts remain.
@@ -897,7 +897,7 @@ dictionaries (new keys only), the protocol (C, D and E raise `PROTOCOL_VERSION`:
 rebases and raises it once more).
 
 Common criteria for all packages: state is not conveyed by color alone; new strings through `t()`
-in ru and en; PixiJS objects are destroyed; 60 FPS on `arteriya` in the dev scene `demo`; the reference
+in ru and en; PixiJS objects are destroyed; 60 FPS in the dev scene `demo` on a map of the server pool; the reference
 snapshots of `apps/client/visual/` are updated; Vitest on pure functions; "reduced motion" turns off
 the package's animations; the contrast of new elements is checked (section 14.2).
 
@@ -1189,7 +1189,7 @@ A new icon is added by an entry in this table (shape, meaning, where) and is che
 | Constraint | Source | What it means for the style |
 |---|---|---|
 | **CSP** | `apps/client/csp.ts`, AGENTS.md, 7.2 | `img-src 'self' data:`, `font-src 'self'`, `style-src 'self'`: there are no static `style="..."` in the markup; PixiJS is connected by the module `pixi.js/unsafe-eval` instead of allowing `unsafe-eval`; textures are loaded without workers (`preferWorkers: false`, `worker-src 'none'`). No external fonts, images or CDN |
-| **60 FPS on integrated graphics** | AGENTS.md, section 12 | the frame budget is about 16.7 ms. Check conditions: the dev scene `demo` on `arteriya` (40 nodes), FPS in the dev panel; in the worst case software WebGL (SwiftShader). Filters on every object, full-screen filters every frame, redrawing `Graphics` for static content are forbidden; shadows and gradients are baked into textures (measurements in section 24) |
+| **60 FPS on integrated graphics** | AGENTS.md, section 12 | the frame budget is about 16.7 ms. Check conditions: the dev scene `demo` on a map of the server pool (the DEC-27 maps have 45 to 55 nodes), FPS in the dev panel; in the worst case software WebGL (SwiftShader). Filters on every object, full-screen filters every frame, redrawing `Graphics` for static content are forbidden; shadows and gradients are baked into textures (measurements in section 24) |
 | **Not only color** | AGENTS.md, 7.4 | every state has a shape, a pattern or a sign; every map edit is checked in grayscale (CSS `filter: grayscale(1)` on the canvas, as in #222; in the mockups a "grayscale" checkbox) |
 | **Contrast** | WCAG 1.4.3, 1.4.11, XAG 102 | text 4.5:1, icons and borders 3:1; count against the lightest place of the background. A light map (D2) recounts everything |
 | **Minimum size** | section 5, item 9, section 7 | a meaningful map symbol is not smaller than 20 px, a mouse hit area not less than 28 px, a caption not smaller than 12 px |
@@ -1348,7 +1348,7 @@ Grounds:
    neutral cities are lighter than the background (R4); the unit number is 12 px (R5); the mark of the opponent's side on the ribbon tail is a double ring instead of
    a diamond (section 21). `visual` references and the before and after frames in the PR.
 2. **D1-b. Territory without color** (S-M, 1-2 days): the owner hatching in a `TilingSprite` (your own "/", the opponent "\"), the fill is leveled by
-   the background brightness; a grayscale check on the live map `arteriya` and `pautina`.
+   the background brightness; a grayscale check on the live maps `artery` and `web`.
 3. **D1-c. Background and fog** (S, up to 1 day): stamps sparser and quieter near cities (R8), the fog stripe width in screen pixels (R7), the biome palette of
    `maps:bake` quieter (the background does not compete with the territory); `maps:bake` and updating the references.
 
@@ -1356,7 +1356,7 @@ Regardless of the choice: the V3 arena (#330, after #329) and the screens outsid
 by files, except `fightView.ts` (not touched).
 
 If the owner chooses D2 or D3: the first task will be **a prototype on one map** (baking the background and a token theme, an FPS measurement on
-`demo`/`arteriya`), not a full implementation; the decision to continue is made by the frames and the measurement.
+`demo`/`artery`), not a full implementation; the decision to continue is made by the frames and the measurement.
 
 ---
 
@@ -1366,7 +1366,7 @@ If the owner chooses D2 or D3: the first task will be **a prototype on one map**
 
 **The owner's decision on #332, 2026-10-21 (partial) [accepted].** He liked D3 "Soft volume" for the shading part (gradients, soft shadows, border glow, highlights), the textures in general look better; **no semi-3D landscape**: no hillshade and no "lit hills", the relief stays flat in presentation. The final choice of the direction on #332 (D1, D2, D3 or "change nothing") stays with the owner; the statuses of sections 24 and 25 are not changed by this section.
 
-Mockup: [`mockups/map-style-2.html`](mockups/map-style-2.html): a scene on a **fragment of the real map `arteriya`** (nodes 3-16: your own cities and groups, a fight with the DEC-32 arena, a group's order, the opponent's scheduled order, the territory border, fog with a ghost, roads of levels 1-3, construction on an edge, packets). Four independent blocks with switches, "all variants of a block side by side", grayscale, "reduced motion", scale 60% / 100% / 200%, a strip of signs 1:1 on three backgrounds, a road matrix, biome samples; a frame by address, for example `map-style-2.html#sh=1&tx=2&fg=2&rd=1&gray=1`. The textures are drawn by the script [`mockups/src/map_textures.py`](mockups/src/map_textures.py) (numpy and Pillow, deterministic, the biome field of the current baker; run `uv run python docs/design/mockups/src/map_textures.py` from the root).
+Mockup: [`mockups/map-style-2.html`](mockups/map-style-2.html): a scene on a **fragment of the real map `arteriya`** (now `artery`, #390) (nodes 3-16: your own cities and groups, a fight with the DEC-32 arena, a group's order, the opponent's scheduled order, the territory border, fog with a ghost, roads of levels 1-3, construction on an edge, packets). Four independent blocks with switches, "all variants of a block side by side", grayscale, "reduced motion", scale 60% / 100% / 200%, a strip of signs 1:1 on three backgrounds, a road matrix, biome samples; a frame by address, for example `map-style-2.html#sh=1&tx=2&fg=2&rd=1&gray=1`. The textures are drawn by the script [`mockups/src/map_textures.py`](mockups/src/map_textures.py) (numpy and Pillow, deterministic, the biome field of the current baker; run `uv run python docs/design/mockups/src/map_textures.py` from the root).
 
 | BL1 Shading (now, restrained, pronounced) | BL2 Textures (now, T1, T2, T3) |
 |---|---|
@@ -1424,7 +1424,7 @@ The implementation issues were opened after the choice per section 27: #344, #34
 
 **Status: [accepted] 2026-10-21 (section 27.3, shots: 29.4).** Issue #339 is closed; implementation: #330 (arena AR1), #346 (layers LY2), #351 (FX3), #352 (SH1), #353 (IN3, the bonus on the head), #354 (EF2). A continuation of #335: the map style is chosen (section 26.3), the current order ribbons next to it "do not look very good" (the owner, 2026-10-21).
 
-Mockup: [`mockups/orders-style.html`](mockups/orders-style.html): self-contained, opens from a file, no network; **the same map `arteriya` and the chosen style** (restrained shading with the border highlighting of "pronounced", T2, haze F1, lanes R1, a square packet). Six scenes, each with axes with variant switches (**3-4 variants per element plus the current look**, section 23), "side by side" shows all the variants of an axis, scenarios, a clock with a time slider (play, pause, speed), grayscale, "reduced motion", scale 60% / 100% / 200%, a frame by address (`orders-style.html#s=plan&rib=4&side=3&p=1&t=2.6`). The fight engine in the mockup plays the DEC-24 and DEC-32 rules round by round and is checked against the table of examples of `mechanics.md` on the page (scene 6).
+Mockup: [`mockups/orders-style.html`](mockups/orders-style.html): self-contained, opens from a file, no network; **the same map `arteriya` (now `artery`, #390) and the chosen style** (restrained shading with the border highlighting of "pronounced", T2, haze F1, lanes R1, a square packet). Six scenes, each with axes with variant switches (**3-4 variants per element plus the current look**, section 23), "side by side" shows all the variants of an axis, scenarios, a clock with a time slider (play, pause, speed), grayscale, "reduced motion", scale 60% / 100% / 200%, a frame by address (`orders-style.html#s=plan&rib=4&side=3&p=1&t=2.6`). The fight engine in the mockup plays the DEC-24 and DEC-32 rules round by round and is checked against the table of examples of `mechanics.md` on the page (scene 6).
 
 | Ordinary orders (scene 1) | Scheduled orders (scene 2) |
 |---|---|
@@ -1487,7 +1487,7 @@ The check was done on the mockup page (scene 6): the engine, whose rules are tak
 
 **Status: [accepted] 2026-10-21 (section 28.1).** Issue #337 is closed; implementation: #347 (U1 as part of BL1), #348 (the row of squares U4, cities C1), #349 (icons B1), #350 (menu icons I1). B2 "Building and rampart" is postponed, no issue is opened.
 
-Basis: the owner's choice on #335 (recorded by issue #335): BL1 shading "Restrained" with the border highlighting as in "Pronounced", texture T2, fog F1 "Haze", roads R1 "Lanes". Mockup [`mockups/objects-style.html`](mockups/objects-style.html): the same scene (a fragment of `arteriya`, nodes 0-16, nodes 12 and 13 are shown as provinces) in this style and four blocks of 4 variants each plus "Now". What a variant shows the player is taken only from the fog rules of `mechanics.md` (DEC-04, DEC-21, DEC-26, DEC-30, DEC-31); no variant needs new data, a protocol or a DEC. The mockup background texture is drawn by the script [`mockups/src/objects_texture.py`](mockups/src/objects_texture.py) (functions of `map_textures.py`). Modes: grayscale, "reduced motion", map scale 60% / 100% / 150%, "all variants side by side", samples on four backgrounds; a frame by address, for example `objects-style.html#u=2&c=1&b=1&i=1&sc=60&gray=1`. The samples of each block are shown at 100% and 60%: meaningful signs keep the minimum size on screen (a group 20 px as now, the barracks and "Defense" icons in the new variants 16 px, like `symbolScale` of groups).
+Basis: the owner's choice on #335 (recorded by issue #335): BL1 shading "Restrained" with the border highlighting as in "Pronounced", texture T2, fog F1 "Haze", roads R1 "Lanes". Mockup [`mockups/objects-style.html`](mockups/objects-style.html): the same scene (a fragment of `arteriya`, now `artery`, nodes 0-16, nodes 12 and 13 are shown as provinces) in this style and four blocks of 4 variants each plus "Now". What a variant shows the player is taken only from the fog rules of `mechanics.md` (DEC-04, DEC-21, DEC-26, DEC-30, DEC-31); no variant needs new data, a protocol or a DEC. The mockup background texture is drawn by the script [`mockups/src/objects_texture.py`](mockups/src/objects_texture.py) (functions of `map_textures.py`). Modes: grayscale, "reduced motion", map scale 60% / 100% / 150%, "all variants side by side", samples on four backgrounds; a frame by address, for example `objects-style.html#u=2&c=1&b=1&i=1&sc=60&gray=1`. The samples of each block are shown at 100% and 60%: meaningful signs keep the minimum size on screen (a group 20 px as now, the barracks and "Defense" icons in the new variants 16 px, like `symbolScale` of groups).
 
 | Block | Variants | Recommendation | Estimate |
 |---|---|---|---|

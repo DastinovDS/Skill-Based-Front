@@ -1,1861 +1,1861 @@
-# Skill-Based Front — план MVP: issues
+# Skill-Based Front MVP plan: issues
 
-> Сгенерировано из `issues.yaml`. Каждый блок — готовое тело GitHub issue; заголовок issue — строка `### [ID] …`.
+> Generated from `issues.yaml`. Each block is a ready GitHub issue body; the issue title is the `### [ID] ...` line.
 
-## M0 — Фундамент
+## M0: Foundation
 
-*Репозиторий, инструменты, CI и документы готовы; открытые вопросы дизайна получили значения по умолчанию.*
+*The repository, tooling, CI and documents are ready; the open design questions have default values.*
 
-### [INF-01] Монорепозиторий: новая структура и архив прототипа на Pygame
+### [INF-01] Monorepo: new structure and archive of the Pygame prototype
 
-Метки: `area:infra` `type:chore` `P0` `size:S`
+Labels: `area:infra` `type:chore` `P0` `size:S`
 
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
 
-### Контекст
-Текущий код реализует старый дизайн (пять ресурсов, здания, три типа юнитов, бой через урон и броню) и в новой симуляции не переиспользуется. Генератор карт из legacy может пригодиться как офлайн-инструмент (MAP-05).
+### Context
+The current code implements the old design (five resources, buildings, three unit types, combat through damage and armor) and is not reused in the new simulation. The map generator from legacy may come in handy as an offline tool (MAP-05).
 
-### Задачи
-- [ ] Поставить тег `v0-pygame-prototype` на текущий `develop`.
-- [ ] Перенести `rts_core/`, `rts_client.py`, `rts_server.py`, `main.py`, `assets/` в `legacy/`; исключить `legacy/` из линтеров, тайпчекера и CI.
-- [ ] Создать каталоги: `packages/sim`, `packages/protocol`, `apps/server`, `apps/bots`, `apps/client`, `tools/maps`, `maps/`, `rulesets/`, `docs/{design,adr,balance,mvp,qa}`.
-- [ ] Корневой `pyproject.toml` как uv workspace (Python 3.12, версия зафиксирована в `.python-version`) с пакетами `gow_sim`, `gow_protocol`, `gow_server`, `gow_bots`, `gow_maps`.
-- [ ] Обновить `.gitignore`: `node_modules/`, `dist/`, `.pytest_cache/`, `data/`, `*.db`.
+### Tasks
+- [ ] Put the tag `v0-pygame-prototype` on the current `develop`.
+- [ ] Move `rts_core/`, `rts_client.py`, `rts_server.py`, `main.py`, `assets/` into `legacy/`; exclude `legacy/` from the linters, the type checker and CI.
+- [ ] Create the directories: `packages/sim`, `packages/protocol`, `apps/server`, `apps/bots`, `apps/client`, `tools/maps`, `maps/`, `rulesets/`, `docs/{design,adr,balance,mvp,qa}`.
+- [ ] A root `pyproject.toml` as a uv workspace (Python 3.12, the version pinned in `.python-version`) with the packages `gow_sim`, `gow_protocol`, `gow_server`, `gow_bots`, `gow_maps`.
+- [ ] Update `.gitignore`: `node_modules/`, `dist/`, `.pytest_cache/`, `data/`, `*.db`.
 
-### Критерии приёмки
-- [ ] `uv sync --locked` проходит на чистой машине.
-- [ ] `uv run python -c "import gow_sim, gow_protocol, gow_server, gow_bots, gow_maps"` выполняется без ошибок.
-- [ ] README описывает новую структуру и ссылается на `legacy/` и тег прототипа.
+### Acceptance criteria
+- [ ] `uv sync --locked` passes on a clean machine.
+- [ ] `uv run python -c "import gow_sim, gow_protocol, gow_server, gow_bots, gow_maps"` runs without errors.
+- [ ] The README describes the new structure and links to `legacy/` and the prototype tag.
 
-### Вне рамок
-- Перенос кода legacy в новые пакеты.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [DOC-01] Дизайн-документы, ADR и инструкция для агентов в репозитории
-
-Метки: `area:docs` `type:chore` `P0` `size:S`
-
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** INF-01
-
-### Задачи
-- [ ] `docs/design/mechanics.md` — актуальная механика (из `skill-based-front-mechanics.md`).
-- [ ] Записать в mechanics.md значения по умолчанию всех DEC-issues со статусом [по умолчанию]; DEC-issues потом меняют его на [принято] или на другое решение.
-- [ ] `DESIGN.md` → `docs/design/archive/DESIGN-v1.md` с пометкой «устарело, см. mechanics.md».
-- [ ] `AGENTS.md` в корне; `CLAUDE.md` с одной строкой `@AGENTS.md`.
-- [ ] `docs/adr/0001-architecture.md`: авторитарный сервер, чистая симуляция, Python + TypeScript, туман на сервере.
-- [ ] `docs/mvp/`: план MVP и список issues.
-
-### Критерии приёмки
-- [ ] README ссылается на mechanics.md, AGENTS.md и план MVP.
-- [ ] Глоссарий AGENTS.md совпадает с терминами mechanics.md.
+### Out of scope
+- Moving the legacy code into the new packages.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [INF-02] Python-инструменты: ruff, pyright strict, pytest, hypothesis, границы импортов
+### [DOC-01] Design documents, ADRs and the agent instructions in the repository
 
-Метки: `area:infra` `type:chore` `P0` `size:S`
+Labels: `area:docs` `type:chore` `P0` `size:S`
 
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** A
-**Зависит от:** INF-01
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** INF-01
 
-### Задачи
-- [ ] ruff (lint + format) с общим конфигом в корне.
-- [ ] pyright в режиме strict для `packages/`, `apps/`, `tools/`.
-- [ ] pytest + hypothesis; профили hypothesis `dev` и `ci` (ограниченное число примеров, `derandomize=True`).
-- [ ] import-linter: `gow_sim` не импортирует другие пакеты проекта; `gow_protocol` не импортирует `gow_server` и `gow_bots`; `gow_bots.bots` не импортирует напрямую `gow_sim.state`, `gow_sim.systems`, `gow_sim.match` (контракт `forbidden` с `allow_indirect_imports = true`, потому что `view` и `commands` сами используют `state`); ничто не импортирует `legacy`.
-- [ ] `packages/sim/ruff.toml` с `extend = "../../pyproject.toml"` и правилом TID251 (banned-api): запрет `time`, `random`, `asyncio`, `socket`, `threading`, `datetime.datetime.now` внутри `gow_sim`.
-- [ ] pre-commit с ruff.
+### Tasks
+- [ ] `docs/design/mechanics.md`: the current mechanics (from `skill-based-front-mechanics.md`).
+- [ ] Record in mechanics.md the default values of all DEC issues with the status [default]; the DEC issues later change it to [accepted] or to another decision.
+- [ ] `DESIGN.md` → `docs/design/archive/DESIGN-v1.md` with the note "outdated, see mechanics.md".
+- [ ] `AGENTS.md` in the root; `CLAUDE.md` with a single line `@AGENTS.md`.
+- [ ] `docs/adr/0001-architecture.md`: authoritative server, pure simulation, Python + TypeScript, fog of war on the server.
+- [ ] `docs/mvp/`: the MVP plan and the list of issues.
 
-### Критерии приёмки
-- [ ] `uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run lint-imports && uv run pytest` зелёные.
-- [ ] Пробный `import time` в `gow_sim` ломает ruff, пробный импорт `gow_sim.state` из бота ломает lint-imports (проверено, описано в PR).
+### Acceptance criteria
+- [ ] The README links to mechanics.md, AGENTS.md and the MVP plan.
+- [ ] The AGENTS.md glossary matches the terms of mechanics.md.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [INF-03] Каркас веб-клиента: pnpm, Vite, Svelte 5, TypeScript strict, PixiJS 8, целевой CSP
+### [INF-02] Python tooling: ruff, pyright strict, pytest, hypothesis, import boundaries
 
-Метки: `area:client` `type:chore` `P0` `size:M`
+Labels: `area:infra` `type:chore` `P0` `size:S`
 
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** INF-01
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** A
+**Depends on:** INF-01
 
-### Задачи
-- [ ] `apps/client` из шаблона Vite `svelte-ts` (без SvelteKit).
+### Tasks
+- [ ] ruff (lint + format) with a shared config in the root.
+- [ ] pyright in strict mode for `packages/`, `apps/`, `tools/`.
+- [ ] pytest + hypothesis; hypothesis profiles `dev` and `ci` (a bounded number of examples, `derandomize=True`).
+- [ ] import-linter: `gow_sim` does not import other project packages; `gow_protocol` does not import `gow_server` and `gow_bots`; `gow_bots.bots` does not directly import `gow_sim.state`, `gow_sim.systems`, `gow_sim.match` (a `forbidden` contract with `allow_indirect_imports = true`, because `view` and `commands` themselves use `state`); nothing imports `legacy`.
+- [ ] `packages/sim/ruff.toml` with `extend = "../../pyproject.toml"` and the TID251 rule (banned-api): ban `time`, `random`, `asyncio`, `socket`, `threading`, `datetime.datetime.now` inside `gow_sim`.
+- [ ] pre-commit with ruff.
+
+### Acceptance criteria
+- [ ] `uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run lint-imports && uv run pytest` are green.
+- [ ] A trial `import time` in `gow_sim` breaks ruff, a trial import of `gow_sim.state` from a bot breaks lint-imports (verified, described in the PR).
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [INF-03] Web client skeleton: pnpm, Vite, Svelte 5, TypeScript strict, PixiJS 8, target CSP
+
+Labels: `area:client` `type:chore` `P0` `size:M`
+
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** INF-01
+
+### Tasks
+- [ ] `apps/client` from the Vite `svelte-ts` template (without SvelteKit).
 - [ ] `tsconfig`: `strict`, `noUncheckedIndexedAccess`.
 - [ ] ESLint (flat config, typescript-eslint, eslint-plugin-svelte), Prettier, `svelte-check`, Vitest.
-- [ ] `GameCanvas.svelte`: создаёт `Application` в `onMount`, защищён от завершения асинхронного `init()` после размонтирования, уничтожает приложение в cleanup.
-- [ ] HUD-оверлей поверх канваса: `pointer-events: none` на контейнере, `auto` на панелях.
-- [ ] Функция `t("key")` и словарь ru с первого экрана — все последующие CLI-issues пишут строки только через неё.
-- [ ] Целевой CSP (тот же, что в OPS-02) проверяется на прод-сборке: `import 'pixi.js/unsafe-eval'` вместо `unsafe-eval`, `worker-src blob:` или отключение воркеров загрузчика, решение по `style-src` для Svelte.
+- [ ] `GameCanvas.svelte`: creates the `Application` in `onMount`, is guarded against the asynchronous `init()` finishing after unmount, destroys the application in cleanup.
+- [ ] An HUD overlay on top of the canvas: `pointer-events: none` on the container, `auto` on the panels.
+- [ ] The `t("key")` function and the ru dictionary from the first screen: all later CLI issues write strings only through it.
+- [ ] The target CSP (the same as in OPS-02) is checked on the prod build: `import 'pixi.js/unsafe-eval'` instead of `unsafe-eval`, `worker-src blob:` or disabling the loader's workers, a decision on `style-src` for Svelte.
 
-### Критерии приёмки
-- [ ] `pnpm dev` показывает канвас с тестовым графом (3 круга, 2 линии) и HUD поверх; ресайз окна работает.
-- [ ] `pnpm lint && pnpm check && pnpm test && pnpm build` зелёные.
-- [ ] Vitest: 20 циклов mount/unmount вызывают `app.destroy` 20 раз.
-- [ ] Прод-сборка под целевым CSP запускается без ошибок CSP в консоли браузера.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [INF-04] CI в GitHub Actions для Python и клиента
-
-Метки: `area:infra` `type:chore` `P0` `size:S`
-
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** INF-02, INF-03, INF-05
-
-### Задачи
-- [ ] Job `py`: `astral-sh/setup-uv`, `uv sync --locked`, ruff, pyright, lint-imports, pytest (профиль hypothesis `ci`).
-- [ ] Job `web`: pnpm с кэшем, lint, check, test, build.
-- [ ] Фильтры по путям, запуск на PR в `develop` и `main`.
-- [ ] Описать в README, какие проверки обязательны (branch protection настраивается вручную).
-
-### Критерии приёмки
-- [ ] PR показывает оба job'а; падение любого блокирует merge.
-- [ ] Команды AGENTS.md, помеченные как доступные с M0, выполняются локально без правок.
+### Acceptance criteria
+- [ ] `pnpm dev` shows a canvas with a test graph (3 circles, 2 lines) and an HUD on top; resizing the window works.
+- [ ] `pnpm lint && pnpm check && pnpm test && pnpm build` are green.
+- [ ] Vitest: 20 mount/unmount cycles call `app.destroy` 20 times.
+- [ ] The prod build under the target CSP starts without CSP errors in the browser console.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [INF-05] Шаблоны issue и PR, метки, соглашения по веткам и коммитам
+### [INF-04] CI in GitHub Actions for Python and the client
 
-Метки: `area:docs` `type:chore` `P0` `size:S`
+Labels: `area:infra` `type:chore` `P0` `size:S`
 
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** INF-01
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** INF-02, INF-03, INF-05
 
-### Задачи
+### Tasks
+- [ ] Job `py`: `astral-sh/setup-uv`, `uv sync --locked`, ruff, pyright, lint-imports, pytest (hypothesis profile `ci`).
+- [ ] Job `web`: pnpm with a cache, lint, check, test, build.
+- [ ] Path filters, run on PRs into `develop` and `main`.
+- [ ] Describe in the README which checks are required (branch protection is configured manually).
+
+### Acceptance criteria
+- [ ] A PR shows both jobs; a failure of either blocks the merge.
+- [ ] The AGENTS.md commands marked as available from M0 run locally without edits.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [INF-05] Issue and PR templates, labels, branch and commit conventions
+
+Labels: `area:docs` `type:chore` `P0` `size:S`
+
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** INF-01
+
+### Tasks
 - [ ] `.github/ISSUE_TEMPLATE/`: feature, bug, decision.
-- [ ] `.github/pull_request_template.md` с чек-листом Definition of Done из AGENTS.md.
-- [ ] Метки создаются скриптом импорта issues.
-- [ ] Соглашения: ветка `feature/<номер>-<slug>`, коммит `<type>(<scope>): <сообщение> (#<номер>)`.
-- [ ] Сделать `develop` веткой по умолчанию на GitHub — иначе `Closes #N` в PR в `develop` не закрывает issue.
+- [ ] `.github/pull_request_template.md` with the Definition of Done checklist from AGENTS.md.
+- [ ] The labels are created by the issue import script.
+- [ ] Conventions: branch `feature/<number>-<slug>`, commit `<type>(<scope>): <message> (#<number>)`.
+- [ ] Make `develop` the default branch on GitHub, otherwise `Closes #N` in a PR into `develop` does not close the issue.
 
-### Критерии приёмки
-- [ ] Шаблоны появляются при создании issue и PR и совпадают с AGENTS.md.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [DEC-01] Решение: как появляются новые юниты
-
-Метки: `area:design` `type:decision` `P0` `size:XS`
-
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** XS (≤ 2 часа) · **Трек:** any
-**Зависит от:** DOC-01
-
-### Контекст
-В mechanics.md не описано производство юнитов. Без этого правила нельзя закончить SIM-12.
-
-### Решение по умолчанию
-Рекрут в любом своём городе со свободной ёмкостью: команда `Recruit(node)` создаёт одного разряженного юнита новой группой за 1 CP; не чаще одного юнита на город за 20 тиков, иначе отказ `RECRUIT_COOLDOWN`. Флаг `recruit.location = any_city | capital`.
-
-### Альтернативы
-- Только в столице (медленнее выход на фронт, сильнее роль логистики).
-- Рекрут за заряды со склада вместо CP.
-
-### Критерии приёмки
-- [ ] Решение записано в mechanics.md со статусом [принято] и отражено в `rulesets/mvp-0.toml`.
-
-### Как закрыть
-Значение по умолчанию уже есть, поэтому решение занимает не больше пары часов: подтвердить его или выбрать альтернативу и записать в `docs/design/mechanics.md` со статусом [принято]. Блокирует SIM-01 (DEC-05 — SRV-04, DEC-06 — RAT-02). Дальше числа меняются только через рулсет и BAL-02.
+### Acceptance criteria
+- [ ] The templates appear when creating an issue and a PR and match AGENTS.md.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [DEC-02] Решение: модель экономики и стойка CP
+### [DEC-01] Decision: how new units appear
 
-Метки: `area:design` `type:decision` `P0` `size:XS`
+Labels: `area:design` `type:decision` `P0` `size:XS`
 
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** XS (≤ 2 часа) · **Трек:** any
-**Зависит от:** DOC-01
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** XS (≤ 2 hours) · **Track:** any
+**Depends on:** DOC-01
 
-### Решение по умолчанию
-Плоская экономика: снабжение производит только столица. Пассивно 1 заряд за 50 тиков; стойка в трёх положениях (25 / 50 / 75% регена CP уходит в заряды по курсу 1 CP → 2 заряда). Начисление квантом: раз в 50 тиков 100 сотых CP делятся по стойке; доля в заряды копится в аккумуляторе (в сотых долях заряда) и превращается в целые заряды. На потолке CP излишек CP сгорает; доля стойки в заряды начисляется всегда. Смена стойки бесплатна, не чаще раза в 100 тиков.
+### Context
+mechanics.md does not describe unit production. Without this rule SIM-12 cannot be finished.
 
-### Альтернативы
-- Вогнутая модель (города дают небольшой доход с убывающей отдачей) — реализуется, только если BAL-02 провалится.
-- Два независимых плоских потока (CP и заряды) без конвертации.
+### Default decision
+Recruit in any of your own cities with free capacity: the command `Recruit(node)` creates one discharged unit as a new group for 1 CP; no more than one unit per city per 20 ticks, otherwise the rejection `RECRUIT_COOLDOWN`. The flag `recruit.location = any_city | capital`.
 
-### Критерии приёмки
-- [ ] Решение записано в mechanics.md со статусом [принято] и отражено в `rulesets/mvp-0.toml`.
+### Alternatives
+- Only in the capital (slower arrival at the front, a stronger role for logistics).
+- Recruit for charges from the warehouse instead of CP.
 
-### Как закрыть
-Значение по умолчанию уже есть, поэтому решение занимает не больше пары часов: подтвердить его или выбрать альтернативу и записать в `docs/design/mechanics.md` со статусом [принято]. Блокирует SIM-01 (DEC-05 — SRV-04, DEC-06 — RAT-02). Дальше числа меняются только через рулсет и BAL-02.
+### Acceptance criteria
+- [ ] The decision is recorded in mechanics.md with the status [accepted] and reflected in `rulesets/mvp-0.toml`.
 
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [DEC-03] Решение: условие победы и длина партии
-
-Метки: `area:design` `type:decision` `P0` `size:XS`
-
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** XS (≤ 2 часа) · **Трек:** any
-**Зависит от:** DOC-01
-
-### Решение по умолчанию
-Партия 12 минут (7200 тиков). VP начисляются каждые 50 тиков за каждый свой город (значение `vp` из карты, столица ×3). Захват вражеской столицы — мгновенная победа. По таймеру побеждает тот, у кого больше VP; при равенстве — больше городов; иначе ничья.
-
-### Альтернативы
-- Порог VP вместо таймера или бонус за финальное удержание — только если BAL-02 покажет замирание конца партии.
-
-### Критерии приёмки
-- [ ] Решение записано в mechanics.md со статусом [принято] и отражено в `rulesets/mvp-0.toml`.
-
-### Как закрыть
-Значение по умолчанию уже есть, поэтому решение занимает не больше пары часов: подтвердить его или выбрать альтернативу и записать в `docs/design/mechanics.md` со статусом [принято]. Блокирует SIM-01 (DEC-05 — SRV-04, DEC-06 — RAT-02). Дальше числа меняются только через рулсет и BAL-02.
+### How to close
+A default value already exists, so the decision takes a couple of hours at most: confirm it or pick an alternative and record it in `docs/design/mechanics.md` with the status [accepted]. It blocks SIM-01 (DEC-05 blocks SRV-04, DEC-06 blocks RAT-02). After that the numbers change only through the ruleset and BAL-02.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [DEC-04] Решение: правила видимости в MVP
+### [DEC-02] Decision: economy model and CP stance
 
-Метки: `area:design` `type:decision` `P0` `size:XS`
+Labels: `area:design` `type:decision` `P0` `size:XS`
 
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** XS (≤ 2 часа) · **Трек:** any
-**Зависит от:** DOC-01
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** XS (≤ 2 hours) · **Track:** any
+**Depends on:** DOC-01
 
-### Контекст
-Уточняет лестницу информации из mechanics.md §10 до уровня, достаточного для кода. Отличие от §10: владение всеми узлами и VP обеих сторон публичны — иначе табло VP раскрывало бы скрытое косвенно.
+### Default decision
+A flat economy: only the capital produces supply. Passively 1 charge per 50 ticks; a stance with three positions (25 / 50 / 75% of CP regeneration goes into charges at the rate 1 CP → 2 charges). Accrual in quanta: once per 50 ticks 100 hundredths of CP are split by the stance; the share going into charges accumulates in an accumulator (in hundredths of a charge) and turns into whole charges. At the CP cap the excess CP burns off; the stance's share into charges is always accrued. Changing the stance is free, no more than once per 100 ticks.
 
-### Решение по умолчанию
-Всем и всегда: география, рельеф, ширины дорог, владение и ёмкость всех узлов, VP обеих сторон, намерения запланированных приказов и строек (откуда → куда, тип; без размера и без id группы). Точно: свои узлы и узлы, где стоят свои группы. В соседних с ними узлах и на примыкающих рёбрах: есть ли вражеские группы и их режим, но не число юнитов и зарядов. У вражеской группы с обычным приказом цель не показывается. Остальное — туман с памятью «последний раз видели». Обзор от размера группы в MVP не делаем.
+### Alternatives
+- A concave model (cities give a small income with diminishing returns): implemented only if BAL-02 fails.
+- Two independent flat streams (CP and charges) without conversion.
 
-### Альтернативы
-- Скрытое владение дальними узлами и скрытые VP противника (ближе к §10, но табло становится бесполезным).
+### Acceptance criteria
+- [ ] The decision is recorded in mechanics.md with the status [accepted] and reflected in `rulesets/mvp-0.toml`.
 
-### Критерии приёмки
-- [ ] Решение записано в mechanics.md со статусом [принято]; каждое правило — отдельный тест в SIM-14.
-
-### Как закрыть
-Значение по умолчанию уже есть, поэтому решение занимает не больше пары часов: подтвердить его или выбрать альтернативу и записать в `docs/design/mechanics.md` со статусом [принято]. Блокирует SIM-01 (DEC-05 — SRV-04, DEC-06 — RAT-02). Дальше числа меняются только через рулсет и BAL-02.
+### How to close
+A default value already exists, so the decision takes a couple of hours at most: confirm it or pick an alternative and record it in `docs/design/mechanics.md` with the status [accepted]. It blocks SIM-01 (DEC-05 blocks SRV-04, DEC-06 blocks RAT-02). After that the numbers change only through the ruleset and BAL-02.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [DEC-07] Решение: разрешение боя (таблица разобранных примеров)
+### [DEC-03] Decision: victory condition and match length
 
-Метки: `area:design` `type:decision` `P0` `size:S`
+Labels: `area:design` `type:decision` `P0` `size:XS`
 
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** DOC-01
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** XS (≤ 2 hours) · **Track:** any
+**Depends on:** DOC-01
 
-### Контекст
-Правила боя из mechanics.md §4 не доопределены: порядок гашения виртуальных зарядов, судьба лишнего заряда, бой на ребре, одновременное прибытие, несколько групп, отскок в потерянный узел. Без этого табличные тесты SIM-09 пришлось бы придумывать. Таблица ниже — значение по умолчанию; тесты SIM-09 — это ровно эта таблица.
+### Default decision
+A 12-minute match (7200 ticks). VP are accrued every 50 ticks for each of your cities (the `vp` value from the map, the capital ×3). Capturing the enemy capital is an instant win. On the timer the winner is the one with more VP; on a tie, more cities; otherwise a draw.
 
-### Решение по умолчанию
-Главное правило: каждый заряд — один «выстрел». Он либо гасит заряд противника, либо убивает
-одного юнита противника. Разряженный юнит не стреляет.
+### Alternatives
+- A VP threshold instead of a timer, or a bonus for final holding: only if BAL-02 shows the end of the match stalling.
 
-1. Пул стороны Q = заряды стреляющих юнитов + бонус запланированного приказа или «Защиты» + рельеф.
-   Стреляют юниты в режимах «Атака» и «Защита»; заряды юнитов в «Строительстве» не считаются.
-   Бонус «Защиты» и рельеф действуют только на защитника узла и только если у него есть хотя бы
-   один стреляющий заряд: горы +1, равнина −1 (один заряженный юнит не может стрелять, но свой заряд сохраняет).
-2. Гашение: c = min(Qa, Qd); каждая сторона тратит c выстрелов — сначала виртуальные (бонус, рельеф), потом реальные.
-3. Перевес s = |Qa − Qd| у сильной стороны убивает до s юнитов противника. После гашения у противника
-   все юниты разряжены (кроме «равнинного» случая), поэтому первыми гибнут разряженные. Каждое убийство
-   тратит выстрел — тоже сначала виртуальный. Выстрелы сверх числа юнитов противника не тратятся;
-   неизрасходованный бонус сгорает после боя.
-4. Если у защитника не осталось юнитов — узел переходит атакующему. Иначе атакующий отскакивает:
-   возвращается по тому же ребру в исходный узел (путь занимает travel_ticks); приказ и бонус сгорают.
-   Если исходный узел за это время стал чужим — прибытие туда обычное, со своим боем.
-5. Одновременное прибытие обеих сторон в нейтральный узел (нейтральных гарнизонов в MVP нет) — симметричный
-   бой без рельефа и без «защитника»; если обе стороны не уничтожены — обе отскакивают, узел остаётся нейтральным.
-6. Встреча на ребре: `progress` хранится в тысячных долях ребра; встречные группы встречаются, когда сумма
-   progress ≥ 1000. Симметричный бой без рельефа; проигравший отскакивает в свой исходный узел, выживший
-   победитель продолжает путь; при равенстве отскакивают оба. Отскок с середины ребра длится столько,
-   сколько группа уже прошла. Встречи на рёбрах разрешаются раньше прибытий в том же тике.
-7. Несколько групп одной стороны в бою суммируются, но остаются отдельными группами (бесплатного слияния нет).
-   Гибнут сначала разряженные юниты любой группы, затем юниты группы с наибольшим `units`; выстрелы тратятся
-   с группы с наибольшим `charged`; при равенстве — по id внутри игрока.
-8. Бой разрешается в тике прибытия: сначала вычисляются все движения и прибытия, затем все бои — порядок игроков не влияет на исход.
-9. Автоматического бегства нет: разряженные остаются, пока игрок не отведёт их приказом.
+### Acceptance criteria
+- [ ] The decision is recorded in mechanics.md with the status [accepted] and reflected in `rulesets/mvp-0.toml`.
 
-Разобранные примеры (лес, без приказов, если не сказано иное):
+### How to close
+A default value already exists, so the decision takes a couple of hours at most: confirm it or pick an alternative and record it in `docs/design/mechanics.md` with the status [accepted]. It blocks SIM-01 (DEC-05 blocks SRV-04, DEC-06 blocks RAT-02). After that the numbers change only through the ruleset and BAL-02.
 
-| # | Атака | Защита | Итог |
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [DEC-04] Decision: visibility rules in the MVP
+
+Labels: `area:design` `type:decision` `P0` `size:XS`
+
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** XS (≤ 2 hours) · **Track:** any
+**Depends on:** DOC-01
+
+### Context
+Refines the information ladder from mechanics.md §10 to a level sufficient for code. The difference from §10: ownership of all nodes and the VP of both sides are public, otherwise the VP scoreboard would reveal hidden information indirectly.
+
+### Default decision
+To everyone, always: geography, terrain, road widths, ownership and capacity of all nodes, the VP of both sides, the intents of scheduled orders and constructions (from where → to where, kind; without the size and without the group id). Exactly: your own nodes and the nodes where your groups stand. In the nodes adjacent to them and on adjoining edges: whether there are enemy groups and their mode, but not the number of units and charges. For an enemy group with an ordinary order the target is not shown. The rest is fog with a "last seen" memory. We do not make vision depend on group size in the MVP.
+
+### Alternatives
+- Hidden ownership of distant nodes and hidden enemy VP (closer to §10, but the scoreboard becomes useless).
+
+### Acceptance criteria
+- [ ] The decision is recorded in mechanics.md with the status [accepted]; each rule is a separate test in SIM-14.
+
+### How to close
+A default value already exists, so the decision takes a couple of hours at most: confirm it or pick an alternative and record it in `docs/design/mechanics.md` with the status [accepted]. It blocks SIM-01 (DEC-05 blocks SRV-04, DEC-06 blocks RAT-02). After that the numbers change only through the ruleset and BAL-02.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [DEC-07] Decision: combat resolution (table of worked examples)
+
+Labels: `area:design` `type:decision` `P0` `size:S`
+
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** DOC-01
+
+### Context
+The combat rules in mechanics.md §4 are not fully specified: the order of cancelling virtual charges, the fate of an extra charge, combat on an edge, simultaneous arrival, several groups, a bounce into a lost node. Without this the SIM-09 table tests would have to be invented. The table below is the default value; the SIM-09 tests are exactly this table.
+
+### Default decision
+The main rule: each charge is one "shot". It either cancels an enemy charge or kills
+one enemy unit. A discharged unit does not shoot.
+
+1. A side's pool Q = the charges of the shooting units + the bonus of a scheduled order or of "Defense" + terrain.
+   Units in the "Attack" and "Defense" modes shoot; the charges of units in "Building" are not counted.
+   The "Defense" bonus and terrain apply only to the node's defender and only if it has at least
+   one shooting charge: mountains +1, plains −1 (a single charged unit cannot shoot, but keeps its charge).
+2. Cancelling: c = min(Qa, Qd); each side spends c shots, first the virtual ones (bonus, terrain), then the real ones.
+3. The excess s = |Qa − Qd| of the stronger side kills up to s enemy units. After cancelling, all the enemy's
+   units are discharged (except the "plains" case), so the discharged ones die first. Each kill
+   spends a shot, also the virtual ones first. Shots beyond the number of enemy units are not spent;
+   the unspent bonus burns off after the fight.
+4. If the defender has no units left, the node goes to the attacker. Otherwise the attacker bounces:
+   returns along the same edge to the source node (the trip takes travel_ticks); the order and the bonus burn off.
+   If the source node became foreign in the meantime, the arrival there is ordinary, with its own fight.
+5. Simultaneous arrival of both sides at a neutral node (there are no neutral garrisons in the MVP) is a symmetric
+   fight without terrain and without a "defender"; if both sides are not destroyed, both bounce, the node stays neutral.
+6. A meeting on an edge: `progress` is stored in thousandths of the edge; opposing groups meet when the sum of
+   progress ≥ 1000. A symmetric fight without terrain; the loser bounces to its source node, a surviving
+   winner continues on its way; on a tie both bounce. A bounce from the middle of an edge lasts as long
+   as the group had already travelled. Meetings on edges are resolved before arrivals in the same tick.
+7. Several groups of one side in a fight are summed but remain separate groups (there is no free merging).
+   The discharged units of any group die first, then the units of the group with the largest `units`; shots are spent
+   from the group with the largest `charged`; on a tie, by id within the player.
+8. A fight is resolved in the tick of arrival: first all movements and arrivals are computed, then all fights; the order of players does not affect the outcome.
+9. There is no automatic flight: discharged units stay until the player withdraws them with an order.
+
+Worked examples (forest, no orders unless stated otherwise):
+
+| # | Attack | Defense | Outcome |
 |---|---|---|---|
-| 1 | 2 заряж. | 2 заряж. | обе разряжены, потерь нет, атака отскакивает |
-| 2 | 3 заряж. | 2 заряж. | убит 1 защитник; атака (3, все разряжены) отскакивает; у защиты 1 разряженный |
-| 3 | 4 заряж. | 2 заряж. | защита уничтожена, узел взят 4 разряженными |
-| 4 | 1 заряж. | 10 разряж. | убит 1; атака разряжена и отскакивает |
-| 5 | 2 заряж. | пустой вражеский узел | узел взят, заряды не тратятся |
-| 6 | 3 заряж. | 2 заряж., горы | Qd = 3: все разряжены, потерь нет, отскок |
-| 7 | 2 заряж. | 3 разряж., горы | рельеф не действует; убиты 2, отскок |
-| 8 | 2 заряж. | 2 заряж., равнина | Qd = 1: убит 1 разряженный защитник; у защиты остался 1 заряженный; отскок |
-| 9 | 2 заряж. + план (+2) | 2 заряж. | гасятся виртуальные +2; реальные 2 убивают 2; узел взят |
-| 10 | 3 заряж. | 2 заряж. + «Защита» (+2) | убит 1 атакующий; 2 разряженных отскакивают; у защиты 2 юнита, оба разряжены |
-| 11 | ребро: 2 заряж. | ребро: 2 заряж. | обе разряжены, обе отскакивают |
-| 12 | ребро: 3 заряж. | ребро: 1 заряж. | противник уничтожен; у победителя 1 заряженный, путь продолжается |
-| 13 | одновременно в нейтральный: 3 заряж. | 2 заряж. | убит 1; обе стороны отскакивают; узел нейтральный |
-| 14 | одновременно в нейтральный: 4 заряж. | 2 заряж. | вторая сторона уничтожена; узел взят |
-| 15 | 3 заряж. + план (+2) | 1 разряж. | убит 1 (потрачен виртуальный выстрел); узел взят, у атаки 3 заряженных |
-| 16 | 3 заряж. | 2 разряж. + «Защита» (+2) | бонус не действует (нет стреляющих зарядов); убиты 2; узел взят, у атаки 1 заряженный |
+| 1 | 2 charged | 2 charged | both discharged, no losses, the attack bounces |
+| 2 | 3 charged | 2 charged | 1 defender killed; the attack (3, all discharged) bounces; the defense has 1 discharged |
+| 3 | 4 charged | 2 charged | defense destroyed, node taken by 4 discharged |
+| 4 | 1 charged | 10 discharged | 1 killed; the attack is discharged and bounces |
+| 5 | 2 charged | empty enemy node | node taken, no charges spent |
+| 6 | 3 charged | 2 charged, mountains | Qd = 3: all discharged, no losses, bounce |
+| 7 | 2 charged | 3 discharged, mountains | terrain does not apply; 2 killed, bounce |
+| 8 | 2 charged | 2 charged, plains | Qd = 1: 1 discharged defender killed; the defense keeps 1 charged; bounce |
+| 9 | 2 charged + plan (+2) | 2 charged | the virtual +2 are cancelled; the real 2 kill 2; node taken |
+| 10 | 3 charged | 2 charged + "Defense" (+2) | 1 attacker killed; 2 discharged bounce; the defense has 2 units, both discharged |
+| 11 | edge: 2 charged | edge: 2 charged | both discharged, both bounce |
+| 12 | edge: 3 charged | edge: 1 charged | the opponent is destroyed; the winner has 1 charged, the journey continues |
+| 13 | simultaneously into a neutral: 3 charged | 2 charged | 1 killed; both sides bounce; the node is neutral |
+| 14 | simultaneously into a neutral: 4 charged | 2 charged | the second side is destroyed; node taken |
+| 15 | 3 charged + plan (+2) | 1 discharged | 1 killed (a virtual shot is spent); node taken, the attack has 3 charged |
+| 16 | 3 charged | 2 discharged + "Defense" (+2) | the bonus does not apply (no shooting charges); 2 killed; node taken, the attack has 1 charged |
 
-### Альтернативы
-- Лишний заряд убивает, не тратясь (волны атак сильнее, осада дешевле).
-- Рельеф действует на защитника и без зарядов (осада на истощение почти невозможна в горах).
+### Alternatives
+- An extra charge kills without being spent (attack waves are stronger, a siege is cheaper).
+- Terrain applies to the defender even without charges (a siege of attrition is almost impossible in the mountains).
 
-### Критерии приёмки
-- [ ] Таблица записана в mechanics.md §4 со статусом [принято].
-- [ ] Таблица сохранена как данные `packages/protocol/vectors/combat.json` (вход, параметры рельефа и бонусов, ожидаемый итог) — по ней тестируются и симуляция (SIM-09), и оценка боя в клиенте (CLI-08).
+### Acceptance criteria
+- [ ] The table is recorded in mechanics.md §4 with the status [accepted].
+- [ ] The table is saved as data `packages/protocol/vectors/combat.json` (input, terrain and bonus parameters, expected outcome): both the simulation (SIM-09) and the combat estimate in the client (CLI-08) are tested against it.
 
-### Как закрыть
-Значение по умолчанию уже есть, поэтому решение занимает не больше пары часов: подтвердить его или выбрать альтернативу и записать в `docs/design/mechanics.md` со статусом [принято]. Блокирует SIM-01 (DEC-05 — SRV-04, DEC-06 — RAT-02). Дальше числа меняются только через рулсет и BAL-02.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [DEC-08] Решение: режимы и запланированные приказы
-
-Метки: `area:design` `type:decision` `P0` `size:XS`
-
-**Веха:** M0 — Фундамент · **Приоритет:** P0 · **Размер:** XS (≤ 2 часа) · **Трек:** any
-**Зависит от:** DOC-01
-
-### Контекст
-Доопределяет mechanics.md §3 и §5: время подготовки, отмена, эффекты режимов.
-
-### Решение по умолчанию
-Запланированный приказ: группа стоит в исходном узле `orders.planned_delay_ticks` (30 тиков = 3 с), намерение уже видно всем; затем выступает с бонусом +2 на первый бой. Стоимость — 2 CP вместо 1. «Защита»: включение видно всем как намерение, бонус +2 активен через 30 тиков и расходуется в первом бою; повторное включение стоит снова (2 CP). «Защита» держится, пока группа стоит; приказ на движение снимает её без доплаты. «Атака» — обычное состояние без эффектов (переключение бесплатно). «Строительство» (1 CP): заряды группы в бою не считаются. Отмена запланированного приказа во время задержки стоит 1 CP. Полная таблица стоимостей — в SIM-01.
-
-### Альтернативы
-- Бонус «Защиты» действует на каждый бой, пока режим включён (сильнее оборона, слабее осада).
-- Асимметричная отмена: бесплатно вне угрозы, дорого под угрозой.
-
-### Критерии приёмки
-- [ ] Решение записано в mechanics.md со статусом [принято] и отражено в `rulesets/mvp-0.toml`.
-
-### Как закрыть
-Значение по умолчанию уже есть, поэтому решение занимает не больше пары часов: подтвердить его или выбрать альтернативу и записать в `docs/design/mechanics.md` со статусом [принято]. Блокирует SIM-01 (DEC-05 — SRV-04, DEC-06 — RAT-02). Дальше числа меняются только через рулсет и BAL-02.
+### How to close
+A default value already exists, so the decision takes a couple of hours at most: confirm it or pick an alternative and record it in `docs/design/mechanics.md` with the status [accepted]. It blocks SIM-01 (DEC-05 blocks SRV-04, DEC-06 blocks RAT-02). After that the numbers change only through the ruleset and BAL-02.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-## M1 — Ядро симуляции
+### [DEC-08] Decision: modes and scheduled orders
 
-*Все правила MVP реализованы в чистой детерминированной симуляции без графики и сети.*
+Labels: `area:design` `type:decision` `P0` `size:XS`
 
-### [MAP-01] Формат карты и загрузчик
+**Milestone:** M0: Foundation · **Priority:** P0 · **Size:** XS (≤ 2 hours) · **Track:** any
+**Depends on:** DOC-01
 
-Метки: `area:maps` `type:feature` `P0` `size:S`
+### Context
+Refines mechanics.md §3 and §5: preparation time, cancellation, the effects of modes.
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** B
-**Зависит от:** INF-02, DOC-01
+### Default decision
+A scheduled order: the group stands in the source node for `orders.planned_delay_ticks` (30 ticks = 3 s), the intent is already visible to everyone; then it sets out with a +2 bonus for the first fight. The cost is 2 CP instead of 1. "Defense": switching it on is visible to everyone as an intent, the +2 bonus becomes active after 30 ticks and is spent in the first fight; switching it on again costs again (2 CP). "Defense" holds while the group stands; a movement order removes it at no extra cost. "Attack" is the ordinary state without effects (switching is free). "Building" (1 CP): the group's charges are not counted in a fight. Cancelling a scheduled order during the delay costs 1 CP. The full cost table is in SIM-01.
 
-### Задачи
-- [ ] JSON: `nodes[{id, x, y, terrain: plains|forest|mountains, vp, base_capacity, capital_of, start_owner, start_units, start_charged, start_stock}]`, `edges[{id, a, b, base_width, max_width, travel_ticks}]`, `meta{name, version, symmetry: "rot180"}`, `mirror{nodes: {id: id}, edges: {id: id}}`. Все числа целые.
-- [ ] В MVP каждый узел — город со складом (упрощение записать в mechanics.md); нейтральные узлы без гарнизонов.
-- [ ] `node_key(player, node)` — ключ для тай-брейков по узлам: для игрока 0 — id узла, для игрока 1 — id зеркального узла. Так тай-брейки не ломают зеркальную симметрию.
-- [ ] Модель `MapDef` (frozen dataclass) и загрузчик в `gow_sim.maps` с проверкой ссылок и диапазонов.
-- [ ] Три крошечные тестовые карты в `packages/sim/tests/maps/`: линия из 3 узлов, ромб 1v1, «перевал».
-- [ ] Описание формата в `docs/design/map-format.md`.
+### Alternatives
+- The "Defense" bonus applies to every fight while the mode is on (stronger defense, weaker siege).
+- Asymmetric cancellation: free when not under threat, expensive under threat.
 
-### Критерии приёмки
-- [ ] Загрузчик принимает тестовые карты и отвергает битые ссылки и нецелые числа с понятной ошибкой.
+### Acceptance criteria
+- [ ] The decision is recorded in mechanics.md with the status [accepted] and reflected in `rulesets/mvp-0.toml`.
 
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [MAP-02] Валидатор карт
-
-Метки: `area:maps` `type:feature` `P0` `size:M`
-
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** MAP-01
-
-### Задачи
-- [ ] CLI `uv run gow-maps validate <files>`, ненулевой код выхода при ошибке.
-- [ ] Проверки: связность; планарность (рёбра не пересекаются геометрически); поворотная симметрия 180° по таблице `mirror` (совпадают атрибуты, включая стартовые поля, и координаты после поворота); степень узла ≤ 5; у нейтральных узлов нет гарнизонов.
-- [ ] От каждой столицы к каждому узлу с `vp ≥ 2` — не меньше двух рёберно-непересекающихся путей.
-- [ ] Нейтральное пространство: не меньше 20% узлов без стартового владельца с разницей расстояний до столиц ≤ 1 шага.
-- [ ] `travel_ticks` согласован с длиной ребра (допуск из конфига).
-- [ ] networkx разрешён в `tools/maps`, но не в `gow_sim`.
-
-### Критерии приёмки
-- [ ] Для каждой проверки есть «плохая» фикстура, которая падает с понятным сообщением.
-- [ ] Тестовые карты из MAP-01 проходят.
+### How to close
+A default value already exists, so the decision takes a couple of hours at most: confirm it or pick an alternative and record it in `docs/design/mechanics.md` with the status [accepted]. It blocks SIM-01 (DEC-05 blocks SRV-04, DEC-06 blocks RAT-02). After that the numbers change only through the ruleset and BAL-02.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [MAP-03] Скрипт отзеркаливания половины карты
+## M1: Simulation core
 
-Метки: `area:maps` `type:feature` `P0` `size:S`
+*All MVP rules are implemented in a pure deterministic simulation with no graphics and no network.*
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** B
-**Зависит от:** MAP-02
+### [MAP-01] Map format and loader
 
-### Задачи
-- [ ] `uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json`: половина карты рисуется вручную, скрипт поворачивает её на 180°, сшивает рёбра через центральную полосу и назначает зеркальные id.
-- [ ] Результат сразу прогоняется через валидатор.
+Labels: `area:maps` `type:feature` `P0` `size:S`
 
-### Критерии приёмки
-- [ ] Любая валидная половина даёт карту, проходящую проверку симметрии.
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** B
+**Depends on:** INF-02, DOC-01
 
-### Вне рамок
-- Процедурная генерация карт — после MVP.
+### Tasks
+- [ ] JSON: `nodes[{id, x, y, terrain: plains|forest|mountains, vp, base_capacity, capital_of, start_owner, start_units, start_charged, start_stock}]`, `edges[{id, a, b, base_width, max_width, travel_ticks}]`, `meta{name, version, symmetry: "rot180"}`, `mirror{nodes: {id: id}, edges: {id: id}}`. All numbers are integers.
+- [ ] In the MVP every node is a city with a warehouse (record the simplification in mechanics.md); neutral nodes have no garrisons.
+- [ ] `node_key(player, node)`: the key for tie-breaks between nodes: for player 0 it is the node id, for player 1 the id of the mirrored node. This way tie-breaks do not break the mirror symmetry.
+- [ ] The `MapDef` model (frozen dataclass) and the loader in `gow_sim.maps` with checks of references and ranges.
+- [ ] Three tiny test maps in `packages/sim/tests/maps/`: a line of 3 nodes, a 1v1 diamond, a "pass".
+- [ ] A description of the format in `docs/design/map-format.md`.
 
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [MAP-04] Пул карт MVP: три карты с разным характером
-
-Метки: `area:maps` `type:feature` `P0` `size:M`
-
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** MAP-02, MAP-03
-
-### Задачи
-- [ ] «Перевал»: горный хребет в центре, мало широких проходов.
-- [ ] «Паутина»: много узких путей, частые обходы.
-- [ ] «Артерия»: одна широкая центральная ось.
-- [ ] 25–40 узлов каждая, собраны из половин скриптом MAP-03; стартовая территория и гарнизоны, значимое нейтральное пространство.
-- [ ] Превью PNG (matplotlib) и описание характера каждой карты в `maps/README.md`.
-
-### Критерии приёмки
-- [ ] Все три карты проходят валидатор.
-- [ ] Превью приложены к PR.
+### Acceptance criteria
+- [ ] The loader accepts the test maps and rejects broken references and non-integer numbers with a clear error.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SIM-01] Ruleset: все числа и флаги правил как данные
+### [MAP-02] Map validator
 
-Метки: `area:sim` `type:feature` `P0` `size:S`
+Labels: `area:maps` `type:feature` `P0` `size:M`
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** A
-**Зависит от:** INF-02, DOC-01, DEC-01, DEC-02, DEC-03, DEC-04, DEC-07, DEC-08
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** MAP-01
 
-### Контекст
-Все числа и флаги дизайна лежат в одном файле, чтобы открытые вопросы и балансировка решались правкой данных, а не кода.
+### Tasks
+- [ ] CLI `uv run gow-maps validate <files>`, a non-zero exit code on error.
+- [ ] Checks: connectivity; planarity (edges do not cross geometrically); 180° rotational symmetry per the `mirror` table (attributes match, including the start fields, and the coordinates after rotation); node degree ≤ 5; neutral nodes have no garrisons.
+- [ ] From each capital to each node with `vp ≥ 2` there are at least two edge-disjoint paths.
+- [ ] Neutral space: at least 20% of nodes without a starting owner with a difference of distances to the capitals ≤ 1 step.
+- [ ] `travel_ticks` is consistent with the edge length (tolerance from the config).
+- [ ] networkx is allowed in `tools/maps`, but not in `gow_sim`.
 
-### Задачи
-- [ ] `Ruleset` — frozen dataclass (slots) с секциями: `cp`, `orders`, `combat`, `supply`, `capacity`, `terrain`, `build`, `recruit`, `victory`.
-- [ ] Загрузка из `rulesets/mvp-0.toml` (`tomllib`); неизвестные ключи и значения вне диапазона — ошибка.
-- [ ] `ruleset_hash` — blake2b канонического представления; каждый рулсет, на котором играли, сохраняется в `rulesets/archive/<hash>.toml`.
-- [ ] Стартовые значения `mvp-0` — таблица ниже (из mechanics.md §14 и DEC). Длительности — в тиках, CP — в сотых долях, всё целое.
-- [ ] `rulesets/test-short.toml` для e2e: партия 60 секунд.
-- [ ] Только флаги, у которых есть решение по умолчанию; запасные модели (вогнутая экономика, порог VP) не реализуем до провала BAL-02.
+### Acceptance criteria
+- [ ] Each check has a "bad" fixture that fails with a clear message.
+- [ ] The test maps from MAP-01 pass.
 
-### Значения и примечания
-Стартовые значения `rulesets/mvp-0.toml`:
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-| Параметр | Значение |
+### [MAP-03] Script for mirroring half a map
+
+Labels: `area:maps` `type:feature` `P0` `size:S`
+
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** B
+**Depends on:** MAP-02
+
+### Tasks
+- [ ] `uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json`: half of the map is drawn by hand, the script rotates it by 180°, stitches the edges across the central strip and assigns the mirrored ids.
+- [ ] The result is run through the validator right away.
+
+### Acceptance criteria
+- [ ] Any valid half gives a map that passes the symmetry check.
+
+### Out of scope
+- Procedural map generation: after the MVP.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [MAP-04] MVP map pool: three maps of different character
+
+Labels: `area:maps` `type:feature` `P0` `size:M`
+
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** MAP-02, MAP-03
+
+### Tasks
+- [ ] "Pass": a mountain ridge in the center, few wide passages.
+- [ ] "Web": many narrow paths, frequent detours.
+- [ ] "Artery": one wide central axis.
+- [ ] 25-40 nodes each, assembled from halves by the MAP-03 script; starting territory and garrisons, meaningful neutral space.
+- [ ] A PNG preview (matplotlib) and a description of each map's character in `maps/README.md`.
+
+### Acceptance criteria
+- [ ] All three maps pass the validator.
+- [ ] The previews are attached to the PR.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [SIM-01] Ruleset: all rule numbers and flags as data
+
+Labels: `area:sim` `type:feature` `P0` `size:S`
+
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** A
+**Depends on:** INF-02, DOC-01, DEC-01, DEC-02, DEC-03, DEC-04, DEC-07, DEC-08
+
+### Context
+All the numbers and flags of the design live in one file, so that the open questions and balancing are settled by editing data, not code.
+
+### Tasks
+- [ ] `Ruleset` is a frozen dataclass (slots) with the sections: `cp`, `orders`, `combat`, `supply`, `capacity`, `terrain`, `build`, `recruit`, `victory`.
+- [ ] Loading from `rulesets/mvp-0.toml` (`tomllib`); unknown keys and out-of-range values are an error.
+- [ ] `ruleset_hash` is the blake2b of the canonical representation; every ruleset that was played is saved to `rulesets/archive/<hash>.toml`.
+- [ ] The starting values of `mvp-0` are the table below (from mechanics.md §14 and the DECs). Durations are in ticks, CP in hundredths, everything is an integer.
+- [ ] `rulesets/test-short.toml` for e2e: a 60-second match.
+- [ ] Only the flags that have a default decision; the fallback models (concave economy, VP threshold) are not implemented until BAL-02 fails.
+
+### Values and notes
+The starting values of `rulesets/mvp-0.toml`:
+
+| Parameter | Value |
 |---|---|
-| `tick_hz`, `match_ticks` | 10; 7200 (12 минут) |
+| `tick_hz`, `match_ticks` | 10; 7200 (12 minutes) |
 | `cp.start`, `cp.cap`, `cp.per_period`, `cp.period_ticks` | 300; 500; 100 (1 CP); 50 |
-| `economy.stance_to_charges_pct` | экономия 75, баланс 50, война 25 |
+| `economy.stance_to_charges_pct` | economy 75, balance 50, war 25 |
 | `economy.charges_per_cp`, `economy.passive_period_ticks`, `economy.passive_amount` | 2; 50; 1 |
-| `orders.cost` (в сотых CP) | Move 100, план 200, Split 100, Merge 100, «Защита» 200, «Строительство»/UpgradeRoad 100, «Атака» 0, Recruit 100, отмена 100, стойка 0 |
-| `orders.planned_delay_ticks`, `orders.defense_delay_ticks`, бонусы | 30; 30; +2 |
+| `orders.cost` (in hundredths of CP) | Move 100, plan 200, Split 100, Merge 100, "Defense" 200, "Building"/UpgradeRoad 100, "Attack" 0, Recruit 100, cancel 100, stance 0 |
+| `orders.planned_delay_ticks`, `orders.defense_delay_ticks`, bonuses | 30; 30; +2 |
 | `orders.stance_cooldown_ticks` | 100 |
 | `recruit.cooldown_ticks`, `recruit.location` | 20; any_city |
-| `terrain.defense_mod` | горы +1, лес 0, равнина −1 |
-| `terrain.entry_speed_pct` | равнина 125, лес 100, горы 70 (время = travel_ticks × 100 // pct) |
-| `capacity.width_gain_centi` | ширина 1 → 100, 2 → 150, 3 → 200, 4 → 230, 5 → 260 |
+| `terrain.defense_mod` | mountains +1, forest 0, plains −1 |
+| `terrain.entry_speed_pct` | plains 125, forest 100, mountains 70 (time = travel_ticks × 100 // pct) |
+| `capacity.width_gain_centi` | width 1 → 100, 2 → 150, 3 → 200, 4 → 230, 5 → 260 |
 | `capacity.attrition_ticks`, `capacity.grace_ticks` | 30; 50 |
 | `supply.dispatch_ticks`, `supply.buffer`, `supply.recharge_per_tick` | 10; 2; 1 |
-| `supply.packet_speed_pct` | ширина 1 → 100, 2 → 125, 3 → 150, 4 → 175, 5 → 200 |
+| `supply.packet_speed_pct` | width 1 → 100, 2 → 125, 3 → 150, 4 → 175, 5 → 200 |
 | `build.ticks_per_level` | 150 |
 | `victory.vp_period_ticks`, `victory.capital_multiplier` | 50; 3 |
 
-Ёмкость — одно число, которое отдельно ограничивает число стоящих юнитов и отдельно запас склада.
+Capacity is a single number that separately limits the number of standing units and separately the warehouse stock.
 
-### Критерии приёмки
-- [ ] `rulesets/mvp-0.toml` содержит все значения из таблицы.
-- [ ] Опечатка в ключе даёт ошибку с именем ключа.
-- [ ] Хэш одинаков в разных процессах и меняется при изменении любого значения.
-- [ ] Все параметры правил в системах читаются из `Ruleset` (проверяется на ревью).
+### Acceptance criteria
+- [ ] `rulesets/mvp-0.toml` contains all the values from the table.
+- [ ] A typo in a key gives an error with the key's name.
+- [ ] The hash is the same in different processes and changes when any value changes.
+- [ ] All rule parameters in the systems are read from `Ruleset` (checked in review).
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SIM-02] Модель состояния и каноническая сериализация
+### [SIM-02] State model and canonical serialization
 
-Метки: `area:sim` `type:feature` `P0` `size:M`
+Labels: `area:sim` `type:feature` `P0` `size:M`
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** A
-**Зависит от:** SIM-01, MAP-01
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** A
+**Depends on:** SIM-01, MAP-01
 
-### Задачи
+### Tasks
 - [ ] Dataclasses (slots): `GameState(tick, players, nodes, edges, groups, packets, intents, vision_memory, next_id, events)`.
-- [ ] Группа — счётчики, а не список юнитов: `units: int`, `charged: int` (≤ units), `mode`, `location: AtNode(node) | OnEdge(edge, from_node, progress)`.
-- [ ] Хранение в `dict[int, T]`; любой обход — `sorted()` по id; никаких `set` в логике.
-- [ ] `to_canonical()` / `from_canonical()`; `state_hash()` = blake2b канонического JSON с сортировкой ключей.
-- [ ] `initial_state(map, ruleset)`: стартовая территория, гарнизоны и склады из карты, CP из рулсета.
+- [ ] A group is counters, not a list of units: `units: int`, `charged: int` (≤ units), `mode`, `location: AtNode(node) | OnEdge(edge, from_node, progress)`.
+- [ ] Storage in `dict[int, T]`; any iteration is `sorted()` by id; no `set` in the logic.
+- [ ] `to_canonical()` / `from_canonical()`; `state_hash()` = blake2b of the canonical JSON with sorted keys.
+- [ ] `initial_state(map, ruleset)`: the starting territory, garrisons and warehouses from the map, CP from the ruleset.
 
-### Критерии приёмки
+### Acceptance criteria
 - [ ] Roundtrip `from_canonical(to_canonical(s)) == s`.
-- [ ] `state_hash()` совпадает в двух процессах с разными `PYTHONHASHSEED` (тест через subprocess).
-- [ ] Тест: в каноническом представлении нет значений типа `float`.
+- [ ] `state_hash()` matches in two processes with different `PYTHONHASHSEED` (a test via subprocess).
+- [ ] A test: the canonical representation has no values of type `float`.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SIM-03] Видимость: какие узлы и рёбра видит игрок
+### [SIM-03] Visibility: which nodes and edges a player sees
 
-Метки: `area:sim` `type:feature` `P0` `size:S`
+Labels: `area:sim` `type:feature` `P0` `size:S`
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** A
-**Зависит от:** SIM-02
-**Связано:** DEC-04
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** A
+**Depends on:** SIM-02
+**Related:** DEC-04
 
-### Задачи
-- [ ] `visible_nodes`, `visible_edges`, `detail_level(state, player, node) -> EXACT | PRESENCE | FOG` по DEC-04.
-- [ ] `is_visible(state, player, entity)` — единая точка, которой пользуются валидация команд (SIM-04) и проекция (SIM-14).
-- [ ] Обновление `vision_memory` в `GameState` (отдельная система в конце тика).
+### Tasks
+- [ ] `visible_nodes`, `visible_edges`, `detail_level(state, player, node) -> EXACT | PRESENCE | FOG` per DEC-04.
+- [ ] `is_visible(state, player, entity)` is the single point used by command validation (SIM-04) and projection (SIM-14).
+- [ ] Updating `vision_memory` in `GameState` (a separate system at the end of the tick).
 
-### Критерии приёмки
-- [ ] Юнит-тесты видимости на тестовых картах для каждого уровня детализации, включая группы на рёбрах.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [SIM-04] Команды: типы, валидация и применение на границе тика
-
-Метки: `area:sim` `type:feature` `P0` `size:M`
-
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** A
-**Зависит от:** SIM-02, SIM-03
-
-### Задачи
-- [ ] Команды — frozen dataclasses: `Move(group, dest, planned)`, `Split(group, n)`, `Merge(groups)`, `SetMode(group, mode)`, `SetStance(stance)`, `UpgradeRoad(group, edge)`, `Recruit(node)`, `CancelOrder(group)`, `Forfeit()`.
-- [ ] `validate(state, player, cmd) -> Ok | Reject(code)`; один код `NOT_FOUND_OR_HIDDEN` для «не существует» и «не видно».
-- [ ] Списание CP по рулсету (в сотых долях); при нехватке — `Reject(NOT_ENOUGH_CP)`.
-- [ ] Команды применяются в начале тика в порядке `(player_id, seq)`; команды одного игрока не влияют на валидность команд другого в том же тике.
-- [ ] Валидация `Move` использует поиск пути из SIM-05 (заглушка до его готовности); путь возвращается в результате применения для `ack`.
-
-### Критерии приёмки
-- [ ] Табличные тесты: каждая команда × (валидна, нет CP, чужая группа, невидимая цель, группа на ребре).
-- [ ] Отклонённая команда не меняет состояние (сравнение хэшей).
-- [ ] Порядок поступления команд внутри тика не влияет на итоговое состояние.
+### Acceptance criteria
+- [ ] Unit tests of visibility on the test maps for each detail level, including groups on edges.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SIM-05] Движение по графу
+### [SIM-04] Commands: types, validation and application at the tick boundary
 
-Метки: `area:sim` `type:feature` `P0` `size:M`
+Labels: `area:sim` `type:feature` `P0` `size:M`
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** A
-**Зависит от:** SIM-04
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** A
+**Depends on:** SIM-02, SIM-03
 
-### Задачи
-- [ ] Детерминированный Дейкстра по `travel_ticks` с модификатором рельефа узла входа; тай-брейк по `node_key(player, node)`.
-- [ ] Двухфазное движение: сначала все группы продвигаются и фиксируются все прибытия, затем бой (SIM-09) — никакой зависимости от порядка игроков.
-- [ ] Движение по ребру: `progress` в тысячных долях ребра, приращение за тик зависит от рельефа узла входа; стоять группы могут только в узлах.
-- [ ] Путь проходит только через свои узлы; первый чужой или нейтральный узел на пути — цель атаки или захвата.
-- [ ] Пустой нейтральный узел захватывается при прибытии.
+### Tasks
+- [ ] Commands are frozen dataclasses: `Move(group, dest, planned)`, `Split(group, n)`, `Merge(groups)`, `SetMode(group, mode)`, `SetStance(stance)`, `UpgradeRoad(group, edge)`, `Recruit(node)`, `CancelOrder(group)`, `Forfeit()`.
+- [ ] `validate(state, player, cmd) -> Ok | Reject(code)`; one code `NOT_FOUND_OR_HIDDEN` for "does not exist" and "not visible".
+- [ ] CP is deducted per the ruleset (in hundredths); when short, `Reject(NOT_ENOUGH_CP)`.
+- [ ] Commands are applied at the start of the tick in the order `(player_id, seq)`; one player's commands do not affect the validity of another player's commands in the same tick.
+- [ ] `Move` validation uses the pathfinding from SIM-05 (a stub until it is ready); the path is returned in the result of application for the `ack`.
 
-### Критерии приёмки
-- [ ] Время прохода ребра равно `travel_ticks` с модификатором рельефа.
-- [ ] При равных по длине путях выбирается один и тот же.
-- [ ] Тест зеркальности: зеркальный старт и зеркальные команды на карте rot180 дают зеркальное состояние через 600 тиков.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [SIM-06] Экономика: CP, стойка и производство в столице
-
-Метки: `area:sim` `type:feature` `P0` `size:S`
-
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** A
-**Зависит от:** SIM-02
-**Связано:** DEC-02
-
-### Задачи
-- [ ] Реген CP по рулсету и потолок; хранение в сотых долях.
-- [ ] Стойка делит реген между CP и зарядами по курсу из рулсета.
-- [ ] Пассивное производство столицы; заряды зачисляются на склад столицы в пределах ёмкости, излишек теряется (с событием).
-
-### Критерии приёмки
-- [ ] Тесты на реген, потолок и каждое положение стойки.
-- [ ] За 600 тиков сумма CP и зарядов совпадает с рассчитанной вручную для каждой стойки.
+### Acceptance criteria
+- [ ] Table tests: each command × (valid, no CP, someone else's group, an invisible target, a group on an edge).
+- [ ] A rejected command does not change the state (hash comparison).
+- [ ] The order in which commands arrive within a tick does not affect the resulting state.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SIM-07] Склады, ёмкость городов и истощение
+### [SIM-05] Movement across the graph
 
-Метки: `area:sim` `type:feature` `P0` `size:M`
+Labels: `area:sim` `type:feature` `P0` `size:M`
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** A
-**Зависит от:** SIM-02
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** A
+**Depends on:** SIM-04
 
-### Задачи
-- [ ] Связная снабжаемая территория — BFS от столицы по своим узлам и внутренним рёбрам.
-- [ ] Ёмкость = `base_capacity` + Σ вкладов ширин внутренних рёбер в связную территорию (таблица из рулсета в сотых долях, округление вниз).
-- [ ] Ёмкость едина для юнитов и склада (или раздельна — по рулсету).
-- [ ] Истощение: если стоящих в узле юнитов больше ёмкости дольше `capacity.attrition_ticks` подряд, гибнет один юнит (сначала разряженный); транзит и отсрочка `capacity.grace_ticks` после захвата не считаются.
-- [ ] При смене владельца склад обнуляется, ширины рёбер сохраняются.
-- [ ] Пересчёт ёмкости только при изменении топологии или владения.
+### Tasks
+- [ ] A deterministic Dijkstra over `travel_ticks` with the terrain modifier of the entry node; a tie-break by `node_key(player, node)`.
+- [ ] Two-phase movement: first all groups advance and all arrivals are recorded, then combat (SIM-09), with no dependence on player order.
+- [ ] Movement along an edge: `progress` in thousandths of the edge, the per-tick increment depends on the terrain of the entry node; groups can stand only in nodes.
+- [ ] A path goes only through your own nodes; the first foreign or neutral node on the path is the target of an attack or capture.
+- [ ] An empty neutral node is captured on arrival.
 
-### Критерии приёмки
-- [ ] Сценарий: перерезанный подход уменьшает ёмкость города точно по таблице.
-- [ ] Сценарий: гарнизон сверх ёмкости теряет юнитов с заданным темпом, начиная с разряженных; группа, проходящая транзитом, не теряет.
-- [ ] Сценарий: склад захваченного города обнуляется.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [SIM-08] Снабжение: пакеты, пропускная способность, перезарядка
-
-Метки: `area:sim` `type:feature` `P0` `size:L`
-
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** L (4–5 дней) · **Трек:** A
-**Зависит от:** SIM-05, SIM-06, SIM-07
-
-### Задачи
-- [ ] Поток идёт только наружу по дереву кратчайших путей от столицы (у каждого узла — родитель в сторону столицы). Циклов и «пинг-понга» нет по построению.
-- [ ] Целевой запас узла = число разряженных стоящих юнитов + `supply.buffer`; дефицит поддерева = собственный дефицит + дефициты поддеревьев детей (считается снизу вверх раз в `supply.dispatch_ticks`).
-- [ ] Узел отправляет детям всё сверх своего целевого запаса — в порядке убывания дефицита поддерева (тай-брейк по `node_key`), так заряды проходят транзитом глубже.
-- [ ] Пакеты идут только по внутренним рёбрам, не больше `width` зарядов на ребро за период; время в пути = `travel_ticks × 100 // packet_speed_pct[width]` (mechanics.md §8: ширина влияет на скорость и объём).
-- [ ] Пакет на ребре, которое перестало быть внутренним, теряется (событие).
-- [ ] Перезарядка: юниты, стоящие в узле, заряжаются со склада не быстрее `supply.recharge_per_tick`; на рёбрах не заряжаются.
-- [ ] Бюджет: шаг снабжения O(V + E) на тик.
-
-### Критерии приёмки
-- [ ] Сценарий: перерезанная дорога → склад за ней перестаёт пополняться, юниты там перестают перезаряжаться.
-- [ ] Сценарий: дорога шириной 3 доставляет втрое больше, чем шириной 1, за одинаковое время.
-- [ ] Тест: 1000 тиков без боёв — ни один пакет не движется к столице.
-- [ ] Сценарий: цепочка столица → A → B, дефицит только в B — заряды доходят до B через A.
-- [ ] Бенчмарк: шаг снабжения на карте из 40 узлов ≤ 0,1 мс на эталонной машине.
+### Acceptance criteria
+- [ ] The time to traverse an edge equals `travel_ticks` with the terrain modifier.
+- [ ] With paths of equal length the same one is always chosen.
+- [ ] A mirror test: a mirrored start and mirrored commands on a rot180 map give a mirrored state after 600 ticks.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SIM-09] Бой по таблице DEC-07
+### [SIM-06] Economy: CP, stance and production in the capital
 
-Метки: `area:sim` `type:feature` `P0` `size:L`
+Labels: `area:sim` `type:feature` `P0` `size:S`
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** L (4–5 дней) · **Трек:** A
-**Зависит от:** SIM-05, SIM-07
-**Связано:** DEC-07
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** A
+**Depends on:** SIM-02
+**Related:** DEC-02
 
-### Задачи
-- [ ] Реализовать правила 1–9 из DEC-07: пул с виртуальными зарядами, гашение, перевес, отскок, симметричные бои, бой на ребре, несколько групп.
-- [ ] Функция боя получает бонусы сторон входным параметром (их источник — SIM-10), поэтому строки 9, 10, 15, 16 тестируются до SIM-10.
-- [ ] Параметры рельефа и бонусов — из рулсета; тесты таблицы идут на закреплённом `tests/rulesets/dec07.toml`, чтобы итерации баланса не ломали тесты правил.
-- [ ] События боя: участники, пул до и после, потери, отскок.
+### Tasks
+- [ ] CP regeneration per the ruleset and the cap; stored in hundredths.
+- [ ] The stance splits the regeneration between CP and charges at the rate from the ruleset.
+- [ ] Passive production of the capital; charges are credited to the capital's warehouse within capacity, the excess is lost (with an event).
 
-### Критерии приёмки
-- [ ] Каждая строка `packages/protocol/vectors/combat.json` (таблица DEC-07) — отдельный параметризованный тест; ожидаемые значения взяты из таблицы, а не из вывода кода.
-- [ ] Сценарий «осада на истощение» на `tests/maps/siege.json` с `tests/rulesets/siege.toml`: при перерезанных дорогах город падает ровно на волне N, при открытых — не падает за 10 волн; N вычислено вручную в описании теста.
-- [ ] Тест зеркальности (SIM-05) проходит с боями в центральном узле.
+### Acceptance criteria
+- [ ] Tests of regeneration, the cap and each stance position.
+- [ ] Over 600 ticks the sum of CP and charges matches the hand-computed one for each stance.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SIM-10] Приказы: запланированные, режим «Защита», отмена
+### [SIM-07] Warehouses, city capacity and attrition
 
-Метки: `area:sim` `type:feature` `P0` `size:M`
+Labels: `area:sim` `type:feature` `P0` `size:M`
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** A
-**Зависит от:** SIM-04, SIM-09
-**Связано:** DEC-08
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** A
+**Depends on:** SIM-02
 
-### Задачи
-- [ ] Запланированный `Move` по DEC-08: задержка `orders.planned_delay_ticks`, стоимость, одноразовый бонус.
-- [ ] Реестр намерений `intents`: владелец, откуда, куда, тип — без размера и без id группы.
-- [ ] «Защита» по DEC-08; «Строительство» — заряды не участвуют в бою.
-- [ ] Отмена запланированного приказа и «Защиты» стоит `orders.cancel_cp`.
+### Tasks
+- [ ] The connected supplied territory is a BFS from the capital over your own nodes and internal edges.
+- [ ] Capacity = `base_capacity` + Σ of the contributions of the widths of internal edges into the connected territory (a table from the ruleset in hundredths, rounded down).
+- [ ] Capacity is shared by units and the warehouse (or separate, per the ruleset).
+- [ ] Attrition: if the units standing in a node exceed the capacity for longer than `capacity.attrition_ticks` in a row, one unit dies (a discharged one first); transit and the `capacity.grace_ticks` grace after a capture are not counted.
+- [ ] When the owner changes, the warehouse is zeroed, the edge widths are kept.
+- [ ] Capacity is recomputed only when the topology or ownership changes.
 
-### Критерии приёмки
-- [ ] Тесты на задержку, стоимость, расход бонуса, отмену.
-- [ ] Реестр намерений не содержит размера и id групп (тест).
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [SIM-11] Режим «Строительство»: улучшение дорог
-
-Метки: `area:sim` `type:feature` `P0` `size:S`
-
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** SIM-04, SIM-07
-
-### Задачи
-- [ ] Группа в режиме «Строительство» в конце внутреннего ребра повышает ширину на 1 каждые `build.ticks_per_level`, до `max_width`.
-- [ ] Буферные рёбра улучшать нельзя.
-- [ ] Стройка прерывается боем или уходом группы; прогресс уровня теряется.
-- [ ] Пересчёт ёмкости и пропускной способности после повышения.
-- [ ] `upgrade_gain(edge)` — сколько ёмкости и пропускной способности даст следующий уровень (для подсказки в клиенте, mechanics.md §18).
-
-### Критерии приёмки
-- [ ] Сценарий: ширина растёт в точности по рулсету и останавливается на `max_width`.
-- [ ] `UpgradeRoad` на буферном ребре отклоняется.
-- [ ] `upgrade_gain` совпадает с разницей ёмкостей до и после улучшения.
+### Acceptance criteria
+- [ ] Scenario: a cut-off approach reduces a city's capacity exactly per the table.
+- [ ] Scenario: a garrison above capacity loses units at the set pace, starting with the discharged ones; a group passing in transit loses none.
+- [ ] Scenario: the warehouse of a captured city is zeroed.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SIM-12] Рекрутинг юнитов
+### [SIM-08] Supply: packets, throughput, recharging
 
-Метки: `area:sim` `type:feature` `P0` `size:S`
+Labels: `area:sim` `type:feature` `P0` `size:L`
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** SIM-04, SIM-07
-**Связано:** DEC-01
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** L (4-5 days) · **Track:** A
+**Depends on:** SIM-05, SIM-06, SIM-07
 
-### Задачи
-- [ ] Правило DEC-01 с флагом `recruit.location`.
-- [ ] Проверка свободной ёмкости и кулдауна на город.
+### Tasks
+- [ ] The flow goes only outward along the tree of shortest paths from the capital (each node has a parent in the direction of the capital). By construction there are no cycles and no "ping-pong".
+- [ ] A node's target stock = the number of discharged standing units + `supply.buffer`; the subtree deficit = its own deficit + the deficits of the children's subtrees (computed bottom-up once per `supply.dispatch_ticks`).
+- [ ] A node sends to its children everything above its target stock, in descending order of subtree deficit (a tie-break by `node_key`), so charges go deeper in transit.
+- [ ] Packets travel only along internal edges, no more than `width` charges per edge per period; travel time = `travel_ticks × 100 // packet_speed_pct[width]` (mechanics.md §8: width affects speed and volume).
+- [ ] A packet on an edge that stopped being internal is lost (an event).
+- [ ] Recharging: units standing in a node are charged from the warehouse no faster than `supply.recharge_per_tick`; they are not charged on edges.
+- [ ] Budget: the supply step is O(V + E) per tick.
 
-### Критерии приёмки
-- [ ] Тесты: рекрут в полном городе отклоняется; кулдаун соблюдается; юнит появляется разряженным.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [SIM-13] Победа: VP, захват столицы, таймер, тай-брейк
-
-Метки: `area:sim` `type:feature` `P0` `size:S`
-
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** SIM-09
-**Связано:** DEC-03
-
-### Задачи
-- [ ] Начисление VP по DEC-03; мгновенная победа за захват столицы.
-- [ ] Окончание по таймеру, тай-брейк, ничья.
-- [ ] `Forfeit` — поражение сдавшегося; сервер использует ту же команду для технического поражения.
-
-### Критерии приёмки
-- [ ] Сценарные тесты на каждый путь окончания, включая ничью и сдачу.
+### Acceptance criteria
+- [ ] Scenario: a cut road → the warehouse behind it stops being replenished, the units there stop recharging.
+- [ ] Scenario: a road of width 3 delivers three times as much as width 1 in the same time.
+- [ ] A test: 1000 ticks without fights, no packet moves toward the capital.
+- [ ] Scenario: a chain capital → A → B, a deficit only in B: charges reach B through A.
+- [ ] Benchmark: the supply step on a 40-node map ≤ 0.1 ms on the reference machine.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SIM-14] Проекция: PlayerView
+### [SIM-09] Combat per the DEC-07 table
 
-Метки: `area:sim` `type:feature` `P0` `size:M`
+Labels: `area:sim` `type:feature` `P0` `size:L`
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** A
-**Зависит от:** SIM-03, SIM-05, SIM-10, SIM-11
-**Связано:** DEC-04
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** L (4-5 days) · **Track:** A
+**Depends on:** SIM-05, SIM-07
+**Related:** DEC-07
 
-### Задачи
-- [ ] `project(state, player) -> PlayerView` — чистая функция, читает `vision_memory` из состояния; это единственное, что видит игрок или бот.
-- [ ] Непрозрачные id для каждого игрока: keyed blake2b от `(match_key, player, internal_id)`, где `match_key` — секрет матча, который сервер генерирует и передаёт в `Match` (и пишет в реплей); не последовательны и не восстанавливаются перебором.
-- [ ] `resolve(state, player, cmd)` переводит непрозрачные id команды во внутренние — общая функция для сервера и `run_headless`.
-- [ ] Ёмкость всех узлов в виде (DEC-04).
-- [ ] Уровни детализации DEC-04: точные числа, «есть вражеские группы» без чисел, туман с памятью.
-- [ ] Глобальные намерения — без размера и id групп; цель обычного приказа противника не показывается.
-- [ ] Свои рёбра — с `upgrade_gain`.
-- [ ] Нет в виде: CP, стойки и производства противника, событий в тумане, общих счётчиков противника.
+### Tasks
+- [ ] Implement rules 1-9 from DEC-07: a pool with virtual charges, cancelling, excess, bounce, symmetric fights, a fight on an edge, several groups.
+- [ ] The combat function receives the sides' bonuses as an input parameter (their source is SIM-10), so rows 9, 10, 15, 16 are tested before SIM-10.
+- [ ] Terrain and bonus parameters come from the ruleset; the table tests run on the pinned `tests/rulesets/dec07.toml`, so that balance iterations do not break the rule tests.
+- [ ] Combat events: participants, the pool before and after, losses, bounce.
 
-### Критерии приёмки
-- [ ] Проекция детерминирована (одинаковый хэш вида в двух процессах).
-- [ ] Каждое правило DEC-04 — отдельный тест.
-- [ ] Property-тест (Hypothesis на случайных состояниях сценарных карт): в виде нет сущностей из невидимых узлов и рёбер.
+### Acceptance criteria
+- [ ] Each row of `packages/protocol/vectors/combat.json` (the DEC-07 table) is a separate parameterized test; the expected values are taken from the table, not from the code's output.
+- [ ] A "siege of attrition" scenario on `tests/maps/siege.json` with `tests/rulesets/siege.toml`: with cut roads the city falls exactly on wave N, with open ones it does not fall in 10 waves; N is computed by hand in the test description.
+- [ ] The mirror test (SIM-05) passes with fights in the central node.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SIM-15] Движок матча и headless-прогон
+### [SIM-10] Orders: scheduled, the "Defense" mode, cancellation
 
-Метки: `area:sim` `type:feature` `P0` `size:M`
+Labels: `area:sim` `type:feature` `P0` `size:M`
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** A
-**Зависит от:** SIM-08, SIM-10, SIM-11, SIM-12, SIM-13, SIM-14
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** A
+**Depends on:** SIM-04, SIM-09
+**Related:** DEC-08
 
-### Задачи
-- [ ] `Match(map, ruleset, match_key)` с методом `step(commands) -> list[Event]`.
-- [ ] Фиксированный порядок систем: `apply_commands → economy → movement → combat → capacity → supply → recruit → build → victory → vision` (последняя система обновляет память тумана).
-- [ ] `run_headless(map, ruleset, controllers, max_ticks, decide_every=5) -> MatchResult`; контроллеры вызываются раз в `decide_every` тиков.
-- [ ] Эталонная машина для бюджетов описана в `docs/perf.md`.
+### Tasks
+- [ ] A scheduled `Move` per DEC-08: the delay `orders.planned_delay_ticks`, the cost, a one-off bonus.
+- [ ] The intent registry `intents`: owner, from where, to where, kind, without the size and without the group id.
+- [ ] "Defense" per DEC-08; "Building": the charges do not take part in a fight.
+- [ ] Cancelling a scheduled order and "Defense" costs `orders.cancel_cp`.
 
-### Критерии приёмки
-- [ ] Шаг симуляции без проекций на карте 40 узлов с 40 группами: в среднем ≤ 0,3 мс, p99 ≤ 1 мс; одна проекция ≤ 0,3 мс.
-- [ ] Полная партия двух простых ботов прогоняется за ≤ 8 секунд.
-- [ ] `pytest-benchmark` падает при регрессии больше 50%.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [SIM-16] Детерминизм и реплеи
-
-Метки: `area:sim` `type:test` `P0` `size:M`
-
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** A
-**Зависит от:** SIM-15
-
-### Задачи
-- [ ] Формат реплея `.jsonl.gz` (gzip из стандартной библиотеки): заголовок `{sim_version, ruleset_hash, python_version, map_id, map_hash, match_key}`, затем `(tick, player, seq, cmd)` и контрольные хэши каждые 50 тиков.
-- [ ] `replay_run(file)` и CLI `python -m gow_sim.replay check <files>` проверяют хэши и при расхождении сохраняют дамп обоих состояний.
-- [ ] Тест детерминизма: один матч в трёх свежих процессах с разными `PYTHONHASHSEED` даёт одинаковые хэши.
-- [ ] Золотые реплеи в `packages/sim/tests/golden/v{SIM_VERSION}/`; скрипт перегенерации создаёт каталог новой версии.
-
-### Критерии приёмки
-- [ ] CI прогоняет тест детерминизма и золотые реплеи текущей версии.
-- [ ] Правка правила без повышения `SIM_VERSION` ломает CI (хэши текущих эталонов расходятся); CI также проверяет, что каталоги прежних версий не изменялись.
+### Acceptance criteria
+- [ ] Tests of the delay, the cost, the bonus expenditure, cancellation.
+- [ ] The intent registry contains no size and no group ids (a test).
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SIM-17] Property-based тесты инвариантов (Hypothesis)
+### [SIM-11] The "Building" mode: road upgrades
 
-Метки: `area:sim` `type:test` `P0` `size:M`
+Labels: `area:sim` `type:feature` `P0` `size:S`
 
-**Веха:** M1 — Ядро симуляции · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** any
-**Зависит от:** SIM-15
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** SIM-04, SIM-07
 
-### Задачи
-- [ ] `RuleBasedStateMachine`: правила генерируют случайные валидные команды и шаги тиков.
-- [ ] Инварианты: сохранение зарядов (произведено = склады + в пути + в юнитах + потрачено + потеряно); нет отрицательных счётчиков; `charged ≤ units`; каждая группа в существующем узле или на ребре; без новых прибытий гарнизон сверх ёмкости не растёт.
-- [ ] Инвариант тумана на полном матче: в `project(state, p)` нет сущностей из невидимых для `p` узлов и рёбер.
+### Tasks
+- [ ] A group in the "Building" mode at the end of an internal edge raises the width by 1 every `build.ticks_per_level`, up to `max_width`.
+- [ ] Buffer edges cannot be upgraded.
+- [ ] Construction is interrupted by a fight or the group leaving; the level's progress is lost.
+- [ ] Recompute capacity and throughput after an increase.
+- [ ] `upgrade_gain(edge)`: how much capacity and throughput the next level gives (for a hint in the client, mechanics.md §18).
 
-### Критерии приёмки
-- [ ] Тесты проходят в профиле `ci` за ≤ 60 секунд.
-- [ ] Найденные Hypothesis контрпримеры сохраняются как регрессионные тесты.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-## M2 — Боты и баланс-гейт
-
-*Турнир ботов показывает, что механика не схлопывается в одну стратегию.*
-
-### [BOT-01] Интерфейс контроллера, базовые боты и вариативность от seed
-
-Метки: `area:bots` `type:feature` `P0` `size:S`
-
-**Веха:** M2 — Боты и баланс-гейт · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** A
-**Зависит от:** SIM-15, MAP-04
-
-### Задачи
-- [ ] `Controller.decide(view: PlayerView, tick) -> list[Command]`; боты видят только `PlayerView`.
-- [ ] `IdleBot` и `RandomLegalBot`.
-- [ ] Каждый бот получает параметры (агрессия, радиус экспансии, порог атаки и т.п.) из диапазонов, выбранных детерминированно по seed матча — иначе детерминированные матчи повторяются.
-- [ ] Общая функция полезности «обычный или запланированный приказ», считающая выгоду из цен рулсета: доля планов определяется ценой, а не кодом бота.
-
-### Критерии приёмки
-- [ ] Матч `RandomLegal` против `RandomLegal` завершается без исключений на всех картах MVP.
-- [ ] 100 seed одной пары ботов дают не меньше 30 различающихся итоговых хэшей.
+### Acceptance criteria
+- [ ] Scenario: the width grows exactly per the ruleset and stops at `max_width`.
+- [ ] `UpgradeRoad` on a buffer edge is rejected.
+- [ ] `upgrade_gain` matches the difference of capacities before and after the upgrade.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [BOT-02] Боты-стратегии: Expander и Turtle
+### [SIM-12] Unit recruiting
 
-Метки: `area:bots` `type:feature` `P0` `size:M`
+Labels: `area:sim` `type:feature` `P0` `size:S`
 
-**Веха:** M2 — Боты и баланс-гейт · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** any
-**Зависит от:** BOT-01
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** SIM-04, SIM-07
+**Related:** DEC-01
 
-### Задачи
-- [ ] `ExpanderBot`: захват нейтральных узлов, строительство дорог в тылу.
-- [ ] `TurtleBot`: бункер — держит маленький регион, копит заряды, держит «Защиту» (проверка Topic 2).
+### Tasks
+- [ ] The DEC-01 rule with the flag `recruit.location`.
+- [ ] A check of free capacity and of the per-city cooldown.
 
-### Критерии приёмки
-- [ ] Каждый выигрывает у `RandomLegal` ≥ 90% на всех картах MVP.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [BOT-03] Боты-стратегии: Rusher, Strangler и Reactive
-
-Метки: `area:bots` `type:feature` `P0` `size:L`
-
-**Веха:** M2 — Боты и баланс-гейт · **Приоритет:** P0 · **Размер:** L (4–5 дней) · **Трек:** any
-**Зависит от:** BOT-01
-
-### Задачи
-- [ ] `RusherBot`: раннее давление, запланированные удары по слабым городам.
-- [ ] `StranglerBot`: перерезание дорог и осада на истощение.
-- [ ] `ReactiveBot`: реагирует на видимые намерения противника — усиливает цель, включает «Защиту» или бьёт в оголённое место.
-
-### Критерии приёмки
-- [ ] Каждый выигрывает у `RandomLegal` ≥ 90% на всех картах MVP.
-- [ ] Сценарные тесты поведения: `StranglerBot` перерезает дорогу на карте `siege.json`; `ReactiveBot` отвечает на видимое намерение в течение 10 тиков.
+### Acceptance criteria
+- [ ] Tests: a recruit in a full city is rejected; the cooldown is respected; the unit appears discharged.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [BOT-04] Турнирный харнесс и анализатор матчей
+### [SIM-13] Victory: VP, capital capture, timer, tie-break
 
-Метки: `area:bots` `type:feature` `P0` `size:M`
+Labels: `area:sim` `type:feature` `P0` `size:S`
 
-**Веха:** M2 — Боты и баланс-гейт · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** A
-**Зависит от:** BOT-01, SIM-16
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** SIM-09
+**Related:** DEC-03
 
-### Задачи
-- [ ] CLI `uv run gow-bots tournament --maps ... --bots ... --seeds 100 --jobs N --ruleset ...`; `ProcessPoolExecutor`, один матч на процесс, обе стороны для каждой пары.
-- [ ] `gow_sim.analysis`: метрики из журнала событий матча — победитель, сторона, длительность, доля запланированных атак, попытки и успехи осад, захваты по минутам, итоговые VP, причина окончания. Тот же анализатор применяется к реальным матчам (PT-01, REL-01).
-- [ ] Результаты в JSONL; опционально сохранение реплеев.
+### Tasks
+- [ ] VP accrual per DEC-03; instant victory for capturing the capital.
+- [ ] Ending on the timer, tie-break, draw.
+- [ ] `Forfeit` is the defeat of the one who surrenders; the server uses the same command for a technical defeat.
 
-### Критерии приёмки
-- [ ] 1000 матчей за ≤ 20 минут на 8 ядрах эталонной машины.
-- [ ] Повторный запуск с теми же параметрами даёт идентичный JSONL.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [BOT-05] Баланс-отчёт
-
-Метки: `area:bots` `type:feature` `P0` `size:S`
-
-**Веха:** M2 — Боты и баланс-гейт · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** BOT-02, BOT-03, BOT-04
-
-### Задачи
-- [ ] `uv run gow-bots report <file.jsonl>`: markdown + графики matplotlib в `docs/balance/`.
-- [ ] Разделы: матрица побед пар стратегических ботов с 95% доверительными интервалами (Уилсон); преимущество стороны; доля запланированных атак; успех осад; win-rate `TurtleBot`; захваты в последние 3 минуты; число уникальных исходов; разбивка по картам.
-
-### Критерии приёмки
-- [ ] Отчёт генерируется одной командой.
-- [ ] Проверки компетентности ботов в отчёте: `StranglerBot` берёт хотя бы один город осадой в ≥ 50% матчей против `ExpanderBot`; `ReactiveBot` выигрывает у `RusherBot` чаще, чем `ExpanderBot` у `RusherBot`.
+### Acceptance criteria
+- [ ] Scenario tests for every way to end, including a draw and a surrender.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [BAL-01] Баланс: первый прогон и вердикт
+### [SIM-14] Projection: PlayerView
 
-Метки: `area:design` `type:decision` `P0` `size:S`
+Labels: `area:sim` `type:feature` `P0` `size:M`
 
-**Веха:** M2 — Боты и баланс-гейт · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** A
-**Зависит от:** BOT-05, DEC-01, DEC-02, DEC-03, DEC-04, DEC-07, DEC-08
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** A
+**Depends on:** SIM-03, SIM-05, SIM-10, SIM-11
+**Related:** DEC-04
 
-### Задачи
-- [ ] Турнир на всех картах MVP с `mvp-0`, отчёт в `docs/balance/`.
-- [ ] Сравнить с критериями гейта (BAL-02) и записать гипотезы для итераций в `docs/balance/log.md`.
+### Tasks
+- [ ] `project(state, player) -> PlayerView` is a pure function, reads `vision_memory` from the state; this is the only thing a player or a bot sees.
+- [ ] Opaque ids for each player: a keyed blake2b of `(match_key, player, internal_id)`, where `match_key` is the match secret that the server generates and passes into `Match` (and writes into the replay); they are not sequential and cannot be recovered by brute force.
+- [ ] `resolve(state, player, cmd)` turns the opaque ids of a command into internal ones: a common function for the server and `run_headless`.
+- [ ] The capacity of all nodes is in the view (DEC-04).
+- [ ] The DEC-04 detail levels: exact numbers, "there are enemy groups" without numbers, fog with memory.
+- [ ] Global intents without the size and group ids; the target of the opponent's ordinary order is not shown.
+- [ ] Your own edges come with `upgrade_gain`.
+- [ ] Not in the view: the opponent's CP, stance and production, events in the fog, the opponent's overall counters.
 
-### Критерии приёмки
-- [ ] Отчёт и список гипотез опубликованы в PR.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [BAL-02] Баланс-гейт: итерации (таймбокс 5 дней)
-
-Метки: `area:design` `type:decision` `P0` `size:L`
-
-**Веха:** M2 — Боты и баланс-гейт · **Приоритет:** P0 · **Размер:** L (4–5 дней) · **Трек:** A
-**Зависит от:** BAL-01
-
-### Контекст
-Итерации правят рулсет, а при необходимости — ботов (если бот играет глупо) и код правил (если найден баг). Каждая итерация записывается в `docs/balance/log.md`: гипотеза, изменение, результат. Если за 5 дней гейт не пройден — обсуждение дизайна до продолжения M5.
-
-### Задачи
-- [ ] Итерации `mvp-1`, `mvp-2`… с перезапуском турнира.
-
-### Критерии приёмки
-- [ ] Ни один стратегический бот не выигрывает у всех остальных стратегических в сумме больше 65% (Idle и Random не учитываются).
-- [ ] Преимущество стороны на каждой карте < 55%, и 95% доверительный интервал включает 50%.
-- [ ] Доля запланированных атак у стратегических ботов — 20–70%.
-- [ ] `TurtleBot` выигрывает у `ExpanderBot` < 40%.
-- [ ] Хотя бы один захват в последние 3 минуты — в ≥ 30% матчей между стратегическими ботами.
-- [ ] Итоговый рулсет зафиксирован как `rulesets/mvp.toml` и сохранён в архиве по хэшу.
+### Acceptance criteria
+- [ ] The projection is deterministic (the same view hash in two processes).
+- [ ] Each DEC-04 rule is a separate test.
+- [ ] A property test (Hypothesis on random states of the scenario maps): the view has no entities from invisible nodes and edges.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-## M3 — Сервер матча
+### [SIM-15] Match engine and headless run
 
-*Авторитарный сервер проводит матч между двумя WebSocket-клиентами с туманом войны.*
+Labels: `area:sim` `type:feature` `P0` `size:M`
 
-### [SRV-01] Каркас сервера FastAPI
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** A
+**Depends on:** SIM-08, SIM-10, SIM-11, SIM-12, SIM-13, SIM-14
 
-Метки: `area:server` `type:feature` `P0` `size:S`
+### Tasks
+- [ ] `Match(map, ruleset, match_key)` with the method `step(commands) -> list[Event]`.
+- [ ] A fixed order of systems: `apply_commands → economy → movement → combat → capacity → supply → recruit → build → victory → vision` (the last system updates the fog memory).
+- [ ] `run_headless(map, ruleset, controllers, max_ticks, decide_every=5) -> MatchResult`; controllers are called once per `decide_every` ticks.
+- [ ] The reference machine for the budgets is described in `docs/perf.md`.
 
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** A
-**Зависит от:** INF-02
-
-### Задачи
-- [ ] App factory, `lifespan` (не `on_event`), настройки через `pydantic-settings`, `/api/health`.
-- [ ] Структурированные логи (JSON), request id.
-- [ ] Раздача карт: `/api/maps` и `/api/maps/{id}` (JSON и PNG фона, если есть).
-- [ ] Запуск только с `--workers 1`; `--ws-max-size 65536`; `--forwarded-allow-ips` для Caddy.
-- [ ] Абстракция часов `Clock` (`now()`, `async sleep()`): настоящие часы в проде, управляемые в тестах.
-
-### Критерии приёмки
-- [ ] `uv run gow-server` поднимает сервер; health и карты отдаются; тест через `httpx`.
+### Acceptance criteria
+- [ ] A simulation step without projections on a 40-node map with 40 groups: on average ≤ 0.3 ms, p99 ≤ 1 ms; one projection ≤ 0.3 ms.
+- [ ] A full match of two simple bots runs in ≤ 8 seconds.
+- [ ] `pytest-benchmark` fails on a regression of more than 50%.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [DB-01] Хранилище: SQLAlchemy 2, Alembic, SQLite в режиме WAL
+### [SIM-16] Determinism and replays
 
-Метки: `area:server` `type:feature` `P0` `size:S`
+Labels: `area:sim` `type:test` `P0` `size:M`
 
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** SRV-01
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** A
+**Depends on:** SIM-15
 
-### Задачи
-- [ ] Модели `Mapped[]`: `players`, `ratings`, `matches`, `match_players`; отдельно от протокольных моделей.
-- [ ] Alembic с `render_as_batch=True`, первая миграция.
-- [ ] PRAGMA при подключении: `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`.
-- [ ] Синхронный SQLAlchemy только в `def`-эндпоинтах (threadpool FastAPI) или через `asyncio.to_thread`; никогда внутри `async def` и тика матча.
+### Tasks
+- [ ] The replay format `.jsonl.gz` (gzip from the standard library): a header `{sim_version, ruleset_hash, python_version, map_id, map_hash, match_key}`, then `(tick, player, seq, cmd)` and control hashes every 50 ticks.
+- [ ] `replay_run(file)` and the CLI `python -m gow_sim.replay check <files>` verify the hashes and on a divergence save a dump of both states.
+- [ ] A determinism test: one match in three fresh processes with different `PYTHONHASHSEED` gives identical hashes.
+- [ ] Golden replays in `packages/sim/tests/golden/v{SIM_VERSION}/`; the regeneration script creates the directory of the new version.
 
-### Критерии приёмки
-- [ ] Тест проверяет, что `PRAGMA journal_mode` возвращает `wal`.
-- [ ] `alembic upgrade head` на пустой базе проходит.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [ID-01] Гостевая идентичность и ники
-
-Метки: `area:server` `type:feature` `P0` `size:S`
-
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** DB-01
-
-### Задачи
-- [ ] `POST /api/guest` → `{player_id, token}`; токен из `secrets.token_urlsafe(32)`, в базе только SHA-256.
-- [ ] HTTP: `Authorization: Bearer`; токен никогда не пишется в логи и не передаётся в URL.
-- [ ] Ник: длина 3–16, допустимые символы; уникальность без учёта регистра через отдельную колонку `nick_key = nick.casefold()` с уникальным индексом (NOCASE в SQLite работает только для ASCII).
-- [ ] Ограничение частоты создания гостей по IP.
-
-### Критерии приёмки
-- [ ] Тесты: неверный токен → 401; токен не встречается в логах (перехват логгера); ник валидируется.
+### Acceptance criteria
+- [ ] CI runs the determinism test and the golden replays of the current version.
+- [ ] Editing a rule without raising `SIM_VERSION` breaks CI (the hashes of the current references diverge); CI also checks that the directories of earlier versions were not changed.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [PRO-01] Протокол: схема сообщений и JSON-фикстуры
+### [SIM-17] Property-based tests of invariants (Hypothesis)
 
-Метки: `area:protocol` `type:feature` `P0` `size:M`
+Labels: `area:sim` `type:test` `P0` `size:M`
 
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** any
-**Зависит от:** SIM-02, DEC-04
+**Milestone:** M1: Simulation core · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** any
+**Depends on:** SIM-15
 
-### Контекст
-Схема отделена от конвертеров, чтобы клиент мог начать сетевой слой до готовности всей симуляции.
+### Tasks
+- [ ] `RuleBasedStateMachine`: the rules generate random valid commands and tick steps.
+- [ ] Invariants: conservation of charges (produced = warehouses + in transit + in units + spent + lost); no negative counters; `charged ≤ units`; every group is in an existing node or on an edge; without new arrivals a garrison above capacity does not grow.
+- [ ] The fog invariant on a full match: `project(state, p)` has no entities from nodes and edges invisible to `p`.
 
-### Задачи
-- [ ] `ClientMsg` — tagged union по полю `type`: `hello{protocol_version, token}`, `command{seq, cmd}`, `ping`, `resync`.
+### Acceptance criteria
+- [ ] The tests pass in the `ci` profile in ≤ 60 seconds.
+- [ ] Counterexamples found by Hypothesis are saved as regression tests.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+## M2: Bots and balance gate
+
+*The bot tournament shows that the mechanics do not collapse into a single strategy.*
+
+### [BOT-01] Controller interface, base bots and seed-driven variability
+
+Labels: `area:bots` `type:feature` `P0` `size:S`
+
+**Milestone:** M2: Bots and balance gate · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** A
+**Depends on:** SIM-15, MAP-04
+
+### Tasks
+- [ ] `Controller.decide(view: PlayerView, tick) -> list[Command]`; bots see only the `PlayerView`.
+- [ ] `IdleBot` and `RandomLegalBot`.
+- [ ] Each bot gets parameters (aggression, expansion radius, attack threshold, etc.) from ranges chosen deterministically from the match seed, otherwise deterministic matches repeat.
+- [ ] A common utility function "ordinary or scheduled order" that computes the benefit from the ruleset prices: the share of plans is determined by the price, not by the bot's code.
+
+### Acceptance criteria
+- [ ] A `RandomLegal` vs `RandomLegal` match finishes without exceptions on all MVP maps.
+- [ ] 100 seeds of one pair of bots give at least 30 distinct final hashes.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [BOT-02] Strategy bots: Expander and Turtle
+
+Labels: `area:bots` `type:feature` `P0` `size:M`
+
+**Milestone:** M2: Bots and balance gate · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** any
+**Depends on:** BOT-01
+
+### Tasks
+- [ ] `ExpanderBot`: captures neutral nodes, builds roads in the rear.
+- [ ] `TurtleBot`: a bunker: holds a small region, accumulates charges, holds "Defense" (the check of Topic 2).
+
+### Acceptance criteria
+- [ ] Each beats `RandomLegal` in ≥ 90% on all MVP maps.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [BOT-03] Strategy bots: Rusher, Strangler and Reactive
+
+Labels: `area:bots` `type:feature` `P0` `size:L`
+
+**Milestone:** M2: Bots and balance gate · **Priority:** P0 · **Size:** L (4-5 days) · **Track:** any
+**Depends on:** BOT-01
+
+### Tasks
+- [ ] `RusherBot`: early pressure, scheduled strikes on weak cities.
+- [ ] `StranglerBot`: cutting roads and a siege of attrition.
+- [ ] `ReactiveBot`: reacts to the opponent's visible intents: reinforces the target, switches on "Defense" or hits an exposed spot.
+
+### Acceptance criteria
+- [ ] Each beats `RandomLegal` in ≥ 90% on all MVP maps.
+- [ ] Behavior scenario tests: `StranglerBot` cuts a road on the map `siege.json`; `ReactiveBot` answers a visible intent within 10 ticks.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [BOT-04] Tournament harness and match analyzer
+
+Labels: `area:bots` `type:feature` `P0` `size:M`
+
+**Milestone:** M2: Bots and balance gate · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** A
+**Depends on:** BOT-01, SIM-16
+
+### Tasks
+- [ ] CLI `uv run gow-bots tournament --maps ... --bots ... --seeds 100 --jobs N --ruleset ...`; `ProcessPoolExecutor`, one match per process, both sides for each pair.
+- [ ] `gow_sim.analysis`: metrics from the match event log: winner, side, duration, the share of scheduled attacks, siege attempts and successes, captures by minute, final VP, the reason for ending. The same analyzer is applied to real matches (PT-01, REL-01).
+- [ ] Results in JSONL; optionally saving replays.
+
+### Acceptance criteria
+- [ ] 1000 matches in ≤ 20 minutes on 8 cores of the reference machine.
+- [ ] A repeat run with the same parameters gives an identical JSONL.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [BOT-05] Balance report
+
+Labels: `area:bots` `type:feature` `P0` `size:S`
+
+**Milestone:** M2: Bots and balance gate · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** BOT-02, BOT-03, BOT-04
+
+### Tasks
+- [ ] `uv run gow-bots report <file.jsonl>`: markdown + matplotlib charts in `docs/balance/`.
+- [ ] Sections: a win matrix of pairs of strategy bots with 95% confidence intervals (Wilson); side advantage; the share of scheduled attacks; siege success; the `TurtleBot` win rate; captures in the last 3 minutes; the number of unique outcomes; a breakdown by map.
+
+### Acceptance criteria
+- [ ] The report is generated with one command.
+- [ ] Bot competence checks in the report: `StranglerBot` takes at least one city by siege in ≥ 50% of matches against `ExpanderBot`; `ReactiveBot` beats `RusherBot` more often than `ExpanderBot` beats `RusherBot`.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [BAL-01] Balance: first run and verdict
+
+Labels: `area:design` `type:decision` `P0` `size:S`
+
+**Milestone:** M2: Bots and balance gate · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** A
+**Depends on:** BOT-05, DEC-01, DEC-02, DEC-03, DEC-04, DEC-07, DEC-08
+
+### Tasks
+- [ ] A tournament on all MVP maps with `mvp-0`, the report in `docs/balance/`.
+- [ ] Compare with the gate criteria (BAL-02) and write the hypotheses for iterations in `docs/balance/log.md`.
+
+### Acceptance criteria
+- [ ] The report and the list of hypotheses are published in the PR.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [BAL-02] Balance gate: iterations (5-day timebox)
+
+Labels: `area:design` `type:decision` `P0` `size:L`
+
+**Milestone:** M2: Bots and balance gate · **Priority:** P0 · **Size:** L (4-5 days) · **Track:** A
+**Depends on:** BAL-01
+
+### Context
+The iterations edit the ruleset and, if needed, the bots (if a bot plays stupidly) and the rules code (if a bug is found). Each iteration is recorded in `docs/balance/log.md`: hypothesis, change, result. If the gate is not passed in 5 days, a design discussion before continuing M5.
+
+### Tasks
+- [ ] Iterations `mvp-1`, `mvp-2`… with a re-run of the tournament.
+
+### Acceptance criteria
+- [ ] No strategy bot beats all the other strategy bots in total more than 65% (Idle and Random are not counted).
+- [ ] The side advantage on each map is < 55%, and the 95% confidence interval includes 50%.
+- [ ] The share of scheduled attacks among the strategy bots is 20-70%.
+- [ ] `TurtleBot` beats `ExpanderBot` in < 40%.
+- [ ] At least one capture in the last 3 minutes in ≥ 30% of matches between strategy bots.
+- [ ] The final ruleset is fixed as `rulesets/mvp.toml` and saved in the archive by hash.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+## M3: Match server
+
+*An authoritative server runs a match between two WebSocket clients with fog of war.*
+
+### [SRV-01] FastAPI server skeleton
+
+Labels: `area:server` `type:feature` `P0` `size:S`
+
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** A
+**Depends on:** INF-02
+
+### Tasks
+- [ ] An app factory, `lifespan` (not `on_event`), settings through `pydantic-settings`, `/api/health`.
+- [ ] Structured logs (JSON), a request id.
+- [ ] Serving maps: `/api/maps` and `/api/maps/{id}` (JSON and the background PNG, if any).
+- [ ] Started only with `--workers 1`; `--ws-max-size 65536`; `--forwarded-allow-ips` for Caddy.
+- [ ] The `Clock` abstraction (`now()`, `async sleep()`): a real clock in prod, a controllable one in tests.
+
+### Acceptance criteria
+- [ ] `uv run gow-server` brings up the server; health and maps are served; a test via `httpx`.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [DB-01] Storage: SQLAlchemy 2, Alembic, SQLite in WAL mode
+
+Labels: `area:server` `type:feature` `P0` `size:S`
+
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** SRV-01
+
+### Tasks
+- [ ] `Mapped[]` models: `players`, `ratings`, `matches`, `match_players`; separate from the protocol models.
+- [ ] Alembic with `render_as_batch=True`, the first migration.
+- [ ] PRAGMAs on connect: `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`.
+- [ ] Synchronous SQLAlchemy only in `def` endpoints (the FastAPI threadpool) or through `asyncio.to_thread`; never inside `async def` and the match tick.
+
+### Acceptance criteria
+- [ ] A test checks that `PRAGMA journal_mode` returns `wal`.
+- [ ] `alembic upgrade head` on an empty database passes.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [ID-01] Guest identity and nicknames
+
+Labels: `area:server` `type:feature` `P0` `size:S`
+
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** DB-01
+
+### Tasks
+- [ ] `POST /api/guest` → `{player_id, token}`; the token from `secrets.token_urlsafe(32)`, only the SHA-256 in the database.
+- [ ] HTTP: `Authorization: Bearer`; the token is never written to logs and never passed in a URL.
+- [ ] Nickname: length 3-16, allowed characters; case-insensitive uniqueness through a separate column `nick_key = nick.casefold()` with a unique index (NOCASE in SQLite works only for ASCII).
+- [ ] Rate limiting of guest creation by IP.
+
+### Acceptance criteria
+- [ ] Tests: a wrong token → 401; the token does not appear in the logs (logger interception); the nickname is validated.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [PRO-01] Protocol: message schema and JSON fixtures
+
+Labels: `area:protocol` `type:feature` `P0` `size:M`
+
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** any
+**Depends on:** SIM-02, DEC-04
+
+### Context
+The schema is separated from the converters so that the client can start its network layer before the whole simulation is ready.
+
+### Tasks
+- [ ] `ClientMsg` is a tagged union on the field `type`: `hello{protocol_version, token}`, `command{seq, cmd}`, `ping`, `resync`.
 - [ ] `ServerMsg`: `welcome{player, ruleset_public, map_id, last_seq}`, `snapshot{tick, view}`, `ack{seq, applied_tick, path | reject_code}`, `event`, `match_end`, `error`, `pong`.
-- [ ] `model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)` везде (иначе токен из `hello` попадёт в текст ошибки и в логи); `PROTOCOL_VERSION` — целое.
-- [ ] `ruleset_public` — только то, что нужно клиенту: стоимости команд и параметры оценки боя.
-- [ ] JSON-фикстуры типовых сообщений в `packages/protocol/fixtures/` — ими пользуются тесты клиента.
-- [ ] Модуль `codec` (JSON сейчас, msgpack позже заменой одного файла).
+- [ ] `model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)` everywhere (otherwise the token from `hello` ends up in the error text and in the logs); `PROTOCOL_VERSION` is an integer.
+- [ ] `ruleset_public` is only what the client needs: command costs and the combat estimate parameters.
+- [ ] JSON fixtures of typical messages in `packages/protocol/fixtures/`: the client tests use them.
+- [ ] The `codec` module (JSON now, msgpack later by replacing one file).
 
-### Критерии приёмки
-- [ ] Roundtrip-тесты всех сообщений и фикстур.
-- [ ] Hypothesis-фаззинг: произвольные байты на входе дают только `ValidationError`, никаких других исключений.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [PRO-02] Генерация TypeScript-типов и проверка дрейфа схемы
-
-Метки: `area:protocol` `type:chore` `P0` `size:S`
-
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** B
-**Зависит от:** PRO-01, INF-03, INF-04
-
-### Задачи
-- [ ] `scripts/export_schema.py`: `TypeAdapter(...).json_schema()` для обоих union → `protocol.schema.json`; `json2ts` → `apps/client/src/protocol.gen.ts`; npm-скрипт `pnpm gen:protocol`.
-- [ ] Job CI `protocol-drift`: перегенерация + `git diff --exit-code`.
-
-### Критерии приёмки
-- [ ] Изменение поля в Pydantic-модели без перегенерации ломает CI.
-- [ ] В `protocol.gen.ts` union сообщений сужается по `type`.
+### Acceptance criteria
+- [ ] Roundtrip tests of all messages and fixtures.
+- [ ] Hypothesis fuzzing: arbitrary bytes on input give only `ValidationError`, no other exceptions.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [PRO-03] Протокол: конвертеры между симуляцией и сообщениями
+### [PRO-02] TypeScript type generation and schema drift check
 
-Метки: `area:protocol` `type:feature` `P0` `size:S`
+Labels: `area:protocol` `type:chore` `P0` `size:S`
 
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** A
-**Зависит от:** PRO-01, SIM-14
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** B
+**Depends on:** PRO-01, INF-03, INF-04
 
-### Задачи
-- [ ] `PlayerView → SnapshotMsg`, клиентская команда → команда симуляции, события симуляции → `event` (только видимые игроку).
+### Tasks
+- [ ] `scripts/export_schema.py`: `TypeAdapter(...).json_schema()` for both unions → `protocol.schema.json`; `json2ts` → `apps/client/src/protocol.gen.ts`; the npm script `pnpm gen:protocol`.
+- [ ] A CI job `protocol-drift`: regeneration + `git diff --exit-code`.
 
-### Критерии приёмки
-- [ ] Тесты конвертеров на сценарных картах; ни одно скрытое поле не попадает в сообщение.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [SRV-02] MatchRunner и MatchManager: тик-цикл матча
-
-Метки: `area:server` `type:feature` `P0` `size:M`
-
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** A
-**Зависит от:** SIM-15, SRV-01
-
-### Задачи
-- [ ] Один `asyncio`-таск на матч; цикл на `Clock` с `next += dt`; при отставании больше 3 тиков — сброс `next` к текущему времени, а не бесконечная догонка.
-- [ ] Паузы: цикл ждёт события возобновления и после него пересчитывает `next`.
-- [ ] Входящая очередь команд, применение на границе тика; внутри шага нет `await`.
-- [ ] После шага — проекция для каждого игрока раз в тик и отправка через очереди соединений.
-- [ ] `MatchManager`: реестр матчей, сильные ссылки на таски, логирование исключений с id матча; падение одного матча не трогает остальные.
-
-### Критерии приёмки
-- [ ] Тест с управляемыми часами: матч двух фейковых контроллеров доходит до конца без реального ожидания.
-- [ ] Тест: «зависание» часов на 2 секунды не приводит к пачке из 20 шагов.
-- [ ] Тест: исключение в одном матче не останавливает второй.
+### Acceptance criteria
+- [ ] Changing a field in a Pydantic model without regenerating breaks CI.
+- [ ] In `protocol.gen.ts` the message union narrows by `type`.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SRV-03] WebSocket матча: аутентификация, чтение, запись, команды
+### [PRO-03] Protocol: converters between the simulation and messages
 
-Метки: `area:server` `type:feature` `P0` `size:M`
+Labels: `area:protocol` `type:feature` `P0` `size:S`
 
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** A
-**Зависит от:** SRV-02, PRO-03, ID-01
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** A
+**Depends on:** PRO-01, SIM-14
 
-### Задачи
-- [ ] `/ws/match/{id}`: проверка `Origin`; первое сообщение `hello` с токеном за 5 секунд, иначе закрытие.
-- [ ] Несовпадение `PROTOCOL_VERSION` → закрытие с кодом 4001.
-- [ ] Задачи чтения и записи в `TaskGroup`. Снапшоты — ячейка «только последний»; `ack`, `event`, `match_end`, `error` — надёжная FIFO-очередь. `send` с таймаутом, зависший клиент отключается.
-- [ ] Прикладной `ping/pong` для RTT.
-- [ ] Дедупликация по `seq`, `ack` с тиком применения и путём или кодом отказа.
-- [ ] Token bucket на команды игрока; флуд → отключение.
+### Tasks
+- [ ] `PlayerView → SnapshotMsg`, a client command → a simulation command, simulation events → `event` (only those visible to the player).
 
-### Критерии приёмки
-- [ ] Интеграционные тесты на `websockets`-клиенте: неверный Origin, отсутствие hello, старая версия протокола, флуд, повтор `seq`, медленный клиент не тормозит тик и не теряет `ack`.
+### Acceptance criteria
+- [ ] Converter tests on the scenario maps; no hidden field gets into a message.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [DEC-05] Решение: разрыв соединения и паузы
+### [SRV-02] MatchRunner and MatchManager: the match tick loop
 
-Метки: `area:design` `type:decision` `P0` `size:XS`
+Labels: `area:server` `type:feature` `P0` `size:M`
 
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** XS (≤ 2 часа) · **Трек:** any
-**Зависит от:** DOC-01
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** A
+**Depends on:** SIM-15, SRV-01
 
-### Решение по умолчанию
-60 секунд на переподключение, матч при этом продолжается; затем техническое поражение (записывается в журнал реплея как команда `Forfeit`). В рейтинговых матчах пауз нет; в приватных — одна пауза до 60 секунд на игрока. Настройки сервера, а не рулсета.
+### Tasks
+- [ ] One `asyncio` task per match; a loop on `Clock` with `next += dt`; when more than 3 ticks behind, `next` is reset to the current time instead of endless catching up.
+- [ ] Pauses: the loop waits for a resume event and recomputes `next` after it.
+- [ ] An incoming command queue, applied at the tick boundary; there is no `await` inside the step.
+- [ ] After the step, a projection for each player once per tick and sending through the connection queues.
+- [ ] `MatchManager`: a registry of matches, strong references to tasks, logging of exceptions with the match id; the crash of one match does not touch the others.
 
-### Альтернативы
-- Бот берёт управление на время отключения.
-
-### Критерии приёмки
-- [ ] Решение записано в mechanics.md со статусом [принято].
-
-### Как закрыть
-Значение по умолчанию уже есть, поэтому решение занимает не больше пары часов: подтвердить его или выбрать альтернативу и записать в `docs/design/mechanics.md` со статусом [принято]. Блокирует SIM-01 (DEC-05 — SRV-04, DEC-06 — RAT-02). Дальше числа меняются только через рулсет и BAL-02.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [SRV-04] Переподключение и политика разрыва
-
-Метки: `area:server` `type:feature` `P0` `size:S`
-
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** A
-**Зависит от:** SRV-03, DEC-05
-
-### Задачи
-- [ ] Переподключение по тому же токену в течение окна DEC-05; полный вид и `last_seq` в `welcome`.
-- [ ] Истечение окна → команда `Forfeit` от имени отключившегося (пишется в журнал реплея).
-- [ ] Паузы для приватных матчей по DEC-05.
-
-### Критерии приёмки
-- [ ] Тест с управляемыми часами: разрыв и переподключение через 10 с восстанавливают вид; через 61 с — поражение.
+### Acceptance criteria
+- [ ] A test with a controllable clock: a match of two fake controllers runs to the end without real waiting.
+- [ ] A test: a clock "freeze" of 2 seconds does not lead to a burst of 20 steps.
+- [ ] A test: an exception in one match does not stop the other.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SRV-05] Приватный матч по инвайт-ссылке
+### [SRV-03] Match WebSocket: authentication, reading, writing, commands
 
-Метки: `area:server` `type:feature` `P0` `size:S`
+Labels: `area:server` `type:feature` `P0` `size:M`
 
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** SRV-03
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** A
+**Depends on:** SRV-02, PRO-03, ID-01
 
-### Задачи
-- [ ] `POST /api/matches` (карта из пула) → код приглашения; `POST /api/matches/{code}/join`.
-- [ ] Готовность обоих игроков → старт; истечение неиспользованного приглашения через 30 минут.
+### Tasks
+- [ ] `/ws/match/{id}`: a check of `Origin`; the first message `hello` with the token within 5 seconds, otherwise closing.
+- [ ] A `PROTOCOL_VERSION` mismatch → closing with code 4001.
+- [ ] Reading and writing tasks in a `TaskGroup`. Snapshots are a "latest only" cell; `ack`, `event`, `match_end`, `error` are a reliable FIFO queue. `send` with a timeout, a hung client is disconnected.
+- [ ] An application-level `ping/pong` for RTT.
+- [ ] Deduplication by `seq`, `ack` with the tick of application and the path or the rejection code.
+- [ ] A token bucket on the player's commands; a flood → disconnect.
 
-### Критерии приёмки
-- [ ] Тест: создать, присоединиться, оба готовы → матч стартует; третий игрок получает отказ.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [SRV-06] Матч против бота
-
-Метки: `area:server` `type:feature` `P0` `size:S`
-
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** A
-**Зависит от:** SRV-02, BOT-02
-
-### Задачи
-- [ ] Режим «против бота»: контроллер бота в процессе сервера получает тот же `PlayerView`, решает раз в 5 тиков.
-- [ ] Выбор бота (несколько уровней сложности = разные боты и параметры).
-- [ ] Решение бота укладывается в 1 мс; иначе бот пропускает очередной вызов (с метрикой).
-
-### Критерии приёмки
-- [ ] Тест: матч скриптового клиента против бота завершается.
+### Acceptance criteria
+- [ ] Integration tests on a `websockets` client: a wrong Origin, no hello, an old protocol version, a flood, a repeated `seq`, a slow client does not slow the tick and does not lose an `ack`.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SRV-07] Реплеи: запись и файл кадров для просмотра
+### [DEC-05] Decision: disconnection and pauses
 
-Метки: `area:server` `type:feature` `P0` `size:M`
+Labels: `area:design` `type:decision` `P0` `size:XS`
 
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** any
-**Зависит от:** SRV-02, SIM-16, DB-01
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** XS (≤ 2 hours) · **Track:** any
+**Depends on:** DOC-01
 
-### Контекст
-Просмотр не требует пересимуляции в браузере и не ломается при смене `SIM_VERSION`: после матча сервер один раз пересимулирует журнал и пишет полные кадры.
+### Default decision
+60 seconds to reconnect, the match keeps going meanwhile; then a technical defeat (written to the replay log as the command `Forfeit`). There are no pauses in ranked matches; in private ones, one pause of up to 60 seconds per player. Server settings, not the ruleset's.
 
-### Задачи
-- [ ] Журнал команд `data/replays/{id}.jsonl.gz` пишется по ходу матча; метаданные в `matches`.
-- [ ] После матча — пересимуляция журнала в `ProcessPoolExecutor` (не в цикле событий и не в потоке: мешает GIL), проверка хэшей и файл кадров `data/replays/{id}.frames.json.gz`: полное состояние 2 раза в секунду + события.
-- [ ] `GET /api/replays/{id}` отдаёт файл кадров; доступ — участникам, реплеи рейтинговых матчей публичны.
+### Alternatives
+- A bot takes control for the duration of the disconnection.
 
-### Критерии приёмки
-- [ ] Тест: пересимуляция завершённого матча даёт тот же итог и хэши; файл кадров матча на 12 минут ≤ 2 МБ.
+### Acceptance criteria
+- [ ] The decision is recorded in mechanics.md with the status [accepted].
 
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [SRV-08] Интеграционный тест: два скриптовых клиента играют матч
-
-Метки: `area:qa` `type:test` `P0` `size:S`
-
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** A
-**Зависит от:** SRV-04, SRV-05
-
-### Задачи
-- [ ] Тест поднимает сервер, два клиента на `websockets` проходят инвайт и играют ботами поверх протокола до конца на `test-short`.
-- [ ] Проверки: клиент ни разу не получил сущность из невидимого узла; итог совпадает с `run_headless` на тех же командах.
-
-### Критерии приёмки
-- [ ] Тест идёт в CI за ≤ 90 секунд.
+### How to close
+A default value already exists, so the decision takes a couple of hours at most: confirm it or pick an alternative and record it in `docs/design/mechanics.md` with the status [accepted]. It blocks SIM-01 (DEC-05 blocks SRV-04, DEC-06 blocks RAT-02). After that the numbers change only through the ruleset and BAL-02.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [SRV-09] Жизненный цикл матча
+### [SRV-04] Reconnection and the disconnect policy
 
-Метки: `area:server` `type:feature` `P0` `size:M`
+Labels: `area:server` `type:feature` `P0` `size:S`
 
-**Веха:** M3 — Сервер матча · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** any
-**Зависит от:** SRV-05, DB-01
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** A
+**Depends on:** SRV-03, DEC-05
 
-### Задачи
-- [ ] Состояния: создан → ожидание готовности → идёт → окончен → сохранён → очищен; таймаут неявки.
-- [ ] Итог каждого матча (рейтингового и нет) пишется в БД вне тика.
-- [ ] Правило: у игрока не больше одного активного матча или места в очереди.
-- [ ] Белый список рулсетов: `test-short` доступен только в dev и e2e окружении.
+### Tasks
+- [ ] Reconnecting with the same token within the DEC-05 window; the full view and `last_seq` in `welcome`.
+- [ ] The window expires → a `Forfeit` command on behalf of the disconnected player (written to the replay log).
+- [ ] Pauses for private matches per DEC-05.
 
-### Критерии приёмки
-- [ ] Тесты на каждый переход состояния, неявку и попытку второго активного матча.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-## M4 — Веб-клиент и внутренний плейтест
-
-*Два человека играют полную партию в браузерах; есть игра против бота и просмотр реплея; внутренний плейтест дал «go».*
-
-### [CLI-01] Сетевой слой клиента
-
-Метки: `area:client` `type:feature` `P0` `size:M`
-
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** PRO-02, INF-03
-
-### Задачи
-- [ ] Типизированный WebSocket-клиент на `protocol.gen.ts`; `hello` с токеном первым сообщением.
-- [ ] Переподключение с экспоненциальной задержкой; при коде 4001 — просьба перезагрузить страницу.
-- [ ] Отслеживание команд до `ack`; повтор неподтверждённых после переподключения.
-- [ ] RTT по `ping/pong`.
-
-### Критерии приёмки
-- [ ] Vitest с фейковым сервером на фикстурах PRO-01: переподключение, повтор команд, код 4001.
+### Acceptance criteria
+- [ ] A test with a controllable clock: a disconnect and a reconnect after 10 s restore the view; after 61 s, a defeat.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [CLI-02] Буфер снапшотов и интерполяция
+### [SRV-05] Private match via an invite link
 
-Метки: `area:client` `type:feature` `P0` `size:S`
+Labels: `area:server` `type:feature` `P0` `size:S`
 
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** B
-**Зависит от:** CLI-01
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** SRV-03
 
-### Задачи
-- [ ] Кольцевой буфер снапшотов по тику; отрисовка на 2–3 снапшота позади (настраивается).
-- [ ] Интерполяция `progress` групп и пакетов на рёбрах; без экстраполяции и предсказания.
-- [ ] Сброс буфера при `resync` и переподключении.
-- [ ] Буфер — обычный TypeScript, не `$state`.
+### Tasks
+- [ ] `POST /api/matches` (a map from the pool) → an invite code; `POST /api/matches/{code}/join`.
+- [ ] Both players ready → start; an unused invite expires after 30 minutes.
 
-### Критерии приёмки
-- [ ] Vitest: интерполяция между двумя снапшотами; пропуск и дубликат снапшота.
+### Acceptance criteria
+- [ ] A test: create, join, both ready → the match starts; a third player gets a refusal.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [CLI-03] Рендер карты и камера
+### [SRV-06] Match against a bot
 
-Метки: `area:client` `type:feature` `P0` `size:M`
+Labels: `area:server` `type:feature` `P0` `size:S`
 
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** INF-03, MAP-01
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** A
+**Depends on:** SRV-02, BOT-02
 
-### Контекст
-Можно начинать до готовности протокола: карта грузится из JSON напрямую.
+### Tasks
+- [ ] The "against a bot" mode: the bot's controller in the server process gets the same `PlayerView`, decides once per 5 ticks.
+- [ ] Bot choice (several difficulty levels = different bots and parameters).
+- [ ] The bot's decision fits into 1 ms; otherwise the bot skips the next call (with a metric).
 
-### Задачи
-- [ ] Слои контейнеров: фон, территория, дороги, узлы, группы, намерения, туман, эффекты.
-- [ ] Фон — заливка по рельефу (или PNG из MAP-05, если он есть).
-- [ ] Толщина дороги по ширине; владелец узла — цвет и контур (не только цвет); значок столицы; VP узла.
-- [ ] Камера: перетаскивание, колесо, «вписать карту»; корректно на HiDPI.
-- [ ] Общие `GraphicsContext` для одинаковых фигур; `destroy` всего созданного.
-
-### Критерии приёмки
-- [ ] Все карты MVP отображаются; 60 FPS на интегрированной графике эталонного ноутбука.
+### Acceptance criteria
+- [ ] A test: a match of a scripted client against a bot finishes.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [CLI-04] Рендер групп, зарядов, складов, пакетов и намерений
+### [SRV-07] Replays: recording and the frames file for viewing
 
-Метки: `area:client` `type:feature` `P0` `size:L`
+Labels: `area:server` `type:feature` `P0` `size:M`
 
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** L (4–5 дней) · **Трек:** B
-**Зависит от:** CLI-02, CLI-03
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** any
+**Depends on:** SRV-02, SIM-16, DB-01
 
-### Задачи
-- [ ] Группа: число юнитов и зарядов, режим. Заряд различим не только цветом: заполненная и пустая точка.
-- [ ] Уровни детализации тумана: точные числа, «есть враг» без чисел.
-- [ ] Склад: полоска заполнения относительно ёмкости.
-- [ ] Пакеты — анимация движения по дорогам.
-- [ ] Намерения (запланированные приказы и стройки) обеих сторон — стрелки.
-- [ ] Отметка боя в узле с участниками и итогом (по событиям).
+### Context
+Viewing does not require re-simulation in the browser and does not break when `SIM_VERSION` changes: after the match the server re-simulates the log once and writes full frames.
 
-### Критерии приёмки
-- [ ] Для трёх заранее записанных снапшотов (фикстуры) скриншот-тест Playwright совпадает с эталоном.
+### Tasks
+- [ ] The command log `data/replays/{id}.jsonl.gz` is written during the match; metadata in `matches`.
+- [ ] After the match, re-simulation of the log in a `ProcessPoolExecutor` (not in the event loop and not in a thread: the GIL gets in the way), a check of the hashes and the frames file `data/replays/{id}.frames.json.gz`: the full state 2 times per second + events.
+- [ ] `GET /api/replays/{id}` serves the frames file; access is for the participants, the replays of ranked matches are public.
 
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [CLI-05] Туман войны на клиенте
-
-Метки: `area:client` `type:feature` `P0` `size:S`
-
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** B
-**Зависит от:** CLI-04
-
-### Задачи
-- [ ] Затемнение невидимых узлов и рёбер.
-- [ ] «Призраки» из памяти «последний раз видели» с возрастом.
-
-### Критерии приёмки
-- [ ] Невидимое визуально отличается от видимого; призраки исчезают при повторном обзоре.
+### Acceptance criteria
+- [ ] A test: re-simulating a finished match gives the same result and hashes; the frames file of a 12-minute match ≤ 2 MB.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [CLI-06] Выбор и перемещение: обычные и запланированные приказы
+### [SRV-08] Integration test: two scripted clients play a match
 
-Метки: `area:client` `type:feature` `P0` `size:M`
+Labels: `area:qa` `type:test` `P0` `size:S`
 
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** CLI-04
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** A
+**Depends on:** SRV-04, SRV-05
 
-### Задачи
-- [ ] Выбор группы и узла кликом; снятие выбора.
-- [ ] Приказ на движение кликом по цели; запланированный — с Shift или переключателем.
-- [ ] Предпросмотр — цель и стоимость в CP; путь рисуется из `ack` (клиент путь не считает).
-- [ ] Призрачная стрелка до `ack`, откат при отказе с понятным сообщением; отмена приказа.
+### Tasks
+- [ ] The test brings up the server, two clients on `websockets` go through an invite and play with bots over the protocol to the end on `test-short`.
+- [ ] Checks: a client never received an entity from an invisible node; the result matches `run_headless` on the same commands.
 
-### Критерии приёмки
-- [ ] Все сценарии работают мышью; горячие клавиши описаны в подсказке.
+### Acceptance criteria
+- [ ] The test runs in CI in ≤ 90 seconds.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [CLI-07] Остальные команды: деление, слияние, режимы, рекрут, стройка, стойка, сдача
+### [SRV-09] Match lifecycle
 
-Метки: `area:client` `type:feature` `P0` `size:M`
+Labels: `area:server` `type:feature` `P0` `size:M`
 
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** CLI-06
+**Milestone:** M3: Match server · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** any
+**Depends on:** SRV-05, DB-01
 
-### Задачи
-- [ ] Деление (ползунок или число) и слияние групп в узле.
-- [ ] Режимы А / З / С (горячие клавиши); улучшение дороги с подсказкой `upgrade_gain` («+1,5 ёмкости города»).
-- [ ] Рекрут в выбранном городе; переключатель стойки.
-- [ ] Кнопка «Сдаться» с подтверждением.
+### Tasks
+- [ ] States: created → waiting for readiness → running → finished → saved → cleaned up; a no-show timeout.
+- [ ] The result of each match (ranked or not) is written to the DB outside the tick.
+- [ ] A rule: a player has at most one active match or queue spot.
+- [ ] A whitelist of rulesets: `test-short` is available only in the dev and e2e environment.
 
-### Критерии приёмки
-- [ ] Каждая команда отправляется и подтверждается или отклоняется с сообщением.
+### Acceptance criteria
+- [ ] Tests for each state transition, a no-show and an attempt at a second active match.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+## M4: Web client and internal playtest
+
+*Two people play a full match in browsers; there is play against a bot and replay viewing; the internal playtest gave a "go".*
+
+### [CLI-01] Client network layer
+
+Labels: `area:client` `type:feature` `P0` `size:M`
+
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** PRO-02, INF-03
+
+### Tasks
+- [ ] A typed WebSocket client on `protocol.gen.ts`; `hello` with the token as the first message.
+- [ ] Reconnection with an exponential delay; on code 4001, a request to reload the page.
+- [ ] Tracking commands until the `ack`; retrying unconfirmed ones after reconnection.
+- [ ] RTT via `ping/pong`.
+
+### Acceptance criteria
+- [ ] Vitest with a fake server on the PRO-01 fixtures: reconnection, command retry, code 4001.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [CLI-02] Snapshot buffer and interpolation
+
+Labels: `area:client` `type:feature` `P0` `size:S`
+
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** B
+**Depends on:** CLI-01
+
+### Tasks
+- [ ] A ring buffer of snapshots by tick; rendering 2-3 snapshots behind (configurable).
+- [ ] Interpolation of the `progress` of groups and packets on edges; no extrapolation and no prediction.
+- [ ] Resetting the buffer on `resync` and on reconnection.
+- [ ] The buffer is plain TypeScript, not `$state`.
+
+### Acceptance criteria
+- [ ] Vitest: interpolation between two snapshots; a skipped and a duplicate snapshot.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [CLI-03] Map rendering and camera
+
+Labels: `area:client` `type:feature` `P0` `size:M`
+
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** INF-03, MAP-01
+
+### Context
+It can start before the protocol is ready: the map is loaded from JSON directly.
+
+### Tasks
+- [ ] Container layers: background, territory, roads, nodes, groups, intents, fog, effects.
+- [ ] The background is a fill by terrain (or the PNG from MAP-05, if there is one).
+- [ ] Road thickness by width; the node's owner is color and outline (not color alone); a capital icon; the node's VP.
+- [ ] Camera: dragging, wheel, "fit the map"; correct on HiDPI.
+- [ ] Shared `GraphicsContext`s for identical shapes; `destroy` of everything created.
+
+### Acceptance criteria
+- [ ] All MVP maps are displayed; 60 FPS on the integrated graphics of the reference laptop.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [CLI-04] Rendering groups, charges, warehouses, packets and intents
+
+Labels: `area:client` `type:feature` `P0` `size:L`
+
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** L (4-5 days) · **Track:** B
+**Depends on:** CLI-02, CLI-03
+
+### Tasks
+- [ ] A group: the number of units and charges, the mode. A charge is distinguishable not by color alone: a filled and an empty dot.
+- [ ] The fog detail levels: exact numbers, "there is an enemy" without numbers.
+- [ ] A warehouse: a fill bar relative to capacity.
+- [ ] Packets are an animation of movement along roads.
+- [ ] The intents (scheduled orders and constructions) of both sides are arrows.
+- [ ] A fight marker in a node with the participants and the result (from events).
+
+### Acceptance criteria
+- [ ] For three pre-recorded snapshots (fixtures) a Playwright screenshot test matches the reference.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [CLI-05] Fog of war on the client
+
+Labels: `area:client` `type:feature` `P0` `size:S`
+
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** B
+**Depends on:** CLI-04
+
+### Tasks
+- [ ] Darkening of invisible nodes and edges.
+- [ ] "Ghosts" from the "last seen" memory with an age.
+
+### Acceptance criteria
+- [ ] The invisible is visually different from the visible; ghosts disappear on being seen again.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [CLI-06] Selection and movement: ordinary and scheduled orders
+
+Labels: `area:client` `type:feature` `P0` `size:M`
+
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** CLI-04
+
+### Tasks
+- [ ] Selecting a group and a node by click; deselecting.
+- [ ] A movement order by clicking the target; a scheduled one with Shift or a toggle.
+- [ ] Preview: the target and the cost in CP; the path is drawn from the `ack` (the client does not compute the path).
+- [ ] A ghost arrow until the `ack`, a rollback on rejection with a clear message; cancelling an order.
+
+### Acceptance criteria
+- [ ] All scenarios work with the mouse; the hotkeys are described in a hint.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [CLI-07] Remaining commands: split, merge, modes, recruit, build, stance, surrender
+
+Labels: `area:client` `type:feature` `P0` `size:M`
+
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** CLI-06
+
+### Tasks
+- [ ] Splitting (a slider or a number) and merging groups in a node.
+- [ ] Modes A / D / B (hotkeys); a road upgrade with the `upgrade_gain` hint ("+1.5 city capacity").
+- [ ] Recruit in the selected city; the stance toggle.
+- [ ] A "Surrender" button with confirmation.
+
+### Acceptance criteria
+- [ ] Each command is sent and confirmed, or rejected with a message.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
 ### [CLI-08] HUD
 
-Метки: `area:client` `type:feature` `P0` `size:M`
+Labels: `area:client` `type:feature` `P0` `size:M`
 
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** CLI-02, PRO-02, SIM-09
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** CLI-02, PRO-02, SIM-09
 
-### Задачи
-- [ ] CP с регеном, стойка, VP обеих сторон, таймер.
-- [ ] Панель выбранной группы или города: юниты, заряды, ёмкость, склад.
-- [ ] Оценка боя перед атакой по `ruleset_public`: точная, если враг виден полностью, иначе верхняя граница по ёмкости узла («не больше N»). Помечена как оценка.
-- [ ] Лента видимых событий.
-- [ ] Данные HUD — класс в `.svelte.ts` с полем `current = $state.raw(...)`, которое заменяется раз на снапшот (10 Гц), не каждый кадр (экспорт переприсваиваемого `$state` из модуля Svelte не компилирует).
+### Tasks
+- [ ] CP with regeneration, stance, the VP of both sides, the timer.
+- [ ] A panel of the selected group or city: units, charges, capacity, warehouse.
+- [ ] A combat estimate before an attack from `ruleset_public`: exact if the enemy is fully visible, otherwise an upper bound by the node's capacity ("no more than N"). Marked as an estimate.
+- [ ] A feed of visible events.
+- [ ] The HUD data is a class in `.svelte.ts` with a field `current = $state.raw(...)` that is replaced once per snapshot (10 Hz), not every frame (Svelte does not compile exporting a reassignable `$state` from a module).
 
-### Критерии приёмки
-- [ ] Функция оценки проходит все строки `packages/protocol/vectors/combat.json` в Vitest.
-- [ ] Значения HUD совпадают со снапшотом; профилировщик не показывает пересчёт Svelte каждый кадр.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [CLI-09] Экраны и навигация
-
-Метки: `area:client` `type:feature` `P0` `size:M`
-
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** CLI-01, ID-01, SRV-05, SRV-06
-
-### Задачи
-- [ ] REST-типы: OpenAPI FastAPI → `openapi-typescript` → `apps/client/src/api.gen.ts` (входит в проверку дрейфа).
-- [ ] Приветствие (создание гостя, ник), главное меню.
-- [ ] Создание приватного матча с выбором карты и присоединение по ссылке `?m=<code>`; экран ожидания готовности.
-- [ ] «Играть с ботом»: выбор бота и карты.
-- [ ] Экран матча; экран итога (результат, VP, кнопка реплея).
-- [ ] Навигация через состояние, без SvelteKit; никаких `{@html}` с пользовательскими данными.
-
-### Критерии приёмки
-- [ ] Путь «открыл ссылку → ввёл ник → оказался в матче» проходит за ≤ 3 действия.
+### Acceptance criteria
+- [ ] The estimate function passes all rows of `packages/protocol/vectors/combat.json` in Vitest.
+- [ ] The HUD values match the snapshot; the profiler does not show a Svelte recomputation every frame.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [CLI-10] Просмотр реплея
+### [CLI-09] Screens and navigation
 
-Метки: `area:client` `type:feature` `P0` `size:S`
+Labels: `area:client` `type:feature` `P0` `size:M`
 
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** B
-**Зависит от:** SRV-07, CLI-04
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** CLI-01, ID-01, SRV-05, SRV-06
 
-### Задачи
-- [ ] Загрузка файла кадров и тот же рендер в режиме зрителя с полным раскрытием.
-- [ ] Скорость ×1 / ×4 / ×16, пауза, перемотка ползунком.
+### Tasks
+- [ ] REST types: FastAPI OpenAPI → `openapi-typescript` → `apps/client/src/api.gen.ts` (part of the drift check).
+- [ ] A welcome screen (guest creation, nickname), the main menu.
+- [ ] Creating a private match with a choice of map and joining via the link `?m=<code>`; the readiness waiting screen.
+- [ ] "Play against a bot": choice of bot and map.
+- [ ] The match screen; the result screen (outcome, VP, a replay button).
+- [ ] Navigation through state, without SvelteKit; no `{@html}` with user data.
 
-### Критерии приёмки
-- [ ] Реплей завершённого матча открывается с экрана итога.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [CLI-11] Английская локализация и выбор языка
-
-Метки: `area:client` `type:feature` `P1` `size:S`
-
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P1 · **Размер:** S (≤ 1 день) · **Трек:** B
-**Зависит от:** INF-03
-
-### Задачи
-- [ ] Словарь en для всех ключей ru (uk — после MVP).
-- [ ] Выбор языка по браузеру с возможностью переключения.
-
-### Критерии приёмки
-- [ ] Скрипт проверки: нет строк интерфейса вне словарей, в словарях одинаковый набор ключей.
+### Acceptance criteria
+- [ ] The path "opened a link → entered a nickname → ended up in a match" takes ≤ 3 actions.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [QA-01] Первый живой матч: ручной чек-лист
+### [CLI-10] Replay viewing
 
-Метки: `area:qa` `type:test` `P0` `size:S`
+Labels: `area:client` `type:feature` `P0` `size:S`
 
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** CLI-05, CLI-07, CLI-08, CLI-09, CLI-10, SRV-04, SRV-06, SRV-08, SRV-09
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** B
+**Depends on:** SRV-07, CLI-04
 
-### Задачи
-- [ ] Чек-лист в `docs/qa/manual-match.md`: инвайт, игра с ботом, все команды, бой, осада, победа по таймеру и по столице, сдача, переподключение, реплей.
-- [ ] Прогон на двух разных компьютерах через интернет (временный сервер или туннель).
+### Tasks
+- [ ] Loading the frames file and the same rendering in spectator mode with full reveal.
+- [ ] Speed ×1 / ×4 / ×16, pause, seeking with a slider.
 
-### Критерии приёмки
-- [ ] Все пункты чек-листа пройдены, найденные баги заведены как issues.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [PT-01] Внутренний плейтест: решение go / no-go
-
-Метки: `area:design` `type:decision` `P0` `size:S`
-
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** QA-01, BAL-02
-
-### Контекст
-Боты не заменяют людей: до вложений в метаигру нужно убедиться, что играть интересно.
-
-### Задачи
-- [ ] Не меньше 10 партий между людьми (разработчики и друзья) по инвайту на `rulesets/mvp.toml`.
-- [ ] Короткая анкета после каждой партии: понятность боя, интерес, что раздражало.
-- [ ] Разбор реплеев тем же анализатором (BOT-04).
-
-### Критерии приёмки
-- [ ] Решение «go» или «no-go» записано в `docs/balance/playtest-0.md` с аргументами; при «no-go» — список правок до повторного плейтеста.
+### Acceptance criteria
+- [ ] The replay of a finished match opens from the result screen.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [MAP-05] Бейкер фона карт из legacy-генератора
+### [CLI-11] English localization and language selection
 
-Метки: `area:maps` `type:feature` `P2` `size:M`
+Labels: `area:client` `type:feature` `P1` `size:S`
 
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P2 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** MAP-01
+**Milestone:** M4: Web client and internal playtest · **Priority:** P1 · **Size:** S (≤ 1 day) · **Track:** B
+**Depends on:** INF-03
 
-### Задачи
-- [ ] Перенести логику биомов и metaballs из `legacy/.../MapGenerator.py` в `tools/maps/bake.py`.
-- [ ] Биом каждой области соответствует рельефу узла + море; результат детерминирован.
+### Tasks
+- [ ] An en dictionary for all the ru keys (uk after the MVP).
+- [ ] Language selection by the browser with the option to switch.
 
-### Критерии приёмки
-- [ ] PNG для всех карт MVP, каждый ≤ 1,5 МБ.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [CLI-12] Обратная связь и «сочность»
-
-Метки: `area:client` `type:feature` `P2` `size:M`
-
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P2 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** CLI-04, BAL-02
-
-### Задачи
-- [ ] Анимации боя, отскока, захвата узла, гибели юнитов.
-- [ ] Звуки (Howler.js) с регулировкой громкости.
-
-### Критерии приёмки
-- [ ] Каждое событие боя имеет визуальный отклик; звук отключается одной кнопкой.
+### Acceptance criteria
+- [ ] A check script: no interface strings outside the dictionaries, the dictionaries have the same set of keys.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [CLI-13] Экран «Как играть»
+### [QA-01] First live match: manual checklist
 
-Метки: `area:client` `type:feature` `P0` `size:S`
+Labels: `area:qa` `type:test` `P0` `size:S`
 
-**Веха:** M4 — Веб-клиент и внутренний плейтест · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** B
-**Зависит от:** CLI-09, BAL-02
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** CLI-05, CLI-07, CLI-08, CLI-09, CLI-10, SRV-04, SRV-06, SRV-08, SRV-09
 
-### Задачи
-- [ ] Одна страница: заряды, дороги, бой и отскок, запланированные приказы, победа — с картинками.
-- [ ] Центральная фраза: «Столица производит заряды, дороги их развозят, юнит без заряда беззащитен».
+### Tasks
+- [ ] A checklist in `docs/qa/manual-match.md`: invite, play against a bot, all commands, combat, siege, victory by timer and by capital, surrender, reconnection, replay.
+- [ ] A run on two different computers over the internet (a temporary server or a tunnel).
 
-### Критерии приёмки
-- [ ] Экран открывается из меню и с экрана матча; примеры боя на нём генерируются из векторов `combat.json`, пересчитанных по `rulesets/mvp.toml`.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-## M5 — Метаигра
-
-*Публичное лобби, очередь матчмейкинга, рейтинг Glicko-2 и лидерборд.*
-
-### [RAT-01] Рейтинг Glicko-2
-
-Метки: `area:meta` `type:feature` `P0` `size:S`
-
-**Веха:** M5 — Метаигра · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** DB-01, PT-01
-
-### Задачи
-- [ ] Собственная реализация Glicko-2 (~100 строк) в `gow_server.rating`, τ = 0,5, обновление после каждого матча.
-- [ ] Тест на пример из статьи Глицкмана: 1500 / 200 / 0,06 → 1464,06 / 151,52 / 0,05999.
-- [ ] Показываемый рейтинг — `r − 2·RD`.
-
-### Критерии приёмки
-- [ ] Тест на пример из статьи проходит с точностью до 0,01.
+### Acceptance criteria
+- [ ] All checklist items are passed, the bugs found are filed as issues.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [DEC-06] Решение: какие матчи рейтинговые
+### [PT-01] Internal playtest: go / no-go decision
 
-Метки: `area:design` `type:decision` `P0` `size:XS`
+Labels: `area:design` `type:decision` `P0` `size:S`
 
-**Веха:** M5 — Метаигра · **Приоритет:** P0 · **Размер:** XS (≤ 2 часа) · **Трек:** any
-**Зависит от:** DOC-01
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** QA-01, BAL-02
 
-### Решение по умолчанию
-Рейтинговые только матчи из очереди матчмейкинга. Матчи из лобби, по инвайту и против бота рейтинг не меняют, но сохраняются в истории. Техническое поражение и сдача — поражение.
+### Context
+Bots do not replace people: before investing in the meta game we need to make sure the game is fun to play.
 
-### Критерии приёмки
-- [ ] Решение записано в mechanics.md со статусом [принято].
+### Tasks
+- [ ] At least 10 matches between people (developers and friends) via an invite on `rulesets/mvp.toml`.
+- [ ] A short questionnaire after each match: clarity of combat, interest, what was annoying.
+- [ ] Analysis of the replays with the same analyzer (BOT-04).
 
-### Как закрыть
-Значение по умолчанию уже есть, поэтому решение занимает не больше пары часов: подтвердить его или выбрать альтернативу и записать в `docs/design/mechanics.md` со статусом [принято]. Блокирует SIM-01 (DEC-05 — SRV-04, DEC-06 — RAT-02). Дальше числа меняются только через рулсет и BAL-02.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [RAT-02] Обновление рейтинга по итогам матчей
-
-Метки: `area:meta` `type:feature` `P0` `size:S`
-
-**Веха:** M5 — Метаигра · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** RAT-01, SRV-09, PT-01, DEC-06
-
-### Задачи
-- [ ] По окончании рейтингового матча — обновление обоих игроков в одной транзакции вне тика.
-- [ ] Идемпотентность: повторная обработка того же матча не меняет рейтинг.
-- [ ] Изменение рейтинга в `match_end` и на экране итога.
-
-### Критерии приёмки
-- [ ] Тест: два рейтинговых матча подряд дают ожидаемые значения; повторная обработка не меняет их.
+### Acceptance criteria
+- [ ] A "go" or "no-go" decision is recorded in `docs/balance/playtest-0.md` with arguments; on "no-go", a list of fixes before a repeat playtest.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [LOB-01] Публичное лобби
+### [MAP-05] Map background baker from the legacy generator
 
-Метки: `area:meta` `type:feature` `P0` `size:M`
+Labels: `area:maps` `type:feature` `P2` `size:M`
 
-**Веха:** M5 — Метаигра · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** any
-**Зависит от:** SRV-09, CLI-09, PT-01
+**Milestone:** M4: Web client and internal playtest · **Priority:** P2 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** MAP-01
 
-### Задачи
-- [ ] Сервер: публичный матч (карта из пула), список открытых матчей, присоединение, удаление брошенных.
-- [ ] Клиент: экран лобби с обновлением списка (опрос раз в 2 секунды).
+### Tasks
+- [ ] Move the biome and metaballs logic from `legacy/.../MapGenerator.py` into `tools/maps/bake.py`.
+- [ ] The biome of each area corresponds to the node's terrain + sea; the result is deterministic.
 
-### Критерии приёмки
-- [ ] Два браузера: один создаёт публичный матч, второй видит его в списке и входит.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [MM-01] Очередь матчмейкинга
-
-Метки: `area:meta` `type:feature` `P0` `size:L`
-
-**Веха:** M5 — Метаигра · **Приоритет:** P0 · **Размер:** L (4–5 дней) · **Трек:** any
-**Зависит от:** RAT-01, SRV-09, SRV-06, CLI-09, PT-01
-
-### Задачи
-- [ ] Очередь в памяти, проход раз в 1–2 секунды; окно `±100 + k·ожидание` с потолком; пара, только если оба окна принимают друг друга; не сводить ту же пару дважды подряд.
-- [ ] «Пара найдена» → подтверждение за 15 секунд; неподтвердивший выходит из очереди, подтвердивший возвращается в её начало.
-- [ ] Случайная карта из пула; рейтинговый матч по DEC-06.
-- [ ] Через 60–90 секунд ожидания — предложение сыграть с ботом без рейтинга.
-- [ ] Клиент: экран очереди с временем ожидания и размером очереди.
-
-### Критерии приёмки
-- [ ] Тест алгоритма: 10 игроков с разным рейтингом сводятся по правилам, окно расширяется со временем.
-- [ ] Тест: неподтверждённая пара не создаёт матч.
+### Acceptance criteria
+- [ ] A PNG for all MVP maps, each ≤ 1.5 MB.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [LB-01] Лидерборд и профиль игрока
+### [CLI-12] Feedback and "juice"
 
-Метки: `area:meta` `type:feature` `P0` `size:M`
+Labels: `area:client` `type:feature` `P2` `size:M`
 
-**Веха:** M5 — Метаигра · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** any
-**Зависит от:** RAT-02, CLI-10, MM-01
+**Milestone:** M4: Web client and internal playtest · **Priority:** P2 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** CLI-04, BAL-02
 
-### Задачи
-- [ ] `/api/leaderboard` (топ-100 по `r − 2·RD`, минимум 5 рейтинговых матчей) и `/api/players/{id}`.
-- [ ] Профиль: рейтинг, победы и поражения, последние 20 матчей (любых) со ссылками на реплеи.
-- [ ] Клиентские экраны.
+### Tasks
+- [ ] Animations of combat, bounce, node capture, unit deaths.
+- [ ] Sounds (Howler.js) with volume control.
 
-### Критерии приёмки
-- [ ] После рейтингового матча оба игрока видят изменения в профиле и лидерборде.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [MOD-01] Базовая защита от злоупотреблений
-
-Метки: `area:meta` `type:feature` `P0` `size:S`
-
-**Веха:** M5 — Метаигра · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** ID-01, PT-01
-
-### Задачи
-- [ ] Зарезервированные и запрещённые ники (базовый список).
-- [ ] Лимиты частоты: создание матчей, вход в очередь, смена ника.
-- [ ] Админ-скрипт: переименовать или заблокировать игрока.
-
-### Критерии приёмки
-- [ ] Тесты на лимиты и запрещённые ники.
+### Acceptance criteria
+- [ ] Every combat event has a visual response; sound is switched off with one button.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-## M6 — Релиз MVP
+### [CLI-13] "How to play" screen
 
-*Игра развёрнута по https, проходит e2e и аудит, проведён закрытый плейтест.*
+Labels: `area:client` `type:feature` `P0` `size:S`
 
-### [OPS-01] Docker-образы и docker compose
+**Milestone:** M4: Web client and internal playtest · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** B
+**Depends on:** CLI-09, BAL-02
 
-Метки: `area:infra` `type:chore` `P0` `size:M`
+### Tasks
+- [ ] One page: charges, roads, combat and bounce, scheduled orders, victory, with pictures.
+- [ ] The central phrase: "The capital produces charges, roads carry them, a unit without a charge is defenseless".
 
-**Веха:** M6 — Релиз MVP · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** SRV-01, INF-03
-
-### Задачи
-- [ ] Образ `app`: uv, `uvicorn --workers 1`, том `/data` (SQLite и реплеи).
-- [ ] Многоэтапный образ `caddy`: сборка клиента и Caddy со статикой.
-- [ ] `compose.yaml`: `caddy` (80/443) и `app` (только внутренняя сеть); `.env.example`.
-
-### Критерии приёмки
-- [ ] `docker compose up` локально поднимает игру; матч по инвайту проходит.
+### Acceptance criteria
+- [ ] The screen opens from the menu and from the match screen; the combat examples on it are generated from the `combat.json` vectors, recomputed against `rulesets/mvp.toml`.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [OPS-02] Caddy: TLS, WebSocket, статика, заголовки безопасности
+## M5: Meta game
 
-Метки: `area:infra` `type:chore` `P0` `size:S`
+*Public lobby, matchmaking queue, Glicko-2 rating and leaderboard.*
 
-**Веха:** M6 — Релиз MVP · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** B
-**Зависит от:** OPS-01
+### [RAT-01] Glicko-2 rating
 
-### Задачи
-- [ ] Маршруты `/api/*`, `/ws/*` (с `stream_close_delay`), остальное — статика с `try_files`.
-- [ ] `index.html` — `no-cache`, ассеты с хэшем — `immutable`.
-- [ ] CSP из INF-03, `X-Content-Type-Options`, `Referrer-Policy`.
+Labels: `area:meta` `type:feature` `P0` `size:S`
 
-### Критерии приёмки
-- [ ] Проверка заголовков скриптом; WebSocket переживает перезагрузку конфига Caddy; в консоли браузера нет ошибок CSP.
+**Milestone:** M5: Meta game · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** DB-01, PT-01
 
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+### Tasks
+- [ ] Our own Glicko-2 implementation (~100 lines) in `gow_server.rating`, τ = 0.5, updated after every match.
+- [ ] A test on the example from Glickman's paper: 1500 / 200 / 0.06 → 1464.06 / 151.52 / 0.05999.
+- [ ] The displayed rating is `r − 2·RD`.
 
-### [OPS-03] Развёртывание на VPS, бэкапы и безопасный деплой
-
-Метки: `area:infra` `type:chore` `P0` `size:M`
-
-**Веха:** M6 — Релиз MVP · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** OPS-02, DB-01
-
-### Задачи
-- [ ] Инструкция и скрипт подготовки VPS (Hetzner): Docker, файрвол, пользователь без root.
-- [ ] Деплой с «осушением»: запрет новых матчей, ожидание окончания текущих (или таймаут), затем перезапуск.
-- [ ] Ночной бэкап `VACUUM INTO` и каталога реплеев; проверенное восстановление.
-
-### Критерии приёмки
-- [ ] Игра доступна по https на своём домене; восстановление из бэкапа проверено на чистой машине.
+### Acceptance criteria
+- [ ] The test on the example from the paper passes to within 0.01.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [OPS-04] Наблюдаемость: логи, метрики, ошибки
+### [DEC-06] Decision: which matches are ranked
 
-Метки: `area:infra` `type:chore` `P1` `size:S`
+Labels: `area:design` `type:decision` `P0` `size:XS`
 
-**Веха:** M6 — Релиз MVP · **Приоритет:** P1 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** SRV-02, OPS-01
+**Milestone:** M5: Meta game · **Priority:** P0 · **Size:** XS (≤ 2 hours) · **Track:** any
+**Depends on:** DOC-01
 
-### Задачи
-- [ ] Метрики: активные матчи, отставание тиков, p99 шага, пропуски ботов, размер очереди, число соединений.
-- [ ] Сбор ошибок (Sentry или аналог, опционально) для сервера и клиента.
-- [ ] Оповещение при падении матча или отставании тиков > 10%.
+### Default decision
+Only matches from the matchmaking queue are ranked. Matches from the lobby, via an invite and against a bot do not change the rating, but are saved in the history. A technical defeat and a surrender are a defeat.
 
-### Критерии приёмки
-- [ ] Намеренное исключение в матче видно в логах с id матча, и приходит оповещение.
+### Acceptance criteria
+- [ ] The decision is recorded in mechanics.md with the status [accepted].
 
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [QA-02] E2E Playwright: матч по инвайту в двух браузерах
-
-Метки: `area:qa` `type:test` `P0` `size:M`
-
-**Веха:** M6 — Релиз MVP · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** B
-**Зависит от:** QA-01, OPS-01
-
-### Задачи
-- [ ] Два контекста браузера: создание гостей, инвайт, несколько приказов, окончание матча на `test-short`, открытие реплея.
-- [ ] Запуск в CI против `docker compose`.
-
-### Критерии приёмки
-- [ ] Тест стабилен: 20 прогонов подряд без ложных падений.
+### How to close
+A default value already exists, so the decision takes a couple of hours at most: confirm it or pick an alternative and record it in `docs/design/mechanics.md` with the status [accepted]. It blocks SIM-01 (DEC-05 blocks SRV-04, DEC-06 blocks RAT-02). After that the numbers change only through the ruleset and BAL-02.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [QA-03] Нагрузочный тест
+### [RAT-02] Updating the rating from match results
 
-Метки: `area:qa` `type:test` `P1` `size:S`
+Labels: `area:meta` `type:feature` `P0` `size:S`
 
-**Веха:** M6 — Релиз MVP · **Приоритет:** P1 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** SRV-08, OPS-03
+**Milestone:** M5: Meta game · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** RAT-01, SRV-09, PT-01, DEC-06
 
-### Задачи
-- [ ] N параллельных матчей бот против бота через настоящие WebSocket на целевом VPS.
-- [ ] Замер отставания тиков, p99 шага, CPU и памяти.
+### Tasks
+- [ ] When a ranked match ends, both players are updated in one transaction outside the tick.
+- [ ] Idempotency: reprocessing the same match does not change the rating.
+- [ ] The rating change in `match_end` and on the result screen.
 
-### Критерии приёмки
-- [ ] 30 параллельных матчей в одном серверном процессе (одно ядро) с отставанием тиков < 10%; результат в `docs/qa/load.md`.
-
----
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
-
-### [QA-04] Аудит безопасности и утечек тумана
-
-Метки: `area:qa` `type:test` `P0` `size:S`
-
-**Веха:** M6 — Релиз MVP · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** SRV-03, CLI-01, OPS-02, SIM-17, MOD-01
-
-### Задачи
-- [ ] Чек-лист: вид игрока не содержит скрытого (включая id и счётчики); ошибки не различают «нет» и «не видно»; токены не в URL и логах; проверка Origin; лимиты частоты; CSP; фаззинг `ClientMsg`.
-- [ ] Ручная попытка «мапхака»: чтение всех сообщений WebSocket в DevTools за матч.
-
-### Критерии приёмки
-- [ ] Все пункты чек-листа пройдены; найденное исправлено или заведено как P0.
+### Acceptance criteria
+- [ ] A test: two ranked matches in a row give the expected values; reprocessing does not change them.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [LEG-01] Правовой минимум для публичного сайта
+### [LOB-01] Public lobby
 
-Метки: `area:release` `type:chore` `P0` `size:S`
+Labels: `area:meta` `type:feature` `P0` `size:M`
 
-**Веха:** M6 — Релиз MVP · **Приоритет:** P0 · **Размер:** S (≤ 1 день) · **Трек:** any
-**Зависит от:** OPS-03, CLI-09
+**Milestone:** M5: Meta game · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** any
+**Depends on:** SRV-09, CLI-09, PT-01
 
-### Контекст
-Сайт размещается в Германии и доступен публично, поэтому нужны Impressum и политика конфиденциальности (DSGVO). Это не юридическая консультация: тексты стоит проверить у юриста или взять у проверенного генератора.
+### Tasks
+- [ ] Server: a public match (a map from the pool), a list of open matches, joining, removing abandoned ones.
+- [ ] Client: a lobby screen with a refreshing list (polling once every 2 seconds).
 
-### Задачи
-- [ ] Страницы Impressum и политики конфиденциальности; ссылки в подвале и на приветственном экране.
-- [ ] Перечень данных: гостевой id и токен в localStorage, ник, IP в логах (срок хранения), реплеи; удаление по запросу.
-- [ ] Сторонние сервисы (сбор ошибок, хостинг) упомянуты в политике; аналитика только без согласия или с баннером согласия.
-
-### Критерии приёмки
-- [ ] Страницы доступны с любого экрана игры; срок хранения логов с IP настроен и совпадает с политикой.
+### Acceptance criteria
+- [ ] Two browsers: one creates a public match, the other sees it in the list and joins.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
 
-### [REL-01] Закрытый плейтест MVP
+### [MM-01] Matchmaking queue
 
-Метки: `area:release` `type:chore` `P0` `size:M`
+Labels: `area:meta` `type:feature` `P0` `size:L`
 
-**Веха:** M6 — Релиз MVP · **Приоритет:** P0 · **Размер:** M (2–3 дня) · **Трек:** any
-**Зависит от:** QA-02, QA-04, OPS-03, LB-01, MM-01, LOB-01, LEG-01, SRV-08, CLI-13
+**Milestone:** M5: Meta game · **Priority:** P0 · **Size:** L (4-5 days) · **Track:** any
+**Depends on:** RAT-01, SRV-09, SRV-06, CLI-09, PT-01
 
-### Задачи
-- [ ] 10–20 приглашённых игроков, неделя, анкета обратной связи.
-- [ ] Отчёт по реальным матчам анализатором BOT-04 (по журналам реплеев): длительность, итоги, доля запланированных атак, осады, дисконнекты.
-- [ ] Разбор багов и итогов в `docs/balance/playtest-1.md`.
+### Tasks
+- [ ] An in-memory queue, a pass once per 1-2 seconds; a window `±100 + k·wait` with a cap; a pair only if both windows accept each other; do not pair the same pair twice in a row.
+- [ ] "Pair found" → confirmation within 15 seconds; whoever did not confirm leaves the queue, whoever confirmed returns to the front of it.
+- [ ] A random map from the pool; a ranked match per DEC-06.
+- [ ] After 60-90 seconds of waiting, an offer to play against a bot without rating.
+- [ ] Client: a queue screen with the waiting time and the queue size.
 
-### Критерии приёмки
-- [ ] ≥ 90% начатых матчей завершаются без технических сбоев.
-- [ ] Ни одного расхождения пересимуляции реплея с результатом матча.
-- [ ] ≥ 70% участников после двух матчей правильно объясняют правило боя.
+### Acceptance criteria
+- [ ] An algorithm test: 10 players with different ratings are paired by the rules, the window widens over time.
+- [ ] A test: an unconfirmed pair does not create a match.
 
 ---
-Definition of Done: см. `AGENTS.md` → «Definition of Done».
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [LB-01] Leaderboard and player profile
+
+Labels: `area:meta` `type:feature` `P0` `size:M`
+
+**Milestone:** M5: Meta game · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** any
+**Depends on:** RAT-02, CLI-10, MM-01
+
+### Tasks
+- [ ] `/api/leaderboard` (the top 100 by `r − 2·RD`, at least 5 ranked matches) and `/api/players/{id}`.
+- [ ] Profile: rating, wins and losses, the last 20 matches (any) with links to replays.
+- [ ] Client screens.
+
+### Acceptance criteria
+- [ ] After a ranked match both players see the changes in the profile and the leaderboard.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [MOD-01] Basic abuse protection
+
+Labels: `area:meta` `type:feature` `P0` `size:S`
+
+**Milestone:** M5: Meta game · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** ID-01, PT-01
+
+### Tasks
+- [ ] Reserved and forbidden nicknames (a basic list).
+- [ ] Rate limits: creating matches, joining the queue, changing the nickname.
+- [ ] An admin script: rename or block a player.
+
+### Acceptance criteria
+- [ ] Tests of the limits and forbidden nicknames.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+## M6: MVP release
+
+*The game is deployed over https, passes e2e and an audit, a closed playtest has been held.*
+
+### [OPS-01] Docker images and docker compose
+
+Labels: `area:infra` `type:chore` `P0` `size:M`
+
+**Milestone:** M6: MVP release · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** SRV-01, INF-03
+
+### Tasks
+- [ ] The `app` image: uv, `uvicorn --workers 1`, the volume `/data` (SQLite and replays).
+- [ ] A multi-stage `caddy` image: building the client and Caddy with static files.
+- [ ] `compose.yaml`: `caddy` (80/443) and `app` (internal network only); `.env.example`.
+
+### Acceptance criteria
+- [ ] `docker compose up` brings up the game locally; a match via an invite works.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [OPS-02] Caddy: TLS, WebSocket, static files, security headers
+
+Labels: `area:infra` `type:chore` `P0` `size:S`
+
+**Milestone:** M6: MVP release · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** B
+**Depends on:** OPS-01
+
+### Tasks
+- [ ] Routes `/api/*`, `/ws/*` (with `stream_close_delay`), the rest is static files with `try_files`.
+- [ ] `index.html` is `no-cache`, hashed assets are `immutable`.
+- [ ] The CSP from INF-03, `X-Content-Type-Options`, `Referrer-Policy`.
+
+### Acceptance criteria
+- [ ] A header check by script; the WebSocket survives a Caddy config reload; there are no CSP errors in the browser console.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [OPS-03] VPS deployment, backups and safe deploy
+
+Labels: `area:infra` `type:chore` `P0` `size:M`
+
+**Milestone:** M6: MVP release · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** OPS-02, DB-01
+
+### Tasks
+- [ ] An instruction and a script for preparing a VPS (Hetzner): Docker, firewall, a non-root user.
+- [ ] Deploy with "draining": a ban on new matches, waiting for the current ones to end (or a timeout), then a restart.
+- [ ] A nightly backup of `VACUUM INTO` and the replay directory; a verified restore.
+
+### Acceptance criteria
+- [ ] The game is available over https on its own domain; restoring from a backup is verified on a clean machine.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [OPS-04] Observability: logs, metrics, errors
+
+Labels: `area:infra` `type:chore` `P1` `size:S`
+
+**Milestone:** M6: MVP release · **Priority:** P1 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** SRV-02, OPS-01
+
+### Tasks
+- [ ] Metrics: active matches, tick lag, the p99 of the step, bot skips, queue size, the number of connections.
+- [ ] Error collection (Sentry or an equivalent, optional) for the server and the client.
+- [ ] An alert when a match crashes or the tick lag exceeds 10%.
+
+### Acceptance criteria
+- [ ] A deliberate exception in a match is visible in the logs with the match id, and an alert arrives.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [QA-02] E2E Playwright: an invite match in two browsers
+
+Labels: `area:qa` `type:test` `P0` `size:M`
+
+**Milestone:** M6: MVP release · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** B
+**Depends on:** QA-01, OPS-01
+
+### Tasks
+- [ ] Two browser contexts: creating guests, an invite, several orders, the end of a match on `test-short`, opening a replay.
+- [ ] Running in CI against `docker compose`.
+
+### Acceptance criteria
+- [ ] The test is stable: 20 runs in a row without false failures.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [QA-03] Load test
+
+Labels: `area:qa` `type:test` `P1` `size:S`
+
+**Milestone:** M6: MVP release · **Priority:** P1 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** SRV-08, OPS-03
+
+### Tasks
+- [ ] N parallel bot-vs-bot matches through real WebSockets on the target VPS.
+- [ ] Measuring tick lag, the p99 of the step, CPU and memory.
+
+### Acceptance criteria
+- [ ] 30 parallel matches in one server process (one core) with tick lag < 10%; the result in `docs/qa/load.md`.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [QA-04] Security and fog leak audit
+
+Labels: `area:qa` `type:test` `P0` `size:S`
+
+**Milestone:** M6: MVP release · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** SRV-03, CLI-01, OPS-02, SIM-17, MOD-01
+
+### Tasks
+- [ ] A checklist: a player's view contains nothing hidden (including ids and counters); errors do not distinguish "no" from "not visible"; tokens are not in URLs and logs; the Origin check; rate limits; CSP; fuzzing of `ClientMsg`.
+- [ ] A manual "maphack" attempt: reading all the WebSocket messages in DevTools over a match.
+
+### Acceptance criteria
+- [ ] All checklist items are passed; what is found is fixed or filed as P0.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [LEG-01] Legal minimum for a public site
+
+Labels: `area:release` `type:chore` `P0` `size:S`
+
+**Milestone:** M6: MVP release · **Priority:** P0 · **Size:** S (≤ 1 day) · **Track:** any
+**Depends on:** OPS-03, CLI-09
+
+### Context
+The site is hosted in Germany and is publicly available, so an Impressum and a privacy policy (DSGVO) are needed. This is not legal advice: the texts should be checked by a lawyer or taken from a trusted generator.
+
+### Tasks
+- [ ] Impressum and privacy policy pages; links in the footer and on the welcome screen.
+- [ ] A list of data: the guest id and token in localStorage, the nickname, the IP in logs (retention period), replays; deletion on request.
+- [ ] Third-party services (error collection, hosting) are mentioned in the policy; analytics only without consent or with a consent banner.
+
+### Acceptance criteria
+- [ ] The pages are reachable from any game screen; the retention period of logs with IPs is configured and matches the policy.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".
+
+### [REL-01] MVP closed playtest
+
+Labels: `area:release` `type:chore` `P0` `size:M`
+
+**Milestone:** M6: MVP release · **Priority:** P0 · **Size:** M (2-3 days) · **Track:** any
+**Depends on:** QA-02, QA-04, OPS-03, LB-01, MM-01, LOB-01, LEG-01, SRV-08, CLI-13
+
+### Tasks
+- [ ] 10-20 invited players, a week, a feedback questionnaire.
+- [ ] A report on the real matches with the BOT-04 analyzer (from the replay logs): duration, results, the share of scheduled attacks, sieges, disconnects.
+- [ ] A review of bugs and results in `docs/balance/playtest-1.md`.
+
+### Acceptance criteria
+- [ ] ≥ 90% of started matches finish without technical failures.
+- [ ] Not a single divergence of a replay's re-simulation from the match result.
+- [ ] ≥ 70% of participants correctly explain the combat rule after two matches.
+
+---
+Definition of Done: see `AGENTS.md`, section "Definition of Done".

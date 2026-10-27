@@ -1,100 +1,100 @@
-# Skill-Based Front — план MVP
+# Skill-Based Front MVP plan
 
-## Что такое MVP
+## What the MVP is
 
-Два игрока находят друг друга через публичное лобби, очередь матчмейкинга или инвайт-ссылку и играют полную партию 1v1 в браузере по сети. Рейтинговые матчи меняют рейтинг Glicko-2, есть лидерборд, игра против бота и реплей с полным раскрытием. Балансом управляет набор правил (рулсет), проверенный турниром ботов и внутренним плейтестом.
+Two players find each other through a public lobby, a matchmaking queue, or an invite link and play a full 1v1 match in the browser over the network. Ranked matches change the Glicko-2 rating, there is a leaderboard, play against a bot, and a replay with full reveal. Balance is driven by a set of rules (a ruleset) verified by a bot tournament and an internal playtest.
 
-## Что не входит в MVP
+## What is not in the MVP
 
-- Строительство новых рёбер игроками (mechanics.md §8) — после MVP.
-- Режимы доставки «пакеты / прокачка», трофеи со складов, обзор от размера группы.
-- Запасные модели правил (вогнутая экономика, порог VP, бонус за финальное удержание) — реализуются, только если их потребует BAL-02.
-- Процедурная генерация карт (только ручные карты и скрипт отзеркаливания), украинская локализация.
-- FFA и командные режимы; только 1v1.
-- Полноценные аккаунты и OAuth — только гостевая идентичность с возможностью «апгрейда» позже.
-- Steam, мобильные устройства, чат, живые зрители, турниры, монетизация.
-- Редактор карт с интерфейсом — только CLI-инструменты.
+- Players building new edges (mechanics.md section 8): after the MVP.
+- The delivery modes "packets / pump-up", trophies from warehouses, vision based on group size.
+- Fallback rule models (concave economy, VP threshold, a bonus for the final hold): implemented only if BAL-02 requires them.
+- Procedural map generation (hand-made maps and a mirroring script only), Ukrainian localization.
+- FFA and team modes; 1v1 only.
+- Full accounts and OAuth: only a guest identity with an "upgrade" option later.
+- Steam, mobile devices, chat, live spectators, tournaments, monetization.
+- A map editor with an interface: CLI tools only.
 
-## Главные принципы плана
+## Main principles of the plan
 
-- **Сначала механика, потом пиксели и метаигра.** Баланс-гейт BAL-02 проверяет глубину механики на ботах, внутренний плейтест PT-01 — на людях. Полировка клиента (CLI-12, CLI-13) зависит от BAL-02, вся метаигра (M5) — от PT-01.
-- **Правила доопределены до уровня тестов.** Бой задан таблицей разобранных примеров (DEC-07); тесты SIM-09 — это ровно эта таблица.
-- **Открытые вопросы закрываются в начале и быстро.** У каждого DEC-issue уже есть значение по умолчанию; подтверждение занимает пару часов и нужно до SIM-01. Дальше числа меняются только правкой рулсета.
-- **Числа — данные.** Все параметры правил живут в `rulesets/*.toml`; балансировка — это правка файла и перезапуск турнира.
-- **Два параллельных трека.** Трек A (Python) ведёт симуляцию, ботов и сервер; трек B (TypeScript и инструменты) — карты, клиент и инфраструктуру. Клиент начинается на данных карты до готовности протокола (CLI-03).
-- **Каждый issue ≤ 5 дней и имеет проверяемые критерии приёмки.**
+- **Mechanics first, then pixels and the meta game.** The balance gate BAL-02 checks the depth of the mechanics with bots, the internal playtest PT-01 checks it with humans. Client polish (CLI-12, CLI-13) depends on BAL-02, the whole meta game (M5) depends on PT-01.
+- **The rules are specified down to the level of tests.** Combat is defined by a table of worked examples (DEC-07); the SIM-09 tests are exactly this table.
+- **Open questions are closed early and fast.** Every DEC issue already has a default value; confirming it takes a couple of hours and is needed before SIM-01. After that the numbers change only by editing the ruleset.
+- **Numbers are data.** All rule parameters live in `rulesets/*.toml`; balancing is editing a file and rerunning the tournament.
+- **Two parallel tracks.** Track A (Python) carries the simulation, the bots and the server; track B (TypeScript and tools) carries the maps, the client and the infrastructure. The client starts on map data before the protocol is ready (CLI-03).
+- **Every issue is at most 5 days and has verifiable acceptance criteria.**
 
-## Вехи
+## Milestones
 
-| Веха | Цель | Issues | P0 | Оценка, чел.-дней |
+| Milestone | Goal | Issues | P0 | Estimate, person-days |
 |---|---|---|---|---|
-| **M0 — Фундамент** | Репозиторий, инструменты, CI и документы готовы; открытые вопросы дизайна получили значения по умолчанию. | 12 | 12 | 9.75 |
-| **M1 — Ядро симуляции** | Все правила MVP реализованы в чистой детерминированной симуляции без графики и сети. | 21 | 21 | 44.5 |
-| **M2 — Боты и баланс-гейт** | Турнир ботов показывает, что механика не схлопывается в одну стратегию. | 7 | 7 | 17 |
-| **M3 — Сервер матча** | Авторитарный сервер проводит матч между двумя WebSocket-клиентами с туманом войны. | 15 | 15 | 21.75 |
-| **M4 — Веб-клиент и внутренний плейтест** | Два человека играют полную партию в браузерах; есть игра против бота и просмотр реплея; внутренний плейтест дал «go». | 16 | 13 | 31.5 |
-| **M5 — Метаигра** | Публичное лобби, очередь матчмейкинга, рейтинг Glicko-2 и лидерборд. | 7 | 7 | 12.75 |
-| **M6 — Релиз MVP** | Игра развёрнута по https, проходит e2e и аудит, проведён закрытый плейтест. | 9 | 7 | 15 |
-| **Итого** | | 87 | 82 | 152.25 |
+| **M0: Foundation** | The repository, tooling, CI and documents are ready; the open design questions have default values. | 12 | 12 | 9.75 |
+| **M1: Simulation core** | All MVP rules are implemented in a pure deterministic simulation with no graphics and no network. | 21 | 21 | 44.5 |
+| **M2: Bots and balance gate** | The bot tournament shows that the mechanics do not collapse into a single strategy. | 7 | 7 | 17 |
+| **M3: Match server** | An authoritative server runs a match between two WebSocket clients with fog of war. | 15 | 15 | 21.75 |
+| **M4: Web client and internal playtest** | Two people play a full match in browsers; there is play against a bot and replay viewing; the internal playtest gave a "go". | 16 | 13 | 31.5 |
+| **M5: Meta game** | Public lobby, matchmaking queue, Glicko-2 rating and leaderboard. | 7 | 7 | 12.75 |
+| **M6: MVP release** | The game is deployed over https, passes e2e and an audit, a closed playtest has been held. | 9 | 7 | 15 |
+| **Total** | | 87 | 82 | 152.25 |
 
-### Критерии выхода из вех
+### Milestone exit criteria
 
-**M0 — Фундамент**
+**M0: Foundation**
 
-- CI зелёный на пустых пакетах Python и клиента.
-- docs/design/mechanics.md и AGENTS.md лежат в репозитории.
-- Значения по умолчанию всех DEC записаны в mechanics.md; DEC-01…DEC-04, DEC-07, DEC-08 подтверждены.
+- CI is green on empty Python and client packages.
+- docs/design/mechanics.md and AGENTS.md are in the repository.
+- The default values of all DECs are recorded in mechanics.md; DEC-01…DEC-04, DEC-07, DEC-08 are confirmed.
 
-**M1 — Ядро симуляции**
+**M1: Simulation core**
 
-- Полная партия прогоняется headless с простыми контроллерами.
-- Хэши состояния совпадают в разных процессах с разными PYTHONHASHSEED.
-- Зеркальный старт с зеркальными командами даёт зеркальное состояние (нет преимущества стороны в коде).
-- Каждый разобранный пример из DEC-07 — отдельный проходящий тест.
+- A full match runs headless with simple controllers.
+- State hashes match across different processes with different PYTHONHASHSEED values.
+- A mirrored start with mirrored commands gives a mirrored state (no side advantage in the code).
+- Every worked example from DEC-07 is a separate passing test.
 
-**M2 — Боты и баланс-гейт**
+**M2: Bots and balance gate**
 
-- Турнир на 1000 матчей воспроизводим и укладывается в 20 минут на 8 ядрах.
-- BAL-02 закрыт: критерии гейта пройдены, итоговый рулсет зафиксирован.
+- A 1000-match tournament is reproducible and fits into 20 minutes on 8 cores.
+- BAL-02 is closed: the gate criteria are passed, the final ruleset is fixed.
 
-**M3 — Сервер матча**
+**M3: Match server**
 
-- Два скриптовых клиента играют матч по инвайту от начала до конца; итог совпадает с headless-прогоном.
-- Переподключение восстанавливает вид игрока; реплей записывается и воспроизводится.
+- Two scripted clients play a match via an invite from start to finish; the result matches the headless run.
+- Reconnecting restores the player's view; a replay is recorded and played back.
 
-**M4 — Веб-клиент и внутренний плейтест**
+**M4: Web client and internal playtest**
 
-- Ручной чек-лист QA-01 пройден на двух разных компьютерах.
-- PT-01 закрыт с решением «go».
+- The manual QA-01 checklist is passed on two different computers.
+- PT-01 is closed with a "go" decision.
 
-**M5 — Метаигра**
+**M5: Meta game**
 
-- Рейтинговый матч из очереди меняет рейтинг обоих игроков и появляется в лидерборде и профилях.
+- A ranked match from the queue changes the rating of both players and appears in the leaderboard and in profiles.
 
-**M6 — Релиз MVP**
+**M6: MVP release**
 
-- REL-01 закрыт с достигнутыми критериями успеха.
+- REL-01 is closed with the success criteria met.
 
-## Оценка сроков
+## Schedule estimate
 
-- Всего: **152.25 идеальных человеко-дней** (87 issues), из них P0 — 144.25.
-- При двух разработчиках, работающих параллельно по трекам, расчётная длительность — **≈ 78 рабочих дней** (трек A — 75 дн., трек B — 77.25 дн.).
-- Это «идеальные» дни полной занятости. Для работы по вечерам и выходным умножайте на 2–3; на итерации баланса (BAL-02) и плейтест (PT-01) заложите запас.
-- Закрытый плейтест (REL-01) заканчивается на **≈ 75-й день**; после него в расчёте остаются только P1/P2-задачи, от которых релиз не зависит.
-- Критический путь по зависимостям без учёта людей — 48 дней:
+- Total: **152.25 ideal person-days** (87 issues), of which P0 is 144.25.
+- With two developers working in parallel on the tracks, the estimated duration is **about 78 working days** (track A: 75 days, track B: 77.25 days).
+- These are "ideal" full-time days. For work in evenings and weekends multiply by 2-3; leave a reserve for balance iterations (BAL-02) and the playtest (PT-01).
+- The closed playtest (REL-01) ends on **about day 75**; after it only P1/P2 tasks remain in the estimate, and the release does not depend on them.
+- The critical path through the dependencies, not counting people, is 48 days:
 
   INF-01 → DOC-01 → DEC-07 → SIM-01 → SIM-02 → SIM-03 → SIM-04 → SIM-05 → SIM-09 → SIM-10 → SIM-14 → SIM-15 → BOT-01 → BOT-03 → BOT-05 → BAL-01 → BAL-02 → PT-01 → RAT-01 → MM-01 → LB-01 → REL-01
 
-## Расчётный график
+## Estimated schedule
 
-Раскладка по двум трекам (день 0 — старт). Разработчик A — Python-трек, B — TypeScript и инструменты; issues с треком `any` отданы тому, кто свободен раньше.
+The layout over the two tracks (day 0 is the start). Developer A is the Python track, B is TypeScript and tools; issues with the track `any` go to whoever is free earlier.
 
 ```mermaid
 gantt
-  title План MVP (идеальные дни от старта)
+  title MVP plan (ideal days from the start)
   dateFormat YYYY-MM-DD HH:mm
   axisFormat %j
-  section Разработчик A
+  section Developer A
   INF-01 : inf01, 2026-01-01 00:00, 24h
   DOC-01 : doc01, 2026-01-02 00:00, 24h
   INF-02 : inf02, 2026-01-03 00:00, 24h
@@ -138,7 +138,7 @@ gantt
   OPS-04 : ops04, 2026-03-13 06:00, 24h
   REL-01 : rel01, 2026-03-14 06:00, 60h
   QA-03 : qa03, 2026-03-16 18:00, 24h
-  section Разработчик B
+  section Developer B
   INF-03 : inf03, 2026-01-02 00:00, 60h
   DEC-01 : dec01, 2026-01-04 12:00, 6h
   DEC-02 : dec02, 2026-01-04 18:00, 6h
@@ -185,150 +185,150 @@ gantt
   CLI-11 : cli11, 2026-03-19 06:00, 24h
 ```
 
-*Ось — номер идеального рабочего дня (001 — первый день). Календарные даты условные.*
+*The axis is the number of the ideal working day (001 is the first day). The calendar dates are nominal.*
 
-## Риски и как их снижаем
+## Risks and how we reduce them
 
-| Риск | Признак | Что делаем |
+| Risk | Sign | What we do |
 |---|---|---|
-| Механика окажется плоской | BAL-02 не проходит за таймбокс или PT-01 даёт «no-go» | Остановить M5; обсудить отложенные механики (новые рёбра, обзор от размера, запасные модели правил) |
-| Код даёт преимущество одной стороне | Преимущество стороны в отчёте BOT-05 | Двухфазное движение, симметричные бои (DEC-07), тест зеркальности в SIM-05 |
-| Python медленный для турнира или сервера | SIM-14 не укладывается в бюджет шага | Профилирование; упрощение маршрутизации снабжения; кэш ёмкости; в крайнем случае — горячие функции на Cython/mypyc |
-| Кривая обучения TypeScript у разработчика B | CLI-issues растягиваются вдвое | CLI-03 (карта из JSON) делать параллельно с сетевым слоем; держать клиент «тупым»; парное ревью |
-| Мало игроков для матчмейкинга | Очередь пустует | Бот-соперник (SRV-06), инвайты и лобби как основной путь; очередь — дополнительный |
-| Разрастание объёма из открытых вопросов | Новые механики просятся в MVP | Всё новое — флагом в рулсете и только после BAL-02 |
-| Утечки тумана войны | QA-04 или игроки находят скрытое в WebSocket | Единая функция `project()`, property-тесты SIM-14 и SIM-17, аудит QA-04 |
+| The mechanics turn out flat | BAL-02 does not pass within the timebox, or PT-01 gives "no-go" | Stop M5; discuss the postponed mechanics (new edges, vision based on size, fallback rule models) |
+| The code favors one side | A side advantage in the BOT-05 report | Two-phase movement, symmetric fights (DEC-07), the mirror test in SIM-05 |
+| Python is too slow for the tournament or the server | SIM-14 does not fit the step budget | Profiling; simplifying supply routing; a capacity cache; as a last resort, hot functions in Cython/mypyc |
+| The TypeScript learning curve of developer B | CLI issues take twice as long | Do CLI-03 (the map from JSON) in parallel with the network layer; keep the client "dumb"; pair review |
+| Too few players for matchmaking | The queue is empty | A bot opponent (SRV-06), invites and the lobby as the main path; the queue is secondary |
+| Scope growth from the open questions | New mechanics ask to get into the MVP | Everything new goes behind a ruleset flag and only after BAL-02 |
+| Fog of war leaks | QA-04 or players find hidden data in the WebSocket | A single `project()` function, the property tests of SIM-14 and SIM-17, the QA-04 audit |
 
-## Список issues
+## List of issues
 
-### M0 — Фундамент
+### M0: Foundation
 
-| ID | Задача | Приоритет | Размер | Трек | Зависит от |
+| ID | Task | Priority | Size | Track | Depends on |
 |---|---|---|---|---|---|
-| INF-01 | Монорепозиторий: новая структура и архив прототипа на Pygame | P0 | S | any | — |
-| DOC-01 | Дизайн-документы, ADR и инструкция для агентов в репозитории | P0 | S | any | INF-01 |
-| INF-02 | Python-инструменты: ruff, pyright strict, pytest, hypothesis, границы импортов | P0 | S | A | INF-01 |
-| INF-03 | Каркас веб-клиента: pnpm, Vite, Svelte 5, TypeScript strict, PixiJS 8, целевой CSP | P0 | M | B | INF-01 |
-| INF-04 | CI в GitHub Actions для Python и клиента | P0 | S | any | INF-02, INF-03, INF-05 |
-| INF-05 | Шаблоны issue и PR, метки, соглашения по веткам и коммитам | P0 | S | any | INF-01 |
-| DEC-01 | Решение: как появляются новые юниты | P0 | XS | any | DOC-01 |
-| DEC-02 | Решение: модель экономики и стойка CP | P0 | XS | any | DOC-01 |
-| DEC-03 | Решение: условие победы и длина партии | P0 | XS | any | DOC-01 |
-| DEC-04 | Решение: правила видимости в MVP | P0 | XS | any | DOC-01 |
-| DEC-07 | Решение: разрешение боя (таблица разобранных примеров) | P0 | S | any | DOC-01 |
-| DEC-08 | Решение: режимы и запланированные приказы | P0 | XS | any | DOC-01 |
+| INF-01 | Monorepo: new structure and archive of the Pygame prototype | P0 | S | any | - |
+| DOC-01 | Design documents, ADRs and the agent instructions in the repository | P0 | S | any | INF-01 |
+| INF-02 | Python tooling: ruff, pyright strict, pytest, hypothesis, import boundaries | P0 | S | A | INF-01 |
+| INF-03 | Web client skeleton: pnpm, Vite, Svelte 5, TypeScript strict, PixiJS 8, target CSP | P0 | M | B | INF-01 |
+| INF-04 | CI in GitHub Actions for Python and the client | P0 | S | any | INF-02, INF-03, INF-05 |
+| INF-05 | Issue and PR templates, labels, branch and commit conventions | P0 | S | any | INF-01 |
+| DEC-01 | Decision: how new units appear | P0 | XS | any | DOC-01 |
+| DEC-02 | Decision: economy model and CP stance | P0 | XS | any | DOC-01 |
+| DEC-03 | Decision: victory condition and match length | P0 | XS | any | DOC-01 |
+| DEC-04 | Decision: visibility rules in the MVP | P0 | XS | any | DOC-01 |
+| DEC-07 | Decision: combat resolution (table of worked examples) | P0 | S | any | DOC-01 |
+| DEC-08 | Decision: modes and scheduled orders | P0 | XS | any | DOC-01 |
 
-### M1 — Ядро симуляции
+### M1: Simulation core
 
-| ID | Задача | Приоритет | Размер | Трек | Зависит от |
+| ID | Task | Priority | Size | Track | Depends on |
 |---|---|---|---|---|---|
-| MAP-01 | Формат карты и загрузчик | P0 | S | B | INF-02, DOC-01 |
-| MAP-02 | Валидатор карт | P0 | M | B | MAP-01 |
-| MAP-03 | Скрипт отзеркаливания половины карты | P0 | S | B | MAP-02 |
-| MAP-04 | Пул карт MVP: три карты с разным характером | P0 | M | B | MAP-02, MAP-03 |
-| SIM-01 | Ruleset: все числа и флаги правил как данные | P0 | S | A | INF-02, DOC-01, DEC-01, DEC-02, DEC-03, DEC-04, DEC-07, DEC-08 |
-| SIM-02 | Модель состояния и каноническая сериализация | P0 | M | A | SIM-01, MAP-01 |
-| SIM-03 | Видимость: какие узлы и рёбра видит игрок | P0 | S | A | SIM-02 |
-| SIM-04 | Команды: типы, валидация и применение на границе тика | P0 | M | A | SIM-02, SIM-03 |
-| SIM-05 | Движение по графу | P0 | M | A | SIM-04 |
-| SIM-06 | Экономика: CP, стойка и производство в столице | P0 | S | A | SIM-02 |
-| SIM-07 | Склады, ёмкость городов и истощение | P0 | M | A | SIM-02 |
-| SIM-08 | Снабжение: пакеты, пропускная способность, перезарядка | P0 | L | A | SIM-05, SIM-06, SIM-07 |
-| SIM-09 | Бой по таблице DEC-07 | P0 | L | A | SIM-05, SIM-07 |
-| SIM-10 | Приказы: запланированные, режим «Защита», отмена | P0 | M | A | SIM-04, SIM-09 |
-| SIM-11 | Режим «Строительство»: улучшение дорог | P0 | S | any | SIM-04, SIM-07 |
-| SIM-12 | Рекрутинг юнитов | P0 | S | any | SIM-04, SIM-07 |
-| SIM-13 | Победа: VP, захват столицы, таймер, тай-брейк | P0 | S | any | SIM-09 |
-| SIM-14 | Проекция: PlayerView | P0 | M | A | SIM-03, SIM-05, SIM-10, SIM-11 |
-| SIM-15 | Движок матча и headless-прогон | P0 | M | A | SIM-08, SIM-10, SIM-11, SIM-12, SIM-13, SIM-14 |
-| SIM-16 | Детерминизм и реплеи | P0 | M | A | SIM-15 |
-| SIM-17 | Property-based тесты инвариантов (Hypothesis) | P0 | M | any | SIM-15 |
+| MAP-01 | Map format and loader | P0 | S | B | INF-02, DOC-01 |
+| MAP-02 | Map validator | P0 | M | B | MAP-01 |
+| MAP-03 | Script for mirroring half a map | P0 | S | B | MAP-02 |
+| MAP-04 | MVP map pool: three maps of different character | P0 | M | B | MAP-02, MAP-03 |
+| SIM-01 | Ruleset: all rule numbers and flags as data | P0 | S | A | INF-02, DOC-01, DEC-01, DEC-02, DEC-03, DEC-04, DEC-07, DEC-08 |
+| SIM-02 | State model and canonical serialization | P0 | M | A | SIM-01, MAP-01 |
+| SIM-03 | Visibility: which nodes and edges a player sees | P0 | S | A | SIM-02 |
+| SIM-04 | Commands: types, validation and application at the tick boundary | P0 | M | A | SIM-02, SIM-03 |
+| SIM-05 | Movement across the graph | P0 | M | A | SIM-04 |
+| SIM-06 | Economy: CP, stance and production in the capital | P0 | S | A | SIM-02 |
+| SIM-07 | Warehouses, city capacity and attrition | P0 | M | A | SIM-02 |
+| SIM-08 | Supply: packets, throughput, recharging | P0 | L | A | SIM-05, SIM-06, SIM-07 |
+| SIM-09 | Combat per the DEC-07 table | P0 | L | A | SIM-05, SIM-07 |
+| SIM-10 | Orders: scheduled, the "Defense" mode, cancellation | P0 | M | A | SIM-04, SIM-09 |
+| SIM-11 | The "Building" mode: road upgrades | P0 | S | any | SIM-04, SIM-07 |
+| SIM-12 | Unit recruiting | P0 | S | any | SIM-04, SIM-07 |
+| SIM-13 | Victory: VP, capital capture, timer, tie-break | P0 | S | any | SIM-09 |
+| SIM-14 | Projection: PlayerView | P0 | M | A | SIM-03, SIM-05, SIM-10, SIM-11 |
+| SIM-15 | Match engine and headless run | P0 | M | A | SIM-08, SIM-10, SIM-11, SIM-12, SIM-13, SIM-14 |
+| SIM-16 | Determinism and replays | P0 | M | A | SIM-15 |
+| SIM-17 | Property-based tests of invariants (Hypothesis) | P0 | M | any | SIM-15 |
 
-### M2 — Боты и баланс-гейт
+### M2: Bots and balance gate
 
-| ID | Задача | Приоритет | Размер | Трек | Зависит от |
+| ID | Task | Priority | Size | Track | Depends on |
 |---|---|---|---|---|---|
-| BOT-01 | Интерфейс контроллера, базовые боты и вариативность от seed | P0 | S | A | SIM-15, MAP-04 |
-| BOT-02 | Боты-стратегии: Expander и Turtle | P0 | M | any | BOT-01 |
-| BOT-03 | Боты-стратегии: Rusher, Strangler и Reactive | P0 | L | any | BOT-01 |
-| BOT-04 | Турнирный харнесс и анализатор матчей | P0 | M | A | BOT-01, SIM-16 |
-| BOT-05 | Баланс-отчёт | P0 | S | any | BOT-02, BOT-03, BOT-04 |
-| BAL-01 | Баланс: первый прогон и вердикт | P0 | S | A | BOT-05, DEC-01, DEC-02, DEC-03, DEC-04, DEC-07, DEC-08 |
-| BAL-02 | Баланс-гейт: итерации (таймбокс 5 дней) | P0 | L | A | BAL-01 |
+| BOT-01 | Controller interface, base bots and seed-driven variability | P0 | S | A | SIM-15, MAP-04 |
+| BOT-02 | Strategy bots: Expander and Turtle | P0 | M | any | BOT-01 |
+| BOT-03 | Strategy bots: Rusher, Strangler and Reactive | P0 | L | any | BOT-01 |
+| BOT-04 | Tournament harness and match analyzer | P0 | M | A | BOT-01, SIM-16 |
+| BOT-05 | Balance report | P0 | S | any | BOT-02, BOT-03, BOT-04 |
+| BAL-01 | Balance: first run and verdict | P0 | S | A | BOT-05, DEC-01, DEC-02, DEC-03, DEC-04, DEC-07, DEC-08 |
+| BAL-02 | Balance gate: iterations (5-day timebox) | P0 | L | A | BAL-01 |
 
-### M3 — Сервер матча
+### M3: Match server
 
-| ID | Задача | Приоритет | Размер | Трек | Зависит от |
+| ID | Task | Priority | Size | Track | Depends on |
 |---|---|---|---|---|---|
-| SRV-01 | Каркас сервера FastAPI | P0 | S | A | INF-02 |
-| DB-01 | Хранилище: SQLAlchemy 2, Alembic, SQLite в режиме WAL | P0 | S | any | SRV-01 |
-| ID-01 | Гостевая идентичность и ники | P0 | S | any | DB-01 |
-| PRO-01 | Протокол: схема сообщений и JSON-фикстуры | P0 | M | any | SIM-02, DEC-04 |
-| PRO-02 | Генерация TypeScript-типов и проверка дрейфа схемы | P0 | S | B | PRO-01, INF-03, INF-04 |
-| PRO-03 | Протокол: конвертеры между симуляцией и сообщениями | P0 | S | A | PRO-01, SIM-14 |
-| SRV-02 | MatchRunner и MatchManager: тик-цикл матча | P0 | M | A | SIM-15, SRV-01 |
-| SRV-03 | WebSocket матча: аутентификация, чтение, запись, команды | P0 | M | A | SRV-02, PRO-03, ID-01 |
-| DEC-05 | Решение: разрыв соединения и паузы | P0 | XS | any | DOC-01 |
-| SRV-04 | Переподключение и политика разрыва | P0 | S | A | SRV-03, DEC-05 |
-| SRV-05 | Приватный матч по инвайт-ссылке | P0 | S | any | SRV-03 |
-| SRV-06 | Матч против бота | P0 | S | A | SRV-02, BOT-02 |
-| SRV-07 | Реплеи: запись и файл кадров для просмотра | P0 | M | any | SRV-02, SIM-16, DB-01 |
-| SRV-08 | Интеграционный тест: два скриптовых клиента играют матч | P0 | S | A | SRV-04, SRV-05 |
-| SRV-09 | Жизненный цикл матча | P0 | M | any | SRV-05, DB-01 |
+| SRV-01 | FastAPI server skeleton | P0 | S | A | INF-02 |
+| DB-01 | Storage: SQLAlchemy 2, Alembic, SQLite in WAL mode | P0 | S | any | SRV-01 |
+| ID-01 | Guest identity and nicknames | P0 | S | any | DB-01 |
+| PRO-01 | Protocol: message schema and JSON fixtures | P0 | M | any | SIM-02, DEC-04 |
+| PRO-02 | TypeScript type generation and schema drift check | P0 | S | B | PRO-01, INF-03, INF-04 |
+| PRO-03 | Protocol: converters between the simulation and messages | P0 | S | A | PRO-01, SIM-14 |
+| SRV-02 | MatchRunner and MatchManager: the match tick loop | P0 | M | A | SIM-15, SRV-01 |
+| SRV-03 | Match WebSocket: authentication, reading, writing, commands | P0 | M | A | SRV-02, PRO-03, ID-01 |
+| DEC-05 | Decision: disconnection and pauses | P0 | XS | any | DOC-01 |
+| SRV-04 | Reconnection and the disconnect policy | P0 | S | A | SRV-03, DEC-05 |
+| SRV-05 | Private match via an invite link | P0 | S | any | SRV-03 |
+| SRV-06 | Match against a bot | P0 | S | A | SRV-02, BOT-02 |
+| SRV-07 | Replays: recording and the frames file for viewing | P0 | M | any | SRV-02, SIM-16, DB-01 |
+| SRV-08 | Integration test: two scripted clients play a match | P0 | S | A | SRV-04, SRV-05 |
+| SRV-09 | Match lifecycle | P0 | M | any | SRV-05, DB-01 |
 
-### M4 — Веб-клиент и внутренний плейтест
+### M4: Web client and internal playtest
 
-| ID | Задача | Приоритет | Размер | Трек | Зависит от |
+| ID | Task | Priority | Size | Track | Depends on |
 |---|---|---|---|---|---|
-| CLI-01 | Сетевой слой клиента | P0 | M | B | PRO-02, INF-03 |
-| CLI-02 | Буфер снапшотов и интерполяция | P0 | S | B | CLI-01 |
-| CLI-03 | Рендер карты и камера | P0 | M | B | INF-03, MAP-01 |
-| CLI-04 | Рендер групп, зарядов, складов, пакетов и намерений | P0 | L | B | CLI-02, CLI-03 |
-| CLI-05 | Туман войны на клиенте | P0 | S | B | CLI-04 |
-| CLI-06 | Выбор и перемещение: обычные и запланированные приказы | P0 | M | B | CLI-04 |
-| CLI-07 | Остальные команды: деление, слияние, режимы, рекрут, стройка, стойка, сдача | P0 | M | B | CLI-06 |
+| CLI-01 | Client network layer | P0 | M | B | PRO-02, INF-03 |
+| CLI-02 | Snapshot buffer and interpolation | P0 | S | B | CLI-01 |
+| CLI-03 | Map rendering and camera | P0 | M | B | INF-03, MAP-01 |
+| CLI-04 | Rendering groups, charges, warehouses, packets and intents | P0 | L | B | CLI-02, CLI-03 |
+| CLI-05 | Fog of war on the client | P0 | S | B | CLI-04 |
+| CLI-06 | Selection and movement: ordinary and scheduled orders | P0 | M | B | CLI-04 |
+| CLI-07 | Remaining commands: split, merge, modes, recruit, build, stance, surrender | P0 | M | B | CLI-06 |
 | CLI-08 | HUD | P0 | M | B | CLI-02, PRO-02, SIM-09 |
-| CLI-09 | Экраны и навигация | P0 | M | B | CLI-01, ID-01, SRV-05, SRV-06 |
-| CLI-10 | Просмотр реплея | P0 | S | B | SRV-07, CLI-04 |
-| CLI-11 | Английская локализация и выбор языка | P1 | S | B | INF-03 |
-| QA-01 | Первый живой матч: ручной чек-лист | P0 | S | any | CLI-05, CLI-07, CLI-08, CLI-09, CLI-10, SRV-04, SRV-06, SRV-08, SRV-09 |
-| PT-01 | Внутренний плейтест: решение go / no-go | P0 | S | any | QA-01, BAL-02 |
-| MAP-05 | Бейкер фона карт из legacy-генератора | P2 | M | B | MAP-01 |
-| CLI-12 | Обратная связь и «сочность» | P2 | M | B | CLI-04, BAL-02 |
-| CLI-13 | Экран «Как играть» | P0 | S | B | CLI-09, BAL-02 |
+| CLI-09 | Screens and navigation | P0 | M | B | CLI-01, ID-01, SRV-05, SRV-06 |
+| CLI-10 | Replay viewing | P0 | S | B | SRV-07, CLI-04 |
+| CLI-11 | English localization and language selection | P1 | S | B | INF-03 |
+| QA-01 | First live match: manual checklist | P0 | S | any | CLI-05, CLI-07, CLI-08, CLI-09, CLI-10, SRV-04, SRV-06, SRV-08, SRV-09 |
+| PT-01 | Internal playtest: go / no-go decision | P0 | S | any | QA-01, BAL-02 |
+| MAP-05 | Map background baker from the legacy generator | P2 | M | B | MAP-01 |
+| CLI-12 | Feedback and "juice" | P2 | M | B | CLI-04, BAL-02 |
+| CLI-13 | "How to play" screen | P0 | S | B | CLI-09, BAL-02 |
 
-### M5 — Метаигра
+### M5: Meta game
 
-| ID | Задача | Приоритет | Размер | Трек | Зависит от |
+| ID | Task | Priority | Size | Track | Depends on |
 |---|---|---|---|---|---|
-| RAT-01 | Рейтинг Glicko-2 | P0 | S | any | DB-01, PT-01 |
-| DEC-06 | Решение: какие матчи рейтинговые | P0 | XS | any | DOC-01 |
-| RAT-02 | Обновление рейтинга по итогам матчей | P0 | S | any | RAT-01, SRV-09, PT-01, DEC-06 |
-| LOB-01 | Публичное лобби | P0 | M | any | SRV-09, CLI-09, PT-01 |
-| MM-01 | Очередь матчмейкинга | P0 | L | any | RAT-01, SRV-09, SRV-06, CLI-09, PT-01 |
-| LB-01 | Лидерборд и профиль игрока | P0 | M | any | RAT-02, CLI-10, MM-01 |
-| MOD-01 | Базовая защита от злоупотреблений | P0 | S | any | ID-01, PT-01 |
+| RAT-01 | Glicko-2 rating | P0 | S | any | DB-01, PT-01 |
+| DEC-06 | Decision: which matches are ranked | P0 | XS | any | DOC-01 |
+| RAT-02 | Updating the rating from match results | P0 | S | any | RAT-01, SRV-09, PT-01, DEC-06 |
+| LOB-01 | Public lobby | P0 | M | any | SRV-09, CLI-09, PT-01 |
+| MM-01 | Matchmaking queue | P0 | L | any | RAT-01, SRV-09, SRV-06, CLI-09, PT-01 |
+| LB-01 | Leaderboard and player profile | P0 | M | any | RAT-02, CLI-10, MM-01 |
+| MOD-01 | Basic abuse protection | P0 | S | any | ID-01, PT-01 |
 
-### M6 — Релиз MVP
+### M6: MVP release
 
-| ID | Задача | Приоритет | Размер | Трек | Зависит от |
+| ID | Task | Priority | Size | Track | Depends on |
 |---|---|---|---|---|---|
-| OPS-01 | Docker-образы и docker compose | P0 | M | B | SRV-01, INF-03 |
-| OPS-02 | Caddy: TLS, WebSocket, статика, заголовки безопасности | P0 | S | B | OPS-01 |
-| OPS-03 | Развёртывание на VPS, бэкапы и безопасный деплой | P0 | M | B | OPS-02, DB-01 |
-| OPS-04 | Наблюдаемость: логи, метрики, ошибки | P1 | S | any | SRV-02, OPS-01 |
-| QA-02 | E2E Playwright: матч по инвайту в двух браузерах | P0 | M | B | QA-01, OPS-01 |
-| QA-03 | Нагрузочный тест | P1 | S | any | SRV-08, OPS-03 |
-| QA-04 | Аудит безопасности и утечек тумана | P0 | S | any | SRV-03, CLI-01, OPS-02, SIM-17, MOD-01 |
-| LEG-01 | Правовой минимум для публичного сайта | P0 | S | any | OPS-03, CLI-09 |
-| REL-01 | Закрытый плейтест MVP | P0 | M | any | QA-02, QA-04, OPS-03, LB-01, MM-01, LOB-01, LEG-01, SRV-08, CLI-13 |
+| OPS-01 | Docker images and docker compose | P0 | M | B | SRV-01, INF-03 |
+| OPS-02 | Caddy: TLS, WebSocket, static files, security headers | P0 | S | B | OPS-01 |
+| OPS-03 | VPS deployment, backups and safe deploy | P0 | M | B | OPS-02, DB-01 |
+| OPS-04 | Observability: logs, metrics, errors | P1 | S | any | SRV-02, OPS-01 |
+| QA-02 | E2E Playwright: an invite match in two browsers | P0 | M | B | QA-01, OPS-01 |
+| QA-03 | Load test | P1 | S | any | SRV-08, OPS-03 |
+| QA-04 | Security and fog leak audit | P0 | S | any | SRV-03, CLI-01, OPS-02, SIM-17, MOD-01 |
+| LEG-01 | Legal minimum for a public site | P0 | S | any | OPS-03, CLI-09 |
+| REL-01 | MVP closed playtest | P0 | M | any | QA-02, QA-04, OPS-03, LB-01, MM-01, LOB-01, LEG-01, SRV-08, CLI-13 |
 
-## Как завести issues в GitHub
+## How to create the issues on GitHub
 
-Issues уже заведены в `DastinovDS/Skill-Based-Front`; соответствие ID → номер issue лежит в `docs/mvp/issue_map.json`. Повторный запуск нужен только после правки плана.
+The issues already exist in `DastinovDS/Skill-Based-Front`; the mapping of ID to issue number is in `docs/mvp/issue_map.json`. A rerun is needed only after the plan is edited.
 
-1. Установить и авторизовать GitHub CLI: `gh auth login`.
-2. Проверить план без изменений: `python docs/mvp/import_github_issues.py --repo DastinovDS/Skill-Based-Front` (по умолчанию dry-run).
-3. Создать метки, вехи и issues: `python docs/mvp/import_github_issues.py --repo DastinovDS/Skill-Based-Front --apply`.
-4. Скрипт идемпотентен: уже созданные issues (по префиксу `[ID]` в заголовке) пропускаются; во втором проходе ссылки `SIM-03` в телах дополняются реальными номерами `#NN`. Соответствие сохраняется в `docs/mvp/issue_map.json`.
-5. Ветки — `feature/<номер>-<slug>`, коммиты — `<type>(<scope>): <сообщение> (#<номер>)` (см. AGENTS.md).
+1. Install and authorize the GitHub CLI: `gh auth login`.
+2. Check the plan without changes: `python docs/mvp/import_github_issues.py --repo DastinovDS/Skill-Based-Front` (dry run by default).
+3. Create the labels, milestones and issues: `python docs/mvp/import_github_issues.py --repo DastinovDS/Skill-Based-Front --apply`.
+4. The script is idempotent: issues that already exist (by the `[ID]` prefix in the title) are skipped; in the second pass the references like `SIM-03` in the bodies are completed with the real numbers `#NN`. The mapping is saved in `docs/mvp/issue_map.json`.
+5. Branches are `feature/<number>-<slug>`, commits are `<type>(<scope>): <message> (#<number>)` (see AGENTS.md).

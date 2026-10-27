@@ -167,7 +167,7 @@ makespan = max(finish.values())
 p0_days = sum(dur[i["id"]] for i in issues if prio(i) == "P0")
 
 # ── helpers for rendering ─────────────────────────────────────────
-PRIO_TEXT = {"P0": "P0 — обязательно для MVP", "P1": "P1 — желательно в MVP", "P2": "P2 — можно отложить"}
+PRIO_TEXT = {"P0": "P0: required for the MVP", "P1": "P1: desirable in the MVP", "P2": "P2: can be postponed"}
 
 
 def md_list(items: list[str], checkbox: bool = False) -> str:
@@ -183,35 +183,35 @@ def issue_body(i: dict, numbers: dict[str, int] | None = None) -> str:
 
     m = milestones[i["milestone"]]
     lines = [
-        f"**Веха:** {m['title']} · **Приоритет:** {prio(i)} · **Размер:** {i['size']} ({meta['sizes'][i['size']]}) · **Трек:** {i['track']}",
+        f"**Milestone:** {m['title']} · **Priority:** {prio(i)} · **Size:** {i['size']} ({meta['sizes'][i['size']]}) · **Track:** {i['track']}",
     ]
     if i["depends"]:
-        lines.append("**Зависит от:** " + ", ".join(ref(d) for d in i["depends"]))
+        lines.append("**Depends on:** " + ", ".join(ref(d) for d in i["depends"]))
     if i.get("related"):
-        lines.append("**Связано:** " + ", ".join(ref(d) for d in i["related"]))
+        lines.append("**Related:** " + ", ".join(ref(d) for d in i["related"]))
     lines.append("")
     if i.get("context"):
-        lines += ["### Контекст", i["context"].strip(), ""]
+        lines += ["### Context", i["context"].strip(), ""]
     if i.get("default"):
-        lines += ["### Решение по умолчанию", i["default"].strip(), ""]
+        lines += ["### Default decision", i["default"].strip(), ""]
     if i.get("alternatives"):
-        lines += ["### Альтернативы", md_list(i["alternatives"]), ""]
+        lines += ["### Alternatives", md_list(i["alternatives"]), ""]
     if i.get("tasks"):
-        lines += ["### Задачи", md_list(i["tasks"], checkbox=True), ""]
+        lines += ["### Tasks", md_list(i["tasks"], checkbox=True), ""]
     if i.get("notes"):
-        lines += ["### Значения и примечания", i["notes"].strip(), ""]
-    lines += ["### Критерии приёмки", md_list(i["acceptance"], checkbox=True), ""]
+        lines += ["### Values and notes", i["notes"].strip(), ""]
+    lines += ["### Acceptance criteria", md_list(i["acceptance"], checkbox=True), ""]
     if i.get("out_of_scope"):
-        lines += ["### Вне рамок", md_list(i["out_of_scope"]), ""]
+        lines += ["### Out of scope", md_list(i["out_of_scope"]), ""]
     if "type:decision" in i["labels"] and i["id"].startswith("DEC"):
         lines += [
-            "### Как закрыть",
-            "Значение по умолчанию уже есть, поэтому решение занимает не больше пары часов: подтвердить его "
-            "или выбрать альтернативу и записать в `docs/design/mechanics.md` со статусом [принято]. "
-            "Блокирует SIM-01 (DEC-05 — SRV-04, DEC-06 — RAT-02). Дальше числа меняются только через рулсет и BAL-02.",
+            "### How to close",
+            "A default value already exists, so the decision takes a couple of hours at most: confirm it "
+            "or pick an alternative and record it in `docs/design/mechanics.md` with the status [accepted]. "
+            "It blocks SIM-01 (DEC-05 blocks SRV-04, DEC-06 blocks RAT-02). After that the numbers change only through the ruleset and BAL-02.",
             "",
         ]
-    lines += ["---", "Definition of Done: см. `AGENTS.md` → «Definition of Done»."]
+    lines += ["---", "Definition of Done: see `AGENTS.md`, section \"Definition of Done\"."]
     return "\n".join(lines)
 
 
@@ -221,14 +221,14 @@ def title(i: dict) -> str:
 
 # ── MVP_ISSUES.md ─────────────────────────────────────────────────
 parts = [f"# {meta['title']}: issues", "",
-         "> Сгенерировано из `issues.yaml`. Каждый блок — готовое тело GitHub issue; "
-         "заголовок issue — строка `### [ID] …`.", ""]
+         "> Generated from `issues.yaml`. Each block is a ready GitHub issue body; "
+         "the issue title is the `### [ID] ...` line.", ""]
 for mid in ms_order:
     m = milestones[mid]
     parts += [f"## {m['title']}", "", f"*{m['goal']}*", ""]
     for i in [x for x in issues if x["milestone"] == mid]:
         labels = " ".join(f"`{l}`" for l in i["labels"] + [f"size:{i['size']}"])
-        parts += [f"### {title(i)}", "", f"Метки: {labels}", "", issue_body(i), ""]
+        parts += [f"### {title(i)}", "", f"Labels: {labels}", "", issue_body(i), ""]
 (OUT / "MVP_ISSUES.md").write_text("\n".join(parts), encoding="utf-8")
 
 # ── MVP_PLAN.md ───────────────────────────────────────────────────
@@ -245,106 +245,106 @@ for n, dev in assigned.items():
 
 plan: list[str] = []
 plan += [f"# {meta['title']}", ""]
-plan += ["## Что такое MVP", "", meta["mvp_definition"], ""]
+plan += ["## What the MVP is", "", meta["mvp_definition"], ""]
 plan += [
-    "## Что не входит в MVP",
+    "## What is not in the MVP",
     "",
     md_list([
-        "Строительство новых рёбер игроками (mechanics.md §8) — после MVP.",
-        "Режимы доставки «пакеты / прокачка», трофеи со складов, обзор от размера группы.",
-        "Запасные модели правил (вогнутая экономика, порог VP, бонус за финальное удержание) — реализуются, только если их потребует BAL-02.",
-        "Процедурная генерация карт (только ручные карты и скрипт отзеркаливания), украинская локализация.",
-        "FFA и командные режимы; только 1v1.",
-        "Полноценные аккаунты и OAuth — только гостевая идентичность с возможностью «апгрейда» позже.",
-        "Steam, мобильные устройства, чат, живые зрители, турниры, монетизация.",
-        "Редактор карт с интерфейсом — только CLI-инструменты.",
+        "Players building new edges (mechanics.md section 8): after the MVP.",
+        "The delivery modes \"packets / pump-up\", trophies from warehouses, vision based on group size.",
+        "Fallback rule models (concave economy, VP threshold, a bonus for the final hold): implemented only if BAL-02 requires them.",
+        "Procedural map generation (hand-made maps and a mirroring script only), Ukrainian localization.",
+        "FFA and team modes; 1v1 only.",
+        "Full accounts and OAuth: only a guest identity with an \"upgrade\" option later.",
+        "Steam, mobile devices, chat, live spectators, tournaments, monetization.",
+        "A map editor with an interface: CLI tools only.",
     ]),
     "",
 ]
 plan += [
-    "## Главные принципы плана",
+    "## Main principles of the plan",
     "",
     md_list([
-        "**Сначала механика, потом пиксели и метаигра.** Баланс-гейт BAL-02 проверяет глубину механики на ботах, внутренний плейтест PT-01 — на людях. Полировка клиента (CLI-12, CLI-13) зависит от BAL-02, вся метаигра (M5) — от PT-01.",
-        "**Правила доопределены до уровня тестов.** Бой задан таблицей разобранных примеров (DEC-07); тесты SIM-09 — это ровно эта таблица.",
-        "**Открытые вопросы закрываются в начале и быстро.** У каждого DEC-issue уже есть значение по умолчанию; подтверждение занимает пару часов и нужно до SIM-01. Дальше числа меняются только правкой рулсета.",
-        "**Числа — данные.** Все параметры правил живут в `rulesets/*.toml`; балансировка — это правка файла и перезапуск турнира.",
-        "**Два параллельных трека.** Трек A (Python) ведёт симуляцию, ботов и сервер; трек B (TypeScript и инструменты) — карты, клиент и инфраструктуру. Клиент начинается на данных карты до готовности протокола (CLI-03).",
-        "**Каждый issue ≤ 5 дней и имеет проверяемые критерии приёмки.**",
+        "**Mechanics first, then pixels and the meta game.** The balance gate BAL-02 checks the depth of the mechanics with bots, the internal playtest PT-01 checks it with humans. Client polish (CLI-12, CLI-13) depends on BAL-02, the whole meta game (M5) depends on PT-01.",
+        "**The rules are specified down to the level of tests.** Combat is defined by a table of worked examples (DEC-07); the SIM-09 tests are exactly this table.",
+        "**Open questions are closed early and fast.** Every DEC issue already has a default value; confirming it takes a couple of hours and is needed before SIM-01. After that the numbers change only by editing the ruleset.",
+        "**Numbers are data.** All rule parameters live in `rulesets/*.toml`; balancing is editing a file and rerunning the tournament.",
+        "**Two parallel tracks.** Track A (Python) carries the simulation, the bots and the server; track B (TypeScript and tools) carries the maps, the client and the infrastructure. The client starts on map data before the protocol is ready (CLI-03).",
+        "**Every issue is at most 5 days and has verifiable acceptance criteria.**",
     ]),
     "",
 ]
-plan += ["## Вехи", "", "| Веха | Цель | Issues | P0 | Оценка, чел.-дней |", "|---|---|---|---|---|"]
+plan += ["## Milestones", "", "| Milestone | Goal | Issues | P0 | Estimate, person-days |", "|---|---|---|---|---|"]
 for mid in ms_order:
     m = milestones[mid]
     s = ms_stats[mid]
     plan.append(f"| **{m['title']}** | {m['goal']} | {s['n']} | {s['p0']} | {s['days']:g} |")
-plan.append(f"| **Итого** | | {len(issues)} | {sum(1 for i in issues if prio(i)=='P0')} | {total_days:g} |")
+plan.append(f"| **Total** | | {len(issues)} | {sum(1 for i in issues if prio(i)=='P0')} | {total_days:g} |")
 plan.append("")
-plan += ["### Критерии выхода из вех", ""]
+plan += ["### Milestone exit criteria", ""]
 for mid in ms_order:
     m = milestones[mid]
     plan += [f"**{m['title']}**", "", md_list(m["exit"]), ""]
 
 plan += [
-    "## Оценка сроков",
+    "## Schedule estimate",
     "",
-    f"- Всего: **{total_days:g} идеальных человеко-дней** ({len(issues)} issues), из них P0 — {p0_days:g}.",
-    f"- При двух разработчиках, работающих параллельно по трекам, расчётная длительность — **≈ {makespan:.0f} рабочих дней** "
-    f"(трек A — {track_days['A']:g} дн., трек B — {track_days['B']:g} дн.).",
-    "- Это «идеальные» дни полной занятости. Для работы по вечерам и выходным умножайте на 2–3; на итерации баланса (BAL-02) и плейтест (PT-01) заложите запас.",
-    f"- Закрытый плейтест (REL-01) заканчивается на **≈ {finish['REL-01']:.0f}-й день**; после него в расчёте остаются только P1/P2-задачи, от которых релиз не зависит.",
-    f"- Критический путь по зависимостям без учёта людей — {ef[end]:g} дней:",
+    f"- Total: **{total_days:g} ideal person-days** ({len(issues)} issues), of which P0 is {p0_days:g}.",
+    f"- With two developers working in parallel on the tracks, the estimated duration is **about {makespan:.0f} working days** "
+    f"(track A: {track_days['A']:g} days, track B: {track_days['B']:g} days).",
+    "- These are \"ideal\" full-time days. For work in evenings and weekends multiply by 2-3; leave a reserve for balance iterations (BAL-02) and the playtest (PT-01).",
+    f"- The closed playtest (REL-01) ends on **about day {finish['REL-01']:.0f}**; after it only P1/P2 tasks remain in the estimate, and the release does not depend on them.",
+    f"- The critical path through the dependencies, not counting people, is {ef[end]:g} days:",
     "",
     "  " + " → ".join(crit),
     "",
 ]
 
 # mermaid gantt from schedule
-plan += ["## Расчётный график", "", "Раскладка по двум трекам (день 0 — старт). "
-         "Разработчик A — Python-трек, B — TypeScript и инструменты; issues с треком `any` отданы тому, кто свободен раньше.", "",
-         "```mermaid", "gantt", "  title План MVP (идеальные дни от старта)", "  dateFormat YYYY-MM-DD HH:mm", "  axisFormat %j"]
+plan += ["## Estimated schedule", "", "The layout over the two tracks (day 0 is the start). "
+         "Developer A is the Python track, B is TypeScript and tools; issues with the track `any` go to whoever is free earlier.", "",
+         "```mermaid", "gantt", "  title MVP plan (ideal days from the start)", "  dateFormat YYYY-MM-DD HH:mm", "  axisFormat %j"]
 for dev in ("A", "B"):
-    plan.append(f"  section Разработчик {dev}")
+    plan.append(f"  section Developer {dev}")
     for n in sorted([n for n in assigned if assigned[n] == dev], key=lambda n: start[n]):
         t0 = BASE + timedelta(hours=start[n] * 24)
         plan.append(f"  {n} : {n.lower().replace('-', '')}, {t0:%Y-%m-%d %H:%M}, {int(dur[n] * 24)}h")
-plan += ["```", "", "*Ось — номер идеального рабочего дня (001 — первый день). Календарные даты условные.*", ""]
+plan += ["```", "", "*The axis is the number of the ideal working day (001 is the first day). The calendar dates are nominal.*", ""]
 
 plan += [
-    "## Риски и как их снижаем",
+    "## Risks and how we reduce them",
     "",
-    "| Риск | Признак | Что делаем |",
+    "| Risk | Sign | What we do |",
     "|---|---|---|",
-    "| Механика окажется плоской | BAL-02 не проходит за таймбокс или PT-01 даёт «no-go» | Остановить M5; обсудить отложенные механики (новые рёбра, обзор от размера, запасные модели правил) |",
-    "| Код даёт преимущество одной стороне | Преимущество стороны в отчёте BOT-05 | Двухфазное движение, симметричные бои (DEC-07), тест зеркальности в SIM-05 |",
-    "| Python медленный для турнира или сервера | SIM-14 не укладывается в бюджет шага | Профилирование; упрощение маршрутизации снабжения; кэш ёмкости; в крайнем случае — горячие функции на Cython/mypyc |",
-    "| Кривая обучения TypeScript у разработчика B | CLI-issues растягиваются вдвое | CLI-03 (карта из JSON) делать параллельно с сетевым слоем; держать клиент «тупым»; парное ревью |",
-    "| Мало игроков для матчмейкинга | Очередь пустует | Бот-соперник (SRV-06), инвайты и лобби как основной путь; очередь — дополнительный |",
-    "| Разрастание объёма из открытых вопросов | Новые механики просятся в MVP | Всё новое — флагом в рулсете и только после BAL-02 |",
-    "| Утечки тумана войны | QA-04 или игроки находят скрытое в WebSocket | Единая функция `project()`, property-тесты SIM-14 и SIM-17, аудит QA-04 |",
+    "| The mechanics turn out flat | BAL-02 does not pass within the timebox, or PT-01 gives \"no-go\" | Stop M5; discuss the postponed mechanics (new edges, vision based on size, fallback rule models) |",
+    "| The code favors one side | A side advantage in the BOT-05 report | Two-phase movement, symmetric fights (DEC-07), the mirror test in SIM-05 |",
+    "| Python is too slow for the tournament or the server | SIM-14 does not fit the step budget | Profiling; simplifying supply routing; a capacity cache; as a last resort, hot functions in Cython/mypyc |",
+    "| The TypeScript learning curve of developer B | CLI issues take twice as long | Do CLI-03 (the map from JSON) in parallel with the network layer; keep the client \"dumb\"; pair review |",
+    "| Too few players for matchmaking | The queue is empty | A bot opponent (SRV-06), invites and the lobby as the main path; the queue is secondary |",
+    "| Scope growth from the open questions | New mechanics ask to get into the MVP | Everything new goes behind a ruleset flag and only after BAL-02 |",
+    "| Fog of war leaks | QA-04 or players find hidden data in the WebSocket | A single `project()` function, the property tests of SIM-14 and SIM-17, the QA-04 audit |",
     "",
 ]
 
-plan += ["## Список issues", ""]
+plan += ["## List of issues", ""]
 for mid in ms_order:
     m = milestones[mid]
-    plan += [f"### {m['title']}", "", "| ID | Задача | Приоритет | Размер | Трек | Зависит от |", "|---|---|---|---|---|---|"]
+    plan += [f"### {m['title']}", "", "| ID | Task | Priority | Size | Track | Depends on |", "|---|---|---|---|---|---|"]
     for i in [x for x in issues if x["milestone"] == mid]:
-        deps = ", ".join(i["depends"]) or "—"
+        deps = ", ".join(i["depends"]) or "-"
         plan.append(f"| {i['id']} | {i['title']} | {prio(i)} | {i['size']} | {i['track']} | {deps} |")
     plan.append("")
 
 plan += [
-    "## Как завести issues в GitHub",
+    "## How to create the issues on GitHub",
     "",
-    "Issues уже заведены в `DastinovDS/Skill-Based-Front`; соответствие ID → номер issue лежит в `docs/mvp/issue_map.json`. Повторный запуск нужен только после правки плана.",
+    "The issues already exist in `DastinovDS/Skill-Based-Front`; the mapping of ID to issue number is in `docs/mvp/issue_map.json`. A rerun is needed only after the plan is edited.",
     "",
-    "1. Установить и авторизовать GitHub CLI: `gh auth login`.",
-    "2. Проверить план без изменений: `python docs/mvp/import_github_issues.py --repo DastinovDS/Skill-Based-Front` (по умолчанию dry-run).",
-    "3. Создать метки, вехи и issues: `python docs/mvp/import_github_issues.py --repo DastinovDS/Skill-Based-Front --apply`.",
-    "4. Скрипт идемпотентен: уже созданные issues (по префиксу `[ID]` в заголовке) пропускаются; во втором проходе ссылки `SIM-03` в телах дополняются реальными номерами `#NN`. Соответствие сохраняется в `docs/mvp/issue_map.json`.",
-    "5. Ветки — `feature/<номер>-<slug>`, коммиты — `<type>(<scope>): <сообщение> (#<номер>)` (см. AGENTS.md).",
+    "1. Install and authorize the GitHub CLI: `gh auth login`.",
+    "2. Check the plan without changes: `python docs/mvp/import_github_issues.py --repo DastinovDS/Skill-Based-Front` (dry run by default).",
+    "3. Create the labels, milestones and issues: `python docs/mvp/import_github_issues.py --repo DastinovDS/Skill-Based-Front --apply`.",
+    "4. The script is idempotent: issues that already exist (by the `[ID]` prefix in the title) are skipped; in the second pass the references like `SIM-03` in the bodies are completed with the real numbers `#NN`. The mapping is saved in `docs/mvp/issue_map.json`.",
+    "5. Branches are `feature/<number>-<slug>`, commits are `<type>(<scope>): <message> (#<number>)` (see AGENTS.md).",
     "",
 ]
 (OUT / "MVP_PLAN.md").write_text("\n".join(plan), encoding="utf-8")
