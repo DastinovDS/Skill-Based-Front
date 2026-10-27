@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Вид юнитов, городов, казармы и Защиты, значки меню</title>
+<title>Look of units, cities, barracks and Defense, menu icons</title>
 <style>
 :root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#9da7b3;--you:#5b9bff;--enemy:#e5484d;--warn:#ffb020;--ok:#3fb950}
 *{box-sizing:border-box}
@@ -64,57 +64,57 @@ code{background:var(--surface2);padding:0 4px;border-radius:4px;font-size:12.5px
 <body>
 <header>
   <div class="row">
-    <h1>Объекты карты и меню (#337)</h1>
-    <label class="opt"><input type="checkbox" id="gray"> серая шкала</label>
-    <label class="opt"><input type="checkbox" id="rm"> меньше движения</label>
-    <label class="opt">масштаб карты <select id="sc"><option value="60">60%</option><option value="100" selected>100%</option><option value="150">150%</option></select></label>
-    <label class="opt"><input type="checkbox" id="prov" checked> провинции в сцене (узлы 12 и 13)</label>
-    <label class="opt">фон образцов <select id="bd"><option value="forest">лес</option><option value="plain">равнина</option><option value="snow">снег</option><option value="dark">тёмный</option></select></label>
-    <nav><a href="#b1">1 Юниты</a><a href="#b2">2 Города</a><a href="#b3">3 Казарма и Защита</a><a href="#b4">4 Значки меню</a></nav>
+    <h1>Map objects and menus (#337)</h1>
+    <label class="opt"><input type="checkbox" id="gray"> grayscale</label>
+    <label class="opt"><input type="checkbox" id="rm"> reduced motion</label>
+    <label class="opt">map scale <select id="sc"><option value="60">60%</option><option value="100" selected>100%</option><option value="150">150%</option></select></label>
+    <label class="opt"><input type="checkbox" id="prov" checked> provinces in the scene (nodes 12 and 13)</label>
+    <label class="opt">sample background <select id="bd"><option value="forest">forest</option><option value="plain">plains</option><option value="snow">snow</option><option value="dark">dark</option></select></label>
+    <nav><a href="#b1">1 Units</a><a href="#b2">2 Cities</a><a href="#b3">3 Barracks and Defense</a><a href="#b4">4 Menu icons</a></nav>
   </div>
 </header>
 <main>
-<p class="note">Макет к issue #337. Сцена: тот же фрагмент реальной карты <code>arteriya</code>, что в #335, в <b>выбранном владельцем стиле</b>: шейдинг BL1 «Сдержанный» с подсветкой границ как у «Выраженного», текстура T2 «Прореживание», туман F1 «Дымка», дороги R1 «Полосы». Менять в макете можно только то, что выбирает этот раунд: четыре блока ниже. Ничего сверх правил тумана: что видит игрок, взято из <code>mechanics.md</code>, разделы 3, 5 (DEC-30), 8 (DEC-26), 10 (DEC-04, DEC-21, DEC-31); там, где вариант требует новых данных, он помечен «нужен протокол/DEC». Макет не PixiJS: он нарисован в SVG, цены по FPS в issue это оценки по замеру ui-style 24.4.</p>
+<p class="note">A mockup for issue #337. The scene: the same fragment of the real map <code>arteriya</code> as in #335, in <b>the style chosen by the owner</b>: BL1 shading "Restrained" with the border highlight of "Pronounced", the T2 texture "Thinning", the F1 fog "Haze", the R1 roads "Lanes". In the mockup you can change only what this round chooses: the four blocks below. Nothing beyond the fog rules: what the player sees is taken from <code>mechanics.md</code>, sections 3, 5 (DEC-30), 8 (DEC-26), 10 (DEC-04, DEC-21, DEC-31); where a variant needs new data, it is marked "protocol/DEC needed". The mockup is not PixiJS: it is drawn in SVG, the FPS prices in the issue are estimates from the ui-style 24.4 measurement.</p>
 <p class="legend" id="leg"></p>
 
-<h2 class="sec" id="b1">1. Юниты (группы)</h2>
-<p class="note">Форма, число юнитов, заряд, своя и чужая сторона <b>не только цветом</b>, размер при масштабе 60%. «Сейчас» это треугольник ▽ из ui-style 9.5 (плоский, как в клиенте); у U1 та же форма в стиле BL1. U2, U3 и U4 смелее: они меняют язык значков (ui-style 21), поэтому каждый можно принять частично (например, форму U2 и подпись U1). У групп в городе значок стоит в центре города (как сейчас), у U3 (знамя) воткнут рядом с городом. «Защита»: в этом блоке не рисуется, её вид решает блок 3 (там же вариант «как сейчас»: щит на углу значка). Режим «рядом» ниже показывает все варианты на одной сцене.</p>
-<div class="picker"><div class="seg" id="pk_u"></div><label class="opt"><input type="checkbox" id="side_u"> все варианты рядом</label></div>
+<h2 class="sec" id="b1">1. Units (groups)</h2>
+<p class="note">The shape, the number of units, the charge, your own and the opposing side <b>not by color alone</b>, the size at 60% scale. "Now" is the triangle ▽ from ui-style 9.5 (flat, as in the client); U1 has the same shape in the BL1 style. U2, U3 and U4 are bolder: they change the language of icons (ui-style 21), so each one can be accepted partially (for example, the U2 shape and the U1 caption). For groups in a city the icon stands in the center of the city (as now), for U3 (the banner) it is planted next to the city. "Defense": not drawn in this block, its look is decided by block 3 (which also has the "as now" variant: a shield on the corner of the icon). The "side by side" mode below shows all variants on one scene.</p>
+<div class="picker"><div class="seg" id="pk_u"></div><label class="opt"><input type="checkbox" id="side_u"> all variants side by side</label></div>
 <div id="stage1"></div>
-<h3 class="sub">Состояния, масштаб карты 100% (строка выбранного варианта подсвечена)</h3>
+<h3 class="sub">States, map scale 100% (the row of the chosen variant is highlighted)</h3>
 <div class="tbl" id="spec_u100"></div>
-<h3 class="sub">Те же состояния, масштаб карты 60% (минимальный размер значка на экране 20 px, ui-style 9.5)</h3>
+<h3 class="sub">The same states, map scale 60% (the minimum icon size on screen is 20 px, ui-style 9.5)</h3>
 <div class="tbl" id="spec_u60"></div>
 <div class="cards" id="cards_u"></div>
 
-<h2 class="sec" id="b2">2. Города</h2>
-<p class="note">Город по виду (малый, средний, большой), столица, провинция (DEC-23: без склада и без VP, ёмкость 3); склад в квадратах (квадрат = заряд, ui-style 21), <b>уровень склада</b> (DEC-26: ёмкость склада 1-6 в начале, +1 за уровень, максимум 2 уровня; нового поля нет: <code>warehouse_level</code>, <code>warehouse_cap</code> уже у своих городов), владение (свой, враг, нейтральный: форма и контур, не только цвет). У чужого города склад скрыт (DEC-26, п. 10): виден только вместе с точным обзором и только заряды. В сцене и в таблице: узлы 12 и 13 показаны провинциями (на картах MVP их пока нет). Юнит в городе рисуется выбранным вариантом блока 1, казарма и «Защита» выбранным вариантом блока 3.</p>
-<div class="picker"><div class="seg" id="pk_c"></div><label class="opt"><input type="checkbox" id="side_c"> все варианты рядом</label></div>
+<h2 class="sec" id="b2">2. Cities</h2>
+<p class="note">A city by kind (small, medium, large), the capital, a province (DEC-23: no warehouse and no VP, capacity 3); the warehouse in squares (square = charge, ui-style 21), the <b>warehouse level</b> (DEC-26: warehouse capacity 1-6 at the start, +1 per level, at most 2 levels; there is no new field: <code>warehouse_level</code>, <code>warehouse_cap</code> are already on your own cities), ownership (your own, enemy, neutral: shape and outline, not only color). The warehouse of an enemy city is hidden (DEC-26, item 10): it is visible only together with exact vision and only the charges. In the scene and in the table: nodes 12 and 13 are shown as provinces (the MVP maps have none yet). A unit in a city is drawn by the chosen variant of block 1, the barracks and "Defense" by the chosen variant of block 3.</p>
+<div class="picker"><div class="seg" id="pk_c"></div><label class="opt"><input type="checkbox" id="side_c"> all variants side by side</label></div>
 <div id="stage2"></div>
-<h3 class="sub">Образцы: виды, склад и владение (масштаб карты 100%)</h3>
+<h3 class="sub">Samples: kinds, warehouse and ownership (map scale 100%)</h3>
 <div class="tbl" id="spec_c100"></div>
-<h3 class="sub">Те же образцы, масштаб карты 60%</h3>
+<h3 class="sub">The same samples, map scale 60%</h3>
 <div class="tbl" id="spec_c60"></div>
 <div class="cards" id="cards_c"></div>
 
-<h2 class="sec" id="b3">3. Казарма и «Защита» у города</h2>
-<p class="note"><b>Казарма</b> (DEC-26, DEC-31): своя видна всегда; <b>чужая только у города, соседнего со своим узлом</b> (по рёбрам графа карты), только построенная; стройка казармы чужого города, очередь найма, склад скрыты; там, где неизвестно (<code>None</code>) и где её нет (<code>False</code>), рисуется одно и то же: ничего. <b>«Защита»</b> (DEC-30): своя группа показывает накопленный бонус и потолок «+1 / 3» (<code>GroupView.defense_bonus</code> и <code>defense_cap</code>, #317); у чужой видно только режим (с уровня <code>PRESENCE</code>), не число. Бонус виртуальный выстрел, поэтому в языке значков он ромб ◇ (ui-style 21); «Защита» всегда у группы, стоящей в узле, поэтому её можно рисовать у города. Несколько групп в городе: значок показывает максимум по группам (подсказка уточняет; не новое поле). Выбор «Сейчас»: домик в круглом значке слева от кольца, щит кружком на углу значка группы.</p>
-<div class="picker"><div class="seg" id="pk_b"></div><label class="opt"><input type="checkbox" id="side_b"> все варианты рядом</label></div>
+<h2 class="sec" id="b3">3. Barracks and "Defense" at a city</h2>
+<p class="note"><b>Barracks</b> (DEC-26, DEC-31): your own is always visible; <b>an enemy one only at a city adjacent to your own node</b> (by the edges of the map graph), only a built one; the construction of an enemy city's barracks, the recruit queue and the warehouse are hidden; where it is unknown (<code>None</code>) and where there is none (<code>False</code>), the same thing is drawn: nothing. <b>"Defense"</b> (DEC-30): your own group shows the accumulated bonus and the cap "+1 / 3" (<code>GroupView.defense_bonus</code> and <code>defense_cap</code>, #317); for an enemy one only the mode is visible (from the <code>PRESENCE</code> level), not the number. The bonus is a virtual shot, so in the language of icons it is a rhombus ◇ (ui-style 21); "Defense" always belongs to a group standing in a node, so it can be drawn at a city. Several groups in a city: the icon shows the maximum over the groups (the tooltip clarifies; not a new field). The "Now" choice: a little house in a round icon to the left of the ring, a shield circle on the corner of the group icon.</p>
+<div class="picker"><div class="seg" id="pk_b"></div><label class="opt"><input type="checkbox" id="side_b"> all variants side by side</label></div>
 <div id="stage3"></div>
-<h3 class="sub">Состояния, масштаб карты 100% (город средний, группа 3 юнита, 3 заряда)</h3>
+<h3 class="sub">States, map scale 100% (a medium city, a group of 3 units, 3 charges)</h3>
 <div class="tbl" id="spec_b100"></div>
-<h3 class="sub">Те же состояния, масштаб карты 60%</h3>
+<h3 class="sub">The same states, map scale 60%</h3>
 <div class="tbl" id="spec_b60"></div>
 <div class="cards" id="cards_b"></div>
 
-<h2 class="sec" id="b4">4. Значки радиальных меню</h2>
-<p class="note">Единый набор для четырёх меню (город: нанять, казарма, склад; группа: разделить, защита, отмена, слить; стойка: экономия, баланс, война; снабжение: перевозка, маркеры фронта 1 и 2). Сейчас: у города и снабжения символы-буквы шрифта (<code>+</code>, <code>⌂</code>, <code>▤</code>, <code>⇢</code>, <code>⚑</code>), у групп и стойки значка нет (только слово), поэтому вид зависит от шрифта. Новые наборы нарисованы здесь же в SVG (своё авторство, лицензия не нужна, <code>THIRD_PARTY_NOTICES.md</code> не меняется); Lucide из <code>hud/icons.ts</code> остаётся для HUD (ui-style 8). Ниже: сетка значков, читаемость при 32, 24 и 16 px, затем сами меню в реальном размере (сектор «наведён», «текущий», «выключен»).</p>
-<div class="picker"><div class="seg" id="pk_i"></div><label class="opt"><input type="checkbox" id="side_i" checked> все наборы рядом</label></div>
-<h3 class="sub">Сетка значков</h3>
+<h2 class="sec" id="b4">4. Radial menu icons</h2>
+<p class="note">A single set for the four menus (city: recruit, barracks, warehouse; group: split, defense, cancel, merge; stance: economy, balance, war; supply: transfer, front markers 1 and 2). Now: the city and supply menus use letter-like font symbols (<code>+</code>, <code>⌂</code>, <code>▤</code>, <code>⇢</code>, <code>⚑</code>), the group and stance menus have no icon (only a word), so the look depends on the font. The new sets are drawn here in SVG (our own authorship, no license needed, <code>THIRD_PARTY_NOTICES.md</code> does not change); Lucide from <code>hud/icons.ts</code> stays for the HUD (ui-style 8). Below: the icon grid, readability at 32, 24 and 16 px, then the menus themselves at real size (a sector "hovered", "current", "disabled").</p>
+<div class="picker"><div class="seg" id="pk_i"></div><label class="opt"><input type="checkbox" id="side_i" checked> all sets side by side</label></div>
+<h3 class="sub">Icon grid</h3>
 <div class="tbl" id="spec_i"></div>
-<h3 class="sub">Читаемость на малом размере (32, 24, 16 px; светлый значок на тёмном секторе)</h3>
+<h3 class="sub">Readability at a small size (32, 24, 16 px; a light icon on a dark sector)</h3>
 <div class="tbl" id="spec_is"></div>
-<h3 class="sub">Меню в реальном размере</h3>
+<h3 class="sub">Menus at real size</h3>
 <div id="menus"></div>
 <div class="cards" id="cards_i"></div>
 
@@ -133,7 +133,7 @@ const MAP_EDGES = [[0,0,3,3],[1,3,4,3],[2,4,5,3],[3,5,15,3],[4,0,1,3],[5,0,2,3],
 /*MAP:END*/
 const CAPK = { C: 10, L: 8, M: 6, S: 4, P: 3 };                 // capacity.by_kind of rulesets/mvp-1.toml
 const WH0 = { C: 6, L: 2, M: 2, S: 1 };                          // warehouse.start_by_kind; gain_per_level 1, max_level 2 (DEC-26)
-const KNAME = { C: 'столица', L: 'большой город', M: 'средний город', S: 'малый город', P: 'провинция' };
+const KNAME = { C: 'capital', L: 'large city', M: 'medium city', S: 'small city', P: 'province' };
 const PROV = [12, 13];                                            // shown as provinces when the checkbox is on (the MVP maps have none yet)
 const NODES = MAP_NODES.map(([id, x, y, t, k, vp]) => ({ id, x, y, t, k, vp, o: 'none' }));
 const radiusOf = (cap) => (cap <= 2 ? 11 : cap <= 4 ? 14 : cap <= 6 ? 17 : 20);   // cityRadius() of the client
@@ -225,7 +225,7 @@ const inView = (v, x, y, m = 0) => x > v.x - m && x < v.x + v.w + m && y > v.y -
 const G = (x, y, inner, extra = '') => `<g transform="translate(${f1(x)} ${f1(y)})" ${extra}>${inner}</g>`;
 const diamond = (x, y, r) => `${f1(x)},${f1(y - r)} ${f1(x + r)},${f1(y)} ${f1(x)},${f1(y + r)} ${f1(x - r)},${f1(y)}`;
 
-// Drawing context: `sh` 0 = flat (what the client draws today), 1 = the shading of the owner's choice (BL1 «Сдержанный»).
+// Drawing context: `sh` 0 = flat (what the client draws today), 1 = the shading of the owner's choice (BL1 "Restrained").
 function mkCtx(I, sh) {
   const filt = (id) => (sh ? `filter="url(#${I(id)})"` : '');
   const fillOf = (own, flat) => (sh ? `url(#${I('g' + (own || 'none'))})` : flat);
@@ -367,11 +367,11 @@ function uHex(m, X) {
   return { svg: G(0, -(bottom - R) / 2, g), w: 2 * R * (m.sel ? 1.5 : 1), h: (R + bottom) * (m.sel ? 1.2 : 1), dy: (bottom - R) / 2 };
 }
 const UNITS = [
-  { name: 'Сейчас', sub: 'треугольник ▽, плоский (ui-style 9.5)', fn: uTri, sh: 0 },
-  { name: 'U1 Треугольник BL1', sub: 'та же форма, шейдинг выбора владельца', fn: uTri, sh: 1 },
-  { name: 'U2 Батарейки', sub: 'по батарейке на юнита, враг вверх ногами', fn: uBat, sh: 1 },
-  { name: 'U3 Знамя', sub: 'квадрат на полотнище на юнита, враг развевается влево', fn: uFlag, sh: 1 },
-  { name: 'U4 Жетон', sub: 'шестиугольник с числом и ряд квадратов', fn: uHex, sh: 1 },
+  { name: 'Now', sub: 'triangle ▽, flat (ui-style 9.5)', fn: uTri, sh: 0 },
+  { name: 'U1 BL1 Triangle', sub: 'the same shape, the shading of the owner’s choice', fn: uTri, sh: 1 },
+  { name: 'U2 Batteries', sub: 'one battery per unit, the enemy upside down', fn: uBat, sh: 1 },
+  { name: 'U3 Banner', sub: 'a square on a cloth per unit, the enemy flutters to the left', fn: uFlag, sh: 1 },
+  { name: 'U4 Token', sub: 'a hexagon with a number and a row of squares', fn: uHex, sh: 1 },
 ];
 // a unit drawn at (x, y) of the map; `at` leaves the shading to the variant; the symbol never gets smaller than 20 px on screen
 function drawUnit(x, y, m, uv, X, sc) {
@@ -542,11 +542,11 @@ function cWheel(n, X) {
   return { svg: s, top: -R, bottom: R, left: -R, right: R + 6, R, unitAt: [r * .75 + 9, r * .75 + 5] };
 }
 const CITIES = [
-  { name: 'Сейчас', sub: 'круг, кольцо, полоска склада', fn: (n, X) => cRound(n, X, false), sh: 0 },
-  { name: 'C1 Круг BL1', sub: 'тот же круг в стиле BL1, места склада по уровню', fn: (n, X) => cRound(n, X, true), sh: 1 },
-  { name: 'C2 Башня', sub: 'башня по виду, фишки гарнизона, ящики склада', fn: cTower, sh: 1 },
-  { name: 'C3 Карточка', sub: 'круг и карточка с гарнизоном и складом', fn: cCard, sh: 1 },
-  { name: 'C4 Колесо', sub: 'обод = места, склад внутри, юнит у города', fn: cWheel, sh: 1 },
+  { name: 'Now', sub: 'circle, ring, warehouse bar', fn: (n, X) => cRound(n, X, false), sh: 0 },
+  { name: 'C1 BL1 Circle', sub: 'the same circle in the BL1 style, warehouse slots by level', fn: (n, X) => cRound(n, X, true), sh: 1 },
+  { name: 'C2 Tower', sub: 'a tower by kind, garrison chips, warehouse crates', fn: cTower, sh: 1 },
+  { name: 'C3 Card', sub: 'a circle and a card with the garrison and the warehouse', fn: cCard, sh: 1 },
+  { name: 'C4 Wheel', sub: 'the rim = slots, the warehouse inside, the unit at the city', fn: cWheel, sh: 1 },
 ];
 
 // ======================================================================================================
@@ -579,7 +579,7 @@ const sym = (x, y, inner, ref) => G(x, y, `<g transform="scale(${f1(K(ref))})">$
 const B3 = [
   // B3-0 "Now": a round badge with a house on the left of the ring; Defense is the shield disc on the corner of the group icon (drawn by the unit)
   {
-    name: 'Сейчас', sub: 'домик в круге слева, щит кружком на значке группы', fn(n, ext, dirs, X) {
+    name: 'Now', sub: 'a little house in a circle on the left, a shield circle on the group icon', fn(n, ext, dirs, X) {
       let s = '';
       if (n.bar === 'built') s += G(-(ext.R + 8.5), 0, `<circle r="7.5" fill="${C.bg}" stroke="${col(n.o)}" stroke-width="2"/>${houseGlyph(1)}${ring2(n, 7.5)}`);
       if (n.bar === 'building') s += buildBar(0, f1(ext.top - 17), 24, n.pct, X);
@@ -588,7 +588,7 @@ const B3 = [
   },
   // B3-1 "Badges": two round badges in a fixed column left of the city: the house above, the shield below; the own shield carries the counter "◆ 1/3"
   {
-    name: 'B1 Значки', sub: 'домик и щит значками слева, счётчик ◆ 1/3 у щита', fn(n, ext, dirs, X) {
+    name: 'B1 Icons', sub: 'a little house and a shield as icons on the left, a ◆ 1/3 counter at the shield', fn(n, ext, dirs, X) {
       const x = ext.left - 10.5, r = 9.5;
       let s = '';
       if (n.bar) {
@@ -603,7 +603,7 @@ const B3 = [
   },
   // B3-2 "Building and rampart": the barracks is a small building on the ground beside the city; Defense is a rampart ring around the city: own = a diamond per place (full = accumulated bonus), enemy = the same ring without the diamonds
   {
-    name: 'B2 Постройка и вал', sub: 'казарма постройкой рядом, «Защита» кольцом-валом из ромбов', fn(n, ext, dirs, X) {
+    name: 'B2 Building and rampart', sub: 'the barracks as a building nearby, "Defense" as a rampart ring of rhombi', fn(n, ext, dirs, X) {
       let s = '';
       const Rr = ext.R + 15;
       if (n.def) {
@@ -634,7 +634,7 @@ const B3 = [
   },
   // B3-3 "Barricades": Defense is a barricade across every road at the entrance to the city (own: and the counter ◆ 1/3 at the city); the barracks is a pennant with a house on a pole beside the city
   {
-    name: 'B3 Заграждения', sub: '«Защита» заграждениями на дорогах у города, казарма флажком', fn(n, ext, dirs, X) {
+    name: 'B3 Barriers', sub: '"Defense" as barriers on the roads at the city, the barracks as a flag', fn(n, ext, dirs, X) {
       let s = '';
       if (n.def) {
         const d0 = ext.R + 15;
@@ -661,7 +661,7 @@ const B3 = [
   },
   // B3-4 "Status row": one row of chips under the city (and its warehouse): the house chip, the shield chip with diamonds (own: full = accumulated bonus, five or fewer; more: the number)
   {
-    name: 'B4 Строка статуса', sub: 'ряд плашек под городом: домик, щит с ромбами', fn(n, ext, dirs, X) {
+    name: 'B4 Status row', sub: 'a row of plates under the city: a little house, a shield with rhombi', fn(n, ext, dirs, X) {
       const H = 18, items = [];
       if (n.bar) items.push({ w: 24, kind: 'bar' });
       if (n.def) items.push({ w: n.def === true ? 24 : n.def.cap <= 5 ? 22 + n.def.cap * 8.6 : 22 + (`${n.def.b}/${n.def.cap}`.length * 6.8 + 6), kind: 'def' });
@@ -785,7 +785,7 @@ function scene(o, uid) {
   defs += fog.defs; body += fog.svg; ghosts += fog.ghosts;
   // the ghost of the enemy group last seen at 15 (21 s ago), drawn above the haze
   const n15 = NODES[15];
-  if (inView(V, n15.x, n15.y, 60)) ghosts += G(n15.x, n15.y, `<g opacity=".78">${drawUnit(0, 0, { n: 3, c: 0, o: 'enemy', k: 'ghost' }, o.u, X, sc)}</g>${G(0, 30, `<rect x="-14" y="-6.5" width="28" height="13" rx="6.5" fill="${C.plate}" fill-opacity=".92" stroke="${C.paper}" stroke-opacity=".5"/>${text(0, .3, '21 с', 9.5, C.paper)}`)}`);
+  if (inView(V, n15.x, n15.y, 60)) ghosts += G(n15.x, n15.y, `<g opacity=".78">${drawUnit(0, 0, { n: 3, c: 0, o: 'enemy', k: 'ghost' }, o.u, X, sc)}</g>${G(0, 30, `<rect x="-14" y="-6.5" width="28" height="13" rx="6.5" fill="${C.plate}" fill-opacity=".92" stroke="${C.paper}" stroke-opacity=".5"/>${text(0, .3, '21 s', 9.5, C.paper)}`)}`);
   return `<svg viewBox="${V.x} ${V.y} ${V.w} ${V.h}" width="${f1(V.w * sc)}" height="${f1(V.h * sc)}" role="img" aria-label="${o.label}" fill="none"><defs>${defs}</defs>${body}${over}${ghosts}</svg>`;
 }
 
@@ -844,18 +844,18 @@ function table(el, heads, rows, cur, bg = 'transparent') {
   el.innerHTML = h + '</table>';
 }
 const UST = [
-  ['свой 1/1', { n: 1, c: 1, o: 'you' }], ['свой 3/2', { n: 3, c: 2, o: 'you' }], ['свой 6/6', { n: 6, c: 6, o: 'you' }], ['свой 6/0', { n: 6, c: 0, o: 'you' }],
-  ['свой 12/5', { n: 12, c: 5, o: 'you' }], ['свой 20/7', { n: 20, c: 7, o: 'you' }], ['выделен 4/3', { n: 4, c: 3, o: 'you', sel: true }],
-  ['враг 4/2, точно', { n: 4, c: 2, o: 'enemy' }], ['враг 12/12', { n: 12, c: 12, o: 'enemy' }], ['враг есть, числа нет', { n: null, c: 0, o: 'enemy', k: 'presence' }], ['призрак в тумане', { n: 3, c: 0, o: 'enemy', k: 'ghost' }],
+  ['own 1/1', { n: 1, c: 1, o: 'you' }], ['own 3/2', { n: 3, c: 2, o: 'you' }], ['own 6/6', { n: 6, c: 6, o: 'you' }], ['own 6/0', { n: 6, c: 0, o: 'you' }],
+  ['own 12/5', { n: 12, c: 5, o: 'you' }], ['own 20/7', { n: 20, c: 7, o: 'you' }], ['selected 4/3', { n: 4, c: 3, o: 'you', sel: true }],
+  ['enemy 4/2, exact', { n: 4, c: 2, o: 'enemy' }], ['enemy 12/12', { n: 12, c: 12, o: 'enemy' }], ['enemy present, no number', { n: null, c: 0, o: 'enemy', k: 'presence' }], ['ghost in the fog', { n: 3, c: 0, o: 'enemy', k: 'ghost' }],
 ];
 function specUnits(el, sc, st) {
   const rows = UNITS.map((U, uv) => ({ name: U.name, sub: U.sub, cells: UST.map(([, m]) => cell(84, 84, -42, -42, (I) => drawUnit(0, 0, Object.assign({ k: 'exact' }, m), uv, mkCtx(I, 1), sc), sc, BACKDROPS[st.bd])) }));
   table(el, UST.map(([t]) => t), rows, st.u, BACKDROPS[st.bd]);
 }
 const CST = [
-  ['столица, свой', { kind: 'C', o: 'you', vp: 1, units: 0, st: 5, lvl: 1 }], ['большой, свой', { kind: 'L', o: 'you', vp: 3, units: 2, st: 3, lvl: 1 }], ['средний, свой', { kind: 'M', o: 'you', vp: 1, units: 3, st: 2, lvl: 0 }],
-  ['малый, свой, склад 2 из 3', { kind: 'S', o: 'you', vp: 1, units: 1, st: 1, lvl: 1 }], ['малый, склад максимум', { kind: 'S', o: 'you', vp: 1, units: 4, st: 3, lvl: 2 }], ['провинция, своя', { kind: 'P', o: 'you', vp: 0, units: 1 }],
-  ['средний, враг (склад скрыт)', { kind: 'M', o: 'enemy', vp: 1 }], ['малый, враг, виден точно', { kind: 'S', o: 'enemy', vp: 1, st: 2, whOnly: true }], ['средний, нейтральный', { kind: 'M', o: 'none', vp: 1 }], ['провинция, враг', { kind: 'P', o: 'enemy', vp: 0 }],
+  ['capital, own', { kind: 'C', o: 'you', vp: 1, units: 0, st: 5, lvl: 1 }], ['large, own', { kind: 'L', o: 'you', vp: 3, units: 2, st: 3, lvl: 1 }], ['medium, own', { kind: 'M', o: 'you', vp: 1, units: 3, st: 2, lvl: 0 }],
+  ['small, own, warehouse 2 of 3', { kind: 'S', o: 'you', vp: 1, units: 1, st: 1, lvl: 1 }], ['small, warehouse at max', { kind: 'S', o: 'you', vp: 1, units: 4, st: 3, lvl: 2 }], ['province, own', { kind: 'P', o: 'you', vp: 0, units: 1 }],
+  ['medium, enemy (warehouse hidden)', { kind: 'M', o: 'enemy', vp: 1 }], ['small, enemy, seen exactly', { kind: 'S', o: 'enemy', vp: 1, st: 2, whOnly: true }], ['medium, neutral', { kind: 'M', o: 'none', vp: 1 }], ['province, enemy', { kind: 'P', o: 'enemy', vp: 0 }],
 ];
 function specCities(el, sc, st) {
   const rows = CITIES.map((Cv, cv) => ({
@@ -868,10 +868,10 @@ function specCities(el, sc, st) {
   table(el, CST.map(([t]) => t), rows, st.c, BACKDROPS[st.bd]);
 }
 const BST = [
-  ['своя, казармы нет', { o: 'you' }], ['своя казарма построена', { o: 'you', bar: 'built' }], ['своя казарма строится 55%', { o: 'you', bar: 'building', pct: 55 }],
-  ['«Защита» 1/3', { o: 'you', def: { b: 1, cap: 3 } }], ['«Защита» 3/3, полная', { o: 'you', def: { b: 3, cap: 3 } }], ['«Защита» 0/3, только включена', { o: 'you', def: { b: 0, cap: 3 } }],
-  ['казарма и «Защита» 2/3', { o: 'you', bar: 'built', def: { b: 2, cap: 3 } }], ['«Защита» 4/8, большой потолок', { o: 'you', def: { b: 4, cap: 8 } }],
-  ['враг: казарма видна (сосед)', { o: 'enemy', bar: 'built' }], ['враг: «Защита» (режим, без числа)', { o: 'enemy', def: true }], ['враг: казарма и «Защита»', { o: 'enemy', bar: 'built', def: true }], ['враг: казарма скрыта', { o: 'enemy' }],
+  ['own, no barracks', { o: 'you' }], ['own barracks built', { o: 'you', bar: 'built' }], ['own barracks under construction 55%', { o: 'you', bar: 'building', pct: 55 }],
+  ['"Defense" 1/3', { o: 'you', def: { b: 1, cap: 3 } }], ['"Defense" 3/3, full', { o: 'you', def: { b: 3, cap: 3 } }], ['"Defense" 0/3, just switched on', { o: 'you', def: { b: 0, cap: 3 } }],
+  ['barracks and "Defense" 2/3', { o: 'you', bar: 'built', def: { b: 2, cap: 3 } }], ['"Defense" 4/8, a large cap', { o: 'you', def: { b: 4, cap: 8 } }],
+  ['enemy: barracks visible (neighbor)', { o: 'enemy', bar: 'built' }], ['enemy: "Defense" (mode, no number)', { o: 'enemy', def: true }], ['enemy: barracks and "Defense"', { o: 'enemy', bar: 'built', def: true }], ['enemy: barracks hidden', { o: 'enemy' }],
 ];
 const STUB = [[1, 0], [-.72, -.69], [-.3, .95]];
 function specB3(el, sc, st) {
@@ -896,27 +896,27 @@ function specB3(el, sc, st) {
 // Block 4: the icons of the radial menus. 24x24 grid; own drawings (no foreign set, no licence): I1 line, I2 disc, I3 squares (7x7), I4 duotone
 // ======================================================================================================
 const ICO = {
-  recruit: { n: 'Нанять', line: '<rect x="7" y="6" width="10" height="15" rx="2"/><path d="M10 3h4v3h-4z"/><path d="M12 11v6M9 14h6"/>', fill: '<rect x="7" y="6" width="10" height="15" rx="2"/>', px: ['..###..', '.#####.', '.##.##.', '.#...#.', '.##.##.', '.#####.', '.#####.'], ch: '+' },
-  barracks: { n: 'Казарма', line: '<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/>', fill: '<path d="M5.5 10 12 4.5 18.5 10V20h-13z"/>', px: ['...#...', '..###..', '.#####.', '#######', '.##.##.', '.##.##.', '.##.##.'], ch: '⌂' },
-  warehouse: { n: 'Склад', line: '<rect x="8.5" y="3.5" width="7" height="7"/><rect x="3.5" y="13.5" width="7" height="7"/><rect x="13.5" y="13.5" width="7" height="7"/>', fill: '<rect x="8.5" y="3.5" width="7" height="7"/>', px: ['..###..', '..###..', '..###..', '.......', '###.###', '###.###', '###.###'], ch: '▤' },
-  split: { n: 'Разделить', line: '<path d="M12 21v-8"/><path d="M12 13 6 6"/><path d="M12 13l6-7"/><path d="M6 10V6h4"/><path d="M14 6h4v4"/>', fill: '<path d="M6 6h4L6 10zM18 6h-4l4 4z"/>', px: ['##...##', '###.###', '.#####.', '..###..', '...#...', '...#...', '...#...'] },
-  defense: { n: 'Защита', line: '<path d="M12 3 5 6v6c0 4.3 3 7.4 7 9 4-1.6 7-4.7 7-9V6z"/>', fill: '<path d="M12 3 5 6v6c0 4.3 3 7.4 7 9 4-1.6 7-4.7 7-9V6z"/>', px: ['.#####.', '#######', '#######', '#######', '.#####.', '..###..', '...#...'] },
-  cancel: { n: 'Отмена', line: '<circle cx="12" cy="12" r="9"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/>', fill: '<circle cx="12" cy="12" r="9"/>', px: ['#.....#', '##...##', '.##.##.', '..###..', '.##.##.', '##...##', '#.....#'] },
-  merge: { n: 'Слить', line: '<path d="M6 4l6 7 6-7"/><path d="M12 11v9"/><path d="M8.5 17 12 20.5 15.5 17"/>', fill: '<path d="M8.5 17h7L12 20.5z"/>', px: ['#.....#', '##...##', '.##.##.', '..###..', '...#...', '...#...', '...#...'] },
-  economy: { n: 'Экономика', line: '<rect x="4" y="15" width="16" height="5" rx="1.5"/><rect x="6" y="9.5" width="12" height="4.5" rx="1.5"/><rect x="8" y="4.5" width="8" height="4" rx="1.5"/>', fill: '<rect x="4" y="15" width="16" height="5" rx="1.5"/>', px: ['.......', '.......', '..###..', '.......', '.#####.', '.......', '#######'] },
-  balance: { n: 'Баланс', line: '<path d="M12 4v16"/><path d="M5 8h14"/><path d="M8 20h8"/><path d="M5 8 2.5 14h5z"/><path d="M19 8l-2.5 6h5z"/>', fill: '<path d="M5 8 2.5 14h5zM19 8l-2.5 6h5z"/>', px: ['...#...', '#######', '#..#..#', '##.#.##', '...#...', '...#...', '.#####.'] },
-  war: { n: 'Война', line: '<circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/><circle cx="12" cy="12" r="1.2"/>', fill: '<circle cx="12" cy="12" r="6.5"/>', px: ['...#...', '...#...', '.......', '##.#.##', '.......', '...#...', '...#...'] },
-  transfer: { n: 'Перевозка', line: '<rect x="3" y="8.5" width="7" height="7"/><path d="M12.5 12H21M17.5 8l4 4-4 4"/>', fill: '<rect x="3" y="8.5" width="7" height="7"/>', px: ['.......', '....#..', '###..##', '###.###', '###..##', '....#..', '.......'], ch: '⇢' },
-  front1: { n: 'Маркер 1', line: '<path d="M6 21V4"/><path d="M6 5h12l-3.2 4.2L18 13.4H6"/>', fill: '<path d="M6 5h12l-3.2 4.2L18 13.4H6z"/>', t: '1', px: ['######.', '##.####', '##.####', '######.', '#......', '#......', '#......'], ch: '⚑' },
-  front2: { n: 'Маркер 2', line: '<path d="M6 21V4"/><path d="M6 5h12l-3.2 4.2L18 13.4H6"/>', fill: '<path d="M6 5h12l-3.2 4.2L18 13.4H6z"/>', t: '2', px: ['######.', '#.#.##.', '#.#.##.', '######.', '#......', '#......', '#......'], ch: '⚑' },
+  recruit: { n: 'Recruit', line: '<rect x="7" y="6" width="10" height="15" rx="2"/><path d="M10 3h4v3h-4z"/><path d="M12 11v6M9 14h6"/>', fill: '<rect x="7" y="6" width="10" height="15" rx="2"/>', px: ['..###..', '.#####.', '.##.##.', '.#...#.', '.##.##.', '.#####.', '.#####.'], ch: '+' },
+  barracks: { n: 'Barracks', line: '<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/>', fill: '<path d="M5.5 10 12 4.5 18.5 10V20h-13z"/>', px: ['...#...', '..###..', '.#####.', '#######', '.##.##.', '.##.##.', '.##.##.'], ch: '⌂' },
+  warehouse: { n: 'Warehouse', line: '<rect x="8.5" y="3.5" width="7" height="7"/><rect x="3.5" y="13.5" width="7" height="7"/><rect x="13.5" y="13.5" width="7" height="7"/>', fill: '<rect x="8.5" y="3.5" width="7" height="7"/>', px: ['..###..', '..###..', '..###..', '.......', '###.###', '###.###', '###.###'], ch: '▤' },
+  split: { n: 'Split', line: '<path d="M12 21v-8"/><path d="M12 13 6 6"/><path d="M12 13l6-7"/><path d="M6 10V6h4"/><path d="M14 6h4v4"/>', fill: '<path d="M6 6h4L6 10zM18 6h-4l4 4z"/>', px: ['##...##', '###.###', '.#####.', '..###..', '...#...', '...#...', '...#...'] },
+  defense: { n: 'Defense', line: '<path d="M12 3 5 6v6c0 4.3 3 7.4 7 9 4-1.6 7-4.7 7-9V6z"/>', fill: '<path d="M12 3 5 6v6c0 4.3 3 7.4 7 9 4-1.6 7-4.7 7-9V6z"/>', px: ['.#####.', '#######', '#######', '#######', '.#####.', '..###..', '...#...'] },
+  cancel: { n: 'Cancel', line: '<circle cx="12" cy="12" r="9"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/>', fill: '<circle cx="12" cy="12" r="9"/>', px: ['#.....#', '##...##', '.##.##.', '..###..', '.##.##.', '##...##', '#.....#'] },
+  merge: { n: 'Merge', line: '<path d="M6 4l6 7 6-7"/><path d="M12 11v9"/><path d="M8.5 17 12 20.5 15.5 17"/>', fill: '<path d="M8.5 17h7L12 20.5z"/>', px: ['#.....#', '##...##', '.##.##.', '..###..', '...#...', '...#...', '...#...'] },
+  economy: { n: 'Economy', line: '<rect x="4" y="15" width="16" height="5" rx="1.5"/><rect x="6" y="9.5" width="12" height="4.5" rx="1.5"/><rect x="8" y="4.5" width="8" height="4" rx="1.5"/>', fill: '<rect x="4" y="15" width="16" height="5" rx="1.5"/>', px: ['.......', '.......', '..###..', '.......', '.#####.', '.......', '#######'] },
+  balance: { n: 'Balance', line: '<path d="M12 4v16"/><path d="M5 8h14"/><path d="M8 20h8"/><path d="M5 8 2.5 14h5z"/><path d="M19 8l-2.5 6h5z"/>', fill: '<path d="M5 8 2.5 14h5zM19 8l-2.5 6h5z"/>', px: ['...#...', '#######', '#..#..#', '##.#.##', '...#...', '...#...', '.#####.'] },
+  war: { n: 'War', line: '<circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/><circle cx="12" cy="12" r="1.2"/>', fill: '<circle cx="12" cy="12" r="6.5"/>', px: ['...#...', '...#...', '.......', '##.#.##', '.......', '...#...', '...#...'] },
+  transfer: { n: 'Transfer', line: '<rect x="3" y="8.5" width="7" height="7"/><path d="M12.5 12H21M17.5 8l4 4-4 4"/>', fill: '<rect x="3" y="8.5" width="7" height="7"/>', px: ['.......', '....#..', '###..##', '###.###', '###..##', '....#..', '.......'], ch: '⇢' },
+  front1: { n: 'Marker 1', line: '<path d="M6 21V4"/><path d="M6 5h12l-3.2 4.2L18 13.4H6"/>', fill: '<path d="M6 5h12l-3.2 4.2L18 13.4H6z"/>', t: '1', px: ['######.', '##.####', '##.####', '######.', '#......', '#......', '#......'], ch: '⚑' },
+  front2: { n: 'Marker 2', line: '<path d="M6 21V4"/><path d="M6 5h12l-3.2 4.2L18 13.4H6"/>', fill: '<path d="M6 5h12l-3.2 4.2L18 13.4H6z"/>', t: '2', px: ['######.', '#.#.##.', '#.#.##.', '######.', '#......', '#......', '#......'], ch: '⚑' },
 };
 const ICON_ORDER = ['recruit', 'barracks', 'warehouse', 'split', 'defense', 'cancel', 'merge', 'economy', 'balance', 'war', 'transfer', 'front1', 'front2'];
 const ISETS = [
-  { name: 'Сейчас', sub: 'символы шрифта у города и снабжения, у групп и стойки значка нет' },
-  { name: 'I1 Линейные', sub: 'контур 2 px, закруглённые концы' },
-  { name: 'I2 Диски', sub: 'тёмный знак на светлом диске' },
-  { name: 'I3 Квадраты', sub: 'сетка 7×7 из квадратов, язык «заряд = квадрат»' },
-  { name: 'I4 Двухтонные', sub: 'контур и подложка цвета владельца' },
+  { name: 'Now', sub: 'font symbols for the city and supply, no icon for groups and stance' },
+  { name: 'I1 Linear', sub: '2 px outline, rounded ends' },
+  { name: 'I2 Discs', sub: 'a dark sign on a light disc' },
+  { name: 'I3 Squares', sub: 'a 7×7 grid of squares, the "charge = square" language' },
+  { name: 'I4 Two-tone', sub: 'an outline and a backing in the owner color' },
 ];
 // one icon: set, id, size (px), colour of the glyph on a dark sector
 function iconSVG(set, id, size, color = C.paper) {
@@ -983,68 +983,68 @@ function menuSVG(set, spec) {
 function menuSpecs() {
   const a3 = spread(3), a4 = spread(4);
   return [
-    { label: 'Меню города', ring: { inner: 27, outer: 81 }, half: 59, big: false, items: [
-      { id: 'recruit', angle: a3[0], label: 'Нанять', lines: ['2 CP'], key: 'R', compact: true, state: 'hover' },
-      { id: 'barracks', angle: a3[1], label: 'Казарма', lines: ['3 CP'], compact: true, state: 'norm' },
-      { id: 'warehouse', angle: a3[2], label: 'Склад', lines: ['2 CP'], compact: true, state: 'off' }] },
-    { label: 'Меню группы', ring: { inner: 26, outer: 96 }, half: 44, big: false, items: [
-      { id: 'split', angle: a4[0], label: 'Разделить', key: 'S', state: 'norm' },
-      { id: 'defense', angle: a4[1], label: 'Защита', lines: ['2 CP'], key: 'D', state: 'current' },
-      { id: 'cancel', angle: a4[2], label: 'Отмена', key: 'X', state: 'off' },
-      { id: 'merge', angle: a4[3], label: 'Слить', key: 'G', state: 'hover' }] },
-    { label: 'Меню снабжения', ring: { inner: 30, outer: 112 }, half: 44, big: false, items: [
-      { id: 'front1', angle: 270, label: 'снять 1', lines: ['склад полон'], key: '1', state: 'current' },
-      { id: 'front2', angle: 0, label: 'маркер 2', lines: ['здесь другой'], key: '2', state: 'off' },
-      { id: 'transfer', angle: 180, label: 'перевезти', lines: ['на складе 5'], key: '3', state: 'hover' }] },
-    { label: 'Меню стойки', ring: { inner: 34, outer: 150 }, half: 58, big: true, items: [
-      { id: 'economy', angle: 150, label: 'Экономика', lines: ['+3 CP в минуту', '+18 зарядов в минуту'], key: '1', state: 'norm' },
-      { id: 'balance', angle: 270, label: 'Баланс', lines: ['+6 CP в минуту', '+12 зарядов в минуту'], key: '2', state: 'current' },
-      { id: 'war', angle: 30, label: 'Война', lines: ['+9 CP в минуту', '+6 зарядов в минуту'], key: '3', state: 'hover' }] },
+    { label: 'City menu', ring: { inner: 27, outer: 81 }, half: 59, big: false, items: [
+      { id: 'recruit', angle: a3[0], label: 'Recruit', lines: ['2 CP'], key: 'R', compact: true, state: 'hover' },
+      { id: 'barracks', angle: a3[1], label: 'Barracks', lines: ['3 CP'], compact: true, state: 'norm' },
+      { id: 'warehouse', angle: a3[2], label: 'Warehouse', lines: ['2 CP'], compact: true, state: 'off' }] },
+    { label: 'Group menu', ring: { inner: 26, outer: 96 }, half: 44, big: false, items: [
+      { id: 'split', angle: a4[0], label: 'Split', key: 'S', state: 'norm' },
+      { id: 'defense', angle: a4[1], label: 'Defense', lines: ['2 CP'], key: 'D', state: 'current' },
+      { id: 'cancel', angle: a4[2], label: 'Cancel', key: 'X', state: 'off' },
+      { id: 'merge', angle: a4[3], label: 'Merge', key: 'G', state: 'hover' }] },
+    { label: 'Supply menu', ring: { inner: 30, outer: 112 }, half: 44, big: false, items: [
+      { id: 'front1', angle: 270, label: 'remove 1', lines: ['warehouse full'], key: '1', state: 'current' },
+      { id: 'front2', angle: 0, label: 'marker 2', lines: ['other is here'], key: '2', state: 'off' },
+      { id: 'transfer', angle: 180, label: 'transfer', lines: ['5 in stock'], key: '3', state: 'hover' }] },
+    { label: 'Stance menu', ring: { inner: 34, outer: 150 }, half: 58, big: true, items: [
+      { id: 'economy', angle: 150, label: 'Economy', lines: ['+3 CP/min', '+18 charges/min'], key: '1', state: 'norm' },
+      { id: 'balance', angle: 270, label: 'Balance', lines: ['+6 CP/min', '+12 charges/min'], key: '2', state: 'current' },
+      { id: 'war', angle: 30, label: 'War', lines: ['+9 CP/min', '+6 charges/min'], key: '3', state: 'hover' }] },
   ];
 }
 
 // ---- the cards under each block: what changes, FPS (an estimate by ui-style 24.4: ratio to flat drawing), risk, days, DEC and protocol ----
 const CARDS = {
   u: [
-    ['Сейчас', 'Треугольник ▽ в `shapes.ts` (`Token`), заряд уровнем заливки (площадь `sqrt(заряд / юниты)`), щит кружком на углу.', 'база', 'заряд читается грубо: «чуть больше половины» нельзя отличить от «две трети»', '0', 'нет'],
-    ['U1 Треугольник BL1', 'Та же форма и тот же язык; градиент, тень 1,5 px и кромка из выбора BL1 в контекстах `EntityKit` (`kit.triangles`). Входит в работу BL1-1 из #335, отдельной цены нет.', 'около 0,9-1,0', 'низкий; заряд по-прежнему уровнем', 'в составе BL1 (S, до 1 дня сверх)', 'нет, нет'],
-    ['U2 Батарейки', 'Новый `Token`: до 6 спрайтов-батареек в пуле на группу (две текстуры: полная и со штриховкой, две стороны), для 7+ юнитов шесть и подпись числа; выделение уголками; вражеская группа вверх ногами с двойным контуром. Затрагивает `shapes.ts`, `entityView.ts`, `pick.ts` (попадание по габариту кластера), `anchors.ts`.', 'около 0,9-1,0 (до 240 лёгких спрайтов вместо 40 треугольников; текстуры общие)', 'средний: меняет язык значков (▽ у групп уйдёт из ui-style 21), «слипание» при 60%, 7+ юнитов рисуются пропорционально', 'M, 3-4 дня', 'нет, нет'],
-    ['U3 Знамя', 'Новый `Token`: контур полотнища и сетка квадратов (3 колонки), древко; для 13+ юнитов сетка 4×4 пропорционально и число. Свой развевается вправо, чужой влево.', 'около 0,9-1,0', 'средний-высокий: высота до 48 px перекрывает соседние подписи и кольцо ёмкости, 5 px квадраты на пределе читаемости, неочевидно для «группы»', 'M, 4 дня', 'нет, нет'],
-    ['U4 Жетон', 'Новый `Token`: шестиугольник (своя на грани, чужая на вершине, двойной контур) с числом, под ним ряд до 8 квадратов (заполнен = заряжен). Затрагивает `shapes.ts`, `entityView.ts`, `pick.ts`.', 'около 0,9-1,0', 'низкий-средний: ряд квадратов 5 px мелкий при 60% (держится минимальным размером 20 px), для 9+ юнитов ряд пропорциональный', 'M, 3 дня', 'нет, нет'],
+    ['Now', 'A triangle ▽ in `shapes.ts` (`Token`), the charge as a fill level (area `sqrt(charge / units)`), a shield circle on the corner.', 'baseline', 'the charge reads roughly: "a bit over half" cannot be told from "two thirds"', '0', 'no'],
+    ['U1 BL1 Triangle', 'The same shape and the same language; the gradient, a 1.5 px shadow and the rim from the BL1 choice in the `EntityKit` contexts (`kit.triangles`). Part of the BL1-1 work from #335, no separate price.', 'about 0.9-1.0', 'low; the charge is still a level', 'part of BL1 (S, up to 1 day extra)', 'no, no'],
+    ['U2 Batteries', 'A new `Token`: up to 6 battery sprites in a pool per group (two textures: full and hatched, two sides), for 7+ units six and a number caption; the selection by corners; an enemy group upside down with a double outline. Touches `shapes.ts`, `entityView.ts`, `pick.ts` (a hit by the cluster size), `anchors.ts`.', 'about 0.9-1.0 (up to 240 light sprites instead of 40 triangles; the textures are shared)', 'medium: changes the language of icons (▽ for groups would leave ui-style 21), "sticking together" at 60%, 7+ units are drawn proportionally', 'M, 3-4 days', 'no, no'],
+    ['U3 Banner', 'A new `Token`: a cloth outline and a grid of squares (3 columns), a pole; for 13+ units a 4×4 grid proportionally and a number. Your own flutters to the right, the enemy to the left.', 'about 0.9-1.0', 'medium-high: a height of up to 48 px overlaps the neighboring captions and the capacity ring, 5 px squares are at the limit of readability, not obvious for a "group"', 'M, 4 days', 'no, no'],
+    ['U4 Token', 'A new `Token`: a hexagon (your own on a side, the enemy on a vertex, a double outline) with a number, under it a row of up to 8 squares (filled = charged). Touches `shapes.ts`, `entityView.ts`, `pick.ts`.', 'about 0.9-1.0', 'low-medium: a row of 5 px squares is small at 60% (held by the 20 px minimum size), for 9+ units the row is proportional', 'M, 3 days', 'no, no'],
   ],
   c: [
-    ['Сейчас', 'Круг, кольцо ёмкости (сегмент = место), полоска склада под кольцом; провинция рисуется тем же кругом (радиус по ёмкости 3).', 'база', 'уровень склада виден только длиной полоски; провинция похожа на малый город', '0', 'нет'],
-    ['C1 Круг BL1', 'Те же элементы, шейдинг BL1; места склада по уровню: заполнено, рамка, пунктир (ещё не построено: `warehouse_max_level` и `warehouse_gain_per_level` из `ruleset_public` дают число пунктирных мест вместе с `warehouse_level`, нового поля нет); провинция полое кольцо радиуса 9 (форма, не размер). `cityView.ts`, `shapes.ts` (`drawWarehouseBar` с параметром), `style.ts`.', 'около 0,9-1,0', 'низкий; пунктирные места видны только у своего города, у чужого их нет', 'S-M, 1-2 дня (после BL1-1)', 'нет, нет'],
-    ['C2 Башня', 'Башня-силуэт по виду (высота по классу, флажок у столицы), гарнизон фишками на цоколе, склад ящиками (квадратами) в строках по 4. Новый `CityView` рисует контекст по виду узла; провинция то же полое кольцо. Кольцо радиального меню вокруг башни считается от габарита.', 'около 0,9-1,0', 'средний: башня выше круга (рост до 2,3 радиуса) задевает дороги и соседние значки; юнит в городе стоит поверх неё', 'M, 3 дня', 'нет, нет'],
-    ['C3 Карточка', 'Круг (меньше на 1 px) без кольца и карточка под ним: ряд кружков гарнизона и ряд квадратов склада (с пунктирными местами). У чужого города карточка без склада.', 'около 0,9-1,0', 'средний: карточка шире круга (до 58 px у столицы) мешает рёбрам; капитал и большой город похожи', 'M, 2-3 дня', 'нет, нет'],
-    ['C4 Колесо', 'Обод кольца = места гарнизона, склад сеткой квадратов внутри тела, юнит города «пристыкован» справа внизу и не закрывает тело; столица: двойной обод и звезда в углу.', 'около 0,9-1,0', 'средний-высокий: тело с 6-9 квадратами по 4 px нечитаемо при 60%; стыковка юнита к городу меняет геометрию пика, стопки групп (`cityStacks.ts`) и радиальных меню', 'M-L, 4 дня', 'нет, нет'],
+    ['Now', 'A circle, a capacity ring (a segment = a slot), a warehouse bar under the ring; a province is drawn by the same circle (the radius by capacity 3).', 'baseline', 'the warehouse level is visible only by the bar length; a province looks like a small city', '0', 'no'],
+    ['C1 BL1 Circle', 'The same elements, BL1 shading; warehouse slots by level: filled, a frame, dashed (not built yet: `warehouse_max_level` and `warehouse_gain_per_level` from `ruleset_public` together with `warehouse_level` give the number of dashed slots, there is no new field); a province is a hollow ring of radius 9 (a shape, not a size). `cityView.ts`, `shapes.ts` (`drawWarehouseBar` with a parameter), `style.ts`.', 'about 0.9-1.0', 'low; the dashed slots are visible only at your own city, an enemy city has none', 'S-M, 1-2 days (after BL1-1)', 'no, no'],
+    ['C2 Tower', 'A tower silhouette by kind (the height by class, a flag at the capital), the garrison as chips on the base, the warehouse as crates (squares) in rows of 4. A new `CityView` draws a context by the kind of node; a province is the same hollow ring. The radial menu ring around the tower is computed from the size.', 'about 0.9-1.0', 'medium: a tower taller than a circle (up to 2.3 radii) touches roads and neighboring icons; the unit in the city stands on top of it', 'M, 3 days', 'no, no'],
+    ['C3 Card', 'A circle (1 px smaller) without a ring and a card under it: a row of garrison circles and a row of warehouse squares (with dashed slots). An enemy city\'s card has no warehouse.', 'about 0.9-1.0', 'medium: the card is wider than the circle (up to 58 px at the capital) and interferes with edges; the capital and a large city look alike', 'M, 2-3 days', 'no, no'],
+    ['C4 Wheel', 'The ring rim = garrison slots, the warehouse as a grid of squares inside the body, the city unit is "docked" at the bottom right and does not cover the body; the capital: a double rim and a star in the corner.', 'about 0.9-1.0', 'medium-high: a body with 6-9 squares of 4 px is unreadable at 60%; docking the unit to the city changes the geometry of the peak, the group stacks (`cityStacks.ts`) and the radial menus', 'M-L, 4 days', 'no, no'],
   ],
   b: [
-    ['Сейчас', 'Казарма: круглый значок с домиком слева от кольца (только своя). «Защита»: щит кружком на углу значка группы, числа нет (клиент #318 добавит «+1 / 3»). Идущая стройка: тонкая полоска над очередью.', 'база', 'на 60% значок 9 px; «Защита» привязана к значку группы, который у вражеской группы пунктирный', '0', 'нет'],
-    ['B1 Значки', 'Колонка из двух значков у города слева: домик (казарма: построена, строится дугой хода, чужая с двойным контуром) и щит со счётчиком ◆ 1/3; у чужого щит без числа. Минимум 16 px на экране при любом масштабе (как `symbolScale` у групп). `cityView.ts`, `style.ts`, `entityView.ts` (щит с группы убирается).', 'около 0,95-1,0 (2 спрайта на город, текстуры общие)', 'низкий; слева у города уже стоит значок снабжения (`barracksAt`): сдвиг; ромб в счётчике и «◇ бонус» в арене должны читаться одинаково', 'S-M, 1-2 дня', 'нет, нет'],
-    ['B2 Постройка и вал', 'Казарма: маленькое здание на территории города рядом с узлом (построена, стройка пунктиром с лесами и полоской); «Защита»: кольцо-вал вокруг города из ромбов, один на место потолка (заполнен = накопленный бонус), у чужого двойное кольцо без ромбов.', 'около 0,9-1,0 (кольцо и ромбы: до 8 графических примитивов на город в «Защите», статичные)', 'средний: кольцо пересекает VP, склад и дороги, при 60% ромбы держатся минимальным размером; где ставить здание на плотной карте', 'M, 3 дня', 'нет, нет'],
-    ['B3 Заграждения', 'Казарма флажком с домиком на древке у города; «Защита»: шлагбаум поперёк каждой дороги у города (свой одинарный, чужой двойной), счётчик ◆ 1/3 у своего города. Дороги города берутся из графа карты (`dirsOf`), как соседство DEC-31.', 'около 0,9-1,0', 'средний-высокий: до 4 шлагбаумов на город пересекают полосы R1 и пакеты, на 4-дорожных узлах шумно; число дорог не равно числу фронтов', 'M, 3 дня', 'нет, нет'],
-    ['B4 Строка статуса', 'Ряд плашек под городом и складом: домик (построена, стройка пунктиром с полоской), щит с ромбами (до 5) или числом. Своя «Защита» показывает накопление, чужая только щит.', 'около 0,95-1,0', 'низкий-средний: ряд занимает место под складом, где уже полоска и подписи; для 60% минимальный размер плашки', 'S-M, 2 дня', 'нет, нет'],
+    ['Now', 'Barracks: a round icon with a little house to the left of the ring (only your own). "Defense": a shield circle on the corner of the group icon, no number (client #318 will add "+1 / 3"). Construction in progress: a thin bar above the queue.', 'baseline', 'at 60% the icon is 9 px; "Defense" is tied to the group icon, which is dashed for an enemy group', '0', 'no'],
+    ['B1 Icons', 'A column of two icons at the city on the left: a little house (barracks: built, under construction with a progress arc, an enemy one with a double outline) and a shield with a ◆ 1/3 counter; an enemy shield has no number. At least 16 px on screen at any scale (like `symbolScale` for groups). `cityView.ts`, `style.ts`, `entityView.ts` (the shield is removed from the group).', 'about 0.95-1.0 (2 sprites per city, the textures are shared)', 'low; on the left of the city there is already a supply icon (`barracksAt`): a shift; the rhombus in the counter and "◇ bonus" in the arena must read the same', 'S-M, 1-2 days', 'no, no'],
+    ['B2 Building and rampart', 'Barracks: a small building on the city territory next to the node (built, construction dashed with scaffolding and a bar); "Defense": a rampart ring of rhombi around the city, one per cap slot (filled = accumulated bonus), an enemy one has a double ring without rhombi.', 'about 0.9-1.0 (the ring and rhombi: up to 8 graphic primitives per city in "Defense", static)', 'medium: the ring crosses VP, the warehouse and roads, at 60% the rhombi are held by the minimum size; where to put the building on a dense map', 'M, 3 days', 'no, no'],
+    ['B3 Barriers', 'Barracks as a flag with a little house on a pole at the city; "Defense": a barrier across each road at the city (your own single, the enemy double), a ◆ 1/3 counter at your own city. The roads of a city come from the map graph (`dirsOf`), like the adjacency of DEC-31.', 'about 0.9-1.0', 'medium-high: up to 4 barriers per city cross the R1 lanes and the packets, noisy at nodes with 4 roads; the number of roads does not equal the number of fronts', 'M, 3 days', 'no, no'],
+    ['B4 Status row', 'A row of plates under the city and the warehouse: a little house (built, construction dashed with a bar), a shield with rhombi (up to 5) or a number. Your own "Defense" shows the accumulation, an enemy one only the shield.', 'about 0.95-1.0', 'low-medium: the row takes space under the warehouse, where there is already a bar and captions; for 60% a minimum plate size', 'S-M, 2 days', 'no, no'],
   ],
   i: [
-    ['Сейчас', 'Символ шрифта в `RadialItem.sign` у города (`+`, `⌂`, `▤`) и снабжения (`⇢`, `⚑`); у групп и стойки значка нет. Внешний вид зависит от шрифта и платформы.', 'не рисуется на карте', 'разные начертания, у групп и стойки нет форм', '0', 'нет'],
-    ['I1 Линейные', 'Новые значки в `hud/icons.ts` рядом с Lucide (тот же формат `IconShape`, 24×24, штрих 2, `currentColor`), `Radial.svelte` рисует `Icon` вместо `sign`; ключ `sign` становится именем значка. Свои рисунки, `THIRD_PARTY_NOTICES.md` не меняется.', 'нет (HUD, не карта)', 'низкий; единственный из наборов в одном языке с Lucide HUD', 'S, 1 день', 'нет, нет'],
-    ['I2 Диски', 'То же, но знак в светлом диске: сильнее различаются в списке меню, плотнее при 16 px; два слоя SVG на значок.', 'нет', 'низкий-средний: светлые диски спорят с подсвеченным сектором (заливка `--you` 38%)', 'S, 1 день', 'нет, нет'],
-    ['I3 Квадраты', 'Сетка 7×7 из квадратов: язык «заряд = квадрат», резкие края при любом размере. Хранится как строки сетки, рисуется `rect`.', 'нет', 'средний: силуэты грубые (щит похож на сердце, баланс на «П»), нужна ручная правка каждого значка и отдельное чтение при 24 px', 'M, 2-3 дня', 'нет, нет'],
-    ['I4 Двухтонные', 'I1 плюс подложка цвета владельца (заливка 50%) в части значка: форма несёт смысл, подложка акцент. Два слоя на значок.', 'нет', 'низкий; в серой шкале остаётся контур', 'S, 1 день', 'нет, нет'],
+    ['Now', 'A font symbol in `RadialItem.sign` for the city (`+`, `⌂`, `▤`) and supply (`⇢`, `⚑`); the group and stance menus have no icon. The look depends on the font and the platform.', 'not drawn on the map', 'different glyph styles, no shapes for groups and stance', '0', 'no'],
+    ['I1 Linear', 'New icons in `hud/icons.ts` next to Lucide (the same `IconShape` format, 24×24, stroke 2, `currentColor`), `Radial.svelte` draws an `Icon` instead of `sign`; the `sign` key becomes the icon name. Our own drawings, `THIRD_PARTY_NOTICES.md` does not change.', 'none (HUD, not the map)', 'low; the only set in the same language as the Lucide HUD', 'S, 1 day', 'no, no'],
+    ['I2 Discs', 'The same, but the sign is in a light disc: better told apart in the menu list, denser at 16 px; two SVG layers per icon.', 'none', 'low-medium: light discs compete with the highlighted sector (`--you` fill 38%)', 'S, 1 day', 'no, no'],
+    ['I3 Squares', 'A 7×7 grid of squares: the "charge = square" language, sharp edges at any size. Stored as grid strings, drawn with `rect`.', 'none', 'medium: the silhouettes are coarse (the shield looks like a heart, balance like a "Π"), each icon needs manual editing and a separate reading at 24 px', 'M, 2-3 days', 'no, no'],
+    ['I4 Two-tone', 'I1 plus a backing in the owner color (50% fill) on part of the icon: the shape carries the meaning, the backing the accent. Two layers per icon.', 'none', 'low; in grayscale the outline remains', 'S, 1 day', 'no, no'],
   ],
 };
 const CARD_NOTES = {
-  u: 'В описании «заряд» это заряженный юнит; все варианты берут данные из `GroupView` (`units`, `charged`, `mode`) и `NodeView.detail`: числа у чужой группы без `EXACT` не рисуются (`?`). Рекомендация: **U1** как основа (меньше всего меняет, входит в BL1), **U4** как «смелая» часть: ряд квадратов делает заряд считаемым и связывает его с языком склада; решение «перенять ряд квадратов под U1» можно принять отдельно.',
-  c: 'Данные всех вариантов: `NodeView.kind`, `owner`, `capacity`, `garrison`, `warehouse`, `warehouse_level`, `warehouse_cap`, `vp` и `ruleset_public.city_upgrades`; чужой склад скрыт (DEC-26, п. 10), поэтому у чужого города ряд квадратов не рисуется. Рекомендация: **C1** (провинция полым кольцом и пунктирные места склада берутся и без остального).',
-  b: 'Данные: `NodeView.has_barracks` (своя всегда; чужая у соседнего города, DEC-31, #319), `GroupView.defense_bonus` и `defense_cap` (только своя, #317), режим «Защита» чужой группы (`PRESENCE`, DEC-21 п. 7). Для вариантов ничего сверх этого не нужно: «нужен протокол/DEC» нет ни у одного. Ромб в счётчике это бонусный выстрел, как в арене DEC-32. Рекомендация: **B1** (дёшево, читается при 60% благодаря минимальному размеру); B2 стоит рассмотреть вторым шагом, если владельцу нужен «характер» территории.',
-  i: 'Рекомендация: **I1 Линейные** (единый язык с Lucide HUD, `Radial.svelte` уже умеет `Icon`); I4 как вариант с акцентом.',
+  u: 'In the description "charge" means a charged unit; all variants take the data from `GroupView` (`units`, `charged`, `mode`) and `NodeView.detail`: the numbers of an enemy group without `EXACT` are not drawn (`?`). Recommendation: **U1** as the base (it changes the least, part of BL1), **U4** as the "bold" part: a row of squares makes the charge countable and ties it to the language of the warehouse; the decision "adopt the row of squares under U1" can be made separately.',
+  c: 'The data of all variants: `NodeView.kind`, `owner`, `capacity`, `garrison`, `warehouse`, `warehouse_level`, `warehouse_cap`, `vp` and `ruleset_public.city_upgrades`; an enemy warehouse is hidden (DEC-26, item 10), so an enemy city has no row of squares. Recommendation: **C1** (a province as a hollow ring and the dashed warehouse slots can be taken without the rest).',
+  b: 'The data: `NodeView.has_barracks` (your own always; an enemy one at an adjacent city, DEC-31, #319), `GroupView.defense_bonus` and `defense_cap` (your own only, #317), the "Defense" mode of an enemy group (`PRESENCE`, DEC-21 item 7). The variants need nothing beyond this: none of them has "protocol/DEC needed". The rhombus in the counter is the bonus shot, as in the DEC-32 arena. Recommendation: **B1** (cheap, reads at 60% thanks to the minimum size); B2 is worth considering as a second step if the owner wants a "character" of the territory.',
+  i: 'Recommendation: **I1 Linear** (a single language with the Lucide HUD, `Radial.svelte` already handles `Icon`); I4 as a variant with an accent.',
 };
 function cards() {
   const md = (s) => s.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
   for (const k of ['u', 'c', 'b', 'i']) {
     const list = { u: UNITS, c: CITIES, b: B3, i: ISETS }[k];
-    $('#cards_' + k).innerHTML = CARDS[k].map((c, i) => `<div class="card ${REC[k] === i ? 'rec' : ''}"><h3>${list[i].name}${REC[k] === i ? '<span class="badge">рекомендовано</span>' : ''}</h3><dl><dt>Что меняется (PixiJS, Svelte)</dt><dd>${md(c[1])}</dd><dt>Цена по FPS (оценка)</dt><dd>${c[2]}</dd><dt>Риск</dt><dd>${c[3]}</dd><dt>Оценка</dt><dd>${c[4]}</dd><dt>DEC, протокол</dt><dd>${c[5]}</dd></dl></div>`).join('') + `<div class="card" style="grid-column:1/-1"><p class="note" style="margin:0">${md(CARD_NOTES[k])}</p></div>`;
+    $('#cards_' + k).innerHTML = CARDS[k].map((c, i) => `<div class="card ${REC[k] === i ? 'rec' : ''}"><h3>${list[i].name}${REC[k] === i ? '<span class="badge">recommended</span>' : ''}</h3><dl><dt>What changes (PixiJS, Svelte)</dt><dd>${md(c[1])}</dd><dt>FPS price (estimate)</dt><dd>${c[2]}</dd><dt>Risk</dt><dd>${c[3]}</dd><dt>Estimate</dt><dd>${c[4]}</dd><dt>DEC, protocol</dt><dd>${c[5]}</dd></dl></div>`).join('') + `<div class="card" style="grid-column:1/-1"><p class="note" style="margin:0">${md(CARD_NOTES[k])}</p></div>`;
   }
 }
 
@@ -1061,7 +1061,7 @@ function readHash() {
 }
 function toHash() { const q = new URLSearchParams(); for (const k of Object.keys(st)) q.set(k, st[k]); return q.toString(); }
 function picker(id, key, list) {
-  $('#' + id).innerHTML = list.map((v, i) => `<label><input type="radio" name="${key}" value="${i}" ${st[key] === i ? 'checked' : ''}><span>${v.name}${REC[key] === i ? '<em class="badge">рекомендовано</em>' : ''}</span></label>`).join('');
+  $('#' + id).innerHTML = list.map((v, i) => `<label><input type="radio" name="${key}" value="${i}" ${st[key] === i ? 'checked' : ''}><span>${v.name}${REC[key] === i ? '<em class="badge">recommended</em>' : ''}</span></label>`).join('');
 }
 function stage(el, block, list, key, sideKey) {
   const o0 = { c: st.c, u: st.u, b: st.b, prov: st.prov, scale: st.sc / 100, rm: st.rm };
@@ -1090,12 +1090,12 @@ function render() {
   cards();
   history.replaceState(null, '', '#' + toHash());
   const nm = (L, k) => L[st[k]].name;
-  $('#pick').innerHTML = `Ваш выбор сейчас: юниты <b>${nm(UNITS, 'u')}</b>, города <b>${nm(CITIES, 'c')}</b>, казарма и «Защита» <b>${nm(B3, 'b')}</b>, значки <b>${nm(ISETS, 'i')}</b>. Адрес кадра: <code>objects-style.html#${toHash()}</code>. Рекомендация: ${nm_(UNITS, REC.u)}, ${nm_(CITIES, REC.c)}, ${nm_(B3, REC.b)}, ${nm_(ISETS, REC.i)}.`;
+  $('#pick').innerHTML = `Your choice now: units <b>${nm(UNITS, 'u')}</b>, cities <b>${nm(CITIES, 'c')}</b>, barracks and "Defense" <b>${nm(B3, 'b')}</b>, icons <b>${nm(ISETS, 'i')}</b>. Frame address: <code>objects-style.html#${toHash()}</code>. Recommendation: ${nm_(UNITS, REC.u)}, ${nm_(CITIES, REC.c)}, ${nm_(B3, REC.b)}, ${nm_(ISETS, REC.i)}.`;
 }
 const nm_ = (L, i) => `<b>${L[i].name}</b>`;
 window.addEventListener('load', () => {
   readHash();
-  $('#leg').innerHTML = '<span>■ заряд (склад, перевозка)</span><span>◇ бонус (виртуальный выстрел)</span><span>▽ группа</span><span>штриховка = разряжен</span><span>двойной контур = противник</span><span>пунктир = не видно точно</span><span>домик = казарма</span><span>щит = «Защита»</span>';
+  $('#leg').innerHTML = '<span>■ charge (warehouse, transfer)</span><span>◇ bonus (virtual shot)</span><span>▽ group</span><span>hatching = discharged</span><span>double outline = opponent</span><span>dashed = not seen exactly</span><span>little house = barracks</span><span>shield = "Defense"</span>';
   for (const [id, key, list] of [['pk_u', 'u', UNITS], ['pk_c', 'c', CITIES], ['pk_b', 'b', B3], ['pk_i', 'i', ISETS]]) $('#' + id).addEventListener('change', (ev) => { st[key] = +ev.target.value; render(); });
   for (const [id, key] of [['gray', 'gray'], ['rm', 'rm'], ['prov', 'prov'], ['side_u', 'su'], ['side_c', 'sc_'], ['side_b', 'sb'], ['side_i', 'si']]) $('#' + id).addEventListener('change', (ev) => { st[key] = ev.target.checked ? 1 : 0; render(); });
   $('#sc').addEventListener('change', (ev) => { st.sc = +ev.target.value; render(); });
