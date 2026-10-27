@@ -19,6 +19,9 @@ self-contained: open in a browser. The screenshots of our client and the images 
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
 only links and our descriptions.
 
+**Variant ids** (AR1, BL1-1, IM1, SH1 ...) are Latin. Until 2026-10-27 many of them were Cyrillic:
+closed PRs, issues and comments still use the old ids; the full mapping is in section 30.
+
 **Statuses.** **[accepted]**: the owner's decision, in force, to be changed only by his decision.
 **[proposed]**: a proposal of an agent or a detail the owner did not set; in force as
 the default value until he answers otherwise. **[awaiting the owner's decision]**: the variants and the
@@ -31,14 +34,14 @@ recommendation are ready, there is no choice, there is no code. **[replaced]**: 
 | 6 Palette | [accepted] (blue is own, red is the enemy, amber is the alert); the pair `--vp`/`--warn` [proposed] to be changed (R2) | implemented, R2 not fixed |
 | 9 Map | [accepted] as implemented (#222, #224, #256, #272, #325); arena 9.9 [replaced by DEC-32] | implemented |
 | 10, 11, 18, 19 HUD and menus | [accepted] by the decisions of the owner's rounds 2-4 | implemented |
-| 13 Screens outside the match, У1, У11, У13, У20 | [proposed], package E; new design decisions on them are **postponed** until the mechanics are done (section 23) | **not done** (K6-K11) |
+| 13 Screens outside the match, IM1, IM11, IM13, IM20 | [proposed], package E; new design decisions on them are **postponed** until the mechanics are done (section 23) | **not done** (K6-K11) |
 | 14.1 Sound, onboarding, package F | [proposed] | not checked |
 | 20-23 (animation, icons, constraints, process) | 23 [accepted] (the owner's practice of 2026-10-21), 20-22 [proposed] | new |
 | 24 Style directions | [accepted] 2026-10-21: D3 for the shading, without relief (refined by section 26); #332 closed | waits for implementation: #347 |
-| 26 Map style, round 2 | [accepted] 2026-10-21 (26.3): Б1-1 with the highlight of the borders of the "pronounced" one, T2 (the baker on numpy and Pillow, WebP), F1 "Haze", R1 "Stripes", the packet as a square; #335 closed | waits for implementation: #344 (the baker, T2, the `arteriya` scene), #347 (shading, borders); **implemented: roads R1 "Stripes" and the square packet (26.1) #345, PR #367; fog F1 "Haze" (9.8) #346, PR #368** |
-| 27 Orders, fight on the map, arena | [accepted] 2026-10-21 (27.3, shots: 29.4): orders and ribbons as now, С3 "Sight", the bonus "◇ +N" on the head, Сл2 "Over the haze", Э3, Ф2 "Pointer" with "Dissolve and marks", arena А1; #339 closed | waits for implementation: #330 (arena А1, in progress), #353 (С3, bonus), #354 (Ф2, after #296); **implemented: fight effects Э3 #351, PR #373; layers Сл2 "Over the haze" #346, PR #368; shots Ш1 instead of the exchange arrows of the arena #352, PR #376** |
+| 26 Map style, round 2 | [accepted] 2026-10-21 (26.3): BL1-1 with the highlight of the borders of the "pronounced" one, T2 (the baker on numpy and Pillow, WebP), F1 "Haze", R1 "Stripes", the packet as a square; #335 closed | waits for implementation: #344 (the baker, T2, the `arteriya` scene), #347 (shading, borders); **implemented: roads R1 "Stripes" and the square packet (26.1) #345, PR #367; fog F1 "Haze" (9.8) #346, PR #368** |
+| 27 Orders, fight on the map, arena | [accepted] 2026-10-21 (27.3, shots: 29.4): orders and ribbons as now, IN3 "Sight", the bonus "◇ +N" on the head, LY2 "Over the haze", FX3, EF2 "Pointer" with "Dissolve and marks", arena AR1; #339 closed | waits for implementation: #330 (arena AR1, in progress), #353 (IN3, bonus), #354 (EF2, after #296); **implemented: fight effects FX3 #351, PR #373; layers LY2 "Over the haze" #346, PR #368; shots SH1 instead of the exchange arrows of the arena #352, PR #376** |
 | 28 Map objects and menu icons | [accepted] 2026-10-21 (28.1): U1 and the row of squares U4, C1, B1, I1 (B2 later, no issue is opened); #337 closed | waits for implementation: #347 (U1), #348 (U4, C1), #349 (B1); implemented (menu icons I1): PR #362 |
-| 29 Shots in a fight | [accepted] 2026-10-21 (29.4): Ш1 "Tracers", the strength "Stronger", the distance of the groups as now (46) | the strength "Stronger" and the common part (pools, the effects layer, the particle core) **implemented: #351, PR #373**; tracers Ш1 **implemented: #352, PR #376** |
+| 29 Shots in a fight | [accepted] 2026-10-21 (29.4): SH1 "Tracers", the strength "Stronger", the distance of the groups as now (46) | the strength "Stronger" and the common part (pools, the effects layer, the particle core) **implemented: #351, PR #373**; tracers SH1 **implemented: #352, PR #376** |
 
 Contents:
 
@@ -68,7 +71,10 @@ Contents:
 24. Directions of the map and unit style (#332)
 25. Recommendation and the first tasks
 26. Map style, round 2: volume, textures, fog, roads (#335)
-27. Map objects and menu icons (#337)
+27. Orders, the fight on the map and the arena in the chosen map style (#339)
+28. Map objects and menu icons: units, cities, barracks and "Defense" (#337)
+29. Shots in the fight on the map: animation variants (#339)
+30. Variant id mapping (old Cyrillic to new Latin)
 
 ---
 
@@ -83,7 +89,7 @@ Accepted by the owner (not reconsidered):
 - road upgrade: ~~a city function on `U`~~ **[replaced by DEC-28, #311, #315]** a road upgrade mode on `U` (a click on a highlighted own road), there is no "Building" mode (DEC-16, #209);
 - fog on the enemy's roads (DEC-17, #210).
 
-Round 3 (#252, #254): the popups with facts looked like debugging and were removed (У5 and the tooltips of
+Round 3 (#252, #254): the popups with facts looked like debugging and were removed (IM5 and the tooltips of
 a city, a road and intent arrows no longer apply); one tooltip with the charges of a group remains.
 The hint line at the bottom (`OrderHint`) and the fight estimate in the HUD were removed, the client has no game logic at all.
 Travel time: one number at the target node while an own group is selected and the cursor is over a reachable node.
@@ -182,13 +188,13 @@ and a live match against a bot on a local server (Russian language, a map with a
 | # | What was bad in v2 | Status on 2026-10-21 |
 | --- | --- | --- |
 | K1 | The map takes about 60% of the screen, the panel is 300 px, the symbols are small | **done** (wave 3, #228, #247): the top bar is 48 px, the rest is the map; on a 40-node map it is square, so margins remain on the sides (about 20% of the width on each side at 1280×800) |
-| K2 | For player 2 own is orange | **done**: own is always blue, the splash "You are blue. Your capital is here" (У4) |
-| K3 | The event feed is stuffed with VP | **done** (У2): toasts only for events (a fight, a capture), there is no VP in the feed |
+| K2 | For player 2 own is orange | **done**: own is always blue, the splash "You are blue. Your capital is here" (IM4) |
+| K3 | The event feed is stuffed with VP | **done** (IM2): toasts only for events (a fight, a capture), there is no VP in the feed |
 | K4 | The fog is dirty, three quarters of the map in hatching | **partly done**: the hatching only as a band at the border, but on small dev maps (`line3`, `siege`) the band is about 70 px and reads heavily; on a live map it is thin |
 | K5 | There is no opponent's name and no tooltips | the nick is in the top bar; the tooltips were removed by the owner (#252), will not return |
-| K6 | The result: an empty peak moment | **not done**: "Defeat, A player gave up, Victory points: you 0, enemy 0" and two buttons; no opponent's nick, graph, "play again" (У1, package E) |
+| K6 | The result: an empty peak moment | **not done**: "Defeat, A player gave up, Victory points: you 0, enemy 0" and two buttons; no opponent's nick, graph, "play again" (IM1, package E) |
 | K7 | The menu: four identical blue buttons | **not done**: five buttons, the main action is not highlighted |
-| K8 | The queue is text only | **not done** (У11) |
+| K8 | The queue is text only | **not done** (IM11) |
 | K9 | The replay: "Player 1", "Player 2", a timeline without events | **not done** in the sample `?replay=dev` ("Player 1 34 : 34 Player 2", a slider without marks); the replays of real matches with nicks were not re-shot |
 | K10 | The waiting room: the map is named by an id, there is no preview | **not done** ("Map: pautina") |
 | K11 | Screens outside the match: a 420 px card on an empty background | **not done**: the same frame on all five screens |
@@ -234,29 +240,29 @@ or **later**.
 
 | ID | Improvement | Why (section 2) | Prio. | Effort | Needed | When | Package |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| У1 | **A result screen with the course of the match**: a big word of the outcome, the opponent's nick, the duration, 4 key numbers (cities at the end, units lost, charges delivered, VP peak) and a graph of the VP difference over time with marks of captures and fights; a click on a mark opens the replay at that tick | 13, 14, 19, 20, 22 | P0 | M | no: everything is in the frames file (`GET /api/replays/{id}`, `docs/design/replay-frames.md`) | now | E |
-| У2 | **An event filter**: VP awards do not get into the feed (the score is already in the top bar); toasts only for a fight, the capture and loss of a city, starvation, a rejected command; the rest in a slide-out log | 1, 3 | P0 | S | no | now | D |
-| У3 | **Nicks in the match, the result and the replay**: "Danya 4 : 6 Guest" in the top bar, the opponent's nick on the result, nicks in the replay | 14, 16 | P0 | S | protocol: nicks in `welcome`; API: nicks in the frames file or in the replay response | now | D, E |
-| У4 | **Match start**: for 3 s a plate "You are blue. Your capital is here" and a pulsing ring around the own capital, the camera fits the map | 3, 1 | P0 | S | no | now | D |
-| У5 | **Hover tooltips with numbers** for a city, a road, a group, an intent arrow: 1 title line and 2-4 "key: value" lines (capacity, warehouse, terrain with a modifier, width and what the next one gives), the term CP and "capacity" with a nested tooltip | 3, 10, 23 | P0 | M | no (the numbers from the player's view and `ruleset_public`) | now | D |
-| У6 | **A response to every action**: an accepted order: the ghost becomes solid and a short sound; a rejection: the ghost shakes and fades, a toast with the reason (`rejects.ts` already translates the codes) and a rejection sound | 7, 2 | P0 | S | no | now | C (map), F (sound) |
-| У7 | **The alert "they are coming for your city"**: an enemy intent with the target in your city gives an amber ring at the city and a line in the alert stack with a countdown of the delay and a jump via `Space` | 3 | P1 | S | `ruleset_public.orders.planned_delay_ticks` (already in the list of section 15) | now | C |
-| У8 | **A clear outcome of a fight**: at the place of the fight a white flash of 400 ms and two loss numbers in the colors of the sides; a bounce: a short arrow back along the edge; the capture of a city: a wave in the color of the new owner over the cell | 6, 7, 18 | P1 | M | no | now | B (part of CLI-12, #71) |
-| У9 | **Sound**: 8 events (order accepted, rejection, a fight nearby, city captured, city lost, starvation, opponent found, match end), a master volume and an off switch, no more than 4 sounds at once, a fight off-screen is quieter | 2, 6, 17 | P1 | M | the dependency `howler` (allowed by AGENTS.md, section 2) and CC0 sounds | now | F (CLI-12, #71) |
-| У10 | **First match hints**: 5 short contextual hints in the first match against a bot (pick a group, give an order, charges and the capital, `Shift`+click, the `Q` stance), each closes and does not appear again (`localStorage`); "How to play" (CLI-13) opens from the menu and from `?` | 13, 4 | P1 | M | no | now | F |
-| У11 | **A queue you cannot miss**: a search ring, a timer counting up, "Opponent found" with a sound and a change of the tab title (`(!) Opponent found`), a confirmation countdown ring | 21 | P1 | S | no | now | E |
-| У12 | **The last minute**: the timer becomes amber and bigger, one sound signal at 1:00 | 15 | P2 | S | no | now | D |
-| У13 | **A replay for analysis**: nicks, event marks on the timeline (fights, captures, stance changes), keys (`Space` pause, arrows ±5 s, `1`/`2`/`3` speed), a graph of the VP difference above the timeline (the same as in У1) | 14, 19 | P1 | M | API: nicks (У3) | now | E |
-| У14 | **Loading, empty and error states**: a skeleton of the lobby list, a clear empty state with an action, an error with a "Retry" button, connecting to a match with stages | 25 | P1 | S | no | now | E |
-| У15 | **Settings**: interface scale 100/125/150%, volume, "reduced motion" (plus `prefers-reduced-motion`), language; in the ☰ menu in a match and on the main screen | 13, 26 | P1 | S | no | now | F |
-| У16 | **Off-screen indicators**: when the camera is zoomed in, a fight, an alert or an enemy intent beyond the edge is shown by an arrow at the screen edge | 3 | P2 | S | no | later | D |
-| У17 | **Minimap** | 10 | P2 | M | no | **not doing**: the MVP maps fit the screen entirely (`Home`), the У16 indicators are enough | - |
-| У18 | **Challenges with medals** (deliver charges, win a fight with a scheduled order, hold VP) | 13 | P2 | L | scenarios on the server or an offline mode | later, after REL-01 | - |
-| У19 | **A preview of the path and the travel time before sending an order** | 5, 3 | P2 | M | protocol: a path query to the server (the client does not compute paths, AGENTS.md 7.1); the owner's decision | later | - |
-| У20 | **Rating and nick in the menu corner**, the rating change on the result as an arrow | 22 | P1 | S | API: the rating in `/api/me` (LB-01, #78) | together with LB-01 | E |
+| IM1 | **A result screen with the course of the match**: a big word of the outcome, the opponent's nick, the duration, 4 key numbers (cities at the end, units lost, charges delivered, VP peak) and a graph of the VP difference over time with marks of captures and fights; a click on a mark opens the replay at that tick | 13, 14, 19, 20, 22 | P0 | M | no: everything is in the frames file (`GET /api/replays/{id}`, `docs/design/replay-frames.md`) | now | E |
+| IM2 | **An event filter**: VP awards do not get into the feed (the score is already in the top bar); toasts only for a fight, the capture and loss of a city, starvation, a rejected command; the rest in a slide-out log | 1, 3 | P0 | S | no | now | D |
+| IM3 | **Nicks in the match, the result and the replay**: "Danya 4 : 6 Guest" in the top bar, the opponent's nick on the result, nicks in the replay | 14, 16 | P0 | S | protocol: nicks in `welcome`; API: nicks in the frames file or in the replay response | now | D, E |
+| IM4 | **Match start**: for 3 s a plate "You are blue. Your capital is here" and a pulsing ring around the own capital, the camera fits the map | 3, 1 | P0 | S | no | now | D |
+| IM5 | **Hover tooltips with numbers** for a city, a road, a group, an intent arrow: 1 title line and 2-4 "key: value" lines (capacity, warehouse, terrain with a modifier, width and what the next one gives), the term CP and "capacity" with a nested tooltip | 3, 10, 23 | P0 | M | no (the numbers from the player's view and `ruleset_public`) | now | D |
+| IM6 | **A response to every action**: an accepted order: the ghost becomes solid and a short sound; a rejection: the ghost shakes and fades, a toast with the reason (`rejects.ts` already translates the codes) and a rejection sound | 7, 2 | P0 | S | no | now | C (map), F (sound) |
+| IM7 | **The alert "they are coming for your city"**: an enemy intent with the target in your city gives an amber ring at the city and a line in the alert stack with a countdown of the delay and a jump via `Space` | 3 | P1 | S | `ruleset_public.orders.planned_delay_ticks` (already in the list of section 15) | now | C |
+| IM8 | **A clear outcome of a fight**: at the place of the fight a white flash of 400 ms and two loss numbers in the colors of the sides; a bounce: a short arrow back along the edge; the capture of a city: a wave in the color of the new owner over the cell | 6, 7, 18 | P1 | M | no | now | B (part of CLI-12, #71) |
+| IM9 | **Sound**: 8 events (order accepted, rejection, a fight nearby, city captured, city lost, starvation, opponent found, match end), a master volume and an off switch, no more than 4 sounds at once, a fight off-screen is quieter | 2, 6, 17 | P1 | M | the dependency `howler` (allowed by AGENTS.md, section 2) and CC0 sounds | now | F (CLI-12, #71) |
+| IM10 | **First match hints**: 5 short contextual hints in the first match against a bot (pick a group, give an order, charges and the capital, `Shift`+click, the `Q` stance), each closes and does not appear again (`localStorage`); "How to play" (CLI-13) opens from the menu and from `?` | 13, 4 | P1 | M | no | now | F |
+| IM11 | **A queue you cannot miss**: a search ring, a timer counting up, "Opponent found" with a sound and a change of the tab title (`(!) Opponent found`), a confirmation countdown ring | 21 | P1 | S | no | now | E |
+| IM12 | **The last minute**: the timer becomes amber and bigger, one sound signal at 1:00 | 15 | P2 | S | no | now | D |
+| IM13 | **A replay for analysis**: nicks, event marks on the timeline (fights, captures, stance changes), keys (`Space` pause, arrows ±5 s, `1`/`2`/`3` speed), a graph of the VP difference above the timeline (the same as in IM1) | 14, 19 | P1 | M | API: nicks (IM3) | now | E |
+| IM14 | **Loading, empty and error states**: a skeleton of the lobby list, a clear empty state with an action, an error with a "Retry" button, connecting to a match with stages | 25 | P1 | S | no | now | E |
+| IM15 | **Settings**: interface scale 100/125/150%, volume, "reduced motion" (plus `prefers-reduced-motion`), language; in the ☰ menu in a match and on the main screen | 13, 26 | P1 | S | no | now | F |
+| IM16 | **Off-screen indicators**: when the camera is zoomed in, a fight, an alert or an enemy intent beyond the edge is shown by an arrow at the screen edge | 3 | P2 | S | no | later | D |
+| IM17 | **Minimap** | 10 | P2 | M | no | **not doing**: the MVP maps fit the screen entirely (`Home`), the IM16 indicators are enough | - |
+| IM18 | **Challenges with medals** (deliver charges, win a fight with a scheduled order, hold VP) | 13 | P2 | L | scenarios on the server or an offline mode | later, after REL-01 | - |
+| IM19 | **A preview of the path and the travel time before sending an order** | 5, 3 | P2 | M | protocol: a path query to the server (the client does not compute paths, AGENTS.md 7.1); the owner's decision | later | - |
+| IM20 | **Rating and nick in the menu corner**, the rating change on the result as an arrow | 22 | P1 | S | API: the rating in `/api/me` (LB-01, #78) | together with LB-01 | E |
 
-Recommendation for the MVP now: У1-У6 (P0) and У7-У11, У13-У15 (P1). Later: У16, У18, У19.
-Not doing: У17.
+Recommendation for the MVP now: IM1-IM6 (P0) and IM7-IM11, IM13-IM15 (P1). Later: IM16, IM18, IM19.
+Not doing: IM17.
 
 ---
 
@@ -336,7 +342,7 @@ is in the PR description of #208):
   18 px bold. A screen title 24 px, the outcome word on the result 40 px.
   Rationale: XAG 101 requires on PC at 1080p at least 18 px of glyph height; the CSS `font-size`
   is larger than the glyph height, so 15-16 px in CSS is close to the lower bound, not with a margin.
-- Interface scale 100/125/150% (У15): `html { font-size }` and the HUD sizes in `rem`; the map
+- Interface scale 100/125/150% (IM15): `html { font-size }` and the HUD sizes in `rem`; the map
   is not scaled, its symbols keep the minimum screen size (9.5).
 - All HUD numbers `font-variant-numeric: tabular-nums`.
 - Captions on the map (PixiJS `Text`): 12-13 px on the screen, bold, with a dark 3 px outline, in a
@@ -391,7 +397,7 @@ intents → fog → effects. Only the content is added:
 - `territory`: a thin 1 px line (`CELL_LINE`, light, alpha 0.16) around every area, including between areas of one owner (a shared edge once; the map edge is not drawn); on top of it the border of the owner's area as a light 2 px line in the owner's color (Northgard), stronger;
 - `nodes`: capacity rings and the warehouse bar;
 - `groups`: packets under the triangles, motion trails under the packets;
-- `effects`: the starvation countdown, the fight animation (arena, exchange of blows, losses, result; 9.9), the start ring (У4), the alert (У7).
+- `effects`: the starvation countdown, the fight animation (arena, exchange of blows, losses, result; 9.9), the start ring (IM4), the alert (IM7).
 
 ### 9.2 Terrain on the map
 
@@ -403,7 +409,7 @@ intents → fog → effects. Only the content is added:
   (`renderer.generateTexture`) and laid out as sprites on a 34×30 grid (forest), 52×40 (mountains),
   30×26 (plains) with every second row shifted; the grid shift comes from the node id (the same on every
   run). Not closer than 30 units to the city center and 12 to the road axis.
-- In the city tooltip (У5) the terrain as a word and a number: "Mountains: defense +1, entry 70%" (from `ruleset_public`).
+- In the city tooltip (IM5) the terrain as a word and a number: "Mountains: defense +1, entry 70%" (from `ruleset_public`).
 
 ### 9.3 Roads: level 1..3 is the number of stripes (R1 "Stripes", #345)
 
@@ -485,7 +491,7 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
 | A scheduled order (own) | a wide ribbon, a **solid** outline | both |
 | The enemy's scheduled order | a wide ribbon, a **dashed** 9/5 outline | both |
 | Sent, awaiting confirmation | nothing is drawn (round 4: the flickering ghost and the dashed straight line to the target were removed; the order is shown by the snapshot) | the own player |
-| Server rejection | the ghost shakes for 200 ms and fades, a toast with the reason (У6) | the own player |
+| Server rejection | the ghost shakes for 200 ms and fades, a toast with the reason (IM6) | the own player |
 
 The ribbon arrow (HOI4, Mini Motorways):
 
@@ -511,7 +517,7 @@ The ribbon arrow (HOI4, Mini Motorways):
   stream, through the nodes, not along the current edge; "reduced motion": the chevrons stand still. There is no dashed straight line to the target.
   The dotted preview line under the cursor remains only for a scheduled order (Shift).
 - The target of an enemy intent: a dashed ring in the enemy color of radius radius + 20. If the target is in
-  your city, the ring is `--warn` and there is a line in the alert stack (У7).
+  your city, the ring is `--warn` and there is a line in the alert stack (IM7).
 - "Defense" without a target: a circle of radius 13 above the city with a shield glyph and a countdown arc.
 - The arrow body is not thinner than 8 px on the screen.
 
@@ -526,7 +532,7 @@ The ribbon arrow (HOI4, Mini Motorways):
   under the veil darken together with it; there is no shadow along the edge (a half in the fog is carried by dots, 9.3). The light line along the border
   (`FOG_FRONT`) was removed by the owner's decision of 2026-10-22; to bring it back if the visibility border reads badly in the gray scale. Cities in the fog are drawn with the outline of the last
   known owner; ghosts, the "?", the border point tick mark and the range plates lie above the veil.
-- **Layers Сл2 "Over the haze"** (26.3, 27.3; #346): the `intents` layer is above `fog` in `LAYER_ORDER` (ribbons, target rings, the bonus,
+- **Layers LY2 "Over the haze"** (26.3, 27.3; #346): the `intents` layer is above `fog` in `LAYER_ORDER` (ribbons, target rings, the bonus,
   the ghost of an own order and a road construction do not dim: an intent is public, DEC-04); the groups remain under the haze, the thin
   lines of ordinary orders too (they are under the figures of own groups).
 - The "last seen" ghost: an enemy triangle dashed and an age caption "−1:10".
@@ -543,12 +549,12 @@ The ribbon arrow (HOI4, Mini Motorways):
   (`GHOST_FADE_START_S = 60`, `GHOST_HIDE_S = 120` in `style.ts`). Display only: the memory remains in
   `PlayerView`.
 
-### 9.9 Fight, bounce, capture (У8; a fight over time: DEC-24, #276)
+### 9.9 Fight, bounce, capture (IM8; a fight over time: DEC-24, #276)
 
 > **v3: the arena below (a circle of halves) is replaced per DEC-32 by the V3 view "chips"** (#330, **[accepted]** 2026-10-21): a capsule per unit
 > (charged: filled, discharged: empty with hatching, dead: dashed, one that changed in the round pulses), up to 8 chips per side, then "+N"
 > with the exact number, a bonus stock icon ◇ with a number at each side, the caption "bonus attack" in a round with
-> a virtual shot (the shot itself: the Ш1 tracer on the map, #352), a round of 2 s. The rest of the description (the arena position, losses, result, bounce, capture) remains.
+> a virtual shot (the shot itself: the SH1 tracer on the map, #352), a round of 2 s. The rest of the description (the arena position, losses, result, bounce, capture) remains.
 > A sample of the look: `mockups/fight-arena.html` and the arena in `mockups/map-style.html`.
 
 A fight goes in rounds by the rules, so the animation shows the course of the fight, not a single flash. It is
@@ -565,10 +571,10 @@ drawn **only from server data**: the view field `fights` and the events `fight_r
   so it is smooth). The arena of a fight in a city floats above the capacity ring, of a fight on an edge above the meeting point with a
   dashed callout and a cross at the point itself (`point / 2000`). Several fights on the map read each
   by its own arena, there are no windows.
-- **Shots of the last round: tracers Ш1** (the owner's decision of 2026-10-21, 29.4; #352; they replaced the arc exchange arrows above the
+- **Shots of the last round: tracers SH1** (the owner's decision of 2026-10-21, 29.4; #352; they replaced the arc exchange arrows above the
   arena and the plates with shot numbers on them: only the chips, the ◇ stock and the caption "bonus attack" remained on the arena plate).
   A shot is drawn on the **map between the groups** from the `fight_round` fields (`shots`, `virtual`, `losses`) and the same group places
-  as the Э3 effects (`render/shotLayout.ts` the pure part, `render/shotView.ts` the drawing; the client does not compute the outcome).
+  as the FX3 effects (`render/shotLayout.ts` the pure part, `render/shotView.ts` the drawing; the client does not compute the outcome).
   **A real shot**: a curved arc (a Bezier curve to the left of the path) with a tapering tail (8 segments in one `Graphics`,
   each denser than the previous, under a dark backing so that the tail reads also above a city of its own color; transparent at the end of the tail),
   a white core (dark for the enemy, the second shape of the side), a soft glow along the tail and a head: a **solid square ■**
@@ -578,8 +584,8 @@ drawn **only from server data**: the view field `fights` and the events `fight_r
   with a decreasing alpha. **A bonus shot** (all shots of the side are virtual): the tail is empty (two thin lines), behind the head
   three decreasing echo diamonds, the head is a **hollow diamond ◇** (for the enemy a double outline). **Cancellation** (both shots): two arcs bend
   in different directions of the path (a lens) and meet in the middle between the groups in 0.3 s, then a white ring, a ✕ and rays of two colors
-  from Э3, nobody is hit. **A kill and a cancelled charge**: the shot arrives in 0.6 s, then the Э3 hit (a ring, a flash, sparks
-  in a cone from the shooter, shards ▽ in the color of the side that lost, "−N"). **A silent charge**: there is no projectile, only the Э3 sign. **The path after
+  from FX3, nobody is hit. **A kill and a cancelled charge**: the shot arrives in 0.6 s, then the FX3 hit (a ring, a flash, sparks
+  in a cone from the shooter, shards ▽ in the color of the side that lost, "−N"). **A silent charge**: there is no projectile, only the FX3 sign. **The path after
   the shot melts as an arc** for 0.5 s (a thin line, dashed for a bonus one), it does not break off. The times are in fractions of the round (`round_ticks`),
   not in seconds.
   **The distance between the groups did not change (46)**, so the free path between the tokens is only about 8-15 units (29.4, risk 1). A shot
@@ -589,7 +595,7 @@ drawn **only from server data**: the view field `fights` and the events `fight_r
   sets the factor of the tail length and width (1.18, "medium" 0.7 + 0.3 = 1.0), the number of sparks (5 and 3), the brightness and the lengthening.
   The frame cost (head particles, glows, sparks and echo diamonds in the same two `ParticleContainer`; tails: a `Graphics` pool
   one per shot, up to 16): the numbers are in the description of PR #376.
-- **The round losses** (E3, #351) float up as a `−N` number above the group that lost units (above its figure on the map,
+- **The round losses** (FX3, #351) float up as a `−N` number above the group that lost units (above its figure on the map,
   not at the plate), from the hit: 1.0 s after it (0.5 round), they rise by 12 units and fade; with "reduced motion" they do not
   rise.
 - **The end** (`fight_ended`), 3 s: the arena remains with the losses of the whole fight in the halves, the winner's half
@@ -599,7 +605,7 @@ drawn **only from server data**: the view field `fights` and the events `fight_r
 - **A bounce** of the attacker: a short arrow back along the edge in the attacker's color with dashes, 1 s.
 - **City capture**: a wave in the color of the new owner from the center over the cell, 500 ms, and a white ring from the city (the radius by the strength
   of the effects), a flag of the new owner above the city for 1.6 s (it fades during the last 1.0 s); a toast "City 7 captured".
-- **Fight effects on the map Э3 "Expressive", the strength "Stronger"** (the owner's decision of 2026-10-21, sections 27.3 and 29.4; #351):
+- **Fight effects on the map FX3 "Expressive", the strength "Stronger"** (the owner's decision of 2026-10-21, sections 27.3 and 29.4; #351):
   on top of the arena, under the plates, in the `effects` layer, above the haze where the fight is visible. Everything is computed from the view fields and events
   (`fight_round`: shots, virtual, losses; `FightView`: charged, the ◇ stock, silent, `next_round_tick`), the client does not compute the outcome. The times are in fractions of the round `combat.round_ticks` (a round of 2 s: a wind-up of 0.35 s before the tick, a hit of 0.6 s after it, 0.3 s for oncoming
   shots, a flash, a ring, sparks and shards up to 1.0 s after the hit, "−N" 1.0 s, everything ends at 1.6 s, the wind-up of the next one from 1.65 s).
@@ -611,10 +617,10 @@ drawn **only from server data**: the view field `fights` and the events `fight_r
   ◇); contact (the start of a fight): a white ring of 0.6 s. The token that was hit "pops" in scale (1 → 1.35 → 1, 0.25 s).
   The strength is one constant `FIGHT_FX_STRENGTH` (1.6): the number of sparks and shards, the size of the flash and the ring, the length of the rays; the fallback
   "medium" is 1.0. Particles only with the built-in `ParticleContainer` (two for all fights: an ordinary and an additive one, one atlas of
-  baked white shapes, `particles.ts`), no filters; pools, nothing is created per frame. The shot tracers (Ш1): #352 on
+  baked white shapes, `particles.ts`), no filters; pools, nothing is created per frame. The shot tracers (SH1): #352 on
   this basis. "Reduced motion" does not turn these effects off (the owner's decision of 2026-10-21).
 - **Reduced motion**: no wave and no bounce arrow; the numbers do not rise, the arena, the losses, the result and the toasts remain.
-  The tracers and the Э3 effects are not turned off by it (the owner's decision of 2026-10-21).
+  The tracers and the FX3 effects are not turned off by it (the owner's decision of 2026-10-21).
 - Objects in pools (arenas, numbers, captions), nothing is created per frame, `destroy()` frees everything.
 
 ---
@@ -628,11 +634,11 @@ drawn **only from server data**: the view field `fights` and the events `fight_r
 | Title, map and scene selection, FPS | on the dev screen only |
 | Language, "Fit the map" | the ☰ menu (and `Home`) |
 | "Help" with a text legend | an overlay on `?`: a picture legend and a key table, a link to "How to play" (CLI-13) |
-| Inspector | hover tooltips (У5) and the selection card |
+| Inspector | hover tooltips (IM5) and the selection card |
 | Orders panel: a hint, the "Scheduled" checkbox, stance buttons | the selection card (modes, the price of an ordinary one and of `Shift`+click); stance in the radial menu |
 | "Forfeit" | "Exit" in the top bar (the owner's decision) |
 | "Pause" as a separate button on the right | in the top bar next to "Exit" |
-| Event log | toasts (У2) and a slide-out log |
+| Event log | toasts (IM2) and a slide-out log |
 
 ### 10.2 The top bar
 
@@ -649,7 +655,7 @@ Height 48 px, three columns:
 - **Stance:** a chip with an icon, a name and `Q`; a click opens the radial menu.
 - **The VP score as a "tug of war"** (Against the Storm): nicks, numbers and a common bar, the blue part on the left,
   the red on the right, a tick mark in the middle. Under the nick a triangle of its own shape (single and double outline).
-- **The timer** 18 px with an icon; in the last minute `--warn` (У12).
+- **The timer** 18 px with an icon; in the last minute `--warn` (IM12).
 - **On the right:** sound on/off, pause (private matches only), `?`, "Exit".
 
 ### 10.3 The selection card
@@ -665,9 +671,9 @@ a title with a figure, a line of key numbers, action buttons with a price and a 
 ### 10.4 Toasts, alerts, key hints
 
 - **Toasts** at the top right: up to 3, fade after 6 s, a frame on the left in the color of the meaning (own, enemy,
-  `--warn`, neutral) and an icon. A VP award is not shown as a toast (У2).
+  `--warn`, neutral) and an icon. A VP award is not shown as a toast (IM2).
 - **The alert stack** at the center under the top bar: overcrowding (section 12) and "they are coming for your
-  city" (У7); one line per type with a number, `Space` leads the camera to the nearest one.
+  city" (IM7); one line per type with a number, `Space` leads the camera to the nearest one.
 - **The key line** at the bottom right: `Q` stance, `U` upgrade a road (the road mode, #315), `R` recruit, `?` help; it hides
   after 3 matches (a counter in `localStorage`), it remains in `?`.
 - **Exit:** the dialog "Leave the match? This is a forfeit: the match ends with your defeat." with the buttons
@@ -719,7 +725,7 @@ The display, in order of escalation (Mini Metro):
    the grace the arc is gray and "grace 3s".
 3. A line in the alert stack: "City 7 is overcrowded: 6 of 4. A unit is lost in 2.4 s", `Space` leads
    the camera; with several cities one line with a number.
-4. The `attrition` event gives a toast "Overcapacity at node 7: a unit was lost" and a sound (У9).
+4. The `attrition` event gives a toast "Overcapacity at node 7: a unit was lost" and a sound (IM9).
 
 The client does not compute the overcrowding and the countdown (AGENTS.md, 7.1): the numbers come from the server (section 15).
 
@@ -737,7 +743,7 @@ The client does not compute the overcrowding and the countdown (AGENTS.md, 7.1):
   a `--bg` dimming of 0.75 and a light blur (CSS `filter: blur(2px)`), without animation. Our own
   picture, there are no external assets.
 - At the top left the name of the game (24 px, bold) and a motto line from CLI-13 "The capital produces
-  charges, roads carry them, a unit without a charge is defenseless". At the top right the nick, the rating (У20),
+  charges, roads carry them, a unit without a charge is defenseless". At the top right the nick, the rating (IM20),
   language, sound, settings.
 - The content in a panel of width 480 px (`--surface`, outline `--border`, radius 10), not 420 px
   in the middle of emptiness. Buttons: one primary (a `--you` fill), secondary ones with an outline, tertiary ones as a link
@@ -758,9 +764,9 @@ The client does not compute the overcrowding and the countdown (AGENTS.md, 7.1):
 
 - A list of cards: a nick, a map with a small preview (`maps/<id>.preview.png` or the background), the age of
   the entry "2 min"; a "Join" button on the right. Empty: a placeholder picture made of map symbols, a text and
-  the main button "Create a public match". Loading: 3 skeleton lines (У14).
+  the main button "Create a public match". Loading: 3 skeleton lines (IM14).
 
-### 13.4 The queue (У11)
+### 13.4 The queue (IM11)
 
 - In the center a search ring of 160 px (a rotating `--you` arc; with "reduced motion" motionless),
   inside a timer counting up 24 px; under it "Looking for an opponent" and "Players in the queue: 1".
@@ -776,7 +782,7 @@ The client does not compute the overcrowding and the countdown (AGENTS.md, 7.1):
   the opponent, each with a nick and a chip "Ready" or "Waiting". The invite link with a big
   "Copy" button while there is no opponent; "Leave" as a link.
 
-### 13.6 The result (У1)
+### 13.6 The result (IM1)
 
 The hierarchy (Overwatch 2 Match Summary, VALORANT):
 
@@ -794,7 +800,7 @@ Data: the frames file (`GET /api/replays/{id}`) already contains `p` (CP, VP), `
 game logic. While the file is not ready (seconds after the match), blocks 3 and 4 show a skeleton, blocks 1, 2
 and 5 are visible at once from `match_end`.
 
-### 13.7 The replay (У13)
+### 13.7 The replay (IM13)
 
 - At the top the nicks of the sides and the VP score in the same "tug of war" as in the match.
 - At the bottom a timeline with event marks (fights as dots, captures as diamonds in the side's color) and a graph of the VP
@@ -806,7 +812,7 @@ and 5 are visible at once from `match_end`.
 
 The same frame 13.1, the text of width 680 px, 16 px, line height 1.5; the language in the header, not at the bottom.
 
-### 13.9 Loading, emptiness, errors (У14)
+### 13.9 Loading, emptiness, errors (IM14)
 
 | State | Look |
 | --- | --- |
@@ -820,7 +826,7 @@ The same frame 13.1, the text of width 680 px, 16 px, line height 1.5; the langu
 
 ## 14. Sound, accessibility, localization
 
-### 14.1 Sound (У9)
+### 14.1 Sound (IM9)
 
 - The library `howler` (allowed by AGENTS.md, section 2; rationale: sprites, a single volume,
   autoplay after a user gesture). An alternative without a dependency: the Web Audio API directly; the choice
@@ -864,13 +870,13 @@ HTTP API: regenerate `openapi.json` and `api.gen.ts`.
 | Field | Where | Why | Package |
 |---|---|---|---|
 | `economy.stance_to_charges_pct`, `economy.charges_per_cp`, `economy.passive_amount`, `economy.passive_period_ticks`, `orders.stance_cooldown_ticks` | `RulesetPublic` | numbers in the radial menu | C |
-| `orders.planned_delay_ticks`, `orders.defense_delay_ticks` | `RulesetPublic` | countdown on the arrow, alert У7 | C |
+| `orders.planned_delay_ticks`, `orders.defense_delay_ticks` | `RulesetPublic` | countdown on the arrow, alert IM7 | C |
 | `stance_ready_tick` | `SelfView` | stance cooldown countdown | C (optional) |
 | `capacity.attrition_ticks`, `capacity.grace_ticks` | `RulesetPublic` | attrition countdown arc | D |
 | `attrition_in: int \| None`, `grace_left: int \| None` | `NodeView`, only own overcrowded nodes | attrition countdown | D |
-| `nicks: tuple[str, str]` (by player id) | `WelcomeMsg` | nicks in the top bar and on the result screen (У3) | D |
+| `nicks: tuple[str, str]` (by player id) | `WelcomeMsg` | nicks in the top bar and on the result screen (IM3) | D |
 | `nicks` (by player id) | the frames file (`gow_server.frames`, an optional key, `format` does not change) | nicks in the replay and on the result chart | E |
-| rating in `GET /api/me` | HTTP API | nick and rating in the menu (У20) | LB-01 (#78) |
+| rating in `GET /api/me` | HTTP API | nick and rating in the menu (IM20) | LB-01 (#78) |
 | the end tick of one's own construction, the opponent's visible construction | player view | construction hatching | implementation of DEC-16/17 (#209, #210) |
 
 `attrition_in` is taken from `Node.over_ticks` in `gow_sim.view.project()`: `attrition_ticks - over_ticks`.
@@ -930,7 +936,7 @@ Files: `render/shapes.ts`, `render/layout.ts`, `render/entityView.ts` (groups, e
 - [x] A movement trail, lanes of counter-movement of 18 units.
 - [x] Packets per 9.6, no jump when they disappear from the snapshot.
 - [x] Ghosts fade per 9.8; a test of the opacity-by-age function.
-- [x] Fight, bounce and capture per 9.9 (У8); with "reduced motion" only the numbers.
+- [x] Fight, bounce and capture per 9.9 (IM8); with "reduced motion" only the numbers.
 
 Implemented in #224. Deviations: the bounce is drawn only for own groups (the server sends `fight_group` only to the owner, the client does not guess the enemy's path, AGENTS.md 7.1); the flash of a warehouse segment when a packet enters a city is not done.
 
@@ -943,9 +949,9 @@ Files: new `render/intentView.ts` (moved out of `entityView.ts` in the first com
 
 - [x] Arrows per 9.7: a ribbon for the scheduled orders of both sides, a thin one with chevrons for
       ordinary ones; your own by `order.path`, the enemy's as an arc; the delay countdown along the axis.
-- [x] Ghost: confirmation by the `ack` makes it solid, a rejection: a 200 ms shake and fading (У6);
+- [x] Ghost: confirmation by the `ack` makes it solid, a rejection: a 200 ms shake and fading (IM6);
       the event for sound is handed out through `orderUi` (subscription of package F).
-- [x] The alert "they are coming for your city" (У7): a `--warn` ring at the target and an entry in the shared alert list
+- [x] The alert "they are coming for your city" (IM7): a `--warn` ring at the target and an entry in the shared alert list
       (`match/alerts.svelte.ts`, created by C, drawn by D).
 - [x] The radial menu per section 11; test: for `mvp-0` you get 3/18, 6/12, 9/6.
 - [x] `RulesetPublic` is extended with the fields of section 15; `PROTOCOL_VERSION`++, artifacts regenerated.
@@ -972,12 +978,12 @@ Files: `hud/Hud.svelte`, `hud/StatusBar.svelte` (becomes `TopBar.svelte`), `hud/
 - [x] There is no side panel; the top bar per 10.2 (CP as `--you` segments, the stance chip, VP
       as a "tug of war" with nicks, timer, sound, pause, `?`, "Exit").
 - [x] The selection card per 10.3 (no `P`, the price of an ordinary order and `Shift`+click).
-- [x] Hover hints per У5 for a city, road, group, arrow; a 300 ms delay.
-- [x] Toasts and the log per 10.4; VP accrual does not reach the feed (a test on the filter, У2).
+- [x] Hover hints per IM5 for a city, road, group, arrow; a 300 ms delay.
+- [x] Toasts and the log per 10.4; VP accrual does not reach the feed (a test on the filter, IM2).
 - [x] The alert stack: overflow (section 12) and the entries of package C; `Space` takes the camera.
-- [x] The match start per У4 (a 3 s banner and a ring around your own capital).
+- [x] The match start per IM4 (a 3 s banner and a ring around your own capital).
 - [x] "Exit" and a double `Esc` with a dialog per 10.4, they send `Forfeit`.
-- [x] The last minute per У12.
+- [x] The last minute per IM12.
 - [x] The `?` overlay with the legend and keys, a link to "How to play"; `Home` fits the map.
 - [x] `MenuSheet.svelte` with the language and "Fit the map" and an empty slot for settings (F fills it).
 - [x] Lucide icons in `Icon.svelte`; licences in `THIRD_PARTY_NOTICES.md` and on the legal page.
@@ -1031,9 +1037,9 @@ volume, scale, "reduced motion", in `localStorage` through `try/catch`), `src/on
 
 - [ ] Sounds per 14.1: 8 events, a limit of simultaneous ones, merging, quieter off-screen; a switch and
       volume; everything works when autoplay is forbidden (the user's first gesture).
-- [ ] Settings per У15; scale through `rem` (checked by snapshots at 150%); "reduced motion"
+- [ ] Settings per IM15; scale through `rem` (checked by snapshots at 150%); "reduced motion"
       is available to other packages as `settings.reducedMotion`.
-- [ ] First-match hints per У10: 5 hints on events (selection, the first order, the first
+- [ ] First-match hints per IM10: 5 hints on events (selection, the first order, the first
       packet delivery, the first `Shift`+click, the first stance change), each one once; a reset in the settings.
 - [ ] Sound licences in `THIRD_PARTY_NOTICES.md`; the CSP is checked with a production build (`pnpm build && pnpm preview`).
 - [ ] Closes the sound part of CLI-12 (#71); "How to play" (CLI-13, #72) stays its own issue.
@@ -1048,11 +1054,11 @@ block in `MenuSheet.svelte`, which is created by D).
 
 The default decisions are written above; if the owner answers differently, only this guide changes.
 
-1. **The result screen and "Play again"** (У1): the button repeats the same mode (a bot of the same level or
+1. **The result screen and "Play again"** (IM1): the button repeats the same mode (a bot of the same level or
    the queue). By default: yes.
-2. **First-match hints** (У10): show them in the first match of any mode or only against
+2. **First-match hints** (IM10): show them in the first match of any mode or only against
    a bot. By default: only against a bot.
-3. **Sound** (У9): on by default with a volume of 60%. By default: yes.
+3. **Sound** (IM9): on by default with a volume of 60%. By default: yes.
 4. **The key hint row** hides after 3 matches. By default: yes.
 5. **The direction of the map and unit style** (#332, section 24): D1 "Flat, polished", D2 "Staff paper map" or D3 "Soft volume". **Awaiting the owner's decision.** Recommendation: D1 now (section 25).
 
@@ -1133,7 +1139,7 @@ the new ones are marked **[proposed]**.
 | Pulse of pinning a scheduled order | 8 ticks (0.8 s), once | sine squared |
 | Pulse of an alert and overflow (goes on while the state exists) | period 0.8 s, alpha 0.5 ↔ 1 | sine (rule 2) |
 | Round losses "−N" | 1.0 s after the hit (0.5 of a round), rise by 12 units and fade | as implemented (#351) |
-| A tracer shot on the map (Ш1, #352) | flight 0.6 s (counter shots 0.3 s), the path fades for 0.5 s after the hit: fractions of the round `round_ticks` | flight linear, fade linear by alpha |
+| A tracer shot on the map (SH1, #352) | flight 0.6 s (counter shots 0.3 s), the path fades for 0.5 s after the hit: fractions of the round `round_ticks` | flight linear, fade linear by alpha |
 | The fight result on the arena | holds for 3 s, then fades | as implemented |
 | Pulse of a changed V3 chip (DEC-32) **[proposed]** | once per round, 0.8 s, scale 1 → 1.2 → 1 | sine |
 | Fading of a ghost | linear from 60 to 120 s | linear |
@@ -1159,16 +1165,16 @@ The principle: **one shape means one thing**, and the shape reads without color 
 | Shape | What it means | Where |
 |---|---|---|
 | ▽ inverted triangle | a group of units; the fill from the tip = the share of charged; the number = units | map, arena chips (V3) |
-| ■ square | a **charge**: a warehouse segment (filled: there is a charge, a frame: room), an auto-supply packet (with a tail of two pale squares), a one-off transfer on a road (larger, with a double outline), the warehouse stock on the "Supply" layer, the head of a real shot with a tail (the Ш1 tracer) **[accepted]** (#325, #345, #352) | warehouse under a city, roads, "Supply", the fight map |
+| ■ square | a **charge**: a warehouse segment (filled: there is a charge, a frame: room), an auto-supply packet (with a tail of two pale squares), a one-off transfer on a road (larger, with a double outline), the warehouse stock on the "Supply" layer, the head of a real shot with a tail (the SH1 tracer) **[accepted]** (#325, #345, #352) | warehouse under a city, roads, "Supply", the fight map |
 | a ring segment | one capacity place; filled with white: a unit stands there | the ring around a city |
 | ◇ diamond | a bonus (virtual) shot and the bonus stock (DEC-32) | arena (stock and caption), the head and echo of a tracer |
-| ✕ cross | the meeting point of a fight on an edge; two shots met and went out (E3, #351; two arcs of Ш1 tracers converge in it, #352) | map |
+| ✕ cross | the meeting point of a fight on an edge; two shots met and went out (FX3, #351; two arcs of SH1 tracers converge in it, #352) | map |
 | a number in a circle with a rim | the VP of a city | at a city |
 | shield / flag / little house / star | "Defense" / capture / barracks / capital | groups, cities, captions |
 | `!` in an amber circle, a dashed ring | alert: overflow, they are coming for the city | around a city |
 | `✂` | starvation (cut off from the capital, DEC-19) | city, "Supply" |
 | dashed outline | what does not exist or is not visible exactly: the opponent's scheduled order, an enemy without numbers "?", a ghost, a killed chip; a bonus shot (a dashed hit ring) | map |
-| an amber crossed circle, an amber dashed ring | a silent charge (DEC-24, F2): a sign on the group and a dim ring for one round tick (E3, #351) | map, arena |
+| an amber crossed circle, an amber dashed ring | a silent charge (DEC-24, F2): a sign on the group and a dim ring for one round tick (FX3, #351) | map, arena |
 
 Checking against the map revealed one place where the language is broken (**[proposed]**, a small fix):
 
@@ -1214,7 +1220,7 @@ the look of most frames or costs more than a day) **does not start with code.** 
    decision: an entry **[accepted]** with a date in this guide.
 4. **Code** after the choice: separate implementation issues (the client after the server part, if there is one).
 
-**New design rounds are postponed until the mechanics are done (the owner's decision, 2026-10-21).** All the accepted style decisions (sections 24-29) are implemented as written (issues #344-#354 and #330). **New** visual and UI decisions (a new round of mockups, a redesign, additional variants: for example, B2 "Building and rampart", the variants Б3-2 and Б3-3, A2 and A3, Ш2-Ш5) start only after all the key parts of the mechanics and game logic are done (the mechanics freeze, `mechanics.md`; tracking #282). Until then such items get no mockups and no issues, and are marked **postponed**; small edits and bugs of the existing interface go straight into code, as below.
+**New design rounds are postponed until the mechanics are done (the owner's decision, 2026-10-21).** All the accepted style decisions (sections 24-29) are implemented as written (issues #344-#354 and #330). **New** visual and UI decisions (a new round of mockups, a redesign, additional variants: for example, B2 "Building and rampart", the variants BL3-2 and BL3-3, AR2 and AR3, SH2-SH5) start only after all the key parts of the mechanics and game logic are done (the mechanics freeze, `mechanics.md`; tracking #282). Until then such items get no mockups and no issues, and are marked **postponed**; small edits and bugs of the existing interface go straight into code, as below.
 
 **Small edits go straight into code**, without a mockup: a color, unifying a shape, spacing, sizes, fixing an overlap. The boundary: if an edit changes
 the look of most frames or has a noticeable alternative, it is a major decision.
@@ -1346,7 +1352,7 @@ Grounds:
 3. **D1-c. Background and fog** (S, up to 1 day): stamps sparser and quieter near cities (R8), the fog stripe width in screen pixels (R7), the biome palette of
    `maps:bake` quieter (the background does not compete with the territory); `maps:bake` and updating the references.
 
-Regardless of the choice: the V3 arena (#330, after #329) and the screens outside the match (package E, К6-К11) go in their own order; D1-a..c do not intersect with them
+Regardless of the choice: the V3 arena (#330, after #329) and the screens outside the match (package E, K6-K11) go in their own order; D1-a..c do not intersect with them
 by files, except `fightView.ts` (not touched).
 
 If the owner chooses D2 or D3: the first task will be **a prototype on one map** (baking the background and a token theme, an FPS measurement on
@@ -1356,67 +1362,67 @@ If the owner chooses D2 or D3: the first task will be **a prototype on one map**
 
 ## 26. Map style, round 2: object volume, textures, fog, roads (#335)
 
-**Status: four blocks [accepted] 2026-10-21 (section 26.3).** Issue #335 is closed; implementation: #344 (the T2 baker and WebP, a scene on a real map), #345 (roads R1, the packet), #346 (fog F1, layers Сл2), #347 (Б1 shading and border highlighting).
+**Status: four blocks [accepted] 2026-10-21 (section 26.3).** Issue #335 is closed; implementation: #344 (the T2 baker and WebP, a scene on a real map), #345 (roads R1, the packet), #346 (fog F1, layers LY2), #347 (BL1 shading and border highlighting).
 
 **The owner's decision on #332, 2026-10-21 (partial) [accepted].** He liked D3 "Soft volume" for the shading part (gradients, soft shadows, border glow, highlights), the textures in general look better; **no semi-3D landscape**: no hillshade and no "lit hills", the relief stays flat in presentation. The final choice of the direction on #332 (D1, D2, D3 or "change nothing") stays with the owner; the statuses of sections 24 and 25 are not changed by this section.
 
 Mockup: [`mockups/map-style-2.html`](mockups/map-style-2.html): a scene on a **fragment of the real map `arteriya`** (nodes 3-16: your own cities and groups, a fight with the DEC-32 arena, a group's order, the opponent's scheduled order, the territory border, fog with a ghost, roads of levels 1-3, construction on an edge, packets). Four independent blocks with switches, "all variants of a block side by side", grayscale, "reduced motion", scale 60% / 100% / 200%, a strip of signs 1:1 on three backgrounds, a road matrix, biome samples; a frame by address, for example `map-style-2.html#sh=1&tx=2&fg=2&rd=1&gray=1`. The textures are drawn by the script [`mockups/src/map_textures.py`](mockups/src/map_textures.py) (numpy and Pillow, deterministic, the biome field of the current baker; run `uv run python docs/design/mockups/src/map_textures.py` from the root).
 
-| Б1 Shading (now, restrained, pronounced) | Б2 Textures (now, T1, T2, T3) |
+| BL1 Shading (now, restrained, pronounced) | BL2 Textures (now, T1, T2, T3) |
 |---|---|
-| ![Б1](mockups/img/v3/map-style-2-shading.jpg) | ![Б2](mockups/img/v3/map-style-2-textures.jpg) |
+| ![BL1](mockups/img/v3/map-style-2-shading.jpg) | ![BL2](mockups/img/v3/map-style-2-textures.jpg) |
 
-| Б3 Fog (now, F1, F2, F3) | Б4 Roads (a matrix of levels and states) |
+| BL3 Fog (now, F1, F2, F3) | BL4 Roads (a matrix of levels and states) |
 |---|---|
-| ![Б3](mockups/img/v3/map-style-2-fog.jpg) | ![Б4](mockups/img/v3/map-style-2-roads.jpg) |
+| ![BL3](mockups/img/v3/map-style-2-fog.jpg) | ![BL4](mockups/img/v3/map-style-2-roads.jpg) |
 
 ### 26.1 Table of variants
 
-The FPS prices are taken from the measurement of section 24.4 (software WebGL, ratios to flat drawing: sprites with a baked shadow 0.84; a glow layer every frame 1.9, with a cache 0.66; a full-screen `NoiseFilter` 0.64); "about" means an estimate from these measurements, not a new measurement. The mockup is drawn in SVG, the PixiJS techniques are checked against the contents of `pixi.js` 8.21 (24.3), not with a prototype. There are no new packages in any variant. All the fog variants (Б3) use only `detail`, `seen`, `width` and public ownership: nothing beyond section 10 of `mechanics.md`.
+The FPS prices are taken from the measurement of section 24.4 (software WebGL, ratios to flat drawing: sprites with a baked shadow 0.84; a glow layer every frame 1.9, with a cache 0.66; a full-screen `NoiseFilter` 0.64); "about" means an estimate from these measurements, not a new measurement. The mockup is drawn in SVG, the PixiJS techniques are checked against the contents of `pixi.js` 8.21 (24.3), not with a prototype. There are no new packages in any variant. All the fog variants (BL3) use only `detail`, `seen`, `width` and public ownership: nothing beyond section 10 of `mechanics.md`.
 
 | Block and variant | What changes (PixiJS, baking) | FPS price | Risk | Estimate | DEC, protocol |
 |---|---|---|---|---|---|
-| **Б1-1 Restrained** | sprites from `generateTexture` with a gradient and a 1.5 px shadow for cities, triangles, icons, arena chips; the border: a `BlurFilter` 3 px layer + `cacheAsTexture`; baking does not change | about 0.8-1.0 | low-medium; after #330 (a shared file `fightView.ts`) | M, 3-4 days | no, no |
-| **Б1-2 Pronounced** | the same, a radial gradient, a highlight, a 3 px shadow, a 5.5 px glow | about 0.9-1.1, more texture memory | medium: the highlight makes a neutral city a "button", the shadow thickens the outline on snow | L, 5-6 days | no, no |
-| **Б2-1 T1 Ragged edge** | the background is one texture, the `TerrainView` stamps (about 1300 sprites) are turned off; **a new baker**: a noise mask, detail sprites | not higher than the current one | low-medium: background formats, trees at the edge stick together | M-L, 3-5 days | no, no |
-| **Б2-2 T2 Thinning** | the same, plus a narrow color stripe and a detail density field (they thin out and shrink toward the edge) | the same | low-medium | M-L, 3-5 days | no, no |
-| **Б2-3 T3 Gradient** | the same, a wide blend, pale details, grain in the background | the same | medium: the borders are "soapy" at a large scale | M, 2-3 days | no, no |
-| **Б3-1 Haze** | a 66% veil with a soft edge: polygons, `BlurFilter` 9 px, `cacheAsTexture`, recomputed when the set of cells changes; `fogView.ts` | about 0.66 with a cache (1.9 without) | low; in grayscale the border only by brightness | S, 1 day | no, no |
-| **Б3-2 Memory** | three states: visible, "seen" (the veil darkens with the age of `seen.tick`, hatching), "never" (a dark veil, dots, "?"); `TilingSprite` patterns, cached layers | about 0.7-0.9 | low-medium: more states, a hint is needed | M, 2-3 days | no, no (`NodeView.seen`, `EdgeView.seen` already exist) |
-| **Б3-3 Line of sight** | a grainy veil, a dashed border, a tick on the road at the border point, gradient roads | about 0.8-1.0 | medium: small signs compete with Б4 | M, 3 days | the middle of the edge: no, no; the border by the DEC-21 halves: **needs protocol/DEC-21 in PlayerView** (#233, #329), is not proposed as the main one |
-| **Б4-1 Lanes** | level = the number of lanes, your own road with an owner backing, a buffer one dashed, fog with dots, "?" for a never seen one, a construction ribbon with a "1→2" plate, a square packet; `mapView.ts`, `layout.ts`, `entityView.ts` | about 1.0 | low; at 60% the lanes stick together | M, 2-3 days | no, no |
-| **Б4-2 Plates** | a line and a plate with 1-3 dots on the edge, a buffer one split at the border point by the colors of its ends, wagons | about 1.0-1.05 | medium: about 44 more small signs | M, 3 days | no, no |
-| **Б4-3 Tube** | a tube with a gradient and a highlight, an owner glow, running lights (number = level), a `TilingSprite` with scrolling | moderate, measure in a prototype | medium-high: animation, the "reduced motion" mode is mandatory | L, 4-6 days | no, no |
+| **BL1-1 Restrained** | sprites from `generateTexture` with a gradient and a 1.5 px shadow for cities, triangles, icons, arena chips; the border: a `BlurFilter` 3 px layer + `cacheAsTexture`; baking does not change | about 0.8-1.0 | low-medium; after #330 (a shared file `fightView.ts`) | M, 3-4 days | no, no |
+| **BL1-2 Pronounced** | the same, a radial gradient, a highlight, a 3 px shadow, a 5.5 px glow | about 0.9-1.1, more texture memory | medium: the highlight makes a neutral city a "button", the shadow thickens the outline on snow | L, 5-6 days | no, no |
+| **BL2-1 T1 Ragged edge** | the background is one texture, the `TerrainView` stamps (about 1300 sprites) are turned off; **a new baker**: a noise mask, detail sprites | not higher than the current one | low-medium: background formats, trees at the edge stick together | M-L, 3-5 days | no, no |
+| **BL2-2 T2 Thinning** | the same, plus a narrow color stripe and a detail density field (they thin out and shrink toward the edge) | the same | low-medium | M-L, 3-5 days | no, no |
+| **BL2-3 T3 Gradient** | the same, a wide blend, pale details, grain in the background | the same | medium: the borders are "soapy" at a large scale | M, 2-3 days | no, no |
+| **BL3-1 Haze** | a 66% veil with a soft edge: polygons, `BlurFilter` 9 px, `cacheAsTexture`, recomputed when the set of cells changes; `fogView.ts` | about 0.66 with a cache (1.9 without) | low; in grayscale the border only by brightness | S, 1 day | no, no |
+| **BL3-2 Memory** | three states: visible, "seen" (the veil darkens with the age of `seen.tick`, hatching), "never" (a dark veil, dots, "?"); `TilingSprite` patterns, cached layers | about 0.7-0.9 | low-medium: more states, a hint is needed | M, 2-3 days | no, no (`NodeView.seen`, `EdgeView.seen` already exist) |
+| **BL3-3 Line of sight** | a grainy veil, a dashed border, a tick on the road at the border point, gradient roads | about 0.8-1.0 | medium: small signs compete with BL4 | M, 3 days | the middle of the edge: no, no; the border by the DEC-21 halves: **needs protocol/DEC-21 in PlayerView** (#233, #329), is not proposed as the main one |
+| **BL4-1 Lanes** | level = the number of lanes, your own road with an owner backing, a buffer one dashed, fog with dots, "?" for a never seen one, a construction ribbon with a "1→2" plate, a square packet; `mapView.ts`, `layout.ts`, `entityView.ts` | about 1.0 | low; at 60% the lanes stick together | M, 2-3 days | no, no |
+| **BL4-2 Plates** | a line and a plate with 1-3 dots on the edge, a buffer one split at the border point by the colors of its ends, wagons | about 1.0-1.05 | medium: about 44 more small signs | M, 3 days | no, no |
+| **BL4-3 Tube** | a tube with a gradient and a highlight, an owner glow, running lights (number = level), a `TilingSprite` with scrolling | moderate, measure in a prototype | medium-high: animation, the "reduced motion" mode is mandatory | L, 4-6 days | no, no |
 
-**The baker (Б2).** The rule of section 22 ("the baker on the standard library, PNG through zlib") is either kept (pure Python, a PNG of 2.2-2.6 MB per map against 0.12 MB now; 3-octave noise on 1600×1000 in pure Python 0.6 s, blur and sprites were not measured), or lifted for numpy and Pillow (they are already in `uv.lock` through matplotlib, declare them in `tools/maps/pyproject.toml`; WebP 0.27-0.29 MB, JPEG 0.30-0.35 MB, 2-3 s per map; `.bg.png` → `.bg.webp` changes the path on the server and in the client). The sizes of the whole-map background 1600×1000 (PNG / JPEG / WebP): T1 2.2 MB / 334 KB / 266 KB; T2 2.5 MB / 345 KB / 280 KB; T3 2.4 MB / 298 KB / 287 KB.
+**The baker (BL2).** The rule of section 22 ("the baker on the standard library, PNG through zlib") is either kept (pure Python, a PNG of 2.2-2.6 MB per map against 0.12 MB now; 3-octave noise on 1600×1000 in pure Python 0.6 s, blur and sprites were not measured), or lifted for numpy and Pillow (they are already in `uv.lock` through matplotlib, declare them in `tools/maps/pyproject.toml`; WebP 0.27-0.29 MB, JPEG 0.30-0.35 MB, 2-3 s per map; `.bg.png` → `.bg.webp` changes the path on the server and in the client). The sizes of the whole-map background 1600×1000 (PNG / JPEG / WebP): T1 2.2 MB / 334 KB / 266 KB; T2 2.5 MB / 345 KB / 280 KB; T3 2.4 MB / 298 KB / 287 KB.
 
-**The supply packet (Б4).** By the language of icons (section 21) a charge is a square, and the packet was round: the decision is independent of the choice of roads; the square was done in #345.
+**The supply packet (BL4).** By the language of icons (section 21) a charge is a square, and the packet was round: the decision is independent of the choice of roads; the square was done in #345.
 
 ### 26.2 Recommendation
 
-1. **Б1-1 Restrained.** It gives the depth of D3 at a minimal price for small signs (a 1:1 strip in the mockup: the number and the outline read on forest, plains and snow).
-2. **Б2-2 T2 Thinning, the baker on numpy and Pillow.** The most "natural" transition without blur, the objects on top read, the file is 8 times smaller than the PNG. A fallback: keep the textures, a quieter palette (D1-c from section 25).
-3. **Б3-2 Memory against the unknown.** The only variant that carries information (how outdated the knowledge is, where we have not been at all) on the data that is already in `PlayerView`; a fallback: Б3-1 (a day of work).
-4. **Б4-1 Lanes** and the square packet. The level reads without color, your own road differs from a buffer one, the fog memory is visible; no animation.
+1. **BL1-1 Restrained.** It gives the depth of D3 at a minimal price for small signs (a 1:1 strip in the mockup: the number and the outline read on forest, plains and snow).
+2. **BL2-2 T2 Thinning, the baker on numpy and Pillow.** The most "natural" transition without blur, the objects on top read, the file is 8 times smaller than the PNG. A fallback: keep the textures, a quieter palette (D1-c from section 25).
+3. **BL3-2 Memory against the unknown.** The only variant that carries information (how outdated the knowledge is, where we have not been at all) on the data that is already in `PlayerView`; a fallback: BL3-1 (a day of work).
+4. **BL4-1 Lanes** and the square packet. The level reads without color, your own road differs from a buffer one, the fog memory is visible; no animation.
 
-In total about 10-15 days of client work, four separate PRs (after #330 and #329), no DEC, protocol or simulation; outside the client only the baker (Б2).
+In total about 10-15 days of client work, four separate PRs (after #330 and #329), no DEC, protocol or simulation; outside the client only the baker (BL2).
 
 ### 26.3 The owner's decision
 
 **[accepted] 2026-10-21** (the owner, by the mockup `mockups/map-style-2.html`; the decision field: issue #335).
 
-- Б1 Shading: **Б1-1 "Restrained", but the territory border highlighting as in "Pronounced"** (a border glow of 5.5 px and brighter, the rest as in "restrained").
-- Б2 Textures: **T2 "Thinning"**; the baker: **(b) numpy and Pillow, the WebP format** (declare `numpy` and `Pillow` in `tools/maps/pyproject.toml`, lift the rule of section 22 about the standard library, `.bg.png` → `.bg.webp`).
-- Б3 Fog: **Б3-1 "Haze"** (F1; not the recommended Б3-2, the owner's decision).
-- Б4 Roads: **Б4-1 "Lanes"** (R1); the supply packet: **a square**.
+- BL1 Shading: **BL1-1 "Restrained", but the territory border highlighting as in "Pronounced"** (a border glow of 5.5 px and brighter, the rest as in "restrained").
+- BL2 Textures: **T2 "Thinning"**; the baker: **(b) numpy and Pillow, the WebP format** (declare `numpy` and `Pillow` in `tools/maps/pyproject.toml`, lift the rule of section 22 about the standard library, `.bg.png` → `.bg.webp`).
+- BL3 Fog: **BL3-1 "Haze"** (F1; not the recommended BL3-2, the owner's decision).
+- BL4 Roads: **BL4-1 "Lanes"** (R1); the supply packet: **a square**.
 
-The implementation issues were opened after the choice per section 27: #344, #345, #346, #347 (order and parallelism: the description of each issue and tracking #282, section 11). Б1-1 in the description of #335 included "an order ribbon as a tube of two layers"; the decision on #339 "the look of the arrow and ribbons as now" is later and more specific, so the ribbons do not change.
+The implementation issues were opened after the choice per section 27: #344, #345, #346, #347 (order and parallelism: the description of each issue and tracking #282, section 11). BL1-1 in the description of #335 included "an order ribbon as a tube of two layers"; the decision on #339 "the look of the arrow and ribbons as now" is later and more specific, so the ribbons do not change.
 
 ---
 
 ## 27. Orders, the fight on the map and the arena in the chosen map style (#339)
 
-**Status: [accepted] 2026-10-21 (section 27.3, shots: 29.4).** Issue #339 is closed; implementation: #330 (arena А1), #346 (layers Сл2), #351 (Э3), #352 (Ш1), #353 (С3, the bonus on the head), #354 (Ф2). A continuation of #335: the map style is chosen (section 26.3), the current order ribbons next to it "do not look very good" (the owner, 2026-10-21).
+**Status: [accepted] 2026-10-21 (section 27.3, shots: 29.4).** Issue #339 is closed; implementation: #330 (arena AR1), #346 (layers LY2), #351 (FX3), #352 (SH1), #353 (IN3, the bonus on the head), #354 (EF2). A continuation of #335: the map style is chosen (section 26.3), the current order ribbons next to it "do not look very good" (the owner, 2026-10-21).
 
 Mockup: [`mockups/orders-style.html`](mockups/orders-style.html): self-contained, opens from a file, no network; **the same map `arteriya` and the chosen style** (restrained shading with the border highlighting of "pronounced", T2, haze F1, lanes R1, a square packet). Six scenes, each with axes with variant switches (**3-4 variants per element plus the current look**, section 23), "side by side" shows all the variants of an axis, scenarios, a clock with a time slider (play, pause, speed), grayscale, "reduced motion", scale 60% / 100% / 200%, a frame by address (`orders-style.html#s=plan&rib=4&side=3&p=1&t=2.6`). The fight engine in the mockup plays the DEC-24 and DEC-32 rules round by round and is checked against the table of examples of `mechanics.md` on the page (scene 6).
 
@@ -1438,16 +1444,16 @@ FPS prices: an estimate from the number of PixiJS objects per frame and the meas
 
 | Scene and axis | Variants | Recommendation | Estimate | DEC, protocol |
 |---|---|---|---|---|
-| 1 An ordinary order: the look of the arrow (your own path through several nodes and an adjacent node, movement, cancel) | Now, П1 Tube, П2 Route (dots, rings on nodes, the arrival time from `ack.arrive_tick`), П3 Road highlight, П4 Light | П2 | S-M, 1-2 days | no, no |
-| 1 The ghost before the `ack`, a rejection | Now (nothing), Г1 Dashes, Г2 Dispatch ring, Г3 Target marked | Г3 or Г2 (Г1 draws a straight line that may not exist: the client does not know the path before the `ack`) | S, 0.5 day | no, no |
-| 2 Scheduled: preparation 3 s, pinning (one pulse, a strengthened outline), departure | Now, Л1 Charged tube, Л2 Thin ribbon and a countdown ring, Л3 Hatching, Л4 Chevrons (the delay lights the chevrons one by one) | Л4 | M, 2-3 days | no, no |
-| 2 Your own against the opponent's intent (the size and composition are not visible) | Now, С1 Size sign ("?" for the opponent), С2 Two tiers, С3 Crosshair (a thin arrow, a crosshair ring on the target) | С3 | S, 1 day | no, no |
+| 1 An ordinary order: the look of the arrow (your own path through several nodes and an adjacent node, movement, cancel) | Now, OR1 Tube, OR2 Route (dots, rings on nodes, the arrival time from `ack.arrive_tick`), OR3 Road highlight, OR4 Light | OR2 | S-M, 1-2 days | no, no |
+| 1 The ghost before the `ack`, a rejection | Now (nothing), GH1 Dashes, GH2 Dispatch ring, GH3 Target marked | GH3 or GH2 (GH1 draws a straight line that may not exist: the client does not know the path before the `ack`) | S, 0.5 day | no, no |
+| 2 Scheduled: preparation 3 s, pinning (one pulse, a strengthened outline), departure | Now, SC1 Charged tube, SC2 Thin ribbon and a countdown ring, SC3 Hatching, SC4 Chevrons (the delay lights the chevrons one by one) | SC4 | M, 2-3 days | no, no |
+| 2 Your own against the opponent's intent (the size and composition are not visible) | Now, IN1 Size sign ("?" for the opponent), IN2 Two tiers, IN3 Crosshair (a thin arrow, a crosshair ring on the target) | IN3 | S, 1 day | no, no |
 | 2 The bonus on the head | no, yes ("◇ +N") | no (after the decision about the protocol) | S | **needs protocol**: a bonus field in `OrderView` (DEC-29 computes the cap on the server at the departure tick) |
-| 3 Counter and crossing ribbons | Now, Р1 Lanes along the road, Р2 Low arcs, Р3 Single stripe | Р2 | S, 0.5 day | no, no |
-| 3 A ribbon over the R1 road, borders and in the F1 haze | Now, Сл1 Glass, Сл2 Over the haze, Сл3 Gap, Сл4 Hollow in the haze | Сл4 (fallback Сл2) | M, 1.5-2 days | no, no |
-| 4 The fight on the map: the style and strength of effects (closing in, 2 s rounds, bonus shots with the caption "bonus attack" per A1, death, bounce, capture, a fight on an edge at the meeting point, three fights at once) | Now, Э1 Quiet, Э2 Staff, Э3 Expressive (particles), Э4 Symbols; strength: weaker, medium, stronger | Э2, strength "medium"; Э3 as the second step after a measurement | M, 2 days (Э3: 3 days) | no, no (data: `FightView`, `fight_round`) |
-| 5 An enemy group in the vision zone (DEC-33): the look of the figure, entering and leaving the haze, the half level | Now (a mark in the middle of the half), Ф1 Chevrons behind, Ф2 Pointer, Ф3 Bead with a trail, Ф4 Arrow on the road; entering and leaving: Hard, From under the haze, Dissolve, Dissolve and marks | Ф1 and "Dissolve and marks" | M, 2-3 days after the protocol | DEC-33 is accepted; **needs protocol** (`EdgeView.enemy_groups`, #296) |
-| 6 The V3 arena (DEC-32) | Now (a circle), А1 Chips (as in DEC-32), А2 Chips 2×4 large, А3 Batteries | А2 (or А1 in screen pixels) | M, 2-3 days (#330) | DEC-32 is accepted; protocol: the ◇ stock (#329) and a field of silent charges (27.2) |
+| 3 Counter and crossing ribbons | Now, CR1 Lanes along the road, CR2 Low arcs, CR3 Single stripe | CR2 | S, 0.5 day | no, no |
+| 3 A ribbon over the R1 road, borders and in the F1 haze | Now, LY1 Glass, LY2 Over the haze, LY3 Gap, LY4 Hollow in the haze | LY4 (fallback LY2) | M, 1.5-2 days | no, no |
+| 4 The fight on the map: the style and strength of effects (closing in, 2 s rounds, bonus shots with the caption "bonus attack" per A1, death, bounce, capture, a fight on an edge at the meeting point, three fights at once) | Now, FX1 Quiet, FX2 Staff, FX3 Expressive (particles), FX4 Symbols; strength: weaker, medium, stronger | FX2, strength "medium"; FX3 as the second step after a measurement | M, 2 days (FX3: 3 days) | no, no (data: `FightView`, `fight_round`) |
+| 5 An enemy group in the vision zone (DEC-33): the look of the figure, entering and leaving the haze, the half level | Now (a mark in the middle of the half), EF1 Chevrons behind, EF2 Pointer, EF3 Bead with a trail, EF4 Arrow on the road; entering and leaving: Hard, From under the haze, Dissolve, Dissolve and marks | EF1 and "Dissolve and marks" | M, 2-3 days after the protocol | DEC-33 is accepted; **needs protocol** (`EdgeView.enemy_groups`, #296) |
+| 6 The V3 arena (DEC-32) | Now (a circle), AR1 Chips (as in DEC-32), AR2 Chips 2×4 large, AR3 Batteries | AR2 (or AR1 in screen pixels) | M, 2-3 days (#330) | DEC-32 is accepted; protocol: the ◇ stock (#329) and a field of silent charges (27.2) |
 
 In total the recommended set: the client about 13-17 days, 5-6 separate PRs after #330 and #329; no new dependencies.
 
@@ -1461,32 +1467,32 @@ The check was done on the mockup page (scene 6): the engine, whose rules are tak
 4. **Reinforcement** (DEC-24, item D) increases `units`, the number of chips grows (count `units + losses`, not the initial composition); new chips appear with a pulse.
 5. **What changes in a round.** One shot per side per round (`shots_per_round = 1`): one charged chip of the side goes out, and one discharged one is killed (a charged one, only if there are no discharged ones). 1-2 chips per side should pulse, not all; which exactly cannot be learned from the view, this is a visual convention (the last charged one goes out, the last discharged one dies).
 6. **The ◇ stock** is visible from contact (DEC-32, item 3): +1 for the defender in the mountains, the accumulated "Defense" and the plan bonus of the joining group; it grows on the tick when a reinforcement with a bonus joins. The caption "bonus attack" only in a round where `last_round.virtual > 0`.
-7. **Size.** A chip of 15 units (А1) is smaller than a meaningful symbol of 20 px (section 22) and at 60% smaller than 10 px; А2 (19 units) meets the rule at 100%. The arena is worth drawing in **screen pixels** (the size neither grows nor falls with the map scale), like a plate.
+7. **Size.** A chip of 15 units (AR1) is smaller than a meaningful symbol of 20 px (section 22) and at 60% smaller than 10 px; AR2 (19 units) meets the rule at 100%. The arena is worth drawing in **screen pixels** (the size neither grows nor falls with the map scale), like a plate.
 
 ### 27.3 The owner's decision
 
 **The choice was received on 2026-10-21** (frame: `orders-style.html#s=arena&side=3&bonus=1&lay=2&scn_cross=layer&fx=3&k=1&scn_fight=three&mv=2&rev=3&scn_enemy=out&arena=1&case=2&act=arena`; recorded in the decision field of issue #339):
 
 - [x] An ordinary order: the look of the arrow **as now**; before the server's answer **as now**
-- [x] Scheduled: the ribbon of preparation, pinning, departure **as now**; your own against the opponent's intent **С3 "Crosshair"**; the bonus on the head **yes** (the protocol is added in #329: a forecast of the plan bonus in the `OrderView` of your own group)
-- [x] Counter and crossings: how the ribbons are separated **as now**; layers **Сл2 "Over the haze"**
-- [x] The fight on the map: the effect style **Э3 "Expressive"**; strength **"Stronger"** (a choice by shots of 2026-10-21, section 29.4, replaces the former "medium"); shots **Ш1 "Tracers"** (29.4)
-- [x] An enemy group in the vision zone: **Ф2 "Pointer"**; entering and leaving **"Dissolve and marks"**
-- [x] The V3 arena: **А1 "Chips"**
+- [x] Scheduled: the ribbon of preparation, pinning, departure **as now**; your own against the opponent's intent **IN3 "Crosshair"**; the bonus on the head **yes** (the protocol is added in #329: a forecast of the plan bonus in the `OrderView` of your own group)
+- [x] Counter and crossings: how the ribbons are separated **as now**; layers **LY2 "Over the haze"**
+- [x] The fight on the map: the effect style **FX3 "Expressive"**; strength **"Stronger"** (a choice by shots of 2026-10-21, section 29.4, replaces the former "medium"); shots **SH1 "Tracers"** (29.4)
+- [x] An enemy group in the vision zone: **EF2 "Pointer"**; entering and leaving **"Dissolve and marks"**
+- [x] The V3 arena: **AR1 "Chips"**
 - The switches "Half level" and "Case" in the mockup were a preview, not a choice: the half level is set by the DEC-21 terrain table.
 
 ---
 
 ## 28. Map objects and menu icons: units, cities, barracks and "Defense" (#337)
 
-**Status: [accepted] 2026-10-21 (section 28.1).** Issue #337 is closed; implementation: #347 (U1 as part of Б1), #348 (the row of squares U4, cities C1), #349 (icons B1), #350 (menu icons I1). B2 "Building and rampart" is postponed, no issue is opened.
+**Status: [accepted] 2026-10-21 (section 28.1).** Issue #337 is closed; implementation: #347 (U1 as part of BL1), #348 (the row of squares U4, cities C1), #349 (icons B1), #350 (menu icons I1). B2 "Building and rampart" is postponed, no issue is opened.
 
-Basis: the owner's choice on #335 (recorded by issue #335): Б1 shading "Restrained" with the border highlighting as in "Pronounced", texture T2, fog F1 "Haze", roads R1 "Lanes". Mockup [`mockups/objects-style.html`](mockups/objects-style.html): the same scene (a fragment of `arteriya`, nodes 0-16, nodes 12 and 13 are shown as provinces) in this style and four blocks of 4 variants each plus "Now". What a variant shows the player is taken only from the fog rules of `mechanics.md` (DEC-04, DEC-21, DEC-26, DEC-30, DEC-31); no variant needs new data, a protocol or a DEC. The mockup background texture is drawn by the script [`mockups/src/objects_texture.py`](mockups/src/objects_texture.py) (functions of `map_textures.py`). Modes: grayscale, "reduced motion", map scale 60% / 100% / 150%, "all variants side by side", samples on four backgrounds; a frame by address, for example `objects-style.html#u=2&c=1&b=1&i=1&sc=60&gray=1`. The samples of each block are shown at 100% and 60%: meaningful signs keep the minimum size on screen (a group 20 px as now, the barracks and "Defense" icons in the new variants 16 px, like `symbolScale` of groups).
+Basis: the owner's choice on #335 (recorded by issue #335): BL1 shading "Restrained" with the border highlighting as in "Pronounced", texture T2, fog F1 "Haze", roads R1 "Lanes". Mockup [`mockups/objects-style.html`](mockups/objects-style.html): the same scene (a fragment of `arteriya`, nodes 0-16, nodes 12 and 13 are shown as provinces) in this style and four blocks of 4 variants each plus "Now". What a variant shows the player is taken only from the fog rules of `mechanics.md` (DEC-04, DEC-21, DEC-26, DEC-30, DEC-31); no variant needs new data, a protocol or a DEC. The mockup background texture is drawn by the script [`mockups/src/objects_texture.py`](mockups/src/objects_texture.py) (functions of `map_textures.py`). Modes: grayscale, "reduced motion", map scale 60% / 100% / 150%, "all variants side by side", samples on four backgrounds; a frame by address, for example `objects-style.html#u=2&c=1&b=1&i=1&sc=60&gray=1`. The samples of each block are shown at 100% and 60%: meaningful signs keep the minimum size on screen (a group 20 px as now, the barracks and "Defense" icons in the new variants 16 px, like `symbolScale` of groups).
 
 | Block | Variants | Recommendation | Estimate |
 |---|---|---|---|
-| 1 Units | Now ▽, U1 ▽ in the Б1 style, U2 Batteries, U3 Banner, U4 Token | U1 as the basis; the row of charge squares from U4 as a separate decision | S-M, 1-4 days |
-| 2 Cities | Now, C1 A Б1 circle (warehouse places by level, a province as a hollow ring), C2 Tower, C3 Card, C4 Wheel | C1 | S-M, 1-4 days |
+| 1 Units | Now ▽, U1 ▽ in the BL1 style, U2 Batteries, U3 Banner, U4 Token | U1 as the basis; the row of charge squares from U4 as a separate decision | S-M, 1-4 days |
+| 2 Cities | Now, C1 A BL1 circle (warehouse places by level, a province as a hollow ring), C2 Tower, C3 Card, C4 Wheel | C1 | S-M, 1-4 days |
 | 3 Barracks and "Defense" | Now, B1 Icons, B2 Building and rampart, B3 Barriers, B4 Status line | B1 | S-M, 1-3 days |
 | 4 Menu icons | Now (font symbols), I1 Line, I2 Disks, I3 Squares, I4 Two-tone | I1 | S, 1 day |
 
@@ -1513,15 +1519,15 @@ FPS prices: estimates from the measurement of section 24.4 (the ratio to flat dr
 
 ## 29. Shots in the fight on the map: animation variants (#339)
 
-**Status: [accepted] 2026-10-21 (section 29.4).** Issue #339 is closed; implementation: #351 (Э3, the common part), #352 (Ш1). Basis: the owner's choice of 2026-10-21 on scene 4 (section 27.3): the Э3 "Expressive" effects, strength medium, arena А1; the owner wants the shots themselves to look better and "not so banal".
+**Status: [accepted] 2026-10-21 (section 29.4).** Issue #339 is closed; implementation: #351 (FX3, the common part), #352 (SH1). Basis: the owner's choice of 2026-10-21 on scene 4 (section 27.3): the FX3 "Expressive" effects, strength medium, arena AR1; the owner wants the shots themselves to look better and "not so banal".
 
-Mockup: [`mockups/fight-shots.html`](mockups/fight-shots.html): self-contained, opens from a file, no network; the same fight scene and the same map style as in `orders-style.html` (Б1 with border highlighting, T2, F1, R1, arena А1), the fight engine is the same (the DEC-24 and DEC-32 rules round by round, checked against the table on the page). Six rows of the "Shot" switch: the current Э3 and five new ones. Switches: strength (weaker, medium, stronger), one fight or three at once, five fight scenarios (forest: a bonus against a real one, cancellation, bounce; forest: the bonus kills, capture; plains: the defender's silent charge; mountains: the defender's bonus; edge: the meeting point), the distance between groups (in Э3 they stood 46 units apart, shots need more: 110 by default), slow motion ×0.25 for analysis, grayscale, scale 60% / 100% / 200%, "all side by side", the А1 arena on and off, a time slider and "scenario rounds" buttons (a frame 0.5 s before the round tick). "Reduced motion" is not needed for the fight animation (the owner), it is absent from the mockup. A frame by address, for example `fight-shots.html#v=5&s=hold&p=1&t=5.42`.
+Mockup: [`mockups/fight-shots.html`](mockups/fight-shots.html): self-contained, opens from a file, no network; the same fight scene and the same map style as in `orders-style.html` (BL1 with border highlighting, T2, F1, R1, arena AR1), the fight engine is the same (the DEC-24 and DEC-32 rules round by round, checked against the table on the page). Six rows of the "Shot" switch: the current FX3 and five new ones. Switches: strength (weaker, medium, stronger), one fight or three at once, five fight scenarios (forest: a bonus against a real one, cancellation, bounce; forest: the bonus kills, capture; plains: the defender's silent charge; mountains: the defender's bonus; edge: the meeting point), the distance between groups (in FX3 they stood 46 units apart, shots need more: 110 by default), slow motion ×0.25 for analysis, grayscale, scale 60% / 100% / 200%, "all side by side", the AR1 arena on and off, a time slider and "scenario rounds" buttons (a frame 0.5 s before the round tick). "Reduced motion" is not needed for the fight animation (the owner), it is absent from the mockup. A frame by address, for example `fight-shots.html#v=5&s=hold&p=1&t=5.42`.
 
 | Cancellation (frame 5.42 s, all variants side by side) | Kill (9.82 s) |
 |---|---|
 | ![Cancellation](mockups/img/v3/fight-shots-cancel.jpg) | ![Kill](mockups/img/v3/fight-shots-kill.jpg) |
 
-| Three fights at once, Ш5 | Grayscale, cancellation |
+| Three fights at once, SH5 | Grayscale, cancellation |
 |---|---|
 | ![Three fights](mockups/img/v3/fight-shots-three.jpg) | ![Grayscale](mockups/img/v3/fight-shots-gray.jpg) |
 
@@ -1532,44 +1538,75 @@ The same in all variants (this set is also what is checked in grayscale; a shape
 | State | Sign |
 |---|---|
 | a real shot | a solid square ■ in the side's color (a charge, section 21), spends a charge |
-| a bonus (virtual) shot | a hollow diamond ◇, a thinner and paler body, a plate "◇ bonus attack" at the shooter (and in the А1 arena) |
+| a bonus (virtual) shot | a hollow diamond ◇, a thinner and paler body, a plate "◇ bonus attack" at the shooter (and in the AR1 arena) |
 | cancellation (a shot against a shot) | both shots meet in the middle (equal speed, after 0.3 s instead of 0.6 s), a collision, a cross of two small strokes; nobody is hit |
 | killing a unit | the shot arrives, ▽ fragments in the loser's color, "−N" |
 | a silent charge (DEC-24, item F2: plains) | an amber sign on the group, a dim dashed ring for a round tick, no projectile, no flash; the caption "silent" in the first round |
-| bounce, capture | as in Э3: a dashed arrow back, a wave and a flag |
+| bounce, capture | as in FX3: a dashed arrow back, a wave and a flag |
 | side | color and shape: the opponent has a double outline on the shot head and a dark core of the body |
 
 Time: a round is 2 s (DEC-32); a wind-up of 0.35 s before the tick, the flight of a killing shot 0.6 s, fading and fragments up to 1.0 s after the hit, "−N" 1.0 s; everything ends at 1.6 s, the wind-up of the next round from 1.65 s (checked on the page). The data is the same as for the arena: `last_round` (shots, bonus ones, losses) and the field of silent ones (section 27.2); the client does not compute the outcome, it shows the fields.
 
 ### 29.2 Table of variants
 
-The frame price: **a calculation of the page, not a measurement.** A dry run of the "three fights" scene counts what the same frame would put on the PixiJS side (a Graphics primitive 1, a sprite from a pool 0.5, text 2, a `ParticleContainer` particle 0.05), and ties it to Э3 from #339 (the worst frame 1.10-1.25, taken 1.18; the average about 1.03). Common to all: an effects layer, pools, one particle atlas and two `ParticleContainer`s for all fights (an ordinary one and an additive one; the blend mode is set by the container), four baked head textures (a square and a diamond, your own and the opponent's), glows as sprites with a baked gradient, no filters; about 1.5 days for everything common, it is included in the estimate of Э3. Whether anything else is needed: no DEC, no protocol (except the silent-ones field, already in the list of #329), no simulation.
+The frame price: **a calculation of the page, not a measurement.** A dry run of the "three fights" scene counts what the same frame would put on the PixiJS side (a Graphics primitive 1, a sprite from a pool 0.5, text 2, a `ParticleContainer` particle 0.05), and ties it to FX3 from #339 (the worst frame 1.10-1.25, taken 1.18; the average about 1.03). Common to all: an effects layer, pools, one particle atlas and two `ParticleContainer`s for all fights (an ordinary one and an additive one; the blend mode is set by the container), four baked head textures (a square and a diamond, your own and the opponent's), glows as sprites with a baked gradient, no filters; about 1.5 days for everything common, it is included in the estimate of FX3. Whether anything else is needed: no DEC, no protocol (except the silent-ones field, already in the list of #329), no simulation.
 
 | Variant | What changes in PixiJS | Frame price, three fights (calculation) | Risk | Estimate |
 |---|---|---|---|---|
-| Now (Э3) | a straight tracer with an outline and a glow, a ring, a flash, sparks, small square fragments | worst 1.18, average 1.03 (Graphics 18, sprites 5, particles 11) | looks like one more line; cancellation does not differ from a hit | chosen, 3 days |
-| Ш1 Tracers | a Bezier curve, a tail as a tapering polygon with a gradient, a head sprite, sparks; counter shots bend to different sides and meet; a bonus one: an empty tail and echo diamonds | 1.17 / 1.03 (17, 4, 16) | low; the most familiar look; the gradient fill of a polygon in Pixi: `FillGradient`, check with a prototype | M, 3 days |
-| Ш2 Discharge | lightning: a polyline of 9 points with a grain per shot (the shape does not jitter, WCAG 2.3.1), three stroke passes, branches; a bonus one: a chain of hollow diamonds and a dash; counter ones converge into a "knot" | 1.27 / 1.04 (30, 6, 8) | medium: the most expensive and the brightest with three fights, hides the token at the hit place | M-L, 3-4 days |
-| Ш3 Volley | a ballistic arc, a shadow sprite on the ground, an aiming dashed arc; a collision in the air, fragments fall; a scorch mark | 1.15 / 1.03 (11, 8, 24) | medium: the upward arc goes onto neighboring nodes, worse at 60%; "artillery" against the battery theme | M-L, 4 days |
-| Ш4 Pulse | a fan of three arcs (`Graphics`), interference rings on cancellation, a push of the group by 8 units on a hit | 1.18 / 1.03 (20, 1, 16) | medium: there is no "head", the square and the diamond do not read, real and bonus are held only by solid and dashed; stands out of the language of icons | M, 3 days |
-| Ш5 Battery sparks (**recommendation**) | a cell ■ (the same square as a charge in the warehouse) with a tail of sparks: particles of one container; wind-up: sparks are drawn to the group; cancellation: a "short circuit", the cells burst into small ones; kill: sparks upward and a dashed ghost of the lost ▽ | 1.13 / 1.02 (11, 3, 34): cheaper than Э3 | low-medium: the most particles (in one container); in grayscale the sparks drown in the glow, the difference is held by the head shape (checked) | M, 3-4 days |
+| Now (FX3) | a straight tracer with an outline and a glow, a ring, a flash, sparks, small square fragments | worst 1.18, average 1.03 (Graphics 18, sprites 5, particles 11) | looks like one more line; cancellation does not differ from a hit | chosen, 3 days |
+| SH1 Tracers | a Bezier curve, a tail as a tapering polygon with a gradient, a head sprite, sparks; counter shots bend to different sides and meet; a bonus one: an empty tail and echo diamonds | 1.17 / 1.03 (17, 4, 16) | low; the most familiar look; the gradient fill of a polygon in Pixi: `FillGradient`, check with a prototype | M, 3 days |
+| SH2 Discharge | lightning: a polyline of 9 points with a grain per shot (the shape does not jitter, WCAG 2.3.1), three stroke passes, branches; a bonus one: a chain of hollow diamonds and a dash; counter ones converge into a "knot" | 1.27 / 1.04 (30, 6, 8) | medium: the most expensive and the brightest with three fights, hides the token at the hit place | M-L, 3-4 days |
+| SH3 Volley | a ballistic arc, a shadow sprite on the ground, an aiming dashed arc; a collision in the air, fragments fall; a scorch mark | 1.15 / 1.03 (11, 8, 24) | medium: the upward arc goes onto neighboring nodes, worse at 60%; "artillery" against the battery theme | M-L, 4 days |
+| SH4 Pulse | a fan of three arcs (`Graphics`), interference rings on cancellation, a push of the group by 8 units on a hit | 1.18 / 1.03 (20, 1, 16) | medium: there is no "head", the square and the diamond do not read, real and bonus are held only by solid and dashed; stands out of the language of icons | M, 3 days |
+| SH5 Battery sparks (**recommendation**) | a cell ■ (the same square as a charge in the warehouse) with a tail of sparks: particles of one container; wind-up: sparks are drawn to the group; cancellation: a "short circuit", the cells burst into small ones; kill: sparks upward and a dashed ghost of the lost ▽ | 1.13 / 1.02 (11, 3, 34): cheaper than FX3 | low-medium: the most particles (in one container); in grayscale the sparks drown in the glow, the difference is held by the head shape (checked) | M, 3-4 days |
 
 ### 29.3 Recommendation
 
-**Ш5 "Battery sparks":** it is the only variant that grows out of the theme of the game (a battery unit, a charge as energy), it uses the already settled language (■ charge, ◇ bonus, the row of charge squares in #337), gives a cancellation that looks like a collision ("a short circuit") and not like one more line, and by the calculation costs no more than Э3 (the weight is in particles, not in Graphics). A fallback: **Ш1 "Tracers"** (the most familiar and reliable, but the most banal). **Ш2 "Discharge"** is the most spectacular, but the most expensive and noisy with three fights; take it if "wow" matters most and you are ready to spend frame time. Strength "medium": Э3 from #339 is already chosen, "stronger" in Ш5 adds sparks and the size of flashes.
+**SH5 "Battery sparks":** it is the only variant that grows out of the theme of the game (a battery unit, a charge as energy), it uses the already settled language (■ charge, ◇ bonus, the row of charge squares in #337), gives a cancellation that looks like a collision ("a short circuit") and not like one more line, and by the calculation costs no more than FX3 (the weight is in particles, not in Graphics). A fallback: **SH1 "Tracers"** (the most familiar and reliable, but the most banal). **SH2 "Discharge"** is the most spectacular, but the most expensive and noisy with three fights; take it if "wow" matters most and you are ready to spend frame time. Strength "medium": FX3 from #339 is already chosen, "stronger" in SH5 adds sparks and the size of flashes.
 
 ### 29.4 The owner's decision
 
 **The choice was received on 2026-10-21** (the owner, by the mockup `fight-shots.html`; recorded in the decision field of issue #339):
 
-- [x] Shots: **Ш1 "Tracers"** (not the recommended Ш5: the owner's decision)
-- [x] Strength: **"Stronger"** (a coefficient of 1.6 on the length and brightness of the trails and the number of sparks; the price of Э3 about +40%; replaces the former "medium" from 27.3)
+- [x] Shots: **SH1 "Tracers"** (not the recommended SH5: the owner's decision)
+- [x] Strength: **"Stronger"** (a coefficient of 1.6 on the length and brightness of the trails and the number of sparks; the price of FX3 about +40%; replaces the former "medium" from 27.3)
 - [x] The distance between groups in a fight on the map: **as now (46)**
 
 **Risks recorded next to the choice:**
 
 1. At a distance of 46 the tracer track is short, the bend is almost invisible. If the shot does not read, **lengthen the trail (the tail, the fading path), not move the groups apart**: the placement of groups stays as now.
 2. A tail as a polygon with a gradient on `FillGradient` in `pixi.js` 8.21 must be **checked with a prototype** before implementation (a CSP without `unsafe-eval`, the frame price on integrated graphics).
-3. "Stronger" costs about +40% to the price of Э3 ("dangerous for weak graphics"): a measurement with a prototype before the main work, a fallback knob: the strength constant (#351, #352).
+3. "Stronger" costs about +40% to the price of FX3 ("dangerous for weak graphics"): a measurement with a prototype before the main work, a fallback knob: the strength constant (#351, #352).
 
-Implementation: #351 (Э3: the effects infrastructure, fight events, strength), then #352 (the Ш1 shots).
+Implementation: #351 (FX3: the effects infrastructure, fight events, strength), then #352 (the SH1 shots).
+
+---
+
+## 30. Variant id mapping (old Cyrillic to new Latin)
+
+Since 2026-10-27 (#401) all variant ids are Latin. The rule: **the Cyrillic prefix is replaced by the Latin one, the numbers and the sub-numbers are kept**
+(the table gives every prefix; for example, sub-id 2-3 of block BL2 keeps its number). The new prefixes are two letters and do not collide with the ids that were already Latin
+(D1-D3 directions, K1-K14 and R1-R9 of section 3, T1-T3, F1-F3, U1-U4, C1-C4, B1-B4, I1-I4 of section 28, V1-V3 arena views, packages A-F, priorities P0-P2).
+
+| Old (Cyrillic) | New (Latin) | What it names | Where |
+| --- | --- | --- | --- |
+| А1, А2, А3 | AR1, AR2, AR3 | views of the fight arena (A1 chips, A2 chips 2×4 large, A3 batteries) | section 27, `orders-style.html`, `fight-shots.html` |
+| Б1, Б2, Б3, Б4 | BL1, BL2, BL3, BL4 | blocks of map style round 2: shading, textures, fog, roads | section 26, `map-style-2.html` |
+| Б1-0, Б1-1, Б1-2 | BL1-0, BL1-1, BL1-2 | shading variants (now, restrained, pronounced) | section 26 |
+| Б2-0, Б2-1, Б2-2, Б2-3 | BL2-0, BL2-1, BL2-2, BL2-3 | texture variants (now, T1, T2, T3) | section 26 |
+| Б3-0, Б3-1, Б3-2, Б3-3 | BL3-0, BL3-1, BL3-2, BL3-3 | fog variants (now, haze, memory, line of sight) | section 26 |
+| Б4-0, Б4-1, Б4-2, Б4-3 | BL4-0, BL4-1, BL4-2, BL4-3 | road variants (now, lanes, plates, tube) | section 26 |
+| Г1, Г2, Г3 | GH1, GH2, GH3 | the ghost of an order before the server's `ack` (dashes, dispatch ring, target marked) | section 27 |
+| К6-К11 | K6-K11 | not a new id: the Cyrillic letter К was a typo for the Latin K of section 3.1 | section 3.1 |
+| Л1, Л2, Л3, Л4 | SC1, SC2, SC3, SC4 | the scheduled order ribbon (charged tube, thin ribbon and a ring, hatching, chevrons) | section 27 |
+| П1, П2, П3, П4 | OR1, OR2, OR3, OR4 | the look of an ordinary order arrow (tube, route, road highlight, light) | section 27 |
+| Р1, Р2, Р3 | CR1, CR2, CR3 | how counter and crossing ribbons are separated | section 27 |
+| С1, С2, С3 | IN1, IN2, IN3 | own order against the opponent's intent (size sign, two tiers, crosshair) | section 27 |
+| Сл1, Сл2, Сл3, Сл4 | LY1, LY2, LY3, LY4 | layers: ribbon over the road, the border and the haze (glass, over the haze, gap, hollow) | section 27 |
+| У1-У20 | IM1-IM20 | the improvements of section 4 | sections 4, 13, 14, 16, 17 |
+| Ф1, Ф2, Ф3, Ф4 | EF1, EF2, EF3, EF4 | the look of an enemy figure in the vision zone (DEC-33) | section 27 |
+| Ш1, Ш2, Ш3, Ш4, Ш5 | SH1, SH2, SH3, SH4, SH5 | the look of shots in a fight (tracers, discharge, volley, pulse, battery sparks) | section 29 |
+| Э1, Э2, Э3, Э4 | FX1, FX2, FX3, FX4 | the style of fight effects on the map (quiet, staff, expressive, symbols) | sections 9.9, 27 |
+
+Not renamed: the ids that were already Latin and mean something else: **A1 and A2 of DEC-32** (the display of the bonus shot in `fight-arena.html`: A1 an arrow and a caption, A2 a history strip), V1-V3 (arena views), D1-D3, T1-T3, F1-F3, R1-R9, K1-K14, U1-U4, C1-C4, B1-B4, I1-I4.
+In the code comments of the mockups the Latin spellings E1-E3 (for IN1-IN3, the target marker of an intent), E3 (for FX3) and A1, A3 (for AR1, AR3) were also unified to the new ids.
