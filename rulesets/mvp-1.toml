@@ -36,7 +36,7 @@ period_ticks = 50 # ... every 50 ticks (5 s); the quantum is split by stance (DE
 # The stance's share for charges is always credited, even at the CP ceiling.
 charges_per_cp = 2 # rate: 1 CP -> 2 charges
 # Stance of both players at the start of the match: economy | balance | war.
-# TODO(#104): DEC-02 does not set the starting stance; until decided, the default from #104 applies.
+# DEC-09 (owner, 2026-10-28): both players start in "balance"; the first stance change is allowed at once.
 start_stance = "balance"
 
 [economy.stance_to_charges_pct]
@@ -109,7 +109,7 @@ regroup_ticks = 10 # regrouping of the winner on an edge: 1 s
 # Node capacity (DEC-22, #234; mechanics.md, section 8): limits the number of units standing in a node and,
 # with city_upgrades.enabled = false, separately the warehouse stock (with true the warehouse follows [warehouse], DEC-26).
 # Fixed by the node kind from the map (capacity.by_kind), independent of roads, owner and supply.
-attrition_ticks = 30 # a garrison over capacity for more than 30 ticks in a row loses one unit
+attrition_ticks = 30 # a garrison over capacity loses one unit on the 30th consecutive tick above it, then the count restarts (DEC-12)
 grace_ticks = 50 # grace period of attrition after a city is captured
 
 [capacity.by_kind]

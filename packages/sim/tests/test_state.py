@@ -140,7 +140,7 @@ def test_initial_state_follows_map_and_ruleset(name: str, rules: Ruleset) -> Non
     assert sorted(state.players) == [0, 1]
     for player in state.players.values():
         assert player.cp == 300  # cp.start of mvp-0 (SIM-01)
-        assert player.stance is Stance.BALANCE  # economy.start_stance, question #104
+        assert player.stance is Stance.BALANCE  # economy.start_stance, DEC-09
         assert (player.charge_acc, player.vp) == (0, 0)
     for node in raw["nodes"]:
         assert state.nodes[node["id"]].owner == node["start_owner"]

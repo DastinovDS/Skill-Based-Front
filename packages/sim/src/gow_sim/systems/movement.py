@@ -33,7 +33,7 @@ Timing: a group whose order may depart this tick (``state.tick >= order.depart_t
 its node and makes its first step in the same tick. An intermediate own node is passed without a
 stop: in the tick of reaching it the group is already on the next edge with ``progress == 0``, so
 between ticks a group in transit is never ``AtNode`` (capacity counts only standing groups,
-#118). A path of edges of ``T1`` and ``T2`` ticks thus takes ``T1 + T2`` ticks. Only reaching
+DEC-12). A path of edges of ``T1`` and ``T2`` ticks thus takes ``T1 + T2`` ticks. Only reaching
 the end of the path (the destination, or a node that is no longer own) is an ``Arrival``.
 A planned order's bonus is capped by the group's charged units when it departs (DEC-29).
 """

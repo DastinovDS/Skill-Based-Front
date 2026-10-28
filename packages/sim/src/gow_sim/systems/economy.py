@@ -17,7 +17,7 @@ DEC-02 (mechanics.md, section 6), numbers from ``Ruleset``:
   cities in the same tick; what finds no room there burns (``charges_overflow``). If the player
   does not own its capital, all of the produced charges are spill and burn there.
 - The stance changes at most once per ``orders.stance_cooldown_ticks``; the first change is not
-  limited (#104 default). Command validation and application (SIM-04) use
+  limited (DEC-09). Command validation and application (SIM-04) use
   ``stance_cooldown_left()`` and ``set_stance()``.
 
 Tick convention: a system sees ``state.tick`` as the number of the tick being simulated, 1 for

@@ -35,7 +35,7 @@ period_ticks = 50 # ... every 50 ticks (5 s); the quantum is split by stance (DE
 # The stance's share for charges is always credited, even at the CP ceiling.
 charges_per_cp = 2 # rate: 1 CP -> 2 charges
 # Stance of both players at the start of the match: economy | balance | war.
-# TODO(#104): DEC-02 does not set the starting stance; until decided, the default from #104 applies.
+# DEC-09 (owner, 2026-10-28): both players start in "balance"; the first stance change is allowed at once.
 start_stance = "balance"
 
 [economy.stance_to_charges_pct]

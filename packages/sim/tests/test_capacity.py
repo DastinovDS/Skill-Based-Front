@@ -2,7 +2,7 @@
 
 Expected values are worked out by hand from DEC-22 (#234), item 1: the capacity of a node is
 ``capacity.by_kind[kind]`` (capital 10, large 8, medium 6, small 4, province 3) and does not depend
-on roads, the owner or supply. Attrition details: #118 default.
+on roads, the owner or supply. Attrition details: DEC-12.
 
 The map ``fork`` (rot180), every road level 1:
 
