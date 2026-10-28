@@ -318,6 +318,12 @@ export class OrderController implements MapInteraction {
       this.#clickStack(hit.node, hit.ids);
       return;
     }
+    // A province is only a destination (DEC-23): it is never selected, lit or given a menu, so a
+    // click on one that is not an order is a click on nothing.
+    if (hit.kind === 'node' && this.#isProvince(hit.id)) {
+      this.deselect();
+      return;
+    }
     // A city opens its menu on the click that selects it, a second click on it closes the menu.
     // A group opens its menu on a click on the group that is already selected (a second click
     // toggles it): the first click only selects, so ordering a move never has a ring in the way.
@@ -351,7 +357,10 @@ export class OrderController implements MapInteraction {
     const wasOpen = this.stackMenu.current.open && this.stackMenu.current.target === node;
     this.#closeMenus();
     const selected = this.#o.hud.selection;
-    if (!(selected?.kind === 'group' && ids.includes(selected.id))) {
+    if (this.#isProvince(node)) {
+      // The list opens, but the province itself is not selected (DEC-23).
+      if (!(selected?.kind === 'group' && ids.includes(selected.id))) this.#o.hud.select(null);
+    } else if (!(selected?.kind === 'group' && ids.includes(selected.id))) {
       this.#o.hud.select({ kind: 'node', id: node });
     }
     this.#hover = { kind: 'node', id: node };
@@ -972,6 +981,11 @@ export class OrderController implements MapInteraction {
     this.#closeTargetMenus();
   }
 
+  /** The node `id` is a province (`kind = province`, DEC-23): not selectable, has no city menus. */
+  #isProvince(id: number): boolean {
+    return this.#o.map.nodes[id]?.kind === 'province';
+  }
+
   /** The node `id` is one of the player's own cities in the snapshot on screen. */
   #isOwnNode(id: number): boolean {
     return this.#o.hud.current?.nodes.some((n) => n.id === id && n.owner === 'mine') ?? false;
@@ -1002,7 +1016,13 @@ export class OrderController implements MapInteraction {
     if (stack.open) {
       // The list belongs to its city while it is selected (or a group in it is) and has a choice.
       const node = this.#o.hud.selection?.kind === 'node' ? this.#o.hud.selection.id : null;
-      const at = node ?? this.#selectedGroup()?.node ?? null;
+      // A province is never selected: its list stays open with nothing selected (DEC-23).
+      const at =
+        node ??
+        this.#selectedGroup()?.node ??
+        (this.#o.hud.selection === null && this.#isProvince(stack.target ?? -1)
+          ? stack.target
+          : null);
       if (at !== stack.target || this.stackGroups().length < 2) this.stackMenu.close();
     }
   }
@@ -1013,7 +1033,9 @@ export class OrderController implements MapInteraction {
     warehouseCap: number | null;
   } | null {
     const choice = this.#o.hud.current?.nodes.find((n) => n.id === node);
-    return choice?.owner === 'mine' && choice.warehouseCap !== null ? choice : null;
+    return choice?.owner === 'mine' && choice.warehouseCap !== null && !this.#isProvince(node)
+      ? choice
+      : null;
   }
 
   /**
