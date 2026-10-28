@@ -382,7 +382,7 @@ Style guide: `docs/design/ui-style.md` (section 23 "Visual decision process"). I
 - Bot parameters are chosen deterministically from the match seed: without this, deterministic matches repeat and the tournament measures nothing.
 - The choice "ordinary or scheduled order" is a common utility function of the ruleset prices.
 - A tournament is one match per process, both sides for each pair; the JSONL result is reproducible. After a ruleset edit: a tournament and a report in the PR.
-- Agents' smoke tournaments (a report in the PR) only on `mvp-1` (the ruleset of `stack` and `compose.yaml`), for example `mise run tournament -- --seeds 10`; `mvp-0` stays a test ruleset (unit tests, golden replays), we do not run tournaments on it.
+- Agents' tournaments run only on `mvp-1` (the ruleset of `stack` and `compose.yaml`); `mvp-0` stays a test ruleset (unit tests, golden replays), we do not run tournaments on it. After a rules change the smoke tournament is `mise run tournament -- --seeds 3` (it looks for crashes and gross imbalance; a report in the PR). A full tournament (default seeds) only after a change of ruleset numbers and before a playtest (BAL-02).
 
 ---
 
