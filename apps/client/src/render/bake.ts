@@ -36,14 +36,18 @@ export interface Baker {
   }): Texture;
 }
 
+const textureBytes = (texture: Texture): number =>
+  Math.ceil(texture.source.pixelWidth) * Math.ceil(texture.source.pixelHeight) * 4;
+
 interface Entry {
   texture: Texture;
   /** Sprites showing this texture now. */
   users: number;
 }
 
-/** Textures kept beyond this many are dropped, the ones nobody shows first. */
+/** Textures kept beyond this many (or this many bytes) are dropped, the ones nobody shows first. */
 export const MAX_BAKED = 384;
+export const MAX_BAKED_BYTES = 64 * 1024 * 1024;
 
 /**
  * Shapes of the map baked into textures (BL1, #347): a city, a token, a plate costs one sprite
@@ -93,9 +97,7 @@ export class SpriteCache implements BakeTools {
   /** Texture memory held now, in bytes (RGBA). */
   get bytes(): number {
     let sum = 0;
-    for (const { texture } of this.entries.values()) {
-      sum += Math.ceil(texture.source.pixelWidth) * Math.ceil(texture.source.pixelHeight) * 4;
-    }
+    for (const { texture } of this.entries.values()) sum += textureBytes(texture);
     return sum;
   }
 
@@ -202,12 +204,14 @@ export class SpriteCache implements BakeTools {
     return texture;
   }
 
-  /** Drops the textures nobody shows, the oldest first, until the cache is within `MAX_BAKED`. */
+  /** Drops the textures nobody shows, the oldest first, until the cache is within its bounds. */
   private trim(): void {
-    if (this.entries.size <= MAX_BAKED) return;
+    let bytes = this.bytes;
+    if (this.entries.size <= MAX_BAKED && bytes <= MAX_BAKED_BYTES) return;
     for (const [key, entry] of this.entries) {
-      if (this.entries.size <= MAX_BAKED) return;
+      if (this.entries.size <= MAX_BAKED && bytes <= MAX_BAKED_BYTES) return;
       if (entry.users > 0) continue;
+      bytes -= textureBytes(entry.texture);
       this.retired.push(entry.texture);
       this.entries.delete(key);
     }

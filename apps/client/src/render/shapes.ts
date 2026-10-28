@@ -24,7 +24,6 @@ import {
   PACKET_TRANSFER,
   PAPER,
   PLATE_FILL,
-  PLATE_INNER_RING,
   SEGMENT_EMPTY_BAR,
   DEFENSE_LABEL,
   SHIELD_BADGE_SCALE,
@@ -87,10 +86,8 @@ export class EntityKit {
   readonly packetTransfer: Readonly<Record<PlayerId, GraphicsContext>>;
   /** The squares of the tail behind a packet, nearest first (`PACKET_TAIL`). */
   readonly packetTail: Readonly<Record<PlayerId, readonly GraphicsContext[]>>;
-  readonly glyph: Readonly<Record<Mode, GraphicsContext>>;
   /** The plate with the level change on a road being built. */
   readonly buildPlate: GraphicsContext;
-  readonly iconDisc: Readonly<Record<PlayerId, GraphicsContext>>;
   readonly textStyle: TextStyle;
   /** The number inside a triangle (a city icon): dark stroke, so it reads on the fill and the plate. */
   readonly insideStyle: TextStyle;
@@ -130,10 +127,6 @@ export class EntityKit {
     this.packet = { 0: packet(0), 1: packet(1) };
     this.packetTransfer = { 0: transfer(0), 1: transfer(1) };
     this.packetTail = { 0: tail(0), 1: tail(1) };
-    this.glyph = {
-      attack: this.context((g) => drawModeGlyph(g, 'attack')),
-      defense: this.context((g) => drawModeGlyph(g, 'defense')),
-    };
     this.buildPlate = this.context((g) =>
       g
         .roundRect(
@@ -146,15 +139,6 @@ export class EntityKit {
         .fill(BG)
         .stroke(BUILD_PLATE.stroke),
     );
-    const disc = (owner: PlayerId): GraphicsContext =>
-      this.context((g) => {
-        g.circle(0, 0, 9)
-          .fill(PLATE_FILL)
-          .stroke({ width: 2.5, color: ownerColor(me, owner) });
-        if (owner !== me) g.circle(0, 0, 5.5).stroke(PLATE_INNER_RING);
-        return g;
-      });
-    this.iconDisc = { 0: disc(0), 1: disc(1) };
     this.textStyle = new TextStyle({
       fontFamily: 'system-ui, sans-serif',
       fontSize: COUNT_FONT_SIZE,

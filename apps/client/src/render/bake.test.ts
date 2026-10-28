@@ -1,6 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
-import { MAX_BAKED, SpriteCache, type BakeSpec } from './bake.ts';
+import { MAX_BAKED, MAX_BAKED_BYTES, SpriteCache, type BakeSpec } from './bake.ts';
 import { fakeBaker } from './testSprites.ts';
 
 const spec = (key: string, size = 10): BakeSpec => ({
@@ -61,6 +61,17 @@ describe('SpriteCache', () => {
     expect(baker.textures.length).toBeGreaterThan(MAX_BAKED);
     cache.endFrame();
     cache.endFrame();
+    cache.destroy();
+  });
+
+  it('also drops the unused textures past the byte bound, and never one that is shown', () => {
+    const { cache } = setup();
+    const kept = cache.sprite(spec('kept', 1000));
+    // 1000 x 1000 px, 4 bytes each: about 4 MB a texture.
+    for (let i = 0; i < 40; i++) cache.sprite(spec(`big${String(i)}`, 1000)).set(null);
+    expect(cache.bytes).toBeLessThanOrEqual(MAX_BAKED_BYTES);
+    expect(kept.texture.destroyed).toBe(false);
+    expect(cache.used).toBe(1);
     cache.destroy();
   });
 
