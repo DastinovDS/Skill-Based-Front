@@ -177,6 +177,7 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_PASSWORD_RATE_LIMIT`, `GOW_PASSWORD_RATE_WINDOW_S` | `5`, `3600` | #374: no more than N password settings and changes per player per window |
 | `GOW_SCRYPT_N`, `GOW_SCRYPT_R`, `GOW_SCRYPT_P`, `GOW_SCRYPT_MAXMEM` | `32768`, `8`, `1`, `67108864` | #374: the `hashlib.scrypt` parameters of new password hashes (memory is about `128·N·r` bytes, `MAXMEM` must be larger); a hash stores its own parameters |
 | `GOW_NICK_BLOCKLIST_FILE` | empty | MOD-01: a file of additional forbidden words for nicks (one word per line, `#` is a comment); in the container `/data/nick-blocklist.txt` |
+| `GOW_MAX_REQUEST_BODY_BYTES` | `32768` | SRV-01: the largest HTTP request body in bytes; more gets `413` before any parsing (by `Content-Length` and by counting a streamed body). Caddy adds its own 64 KB cap on `/api/*` |
 | `GOW_INVITE_TTL_S` | `1800` | the lifetime of an invite to a private match (seconds) |
 | `GOW_READY_TIMEOUT_S` | `120` | SRV-09: the time to get ready after a guest joins an invite; after that the invite is withdrawn (no-show) |
 | `GOW_WS_ALLOWED_ORIGINS` | `[]` | a JSON list of `Origin`s, other than the site itself, that may open the match WebSocket |
@@ -273,6 +274,7 @@ Variables (`.env`, sample `.env.example`):
 |---|---|---|
 | `SITE_ADDRESS` | `http://localhost` | the site address for Caddy: `http://localhost` without TLS (local, e2e), `https://localhost` with local TLS, a domain name turns on automatic HTTPS (the "Caddy" section) |
 | `HTTP_PORT`, `HTTPS_PORT` | `80`, `443` | ports on the host, for example `HTTP_PORT=8080` if 80 is taken |
+| `APP_MEM_LIMIT` | `1g` | the memory limit of the `app` container (SRV-01) |
 | `GOW_ENV`, `GOW_LOG_LEVEL`, `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S`, `GOW_RECONNECT_WINDOW_S`, `GOW_PAUSE_MAX_S`, `GOW_MONITOR_INTERVAL_S` | `prod`, `INFO`, `10`, `3600`, `60`, `60`, `30` | server settings (the "Server" section); `e2e` only for a Playwright run |
 
 Only the variables listed in `compose.yaml` reach `app` (`Settings` forbids unknown fields):

@@ -37,6 +37,12 @@
 	root * /srv
 
 	handle /api/* {
+		# Defense in depth (SRV-01, #411): API bodies are a few hundred bytes. Caddy answers 413 by
+		# Content-Length and while streaming; the server has its own, lower limit
+		# (GOW_MAX_REQUEST_BODY_BYTES, 32 KiB), so this one only catches what bypasses it.
+		request_body {
+			max_size 64KB
+		}
 		encode
 		reverse_proxy app:8000
 	}

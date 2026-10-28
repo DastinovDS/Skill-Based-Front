@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEV_ONLY_RULESETS = frozenset({"test-short"})
@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     rulesets_bundled_dir: Path = Path("rulesets/archive")
     """The archive shipped with the image (read-only): its files are copied into ``rulesets_dir``
     at start-up when that is another directory."""
+    max_request_body_bytes: int = Field(default=32 * 1024, gt=0)
+    """Largest HTTP request body in bytes; more gets 413 before any parsing (SRV-01, #411). Every
+    API body is a few hundred bytes. WebSocket messages are not covered."""
     guest_rate_limit: int = 10
     guest_rate_window_s: int = 3600
     """At most ``guest_rate_limit`` guests per client IP within ``guest_rate_window_s`` seconds."""

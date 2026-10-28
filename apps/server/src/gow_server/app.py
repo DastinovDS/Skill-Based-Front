@@ -15,6 +15,7 @@ from sqlalchemy.orm import sessionmaker
 
 from gow_server import alerts, botmatch, identity, internal, invites, maps, matchqueue, replays, ws
 from gow_server.abuse import Limits
+from gow_server.bodylimit import BodySizeLimitMiddleware
 from gow_server.clock import Clock, MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.lifecycle import MatchLifecycle, abort_orphans, archive_rulesets
@@ -117,6 +118,9 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.state.invite_limiter = SlidingWindowLimiter(
         settings.invite_rate_limit, settings.invite_rate_window_s, match_clock
     )
+
+    # Added before request_context, so it sits inside it: the access log sees the 413.
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_body_bytes)
 
     @app.middleware("http")
     async def request_context(  # pyright: ignore[reportUnusedFunction]

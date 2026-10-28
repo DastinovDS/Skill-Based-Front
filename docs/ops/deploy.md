@@ -207,6 +207,7 @@ All limits live in the memory of one process (a server restart zeroes the counte
 | Joining the matchmaking queue | player | 20 per minute | `POST /api/queue` (MM-01) |
 | Commands in a match | connection | 20/s, burst 60 | WebSocket, flooding leads to a disconnect (SRV-03) |
 | Active match | player | 1 | `409` (SRV-09) |
+| HTTP request body | request | 32 KiB (`GOW_MAX_REQUEST_BODY_BYTES`) | `413` before any parsing, in the server (by `Content-Length` and by counting a streamed body) and, at 64 KB, in Caddy on `/api/*` (SRV-01, #411) |
 
 **The per-IP limit works only with the real client address.** The server takes the address from `request.client`, and uvicorn
 puts `X-Forwarded-For` there only from trusted proxies (`GOW_FORWARDED_ALLOW_IPS`). In `compose.yaml`
