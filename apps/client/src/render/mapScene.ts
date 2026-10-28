@@ -6,6 +6,7 @@ import { CameraController } from './cameraController.ts';
 import { CityView } from './cityView.ts';
 import { AlertView } from './alertView.ts';
 import { EffectsView } from './effectsView.ts';
+import { FrameGuard } from './frameGuard.ts';
 import { EntityView } from './entityView.ts';
 import { FogView } from './fogView.ts';
 import { IntentView } from './intentView.ts';
@@ -20,6 +21,9 @@ import type { RenderSource } from './source.ts';
 import { SupplyView } from './supplyView.ts';
 import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
+
+/** Failed frames in a row before the player is told (a transient error is only skipped). */
+export const FRAME_FAILURE_LIMIT = 3;
 
 /** Ticks per second when the source does not say (`rulesets/mvp-0.toml`). */
 const DEFAULT_TICK_HZ = 10;
@@ -57,6 +61,8 @@ export interface SceneOptions {
   onbackground?: (state: 'loaded' | 'failed') => void;
   /** Called when a frame built on a new snapshot is drawn for the first time (tick of it). */
   onsnapshot?: (tick: number) => void;
+  /** Called once when frames keep failing (`FRAME_FAILURE_LIMIT` in a row): the map is not drawing. */
+  onframefailure?: (error: unknown) => void;
 }
 
 /**
@@ -89,6 +95,8 @@ export class MapScene {
   private destroyed = false;
   private supplyOn = false;
   private readonly onsnapshot: ((tick: number) => void) | undefined;
+  /** A frame that throws is skipped, not the end of the loop (CLI-03, #418). */
+  private readonly guard: FrameGuard;
   private readonly onbackground: ((state: 'loaded' | 'failed') => void) | undefined;
 
   constructor(
@@ -101,6 +109,7 @@ export class MapScene {
     this.interaction = options.interaction ?? null;
     this.onsnapshot = options.onsnapshot;
     this.onbackground = options.onbackground;
+    this.guard = new FrameGuard(FRAME_FAILURE_LIMIT, (error) => options.onframefailure?.(error));
     this.layers = createLayers();
     const me = options.player ?? 0;
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.
@@ -253,8 +262,13 @@ export class MapScene {
     }
   }
 
-  /** Every frame: owners and road widths from a new snapshot, then the moving entities. */
+  /** The ticker listener: PixiJS stops asking for frames if a listener throws, so it never does. */
   private readonly onFrame = (): void => {
+    this.guard.run(this.drawFrame);
+  };
+
+  /** Every frame: owners and road widths from a new snapshot, then the moving entities. */
+  private readonly drawFrame = (): void => {
     // Textures dropped a frame ago may go now (see `SpriteCache.endFrame`).
     this.sprites.endFrame();
     this.screenSprites.endFrame();

@@ -31,6 +31,8 @@
 
   interface Props {
     rendererFailed: boolean;
+    /** Reloads the page: offered next to the failed-renderer notice. */
+    onreload?: (() => void) | undefined;
     /** The dev screen's pickers and frame rate; absent in a real match. */
     dev?: DevControls | undefined;
     /** The HUD numbers; replaced once per snapshot. */
@@ -52,6 +54,7 @@
 
   let {
     rendererFailed,
+    onreload,
     dev,
     hud,
     orders,
@@ -203,7 +206,12 @@
     }}
   />
   {#if rendererFailed}
-    <section class="error" role="alert">{t('error.renderer')}</section>
+    <section class="error" role="alert">
+      {t('error.renderer')}
+      {#if onreload !== undefined}
+        <button type="button" onclick={onreload}>{t('match.reload')}</button>
+      {/if}
+    </section>
   {/if}
 </div>
 

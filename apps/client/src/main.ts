@@ -8,7 +8,11 @@ import LegalPage from './legal/LegalPage.svelte';
 import LegalFooter from './legal/LegalFooter.svelte';
 import { loadGuest } from './api/guestStore.ts';
 import ReplayScreen from './replay/ReplayScreen.svelte';
+import { installErrorLog } from './errorLog.ts';
 import './app.css';
+
+// What nothing else catches (an uncaught error, an unhandled rejection) is logged, without tokens.
+installErrorLog(window);
 
 // Texture decoding on the main thread: the CSP has worker-src 'none' (see csp.ts).
 Assets.setPreferences({ preferWorkers: false });

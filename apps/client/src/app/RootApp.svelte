@@ -4,6 +4,7 @@
   import { t, type MessageKey } from '../i18n/index.ts';
   import type { MatchEndMsg, PlayerId } from '../protocol.gen.ts';
   import ReplayScreen from '../replay/ReplayScreen.svelte';
+  import CrashGuard from './CrashGuard.svelte';
   import { AppState } from './appState.svelte.ts';
   import BotScreen from './BotScreen.svelte';
   import CreateScreen from './CreateScreen.svelte';
@@ -144,18 +145,24 @@
   {/key}
 {:else if screen.name === 'match'}
   {#key screen.matchId}
-    <MatchScreen
-      api={app.api}
-      token={guest.token}
-      matchId={screen.matchId}
-      mapId={screen.mapId}
-      onend={(me: PlayerId, end: MatchEndMsg) => {
-        app.finishMatch(screen.matchId, me, end);
-      }}
+    <CrashGuard
       onexit={() => {
         app.menu();
       }}
-    />
+    >
+      <MatchScreen
+        api={app.api}
+        token={guest.token}
+        matchId={screen.matchId}
+        mapId={screen.mapId}
+        onend={(me: PlayerId, end: MatchEndMsg) => {
+          app.finishMatch(screen.matchId, me, end);
+        }}
+        onexit={() => {
+          app.menu();
+        }}
+      />
+    </CrashGuard>
   {/key}
 {:else if screen.name === 'result'}
   <ResultScreen

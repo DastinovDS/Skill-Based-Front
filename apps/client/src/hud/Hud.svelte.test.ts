@@ -31,7 +31,13 @@ describe('Hud', () => {
   });
 
   function render(
-    options: { oninsets?: (insets: Insets) => void; hints?: boolean; dev?: boolean } = {},
+    options: {
+      oninsets?: (insets: Insets) => void;
+      hints?: boolean;
+      dev?: boolean;
+      rendererFailed?: boolean;
+      onreload?: () => void;
+    } = {},
   ) {
     const state = new HudState({
       me: DEV_PLAYER,
@@ -54,7 +60,8 @@ describe('Hud', () => {
     mounted = mount(Hud, {
       target,
       props: {
-        rendererFailed: false,
+        rendererFailed: options.rendererFailed ?? false,
+        onreload: options.onreload,
         hud: state,
         orders,
         chrome,
@@ -83,6 +90,15 @@ describe('Hud', () => {
     [...target.querySelectorAll('button')].find((b) =>
       (b.getAttribute('aria-label') ?? b.textContent).includes(label),
     );
+
+  it('tells that the map stopped drawing and offers Reload (#418)', () => {
+    setLocale('en');
+    const onreload = vi.fn();
+    const { target } = render({ rendererFailed: true, onreload });
+    expect(target.querySelector('section.error')?.textContent).toContain('could not be drawn');
+    button(target, 'Reload')?.click();
+    expect(onreload).toHaveBeenCalledOnce();
+  });
 
   it('has no side panel and shows the numbers of the snapshot in the top bar', () => {
     setLocale('en');
