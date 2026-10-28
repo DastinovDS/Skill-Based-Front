@@ -16,8 +16,9 @@ const snapshot = devSnapshot(DEFAULT_MAP, DEV_RULES, 600);
 const group = snapshot.view.groups[0];
 if (group?.location.kind !== 'node') throw new Error('the dev snapshot has no group in a node');
 const home = group.location.node;
+let nodeSpot: { x: number; y: number; r: number } | null = { x: 300, y: 300, r: 20 };
 const anchors: MapAnchors = {
-  node: () => ({ x: 300, y: 300, r: 20 }),
+  node: () => nodeSpot,
   group: () => ({ x: 300, y: 340, r: 12 }),
 };
 
@@ -26,6 +27,7 @@ describe('the radial menus of a city and of a group', () => {
   let mounted: Record<string, unknown>[] = [];
 
   afterEach(() => {
+    nodeSpot = { x: 300, y: 300, r: 20 };
     for (const m of mounted) void unmount(m);
     mounted = [];
     setLocale(initial);
@@ -111,6 +113,18 @@ describe('the radial menus of a city and of a group', () => {
     flushSync();
     expect(sent).toEqual([{ type: 'recruit', node: home }]);
     expect(target.querySelector('[role="menu"]')).toBeNull();
+  });
+
+  it('a menu that loses its city on the map closes and lets the city go (#426)', async () => {
+    const { target, orders, hud } = render();
+    orders.click({ kind: 'node', id: home }, false);
+    flushSync();
+    expect(hud.selection).toEqual({ kind: 'node', id: home });
+    nodeSpot = null; // the ring has nothing to stand at: it closes itself
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    flushSync();
+    expect(target.querySelector('[role="menu"]')).toBeNull();
+    expect(hud.selection).toBeNull();
   });
 
   it('a sector that cannot be paid or used is off: dashed, never lit, a click does nothing', () => {

@@ -107,7 +107,7 @@
       orders.chooseCity(id as CityChoice);
     }}
     onclose={() => {
-      orders.cityMenu.close();
+      orders.closeCityMenu();
     }}
     closeLabel={t('city.close')}
   />
