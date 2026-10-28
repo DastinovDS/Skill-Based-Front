@@ -1116,7 +1116,52 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
     expect(controller.cityMenu.current).toMatchObject({ open: true, target: home });
     controller.click({ kind: 'node', id: home }, false);
     expect(controller.cityMenu.current.open).toBe(false);
-    expect(hud.selection).toEqual({ kind: 'node', id: home }); // still selected
+    expect(hud.selection).toBeNull(); // the highlight goes with the menu (#426)
+  });
+
+  it('the highlight of the city goes off with its menu in every way it closes (#426)', () => {
+    // A key: Esc closes the menu and drops the selection.
+    const a = setup();
+    a.controller.click({ kind: 'node', id: home }, false);
+    a.controller.key(key('Escape'));
+    expect(a.controller.cityMenu.current.open).toBe(false);
+    expect(a.hud.selection).toBeNull();
+    // A click outside the menu: on empty map (the menu is not modal), on the city again, or the
+    // menu's own close (the ring lost its anchor).
+    const b = setup();
+    b.controller.click({ kind: 'node', id: home }, false);
+    b.controller.click(null, false);
+    expect(b.controller.cityMenu.current.open).toBe(false);
+    expect(b.hud.selection).toBeNull();
+    b.controller.click({ kind: 'node', id: home }, false);
+    b.controller.click({ kind: 'node', id: home }, false);
+    expect(b.controller.cityMenu.current.open).toBe(false);
+    expect(b.hud.selection).toBeNull();
+    b.controller.click({ kind: 'node', id: home }, false);
+    b.controller.closeCityMenu();
+    expect(b.controller.cityMenu.current.open).toBe(false);
+    expect(b.hud.selection).toBeNull();
+    // An action: a sector of the menu, and the keys that do the same.
+    const c = setup();
+    c.controller.click({ kind: 'node', id: home }, false);
+    c.controller.chooseCity('recruit');
+    expect(c.sent).toEqual([{ type: 'recruit', node: home }]);
+    expect(c.controller.cityMenu.current.open).toBe(false);
+    expect(c.hud.selection).toBeNull();
+    const d = setup();
+    d.controller.click({ kind: 'node', id: home }, false);
+    d.controller.key(key('KeyR'));
+    expect(d.sent).toEqual([{ type: 'recruit', node: home }]);
+    expect(d.hud.selection).toBeNull();
+  });
+
+  it('closing a city menu does not touch another selection', () => {
+    const { controller, hud } = setup();
+    controller.click({ kind: 'node', id: home }, false);
+    controller.closeCityMenu(); // closed and dropped
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.closeCityMenu(); // nothing open: the group stays selected
+    expect(hud.selection).toEqual({ kind: 'group', id: group.id });
   });
 
   it('opens no city menu on an enemy city, or without a match to send to', () => {

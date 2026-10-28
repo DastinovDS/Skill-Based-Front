@@ -338,12 +338,17 @@ export class OrderController implements MapInteraction {
       target.kind === 'group' &&
       this.groupMenu.current.open &&
       this.groupMenu.current.target === target.id;
+    if (cityReclick) {
+      // The second click closes the menu and lets the city go with it (#426).
+      this.deselect();
+      return;
+    }
     this.#closeMenus();
     this.#o.hud.select(target);
     this.#hover = hit;
     if (this.#o.send !== null) {
       if (target.kind === 'group' && again && !groupWasOpen) this.groupMenu.open(target.id);
-      else if (target.kind === 'node' && !cityReclick && this.#isOwnNode(target.id)) {
+      else if (target.kind === 'node' && this.#isOwnNode(target.id)) {
         this.cityMenu.open(target.id);
       }
     }
@@ -549,9 +554,19 @@ export class OrderController implements MapInteraction {
     this.#o.hud.select({ kind: 'group', id: follow.to });
   }
 
+  /**
+   * Closes the menu of a city (a key, a click outside, an action) and lets the city go with it, so
+   * its selection highlight does not stay on after the menu (#426).
+   */
+  closeCityMenu(): void {
+    const { open, target } = this.cityMenu.current;
+    this.cityMenu.close();
+    const selection = this.#o.hud.selection;
+    if (open && selection?.kind === 'node' && selection.id === target) this.#o.hud.select(null);
+  }
+
   /** A sector of the menu of a city: the same as its key. */
   chooseCity(choice: CityChoice): void {
-    this.cityMenu.close();
     if (choice === 'recruit') this.recruit();
     else if (choice === 'barracks') this.cityBuild('build_barracks');
     else this.cityBuild('upgrade_warehouse');
@@ -585,7 +600,7 @@ export class OrderController implements MapInteraction {
 
   recruit(): void {
     const node = this.recruitNode();
-    this.cityMenu.close();
+    this.closeCityMenu();
     if (node === null) return;
     this.#sendCommand({ type: 'recruit', node }, null);
   }
@@ -593,7 +608,7 @@ export class OrderController implements MapInteraction {
   /** The barracks or a warehouse level of the selected own city (DEC-26). */
   cityBuild(type: 'build_barracks' | 'upgrade_warehouse'): void {
     const node = this.recruitNode();
-    this.cityMenu.close();
+    this.closeCityMenu();
     if (node === null) return;
     this.#sendCommand({ type, node }, null);
   }
@@ -620,7 +635,7 @@ export class OrderController implements MapInteraction {
   /** Take the last unit off the recruit queue of the selected city (DEC-25); free. */
   cancelRecruit(): void {
     const node = this.recruitNode();
-    this.cityMenu.close();
+    this.closeCityMenu();
     if (node === null) return;
     this.#sendCommand({ type: 'cancel_recruit', node }, null);
   }
