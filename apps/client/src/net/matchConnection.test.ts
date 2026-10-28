@@ -43,8 +43,16 @@ function setup(
     token?: string;
     maxAttempts?: number;
     maxPending?: number;
+    pingIntervalMs?: number;
   } = {},
 ) {
+  // The events of the page: `online` on the window, `visibilitychange` on the document.
+  const page = {
+    window: new EventTarget(),
+    document: Object.assign(new EventTarget(), {
+      visibilityState: 'visible',
+    }) as unknown as Document,
+  };
   const server = createFakeServer();
   const messages: ServerMsg[] = [];
   const statuses: string[] = [];
@@ -69,7 +77,8 @@ function setup(
     createSocket: server.create,
     baseBackoffMs: 500,
     maxBackoffMs: 4000,
-    pingIntervalMs: 1000,
+    pingIntervalMs: extra.pingIntervalMs ?? 1000,
+    page,
     random: extra.random ?? (() => 1),
     now: () => clock,
     ...(extra.maxAttempts === undefined ? {} : { maxAttempts: extra.maxAttempts }),
@@ -84,6 +93,7 @@ function setup(
     lost,
     invalid: () => invalid,
     resets: () => resets,
+    page,
     setClock: (ms: number) => (clock = ms),
   };
 }
@@ -449,6 +459,132 @@ describe('terminal close codes and the cap of attempts (CLI-01, #416)', () => {
     socket.accept();
     socket.reply(welcome());
     expect(socket.sent.filter((m) => m.type === 'command')).toHaveLength(3);
+  });
+});
+
+describe('liveness watchdog and waking up (CLI-02, #417)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const pong = (id: number): ServerMsg => withFields('pong', { id });
+
+  it('takes a link with no frame for 3 s for dead: closes it and reconnects', () => {
+    const t = setup({ pingIntervalMs: 60_000 });
+    const socket = ready(t);
+    const seq = t.conn.send(move);
+    t.setClock(2_900);
+    vi.advanceTimersByTime(1_000);
+    expect(t.conn.status).toBe('ready');
+    t.setClock(3_100);
+    vi.advanceTimersByTime(1_000);
+    expect(t.conn.status).toBe('reconnecting');
+    expect(t.resets()).toBe(1);
+    expect(socket.readyState).toBe(3);
+    vi.advanceTimersByTime(500);
+    expect(t.server.sockets.length).toBe(2);
+    expect(t.conn.pendingSeqs).toEqual([seq]);
+  });
+
+  it('counts any frame as life: a snapshot, an ack or a pong keeps the link', () => {
+    const t = setup({ pingIntervalMs: 60_000 });
+    const socket = ready(t);
+    for (const [at, msg] of [
+      [2_500, serverFixture('snapshot')],
+      [5_000, ack(99)],
+      [7_500, pong(0)],
+    ] as const) {
+      t.setClock(at);
+      socket.reply(msg);
+      t.setClock(at + 2_000);
+      vi.advanceTimersByTime(1_000);
+      expect(t.conn.status).toBe('ready');
+    }
+  });
+
+  it('does not take the silence of a pause for a dead link (the server sends no snapshots)', () => {
+    const t = setup({ pingIntervalMs: 60_000 });
+    const socket = ready(t);
+    socket.reply(serverFixture('paused'));
+    t.setClock(20_000);
+    vi.advanceTimersByTime(1_000);
+    expect(t.conn.status).toBe('ready');
+    // The pause is over: snapshots are due again.
+    socket.reply(serverFixture('paused_end'));
+    t.setClock(24_000);
+    vi.advanceTimersByTime(1_000);
+    expect(t.conn.status).toBe('reconnecting');
+  });
+
+  it('takes two unanswered pings for a dead link, even in a pause', () => {
+    const t = setup();
+    const socket = ready(t);
+    socket.reply(serverFixture('paused'));
+    vi.advanceTimersByTime(2_000);
+    expect(socket.sent.filter((m) => m.type === 'ping')).toHaveLength(2);
+    expect(t.conn.status).toBe('ready');
+    vi.advanceTimersByTime(1_000);
+    expect(t.conn.status).toBe('reconnecting');
+  });
+
+  it('keeps a link whose pings are answered', () => {
+    const t = setup();
+    const socket = ready(t);
+    for (let i = 0; i < 6; i++) {
+      vi.advanceTimersByTime(1_000);
+      socket.reply(pong(i));
+    }
+    expect(t.conn.status).toBe('ready');
+  });
+
+  it('reconnects at once on online instead of waiting out the backoff', () => {
+    const t = setup();
+    const socket = ready(t);
+    socket.drop();
+    expect(t.conn.status).toBe('reconnecting');
+    t.page.window.dispatchEvent(new Event('online'));
+    expect(t.conn.status).toBe('connecting');
+    expect(t.server.sockets.length).toBe(2);
+    vi.advanceTimersByTime(60_000);
+    expect(t.server.sockets.length).toBe(2);
+  });
+
+  it('tries again from failed on online', () => {
+    const t = setup();
+    ready(t).drop(CLOSE_POLICY);
+    expect(t.conn.status).toBe('failed');
+    t.page.window.dispatchEvent(new Event('online'));
+    expect(t.server.sockets.length).toBe(2);
+  });
+
+  it('looks at the link when the tab becomes visible, and reconnects if it was silent', () => {
+    const t = setup({ pingIntervalMs: 60_000 });
+    ready(t);
+    t.setClock(10_000); // the laptop slept: the timers did not run
+    (t.page.document as unknown as { visibilityState: string }).visibilityState = 'hidden';
+    t.page.document.dispatchEvent(new Event('visibilitychange'));
+    expect(t.conn.status).toBe('ready');
+    (t.page.document as unknown as { visibilityState: string }).visibilityState = 'visible';
+    t.page.document.dispatchEvent(new Event('visibilitychange'));
+    expect(t.conn.status).toBe('reconnecting');
+  });
+
+  it('leaves a live link alone when the tab becomes visible', () => {
+    const t = setup({ pingIntervalMs: 60_000 });
+    ready(t);
+    t.page.document.dispatchEvent(new Event('visibilitychange'));
+    t.page.window.dispatchEvent(new Event('online'));
+    expect(t.conn.status).toBe('ready');
+    expect(t.server.sockets.length).toBe(1);
+  });
+
+  it('stops listening to the page after close()', () => {
+    const t = setup();
+    const socket = ready(t);
+    socket.drop();
+    t.conn.close();
+    t.page.window.dispatchEvent(new Event('online'));
+    expect(t.server.sockets.length).toBe(1);
+    expect(t.conn.status).toBe('idle');
   });
 });
 

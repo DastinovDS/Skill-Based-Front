@@ -16,6 +16,14 @@
  * `maxAttempts` times with the backoff, then `failed`, and `retry()` starts over by the player's
  * hand. The queue of unacknowledged commands is capped below the server's token bucket, so a
  * resend after a long outage cannot trip it.
+ *
+ * A link that dies without a FIN or an RST (a Wi-Fi change, sleep and wake, a NAT timeout) raises
+ * `close` only when the browser's own TCP timeout expires, long after the server has started the
+ * disconnect window of DEC-05 (CLI-02, #417). So the client watches for life itself: while ready
+ * (and not in a pause, when the server sends no snapshots) no frame of any kind for `deadAfterMs`
+ * is a dead link, and so are two unanswered pings; either closes the socket on this side and takes
+ * the normal reconnect path. `online` and a tab that becomes visible again reconnect at once, or
+ * check the link at once.
  */
 import {
   CLOSE_PROTOCOL_VERSION,
@@ -76,6 +84,12 @@ export interface MatchConnectionOptions {
   baseBackoffMs?: number;
   maxBackoffMs?: number;
   pingIntervalMs?: number;
+  /** No frame for this long while ready (and not paused) is a dead link (default `DEAD_AFTER_MS`). */
+  deadAfterMs?: number;
+  /** How often the silence is checked (default `WATCHDOG_MS`). */
+  watchdogMs?: number;
+  /** Page events for waking up: `online` of the window, `visibilitychange` of the document. */
+  page?: { window: EventTarget; document: Document } | null;
   /** Failed attempts in a row before the status is `failed` (default `MAX_ATTEMPTS`). */
   maxAttempts?: number;
   /** Answers 4004 in a row that are retried before the status is `gone` (default `NO_MATCH_RETRIES`). */
@@ -99,6 +113,12 @@ export const NO_MATCH_RETRIES = 2;
 /** Below the server's burst of 60 messages per connection, with room for `hello` and the pings. */
 export const MAX_PENDING_COMMANDS = 50;
 
+/** Snapshots come at 10 Hz: this much silence while ready is not a slow link, it is a dead one. */
+export const DEAD_AFTER_MS = 3_000;
+export const WATCHDOG_MS = 1_000;
+/** What the browser reports for a link that went away without a close handshake. */
+const CLOSE_ABNORMAL = 1006;
+
 /** `ws(s)://<host>/ws/match/<id>` for the page's own origin. */
 export function matchSocketUrl(
   matchId: string,
@@ -118,6 +138,12 @@ export function backoffDelay(
   return Math.min(maxMs, baseMs * 2 ** attempt) * (0.5 + random / 2);
 }
 
+function pageOf(scope: typeof globalThis): { window: EventTarget; document: Document } | null {
+  return typeof scope.window === 'undefined' || typeof scope.document === 'undefined'
+    ? null
+    : { window: scope.window, document: scope.document };
+}
+
 export class MatchConnection {
   readonly #opts: MatchConnectionOptions;
   readonly #baseMs: number;
@@ -128,6 +154,8 @@ export class MatchConnection {
   readonly #maxAttempts: number;
   readonly #noMatchRetries: number;
   readonly #maxPending: number;
+  readonly #deadAfterMs: number;
+  readonly #watchdogMs: number;
 
   #status: ConnectionStatus = 'idle';
   #socket: WebSocket | null = null;
@@ -136,6 +164,12 @@ export class MatchConnection {
   #noMatch = 0;
   #retryTimer: ReturnType<typeof setTimeout> | undefined;
   #pingTimer: ReturnType<typeof setInterval> | undefined;
+  #watchdog: ReturnType<typeof setInterval> | undefined;
+  /** When the last frame of any kind arrived on this connection (`now()`). */
+  #lastFrameAt = 0;
+  /** The match is paused: the server sends no snapshots, only the answers to pings. */
+  #paused = false;
+  #unhook: (() => void) | null = null;
 
   #nextSeq = 1;
   /** Commands sent (or waiting to be sent) and not yet acknowledged, by `seq`. */
@@ -153,6 +187,8 @@ export class MatchConnection {
     this.#maxAttempts = opts.maxAttempts ?? MAX_ATTEMPTS;
     this.#noMatchRetries = opts.noMatchRetries ?? NO_MATCH_RETRIES;
     this.#maxPending = opts.maxPending ?? MAX_PENDING_COMMANDS;
+    this.#deadAfterMs = opts.deadAfterMs ?? DEAD_AFTER_MS;
+    this.#watchdogMs = opts.watchdogMs ?? WATCHDOG_MS;
   }
 
   get status(): ConnectionStatus {
@@ -166,6 +202,7 @@ export class MatchConnection {
 
   connect(): void {
     if (this.#status !== 'idle') return;
+    this.#hookPage();
     this.#open();
   }
 
@@ -218,6 +255,8 @@ export class MatchConnection {
 
   /** Stop for good: no more reconnects. Unacknowledged commands are dropped. */
   close(): void {
+    this.#unhook?.();
+    this.#unhook = null;
     this.#teardown();
     this.#pending.clear();
     this.#setStatus('idle');
@@ -230,6 +269,7 @@ export class MatchConnection {
   }
 
   #open(): void {
+    this.#paused = false;
     this.#setStatus('connecting');
     const location = this.#opts.location ?? globalThis.location;
     const url = matchSocketUrl(this.#opts.matchId, location);
@@ -257,6 +297,7 @@ export class MatchConnection {
   }
 
   #onFrame(frame: unknown): void {
+    this.#lastFrameAt = this.#now();
     const msg = decodeServerMsg(frame);
     if (msg === null) {
       this.#opts.handlers.onInvalidFrame?.();
@@ -268,6 +309,9 @@ export class MatchConnection {
         break;
       case 'ack':
         this.#pending.delete(msg.seq);
+        break;
+      case 'paused':
+        this.#paused = msg.paused;
         break;
       case 'pong': {
         const sentAt = this.#pingSentAt.get(msg.id);
@@ -305,9 +349,59 @@ export class MatchConnection {
     this.#startPing();
   }
 
+  /**
+   * Is the link alive? A dead one is closed on this side and goes the normal reconnect path:
+   * `close` of the browser may come minutes later.
+   */
+  #checkAlive(): void {
+    if (this.#status !== 'ready') return;
+    const silent = !this.#paused && this.#now() - this.#lastFrameAt > this.#deadAfterMs;
+    if (silent || this.#pingSentAt.size >= 2) this.#onClose(CLOSE_ABNORMAL);
+  }
+
+  /** `online` and a visible tab: reconnect now instead of at the end of the backoff, or look at the link. */
+  readonly #wake = (): void => {
+    switch (this.#status) {
+      case 'reconnecting':
+        clearTimeout(this.#retryTimer);
+        this.#retryTimer = undefined;
+        this.#open();
+        break;
+      case 'failed':
+        this.retry();
+        break;
+      case 'ready':
+        this.#checkAlive();
+        break;
+      default:
+        break;
+    }
+  };
+
+  #hookPage(): void {
+    const page = this.#opts.page === undefined ? pageOf(globalThis) : this.#opts.page;
+    if (page === null) return;
+    const onVisible = (): void => {
+      if (page.document.visibilityState === 'visible') this.#wake();
+    };
+    page.window.addEventListener('online', this.#wake);
+    page.document.addEventListener('visibilitychange', onVisible);
+    this.#unhook = () => {
+      page.window.removeEventListener('online', this.#wake);
+      page.document.removeEventListener('visibilitychange', onVisible);
+    };
+  }
+
   #startPing(): void {
     this.#stopPing();
+    this.#lastFrameAt = this.#now();
+    this.#watchdog = setInterval(() => {
+      this.#checkAlive();
+    }, this.#watchdogMs);
     this.#pingTimer = setInterval(() => {
+      // Two pings without a pong: the pong of the first would have come long ago.
+      this.#checkAlive();
+      if (this.#status !== 'ready') return;
       const id = this.#nextPingId++;
       this.#pingSentAt.set(id, this.#now());
       this.#write({ type: 'ping', id });
@@ -317,6 +411,8 @@ export class MatchConnection {
   #stopPing(): void {
     clearInterval(this.#pingTimer);
     this.#pingTimer = undefined;
+    clearInterval(this.#watchdog);
+    this.#watchdog = undefined;
     this.#pingSentAt.clear();
   }
 
