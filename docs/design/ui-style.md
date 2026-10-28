@@ -15,7 +15,8 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/map-style.html`](mockups/map-style.html) (map style directions, #332),
 [`mockups/map-style-2.html`](mockups/map-style-2.html) (round 2: volume, textures, fog, roads, #335),
 [`mockups/objects-style.html`](mockups/objects-style.html) (units, cities, barracks and "Defense", menu icons, #337),
-[`mockups/progress-style.html`](mockups/progress-style.html) (CP bar and the progress of barracks construction and recruiting, #430: **[awaiting the owner's decision]**; the owner asked for it on 2026-10-28, after the mechanics freeze, so the postponement of section 23 does not apply to it). All of them are
+[`mockups/progress-style.html`](mockups/progress-style.html) (CP bar and the progress of barracks construction and recruiting, #430: **[awaiting the owner's decision]**; the owner asked for it on 2026-10-28, after the mechanics freeze, so the postponement of section 23 does not apply to it).,
+[`mockups/start-menu.html`](mockups/start-menu.html) (the start menu and the pre-match screens, #471: **[awaiting the owner's decision]**, section 31; asked for before the release on 2026-10-28). All of them are
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
 only links and our descriptions.
@@ -76,6 +77,7 @@ Contents:
 28. Map objects and menu icons: units, cities, barracks and "Defense" (#337)
 29. Shots in the fight on the map: animation variants (#339)
 30. Variant id mapping (old Cyrillic to new Latin)
+31. Start menu redesign (#471)
 
 ---
 
@@ -1626,3 +1628,23 @@ Since 2026-10-27 (#401) all variant ids are Latin. The rule: **the Cyrillic pref
 
 Not renamed: the ids that were already Latin and mean something else: **A1 and A2 of DEC-32** (the display of the bonus shot in `fight-arena.html`: A1 an arrow and a caption, A2 a history strip), V1-V3 (arena views), D1-D3, T1-T3, F1-F3, R1-R9, K1-K14, U1-U4, C1-C4, B1-B4, I1-I4.
 In the code comments of the mockups the Latin spellings E1-E3 (for IN1-IN3, the target marker of an intent), E3 (for FX3) and A1, A3 (for AR1, AR3) were also unified to the new ids.
+
+---
+
+## 31. Start menu redesign (#471)
+
+Status: **[awaiting the owner's decision]**. The owner asked for the redesign before the release on 2026-10-28 (the item "Start menu: redesign" of #252 and #282 section 2), so the postponement of section 23 does not apply to it. It supersedes the proposal of section 13.2 for the menu and the welcome screen once chosen; sections 13.3 to 13.9 stay as the default for the other screens until then.
+
+Mockup: [`mockups/start-menu.html`](mockups/start-menu.html), frames in [`mockups/img/start-menu/`](mockups/img/start-menu/). It shows the current look (**Now**) and four variants for the same 15 states: welcome (and its error), menu for a guest, an account in calibration k/5 (DEC-34) and a rated account, the account menu, a match in progress, the queue (searching, long wait with the bot offer, opponent found, confirmed), the queue ban with the time left, a network error, and the bot, friend, lobby and replays places.
+
+| Id | Variant | Client effort | Risk |
+| --- | --- | --- | --- |
+| Now | the 420 px card, four equal buttons | none | no main action, no ban time, no calibration |
+| A | **Front**: the real pool map as the postcard, a text rail with one huge Play, the queue shown on the map | M, 2-3 days | low to medium |
+| B | **Capital**: the menu is a small map, the capital is Play, the cities are the modes | L, 4-5 days | medium to high |
+| C | **Ledger**: type and hotkeys, a list and a detail pane, no picture | S, 1-1.5 days | low (weakest first impression) |
+| D | **Versus**: your triangle against an empty "?" slot, one selector, one Play, settings inline | L, 4-5 days | medium (biggest refactor) |
+
+No variant needs a DEC, a protocol change or a server change. Optional inputs that do not depend on the choice: the rating in `GET /api/me` and a match list for the Replays row (LB-01, #78), the "How to play" screen (#72). **Recommendation: A**, with C as the fast fallback; the reasons, the list of what the implementation touches and the questions to the owner are in #471.
+
+**Owner's decision:** awaiting the owner's decision.

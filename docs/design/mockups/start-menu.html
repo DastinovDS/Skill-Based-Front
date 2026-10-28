@@ -1,0 +1,665 @@
+<!doctype html>
+<!--
+  Mockup: the start menu (the pre-match screens), for the owner to choose. Decision issue: see docs/design/ui-style.md, section 31.
+  Self-contained: no network, no external fonts, images or scripts; everything is drawn by code (HTML, CSS, inline SVG). Open it as a file.
+  This is an illustration, not client code. The strings are the real English strings of the client where a screen exists today
+  (apps/client/src/i18n/en.ts); new strings are short and English only. The map behind variants A and B is the real pool map "crossroads"
+  (maps/crossroads.json, 49 nodes), drawn in the style of ui-style.md, sections 9 and 21.
+  The state of the choices lives in the address (start-menu.html#v=a&s=search&acct=cal&gray=0&rm=0&ann=0&sc=fit),
+  so the mockup can be opened at the right frame.
+  Keys on the page: [ and ] switch the variant, , and . switch the state. Inside the frame the game keys work: Enter, B, I, L, R, Esc.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Start menu: variants</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#9da7b3;--you:#5b9bff;--enemy:#e5484d;--warn:#ffb020;--ok:#3fb950;--paper:#f0f6fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif}
+header.page{position:sticky;top:0;z-index:50;padding:8px 16px 10px;background:var(--surface);border-bottom:1px solid var(--border)}
+.row{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center}
+.row+.row{margin-top:6px}
+h1{font-size:16px;margin:0 8px 0 0}
+nav a{color:var(--you);text-decoration:none;margin-right:12px;font-size:13px}
+nav a:hover{text-decoration:underline}
+.opt{display:flex;gap:6px;align-items:center;color:var(--dim);font-size:13px}
+.opt select{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:2px 4px}
+.pk{display:flex;align-items:center;gap:8px}
+.pk>b{font-size:12px;color:var(--dim);font-weight:600}
+.seg{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;border-right:1px solid var(--border);background:var(--surface2);color:var(--text);padding:4px 10px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--you);color:#0d1117;font-weight:700}
+.seg button:focus-visible{outline:2px solid #f0f6fc;outline-offset:-2px}
+main{max-width:1400px;margin:0 auto;padding:16px}
+h2.sec{font-size:18px;margin:34px 0 4px;padding-top:14px;border-top:1px solid var(--border)}
+h2.sec:first-of-type{border-top:0;margin-top:8px}
+.note{color:var(--dim);margin:4px 0 10px;font-size:13px;max-width:1100px}
+.note b{color:var(--text)}
+code{background:var(--surface2);padding:0 4px;border-radius:4px;font-size:12.5px}
+.stagewrap{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#000;width:max-content;max-width:100%}
+.stagebox{transform-origin:0 0}
+.cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));margin-top:12px}
+.cd{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:13px}
+.cd h3{font-size:15px;margin:0 0 6px}
+.cd ul{margin:4px 0 0;padding-left:18px;color:var(--dim)}
+.cd li{margin:2px 0}
+.cd.rec{border-color:var(--ok)}
+.badge{display:inline-block;font-size:11px;border:1px solid var(--ok);color:var(--ok);border-radius:10px;padding:0 7px;margin-left:6px;vertical-align:1px}
+.ov{display:grid;grid-template-columns:repeat(auto-fill,512px);gap:14px;justify-content:start}
+.ov figure{margin:0;cursor:pointer}
+.ov figcaption{font-size:13px;color:var(--dim);padding:4px 2px}
+.ov figure.on figcaption{color:var(--text);font-weight:700}
+.thumb{width:512px;height:288px;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative}
+.thumb .stagebox{transform:scale(.4);pointer-events:none}
+figure.on .thumb{border-color:var(--you)}
+.tbl{overflow:auto;max-width:100%;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+.tbl table{border-collapse:collapse;width:100%;min-width:900px}
+.tbl th,.tbl td{border:1px solid var(--border);padding:6px 10px;vertical-align:top;text-align:left;font-size:13px}
+.tbl th{font-weight:600;font-size:12px;color:var(--dim);background:var(--surface2)}
+.tbl tr.rec td{background:#14261a}
+.decision{margin-top:12px;padding:10px 14px;background:var(--surface);border:1px solid var(--warn);border-radius:8px}
+.chk{font-size:13px;color:var(--dim)}
+.chk li{margin:3px 0}
+.chk .ok{color:var(--ok);font-weight:700}
+.chk .bad{color:var(--warn);font-weight:700}
+
+/* ===== the frames: 1280 x 720, the real tokens of apps/client/src/app.css ===== */
+.st{position:relative;width:1280px;height:720px;overflow:hidden;background:#0d1117;color:#e6edf3;font:16px/1.4 system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif;
+  --bg:#0d1117;--surface:rgb(22 27 34 / 94%);--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#9da7b3;--paper:#f0f6fc;--you:#5b9bff;--enemy:#e5484d;--warn:#ffb020}
+.st *{box-sizing:border-box}
+.st button,.st input,.st select{font:inherit;color:inherit}
+.st button{cursor:pointer}
+.st h1,.st h2,.st p{margin:0}
+.st :focus-visible{outline:2px solid #f0f6fc;outline-offset:2px}
+.st.gray{filter:grayscale(1)}
+.st .legal{position:absolute;right:8px;bottom:4px;z-index:20;display:flex;gap:12px;padding:2px 8px;border-radius:4px;background:rgb(13 17 23 / 80%);font-size:12px}
+.st .legal a{color:#8b949e;text-decoration:underline}
+.st .ic{flex:none}
+.st .k{display:inline-block;min-width:24px;height:24px;padding:0 7px;border:1px solid #3d444d;border-bottom-width:2px;border-radius:6px;background:var(--surface2);color:var(--dim);font-size:12px;font-weight:600;line-height:21px;text-align:center}
+.st .chip{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid var(--border);border-radius:13px;font-size:13px;color:var(--dim);background:rgb(13 17 23 / 55%);white-space:nowrap}
+.st .chip.wn{border:1px dashed var(--warn);color:var(--warn)}
+.st .chip b{color:var(--text);font-weight:700}
+.st .cells{display:inline-flex;gap:3px}
+.st .cells i{display:block;width:16px;height:8px;border:1.5px solid var(--you);border-radius:2px}
+.st .cells i.on{background:var(--you)}
+.st .wn{color:var(--warn)}
+.st .wl{display:flex;align-items:center;gap:8px;color:var(--warn);font-size:15px}
+.st .dim{color:var(--dim)}
+.st .hint{font-size:13px;color:var(--dim)}
+.st .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;height:44px;padding:0 18px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)}
+.st .btn.pri{background:var(--you);border-color:var(--paper);color:var(--bg);font-weight:700}
+.st .btn.wide{width:100%}
+.st .btn[disabled],.st .dis{opacity:.5;cursor:default}
+.st .btn.link{background:none;border-color:transparent;color:var(--dim);padding:0 8px}
+.st .sg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.st .sg button{white-space:nowrap;display:inline-flex;align-items:center;gap:7px;border:0;border-right:1px solid var(--border);background:var(--surface2);padding:8px 14px}
+.st .sg button:last-child{border-right:0}
+.st .sg button.on{background:var(--you);color:var(--bg);font-weight:700}
+.st .sg button.on::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--bg)}
+.st .sg button.dis{background:repeating-linear-gradient(135deg,#21262d 0 6px,#1a1f26 6px 12px);opacity:.75}
+.st .fld{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.st .fld input{height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)}
+.st .tri{display:block;overflow:visible}
+.st .pn h2{font-size:20px;margin-bottom:4px}
+.st .pn .rw{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #262c34}
+.st .pn .rw .grow{flex:1;min-width:0}
+.st .pn .rw small{display:block;color:var(--dim);font-size:12.5px}
+.st .pn .sp{display:flex;flex-direction:column;gap:14px}
+.st .pn .cap{font-size:13px;color:var(--dim);margin-bottom:6px}
+.st .pn .res{display:inline-flex;align-items:center;gap:6px;width:62px;font-weight:700}
+.st .pn .res i{width:10px;height:10px;border-radius:50%;border:2px solid var(--you)}
+.st .pn .res.w i{background:var(--you)}
+.st .pn .res.d i{background:linear-gradient(90deg,var(--you) 50%,transparent 50%)}
+.st .linkbox{display:flex;gap:8px}
+.st .linkbox input{flex:1;height:40px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);font-size:14px}
+.st .pop{position:absolute;z-index:30;width:300px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;gap:2px}
+.st .pop button{display:flex;align-items:center;gap:10px;height:40px;padding:0 10px;border:0;border-radius:6px;background:none;text-align:left}
+.st .pop button:hover{background:var(--surface2)}
+.st .pop .wl{padding:6px 10px;font-size:13px}
+.st .who{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:22px;padding:5px 14px 5px 12px;background:rgb(13 17 23 / 70%);cursor:pointer;font-size:15px}
+.st .who b{font-weight:700}
+.st .who .num{font-size:20px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.st .who .cap2{font-size:11px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase}
+.st .mark{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.01em;font-size:18px}
+.st .march{animation:march 1.1s linear infinite}
+@keyframes march{to{stroke-dashoffset:-24}}
+.st .pulse{animation:pulse 1.25s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.st .ring{transform-box:fill-box;transform-origin:center;animation:ring 2.4s ease-out infinite}
+@keyframes ring{0%{transform:scale(.8);opacity:.9}100%{transform:scale(2.4);opacity:0}}
+.st.rm *,.st.rm{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion:reduce){.st *{animation:none!important;transition:none!important}}
+/* annotations: what a frame needs from the server or the protocol */
+.ann .st [data-need]{position:relative;outline:1px dashed var(--warn);outline-offset:3px}
+.ann .st [data-need]::after{content:attr(data-need);position:absolute;left:0;top:100%;margin-top:4px;z-index:60;white-space:nowrap;font-size:11px;line-height:16px;padding:0 6px;background:#3a2a00;color:var(--warn);border:1px solid var(--warn);border-radius:4px;font-weight:600;letter-spacing:0;text-transform:none}
+
+/* ===== NOW: the current client look (app.css) ===== */
+.n .screen{position:absolute;inset:0 0 28px;display:grid;place-items:center;padding:16px}
+.n .card{display:flex;flex-direction:column;gap:12px;width:420px;padding:20px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+.n .card h1{font-size:22px}
+.n .card label{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.n .card input,.n .card select,.n .card button{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:16px}
+.n .card button.primary{background:var(--you);border-color:var(--paper);color:var(--bg)}
+.n .card button:disabled{opacity:.6;cursor:default}
+.n .card .hint{font-size:12px}
+.n .card .error{color:var(--warn);font-size:14px}
+.n .card .actions{display:flex;flex-wrap:wrap;gap:8px}
+.n .card .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.n .card .list li{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.n .card .gone{opacity:.7;border-style:dashed}
+
+/* ===== A "Front": the real map as the postcard, a text rail on the left ===== */
+.a .mapsvg{position:absolute;inset:0}
+.a .shade{position:absolute;inset:0;background:linear-gradient(90deg,rgb(13 17 23 / 97%) 0,rgb(13 17 23 / 90%) 330px,rgb(13 17 23 / 45%) 470px,rgb(13 17 23 / 8%) 640px,rgb(13 17 23 / 0%) 100%),linear-gradient(0deg,rgb(13 17 23 / 70%),rgb(13 17 23 / 0%) 140px)}
+.a .top{position:absolute;left:56px;right:44px;top:28px;z-index:5;display:flex;align-items:center;justify-content:space-between}
+.a .rail{position:absolute;left:56px;top:150px;width:430px;z-index:5}
+.a .eyebrow{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);min-height:20px}
+.a .big{display:flex;align-items:center;gap:16px;width:100%;margin:8px 0 6px;padding:0;border:0;background:none;font-size:68px;line-height:1;font-weight:800;letter-spacing:-.025em;text-align:left;color:var(--text)}
+.a .big .k{margin-left:6px;transform:translateY(4px);letter-spacing:0}
+.a .big.sm{font-size:44px}
+.a .sub{display:flex;align-items:center;gap:10px;min-height:28px;color:var(--dim);font-size:14px}
+.a .rows{margin-top:26px;width:370px}
+.a .rw2{display:flex;align-items:center;gap:14px;width:100%;padding:11px 4px;border:0;border-bottom:1px solid rgb(230 237 243 / 10%);background:none;font-size:22px;text-align:left;color:var(--text)}
+.a .rw2 .ic{color:var(--dim)}
+.a .rw2 .k{margin-left:auto}
+.a .rw2:hover,.a .rw2.on{background:linear-gradient(90deg,rgb(91 155 255 / 18%),transparent)}
+.a .rw2.on{border-bottom-color:var(--you)}
+.a .rw2.dis{opacity:.4}
+.a .tools{display:flex;gap:6px;margin-top:20px}
+.a .tools button{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid var(--border);border-radius:18px;background:rgb(13 17 23 / 60%);color:var(--dim);font-size:13px}
+.a .tag{position:absolute;left:56px;bottom:46px;width:340px;z-index:5;font-size:13px;color:var(--dim)}
+.a .panel{position:absolute;left:520px;top:120px;width:470px;z-index:6;padding:22px;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+.a .form{display:flex;flex-direction:column;gap:12px;margin-top:6px}
+.a .form input{height:56px;font-size:28px;padding:0 4px;border:0;border-bottom:2px solid var(--you);border-radius:0;background:none;width:100%}
+.a .form input.s{height:44px;font-size:18px}
+.a .lc{display:flex;gap:6px;margin-top:14px}
+.a .lc button{border:0;background:none;color:var(--dim);font-size:15px;text-decoration:underline;padding:4px 6px}
+
+/* ===== B "Capital": the menu is a small map, the cities are the buttons ===== */
+.b .mapsvg{position:absolute;inset:0}
+.b .top{position:absolute;left:56px;right:44px;top:28px;z-index:5;display:flex;align-items:center;justify-content:space-between}
+.b .nd{position:absolute;z-index:4;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);width:150px;border:0;background:none;padding:0;color:var(--text)}
+.b .nd .hit{display:flex;align-items:center;justify-content:center;border-radius:50%}
+.b .nd .kr{display:flex;gap:8px;align-items:center}
+.b .nd .cp{position:absolute;top:100%;margin-top:8px;display:flex;flex-direction:column;align-items:center;gap:5px;font-weight:700;font-size:20px;white-space:nowrap}
+.b .nd.cap .cp{font-size:34px;font-weight:800;letter-spacing:-.02em;gap:8px;margin-top:20px}
+.b .nd:hover .cp,.b .nd.on .cp{color:var(--paper)}
+.b .nd.dis{opacity:.45}
+.b .nd .cp small{font-size:13px;font-weight:500;color:var(--dim)}
+.b .panel{position:absolute;z-index:6;width:440px;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+.b .welc{position:absolute;z-index:6;left:240px;top:470px;width:360px;display:flex;flex-direction:column;gap:12px}
+
+/* ===== C "Ledger": type and keys, a list on the left, the detail on the right, no map ===== */
+.c{background:radial-gradient(circle at 1px 1px,#1a2029 1px,transparent 1.5px) 0 0/28px 28px,#0d1117}
+.c .wrap{position:absolute;inset:0;display:grid;grid-template-columns:620px 1fr;padding:56px 96px 48px 96px}
+.c .l{display:flex;flex-direction:column}
+.c .mark{margin-bottom:46px}
+.c .item{display:flex;align-items:center;gap:0;height:74px;border:0;border-bottom:1px solid #1f262e;background:none;font-size:42px;font-weight:700;letter-spacing:-.015em;text-align:left;color:var(--dim);padding:0}
+.c .item .cur{width:58px;flex:none;display:flex;justify-content:flex-start}
+.c .item .k{margin-left:auto;font-weight:600}
+.c .item.on{color:var(--text);border-bottom-color:var(--you)}
+.c .item:hover{color:var(--text)}
+.c .item.dis{opacity:.4}
+.c .item small{font-size:15px;font-weight:500;color:var(--dim);margin-left:18px;letter-spacing:0}
+.c .foot{margin-top:auto;display:flex;gap:6px;flex-wrap:wrap}
+.c .foot button{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;border:1px solid var(--border);border-radius:17px;background:none;color:var(--dim);font-size:13px}
+.c .r{border-left:1px solid #1f262e;padding:6px 0 0 64px;display:flex;flex-direction:column;gap:18px}
+.c .prof{display:flex;align-items:center;gap:14px;height:44px}
+.c .prof b{font-size:20px}
+.c .prof .num{font-size:28px;font-weight:800;margin-left:auto;font-variant-numeric:tabular-nums}
+.c .det{margin-top:12px;display:flex;flex-direction:column;gap:14px;max-width:470px}
+.c .det h2{font-size:26px}
+.c .stat{display:flex;align-items:baseline;gap:14px}
+.c .stat .t{font-size:64px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1}
+.c .wf{display:flex;flex-direction:column;gap:10px;max-width:520px}
+.c .wf input{height:74px;font-size:42px;font-weight:700;border:0;border-bottom:2px solid var(--you);background:none;border-radius:0;padding:0 0 0 58px;width:100%;letter-spacing:-.015em}
+.c .wf .s{font-size:22px;height:50px;padding-left:0}
+
+/* ===== D "Versus": you against an empty slot, one Play button, the opponent chosen under it ===== */
+.d{background:linear-gradient(115deg,rgb(91 155 255 / 11%) 0,rgb(91 155 255 / 3%) 45%,rgb(229 72 77 / 3%) 55%,rgb(229 72 77 / 11%) 100%),#0d1117}
+.d .hatch{position:absolute;inset:0;background:repeating-linear-gradient(115deg,rgb(255 255 255 / 2.2%) 0 2px,transparent 2px 22px)}
+.d .top{position:absolute;left:56px;right:44px;top:28px;z-index:5;display:flex;align-items:center;justify-content:space-between}
+.d .topr{display:flex;align-items:center;gap:8px}
+.d .tb{display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;border:1px solid var(--border);border-radius:20px;background:rgb(13 17 23 / 70%);color:var(--dim);font-size:14px}
+.d .arena{position:absolute;left:0;right:0;top:92px;height:300px}
+.d .side{position:absolute;top:20px;width:300px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.d .side .nm{font-size:26px;font-weight:800;letter-spacing:-.02em}
+.d .side .ln{display:flex;align-items:center;gap:8px;min-height:26px}
+.d .road{position:absolute;left:0;top:0}
+.d .ctl{position:absolute;left:50%;transform:translateX(-50%);top:404px;width:780px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.d .sg.main{width:100%}
+.d .sg.main button{flex:1;justify-content:center;height:46px;font-size:16px}
+.d .wcol{display:flex;flex-direction:column;gap:10px;width:420px}
+.d .play{display:flex;align-items:center;justify-content:center;gap:16px;width:100%;height:68px;border:1px solid var(--paper);border-radius:12px;background:var(--you);color:var(--bg);font-size:28px;font-weight:800;letter-spacing:-.01em}
+.d .play .k{background:rgb(13 17 23 / 18%);border-color:rgb(13 17 23 / 35%);color:var(--bg)}
+.d .play.cn{background:var(--surface2);color:var(--text);border-color:var(--border)}
+.d .play.cn .k{background:var(--surface2);border-color:#3d444d;color:var(--dim)}
+.d .play.dis{background:repeating-linear-gradient(135deg,#21262d 0 8px,#1a1f26 8px 16px);color:var(--dim);border-color:var(--border);opacity:1}
+.d .inl{display:flex;align-items:center;justify-content:center;gap:18px;min-height:46px;flex-wrap:wrap;width:100%}
+.d .inl .cap{font-size:13px;color:var(--dim)}
+.d .lb{display:flex;flex-direction:column;width:100%}
+.d .lb .rw{display:flex;align-items:center;gap:12px;padding:6px 4px;border-bottom:1px solid #262c34}
+.d .lb .rw span.g{flex:1}
+.d .drawer{position:absolute;right:0;top:0;bottom:0;width:460px;z-index:8;padding:90px 28px 28px;background:var(--surface);border-left:1px solid var(--border)}
+</style>
+</head>
+<body>
+<header class="page">
+  <div class="row">
+    <h1>Start menu: variants</h1>
+    <div class="pk"><b>Variant</b><div class="seg" id="pv"></div></div>
+    <div class="pk"><b>Account</b><div class="seg" id="pa"></div></div>
+    <label class="opt"><input type="checkbox" id="gray"> grayscale</label>
+    <label class="opt"><input type="checkbox" id="rm"> reduced motion</label>
+    <label class="opt"><input type="checkbox" id="ann"> needs from the server</label>
+    <label class="opt"><input type="checkbox" id="live"> live timers</label>
+    <label class="opt">scale <select id="sc"><option value="fit">fit</option><option value="1">100%</option><option value="0.75">75%</option><option value="0.5">50%</option></select></label>
+    <nav><a href="#s1">1 Frames</a><a href="#s2">2 Side by side</a><a href="#s3">3 Variants</a><a href="#s4">4 Table and choice</a><a href="#s5">5 Checks</a></nav>
+  </div>
+  <div class="row"><div class="pk"><b>State</b><div class="seg" id="ps"></div></div></div>
+</header>
+<main>
+
+<h2 class="sec" id="s1">1. The frame</h2>
+<p class="note">
+  The start menu is what a player sees first. <b>Now</b> is the current client (a 420 px card, four equal blue buttons, no background; frames taken from the dev server and redrawn here with the same CSS).
+  <b>A-D</b> are four different answers to the same list of screens. Every variant shows the same states: a guest or an account, the queue (searching, a long wait with the bot offer, an opponent found,
+  confirmed), the queue ban with the time left, calibration k/5 (DEC-34), a network error, a match in progress, and the four secondary places (a bot, a friend, the public lobby, replays).
+  Keys inside the frame: <code>Enter</code> Play, <code>B</code> bot, <code>I</code> friend, <code>L</code> lobby, <code>R</code> replays, <code>Esc</code> back; click the profile for the account menu.
+  Side colours follow ui-style 6: your side is blue with one outline, the enemy is red with a double outline or a dashed outline and "?" when unknown; amber is for alerts, always with a <code>!</code>.
+</p>
+<div id="vnote" class="note"></div>
+<div class="stagewrap" id="swrap"><div class="stagebox" id="sbox"><div id="stage"></div></div></div>
+
+<h2 class="sec" id="s2">2. All variants, the same state</h2>
+<p class="note">Click a frame to open it above. The state, the account and the switches of the header apply to all frames.</p>
+<div class="ov" id="ov"></div>
+
+<h2 class="sec" id="s3">3. The variants</h2>
+<div class="cards" id="vcards"></div>
+
+<h2 class="sec" id="s4">4. Table, recommendation, decision</h2>
+<div class="tbl"><table id="tbl"></table></div>
+<div class="cards" id="rec"></div>
+<div class="decision"><b>Owner's decision:</b> awaiting the owner's decision. Code starts only after the choice (ui-style.md, section 23).</div>
+
+<h2 class="sec" id="s5">5. Checks against the constraints</h2>
+<ul class="chk" id="chk"></ul>
+
+</main>
+<script>
+const MAPN='122,576,c,m,0;253,204,c,f,0;252,424,p,p,0;279,744,p,p,0;308,964,c,f,0;411,86,p,p,-;400,326,c,p,0;412,596,c,p,0;443,866,c,f,0;474,1106,p,f,-;553,229,c,f,-;552,469,p,p,-;576,749,p,p,-;608,989,c,m,-;711,113,c,m,-;700,353,p,f,-;712,623,c,p,-;743,893,p,f,-;774,1133,c,p,-;842,252,p,p,-;842,492,c,m,-;861,772,p,p,-;886,1012,p,f,-;1000,100,c,m,-;1000,620,c,p,-;1000,1140,c,m,-;1101,231,p,f,-;1134,469,p,p,-;1165,744,c,m,-;1177,985,p,p,-;1207,93,c,p,-;1242,331,p,f,-;1289,598,c,p,-;1326,871,p,f,-;1308,1103,c,m,-;1370,228,c,m,-;1410,459,p,p,-;1483,748,p,p,-;1507,980,c,f,-;1461,78,p,f,-;1520,326,c,f,1;1606,586,c,p,1;1669,867,c,p,1;1646,1107,p,p,-;1638,211,c,f,1;1722,430,p,p,1;1805,746,p,p,1;1825,961,c,f,1;1921,569,c,m,1',MAPE='0,2;0,3;0,7;1,2;3,4;1,5;1,6;2,6;2,7;3,7;3,8;4,8;4,9;5,10;6,10;6,11;7,11;7,12;8,12;8,13;9,13;10,11;12,13;10,14;10,15;11,15;11,16;12,16;12,17;13,17;13,18;14,19;15,19;15,20;16,20;16,21;17,21;17,22;18,22;20,24;21,24;14,23;19,23;48,46;48,45;48,41;47,46;45,44;47,43;47,42;46,42;46,41;45,41;45,40;44,40;44,39;43,38;42,38;42,37;41,37;41,36;40,36;40,35;39,35;38,37;36,35;38,34;38,33;37,33;37,32;36,32;36,31;35,31;35,30;34,29;33,29;33,28;32,28;32,27;31,27;31,26;30,26;28,24;27,24;34,25;29,25;19,26;22,29;20,27;21,28;18,25;23,30';
+const $=s=>document.querySelector(s);
+const VARS=[['now','Now'],['a','A Front'],['b','B Capital'],['c','C Ledger'],['d','D Versus']];
+const STATES=[['welcome','Welcome'],['welcome-error','Welcome, error'],['menu','Menu'],['account','Account menu'],['resume','Match in progress'],['search','Queue: searching'],['search-long','Queue: long wait'],['found','Queue: found'],['confirmed','Queue: confirmed'],['banned','Queue ban'],['error','Network error'],['bot','Bot'],['friend','Friend'],['lobby','Lobby'],['replays','Replays']];
+const ACCTS=[['guest','Guest'],['cal','Account, calibration 2/5'],['rated','Account, rated']];
+const S={v:'a',s:'menu',acct:'cal',gray:0,rm:0,ann:0,live:0,sc:'fit',wmode:'guest',t0:Date.now()};
+const H={wait:{search:14,'search-long':62},found:11,confirmed:6,ban:287};
+
+/* ---------- the strings (English only; the client ones are from en.ts) ---------- */
+const T={name:'Skill-Based Front',motto:'The capital produces charges, roads carry them, a unit without a charge is defenseless.',
+  play:'Play',bot:'Play a bot',friend:'Invite a friend',lobby:'Open matches',replays:'Replays',how:'How to play',nick:'Your nick',nickHint:'3 to 16 characters: letters, digits, _ and -',
+  login:'Log in',register:'Create an account',guestGo:'Play without an account',pw:'Password',pw2:'Repeat the password'};
+
+/* ---------- small drawing helpers ---------- */
+const ICON={play:'<polygon points="7 4 20 12 7 20"/>',bot:'<rect x="4" y="8" width="16" height="11" rx="2"/><path d="M12 8V4"/><circle cx="12" cy="3.5" r="1"/><circle cx="9" cy="13.5" r="1"/><circle cx="15" cy="13.5" r="1"/>',
+ link:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+ users:'<path d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/><circle cx="9.5" cy="8" r="3.5"/><path d="M21 20v-1a4 4 0 0 0-3-3.9"/><path d="M16 4.1a3.5 3.5 0 0 1 0 6.8"/>',
+ history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',help:'<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+ user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+ alert:'<circle cx="12" cy="12" r="10"/><path d="M12 7v6"/><path d="M12 17h.01"/>',clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+ copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+ key:'<circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9-9"/><path d="m16 7 3 3"/>',wifi:'<path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.9a10 10 0 0 1 14 0"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M12 20h.01"/><path d="m3 3 18 18"/>'};
+const ico=(n,s=20)=>`<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
+const kb=k=>`<kbd class="k">${k}</kbd>`;
+const cells=(k,n=5)=>{let s=`<span class="cells" role="img" aria-label="Calibration ${k} of ${n}">`;for(let i=0;i<n;i++)s+=`<i class="${i<k?'on':''}"></i>`;return s+'</span>'};
+/* the unit: an inverted triangle, the fill from the tip is the share of charged (ui-style 9.5) */
+function tri(kind,w=40,share=.6,cls=''){const h=w*.866,p=4,W=w+p*2,Hh=h+p*2,tx=p+w/2,ty=p+h;
+  const P=f=>[[tx-f*w/2,ty-f*h],[tx+f*w/2,ty-f*h],[tx,ty]].map(a=>a[0].toFixed(1)+','+a[1].toFixed(1)).join(' ');
+  let s=`<svg class="tri ${cls}" width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}" aria-hidden="true">`;
+  if(kind==='ghost'){s+=`<polygon class="march" points="${P(1)}" fill="rgb(229 72 77 / 8%)" stroke="#e5484d" stroke-width="2.4" stroke-dasharray="7 5" stroke-linejoin="round"/><text x="${tx}" y="${p+h*.46}" text-anchor="middle" font-size="${w*.42}" font-weight="800" fill="#e5484d">?</text>`;}
+  else{const c=kind==='enemy'?'#e5484d':'#5b9bff';s+=`<polygon points="${P(1)}" fill="#161b22"/><polygon points="${P(Math.sqrt(share))}" fill="${c}"/><polygon points="${P(1)}" fill="none" stroke="#f0f6fc" stroke-width="2.4" stroke-linejoin="round"/>`;
+    if(kind==='enemy')s+=`<polygon points="${P(.62)}" fill="none" stroke="#0d1117" stroke-width="2" stroke-linejoin="round"/>`;}
+  return s+'</svg>'}
+const mark=()=>`<span class="mark"><svg width="64" height="26" viewBox="0 0 64 26" aria-hidden="true"><polygon points="3,3 21,3 12,19.6" fill="#5b9bff" stroke="#f0f6fc" stroke-width="1.8" stroke-linejoin="round"/><path d="M26 11h12" stroke="#9da7b3" stroke-width="2" stroke-dasharray="3 3"/><polygon points="43,3 61,3 52,19.6" fill="#e5484d" stroke="#f0f6fc" stroke-width="1.8" stroke-linejoin="round"/><polygon points="47.5,5.6 56.5,5.6 52,13.4" fill="none" stroke="#0d1117" stroke-width="1.4" stroke-linejoin="round"/></svg>${T.name}</span>`;
+const legal=()=>`<nav class="legal" aria-label="Legal information"><a href="#" onclick="return false">Impressum</a><a href="#" onclick="return false">Privacy policy</a></nav>`;
+const fmt=s=>{s=Math.max(0,Math.floor(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+
+/* ---------- the model of a frame ---------- */
+function elapsed(){return S.live?Math.floor((Date.now()-S.t0)/1000):0}
+function model(){const s=S.s,a=S.acct;
+  const ph={search:'search','search-long':'long',found:'found',confirmed:'confirmed',banned:'banned',resume:'resume'}[s]||'idle';
+  const e=elapsed();
+  return{s,ph,guest:a==='guest',cal:a==='cal',rated:a==='rated',nick:'Danya',e,
+    waited:(H.wait[s]||0)+e,confirm:Math.max(0,(s==='confirmed'?H.confirmed:H.found)-e),ban:Math.max(0,H.ban-e),
+    welcome:s.startsWith('welcome'),err:s==='welcome-error',net:s==='error',account:s==='account',
+    panel:['bot','friend','lobby','replays'].includes(s)?s:null,
+    wm:s==='welcome-error'?'login':S.wmode,
+    chip:a==='guest'?{t:'Unrated',why:'Guests play unrated'}:a==='cal'?{t:'Calibration 2/5',why:'Rating shows after 5 ranked games'}:{t:'Ranked',why:''}};}
+const T_=(k,v)=>`<span data-t="${k}">${v}</span>`;
+function statusChip(m){
+  if(m.guest)return `<span class="chip" data-need="DEC-34: guests are unrated">${ico('user',14)} Unrated</span>`;
+  if(m.cal)return `<span class="chip" data-need="/api/me: calibration (exists)">${cells(2)} <b>Calibration 2/5</b></span>`;
+  return `<span class="chip" data-need="/api/me: rating (LB-01, #78)"><b>Ranked</b> 1480</span>`;}
+function who(m){
+  const inner=m.guest?`${ico('user',18)}<b>${m.nick}</b><span class="chip" data-need="DEC-34: guests are unrated" style="margin-left:2px">Guest</span>`:
+    m.cal?`<b>${m.nick}</b><span data-need="/api/me: calibration (exists)" style="display:flex;align-items:center;gap:8px">${cells(2)}<span class="cap2">Calibration 2/5</span></span>`:
+    `<b>${m.nick}</b><span class="cap2" data-need="/api/me: rating (LB-01, #78)" style="display:flex;align-items:center;gap:6px"><span class="num">1480</span>Rating</span>`;
+  return `<button class="who" data-act="go:account" aria-haspopup="menu" aria-expanded="${m.account}">${inner}</button>`}
+function accountPop(m,x,y){if(!m.account)return'';
+  return `<div class="pop" role="menu" style="left:${x}px;top:${y}px">
+    ${m.guest?`<p class="wl" role="alert">${ico('alert',16)} A guest account is lost on log out. Set a password to keep it.</p>`:''}
+    <button role="menuitem">${ico('key',18)} ${m.guest?'Set a password':'Change the password'}</button>
+    <button role="menuitem" data-act="go:welcome">${ico('logout',18)} Log out</button></div>`}
+
+/* ---------- shared panels: the small forms behind the secondary places ---------- */
+const MAPS=['Random map','crossroads','highway','ridge'];
+function panel(kind,m){
+  if(kind==='bot')return `<div class="pn sp"><h2>Play a bot</h2><div><div class="cap">Level</div><div class="sg" role="group"><button>Easy</button><button class="on" aria-pressed="true">Normal</button><button>Hard</button><button>Expert</button></div></div>
+    <div><div class="cap">Map</div><div class="sg" role="group">${MAPS.map((x,i)=>`<button class="${i?'':'on'}">${x}</button>`).join('')}</div></div>
+    <div class="hint">Unrated. A bot match is never ranked.</div><div style="display:flex;gap:8px"><button class="btn pri" style="flex:1">Start ${kb('↵')}</button><button class="btn" data-act="go:menu">Back ${kb('Esc')}</button></div></div>`;
+  if(kind==='friend')return `<div class="pn sp"><h2>Invite a friend</h2><div class="hint">Send this link. The match starts when both are ready.</div>
+    <div class="linkbox"><input readonly value="https://play.example/?m=k3x9-q7ab-02ff" aria-label="Invite link"><button class="btn pri">${ico('copy',18)} Copy</button></div>
+    <div class="rw" style="border:0;padding:0"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle class="pulse" cx="11" cy="11" r="6" fill="none" stroke="#9da7b3" stroke-width="2" stroke-dasharray="4 3"/></svg><span class="dim">Waiting for the opponent to open the link...</span></div>
+    <div><div class="cap">Map</div><div class="sg" role="group">${MAPS.map((x,i)=>`<button class="${i?'':'on'}">${x}</button>`).join('')}</div></div>
+    <div class="hint">The invite expires in 9 min.</div><div style="display:flex"><button class="btn" data-act="go:menu">Leave ${kb('Esc')}</button></div></div>`;
+  if(kind==='lobby')return `<div class="pn"><h2>Open matches</h2><div class="hint" style="margin-bottom:6px">The list updates by itself.</div>
+    ${[['Vega','crossroads','0:40'],['Kolya','ridge','2:10'],['Mira','highway','3:05']].map(r=>`<div class="rw"><div class="grow"><b>${r[0]}</b><small>${r[1]} · ${r[2]} ago</small></div><button class="btn pri" style="height:36px">Join</button></div>`).join('')}
+    <div style="display:flex;gap:8px;margin-top:14px"><button class="btn">Create an open match</button><button class="btn link" data-act="go:menu">Back ${kb('Esc')}</button></div></div>`;
+  if(kind==='replays')return `<div class="pn" data-need="server: match list (LB-01, #78)"><h2>Replays</h2><div class="hint" style="margin-bottom:6px">Your last matches.</div>
+    ${[['w','Win','Vega','crossroads','12:04','Ranked','2 h ago'],['l','Loss','Kolya','ridge','8:41','Unrated','Yesterday'],['d','Draw','Bot, Hard','highway','15:00','Unrated','Yesterday'],['w','Win','Mira','crossroads','10:27','Ranked','2 days ago']].map(r=>`<div class="rw"><span class="res ${r[0]}"><i></i>${r[1]}</span><div class="grow"><b>${r[2]}</b><small>${r[3]} · ${r[4]} · ${r[5]} · ${r[6]}</small></div><button class="btn" style="height:34px">Watch</button></div>`).join('')}
+    <div style="display:flex;margin-top:14px"><button class="btn link" data-act="go:menu">Back ${kb('Esc')}</button></div></div>`;
+  return'';}
+function welcomeFields(m,cls){const login=m.wm==='login',reg=m.wm==='register';
+  return `<label class="fld ${cls||''}"><span class="dim">${T.nick}</span><input value="${m.err?'Danya':''}" maxlength="16" aria-label="${T.nick}"></label>
+   ${login||reg?`<label class="fld"><span class="dim">${T.pw}</span><input type="password" value="${m.err?'••••••••••':''}" aria-label="${T.pw}"></label>`:`<p class="hint">${T.nickHint}</p>`}
+   ${reg?`<label class="fld"><span class="dim">${T.pw2}</span><input type="password" aria-label="${T.pw2}"></label>`:''}
+   ${m.err?`<p class="wl" role="alert">${ico('alert',16)} Wrong nick or password.</p>`:''}`}
+const wLabel=m=>m.wm==='login'?T.login:m.wm==='register'?'Create the account and play':T.play;
+const wAlt=m=>[m.wm!=='guest'?`<button data-act="wm:guest">${T.guestGo}</button>`:'',m.wm!=='login'?`<button data-act="wm:login">${T.login}</button>`:'',m.wm!=='register'?`<button data-act="wm:register">${T.register}</button>`:''].join('');
+
+/* ---------- the real map as a picture (variants A and B) ---------- */
+const NODES=MAPN.split(';').map((r,i)=>{const a=r.split(',');return{i,x:+a[0],y:+a[1],k:a[2],t:a[3],o:a[4]==='-'?-1:+a[4]}});
+const EDGES=MAPE.split(';').map(r=>r.split(',').map(Number));
+const FRONT=[0,7,11,15,20,27,32,36,41,48];
+const TERR={p:'#3a4630',f:'#25392b',m:'#4a453e'};
+function defs(){return `<defs><radialGradient id="gy" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="#9cc3ff"/><stop offset="1" stop-color="#4f8ff0"/></radialGradient>
+ <radialGradient id="ge" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="#f07a7e"/><stop offset="1" stop-color="#cf3b40"/></radialGradient>
+ <linearGradient id="gf" x1="0" x2="1"><stop offset="0" stop-color="#0d1117" stop-opacity="0"/><stop offset=".35" stop-color="#0d1117" stop-opacity=".62"/><stop offset="1" stop-color="#0d1117" stop-opacity=".9"/></linearGradient>
+ <pattern id="hf" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.6" height="9" fill="#9da7b3" opacity=".16"/></pattern>
+ <filter id="bl" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="16"/></filter></defs>`}
+function star(cx,cy,r,f='#0d1117'){let p=[];for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.45:r;p.push((cx+rr*Math.cos(a)).toFixed(1)+','+(cy+rr*Math.sin(a)).toFixed(1))}return `<polygon points="${p.join(' ')}" fill="${f}" stroke="#f0f6fc" stroke-width="1" stroke-linejoin="round"/>`}
+function segRing(cx,cy,r,n,filled,w=3){const C=2*Math.PI*r,g=3,d=C/n-g;return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#0d1117" stroke-opacity=".8" stroke-width="${w+3}"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#6b7480" stroke-width="${w}" stroke-dasharray="${d} ${g}" transform="rotate(-90 ${cx} ${cy})"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#f0f6fc" stroke-width="${w}" stroke-dasharray="${d} ${C-d}" stroke-dashoffset="0" transform="rotate(-90 ${cx} ${cy})" opacity="${filled?1:0}"/>`}
+function city(cx,cy,r,kind,o={}){let s='';
+  if(kind==='prov'){const c=o.c||'#8b949e';return `<circle cx="${cx}" cy="${cy}" r="${r+2}" fill="#0d1117" fill-opacity=".9"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${c}" stroke-width="${o.w||3}" ${o.dash?`stroke-dasharray="${o.dash}"`:''}/>${o.you?`<circle cx="${cx}" cy="${cy}" r="${r+3.2}" fill="none" stroke="#f0f6fc" stroke-width="1.6"/>`:''}`}
+  const f=kind==='you'?'url(#gy)':kind==='enemy'?'url(#ge)':'#2b3139',st=kind==='neu'?'#8b949e':'#f0f6fc';
+  s+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${f}" stroke="${st}" stroke-width="${kind==='neu'?2:3}"/>`;
+  if(kind==='enemy')s+=`<circle cx="${cx}" cy="${cy}" r="${r-5}" fill="none" stroke="#0d1117" stroke-width="2"/>`;
+  if(o.star)s+=star(cx,cy,r*.5,kind==='enemy'?'#0d1117':'#0d1117');return s}
+function road(x1,y1,x2,y2,kind,lvl=1){const dx=x2-x1,dy=y2-y1,L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L;let s='';
+  if(kind==='own'){const w=2+lvl*1.6;s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#5b9bff" stroke-opacity=".55" stroke-width="${w+3.6}" stroke-linecap="round"/>`;
+    for(let i=0;i<lvl;i++){const o=(i-(lvl-1)/2)*3.4;s+=`<line x1="${x1+nx*o}" y1="${y1+ny*o}" x2="${x2+nx*o}" y2="${y2+ny*o}" stroke="#e6edf3" stroke-width="1.6" stroke-linecap="round"/>`}}
+  else if(kind==='buf'){s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#0d1117" stroke-opacity=".5" stroke-width="5"/><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#aab2bd" stroke-width="2" stroke-dasharray="7 5"/>`}
+  else if(kind==='fog'){s+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#aab2bd" stroke-opacity=".55" stroke-width="1.5" stroke-dasharray="1.5 4.5" stroke-linecap="round"/>`}
+  else if(kind==='march'){s+=`<line class="march" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#f0f6fc" stroke-width="2.4" stroke-dasharray="12 12" stroke-linecap="round"/>`}
+  return s}
+/* A: the map panorama, scaled and shifted so that the own capital stands right of the rail */
+function mapA(m){const k=.38,ox=470,oy=140,X=x=>ox+x*k,Y=y=>oy+y*k,fogX=1090;let s=`<svg class="mapsvg" viewBox="0 0 1280 720" width="1280" height="720" aria-hidden="true">${defs()}`;
+  s+='<g filter="url(#bl)" opacity=".7">'+NODES.map(n=>`<circle cx="${X(n.x)}" cy="${Y(n.y)}" r="56" fill="${TERR[n.t]}"/>`).join('')+'</g>';
+  s+=NODES.filter(n=>n.o===0).map(n=>`<circle cx="${X(n.x)}" cy="${Y(n.y)}" r="44" fill="#5b9bff" opacity=".16"/>`).join('');
+  s+=NODES.filter(n=>n.o===1).map(n=>`<circle cx="${X(n.x)}" cy="${Y(n.y)}" r="44" fill="#e5484d" opacity=".12"/>`).join('');
+  s+='<g opacity=".5">';for(const[a,b]of EDGES){const A=NODES[a],B=NODES[b];if(!(A.o===0&&B.o===0)){const fog=X(A.x)>fogX&&X(B.x)>fogX;s+=road(X(A.x),Y(A.y),X(B.x),Y(B.y),fog?'fog':'buf')}}s+='</g>';
+  for(const[a,b]of EDGES){const A=NODES[a],B=NODES[b];if(A.o===0&&B.o===0)s+=road(X(A.x),Y(A.y),X(B.x),Y(B.y),'own',a===0||b===0?3:2)}
+  const front=FRONT.map(i=>[X(NODES[i].x),Y(NODES[i].y)]);
+  if(m.ph==='long'||m.ph==='search'){for(let i=0;i<front.length-1;i++)s+=road(...front[i],...front[i+1],'march')}
+  if(m.ph==='found'||m.ph==='confirmed'){for(let i=0;i<front.length-1;i++)s+=`<line x1="${front[i][0]}" y1="${front[i][1]}" x2="${front[i+1][0]}" y2="${front[i+1][1]}" stroke="#f0f6fc" stroke-width="2.4" stroke-linecap="round"/>`}
+  for(const n of NODES){const x=X(n.x),y=Y(n.y),fog=x>fogX;if(n.i===48||n.i===0)continue;const own=n.o===0,en=n.o===1;
+    if(n.k==='c')s+=city(x,y,own?9:8,own?'you':en?'enemy':'neu');else s+=city(x,y,5.5,'prov',{c:own?'#5b9bff':en?'#e5484d':'#8b949e',w:2.4,you:own})}
+  s+=`<rect x="${fogX-120}" y="0" width="${1280-fogX+120}" height="720" fill="url(#gf)"/><rect x="${fogX-60}" y="0" width="${1280-fogX+60}" height="720" fill="url(#hf)"/>`;
+  const c0=front[0],e=front[front.length-1];
+  /* own capital */
+  if(m.ph==='banned')s+=`<circle class="pulse" cx="${c0[0]}" cy="${c0[1]}" r="24" fill="none" stroke="#ffb020" stroke-width="2.4" stroke-dasharray="6 4"/>`;
+  if(m.ph==='search'||m.ph==='long')s+=[0,1].map(i=>`<circle class="ring" style="animation-delay:${i*1.2}s" cx="${c0[0]}" cy="${c0[1]}" r="16" fill="none" stroke="#5b9bff" stroke-width="2"/>`).join('');
+  s+=city(c0[0],c0[1],15,'you',{star:1});s+=segRing(c0[0],c0[1],22,5,1);
+  /* the enemy capital: unknown behind the fog, a name when the pair is found */
+  if(m.ph==='found'||m.ph==='confirmed'){s+=`<circle cx="${e[0]}" cy="${e[1]}" r="34" fill="#0d1117" opacity=".7"/>`+city(e[0],e[1],16,'enemy',{star:1})+segRing(e[0],e[1],23,5,1)+`<g><rect x="${e[0]-44}" y="${e[1]+32}" width="88" height="24" rx="12" fill="#0d1117" fill-opacity=".9" stroke="#e5484d" stroke-width="1.5"/><text x="${e[0]}" y="${e[1]+49}" text-anchor="middle" font-size="14" font-weight="700" fill="#e6edf3">Vega</text></g>`}
+  else s+=`<circle cx="${e[0]}" cy="${e[1]}" r="17" fill="#0d1117" fill-opacity=".85"/><circle class="march" cx="${e[0]}" cy="${e[1]}" r="16" fill="none" stroke="#e5484d" stroke-width="2.4" stroke-dasharray="7 5"/><text x="${e[0]}" y="${e[1]+6}" text-anchor="middle" font-size="18" font-weight="800" fill="#e5484d">?</text>`;
+  /* charges on the own roads (a square is a charge, ui-style 21) */
+  if(!S.rm&&(m.ph==='idle'||m.ph==='confirmed'||m.ph==='found'||m.ph==='resume')){const d='M'+front.slice(0,6).map(p=>p.join(' ')).join(' L');
+    s+=[0,1,2].map(i=>`<rect x="-4" y="-4" width="8" height="8" fill="#e6edf3" stroke="#0d1117" stroke-width="1"><animateMotion dur="9s" begin="${-i*3}s" repeatCount="indefinite" path="${d}"/></rect>`).join('')}
+  return s+'</svg>'}
+
+/* ---------- frames ---------- */
+function frame(cls,inner,m){return `<div class="st ${cls}${S.gray?' gray':''}${S.rm?' rm':''}">${inner}${legal()}</div>`}
+
+/* Now: the current client, state by state */
+function frameNow(m){let c='';const act='<div class="actions">';
+  if(m.welcome)c=`<form class="card"><h1>${T.name}</h1><p>${m.wm==='login'?'Log in with your nick and password.':m.wm==='register'?'Choose a nick and a password. An account keeps your rating and match history, and you can log in to it from another device.':'Choose a nick and play in your browser.'}</p>
+    <label>${T.nick}<input value="${m.err?'Danya':''}"></label>${m.wm==='login'?`<label>Password<input type="password" value="${m.err?'••••••••••':''}"></label>`:`<p class="hint">${T.nickHint}</p>`}${m.err?'<p class="error" role="alert">Wrong nick or password.</p>':''}
+    ${act}<button type="button" class="primary">${m.wm==='login'?T.login:m.wm==='register'?'Create the account and play':'Play'}</button></div>${act}${m.wm!=='guest'?`<button type="button" data-act="wm:guest">${T.guestGo}</button>`:''}${m.wm!=='login'?`<button type="button" data-act="wm:login">Log in to an account</button>`:''}${m.wm!=='register'?`<button type="button" data-act="wm:register">Create an account</button>`:''}</div></form>`;
+  else if(m.ph==='idle'&&!m.panel&&!m.net||m.ph==='resume'||m.ph==='banned'){
+    c=`<div class="card"><h1>${T.name}</h1><p>Hello, ${m.nick}!</p>${m.ph==='banned'?'<p class="error" role="alert">Too many requests from your address or account. Try again later.</p>':''}
+    ${m.ph==='resume'?`<p role="status">You have a match in progress.</p>${act}<button type="button" class="primary">Return to the match</button></div>`:''}
+    ${act}<button type="button" class="primary" data-act="go:search">Ranked match</button><button type="button" class="primary" data-act="go:friend">Private match with a friend</button><button type="button" class="primary" data-act="go:lobby">Public lobby</button><button type="button" class="primary" data-act="go:bot">Play against a bot</button></div>
+    ${m.account&&m.guest?'<p class="error" role="alert">If you log out now, this guest account is lost. Set a password first to keep it.</p>':''}
+    ${act}<button type="button">${m.guest?'Set a password':'Change the password'}</button><button type="button" data-act="go:welcome">${m.account&&m.guest?'Log out and lose the account':'Log out'}</button></div></div>`;}
+  else if(m.net)c=`<div class="card"><h1>Finding an opponent</h1><p class="hint">A ranked match against a player of similar rating. The longer you wait, the wider the range of opponents.</p><p role="status">Loading...</p><p class="error" role="alert">Could not reach the server.</p>${act}<button type="button" data-act="go:menu">Stop searching</button></div></div>`;
+  else if(['search','long','found','confirmed'].includes(m.ph))c=`<div class="card"><h1>Finding an opponent</h1><p class="hint">A ranked match against a player of similar rating. The longer you wait, the wider the range of opponents.</p>
+    ${m.ph==='search'||m.ph==='long'?`<p role="status">Looking for an opponent...</p><p>Waiting: ${T_('waited',fmt(m.waited))}</p><p>Players in the queue: 1</p>${m.ph==='long'?`<p>No opponent yet. You can play a bot instead (unrated); this leaves the queue.</p>${act}<button type="button">Play a bot</button></div>`:''}`:
+    `<p role="status">Opponent found: Vega</p>${m.ph==='confirmed'?'<p role="status">You confirmed. Waiting for the opponent...</p>':`<p>Confirm within ${T_('confirm',Math.ceil(m.confirm))} s, or you leave the queue.</p>`}${act}<button type="button" class="primary" ${m.ph==='confirmed'?'disabled':'data-act="go:confirmed"'}>Play</button></div>`}
+    ${act}<button type="button" data-act="go:menu">${m.ph==='found'||m.ph==='confirmed'?'Decline':'Stop searching'}</button></div></div>`;
+  else if(m.panel==='bot')c=`<form class="card"><h1>Play against a bot</h1><label>Bot level<select><option>Normal</option></select></label><label>Map<select><option>Random map</option></select></label>${act}<button type="button" class="primary">Start</button><button type="button" data-act="go:menu">Back</button></div></form>`;
+  else if(m.panel==='friend')c=`<div class="card"><h1>Waiting room</h1><p>Map: crossroads</p><label>Invite link<input readonly value="https://play.example/?m=k3x9-q7ab-02ff"></label>${act}<button type="button">Copy the link</button></div><p role="status">Waiting for the opponent to open the link...</p><p class="hint">The invite expires in 9 min.</p>${act}<button type="button" data-act="go:menu">Leave</button></div></div>`;
+  else if(m.panel==='lobby')c=`<div class="card"><h1>Public lobby</h1><p class="hint">Open matches of other players. The list updates by itself.</p><ul class="list"><li><span>Vega, map: crossroads</span><button type="button" class="primary">Join</button></li><li><span>Kolya, map: ridge</span><button type="button" class="primary">Join</button></li></ul>${act}<button type="button" class="primary">Create a public match</button><button type="button" data-act="go:menu">Back</button></div></div>`;
+  else if(m.panel==='replays')c=`<div class="card gone"><h1>Replays</h1><p class="hint">There is no such screen today. A replay opens only from the result of a match you just played (and from <code>?replay=&lt;id&gt;</code>); there is no list of past matches.</p>${act}<button type="button" data-act="go:menu">Back</button></div></div>`;
+  return frame('n',`<main class="screen">${c}</main>`,m)}
+
+/* A "Front" */
+function frameA(m){const R=[['play','bot','B',T.bot,'go:bot'],['users','friend','I',T.friend,'go:friend'],['users','lobby','L',T.lobby,'go:lobby'],['history','replays','R',T.replays,'go:replays']];
+  let rail='',panel='';
+  const rows=(banned)=>`<div class="rows">${R.map(r=>`<button class="rw2${m.s===r[1]?' on':''}${m.ph==='resume'?' dis':''}" data-act="${r[4]}" ${m.ph==='resume'?'disabled':''}>${ico(r[0],22)}${r[3]}${kb(r[2])}</button>`).join('')}</div>
+    <div class="tools"><button>${ico('help',16)} ${T.how} ${kb('H')}</button></div>`;
+  if(m.welcome){rail=`<div class="eyebrow">Welcome</div><div class="form">${welcomeFields(m,'')}</div>
+    <button class="big" data-act="go:menu">${tri('own',44,1)}${wLabel(m)}${kb('↵')}</button><div class="lc">${wAlt(m)}</div>`}
+  else{let head='';
+    if(m.ph==='idle'||m.panel||m.net){head=`<div class="eyebrow">${m.net?'':'Ready'}</div><button class="big" data-act="go:search">${tri('own',46,1)}${T.play}${kb('↵')}</button>
+      <div class="sub">${statusChip(m)}${m.guest?'<span>Set a password to play ranked</span>':m.cal?'<span>Rating shows after 5 games</span>':''}</div>${m.net?`<p class="wl" style="margin-top:10px" role="alert">${ico('wifi',16)} Could not reach the server. <button class="btn link" style="height:28px">Retry</button></p>`:''}`}
+    else if(m.ph==='resume'){head=`<div class="eyebrow">Match in progress</div><button class="big" data-act="go:menu">${tri('own',46,.6)}Return${kb('↵')}</button><div class="sub"><span>Other modes wait until it ends</span></div>`}
+    else if(m.ph==='search'||m.ph==='long'){head=`<div class="eyebrow">Searching</div><button class="big sm" data-act="go:menu">${T_('waited',fmt(m.waited))}${kb('Esc')}</button><div class="sub">1 in the queue · stop searching</div>
+      ${m.ph==='long'?`<button class="rw2" style="margin-top:16px;width:370px;font-size:20px" data-act="go:bot">${ico('bot',22)}No one yet. Play a bot?${kb('B')}</button>`:''}`}
+    else if(m.ph==='found'||m.ph==='confirmed'){head=`<div class="eyebrow">Opponent found</div><div style="display:flex;align-items:center;gap:14px;margin-top:6px">${tri('enemy',34,1)}<span style="font-size:36px;font-weight:800">Vega</span></div>
+      ${m.ph==='found'?`<button class="big" style="margin-top:10px" data-act="go:confirmed">${T.play} ${kb('↵')}<span style="margin-left:14px;font-size:30px;font-variant-numeric:tabular-nums;color:var(--dim)">${T_('confirm',Math.ceil(m.confirm))} s</span></button><div class="sub"><span>Confirm or you leave the queue</span> <button class="btn link" data-act="go:menu" style="height:28px">Decline ${kb('Esc')}</button></div>`:
+      `<div class="big sm" style="margin-top:10px">Waiting for Vega</div><div class="sub"><button class="btn link" data-act="go:menu" style="height:28px">Decline ${kb('Esc')}</button></div>`}`}
+    else if(m.ph==='banned'){head=`<div class="eyebrow wn">Queue locked</div><div class="big sm wn" style="color:var(--warn)" data-need="429 QueueBan.retry_after_s (exists)">${ico('alert',40)}${T_('ban',fmt(m.ban))}</div><div class="sub"><span>Repeated resigns. Bots, friends and the lobby stay open.</span></div>`}
+    rail=head+(['search','long','found','confirmed'].includes(m.ph)?'':rows())}
+  if(m.panel)panel=`<div class="panel">${panel_(m)}</div>`;
+  if(m.account)panel+=accountPop(m,880,84);
+  return frame('a',mapA(m)+`<div class="shade"></div><header class="top">${mark()}${m.welcome?'':who(m)}</header><nav class="rail" aria-label="Main menu">${rail}</nav><p class="tag">${T.motto}</p>${panel}`,m)}
+const panel_=m=>panel(m.panel,m);
+
+/* B "Capital": the nodes are the buttons */
+const BN={bot:{x:640,y:190},friend:{x:660,y:540},lobby:{x:900,y:540},replays:{x:170,y:540},how:{x:190,y:190}},BC={x:420,y:350},BE={x:1160,y:350},BP=[{x:700,y:350},{x:960,y:350}];
+function mapB(m){let s=`<svg class="mapsvg" viewBox="0 0 1280 720" width="1280" height="720" aria-hidden="true">${defs()}`;
+  /* the real map as a faint blueprint */
+  const k=.62,ox=-20,oy=-24;s+='<g opacity=".16">'+EDGES.map(([a,b])=>`<line x1="${ox+NODES[a].x*k}" y1="${oy+NODES[a].y*k}" x2="${ox+NODES[b].x*k}" y2="${oy+NODES[b].y*k}" stroke="#9da7b3" stroke-width="1.4"/>`).join('')+NODES.map(n=>`<circle cx="${ox+n.x*k}" cy="${oy+n.y*k}" r="${n.k==='c'?4:2.5}" fill="none" stroke="#9da7b3" stroke-width="1.2"/>`).join('')+'</g>';
+  const C=BC,P=BP,E=BE,N=BN,dead=m.ph==='banned';
+  /* roads to the secondary cities (own, level 1) */
+  if(!m.welcome){for(const n of Object.values(N))s+=road(C.x,C.y,n.x,n.y,'own',1);s+=road(N.friend.x,N.friend.y,N.lobby.x,N.lobby.y,'own',1)}
+  /* the road into the fog is the match */
+  const chain=[[C.x,C.y],[P[0].x,P[0].y],[P[1].x,P[1].y],[E.x,E.y]];
+  for(let i=0;i<3;i++){const a=chain[i],b=chain[i+1];
+    if(m.ph==='search'||m.ph==='long')s+=road(...a,...b,'march');
+    else if(m.ph==='found'||m.ph==='confirmed')s+=road(...a,...b,'own',2);
+    else if(dead)s+=road(...a,...b,'fog');
+    else s+=road(...a,...b,i===0?'own':'buf',1)}
+  if(dead){const mx=(C.x+P[0].x)/2+16;s+=`<circle cx="${mx}" cy="${C.y}" r="14" fill="#0d1117" stroke="#ffb020" stroke-width="2.4" stroke-dasharray="5 3"/><path d="M${mx-5} ${C.y-5}l10 10M${mx+5} ${C.y-5}l-10 10" stroke="#ffb020" stroke-width="2.4" stroke-linecap="round"/>`}
+  s+=city(P[0].x,P[0].y,10,'prov',{c:'#5b9bff',you:1});s+=city(P[1].x,P[1].y,10,'prov',{c:'#8b949e'});
+  /* the fog on the enemy side */
+  s+=`<rect x="980" y="0" width="300" height="720" fill="url(#gf)"/><rect x="1000" y="0" width="280" height="720" fill="url(#hf)"/>`;
+  if(m.ph==='found'||m.ph==='confirmed')s+=`<circle cx="${E.x}" cy="${E.y}" r="62" fill="#0d1117" opacity=".7"/>`+city(E.x,E.y,36,'enemy',{star:1})+segRing(E.x,E.y,46,5,1,4)+`<rect x="${E.x-50}" y="${E.y+58}" width="100" height="28" rx="14" fill="#0d1117" fill-opacity=".92" stroke="#e5484d" stroke-width="1.6"/><text x="${E.x}" y="${E.y+78}" text-anchor="middle" font-size="17" font-weight="700" fill="#e6edf3">Vega</text>`;
+  else s+=`<circle cx="${E.x}" cy="${E.y}" r="37" fill="#0d1117" fill-opacity=".85"/><circle class="march" cx="${E.x}" cy="${E.y}" r="36" fill="none" stroke="#e5484d" stroke-width="2.6" stroke-dasharray="9 6"/><text x="${E.x}" y="${E.y+13}" text-anchor="middle" font-size="38" font-weight="800" fill="#e5484d">?</text>`;
+  /* the secondary cities */
+  if(!m.welcome)s+=city(N.bot.x,N.bot.y,32,'you')+city(N.friend.x,N.friend.y,32,'you')+city(N.lobby.x,N.lobby.y,32,'you')+city(N.replays.x,N.replays.y,32,'neu')+city(N.how.x,N.how.y,22,'prov',{c:'#8b949e',w:3});
+  /* the capital: Play */
+  if(m.ph==='search'||m.ph==='long')s+=[0,1].map(i=>`<circle class="ring" style="animation-delay:${i*1.2}s" cx="${C.x}" cy="${C.y}" r="50" fill="none" stroke="#5b9bff" stroke-width="2.4"/>`).join('');
+  if(dead)s+=`<circle class="pulse" cx="${C.x}" cy="${C.y}" r="86" fill="none" stroke="#ffb020" stroke-width="3" stroke-dasharray="9 6"/>`;
+  s+=city(C.x,C.y,62,'you',{star:1})+segRing(C.x,C.y,76,5,1,6);
+  if(!S.rm&&(m.ph==='idle'||m.ph==='found'||m.ph==='confirmed')){const d=`M${C.x} ${C.y} L${P[0].x} ${P[0].y}`;s+=[0,1,2].map(i=>`<rect x="-5" y="-5" width="10" height="10" fill="#e6edf3" stroke="#0d1117"><animateMotion dur="5s" begin="${-i*1.66}s" repeatCount="indefinite" path="${d}"/></rect>`).join('')}
+  return s+'</svg>'}
+function frameB(m){const N=BN;let h='';
+  const node=(id,pt,r,label,key,ic,icc,extra='',cls='')=>`<button class="nd ${cls}${m.s===id?' on':''}${m.ph==='resume'&&id!=='cap'?' dis':''}" style="left:${pt.x}px;top:${pt.y}px" data-act="go:${id==='cap'?'search':id}" aria-label="${label.replace(/<[^>]+>/g,'')}"><span class="hit" style="width:${r*2}px;height:${r*2}px;color:${icc}">${ic?ico(ic,r>30?28:22):''}</span><span class="cp">${label}<span class="kr">${key?kb(key):''}${extra}</span></span></button>`;
+  let capLabel=T.play,capExtra=statusChip(m),capKey='↵';
+  if(m.ph==='search'||m.ph==='long'){capLabel=T_('waited',fmt(m.waited));capKey='Esc';capExtra='<span class="hint">1 in the queue</span>'}
+  if(m.ph==='found'){capLabel='Play';capExtra=`<span class="chip">${T_('confirm',Math.ceil(m.confirm))} s</span>`}
+  if(m.ph==='confirmed'){capLabel='Waiting for Vega';capKey='Esc';capExtra=''}
+  if(m.ph==='banned'){capLabel='Queue locked';capKey='';capExtra=`<span class="chip wn" data-need="429 QueueBan.retry_after_s (exists)">${ico('alert',14)} ${T_('ban',fmt(m.ban))}</span>`}
+  if(m.ph==='resume'){capLabel='Return';capExtra='<span class="hint">Match in progress</span>'}
+  if(m.net)capExtra=`<span class="wl" role="alert">${ico('wifi',16)} Could not reach the server</span>`;
+  if(m.welcome){h=`<div class="welc">${welcomeFields(m,'')}<div style="display:flex;gap:8px"><button class="btn pri" style="flex:1" data-act="go:menu">${wLabel(m)} ${kb('↵')}</button></div><div style="display:flex;gap:6px;flex-wrap:wrap">${wAlt(m).replace(/<button /g,'<button class="btn link" ')}</div></div>`}
+  else{h=node('cap',BC,62,capLabel,capKey,'','',capExtra,'cap')+node('bot',N.bot,32,T.bot,'B','bot','#0d1117')+node('friend',N.friend,32,'Friend','I','link','#0d1117')+node('lobby',N.lobby,32,'Lobby','L','users','#0d1117')+node('replays',N.replays,32,T.replays,'R','history','#e6edf3','<span data-need="server: match list (LB-01, #78)"></span>')+node('how',N.how,22,T.how,'H','help','#e6edf3')}
+  const px=m.panel==='replays'?560:700,py=m.panel==='replays'?70:m.panel==='bot'?110:150;
+  const pl=m.panel?`<div class="panel" style="left:${px}px;top:${py}px">${panel_(m)}</div>`:'';
+  return frame('b',mapB(m)+`<header class="top">${mark()}${m.welcome?'':who(m)}</header>${h}${pl}${m.account?accountPop(m,880,84):''}`,m)}
+
+/* C "Ledger" */
+function frameC(m){const sel=m.panel||'play',items=[['play',T.play,'↵','play'],['bot',T.bot,'B','bot'],['friend',T.friend,'I','link'],['lobby',T.lobby,'L','users'],['replays',T.replays,'R','history']];
+  const busy=['search','long','found','confirmed'].includes(m.ph);
+  const list=items.map(([id,l,key])=>{let lab=l,small='';
+    if(id==='play'&&busy){lab=m.ph==='found'?'Found':m.ph==='confirmed'?'Waiting':'Searching';small=m.ph==='found'?'Vega':T_('waited',fmt(m.waited))}
+    if(id==='play'&&m.ph==='banned'){small=`<span class="wn">locked ${T_('ban',fmt(m.ban))}</span>`}
+    if(id==='play'&&m.ph==='resume')lab='Return';
+    return `<button class="item${sel===id?' on':''}${m.ph==='resume'&&id!=='play'?' dis':''}${m.ph==='banned'&&id==='play'?' dis':''}" data-act="${id==='play'?(busy?'go:menu':m.ph==='banned'?'go:menu':'go:search'):'go:'+id}"><span class="cur">${sel===id?tri('own',30,1):''}</span>${lab}${small?`<small>${small}</small>`:''}${kb(key)}</button>`}).join('');
+  let det='';
+  if(m.welcome)return frame('c',`<div class="wrap"><div class="l"><div class="mark">${mark()}</div><div class="wf">${welcomeFields(m,'').replace(/class="fld "/,'class="fld"')}<div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" data-act="go:menu">${wLabel(m)} ${kb('↵')}</button>${wAlt(m).replace(/<button /g,'<button class="btn link" ')}</div></div></div><div class="r"></div></div>`,m);
+  const prof=m.guest?`<div class="prof">${ico('user',22)}<b>${m.nick}</b><span class="chip" data-need="DEC-34: guests are unrated">Guest</span></div>`:
+    m.cal?`<div class="prof"><b>${m.nick}</b>${cells(2)}<span class="hint" data-need="/api/me: calibration (exists)">2/5</span></div>`:
+    `<div class="prof"><b>${m.nick}</b><span class="num" data-need="/api/me: rating (LB-01, #78)">1480</span><span class="hint">rating</span></div>`;
+  if(m.panel)det=panel_(m).replace('class="pn','class="pn');
+  else if(m.net)det=`<h2>Play</h2><p class="wl" role="alert">${ico('wifi',16)} Could not reach the server.</p><div><button class="btn">Retry</button></div>`;
+  else if(m.ph==='idle')det=`<h2>Play</h2><div class="hint">A match against a player of similar rating, 10 to 15 minutes.</div><div>${statusChip(m)}</div>${m.guest?'<div class="hint">Set a password to get a rating.</div>':m.cal?'<div class="hint">Your rating shows after 5 ranked games.</div>':''}<div><button class="btn pri" data-act="go:search">Find an opponent ${kb('↵')}</button></div>`;
+  else if(m.ph==='resume')det=`<h2>Match in progress</h2><div class="hint">The other places wait until it ends.</div><div><button class="btn pri">Return to the match ${kb('↵')}</button></div>`;
+  else if(m.ph==='search'||m.ph==='long')det=`<h2>Searching</h2><div class="stat"><span class="t">${T_('waited',fmt(m.waited))}</span><span class="hint">1 in the queue</span></div>${m.ph==='long'?`<div class="rw" style="display:flex;gap:14px;align-items:center">${ico('bot',24)}<span>No one yet. Play a bot instead? ${kb('B')}</span></div>`:''}<div><button class="btn" data-act="go:menu">Stop searching ${kb('Esc')}</button></div>`;
+  else if(m.ph==='found')det=`<h2>Opponent found</h2><div style="display:flex;align-items:center;gap:14px">${tri('enemy',44,1)}<span style="font-size:34px;font-weight:800">Vega</span></div><div class="stat"><span class="t">${T_('confirm',Math.ceil(m.confirm))}</span><span class="hint">seconds to confirm</span></div><div style="display:flex;gap:8px"><button class="btn pri" data-act="go:confirmed">Play ${kb('↵')}</button><button class="btn" data-act="go:menu">Decline ${kb('Esc')}</button></div>`;
+  else if(m.ph==='confirmed')det=`<h2>Waiting for Vega</h2><div class="hint">You confirmed. The match starts when both are ready.</div><div><button class="btn" data-act="go:menu">Decline ${kb('Esc')}</button></div>`;
+  else if(m.ph==='banned')det=`<h2 class="wn">Queue locked</h2><div class="stat wn" data-need="429 QueueBan.retry_after_s (exists)">${ico('alert',44)}<span class="t">${T_('ban',fmt(m.ban))}</span></div><div class="hint">Repeated resigns. Bots, friends and the lobby stay open.</div>`;
+  return frame('c',`<div class="wrap"><div class="l"><div class="mark">${mark()}</div>${list}<div class="foot"><button>${ico('help',16)} ${T.how} ${kb('H')}</button><button data-act="go:account">${ico('user',16)} Account</button></div></div><div class="r">${prof}<div class="det">${det}</div></div></div>${m.account?accountPop(m,830,110):''}`,m)}
+
+/* D "Versus" */
+function frameD(m){const busy=['search','long','found','confirmed'].includes(m.ph),sel=m.panel==='bot'||m.panel==='friend'||m.panel==='lobby'?m.panel:'play';
+  const Lx=410,Rx=870,found=m.ph==='found'||m.ph==='confirmed';
+  const enemy=found?tri('enemy',150,1):tri('ghost',150);
+  const me=tri('own',150,m.ph==='confirmed'?1:m.ph==='found'?.8:.6);
+  const road=`<svg class="road" width="1280" height="300" viewBox="0 0 1280 300" aria-hidden="true"><line class="${busy&&!found?'march':''}" x1="${Lx+100}" y1="104" x2="${Rx-100}" y2="104" stroke="${found?'#f0f6fc':'#9da7b3'}" stroke-width="${found?3:2.4}" stroke-dasharray="${found?'0':'12 12'}" stroke-linecap="round"/>${m.ph==='confirmed'?`<circle cx="640" cy="104" r="14" fill="#0d1117" stroke="#f0f6fc" stroke-width="2.4"/><path d="M633 104l5 5 9-10" fill="none" stroke="#f0f6fc" stroke-width="2.4" stroke-linecap="round"/>`:''}</svg>`;
+  const seg=['play','bot','friend','lobby'].map(id=>{const lab={play:T.play,bot:'Bot',friend:'Friend',lobby:'Lobby'}[id],ic={play:'play',bot:'bot',friend:'link',lobby:'users'}[id],key={play:'P',bot:'B',friend:'I',lobby:'L'}[id];
+    const lock=id==='play'&&m.ph==='banned',off=m.ph==='resume'||(busy&&id!=='play');
+    return `<button class="${sel===id?'on':''}${lock||off?' dis':''}" data-act="go:${id==='play'?'menu':id}" aria-pressed="${sel===id}">${lock?ico('alert',16):ico(ic,18)}${lab}${kb(key)}</button>`}).join('');
+  let inl='',btn='';
+  if(m.welcome){inl=`<div class="wcol">${welcomeFields(m,'')}</div>`;btn=`<button class="play" data-act="go:menu">${wLabel(m)} ${kb('↵')}</button><div class="inl">${wAlt(m).replace(/<button /g,'<button class="btn link" ')}</div>`}
+  else{
+    if(m.ph==='resume'){btn=`<button class="play" data-act="go:menu">Return to the match ${kb('↵')}</button>`;inl='<div class="inl dim">Match in progress. The other modes wait until it ends.</div>'}
+    else if(m.ph==='search'||m.ph==='long'){btn=`<button class="play cn" data-act="go:menu">Searching ${T_('waited',fmt(m.waited))} ${kb('Esc')}</button>`;inl=m.ph==='long'?`<div class="inl">No one yet. <button class="btn" data-act="go:bot">${ico('bot',18)} Play a bot instead ${kb('B')}</button></div>`:'<div class="inl dim">1 in the queue</div>'}
+    else if(m.ph==='found'){btn=`<button class="play" data-act="go:confirmed">Play ${kb('↵')}<span style="font-size:22px;font-variant-numeric:tabular-nums;opacity:.85">${T_('confirm',Math.ceil(m.confirm))} s</span></button>`;inl='<div class="inl dim">Confirm or you leave the queue. <button class="btn link" data-act="go:menu">Decline Esc</button></div>'}
+    else if(m.ph==='confirmed'){btn=`<button class="play cn" data-act="go:menu">Waiting for Vega ${kb('Esc')}</button>`;inl='<div class="inl dim">You confirmed.</div>'}
+    else if(m.ph==='banned'){btn=`<button class="play dis" disabled>${ico('alert',30)} Queue locked ${T_('ban',fmt(m.ban))}</button>`;inl=`<div class="inl wn" data-need="429 QueueBan.retry_after_s (exists)">${ico('alert',16)} Repeated resigns. Pick a bot, a friend or the lobby.</div>`}
+    else if(m.panel==='bot'){inl=`<div class="inl"><span class="cap">Level</span><div class="sg"><button>Easy</button><button class="on">Normal</button><button>Hard</button><button>Expert</button></div><span class="cap">Map</span><div class="sg"><button class="on">Random</button><button>crossroads</button><button>ridge</button></div></div>`;btn=`<button class="play" data-act="go:menu">Start ${kb('↵')}</button>`}
+    else if(m.panel==='friend'){inl=`<div class="inl" style="flex-direction:column;gap:8px;align-items:stretch"><div class="linkbox"><input readonly value="https://play.example/?m=k3x9-q7ab-02ff" aria-label="Invite link"><button class="btn pri">${ico('copy',18)} Copy</button></div><div class="inl dim" style="min-height:0">Waiting for the opponent to open the link. Expires in 9 min.</div></div>`;btn=`<button class="play cn" data-act="go:menu">Leave ${kb('Esc')}</button>`}
+    else if(m.panel==='lobby'){inl=`<div class="lb">${[['Vega','crossroads','0:40'],['Kolya','ridge','2:10']].map(r=>`<div class="rw"><span class="g"><b>${r[0]}</b> <span class="dim">${r[1]} · ${r[2]}</span></span><button class="btn pri" style="height:32px">Join</button></div>`).join('')}</div>`;btn=`<button class="play" style="height:52px;font-size:22px">Create an open match</button>`}
+    else {inl=`<div class="inl">${statusChip(m)}<span class="hint">${m.guest?'Set a password to get a rating':m.cal?'Rating shows after 5 games':'A match against a player of similar rating'}</span></div>`;btn=`<button class="play" data-act="go:search">${ico('play',28)} ${T.play} ${kb('↵')}</button>`}
+    if(m.net)inl=`<div class="inl wl" role="alert">${ico('wifi',16)} Could not reach the server. <button class="btn">Retry</button></div>`}
+  const sgrow=m.welcome?'':`<div class="sg main" role="group" aria-label="Opponent">${seg}</div>`;
+  const enemyLine=found?'':`<span class="chip" style="border-style:dashed">Opponent</span>`;
+  const meLine='';
+  const enNm=found?'Vega':'?';
+  const drawer=m.panel==='replays'?`<aside class="drawer pn">${panel('replays',m).replace('<div class="pn" data-need="server: match list (LB-01, #78)">','<div data-need="server: match list (LB-01, #78)">')}</aside>`:'';
+  return frame('d',`<div class="hatch"></div><header class="top">${mark()}<div class="topr"><button class="tb" data-act="go:replays">${ico('history',18)} ${T.replays} ${kb('R')}</button><button class="tb">${ico('help',18)} ${kb('H')}</button>${m.welcome?'':who(m)}</div></header>
+   <section class="arena">${road}<div class="side" style="left:${Lx-150}px"><div>${me}</div><div class="nm">${m.nick}</div><div class="ln">${meLine}</div></div><div class="side" style="left:${Rx-150}px"><div>${enemy}</div><div class="nm">${enNm}</div><div class="ln">${enemyLine}</div></div></section>
+   <section class="ctl">${sgrow}${inl}${btn}</section>${drawer}${m.account?accountPop(m,880,84):''}`,m)}
+
+function render(){const m=model();const f={now:frameNow,a:frameA,b:frameB,c:frameC,d:frameD}[S.v];
+  $('#stage').innerHTML=f(m);
+  const wrap=$('#swrap'),box=$('#sbox');let k=S.sc==='fit'?Math.min(1,(wrap.parentElement.clientWidth-2)/1280):+S.sc;
+  box.style.transform=`scale(${k})`;wrap.style.width=1280*k+2+'px';wrap.style.height=720*k+2+'px';box.style.width='1280px';box.style.height='720px';
+  document.body.classList.toggle('ann',!!S.ann);
+  $('#ov').innerHTML=VARS.map(([id,l])=>{const saved=S.v;return `<figure class="${id===S.v?'on':''}" data-v="${id}"><div class="thumb"><div class="stagebox">${{now:frameNow,a:frameA,b:frameB,c:frameC,d:frameD}[id](m)}</div></div><figcaption>${l}</figcaption></figure>`}).join('');
+  for(const [id,l] of [['pv',VARS],['ps',STATES],['pa',ACCTS]]){const key={pv:'v',ps:'s',pa:'acct'}[id];$('#'+id).innerHTML=l.map(([v,t])=>`<button data-k="${key}" data-v="${v}" class="${S[key]===v?'on':''}">${t}</button>`).join('')}
+  $('#vnote').innerHTML=NOTES[S.v];sync()}
+function sync(){const p=new URLSearchParams({v:S.v,s:S.s,acct:S.acct,gray:+S.gray,rm:+S.rm,ann:+S.ann,sc:S.sc});history.replaceState(null,'','#'+p.toString())}
+function load(){const p=new URLSearchParams(location.hash.slice(1));for(const k of['v','s','acct','sc'])if(p.get(k))S[k]=p.get(k);for(const k of['gray','rm','ann'])S[k]=p.get(k)==='1'?1:0;
+  for(const k of['gray','rm','ann'])$('#'+k).checked=!!S[k]}
+function set(k,v){S[k]=v;if(k==='s'||k==='acct')S.t0=Date.now();render()}
+
+const NOTES={
+ now:'<b>Now.</b> One 420 px card on an empty background; the same four blue buttons for every mode; no main action; the queue ban shows as a generic "too many requests" line with no time; calibration is not shown anywhere; there is no list of replays and no way to open "How to play" outside a match. Taken from <code>MenuScreen</code>, <code>QueueScreen</code>, <code>LobbyScreen</code>, <code>BotScreen</code>, <code>InviteScreen</code>.',
+ a:'<b>A Front.</b> The postcard is the real map: a pool map drawn behind the menu, your capital at the left, the enemy capital in the fog as "?". The menu is a text rail on the left with one huge <b>Play</b> and four quiet rows under it. The queue happens on the map: rings grow from your capital, the road into the fog marches, and when a pair is found the "?" turns into a red capital with the opponent\'s nick. A queue ban puts an amber dashed ring on your capital. Panels (bot, friend, lobby, replays) open as a card beside the rail; the screens keep their own places.',
+ b:'<b>B Capital.</b> The menu is a small map: your capital is the Play button, the other modes are your cities around it, the road east leads into the fog where the opponent is. The queue is the road: it marches, then fills with a red capital and a nick. A ban cuts the road with an amber mark; the other cities stay open. Strongest identity, most unusual: the buttons are shapes of the game, so discoverability and keyboard focus need care.',
+ c:'<b>C Ledger.</b> Type and keys, no picture. A list of five big words on the left with the key at the right edge, the selected row marked with your triangle; on the right a detail pane shows what the selected row does and holds its settings. Arrows or the hotkeys move the selection, <code>Enter</code> starts. The queue stays in the same screen. Cheapest and fastest to use, the least of a postcard.',
+ d:'<b>D Versus.</b> The first thing on the screen is the match: your triangle against an empty slot with "?". Under it one selector chooses who the opponent is (Play, Bot, Friend, Lobby) and one big button starts it; the settings of the chosen mode sit inline, so a bot match is two clicks from the menu. In the queue the empty slot searches (marching dashes) and fills with the opponent\'s red triangle and nick. A ban greys out the Play segment with the time left and the selector moves to the bot.'};
+
+const VCARDS=[
+ ['Now','Current client',['A 420 px card, 4 equal blue buttons','No background, no identity','No main action; ban and calibration invisible','No way to reach replays or help from the menu'],0],
+ ['A Front','The real map as the postcard, a text rail with a huge Play',['Backdrop: pool map from <code>GET /api/maps/{id}</code> plus its baked <code>background.webp</code> (both exist)','Charge squares run along your roads (CSS motion path, 3 elements)','Queue is shown on the map; ban is a dashed amber ring','Panels beside the rail: the existing screens stay'],1],
+ ['B Capital','The menu is a map: the capital is Play, the cities are the modes',['One SVG scene, five HTML buttons on top of it (a11y and focus)','The road into the fog is the queue','Needs a layout for 1024 px and for UI scale 125 and 150%','Most memorable, most to get right'],0],
+ ['C Ledger','Typography and hotkeys, master and detail, no picture',['Pure HTML and CSS, the dot grid is one CSS gradient','Keyboard first: arrows or letters, <code>Enter</code>','The queue stays on the same screen','Fastest to build and to use, weakest as a first impression'],0],
+ ['D Versus','You against an empty slot; the opponent is chosen under one big button',['Selector Play, Bot, Friend, Lobby; settings inline','Bot level and map move into the menu, so three screens collapse','Queue lives on the menu (the queue poll moves out of <code>QueueScreen</code>)','The enemy slot is the "?" of ui-style 21 and the queue animation'],0]];
+
+const ROWS=[
+ ['Now','current client','no','no','no','none','Does not fix K7 of ui-style 3.2 (no main action); shows no ban time, no calibration, no replays.'],
+ ['A Front','real map backdrop, text rail, Play as the headline','no','no','no (rating and replays list only when LB-01 lands; the rows are hidden until then)','<b>M</b>, 2-3 days: a shared <code>ScreenFrame</code> with the backdrop and rail for 8 screens, <code>MenuBackdrop</code> (SVG from <code>MapFile</code>), ban and calibration states','Low-medium. A map fetch on the first screen (fallback: static dark background). Legibility over the map is a CSS shade, already tuned in the mockup.'],
+ ['B Capital','menu is a map, cities are buttons','no','no','no (same as A)','<b>L</b>, 4-5 days: the scene, the HTML buttons over it, layouts for small screens and 125 and 150% scale, key and focus model','Medium-high. Discoverability (is a city a button?), 1024 px, a long tail of states on a graphical menu.'],
+ ['C Ledger','typography, hotkeys, master and detail','no','no','no (same as A)','<b>S</b>, 1-1.5 days: one new menu screen, restyle of the others; no assets','Low. The risk is the brief: the owner asked for the postcard, this is the plainest one.'],
+ ['D Versus','you against an empty slot, one selector, one Play','no','no','no (same as A)','<b>L</b>, 4-5 days: the composition, inline settings from 3 screens, queue state moved from <code>QueueScreen</code> into the menu (<code>AppState</code> owns the poll)','Medium. The biggest client refactor; a bug there can break queue, bot, invite and lobby flows at once, close to the release.']];
+
+function tables(){
+ $('#vcards').innerHTML=VCARDS.map(([n,h,l,rec])=>`<div class="cd ${rec?'rec':''}"><h3>${n}${rec?'<span class="badge">recommended</span>':''}</h3><div>${h}</div><ul>${l.map(x=>`<li>${x}</li>`).join('')}</ul></div>`).join('');
+ $('#tbl').innerHTML='<tr><th>Variant</th><th>Idea</th><th>DEC needed</th><th>Protocol</th><th>Server</th><th>Client, estimate</th><th>Risk</th></tr>'+ROWS.map((r,i)=>`<tr class="${i===1?'rec':''}">${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('');
+ $('#rec').innerHTML=`<div class="cd rec"><h3>Recommendation: A Front</h3><ul>
+  <li>It answers the brief ("the postcard") with the cheapest real asset we own: the map. The baked backgrounds and the map files are already served; no new asset, no new dependency, no PixiJS.</li>
+  <li>The flows do not change: the queue, bot, invite and lobby stay separate screens with the same API calls, so the release risk is the lowest of the three visual variants.</li>
+  <li>One frame (backdrop, rail, card) is reused by all pre-match screens, which is where the current card look repeats 8 times.</li>
+  <li>The map reacts to the queue (rings, marching road, "?" turning into a named capital) with no extra data: the states come from <code>QueueStatus</code>.</li>
+  <li>If the owner wants more later: the "?" slot of D can be added to A's queue state, and D's inline bot settings can follow after the release.</li></ul></div>
+ <div class="cd"><h3>Needed from the server (none blocks A)</h3><ul>
+  <li><b>Rating in the menu corner:</b> <code>GET /api/me</code> has no rating yet (LB-01, #78). Until then a calibrated account shows only "Ranked".</li>
+  <li><b>Replays row:</b> there is no match list endpoint (LB-01, #78: last 20 matches). Until then the Replays row is hidden; the replay stays reachable from the result screen.</li>
+  <li><b>How to play:</b> the screen is CLI-13 (#72). The row appears when it exists.</li>
+  <li><b>Queue ban time:</b> the 429 body already carries <code>retry_after_s</code> (<code>QueueBan</code> in <code>api.gen.ts</code>); the client has to read it (today it shows the generic rate-limit text).</li>
+  <li><b>Calibration k/5:</b> <code>GET /api/me</code> has <code>calibration</code> {played,total}; <code>welcome</code> and <code>match_end</code> carry it too.</li>
+  <li><b>Confirm ring:</b> the status gives the seconds left but not the window (15 s is a server setting), so the mockups show only the number.</li></ul></div>`;
+ $('#chk').innerHTML=[
+  ['ok','English only, short strings. Where a screen exists the string is the client one (<code>en.ts</code>); the language selector is hidden while there is one locale, as today.'],
+  ['ok','Colour is never alone: your side is blue with one outline, the enemy red with a double outline (or a dashed outline and "?" when unknown); the queue ban is amber with a <code>!</code>, a dashed ring and the time in digits; calibration is cells plus "2/5"; results in the replays list are a word plus a filled, half or hollow dot. Use "grayscale" in the header to check.'],
+  ['ok','Reduced motion: marching dashes, rings, pulses and charge squares stop; every state keeps a static sign. The switch and <code>prefers-reduced-motion</code> both work.'],
+  ['ok','Hotkeys: <code>Enter</code>, <code>B</code>, <code>I</code>, <code>L</code>, <code>R</code>, <code>H</code>, <code>Esc</code>; none collides with the match keys because the menu and the match are different screens.'],
+  ['ok','CSP (<code>style-src \'self\'</code>): the production versions need no static <code>style="..."</code>; positions come from classes and SVG attributes, dynamic ones (countdown, node coordinates) through Svelte <code>style:</code> directives or attributes. This page uses inline styles only because it is a mockup.'],
+  ['ok','No new dependency. A and B draw SVG from <code>MapFile</code> that the client already loads for matches; the only motion is CSS (marching dashes, pulses) and a CSS motion path or a tiny <code>requestAnimationFrame</code> for 3 squares. Text is HTML in all variants (the owner\'s rule: no UI in PixiJS).'],
+  ['ok','Contrast: all text is <code>--text</code> or <code>--text-dim</code> on <code>--bg</code> or on the shaded map (the shade is at least 92% dark under the rail in A, so the dim text keeps 4.5:1).'],
+  ['bad','Open item: a minimum screen (1024 x 640) and the interface scale 125% and 150% (IM15) are checked by eye only in the scale switch of this page; the implementation PR must take screenshots at those sizes.'],
+  ['bad','Open item: B and D put the match or its road on the first screen; on a very short window the lower controls of D need a layout rule (the arena shrinks first).']].map(([c,t])=>`<li><span class="${c}">${c==='ok'?'ok':'open'}</span> ${t}</li>`).join('')}
+
+/* ---------- events ---------- */
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-k]');if(b){set(b.dataset.k,b.dataset.v);return}
+  const f=e.target.closest('figure[data-v]');if(f){S.v=f.dataset.v;render();return}
+  const a=e.target.closest('#stage [data-act]');if(a){const[x,y]=a.dataset.act.split(':');if(x==='go'){if(y==='search'&&model().ph==='banned')return;set('s',y)}else if(x==='wm'){S.wmode=y;if(S.s==='welcome-error')S.s='welcome';render()}}});
+for(const k of['gray','rm','ann','live'])$('#'+k).addEventListener('change',e=>{S[k]=e.target.checked?1:0;S.t0=Date.now();render()});
+$('#sc').addEventListener('change',e=>{S.sc=e.target.value;render()});
+addEventListener('resize',render);
+document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey)return;const tag=(e.target.tagName||'').toLowerCase(),typing=tag==='input'||tag==='select';
+  const ids=VARS.map(v=>v[0]),sts=STATES.map(v=>v[0]);
+  if(!typing&&e.key==='['){set('v',ids[(ids.indexOf(S.v)+ids.length-1)%ids.length]);return}
+  if(!typing&&e.key===']'){set('v',ids[(ids.indexOf(S.v)+1)%ids.length]);return}
+  if(!typing&&e.key===','){set('s',sts[(sts.indexOf(S.s)+sts.length-1)%sts.length]);return}
+  if(!typing&&e.key==='.'){set('s',sts[(sts.indexOf(S.s)+1)%sts.length]);return}
+  const m=model(),k=e.key.toLowerCase();
+  if(k==='escape'){if(S.s!=='menu'&&!m.welcome){set('s','menu');e.preventDefault()}return}
+  if(k==='enter'){if(m.welcome){set('s','menu')}else if(S.s==='menu'||S.s==='error'){if(m.ph!=='banned')set('s','search')}else if(S.s==='found')set('s','confirmed');e.preventDefault();return}
+  if(typing||m.welcome||m.ph==='resume')return;
+  const go={b:'bot',i:'friend',l:'lobby',r:'replays',p:'search'}[k];if(go&&!(go==='search'&&m.ph==='banned')){set('s',go)}});
+setInterval(()=>{if(!S.live)return;const m=model();for(const[k,v]of[['waited',fmt(m.waited)],['confirm',Math.ceil(m.confirm)],['ban',fmt(m.ban)]])document.querySelectorAll('#stage [data-t="'+k+'"]').forEach(n=>{n.textContent=v})},1000);
+load();tables();render();
+</script>
+</body>
+</html>
