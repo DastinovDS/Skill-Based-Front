@@ -277,6 +277,9 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
             winner: 1,
             vp: [0, 0],
             rating: null,
+            rated: false,
+            unrated_reason: 'casual',
+            calibration: null,
           });
         }, 0);
         return null;
@@ -297,6 +300,9 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
           map_id: map.meta.name,
           last_seq: lastSeq,
           nicks: ['Danya', 'Bot'],
+          rated: false,
+          unrated_reason: 'casual',
+          calibration: null,
         });
         this.push();
         timer = setInterval(() => {

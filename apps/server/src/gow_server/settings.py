@@ -121,6 +121,23 @@ class Settings(BaseSettings):
     """After this long in the queue the player is offered an unrated match against a bot."""
     queue_stale_s: float = 15.0
     """A player whose client did not poll the queue this long (a closed tab) leaves it."""
+    calibration_matches: int = Field(default=5, ge=1)
+    """Calibration matches of a password account before its rating is shown and it counts for
+    opponents (DEC-34, item 2)."""
+    early_resign_s: int = Field(default=180, ge=0)
+    """A resign or technical defeat before this match time (seconds, so ``early_resign_s *
+    tick_hz`` ticks) gives the winner no rating change (DEC-34, item 3)."""
+    resign_window_s: int = Field(default=86400, gt=0)
+    """Rolling window of the repeated-resign count of the queue ban (DEC-34, item 3)."""
+    resign_ban_second_s: int = Field(default=300, ge=0)
+    resign_ban_third_s: int = Field(default=1800, ge=0)
+    resign_ban_later_s: int = Field(default=7200, ge=0)
+    """Queue ban after the 2nd, the 3rd, and the 4th and later resign within the window (the 1st
+    carries none): 5 minutes, 30 minutes, 2 hours (DEC-34, item 3)."""
+    opponent_limit: int = Field(default=3, ge=1)
+    opponent_limit_window_s: int = Field(default=86400, gt=0)
+    """At most ``opponent_limit`` rated matches between the same two accounts within the rolling
+    window; the later ones are unrated (DEC-34, item 4)."""
     bot_budget_s: float = 0.001
     """A bot decision longer than this makes the bot skip its next call (SRV-06, AGENTS.md, 8)."""
 

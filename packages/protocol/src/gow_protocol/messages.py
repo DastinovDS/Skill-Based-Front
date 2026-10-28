@@ -32,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 25
+PROTOCOL_VERSION: Final = 26
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -117,6 +117,42 @@ type ClientMsg = Annotated[
 Nick = Annotated[str, StringConstraints(min_length=1, max_length=16)]
 
 
+class UnratedReason(StrEnum):
+    """Why a match did not change your rating (DEC-34, #414)."""
+
+    CASUAL = "casual"
+    """Not a queue match: an invite, the lobby or a bot (DEC-06). Nothing to explain."""
+    GUEST = "guest"
+    """Your account has no password: rated matches are for password accounts."""
+    OPPONENT_GUEST = "opponent_guest"
+    """The opponent is a guest."""
+    OPPONENT_CALIBRATING = "opponent_calibrating"
+    """The opponent is still in calibration: it does not change the rating of a calibrated
+    player."""
+    OPPONENT_LIMIT = "opponent_limit"
+    """You have already played the rated-match limit against this opponent within 24 hours."""
+    OPPONENT_EARLY_RESIGN = "opponent_early_resign"
+    """The opponent resigned (or disconnected) early: no gain for the winner. Only in
+    ``match_end``."""
+
+
+class Calibration(WireModel):
+    """Calibration progress of an account: the first matches of a rated account do not show its
+    rating (DEC-34, #414)."""
+
+    played: NonNegInt
+    """Calibration matches played, at most ``total``."""
+    total: PosInt
+    """Calibration matches needed (a server setting, 5 by default)."""
+
+
+def _check_rated_fields(rated: bool, reason: UnratedReason | None) -> None:
+    if rated and reason is not None:
+        raise ValueError("a rated match has no unrated reason")
+    if not rated and reason is None:
+        raise ValueError("an unrated match needs a reason")
+
+
 class WelcomeMsg(WireModel):
     """Answer to a valid ``hello``, also after a reconnect; a full ``snapshot`` follows."""
 
@@ -131,6 +167,20 @@ class WelcomeMsg(WireModel):
     nicks: tuple[Nick, Nick]
     """Nicks of the two players by player id (ui-style U3); the bot of a bot match is ``Bot``.
     Not secret (visible in the waiting room and the queue), so not part of the ``PlayerView``."""
+    rated: bool = False
+    """Whether this match is expected to change your rating (DEC-34, #414); a calibration match
+    does, silently. A rated match can still end unrated for its winner (an early resign of the
+    opponent): ``match_end`` has the final answer."""
+    unrated_reason: UnratedReason | None = UnratedReason.CASUAL
+    """Why not (``rated`` is ``False``), known at the start; ``None`` when ``rated``."""
+    calibration: Calibration | None = None
+    """Your calibration progress before this match; ``None`` for a guest, in a match that is not
+    from the queue, and once calibration is over."""
+
+    @model_validator(mode="after")
+    def _check_rated(self) -> Self:
+        _check_rated_fields(self.rated, self.unrated_reason)
+        return self
 
 
 class SnapshotMsg(WireModel):
@@ -233,10 +283,23 @@ class MatchEndMsg(WireModel):
     vp: tuple[NonNegInt, NonNegInt]
     """Final VP of both players, by player id."""
     rating: RatingChange | None = None
-    """Rating change of the receiving player; ``None``: the match is not rated (DEC-06)."""
+    """Rating change of the receiving player; ``None``: the match is not rated (DEC-06), or the
+    player is still in calibration and the rating is hidden (``calibration``). Present when the
+    match completes the calibration: that is the first rating the player sees (DEC-34)."""
+    rated: bool = False
+    """Whether this match changed your rating (a calibration match did, silently); the final
+    answer, after the early-resign rule (DEC-34, #414)."""
+    unrated_reason: UnratedReason | None = UnratedReason.CASUAL
+    """Why not (``rated`` is ``False``); ``None`` when ``rated``."""
+    calibration: Calibration | None = None
+    """Your calibration progress after this match; ``None`` for a guest, in a match that is not
+    from the queue, and once calibration was over before this match."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
+        _check_rated_fields(self.rated, self.unrated_reason)
+        if self.rating is not None and not self.rated:
+            raise ValueError("a rating change needs a rated match")
         if self.reason is EndReason.DOUBLE_DEFEAT:
             if self.winner is not None:
                 raise ValueError("a double defeat is a draw")

@@ -144,7 +144,12 @@ def test_guest_sets_a_password_and_logs_in_on_another_device(
 ) -> None:
     guest_token, player_id = guest(api, "Alice")
     me = api.get("/api/me", headers=auth(guest_token)).json()
-    assert me == {"player_id": player_id, "nick": "Alice", "has_password": False}
+    assert me == {
+        "player_id": player_id,
+        "nick": "Alice",
+        "has_password": False,
+        "calibration": None,
+    }
     sessions = cast("sessionmaker[Session]", api.app.state.sessions)  # type: ignore[attr-defined]
     with sessions() as session:
         session.add(Rating(player_id=player_id, rating=1600.0, rd=80.0, volatility=0.06))
@@ -162,7 +167,12 @@ def test_guest_sets_a_password_and_logs_in_on_another_device(
     assert account_token != guest_token
     assert api.get("/api/me", headers=auth(guest_token)).status_code == 401  # the old token died
     me = api.get("/api/me", headers=auth(account_token)).json()
-    assert me == {"player_id": player_id, "nick": "Alice", "has_password": True}
+    assert me == {
+        "player_id": player_id,
+        "nick": "Alice",
+        "has_password": True,
+        "calibration": {"played": 0, "total": 5},
+    }
 
     # Another device (a new client, no localStorage): nick in any case and the password.
     with TestClient(create_app(fast)) as other_device:
@@ -173,7 +183,12 @@ def test_guest_sets_a_password_and_logs_in_on_another_device(
     # One token per player (question 2): the first device is logged out, the new one works.
     assert api.get("/api/me", headers=auth(account_token)).status_code == 401
     me = api.get("/api/me", headers=auth(login_body["token"])).json()
-    assert me == {"player_id": player_id, "nick": "Alice", "has_password": True}
+    assert me == {
+        "player_id": player_id,
+        "nick": "Alice",
+        "has_password": True,
+        "calibration": {"played": 0, "total": 5},
+    }
     with sessions() as session:  # the same player: the rating is still there
         rating = session.get(Rating, player_id)
         assert rating is not None and rating.rating == 1600.0

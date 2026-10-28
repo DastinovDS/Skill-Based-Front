@@ -6,19 +6,22 @@ the closest partner first, front of the queue first, never the same pair twice i
 """
 
 from collections.abc import Iterator
+from datetime import timedelta
 from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
+from gow_protocol.messages import UnratedReason
 from gow_server.app import create_app
 from gow_server.clock import ManualClock
+from gow_server.identity import hash_token
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle
 from gow_server.matches import MatchManager
 from gow_server.matchqueue import MatchQueue
-from gow_server.models import Match
+from gow_server.models import Match, Player, Rating
 from gow_server.settings import Settings
 
 Json = dict[str, object]
@@ -254,10 +257,32 @@ def test_http_unconfirmed_pair_creates_no_match(api: TestClient, clock: ManualCl
     assert "gow_queue_size 0" in api.get("/internal/metrics").text
 
 
+def account(api: TestClient, nick: str, *, played: int | None = 5) -> dict[str, str]:
+    """A password account (DEC-34) with ``played`` rating-changing matches: 5 is calibrated."""
+    headers = guest(api, nick)
+    token = headers["Authorization"].removeprefix("Bearer ")
+    with sessions_of(api).begin() as session:
+        player = session.execute(
+            select(Player).where(Player.token_hash == hash_token(token))
+        ).scalar_one()
+        player.password_hash = "scrypt$not-a-real-hash"
+        if played is not None:
+            session.add(
+                Rating(
+                    player_id=player.id,
+                    rating=1500.0,
+                    rd=350.0,
+                    volatility=0.06,
+                    rated_matches=played,
+                )
+            )
+    return headers
+
+
 def test_http_confirmed_pair_starts_a_rated_public_match(
     api: TestClient, clock: ManualClock
 ) -> None:
-    alice, bob = guest(api, "alice"), guest(api, "bob")
+    alice, bob = account(api, "alice"), account(api, "bob")
     api.post("/api/queue", headers=alice)
     api.post("/api/queue", headers=bob)
     clock.advance(1)
@@ -280,6 +305,69 @@ def test_http_confirmed_pair_starts_a_rated_public_match(
     # In a match: the queue refuses (one active match per player).
     assert api.post("/api/queue", headers=alice).status_code == 409
     assert api.post("/api/queue", headers=guest(api, "carol")).status_code == 200
+
+
+def test_http_a_guest_pair_plays_a_public_unrated_match(
+    api: TestClient, clock: ManualClock
+) -> None:
+    """DEC-34: guests keep playing from the queue, unrated."""
+    alice, bob = guest(api, "alice"), guest(api, "bob")
+    api.post("/api/queue", headers=alice)
+    api.post("/api/queue", headers=bob)
+    clock.advance(1)
+    api.post("/api/queue/confirm", headers=alice)
+    match_id = str(api.post("/api/queue/confirm", headers=bob).json()["match_id"])
+    with sessions_of(api)() as session:
+        row = session.get(Match, int(match_id))
+        assert row is not None and row.rated is False
+    runner = manager_of(api).get(match_id)
+    assert runner is not None and runner.private is False
+    assert runner.intro_notice(0).unrated_reason is UnratedReason.GUEST
+
+
+def test_http_the_queue_refuses_a_banned_player_with_the_time_left(
+    api: TestClient, clock: ManualClock
+) -> None:
+    alice = account(api, "alice")
+    with sessions_of(api).begin() as session:
+        session.execute(
+            update(Player).values(queue_banned_until=clock.wall() + timedelta(seconds=299.5))
+        )
+    refused = api.post("/api/queue", headers=alice)
+    assert refused.status_code == 429
+    assert refused.headers["Retry-After"] == "300"
+    assert refused.json() == {
+        "detail": {
+            "code": "queue_banned",
+            "message": "queue ban for repeated resigns",
+            "retry_after_s": 300,
+        }
+    }
+    assert api.get("/api/queue", headers=alice).status_code == 404  # the refusal queued nothing
+    clock.advance(150)
+    assert api.post("/api/queue", headers=alice).status_code == 429
+    clock.advance(150)
+    assert api.post("/api/queue", headers=alice).status_code == 200
+
+
+def test_http_a_ban_does_not_touch_other_players(api: TestClient, clock: ManualClock) -> None:
+    alice, bob = account(api, "alice"), account(api, "bob")
+    with sessions_of(api).begin() as session:
+        player = session.execute(select(Player).where(Player.nick == "alice")).scalar_one()
+        player.queue_banned_until = clock.wall() + timedelta(hours=2)
+    assert api.post("/api/queue", headers=alice).status_code == 429
+    assert api.post("/api/queue", headers=bob).status_code == 200
+
+
+def test_http_me_shows_the_calibration_progress(api: TestClient) -> None:
+    newbie = account(api, "newbie", played=2)
+    assert api.get("/api/me", headers=newbie).json()["calibration"] == {"played": 2, "total": 5}
+    assert api.get("/api/me", headers=account(api, "fresh", played=None)).json()["calibration"] == {
+        "played": 0,
+        "total": 5,
+    }
+    assert api.get("/api/me", headers=account(api, "veteran")).json()["calibration"] is None
+    assert api.get("/api/me", headers=guest(api, "gus")).json()["calibration"] is None
 
 
 def test_http_queue_entry_is_rate_limited(settings: Settings, clock: ManualClock) -> None:

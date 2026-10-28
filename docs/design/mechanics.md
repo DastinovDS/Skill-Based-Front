@@ -3021,9 +3021,9 @@ A rated match (DEC-06) is found through the queue (`gow_server.matchqueue`, `POS
 
 The owner's decision of 2026-10-28, from the audit item SRV-04 (#414: a player queues together with a throwaway guest
 that forfeits at once, and the full win is rated). These are meta-game rules of the server, not of the simulation
-ruleset: no `SIM_VERSION`. Every number below is a server setting (the implementation names the settings; they are not
-in `rulesets/*.toml`). The sections above are extended, not replaced: DEC-06 (what is rated) and RAT-02 (the update).
-Implementation: a separate PR of #414 (the issue stays open until then).
+ruleset: no `SIM_VERSION`. Every number below is a server setting (the settings are named in the "Implementation"
+paragraph at the end of this block; they are not in `rulesets/*.toml`). The sections above are extended, not replaced:
+DEC-06 (what is rated) and RAT-02 (the update). Implemented in #414 (`PROTOCOL_VERSION` 26).
 
 1. **Rated only between password accounts.** There is one shared matchmaking queue, the pool is not split. A queue
    match is rated only if both players are accounts with a password and both have finished calibration (item 2);
@@ -3041,12 +3041,51 @@ Implementation: a separate PR of #414 (the issue stays open until then).
    - **Repeated resigns** in rated matches within a rolling 24 hour window ban the player from the matchmaking queue
      (settings: the window, the ban lengths): the first carries no ban, the 2nd a ban of 5 minutes, the 3rd of
      30 minutes, the 4th and each later one of 2 hours. The ban is shown to the player with the time left.
+   - **A resign in a calibration match counts** toward that resign count (owner's decision of 2026-10-28), like a
+     resign in any other rated match.
+   - **A draw is not a resign** (owner's decision of 2026-10-28): a `double_defeat` (or any other draw) never counts
+     toward the ban, and the early-resign rule does not apply to it: both players are rated as for a draw.
 4. **Per-opponent limit.** At most 3 rated matches between the same two accounts within a rolling 24 hour window
    (settings: the count, the window). The queue may still pair them (the online pool is small), but the 4th and later
    matches are unrated, and the result screen says why.
 5. **What the client is told.** Whether a match is rated and, if not, why (a guest, the calibration of the opponent,
    the opponent limit, an early resign of the opponent), and the calibration progress. The exact protocol and HTTP
    fields are left to the implementation (`PROTOCOL_VERSION`++ there).
+
+**Implementation (#414)**, the details the items above leave open:
+
+- *Who is rated* is decided once, when the match starts (`gow_server.ladder.plan_queue_match`), and stored per side in
+  `match_players.rating_mode` (`rated`, `calibration`, `none`) and `unrated_reason`. `matches.rated` means "at least one
+  side's rating can change". A side is `calibration` while its account has fewer than the calibration number of rating
+  changes (`ratings.rated_matches`); a calibrated side against a calibrating one is `none` with the reason
+  `opponent_calibrating` (it is not a rated match for it). Two calibrating players both change their own rating.
+- *Calibration progress* counts the matches that changed the account's rating: an unrated match, the calibrated side
+  of a calibration match and the winner of an early resign add nothing. Early-resign winners therefore do not
+  progress either, so a throwaway account cannot finish calibration through quick resigns of an alt.
+- *The early resign* is checked at the end by `gow_server.ladder.settle`: end reason `forfeit`, `disconnect` or `no_show`
+  and fewer ticks than the threshold in seconds times `tick_hz` (tick 1800 at 10 Hz is not early, tick 1799 is). The
+  match stays flagged rated (it counts toward the per-opponent limit and the resign count); the winner's side becomes
+  `none` with the reason `opponent_early_resign`, the loser's rating changes as usual. The same function computes what
+  `match_end` tells the players and what the database transaction stores.
+- *The per-opponent limit* counts the matches flagged rated at their start between the two accounts, with a start time
+  inside the rolling window (a match whose winner got no gain counts too). A match that was unrated for that reason is
+  not itself counted, so the oldest rated match leaving the window frees exactly one place.
+- *The queue ban* is stored as `players.queue_banned_until`, set in the transaction that writes the result of the
+  resigned match: the length is by the number of that player's resigns (the loser of a match flagged rated whose end
+  reason is `forfeit`, `disconnect` or `no_show`) within the window, this one included. A shorter ban never shortens a
+  longer one. `POST /api/queue` answers 429 with `Retry-After` and a `QueueBan` body while it lasts. The ban applies to
+  the queue only: invites, the lobby and bot matches stay open.
+- *The client is told* (`PROTOCOL_VERSION` 26): `welcome` and `match_end` carry `rated`, `unrated_reason`
+  (`casual`, `guest`, `opponent_guest`, `opponent_calibrating`, `opponent_limit`, `opponent_early_resign`; the last
+  only in `match_end`) and `calibration` (`played`, `total`, for a password account that was calibrating when the match
+  began). `match_end.rating` is `null` while the rating is hidden and present from the match that completes the
+  calibration on. `GET /api/me` has `calibration` (`null` for a guest and once calibration is over). There is no
+  leaderboard endpoint yet: when one is added it lists only accounts with `calibration` of `null` and a password.
+- *Settings*: `GOW_CALIBRATION_MATCHES` (5), `GOW_EARLY_RESIGN_S` (180), `GOW_RESIGN_WINDOW_S` (86400),
+  `GOW_RESIGN_BAN_SECOND_S` (300), `GOW_RESIGN_BAN_THIRD_S` (1800), `GOW_RESIGN_BAN_LATER_S` (7200),
+  `GOW_OPPONENT_LIMIT` (3), `GOW_OPPONENT_LIMIT_WINDOW_S` (86400); passed through `compose.yaml` and listed in the README.
+- Accounts that played rated matches before DEC-34 keep their rating and their `rated_matches`: with five or more they
+  count as calibrated.
 
 Alternatives (not chosen):
 - A separate rated queue for accounts: it splits a small pool.
@@ -3132,7 +3171,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-31 | #316 | enemy barracks are visible at neighboring cities (only a built one, no memory) | section 10 | [accepted] (2026-10-21); changes the barracks fog of DEC-25 and DEC-26; details [accepted] 2026-10-21; implemented (#319, `PROTOCOL_VERSION` 23) |
 | DEC-32 | #327 | the fight arena: a 2 s round (`combat.round_ticks = 20`), the bonus reserve is visible to both sides in a fight (revision of DEC-24, item I1); the bonus rules do not change (B1, B2 not accepted); client A1, V3, ◇ | section 4 | [accepted] (2026-10-21); details [accepted] 2026-10-21; item 13 (mute charges in the fight view) [accepted] by the orchestrator 2026-10-21; variant B3 "bonuses at the end" [open], not accepted by the owner 2026-10-21; implemented (#329, `SIM_VERSION` 18, `PROTOCOL_VERSION` 21); client implemented (#330) |
 | DEC-33 | #296 | visible movement of enemy groups in a node's vision zone: continuous position and direction in the halves of visible nodes | section 10 | [accepted] (2026-10-21); details [accepted] 2026-10-21 (all as recommended); replaces part of DEC-21, item 5; implemented together with DEC-21 (#296, `SIM_VERSION` 19, `PROTOCOL_VERSION` 22); client: ranges, the border point, the half memory and the smooth movement of figures are done in #359, the border point from the map (`border_permille`) since #366, the look of the figure awaits #354 |
-| DEC-34 | #414 | rated-match protection against rating farming: rated only between password accounts, calibration, the early-resign and repeated-resign penalty, a per-opponent limit | section 19 | [accepted] (2026-10-28); meta-game server rules, no `SIM_VERSION`; implementation awaits (a separate PR of #414, `PROTOCOL_VERSION`++) |
+| DEC-34 | #414 | rated-match protection against rating farming: rated only between password accounts, calibration, the early-resign and repeated-resign penalty, a per-opponent limit | section 19 | [accepted] (2026-10-28); meta-game server rules, no `SIM_VERSION`; implemented #414 (`PROTOCOL_VERSION` 26); owner's additions of 2026-10-28: a resign in a calibration match counts toward the queue ban, a draw (`double_defeat` too) is not a resign |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in

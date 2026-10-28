@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from gow_server.abuse import Limits, enforce
 from gow_server.clock import Clock
 from gow_server.identity import CurrentPlayer
+from gow_server.ladder import ban_seconds_left
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchRecord
 from gow_server.maps import MapCatalog
 from gow_server.matches import ManagerDrainingError
@@ -346,6 +347,21 @@ Queue = Annotated[MatchQueue, Depends(_queue)]
 router = APIRouter(prefix="/api/queue", tags=["matchmaking"])
 
 
+class QueueBan(BaseModel):
+    """The refusal of ``POST /api/queue`` while banned (DEC-34, #414)."""
+
+    code: Literal["queue_banned"]
+    message: str
+    retry_after_s: int
+    """Whole seconds until the ban ends; the same value is in the ``Retry-After`` header."""
+
+
+class QueueBanned(BaseModel):
+    """Body of the 429 of a banned player: ``{"detail": {...}}`` like every HTTP error."""
+
+    detail: QueueBan
+
+
 def _not_in_queue() -> HTTPException:
     return HTTPException(status.HTTP_404_NOT_FOUND, detail="not in the queue")
 
@@ -355,12 +371,25 @@ def _read_rating(sessions: sessionmaker[Session], account: int) -> float:
         return rating_of(session, account).rating
 
 
-@router.post("")
+@router.post("", responses={status.HTTP_429_TOO_MANY_REQUESTS: {"model": QueueBanned}})
 async def join_queue(
     request: Request, response: Response, player: CurrentPlayer, queue: Queue
 ) -> QueueStatus:
-    """Enter the queue (or read the status if already in it)."""
+    """Enter the queue (or read the status if already in it).
+
+    429 with ``Retry-After`` and a ``QueueBan`` body while the player is banned for repeated
+    resigns (DEC-34); 429 with only ``Retry-After`` when the entry rate limit is hit.
+    """
     response.headers["Cache-Control"] = "no-store"
+    left = ban_seconds_left(player, queue.clock.wall())
+    if left > 0:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=QueueBan(
+                code="queue_banned", message="queue ban for repeated resigns", retry_after_s=left
+            ).model_dump(),
+            headers={"Retry-After": str(left)},
+        )
     limits: Limits = request.app.state.limits
     enforce(limits.queue, str(player.id), "too many queue entries")
     if queue.lifecycle.manager.draining:

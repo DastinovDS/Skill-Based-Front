@@ -1,5 +1,9 @@
 """RAT-02: ``match_end`` of a rated match carries the rating change of the receiving player.
 
+The plan is a full rated match of two calibrated accounts (DEC-34); the early-resign threshold is
+0 here, so the forfeit at the first tick is not early (the early-resign rule has its own tests in
+``test_ladder.py``).
+
 Expected numbers come from an independent Glicko-2 implementation (the PyPI package
 ``glicko2``, tau = 0.5), not from ``gow_server.rating``: two new players, the first one wins
 twice in a row. The displayed rating is ``r - 2 * RD``.
@@ -17,8 +21,9 @@ from pathlib import Path
 from typing import Final
 
 from gow_protocol.commands import ForfeitCmd
-from gow_protocol.messages import MatchEndMsg, RatingChange
+from gow_protocol.messages import MatchEndMsg, RatingChange, UnratedReason
 from gow_server.clock import ManualClock
+from gow_server.ladder import RatingMode, RatingPlan, SidePlan
 from gow_server.matches import MatchManager, Outbox, Outgoing
 from gow_server.rating import Glicko
 from gow_sim.maps import load_map
@@ -26,6 +31,11 @@ from gow_sim.ruleset import load_ruleset
 
 ROOT: Final = Path(__file__).parents[3]
 DT: Final = 0.1
+
+
+def rated_plan() -> RatingPlan:
+    side = SidePlan(RatingMode.RATED, None, Glicko(), played=5, account=True)
+    return RatingPlan((side, side), early_resign_ticks=0, calibration_total=5)
 
 
 def drain(box: Outbox) -> list[Outgoing]:
@@ -42,7 +52,7 @@ def test_match_end_of_a_rated_match_carries_the_rating_change() -> None:
         rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
         manager = MatchManager(clock, new_id=lambda: "m1")
         runner = manager.create(
-            "line3", mapdef, rules, (101, 202), ratings=(Glicko(), Glicko()), private=False
+            "line3", mapdef, rules, (101, 202), rating_plan=rated_plan(), private=False
         )
         boxes = [runner.attach(0), runner.attach(1)]
         await asyncio.sleep(0)
@@ -55,6 +65,9 @@ def test_match_end_of_a_rated_match_carries_the_rating_change() -> None:
         assert ends[0].winner == 0
         assert ends[0].rating == RatingChange(before=800, after=1082)
         assert ends[1].rating == RatingChange(before=800, after=757)
+        assert [(e.rated, e.unrated_reason, e.calibration) for e in ends] == [
+            (True, None, None)
+        ] * 2
 
     asyncio.run(scenario())
 
@@ -75,5 +88,6 @@ def test_match_end_of_an_unrated_match_has_no_rating() -> None:
                 await asyncio.sleep(0)
         end = next(m for m in drain(box) if isinstance(m, MatchEndMsg))
         assert end.rating is None
+        assert (end.rated, end.unrated_reason) == (False, UnratedReason.CASUAL)
 
     asyncio.run(scenario())

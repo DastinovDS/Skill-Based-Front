@@ -48,7 +48,8 @@ are enabled; [ ] `.env` has mode 600 and is not in git; [ ] backups are copied o
 
 ## 2. The first deploy [manual]
 
-DNS: the A (and AAAA) record `<DOMAIN>` points to `<VPS_HOST>`, before Caddy starts (otherwise ACME will not issue a certificate).
+DNS: the A record `<DOMAIN>` points to `<VPS_HOST>`, before Caddy starts (otherwise ACME will not issue a certificate).
+No AAAA record (owner's decision of 2026-10-28): the production domain is IPv4 only until the per-IP limits key IPv6 clients by their /64 (audit SRV-05, #415); otherwise a client with an IPv6 /64 gets a new address, and a new limit, for every request.
 
 ```sh
 ssh gow@<VPS_HOST>
@@ -207,6 +208,8 @@ All limits live in the memory of one process (a server restart zeroes the counte
 | Joining the matchmaking queue | player | 20 per minute | `POST /api/queue` (MM-01) |
 | Commands in a match | connection | 20/s, burst 60 | WebSocket, flooding leads to a disconnect (SRV-03) |
 | Active match | player | 1 | `409` (SRV-09) |
+| Repeated resigns in rated matches | player | 2nd in 24 hours: 5 minutes out of the queue; 3rd: 30 minutes; 4th and later: 2 hours (the 1st: none) | `POST /api/queue`: `429` with `Retry-After` and a `QueueBan` body (DEC-34, #414; `GOW_RESIGN_*`) |
+| Rated matches between the same two accounts | pair of accounts | 3 per 24 hours, then unrated | the matchmaking queue still pairs them, the match is unrated (DEC-34; `GOW_OPPONENT_LIMIT*`) |
 | HTTP request body | request | 32 KiB (`GOW_MAX_REQUEST_BODY_BYTES`) | `413` before any parsing, in the server (by `Content-Length` and by counting a streamed body) and, at 64 KB, in Caddy on `/api/*` (SRV-01, #411) |
 
 **The per-IP limit works only with the real client address.** The server takes the address from `request.client`, and uvicorn

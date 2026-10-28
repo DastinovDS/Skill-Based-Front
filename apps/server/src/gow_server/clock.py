@@ -6,12 +6,21 @@ Match loops read time only through a ``Clock``: production uses ``MonotonicClock
 
 import asyncio
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
+
+WALL_EPOCH = datetime(2026, 1, 1)
+"""``ManualClock.wall()`` at time 0 (naive UTC, like the database timestamps)."""
 
 
 class Clock(Protocol):
     def now(self) -> float:
         """Monotonic time in seconds."""
+        ...
+
+    def wall(self) -> datetime:
+        """Calendar time, naive UTC like the database timestamps: for rolling windows over stored
+        rows (DEC-34), never for the match loop."""
         ...
 
     async def sleep(self, seconds: float) -> None:
@@ -24,6 +33,9 @@ class MonotonicClock:
 
     def now(self) -> float:
         return time.monotonic()
+
+    def wall(self) -> datetime:
+        return datetime.now(UTC).replace(tzinfo=None)
 
     async def sleep(self, seconds: float) -> None:
         await asyncio.sleep(max(seconds, 0.0))
@@ -38,6 +50,10 @@ class ManualClock:
 
     def now(self) -> float:
         return self._now
+
+    def wall(self) -> datetime:
+        """``WALL_EPOCH`` plus the time advanced so far."""
+        return WALL_EPOCH + timedelta(seconds=self._now)
 
     async def sleep(self, seconds: float) -> None:
         if seconds <= 0:

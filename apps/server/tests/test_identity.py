@@ -36,7 +36,12 @@ def test_create_guest_and_authenticate(client: TestClient, settings: Settings) -
 
     me = client.get("/api/me", headers=_auth(token))
     assert me.status_code == 200
-    assert me.json() == {"player_id": body["player_id"], "nick": "Alice", "has_password": False}
+    assert me.json() == {
+        "player_id": body["player_id"],
+        "nick": "Alice",
+        "has_password": False,
+        "calibration": None,
+    }
 
     # Only the SHA-256 of the token is stored.
     db_path = settings.database_url.removeprefix("sqlite:///")

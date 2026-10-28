@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 25,
+    "PROTOCOL_VERSION": 26,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009
   },
@@ -159,6 +159,30 @@
         "ticks_per_level"
       ],
       "title": "BuildPublic",
+      "type": "object"
+    },
+    "Calibration": {
+      "additionalProperties": false,
+      "description": "Calibration progress of an account: the first matches of a rated account do not show its\nrating (DEC-34, #414).",
+      "properties": {
+        "played": {
+          "description": "Calibration matches played, at most ``total``.",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total": {
+          "description": "Calibration matches needed (a server setting, 5 by default).",
+          "maximum": 2147483647,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "played",
+        "total"
+      ],
+      "title": "Calibration",
       "type": "object"
     },
     "CancelOrderCmd": {
@@ -1605,7 +1629,36 @@
             }
           ],
           "default": null,
-          "description": "Rating change of the receiving player; ``None``: the match is not rated (DEC-06)."
+          "description": "Rating change of the receiving player; ``None``: the match is not rated (DEC-06), or the\nplayer is still in calibration and the rating is hidden (``calibration``). Present when the\nmatch completes the calibration: that is the first rating the player sees (DEC-34)."
+        },
+        "rated": {
+          "default": false,
+          "description": "Whether this match changed your rating (a calibration match did, silently); the final\nanswer, after the early-resign rule (DEC-34, #414).",
+          "type": "boolean"
+        },
+        "unrated_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnratedReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "casual",
+          "description": "Why not (``rated`` is ``False``); ``None`` when ``rated``."
+        },
+        "calibration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Calibration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Your calibration progress after this match; ``None`` for a guest, in a match that is not\nfrom the queue, and once calibration was over before this match."
         }
       },
       "required": [
@@ -1614,7 +1667,10 @@
         "reason",
         "winner",
         "vp",
-        "rating"
+        "rating",
+        "rated",
+        "unrated_reason",
+        "calibration"
       ],
       "title": "MatchEndMsg",
       "type": "object"
@@ -2933,6 +2989,19 @@
       "title": "UnitsRange",
       "type": "object"
     },
+    "UnratedReason": {
+      "description": "Why a match did not change your rating (DEC-34, #414).",
+      "enum": [
+        "casual",
+        "guest",
+        "opponent_guest",
+        "opponent_calibrating",
+        "opponent_limit",
+        "opponent_early_resign"
+      ],
+      "title": "UnratedReason",
+      "type": "string"
+    },
     "UpgradeGain": {
       "additionalProperties": false,
       "description": "What the next road level would give (DEC-28, item 7).",
@@ -3114,6 +3183,35 @@
           "maxItems": 2,
           "minItems": 2,
           "type": "array"
+        },
+        "rated": {
+          "default": false,
+          "description": "Whether this match is expected to change your rating (DEC-34, #414); a calibration match\ndoes, silently. A rated match can still end unrated for its winner (an early resign of the\nopponent): ``match_end`` has the final answer.",
+          "type": "boolean"
+        },
+        "unrated_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnratedReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "casual",
+          "description": "Why not (``rated`` is ``False``), known at the start; ``None`` when ``rated``."
+        },
+        "calibration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Calibration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Your calibration progress before this match; ``None`` for a guest, in a match that is not\nfrom the queue, and once calibration is over."
         }
       },
       "required": [
@@ -3122,7 +3220,10 @@
         "ruleset_public",
         "map_id",
         "last_seq",
-        "nicks"
+        "nicks",
+        "rated",
+        "unrated_reason",
+        "calibration"
       ],
       "title": "WelcomeMsg",
       "type": "object"

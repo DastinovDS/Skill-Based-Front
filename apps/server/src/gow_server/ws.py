@@ -227,6 +227,7 @@ async def _serve(ws: WebSocket, match_id: str, settings: Settings) -> None:
         raise _Close(CLOSE_NO_MATCH, "no such match")
     nicks = await asyncio.to_thread(nicks_of, ws.app.state.sessions, runner.players)
     outbox = runner.attach(player)
+    notice = runner.intro_notice(player)
     outbox.put(
         WelcomeMsg(
             player=player,
@@ -234,6 +235,9 @@ async def _serve(ws: WebSocket, match_id: str, settings: Settings) -> None:
             map_id=runner.map_id,
             last_seq=runner.last_seq(player),
             nicks=nicks,
+            rated=notice.rated,
+            unrated_reason=notice.unrated_reason,
+            calibration=notice.calibration,
         )
     )
     outbox.put_snapshot(runner.snapshot(player))

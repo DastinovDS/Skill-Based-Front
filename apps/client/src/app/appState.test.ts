@@ -216,6 +216,9 @@ describe('AppState', () => {
       winner: 0,
       vp: [3, 5],
       rating: null,
+      rated: false,
+      unrated_reason: 'casual',
+      calibration: null,
     };
     app.finishMatch('7', 0, end);
     const result = app.screen;

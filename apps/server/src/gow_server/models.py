@@ -46,6 +46,10 @@ class Player(Base):
     blocked_at: Mapped[datetime | None]
     """Set by ``gow-admin block`` (MOD-01): the account no longer authenticates (HTTP 403; on the
     match WebSocket it is an unknown token)."""
+    queue_banned_until: Mapped[datetime | None]
+    """The matchmaking queue refuses the player until then: repeated resigns in rated matches
+    (DEC-34, #414). Set when a result is written, so the length is that of the resign that
+    caused it; a later resign never shortens it."""
 
 
 class Rating(Base):
@@ -60,6 +64,8 @@ class Rating(Base):
     rd: Mapped[float]
     volatility: Mapped[float]
     rated_matches: Mapped[int] = mapped_column(default=0)
+    """Matches that changed this player's rating, calibration matches included. While it is below
+    ``Settings.calibration_matches`` the account is calibrating (DEC-34, #414)."""
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
 
@@ -110,3 +116,10 @@ class MatchPlayer(Base):
     rating_before: Mapped[float | None]
     rating_after: Mapped[float | None]
     """Displayed rating (``r - 2 * RD``) before and after a rated match (RAT-02)."""
+    rating_mode: Mapped[str] = mapped_column(String(16), default="none", server_default="none")
+    """What the match does to this side's rating (DEC-34): ``rated``, ``calibration`` (the rating
+    changes but is hidden) or ``none``. Fixed at the start, ``none`` again if the early-resign rule
+    takes the gain away at the end."""
+    unrated_reason: Mapped[str | None] = mapped_column(String(32))
+    """``gow_protocol.messages.UnratedReason`` value when ``rating_mode`` is ``none`` in a queue
+    match; ``None`` otherwise (and in matches that are not from the queue)."""

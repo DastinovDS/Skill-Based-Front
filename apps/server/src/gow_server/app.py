@@ -18,6 +18,7 @@ from gow_server.abuse import Limits
 from gow_server.bodylimit import BodySizeLimitMiddleware
 from gow_server.clock import Clock, MonotonicClock
 from gow_server.db import create_db_engine, upgrade_to_head
+from gow_server.ladder import LadderRules
 from gow_server.lifecycle import MatchLifecycle, abort_orphans, archive_rulesets
 from gow_server.logs import request_id_var
 from gow_server.matches import MatchManager
@@ -62,6 +63,16 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             app.state.sessions,
             match_clock,
             ready_timeout_s=settings.ready_timeout_s,
+            ladder=LadderRules(
+                calibration_matches=settings.calibration_matches,
+                early_resign_s=settings.early_resign_s,
+                resign_window_s=settings.resign_window_s,
+                resign_ban_second_s=settings.resign_ban_second_s,
+                resign_ban_third_s=settings.resign_ban_third_s,
+                resign_ban_later_s=settings.resign_ban_later_s,
+                opponent_limit=settings.opponent_limit,
+                opponent_limit_window_s=settings.opponent_limit_window_s,
+            ),
         )
         app.state.ruleset = load_ruleset(settings.ruleset_path)
         await asyncio.to_thread(

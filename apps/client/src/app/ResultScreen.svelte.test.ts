@@ -11,6 +11,9 @@ const end = (winner: 0 | 1 | null, rating: MatchEndMsg['rating'] = null): MatchE
   winner,
   vp: [3, 5],
   rating,
+  rated: rating !== null,
+  unrated_reason: rating !== null ? null : 'casual',
+  calibration: null,
 });
 
 describe('ResultScreen', () => {
