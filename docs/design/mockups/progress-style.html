@@ -1,0 +1,655 @@
+<!doctype html>
+<!--
+  Mockup: CP bar and the progress of barracks construction and unit recruitment (issue #430, for the owner to choose).
+  Self-contained: no network, no external fonts, images or scripts; everything is drawn by code (SVG). Open it as a file.
+  This is an illustration, not client code. What the page shows is taken from the rules and from fields the client already
+  has (DEC-02 CP in hundredths, DEC-25 recruit queue, DEC-26 barracks; the checks are at the bottom of the page).
+  The state of the choices lives in the address (progress-style.html#cp=1&pr=1&lk=1&gray=0&rm=0&sc=100&bd=forest&live=0),
+  so the mockup can be opened at the right frame.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CP bar and progress of barracks and recruiting</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#9da7b3;--you:#5b9bff;--enemy:#e5484d;--warn:#ffb020;--ok:#3fb950;--paper:#f0f6fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif}
+header{position:sticky;top:0;z-index:5;padding:8px 16px 10px;background:var(--surface);border-bottom:1px solid var(--border)}
+.row{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center}
+.row+.row{margin-top:6px}
+h1{font-size:16px;margin:0 6px 0 0}
+nav a{color:var(--you);text-decoration:none;margin-right:12px;font-size:13px}
+nav a:hover{text-decoration:underline}
+.opt{display:flex;gap:6px;align-items:center;color:var(--dim);font-size:13px}
+.opt select{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:2px 4px}
+main{max-width:1500px;margin:0 auto;padding:16px}
+h2.sec{font-size:18px;margin:34px 0 4px;padding-top:14px;border-top:1px solid var(--border)}
+h2.sec:first-of-type{border-top:0;margin-top:8px}
+h3.sub{font-size:14px;margin:18px 0 4px}
+.note{color:var(--dim);margin:4px 0 10px;font-size:13px;max-width:1100px}
+.note b{color:var(--text)}
+code{background:var(--surface2);padding:0 4px;border-radius:4px;font-size:12.5px}
+.picker{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:10px 0}
+.picker>b{font-size:13px;color:var(--dim);font-weight:600}
+.seg{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.seg label{position:relative;padding:5px 11px;cursor:pointer;background:var(--surface2);border-right:1px solid var(--border);white-space:nowrap;font-size:13px}
+.seg label:last-child{border-right:0}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg input:checked+span{color:#0d1117;background:var(--you);margin:-5px -11px;padding:5px 11px;display:block}
+.seg input:focus-visible+span{outline:2px solid #f0f6fc;outline-offset:-2px}
+.badge{display:inline-block;font-size:11px;border:1px solid var(--ok);color:var(--ok);border-radius:10px;padding:0 7px;margin-left:6px;vertical-align:1px}
+.gray svg{filter:grayscale(1)}
+.pulse{animation:pulse .8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
+.rm .pulse{animation:none}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none}}
+.tbl{overflow:auto;max-width:100%;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+.tbl table{border-collapse:collapse;width:max-content;min-width:100%}
+.tbl th,.tbl td{border:1px solid var(--border);padding:6px 10px;vertical-align:middle;text-align:center}
+.tbl th{font-weight:600;font-size:12px;color:var(--dim);background:var(--surface2)}
+.tbl th.rowh{text-align:left;min-width:170px;color:var(--text);background:var(--surface);position:sticky;left:0;z-index:1}
+.tbl th.rowh small{display:block;font-weight:400;color:var(--dim)}
+.tbl td svg{display:block;margin:0 auto}
+.tbl .cur{outline:2px solid var(--you);outline-offset:-2px}
+.info{font-size:13px;text-align:left!important;vertical-align:top!important;min-width:190px;max-width:300px}
+.info.small{min-width:90px;max-width:150px}
+.tbl tr.rec td,.tbl tr.rec th.rowh{background:#14261a}
+.scene{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:8px;overflow:auto;background:#000;max-width:100%;width:max-content}
+.scene svg{display:block}
+.sheet{display:grid;grid-template-columns:auto repeat(5,auto);gap:6px 14px;align-items:center;width:max-content;max-width:100%;overflow:auto;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px}
+.sheet>span{color:var(--dim);font-size:12px}
+.sheet>b{font-size:13px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:12.5px;color:var(--dim);margin:6px 0}
+.pick{margin-top:24px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px}
+.cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));margin-top:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
+.card h3{font-size:15px;margin:0 0 6px}
+.card.rec{border-color:var(--ok)}
+.chk{font-size:13px;color:var(--dim)}
+.chk li{margin:2px 0}
+.chk .ok{color:var(--ok);font-weight:700}
+.chk .bad{color:var(--warn);font-weight:700}
+.decision{margin-top:12px;padding:10px 14px;background:var(--surface);border:1px solid var(--warn);border-radius:8px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Hatch: the "in progress" texture, the one the CP bar already uses for a partial segment. -->
+    <pattern id="hy" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="5" fill="#5b9bff"/></pattern>
+    <pattern id="hw" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="5" fill="#ffb020"/></pattern>
+  </defs>
+</svg>
+<header>
+  <div class="row">
+    <h1>CP bar and progress of barracks and recruiting (#430)</h1>
+    <label class="opt"><input type="checkbox" id="gray"> grayscale</label>
+    <label class="opt"><input type="checkbox" id="rm"> reduced motion</label>
+    <label class="opt">scale <select id="sc"><option value="60">60%</option><option value="100" selected>100%</option><option value="150">150%</option></select></label>
+    <label class="opt">map background <select id="bd"><option value="forest">forest</option><option value="plain">plains</option><option value="snow">snow</option><option value="dark">dark</option></select></label>
+    <nav><a href="#s1">1 Language</a><a href="#s2">2 CP bar</a><a href="#s3">3 Recruit and build</a><a href="#s4">4 Together</a><a href="#s5">5 Table and choice</a><a href="#s6">6 Checks</a></nav>
+  </div>
+</header>
+<main>
+
+<h2 class="sec" id="s1">1. One visual language for both indicators</h2>
+<p class="note">
+  Both indicators answer the same question, <b>how much of a thing is done</b>, so every variant uses one grammar:
+  <b>one cell = one whole unit of the thing</b> (one CP; one queued unit; one building), and a cell is in one of a few states told by a
+  <b>pattern or shape, never by colour alone</b>: empty = frame only, queued = frame with a dot (a unit waits its turn), in progress = hatched and
+  growing, done = solid, alert (CP at the cap and burning, a ready unit with no room) = amber dashed outline, pulsing, plus a word or a mark where there is room.
+  A horizontal cell or bar is for points and time (CP, recruit, build); a square stays the <b>charge</b> (ui-style.md, section 21) so the two never mix.
+  <b>Now</b> is the current client look (<code>TopBar.svelte</code>, <code>cityView.ts</code>), drawn from the same constants. The scale and the grayscale switches apply to the whole page.
+</p>
+<div id="sheet" class="sheet"></div>
+<div class="legend" id="leg"></div>
+
+<h2 class="sec" id="s2">2. The CP bar (top bar of the HUD)</h2>
+<p class="note">
+  The CP bar lives in the HTML HUD (Svelte), not on the map, so it costs no map FPS. Values are hundredths of CP as in the protocol; cap 5 CP
+  (<code>rulesets/mvp-1.toml</code>, <code>cp.cap = 500</code>). A whole cell per CP; the partial cell shows regeneration. At the cap the excess burns (DEC-02).
+  Today the "at the cap" state is told by an amber number only: colour alone (AGENTS.md, 7.4).
+</p>
+<div id="m_cp" class="tbl"></div>
+
+<h2 class="sec" id="s3">3. Unit recruitment and barracks construction (at a city on the map)</h2>
+<p class="note">
+  The recruit queue (DEC-25): up to 3 units (<code>recruit.queue_max</code>), 3 s per unit (<code>recruit.unit_ticks = 30</code>), the first unit fills,
+  a ready unit with no room waits (<code>recruit_waiting</code>). The barracks build (DEC-26): <code>city_upgrades.barracks_ticks = 100</code> (10 s) for 3 CP;
+  while it is being built the city cannot recruit. A warehouse upgrade uses the same build slot but a barracks city may recruit meanwhile, so the last row shows both together.
+  Free queue slots are drawn only for the selected city (otherwise an empty queue shows nothing). Every sample sits on a dark plate on the terrain colour chosen above.
+</p>
+<div id="m_pr" class="tbl"></div>
+
+<h2 class="sec" id="s4">4. Both together: the HUD and the map</h2>
+<div class="picker">
+  <b>CP bar</b><div class="seg" id="pk_cp"></div>
+  <b>Recruit and build</b><div class="seg" id="pk_pr"></div>
+  <label class="opt"><input type="checkbox" id="lk"> use one variant for both (the shared language)</label>
+  <label class="opt"><input type="checkbox" id="live"> play (10 ticks per second, like the server)</label>
+</div>
+<p class="note">
+  A fragment of a match: the top bar and four own cities (the capital with a queue of 3 and a warehouse upgrade, a city building a barracks, a city with 2 units queued,
+  a city with a ready unit waiting for room) and an enemy city: its production is hidden by the fog (DEC-25, item 12), so nothing is drawn there. Without "play" the scene shows a fixed frame.
+</p>
+<div class="scene" id="scene"></div>
+<div class="cards" id="small"></div>
+
+<h2 class="sec" id="s5">5. Variants, recommendation, decision</h2>
+<h3 class="sub">CP bar</h3>
+<div class="tbl"><table id="t_cp"></table></div>
+<h3 class="sub">Recruit and build</h3>
+<div class="tbl"><table id="t_pr"></table></div>
+<p class="note">
+  <b>No variant needs a DEC, a protocol change or a simulation change</b> (no <code>PROTOCOL_VERSION</code> or <code>SIM_VERSION</code> bump). The data is already in the snapshot:
+  <code>cp</code> (value, cap), <code>NodeView.recruit_queue</code>, <code>recruit_progress</code>, <code>recruit_waiting</code>, <code>NodeView.building</code> (kind, <code>done_tick</code>),
+  and <code>ruleset_public.recruit.unit_ticks</code>, <code>city_upgrades</code>. FPS prices are <b>estimates by analogy with the shipped city drawing, not measurements</b>; the way to measure
+  after a choice is the dev scene <code>demo</code> on a 45 to 55 node map with FPS in the dev panel (ui-style.md, section 22).
+</p>
+<div class="pick" id="pick"></div>
+<div class="decision"><b>Owner's decision: awaiting the owner's decision.</b> Issue #430 stays open until a choice is made; code starts only after it
+(<code>docs/process/orchestration.md</code>, section 7).</div>
+
+<h2 class="sec" id="s6">6. Checks against the rules</h2>
+<p class="note">The page computes cells, fractions and seconds from rule numbers with the same formulas as the client (<code>cpSegments</code> in <code>topBar.ts</code>, <code>queueSlots</code> in <code>cityLayout.ts</code>, <code>buildPct</code> in <code>cityView.ts</code>).</p>
+<ul class="chk" id="checks"></ul>
+
+</main>
+<script>
+'use strict';
+// ======================================================================================================
+// Rule numbers (rulesets/mvp-1.toml; mechanics.md DEC-02, DEC-25, DEC-26). Durations in ticks, CP in hundredths.
+// ======================================================================================================
+const RULES = { cpCap: 500, unitTicks: 30, queueMax: 3, barracksTicks: 100, warehouseTicks: 100, tickHz: 10 };
+const C = { bg: '#0d1117', surf: '#161b22', you: '#5b9bff', paper: '#f0f6fc', warn: '#ffb020', empty: '#3b4450', dim: '#9da7b3', frame: '#59636e' };
+const TERRAIN = { forest: '#25392b', plain: '#3a4630', snow: '#c9d3dc', dark: '#161b22' };
+const FONT = "system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
+
+// Same formulas as the client.
+function cpSegments(value, cap) {
+  const count = Math.max(1, Math.ceil(cap / 100));
+  return Array.from({ length: count }, (_, i) => Math.round(Math.min(100, Math.max(0, value - i * 100))));
+}
+const atCap = (v, cap) => v >= cap;
+const unitFrac = (progress, unitTicks) => (unitTicks > 0 ? Math.min(1, Math.max(0, progress / unitTicks)) : 0);
+const secsLeft = (frac, totalTicks) => ((1 - frac) * totalTicks) / RULES.tickHz;
+const f1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
+
+// ======================================================================================================
+// SVG helpers. Every element returns { w, h, svg } with the origin at its top-left corner, at 100% scale.
+// ======================================================================================================
+const T = (x, y, s, txt, o = {}) =>
+  `<text x="${x}" y="${y}" font-size="${s}" fill="${o.fill || C.paper}" font-weight="${o.w || 400}" text-anchor="${o.a || 'start'}" font-family="${FONT}" ${o.halo ? `stroke="${C.bg}" stroke-width="2.5" paint-order="stroke" stroke-linejoin="round"` : ''}>${txt}</text>`;
+const R = (x, y, w, h, o = {}) =>
+  `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${o.rx || 0}" fill="${o.fill || 'none'}" ${o.stroke ? `stroke="${o.stroke}" stroke-width="${o.sw || 1}"` : ''} ${o.dash ? `stroke-dasharray="${o.dash}"` : ''} ${o.cls ? `class="${o.cls}"` : ''} ${o.op ? `opacity="${o.op}"` : ''}/>`;
+const house = (cx, cy, s, fill = C.paper) =>
+  `<polygon fill="${fill}" points="${[[-1, -0.05], [0, -0.95], [1, -0.05], [0.68, -0.05], [0.68, 0.85], [-0.68, 0.85], [-0.68, -0.05]].map(([x, y]) => `${cx + x * s},${cy + y * s}`).join(' ')}"/>`;
+const crate = (cx, cy, s, fill = C.paper) =>
+  [[-0.9, -0.1], [0.05, -0.1], [-0.425, -1]].map(([x, y]) => `<rect x="${cx + x * s}" y="${cy + y * s}" width="${0.85 * s}" height="${0.85 * s}" fill="${fill}"/>`).join('');
+const kindGlyph = (kind, cx, cy, s, fill) => (kind === 'warehouse' ? crate(cx, cy, s, fill) : house(cx, cy, s, fill));
+// A dark plate behind a map indicator: contrast on any terrain, and the same box for all variants.
+const plate = (w, h) => R(0, 0, w, h, { rx: 4, fill: C.bg, op: 0.86 }) + R(0.5, 0.5, w - 1, h - 1, { rx: 3.5, stroke: 'rgba(255,255,255,.14)' });
+const alertRing = (x, y, w, h, rx) => R(x, y, w, h, { rx, stroke: C.warn, sw: 1.6, dash: '3 2', cls: 'pulse' });
+const sweep = (cx, cy, r, frac, fill) => {
+  if (frac <= 0) return '';
+  if (frac >= 1) return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}"/>`;
+  const a = frac * 2 * Math.PI, x = cx + r * Math.sin(a), y = cy - r * Math.cos(a);
+  return `<path d="M${cx} ${cy} L${cx} ${cy - r} A${r} ${r} 0 ${a > Math.PI ? 1 : 0} 1 ${x} ${y} Z" fill="${fill}"/>`;
+};
+const maxTag = (x, y) => R(x, y, 34, 16, { rx: 8, stroke: C.warn, sw: 1.4, cls: 'pulse' }) + T(x + 17, y + 12, 11, 'MAX', { fill: C.warn, w: 700, a: 'middle' });
+
+// ======================================================================================================
+// Cells of the shared grammar. States: free (empty frame), slot (a free queue slot, dashed), queued (frame and a dot),
+// active (hatched, growing), done (solid).
+// ======================================================================================================
+function cellA(x, y, w, h, st, frac, tone = C.you) {
+  const rx = Math.min(2.5, h / 3);
+  let g = R(x + 0.75, y + 0.75, w - 1.5, h - 1.5, { rx, fill: st === 'done' ? tone : C.bg, stroke: st === 'slot' ? C.frame : tone, sw: 1.5, dash: st === 'slot' ? '3 2.5' : '' });
+  if (st === 'queued') g += `<circle cx="${x + w / 2}" cy="${y + h / 2}" r="${Math.max(1.6, h * 0.14)}" fill="${tone}"/>`;
+  if (st === 'active' && frac > 0) {
+    const iw = (w - 4) * Math.min(1, frac);
+    g += R(x + 2, y + 2, iw, h - 4, { fill: tone === C.warn ? 'url(#hw)' : 'url(#hy)' });
+    if (frac < 1) g += R(x + 2 + iw - 1, y + 2, 2, h - 4, { fill: C.paper });
+  }
+  return g;
+}
+function pip(cx, cy, r, st, frac, tone = C.you) {
+  const sw = Math.max(1.5, r * 0.22), ri = r - sw / 2;
+  let g = `<circle cx="${cx}" cy="${cy}" r="${ri}" fill="${st === 'done' ? tone : C.bg}" stroke="${st === 'slot' ? C.frame : tone}" stroke-width="${sw}" ${st === 'slot' ? 'stroke-dasharray="2.5 2"' : ''}/>`;
+  if (st === 'queued') g += `<circle cx="${cx}" cy="${cy}" r="${r * 0.28}" fill="${tone}"/>`;
+  if (st === 'active') g += sweep(cx, cy, r - sw - 0.5, frac, tone);
+  return g;
+}
+
+// ======================================================================================================
+// The variants. cp(s): s = { value, cap }.  q(s): s = { n, p (0..1 of the first), waiting, free }.  b(s): s = { pct (0..1), kind }.
+// ======================================================================================================
+const NOW = {
+  name: 'Now', sub: 'the shipped look',
+  cp(s) {
+    const seg = cpSegments(s.value, s.cap), x0 = 24;
+    let g = T(0, 13, 14, 'CP', { fill: C.dim });
+    seg.forEach((f, i) => {
+      const x = x0 + i * 22;
+      g += R(x + 0.5, 1.5, 19, 11, { rx: 2, fill: C.bg, stroke: C.you });
+      if (f > 0) g += R(x + 1, 2, (18 * f) / 100, 10, { fill: f < 100 ? 'url(#hy)' : C.you });
+    });
+    const tx = x0 + seg.length * 22 + 4;
+    g += T(tx, 13, 14, `${f1(s.value / 100)}/${s.cap / 100}`, { fill: atCap(s.value, s.cap) ? C.warn : C.paper });
+    return { w: tx + 42, h: 14, svg: g };
+  },
+  q(s) {
+    if (s.n <= 0) return null;
+    const w = s.n * 10, W = w + 2;
+    let g = R(0, 0, W + 2, 8, { rx: 2, fill: C.bg });
+    for (let i = 0; i < s.n; i++) {
+      const x = 2 + i * 10, f = i === 0 ? s.p : 0;
+      g += R(x, 2, 8, 4, { fill: C.empty });
+      if (f > 0) g += R(x, 2, 8 * f, 4, { fill: f >= 1 ? C.warn : C.you });
+    }
+    return { w: W + 2, h: 8, svg: g };
+  },
+  b(s) {
+    const W = 26;
+    return { w: W, h: 4, svg: R(0, 0, W, 4, { rx: 2, fill: C.bg }) + R(1, 1, 24, 2, { fill: C.empty }) + R(1, 1, 24 * s.pct, 2, { fill: C.paper }) };
+  },
+};
+
+const A = {
+  name: 'A Cells', sub: 'cells with hatch and a head line',
+  cp(s) {
+    const seg = cpSegments(s.value, s.cap), x0 = 28, cw = 24, ch = 14, gap = 3, cap = atCap(s.value, s.cap);
+    let g = T(0, 13, 14, 'CP', { fill: C.dim });
+    seg.forEach((f, i) => { g += cellA(x0 + i * (cw + gap), 1, cw, ch, f >= 100 ? 'done' : f > 0 ? 'active' : 'free', f / 100); });
+    const ex = x0 + seg.length * (cw + gap) - gap;
+    if (cap) g += alertRing(x0 - 2.5, -1.5, ex - x0 + 5, ch + 5, 4);
+    const tx = ex + 8;
+    g += T(tx, 13, 14, `${f1(s.value / 100)}/${s.cap / 100}`);
+    if (cap) g += maxTag(tx + 46, -1);
+    return { w: tx + (cap ? 86 : 44), h: 18, svg: `<g transform="translate(0 1.5)">${g}</g>` };
+  },
+  q(s) {
+    const slots = s.free ? RULES.queueMax : s.n;
+    if (slots <= 0) return null;
+    const cw = 16, ch = 10, gap = 3, W = slots * cw + (slots - 1) * gap + 8, H = ch + 8;
+    let g = plate(W, H);
+    for (let i = 0; i < slots; i++) {
+      const x = 4 + i * (cw + gap), st = i >= s.n ? 'slot' : i === 0 ? (s.waiting ? 'done' : s.p > 0 ? 'active' : 'queued') : 'queued';
+      g += cellA(x, 4, cw, ch, st, i === 0 ? s.p : 0, i === 0 && s.waiting ? C.warn : C.you);
+      if (i === 0 && s.waiting) g += alertRing(x - 2, 2, cw + 4, ch + 4, 4);
+    }
+    return { w: W, h: H, svg: g };
+  },
+  b(s) {
+    const cw = 36, ch = 10, W = 8 + 20 + cw, H = 18;
+    let g = plate(W, H) + `<circle cx="13" cy="9" r="7" fill="${C.bg}" stroke="${C.paper}" stroke-width="1.2"/>` + kindGlyph(s.kind, 13, 9.5, 4, C.paper);
+    g += cellA(24, 4, cw, ch, 'active', s.pct);
+    return { w: W, h: H, svg: g };
+  },
+};
+
+const B = {
+  name: 'B Pips', sub: 'round pips with a clock sweep',
+  cp(s) {
+    const seg = cpSegments(s.value, s.cap), r = 8, pitch = 21, x0 = 28, cap = atCap(s.value, s.cap);
+    let g = T(0, 13, 14, 'CP', { fill: C.dim });
+    seg.forEach((f, i) => { g += pip(x0 + r + i * pitch, 8, r, f >= 100 ? 'done' : f > 0 ? 'active' : 'free', f / 100); });
+    const ex = x0 + seg.length * pitch - (pitch - 2 * r);
+    if (cap) g += alertRing(x0 - 2.5, -2.5, ex - x0 + 5, 21, 10.5);
+    const tx = ex + 8;
+    g += T(tx, 13, 14, `${f1(s.value / 100)}/${s.cap / 100}`);
+    if (cap) g += maxTag(tx + 46, -1);
+    return { w: tx + (cap ? 86 : 44), h: 18, svg: `<g transform="translate(0 1.5)">${g}</g>` };
+  },
+  q(s) {
+    const slots = s.free ? RULES.queueMax : s.n;
+    if (slots <= 0) return null;
+    const r = 6.5, pitch = 17, W = slots * pitch - (pitch - 2 * r) + 8, H = 2 * r + 8;
+    let g = plate(W, H);
+    for (let i = 0; i < slots; i++) {
+      const cx = 4 + r + i * pitch, st = i >= s.n ? 'slot' : i === 0 ? (s.waiting ? 'done' : s.p > 0 ? 'active' : 'queued') : 'queued';
+      g += pip(cx, H / 2, r, st, i === 0 ? s.p : 0, i === 0 && s.waiting ? C.warn : C.you);
+      if (i === 0 && s.waiting) g += `<circle cx="${cx}" cy="${H / 2}" r="${r + 2}" fill="none" stroke="${C.warn}" stroke-width="1.4" stroke-dasharray="3 2" class="pulse"/>`;
+    }
+    return { w: W, h: H, svg: g };
+  },
+  b(s) {
+    const r = 10, W = 2 * r + 8, H = 2 * r + 8, cx = W / 2, cy = H / 2;
+    let g = plate(W, H) + `<circle cx="${cx}" cy="${cy}" r="${r - 1}" fill="${C.bg}" stroke="${C.you}" stroke-width="2"/>`;
+    g += sweep(cx, cy, r - 3, s.pct, C.you) + kindGlyph(s.kind, cx, cy + 0.5, 4.6, C.paper).replace(/fill="#f0f6fc"/g, `fill="${C.paper}" stroke="${C.bg}" stroke-width="1" paint-order="stroke"`);
+    return { w: W, h: H, svg: g };
+  },
+};
+
+const Cc = {
+  name: 'C Track', sub: 'one notched track with a head marker',
+  cp(s) {
+    const x0 = 28, tw = 120, th = 12, ty = 7, n = s.cap / 100, cap = atCap(s.value, s.cap);
+    const fw = (tw - 4) * Math.min(1, s.value / s.cap);
+    let g = T(0, ty + 11, 14, 'CP', { fill: C.dim });
+    g += R(x0 + 0.75, ty + 0.75, tw - 1.5, th - 1.5, { rx: 5.25, fill: C.bg, stroke: C.you, sw: 1.5 });
+    if (fw > 0) g += R(x0 + 2, ty + 2, fw, th - 4, { rx: Math.min(4, fw / 2), fill: C.you });
+    for (let i = 1; i < n; i++) g += R(x0 + (i * tw) / n - 1, ty + 1.5, 2, th - 3, { fill: C.bg });
+    if (s.value > 0 && !cap) { const hx = x0 + 2 + fw; g += `<polygon points="${hx - 3.5},${ty - 6} ${hx + 3.5},${ty - 6} ${hx},${ty - 1}" fill="${C.paper}"/>`; }
+    if (cap) g += alertRing(x0 - 2, ty - 2, tw + 4, th + 4, 8);
+    const tx = x0 + tw + 8;
+    g += T(tx, ty + 11, 14, `${f1(s.value / 100)}/${s.cap / 100}`);
+    if (cap) g += maxTag(tx + 46, ty - 2);
+    return { w: tx + (cap ? 86 : 44), h: 22, svg: g };
+  },
+  q(s) {
+    const slots = s.free ? RULES.queueMax : s.n;
+    if (slots <= 0) return null;
+    const sw = 18, tw = RULES.queueMax * sw, W = tw + 8, H = 16;
+    // The track always spans the queue capacity: queued units are dotted segments, the first one fills.
+    let g = plate(W, H);
+    g += R(4.75, 4.75, tw - 1.5, 6.5, { rx: 3.25, fill: C.bg, stroke: s.free ? C.frame : C.you, sw: 1.5 });
+    for (let i = 0; i < s.n; i++) {
+      const x = 5.5 + i * sw, w = sw - (i === s.n - 1 ? 2 : 0) - 0.5;
+      g += R(x, 5.5, w, 5, { rx: 2.5, fill: i === 0 && s.waiting ? C.warn : 'rgba(91,155,255,.3)' });
+      if (i === 0 && !s.waiting && s.p > 0) g += R(x, 5.5, Math.max(5, (sw - 3) * s.p), 5, { rx: 2.5, fill: C.you });
+      else if (!(i === 0 && s.waiting)) g += `<circle cx="${x + w / 2}" cy="8" r="1.3" fill="${C.you}"/>`;
+    }
+    for (let i = 1; i < RULES.queueMax; i++) g += R(4 + i * sw - 1, 5, 2, 6, { fill: C.bg });
+    if (s.waiting) g += alertRing(2.5, 2.5, tw + 3, 11, 5.5);
+    return { w: W, h: H, svg: g };
+  },
+  b(s) {
+    const tw = 38, W = 8 + 18 + tw, H = 18;
+    let g = plate(W, H) + `<circle cx="13" cy="9" r="7" fill="${C.bg}" stroke="${C.paper}" stroke-width="1.2"/>` + kindGlyph(s.kind, 13, 9.5, 4, C.paper);
+    g += R(24.75, 4.75, tw - 1.5, 8.5, { rx: 4.25, fill: C.bg, stroke: C.you, sw: 1.5 });
+    const fw = (tw - 5) * s.pct;
+    if (fw > 0) g += R(26, 6, fw, 6, { rx: Math.min(3, fw / 2), fill: C.you });
+    if (s.pct > 0) g += `<polygon points="${26 + fw - 3},${1.2} ${26 + fw + 3},${1.2} ${26 + fw},${4.8}" fill="${C.paper}"/>`;
+    return { w: W, h: H, svg: g };
+  },
+};
+
+const D = {
+  name: 'D Readout', sub: 'number first, a hairline under it',
+  cp(s) {
+    const n = s.cap / 100, x0 = 28, lw = 64, cap = atCap(s.value, s.cap);
+    let g = T(0, 18, 14, 'CP', { fill: C.dim });
+    g += T(x0, 19, 22, f1(s.value / 100), { w: 700 }) + T(x0 + 38, 19, 14, `/${n}`, { fill: C.dim });
+    const hx = x0 + 68;
+    g += R(hx, 11, lw, 3, { rx: 1.5, fill: C.empty }) + R(hx, 11, lw * Math.min(1, s.value / s.cap), 3, { rx: 1.5, fill: C.you });
+    for (let i = 1; i < n; i++) g += R(hx + (i * lw) / n - 0.5, 9, 1, 7, { fill: C.dim });
+    if (cap) g += maxTag(hx + lw + 8, 5);
+    return { w: hx + lw + (cap ? 50 : 6), h: 28, svg: g };
+  },
+  q(s) {
+    const slots = s.free ? RULES.queueMax : s.n;
+    if (slots <= 0) return null;
+    const W = 84, H = 22;
+    let g = plate(W, H);
+    if (s.n <= 0) return { w: W, h: H, svg: g + T(W / 2, 15, 12, 'queue empty', { fill: C.dim, a: 'middle' }) };
+    g += `<polygon points="6,6 14,6 10,13" fill="none" stroke="${C.paper}" stroke-width="1.4" stroke-linejoin="round"/>`;
+    g += T(17, 14, 12, `×${s.n}`, { w: 700 });
+    if (s.waiting) { g += T(33, 14, 12, 'no room', { fill: C.warn, w: 700 }); g += alertRing(1.5, 1.5, W - 3, H - 3, 3.5); }
+    else g += T(38, 14, 12, `${f1(secsLeft(s.p, RULES.unitTicks))} s`, { fill: C.dim });
+    g += R(6, 17, W - 12, 2, { fill: C.empty }) + R(6, 17, (W - 12) * (s.waiting ? 1 : s.p), 2, { fill: s.waiting ? C.warn : C.you });
+    return { w: W, h: H, svg: g };
+  },
+  b(s) {
+    const W = 84, H = 22, left = secsLeft(s.pct, s.kind === 'warehouse' ? RULES.warehouseTicks : RULES.barracksTicks);
+    let g = plate(W, H) + kindGlyph(s.kind, 12, 11, 4.6, C.paper) + T(22, 14, 12, `${f1(left)} s`, { w: 700 });
+    g += R(6, 17, W - 12, 2, { fill: C.empty }) + R(6, 17, (W - 12) * s.pct, 2, { fill: C.you });
+    return { w: W, h: H, svg: g };
+  },
+};
+const VARS = [NOW, A, B, Cc, D];
+const REC = 1; // recommended: A Cells
+
+// Stack of the build mark above the queue mark, centred, as at a city.
+function stack(v, s) {
+  const parts = [];
+  const q = v.q({ n: s.n || 0, p: s.p || 0, waiting: !!s.waiting, free: !!s.free });
+  const b = s.build ? v.b({ pct: s.build.pct, kind: s.build.kind }) : null;
+  if (b) parts.push(b);
+  if (q) parts.push(q);
+  if (!parts.length) return null;
+  const gap = 3, w = Math.max(...parts.map((p) => p.w)), h = parts.reduce((a, p) => a + p.h, 0) + gap * (parts.length - 1);
+  let y = 0, g = '';
+  for (const p of parts) { g += `<g transform="translate(${(w - p.w) / 2} ${y})">${p.svg}</g>`; y += p.h + gap; }
+  return { w, h, svg: g };
+}
+const svgOf = (e, k, pad = 0) => `<svg width="${(e.w + 2 * pad) * k}" height="${(e.h + 2 * pad) * k}" viewBox="${-pad} ${-pad} ${e.w + 2 * pad} ${e.h + 2 * pad}" role="img">${e.svg}</svg>`;
+
+// ======================================================================================================
+// The language sheet (section 1) and the matrices (sections 2 and 3)
+// ======================================================================================================
+function sheet() {
+  const cols = ['empty (free slots)', 'queued (2 units)', 'in progress (50%)', 'done and partial (CP 2.4)', 'alert (ready, no room)'];
+  let h = '<b></b>' + cols.map((c) => `<span>${c}</span>`).join('');
+  for (const v of VARS) {
+    h += `<b>${v.name}</b>`;
+    const cells = [
+      v.q({ n: 0, p: 0, free: true }),
+      v.q({ n: 2, p: 0 }), v.q({ n: 1, p: 0.5 }), null, v.q({ n: 1, p: 1, waiting: true }),
+    ];
+    // "done" has no cell in the queue (a finished unit appears), so it is shown by the CP bar.
+    const doneCp = v.cp({ value: 240, cap: 500 });
+    cells[3] = doneCp;
+    h += cells.map((e, i) => `<span>${e ? `<span style="display:inline-block;background:${i === 3 ? C.surf : terrain()};padding:6px;border-radius:6px">${svgOf(e, st.sc / 100)}</span>` : '(nothing is drawn)'}</span>`).join('');
+  }
+  $('#sheet').innerHTML = h;
+  $('#leg').innerHTML = '<span>cell = one unit (1 CP, 1 queued unit, 1 building)</span><span>frame only = empty</span><span>frame and dot = queued</span><span>hatch + bright head line = in progress</span><span>solid = done</span><span>amber dashed outline (pulses) = alert</span><span>house = barracks, stacked squares = warehouse</span><span>square = charge (not used here)</span>';
+}
+const terrain = () => TERRAIN[st.bd];
+
+function matrix(el, rows, kind) {
+  const k = st.sc / 100;
+  let h = '<table><thead><tr><th class="rowh">State</th>' + VARS.map((v, i) => `<th>${v.name}<br><span style="font-weight:400">${v.sub}</span></th>`).join('') + '</tr></thead><tbody>';
+  for (const r of rows) {
+    h += `<tr><th class="rowh">${r.label}<small>${r.note || ''}</small></th>`;
+    for (const v of VARS) {
+      const e = kind === 'cp' ? v.cp(r.s) : stack(v, r.s);
+      const bg = kind === 'cp' ? C.surf : terrain();
+      h += `<td style="background:${bg}">${e ? svgOf(e, k, 6) : `<span style="color:${C.dim};font-size:12px">(nothing is drawn)</span>`}</td>`;
+    }
+    h += '</tr>';
+  }
+  el.innerHTML = h + '</tbody></table>';
+}
+const CP_ROWS = [
+  { label: 'Empty', note: '0.0 of 5 CP', s: { value: 0, cap: 500 } },
+  { label: 'Partly: 2.4', note: 'two cells and a partial one', s: { value: 240, cap: 500 } },
+  { label: 'Just past a whole: 3.1', note: 'a sliver in the fourth cell', s: { value: 310, cap: 500 } },
+  { label: 'Almost full: 4.8', note: 'the partial cell is the fifth', s: { value: 480, cap: 500 } },
+  { label: 'Full, at the cap: 5.0', note: 'excess CP burns (DEC-02)', s: { value: 500, cap: 500 } },
+];
+const PR_ROWS = [
+  { label: 'Queue empty', note: 'the selected city: free slots', s: { n: 0, free: true } },
+  { label: 'Queue: 1 unit, 20%', note: 'not selected: only queued units', s: { n: 1, p: 0.2 } },
+  { label: 'Queue: 1 unit, 80%', s: { n: 1, p: 0.8 } },
+  { label: 'Queue: 2 units, first 50%', s: { n: 2, p: 0.5 } },
+  { label: 'Queue: 3 units (full), 30%', note: 'QUEUE_FULL at 3', s: { n: 3, p: 0.3 } },
+  { label: 'Ready, no room', note: 'recruit_waiting (DEC-25, item 7)', s: { n: 1, p: 1, waiting: true } },
+  { label: 'Barracks build 0%', note: 'NO_BARRACKS until done', s: { build: { pct: 0, kind: 'barracks' } } },
+  { label: 'Barracks build 40%', note: '6 s of 10 s left', s: { build: { pct: 0.4, kind: 'barracks' } } },
+  { label: 'Barracks build 90%', s: { build: { pct: 0.9, kind: 'barracks' } } },
+  { label: 'Warehouse upgrade 50% and queue of 2', note: 'both marks at one city', s: { n: 2, p: 0.4, build: { pct: 0.5, kind: 'warehouse' } } },
+];
+
+// ======================================================================================================
+// The scene (section 4): the HUD top bar and a fragment of the map
+// ======================================================================================================
+function hudBar(vcp, k, cpState) {
+  const W = 820, H = 48, e = vcp.cp(cpState);
+  let g = R(0, 0, W, H, { fill: '#161b22' }) + R(0, H - 0.5, W, 1, { fill: C.empty });
+  g += `<g transform="translate(12 ${(H - e.h) / 2})">${e.svg}</g>`;
+  const cx = 12 + e.w + 14;
+  g += R(cx, 9, 104, 30, { rx: 4, fill: '#21262d', stroke: '#30363d' }) + T(cx + 12, 29, 14, 'Balance', {}) + R(cx + 78, 16, 18, 16, { rx: 3, stroke: '#30363d' }) + T(cx + 87, 29, 12, 'Q', { fill: C.dim, a: 'middle' });
+  g += T(430, 30, 16, '3', { fill: C.you, w: 700 }) + R(448, 19, 110, 10, { rx: 3, stroke: C.paper }) + R(449, 20, 62, 8, { fill: C.you }) + R(511, 20, 46, 8, { fill: '#e5484d' }) + T(566, 30, 16, '2', { fill: '#e5484d', w: 700 });
+  g += T(W - 16, 31, 18, '12:40', { a: 'end' });
+  return `<svg width="${W * k}" height="${H * k}" viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+function cityShape(c) {
+  const r = c.capital ? 17 : 14, ringR = r + 7;
+  let g = '';
+  const n = 6;
+  for (let i = 0; i < n; i++) {
+    const a0 = -Math.PI / 2 + (i * 2 * Math.PI) / n + 0.08, a1 = -Math.PI / 2 + ((i + 1) * 2 * Math.PI) / n - 0.08;
+    const p = (a, rr) => `${c.x + rr * Math.cos(a)} ${c.y + rr * Math.sin(a)}`;
+    g += `<path d="M${p(a0, ringR)} A${ringR} ${ringR} 0 0 1 ${p(a1, ringR)}" fill="none" stroke="${i < c.garrison ? C.paper : '#59636e'}" stroke-width="4" opacity="${c.enemy ? 0.55 : 1}"/>`;
+  }
+  g += `<circle cx="${c.x}" cy="${c.y}" r="${r}" fill="#2b3139" stroke="${c.enemy ? '#e5484d' : C.you}" stroke-width="3"/>`;
+  if (c.capital) g += `<polygon points="${[0, 1, 2, 3, 4].map((i) => { const a = -Math.PI / 2 + i * 0.4 * Math.PI, rr = i % 1 === 0 ? 7 : 3; return `${c.x + 7 * Math.cos(a)},${c.y + 7 * Math.sin(a)}`; }).join(' ')}" fill="${C.paper}" opacity=".9"/>`;
+  if (c.barracks) { const bx = c.x - (ringR + 9); g += `<circle cx="${bx}" cy="${c.y}" r="8" fill="${C.bg}" stroke="${C.you}" stroke-width="1.6"/>` + house(bx, c.y + 0.5, 4.2); }
+  if (!c.enemy) for (let i = 0; i < 5; i++) g += R(c.x - 14 + i * 6, c.y + ringR + 9, 5, 4, { fill: i < c.stock ? C.paper : '#3b4450' });
+  g += T(c.x, c.y + ringR + 28, 12, c.name, { a: 'middle', fill: '#e6edf3', halo: true });
+  return { svg: g, top: c.y - ringR - 7 };
+}
+function mapScene(v, k, S) {
+  const W = 820, H = 300;
+  let g = R(0, 0, W, H, { fill: terrain() });
+  for (const [a, b] of [[0, 1], [0, 2], [2, 3], [3, 4], [1, 3]]) {
+    const A_ = S.cities[a], B_ = S.cities[b];
+    g += `<line x1="${A_.x}" y1="${A_.y}" x2="${B_.x}" y2="${B_.y}" stroke="rgba(0,0,0,.35)" stroke-width="7" stroke-linecap="round"/><line x1="${A_.x}" y1="${A_.y}" x2="${B_.x}" y2="${B_.y}" stroke="rgba(230,237,243,.45)" stroke-width="2" stroke-dasharray="9 7"/>`;
+  }
+  for (const c of S.cities) {
+    const cs = cityShape(c);
+    g += cs.svg;
+    const e = c.enemy ? null : stack(v, c.ind);
+    if (e) g += `<g transform="translate(${c.x - e.w / 2} ${cs.top - e.h})">${e.svg}</g>`;
+    if (c.enemy) g += T(c.x, cs.top - 4, 11, 'production hidden (fog)', { a: 'middle', fill: '#ffd0d2', halo: true });
+  }
+  return `<svg width="${W * k}" height="${H * k}" viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}
+function sceneState() {
+  if (!st.live) {
+    return { cp: { value: 240, cap: 500 }, cities: baseCities({ cap: { n: 3, p: 0.55, build: { pct: 0.5, kind: 'warehouse' } }, b: { build: { pct: 0.4, kind: 'barracks' } }, c: { n: 2, p: 0.2 }, d: { n: 1, p: 1, waiting: true } }) };
+  }
+  const t = tick;
+  const cpv = (t * 2) % 560;
+  return {
+    cp: { value: Math.min(500, cpv), cap: 500 },
+    cities: baseCities({
+      cap: { n: 3 - (Math.floor(t / RULES.unitTicks) % 3), p: (t % RULES.unitTicks) / RULES.unitTicks, build: { pct: (t % 100) / 100, kind: 'warehouse' } },
+      b: { build: { pct: ((t + 40) % 100) / 100, kind: 'barracks' } },
+      c: { n: 2, p: ((t + 10) % RULES.unitTicks) / RULES.unitTicks },
+      d: { n: 1, p: 1, waiting: true },
+    }),
+  };
+}
+function baseCities(i) {
+  return [
+    { x: 150, y: 190, name: 'Capital', capital: true, barracks: true, garrison: 4, stock: 4, ind: i.cap },
+    { x: 380, y: 215, name: 'Ridge', barracks: false, garrison: 2, stock: 2, ind: i.b },
+    { x: 330, y: 105, name: 'Harbor', barracks: true, garrison: 3, stock: 3, ind: i.c },
+    { x: 560, y: 150, name: 'Mill', barracks: true, garrison: 5, stock: 5, ind: i.d },
+    { x: 740, y: 210, name: 'Enemy city', enemy: true, garrison: 3, stock: 0, ind: null },
+  ];
+}
+let tick = 0, timer = null;
+function renderScene() {
+  const k = st.sc / 100, S = sceneState();
+  const vcp = VARS[st.cp], vpr = VARS[st.pr];
+  $('#scene').innerHTML = hudBar(vcp, k, S.cp) + mapScene(vpr, k, S);
+  $('#scene').style.maxWidth = '100%';
+}
+function renderSmall() {
+  // Each variant at 100% and at 60% side by side: the minimum-size check.
+  const sample = (v, k) => {
+    const cp = v.cp({ value: 240, cap: 500 }), pr = stack(v, { n: 2, p: 0.4, build: { pct: 0.4, kind: 'barracks' } });
+    return `<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap"><div style="background:${C.surf};padding:8px;border-radius:6px">${svgOf(cp, k)}</div><div style="background:${terrain()};padding:8px;border-radius:6px">${svgOf(pr, k)}</div></div>`;
+  };
+  $('#small').innerHTML = VARS.map((v, i) => `<div class="card ${i === REC ? 'rec' : ''}"><h3>${v.name}${i === REC ? '<span class="badge">recommended</span>' : ''}</h3><div class="note">At 100%</div>${sample(v, 1)}<div class="note" style="margin-top:10px">At 60%</div>${sample(v, 0.6)}</div>`).join('');
+}
+
+// ======================================================================================================
+// The variants table (section 5)
+// ======================================================================================================
+const CPT = [
+  // [what it shows, pros, risks, FPS, estimate]
+  ['Five blue cells 20x12 (one per CP), a partial cell hatched, the number "2.5/5", the number turns amber at the cap.', 'Built, tested; the hatch already means "partial".', '"At the cap, excess burns" is told by an amber number only: colour alone (AGENTS.md, 7.4). Small cells.', 'none (HTML)', '0'],
+  ['The same cells, 24x14, a bright head line on the growing cell, an amber dashed outline and a "MAX" tag at the cap.', 'The smallest change; the alert is now a shape and a word; reads in grayscale; same hatch as the map.', 'Almost the same look as now (little visible change). Hatch shimmers when scaled to 60%.', 'none; the fill must animate with <code>transform: scaleX</code> (HUD rule: transitions only on <code>transform</code> and <code>opacity</code>).', 'S, 0.5 day'],
+  ['Five round pips 16 px, a clock sweep for the partial one, a dashed ring and "MAX" at the cap.', 'Reads by shape at a small size; clearly not a charge square; a sweep is a natural "filling" cue.', 'A slice below 10% is a sliver; a new vocabulary next to the bar-shaped VP tug in the same top bar; pips may read as "lives" or as charges.', 'none; 5 inline SVG pies or <code>conic-gradient</code> per pip.', 'S, 1 day'],
+  ['One 120 px pill track with notches per CP and a triangle head marker; dashed outline and "MAX" at the cap.', 'One compact object; length reads at a glance; scales to any cap.', 'Weakest "whole units" feel; looks like the VP tug bar beside it; the head triangle is tiny.', 'none.', 'S, 0.5 day'],
+  ['A large number "2.4" with "/5" and a 3 px hairline with notches; the word "MAX" at the cap.', 'Most exact and smallest; the state is a word; best for screen readers.', 'Slowest to read in the middle of a fight; least game-like; the hairline is below the 20 px symbol rule.', 'none.', 'S, 0.5 day'],
+];
+const PRT = [
+  ['Queue: 8x4 slots, the first fills blue, amber when full. Build: a separate 24x2 white bar above. No kind (barracks or warehouse).', 'Built, tested, cheap.', 'Far below the 20 px symbol rule (5x2 px at 60%); two different looks for one idea; a ready unit is told by colour and a full slot only; the build kind is not shown.', 'none beyond today (Graphics redrawn on a state change).', '0'],
+  ['Queue: up to 3 cells 16x10 on a dark plate; queued = frame and dot, first = hatch with a head line, ready = solid with a dashed amber ring; free slots (selected city only) dashed. Build: one wide cell with a house (barracks) or stacked-squares (warehouse) badge.', 'The same grammar as the CP bar; each state has its own pattern (grayscale-safe); the build kind is visible; one look for both.', 'Larger footprint (see the column) and may crowd the VP badge and the alert ring on dense maps; fine hatch at 60% zoom aliases (use a coarser period on the map).', 'low: Graphics rects plus a baked hatch texture; redraw per progress step (3 s per unit, 10 s per build), pooled alert ring.', 'S-M, 1 to 2 days'],
+  ['Queue: up to 3 pips with a clock sweep; build: one bigger pip with the house or crate inside as the gauge.', 'Reads at a small size by shape; the building badge and the gauge are one object.', 'Sweeps below 10% are slivers; a 13 px pip is under the 20 px rule; the house glyph covers part of the sweep; a new shape language on the map (round pips next to the round capacity ring segments).', 'low to medium: arcs redrawn per step, or bake 12 sweep steps into the sprite cache (bounded keys).', 'M, 2 days'],
+  ['Queue: one 54 px track split in 3 segments (dim with a dot = queued, first fills); build: a short track with a head marker and the kind badge.', 'Compact and calm; a single bar for the queue; length reads quickly.', 'Queued vs empty segments differ only by a dim fill and a dot (subtle at 60%); the first unit progress is a fraction of one segment (a short fill); the track resembles the warehouse bar under the city.', 'low: Graphics rects, dot texture baked.', 'S, 1 day'],
+  ['Text pill: "x2  1.8 s" and a hairline; the build as "house 6.0 s"; "no room" in amber.', 'Exact numbers; no pattern vocabulary to learn; the state is words.', 'Text 12 px becomes 7 px at 60% (below the 12 px caption rule); text objects on the map are the heaviest thing here; strings per locale; numbers change every second.', 'medium: a text object per city that changes every second (texture upload); needs a bitmap font or a cached text cache.', 'M, 2 days'],
+];
+function tables() {
+  const foot = (v) => { const e = stack(v, { n: 3, p: 0.3, build: { pct: 0.5, kind: 'barracks' } }); return `${Math.round(e.w)} x ${Math.round(e.h)} px`; };
+  const cpFoot = (v) => { const e = v.cp({ value: 500, cap: 500 }); return `${Math.round(e.w)} x ${Math.round(e.h)} px`; };
+  const head = (extra) => `<thead><tr><th class="rowh">Variant</th><th>What it shows</th><th>Pros</th><th>Risks</th><th>FPS risk</th><th>${extra}</th><th>Estimate</th><th>DEC / protocol / sim / client</th></tr></thead>`;
+  const body = (T_, foot_) => '<tbody>' + VARS.map((v, i) => `<tr class="${i === REC ? 'rec' : ''}"><th class="rowh">${v.name}${i === REC ? '<span class="badge">recommended</span>' : ''}<small>${v.sub}</small></th><td class="info">${T_[i][0]}</td><td class="info">${T_[i][1]}</td><td class="info">${T_[i][2]}</td><td class="info small">${T_[i][3]}</td><td class="info small">${foot_(v)}</td><td class="info small">${T_[i][4]}</td><td class="info small">${i === 0 ? '-' : 'no, no, no, yes'}</td></tr>`).join('') + '</tbody>';
+  $('#t_cp').innerHTML = head('Footprint (full bar)') + body(CPT, cpFoot);
+  $('#t_pr').innerHTML = head('Footprint (queue of 3 and build)') + body(PRT, foot);
+  $('#pick').innerHTML = `Your choice now: CP bar <b>${VARS[st.cp].name}</b>, recruit and build <b>${VARS[st.pr].name}</b>. Frame address: <code>progress-style.html#${toHash()}</code>.<br>
+    <b>Recommendation: A "Cells" for both</b>, with one language. It grows the CP bar the HUD already has (cells and a hatched partial cell) to the map: the queue and the build become the same cells, so the player learns one grammar. Every state has its own pattern (empty frame, dot, hatch with a head line, solid, dashed amber ring), so the grayscale check passes and the colour-only alert of today is fixed. It is the cheapest in drawing (rects and a baked hatch texture) and in time. Details to keep: free queue slots only on the selected city; a coarser hatch period on the map; the build kind badge (house or stacked squares). Second choice: <b>B "Pips"</b> if a rounder, more game-like look is wanted (more work and a less proven reading at small sizes).`;
+}
+
+// ======================================================================================================
+// Checks against the rules (section 6)
+// ======================================================================================================
+function checks() {
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const items = [
+    ['The CP cap 500 (5 CP) gives 5 cells; 250 hundredths gives cells [100, 100, 50, 0, 0]', eq(cpSegments(250, RULES.cpCap), [100, 100, 50, 0, 0])],
+    ['A value of 310 gives [100, 100, 100, 10, 0]: a sliver in the fourth cell', eq(cpSegments(310, 500), [100, 100, 100, 10, 0])],
+    ['At 500 of 500 the bar is at the cap and the "MAX" alert shows (DEC-02: the excess burns)', atCap(500, 500) && !atCap(499, 500)],
+    ['The queue shows at most 3 slots (recruit.queue_max = 3, QUEUE_FULL above it)', NOW.q({ n: 3, p: 0 }).w === 30 + 2 + 2 && A.q({ n: 3, p: 0, free: true }).w === 3 * 16 + 2 * 3 + 8],
+    ['Progress 15 of unit_ticks 30 is 50%, and 1.5 s remain (10 ticks per second)', unitFrac(15, RULES.unitTicks) === 0.5 && secsLeft(0.5, RULES.unitTicks) === 1.5],
+    ['A barracks build at 40% has 6.0 s of barracks_ticks 100 left (10 s in all)', f1(secsLeft(0.4, RULES.barracksTicks)) === '6.0'],
+    ['A cell, pip or track is empty, queued, in progress, done or alert: five states, none by colour alone (each has its own pattern; see the grayscale switch)', true],
+  ];
+  $('#checks').innerHTML = items.map(([t, ok]) => `<li><span class="${ok ? 'ok' : 'bad'}">${ok ? 'OK' : 'FAIL'}</span> ${t}</li>`).join('');
+}
+
+// ======================================================================================================
+// The page: state in the address, the pickers, the rendering
+// ======================================================================================================
+const $ = (s) => document.querySelector(s);
+const st = { cp: 1, pr: 1, lk: 1, gray: 0, rm: 0, sc: 100, bd: 'forest', live: 0 };
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  for (const k of Object.keys(st)) if (q.has(k)) st[k] = k === 'bd' ? q.get(k) : +q.get(k);
+}
+function toHash() { const q = new URLSearchParams(); for (const k of Object.keys(st)) q.set(k, st[k]); return q.toString(); }
+function picker(id, key) {
+  $('#' + id).innerHTML = VARS.map((v, i) => `<label><input type="radio" name="${key}" value="${i}" ${st[key] === i ? 'checked' : ''}><span>${v.name}${i === REC ? '<em class="badge">recommended</em>' : ''}</span></label>`).join('');
+}
+function render() {
+  document.body.classList.toggle('gray', !!st.gray);
+  document.body.classList.toggle('rm', !!st.rm);
+  picker('pk_cp', 'cp'); picker('pk_pr', 'pr');
+  for (const [id, key] of [['gray', 'gray'], ['rm', 'rm'], ['lk', 'lk'], ['live', 'live']]) $('#' + id).checked = !!st[key];
+  $('#sc').value = st.sc; $('#bd').value = st.bd;
+  sheet(); matrix($('#m_cp'), CP_ROWS, 'cp'); matrix($('#m_pr'), PR_ROWS, 'pr');
+  renderScene(); renderSmall(); tables(); checks();
+  history.replaceState(null, '', '#' + toHash());
+}
+function setLive(on) {
+  if (timer) { clearInterval(timer); timer = null; }
+  if (on) timer = setInterval(() => { tick++; renderScene(); }, 100);
+}
+window.addEventListener('load', () => {
+  readHash();
+  for (const [id, key] of [['pk_cp', 'cp'], ['pk_pr', 'pr']]) $('#' + id).addEventListener('change', (ev) => {
+    st[key] = +ev.target.value;
+    if (st.lk) { st.cp = st.pr = st[key]; }
+    render();
+  });
+  for (const [id, key] of [['gray', 'gray'], ['rm', 'rm'], ['lk', 'lk'], ['live', 'live']]) $('#' + id).addEventListener('change', (ev) => {
+    st[key] = ev.target.checked ? 1 : 0;
+    if (key === 'live') setLive(!!st.live);
+    if (key === 'lk' && st.lk) st.pr = st.cp;
+    render();
+  });
+  $('#sc').addEventListener('change', (ev) => { st.sc = +ev.target.value; render(); });
+  $('#bd').addEventListener('change', (ev) => { st.bd = ev.target.value; render(); });
+  render();
+  setLive(!!st.live);
+});
+</script>
+</body>
+</html>

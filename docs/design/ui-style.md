@@ -14,7 +14,8 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/fight-arena.html`](mockups/fight-arena.html) (the fight arena, #327),
 [`mockups/map-style.html`](mockups/map-style.html) (map style directions, #332),
 [`mockups/map-style-2.html`](mockups/map-style-2.html) (round 2: volume, textures, fog, roads, #335),
-[`mockups/objects-style.html`](mockups/objects-style.html) (units, cities, barracks and "Defense", menu icons, #337). All of them are
+[`mockups/objects-style.html`](mockups/objects-style.html) (units, cities, barracks and "Defense", menu icons, #337),
+[`mockups/progress-style.html`](mockups/progress-style.html) (CP bar and the progress of barracks construction and recruiting, #430: **[awaiting the owner's decision]**; the owner asked for it on 2026-10-28, after the mechanics freeze, so the postponement of section 23 does not apply to it). All of them are
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
 only links and our descriptions.
