@@ -43,6 +43,10 @@ Commands (from the repository root; `mise run` installs Playwright Chromium itse
 5. `mise run shots:publish <PR or issue number>`, put the links into the PR description: "before" and "after", which scenes were viewed and what was seen.
    After the PR is merged: `git push origin --delete shots/<number>`.
 
+The travel time of an order (#432): `mise run shots` takes `eta-<name>.png` (the map alone) with the parameter
+`?eta=<from>,<to>,<ticks>` that pins the label to a frozen scene (a fixture has no server to answer `reach`): `eta-artery-near` (a road
+between two cities), `eta-artery-far` and `eta-artery-bend` (no road between them), `eta-snapshot`. They have no `visual` references.
+
 Radial menus (#350): `mise run shots` takes them too, on the scene `snapshot_fog` with the parameter `?menus` (in a frozen
 scene orders go nowhere, the menus open as for a player, city development is on): `menu-stance.png` (key Q),
 `menu-city.png` (a click on a city ring), `menu-group.png` (two clicks on a group), `menu-supply.png` (Tab and a click on a city)

@@ -322,8 +322,23 @@ export const SELECT_RING_GAP = 18;
  * reach only after a split: a dashed warning ring. Solid against dashed, not only colour.
  */
 export const REACH_RING = { gap: 12, width: 2, alpha: 0.8, dash: 5 } as const;
-/** The travel time under a hovered node: font size in world units (scaled to stay readable). */
+/**
+ * The travel time of a move order (#432): a plate with a small clock and the seconds, on the road
+ * between the group and the hovered city. The size is in world units and is scaled to stay as big
+ * on screen (`badgeScale`: 13 px of text is still 13 px at a 60% map scale). The seconds are text and
+ * the clock is a shape: the label never rests on colour.
+ */
 export const ETA_FONT_SIZE = 13;
+export const ETA_LABEL = {
+  height: 22,
+  padX: 7,
+  /** Width of the clock and the gap between it and the number. */
+  clock: 12,
+  gap: 4,
+  radius: 7,
+  /** The plate stands this far off the road (past the half width of the widest road). */
+  roadGap: 5,
+} as const;
 export const SELECT_WIDTH = 3;
 /** Group selection: a rounded frame this far outside the token. */
 export const SELECT_TOKEN_GAP = 4;

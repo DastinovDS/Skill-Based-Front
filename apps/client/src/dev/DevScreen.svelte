@@ -7,6 +7,7 @@
   import { HudState } from '../hud/hudState.svelte.ts';
   import { HudPrefs } from '../hud/prefs.svelte.ts';
   import { createDevMatch } from './devMatch.ts';
+  import { parseEta, pinEta } from './etaPin.ts';
   import { DEMO_SCENE, FIXTURE_SCENES, frozenSource } from './scenarios.ts';
   import { OrderBook } from '../match/orderBook.ts';
   import { forwardKey } from '../match/keyEvents.ts';
@@ -27,6 +28,8 @@
   // `?at=<tick>` freezes a fixture scene at another render tick (also a fractional one): a round of a fight frame by frame.
   const atParam = Number(params.get('at'));
   const at = params.has('at') && Number.isFinite(atParam) ? atParam : undefined;
+  // `?eta=<from>,<to>,<ticks>` pins the travel-time label of an order to a frozen scene (#432).
+  const etaPinned = parseEta(params.get('eta'));
   const fixtureScene = (id: string | null) => FIXTURE_SCENES.find((scene) => scene.id === id);
   let rendererFailed = $state(false);
   let sceneId = $state(
@@ -124,6 +127,8 @@
     };
   });
 
+  const interaction = $derived(etaPinned === null ? orders : pinEta(orders, etaPinned));
+
   function handleKey(event: KeyboardEvent): void {
     if (routeKey(chrome, event, { fit: () => canvas?.fitMap(), idle: () => orders.isIdle() })) {
       return;
@@ -168,7 +173,7 @@
     bind:this={canvas}
     {map}
     {source}
-    interaction={orders}
+    {interaction}
     backgroundUrl={backgroundUrl(map.meta.name)}
     viewRect={fixture?.view ?? null}
     onerror={handleRendererError}

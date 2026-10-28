@@ -77,13 +77,16 @@ export interface OverlayState {
   readonly reach: readonly number[];
   readonly split: readonly number[];
   /**
-   * The time to the hovered reachable node, drawn as one small number there: the server's travel
-   * time of the whole path, plus the delay of a planned order (Shift held). `null`: no number.
+   * The time to the hovered reachable node, drawn as a small label on the road between the group
+   * and that node (#432): the server's travel time of the whole path, plus the delay of a planned
+   * order (Shift held). `null`: no label.
    */
   readonly eta: EtaMark | null;
 }
 
 export interface EtaMark {
+  /** The node the group stands in: the label sits on the way from it to `node`. */
+  readonly from: number;
   readonly node: number;
   readonly ticks: number;
 }

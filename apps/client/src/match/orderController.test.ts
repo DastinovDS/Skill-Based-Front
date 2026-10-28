@@ -250,10 +250,11 @@ describe('OrderController', () => {
     // The hovered reachable target shows the server's travel time as one number, nothing else.
     expect(controller.overlay().eta).toBeNull();
     controller.hover({ kind: 'node', id: enemy.id });
-    expect(controller.overlay().eta).toEqual({ node: enemy.id, ticks: 25 });
+    expect(controller.overlay().eta).toEqual({ from: home, node: enemy.id, ticks: 25 });
     // Shift (a planned order): the delay before the group sets off comes on top.
     controller.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
     expect(controller.overlay().eta).toEqual({
+      from: home,
       node: enemy.id,
       ticks: 25 + DEV_RULES.orders.planned_delay_ticks,
     });
