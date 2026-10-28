@@ -110,7 +110,6 @@ export class CityView {
   private readonly vpLabels: Text[] = [];
   private readonly keys: string[];
   private readonly radii: number[];
-  private readonly last: (CityState | null)[];
   private readonly vpStyle: TextStyle;
   private supplyMode = false;
 
@@ -128,7 +127,6 @@ export class CityView {
       fill: VP_TEXT_COLOR,
     });
     this.keys = map.nodes.map(() => '');
-    this.last = map.nodes.map(() => null);
     this.radii = map.nodes.map((node) => (node.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS));
     this.cities = [];
     this.bodies = [];
@@ -228,10 +226,6 @@ export class CityView {
       for (const mark of marks) mark.visible = !on && mark.spec !== null;
     }
     for (const queue of this.queues) queue.visible = !on;
-    // The shadow of a body counts its ring: without the ring (the layer draws none) another body.
-    this.last.forEach((state, id) => {
-      if (state !== null) this.drawBody(id, state);
-    });
   }
 
   setLabelResolution(resolution: number): void {
@@ -280,7 +274,7 @@ export class CityView {
     return owner === null ? 'neutral' : sideOf(this.me, owner);
   }
 
-  /** The body of city `id`, with the shadow of its ring unless the «Supply» layer shows no ring. */
+  /** The body of city `id`. */
   private drawBody(id: number, state: CityState): void {
     const node = this.map.nodes[id];
     const body = this.bodies[id];
@@ -290,7 +284,6 @@ export class CityView {
         this.kindOf(state.owner),
         this.radii[id] ?? NODE_RADIUS,
         node.capital_of !== null,
-        state.capacity !== null && !this.supplyMode,
       ),
     );
   }
@@ -299,7 +292,6 @@ export class CityView {
     const key = stateKey(state);
     if (this.keys[id] === key) return;
     this.keys[id] = key;
-    this.last[id] = state;
     const node = this.map.nodes[id];
     const ring = this.rings[id];
     const bar = this.bars[id];

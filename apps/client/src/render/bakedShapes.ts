@@ -82,20 +82,13 @@ const RIM_ARC = { from: Math.PI * 1.08, to: Math.PI * 1.75, inset: 2.2 } as cons
 
 /**
  * The body of a city: halo, a gradient fill with its outline (own: blue and white, enemy: red with
- * a dark inner ring, neutral: grey), the light rim of an owned one, the star of a capital. The
- * shadow is that of the whole city with its capacity ring (`ring`), as the mockup's group shadow.
+ * a dark inner ring, neutral: grey), the light rim of an owned one, the star of a capital, all on
+ * the soft shadow of the halo.
  */
-export function cityBodySpec(
-  kind: CityKind,
-  radius: number,
-  capital: boolean,
-  ring: boolean,
-): BakeSpec {
-  const reach = ring
-    ? ringRadius(radius) + RING_SEGMENT.base / 2
-    : radius + CITY_HALO_INSET + CITY_HALO.width / 2;
+export function cityBodySpec(kind: CityKind, radius: number, capital: boolean): BakeSpec {
+  const reach = radius + CITY_HALO_INSET + CITY_HALO.width / 2;
   return {
-    key: `city:${kind}:${String(radius)}:${capital ? 'c' : ''}:${ring ? 'r' : ''}`,
+    key: `city:${kind}:${String(radius)}:${capital ? 'c' : ''}`,
     box: shadowBox(circleBox(reach), BAKE_MARGIN),
     draw(into, tools) {
       shadow(into, (g) => g.circle(0, 0, reach));
@@ -138,16 +131,27 @@ function strokeArcs(
   g.stroke({ ...style, cap: 'butt' });
 }
 
-/** The capacity ring: a dark base, white segments for the garrison, grey for room (its shadow is the body's). */
+/** The capacity ring: a dark base, white segments for the garrison, grey for room, on a soft shadow. */
 export function cityRingSpec(radius: number, capacity: number, garrison: number): BakeSpec {
   const r = ringRadius(radius);
   const reach = r + RING_SEGMENT.base / 2;
   return {
     key: `ring:${String(radius)}:${String(capacity)}:${String(garrison)}`,
-    box: shadowBox(circleBox(reach), 1),
+    box: shadowBox(circleBox(reach), BAKE_MARGIN),
     draw(into) {
-      const g = graphics(into);
       const ring = capacityRing(capacity, garrison);
+      // The shadow follows the arcs, so the gaps between the segments stay see-through.
+      for (const { grow, alpha } of SHADOW.layers) {
+        const s = new Graphics();
+        s.y = SHADOW.dy;
+        strokeArcs(s, r, ring.arcs, {
+          width: RING_SEGMENT.base + 2 * grow,
+          color: 0x000000,
+          alpha,
+        });
+        into.addChild(s);
+      }
+      const g = graphics(into);
       strokeArcs(g, r, ring.arcs, {
         width: RING_SEGMENT.base,
         color: BG,

@@ -3,21 +3,22 @@ import { SpriteCache, type Baker } from './bake.ts';
 
 /**
  * A baker for tests (no WebGL in jsdom): a texture of the size the real one would have, nothing drawn.
- * `made` lists the frames baked, in order.
+ * `textures` lists every texture made, in order (a test checks that they are all released).
  */
-export function fakeBaker(): Baker & { made: { width: number; height: number }[] } {
-  const made: { width: number; height: number }[] = [];
+export function fakeBaker(): Baker & { textures: Texture[] } {
+  const textures: Texture[] = [];
   return {
-    made,
+    textures,
     flat: true,
     generateTexture({ frame, resolution }) {
-      made.push({ width: frame.width, height: frame.height });
       const source = new TextureSource({
         width: frame.width,
         height: frame.height,
         resolution,
       });
-      return new Texture({ source });
+      const texture = new Texture({ source });
+      textures.push(texture);
+      return texture;
     },
   };
 }
