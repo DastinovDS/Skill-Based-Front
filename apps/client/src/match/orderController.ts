@@ -265,7 +265,10 @@ export class OrderController implements MapInteraction {
         supply,
         reach: reachNodes,
         split: splitNodes,
-        eta: eta === null || preview === null ? null : { node: preview, ticks: eta.ticks },
+        eta:
+          eta === null || preview === null || from === null
+            ? null
+            : { from, node: preview, ticks: eta.ticks },
       };
     }
     return this.#overlay;

@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { CanvasTextMetrics } from 'pixi.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { TokenSpot } from './layout.ts';
 import type { GhostArrow, OverlayState } from './interaction.ts';
 import { setReducedMotion } from './motion.ts';
-import { GHOST_REJECT_MS } from './style.ts';
+import { badgeScale } from './alertLayout.ts';
+import { ETA_LABEL, GHOST_REJECT_MS, REACH_RING, roadSpan } from './style.ts';
 import { createLayers } from './layers.ts';
 import { OverlayView } from './overlayView.ts';
 
@@ -148,5 +150,103 @@ describe('OverlayView', () => {
       expect(bounds(layers).width).toBe(0);
       view.destroy();
     });
+  });
+});
+
+describe('OverlayView, the travel time of an order on its road (#432)', () => {
+  const state = (eta: OverlayState['eta']): OverlayState => ({
+    selection: null,
+    ghosts: [],
+    preview: null,
+    candidates: [],
+    beacon: null,
+    supply: null,
+    reach: [],
+    split: [],
+    eta,
+  });
+  const label = (layers: ReturnType<typeof setup>['layers']) =>
+    layers.layer.intents.children.find((c) => c.label === 'order-eta');
+  /** The texts of the label. */
+  const textOf = (layers: ReturnType<typeof setup>['layers']): string =>
+    (label(layers)?.children.find((c) => 'text' in c) as { text: string } | undefined)?.text ?? '';
+
+  beforeEach(() => {
+    // jsdom has no canvas to measure text on: seven units a letter.
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+    );
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Where the label of an order from node `from` to node `to` stands, along and off the line. */
+  function spotOf(from: number, to: number) {
+    const { layers, view, none } = setup();
+    view.setTickHz(10);
+    view.setCameraScale(1);
+    view.update(state({ from, node: to, ticks: 25 }), none);
+    const plate = label(layers);
+    expect(plate?.visible).toBe(true);
+    expect(textOf(layers)).toBe('3 s');
+    const p = map.nodes[from];
+    const q = map.nodes[to];
+    if (p === undefined || q === undefined) throw new Error('no such node');
+    const length = Math.hypot(q.x - p.x, q.y - p.y);
+    const ux = (q.x - p.x) / length;
+    const uy = (q.y - p.y) / length;
+    const px = (plate?.x ?? 0) - p.x;
+    const py = (plate?.y ?? 0) - p.y;
+    const rim = (n: typeof p) => (n.capital_of === null ? 14 : 17) + REACH_RING.gap;
+    const result = {
+      along: px * ux + py * uy,
+      off: Math.abs(px * -uy + py * ux),
+      length,
+      rimFrom: rim(p),
+      rimTo: rim(q),
+    };
+    view.destroy();
+    return result;
+  }
+
+  it('on a road between two cities: in the middle of it between the rims, above it', () => {
+    const edge = map.edges[0];
+    if (edge === undefined) throw new Error('a map without roads');
+    const spot = spotOf(edge.a, edge.b);
+    expect(spot.along).toBeCloseTo((spot.rimFrom + spot.length - spot.rimTo) / 2);
+    expect(spot.off).toBeGreaterThanOrEqual((roadSpan(3) / 2 + ETA_LABEL.roadGap) * badgeScale(1));
+  });
+
+  it('for cities with no road between them: the last piece before the destination, not on a city', () => {
+    const linked = map.edges.some(
+      (e) => (e.a === a.id && e.b === b.id) || (e.a === b.id && e.b === a.id),
+    );
+    expect(linked).toBe(false);
+    const spot = spotOf(a.id, b.id);
+    // Past the middle, short of the rim of the destination, and clear of the line.
+    expect(spot.along).toBeGreaterThan(spot.length / 2);
+    expect(spot.along).toBeLessThan(spot.length - spot.rimTo);
+    expect(spot.off).toBeGreaterThanOrEqual((roadSpan(3) / 2 + ETA_LABEL.roadGap) * badgeScale(1));
+  });
+
+  it('keeps its size on screen: the scale follows the camera, within the badge bounds', () => {
+    const { layers, view, none } = setup();
+    view.setTickHz(10);
+    view.setCameraScale(0.6);
+    view.update(state({ from: a.id, node: b.id, ticks: 25 }), none);
+    // 13 px of text at a 60% map scale: world scale 1 / 0.6, so 13 * (1 / 0.6) * 0.6 = 13 px.
+    expect(label(layers)?.scale.x).toBeCloseTo(1 / 0.6);
+    expect(13 * (label(layers)?.scale.x ?? 0) * 0.6).toBeGreaterThanOrEqual(12);
+    view.destroy();
+  });
+
+  it('is hidden without a mark', () => {
+    const { layers, view, none } = setup();
+    view.setTickHz(10);
+    view.update(state({ from: a.id, node: b.id, ticks: 25 }), none);
+    view.update(state(null), none);
+    expect(label(layers)?.visible).toBe(false);
+    view.destroy();
   });
 });

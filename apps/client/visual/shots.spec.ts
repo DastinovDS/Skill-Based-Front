@@ -96,3 +96,24 @@ for (const menu of MENUS) {
     await page.screenshot({ path: join(OUT, `menu-${menu.name}-gray.png`) });
   });
 }
+
+// The travel time of an order (#432): `?eta=<from>,<to>,<ticks>` pins the label to a frozen scene (a
+// fixture has no server to answer `reach`). `eta-<name>.png` is the map alone: a road between two
+// cities (the label in the middle of it), and cities with no road between them (the last piece
+// before the destination).
+const ETAS = [
+  { name: 'artery-near', scene: 'artery', tick: 2400, eta: '3,4,120' },
+  { name: 'artery-far', scene: 'artery', tick: 2400, eta: '3,5,250' },
+  { name: 'artery-bend', scene: 'artery', tick: 2400, eta: '6,8,310' },
+  { name: 'snapshot', scene: 'snapshot', tick: 120, eta: '0,1,95' },
+] as const;
+
+for (const shot of ETAS) {
+  test(`shot of the travel time of an order (${shot.name})`, async ({ page }) => {
+    await page.goto(`/?scene=${shot.scene}&eta=${shot.eta}`);
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(shot.tick));
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.addStyleTag({ content: '.hud { display: none !important; }' });
+    await page.locator('canvas').screenshot({ path: join(OUT, `eta-${shot.name}.png`) });
+  });
+}

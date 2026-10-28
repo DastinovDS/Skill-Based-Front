@@ -1,7 +1,8 @@
-import { Graphics, Text, TextStyle } from 'pixi.js';
+import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { t } from '../i18n/index.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { badgeScale } from './alertLayout.ts';
+import { etaSpot } from './etaLayout.ts';
 import type { Point } from './camera.ts';
 import { EMPTY_OVERLAY, type GhostArrow, type OverlayState } from './interaction.ts';
 import { ghostLook } from './intentLayout.ts';
@@ -18,6 +19,7 @@ import {
 import {
   ARROW_HEAD,
   ETA_FONT_SIZE,
+  ETA_LABEL,
   ARROW_OUTLINE,
   BG,
   CAPITAL_RADIUS,
@@ -57,8 +59,12 @@ export class OverlayView {
   private overlay: OverlayState = EMPTY_OVERLAY;
   /** Side of the triangle the selection frame is drawn for (0: not drawn yet). */
   private frameSide = 0;
-  /** The time to the hovered reachable node: one small number under it, no window. */
-  private readonly eta: Text;
+  /** The time to the hovered reachable node: a small plate on the road to it, no window. */
+  private readonly eta = new Container({ label: 'order-eta', visible: false });
+  private readonly etaPlate = new Graphics();
+  private readonly etaText: Text;
+  /** The text the plate is drawn for (the plate is redrawn when the number changes). */
+  private etaDrawn = '';
   private readonly etaStyle = new TextStyle({
     fontFamily: 'system-ui, sans-serif',
     fontSize: ETA_FONT_SIZE,
@@ -77,13 +83,13 @@ export class OverlayView {
     private readonly radiusOf: (node: number) => number = (node) =>
       map.nodes[node]?.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS,
   ) {
-    this.eta = new Text({
+    this.etaText = new Text({
       text: '',
       style: this.etaStyle,
-      anchor: { x: 0.5, y: 0 },
+      anchor: { x: 0, y: 0.5 },
       resolution: 1,
-      visible: false,
     });
+    this.eta.addChild(this.etaPlate, this.etaText);
     layers.layer.intents.addChild(this.lines, this.ring, this.frame, this.eta, this.ghosts);
     this.frame.visible = false;
   }
@@ -114,7 +120,7 @@ export class OverlayView {
   }
 
   setLabelResolution(resolution: number): void {
-    if (this.eta.resolution !== resolution) this.eta.resolution = resolution;
+    if (this.etaText.resolution !== resolution) this.etaText.resolution = resolution;
   }
 
   /** Ticks per second, to turn the travel time into seconds. */
@@ -127,24 +133,75 @@ export class OverlayView {
     this.cameraScale = scale;
   }
 
-  /** The number of seconds (rounded up) under the hovered node, or nothing. */
+  /**
+   * The seconds (rounded up) on the road to the hovered node, or nothing (#432). The path is the
+   * stretch from the group's city to that city (the server answers only the total time on hover,
+   * `reach`); the label sits in the middle of it between the two rims, above the road.
+   */
   private placeEta(state: OverlayState): void {
     const mark = state.eta;
-    const at = mark === null ? undefined : nodePoint(this.map, mark.node);
-    if (mark === null || at === undefined || this.tickHz <= 0) {
+    const from = mark === null ? undefined : nodePoint(this.map, mark.from);
+    const to = mark === null ? undefined : nodePoint(this.map, mark.node);
+    if (mark === null || from === undefined || to === undefined || this.tickHz <= 0) {
       this.eta.visible = false;
       return;
     }
     const text = `${String(Math.ceil(mark.ticks / this.tickHz))} ${t('unit.s')}`;
-    if (this.eta.text !== text) this.eta.text = text;
+    if (this.etaText.text !== text) this.etaText.text = text;
+    const width = this.drawEtaPlate(text);
     const scale = badgeScale(this.cameraScale);
+    const spot = etaSpot(
+      [from, to],
+      {
+        start: this.radiusOf(mark.from) + REACH_RING.gap,
+        end: this.radiusOf(mark.node) + REACH_RING.gap,
+      },
+      { width: width * scale, height: ETA_LABEL.height * scale },
+      (roadSpan(3) / 2 + ETA_LABEL.roadGap) * scale,
+      // Two cities with a road between them: that road. Else the way is the server's and unknown
+      // here: the last piece before the destination, never over a city on the way.
+      this.map.edges.some(
+        (e) => (e.a === mark.from && e.b === mark.node) || (e.b === mark.from && e.a === mark.node),
+      )
+        ? 'middle'
+        : 'end',
+    );
+    if (spot === null) {
+      this.eta.visible = false;
+      return;
+    }
     this.eta.scale.set(scale);
-    this.eta.position.set(at.x, at.y + this.radiusOf(mark.node) + REACH_RING.gap + 4 * scale);
+    this.eta.position.set(spot.x, spot.y);
     this.eta.visible = true;
   }
 
+  /** The plate with the clock and the number, centred on the origin; returns its width. */
+  private drawEtaPlate(text: string): number {
+    const L = ETA_LABEL;
+    const width = L.padX + L.clock + L.gap + this.etaText.width + L.padX;
+    if (this.etaDrawn === text) return width;
+    this.etaDrawn = text;
+    const left = -width / 2;
+    const cx = left + L.padX + L.clock / 2;
+    const r = L.clock / 2 - 0.75;
+    this.etaText.position.set(left + L.padX + L.clock + L.gap, 0);
+    this.etaPlate
+      .clear()
+      .roundRect(left, -L.height / 2, width, L.height, L.radius)
+      .fill({ color: BG, alpha: 0.92 })
+      .stroke({ width: 1.5, color: PAPER, alpha: 0.75 })
+      .circle(cx, 0, r)
+      .stroke({ width: 1.5, color: PAPER })
+      .moveTo(cx, 0)
+      .lineTo(cx, -r * 0.6)
+      .moveTo(cx, 0)
+      .lineTo(cx + r * 0.5, r * 0.2)
+      .stroke({ width: 1.5, color: PAPER, cap: 'round' });
+    return width;
+  }
+
   destroy(): void {
-    this.eta.destroy();
+    this.eta.destroy({ children: true });
     this.etaStyle.destroy();
     this.lines.destroy();
     this.ghosts.destroy();
