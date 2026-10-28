@@ -472,10 +472,12 @@ describe('liveness watchdog and waking up (CLI-02, #417)', () => {
     const t = setup({ pingIntervalMs: 60_000 });
     const socket = ready(t);
     const seq = t.conn.send(move);
-    t.setClock(2_900);
-    vi.advanceTimersByTime(1_000);
-    expect(t.conn.status).toBe('ready');
-    t.setClock(3_100);
+    for (const at of [1_000, 2_000, 3_000]) {
+      t.setClock(at);
+      vi.advanceTimersByTime(1_000);
+      expect(t.conn.status).toBe('ready');
+    }
+    t.setClock(4_000);
     vi.advanceTimersByTime(1_000);
     expect(t.conn.status).toBe('reconnecting');
     expect(t.resets()).toBe(1);
@@ -483,6 +485,25 @@ describe('liveness watchdog and waking up (CLI-02, #417)', () => {
     vi.advanceTimersByTime(500);
     expect(t.server.sockets.length).toBe(2);
     expect(t.conn.pendingSeqs).toEqual([seq]);
+  });
+
+  it('forgives a stalled page: a watchdog that runs late says nothing about the link', () => {
+    const t = setup({ pingIntervalMs: 60_000 });
+    const socket = ready(t);
+    // The page was blocked for 10 s: the timer fires once, late, and the frames are still queued.
+    t.setClock(10_000);
+    vi.advanceTimersByTime(1_000);
+    expect(t.conn.status).toBe('ready');
+    socket.reply(serverFixture('snapshot'));
+    t.setClock(11_000);
+    vi.advanceTimersByTime(1_000);
+    expect(t.conn.status).toBe('ready');
+    // The silence that follows a stall is real again: a new window of 3 s, then dead.
+    for (const at of [12_000, 13_000, 14_000]) {
+      t.setClock(at);
+      vi.advanceTimersByTime(1_000);
+    }
+    expect(t.conn.status).toBe('reconnecting');
   });
 
   it('counts any frame as life: a snapshot, an ack or a pong keeps the link', () => {
@@ -493,8 +514,13 @@ describe('liveness watchdog and waking up (CLI-02, #417)', () => {
       [5_000, ack(99)],
       [7_500, pong(0)],
     ] as const) {
+      // The clock runs a second at a time, like the timer; a frame comes at `at`.
+      t.setClock(at - 1_500);
+      vi.advanceTimersByTime(1_000);
       t.setClock(at);
       socket.reply(msg);
+      t.setClock(at + 1_000);
+      vi.advanceTimersByTime(1_000);
       t.setClock(at + 2_000);
       vi.advanceTimersByTime(1_000);
       expect(t.conn.status).toBe('ready');
@@ -505,13 +531,17 @@ describe('liveness watchdog and waking up (CLI-02, #417)', () => {
     const t = setup({ pingIntervalMs: 60_000 });
     const socket = ready(t);
     socket.reply(serverFixture('paused'));
-    t.setClock(20_000);
-    vi.advanceTimersByTime(1_000);
+    for (let at = 1_000; at <= 20_000; at += 1_000) {
+      t.setClock(at);
+      vi.advanceTimersByTime(1_000);
+    }
     expect(t.conn.status).toBe('ready');
     // The pause is over: snapshots are due again.
     socket.reply(serverFixture('paused_end'));
-    t.setClock(24_000);
-    vi.advanceTimersByTime(1_000);
+    for (let at = 21_000; at <= 24_000; at += 1_000) {
+      t.setClock(at);
+      vi.advanceTimersByTime(1_000);
+    }
     expect(t.conn.status).toBe('reconnecting');
   });
 

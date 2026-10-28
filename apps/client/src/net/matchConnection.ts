@@ -116,6 +116,8 @@ export const MAX_PENDING_COMMANDS = 50;
 /** Snapshots come at 10 Hz: this much silence while ready is not a slow link, it is a dead one. */
 export const DEAD_AFTER_MS = 3_000;
 export const WATCHDOG_MS = 1_000;
+/** The watchdog that runs this many periods late was not running: the page was stalled. */
+const STALL_FACTOR = 2.5;
 /** What the browser reports for a link that went away without a close handshake. */
 const CLOSE_ABNORMAL = 1006;
 
@@ -167,6 +169,8 @@ export class MatchConnection {
   #watchdog: ReturnType<typeof setInterval> | undefined;
   /** When the last frame of any kind arrived on this connection (`now()`). */
   #lastFrameAt = 0;
+  /** When the watchdog last ran (`now()`): a late run means the page itself was stalled. */
+  #lastWatchAt = 0;
   /** The match is paused: the server sends no snapshots, only the answers to pings. */
   #paused = false;
   #unhook: (() => void) | null = null;
@@ -359,6 +363,23 @@ export class MatchConnection {
     if (silent || this.#pingSentAt.size >= 2) this.#onClose(CLOSE_ABNORMAL);
   }
 
+  /**
+   * The timer's look at the link. A timer that runs much later than it should means the page was
+   * stalled (a heavy frame, a busy device) or asleep, and the frames that arrived meanwhile are
+   * still queued behind this very task: that silence says nothing about the link, so it gets a new
+   * window. (`online` and a visible tab call `#checkAlive` directly: after a sleep they do look.)
+   */
+  #watch(): void {
+    const now = this.#now();
+    const stalled = now - this.#lastWatchAt > this.#watchdogMs * STALL_FACTOR;
+    this.#lastWatchAt = now;
+    if (stalled) {
+      this.#lastFrameAt = now;
+      return;
+    }
+    this.#checkAlive();
+  }
+
   /** `online` and a visible tab: reconnect now instead of at the end of the backoff, or look at the link. */
   readonly #wake = (): void => {
     switch (this.#status) {
@@ -394,13 +415,13 @@ export class MatchConnection {
 
   #startPing(): void {
     this.#stopPing();
-    this.#lastFrameAt = this.#now();
+    this.#lastFrameAt = this.#lastWatchAt = this.#now();
     this.#watchdog = setInterval(() => {
-      this.#checkAlive();
+      this.#watch();
     }, this.#watchdogMs);
     this.#pingTimer = setInterval(() => {
       // Two pings without a pong: the pong of the first would have come long ago.
-      this.#checkAlive();
+      this.#watch();
       if (this.#status !== 'ready') return;
       const id = this.#nextPingId++;
       this.#pingSentAt.set(id, this.#now());
