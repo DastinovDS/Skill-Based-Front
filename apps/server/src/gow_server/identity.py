@@ -21,7 +21,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
+from gow_protocol.messages import Calibration
 from gow_server.abuse import Limits, enforce
 from gow_server.db import DbSession
 from gow_server.lifecycle import MatchLifecycle, MatchState
@@ -29,6 +31,8 @@ from gow_server.models import Player
 from gow_server.nicks import NickPolicy, skeleton, validate_nick
 from gow_server.passwords import PasswordHasher, normalize
 from gow_server.ratelimit import SlidingWindowLimiter
+from gow_server.rating import played_of
+from gow_server.settings import Settings
 
 
 def nick_key(nick: str) -> str:
@@ -62,6 +66,9 @@ class Me(BaseModel):
     nick: str
     has_password: bool
     """``False`` for a guest; ``True`` once a password is set (``POST /api/account/password``)."""
+    calibration: Calibration | None = None
+    """Calibration progress of a password account (DEC-34, #414): its rating is hidden until
+    ``played`` reaches ``total``. ``None`` for a guest and once calibration is over."""
 
 
 LONGEST_INPUT = 1024
@@ -174,8 +181,8 @@ def create_guest(
 
 
 @router.get("/me")
-def me(player: CurrentPlayer) -> Me:
-    return _me(player)
+def me(request: Request, player: CurrentPlayer, session: DbSession) -> Me:
+    return _me(request, player, session)
 
 
 def _passwords(request: Request) -> PasswordHasher:
@@ -258,8 +265,19 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _me(player: Player) -> Me:
-    return Me(player_id=player.id, nick=player.nick, has_password=player.password_hash is not None)
+def _me(request: Request, player: Player, session: Session) -> Me:
+    settings: Settings = request.app.state.settings
+    calibration = None
+    if player.password_hash is not None:
+        played = played_of(session, player.id)
+        if played < settings.calibration_matches:
+            calibration = Calibration(played=played, total=settings.calibration_matches)
+    return Me(
+        player_id=player.id,
+        nick=player.nick,
+        has_password=player.password_hash is not None,
+        calibration=calibration,
+    )
 
 
 @router.get("/me/active-match")
@@ -303,7 +321,7 @@ def change_nick(
     except IntegrityError:
         session.rollback()
         raise _nick_taken() from None
-    return _me(player)
+    return _me(request, player, session)
 
 
 def _check_policy(policy: NickPolicy, nick: str) -> None:

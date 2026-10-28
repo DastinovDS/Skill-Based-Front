@@ -754,7 +754,7 @@
           "matchmaking"
         ],
         "summary": "Join Queue",
-        "description": "Enter the queue (or read the status if already in it).",
+        "description": "Enter the queue (or read the status if already in it).\n\n429 with ``Retry-After`` and a ``QueueBan`` body while the player is banned for repeated\nresigns (DEC-34); 429 with only ``Retry-After`` when the entry rate limit is hit.",
         "operationId": "join_queue_api_queue_post",
         "responses": {
           "200": {
@@ -763,6 +763,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/QueueStatus"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueBanned"
                 }
               }
             }
@@ -875,6 +885,32 @@
           "player"
         ],
         "title": "BotMatchOut"
+      },
+      "Calibration": {
+        "properties": {
+          "played": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Played",
+            "description": "Calibration matches played, at most ``total``."
+          },
+          "total": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Total",
+            "description": "Calibration matches needed (a server setting, 5 by default)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "played",
+          "total"
+        ],
+        "title": "Calibration",
+        "description": "Calibration progress of an account: the first matches of a rated account do not show its\nrating (DEC-34, #414)."
       },
       "CreateBotMatch": {
         "properties": {
@@ -1168,6 +1204,16 @@
           "has_password": {
             "type": "boolean",
             "title": "Has Password"
+          },
+          "calibration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Calibration"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -1218,6 +1264,44 @@
         ],
         "title": "PasswordSet",
         "description": "A new password; ``old_password`` is required when the account already has one."
+      },
+      "QueueBan": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "const": "queue_banned",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "retry_after_s": {
+            "type": "integer",
+            "title": "Retry After S"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "retry_after_s"
+        ],
+        "title": "QueueBan",
+        "description": "The refusal of ``POST /api/queue`` while banned (DEC-34, #414)."
+      },
+      "QueueBanned": {
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/QueueBan"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "QueueBanned",
+        "description": "Body of the 429 of a banned player: ``{\"detail\": {...}}`` like every HTTP error."
       },
       "QueueStatus": {
         "properties": {

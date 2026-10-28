@@ -25,6 +25,7 @@ import random
 import time
 import timeit
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -75,6 +76,9 @@ class _ScaledClock:
 
     def now(self) -> float:
         return time.monotonic() / self.factor
+
+    def wall(self) -> datetime:
+        return datetime.now(UTC).replace(tzinfo=None)
 
     async def sleep(self, seconds: float) -> None:
         await asyncio.sleep(max(seconds, 0.0) * self.factor)

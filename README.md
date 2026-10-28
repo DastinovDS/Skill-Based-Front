@@ -178,6 +178,10 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_SCRYPT_N`, `GOW_SCRYPT_R`, `GOW_SCRYPT_P`, `GOW_SCRYPT_MAXMEM` | `32768`, `8`, `1`, `67108864` | #374: the `hashlib.scrypt` parameters of new password hashes (memory is about `128·N·r` bytes, `MAXMEM` must be larger); a hash stores its own parameters |
 | `GOW_NICK_BLOCKLIST_FILE` | empty | MOD-01: a file of additional forbidden words for nicks (one word per line, `#` is a comment); in the container `/data/nick-blocklist.txt` |
 | `GOW_MAX_REQUEST_BODY_BYTES` | `32768` | SRV-01: the largest HTTP request body in bytes; more gets `413` before any parsing (by `Content-Length` and by counting a streamed body). Caddy adds its own 64 KB cap on `/api/*` |
+| `GOW_CALIBRATION_MATCHES` | `5` | DEC-34, #414: rating-changing matches of a password account before its rating is shown and it counts for opponents (calibration) |
+| `GOW_EARLY_RESIGN_S` | `180` | DEC-34: a surrender or disconnect before this match time (seconds) gives the winner no rating change |
+| `GOW_RESIGN_WINDOW_S`, `GOW_RESIGN_BAN_SECOND_S`, `GOW_RESIGN_BAN_THIRD_S`, `GOW_RESIGN_BAN_LATER_S` | `86400`, `300`, `1800`, `7200` | DEC-34: repeated resigns in rated matches within the window ban the player from the queue: the 2nd for `SECOND` seconds, the 3rd for `THIRD`, the 4th and later for `LATER` (the 1st: no ban) |
+| `GOW_OPPONENT_LIMIT`, `GOW_OPPONENT_LIMIT_WINDOW_S` | `3`, `86400` | DEC-34: at most N rated matches between the same two accounts per window, the later ones are unrated |
 | `GOW_INVITE_TTL_S` | `1800` | the lifetime of an invite to a private match (seconds) |
 | `GOW_READY_TIMEOUT_S` | `120` | SRV-09: the time to get ready after a guest joins an invite; after that the invite is withdrawn (no-show) |
 | `GOW_WS_ALLOWED_ORIGINS` | `[]` | a JSON list of `Origin`s, other than the site itself, that may open the match WebSocket |
@@ -276,6 +280,7 @@ Variables (`.env`, sample `.env.example`):
 | `HTTP_PORT`, `HTTPS_PORT` | `80`, `443` | ports on the host, for example `HTTP_PORT=8080` if 80 is taken |
 | `APP_MEM_LIMIT` | `1g` | the memory limit of the `app` container (SRV-01) |
 | `GOW_ENV`, `GOW_LOG_LEVEL`, `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S`, `GOW_RECONNECT_WINDOW_S`, `GOW_PAUSE_MAX_S`, `GOW_MONITOR_INTERVAL_S` | `prod`, `INFO`, `10`, `3600`, `60`, `60`, `30` | server settings (the "Server" section); `e2e` only for a Playwright run |
+| every other `GOW_*` setting of the table in the "Server" section except the container paths | the default of that table | passed through by `compose.yaml` since audit SRV-07 (`apps/server/tests/test_compose.py` keeps the list and `Settings` in step); a new server setting is added to `compose.yaml` in the same change |
 
 Only the variables listed in `compose.yaml` reach `app` (`Settings` forbids unknown fields):
 a new server setting for production is added both there and in `.env.example`.

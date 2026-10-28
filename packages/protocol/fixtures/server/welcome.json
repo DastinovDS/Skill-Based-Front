@@ -77,5 +77,8 @@
   },
   "map_id": "diamond",
   "last_seq": 0,
-  "nicks": ["Danya", "Guest"]
+  "nicks": ["Danya", "Guest"],
+  "rated": false,
+  "unrated_reason": "casual",
+  "calibration": null
 }

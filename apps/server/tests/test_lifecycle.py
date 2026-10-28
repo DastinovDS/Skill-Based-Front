@@ -2,10 +2,12 @@
 
 import asyncio
 import itertools
+import math
 import shutil
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Final
 
@@ -16,9 +18,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from gow_protocol.commands import ForfeitCmd
+from gow_protocol.messages import Calibration, MatchEndMsg, RatingChange, UnratedReason
 from gow_server.app import create_app
 from gow_server.clock import ManualClock
 from gow_server.identity import hash_token
+from gow_server.ladder import apply_match
 from gow_server.lifecycle import (
     TRANSITIONS,
     IllegalTransitionError,
@@ -28,9 +32,8 @@ from gow_server.lifecycle import (
     abort_orphans,
     archive_rulesets,
 )
-from gow_server.matches import MatchRunner
+from gow_server.matches import MatchRunner, Outbox
 from gow_server.models import Match, MatchPlayer, Player, Rating
-from gow_server.rating import apply_match
 from gow_server.settings import Settings
 from gow_sim.maps import MapDef, load_map
 from gow_sim.ruleset import load_ruleset, ruleset_hash
@@ -72,6 +75,25 @@ class Live:
             return session.execute(
                 select(Player.id).where(Player.token_hash == hash_token(token))
             ).scalar_one()
+
+    async def member(self, nick: str, *, played: int | None = 5) -> tuple[dict[str, str], int]:
+        """A password account that has played ``played`` rating-changing matches (DEC-34): 5 or
+        more is calibrated. ``None``: no rating row yet."""
+        headers = await self.guest(nick)
+        account = await self.account(headers)
+        with self.sessions.begin() as session:
+            session.get_one(Player, account).password_hash = "scrypt$not-a-real-hash"
+            if played is not None:
+                session.add(
+                    Rating(
+                        player_id=account,
+                        rating=1500.0,
+                        rd=350.0,
+                        volatility=0.06,
+                        rated_matches=played,
+                    )
+                )
+        return headers, account
 
     async def invite_post(self, headers: dict[str, str], code: str, action: str) -> httpx2.Response:
         return await self.http.post(f"/api/matches/{code}/{action}", headers=headers)
@@ -451,20 +473,54 @@ def test_server_archives_its_ruleset_at_start(live_settings: Settings) -> None:
 #   loser r / RD     1337.6891 / 290.3190   1279.6828 / 260.4888
 #   winner displayed 1082 (from 800)        1199 (from 1082)
 #   loser displayed  757 (from 800)         759 (from 757)
+#
+# DEC-34 (mechanics.md, section 19) decides who is rated: the helpers below make password
+# accounts, calibrated unless a test says otherwise. A forfeit at the first tick would be an early
+# resign (no gain for the winner), so these tests use ``early_resign_s = 0`` unless they are about
+# that rule.
+
+EARLY_S: Final = 2
+"""Early-resign threshold of the tests of that rule: 2 s, 20 ticks."""
 
 
-async def _play_rated(live: Live, mapdef: MapDef, accounts: tuple[int, int], loser: int) -> int:
-    """Start a rated match between two accounts, ``loser`` (a slot) forfeits, wait for the save."""
+def no_early_resign(settings: Settings) -> Settings:
+    return settings.model_copy(update={"early_resign_s": 0})
+
+
+async def _play_queue(
+    live: Live,
+    mapdef: MapDef,
+    accounts: tuple[int, int],
+    loser: int,
+    *,
+    after_ticks: int = 0,
+) -> tuple[MatchRunner, list[Outbox]]:
+    """Start a queue match between two accounts; ``loser`` (a slot) forfeits once the match has
+    run ``after_ticks`` ticks. Waits for the saved result; the boxes hold its messages."""
     lifecycle = live.lifecycle
     rules = load_ruleset(live.settings.ruleset_path)
     record = lifecycle.open_record()
     runner = await lifecycle.start(
         record, "web", mapdef, rules, accounts, private=False, rated=True
     )
+    boxes = [runner.attach(0), runner.attach(1)]
+    if after_ticks:
+        await live.run_until(lambda: runner.match.tick >= after_ticks)
     assert runner.submit(loser, 1, ForfeitCmd())
-    pk = int(runner.match_id)
     await live.run_until(lambda: live.row(runner.match_id)[0].status == "saved")
-    return pk
+    return runner, boxes
+
+
+def _end_of(box: Outbox) -> MatchEndMsg:
+    while (msg := box.get_nowait()) is not None:
+        if isinstance(msg, MatchEndMsg):
+            return msg
+    raise AssertionError("no match_end")
+
+
+async def _play_rated(live: Live, mapdef: MapDef, accounts: tuple[int, int], loser: int) -> int:
+    runner, _ = await _play_queue(live, mapdef, accounts, loser)
+    return int(runner.match_id)
 
 
 def _ratings(live: Live, accounts: tuple[int, int]) -> list[Rating]:
@@ -474,21 +530,22 @@ def _ratings(live: Live, accounts: tuple[int, int]) -> list[Rating]:
 
 def test_two_rated_matches_in_a_row_and_no_double_counting(live_settings: Settings) -> None:
     async def scenario() -> None:
-        async with live_server(live_settings) as live:
+        async with live_server(no_early_resign(live_settings)) as live:
             mapdef = load_map(live.settings.maps_dir / "web.json")
-            alice = await live.account(await live.guest("alice"))
-            bob = await live.account(await live.guest("bob"))
+            _, alice = await live.member("alice")
+            _, bob = await live.member("bob")
 
             first = await _play_rated(live, mapdef, (alice, bob), loser=1)
             row, sides = live.row(str(first))
-            assert row.rating_applied
+            assert row.rating_applied and row.rated
             assert [s.result for s in sides] == ["win", "loss"]
+            assert [s.rating_mode for s in sides] == ["rated", "rated"]
             assert [round(s.rating_before or 0) for s in sides] == [800, 800]
             assert [round(s.rating_after or 0) for s in sides] == [1082, 757]
             win, loss = _ratings(live, (alice, bob))
             assert (win.rating, win.rd) == pytest.approx((1662.3109, 290.3190), abs=0.001)
             assert (loss.rating, loss.rd) == pytest.approx((1337.6891, 290.3190), abs=0.001)
-            assert (win.rated_matches, loss.rated_matches) == (1, 1)
+            assert (win.rated_matches, loss.rated_matches) == (6, 6)
 
             second = await _play_rated(live, mapdef, (alice, bob), loser=1)
             _, sides = live.row(str(second))
@@ -497,7 +554,7 @@ def test_two_rated_matches_in_a_row_and_no_double_counting(live_settings: Settin
             win, loss = _ratings(live, (alice, bob))
             assert (win.rating, win.rd) == pytest.approx((1720.3172, 260.4888), abs=0.001)
             assert (loss.rating, loss.rd) == pytest.approx((1279.6828, 260.4888), abs=0.001)
-            assert (win.rated_matches, loss.rated_matches) == (2, 2)
+            assert (win.rated_matches, loss.rated_matches) == (7, 7)
 
             # processing a match again changes nothing
             with live.sessions.begin() as session:
@@ -505,11 +562,182 @@ def test_two_rated_matches_in_a_row_and_no_double_counting(live_settings: Settin
                 assert apply_match(session, second) is False
             again = _ratings(live, (alice, bob))
             assert [(r.rating, r.rd, r.volatility, r.rated_matches) for r in again] == [
-                (win.rating, win.rd, win.volatility, 2),
-                (loss.rating, loss.rd, loss.volatility, 2),
+                (win.rating, win.rd, win.volatility, 7),
+                (loss.rating, loss.rd, loss.volatility, 7),
             ]
 
     asyncio.run(scenario())
+
+
+def test_a_queue_match_with_a_guest_is_unrated(live_settings: Settings) -> None:
+    async def scenario() -> None:
+        async with live_server(no_early_resign(live_settings)) as live:
+            mapdef = load_map(live.settings.maps_dir / "web.json")
+            _, alice = await live.member("alice")
+            guest = await live.account(await live.guest("gus"))
+            runner, boxes = await _play_queue(live, mapdef, (alice, guest), loser=1)
+            row, sides = live.row(runner.match_id)
+            assert not row.rated and not row.rating_applied
+            assert [s.unrated_reason for s in sides] == ["opponent_guest", "guest"]
+            assert [s.rating_after for s in sides] == [None, None]
+            ends = [_end_of(box) for box in boxes]
+            assert [(e.rated, e.rating, e.calibration) for e in ends] == [(False, None, None)] * 2
+            assert [e.unrated_reason for e in ends] == [
+                UnratedReason.OPPONENT_GUEST,
+                UnratedReason.GUEST,
+            ]
+            with live.sessions() as session:
+                assert [r.rated_matches for r in session.execute(select(Rating)).scalars()] == [5]
+
+    asyncio.run(scenario())
+
+
+def test_a_calibration_match_changes_only_the_calibrating_side(live_settings: Settings) -> None:
+    async def scenario() -> None:
+        async with live_server(no_early_resign(live_settings)) as live:
+            mapdef = load_map(live.settings.maps_dir / "web.json")
+            _, newbie = await live.member("newbie", played=0)
+            _, veteran = await live.member("veteran")
+            runner, boxes = await _play_queue(live, mapdef, (newbie, veteran), loser=1)
+            row, sides = live.row(runner.match_id)
+            assert row.rated and row.rating_applied
+            assert [s.rating_mode for s in sides] == ["calibration", "none"]
+            assert [s.unrated_reason for s in sides] == [None, "opponent_calibrating"]
+            mine, theirs = _ratings(live, (newbie, veteran))
+            assert (mine.rating, mine.rd) == pytest.approx((1662.3109, 290.3190), abs=0.001)
+            assert mine.rated_matches == 1
+            assert (theirs.rating, theirs.rd, theirs.rated_matches) == (1500.0, 350.0, 5)
+            first, second = (_end_of(box) for box in boxes)
+            # the calibrating player: rating changed but hidden, progress 1/5
+            assert (first.rated, first.rating, first.unrated_reason) == (True, None, None)
+            assert first.calibration == Calibration(played=1, total=5)
+            # the calibrated opponent: unrated, told why
+            assert (second.rated, second.rating, second.calibration) == (False, None, None)
+            assert second.unrated_reason is UnratedReason.OPPONENT_CALIBRATING
+
+    asyncio.run(scenario())
+
+
+def test_the_last_calibration_match_shows_the_rating(live_settings: Settings) -> None:
+    async def scenario() -> None:
+        async with live_server(no_early_resign(live_settings)) as live:
+            mapdef = load_map(live.settings.maps_dir / "web.json")
+            _, almost = await live.member("almost", played=4)
+            _, veteran = await live.member("veteran")
+            _, other = await live.member("other")
+            _, boxes = await _play_queue(live, mapdef, (almost, veteran), loser=1)
+            end = _end_of(boxes[0])
+            assert end.rating == RatingChange(before=800, after=1082)
+            assert end.calibration == Calibration(played=5, total=5)
+            assert _ratings(live, (almost, veteran))[0].rated_matches == 5
+            # calibrated now: the next match against a calibrated account is fully rated
+            runner, boxes = await _play_queue(live, mapdef, (almost, other), loser=0)
+            _, sides = live.row(runner.match_id)
+            assert [s.rating_mode for s in sides] == ["rated", "rated"]
+            assert _end_of(boxes[0]).calibration is None
+
+    asyncio.run(scenario())
+
+
+def test_an_early_resign_gives_the_winner_no_gain(live_settings: Settings) -> None:
+    async def scenario() -> None:
+        async with live_server(
+            live_settings.model_copy(update={"early_resign_s": EARLY_S})
+        ) as live:
+            mapdef = load_map(live.settings.maps_dir / "web.json")
+            _, alice = await live.member("alice")
+            _, bob = await live.member("bob")
+            runner, boxes = await _play_queue(live, mapdef, (alice, bob), loser=1)  # tick 1 < 20
+            row, sides = live.row(runner.match_id)
+            assert row.rated and row.rating_applied  # a rated match whose winner gets nothing
+            assert [s.rating_mode for s in sides] == ["none", "rated"]
+            assert sides[0].unrated_reason == "opponent_early_resign"
+            winner, loser = _ratings(live, (alice, bob))
+            assert (winner.rating, winner.rated_matches) == (1500.0, 5)
+            assert (loser.rating, loser.rd) == pytest.approx((1337.6891, 290.3190), abs=0.001)
+            assert loser.rated_matches == 6
+            win_end, lose_end = (_end_of(box) for box in boxes)
+            assert (win_end.rated, win_end.rating) == (False, None)
+            assert win_end.unrated_reason is UnratedReason.OPPONENT_EARLY_RESIGN
+            assert lose_end.rating == RatingChange(before=800, after=757)
+
+            # past the threshold the same forfeit is a normal rated defeat
+            late, boxes = await _play_queue(
+                live, mapdef, (alice, bob), loser=1, after_ticks=EARLY_S * 10 + 5
+            )
+            _, sides = live.row(late.match_id)
+            assert [s.rating_mode for s in sides] == ["rated", "rated"]
+            assert _end_of(boxes[0]).rated is True
+
+    asyncio.run(scenario())
+
+
+def test_the_fourth_rated_match_against_the_same_opponent_is_unrated(
+    live_settings: Settings,
+) -> None:
+    async def scenario() -> None:
+        async with live_server(no_early_resign(live_settings)) as live:
+            mapdef = load_map(live.settings.maps_dir / "web.json")
+            _, alice = await live.member("alice")
+            _, bob = await live.member("bob")
+            for _ in range(3):
+                runner, _ = await _play_queue(live, mapdef, (alice, bob), loser=1)
+                assert live.row(runner.match_id)[0].rated
+            before = _ratings(live, (alice, bob))
+            runner, boxes = await _play_queue(live, mapdef, (alice, bob), loser=1)
+            row, sides = live.row(runner.match_id)
+            assert not row.rated and not row.rating_applied
+            assert [s.unrated_reason for s in sides] == ["opponent_limit"] * 2
+            assert [(r.rating, r.rated_matches) for r in _ratings(live, (alice, bob))] == [
+                (r.rating, r.rated_matches) for r in before
+            ]
+            assert {_end_of(box).unrated_reason for box in boxes} == {UnratedReason.OPPONENT_LIMIT}
+            # 24 hours later the window has rolled
+            live.clock.advance(24 * 3600 + 60)
+            runner, _ = await _play_queue(live, mapdef, (alice, bob), loser=1)
+            assert live.row(runner.match_id)[0].rated
+
+    asyncio.run(scenario())
+
+
+def test_repeated_resigns_ban_the_player_from_the_queue(live_settings: Settings) -> None:
+    async def scenario() -> None:
+        async with live_server(no_early_resign(live_settings)) as live:
+            mapdef = load_map(live.settings.maps_dir / "web.json")
+            quitter_headers, quitter = await live.member("quitter")
+            _, bob = await live.member("bob")
+            _, carol = await live.member("carol")
+
+            await _play_queue(live, mapdef, (quitter, bob), loser=0)
+            assert _banned_until(live, quitter) is None  # the first resign carries no ban
+            joined = await live.http.post("/api/queue", headers=quitter_headers)
+            assert joined.status_code == 200
+            await live.http.delete("/api/queue", headers=quitter_headers)
+
+            second, _ = await _play_queue(live, mapdef, (quitter, carol), loser=0)
+            ended = live.row(second.match_id)[0].ended_at
+            assert ended is not None
+            assert _banned_until(live, quitter) == ended + timedelta(minutes=5)
+            assert _banned_until(live, bob) is None  # winners are never banned
+
+            refused = await live.http.post("/api/queue", headers=quitter_headers)
+            left = math.ceil((ended + timedelta(minutes=5) - live.clock.wall()).total_seconds())
+            assert refused.status_code == 429
+            assert refused.headers["Retry-After"] == str(left)
+            assert refused.json()["detail"] == {
+                "code": "queue_banned",
+                "message": "queue ban for repeated resigns",
+                "retry_after_s": left,
+            }
+            live.clock.advance(left)
+            assert (await live.http.post("/api/queue", headers=quitter_headers)).status_code == 200
+
+    asyncio.run(scenario())
+
+
+def _banned_until(live: Live, account: int) -> datetime | None:
+    with live.sessions() as session:
+        return session.get_one(Player, account).queue_banned_until
 
 
 def test_unrated_matches_do_not_touch_ratings(live_settings: Settings) -> None:
@@ -521,7 +749,7 @@ def test_unrated_matches_do_not_touch_ratings(live_settings: Settings) -> None:
             await live.invite_post(alice, code, "ready")
             match_id = (await live.invite_post(bob, code, "ready")).json()["match_id"]
             runner = live.lifecycle.manager.get(match_id)
-            assert runner is not None and runner.ratings is None
+            assert runner is not None and runner.rating_plan is None
             assert runner.submit(0, 1, ForfeitCmd())
             await live.run_until(lambda: live.row(match_id)[0].status == "saved")
             row, sides = live.row(match_id)

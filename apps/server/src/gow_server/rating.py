@@ -7,20 +7,18 @@ this module is server-side only, the simulation never sees it (AGENTS.md, sectio
 The number a player sees is ``displayed_rating``: ``r - 2 * RD``, a conservative estimate that
 grows as the system gets more sure of the player.
 
-RAT-02 (#75): ``apply_match`` rates a finished rated match in the caller's transaction. It is
-idempotent: ``matches.rating_applied`` is claimed by one atomic ``UPDATE``, so a match is rated
-once however often it is processed. Database calls are blocking: use ``asyncio.to_thread``.
+RAT-02 (#75): ``gow_server.ladder.apply_match`` rates a finished rated match in the caller's
+transaction (DEC-34: who is rated and who is not). The database helpers here are blocking: use
+``asyncio.to_thread``.
 """
 
 import math
 from dataclasses import dataclass
 from typing import Final
 
-from sqlalchemy import select
-from sqlalchemy import update as sql_update
 from sqlalchemy.orm import Session
 
-from gow_server.models import Match, MatchPlayer, Rating
+from gow_server.models import Rating
 
 INITIAL_RATING: Final = 1500.0
 INITIAL_RD: Final = 350.0
@@ -122,9 +120,7 @@ def rate_match(a: Glicko, b: Glicko, score_a: float) -> tuple[Glicko, Glicko]:
     return update(a, [(b, score_a)]), update(b, [(a, 1.0 - score_a)])
 
 
-# Wire and database --------------------------------------------------------------------------
-
-_SCORES: Final = {"win": WIN, "draw": DRAW, "loss": LOSS}
+# Database -----------------------------------------------------------------------------------
 
 
 def rating_of(session: Session, player_id: int) -> Glicko:
@@ -133,7 +129,14 @@ def rating_of(session: Session, player_id: int) -> Glicko:
     return Glicko() if row is None else Glicko(row.rating, row.rd, row.volatility)
 
 
-def _store(session: Session, player_id: int, g: Glicko) -> None:
+def played_of(session: Session, player_id: int) -> int:
+    """Matches that changed the player's rating so far (calibration matches included)."""
+    row = session.get(Rating, player_id)
+    return 0 if row is None else row.rated_matches
+
+
+def store_rating(session: Session, player_id: int, g: Glicko) -> None:
+    """Save the rating after a match that changed it and count that match."""
     row = session.get(Rating, player_id)
     if row is None:
         session.add(
@@ -148,40 +151,3 @@ def _store(session: Session, player_id: int, g: Glicko) -> None:
     else:
         row.rating, row.rd, row.volatility = g.rating, g.rd, g.volatility
         row.rated_matches += 1
-
-
-def apply_match(session: Session, match_id: int) -> bool:
-    """Rate a saved rated match between two accounts once. ``True``: the ratings changed.
-
-    ``False`` when the match is not rated, is not saved, has a bot or no result, or was rated
-    before. Writes the displayed rating before and after into both ``match_players`` rows.
-    """
-    match = session.get(Match, match_id)
-    if match is None or not match.rated or match.status != "saved":
-        return False
-    sides = list(
-        session.execute(
-            select(MatchPlayer).where(MatchPlayer.match_id == match_id).order_by(MatchPlayer.side)
-        ).scalars()
-    )
-    if len(sides) != 2 or any(s.player_id is None or s.result not in _SCORES for s in sides):
-        return False
-    claimed = session.execute(
-        sql_update(Match)
-        .where(Match.id == match_id, Match.rating_applied.is_(False))
-        .values(rating_applied=True)
-        .returning(Match.id)
-    ).first()
-    if claimed is None:
-        return False
-    first, second = sides
-    assert first.player_id is not None and second.player_id is not None
-    assert first.result is not None
-    old = (rating_of(session, first.player_id), rating_of(session, second.player_id))
-    new = rate_match(old[0], old[1], _SCORES[first.result])
-    for side, before, after in zip(sides, old, new, strict=True):
-        assert side.player_id is not None
-        _store(session, side.player_id, after)
-        side.rating_before = displayed_rating(before)
-        side.rating_after = displayed_rating(after)
-    return True

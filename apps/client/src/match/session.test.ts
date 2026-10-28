@@ -14,6 +14,9 @@ const welcome: ServerMsg = {
   map_id: map.meta.name,
   last_seq: 0,
   nicks: ['Danya', 'Bot'],
+  rated: false,
+  unrated_reason: 'casual',
+  calibration: null,
 };
 const snapshot = (tick: number): ServerMsg => devSnapshot(map, DEV_RULES, tick);
 

@@ -28,6 +28,7 @@ import asyncio
 import logging
 import shutil
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
@@ -36,9 +37,16 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from gow_server.clock import Clock
+from gow_server.ladder import (
+    LadderRules,
+    RatingMode,
+    RatingPlan,
+    apply_match,
+    plan_queue_match,
+    record_resign,
+)
 from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError, MatchManager, MatchRunner
 from gow_server.models import Match, MatchPlayer, utcnow
-from gow_server.rating import Glicko, apply_match, rating_of
 from gow_sim.maps import PLAYERS, MapDef
 from gow_sim.ruleset import Ruleset, archive_ruleset, ruleset_hash
 
@@ -120,6 +128,8 @@ class _Result:
     winner: int | None
     """Side that won; ``None``: a draw, or no result (``status = aborted``)."""
     has_result: bool
+    tick_hz: int = 10
+    """Ticks per second of the match's ruleset (the early-resign threshold is in seconds)."""
 
 
 class MatchLifecycle:
@@ -132,10 +142,13 @@ class MatchLifecycle:
         clock: Clock,
         *,
         ready_timeout_s: float = DEFAULT_READY_TIMEOUT_S,
+        ladder: LadderRules | None = None,
     ) -> None:
         self.manager = manager
         self.clock = clock
         self.ready_timeout_s = ready_timeout_s
+        self.ladder = ladder or LadderRules()
+        """The numbers of DEC-34 (calibration, early resign, queue ban, per-opponent limit)."""
         self._sessions = sessions
         self._claims: dict[int, MatchRecord] = {}
         self._pending: set[MatchRecord] = set()
@@ -218,6 +231,10 @@ class MatchLifecycle:
 
         Claims the human ``players`` (``AlreadyActiveError``). Raises ``ManagerDrainingError``
         while the server drains; the record then keeps its state, the caller may retry or abort.
+
+        ``rated`` marks a queue match: ``gow_server.ladder`` decides at the start who of the two
+        accounts changes a rating (DEC-34), so the stored match is flagged rated only if at least
+        one of them does. Against a bot the flag is ignored (DEC-06).
         """
         if record.dead:
             raise IllegalTransitionError(f"{record.state.value} -> running")
@@ -228,8 +245,8 @@ class MatchLifecycle:
         deadline, record.deadline = record.deadline, None  # not swept while the row is written
         rated = rated and bot is None and BOT_ACCOUNT not in players  # DEC-06: two humans only
         try:
-            pk, ratings = await asyncio.to_thread(
-                self._insert, map_id, ruleset_hash(rules), rated, players, bot_name
+            pk, plan = await asyncio.to_thread(
+                self._insert, map_id, ruleset_hash(rules), rated, players, bot_name, rules.tick_hz
             )
         except BaseException:
             record.deadline = deadline
@@ -244,7 +261,7 @@ class MatchLifecycle:
                 match_id=match_id,
                 private=private,
                 bot=bot,
-                ratings=ratings,
+                rating_plan=plan,
             )
         except BaseException:
             record.deadline = deadline
@@ -290,33 +307,48 @@ class MatchLifecycle:
     # Database (blocking: call through ``asyncio.to_thread``) -----------------------------------
 
     def _insert(
-        self, map_id: str, rules_hash: str, rated: bool, players: tuple[int, int], bot: str | None
-    ) -> tuple[int, tuple[Glicko, Glicko] | None]:
-        """Insert the match; for a rated one also read the ratings of both accounts."""
+        self,
+        map_id: str,
+        rules_hash: str,
+        rated: bool,
+        players: tuple[int, int],
+        bot: str | None,
+        tick_hz: int,
+    ) -> tuple[int, RatingPlan | None]:
+        """Insert the match; for a queue match also decide its rating rules (DEC-34)."""
         with self._sessions.begin() as session:
+            now = self.clock.wall()
+            plan = (
+                plan_queue_match(session, (players[0], players[1]), self.ladder, tick_hz, now)
+                if rated
+                else None
+            )
             match = Match(
                 map_id=map_id,
                 ruleset_hash=rules_hash,
-                rated=rated,
-                started_at=utcnow(),
+                rated=plan is not None
+                and any(side.mode is not RatingMode.NONE for side in plan.sides),
+                started_at=now,
                 status=STATUS_RUNNING,
             )
             session.add(match)
             session.flush()
             for side, account in zip(PLAYERS, players, strict=True):
                 is_bot = account == BOT_ACCOUNT
+                mode, reason = RatingMode.NONE, None
+                if plan is not None:
+                    mode, reason = plan.sides[side].mode, plan.sides[side].reason
                 session.add(
                     MatchPlayer(
                         match_id=match.id,
                         side=side,
                         player_id=None if is_bot else account,
                         bot=bot if is_bot else None,
+                        rating_mode=mode.value,
+                        unrated_reason=None if reason is None else reason.value,
                     )
                 )
-            ratings = (
-                (rating_of(session, players[0]), rating_of(session, players[1])) if rated else None
-            )
-            return match.id, ratings
+            return match.id, plan
 
     def _write_result(self, pk: int, result: _Result) -> None:
         with self._sessions.begin() as session:
@@ -324,8 +356,9 @@ class MatchLifecycle:
             if match is None:
                 log.error("match row is gone", extra={"match_id": pk})
                 return
+            ended = self.clock.wall()
             match.status = result.status
-            match.ended_at = utcnow()
+            match.ended_at = ended
             match.end_reason = result.end_reason
             match.ticks = result.ticks
             if not result.has_result:
@@ -340,20 +373,26 @@ class MatchLifecycle:
                     .values(result=outcome)
                 )
             if match.rated:
-                self._rate(session, pk)
+                self._rate(session, pk, result.tick_hz, ended)
 
-    @staticmethod
-    def _rate(session: Session, pk: int) -> None:
-        """Rate the match in the transaction of its result (RAT-02, #75).
+    def _rate(self, session: Session, pk: int, tick_hz: int, ended: datetime) -> None:
+        """Rate the match and ban a repeated resigner, in the transaction of the result.
 
-        A failure rolls back only the rating (a savepoint): the result stays saved and the
-        error is logged. ``apply_match`` is idempotent, so a retry cannot rate twice.
+        RAT-02 (#75), DEC-34. A failure rolls back only that step (a savepoint): the result stays
+        saved and the error is logged. ``apply_match`` is idempotent, so a retry cannot rate twice.
         """
         try:
             with session.begin_nested():
-                apply_match(session, pk)
+                apply_match(session, pk, self.ladder, tick_hz)
         except Exception:
             log.exception("match not rated", extra={"match_id": pk})
+        try:
+            with session.begin_nested():
+                until = record_resign(session, pk, self.ladder, ended)
+            if until is not None:
+                log.info("queue ban", extra={"match_id": pk, "until": until.isoformat()})
+        except Exception:
+            log.exception("queue ban not recorded", extra={"match_id": pk})
 
     def _write_aborted(self, pk: int, reason: str) -> None:
         self._write_result(pk, _Result(STATUS_ABORTED, reason, 0, None, False))
@@ -367,7 +406,7 @@ def _result_of(runner: MatchRunner, failure: str | None) -> _Result:
     outcome = runner.match.outcome
     reason = runner.end_reason()
     assert outcome is not None and reason is not None
-    return _Result(STATUS_SAVED, reason, ticks, outcome.winner, True)
+    return _Result(STATUS_SAVED, reason, ticks, outcome.winner, True, runner.match.rules.tick_hz)
 
 
 def abort_orphans(sessions: sessionmaker[Session]) -> int:

@@ -42,6 +42,16 @@ export type ServerMsg =
   | ReachMsg;
 export type PlayerId = 0 | 1;
 /**
+ * Why a match did not change your rating (DEC-34, #414).
+ */
+export type UnratedReason =
+  | 'casual'
+  | 'guest'
+  | 'opponent_guest'
+  | 'opponent_calibrating'
+  | 'opponent_limit'
+  | 'opponent_early_resign';
+/**
  * How much a player sees of a node or a half of an edge (DEC-21, mechanics.md, section 10).
  *
  * Better first: ``EXACT``, ``RANGE``, ``PRESENCE``, ``FOG``.
@@ -255,6 +265,21 @@ export interface WelcomeMsg {
    * @maxItems 2
    */
   nicks: [string, string];
+  /**
+   * Whether this match is expected to change your rating (DEC-34, #414); a calibration match
+   * does, silently. A rated match can still end unrated for its winner (an early resign of the
+   * opponent): ``match_end`` has the final answer.
+   */
+  rated: boolean;
+  /**
+   * Why not (``rated`` is ``False``), known at the start; ``None`` when ``rated``.
+   */
+  unrated_reason: UnratedReason | null;
+  /**
+   * Your calibration progress before this match; ``None`` for a guest, in a match that is not
+   * from the queue, and once calibration is over.
+   */
+  calibration: Calibration | null;
 }
 export interface RulesetPublic {
   tick_hz: number;
@@ -436,6 +461,20 @@ export interface SupplyPublic {
    * Front markers of a player: ``set_front`` accepts ``marker`` ``0..front_markers - 1``.
    */
   front_markers: number;
+}
+/**
+ * Calibration progress of an account: the first matches of a rated account do not show its
+ * rating (DEC-34, #414).
+ */
+export interface Calibration {
+  /**
+   * Calibration matches played, at most ``total``.
+   */
+  played: number;
+  /**
+   * Calibration matches needed (a server setting, 5 by default).
+   */
+  total: number;
 }
 /**
  * The player's view after tick ``tick``. Only the latest one matters (AGENTS.md, 5.3).
@@ -927,9 +966,25 @@ export interface MatchEndMsg {
    */
   vp: [number, number];
   /**
-   * Rating change of the receiving player; ``None``: the match is not rated (DEC-06).
+   * Rating change of the receiving player; ``None``: the match is not rated (DEC-06), or the
+   * player is still in calibration and the rating is hidden (``calibration``). Present when the
+   * match completes the calibration: that is the first rating the player sees (DEC-34).
    */
   rating: RatingChange | null;
+  /**
+   * Whether this match changed your rating (a calibration match did, silently); the final
+   * answer, after the early-resign rule (DEC-34, #414).
+   */
+  rated: boolean;
+  /**
+   * Why not (``rated`` is ``False``); ``None`` when ``rated``.
+   */
+  unrated_reason: UnratedReason | null;
+  /**
+   * Your calibration progress after this match; ``None`` for a guest, in a match that is not
+   * from the queue, and once calibration was over before this match.
+   */
+  calibration: Calibration | null;
 }
 /**
  * The rating of the receiving player before and after a rated match (RAT-02, #75).
@@ -1073,6 +1128,6 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 25;
+export const PROTOCOL_VERSION = 26;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;

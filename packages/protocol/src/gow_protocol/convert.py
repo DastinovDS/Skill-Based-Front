@@ -55,6 +55,7 @@ from gow_protocol import commands as wire
 from gow_protocol.codec import SnapshotFrame, encode_snapshot
 from gow_protocol.messages import (
     AckMsg,
+    Calibration,
     EndReason,
     EventMsg,
     MatchEndMsg,
@@ -62,6 +63,7 @@ from gow_protocol.messages import (
     ReachMsg,
     ReachNode,
     SnapshotMsg,
+    UnratedReason,
 )
 from gow_protocol.view import (
     AtNodeLoc,
@@ -648,14 +650,25 @@ def match_end_msg(
     *,
     disconnect: bool = False,
     rating: RatingChange | None = None,
+    unrated_reason: UnratedReason | None = UnratedReason.CASUAL,
+    calibration: Calibration | None = None,
 ) -> MatchEndMsg:
     """``match_end`` of a finished match; ``disconnect``: the ``Forfeit`` was a technical defeat.
 
-    ``rating``: the receiving player's rating change in a rated match (RAT-02).
+    ``rating``: the receiving player's rating change in a rated match (RAT-02), ``None`` while
+    the rating is hidden. ``unrated_reason``: why the match did not change the rating, ``None``
+    when it did (DEC-34). ``calibration``: the player's progress after the match.
     """
     reason = _END_REASONS[outcome.reason]
     if disconnect and reason is EndReason.FORFEIT:
         reason = EndReason.DISCONNECT
     return MatchEndMsg(
-        tick=tick, reason=reason, winner=outcome.winner, vp=(vp[0], vp[1]), rating=rating
+        tick=tick,
+        reason=reason,
+        winner=outcome.winner,
+        vp=(vp[0], vp[1]),
+        rating=rating,
+        rated=unrated_reason is None,
+        unrated_reason=unrated_reason,
+        calibration=calibration,
     )

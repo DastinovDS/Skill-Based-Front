@@ -16,7 +16,10 @@ services:
       dockerfile: deploy/app.Dockerfile
     image: skill-based-front/app:local
     restart: unless-stopped
-    # Only variables listed here reach the server (Settings forbids unknown GOW_* fields).
+    # Only variables listed here reach the server (Settings forbids unknown GOW_* fields). Every
+    # operator-tunable Settings field is listed, with the Settings default; the container paths
+    # (GOW_HOST, GOW_PORT, GOW_DATABASE_URL, GOW_MAPS_DIR, GOW_REPLAYS_DIR, GOW_RULESETS_*) are
+    # fixed by the image (deploy/app.Dockerfile). apps/server/tests/test_compose.py keeps this list and Settings in step.
     environment:
       GOW_ENV: ${GOW_ENV:-prod}
       GOW_LOG_LEVEL: ${GOW_LOG_LEVEL:-INFO}
@@ -38,6 +41,48 @@ services:
       GOW_READY_TIMEOUT_S: ${GOW_READY_TIMEOUT_S:-120}
       GOW_MONITOR_INTERVAL_S: ${GOW_MONITOR_INTERVAL_S:-30}
       GOW_MAX_REQUEST_BODY_BYTES: ${GOW_MAX_REQUEST_BODY_BYTES:-32768}
+      # Logins and passwords (#374): attempts per window, per client IP and per nick; password changes.
+      GOW_LOGIN_IP_RATE_LIMIT: ${GOW_LOGIN_IP_RATE_LIMIT:-20}
+      GOW_LOGIN_IP_RATE_WINDOW_S: ${GOW_LOGIN_IP_RATE_WINDOW_S:-600}
+      GOW_LOGIN_NICK_RATE_LIMIT: ${GOW_LOGIN_NICK_RATE_LIMIT:-10}
+      GOW_LOGIN_NICK_RATE_WINDOW_S: ${GOW_LOGIN_NICK_RATE_WINDOW_S:-600}
+      GOW_PASSWORD_RATE_LIMIT: ${GOW_PASSWORD_RATE_LIMIT:-5}
+      GOW_PASSWORD_RATE_WINDOW_S: ${GOW_PASSWORD_RATE_WINDOW_S:-3600}
+      # scrypt of new password hashes; docs/ops/deploy.md says to tune N on the VPS (target 50..100 ms).
+      GOW_SCRYPT_N: ${GOW_SCRYPT_N:-32768}
+      GOW_SCRYPT_R: ${GOW_SCRYPT_R:-8}
+      GOW_SCRYPT_P: ${GOW_SCRYPT_P:-1}
+      GOW_SCRYPT_MAXMEM: ${GOW_SCRYPT_MAXMEM:-67108864}
+      # The match WebSocket: extra allowed Origins (a JSON list), hello and send timeouts, the
+      # token bucket of one connection's messages.
+      GOW_WS_ALLOWED_ORIGINS: ${GOW_WS_ALLOWED_ORIGINS:-[]}
+      GOW_WS_HELLO_TIMEOUT_S: ${GOW_WS_HELLO_TIMEOUT_S:-5}
+      GOW_WS_SEND_TIMEOUT_S: ${GOW_WS_SEND_TIMEOUT_S:-5}
+      GOW_WS_MSG_RATE: ${GOW_WS_MSG_RATE:-20}
+      GOW_WS_MSG_BURST: ${GOW_WS_MSG_BURST:-60}
+      # Invites and the public lobby.
+      GOW_LOBBY_STALE_S: ${GOW_LOBBY_STALE_S:-15}
+      GOW_INVITE_RATE_LIMIT: ${GOW_INVITE_RATE_LIMIT:-10}
+      GOW_INVITE_RATE_WINDOW_S: ${GOW_INVITE_RATE_WINDOW_S:-60}
+      # Matchmaking queue (MM-01): the rating window, the pass period, confirmation, bot offer.
+      GOW_QUEUE_WINDOW_BASE: ${GOW_QUEUE_WINDOW_BASE:-100}
+      GOW_QUEUE_WINDOW_PER_S: ${GOW_QUEUE_WINDOW_PER_S:-5}
+      GOW_QUEUE_WINDOW_MAX: ${GOW_QUEUE_WINDOW_MAX:-400}
+      GOW_QUEUE_PASS_S: ${GOW_QUEUE_PASS_S:-1}
+      GOW_QUEUE_CONFIRM_S: ${GOW_QUEUE_CONFIRM_S:-15}
+      GOW_QUEUE_BOT_OFFER_S: ${GOW_QUEUE_BOT_OFFER_S:-60}
+      GOW_QUEUE_STALE_S: ${GOW_QUEUE_STALE_S:-15}
+      GOW_BOT_BUDGET_S: ${GOW_BOT_BUDGET_S:-0.001}
+      # Rating-farming protection (DEC-34, #414, mechanics.md section 19): calibration, the
+      # early-resign threshold, the queue ban of repeated resigns, the per-opponent limit.
+      GOW_CALIBRATION_MATCHES: ${GOW_CALIBRATION_MATCHES:-5}
+      GOW_EARLY_RESIGN_S: ${GOW_EARLY_RESIGN_S:-180}
+      GOW_RESIGN_WINDOW_S: ${GOW_RESIGN_WINDOW_S:-86400}
+      GOW_RESIGN_BAN_SECOND_S: ${GOW_RESIGN_BAN_SECOND_S:-300}
+      GOW_RESIGN_BAN_THIRD_S: ${GOW_RESIGN_BAN_THIRD_S:-1800}
+      GOW_RESIGN_BAN_LATER_S: ${GOW_RESIGN_BAN_LATER_S:-7200}
+      GOW_OPPONENT_LIMIT: ${GOW_OPPONENT_LIMIT:-3}
+      GOW_OPPONENT_LIMIT_WINDOW_S: ${GOW_OPPONENT_LIMIT_WINDOW_S:-86400}
       # app is reachable only through the internal network, i.e. only from Caddy, and Caddy
       # replaces a client's X-Forwarded-For with the real client address.
       GOW_FORWARDED_ALLOW_IPS: "*"

@@ -356,6 +356,9 @@ export interface paths {
     /**
      * Join Queue
      * @description Enter the queue (or read the status if already in it).
+     *
+     *     429 with ``Retry-After`` and a ``QueueBan`` body while the player is banned for repeated
+     *     resigns (DEC-34); 429 with only ``Retry-After`` when the entry rate limit is hit.
      */
     post: operations['join_queue_api_queue_post'];
     /**
@@ -415,6 +418,23 @@ export interface components {
       level: 'easy' | 'normal' | 'hard' | 'expert';
       /** Player */
       player: number;
+    };
+    /**
+     * Calibration
+     * @description Calibration progress of an account: the first matches of a rated account do not show its
+     *     rating (DEC-34, #414).
+     */
+    Calibration: {
+      /**
+       * Played
+       * @description Calibration matches played, at most ``total``.
+       */
+      played: number;
+      /**
+       * Total
+       * @description Calibration matches needed (a server setting, 5 by default).
+       */
+      total: number;
     };
     /** CreateBotMatch */
     CreateBotMatch: {
@@ -524,6 +544,7 @@ export interface components {
       nick: string;
       /** Has Password */
       has_password: boolean;
+      calibration?: components['schemas']['Calibration'] | null;
     };
     /** NickChange */
     NickChange: {
@@ -539,6 +560,28 @@ export interface components {
       password: string;
       /** Old Password */
       old_password?: string | null;
+    };
+    /**
+     * QueueBan
+     * @description The refusal of ``POST /api/queue`` while banned (DEC-34, #414).
+     */
+    QueueBan: {
+      /**
+       * Code
+       * @constant
+       */
+      code: 'queue_banned';
+      /** Message */
+      message: string;
+      /** Retry After S */
+      retry_after_s: number;
+    };
+    /**
+     * QueueBanned
+     * @description Body of the 429 of a banned player: ``{"detail": {...}}`` like every HTTP error.
+     */
+    QueueBanned: {
+      detail: components['schemas']['QueueBan'];
     };
     /** QueueStatus */
     QueueStatus: {
@@ -1179,6 +1222,15 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['QueueStatus'];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['QueueBanned'];
         };
       };
     };

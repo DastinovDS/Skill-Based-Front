@@ -57,11 +57,19 @@ from gow_protocol.convert import (
     reach_msg,
     snapshot_frame,
 )
-from gow_protocol.messages import PausedMsg, RatingChange, ReachMsg, ServerMsg
+from gow_protocol.messages import PausedMsg, ReachMsg, ServerMsg
 from gow_server.alerts import Alerter
 from gow_server.clock import Clock
+from gow_server.ladder import (
+    CASUAL_NOTICE,
+    Notice,
+    RatingPlan,
+    Settlement,
+    end_notice,
+    intro_notice,
+    settle,
+)
 from gow_server.metrics import ServerMetrics
-from gow_server.rating import DRAW, LOSS, WIN, Glicko, displayed_rating, rate_match
 
 if TYPE_CHECKING:
     from gow_server.replays import ReplayService
@@ -202,7 +210,7 @@ class MatchRunner:
         bot: BotSeat | None = None,
         bot_budget_s: float = BOT_BUDGET_S,
         metrics: ServerMetrics | None = None,
-        ratings: tuple[Glicko, Glicko] | None = None,
+        rating_plan: RatingPlan | None = None,
         validate_snapshots: bool = False,
     ) -> None:
         self.match_id: Final = match_id
@@ -223,9 +231,10 @@ class MatchRunner:
         """Tick lag in seconds: how late each step started after it was due (AGENTS.md, 12)."""
         self.metrics = metrics or ServerMetrics()
         """Process-wide counters and histograms; ``MatchManager.start`` replaces the default."""
-        self.ratings: Final = ratings
-        """Ratings of both accounts at the start of a rated match (RAT-02); else ``None``."""
-        self._rating_changes: dict[int, RatingChange] | None = None
+        self.rating_plan: Final = rating_plan
+        """The rating rules of a queue match, fixed at its start (RAT-02, DEC-34); ``None``: a match
+        that is not from the queue, which never changes a rating (DEC-06)."""
+        self._settlement: Settlement | None = None
         self.validate_snapshots: Final = validate_snapshots
         """Decode and validate every snapshot frame (outside ``prod``: a leak trap, #155)."""
         self.bot: Final = bot
@@ -488,32 +497,37 @@ class MatchRunner:
             else:  # the final view goes before match_end, then the connection is done
                 box.put(snapshot)
                 vp = [match.state.players[p].vp for p in PLAYERS]
-                rating = self._rating_change(outcome.winner).get(player)
+                notice = self.end_notice(player)
                 box.put(
-                    match_end_msg(outcome, match.tick, vp, disconnect=disconnect, rating=rating)
+                    match_end_msg(
+                        outcome,
+                        match.tick,
+                        vp,
+                        disconnect=disconnect,
+                        rating=notice.rating,
+                        unrated_reason=notice.unrated_reason,
+                        calibration=notice.calibration,
+                    )
                 )
                 box.close()
 
-    def _rating_change(self, winner: int | None) -> dict[int, RatingChange]:
-        """The rating change of each player of a rated match, computed once (RAT-02, #75).
+    def intro_notice(self, player: int) -> Notice:
+        """What ``player`` is told about the rating before the match (``welcome``)."""
+        return intro_notice(self.rating_plan, player)
 
-        Pure arithmetic on the ratings read at the start, so the tick stays free of I/O. The
-        database write in ``gow_server.lifecycle`` recomputes the same numbers in its transaction.
+    def end_notice(self, player: int) -> Notice:
+        """What ``player`` is told about the rating after the match (``match_end``).
+
+        Pure arithmetic on the plan made at the start (``gow_server.ladder.settle``), so the tick
+        stays free of I/O. The database write in ``gow_server.lifecycle`` settles the same way in
+        its transaction. Computed once, at the end of the match.
         """
-        if self.ratings is None:
-            return {}
-        if self._rating_changes is None:
-            score = DRAW if winner is None else WIN if winner == PLAYERS[0] else LOSS
-            before = self.ratings
-            after = rate_match(before[0], before[1], score)
-            self._rating_changes = {
-                p: RatingChange(
-                    before=round(displayed_rating(before[p])),
-                    after=round(displayed_rating(after[p])),
-                )
-                for p in PLAYERS
-            }
-        return self._rating_changes
+        plan, outcome, reason = self.rating_plan, self.match.outcome, self.end_reason()
+        if plan is None or outcome is None or reason is None:
+            return CASUAL_NOTICE
+        if self._settlement is None:
+            self._settlement = settle(plan, outcome.winner, reason, self.match.tick)
+        return end_notice(plan, self._settlement, player)
 
     def end_reason(self) -> str | None:
         """Why the match ended, as stored in ``matches.end_reason``; ``None``: still running.
@@ -674,7 +688,7 @@ class MatchManager:
         *,
         private: bool = False,
         bot: BotSeat | None = None,
-        ratings: tuple[Glicko, Glicko] | None = None,
+        rating_plan: RatingPlan | None = None,
     ) -> MatchRunner:
         """Create a match and start its loop. Raises ``ManagerDrainingError`` while draining.
 
@@ -682,7 +696,8 @@ class MatchManager:
         ``GET /api/replays/{id}`` are named by it (``gow_server.replays``). ``private``: lobby,
         invite and bot matches, where each player may pause once (DEC-05); queue matches are rated.
         ``bot``: the slot a bot plays (SRV-06); that entry of ``players`` is ``BOT_ACCOUNT``.
-        ``ratings``: the ratings of both accounts of a rated match (RAT-02), for ``match_end``.
+        ``rating_plan``: the rating rules of a queue match (RAT-02, DEC-34), for ``welcome`` and
+        ``match_end``.
         """
         if self.draining:
             raise ManagerDrainingError("the server is draining for a deploy")
@@ -701,7 +716,7 @@ class MatchManager:
             pause_max_s=self._pause_max_s,
             bot=bot,
             bot_budget_s=self._bot_budget_s,
-            ratings=ratings,
+            rating_plan=rating_plan,
             validate_snapshots=self._validate_snapshots,
         )
         self.start(runner)
