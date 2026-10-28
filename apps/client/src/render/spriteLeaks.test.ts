@@ -25,7 +25,7 @@ function stream(seed: number): (below: number) => number {
 /** A snapshot with owners, stock and groups (counts of every size, both modes) changed by `next`. */
 function varied(tick: number, next: (below: number) => number): SnapshotMsg {
   const nodes = base.view.nodes.map((n) => {
-    const owner: PlayerId | null = ([0, 1, null] as const)[next(3)];
+    const owner: PlayerId | null = ([0, 1, null] as const).at(next(3)) ?? null;
     return {
       ...n,
       owner,
@@ -88,21 +88,35 @@ describe('the baked sprites over a long scene', () => {
     sprites.destroy();
   });
 
-  it('lets go of every texture when the views are destroyed (no leak: the counter is as before)', () => {
+  it('lets go of every texture when the views are destroyed and finds them again for the next scene', () => {
     const baker = fakeBaker();
     const sprites = new SpriteCache(baker);
-    const layers = createLayers();
-    const cities = new CityView(map, layers, 0, 1, sprites);
-    const entities = new EntityView(map, layers, 0, 1, (id) => cities.radiusOf(id), sprites);
-    const next = stream(11);
-    for (let tick = 0; tick < 50; tick++) {
-      const snapshot = varied(tick, next);
-      cities.update(snapshot, 50, { barracks: 100, warehouse: 100 });
-      entities.update(interpolateFrame(snapshot, null, tick));
-    }
-    expect(sprites.size).toBeGreaterThan(0);
-    entities.destroy();
-    cities.destroy();
+    const play = (): void => {
+      const layers = createLayers();
+      const cities = new CityView(map, layers, 0, 1, sprites);
+      const entities = new EntityView(map, layers, 0, 1, (id) => cities.radiusOf(id), sprites);
+      const next = stream(11);
+      for (let tick = 0; tick < 50; tick++) {
+        const snapshot = varied(tick, next);
+        cities.update(snapshot, 50, { barracks: 100, warehouse: 100 });
+        entities.update(interpolateFrame(snapshot, null, tick));
+      }
+      expect(sprites.used).toBeGreaterThan(0);
+      entities.destroy();
+      cities.destroy();
+    };
+    play();
+    // No sprite shows anything any more: nothing is held by a destroyed scene.
+    expect(sprites.used).toBe(0);
+    const made = baker.textures.length;
+    const size = sprites.size;
+    expect(size).toBeGreaterThan(0);
+    // The same scene again: the textures are found, nothing is baked, the count is as before.
+    play();
+    expect(sprites.used).toBe(0);
+    expect(baker.textures.length).toBe(made);
+    expect(sprites.size).toBe(size);
+    // The Application goes: every texture is released.
     sprites.destroy();
     expect(sprites.size).toBe(0);
     expect(baker.textures.every((texture) => texture.destroyed)).toBe(true);

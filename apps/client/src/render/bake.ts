@@ -49,7 +49,9 @@ export const MAX_BAKED = 384;
  * Shapes of the map baked into textures (BL1, #347): a city, a token, a plate costs one sprite
  * instead of its vector geometry, and carries a gradient and a soft shadow that vectors cannot
  * draw cheaply. A texture is made once per key by `renderer.generateTexture`, shared by every
- * sprite with that key and released here: `destroy()` frees them all (AGENTS.md 7.2).
+ * sprite with that key and released here: `destroy()` frees them all (AGENTS.md 7.2). The cache
+ * lives as long as the Application, not the scene: a scene that goes lets go of its sprites and the
+ * textures stay for the next one (destroying a texture a frame may still have bound makes PixiJS warn).
  *
  * The number of keys is bounded by the looks themselves (kinds, radii, capacity classes, sides),
  * not by the match; on top of that textures nobody shows are dropped past `MAX_BAKED`. A texture is
@@ -79,6 +81,13 @@ export class SpriteCache implements BakeTools {
   /** The number of textures held now. */
   get size(): number {
     return this.entries.size;
+  }
+
+  /** The number of textures some sprite shows now (the rest are kept for the next time). */
+  get used(): number {
+    let sum = 0;
+    for (const { users } of this.entries.values()) if (users > 0) sum++;
+    return sum;
   }
 
   /** Texture memory held now, in bytes (RGBA). */
@@ -118,6 +127,7 @@ export class SpriteCache implements BakeTools {
     this.retired = [];
   }
 
+  /** Releases every texture and gradient (when the Application is gone). */
   destroy(): void {
     for (const sprite of [...this.sprites]) sprite.release();
     this.sprites.clear();

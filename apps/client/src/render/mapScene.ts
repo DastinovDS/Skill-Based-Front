@@ -1,4 +1,4 @@
-import { Assets, type Application, type Texture } from 'pixi.js';
+import { Assets, type Application, type Renderer, type Texture } from 'pixi.js';
 import { SpriteCache } from './bake.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { labelResolution, NO_INSETS, type Camera, type Insets } from './camera.ts';
@@ -23,7 +23,24 @@ import type { Point } from './camera.ts';
 /** Ticks per second when the source does not say (`rulesets/mvp-0.toml`). */
 const DEFAULT_TICK_HZ = 10;
 
+/**
+ * The baked shapes of the map (`bake.ts`): in world units (cities, tokens: re-baked when the zoom
+ * changes) and in screen px (the arenas of fights: the device pixel ratio only). They belong to the
+ * Application (`GameCanvas`), so a scene that replaces another finds the textures made already.
+ */
+export interface SceneSprites {
+  readonly world: SpriteCache;
+  readonly screen: SpriteCache;
+}
+
+/** The caches of a renderer; the owner destroys them after the Application. */
+export function createSceneSprites(renderer: Renderer): SceneSprites {
+  return { world: new SpriteCache(renderer), screen: new SpriteCache(renderer) };
+}
+
 export interface SceneOptions {
+  /** The baked shapes; without them the scene makes its own and frees them with itself. */
+  sprites?: SceneSprites;
   /** Frames and events to draw; without it only the static map is shown. */
   source?: RenderSource | null;
   /** The viewing player: own groups and packets are this player's. Default 0. */
@@ -52,6 +69,8 @@ export class MapScene {
   private readonly sprites: SpriteCache;
   /** Baked shapes drawn in screen px (the arenas of fights): the device pixel ratio only. */
   private readonly screenSprites: SpriteCache;
+  /** Made by the scene itself (not handed in): freed with it. */
+  private readonly ownedSprites: SceneSprites | null;
   private readonly cities: CityView;
   private readonly entities: EntityView;
   private readonly intents: IntentView;
@@ -84,8 +103,10 @@ export class MapScene {
     const me = options.player ?? 0;
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.
     const hasBackground = options.backgroundUrl !== undefined && options.backgroundUrl !== null;
-    this.sprites = new SpriteCache(app.renderer);
-    this.screenSprites = new SpriteCache(app.renderer);
+    const shapes = options.sprites ?? createSceneSprites(app.renderer);
+    this.ownedSprites = options.sprites === undefined ? shapes : null;
+    this.sprites = shapes.world;
+    this.screenSprites = shapes.screen;
     this.view = new MapView(map, this.layers, me, app.renderer, hasBackground);
     this.cities = new CityView(map, this.layers, me, 1, this.sprites);
     const radiusOf = (node: number): number => this.cities.radiusOf(node);
@@ -196,8 +217,9 @@ export class MapScene {
     this.supply.destroy();
     this.cities.destroy();
     this.view.destroy();
-    this.sprites.destroy();
-    this.screenSprites.destroy();
+    // Its own caches go with it; the Application's stay for the next scene.
+    this.ownedSprites?.world.destroy();
+    this.ownedSprites?.screen.destroy();
     if (this.backgroundUrl !== null) {
       void Assets.unload(this.backgroundUrl);
     }
