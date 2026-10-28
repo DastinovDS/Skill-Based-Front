@@ -21,7 +21,7 @@ import { warehouseCapOf } from './devWarehouse.ts';
 export const PROVINCES_TICK = 1200;
 
 /** The part of the map (world units) the camera looks at: the own half and the middle. */
-export const PROVINCES_VIEW = { x: 60, y: 150, width: 960, height: 640 } as const;
+export const PROVINCES_VIEW = { x: 100, y: 140, width: 1000, height: 640 } as const;
 
 const ENEMY = [10, 11, 15, 19, 20, 16];
 /** Own groups stand here: the nodes are seen exactly, their neighbours as presence. */
