@@ -303,6 +303,9 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
           tick += 1;
           this.push();
         }, 1000 / rules.tick_hz);
+      } else if (msg.type === 'ping') {
+        // Like the real server: the client's liveness watchdog takes silence for a dead link (#417).
+        this.reply({ type: 'pong', id: msg.id });
       } else if (msg.type === 'command') {
         lastSeq = Math.max(lastSeq, msg.seq);
         const handle = setTimeout(() => {
