@@ -25,6 +25,7 @@ import { iconPoint, stackGroups, stackKey, type CityIcon } from './cityStacks.ts
 import { nodeMarkerPoint } from './fogLayout.ts';
 import { buildProgress } from './roadLayout.ts';
 import { knownOfFigure, knownOfSeen } from './rangeLabel.ts';
+import type { SpriteCache } from './bake.ts';
 import { EntityKit, Token } from './shapes.ts';
 import {
   BUILD_PLATE,
@@ -138,8 +139,10 @@ export class EntityView implements EnemyAnchors {
     private labelResolution: number,
     /** Radius of a city now (by its capacity class, `CityView.radiusOf`). */
     private readonly radiusOf: (node: number) => number,
+    /** The baked shapes of the tokens (`bake.ts`). */
+    sprites: SpriteCache,
   ) {
-    this.kit = new EntityKit(me);
+    this.kit = new EntityKit(me, sprites);
     this.enemy = other(me);
     this.enemyNodes = map.nodes.map(() => null);
 

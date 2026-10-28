@@ -1,4 +1,6 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
+import type { BakedSprite, SpriteCache } from './bake.ts';
+import { arenaPlateSpec, chipSpec } from './bakedShapes.ts';
 import { t } from '../i18n/index.ts';
 import type { RenderFrame } from '../net/interpolate.ts';
 import type { EventMsg, FightRoundView, MapFile, PlayerId } from '../protocol.gen.ts';
@@ -19,8 +21,6 @@ import {
   arenaSides,
   changedChips,
   chipAt,
-  chipHatch,
-  chipHeight,
   chipPulse,
   chipsOf,
   exchangeAlpha,
@@ -32,7 +32,6 @@ import {
   roundEffect,
   roundProgress,
   type ArenaSides,
-  type ChipState,
   type EndFx,
   type FightFx,
   type FightPlace,
@@ -64,8 +63,6 @@ const CHIPS_PER_ARENA = 2 * CHIP.max;
 const MINUS = '−';
 /** Where "-N" stands from the middle of the token that lost the units (world units at 100%). */
 const POP_OFFSET = { x: 17, y: 18 } as const;
-/** The tone of the discharged units and the hatching on their chips. */
-const REST_LIGHTEN = 0.6;
 /** The plate: its inner margin and the rows of the bottom strip (px from the middle). */
 const STOCK_Y = 20;
 const BAR_Y = PLATE.halfHeight - 9;
@@ -116,10 +113,10 @@ interface Arena {
   readonly top: Container;
   /** A dotted line down to a fight on a road, and a cross there. */
   readonly tether: Graphics;
-  readonly plate: Graphics;
+  readonly plate: BakedSprite;
   /** A finished fight: the halves tinted by the owners, the winner's outlined. */
   readonly tint: Graphics;
-  readonly chips: Graphics[];
+  readonly chips: BakedSprite[];
   readonly badges: Graphics[];
   /** Per side: the diamond of the bonus stock, "×N" beside it. */
   readonly stockMark: Readonly<Record<Side, Graphics>>;
@@ -175,16 +172,6 @@ const RESULT_KEY = {
   bounced: 'fight.bounced',
 } as const;
 
-/** The three corners of a chip of `side`, tip down, centred on its box. */
-function chipCorners(side: number): Point[] {
-  const h = chipHeight(side);
-  return [
-    { x: -side / 2, y: -h / 2 },
-    { x: side / 2, y: -h / 2 },
-    { x: 0, y: h / 2 },
-  ];
-}
-
 /**
  * The animation of fights (DEC-24, DEC-29, DEC-32; ui-style 9.9, 27, 29). Over every fight going
  * on (`view.fights`) floats the arena (A1 "chips"): a plate of two halves, own units on the left,
@@ -223,12 +210,8 @@ export class FightView {
   private readonly ends: EndLabel[] = [];
   private readonly contexts: GraphicsContext[] = [];
   private readonly glyphs: Glyphs;
-  private readonly plateContext: GraphicsContext;
   private readonly barContext: GraphicsContext;
   private readonly badgeContext: GraphicsContext;
-  private readonly chipContext: Readonly<
-    Record<Side, Readonly<Record<ChipState, GraphicsContext>>>
-  >;
   private readonly stockContext: Readonly<
     Record<Side, { readonly on: GraphicsContext; readonly off: GraphicsContext }>
   >;
@@ -265,6 +248,8 @@ export class FightView {
     private resolution: number,
     /** Radius of a city now (`CityView.radiusOf`). */
     private readonly radiusOf: (node: number) => number,
+    /** The baked plate and chips, in screen px (`bake.ts`). */
+    private readonly sprites: SpriteCache,
   ) {
     const text = (fill: number, size: number, stroke = true): TextStyle =>
       new TextStyle({
@@ -307,17 +292,6 @@ export class FightView {
           .fill(GLYPH_COLOR),
       ),
     };
-    const { halfWidth: hw, halfHeight: hh } = PLATE;
-    this.plateContext = this.context((g) => {
-      g.roundRect(-hw, -hh, 2 * hw, 2 * hh + 2, 12)
-        .fill({ color: PLATE_FILL, alpha: 0.96 })
-        .stroke({ width: 1.6, color: FIGHT_COLOR, alpha: 0.85 });
-      // The middle line between the halves.
-      for (const [from, to] of dashSegments({ x: 0, y: -hh + 5 }, { x: 0, y: hh - 12 }, 3, 3)) {
-        g.moveTo(from.x, from.y).lineTo(to.x, to.y);
-      }
-      return g.stroke({ width: 1, color: FIGHT_COLOR, alpha: 0.4 });
-    });
     this.barContext = this.context((g) =>
       g.roundRect(0, 0, BAR_WIDTH, BAR_HEIGHT, BAR_HEIGHT / 2).fill(FIGHT_COLOR),
     );
@@ -330,11 +304,7 @@ export class FightView {
         .lineTo(3, -3)
         .stroke({ width: 1.5, color: WARN }),
     );
-    const colorOf = (side: Side): number => ownerColor(me, side === 'own' ? me : enemy);
-    this.chipContext = {
-      own: this.chipContexts('own', colorOf('own')),
-      enemy: this.chipContexts('enemy', colorOf('enemy')),
-    };
+    const colorOf = (side: Side): number => this.colorOf(side);
     const diamond = (r: number): Point[] => [
       { x: 0, y: -r },
       { x: r, y: 0 },
@@ -370,43 +340,9 @@ export class FightView {
     layers.layer.effects.addChild(this.layer);
   }
 
-  /**
-   * The three chip drawings of a side. Charged: filled, a light outline (the enemy's also a dark
-   * inner one). Discharged: hollow, outlined in the side's colour, hatched. Dead: dashed and faint.
-   */
-  private chipContexts(side: Side, color: number): Readonly<Record<ChipState, GraphicsContext>> {
-    const corners = chipCorners(CHIP.side);
-    const inner = chipCorners(CHIP.side * 0.58);
-    const light = lighten(color, REST_LIGHTEN);
-    return {
-      charged: this.context((g) => {
-        g.poly(flat(corners)).fill(color).stroke({ width: 1.6, color: GLYPH_COLOR, join: 'round' });
-        if (side === 'enemy') {
-          g.poly(flat(inner)).stroke({ width: 1.1, color: BG, join: 'round' });
-        }
-        return g;
-      }),
-      empty: this.context((g) => {
-        g.poly(flat(corners)).fill(PLATE_FILL);
-        for (const [from, to] of chipHatch(CHIP.side, 3.5))
-          g.moveTo(from.x, from.y).lineTo(to.x, to.y);
-        g.stroke({ width: 1.2, color: light, alpha: 0.85 });
-        g.poly(flat(corners)).stroke({ width: 1.8, color, join: 'round' });
-        if (side === 'enemy') {
-          g.poly(flat(inner)).stroke({ width: 1.1, color: BG, join: 'round' });
-        }
-        return g;
-      }),
-      killed: this.context((g) => {
-        corners.forEach((from, i) => {
-          const to = corners[(i + 1) % corners.length];
-          if (to === undefined) return;
-          for (const [a, b] of dashSegments(from, to, 2.5, 2.5))
-            g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-        });
-        return g.stroke({ width: 1.6, color, alpha: 0.6, cap: 'round' });
-      }),
-    };
+  /** The colour of a side of the arena: own blue, the opponent red. */
+  private colorOf(side: Side): number {
+    return ownerColor(this.me, side === 'own' ? this.me : this.me === 0 ? 1 : 0);
   }
 
   private context(draw: (g: GraphicsContext) => GraphicsContext): GraphicsContext {
@@ -605,10 +541,10 @@ export class FightView {
     if (arena === undefined) {
       const view = this.arenaLayer.addChild(new Container({ label: 'arena' }));
       const tether = view.addChild(new Graphics());
-      const plate = view.addChild(new Graphics(this.plateContext));
+      const plate = view.addChild(this.sprites.sprite(arenaPlateSpec()));
       const tint = view.addChild(new Graphics());
       const chips = Array.from({ length: CHIPS_PER_ARENA }, () => {
-        const chip = view.addChild(new Graphics(this.chipContext.own.charged));
+        const chip = view.addChild(this.sprites.sprite());
         chip.visible = false;
         return chip;
       });
@@ -769,7 +705,7 @@ export class FightView {
         const chip = arena.chips[used++];
         if (chip === undefined) return;
         const at = chipAt(index, chips.shown.length, own);
-        chip.context = this.chipContext[side][state];
+        chip.set(chipSpec(state, !own, this.colorOf(side)));
         chip.label = `chip:${state}`;
         chip.position.set(at.x, at.y);
         chip.scale.set(look.pulses[side].get(index) ?? 1);

@@ -1,4 +1,5 @@
 import { Assets, type Application, type Texture } from 'pixi.js';
+import { SpriteCache } from './bake.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { labelResolution, NO_INSETS, type Camera, type Insets } from './camera.ts';
 import { CameraController } from './cameraController.ts';
@@ -47,6 +48,10 @@ export interface SceneOptions {
 export class MapScene {
   readonly layers: MapLayers;
   private readonly view: MapView;
+  /** Baked shapes in world units (cities, tokens): re-baked when the zoom changes. */
+  private readonly sprites: SpriteCache;
+  /** Baked shapes drawn in screen px (the arenas of fights): the device pixel ratio only. */
+  private readonly screenSprites: SpriteCache;
   private readonly cities: CityView;
   private readonly entities: EntityView;
   private readonly intents: IntentView;
@@ -79,12 +84,22 @@ export class MapScene {
     const me = options.player ?? 0;
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.
     const hasBackground = options.backgroundUrl !== undefined && options.backgroundUrl !== null;
+    this.sprites = new SpriteCache(app.renderer);
+    this.screenSprites = new SpriteCache(app.renderer);
     this.view = new MapView(map, this.layers, me, app.renderer, hasBackground);
-    this.cities = new CityView(map, this.layers, me, 1);
+    this.cities = new CityView(map, this.layers, me, 1, this.sprites);
     const radiusOf = (node: number): number => this.cities.radiusOf(node);
-    this.entities = new EntityView(map, this.layers, me, 1, radiusOf);
+    this.entities = new EntityView(map, this.layers, me, 1, radiusOf, this.sprites);
     this.intents = new IntentView(map, this.layers, me, this.entities.kit, radiusOf);
-    this.effects = new EffectsView(map, this.layers, me, 1, this.view.cells, radiusOf);
+    this.effects = new EffectsView(
+      map,
+      this.layers,
+      me,
+      1,
+      this.view.cells,
+      radiusOf,
+      this.screenSprites,
+    );
     this.fog = new FogView(
       map,
       this.layers,
@@ -181,6 +196,8 @@ export class MapScene {
     this.supply.destroy();
     this.cities.destroy();
     this.view.destroy();
+    this.sprites.destroy();
+    this.screenSprites.destroy();
     if (this.backgroundUrl !== null) {
       void Assets.unload(this.backgroundUrl);
     }
@@ -212,6 +229,9 @@ export class MapScene {
 
   /** Every frame: owners and road widths from a new snapshot, then the moving entities. */
   private readonly onFrame = (): void => {
+    // Textures dropped a frame ago may go now (see `SpriteCache.endFrame`).
+    this.sprites.endFrame();
+    this.screenSprites.endFrame();
     const frame = this.source?.frame();
     if (frame === undefined || frame === null || this.source === null) return;
     // Asked once per frame and first: the «Supply» mode swaps the picture before anything draws.
@@ -311,6 +331,7 @@ export class MapScene {
   private readonly onCamera = (camera: Camera): void => {
     // Also runs on resize, so a new device pixel ratio (window moved to another screen) applies.
     const resolution = labelResolution(camera.scale, this.app.renderer.resolution);
+    this.sprites.setResolution(resolution);
     this.cities.setLabelResolution(resolution);
     this.overlay.setLabelResolution(resolution);
     this.overlay.setCameraScale(camera.scale);
@@ -319,6 +340,7 @@ export class MapScene {
     this.supply.setLabelResolution(resolution);
     // What is drawn at one unit a CSS px (the arenas of fights, the bonus of plans) needs the device pixel ratio only.
     const screen = labelResolution(1, this.app.renderer.resolution);
+    this.screenSprites.setResolution(screen);
     this.effects.setScreenResolution(screen);
     this.intents.setScreenResolution(screen);
     this.effects.setCameraScale(camera.scale);

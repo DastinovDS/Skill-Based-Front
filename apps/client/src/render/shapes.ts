@@ -1,17 +1,16 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
+import type { BakedSprite, SpriteCache } from './bake.ts';
+import {
+  triangleBackSpec,
+  triangleFrontSpec,
+  triangleLevelSpec,
+  shieldSpec,
+} from './bakedShapes.ts';
 import { tf } from '../i18n/index.ts';
 import type { Mode, PlayerId } from '../protocol.gen.ts';
-import type { Point } from './camera.ts';
 import type { WarehouseBar } from './cityLayout.ts';
 import type { DefenseBonus } from './cityStacks.ts';
-import {
-  chargeLevel,
-  countLabel,
-  dashSegments,
-  triangleCorners,
-  triangleHeight,
-  triangleSide,
-} from './layout.ts';
+import { chargeLevel, countLabel, triangleHeight, triangleSide } from './layout.ts';
 import {
   BAR_BASE,
   BAR_SEGMENT,
@@ -29,12 +28,8 @@ import {
   SEGMENT_EMPTY_BAR,
   DEFENSE_LABEL,
   SHIELD_BADGE_SCALE,
-  UNIT_DASH,
-  UNIT_HALO,
-  UNIT_INNER_OUTLINE,
   UNIT_INNER_SCALE,
   UNIT_LABEL,
-  UNIT_OUTLINE,
   UNIT_QUESTION_FONT_SIZE,
   UNIT_SIDES,
   ownerColor,
@@ -77,20 +72,6 @@ export function drawWarehouseBar(
   }
 }
 
-const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x, p.y]);
-
-/** The shapes of the triangle of one side: base fill, charge fill (per owner), outlines. */
-interface TriangleShapes {
-  /** A dark casing around the triangle: the icon of units in a city stays apart from the city body. */
-  halo: GraphicsContext;
-  fill: GraphicsContext;
-  /** From the tip, scaled by `chargeLevel` (the tip is the origin). */
-  level: Readonly<Record<PlayerId, GraphicsContext>>;
-  own: GraphicsContext;
-  enemy: GraphicsContext;
-  dashed: Readonly<Record<PlayerId, GraphicsContext>>;
-}
-
 /**
  * Shapes shared by every token, packet and mark. Like `MapView`, identical shapes share one
  * GraphicsContext; `destroy()` releases them all (a Graphics destroyed on its own leaves the
@@ -98,7 +79,8 @@ interface TriangleShapes {
  */
 export class EntityKit {
   readonly contexts: GraphicsContext[] = [];
-  readonly triangles: ReadonlyMap<number, TriangleShapes>;
+  /** The baked sprites of the tokens (`bakedShapes.ts`): triangles, shields. */
+  readonly sprites: SpriteCache;
   /** A packet of the automatic supply: a square (a charge, ui-style 21). */
   readonly packet: Readonly<Record<PlayerId, GraphicsContext>>;
   /** A one-off transfer: a bigger square with a double outline. */
@@ -116,56 +98,11 @@ export class EntityKit {
   /** "+N / M" beside the shield of an own group in "Defense" (DEC-30): dark stroke, like the number inside. */
   readonly defenseStyle: TextStyle;
 
-  constructor(readonly me: PlayerId) {
-    const triangles = new Map<number, TriangleShapes>();
-    const other: PlayerId = me === 0 ? 1 : 0;
-    for (const side of UNIT_SIDES) {
-      const corners = triangleCorners(side);
-      const [left, right, tip] = corners;
-      const centroid = { x: 0, y: (left.y + right.y + tip.y) / 3 };
-      const inner = corners.map((p) => ({
-        x: centroid.x + (p.x - centroid.x) * UNIT_INNER_SCALE,
-        y: centroid.y + (p.y - centroid.y) * UNIT_INNER_SCALE,
-      }));
-      const level = (owner: PlayerId): GraphicsContext =>
-        this.context((g) => g.poly(flat(triangleCorners(side, true))).fill(ownerColor(me, owner)));
-      const dashed = (owner: PlayerId): GraphicsContext =>
-        this.context((g) => {
-          for (const [from, to] of [
-            [left, right],
-            [right, tip],
-            [tip, left],
-          ] as const) {
-            for (const [a, b] of dashSegments(from, to, UNIT_DASH.dash, UNIT_DASH.gap)) {
-              g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-            }
-          }
-          return g.stroke({
-            width: UNIT_OUTLINE.width,
-            color: ownerColor(me, owner),
-            cap: 'round',
-          });
-        });
-      triangles.set(side, {
-        halo: this.context((g) => g.poly(flat(corners)).stroke({ ...UNIT_HALO, color: BG })),
-        fill: this.context((g) => g.poly(flat(corners)).fill(PLATE_FILL)),
-        level: { 0: level(0), 1: level(1) },
-        // The outline carries the owner's colour, so an empty triangle still tells whose it is;
-        // the opponent's second, inner outline tells it without the hue (AGENTS.md 7.4).
-        own: this.context((g) =>
-          g.poly(flat(corners)).stroke({ ...UNIT_OUTLINE, color: ownerColor(me, me) }),
-        ),
-        enemy: this.context((g) =>
-          g
-            .poly(flat(corners))
-            .stroke({ ...UNIT_OUTLINE, color: ownerColor(me, other) })
-            .poly(flat(inner))
-            .stroke(UNIT_INNER_OUTLINE),
-        ),
-        dashed: { 0: dashed(0), 1: dashed(1) },
-      });
-    }
-    this.triangles = triangles;
+  constructor(
+    readonly me: PlayerId,
+    sprites: SpriteCache,
+  ) {
+    this.sprites = sprites;
     const square = (g: GraphicsContext, side: number): GraphicsContext =>
       g.rect(-side / 2, -side / 2, side, side);
     const packet = (owner: PlayerId): GraphicsContext =>
@@ -299,12 +236,10 @@ function specKey(spec: TokenSpec): string {
  */
 export class Token {
   readonly view = new Container();
-  private readonly halo: Graphics;
-  private readonly fill: Graphics;
-  private readonly level: Graphics;
-  private readonly outline: Graphics;
-  private readonly shield: Container;
-  private readonly shieldDisc: Graphics;
+  private readonly back: BakedSprite;
+  private readonly level: BakedSprite;
+  private readonly outline: BakedSprite;
+  private readonly shield: BakedSprite;
   private readonly defensePill = new Graphics();
   private readonly defenseText: Text;
   private readonly defenseLabel = new Container({ visible: false });
@@ -322,20 +257,15 @@ export class Token {
     private readonly kit: EntityKit,
     resolution: number,
   ) {
-    // Every Graphics starts on a shared context: one that owned its own would leak on
-    // `destroy({ children: true })`.
-    const base = kit.triangles.get(UNIT_SIDES[1]);
-    if (base === undefined) throw new Error('no triangle shapes');
-    this.halo = new Graphics(base.halo);
-    this.halo.visible = false;
-    this.fill = new Graphics(base.fill);
-    this.level = new Graphics(base.level[0]);
-    this.outline = new Graphics(base.own);
-    this.shieldDisc = new Graphics(kit.iconDisc[0]);
-    const glyph = new Graphics(kit.glyph.defense);
-    this.shield = new Container({ visible: false });
+    // The shapes are baked sprites (U1, #347): the plate with its shadow and the casing of an icon
+    // in a city, the charge fill (scaled from the tip), the outline with its rim, the shield badge.
+    this.back = kit.sprites.sprite();
+    this.level = kit.sprites.sprite();
+    this.level.visible = false;
+    this.outline = kit.sprites.sprite();
+    this.shield = kit.sprites.sprite();
     this.shield.scale.set(SHIELD_BADGE_SCALE);
-    this.shield.addChild(this.shieldDisc, glyph);
+    this.shield.visible = false;
     this.defenseText = new Text({
       text: '',
       style: kit.defenseStyle,
@@ -353,8 +283,7 @@ export class Token {
     this.count = new Text({ text: '', style: kit.textStyle, anchor: 0.5, resolution });
     this.label.addChild(this.pill, this.count);
     this.view.addChild(
-      this.halo,
-      this.fill,
+      this.back,
       this.level,
       this.outline,
       this.question,
@@ -386,28 +315,31 @@ export class Token {
     const { counts, owner } = spec;
     const side = triangleSide(counts === null ? null : counts.units);
     this.side = side;
-    const shapes = this.kit.triangles.get(side);
-    if (shapes === undefined) return;
     const h = triangleHeight(side);
     const range = spec.range ?? null;
     this.counted = counts !== null || range !== null;
+    const { me } = this.kit;
+    const color = ownerColor(me, owner);
 
-    this.halo.context = shapes.halo;
-    this.halo.visible = spec.inside === true;
-    this.fill.context = shapes.fill;
+    this.back.set(triangleBackSpec(side, spec.inside === true));
     const level = counts === null ? 0 : chargeLevel(counts.units, counts.charged);
     this.level.visible = level > 0;
     if (level > 0) {
-      this.level.context = shapes.level[owner];
+      this.level.set(triangleLevelSpec(side, color));
       this.level.scale.set(level);
       this.level.position.set(0, h / 2);
     }
+    // The outline carries the owner's colour, so an empty triangle still tells whose it is; the
+    // opponent's second, inner outline tells it without the hue (AGENTS.md 7.4).
     const dashed = counts === null || spec.ghost === true;
-    this.outline.context = dashed
-      ? shapes.dashed[owner]
-      : owner === this.kit.me
-        ? shapes.own
-        : shapes.enemy;
+    this.outline.set(
+      triangleFrontSpec(
+        side,
+        dashed ? 'dashed' : owner === me ? 'own' : 'enemy',
+        color,
+        UNIT_INNER_SCALE,
+      ),
+    );
 
     this.question.visible = counts === null && range === null;
     // Centre of mass of the triangle, a third of the height above the middle of the box.
@@ -416,7 +348,7 @@ export class Token {
     const defended = spec.modes.includes('defense');
     this.shield.visible = defended;
     if (defended) {
-      this.shieldDisc.context = this.kit.iconDisc[owner];
+      this.shield.set(shieldSpec(color, owner !== me));
       this.shield.position.set(side / 2, -h / 2);
     }
 

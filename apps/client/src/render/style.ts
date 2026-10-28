@@ -51,6 +51,46 @@ export const TERRITORY_ALPHA = 0.2;
 /** The border of an area of one owner: a light line of the owner colour. */
 export const TERRITORY_BORDER = { width: 2, alpha: 0.95, inset: 1.5 } as const;
 
+// --- Shading BL1-1 "Restrained" (ui-style 26.3, #347) ------------------------------------------------
+// Objects (cities, group triangles, badges, arena plates and chips) are baked into textures once
+// (`bake.ts`) with a vertical fill gradient (the top lightened, the bottom darkened), a soft shadow
+// a little below and, on an owned object, a light rim at the top. The shadow is made of a few
+// stacked outlines (no blur filter): its size and strength follow the mockup (`map-style-2.html`,
+// "Restrained": 1.5 px down, a blur of about 1, half opaque).
+
+/** The fill gradient of a shaded shape: this share to white at the top, to black at the bottom. */
+export const SHADE = { light: 0.16, dark: 0.14 } as const;
+/**
+ * The soft shadow: `dy` px down, built of outlines `grow` px wider than the shape (the widest
+ * first), each at `alpha`; stacked they give a half opaque core and a soft edge of about 1.6 px.
+ */
+export const SHADOW = {
+  dy: 1.5,
+  layers: [
+    { grow: 1.6, alpha: 0.14 },
+    { grow: 0.8, alpha: 0.2 },
+    { grow: 0, alpha: 0.28 },
+  ],
+} as const;
+/** The light rim of an owned object, at its upper left (not on a neutral city). */
+export const RIM = { alpha: 0.3, width: 1.4 } as const;
+/** The room a baked sprite keeps around its shape for the shadow (world units). */
+export const BAKE_MARGIN = 4;
+
+/**
+ * The glow along the border of a territory (BL1 "pronounced" border, owner's choice 2026-10-21): a
+ * line of the owner's colour `width` wide at `alpha`, blurred by `blur`, on the owner's side of the
+ * border only. It is drawn once into a cached texture and drawn again only when an owner changes.
+ * `resolution` is the cache's pixel density: the glow is soft, half the pixels are enough.
+ */
+export const TERRITORY_GLOW = {
+  width: 12,
+  alpha: 0.85,
+  blur: 4.5,
+  blurQuality: 3,
+  resolution: 0.5,
+} as const;
+
 // --- Terrain stamps (9.2): dark "ink" stamps on the cell of a city ------------------------------
 export interface StampSpec {
   /** Grid step in world units. */

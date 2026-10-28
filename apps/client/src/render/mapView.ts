@@ -1,4 +1,13 @@
-import { Container, Graphics, GraphicsContext, Sprite, type Renderer, type Texture } from 'pixi.js';
+import {
+  BlurFilter,
+  Container,
+  Graphics,
+  GraphicsContext,
+  Rectangle,
+  Sprite,
+  type Renderer,
+  type Texture,
+} from 'pixi.js';
 import type { Detail, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
@@ -23,6 +32,7 @@ import {
   ROAD_LANE,
   ROAD_OWN,
   TERRAIN_FILL,
+  TERRITORY_GLOW,
   SUPPLY_FLOOR,
   SUPPLY_TERRITORY_ALPHA,
   TERRITORY_ALPHA,
@@ -100,6 +110,25 @@ export class MapView {
   private owners: readonly Owner[] = [];
   private readonly cellLines: Graphics;
   private readonly territory: Graphics;
+  /** The line of an owner's border, over its glow. */
+  private readonly borderLines: Graphics;
+  /**
+   * The glow along the borders of the territories (BL1, #347): per owner a blurred wide line on the
+   * owner's side of the border, cached as one texture and drawn again only when an owner changes.
+   * The blur is a filter INSIDE the cached container, so it runs only when the cache is built.
+   */
+  private readonly glow = new Container({ label: 'territory-glow', visible: false });
+  private readonly glowLines: Record<0 | 1, Graphics> = {
+    0: new Graphics({ label: 'glow-lines-0' }),
+    1: new Graphics({ label: 'glow-lines-1' }),
+  };
+  private readonly glowMasks: Record<0 | 1, Graphics> = {
+    0: new Graphics({ label: 'glow-mask-0' }),
+    1: new Graphics({ label: 'glow-mask-1' }),
+  };
+  private readonly glowBlurs: BlurFilter[] = [];
+  private glowKey = '';
+  private glowDrawn = false;
   private readonly roads: Road[];
   private readonly casingLayer: Container;
   private readonly laneLayer: Container;
@@ -142,6 +171,8 @@ export class MapView {
     // the stronger border of the owners, under the roads.
     this.cellLines = layers.layer.territory.addChild(this.drawCellLines());
     this.territory = layers.layer.territory.addChild(new Graphics());
+    this.buildGlow(layers.layer.territory, bounds);
+    this.borderLines = layers.layer.territory.addChild(new Graphics());
 
     // All casings first, so no casing covers the lanes of a neighbouring road.
     this.casingLayer = layers.layer.roads.addChild(new Container({ label: 'road-casings' }));
@@ -215,6 +246,7 @@ export class MapView {
     this.floor.visible = on;
     this.dim.visible = !on;
     this.stamps?.setVisible(!on);
+    this.glow.visible = !on && this.glowDrawn;
     if (this.backdrop !== null) this.backdrop.visible = !on;
     // Without a baked background the flat terrain colours are the fallback (hidden with the rest).
     if (this.backdrop === null) this.terrainFill.visible = !on;
@@ -239,12 +271,13 @@ export class MapView {
       }
     });
     // The border of an area: a light line of the owner colour, one stroke per owner.
+    const lines = this.borderLines.clear();
     const borders = territoryBorders(this.cells, owners, TERRITORY_BORDER.inset);
     for (const owner of [0, 1] as const) {
       const own = borders.filter((border) => border.owner === owner);
-      for (const { a, b } of own) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      for (const { a, b } of own) lines.moveTo(a.x, a.y).lineTo(b.x, b.y);
       if (own.length > 0) {
-        g.stroke({
+        lines.stroke({
           width: TERRITORY_BORDER.width,
           color: ownerColor(this.me, owner),
           alpha: TERRITORY_BORDER.alpha,
@@ -252,11 +285,69 @@ export class MapView {
         });
       }
     }
+    this.drawGlow(owners);
     // A road between two cities of one owner looks different from a buffer road.
     this.roads.forEach((_, i) => {
       this.drawRoad(i);
     });
     this.flushDashes();
+  }
+
+  private buildGlow(parent: Container, bounds: { width: number; height: number }): void {
+    for (const owner of [0, 1] as const) {
+      const blur = new BlurFilter({
+        strength: TERRITORY_GLOW.blur,
+        quality: TERRITORY_GLOW.blurQuality,
+        resolution: TERRITORY_GLOW.resolution,
+      });
+      this.glowBlurs.push(blur);
+      // Opaque strokes, the alpha on the blurred whole: where two lines meet nothing doubles.
+      const blurred = new Container({
+        label: `glow-blur-${String(owner)}`,
+        alpha: TERRITORY_GLOW.alpha,
+      });
+      blurred.filters = [blur];
+      blurred.addChild(this.glowLines[owner]);
+      // The glow stays on the owner's side of the border: the cells of the owner clip it.
+      const clip = new Container({ label: `glow-clip-${String(owner)}` });
+      clip.addChild(blurred, this.glowMasks[owner]);
+      clip.mask = this.glowMasks[owner];
+      this.glow.addChild(clip);
+    }
+    this.glow.boundsArea = new Rectangle(0, 0, bounds.width, bounds.height);
+    this.glow.cacheAsTexture({ resolution: TERRITORY_GLOW.resolution, antialias: true });
+    parent.addChild(this.glow);
+  }
+
+  /** Redraws the glow (and its cache) when the owners changed; the tint of the «Supply» mode has none. */
+  private drawGlow(owners: readonly Owner[]): void {
+    const key = owners.map((owner) => String(owner)).join('');
+    if (key === this.glowKey) return;
+    this.glowKey = key;
+    const borders = territoryBorders(this.cells, owners, 0);
+    let drawn = 0;
+    for (const owner of [0, 1] as const) {
+      const lines = this.glowLines[owner].clear();
+      const mask = this.glowMasks[owner].clear();
+      const own = borders.filter((border) => border.owner === owner);
+      for (const { a, b } of own) lines.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      if (own.length > 0) {
+        lines.stroke({
+          width: TERRITORY_GLOW.width,
+          color: ownerColor(this.me, owner),
+          cap: 'round',
+        });
+        drawn += own.length;
+        owners.forEach((o, i) => {
+          const cell = this.cells[i];
+          if (o === owner && cell !== undefined) mask.poly(cell);
+        });
+        mask.fill(0xffffff);
+      }
+    }
+    this.glowDrawn = drawn > 0;
+    this.glow.visible = this.glowDrawn && !this.supplyMode;
+    if (drawn > 0) this.glow.updateCacheTexture();
   }
 
   /**
@@ -409,6 +500,9 @@ export class MapView {
     this.laneLayer.destroy({ children: true });
     this.cellLines.destroy();
     this.territory.destroy();
+    this.borderLines.destroy();
+    this.glow.destroy({ children: true });
+    for (const blur of this.glowBlurs) blur.destroy();
     this.stamps?.destroy();
     this.backdrop?.destroy();
     this.terrainFill.destroy();
