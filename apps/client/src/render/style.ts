@@ -30,12 +30,6 @@ export const TERRAIN_FILL: Readonly<Record<Terrain, number>> = {
 export const BACKDROP_DIM = { color: BG, alpha: 0.18 } as const;
 /** The thin line round every area of the map (also between areas of one owner): subtle. */
 export const CELL_LINE = { width: 1, color: PAPER, alpha: 0.16 } as const;
-/**
- * A border between two neighbouring cells that have no road (#428): a strip in the background
- * colour with no territory tint, so it reads as «no passage». The colour is `BG` on the map and
- * the floor colour in the «Supply» mode.
- */
-export const CLOSED_BORDER = { width: 6, color: BG, alpha: 0.8 } as const;
 export const CELL_BORDER = { width: 1, color: BG, alpha: 0.5 } as const;
 export const MAP_BORDER = { width: 2, color: 0x484f58 } as const;
 
