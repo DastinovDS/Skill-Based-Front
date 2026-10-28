@@ -47,7 +47,7 @@ Common to all maps:
 - every node has a name (DEC-23, item 4; the preview labels it after the kind); the border point is in the middle of all
   roads (`border_permille` 500), the preview draws it as a small circle;
 - all roads start at level 1 (DEC-22); the upgrade limit `max_level` (at most 3) sets the character
-  of a map; roads affect only supply: there is no road type, an upgrade only speeds up
+  of a map (on the pool maps no road is limited to level 1: flank and rim roads go up to 2, #422); roads affect only supply: there is no road type, an upgrade only speeds up
   delivery (DEC-26);
 - a city's capacity is set by its kind `kind` (capital 10, large 8, medium 6, small 4, DEC-22);
   the rule by which three maps got their kinds before the DEC-23 rework: `docs/design/map-format.md`,
@@ -75,7 +75,7 @@ Scree); to the Gates: the main road through Outpost, Highroad and Hillfoot (up t
 there are two large cities of vp 2 (Oakgrove, Fairground): they are held by whoever reaches the foot first.
 
 Character: a positional map. Mountains give the defender +1 and a slow entry, the ridge is crossed only
-through the passes and the Gates; a trail along the crest links the peaks and the passes but cannot be upgraded (level 1). The approach provinces
+through the passes and the Gates; a trail along the crest links the peaks and the passes and can be upgraded once (up to level 2, like the other flank roads). The approach provinces
 cut the supply of the cities before the ridge if they are lost.
 
 ### Crossroads (`crossroads`)
