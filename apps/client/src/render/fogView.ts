@@ -8,10 +8,9 @@ import type {
   PlayerId,
   SnapshotMsg,
 } from '../protocol.gen.ts';
-import { edgeEnds, triangleHeight, triangleSide } from './layout.ts';
+import { triangleHeight, triangleSide } from './layout.ts';
 import {
   ageLabel,
-  borderPoint,
   ghostAlpha,
   halfMarkerPoint,
   nodeMarkerPoint,
@@ -27,10 +26,8 @@ import {
   FOG_VEIL,
   GHOST_AGE_FONT_SIZE,
   GHOST_AGE_STROKE,
-  BORDER_MARK,
   GLYPH_COLOR,
   GHOST_HIDE_S,
-  roadSpan,
 } from './style.ts';
 
 /** Where a snapshot says an enemy was last seen in a place that is hidden now. */
@@ -126,8 +123,6 @@ export class FogView {
   private readonly nodeGhosts: (Ghost | null)[];
   /** The memory of a half of a road in fog, by `edge * 2 + half`. */
   private readonly halfGhosts: (Ghost | null)[];
-  /** A tick across every road at its border point (DEC-21, item 5). */
-  private readonly borders = new Graphics();
   private readonly shadeLayer = new Container({ label: 'fog-shades' });
   private readonly ghostLayer = new Container({ label: 'fog-ghosts' });
   private readonly ageStyle: TextStyle;
@@ -165,7 +160,7 @@ export class FogView {
     this.shadeLayer.addChild(this.veilCache);
     this.nodeGhosts = map.nodes.map(() => null);
     this.halfGhosts = map.edges.flatMap(() => [null, null]);
-    layers.layer.fog.addChild(this.shadeLayer, this.borders, this.ghostLayer);
+    layers.layer.fog.addChild(this.shadeLayer, this.ghostLayer);
   }
 
   /** Ticks per second, for the age of a memory; set when the ruleset is known. */
@@ -204,17 +199,10 @@ export class FogView {
     const { nodes, edges } = base.view;
     this.setRegions(nodes);
     for (const node of nodes) this.setNode(node, base.tick);
-    this.borders.clear();
     for (const edge of edges) this.setEdge(edge, base.tick);
-    this.borders.stroke({
-      width: BORDER_MARK.width,
-      color: BORDER_MARK.color,
-      alpha: BORDER_MARK.alpha,
-    });
   }
 
   destroy(): void {
-    this.borders.destroy();
     this.shadeLayer.destroy({ children: true });
     this.blur.destroy();
     this.ghostLayer.destroy({ children: true });
@@ -302,23 +290,11 @@ export class FogView {
   }
 
   /**
-   * One road: the tick at the border point and the memory of each
-   * half in fog (DEC-21, item 8; DEC-33, detail 8: no position, a ghost at the border point with
+   * One road: the memory of each half in fog (DEC-21, item 8; DEC-33, detail 8: no position, a ghost at the border point with
    * its age). The half in fog itself is drawn by `MapView` (dotted lanes), by the half's own
    * `detail`, not the road's.
    */
   private setEdge(edge: EdgeView, tick: number): void {
-    const border = borderPoint(this.map, edge.id);
-    const ends = edgeEnds(this.map, edge.id);
-    if (border !== undefined && ends !== undefined) {
-      const length = Math.hypot(ends.b.x - ends.a.x, ends.b.y - ends.a.y);
-      if (length > 0) {
-        const reach = roadSpan(edge.width) / 2 + BORDER_MARK.overhang;
-        const nx = (-(ends.b.y - ends.a.y) / length) * reach;
-        const ny = ((ends.b.x - ends.a.x) / length) * reach;
-        this.borders.moveTo(border.x - nx, border.y - ny).lineTo(border.x + nx, border.y + ny);
-      }
-    }
     edge.halves.forEach((half, i) => {
       const side = i === 0 ? 0 : 1;
       this.setHalf(edge, half, side, tick);

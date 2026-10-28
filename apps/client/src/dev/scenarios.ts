@@ -261,7 +261,7 @@ function fightRoundEvents(snapshot: SnapshotMsg): EventMsg[] {
  * What DEC-21 and DEC-33 show about enemies (#359), on the `diamond` map at tick 600: a city seen
  * as a range («21+»), figures on road halves seen exactly, as a range and as presence, and the
  * memory of cities and halves in fog (a range, exact numbers, presence) with their ages. The
- * border point is the tick across each road. Made here, not a fixture of the protocol.
+ * border point holds the memory ghosts of the halves. Made here, not a fixture of the protocol.
  */
 function rangesSnapshot(): SnapshotMsg {
   const base = fixture('snapshot');
