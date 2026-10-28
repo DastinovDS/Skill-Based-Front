@@ -1142,18 +1142,49 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
     b.controller.closeCityMenu();
     expect(b.controller.cityMenu.current.open).toBe(false);
     expect(b.hud.selection).toBeNull();
-    // An action: a sector of the menu, and the keys that do the same.
-    const c = setup();
-    c.controller.click({ kind: 'node', id: home }, false);
-    c.controller.chooseCity('recruit');
-    expect(c.sent).toEqual([{ type: 'recruit', node: home }]);
-    expect(c.controller.cityMenu.current.open).toBe(false);
-    expect(c.hud.selection).toBeNull();
-    const d = setup();
-    d.controller.click({ kind: 'node', id: home }, false);
-    d.controller.key(key('KeyR'));
-    expect(d.sent).toEqual([{ type: 'recruit', node: home }]);
-    expect(d.hud.selection).toBeNull();
+    // The barracks and the warehouse close the menu with the city; recruiting does not (#450).
+    for (const choice of ['barracks', 'warehouse'] as const) {
+      const c = setup();
+      c.controller.click({ kind: 'node', id: home }, false);
+      c.controller.chooseCity(choice);
+      expect(c.sent).toHaveLength(1);
+      expect(c.controller.cityMenu.current.open).toBe(false);
+      expect(c.hud.selection).toBeNull();
+    }
+  });
+
+  it('recruiting keeps the menu open and the city selected, so the next one needs no new click (#450)', () => {
+    // A sector, twice, then the key R, then the key X (cancel): every one reaches the server.
+    const { controller, hud, sent } = setup();
+    controller.click({ kind: 'node', id: home }, false);
+    controller.chooseCity('recruit');
+    controller.chooseCity('recruit');
+    controller.key(key('KeyR'));
+    controller.key(key('KeyX'));
+    controller.chooseCity('recruit');
+    expect(sent).toEqual([
+      { type: 'recruit', node: home },
+      { type: 'recruit', node: home },
+      { type: 'recruit', node: home },
+      { type: 'cancel_recruit', node: home },
+      { type: 'recruit', node: home },
+    ]);
+    expect(controller.cityMenu.current).toMatchObject({ open: true, target: home });
+    expect(hud.selection).toEqual({ kind: 'node', id: home });
+    // The #426 ways out still work after recruiting: Esc, then again a second click on the city.
+    controller.key(key('Escape'));
+    expect(controller.cityMenu.current.open).toBe(false);
+    expect(hud.selection).toBeNull();
+    controller.click({ kind: 'node', id: home }, false);
+    controller.chooseCity('recruit');
+    controller.click({ kind: 'node', id: home }, false);
+    expect(controller.cityMenu.current.open).toBe(false);
+    expect(hud.selection).toBeNull();
+    controller.click({ kind: 'node', id: home }, false);
+    controller.chooseCity('recruit');
+    controller.click(null, false);
+    expect(controller.cityMenu.current.open).toBe(false);
+    expect(hud.selection).toBeNull();
   });
 
   it('closing a city menu does not touch another selection', () => {
@@ -1179,14 +1210,13 @@ describe('radial menus of a city and of a group (UI round 2)', () => {
     controller.click({ kind: 'node', id: home }, false);
     controller.chooseCity('recruit');
     expect(sent).toEqual([{ type: 'recruit', node: home }]);
-    expect(controller.cityMenu.current.open).toBe(false);
   });
 
-  it('the key R closes the menu of the city as well', () => {
+  it('the key R keeps the menu of the city open (#450)', () => {
     const { controller } = setup();
     controller.click({ kind: 'node', id: home }, false);
     controller.key(down('KeyR'));
-    expect(controller.cityMenu.current.open).toBe(false);
+    expect(controller.cityMenu.current.open).toBe(true);
   });
 
   it('the first click on a group only selects it, a second opens its menu, a third closes it', () => {

@@ -113,7 +113,8 @@ export interface KeyInput {
  * UI round 2: there is no selection card. A click on an own city opens its radial menu (recruit
  * `R`, with DEC-26 the barracks and the warehouse) centred on the city circle; a second click on an own group (the first selects
  * it) opens a small radial menu on the group (split `S`, merge `G`, cancel `X`, defense `D`). The
- * menus only front the keys: a key does the same without the menu. A click on the same object
+ * menus only front the keys: a key does the same without the menu. Recruiting (R) and cancelling
+ * a recruit (X) keep the city menu open, to queue several units in a row. A click on the same object
  * again, any click elsewhere and Esc close the menu (a click on another node still orders the
  * selected group).
  *
@@ -558,8 +559,9 @@ export class OrderController implements MapInteraction {
   }
 
   /**
-   * Closes the menu of a city (a key, a click outside, an action) and lets the city go with it, so
-   * its selection highlight does not stay on after the menu (#426).
+   * Closes the menu of a city (a key, a click outside, the barracks or the warehouse) and lets the
+   * city go with it, so its selection highlight does not stay on after the menu (#426). Recruiting
+   * and cancelling a recruit do not close it (#450).
    */
   closeCityMenu(): void {
     const { open, target } = this.cityMenu.current;
@@ -601,9 +603,13 @@ export class OrderController implements MapInteraction {
     return this.#selectedGroup()?.node ?? null;
   }
 
+  /**
+   * Queues a unit in the selected city. The menu stays open and the city stays selected, so the
+   * next click on the sector or the next R queues another one (#450); the sector is dimmed by the
+   * CP price and the queue length, the server rejects the rest.
+   */
   recruit(): void {
     const node = this.recruitNode();
-    this.closeCityMenu();
     if (node === null) return;
     this.#sendCommand({ type: 'recruit', node }, null);
   }
@@ -635,10 +641,9 @@ export class OrderController implements MapInteraction {
     };
   }
 
-  /** Take the last unit off the recruit queue of the selected city (DEC-25); free. */
+  /** Take the last unit off the recruit queue of the selected city (DEC-25); free. Keeps the menu open like `recruit`. */
   cancelRecruit(): void {
     const node = this.recruitNode();
-    this.closeCityMenu();
     if (node === null) return;
     this.#sendCommand({ type: 'cancel_recruit', node }, null);
   }

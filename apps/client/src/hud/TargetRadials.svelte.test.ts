@@ -112,7 +112,15 @@ describe('the radial menus of a city and of a group', () => {
     items[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     flushSync();
     expect(sent).toEqual([{ type: 'recruit', node: home }]);
-    expect(target.querySelector('[role="menu"]')).toBeNull();
+    // The ring stays up and the city selected: the next click queues the next unit (#450).
+    expect(target.querySelector('[role="menu"]')).not.toBeNull();
+    items[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    flushSync();
+    expect(sent).toEqual([
+      { type: 'recruit', node: home },
+      { type: 'recruit', node: home },
+    ]);
+    expect(target.querySelector('[role="menu"]')).not.toBeNull();
   });
 
   it('a menu that loses its city on the map closes and lets the city go (#426)', async () => {
@@ -152,7 +160,7 @@ describe('the radial menus of a city and of a group', () => {
     orders.key({ type: 'keydown', code: 'KeyX', shiftKey: false });
     flushSync();
     expect(sent).toEqual([{ type: 'cancel_recruit', node: home }]);
-    expect(target.querySelector('[role="menu"]')).toBeNull();
+    expect(target.querySelector('[role="menu"]')).not.toBeNull(); // stays open (#450)
   });
 
   it('with city upgrades the menu builds the barracks and the warehouse (DEC-26)', () => {
