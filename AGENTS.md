@@ -58,13 +58,20 @@ deploy/                            Dockerfiles, Caddyfile, deployment scripts (c
 
 | Package | May import from the project | Third-party dependencies | Must not |
 |---|---|---|---|
-| `gow_sim` | none | standard library only | `time`, `random`, `asyncio`, `socket`, `threading`, `datetime.now`; any project package |
-| `gow_protocol` | `gow_sim` | `pydantic` | `gow_server`, `gow_bots` |
+| `gow_sim` | none | standard library only | `time`, `random`, `secrets`, `uuid`, `asyncio`, `socket`, `threading`, `subprocess`, `multiprocessing`, `concurrent`, `os.environ`, `os.urandom`, `datetime.now`; file I/O outside `maps.py`, `ruleset.py`, `replay.py`; any project package |
+| `gow_protocol` | `gow_sim` | `pydantic` | `gow_server`, `gow_bots`, `gow_maps` |
 | `gow_bots.bots` | `gow_sim.view`, `gow_sim.commands`, `gow_sim.maps`, `gow_sim.ruleset` | none | import `gow_sim.state`, `gow_sim.systems`, `gow_sim.match` directly (otherwise a bot sees hidden information) |
-| `gow_bots` (harness) | all of `gow_sim` | `matplotlib` (reports only) | `gow_server`, `gow_protocol` |
+| `gow_bots` (harness) | all of `gow_sim` | `matplotlib` (reports only) | `gow_server`, `gow_protocol`, `gow_maps` |
 | `gow_server` | everything above | `fastapi`, `uvicorn`, `sqlalchemy`, `alembic`, `pydantic-settings` | none |
-| `gow_maps` | `gow_sim.maps`, `gow_sim.ruleset` (the `warehouse` check, DEC-26) | `networkx`, `matplotlib`, `numpy`, `Pillow` | `gow_server` |
-| client | `src/protocol.gen.ts`, `src/api.gen.ts` | `pixi.js`, `svelte`, `howler` | its own copies of the game rules |
+| `gow_maps` | `gow_sim.maps`, `gow_sim.ruleset` (the `warehouse` check, DEC-26) | `networkx`, `matplotlib`, `numpy`, `Pillow` | `gow_server`, `gow_protocol`, `gow_bots`, other `gow_sim` modules |
+| client | `src/protocol.gen.ts`, `src/api.gen.ts` | `pixi.js` (only under `src/render/` and in `src/main.ts`), `svelte` | its own copies of the game rules |
+
+Where each boundary is checked (`mise run check`):
+
+- Imports between project packages, and the third-party packages of every Python package: `[tool.importlinter]` in `pyproject.toml`. The import-linter contracts can only forbid an external package, so each Python package has a list of the installed packages it must not import; a new workspace dependency goes into the lists of the packages that may not use it (the same PR). The bot rule is an allow-list: `gow_bots.bots` may import only `gow_sim.view`, `gow_sim.commands`, `gow_sim.maps`, `gow_sim.ruleset`; `gow_maps` only `gow_sim.maps` and `gow_sim.ruleset`.
+- Determinism and I/O in `gow_sim` (section 4.1): ruff in `packages/sim/ruff.toml` (TID251: clock, randomness, process, environment, concurrency, network; TID253: modules of file I/O at module level, allowed only in `maps.py`, `ruleset.py`, `replay.py` and `canonical.py` for `json`). Not lintable, left to the runtime nets (golden replays, `test_determinism.py`): `hash()`, iteration over a `set`, a function-local import of an I/O module; the builtin `open()` is caught by PTH123 (its message suggests `Path.open()`, which is banned too).
+- Bots and `GameState`: `apps/bots/src/gow_bots/bots/ruff.toml` bans `gow_sim.view.GameState`.
+- PixiJS only in `src/render/` and `src/main.ts`: `no-restricted-imports` in `apps/client/eslint.config.js`.
 
 ---
 

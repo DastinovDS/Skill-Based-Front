@@ -5,7 +5,7 @@ Each process generates the golden games (``golden/generate.py``) with its own
 """
 
 import os
-import subprocess
+import subprocess  # noqa: TID251 (fresh process with PYTHONHASHSEED)
 import sys
 from pathlib import Path
 
@@ -16,7 +16,7 @@ SEEDS = ("0", "1", "4242")
 def test_same_replays_under_different_hash_seeds(tmp_path: Path) -> None:
     procs: list[subprocess.Popen[bytes]] = []
     for seed in SEEDS:
-        env = {**os.environ, "PYTHONHASHSEED": seed}
+        env = {**os.environ, "PYTHONHASHSEED": seed}  # noqa: TID251 (fresh process with PYTHONHASHSEED)
         out, archive = tmp_path / seed, tmp_path / f"archive-{seed}"
         cmd = [sys.executable, str(GENERATE), "--out", str(out), "--archive", str(archive)]
         procs.append(subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL))

@@ -33,6 +33,33 @@ export default defineConfig(
     },
   },
   {
+    // AGENTS.md, section 7.2: PixiJS draws only the map. It is imported under src/render/ and in
+    // src/main.ts (pixi.js/unsafe-eval and Assets preferences, before anything else loads);
+    // the HUD and the rest of the client never touch it.
+    files: ['**/*.ts', '**/*.js', '**/*.svelte'],
+    ignores: ['src/render/**', 'src/main.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['pixi.js', 'pixi.js/*', '@pixi/*'],
+              message: 'PixiJS is imported only under src/render/ and in src/main.ts.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportExpression[source.value=/^(pixi\\.js|@pixi\\/)/]',
+          message: 'PixiJS is imported only under src/render/ and in src/main.ts.',
+        },
+      ],
+    },
+  },
+  {
     files: ['*.js', '*.ts'],
     languageOptions: { globals: { ...globals.node } },
   },

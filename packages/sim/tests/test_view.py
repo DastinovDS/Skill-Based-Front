@@ -15,7 +15,7 @@ worked out by hand from DEC-21 and the map file:
 import dataclasses
 import os
 import re
-import subprocess
+import subprocess  # noqa: TID251 (fresh process with PYTHONHASHSEED)
 import sys
 from pathlib import Path
 
@@ -689,7 +689,7 @@ def test_view_hash_is_the_same_in_fresh_processes() -> None:
     outputs = {
         subprocess.run(
             [sys.executable, "-c", script],
-            env={**os.environ, "PYTHONHASHSEED": seed},
+            env={**os.environ, "PYTHONHASHSEED": seed},  # noqa: TID251 (fresh process with PYTHONHASHSEED)
             capture_output=True,
             text=True,
             check=True,

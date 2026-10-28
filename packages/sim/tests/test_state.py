@@ -6,7 +6,7 @@ of mvp-0 (cp.start = 300), not from the code.
 
 import json
 import os
-import subprocess
+import subprocess  # noqa: TID251 (fresh process with PYTHONHASHSEED)
 import sys
 from pathlib import Path
 from typing import Any, cast
@@ -274,7 +274,7 @@ def test_state_hash_is_the_same_in_fresh_processes(rules: Ruleset, tmp_path: Pat
                 str(MVP0),
                 str(dump),
             ],
-            env={**os.environ, "PYTHONHASHSEED": seed},
+            env={**os.environ, "PYTHONHASHSEED": seed},  # noqa: TID251 (fresh process with PYTHONHASHSEED)
             capture_output=True,
             text=True,
             check=True,
