@@ -2,6 +2,7 @@
 
 import asyncio
 import itertools
+import math
 import shutil
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
@@ -720,7 +721,7 @@ def test_repeated_resigns_ban_the_player_from_the_queue(live_settings: Settings)
             assert _banned_until(live, bob) is None  # winners are never banned
 
             refused = await live.http.post("/api/queue", headers=quitter_headers)
-            left = int((ended + timedelta(minutes=5) - live.clock.wall()).total_seconds())
+            left = math.ceil((ended + timedelta(minutes=5) - live.clock.wall()).total_seconds())
             assert refused.status_code == 429
             assert refused.headers["Retry-After"] == str(left)
             assert refused.json()["detail"] == {
