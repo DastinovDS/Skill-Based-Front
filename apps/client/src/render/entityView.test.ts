@@ -8,6 +8,7 @@ import { EntityView } from './entityView.ts';
 import { createLayers } from './layers.ts';
 import { edgeEnds, edgePoint, nodePoint } from './layout.ts';
 import { PACKET_SIDE, PACKET_TRANSFER, ROAD_TAPE, YOU } from './style.ts';
+import { testSprites } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
 const base = devSnapshot(map, DEV_RULES, 100);
@@ -47,7 +48,7 @@ describe('EntityView, enemies seen in a city', () => {
     const city = nodePoint(map, nodeId);
     for (const exact of [true, false]) {
       const layers = createLayers();
-      const view = new EntityView(map, layers, 0, 1, () => 17);
+      const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
       view.update(frameWith([], exact));
       const token = enemyTokenAt(layers);
       expect(token?.position.x).toBeCloseTo(city?.x ?? NaN);
@@ -69,7 +70,7 @@ describe('EntityView, enemies seen in a city', () => {
       defense_cap: null,
     };
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWith([own], true));
     const token = enemyTokenAt(layers);
     expect(token?.position.x).toBeGreaterThan((city?.x ?? 0) + 10);
@@ -112,7 +113,7 @@ describe('EntityView, the Defense bonus beside the shield (DEC-30)', () => {
 
   it('shows "+N / M" by the shield of an own group in Defense, from the view', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWith([defender(1, 3)], false));
     expect(texts(layers)).toContain('+1 / 3');
     // It follows the snapshot: the bonus grows.
@@ -124,7 +125,7 @@ describe('EntityView, the Defense bonus beside the shield (DEC-30)', () => {
 
   it('shows nothing for a group that is not in Defense, or has no numbers', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWith([{ ...defender(1, 3), mode: 'attack' }], false));
     expect(texts(layers).filter((text) => text.startsWith('+'))).toEqual([]);
     view.update(frameWith([defender(null, null)], false));
@@ -134,7 +135,7 @@ describe('EntityView, the Defense bonus beside the shield (DEC-30)', () => {
 
   it('never shows a number for the opponent: its icon has the shield and no bonus', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     // A replay shows both sides; even if the data of the opponent's group had the numbers, the
     // icon would show the mode only (the server never sends them: DEC-30, item 5).
     const frame = frameWith([defender(2, 3)], false);
@@ -170,7 +171,7 @@ describe('EntityView, enemy figures on roads (DEC-33)', () => {
 
   it('draws one token per figure near its position, and drops a figure that is gone', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWithFigures([figure, { ...figure, id: 'f2', pos: 900, toward_b: false }]));
     const enemy = layers.layer.groups.children.find((c) => c.label === 'enemy');
     const before = enemy?.children.length ?? 0; // the enemies seen in cities, and the figures
@@ -230,7 +231,7 @@ describe('EntityView, ranges and moving figures (DEC-21, DEC-33)', () => {
 
   it('writes the range of a figure seen as a range, and nothing about its charges', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     // Even if the data had charges at this level, the range token does not show them.
     const snapshot = snapshotWith(100, [figure({ charged: 7 })]);
     view.update(interpolateFrame(snapshot, null, 100));
@@ -267,7 +268,7 @@ describe('EntityView, ranges and moving figures (DEC-21, DEC-33)', () => {
     );
     const snapshot: SnapshotMsg = { ...base, view: { ...base.view, nodes, groups: [] } };
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(interpolateFrame(snapshot, null, snapshot.tick));
     expect(texts(layers)).toContain('6-10');
     view.destroy();
@@ -275,7 +276,7 @@ describe('EntityView, ranges and moving figures (DEC-21, DEC-33)', () => {
 
   it('moves a figure smoothly between two snapshots, along the road, and keeps its token', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     const a = snapshotWith(100, [figure({ pos: 200 })]);
     const b = snapshotWith(110, [figure({ pos: 400 })]);
     const enemy = layers.layer.groups.children.find((c) => c.label === 'enemy');
@@ -362,7 +363,7 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
 
   it('draws a packet as a filled square of its owner with a tail of two fainter squares', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWithPacket(false));
     const [far, near, dot] = packetView(layers).children as Graphics[];
     expect(dot).toBeDefined();
@@ -381,7 +382,7 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
 
   it('puts the tail behind the packet, against its way, whichever end it leaves from', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     const ends = edgeEnds(map, edge.id);
     if (ends === undefined) throw new Error('no ends');
     const way = { x: ends.b.x - ends.a.x, y: ends.b.y - ends.a.y };
@@ -405,7 +406,7 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
 
   it('tells a transfer by a bigger square with a second outline apart from it', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWithPacket(true));
     const dot = packetView(layers).children[2] as Graphics;
     const shapes = drawn(dot);
@@ -420,7 +421,7 @@ describe('EntityView, supply packets (a charge is a square, ui-style 21)', () =>
   it('draws no circle for a packet, whoever it belongs to', () => {
     for (const transfer of [false, true]) {
       const layers = createLayers();
-      const view = new EntityView(map, layers, 0, 1, () => 17);
+      const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
       view.update(frameWithPacket(transfer));
       const graphics = packetView(layers).children.filter(
         (c): c is Graphics => c instanceof Graphics,
@@ -482,7 +483,7 @@ describe('EntityView, the road build (R1, #345)', () => {
 
   it('draws the tape under the lanes: a dark band, the warning stripes, the part done on top', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.setBuildTicks(150);
     // 75 of the 150 ticks are left: half is done.
     view.update(frameWithBuild(1, 175));
@@ -508,7 +509,7 @@ describe('EntityView, the road build (R1, #345)', () => {
 
   it('shows no part done for an enemy build (no `done_tick`), and none without the duration', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.setBuildTicks(150);
     view.update(frameWithBuild(1, null));
     expect(filled(tape(layers))).toHaveLength(2);
@@ -520,7 +521,7 @@ describe('EntityView, the road build (R1, #345)', () => {
 
   it('puts a plate with the change of level in the middle of the road, and the time left of an own build', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.setTickHz(10);
     view.update(frameWithBuild(2, 175));
     const [plate, ...rest] = plates(layers);
@@ -537,7 +538,7 @@ describe('EntityView, the road build (R1, #345)', () => {
 
   it('removes the plate when the build is over, and keeps it at least 20 px high on screen', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWithBuild(1, 175));
     view.setCameraScale(0.5);
     // 16 world units high: 20 px needs a scale of at least 20 / (16 * 0.5).
@@ -552,7 +553,7 @@ describe('EntityView, the road build (R1, #345)', () => {
 describe('EntityView, where the groups of a fight stand and the token pop (E3, #351)', () => {
   it('tells where an enemy marker stands in a city, and nowhere else', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWith([], true));
     const city = nodePoint(map, nodeId);
     expect(view.nodePoint(nodeId)).toEqual({ x: city?.x, y: city?.y });
@@ -563,7 +564,7 @@ describe('EntityView, where the groups of a fight stand and the token pop (E3, #
 
   it('swells the token standing at a point for a frame, and puts the marker back', () => {
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWith([], true));
     const at = view.nodePoint(nodeId);
     if (at === undefined) throw new Error('no marker');
@@ -589,7 +590,7 @@ describe('EntityView, where the groups of a fight stand and the token pop (E3, #
       defense_cap: null,
     };
     const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17);
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWith([own], false));
     const spot = view.groupPoints().get('g');
     if (spot === undefined) throw new Error('no spot');

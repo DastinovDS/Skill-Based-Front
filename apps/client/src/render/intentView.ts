@@ -19,6 +19,8 @@ import type { MapLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
 import { reducedMotion } from './motion.ts';
 import { splitOrder, trackOrder } from './orderTrack.ts';
+import type { BakedSprite } from './bake.ts';
+import { shieldSpec } from './bakedShapes.ts';
 import type { EntityKit } from './shapes.ts';
 import type { OrderDelays } from './source.ts';
 import {
@@ -420,13 +422,13 @@ export class IntentView {
     let icon = this.iconPool[index];
     if (icon === undefined) {
       icon = this.icons.addChild(new Container());
-      icon.addChild(new Graphics(this.kit.iconDisc[0]));
-      // The only intent without a destination is "Defense" (DEC-08).
-      icon.addChild(new Graphics(this.kit.glyph.defense));
+      // The only intent without a destination is "Defense" (DEC-08): the shield badge, baked like
+      // the one on a group (BL1, #347).
+      icon.addChild(this.kit.sprites.sprite());
       this.iconPool.push(icon);
     }
-    const [disc] = icon.children as [Graphics, Graphics];
-    disc.context = this.kit.iconDisc[intent.owner];
+    const [badge] = icon.children as [BakedSprite];
+    badge.set(shieldSpec(ownerColor(this.me, intent.owner), intent.owner !== this.me));
     const radius = this.radiusOf(intent.origin);
     const offset = around(radius + INTENT_ICON_DISTANCE, INTENT_ICON_ANGLE);
     const x = at.x + offset.x;

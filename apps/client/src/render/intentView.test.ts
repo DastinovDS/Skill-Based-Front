@@ -10,6 +10,7 @@ import { nodePoint } from './layout.ts';
 import { setReducedMotion } from './motion.ts';
 import { EntityKit } from './shapes.ts';
 import { BG, RIBBON } from './style.ts';
+import { testSprites } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
 const base = devSnapshot(map, DEV_RULES, 100);
@@ -31,7 +32,7 @@ const intent = (over: Partial<WireIntent>): WireIntent => ({
 
 function setup() {
   const layers = createLayers();
-  const kit = new EntityKit(0);
+  const kit = new EntityKit(0, testSprites());
   const view = new IntentView(map, layers, 0, kit, () => 17);
   view.setDelays({ planned: 30 });
   const draw = (intents: WireIntent[], groups: GroupView[] = [], tick = 100) => {

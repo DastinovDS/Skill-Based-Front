@@ -25,7 +25,9 @@ Commands (from the repository root; `mise run` installs Playwright Chromium itse
   `replay.png`. The dev server runs on a free port, Playwright stops it;
 - `mise run shots:publish <number>`: PNGs from `.shots/` to the branch `shots/<number>` and ready markdown links for the PR description;
 - `pnpm -C apps/client test:visual:update`: write the references anew after an intended change of look (there is no `mise run` command
-  for this: an update is always deliberate).
+  for this: an update is always deliberate). It rewrites only the references that fail the 1% tolerance; a change of look that is
+  smaller than that (shading, a shadow) leaves them as they were, so for a change that touches every frame add `--update-snapshots=all`
+  (`pnpm -C apps/client exec playwright test --update-snapshots=all`, #347).
 
 ## Changing the look: the agent's loop
 

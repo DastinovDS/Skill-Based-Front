@@ -1,4 +1,4 @@
-import { Graphics, type Renderer } from 'pixi.js';
+import { Container, Graphics, type Renderer } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { Detail } from '../protocol.gen.ts';
@@ -242,5 +242,62 @@ describe('MapView, the roads of R1', () => {
     expect(redraw).not.toHaveBeenCalled();
     view.setOwners(owners(0, 1));
     expect(redraw).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('MapView, the glow along the borders of the territories (BL1, #347)', () => {
+  let layers: MapLayers;
+  let view: MapView;
+  const glow = (): Container | undefined =>
+    layers.layer.territory.children.find((c) => c.label === 'territory-glow');
+  /** Owners: every city of the first half of the map is player 0's, of the second half player 1's. */
+  const halves = (): (0 | 1)[] => map.nodes.map((_, i) => (i < map.nodes.length / 2 ? 0 : 1));
+
+  beforeEach(() => {
+    layers = createLayers();
+    view = new MapView(map, layers, 0, {} as Renderer, true);
+  });
+  afterEach(() => {
+    view.destroy();
+  });
+
+  it('is one cached texture over the territory fill, under the line of the border', () => {
+    view.setOwners(halves());
+    const layer = layers.layer.territory.children;
+    const index = (label: string) => layer.findIndex((c) => c.label === label);
+    expect(glow()?.isCachedAsTexture).toBe(true);
+    expect(glow()?.visible).toBe(true);
+    // The blur runs inside the cache (a filter on a cached container would run every frame).
+    expect(glow()?.filters ?? []).toHaveLength(0);
+    expect(layer.indexOf(glow() as Container)).toBeGreaterThan(
+      layer.findIndex((c) => c instanceof Graphics),
+    );
+    expect(index('territory-glow')).toBeLessThan(layer.length - 1);
+    expect(layer[layer.length - 1]).toBeInstanceOf(Graphics);
+  });
+
+  it('is rebuilt when an owner changes and not for the same owners', () => {
+    const rebuild = vi.spyOn(Container.prototype, 'updateCacheTexture');
+    view.setOwners(halves());
+    const first = rebuild.mock.calls.length;
+    expect(first).toBeGreaterThan(0);
+    view.setOwners(halves());
+    expect(rebuild.mock.calls.length).toBe(first);
+    const changed = halves();
+    changed[0] = 1;
+    view.setOwners(changed);
+    expect(rebuild.mock.calls.length).toBeGreaterThan(first);
+    rebuild.mockRestore();
+  });
+
+  it('is not shown without a border between owners, nor in the «Supply» mode', () => {
+    view.setOwners(map.nodes.map(() => 0));
+    expect(glow()?.visible).toBe(false);
+    view.setOwners(halves());
+    expect(glow()?.visible).toBe(true);
+    view.setSupplyMode(true);
+    expect(glow()?.visible).toBe(false);
+    view.setSupplyMode(false);
+    expect(glow()?.visible).toBe(true);
   });
 });

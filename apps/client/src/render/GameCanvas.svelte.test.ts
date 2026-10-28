@@ -39,13 +39,27 @@ const fakes = vi.hoisted(() => {
       FakeMapScene.instances.push(this);
     }
   }
-  return { FakeApplication, FakeMapScene };
+  /** The baked shapes the canvas makes per Application (`createSceneSprites`). */
+  class FakeSprites {
+    static instances: FakeSprites[] = [];
+
+    readonly world = { destroy: vi.fn() };
+    readonly screen = { destroy: vi.fn() };
+
+    constructor() {
+      FakeSprites.instances.push(this);
+    }
+  }
+  return { FakeApplication, FakeMapScene, FakeSprites };
 });
 
 vi.mock('pixi.js', () => ({ Application: fakes.FakeApplication }));
-vi.mock('./mapScene.ts', () => ({ MapScene: fakes.FakeMapScene }));
+vi.mock('./mapScene.ts', () => ({
+  MapScene: fakes.FakeMapScene,
+  createSceneSprites: () => new fakes.FakeSprites(),
+}));
 
-const { FakeApplication, FakeMapScene } = fakes;
+const { FakeApplication, FakeMapScene, FakeSprites } = fakes;
 
 function mapNamed(name: string): MapFile {
   return {
@@ -79,6 +93,7 @@ describe('GameCanvas', () => {
   beforeEach(() => {
     FakeApplication.instances = [];
     FakeMapScene.instances = [];
+    FakeSprites.instances = [];
     target = document.createElement('div');
     document.body.appendChild(target);
   });
@@ -103,6 +118,10 @@ describe('GameCanvas', () => {
     expect(FakeApplication.instances).toHaveLength(20);
     expect(destroyCalls(FakeApplication.instances)).toBe(20);
     expect(destroyCalls(FakeMapScene.instances)).toBe(20);
+    // The baked shapes live as long as the Application and go with it.
+    expect(FakeSprites.instances).toHaveLength(20);
+    expect(destroyCalls(FakeSprites.instances.map((sprites) => sprites.world))).toBe(20);
+    expect(destroyCalls(FakeSprites.instances.map((sprites) => sprites.screen))).toBe(20);
   });
 
   it('destroys the application when init() finishes after unmount', async () => {

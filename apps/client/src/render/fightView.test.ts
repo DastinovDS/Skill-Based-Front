@@ -9,6 +9,7 @@ import { FightView } from './fightView.ts';
 import { createLayers } from './layers.ts';
 import { setReducedMotion } from './motion.ts';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
+import { testSprites } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
 const radiusOf = (): number => 14;
@@ -97,7 +98,7 @@ const labelOf = (node: { label: string | null }): string => node.label ?? '';
 
 function setup() {
   const layers = createLayers();
-  const view = new FightView(map, layers, 0, 1, radiusOf);
+  const view = new FightView(map, layers, 0, 1, radiusOf, testSprites());
   const frame = (snap: SnapshotMsg) => interpolateFrame(snap, null, snap.tick);
   /** Every visible node, top down; the children of a node `leaf` accepts are left out. */
   const walk = (visit: (node: Container) => void, leaf?: (node: Container) => boolean): void => {
@@ -317,7 +318,7 @@ describe('FightView', () => {
     expect(texts()).toContain('×3');
     // Seen from the other player the pairs swap sides: the view's pairs are by player id.
     const layers1 = createLayers();
-    const other = new FightView(map, layers1, 1, 1, radiusOf);
+    const other = new FightView(map, layers1, 1, 1, radiusOf, testSprites());
     other.update(frame(snapshot([fightAt({ virtual_left: [5, 4] })])), [], ROUND, false);
     const xOf = (label: string): number => {
       let x = Number.NaN;

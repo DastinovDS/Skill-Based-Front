@@ -8,6 +8,7 @@ import { FogView } from './fogView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
 import { voronoiCells } from './voronoi.ts';
 import { EntityKit } from './shapes.ts';
+import { testSprites } from './testSprites.ts';
 
 // The fog layer draws what the player's view gives and nothing else (DEC-21, item 8; DEC-33,
 // detail 8): a memory of a half only for a half in fog, with the enemies it lists, at the border
@@ -120,7 +121,7 @@ describe('FogView, the memory of the halves of a road', () => {
       (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
     );
     layers = createLayers();
-    kit = new EntityKit(0);
+    kit = new EntityKit(0, testSprites());
     view = new FogView(map, layers, 0, kit, 1, 10, [], () => 17);
   });
   afterEach(() => {
@@ -212,7 +213,7 @@ describe('FogView, the "?" of a road that was never seen', () => {
       (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
     );
     layers = createLayers();
-    kit = new EntityKit(0);
+    kit = new EntityKit(0, testSprites());
     view = new FogView(map, layers, 0, kit, 1, 10, [], () => 17);
   });
   afterEach(() => {
@@ -279,7 +280,7 @@ describe('FogView, the haze F1 over the hidden cities', () => {
       (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
     );
     layers = createLayers();
-    kit = new EntityKit(0);
+    kit = new EntityKit(0, testSprites());
     view = new FogView(map, layers, 0, kit, 1, 10, cells, () => 17);
   });
   afterEach(() => {

@@ -5,7 +5,7 @@
   import type { Anchor } from './anchors.ts';
   import { NO_INSETS, type Insets } from './camera.ts';
   import type { MapInteraction } from './interaction.ts';
-  import { MapScene } from './mapScene.ts';
+  import { createSceneSprites, MapScene, type SceneSprites } from './mapScene.ts';
   import type { RenderSource } from './source.ts';
   import { CANVAS_BACKGROUND } from './style.ts';
 
@@ -46,6 +46,8 @@
   let canvas: HTMLCanvasElement;
   let app: Application | null = null;
   let scene: MapScene | null = null;
+  // The baked shapes live as long as the renderer: a scene that replaces another finds them made.
+  let sprites: SceneSprites | null = null;
   let insets: Insets = NO_INSETS;
 
   /** "Fit map": show the whole map. Called by the HUD button through `bind:this`. */
@@ -87,6 +89,7 @@
     scene = untrack(
       () =>
         new MapScene(current, next, insets, {
+          sprites: sprites ?? undefined,
           source,
           interaction,
           player,
@@ -152,6 +155,7 @@
           return;
         }
         app = pending;
+        sprites = createSceneSprites(pending.renderer);
         show(map);
         if (typeof window.matchMedia === 'function') {
           watchDpr();
@@ -176,6 +180,10 @@
         app.destroy({ removeView: false }, { children: true });
         app = null;
       }
+      // After the renderer: no frame has the textures bound any more.
+      sprites?.world.destroy();
+      sprites?.screen.destroy();
+      sprites = null;
     };
   });
 </script>

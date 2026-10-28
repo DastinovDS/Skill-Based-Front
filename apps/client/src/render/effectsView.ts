@@ -21,6 +21,7 @@ import {
   type CaptureInfo,
 } from './effectsLayout.ts';
 import type { Rect } from './arenaLayout.ts';
+import type { SpriteCache } from './bake.ts';
 import { FightView } from './fightView.ts';
 import type { MapLayers } from './layers.ts';
 import { dashSegments, edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
@@ -91,6 +92,8 @@ export class EffectsView {
     private readonly cells: readonly (readonly Point[])[],
     /** Radius of a city now (`CityView.radiusOf`). */
     private readonly radiusOf: (node: number) => number,
+    /** The baked shapes drawn in screen px (the plate and chips of the arenas). */
+    sprites: SpriteCache,
   ) {
     this.layer.addChild(this.arrows);
     const flag = (owner: PlayerId): GraphicsContext =>
@@ -112,7 +115,7 @@ export class EffectsView {
       enemy: ownerColor(me, enemy),
     });
     this.hits = new HitView(layers.layer.effects, map, me, labelResolution, radiusOf);
-    this.fightView = new FightView(map, layers, me, labelResolution, radiusOf);
+    this.fightView = new FightView(map, layers, me, labelResolution, radiusOf, sprites);
     this.fightView.setContacts((place) => this.contactsAt(place));
   }
 
