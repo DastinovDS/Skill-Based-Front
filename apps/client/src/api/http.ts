@@ -148,8 +148,9 @@ export class Api {
   }
 
   /** Open public matches of other players (LOB-01). */
-  async lobby(token: string): Promise<LobbyEntry[]> {
-    return (await this.#request<Schemas['LobbyOut']>('GET', '/api/lobby', token)).matches;
+  async lobby(token: string, signal?: AbortSignal): Promise<LobbyEntry[]> {
+    return (await this.#request<Schemas['LobbyOut']>('GET', '/api/lobby', token, undefined, signal))
+      .matches;
   }
 
   /** Leave the waiting room: the server drops an invite that has not started. */
@@ -157,8 +158,14 @@ export class Api {
     await this.#request('DELETE', `/api/matches/${encodeURIComponent(code)}`, token);
   }
 
-  invite(token: string, code: string): Promise<Invite> {
-    return this.#request('GET', `/api/matches/${encodeURIComponent(code)}`, token);
+  invite(token: string, code: string, signal?: AbortSignal): Promise<Invite> {
+    return this.#request(
+      'GET',
+      `/api/matches/${encodeURIComponent(code)}`,
+      token,
+      undefined,
+      signal,
+    );
   }
 
   joinInvite(token: string, code: string): Promise<Invite> {
@@ -170,13 +177,13 @@ export class Api {
   }
 
   /** Enter the matchmaking queue (MM-01); the status if already in it. */
-  joinQueue(token: string): Promise<QueueStatus> {
-    return this.#request('POST', '/api/queue', token);
+  joinQueue(token: string, signal?: AbortSignal): Promise<QueueStatus> {
+    return this.#request('POST', '/api/queue', token, undefined, signal);
   }
 
   /** The queue status; `not_found` once the player is out of the queue. Also the heartbeat. */
-  queueStatus(token: string): Promise<QueueStatus> {
-    return this.#request('GET', '/api/queue', token);
+  queueStatus(token: string, signal?: AbortSignal): Promise<QueueStatus> {
+    return this.#request('GET', '/api/queue', token, undefined, signal);
   }
 
   /** Confirm the found opponent; the second confirmation starts the match. */
@@ -201,6 +208,8 @@ export class Api {
     url: string,
     token: string | null,
     body?: unknown,
+    /** Aborts the request (a poll that took too long): it ends as a `network` error. */
+    signal?: AbortSignal,
   ): Promise<T> {
     const headers: Record<string, string> = {};
     if (token !== null) headers['Authorization'] = `Bearer ${token}`;
@@ -211,6 +220,7 @@ export class Api {
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
+        ...(signal === undefined ? {} : { signal }),
       });
     } catch {
       throw new ApiError('network', 0);

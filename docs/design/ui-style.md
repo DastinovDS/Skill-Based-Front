@@ -1013,8 +1013,7 @@ optional list of ribbon axes (for hover only, a click does not find them, `PickH
 `vp_awarded` is moved to the hidden event kinds (neither a toast nor the log). The "Accepted" message for orders is removed:
 an accepted order is visible on the map, a rejection arrives as a toast. Pause: the top bar button is shown in any match, not
 only a private one (`welcome` has no private flag), the server answers with a rejection as a toast. The "How to play" link
-in the help is inactive for now (there is no CLI-13 page). Sound: the top bar switch stores the choice (`sbf.sound`), the sound itself
-is made by package F. The key hint row: the match counter in `sbf.hints.matches`/`sbf.hints.last` (recorded on the privacy
+in the help is inactive for now (there is no CLI-13 page). Sound: the top bar switch (`sbf.sound`) was removed in #410 (CLI-12): the game has no sound yet, and a switch that does nothing reads as a bug; package F brings the switch back with the sound. The key hint row: the match counter in `sbf.hints.matches`/`sbf.hints.last` (recorded on the privacy
 page). Protocol: `PROTOCOL_VERSION` 8; `NodeView.attrition_in`/`grace_left` (only own cities,
 the fog test `test_fog_overcrowding_countdown_is_never_shown_for_foreign_nodes`), `WelcomeMsg.nicks` (a bot: `Bot`),
 `RulesetPublic.capacity`. The attrition warning: the badge at the city is drawn by `render/alertView.ts` from the same

@@ -15,7 +15,6 @@
   import HelpOverlay from './HelpOverlay.svelte';
   import type { HudState } from './hudState.svelte.ts';
   import KeyHints from './KeyHints.svelte';
-  import type { HudPrefs } from './prefs.svelte.ts';
   import RadialMenu from './RadialMenu.svelte';
   import SplitMenu from './SplitMenu.svelte';
   import StackRadial from './StackRadial.svelte';
@@ -41,7 +40,6 @@
     orders: OrderController;
     /** Which overlay is open (help, exit dialog). */
     chrome: HudChrome;
-    prefs: HudPrefs;
     /** Show the key-hint bar (the first matches only). */
     hints?: boolean;
     /** Where cities and groups are on screen: the radial menus of a city and a group sit on them. */
@@ -59,7 +57,6 @@
     hud,
     orders,
     chrome,
-    prefs,
     hints = false,
     anchors = NO_ANCHORS,
     onpause,
@@ -160,7 +157,7 @@
 <!-- The overlay lets pointer events through to the canvas; only panels catch them. -->
 <div class="hud" bind:this={root} data-selection={selection}>
   <div class="top" bind:this={top}>
-    <TopBar {data} {orders} {chrome} {prefs} {onpause} />
+    <TopBar {data} {orders} {chrome} {onpause} />
   </div>
   {#if dev !== undefined}
     <DevPanel {dev} />

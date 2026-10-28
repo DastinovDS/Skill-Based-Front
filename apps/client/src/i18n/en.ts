@@ -168,6 +168,9 @@ export const en = {
   'queue.title': 'Finding an opponent',
   'queue.intro':
     'A ranked match against a player of similar rating. The longer you wait, the wider the range of opponents.',
+  'queue.keepOpen':
+    'Keep this tab open while you wait: a tab that sleeps in the background can drop out of the queue.',
+  'queue.titleFlash': 'Opponent found! Confirm',
   'queue.searching': 'Looking for an opponent...',
   'queue.waited': 'Waiting: {time}',
   'queue.size': 'Players in the queue: {count}',
@@ -280,8 +283,6 @@ export const en = {
   'alert.overflowGrace': 'grace {seconds} s',
   'bar.cpLabel': 'CP: {value} of {cap}',
   'bar.scoreLabel': 'VP score: {mine} {mineVp}, {enemy} {enemyVp}',
-  'bar.soundOn': 'Turn the sound on',
-  'bar.soundOff': 'Turn the sound off',
   'bar.help': 'Help [?]',
   'bar.exit': 'Exit',
   'toast.title': 'Notifications',

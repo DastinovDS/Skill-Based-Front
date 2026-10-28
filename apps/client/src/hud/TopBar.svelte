@@ -7,7 +7,6 @@
   import { LAST_MINUTE_S } from './hudState.svelte.ts';
   import Icon from './Icon.svelte';
   import type { IconName } from './icons.ts';
-  import type { HudPrefs } from './prefs.svelte.ts';
   import { atCap, cpSegments, isPartial, vpShare } from './topBar.ts';
 
   interface Props {
@@ -15,12 +14,11 @@
     /** Opens the stance menu and the other overlays. */
     orders: OrderController;
     chrome: HudChrome;
-    prefs: HudPrefs;
     /** The pause of a private match; without it the button is not shown. */
     onpause?: () => void;
   }
 
-  let { data, orders, chrome, prefs, onpause }: Props = $props();
+  let { data, orders, chrome, onpause }: Props = $props();
 
   /** The key itself is not translated. */
   const STANCE_KEY = 'Q';
@@ -118,18 +116,6 @@
         <span class="time">{formatClock(data.secondsLeft)}</span>
       </span>
     {/if}
-    <button
-      type="button"
-      class="icon-button"
-      aria-pressed={prefs.soundOn}
-      aria-label={t(prefs.soundOn ? 'bar.soundOff' : 'bar.soundOn')}
-      title={t(prefs.soundOn ? 'bar.soundOff' : 'bar.soundOn')}
-      onclick={() => {
-        prefs.toggleSound();
-      }}
-    >
-      <Icon name={prefs.soundOn ? 'volumeOn' : 'volumeOff'} />
-    </button>
     {#if onpause !== undefined}
       <button
         type="button"
@@ -214,10 +200,6 @@
     width: 32px;
     height: 32px;
     padding: 0;
-  }
-
-  .icon-button[aria-pressed='false'] {
-    color: var(--text-dim);
   }
 
   .cp {

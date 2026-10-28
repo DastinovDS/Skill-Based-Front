@@ -55,7 +55,7 @@ describe('LobbyScreen', () => {
     flushSync();
     expect(document.body.textContent).toContain('alice');
     expect(lobby).toHaveBeenCalledTimes(2);
-    expect(lobby).toHaveBeenCalledWith('t');
+    expect(lobby).toHaveBeenCalledWith('t', expect.any(AbortSignal));
   });
 
   it('shows a nick as text, never as markup', async () => {

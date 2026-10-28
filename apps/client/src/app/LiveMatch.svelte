@@ -4,7 +4,6 @@
   import Hud from '../hud/Hud.svelte';
   import { routeKey } from '../hud/hudKeys.ts';
   import { HudState } from '../hud/hudState.svelte.ts';
-  import { HudPrefs } from '../hud/prefs.svelte.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import { backgroundUrl } from '../map/bundledMaps.ts';
   import { forwardKey } from '../match/keyEvents.ts';
@@ -66,7 +65,6 @@
   let insets: Insets = $state.raw(NO_INSETS);
   let pauseLeft = $state(0);
   const chrome = new HudChrome();
-  const prefs = new HudPrefs();
   // The key hints show in the first matches only; a match counts once, also after a reload.
   const hints = $derived(hintsVisible(registerMatch(matchId)));
 
@@ -222,7 +220,6 @@
       {hud}
       {orders}
       {chrome}
-      {prefs}
       {hints}
       onpause={status === 'ready' && paused === null
         ? () => {

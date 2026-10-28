@@ -5,7 +5,6 @@
   import Hud from '../hud/Hud.svelte';
   import { routeKey } from '../hud/hudKeys.ts';
   import { HudState } from '../hud/hudState.svelte.ts';
-  import { HudPrefs } from '../hud/prefs.svelte.ts';
   import { createDevMatch } from './devMatch.ts';
   import { parseEta, pinEta } from './etaPin.ts';
   import { DEMO_SCENE, FIXTURE_SCENES, frozenSource } from './scenarios.ts';
@@ -64,7 +63,6 @@
     new HudState({ me: DEV_PLAYER, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map }),
   );
   const chrome = new HudChrome();
-  const prefs = new HudPrefs();
 
   // The demo scene is a live match against the dev server (until SRV-03); a fixture is a frozen
   // snapshot. Either way the map and the HUD read the same snapshots.
@@ -195,7 +193,6 @@
     {hud}
     {orders}
     {chrome}
-    {prefs}
     oninsets={(next: Insets) => {
       insets = next;
     }}
