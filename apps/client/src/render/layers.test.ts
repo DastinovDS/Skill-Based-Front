@@ -8,8 +8,15 @@ describe('layer order', () => {
     expect(at('intents')).toBeGreaterThan(at('fog'));
   });
 
-  it('keeps the groups under the fog and the «Supply» layer above everything', () => {
-    expect(at('groups')).toBeLessThan(at('fog'));
+  it('draws the groups above the fog: an own group on a road into the fog is not dimmed (#419)', () => {
+    expect(at('groups')).toBeGreaterThan(at('fog'));
+    // The cities and roads stay under the haze, the intents over the groups.
+    expect(at('nodes')).toBeLessThan(at('fog'));
+    expect(at('roads')).toBeLessThan(at('fog'));
+    expect(at('intents')).toBeGreaterThan(at('groups'));
+  });
+
+  it('keeps the «Supply» layer above everything', () => {
     expect(at('supply')).toBe(LAYER_ORDER.length - 1);
     expect(at('effects')).toBeGreaterThan(at('intents'));
   });
