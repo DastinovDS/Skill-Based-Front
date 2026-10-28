@@ -1,17 +1,20 @@
 import { Container } from 'pixi.js';
 
 /**
- * Layer names from bottom to top (AGENTS.md §7.2). The intents lie ABOVE the fog (layers Sl2 «Over
- * the haze», ui-style 27): a ribbon is public (DEC-04) and must not dim; the groups stay under it
- * (an enemy group in fog is not there at all). `supply` is above everything.
+ * Layer names from bottom to top (AGENTS.md §7.2). The groups and the intents lie ABOVE the fog
+ * (layers Sl2 «Over the haze», ui-style 27; the groups since #419): a ribbon is public (DEC-04) and
+ * must not dim, and neither must the own group that marches along a road into a hidden city
+ * (DEC-10: it sees its own edge, which lies in the veil of the hidden end). That is safe: the
+ * server sends an enemy figure only where it is seen, and the memory ghosts of the fog are drawn in
+ * the fog layer itself. `supply` is above everything.
  */
 export const LAYER_ORDER = [
   'background',
   'territory',
   'roads',
   'nodes',
-  'groups',
   'fog',
+  'groups',
   'intents',
   'effects',
   'supply',

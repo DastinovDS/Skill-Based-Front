@@ -391,8 +391,8 @@ are about 100 units apart), unless "px on the screen" is said.
 
 ### 9.1 Layers
 
-The order of the layers does not change (AGENTS.md, 7.2): background → territory → roads → nodes → groups →
-intents → fog → effects. Only the content is added:
+The order of the layers (AGENTS.md, 7.2): background → territory → roads → nodes → fog → groups →
+intents → effects (the groups moved above the fog in #419, 9.8). Only the content is added:
 
 - `background`: the baked background, a `--bg` dimming with alpha 0.18 (round 3: it was 0.3), terrain stamps; the owner's territory fill with alpha 0.2 (round 3, #272: it was 0.13, then 0.07, it got lost on the baked background);
 - `territory`: a thin 1 px line (`CELL_LINE`, light, alpha 0.16) around every area, including between areas of one owner (a shared edge once; the map edge is not drawn); on top of it the border of the owner's area as a light 2 px line in the owner's color (Northgard), stronger;
@@ -544,8 +544,11 @@ The ribbon arrow (HOI4, Mini Motorways):
   (`FOG_FRONT`) was removed by the owner's decision of 2026-10-22; to bring it back if the visibility border reads badly in the gray scale. Cities in the fog are drawn with the outline of the last
   known owner; ghosts and the range plates lie above the veil.
 - **Layers LY2 "Over the haze"** (26.3, 27.3; #346): the `intents` layer is above `fog` in `LAYER_ORDER` (ribbons, target rings, the bonus,
-  the ghost of an own order and a road construction do not dim: an intent is public, DEC-04); the groups remain under the haze, the thin
-  lines of ordinary orders too (they are under the figures of own groups).
+  the ghost of an own order and a road construction do not dim: an intent is public, DEC-04). **The groups moved above the haze in #419** (the audit CLI-04,
+  the smallest fix): since DEC-10 an own group on a road sees its own edge, and that edge lies in the veil of the hidden end city, so the army the player steers
+  (and any enemy figure seen on that road) was dimmed. It is safe: the server sends an enemy figure only where it is seen, the memory ghosts live in the `fog` layer
+  itself, and cities and roads still darken under the veil. The thin lines of ordinary orders lie in the same layer, under the figures of own groups. The
+  corridor cut-out (the visible halves of a road cut out of the veil) was not done: the road itself stays under the haze. The dev scene `fog_road` shows the case.
 - The "last seen" ghost: an enemy triangle dashed and an age caption "−1:10".
 - **Range** (DEC-21, item 4, #359): where the view gives only a range of units, the enemy triangle has a dashed outline
   (like the "?") and a plate with "3-5" or "21+" under the tip instead of the number; there are no charges at the `range` level. Presence

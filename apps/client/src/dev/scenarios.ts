@@ -370,6 +370,70 @@ function rangesSnapshot(): SnapshotMsg {
   };
 }
 
+/**
+ * The `snapshot_fog` fixture with an own group marching along the road 2-1 into the hidden city 2
+ * (#419, DEC-10): the group sees its own road, so the half of the road that lies in the hidden cell
+ * is `presence` and an enemy figure on it is seen too (no numbers); the city 2 stays in fog. The
+ * group and the figure have to be drawn over the veil, not dimmed by it. Made here, not a fixture of
+ * the protocol.
+ */
+function fogRoadSnapshot(): SnapshotMsg {
+  const base = fixture('snapshot_fog');
+  const sighting = (level: Detail): Seen => ({
+    tick: base.tick,
+    level,
+    enemy_modes: level === 'presence' ? ['attack'] : [],
+    enemy_units: null,
+    enemy_charged: null,
+    enemy_range: null,
+  });
+  const edges = base.view.edges.map((edge): EdgeView => {
+    if (edge.id !== 1) return edge;
+    return {
+      ...edge,
+      detail: 'presence',
+      halves: [
+        { detail: 'presence', seen: sighting('presence') },
+        { detail: 'presence', seen: sighting('presence') },
+      ],
+      // Near the city 2 (the end `a`), going to it.
+      enemy_groups: [
+        {
+          id: 'e0f1a2b3c4d5e6f7',
+          pos: 420,
+          toward_b: false,
+          detail: 'presence',
+          mode: 'attack',
+          units: null,
+          charged: null,
+          units_range: null,
+        },
+      ],
+    };
+  });
+  return {
+    ...base,
+    view: {
+      ...base.view,
+      edges,
+      groups: [
+        ...base.view.groups,
+        {
+          id: '0f1e2d3c4b5a6978',
+          units: 2,
+          charged: 1,
+          mode: 'attack',
+          // A quarter of the road short of the hidden city, in the veil of its cell.
+          location: { kind: 'edge', edge: 1, from_node: 1, progress: 750 },
+          order: null,
+          defense_bonus: null,
+          defense_cap: null,
+        },
+      ],
+    },
+  };
+}
+
 /** A real map with a baked background, by name (the scenes `artery` and `provinces`). */
 function bundledMap(name: string) {
   const map = BUNDLED_MAPS.find((m) => m.meta.name === name);
@@ -421,6 +485,8 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
   { id: 'overflow', map: 'diamond', snapshot: overflowSnapshot(), events: [] },
   { id: 'ranges', map: 'diamond', snapshot: rangesSnapshot(), events: [] },
   { id: 'snapshot_fog', map: 'line3', snapshot: fixture('snapshot_fog'), events: [] },
+  // An own group and an enemy figure on a road into a hidden city: not dimmed by the veil (#419).
+  { id: 'fog_road', map: 'line3', snapshot: fogRoadSnapshot(), events: [] },
   {
     id: 'fights',
     map: 'siege',
