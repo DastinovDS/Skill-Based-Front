@@ -48,6 +48,8 @@ The travel time of an order (#432): `mise run shots` takes `eta-<name>.png` (the
 `?eta=<from>,<to>,<ticks>` that pins the label to a frozen scene (a fixture has no server to answer `reach`): `eta-artery-near` (a road
 between two cities), `eta-artery-far` and `eta-artery-bend` (no road between them), `eta-snapshot`. They have no `visual` references.
 
+The road mode (#469): `mise run shots` takes `road-mode-normal.png` and `road-mode-supply.png` (the map alone) on the scene `snapshot` with `?menus`: key U, and Tab before it for the Supply view; the dashed band on the road a click would raise shows in both. They have no `visual` references.
+
 Radial menus (#350): `mise run shots` takes them too, on the scene `snapshot_fog` with the parameter `?menus` (in a frozen
 scene orders go nowhere, the menus open as for a player, city development is on): `menu-stance.png` (key Q),
 `menu-city.png` (a click on a city ring), `menu-group.png` (two clicks on a group), `menu-supply.png` (Tab and a click on a city)
