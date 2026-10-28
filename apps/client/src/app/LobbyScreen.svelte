@@ -2,6 +2,7 @@
   import { Api, ApiError, type LobbyEntry } from '../api/http.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import { apiErrorKey } from './appState.svelte.ts';
+  import { startPolling } from './poll.ts';
 
   interface Props {
     api: Api;
@@ -21,9 +22,9 @@
   let failure = $state.raw<MessageKey | null>(null);
   let busy = $state(false);
 
-  async function load(): Promise<readonly LobbyEntry[] | null> {
+  async function load(signal?: AbortSignal): Promise<readonly LobbyEntry[] | null> {
     try {
-      return await api.lobby(token);
+      return await api.lobby(token, signal);
     } catch (error) {
       failure = apiErrorKey(error);
       return null;
@@ -32,18 +33,17 @@
 
   $effect(() => {
     let current = true;
-    async function poll(): Promise<void> {
-      const next = await load();
+    async function poll(signal: AbortSignal): Promise<void> {
+      const next = await load(signal);
       if (current && next !== null) {
         entries = next;
         failure = null;
       }
     }
-    void poll();
-    const timer = setInterval(() => void poll(), pollMs);
+    const stop = startPolling(poll, pollMs);
     return () => {
       current = false;
-      clearInterval(timer);
+      stop();
     };
   });
 

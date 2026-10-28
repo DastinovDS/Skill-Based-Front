@@ -10,7 +10,6 @@ import { HudChrome } from './chrome.svelte.ts';
 import { DEV_PLAYER, DEV_RULES, devSnapshot } from './devFeed.ts';
 import Hud from './Hud.svelte';
 import { HudState } from './hudState.svelte.ts';
-import { HudPrefs } from './prefs.svelte.ts';
 
 describe('Hud', () => {
   const initial = getLocale();
@@ -55,7 +54,6 @@ describe('Hud', () => {
       send: (cmd) => sent.push(cmd),
     });
     const chrome = new HudChrome();
-    const prefs = new HudPrefs(() => window.localStorage);
     const target = document.body.appendChild(document.createElement('div'));
     mounted = mount(Hud, {
       target,
@@ -65,7 +63,6 @@ describe('Hud', () => {
         hud: state,
         orders,
         chrome,
-        prefs,
         hints: options.hints ?? false,
         oninsets: options.oninsets,
         dev:

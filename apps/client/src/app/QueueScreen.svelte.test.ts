@@ -67,9 +67,65 @@ describe('QueueScreen', () => {
     await vi.advanceTimersByTimeAsync(1000);
     flushSync();
     expect(joinQueue).toHaveBeenCalledTimes(1);
-    expect(queueStatus).toHaveBeenCalledWith('t');
+    expect(queueStatus).toHaveBeenCalledWith('t', expect.any(AbortSignal));
     expect(document.body.textContent).toContain('1:05');
     expect(document.body.textContent).toContain('Players in the queue: 3');
+  });
+
+  it('tells the player to keep the tab open', async () => {
+    render({
+      joinQueue: () => Promise.resolve(searching()),
+      queueStatus: () => Promise.resolve(searching()),
+    });
+    await settle();
+    expect(document.body.textContent).toContain(translate('en', 'queue.keepOpen'));
+  });
+
+  it('does not start a new poll while the last one is unanswered, and gives a slow one up', async () => {
+    let signal: AbortSignal | undefined;
+    const queueStatus = vi.fn((_token: string, given?: AbortSignal) => {
+      signal = given;
+      // Never answers; it ends when the signal aborts, like a fetch.
+      return new Promise<QueueStatus>((_resolve, reject) => {
+        given?.addEventListener('abort', () => {
+          reject(new ApiError('network', 0));
+        });
+      });
+    });
+    render({ joinQueue: () => Promise.resolve(searching()), queueStatus });
+    await settle();
+    await vi.advanceTimersByTimeAsync(1000); // the first status poll starts
+    expect(queueStatus).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(4_000); // 4 s in, still waiting: no second request
+    expect(queueStatus).toHaveBeenCalledTimes(1);
+    expect(signal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1_000); // 5 s: aborted
+    expect(signal?.aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(1_000); // and asked again one period later
+    expect(queueStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('flashes the title of a tab in the background while a found opponent waits to be confirmed', async () => {
+    const original = document.title;
+    document.title = 'Skill-Based Front';
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    try {
+      const confirmQueue = vi.fn(() => Promise.resolve(found({ you_confirmed: true })));
+      render({ joinQueue: () => Promise.resolve(found()), confirmQueue });
+      await settle();
+      expect(document.title).toBe(translate('en', 'queue.titleFlash'));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(document.title).toBe('Skill-Based Front');
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(document.title).toBe(translate('en', 'queue.titleFlash'));
+      // Confirmed: nothing left to flash for.
+      button(translate('en', 'queue.confirm'))?.click();
+      await settle();
+      expect(document.title).toBe('Skill-Based Front');
+    } finally {
+      document.title = original;
+      Reflect.deleteProperty(document, 'visibilityState');
+    }
   });
 
   it('confirms a found opponent and starts the match', async () => {

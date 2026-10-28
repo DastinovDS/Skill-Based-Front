@@ -3,6 +3,8 @@
   import { formatClock } from '../hud/format.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import { apiErrorKey } from './appState.svelte.ts';
+  import { startPolling } from './poll.ts';
+  import { flashTitle } from './titleFlash.ts';
 
   interface Props {
     api: Api;
@@ -60,21 +62,30 @@
   $effect(() => {
     let current = true;
     let joined = false;
-    async function poll(): Promise<void> {
+    async function poll(signal: AbortSignal): Promise<void> {
       try {
-        const next = joined ? await api.queueStatus(token) : await api.joinQueue(token);
+        const next = joined
+          ? await api.queueStatus(token, signal)
+          : await api.joinQueue(token, signal);
         joined = true;
         if (current) update(next);
       } catch (error) {
         if (current) fail(error);
       }
     }
-    void poll();
-    const timer = setInterval(() => void poll(), pollMs);
+    // One request at a time, each with a timeout (CLI-10); it is also the heartbeat of the place.
+    const stop = startPolling(poll, pollMs);
     return () => {
       current = false;
-      clearInterval(timer);
+      stop();
     };
+  });
+
+  // A found pair has to be confirmed in time: a player in another tab sees the title flash.
+  const offered = $derived(status?.state === 'found' && !status.you_confirmed);
+  $effect(() => {
+    if (!offered) return undefined;
+    return flashTitle(t('queue.titleFlash'));
   });
 
   async function confirm(): Promise<void> {
@@ -110,6 +121,7 @@
   <div class="card">
     <h1>{t('queue.title')}</h1>
     <p class="hint">{t('queue.intro')}</p>
+    <p class="hint">{t('queue.keepOpen')}</p>
     {#if status === null}
       <p role="status">{t('common.loading')}</p>
     {:else if status.state === 'searching'}

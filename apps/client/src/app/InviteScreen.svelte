@@ -2,6 +2,7 @@
   import { Api, ApiError, type Invite } from '../api/http.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import { apiErrorKey } from './appState.svelte.ts';
+  import { startPolling } from './poll.ts';
 
   interface Props {
     api: Api;
@@ -49,19 +50,18 @@
 
   $effect(() => {
     let current = true;
-    async function poll(): Promise<void> {
+    async function poll(signal: AbortSignal): Promise<void> {
       try {
-        const next = await api.invite(token, code);
+        const next = await api.invite(token, code, signal);
         if (current) update(next);
       } catch (error) {
         if (current && !gone(error)) failure = apiErrorKey(error);
       }
     }
-    void poll();
-    const timer = setInterval(() => void poll(), pollMs);
+    const stop = startPolling(poll, pollMs);
     return () => {
       current = false;
-      clearInterval(timer);
+      stop();
     };
   });
 
