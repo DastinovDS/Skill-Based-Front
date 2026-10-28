@@ -299,6 +299,8 @@ export class MapView {
         strength: TERRITORY_GLOW.blur,
         quality: TERRITORY_GLOW.blurQuality,
         resolution: TERRITORY_GLOW.resolution,
+        // Not cut to the canvas: the filter runs inside the world-sized cache texture (#441).
+        clipToViewport: false,
       });
       this.glowBlurs.push(blur);
       // Opaque strokes, the alpha on the blurred whole: where two lines meet nothing doubles.
