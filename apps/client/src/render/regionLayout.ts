@@ -159,6 +159,26 @@ export function cellEdges(cells: readonly (readonly Point[])[]): readonly CellEd
   return edges;
 }
 
+/**
+ * The shared borders of two cells that have no road between their cities: where two neighbouring
+ * cells touch but nothing connects them, the border is not a passage (#428). Each border once
+ * (the map edge has no neighbour and is not one). `roads` are the ends of the map's edges; the
+ * cell `i` is the node `i`. Pure geometry from the map data, no new map field.
+ */
+export function closedBorders(
+  cells: readonly (readonly Point[])[],
+  roads: readonly { readonly a: number; readonly b: number }[],
+): Segment[] {
+  const linked = new Set<string>();
+  for (const { a, b } of roads) linked.add(`${String(Math.min(a, b))}|${String(Math.max(a, b))}`);
+  const closed: Segment[] = [];
+  for (const { cell, a, b, neighbour } of cellEdges(cells)) {
+    if (neighbour === null || cell > neighbour) continue;
+    if (!linked.has(`${String(cell)}|${String(neighbour)}`)) closed.push({ a, b });
+  }
+  return closed;
+}
+
 /** `p` moved `distance` from the edge `a`-`b` toward `towards` (perpendicular to the edge). */
 function inward(a: Point, b: Point, towards: Point, distance: number): Point {
   const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;

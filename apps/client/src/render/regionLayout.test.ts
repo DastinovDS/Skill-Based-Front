@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cellEdges,
   clipToConvex,
+  closedBorders,
   distanceToSegment,
   insideConvex,
   stampPoints,
@@ -152,5 +153,60 @@ describe('clipping', () => {
       { x: 50, y: 110 },
     ]);
     expect(half.every((p) => p.x >= 49.999)).toBe(true);
+  });
+});
+
+describe('closedBorders: shared cell borders with no road between the cities (#428)', () => {
+  // Three cities in a row: the cells 0 | 1 | 2 share two borders, the cells 0 and 2 share none.
+  const cells = voronoiCells(
+    [
+      { x: 20, y: 50 },
+      { x: 50, y: 50 },
+      { x: 80, y: 50 },
+    ],
+    { width: 100, height: 100 },
+  );
+
+  it('gives the borders whose two cities have no road, each once', () => {
+    const closed = closedBorders(cells, []);
+    expect(closed).toHaveLength(2);
+    // The borders are the vertical lines x = 35 and x = 65.
+    expect(closed.map((s) => Math.round(s.a.x)).sort()).toEqual([35, 65]);
+    expect(closed.every((s) => Math.abs(s.a.x - s.b.x) < 1e-9)).toBe(true);
+  });
+
+  it('skips a border with a road, in either direction of the edge', () => {
+    const only = closedBorders(cells, [{ a: 1, b: 0 }]);
+    expect(only).toHaveLength(1);
+    expect(only[0]?.a.x).toBeCloseTo(65);
+    expect(
+      closedBorders(cells, [
+        { a: 0, b: 1 },
+        { a: 1, b: 2 },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('is not made by the border of the map nor by a road between cells that do not touch', () => {
+    expect(closedBorders(cells, [{ a: 0, b: 2 }])).toHaveLength(2);
+    const alone = voronoiCells([{ x: 50, y: 50 }], { width: 100, height: 100 });
+    expect(closedBorders(alone, [])).toEqual([]);
+  });
+
+  it('on every bundled map each segment is a shared border of two cells with no road', () => {
+    for (const map of BUNDLED_MAPS) {
+      const mapCells = voronoiCells(map.nodes, { width: map.meta.width, height: map.meta.height });
+      const closed = closedBorders(mapCells, map.edges);
+      const roads = new Set(map.edges.map((e) => `${String(e.a)}|${String(e.b)}`));
+      const touching = cellEdges(mapCells).filter(
+        (e) => e.neighbour !== null && e.cell < e.neighbour,
+      );
+      const expected = touching.filter(
+        (e) =>
+          !roads.has(`${String(e.cell)}|${String(e.neighbour)}`) &&
+          !roads.has(`${String(e.neighbour)}|${String(e.cell)}`),
+      );
+      expect(closed).toHaveLength(expected.length);
+    }
   });
 });

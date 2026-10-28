@@ -12,7 +12,7 @@ import type { Detail, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { borderPermille } from './fogLayout.ts';
-import { cellEdges, territoryBorders } from './regionLayout.ts';
+import { cellEdges, closedBorders, territoryBorders, type Segment } from './regionLayout.ts';
 import {
   laneDashes,
   laneOffsets,
@@ -26,6 +26,7 @@ import {
   BG,
   CELL_BORDER,
   CELL_LINE,
+  CLOSED_BORDER,
   MAP_BORDER,
   ROAD_BUFFER,
   ROAD_FOG,
@@ -110,6 +111,9 @@ export class MapView {
   private owners: readonly Owner[] = [];
   private readonly cellLines: Graphics;
   private readonly territory: Graphics;
+  /** The strips of the borders between cells with no road (#428), over the tint and its glow. */
+  private readonly closedLines: Graphics;
+  private readonly closedSegments: readonly Segment[];
   /** The line of an owner's border, over its glow. */
   private readonly borderLines: Graphics;
   /**
@@ -172,6 +176,9 @@ export class MapView {
     this.cellLines = layers.layer.territory.addChild(this.drawCellLines());
     this.territory = layers.layer.territory.addChild(new Graphics());
     this.buildGlow(layers.layer.territory, bounds);
+    this.closedSegments = closedBorders(this.cells, map.edges);
+    this.closedLines = layers.layer.territory.addChild(new Graphics({ label: 'closed-borders' }));
+    this.drawClosedBorders();
     this.borderLines = layers.layer.territory.addChild(new Graphics());
 
     // All casings first, so no casing covers the lanes of a neighbouring road.
@@ -247,6 +254,7 @@ export class MapView {
     this.dim.visible = !on;
     this.stamps?.setVisible(!on);
     this.glow.visible = !on && this.glowDrawn;
+    this.drawClosedBorders();
     if (this.backdrop !== null) this.backdrop.visible = !on;
     // Without a baked background the flat terrain colours are the fallback (hidden with the rest).
     if (this.backdrop === null) this.terrainFill.visible = !on;
@@ -502,6 +510,7 @@ export class MapView {
     this.laneLayer.destroy({ children: true });
     this.cellLines.destroy();
     this.territory.destroy();
+    this.closedLines.destroy();
     this.borderLines.destroy();
     this.glow.destroy({ children: true });
     for (const blur of this.glowBlurs) blur.destroy();
@@ -527,6 +536,20 @@ export class MapView {
       if (neighbour !== null && cell < neighbour) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
     }
     return g.stroke({ width: CELL_LINE.width, color: CELL_LINE.color, alpha: CELL_LINE.alpha });
+  }
+
+  /** Strips over the tint along the borders with no road, in the colour of the ground under the map. */
+  private drawClosedBorders(): void {
+    const g = this.closedLines.clear();
+    for (const { a, b } of this.closedSegments) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    if (this.closedSegments.length > 0) {
+      g.stroke({
+        width: CLOSED_BORDER.width,
+        color: this.supplyMode ? SUPPLY_FLOOR : CLOSED_BORDER.color,
+        alpha: CLOSED_BORDER.alpha,
+        cap: 'round',
+      });
+    }
   }
 
   private drawTerrain(): Graphics {

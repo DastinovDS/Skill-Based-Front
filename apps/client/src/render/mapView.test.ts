@@ -4,7 +4,7 @@ import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { Detail } from '../protocol.gen.ts';
 import { createLayers, type MapLayers } from './layers.ts';
 import { MapView } from './mapView.ts';
-import { BG, ROAD_BUFFER, ROAD_FOG, ROAD_OWN, YOU, ENEMY } from './style.ts';
+import { BG, ROAD_BUFFER, ROAD_FOG, ROAD_OWN, SUPPLY_FLOOR, YOU, ENEMY } from './style.ts';
 
 // The roads read without colour (R1, #345): the level is the number of lanes, an own road has solid
 // lanes on a band of its owner's colour, a buffer road dashed lanes, and a half in fog dotted ones.
@@ -312,5 +312,41 @@ describe('MapView, the glow along the borders of the territories (BL1, #347)', (
     expect(glow()?.visible).toBe(false);
     view.setSupplyMode(false);
     expect(glow()?.visible).toBe(true);
+  });
+});
+
+describe('MapView, the borders between cells with no road (#428)', () => {
+  let layers: MapLayers;
+  let view: MapView;
+  const strips = (): Graphics | undefined =>
+    layers.layer.territory.children.find((c) => c.label === 'closed-borders') as
+      Graphics | undefined;
+
+  beforeEach(() => {
+    layers = createLayers();
+    view = new MapView(map, layers, 0, {} as Renderer, true);
+  });
+  afterEach(() => {
+    view.destroy();
+  });
+
+  it('draws the strips over the tint and its glow, under the line of the border', () => {
+    const layer = layers.layer.territory.children;
+    const at = layer.findIndex((c) => c.label === 'closed-borders');
+    expect(at).toBeGreaterThan(layer.findIndex((c) => c.label === 'territory-glow'));
+    expect(at).toBeLessThan(layer.length - 1);
+  });
+
+  it('strokes them in the background colour, and in the floor colour in the «Supply» mode', () => {
+    const colors = (): number[] =>
+      (strips()?.context.instructions ?? []).flatMap((i) => {
+        const style = (i.data as { style?: { color?: number } }).style;
+        return style?.color === undefined ? [] : [style.color];
+      });
+    expect(colors()).toEqual([BG]);
+    view.setSupplyMode(true);
+    expect(colors()).toEqual([SUPPLY_FLOOR]);
+    view.setSupplyMode(false);
+    expect(colors()).toEqual([BG]);
   });
 });
