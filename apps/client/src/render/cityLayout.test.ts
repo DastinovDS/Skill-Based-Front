@@ -5,6 +5,7 @@ import {
   barTop,
   capacityRing,
   cityRadius,
+  lockedPlaces,
   queueSlots,
   queueTop,
   ringRadius,
@@ -63,10 +64,13 @@ describe('capacityRing', () => {
 });
 
 describe('warehouseSegments', () => {
-  it('has a segment per unit of capacity, filled by the charges in the warehouse', () => {
+  const states = (bar: ReturnType<typeof warehouseSegments>) => bar.segments.map((s) => s.state);
+
+  it('has a place per unit of capacity, filled by the charges in the warehouse, the rest a frame', () => {
     const bar = warehouseSegments(2, 5);
     expect(bar.segments).toHaveLength(5);
     expect(bar.segments.filter((s) => s.filled)).toHaveLength(2);
+    expect(states(bar)).toEqual(['filled', 'filled', 'frame', 'frame', 'frame']);
   });
 
   it('is centred and clamps the fill', () => {
@@ -77,6 +81,50 @@ describe('warehouseSegments', () => {
 
   it('sits under the ring', () => {
     expect(barTop(11)).toBeGreaterThan(ringRadius(11));
+  });
+
+  it('adds dashed places after the frames for the levels not built yet (C1)', () => {
+    const bar = warehouseSegments(1, 2, 2);
+    expect(states(bar)).toEqual(['filled', 'frame', 'dashed', 'dashed']);
+    // The dashed places are part of the bar: it is as wide as one with that many places.
+    expect(bar.width).toBe(warehouseSegments(0, 4).width);
+  });
+
+  it('keeps the dashed places last even when the warehouse is full or empty', () => {
+    expect(states(warehouseSegments(2, 2, 1))).toEqual(['filled', 'filled', 'dashed']);
+    expect(states(warehouseSegments(0, 1, 2))).toEqual(['frame', 'dashed', 'dashed']);
+  });
+
+  it('shows only the charges of a foreign warehouse: capacity = charges, nothing locked', () => {
+    expect(states(warehouseSegments(3, 3, 0))).toEqual(['filled', 'filled', 'filled']);
+  });
+});
+
+describe('lockedPlaces (the warehouse levels of DEC-26, from the view and ruleset_public)', () => {
+  // warehouse.max_level = 2 and gain_per_level = 1 of rulesets/mvp-1.toml, then a made-up pair.
+  const mvp1 = { warehouseMaxLevel: 2, warehouseGainPerLevel: 1 };
+
+  it.each([
+    [0, 2],
+    [1, 1],
+    [2, 0],
+  ])('level %i of 2 leaves %i dashed places', (level, locked) => {
+    expect(lockedPlaces(level, mvp1)).toBe(locked);
+  });
+
+  it('is gain places per level not built yet', () => {
+    const levels = { warehouseMaxLevel: 3, warehouseGainPerLevel: 2 };
+    expect([0, 1, 2, 3].map((level) => lockedPlaces(level, levels))).toEqual([6, 4, 2, 0]);
+  });
+
+  it('is never negative and never above the top', () => {
+    expect(lockedPlaces(5, mvp1)).toBe(0);
+    expect(lockedPlaces(-1, mvp1)).toBe(2);
+  });
+
+  it('is 0 where the view gives no level (a foreign city, a province) or the development is off', () => {
+    expect(lockedPlaces(null, mvp1)).toBe(0);
+    expect(lockedPlaces(0, null)).toBe(0);
   });
 });
 

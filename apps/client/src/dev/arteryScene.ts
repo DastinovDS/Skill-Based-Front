@@ -8,6 +8,7 @@
  * the protocol: it is a picture for the eyes, the numbers only have to be plausible.
  */
 import { DEV_CAPACITY } from '../hud/devFeed.ts';
+import { warehouseCapOf } from './devWarehouse.ts';
 import type {
   Detail,
   EdgeView,
@@ -31,7 +32,7 @@ const OWN = [0, 1, 2, 3, 4, 6, 9, 12, 13];
 const ENEMY = [5, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30];
 /** Own cities with a group standing in them: the neighbours of these are seen as presence. */
 const STATIONED = [3, 4, 6, 9, 12];
-/** Warehouse stock of the own cities (the capacity of the kind where not listed). */
+/** Warehouse stock of the own cities (the capacity of its level where not listed). */
 const STOCK: Readonly<Record<number, number>> = {
   0: 6,
   1: 2,
@@ -43,6 +44,8 @@ const STOCK: Readonly<Record<number, number>> = {
   12: 1,
   13: 1,
 };
+/** Warehouse level of the own cities (0 where not listed): all three levels appear. */
+const WAREHOUSE_LEVEL: Readonly<Record<number, number>> = { 0: 1, 3: 1, 4: 2, 9: 2 };
 /** What the player knows of the road levels (`edge.width`); the others are level 1. */
 const LEVEL: Readonly<Record<number, number>> = { 1: 3, 14: 2, 6: 2, 2: 2, 3: 2 };
 /** Fog memory, ticks ago: a city or road not listed here and out of sight was never seen. */
@@ -83,6 +86,10 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
   const nodes: NodeView[] = map.nodes.map((n) => {
     const capacity = DEV_CAPACITY[n.kind];
     const mine = OWN.includes(n.id);
+    // A warehouse is an own city's (DEC-26): a province has none, its `warehouse` is 0.
+    const city = mine && n.kind !== 'province';
+    const level = WAREHOUSE_LEVEL[n.id] ?? 0;
+    const cap = warehouseCapOf(n.kind, level);
     const detail: Detail = isExact(n.id) ? 'exact' : nextToExact(n.id) ? 'presence' : 'fog';
     const ago = SEEN_NODE[n.id];
     const memory =
@@ -96,17 +103,17 @@ export function arterySnapshot(map: MapFile): SnapshotMsg {
       owner: owner(n.id),
       capacity,
       detail,
-      warehouse: mine ? (STOCK[n.id] ?? capacity) : null,
+      warehouse: mine ? (city ? Math.min(STOCK[n.id] ?? cap, cap) : 0) : null,
       seen: memory,
       attrition_in: null,
       grace_left: null,
       starve_in: null,
-      recruit_queue: mine ? 0 : null,
-      recruit_progress: mine ? 0 : null,
-      recruit_waiting: mine ? false : null,
+      recruit_queue: city ? 0 : null,
+      recruit_progress: city ? 0 : null,
+      recruit_waiting: city ? false : null,
       has_barracks: n.kind === 'province' ? null : barracks(n.id),
-      warehouse_level: mine ? 0 : null,
-      warehouse_cap: mine ? capacity : null,
+      warehouse_level: city ? level : null,
+      warehouse_cap: city ? cap : null,
       building: null,
     };
   });

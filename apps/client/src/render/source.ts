@@ -16,10 +16,18 @@ export interface CapacityTicks {
   readonly graceTicks: number;
 }
 
-/** Durations of the city builds of DEC-26 in ticks. */
-export interface CityBuildTicks {
+/**
+ * `ruleset_public.city_upgrades` when the city development of DEC-26 is on: the durations of the
+ * city builds in ticks and the warehouse levels (the places of a warehouse not built yet are drawn
+ * dashed, C1).
+ */
+export interface CityDevelopment {
   readonly barracks: number;
   readonly warehouse: number;
+  /** `warehouse_max_level`: the top level of a warehouse. */
+  readonly warehouseMaxLevel: number;
+  /** `warehouse_gain_per_level`: places (charges) one level adds. */
+  readonly warehouseGainPerLevel: number;
 }
 
 export interface RenderSource {
@@ -41,7 +49,7 @@ export interface RenderSource {
    * durations of the barracks and warehouse builds for the build mark over an own city, and the
    * warehouse bar of a foreign city shows only its charges (its capacity is hidden).
    */
-  readonly cityUpgrades?: CityBuildTicks | null;
+  readonly cityUpgrades?: CityDevelopment | null;
   /**
    * Ticks one road level takes to build (`ruleset_public.build.ticks_per_level`): the part done of
    * the tape of an own build. Without it the tape shows no part done.

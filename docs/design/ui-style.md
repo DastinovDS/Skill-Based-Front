@@ -41,7 +41,7 @@ recommendation are ready, there is no choice, there is no code. **[replaced]**: 
 | 24 Style directions | [accepted] 2026-10-21: D3 for the shading, without relief (refined by section 26); #332 closed | shading **implemented: #347, PR #409** (see 26.3) |
 | 26 Map style, round 2 | [accepted] 2026-10-21 (26.3): BL1-1 with the highlight of the borders of the "pronounced" one, T2 (the baker on numpy and Pillow, WebP), F1 "Haze", R1 "Stripes", the packet as a square; #335 closed | waits for implementation: #344 (the baker, T2, the `artery` scene); **implemented: BL1-1 shading with the border glow (26.3) #347, PR #409; roads R1 "Stripes" and the square packet (26.1) #345, PR #367; fog F1 "Haze" (9.8) #346, PR #368** |
 | 27 Orders, fight on the map, arena | [accepted] 2026-10-21 (27.3, shots: 29.4): orders and ribbons as now, IN3 "Sight", the bonus "◇ +N" on the head, LY2 "Over the haze", FX3, EF2 "Pointer" with "Dissolve and marks", arena AR1; #339 closed | waits for implementation: #330 (arena AR1, in progress), #353 (IN3, bonus), #354 (EF2, after #296); **implemented: fight effects FX3 #351, PR #373; layers LY2 "Over the haze" #346, PR #368; shots SH1 instead of the exchange arrows of the arena #352, PR #376** |
-| 28 Map objects and menu icons | [accepted] 2026-10-21 (28.1): U1 and the row of squares U4, C1, B1, I1 (B2 later, no issue is opened); #337 closed | waits for implementation: #348 (U4, C1), #349 (B1); **implemented: U1 as part of BL1 #347, PR #409**; implemented (menu icons I1): PR #362 |
+| 28 Map objects and menu icons | [accepted] 2026-10-21 (28.1): U1 and the row of squares U4, C1, B1, I1 (B2 later, no issue is opened); #337 closed | waits for implementation: the row of squares U4 (#433, moved from #348, waits for a mockup, #431), B1 (#349); **implemented: U1 as part of BL1 #347, PR #409; cities C1 (warehouse places filled / frame / dashed, the province as a hollow ring) #348, PR #437**; implemented (menu icons I1): PR #362 |
 | 29 Shots in a fight | [accepted] 2026-10-21 (29.4): SH1 "Tracers", the strength "Stronger", the distance of the groups as now (46) | the strength "Stronger" and the common part (pools, the effects layer, the particle core) **implemented: #351, PR #373**; tracers SH1 **implemented: #352, PR #376** |
 
 Contents:
@@ -429,12 +429,12 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
 | Own internal (both ends belong to one player) | solid light stripes `#e6edf3` on a backing in the owner's color (alpha 0.62, wider than the stripes by 3.6) |
 | Buffer (the owners of the ends differ or one has none) | a 7/5 dashed line in gray `#aab2bd` on a dark `--bg` backing (alpha 0.4), without the owner's color |
 | A half in the fog (`HalfView.detail = fog`) | a dotted 1.5/4.5 line in gray, the `--bg` backing alpha 0.3: by the level the player knows (DEC-17) |
-| Never seen (`EdgeView.detail = fog`, neither half has `seen`) | a dotted line and a "?" at the border point (a dark disc of radius 6.5 with a dashed rim); level 1 per DEC-17 |
+| Never seen (`EdgeView.detail = fog`, neither half has `seen`) | the same dotted line as any half in the fog, nothing else: no mark at the border point (the "?" disc was removed by the owner's decision, #348); level 1 per DEC-17 |
 | Construction on an edge (DEC-28, item 7) | a striped ribbon under the stripes: a dark base, yellow slanted stripes (`--warn`), the done part as a solid stripe on top; a "1→2" plate in the middle, for an own construction the time `m:ss` under it |
 
 - A road is redrawn only when the level, the owner of an end or a half in the fog changes, not every frame. At a 60% scale the stripes may stick together, the width, the dashes and the backing remain (the gray scale is checked).
-- "Never seen" is taken from the player's view: the `seen` of a half is written at every observation, also without enemies (`null` for a half in the fog: never). `EdgeView` itself has no `seen` field since #296.
-- The "?" and the construction plate are not smaller than 20 px on the screen (section 22): they grow when the camera zooms out.
+- A road never seen looks like any road in the fog: the client does not tell "never seen" from "seen long ago" on the road itself (the memory of a half is a ghost at the border point, 9.8). `EdgeView` has no `seen` field since #296.
+- The construction plate is not smaller than 20 px on the screen (section 22): it grows when the camera zooms out.
 - The border point tick mark (DEC-21, item 5) and the ghosts of half memory (#359) remain.
 - Hover: a small circle with the width number in the middle. With an own city selected after `U`: the tooltip
   "Width 3: +0.5 capacity, +25% packet speed, 3 charges from the warehouse" (the numbers from `ruleset_public`).
@@ -443,14 +443,23 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
 
 ### 9.4 Cities and capacity
 
-- **Size by capacity class:** radius 11 at capacity up to 2, 14 at 3-4, 17 at 5-6, 20 at 7+ (round 3: cities smaller, it was 13, 17, 21, 25).
+- **Size by capacity class:** radius 11 at capacity up to 2, 14 at 3-4, 17 at 5-6, 20 at 7+ (round 3: cities smaller, it was 13, 17, 21, 25). A **province** has its own radius 9 whatever its capacity (C1, below).
 - **The capacity ring** at the distance radius + 7: as many segments as the capacity, thickness 4 with
   a dark backing 7. For own cities there are as many white segments as there are units in the city; for enemy and
   neutral ones all segments are gray. At capacity above 10 a solid arc with a tick on every fifth.
 - **Overcrowding:** the extra units as `--warn` segments on a second ring outside, a dashed `--warn`
   circle and a countdown (section 12).
-- **Warehouse:** a segmented bar under the ring in the owner's color (the Polytopia technique: segments, not
-  a smooth fill).
+- **Warehouse (C1, #348):** a bar of places under the ring (the Polytopia technique: segments, not a smooth fill), one 5 x 4 square per
+  charge of warehouse capacity, the state by shape (ui-style 21): **filled** (gradient in the owner's color) = a charge, a **frame** = room
+  for one, **dashed** = a place of a warehouse level that is not built yet. The dashed places come last and only on an own city when the
+  city development is on: their number is `(warehouse_max_level - warehouse_level) * warehouse_gain_per_level` from the view
+  (`warehouse_level`) and `ruleset_public.city_upgrades`, the filled and frame ones are `warehouse` of `warehouse_cap`. With the
+  city development on, a foreign city that is a vision source shows only the filled places (its level and capacity stay hidden, DEC-21 item 3, DEC-26 item 10, AGENTS.md 4.4);
+  one that is not has no bar. The «Supply» layer draws the same places.
+- **Province (C1, #348; DEC-23):** a node without a city: no body, no warehouse, no VP, no recruit queue or barracks. It is a **hollow ring** of
+  radius 9 on a dark plate (alpha 0.9): own, a blue ring 3.6 wide with a light ring 2.6 outside it; the opponent's, a red ring with the light ring
+  outside and a second light ring inside; nobody's, a thin grey ring 2.4 wide. The side reads by the rings, not only by the hue. The capacity ring
+  (3 segments) stays around it. A province is told from a city by shape (a hollow ring, no filled body), not by size alone.
 - **Owner:** a color fill plus an outline: own a white outline 3; the enemy a white outline and a dark
   inner ring; neutral a gray outline 2.
 - The capital: a white star inside (under the unit icon while the units are in the city). VP: a dark circle of radius 8.5 with a `--vp` rim and a number at the top right, outside the capacity ring (round 3, #274: inside the body it was covered by the unit icon).
@@ -532,7 +541,7 @@ The ribbon arrow (HOI4, Mini Motorways):
   rectangle (a mask inside the cache), the cell edges at the map border are pushed outward so that the veil does not get lighter at the edge. A road and a city
   under the veil darken together with it; there is no shadow along the edge (a half in the fog is carried by dots, 9.3). The light line along the border
   (`FOG_FRONT`) was removed by the owner's decision of 2026-10-22; to bring it back if the visibility border reads badly in the gray scale. Cities in the fog are drawn with the outline of the last
-  known owner; ghosts, the "?", the border point tick mark and the range plates lie above the veil.
+  known owner; ghosts, the border point tick mark and the range plates lie above the veil.
 - **Layers LY2 "Over the haze"** (26.3, 27.3; #346): the `intents` layer is above `fog` in `LAYER_ORDER` (ribbons, target rings, the bonus,
   the ghost of an own order and a road construction do not dim: an intent is public, DEC-04); the groups remain under the haze, the thin
   lines of ordinary orders too (they are under the figures of own groups).
@@ -1166,11 +1175,12 @@ The principle: **one shape means one thing**, and the shape reads without color 
 | Shape | What it means | Where |
 |---|---|---|
 | ▽ inverted triangle | a group of units; the fill from the tip = the share of charged; the number = units | map, arena chips (V3) |
-| ■ square | a **charge**: a warehouse segment (filled: there is a charge, a frame: room), an auto-supply packet (with a tail of two pale squares), a one-off transfer on a road (larger, with a double outline), the warehouse stock on the "Supply" layer, the head of a real shot with a tail (the SH1 tracer) **[accepted]** (#325, #345, #352) | warehouse under a city, roads, "Supply", the fight map |
+| ■ square | a **charge**: a warehouse place (filled: there is a charge, a frame: room, dashed: a level not built yet, C1 #348), an auto-supply packet (with a tail of two pale squares), a one-off transfer on a road (larger, with a double outline), the warehouse stock on the "Supply" layer, the head of a real shot with a tail (the SH1 tracer) **[accepted]** (#325, #345, #352) | warehouse under a city, roads, "Supply", the fight map |
 | a ring segment | one capacity place; filled with white: a unit stands there | the ring around a city |
 | ◇ diamond | a bonus (virtual) shot and the bonus stock (DEC-32) | arena (stock and caption), the head and echo of a tracer |
 | ✕ cross | the meeting point of a fight on an edge; two shots met and went out (FX3, #351; two arcs of SH1 tracers converge in it, #352) | map |
 | a number in a circle with a rim | the VP of a city | at a city |
+| a hollow ring | a province (DEC-23): no city, no warehouse, no VP (C1, #348) | map |
 | shield / flag / little house / star | "Defense" / capture / barracks / capital | groups, cities, captions |
 | `!` in an amber circle, a dashed ring | alert: overflow, they are coming for the city | around a city |
 | `✂` | starvation (cut off from the capital, DEC-19) | city, "Supply" |
@@ -1488,7 +1498,7 @@ The check was done on the mockup page (scene 6): the engine, whose rules are tak
 
 ## 28. Map objects and menu icons: units, cities, barracks and "Defense" (#337)
 
-**Status: [accepted] 2026-10-21 (section 28.1).** Issue #337 is closed; implementation: #347 (U1 as part of BL1), #348 (the row of squares U4, cities C1), #349 (icons B1), #350 (menu icons I1). B2 "Building and rampart" is postponed, no issue is opened.
+**Status: [accepted] 2026-10-21 (section 28.1).** Issue #337 is closed; implementation: #347 (U1 as part of BL1), #348 (cities C1; the row of squares U4 was split off into #433), #349 (icons B1), #350 (menu icons I1). B2 "Building and rampart" is postponed, no issue is opened.
 
 Basis: the owner's choice on #335 (recorded by issue #335): BL1 shading "Restrained" with the border highlighting as in "Pronounced", texture T2, fog F1 "Haze", roads R1 "Lanes". Mockup [`mockups/objects-style.html`](mockups/objects-style.html): the same scene (a fragment of `arteriya`, now `artery`, nodes 0-16, nodes 12 and 13 are shown as provinces) in this style and four blocks of 4 variants each plus "Now". What a variant shows the player is taken only from the fog rules of `mechanics.md` (DEC-04, DEC-21, DEC-26, DEC-30, DEC-31); no variant needs new data, a protocol or a DEC. The mockup background texture is drawn by the script [`mockups/src/objects_texture.py`](mockups/src/objects_texture.py) (functions of `map_textures.py`). Modes: grayscale, "reduced motion", map scale 60% / 100% / 150%, "all variants side by side", samples on four backgrounds; a frame by address, for example `objects-style.html#u=2&c=1&b=1&i=1&sc=60&gray=1`. The samples of each block are shown at 100% and 60%: meaningful signs keep the minimum size on screen (a group 20 px as now, the barracks and "Defense" icons in the new variants 16 px, like `symbolScale` of groups).
 

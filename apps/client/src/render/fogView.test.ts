@@ -62,27 +62,6 @@ const textsOf = (item: Container): string[] => {
   visit(item);
   return found;
 };
-/** The centres and radii of the discs of the "?" marks of the roads never seen. */
-const unknownDiscs = (layers: MapLayers): { x: number; y: number; radius: number }[] => {
-  const marks = layers.layer.fog.children.find((c) => c.label === 'fog-unknown-roads') as
-    Graphics | undefined;
-  const instructions = (marks?.context.instructions ?? []) as unknown as {
-    action: string;
-    data: {
-      path: {
-        shapePath: {
-          shapePrimitives: { shape: { type: string; x: number; y: number; radius: number } }[];
-        };
-      };
-    };
-  }[];
-  return instructions
-    .filter((i) => i.action === 'fill')
-    .flatMap((i) => i.data.path.shapePath.shapePrimitives)
-    .map((p) => p.shape)
-    .filter((shape) => shape.type === 'circle' && shape.radius > 3);
-};
-
 /** The haze (F1): the container of the cached veil and the number of cells filled in it. */
 const veilOf = (layers: MapLayers): Container | undefined => {
   const shades = layers.layer.fog.children.find((c) => c.label === 'fog-shades');
@@ -193,7 +172,7 @@ describe('FogView, the memory of the halves of a road', () => {
   });
 });
 
-describe('FogView, the "?" of a road that was never seen', () => {
+describe('FogView, a road that was never seen (no "?" mark since #348)', () => {
   let layers: MapLayers;
   let kit: EntityKit;
   let view: FogView;
@@ -222,40 +201,40 @@ describe('FogView, the "?" of a road that was never seen', () => {
     vi.restoreAllMocks();
   });
 
-  it('puts a "?" at the border point of a road in fog that has no sighting at all', () => {
+  /** Every visible text in the fog layer, and the labels of its direct children. */
+  const fogTexts = (): string[] => {
+    const found: string[] = [];
+    const visit = (node: Container): void => {
+      if (!node.visible) return;
+      if (node instanceof Text && node.text !== '') found.push(node.text);
+      for (const child of node.children) visit(child);
+    };
+    visit(layers.layer.fog);
+    return found;
+  };
+
+  it('draws no "?" at the border point of a road with no sighting at all: the dotted half is all it gets', () => {
     view.update(withRoad('fog', half('fog', null), half('fog', null)));
-    const [mark, ...rest] = unknownDiscs(layers);
-    expect(rest).toEqual([]);
-    const border = borderPoint(map, road.id);
-    expect(mark?.x).toBeCloseTo(border?.x ?? NaN);
-    expect(mark?.y).toBeCloseTo(border?.y ?? NaN);
-    // At the camera scale 1 the 13 units of the disc would be 13 px: it is drawn 20 px wide.
-    expect((mark?.radius ?? 0) * 2).toBeCloseTo(20);
+    const labels = layers.layer.fog.children.map((c) => c.label);
+    expect(labels).not.toContain('fog-unknown-roads');
+    expect(fogTexts()).not.toContain('?');
+    expect(ghosts(layers)).toEqual([]);
   });
 
-  it('does not mark a road that is in sight, or one that was seen before (a sighting of a half)', () => {
+  it('draws the same for a road that was seen once or is in sight: nothing marks the road itself', () => {
+    const labelsOf = (): string[] => layers.layer.fog.children.map((c) => c.label);
     view.update(withRoad('presence', half('exact', null), half('fog', null)));
-    expect(unknownDiscs(layers)).toEqual([]);
+    const inSight = labelsOf();
     view.update(withRoad('fog', half('fog', seen({ enemy_modes: [] })), half('fog', null)));
-    expect(unknownDiscs(layers)).toEqual([]);
+    expect(labelsOf()).toEqual(inSight);
+    view.update(withRoad('fog', half('fog', null), half('fog', null)));
+    expect(labelsOf()).toEqual(inSight);
   });
 
-  it('takes the "?" away when the road is seen, and brings it back when it is not', () => {
-    view.update(withRoad('fog', half('fog', null), half('fog', null)));
-    expect(unknownDiscs(layers)).toHaveLength(1);
-    view.update(withRoad('presence', half('exact', null), half('exact', null)));
-    expect(unknownDiscs(layers)).toEqual([]);
-    view.update(withRoad('fog', half('fog', null), half('fog', null)));
-    expect(unknownDiscs(layers)).toHaveLength(1);
-  });
-
-  it('keeps the "?" at least 20 px wide on screen when the map is zoomed out', () => {
+  it('keeps the camera scale harmless: no mark to resize', () => {
     view.update(withRoad('fog', half('fog', null), half('fog', null)));
     view.setCameraScale(0.5);
-    // 13 world units wide: 20 px needs a scale of at least 20 / (13 * 0.5).
-    expect((unknownDiscs(layers)[0]?.radius ?? 0) * 2).toBeGreaterThanOrEqual(20 / 0.5 - 1e-9);
-    view.setCameraScale(4);
-    expect((unknownDiscs(layers)[0]?.radius ?? 0) * 2).toBeCloseTo(13);
+    expect(fogTexts()).not.toContain('?');
   });
 });
 
@@ -328,10 +307,9 @@ describe('FogView, the haze F1 over the hidden cities', () => {
     expect(veilCellCount(layers)).toBe(0);
   });
 
-  it('leaves the border tick, the "?" and the ghosts of the memories above the veil', () => {
+  it('leaves the border tick and the ghosts of the memories above the veil', () => {
     view.update(withFog([1], seen()));
     const order = layers.layer.fog.children.map((c) => c.label);
-    expect(order.indexOf('fog-shades')).toBeLessThan(order.indexOf('fog-unknown-roads'));
     expect(order.indexOf('fog-shades')).toBeLessThan(order.indexOf('fog-ghosts'));
     expect(ghosts(layers).length).toBeGreaterThan(0);
   });

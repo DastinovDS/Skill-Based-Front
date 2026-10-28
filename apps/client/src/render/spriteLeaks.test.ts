@@ -12,6 +12,12 @@ import { fakeBaker } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
 const base = devSnapshot(map, DEV_RULES, 100);
+const UPGRADES = {
+  barracks: 100,
+  warehouse: 100,
+  warehouseMaxLevel: DEV_RULES.city_upgrades.warehouse_max_level,
+  warehouseGainPerLevel: DEV_RULES.city_upgrades.warehouse_gain_per_level,
+};
 
 /** A deterministic stream of numbers (a test must not depend on `Math.random`). */
 function stream(seed: number): (below: number) => number {
@@ -70,7 +76,7 @@ describe('the baked sprites over a long scene', () => {
     const sizes: number[] = [];
     for (let tick = 0; tick < 600; tick++) {
       const snapshot = varied(tick, next);
-      cities.update(snapshot, 50, { barracks: 100, warehouse: 100 });
+      cities.update(snapshot, 50, UPGRADES);
       entities.update(interpolateFrame(snapshot, null, tick));
       sprites.endFrame();
       sizes.push(sprites.size);
@@ -98,7 +104,7 @@ describe('the baked sprites over a long scene', () => {
       const next = stream(11);
       for (let tick = 0; tick < 50; tick++) {
         const snapshot = varied(tick, next);
-        cities.update(snapshot, 50, { barracks: 100, warehouse: 100 });
+        cities.update(snapshot, 50, UPGRADES);
         entities.update(interpolateFrame(snapshot, null, tick));
       }
       expect(sprites.used).toBeGreaterThan(0);

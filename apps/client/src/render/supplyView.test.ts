@@ -7,7 +7,7 @@ import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import { interpolateFrame } from '../net/interpolate.ts';
 import { warehouseSegments } from './cityLayout.ts';
 import { createLayers } from './layers.ts';
-import { SEGMENT_EMPTY_BAR, SUPPLY_PACKET, YOU } from './style.ts';
+import { PLACE_FRAME, SUPPLY_PACKET, YOU } from './style.ts';
 import { SupplyView } from './supplyView.ts';
 
 const map = DEFAULT_MAP;
@@ -18,8 +18,8 @@ interface Shape {
   readonly color: number;
 }
 
-/** The shapes filled into a Graphics, with the colour of the fill. */
-function fills(g: Graphics): Shape[] {
+/** The shapes filled (or stroked: `action`) into a Graphics, with the colour of the fill. */
+function fills(g: Graphics, action: 'fill' | 'stroke' = 'fill'): Shape[] {
   const instructions = g.context.instructions as unknown as {
     action: string;
     data: {
@@ -28,7 +28,7 @@ function fills(g: Graphics): Shape[] {
     };
   }[];
   return instructions
-    .filter((i) => i.action === 'fill')
+    .filter((i) => i.action === action)
     .flatMap((i) =>
       i.data.path.shapePath.shapePrimitives.map((p) => ({
         type: p.shape.type,
@@ -57,14 +57,17 @@ describe('SupplyView: the warehouse (#325)', () => {
       (n) => n.owner === 0 && n.warehouse !== null && n.warehouse_cap !== null,
     );
     expect(own.length).toBeGreaterThan(0);
-    // One square per place of every warehouse: a charge held in the colour of the side, room in grey.
-    const expected = own.flatMap((n) =>
-      warehouseSegments(n.warehouse ?? 0, n.warehouse_cap ?? 0).segments.map((s) =>
-        s.filled ? YOU : SEGMENT_EMPTY_BAR,
-      ),
+    // One square per place of every warehouse: a charge held is filled in the colour of the side,
+    // room is a grey frame (C1, #348).
+    const places = own.flatMap((n) =>
+      warehouseSegments(n.warehouse ?? 0, n.warehouse_cap ?? 0).segments.map((s) => s.state),
     );
-    const squares = rects.filter((s) => s.color === YOU || s.color === SEGMENT_EMPTY_BAR);
-    expect(squares.map((s) => s.color).sort()).toEqual([...expected].sort());
+    const held = rects.filter((s) => s.color === YOU);
+    expect(held).toHaveLength(places.filter((state) => state === 'filled').length);
+    const frames = fills(plates, 'stroke').filter(
+      (s) => s.type === 'rectangle' && s.color === PLACE_FRAME.color,
+    );
+    expect(frames).toHaveLength(places.filter((state) => state === 'frame').length);
     // No circle stands for a charge of a warehouse any more.
     expect(shapes.filter((s) => s.type === 'circle' && s.color === YOU)).toEqual([]);
     view.destroy();

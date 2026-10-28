@@ -9,7 +9,6 @@ import type {
   SnapshotMsg,
 } from '../protocol.gen.ts';
 import { edgeEnds, triangleHeight, triangleSide } from './layout.ts';
-import { neverSeen } from './roadLayout.ts';
 import {
   ageLabel,
   borderPoint,
@@ -31,13 +30,8 @@ import {
   BORDER_MARK,
   GLYPH_COLOR,
   GHOST_HIDE_S,
-  ROAD_UNKNOWN,
   roadSpan,
 } from './style.ts';
-
-/** The dashes of the rim of a "?" mark, and the angles of the points of its hook (radians, y down). */
-const RIM_DASHES = 8;
-const HOOK_ANGLES = [0.95, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5].map((n) => Math.PI * n);
 
 /** Where a snapshot says an enemy was last seen in a place that is hidden now. */
 type Memory = NodeView['seen'];
@@ -105,14 +99,14 @@ class Ghost {
  * (`cacheAsTexture`), so a frame draws one sprite; the cache is rebuilt only when the SET of hidden
  * cities changes (a snapshot with the same set costs nothing). The veil darkens what lies under the
  * fog layer: the terrain, the roads and the cities; the intents lie above it (`LAYER_ORDER`). The half
- * of a road in fog has dotted lanes (`MapView`), and a road never seen carries a "?" at its border
- * point (its level is the 1 of DEC-17, not a known one). It puts a "last seen" ghost on a hidden
+ * of a road in fog has dotted lanes (`MapView`), a road never seen included (its level is the 1
+ * of DEC-17, not a known one): it has no mark of its own (the "?" was removed, #348). It puts a "last seen" ghost on a hidden
  * place when the snapshot still carries a `Seen` with enemy groups in it: the enemy token, faded,
  * with its age as `-m:ss`. A place that is seen again loses its veil and its ghost on the next
  * snapshot. Nothing is inferred: no ghost without a `Seen`, no numbers the `Seen` has not got.
  *
- * Redrawn once per snapshot (`update` does nothing when `base` is the same object); the "?" of the
- * roads never seen are one Graphics. `destroy()` releases everything.
+ * Redrawn once per snapshot (`update` does nothing when `base` is the same object). `destroy()`
+ * releases everything.
  */
 export class FogView {
   /** The veil: the hidden cells filled; blurred and cached through `veilCache`. */
@@ -129,14 +123,6 @@ export class FogView {
   private readonly veilClip = new Container({ label: 'fog-veil-clip' });
   private readonly veilCache = new Container({ label: 'fog-veil', visible: false });
   private hiddenCities: number[] = [];
-  /**
-   * The "?" of the roads that were never seen: one Graphics for all of them (a Container with a
-   * Graphics and a Text per road was the cost of a tenth of the frame in the software renderer),
-   * redrawn when the set of the roads or the zoom changes.
-   */
-  private readonly unknownMarks = Object.assign(new Graphics(), { label: 'fog-unknown-roads' });
-  private unknownRoads: Point[] = [];
-  private unknownKey = '';
   private readonly nodeGhosts: (Ghost | null)[];
   /** The memory of a half of a road in fog, by `edge * 2 + half`. */
   private readonly halfGhosts: (Ghost | null)[];
@@ -179,7 +165,7 @@ export class FogView {
     this.shadeLayer.addChild(this.veilCache);
     this.nodeGhosts = map.nodes.map(() => null);
     this.halfGhosts = map.edges.flatMap(() => [null, null]);
-    layers.layer.fog.addChild(this.shadeLayer, this.borders, this.unknownMarks, this.ghostLayer);
+    layers.layer.fog.addChild(this.shadeLayer, this.borders, this.ghostLayer);
   }
 
   /** Ticks per second, for the age of a memory; set when the ruleset is known. */
@@ -199,12 +185,6 @@ export class FogView {
         ghost.setScale(symbolScale(ghost.token.side, scale));
       }
     }
-    this.drawUnknown();
-  }
-
-  /** The "?" of a road never seen keeps the minimum size of a symbol on screen (ui-style 22). */
-  private markScale(): number {
-    return symbolScale(2 * ROAD_UNKNOWN.radius, this.cameraScale);
   }
 
   setLabelResolution(resolution: number): void {
@@ -225,9 +205,7 @@ export class FogView {
     this.setRegions(nodes);
     for (const node of nodes) this.setNode(node, base.tick);
     this.borders.clear();
-    this.unknownRoads = [];
     for (const edge of edges) this.setEdge(edge, base.tick);
-    this.drawUnknown();
     this.borders.stroke({
       width: BORDER_MARK.width,
       color: BORDER_MARK.color,
@@ -239,68 +217,11 @@ export class FogView {
     this.borders.destroy();
     this.shadeLayer.destroy({ children: true });
     this.blur.destroy();
-    this.unknownMarks.destroy();
     this.ghostLayer.destroy({ children: true });
     this.ageStyle.destroy();
   }
 
   // --- Shapes -------------------------------------------------------------------------------
-
-  /** Collects the border point of a road that was never seen; hidden once it has been (`drawUnknown`). */
-  private setUnknown(edge: EdgeView): void {
-    const at = neverSeen(edge) ? borderPoint(this.map, edge.id) : undefined;
-    if (at !== undefined) this.unknownRoads.push(at);
-  }
-
-  /**
-   * The "?" of every road never seen, at its border point: a dark disc with a dashed rim (what is
-   * not known is dashed, ui-style 21) and a question mark of strokes, not text: this is one
-   * Graphics for all of them. Not mended when nothing changed.
-   */
-  private drawUnknown(): void {
-    const k = this.markScale();
-    const key = `${String(k)}|${this.unknownRoads.map((p) => `${String(p.x)},${String(p.y)}`).join(';')}`;
-    if (key === this.unknownKey) return;
-    this.unknownKey = key;
-    const g = this.unknownMarks.clear();
-    const { radius, fill, stroke, dash } = ROAD_UNKNOWN;
-    const r = radius * k;
-    for (const at of this.unknownRoads) g.circle(at.x, at.y, r);
-    g.fill(fill);
-    // The rim and the hook are polylines of a few straight pieces: arcs would cost hundreds of
-    // vertices a disc, and there are a disc for every road never seen.
-    for (const at of this.unknownRoads) {
-      for (let i = 0; i < RIM_DASHES; i++) {
-        const from = (2 * Math.PI * i) / RIM_DASHES;
-        const to = from + ((2 * Math.PI) / RIM_DASHES) * dash;
-        g.moveTo(at.x + r * Math.cos(from), at.y + r * Math.sin(from));
-        g.lineTo(at.x + r * Math.cos(to), at.y + r * Math.sin(to));
-      }
-    }
-    g.stroke({ ...stroke, width: stroke.width * k });
-    // The question mark: a hook over a stem, and a dot.
-    const { glyph } = ROAD_UNKNOWN;
-    for (const at of this.unknownRoads) {
-      const top = at.y - glyph.up * k;
-      HOOK_ANGLES.forEach((angle, i) => {
-        const x = at.x + glyph.hook * k * Math.cos(angle);
-        const y = top + glyph.hook * k * Math.sin(angle);
-        if (i === 0) g.moveTo(x, y);
-        else g.lineTo(x, y);
-      });
-      g.lineTo(at.x, at.y + glyph.stem * k);
-    }
-    g.stroke({ width: glyph.width * k, color: GLYPH_COLOR, join: 'round' });
-    for (const at of this.unknownRoads) {
-      g.rect(
-        at.x - glyph.dotRadius * k,
-        at.y + (glyph.dot - glyph.dotRadius) * k,
-        2 * glyph.dotRadius * k,
-        2 * glyph.dotRadius * k,
-      );
-    }
-    g.fill(GLYPH_COLOR);
-  }
 
   /**
    * The veil over the cells of the hidden cities. Redrawn (and the cache rebuilt) only when the set
@@ -381,7 +302,7 @@ export class FogView {
   }
 
   /**
-   * One road: the tick at the border point, the "?" of a road never seen, and the memory of each
+   * One road: the tick at the border point and the memory of each
    * half in fog (DEC-21, item 8; DEC-33, detail 8: no position, a ghost at the border point with
    * its age). The half in fog itself is drawn by `MapView` (dotted lanes), by the half's own
    * `detail`, not the road's.
@@ -398,7 +319,6 @@ export class FogView {
         this.borders.moveTo(border.x - nx, border.y - ny).lineTo(border.x + nx, border.y + ny);
       }
     }
-    this.setUnknown(edge);
     edge.halves.forEach((half, i) => {
       const side = i === 0 ? 0 : 1;
       this.setHalf(edge, half, side, tick);

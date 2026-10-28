@@ -110,6 +110,9 @@
             ? {
                 barracks: welcome.ruleset_public.city_upgrades.barracks_ticks,
                 warehouse: welcome.ruleset_public.city_upgrades.warehouse_ticks,
+                warehouseMaxLevel: welcome.ruleset_public.city_upgrades.warehouse_max_level,
+                warehouseGainPerLevel:
+                  welcome.ruleset_public.city_upgrades.warehouse_gain_per_level,
               }
             : null,
         };

@@ -144,17 +144,6 @@ export function roadLanesWidth(level: number): number {
 export function roadSpan(level: number): number {
   return roadLanesWidth(level) + ROAD_OWN.casing;
 }
-/** The "?" on a road that was never seen (its level is 1 by DEC-17): a small dashed disc. */
-export const ROAD_UNKNOWN = {
-  radius: 6.5,
-  fill: { color: BG, alpha: 0.92 },
-  stroke: { width: 1.2, color: NEUTRAL_STROKE },
-  /** The share of a dash of the rim in its step (the rest is the gap). */
-  dash: 0.5,
-  /** The question mark drawn with strokes: the hook (radius, how far above the centre), the stem, the dot. */
-  glyph: { hook: 2.3, up: 2.2, stem: 1.6, dot: 4.2, dotRadius: 0.95, width: 1.7 },
-} as const;
-
 // --- Cities (9.4) -------------------------------------------------------------------------------
 /** Radius when the capacity is not known (a map without a snapshot). */
 export const NODE_RADIUS = 14;
@@ -179,6 +168,26 @@ export const RING_MAX_SEGMENTS = 10;
 export const BAR_SEGMENT = { width: 5, height: 4, pitch: 6, pad: 1 } as const;
 export const BAR_BASE = { color: BG, radius: 2 } as const;
 export const BAR_GAP = 9;
+/**
+ * A warehouse place that is only room (a frame) or a level not built yet (dashed), inside the same
+ * 5 x 4 cell as a charge (C1, ui-style 9.4): a charge is filled, the other two are told by the outline.
+ */
+export const PLACE_FRAME = { width: 1, color: SEGMENT_EMPTY } as const;
+export const PLACE_DASHED = { width: 0.9, color: PAPER, alpha: 0.5, dash: 1.4, gap: 1.4 } as const;
+/**
+ * A province (DEC-23, C1): a small hollow ring instead of a city body, no warehouse, no VP. The
+ * ring is `ring.owned` wide in the colour of the owner (`ring.neutral` and grey for nobody's), an
+ * own one has a light ring `outer.inset` outside, the opponent's also a light ring `inner.inset`
+ * inside, so the side reads without the colour as on a city.
+ */
+export const PROVINCE = {
+  radius: 9,
+  /** The dark plate inside the ring (`PLATE_FILL`) is this opaque. */
+  plateAlpha: 0.9,
+  ring: { owned: 3.6, neutral: 2.4 },
+  outer: { inset: 2.6, width: 1.6 },
+  inner: { inset: 3.4, width: 1.3, alpha: 0.9 },
+} as const;
 /**
  * The recruit queue above the ring of an own city (DEC-25): one 8 x 4 slot per queued unit
  * (10 apart); the first fills with the progress of the unit in production.
@@ -270,7 +279,7 @@ export const FIGHT_COLOR = PAPER;
 // A hidden area is a cool grey veil with a soft edge, no hatching (ui-style 26.3): the cells of the
 // hidden cities are filled, blurred once and cached as one texture, redrawn only when the set of
 // the hidden cities changes. What is not known of a place is carried by the dotted half of a road
-// (`ROAD_FOG`), the "?" of a road never seen, the memory ghosts and the tick at the border point.
+// (`ROAD_FOG`, a road never seen too), the memory ghosts and the tick at the border point.
 
 /**
  * The veil: `color` at `alpha` over the hidden cells, blurred by `blur` px (world units). The blur

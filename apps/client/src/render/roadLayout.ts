@@ -5,7 +5,7 @@
  * and Vitest checks them directly. Nothing here knows a game rule: the level of a road, its
  * halves in fog and a build come from the player's view, the owners of the ends from the nodes.
  */
-import type { Detail, PlayerId } from '../protocol.gen.ts';
+import type { PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import { ROAD_LANE } from './style.ts';
 
@@ -101,25 +101,6 @@ export function laneDashes(
     }
   }
   return quads;
-}
-
-/** What the fog layer needs to know of a road. */
-export interface RoadFog {
-  readonly detail: Detail;
-  readonly halves: readonly { readonly detail: Detail; readonly seen: unknown }[];
-}
-
-/**
- * A road that was never seen: the level of the road is in fog, and neither of its halves has a
- * sighting (`seen`: every sighting of a place is recorded, also one without enemies, so `null` for
- * a half in fog means it was never in view). Its level is the 1 of DEC-17, not a known one.
- */
-export function neverSeen(road: RoadFog): boolean {
-  return (
-    road.detail === 'fog' &&
-    road.halves.length > 0 &&
-    road.halves.every((half) => half.detail === 'fog' && half.seen === null)
-  );
 }
 
 /**

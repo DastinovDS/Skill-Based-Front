@@ -19,6 +19,7 @@ import type {
 } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
+import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 
 const files = import.meta.glob<SnapshotMsg>(
   '../../../../packages/protocol/fixtures/server/snapshot*.json',
@@ -369,10 +370,10 @@ function rangesSnapshot(): SnapshotMsg {
   };
 }
 
-/** The real map of the `artery` scene (the only scene with a baked background). */
-function arteryMap() {
-  const map = BUNDLED_MAPS.find((m) => m.meta.name === 'artery');
-  if (map === undefined) throw new Error('maps/fixtures/artery.json is not bundled');
+/** A real map with a baked background, by name (the scenes `artery` and `provinces`). */
+function bundledMap(name: string) {
+  const map = BUNDLED_MAPS.find((m) => m.meta.name === name);
+  if (map === undefined) throw new Error(`the map ${name} is not bundled`);
   return map;
 }
 
@@ -393,11 +394,20 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     // The real map with its baked background (#344): the scene to judge the map style by.
     id: 'artery',
     map: 'artery',
-    snapshot: arterySnapshot(arteryMap()),
+    snapshot: arterySnapshot(bundledMap('artery')),
     // The last round of the fight in the city 4 (its shots in the air), 12 ticks ago.
     events: [round(ARTERY_TICK - 12, { node: 4 }, 2, 0, 1)],
     view: ARTERY_VIEW,
     // As in `mvp-1`: the own capital and the enemy city 5 next door show the barracks (DEC-31).
+    cityUpgrades: true,
+  },
+  {
+    // A pool map (DEC-27) with its provinces: hollow rings, no warehouse, no VP (#348).
+    id: 'provinces',
+    map: 'crossroads',
+    snapshot: provincesSnapshot(bundledMap('crossroads')),
+    events: [],
+    view: PROVINCES_VIEW,
     cityUpgrades: true,
   },
   {
@@ -469,6 +479,8 @@ export function frozenSource(scene: FixtureScene, at?: number): RenderSource {
         ? {
             barracks: DEV_RULES.city_upgrades.barracks_ticks,
             warehouse: DEV_RULES.city_upgrades.warehouse_ticks,
+            warehouseMaxLevel: DEV_RULES.city_upgrades.warehouse_max_level,
+            warehouseGainPerLevel: DEV_RULES.city_upgrades.warehouse_gain_per_level,
           }
         : null,
     capacityTicks: {
