@@ -37,6 +37,7 @@ services:
       GOW_PAUSE_MAX_S: ${GOW_PAUSE_MAX_S:-60}
       GOW_READY_TIMEOUT_S: ${GOW_READY_TIMEOUT_S:-120}
       GOW_MONITOR_INTERVAL_S: ${GOW_MONITOR_INTERVAL_S:-30}
+      GOW_MAX_REQUEST_BODY_BYTES: ${GOW_MAX_REQUEST_BODY_BYTES:-32768}
       # app is reachable only through the internal network, i.e. only from Caddy, and Caddy
       # replaces a client's X-Forwarded-For with the real client address.
       GOW_FORWARDED_ALLOW_IPS: "*"
@@ -57,6 +58,9 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
+    # A cap on the one process that runs every match (SRV-01, #411): a memory leak or a flood is
+    # killed and restarted inside the container instead of taking the VPS (2 GB) down.
+    mem_limit: ${APP_MEM_LIMIT:-1g}
     # Graceful shutdown: uvicorn finishes open requests. Matches are drained before a deploy by
     # deploy/deploy.sh (docs/ops/deploy.md); a plain `docker compose down` cuts running matches.
     stop_grace_period: 30s

@@ -22,7 +22,6 @@ def _chunks(body: bytes, size: int = 64 * 1024) -> Iterator[bytes]:
         yield body[start : start + size]
 
 
-@pytest.mark.xfail(strict=True, reason="audit #411: request bodies are not size-limited")
 @pytest.mark.parametrize("chunked", [False, True], ids=["content-length", "chunked"])
 def test_oversized_body_is_refused_before_parsing(client: TestClient, chunked: bool) -> None:
     """SRV-01: an anonymous request with a huge body gets 413, not a full read and JSON parse."""

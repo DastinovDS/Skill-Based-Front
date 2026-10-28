@@ -119,6 +119,10 @@ status="$(fetch api /api/health)"
 [ "$(cat "$tmp/api.b")" = '{"status":"ok"}' ] || fail "unexpected /api/health: $(cat "$tmp/api.b")"
 [ -n "$(header api X-Request-ID)" ] || fail "/api/health has no X-Request-ID (not from the server?)"
 expect_security_headers api
+# A body over the limit is refused by Caddy (SRV-01, #411) before it reaches the server: 413.
+status="$(fetch big /api/health --request POST --header 'Content-Type: application/json' \
+	--data-binary "$(head -c 70000 /dev/zero | tr '\0' 'x')")"
+[ "$status" = 413 ] || fail "POST /api/health with a 70000 byte body returned $status, expected 413"
 [ -z "$(header api Cache-Control)" ] || fail "/api/* got a static Cache-Control"
 
 echo "== /ws/* is proxied, not served as a static file"
