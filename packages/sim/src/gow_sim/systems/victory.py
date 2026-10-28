@@ -7,7 +7,8 @@ DEC-03 (mechanics.md, section 11), numbers from ``Ruleset.victory`` and ``Rulese
 - A player loses at once when it forfeited (``PlayerState.forfeited``, a ``Forfeit`` command, also
   used by the server for a technical defeat) or when its capital belongs to the enemy.
 - When both lose in the same tick (both forfeit, or both capitals changed hands), the match is a
-  draw: the only mirror-symmetric answer. TODO(#136): confirm with the owner.
+  draw (``EndReason.DOUBLE_DEFEAT``): the only mirror-symmetric answer (DEC-03 addition, #136,
+  accepted by the owner on 2026-10-28).
 - At ``match_ticks`` more VP wins; on equal VP more cities; else a draw.
 
 ``outcome()`` is a pure function of the state: no winner field is stored, so the canonical form

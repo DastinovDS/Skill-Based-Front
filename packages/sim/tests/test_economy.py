@@ -9,7 +9,7 @@ Expected values are worked out by hand from DEC-02 (mechanics.md, section 6):
 - no passive production (owner's decision of 2026-10-14, #253): charges come only from the
   stance share; 600 ticks give 18 / 12 / 6 charges in "Economy" / "Balance" / "War";
 - CP cap 5 (500): the CP excess burns, the charge share is credited always;
-- stance change at most once per 100 ticks; the first change is free (#104 default).
+- stance change at most once per 100 ticks; the first change is free (DEC-09).
 
 The DEC-02 numbers are pinned in ``DEC02`` below, so balance changes of ``mvp-0.toml`` do not
 break these rule tests. Tick convention (``gow_sim.systems.economy``): step ``t`` runs with

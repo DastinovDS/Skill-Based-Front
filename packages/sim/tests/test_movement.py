@@ -161,7 +161,7 @@ def test_a_path_takes_the_sum_of_its_edges() -> None:
 
 
 def test_transit_never_stands_in_an_intermediate_node() -> None:
-    """Between ticks a group passing an own node is on the next edge (#118: transit)."""
+    """Between ticks a group passing an own node is on the next edge (DEC-12: transit)."""
     mapdef = _line(["forest"] * 4, [0, 0, 0, 1], [30, 30, 30])
     state = initial_state(mapdef, RULES)
     gid = _group(state, 0, 0)

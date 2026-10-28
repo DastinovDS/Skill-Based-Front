@@ -13,7 +13,7 @@ Capacity (DEC-22, item 1, replaces the road-dependent formula of SIM-07):
   reachable from the own capital over own nodes; every edge between two own nodes is internal,
   so this is a BFS over internal edges.
 
-Attrition (the ``capacity`` system; details: #118 default):
+Attrition (the ``capacity`` system; DEC-12, #118):
 
 - Only units of the node owner that stand in the node (``is_standing``) count; groups on edges
   are in transit.
@@ -54,10 +54,10 @@ def is_internal(state: GameState, edge: int) -> bool:
 
 
 def is_standing(group: Group) -> bool:
-    """The group stands in a node; groups on edges are in transit.
+    """The group stands in a node; groups on edges are in transit (DEC-12, item 3).
 
-    TODO(#118): movement (SIM-05) must not leave a group in an intermediate node of its path
-    between ticks, otherwise this check grows with SIM-05.
+    Movement never leaves a group in an intermediate node of its path: it puts the group onto the
+    next edge with ``progress == 0`` in the tick of reaching the node (``systems.movement``).
     """
     return isinstance(group.location, AtNode)
 

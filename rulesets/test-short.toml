@@ -16,7 +16,7 @@ period_ticks = 50
 
 [economy]
 charges_per_cp = 2
-start_stance = "balance" # TODO(#104): as in mvp-0.toml
+start_stance = "balance" # DEC-09, as in mvp-0.toml
 
 [economy.stance_to_charges_pct]
 economy = 75

@@ -342,7 +342,7 @@ def test_dec20_example_7_merge_over_capacity() -> None:
     assert _validate_move(state, g1, C) == Reject(RejectCode.STACK_LIMIT)
     ok = _validate_move(state, g1, K)  # the capital holds 10
     assert isinstance(ok, Ok) and ok.path == (A, K)
-    # Over capacity 6: attrition by #118 (one unit per capacity.attrition_ticks).
+    # Over capacity 6: attrition by DEC-12 (one unit per capacity.attrition_ticks).
     run.until(20 + RULES.capacity.attrition_ticks)
     assert [e.get("node") for e in run.kinds("attrition")] == [A]
     assert state.groups[g1].units == 7

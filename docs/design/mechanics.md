@@ -1,5 +1,8 @@
 # Skill-Based Front: mechanics
 
+> **Status: mechanics frozen for the first release on 2026-10-28 (owner decision).** Bugs are fixed at once; new rules
+> and mechanics go to the queue after the release (#282).
+
 > **The single source of truth about the game rules** (see `AGENTS.md`, section 0).
 > The basis of the document: a digest of the mechanics discussions (the "battery unit" model). The decisions of the DEC issues
 > are written into the matching sections; their summary list: section 21.
@@ -1172,7 +1175,12 @@ hundredths of a charge go into the accumulator. Charges are credited to the capi
 (event `charges_overflow`)~~ **[superseded by DEC-28]**: the excess spreads to the rear cities, burns up (`charges_overflow`) only when all warehouses are full (section 8, DEC-28, item 4.4); CP that burned up at the cap: event `cp_burned`. If the capital is not yours, the
 produced charges are lost, CP regenerate as usual.
 
-- **[open]** The starting stance of both players and whether the cooldown applies to the first change: question #104. Until decided: `economy.start_stance = "balance"`, the first change is allowed at once.
+#### Starting stance and the first stance change (DEC-09, #104) **[accepted]**
+
+The owner's decision of 2026-10-28; it confirms what is implemented (no change of rules, `SIM_VERSION` unchanged).
+
+- The starting stance of both players is "Balance" (`economy.start_stance = "balance"`).
+- The first stance change is allowed at once: the cooldown `orders.stance_cooldown_ticks` counts from the previous change, and there is none at the start.
 
 Alternatives (not chosen):
 - A concave model (cities give a small income with diminishing returns): implemented only if BAL-02 fails.
@@ -2262,11 +2270,12 @@ Alternatives (not chosen):
 - ~~Capacity is recomputed only when the owners of nodes or the widths of roads change.~~ **[superseded by DEC-22]**
 - On a change of owner the warehouse is zeroed (event `warehouse_lost`), road widths are kept,
   the grace period `capacity.grace_ticks` starts. DEC-26: the barracks and the warehouse level are kept.
-- **[open]** Details of attrition: question #118. Until decided: only the owner's units standing in the node (not on an edge)
-  count; on every `capacity.attrition_ticks`-th consecutive tick above capacity one unit dies, and the count
-  starts anew; the grace ticks after a capture do not count; a discharged unit of the group
-  with the lowest id dies, otherwise a charged unit of the largest group (like DEC-07, rule 7); the warehouse above the
-  fallen capacity is not trimmed (after DEC-22 capacity does not fall).
+- **Details of attrition (DEC-12, #118) [accepted].** The owner's decision of 2026-10-28; it confirms what is implemented (no change of rules, `SIM_VERSION` unchanged).
+  1. A unit dies on the `capacity.attrition_ticks`-th consecutive tick above capacity; then the count restarts (one unit per `attrition_ticks` ticks). A tick without an excess resets the count.
+  2. The grace ticks after a capture (`captured_tick .. captured_tick + capacity.grace_ticks - 1`) do not count; the count stays at zero. Starting cities do not count as captured.
+  3. Only the owner's standing units (`AtNode`) count; groups on edges are in transit. Movement never leaves a group standing in an intermediate node of its path: it puts the group onto the next edge with `progress = 0` (`gow_sim.systems.movement`), so a path through own nodes has no standing stops.
+  4. Only the units of the node's owner count. The unit that dies: a discharged one of the group with the lowest id; if there are no discharged ones, a charged one of the group with the most units, ties by the lowest id (as DEC-07, rule 7). A group without units is removed.
+  5. ~~A warehouse above the capacity is not trimmed.~~ Obsolete: after DEC-22 the capacity does not fall, and with DEC-26 the warehouse has its own capacity.
 
 ### Map rework: provinces, city kinds, names, border point (DEC-23, #235) **[accepted]**
 
@@ -2748,7 +2757,7 @@ The owner's decision of 2026-10-07 (#211): the award period was increased from 5
 
 Implementation details (SIM-13, #29), `gow_sim.systems.victory`:
 - A player loses at once if they surrendered (`Forfeit`, including a technical defeat by the server) or if their capital belongs to the opponent. A neutral capital does not count as captured.
-- If both lost in one tick (both surrendered or both capitals changed owner), it is a draw. The only mirror-symmetric answer; a question to the owner is open: #136.
+- **Double defeat (DEC-03 addition, #136) [accepted].** If both players lose in the same tick (both `Forfeit`, or both capitals change owner, or a mix of the two), the match is a draw (`EndReason.DOUBLE_DEFEAT`, `reason: double_defeat`). The only mirror-symmetric answer, no tie-break between players. The owner's decision of 2026-10-28; it confirms what is implemented (no change of rules, `SIM_VERSION` unchanged).
 - The last tick of the match (`match_ticks`) awards VP as usual, then the winner is determined. A neutral city does not count as anyone's city when comparing the number of cities.
 - The result is not stored in the state: `outcome(state, rules)` is computed from it, the `victory` system writes the event `match_ended` (`winner`: a player id or `null` on a draw; `reason`: `capital`, `forfeit`, `vp`, `cities`, `draw`, `double_defeat`).
 
@@ -2968,14 +2977,16 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 |---|---|---|---|---|
 | DEC-01 | #7 | how new units appear | section 3 | [accepted]; instant recruit and cooldown [superseded by DEC-25]; "any city" [superseded by DEC-26 with `city_upgrades.enabled = true`] |
 | DEC-02 | #8 | the economy model and the CP stance | section 6 | [accepted]; passive production removed 2026-10-14 (#253) |
-| DEC-03 | #9 | victory condition and match length | section 11 | [accepted]; match length [superseded by DEC-22] |
+| DEC-03 | #9 | victory condition and match length | section 11 | [accepted]; match length [superseded by DEC-22]; double defeat is a draw [accepted] 2026-10-28 (#136) |
 | DEC-04 | #10 | visibility rules in the MVP | section 10 | [accepted]; parts [superseded by DEC-17, DEC-21] |
 | DEC-05 | #49 | disconnect and pauses | section 19 | [accepted] |
 | DEC-06 | #74 | which matches are rated | section 19 | [accepted] |
 | DEC-07 | #11 | combat resolution (a table of worked examples) | section 4 | [accepted]; rule 8 and the repeated bounce [superseded by DEC-24] |
 | DEC-08 | #12 | modes and scheduled orders | section 5 | [accepted]; "Building" [superseded by DEC-16]; the cancel price [superseded by DEC-20]; the "Defense" bonus [superseded by DEC-30] |
+| DEC-09 | #104 | the starting CP stance and the first stance change | section 6 | [accepted] (2026-10-28); confirms the implementation |
 | DEC-13 | #124 | road construction by a group: countdown, builders, interruption | section 8 | [superseded by DEC-16] |
 | DEC-11 | #117 | splitting and merging groups, commands to a group on the way | section 3 | [superseded by DEC-20] |
+| DEC-12 | #118 | garrison attrition: the count, the grace period, transit, the unit that dies | section 9 | [accepted] (2026-10-28); confirms the implementation; item 5 (trimming the warehouse) obsolete after DEC-22 and DEC-26 |
 | DEC-14 | #131 | supply details SIM-08 | section 7 | [superseded by DEC-18] |
 | DEC-16 | #203 | road upgrade as a city function for warehouse charges | section 8 | [accepted]; the numbers and the link to capacity [superseded by DEC-22]; part [superseded by DEC-28] |
 | DEC-17 | #204 | fog of war for roads: widths, capacity and the enemy's construction | section 10 | [accepted]; item 3 [superseded by DEC-22] |

@@ -78,7 +78,7 @@ def test_mvp0_economy(mvp0: Ruleset) -> None:
     assert economy.charges_per_cp == 2
     # No passive production of the capital (#253): no such keys.
     assert not hasattr(economy, "passive_amount")
-    # Default of the open question #104.
+    # DEC-09.
     assert economy.start_stance is Stance.BALANCE
 
 

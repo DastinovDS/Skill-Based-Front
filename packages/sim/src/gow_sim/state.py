@@ -217,7 +217,7 @@ class PlayerState:
     vp: int
     stance_changed_tick: int | None
     """Tick of the last stance change; ``None``: never changed, so the first change is free of the
-    cooldown (#104 default)."""
+    cooldown (DEC-09)."""
     forfeited: bool = False
     """The player gave up: a ``Forfeit`` command, also for a technical defeat (DEC-05)."""
     fronts: tuple[int | None, ...] = ()
@@ -427,7 +427,7 @@ def initial_state(mapdef: MapDef, rules: Ruleset) -> GameState:
     Groups get ids player by player, each player's in ``node_key(player, node)`` order, so the
     id order of a player's groups is the mirror of the other player's: tie-breaks by group id
     inside a player (DEC-07, rule 7) stay mirror-symmetric. The stance is
-    ``economy.start_stance`` (open question #104). Barracks and the start stock follow
+    ``economy.start_stance`` (DEC-09). Barracks and the start stock follow
     ``city_upgrades`` (DEC-26, item 5 and the barracks block of section 3).
     """
     state = GameState(
