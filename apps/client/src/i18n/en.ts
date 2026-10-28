@@ -232,6 +232,7 @@ export const en = {
   'error.queue.dropped': 'You left the queue: the match was not confirmed in time.',
   'match.connecting': 'Connecting to the match...',
   'match.pause': 'Pause',
+  'match.pause.used': 'You have already used your pause in this match.',
   'match.resume': 'Resume',
   'match.paused.you': 'You paused the match. It resumes by itself in {seconds} s.',
   'match.paused.enemy': 'The opponent paused the match. It resumes by itself in {seconds} s.',

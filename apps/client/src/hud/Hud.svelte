@@ -46,6 +46,8 @@
     anchors?: MapAnchors;
     /** The pause of a private match; without it the button is not shown. */
     onpause?: () => void;
+    /** This player has used the pause of the match: the button stays but is disabled. */
+    pauseUsed?: boolean;
     /** The part of the screen the HUD covers, reported whenever it changes (for "fit map"). */
     oninsets?: (insets: Insets) => void;
   }
@@ -60,6 +62,7 @@
     hints = false,
     anchors = NO_ANCHORS,
     onpause,
+    pauseUsed = false,
     oninsets,
   }: Props = $props();
 
@@ -157,7 +160,7 @@
 <!-- The overlay lets pointer events through to the canvas; only panels catch them. -->
 <div class="hud" bind:this={root} data-selection={selection}>
   <div class="top" bind:this={top}>
-    <TopBar {data} {orders} {chrome} {onpause} />
+    <TopBar {data} {orders} {chrome} {onpause} {pauseUsed} />
   </div>
   {#if dev !== undefined}
     <DevPanel {dev} />

@@ -36,6 +36,8 @@ describe('Hud', () => {
       dev?: boolean;
       rendererFailed?: boolean;
       onreload?: () => void;
+      onpause?: () => void;
+      pauseUsed?: boolean;
     } = {},
   ) {
     const state = new HudState({
@@ -60,6 +62,8 @@ describe('Hud', () => {
       props: {
         rendererFailed: options.rendererFailed ?? false,
         onreload: options.onreload,
+        onpause: options.onpause,
+        pauseUsed: options.pauseUsed,
         hud: state,
         orders,
         chrome,
@@ -95,6 +99,24 @@ describe('Hud', () => {
     expect(target.querySelector('section.error')?.textContent).toContain('could not be drawn');
     button(target, 'Reload')?.click();
     expect(onreload).toHaveBeenCalledOnce();
+  });
+
+  it('disables the pause button once the pause is used (#475)', () => {
+    setLocale('en');
+    const onpause = vi.fn();
+    const fresh = render({ onpause });
+    const live = button(fresh.target, 'Pause');
+    expect(live?.disabled).toBe(false);
+    live?.click();
+    expect(onpause).toHaveBeenCalledOnce();
+    void unmount(mounted as Record<string, unknown>);
+    mounted = undefined;
+    document.body.innerHTML = '';
+
+    const used = render({ onpause, pauseUsed: true });
+    const spent = button(used.target, 'Pause');
+    expect(spent?.disabled).toBe(true);
+    expect(spent?.title).toBe('You have already used your pause in this match.');
   });
 
   it('has no side panel and shows the numbers of the snapshot in the top bar', () => {

@@ -4,10 +4,11 @@
   import Hud from '../hud/Hud.svelte';
   import { routeKey } from '../hud/hudKeys.ts';
   import { HudState } from '../hud/hudState.svelte.ts';
-  import { t, tf, type MessageKey } from '../i18n/index.ts';
+  import { t, tf } from '../i18n/index.ts';
   import { backgroundUrl } from '../map/bundledMaps.ts';
   import { forwardKey } from '../match/keyEvents.ts';
   import { OrderController } from '../match/orderController.ts';
+  import { PauseState } from '../match/pauseState.svelte.ts';
   import { MatchSession } from '../match/session.ts';
   import type { ConnectionStatus } from '../net/matchConnection.ts';
   import type {
@@ -51,7 +52,7 @@
   let session = $state.raw<MatchSession | null>(null);
   let status = $state<ConnectionStatus>('connecting');
   let paused = $state.raw<PausedMsg | null>(null);
-  let notice = $state.raw<MessageKey | null>(null);
+  const pauseState = new PauseState();
   let rendererFailed = $state(false);
   let canvas:
     | {
@@ -69,12 +70,10 @@
   const hints = $derived(hintsVisible(registerMatch(matchId)));
 
   function handle(msg: ServerMsg): void {
+    pauseState.onMessage(msg, me);
     if (msg.type === 'paused') {
       paused = msg.paused ? msg : null;
       pauseLeft = msg.ends_in_s ?? 0;
-      notice = null;
-    } else if (msg.type === 'error') {
-      notice = msg.code === 'PAUSE_DENIED' ? 'match.error.pauseDenied' : 'match.error.generic';
     } else if (msg.type === 'match_end') {
       onend(me, msg);
     } else if (msg.type === 'reach') {
@@ -175,6 +174,9 @@
   });
 
   function handleKey(event: KeyboardEvent): void {
+    if (event.type === 'keydown') {
+      pauseState.dismiss();
+    }
     // The HUD's own keys and the open overlays first, then the keys of the orders.
     if (
       routeKey(chrome, event, {
@@ -193,6 +195,9 @@
 </script>
 
 <svelte:window
+  onpointerdown={() => {
+    pauseState.dismiss();
+  }}
   onkeydown={handleKey}
   onkeyup={handleKey}
   onblur={() => {
@@ -221,6 +226,7 @@
       {orders}
       {chrome}
       {hints}
+      pauseUsed={pauseState.used}
       onpause={status === 'ready' && paused === null
         ? () => {
             session?.pause();
@@ -283,8 +289,8 @@
         >
       {/if}
     </div>
-  {:else if notice !== null}
-    <div class="banner" role="alert">{t(notice)}</div>
+  {:else if pauseState.notice !== null}
+    <div class="banner" role="alert">{t(pauseState.notice)}</div>
   {/if}
 </main>
 
