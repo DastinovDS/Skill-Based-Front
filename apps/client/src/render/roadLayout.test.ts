@@ -4,7 +4,6 @@ import {
   dashRuns,
   laneDashes,
   laneOffsets,
-  neverSeen,
   roadKind,
   roadSegments,
   roadStyle,
@@ -80,24 +79,6 @@ describe('dashes', () => {
   it('draws nothing for no length or no dash', () => {
     expect(dashRuns(0, 10, 5)).toEqual([]);
     expect(dashRuns(10, 0, 5)).toEqual([]);
-  });
-});
-
-describe('a road that was never seen', () => {
-  const half = (detail: 'fog' | 'exact', seen: unknown = null) => ({ detail, seen });
-
-  it('is a road in fog whose halves have never had a sighting', () => {
-    expect(neverSeen({ detail: 'fog', halves: [half('fog'), half('fog')] })).toBe(true);
-  });
-
-  it('is not one that is in sight, or whose level was seen once (a memory in a half)', () => {
-    expect(neverSeen({ detail: 'presence', halves: [half('exact'), half('fog')] })).toBe(false);
-    expect(neverSeen({ detail: 'fog', halves: [half('fog', { tick: 5 }), half('fog')] })).toBe(
-      false,
-    );
-    // A half in sight now was seen.
-    expect(neverSeen({ detail: 'fog', halves: [half('exact'), half('fog')] })).toBe(false);
-    expect(neverSeen({ detail: 'fog', halves: [] })).toBe(false);
   });
 });
 

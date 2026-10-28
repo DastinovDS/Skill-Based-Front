@@ -6,6 +6,7 @@ import {
   ringRadius,
   warehouseSegments,
   type Arc,
+  type PlaceState,
 } from './cityLayout.ts';
 import { CHIP, PLATE, chipHatch, chipHeight, lighten, type ChipState } from './fightFx.ts';
 import { dashSegments, triangleCorners, triangleHeight } from './layout.ts';
@@ -27,13 +28,15 @@ import {
   NEUTRAL_OUTLINE,
   OWNER_OUTLINE,
   PAPER,
+  PLACE_DASHED,
+  PLACE_FRAME,
   PLATE_FILL,
   PLATE_INNER_RING,
+  PROVINCE,
   RING_FILLED,
   RING_SEGMENT,
   RIM,
   SEGMENT_EMPTY,
-  SEGMENT_EMPTY_BAR,
   SHADOW,
   UNIT_DASH,
   UNIT_HALO,
@@ -113,6 +116,45 @@ export function cityBodySpec(kind: CityKind, radius: number, capital: boolean): 
   };
 }
 
+/**
+ * A province (DEC-23, C1): a small hollow ring on a dark plate, its halo and shadow like a city's.
+ * Own: a blue ring with a light ring outside; the opponent's: a red ring with a light ring outside
+ * and one inside; nobody's: a thin grey ring. No gradient, no rim, no star, no warehouse.
+ */
+export function provinceBodySpec(kind: CityKind): BakeSpec {
+  const r = PROVINCE.radius;
+  const reach = r + CITY_HALO_INSET + CITY_HALO.width / 2;
+  return {
+    key: `province:${kind}`,
+    box: shadowBox(circleBox(reach), BAKE_MARGIN),
+    draw(into) {
+      shadow(into, (g) => g.circle(0, 0, reach));
+      const g = graphics(into);
+      g.circle(0, 0, r + CITY_HALO_INSET).stroke(CITY_HALO);
+      g.circle(0, 0, r).fill({ color: PLATE_FILL, alpha: PROVINCE.plateAlpha });
+      if (kind === 'neutral') {
+        g.circle(0, 0, r).stroke({ width: PROVINCE.ring.neutral, color: NEUTRAL_STROKE });
+        return;
+      }
+      g.circle(0, 0, r).stroke({
+        width: PROVINCE.ring.owned,
+        color: kind === 'you' ? YOU : ENEMY,
+      });
+      g.circle(0, 0, r + PROVINCE.outer.inset).stroke({
+        width: PROVINCE.outer.width,
+        color: PAPER,
+      });
+      if (kind === 'enemy') {
+        g.circle(0, 0, r - PROVINCE.inner.inset).stroke({
+          width: PROVINCE.inner.width,
+          color: PAPER,
+          alpha: PROVINCE.inner.alpha,
+        });
+      }
+    },
+  };
+}
+
 function strokeArcs(
   g: Graphics,
   radius: number,
@@ -187,9 +229,51 @@ export function stockColor(kind: CityKind): number {
   return kind === 'you' ? YOU : kind === 'enemy' ? ENEMY : NEUTRAL_STROKE;
 }
 
-/** The warehouse bar under the ring: a dark base, a square per place, the filled ones with a gradient. The sprite's origin is the middle of its top edge. */
-export function warehouseBarSpec(capacity: number, stock: number, color: number): BakeSpec {
-  const bar = warehouseSegments(stock, capacity);
+/**
+ * The outline of a warehouse place that holds no charge, in the 5 x 4 cell at (`x`, `y`): a frame
+ * for room, a dashed outline for a level not built yet (C1). Drawn inside the cell, so the cell
+ * keeps its size whatever the state.
+ */
+export function drawPlaceOutline(
+  g: Graphics,
+  x: number,
+  y: number,
+  state: Exclude<PlaceState, 'filled'>,
+): void {
+  const { width, height } = BAR_SEGMENT;
+  if (state === 'frame') {
+    const w = PLACE_FRAME.width;
+    g.rect(x + w / 2, y + w / 2, width - w, height - w).stroke(PLACE_FRAME);
+    return;
+  }
+  const { width: w, color, alpha, dash, gap } = PLACE_DASHED;
+  const [x0, y0, x1, y1] = [x + w / 2, y + w / 2, x + width - w / 2, y + height - w / 2];
+  const corners: Point[] = [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x1, y: y1 },
+    { x: x0, y: y1 },
+  ];
+  corners.forEach((from, i) => {
+    const to = corners[(i + 1) % corners.length];
+    if (to === undefined) return;
+    for (const [a, b] of dashSegments(from, to, dash, gap)) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+  });
+  g.stroke({ width: w, color, alpha });
+}
+
+/**
+ * The warehouse bar under the ring: a dark base, a place per unit of capacity (a charge filled with
+ * a gradient, room a frame) and `locked` dashed places for the levels not built yet. The sprite's
+ * origin is the middle of its top edge.
+ */
+export function warehouseBarSpec(
+  capacity: number,
+  stock: number,
+  color: number,
+  locked = 0,
+): BakeSpec {
+  const bar = warehouseSegments(stock, capacity, locked);
   const base: Box = {
     x: -bar.width / 2 - 1,
     y: -1,
@@ -197,16 +281,18 @@ export function warehouseBarSpec(capacity: number, stock: number, color: number)
     height: BAR_SEGMENT.height + 4,
   };
   return {
-    key: `bar:${String(capacity)}:${String(stock)}:${String(color)}`,
+    key: `bar:${String(capacity)}:${String(stock)}:${String(locked)}:${String(color)}`,
     box: shadowBox(base, BAKE_MARGIN),
     draw(into, tools) {
       shadow(into, (g) => g.roundRect(base.x, base.y, base.width, base.height, BAR_BASE.radius));
       const g = graphics(into);
       g.roundRect(base.x, base.y, base.width, base.height, BAR_BASE.radius).fill(BAR_BASE.color);
       for (const segment of bar.segments) {
-        g.rect(segment.x, 1, BAR_SEGMENT.width, BAR_SEGMENT.height).fill(
-          segment.filled ? tools.gradient(color) : SEGMENT_EMPTY_BAR,
-        );
+        if (segment.state === 'filled') {
+          g.rect(segment.x, 1, BAR_SEGMENT.width, BAR_SEGMENT.height).fill(tools.gradient(color));
+        } else {
+          drawPlaceOutline(g, segment.x, 1, segment.state);
+        }
       }
     },
   };

@@ -1,6 +1,7 @@
 import { Container, Graphics, GraphicsContext, Text, TextStyle } from 'pixi.js';
 import type { BakedSprite, SpriteCache } from './bake.ts';
 import {
+  drawPlaceOutline,
   triangleBackSpec,
   triangleFrontSpec,
   triangleLevelSpec,
@@ -24,7 +25,6 @@ import {
   PACKET_TRANSFER,
   PAPER,
   PLATE_FILL,
-  SEGMENT_EMPTY_BAR,
   DEFENSE_LABEL,
   SHIELD_BADGE_SCALE,
   UNIT_INNER_SCALE,
@@ -46,8 +46,8 @@ export function drawModeGlyph(g: GraphicsContext, mode: Mode): GraphicsContext {
 
 /**
  * The warehouse bar of a city (`warehouseSegments`): a dark base with a small square per unit of
- * capacity, `color` for a charge held, grey for room. One drawing for the map and the «Supply»
- * layer, so the stock looks the same in both. `x` is the middle of the bar, `top` its top edge.
+ * capacity, `color` for a charge held, a frame for room, a dashed outline for a level not built
+ * yet (C1). The same places as the baked bar of the map (`warehouseBarSpec`), so the stock looks the same in both. `x` is the middle of the bar, `top` its top edge.
  */
 export function drawWarehouseBar(
   g: Graphics,
@@ -65,9 +65,11 @@ export function drawWarehouseBar(
     BAR_BASE.radius,
   ).fill(BAR_BASE.color);
   for (const segment of bar.segments) {
-    g.rect(x + segment.x, top + 1, BAR_SEGMENT.width, BAR_SEGMENT.height).fill(
-      segment.filled ? color : SEGMENT_EMPTY_BAR,
-    );
+    if (segment.state === 'filled') {
+      g.rect(x + segment.x, top + 1, BAR_SEGMENT.width, BAR_SEGMENT.height).fill(color);
+    } else {
+      drawPlaceOutline(g, x + segment.x, top + 1, segment.state);
+    }
   }
 }
 

@@ -15,7 +15,10 @@ import {
   RING_SEGMENT,
 } from './style.ts';
 
-/** City radius by capacity class: up to 2, 3-4, 5-6, 7 and more. */
+/**
+ * City radius by capacity class: up to 2, 3-4, 5-6, 7 and more. A province is a small ring of its
+ * own radius, whatever its capacity (DEC-23, C1): `PROVINCE.radius`.
+ */
 export function cityRadius(capacity: number): number {
   if (capacity <= 2) return 11;
   if (capacity <= 4) return 14;
@@ -75,9 +78,17 @@ export function capacityRing(capacity: number, garrison: number): Ring {
   return { solid: false, arcs, notches: [] };
 }
 
+/**
+ * What a warehouse place shows (ui-style 9.4, C1): `filled` holds a charge, `frame` is room for one,
+ * `dashed` is a place of a level that is not built yet (the shape tells it, not the colour).
+ */
+export type PlaceState = 'filled' | 'frame' | 'dashed';
+
 export interface BarSegment {
   /** Left edge from the middle of the bar. */
   readonly x: number;
+  readonly state: PlaceState;
+  /** Holds a charge (`state === 'filled'`). */
   readonly filled: boolean;
 }
 
@@ -86,17 +97,38 @@ export interface WarehouseBar {
   readonly segments: BarSegment[];
 }
 
-/** Warehouse bar: a segment per unit of capacity, `warehouse` of them filled. */
-export function warehouseSegments(warehouse: number, capacity: number): WarehouseBar {
+/**
+ * Warehouse bar: a place per unit of warehouse capacity, `warehouse` of them filled (the rest a
+ * frame), then `locked` dashed places for the levels not built yet (always the last ones).
+ */
+export function warehouseSegments(warehouse: number, capacity: number, locked = 0): WarehouseBar {
   const cap = Math.max(0, Math.floor(capacity));
   const filled = Math.min(cap, Math.max(0, Math.floor(warehouse)));
+  const total = cap + Math.max(0, Math.floor(locked));
   const { pitch, pad } = BAR_SEGMENT;
-  const width = cap * pitch + 2 * pad - (pitch - BAR_SEGMENT.width);
+  const width = total * pitch + 2 * pad - (pitch - BAR_SEGMENT.width);
   const segments: BarSegment[] = [];
-  for (let i = 0; i < cap; i++) {
-    segments.push({ x: -width / 2 + pad + i * pitch, filled: i < filled });
+  for (let i = 0; i < total; i++) {
+    const state: PlaceState = i < filled ? 'filled' : i < cap ? 'frame' : 'dashed';
+    segments.push({ x: -width / 2 + pad + i * pitch, state, filled: state === 'filled' });
   }
   return { width, segments };
+}
+
+/** What `ruleset_public.city_upgrades` says of the warehouse levels (DEC-26). */
+export interface WarehouseLevels {
+  readonly warehouseMaxLevel: number;
+  readonly warehouseGainPerLevel: number;
+}
+
+/**
+ * Dashed places of an own city: the levels above its `level` up to the top one, `gain` places each
+ * (`warehouse_level` of the view, the two numbers of the ruleset). 0 for a city whose level the view
+ * does not give (a foreign one) and without city development.
+ */
+export function lockedPlaces(level: number | null, levels: WarehouseLevels | null): number {
+  if (level === null || levels === null) return 0;
+  return Math.max(0, levels.warehouseMaxLevel - Math.max(0, level)) * levels.warehouseGainPerLevel;
 }
 
 /** Where the warehouse bar sits: its top edge, from the city centre. */

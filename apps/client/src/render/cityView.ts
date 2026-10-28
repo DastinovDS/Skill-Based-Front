@@ -1,11 +1,12 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import type { MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
-import type { CityBuildTicks } from './source.ts';
+import type { CityDevelopment } from './source.ts';
 import type { Point } from './camera.ts';
 import {
   barracksAt,
   barTop,
   cityRadius,
+  lockedPlaces,
   queueSlots,
   queueTop,
   ringRadius,
@@ -18,6 +19,7 @@ import {
   ENEMY,
   NODE_RADIUS,
   PAPER,
+  PROVINCE,
   QUEUE_SLOT,
   SEGMENT_EMPTY_BAR,
   VP_BADGE_RADIUS,
@@ -33,6 +35,7 @@ import {
   barracksSpec,
   cityBodySpec,
   cityRingSpec,
+  provinceBodySpec,
   stockColor,
   vpBadgeSpec,
   warehouseBarSpec,
@@ -55,6 +58,8 @@ interface CityState {
   readonly unitTicks: number | null;
   /** Segments of the warehouse bar: the warehouse capacity (DEC-26), or the charges only. */
   readonly warehouseCap: number | null;
+  /** Own city: dashed places of the warehouse levels not built yet (DEC-26, C1); 0 for the rest. */
+  readonly locked: number;
   /** Own city: share of its barracks or warehouse build done, in percent; `null`: none. */
   readonly buildPct: number | null;
   /** A city known to have the barracks (own, DEC-26, or an enemy's next door, DEC-31): the house. */
@@ -71,6 +76,7 @@ function stateKey(s: CityState): string {
     s.progress,
     s.unitTicks,
     s.warehouseCap,
+    s.locked,
     s.buildPct,
     s.barracks,
   ]
@@ -88,10 +94,14 @@ function onCircle(radius: number, angle: number): Point {
  * with the colour of the owner (own: blue with a white outline, enemy: red with a white outline and
  * a dark inner ring, neutral: grey with a thin outline), the capital star, the capacity ring of
  * segments (white for own units standing there, grey otherwise; overcrowding is the alert view's
- * pulsing ring and badge, not drawn here), the warehouse bar under the ring, the recruit queue of an
+ * pulsing ring and badge, not drawn here), the warehouse bar under the ring (a place per charge:
+ * filled, a frame for room, dashed for a level not built yet, C1), the recruit queue of an
  * own city above it (DEC-25), the barracks house of an own city (DEC-26) or of an enemy city next to
  * an own node (DEC-31) and the VP badge. The capacity is public and exact (DEC-22: fixed by
  * the node kind).
+ *
+ * A province (`kind = province`, DEC-23, C1) is a small hollow ring instead of a body, with the
+ * capacity ring but no warehouse bar, queue, barracks or VP badge.
  *
  * BL1-1 "Restrained" (#347): the body, the ring, the bar, the badges are baked sprites (a gradient,
  * a soft shadow, a light rim; `bakedShapes.ts`, `SpriteCache`), one texture per look shared by every
@@ -127,7 +137,13 @@ export class CityView {
       fill: VP_TEXT_COLOR,
     });
     this.keys = map.nodes.map(() => '');
-    this.radii = map.nodes.map((node) => (node.capital_of === null ? NODE_RADIUS : CAPITAL_RADIUS));
+    this.radii = map.nodes.map((node) =>
+      node.kind === 'province'
+        ? PROVINCE.radius
+        : node.capital_of === null
+          ? NODE_RADIUS
+          : CAPITAL_RADIUS,
+    );
     this.cities = [];
     this.bodies = [];
     this.rings = [];
@@ -145,7 +161,8 @@ export class CityView {
       house.label = 'barracks';
       house.visible = false;
       this.barracks.push(house);
-      if (node.vp > 0) {
+      // A province carries no VP (DEC-23).
+      if (node.vp > 0 && node.kind !== 'province') {
         const badge = city.addChild(new Container());
         badge.addChild(sprites.sprite(vpBadgeSpec()));
         const label = new Text({
@@ -186,6 +203,7 @@ export class CityView {
         progress: 0,
         unitTicks: null,
         warehouseCap: null,
+        locked: 0,
         buildPct: null,
         barracks: false,
       });
@@ -199,7 +217,7 @@ export class CityView {
   update(
     base: SnapshotMsg,
     unitTicks: number | null = null,
-    cityUpgrades: CityBuildTicks | null = null,
+    cityUpgrades: CityDevelopment | null = null,
   ): void {
     const garrison = new Map<number, number>();
     for (const group of base.view.groups) {
@@ -245,7 +263,7 @@ export class CityView {
     node: NodeView,
     garrison: number,
     unitTicks: number | null,
-    cityUpgrades: CityBuildTicks | null,
+    cityUpgrades: CityDevelopment | null,
     tick: number,
   ): CityState {
     const building = node.building;
@@ -265,6 +283,7 @@ export class CityView {
       // DEC-26: an own city knows its warehouse capacity; a foreign one shows only its charges
       // when the warehouse is apart from the capacity, else the capacity (DEC-22).
       warehouseCap: node.warehouse_cap ?? (cityUpgrades === null ? node.capacity : null),
+      locked: lockedPlaces(node.warehouse_level, cityUpgrades),
       buildPct,
       barracks: showsBarracks(node.has_barracks, cityUpgrades !== null),
     };
@@ -279,12 +298,11 @@ export class CityView {
     const node = this.map.nodes[id];
     const body = this.bodies[id];
     if (node === undefined || body === undefined) return;
+    const kind = this.kindOf(state.owner);
     body.set(
-      cityBodySpec(
-        this.kindOf(state.owner),
-        this.radii[id] ?? NODE_RADIUS,
-        node.capital_of !== null,
-      ),
+      node.kind === 'province'
+        ? provinceBodySpec(kind)
+        : cityBodySpec(kind, this.radii[id] ?? NODE_RADIUS, node.capital_of !== null),
     );
   }
 
@@ -308,8 +326,10 @@ export class CityView {
     }
 
     const capital = node.capital_of !== null;
-    const radius =
-      state.capacity === null
+    const province = node.kind === 'province';
+    const radius = province
+      ? PROVINCE.radius
+      : state.capacity === null
         ? capital
           ? CAPITAL_RADIUS
           : NODE_RADIUS
@@ -336,9 +356,17 @@ export class CityView {
     const ringOn = capacity !== null;
     ring.set(ringOn ? cityRingSpec(radius, capacity, kind === 'you' ? state.garrison : 0) : null);
     ring.visible = ringOn && !this.supplyMode;
-    const barOn = ringOn && warehouse !== null;
+    // A province has no warehouse (DEC-23): whatever number the view carries, nothing is drawn.
+    const barOn = ringOn && warehouse !== null && !province;
     bar.set(
-      barOn ? warehouseBarSpec(state.warehouseCap ?? warehouse, warehouse, stockColor(kind)) : null,
+      barOn
+        ? warehouseBarSpec(
+            state.warehouseCap ?? warehouse,
+            warehouse,
+            stockColor(kind),
+            state.locked,
+          )
+        : null,
     );
     if (barOn) bar.position.set(0, barTop(radius));
     bar.visible = barOn && !this.supplyMode;
