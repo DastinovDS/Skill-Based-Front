@@ -275,15 +275,17 @@ def test_example_12_a_group_in_a_fight_is_not_a_figure(
     assert view.edges[0].halves[1].seen == Sighting(10, R, (Mode.ATTACK,), None, None, (3, 5))
 
 
-def test_example_13_own_group_on_an_edge_gives_no_sight(
+def test_example_13_own_group_on_an_edge_sees_its_edge(
     make_fog_map: MakeMap, rules: Ruleset
 ) -> None:
-    """An own group stands on the edge E-F, no source next to it (#112): no figures."""
+    """An own group stands on the edge E-F, no source next to it: as revised by DEC-10 (#112),
+    the halves of E-F are presence, the enemy group on E-F is a figure without numbers."""
     mapdef = make_fog_map("ppff", [(M_NODE, 3), (3, E_NODE), (E_NODE, F_NODE)])  # M - X - E - F
     state = _state(mapdef, rules)
     _group(state, 0, OnEdge(edge=2, from_node=E_NODE, progress=500), units=1, charged=1)
     _group(state, 1, OnEdge(edge=2, from_node=E_NODE, progress=400))
-    assert _figures(state, rules, 2) == ()
+    (figure,) = _figures(state, rules, 2)
+    assert _shown(figure) == (400, True, P, Mode.ATTACK, None, None, None)
 
 
 # "Details", one test per item --------------------------------------------------------------------

@@ -43,7 +43,7 @@ Details of F1 and F2 (reproduction on the test bed) are in the issues #193 and #
 ### 3.1 The `project()` projection (`packages/sim/src/gow_sim/view.py`)
 
 - [x] Own groups and packets: only `owner == player`; there are no foreign groups as entities, only `seen`
-  of a place. Foreign packets are never visible (#112).
+  of a place. Foreign packets are never visible (DEC-10, #112).
 - [x] The warehouse only at `EXACT`; at `PRESENCE` `seen` has no numbers (`systems/vision.py:_sighting`);
   in `FOG` only the memory `vision_memory`, there are never numbers on edges.
 - [x] `me` contains only own CP and stance; there are no CP, stance, production of the opponent in the view.
