@@ -453,8 +453,8 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
   charge of warehouse capacity, the state by shape (ui-style 21): **filled** (gradient in the owner's color) = a charge, a **frame** = room
   for one, **dashed** = a place of a warehouse level that is not built yet. The dashed places come last and only on an own city when the
   city development is on: their number is `(warehouse_max_level - warehouse_level) * warehouse_gain_per_level` from the view
-  (`warehouse_level`) and `ruleset_public.city_upgrades`, the filled and frame ones are `warehouse` of `warehouse_cap`. A foreign
-  city that is a vision source shows only the filled places (its level and capacity stay hidden, DEC-21 item 3, DEC-26 item 10, AGENTS.md 4.4);
+  (`warehouse_level`) and `ruleset_public.city_upgrades`, the filled and frame ones are `warehouse` of `warehouse_cap`. With the
+  city development on, a foreign city that is a vision source shows only the filled places (its level and capacity stay hidden, DEC-21 item 3, DEC-26 item 10, AGENTS.md 4.4);
   one that is not has no bar. The «Supply» layer draws the same places.
 - **Province (C1, #348; DEC-23):** a node without a city: no body, no warehouse, no VP, no recruit queue or barracks. It is a **hollow ring** of
   radius 9 on a dark plate (alpha 0.9): own, a blue ring 3.6 wide with a light ring 2.6 outside it; the opponent's, a red ring with the light ring
