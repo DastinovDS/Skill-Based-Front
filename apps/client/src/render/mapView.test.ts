@@ -276,6 +276,19 @@ describe('MapView, the glow along the borders of the territories (BL1, #347)', (
     expect(layer[layer.length - 1]).toBeInstanceOf(Graphics);
   });
 
+  it('does not cut the blur to the canvas: the cache texture is the size of the world (#441)', () => {
+    view.setOwners(halves());
+    const blurs = (glow()?.children ?? [])
+      .flatMap((clip) => clip.children)
+      .filter((c) => c.label.startsWith('glow-blur-'));
+    expect(blurs).toHaveLength(2);
+    for (const blurred of blurs) {
+      const filters = blurred.filters as readonly { clipToViewport: boolean }[];
+      expect(filters).toHaveLength(1);
+      expect(filters[0]?.clipToViewport).toBe(false);
+    }
+  });
+
   it('is rebuilt when an owner changes and not for the same owners', () => {
     const rebuild = vi.spyOn(Container.prototype, 'updateCacheTexture');
     view.setOwners(halves());

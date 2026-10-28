@@ -268,6 +268,16 @@ describe('FogView, the haze F1 over the hidden cities', () => {
     vi.restoreAllMocks();
   });
 
+  it('does not cut the blur to the canvas: the cache texture is the size of the world (#441)', () => {
+    // A filter area is clipped to the root viewport by default; the veil is built into a texture
+    // of the whole map, so on a canvas smaller than the map (a 1920x1080 window at devicePixelRatio 1)
+    // the veil would stop at the canvas size.
+    const blurred = veilOf(layers)?.children[0]?.children.find((c) => c.label === 'fog-veil-blur');
+    const filters = (blurred?.filters ?? []) as readonly { clipToViewport: boolean }[];
+    expect(filters).toHaveLength(1);
+    expect(filters[0]?.clipToViewport).toBe(false);
+  });
+
   it('is one cached texture of the hidden cells, with the blur inside the cache, not on it', () => {
     view.update(withFog([1, 2]));
     const veil = veilOf(layers);

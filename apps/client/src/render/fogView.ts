@@ -115,6 +115,11 @@ export class FogView {
     strength: FOG_VEIL.blur,
     quality: FOG_VEIL.blurQuality,
     resolution: FOG_VEIL.blurResolution,
+    // The filter runs inside the cache texture, which is the size of the world. By default Pixi
+    // cuts a filter area to the canvas (the root viewport), so on a screen smaller than the
+    // world (a 1920x1080 window at devicePixelRatio 1) the veil would stop at the canvas size
+    // (#441). The cache texture is the area that matters here.
+    clipToViewport: false,
   });
   /** The blur is a filter of this container, INSIDE the cached one: it runs only when the cache is built. */
   private readonly veilBlur = new Container({ label: 'fog-veil-blur' });
