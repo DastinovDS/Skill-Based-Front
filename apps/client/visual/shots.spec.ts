@@ -117,3 +117,20 @@ for (const shot of ETAS) {
     await page.locator('canvas').screenshot({ path: join(OUT, `eta-${shot.name}.png`) });
   });
 }
+
+// The road mode (key U, #469): the dashed band on the roads a click would raise, on the normal map
+// and in the «Supply» view (Tab). `road-mode-normal.png` and `road-mode-supply.png`, the map alone;
+// `?menus` lets the frozen scene take the mode (orders go nowhere).
+for (const view of ['normal', 'supply'] as const) {
+  test(`shot of the road mode (${view})`, async ({ page }) => {
+    await page.goto('/?scene=snapshot&menus');
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    if (view === 'supply') await page.keyboard.press('Tab');
+    await page.keyboard.press('KeyU');
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(300);
+    await page.addStyleTag({ content: '.hud { display: none !important; }' });
+    await page.locator('canvas').screenshot({ path: join(OUT, `road-mode-${view}.png`) });
+  });
+}

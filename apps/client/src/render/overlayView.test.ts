@@ -81,7 +81,7 @@ describe('OverlayView', () => {
       split: [],
       eta: null,
     };
-    const frame = layers.layer.intents.children[2];
+    const frame = layers.layer.intents.children[3];
     view.update(state, () => ({ x: 50, y: 60, side: 30, scale: 1 }));
     expect(frame?.visible).toBe(true);
     expect(frame?.position.x).toBe(50);
@@ -247,6 +247,53 @@ describe('OverlayView, the travel time of an order on its road (#432)', () => {
     view.update(state({ from: a.id, node: b.id, ticks: 25 }), none);
     view.update(state(null), none);
     expect(label(layers)?.visible).toBe(false);
+    view.destroy();
+  });
+});
+
+describe('OverlayView, the dashed band of the road mode (#469)', () => {
+  const state = (supply: OverlayState['supply']): OverlayState => ({
+    selection: null,
+    ghosts: [],
+    preview: null,
+    candidates: [0, 1],
+    beacon: null,
+    supply,
+    reach: [],
+    split: [],
+    eta: null,
+  });
+  const band = (layers: ReturnType<typeof setup>['layers'], where: 'intents' | 'roads') =>
+    layers.layer[where].children.find((c) => c.label === 'road-band');
+
+  it('lies at the bottom of the intents layer on the normal map', () => {
+    const { layers, view, none } = setup();
+    view.update(state(null), none);
+    expect(layers.layer.intents.children[0]?.label).toBe('road-band');
+    expect(band(layers, 'intents')?.getLocalBounds().width).toBeGreaterThan(0);
+    expect(band(layers, 'roads')).toBeUndefined();
+    view.destroy();
+  });
+
+  it('moves to the roads layer in the «Supply» view, which hides the intents, and back', () => {
+    const { layers, view, none } = setup();
+    view.update(state({ source: null, targets: [] }), none);
+    // The intents layer is hidden in this view, so what is visible is the roads layer.
+    expect(band(layers, 'intents')).toBeUndefined();
+    const drawn = band(layers, 'roads');
+    expect(drawn?.getLocalBounds().width).toBeGreaterThan(0);
+    expect(layers.layer.roads.children.at(-1)).toBe(drawn);
+
+    view.update(state(null), none);
+    expect(band(layers, 'roads')).toBeUndefined();
+    expect(layers.layer.intents.children[0]).toBe(drawn);
+    view.destroy();
+  });
+
+  it('is empty without candidates in both views', () => {
+    const { layers, view, none } = setup();
+    view.update({ ...state({ source: null, targets: [] }), candidates: [] }, none);
+    expect(band(layers, 'roads')?.getLocalBounds().width).toBe(0);
     view.destroy();
   });
 });

@@ -54,6 +54,14 @@ export class OverlayView {
   private readonly ring = new Graphics();
   private readonly frame = new Graphics();
   private readonly lines = new Graphics();
+  /**
+   * The dashed band of the road mode: a Graphics of its own because it has to show in the «Supply»
+   * view, which hides the `intents` layer (#469): there it lies on the `roads` layer (under the
+   * supply flows), on the normal map at the bottom of `intents`, where it always was.
+   */
+  private readonly band = new Graphics({ label: 'road-band' });
+  private bandLayer: Container;
+  private readonly layers: MapLayers;
   /** Ghost arrows of sent orders: redrawn every frame while one shakes and fades. */
   private readonly ghosts = new Graphics();
   private overlay: OverlayState = EMPTY_OVERLAY;
@@ -90,7 +98,16 @@ export class OverlayView {
       resolution: 1,
     });
     this.eta.addChild(this.etaPlate, this.etaText);
-    layers.layer.intents.addChild(this.lines, this.ring, this.frame, this.eta, this.ghosts);
+    this.layers = layers;
+    this.bandLayer = layers.layer.intents;
+    layers.layer.intents.addChild(
+      this.band,
+      this.lines,
+      this.ring,
+      this.frame,
+      this.eta,
+      this.ghosts,
+    );
     this.frame.visible = false;
   }
 
@@ -103,6 +120,7 @@ export class OverlayView {
     const changed = next !== this.overlay;
     if (changed) {
       this.overlay = next;
+      this.placeBand(next.supply !== null);
       this.drawLines(next);
       this.drawRing(next);
     }
@@ -203,6 +221,7 @@ export class OverlayView {
   destroy(): void {
     this.eta.destroy({ children: true });
     this.etaStyle.destroy();
+    this.band.destroy();
     this.lines.destroy();
     this.ghosts.destroy();
     this.ring.destroy();
@@ -263,9 +282,10 @@ export class OverlayView {
   }
 
   private drawLines(state: OverlayState): void {
+    this.band.clear();
+    this.drawCandidates(this.band, state.candidates);
     const g = this.lines;
     g.clear();
-    this.drawCandidates(g, state.candidates);
     // The dotted line of an ordinary order is gone (the arrow of the order is its picture); only a
     // planned order shows where its ribbon will go.
     const preview = state.preview !== null && state.preview.planned ? state.preview : null;
@@ -284,6 +304,16 @@ export class OverlayView {
         });
       }
     }
+  }
+
+  /** The band is drawn on the layer that is visible in the current view (see `band`). */
+  private placeBand(supply: boolean): void {
+    const layer = supply ? this.layers.layer.roads : this.layers.layer.intents;
+    if (layer === this.bandLayer) return;
+    this.bandLayer = layer;
+    // Bottom of the `intents`, as before; the top of the `roads`: over the lanes, under the cities.
+    if (supply) layer.addChild(this.band);
+    else layer.addChildAt(this.band, 0);
   }
 
   /** Road pick: a dashed band along each road a click would upgrade. */
