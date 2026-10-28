@@ -317,7 +317,7 @@ describe('FogView, the haze F1 over the hidden cities', () => {
     expect(veilCellCount(layers)).toBe(0);
   });
 
-  it('leaves the border tick and the ghosts of the memories above the veil', () => {
+  it('leaves the ghosts of the memories above the veil', () => {
     view.update(withFog([1], seen()));
     const order = layers.layer.fog.children.map((c) => c.label);
     expect(order.indexOf('fog-shades')).toBeLessThan(order.indexOf('fog-ghosts'));

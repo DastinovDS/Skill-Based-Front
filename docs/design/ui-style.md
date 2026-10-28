@@ -435,7 +435,7 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
 - A road is redrawn only when the level, the owner of an end or a half in the fog changes, not every frame. At a 60% scale the stripes may stick together, the width, the dashes and the backing remain (the gray scale is checked).
 - A road never seen looks like any road in the fog: the client does not tell "never seen" from "seen long ago" on the road itself (the memory of a half is a ghost at the border point, 9.8). `EdgeView` has no `seen` field since #296.
 - The construction plate is not smaller than 20 px on the screen (section 22): it grows when the camera zooms out.
-- The border point tick mark (DEC-21, item 5) and the ghosts of half memory (#359) remain.
+- The ghosts of half memory (#359) remain. The tick mark across every road at the border point was removed by the owner's decision of 2026-10-28 (#427): the border point stays in the rules and in vision, it is not drawn.
 - Hover: a small circle with the width number in the middle. With an own city selected after `U`: the tooltip
   "Width 3: +0.5 capacity, +25% packet speed, 3 charges from the warehouse" (the numbers from `ruleset_public`).
 - A construction in progress: running `--paper` hatching from the building city, the length grows toward the finishing tick.
@@ -541,7 +541,7 @@ The ribbon arrow (HOI4, Mini Motorways):
   rectangle (a mask inside the cache), the cell edges at the map border are pushed outward so that the veil does not get lighter at the edge. A road and a city
   under the veil darken together with it; there is no shadow along the edge (a half in the fog is carried by dots, 9.3). The light line along the border
   (`FOG_FRONT`) was removed by the owner's decision of 2026-10-22; to bring it back if the visibility border reads badly in the gray scale. Cities in the fog are drawn with the outline of the last
-  known owner; ghosts, the border point tick mark and the range plates lie above the veil.
+  known owner; ghosts and the range plates lie above the veil.
 - **Layers LY2 "Over the haze"** (26.3, 27.3; #346): the `intents` layer is above `fog` in `LAYER_ORDER` (ribbons, target rings, the bonus,
   the ghost of an own order and a road construction do not dim: an intent is public, DEC-04); the groups remain under the haze, the thin
   lines of ordinary orders too (they are under the figures of own groups).
@@ -549,7 +549,7 @@ The ribbon arrow (HOI4, Mini Motorways):
 - **Range** (DEC-21, item 4, #359): where the view gives only a range of units, the enemy triangle has a dashed outline
   (like the "?") and a plate with "3-5" or "21+" under the tip instead of the number; there are no charges at the `range` level. Presence
   without numbers remains "?". The strings `range.closed` and `range.open` in the dictionaries.
-- **The border point of an edge** (DEC-21, item 5): a short light tick mark across every road (`BORDER_MARK` in `style.ts`).
+- **The border point of an edge** (DEC-21, item 5) is not drawn (the tick mark across the road was removed, #427).
   A half of an edge in the fog (`HalfView.detail = fog`) is darkened like a road body in the fog; by halves, not by edge.
 - **Half memory** (DEC-33, item 8): a ghost with an age at the border point, at the side of the road: the half of end `a`
   to the left of the direction a → b, the half of end `b` to the right. There is no position and direction in the memory.
