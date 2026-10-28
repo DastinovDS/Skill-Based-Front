@@ -218,6 +218,7 @@
     />
     <Hud
       {rendererFailed}
+      {onreload}
       {hud}
       {orders}
       {chrome}

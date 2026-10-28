@@ -63,7 +63,15 @@
     }}
   />
   {#if rendererFailed}
-    <p class="failed" role="alert">{t('error.renderer')}</p>
+    <p class="failed" role="alert">
+      {t('error.renderer')}
+      <button
+        type="button"
+        onclick={() => {
+          window.location.reload();
+        }}>{t('match.reload')}</button
+      >
+    </p>
   {/if}
   <section class="controls" aria-label={t('replay.controls')}>
     {#if onback !== undefined}

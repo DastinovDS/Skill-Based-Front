@@ -21,7 +21,7 @@
     backgroundUrl?: string | null;
     /** The part of the map (world units) to look at at the start; default: the whole map. */
     viewRect?: { x: number; y: number; width: number; height: number } | null;
-    /** Called when the renderer cannot start (for example, no WebGL). */
+    /** Called when the renderer cannot start (for example, no WebGL) or the map keeps failing to draw. */
     onerror?: (error: unknown) => void;
     /** Frames per second, reported twice a second (not every frame) for the dev HUD. */
     onfps?: (fps: number) => void;
@@ -96,6 +96,9 @@
           backgroundUrl,
           onbackground: (state: 'loaded' | 'failed') => {
             host.dataset.background = state;
+          },
+          onframefailure: (error: unknown) => {
+            onerror?.(error);
           },
           onsnapshot: (tick: number) => {
             // A plain attribute: end-to-end tests wait for it before taking a screenshot.

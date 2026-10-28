@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CrashGuard from '../app/CrashGuard.svelte';
   import { t, type MessageKey } from '../i18n/index.ts';
   import { loadReplayWhenReady, ReplayLoadError, type ReplayLoadCode } from './loadReplay.ts';
   import { parseReplay, type ReplayFile } from './replayFile.ts';
@@ -71,23 +72,27 @@
   });
 </script>
 
-{#if file !== null}
-  <ReplayViewer {file} {onback} />
-{:else}
-  <main class="status" role={failure === null ? 'status' : 'alert'}>
-    {#if failure !== null}
-      <p>{t(ERRORS[failure])}</p>
-    {:else if preparing}
-      <p class="waiting"><span class="spinner" aria-hidden="true"></span>{t('replay.preparing')}</p>
-      <p class="hint">{t('replay.preparing.hint')}</p>
-    {:else}
-      <p>{t('replay.loading')}</p>
-    {/if}
-    {#if onback !== undefined}
-      <button type="button" onclick={onback}>{t('replay.back')}</button>
-    {/if}
-  </main>
-{/if}
+<CrashGuard onexit={onback}>
+  {#if file !== null}
+    <ReplayViewer {file} {onback} />
+  {:else}
+    <main class="status" role={failure === null ? 'status' : 'alert'}>
+      {#if failure !== null}
+        <p>{t(ERRORS[failure])}</p>
+      {:else if preparing}
+        <p class="waiting">
+          <span class="spinner" aria-hidden="true"></span>{t('replay.preparing')}
+        </p>
+        <p class="hint">{t('replay.preparing.hint')}</p>
+      {:else}
+        <p>{t('replay.loading')}</p>
+      {/if}
+      {#if onback !== undefined}
+        <button type="button" onclick={onback}>{t('replay.back')}</button>
+      {/if}
+    </main>
+  {/if}
+</CrashGuard>
 
 <style>
   .status {
