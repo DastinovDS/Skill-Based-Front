@@ -1,0 +1,10 @@
+# Bots see only PlayerView (AGENTS.md, section 2). The module-level boundary is the import-linter
+# contract "gow_bots.bots imports only the allowed gow_sim modules" (pyproject.toml); this closes
+# the full-state type that gow_sim.view imports for its own use and does not export.
+extend = "../../../../../pyproject.toml"
+
+[lint]
+extend-select = ["TID251"]
+
+[lint.flake8-tidy-imports.banned-api]
+"gow_sim.view.GameState".msg = "bots see only PlayerView, never the full GameState."

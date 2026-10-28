@@ -85,9 +85,20 @@ markers = [
 ]
 
 # Package boundaries (AGENTS.md, section 2). Checked by `uv run lint-imports`.
+#
+# Third-party packages: import-linter can only forbid, not allow, an external package, and the
+# workspace venv holds the dependencies of every package, so an import resolves wherever it is
+# written. Each contract below therefore forbids the packages of the venv that the package may not
+# use (the table in AGENTS.md, section 2). A new dependency of the workspace must be added to the
+# lists of the packages that may not import it (the PR that adds it, AGENTS.md section 0, item 5).
+# The lists are written out because TOML has no shared values; a package missing from a list is
+# a hole, so keep the four lists in step. The packages themselves declare their dependencies in
+# their own pyproject.toml; for gow_sim that list is empty.
 [tool.importlinter]
 root_packages = ["gow_sim", "gow_protocol", "gow_server", "gow_bots", "gow_maps"]
 include_external_packages = true
+
+# ---- gow_sim: no project packages, standard library only.
 
 [[tool.importlinter.contracts]]
 name = "gow_sim does not import other project packages"
@@ -95,40 +106,275 @@ type = "forbidden"
 source_modules = ["gow_sim"]
 forbidden_modules = ["gow_protocol", "gow_server", "gow_bots", "gow_maps"]
 
-# gow_sim uses only the standard library (AGENTS.md, section 2); map tools may use networkx,
-# matplotlib, numpy and Pillow (the background baker, #344).
 [[tool.importlinter.contracts]]
-name = "gow_sim does not import the map tools' third-party packages"
+name = "gow_sim uses the standard library only"
 type = "forbidden"
 source_modules = ["gow_sim"]
-forbidden_modules = ["networkx", "matplotlib", "numpy", "PIL"]
+forbidden_modules = [
+    "alembic",
+    "annotated_types",
+    "anyio",
+    "click",
+    "dateutil",
+    "dotenv",
+    "fastapi",
+    "fontTools",
+    "h11",
+    "httpcore2",
+    "httpx2",
+    "hypothesis",
+    "idna",
+    "kiwisolver",
+    "mako",
+    "markupsafe",
+    "matplotlib",
+    "mpl_toolkits",
+    "networkx",
+    "numpy",
+    "packaging",
+    "PIL",
+    "platformdirs",
+    "pydantic",
+    "pydantic_core",
+    "pydantic_settings",
+    "pygments",
+    "pyparsing",
+    "pytest",
+    "rich",
+    "six",
+    "sortedcontainers",
+    "sqlalchemy",
+    "starlette",
+    "typing_extensions",
+    "uvicorn",
+    "websockets",
+    "yaml",
+]
+
+# ---- gow_protocol: gow_sim and pydantic only.
 
 [[tool.importlinter.contracts]]
-name = "gow_protocol does not import gow_server or gow_bots"
+name = "gow_protocol does not import gow_server, gow_bots or gow_maps"
 type = "forbidden"
 source_modules = ["gow_protocol"]
-forbidden_modules = ["gow_server", "gow_bots"]
+forbidden_modules = ["gow_server", "gow_bots", "gow_maps"]
 
-# Bots see only PlayerView. Indirect imports are allowed because gow_sim.view and
-# gow_sim.commands themselves use gow_sim.state.
 [[tool.importlinter.contracts]]
-name = "gow_bots.bots does not import hidden simulation state directly"
+# pydantic_core is pydantic's own engine (schema.py uses core_schema), not a separate choice.
+name = "gow_protocol uses the standard library, gow_sim and pydantic only"
+type = "forbidden"
+source_modules = ["gow_protocol"]
+forbidden_modules = [
+    "alembic",
+    "annotated_types",
+    "anyio",
+    "click",
+    "dateutil",
+    "dotenv",
+    "fastapi",
+    "fontTools",
+    "h11",
+    "httpcore2",
+    "httpx2",
+    "hypothesis",
+    "idna",
+    "kiwisolver",
+    "mako",
+    "markupsafe",
+    "matplotlib",
+    "mpl_toolkits",
+    "networkx",
+    "numpy",
+    "packaging",
+    "PIL",
+    "platformdirs",
+    "pydantic_settings",
+    "pygments",
+    "pyparsing",
+    "pytest",
+    "rich",
+    "six",
+    "sortedcontainers",
+    "sqlalchemy",
+    "starlette",
+    "typing_extensions",
+    "uvicorn",
+    "websockets",
+    "yaml",
+]
+
+# ---- gow_bots.bots: an allow-list of gow_sim modules, no third-party packages.
+# Bots see only PlayerView: forbid all of gow_sim and ignore the four modules they may import
+# (gow_sim.view, commands, maps, ruleset). Indirect imports are allowed because gow_sim.view and
+# gow_sim.commands themselves use gow_sim.state. A new gow_sim module is forbidden to bots until
+# it is added here. `from gow_sim.view import GameState` is closed in
+# apps/bots/src/gow_bots/bots/ruff.toml (TID251).
+
+[[tool.importlinter.contracts]]
+name = "gow_bots.bots imports only the allowed gow_sim modules"
 type = "forbidden"
 source_modules = ["gow_bots.bots"]
-forbidden_modules = ["gow_sim.state", "gow_sim.systems", "gow_sim.match"]
+forbidden_modules = ["gow_sim"]
 allow_indirect_imports = true
+ignore_imports = [
+    "gow_bots.bots.** -> gow_sim.view",
+    "gow_bots.bots.** -> gow_sim.commands",
+    "gow_bots.bots.** -> gow_sim.maps",
+    "gow_bots.bots.** -> gow_sim.ruleset",
+]
+unmatched_ignore_imports_alerting = "none"
 
 [[tool.importlinter.contracts]]
-name = "gow_bots does not import gow_server or gow_protocol"
+name = "gow_bots.bots uses no third-party packages"
+type = "forbidden"
+source_modules = ["gow_bots.bots"]
+forbidden_modules = [
+    "alembic",
+    "annotated_types",
+    "anyio",
+    "click",
+    "dateutil",
+    "dotenv",
+    "fastapi",
+    "fontTools",
+    "h11",
+    "httpcore2",
+    "httpx2",
+    "hypothesis",
+    "idna",
+    "kiwisolver",
+    "mako",
+    "markupsafe",
+    "matplotlib",
+    "mpl_toolkits",
+    "networkx",
+    "numpy",
+    "packaging",
+    "PIL",
+    "platformdirs",
+    "pydantic",
+    "pydantic_core",
+    "pydantic_settings",
+    "pygments",
+    "pyparsing",
+    "pytest",
+    "rich",
+    "six",
+    "sortedcontainers",
+    "sqlalchemy",
+    "starlette",
+    "typing_extensions",
+    "uvicorn",
+    "websockets",
+    "yaml",
+]
+
+# ---- gow_bots (harness): all of gow_sim, matplotlib (reports) only.
+
+[[tool.importlinter.contracts]]
+name = "gow_bots does not import gow_server, gow_protocol or gow_maps"
 type = "forbidden"
 source_modules = ["gow_bots"]
-forbidden_modules = ["gow_server", "gow_protocol"]
+forbidden_modules = ["gow_server", "gow_protocol", "gow_maps"]
 
 [[tool.importlinter.contracts]]
-name = "gow_maps does not import gow_server"
+name = "gow_bots uses the standard library, gow_sim and matplotlib only"
+type = "forbidden"
+source_modules = ["gow_bots"]
+forbidden_modules = [
+    "alembic",
+    "annotated_types",
+    "anyio",
+    "click",
+    "dateutil",
+    "dotenv",
+    "fastapi",
+    "fontTools",
+    "h11",
+    "httpcore2",
+    "httpx2",
+    "hypothesis",
+    "idna",
+    "kiwisolver",
+    "mako",
+    "markupsafe",
+    "mpl_toolkits",
+    "networkx",
+    "numpy",
+    "packaging",
+    "PIL",
+    "platformdirs",
+    "pydantic",
+    "pydantic_core",
+    "pydantic_settings",
+    "pygments",
+    "pyparsing",
+    "pytest",
+    "rich",
+    "six",
+    "sortedcontainers",
+    "sqlalchemy",
+    "starlette",
+    "typing_extensions",
+    "uvicorn",
+    "websockets",
+    "yaml",
+]
+
+# ---- gow_maps: gow_sim.maps and gow_sim.ruleset only, map-tool packages.
+
+[[tool.importlinter.contracts]]
+name = "gow_maps imports only gow_sim.maps and gow_sim.ruleset of the project"
 type = "forbidden"
 source_modules = ["gow_maps"]
-forbidden_modules = ["gow_server"]
+forbidden_modules = ["gow_server", "gow_protocol", "gow_bots", "gow_sim"]
+allow_indirect_imports = true
+ignore_imports = [
+    "gow_maps.** -> gow_sim.maps",
+    "gow_maps.** -> gow_sim.ruleset",
+]
+unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+name = "gow_maps uses the standard library, gow_sim, networkx, matplotlib, numpy and Pillow only"
+type = "forbidden"
+source_modules = ["gow_maps"]
+forbidden_modules = [
+    "alembic",
+    "annotated_types",
+    "anyio",
+    "click",
+    "dateutil",
+    "dotenv",
+    "fastapi",
+    "fontTools",
+    "h11",
+    "httpcore2",
+    "httpx2",
+    "hypothesis",
+    "idna",
+    "kiwisolver",
+    "mako",
+    "markupsafe",
+    "mpl_toolkits",
+    "packaging",
+    "platformdirs",
+    "pydantic",
+    "pydantic_core",
+    "pydantic_settings",
+    "pygments",
+    "pyparsing",
+    "pytest",
+    "rich",
+    "six",
+    "sortedcontainers",
+    "sqlalchemy",
+    "starlette",
+    "typing_extensions",
+    "uvicorn",
+    "websockets",
+    "yaml",
+]
 
 [dependency-groups]
 dev = [

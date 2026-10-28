@@ -6,7 +6,7 @@ docs/design/mechanics.md, not from the loader output.
 
 import copy
 import os
-import subprocess
+import subprocess  # noqa: TID251 (fresh process with PYTHONHASHSEED)
 import sys
 import tomllib
 from pathlib import Path
@@ -332,7 +332,7 @@ def test_hash_is_the_same_in_fresh_processes() -> None:
         "print(ruleset_hash(load_ruleset(sys.argv[1])))"
     )
     for seed in ("0", "1", "4242"):
-        env = {**os.environ, "PYTHONHASHSEED": seed}
+        env = {**os.environ, "PYTHONHASHSEED": seed}  # noqa: TID251 (fresh process with PYTHONHASHSEED)
         out = subprocess.run(
             [sys.executable, "-c", script, str(MVP0)],
             env=env,

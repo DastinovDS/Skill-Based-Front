@@ -1,17 +1,55 @@
 # gow_sim is a pure deterministic simulation (AGENTS.md, section 4.1):
-# no wall clock, no randomness, no concurrency, no network.
+# no wall clock, no randomness, no concurrency, no network, no process or environment access,
+# and file I/O only in maps.py, ruleset.py and replay.py.
 extend = "../../pyproject.toml"
 
 [lint]
-extend-select = ["TID251"]
+# TID251: banned modules and attributes. TID253: modules banned at module level (the I/O set).
+# PTH123: a call of the builtin open().
+extend-select = ["TID251", "TID253", "PTH123"]
 
 [lint.flake8-tidy-imports.banned-api]
 "time".msg = "gow_sim is deterministic: the tick is the only clock."
 "random".msg = "gow_sim is deterministic: randomness is a design change via ADR."
+"secrets".msg = "gow_sim is deterministic: randomness is a design change via ADR."
+"uuid".msg = "gow_sim is deterministic: ids come from the state, not from a generator."
+"os.urandom".msg = "gow_sim is deterministic: randomness is a design change via ADR."
+"os.environ".msg = "gow_sim is deterministic: the rules come from Ruleset, not from the environment."
+"os.getenv".msg = "gow_sim is deterministic: the rules come from Ruleset, not from the environment."
 "asyncio".msg = "gow_sim has no I/O or concurrency."
-"socket".msg = "gow_sim has no network access."
 "threading".msg = "gow_sim has no I/O or concurrency."
+"multiprocessing".msg = "gow_sim has no I/O or concurrency."
+"concurrent".msg = "gow_sim has no I/O or concurrency."
+"subprocess".msg = "gow_sim has no I/O or concurrency."
+"socket".msg = "gow_sim has no network access."
 "datetime.datetime.now".msg = "gow_sim is deterministic: the tick is the only clock."
 "datetime.datetime.utcnow".msg = "gow_sim is deterministic: the tick is the only clock."
 "datetime.datetime.today".msg = "gow_sim is deterministic: the tick is the only clock."
 "datetime.date.today".msg = "gow_sim is deterministic: the tick is the only clock."
+
+[lint.flake8-tidy-imports]
+# File and process I/O (AGENTS.md, section 4.1, rule 1): only maps.py, ruleset.py and replay.py
+# (canonical.py needs json for the canonical form); see per-file-ignores below. TID253 flags
+# module-level imports only. TID251 cannot express this: it would have to be switched off per
+# file for all the bans above, not only for these.
+banned-module-level-imports = [
+    "os",
+    "sys",
+    "io",
+    "pathlib",
+    "shutil",
+    "tempfile",
+    "glob",
+    "json",
+    "gzip",
+    "tomllib",
+    "platform",
+]
+
+[lint.per-file-ignores]
+"src/gow_sim/maps.py" = ["TID253", "PTH123"]
+"src/gow_sim/ruleset.py" = ["TID253", "PTH123"]
+"src/gow_sim/replay.py" = ["TID253", "PTH123"]
+"src/gow_sim/canonical.py" = ["TID253"]
+# Tests read fixtures. They stay under the TID251 bans.
+"tests/**" = ["TID253", "PTH123"]
