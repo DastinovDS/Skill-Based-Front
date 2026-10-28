@@ -8,6 +8,14 @@
  * Close code 4001 (protocol version mismatch) is final: the page has to be reloaded. So is 4009
  * (replaced by a newer connection of the same player, e.g. a second tab): reconnecting would
  * make two tabs evict each other forever (SRV-04, #50).
+ *
+ * The other codes do not retry forever either (CLI-01, #416): 4004 (the server answers it for an
+ * unknown token, an unknown or finished match and a non-participant, and does not say which) is
+ * retried `noMatchRetries` times, a start race being its only legitimate cause, then the match is
+ * `gone`; 1008 (policy, rate limit) is not retried blindly: `failed`; any other code is retried
+ * `maxAttempts` times with the backoff, then `failed`, and `retry()` starts over by the player's
+ * hand. The queue of unacknowledged commands is capped below the server's token bucket, so a
+ * resend after a long outage cannot trip it.
  */
 import {
   CLOSE_PROTOCOL_VERSION,
@@ -32,6 +40,10 @@ export type ConnectionStatus =
   | 'version_mismatch'
   /** The server closed with 4009: another tab or device of this player took over the match. */
   | 'replaced'
+  /** The server keeps answering 4004: the match is over, or no longer exists for this token. */
+  | 'gone'
+  /** Too many failed attempts, or the server closed with 1008: `retry()` tries again. */
+  | 'failed'
   /** `match_end` received: the server closes the connection, nothing to reconnect to. */
   | 'ended';
 
@@ -64,11 +76,28 @@ export interface MatchConnectionOptions {
   baseBackoffMs?: number;
   maxBackoffMs?: number;
   pingIntervalMs?: number;
+  /** Failed attempts in a row before the status is `failed` (default `MAX_ATTEMPTS`). */
+  maxAttempts?: number;
+  /** Answers 4004 in a row that are retried before the status is `gone` (default `NO_MATCH_RETRIES`). */
+  noMatchRetries?: number;
+  /** Unacknowledged commands kept (default `MAX_PENDING_COMMANDS`); the oldest is dropped. */
+  maxPending?: number;
   /** In [0, 1); the delay is spread over [50%, 100%] of its nominal value. */
   random?: () => number;
   /** Monotonic clock in ms. */
   now?: () => number;
 }
+
+/** Close codes of the server that are not in the protocol schema (`ws.py`, `CLOSE_POLICY`, `CLOSE_NO_MATCH`). */
+export const CLOSE_POLICY = 1008;
+export const CLOSE_NO_MATCH = 4004;
+
+/** Failed attempts in a row before giving up: with the backoff this is about the 60 s window of DEC-05. */
+export const MAX_ATTEMPTS = 8;
+/** A 4004 right after the start of a match may be a race: two more tries, then the match is gone. */
+export const NO_MATCH_RETRIES = 2;
+/** Below the server's burst of 60 messages per connection, with room for `hello` and the pings. */
+export const MAX_PENDING_COMMANDS = 50;
 
 /** `ws(s)://<host>/ws/match/<id>` for the page's own origin. */
 export function matchSocketUrl(
@@ -96,10 +125,15 @@ export class MatchConnection {
   readonly #pingMs: number;
   readonly #random: () => number;
   readonly #now: () => number;
+  readonly #maxAttempts: number;
+  readonly #noMatchRetries: number;
+  readonly #maxPending: number;
 
   #status: ConnectionStatus = 'idle';
   #socket: WebSocket | null = null;
   #attempt = 0;
+  /** Answers 4004 in a row. */
+  #noMatch = 0;
   #retryTimer: ReturnType<typeof setTimeout> | undefined;
   #pingTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -116,6 +150,9 @@ export class MatchConnection {
     this.#pingMs = opts.pingIntervalMs ?? 5_000;
     this.#random = opts.random ?? Math.random;
     this.#now = opts.now ?? (() => performance.now());
+    this.#maxAttempts = opts.maxAttempts ?? MAX_ATTEMPTS;
+    this.#noMatchRetries = opts.noMatchRetries ?? NO_MATCH_RETRIES;
+    this.#maxPending = opts.maxPending ?? MAX_PENDING_COMMANDS;
   }
 
   get status(): ConnectionStatus {
@@ -137,8 +174,24 @@ export class MatchConnection {
     const seq = this.#nextSeq++;
     const msg: ClientMsg = { type: 'command', seq, cmd };
     this.#pending.set(seq, msg);
+    if (this.#pending.size > this.#maxPending) {
+      // The oldest goes: its outcome is unknown now, like after a lost `ack`.
+      const oldest = this.#pending.keys().next().value;
+      if (oldest !== undefined) {
+        this.#pending.delete(oldest);
+        this.#opts.handlers.onAckLost?.(oldest);
+      }
+    }
     if (this.#status === 'ready') this.#write(msg);
     return seq;
+  }
+
+  /** After `failed`: try again from the first attempt, with the commands still waiting. */
+  retry(): void {
+    if (this.#status !== 'failed') return;
+    this.#attempt = 0;
+    this.#noMatch = 0;
+    this.#open();
   }
 
   /** Ask the server for a full snapshot (after a gap in snapshots). */
@@ -237,6 +290,7 @@ export class MatchConnection {
 
   #onWelcome(lastSeq: number): void {
     this.#attempt = 0;
+    this.#noMatch = 0;
     // A fresh page starts numbering at 1; keep seq strictly increasing for this token.
     this.#nextSeq = Math.max(this.#nextSeq, lastSeq + 1);
     for (const seq of [...this.#pending.keys()]) {
@@ -276,6 +330,21 @@ export class MatchConnection {
     if (code === CLOSE_REPLACED) {
       this.#pending.clear();
       this.#setStatus('replaced');
+      return;
+    }
+    if (code === CLOSE_POLICY) {
+      // Not a drop of the link: a retry would be refused the same way.
+      this.#setStatus('failed');
+      return;
+    }
+    this.#noMatch = code === CLOSE_NO_MATCH ? this.#noMatch + 1 : 0;
+    if (this.#noMatch > this.#noMatchRetries) {
+      this.#pending.clear();
+      this.#setStatus('gone');
+      return;
+    }
+    if (this.#attempt >= this.#maxAttempts) {
+      this.#setStatus('failed');
       return;
     }
     this.#setStatus('reconnecting');

@@ -160,6 +160,11 @@ export class MatchSession implements RenderSource {
     this.orders.clear();
   }
 
+  /** After `failed`: connect again (the player asked for it). */
+  retry(): void {
+    this.#connection.retry();
+  }
+
   /** Ask for a full snapshot after a gap; the buffer is cleared first. */
   resync(): void {
     this.#connection.resync();

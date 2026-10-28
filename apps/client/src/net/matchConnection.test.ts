@@ -8,6 +8,8 @@ import {
 import { createFakeServer } from './fakeServer.ts';
 import {
   backoffDelay,
+  CLOSE_NO_MATCH,
+  CLOSE_POLICY,
   MatchConnection,
   matchSocketUrl,
   type MatchHandlers,
@@ -35,7 +37,14 @@ const welcome = (last_seq = 0): ServerMsg => withFields('welcome', { last_seq })
 const ack = (seq: number): ServerMsg => withFields('ack_ok', { seq });
 const move = { type: 'forfeit' } as const;
 
-function setup(extra: { random?: () => number; token?: string } = {}) {
+function setup(
+  extra: {
+    random?: () => number;
+    token?: string;
+    maxAttempts?: number;
+    maxPending?: number;
+  } = {},
+) {
   const server = createFakeServer();
   const messages: ServerMsg[] = [];
   const statuses: string[] = [];
@@ -63,6 +72,8 @@ function setup(extra: { random?: () => number; token?: string } = {}) {
     pingIntervalMs: 1000,
     random: extra.random ?? (() => 1),
     now: () => clock,
+    ...(extra.maxAttempts === undefined ? {} : { maxAttempts: extra.maxAttempts }),
+    ...(extra.maxPending === undefined ? {} : { maxPending: extra.maxPending }),
   });
   return {
     server,
@@ -339,6 +350,105 @@ describe('reconnect', () => {
     first.drop();
     expect(t.messages.length).toBe(before);
     expect(t.conn.status).toBe('connecting');
+  });
+});
+
+describe('terminal close codes and the cap of attempts (CLI-01, #416)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('retries 4004 twice (a race at the start of a match), then says the match is gone', () => {
+    const t = setup();
+    const socket = ready(t);
+    t.conn.send(move);
+    socket.drop(CLOSE_NO_MATCH);
+    expect(t.conn.status).toBe('reconnecting');
+    vi.advanceTimersByTime(500);
+    t.server.last().drop(CLOSE_NO_MATCH);
+    expect(t.conn.status).toBe('reconnecting');
+    vi.advanceTimersByTime(1000);
+    t.server.last().drop(CLOSE_NO_MATCH);
+    expect(t.conn.status).toBe('gone');
+    expect(t.conn.pendingSeqs).toEqual([]);
+    const count = t.server.sockets.length;
+    vi.advanceTimersByTime(120_000);
+    expect(t.server.sockets.length).toBe(count);
+  });
+
+  it('counts only 4004 in a row: a welcome or another code starts the count over', () => {
+    const t = setup();
+    t.conn.connect();
+    t.server.last().drop(CLOSE_NO_MATCH);
+    vi.advanceTimersByTime(500);
+    t.server.last().drop(CLOSE_NO_MATCH);
+    vi.advanceTimersByTime(1000);
+    t.server.last().drop(1006);
+    vi.advanceTimersByTime(2000);
+    t.server.last().drop(CLOSE_NO_MATCH);
+    expect(t.conn.status).toBe('reconnecting');
+    vi.advanceTimersByTime(4000);
+    const socket = t.server.last();
+    socket.accept();
+    socket.reply(welcome());
+    expect(t.conn.status).toBe('ready');
+    socket.drop(CLOSE_NO_MATCH);
+    expect(t.conn.status).toBe('reconnecting');
+  });
+
+  it('gives up after maxAttempts failed attempts, keeps the commands, and retry() starts over', () => {
+    const t = setup({ maxAttempts: 3 });
+    t.conn.connect();
+    const seq = t.conn.send(move);
+    for (const delay of [500, 1000, 2000]) {
+      t.server.last().drop();
+      expect(t.conn.status).toBe('reconnecting');
+      vi.advanceTimersByTime(delay);
+    }
+    t.server.last().drop();
+    expect(t.conn.status).toBe('failed');
+    expect(t.conn.pendingSeqs).toEqual([seq]);
+    const count = t.server.sockets.length;
+    vi.advanceTimersByTime(120_000);
+    expect(t.server.sockets.length).toBe(count);
+
+    t.conn.retry();
+    expect(t.conn.status).toBe('connecting');
+    expect(t.server.sockets.length).toBe(count + 1);
+    const socket = t.server.last();
+    socket.accept();
+    socket.reply(welcome());
+    expect(t.conn.status).toBe('ready');
+    expect(socket.sent.filter((m) => m.type === 'command')).toHaveLength(1);
+  });
+
+  it('does not retry 1008 blindly: it is failed at once, and retry() is the way out', () => {
+    const t = setup();
+    const socket = ready(t);
+    socket.drop(CLOSE_POLICY);
+    expect(t.conn.status).toBe('failed');
+    vi.advanceTimersByTime(60_000);
+    expect(t.server.sockets.length).toBe(1);
+    t.conn.retry();
+    expect(t.server.sockets.length).toBe(2);
+  });
+
+  it('retry() does nothing unless the status is failed', () => {
+    const t = setup();
+    ready(t);
+    t.conn.retry();
+    expect(t.server.sockets.length).toBe(1);
+  });
+
+  it('caps the unacknowledged commands: the oldest is dropped and reported', () => {
+    const t = setup({ maxPending: 3 });
+    t.conn.connect();
+    const seqs = [1, 2, 3, 4, 5].map(() => t.conn.send(move));
+    expect(t.conn.pendingSeqs).toEqual(seqs.slice(2));
+    expect(t.lost).toEqual(seqs.slice(0, 2));
+    const socket = t.server.last();
+    socket.accept();
+    socket.reply(welcome());
+    expect(socket.sent.filter((m) => m.type === 'command')).toHaveLength(3);
   });
 });
 
