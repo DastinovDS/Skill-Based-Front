@@ -396,6 +396,7 @@ intents → fog → effects. Only the content is added:
 
 - `background`: the baked background, a `--bg` dimming with alpha 0.18 (round 3: it was 0.3), terrain stamps; the owner's territory fill with alpha 0.2 (round 3, #272: it was 0.13, then 0.07, it got lost on the baked background);
 - `territory`: a thin 1 px line (`CELL_LINE`, light, alpha 0.16) around every area, including between areas of one owner (a shared edge once; the map edge is not drawn); on top of it the border of the owner's area as a light 2 px line in the owner's color (Northgard), stronger;
+- `territory`, borders with no road (#428): where two neighbouring cells share a border but their cities have no road, the border is a strip (`CLOSED_BORDER` in `style.ts`: 6 px, the background colour, alpha 0.8) laid over the tint and its glow and under the owner's border line, so the tint does not continue across it and it reads as «no passage» (the floor colour in the «Supply» mode). Found from the map data only (`closedBorders` in `regionLayout.ts`: the cells of the Voronoi that touch and have no edge between their nodes); a border with a road keeps the thin `CELL_LINE`. Rivers and lakes as impassable terrain are a later issue (#429);
 - `nodes`: capacity rings and the warehouse bar;
 - `groups`: packets under the triangles, motion trails under the packets;
 - `effects`: the starvation countdown, the fight animation (arena, exchange of blows, losses, result; 9.9), the start ring (IM4), the alert (IM7).
