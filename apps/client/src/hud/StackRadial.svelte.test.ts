@@ -58,7 +58,7 @@ describe('the list of the groups standing in a city', () => {
       send: () => 1,
     });
     const target = document.body.appendChild(document.createElement('div'));
-    mounted.push(mount(StackRadial, { target, props: { orders, anchors } }));
+    mounted.push(mount(StackRadial, { target, props: { orders, anchors, names: hud.nodeName } }));
     return { target, orders, hud };
   }
 

@@ -6,6 +6,7 @@ import { getLocale, t, tf } from '../i18n/index.ts';
 import type { IncomingAlert } from '../match/incoming.ts';
 import type { OverflowAlert } from '../match/overflow.ts';
 import { formatSeconds } from './format.ts';
+import type { NodeNamer } from './nodeName.ts';
 
 /** Overcrowded cities: the one whose unit dies first, and how many there are. */
 export interface OverflowRow {
@@ -46,7 +47,7 @@ export function alertRows(
 }
 
 /** The line of a row, in the language of the page. */
-export function alertRowText(row: AlertRow, tickHz: number): string {
+export function alertRowText(row: AlertRow, tickHz: number, names: NodeNamer): string {
   const seconds = (ticks: number): string => formatSeconds(ticks, tickHz, getLocale());
   if (row.kind === 'overflow') {
     const { first } = row;
@@ -56,12 +57,12 @@ export function alertRowText(row: AlertRow, tickHz: number): string {
         : tf('alert.overflowGrace', { seconds: seconds(first.graceLeft ?? 0) });
     return row.cities === 1
       ? tf('alert.overflow', {
-          node: first.node,
+          node: names(first.node),
           units: first.units,
           capacity: first.capacity,
           when,
         })
-      : tf('alert.overflowMany', { count: row.cities, node: first.node, when });
+      : tf('alert.overflowMany', { count: row.cities, node: names(first.node), when });
   }
   const { first } = row;
   const when =
@@ -69,6 +70,6 @@ export function alertRowText(row: AlertRow, tickHz: number): string {
       ? t('alert.incomingGone')
       : tf('alert.incomingIn', { seconds: seconds(first.ticksLeft) });
   return row.cities === 1
-    ? tf('alert.incoming', { node: first.node, count: first.count, when })
-    : tf('alert.incomingMany', { count: row.cities, node: first.node, when });
+    ? tf('alert.incoming', { node: names(first.node), count: first.count, when })
+    : tf('alert.incomingMany', { count: row.cities, node: names(first.node), when });
 }

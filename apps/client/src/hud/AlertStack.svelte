@@ -2,12 +2,15 @@
   import { t } from '../i18n/index.ts';
   import type { AlertState } from '../match/alerts.svelte.ts';
   import { alertRows, alertRowText } from './alertRows.ts';
+  import type { NodeNamer } from './nodeName.ts';
 
   interface Props {
     alerts: AlertState;
+    /** The name of a place by its id. */
+    names: NodeNamer;
   }
 
-  let { alerts }: Props = $props();
+  let { alerts, names }: Props = $props();
 
   const rows = $derived(alertRows(alerts.overflow, alerts.current));
 </script>
@@ -18,7 +21,7 @@
     {#each rows as row (row.kind)}
       <li class="row {row.kind}">
         <span class="mark" aria-hidden="true">!</span>
-        <span>{alertRowText(row, alerts.tickHz)}</span>
+        <span>{alertRowText(row, alerts.tickHz, names)}</span>
       </li>
     {/each}
     <li class="hint">{t('alert.focusHint')}</li>

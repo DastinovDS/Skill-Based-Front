@@ -2,6 +2,7 @@
   import { getLocale, t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import { formatCentis } from './format.ts';
+  import type { NodeNamer } from './nodeName.ts';
   import Radial from './Radial.svelte';
   import {
     frontOf,
@@ -14,9 +15,11 @@
 
   interface Props {
     orders: OrderController;
+    /** The name of a place by its id. */
+    names: NodeNamer;
   }
 
-  let { orders }: Props = $props();
+  let { orders, names }: Props = $props();
 
   const menu = $derived(orders.supplyMenu.current);
 
@@ -71,7 +74,7 @@
 {#if menu.open}
   <Radial
     {items}
-    label={tf('supplyMenu.title', { node: menu.node })}
+    label={tf('supplyMenu.title', { node: names(menu.node) })}
     at="pointer"
     hover={menu.hover}
     onhover={(id: string | null) => {

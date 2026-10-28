@@ -5,6 +5,7 @@
   import { cityChoices } from './cityChoices.ts';
   import { formatCentis } from './format.ts';
   import type { NodeInfo } from './hudData.ts';
+  import type { NodeNamer } from './nodeName.ts';
   import Radial from './Radial.svelte';
   import { halfFor, spreadAngles, type RadialItem } from './radial.ts';
 
@@ -16,9 +17,11 @@
     queue: number | null;
     /** The selected city (barracks, warehouse and its build of any kind, DEC-26); `null`: none. */
     city?: NodeInfo | null;
+    /** The name of a place by its id. */
+    names: NodeNamer;
   }
 
-  let { orders, anchors, queue, city = null }: Props = $props();
+  let { orders, anchors, queue, city = null, names }: Props = $props();
 
   const menu = $derived(orders.cityMenu.current);
   const cp = (centis: number): string => formatCentis(centis, getLocale());
@@ -94,7 +97,7 @@
   {@const target = menu.target}
   <Radial
     {items}
-    label={tf('city.title', { node: target })}
+    label={tf('city.title', { node: names(target) })}
     at={() => anchors.node(target)}
     {ring}
     half={halfFor(count)}

@@ -46,8 +46,8 @@ describe('the «Supply» mode UI (DEC-28)', () => {
       send: (cmd) => sent.push(cmd),
     });
     const target = document.body.appendChild(document.createElement('div'));
-    mounted.push(mount(SupplyBanner, { target, props: { orders } }));
-    mounted.push(mount(SupplyMenu, { target, props: { orders } }));
+    mounted.push(mount(SupplyBanner, { target, props: { orders, names: hud.nodeName } }));
+    mounted.push(mount(SupplyMenu, { target, props: { orders, names: hud.nodeName } }));
     return { target, orders, hud, sent };
   }
 

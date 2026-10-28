@@ -65,6 +65,7 @@ describe('the radial menus of a city and of a group', () => {
         props: {
           orders,
           anchors,
+          names: hud.nodeName,
           queue,
           city,
         },

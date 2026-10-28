@@ -2,6 +2,7 @@
 import type { PlayerId, Stance } from '../protocol.gen.ts';
 import { t, tf } from '../i18n/index.ts';
 import type { HudEvent } from './hudData.ts';
+import type { NodeNamer } from './nodeName.ts';
 
 function num(value: unknown): number {
   return typeof value === 'number' ? value : 0;
@@ -64,14 +65,17 @@ export function isLogged(kind: string): boolean {
   return LOGGED_EVENT_KINDS.has(kind);
 }
 
-/** One line for the feed; only for kinds `isLogged` accepts (others give an empty string). */
-export function eventText(event: HudEvent, me: PlayerId): string {
+/**
+ * One line for the feed; only for kinds `isLogged` accepts (others give an empty string). A place
+ * is told by its name from the map (`names`, #449), never by its number.
+ */
+export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): string {
   const { data } = event;
   const side = data.player === me ? 'mine' : 'enemy';
   switch (event.kind) {
     case 'node_captured':
       return tf(side === 'mine' ? 'event.node_captured.mine' : 'event.node_captured.enemy', {
-        node: num(data.node),
+        node: names(num(data.node)),
       });
     case 'fight_ended': {
       // `losses_<p>`: units player p lost in the whole fight (DEC-24).
@@ -80,36 +84,39 @@ export function eventText(event: HudEvent, me: PlayerId): string {
         enemy: num(data[`losses_${String(1 - me)}`]),
       };
       return typeof data.node === 'number'
-        ? tf('event.fight.node', { ...values, node: data.node })
+        ? tf('event.fight.node', { ...values, node: names(data.node) })
         : tf('event.fight.edge', { ...values, edge: num(data.edge) });
     }
     case 'recruited':
       return tf(side === 'mine' ? 'event.recruited.mine' : 'event.recruited.enemy', {
-        node: num(data.node),
+        node: names(num(data.node)),
       });
     case 'stance_changed':
       return tf(side === 'mine' ? 'event.stance_changed.mine' : 'event.stance_changed.enemy', {
         stance: isStance(data.stance) ? t(`stance.${data.stance}`) : '?',
       });
     case 'warehouse_lost':
-      return tf('event.warehouse_lost', { node: num(data.node) });
+      return tf('event.warehouse_lost', { node: names(num(data.node)) });
     case 'recruit_queue_lost':
-      return tf('event.recruit_queue_lost', { node: num(data.node), units: num(data.units) });
+      return tf('event.recruit_queue_lost', {
+        node: names(num(data.node)),
+        units: num(data.units),
+      });
     case 'forfeit':
       return t(side === 'mine' ? 'event.forfeit.mine' : 'event.forfeit.enemy');
     case 'match_ended':
       return t('event.match_ended');
     case 'attrition':
-      return tf('event.attrition', { node: num(data.node) });
+      return tf('event.attrition', { node: names(num(data.node)) });
     case 'road_upgraded':
       return tf('event.road_upgraded', { edge: num(data.edge), width: num(data.width) });
     case 'build_started':
       // DEC-26: a city builds a road level, the barracks or a warehouse level.
       if (data.kind === 'barracks')
-        return tf('event.build_started.barracks', { node: num(data.node) });
+        return tf('event.build_started.barracks', { node: names(num(data.node)) });
       if (data.kind === 'warehouse') {
         return tf('event.build_started.warehouse', {
-          node: num(data.node),
+          node: names(num(data.node)),
           level: num(data.level),
         });
       }
@@ -118,24 +125,27 @@ export function eventText(event: HudEvent, me: PlayerId): string {
     case 'build_stopped':
       return typeof data.edge === 'number'
         ? tf('event.build_stopped', { edge: data.edge })
-        : tf('event.build_stopped.city', { node: num(data.node) });
+        : tf('event.build_stopped.city', { node: names(num(data.node)) });
     case 'barracks_built':
-      return tf('event.barracks_built', { node: num(data.node) });
+      return tf('event.barracks_built', { node: names(num(data.node)) });
     case 'warehouse_upgraded':
-      return tf('event.warehouse_upgraded', { node: num(data.node), level: num(data.level) });
+      return tf('event.warehouse_upgraded', {
+        node: names(num(data.node)),
+        level: num(data.level),
+      });
     case 'packet_lost':
       return tf('event.packet_lost', { edge: num(data.edge), charges: num(data.charges) });
     case 'starvation':
       return tf('event.starvation', {
-        node: num(data.node),
+        node: names(num(data.node)),
         warehouse: num(data.warehouse),
         units: num(data.units),
       });
     case 'transfer_started':
       return tf('event.transfer_started', {
         charges: num(data.charges),
-        from: num(data.from_node),
-        to: num(data.to_node),
+        from: names(num(data.from_node)),
+        to: names(num(data.to_node)),
       });
     default:
       return '';
