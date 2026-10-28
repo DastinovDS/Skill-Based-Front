@@ -236,14 +236,33 @@
         group: (id: string) => canvas?.groupAnchor(id) ?? null,
       }}
     />
-  {:else if status === 'version_mismatch' || status === 'replaced'}
+  {:else if status === 'version_mismatch' || status === 'replaced' || status === 'gone' || status === 'failed'}
     <!-- The banner below says what happened. -->
   {:else}
     <p class="loading" role="status">{t('match.connecting')}</p>
   {/if}
 
   {#if status === 'reconnecting'}
-    <div class="banner" role="status">{t('match.status.reconnecting')}</div>
+    <div class="banner" role="status">
+      {t('match.status.reconnecting')}
+      <button type="button" onclick={onexit}>{t('match.toMenu')}</button>
+    </div>
+  {:else if status === 'gone'}
+    <div class="banner" role="alert">
+      {t('match.status.gone')}
+      <button type="button" onclick={onexit}>{t('match.toMenu')}</button>
+    </div>
+  {:else if status === 'failed'}
+    <div class="banner" role="alert">
+      {t('match.status.failed')}
+      <button
+        type="button"
+        onclick={() => {
+          session?.retry();
+        }}>{t('match.retry')}</button
+      >
+      <button type="button" onclick={onexit}>{t('match.toMenu')}</button>
+    </div>
   {:else if status === 'version_mismatch'}
     <div class="banner" role="alert">
       {t('match.status.versionMismatch')}
