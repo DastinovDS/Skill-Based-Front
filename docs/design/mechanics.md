@@ -1751,8 +1751,10 @@ supply, they have up to three levels and ~~two types to choose from~~ **[superse
 6. ~~**The price of an upgrade** in warehouse charges of the builder city~~ **[superseded by DEC-28]**: 0.5 CP per level (`orders.cost.build = 50`), the province and the warehouse do not take part. The former entry (key: new level): ~~`2 = 3`, `3 = 4`~~
    **[superseded by DEC-26]**: `2 = 1`, `3 = 2` (`build.charges_per_level`);
    `build.ticks_per_level = 150` (15 s, unchanged); `orders.cost.build = 0`. The smallest city
-   (capacity 4) pays for any level (with `city_upgrades.enabled = true` the warehouse is separate: DEC-26, item 7). A province cannot build (it has no warehouse), so a road
-   between two provinces is not upgraded (owner, 2026-10-12).
+   (capacity 4) pays for any level (with `city_upgrades.enabled = true` the warehouse is separate: DEC-26, item 7). ~~A province cannot build (it has no warehouse), so a road
+   between two provinces is not upgraded (owner, 2026-10-12).~~ **[superseded by DEC-28, item 7]**: an upgrade needs no
+   city, only an own internal edge that is not at its last level, with no build in progress, and the CP, so a road
+   between two provinces can be upgraded.
 7. **Upgrade hint** (`upgrade_gain`): ~~the gain of `speed_pct` and `amount` for each of the two
    types at level 1 and for its own type at level 2 (instead of the capacity gain)~~ **[superseded by
    DEC-26]**: only the `speed_pct` gain of the next level (`amount` does not grow).
@@ -2743,6 +2745,10 @@ The owner's decision of 2026-10-26 (the last comment on #112). Closes the open i
 "a group on an edge gives no vision" in DEC-21, item 1 and DEC-33, item 4 (struck through above); example 13 of
 DEC-33 changes accordingly. Implementation: #112.
 
+Owner confirmed on 2026-10-28: (1) a group on an edge makes `EdgeView.detail` PRESENCE, so the exact road level and
+enemy construction on that edge are visible; (2) an enemy group standing in an end node stays hidden until it steps
+onto the edge; (3) a half in fog rises only to PRESENCE, never to RANGE or EXACT.
+
 **The owner's decision [accepted].**
 
 1. An own group on an edge is a vision source for that edge only: it sees its own edge at the level
@@ -2992,13 +2998,13 @@ Alternatives (not chosen):
 
 ### Which matches are rated (DEC-06, #74) **[accepted]**
 
-Rated are only the matches from the matchmaking queue. Matches from the lobby, by invite and against a bot do not change the rating but are saved in the history. A technical defeat and a surrender are a defeat.
+Rated are only the matches from the matchmaking queue. Matches from the lobby, by invite and against a bot do not change the rating but are saved in the history. A technical defeat and a surrender are a defeat. (Extended by DEC-34: who of the queue players is rated, and when the rating is not updated.)
 
 ### Glicko-2 rating (RAT-01, #73)
 
 A player's rating is a Glicko-2 triple `(r, RD, σ)` (`gow_server.rating`, after Glickman's paper). A new player: 1500 / 350 / 0.06, τ = 0.5. Each rated match is a separate "period": both players are updated after the match against each other (a win 1, a draw 0.5, a loss 0). RD growth from idleness is not implemented: RD changes only in matches. The displayed rating is `r − 2·RD`. This is a meta-game setting, not a ruleset one: the simulation does not see the rating.
 
-The update (RAT-02, #75): right after a rated match, in the same DB transaction as the result record (outside a tick). A win 1, a draw 0.5 (including `double_defeat`), a loss 0; a technical defeat (`disconnect`, `no_show`) and a surrender are a defeat. A match is counted once: the flag `matches.rating_applied` is taken by a single atomic `UPDATE`, repeated processing does not change the rating. An aborted match (`aborted`) is not rated. A match becomes rated only in `lifecycle.start(rated=True)` between two accounts: against a bot the flag is ignored. The displayed rating before and after is written to `match_players.rating_before/after`; the player gets it in `match_end.rating` (`before`, `after`, integers) and sees it on the result screen. Both sides are computed from the ratings at the start of the match (a player never has two active matches), the server recomputes them in the transaction.
+The update (RAT-02, #75): right after a rated match, in the same DB transaction as the result record (outside a tick). A win 1, a draw 0.5 (including `double_defeat`), a loss 0; a technical defeat (`disconnect`, `no_show`) and a surrender are a defeat. A match is counted once: the flag `matches.rating_applied` is taken by a single atomic `UPDATE`, repeated processing does not change the rating. An aborted match (`aborted`) is not rated. A match becomes rated only in `lifecycle.start(rated=True)` between two accounts: against a bot the flag is ignored (extended by DEC-34: only between two password accounts that finished calibration, and with exceptions for calibration, an early resign and the per-opponent limit). The displayed rating before and after is written to `match_players.rating_before/after`; the player gets it in `match_end.rating` (`before`, `after`, integers) and sees it on the result screen. Both sides are computed from the ratings at the start of the match (a player never has two active matches), the server recomputes them in the transaction.
 
 ### Matchmaking queue (MM-01, #77)
 
@@ -3010,6 +3016,42 @@ A rated match (DEC-06) is found through the queue (`gow_server.matchqueue`, `POS
 - **The match**: a random map of the pool, sides chosen randomly (independent of the order in the queue), rated (`lifecycle.start(rated=True)`), not private: no pauses (DEC-05).
 - **Bot.** After 60 seconds of waiting the player is offered an unrated match with a bot (SRV-06); accepting the offer takes them out of the queue.
 - Waiting in the queue occupies the player, like a match does (SRV-09): while they are in the queue, they cannot create or accept another match (409), and vice versa. The client polls the status once a second; a player whose client is silent for 15 seconds (a closed tab) leaves the queue. The queue lives in process memory: a server restart clears it.
+
+### Rated-match protection against rating farming (DEC-34, #414) **[accepted]**
+
+The owner's decision of 2026-10-28, from the audit item SRV-04 (#414: a player queues together with a throwaway guest
+that forfeits at once, and the full win is rated). These are meta-game rules of the server, not of the simulation
+ruleset: no `SIM_VERSION`. Every number below is a server setting (the implementation names the settings; they are not
+in `rulesets/*.toml`). The sections above are extended, not replaced: DEC-06 (what is rated) and RAT-02 (the update).
+Implementation: a separate PR of #414 (the issue stays open until then).
+
+1. **Rated only between password accounts.** There is one shared matchmaking queue, the pool is not split. A queue
+   match is rated only if both players are accounts with a password and both have finished calibration (item 2);
+   otherwise it is played unrated. Guests keep playing, unrated. Rated stays only for queue matches (DEC-06): never by
+   invite, from the lobby or against a bot, so a player cannot choose the opponent of a rated match.
+2. **Calibration.** The first 5 queue matches of an account (between password accounts) are its calibration matches
+   (setting: the number of calibration matches). The Glicko-2 rating of the calibrating player is updated as usual,
+   but it is not displayed: the player sees "Calibration k/5" and is not on the leaderboard. A calibration match does
+   NOT change the rating of the opponent, whether the opponent is calibrated or not. After 5 such matches the rating
+   is displayed as usual (`r - 2*RD`) and the player appears on the leaderboard.
+3. **Resign penalty.** A "resign" is a surrender (the command `Forfeit`) or a technical defeat by disconnect (DEC-05)
+   in a rated match.
+   - **An early resign**, before 3 minutes of match time (tick 1800 at 10 Hz; setting: the threshold in seconds): the
+     resigner gets the defeat as usual, the rating of the winner does not change.
+   - **Repeated resigns** in rated matches within a rolling 24 hour window ban the player from the matchmaking queue
+     (settings: the window, the ban lengths): the first carries no ban, the 2nd a ban of 5 minutes, the 3rd of
+     30 minutes, the 4th and each later one of 2 hours. The ban is shown to the player with the time left.
+4. **Per-opponent limit.** At most 3 rated matches between the same two accounts within a rolling 24 hour window
+   (settings: the count, the window). The queue may still pair them (the online pool is small), but the 4th and later
+   matches are unrated, and the result screen says why.
+5. **What the client is told.** Whether a match is rated and, if not, why (a guest, the calibration of the opponent,
+   the opponent limit, an early resign of the opponent), and the calibration progress. The exact protocol and HTTP
+   fields are left to the implementation (`PROTOCOL_VERSION`++ there).
+
+Alternatives (not chosen):
+- A separate rated queue for accounts: it splits a small pool.
+- Account age instead of calibration.
+- No rating gain for the winner after any resign, not only an early one.
 
 ---
 
@@ -3090,6 +3132,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-31 | #316 | enemy barracks are visible at neighboring cities (only a built one, no memory) | section 10 | [accepted] (2026-10-21); changes the barracks fog of DEC-25 and DEC-26; details [accepted] 2026-10-21; implemented (#319, `PROTOCOL_VERSION` 23) |
 | DEC-32 | #327 | the fight arena: a 2 s round (`combat.round_ticks = 20`), the bonus reserve is visible to both sides in a fight (revision of DEC-24, item I1); the bonus rules do not change (B1, B2 not accepted); client A1, V3, ◇ | section 4 | [accepted] (2026-10-21); details [accepted] 2026-10-21; item 13 (mute charges in the fight view) [accepted] by the orchestrator 2026-10-21; variant B3 "bonuses at the end" [open], not accepted by the owner 2026-10-21; implemented (#329, `SIM_VERSION` 18, `PROTOCOL_VERSION` 21); client implemented (#330) |
 | DEC-33 | #296 | visible movement of enemy groups in a node's vision zone: continuous position and direction in the halves of visible nodes | section 10 | [accepted] (2026-10-21); details [accepted] 2026-10-21 (all as recommended); replaces part of DEC-21, item 5; implemented together with DEC-21 (#296, `SIM_VERSION` 19, `PROTOCOL_VERSION` 22); client: ranges, the border point, the half memory and the smooth movement of figures are done in #359, the border point from the map (`border_permille`) since #366, the look of the figure awaits #354 |
+| DEC-34 | #414 | rated-match protection against rating farming: rated only between password accounts, calibration, the early-resign and repeated-resign penalty, a per-opponent limit | section 19 | [accepted] (2026-10-28); meta-game server rules, no `SIM_VERSION`; implementation awaits (a separate PR of #414, `PROTOCOL_VERSION`++) |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in
