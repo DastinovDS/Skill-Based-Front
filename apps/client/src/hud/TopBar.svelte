@@ -16,9 +16,11 @@
     chrome: HudChrome;
     /** The pause of a private match; without it the button is not shown. */
     onpause?: () => void;
+    /** This player has used the pause of the match: the button stays but is disabled. */
+    pauseUsed?: boolean;
   }
 
-  let { data, orders, chrome, onpause }: Props = $props();
+  let { data, orders, chrome, onpause, pauseUsed = false }: Props = $props();
 
   /** The key itself is not translated. */
   const STANCE_KEY = 'Q';
@@ -121,7 +123,8 @@
         type="button"
         class="icon-button"
         aria-label={t('match.pause')}
-        title={t('match.pause')}
+        title={pauseUsed ? t('match.pause.used') : t('match.pause')}
+        disabled={pauseUsed}
         onclick={onpause}
       >
         <Icon name="pause" />
@@ -192,6 +195,11 @@
   button:focus-visible {
     outline: 2px solid var(--paper);
     outline-offset: 1px;
+  }
+
+  .icon-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .icon-button {
