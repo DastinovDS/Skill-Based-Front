@@ -134,7 +134,7 @@
             icon: 'road',
             text: tf('transfer.accepted', {
               n: cmd.n,
-              node: cmd.to_node,
+              node: hud.nodeName(cmd.to_node),
               seconds: Math.ceil(Math.max(0, arriveTick - now) / hud.context.rules.tick_hz),
             }),
           });
@@ -163,25 +163,26 @@
     <DevPanel {dev} />
   {/if}
   <EdgeAlerts threats={hud.threats} {anchors} top={topInset} />
-  <AlertStack alerts={hud.alerts} />
+  <AlertStack alerts={hud.alerts} names={hud.nodeName} />
   <ToastStack toasts={hud.toasts} />
   <StartBanner {data} visible={hud.banner} />
   {#if hints}
     <KeyHints />
   {/if}
   <RadialMenu {orders} stance={data?.stance ?? null} />
-  <SupplyBanner {orders} />
-  <SupplyMenu {orders} />
-  <TransferDialog {orders} />
+  <SupplyBanner {orders} names={hud.nodeName} />
+  <SupplyMenu {orders} names={hud.nodeName} />
+  <TransferDialog {orders} names={hud.nodeName} />
   <SplitMenu {orders} {anchors} />
   <CityRadial
     {orders}
     {anchors}
+    names={hud.nodeName}
     queue={data?.node?.recruitQueue ?? null}
     city={data?.node ?? null}
   />
   <GroupRadial {orders} {anchors} group={data?.group ?? null} {mergeable} />
-  <StackRadial {orders} {anchors} />
+  <StackRadial {orders} {anchors} names={hud.nodeName} />
   <GroupTip group={data?.hovered ?? null} rules={hud.context.rules} />
   <RoadBanner {orders} />
   <RoadTip {orders} road={roadHover} />

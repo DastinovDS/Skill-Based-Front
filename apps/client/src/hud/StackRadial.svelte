@@ -2,6 +2,7 @@
   import { t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import type { MapAnchors } from '../render/anchors.ts';
+  import type { NodeNamer } from './nodeName.ts';
   import Radial from './Radial.svelte';
   import { halfFor, spreadAngles, type RadialItem } from './radial.ts';
 
@@ -9,9 +10,11 @@
     orders: OrderController;
     /** What the city looks like on screen: the list is centred on its circle and follows it. */
     anchors: MapAnchors;
+    /** The name of a place by its id. */
+    names: NodeNamer;
   }
 
-  let { orders, anchors }: Props = $props();
+  let { orders, anchors, names }: Props = $props();
 
   const menu = $derived(orders.stackMenu.current);
   // The groups of the city, read again with every snapshot (the HUD data is the dependency).
@@ -46,7 +49,7 @@
   {@const target = menu.target}
   <Radial
     {items}
-    label={tf('stack.title', { node: target })}
+    label={tf('stack.title', { node: names(target) })}
     at={() => anchors.node(target)}
     {ring}
     half={halfFor(items.length)}

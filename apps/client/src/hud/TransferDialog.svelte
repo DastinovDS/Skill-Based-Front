@@ -2,12 +2,15 @@
   import { tick } from 'svelte';
   import { t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
+  import type { NodeNamer } from './nodeName.ts';
 
   interface Props {
     orders: OrderController;
+    /** The name of a place by its id. */
+    names: NodeNamer;
   }
 
-  let { orders }: Props = $props();
+  let { orders, names }: Props = $props();
 
   const dialog = $derived(orders.transfer.current);
   let slider: HTMLInputElement | undefined = $state();
@@ -50,7 +53,9 @@
       tabindex="-1"
       onkeydown={onKey}
     >
-      <h2 id="transfer-title">{tf('transfer.title', { from: dialog.from, to: dialog.to })}</h2>
+      <h2 id="transfer-title">
+        {tf('transfer.title', { from: names(dialog.from), to: names(dialog.to) })}
+      </h2>
       {#if dialog.max > 0}
         <label class="amount">
           <span>{tf('transfer.amount', { n: dialog.n, max: dialog.max })}</span>

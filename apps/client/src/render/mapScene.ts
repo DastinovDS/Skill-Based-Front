@@ -11,6 +11,7 @@ import { FogView } from './fogView.ts';
 import { IntentView } from './intentView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
 import { MapView } from './mapView.ts';
+import { NameView } from './nameView.ts';
 import { EMPTY_OVERLAY, type MapInteraction, type PickHit } from './interaction.ts';
 import { OverlayView } from './overlayView.ts';
 import { nodePoint } from './layout.ts';
@@ -72,6 +73,7 @@ export class MapScene {
   /** Made by the scene itself (not handed in): freed with it. */
   private readonly ownedSprites: SceneSprites | null;
   private readonly cities: CityView;
+  private readonly names: NameView;
   private readonly entities: EntityView;
   private readonly intents: IntentView;
   private readonly effects: EffectsView;
@@ -110,6 +112,7 @@ export class MapScene {
     this.view = new MapView(map, this.layers, me, app.renderer, hasBackground);
     this.cities = new CityView(map, this.layers, me, 1, this.sprites);
     const radiusOf = (node: number): number => this.cities.radiusOf(node);
+    this.names = new NameView(map, this.layers, radiusOf, 1);
     this.entities = new EntityView(map, this.layers, me, 1, radiusOf, this.sprites);
     this.intents = new IntentView(map, this.layers, me, this.entities.kit, radiusOf);
     this.effects = new EffectsView(
@@ -215,6 +218,7 @@ export class MapScene {
     this.entities.destroy();
     this.overlay.destroy();
     this.supply.destroy();
+    this.names.destroy();
     this.cities.destroy();
     this.view.destroy();
     // Its own caches go with it; the Application's stay for the next scene.
@@ -270,6 +274,7 @@ export class MapScene {
         this.source.recruitTicks ?? null,
         this.source.cityUpgrades ?? null,
       );
+      this.names.refresh();
     }
     const tickHz = this.source.tickHz ?? DEFAULT_TICK_HZ;
     this.entities.setTickHz(tickHz);
@@ -362,6 +367,8 @@ export class MapScene {
     this.supply.setLabelResolution(resolution);
     // What is drawn at one unit a CSS px (the arenas of fights, the bonus of plans) needs the device pixel ratio only.
     const screen = labelResolution(1, this.app.renderer.resolution);
+    this.names.setCameraScale(camera.scale);
+    this.names.setLabelResolution(screen);
     this.screenSprites.setResolution(screen);
     this.effects.setScreenResolution(screen);
     this.intents.setScreenResolution(screen);

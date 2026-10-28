@@ -3,6 +3,9 @@ import { getLocale, setLocale } from '../i18n/index.ts';
 import type { IncomingAlert } from '../match/incoming.ts';
 import type { OverflowAlert } from '../match/overflow.ts';
 import { alertRows, alertRowText } from './alertRows.ts';
+import type { NodeNamer } from './nodeName.ts';
+
+const names: NodeNamer = (id) => `Place${String(id)}`;
 
 const overflow = (node: number, over: Partial<OverflowAlert> = {}): OverflowAlert => ({
   kind: 'overflow',
@@ -42,22 +45,24 @@ describe('alertRows', () => {
     setLocale('en');
     const [row] = alertRows([overflow(7)], []);
     if (row === undefined) throw new Error('no row');
-    expect(alertRowText(row, 10)).toBe('City 7 is overcrowded: 6 of 4. a unit is lost in 2.4 s');
+    expect(alertRowText(row, 10, names)).toBe(
+      'Place7 is overcrowded: 6 of 4. a unit is lost in 2.4 s',
+    );
   });
 
   it('shows the grace instead of the loss while it lasts', () => {
     setLocale('en');
     const [row] = alertRows([overflow(7, { attritionIn: null, graceLeft: 30 })], []);
     if (row === undefined) throw new Error('no row');
-    expect(alertRowText(row, 10)).toBe('City 7 is overcrowded: 6 of 4. grace 3.0 s');
+    expect(alertRowText(row, 10, names)).toBe('Place7 is overcrowded: 6 of 4. grace 3.0 s');
   });
 
   it('folds several cities into one line with the count and the nearest one', () => {
     setLocale('en');
     const [row] = alertRows([overflow(7), overflow(9, { attritionIn: 50 })], []);
     if (row === undefined) throw new Error('no row');
-    expect(alertRowText(row, 10)).toBe(
-      'Overcrowded cities: 2. Nearest, city 7: a unit is lost in 2.4 s',
+    expect(alertRowText(row, 10, names)).toBe(
+      'Overcrowded cities: 2. Nearest, Place7: a unit is lost in 2.4 s',
     );
   });
 
@@ -65,11 +70,11 @@ describe('alertRows', () => {
     setLocale('en');
     const [row] = alertRows([], [incoming(3, { count: 2 })]);
     if (row === undefined) throw new Error('no row');
-    expect(alertRowText(row, 10)).toBe(
-      'They are coming for city 3 (orders: 2): they leave in 3.2 s',
+    expect(alertRowText(row, 10, names)).toBe(
+      'They are coming for Place3 (orders: 2): they leave in 3.2 s',
     );
     const [gone] = alertRows([], [incoming(3, { ticksLeft: null })]);
     if (gone === undefined) throw new Error('no row');
-    expect(alertRowText(gone, 10)).toContain('already on the way');
+    expect(alertRowText(gone, 10, names)).toContain('already on the way');
   });
 });

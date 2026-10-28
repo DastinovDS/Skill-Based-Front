@@ -8,6 +8,7 @@ import type { PlayerId } from '../protocol.gen.ts';
 import { eventText } from './eventText.ts';
 import type { HudEvent } from './hudData.ts';
 import type { IconName } from './icons.ts';
+import type { NodeNamer } from './nodeName.ts';
 
 /** The colour of the left edge: own, the opponent, a warning, neutral (the icon says it as well). */
 export type ToastTone = 'mine' | 'enemy' | 'warn' | 'neutral';
@@ -31,9 +32,9 @@ export const TOAST_EVENT_KINDS: ReadonlySet<string> = new Set([
 ]);
 
 /** The toast of `event` for player `me`, or `null` if the event goes to the journal only. */
-export function toastOf(event: HudEvent, me: PlayerId): ToastBody | null {
+export function toastOf(event: HudEvent, me: PlayerId, names: NodeNamer): ToastBody | null {
   if (!TOAST_EVENT_KINDS.has(event.kind)) return null;
-  const text = eventText(event, me);
+  const text = eventText(event, me, names);
   if (text === '') return null;
   switch (event.kind) {
     case 'node_captured':

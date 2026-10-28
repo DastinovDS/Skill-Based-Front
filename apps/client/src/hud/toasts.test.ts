@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getLocale, setLocale } from '../i18n/index.ts';
 import type { HudEvent } from './hudData.ts';
 import { TOAST_LIMIT, TOAST_MS, ToastState } from './toastState.svelte.ts';
+import type { NodeNamer } from './nodeName.ts';
 import { TOAST_EVENT_KINDS, toastOf } from './toasts.ts';
+
+const names: NodeNamer = (id) => `Place${String(id)}`;
 
 const event = (kind: string, data: HudEvent['data']): HudEvent => ({ seq: 1, tick: 1, kind, data });
 
@@ -29,35 +32,35 @@ describe('toastOf', () => {
       'packet_lost',
       'charges_produced',
     ]) {
-      expect(toastOf(event(kind, { node: 1, player: 0, vp: 1 }), 0), kind).toBeNull();
+      expect(toastOf(event(kind, { node: 1, player: 0, vp: 1 }), 0, names), kind).toBeNull();
     }
   });
 
   it('warns of a recruit queue lost with its city (DEC-25)', () => {
     setLocale('en');
-    expect(toastOf(event('recruit_queue_lost', { node: 4, player: 0, units: 2 }), 0)).toMatchObject(
-      { tone: 'warn', text: 'Recruit queue lost at node 4: 2 units' },
-    );
+    expect(
+      toastOf(event('recruit_queue_lost', { node: 4, player: 0, units: 2 }), 0, names),
+    ).toMatchObject({ tone: 'warn', text: 'Recruit queue lost at Place4: 2 units' });
   });
 
   it('colours a capture by who took the city, and a loss in the colour of the enemy', () => {
     setLocale('en');
-    expect(toastOf(event('node_captured', { node: 2, player: 0 }), 0)).toMatchObject({
+    expect(toastOf(event('node_captured', { node: 2, player: 0 }), 0, names)).toMatchObject({
       tone: 'mine',
-      text: 'You captured node 2',
+      text: 'You captured Place2',
     });
-    expect(toastOf(event('node_captured', { node: 2, player: 1 }), 0)).toMatchObject({
+    expect(toastOf(event('node_captured', { node: 2, player: 1 }), 0, names)).toMatchObject({
       tone: 'enemy',
-      text: 'The enemy captured node 2',
+      text: 'The enemy captured Place2',
     });
   });
 
   it('warns about attrition and keeps fights neutral', () => {
     setLocale('en');
-    expect(toastOf(event('attrition', { node: 4, player: 0 }), 0)?.tone).toBe('warn');
-    expect(toastOf(event('fight_ended', { node: 3, losses_0: 1, losses_1: 2 }), 0)?.tone).toBe(
-      'neutral',
-    );
+    expect(toastOf(event('attrition', { node: 4, player: 0 }), 0, names)?.tone).toBe('warn');
+    expect(
+      toastOf(event('fight_ended', { node: 3, losses_0: 1, losses_1: 2 }), 0, names)?.tone,
+    ).toBe('neutral');
   });
 });
 

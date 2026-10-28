@@ -1,12 +1,15 @@
 <script lang="ts">
   import { t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
+  import type { NodeNamer } from './nodeName.ts';
 
   interface Props {
     orders: OrderController;
+    /** The name of a place by its id. */
+    names: NodeNamer;
   }
 
-  let { orders }: Props = $props();
+  let { orders, names }: Props = $props();
 
   const ui = $derived(orders.ui.current);
 
@@ -29,7 +32,7 @@
   <section class="banner" aria-live="polite">
     <strong>{t('supply.banner')}</strong>
     {#if ui.transferFrom !== null}
-      <span>{tf('supply.pick', { node: ui.transferFrom })}</span>
+      <span>{tf('supply.pick', { node: names(ui.transferFrom) })}</span>
     {:else}
       <span>{t('supply.hint')}</span>
     {/if}
