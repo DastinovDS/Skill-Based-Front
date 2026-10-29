@@ -171,6 +171,27 @@ export function zoomAt(
   );
 }
 
+/**
+ * The camera `t` of the way from `from` to `to` (`t` already eased, 0..1): the centre moves in a
+ * straight line and the scale geometrically, so a zoom feels even whatever the scales are.
+ */
+export function glideCamera(from: Camera, to: Camera, t: number): Camera {
+  const k = clamp(t, 0, 1);
+  return {
+    x: from.x + (to.x - from.x) * k,
+    y: from.y + (to.y - from.y) * k,
+    scale: from.scale * Math.pow(to.scale / from.scale, k),
+  };
+}
+
+/**
+ * The share of the remaining way an exponential smoothing with time constant `tauMs` covers in
+ * `dtMs` (frame-rate independent: two steps of 8 ms equal one of 16 ms).
+ */
+export function smoothShare(dtMs: number, tauMs: number): number {
+  return 1 - Math.exp(-Math.max(0, dtMs) / tauMs);
+}
+
 /** `WheelEvent.deltaMode` values. */
 const DOM_DELTA_LINE = 1;
 const DOM_DELTA_PAGE = 2;

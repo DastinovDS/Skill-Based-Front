@@ -537,3 +537,70 @@ describe('CityView: progress cells of an own city (variant A, #439)', () => {
     view.destroy();
   });
 });
+
+describe('CityView: a captured city cross-fades its body (#508)', () => {
+  beforeEach(() => {
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+    );
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  const captured = (snapshot: SnapshotMsg, id: number): SnapshotMsg => ({
+    ...snapshot,
+    view: {
+      ...snapshot.view,
+      nodes: snapshot.view.nodes.map((n) => (n.id === id ? { ...n, owner: 1 } : n)),
+    },
+  });
+
+  it('keeps the old body over the new one, fading out, and removes it', () => {
+    const snapshot = devSnapshot(map, DEV_RULES, 100);
+    const own = snapshot.view.nodes.find(
+      (n) => n.owner === 0 && map.nodes[n.id]?.kind !== 'province',
+    );
+    if (own === undefined) throw new Error('no own city');
+    const layers = createLayers();
+    const view = new CityView(map, layers, 0, 1, testSprites());
+    const nodes = layers.layer.nodes;
+    view.update(snapshot);
+    const before = city(nodes, own.id).children.length;
+    expect(bodyOf(nodes, own.id).spec?.key).toBe(
+      cityBodySpec(
+        'you',
+        view.radiusOf(own.id),
+        own.id === map.nodes.find((n) => n.capital_of === 0)?.id,
+      ).key,
+    );
+
+    view.update(captured(snapshot, own.id));
+    const body = city(nodes, own.id);
+    expect(body.children.length).toBe(before + 1);
+    const ghost = body.children[1] as BakedSprite;
+    expect(ghost.alpha).toBe(1);
+    expect(ghost.spec?.key).not.toBe(bodyOf(nodes, own.id).spec?.key);
+    view.advance(100);
+    expect(ghost.alpha).toBeLessThan(1);
+    expect(ghost.alpha).toBeGreaterThan(0);
+    view.advance(2000);
+    expect(city(nodes, own.id).children.length).toBe(before);
+    view.destroy();
+  });
+
+  it('shows the first snapshot and "less motion" with no fade', () => {
+    const snapshot = devSnapshot(map, DEV_RULES, 100);
+    const own = snapshot.view.nodes.find(
+      (n) => n.owner === 0 && map.nodes[n.id]?.kind !== 'province',
+    );
+    if (own === undefined) throw new Error('no own city');
+    const layers = createLayers();
+    const view = new CityView(map, layers, 0, 1, testSprites());
+    view.update(snapshot);
+    setReducedMotion(true);
+    const before = city(layers.layer.nodes, own.id).children.length;
+    view.update(captured(snapshot, own.id));
+    expect(city(layers.layer.nodes, own.id).children.length).toBe(before);
+    setReducedMotion(null);
+    view.destroy();
+  });
+});

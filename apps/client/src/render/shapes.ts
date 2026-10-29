@@ -224,6 +224,13 @@ export interface TokenSpec {
   inside?: boolean;
 }
 
+/** Fade and swell of a token that comes or goes, ms, and the size it starts from (#508). */
+const PRESENCE_MS = 220;
+const ENTER_SCALE = 0.78;
+/** The swell on a change of the number of units: size at the start, ms. */
+const BUMP_SCALE = 1.14;
+const BUMP_MS = 260;
+
 function specKey(spec: TokenSpec): string {
   // The charged count is the fill of the triangle, so it belongs to the key, not to the text.
   const counts =
@@ -261,6 +268,12 @@ export class Token {
   private labelWanted = false;
   /** Side of the triangle now, world units. */
   side: number = UNIT_SIDES[1];
+  /** 0 (not there) to 1: a token that comes or goes fades and swells in or out (#508). */
+  private readonly presence = new EaseTween(1, PRESENCE_MS);
+  /** A short swell when the number of units changes (a merge, a split, a loss). */
+  private readonly bump = new EaseTween(1, BUMP_MS);
+  private baseScale = 1;
+  private units = -1;
 
   constructor(
     private readonly kit: EntityKit,
@@ -311,7 +324,52 @@ export class Token {
 
   /** Scale of the whole token (the minimum size on screen, `symbolScale`). */
   setScale(scale: number): void {
-    if (this.view.scale.x !== scale) this.view.scale.set(scale);
+    if (this.baseScale === scale && this.view.scale.x === this.shownScale()) return;
+    this.baseScale = scale;
+    this.view.scale.set(this.shownScale());
+  }
+
+  /** The scale to draw: the size on screen, the entry swell and the unit-count bump. */
+  private shownScale(): number {
+    return (
+      this.baseScale * (ENTER_SCALE + (1 - ENTER_SCALE) * this.presence.value) * this.bump.value
+    );
+  }
+
+  /** Puts the entry fade and the bump on the view. */
+  private showMotion(): void {
+    this.view.alpha = this.presence.value;
+    this.view.scale.set(this.shownScale());
+  }
+
+  /** A token that has just come into being: fades and swells in (not for "less motion"). */
+  enter(): void {
+    if (reducedMotion()) return;
+    this.presence.snap(0);
+    this.presence.setTarget(1);
+    this.showMotion();
+    this.kit.startEasing(this);
+  }
+
+  /** Fades the token out; `gone` says when it has finished. */
+  leave(): void {
+    if (reducedMotion()) this.presence.snap(0);
+    else this.presence.setTarget(0);
+    this.showMotion();
+    if (this.presence.active) this.kit.startEasing(this);
+  }
+
+  /** The token is wanted again (it was leaving): fades back in from where it is. */
+  revive(): void {
+    if (this.presence.target === 1) return;
+    this.presence.setTarget(1);
+    this.showMotion();
+    this.kit.startEasing(this);
+  }
+
+  /** Faded out for good: its owner may destroy it. */
+  get gone(): boolean {
+    return this.presence.target === 0 && this.presence.value === 0;
   }
 
   /** The number of units shows only when asked to and the numbers are known. */
@@ -334,7 +392,10 @@ export class Token {
   advance(dtMs: number): boolean {
     this.fill.step(dtMs);
     this.showFill();
-    return this.fill.active;
+    this.presence.step(dtMs);
+    this.bump.step(dtMs);
+    this.showMotion();
+    return this.fill.active || this.presence.active || this.bump.active;
   }
 
   set(spec: TokenSpec): void {
@@ -342,6 +403,15 @@ export class Token {
     if (key === this.key) return;
     const first = this.key === '';
     this.key = key;
+    // A change of the number of units swells the token for a moment (not a new one, not "less motion").
+    const units = spec.counts?.units ?? -1;
+    if (!first && units !== this.units && units >= 0 && this.units >= 0 && !reducedMotion()) {
+      this.bump.snap(BUMP_SCALE);
+      this.bump.setTarget(1);
+      this.showMotion();
+      this.kit.startEasing(this);
+    }
+    this.units = units;
     const { counts, owner } = spec;
     const side = triangleSide(counts === null ? null : counts.units);
     this.side = side;

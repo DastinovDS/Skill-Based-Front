@@ -275,6 +275,8 @@ export class MapScene {
 
   /** Every frame: owners and road widths from a new snapshot, then the moving entities. */
   private readonly drawFrame = (): void => {
+    // The camera glides first, so everything below is placed for the camera of this frame.
+    this.controller.step(this.frameMs);
     // Textures dropped a frame ago may go now (see `SpriteCache.endFrame`).
     this.sprites.endFrame();
     this.screenSprites.endFrame();
@@ -288,8 +290,13 @@ export class MapScene {
     this.cities.pulse(performance.now());
     const announce = frame.base !== this.base;
     if (announce) {
+      // The first snapshot shows the map as it is; later changes of owners fade (#508).
+      const first = this.base === null;
       this.base = frame.base;
-      this.view.setOwners(frame.base.view.nodes.map((node) => node.owner));
+      this.view.setOwners(
+        frame.base.view.nodes.map((node) => node.owner),
+        !first,
+      );
       const edges = frame.base.view.edges;
       this.view.setRoads(edges);
       this.cities.update(
@@ -309,6 +316,8 @@ export class MapScene {
     this.intents.setTickHz(tickHz);
     this.entities.update(frame);
     this.entities.advance(this.frameMs);
+    this.view.advance(this.frameMs);
+    this.cities.advance(this.frameMs);
     this.intents.update(frame, this.entities.groupPoints());
     const punches = this.effects.update(
       frame,

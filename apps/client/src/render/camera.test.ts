@@ -16,6 +16,8 @@ import {
   zoomAt,
   type Camera,
   type CameraLimits,
+  glideCamera,
+  smoothShare,
 } from './camera.ts';
 
 const WORLD = { width: 1000, height: 500 };
@@ -250,5 +252,29 @@ describe('centerOn', () => {
     );
     expect(next.x).toBe(0);
     expect(next.y).toBe(WORLD.height);
+  });
+});
+
+describe('glideCamera and smoothShare (#508)', () => {
+  const from = { x: 100, y: 200, scale: 0.5 };
+  const to = { x: 300, y: 100, scale: 2 };
+
+  it('runs from one camera to the other, the scale geometrically', () => {
+    expect(glideCamera(from, to, 0)).toEqual(from);
+    expect(glideCamera(from, to, 1)).toEqual(to);
+    const mid = glideCamera(from, to, 0.5);
+    expect(mid.x).toBe(200);
+    expect(mid.y).toBe(150);
+    expect(mid.scale).toBeCloseTo(1);
+    expect(glideCamera(from, to, 7)).toEqual(to);
+  });
+
+  it('smooths by real time: two short steps cover what one long step does', () => {
+    const one = smoothShare(32, 80);
+    const left = (1 - smoothShare(16, 80)) * (1 - smoothShare(16, 80));
+    expect(1 - left).toBeCloseTo(one, 9);
+    expect(smoothShare(0, 80)).toBe(0);
+    expect(smoothShare(-5, 80)).toBe(0);
+    expect(smoothShare(10_000, 80)).toBeCloseTo(1);
   });
 });

@@ -119,3 +119,65 @@ describe('CameraController panning', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 });
+
+describe('CameraController easing (#508)', () => {
+  let controller: CameraController | undefined;
+  afterEach(() => {
+    controller?.destroy();
+  });
+
+  const wheel = (s: ReturnType<typeof setup>, deltaY: number) => {
+    const event = new WheelEvent('wheel', { deltaY, clientX: 400, clientY: 300, cancelable: true });
+    s.element.dispatchEvent(event);
+  };
+
+  it('eases a wheel zoom toward its goal around the pointer instead of jumping', () => {
+    const s = setup();
+    controller = s.controller;
+    const start = s.controller.current.scale;
+    wheel(s, -100);
+    // Nothing moved yet: the goal is set, the frames do the moving.
+    expect(s.controller.current.scale).toBe(start);
+    expect(s.controller.easing).toBe(true);
+    s.controller.step(16);
+    const first = s.controller.current.scale;
+    expect(first).toBeGreaterThan(start);
+    const goal = start * Math.exp(0.2);
+    expect(first).toBeLessThan(goal);
+    for (let i = 0; i < 60; i++) s.controller.step(16);
+    expect(s.controller.current.scale).toBeCloseTo(goal, 2);
+    expect(s.controller.easing).toBe(false);
+  });
+
+  it('adds up the notches of a fast spin and stays inside the zoom limits', () => {
+    const s = setup();
+    controller = s.controller;
+    for (let i = 0; i < 40; i++) wheel(s, -250);
+    for (let i = 0; i < 200; i++) s.controller.step(16);
+    const top = s.controller.current.scale;
+    expect(top).toBeLessThanOrEqual(6);
+    expect(top).toBeGreaterThan(2);
+    // The goal is clamped, so more spinning does not push it further.
+    for (let i = 0; i < 10; i++) wheel(s, -250);
+    for (let i = 0; i < 200; i++) s.controller.step(16);
+    expect(s.controller.current.scale).toBeCloseTo(top, 6);
+  });
+
+  it('glides to a focus point and lands on it; a drag takes over', () => {
+    const s = setup();
+    controller = s.controller;
+    s.controller.focus({ x: 700, y: 300 });
+    const at = s.controller.current.x;
+    s.controller.step(100);
+    const mid = s.controller.current.x;
+    expect(mid).not.toBe(at);
+    s.controller.step(1000);
+    expect(s.controller.easing).toBe(false);
+    const landed = s.controller.current.x;
+    s.controller.focus({ x: 100, y: 300 });
+    s.fire('pointerdown', 400, 300, { button: 2 });
+    s.fire('pointermove', 340, 300, { button: 2 });
+    expect(s.controller.easing).toBe(false);
+    expect(s.controller.current.x).not.toBe(landed);
+  });
+});

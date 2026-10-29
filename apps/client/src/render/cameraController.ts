@@ -1,10 +1,14 @@
 import type { Container } from 'pixi.js';
+import { reducedMotion } from './motion.ts';
+import { easeOutCubic } from './tween.ts';
 import {
   cameraLimits,
   centerOn,
   clampCamera,
   fitScale,
   fitCamera,
+  glideCamera,
+  smoothShare,
   FIT_PADDING,
   NO_INSETS,
   panBy,
@@ -17,6 +21,13 @@ import {
   type Point,
   type Size,
 } from './camera.ts';
+
+/** Time constant of the wheel zoom's smoothing, ms: the scale covers 63% of the way to the goal in this time. */
+const ZOOM_TAU_MS = 80;
+/** A zoom this close to its goal (as a ratio of scales) is done. */
+const ZOOM_DONE = 0.002;
+/** How long "fit map" and the jump to an alert glide, ms. */
+const GLIDE_MS = 380;
 
 /** A press that moves less than this (CSS px) stays a click, for selection (CLI-06, #62). */
 const DRAG_THRESHOLD = 6;
@@ -63,6 +74,10 @@ export class CameraController {
   private insets: Insets = NO_INSETS;
   private press: Press | null = null;
   private handlers: PointerHandlers = {};
+  /** The wheel zoom still easing: the scale it is heading for and the screen point it keeps in place (#508). */
+  private zoom: { anchor: Point; scale: number } | null = null;
+  /** A glide of the camera to another one ("fit map", the jump to an alert). */
+  private glide: { from: Camera; to: Camera; elapsed: number } | null = null;
 
   constructor(
     private readonly element: HTMLElement,
@@ -93,16 +108,74 @@ export class CameraController {
     return this.camera;
   }
 
+  /** "Fit map": the camera glides to the whole map. */
   fit(): void {
     this.fitted = true;
+    this.goTo(fitCamera(this.worldSize, this.viewport, FIT_PADDING, this.insets));
+  }
+
+  /** Fits at once (the first frame, a changed HUD, a resized window): nothing to glide from. */
+  private fitNow(): void {
+    this.fitted = true;
+    this.stopEasing();
     this.camera = fitCamera(this.worldSize, this.viewport, FIT_PADDING, this.insets);
     this.apply();
+  }
+
+  /** Eases the camera toward the goal of a wheel zoom or a glide, `dtMs` of real time; once per frame. */
+  step(dtMs: number): void {
+    if (this.glide !== null) {
+      const glide = this.glide;
+      glide.elapsed += Math.max(0, dtMs);
+      const t = Math.min(1, glide.elapsed / GLIDE_MS);
+      this.camera = t >= 1 ? glide.to : glideCamera(glide.from, glide.to, easeOutCubic(t));
+      if (t >= 1) this.glide = null;
+      this.apply();
+      return;
+    }
+    if (this.zoom === null) return;
+    const { anchor, scale: goal } = this.zoom;
+    const ratio = goal / this.camera.scale;
+    if (Math.abs(ratio - 1) < ZOOM_DONE) {
+      this.zoom = null;
+      return;
+    }
+    const step = Math.pow(ratio, smoothShare(dtMs, ZOOM_TAU_MS));
+    this.camera = zoomAt(this.camera, this.viewport, anchor, step, this.limits);
+    if (Math.abs(goal / this.camera.scale - 1) < ZOOM_DONE) this.zoom = null;
+    this.apply();
+  }
+
+  /** True while the camera is still moving by itself. */
+  get easing(): boolean {
+    return this.glide !== null || this.zoom !== null;
+  }
+
+  private stopEasing(): void {
+    this.zoom = null;
+    this.glide = null;
+  }
+
+  /** Moves to `camera`: a glide, or at once when it is the same place or the player wants less motion. */
+  private goTo(camera: Camera): void {
+    this.stopEasing();
+    const now = this.camera;
+    const same =
+      Math.abs(camera.x - now.x) < 0.5 &&
+      Math.abs(camera.y - now.y) < 0.5 &&
+      Math.abs(camera.scale / now.scale - 1) < ZOOM_DONE;
+    if (same || reducedMotion()) {
+      this.camera = camera;
+      this.apply();
+      return;
+    }
+    this.glide = { from: now, to: camera, elapsed: 0 };
   }
 
   /** Shows a rectangle of the map (world units) in the free part of the viewport. */
   showRect(rect: { x: number; y: number; width: number; height: number }): void {
     const scale = fitScale(rect, this.viewport, FIT_PADDING, this.insets);
-    this.move(
+    this.moveNow(
       clampCamera(
         {
           x: rect.x + rect.width / 2 - (this.insets.left - this.insets.right) / (2 * scale),
@@ -116,7 +189,8 @@ export class CameraController {
 
   /** Moves the camera to `point` (world), keeping the scale: the jump to an alert. */
   focus(point: Point): void {
-    this.move(centerOn(this.camera, point, this.insets, this.limits));
+    this.fitted = false;
+    this.goTo(centerOn(this.camera, point, this.insets, this.limits));
   }
 
   /** The part of the viewport the HUD covers; "fit map" keeps the map out of it. */
@@ -124,13 +198,14 @@ export class CameraController {
     this.insets = insets;
     this.limits = cameraLimits(this.worldSize, this.viewport, FIT_PADDING, insets);
     if (this.fitted) {
-      this.fit();
+      this.fitNow();
     }
   }
 
   resize(viewport: Size): void {
     this.viewport = viewport;
     this.limits = cameraLimits(this.worldSize, viewport, FIT_PADDING, this.insets);
+    this.stopEasing();
     this.camera = this.fitted
       ? fitCamera(this.worldSize, viewport, FIT_PADDING, this.insets)
       : clampCamera(this.camera, this.limits);
@@ -148,7 +223,13 @@ export class CameraController {
     this.endPress();
   }
 
+  /** A move the player makes by hand (a drag): it takes over from any glide or zoom. */
   private move(camera: Camera): void {
+    this.stopEasing();
+    this.moveNow(camera);
+  }
+
+  private moveNow(camera: Camera): void {
     this.fitted = false;
     this.camera = camera;
     this.apply();
@@ -245,8 +326,17 @@ export class CameraController {
   private readonly onWheel = (event: WheelEvent): void => {
     event.preventDefault(); // the page itself never scrolls or zooms over the map
     const factor = wheelZoomFactor(event.deltaY, event.deltaMode);
-    if (factor !== 1) {
+    if (factor === 1) return;
+    if (reducedMotion()) {
       this.move(zoomAt(this.camera, this.viewport, this.local(event), factor, this.limits));
+      return;
     }
+    // The wheel sets a goal and the camera eases toward it (`step`), around the point under the
+    // pointer; a notch while one is under way adds to the goal, so a fast spin still zooms fast.
+    const base = this.zoom?.scale ?? this.camera.scale;
+    const scale = Math.min(this.limits.maxScale, Math.max(this.limits.minScale, base * factor));
+    this.glide = null;
+    this.fitted = false;
+    this.zoom = { anchor: this.local(event), scale };
   };
 }
