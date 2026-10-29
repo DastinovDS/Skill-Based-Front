@@ -185,7 +185,7 @@ def test_example_5_reach_and_ack_count_both_zones() -> None:
     gid = _group(state, 0, AtNode(0))
     found = reach(state, RULES, 0, opaque_id(KEY, 0, gid), KEY)
     assert found is not None
-    assert dict(found.nodes)[2] == 69  # 33 + 36
+    assert {n: (t, path) for n, t, path in found.nodes}[2] == (69, (0, 1, 2))  # 33 + 36; #448
     state.tick = 7  # the order is applied at tick t = 7
     outcome = validate(state, RULES, 0, Move(gid, 2))
     assert isinstance(outcome, Ok)

@@ -280,6 +280,12 @@ export interface WelcomeMsg {
    * from the queue, and once calibration is over.
    */
   calibration: Calibration | null;
+  /**
+   * Whether you may still pause this match (DEC-05): ``False`` in a rated (queue) match and
+   * once you have used your pause, also on a reconnect. A pause of the opponent going on now
+   * does not change it (``paused`` says that).
+   */
+  pause_available: boolean;
 }
 export interface RulesetPublic {
   tick_hz: number;
@@ -1052,6 +1058,14 @@ export interface ReachNode {
    * Ticks of the path once the group departs (a planned order waits its delay first).
    */
   ticks: number;
+  /**
+   * The nodes from the group's node to ``node``: the path ``ticks`` refers to, the same one
+   * the ``ack`` of a ``move`` there carries (#448). All but the last are the group's node or own
+   * nodes.
+   *
+   * @minItems 2
+   */
+  path: [number, number, ...number[]];
 }
 export interface MapFile {
   meta: MapMetaFile;
@@ -1128,6 +1142,8 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 26;
+export const PROTOCOL_VERSION = 27;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
+export const CLOSE_NO_MATCH = 4004;
+export const CLOSE_POLICY = 1008;

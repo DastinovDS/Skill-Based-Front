@@ -386,6 +386,11 @@ class MatchRunner:
             self._end_pause()
         self._resumed.set()
 
+    def pause_available(self, player: int) -> bool:
+        """``player`` may still pause (``welcome.pause_available``): a private match whose pause
+        ``player`` has not used. A pause going on now, whoever's, does not count here."""
+        return self.private and player not in self._pauses_used
+
     def request_pause(self, player: int) -> bool:
         """A player's pause (DEC-05). ``False``: rated match, pause already used, or paused now."""
         if not self.private or self.finished or self.paused or player in self._pauses_used:

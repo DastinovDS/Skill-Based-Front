@@ -29,6 +29,8 @@ from websockets.typing import Origin
 from gow_protocol.codec import decode_server, encode
 from gow_protocol.commands import ForfeitCmd, SetStanceCmd
 from gow_protocol.messages import (
+    CLOSE_NO_MATCH,
+    CLOSE_POLICY,
     CLOSE_PROTOCOL_VERSION,
     CLOSE_REPLACED,
     PROTOCOL_VERSION,
@@ -51,13 +53,13 @@ from gow_protocol.messages import (
     SnapshotMsg,
     WelcomeMsg,
 )
+from gow_protocol.view import AtNodeLoc
 from gow_server.app import create_app
 from gow_server.cli import WS_MAX_SIZE
 from gow_server.clock import ManualClock
 from gow_server.logs import configure_logging
 from gow_server.matches import MatchManager, MatchRunner
 from gow_server.settings import Settings
-from gow_server.ws import CLOSE_NO_MATCH, CLOSE_POLICY
 from gow_sim.commands import Forfeit
 from gow_sim.replay import read_replay
 from gow_sim.ruleset import Stance, load_ruleset
@@ -405,6 +407,10 @@ def test_reach_query_is_answered_by_the_server(ws_settings: Settings) -> None:
             reach = await recv_until(ws, ReachMsg)
             assert (reach.group, reach.tick) == (group, live.runner.match.tick)
             assert reach.nodes
+            home = snap.view.groups[0].location
+            assert isinstance(home, AtNodeLoc)
+            for rn in reach.nodes:  # #448: the path the ticks refer to, from the group's node
+                assert (rn.path[0], rn.path[-1]) == (home.node, rn.node)
             await send(ws, ReachQueryMsg(group="999"))
             unknown = await recv_until(ws, ReachMsg)
             assert (unknown.group, unknown.nodes, unknown.split) == ("999", (), ())
@@ -637,8 +643,9 @@ def test_a_connection_that_replaces_another_does_not_start_a_window(
 
 def test_pause_in_a_private_match(policy_settings: Settings) -> None:
     async def scenario(live: Live) -> None:
-        a, _ = await join(live, 0)
-        b, _ = await join(live, 1)
+        a, welcome_a = await join(live, 0)
+        b, welcome_b = await join(live, 1)
+        assert welcome_a.pause_available and welcome_b.pause_available
         await send(a, PauseMsg())
         for ws in (a, b):
             msg = await recv_until(ws, PausedMsg)
@@ -657,13 +664,20 @@ def test_pause_in_a_private_match(policy_settings: Settings) -> None:
         assert (await recv_until(a, ErrorMsg)).code == "PAUSE_DENIED"
         await a.close()
         await b.close()
+        # a reconnect is told what is left: a used its pause, b did not
+        a, welcome_a = await join(live, 0)
+        b, welcome_b = await join(live, 1)
+        assert (welcome_a.pause_available, welcome_b.pause_available) == (False, True)
+        await a.close()
+        await b.close()
 
     run(policy_settings, scenario, ruleset="mvp-0", private=True)
 
 
 def test_rated_match_refuses_a_pause(policy_settings: Settings) -> None:
     async def scenario(live: Live) -> None:
-        a, _ = await join(live, 0)
+        a, welcome = await join(live, 0)
+        assert not welcome.pause_available
         await send(a, PauseMsg())
         assert (await recv_until(a, ErrorMsg)).code == "PAUSE_DENIED"
         assert not live.runner.paused

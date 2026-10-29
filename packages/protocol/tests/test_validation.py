@@ -149,6 +149,14 @@ BAD_SERVER_FRAMES: dict[str, str | bytes] = {
     "welcome extra ruleset field": _edit(
         "server", "welcome", lambda d: _at(d, "ruleset_public").update(secret=1)
     ),
+    "welcome no pause flag": _edit("server", "welcome", lambda d: d.pop("pause_available")),
+    "reach no path": _edit("server", "reach", lambda d: _at(d, "nodes", 0).pop("path")),
+    "reach path of one node": _edit(
+        "server", "reach", lambda d: _at(d, "nodes", 0).update(path=[0])
+    ),
+    "reach path to another node": _edit(
+        "server", "reach", lambda d: _at(d, "nodes", 0).update(path=[4, 2])
+    ),
     "ack path and reject": _edit("server", "ack_move", lambda d: d.update(reject_code="NO")),
     "ack empty path": _edit("server", "ack_move", lambda d: d.update(path=[])),
     "ack lower-case code": _edit("server", "ack_reject", lambda d: d.update(reject_code="no_cp")),
