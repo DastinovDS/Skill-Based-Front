@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     ``128 * n * r`` bytes (32 MiB by default), so ``scrypt_maxmem`` must stay above it; a hash keeps
     its own ``n``, ``r``, ``p``, so raising them later does not break existing passwords. Target:
     50..100 ms per hash on the server."""
+    scrypt_concurrency: int = Field(default=3, ge=1)
+    """At most this many scrypt runs at once (#413, about ``128 * n * r`` bytes each). A login or
+    a password change over the limit is answered 503 with ``Retry-After`` at once, no queueing."""
     nick_blocklist_file: Path | None = None
     """Extra forbidden words for nicks, one per line (``#`` comments), added to the built-in list
     (``gow_server.nicks``). In a container put it on the volume: ``/data/nick-blocklist.txt``."""

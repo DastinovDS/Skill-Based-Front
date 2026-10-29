@@ -53,6 +53,8 @@ services:
       GOW_SCRYPT_R: ${GOW_SCRYPT_R:-8}
       GOW_SCRYPT_P: ${GOW_SCRYPT_P:-1}
       GOW_SCRYPT_MAXMEM: ${GOW_SCRYPT_MAXMEM:-67108864}
+      # scrypt runs at once (about 32 MiB each); a login over it gets 503 at once (#413).
+      GOW_SCRYPT_CONCURRENCY: ${GOW_SCRYPT_CONCURRENCY:-3}
       # The match WebSocket: extra allowed Origins (a JSON list), hello and send timeouts, the
       # token bucket of one connection's messages.
       GOW_WS_ALLOWED_ORIGINS: ${GOW_WS_ALLOWED_ORIGINS:-[]}

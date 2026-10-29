@@ -258,6 +258,9 @@ stops working on all devices; the player logs in with the nick and the new passw
 The scrypt parameters of new hashes: `GOW_SCRYPT_N` (2^15), `GOW_SCRYPT_R` (8), `GOW_SCRYPT_P` (1), `GOW_SCRYPT_MAXMEM`
 (64 MB); a hash stores its own parameters, so they can be raised without resetting passwords. `[manual]` Measure the hash time
 on the VPS (a target of 50..100 ms) and change `GOW_SCRYPT_N` if needed. The login limits: the table above.
+At most `GOW_SCRYPT_CONCURRENCY` (3) scrypt runs go at once (each about 32 MiB, so about 100 MiB at most): a login or a password
+change over that gets `503` with `Retry-After: 1` at once instead of queueing. The hash runs without a database connection
+(read, release, hash, write), so a login burst does not starve match inserts and WebSocket token lookups (#413).
 
 ### What is not done
 
