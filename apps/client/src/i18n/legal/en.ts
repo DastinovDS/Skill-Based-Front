@@ -66,12 +66,12 @@ export const en = {
       {
         heading: 'Data in your browser',
         body: [
-          'The game saves two entries in the localStorage of your browser. No cookies are set.',
+          'The game saves up to four entries in the localStorage of your browser. No cookies are set, and sessionStorage is not used. Clearing the site data of this page in your browser removes all of them.',
         ],
         items: [
-          'sbf.guest: your nickname and your token, so that you stay the same guest on your next visit. Remove it with "Change nickname" in the menu or by clearing site data; the guest on the server is then no longer reachable from this browser.',
-          'sbf.locale: the interface language you picked.',
+          'sbf.guest: your nickname, your token and whether your account has a password, so that you stay the same player on your next visit. "Log out" in the menu removes it. Without a password the player cannot be reached again from this browser; with a password you can log in again from any browser.',
           'sbf.hints.matches and sbf.hints.last: how many matches you played, to hide the key hints after the third (and the last match counted).',
+          'sbf.locale: the interface language, saved only when you choose one yourself. The game is English only for now and has no language selector, so this entry normally does not appear.',
         ],
       },
       {
