@@ -147,13 +147,8 @@
         found === null
           ? null
           : { ...found, x: Math.round(found.x), y: Math.round(found.y), r: Math.round(found.r) };
-      if (
-        !sameSight(
-          untrack(() => sight),
-          next,
-        )
-      )
-        sight = next;
+      const shown = untrack(() => sight);
+      if (!sameSight(shown, next)) sight = next;
     };
 
     const first = clockAt(now, reducedMotion());
@@ -420,8 +415,7 @@
       </g>
     </svg>
 
-    <canvas class="motion layer" bind:this={canvas} width={scene.width} height={scene.height}
-    ></canvas>
+    <canvas class="motion layer" bind:this={canvas}></canvas>
 
     <svg
       class="capitals layer"
