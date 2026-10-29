@@ -15,8 +15,11 @@ import { borderPermille, borderPoint } from './fogLayout.ts';
 import { edgeEnds, edgePoint, LANE_OFFSET, sideways } from './layout.ts';
 import { reducedMotion } from './motion.ts';
 import { knownOfFigure } from './rangeLabel.ts';
+import { spreadApart, type SpreadItem } from './spread.ts';
 import { Token, type EntityKit } from './shapes.ts';
 import { BG, ENEMY, PAPER, PLATE_FILL } from './style.ts';
+
+const ORIGIN: Point = { x: 0, y: 0 };
 
 /** One enemy figure on a half of a road: its container sits on its lane of the road. */
 interface Figure {
@@ -117,6 +120,7 @@ export class FigureView {
     this.stamp = stamp;
     const first = !this.started;
     this.started = true;
+    const placed: { view: Container; item: SpreadItem }[] = [];
     for (const { edge, figure, pos } of enemies) {
       const ends = edgeEnds(this.map, edge);
       if (ends === undefined) continue;
@@ -150,7 +154,21 @@ export class FigureView {
       const [from, to] = figure.toward_b ? [ends.a, ends.b] : [ends.b, ends.a];
       const lane = sideways(from, to, at, LANE_OFFSET);
       entry.view.position.set(lane.x, lane.y);
+      // Figures at the same place must not hide each other (#547): the plate hangs under the token.
+      placed.push({
+        view: entry.view,
+        item: {
+          at: lane,
+          normal: sideways(from, to, ORIGIN, 1),
+          radius: (token.side * 0.55 + FIGURE.plate.height / 2) * scale,
+        },
+      });
     }
+    const places = spreadApart(placed.map((p) => p.item));
+    placed.forEach(({ view }, i) => {
+      const at = places[i];
+      if (at !== undefined) view.position.set(at.x, at.y);
+    });
     for (const [id, figure] of this.figures) {
       if (figure.stamp === stamp) continue;
       figure.view.destroy({ children: true });

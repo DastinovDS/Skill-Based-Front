@@ -13,6 +13,7 @@ import {
   edgePoint,
   nodePoint,
   roadPosition,
+  sideways,
   packetFade,
   timeLeftLabel,
   type TokenSpot,
@@ -20,6 +21,7 @@ import {
 import { symbolScale, type Point } from './camera.ts';
 import { iconPoint, stackGroups, stackKey, type CityIcon } from './cityStacks.ts';
 import { nodeMarkerPoint } from './fogLayout.ts';
+import { spreadApart, type SpreadItem } from './spread.ts';
 import { buildProgress } from './roadLayout.ts';
 import { knownOfSeen } from './rangeLabel.ts';
 import type { SpriteCache } from './bake.ts';
@@ -33,7 +35,13 @@ import {
   PACKET_TRANSFER,
   ROAD_TAPE,
   roadSpan,
+  UNIT_LABEL,
 } from './style.ts';
+
+const ORIGIN: Point = { x: 0, y: 0 };
+
+/** Radius of a token on a road for spreading, as a share of its side (the triangle plus a margin). */
+const SPREAD_RADIUS = 0.55;
 
 function other(player: PlayerId): PlayerId {
   return player === 0 ? 1 : 0;
@@ -511,6 +519,9 @@ export class EntityView implements EnemyAnchors {
       for (const id of stack.ids) spots.set(id, spot);
       if (own) icons.push({ ...stack, spot });
     }
+    // Groups on roads: all places first, then tokens that would sit on top of each other are moved
+    // apart sideways (#547): auto-merge is only in a city, so two groups can share a place on a road.
+    const onRoad: { id: string; entry: GroupEntry; at: Point; item: SpreadItem }[] = [];
     for (const item of groups) {
       if (item.location.kind === 'node') continue;
       const owner = item.owner ?? this.me;
@@ -522,24 +533,37 @@ export class EntityView implements EnemyAnchors {
         counts: { units: item.group.units, charged: item.group.charged },
       });
       const { location } = item;
-      let at: Point | undefined;
       const ends = edgeEnds(this.map, location.edge);
       const edge = this.map.edges[location.edge];
-      if (ends !== undefined && edge !== undefined) {
-        const fromIsA = edge.a === location.from_node;
-        at = roadPosition(ends.a, ends.b, fromIsA, location.progress);
+      if (ends === undefined || edge === undefined) {
+        entry.view.visible = false;
+        continue;
       }
-      entry.view.visible = at !== undefined;
-      if (at === undefined) continue;
+      const fromIsA = edge.a === location.from_node;
+      const at = roadPosition(ends.a, ends.b, fromIsA, location.progress);
+      const normal = fromIsA
+        ? sideways(ends.a, ends.b, ORIGIN, 1)
+        : sideways(ends.b, ends.a, ORIGIN, 1);
+      // The triangle and the number pill under its tip.
+      const radius =
+        (entry.token.side * SPREAD_RADIUS + (UNIT_LABEL.height + UNIT_LABEL.gap) / 2) *
+        symbolScale(entry.token.side, this.cameraScale);
+      onRoad.push({ id: item.group.id, entry, at, item: { at, normal, radius } });
+    }
+    const places = spreadApart(onRoad.map((road) => road.item));
+    onRoad.forEach(({ id, entry }, i) => {
+      const at = places[i];
+      if (at === undefined) return;
+      entry.view.visible = true;
       const scale = symbolScale(entry.token.side, this.cameraScale);
       entry.view.scale.set(scale);
       entry.view.position.set(at.x, at.y);
       // One short number: always shown (the exact units and charged are the tooltip's).
       entry.token.setLabel(true);
       const spot: TokenSpot = { x: at.x, y: at.y, side: entry.token.side, scale };
-      spots.set(item.group.id, spot);
-      edgeSpots.set(item.group.id, spot);
-    }
+      spots.set(id, spot);
+      edgeSpots.set(id, spot);
+    });
     this.sweepGroups();
     this.edgeSpots = edgeSpots;
     this.icons = icons;

@@ -665,3 +665,93 @@ describe('EntityView, tokens that come and go (#508)', () => {
     view.destroy();
   });
 });
+
+describe('EntityView, tokens at the same place of a road (#547)', () => {
+  const edge = map.edges[0];
+  if (edge === undefined) throw new Error('no roads');
+
+  beforeEach(() => {
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
+    );
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const onRoad = (id: string, progress: number, from = edge.a): GroupView => ({
+    id,
+    units: 3,
+    charged: 3,
+    mode: 'attack',
+    location: { kind: 'edge', edge: edge.id, from_node: from, progress },
+    order: null,
+    defense_bonus: null,
+    defense_cap: null,
+  });
+
+  function frameWithGroups(groups: GroupView[], enemies: EnemyGroup[] = []) {
+    const edges = base.view.edges.map((e) =>
+      e.id === edge?.id ? { ...e, enemy_groups: enemies } : e,
+    );
+    const snapshot: SnapshotMsg = { ...base, view: { ...base.view, edges, groups } };
+    return interpolateFrame(snapshot, null, snapshot.tick);
+  }
+
+  const distance = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
+    Math.hypot(a.x - b.x, a.y - b.y);
+
+  it('draws two own groups bounced back to the same place side by side, both pickable', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
+    view.update(frameWithGroups([onRoad('g1', 400), onRoad('g2', 400)]));
+    const spots = view.roadGroupPoints();
+    const first = spots.get('g1');
+    const second = spots.get('g2');
+    if (first === undefined || second === undefined) throw new Error('no spots');
+    expect(distance(first, second)).toBeGreaterThanOrEqual(first.side * 0.9);
+    // The tokens sit where the spots say, so a click on either centre picks it.
+    const tokens = layers.layer.groups.children
+      .find((c) => c.label === 'own-groups')
+      ?.children.filter((c) => c.visible);
+    expect(tokens?.map((t) => [t.x, t.y])).toEqual([
+      [first.x, first.y],
+      [second.x, second.y],
+    ]);
+    view.destroy();
+  });
+
+  it('keeps a lone group on its lane and groups far apart where they are', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
+    view.update(frameWithGroups([onRoad('g1', 200), onRoad('g2', 800)]));
+    const ends = edgeEnds(map, edge.id);
+    const lone = view.roadGroupPoints().get('g1');
+    const at = ends === undefined ? undefined : edgePoint(ends.a, ends.b, true, 200);
+    // On its lane: within the lane offset of the centre line.
+    expect(distance(lone ?? { x: NaN, y: NaN }, at ?? { x: 0, y: 0 })).toBeLessThanOrEqual(9.001);
+    view.update(frameWithGroups([onRoad('g1', 200)]));
+    expect(view.roadGroupPoints().get('g1')).toEqual(lone);
+    view.destroy();
+  });
+
+  it('draws two enemy figures at the same place of a road apart', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
+    const figure = (id: string): EnemyGroup => ({
+      id,
+      pos: 250,
+      toward_b: true,
+      detail: 'presence',
+      mode: 'attack',
+      units: null,
+      charged: null,
+      units_range: null,
+    });
+    view.update(frameWithGroups([], [figure('f1'), figure('f2')]));
+    const enemy = layers.layer.groups.children.find((c) => c.label === 'enemy');
+    const [second, first] = [...(enemy?.children ?? [])].reverse();
+    expect(distance(first ?? { x: 0, y: 0 }, second ?? { x: 0, y: 0 })).toBeGreaterThanOrEqual(20);
+    view.destroy();
+  });
+});
