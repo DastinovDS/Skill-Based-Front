@@ -1,3 +1,4 @@
+import type { MatchAudio } from '../audio/matchAudio.ts';
 import type { HudState } from '../hud/hudState.svelte.ts';
 import {
   MatchConnection,
@@ -51,6 +52,8 @@ export interface MatchContext {
   cityUpgrades?: CityDevelopment | null;
   /** `ruleset_public.build.ticks_per_level`: the part done of the tape of an own road build (DEC-28). */
   roadBuildTicks?: number;
+  /** The sounds of the match (#71); absent: silent (tests, the replay). */
+  audio?: MatchAudio;
 }
 
 export interface MatchSessionOptions {
@@ -92,6 +95,7 @@ export class MatchSession implements RenderSource {
   capacityTicks: CapacityTicks | undefined;
   buffer: SnapshotBuffer;
   #hud: HudState | null = null;
+  #audio: MatchAudio | null = null;
   readonly #now: (() => number) | undefined;
   readonly #onServerMessage: ((msg: ServerMsg) => void) | undefined;
   readonly #connection: MatchConnection;
@@ -127,6 +131,7 @@ export class MatchSession implements RenderSource {
           this.#lastSnapshotAt = null;
           this.buffer.clear();
           this.#hud?.reset();
+          this.#audio?.reset();
         },
         onAckLost: (seq) => {
           this.orders.onAckLost(seq);
@@ -139,6 +144,7 @@ export class MatchSession implements RenderSource {
 
   #setContext(context: MatchContext): void {
     this.#hud = context.hud;
+    this.#audio = context.audio ?? null;
     this.tickHz = context.tickHz;
     const orders = context.orders;
     this.orderDelays = orders === undefined ? undefined : { planned: orders.planned_delay_ticks };
@@ -205,6 +211,7 @@ export class MatchSession implements RenderSource {
     if (frame !== null) {
       this.orders.onRendered(frame.base.tick);
       this.#hud?.onRender(frame.tick);
+      this.#audio?.onRender(frame.tick);
     }
     return frame;
   }
@@ -249,6 +256,9 @@ export class MatchSession implements RenderSource {
         break;
       default:
         break;
+    }
+    if (msg.type === 'event' || msg.type === 'ack' || msg.type === 'match_end') {
+      this.#audio?.onMessage(msg);
     }
     this.#onServerMessage?.(msg);
   }

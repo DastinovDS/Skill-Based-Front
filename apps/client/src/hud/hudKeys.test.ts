@@ -29,6 +29,18 @@ describe('hudKey', () => {
     expect(fit).toHaveBeenCalledTimes(2);
   });
 
+  it('toggles the sound on M, also while the help is open, but not in the exit dialog', () => {
+    const chrome = new HudChrome();
+    const mute = vi.fn();
+    expect(hudKey(chrome, down('KeyM', 'm'), { fit: vi.fn(), mute }, 0)).toBe('handled');
+    chrome.helpOpen = true;
+    expect(hudKey(chrome, down('KeyM', 'm'), { fit: vi.fn(), mute }, 1)).toBe('handled');
+    expect(mute).toHaveBeenCalledTimes(2);
+    chrome.openExit();
+    expect(hudKey(chrome, down('KeyM', 'm'), { fit: vi.fn(), mute }, 2)).toBe('blocked');
+    expect(mute).toHaveBeenCalledTimes(2);
+  });
+
   it('has no key for the removed journal: J goes on to the orders', () => {
     const chrome = new HudChrome();
     expect(hudKey(chrome, down('KeyJ', 'j'), { fit: vi.fn() }, 0)).toBe('pass');

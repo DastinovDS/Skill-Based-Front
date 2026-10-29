@@ -1,5 +1,5 @@
 /**
- * The keys of the HUD itself (ui-style 10 and 11): `?` help, `H` (or `Home`) fit the map, the
+ * The keys of the HUD itself (ui-style 10 and 11): `?` help, `H` (or `Home`) fit the map, `M` sound on or off, the
  * double `Esc` that opens the exit dialog, and `Esc` that closes an overlay. The keys of the
  * orders (`match/keyEvents.ts`) come after these.
  */
@@ -22,6 +22,8 @@ export type HudKeyResult = 'handled' | 'blocked' | 'pass';
 export interface HudKeyActions {
   /** "Fit map". */
   fit: () => void;
+  /** Sound on or off (`M`, #71). Absent: the key is not the HUD's. */
+  mute?: () => void;
   /**
    * Nothing is selected and no order menu is open: an `Esc` now has nothing to drop, so two of
    * them in a row ask to leave the match. Absent: always idle (the unit tests of the keys).
@@ -58,6 +60,10 @@ export function hudKey(
   if (chrome.exitOpen) return 'blocked';
   if (input.key === '?' || input.code === 'F1') {
     if (input.repeat !== true) chrome.helpOpen = !chrome.helpOpen;
+    return 'handled';
+  }
+  if (input.code === 'KeyM' && actions.mute !== undefined) {
+    if (input.repeat !== true) actions.mute();
     return 'handled';
   }
   if (chrome.modal) return 'blocked';

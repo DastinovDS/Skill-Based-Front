@@ -71,6 +71,7 @@ export const en = {
         items: [
           'sbf.guest: your nickname, your token and whether your account has a password, so that you stay the same player on your next visit. "Log out" in the menu removes it. Without a password the player cannot be reached again from this browser; with a password you can log in again from any browser.',
           'sbf.hints.matches and sbf.hints.last: how many matches you played, to hide the key hints after the third (and the last match counted).',
+          'sbf.sound: whether you muted the sound and the volume you chose, saved when you change either.',
           'sbf.locale: the interface language, saved only when you choose one yourself. The game is English only for now and has no language selector, so this entry normally does not appear.',
         ],
       },
