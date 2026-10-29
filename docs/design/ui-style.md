@@ -20,6 +20,7 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/lobby-invite-bot.html`](mockups/lobby-invite-bot.html) (the lobby, invite and bot screens in the language of the new menu, #473: **[awaiting the owner's decision]**, section 34; planned before the release, owner, 2026-10-29),
 [`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html) (planned orders, unit tokens, cities and provinces, #431, round 1; asked for before the release on 2026-10-28) its round 2 [`mockups/tokens-cities-orders-r2.html`](mockups/tokens-cities-orders-r2.html) and round 3 [`mockups/tokens-cities-orders-r3.html`](mockups/tokens-cities-orders-r3.html) and round 4 [`mockups/tokens-cities-orders-r4.html`](mockups/tokens-cities-orders-r4.html) (planned orders ODb **[accepted]**, units and cities stay as they are, 2026-10-29, section 33), [`mockups/provinces-defense.html`](mockups/provinces-defense.html) (provinces in the current look, the "Defense" counter and the barracks placement, #431, #349: **[awaiting the owner's decision]**, section 35),
 [`mockups/menu-background.html`](mockups/menu-background.html) (the background of the start menu: animation concepts and a dedicated menu map, #474: **[awaiting the owner's decision]**, section 36; asked for before the release on 2026-10-28). All of them are
+[`mockups/leaderboard-profile.html`](mockups/leaderboard-profile.html) (the leaderboard and the player profile in the language of the start menu and the lobby screens, #78: **[awaiting the owner's decision]**, section 38; a new screen, so a mockup first),
 [`mockups/supply-terrain.html`](mockups/supply-terrain.html) (nicer supply lines in the Supply view, a terrain and vision concept, rivers and lakes as visual borders, #429: **[awaiting the owner's decision]**, section 37; moved before the release by the owner, 2026-10-29),
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
@@ -90,6 +91,8 @@ Contents:
 34. Lobby, invite and bot screens (#473)
 35. Provinces in the current look, the "Defense" counter and the barracks placement (#431, #349)
 36. Start menu background: animation and a menu map (#474)
+37. Supply lines, terrain and vision, rivers and lakes (#429)
+38. Leaderboard and player profile (#78)
 
 ---
 
@@ -1900,5 +1903,29 @@ Finding that shapes the rivers: a river never meets a road, so each lies inside 
 | ![Terrain and vision variants](mockups/img/429/terrain-region.png) | ![River variants](mockups/img/429/rivers-map.png) |
 
 Checked in grayscale (`supply-gray-pocket.png`, `terrain-gray.png`): the level is lanes, a bore or a width, never a hue; the sight level is three bars, never a colour; the cut-off city is a ring, an arc or a hatch with the time in digits; the terrain is a glyph or a pattern.
+
+**Owner's decision:** awaiting the owner's decision.
+
+---
+
+## 38. Leaderboard and player profile (#78)
+
+Status: **[awaiting the owner's decision]**. LB-01 adds two screens that do not exist yet, so by the process of section 23 a mockup comes first and the client code after the choice. The server half (`GET /api/leaderboard`, `GET /api/players/{id}`, no protocol change) is a separate PR. Until the endpoints exist the start menu hides the Replays row and the rating in the corner chip (PR #489); the screens bring both back.
+
+Mockup: [`mockups/leaderboard-profile.html`](mockups/leaderboard-profile.html), frames in [`mockups/img/78/`](mockups/img/78/). Three variants, all in the family of the start menu (A) and the lobby screens of #473 (the menu rail kept, the content on the map), for two screens and these states: the leaderboard (top list, empty, loading, network error, rate limited, own row marked in the table, own rank beyond the top 100 pinned under the table) and the profile (the matches, no matches yet, loading, network error, an unknown player). Switches: a guest, a calibrating (2/5) or a ranked account; the profile of yourself, of a ranked player, of a calibrating player and of a guest; the queue ban, grayscale, reduced motion and "needs from the server" (which field of which endpoint feeds each piece). The history shows every replay state: ready, preparing, expired (retention, #515), no replay, players only.
+
+| Id | Variant | Client effort | Risk |
+| --- | --- | --- | --- |
+| D | **Dock**: the menu rail stays (Leaderboard marked), the board is one card on the map with 6 columns; a nick opens the profile in the same card, Back (Esc) returns | S to M, 2 to 3 days | low |
+| W | **Ledger**: the rail shrinks to an icon strip, the card is wide: matches and win share in the board, the history as a full table (map, length, date) | M, 3 to 4 days | medium (a second table layout, the strip is a new language) |
+| S | **Split**: the compact list at the left, the profile of the chosen row at the right, the own profile by default; one frame for both screens | M, 3 days | medium (tight at 1280 px, a stacked layout for narrow windows) |
+
+No variant needs a DEC, a protocol change or a new rule. **Recommendation: D** (`leaderboard-profile.html#v=d&scr=board&st=list&acct=rated`): the same pattern as the lobby, invite and bot screens in variant D of #473, so the client gets one panel component for six screens; if #473 ends with another variant, the table, the row, the history line and the replay chip stay and only the container changes. The questions to the owner (menu rows and keys, what the Replays row opens, one or two record blocks, strangers' unrated replays, guest profiles, the own rank beyond 100) are in #78.
+
+| D, the board | D, a player and their replays |
+| --- | --- |
+| ![D, the leaderboard](mockups/img/78/d-board-ranked.png) | ![D, the profile of another player](mockups/img/78/d-profile-other-replay-states.png) |
+
+Checked in grayscale (`gray-d-board.png`, `gray-d-profile-other.png`): the own row is a band, a triangle and the word You; a result is a filled dot, a ring or a half dot with its word; the replay state is a shape and a word; calibration is cells and "k/5".
 
 **Owner's decision:** awaiting the owner's decision.
