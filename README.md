@@ -176,6 +176,7 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_LOGIN_NICK_RATE_LIMIT`, `GOW_LOGIN_NICK_RATE_WINDOW_S` | `10`, `600` | #374: no more than N login attempts to one nick (by `nick_key`) per window |
 | `GOW_PASSWORD_RATE_LIMIT`, `GOW_PASSWORD_RATE_WINDOW_S` | `5`, `3600` | #374: no more than N password settings and changes per player per window |
 | `GOW_SCRYPT_N`, `GOW_SCRYPT_R`, `GOW_SCRYPT_P`, `GOW_SCRYPT_MAXMEM` | `32768`, `8`, `1`, `67108864` | #374: the `hashlib.scrypt` parameters of new password hashes (memory is about `128·N·r` bytes, `MAXMEM` must be larger); a hash stores its own parameters |
+| `GOW_SCRYPT_CONCURRENCY` | `3` | #413: at most this many scrypt runs at once (about 32 MiB each); a login or password change over it gets `503` with `Retry-After` at once |
 | `GOW_NICK_BLOCKLIST_FILE` | empty | MOD-01: a file of additional forbidden words for nicks (one word per line, `#` is a comment); in the container `/data/nick-blocklist.txt` |
 | `GOW_MAX_REQUEST_BODY_BYTES` | `32768` | SRV-01: the largest HTTP request body in bytes; more gets `413` before any parsing (by `Content-Length` and by counting a streamed body). Caddy adds its own 64 KB cap on `/api/*` |
 | `GOW_CALIBRATION_MATCHES` | `5` | DEC-34, #414: rating-changing matches of a password account before its rating is shown and it counts for opponents (calibration) |
@@ -184,6 +185,9 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_OPPONENT_LIMIT`, `GOW_OPPONENT_LIMIT_WINDOW_S` | `3`, `86400` | DEC-34: at most N rated matches between the same two accounts per window, the later ones are unrated |
 | `GOW_INVITE_TTL_S` | `1800` | the lifetime of an invite to a private match (seconds) |
 | `GOW_READY_TIMEOUT_S` | `120` | SRV-09: the time to get ready after a guest joins an invite; after that the invite is withdrawn (no-show) |
+| `GOW_MAX_MATCHES` | `30` | #412: at most this many matches run at once (the AGENTS.md section 12 budget for one core); past it a new match is refused with `503` |
+| `GOW_MAX_BOT_MATCHES` | `10` | #412: of them at most this many against a bot; `0` turns bot matches off; `503` when full |
+| `GOW_BOT_CONNECT_TIMEOUT_S` | `15` | #412: a bot match nobody connected to within this time is dropped as never started (no replay, saved `aborted`) |
 | `GOW_WS_ALLOWED_ORIGINS` | `[]` | a JSON list of `Origin`s, other than the site itself, that may open the match WebSocket |
 | `GOW_WS_HELLO_TIMEOUT_S`, `GOW_WS_SEND_TIMEOUT_S` | `5`, `5` | the wait for `hello`; a send longer than this: the client is not reading, disconnect |
 | `GOW_MONITOR_INTERVAL_S` | `30` | OPS-04: the period of the tick lag check (the alert threshold is 10% of the tick period) |

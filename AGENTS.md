@@ -322,6 +322,7 @@ async def run(self) -> None:
 - States: created → waiting for readiness → running → finished → saved → cleaned up (`MatchState`, the table `TRANSITIONS`); a match that has not started (the invite expired, was replaced, no-show `GOW_READY_TIMEOUT_S`) goes to `aborted` and is cleaned up at once.
 - The `matches` row is created before the start (`status=running`), the runner is started with `match_id=str(matches.id)`. The result (`status`, `end_reason`, `ticks`, `match_players.result`) is written through `asyncio.to_thread` after the match ends; unfinished rows get `aborted` / `server_restart` when the process starts.
 - A player has at most one active match (`MatchLifecycle.claim`, 409): from the moment of pairing (a guest joining, a bot match) until the match ends. The queue (MM-01) occupies the player the same way.
+- Caps (#412): `GOW_MAX_MATCHES` running matches in all and the lower `GOW_MAX_BOT_MATCHES` against a bot; past them starting a match is `503` (`ServerFullError`, a metric and an alert). A bot match nobody connects to within `GOW_BOT_CONNECT_TIMEOUT_S` is dropped as never started: no replay, saved `aborted` with `end_reason = never_started`.
 - The server's ruleset is archived in `GOW_RULESETS_DIR/<hash>.toml` on start; `test-short` is not started when `GOW_ENV=prod`.
 
 ### 5.5 Security

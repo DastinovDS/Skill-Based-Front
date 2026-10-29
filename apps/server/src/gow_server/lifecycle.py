@@ -12,7 +12,8 @@ A match goes through these states (``TRANSITIONS`` is the whole table):
                in time (no-show); it is cleaned at once. Nothing is written for such a match.
 
 A match whose task crashed or was cancelled by a server stop is saved as ``status = aborted``
-without results. At start-up rows still ``running`` (the process died) become ``aborted`` too.
+without results. So is a bot match nobody connected to (``end_reason = never_started``, #412).
+At start-up rows still ``running`` (the process died) become ``aborted`` too.
 
 The rule "a player has at most one active match or queue place" is ``claim``: a player is claimed
 from the moment two players are paired (``waiting``, or ``created`` of a bot match) until the
@@ -45,7 +46,14 @@ from gow_server.ladder import (
     plan_queue_match,
     record_resign,
 )
-from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError, MatchManager, MatchRunner
+from gow_server.matches import (
+    BOT_ACCOUNT,
+    BotSeat,
+    ManagerDrainingError,
+    MatchManager,
+    MatchRunner,
+    ServerFullError,
+)
 from gow_server.models import Match, MatchPlayer, utcnow
 from gow_sim.maps import PLAYERS, MapDef
 from gow_sim.ruleset import Ruleset, archive_ruleset, ruleset_hash
@@ -230,7 +238,8 @@ class MatchLifecycle:
         """``created`` or ``waiting`` ``-> running``: insert the row, then start the runner.
 
         Claims the human ``players`` (``AlreadyActiveError``). Raises ``ManagerDrainingError``
-        while the server drains; the record then keeps its state, the caller may retry or abort.
+        while the server drains and ``ServerFullError`` at the caps on running matches (#412); the
+        record then keeps its state, the caller may retry or abort.
 
         ``rated`` marks a queue match: ``gow_server.ladder`` decides at the start who of the two
         accounts changes a rating (DEC-34), so the stored match is flagged rated only if at least
@@ -242,6 +251,7 @@ class MatchLifecycle:
         self.claim(record, humans)
         if self.manager.draining:
             raise ManagerDrainingError("the server is draining for a deploy")
+        self.manager.check_capacity(bot is not None)  # before the row; ``create`` checks again
         deadline, record.deadline = record.deadline, None  # not swept while the row is written
         rated = rated and bot is None and BOT_ACCOUNT not in players  # DEC-06: two humans only
         try:
@@ -263,9 +273,11 @@ class MatchLifecycle:
                 bot=bot,
                 rating_plan=plan,
             )
-        except BaseException:
+        except BaseException as exc:
             record.deadline = deadline
-            await asyncio.to_thread(self._write_aborted, pk, "server_draining")
+            full = isinstance(exc, ServerFullError)  # a start racing for the last place
+            reason = "server_full" if full else "server_draining"
+            await asyncio.to_thread(self._write_aborted, pk, reason)
             raise
         record.match_id = match_id
         record.advance(MatchState.RUNNING)
@@ -401,7 +413,7 @@ class MatchLifecycle:
 def _result_of(runner: MatchRunner, failure: str | None) -> _Result:
     ticks = runner.match.tick
     if failure is not None:
-        reason = "crashed" if failure == "crashed" else "server_stopped"
+        reason = failure if failure in ("crashed", "never_started") else "server_stopped"
         return _Result(STATUS_ABORTED, reason, ticks, None, False)
     outcome = runner.match.outcome
     reason = runner.end_reason()

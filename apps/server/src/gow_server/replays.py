@@ -138,6 +138,10 @@ class ReplayService:
     def log_path(self, match_id: str) -> Path:
         return self.replays_dir / (self._checked(match_id) + LOG_SUFFIX)
 
+    def discard_log(self, match_id: str) -> None:
+        """Delete the command log of a match that never started (#412)."""
+        self.log_path(match_id).unlink(missing_ok=True)
+
     def frames_name(self, match_id: str) -> str:
         """Name of the frames file relative to ``replays_dir``: the value of ``replay_path``."""
         return self._checked(match_id) + FRAMES_SUFFIX

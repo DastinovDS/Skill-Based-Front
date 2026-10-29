@@ -149,7 +149,10 @@ docker compose exec app python -c "import urllib.request as u; print(u.urlopen('
 | Metric | What it is |
 |---|---|
 | `gow_matches_active` | matches running now |
+| `gow_matches_bot_active` | of them, matches against a bot |
 | `gow_matches_started_total`, `_finished_total`, `_crashed_total` | match counters |
+| `gow_matches_refused_full_total`, `gow_matches_refused_bot_full_total` | matches refused with 503 because `GOW_MAX_MATCHES` or `GOW_MAX_BOT_MATCHES` was reached (#412) |
+| `gow_matches_never_started_total` | bot matches dropped because nobody connected within `GOW_BOT_CONNECT_TIMEOUT_S` (#412) |
 | `gow_tick_lag_seconds` (histogram) | how much later than scheduled a tick started; the alert threshold is 10% of the tick period = 10 ms at 10 Hz |
 | `gow_step_seconds` (histogram) | the duration of one tick; p99: `histogram_quantile(0.99, rate(gow_step_seconds_bucket[5m]))` |
 | `gow_bot_overruns_total`, `gow_bot_skipped_total` | bot decisions longer than the budget and the calls skipped because of them (per match the same is written to the `match finished` log) |
@@ -165,6 +168,7 @@ a one-off poll by `cron`; for now manual collection and the logs are enough. [ow
 The server writes an alert as an ERROR line of the logger `gow_server.alerts` with the field `alert`:
 
 - `match_crashed`: a match crashed with an exception (next to it a `match crashed` record with a traceback and the same `match_id`);
+- `matches_full`, `bot_matches_full`: a match was refused because the cap on all running matches or on bot matches was reached (#412; at most once per 5 minutes per kind; a `match refused: server full` WARNING record with `cap`, `active`, `bot_active` goes with every refusal). A few now and then is a busy evening; a steady stream of `bot_matches_full` is someone farming bot matches;
 - `tick_lag`: the average tick lag of a match over the window `GOW_MONITOR_INTERVAL_S` is more than 10% of the tick period or the loop reset the schedule.
 
 The same alert for one match no more often than once in 5 minutes. The `app` container has no way out (the `internal` network),
@@ -208,6 +212,8 @@ All limits live in the memory of one process (a server restart zeroes the counte
 | Joining the matchmaking queue | player | 20 per minute | `POST /api/queue` (MM-01) |
 | Commands in a match | connection | 20/s, burst 60 | WebSocket, flooding leads to a disconnect (SRV-03) |
 | Active match | player | 1 | `409` (SRV-09) |
+| Running matches | server | 30 (`GOW_MAX_MATCHES`: the budget of AGENTS.md section 12 for one core), of them against a bot 10 (`GOW_MAX_BOT_MATCHES`, 0 turns bot matches off) | `503` with `Retry-After` on `POST /api/bot-matches`, the second `ready` of an invite and the second `confirm` of the queue; the player stays free (#412) |
+| Bot match without a WebSocket | match | 15 s (`GOW_BOT_CONNECT_TIMEOUT_S`) | the match is dropped as never started: no replay, saved `aborted` / `never_started`, the player is free again (#412) |
 | Repeated resigns in rated matches | player | 2nd in 24 hours: 5 minutes out of the queue; 3rd: 30 minutes; 4th and later: 2 hours (the 1st: none) | `POST /api/queue`: `429` with `Retry-After` and a `QueueBan` body (DEC-34, #414; `GOW_RESIGN_*`) |
 | Rated matches between the same two accounts | pair of accounts | 3 per 24 hours, then unrated | the matchmaking queue still pairs them, the match is unrated (DEC-34; `GOW_OPPONENT_LIMIT*`) |
 | HTTP request body | request | 32 KiB (`GOW_MAX_REQUEST_BODY_BYTES`) | `413` before any parsing, in the server (by `Content-Length` and by counting a streamed body) and, at 64 KB, in Caddy on `/api/*` (SRV-01, #411) |

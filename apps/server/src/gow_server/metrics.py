@@ -55,6 +55,9 @@ class ServerMetrics:
     matches_crashed: int = 0
     bot_overruns: int = 0
     bot_skipped: int = 0
+    matches_refused_full: int = 0
+    matches_refused_bot_full: int = 0
+    matches_never_started: int = 0
     step_seconds: Histogram = field(default_factory=lambda: Histogram(STEP_BUCKETS_S))
     tick_lag_seconds: Histogram = field(default_factory=lambda: Histogram(LAG_BUCKETS_S))
 
@@ -87,6 +90,13 @@ def render(manager: "MatchManager", queue_size: int = 0) -> str:
     _value(
         lines,
         "gauge",
+        "gow_matches_bot_active",
+        "Matches against a bot running now.",
+        manager.bot_active,
+    )
+    _value(
+        lines,
+        "gauge",
         "gow_matches_draining",
         "1 while draining for a deploy.",
         int(manager.draining),
@@ -113,6 +123,27 @@ def render(manager: "MatchManager", queue_size: int = 0) -> str:
         "gow_matches_crashed_total",
         "Matches ended by an exception.",
         m.matches_crashed,
+    )
+    _value(
+        lines,
+        "counter",
+        "gow_matches_refused_full_total",
+        "Matches refused: GOW_MAX_MATCHES running matches (503).",
+        m.matches_refused_full,
+    )
+    _value(
+        lines,
+        "counter",
+        "gow_matches_refused_bot_full_total",
+        "Bot matches refused: GOW_MAX_BOT_MATCHES running bot matches (503).",
+        m.matches_refused_bot_full,
+    )
+    _value(
+        lines,
+        "counter",
+        "gow_matches_never_started_total",
+        "Bot matches dropped: nobody connected within GOW_BOT_CONNECT_TIMEOUT_S.",
+        m.matches_never_started,
     )
     _value(
         lines, "counter", "gow_bot_overruns_total", "Bot decisions over the budget.", m.bot_overruns

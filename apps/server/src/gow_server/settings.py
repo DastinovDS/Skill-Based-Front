@@ -108,6 +108,15 @@ class Settings(BaseSettings):
     then the server applies a ``Forfeit`` for them, a technical defeat (DEC-05, #49)."""
     pause_max_s: float = 60.0
     """One pause per player in a private match, at most this long (DEC-05); none in rated ones."""
+    max_matches: int = Field(default=30, ge=1)
+    """At most this many matches run at once (#412). The budget of AGENTS.md, section 12 is 30
+    parallel matches per core (tick lag under 10 %); past it a new match is refused with 503."""
+    max_bot_matches: int = Field(default=10, ge=0)
+    """At most this many of them play against a bot (they cost bot decisions and cannot be
+    paid for by a second human); 0 turns bot matches off. 503 when full (#412)."""
+    bot_connect_timeout_s: float = Field(default=15.0, gt=0)
+    """A bot match nobody connected to within this many seconds is dropped as never started: no
+    replay, saved ``aborted`` (#412). The client connects right after ``POST /api/bot-matches``."""
     ready_timeout_s: float = 120.0
     """A guest who joined an invite and the host have this long to be ready; otherwise the
     invite is dropped, a no-show (SRV-09)."""

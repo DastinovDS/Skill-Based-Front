@@ -27,6 +27,11 @@ humans' ones and land in the command log. A decision longer than ``bot_budget_s`
 kept, but the next call is skipped and counted (``bot_overruns``). The bot has no connection,
 so no reconnect window runs for it; its slot holds ``BOT_ACCOUNT``, which no account has.
 
+A bot match that nobody connects to within ``connect_timeout_s`` (#412) is dropped as never
+started: the runner ends without an outcome (``never_started``), its partial command log is deleted
+and no frames are built; the lifecycle saves it as ``aborted`` / ``never_started``. Without this
+a plain HTTP client could keep one bot match per account running until the reconnect window.
+
 A runner given a ``ReplayWriter`` writes the command log of its match tick by tick (SRV-07);
 ``MatchManager`` hands a finished match to ``ReplayService`` for the frames file. A failing log
 (a full disk) stops the recording and never the match.
@@ -212,6 +217,7 @@ class MatchRunner:
         metrics: ServerMetrics | None = None,
         rating_plan: RatingPlan | None = None,
         validate_snapshots: bool = False,
+        connect_timeout_s: float | None = None,
     ) -> None:
         self.match_id: Final = match_id
         self.map_id: Final = map_id
@@ -245,6 +251,11 @@ class MatchRunner:
         """Decisions slower than ``bot_budget_s``; each made the bot skip its next call."""
         self.bot_skipped = 0
         self._bot_skip_next = False
+        self.connect_timeout_s: Final = connect_timeout_s
+        """A bot match is dropped when no player connects within this many seconds of its start;
+        ``None``: never (#412)."""
+        self.never_started = False
+        """The loop ended because nobody connected in time (``connect_timeout_s``)."""
         self._inbox: list[_Queued] = []
         self._last_seq: dict[int, int] = dict.fromkeys(PLAYERS, 0)
         self._outboxes: dict[int, Outbox] = {}
@@ -441,6 +452,7 @@ class MatchRunner:
         """Step the match at ``tick_hz`` until it ends (AGENTS.md, section 5.2)."""
         dt = self.dt
         start, ticks = self.clock.now(), 0  # the k-th tick is due at start + k * dt
+        run_started = start
         for player in PLAYERS:  # nobody connected yet: the window runs from the start
             if player not in self._outboxes:
                 self._start_forfeit_timer(player)
@@ -450,6 +462,10 @@ class MatchRunner:
                     await self._resumed.wait()
                     start, ticks = self.clock.now(), 0
                 now = self.clock.now()
+                if self._nobody_came(now - run_started):
+                    self.never_started = True
+                    log.info("bot match never started", extra={"match_id": self.match_id})
+                    break
                 if now - (start + ticks * dt) > MAX_BEHIND_TICKS * dt:
                     start, ticks = now, 0
                     self.resets += 1
@@ -473,6 +489,15 @@ class MatchRunner:
             self._close_replay()
             for box in self._outboxes.values():
                 box.close()
+
+    def _nobody_came(self, waited_s: float) -> bool:
+        """A bot match that no player connected to within ``connect_timeout_s`` of its start."""
+        return (
+            self.bot is not None
+            and self.connect_timeout_s is not None
+            and not self._seen
+            and waited_s >= self.connect_timeout_s
+        )
 
     def step(self) -> None:
         """One tick, synchronously: commands, ``Match.step``, messages for every connection."""
@@ -622,6 +647,15 @@ class ManagerDrainingError(RuntimeError):
     """The server is being drained for a deploy and starts no new matches."""
 
 
+class ServerFullError(RuntimeError):
+    """The cap on running matches (``kind`` ``matches_full``) or on running bot matches
+    (``bot_matches_full``) is reached: the HTTP layer answers 503 (#412)."""
+
+    def __init__(self, kind: str) -> None:
+        super().__init__(f"server is full ({kind})")
+        self.kind = kind
+
+
 class MatchManager:
     """All matches of the process: a registry with strong references to their tasks.
 
@@ -641,6 +675,9 @@ class MatchManager:
         bot_budget_s: float = BOT_BUDGET_S,
         alerter: Alerter | None = None,
         validate_snapshots: bool = False,
+        max_matches: int | None = None,
+        max_bot_matches: int | None = None,
+        bot_connect_timeout_s: float | None = None,
     ) -> None:
         self.clock = clock
         self.metrics = ServerMetrics()
@@ -650,6 +687,9 @@ class MatchManager:
         self._reconnect_window_s = reconnect_window_s
         self._pause_max_s = pause_max_s
         self._replays = replays
+        self._max_matches = max_matches
+        self._max_bot_matches = max_bot_matches
+        self._bot_connect_timeout_s = bot_connect_timeout_s
         self._new_id = new_id or (lambda: secrets.token_urlsafe(12))
         self._runners: dict[str, MatchRunner] = {}
         self._tasks: dict[str, asyncio.Task[None]] = {}
@@ -661,6 +701,31 @@ class MatchManager:
     @property
     def active(self) -> int:
         return len(self._tasks)
+
+    @property
+    def bot_active(self) -> int:
+        """Running matches against a bot."""
+        return sum(1 for runner in self._runners.values() if runner.bot is not None)
+
+    def check_capacity(self, bot: bool) -> None:
+        """Raise ``ServerFullError`` if no match (or, for ``bot``, no bot match) may start (#412).
+
+        The caps are ``max_matches`` for all running matches and the lower ``max_bot_matches`` for
+        those against a bot; ``None``: no cap. A refusal is counted, logged and alerted (the alert
+        has the usual cooldown); the HTTP layer turns it into 503.
+        """
+        if self._max_matches is not None and self.active >= self._max_matches:
+            kind = "matches_full"
+            self.metrics.matches_refused_full += 1
+        elif bot and self._max_bot_matches is not None and self.bot_active >= self._max_bot_matches:
+            kind = "bot_matches_full"
+            self.metrics.matches_refused_bot_full += 1
+        else:
+            return
+        extra = {"cap": kind, "active": self.active, "bot_active": self.bot_active}
+        log.warning("match refused: server full", extra=extra)
+        self.alerter.alert(kind, f"match refused: {kind.replace('_', ' ')}", key=kind, **extra)
+        raise ServerFullError(kind)
 
     @property
     def connections(self) -> int:
@@ -695,7 +760,8 @@ class MatchManager:
         bot: BotSeat | None = None,
         rating_plan: RatingPlan | None = None,
     ) -> MatchRunner:
-        """Create a match and start its loop. Raises ``ManagerDrainingError`` while draining.
+        """Create a match and start its loop. Raises ``ManagerDrainingError`` while draining and
+        ``ServerFullError`` at the caps (``check_capacity``, #412).
 
         ``match_id`` is ``str(matches.id)`` for a match with a database row: the replay files and
         ``GET /api/replays/{id}`` are named by it (``gow_server.replays``). ``private``: lobby,
@@ -706,6 +772,7 @@ class MatchManager:
         """
         if self.draining:
             raise ManagerDrainingError("the server is draining for a deploy")
+        self.check_capacity(bot is not None)
         match_id = match_id or self._new_id()
         replay = self._replays.writer(match_id) if self._replays is not None else None
         runner = MatchRunner(
@@ -723,6 +790,7 @@ class MatchManager:
             bot_budget_s=self._bot_budget_s,
             rating_plan=rating_plan,
             validate_snapshots=self._validate_snapshots,
+            connect_timeout_s=self._bot_connect_timeout_s if bot is not None else None,
         )
         self.start(runner)
         return runner
@@ -771,6 +839,12 @@ class MatchManager:
                 match_id=runner.match_id,
                 tick=runner.match.tick,
             )
+        elif runner.never_started:
+            failure = "never_started"
+            self.metrics.matches_never_started += 1
+            if self._replays is not None:  # no replay of a match nobody played
+                self._replays.discard_log(runner.match_id)
+            log.info("match never started", extra=extra)
         else:
             self.metrics.matches_finished += 1
             if self._replays is not None and runner.replay_complete:

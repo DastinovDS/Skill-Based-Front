@@ -39,6 +39,11 @@ services:
       GOW_RECONNECT_WINDOW_S: ${GOW_RECONNECT_WINDOW_S:-60}
       GOW_PAUSE_MAX_S: ${GOW_PAUSE_MAX_S:-60}
       GOW_READY_TIMEOUT_S: ${GOW_READY_TIMEOUT_S:-120}
+      # Caps on running matches (#412): all matches, those against a bot, and how long a bot match
+      # may wait for its player's WebSocket before it is dropped as never started.
+      GOW_MAX_MATCHES: ${GOW_MAX_MATCHES:-30}
+      GOW_MAX_BOT_MATCHES: ${GOW_MAX_BOT_MATCHES:-10}
+      GOW_BOT_CONNECT_TIMEOUT_S: ${GOW_BOT_CONNECT_TIMEOUT_S:-15}
       GOW_MONITOR_INTERVAL_S: ${GOW_MONITOR_INTERVAL_S:-30}
       GOW_MAX_REQUEST_BODY_BYTES: ${GOW_MAX_REQUEST_BODY_BYTES:-32768}
       # Logins and passwords (#374): attempts per window, per client IP and per nick; password changes.
