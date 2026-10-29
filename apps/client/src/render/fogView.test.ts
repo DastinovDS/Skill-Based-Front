@@ -124,6 +124,20 @@ describe('FogView, the memory of the halves of a road', () => {
     ).toBeLessThan(30);
   });
 
+  it('puts a dashed tick across the road on the border point while a memory of the half is drawn (#354)', () => {
+    const ticks = (): Graphics | undefined =>
+      layers.layer.fog.children.find((c) => c.label === 'fog-half-ticks') as Graphics | undefined;
+    const strokes = (): number =>
+      (ticks()?.context.instructions ?? []).filter((i) => i.action === 'stroke').length;
+    view.update(withHalves(half('exact', null), half('exact', null)));
+    expect(strokes()).toBe(0);
+    view.update(withHalves(half('exact', null), half('fog', seen())));
+    expect(strokes()).toBe(1);
+    // The memory is gone from the view: the tick goes with it.
+    view.update(withHalves(half('exact', null), half('fog', null)));
+    expect(strokes()).toBe(0);
+  });
+
   it('keeps the two halves apart: each memory is its own ghost, on its own side of the road', () => {
     view.update(withHalves(half('fog', seen({ tick: 300 })), half('fog', seen({ tick: 540 }))));
     const found = ghosts(layers);

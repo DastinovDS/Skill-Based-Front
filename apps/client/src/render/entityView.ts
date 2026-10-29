@@ -1,7 +1,6 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
 import {
   EDGE_LENGTH,
-  type RenderEnemy,
   type RenderFrame,
   type RenderGroup,
   type RenderPacket,
@@ -12,10 +11,8 @@ import {
   buildGeometry,
   edgeEnds,
   edgePoint,
-  LANE_OFFSET,
   nodePoint,
   roadPosition,
-  sideways,
   packetFade,
   timeLeftLabel,
   type TokenSpot,
@@ -24,9 +21,10 @@ import { symbolScale, type Point } from './camera.ts';
 import { iconPoint, stackGroups, stackKey, type CityIcon } from './cityStacks.ts';
 import { nodeMarkerPoint } from './fogLayout.ts';
 import { buildProgress } from './roadLayout.ts';
-import { knownOfFigure, knownOfSeen } from './rangeLabel.ts';
+import { knownOfSeen } from './rangeLabel.ts';
 import type { SpriteCache } from './bake.ts';
 import { EntityKit, Token } from './shapes.ts';
+import { FigureView } from './figureView.ts';
 import {
   BUILD_PLATE,
   BUILD_TIME_FONT_SIZE,
@@ -51,14 +49,6 @@ interface GroupEntry extends Labelled {
   stamp: number;
   view: Container;
   owner: PlayerId;
-}
-
-/** An enemy figure on a road: its token, drawn again every frame at the place the frame gives. */
-interface FigureEntry {
-  edge: number;
-  token: Token;
-  stamp: number;
-  view: Container;
 }
 
 /** Where enemies stand on the map now (the effects of a fight go over them). */
@@ -106,9 +96,10 @@ export class EntityView implements EnemyAnchors {
   readonly kit: EntityKit;
   private readonly enemy: PlayerId;
   private readonly enemyNodes: (Token | null)[];
-  /** Enemy figures on the halves of roads in sight (DEC-33), by their id. */
-  private readonly enemyFigures = new Map<string, FigureEntry>();
+  /** Enemy figures on the halves of roads in sight (DEC-33): EF2 "Pointer", #354. */
+  private readonly figures: FigureView;
   private readonly enemyLayer = new Container({ label: 'enemy' });
+  private readonly markLayer = new Container({ label: 'figure-marks' });
   private readonly packetLayer = new Container({ label: 'packets' });
   private readonly groupLayer = new Container({ label: 'own-groups' });
   private readonly buildTape = new Graphics();
@@ -145,6 +136,14 @@ export class EntityView implements EnemyAnchors {
     this.kit = new EntityKit(me, sprites);
     this.enemy = other(me);
     this.enemyNodes = map.nodes.map(() => null);
+    this.figures = new FigureView(
+      map,
+      this.enemyLayer,
+      this.markLayer,
+      this.kit,
+      this.enemy,
+      labelResolution,
+    );
 
     this.timeStyle = new TextStyle({
       fontFamily: 'system-ui, sans-serif',
@@ -161,7 +160,12 @@ export class EntityView implements EnemyAnchors {
     });
     // The tape of a road build lies under the lanes: first in the layer of the roads.
     layers.layer.roads.addChildAt(this.buildTape, 0);
-    layers.layer.groups.addChild(this.enemyLayer, this.packetLayer, this.groupLayer);
+    layers.layer.groups.addChild(
+      this.enemyLayer,
+      this.markLayer,
+      this.packetLayer,
+      this.groupLayer,
+    );
     layers.layer.intents.addChild(this.buildLayer);
   }
 
@@ -169,6 +173,7 @@ export class EntityView implements EnemyAnchors {
     this.labelResolution = resolution;
     const texts: Text[] = [];
     for (const token of this.enemyTokens()) texts.push(...token.labels());
+    texts.push(...this.figures.labels());
     for (const entry of [...this.groups.values(), ...this.packets.values()]) {
       texts.push(...entry.labels());
     }
@@ -220,12 +225,12 @@ export class EntityView implements EnemyAnchors {
   nearestOnEdge(edge: number, to: Point): Point | undefined {
     let best: Point | undefined;
     let bestDistance = Infinity;
-    for (const entry of this.enemyFigures.values()) {
-      if (entry.edge !== edge) continue;
-      const distance = Math.hypot(entry.view.x - to.x, entry.view.y - to.y);
+    for (const spot of this.figures.spots()) {
+      if (spot.edge !== edge) continue;
+      const distance = Math.hypot(spot.at.x - to.x, spot.at.y - to.y);
       if (distance < bestDistance) {
         bestDistance = distance;
-        best = { x: entry.view.x, y: entry.view.y };
+        best = spot.at;
       }
     }
     return best;
@@ -245,6 +250,10 @@ export class EntityView implements EnemyAnchors {
       for (const entry of this.groups.values()) {
         if (near(entry.view)) entry.view.scale.set(entry.view.scale.x * scale);
       }
+      // A figure on a road: its container is rescaled every frame, so there is nothing to put back.
+      for (const spot of this.figures.spots()) {
+        if (near(spot.view)) spot.view.scale.set(spot.view.scale.x * scale);
+      }
       for (const token of this.enemyTokens()) {
         if (!near(token.view)) continue;
         token.view.scale.set(symbolScale(token.side, this.cameraScale) * scale);
@@ -257,7 +266,6 @@ export class EntityView implements EnemyAnchors {
   private enemyTokens(): Token[] {
     const tokens: Token[] = [];
     for (const token of this.enemyNodes) if (token !== null) tokens.push(token);
-    for (const entry of this.enemyFigures.values()) tokens.push(entry.token);
     return tokens;
   }
 
@@ -282,7 +290,7 @@ export class EntityView implements EnemyAnchors {
     this.stamp++;
     this.spots = this.updateGroups(frame.groups);
     this.placeEnemyNodes();
-    this.updateEnemyFigures(frame.enemies);
+    this.figures.update(frame.enemies, frame.tick, this.tickHz, this.cameraScale, this.stamp);
     this.updatePackets(frame);
   }
 
@@ -290,7 +298,14 @@ export class EntityView implements EnemyAnchors {
     // Containers and their children first: they reference the shared contexts, which Graphics
     // leaves alone. The two Graphics below own their contexts and are destroyed without options.
     this.buildTape.destroy();
-    for (const container of [this.buildLayer, this.enemyLayer, this.packetLayer, this.groupLayer]) {
+    this.figures.destroy();
+    for (const container of [
+      this.buildLayer,
+      this.enemyLayer,
+      this.markLayer,
+      this.packetLayer,
+      this.groupLayer,
+    ]) {
       container.destroy({ children: true });
     }
     this.kit.destroy();
@@ -438,37 +453,6 @@ export class EntityView implements EnemyAnchors {
       const at = iconPoint(city, marker, false, this.ownIcons.has(id));
       token.view.position.set(at.x, at.y);
     });
-  }
-
-  /**
-   * Enemy groups on the halves of roads in sight (DEC-33): a token each at its position, on the
-   * lane of its direction. The position comes from the frame, between two snapshots (a figure
-   * that is gone is removed, a new `id` is a new figure). Numbers only where its half is seen
-   * exactly; where it is seen as a range, the range («3-5»), never charges.
-   */
-  private updateEnemyFigures(enemies: readonly RenderEnemy[]): void {
-    for (const { edge, figure, pos } of enemies) {
-      let entry = this.enemyFigures.get(figure.id);
-      if (entry === undefined) {
-        const token = new Token(this.kit, this.labelResolution);
-        this.enemyLayer.addChild(token.view);
-        entry = { edge, token, view: token.view, stamp: this.stamp };
-        this.enemyFigures.set(figure.id, entry);
-      }
-      entry.stamp = this.stamp;
-      const { token } = entry;
-      const { counts, range } = knownOfFigure(figure);
-      token.set({ owner: this.enemy, modes: [figure.mode], counts, range, inside: false });
-      token.setLabel(true);
-      token.setScale(symbolScale(token.side, this.cameraScale));
-      const ends = edgeEnds(this.map, edge);
-      if (ends === undefined) continue;
-      const at = edgePoint(ends.a, ends.b, true, pos);
-      const [from, to] = figure.toward_b ? [ends.a, ends.b] : [ends.b, ends.a];
-      const lane = sideways(from, to, at, LANE_OFFSET);
-      token.view.position.set(lane.x, lane.y);
-    }
-    sweep(this.enemyFigures, this.stamp);
   }
 
   // --- Frame-driven part --------------------------------------------------------------------
