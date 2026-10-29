@@ -3,14 +3,15 @@
 #   docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d
 #
 # The server plays the 60-second ruleset `test-short`, which a prod server refuses to start with
-# (AGENTS.md, section 5.4), so GOW_ENV is `e2e`. The reconnect window and the pause are short and
-# the guest limit is high, so a test does not wait or hit the rate limit. The map pool is the real
-# one (`maps/*.json`, DEC-27), the invite tests play `ridge`.
+# (AGENTS.md, section 5.4), so GOW_ENV is `e2e`. The guest limit is high, so a test does not hit
+# the rate limit. The reconnect window and the pause are long: a slow runner must not lose a match
+# by disconnect during a page reload, or see a pause run out under a test (#484). The map pool is
+# the real one (`maps/*.json`, DEC-27), the invite tests play `ridge`.
 services:
   app:
     environment:
       GOW_ENV: e2e
       GOW_RULESET_PATH: /app/rulesets/test-short.toml
       GOW_GUEST_RATE_LIMIT: ${GOW_GUEST_RATE_LIMIT:-1000}
-      GOW_RECONNECT_WINDOW_S: ${GOW_RECONNECT_WINDOW_S:-10}
-      GOW_PAUSE_MAX_S: ${GOW_PAUSE_MAX_S:-10}
+      GOW_RECONNECT_WINDOW_S: ${GOW_RECONNECT_WINDOW_S:-120}
+      GOW_PAUSE_MAX_S: ${GOW_PAUSE_MAX_S:-300}

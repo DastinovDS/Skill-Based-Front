@@ -183,21 +183,33 @@ test('a page reload in a running match returns to the same match (#189)', async 
   const side = await host.side();
   expect(host.welcomes()).toBe(1);
 
+  // The match is paused for the whole test (#484): on a loaded machine every step takes many
+  // seconds, and the 60-second `test-short` match would end under the test before the forfeit
+  // below. A paused clock makes the speed of the runner irrelevant (the pause limit and the
+  // reconnect window of the e2e stack are long: e2e/compose.e2e.yaml).
+  await host.page.getByRole('button', { name: 'Pause' }).click();
+  await expect(host.page.getByText(/^You paused the match\./)).toBeVisible();
+  await expect(guest.page.getByText(/^The opponent paused the match\./)).toBeVisible();
+
   // F5 in the middle of the match: the page asks the server where the match is and reconnects
   // with the same token (a second `welcome`), instead of landing on the menu.
   await host.page.reload();
   await expect.poll(() => host.welcomes(), { timeout: 30_000 }).toBe(2);
-  await host.expectPlaying();
   expect(host.received.filter((f) => f.type === 'welcome').map((f) => f['player'])).toEqual([
     side,
     side,
   ]);
+  // The same match, not the menu: the pause the host started is still on.
+  await expect(host.page.getByText(/^You paused the match\./)).toBeVisible();
   await expect(host.page.getByRole('button', { name: host.nick })).toBeHidden();
 
-  // The match goes on for both and nobody lost by disconnect: the guest can still forfeit it.
+  // Nobody lost by disconnect and the match goes on for both: the guest's forfeit is queued by the
+  // server (commands wait for the next tick) and applies as soon as the host ends the pause.
   await guest.forfeit();
+  await host.page.getByRole('button', { name: 'Resume' }).click();
   await expect(host.page.getByRole('heading', { name: 'Victory' })).toBeVisible();
   await expect(host.page.getByText('A player gave up.')).toBeVisible();
+  await expect(guest.page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
 
   await host.close();
   await guest.close();
