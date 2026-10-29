@@ -277,7 +277,6 @@
     fill-opacity: 0.35;
     stroke: var(--you);
     stroke-width: 1.6;
-    stroke-dasharray: 4 3;
   }
 
   .alertring {

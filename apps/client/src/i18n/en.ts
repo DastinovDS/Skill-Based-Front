@@ -409,7 +409,8 @@ export const en = {
   'help.legend.enemy': 'Enemy group: a red triangle, a double outline',
   'help.legend.charge': 'Light fill: how many units are charged',
   'help.legend.order': 'Thin arrow: an ordinary order',
-  'help.legend.planned': 'Wide dashed ribbon: a planned order, both sides see it',
+  'help.legend.planned':
+    "Wide ribbon: a planned order, both sides see it (the opponent's has a double outline)",
   'help.legend.alert': 'Amber ring: they are coming for the city, or it is overcrowded',
   'help.legend.chips':
     'Fight arena: a chip per unit (filled: charged, hatched: discharged, dashed: dead), up to 8 a side, then "+N"',

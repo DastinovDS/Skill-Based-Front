@@ -12,6 +12,7 @@ import {
   RING_GAP,
   RING_MAX_SEGMENTS,
   RING_SEGMENT,
+  VP_BADGE_RADIUS,
 } from './style.ts';
 
 /**
@@ -155,6 +156,15 @@ export const BARRACKS_HOUSE: readonly (readonly [number, number])[] = [
   [-3.5, -0.5],
   [-4.5, -0.5],
 ];
+
+/**
+ * Where the VP badge sits: outside the capacity ring at the upper right (the angle of -45 degrees),
+ * from the city centre.
+ */
+export function vpBadgeAt(radius: number): { x: number; y: number } {
+  const d = ringRadius(radius) + VP_BADGE_RADIUS + 1;
+  return { x: d * Math.cos(-Math.PI / 4), y: d * Math.sin(-Math.PI / 4) };
+}
 
 /**
  * Where the barracks mark sits: outside the capacity ring on the left of the city, clear of the VP
