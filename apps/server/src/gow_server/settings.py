@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     replays_dir: Path = Path("data/replays")
     """Command logs and frames files of matches (AGENTS.md, section 9); the server writes only here
     and into the database. Relative paths are relative to the working directory."""
+    replay_retention_days: int = Field(default=30, ge=0)
+    """Days a replay of an unrated match (invite, lobby, bot) is kept after the match ended; then
+    the command log and the frames file are deleted and the match is marked expired (SRV-08, #515).
+    0 keeps them forever."""
+    replay_rated_retention_days: int = Field(default=0, ge=0)
+    """The same for rated matches, whose replays are public. 0 (the default) keeps them forever."""
+    replay_cleanup_interval_s: float = Field(default=3600.0, gt=0)
+    """How often the cleanup task looks for replays past their retention (the first pass runs at
+    start-up)."""
     rulesets_dir: Path = Path("rulesets/archive")
     """Archive of the rulesets matches were played on (``<hash>.toml``): a replay is re-simulated
     with the ruleset named in its header (AGENTS.md, section 4.5). The server archives its ruleset

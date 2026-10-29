@@ -41,8 +41,10 @@ import gzip
 import logging
 import multiprocessing
 import re
+from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Final, Literal
@@ -59,6 +61,7 @@ from gow_server.frames import FramesResult, build_frames
 from gow_server.identity import hash_token
 from gow_server.lifecycle import STATUS_RUNNING
 from gow_server.models import Match, MatchPlayer, Player
+from gow_server.replay_retention import BATCH, PurgeResult, RetentionPolicy
 from gow_sim.replay import ReplayWriter
 
 log = logging.getLogger("gow_server.replays")
@@ -85,6 +88,14 @@ class ReplayPreparing(BaseModel):
     """Body of ``202``: the replay will be there shortly (or when the match is over)."""
 
     status: Literal["preparing"] = "preparing"
+
+
+class ReplayGone(BaseModel):
+    """Body of ``410``. ``reason`` ``expired``: the retention removed the files (SRV-08);
+    ``unavailable``: the match is over and no frames were or will be made."""
+
+    detail: str
+    reason: Literal["expired", "unavailable"]
 
 
 def _header_agrees(file: Path, match: Match) -> bool:
@@ -124,12 +135,15 @@ class ReplayService:
         maps_dir: Path,
         sessions: sessionmaker[Session],
         workers: int = 1,
+        retention: RetentionPolicy | None = None,
     ) -> None:
         self.replays_dir: Final = replays_dir
         self.rulesets_dir: Final = rulesets_dir
         self.maps_dir: Final = maps_dir
         self._sessions: Final = sessions
         self._workers: Final = workers
+        self.retention: Final = retention or RetentionPolicy(unrated_days=0, rated_days=0)
+        """Used by ``purge_expired`` (SRV-08); the default keeps every replay."""
         self._pool: ProcessPoolExecutor | None = None
         self._tasks: set[asyncio.Task[FramesResult | None]] = set()
         self._building: set[str] = set()
@@ -239,9 +253,93 @@ class ReplayService:
         """Where the replay of ``match`` is. Blocking only for a ``stat`` (call from a ``def``)."""
         if self.frames_file(match) is not None:
             return ReplayState.READY
-        if match.status == STATUS_RUNNING or str(match.id) in self._building:
+        if match.status == STATUS_RUNNING or self.is_building(str(match.id)):
             return ReplayState.PREPARING
         return ReplayState.UNAVAILABLE
+
+    # Retention (SRV-08) -----------------------------------------------------------------------
+
+    def is_building(self, match_id: str) -> bool:
+        return match_id in self._building
+
+    def _scan(self) -> dict[str, list[tuple[Path, int, datetime]]]:
+        """Replay files by match id: ``(path, size, modified)``. ``modified`` is naive UTC."""
+        found: defaultdict[str, list[tuple[Path, int, datetime]]] = defaultdict(list)
+        if not self.replays_dir.is_dir():
+            return found
+        for path in self.replays_dir.iterdir():
+            name = path.name
+            if not name.endswith((LOG_SUFFIX, FRAMES_SUFFIX, FRAMES_SUFFIX + ".tmp")):
+                continue
+            match_id = name.split(".", 1)[0]
+            if not _MATCH_ID_RE.fullmatch(match_id):
+                continue
+            try:
+                stat = path.stat()
+            except OSError:  # removed since the listing
+                continue
+            modified = datetime.fromtimestamp(stat.st_mtime, UTC).replace(tzinfo=None)
+            found[match_id].append((path, stat.st_size, modified))
+        return found
+
+    def purge_expired(self, now: datetime) -> PurgeResult:
+        """Delete the replay files that outlived the retention (blocking: call from a thread).
+
+        A match past its retention loses its command log and frames file, its row gets
+        ``replay_path = NULL`` and ``replay_expired_at = now``. Matches that are running or whose
+        frames are being built are skipped. Files of no match (a database that was reset, a
+        leftover ``.tmp``) are removed once they are older than the unrated retention. With the
+        database updated first, a crash between the two steps leaves files that the next pass
+        removes.
+        """
+        files = self._scan()
+        ids = sorted(files)
+        removed_files = removed_bytes = expired = orphans = 0
+        kept = sum(size for group in files.values() for _, size, _ in group)
+        orphan_days = self.retention.unrated_days
+        for start in range(0, len(ids), BATCH):
+            chunk = ids[start : start + BATCH]
+            doomed: list[tuple[Path, int]] = []
+            with self._sessions.begin() as session:
+                rows = {
+                    str(match.id): match
+                    for match in session.execute(
+                        select(Match).where(Match.id.in_([int(i) for i in chunk if i.isdecimal()]))
+                    ).scalars()
+                }
+                for match_id in chunk:
+                    group = files[match_id]
+                    if self.is_building(match_id):
+                        continue
+                    row = rows.get(match_id)
+                    if row is None:
+                        if orphan_days > 0 and all(
+                            (now - modified).days >= orphan_days for _, _, modified in group
+                        ):
+                            doomed.extend((path, size) for path, size, _ in group)
+                            orphans += len(group)
+                        continue
+                    if row.status == STATUS_RUNNING:
+                        continue
+                    due = self.retention.expires_at(row)
+                    if due is None or due > now:
+                        continue
+                    doomed.extend((path, size) for path, size, _ in group)
+                    if row.replay_path is not None:
+                        row.replay_path = None
+                        row.replay_expired_at = now
+                        expired += 1
+            for path, size in doomed:
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    continue
+                except OSError:
+                    log.exception("replay file not removed", extra={"file": path.name})
+                    continue
+                removed_files += 1
+                removed_bytes += size
+        return PurgeResult(removed_files, removed_bytes, expired, orphans, kept - removed_bytes)
 
     def _get_pool(self) -> ProcessPoolExecutor:
         if self._pool is None:
@@ -301,7 +399,10 @@ def _unauthorized() -> HTTPException:
     responses={
         202: {"model": ReplayPreparing, "description": "The replay is being prepared: retry."},
         404: {"description": "No such match."},
-        410: {"description": "The match is over and no replay will be made."},
+        410: {
+            "model": ReplayGone,
+            "description": "The replay expired (retention), or the match is over and none is made.",
+        },
     },
 )
 def get_replay(
@@ -315,7 +416,8 @@ def get_replay(
 
     Rated matches: public. Others: 401 without a valid token, 403 for a player outside the match.
     404: no such match. 202 (``Retry-After``): the match runs or the frames are being built.
-    410: the match is over and there will be no frames (failed build, crash, aborted match).
+    410: the match is over and there will be no frames (failed build, crash, aborted match), or
+    the retention removed them (``reason: expired``, SRV-08).
     """
     match = session.get(Match, match_id)
     if match is None:
@@ -335,6 +437,11 @@ def get_replay(
         ).first()
         if played is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="not your match")
+    if match.replay_expired_at is not None:
+        return JSONResponse(
+            ReplayGone(detail="replay has expired", reason="expired").model_dump(),
+            status_code=status.HTTP_410_GONE,
+        )
     state = service.state(match)
     if state is ReplayState.PREPARING:
         return JSONResponse(
@@ -345,7 +452,10 @@ def get_replay(
     file = service.frames_file(match)
     if state is ReplayState.UNAVAILABLE or file is None:
         log.warning("replay is not available", extra={"match_id": match_id})
-        raise HTTPException(status_code=status.HTTP_410_GONE, detail="replay is not available")
+        return JSONResponse(
+            ReplayGone(detail="replay is not available", reason="unavailable").model_dump(),
+            status_code=status.HTTP_410_GONE,
+        )
     # no-cache: the browser may keep the file but asks every time (a match id can come back with
     # another match behind it after a database reset), the ETag makes that a cheap 304.
     cache = "public" if match.rated else "private"

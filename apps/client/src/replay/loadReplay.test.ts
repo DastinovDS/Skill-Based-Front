@@ -39,6 +39,13 @@ describe('loadReplay', () => {
     await expect(loadReplay('1', null, answer(status))).rejects.toMatchObject({ code });
   });
 
+  it('tells an expired replay from an unavailable one by the reason of the 410', async () => {
+    const expired = answer(410, { detail: 'replay has expired', reason: 'expired' });
+    await expect(loadReplay('1', null, expired)).rejects.toMatchObject({ code: 'expired' });
+    const other = answer(410, { detail: 'replay is not available', reason: 'unavailable' });
+    await expect(loadReplay('1', null, other)).rejects.toMatchObject({ code: 'unavailable' });
+  });
+
   it('maps a lost connection to network, an unknown format to format', async () => {
     const down: typeof fetch = () => Promise.reject(new TypeError('offline'));
     await expect(loadReplay('1', null, down)).rejects.toMatchObject({ code: 'network' });

@@ -90,9 +90,30 @@ then `deploy/restore.sh <the predeploy backup of this deploy>`.
 
 ## 4. Backups
 
-- `deploy/backup.sh [label]` writes `$BACKUP_DIR/gow-<UTC time>-<label>.tar.gz`: `gow.db` (a `VACUUM INTO`
-  snapshot, safe with a running server and WAL; `PRAGMA integrity_check` before packing) and
-  `replays/`. The last `BACKUP_KEEP` (14 by default) archives of each label are kept.
+- `deploy/backup.sh [label]` makes two things (SRV-08, #515):
+  - `$BACKUP_DIR/gow-<UTC time>-<label>.tar.gz` with `gow.db` only (a `VACUUM INTO` snapshot, safe with a running
+    server and WAL; `PRAGMA integrity_check` before packing). The last `BACKUP_KEEP` (14 by default) archives of each
+    label are kept; they are small, because the replays are not in them any more.
+  - the mirror `$BACKUP_DIR/replays/`: the replay files never change once written, so each run copies only the files
+    modified since the previous run (`replays/.last-sync` holds the stamp, set back two minutes) and removes from the
+    mirror what the server's retention removed. The first run copies everything. The database is snapshotted first
+    and the replays copied after it, so the mirror holds every file the archive refers to.
+  - The script fails (and the deploy stops at the `predeploy` backup) if the replays directory in the container is
+    missing: an empty file list must not wipe the mirror.
+  - A one-off full archive with the replays inside (the old format):
+    `docker compose exec -T app python -m gow_server.backup create --with-replays > full.tar.gz`.
+- **Replay retention** (SRV-08, #515): the server deletes the command log and the frames file of a match once it is
+  older than `GOW_REPLAY_RETENTION_DAYS` (unrated matches: invites, lobby, bots; default 30) or
+  `GOW_REPLAY_RATED_RETENTION_DAYS` (rated, public replays; default 0 = forever), counted from the end of the match; 0
+  keeps forever. A task in the server runs at start-up and then every `GOW_REPLAY_CLEANUP_INTERVAL_S` (3600 s), in a
+  thread; it also removes files of no match (a reset database, a leftover `.tmp`) once they are older than the
+  unrated limit. The `matches` row stays with `replay_path = NULL` and `replay_expired_at` set: result and rating are
+  kept, and `GET /api/replays/{id}` answers `410` with `"reason": "expired"` (the viewer says "no longer available").
+  Each pass logs `replay cleanup` with the counts of files, bytes and matches. Disk use of the volume:
+  `docker compose exec app du -sh /data/replays`.
+- **[manual] Disk usage alert.** There is no disk metric in the server yet; watch the free space of the VPS and of
+  `BACKUP_DIR` from outside (`df -h`, the provider's monitoring). Check once after the first deploy of this change that
+  the cleanup removed what you expect (`docker compose logs app | grep "replay cleanup"`).
 - The nightly backup: `deploy/systemd/gow-backup.timer` (03:30 UTC, label `nightly`). Check:
   `systemctl list-timers gow-backup.timer`, `journalctl -u gow-backup`.
 - **[manual] A copy off the server.** A backup on the same disk does not protect against losing the VPS. For example, a Hetzner
@@ -108,7 +129,10 @@ deploy/restore.sh /var/backups/skill-based-front/gow-<...>.tar.gz
 ```
 
 The script stops `app`, checks the archive (`integrity_check`, applied migrations), replaces the database
-(together with `-wal`/`-shm`) and the replays, starts the stack. On a clean machine: sections 1 and 2 without `deploy.sh`,
+(together with `-wal`/`-shm`), starts the stack. The replays come from the archive if it has a `replays/` (archives made
+before SRV-08), otherwise from the mirror `replays/` in the directory of the archive (mounted read-only into the
+one-off container); the mirror is as new as the latest backup, so after restoring an older archive some replays of
+matches the database knows may be missing (the viewer then says "unavailable"). On a clean machine: sections 1 and 2 without `deploy.sh`,
 copy the archive (`scp`), `docker compose build`, then `deploy/restore.sh <archive>`.
 
 **[manual] A check on a clean machine** (once before a release and once a quarter): a new VPS or a local

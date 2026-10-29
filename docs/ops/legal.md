@@ -25,7 +25,7 @@ must fill in the real operator data.
 | number of matches played and the last match id (hides the key hints after the third match) | `localStorage["sbf.hints.matches"]`, `["sbf.hints.last"]` (`hud/hints.ts`) | until the player clears it |
 | interface language | `localStorage["sbf.locale"]` (`locale.ts`); written only when the viewer picks a language, and the selector is hidden while only `en` exists (#387), so currently not written | the same |
 | rating, matches, sides (`ratings`, `matches`, `match_players`) | DB | until deletion on request |
-| replays (`*.jsonl.gz`, `*.frames.json.gz`) | `/data/replays`, contain no nick | indefinitely |
+| replays (`*.jsonl.gz`, `*.frames.json.gz`) | `/data/replays` and the backup mirror `$BACKUP_DIR/replays`, contain no nick | unrated matches: `GOW_REPLAY_RETENTION_DAYS` after the match (30 by default); rated matches: `GOW_REPLAY_RATED_RETENTION_DAYS` (0 by default: indefinitely); the mirror follows within one backup (SRV-08, #515) |
 | game statistics from the match command log (stance, command rate, supply actions, the share of scheduled orders, CP spending): `gow-bots analyze` and `gow-bots stats` compute them offline from a replay; not stored anywhere; tied to a player only by the match side (`match_players`), for balance and match review (#375) | the command output, not stored in the DB or on the server | as for replays |
 | IP when a guest is created | process memory, `SlidingWindowLimiter` (window `GOW_GUEST_RATE_WINDOW_S`, 1 h) | until the window ends or a restart |
 | IP and `nick_key` of password login attempts (`abuse.Limits.login_ip`, `login_nick`, `login_nick_total`) | process memory (windows `GOW_LOGIN_IP_RATE_WINDOW_S`, `GOW_LOGIN_NICK_RATE_WINDOW_S`, 10 min) | until the window ends or a restart |
