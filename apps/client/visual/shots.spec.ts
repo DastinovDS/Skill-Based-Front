@@ -206,3 +206,18 @@ test('shot of the progress cells in grey scale at 60% scale', async ({ page }) =
   });
   await page.locator('canvas').screenshot({ path: join(OUT, 'progress-gray-60.png') });
 });
+
+// The enemy figures of the roads (EF2 "Pointer", #354) in grey scale at 60% of the map scale: the direction (the head),
+// the level (the plate, the dashes) and the half memory with its dashed tick must read without the hue.
+// `figures-gray-60.png`, the map alone.
+test('shot of the enemy figures in grey scale at 60% scale', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 480 });
+  await page.goto('/?scene=figures');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.waitForTimeout(500);
+  await page.addStyleTag({
+    content: '.hud { display: none !important; } canvas { filter: grayscale(1); }',
+  });
+  await page.locator('canvas').screenshot({ path: join(OUT, 'figures-gray-60.png') });
+});

@@ -16,7 +16,7 @@ import { edgeEnds, edgePoint, LANE_OFFSET, sideways } from './layout.ts';
 import { reducedMotion } from './motion.ts';
 import { knownOfFigure } from './rangeLabel.ts';
 import { Token, type EntityKit } from './shapes.ts';
-import { ENEMY, PAPER, PLATE_FILL } from './style.ts';
+import { BG, ENEMY, PAPER, PLATE_FILL } from './style.ts';
 
 /** One enemy figure on a half of a road: its container sits on its lane of the road. */
 interface Figure {
@@ -61,6 +61,8 @@ export class FigureView {
   private readonly style: TextStyle;
   private stamp = 0;
   private started = false;
+  /** The marks Graphics holds something now. */
+  private marked = false;
 
   constructor(
     private readonly map: MapFile,
@@ -196,7 +198,13 @@ export class FigureView {
 
   private drawHead(g: Graphics, dir: Point): void {
     const points = headCorners(dir).flatMap((p) => [p.x, p.y]);
-    g.clear().poly(points).fill(ENEMY).stroke({ width: 1.6, color: PAPER, join: 'round' });
+    // A dark casing under the light outline: the head reads on the red of the enemy's territory.
+    g.clear()
+      .poly(points)
+      .stroke({ width: 4, color: BG, join: 'round' })
+      .poly(points)
+      .fill(ENEMY)
+      .stroke({ width: 1.6, color: PAPER, join: 'round' });
   }
 
   private setPlate(figure: Figure, text: string | null): void {
@@ -215,7 +223,10 @@ export class FigureView {
   /** The ring and the tick of the figures that came out of the fog in the last 2 s, on their border points. */
   private drawMarks(tick: number, tickHz: number): void {
     const g = this.marks;
+    // Nothing to draw and nothing drawn: no work every frame.
+    if (this.entries.length === 0 && !this.marked) return;
     g.clear();
+    this.marked = this.entries.length > 0;
     const reduced = reducedMotion();
     const { tickSeconds, tickHalf } = FIGURE.entry;
     for (let i = this.entries.length - 1; i >= 0; i--) {

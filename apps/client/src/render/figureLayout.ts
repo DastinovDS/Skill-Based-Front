@@ -14,7 +14,7 @@ import { rangeLabel } from './rangeLabel.ts';
 
 export const FIGURE = {
   /** The head: its tip this far in front of the token centre, its length and its width. */
-  head: { tip: 30, length: 14, width: 8 },
+  head: { tip: 30, length: 14, width: 14 },
   /** The plate with the level: its centre this far under the token centre, its height and side padding. */
   plate: { drop: 26, height: 16, padX: 6, fontSize: 11 },
   /** The figure goes from invisible to opaque over this many world units from the border point. */

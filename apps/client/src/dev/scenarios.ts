@@ -19,6 +19,7 @@ import type {
 } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
+import { FIGURES_VIEW, figuresSnapshot } from './figuresScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 
@@ -345,7 +346,11 @@ function rangesSnapshot(): SnapshotMsg {
             half('range', seen(0, 'range', ['attack'], { enemy_range: { low: 6, high: 10 } })),
             half('fog', seen(120, 'presence', ['defense'])),
           ],
-          enemy_groups: [figure('r1', 350, false, 'range', { units_range: { low: 6, high: 10 } })],
+          enemy_groups: [
+            figure('r1', 350, false, 'range', { units_range: { low: 6, high: 10 } }),
+            // Just out of the haze, near the border point: it is half dissolved (EF2, #354).
+            figure('r3', 470, true, 'range', { units_range: { low: 1, high: 2 } }),
+          ],
         };
       case 3:
         // 3-1: both halves seen, an exact figure going to 3 and a range one going to 1.
@@ -464,6 +469,15 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     events: [round(ARTERY_TICK - 12, { node: 4 }, 2, 0, 1)],
     view: ARTERY_VIEW,
     // As in `mvp-1`: the own capital and the enemy city 5 next door show the barracks (DEC-31).
+    cityUpgrades: true,
+  },
+  {
+    // The artery moment with enemy figures on roads in every level, and half memory (#354).
+    id: 'figures',
+    map: 'artery',
+    snapshot: figuresSnapshot(bundledMap('artery')),
+    events: [],
+    view: FIGURES_VIEW,
     cityUpgrades: true,
   },
   {
