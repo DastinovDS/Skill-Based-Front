@@ -12,11 +12,11 @@ describe('ExitDialog', () => {
     setLocale('en');
   });
 
-  function render(rated: boolean, onforfeit = vi.fn()): string {
+  function render(rated: boolean, onforfeit = vi.fn(), banSeconds = 0): string {
     setLocale('en');
     component = mount(ExitDialog, {
       target: document.body,
-      props: { open: true, rated, onforfeit, onstay: vi.fn() },
+      props: { open: true, rated, banSeconds, onforfeit, onstay: vi.fn() },
     });
     flushSync();
     return document.querySelector('[role=alertdialog]')?.textContent ?? '';
@@ -28,13 +28,30 @@ describe('ExitDialog', () => {
     expect(text).not.toMatch(/queue/);
   });
 
-  it('explains the queue lock before a forfeit in a ranked match (DEC-34)', () => {
+  it('says a first forfeit in a ranked match carries no lock yet (DEC-34)', () => {
     const text = render(true);
-    expect(text).toContain(translate('en', 'exit.ratedText'));
-    expect(text).toMatch(/lock the matchmaking queue/);
+    expect(text).toContain(translate('en', 'exit.rated.noLock'));
+    expect(text).toMatch(/does not lock the matchmaking queue/);
     expect(text).toMatch(/bots, friends and the lobby stay open/);
     expect(text).toMatch(/opponent's rating unchanged/);
     expect(text).not.toContain(translate('en', 'exit.text'));
+  });
+
+  it.each([
+    [300, '5 min'],
+    [1800, '30 min'],
+    [7200, '2 h'],
+    [90, '2 min'],
+  ])('shows the lock the server announces: %i s as %s', (seconds, shown) => {
+    const text = render(true, vi.fn(), seconds);
+    expect(text).toContain(`locks the matchmaking queue for ${shown} `);
+    expect(text).not.toContain(translate('en', 'exit.rated.noLock'));
+  });
+
+  it('ignores the lock length in a match that is not ranked', () => {
+    const text = render(false, vi.fn(), 300);
+    expect(text).toContain(translate('en', 'exit.text'));
+    expect(text).not.toMatch(/queue/);
   });
 
   it('still forfeits only on the confirmation', () => {

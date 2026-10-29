@@ -1,17 +1,19 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { t } from '../i18n/index.ts';
+  import { t, tf } from '../i18n/index.ts';
 
   interface Props {
     open: boolean;
     /** A ranked match (DEC-34): the warning names the queue lock a forfeit can bring. */
     rated?: boolean;
+    /** Seconds the queue would be locked for a forfeit now, as the server says (`welcome.forfeit_ban_s`); 0: no lock. */
+    banSeconds?: number;
     /** The player confirmed: forfeit the match. */
     onforfeit: () => void;
     onstay: () => void;
   }
 
-  let { open, rated = false, onforfeit, onstay }: Props = $props();
+  let { open, rated = false, banSeconds = 0, onforfeit, onstay }: Props = $props();
 
   let stay: HTMLButtonElement | undefined = $state();
   let confirm: HTMLButtonElement | undefined = $state();
@@ -20,6 +22,22 @@
   $effect(() => {
     if (open) void tick().then(() => stay?.focus());
   });
+
+  /** Display only: the server's length in whole hours or rounded-up minutes. */
+  function duration(seconds: number): string {
+    if (seconds % 3600 === 0) return tf('exit.duration.hours', { n: seconds / 3600 });
+    return tf('exit.duration.minutes', { n: Math.ceil(seconds / 60) });
+  }
+
+  const ratedText = $derived(
+    [
+      t('exit.rated.lead'),
+      banSeconds > 0
+        ? tf('exit.rated.lock', { duration: duration(banSeconds) })
+        : t('exit.rated.noLock'),
+      t('exit.rated.early'),
+    ].join(' '),
+  );
 
   function onKey(event: KeyboardEvent): void {
     if (event.key !== 'Tab') return;
@@ -43,7 +61,7 @@
       onkeydown={onKey}
     >
       <h2 id="exit-title">{t('exit.title')}</h2>
-      <p id="exit-text">{t(rated ? 'exit.ratedText' : 'exit.text')}</p>
+      <p id="exit-text">{rated ? ratedText : t('exit.text')}</p>
       <div class="actions">
         <button type="button" class="danger" bind:this={confirm} onclick={onforfeit}>
           {t('exit.confirm')}

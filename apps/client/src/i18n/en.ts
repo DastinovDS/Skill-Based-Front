@@ -398,8 +398,15 @@ export const en = {
   'start.capital': 'Opponent: {nick}',
   'exit.title': 'Leave the match?',
   'exit.text': 'This is a forfeit: the match ends with your defeat.',
-  'exit.ratedText':
-    "This is a ranked match. A forfeit is a defeat, and forfeits in ranked matches lock the matchmaking queue: a single one carries no lock, repeated ones lock it for longer each time (bots, friends and the lobby stay open). A forfeit in the first minutes also leaves your opponent's rating unchanged.",
+  'exit.rated.lead': 'This is a ranked match. A forfeit is a defeat.',
+  'exit.rated.noLock':
+    'A forfeit now does not lock the matchmaking queue, but repeated ones do, for longer each time (bots, friends and the lobby stay open).',
+  'exit.rated.lock':
+    'A forfeit now locks the matchmaking queue for {duration} (bots, friends and the lobby stay open).',
+  'exit.rated.early':
+    "A forfeit in the first minutes also leaves your opponent's rating unchanged.",
+  'exit.duration.minutes': '{n} min',
+  'exit.duration.hours': '{n} h',
   'exit.confirm': 'Forfeit and leave',
   'exit.stay': 'Stay',
   'help.title': 'Help',

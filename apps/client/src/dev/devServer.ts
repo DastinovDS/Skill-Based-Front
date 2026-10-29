@@ -312,6 +312,7 @@ export function createDevServer(
           rated: false,
           unrated_reason: 'casual',
           calibration: null,
+          forfeit_ban_s: 0,
           pause_available: true,
         });
         this.push();

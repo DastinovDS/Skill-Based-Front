@@ -105,6 +105,9 @@ class SidePlan:
     """Matches that changed this account's rating before this one."""
     account: bool
     """A password account: the only kind that calibrates and is rated."""
+    forfeit_ban_s: int = 0
+    """Queue ban in seconds a resign of this side would bring if it happened now (DEC-34,
+    item 3); ``0``: none, or the match is not flagged rated."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +141,8 @@ class Notice:
     rating: RatingChange | None
     unrated_reason: UnratedReason | None
     calibration: Calibration | None
+    forfeit_ban_s: int = 0
+    """Only in ``welcome``: the queue ban a forfeit would bring now."""
 
     @property
     def rated(self) -> bool:
@@ -182,7 +187,7 @@ def intro_notice(plan: RatingPlan | None, side: int) -> Notice:
     if plan is None:
         return CASUAL_NOTICE
     own = plan.sides[side]
-    return Notice(None, own.reason, _calibration(plan, own, own.played))
+    return Notice(None, own.reason, _calibration(plan, own, own.played), own.forfeit_ban_s)
 
 
 def end_notice(plan: RatingPlan | None, settlement: Settlement | None, side: int) -> Notice:
@@ -239,8 +244,14 @@ def plan_queue_match(
                 reasons[index] = UnratedReason.OPPONENT_CALIBRATING
             else:
                 modes[index] = RatingMode.RATED
+    flagged_rated = any(mode is not RatingMode.NONE for mode in modes)
+    since = now - timedelta(seconds=rules.resign_window_s)
+    bans = [
+        rules.ban_s(_resigns_since(session, account, since) + 1) if flagged_rated else 0
+        for account in accounts
+    ]
     sides = tuple(
-        SidePlan(modes[i], reasons[i], ratings[i], played[i], password[i]) for i in (0, 1)
+        SidePlan(modes[i], reasons[i], ratings[i], played[i], password[i], bans[i]) for i in (0, 1)
     )
     return RatingPlan((sides[0], sides[1]), rules.early_resign_ticks(tick_hz), total)
 
@@ -353,19 +364,7 @@ def record_resign(
     ).scalar_one_or_none()
     if loser is None:
         return None
-    resigns = session.execute(
-        select(func.count())
-        .select_from(MatchPlayer)
-        .join(Match, Match.id == MatchPlayer.match_id)
-        .where(
-            MatchPlayer.player_id == loser,
-            MatchPlayer.result == "loss",
-            Match.rated.is_(True),
-            Match.status == "saved",
-            Match.end_reason.in_(RESIGN_END_REASONS),
-            Match.ended_at > now - timedelta(seconds=rules.resign_window_s),
-        )
-    ).scalar_one()
+    resigns = _resigns_since(session, loser, now - timedelta(seconds=rules.resign_window_s))
     seconds = rules.ban_s(resigns)
     if seconds <= 0:
         return None
@@ -374,6 +373,23 @@ def record_resign(
     if player.queue_banned_until is None or player.queue_banned_until < until:
         player.queue_banned_until = until
     return player.queue_banned_until
+
+
+def _resigns_since(session: Session, player_id: int, since: datetime) -> int:
+    """Resigns of ``player_id`` (lost saved rated matches ended by a resign) after ``since``."""
+    return session.execute(
+        select(func.count())
+        .select_from(MatchPlayer)
+        .join(Match, Match.id == MatchPlayer.match_id)
+        .where(
+            MatchPlayer.player_id == player_id,
+            MatchPlayer.result == "loss",
+            Match.rated.is_(True),
+            Match.status == "saved",
+            Match.end_reason.in_(RESIGN_END_REASONS),
+            Match.ended_at > since,
+        )
+    ).scalar_one()
 
 
 def ban_seconds_left(player: Player, now: datetime) -> int:

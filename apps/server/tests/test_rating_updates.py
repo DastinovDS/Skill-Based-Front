@@ -91,3 +91,20 @@ def test_match_end_of_an_unrated_match_has_no_rating() -> None:
         assert (end.rated, end.unrated_reason) == (False, UnratedReason.CASUAL)
 
     asyncio.run(scenario())
+
+
+def test_the_intro_of_a_runner_tells_each_side_its_forfeit_ban() -> None:
+    async def scenario() -> None:
+        clock = ManualClock()
+        mapdef = load_map(ROOT / "packages" / "sim" / "tests" / "maps" / "line3.json")
+        rules = load_ruleset(ROOT / "rulesets" / "test-short.toml")
+        manager = MatchManager(clock, new_id=lambda: "m1")
+        sides = (
+            SidePlan(RatingMode.RATED, None, Glicko(), 5, True, forfeit_ban_s=300),
+            SidePlan(RatingMode.RATED, None, Glicko(), 5, True, forfeit_ban_s=7200),
+        )
+        plan = RatingPlan(sides, early_resign_ticks=0, calibration_total=5)
+        runner = manager.create("line3", mapdef, rules, (101, 202), rating_plan=plan, private=False)
+        assert [runner.intro_notice(p).forfeit_ban_s for p in (0, 1)] == [300, 7200]
+
+    asyncio.run(scenario())
