@@ -1,14 +1,8 @@
 import { Container, Text, TextStyle } from 'pixi.js';
 import type { BuildKind, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { CityDevelopment } from './source.ts';
-import {
-  barracksAt,
-  barTop,
-  cityRadius,
-  lockedPlaces,
-  vpBadgeAt,
-  showsBarracks,
-} from './cityLayout.ts';
+import { barTop, cityRadius, lockedPlaces, vpBadgeAt, showsBarracks } from './cityLayout.ts';
+import { columnKinds, columnSlots, markScale } from './defenseLayout.ts';
 import {
   CAPITAL_RADIUS,
   ENEMY,
@@ -139,6 +133,10 @@ export class CityView {
   private readonly radii: number[];
   private readonly vpStyle: TextStyle;
   private supplyMode = false;
+  /** Camera scale: the barracks mark never gets smaller than 16 px on screen (#349). */
+  private cameraScale = 1;
+  /** The signs of "Defense" each city carries (the column of the barracks is shared with them). */
+  private readonly defenses = new Map<number, number>();
   /** Set after the first snapshot: a body that changes after it (a capture) cross-fades. */
   private warm = false;
   /** The bodies that were just replaced, fading out over the new ones (#508). */
@@ -322,6 +320,59 @@ export class CityView {
     });
   }
 
+  /** The camera scale (CSS px per world unit): the barracks mark keeps its 16 px on screen. */
+  setCameraScale(scale: number): void {
+    if (markScale(scale) === markScale(this.cameraScale)) {
+      this.cameraScale = scale;
+      return;
+    }
+    this.cameraScale = scale;
+    this.placeAllBarracks();
+  }
+
+  /**
+   * How many signs of "Defense" stand in the column of each city (`defenseSigns`): the barracks mark
+   * is the top of the same column, so it moves up when a sign comes under it.
+   */
+  setDefenseCounts(counts: ReadonlyMap<number, number>): void {
+    let same = counts.size === this.defenses.size;
+    if (same) {
+      for (const [id, n] of counts) {
+        if (this.defenses.get(id) !== n) {
+          same = false;
+          break;
+        }
+      }
+    }
+    if (same) return;
+    this.defenses.clear();
+    for (const [id, n] of counts) this.defenses.set(id, n);
+    this.placeAllBarracks();
+  }
+
+  /** Whether city `id` shows the barracks mark now (the first entry of its column). */
+  hasBarracks(id: number): boolean {
+    return this.states[id]?.barracks === true;
+  }
+
+  private placeAllBarracks(): void {
+    this.states.forEach((state, id) => {
+      if (state !== null && state.barracks)
+        this.placeBarracks(id, true, this.radii[id] ?? NODE_RADIUS);
+    });
+  }
+
+  private placeBarracks(id: number, shown: boolean, radius: number): void {
+    const mark = this.barracks[id];
+    if (mark === undefined || !shown) return;
+    const scale = markScale(this.cameraScale);
+    const kinds = columnKinds(true, this.defenses.get(id) ?? 0);
+    const [slot] = columnSlots(radius, kinds, scale);
+    if (slot === undefined) return;
+    mark.position.set(slot.x, slot.y);
+    mark.scale.set(scale);
+  }
+
   setLabelResolution(resolution: number): void {
     for (const text of this.vpLabels) {
       if (text.resolution !== resolution) text.resolution = resolution;
@@ -481,10 +532,7 @@ export class CityView {
 
     // The barracks house: the same shape for both sides, the rim takes the colour of the owner.
     barracks.set(state.barracks ? barracksSpec(kind === 'enemy' ? ENEMY : YOU) : null);
-    if (state.barracks) {
-      const at = barracksAt(radius);
-      barracks.position.set(at.x, at.y);
-    }
+    this.placeBarracks(id, state.barracks, radius);
     barracks.visible = state.barracks && !this.supplyMode;
 
     const { capacity, warehouse } = state;

@@ -29,24 +29,9 @@ import type { MapLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
 import { reducedMotion } from './motion.ts';
 import { splitOrder, trackOrder } from './orderTrack.ts';
-import type { BakedSprite } from './bake.ts';
-import { shieldSpec } from './bakedShapes.ts';
 import { lighten } from './fightFx.ts';
-import type { EntityKit } from './shapes.ts';
 import type { OrderDelays } from './source.ts';
-import {
-  BG,
-  CHEVRON,
-  DEFENSE_ARC,
-  INTENT_ICON_ANGLE,
-  INTENT_ICON_DISTANCE,
-  ORDER_LINE,
-  ownerColor,
-  PAPER,
-  PLATE_FILL,
-  RIBBON,
-  WARN,
-} from './style.ts';
+import { BG, CHEVRON, ORDER_LINE, ownerColor, PAPER, PLATE_FILL, RIBBON, WARN } from './style.ts';
 
 /** One pill of the bonus of an own planned order. */
 interface BonusPill {
@@ -57,13 +42,6 @@ interface BonusPill {
   key: string;
 }
 
-function around(distance: number, degrees: number): Point {
-  const rad = (degrees * Math.PI) / 180;
-  return { x: distance * Math.cos(rad), y: distance * Math.sin(rad) };
-}
-
-/** Radius of the delay arc around the disc of "Defense" (the disc has radius 9, 9.7). */
-const ARC_RADIUS = 9 + DEFENSE_ARC.gap + DEFENSE_ARC.width / 2;
 /** The pill "◇ +N" beside an own planned ribbon (screen px): the diamond, the padding, the height. */
 const BONUS_PILL = { diamond: 5, gap: 4, padX: 7, height: 20 } as const;
 const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x, p.y]);
@@ -74,8 +52,7 @@ const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x,
  * along the server's path of an own order, ending in the centre of the target city: the client
  * finds no route), filling from the start to the tip while the delay runs and pulsing once when it
  * ends, the ring around the target of an enemy intent
- * (`--warn` over an own city: it is coming for you), the shield disc of "Defense" with its delay
- * arc, and the thin order lines with running chevrons of own ordinary orders. Everything is
+ * (`--warn` over an own city: it is coming for you), and the thin order lines with running chevrons of own ordinary orders. Everything is
  * redrawn every frame (a few shapes): the fill and the dashes run, the positions of own groups
  * move. "Less motion" stops the running dashes and chevrons and the pulse.
  */
@@ -83,9 +60,6 @@ export class IntentView {
   private readonly lines = new Graphics();
   private readonly ribbons = new Graphics();
   private readonly rings = new Graphics();
-  private readonly arcs = new Graphics();
-  private readonly icons = new Container({ label: 'intent-icons' });
-  private readonly iconPool: Container[] = [];
   /** The pills of the bonus of own planned orders, a pool; drawn at one unit a screen px. */
   private readonly bonusLayer = new Container({ label: 'plan-bonus' });
   private readonly bonusPills: BonusPill[] = [];
@@ -107,12 +81,11 @@ export class IntentView {
     private readonly map: MapFile,
     layers: MapLayers,
     private readonly me: PlayerId,
-    private readonly kit: EntityKit,
     private readonly radiusOf: (node: number) => number,
   ) {
     // Order lines go under the tokens of the groups they belong to; arrows of intents on top.
     layers.layer.groups.addChildAt(this.lines, 0);
-    layers.layer.intents.addChild(this.ribbons, this.rings, this.icons, this.arcs, this.bonusLayer);
+    layers.layer.intents.addChild(this.ribbons, this.rings, this.bonusLayer);
   }
 
   /** Texture pixels per text unit for what is drawn at one unit a CSS px (the bonus pills). */
@@ -144,9 +117,7 @@ export class IntentView {
     this.drawOrders(frame.groups, spots, seconds * CHEVRON.runSpeed);
     this.ribbons.clear();
     this.rings.clear();
-    this.arcs.clear();
     this.bonusUsed = 0;
-    let icons = 0;
     for (const intent of intents) {
       const from = nodePoint(this.map, intent.origin);
       if (from === undefined) continue;
@@ -159,15 +130,8 @@ export class IntentView {
         const since =
           this.delays === null ? -1 : frame.tick - (intent.created_tick + this.delays.planned);
         this.drawRibbon(intent, pool, progress, since, seconds, nodes[intent.target]?.owner);
-      } else if (intent.kind !== 'planned_move') {
-        // Defense has no delay since DEC-30: its bonus grows, the disc has no arc (#318).
-        this.placeIcon(icons++, intent, from, null);
       }
-    }
-    // Hide the icons left over from the previous frame.
-    for (let i = icons; i < this.iconPool.length; i++) {
-      const icon = this.iconPool[i];
-      if (icon !== undefined) icon.visible = false;
+      // The sign of "Defense" is the city's own (`DefenseView`, #349).
     }
     for (let i = this.bonusUsed; i < this.bonusPills.length; i++) {
       const pill = this.bonusPills[i];
@@ -179,8 +143,6 @@ export class IntentView {
     this.lines.destroy();
     this.ribbons.destroy();
     this.rings.destroy();
-    this.arcs.destroy();
-    this.icons.destroy({ children: true });
     this.bonusLayer.destroy({ children: true });
     this.bonusStyle.destroy();
   }
@@ -413,36 +375,6 @@ export class IntentView {
     pill.view.scale.set(1 / this.cameraScale);
     pill.view.position.set(spot.x, spot.y);
     pill.view.visible = true;
-  }
-
-  private placeIcon(index: number, intent: WireIntent, at: Point, progress: number | null): void {
-    let icon = this.iconPool[index];
-    if (icon === undefined) {
-      icon = this.icons.addChild(new Container());
-      // The only intent without a destination is "Defense" (DEC-08): the shield badge, baked like
-      // the one on a group (BL1, #347).
-      icon.addChild(this.kit.sprites.sprite());
-      this.iconPool.push(icon);
-    }
-    const [badge] = icon.children as [BakedSprite];
-    badge.set(shieldSpec(ownerColor(this.me, intent.owner), intent.owner !== this.me));
-    const radius = this.radiusOf(intent.origin);
-    const offset = around(radius + INTENT_ICON_DISTANCE, INTENT_ICON_ANGLE);
-    const x = at.x + offset.x;
-    const y = at.y + offset.y;
-    icon.position.set(x, y);
-    icon.visible = true;
-    if (progress !== null && progress < 1) {
-      // The delay of the shield: an arc that grows round the disc from the top.
-      const start = -Math.PI / 2;
-      this.arcs
-        .arc(x, y, ARC_RADIUS, start, start + Math.max(0.05, progress) * Math.PI * 2)
-        .stroke({
-          width: DEFENSE_ARC.width,
-          color: ownerColor(this.me, intent.owner),
-          cap: 'round',
-        });
-    }
   }
 
   /**

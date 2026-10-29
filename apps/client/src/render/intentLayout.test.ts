@@ -26,7 +26,8 @@ import {
   signRim,
   tailStart,
 } from './intentLayout.ts';
-import { barracksAt, vpBadgeAt } from './cityLayout.ts';
+import { vpBadgeAt } from './cityLayout.ts';
+import { barracksAt } from './defenseLayout.ts';
 import { GHOST_REJECT_MS, GHOST_SHAKE_MS, RIBBON } from './style.ts';
 
 const A = { x: 0, y: 0 };

@@ -8,10 +8,8 @@ import {
   triangleTicksSpec,
   shieldSpec,
 } from './bakedShapes.ts';
-import { tf } from '../i18n/index.ts';
 import type { Mode, PlayerId } from '../protocol.gen.ts';
 import type { WarehouseBar } from './cityLayout.ts';
-import type { DefenseBonus } from './cityStacks.ts';
 import { reducedMotion } from './motion.ts';
 import { EaseTween } from './tween.ts';
 import { chargeLevel, countLabel, triangleHeight, triangleSide } from './layout.ts';
@@ -27,8 +25,6 @@ import {
   PACKET_TAIL,
   PACKET_TRANSFER,
   PAPER,
-  PLATE_FILL,
-  DEFENSE_LABEL,
   SHIELD_BADGE_SCALE,
   UNIT_INNER_SCALE,
   UNIT_LABEL,
@@ -99,8 +95,6 @@ export class EntityKit {
   readonly questionStyle: TextStyle;
   /** The tokens whose charge fill is still easing (#508): `advance` steps them, once per frame. */
   private readonly easing = new Set<Token>();
-  /** "+N / M" beside the shield of an own group in "Defense" (DEC-30): dark stroke, like the number inside. */
-  readonly defenseStyle: TextStyle;
 
   constructor(
     readonly me: PlayerId,
@@ -159,12 +153,6 @@ export class EntityKit {
       fill: GLYPH_COLOR,
       stroke: { color: BG, width: 3, join: 'round' },
     });
-    this.defenseStyle = new TextStyle({
-      fontFamily: 'system-ui, sans-serif',
-      fontSize: DEFENSE_LABEL.fontSize,
-      fontWeight: '700',
-      fill: GLYPH_COLOR,
-    });
     this.questionStyle = new TextStyle({
       fontFamily: 'system-ui, sans-serif',
       fontSize: UNIT_QUESTION_FONT_SIZE,
@@ -200,7 +188,6 @@ export class EntityKit {
     this.textStyle.destroy();
     this.insideStyle.destroy();
     this.questionStyle.destroy();
-    this.defenseStyle.destroy();
   }
 }
 
@@ -213,8 +200,6 @@ export interface TokenSpec {
   owner: PlayerId;
   modes: readonly Mode[];
   counts: { units: number; charged: number } | null;
-  /** An own group in "Defense": the bonus it holds and its cap, shown as "+N / M" by the shield (DEC-30). */
-  defense?: DefenseBonus | null;
   /**
    * The range of the units where only that is known («3-5», DEC-21, item 4), already written out
    * (`rangeLabel`): shown in the pill under the tip instead of the "?", no charges, `counts` is `null`.
@@ -235,9 +220,7 @@ function specKey(spec: TokenSpec): string {
   // The charged count is the fill of the triangle, so it belongs to the key, not to the text.
   const counts =
     spec.counts === null ? '-' : `${String(spec.counts.units)}/${String(spec.counts.charged)}`;
-  const defense =
-    spec.defense == null ? '-' : `${String(spec.defense.bonus)}/${String(spec.defense.cap)}`;
-  return `${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${defense}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}|${spec.range ?? ''}`;
+  return `${String(spec.owner)}|${spec.modes.includes('defense') ? 'D' : 'A'}|${counts}|${spec.ghost === true ? 'g' : ''}${spec.inside === true ? 'i' : ''}|${spec.range ?? ''}`;
 }
 
 /**
@@ -256,9 +239,6 @@ export class Token {
   private readonly fill = new EaseTween(0);
   private readonly outline: BakedSprite;
   private readonly shield: BakedSprite;
-  private readonly defensePill = new Graphics();
-  private readonly defenseText: Text;
-  private readonly defenseLabel = new Container({ visible: false });
   private readonly question: Text;
   private readonly label = new Container({ visible: false });
   private readonly pill = new Graphics();
@@ -290,13 +270,6 @@ export class Token {
     this.shield = kit.sprites.sprite();
     this.shield.scale.set(SHIELD_BADGE_SCALE);
     this.shield.visible = false;
-    this.defenseText = new Text({
-      text: '',
-      style: kit.defenseStyle,
-      anchor: { x: 0, y: 0.5 },
-      resolution,
-    });
-    this.defenseLabel.addChild(this.defensePill, this.defenseText);
     this.question = new Text({
       text: '?',
       style: kit.questionStyle,
@@ -312,14 +285,13 @@ export class Token {
       this.ticks,
       this.outline,
       this.question,
-      this.defenseLabel,
       this.shield,
       this.label,
     );
   }
 
   labels(): Text[] {
-    return [this.count, this.question, this.defenseText];
+    return [this.count, this.question];
   }
 
   /** Scale of the whole token (the minimum size on screen, `symbolScale`). */
@@ -454,33 +426,13 @@ export class Token {
     // Centre of mass of the triangle, a third of the height above the middle of the box.
     this.question.position.set(0, -h / 6);
 
-    const defended = spec.modes.includes('defense');
+    // The shield of "Defense" sits on the corner of a token on a road. The icon of the units in a
+    // city has none: the city's own column carries the one sign (L1, #349, `defenseView.ts`).
+    const defended = spec.modes.includes('defense') && spec.inside !== true;
     this.shield.visible = defended;
     if (defended) {
       this.shield.set(shieldSpec(color, owner !== me));
       this.shield.position.set(side / 2, -h / 2);
-    }
-
-    // "+N / M" by the shield, under it: only an own group carries the numbers (DEC-30, item 5).
-    const gathered = defended && spec.defense != null ? spec.defense : null;
-    this.defenseLabel.visible = gathered !== null;
-    if (gathered !== null) {
-      const word = tf('defense.bonus', { bonus: gathered.bonus, cap: gathered.cap });
-      if (this.defenseText.text !== word) this.defenseText.text = word;
-      const width = this.defenseText.width + 2 * DEFENSE_LABEL.padX;
-      const left = DEFENSE_LABEL.tuck;
-      this.defensePill
-        .clear()
-        .roundRect(left, -DEFENSE_LABEL.height / 2, width, DEFENSE_LABEL.height, 4)
-        .fill({ color: PLATE_FILL, alpha: 0.95 })
-        .stroke({ width: 1.2, color: ownerColor(this.kit.me, owner) });
-      this.defenseText.position.set(left + DEFENSE_LABEL.padX, 0);
-      // To the right of the shield disc, which overlaps the near end of the pill, and a little lower:
-      // the capacity badge and the counters of a city (the grace, #360) sit at the top right.
-      this.defenseLabel.position.set(
-        side / 2 + this.shield.scale.x * 9,
-        -h / 2 + DEFENSE_LABEL.drop,
-      );
     }
 
     const text = counts !== null ? countLabel(counts.units) : range;

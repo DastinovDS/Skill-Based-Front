@@ -6,7 +6,8 @@
  */
 import type { Point } from './camera.ts';
 import type { GhostStatus } from './interaction.ts';
-import { barracksAt, ringRadius, vpBadgeAt } from './cityLayout.ts';
+import { ringRadius, vpBadgeAt } from './cityLayout.ts';
+import { barracksAt } from './defenseLayout.ts';
 import { clipToConvex } from './regionLayout.ts';
 import {
   GHOST_REJECT_MS,
