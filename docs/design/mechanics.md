@@ -274,6 +274,9 @@ the owner on 2026-10-12 (#239).
 2. `Merge(groups)`: two or more own groups standing in one node, none waits to set out
    (`GROUP_BUSY`). The result is in the group with the smallest id; its mode and "Defense" with the bonus are kept,
    as in auto-merge (replaces #117 by default: "Attack"); the intents of the other groups are removed.
+   Enforcement note (the owner, 2026-10-28, #435; `SIM_VERSION` 23): a group that holds a move order (an ordinary one that
+   has not departed yet, i.e. `Move` and `Merge` in the same tick, as already for a waiting scheduled order) is `GROUP_BUSY`, so the
+   whole `Merge` is rejected. Otherwise the merged group would leave with a size the stack limit of item D3 never checked.
 3. The other commands to a group on an edge, except `CancelOrder`, are still rejected
    (`GROUP_ON_EDGE`).
 
@@ -304,6 +307,9 @@ the owner on 2026-10-12 (#239).
    at all: `NO_PATH`, as now.
 3. The check is once, at the command: the size of the group on the way does not change (commands to a group on an edge,
    except cancel, are forbidden), the capacity is fixed.
+   Enforcement note (the owner, 2026-10-28, #435; `SIM_VERSION` 23): this holds also for a group that has a move order but
+   has not departed yet: `Merge` of such a group is rejected with `GROUP_BUSY` (item B2), so `Move` plus `Merge` in one tick
+   cannot send a bigger group where the limit closes the way. No new rule.
 4. Other groups in the nodes of the path are not counted: a common garrison above the capacity is settled by the death (#118).
 5. The interface highlights the nodes reachable by the selected group and the travel time to them; the server computes this
    (see "Impact on the implementation"), the client does not compute it.

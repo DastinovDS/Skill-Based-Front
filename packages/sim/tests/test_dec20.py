@@ -380,6 +380,26 @@ def test_dec20_example_9_merge_keeps_the_defense_of_the_smallest_id() -> None:
     assert active_bonuses(state, RULES)[g1].amount == 2
 
 
+@pytest.mark.parametrize("moving_first", [True, False])
+def test_dec20_d3_merge_with_a_group_holding_a_move_order_is_rejected(moving_first: bool) -> None:
+    # #435: two 4-unit groups fit B (capacity 4). `Move` plus `Merge` in one tick used to send the
+    # merged 8 units to B, which `Move` refuses (STACK_LIMIT); the size must not change after the
+    # check (D3), so the Merge is GROUP_BUSY.
+    state = _state()
+    g1 = _add(state, 4, 4, A)
+    g2 = _add(state, 4, 4, A)
+    assert isinstance(_validate_move(state, g1, B), Ok)
+    mover = g1 if moving_first else g2
+    run = _Run(state)
+    moved, merged = run.step(Move(mover, B), Merge((g1, g2)))
+    assert isinstance(moved, Ok)
+    assert merged == Reject(RejectCode.GROUP_BUSY)
+    assert state.groups[g1].units == state.groups[g2].units == 4
+    run.until(40)
+    assert max(g.units for g in state.groups.values() if g.location == AtNode(B)) == 4
+    assert all(g.units == 4 for g in state.groups.values())
+
+
 # C. Cancel --------------------------------------------------------------------------------------
 
 
