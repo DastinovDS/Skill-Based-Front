@@ -1,0 +1,617 @@
+<!doctype html>
+<!--
+  Mockup: the background of the start menu (variant A "Front" of #471, implemented in #489), for the owner to choose. Issue #474,
+  docs/design/ui-style.md, section 36.
+  Self-contained: no network, no external fonts, images or scripts; everything is drawn by code (HTML, CSS, inline SVG and a 2D canvas).
+  Open it as a file. This is an illustration, not client code: the client keeps its own SVG backdrop (apps/client/src/app/MenuBackdrop.svelte);
+  the canvas here only lets the mockup run cheaply.
+  The pool map is the real "crossroads" (maps/crossroads.json), laid out by a copy of the client's layoutScene (apps/client/src/app/menuScene.ts),
+  so the rail, the fog and the corner chip sit exactly where the client puts them. The three menu map sketches (MM1..MM3) are drawn for
+  this mockup only and are not map files.
+  The state of the choices lives in the address: menu-background.html#v=bg1&m=pool&s=idle&win=1280x800&season=auto&gray=0&rm=0&guides=0
+  Add &t=12.5 to freeze the clock at 12.5 s (the frames in docs/design/mockups/img/menu-background/ are taken that way).
+  Keys: [ and ] switch the concept, , and . the queue state, m the map, g the guides, p pause.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Menu background: variants</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#9da7b3;--you:#5b9bff;--enemy:#e5484d;--warn:#ffb020;--ok:#3fb950;--paper:#f0f6fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif}
+header.page{position:sticky;top:0;z-index:50;padding:8px 16px 10px;background:var(--surface);border-bottom:1px solid var(--border)}
+.row{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center}
+.row+.row{margin-top:6px}
+h1{font-size:16px;margin:0 8px 0 0}
+nav.toc a{color:var(--you);text-decoration:none;margin-right:12px;font-size:13px}
+.opt{display:flex;gap:6px;align-items:center;color:var(--dim);font-size:13px}
+.opt select{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:2px 4px}
+.pk{display:flex;align-items:center;gap:8px}
+.pk>b{font-size:12px;color:var(--dim);font-weight:600}
+.seg{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;border-right:1px solid var(--border);background:var(--surface2);color:var(--text);padding:4px 10px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--you);color:#0d1117;font-weight:700}
+.fps{font:12px ui-monospace,Menlo,monospace;color:var(--dim);border:1px solid var(--border);border-radius:6px;padding:2px 8px;min-width:190px}
+main{max-width:1400px;margin:0 auto;padding:16px}
+h2.sec{font-size:18px;margin:34px 0 4px;padding-top:14px;border-top:1px solid var(--border)}
+h2.sec:first-of-type{border-top:0;margin-top:8px}
+.note{color:var(--dim);margin:4px 0 10px;font-size:13px;max-width:1150px}
+.note b{color:var(--text)}
+code{background:var(--surface2);padding:0 4px;border-radius:4px;font-size:12.5px}
+.stagewrap{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#000;max-width:100%}
+.stagebox{transform-origin:0 0}
+.states{border-collapse:collapse;margin:8px 0 0;font-size:13px;max-width:1150px}
+.states td,.states th{border:1px solid var(--border);padding:4px 8px;vertical-align:top;text-align:left}
+.states th{color:var(--dim);font-weight:600;white-space:nowrap}
+.states tr.on td,.states tr.on th{background:#1d2a3f}
+.ov{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:14px}
+.ov figure{margin:0;cursor:pointer}
+.ov figcaption{font-size:13px;color:var(--dim);padding:4px 2px}
+.ov figure.on figcaption{color:var(--text);font-weight:700}
+.thumb{border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative;background:#000}
+figure.on .thumb{border-color:var(--you)}
+.cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin-top:12px}
+.cd{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:13px}
+.cd h3{font-size:15px;margin:0 0 6px}
+.cd ul{margin:4px 0 0;padding-left:18px;color:var(--dim)}
+.cd li{margin:2px 0}
+.cd.rec{border-color:var(--ok)}
+.badge{display:inline-block;font-size:11px;border:1px solid var(--ok);color:var(--ok);border-radius:10px;padding:0 7px;margin-left:6px;vertical-align:1px}
+.tbl{overflow:auto;max-width:100%;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+.tbl table{border-collapse:collapse;width:100%;min-width:1000px}
+.tbl th,.tbl td{border:1px solid var(--border);padding:6px 10px;vertical-align:top;text-align:left;font-size:13px}
+.tbl th{background:var(--surface2)}
+.decision{border:1px dashed var(--warn);border-radius:8px;padding:10px 14px;margin-top:12px;color:var(--warn)}
+ul.chk li{margin:3px 0;color:var(--dim)}
+ul.chk b{color:var(--text)}
+
+/* The frame: the menu as the client draws it (sizes from MenuScreen and menuScene.ts). */
+.st{position:relative;overflow:hidden;background:#0d1117;color:#e6edf3;font:15px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+.st.gray{filter:grayscale(1)}
+.st .world{position:absolute;left:0;top:0;transform-origin:0 0}
+.st .world.cam{will-change:transform}
+.st .world svg,.st .world canvas,.st .fog,.st .hi,.st .guides{position:absolute;left:0;top:0}
+.st .shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgb(13 17 23/97%) 0,rgb(13 17 23/90%) 330px,rgb(13 17 23/45%) 470px,rgb(13 17 23/8%) 640px,rgb(13 17 23/0%) 100%),linear-gradient(0deg,rgb(13 17 23/70%),rgb(13 17 23/0%) 140px)}
+.st .top{position:absolute;left:56px;right:44px;top:28px;display:flex;justify-content:space-between;align-items:center;z-index:5}
+.st .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+.st .who{display:flex;align-items:center;gap:10px;border:1px solid #30363d;border-radius:22px;padding:5px 14px;background:rgb(13 17 23 / 70%);font-size:15px}
+.st .who .g{font-size:12px;color:#9da7b3;border:1px solid #30363d;border-radius:10px;padding:0 7px}
+.st .who .cal{font-size:11px;color:#9da7b3;letter-spacing:.06em}
+.st .who .pips{display:flex;gap:3px}.st .who .pips i{width:18px;height:9px;border:1.5px solid #5b9bff;border-radius:2px}.st .who .pips i.f{background:#5b9bff}
+.st .rail{position:absolute;left:56px;top:150px;width:370px;z-index:5}
+.st .eb{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#9da7b3;margin-bottom:6px}
+.st .eb.warn{color:#ffb020}
+.st .play{display:flex;align-items:center;gap:16px;font-size:68px;font-weight:800;letter-spacing:-.03em;line-height:1.05}
+.st .kb{display:inline-block;font:600 12px system-ui;border:1px solid #484f58;background:#21262d;border-radius:5px;padding:1px 6px;color:#c9d1d9;letter-spacing:0}
+.st .play .kb{font-size:13px;align-self:center}
+.st .big{font-size:48px;font-weight:800;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+.st .sub{color:#9da7b3;font-size:14px;margin:8px 0 14px}
+.st .small{color:#9da7b3;font-size:13px;margin:4px 0}
+.st .rows{border-top:0}
+.st .rows div{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #30363d;padding:12px 4px;font-size:20px}
+.st .rows div span{display:flex;gap:14px;align-items:center}
+.st .ghost{display:inline-flex;gap:8px;align-items:center;font-size:14px;color:#c9d1d9;margin:10px 8px}
+.st .nick{display:flex;align-items:center;gap:12px;font-size:34px;font-weight:800}
+.st .tag{position:absolute;left:56px;bottom:50px;z-index:5;font-size:13.5px;color:#c9d1d9;margin:0}
+.st .tag span{transition:color .4s,background-color .4s;border-radius:3px;padding:0 1px}
+.st .tag span.on{color:#f0f6fc;background:rgb(91 155 255 / 22%)}
+.st.rm .tag span{transition:none}
+.st .legal{position:absolute;right:16px;bottom:6px;z-index:5;display:flex;gap:12px;font-size:12.5px}
+.st .legal a{color:#9da7b3;text-decoration:underline}
+</style>
+</head>
+<body>
+<header class="page">
+  <div class="row">
+    <h1>Menu background (#474)</h1>
+    <div class="pk"><b>Concept</b><div class="seg" id="pv"></div></div>
+    <div class="pk"><b>Map</b><div class="seg" id="pm"></div></div>
+  </div>
+  <div class="row">
+    <div class="pk"><b>Queue state</b><div class="seg" id="ps"></div></div>
+    <label class="opt">window <select id="win"><option>1280x800</option><option>1280x720</option><option>1024x640</option><option>1600x900</option></select></label>
+    <label class="opt">season <select id="season"><option value="auto">by date</option><option>spring</option><option>summer</option><option>autumn</option><option>winter</option></select></label>
+    <label class="opt"><input type="checkbox" id="gray"> grayscale</label>
+    <label class="opt"><input type="checkbox" id="rm"> reduced motion</label>
+    <label class="opt"><input type="checkbox" id="guides"> guides</label>
+    <label class="opt"><input type="checkbox" id="pause"> pause</label>
+    <span class="fps" id="fps">fps</span>
+  </div>
+  <div class="row"><nav class="toc"><a href="#s1">1 Frame</a><a href="#s2">2 Concepts side by side</a><a href="#s3">3 Concepts</a><a href="#s4">4 A menu map</a><a href="#s5">5 Table and choice</a><a href="#s6">6 Checks</a></nav></div>
+</header>
+<main>
+<h2 class="sec" id="s1">1. The frame</h2>
+<p class="note">The live frame: the concept, the map and the queue state from the header. The rail, its shade and the strings are the client's (<code>ScreenFrame.svelte</code>, <code>app.css</code>, the <code>?menu=</code> dev scenes). The motion runs on one <code>requestAnimationFrame</code> loop that stops when the tab is hidden, the frame is off screen, "pause" or "reduced motion" is on. The meter in the header is the time this page spends drawing one frame of the background (the canvas of the mockup, not the client).</p>
+<div id="vnote" class="note"></div>
+<div class="stagewrap" id="swrap"><div class="stagebox" id="sbox"></div></div>
+<table class="states" id="stab"></table>
+
+<h2 class="sec" id="s2">2. All concepts, the same state</h2>
+<p class="note">Still frames at a fixed moment of the selected state and map (click one to open it above). Each concept keeps a static sign for every state, so the frames read without the motion too.</p>
+<div class="ov" id="ov"></div>
+
+<h2 class="sec" id="s3">3. The concepts</h2>
+<div class="cards" id="vcards"></div>
+
+<h2 class="sec" id="s4">4. A dedicated menu map</h2>
+<p class="note" id="mapnote"></p>
+<div class="ov" id="maps"></div>
+<div class="cards" id="mapspec"></div>
+
+<h2 class="sec" id="s5">5. Table, recommendation, decision</h2>
+<div class="tbl"><table id="tbl"></table></div>
+<div class="cards" id="rec"></div>
+<div class="decision"><b>Decision:</b> awaiting the owner's decision (issue #474).</div>
+
+<h2 class="sec" id="s6">6. Checks against the constraints</h2>
+<ul class="chk" id="chk"></ul>
+</main>
+
+<script>
+'use strict';
+/* ------------------------------------------------------------------ data */
+const POOL={"n":[[122,576,"m","ca",0,0,"Nexus"],[253,204,"f","ci",0,-1,"Lindenwood"],[252,424,"p","pr",0,-1,"Flank"],[279,744,"p","pr",0,-1,"Strip"],[308,964,"f","ci",0,-1,"Broomfield"],[411,86,"p","pr",-1,-1,"Field"],[400,326,"p","ci",0,-1,"Freehold"],[412,596,"p","ci",0,-1,"Middle Court"],[443,866,"f","ci",0,-1,"Lodge"],[474,1106,"f","pr",-1,-1,"Woodcut"],[553,229,"f","ci",-1,-1,"White Spring"],[552,469,"p","pr",-1,-1,"Fork"],[576,749,"p","pr",-1,-1,"Crossways"],[608,989,"m","ci",-1,-1,"Flint"],[711,113,"m","ci",-1,-1,"Watchtower"],[700,353,"f","pr",-1,-1,"Woodlane"],[712,623,"p","ci",-1,-1,"Fairgate"],[743,893,"f","pr",-1,-1,"Glade"],[774,1133,"p","ci",-1,-1,"Millstead"],[842,252,"p","pr",-1,-1,"Old Road"],[842,492,"m","ci",-1,-1,"Sentinel"],[861,772,"p","pr",-1,-1,"Wallside"],[886,1012,"f","pr",-1,-1,"Bend"],[1000,100,"m","ci",-1,-1,"North Outpost"],[1000,620,"p","ci",-1,-1,"Crossroads"],[1000,1140,"m","ci",-1,-1,"South Outpost"],[1101,231,"f","pr",-1,-1,"Loop"],[1134,469,"p","pr",-1,-1,"Overhill"],[1165,744,"m","ci",-1,-1,"Lookout"],[1177,985,"p","pr",-1,-1,"Post Road"],[1207,93,"p","ci",-1,-1,"Millpond"],[1242,331,"f","pr",-1,-1,"Treeline"],[1289,598,"p","ci",-1,-1,"Tradegate"],[1326,871,"f","pr",-1,-1,"Footpath"],[1308,1103,"m","ci",-1,-1,"Beacon"],[1370,228,"m","ci",-1,-1,"Shale"],[1410,459,"p","pr",-1,-1,"Crosspoint"],[1483,748,"p","pr",-1,-1,"Parting"],[1507,980,"f","ci",-1,-1,"Black Spring"],[1461,78,"f","pr",-1,-1,"Clearing"],[1520,326,"f","ci",1,-1,"Newstead"],[1606,586,"p","ci",1,-1,"Bazaar"],[1669,867,"p","ci",1,-1,"Burgh"],[1646,1107,"p","pr",-1,-1,"Meadow"],[1638,211,"f","ci",1,-1,"Willowbed"],[1722,430,"p","pr",1,-1,"Fringe"],[1805,746,"p","pr",1,-1,"Edge"],[1825,961,"f","ci",1,-1,"Elmwood"],[1921,569,"m","ca",1,1,"Core"]],"e":[[0,2,62],[0,3,71],[0,7,91],[1,2,65],[3,4,68],[1,5,64],[1,6,56],[2,6,54],[2,7,74],[3,7,59],[3,8,65],[4,8,50],[4,9,66],[5,10,58],[6,10,57],[6,11,64],[7,11,59],[7,12,69],[8,12,52],[8,13,58],[9,13,53],[10,11,71],[12,13,71],[10,14,64],[10,15,61],[11,15,58],[11,16,70],[12,16,55],[12,17,65],[13,17,49],[13,18,65],[14,19,55],[15,19,54],[15,20,61],[16,20,56],[16,21,62],[17,21,52],[17,22,54],[18,22,51],[20,24,61],[21,24,61],[14,23,90],[19,23,68],[48,46,62],[48,45,71],[48,41,91],[47,46,65],[45,44,68],[47,43,64],[47,42,56],[46,42,54],[46,41,74],[45,41,59],[45,40,65],[44,40,50],[44,39,66],[43,38,58],[42,38,57],[42,37,64],[41,37,59],[41,36,69],[40,36,52],[40,35,58],[39,35,53],[38,37,71],[36,35,71],[38,34,64],[38,33,61],[37,33,58],[37,32,70],[36,32,55],[36,31,65],[35,31,49],[35,30,65],[34,29,55],[33,29,54],[33,28,61],[32,28,56],[32,27,62],[31,27,52],[31,26,54],[30,26,51],[28,24,61],[27,24,61],[34,25,90],[29,25,68],[19,26,83],[22,29,83],[20,27,90],[21,28,90],[18,25,65],[23,30,65]]};
+const C={bg:'#0d1117',paper:'#f0f6fc',text:'#e6edf3',dim:'#9da7b3',you:'#5b9bff',youHi:'#9cc3ff',enemy:'#e5484d',enemyHi:'#f07a7e',neutral:'#8b949e',nfill:'#2b3139',warn:'#ffb020',light:'#ffd27a'};
+const SEASON={summer:{p:'#3a4630',f:'#25392b',m:'#4a453e'},spring:{p:'#405233',f:'#2b4632',m:'#4a4740'},autumn:{p:'#47452f',f:'#43382a',m:'#4a453e'},winter:{p:'#464c53',f:'#2f3c3b',m:'#5b5e64'}};
+const MONTH_SEASON=['winter','winter','spring','spring','spring','summer','summer','summer','autumn','autumn','autumn','winter'];
+
+const CONCEPTS=[
+ {id:'now',name:'Now',short:'Now'},
+ {id:'bg1',name:'BG1 Living front',short:'BG1'},
+ {id:'bg2',name:'BG2 Story and scout',short:'BG2'},
+ {id:'bg3',name:'BG3 Atlas camera',short:'BG3'},
+ {id:'bg4',name:'BG4 Light and seasons',short:'BG4'},
+ {id:'bg5',name:'BG5 Set (BG1 + BG2 scout + season)',short:'BG5 Set'}];
+const STATES=[
+ {id:'idle',name:'idle',rep:20.6},
+ {id:'search',name:'searching',rep:14},
+ {id:'long',name:'long wait (bot offer)',rep:3},
+ {id:'found',name:'found',rep:2.2},
+ {id:'confirmed',name:'confirmed',rep:5.4},
+ {id:'banned',name:'queue locked',rep:1}];
+const LONG_AT=62; /* the bot offer comes after a minute in the queue (queue-long dev scene shows 1:02) */
+
+/* Menu map sketches. Rows: X, Y in the 1280x800 frame, terrain, kind (C capital, L/M/S city, p province), owner, name.
+   They become world coordinates (X-480, Y-140) with meta 800x560, so the client's layoutScene puts them back in place at 1280x800. */
+const SKETCH={
+ mm1:{edges:'0-1,0-2,0-3,0-6,0-7,1-6,1-5,1-3,2-7,2-3,2-4,3-8,3-9,5-16,5-8,4-14,2-14,8-10,9-10,8-16,8-11,16-11,16-17,11-17,11-10,10-13,11-13,9-12,9-14,14-15,15-12,12-13,13-21,17-18,11-19,13-19,13-20,12-20,18-19,18-22,19-22,19-21,20-21,22-25,21-25,21-24,20-23,23-24,12-23',name:'MM1 Valley',blob:58,land:44,rows:[
+  [520,420,'m','C',0,'Highhold'],[610,300,'m','S',0,'Greyscar'],[605,545,'f','M',0,'Alderfell'],[690,420,'f','M',0,'Mossgate'],[660,650,'m','p',0,'South Cairn'],[700,215,'m','p',0,'North Cairn'],[560,250,'m','p',0,'Old Watch'],[545,640,'m','S',0,'Quarry'],
+  [790,330,'p','p',null,'Barley'],[800,505,'p','S',null,'Millbrook'],[885,420,'p','L',null,'Fordham'],[930,300,'f','p',null,'Elm Rows'],[955,560,'f','M',null,'Wickwood'],[1000,425,'p','p',null,'Long Meadow'],[770,625,'f','p',null,'Fernhollow'],[880,660,'f','S',null,'Thornby'],[840,205,'m','S',null,'Ridgeway'],[975,195,'m','p',null,'Windgap'],[1090,200,'m','p',null,'Cold Pass'],
+  [1065,320,'m','S',1,'Iron Bluff'],[1065,525,'f','M',1,'Darkwood'],[1170,420,'m','C',1,'Stormcrown'],[1150,290,'m','p',1,'High Shelf'],[1140,630,'m','p',1,'Low Scree'],[1240,525,'m','S',1,'Blackrock'],[1240,320,'m','p',1,'Eagle Step']]},
+ mm2:{edges:'0-1,0-2,0-3,0-6,0-4,1-4,1-3,1-7,2-6,2-5,2-3,3-5,3-7,4-17,4-12,1-12,7-8,7-10,7-16,3-16,5-16,12-8,12-13,12-17,17-13,8-9,8-10,9-13,9-11,9-18,13-18,10-11,10-14,16-14,14-15,10-15,11-15,11-19,11-20,18-19,18-22,19-22,19-21,20-21,15-20,15-23,20-23,21-22,21-25,22-25,21-24,23-24,20-24',name:'MM2 Rising pass',blob:58,land:44,rows:[
+  [520,560,'m','C',0,'Lowgate'],[600,465,'m','S',0,'Shale'],[610,650,'f','M',0,'Birchmoor'],[690,570,'p','M',0,'Greenacre'],[545,385,'m','p',0,'Watch Hill'],[710,670,'f','p',0,'Coppice'],[560,690,'f','S',0,'Hearth'],
+  [770,480,'p','p',null,'Cross Field'],[825,400,'p','S',null,'Upton'],[885,330,'m','p',null,'Saddle'],[905,480,'p','L',null,'Midmarch'],[965,405,'p','p',null,'Shepherds'],[760,330,'m','S',null,'Crag'],[815,235,'m','p',null,'Scree Top'],[940,600,'f','p',null,'Deepwood'],[1015,540,'f','S',null,'Oakhaven'],[850,640,'f','p',null,'Glade'],[680,270,'m','p',null,'Tor'],[1005,255,'m','S',null,'Falcon Rest'],
+  [1060,310,'m','S',1,'Summit'],[1085,435,'p','M',1,'Overlook'],[1170,335,'m','C',1,'Skyreach'],[1140,220,'m','p',1,'Cloudline'],[1175,530,'f','p',1,'Pinefall'],[1250,430,'m','S',1,'Far Spur'],[1245,250,'m','p',1,'Ice Ledge']]},
+ mm3:{edges:'0-1,0-2,0-3,0-6,1-5,1-3,2-3,2-4,2-6,4-6,3-11,1-14,5-14,14-12,14-18,2-16,4-16,16-10,11-12,11-10,12-13,13-8,8-9,9-10,7-8,7-9,7-10,7-11,7-12,7-13,12-18,13-18,13-15,18-15,15-20,8-22,22-20,22-21,22-23,9-17,17-21,10-19,16-19,19-17,9-19,13-20,20-23,21-23,20-24,23-24,21-25,23-25',name:'MM3 Wheel',blob:56,land:42,rows:[
+  [520,420,'m','C',0,'Westhold'],[600,315,'m','S',0,'Granite'],[600,525,'f','M',0,'Ashgrove'],[655,420,'p','p',0,'Gatefield'],[575,640,'m','p',0,'Bastion Rock'],[580,215,'m','p',0,'Spire'],[540,560,'f','S',0,'Kiln'],
+  [850,420,'f','L',null,'Heartwood'],[970,420,'p','p',null,'East Spoke'],[910,525,'p','S',null,'South Spoke'],[790,525,'p','p',null,'Wheelwright'],[730,420,'p','S',null,'West Spoke'],[790,315,'p','p',null,'Northgate'],[910,315,'p','S',null,'Hub Mill'],
+  [705,250,'m','p',null,'Cairn'],[1000,240,'m','p',null,'Lookout'],[710,610,'f','S',null,'Hollow'],[1000,615,'f','p',null,'Bramble'],[850,215,'m','S',null,'Crown Peak'],[850,640,'f','p',null,'Wild Hedge'],
+  [1100,320,'m','S',1,'Easthold Keep'],[1100,525,'f','M',1,'Duskwood'],[1060,420,'f','p',1,'Ember Field'],[1170,420,'m','C',1,'Easthold'],[1240,300,'m','p',1,'Far Crag'],[1240,560,'m','S',1,'Last Light']]}};
+
+/* ------------------------------------------------------------------ state */
+const S={v:'bg5',m:'pool',s:'idle',win:'1280x800',season:'auto',gray:false,rm:false,guides:false,pause:false,t:null,t0:performance.now()};
+
+/* ------------------------------------------------------------------ maps */
+const TER={p:'plains',f:'forest',m:'mountains'};
+function poolMap(){return{id:'pool',name:'crossroads (pool, Now)',w:2000,h:1240,blob:147,land:116,
+ nodes:POOL.n.map((r,i)=>({id:i,x:r[0],y:r[1],ter:r[2],kind:r[3]==='ca'?'C':r[3]==='pr'?'p':'M',owner:r[4]<0?null:r[4],cap:r[5]<0?null:r[5],name:r[6]})),
+ edges:POOL.e.map(r=>({a:r[0],b:r[1],w:r[2]}))}}
+/* A sketch's roads are drawn by hand (planar, like the validator wants); the travel time is 0.3 per unit of length. */
+function sketchMap(id){const sk=SKETCH[id];const nodes=sk.rows.map((r,i)=>({id:i,x:r[0]-480,y:r[1]-140,ter:r[2],kind:r[3],owner:r[4],cap:r[3]==='C'?r[4]:null,name:r[5]}));
+ const edges=sk.edges.split(',').map(p=>{const[a,b]=p.split('-').map(Number);return{a,b,w:Math.round(Math.hypot(nodes[a].x-nodes[b].x,nodes[a].y-nodes[b].y)*.3)}});
+ return{id,name:sk.name,w:800,h:560,blob:sk.blob,land:sk.land,nodes,edges}}
+const MAPS={pool:poolMap(),mm1:sketchMap('mm1'),mm2:sketchMap('mm2'),mm3:sketchMap('mm3')};
+
+/* A copy of layoutScene (apps/client/src/app/menuScene.ts): the own capital right of the rail, the enemy capital in the fog. */
+const RAIL_RIGHT=520,FOG_WIDTH=250,FOG_FADE=130,BAR_BOTTOM=76,FOG_TOP_FADE=60,ENEMY_MARGIN=110,TOP_ROOM=BAR_BOTTOM+FOG_TOP_FADE+4,BOTTOM_ROOM=100,MIN_SCALE=.16;
+function dijkstra(adj,from,to){const best=new Map([[from,0]]),came=new Map(),open=new Set([from]);
+ while(open.size){let cur=-1;for(const id of open)if(cur<0||best.get(id)<best.get(cur))cur=id;open.delete(cur);if(cur===to)break;
+  for(const s of adj[cur]){const c=best.get(cur)+s.w;if(c<(best.get(s.to)??1/0)){best.set(s.to,c);came.set(s.to,cur);open.add(s.to)}}}
+ const p=[to];while(p[0]!==from){const b=came.get(p[0]);if(b===undefined)return[from,to];p.unshift(b)}return p}
+function bfsTree(sc,root,ok){const par=new Map([[root,-1]]),q=[root];while(q.length){const c=q.shift();for(const s of sc.adj[c]){if(par.has(s.to)||!ok(s.to))continue;par.set(s.to,c);q.push(s.to)}}
+ const path=id=>{const p=[];let c=id;while(c!==-1&&c!==undefined){p.push(sc.nodes[c]);c=par.get(c)}return p};return{par,path}}
+function layout(map,W,H){const c0=map.nodes.find(n=>n.cap===0),c1=map.nodes.find(n=>n.cap===1);
+ const left=Math.min(RAIL_RIGHT,Math.max(W*.4,260)),spanX=Math.max(1,c1.x-c0.x),wantX=Math.max(80,W-ENEMY_MARGIN-left),fitY=Math.max(80,H-TOP_ROOM-BOTTOM_ROOM)/Math.max(1,map.h);
+ const k=Math.max(MIN_SCALE,Math.min(wantX/spanX,fitY)),mid=(TOP_ROOM+H-BOTTOM_ROOM)/2;
+ const nodes=map.nodes.map(n=>({...n,x:left+(n.x-c0.x)*k,y:mid+(n.y-map.h/2)*k}));
+ const adj=nodes.map(()=>[]);for(const e of map.edges){adj[e.a].push({to:e.b,w:e.w});adj[e.b].push({to:e.a,w:e.w})}
+ const edges=map.edges.map(e=>({a:nodes[e.a],b:nodes[e.b],own:nodes[e.a].owner===0&&nodes[e.b].owner===0,lines:(e.a===c0.id||e.b===c0.id)?3:2}));
+ const own=nodes[c0.id],en=nodes[c1.id],fogStart=Math.min(W-FOG_WIDTH,en.x-90);
+ const sc={map,W,H,k,nodes,edges,adj,own,en,fogStart,fadeStart:fogStart-FOG_FADE,blob:map.blob*k,land:map.land*k};
+ sc.front=dijkstra(adj,c0.id,c1.id).map(i=>nodes[i]);
+ /* Named places of the stories: the own front city, the first neutral node, the meeting point, where the enemy comes from, where the scout waits. */
+ let fi=0;sc.front.forEach((n,i)=>{if(n.owner===0)fi=i});sc.frontCity=sc.front[fi];sc.firstNeutral=sc.front[Math.min(fi+1,sc.front.length-1)];
+ const midX=(sc.frontCity.x+sc.fogStart)/2;let ci=fi+1,bd=1/0;for(let i=fi+1;i<sc.front.length-1;i++){const d=Math.abs(sc.front[i].x-midX);if(d<bd&&sc.front[i].owner===null){bd=d;ci=i}}
+ sc.ci=Math.min(ci,sc.front.length-2);sc.centre=sc.front[sc.ci];
+ let si=sc.ci;for(let i=sc.ci;i<sc.front.length-1;i++)if(Math.hypot(sc.front[i].x-en.x,sc.front[i].y-en.y)>120)si=i;sc.si=si;sc.scoutPath=sc.front.slice(0,si+1);
+ /* where the opponent's order comes from: the neighbour of the meeting point farthest toward the enemy, not the scout's stop */
+ const stop=sc.front[si];let ent=sc.front[Math.min(sc.ci+1,sc.front.length-2)];for(const st of adj[sc.centre.id]){const n=nodes[st.to];if(n!==stop&&n!==sc.en&&n.x>sc.centre.x+30&&(ent===stop||n.x>ent.x))ent=n}sc.entry=ent;
+ const isOwn=id=>nodes[id].owner===0;sc.tree=bfsTree(sc,c0.id,isOwn);sc.toFront=bfsTree(sc,sc.frontCity.id,isOwn);
+ sc.ownNodes=nodes.filter(n=>n.owner===0&&n!==own&&sc.tree.par.has(n.id));
+ sc.ownEdges=edges.filter(e=>e.own);
+ return sc}
+
+/* ------------------------------------------------------------------ helpers */
+const f1=v=>Math.round(v*10)/10;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const ease=u=>1-Math.pow(1-clamp(u,0,1),3);
+const smooth=u=>{u=clamp(u,0,1);return u*u*(3-2*u)};
+function rnd(k,salt){let x=Math.imul(k+1,374761393)^Math.imul(salt+7,668265263);x=Math.imul(x^(x>>>13),1274126177);return((x^(x>>>16))>>>0)/4294967296}
+function plen(P){let L=0;for(let i=1;i<P.length;i++)L+=Math.hypot(P[i].x-P[i-1].x,P[i].y-P[i-1].y);return L}
+function at(P,d){for(let i=1;i<P.length;i++){const a=P[i-1],b=P[i],l=Math.hypot(b.x-a.x,b.y-a.y);if(d<=l||i===P.length-1){const u=l?clamp(d/l,0,1):0;return{x:a.x+(b.x-a.x)*u,y:a.y+(b.y-a.y)*u,ang:Math.atan2(b.y-a.y,b.x-a.x)}}d-=l}return{x:P[0].x,y:P[0].y,ang:0}}
+function sub(P,d0,d1){const out=[at(P,d0)];let acc=0;for(let i=1;i<P.length;i++){acc+=Math.hypot(P[i].x-P[i-1].x,P[i].y-P[i-1].y);if(acc>d0&&acc<d1)out.push(P[i])}out.push(at(P,d1));return out}
+function fmt(s){s=Math.max(0,Math.floor(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+function star(cx,cy,r){let p=[];for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.45:r;p.push(f1(cx+rr*Math.cos(a))+','+f1(cy+rr*Math.sin(a)))}return p.join(' ')}
+function seasonOf(){return S.season==='auto'?MONTH_SEASON[new Date().getMonth()]:S.season}
+
+/* ------------------------------------------------------------------ static layers (SVG strings, literal colours so they also render as an image) */
+function baseSvg(sc,o){const{W,H}=sc,P=SEASON[o.season]||SEASON.summer;
+ let s=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs>
+ <radialGradient id="gy" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="${C.youHi}"/><stop offset="1" stop-color="${C.you}"/></radialGradient>
+ <radialGradient id="ge" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="${C.enemyHi}"/><stop offset="1" stop-color="${C.enemy}"/></radialGradient>
+ <filter id="bl" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="16"/></filter></defs>
+ <rect width="${W}" height="${H}" fill="${C.bg}"/>`;
+ if(o.atlas){for(let x=40;x<W;x+=90)s+=`<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="#9da7b3" stroke-opacity=".055"/>`;for(let y=40;y<H;y+=90)s+=`<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="#9da7b3" stroke-opacity=".055"/>`}
+ s+=`<g filter="url(#bl)" opacity=".7">`;for(const n of sc.nodes)s+=`<circle cx="${f1(n.x)}" cy="${f1(n.y)}" r="${f1(sc.blob)}" fill="${P[n.ter]}"/>`;s+=`</g>`;
+ for(const n of sc.nodes)if(n.owner!==null)s+=`<circle cx="${f1(n.x)}" cy="${f1(n.y)}" r="${f1(sc.land)}" fill="${n.owner===0?C.you:C.enemy}" opacity="${n.owner===0?.16:.12}"/>`;
+ s+=`<g opacity=".5">`;for(const e of sc.edges){if(e.own)continue;const hid=e.a.x>sc.fadeStart&&e.b.x>sc.fadeStart,L=`x1="${f1(e.a.x)}" y1="${f1(e.a.y)}" x2="${f1(e.b.x)}" y2="${f1(e.b.y)}"`;
+  s+=hid?`<line ${L} stroke="#aab2bd" stroke-opacity=".55" stroke-width="1.5" stroke-dasharray="1.5 4.5" stroke-linecap="round"/>`:`<line ${L} stroke="${C.bg}" stroke-opacity=".5" stroke-width="5"/><line ${L} stroke="#aab2bd" stroke-width="2" stroke-dasharray="7 5"/>`}s+=`</g>`;
+ for(const e of sc.edges){if(!e.own)continue;const dx=e.b.x-e.a.x,dy=e.b.y-e.a.y,l=Math.hypot(dx,dy)||1,nx=-dy/l,ny=dx/l;
+  s+=`<line x1="${f1(e.a.x)}" y1="${f1(e.a.y)}" x2="${f1(e.b.x)}" y2="${f1(e.b.y)}" stroke="${C.you}" stroke-opacity=".55" stroke-linecap="round" stroke-width="${2+e.lines*1.6+3.6}"/>`;
+  for(let q=0;q<e.lines;q++){const off=(q-(e.lines-1)/2)*3.4;s+=`<line x1="${f1(e.a.x+nx*off)}" y1="${f1(e.a.y+ny*off)}" x2="${f1(e.b.x+nx*off)}" y2="${f1(e.b.y+ny*off)}" stroke="${C.text}" stroke-width="1.6" stroke-linecap="round"/>`}}
+ for(const n of sc.nodes){if(n.kind==='C')continue;
+  if(n.kind!=='p'){const r=n.owner===0?9:8;s+=n.owner===null?`<circle cx="${f1(n.x)}" cy="${f1(n.y)}" r="${r}" fill="${C.nfill}" stroke="${C.neutral}" stroke-width="2"/>`:`<circle cx="${f1(n.x)}" cy="${f1(n.y)}" r="${r}" fill="url(#${n.owner===0?'gy':'ge'})" stroke="${C.paper}" stroke-width="3"/>`}
+  else s+=`<circle cx="${f1(n.x)}" cy="${f1(n.y)}" r="7.5" fill="${C.bg}" fill-opacity=".9"/><circle cx="${f1(n.x)}" cy="${f1(n.y)}" r="5.5" fill="none" stroke-width="2.4" stroke="${n.owner===0?C.you:n.owner===1?C.enemy:C.neutral}"/>`}
+ if(o.atlas){for(const n of sc.nodes){if(n.kind==='p'||n.x>sc.fadeStart+40)continue;const big=n.kind==='C'||n.kind==='L';
+   s+=`<text x="${f1(n.x)}" y="${f1(n.y+(n.kind==='C'?34:21))}" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="${big?11.5:9.5}" letter-spacing="${big?2:1.4}" fill="#c9d1d9" fill-opacity="${big?.8:.6}" style="font-variant:small-caps">${n.name.toUpperCase()}</text>`}
+  const cx=W-120,cy=H-150;s+=`<g opacity=".45" stroke="#c9d1d9" fill="none"><circle cx="${cx}" cy="${cy}" r="22" stroke-width="1"/><circle cx="${cx}" cy="${cy}" r="15" stroke-width=".7" stroke-dasharray="2 3"/></g><polygon points="${cx},${cy-30} ${cx+5},${cy} ${cx},${cy+30} ${cx-5},${cy}" fill="#c9d1d9" fill-opacity=".45"/><text x="${cx}" y="${cy-35}" text-anchor="middle" font-family="Georgia,serif" font-size="11" fill="#c9d1d9" fill-opacity=".6">N</text>`;
+  s+=`<g opacity=".5"><line x1="${RAIL_RIGHT+200}" y1="${H-96}" x2="${RAIL_RIGHT+300}" y2="${H-96}" stroke="#c9d1d9" stroke-width="1.5"/>${[0,25,50,75,100].map(d=>`<line x1="${RAIL_RIGHT+200+d}" y1="${H-100}" x2="${RAIL_RIGHT+200+d}" y2="${H-92}" stroke="#c9d1d9"/>`).join('')}<text x="${RAIL_RIGHT+200}" y="${H-104}" font-family="Georgia,serif" font-size="9.5" letter-spacing="1.4" fill="#c9d1d9">TEN SECONDS OF MARCH</text></g>`}
+ return s+`</svg>`}
+function fogSvg(sc){const{W,H}=sc;return`<svg class="fog" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs>
+ <linearGradient id="fg" gradientUnits="userSpaceOnUse" x1="${sc.fadeStart}" x2="${sc.fogStart}" y1="0" y2="0"><stop offset="0" stop-color="${C.bg}" stop-opacity="0"/><stop offset="1" stop-color="${C.bg}" stop-opacity=".9"/></linearGradient>
+ <linearGradient id="fgm" gradientUnits="userSpaceOnUse" x1="${sc.fadeStart}" x2="${sc.fogStart}" y1="0" y2="0"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient>
+ <linearGradient id="ftm" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="${BAR_BOTTOM}" y2="${BAR_BOTTOM+FOG_TOP_FADE}"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient>
+ <mask id="fmt" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="url(#ftm)"/></mask>
+ <mask id="fmh" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="url(#fgm)"/></mask>
+ <pattern id="fh" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.6" height="9" fill="${C.dim}" opacity=".16"/></pattern></defs>
+ <g mask="url(#fmt)"><rect x="${sc.fadeStart}" width="${W-sc.fadeStart}" height="${H}" fill="url(#fg)"/><rect x="${sc.fadeStart}" width="${W-sc.fadeStart}" height="${H}" fill="url(#fh)" mask="url(#fmh)"/></g></svg>`}
+function chipBox(W){return{x:W-44-170,y:24,w:170,h:44}}
+function guidesSvg(sc,showChip){const{W,H}=sc,cb=chipBox(W);
+ const inBand=sc.nodes.filter(n=>n.y<BAR_BOTTOM+FOG_TOP_FADE+14&&n.x>RAIL_RIGHT).length;
+ const lbl=(x,y,t,c)=>`<text x="${x}" y="${y}" font-size="11" font-family="system-ui" fill="${c}">${t}</text>`;
+ return`<svg class="guides" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">
+ <rect x="56" y="140" width="370" height="${H-240}" fill="none" stroke="#5b9bff" stroke-dasharray="6 4"/>${lbl(60,134,'rail (56 + 370 px; the map starts at 520)','#5b9bff')}
+ <line x1="${RAIL_RIGHT}" y1="0" x2="${RAIL_RIGHT}" y2="${H}" stroke="#5b9bff" stroke-opacity=".5" stroke-dasharray="2 4"/>
+ <rect x="0" y="0" width="${W}" height="${BAR_BOTTOM}" fill="#ffb020" fill-opacity=".06"/><line x1="0" y1="${BAR_BOTTOM}" x2="${W}" y2="${BAR_BOTTOM}" stroke="#ffb020" stroke-dasharray="6 4"/>${lbl(RAIL_RIGHT+8,BAR_BOTTOM-6,'title bar: no fog above this line (BAR_BOTTOM 76)','#ffb020')}
+ <line x1="0" y1="${BAR_BOTTOM+FOG_TOP_FADE}" x2="${W}" y2="${BAR_BOTTOM+FOG_TOP_FADE}" stroke="#ffb020" stroke-opacity=".5" stroke-dasharray="2 4"/>${lbl(RAIL_RIGHT+8,BAR_BOTTOM+FOG_TOP_FADE-6,'fog fades in down to here','#ffb020')}
+ ${showChip?`<rect x="${cb.x}" y="${cb.y}" width="${cb.w}" height="${cb.h}" rx="22" fill="none" stroke="#e5484d" stroke-width="1.5"/>${lbl(cb.x,cb.y+cb.h+14,'corner chip','#e5484d')}`:''}
+ <rect x="${sc.fadeStart}" y="${BAR_BOTTOM}" width="${sc.fogStart-sc.fadeStart}" height="${H-BAR_BOTTOM}" fill="#f0f6fc" fill-opacity=".05"/><line x1="${sc.fogStart}" y1="${BAR_BOTTOM}" x2="${sc.fogStart}" y2="${H}" stroke="#f0f6fc" stroke-dasharray="6 4" stroke-opacity=".6"/>${lbl(sc.fogStart+6,H-110,'solid fog','#f0f6fc')}${lbl(sc.fadeStart+6,H-110,'fog edge','#f0f6fc')}
+ ${lbl(RAIL_RIGHT+8,H-128,`nodes under the title bar or the fog's top fade: ${inBand}`,inBand?'#e5484d':'#3fb950')}</svg>`}
+
+/* ------------------------------------------------------------------ canvas primitives */
+function tri(c,x,y,side,charged,a=1,n=0){c.save();c.globalAlpha*=a;const col=side===0?C.you:C.enemy;
+ c.beginPath();c.moveTo(x-7,y-5.5);c.lineTo(x+7,y-5.5);c.lineTo(x,y+7);c.closePath();c.lineJoin='round';
+ c.lineWidth=4;c.strokeStyle='rgba(13,17,23,.85)';c.stroke();c.fillStyle=charged?col:C.bg;c.fill();c.lineWidth=1.6;c.strokeStyle=charged?C.paper:col;c.stroke();
+ if(n>1){c.font='700 10px system-ui';c.fillStyle=C.paper;c.strokeStyle=C.bg;c.lineWidth=3;c.strokeText('×'+n,x+9,y+3);c.fillText('×'+n,x+9,y+3)}c.restore()}
+function packet(c,x,y,ang,a=1){c.save();c.globalAlpha*=a;const dx=Math.cos(ang),dy=Math.sin(ang);
+ [[14,4,.3],[8,5,.6]].forEach(([b,s,al])=>{c.globalAlpha=a*al;c.fillStyle=C.you;c.fillRect(x-dx*b-s/2,y-dy*b-s/2,s,s)});
+ c.globalAlpha=a;c.fillStyle=C.you;c.strokeStyle=C.bg;c.lineWidth=1.4;c.fillRect(x-3.5,y-3.5,7,7);c.strokeRect(x-3.5,y-3.5,7,7);c.restore()}
+function ring(c,x,y,r,col,w,a,dash){c.save();c.globalAlpha*=a;c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.strokeStyle=col;c.lineWidth=w;if(dash)c.setLineDash(dash);c.stroke();c.restore()}
+function squares(c,x,y,n,filled,side=0){for(let i=0;i<n;i++){const sx=x+(i-(n-1)/2)*7-2.5;c.fillStyle=C.bg;c.fillRect(sx-1,y-1,7,7);if(i<filled){c.fillStyle=side===0?C.you:C.enemy;c.fillRect(sx,y,5,5)}else{c.strokeStyle=C.dim;c.lineWidth=1;c.strokeRect(sx+.5,y+.5,4,4)}}}
+function quad(a,b,bend){const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y;return{x:mx+dy*bend,y:my-dx*bend}}
+function qpts(a,cp,b,n=40){const P=[];for(let i=0;i<=n;i++){const u=i/n,v=1-u;P.push({x:v*v*a.x+2*v*u*cp.x+u*u*b.x,y:v*v*a.y+2*v*u*cp.y+u*u*b.y})}return P}
+function trimEnds(P,d0,d1){const L=plen(P);return sub(P,d0,L-d1)}
+/* The planned order: ODb Low relief, made smaller for the menu (body 9, head 22 x 17), body and head one outline. */
+function ribbonPath(P,body,hw,hl){const L=plen(P),out=[],back=[];const N=36;
+ for(let i=0;i<=N;i++){const d=(L-hl)*i/N,p=at(P,d),w=body*(.6+.4*smooth(d/(L*.35)))/2,nx=-Math.sin(p.ang),ny=Math.cos(p.ang);out.push([p.x+nx*w,p.y+ny*w]);back.push([p.x-nx*w,p.y-ny*w])}
+ const hb=at(P,L-hl),tip=at(P,L),nx=-Math.sin(hb.ang),ny=Math.cos(hb.ang);
+ const pts=[...out,[hb.x+nx*hw/2,hb.y+ny*hw/2],[tip.x,tip.y],[hb.x-nx*hw/2,hb.y-ny*hw/2],...back.reverse()];return pts}
+function ribbon(c,a,b,o){const cp=quad(a,b,o.bend??.28);let P=qpts(a,cp,b);P=trimEnds(P,o.r0??14,o.r1??12);const pts=ribbonPath(P,9,22,17);
+ const trace=()=>{c.beginPath();pts.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.closePath()};
+ c.save();c.globalAlpha=o.a??1;c.lineJoin='round';
+ c.save();c.translate(1,2);trace();c.fillStyle='rgba(0,0,0,.35)';c.fill();c.restore();
+ trace();c.fillStyle='rgba(13,17,23,.96)';c.fill();c.lineWidth=6;c.strokeStyle='rgba(13,17,23,.45)';c.stroke();
+ c.save();trace();c.clip();c.globalAlpha=(o.a??1)*(o.base??.14);c.fillStyle=C.you;c.fill();
+ if(o.fill>0){c.globalAlpha=(o.a??1)*.55;c.lineWidth=60;c.strokeStyle=C.you;c.beginPath();const Q=sub(P,0,plen(P)*o.fill);Q.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.stroke()}
+ if(o.flash>0){c.globalAlpha=(o.a??1)*.5*o.flash;c.fillStyle='#fff';c.fill()}c.restore();
+ trace();c.globalAlpha=(o.a??1)*.95;c.lineWidth=o.fixed?3.2:2.2;c.strokeStyle=C.you;if(o.run!=null){c.setLineDash([8,5]);c.lineDashOffset=-o.run}c.stroke();c.setLineDash([]);
+ c.save();trace();c.clip();c.globalAlpha=(o.a??1)*.18;c.lineWidth=2;c.strokeStyle='#fff';c.translate(0,1);c.stroke();c.restore();
+ c.restore();return P}
+/* The opponent's intent IN3 "Crosshair": a thin dashed arrow, a small head, the crosshair on the target. */
+function intent(c,a,b,o){const cp=quad(a,b,.28);let P=qpts(a,cp,b);P=trimEnds(P,10,o.tr+3);const L=plen(P);
+ c.save();c.globalAlpha=o.a??1;c.lineCap='round';c.beginPath();P.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));
+ c.strokeStyle='rgba(13,17,23,.7)';c.lineWidth=4.5;c.stroke();c.strokeStyle=C.enemy;c.lineWidth=1.8;c.setLineDash([9,5]);c.lineDashOffset=-(o.run||0);c.stroke();c.setLineDash([]);
+ const h=at(P,L),ang=h.ang;c.translate(h.x,h.y);c.rotate(ang);c.beginPath();c.moveTo(0,0);c.lineTo(-9,-5);c.lineTo(-9,5);c.closePath();c.fillStyle=C.enemy;c.fill();c.restore();
+ const t=b;c.save();c.globalAlpha=(o.a??1);ring(c,t.x,t.y,o.tr,C.bg,4.5,.7);ring(c,t.x,t.y,o.tr,C.enemy,1.8,1);ring(c,t.x,t.y,o.tr-6,C.enemy,1.2,.9);
+ for(let q=0;q<4;q++){const an=q*Math.PI/2;c.beginPath();c.moveTo(t.x+Math.cos(an)*(o.tr-3),t.y+Math.sin(an)*(o.tr-3));c.lineTo(t.x+Math.cos(an)*(o.tr+4),t.y+Math.sin(an)*(o.tr+4));c.strokeStyle=C.enemy;c.lineWidth=1.6;c.stroke()}
+ const ph=o.pulse??.5;ring(c,t.x,t.y,o.tr+3,C.enemy,5+3*ph,.15+.35*ph);c.restore()}
+/* A tracer shot (SH1): a curved path, a square head in the shooter's colour, the opponent's with a dark core. */
+function tracer(c,a,b,u,side,bend){const cp=quad(a,b,bend);const P=qpts(a,cp,b,24),L=plen(P),d=L*clamp(u,0,1),tail=Math.min(d,28);
+ c.save();c.lineCap='round';for(let i=0;i<6;i++){const s0=d-tail*(i+1)/6,s1=d-tail*i/6;if(s0<0)continue;const p0=at(P,s0),p1=at(P,s1);c.globalAlpha=.8*(1-i/6);c.beginPath();c.moveTo(p0.x,p0.y);c.lineTo(p1.x,p1.y);c.strokeStyle=side===0?C.you:C.enemy;c.lineWidth=2.6-i*.3;c.stroke()}
+ const h=at(P,d);c.globalAlpha=1;c.fillStyle=side===0?C.you:C.enemy;c.strokeStyle=side===0?C.bg:C.paper;c.lineWidth=1.2;c.fillRect(h.x-3,h.y-3,6,6);c.strokeRect(h.x-3,h.y-3,6,6);if(side===1){c.fillStyle=C.bg;c.fillRect(h.x-1,h.y-1,2,2)}c.restore();return h}
+function shatter(c,x,y,u,side){c.save();for(let i=0;i<4;i++){const an=-Math.PI/2+(i-1.5)*.7,d=6+16*ease(u);c.globalAlpha=1-u;c.fillStyle=side===0?C.you:C.enemy;c.save();c.translate(x+Math.cos(an)*d,y+Math.sin(an)*d+8*u*u);c.rotate(u*3+i);c.beginPath();c.moveTo(-3,-2);c.lineTo(3,-2);c.lineTo(0,3);c.closePath();c.fill();c.restore()}
+ c.globalAlpha=1-u;c.font='700 12px system-ui';c.fillStyle=C.paper;c.strokeStyle=C.bg;c.lineWidth=3;c.strokeText('−1',x+8,y-10-12*u);c.fillText('−1',x+8,y-10-12*u);c.restore()}
+function capture(c,x,y,u,side){ring(c,x,y,9+22*ease(u),side===0?C.you:C.enemy,3*(1-u)+.5,1-u)}
+function ownCity(c,x,y,a=1){c.save();c.globalAlpha*=a;const g=c.createRadialGradient(x-3,y-3,1,x,y,10);g.addColorStop(0,C.youHi);g.addColorStop(1,C.you);c.beginPath();c.arc(x,y,9,0,Math.PI*2);c.fillStyle=g;c.fill();c.lineWidth=3;c.strokeStyle=C.paper;c.stroke();c.restore()}
+function starC(c,x,y,r){c.beginPath();for(let i=0;i<10;i++){const an=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.45:r;c.lineTo(x+rr*Math.cos(an),y+rr*Math.sin(an))}c.closePath();c.fillStyle=C.bg;c.fill();c.strokeStyle=C.paper;c.lineWidth=1;c.stroke()}
+function capitalC(c,p,side){const g=c.createRadialGradient(p.x-5,p.y-5,2,p.x,p.y,17);g.addColorStop(0,side===0?C.youHi:C.enemyHi);g.addColorStop(1,side===0?C.you:C.enemy);
+ c.beginPath();c.arc(p.x,p.y,side===0?15:16,0,Math.PI*2);c.fillStyle=g;c.fill();c.lineWidth=3;c.strokeStyle=C.paper;c.stroke();starC(c,p.x,p.y,side===0?7.5:8);
+ const r=side===0?22:23,L=2*Math.PI*r;c.save();c.translate(p.x,p.y);c.rotate(-Math.PI/2);ring(c,0,0,r,C.bg,6,.8);c.setLineDash([L/5-3,3]);ring(c,0,0,r,C.paper,3,1,[L/5-3,3]);c.restore()}
+function unknownC(c,p,run){c.save();c.beginPath();c.arc(p.x,p.y,17,0,Math.PI*2);c.fillStyle='rgba(13,17,23,.85)';c.fill();c.setLineDash([7,5]);c.lineDashOffset=-run;c.lineWidth=2.4;c.strokeStyle=C.enemy;c.beginPath();c.arc(p.x,p.y,16,0,Math.PI*2);c.stroke();c.setLineDash([]);
+ c.font='800 18px system-ui';c.textAlign='center';c.fillStyle=C.enemy;c.fillText('?',p.x,p.y+6);c.restore()}
+function nickC(c,p,nick,a=1){c.save();c.globalAlpha=a;c.beginPath();c.arc(p.x,p.y,34,0,Math.PI*2);c.fillStyle='rgba(13,17,23,.7)';c.fill();capitalC(c,p,1);
+ c.beginPath();c.roundRect(p.x-48,p.y+32,96,24,12);c.fillStyle='rgba(13,17,23,.9)';c.fill();c.strokeStyle=C.enemy;c.lineWidth=1.5;c.stroke();c.font='700 14px system-ui';c.textAlign='center';c.fillStyle=C.text;c.fillText(nick,p.x,p.y+49);c.restore()}
+function march(c,P,run,a=1){c.save();c.globalAlpha=a;c.beginPath();P.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.strokeStyle=C.paper;c.lineWidth=2.4;c.lineCap='round';if(run!=null){c.setLineDash([12,12]);c.lineDashOffset=-run}c.stroke();c.restore()}
+
+/* ------------------------------------------------------------------ the concepts: what each draws per state */
+/* K: {sc, fx (under the fog), hi (over the fog), t (s in this state), g (s since load), rm, st, cam} */
+const NICK='Vega';
+function qElapsed(K){return K.st==='long'?LONG_AT+K.t:K.t}
+const REVEAL={found:1,confirmed:1};
+function baseSigns(K,o={}){/* the capitals and the state signs every concept keeps (the client's: ban ring, unknown, nick) */
+ const{hi,sc,t,g,rm,st}=K;
+ if(st==='banned'){const a=rm?.85:.35+.65*(.5-.5*Math.cos(g*Math.PI*2/1.25));ring(hi,sc.own.x,sc.own.y,27,C.warn,2.4,a,[6,4])}
+ if(o.grow&&(st==='search'||st==='long')&&!rm)for(const i of[0,1]){const u=((g+i*1.2)%2.4)/2.4;ring(hi,sc.own.x,sc.own.y,16*(.8+1.6*ease(u)),C.you,2,.9*(1-u))}
+ if(o.grow&&(st==='search'||st==='long')&&rm)ring(hi,sc.own.x,sc.own.y,30,C.you,2,.5);
+ capitalC(hi,sc.own,0);
+ if(REVEAL[st])nickC(hi,sc.en,NICK,o.revealA??1);else unknownC(hi,sc.en,rm?0:(g*24/1.1)%24)}
+
+/* Now: the client today. */
+function drawNow(K){const{fx,sc,g,rm,st}=K;
+ if(st==='search'||st==='long')march(fx,sc.front,rm?0:(g*24/1.1)%24);
+ if(REVEAL[st])march(fx,sc.front,null);
+ baseSigns(K,{grow:true})}
+
+/* BG1 Living front: the rules at work, calm. idle: supply and drills; search: mobilisation and a planned order waiting; found: the orders meet; confirmed: the fight; locked: the supply stands. */
+function supply(K,a=1,frozenAt=null){const{fx,sc}=K,g=frozenAt??K.g,P=1.4,sp=55;const owns=sc.ownNodes;if(!owns.length)return;
+ for(let k=Math.floor((g-14)/P);k<=Math.floor(g/P);k++){if(k<0)continue;const city=owns[Math.floor(rnd(k,1)*owns.length)],path=sc.tree.path(city.id).reverse(),L=plen(path),s=g-k*P,d=s*sp;
+  if(d<0)continue;if(d<=L-10){const p=at(path,d);packet(fx,p.x,p.y,p.ang,a)}else if(frozenAt==null&&s-L/sp<.6){ring(fx,city.x,city.y,11+5*(s-L/sp),C.you,1.6,(1-(s-L/sp)/.6)*a)}}}
+function drills(K){const{fx,sc,g}=K;const E=sc.ownEdges;if(!E.length)return;const P=6.5,sp=22;
+ for(let k=Math.floor((g-14)/P);k<=Math.floor(g/P);k++){if(k<0)continue;const e=E[Math.floor(rnd(k,2)*E.length)],fw=rnd(k,3)<.5,A=fw?e.a:e.b,B=fw?e.b:e.a,L=Math.hypot(B.x-A.x,B.y-A.y),s=g-k*P,d=s*sp;
+  if(d<0)continue;if(d<=L){const p=at([A,B],d);tri(fx,p.x,p.y-1,0,true,clamp(s/.4,0,1))}else if(s-L/sp<.8)tri(fx,B.x+10,B.y-12,0,true,1-(s-L/sp)/.8)}
+ const R=11;const k=Math.floor(g/R),s=g-k*R;if(sc.ownNodes.length){const city=sc.ownNodes[Math.floor(rnd(k,5)*sc.ownNodes.length)],path=sc.tree.path(city.id).reverse(),L=plen(path);
+  if(s<1.2){ring(fx,sc.own.x,sc.own.y,18+8*ease(s/1.2),C.you,1.5,1-s/1.2);tri(fx,sc.own.x+14,sc.own.y-16,0,true,clamp(s/.3,0,1))}
+  else{const d=(s-1.2)*sp;if(d<=L){const p=at(path,d);tri(fx,p.x,p.y-1,0,true)}else if(d<=L+18)tri(fx,city.x+10,city.y-12,0,true,1-(d-L)/18)}}}
+function frontStack(K,n){const{fx,sc}=K;tri(fx,sc.frontCity.x+12,sc.frontCity.y-14,0,true,1,n)}
+function mobilise(K){const{fx,sc,g}=K;const owns=sc.ownNodes.filter(n=>n!==sc.frontCity&&sc.toFront.par.has(n.id));if(!owns.length)return;const P=3.4,sp=24;
+ for(let k=Math.floor((g-14)/P);k<=Math.floor(g/P);k++){if(k<0)continue;const city=owns[Math.floor(rnd(k,7)*owns.length)],path=sc.toFront.path(city.id),L=plen(path),d=(g-k*P)*sp;if(d<0||d>L-12)continue;const p=at(path,d);tri(fx,p.x,p.y-1,0,true)}}
+function fightAt(K,t0){const{hi,sc,t}=K,c=sc.centre,a={x:c.x-15,y:c.y-2},b={x:c.x+15,y:c.y-2};
+ ring(hi,c.x,c.y,26,C.paper,1.2,.35,[3,4]);tri(hi,a.x,a.y,0,true,1);tri(hi,b.x,b.y,1,true,1);
+ const tt=t-t0;if(tt<0)return;const round=2,r=Math.floor(tt/round),u=(tt-r*round);
+ if(r%3===0){const f=clamp((u-.35)/.3,0,1);if(u>.35&&u<.65){tracer(hi,a,b,f*.5,0,.35);tracer(hi,b,a,f*.5,1,.35)}if(u>=.65&&u<1.1){const m=quad(a,b,.35*.5),q=(u-.65)/.45;hi.save();hi.globalAlpha=1-q;hi.strokeStyle=C.paper;hi.lineWidth=2;hi.beginPath();const mx=(a.x+b.x)/2,my=Math.min(a.y,b.y)-6;hi.moveTo(mx-4,my-4);hi.lineTo(mx+4,my+4);hi.moveTo(mx+4,my-4);hi.lineTo(mx-4,my+4);hi.stroke();hi.restore()}}
+ else{const side=r%2,from=side===0?a:b,to=side===0?b:a,f=clamp((u-.35)/.6,0,1);if(u>.35&&u<.95)tracer(hi,from,to,f,side,.35);if(u>=.95&&u<1.95)shatter(hi,to.x,to.y,(u-.95),1-side)}}
+function drawBG1(K){const{fx,hi,sc,t,g,rm,st}=K;const el=qElapsed(K);
+ if(st==='banned'){supply(K,.45,4.2);frontStack(K,2);baseSigns(K);return}
+ if(st==='idle'){supply(K);drills(K);frontStack(K,2);baseSigns(K);return}
+ supply(K,.7);
+ if(st==='search'||st==='long'){mobilise(K);frontStack(K,Math.min(9,2+Math.floor(el/12)));
+  const br=rm?.2:.14+.14*(.5-.5*Math.cos(g*Math.PI*2/3.2));const P=ribbon(fx,sc.frontCity,sc.centre,{base:br,fill:0,r1:12});
+  const rest=sc.front.slice(sc.ci);march(fx,rest,rm?0:(g*24/1.1)%24,.8);baseSigns(K);return}
+ /* found, confirmed */
+ const pulse=rm?0:clamp(t/.8,0,1),fl=rm?0:Math.pow(Math.sin(Math.PI*pulse),2);
+ if(st==='found'){frontStack(K,6);ribbon(fx,sc.frontCity,sc.centre,{fill:1,fixed:pulse>=1||rm,flash:fl,run:rm?null:(g*20)%13});
+  intent(fx,sc.entry,sc.centre,{tr:16,a:ease(t/.6)||(rm?1:0),run:rm?0:(g*28)%14,pulse:rm?.5:.5-.5*Math.cos(g*Math.PI*2/.8)});baseSigns(K);return}
+ /* confirmed: both sides march to the meeting point, then the rounds (2 s, DEC-32) */
+ const own=qpts(sc.frontCity,quad(sc.frontCity,sc.centre,.28),sc.centre),en=[sc.entry,sc.centre];const u=clamp((rm?9:t)/3,0,1);
+ if(u<1){ribbon(fx,sc.frontCity,sc.centre,{fill:1,fixed:true,a:1-u});const p=at(own,plen(own)*ease(u)*.92),q=at(en,plen(en)*ease(u)*.85);tri(hi,p.x,p.y,0,true,1,6);tri(hi,q.x,q.y,1,true,1)}
+ else fightAt(K,rm?1e9:3);baseSigns(K)}
+
+/* BG2 Story and scout: idle tells the tagline in four beats; searching sends a scout into the fog, the scout's sight finds the opponent. */
+const BEAT=8,LOOP=32;
+function storyIdle(K,frozenBeat){const{fx,hi,sc,rm}=K;const g=frozenBeat??(K.g%LOOP),beat=Math.min(3,Math.floor(g/BEAT)),tb=g-beat*BEAT,fade=g>LOOP-1?LOOP-g:1;
+ const capPath=sc.tree.path(sc.frontCity.id).reverse(),L=plen(capPath);
+ fx.save();fx.globalAlpha=fade;hi.save();hi.globalAlpha=fade;
+ /* the capital's stock: 5 squares under it */
+ let stock=beat===0?Math.min(5,1+Math.floor(tb/1.6)):beat===1?5-Math.min(3,Math.floor(tb/1.2)+1):2;squares(hi,sc.own.x,sc.own.y+30,5,stock);
+ let ware=beat===0?0:beat===1?Math.min(3,[0,1,2].filter(i=>tb-i*1.2>=L/45).length):3;
+ if(beat===1)for(let i=0;i<3;i++){const s=tb-i*1.2;if(s<0)continue;const d=s*45;if(d<L-10){const p=at(capPath,d);packet(fx,p.x,p.y,p.ang)}}
+ squares(hi,sc.frontCity.x,sc.frontCity.y+15,3,beat>=2&&beat<3?ware-1:beat===3?ware-1:ware);
+ if(beat===0&&!rm){const u=(tb%1.6)/1.6;ring(hi,sc.own.x,sc.own.y,24+10*ease(u),C.you,2,(1-u)*.8)}
+ const fn=sc.firstNeutral,taken=beat>=3||(beat===2&&tb>=3.5);
+ if(taken)ownCity(fx,fn.x,fn.y);
+ if(beat===2){const P=[sc.frontCity,fn],l=plen(P),d=l*ease(tb/3.2);const p=at(P,d);if(tb<3.6)tri(hi,p.x,p.y-1,0,true,1,1);else tri(hi,fn.x+12,fn.y-13,0,true);if(tb>=3.2&&tb<3.7)capture(fx,fn.x,fn.y,(tb-3.2)/.5,0)}
+ if(beat===3){tri(hi,fn.x+12,fn.y-13,0,true);const from=sc.front[Math.min(sc.front.indexOf(fn)+1,sc.front.length-1)],P=[from,fn],l=plen(P);const dd=l*.62*ease(tb/2.6),p=at(P,dd);
+  if(tb<3.6)tri(hi,p.x,p.y-1,1,false);
+  if(tb>=2.8&&tb<3.6)tracer(hi,{x:fn.x+12,y:fn.y-13},p,(tb-2.8)/.6,0,.25);
+  if(tb>=3.6&&tb<4.8)shatter(hi,p.x,p.y,(tb-3.6)/1.2,1)}
+ fx.restore();hi.restore();return beat}
+function scoutLens(K,o={}){const{hi,sc,rm}=K;const P=sc.scoutPath,L=plen(P),el=o.reveal?1e9:qElapsed(K),d=Math.min(L,el*18),p=at(P,d);
+ let R=64;if(o.reveal){const need=Math.hypot(sc.en.x-p.x,sc.en.y-p.y)+40;R=64+(need-64)*ease(rm?1:K.t/1.2)}
+ /* the sight: the map without the fog inside a circle round the scout (DEC-35: own groups see), its rim fading back into the fog */
+ if(K.img){/* the soft-edged sight is built once per place and size, then one small blit per frame */
+  const px=Math.round(p.x),py=Math.round(p.y),key=`${px},${py},${Math.round(R)}`;if(!K.lens||K.lens.key!==key){const n=Math.ceil(R*2)+2,cv=K.lens?.cv??document.createElement('canvas');cv.width=n;cv.height=n;const q=cv.getContext('2d');q.clearRect(0,0,n,n);
+   for(const[f,al]of[[1,.25],[.9,.34],[.8,.5],[.7,1]]){q.save();q.globalAlpha=al;q.beginPath();q.arc(n/2,n/2,R*f,0,Math.PI*2);q.clip();q.drawImage(K.img,px-n/2,py-n/2,n,n,0,0,n,n);q.restore()}K.lens={key,cv,px,py}}
+  hi.drawImage(K.lens.cv,K.lens.px-K.lens.cv.width/2,K.lens.py-K.lens.cv.height/2)}
+ return{P,L,d,p,R,reveal:!!o.reveal}}
+function scoutMark(K,s){const{hi,rm}=K;march(hi,sub(s.P,0,Math.max(.1,s.d)),null,.35);
+ const waiting=s.d>=s.L&&!s.reveal,br=waiting&&!rm?.5-.5*Math.cos(K.g*Math.PI*2/2.4):.5,fade=s.reveal?1-ease(rm?1:K.t/1.2):1;
+ if(fade>0)ring(hi,s.p.x,s.p.y,s.R,C.paper,1.2,(.25+.25*br)*fade,[3,5]);tri(hi,s.p.x,s.p.y-2,0,true)}
+function drawBG2(K){const{sc,st,rm}=K;
+ if(st==='idle'){const beat=storyIdle(K,rm?2*BEAT+5:null);K.tagOn=beat===0?0:beat===1?1:2;baseSigns(K);return}
+ if(st==='banned'){storyIdle(K,3.3);K.tagOn=-1;baseSigns(K);return}
+ K.tagOn=-1;
+ if(st==='search'||st==='long'){const s=scoutLens(K);scoutMark(K,s);baseSigns(K);return}
+ const s=scoutLens(K,{reveal:true});march(K.hi,sc.front.slice(sc.si),null,.9);scoutMark(K,s);baseSigns(K,{revealA:ease(rm?1:K.t/1.2)})}
+
+/* BG3 Atlas camera: an atlas sheet (names, a grid, a compass) and a slow camera; the queue signs are the ones of Now. */
+function camFor(K){const{sc,g,t,st,rm}=K;
+ /* zoom about the own capital: it never moves toward the rail; the cap keeps the "?" on the screen */
+ const zmax=Math.min(1.09,(sc.W-50-sc.own.x)/Math.max(1,sc.en.x-sc.own.x));let z=1,dy=0;
+ if(!rm){z=1+(zmax-1)*(.5-.5*Math.cos(g*Math.PI*2/90));dy=10*Math.sin(g*Math.PI*2/75)}
+ if(st==='banned'){z=1+(zmax-1)*.5;dy=0}
+ if(st==='search'||st==='long'){const u=rm?1:smooth(qElapsed(K)/70);z=1+(zmax-1)*u;dy=rm?0:6*Math.sin(g*Math.PI*2/60)}
+ if(REVEAL[st]){const u=rm?1:ease(t/1.4);z=zmax+(1-zmax)*u;dy=dy*(1-u)}
+ return{z,ox:sc.own.x*(1-z),oy:sc.own.y*(1-z)+dy}}
+function drawBG3(K){const{fx,hi,sc,g,rm,st}=K;const cam=K.cam;hi.save();hi.setTransform(cam.z*K.dpr,0,0,cam.z*K.dpr,cam.ox*K.dpr,cam.oy*K.dpr);
+ if(st==='search'||st==='long')march(fx,sc.front,rm?0:(g*24/1.1)%24);if(REVEAL[st])march(fx,sc.front,null);
+ baseSigns(K,{grow:true});hi.restore()}
+
+/* BG4 Light and seasons: the season by the date tints the terrain; the light follows the queue: day while idle, dusk and city lights while you wait, dawn from the enemy side when a pair is found. */
+let lampCache=null;
+function lamp(c,x,y,a){if(!lampCache){lampCache=document.createElement('canvas');lampCache.width=lampCache.height=40;const q=lampCache.getContext('2d'),gr=q.createRadialGradient(20,20,0,20,20,20);gr.addColorStop(0,'rgba(255,224,150,1)');gr.addColorStop(.18,'rgba(255,200,110,.85)');gr.addColorStop(1,'rgba(255,170,80,0)');q.fillStyle=gr;q.fillRect(0,0,40,40)}
+ c.save();c.globalAlpha=a;c.drawImage(lampCache,x-20,y-20);c.restore()}
+function lightFor(K){const{t,st,rm}=K;const el=qElapsed(K);let night=0,dawn=0,sun=1;
+ if(st==='search'||st==='long'){night=.5*smooth(el/40);sun=1-smooth(el/30)}
+ if(st==='banned'){night=.32;sun=0}
+ if(REVEAL[st]){const u=rm?1:ease(t/1.6);night=.5*(1-u)+.12*u;dawn=u;sun=0}
+ if(rm&&(st==='search'||st==='long'))night=.5;return{night,dawn,sun}}
+function drawBG4(K){const{fx,hi,sc,g,rm,st}=K;const L=lightFor(K),W=sc.W,H=sc.H;
+ if(st==='search'||st==='long')march(fx,sc.front,rm?0:(g*24/1.1)%24);if(REVEAL[st])march(fx,sc.front,null);
+ if(L.sun>0){const sx=rm?W*.62:RAIL_RIGHT+((g/180)%1)*(W-RAIL_RIGHT),gr=hi.createRadialGradient(sx,H*.2,20,sx,H*.2,520);gr.addColorStop(0,`rgba(255,226,170,${.11*L.sun})`);gr.addColorStop(1,'rgba(255,226,170,0)');hi.fillStyle=gr;hi.fillRect(0,0,W,H)}
+ if(L.night>0){hi.fillStyle=`rgba(6,10,28,${L.night})`;hi.fillRect(0,0,W,H)}
+ if(L.dawn>0){const gr=hi.createLinearGradient(W,0,sc.fadeStart-200,0);gr.addColorStop(0,`rgba(255,170,90,${.2*L.dawn})`);gr.addColorStop(1,'rgba(255,170,90,0)');hi.fillStyle=gr;hi.fillRect(0,BAR_BOTTOM,W,H-BAR_BOTTOM)}
+ /* city lights: own cities light up one by one as the night comes, in a fixed order */
+ if(L.night>.05){const cities=sc.nodes.filter(n=>n.owner===0&&n.kind!=='p');cities.forEach((n,i)=>{const on=clamp((L.night/.5)*cities.length-i,0,1);if(on>0)lamp(hi,n.x,n.y,on*(rm?.9:.8+.2*Math.sin(g*1.3+i)))})}
+ baseSigns(K,{grow:true})}
+
+/* BG5 Set: BG1 while idle and once a pair is found, the BG2 scout while searching, the season of BG4 as a still tint. */
+function drawBG5(K){const{st,sc}=K;
+ if(st==='search'||st==='long'){const s=scoutLens(K),K2=Object.assign({},K,{fx:K.hi});supply(K2,.7);frontStack(K2,Math.min(9,2+Math.floor(qElapsed(K)/12)));scoutMark(K,s);baseSigns(K);return}
+ if(st==='found'){const s=scoutLens(K,{reveal:true}),K2=Object.assign({},K,{fx:K.hi}),hi=K.hi;supply(K2,.7);frontStack(K2,6);
+  const pulse=K.rm?1:clamp(K.t/.8,0,1),fl=K.rm?0:Math.pow(Math.sin(Math.PI*pulse),2);
+  ribbon(hi,sc.frontCity,sc.centre,{fill:1,fixed:pulse>=1,flash:fl,run:K.rm?null:(K.g*20)%13});
+  intent(hi,sc.entry,sc.centre,{tr:16,a:K.rm?1:ease(K.t/.6),run:K.rm?0:(K.g*28)%14,pulse:K.rm?.5:.5-.5*Math.cos(K.g*Math.PI*2/.8)});scoutMark(K,s);baseSigns(K,{revealA:ease(K.rm?1:K.t/1.2)});return}
+ drawBG1(K)}
+const DRAW={now:drawNow,bg1:drawBG1,bg2:drawBG2,bg3:drawBG3,bg4:drawBG4,bg5:drawBG5};
+
+/* ------------------------------------------------------------------ the rail (the client's strings) */
+const ICON={bot:'<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#9da7b3" stroke-width="1.5"><rect x="3" y="6" width="12" height="9" rx="2"/><circle cx="7" cy="10.5" r="1"/><circle cx="11" cy="10.5" r="1"/><path d="M9 6V3"/></svg>',
+ link:'<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#9da7b3" stroke-width="1.5"><path d="M7.5 10.5l3-3M6 8.5l-1.5 1.5a2.5 2.5 0 003.5 3.5L9.5 12M12 9.5l1.5-1.5A2.5 2.5 0 0010 4.5L8.5 6"/></svg>',
+ users:'<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#9da7b3" stroke-width="1.5"><circle cx="7" cy="6.5" r="2.5"/><path d="M2.5 15c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4M12 4.5a2.5 2.5 0 010 5M13.5 11c1.5.5 2.5 2 2.5 4"/></svg>'};
+const triSvg=(col,w=46)=>`<svg width="${w}" height="${w*.9}" viewBox="0 0 46 42"><polygon points="3,4 43,4 23,38" fill="${col}" stroke="#f0f6fc" stroke-width="3" stroke-linejoin="round"/></svg>`;
+function railHtml(st,t){const rows=(list)=>`<div class="rows">${list.map(([ic,txt,k])=>`<div><span>${ICON[ic]}${txt}</span><span class="kb">${k}</span></div>`).join('')}</div>`;
+ const all=rows([['bot','Play a bot','B'],['link','Invite a friend','I'],['users','Open matches','L']]);
+ if(st==='idle')return`<div class="eb">Ready</div><div class="play">${triSvg('#5b9bff',52)}Play <span class="kb">↵</span></div><p class="sub">Set a password to play ranked.</p>${all}`;
+ if(st==='banned')return`<div class="eb warn">Queue locked</div><div class="big" style="color:#ffb020">⚠ ${fmt(287)}</div><p class="sub">Repeated resigns. Bots, friends and the lobby stay open.</p>${all}`;
+ if(st==='search'||st==='long'){const el=st==='long'?LONG_AT+t:t;return`<div class="eb">Finding an opponent</div><div class="big" data-clock>${fmt(el)}</div><p class="small">Looking for an opponent...&nbsp;&nbsp; Players in the queue: 1</p><p class="small">Keep this tab open while you wait: a tab that sleeps in the background can drop out of the queue.</p>${st==='long'?`<p class="small">No opponent yet. You can play a bot instead (unrated); this leaves the queue.</p>${rows([['bot','Play a bot','B']])}`:''}<div class="ghost">Stop searching <span class="kb">Esc</span></div>`}
+ if(st==='found')return`<div class="eb">Opponent found</div><div class="nick">${triSvg('#e5484d',34)}${NICK}</div><div class="play">Play <span class="kb">↵</span> <span style="font-size:28px;color:#9da7b3" data-count>${Math.max(0,11-Math.floor(t))} s</span></div><p class="sub">Confirm or you leave the queue.</p><div class="ghost">Decline <span class="kb">Esc</span></div>`;
+ return`<div class="eb">Opponent found</div><div class="nick">${triSvg('#e5484d',34)}${NICK}</div><p class="sub">You confirmed. Waiting for the opponent...</p><p class="small">The opponent confirmed.</p><p class="small">Starting the match...</p>`}
+function chipHtml(st){if(st==='idle')return`<div class="who"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#c9d1d9" stroke-width="1.5"><circle cx="8" cy="5.5" r="3"/><path d="M2.5 14.5c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/></svg><b>Danya</b><span class="g">Guest</span></div>`;
+ if(st==='banned')return`<div class="who"><b>Danya</b><span class="pips"><i class="f"></i><i class="f"></i><i></i><i></i><i></i></span><span class="cal">CALIBRATION 2/5</span></div>`;return''}
+const TAG=['The capital produces charges','roads carry them','a unit without a charge is defenseless'];
+
+/* ------------------------------------------------------------------ a stage: the frame with its layers */
+function makeStage(host,cfg){const[W,H]=cfg.win.split('x').map(Number),map=MAPS[cfg.m],sc=layout(map,W,H),season=(cfg.v==='bg4'||cfg.v==='bg5')?seasonOf():'summer',atlas=cfg.v==='bg3';
+ const dpr=cfg.thumb?1:Math.min(2,window.devicePixelRatio||1);const svg=baseSvg(sc,{season,atlas});
+ host.innerHTML=`<div class="st${cfg.gray?' gray':''}${cfg.rm?' rm':''}" style="width:${W}px;height:${H}px">
+  <div class="world${atlas?' cam':''}"><div class="b">${svg}</div><canvas class="fx" width="${W*dpr}" height="${H*dpr}" style="width:${W}px;height:${H}px"></canvas></div>
+  ${fogSvg(sc)}<canvas class="hi" width="${W*dpr}" height="${H*dpr}" style="width:${W}px;height:${H}px"></canvas>
+  <div class="shade"></div>
+  <header class="top"><div class="logo">${triSvg('#5b9bff',22)}<span style="color:#9da7b3;margin:0 -6px">··</span>${triSvg('#e5484d',22)}Skill-Based Front</div>${chipHtml(cfg.s)}</header>
+  <nav class="rail">${railHtml(cfg.s,cfg.t??0)}</nav>
+  <p class="tag">${TAG.map((s,i)=>`<span data-i="${i}">${s}</span>`).join(', ')}.</p>
+  <nav class="legal"><a>Impressum</a><a>Privacy policy</a></nav>${cfg.guides?guidesSvg(sc,!!chipHtml(cfg.s)):''}</div>`;
+ const st=host.firstElementChild,world=st.querySelector('.world'),fx=st.querySelector('canvas.fx').getContext('2d'),hi=st.querySelector('canvas.hi').getContext('2d');
+ const K={sc,fx,hi,dpr,st:cfg.s,v:cfg.v,rm:cfg.rm,t:0,g:0,img:null,cam:{z:1,ox:0,oy:0},tagOn:-1,world,el:st,lastClock:-1,lastTag:-2};
+ const img=new Image();img.onload=()=>{/* rasterise the SVG once: drawing an SVG image re-renders its blur every time */const bmp=document.createElement('canvas');bmp.width=W;bmp.height=H;bmp.getContext('2d').drawImage(img,0,0,W,H);K.img=bmp;if(K.onImg)K.onImg()};img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+ return K}
+function drawStage(K,t,g){K.t=t;K.g=g;const{fx,hi,dpr,sc}=K;
+ fx.setTransform(dpr,0,0,dpr,0,0);hi.setTransform(dpr,0,0,dpr,0,0);fx.clearRect(0,0,sc.W,sc.H);hi.clearRect(0,0,sc.W,sc.H);
+ if(K.v==='bg3'){K.cam=camFor(K);K.world.style.transform=`translate(${f1(K.cam.ox)}px,${f1(K.cam.oy)}px) scale(${K.cam.z.toFixed(4)})`}
+ DRAW[K.v](K);
+ if(K.tagOn!==K.lastTag){K.el.querySelectorAll('.tag span').forEach(s=>s.classList.toggle('on',+s.dataset.i===K.tagOn));K.lastTag=K.tagOn}
+ const sec=Math.floor(t);if(sec!==K.lastClock){K.lastClock=sec;const ck=K.el.querySelector('[data-clock]');if(ck)ck.textContent=fmt(K.st==='long'?LONG_AT+t:t);const cn=K.el.querySelector('[data-count]');if(cn)cn.textContent=Math.max(0,11-sec)+' s'}}
+
+/* ------------------------------------------------------------------ the page */
+let MAIN=null,raf=0,visible=true,acc={n:0,ms:0,t:performance.now()};
+function cfgMain(){return{v:S.v,m:S.m,s:S.s,win:S.win,gray:S.gray,rm:S.rm,guides:S.guides,t:S.t}}
+function fit(){const[W,H]=S.win.split('x').map(Number),box=document.getElementById('sbox'),wrap=document.getElementById('swrap'),k=Math.min(1,(document.querySelector('main').clientWidth-2)/W);box.style.transform=`scale(${k})`;wrap.style.width=W*k+2+'px';wrap.style.height=H*k+2+'px'}
+function frozen(){return S.t!=null||S.rm||S.pause}
+function tick(now){raf=0;if(!MAIN)return;const t=S.t??(now-S.t0)/1000,g=S.t??now/1000;const a=performance.now();drawStage(MAIN,t,g);const b=performance.now();
+ acc.n++;acc.ms+=b-a;if(now-acc.t>1000){document.getElementById('fps').textContent=`${Math.round(acc.n*1000/(now-acc.t))} fps · draw ${(acc.ms/acc.n).toFixed(2)} ms/frame`;acc={n:0,ms:0,t:now}}
+ if(!frozen()&&visible)raf=requestAnimationFrame(tick)}
+function kick(){if(!raf)raf=requestAnimationFrame(tick)}
+function renderMain(){MAIN=makeStage(document.getElementById('sbox'),cfgMain());const rep=STATES.find(x=>x.id===S.s).rep;
+ const still=()=>{const t=S.t??(S.rm?rep:(performance.now()-S.t0)/1000);drawStage(MAIN,t,S.t??(S.rm?rep:performance.now()/1000));if(frozen())document.getElementById('fps').textContent=S.pause?'paused':S.rm?'reduced motion: one still frame':'frozen at t = '+S.t+' s'};
+ MAIN.onImg=still;still();fit();kick();notes()}
+function renderOverview(){const ov=document.getElementById('ov');const rep=S.t??STATES.find(x=>x.id===S.s).rep;ov.innerHTML='';
+ for(const c of CONCEPTS){const fig=document.createElement('figure');fig.className=c.id===S.v?'on':'';const[W,H]=S.win.split('x').map(Number),k=400/W;
+  fig.innerHTML=`<div class="thumb" style="width:${W*k+2}px;height:${H*k+2}px"><div class="stagebox" style="transform:scale(${k})"></div></div><figcaption>${c.name}</figcaption>`;ov.appendChild(fig);
+  const K=makeStage(fig.querySelector('.stagebox'),{v:c.id,m:S.m,s:S.s,win:S.win,gray:S.gray,rm:S.rm,guides:false,t:rep,thumb:true});const d=()=>drawStage(K,rep,rep);K.onImg=d;d();
+  fig.onclick=()=>{set('v',c.id);document.getElementById('s1').scrollIntoView({behavior:'smooth'})}}
+ const ms=document.getElementById('maps');ms.innerHTML='';
+ for(const id of Object.keys(MAPS)){const fig=document.createElement('figure');fig.className=id===S.m?'on':'';const[W,H]=S.win.split('x').map(Number),k=400/W;
+  fig.innerHTML=`<div class="thumb" style="width:${W*k+2}px;height:${H*k+2}px"><div class="stagebox" style="transform:scale(${k})"></div></div><figcaption>${MAPS[id].name}: ${MAPS[id].nodes.length} nodes, ${MAPS[id].edges.length} roads${id==='pool'?' (the pool map scaled to fit)':''}</figcaption>`;ms.appendChild(fig);
+  const K=makeStage(fig.querySelector('.stagebox'),{v:'bg5',m:id,s:'idle',win:S.win,gray:S.gray,rm:true,guides:true,t:20.6,thumb:true});const d=()=>drawStage(K,20.6,20.6);K.onImg=d;d();
+  fig.onclick=()=>{set('m',id);document.getElementById('s1').scrollIntoView({behavior:'smooth'})}}}
+
+/* ------------------------------------------------------------------ texts */
+const INFO={
+ now:{what:'The client today (#489): the pool map at a small scale; the only motion is the queue sign.',
+  st:{idle:'Still. The "?" ring in the fog marches.',search:'Rings grow from the capital, the road to the "?" marches.',long:'The same as searching.',found:'The road is solid, the enemy capital shows the nick.',confirmed:'The same as found.',banned:'An amber dashed ring pulses on the own capital.'},
+  cost:'SVG and three CSS animations (dash offset, scale, opacity). Next to nothing on the main thread.',why:'The motion says "something is going on" but not what: rings and a marching line are not things of the game.'},
+ bg1:{what:'The map lives by the rules, slowly: supply packets go from the capital to the cities, groups drill on own roads, a recruit leaves the capital. The queue changes what the army does.',
+  st:{idle:'Peace: supply packets (■ with a tail, 9.6) to random own cities, a new unit leaves the capital every 11 s, a group walks one own road every 6.5 s and merges (DEC-20). No captures, nothing that must be undone by a loop.',
+   search:'Mobilisation: groups walk to the front city and merge, its stack grows by one every 12 s (×2 to ×9: a still sign of the time waited). A planned order (ODb) from the front city to the middle city is drawn with its delay fill breathing: "ready to go, waiting for the opponent". The rest of the road to the "?" marches.',
+   long:'The same; the stack is at ×7 or more.',found:'The order is fixed: one depart pulse (0.8 s), the outline strengthens, its dashes run. The opponent\'s intent IN3 comes out of the fog to the same city, the crosshair pulses. The enemy capital shows the nick.',
+   confirmed:'Both groups set out and meet in the middle city; a fight in rounds of 2 s (DEC-32): tracers (SH1), every third round a cancellation (the two shots meet), the others a kill with "−1".',banned:'The supply stands: the packets stop where they are, dimmed. The amber ring of the lock on the capital.'},
+  cost:'Up to about 15 moving objects (packets, triangles, one ribbon, two tracers). In the client: pooled SVG elements moved by transform from one rAF at 30 fps, or one 2D canvas. Measured here: see the meter.',why:'Everything that moves is a thing of the game, moving for a reason of the game; the queue state is the army\'s state.'},
+ bg2:{what:'Idle tells the tagline in four beats (32 s loop), the clause of the tagline lights up with its beat. In the queue a scout walks into the fog: what the scout sees is revealed (DEC-35: own groups are the source of sight), and the opponent is found where the scout looks.',
+  st:{idle:'Beat 1: the capital produces charges (the stock under it fills). Beat 2: three packets ride to the front city, its stock fills. Beat 3: a charged group takes the first neutral node (capture wave). Beat 4: a discharged enemy group comes out of the fog and is killed by one shot ("a unit without a charge is defenseless"). A 1 s fade, then again.',
+   search:'A scout ▽ leaves the capital along the road to the enemy (18 px/s) and lights a circle of sight through the fog; it stops one step before the enemy capital and waits, its sight ring breathes. The walked road is a faint trail.',
+   long:'The scout waits at the edge (it got there in under a minute).',found:'The sight widens over 1.2 s to the enemy capital: it shows the nick. The road from the scout on is solid.',confirmed:'The same as found.',banned:'The story stops on a still frame of beat 1; the amber ring.'},
+  cost:'A few objects and one clipped image of the map per frame (the sight). In the client the sight is a mask on the fog layer: a moving mask repaints the fog layer, so update it at 10 Hz (the scout moves 1.8 px per update).',why:'The search is literally a search: you look into the fog, and the found opponent appears where you looked.'},
+ bg3:{what:'The map is an atlas sheet: names in small caps, a faint grid, a compass, a scale bar "ten seconds of march". The camera drifts slowly over own land; the queue moves it toward the enemy.',
+  st:{idle:'Drift over own land: a zoom of 1.08 to 1.15 and a sway of 26 px over 75 to 120 s (under 2 px/s).',search:'The camera pans toward the fog over 70 s (80 px), the road marches as in Now.',long:'The pan has ended at the fog edge.',found:'The camera eases back in 1.4 s to frame both capitals; the enemy capital shows the nick.',confirmed:'The same as found.',banned:'The camera stands; the amber ring.'},
+  cost:'One CSS transform on a cached layer: compositor only, no paint, if the layer is promoted once (will-change). Risk: the 16 px blur of the terrain repainted every frame if the layer is not promoted (integrated GPUs).',why:'Calm and "cartographic"; but nothing on the map does anything, so it answers "varied", not "logical".'},
+ bg4:{what:'The season by the date tints the terrain (spring, summer, autumn, winter): the menu looks different through the year at no cost. The light follows the queue.',
+  st:{idle:'Day: a soft warm light crosses the map in 3 minutes.',search:'Dusk falls over 40 s of waiting; own cities light their lamps one by one.',long:'Night: own cities lit, the fog darker.',found:'Dawn from the enemy side in 1.6 s; the enemy capital shows the nick.',confirmed:'Morning.',banned:'A cold dusk, still; the amber ring.'},
+  cost:'Two gradient fills over the frame and up to 8 lamp sprites. In the client: two HTML overlays with opacity transitions (compositor) and the lamps as one small SVG group.',why:'Varied and moody, and waiting feels like time passing; but the light is not a thing of the game (the match has no day and night).'},
+ bg5:{what:'The recommended set: BG1 while idle and once a pair is found, the BG2 scout while searching (instead of the planned order that only breathes), the season of BG4 as a still tint (no light cycle).',
+  st:{idle:'BG1 peace: supply, recruits, drills.',search:'The front stack grows (BG1) and the scout walks into the fog (BG2).',long:'The scout waits at the edge; the stack is large.',found:'The scout\'s sight finds the enemy capital; the own planned order is fixed with its pulse and the opponent\'s intent comes to the same city.',confirmed:'BG1: the march and the fight in rounds.',banned:'BG1: the supply stands; the amber ring.'},
+  cost:'The sum of BG1 and the scout: about 15 objects and the sight mask at 10 Hz.',why:'Every state has its own action that follows from the rules, the search is a scout, the match start is the fight; the season keeps it from looking the same every visit.'}};
+function notes(){const c=CONCEPTS.find(x=>x.id===S.v),I=INFO[S.v];document.getElementById('vnote').innerHTML=`<b>${c.name}.</b> ${I.what} <b>Why it moves:</b> ${I.why}`;
+ document.getElementById('stab').innerHTML=`<tr><th>State</th><th>What moves in ${c.short}</th></tr>`+STATES.map(s=>`<tr class="${s.id===S.s?'on':''}"><th>${s.name}</th><td>${I.st[s.id]}</td></tr>`).join('')+`<tr><th>Cost</th><td>${I.cost}</td></tr>`}
+function cards(){document.getElementById('vcards').innerHTML=CONCEPTS.map(c=>{const I=INFO[c.id];return`<div class="cd${c.id==='bg5'?' rec':''}"><h3>${c.name}${c.id==='bg5'?'<span class="badge">recommended</span>':''}</h3><p>${I.what}</p><ul>${STATES.map(s=>`<li><b>${s.name}:</b> ${I.st[s.id]}</li>`).join('')}</ul><p style="color:#9da7b3"><b>Cost:</b> ${I.cost}</p></div>`}).join('');
+ document.getElementById('mapnote').innerHTML=`The client draws the pool map <code>crossroads</code> (49 nodes, 2000 × 1240) at about a third of its size: the cities stand 25 to 40 px apart, half of the map is under the fog, and the road to the enemy is whatever the shortest path happens to be. A map drawn for the frame can place the action where the eye goes (between the rail and the fog), keep the title bar empty and give the stories fixed places: the front city, the middle city, the scout's stop. Below: the pool map and three sketches, all laid out by the client's own <code>layoutScene</code> at the selected window, with the guides on (the rail, the title bar line, the fog's top fade, the corner chip, the fog edge). Click one to use it in the frame above.`;
+ document.getElementById('mapspec').innerHTML=[
+  ['MM1 Valley','A horizontal valley: mountains frame the top and the bottom (no node above y 190, well under the fog\'s top fade and the chip), the plains and a forest belt in the middle, the road runs down the valley. The middle city Fordham is the meeting point at the optical centre of the free area. The calmest composition behind the text.'],
+  ['MM2 Rising pass','A diagonal: the own capital low on the left, the enemy\'s higher on the right; the road climbs through a pass between a massif and a forest. Reads as "advance", the strongest picture; the enemy capital sits higher (y 335), still 200 px below the chip.'],
+  ['MM3 Wheel','A ring of six nodes round a forest city with spokes: a clear focal point for the fight, a symmetric frame. The most "designed", but the regular wheel looks less like a real map.'],
+  ['What it takes (any sketch)',`<ul><li><b>A file outside the pool:</b> <code>maps/menu/&lt;id&gt;.json</code> in the existing format (no new keys: the format rejects unknown keys), about 26 nodes, built from a half with <code>gow-maps mirror</code> so it passes the validator's checks unchanged (connectivity, planarity, rule symmetry, names, kinds, border points, degree, travel ticks, disjoint paths, neutral space; the size check is off by default); the coordinates are free (DEC-27), so the picture need not be mirrored. Keeping it a valid, fair map costs nothing and lets it become a playable map later. The server loads <code>maps/*.json</code> without subdirectories, so it never enters the pool, the queue or the tournament.</li>
+   <li><b>Validator and bake:</b> the <code>gow-maps</code> commands take paths, so only the globs of the mise tasks change: <code>maps:validate</code>, <code>maps:bake</code> and <code>maps:preview</code> add <code>maps/menu/*.json</code> (they cover the pool only today), and the bake gives <code>maps/menu/&lt;id&gt;.bg.webp</code> with the T2 texture (well under 0.5 MB at 800 × 560).</li>
+   <li><b>Client:</b> import the JSON at build time (a few KB) and the background as a static asset (CSP <code>img-src 'self'</code>), instead of <code>GET /api/maps</code> + <code>GET /api/maps/crossroads</code> in <code>#loadBackdrop</code>: the picture is there on the first frame and does not depend on the server. <code>layoutScene</code> stays as it is: the sketch is authored at 800 × 560 world units so that it lands 1:1 in a 1280 × 800 window.</li>
+   <li><b>No DEC, no protocol, no server, no simulation change.</b> Estimate: S to M, 1 to 1.5 days (half, mirror, validate, bake, client import, a look at <code>mise run shots</code>).</li></ul>`]].map(([h,b])=>`<div class="cd${h==='MM1 Valley'?' rec':''}"><h3>${h}${h==='MM1 Valley'?'<span class="badge">recommended</span>':''}</h3>${b.startsWith('<ul>')?b:`<p>${b}</p>`}</div>`).join('');
+ const rowsT=[
+  ['Now','client today: the pool map, a marching road, growing rings','none','the motion says nothing about the game','0.09 ms per frame here (search); CSS animations in the client','none','no'],
+  ['BG1 Living front','packets, recruits, drills; mobilisation and a planned order; orders meet; a fight','every motion is a game thing with a reason; the queue state is the army\'s state; the match start is a fight','busy if too many objects: capped at about 15, 30 fps','≈ 15 objects; 0.12 (idle) to 0.25 ms per frame here (found, confirmed), 60 fps','M, 3 days','no (better with one)'],
+  ['BG2 Story and scout','the tagline told in 4 beats; a scout looks into the fog','teaches the core rule on the first screen; the search is a search; the clause of the tagline lights with its beat','a 32 s loop repeats; the sight mask repaints the fog layer (update at 10 Hz)','≈ 6 objects + the sight; 0.09 (idle) to 0.34 ms per frame here (search), 60 fps','M, 3 days','no (better with one: fixed beat places)'],
+  ['BG3 Atlas camera','a slow camera over an atlas sheet','calmest; cheapest motion; a look of its own','says nothing new; any camera motion behind text can bother some people (reduced motion stops it); blur repaint if the layer is not promoted','compositor only in the client; 0.12 ms per frame here','S, 1 to 1.5 days','no'],
+  ['BG4 Light and seasons','season by date; light follows the queue','varied through the year; waiting feels like time','the light is not a thing of the game; a darker frame behind the rail','two overlays + up to 8 lamps; 0.13 ms per frame here (long wait)','S to M, 2 days','no'],
+  ['BG5 Set (recommended)','BG1 + the BG2 scout + the BG4 season tint','all of the above where it fits: idle shows the economy, the search is the scout, found shows both orders, confirmed the fight; varied by season','the most work; needs the menu map for the best look','≈ 15 objects + the sight; 0.27 to 0.37 ms per frame here (search, found), 60 fps','M to L, 4 days (+1 to 1.5 for the map)','recommended (MM1)']];
+ document.getElementById('tbl').innerHTML=`<tr><th>Id</th><th>What moves</th><th>Pros</th><th>Risks</th><th>FPS cost</th><th>Estimate (client)</th><th>New map file</th></tr>`+rowsT.map(r=>`<tr>${r.map((c,i)=>i===0?`<th>${c}</th>`:`<td>${c}</td>`).join('')}</tr>`).join('')+
+  `<tr><th>MM1, MM2, MM3</th><td>a map drawn for the frame</td><td>composition, fixed story places, empty title bar, no server request</td><td>one more map to keep valid (the validator does it); its look must follow the map style</td><td>none (a static layer)</td><td>S to M, 1 to 1.5 days</td><td>yes: <code>maps/menu/&lt;id&gt;.json</code> + <code>.bg.webp</code>, outside the pool</td></tr>`;
+ document.getElementById('rec').innerHTML=`<div class="cd rec"><h3>Recommendation: BG5 Set on MM1 Valley</h3><p>BG5 gives every queue state its own action that follows from the rules (economy, scout, two orders, a fight), and the season tint keeps the screen from looking the same every visit. MM1 is the calmest frame for the rail and keeps the title bar and the chip clear by construction. Second choice: <b>BG1</b> alone (no sight mask), or <b>BG3</b> if the owner wants the quietest screen.</p></div>
+ <div class="cd"><h3>Rules for whichever is chosen</h3><ul><li>Nothing moves faster than about 60 px/s; no blinking; pulses under 3 Hz (ui-style 20).</li><li>The motion stops when the tab is hidden, when a match starts and with reduced motion; every state keeps its still sign (ban ring, "?" or the nick, the stack ×N, the scout's place).</li><li>Nothing enters the rail column or the title bar band; the fog never reaches the chip (BAR_BOTTOM).</li><li>The menu draws no game logic: it is decoration, the client still decides nothing (AGENTS 7.1); the stories are scripted, not simulated.</li></ul></div>`;
+ document.getElementById('chk').innerHTML=[
+  '<b>Calm behind the text:</b> objects move at 18 to 55 px/s, only right of the rail (x ≥ 520 at 1280); the rail column has no motion.',
+  '<b>Readable:</b> each state keeps a still sign: grayscale and reduced motion show it (header switches).',
+  '<b>Fog and chip:</b> the fog starts below the title bar (BAR_BOTTOM 76, fade 60 px), the same rule as the client; the sketches have no node above y 190; guides show it per window size.',
+  '<b>Cheap:</b> one rAF loop, stops when hidden or off screen; the header meter shows the draw time; static layers drawn once. Measured on 2026-10-29 in headless Chromium (software rendering, 1280 × 800): every concept and state held 60 fps, the draw took 0.09 to 0.37 ms per frame; the scout\'s sight is cached per pixel of movement (an SVG image drawn into a canvas re-renders its blur on every call: rasterise it once).',
+  '<b>Found at 1024 × 640:</b> the client\'s <code>layoutScene</code> puts the own capital at x = 0.4 × width = 410, under the rail (the rows of the rail end at about 426): under the rail\'s shade the key hints of the rows sit on the capital in the idle and locked states (switch the window to 1024x640 with the guides on; the client\'s own <code>screen-queue-found-1024x640.png</code> shows the capital at the same place). A fix that does not depend on the choice: keep <code>left</code> at least at the rail\'s right edge and shrink the map instead.',
+  '<b>Pulses:</b> the ban ring 0.8 Hz, the crosshair 1.25 Hz, the order breathing 0.3 Hz: all under 3 Hz, smooth (ui-style 20.2).',
+  '<b>No new mechanic:</b> everything drawn exists in the game: packets 9.6, groups 9.5, planned orders ODb, intents IN3, tracers SH1, capture wave, sight of own groups (DEC-35).'].map(x=>`<li>${x}</li>`).join('')}
+
+/* ------------------------------------------------------------------ controls */
+function seg(id,list,key){const el=document.getElementById(id);el.innerHTML=list.map(x=>`<button data-v="${x.id}" class="${S[key]===x.id?'on':''}">${x.short||x.name}</button>`).join('');el.onclick=e=>{const b=e.target.closest('button');if(b)set(key,b.dataset.v)}}
+function controls(){seg('pv',CONCEPTS,'v');seg('pm',Object.keys(MAPS).map(id=>({id,name:id==='pool'?'crossroads (pool)':MAPS[id].name})),'m');seg('ps',STATES,'s');
+ for(const k of['gray','rm','guides','pause'])document.getElementById(k).checked=S[k];document.getElementById('win').value=S.win;document.getElementById('season').value=S.season}
+function sync(){const p=new URLSearchParams({v:S.v,m:S.m,s:S.s,win:S.win,season:S.season,gray:+S.gray,rm:+S.rm,guides:+S.guides});if(S.t!=null)p.set('t',S.t);history.replaceState(null,'','#'+p)}
+function load(){const p=new URLSearchParams(location.hash.slice(1));for(const k of['v','m','s','win','season'])if(p.get(k))S[k]=p.get(k);for(const k of['gray','rm','guides'])if(p.get(k))S[k]=p.get(k)==='1';if(p.get('t'))S.t=parseFloat(p.get('t'))}
+function set(k,v){S[k]=v;if(k==='s')S.t0=performance.now();controls();sync();renderMain();renderOverview()}
+document.getElementById('header')
+for(const k of['gray','rm','guides','pause'])document.getElementById(k).onchange=e=>{S[k]=e.target.checked;sync();renderMain();if(k!=='pause')renderOverview()};
+document.getElementById('win').onchange=e=>set('win',e.target.value);document.getElementById('season').onchange=e=>set('season',e.target.value);
+addEventListener('keydown',e=>{if(e.target.tagName==='SELECT')return;const cyc=(list,key,d)=>{const i=list.findIndex(x=>x.id===S[key]);set(key,list[(i+d+list.length)%list.length].id)};
+ if(e.key==='[')cyc(CONCEPTS,'v',-1);if(e.key===']')cyc(CONCEPTS,'v',1);if(e.key===',')cyc(STATES,'s',-1);if(e.key==='.')cyc(STATES,'s',1);
+ if(e.key==='m')cyc(Object.keys(MAPS).map(id=>({id})),'m',1);if(e.key==='g'){S.guides=!S.guides;controls();sync();renderMain()}if(e.key==='p'){S.pause=!S.pause;controls();renderMain()}});
+document.addEventListener('visibilitychange',()=>{visible=!document.hidden;if(visible)kick()});
+new IntersectionObserver(es=>{for(const e of es){visible=e.isIntersecting&&!document.hidden;if(visible)kick()}}).observe(document.getElementById('swrap'));
+addEventListener('resize',fit);
+load();controls();cards();renderMain();renderOverview();
+</script>
+</body>
+</html>
