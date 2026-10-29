@@ -275,6 +275,8 @@ export class MapScene {
 
   /** Every frame: owners and road widths from a new snapshot, then the moving entities. */
   private readonly drawFrame = (): void => {
+    // The camera glides first, so everything below is placed for the camera of this frame.
+    this.controller.step(this.frameMs);
     // Textures dropped a frame ago may go now (see `SpriteCache.endFrame`).
     this.sprites.endFrame();
     this.screenSprites.endFrame();
