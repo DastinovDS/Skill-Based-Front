@@ -442,7 +442,7 @@ describe('MapView, the terrain mode (#429)', () => {
   });
 
   it('keeps the glow of the territory in the terrain mode, unlike «Supply»', () => {
-    view.setOwners(map.nodes.map((n, i) => (i % 2 === 0 ? 0 : 1)));
+    view.setOwners(map.nodes.map((_, i) => (i % 2 === 0 ? 0 : 1)));
     const glow = layers.layer.territory.children.find((c) => c.label === 'territory-glow');
     expect(glow?.visible).toBe(true);
     view.setTerrainMode(true);
