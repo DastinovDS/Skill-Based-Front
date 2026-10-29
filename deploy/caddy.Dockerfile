@@ -16,7 +16,7 @@ RUN corepack enable pnpm
 # screen bundles them (src/map/bundledMaps.ts), and the dev screen is not built. The one map file it
 # bundles is the menu map behind the start screens (src/app/menuMap.ts, #474), outside the pool.
 # The vector files of the maps with a geography (DEC-36, #544, `maps/geo/<id>.json`) are bundled too,
-# one lazy chunk per map (src/map/geography.ts); the directory holds a .gitkeep until a map has one.
+# one lazy chunk per map (src/map/geography.ts).
 WORKDIR /repo/apps/client
 COPY maps/menu/valley.json /repo/maps/menu/valley.json
 COPY maps/geo/ /repo/maps/geo/
