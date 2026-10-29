@@ -175,18 +175,23 @@ export const BAR_GAP = 9;
 export const PLACE_FRAME = { width: 1, color: SEGMENT_EMPTY } as const;
 export const PLACE_DASHED = { width: 0.9, color: PAPER, alpha: 0.5, dash: 1.4, gap: 1.4 } as const;
 /**
- * A province (DEC-23, C1): a small hollow ring instead of a city body, no warehouse, no VP. The
- * ring is `ring.owned` wide in the colour of the owner (`ring.neutral` and grey for nobody's), an
- * own one has a light ring `outer.inset` outside, the opponent's also a light ring `inner.inset`
- * inside, so the side reads without the colour as on a city.
+ * A province (DEC-23, PB "Pale dot", #431, ui-style 35): a small solid dot of `dot` radius in a pale
+ * tint of the owner (`lighten` of the owner's colour, no dark plate, so no centre that reads as a
+ * target), a thin darker outline (`outline.darken`) and a dark casing; the capacity ring of 3
+ * places outside it (`ringRadius(radius)`) is the same as ever. The opponent's dot has a second
+ * thin light ring `enemy.inset` outside it, so the side reads without the hue; nobody's is a paler,
+ * see-through grey dot with a dashed outline. No gradient, no rim, no star, no warehouse, no VP.
  */
 export const PROVINCE = {
+  /** The radius the capacity ring and the label are laid out by. */
   radius: 9,
-  /** The dark plate inside the ring (`PLATE_FILL`) is this opaque. */
-  plateAlpha: 0.9,
-  ring: { owned: 3.6, neutral: 2.4 },
-  outer: { inset: 2.6, width: 1.6 },
-  inner: { inset: 3.4, width: 1.3, alpha: 0.9 },
+  dot: 6.5,
+  casing: { inset: 1.6, width: 2, alpha: 0.55 },
+  /** How far the owner's colour is moved to white; nobody's is paler still and see-through. */
+  tint: { owned: 0.5, neutral: 0.25, neutralAlpha: 0.6 },
+  outline: { width: 1.4, darken: 0.15 },
+  neutralOutline: { width: 1.3, dash: 2.6, gap: 2 },
+  enemy: { inset: 3.4, width: 1.1, alpha: 0.95 },
 } as const;
 /**
  * The progress marks above an own city (variant A "Cells", #439; ui-style 9.4a): one cell is one

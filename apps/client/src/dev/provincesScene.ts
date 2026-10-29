@@ -1,7 +1,7 @@
 /**
  * The `provinces` scene of the dev screen (#348): one moment of a game on the pool map `crossroads`
  * (DEC-27: 22 of its 49 nodes are provinces), with its baked background. It shows what the other
- * scenes cannot: provinces as hollow rings (an own one, an own one with a group, nobody's with a
+ * scenes cannot: provinces as pale dots (PB, #431) (an own one, an own one with a group, nobody's with a
  * group of its own on it, the enemy's in sight and in the fog) next to cities with warehouses of
  * every level (places filled, frames, dashed). Made here from the map file, not a fixture of the
  * protocol: it is a picture for the eyes, the numbers only have to be plausible.
