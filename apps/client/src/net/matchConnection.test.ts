@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CLOSE_NO_MATCH,
+  CLOSE_POLICY,
   CLOSE_PROTOCOL_VERSION,
   CLOSE_REPLACED,
   PROTOCOL_VERSION,
@@ -8,8 +10,6 @@ import {
 import { createFakeServer } from './fakeServer.ts';
 import {
   backoffDelay,
-  CLOSE_NO_MATCH,
-  CLOSE_POLICY,
   MatchConnection,
   matchSocketUrl,
   type MatchHandlers,
