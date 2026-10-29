@@ -221,3 +221,17 @@ test('shot of the enemy figures in grey scale at 60% scale', async ({ page }) =>
   });
   await page.locator('canvas').screenshot({ path: join(OUT, 'figures-gray-60.png') });
 });
+
+// The opponent's planned order (IN3 "Crosshair", #353) in grey scale at 60% of the map scale: the thin dashed arrow, the ring in a ring
+// at its tail and the crosshair (two rings, four ticks) on the target must read without the hue. `intents-gray-60.png`, the map alone.
+test('shot of the opponent intent in grey scale at 60% scale', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 480 });
+  await page.goto('/?scene=artery');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.waitForTimeout(500);
+  await page.addStyleTag({
+    content: '.hud { display: none !important; } canvas { filter: grayscale(1); }',
+  });
+  await page.locator('canvas').screenshot({ path: join(OUT, 'intents-gray-60.png') });
+});
