@@ -1,4 +1,8 @@
-"""Command line: `gow-maps validate`, `gow-maps mirror`, `gow-maps preview`, `gow-maps bake`."""
+"""Command line: `gow-maps validate`, `gow-maps mirror`, `gow-maps preview`, `gow-maps bake`.
+
+`bake` of a map with an authored geography (DEC-36, `maps/src/<id>.geo.json`) also writes the
+vector file `maps/geo/<id>.json`.
+"""
 
 import argparse
 import glob
@@ -7,6 +11,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from gow_maps.bake import background_path, bake_background
+from gow_maps.geo import bake_geography, find_spec, vector_path
 from gow_maps.mirror import HalfFormatError, mirror_file
 from gow_maps.preview import preview_path, render_preview
 from gow_maps.validate import Issue, load_config, validate_file
@@ -79,7 +84,12 @@ def _bake(args: argparse.Namespace) -> int:
         try:
             mapdef = load_map(path)
             out = background_path(path)
-            bake_background(mapdef, out, args.seed)
+            spec = find_spec(path)
+            if spec is None:  # a land-only map (DEC-27, item 3)
+                bake_background(mapdef, out, args.seed)
+            else:  # a map with a geography (DEC-36): water, and the vector file for the client
+                bake_geography(mapdef, spec, out, vector_path(path), args.seed)
+                print(f"wrote {vector_path(path)}")
         except (MapFormatError, ValueError) as exc:
             print(f"FAIL {path}\n  {exc}")
             ok = False

@@ -1,4 +1,4 @@
-"""Map geography of DEC-36 (#537): water cells, rivers as area borders, areas touch only along roads.
+"""Map geography of DEC-36 (#537): water cells, rivers as area borders, areas meet along roads.
 
 A map may have an authored geography ``maps/src/<id>.geo.json`` (water cells and long rivers,
 ``load_spec``). For such a map the baker computes, on the grid of ``gow_maps.bake`` (``STEP``
@@ -26,6 +26,7 @@ random field comes from ``numpy.random.default_rng`` seeded from it, ties go to 
 """
 
 import heapq
+import itertools
 import json
 import math
 from collections.abc import Iterable
@@ -65,7 +66,7 @@ BRIDGE_REACH = 24.0  # a road may cross water this close to a bridge of its own 
 WaterKind = Literal["sea", "lake"]
 Labels = NDArray[np.int32]
 Mask = NDArray[np.bool_]
-Floats = NDArray[np.float64]
+Floats = NDArray[np.floating[Any]]
 Pt = tuple[float, float]
 
 
@@ -157,9 +158,7 @@ def parse_spec(raw: object) -> GeoSpec:
         r = _int(w["r"], f"water[{i}].r")
         if r < 0:
             raise GeoFormatError(f"water[{i}].r must not be negative")
-        water.append(
-            WaterCell(cast(WaterKind, kind), _int(w["x"], f"water[{i}].x"), _int(w["y"], "y"), r)
-        )
+        water.append(WaterCell(kind, _int(w["x"], f"water[{i}].x"), _int(w["y"], "y"), r))
     rivers: list[RiverSpec] = []
     for i, item in enumerate(_list(top.get("rivers", []), "rivers")):
         rv = _obj(item, f"rivers[{i}]")
@@ -311,7 +310,7 @@ def _smooth(pts: list[Pt], passes: int) -> list[Pt]:
         if len(pts) < 3:
             break
         out = [pts[0]]
-        for a, b in zip(pts[:-1], pts[1:], strict=True):
+        for a, b in itertools.pairwise(pts):
             out.append((0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]))
             out.append((0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]))
         out.append(pts[-1])
@@ -821,54 +820,51 @@ def _dashes(a: Pt, b: Pt, dash: tuple[float, float], phase: int) -> list[tuple[P
     return out
 
 
-def _mix(img: Field, colour: tuple[int, int, int], alpha: Field) -> Field:
+def _mix(img: Field, colour: tuple[int, int, int], alpha: NDArray[np.floating[Any]]) -> Field:
     c = np.array(colour, dtype=np.float32)
     a = alpha[..., None]
     return np.asarray(img * (1.0 - a) + c * a, dtype=np.float32)
+
+
+def _deck_point(br: Bridge, angle: float, u: float, v: float) -> tuple[float, float]:
+    """A point of a bridge deck in supersampled pixels: ``u`` along the road, ``v`` across."""
+    ux, uy = math.cos(angle), math.sin(angle)
+    s = bake.SUPERSAMPLE
+    return ((br.x + ux * u - uy * v) * s, (br.y + uy * u + ux * v) * s)
 
 
 def _draw_bridges(img: Field, mapdef: MapDef, bridges: Iterable[Bridge]) -> Field:
     """Wooden decks with planks and railings and a soft shadow, along the road (mockup W4)."""
     s = bake.SUPERSAMPLE
     h, w = img.shape[:2]
-    layer = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB").resize(
-        (w * s, h * s), Image.Resampling.BILINEAR
-    )
-    shade = Image.new("L", (w * s, h * s), 0)
-    draw = ImageDraw.Draw(layer)
-    shadow = ImageDraw.Draw(shade)
+    base = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB")
+    layer = base.resize((w * s, h * s), Image.Resampling.BILINEAR).convert("RGBA")
+    shade = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    hl, hw = BRIDGE_LEN / 2, BRIDGE_W / 2
+    quad = [(-hl, -hw), (hl, -hw), (hl, hw), (-hl, hw)]
+    decks: list[tuple[Bridge, float]] = []
     for br in bridges:
         edge = mapdef.edges[br.edge]
         a, b = mapdef.nodes[edge.a], mapdef.nodes[edge.b]
-        ang = math.atan2(b.y - a.y, b.x - a.x)
-        ux, uy = math.cos(ang), math.sin(ang)
-        vx, vy = -uy, ux
-
-        def at(u: float, v: float, dx: float = 0.0, dy: float = 0.0) -> tuple[float, float]:
-            return ((br.x + ux * u + vx * v + dx) * s, (br.y + uy * u + vy * v + dy) * s)
-
-        hl, hw = BRIDGE_LEN / 2, BRIDGE_W / 2
-        quad = [(-hl, -hw), (hl, -hw), (hl, hw), (-hl, hw)]
-        shadow.polygon([at(u, v, 1.5, 2.5) for u, v in quad], fill=round(255 * 0.28))
-        draw.polygon([at(u, v) for u, v in quad], fill=DECK)
+        angle = math.atan2(b.y - a.y, b.x - a.x)
+        decks.append((br, angle))
+        shifted = Bridge(br.edge, br.x + 1.5, br.y + 2.5)
+        ImageDraw.Draw(shade).polygon(
+            [_deck_point(shifted, angle, u, v) for u, v in quad], fill=(*SHADOW, 71)
+        )
+    layer = Image.alpha_composite(layer, shade)
+    draw = ImageDraw.Draw(layer)
+    for br, angle in decks:
+        draw.polygon([_deck_point(br, angle, u, v) for u, v in quad], fill=DECK)
         u = -hl + 3
         while u < hl:
-            draw.line([at(u, -hw), at(u, hw)], fill=PLANK, width=max(1, round(0.9 * s)))
+            line = [_deck_point(br, angle, u, -hw), _deck_point(br, angle, u, hw)]
+            draw.line(line, fill=PLANK, width=max(1, round(0.9 * s)))
             u += 4
         for v in (-hw, hw):
-            draw.line([at(-hl, v), at(hl, v)], fill=RAIL, width=max(1, round(1.6 * s)))
-    # The shadow under the deck: darken where the shadow is and the deck is not.
-    pixels = np.asarray(layer, dtype=np.float32)
-    dark = np.asarray(shade, dtype=np.float32)[..., None] / 255.0
-    deck = np.asarray(
-        Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB").resize(
-            (w * s, h * s), Image.Resampling.BILINEAR
-        ),
-        dtype=np.float32,
-    )
-    changed = (np.abs(pixels - deck).sum(axis=2, keepdims=True) > 0).astype(np.float32)
-    pixels = pixels * (1.0 - dark * (1.0 - changed))
-    out = Image.fromarray(np.clip(pixels, 0, 255).astype(np.uint8), "RGB").reduce(s)
+            line = [_deck_point(br, angle, -hl, v), _deck_point(br, angle, hl, v)]
+            draw.line(line, fill=RAIL, width=max(1, round(1.6 * s)))
+    out = layer.convert("RGB").reduce(s)
     return np.asarray(out, dtype=np.float32)
 
 
@@ -918,7 +914,9 @@ def render(mapdef: MapDef, geo: Geography, seed: int | None = None) -> Image8:
     def paint(img: Field) -> Field:
         noise = bake.fbm(h, w, 60, 3, rng_tone) * 1.6
         blotch = np.clip((noise + 0.18) / 0.36, 0.0, 1.0).astype(np.float32)
-        tone = bake.lerp(*WATER_TONES, blotch * blotch * (3.0 - 2.0 * blotch))
+        tone = bake.lerp(
+            *WATER_TONES, np.asarray(blotch * blotch * (3.0 - 2.0 * blotch), np.float32)
+        )
         rivers_only = np.asarray(water * (1.0 - lake), dtype=np.float32)
         tone = _mix(tone, RIVER_LIGHT[0], rivers_only * RIVER_LIGHT[1])
         shallow = np.asarray(
@@ -956,3 +954,24 @@ def _draw_reeds(img: Field, reeds: list[tuple[float, float, float]]) -> Field:
             )
     mask = np.asarray(alpha.reduce(s), dtype=np.float32) / 255.0
     return _mix(img, REED[0], mask)
+
+
+def bake_geography(
+    mapdef: MapDef,
+    spec: GeoSpec,
+    background: str | Path,
+    vectors: str | Path,
+    seed: int | None = None,
+) -> Geography:
+    """Write the background with water (WebP, the budget of ``bake``) and the vector file.
+
+    Raises ``ValueError`` (``GeoFormatError`` included), writing nothing, on a bad geography or a
+    background over the budget.
+    """
+    geography = compute(mapdef, spec, seed)
+    text = dump_vector_file(vector_file(mapdef, geography))
+    bake.write_background(mapdef, render(mapdef, geography, seed), background)
+    out = Path(vectors)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    return geography

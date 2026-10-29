@@ -2,12 +2,12 @@
 
 The biome field comes from the Pygame prototype map generator (git tag ``v0-pygame-prototype``,
 path ``rts_core/game_logic/World/MapGenerator.py``). There is no water (DEC-27, item 3: the owner
-finds it confusing): every cell is land, unless the map has a geography of DEC-36 (``gow_maps.geo``,
-which paints water over the picture of this module). The biome comes from the terrain of the nearest city
-(Voronoi area of the node, borders warped so they are not straight): plains, forest, mountains.
-The prototype moisture and detail noise only pick a variant inside that terrain (steppe or savanna,
-forest or jungle, rock or snow). The field is sampled on a ``STEP`` grid (``bake_cells``), exactly
-as before #344, so the layout of biomes stays recognisable.
+finds it confusing): every cell is land, unless the map has a geography of DEC-36
+(``gow_maps.geo``, which paints water over the picture of this module). The biome comes from the
+terrain of the nearest city (Voronoi area of the node, borders warped so they are not straight):
+plains, forest, mountains. The prototype moisture and detail noise only pick a variant inside that
+terrain (steppe or savanna, forest or jungle, rock or snow). The field is sampled on a ``STEP``
+grid (``bake_cells``), exactly as before #344, so the layout of biomes stays recognisable.
 
 The picture is the texture "T2 Thinning" chosen by the owner (ui-style.md, 26.3; prototype and
 mockup: docs/design/mockups/map-style-2.html, src/map_textures.py):
@@ -458,7 +458,12 @@ def encode_webp(pixels: Image8) -> bytes:
 
 def bake_background(mapdef: MapDef, out: str | Path, seed: int | None = None) -> None:
     """Write ``out`` (WebP). Raises ``ValueError``, writing nothing, if it is over the budget."""
-    data = encode_webp(render_background(mapdef, seed))
+    write_background(mapdef, render_background(mapdef, seed), out)
+
+
+def write_background(mapdef: MapDef, pixels: Image8, out: str | Path) -> None:
+    """Write the pixels as ``out`` (WebP); ``ValueError``, writing nothing, over the budget."""
+    data = encode_webp(pixels)
     if len(data) > MAX_WEBP_BYTES:
         raise ValueError(
             f"{mapdef.meta.name}: the background is {len(data)} bytes, "
