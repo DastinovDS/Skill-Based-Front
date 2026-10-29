@@ -248,6 +248,7 @@ export class OrderController implements MapInteraction {
     const reachNodes = reach === null ? [] : [...reach.ticks.keys()];
     const splitNodes = reach === null ? [] : [...reach.split];
     const eta = this.#eta(reach, preview);
+    this.#syncSplitHover(reach, preview);
     const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}`;
     if (
       key !== this.#overlayKey ||
@@ -1245,6 +1246,16 @@ export class OrderController implements MapInteraction {
   #syncRoadHover(): void {
     const road = this.#roadTarget(this.#hover);
     if (road !== this.ui.current.roadHover) this.ui.patch({ roadHover: road });
+  }
+
+  /**
+   * The hovered target the server's `reach` answer lists under `split` (the selected group is bigger
+   * than a node on the way, DEC-20), mirrored to `ui.current.splitHover` for the hint. Only what the
+   * server sent: nothing about the stack limit is worked out here (AGENTS.md 7.1).
+   */
+  #syncSplitHover(reach: ReachInfo | null, preview: number | null): void {
+    const node = reach !== null && preview !== null && reach.split.has(preview) ? preview : null;
+    if (node !== this.ui.current.splitHover) this.ui.patch({ splitHover: node });
   }
 
   /** In the road mode, every own road a click would raise now: lit up (dashed band) on the map. */

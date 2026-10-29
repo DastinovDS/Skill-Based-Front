@@ -38,6 +38,12 @@ export interface OrderUiData {
   readonly roadMode: boolean;
   /** The own road under the pointer that a click would raise (DEC-28, item 7); `null`: none. */
   readonly roadHover: number | null;
+  /**
+   * The node the pointer rests on as a target of the selected group that the server says the group is
+   * too big for (`reach.split`, STACK_LIMIT, DEC-20): the hint "split the group" shows for it before any
+   * order is sent (#468). `null`: none.
+   */
+  readonly splitHover: number | null;
   /** The «Supply» map mode is on (Tab or F2, DEC-18). */
   readonly supplyMode: boolean;
   /** Transfer pick: the own city the charges leave; a click on another own city picks `to`. */
@@ -56,6 +62,7 @@ export class OrderUiState {
     planned: false,
     roadMode: false,
     roadHover: null,
+    splitHover: null,
     supplyMode: false,
     transferFrom: null,
     notice: null,
