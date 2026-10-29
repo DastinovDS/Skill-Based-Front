@@ -499,7 +499,7 @@ def compute(mapdef: MapDef, spec: GeoSpec, seed: int | None = None) -> Geography
         if not bad.any():
             break
         labels = np.where(bad, RIVER, labels).astype(np.int32)
-    _fill_islands(labels, mapdef)
+    fill_islands(labels, mapdef)
 
     bridges: list[Bridge] = []
     for e in mapdef.edges:
@@ -559,7 +559,7 @@ def _stream_lines(lab: Labels, hw: Floats, pairs: set[tuple[int, int]]) -> tuple
     return tuple(out)
 
 
-def _fill_islands(labels: Labels, mapdef: MapDef) -> None:
+def fill_islands(labels: Labels, mapdef: MapDef) -> None:
     """A land piece cut off from its node becomes the water around it (in place)."""
     h, w = labels.shape
     for node in sorted(mapdef.nodes, key=lambda n: n.id):
