@@ -124,7 +124,8 @@ class Split:
 @dataclass(frozen=True, slots=True)
 class Merge:
     """Merge two or more groups standing in one node into the one with the smallest id; it keeps
-    its mode and "Defense" with the bonus (DEC-20, B2)."""
+    its mode and "Defense" with the bonus (DEC-20, B2). A group that holds a move order is
+    ``GROUP_BUSY``: the size the stack limit was checked for must not change (DEC-20, D3)."""
 
     groups: tuple[int, ...]
 
@@ -482,6 +483,10 @@ def _check(
                     return group
                 if group.fight is not None:
                     return Reject(RejectCode.IN_FIGHT)
+                if group.order is not None:
+                    # A move order has not departed yet (an ordinary one: same tick as its
+                    # ``Move``); merging would change the size the stack limit was checked for.
+                    return Reject(RejectCode.GROUP_BUSY)  # DEC-20, D3
                 nodes.append(_node_of(group))
             if any(node != nodes[0] for node in nodes):
                 return Reject(RejectCode.NOT_SAME_NODE)
