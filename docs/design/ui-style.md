@@ -543,6 +543,10 @@ The ribbon arrow (HOI4, Mini Motorways):
   every 0.8 s (radius +4, alpha 0.15 to 0.5, width 5 to 8; steady halfway with "less motion"). In the enemy colour; over **your** city `--warn` (amber) and
   there is a line in the alert stack (IM7). Rings and ticks, not colour alone; the old dashed ring is gone. Code: `intentLayout.ts` (`reticleLook`, `reticlePhase`, `enemyHead`), `intentView.ts`.
 - The bonus of an own scheduled order "◇ +N" at the head of its ribbon (DEC-29) was done with #330 (`OrderView.bonus`, a pill, dashed while a forecast); #353 only checked it.
+- **The stack limit before the order (#468, DEC-20):** with a group selected, the server's `reach` answer lists the nodes the group is too big for (`split`); they have the dashed ring.
+  When the pointer rests on one, a tip by the pointer says «Too big to go to {place}: split the group first (S)» with the split icon (a shape and words, not the colour): the order is not sent
+  and nothing is computed in the client, the list is the server's (the same text as the rejection `STACK_LIMIT`, which stays for an order sent anyway). `SplitTip.svelte`,
+  `OrderController.ui.current.splitHover`. The tip waits 300 ms of rest like the other map tips; it has no map cost (HTML).
 - "Defense" without a target: a circle of radius 13 above the city with a shield glyph and a countdown arc.
 - The arrow body is not thinner than 8 px on the screen.
 

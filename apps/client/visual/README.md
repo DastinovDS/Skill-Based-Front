@@ -50,6 +50,8 @@ The travel time of an order (#432): `mise run shots` takes `eta-<name>.png` (the
 `?eta=<from>,<to>,<ticks>[,<via>...]` that pins the label and the route (the nodes it goes through, #448) to a frozen scene (a fixture has no server to answer `reach`): `eta-artery-near` (a road
 between two cities), `eta-artery-far` and `eta-artery-bend` (a route of two roads through a city), `eta-snapshot`. They have no `visual` references.
 
+The hint "split the group" (#468): `mise run shots` takes `split-hint.png` and `split-hint-gray.png` on the scene `snapshot` with `?split=2&menus`: a frozen scene has no server to answer `reach`, so `?split=<node>` makes it answer the `reach` of the selected group with that node under `split` (the group is too big for it); `menus` lets the pointer preview an order. The test selects the group, rests the pointer on the node and takes the tip. No `visual` reference.
+
 The road mode (#469): `mise run shots` takes `road-mode-normal.png` and `road-mode-supply.png` (the map alone) on the scene `snapshot` with `?menus`: key U, and Tab before it for the Supply view; the dashed band on the road a click would raise shows in both. They have no `visual` references.
 
 The screens before a match (#471): `mise run shots` takes `screen-<id>.png` (and the same in grey scale, `screen-<id>-gray.png`) of the dev scenes
