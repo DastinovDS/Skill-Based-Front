@@ -27,8 +27,8 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
 5. **Garrisons and the rest**: ``hold_front`` units stay in own nodes next to the enemy, front
    garrisons below it are filled from free groups nearby, ``fortify`` puts their strongest group
    into Defense; the stance is the personality's, one step toward Economy while units wait for
-   charges and toward War while the warehouses are full; one road is upgraded at a time while
-   ``road_keep`` CP are left (DEC-28, item 7).
+   charges and toward War while the warehouses are full and CP do not burn; one road is
+   upgraded at a time while ``road_keep`` CP are left (DEC-28, item 7).
 
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
@@ -158,6 +158,7 @@ class SmartBot(CampaignBot):
             p["reserve"] = 0
         if self.alarm:
             p["guard"] = max(p["guard"], a.threat.units)
+            p["reserve"] = 0  # the reserve is for this moment: Defense and the walk home
         return p
 
     def _decide(self, view: PlayerView, tick: int, a: Assessment) -> list[Command]:
@@ -194,7 +195,8 @@ class SmartBot(CampaignBot):
     def wanted_stance(self, a: Assessment) -> Stance:
         """The personality's stance, one step toward Economy while ``starved`` own units wait
         for charges and the warehouses are less than half full, one step toward War while the
-        warehouses are full and no unit waits (the stance only splits the CP income, DEC-02)."""
+        warehouses are full, no unit waits and the CP are not about to burn (the stance only
+        splits the CP income, DEC-02)."""
         p = self.params
         late = p["late"]
         stance = self.LATE_STANCE if self.LATE_STANCE and late and a.tick >= late else self.STANCE
@@ -202,7 +204,11 @@ class SmartBot(CampaignBot):
         own = a.own
         if own.uncharged_standing >= p["starved"] and 2 * own.warehouse < own.warehouse_cap:
             at = max(0, at - 1)
-        elif 0 < own.warehouse_cap <= own.warehouse and own.uncharged_standing == 0:
+        elif (
+            0 < own.warehouse_cap <= own.warehouse
+            and own.uncharged_standing == 0
+            and a.cp < self.rules.cp.cap - 2 * self.rules.cp.per_period
+        ):
             at = min(len(STANCES) - 1, at + 1)
         return STANCES[at]
 
@@ -543,6 +549,7 @@ class SmartRusher(SmartBot):
         "guard": ParamRange(0, 1),
         "reserve": ParamRange(0, 0),
         "recruit_keep": ParamRange(100, 150),
+        "secure_margin": ParamRange(0, 0),
         "w_vp": ParamRange(300, 300),
         "w_neutral": ParamRange(40, 120),
         "w_closer": ParamRange(40, 40),
@@ -569,7 +576,6 @@ class SmartStrangler(SmartBot):
         "w_base": ParamRange(150, 150),
         "w_cut": ParamRange(100, 100),
         "w_need": ParamRange(3, 3),
-        "hold_front": ParamRange(1, 2),
     }
 
 

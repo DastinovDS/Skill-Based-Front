@@ -247,6 +247,8 @@ class Assessment:
     enemy_cp: int
     """Upper bound of the enemy CP in hundredths."""
     own: Army
+    cp: int
+    """Own CP in hundredths."""
 
     @property
     def forecast(self) -> tuple[int, int]:
@@ -291,6 +293,7 @@ class Assessor:
             threat=self.threat(view, guess, horizon),
             enemy_cp=bound,
             own=army(view, self.map, supplied),
+            cp=view.me.cp,
         )
 
     def threat(self, view: PlayerView, guess: int, horizon: int) -> Threat:

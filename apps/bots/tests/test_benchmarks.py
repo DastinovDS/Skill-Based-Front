@@ -125,6 +125,25 @@ def test_bench_decide_strategy_views(
     _bench(benchmark, speed_factor, strategy_views, maps["web"], mvp_rules, name)
 
 
+@pytest.fixture(scope="module")
+def smart_views(maps: dict[str, MapDef], mvp1_rules: Ruleset) -> list[PlayerView]:
+    """Views of a match of two smart bots on ``mvp-1`` (city builds, fights, threats, #166)."""
+    return _play(maps["web"], mvp1_rules, ("smart_rusher", "smart_expander"))
+
+
+@pytest.mark.parametrize("name", [n for n in sorted(BOTS) if n.startswith("smart_")])
+def test_bench_decide_smart_views(
+    benchmark: BenchmarkFixture,
+    speed_factor: float,
+    smart_views: list[PlayerView],
+    maps: dict[str, MapDef],
+    mvp1_rules: Ruleset,
+    name: str,
+) -> None:
+    """#166: the smart bots, the assessment layer included, on the views of a smart match."""
+    _bench(benchmark, speed_factor, smart_views, maps["web"], mvp1_rules, name)
+
+
 def _bench(
     benchmark: BenchmarkFixture,
     speed_factor: float,
