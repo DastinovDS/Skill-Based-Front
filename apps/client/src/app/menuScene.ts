@@ -8,15 +8,17 @@
  */
 import type { MapFile, Terrain } from '../protocol.gen.ts';
 
-/** What the picture says about the state of the menu. */
+/** What the picture says about the state of the menu (#474: the motion of each, `menuMotion.ts`). */
 export type BackdropPhase =
-  /** Nothing going on: the enemy capital is a question mark in the fog. */
+  /** Nothing going on: the supply rides, the enemy capital is a question mark in the fog. */
   | 'idle'
-  /** In the queue: rings grow from the own capital, the road into the fog marches. */
+  /** In the queue: a scout walks into the fog, the stack at the front grows. */
   | 'search'
-  /** A pair is found: the road is solid and the enemy capital shows the opponent's nick. */
+  /** A pair is found: the own order and the opponent's intent meet, the nick shows. */
   | 'found'
-  /** The queue is locked (DEC-34): an amber dashed ring on the own capital. */
+  /** The player confirmed the pair: the two groups march and fight. */
+  | 'confirmed'
+  /** The queue is locked (DEC-34): the supply stands, an amber dashed ring on the own capital. */
   | 'banned';
 
 export interface Point {
@@ -53,6 +55,8 @@ export interface Scene {
   readonly edges: readonly SceneEdge[];
   /** The road from the own capital to the enemy one, node by node. */
   readonly front: readonly Point[];
+  /** The same road as node ids. */
+  readonly frontIds: readonly number[];
   readonly ownCapital: Point;
   readonly enemyCapital: Point;
   /** Node ids of the two capitals: drawn on their own, not with the other cities. */
@@ -194,6 +198,7 @@ export function layoutScene(map: MapFile, width: number, height: number, ownLeft
       nodes: [],
       edges: [],
       front: [],
+      frontIds: [],
       ownCapital: { x: RAIL_RIGHT, y: height / 2 },
       enemyCapital: { x: width - ENEMY_MARGIN, y: height / 2 },
       capitalIds: [-1, -1],
@@ -234,7 +239,8 @@ export function layoutScene(map: MapFile, width: number, height: number, ownLeft
       lines: edge.a === capital0.id || edge.b === capital0.id ? 3 : 2,
     });
   }
-  const front = shortestPath(map, capital0.id, capital1.id).flatMap((id) => {
+  const frontIds = shortestPath(map, capital0.id, capital1.id);
+  const front = frontIds.flatMap((id) => {
     const found = byId.get(id);
     return found === undefined ? [] : [{ x: found.x, y: found.y }];
   });
@@ -251,6 +257,7 @@ export function layoutScene(map: MapFile, width: number, height: number, ownLeft
     nodes,
     edges,
     front,
+    frontIds,
     ownCapital,
     enemyCapital,
     capitalIds: [capital0.id, capital1.id],

@@ -28,7 +28,9 @@
   const searching = $derived(status === null || status.state === 'searching');
   const found = $derived(status?.state === 'found');
   const opponent = $derived(status?.opponent_nick ?? '');
-  const phase = $derived(searching ? 'search' : 'found');
+  const phase = $derived(
+    searching ? 'search' : status?.you_confirmed === true ? 'confirmed' : 'found',
+  );
 
   // Enter confirms a found pair, Esc leaves the queue or declines, B takes the bot offer.
   function onkeydown(event: KeyboardEvent): void {
@@ -50,7 +52,13 @@
 
 <svelte:window {onkeydown} />
 
-<ScreenFrame {map} {phase} opponent={found ? opponent : null} label={t('queue.title')}>
+<ScreenFrame
+  {map}
+  {phase}
+  opponent={found ? opponent : null}
+  waited={status?.waited_s ?? 0}
+  label={t('queue.title')}
+>
   {#if status === null}
     <div class="eyebrow">{t('queue.title')}</div>
     <p class="sub" role="status">{t('common.loading')}</p>
