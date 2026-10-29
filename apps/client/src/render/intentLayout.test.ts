@@ -14,8 +14,19 @@ import {
   ribbonBody,
   ribbonFilled,
   ribbonOutline,
+  enemyArrowWidth,
+  enemyHead,
+  reticleLook,
+  reticlePhase,
 } from './intentLayout.ts';
-import { GHOST_REJECT_MS, GHOST_SHAKE_MS, RIBBON } from './style.ts';
+import {
+  GHOST_REJECT_MS,
+  GHOST_SHAKE_MS,
+  INTENT_ENEMY,
+  INTENT_RETICLE,
+  INTENT_TARGET_RING,
+  RIBBON,
+} from './style.ts';
 
 const A = { x: 0, y: 0 };
 const B = { x: 200, y: 0 };
@@ -339,5 +350,81 @@ describe('ghostLook', () => {
 
   it('does not shake with less motion', () => {
     expect(ghostLook('rejected', 25, 0.85, true).dx).toBe(0);
+  });
+});
+
+describe('reticlePhase: the pulse of the crosshair (IN3, #353)', () => {
+  const { periodS } = INTENT_RETICLE.pulse;
+
+  it('swells from 0 to 1 and back once every 0.8 s', () => {
+    expect(reticlePhase(0, false)).toBeCloseTo(0);
+    expect(reticlePhase(periodS / 2, false)).toBeCloseTo(1);
+    expect(reticlePhase(periodS, false)).toBeCloseTo(0);
+    expect(reticlePhase(periodS * 7 + periodS / 4, false)).toBeCloseTo(0.5);
+  });
+
+  it('holds still halfway with "less motion"', () => {
+    expect(reticlePhase(0, true)).toBe(0.5);
+    expect(reticlePhase(1.7, true)).toBe(0.5);
+  });
+
+  it('survives a time before the start', () => {
+    expect(reticlePhase(-periodS / 2, false)).toBeCloseTo(1);
+  });
+});
+
+describe('reticleLook: the crosshair on the target of an opponent intent', () => {
+  it('has the outer ring a gap outside the city circle and the inner ring inside it', () => {
+    const look = reticleLook(17, 0);
+    expect(look.ring).toBe(17 + INTENT_TARGET_RING.gap);
+    expect(look.inner).toBe(look.ring - INTENT_RETICLE.innerGap);
+  });
+
+  it('has four ticks at the quarters, each across the outer ring', () => {
+    const look = reticleLook(17, 0);
+    expect(look.ticks).toHaveLength(4);
+    for (const tick of look.ticks) {
+      expect(Math.hypot(tick.from.x, tick.from.y)).toBeCloseTo(look.ring - INTENT_RETICLE.tick.in);
+      expect(Math.hypot(tick.to.x, tick.to.y)).toBeCloseTo(look.ring + INTENT_RETICLE.tick.out);
+    }
+    const angles = look.ticks.map((t) => Math.round((Math.atan2(t.to.y, t.to.x) * 180) / Math.PI));
+    expect(angles).toEqual([0, 90, 180, -90]);
+  });
+
+  it('swells the halo with the phase: bigger, brighter, wider', () => {
+    const low = reticleLook(17, 0).halo;
+    const high = reticleLook(17, 1).halo;
+    expect(high.radius).toBeGreaterThan(low.radius);
+    expect(high.alpha).toBeGreaterThan(low.alpha);
+    expect(high.width).toBeGreaterThan(low.width);
+    expect(low.alpha).toBeCloseTo(INTENT_RETICLE.pulse.alphaLow);
+  });
+
+  it('does not move the rings or the ticks with the phase', () => {
+    expect(reticleLook(17, 0).ring).toBe(reticleLook(17, 1).ring);
+    expect(reticleLook(17, 0).ticks).toEqual(reticleLook(17, 1).ticks);
+  });
+});
+
+describe('the thin arrow of an opponent intent', () => {
+  it('is thin: at most 3 units, a third of the own ribbon body', () => {
+    expect(enemyArrowWidth(0)).toBe(INTENT_ENEMY.width);
+    expect(enemyArrowWidth(1)).toBeCloseTo(INTENT_ENEMY.width + INTENT_ENEMY.lockedExtra);
+    expect(enemyArrowWidth(1)).toBeLessThanOrEqual(3);
+    expect(enemyArrowWidth(1)).toBeLessThan(RIBBON.body / 3);
+  });
+
+  it('thickens as the order locks, and no further than locked', () => {
+    expect(enemyArrowWidth(0.5)).toBeGreaterThan(enemyArrowWidth(0));
+    expect(enemyArrowWidth(4)).toBe(enemyArrowWidth(1));
+    expect(enemyArrowWidth(-1)).toBe(enemyArrowWidth(0));
+  });
+
+  it('has the head at the tip, pointing along the direction', () => {
+    const [tip, left, right] = enemyHead({ x: 100, y: 50 }, { x: 1, y: 0 });
+    expect(tip).toEqual({ x: 100, y: 50 });
+    expect(left.x).toBeCloseTo(100 - INTENT_ENEMY.head.length);
+    expect(right.x).toBeCloseTo(left.x);
+    expect(Math.abs(left.y - right.y)).toBeCloseTo(2 * INTENT_ENEMY.head.half);
   });
 });

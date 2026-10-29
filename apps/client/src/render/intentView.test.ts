@@ -9,7 +9,7 @@ import { createLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
 import { setReducedMotion } from './motion.ts';
 import { EntityKit } from './shapes.ts';
-import { BG, RIBBON } from './style.ts';
+import { BG, ENEMY, INTENT_ENEMY, INTENT_RETICLE, RIBBON, WARN, YOU } from './style.ts';
 import { testSprites } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
@@ -143,6 +143,94 @@ describe('IntentView', () => {
     expect(rings?.getLocalBounds().width).toBe(0);
     draw([intent({})]);
     expect(rings?.getLocalBounds().width).toBeGreaterThan(40);
+    view.destroy();
+    kit.destroy();
+  });
+
+  it('IN3: the opponent intent is a thin dashed arrow, not a ribbon', () => {
+    const { view, draw, ribbons, kit } = setup();
+    draw([intent({})], [], 140);
+    const strokes = paints(ribbons).filter((p) => p.action === 'stroke');
+    // No ribbon contour of the width of the own ones, and no wide tinted fill.
+    expect(Math.max(...strokes.filter((p) => p.color === ENEMY).map((p) => p.width))).toBeLessThan(
+      RIBBON.contour.width + 2,
+    );
+    expect(paints(ribbons).some((p) => p.action === 'fill' && p.alpha === RIBBON.fillAlpha)).toBe(
+      false,
+    );
+    // The ink is the opponent's, over a dark casing wider than it.
+    expect(strokes.some((p) => p.color === ENEMY && p.width <= 3)).toBe(true);
+    expect(strokes.some((p) => p.color === BG && p.width > INTENT_ENEMY.width)).toBe(true);
+    view.destroy();
+    kit.destroy();
+  });
+
+  it('IN3: the thin arrow is faint while the delay runs, solid ink after it', () => {
+    const { view, draw, ribbons, kit } = setup();
+    draw([intent({})], [], 105);
+    const waiting = paints(ribbons).find((p) => p.action === 'stroke' && p.color === ENEMY);
+    expect(waiting?.alpha).toBeCloseTo(INTENT_ENEMY.prepAlpha);
+    draw([intent({})], [], 160);
+    const going = paints(ribbons).filter((p) => p.action === 'stroke' && p.color === ENEMY);
+    expect(going.some((p) => p.alpha === 1)).toBe(true);
+    view.destroy();
+    kit.destroy();
+  });
+
+  it('IN3: the tail of the opponent is a ring in a ring, the own tail a dot (no diamond)', () => {
+    const { view, draw, ribbons, kit } = setup();
+    draw([intent({})], [], 140);
+    const circles = (g: unknown): number =>
+      (
+        (g as Graphics).context.instructions as unknown as {
+          data: { path: { shapePath: { shapePrimitives: { shape: { type: string } }[] } } };
+        }[]
+      )
+        .flatMap((i) => i.data.path.shapePath.shapePrimitives)
+        .filter((p) => p.shape.type === 'circle').length;
+    const theirs = circles(ribbons);
+    draw([intent({ owner: 0, origin: home, target: via })], [], 140);
+    // Two rings against one dot.
+    expect(theirs).toBeGreaterThan(circles(ribbons));
+    view.destroy();
+    kit.destroy();
+  });
+
+  it('IN3: the crosshair has two rings, four ticks and a halo; amber over my city, red elsewhere', () => {
+    const { view, draw, layers, kit } = setup();
+    const rings = layers.layer.intents.children[1];
+    draw([intent({ target: home })], [], 140);
+    const mineRings = paints(rings).filter((p) => p.action === 'stroke');
+    // halo, casing, outer ring, inner ring, the ticks.
+    expect(mineRings).toHaveLength(5);
+    expect(mineRings.filter((p) => p.color === WARN)).toHaveLength(4);
+    expect(paints(rings).some((p) => p.color === YOU)).toBe(false);
+    draw([intent({ origin: home, target: far, owner: 1 })], [], 140);
+    expect(paints(rings).filter((p) => p.color === WARN)).toHaveLength(0);
+    expect(paints(rings).filter((p) => p.color === ENEMY)).toHaveLength(4);
+    view.destroy();
+    kit.destroy();
+  });
+
+  it('IN3: the halo pulses with the time, and holds still with less motion', () => {
+    const { view, draw, layers, kit } = setup();
+    const rings = layers.layer.intents.children[1];
+    const halo = (tick: number) => {
+      draw([intent({})], [], tick);
+      return paints(rings)[0];
+    };
+    // A period is 0.8 s: 8 ticks at 10 Hz; a half period apart the halo is at its two extremes.
+    expect(halo(144)?.alpha).toBeCloseTo(INTENT_RETICLE.pulse.alphaLow);
+    expect(halo(148)?.alpha).toBeCloseTo(INTENT_RETICLE.pulse.alphaHigh);
+    setReducedMotion(true);
+    try {
+      const still = halo(144)?.alpha;
+      expect(halo(148)?.alpha).toBe(still);
+      expect(still).toBeGreaterThan(INTENT_RETICLE.pulse.alphaLow);
+      expect(still).toBeLessThan(INTENT_RETICLE.pulse.alphaHigh);
+    } finally {
+      setReducedMotion(null);
+    }
     view.destroy();
     kit.destroy();
   });

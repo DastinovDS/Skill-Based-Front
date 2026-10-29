@@ -7,7 +7,15 @@
 import type { Point } from './camera.ts';
 import type { GhostStatus } from './interaction.ts';
 import { clipToConvex } from './regionLayout.ts';
-import { GHOST_REJECT_MS, GHOST_SHAKE_AMPLITUDE, GHOST_SHAKE_MS, RIBBON } from './style.ts';
+import {
+  GHOST_REJECT_MS,
+  GHOST_SHAKE_AMPLITUDE,
+  GHOST_SHAKE_MS,
+  INTENT_ENEMY,
+  INTENT_RETICLE,
+  INTENT_TARGET_RING,
+  RIBBON,
+} from './style.ts';
 
 function dist(a: Point, b: Point): number {
   return Math.hypot(b.x - a.x, b.y - a.y);
@@ -399,4 +407,68 @@ export function roundRectPoints(width: number, height: number, radius: number, s
     }
   }
   return points;
+}
+
+// --- IN3 "Crosshair" (#353): the opponent's intent --------------------------------------------------
+
+export interface ReticleLook {
+  /** The pulsing halo outside the ring: its radius, opacity and width. */
+  readonly halo: { readonly radius: number; readonly alpha: number; readonly width: number };
+  /** The outer ring, the inner ring (radii from the centre of the target) and the dark casing under the outer. */
+  readonly ring: number;
+  readonly inner: number;
+  /** The four ticks across the outer ring: from and to, relative to the centre of the target. */
+  readonly ticks: readonly { readonly from: Point; readonly to: Point }[];
+}
+
+/** The phase of the pulse of the crosshair, 0..1: a smooth swell of `periodS`; 0.5 held still with "less motion". */
+export function reticlePhase(seconds: number, reduced: boolean): number {
+  if (reduced) return 0.5;
+  const phase =
+    (((seconds % INTENT_RETICLE.pulse.periodS) + INTENT_RETICLE.pulse.periodS) %
+      INTENT_RETICLE.pulse.periodS) /
+    INTENT_RETICLE.pulse.periodS;
+  return 0.5 - 0.5 * Math.cos(2 * Math.PI * phase);
+}
+
+/**
+ * The crosshair on the target of an opponent's intent: the outer ring `ring` (the city circle `radius`
+ * plus `INTENT_TARGET_RING.gap`), the inner ring `INTENT_RETICLE.innerGap` inside it, four ticks at the
+ * quarters and the halo that swells with `phase`.
+ */
+export function reticleLook(radius: number, phase: number): ReticleLook {
+  const ring = radius + INTENT_TARGET_RING.gap;
+  const { tick, pulse, innerGap } = INTENT_RETICLE;
+  const ticks = [0, 1, 2, 3].map((i) => {
+    const a = (i * Math.PI) / 2;
+    const at = (r: number): Point => ({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+    return { from: at(ring - tick.in), to: at(ring + tick.out) };
+  });
+  return {
+    halo: {
+      radius: ring + pulse.grow * phase,
+      alpha: pulse.alphaLow + (pulse.alphaHigh - pulse.alphaLow) * phase,
+      width: pulse.widthLow + (pulse.widthHigh - pulse.widthLow) * phase,
+    },
+    ring,
+    inner: ring - innerGap,
+    ticks,
+  };
+}
+
+/** The width of the thin arrow of an opponent's intent: thicker once the order is locked (`lock` 0..1). */
+export function enemyArrowWidth(lock: number): number {
+  return INTENT_ENEMY.width + INTENT_ENEMY.lockedExtra * Math.min(1, Math.max(0, lock));
+}
+
+/** The three corners of the head of the thin arrow at `tip`, pointing along the unit vector `dir`. */
+export function enemyHead(tip: Point, dir: Point): [Point, Point, Point] {
+  const { length, half } = INTENT_ENEMY.head;
+  const bx = tip.x - dir.x * length;
+  const by = tip.y - dir.y * length;
+  return [
+    tip,
+    { x: bx - dir.y * half, y: by + dir.x * half },
+    { x: bx + dir.y * half, y: by - dir.x * half },
+  ];
 }

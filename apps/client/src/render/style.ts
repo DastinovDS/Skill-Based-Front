@@ -475,6 +475,37 @@ export const RIBBON = {
 } as const;
 /** The dotted ring around the target of an enemy intent. */
 export const INTENT_TARGET_RING = { gap: 20, width: 2, dash: 5, gap2: 4, alpha: 0.95 } as const;
+/**
+ * IN3 "Crosshair" (#353, ui-style 27): the opponent's planned order is a thin dashed arrow, and the
+ * sign is the crosshair on the target city: a ring with an inner ring, four ticks and a pulse of
+ * `periodS` (as the alert); `--warn` over an own city. The arrow ends `tipGap` outside the city
+ * circle, on the inner ring. While the delay runs the arrow is faint and dotted (`prepAlpha`,
+ * `prepDash`), then it is solid ink with running dashes; the lock after the delay makes it thicker.
+ */
+export const INTENT_ENEMY = {
+  width: 1.8,
+  lockedExtra: 1.2,
+  casing: { extra: 3.4, alpha: 0.6 },
+  dash: 9,
+  gap: 5,
+  prepDash: 2,
+  prepGap: 6,
+  prepAlpha: 0.55,
+  head: { length: 14, half: 8 },
+  /** Gap between the circle of the target city and the tip of the arrow. */
+  tipGap: 12,
+  /** The mark of the opponent's side at the tail: a ring in a ring (the diamond is the bonus, ui-style 21). */
+  tail: { inner: 3.5, outer: 6.5, width: 1.8 },
+} as const;
+export const INTENT_RETICLE = {
+  /** The outer ring is this far outside the city circle (`INTENT_TARGET_RING.gap`), the inner one `innerGap` inside it. */
+  innerGap: 8,
+  ring: { width: 2.2, innerWidth: 1.6, casingWidth: 5, casingAlpha: 0.6 },
+  /** Four ticks across the outer ring: from `in` inside it to `out` outside it. */
+  tick: { in: 9, out: 5, width: 2.6 },
+  /** The pulse: the halo grows by `grow`, its alpha and width swing between the low and the high value. */
+  pulse: { periodS: 0.8, grow: 4, alphaLow: 0.15, alphaHigh: 0.5, widthLow: 5, widthHigh: 8 },
+} as const;
 /** The disc of "Defense" with the delay arc around it. */
 export const DEFENSE_ARC = { gap: 3, width: 3 } as const;
 
