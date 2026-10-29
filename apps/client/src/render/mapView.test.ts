@@ -408,3 +408,51 @@ describe('MapView, a capture cross-fades the territory (#508)', () => {
     expect(fills().get(ENEMY)).toHaveLength(map.nodes.length);
   });
 });
+
+describe('MapView, the terrain mode (#429)', () => {
+  const map = DEFAULT_MAP;
+  let layers: MapLayers;
+  let view: MapView;
+  beforeEach(() => {
+    layers = createLayers();
+    view = new MapView(map, layers, 0, {} as Renderer, true);
+  });
+  afterEach(() => {
+    view.destroy();
+  });
+  const ground = () => layers.layer.background.children.find((c) => c.label === 'pattern-ground');
+  const visibleBackground = () => layers.layer.background.children.filter((c) => c.visible).length;
+
+  it('makes the pattern ground only when the mode is first turned on', () => {
+    expect(ground()).toBeUndefined();
+    view.setTerrainMode(true);
+    expect(ground()?.visible).toBe(true);
+  });
+
+  it('swaps the picture for the ground and back, leaving the territory and the roads', () => {
+    const before = visibleBackground();
+    view.setTerrainMode(true);
+    // The terrain colours and the dimming give way to the pattern ground: one fewer than before.
+    expect(visibleBackground()).toBe(before - 1);
+    view.setTerrainMode(false);
+    expect(ground()?.visible).toBe(false);
+    expect(visibleBackground()).toBe(before);
+    expect(layers.layer.territory.visible).toBe(true);
+    expect(layers.layer.roads.visible).toBe(true);
+  });
+
+  it('keeps the glow of the territory in the terrain mode, unlike «Supply»', () => {
+    view.setOwners(map.nodes.map((n, i) => (i % 2 === 0 ? 0 : 1)));
+    const glow = layers.layer.territory.children.find((c) => c.label === 'territory-glow');
+    expect(glow?.visible).toBe(true);
+    view.setTerrainMode(true);
+    expect(glow?.visible).toBe(true);
+  });
+
+  it('a flat ground stays flat when «Supply» is switched off while the terrain mode is on', () => {
+    view.setTerrainMode(true);
+    view.setSupplyMode(true);
+    view.setSupplyMode(false);
+    expect(ground()?.visible).toBe(true);
+  });
+});

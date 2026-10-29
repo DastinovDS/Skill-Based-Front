@@ -33,6 +33,9 @@ export const SIGHT_BARS = {
   base: 4.5,
 } as const;
 
+/** The sign is drawn this much larger than the numbers above: it must read at the map's usual zoom. */
+export const SIGHT_SCALE = 1.3;
+
 /** The sign is dropped from the centre of the city by the ring radius plus this, to the lower right. */
 const OFFSET = 11;
 /** Below this camera scale the sign is too small to read and is not drawn. */
@@ -40,7 +43,7 @@ export const SIGHT_MIN_SCALE = 0.45;
 
 /** Where the sign of a place is centred: the lower right of the ring of the city. */
 export function signAt(center: Point, radius: number): Point {
-  const d = ringRadius(radius) + OFFSET;
+  const d = ringRadius(radius) + OFFSET * SIGHT_SCALE;
   const angle = Math.PI / 4;
   return { x: center.x + d * Math.cos(angle), y: center.y + d * Math.sin(angle) };
 }

@@ -23,6 +23,7 @@ export const SCENES: readonly {
   { id: 'figures', tick: 2400 },
   { id: 'orders', tick: 2400 },
   { id: 'supply', tick: 2400, keys: ['Tab'] },
+  { id: 'terrain', tick: 2400, keys: ['KeyT'] },
 ];
 
 /**

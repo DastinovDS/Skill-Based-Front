@@ -2,7 +2,14 @@ import { Container, Graphics } from 'pixi.js';
 import type { MapFile, NodeView, PlayerId } from '../protocol.gen.ts';
 import type { MapLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
-import { SIGHT_BARS, SIGHT_MIN_SCALE, showsSight, sightLevel, signAt } from './sightLayout.ts';
+import {
+  SIGHT_BARS,
+  SIGHT_MIN_SCALE,
+  SIGHT_SCALE,
+  showsSight,
+  sightLevel,
+  signAt,
+} from './sightLayout.ts';
 import { BG, PAPER } from './style.ts';
 
 /**
@@ -38,22 +45,29 @@ export class SightView {
   }
 
   private draw(levels: readonly number[]): void {
+    const k = SIGHT_SCALE;
     const { width, gap, heights, pad, radius, base } = SIGHT_BARS;
-    const total = 3 * width + 2 * gap;
+    const total = (3 * width + 2 * gap) * k;
     const g = this.signs.clear();
     levels.forEach((level, id) => {
       const center = nodePoint(this.map, id);
       if (level === 0 || center === undefined) return;
       const at = signAt(center, this.radiusOf(id));
-      g.roundRect(at.x - total / 2 - pad.x, at.y - pad.top, total + 2 * pad.x, pad.height, radius)
+      g.roundRect(
+        at.x - total / 2 - pad.x * k,
+        at.y - pad.top * k,
+        total + 2 * pad.x * k,
+        pad.height * k,
+        radius,
+      )
         .fill({ color: BG, alpha: 0.9 })
         .stroke({ color: PAPER, alpha: 0.5, width: 1 });
       heights.forEach((h, i) => {
-        const x = at.x - total / 2 + i * (width + gap);
-        const y = at.y + base - h;
-        if (i < level) g.rect(x, y, width, h).fill(PAPER);
+        const x = at.x - total / 2 + i * (width + gap) * k;
+        const y = at.y + (base - h) * k;
+        if (i < level) g.rect(x, y, width * k, h * k).fill(PAPER);
         else
-          g.rect(x + 0.4, y + 0.4, width - 0.8, h - 0.8).stroke({
+          g.rect(x + 0.4, y + 0.4, width * k - 0.8, h * k - 0.8).stroke({
             color: PAPER,
             alpha: 0.55,
             width: 0.8,

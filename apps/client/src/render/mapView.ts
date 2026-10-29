@@ -646,7 +646,7 @@ export class MapView {
 
   /** A flat colour per area and the marks of its terrain, one Graphics drawn once. */
   private drawPatternGround(): Graphics {
-    const g = new Graphics();
+    const g = new Graphics({ label: 'pattern-ground' });
     const { dot, fir, hatch } = PATTERN_GROUND;
     // Under the frame and over the dimming, where the «Supply» floor lies.
     this.stampParent.addChildAt(g, this.stampParent.getChildIndex(this.floor));
