@@ -372,9 +372,11 @@ export class MapView {
     if (road === undefined || look === undefined || edge === undefined) return;
     const level = Math.min(3, Math.max(1, Math.round(look.width)));
     const kind = roadKind(this.owners[edge.a] ?? null, this.owners[edge.b] ?? null);
+    // The own territory is never under the veil (DEC-35, the owner's decision of 2026-10-29): the
+    // half of an own end is drawn as seen even when its `detail` is `fog`.
     const fog: [boolean, boolean] = [
-      look.halves?.[0]?.detail === 'fog',
-      look.halves?.[1]?.detail === 'fog',
+      look.halves?.[0]?.detail === 'fog' && this.owners[edge.a] !== this.me,
+      look.halves?.[1]?.detail === 'fog' && this.owners[edge.b] !== this.me,
     ];
     const key = `${String(level)}|${kind.kind === 'buffer' ? 'b' : String(kind.owner)}|${fog[0] ? 'f' : 's'}${fog[1] ? 'f' : 's'}`;
     if (key === road.key) return;

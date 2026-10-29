@@ -365,7 +365,9 @@ export class CityView {
       owner: node.owner,
       capacity: node.capacity,
       garrison: node.owner === this.me ? city.garrison : 0,
-      warehouse: node.detail === 'exact' ? node.warehouse : null,
+      // The server sends a warehouse only where it may be seen: an own node at any `detail`
+      // (DEC-35, detail 3) or a node where an own group stands.
+      warehouse: node.warehouse,
       queue: node.recruit_queue,
       progress: node.recruit_progress ?? 0,
       unitTicks,
