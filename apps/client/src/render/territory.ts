@@ -67,12 +67,34 @@ interface Piece {
   readonly other: Kind;
 }
 
+/**
+ * Corner cutting (Chaikin, one round) with the ends fixed: the chains lie on the 4-unit grid of
+ * the labels and the baked coast is blurred, so the stairs of the raw chain would show as a
+ * stepped tint and border line. A chain is smoothed once and both areas beside it use the result,
+ * so they still share every point; it moves a line by under 2 units.
+ */
+function smoothed(pts: readonly Point[]): Point[] {
+  if (pts.length < 3) return [...pts];
+  const out: Point[] = [pts[0] as Point];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i] as Point;
+    const b = pts[i + 1] as Point;
+    if (i > 0) out.push({ x: 0.75 * a.x + 0.25 * b.x, y: 0.75 * a.y + 0.25 * b.y });
+    if (i + 2 < pts.length) out.push({ x: 0.25 * a.x + 0.75 * b.x, y: 0.25 * a.y + 0.75 * b.y });
+  }
+  out.push(pts[pts.length - 1] as Point);
+  return out;
+}
+
 function points(chain: GeoChain): Point[] {
   const out: Point[] = [];
   for (let i = 0; i + 1 < chain.pts.length; i += 2) {
     out.push({ x: chain.pts[i] ?? 0, y: chain.pts[i + 1] ?? 0 });
   }
-  return out;
+  // Only a shore is smoothed: the edge of the map stays straight, and a border between two land
+  // areas is a road crossing (a straight cut).
+  const shore = typeof chain.l === 'string' || typeof chain.r === 'string';
+  return shore && chain.l !== -1 && chain.r !== -1 ? smoothed(smoothed(out)) : out;
 }
 
 const keyOf = (p: Point): string => `${String(p.x)},${String(p.y)}`;

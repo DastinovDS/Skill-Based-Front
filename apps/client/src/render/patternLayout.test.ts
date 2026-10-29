@@ -88,3 +88,41 @@ describe('patternMarks (#429)', () => {
     expect(patternMarks(line, 'plains')).toEqual({ dots: [], firs: [], hatches: [] });
   });
 });
+
+describe('patternMarks on a cell that is not convex (DEC-36, #544)', () => {
+  // A U: 120 x 120 with a notch 40 wide and 80 deep cut from the top middle.
+  const ushape = [
+    { x: 0, y: 0 },
+    { x: 40, y: 0 },
+    { x: 40, y: 80 },
+    { x: 80, y: 80 },
+    { x: 80, y: 0 },
+    { x: 120, y: 0 },
+    { x: 120, y: 120 },
+    { x: 0, y: 120 },
+  ];
+
+  it('keeps every mark in the U, away from its sides, none in the notch', () => {
+    for (const terrain of ['plains', 'forest'] as const) {
+      const marks = patternMarks(ushape, terrain, false);
+      const points = terrain === 'plains' ? marks.dots : marks.firs;
+      expect(points.length).toBeGreaterThan(10);
+      const margin = terrain === 'plains' ? DOT_MARGIN : FIR_MARGIN;
+      for (const p of points) {
+        const inNotch = p.x > 40 - margin && p.x < 80 + margin && p.y < 80 + margin;
+        expect(inNotch).toBe(false);
+      }
+    }
+  });
+
+  it('cuts a hatching line that crosses the notch in two stretches', () => {
+    const marks = patternMarks(ushape, 'mountains', false);
+    // The line x + y = 99 (a multiple of the step) leaves the left arm, crosses the notch and
+    // enters the right arm.
+    const on = marks.hatches.filter(([p]) => Math.round(p.x + p.y) === 99);
+    expect(on).toHaveLength(2);
+    for (const [p, q] of marks.hatches) {
+      expect(Math.round(p.x + p.y)).toBe(Math.round(q.x + q.y));
+    }
+  });
+});

@@ -3,6 +3,8 @@ import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { CityIcon } from './cityStacks.ts';
 import type { TokenSpot } from './layout.ts';
 import { NODE_HIT_SLACK, cellAt, pickAt, segmentDistance } from './pick.ts';
+import { GEO_FILE, GEO_MAP } from './geoFixture.ts';
+import { geoTerritory, voronoiTerritory } from './territory.ts';
 import { voronoiCells } from './voronoi.ts';
 import { NODE_RADIUS } from './style.ts';
 
@@ -124,5 +126,26 @@ describe('pickAt, units in a city and the area of a city', () => {
     const hit = pickAt(map, quarter, { groups: NONE, cells });
     expect(hit).toMatchObject({ kind: 'edge', id: edge.id });
     expect(hit?.kind === 'edge' ? hit.cell : null).toBe(cellAt(cells, quarter));
+  });
+});
+
+describe('pickAt on the areas of a geography (DEC-36, #544)', () => {
+  const territory = geoTerritory(GEO_MAP, GEO_FILE);
+  const scene = { groups: NONE, cells: territory?.cells, geo: true };
+
+  it('hits the area that holds the point, not a convex cell', () => {
+    // Left of the road beside the contact: area 0 (the Voronoi border would be x = 100 as well,
+    // but the notch of the river makes the area narrower above y = 60).
+    expect(pickAt(GEO_MAP, { x: 80, y: 20 }, scene)).toEqual({ kind: 'node', id: 0 });
+    expect(pickAt(GEO_MAP, { x: 125, y: 20 }, scene)).toEqual({ kind: 'node', id: 1 });
+  });
+
+  it('hits nothing on the water', () => {
+    expect(pickAt(GEO_MAP, { x: 100, y: 20 }, scene)).toBeNull();
+    // The Voronoi cells would give the point to area 0 or 1.
+    const voronoi = voronoiTerritory(GEO_MAP);
+    expect(
+      pickAt(GEO_MAP, { x: 100, y: 20 }, { groups: NONE, cells: voronoi.cells }),
+    ).not.toBeNull();
   });
 });

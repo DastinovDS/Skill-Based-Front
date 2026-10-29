@@ -149,6 +149,16 @@ background, so it draws the water flat). The owner border runs along a coast whe
 along a river between two areas of one owner. Maps without the file keep today's code. No new dependency, no
 protocol change (the file is bundled like the background; serving it at `GET /api/maps/{id}/geo.json` too is optional).
 
+**Done in #544 (step 2).** `apps/client/src/map/geography.ts` loads `maps/geo/<id>.json` (one lazy chunk per map,
+`maps/geo/` and `maps/menu/` are copied into the client stage of `deploy/caddy.Dockerfile`, the directory holds a `.gitkeep`
+until a map has a file) and ignores a file of another map or another `meta.version`; `render/territory.ts` turns the chains
+into one polygon per node (a lake inside an area is cut out by a slit; a shore is smoothed by one round of corner cutting,
+under 2 units) and into edges with what lies across each. Across a sea or a lake there is no area; across a river or a
+stream the client looks for the area on the far bank, so the owner border runs along a coast, along a river bank between two
+owners, and not along a river between two areas of one owner. The thin area line is drawn only between two land areas (no
+line along water). The fog veil covers the areas of hidden nodes only, not the water beside them. The Supply view and the
+terrain mode draw the water flat (the part of the map no area covers). A map without a usable file keeps the Voronoi cells.
+
 **Symmetry** (DEC-27, item 1): the authored geography and the vectors need not be mirrored; `symmetry` does not read them.
 
 ## General rules

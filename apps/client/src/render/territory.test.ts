@@ -141,6 +141,9 @@ describe('a lake inside an area', () => {
     expect(areaAt([cell], { x: 10, y: 10 })).toBe(0);
     expect(areaAt([cell], { x: 50, y: 50 })).toBeNull();
     expect(areaAt([cell], { x: 70, y: 50 })).toBe(0);
-    expect(t?.edges.filter((e) => e.water === true && e.neighbour === null)).toHaveLength(4);
+    // The shore of the lake is smoothed: more than its four sides, every one looking at water.
+    const shore = t?.edges.filter((e) => e.water === true && e.neighbour === null) ?? [];
+    expect(shore.length).toBeGreaterThanOrEqual(4);
+    expect(shore.every((e) => e.a.x >= 40 && e.a.x <= 60 && e.a.y >= 40 && e.a.y <= 60)).toBe(true);
   });
 });
