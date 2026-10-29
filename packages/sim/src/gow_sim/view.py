@@ -89,7 +89,7 @@ from gow_sim.systems.capacity import (
     starve_in,
     warehouse_capacity,
 )
-from gow_sim.systems.movement import reachable
+from gow_sim.systems.movement import reachable, reachable_paths
 from gow_sim.systems.recruit import recruit_waiting
 from gow_sim.systems.supply import is_city, packet_dest_tick, packet_path
 from gow_sim.systems.vision import (
@@ -493,16 +493,18 @@ def resolve(state: GameState, player: int, cmd: Command, match_key: bytes) -> Co
 class Reach:
     """Where an own standing group can be ordered to (DEC-20, D5; DEC-22, item 10).
 
-    The interface highlights ``nodes`` and shows their travel time; it never computes either.
+    The interface highlights ``nodes`` and shows their travel time and path; it computes none.
     Ownership of the own nodes is all the search reads besides the public map and ruleset, so
     the answer shows nothing a ``Move`` and its ``ack`` would not.
     """
 
     group: int
     """Opaque id of the group."""
-    nodes: tuple[tuple[int, int], ...]
-    """``(node, ticks)`` by node id: the nodes a ``Move`` of the group accepts now, with the
-    ticks of the path once the group departs (``movement.path_ticks``)."""
+    nodes: tuple[tuple[int, int, tuple[int, ...]], ...]
+    """``(node, ticks, path)`` by node id: the nodes a ``Move`` of the group accepts now, with the
+    ticks of the path once the group departs (``movement.path_ticks``) and that path
+    ``(start, ..., node)``, the one the ``Move`` would take (#448). Every node of a path but the
+    last is the group's node or an own node, so it names nothing hidden."""
     split: tuple[int, ...]
     """Nodes a ``Move`` rejects with ``STACK_LIMIT``: reachable only by a smaller group."""
 
@@ -519,11 +521,11 @@ def reach(
             if not isinstance(g.location, AtNode):
                 return None
             start = g.location.node
-            fits = reachable(state, rules, player, start, size=g.units)
+            fits = reachable_paths(state, rules, player, start, size=g.units)
             every = reachable(state, rules, player, start)
             return Reach(
                 group=group,
-                nodes=tuple(fits.items()),
+                nodes=tuple((node, ticks, path) for node, (ticks, path) in fits.items()),
                 split=tuple(n for n in every if n not in fits),
             )
     return None

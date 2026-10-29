@@ -6,7 +6,13 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, TypeAdapter
 
-from gow_protocol.messages import CLOSE_PROTOCOL_VERSION, CLOSE_REPLACED, PROTOCOL_VERSION
+from gow_protocol.messages import (
+    CLOSE_NO_MATCH,
+    CLOSE_POLICY,
+    CLOSE_PROTOCOL_VERSION,
+    CLOSE_REPLACED,
+    PROTOCOL_VERSION,
+)
 from gow_protocol.schema import SCHEMA_PATH, WireJsonSchema, protocol_json_schema
 
 REGENERATE = "uv run python scripts/export_schema.py && pnpm -C apps/client gen:protocol"
@@ -32,11 +38,13 @@ def test_committed_schema_is_current(schema: dict[str, Any]) -> None:
 
 
 def test_schema_carries_the_runtime_constants_of_the_client(schema: dict[str, Any]) -> None:
-    """The client's ``hello`` and its 4001 handling read these (CLI-01, #57)."""
+    """The client's ``hello`` and its close-code handling read these (CLI-01, #57; #448)."""
     assert schema["x-constants"] == {
         "PROTOCOL_VERSION": PROTOCOL_VERSION,
         "CLOSE_PROTOCOL_VERSION": CLOSE_PROTOCOL_VERSION,
         "CLOSE_REPLACED": CLOSE_REPLACED,
+        "CLOSE_NO_MATCH": CLOSE_NO_MATCH,
+        "CLOSE_POLICY": CLOSE_POLICY,
     }
 
 

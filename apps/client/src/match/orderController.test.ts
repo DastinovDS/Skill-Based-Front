@@ -242,7 +242,7 @@ describe('OrderController', () => {
       type: 'reach',
       group: group.id,
       tick: 30,
-      nodes: [{ node: enemy.id, ticks: 25 }],
+      nodes: [{ node: enemy.id, ticks: 25, path: [home, enemy.id] }],
       split: [other.id],
     });
     const overlay = controller.overlay();

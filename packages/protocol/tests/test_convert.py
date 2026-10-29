@@ -804,6 +804,7 @@ def test_reach_msg_promises_what_a_move_gets(name: str) -> None:
                 ok = sim.validate(match.state, RULES, player, cmd)
                 assert isinstance(ok, sim.Ok)
                 assert ok.arrive_tick == match.tick + rn.ticks - 1
+                assert rn.path == ok.path  # #448: the path of the ack
             for node in msg.split:
                 cmd = match.resolve(player, sim.Move(g.id, node))
                 assert sim.validate(match.state, RULES, player, cmd) == sim.Reject(
@@ -812,3 +813,57 @@ def test_reach_msg_promises_what_a_move_gets(name: str) -> None:
             enemy = reach_msg(wire_id, match.tick, match.reach(1 - player, g.id))
             assert (enemy.nodes, enemy.split) == ((), ())
     assert reach_msg("x", 1, None).nodes == ()
+
+
+class _ReachChecker:
+    """``MatchObserver``: every ``every`` ticks, the ``reach`` of each standing own group carries
+    the path the ``ack`` of a move there would (#448) and names only nodes the player knows."""
+
+    def __init__(self, every: int = 25) -> None:
+        self.every = every
+        self.longest = 0
+        self.acked = 0
+
+    def begin(self, match: Match) -> None:
+        pass
+
+    def record(self, match: Match, commands: Sequence[sim.PlayerCommand]) -> None:
+        if match.tick % self.every:
+            return
+        for player in PLAYERS:
+            view = match.view(player)
+            for g in view.groups:
+                if not isinstance(g.location, AtNode):
+                    continue
+                msg = reach_msg(opaque_to_wire(g.id), match.tick, match.reach(player, g.id))
+                for rn in msg.nodes:
+                    # the search ``validate`` runs for a ``Move`` (its CP and fight checks aside:
+                    # a bot may have spent its CP, a group may stand in a fight)
+                    here = g.location.node
+                    size = g.units
+                    assert rn.path == find_path(
+                        match.state, RULES, player, here, rn.node, size=size
+                    )
+                    ok = sim.validate(
+                        match.state, RULES, player, match.resolve(player, sim.Move(g.id, rn.node))
+                    )
+                    if isinstance(ok, sim.Ok):
+                        assert rn.path == ok.path
+                        self.acked += 1
+                    assert rn.path[0] == g.location.node and rn.path[-1] == rn.node
+                    # fog: every node the path passes is one the player owns (its own view says
+                    # so); only the destination may be foreign, and it is in ``reach`` anyway
+                    assert all(view.nodes[n].owner == player for n in rn.path[1:-1])
+                    self.longest = max(self.longest, len(rn.path))
+
+
+def test_reach_paths_of_a_bot_match_are_the_ack_paths_and_hide_nothing() -> None:
+    """#448 over a played match: own territory grows, so the paths get longer than one road."""
+    mapdef = load_map(ROOT / "maps" / "fixtures" / "artery.json")
+    controllers = [
+        BOTS[bot](mapdef, RULES, seed=7, player=p) for p, bot in enumerate(("rusher", "turtle"))
+    ]
+    checker = _ReachChecker()
+    run_headless(mapdef, RULES, controllers, max_ticks=BOT_TICKS, match_key=KEY, observer=checker)
+    assert checker.longest >= 4, "some path crosses at least two own nodes"
+    assert checker.acked, "some of them were checked against an accepted move"

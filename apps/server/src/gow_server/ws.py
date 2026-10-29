@@ -42,6 +42,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from gow_protocol.codec import decode_client, encode
 from gow_protocol.messages import (
+    CLOSE_NO_MATCH,
+    CLOSE_POLICY,
     CLOSE_PROTOCOL_VERSION,
     CLOSE_REPLACED,
     PROTOCOL_VERSION,
@@ -65,10 +67,6 @@ from gow_server.settings import Settings
 log = logging.getLogger("gow_server.ws")
 
 CLOSE_NORMAL: Final = 1000
-CLOSE_POLICY: Final = 1008
-"""No ``hello`` in time, a flood, a client that does not read."""
-CLOSE_NO_MATCH: Final = 4004
-"""Unknown token, unknown or finished match, or not a player of it."""
 router = APIRouter()
 
 
@@ -238,6 +236,7 @@ async def _serve(ws: WebSocket, match_id: str, settings: Settings) -> None:
             rated=notice.rated,
             unrated_reason=notice.unrated_reason,
             calibration=notice.calibration,
+            pause_available=runner.pause_available(player),
         )
     )
     outbox.put_snapshot(runner.snapshot(player))

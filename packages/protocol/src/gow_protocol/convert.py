@@ -591,7 +591,7 @@ def reach_msg(group: str, tick: int, reach: sv.Reach | None) -> ReachMsg:
     return ReachMsg(
         group=group,
         tick=tick,
-        nodes=tuple(ReachNode(node=n, ticks=t) for n, t in reach.nodes),
+        nodes=tuple(ReachNode(node=n, ticks=t, path=p) for n, t, p in reach.nodes),
         split=reach.split,
     )
 

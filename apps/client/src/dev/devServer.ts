@@ -303,6 +303,7 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
           rated: false,
           unrated_reason: 'casual',
           calibration: null,
+          pause_available: true,
         });
         this.push();
         timer = setInterval(() => {
@@ -338,7 +339,14 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
                 const path = n.id === at.node ? null : devPath(map, at.node, n.id);
                 return path === null
                   ? []
-                  : [{ node: n.id, ticks: DEV_EDGE_TICKS * (path.length - 1) }];
+                  : [
+                      {
+                        node: n.id,
+                        ticks: DEV_EDGE_TICKS * (path.length - 1),
+                        // from the group's node to another one: at least two nodes
+                        path: path as [number, number, ...number[]],
+                      },
+                    ];
               })
             : [];
         this.reply({ type: 'reach', group: msg.group, tick, nodes, split: [] });

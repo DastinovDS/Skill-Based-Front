@@ -80,5 +80,6 @@
   "nicks": ["Danya", "Guest"],
   "rated": false,
   "unrated_reason": "casual",
-  "calibration": null
+  "calibration": null,
+  "pause_available": true
 }

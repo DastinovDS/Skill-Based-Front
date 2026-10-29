@@ -354,6 +354,11 @@ Implementation: #242 (`SIM_VERSION` 7, `PROTOCOL_VERSION` 11). The details that 
 - The reachable nodes and the travel time are computed by the server on the client request `reach_query` (the answer `reach`:
   the nodes where the group's `Move` would be accepted now, with the travel time, and the nodes with the rejection `STACK_LIMIT`).
   The request goes under the common message limit of the connection.
+- **[accepted]** (owner, 2026-10-28, #448) Each reachable node of `reach` also carries its path: the node ids from
+  the group's node to that node, the path the travel time refers to and the same one the `ack` of a `Move` there would
+  give (one search for both). The client highlights it under the travel-time label and never computes it. The path
+  names nothing hidden: every node of it but the last is the group's node or an own node, and the last is the
+  reachable node itself.
 - The auto-merge event `groups_merged` carries the node (`node`), like a manual merge, only to the owner.
 - A recruit that is given an order to move on the same tick has already left the node and does not merge.
 

@@ -171,8 +171,22 @@ def reachable(
     ``start`` itself is not included. The same search as ``find_path``, so the ticks and the
     nodes match what a ``Move`` would get.
     """
-    dist = _search(state, rules, player, start, size, None)[1]
-    return {node: dist[node] for node in sorted(dist) if node != start}
+    return {
+        node: ticks
+        for node, (ticks, _) in reachable_paths(state, rules, player, start, size).items()
+    }
+
+
+def reachable_paths(
+    state: GameState, rules: Ruleset, player: int, start: int, size: int = 0
+) -> dict[int, tuple[int, tuple[int, ...]]]:
+    """``reachable`` with the path of each node: ``{node: (ticks, (start, ..., node))}``.
+
+    The path is the one ``find_path`` returns for that node (the same Dijkstra; stopping at
+    ``dest`` only cuts it short), so it is the path the ``ack`` of a ``Move`` there carries.
+    """
+    paths, dist = _search(state, rules, player, start, size, None)
+    return {node: (dist[node], paths[node]) for node in sorted(dist) if node != start}
 
 
 def _search(

@@ -32,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 26
+PROTOCOL_VERSION: Final = 27
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -41,6 +41,13 @@ CLOSE_PROTOCOL_VERSION: Final = 4001
 CLOSE_REPLACED: Final = 4009
 """A newer connection of the same player replaced this one. Final for the client: it must not
 reconnect, or two tabs of one player would evict each other forever (SRV-04, #50)."""
+
+CLOSE_NO_MATCH: Final = 4004
+"""Unknown token, unknown or finished match, or not a player of it (one answer for all)."""
+
+CLOSE_POLICY: Final = 1008
+"""WebSocket policy violation: no ``hello`` in time, a bad ``hello``, a flood, a client that does
+not read."""
 
 MAX_EVENT_FIELDS: Final = 32
 """Wire limit on the number of ``event.data`` fields."""
@@ -176,6 +183,10 @@ class WelcomeMsg(WireModel):
     calibration: Calibration | None = None
     """Your calibration progress before this match; ``None`` for a guest, in a match that is not
     from the queue, and once calibration is over."""
+    pause_available: bool
+    """Whether you may still pause this match (DEC-05): ``False`` in a rated (queue) match and
+    once you have used your pause, also on a reconnect. A pause of the opponent going on now
+    does not change it (``paused`` says that)."""
 
     @model_validator(mode="after")
     def _check_rated(self) -> Self:
@@ -346,6 +357,16 @@ class ReachNode(WireModel):
     node: NodeId
     ticks: PosInt
     """Ticks of the path once the group departs (a planned order waits its delay first)."""
+    path: Annotated[tuple[NodeId, ...], Field(min_length=2)]
+    """The nodes from the group's node to ``node``: the path ``ticks`` refers to, the same one
+    the ``ack`` of a ``move`` there carries (#448). All but the last are the group's node or own
+    nodes."""
+
+    @model_validator(mode="after")
+    def _check_path(self) -> Self:
+        if self.path[-1] != self.node:
+            raise ValueError("a path ends at its node")
+        return self
 
 
 class ReachMsg(WireModel):
