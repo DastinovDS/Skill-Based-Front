@@ -432,21 +432,25 @@ export function sheenPhase(seconds: number): number {
 
 /**
  * The part of a ribbon between the shares `from` and `to` (0..1) of its axis: its outline cut
- * across the axis at both shares. Empty if the band is empty.
+ * across the axis at both shares. Empty if the band is empty. `body` is the ribbon width (the
+ * cut lines reach just past the widest part, the head). They must not reach the centre of the
+ * curve: there the two lines cross, the quad turns into a bow tie and the cut comes out empty.
  */
 export function ribbonSlice(
   outline: readonly Point[],
   axis: readonly Point[],
   from: number,
   to: number,
+  body: number = RIBBON.body,
 ): Point[] {
   if (to <= from || axis.length < 2) return [];
   const total = polylineLength(axis);
   const a = axisPoint(axis, total * from);
   const b = axisPoint(axis, total * to);
   if (a === null || b === null) return [];
-  // A quad across the axis from the front `a` to the front `b`, wider than any ribbon.
-  const wide = 400;
+  // A quad across the axis from the front `a` to the front `b`, wider than the ribbon (the head is
+  // `headWidth` across, so this is twice its half) and short enough not to self-intersect.
+  const wide = RIBBON.headWidth * (body / RIBBON.body);
   const quad = [
     { x: a.at.x - a.dir.y * wide, y: a.at.y + a.dir.x * wide },
     { x: b.at.x - b.dir.y * wide, y: b.at.y + b.dir.x * wide },

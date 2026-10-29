@@ -559,3 +559,35 @@ describe('ghostLook', () => {
     expect(ghostLook('rejected', 25, 0.85, true).dx).toBe(0);
   });
 });
+
+describe('ribbonSlice on a strongly curved ribbon', () => {
+  // A short order with a big bend: the radius of the axis is well under 400.
+  const axis = ribbonAxis([A, { x: 160, y: 0 }], 16, 20, 0.3);
+  const outline = ribbonOutline(axis, RIBBON.body)?.outline ?? [];
+
+  it('keeps the running band visible at every phase of the pass', () => {
+    const total = polylineLength(axis);
+    for (let phase = 0.1; phase < 0.95; phase += 0.05) {
+      const span = sheenSpan(total, phase);
+      if (span === null) continue;
+      const band = ribbonSlice(outline, axis, span.from, span.to);
+      expect(band.length, `phase ${phase.toFixed(2)}`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('stays inside the ribbon for every bend, short and long', () => {
+    for (const bend of [-0.3, -0.15, 0.15, 0.3]) {
+      for (const len of [90, 160, 400]) {
+        const ax = ribbonAxis([A, { x: len, y: 0 }], 16, 20, bend);
+        const out = ribbonOutline(ax, RIBBON.body)?.outline ?? [];
+        const total = polylineLength(ax);
+        for (let phase = 0.1; phase < 0.95; phase += 0.1) {
+          const span = sheenSpan(total, phase);
+          if (span === null) continue;
+          const band = ribbonSlice(out, ax, span.from, span.to);
+          expect(band.length, `bend ${bend} len ${len} phase ${phase}`).toBeGreaterThanOrEqual(3);
+        }
+      }
+    }
+  });
+});

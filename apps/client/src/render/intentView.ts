@@ -225,7 +225,7 @@ export class IntentView {
       if (!reducedMotion()) {
         // The soft band that runs along the ribbon after the departure.
         const span = sheenSpan(polylineLength(axis), sheenPhase(seconds));
-        const band = span === null ? [] : ribbonSlice(ribbon.outline, axis, span.from, span.to);
+        const band = span === null ? [] : ribbonSlice(ribbon.outline, axis, span.from, span.to, body);
         if (band.length >= 3) g.poly(flat(band)).fill({ color: PAPER, alpha: RIBBON.sheen.alpha });
       }
     }
