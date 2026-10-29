@@ -1,21 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
+import { MENU_MAP } from './menuMap.ts';
 import {
   BAR_BOTTOM,
   FOG_FADE,
   FOG_TOP_FADE,
   FOG_WIDTH,
+  RAIL_BESIDE_MIN_WIDTH,
   RAIL_RIGHT,
   layoutScene,
   starPoints,
 } from './menuScene.ts';
 
 const POOL = BUNDLED_MAPS.filter((m) => ['crossroads', 'highway', 'ridge'].includes(m.meta.name));
+// The menu map (#474) first: the client draws it; the pool maps keep the layout general.
+const MAPS = [MENU_MAP, ...POOL];
 
 // The windows the menu has to work in: the smallest supported, a laptop, a desktop, an ultrawide.
 const WINDOWS = [
   { width: 1024, height: 640 },
   { width: 1280, height: 720 },
+  { width: 1280, height: 800 },
   { width: 1920, height: 1080 },
   { width: 2560, height: 1080 },
 ] as const;
@@ -25,13 +30,15 @@ describe('layoutScene (#471)', () => {
     expect(POOL).toHaveLength(3);
   });
 
-  for (const map of POOL) {
+  for (const map of MAPS) {
     for (const size of WINDOWS) {
       describe(`${map.meta.name} in ${String(size.width)}x${String(size.height)}`, () => {
         const scene = layoutScene(map, size.width, size.height);
 
         it('puts the own capital right of the text rail, the enemy one in the fog', () => {
-          expect(scene.ownCapital.x).toBeGreaterThanOrEqual(Math.min(RAIL_RIGHT, size.width * 0.4));
+          // #474: also at 1024 px, where 40% of the width put it under the key hints of the rail.
+          expect(size.width).toBeGreaterThanOrEqual(RAIL_BESIDE_MIN_WIDTH);
+          expect(scene.ownCapital.x).toBeGreaterThanOrEqual(RAIL_RIGHT);
           expect(scene.enemyCapital.x).toBeGreaterThan(scene.ownCapital.x);
           expect(scene.enemyCapital.x).toBeGreaterThan(scene.fogStart);
           expect(scene.enemyCapital.x).toBeLessThan(size.width);
@@ -62,6 +69,43 @@ describe('layoutScene (#471)', () => {
       });
     }
   }
+
+  describe('the menu map (#474)', () => {
+    it('is the valley map, outside the server pool', () => {
+      expect(MENU_MAP.meta.name).toBe('valley');
+      expect(BUNDLED_MAPS.map((m) => m.meta.name)).not.toContain('valley');
+    });
+
+    for (const size of WINDOWS) {
+      it(`puts no node under the text rail in ${String(size.width)}x${String(size.height)}`, () => {
+        const scene = layoutScene(MENU_MAP, size.width, size.height);
+        for (const node of scene.nodes) expect(node.x).toBeGreaterThanOrEqual(RAIL_RIGHT);
+      });
+    }
+
+    it('lays out as drawn in the mockup at 1280x800: one world unit is one px', () => {
+      const scene = layoutScene(MENU_MAP, 1280, 800);
+      expect(scene.scale).toBe(1);
+      expect(scene.ownCapital).toEqual({ x: RAIL_RIGHT, y: 420 });
+    });
+
+    it('sizes the terrain and the territory by the spacing of the map, as in the mockup', () => {
+      const scene = layoutScene(MENU_MAP, 1280, 800);
+      expect(Math.round(scene.terrainRadius)).toBe(58);
+      expect(Math.round(scene.territoryRadius)).toBe(44);
+    });
+
+    it('runs the front road down the middle of the valley', () => {
+      const scene = layoutScene(MENU_MAP, 1280, 800);
+      expect(scene.front.length).toBe(5);
+      for (const point of scene.front) expect(point.y).toBe(scene.ownCapital.y);
+    });
+  });
+
+  it('flows the map under the rail in a small window, where the rail is over the picture', () => {
+    const scene = layoutScene(MENU_MAP, 800, 500);
+    expect(scene.ownCapital.x).toBe(320);
+  });
 
   it('marks the own roads and the owners from the map file', () => {
     const map = POOL[0];

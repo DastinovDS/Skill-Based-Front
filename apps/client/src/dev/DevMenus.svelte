@@ -3,8 +3,8 @@
   import ResultScreen from '../app/ResultScreen.svelte';
   import QueueView from '../app/QueueView.svelte';
   import WelcomeScreen from '../app/WelcomeScreen.svelte';
-  import { DEFAULT_MAP, BUNDLED_MAPS } from '../map/bundledMaps.ts';
   import ExitDialog from '../hud/ExitDialog.svelte';
+  import { MENU_MAP } from '../app/menuMap.ts';
   import {
     BAN_SECONDS,
     CALIBRATION,
@@ -16,7 +16,7 @@
   // `?menu=<id>`: one screen before a match with fixed data (see menuScenes.ts).
   const requested = new URLSearchParams(window.location.search).get('menu');
   const id = isMenuScene(requested) ? requested : 'menu-guest';
-  const map = BUNDLED_MAPS.find((m) => m.meta.name === 'crossroads') ?? DEFAULT_MAP;
+  const map = MENU_MAP;
   const nothing = (): void => undefined;
   const handlers = {
     oncreate: nothing,

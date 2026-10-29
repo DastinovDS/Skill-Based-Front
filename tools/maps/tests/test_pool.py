@@ -120,3 +120,36 @@ def test_cli_preview(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None
     broken.write_text("{}", encoding="utf-8")
     assert main(["preview", str(broken)]) == 1
     assert "FAIL" in capsys.readouterr().out
+
+
+# The menu map (#474, MM1 "Valley"): drawn behind the screens before a match, outside the pool ---
+
+MENU = MAPS / "menu"
+
+
+def test_menu_holds_only_the_valley_map() -> None:
+    # maps/menu/ is not read by the server (the pool is maps/*.json, not recursive).
+    assert sorted(p.name for p in MENU.glob("*.json")) == ["valley.json"]
+    assert sorted(p.name for p in (MENU / "src").glob("*.json")) == ["valley.half.json"]
+    assert "valley" not in DEC27 + MVP
+
+
+def test_menu_map_is_built_from_its_half_and_passes_the_validator() -> None:
+    half = json.loads((MENU / "src" / "valley.half.json").read_text(encoding="utf-8"))
+    built = json.loads((MENU / "valley.json").read_text(encoding="utf-8"))
+    assert mirror_half(half, CONFIG) == built
+    rules = load_ruleset(MAPS.parent / "rulesets" / "mvp-1.toml")
+    assert validate_file(MENU / "valley.json", CONFIG, rules) == []
+    assert preview_path(MENU / "valley.json").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_menu_map_fits_the_frame_of_the_menu() -> None:
+    # The mockup's frame (docs/design/mockups/menu-background.html): a world of 800 x 560 that the
+    # client's layoutScene shows at one px per unit in a 1280 x 800 window; the own capital is the
+    # leftmost node (nothing under the text rail), the two capitals on one horizontal line.
+    mapdef = load_map(MENU / "valley.json")
+    assert (mapdef.meta.width, mapdef.meta.height) == (800, 560)
+    own, enemy = mapdef.nodes[mapdef.capital(0)], mapdef.nodes[mapdef.capital(1)]
+    assert own.x == min(n.x for n in mapdef.nodes)
+    assert own.y == enemy.y
+    assert enemy.x - own.x == 650

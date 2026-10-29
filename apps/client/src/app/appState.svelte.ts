@@ -11,6 +11,7 @@ import { forgetGuest, loadGuest, saveGuest } from '../api/guestStore.ts';
 import type { MessageKey } from '../i18n/index.ts';
 import { loginFailure, passwordFailure, type AccountFailure } from './account.ts';
 import { apiErrorKey } from './apiErrors.ts';
+import { MENU_MAP } from './menuMap.ts';
 import type { Calibration, MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
 
 export type Screen =
@@ -75,8 +76,8 @@ export class AppState {
   calibration = $state.raw<Calibration | null>(null);
   /** The matchmaking queue is locked until this time (ms since the epoch), or null (DEC-34). */
   queueBanUntil = $state.raw<number | null>(null);
-  /** The pool map drawn behind the start screens; null until it is loaded or if it cannot be. */
-  backdrop = $state.raw<MapFile | null>(null);
+  /** The map drawn behind the start screens: the menu map, bundled at build time (#474). */
+  readonly backdrop: MapFile = MENU_MAP;
 
   readonly api: Api;
   readonly #storage: () => Storage;
@@ -97,7 +98,6 @@ export class AppState {
   /** The first screen: the invite code from the address, the saved guest, then welcome or menu. */
   async start(): Promise<void> {
     this.#takeInviteFromUrl();
-    void this.#loadBackdrop();
     const saved = loadGuest(this.#storage);
     if (saved !== null) {
       try {
@@ -303,17 +303,6 @@ export class AppState {
     this.guest = null;
     this.calibration = null;
     this.queueBanUntil = null;
-  }
-
-  /** The map behind the start screens: `crossroads` if the pool has it, else the first. Best effort. */
-  async #loadBackdrop(): Promise<void> {
-    try {
-      const pool = await this.api.maps();
-      const pick = pool.find((m) => m.id === 'crossroads') ?? pool[0];
-      if (pick !== undefined) this.backdrop = await this.api.map(pick.id);
-    } catch {
-      // No picture is not fatal: the screens keep the plain dark page.
-    }
   }
 
   #remember(guest: Guest): void {

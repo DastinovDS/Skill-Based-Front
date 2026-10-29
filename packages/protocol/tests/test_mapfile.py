@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[3]
 MAPS = (
     sorted((ROOT / "maps").glob("*.json"))
     + sorted((ROOT / "maps" / "fixtures").glob("*.json"))
+    + sorted((ROOT / "maps" / "menu").glob("*.json"))
     + sorted((ROOT / "packages" / "sim" / "tests" / "maps").glob("*.json"))
 )
 

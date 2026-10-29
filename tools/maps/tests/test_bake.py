@@ -31,9 +31,13 @@ ROOT = Path(__file__).parents[3]
 MAPS = ROOT / "maps"
 FIXTURES = MAPS / "fixtures"  # the MVP maps, frozen test fixtures (#372)
 TEST_MAPS = ROOT / "packages" / "sim" / "tests" / "maps"
-POOL = ["artery", "ridge", "web", "crossroads", "pass", "highway"]
+MENU = MAPS / "menu"  # the menu map, outside the server pool (#474)
+POOL = ["artery", "ridge", "web", "crossroads", "pass", "highway", "valley"]
 MVP = ["artery", "web", "pass"]
-FILES = {name: (FIXTURES if name in MVP else MAPS) / f"{name}.json" for name in POOL}
+FILES = {
+    name: (FIXTURES if name in MVP else MENU if name == "valley" else MAPS) / f"{name}.json"
+    for name in POOL
+}
 ALL_MAPS = [FILES[name] for name in POOL] + sorted(TEST_MAPS.glob("*.json"))
 BAKE_SECONDS = 10  # #344: baking one map takes at most 10 s (CPU time, a loaded machine is slower)
 LAND = frozenset(biome for biomes in TERRAIN_BIOMES.values() for biome in biomes)

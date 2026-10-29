@@ -159,7 +159,12 @@
       <!-- Terrain: soft blobs, one blurred layer (a static one, drawn once). -->
       <g filter="url(#menu-blur)" opacity="0.7">
         {#each scene.nodes as node (node.id)}
-          <circle cx={node.x} cy={node.y} r={147 * scene.scale} class={`terrain ${node.terrain}`} />
+          <circle
+            cx={node.x}
+            cy={node.y}
+            r={scene.terrainRadius}
+            class={`terrain ${node.terrain}`}
+          />
         {/each}
       </g>
       <!-- Territory at the start: the own side in blue, the enemy's in red (it is in the fog). -->
@@ -168,7 +173,7 @@
           <circle
             cx={node.x}
             cy={node.y}
-            r={116 * scene.scale}
+            r={scene.territoryRadius}
             class={node.owner === 0 ? 'land-you' : 'land-enemy'}
           />
         {/if}
