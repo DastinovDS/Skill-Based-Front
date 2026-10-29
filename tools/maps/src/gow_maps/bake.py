@@ -2,7 +2,8 @@
 
 The biome field comes from the Pygame prototype map generator (git tag ``v0-pygame-prototype``,
 path ``rts_core/game_logic/World/MapGenerator.py``). There is no water (DEC-27, item 3: the owner
-finds it confusing): every cell is land. The biome comes from the terrain of the nearest city
+finds it confusing): every cell is land, unless the map has a geography of DEC-36 (``gow_maps.geo``,
+which paints water over the picture of this module). The biome comes from the terrain of the nearest city
 (Voronoi area of the node, borders warped so they are not straight): plains, forest, mountains.
 The prototype moisture and detail noise only pick a variant inside that terrain (steppe or savanna,
 forest or jungle, rock or snow). The field is sampled on a ``STEP`` grid (``bake_cells``), exactly
@@ -32,6 +33,7 @@ import hashlib
 import io
 import math
 import random
+from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -154,27 +156,41 @@ def map_seed(mapdef: MapDef) -> int:
     return int.from_bytes(hashlib.blake2b(key, digest_size=8).digest(), "big")
 
 
-def _cell_indices(mapdef: MapDef, seed: int | None) -> NDArray[np.uint8]:
-    """Biome index (position in ``BIOMES``) of every cell, ``height // STEP`` rows of cells."""
+def map_noise(mapdef: MapDef, seed: int | None = None) -> _Noise:
+    """The noise of a map: offsets from ``random.Random`` seeded like the whole bake."""
+    rng = random.Random(map_seed(mapdef) if seed is None else seed)
+    return _Noise(rng.uniform(-5000, 5000), rng.uniform(-5000, 5000))
+
+
+def cell_centres(mapdef: MapDef) -> tuple[Grid, Grid]:
+    """World coordinates of the cell centres (``height // STEP`` rows, row 0 at the top)."""
     width, height = mapdef.meta.width, mapdef.meta.height
     if width % STEP or height % STEP:
         raise ValueError(
             f"{mapdef.meta.name}: width and height must be multiples of {STEP}, "
             f"got {width} x {height}"
         )
-    rng = random.Random(map_seed(mapdef) if seed is None else seed)
-    noise = _Noise(rng.uniform(-5000, 5000), rng.uniform(-5000, 5000))
-    # Cell centres in world units, row 0 at the top.
     x, y = np.meshgrid(
         np.arange(width // STEP) * STEP + STEP / 2, np.arange(height // STEP) * STEP + STEP / 2
     )
+    return x, y
+
+
+def cell_indices(mapdef: MapDef, seed: int | None) -> NDArray[np.uint8]:
+    """Biome index (position in ``BIOMES``) of every cell, ``height // STEP`` rows of cells."""
+    x, y = cell_centres(mapdef)
+    noise = map_noise(mapdef, seed)
     # The area of a node is its Voronoi cell, with borders warped so they are not straight. The
     # nearest node wins; on a tie the lower id (nodes are sorted by id, argmin takes the first).
     dx, dy = noise.warp(x, y)
     nodes = sorted(mapdef.nodes, key=lambda n: n.id)
     dist = np.stack([(n.x - (x + dx)) ** 2 + (n.y - (y + dy)) ** 2 for n in nodes])
     terrain = np.array([TERRAINS.index(n.terrain) for n in nodes], dtype=np.uint8)[dist.argmin(0)]
-    moisture = noise.moisture(x, y)
+    return biome_indices(terrain, noise.moisture(x, y))
+
+
+def biome_indices(terrain: NDArray[np.uint8], moisture: Grid) -> NDArray[np.uint8]:
+    """Biome index of every cell from the index of its terrain (in ``TERRAINS``) and moisture."""
     out = np.where(
         terrain == TERRAINS.index(Terrain.PLAINS),
         np.where(moisture < 0.3, BIOMES.index(Biome.SAVANNA), BIOMES.index(Biome.STEPPE)),
@@ -189,7 +205,7 @@ def _cell_indices(mapdef: MapDef, seed: int | None) -> NDArray[np.uint8]:
 
 def bake_cells(mapdef: MapDef, seed: int | None = None) -> list[list[Biome]]:
     """Biome grid, ``height // STEP`` rows of ``width // STEP`` cells, row 0 at the top."""
-    return [[BIOMES[i] for i in row] for row in _cell_indices(mapdef, seed).tolist()]
+    return [[BIOMES[i] for i in row] for row in cell_indices(mapdef, seed).tolist()]
 
 
 # ---- numeric helpers ---------------------------------------------------------------------------
@@ -206,7 +222,7 @@ def _value_noise(h: int, w: int, period: int, rng: np.random.Generator) -> Field
     return np.asarray(big, dtype=np.float32)[:h, :w]
 
 
-def _fbm(h: int, w: int, period: int, octaves: int, rng: np.random.Generator) -> Field:
+def fbm(h: int, w: int, period: int, octaves: int, rng: np.random.Generator) -> Field:
     total = np.zeros((h, w), dtype=np.float32)
     amp, norm = 1.0, 0.0
     for k in range(octaves):
@@ -229,7 +245,7 @@ def _box(a: Field, r: int, axis: int) -> Field:
     return (cs[tuple(hi)] - cs[tuple(lo)]) / np.float32(2 * r + 1)
 
 
-def _blur(a: Field, radius: int) -> Field:
+def blur(a: Field, radius: int) -> Field:
     """Gaussian-like blur of the last two axes: three box passes."""
     out = a
     for _ in range(3):
@@ -237,7 +253,7 @@ def _blur(a: Field, radius: int) -> Field:
     return out
 
 
-def _lerp(a: Rgb, b: Rgb, t: Field) -> Field:
+def lerp(a: Rgb, b: Rgb, t: Field) -> Field:
     ca = np.array(a, dtype=np.float32)
     cb = np.array(b, dtype=np.float32)
     return np.asarray(ca + (cb - ca) * t[..., None], dtype=np.float32)
@@ -345,27 +361,22 @@ SPRITES = {
 # ---- the picture ---------------------------------------------------------------------------------
 def _ground(biome: Biome, h: int, w: int, rng: np.random.Generator) -> Field:
     """Flat ground of a biome: two tones in soft blotches and a quiet mid-frequency variation."""
-    blotch = _smoothstep(-0.18, 0.18, _fbm(h, w, 90, 3, rng) * 1.6)
-    out = _lerp(*GROUND[biome], blotch)
-    out += _fbm(h, w, 7, 2, rng)[..., None] * 3.0
+    blotch = _smoothstep(-0.18, 0.18, fbm(h, w, 90, 3, rng) * 1.6)
+    out = lerp(*GROUND[biome], blotch)
+    out += fbm(h, w, 7, 2, rng)[..., None] * 3.0
     return out
-
-
-def _labels(mapdef: MapDef, seed: int | None) -> NDArray[np.uint8]:
-    """Biome index of every pixel: the cells of ``bake_cells`` scaled up to one pixel per unit."""
-    return np.repeat(np.repeat(_cell_indices(mapdef, seed), STEP, 0), STEP, 1)
 
 
 def _weights(labels: NDArray[np.uint8], rng: np.random.Generator) -> tuple[Field, Field]:
     """Ground blend (6, h, w) and detail density (6, h, w): a narrow meandering band, thinning."""
     h, w = labels.shape
     onehot = np.stack([(labels == i) for i in range(len(BIOMES))]).astype(np.float32)
-    soft = _blur(onehot, BLEND_RADIUS)
+    soft = blur(onehot, BLEND_RADIUS)
     wobbled = np.stack(
-        [soft[i] + BAND_WOBBLE * _fbm(h, w, 40, 3, rng) for i in range(len(BIOMES))]
+        [soft[i] + BAND_WOBBLE * fbm(h, w, 40, 3, rng) for i in range(len(BIOMES))]
     ).astype(np.float32)
     mask = _normalise(wobbled)
-    wide = _normalise(np.asarray(_blur(onehot, BLEND_RADIUS + 4) + 0.08 * wobbled, np.float32))
+    wide = _normalise(np.asarray(blur(onehot, BLEND_RADIUS + 4) + 0.08 * wobbled, np.float32))
     density = np.clip((wide - 0.12) / 0.7, 0.0, 1.0) ** 1.25
     return mask, density.astype(np.float32)
 
@@ -393,13 +404,33 @@ def _details(
 
 def render_background(mapdef: MapDef, seed: int | None = None) -> Image8:
     """RGB pixels (``height x width x 3``, row 0 at the top) of the background of a map."""
+    return render_cells(mapdef, cell_indices(mapdef, seed), seed)
+
+
+Paint = Callable[[Field], Field]
+
+
+def render_cells(
+    mapdef: MapDef,
+    cells: NDArray[np.uint8],
+    seed: int | None = None,
+    thin: Field | None = None,
+    paint: Paint | None = None,
+) -> Image8:
+    """The T2 picture of a biome grid (``cells``: one biome index per ``STEP`` cell).
+
+    ``thin`` (``height x width``, 0..1) scales the density of the details (DEC-36: they thin out
+    toward a shore); ``paint`` draws over the finished ground and details, before the grain.
+    """
     seq = np.random.SeedSequence(map_seed(mapdef) if seed is None else seed)
     rngs = [np.random.default_rng(child) for child in seq.spawn(3 + len(BIOMES))]
     rng_band, rng_sprites, rng_grain, *rng_ground = rngs
 
-    labels = _labels(mapdef, seed)
+    labels = np.repeat(np.repeat(cells, STEP, 0), STEP, 1)
     h, w = labels.shape
     mask, density = _weights(labels, rng_band)
+    if thin is not None:
+        density = np.asarray(density * thin[None], dtype=np.float32)
 
     ground = np.zeros((h, w, 3), dtype=np.float32)
     for i, biome in enumerate(BIOMES):
@@ -412,6 +443,8 @@ def render_background(mapdef: MapDef, seed: int | None = None) -> Image8:
         for x, y, q in _details(density[i], step, rng_sprites):
             sprite(draw, x, y, 0.55 + 0.45 * q, rng_sprites)
     flat = np.asarray(base.reduce(SUPERSAMPLE), dtype=np.float32)
+    if paint is not None:
+        flat = paint(flat)
     flat = flat + rng_grain.normal(0, GRAIN, flat.shape[:2]).astype(np.float32)[..., None]
     return np.clip(flat, 0, 255).astype(np.uint8)
 

@@ -641,7 +641,7 @@ def bake_new(m, L):
     B.BIOMES = (*B.BIOMES, "water")
     B.GROUND["water"] = ((74, 98, 96), (66, 90, 90))
     B.SPRITES["water"] = (9999, lambda d, x, y, s, r: None)
-    B._cell_indices = lambda mapdef, seed: out
+    B.cell_indices = lambda mapdef, seed: out
     return Image.fromarray(B.render_background(m), "RGB")
 
 
