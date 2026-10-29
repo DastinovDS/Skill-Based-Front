@@ -604,3 +604,86 @@ describe('EntityView, where the groups of a fight stand and the token pop (E3, #
     view.destroy();
   });
 });
+
+describe('EntityView, tokens that come and go (#508)', () => {
+  const own = (id: string, units = 2): GroupView => ({
+    id,
+    units,
+    charged: units,
+    mode: 'attack',
+    location: { kind: 'node', node: nodeId },
+    order: null,
+    defense_bonus: null,
+    defense_cap: null,
+  });
+  const entries = (layers: ReturnType<typeof createLayers>): Container[] =>
+    layers.layer.groups.children.find((c) => c.label === 'own-groups')?.children as Container[];
+  const tokenOf = (entry: Container | undefined): Container => {
+    const token = entry?.children[0];
+    if (token === undefined) throw new Error('no token');
+    return token as Container;
+  };
+
+  it('shows the first frame as it is, and fades in what appears later', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
+    view.update(frameWith([], false));
+    view.update(frameWith([own('a')], false));
+    const entry = entries(layers)[0];
+    expect(tokenOf(entry).alpha).toBe(0);
+    view.advance(60);
+    expect(tokenOf(entry).alpha).toBeGreaterThan(0);
+    view.advance(1000);
+    expect(tokenOf(entry).alpha).toBe(1);
+    view.destroy();
+
+    const first = createLayers();
+    const other = new EntityView(map, first, 0, 1, () => 17, testSprites());
+    other.update(frameWith([own('a')], false));
+    expect(tokenOf(entries(first)[0]).alpha).toBe(1);
+    other.destroy();
+  });
+
+  it('fades a token that left the snapshot out where it stood, then removes it', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
+    view.update(frameWith([own('a')], false));
+    view.update(frameWith([], false));
+    // Still there, fading.
+    expect(entries(layers)).toHaveLength(1);
+    view.advance(100);
+    const alpha = tokenOf(entries(layers)[0]).alpha;
+    expect(alpha).toBeLessThan(1);
+    expect(alpha).toBeGreaterThan(0);
+    view.advance(1000);
+    view.update(frameWith([], false));
+    expect(entries(layers)).toHaveLength(0);
+    view.destroy();
+  });
+
+  it('takes a token back when it returns while it is still fading', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
+    view.update(frameWith([own('a')], false));
+    view.update(frameWith([], false));
+    view.advance(100);
+    view.update(frameWith([own('a')], false));
+    view.advance(1000);
+    expect(entries(layers)).toHaveLength(1);
+    expect(tokenOf(entries(layers)[0]).alpha).toBe(1);
+    view.destroy();
+  });
+
+  it('swells a token when its number of units changes, and settles', () => {
+    const layers = createLayers();
+    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
+    view.update(frameWith([own('a', 2)], false));
+    const token = tokenOf(entries(layers)[0]);
+    expect(token.scale.x).toBe(1);
+    view.update(frameWith([own('a', 3)], false));
+    expect(token.scale.x).toBeGreaterThan(1);
+    view.advance(1000);
+    expect(token.scale.x).toBe(1);
+    view.destroy();
+  });
+});

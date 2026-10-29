@@ -107,6 +107,8 @@ export class EntityView implements EnemyAnchors {
   private readonly buildMarks: BuildMark[] = [];
   private readonly timeStyle: TextStyle;
   private readonly levelStyle: TextStyle;
+  /** Set after the first frame: what appears later fades in. */
+  private warm = false;
   private tickHz = 10;
   /** Ticks a road level takes to build (`ruleset_public.build.ticks_per_level`): the part done. */
   private buildTicks = 0;
@@ -283,6 +285,11 @@ export class EntityView implements EnemyAnchors {
   }
 
   update(frame: RenderFrame): void {
+    this.updateFrame(frame);
+    this.warm = true;
+  }
+
+  private updateFrame(frame: RenderFrame): void {
     if (frame.base !== this.base) {
       this.base = frame.base;
       this.applyBase(frame.base);
@@ -425,6 +432,8 @@ export class EntityView implements EnemyAnchors {
     }
     const token = current ?? new Token(this.kit, this.labelResolution);
     if (current === null) parent.addChild(token.view);
+    // Seen again after a gap (or for the first time): fade in; the very first frame is as it is.
+    if ((current === null || !current.view.visible) && this.warm) token.enter();
     const { counts, range } = knownOfSeen(seen);
     token.set({ owner: this.enemy, modes: seen.enemy_modes, counts, range, inside });
     token.setLabel(true);
@@ -532,10 +541,28 @@ export class EntityView implements EnemyAnchors {
       spots.set(item.group.id, spot);
       edgeSpots.set(item.group.id, spot);
     }
-    sweep(this.groups, this.stamp);
+    this.sweepGroups();
     this.edgeSpots = edgeSpots;
     this.icons = icons;
     return spots;
+  }
+
+  /**
+   * A group token that left the snapshot fades out where it stood (an arrival into a city icon, a
+   * kill) instead of vanishing, and is destroyed once faded (#508).
+   */
+  private sweepGroups(): void {
+    for (const [id, entry] of this.groups) {
+      if (entry.stamp === this.stamp) {
+        entry.token.revive();
+        continue;
+      }
+      entry.token.leave();
+      if (entry.token.gone) {
+        entry.view.destroy({ children: true });
+        this.groups.delete(id);
+      }
+    }
   }
 
   private groupEntry(id: string, owner: PlayerId): GroupEntry {
@@ -552,6 +579,8 @@ export class EntityView implements EnemyAnchors {
         labels: () => token.labels(),
       };
       this.groups.set(id, entry);
+      // The first frame shows the scene as it is; later arrivals fade in.
+      if (this.warm) token.enter();
     }
     return entry;
   }
