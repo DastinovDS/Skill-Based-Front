@@ -251,6 +251,15 @@ function defs(X) {
   d += `<pattern id="${P}hw" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.4" height="4" fill="${C.warn}"/></pattern>`;
   d += `<pattern id="${P}he" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width="6" height="6" fill="${C.plate}"/><rect width="3" height="6" fill="${C.enemy}" fill-opacity=".85"/></pattern>`;
   d += `<pattern id="${P}hz" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="${C.bg}"/><rect width="4" height="8" fill="${C.warn}"/></pattern>`;
+  d += `<pattern id="${P}hr" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.4" height="4" fill="${C.enemy}"/></pattern>`;
+  // round 2 textures (baked into the sprite of a look in the client, never a per-object filter)
+  d += `<pattern id="${P}cob" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M0 .5H6M0 3.5H6M1.5 .5V3.5M4.5 3.5V6.5" stroke="#000" stroke-opacity=".3" stroke-width=".7"/></pattern>`;
+  d += `<pattern id="${P}fur" width="3.4" height="3.4" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)"><rect width="1.1" height="3.4" fill="#fff" fill-opacity=".3"/></pattern>`;
+  d += `<pattern id="${P}furv" width="3.4" height="3.4" patternUnits="userSpaceOnUse" patternTransform="rotate(60)"><rect width="1.1" height="3.4" fill="#fff" fill-opacity=".3"/></pattern>`;
+  d += `<pattern id="${P}furd" width="3.4" height="3.4" patternUnits="userSpaceOnUse" patternTransform="rotate(-30)"><rect width="1.1" height="3.4" fill="#000" fill-opacity=".22"/></pattern>`;
+  d += `<pattern id="${P}grn" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1" cy="1.2" r=".55" fill="#fff" fill-opacity=".16"/><circle cx="3.6" cy="3.4" r=".55" fill="#000" fill-opacity=".2"/></pattern>`;
+  d += `<pattern id="${P}dia" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 .3H5M.3 0V5" stroke="#000" stroke-opacity=".28" stroke-width=".7"/><circle cx="2.8" cy="2.8" r=".6" fill="#fff" fill-opacity=".25"/></pattern>`;
+  d += `<pattern id="${P}stn" width="7" height="5" patternUnits="userSpaceOnUse"><path d="M0 .4H7M0 2.9H7M2 .4V2.9M5.5 2.9V5.4" stroke="#000" stroke-opacity=".35" stroke-width=".6"/><path d="M.5 1.2H1.6M3 3.6H4.4" stroke="#fff" stroke-opacity=".18" stroke-width=".6"/></pattern>`;
   return d + '</defs>';
 }
 
@@ -305,6 +314,33 @@ function uWrap(m, s, g, bottom) {           // RANGE, ghost and the plates every
   if (m.k === 'ghost') g = `<g opacity=".6">${g}</g>` + agePlate(-h / 2 - 7, m.age || '');
   return { svg: g, ref: s, bottom };
 }
+// Round 2 (owner, 2026-10-29): other shapes and a richer look, in the neutral setting (no battery, no sci-fi).
+// Shared rules: a charge is a filled square or a filled place, an uncharged unit an empty one (readable without colour);
+// the enemy has a second, inner outline; RANGE, PRESENCE and the ghost are dashed; the token never goes below 20 px on screen.
+const unitN = (m) => (m.k === 'exact' ? m.n : null);
+const sqOn = (x, y, z, X, o) => `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(z)}" height="${f1(z)}" fill="${X.fill(o)}" stroke="${C.paper}" stroke-opacity=".6" stroke-width=".7"/>`;
+const sqOff = (x, y, z) => `<rect x="${f1(x + 0.5)}" y="${f1(y + 0.5)}" width="${f1(z - 1)}" height="${f1(z - 1)}" fill="${C.bg}" stroke="${C.empty}" stroke-width="1"/>`;
+// places shown and how many are charged: exact up to max, in proportion above (the number on the token tells the size)
+function placesOf(m, max) { const shown = Math.min(m.n, max); const ch = m.n <= max ? m.c : m.c === 0 ? 0 : m.c === m.n ? max : Math.max(1, Math.min(max - 1, Math.round((m.c * max) / m.n))); return { shown, ch }; }
+function sqGrid(cx, y0, m, X, o = {}) {
+  const { shown, ch } = placesOf(m, o.max || 8), per = o.per || 4, z = o.sz || 4, p = o.pitch || z + 1.2, rows = Math.ceil(shown / per);
+  let g = '';
+  for (let r = 0; r < rows; r++) { const inRow = Math.min(per, shown - r * per), x0 = cx - (inRow * p - (p - z)) / 2; for (let j = 0; j < inRow; j++) { const k = r * per + j; g += k < ch ? sqOn(x0 + j * p, y0 + r * p, z, X, m.o) : sqOff(x0 + j * p, y0 + r * p, z); } }
+  return { svg: g, h: rows * p - (p - z), rows };
+}
+function uFin(m, g, ref, top, bottom) {
+  if (m.k === 'range') { g += rangePlate(bottom + 2, m.rng || '3-5'); bottom += 15; }
+  if (m.k === 'ghost') g = `<g opacity=".6">${g}</g>` + agePlate(top - 7, m.age || '');
+  return { svg: g, ref, bottom };
+}
+const rimOf = (m) => (m.k !== 'exact' ? col(m.o) : m.o === 'you' ? C.paper : col(m.o));
+const dashOf = (m) => (m.k !== 'exact' ? 'stroke-dasharray="4.5 3"' : '');
+const selD = (d) => `<path d="${d}" stroke="${C.bg}" stroke-width="6" stroke-opacity=".8" stroke-linejoin="round"/><path d="${d}" stroke="${C.paper}" stroke-width="2" stroke-linejoin="round"/>`;
+const selBase = (y, rx) => `<ellipse cx="0" cy="${f1(y)}" rx="${f1(rx)}" ry="${f1(rx * 0.32)}" stroke="${C.bg}" stroke-width="6" stroke-opacity=".8"/><ellipse cx="0" cy="${f1(y)}" rx="${f1(rx)}" ry="${f1(rx * 0.32)}" stroke="${C.paper}" stroke-width="2"/>`;
+const polyPath = (P, k = 1, dy = 0) => 'M' + P.map(([x, y]) => f1(x * k) + ' ' + f1((y - dy) * k + dy)).join('L') + 'Z';
+const qMark = (y, s = 15) => text(0, y, '?', s, C.paper, halo(3));
+const numMark = (y, v, s = 11) => text(0, y, v, s, C.paper, halo(3));
+
 const UNITS = [
   { name: 'Now', sub: 'U1 ▽, the charge as a fill from the tip, the number inside (shipped)', fn(m, X) {
     const s = USIDE(m.k === 'exact' ? m.n : null), h = s * 0.866;
@@ -312,61 +348,120 @@ const UNITS = [
     if (m.k === 'exact' && (m.pill || m.sel)) { g += pillCN(h / 2 + 3, m); bottom = h / 2 + 16; }
     return uWrap(m, s, g, bottom);
   } },
-  { name: 'U1+U4 Row', sub: 'U1 as now plus the row of charge squares under the tip (#433 as planned)', rec: true, fn(m, X) {
-    const s = USIDE(m.k === 'exact' ? m.n : null), h = s * 0.866;
-    let g = triShell(m, X, s), bottom = h / 2;
-    if (m.k === 'exact') { const r = chargeRow(m, X); g += G(0, h / 2 + 2.5, r.svg); bottom = h / 2 + 2.5 + r.h; }
-    return uWrap(m, s, g, bottom);
+  { name: 'UA Counter', sub: 'a board war-game counter: a bevelled square chit, the number large, a pip square per unit in a dark band at the foot', fn(m, X) {
+    const ex = m.k === 'exact', en = m.o === 'enemy', rows = ex ? Math.ceil(Math.min(m.n, 8) / 4) : 1, w = Math.max(24, USIDE(unitN(m)) * 0.9), h = w * (rows > 1 ? 1.12 : 1);
+    const rect = (k, extra) => `<rect x="${f1((-w / 2) * k)}" y="${f1((-h / 2) * k)}" width="${f1(w * k)}" height="${f1(h * k)}" rx="${f1(3.5 * k)}" ${extra}/>`;
+    let g = m.sel ? rect(1.4, `stroke="${C.bg}" stroke-width="6" stroke-opacity=".8"`) + rect(1.4, `stroke="${C.paper}" stroke-width="2"`) : '';
+    g += `<g ${X.shd}>` + rect(1, `fill="${ex ? X.fill(m.o) : C.plate}" stroke="${C.bg}" stroke-width="5" stroke-opacity=".9"`);
+    let numY = 0;
+    if (ex) {
+      const grid = sqGrid(0, 0, m, X, { per: 4, sz: 4, pitch: 5 }), bh = grid.h + 4, by = h / 2 - 2 - bh;
+      g += `<path d="M${f1(-w / 2 + 3)} ${f1(-h / 2 + 1.7)}H${f1(w / 2 - 3)}" stroke="#fff" stroke-opacity=".38" stroke-width="1.4" stroke-linecap="round"/>`;
+      g += `<path d="M${f1(-w / 2 + 1.5)} ${f1(-h / 2 + 3)}V${f1(by - 1)}" stroke="#fff" stroke-opacity=".18" stroke-width="1.2" stroke-linecap="round"/>`;
+      g += `<rect x="${f1(-w / 2 + 2)}" y="${f1(by)}" width="${f1(w - 4)}" height="${f1(bh)}" rx="2" fill="${C.bg}" fill-opacity=".8"/>` + G(0, by + 2, grid.svg);
+      numY = (-h / 2 + by) / 2 + 0.5;
+    }
+    g += rect(1, `stroke="${rimOf(m)}" stroke-width="2.2" ${dashOf(m)}`);
+    if (en && ex) g += `<rect x="${f1(-w / 2 + 2.7)}" y="${f1(-h / 2 + 2.7)}" width="${f1(w - 5.4)}" height="${f1(h - 5.4)}" rx="2" stroke="${C.paper}" stroke-width="1" stroke-opacity=".85"/>`;
+    if (m.k === 'presence') g += qMark(0);
+    else if (ex || m.k === 'ghost') g += numMark(numY, m.n, w > 26 ? 12.5 : 11.5);
+    g += '</g>';
+    return uFin(m, g, w, -h / 2, h / 2);
   } },
-  { name: 'UB Even token', sub: 'the ▽ has an even tint and the number; the charge only in the row (one quantity, one sign)', fn(m, X) {
-    const s = USIDE(m.k === 'exact' ? m.n : null), h = s * 0.866;
-    let g = triShell(m, X, s, { flat: true }), bottom = h / 2;
-    if (m.k === 'exact') { const r = chargeRow(m, X); g += G(0, h / 2 + 2.5, r.svg); bottom = h / 2 + 2.5 + r.h; }
-    return uWrap(m, s, g, bottom);
+  { name: 'UB Pennon', sub: 'a hanging banner on a cross-bar with a swallow-tail (it keeps the downward point of ▽); the number on the cloth, a square per unit under it', fn(m, X) {
+    const ex = m.k === 'exact', en = m.o === 'enemy', rows = ex ? Math.ceil(Math.min(m.n, 8) / 4) : 1;
+    const bw = Math.max(21, USIDE(unitN(m)) * 0.8), bh = bw * 0.62 + 15 + rows * 5, notch = bw * 0.3, top = -bh / 2, bot = bh / 2;
+    const cloth = [[-bw / 2, top], [bw / 2, top], [bw / 2, bot], [0, bot - notch], [-bw / 2, bot]], d = polyPath(cloth);
+    let g = m.sel ? selD(polyPath(cloth, 1.38)) : '';
+    g += `<g ${X.shd}><path d="${d}" fill="${ex ? X.fill(m.o) : C.plate}" stroke="${C.bg}" stroke-width="5" stroke-opacity=".9" stroke-linejoin="round"/>`;
+    if (ex) {
+      g += `<path d="M${f1(-bw / 2 + 2.2)} ${f1(top + 2)}V${f1(bot - 2)}" stroke="#fff" stroke-opacity=".22" stroke-width="1.3"/><path d="M${f1(bw / 2 - 2.6)} ${f1(top + 2)}V${f1(bot - 1.5)}" stroke="#000" stroke-opacity=".22" stroke-width="2"/>`;
+      const grid = sqGrid(0, 0, m, X, { per: 4, sz: 4, pitch: 5 });
+      const gw = Math.min(m.n, 4) * 5 - 1 + 3; g += `<rect x="${f1(-gw / 2)}" y="${f1(top + 16)}" width="${f1(gw)}" height="${f1(grid.h + 3)}" rx="1.5" fill="${C.bg}" fill-opacity=".72"/>` + G(0, top + 17.5, grid.svg);
+    }
+    g += `<path d="${d}" stroke="${rimOf(m)}" stroke-width="2" stroke-linejoin="round" ${dashOf(m)}/>`;
+    if (en && ex) g += `<path d="${polyPath(cloth.map(([x, y]) => [x * 0.74, y * 0.82]))}" stroke="${C.paper}" stroke-width=".95" stroke-opacity=".85" stroke-linejoin="round"/>`;
+    // the cross-bar with two knobs
+    g += `<path d="M${f1(-bw / 2 - 4)} ${f1(top)}H${f1(bw / 2 + 4)}" stroke="${C.bg}" stroke-width="4.6" stroke-linecap="round"/><path d="M${f1(-bw / 2 - 4)} ${f1(top)}H${f1(bw / 2 + 4)}" stroke="${C.paper}" stroke-width="2" stroke-linecap="round"/>`;
+    if (m.k === 'presence') g += qMark(top + bh * 0.4);
+    else if (ex || m.k === 'ghost') g += numMark(top + 9.5, m.n, 11);
+    g += '</g>';
+    return uFin(m, g, bw, top - 2, bot);
   } },
-  { name: 'UC Squares inside', sub: 'the squares stand inside the ▽ as a pyramid (10 places), the number on a corner badge', fn(m, X) {
-    if (m.k !== 'exact') { const s = USIDE(null); return uWrap(m, s, triShell(m, X, s), s * 0.433); }
-    const cnt = Math.min(m.n, 10);
-    let R = 1; while ((R * (R + 1)) / 2 < cnt) R++;
-    const p = 6.3, sq = 5, pad = 4;
-    let s = 20;
-    const fits = (s) => { const h = s * 0.866; for (let i = 0; i < R; i++) { const yb = pad + i * p + sq; const wAt = s * (1 - yb / h); if (wAt < (R - i) * p + 3) return false; } return true; };
-    while (!fits(s)) s += 1;
-    const h = s * 0.866, top = -h / 2, T = tri(0, 0, s), fc = col(m.o), en = m.o === 'enemy';
-    const ch = m.n <= 10 ? m.c : m.c === 0 ? 0 : m.c === m.n ? 10 : Math.max(1, Math.min(9, Math.round((m.c * 10) / m.n)));
+  { name: 'UC Pawn', sub: 'a carved game piece seen from the side: round head, flared body, a plinth; the number on the body, a square per unit on the plinth', fn(m, X) {
+    const ex = m.k === 'exact', en = m.o === 'enemy', s = USIDE(unitN(m)), H = s * 1.15, r = Math.max(7.5, s * 0.25), shown = ex ? Math.min(m.n, 8) : 3;
+    const ph = 8, pw = Math.max(s * 0.92, shown * 4.7 + 6), hy = -H / 2 + r, ny = -H / 2 + 2 * r + 0.5, yb = H / 2 - ph, nw = r * 0.45, bwid = s * 0.36;
+    const body = (k) => { const cy = (ny + yb) / 2; const Y = (y) => f1(cy + (y - cy) * k); return `M${f1(-nw * k)} ${Y(ny)}Q${f1(-nw * k)} ${Y((ny + yb) / 2 + 5)} ${f1(-bwid * k)} ${Y(yb)}H${f1(bwid * k)}Q${f1(nw * k)} ${Y((ny + yb) / 2 + 5)} ${f1(nw * k)} ${Y(ny)}Z`; };
+    const fill = ex ? X.fill(m.o) : C.plate, rim = rimOf(m), dash = dashOf(m);
+    let g = m.sel ? selBase(H / 2 - 1, pw * 0.72) : '';
+    g += `<g ${X.shd}><path d="${body(1)}" fill="${fill}" stroke="${C.bg}" stroke-width="4.5" stroke-opacity=".9"/><circle cy="${f1(hy)}" r="${f1(r + 1.6)}" fill="${C.bg}" fill-opacity=".9"/>`;
+    g += `<path d="${body(1)}" fill="${fill}" stroke="${rim}" stroke-width="1.9" stroke-linejoin="round" ${dash}/>`;
+    g += `<circle cy="${f1(hy)}" r="${f1(r)}" fill="${fill}" stroke="${rim}" stroke-width="1.9" ${dash}/>`;
+    g += `<ellipse cy="${f1(ny + 0.5)}" rx="${f1(nw + 2.2)}" ry="1.9" fill="${fill}" stroke="${rim}" stroke-width="1.4"/>`;
+    if (ex) g += `<path d="M${f1(-nw - 0.6)} ${f1(ny + 3)}Q${f1(-nw - 1)} ${f1(yb - 4)} ${f1(-bwid + 2.6)} ${f1(yb - 1.4)}" stroke="#fff" stroke-opacity=".3" stroke-width="1.3" stroke-linecap="round"/><path d="${arcPath(0, hy, r - 1.8, Math.PI * 1.1, Math.PI * 1.6)}" stroke="#fff" stroke-opacity=".35" stroke-width="1.2" stroke-linecap="round"/>`;
+    if (en && ex) g += `<path d="${body(0.62)}" stroke="${C.paper}" stroke-width=".95" stroke-opacity=".85"/>`;
+    g += `<rect x="${f1(-pw / 2)}" y="${f1(yb)}" width="${f1(pw)}" height="${ph}" rx="2" fill="${C.plate}" stroke="${rim}" stroke-width="1.6" ${dash}/>`;
+    if (ex) g += G(0, yb + 2, sqGrid(0, 0, m, X, { per: 8, sz: 3.8, pitch: 4.7 }).svg);
+    if (m.k === 'presence') g += qMark(hy, 12);
+    else if (ex || m.k === 'ghost') g += numMark(hy + 0.3, m.n, m.n > 9 ? 9.5 : 11);
+    g += '</g>';
+    return uFin(m, g, s, -H / 2, H / 2);
+  } },
+  { name: 'UD Blocks', sub: 'a stack of carved blocks, one per unit (up to 6, then in proportion with the number); a charged block has a lit top, an uncharged one a hollow top', fn(m, X) {
+    const ex = m.k === 'exact', en = m.o === 'enemy', P6 = { 1: [[0, 0]], 2: [[-1, 0], [1, 0]], 3: [[-1, 0], [1, 0], [0, 1]], 4: [[-2, 0], [0, 0], [2, 0], [0, 1]], 5: [[-2, 0], [0, 0], [2, 0], [-1, 1], [1, 1]], 6: [[-2, 0], [0, 0], [2, 0], [-1, 1], [1, 1], [0, 2]] };
+    const { shown, ch } = ex ? placesOf(m, 6) : { shown: 3, ch: 0 }, a = shown <= 1 ? 9 : shown <= 3 ? 7.5 : 6.2, hh = a * 1.05;
+    const pos = P6[shown], layers = Math.max(...pos.map((p) => p[1])) + 1, wid = (Math.max(...pos.map((p) => Math.abs(p[0]))) + 1) * a * 2, Ht = layers * hh + a, base = Ht / 2;
+    let g = m.sel ? selBase(base, wid * 0.66) : '';
+    let blocks = '';
+    pos.forEach(([px, ly], i) => {
+      const cx = px * a, ty = base - (ly + 1) * hh - a / 2, on = ex && i < ch, fc = col(m.o);
+      const top = `${f1(cx)},${f1(ty - a / 2)} ${f1(cx + a)},${f1(ty)} ${f1(cx)},${f1(ty + a / 2)} ${f1(cx - a)},${f1(ty)}`;
+      const left = `${f1(cx - a)},${f1(ty)} ${f1(cx)},${f1(ty + a / 2)} ${f1(cx)},${f1(ty + a / 2 + hh)} ${f1(cx - a)},${f1(ty + hh)}`;
+      const right = `${f1(cx)},${f1(ty + a / 2)} ${f1(cx + a)},${f1(ty)} ${f1(cx + a)},${f1(ty + hh)} ${f1(cx)},${f1(ty + a / 2 + hh)}`;
+      const dash = ex ? '' : 'stroke-dasharray="3 2"', rim = ex ? (m.o === 'you' ? C.paper : fc) : fc;
+      if (on) blocks += `<polygon points="${left}" fill="${fc}" stroke="${C.bg}" stroke-width=".9"/><polygon points="${right}" fill="${darken(fc, 0.3)}" stroke="${C.bg}" stroke-width=".9"/><polygon points="${top}" fill="${lighten(fc, 0.22)}" stroke="${rim}" stroke-width="1.2" stroke-linejoin="round"/>`;
+      else blocks += `<polygon points="${left}" fill="#2a313a" stroke="${C.bg}" stroke-width=".9"/><polygon points="${right}" fill="#1b2027" stroke="${C.bg}" stroke-width=".9"/><polygon points="${top}" fill="${C.bg}" stroke="${ex ? rim : fc}" stroke-width="1.2" stroke-linejoin="round" ${dash}/>`;
+      if (en && ex) blocks += `<polygon points="${f1(cx)},${f1(ty - a / 4)} ${f1(cx + a / 2)},${f1(ty)} ${f1(cx)},${f1(ty + a / 4)} ${f1(cx - a / 2)},${f1(ty)}" stroke="${C.paper}" stroke-width=".8" stroke-opacity=".9"/>`;
+    });
+    g += `<g ${X.shd}>${blocks}</g>`;
+    if (m.k === 'presence') g += qMark(0);
+    if (ex && m.n > 6) { const t = String(m.n), w2 = 7 + t.length * 6; g += `<g ${X.shd}><rect x="${f1(wid / 2 - 3)}" y="${f1(base - 12)}" width="${f1(w2)}" height="12" rx="6" fill="${C.plate}" stroke="${rimOf(m)}" stroke-width="1.3"/>${text(wid / 2 - 3 + w2 / 2, base - 5.8, t, 9.5, C.paper)}</g>`; }
+    return uFin(m, g, wid, -Ht / 2, base);
+  } },
+  { name: 'UE Regiment', sub: 'the block of an old battle map: a cell per unit in one or two ranks (filled = charged), the number on a tab at the corner', fn(m, X) {
+    const ex = m.k === 'exact', en = m.o === 'enemy', { shown, ch } = ex ? placesOf(m, 8) : { shown: 4, ch: 0 };
+    const ranks = shown > 4 ? 2 : 1, cols = Math.ceil(shown / ranks), cs = shown <= 2 ? 9.5 : 7.2, W = cols * cs, H = ranks * cs, x0 = -W / 2, y0 = -H / 2 + 4;
+    let g = m.sel ? `<rect x="${f1(x0 - 5)}" y="${f1(y0 - 5)}" width="${f1(W + 10)}" height="${f1(H + 10)}" rx="4" stroke="${C.bg}" stroke-width="6" stroke-opacity=".8"/><rect x="${f1(x0 - 5)}" y="${f1(y0 - 5)}" width="${f1(W + 10)}" height="${f1(H + 10)}" rx="4" stroke="${C.paper}" stroke-width="2"/>` : '';
+    g += `<g ${X.shd}><rect x="${f1(x0)}" y="${f1(y0)}" width="${f1(W)}" height="${f1(H)}" fill="${C.bg}" stroke="${C.bg}" stroke-width="5" stroke-opacity=".9"/>`;
+    for (let k = 0; k < shown; k++) {
+      const r = Math.floor(k / cols), c = k % cols, x = x0 + c * cs, y = y0 + r * cs;
+      g += ex && k < ch ? `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(cs)}" height="${f1(cs)}" fill="${X.fill(m.o)}" stroke="${C.bg}" stroke-width="1"/><path d="M${f1(x + 1.2)} ${f1(y + 1.4)}H${f1(x + cs - 1.4)}" stroke="#fff" stroke-opacity=".35" stroke-width="1"/>` : `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(cs)}" height="${f1(cs)}" fill="${C.plate}" stroke="${C.bg}" stroke-width="1"/><rect x="${f1(x + 1.6)}" y="${f1(y + 1.6)}" width="${f1(cs - 3.2)}" height="${f1(cs - 3.2)}" stroke="${C.empty}" stroke-width=".9"/>`;
+    }
+    g += `<rect x="${f1(x0)}" y="${f1(y0)}" width="${f1(W)}" height="${f1(H)}" stroke="${rimOf(m)}" stroke-width="2.1" ${dashOf(m)}/>`;
+    if (en && ex) g += `<rect x="${f1(x0 - 3)}" y="${f1(y0 - 3)}" width="${f1(W + 6)}" height="${f1(H + 6)}" rx="1.5" stroke="${C.paper}" stroke-width="1" stroke-opacity=".9"/>`;
+    // the number tab on the upper left corner of the block (a label, not a flag: a flag is the capture sign)
+    const lab = m.k === 'presence' ? '?' : m.k === 'range' ? '' : String(m.n), fw = 7 + lab.length * 5.8, fy = y0 - 10;
+    if (lab) g += `<path d="M${f1(x0)} ${f1(fy)}H${f1(x0 + fw)}V${f1(y0)}H${f1(x0)}Z" fill="${C.plate}" stroke="${rimOf(m)}" stroke-width="1.3" stroke-linejoin="round" ${dashOf(m)}/>${text(x0 + fw / 2, fy + 5.2, lab, 9, C.paper)}`;
+    g += '</g>';
+    return uFin(m, g, Math.max(W, 22), fy - 1, y0 + H);
+  } },
+  { name: 'UF Carved ▽', sub: 'the shipped ▽ cut as a faceted carved piece lit from the upper left; the charge still fills from the tip, the uncharged part reads as a recess', fn(m, X) {
+    const ex = m.k === 'exact', en = m.o === 'enemy', s = USIDE(unitN(m)), h = s * 0.866, T = tri(0, 0, s), cy = -h / 6, fc = col(m.o), k = ex && m.n ? Math.sqrt(m.c / m.n) : 0;
+    const [TL, TR, B] = T, Cn = [0, cy];
+    const facets = (cTop, cL, cR) => `<polygon points="${pts([TL, TR, Cn])}" fill="${cTop}"/><polygon points="${pts([TL, Cn, B])}" fill="${cL}"/><polygon points="${pts([TR, B, Cn])}" fill="${cR}"/>`;
+    const id = `${X.P}uf${CLIP++}`;
     let g = m.sel ? selTri(s) : '';
     g += `<g ${X.shd}><polygon points="${pts(T)}" fill="${C.plate}" stroke="${C.bg}" stroke-width="7" stroke-opacity=".9" stroke-linejoin="round"/>`;
-    g += `<polygon points="${pts(T)}" fill="${X.fill(m.o)}" fill-opacity=".22"/>`;
-    g += `<polygon points="${pts(T)}" stroke="${m.o === 'you' ? C.paper : fc}" stroke-width="2.4" stroke-linejoin="round"/>`;
-    if (en) g += `<polygon points="${pts(tri(0, 0, s * 0.86))}" stroke="${C.paper}" stroke-width="1.1" stroke-opacity=".85" stroke-linejoin="round"/>`;
-    let k = 0;
-    for (let i = 0; i < R; i++) {
-      const inRow = R - i, y = top + pad + i * p;
-      for (let j = 0; j < inRow && k < cnt; j++, k++) {
-        const x = -((inRow - 1) * p) / 2 + j * p - sq / 2;
-        g += k < ch ? `<rect x="${f1(x)}" y="${f1(y)}" width="${sq}" height="${sq}" fill="${X.fill(m.o)}" stroke="${C.paper}" stroke-opacity=".6" stroke-width=".7"/>` : `<rect x="${f1(x + 0.5)}" y="${f1(y + 0.5)}" width="${sq - 1}" height="${sq - 1}" fill="${C.bg}" stroke="${C.empty}" stroke-width="1"/>`;
-      }
-    }
+    g += facets('#2b323c', '#20262e', '#151a20');
+    if (ex && k > 0) g += `<clipPath id="${id}"><polygon points="${pts(tri(0, 0, s, k))}"/></clipPath><g clip-path="url(#${id})">${facets(lighten(fc, 0.3), fc, darken(fc, 0.28))}</g>`;
+    g += `<path d="M${f1(TL[0])} ${f1(TL[1])}L${f1(Cn[0])} ${f1(Cn[1])}L${f1(TR[0])} ${f1(TR[1])}M${f1(Cn[0])} ${f1(Cn[1])}L${f1(B[0])} ${f1(B[1])}" stroke="${C.bg}" stroke-opacity=".55" stroke-width=".9"/>`;
+    g += `<polygon points="${pts(tri(0, 0, s * 0.86))}" stroke="#fff" stroke-opacity=".2" stroke-width="1" stroke-linejoin="round"/>`;
+    g += `<polygon points="${pts(T)}" stroke="${rimOf(m)}" stroke-width="2.4" stroke-linejoin="round" ${dashOf(m)}/>`;
+    if (en && ex) g += `<polygon points="${pts(tri(0, 0, s * 0.6))}" stroke="${C.paper}" stroke-width="1.4" stroke-opacity=".9" stroke-linejoin="round"/>`;
+    if (m.k === 'presence') g += qMark(-h / 6);
+    else if (ex || m.k === 'ghost') g += numMark(-h * 0.2, m.n, s > 26 ? 12 : 11);
     g += '</g>';
-    const bx = s / 2 - 1, by = top + 1, br = m.n > 9 ? 7.5 : 6.5;
-    g += `<g ${X.shd}><circle cx="${f1(bx)}" cy="${f1(by)}" r="${br}" fill="${C.plate}" stroke="${m.o === 'you' ? C.paper : fc}" stroke-width="1.6"/>${en ? `<circle cx="${f1(bx)}" cy="${f1(by)}" r="${br - 2.4}" stroke="${C.paper}" stroke-width=".9" stroke-opacity=".8"/>` : ''}${text(bx, by + 0.3, m.n, m.n > 9 ? 8.5 : 9.5, C.paper)}</g>`;
-    return { svg: g, ref: s, bottom: h / 2 };
-  } },
-  { name: 'UD Side gauge', sub: 'U1 as now, the squares in a gauge on the right shoulder (bottom up, 2 columns above 4)', fn(m, X) {
-    const s = USIDE(m.k === 'exact' ? m.n : null), h = s * 0.866;
-    let g = triShell(m, X, s);
-    if (m.k === 'exact') {
-      const shown = Math.min(m.n, 8), cols = shown > 4 ? 2 : 1, rows = Math.ceil(shown / cols), p = 6.2, sq = 5, filled = Math.min(m.c, shown);
-      const gx = s / 2 - 3, gy = -h / 2 - 1, gw = cols * p + 3, gh = rows * p + 3;
-      let q = `<rect x="${f1(gx)}" y="${f1(gy)}" width="${f1(gw)}" height="${f1(gh)}" rx="2.5" fill="${C.plate}" fill-opacity=".94" stroke="${C.bg}" stroke-width="1.5"/>`;
-      for (let i = 0; i < shown; i++) {
-        const r = Math.floor(i / cols), cI = i % cols, x = gx + 2 + cI * p, y = gy + gh - 2 - (r + 1) * p + (p - sq);
-        q += i < filled ? `<rect x="${f1(x)}" y="${f1(y)}" width="${sq}" height="${sq}" fill="${X.fill(m.o)}" stroke="${C.paper}" stroke-opacity=".55" stroke-width=".7"/>` : `<rect x="${f1(x + 0.5)}" y="${f1(y + 0.5)}" width="${sq - 1}" height="${sq - 1}" fill="${C.bg}" stroke="${C.empty}" stroke-width="1"/>`;
-      }
-      if (m.n > 8) q += `<text x="${f1(gx + gw / 2)}" y="${f1(gy + gh + 5.5)}" font-size="8.5" font-weight="700" text-anchor="middle" fill="${C.paper}" dominant-baseline="central" font-family="${FONT}" ${halo(2.5)}>+${m.n - 8}${m.c > 8 ? ' ■' + (m.c - 8) : ''}</text>`;
-      g += `<g ${X.shd}>${q}</g>`;
-    }
-    return uWrap(m, s, g, h / 2);
+    return uFin(m, g, s, -h / 2, h / 2);
   } },
 ];
 // a token at (x, y) of the map: never smaller than 20 px on screen (UNIT_MIN_SIDE_PX)
@@ -491,7 +586,7 @@ const cityRadius = (cap) => (cap <= 2 ? 11 : cap <= 4 ? 14 : cap <= 6 ? 17 : 20)
 // Block 3: CITIES. A model n = { k, o, name, vp, units (own garrison), token (a group is drawn on it), wh, bar, build, q, def, sel, marks (own data or DEC-31) }
 // A drawer returns { svg, bottom (where the caption starts), unitAt: [dx, dy], ownCaption }.
 // ======================================================================================================
-const CITIES = [
+const CITIES_R1 = [
   { name: 'Now', sub: 'C1 as shipped: circle by capacity, ring, warehouse bar, the cells of #439 above the ring', fn(n, X) {
     const cap = capOf(n), r = cityRadius(cap), R = r + 7, you = n.o === 'you';
     let s = bodyDisc(n, r, X);
@@ -509,100 +604,7 @@ const CITIES = [
       }
     }
     if (n.vp) { const a = -Math.PI / 4, d = R + 9.5; s += vpBadge(d * Math.cos(a), d * Math.sin(a), n.vp, X); }
-    return { svg: s, bottom, unitAt: [0, 0] };
-  } },
-  { name: 'CA Tidy', sub: 'C1 cleaned up: size by kind, fixed slots for every mark, the capital star never hidden, enemy double outline', rec: true, fn(n, X) {
-    const cap = capOf(n), r = { S: 11, M: 13, L: 15, C: 16 }[n.k], R = r + 6, you = n.o === 'you';
-    let s = bodyDisc(n, r, X, { double: true, sw: 2.6 });
-    s += `<g ${X.shd}>${ringSegs(R, cap, you ? n.units : 0, 3.6, 6.4)}</g>`;
-    if (n.k === 'C') { const a = -Math.PI * 0.75, d = R + 8.5; s += G(d * Math.cos(a), d * Math.sin(a), `<g ${X.shd}><circle r="8" fill="${C.bg}" stroke="${n.o === 'none' ? C.nStroke : C.paper}" stroke-width="1.6"/>${n.o === 'enemy' ? `<circle r="5.6" stroke="${C.paper}" stroke-width=".9" stroke-opacity=".8"/>` : ''}<polygon points="${pts(star(0, 0.3, 5.4))}" fill="${C.paper}"/></g>`); }
-    if (n.vp) { const a = -Math.PI / 4, d = R + 8.5; s += vpBadge(d * Math.cos(a), d * Math.sin(a), n.vp, X, { r: 8 }); }
-    let bottom = R + 3;
-    if (n.marks) {
-      if (n.wh) { const row = whRow(R + 4, n, X, { pitch: 6.5, sw: 5, sh: 4.5 }); s += row.svg; bottom = R + 4 + row.h; }
-      s += cellsAbove(n, X, -R - 11);
-      s += statusColumn(-(R + 12), n, X, { r: 8.5 });
-    }
-    return { svg: s, bottom, unitAt: [0, 0] };
-  } },
-  { name: 'CB Banner', sub: 'a small disc with the ring; the name plate under it carries the name, VP, barracks and the warehouse', ownCaption: true, fn(n, X) {
-    const cap = capOf(n), r = { S: 7.5, M: 8.5, L: 10, C: 11 }[n.k], R = r + 5.5, you = n.o === 'you', en = n.o === 'enemy', none = n.o === 'none';
-    let s = `<g ${X.shd}><circle r="${f1(r + 2.5)}" stroke="${C.bg}" stroke-opacity=".85" stroke-width="3"/><circle r="${f1(r)}" fill="${none ? C.nFill : X.fill(n.o)}" stroke="${none ? C.nStroke : C.paper}" stroke-width="${none ? 1.8 : 2.2}"/></g>`;
-    s += `<g ${X.shd}>${ringSegs(R, cap, you ? n.units : 0, 3.2, 5.6)}</g>`;
-    if (n.marks) { s += cellsAbove(n, X, -R - 4); s += statusColumn(-(R + 11), n.bar === 'built' ? { ...n, bar: null } : n, X, { r: 8.5 }); }
-    // the plate: screen pixels (it is the caption), so its size does not change with the zoom
-    const px = X.px, fs = 12.5, showName = X.z >= 0.45, name = n.name;
-    const hasBar = n.marks && n.bar === 'built', icon = hasBar || n.k === 'C';
-    const tw = showName ? name.length * fs * 0.62 : 0, pad = 6, ic = icon ? 15 : 0, vpW = n.vp ? 17 : 0;
-    const W = pad + ic + tw + (showName ? 4 : 0) + vpW + pad - (showName ? 0 : 2), H = 19;
-    const y0 = R + px(4);
-    let p = `<rect x="${f1(-W / 2)}" y="0" width="${f1(W)}" height="${H}" rx="4" fill="${C.plate}" fill-opacity=".95" stroke="${none ? C.nStroke : C.paper}" stroke-width="${none ? 1 : 1.3}"/>`;
-    if (!none) p += `<rect x="${f1(-W / 2 + 3)}" y="0.6" width="${f1(W - 6)}" height="3" rx="1.5" fill="${col(n.o)}"/>`;
-    if (en) p += `<rect x="${f1(-W / 2 + 2.6)}" y="2.6" width="${f1(W - 5.2)}" height="${H - 5.2}" rx="2.6" stroke="${C.paper}" stroke-width=".9" stroke-opacity=".75"/>`;
-    let x = -W / 2 + pad;
-    if (n.k === 'C') { p += `<polygon points="${pts(star(x + 6, H / 2 + 1, 6))}" fill="${C.paper}"/>`; x += 15; }
-    else if (hasBar) { p += G(x + 6, H / 2 + 1, houseGlyph(1.05)); x += 15; }
-    if (showName) { p += `<text x="${f1(x)}" y="${f1(H / 2 + 1)}" font-size="${fs}" font-weight="700" fill="${C.text || C.paper}" dominant-baseline="central" font-family="${FONT}">${name}</text>`; x += tw + 4; }
-    if (n.vp) p += `<circle cx="${f1(x + 7.5)}" cy="${f1(H / 2 + 1)}" r="7" fill="${C.bg}" stroke="${C.vp}" stroke-width="1.8"/>` + text(x + 7.5, H / 2 + 1.2, n.vp, 9.5, C.paper);
-    let tabH = 0;
-    if (n.marks && n.wh) {
-      const cp = WH0[n.k] + n.wh.lvl, total = cp + (WH_MAX - n.wh.lvl), tw2 = total * 6 + 6;
-      p += `<rect x="${f1(-tw2 / 2)}" y="${H - 1}" width="${tw2}" height="9" rx="2" fill="${C.plate}" stroke="${C.paper}" stroke-opacity=".5" stroke-width="1"/>`;
-      for (let k = 0; k < total; k++) {
-        const xx = -tw2 / 2 + 3 + k * 6;
-        p += k < n.wh.st ? `<rect x="${f1(xx)}" y="${H + 1}" width="5" height="4" fill="url(#${X.P}gyou)"/>` : k < cp ? `<rect x="${f1(xx + 0.5)}" y="${H + 1.5}" width="4" height="3" stroke="${C.empty}"/>` : `<rect x="${f1(xx + 0.5)}" y="${H + 1.5}" width="4" height="3" stroke="${C.paper}" stroke-opacity=".55" stroke-dasharray="1.4 1.4" stroke-width=".9"/>`;
-      }
-      tabH = 8;
-    }
-    s += G(0, y0, `<g transform="scale(${f1(1000 / X.z) / 1000})" ${X.shd}>${p}</g>`);
-    return { svg: s, bottom: y0 + px(H + tabH + 2), unitAt: [0, 0], ownCaption: true };
-  } },
-  { name: 'CC Citadel', sub: 'the capacity ring is the city wall (a block per place), towers by kind, a flag on the capital', fn(n, X) {
-    const cap = capOf(n), r = { S: 9, M: 10.5, L: 12, C: 13 }[n.k], Rw = r + 6.5, you = n.o === 'you', en = n.o === 'enemy', none = n.o === 'none';
-    let s = `<g ${X.shd}><circle r="${f1(Rw + 5)}" stroke="${C.bg}" stroke-opacity=".7" stroke-width="3"/>`;
-    s += `<circle r="${f1(Rw)}" stroke="${C.bg}" stroke-width="9.5"/>`;
-    const seg = TAU / cap, gap = 0.2 * seg;
-    for (let k = 0; k < cap; k++) {
-      const a0 = -Math.PI / 2 + k * seg + gap / 2, a1 = a0 + seg - gap, on = you && k < n.units;
-      s += `<path d="${arcPath(0, 0, Rw, a0, a1)}" stroke="${on ? C.paper : '#4b5563'}" stroke-width="6.4"/>`;
-    }
-    s += `<circle r="${f1(r)}" fill="${none ? C.nFill : X.fill(n.o)}" stroke="${none ? C.nStroke : C.paper}" stroke-width="${none ? 1.6 : 2}"/>`;
-    if (en) s += `<circle r="${f1(r - 3.2)}" stroke="${C.paper}" stroke-width="1.1" stroke-opacity=".9"/>`;
-    const towers = { S: [], M: [0, Math.PI], L: [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4], C: [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4] }[n.k];
-    for (const a of towers) s += G(Rw * Math.cos(a), Rw * Math.sin(a), `<circle r="4.6" fill="${none ? C.nFill : X.fill(n.o)}" stroke="${none ? C.nStroke : C.paper}" stroke-width="1.4"/>${en ? `<circle r="2" fill="${C.paper}"/>` : ''}`);
-    s += '</g>';
-    if (n.k === 'C') s += `<g ${X.shd}><path d="M0 ${f1(-Rw - 3)}V${f1(-Rw - 17)}" stroke="${C.paper}" stroke-width="1.8" stroke-linecap="round"/><polygon points="0,${f1(-Rw - 17)} ${f1(none ? 9 : 11)},${f1(-Rw - 13.5)} 0,${f1(-Rw - 10)}" fill="${none ? C.nFill : X.fill(n.o)}" stroke="${C.paper}" stroke-width="1.2" stroke-linejoin="round"/></g>`;
-    if (n.vp) { const a = -Math.PI / 4, d = Rw + 10; s += vpBadge(d * Math.cos(a), d * Math.sin(a), n.vp, X, { r: 8 }); }
-    let bottom = Rw + 5;
-    if (n.marks) {
-      if (n.wh) { const row = whRow(Rw + 6.5, n, X); s += row.svg; bottom = Rw + 6.5 + row.h; }
-      s += cellsAbove(n, X, -Rw - (n.k === 'C' ? 20 : 12));
-      // the barracks as a gatehouse on the wall at 9 o'clock (B1 disc, restyled with a square-cornered plate)
-      if (n.bar === 'built') s += G(-Rw - 1, 0, `<g transform="scale(${f1(K16(X, 18) * 100) / 100})"><g ${X.shd}><rect x="-8.5" y="-8.5" width="17" height="17" rx="4" fill="${C.bg}" stroke="${n.o === 'you' ? C.paper : col(n.o)}" stroke-width="2"/>${houseGlyph(1.15)}</g></g>`);
-      if (n.def) s += statusColumn(-(Rw + 12), { ...n, bar: null }, X, { r: 8.5, dy: n.bar === 'built' ? -22 : 0 });
-    }
-    return { svg: s, bottom, unitAt: [0, 0] };
-  } },
-  { name: 'CD Skyline', sub: 'a plinth with a skyline of 1-3 towers by kind (the capital a keep with a flag); the token stands beside', fn(n, X) {
-    const cap = capOf(n), r = { S: 11, M: 13, L: 15, C: 16 }[n.k], R = r + 6, you = n.o === 'you', en = n.o === 'enemy', none = n.o === 'none';
-    let s = bodyDisc(n, r, X, { double: true, sw: 2.4 });
-    const tw = r * 0.34, base = r * 0.5, ink = none ? '#c9d1d9' : C.paper;
-    const tower = (x, w, h) => { const t = base - h, m = w / 3; return `<path d="M${f1(x - w / 2)} ${f1(base)}V${f1(t)}h${f1(m)}v2h${f1(m)}v-2h${f1(m)}V${f1(base)}Z" fill="${ink}" stroke="${C.bg}" stroke-width="1" stroke-linejoin="round"/>`; };
-    let sk = '';
-    if (n.k === 'S') sk = tower(0, tw * 1.2, r * 1.05);
-    if (n.k === 'M') sk = tower(-tw * 0.62, tw, r * 0.95) + tower(tw * 0.62, tw, r * 1.2);
-    if (n.k === 'L') sk = tower(-tw * 1.15, tw, r * 0.85) + tower(tw * 1.15, tw, r * 0.95) + tower(0, tw * 1.1, r * 1.3);
-    if (n.k === 'C') sk = tower(-tw * 1.2, tw * 0.9, r * 0.8) + tower(tw * 1.2, tw * 0.9, r * 0.8) + `<path d="M${f1(-tw * 0.85)} ${f1(base)}V${f1(base - r * 1.05)}h${f1(tw * 1.7)}V${f1(base)}Z" fill="${ink}" stroke="${C.bg}" stroke-width="1"/><path d="M0 ${f1(base - r * 1.05)}V${f1(base - r * 1.5)}" stroke="${ink}" stroke-width="1.3"/><polygon points="0,${f1(base - r * 1.5)} ${f1(r * 0.42)},${f1(base - r * 1.38)} 0,${f1(base - r * 1.26)}" fill="${ink}"/>`;
-    s += `<g>${sk}</g>`;
-    s += `<g ${X.shd}>${ringSegs(R, cap, you ? n.units : 0, 3.6, 6.4)}</g>`;
-    if (n.vp) { const a = -Math.PI / 4, d = R + 8.5; s += vpBadge(d * Math.cos(a), d * Math.sin(a), n.vp, X, { r: 8 }); }
-    let bottom = R + 3;
-    if (n.marks) {
-      if (n.wh) { const row = whRow(R + 4, n, X, { pitch: 6.5, sw: 5, sh: 4.5 }); s += row.svg; bottom = R + 4 + row.h; }
-      s += cellsAbove(n, X, -R - 11);
-      s += statusColumn(-(R + 12), n, X, { r: 8.5 });
-    }
-    return { svg: s, bottom, unitAt: [R * 0.95, R * 0.55] };
+    return { svg: s, bottom, unitAt: [0, 0], r: R + 2 };
   } },
 ];
 
@@ -614,7 +616,7 @@ function pips3(R, units, o = {}) {
   const half = ((o.len || 50) * Math.PI) / 360;
   return [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6].map((a, k) => { const d = arcPath(0, 0, R, a - half, a + half); return `<path d="${d}" stroke="${C.bg}" stroke-opacity=".8" stroke-width="${o.base || 6}" stroke-linecap="round"/><path d="${d}" stroke="${k < units ? C.paper : C.empty}" stroke-width="${o.w || 3.2}" stroke-linecap="round"/>`; }).join('');
 }
-const PROVS = [
+const PROVS_R1 = [
   { name: 'Now', sub: 'a ring on a dark plate (C1, shipped): reads as a target', fn(n, X) {
     const c = col(n.o), r = 9;
     let s = `<g ${X.shd}><circle r="${r + 3}" stroke="${C.bg}" stroke-opacity=".85" stroke-width="3"/><circle r="${r}" fill="${C.plate}" fill-opacity=".9"/>`;
@@ -623,55 +625,183 @@ const PROVS = [
     if (n.o === 'enemy') s += `<circle r="${r - 3.4}" stroke="${C.paper}" stroke-width="1.3" stroke-opacity=".9"/><circle r="${r + 2.6}" stroke="${C.paper}" stroke-width="1.6"/>`;
     s += '</g>' + `<g ${X.shd}>${ringSegs(16, 3, n.o === 'you' ? n.units : 0)}</g>`;
     if (n.marks && n.def) s += statusColumn(-27, { ...n, bar: null }, X, { r: 8 });
-    return { svg: s, bottom: 19, unitAt: [0, 0] };
+    return { svg: s, bottom: 19, unitAt: [0, 0], r: 18 };
   } },
-  { name: 'P1 Pip', sub: 'a solid disc in the owner colour; the capacity as three separate ticks, no closed ring (no target)', fn(n, X) {
-    const none = n.o === 'none', r = 8;
-    let s = `<g ${X.shd}>${pips3(r + 6, n.o === 'you' ? n.units : 0)}</g>`;
-    s += `<g ${X.shd}><circle r="${r + 2.2}" fill="${C.bg}" fill-opacity=".55"/><circle r="${r}" fill="${none ? '#6e7681' : X.fill(n.o)}" stroke="${none ? C.bg : C.paper}" stroke-width="${none ? 1.4 : 2}"/>`;
-    if (!none) s += `<path d="${arcPath(0, 0, r - 2.4, Math.PI * 1.1, Math.PI * 1.7)}" stroke="#fff" stroke-opacity=".35" stroke-width="1.3" stroke-linecap="round"/>`;
-    if (n.o === 'enemy') s += `<circle r="${r + 3}" stroke="${C.paper}" stroke-width="1.1"/>`;
+];
+// Round 2 (owner, 2026-10-29): leave the plain circle; richer structure and textures. Every variant keeps the same slots for the
+// chosen marks so nothing overlaps: the #439 cells above the sign, the B1 column (barracks over Defense) on the left, VP at the upper
+// right, the capital badge (where the shape alone is not enough) at the upper left, the C1 warehouse places under the sign, the
+// caption under them. Textures are SVG patterns here; in the client they are baked into the body sprite (one texture per look).
+// o = { R: radius the badges sit around, top: y of the top of the sign, left: x of its left edge, bottom: y of its lowest part }
+function cityMarks(n, X, s, o) {
+  if (n.k === 'C' && o.capBadge) { const a = -Math.PI * 0.75, d = o.R + 8.5; s += G(d * Math.cos(a), d * Math.sin(a), `<g ${X.shd}><circle r="8" fill="${C.bg}" stroke="${n.o === 'none' ? C.nStroke : C.paper}" stroke-width="1.6"/>${n.o === 'enemy' ? `<circle r="5.6" stroke="${C.paper}" stroke-width=".9" stroke-opacity=".8"/>` : ''}<polygon points="${pts(star(0, 0.3, 5.4))}" fill="${C.paper}"/></g>`); }
+  if (n.vp) { const a = -Math.PI / 4, d = o.R + 8.5; s += vpBadge(d * Math.cos(a), d * Math.sin(a), n.vp, X, { r: 8 }); }
+  let bottom = o.bottom;
+  if (n.marks) {
+    if (n.wh) { const row = whRow(o.bottom + 2, n, X, { pitch: 6.5, sw: 5, sh: 4.5 }); s += row.svg; bottom = o.bottom + 2 + row.h; }
+    s += cellsAbove(n, X, Math.min(o.top, -o.R - 3) - 5);
+    s += statusColumn(o.left - 12, n, X, { r: 8.5 });
+  }
+  return { svg: s, bottom, unitAt: [0, 0], r: o.R };
+}
+const ringPts = (N, r, a0 = -Math.PI / 2) => Array.from({ length: N }, (_, i) => { const a = a0 + (i * TAU) / N; return [r * Math.cos(a), r * Math.sin(a)]; });
+const sideRim = (n) => (n.o === 'none' ? C.nStroke : C.paper);
+const ownFill = (n, X) => (n.o === 'none' ? C.nFill : X.fill(n.o));
+const TERR = { p: { base: '#5d6b44', side: '#3f4a2e', mark: '#b9c77e' }, f: { base: '#2c4a32', side: '#1d3222', mark: '#4f8a5b' }, m: { base: '#6a645a', side: '#47423b', mark: '#a59d90' } };
+
+const CITIES = [
+  CITIES_R1[0],
+  { name: 'CA Bastion', sub: 'a star-fort trace: 4, 6, 7 bastions by kind and 8 for the capital (with the star badge); a cobbled yard; the capacity ring outside', fn(n, X) {
+    const cap = capOf(n), N = { S: 4, M: 6, L: 7, C: 8 }[n.k], Ro = { S: 17.5, M: 19, L: 20.5, C: 22 }[n.k], R = Ro + 5.5, en = n.o === 'enemy', rot = N === 4 ? Math.PI / 4 : 0;
+    const trace = (k) => { const P = []; for (let i = 0; i < N; i++) { const a = -Math.PI / 2 + rot + (i * TAU) / N, w = (Math.PI / N) * 0.4, ri = Ro * (N >= 8 ? 0.74 : 0.8); for (const [aa, rr] of [[a - Math.PI / N, ri], [a - w, Ro * 0.8], [a, Ro], [a + w, Ro * 0.8]]) P.push([rr * k * Math.cos(aa), rr * k * Math.sin(aa)]); } return polyPath(P); };
+    let s = `<g ${X.shd}><path d="${trace(1)}" stroke="${C.bg}" stroke-width="5" stroke-opacity=".85" stroke-linejoin="round"/><path d="${trace(1)}" fill="${ownFill(n, X)}"/><path d="${trace(1)}" fill="url(#${X.P}cob)"/>`;
+    s += `<path d="${trace(0.8)}" stroke="#000" stroke-opacity=".25" stroke-width="1.2" stroke-linejoin="round"/>`;
+    s += `<path d="${trace(1)}" stroke="${sideRim(n)}" stroke-width="${n.o === 'none' ? 1.8 : 2.2}" stroke-linejoin="round"/>`;
+    if (en) s += `<path d="${trace(1.14)}" stroke="${C.paper}" stroke-width="1.1" stroke-linejoin="round"/>`;
+    s += '</g>' + `<g ${X.shd}>${ringSegs(R, cap, n.o === 'you' ? n.units : 0, 3.4, 6)}</g>`;
+    return cityMarks(n, X, s, { R, top: -R - 3.5, left: -R - 2, bottom: R + 3.5, capBadge: true });
+  } },
+  { name: 'CB Districts', sub: 'a ring of roofed blocks round a paved square: one block per capacity place (lit = your unit stands); kind by the count; capital with a crenellated square', fn(n, X) {
+    const cap = capOf(n), rp = { S: 11.5, M: 12.5, L: 13.5, C: 14.5 }[n.k], bw = cap >= 10 ? 6.2 : 7, bl = 7.6, rc = rp + 1.8 + bl / 2, R = rc + bl / 2 + 1, en = n.o === 'enemy', none = n.o === 'none';
+    let s = `<g ${X.shd}><circle r="${f1(R + 1.5)}" fill="${C.bg}" fill-opacity=".45"/>`;
+    s += `<circle r="${f1(rp)}" fill="${none ? '#3b4148' : mix(col(n.o), '#c9c1ad', 0.55)}"/><circle r="${f1(rp)}" fill="url(#${X.P}cob)"/>`;
+    s += n.k === 'C' ? `<circle r="${f1(rp)}" stroke="${C.paper}" stroke-width="2.6" stroke-dasharray="2.2 1.8"/>` : `<circle r="${f1(rp)}" stroke="${none ? C.nStroke : col(n.o)}" stroke-width="1.4"/>`;
+    for (let i = 0; i < cap; i++) {
+      const a = -Math.PI / 2 + (i * TAU) / cap, deg = (a * 180) / Math.PI + 90, lit = n.o === 'you' && i < n.units;
+      const roof = lit ? C.paper : none ? '#4b525b' : X.fill(n.o), rim = lit ? C.bg : sideRim(n);
+      let b = `<rect x="${f1(-bw / 2)}" y="${f1(-bl / 2)}" width="${f1(bw)}" height="${f1(bl)}" rx=".8" fill="${roof}" stroke="${C.bg}" stroke-width="2.4"/>`;
+      b += `<rect x="0" y="${f1(-bl / 2)}" width="${f1(bw / 2)}" height="${f1(bl)}" fill="#000" fill-opacity="${lit ? 0.12 : 0.22}"/>`;
+      b += `<path d="M0 ${f1(-bl / 2 + 0.8)}V${f1(bl / 2 - 0.8)}" stroke="${lit ? C.bg : '#fff'}" stroke-opacity=".45" stroke-width=".8"/>`;
+      b += `<rect x="${f1(-bw / 2)}" y="${f1(-bl / 2)}" width="${f1(bw)}" height="${f1(bl)}" rx=".8" stroke="${rim}" stroke-width="${none ? 0.9 : 1.2}"/>`;
+      if (en) b += `<rect x="${f1(-bw / 2 + 1.5)}" y="${f1(-bl / 2 + 1.5)}" width="${f1(bw - 3)}" height="${f1(bl - 3)}" stroke="${C.paper}" stroke-width=".7" stroke-opacity=".85"/>`;
+      s += `<g transform="translate(${f1(rc * Math.cos(a))} ${f1(rc * Math.sin(a))}) rotate(${f1(deg)})">${b}</g>`;
+    }
     s += '</g>';
-    if (n.marks && n.def) s += statusColumn(-26, { ...n, bar: null }, X, { r: 8 });
-    return { svg: s, bottom: 17, unitAt: [0, 0] };
+    return cityMarks(n, X, s, { R, top: -R - 1, left: -R - 1, bottom: R + 1.5, capBadge: true });
   } },
-  { name: 'P2 Plot', sub: 'a flat hexagon tile (land, not a building); the capacity as three bars on alternate sides; neutral a dashed empty tile', rec: true, fn(n, X) {
-    const none = n.o === 'none', en = n.o === 'enemy', r = 10.5;
-    const hex = (rr) => pts(Array.from({ length: 6 }, (_, i) => { const a = (i * Math.PI) / 3; return [rr * Math.cos(a), rr * Math.sin(a)]; }));
-    let s = `<g ${X.shd}><polygon points="${hex(r + 2.4)}" fill="${C.bg}" fill-opacity=".5" stroke-linejoin="round"/>`;
-    s += `<polygon points="${hex(r)}" fill="${none ? C.plate : X.fill(n.o)}" fill-opacity="${none ? 0.55 : 0.92}" stroke="${none ? C.nStroke : C.paper}" stroke-width="${none ? 1.6 : 2}" stroke-linejoin="round" ${none ? 'stroke-dasharray="3 2.2"' : ''}/>`;
-    if (en) s += `<polygon points="${hex(r + 3.4)}" stroke="${C.paper}" stroke-width="1.1" stroke-linejoin="round"/>`;
-    if (!none) s += `<path d="M${f1(-r * 0.42)} ${f1(-r * 0.62)}H${f1(r * 0.42)}" stroke="#fff" stroke-opacity=".32" stroke-width="1.3" stroke-linecap="round"/>`;
+  { name: 'CC Emblem plate', sub: 'a heraldic plate: square, hexagon or octagon by kind, a stone band with a stud per capacity place, a latticed field, a crown on the capital', fn(n, X) {
+    const sides = { S: 4, M: 6, L: 8, C: 8 }[n.k], Ro = { S: 19, M: 20, L: 21.5, C: 22 }[n.k], a0 = -Math.PI / 2 + Math.PI / sides, en = n.o === 'enemy', none = n.o === 'none', cap = capOf(n);
+    const plate = (r) => polyPath(ringPts(sides, r, a0)), ap = Ro * Math.cos(Math.PI / sides);
+    let s = `<g ${X.shd}><path d="${plate(Ro + 1.5)}" fill="${C.bg}" fill-opacity=".8"/><path d="${plate(Ro)}" fill="#59616b"/><path d="${plate(Ro)}" fill="url(#${X.P}stn)"/>`;
+    s += `<path d="M${f1(-ap * Math.tan(Math.PI / sides) + 2)} ${f1(-ap + 1.2)}H${f1(ap * Math.tan(Math.PI / sides) - 2)}" stroke="#fff" stroke-opacity=".35" stroke-width="1.2" stroke-linecap="round"/>`;
+    s += `<path d="${plate(Ro - 5.5)}" fill="${ownFill(n, X)}" stroke="${C.bg}" stroke-width="1.2"/><path d="${plate(Ro - 5.5)}" fill="url(#${X.P}dia)"/>`;
+    s += `<path d="${plate(Ro)}" stroke="${sideRim(n)}" stroke-width="${none ? 1.6 : 2}" stroke-linejoin="round"/>`;
+    if (en) s += `<path d="${plate(Ro + 3.4)}" stroke="${C.paper}" stroke-width="1.1" stroke-linejoin="round"/>`;
+    for (let i = 0; i < cap; i++) { const a = -Math.PI / 2 + (i * TAU) / cap, rr = Ro - 2.8, lit = n.o === 'you' && i < n.units; s += `<circle cx="${f1(rr * Math.cos(a))}" cy="${f1(rr * Math.sin(a))}" r="2.2" fill="${lit ? C.paper : '#262c34'}" stroke="${lit ? C.bg : '#8b949e'}" stroke-width=".8"/>`; }
+    let top = -Ro - 1.5;
+    if (n.k === 'C') { const y = -ap - 1; s += `<path d="M-7 ${f1(y)}L-7.5 ${f1(y - 7)}L-3.5 ${f1(y - 3.5)}L0 ${f1(y - 9)}L3.5 ${f1(y - 3.5)}L7.5 ${f1(y - 7)}L7 ${f1(y)}Z" fill="${C.paper}" stroke="${C.bg}" stroke-width="1.4" stroke-linejoin="round"/>`; top = y - 10; }
     s += '</g>';
-    // three bars outside the sides at 270°, 30°, 150° (the capacity ring of a province: 3 places)
-    const ap = r * 0.866 + (en ? 7.4 : 5.2), half = r * 0.42;
-    s += `<g ${X.shd}>` + [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6].map((a, k) => {
-      const cx = ap * Math.cos(a), cy = ap * Math.sin(a), tx = -Math.sin(a) * half, ty = Math.cos(a) * half, d = `M${f1(cx - tx)} ${f1(cy - ty)}L${f1(cx + tx)} ${f1(cy + ty)}`;
-      return `<path d="${d}" stroke="${C.bg}" stroke-opacity=".8" stroke-width="6" stroke-linecap="round"/><path d="${d}" stroke="${n.o === 'you' && k < n.units ? C.paper : C.empty}" stroke-width="3.2" stroke-linecap="round"/>`;
-    }).join('') + '</g>';
-    if (n.marks && n.def) s += statusColumn(-28, { ...n, bar: null }, X, { r: 8 });
-    return { svg: s, bottom: 19, unitAt: [0, 0] };
+    return cityMarks(n, X, s, { R: Ro + 2, top, left: -Ro - 2, bottom: Ro + (en ? 3.5 : 1.5) });
   } },
-  { name: 'P3 Pennant', sub: 'a flag planted at the node: own flies right, the enemy left with a double edge, neutral an empty frame', fn(n, X) {
-    const none = n.o === 'none', en = n.o === 'enemy', d = en ? -1 : 1, top = -24, k = K16(X, 20);
-    let f = `<circle r="3.6" fill="${none ? '#6e7681' : X.fill(n.o)}" stroke="${C.bg}" stroke-width="1.4"/>`;
-    f += `<path d="M0 0V${top}" stroke="${C.bg}" stroke-width="4" stroke-linecap="round"/><path d="M0 0V${top}" stroke="${C.paper}" stroke-width="1.8" stroke-linecap="round"/>`;
-    const cloth = `M0 ${top}L${13 * d} ${top + 3.5}L0 ${top + 8}Z`;
-    f += `<path d="${cloth}" fill="${none ? C.plate : X.fill(n.o)}" fill-opacity="${none ? 0.6 : 1}" stroke="${none ? C.nStroke : C.paper}" stroke-width="1.4" stroke-linejoin="round" ${none ? 'stroke-dasharray="2.6 1.8"' : ''}/>`;
-    if (en) f += `<path d="M${1.6 * d} ${top + 2}L${8.5 * d} ${top + 3.9}L${1.6 * d} ${top + 5.9}" stroke="${C.paper}" stroke-width=".9" stroke-linejoin="round"/>`;
-    let s = `<g ${X.shd}>${pips3(11, n.o === 'you' ? n.units : 0, { len: 46 })}</g>`;
-    s += `<g transform="scale(${f1(k * 100) / 100})" ${X.shd}>${f}</g>`;
-    if (n.marks && n.def) s += statusColumn(-24, { ...n, bar: null }, X, { r: 8 });
-    return { svg: s, bottom: 15, unitAt: [0, 0], top: top * k };
+  { name: 'CD Terrain base', sub: 'the city stands on a plinth whose rim shows the terrain (grass, tree crowns, rocks); a walled disc on top, crenellated for the capital; the capacity ring outside', fn(n, X) {
+    const cap = capOf(n), Ro = { S: 17.5, M: 19, L: 20.5, C: 21.5 }[n.k], r = Ro - 6.5, R = Ro + 5, en = n.o === 'enemy', none = n.o === 'none', T = TERR[n.t || 'p'];
+    let s = `<g ${X.shd}><circle cy="2.6" r="${f1(Ro)}" fill="${T.side}" stroke="${C.bg}" stroke-width="1.5"/><circle r="${f1(Ro)}" fill="${T.base}" stroke="${C.bg}" stroke-width="1.2"/>`;
+    const K = 14;
+    for (let i = 0; i < K; i++) {
+      const a = -Math.PI / 2 + ((i + 0.5) * TAU) / K, x = (Ro - 2.6) * Math.cos(a), y = (Ro - 2.6) * Math.sin(a);
+      if (n.t === 'f') s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="2.5" fill="${T.mark}" stroke="${T.side}" stroke-width=".8"/>`;
+      else if (n.t === 'm') s += `<path d="M${f1(x - 2.4)} ${f1(y + 1.6)}L${f1(x)} ${f1(y - 2.4)}L${f1(x + 2.4)} ${f1(y + 1.6)}Z" fill="${T.mark}" stroke="${T.side}" stroke-width=".7" stroke-linejoin="round"/><path d="M${f1(x - 0.8)} ${f1(y - 1.1)}L${f1(x)} ${f1(y - 2.4)}L${f1(x + 0.8)} ${f1(y - 1.1)}Z" fill="#fff" fill-opacity=".8"/>`;
+      else s += `<path d="M${f1(x - 1.6)} ${f1(y - 1.2)}L${f1(x)} ${f1(y + 1.2)}L${f1(x + 1.6)} ${f1(y - 1.2)}" stroke="${T.mark}" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+    const body = n.k === 'C' ? polyPath(Array.from({ length: 32 }, (_, i) => { const a = -Math.PI / 2 + (i * TAU) / 32, rr = Math.floor(i / 2) % 2 ? r - 1.6 : r; return [rr * Math.cos(a), rr * Math.sin(a)]; })) : `M${f1(-r)} 0A${f1(r)} ${f1(r)} 0 1 0 ${f1(r)} 0A${f1(r)} ${f1(r)} 0 1 0 ${f1(-r)} 0Z`;
+    s += `<path d="${body}" fill="${ownFill(n, X)}" stroke="${C.bg}" stroke-width="3.5" stroke-linejoin="round"/><path d="${body}" fill="${ownFill(n, X)}" stroke="${sideRim(n)}" stroke-width="${none ? 1.6 : 2}" stroke-linejoin="round"/>`;
+    if (!none) s += `<path d="${arcPath(0, 0, r - 2.4, Math.PI * 1.1, Math.PI * 1.7)}" stroke="#fff" stroke-opacity=".32" stroke-width="1.3" stroke-linecap="round"/>`;
+    if (en) s += `<circle r="${f1(r + 2.6)}" stroke="${C.paper}" stroke-width="1.1"/>`;
+    s += '</g>' + `<g ${X.shd}>${ringSegs(R, cap, n.o === 'you' ? n.units : 0, 3, 5.5)}</g>`;
+    return cityMarks(n, X, s, { R, top: -R - 3, left: -R - 2, bottom: R + 3, capBadge: true });
   } },
-  { name: 'P4 Field', sub: 'a soft disc of the owner colour (a piece of land), the capacity as three thick arcs on its edge, a light pin', fn(n, X) {
-    const none = n.o === 'none', en = n.o === 'enemy', r = 13;
-    let s = `<circle r="${r}" fill="${none ? '#8b949e' : col(n.o)}" fill-opacity="${none ? 0.16 : 0.36}" stroke="${none ? C.nStroke : col(n.o)}" stroke-width="1.4" ${none ? 'stroke-dasharray="3 3"' : ''}/>`;
-    if (en) s += `<circle r="${r + 3.2}" stroke="${C.paper}" stroke-width="1.1" stroke-opacity=".9"/>`;
-    s += `<g ${X.shd}>${pips3(r, n.o === 'you' ? n.units : 0, { len: 52, base: 6.4, w: 3.6 })}</g>`;
-    s += `<g ${X.shd}><circle r="3.4" fill="${C.paper}" stroke="${C.bg}" stroke-width="1.4"/></g>`;
-    if (n.marks && n.def) s += statusColumn(-(r + 13), { ...n, bar: null }, X, { r: 8 });
-    return { svg: s, bottom: r + 5, unitAt: [0, 0] };
+  { name: 'CE Curtain wall', sub: 'a walled polygon with a tower per capacity place (square, hexagon, octagon, decagon by kind; lit tower = your unit stands); the capital a decagon with the star badge', fn(n, X) {
+    const N = capOf(n), Ro = { S: 17, M: 18.5, L: 20, C: 22 }[n.k], a0 = -Math.PI / 2 + Math.PI / N, en = n.o === 'enemy', none = n.o === 'none', ap = Ro * Math.cos(Math.PI / N);
+    const wall = (r) => polyPath(ringPts(N, r, a0));
+    let s = `<g ${X.shd}><path d="${wall(Ro - 1.5)}" fill="${ownFill(n, X)}"/><path d="${wall(Ro - 1.5)}" fill="url(#${X.P}cob)"/>`;
+    s += `<path d="${wall(Ro)}" stroke="${C.bg}" stroke-width="7.4" stroke-linejoin="round"/><path d="${wall(Ro)}" stroke="#9aa3ad" stroke-width="4.4" stroke-linejoin="round"/><path d="${wall(Ro)}" stroke="${C.bg}" stroke-opacity=".55" stroke-width="4.4" stroke-dasharray=".8 3.2"/>`;
+    s += `<path d="${wall(Ro + 2.2)}" stroke="${sideRim(n)}" stroke-opacity="${none ? 1 : 0.9}" stroke-width="${none ? 1 : 1.2}" stroke-linejoin="round"/>`;
+    if (en) s += `<path d="${wall(Ro + 5)}" stroke="${C.paper}" stroke-width="1.1" stroke-linejoin="round"/>`;
+    ringPts(N, Ro, a0).forEach(([x, y], i) => { const lit = n.o === 'you' && i < n.units; s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="3.9" fill="${lit ? C.paper : none ? '#6e7681' : n.o === 'you' ? '#2b323b' : darken(col(n.o), 0.25)}" stroke="${C.bg}" stroke-width="1.5"/><circle cx="${f1(x)}" cy="${f1(y)}" r="3.9" stroke="${lit ? C.bg : sideRim(n)}" stroke-opacity=".8" stroke-width=".8"/>`; });
+    const top = -Ro - 4;
+    s += '</g>';
+    return cityMarks(n, X, s, { R: Ro + 4, top, left: -Ro - 4, bottom: Ro + (en ? 5.5 : 4.5), capBadge: true });
+  } },
+];
+
+// ======================================================================================================
+// Block 4: PROVINCES (round 2). Lighter than cities (thin, half-transparent, no solid body), no dark centre, readable around a token.
+// ======================================================================================================
+function provDef(n, X, r) { return n.marks && n.def ? statusColumn(-(r + 12), { ...n, bar: null }, X, { r: 8 }) : ''; }
+const A3 = [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6];
+const PROVS = [
+  PROVS_R1[0],
+  { name: 'PA Furrowed plot', sub: 'a half-transparent hexagon of ploughed land (furrows); the 3 capacity places as bars on alternate sides; neutral a dashed empty plot', fn(n, X) {
+    const none = n.o === 'none', en = n.o === 'enemy', r = 14.5, hex = (rr) => pts(ringPts(6, rr, 0)), ap = r * 0.866;
+    let s = `<g ${X.shd}>`;
+    if (!none) s += `<polygon points="${hex(r)}" fill="${col(n.o)}" fill-opacity=".34"/><polygon points="${hex(r)}" fill="url(#${X.P}fur)"/>`;
+    s += `<polygon points="${hex(r)}" stroke="${C.bg}" stroke-opacity=".6" stroke-width="3.4" stroke-linejoin="round"/><polygon points="${hex(r)}" stroke="${none ? C.nStroke : C.paper}" stroke-opacity="${none ? 1 : 0.9}" stroke-width="${none ? 1.3 : 1.5}" stroke-linejoin="round" ${none ? 'stroke-dasharray="3 2.4"' : ''}/>`;
+    if (en) s += `<polygon points="${hex(r + 3.2)}" stroke="${C.paper}" stroke-width="1" stroke-linejoin="round"/>`;
+    s += '</g>';
+    const by = ap + (en ? 7 : 5.5);
+    s += `<g ${X.shd}>` + [-8, 0, 8].map((x, k) => `<path d="M${x - 2.8} ${f1(by)}H${x + 2.8}" stroke="${C.bg}" stroke-opacity=".8" stroke-width="5.4" stroke-linecap="round"/><path d="M${x - 2.8} ${f1(by)}H${x + 2.8}" stroke="${n.o === 'you' && k < n.units ? C.paper : C.empty}" stroke-width="2.8" stroke-linecap="round"/>`).join('') + '</g>';
+    s += provDef(n, X, r);
+    return { svg: s, bottom: by + 3, unitAt: [0, 0], r: r + 2 };
+  } },
+  { name: 'PB Field patches', sub: 'a patchwork of three ploughed parcels round the node, furrows turned each way; each parcel is a capacity place (white = your unit stands); no centre disc', fn(n, X) {
+    const none = n.o === 'none', en = n.o === 'enemy';
+    // parcels (x, y, w, h, furrow pattern): upper left, upper right, the long one below; tilted a little so it reads as land
+    const P3 = [[-17, -15, 15, 12.5, 'fur'], [2, -15, 15, 12.5, 'furv'], [-13, 2.5, 26, 10, 'fur']];
+    let s = `<g transform="rotate(-6)" ${X.shd}>`;
+    P3.forEach(([x, y, w, h, pat], k) => {
+      const lit = n.o === 'you' && k < n.units, r = `x="${x}" y="${y}" width="${w}" height="${h}" rx="2"`;
+      s += `<rect ${r} stroke="${C.bg}" stroke-opacity=".6" stroke-width="3.2"/>`;
+      if (lit) s += `<rect ${r} fill="${C.paper}" fill-opacity=".9"/><rect ${r} fill="url(#${X.P}furd)"/>`;
+      else if (!none) s += `<rect ${r} fill="${col(n.o)}" fill-opacity=".42"/><rect ${r} fill="url(#${X.P}${pat})"/>`;
+      s += `<rect ${r} stroke="${none ? C.nStroke : C.paper}" stroke-opacity="${none ? 1 : 0.9}" stroke-width="${none ? 1.1 : 1.3}" ${none ? 'stroke-dasharray="2.6 2"' : ''}/>`;
+      if (en) s += `<rect x="${x - 2.4}" y="${y - 2.4}" width="${w + 4.8}" height="${h + 4.8}" rx="3" stroke="${C.paper}" stroke-width=".9"/>`;
+    });
+    s += '</g>';
+    s += provDef(n, X, 16);
+    return { svg: s, bottom: 17, unitAt: [0, 0], r: 18 };
+  } },
+  { name: 'PC Palisade', sub: 'three arcs of stakes round a light earth floor; each arc is a capacity place (white stakes = your unit stands); the gaps are the gates', fn(n, X) {
+    const none = n.o === 'none', en = n.o === 'enemy', hw = (42 * Math.PI) / 180;
+    let s = none ? '' : `<circle r="12.5" fill="${mix(col(n.o), '#c9b58f', 0.5)}" fill-opacity=".32"/>`;
+    s += `<g ${X.shd}>`;
+    A3.forEach((a, k) => {
+      const lit = n.o === 'you' && k < n.units, c = lit ? C.paper : none ? C.nStroke : n.o === 'you' ? lighten(C.you, 0.2) : col(n.o);
+      for (let j = -3; j <= 3; j++) { const aa = a + (j * hw) / 3, d = `M${f1(11.5 * Math.cos(aa))} ${f1(11.5 * Math.sin(aa))}L${f1(16.2 * Math.cos(aa))} ${f1(16.2 * Math.sin(aa))}`; s += `<path d="${d}" stroke="${C.bg}" stroke-opacity=".85" stroke-width="4.2" stroke-linecap="round"/><path d="${d}" stroke="${c}" stroke-width="${none ? 1.6 : 2.4}" stroke-linecap="round" ${none ? 'stroke-opacity=".8"' : ''}/>`; }
+      if (!none) s += `<path d="${arcPath(0, 0, 13.8, a - hw, a + hw)}" stroke="${C.bg}" stroke-opacity=".55" stroke-width=".9"/>`;
+      if (en) s += `<path d="${arcPath(0, 0, 19, a - hw, a + hw)}" stroke="${C.paper}" stroke-width="1"/>`;
+    });
+    s += '</g>';
+    s += provDef(n, X, 15);
+    return { svg: s, bottom: 18, unitAt: [0, 0], r: 16 };
+  } },
+  { name: 'PD Waystone', sub: 'a standing stone behind the node with a band of the owner colour (double for the enemy, none when neutral); 3 capacity bars at its foot', fn(n, X) {
+    const none = n.o === 'none', en = n.o === 'enemy', k = K16(X, 18), c = col(n.o);
+    const stone = 'M-6.5 4V-18Q-6.5 -26 0 -26Q6.5 -26 6.5 -18V4Z';
+    let f = `<ellipse cy="4" rx="11" ry="3.4" fill="${none ? '#6e7681' : c}" fill-opacity=".3"/>`;
+    f += `<path d="${stone}" fill="#7d858f" stroke="${C.bg}" stroke-width="3" stroke-linejoin="round"/><path d="M1.5 -25V4H6.5V-18Q6.5 -24 1.5 -25Z" fill="#000" fill-opacity=".22"/><path d="M-3 -12L-1 -9L-2.4 -5M2.6 -4L4 -1" stroke="${C.bg}" stroke-opacity=".5" stroke-width=".8" stroke-linecap="round"/>`;
+    if (!none) f += `<rect x="-6.5" y="-21" width="13" height="6" fill="${X.fill(n.o)}"/><path d="M-6.5 -21H6.5M-6.5 -15H6.5" stroke="${C.paper}" stroke-width="1.1"/>` + (en ? `<path d="M-6.5 -23H6.5M-6.5 -13H6.5" stroke="${C.paper}" stroke-width=".8"/>` : '');
+    f += `<path d="${stone}" stroke="${none ? C.nStroke : C.paper}" stroke-width="1.3" stroke-linejoin="round" ${none ? 'stroke-dasharray="2.6 2"' : ''}/>`;
+    let s = `<g transform="scale(${f1(k * 100) / 100})" ${X.shd}>${f}</g>`;
+    s += `<g ${X.shd}>` + [-9, 0, 9].map((x, i) => `<path d="M${x - 3} 10.5H${x + 3}" stroke="${C.bg}" stroke-opacity=".8" stroke-width="5.4" stroke-linecap="round"/><path d="M${x - 3} 10.5H${x + 3}" stroke="${n.o === 'you' && i < n.units ? C.paper : C.empty}" stroke-width="2.8" stroke-linecap="round"/>`).join('') + '</g>';
+    s += provDef(n, X, 10);
+    return { svg: s, bottom: 14, unitAt: [0, 0], r: 12, top: -26 * k };
+  } },
+  { name: 'PE Hamlet', sub: 'three round thatched huts seen from above, joined by paths; each hut is a capacity place (white roof = your unit stands)', fn(n, X) {
+    const none = n.o === 'none', en = n.o === 'enemy', d = 13.5, hr = 5.2;
+    let s = `<g stroke="#d8c9a6" stroke-opacity="${none ? 0.25 : 0.4}" stroke-width="2" stroke-linecap="round">` + A3.map((a) => `<path d="M0 0L${f1((d - hr) * Math.cos(a))} ${f1((d - hr) * Math.sin(a))}"/>`).join('') + '</g>';
+    s += `<g ${X.shd}>`;
+    A3.forEach((a, k) => {
+      const x = d * Math.cos(a), y = d * Math.sin(a), lit = n.o === 'you' && k < n.units;
+      const fill = lit ? C.paper : none ? 'none' : X.fill(n.o);
+      let h = `<circle r="${hr + 1.4}" fill="${C.bg}" fill-opacity=".7"/><circle r="${hr}" fill="${fill}"/>`;
+      if (!none) h += Array.from({ length: 8 }, (_, i) => { const aa = (i * TAU) / 8; return `<path d="M0 0L${f1(hr * Math.cos(aa))} ${f1(hr * Math.sin(aa))}" stroke="${C.bg}" stroke-opacity=".35" stroke-width=".7"/>`; }).join('') + `<circle r="1" fill="${C.bg}" fill-opacity=".6"/>`;
+      h += `<circle r="${hr}" stroke="${none ? C.nStroke : lit ? C.bg : C.paper}" stroke-width="${none ? 1.1 : 1.2}" ${none ? 'stroke-dasharray="2.2 1.8"' : ''}/>`;
+      if (en) h += `<circle r="${hr + 2.4}" stroke="${C.paper}" stroke-width=".9"/>`;
+      s += G(x, y, h);
+    });
+    s += '</g>';
+    s += provDef(n, X, d);
+    return { svg: s, bottom: d * 0.5 + hr + 3, unitAt: [0, 0], r: 14 };
   } },
 ];
 
@@ -701,7 +831,7 @@ function drawNode(n, X, cv = st.c, pv = st.p) {
   // the caption starts under the token too (the row of squares hangs under the tip): captionTop of nameLayout.ts
   if (n.token && !d.ownCaption) bottom = Math.max(bottom, (d.unitAt ? d.unitAt[1] : 0) + drawUnit(0, 0, n.token, X).bottom + 1);
   if (!d.ownCaption) { s += caption(n, bottom, X); if (X.z >= (prov ? 0.7 : 0.45)) bottom += X.px(prov ? 16 : 17); }
-  return { svg: s, unitAt: d.unitAt, bottom, top: d.top };
+  return { svg: s, unitAt: d.unitAt, bottom, top: d.top, r: d.r };
 }
 
 // ======================================================================================================
@@ -766,9 +896,42 @@ function targetRing(q, X, o = {}) {
   const c = q.tgtOwn ? C.warn : C.enemy, r = q.rB + (o.gap || 20);
   return `<circle cx="${f1(q.B.x)}" cy="${f1(q.B.y)}" r="${f1(r)}" stroke="${C.bg}" stroke-opacity=".6" stroke-width="4.5"/><circle cx="${f1(q.B.x)}" cy="${f1(q.B.y)}" r="${f1(r)}" stroke="${c}" stroke-width="2" stroke-dasharray="5 4" ${q.tgtOwn ? 'class="pulse"' : ''}/>`;
 }
+// Round 2 (owner, 2026-10-29): only refinements of the shipped ribbon. Every variant keeps the body 16 and the head 38 x 30, and
+// draws the body and the head as ONE closed outline (ribbonPoly of one width function); fills are parts of the same shape, never a
+// separately outlined head. New variants stop the head at the rim of the target (no overlap with its token, badges or caption).
+let CLIP = 0;
+// the target of the opponent's intent: a dashed ring outside the badges of the target, open at the bottom so the caption sits in the gap;
+// the head of the ribbon stops on the ring, never inside it
+const TGAP = 14;
+function targetRing2(q) {
+  const c = q.tgtOwn ? C.warn : C.enemy, r = q.rB + TGAP, d = arcPath(q.B.x, q.B.y, r, Math.PI * 0.5 + 0.75, Math.PI * 2.5 - 0.75);
+  return `<path d="${d}" stroke="${C.bg}" stroke-opacity=".6" stroke-width="4.5" stroke-linecap="round"/><path d="${d}" stroke="${c}" stroke-width="2" stroke-dasharray="5 4" stroke-linecap="round" ${q.tgtOwn ? 'class="pulse"' : ''}/>`;
+}
+const RIB = widthFn(16 * 0.6, 16, 38, 30);
+function ribGeo(q, endGap) {
+  const gap = endGap == null ? null : q.o === 'you' ? endGap : TGAP + 3;
+  const P = trim(curve(q.A, q.B, 0.225), q.rA + 22, gap == null ? 0 : q.rB + gap), L = lens(P), T = L[L.length - 1];
+  return { P, L, T, d: polyD(ribbonPoly(P, RIB)), part: (s0, s1, k = 1) => polyD(ribbonPoly(P, (s, TT) => RIB(s, TT) * k, s0, s1)) };
+}
+// the line across the ribbon at the front of the preparation fill (the #439 "head line" of a growing hatch)
+function frontLine(R, s, w = 2) { const p = at(R.P, R.L, s), hw = RIB(s, R.T) / 2 - 1.2; return `<path d="M${f1(p.x - p.ty * hw)} ${f1(p.y + p.tx * hw)}L${f1(p.x + p.ty * hw)} ${f1(p.y - p.tx * hw)}" stroke="${C.paper}" stroke-width="${w}" stroke-linecap="round"/>`; }
+// the tail mark: own a dot, the opponent a double ring (ui-style 21: the diamond stays the bonus sign)
+function tailMark(R, own, c) { const p = R.P[0]; return own ? `<circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="4" fill="${c}" stroke="${C.plate}" stroke-width="1.5"/>` : `<circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="5.2" fill="${C.plate}" stroke="${c}" stroke-width="1.6"/><circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="2.4" stroke="${C.paper}" stroke-width="1.1"/>`; }
+// "◇ +N" on the outer side of the arc, before the head: never over the target, its VP or its caption
+function bonusOut(R, q, prep, X) { if (!q.bonus) return ''; const s = Math.max(20, R.T - 62), p = at(R.P, R.L, s), off = 8 + 3 + X.px(11); return bonusPill(p.x + p.ty * off, p.y - p.tx * off, q.bonus, prep, X); }
+// chevrons that run inside the ribbon toward the target (the moving sign of ordinary orders), clipped by the ribbon itself
+function chevronsIn(R, cid, run, colr, alpha) {
+  let g = '';
+  for (let s = 14 + (run % 26); s < R.T - 10; s += 26) { const p = at(R.P, R.L, s), a = (Math.atan2(p.ty, p.tx) * 180) / Math.PI, k = s > R.T - 30 ? 1.6 : 1; g += `<path d="M${f1(-3 * k)} ${f1(-5 * k)}L${f1(2 * k)} 0L${f1(-3 * k)} ${f1(5 * k)}" transform="translate(${f1(p.x)} ${f1(p.y)}) rotate(${f1(a)})" stroke="${colr}" stroke-opacity="${alpha}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`; }
+  return `<g clip-path="url(#${cid})">${g}</g>`;
+}
+const clipOf = (X, d) => { const id = `${X.P}k${CLIP++}`; return { id, svg: `<clipPath id="${id}"><path d="${d}"/></clipPath>` }; };
+// the double outline of the opponent: a wide stroke in its colour with a narrower dark stroke on top leaves two thin lines (one shape)
+const doubleRim = (d, c, dash = '') => `<path d="${d}" stroke="${c}" stroke-width="5.2" stroke-linejoin="round" ${dash}/><path d="${d}" stroke="${C.plate}" stroke-width="2" stroke-linejoin="round" ${dash}/>`;
+
 const ORDERS = [
-  { name: 'Now', sub: 'wide ribbon, fills during the delay, one pulse, running dashes after; the enemy dashed (shipped)', fn(q, X) {
-    const P = trim(curve(q.A, q.B, 0.225), q.rA + 16, 0), wf = widthFn(16 * 0.6, 16, 38, 30), L = lens(P), T = L[L.length - 1];
+  { name: 'Now', sub: 'wide opaque ribbon, fills during the delay, one pulse, running dashes after; the enemy dashed (shipped)', fn(q, X) {
+    const P = trim(curve(q.A, q.B, 0.225), (q.rA0 || q.rA) + 16, 0), wf = widthFn(16 * 0.6, 16, 38, 30), L = lens(P), T = L[L.length - 1];
     const poly = ribbonPoly(P, wf), d = polyD(poly), c = col(q.o), own = q.o === 'you', prep = q.since < 0, sw = pulseOf(q.since, st.rm), lock = prep ? 0 : 1;
     let s = `<path d="${d}" stroke="${C.bg}" stroke-opacity=".45" stroke-width="6" stroke-linejoin="round"/><path d="${d}" fill="${C.plate}" fill-opacity=".96"/>`;
     if (prep) { s += `<path d="${d}" fill="${c}" fill-opacity=".14"/>`; if (q.prog > 0) s += `<path d="${polyD(ribbonPoly(P, wf, 0, T * q.prog))}" fill="${c}" fill-opacity=".55"/>`; }
@@ -782,116 +945,62 @@ const ORDERS = [
     if (own && q.bonus) { const h = at(P, L, T - 15); s += bonusPill(h.x, h.y - X.px(24), q.bonus, prep, X); }
     return s;
   } },
-  { name: 'O1 Slim arc', sub: 'a slim filled arc; the delay is a fuse burning toward the target with a countdown; the enemy a hollow double rail', rec: true, fn(q, X) {
-    const P = trim(curve(q.A, q.B, 0.14), q.rA + 10, q.rB + 4), L = lens(P), T = L[L.length - 1], c = col(q.o), own = q.o === 'you', prep = q.since < 0;
-    const wf = widthFn(4, 7.5, 22, 17), d = polyD(ribbonPoly(P, wf));
-    let s = '';
-    if (own) {
-      const walked = !prep && q.gpos ? nearestS(P, L, q.gpos) : 0, done = prep ? q.prog * T : T;
-      s += `<path d="${d}" stroke="${C.bg}" stroke-opacity=".55" stroke-width="3.5" stroke-linejoin="round"/>`;
-      if (prep) {
-        s += `<path d="${offsetLine(P, 0, done, T - 17)}" stroke="${c}" stroke-width="2" stroke-dasharray="1.5 4" stroke-linecap="round"/>`;
-        s += `<path d="${polyD(ribbonPoly(P, wf, T - 17, T))}" fill="${C.plate}" stroke="${c}" stroke-width="1.6" stroke-linejoin="round"/>`;
-        if (done > 0) s += `<path d="${polyD(ribbonPoly(P, wf, 0, Math.min(done, T - 17)))}" fill="${X.fill('you')}" stroke="${C.paper}" stroke-width="1" stroke-linejoin="round"/>`;
-        const fx = at(P, L, done); if (!st.rm) s += `<circle cx="${f1(fx.x)}" cy="${f1(fx.y)}" r="3.2" fill="${C.paper}"/>`;
-      } else {
-        if (walked > 0) s += `<path d="${offsetLine(P, 0, 0, walked)}" stroke="${c}" stroke-width="2" stroke-dasharray="1.5 4" stroke-linecap="round"/>`;
-        s += `<path d="${polyD(ribbonPoly(P, wf, walked, T))}" fill="${X.fill('you')}" stroke="${C.paper}" stroke-width="1.2" stroke-linejoin="round"/>`;
-      }
-    } else {
-      const rail = (off) => offsetLine(P, off, 0, T - 16);
-      s += `<path d="${rail(0)}" stroke="${C.bg}" stroke-opacity=".55" stroke-width="10" stroke-linecap="round"/>`;
-      const dash = prep ? '' : `stroke-dasharray="8 5" stroke-dashoffset="${st.rm ? 0 : f1(-((q.since * 24) % 13))}"`;
-      s += `<path d="${rail(-3.6)}" stroke="${c}" stroke-width="1.8" ${dash}/><path d="${rail(3.6)}" stroke="${c}" stroke-width="1.8" ${dash}/>`;
-      const hp = ribbonPoly(P, widthFn(0, 0, 22, 17), T - 17, T);
-      s += `<path d="${polyD(hp)}" fill="${C.plate}" stroke="${c}" stroke-width="1.8" stroke-linejoin="round"/>`;
-      const hp2 = ribbonPoly(P, widthFn(0, 0, 11, 9), T - 13, T - 4);
-      s += `<path d="${polyD(hp2)}" stroke="${C.paper}" stroke-width="1" stroke-linejoin="round"/>`;
-      s += `<circle cx="${f1(q.B.x)}" cy="${f1(q.B.y)}" r="${f1(q.rB + 13)}" stroke="${q.tgtOwn ? C.warn : c}" stroke-width="1.8" stroke-dasharray="2 4" stroke-linecap="round" ${q.tgtOwn ? 'class="pulse"' : ''}/>`;
-      if (q.tgtOwn) s += G(q.B.x + (q.rB + 13) * 0.71, q.B.y - (q.rB + 13) * 0.71, `<g transform="scale(${f1(1000 / X.z) / 1000})"><circle r="7" fill="${C.warn}" stroke="${C.bg}" stroke-width="1.5"/>${text(0, 0.5, '!', 10.5, C.bg)}</g>`);
-    }
-    if (prep) { const p0 = at(P, L, Math.max(14, q.prog * (T - 17))), d0 = X.px(15); s += countdown(p0.x + p0.ty * d0, p0.y - p0.tx * d0, (1 - q.prog) * DELAY, X, c); }
-    const sw = pulseOf(q.since, st.rm);
-    if (sw > 0) s += `<circle cx="${f1(q.A.x)}" cy="${f1(q.A.y)}" r="${f1(q.rA + 4 + 18 * (q.since / 0.8))}" stroke="${C.paper}" stroke-width="2.5" stroke-opacity="${f1(sw)}"/>`;
-    if (own && q.bonus) { const h = at(P, L, T - 8); s += bonusPill(h.x + X.px(4), h.y - X.px(18), q.bonus, prep, X); }
+  { name: 'OA Clean', sub: 'the shipped ribbon with its faults fixed: the head stops at the target rim, a bright front line on the fill, the bonus beside the body, the enemy tail a double ring', fn(q, X) {
+    const R = ribGeo(q, 5), c = col(q.o), own = q.o === 'you', prep = q.since < 0, sw = pulseOf(q.since, st.rm);
+    let s = `<path d="${R.d}" stroke="${C.bg}" stroke-opacity=".45" stroke-width="6" stroke-linejoin="round"/><path d="${R.d}" fill="${C.plate}" fill-opacity=".9"/>`;
+    if (prep) { s += `<path d="${R.d}" fill="${c}" fill-opacity=".16"/>`; if (q.prog > 0) s += `<path d="${R.part(0, R.T * q.prog)}" fill="${c}" fill-opacity=".62"/>` + frontLine(R, R.T * q.prog); }
+    else s += `<path d="${R.d}" fill="${c}" fill-opacity=".66"/>`;
+    if (sw > 0) s += `<path d="${R.d}" fill="${C.paper}" fill-opacity="${f1(0.5 * sw * 100) / 100}"/>`;
+    const width = prep ? 2.2 : 3 + 2.2 * sw, run = st.rm ? 0 : (q.since * 28) % 14;
+    s += own && prep ? `<path d="${R.d}" stroke="${c}" stroke-width="${width}" stroke-linejoin="round"/>` : `<path d="${R.d}" stroke="${c}" stroke-width="${width}" stroke-dasharray="9 5" stroke-dashoffset="${prep ? 0 : f1(-run)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    s += tailMark(R, own, c);
+    if (!own) s += targetRing2(q);
+    if (own) s += bonusOut(R, q, prep, X);
     return s;
   } },
-  { name: 'O2 Medallion', sub: 'a narrower ribbon with a countdown medallion at the tail; after the departure your ribbon starts at your group; the enemy hatched', fn(q, X) {
-    const c = col(q.o), own = q.o === 'you', prep = q.since < 0, fromGroup = own && !prep && q.gpos && Math.hypot(q.B.x - q.gpos.x, q.B.y - q.gpos.y) > q.rB + 40;
-    const Pfull = trim(curve(q.A, q.B, 0.2), q.rA + 14, q.rB + 2);
-    const P = fromGroup ? trim(curve(q.gpos, q.B, 0.2), 16, q.rB + 2) : Pfull, L = lens(P), T = L[L.length - 1];
-    const wf = widthFn(9, 13, 30, 24);
-    const d = polyD(ribbonPoly(P, wf));
-    let s = `<path d="${d}" stroke="${C.bg}" stroke-opacity=".5" stroke-width="5" stroke-linejoin="round"/><path d="${d}" fill="${C.plate}" fill-opacity=".9"/>`;
-    s += own ? `<path d="${d}" fill="${X.fill('you')}" fill-opacity=".62"/>` : `<path d="${d}" fill="url(#${X.P}he)"/>`;
-    s += `<path d="${d}" stroke="${own ? C.paper : c}" stroke-width="${own ? 1.6 : 2}" stroke-linejoin="round"/>`;
-    if (!own) s += `<path d="${polyD(ribbonPoly(P, widthFn(5, 8, 18, 15), 3, T - 4))}" stroke="${C.paper}" stroke-width=".9" stroke-opacity=".8" stroke-linejoin="round"/>`;
-    if (!own && !prep) {   // the enemy's group on the way is not tied to its intent: chevrons run along the ribbon
-      const off = st.rm ? 0 : (q.since * 30) % 24;
-      for (let sx = 10 + off; sx < T - 26; sx += 24) { const p = at(P, L, sx); s += G(p.x, p.y, `<path d="M-3 -4.5L2 0L-3 4.5" stroke="${C.paper}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" transform="rotate(${f1((Math.atan2(p.ty, p.tx) * 180) / Math.PI)})"/>`); }
+  { name: 'OB Glass', sub: 'the same ribbon, half-transparent: the road shows through; a lighter core gives it volume; after the departure a sheen runs to the target; the enemy a double outline', fn(q, X) {
+    const R = ribGeo(q, 5), c = col(q.o), own = q.o === 'you', prep = q.since < 0, sw = pulseOf(q.since, st.rm), K = clipOf(X, R.d);
+    let s = K.svg + `<path d="${R.d}" stroke="${C.bg}" stroke-opacity=".4" stroke-width="5" stroke-linejoin="round"/><path d="${R.d}" fill="${C.plate}" fill-opacity=".5"/>`;
+    const solid = (s1) => `<path d="${R.part(0, s1)}" fill="${c}" fill-opacity=".5"/><path d="${R.part(0, s1, 0.5)}" fill="${lighten(c, 0.35)}" fill-opacity=".45"/>`;
+    if (prep) { s += `<path d="${R.d}" fill="${c}" fill-opacity=".12"/>`; if (q.prog > 0) s += solid(R.T * q.prog) + frontLine(R, R.T * q.prog); }
+    else {
+      s += solid(R.T);
+      if (!st.rm) { const per = 1.6, ph = (q.since % per) / per, s0 = ph * (R.T + 30) - 30; s += `<g clip-path="url(#${K.id})"><path d="${R.part(Math.max(0, s0), Math.min(R.T, s0 + 24))}" fill="${C.paper}" fill-opacity=".38"/></g>`; }
     }
-    const sw = pulseOf(q.since, st.rm);
-    if (prep || sw > 0) {
-      const m = Pfull[0], k = 1000 / X.z / 1000, rem = prep ? 1 - q.prog : 0, sc = 1 + 0.35 * sw;
-      let md = `<circle r="13" fill="${C.plate}" stroke="${C.bg}" stroke-width="3"/><circle r="13" stroke="${own ? C.paper : c}" stroke-width="1.8"/>${own ? '' : `<circle r="16" stroke="${C.paper}" stroke-width="1"/>`}`;
-      md += `<g fill="${c}" fill-opacity=".85">${pie(0, 0, 10, rem)}</g>`;
-      md += text(0, 0.5, prep ? (rem * DELAY).toFixed(1) : 'GO', prep ? 10 : 9, C.paper, halo(2.5));
-      s += G(m.x, m.y, `<g transform="scale(${f1(k * sc * 1000) / 1000})" ${X.shd}>${md}</g>`);
-    }
-    if (!own) s += `<circle cx="${f1(q.B.x)}" cy="${f1(q.B.y)}" r="${f1(q.rB + 16)}" stroke="${q.tgtOwn ? C.warn : c}" stroke-width="2.4" ${q.tgtOwn ? 'class="pulse"' : ''}/>` + [0, 1, 2, 3].map((i) => { const a = (i * Math.PI) / 2, r1 = q.rB + 12, r2 = q.rB + 20; return `<path d="M${f1(q.B.x + r1 * Math.cos(a))} ${f1(q.B.y + r1 * Math.sin(a))}L${f1(q.B.x + r2 * Math.cos(a))} ${f1(q.B.y + r2 * Math.sin(a))}" stroke="${q.tgtOwn ? C.warn : c}" stroke-width="2.4"/>`; }).join('');
-    if (own && q.bonus) { const h = at(P, L, T - 12); s += bonusPill(h.x, h.y - X.px(22), q.bonus, prep, X); }
+    if (sw > 0) s += `<path d="${R.d}" fill="${C.paper}" fill-opacity="${f1(0.5 * sw * 100) / 100}"/>`;
+    s += own ? `<path d="${R.d}" stroke="${c}" stroke-width="${f1(2.4 + 2 * sw)}" stroke-linejoin="round"/><path d="${R.d}" stroke="${C.paper}" stroke-opacity=".45" stroke-width=".9" stroke-linejoin="round"/>` : doubleRim(R.d, c);
+    s += tailMark(R, own, c);
+    if (!own) s += targetRing2(q);
+    if (own) s += bonusOut(R, q, prep, X);
     return s;
   } },
-  { name: 'O3 Beads', sub: 'a chain of beads that light one by one during the delay and flow to the target after; the enemy hollow double beads', fn(q, X) {
-    const P = trim(curve(q.A, q.B, 0.18), q.rA + 12, q.rB + 6), L = lens(P), T = L[L.length - 1], c = col(q.o), own = q.o === 'you', prep = q.since < 0;
-    const step = 17, N = Math.max(3, Math.floor((T - 16) / step)), flow = prep || st.rm ? 0 : (q.since * 26) % step, walked = own && !prep && q.gpos ? nearestS(P, L, q.gpos) : -1;
-    let s = `<path d="${offsetLine(P, 0, 0, T - 10)}" stroke="${C.bg}" stroke-opacity=".45" stroke-width="7" stroke-linecap="round"/><path d="${offsetLine(P, 0, 0, T - 10)}" stroke="${c}" stroke-opacity=".5" stroke-width="1.4"/>`;
-    for (let i = 0; i < N; i++) {
-      const sx = 4 + i * step + flow; if (sx > T - 14 || sx < walked) continue;
-      const p = at(P, L, sx), lit = !prep || i < Math.round(q.prog * N);
-      if (own) s += lit ? `<circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="4.6" fill="${X.fill('you')}" stroke="${C.paper}" stroke-width="1.3"/>` : `<circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="2.4" fill="${c}" fill-opacity=".7"/>`;
-      else s += lit ? `<circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="4.6" fill="${C.plate}" stroke="${c}" stroke-width="1.8"/><circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="1.9" stroke="${C.paper}" stroke-width="1.1"/>` : `<circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="2.4" stroke="${c}" stroke-width="1.2"/>`;
-    }
-    const e = at(P, L, T), a = (Math.atan2(e.ty, e.tx) * 180) / Math.PI;
-    s += G(e.x, e.y, `<g transform="rotate(${f1(a)})"><path d="M-14 -9L0 0L-14 9" stroke="${C.bg}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".6"/><path d="M-14 -9L0 0L-14 9" stroke="${own ? C.paper : c}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>${own ? '' : `<path d="M-10 -5.5L-2 0L-10 5.5" stroke="${C.paper}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>`}</g>`);
-    const sw = pulseOf(q.since, st.rm);
-    if (sw > 0) { const p = at(P, L, T * (q.since / 0.8)); s += `<circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="${f1(7 + 4 * sw)}" stroke="${C.paper}" stroke-width="2" stroke-opacity="${f1(sw)}"/>`; }
-    if (!own) s += targetRing(q, X, { gap: 16 });
-    if (own && q.bonus) { s += bonusPill(e.x - X.px(6), e.y - X.px(22), q.bonus, prep, X); }
+  { name: 'OC Hatch', sub: 'the delay as the hatch of #439 (in progress) growing to a bright front line; solid after the pulse, chevrons run inside the ribbon instead of dashes; the enemy keeps the dashed outline', fn(q, X) {
+    const R = ribGeo(q, 5), c = col(q.o), own = q.o === 'you', prep = q.since < 0, sw = pulseOf(q.since, st.rm), K = clipOf(X, R.d);
+    let s = K.svg + `<path d="${R.d}" stroke="${C.bg}" stroke-opacity=".45" stroke-width="6" stroke-linejoin="round"/><path d="${R.d}" fill="${C.plate}" fill-opacity=".86"/>`;
+    if (prep) { s += `<path d="${R.d}" fill="${c}" fill-opacity=".12"/>`; if (q.prog > 0) s += `<path d="${R.part(0, R.T * q.prog)}" fill="url(#${X.P}${own ? 'hy' : 'hr'})"/>` + frontLine(R, R.T * q.prog); }
+    else { s += `<path d="${R.d}" fill="${c}" fill-opacity=".66"/>`; s += chevronsIn(R, K.id, st.rm ? 0 : q.since * 30, C.paper, 0.6); }
+    if (sw > 0) s += `<path d="${R.d}" fill="${C.paper}" fill-opacity="${f1(0.5 * sw * 100) / 100}"/>`;
+    s += own ? `<path d="${R.d}" stroke="${c}" stroke-width="${f1((prep ? 2.2 : 3) + 2.2 * sw)}" stroke-linejoin="round"/>` : `<path d="${R.d}" stroke="${c}" stroke-width="${prep ? 2.2 : 3}" stroke-dasharray="9 5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    s += tailMark(R, own, c);
+    if (!own) s += targetRing2(q);
+    if (own) s += bonusOut(R, q, prep, X);
     return s;
   } },
-  { name: 'O4 Rail and target', sub: 'a thin line; the weight is on the ends: a countdown arc around the source, a pennant (own) or a reticle (enemy) on the target', fn(q, X) {
-    const P = trim(curve(q.A, q.B, 0.16), q.rA + 8, q.rB + 10), L = lens(P), T = L[L.length - 1], c = col(q.o), own = q.o === 'you', prep = q.since < 0;
-    const walked = own && !prep && q.gpos ? nearestS(P, L, q.gpos) : 0;
-    let s = `<path d="${offsetLine(P, 0, walked, T)}" stroke="${C.bg}" stroke-opacity=".55" stroke-width="${own ? 7 : 10}" stroke-linecap="round"/>`;
-    if (own) { if (walked > 0) s += `<path d="${offsetLine(P, 0, 0, walked)}" stroke="${c}" stroke-opacity=".3" stroke-width="3"/>`; s += `<path d="${offsetLine(P, 0, walked, T)}" stroke="${c}" stroke-width="3.2" stroke-linecap="round"/>`; }
-    else { const dash = prep ? '' : `stroke-dasharray="7 5" stroke-dashoffset="${st.rm ? 0 : f1(-((q.since * 24) % 12))}"`; s += `<path d="${offsetLine(P, -3, 0, T)}" stroke="${c}" stroke-width="1.7" ${dash}/><path d="${offsetLine(P, 3, 0, T)}" stroke="${c}" stroke-width="1.7" ${dash}/>`; }
-    const e = at(P, L, T), a = (Math.atan2(e.ty, e.tx) * 180) / Math.PI;
-    s += G(e.x, e.y, `<path d="M-8 -6.5L0 0L-8 6.5" transform="rotate(${f1(a)})" stroke="${own ? c : c}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`);
-    // the countdown arc around the source (both sides: created_tick + planned_delay_ticks are public)
-    const sw = pulseOf(q.since, st.rm);
-    if (prep) {
-      const R = q.rA + 9, rem = 1 - q.prog;
-      s += `<circle cx="${f1(q.A.x)}" cy="${f1(q.A.y)}" r="${f1(R)}" stroke="${C.bg}" stroke-opacity=".6" stroke-width="5.5"/>`;
-      s += G(q.A.x, q.A.y, `<path d="${arcPath(0, 0, R, -Math.PI / 2, -Math.PI / 2 + Math.max(0.01, rem) * TAU - 0.001)}" stroke="${own ? C.paper : c}" stroke-width="3.2" stroke-linecap="round"/>`);
-      { const d = R + X.px(16); s += countdown(q.A.x - d * 0.71, q.A.y - d * 0.71, rem * DELAY, X, c); }
+  { name: 'OD Embossed', sub: 'the ribbon as a raised strip: a cast shadow, a light inner rim, a fine grain baked into the fill; a sheen runs after the departure; the enemy a double outline', fn(q, X) {
+    const R = ribGeo(q, 5), c = col(q.o), own = q.o === 'you', prep = q.since < 0, sw = pulseOf(q.since, st.rm), K = clipOf(X, R.d);
+    let s = K.svg + `<path d="${R.d}" transform="translate(1.5 3)" fill="${C.bg}" fill-opacity=".5"/><path d="${R.d}" fill="${C.plate}" fill-opacity=".96"/>`;
+    if (prep) { s += `<path d="${R.d}" fill="${c}" fill-opacity=".14"/>`; if (q.prog > 0) s += `<path d="${R.part(0, R.T * q.prog)}" fill="${c}" fill-opacity=".72"/>` + frontLine(R, R.T * q.prog); }
+    else {
+      s += `<path d="${R.d}" fill="${c}" fill-opacity=".74"/>`;
+      if (!st.rm) { const per = 1.8, ph = (q.since % per) / per, s0 = ph * (R.T + 30) - 30; s += `<g clip-path="url(#${K.id})"><path d="${R.part(Math.max(0, s0), Math.min(R.T, s0 + 18))}" fill="${C.paper}" fill-opacity=".3"/></g>`; }
     }
-    if (sw > 0) s += `<circle cx="${f1(q.A.x)}" cy="${f1(q.A.y)}" r="${f1(q.rA + 9 + 10 * (q.since / 0.8))}" stroke="${C.paper}" stroke-width="3" stroke-opacity="${f1(sw)}"/>`;
-    const k = 1000 / X.z / 1000;
-    if (own) {
-      // a pennant on the target carrying the bonus; dashed while the bonus is a forecast
-      const t = `◇+${q.bonus || 0}`, w = 30;
-      let p = `<path d="M0 0V-30" stroke="${C.bg}" stroke-width="4" stroke-linecap="round"/><path d="M0 0V-30" stroke="${C.paper}" stroke-width="2" stroke-linecap="round"/>`;
-      p += `<path d="M0 -30H${w}L${w - 6} -22L${w} -14H0Z" fill="${C.plate}" stroke="${c}" stroke-width="1.8" stroke-linejoin="round" ${prep ? 'stroke-dasharray="3.5 2.5"' : ''}/><path d="M0 -30H${w}L${w - 6} -22L${w} -14H0Z" fill="${c}" fill-opacity="${prep ? 0.25 : 0.55}"/>`;
-      p += `<text x="${f1(w / 2 - 2)}" y="-21.6" font-size="10.5" font-weight="700" text-anchor="middle" dominant-baseline="central" fill="${C.paper}" font-family="${FONT}">${q.bonus ? t : ''}</text>`;
-      s += G(q.B.x + q.rB * 0.4, q.B.y - q.rB * 0.6, `<g transform="scale(${f1(k * 1000) / 1000})" ${X.shd}>${p}</g>`);
-    } else {
-      const cc = q.tgtOwn ? C.warn : c, R = q.rB + 15;
-      let r = `<circle r="${f1(R)}" stroke="${C.bg}" stroke-opacity=".6" stroke-width="5"/><circle r="${f1(R)}" stroke="${cc}" stroke-width="2.2"/><circle r="${f1(R + 3.5)}" stroke="${C.paper}" stroke-width="1" stroke-opacity=".8"/>`;
-      for (let i = 0; i < 4; i++) { const aa = (i * Math.PI) / 2 + Math.PI / 4; r += `<path d="M${f1((R - 7) * Math.cos(aa))} ${f1((R - 7) * Math.sin(aa))}L${f1((R + 6) * Math.cos(aa))} ${f1((R + 6) * Math.sin(aa))}" stroke="${cc}" stroke-width="2.6" stroke-linecap="round"/>`; }
-      s += G(q.B.x, q.B.y, `<g ${q.tgtOwn ? 'class="pulse"' : ''}>${r}</g>`);
-      if (q.tgtOwn) s += G(q.B.x + R * 0.71 + X.px(6), q.B.y - R * 0.71 - X.px(6), `<g transform="scale(${f1(k * 1000) / 1000})"><circle r="7.5" fill="${C.warn}" stroke="${C.bg}" stroke-width="1.5"/>${text(0, 0.5, '!', 11, C.bg)}</g>`);
-    }
+    s += `<path d="${R.d}" fill="url(#${X.P}grn)"/>`;
+    s += `<g clip-path="url(#${K.id})"><path d="${R.d}" stroke="${lighten(c, 0.45)}" stroke-opacity=".7" stroke-width="3" stroke-linejoin="round"/></g>`;
+    if (sw > 0) s += `<path d="${R.d}" fill="${C.paper}" fill-opacity="${f1(0.5 * sw * 100) / 100}"/>`;
+    s += own ? `<path d="${R.d}" stroke="${C.bg}" stroke-opacity=".7" stroke-width="3.4" stroke-linejoin="round"/><path d="${R.d}" stroke="${lighten(c, 0.15)}" stroke-width="${f1(1.6 + 2 * sw)}" stroke-linejoin="round"/>` : doubleRim(R.d, c);
+    s += tailMark(R, own, c);
+    if (!own) s += targetRing2(q);
+    if (own) s += bonusOut(R, q, prep, X);
     return s;
   } },
 ];
@@ -901,40 +1010,44 @@ const ORDERS = [
 // ======================================================================================================
 const INFO = {
   o: [
-    { what: 'The shipped look (ui-style 9.7): a 16-wide opaque ribbon arcing 45% of its chord, a 38 x 30 head, fill rising from the tail during the delay, one white pulse at the departure, then a running dashed outline. The opponent: dashed outline, a hollow diamond at the tail; its target has a dashed ring (amber over your node). Your bonus: the "◇ +N" pill over the head.', pros: 'Known to players; very visible.', risks: 'Covers a lot of map (roads, captions and cities under it), a strong arc reads as a detour; the delay is a fill, not a number; after the departure the ribbon does not tell how far your group is.', fps: 'low (one Graphics per ribbon, redrawn while animating)', needs: 'none', est: '0' },
-    { what: 'A slim filled arc (7 wide, head 22 x 17, a gentle bend 14%), no opaque underlay. The delay is a fuse: a dotted line burns toward the head and a pill "2.1 s" counts down at the tail; a ring wave leaves the source at the departure; then the part your group has walked fades. The opponent: a hollow double rail (two thin lines, the enemy grammar of a double outline) with a hollow double head, dashes run after its departure, a dotted ring on the target (amber with "!" over your node).', pros: 'About a third of the area of now: the map and captions stay readable under orders; own and enemy differ by fill versus double rail (grayscale-safe); the countdown is a number for both sides; progress of your group is visible.', risks: 'Less "loud": at zoom 0.45 a slim arc needs the 8 px minimum width (the client already clamps); the countdown pill adds a text object per order in preparation.', fps: 'low: one Graphics per order redrawn while it animates, one pooled Text for the countdown', needs: 'client only; the countdown from IntentView.created_tick + ruleset_public.orders.planned_delay_ticks (already in the client)', est: 'S-M, 1.5-2 days' },
-    { what: 'A narrower ribbon (13 wide) with a medallion at the tail: a pie that empties in 3 s and the seconds; it flashes "GO" at the departure. After the departure your ribbon starts at your group (the walked part is gone). The opponent: the ribbon is hatched (diagonal stripes) with a second inner outline, chevrons run inside after its departure; its target gets a crosshair ring (4 ticks).', pros: 'The delay is impossible to miss; hatched versus solid works in grayscale; the ribbon length always equals the way left.', risks: 'Still a wide shape; the medallion competes with the source city marks (cells, barracks) for the same place; hatching needs a tiling texture.', fps: 'low-medium: a TilingSprite or a texture fill for the hatch, one baked medallion per state', needs: 'client only', est: 'M, 2-3 days' },
-    { what: 'A chain of beads every 17 units on a hairline; during the delay the beads light one by one (the count is the timer), at the departure a light runs to the target, then the beads flow toward it; your walked part disappears. The opponent: hollow beads with an inner ring, a double chevron head.', pros: 'Very light: the map shows between beads; flowing beads read as movement; no text needed.', risks: 'Beads can be mistaken for supply packets (squares) or road dots in the fog (dotted roads); the count of beads is not a readable timer; at zoom 0.45 the beads merge.', fps: 'low-medium: 10-25 sprites per order (a ParticleContainer or one Graphics)', needs: 'client only', est: 'M, 2 days' },
-    { what: 'A thin line (3 wide; the enemy a double rail) with a chevron at the target; the weight moves to the ends: a countdown arc around the source city with a seconds pill, and on the target a pennant (your order, carrying "◇+N", dashed while a forecast) or a crosshair reticle (the opponent; amber with "!" over your node).', pros: 'The question "where is it going" is answered by a big target marker; lines cross cleanly; the arc around the source shows the delay without a number too.', risks: 'Two markers per order; the arc around the source overlaps the capacity ring and the cells of that city; several orders to one target stack their pennants.', fps: 'low: Graphics for the line, two baked sprites per order', needs: 'client only', est: 'M, 2-3 days' },
+    { what: 'The shipped look (ui-style 9.7): a 16-wide opaque ribbon, a 38 x 30 head to the centre of the target, fill rising from the tail during the delay, one white pulse at the departure, then a running dashed outline. The opponent: dashed outline, a hollow diamond at the tail, a dashed ring on its target (amber over your node). Your bonus: "◇ +N" over the head.', pros: 'The owner\'s favourite; known; very visible; the body and the head are already one outline.', risks: 'The head runs into the target to its centre, so it covers the target\'s token, ring and VP; the bonus pill sits on the target too; the fill front has no edge, so mid-delay it looks unfinished; the diamond at the enemy tail breaks the icon language (ui-style 21).', fps: 'Bake: none (one Graphics per ribbon, redrawn while it animates). FPS: low.', needs: 'none', est: '0' },
+    { what: 'Now with its faults fixed and nothing added: the same width, head, fill, pulse and running dashes; the head ends 5 units before the rim of the target sign; a bright front line marks how far the preparation fill has come; the bonus pill moves to the outer side of the arc before the head; the underlay 0.9 instead of 0.96; the opponent\'s tail is a double ring (the ui-style 21 fix), its body stays dashed.', pros: 'The smallest step; keeps everything the owner likes; removes every overlap with the target; the delay reads as "in progress" with a clean edge.', risks: 'The ribbon still covers roads and captions under its body (as now).', fps: 'Bake: none. FPS: low, as now (+1 line per preparing order).', needs: 'client only (ribbonView: end trim, front line, pill anchor, tail mark)', est: 'S, 0.5-1 day' },
+    { what: 'The same shape, half-transparent: the underlay 0.5, the fill 0.5 with a lighter core band (a narrower copy of the same width function, so the head gets the core too), a hairline light inner rim; the preparation fills glass with a front line; after the departure a soft sheen band runs to the target every 1.6 s instead of the dashes. The opponent: a double outline (one wide stroke with a dark stroke on top) in place of the dashes.', pros: 'Roads, nodes and captions under the body stay readable; the ribbon looks more finished (volume); own vs enemy = single vs double outline (grayscale-safe, the enemy grammar of tokens and cities).', risks: 'Over a busy bright texture (snow) the half-transparent body loses contrast; the sheen is a new motion (off with reduced motion); drops the dashed "intent" look the players know.', fps: 'Bake: none (Graphics: two fills and two strokes per ribbon; the sheen is one more fill redrawn while moving). FPS: low.', needs: 'client only', est: 'S-M, 1-1.5 days' },
+    { what: 'The preparation is the hatch of #439 (the sign of "in progress"): diagonal stripes grow from the tail to a bright front line; the pulse turns it solid; on the way the outline stays solid and chevrons run inside the ribbon toward the target (the moving sign of ordinary orders) instead of the dashed outline. The opponent keeps the dashed outline, its preparation hatched in red.', pros: 'Reuses two signs players already know (hatch = in progress, chevrons = moving); the solid outline looks finished; the head is filled by the same texture as the body.', risks: 'Chevrons inside a planned ribbon and on ordinary lines may blur the difference between the two kinds of order (width keeps them apart); hatch at zoom 0.45 turns into a flat tone.', fps: 'Bake: one hatch texture per side (a TilingSprite masked by the ribbon, or a fill texture). FPS: low (the chevrons are 4-12 small sprites per order, pooled).', needs: 'client only', est: 'M, 1.5-2 days' },
+    { what: 'The ribbon as a raised strip: a cast shadow (an offset dark copy of the shape, not a filter), a light inner rim (a stroke clipped to the shape), a fine grain in the fill (a tiling texture), a thin dark outline; the preparation as now with a front line; after the departure a sheen runs every 1.8 s. The opponent: a double outline.', pros: 'The most "finished" material look, in line with the BL1 shading of tokens and cities; reads at every zoom because the body stays opaque.', risks: 'The shadow and the rim make the ribbon heavier than now on a dense map; the grain is invisible at 0.45 (it costs nothing there).', fps: 'Bake: one grain tile; the rim needs the ribbon as a mask (one mask per order) or a second, narrower polygon. FPS: low-medium (a mask per ribbon is the costliest part; the second polygon avoids it).', needs: 'client only', est: 'M, 2 days' },
   ],
   u: [
-    { what: 'U1: the ▽ with the BL1 shading, the charge as a fill from the tip (area = share of charged), the number inside, the enemy with an inner outline, "?" dashed for PRESENCE, "3-5" plate for RANGE; a "c/n" pill under moving own groups.', pros: 'Shipped and learned; compact.', risks: 'The share of charged is a level that is hard to count (4 of 5 and 3 of 5 look alike).', fps: 'low (baked sprite per look)', needs: 'none', est: '0' },
-    { what: 'U1 as now plus the row of squares under the tip (#433 as planned): a square per unit, filled = charged, frame = not; up to 8, then "+N" and a small "■k" for hidden charged (the #330 rule).', pros: 'Exact count of charges at a glance, the language of squares (warehouse, packets); the fill still reads at 0.45 where squares are tiny.', risks: 'Two signs for one quantity (fill and squares); the row below the tip may touch the city caption or the warehouse row of a small city.', fps: 'low: the row is baked per (units, charged) up to 8 places, about 45 textures', needs: 'client only (#433)', est: 'S-M, 2-3 days' },
-    { what: 'The ▽ gets an even tint (owner colour at 50%) and the number; the charge is shown only by the row of squares.', pros: 'One quantity, one sign (ui-style 5, item 5); a calmer token.', risks: 'At zoom 0.45 the squares are 3-4 px: the charge state almost disappears; a discharged group looks the same as a charged one from far.', fps: 'low (as U1+U4)', needs: 'client only', est: 'S-M, 2 days' },
-    { what: 'The squares stand inside the ▽ as a pyramid (rows 4-3-2-1, up to 10); more than 10 units: 10 squares in proportion. The number is on a small badge at the upper right corner.', pros: 'One compact sign with an exact count up to 10; nothing hangs under the token.', risks: 'The token grows (side up to about 40 at 10 units); proportional squares above 10 are approximate; the number badge is small.', fps: 'low: about 66 baked textures', needs: 'client only', est: 'M, 3 days' },
-    { what: 'U1 as now plus a gauge of squares on the right shoulder: one column up to 4, two columns up to 8, filled from the bottom, "+N" under it.', pros: 'Keeps the space under the token free for the city caption, ribbons and the warehouse row; reads like a fuel gauge.', risks: 'Widens the token to the right, where the VP badge of a city sits; less familiar.', fps: 'low (as U1+U4)', needs: 'client only', est: 'S-M, 2 days' },
+    { what: 'U1: the ▽ with the BL1 shading, the charge as a fill from the tip (area = share of charged), the number inside, the enemy with an inner outline, "?" dashed for PRESENCE, "3-5" plate for RANGE; a "c/n" pill under moving own groups.', pros: 'Shipped and learned; compact.', risks: 'The owner wants other shapes; the share of charged is hard to count.', fps: 'Bake: one sprite per look. FPS: low.', needs: 'none', est: '0' },
+    { what: 'A board war-game counter: a bevelled square chit in the owner colour, the number large, a dark band at the foot with a square per unit (filled = charged, frame = not; up to 8 in two rows, above 8 in proportion). The enemy: an inner frame; unknown: dashed plate with "?".', pros: 'A classic neutral look (tabletop war games); the number is the biggest sign; the exact charge count without a second object under the token.', risks: 'A square token is close to the square sign of a charge (ui-style 21) at small sizes; the pips are 3-4 px at zoom 0.45, so from far only the band reads; the city warehouse places are squares too.', fps: 'Bake: one sprite per (side, units up to 8, charged), about 90 textures, plus the number Text as now. FPS: low.', needs: 'client only; ui-style 21 entry', est: 'M, 2-3 days' },
+    { what: 'A hanging banner on a cross-bar with a swallow-tail that points down (the ▽ point survives); the number on the cloth, a row of squares under it (filled = charged). The enemy: an inner border; unknown: dashed cloth.', pros: 'Strongly "army", neutral (medieval, no tech); the point keeps the token anchored to its place; a big cloth reads at 0.45.', risks: 'Taller than wide: crowds the caption and the warehouse row under a city; a flag is also the "capture" sign (ui-style 21), so capture needs another sign; the bar is wider than the cloth.', fps: 'Bake: one sprite per (side, units up to 8, charged). FPS: low.', needs: 'client only; ui-style 21 (flag)', est: 'M, 2-3 days' },
+    { what: 'A carved game piece from the side: a round head, a flared body in the owner colour with a highlight, a plinth with a square per unit (filled = charged). The enemy: an inner line on the body; unknown: a dashed piece with "?".', pros: 'Reads as "a piece on a board" at once; the silhouette differs from cities, packets and every other sign; the charge row sits on the token, not under it.', risks: 'The plinth gets wide with 7-8 units; a pawn suggests "weak unit" to chess players; the number sits in the narrowest part.', fps: 'Bake: one sprite per (side, units up to 8, charged). FPS: low.', needs: 'client only', est: 'M, 2-3 days' },
+    { what: 'A stack of carved blocks, one per unit (a pyramid up to 6, above 6 in proportion with a number pill); a charged block has a lit top in the owner colour, an uncharged one a dark hollow top. The enemy: an inner diamond on each top; unknown: three dashed hollow blocks.', pros: 'The size of the group is a picture (more blocks = bigger army); charged vs not reads by light vs dark tops even at 0.45; neutral (wooden blocks).', risks: 'Above 6 units the count needs the pill; the iso look differs from the flat map style (BL1 is lit from above, not isometric); the inner diamond of the enemy recalls the bonus sign.', fps: 'Bake: one sprite per (side, shown 1-6, charged 0-6), 2 x 27 textures. FPS: low.', needs: 'client only', est: 'M, 2-3 days' },
+    { what: 'The block of an old battle map (Napoleonic plans): a rectangle of cells, one per unit, in one rank up to 4 and two ranks up to 8 (above 8 in proportion); a filled cell = charged, an empty framed cell = not; a small flag on a pole carries the number. The enemy: an inner frame.', pros: 'The charge count is the shape itself, large and exact, readable at 0.45 and in grayscale; the cartographic look fits the map and the neutral setting; compact in height.', risks: 'A wide token: on a road it covers more of the road; the cells repeat the warehouse squares at a city (different size and frame); the flag is also the capture sign.', fps: 'Bake: one sprite per (side, units up to 8, charged), about 90 textures. FPS: low.', needs: 'client only', est: 'M, 2-3 days' },
+    { what: 'The shipped ▽ cut as a carved piece: three facets lit from the upper left, a light inner bevel; the charge still fills from the tip (the charged part in the owner colour, the uncharged part a dark recess); the number on the top facet.', pros: 'A richer look with no new rule to learn; the silhouette and its meaning stay; fits the BL1 shading.', risks: 'Not a new shape, so it answers "more complex look" but not "other shapes"; the share is as hard to count as now.', fps: 'Bake: one sprite per (side, size, charge level in 10 steps), as now. FPS: low.', needs: 'client only', est: 'S, 1 day' },
   ],
   c: [
-    { what: 'C1 as shipped: a disc sized by capacity (r 14-20), the owner by fill and outline (enemy: dark inner ring), the capacity ring, the warehouse bar under it, the capital star (hidden under a token), the barracks disc on the left, VP at the upper right, the progress cells of #439 (shipped on 2026-10-29) right above the ring.', pros: 'Shipped.', risks: 'Kind reads only by size; the capital star disappears under the garrison token; in the mockup geometry the cells plate comes close to the VP badge (not checked in the client); the enemy dark inner ring is a second "target".', fps: 'low', needs: 'none', est: '0' },
-    { what: 'C1 cleaned up: the disc by kind (S 11, M 13, L 15, capital 16), the enemy outline doubled outside instead of the dark inner ring, the capital star on its own badge at the upper left (never under a token), VP at the upper right; fixed slots: cells above, B1 icons on the left (barracks over Defense), warehouse places right under the ring, the caption under them.', pros: 'The smallest step from what is shipped and tested; every mark has one place, so nothing overlaps; the capital stays visible with a garrison; kind and side read in grayscale.', risks: 'Conservative: the look stays "a circle"; the capital badge adds one sprite to 2 cities.', fps: 'low: the same baked parts, one more badge texture', needs: 'client only', est: 'S-M, 2 days' },
-    { what: 'A small disc with a thin ring; under it a name plate in screen pixels (like a city banner): an owner band on top, a double inner frame for the enemy, the capital star or the barracks house, the name, the VP chip; the warehouse places on a tab under the plate.', pros: 'The name, side, VP and kind read as one label at any zoom; strong, game-like.', risks: 'Plates are the largest footprint: on 45-55 node maps they overlap at zoom 0.45-0.7 (needs collision rules); the warehouse in screen pixels no longer scales with the map; the caption rule of #449 changes.', fps: 'medium: one baked plate per (name, state) plus the Text that exists; more texture memory', needs: 'client only; ui-style 9.4 caption rule', est: 'M-L, 3-4 days' },
-    { what: 'The capacity ring becomes the city wall: thick blocks, one per place, white where your unit stands; towers on the wall by kind (S none, M two, L four), the capital also a flag; the barracks as a square gatehouse on the wall at 9 o\'clock; warehouse places under the wall.', pros: 'Kind reads by towers, not only by size; the ring stops being an abstract gauge; no dark centre.', risks: 'More detail at 0.45 (towers merge into the wall); the wall blocks are another "segment" sign next to the warehouse squares; capital vs large city differ only by the flag.', fps: 'low: baked per (kind, side, garrison), about 120 textures', needs: 'client only', est: 'M, 3 days' },
-    { what: 'A plinth disc with a skyline in white: one tower (small), two (medium), three (large), a keep with a flag (capital); the garrison token stands beside the city at the lower right, so the skyline stays visible.', pros: 'The kind is a picture, easy to learn; the capital always visible.', risks: 'The token moves off the node centre: ribbons, packets and hit areas anchor differently (pick.ts, anchors.ts change); busy at small sizes; the skyline competes with the house glyph of the barracks.', fps: 'low: baked per (kind, side)', needs: 'client only; anchors and picking change', est: 'M, 3-4 days' },
+    { what: 'C1 as shipped: a disc sized by capacity, the owner by fill and outline (enemy: dark inner ring), the capacity ring, the warehouse bar, the capital star (hidden under a token), the barracks disc on the left, VP at the upper right, the #439 cells above the ring.', pros: 'Shipped.', risks: 'The owner wants more than a circle; kind only by size; capital star under the token; a second dark "target" ring on the enemy.', fps: 'Bake: as now. FPS: low.', needs: 'none', est: '0' },
+    { what: 'A star-fort trace: 4 bastions (small), 5 (medium), 6 (large), an 8-point star (capital); a cobbled yard in the owner colour, an inner contour, the side by a single (own) or doubled (enemy) outline; the capacity ring outside.', pros: 'The kind is the shape, and the capital is literally a star; strong "fortified place" read; nothing in the centre the token must not hide.', risks: 'Spikes reach toward roads and badges on dense maps; 5 vs 6 bastions are hard to tell at 0.45 (size helps).', fps: 'Bake: one body sprite per (kind, side), 12 textures; the ring as now. FPS: low.', needs: 'client only', est: 'M, 2-3 days' },
+    { what: 'A ring of roofed blocks around a paved square: one block per capacity place (4, 6, 8, 10), so the kind is the count and the block roof turns white where your unit stands (the capacity ring becomes the town itself); the capital has a crenellated square and the star badge.', pros: 'The town is the gauge: capacity, garrison and kind in one picture; reads as a settlement, not a target; the token stands on the square.', risks: 'Busy at 0.45 (blocks merge into a toothed ring); 8 vs 10 blocks are hard to count; the roofs are new detail to bake per garrison level.', fps: 'Bake: one sprite per (kind, side, garrison 0..cap), about 40 textures (or the body once plus white roof sprites). FPS: low.', needs: 'client only', est: 'M, 3 days' },
+    { what: 'A heraldic plate: square (small), hexagon (medium), octagon (large and capital) with a stone band; the band carries a stud per capacity place (white = your unit); the field in the owner colour with a lattice; a crown above the capital; the enemy a second outline.', pros: 'Kind by outline; the capital by a crown that the token never hides; a "carved emblem" look; the studs keep the place semantics.', risks: 'Studs are about 2 px at 0.45; large and capital share the octagon (the crown tells them apart); a crown is a new sign (ui-style 21).', fps: 'Bake: one plate per (kind, side), 12 textures; studs as small sprites or baked per garrison. FPS: low.', needs: 'client only; ui-style 21 entry', est: 'M, 2-3 days' },
+    { what: 'The city stands on a round plinth whose rim shows the terrain (grass ticks for plains, tree crowns for forest, rocks with snow tips for mountains); a walled disc in the owner colour on top, crenellated for the capital; the capacity ring outside.', pros: 'The terrain (defense and entry rules, DEC-21) is visible at the city itself; a diorama feel; the body stays round and familiar.', risks: 'The plinth repeats what the baked background already shows; the base plus the ring is the widest sign; three terrains x kinds x sides.', fps: 'Bake: one plinth per (terrain, kind), 12 textures, plus the body per (kind, side). FPS: low.', needs: 'client only (terrain is in the map file)', est: 'M, 2-3 days' },
+    { what: 'A curtain wall: a polygon with one tower per capacity place (square for small, hexagon, octagon, decagon for the capital), a tower turns white where your unit stands; the yard in the owner colour with cobbles; masonry joints on the wall; a flag on the capital; the enemy a second outline.', pros: 'Kind by the number of sides, garrison by lit towers, the capital by the decagon and a flag: everything reads from the shape; strongly "city".', risks: 'The flag is also the capture sign; towers are small at 0.45; the decagon is close to a circle from far.', fps: 'Bake: one wall per (kind, side), 12 textures, towers as small sprites. FPS: low.', needs: 'client only', est: 'M, 3 days' },
   ],
   p: [
-    { what: 'C1 as shipped: a hollow ring on a dark plate; own with a light ring outside, the enemy with an inner ring too, neutral a thin grey ring; the capacity ring of 3 around it.', pros: 'Shipped.', risks: 'Concentric rings around a dark centre read as a target (the owner); the dark plate looks like a hole in the terrain; with a garrison the token hides it and only the rings stay.', fps: 'low', needs: 'none', est: '0' },
-    { what: 'A solid disc (r 8) in the owner colour with a light outline and a highlight; the enemy has a second outline outside; neutral a grey disc. The capacity ring of 3 becomes three separate ticks (top, lower right, lower left) with no closed ring behind them.', pros: 'No dark centre and no closed ring, so no bullseye; the simplest; reads as a village dot of a map; a city is larger and carries VP and the warehouse.', risks: 'Close to a small city in silhouette when zoomed out (size carries it); under a garrison token only the three ticks show.', fps: 'low (one baked sprite per side and garrison)', needs: 'client only', est: 'S, 0.5-1 day' },
-    { what: 'A flat hexagon tile (land, not a building) in the owner colour with a light outline; the enemy has a second outline; neutral an empty dashed tile. The 3 capacity places are three bars outside alternate sides (white where your unit stands).', pros: 'A silhouette of its own: no city is hexagonal, so province vs city never depends on size; the dashed empty tile reads as unclaimed; the bars keep the "one place per segment" language without a ring.', risks: 'A new shape in the icon language (an entry in ui-style 21); the hexagon recalls the U4 token of #337 for those who saw it; under a garrison token the bars show, the tile mostly not.', fps: 'low (one baked sprite per side and garrison)', needs: 'client only; ui-style 21 entry', est: 'S, 1 day' },
-    { what: 'A small flag planted at the node: own cloth flies to the right, the enemy to the left with an inner edge (double), neutral an empty dashed cloth; a base dot and the three capacity ticks at the node.', pros: 'Reads as "claimed ground"; side by direction and edge, not only colour; the flag sticks out above a token, so the owner of a garrisoned province stays visible.', risks: 'Taller than other signs (24 units up): touches roads and the caption of the node above on dense maps; a flag is also the "capture" icon (ui-style 21).', fps: 'low', needs: 'client only', est: 'S-M, 1-1.5 days' },
-    { what: 'A soft disc of the owner colour (a piece of land, 36% alpha) with a light pin in the middle; the 3 capacity places are thick arcs on its edge; the enemy edge doubled; neutral a dashed grey edge.', pros: 'Feels like territory, the quietest; no inner rings.', risks: 'Low contrast on the T2 texture and next to the territory fill of the same colour; in grayscale the side is only the edge (single or double); the pin in a disc can still recall a target from far.', fps: 'low', needs: 'client only', est: 'S, 1 day' },
+    { what: 'C1 as shipped: a hollow ring on a dark plate; own with a light ring outside, the enemy with an inner ring too, neutral a thin grey ring; the capacity ring of 3 around it.', pros: 'Shipped.', risks: 'Reads as a target (the owner); the dark plate is a hole in the terrain.', fps: 'Bake: as now. FPS: low.', needs: 'none', est: '0' },
+    { what: 'A half-transparent hexagon of ploughed land (furrows in the owner tint), a light outline (dashed when neutral), the enemy a second outline; 3 bars outside alternate sides for the capacity places.', pros: 'Land, not a building: clearly lighter than any city; a silhouette of its own; no centre.', risks: 'The furrows vanish at 0.45 (the tint stays); the hexagon is a new shape (ui-style 21).', fps: 'Bake: one sprite per (side, garrison 0-3), 12 textures. FPS: low.', needs: 'client only', est: 'S, 1 day' },
+    { what: 'Three ploughed field patches fanned round the node; each patch is one capacity place and turns white where your unit stands; a light hub, no disc in the middle; the enemy an outer arc on each patch.', pros: 'The patches stick out round any token, so the province stays readable under a garrison; capacity and garrison are the sign itself; rural, light.', risks: 'Three patches recall a radiation sign or a fan to some players; widest of the province signs (r 17).', fps: 'Bake: one sprite per (side, garrison 0-3), 12 textures. FPS: low.', needs: 'client only', est: 'S-M, 1-1.5 days' },
+    { what: 'Three arcs of stakes round a light earth floor; each arc is a capacity place (white stakes = your unit); the gaps read as gates; the enemy an outer line behind each arc; neutral grey stakes, no floor.', pros: 'A camp or a stockade: "held ground" without a city body; open, so no target; visible round a token.', risks: 'From far the arcs form a broken ring (a hint of the old target); stakes are thin at 0.45.', fps: 'Bake: one sprite per (side, garrison 0-3). FPS: low.', needs: 'client only', est: 'S, 1 day' },
+    { what: 'A standing stone behind the node with a band in the owner colour (a double band for the enemy, none when neutral); three capacity bars at its foot; the stone keeps a 16 px minimum on screen.', pros: 'The stone rises above the token, so the owner of a garrisoned province stays visible; very light; a map-marker feel.', risks: 'Can read as a grave stone; tall (26 up) on dense maps; the band is small at 0.45.', fps: 'Bake: one sprite per side, bars as now. FPS: low.', needs: 'client only', est: 'S, 1 day' },
+    { what: 'Three round thatched huts seen from above, joined by paths to the node; each hut is a capacity place (white roof = your unit stands); the enemy a ring round each hut; neutral dashed empty huts.', pros: 'A village at a glance; light; the huts sit round the token and stay visible; no centre.', risks: 'Huts are 4-5 px at 0.45; round huts are close to the round city body in shape (much smaller).', fps: 'Bake: one sprite per (side, garrison 0-3). FPS: low.', needs: 'client only', est: 'S-M, 1-1.5 days' },
   ],
 };
-const REC = { o: 1, u: 1, c: 1, p: 2 };
+const REC = { o: 1, u: 5, c: 5, p: 2 };
 const REC_WHY = {
-  o: 'O1 "Slim arc": the smallest change in grammar (still one arrow from the source to the target) that removes the main problem of now, the large opaque ribbon over the map; it adds the two pieces of information players lack (the seconds of the delay and how far your group is) from data the client has, and the opponent\'s intent becomes a double rail, the same "double outline" as enemy tokens and cities. Second choice: O4 "Rail and target" if the owner wants the target to be the loudest part.',
-  u: 'U1+U4 "Row" (the #433 plan): it is what was accepted in #337, conservative, and the row gives the exact count; the fill from the tip is kept on purpose, because at zoom 0.45 the squares are 3-4 px and the fill is what still reads. Second choice: UD "Side gauge" if the row under the tip collides with city captions in the implementation.',
-  c: 'CA "Tidy": it keeps C1 (shipped, tested, accepted in #337) and fixes what the owner and the screenshots show: the capital star is never under the token, the enemy has no second dark "target" ring, the kind reads by size, and every chosen mark (#439 cells, B1 icons, warehouse places, VP, caption) has a fixed slot, so they never overlap. Second choice: CC "Citadel" if a more characterful city is wanted.',
-  p: 'P2 "Plot": the only variant whose silhouette alone tells a province from a city at every zoom (no city is hexagonal), and the dashed empty tile reads as unclaimed land; no dark centre and no rings inside. Second choice: P1 "Pip" (the simplest, half a day).',
+  o: 'REC_O',
+  u: 'REC_U',
+  c: 'REC_C',
+  p: 'REC_P',
 };
 
 // ======================================================================================================
@@ -1031,7 +1144,7 @@ function renderBase(X, t) {
   for (const n of NODES) {
     if (!inView(n.x, n.y)) continue;
     const m = nodeModel(n, t), d = drawNode(m, X);
-    UNIT_AT[n.id] = d.unitAt; NODE_R[n.id] = n.k === 'P' ? 10 : { S: 14, M: 17, L: 20, C: 20 }[n.k];
+    UNIT_AT[n.id] = d.unitAt; NODE_R[n.id] = d.r || (n.k === 'P' ? 10 : { S: 14, M: 17, L: 20, C: 20 }[n.k]);
     let g = d.svg;
     if (st.tags) g += tagText(m, d.bottom + X.px(1), X);
     nodes += G(n.x, n.y, g);
@@ -1066,7 +1179,7 @@ function renderDyn(X, t) {
   const V = ORDERS[st.o];
   for (const pl of PLANS) {
     const ps = planState(pl, t), from = NODES[pl.from], to = NODES[pl.to];
-    const q = { o: pl.o, A: from, B: to, rA: NODE_R[pl.from] || 14, rB: NODE_R[pl.to] || 14, prog: ps.prog, since: ps.since, walk: pl.o === 'you' ? ps.walk : null, gpos: pl.o === 'you' && ps.pos && !ps.pos.arrived ? ps.pos : null, bonus: pl.bonus, tgtOwn: to.o === 'you', t };
+    const q = { o: pl.o, A: from, B: to, rA0: from.k === 'P' ? 10 : { S: 14, M: 17, L: 20, C: 20 }[from.k], rA: NODE_R[pl.from] || 14, rB: NODE_R[pl.to] || 14, prog: ps.prog, since: ps.since, walk: pl.o === 'you' ? ps.walk : null, gpos: pl.o === 'you' && ps.pos && !ps.pos.arrived ? ps.pos : null, bonus: pl.bonus, tgtOwn: to.o === 'you', t };
     intents += V.fn(q, X);
   }
   return s + lines + toks + intents;
@@ -1133,16 +1246,16 @@ function samplesUnits() {
   table(document.getElementById('spec_u'), UNITS, cols, st.u, 'u');
 }
 const C_STATES = [
-  ['capital, own, garrison 5, queue 2, level 1', { k: 'C', o: 'you', name: 'Bedrock', vp: 1, units: 5, marks: true, wh: { lvl: 1, st: 5 }, bar: 'built', q: { n: 2, p: 0.45 }, token: { o: 'you', k: 'exact', n: 5, c: 4 } }],
-  ['large, own, selected, full, a unit waits, warehouse build', { k: 'L', o: 'you', name: 'Outpost', vp: 1, units: 8, marks: true, sel: true, wh: { lvl: 0, st: 1 }, bar: 'built', q: { n: 1, p: 1, waiting: true }, build: { kind: 'warehouse', pct: 0.6 }, token: { o: 'you', k: 'exact', n: 8, c: 5 } }],
-  ['medium, own, empty, barracks build', { k: 'M', o: 'you', name: 'Sprucedale', vp: 1, units: 0, marks: true, wh: { lvl: 0, st: 2 }, build: { kind: 'barracks', pct: 0.55 } }],
-  ['medium, own, garrison in Defense +1/2', { k: 'M', o: 'you', name: 'Cedarwood', vp: 1, units: 2, marks: true, wh: { lvl: 2, st: 4 }, bar: 'built', def: { b: 1, cap: 2 }, token: { o: 'you', k: 'exact', n: 2, c: 2 } }],
-  ['small, own, enemy inside (PRESENCE)', { k: 'S', o: 'you', name: 'Woodside', vp: 1, units: 0, marks: true, wh: { lvl: 1, st: 1 }, token: { o: 'enemy', k: 'presence' } }],
-  ['large, enemy, seen exactly, barracks (DEC-31)', { k: 'L', o: 'enemy', name: 'Fairground', vp: 2, marks: true, bar: 'built', token: { o: 'enemy', k: 'exact', n: 3, c: 1 } }],
-  ['capital, enemy, fog', { k: 'C', o: 'enemy', name: 'Bulwark', vp: 1, fog: true }],
-  ['medium, enemy, fog', { k: 'M', o: 'enemy', name: 'North Pass', vp: 2, fog: true }],
-  ['small, neutral, seen', { k: 'S', o: 'none', name: 'Eagle Nest', vp: 1 }],
-  ['medium, neutral, fog', { k: 'M', o: 'none', name: 'South Pass', vp: 2, fog: true }],
+  ['capital, own, garrison 5, queue 2, level 1', { k: 'C', o: 'you', name: 'Bedrock', t: 'm', vp: 1, units: 5, marks: true, wh: { lvl: 1, st: 5 }, bar: 'built', q: { n: 2, p: 0.45 }, token: { o: 'you', k: 'exact', n: 5, c: 4 } }],
+  ['large, own, selected, full, a unit waits, warehouse build', { k: 'L', o: 'you', name: 'Outpost', t: 'p', vp: 1, units: 8, marks: true, sel: true, wh: { lvl: 0, st: 1 }, bar: 'built', q: { n: 1, p: 1, waiting: true }, build: { kind: 'warehouse', pct: 0.6 }, token: { o: 'you', k: 'exact', n: 8, c: 5 } }],
+  ['medium, own, empty, barracks build', { k: 'M', o: 'you', name: 'Sprucedale', t: 'f', vp: 1, units: 0, marks: true, wh: { lvl: 0, st: 2 }, build: { kind: 'barracks', pct: 0.55 } }],
+  ['medium, own, garrison in Defense +1/2', { k: 'M', o: 'you', name: 'Cedarwood', t: 'f', vp: 1, units: 2, marks: true, wh: { lvl: 2, st: 4 }, bar: 'built', def: { b: 1, cap: 2 }, token: { o: 'you', k: 'exact', n: 2, c: 2 } }],
+  ['small, own, enemy inside (PRESENCE)', { k: 'S', o: 'you', name: 'Woodside', t: 'f', vp: 1, units: 0, marks: true, wh: { lvl: 1, st: 1 }, token: { o: 'enemy', k: 'presence' } }],
+  ['large, enemy, seen exactly, barracks (DEC-31)', { k: 'L', o: 'enemy', name: 'Fairground', t: 'p', vp: 2, marks: true, bar: 'built', token: { o: 'enemy', k: 'exact', n: 3, c: 1 } }],
+  ['capital, enemy, fog', { k: 'C', o: 'enemy', name: 'Bulwark', t: 'm', vp: 1, fog: true }],
+  ['medium, enemy, fog', { k: 'M', o: 'enemy', name: 'North Pass', t: 'm', vp: 2, fog: true }],
+  ['small, neutral, seen', { k: 'S', o: 'none', name: 'Eagle Nest', t: 'm', vp: 1 }],
+  ['medium, neutral, fog', { k: 'M', o: 'none', name: 'South Pass', t: 'm', vp: 2, fog: true }],
 ];
 const P_STATES = [
   ['own, garrison', { k: 'P', o: 'you', name: 'Highroad', units: 2, marks: true, token: { o: 'you', k: 'exact', n: 2, c: 1 } }],
@@ -1159,7 +1272,7 @@ function nodeCell(m, X, cv, pv) {
   const d = drawNode(m, X, cv, pv), ua = d.unitAt || [0, 0];
   const tok = m.token ? drawUnit(ua[0], ua[1], m.token, X).svg : '';
   // fogged places: the veil covers the city; the token layer is above the haze (none is drawn in the fog anyway)
-  return { inner: d.svg, tok };
+  return { inner: d.svg, tok, r: d.r };
 }
 function samplesNodes(prov) {
   const z = st.z / 100, states = prov ? P_STATES : C_STATES, rows = prov ? PROVS : CITIES, cur = prov ? st.p : st.c, w = prov ? 150 : 200, h = prov ? 110 : 160;
@@ -1184,10 +1297,10 @@ function samplesOrders() {
   const cols = O_STATES.map(([label, s]) => [label, (i) => {
     const X = mkX('o' + SID++, z), A = { x: -115, y: 22 }, B = { x: 115, y: 22 };
     const from = { k: 'L', o: s.o, name: s.o === 'you' ? 'Outpost' : 'Oakgrove', vp: 1, units: s.o === 'you' && s.t < 3 ? 4 : 0, marks: s.o === 'you', wh: { lvl: 1, st: 2 }, token: s.t < 3 ? (s.o === 'you' ? { o: 'you', k: 'exact', n: 4, c: 3 } : { o: 'enemy', k: 'range', rng: '3-5' }) : null };
-    const to = s.own ? { k: 'M', o: 'you', name: 'Cedarwood', vp: 1, units: 0, marks: true, wh: { lvl: 0, st: 2 } } : { k: 'P', o: s.o === 'you' ? 'enemy' : 'none', name: 'Hillfoot' };
+    const to = s.own ? { k: 'M', o: 'you', name: 'Cedarwood', t: 'f', vp: 1, units: 0, marks: true, wh: { lvl: 0, st: 2 } } : { k: 'P', o: s.o === 'you' ? 'enemy' : 'none', name: 'Hillfoot' };
     const nf = nodeCell(from, X, st.c, st.p), nt = nodeCell(to, X, st.c, st.p);
     const since = s.t - DELAY, prog = since < 0 ? s.t / DELAY : 1, walk = s.o === 'you' && since > 0 ? Math.min(1, since / 4.5) : null;
-    const q = { o: s.o, A, B, rA: 20, rB: s.own ? 17 : 10, prog, since, walk, gpos: walk != null ? { x: A.x + (B.x - A.x) * walk, y: A.y + (B.y - A.y) * walk } : null, bonus: s.o === 'you' ? 2 : 0, tgtOwn: !!s.own };
+    const q = { o: s.o, A, B, rA0: 20, rA: nf.r || 20, rB: nt.r || (s.own ? 17 : 10), prog, since, walk, gpos: walk != null ? { x: A.x + (B.x - A.x) * walk, y: A.y + (B.y - A.y) * walk } : null, bonus: s.o === 'you' ? 2 : 0, tgtOwn: !!s.own };
     let g = G(A.x, A.y, nf.inner) + G(B.x, B.y, nt.inner) + G(A.x, A.y, nf.tok) + G(B.x, B.y, nt.tok);
     if (walk != null) { const p = { x: A.x + (B.x - A.x) * walk, y: A.y + (B.y - A.y) * walk }; g += drawUnit(p.x, p.y, { o: 'you', k: 'exact', n: 4, c: 3 }, X).svg; }
     if (s.o === 'enemy' && since > 0) { const f = Math.min(0.9, since / 6), p = { x: A.x + (B.x - A.x) * f, y: A.y + (B.y - A.y) * f }; g += drawUnit(p.x, p.y, { o: 'enemy', k: 'range', rng: '3-5' }, X).svg; }
@@ -1201,7 +1314,7 @@ function samplesOrders() {
 // Cards, the pick summary, rules
 // ======================================================================================================
 function cards(key, rows, el) {
-  el.innerHTML = rows.map((V, i) => { const I = INFO[key][i]; return `<div class="card ${REC[key] === i ? 'rec' : ''} ${st[key] === i ? 'cur' : ''}"><h3>${V.name}${REC[key] === i ? '<span class="tag">recommended</span>' : ''}</h3><dl><dt>What</dt><dd>${I.what}</dd><dt>Pros</dt><dd>${I.pros}</dd><dt>Risks</dt><dd>${I.risks}</dd><dt>FPS risk</dt><dd>${I.fps}</dd><dt>DEC / protocol / simulation / client</dt><dd>no / no / no / ${I.needs}</dd><dt>Estimate</dt><dd>${I.est}</dd></dl></div>`; }).join('') + `<div class="card rec"><h3>Recommendation</h3><dd>${REC_WHY[key]}</dd></div>`;
+  el.innerHTML = rows.map((V, i) => { const I = INFO[key][i]; return `<div class="card ${REC[key] === i ? 'rec' : ''} ${st[key] === i ? 'cur' : ''}"><h3>${V.name}${REC[key] === i ? '<span class="tag">recommended</span>' : ''}</h3><dl><dt>What</dt><dd>${I.what}</dd><dt>Pros</dt><dd>${I.pros}</dd><dt>Risks</dt><dd>${I.risks}</dd><dt>Bake / FPS</dt><dd>${I.fps}</dd><dt>DEC / protocol / simulation / client</dt><dd>no / no / no / ${I.needs}</dd><dt>Estimate</dt><dd>${I.est}</dd></dl></div>`; }).join('') + `<div class="card rec"><h3>Recommendation</h3><dd>${REC_WHY[key]}</dd></div>`;
 }
 function pick() {
   const nm = (arr, i) => arr[i].name;
