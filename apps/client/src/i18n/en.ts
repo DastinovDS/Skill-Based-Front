@@ -428,6 +428,19 @@ export const en = {
   'help.key.mode': 'group mode: attack, defense',
   'help.key.cancel': 'cancel the order of the group, or the last recruit of the selected city',
   'help.key.recruit': 'queue a unit in the city',
+  'terrain.banner': 'Terrain map mode [T]',
+  'terrain.hint':
+    'Dots: plains. Firs: forest. Hatching: mountains. Bars beside a place: how well you see it. T: leave',
+  'terrain.legend':
+    'A group standing on the ground at the left sees a place on the ground above as',
+  'terrain.plains': 'Plains',
+  'terrain.forest': 'Forest',
+  'terrain.mountains': 'Mountains',
+  'terrain.sight.exact': 'exact',
+  'terrain.sight.range': 'range',
+  'terrain.sight.presence': 'presence',
+  'help.key.terrain':
+    'terrain map mode: a pattern per ground (dots, firs, hatching) and bars beside the places you see, with the vision table; T again: leave',
   'road.tip.level': 'Road: level {from} → {to}',
   'road.tip.gain': 'units +{units}%, supply +{amount}',
   'road.tip.price': '{cost} CP, {seconds} s',

@@ -123,7 +123,7 @@ export interface KeyInput {
  * selected city, Q the stance menu (hold and release over a sector, or
  * tap and click; 1 / 2 / 3 choose while it is open), S the split menu, G merge, Space the camera
  * to the next alert, Tab or F2 the «Supply» mode (it also lets a selected city go with its menu),
- * U the road mode.
+ * U the road mode, T the terrain mode (patterns and sight signs; not together with «Supply»).
  * At most one radial menu is open: whoever opens one closes the others (`#closeMenus`).
  */
 export class OrderController implements MapInteraction {
@@ -253,7 +253,8 @@ export class OrderController implements MapInteraction {
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
-      supply !== this.#overlay.supply
+      supply !== this.#overlay.supply ||
+      this.ui.current.terrainMode !== this.#overlay.terrain
     ) {
       this.#overlayKey = key;
       this.#overlayGhosts = ghosts;
@@ -272,6 +273,7 @@ export class OrderController implements MapInteraction {
         candidates,
         beacon,
         supply,
+        terrain: this.ui.current.terrainMode,
         reach: reachNodes,
         split: splitNodes,
         eta:
@@ -757,7 +759,32 @@ export class OrderController implements MapInteraction {
     this.#closeMenus();
     this.transfer.close();
     if (this.#o.hud.selection?.kind === 'node') this.#o.hud.select(null);
-    this.ui.patch({ supplyMode: on, transferFrom: null });
+    this.ui.patch({ supplyMode: on, transferFrom: null, ...(on ? { terrainMode: false } : {}) });
+  }
+
+  // --- The terrain map mode (#429) ---------------------------------------------------------------
+
+  get terrainMode(): boolean {
+    return this.ui.current.terrainMode;
+  }
+
+  /**
+   * `T`: the terrain map mode on or off. It only changes the picture, so nothing else closes; it
+   * does not go with the «Supply» mode (turning one on turns the other off).
+   */
+  toggleTerrainMode(): void {
+    const on = !this.ui.current.terrainMode;
+    if (on) {
+      this.#closeMenus();
+      this.transfer.close();
+      if (this.ui.current.supplyMode) this.ui.patch({ supplyMode: false, transferFrom: null });
+    }
+    this.ui.patch({ terrainMode: on });
+  }
+
+  /** The vision table of the rules (`ruleset_public.vision`, DEC-21, item 2): shown, never computed with. */
+  get visionTable(): RulesetPublic['vision']['by_terrain'] {
+    return this.#o.rules.vision.by_terrain;
   }
 
   /** Opens the supply menu of the own city `node` (a click on it in the «Supply» mode). */
@@ -877,6 +904,10 @@ export class OrderController implements MapInteraction {
     }
     if (input.code === 'KeyU') {
       if (input.repeat !== true) this.toggleRoadMode();
+      return true;
+    }
+    if (input.code === 'KeyT') {
+      if (input.repeat !== true) this.toggleTerrainMode();
       return true;
     }
     if (input.code === 'KeyQ') return this.#qDown(input);

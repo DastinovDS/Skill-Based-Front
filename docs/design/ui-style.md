@@ -1908,7 +1908,7 @@ Menu map sketches (drawn in the mockup, not map files): **MM1 Valley** (**recomm
 
 ## 37. Supply lines, terrain and vision, rivers and lakes (#429)
 
-Status: **[awaiting the owner's decision]**. The owner's feedback of 2026-10-28 asked for nicer supply lines in the Supply view (section 19), a way to see what terrain means for vision (DEC-21, DEC-35), and for rivers and lakes as a natural border between neighbouring cells that have no road (the 6 px strips of #428 were removed in #451). On 2026-10-29 the owner moved the issue before the release, so the postponement of section 23 does not apply. Purely visual: no rule, simulation or server change; where a variant needs data the snapshot or the protocol does not carry today, the table says so.
+Status: **[accepted: supply lines B Pipes, terrain and vision B Patterns, owner 2026-10-29]**; rivers and lakes moved to section 39 (DEC-36). The owner's feedback of 2026-10-28 asked for nicer supply lines in the Supply view (section 19), a way to see what terrain means for vision (DEC-21, DEC-35), and for rivers and lakes as a natural border between neighbouring cells that have no road (the 6 px strips of #428 were removed in #451). On 2026-10-29 the owner moved the issue before the release, so the postponement of section 23 does not apply. Purely visual: no rule, simulation or server change; where a variant needs data the snapshot or the protocol does not carry today, the table says so.
 
 Mockup: [`mockups/supply-terrain.html`](mockups/supply-terrain.html), frames in [`mockups/img/429/`](mockups/img/429/). It draws the three pool maps (`highway`, `crossroads`, `ridge`: real positions, kinds, terrain, roads, levels) with a made-up mid-game position (two markers, a counter-flow, a transfer, a raided and cut-off city, own groups and enemy groups). Switches: map, zoom (Overview, Map, Region, Close), what to look at (marker 1, marker 2, the capital, the cut-off city), 1 to 3 columns, grayscale, reduced motion, animation, the group the lens looks from, and a "Together" row that mixes one variant of each part. The state is in the address (`#map=highway&z=region&f=front&sv=corr&tv=lens&rv=r2`). **Now** is drawn from the same constants as the client. The page checks the DEC-21 table and examples 1 to 9, the DEC-35 sources, the DEC-28 markers and flows, the DEC-26 levels, DEC-19 cut-off and that no river crosses a road, on all three maps.
 
@@ -1932,7 +1932,7 @@ Finding that shapes the rivers: a river never meets a road, so each lies inside 
 
 Checked in grayscale (`supply-gray-pocket.png`, `terrain-gray.png`): the level is lanes, a bore or a width, never a hue; the sight level is three bars, never a colour; the cut-off city is a ring, an arc or a hatch with the time in digits; the terrain is a glyph or a pattern.
 
-**Owner's decision:** awaiting the owner's decision.
+**Owner's decision (2026-10-29):** supply lines **B Pipes** (shipped in #542). Terrain and vision **B Patterns** as a "link" indicator, **without terrain icons** (no glyph on the cities): the terrain map mode on `T` (a flat colour and a pattern per terrain, a three-bar sight sign beside every place you do not own and see now, the vision table of `ruleset_public.vision` as the legend); the sign shows the level the server put in the snapshot, the client computes nothing. Rivers and lakes are not part of this issue: see section 39 (DEC-36).
 
 ---
 

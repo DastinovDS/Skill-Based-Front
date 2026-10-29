@@ -856,6 +856,40 @@ describe('OrderController', () => {
     expect(focused).toEqual([aimed.id]);
   });
 
+  describe('terrain map mode (#429)', () => {
+    it('T toggles the mode; the overlay carries it; a held key does not flip it back', () => {
+      const { controller } = setup();
+      expect(controller.overlay().terrain).toBe(false);
+      expect(controller.key(down('KeyT'))).toBe(true);
+      expect(controller.terrainMode).toBe(true);
+      expect(controller.overlay().terrain).toBe(true);
+      controller.key(down('KeyT', true));
+      expect(controller.terrainMode).toBe(true);
+      controller.key(down('KeyT'));
+      expect(controller.terrainMode).toBe(false);
+      expect(controller.overlay().terrain).toBe(false);
+    });
+
+    it('is not together with the «Supply» mode: one turns the other off', () => {
+      const { controller } = setup();
+      controller.key(down('Tab'));
+      controller.key(down('KeyT'));
+      expect(controller.supplyMode).toBe(false);
+      expect(controller.terrainMode).toBe(true);
+      controller.key(down('Tab'));
+      expect(controller.supplyMode).toBe(true);
+      expect(controller.terrainMode).toBe(false);
+    });
+
+    it('gives the vision table of the rules as it is, for the legend', () => {
+      const { controller } = setup();
+      const table = controller.visionTable;
+      // DEC-21, item 2: forest is always a range, mountains see plains exactly.
+      expect(table.forest).toEqual({ plains: 'range', forest: 'range', mountains: 'presence' });
+      expect(table.mountains.plains).toBe('exact');
+    });
+  });
+
   describe('supply map mode (DEC-18)', () => {
     const city = home;
     const target = other.id;

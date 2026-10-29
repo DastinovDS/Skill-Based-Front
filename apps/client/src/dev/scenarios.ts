@@ -25,6 +25,7 @@ import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 import { supplySnapshot } from './supplyScene.ts';
+import { terrainSnapshot } from './terrainScene.ts';
 
 const files = import.meta.glob<SnapshotMsg>(
   '../../../../packages/protocol/fixtures/server/snapshot*.json',
@@ -517,6 +518,15 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     snapshot: defenseSnapshot(bundledMap('artery')),
     events: [],
     view: DEFENSE_VIEW,
+    cityUpgrades: true,
+  },
+  {
+    // The artery moment for the terrain map mode (T, `keys` in visual/scenes.ts): patterns and sight signs (#429).
+    id: 'terrain',
+    map: 'artery',
+    snapshot: terrainSnapshot(bundledMap('artery')),
+    events: [],
+    view: ARTERY_VIEW,
     cityUpgrades: true,
   },
   {

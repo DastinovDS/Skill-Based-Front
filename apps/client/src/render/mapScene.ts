@@ -20,6 +20,7 @@ import { OverlayView } from './overlayView.ts';
 import { nodePoint } from './layout.ts';
 import { pickAt } from './pick.ts';
 import type { RenderSource } from './source.ts';
+import { SightView } from './sightView.ts';
 import { SupplyView } from './supplyView.ts';
 import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
@@ -91,6 +92,7 @@ export class MapScene {
   private readonly fog: FogView;
   private readonly overlay: OverlayView;
   private readonly supply: SupplyView;
+  private readonly sight: SightView;
   private readonly alerts: AlertView;
   private interaction: MapInteraction | null;
   private hovering = false;
@@ -100,6 +102,7 @@ export class MapScene {
   private destroyed = false;
   private supplyOn = false;
   private readonly me: PlayerId;
+  private terrainOn = false;
   private readonly onsnapshot: ((tick: number) => void) | undefined;
   /** A frame that throws is skipped, not the end of the loop (CLI-03, #418). */
   private readonly guard: FrameGuard;
@@ -155,6 +158,7 @@ export class MapScene {
     );
     this.overlay = new OverlayView(map, this.layers, me, radiusOf);
     this.supply = new SupplyView(map, this.layers, me, radiusOf);
+    this.sight = new SightView(map, this.layers, me, radiusOf);
     this.alerts = new AlertView(map, this.layers, me, radiusOf);
     this.controller = new CameraController(
       app.canvas,
@@ -238,6 +242,7 @@ export class MapScene {
     this.entities.destroy();
     this.overlay.destroy();
     this.supply.destroy();
+    this.sight.destroy();
     this.names.destroy();
     this.cities.destroy();
     this.view.destroy();
@@ -294,6 +299,7 @@ export class MapScene {
     // Asked once per frame and first: the «Supply» mode swaps the picture before anything draws.
     const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;
     this.setSupplyMode(overlay.supply !== null);
+    this.setTerrainMode(overlay.terrain);
     // The selected city shows the free slots of its queue; the rings that ask for a look pulse.
     this.cities.setSelected(overlay.selection?.kind === 'node' ? overlay.selection.id : null);
     this.cities.pulse(performance.now());
@@ -349,6 +355,7 @@ export class MapScene {
     this.overlay.update(overlay, (id) => this.entities.groupPoints().get(id));
     this.supply.setTickHz(tickHz);
     this.supply.update(frame, overlay.supply);
+    this.sight.update(this.terrainOn, frame.base.view.nodes, this.layers.world.scale.x);
     this.alerts.update(frame.base.view.nodes, tickHz, overlay.beacon, performance.now());
     if (announce) this.onsnapshot?.(frame.base.tick);
   };
@@ -366,6 +373,16 @@ export class MapScene {
     this.entities.setSupplyMode(on);
     const { groups, intents, fog, effects } = this.layers.layer;
     for (const layer of [groups, intents, fog, effects]) layer.visible = !on;
+  }
+
+  /**
+   * The terrain map mode (#429): the ground becomes flat colours with a pattern per terrain and a
+   * sight sign stands beside the places you see. Everything else stays drawn.
+   */
+  private setTerrainMode(on: boolean): void {
+    if (on === this.terrainOn) return;
+    this.terrainOn = on;
+    this.view.setTerrainMode(on);
   }
 
   /** The hit under a point of the canvas, in CSS px. */
