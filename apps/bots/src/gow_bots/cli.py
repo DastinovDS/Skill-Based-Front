@@ -4,7 +4,8 @@
 ``gow-bots analyze`` prints the metrics and the player statistics (``stats`` key) of replay
 files, e.g. real matches, as JSONL (``gow_sim.analysis``);
 ``gow-bots stats`` prints the player statistics of replay files as a table (``gow_bots.stats``);
-``gow-bots report`` turns a tournament file into a Markdown balance report (``gow_bots.report``).
+``gow-bots report`` turns a tournament file into a Markdown balance report (``gow_bots.report``);
+``gow-bots search`` tunes the parameter ranges of one bot by tournament (``gow_bots.search``).
 """
 
 import argparse
@@ -17,6 +18,7 @@ from pathlib import Path
 
 from gow_bots.bots import BOTS
 from gow_bots.report import write_report
+from gow_bots.search import base_ranges, params_fragment, run_search, write_round
 from gow_bots.stats import render_stats
 from gow_bots.tournament import build_tasks, run_tournament
 from gow_sim.analysis import analyze, analyze_stats
@@ -48,7 +50,56 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("file", help="tournament result (JSONL)")
     r.add_argument("--out-dir", default=DEFAULT_REPORT_DIR, help="folder (default docs/balance)")
     r.add_argument("--name", default=None, help="file name prefix (default: stem of the input)")
+    q = sub.add_parser("search", help="tune the parameter ranges of one bot by tournament")
+    q.add_argument("--bot", required=True, help="the bot to tune (a smart one may take @level)")
+    q.add_argument("--against", nargs="+", required=True, help="the opponents")
+    q.add_argument("--keys", nargs="+", required=True, help="parameters to tune")
+    q.add_argument("--maps", nargs="+", required=True, help="map files (a glob is expanded)")
+    q.add_argument("--ruleset", default="rulesets/mvp-1.toml")
+    q.add_argument("--rounds", type=int, default=20, help="mutations to try (default 20)")
+    q.add_argument("--seeds", type=int, default=4, help="seeds per map and pair (default 4)")
+    q.add_argument("--seed-base", type=int, default=0, help="first seed (default 0)")
+    q.add_argument("--mutate", type=int, default=2, help="keys moved per round (default 2)")
+    q.add_argument("--target", type=float, default=None, help="aim at this win rate, not up")
+    q.add_argument("--search-seed", type=int, default=0, help="seed of the mutations")
+    q.add_argument("--jobs", type=int, default=None, help="worker processes (default: CPU count)")
+    q.add_argument("--out", default="search.jsonl", help="round log (JSONL)")
     return parser
+
+
+def _search(args: argparse.Namespace) -> int:
+    maps = sorted({m for pattern in args.maps for m in (glob.glob(pattern) or [pattern])})
+    start = base_ranges(args.bot)
+    best = None
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="ascii", newline="\n") as f:
+        for n, cand, accepted in run_search(
+            maps,
+            args.ruleset,
+            args.bot,
+            args.against,
+            keys=args.keys,
+            rounds=args.rounds,
+            seeds=args.seeds,
+            seed_base=args.seed_base,
+            mutate_count=args.mutate,
+            target=args.target,
+            search_seed=args.search_seed,
+            jobs=args.jobs,
+        ):
+            write_round(f, n, cand, accepted)
+            if accepted:
+                best = cand
+            mark = "accepted" if accepted else "rejected"
+            print(
+                f"round {n}: win rate {cand.win_rate:.3f} vp share {cand.vp_share:.3f} {mark}",
+                file=sys.stderr,
+            )
+    assert best is not None
+    print(f"best win rate {best.win_rate:.3f}; changed ranges:")
+    print(params_fragment(best.ranges, start))
+    return 0
 
 
 def _tournament(args: argparse.Namespace) -> int:
@@ -99,6 +150,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _tournament(args)
         if args.command == "report":
             return _report(args)
+        if args.command == "search":
+            return _search(args)
         return _analyze(args, table=args.command == "stats")
     except (ValueError, OSError) as exc:  # unknown bot, bad map or ruleset file
         print(f"error: {exc}", file=sys.stderr)

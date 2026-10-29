@@ -21,9 +21,9 @@ engagement zone (DEC-37 pin), does not evacuate doomed cities and sends no scout
 The levels (``DIFFICULTIES``) are calibrated against the unlimited smart bots measured with
 ``gow-bots stats`` on ``mvp-1`` (3 maps, PR 3 description): 12 to 16 commands a minute on
 average, peaks of 24 to 71 in one minute. ``hard`` is the unlimited play with the bursts cut to a
-fast human (40 a minute) and no reaction delay beyond the call (5 ticks); ``normal`` and ``easy`` slow it down. There
-are no human replays to measure yet (the playtest replays are on the owner's server); the human
-figures are an assumption to check with ``mise run stats`` on them (#166).
+fast human (40 a minute) and no reaction delay beyond the call (5 ticks); ``normal`` and ``easy``
+slow it down. There are no human replays to measure yet (the playtest replays are on the owner's
+server); the human figures are an assumption to check with ``mise run stats`` on them (#166).
 
 Integers only, no randomness: a tempo is a pure function of the ticks, so a match stays a
 function of ``(map, ruleset, bots, seed)`` and the two sides stay mirror-symmetric.

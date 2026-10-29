@@ -38,6 +38,7 @@ __all__ = [
     "MatchTask",
     "build_tasks",
     "play_match",
+    "play_tasks",
     "run_tournament",
     "usage",
 ]
@@ -193,13 +194,16 @@ def run_tournament(
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.name + ".tmp")
-    workers = jobs if jobs is not None else (os.cpu_count() or 1)
-    context = multiprocessing.get_context("spawn")
-    with (
-        tmp.open("w", encoding="ascii", newline="\n") as f,
-        ProcessPoolExecutor(workers, mp_context=context, max_tasks_per_child=1) as pool,
-    ):
-        for row in pool.map(play_match, tasks, chunksize=1):
+    with tmp.open("w", encoding="ascii", newline="\n") as f:
+        for row in play_tasks(tasks, jobs):
             f.write(row + "\n")
             yield row
     tmp.replace(out)
+
+
+def play_tasks(tasks: Sequence[MatchTask], jobs: int | None = None) -> Iterator[str]:
+    """The rows of ``tasks`` in task order, played on ``jobs`` processes (module docstring)."""
+    workers = jobs if jobs is not None else (os.cpu_count() or 1)
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(workers, mp_context=context, max_tasks_per_child=1) as pool:
+        yield from pool.map(play_match, tasks, chunksize=1)
