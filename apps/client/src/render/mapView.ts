@@ -264,7 +264,9 @@ export class MapView {
     if (this.backdrop === null) this.terrainFill.visible = !on;
     this.setOwners(this.owners);
     // The roads of the own side turn into pipes (and back): `drawRoad` sees the new mode by its key.
-    this.roads.forEach((_, i) => this.drawRoad(i));
+    this.roads.forEach((_, i) => {
+      this.drawRoad(i);
+    });
     this.flushDashes();
   }
 

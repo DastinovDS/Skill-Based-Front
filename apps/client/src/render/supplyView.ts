@@ -312,7 +312,7 @@ export class SupplyView {
       const directions = new Set(flows.map((f) => f.from));
       const both = directions.size > 1;
       const band = flowBand(bore, both);
-      flows.forEach((flow, slot) => {
+      flows.forEach((flow) => {
         const span = this.span(flow.from, flow.to);
         const a = this.point(flow.from);
         const b = this.point(flow.to);

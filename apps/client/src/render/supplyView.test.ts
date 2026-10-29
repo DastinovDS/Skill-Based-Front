@@ -309,7 +309,7 @@ describe('SupplyView: the packets (#429)', () => {
     const own: SnapshotMsg = { ...snapshot, view: { ...snapshot.view, packets: list } };
     view.update(interpolateFrame(own, null, 150), { source: null, targets: [] });
     const { dots } = parts(layers);
-    const instructions = (dots.context.instructions ?? []) as unknown as {
+    const instructions = dots.context.instructions as unknown as {
       data: {
         path: {
           shapePath: {
