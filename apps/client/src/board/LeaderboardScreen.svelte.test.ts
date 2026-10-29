@@ -37,6 +37,7 @@ describe('LeaderboardScreen', () => {
     onreplays: vi.fn(),
     onboard: vi.fn(),
     onpassword: vi.fn(),
+    onlogout: vi.fn(),
   });
 
   async function settle(): Promise<void> {

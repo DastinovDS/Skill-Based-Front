@@ -31,6 +31,8 @@
     oncreate: nothing,
     onqueue: nothing,
     onlobby: nothing,
+    onreplays: nothing,
+    onboard: nothing,
     onbot: nothing,
     onpassword: nothing,
     onlogout: nothing,
@@ -73,6 +75,7 @@
     onreplays={nothing}
     onboard={nothing}
     onpassword={nothing}
+    onlogout={nothing}
   />
 {:else if result !== undefined}
   <ResultScreen me={0} end={result} onreplay={nothing} onmenu={nothing} />

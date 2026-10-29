@@ -17,11 +17,16 @@
     oncreate: () => void;
     onqueue: () => void;
     onlobby: () => void;
+    /** The rows "Replays" (R) and "Leaderboard" (T), #78. */
+    onreplays: () => void;
+    onboard: () => void;
     onbot: () => void;
     /** The account has a password; without one the way out warns that the account is lost. */
     hasPassword: boolean;
     /** Calibration progress of the account (DEC-34), null for a guest or once it is over. */
     calibration?: Calibration | null;
+    /** The displayed rating of a ranked account (#78), null while unknown. */
+    rating?: number | null;
     /** The queue is locked until this time (ms since the epoch), or null (DEC-34). */
     banUntil?: number | null;
     /** The clock of the ban countdown; tests pass their own. */
@@ -40,9 +45,12 @@
     oncreate,
     onqueue,
     onlobby,
+    onreplays,
+    onboard,
     onbot,
     hasPassword,
     calibration = null,
+    rating = null,
     banUntil = null,
     now = () => Date.now(),
     onpassword,
@@ -73,11 +81,13 @@
     { icon: 'bot', label: t('menu.bot'), key: 'B', go: onbot },
     { icon: 'link', label: t('menu.create'), key: 'I', go: oncreate },
     { icon: 'users', label: t('menu.lobby'), key: 'L', go: onlobby },
+    { icon: 'history', label: t('menu.replays'), key: 'R', go: onreplays },
+    { icon: 'trophy', label: t('menu.leaderboard'), key: 'T', go: onboard },
   ] as const);
 
   const primary = $derived(hasActiveMatch ? onresume : banned ? null : onqueue);
 
-  // Keys of the mockup: Enter plays (or returns), B, I and L open the other modes, Esc shuts the
+  // Keys of the mockup: Enter plays (or returns), B, I, L, R and T open the other rows, Esc shuts the
   // account menu. Typing in a field and a focused button keep their own keys.
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -102,7 +112,15 @@
 
 <ScreenFrame {map} phase={banned ? 'banned' : 'idle'} label={t('menu.nav')}>
   {#snippet corner()}
-    <AccountChip {nick} {hasPassword} {calibration} {onpassword} {onlogout} bind:open={menuOpen} />
+    <AccountChip
+      {nick}
+      {hasPassword}
+      {calibration}
+      {rating}
+      {onpassword}
+      {onlogout}
+      bind:open={menuOpen}
+    />
   {/snippet}
 
   {#if notice !== null}

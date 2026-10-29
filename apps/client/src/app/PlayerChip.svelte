@@ -16,7 +16,15 @@
     ontoggle: () => void;
   }
 
-  let { nick, hasPassword, calibration, rating = null, open, disabled = false, ontoggle }: Props = $props();
+  let {
+    nick,
+    hasPassword,
+    calibration,
+    rating = null,
+    open,
+    disabled = false,
+    ontoggle,
+  }: Props = $props();
 </script>
 
 <!-- The rating and the calibration live here and nowhere else on the menu (#471). Calibration is

@@ -47,6 +47,7 @@
       nick: who.nick,
       hasPassword: who.hasPassword,
       calibration: app.calibration,
+      rating: app.rating,
       banUntil: app.queueBanUntil,
       map: app.backdrop,
       maps: app.maps,
@@ -58,6 +59,12 @@
       },
       onlobby: () => {
         app.go({ name: 'lobby' });
+      },
+      onreplays: () => {
+        app.openBoard('history');
+      },
+      onboard: () => {
+        app.openBoard('board');
       },
       onmenu: () => {
         app.menu();
@@ -89,6 +96,7 @@
     notice={app.notice}
     map={app.backdrop}
     calibration={app.calibration}
+    rating={app.rating}
     banUntil={app.queueBanUntil}
     hasActiveMatch={app.activeMatch !== null}
     onresume={() => {
@@ -103,6 +111,12 @@
     }}
     onlobby={() => {
       app.go({ name: 'lobby' });
+    }}
+    onreplays={() => {
+      app.openBoard('history');
+    }}
+    onboard={() => {
+      app.openBoard('board');
     }}
     onbot={() => {
       app.go({ name: 'bot' });
@@ -204,6 +218,9 @@
       }}
       onpassword={() => {
         app.go({ name: 'password' });
+      }}
+      onlogout={() => {
+        app.logout();
       }}
     />
   {/key}

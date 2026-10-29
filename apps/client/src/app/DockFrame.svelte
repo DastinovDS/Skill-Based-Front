@@ -83,6 +83,8 @@
     { id: 'bot', icon: 'bot', label: t('menu.bot'), key: 'B', go: dock.onbot },
     { id: 'friend', icon: 'link', label: t('menu.create'), key: 'I', go: dock.oncreate },
     { id: 'lobby', icon: 'users', label: t('menu.lobby'), key: 'L', go: dock.onlobby },
+    { id: 'replays', icon: 'history', label: t('menu.replays'), key: 'R', go: dock.onreplays },
+    { id: 'board', icon: 'trophy', label: t('menu.leaderboard'), key: 'T', go: dock.onboard },
   ] as const);
 
   const unrated = $derived(
@@ -147,6 +149,7 @@
       nick={dock.nick}
       hasPassword={dock.hasPassword}
       calibration={dock.calibration}
+      rating={dock.rating ?? null}
       onpassword={dock.onpassword}
       onlogout={dock.onlogout}
       inert={locked}

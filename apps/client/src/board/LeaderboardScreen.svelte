@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from 'svelte';
   import type { Api } from '../api/http.ts';
-  import PlayerChip from '../app/PlayerChip.svelte';
+  import AccountChip from '../app/AccountChip.svelte';
   import Icon from '../hud/Icon.svelte';
   import { t } from '../i18n/index.ts';
   import type { Calibration, MapFile } from '../protocol.gen.ts';
@@ -40,6 +40,7 @@
     onreplays: () => void;
     onboard: () => void;
     onpassword: () => void;
+    onlogout: () => void;
   }
 
   let {
@@ -63,25 +64,31 @@
     onreplays,
     onboard,
     onpassword,
+    onlogout,
   }: Props = $props();
 
   // The data is asked once when the screen opens; the props that feed it do not change here.
-  const state = untrack(() => new BoardState(api, token, ownId));
+  const data = untrack(() => new BoardState(api, token, ownId));
   const clock = untrack(() => now());
 
   onMount(() => {
-    void state.start(untrack(() => player));
+    void data.start(untrack(() => player));
   });
   onDestroy(() => {
-    state.stop();
+    data.stop();
   });
 
-  const ownProfile = $derived(state.own.status === 'ready' ? state.own.value : null);
-  const total = $derived(state.board.status === 'ready' ? state.board.value.total : null);
+  // Keyboard keys are not words of a language: they are labelled the same in every locale.
+  const ESC = 'Esc';
+
+  let accountOpen = $state(false);
+
+  const ownProfile = $derived(data.own.status === 'ready' ? data.own.value : null);
+  const total = $derived(data.board.status === 'ready' ? data.board.value.total : null);
 
   function choose(id: number | 'own'): void {
-    state.select(id);
-    onselect(state.selected === 'own' ? null : state.selected);
+    data.select(id);
+    onselect(data.selected === 'own' ? null : data.selected);
   }
 
   // The rows of the menu, as on the start screen; the open one is marked.
@@ -97,6 +104,8 @@
   // Esc goes back to the menu; B, I, L, R and T open the other rows (the keys of the menu).
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+    // The account menu keeps its own keys while it is open.
+    if (accountOpen) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       onmenu();
@@ -115,20 +124,21 @@
 
 <SplitFrame {map} label={t('menu.nav')}>
   {#snippet corner()}
-    <PlayerChip
+    <AccountChip
       {nick}
       {hasPassword}
       {calibration}
       {rating}
-      open={false}
-      ontoggle={() => undefined}
+      {onpassword}
+      {onlogout}
+      bind:open={accountOpen}
     />
   {/snippet}
 
   {#snippet rail()}
     <button type="button" class="menuback" aria-keyshortcuts="Escape" onclick={onmenu}>
       <Icon name="chevronLeft" size={16} />{t('board.menu')}
-      <kbd class="k" aria-hidden="true">Esc</kbd>
+      <kbd class="k" aria-hidden="true">{ESC}</kbd>
     </button>
     <div class="rows">
       {#each rows as row (row.id)}
@@ -150,27 +160,27 @@
 
   {#snippet panes()}
     <BoardList
-      board={state.board}
+      board={data.board}
       own={ownProfile}
-      ownId={state.ownId}
-      selected={state.selected}
+      ownId={data.ownId}
+      selected={data.selected}
       onselect={choose}
-      onretry={() => state.loadBoard()}
+      onretry={() => data.loadBoard()}
       {onpassword}
       onplay={onmenu}
     />
     <ProfilePanel
-      load={state.viewed}
-      own={state.viewingOwn}
+      load={data.viewed}
+      own={data.viewingOwn}
       {total}
       now={clock}
-      focusHistory={mode === 'history' && state.viewingOwn}
+      focusHistory={mode === 'history' && data.viewingOwn}
       onprofile={choose}
       onwatch={(matchId) => {
         onwatch(String(matchId));
       }}
       onretry={() => {
-        state.retryViewed();
+        data.retryViewed();
       }}
       onshowown={() => {
         choose('own');
