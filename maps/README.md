@@ -23,7 +23,9 @@ name (`PINNED_SEEDS` in `tools/maps/src/gow_maps/bake.py`).
 
 Next to a map lie the preview `<id>.preview.png` (for people) and the background `<id>.bg.webp` (MAP-05, #70, #344; the server
 serves it, the client draws it). After any map edit: `uv run gow-maps preview maps/*.json` and
-`uv run gow-maps bake maps/*.json` (or `mise run maps:bake`). The background is all land, no water (DEC-27, #269), with the
+`uv run gow-maps bake maps/*.json` (or `mise run maps:bake`). The background is all land, no water (DEC-27, #269; a map
+with an authored geography `src/<id>.geo.json` gets water cells and rivers and the vector file `geo/<id>.json`, DEC-36,
+#537; none of the pool maps has one yet, #545), with the
 texture T2 "Thinning" (`ui-style.md`, 26.3), WebP no larger than 0.5 MB, baking one map takes up to 10 s.
 
 | File | Map id (`meta.name`) | World | Nodes (provinces) | Roads | Own at start | Neutral, of them contested | Path capital → capital |

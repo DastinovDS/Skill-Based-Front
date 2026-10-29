@@ -1,4 +1,9 @@
-"""Map background baker (MAP-05, DEC-27, #344): land biomes by terrain, no water, WebP."""
+"""Map background baker (MAP-05, DEC-27, #344): land biomes by terrain, no water, WebP.
+
+A map with an authored geography (DEC-36, #537, ``maps/src/<id>.geo.json``) gets water from
+``gow_maps.geo`` (``test_geo.py``); here its committed background and vector file are compared with
+a fresh bake. The maps without one stay land only (DEC-27, item 3).
+"""
 
 import io
 import json
@@ -6,12 +11,14 @@ import math
 import time
 from functools import cache
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
 from numpy.typing import NDArray
 from PIL import Image
 
+from gow_maps import geo
 from gow_maps.bake import (
     MAX_WEBP_BYTES,
     STEP,
@@ -41,6 +48,8 @@ FILES = {
 ALL_MAPS = [FILES[name] for name in POOL] + sorted(TEST_MAPS.glob("*.json"))
 BAKE_SECONDS = 10  # #344: baking one map takes at most 10 s (CPU time, a loaded machine is slower)
 LAND = frozenset(biome for biomes in TERRAIN_BIOMES.values() for biome in biomes)
+WITH_GEO = [name for name in POOL if geo.spec_path(FILES[name]).is_file()]  # DEC-36, #545
+LAND_ONLY = [name for name in POOL if name not in WITH_GEO]
 
 
 @cache
@@ -157,7 +166,14 @@ def test_width_must_be_a_multiple_of_step(tmp_path: Path) -> None:
 @pytest.fixture(scope="module")
 def fresh() -> dict[str, NDArray[np.uint8]]:
     """A fresh bake of every MVP map (about 5 s each), shared by the tests below."""
-    return {name: render_background(_map(FILES[name])) for name in POOL}
+    return {name: _render(name) for name in POOL}
+
+
+def _render(name: str) -> NDArray[np.uint8]:
+    mapdef, spec = _map(FILES[name]), geo.find_spec(FILES[name])
+    if spec is None:
+        return render_background(mapdef)
+    return geo.render(mapdef, geo.compute(mapdef, spec))
 
 
 def _blocks(pixels: NDArray[np.uint8], size: int = 16) -> NDArray[np.float64]:
@@ -184,7 +200,7 @@ def test_committed_background_is_up_to_date(name: str, fresh: dict[str, NDArray[
     assert diff.max() < 25
 
 
-@pytest.mark.parametrize("name", POOL)
+@pytest.mark.parametrize("name", LAND_ONLY)
 def test_committed_background_has_no_water_pixels(name: str) -> None:
     # Example 12 of DEC-27: not a single sea, shallow water or beach pixel. Water is blue (the
     # old deep and shallow sea (0, 105, 148) and (0, 133, 148)), a beach is sand (238, 214, 175);
@@ -193,6 +209,25 @@ def test_committed_background_has_no_water_pixels(name: str) -> None:
     red, green, blue = pixels[..., 0], pixels[..., 1], pixels[..., 2]
     assert not (blue - np.maximum(red, green) > 25).any()  # blue water
     assert not ((red > 215) & (red - blue > 40)).any()  # sand
+
+
+@pytest.mark.parametrize("name", WITH_GEO)
+def test_committed_vector_file_is_up_to_date(name: str) -> None:
+    # DEC-36, item 12: the vector file is generated and committed like the background. Compared
+    # by its structure, not byte by byte: the head, the bridges and the pairs of regions with a
+    # shared border (a stale file, a map edit without `bake`, moves whole areas).
+    path = FILES[name]
+    mapdef, spec = _map(path), geo.find_spec(path)
+    assert spec is not None
+    fresh = geo.vector_file(mapdef, geo.compute(mapdef, spec))
+    committed = json.loads(geo.vector_path(path).read_text(encoding="utf-8"))
+    for key in ("map", "version", "step", "water", "bridges"):
+        assert committed[key] == fresh[key], key
+
+    def pairs(data: dict[str, Any]) -> set[frozenset[str]]:
+        return {frozenset((str(c["l"]), str(c["r"]))) for c in data["chains"]}
+
+    assert pairs(committed) == pairs(fresh)
 
 
 def test_render_stays_within_the_time_budget() -> None:

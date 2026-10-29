@@ -6,17 +6,25 @@ graph and the attributes, not the picture: DEC-27, item 1), node names and borde
 (DEC-23, items 4, 5, 7), node degree, redundant approaches to valuable cities, neutral space,
 road lengths and, when switched on, the map size (DEC-27, item 5). Given a ruleset with
 ``city_upgrades`` (DEC-26, item 5), also that no city starts with more charges than its
-warehouse holds (``warehouse``).
+warehouse holds (``warehouse``). A map with an authored geography (DEC-36, ``gow_maps.geo``) also
+gets the check ``geography``: areas of nodes share land only along a road, each area is one piece
+around its node, roads cross water only at a bridge, nodes keep clear of water, the vector file is
+baked for the map version.
 """
 
+import json
 import math
 import tomllib
 from dataclasses import dataclass, fields
 from importlib import resources
 from pathlib import Path
+from typing import cast
 
 import networkx as nx
+import numpy as np
 
+from gow_maps import geo
+from gow_maps.bake import STEP
 from gow_sim.maps import (
     BORDER_SELF_MIRROR,
     NAME_MAX_LEN,
@@ -45,6 +53,8 @@ class ValidatorConfig:
     """Run the check ``size`` (DEC-27, item 5): off by default, on for the 45..55 node maps."""
     min_nodes: int
     max_nodes: int
+    water_clearance: int
+    """DEC-36, check ``geography``: the least distance from a node to a sea or a lake."""
 
 
 def load_config(path: str | Path | None = None) -> ValidatorConfig:
@@ -83,12 +93,132 @@ class Issue:
 def validate_file(
     path: str | Path, config: ValidatorConfig, rules: Ruleset | None = None
 ) -> list[Issue]:
-    """Load and validate one map file. A loader error is reported as the ``format`` check."""
+    """Load and validate one map file. A loader error is reported as the ``format`` check.
+
+    A map with an authored geography (``maps/src/<id>.geo.json``, DEC-36) also gets the check
+    ``geography``; a map without one is land only (DEC-27, item 3) and is not checked for it.
+    """
     try:
         mapdef = load_map(path)
     except MapFormatError as exc:
         return [Issue("format", str(exc))]
-    return validate(mapdef, config, rules)
+    issues = validate(mapdef, config, rules)
+    try:
+        spec = geo.find_spec(path)
+    except geo.GeoFormatError as exc:
+        return [*issues, Issue("geography", f"{geo.spec_path(path)}: {exc}")]
+    if spec is not None:
+        issues += check_geography_file(path, mapdef, spec, config)
+    return issues
+
+
+def check_geography_file(
+    path: str | Path, mapdef: MapDef, spec: geo.GeoSpec, config: ValidatorConfig
+) -> list[Issue]:
+    """DEC-36: the computed geography of the map and its vector file ``maps/geo/<id>.json``."""
+    try:
+        computed = geo.compute(mapdef, spec)
+    except (geo.GeoFormatError, ValueError) as exc:
+        return [Issue("geography", str(exc))]
+    return [
+        *check_geography(mapdef, computed, config),
+        *check_vector_file(geo.vector_path(path), mapdef),
+    ]
+
+
+def check_geography(
+    mapdef: MapDef, geography: geo.Geography, config: ValidatorConfig
+) -> list[Issue]:
+    """DEC-36, items 1-4 and the worked examples: on the label grid of the baker.
+
+    * two node areas share land (4-neighbour cell contacts) only if a road connects their nodes
+      (examples 1-3; example 6: a bridge pair may share no land at all);
+    * every node area is one piece and holds its node (example 4);
+    * a road crosses water (a sea, a lake, a river, a stream) only next to a bridge of its own,
+      within ``geo.BRIDGE_REACH`` of it (examples 5, 6);
+    * every node is at least ``water_clearance`` from a water cell, a sea or a lake (example 7).
+    """
+    labels = geography.labels
+    issues: list[Issue] = []
+    roads = geo.road_pairs(mapdef)
+    for (a, b), count in geo.land_contacts(labels).items():
+        if (a, b) not in roads:
+            issues.append(
+                Issue(
+                    "geography",
+                    f"the areas of nodes {a} and {b} share land without a road"
+                    f" ({count} cell contacts): a stream must separate them",
+                )
+            )
+    rows, cols = labels.shape
+    for node in mapdef.nodes:
+        comp, pieces = geo.components(labels == node.id)
+        home = int(comp[min(node.y // STEP, rows - 1), min(node.x // STEP, cols - 1)])
+        if home < 0:
+            issues.append(Issue("geography", f"node {node.id} does not stand in its own area"))
+        if pieces > 1:
+            issues.append(Issue("geography", f"the area of node {node.id} is in {pieces} pieces"))
+    issues += _roads_over_water(mapdef, geography)
+    lakes = np.argwhere(labels >= geo.WATER_BASE)
+    if len(lakes):
+        cx = lakes[:, 1] * STEP + STEP / 2
+        cy = lakes[:, 0] * STEP + STEP / 2
+        for node in mapdef.nodes:
+            near = float(np.hypot(cx - node.x, cy - node.y).min())
+            if near < config.water_clearance:
+                issues.append(
+                    Issue(
+                        "geography",
+                        f"node {node.id} is {near:.0f} from water,"
+                        f" need {config.water_clearance} (water_clearance)",
+                    )
+                )
+    return issues
+
+
+def _roads_over_water(mapdef: MapDef, geography: geo.Geography) -> list[Issue]:
+    labels = geography.labels
+    rows, cols = labels.shape
+    issues: list[Issue] = []
+    for edge in mapdef.edges:
+        a, b = mapdef.nodes[edge.a], mapdef.nodes[edge.b]
+        bridges = [(br.x, br.y) for br in geography.bridges if br.edge == edge.id]
+        steps = max(1, math.ceil(math.hypot(b.x - a.x, b.y - a.y) / 2))
+        for k in range(steps + 1):
+            px = a.x + (b.x - a.x) * k / steps
+            py = a.y + (b.y - a.y) * k / steps
+            r = min(max(int(py // STEP), 0), rows - 1)
+            c = min(max(int(px // STEP), 0), cols - 1)
+            if labels[r, c] < geo.RIVER:
+                continue
+            if all(math.hypot(px - x, py - y) > geo.BRIDGE_REACH for x, y in bridges):
+                issues.append(
+                    Issue(
+                        "geography",
+                        f"edge {edge.id} crosses water away from a bridge at ({px:.0f}, {py:.0f})",
+                    )
+                )
+                break
+    return issues
+
+
+def check_vector_file(path: Path, mapdef: MapDef) -> list[Issue]:
+    """The vector file was baked from this map and its version (DEC-36, item 12)."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [Issue("geography", f"{path} is missing or broken: run gow-maps bake")]
+    head = cast(dict[str, object], data) if isinstance(data, dict) else {}
+    got = (head.get("map"), head.get("version"))
+    want = (mapdef.meta.name, mapdef.meta.version)
+    if got != want:
+        return [
+            Issue(
+                "geography",
+                f"{path} is of map {got}, not {want}: run gow-maps bake",
+            )
+        ]
+    return []
 
 
 def validate(mapdef: MapDef, config: ValidatorConfig, rules: Ruleset | None = None) -> list[Issue]:

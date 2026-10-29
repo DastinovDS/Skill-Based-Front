@@ -22,5 +22,5 @@ Closes #
 - [ ] mechanics.md, AGENTS.md or the README are updated if behavior or commands changed.
 - [ ] There is no `TODO` without an issue number in the code.
 
-<!-- After the merge: in this repository `Closes #N` does not close the issue automatically.
-     Close it by hand: gh issue close <N> --comment "Done in #<PR>". -->
+<!-- `Closes #N` closes the issue on the merge. A PR that must not close it (a docs-only or mockup PR of a decision
+     issue, one step of a multi-step issue) uses `Refs #N`. -->

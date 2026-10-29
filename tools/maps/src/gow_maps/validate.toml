@@ -26,3 +26,7 @@ travel_tolerance_pct = 15
 size_check = false
 min_nodes = 45
 max_nodes = 55
+
+# DEC-36, check geography (only for a map with an authored geography maps/src/<id>.geo.json): every node is at
+# least water_clearance world units from a water cell (a sea or a lake), so a city never stands on a shore.
+water_clearance = 60

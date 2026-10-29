@@ -142,10 +142,10 @@ jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in 
 | `regen`, `regen:protocol`, `regen:api` | regenerate the protocol schema and TS types (`protocol.gen.ts`) and the server OpenAPI with `api.gen.ts` | PRO-02, CLI-09 |
 | `db:migrate` | apply Alembic migrations (the server also does this on start) | DB-01 |
 | `db:revision` | a new migration from the `gow_server.models` models (argument: message) | DB-01 |
-| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json maps/menu/*.json`: the map validator (the pool, the fixtures and the menu map), and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5) | MAP-02, #379, #474 |
+| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json maps/menu/*.json`: the map validator (the pool, the fixtures and the menu map), and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5); the check `geography` for a map with `maps/src/<name>.geo.json` (DEC-36) | MAP-02, #379, #474, #537 |
 | `maps:mirror` | build `maps/<name>.json` from the half `maps/src/<name>.half.json` (argument: name) | MAP-03 |
 | `maps:preview` | draw the preview `maps/<name>.preview.png` (the pool and the menu map `maps/menu/`) | MAP-04, #474 |
-| `maps:bake` | bake the background `maps/<name>.bg.webp` (the pool and the menu map `maps/menu/`): numpy and Pillow, texture T2, WebP up to 0.5 MB (after any map edit) | MAP-05, #344, #474 |
+| `maps:bake` | bake the background `maps/<name>.bg.webp` (the pool and the menu map `maps/menu/`): numpy and Pillow, texture T2, WebP up to 0.5 MB; a map with an authored geography `maps/src/<name>.geo.json` also gets water and `maps/geo/<name>.json` (DEC-36) (after any map edit) | MAP-05, #344, #474, #537 |
 | `tournament` | bot tournament (by default all maps and bots, 100 seeds, 8 processes, `mvp-1`; anything else after `--`, for example `-- --seeds 20`; `mvp-0` is only a test ruleset, we do not run tournaments on it) | BOT-04 |
 | `report` | balance report (argument: file, `docs/balance/latest.jsonl` by default) | BOT-05 |
 | `stats` | player statistics from replays as a table (`gow-bots stats`): stance, APM, supply actions, share of scheduled orders, CP spending; arguments after the task name: replay files and options (`docs/balance/README.md`) | #375 |
@@ -451,7 +451,7 @@ Style guide: `docs/design/ui-style.md` (section 23 "Visual decision process"). I
 - **A PR** into `develop`, the description has `Closes #<number>` and the acceptance criteria ticked. `develop` is the default branch on GitHub (otherwise `Closes` does not close the issue). `main` is for releases only.
 - **CI:** the required checks are `py`, `web` and `docker` (`.github/workflows/ci.yml`, details in the README). The not required `py-slow` runs the tests marked `slow` (long statistical bot matches); mark a new test longer than about 5 s per full match with `@pytest.mark.slow`, and timing measurements with `@pytest.mark.perf`. Merge only when all required checks are green (`gh pr checks <PR> --watch`; analyze a red `py-slow`, but it does not block). GitHub does not enforce this: branch protection is unavailable on the current plan, and the rule rests on the process.
 - **Templates:** `.github/pull_request_template.md` (the Definition of Done checklist below) and `.github/ISSUE_TEMPLATE/` (feature, bug, decision). If you change the Definition of Done, change the PR template too.
-- **Closing an issue after the merge is manual.** In this repository `Closes #N` currently does not link the PR to the issue (the PR's `closingIssuesReferences` is empty even though the base is the default branch), so the author closes the issue: `gh issue close <N> --comment "Done in #<PR>"`.
+- **`Closes #N` closes the issue automatically** when the PR is merged into `develop` (the default branch). A PR that must **not** close its issue (a docs-only or mockup PR of a decision issue, one step of a multi-step issue) writes `Refs #N` instead. After the merge check that the issue is closed (`gh issue view <N>`); if it is still open, close it: `gh issue close <N> --comment "Done in #<PR>"`.
 
 ### Definition of Done
 
