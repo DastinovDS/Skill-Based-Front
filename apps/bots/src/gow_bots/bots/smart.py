@@ -61,6 +61,11 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
    of an enemy arrival there is caught and fights outside the node, without its terrain. A group
    standing in an own node an enemy reaches within that window plus ``PIN_SLACK`` (the order
    applies in the next tick) is *pinned*: it does not leave and fights as the holder.
+9. **Human tempo** (``gow_bots.bots.tempo``): a difficulty level (``easy``, ``normal``,
+   ``hard``; the registry name ``smart_rusher@easy``, ``hard`` without a suffix) sets how often
+   the bot thinks, how late it notices a shown enemy strike or figure, its commands per minute
+   (a token bucket every ``spend`` pays) and whether it reads the position (``insight``: the
+   thresholds of item 1, the pin of item 8, the evacuation of item 6, the scouts of item 7).
 
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
@@ -81,11 +86,13 @@ from gow_bots.bots.logistics import (
     incoming_charges,
     own_parts,
 )
+from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Bucket, Perception
 from gow_sim.commands import (
     CancelRecruit,
     Command,
     Move,
     Recruit,
+    SetFront,
     SetMode,
     SetRearMin,
     SetStance,
@@ -123,6 +130,8 @@ PIN_SLACK: Final = 1
 """Ticks added to ``combat.engage_ticks`` for the pin of DEC-37 (an order applies next tick)."""
 FEED_MIN: Final = 2
 """Own units waiting for charges in a city that a transfer feeds."""
+FRONT_HOLD: Final = 300
+"""Ticks a front marker stays on a city that is still a candidate (hysteresis, item 6)."""
 REAR_MIN_TICKS: Final = 150
 """The rear minimum changes at most this often (no flapping on every dispatch)."""
 SCOUT_TICKS: Final = 30
@@ -174,8 +183,24 @@ class SmartBot(CampaignBot):
         "scouts": ParamRange(1, 1),
     }
 
-    def __init__(self, mapdef: MapDef, rules: Ruleset, *, seed: int, player: int) -> None:
+    def __init__(
+        self,
+        mapdef: MapDef,
+        rules: Ruleset,
+        *,
+        seed: int,
+        player: int,
+        difficulty: str = DEFAULT_DIFFICULTY,
+    ) -> None:
         super().__init__(mapdef, rules, seed=seed, player=player)
+        if difficulty not in DIFFICULTIES:
+            raise ValueError(f"unknown difficulty {difficulty!r}; known: {list(DIFFICULTIES)}")
+        self.difficulty = difficulty
+        self.tempo = DIFFICULTIES[difficulty]
+        self.bucket = Bucket(self.tempo, rules.tick_hz)
+        self.perception = Perception(self.tempo.react_ticks)
+        self.thought: int | None = None
+        """The tick of the last decision (item 9)."""
         self.travel = Travel(mapdef, rules)
         self.assessor = Assessor(mapdef, rules, player, self.travel)
         self.assessment: Assessment | None = None
@@ -200,6 +225,8 @@ class SmartBot(CampaignBot):
         self.watch: list[bool] = [False] * count
         """Own nodes a scout keeps in this decision (item 7)."""
         self.rear_tick: int | None = None
+        self.front_set: list[int | None] = []
+        """By marker index: the tick this bot last moved it (``fronts``)."""
         self.scouted: dict[int, int] = {}
         """Node to the tick a scout was split off for it."""
         self.edge_between: dict[tuple[int, int], int] = {}
@@ -213,6 +240,13 @@ class SmartBot(CampaignBot):
     @override
     def decide(self, view: PlayerView, tick: int) -> list[Command]:
         self.check_view(view)
+        view = self.perception.view(view)  # every call: the first sighting of a figure
+        if self.thought is not None and tick - self.thought < self.tempo.think_ticks:
+            return []
+        self.bucket.refill(tick)
+        if not self.bucket.ready():
+            return []
+        self.thought = tick
         drawn = self.params
         supplied = self.supplied(view)
         a = self.assessor.assess(view, supplied, guess=GUESS_UNITS, horizon=THREAT_HORIZON)
@@ -232,8 +266,14 @@ class SmartBot(CampaignBot):
             self.params = drawn
 
     def adjusted(self, a: Assessment) -> dict[str, int]:
-        """The drawn parameters with the thresholds of this decision (module docstring, 1)."""
+        """The drawn parameters with the thresholds of this decision (module docstring, 1);
+        without ``insight`` (item 9) only the capital guard of an alarm."""
         p = dict(self.params)
+        if not self.tempo.insight:
+            p["scouts"] = 0
+            if self.alarm:
+                p["guard"] = max(p["guard"], a.threat.units)
+            return p
         if a.ahead:
             p["margin"] += p["secure_margin"]
         elif a.awards_left <= p["all_in"]:
@@ -290,6 +330,14 @@ class SmartBot(CampaignBot):
         self.build_roads(ctx)
         self.bank(ctx)
         return ctx.cmds
+
+    @override
+    def spend(self, ctx: Ctx, cmd: Command) -> bool:
+        """``CampaignBot.spend`` that also pays one command of the APM bucket (item 9)."""
+        if not self.bucket.ready() or not super().spend(ctx, cmd):
+            return False
+        self.bucket.take()
+        return True
 
     # Stance ---------------------------------------------------------------------------------
 
@@ -681,7 +729,7 @@ class SmartBot(CampaignBot):
             stock = sum(groups[i].charged for i in f.groups if i in groups) + f.virtual_left[me]
             doomed[node] = f.enemy_charged + f.virtual_left[1 - me] > stock
         window = rules.combat.engage_ticks + PIN_SLACK
-        for node in sorted(self.arrive):
+        for node in sorted(self.arrive) if self.tempo.insight else []:
             if node in fights:
                 continue  # DEC-37, item 2: nothing is caught for a node with a fight
             arrival = self.arrive[node]
@@ -690,6 +738,39 @@ class SmartBot(CampaignBot):
                 doomed[node] = arrival.units >= garrison_need(view, self.map, rules, node)
         self.doomed = doomed
         self.pinned = pinned
+
+    @override
+    def fronts(self, view: PlayerView) -> list[Command]:
+        """The front markers of ``Bot.fronts`` with hysteresis (module docstring, item 6).
+
+        A marker moves only to a wanted city without one (the first ``front_cities``) and only
+        when its own city is lost, cut off or doomed, or ranks below the wanted ones plus one and
+        was set at least ``FRONT_HOLD`` ticks ago; an attacked wanted city without a marker ends
+        the hold (its defenders need the charges first). With no wanted city free a marker stays
+        on its own supplied city: a full rear warehouse does no harm.
+        """
+        cities = self.front_cities(view)
+        count = len(view.me.fronts)
+        wanted = cities[:count]
+        near = cities[: count + 1]
+        fronts = list(view.me.fronts)
+        if len(self.front_set) != count:
+            self.front_set = [None] * count
+        supplied = self.supplied(view)
+        free = [n for n in wanted if n not in fronts]
+        urgent = any(n in self.arrive for n in free)
+        cmds: list[Command] = []
+        for i, node in enumerate(fronts):
+            since = self.front_set[i]
+            held = since is not None and view.tick - since < FRONT_HOLD and not urgent
+            valid = node is not None and supplied[node] and not self.doomed[node]
+            if valid and (node in near or held or not free):
+                continue
+            new = free.pop(0) if free else None
+            if new != node:
+                cmds.append(SetFront(i, new))
+                self.front_set[i] = view.tick
+        return cmds
 
     @override
     def front_cities(self, view: PlayerView) -> list[int]:
@@ -718,7 +799,7 @@ class SmartBot(CampaignBot):
         need to the nearest safe own city (module docstring, item 6)."""
         view = ctx.view
         doomed = [n for n in range(len(view.nodes)) if self.doomed[n]]
-        if not doomed:
+        if not doomed or not self.tempo.insight:
             return
         parts = own_parts(view, self.map)
         incoming = incoming_charges(view)
@@ -897,7 +978,7 @@ class SmartBot(CampaignBot):
         """The ``scouts`` own nodes next to the enemy nearest the own capital, the capital aside
         (it keeps ``guard``), not doomed (item 7)."""
         watch = [False] * len(view.nodes)
-        count = self.params["scouts"]
+        count = self.params["scouts"] if self.tempo.insight else 0
         if count <= 0:
             return watch
         hops = self.hops[self.home]

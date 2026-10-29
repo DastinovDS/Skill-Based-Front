@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from gow_bots.bots import BOTS
+from gow_bots.bots import BotFactory, ParamRange, bot_factory
 from gow_sim.analysis import MatchLog, MatchRecorder, analyze
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, load_map, map_hash
@@ -86,6 +86,14 @@ class MatchTask:
     seed: int
     replay_dir: str | None = None
     """Folder to record a replay of this match into, ``None``: no replay."""
+    params: tuple[tuple[str, str, int, int], ...] = ()
+    """Parameter ranges in place of the class's ones: ``(bot, key, low, high)`` (the search,
+    ``gow_bots.search``); empty in a tournament."""
+
+    def factory(self, side: int) -> BotFactory:
+        name = self.bots[side]
+        ranges = {k: ParamRange(lo, hi) for b, k, lo, hi in self.params if b == name}
+        return bot_factory(name, ranges)
 
 
 class _Both:
@@ -111,7 +119,7 @@ def play_match(task: MatchTask) -> str:
     """Play one match and return its JSONL row (no newline). Runs in a worker process."""
     mapdef = load_map(task.map_path)
     rules = load_ruleset(task.rules_path)
-    controllers = [BOTS[task.bots[p]](mapdef, rules, seed=task.seed, player=p) for p in PLAYERS]
+    controllers = [task.factory(p)(mapdef, rules, seed=task.seed, player=p) for p in PLAYERS]
     recorder = MatchRecorder()
     result: MatchResult
     if task.replay_dir is None:
@@ -149,9 +157,8 @@ def build_tasks(
 
     Raises ``ValueError`` for an unknown bot, no maps, no bots or ``seeds < 1``.
     """
-    unknown = sorted(set(bots) - BOTS.keys())
-    if unknown:
-        raise ValueError(f"unknown bots {unknown}; known: {sorted(BOTS)}")
+    for name in sorted(set(bots)):
+        bot_factory(name)  # an unknown bot or level fails here, not in every worker
     if not map_paths or not bots:
         raise ValueError("need at least one map and one bot")
     if seeds < 1:

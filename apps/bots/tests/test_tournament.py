@@ -44,7 +44,7 @@ def test_build_tasks_plays_every_ordered_pair_in_a_fixed_order() -> None:
 
 
 def test_build_tasks_rejects_bad_arguments() -> None:
-    with pytest.raises(ValueError, match="unknown bots"):
+    with pytest.raises(ValueError, match="unknown bot"):
         build_tasks([MAP], SHORT, ["nope"], seeds=1)
     with pytest.raises(ValueError, match="at least 1"):
         build_tasks([MAP], SHORT, ["idle"], seeds=0)
