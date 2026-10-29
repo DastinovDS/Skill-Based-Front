@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { SCENES } from './scenes.ts';
+import { MENU_SCENES, SCENES } from './scenes.ts';
 
 // `mise run shots [label]`: a PNG of every dev scene for the agent (or the owner) to look at, no
 // comparison with a reference. Per scene: `<scene>.png` is the whole screen with the HUD,
@@ -133,4 +133,46 @@ for (const view of ['normal', 'supply'] as const) {
     await page.addStyleTag({ content: '.hud { display: none !important; }' });
     await page.locator('canvas').screenshot({ path: join(OUT, `road-mode-${view}.png`) });
   });
+}
+
+// The screens before a match (#471, `/?menu=<id>`, src/dev/menuScenes.ts): `screen-<id>.png` and the
+// same in grey scale `screen-<id>-gray.png` (a state must read without the hue). The account menu is
+// the chip in the corner pressed; `-1024x640` is the smallest window we support, `-800x500` the
+// window of a big UI scale (the rail flows over the picture there).
+for (const id of MENU_SCENES) {
+  test(`shot of the screen ${id}`, async ({ page }) => {
+    await page.goto(`/?menu=${id}`);
+    await expect(page.locator('.front svg.scene')).toBeVisible();
+    await page.mouse.move(1000, 700);
+    await page.screenshot({ path: join(OUT, `screen-${id}.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.screenshot({ path: join(OUT, `screen-${id}-gray.png`) });
+  });
+}
+
+test('shot of the account menu', async ({ page }) => {
+  await page.goto('/?menu=menu-guest');
+  await page.locator('button.who').click();
+  await page.getByRole('menuitem', { name: 'Log out' }).click();
+  await expect(page.getByRole('menu')).toBeVisible();
+  await page.mouse.move(600, 700);
+  await page.screenshot({ path: join(OUT, 'screen-account-menu.png') });
+});
+
+for (const size of [
+  { width: 1024, height: 640 },
+  { width: 800, height: 500 },
+]) {
+  for (const id of ['menu-calibration', 'queue-found'] as const) {
+    test(`shot of the screen ${id} at ${String(size.width)}x${String(size.height)}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(size);
+      await page.goto(`/?menu=${id}`);
+      await expect(page.locator('.front svg.scene')).toBeVisible();
+      await page.screenshot({
+        path: join(OUT, `screen-${id}-${String(size.width)}x${String(size.height)}.png`),
+      });
+    });
+  }
 }

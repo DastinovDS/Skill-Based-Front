@@ -127,7 +127,7 @@ test('two guests play a private match by invite to the end and watch the replay'
   await page.getByRole('button', { name: 'Back' }).click();
   await expect(page.getByRole('heading', { name: VERDICT })).toBeVisible();
   await page.getByRole('button', { name: 'To the menu' }).click();
-  await expect(page.getByText(`Hello, ${host.nick}!`)).toBeVisible();
+  await expect(page.getByRole('button', { name: host.nick })).toBeVisible();
 
   await host.close();
   await guest.close();
@@ -192,7 +192,7 @@ test('a page reload in a running match returns to the same match (#189)', async 
     side,
     side,
   ]);
-  await expect(host.page.getByText(`Hello, ${host.nick}!`)).toBeHidden();
+  await expect(host.page.getByRole('button', { name: host.nick })).toBeHidden();
 
   // The match goes on for both and nobody lost by disconnect: the guest can still forfeit it.
   await guest.forfeit();

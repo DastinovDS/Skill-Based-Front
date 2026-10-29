@@ -1,16 +1,31 @@
 <script lang="ts">
-  import { tf, t, type MessageKey } from '../i18n/index.ts';
+  import { onMount } from 'svelte';
+  import Icon from '../hud/Icon.svelte';
+  import { formatClock } from '../hud/format.ts';
+  import { t, tf, type MessageKey } from '../i18n/index.ts';
+  import type { Calibration, MapFile } from '../protocol.gen.ts';
   import LocaleSelect from './LocaleSelect.svelte';
+  import PlayerChip from './PlayerChip.svelte';
+  import ScreenFrame from './ScreenFrame.svelte';
+  import UnitMark from './UnitMark.svelte';
 
   interface Props {
     nick: string;
     notice: MessageKey | null;
+    /** The map drawn behind the menu (null: the plain dark page). */
+    map?: MapFile | null;
     oncreate: () => void;
     onqueue: () => void;
     onlobby: () => void;
     onbot: () => void;
     /** The account has a password; without one the way out warns that the account is lost. */
     hasPassword: boolean;
+    /** Calibration progress of the account (DEC-34), null for a guest or once it is over. */
+    calibration?: Calibration | null;
+    /** The queue is locked until this time (ms since the epoch), or null (DEC-34). */
+    banUntil?: number | null;
+    /** The clock of the ban countdown; tests pass their own. */
+    now?: () => number;
     onpassword: () => void;
     onlogout: () => void;
     /** A match of this guest is running: the way back into it. */
@@ -21,64 +36,175 @@
   let {
     nick,
     notice,
+    map = null,
     oncreate,
     onqueue,
     onlobby,
     onbot,
     hasPassword,
+    calibration = null,
+    banUntil = null,
+    now = () => Date.now(),
     onpassword,
     onlogout,
     hasActiveMatch = false,
     onresume = () => undefined,
   }: Props = $props();
 
+  // The queue ban counts down on the menu itself: the server says the time once, at the refusal.
+  let beat = $state(0);
+  const secondsLeft = $derived.by(() => {
+    // `beat` is read so that the derived runs again every second.
+    return banUntil === null || beat < 0 ? 0 : Math.max(0, Math.ceil((banUntil - now()) / 1000));
+  });
+  const banned = $derived(!hasActiveMatch && secondsLeft > 0);
+  onMount(() => {
+    const timer = setInterval(() => {
+      beat += 1;
+    }, 1000);
+    return () => {
+      clearInterval(timer);
+    };
+  });
+
   // A guest without a password loses the account by logging out: ask once before that.
+  let menuOpen = $state(false);
   let confirmingLogout = $state(false);
 
   function logout(): void {
     if (hasPassword || confirmingLogout) onlogout();
     else confirmingLogout = true;
   }
+
+  function closeMenu(): void {
+    menuOpen = false;
+    confirmingLogout = false;
+  }
+
+  const modes = $derived([
+    { icon: 'bot', label: t('menu.bot'), key: 'B', go: onbot },
+    { icon: 'link', label: t('menu.create'), key: 'I', go: oncreate },
+    { icon: 'users', label: t('menu.lobby'), key: 'L', go: onlobby },
+  ] as const);
+
+  const primary = $derived(hasActiveMatch ? onresume : banned ? null : onqueue);
+
+  // Keys of the mockup: Enter plays (or returns), B, I and L open the other modes, Esc shuts the
+  // account menu. Typing in a field and a focused button keep their own keys.
+  function onkeydown(event: KeyboardEvent): void {
+    if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key === 'Escape' && menuOpen) {
+      closeMenu();
+      return;
+    }
+    const target = event.target;
+    if (menuOpen) return;
+    if (target instanceof Element && target.closest('input, textarea, select, button, a')) return;
+    if (event.key === 'Enter') {
+      if (primary === null) return;
+      primary();
+      event.preventDefault();
+      return;
+    }
+    if (hasActiveMatch) return;
+    const mode = modes.find((m) => m.key.toLowerCase() === event.key.toLowerCase());
+    if (mode === undefined) return;
+    mode.go();
+    event.preventDefault();
+  }
+
+  function onclick(event: MouseEvent): void {
+    if (menuOpen && event.target instanceof Element && !event.target.closest('.corner')) {
+      closeMenu();
+    }
+  }
 </script>
 
-<main class="screen">
-  <div class="card">
-    <h1>{t('app.title')}</h1>
-    <p>{tf('menu.greeting', { nick })}</p>
-    {#if notice !== null}
-      <p class="error" role="alert">{t(notice)}</p>
-    {/if}
-    {#if hasActiveMatch}
-      <p role="status">{t('menu.activeMatch')}</p>
-      <div class="actions">
-        <button type="button" class="primary" onclick={onresume}>{t('menu.resume')}</button>
+<svelte:window {onkeydown} {onclick} />
+
+<ScreenFrame {map} phase={banned ? 'banned' : 'idle'} label={t('menu.nav')}>
+  {#snippet corner()}
+    <PlayerChip
+      {nick}
+      {hasPassword}
+      {calibration}
+      open={menuOpen}
+      ontoggle={() => {
+        if (menuOpen) closeMenu();
+        else menuOpen = true;
+      }}
+    />
+    {#if menuOpen}
+      <div class="pop" id="account-menu" role="menu">
+        {#if confirmingLogout}
+          <p class="wl" role="alert">
+            <Icon name="alert" size={16} />{t('menu.logoutWarning')}
+          </p>
+        {/if}
+        <button type="button" role="menuitem" onclick={onpassword}>
+          <Icon name="key" size={18} />
+          {hasPassword ? t('menu.changePassword') : t('menu.setPassword')}
+        </button>
+        <button type="button" role="menuitem" onclick={logout}>
+          <Icon name="logout" size={18} />
+          {confirmingLogout ? t('menu.logoutConfirm') : t('menu.logout')}
+        </button>
+        {#if confirmingLogout}
+          <button
+            type="button"
+            role="menuitem"
+            onclick={() => {
+              confirmingLogout = false;
+            }}>{t('menu.logoutCancel')}</button
+          >
+        {/if}
       </div>
     {/if}
-    <div class="actions">
-      <button type="button" class="primary" onclick={onqueue}>{t('menu.queue')}</button>
-      <button type="button" class="primary" onclick={oncreate}>{t('menu.create')}</button>
-      <button type="button" class="primary" onclick={onlobby}>{t('menu.lobby')}</button>
-      <button type="button" class="primary" onclick={onbot}>{t('menu.bot')}</button>
+  {/snippet}
+
+  {#if notice !== null}
+    <p class="wl" role="alert"><Icon name="alert" size={16} />{t(notice)}</p>
+  {/if}
+  {#if hasActiveMatch}
+    <div class="eyebrow">{t('menu.eyebrow.match')}</div>
+    <button type="button" class="big" aria-keyshortcuts="Enter" onclick={onresume}>
+      <UnitMark side="own" size={44} share={0.6} />{t('menu.resume')}<kbd
+        class="k"
+        aria-hidden="true">↵</kbd
+      >
+    </button>
+    <div class="sub">{t('menu.matchWaits')}</div>
+  {:else if banned}
+    <div class="eyebrow warn">{t('menu.eyebrow.banned')}</div>
+    <div
+      class="big sm warn"
+      role="timer"
+      aria-label={tf('menu.banAria', { time: formatClock(secondsLeft) })}
+    >
+      <Icon name="alert" size={40} />{formatClock(secondsLeft)}
     </div>
-    {#if confirmingLogout}
-      <p class="error" role="alert">{t('menu.logoutWarning')}</p>
-    {/if}
-    <div class="actions">
-      <button type="button" onclick={onpassword}>
-        {hasPassword ? t('menu.changePassword') : t('menu.setPassword')}
-      </button>
-      <button type="button" onclick={logout}>
-        {confirmingLogout ? t('menu.logoutConfirm') : t('menu.logout')}
-      </button>
-      {#if confirmingLogout}
-        <button
-          type="button"
-          onclick={() => {
-            confirmingLogout = false;
-          }}>{t('menu.logoutCancel')}</button
+    <div class="sub">{t('menu.banReason')}</div>
+  {:else}
+    <div class="eyebrow">{t('menu.eyebrow.ready')}</div>
+    <button type="button" class="big" aria-keyshortcuts="Enter" onclick={onqueue}>
+      <UnitMark side="own" size={46} />{t('menu.play')}<kbd class="k" aria-hidden="true">↵</kbd>
+    </button>
+    <div class="sub">{hasPassword ? '' : t('menu.guestHint')}</div>
+  {/if}
+  <div class="rows">
+    {#each modes as mode (mode.key)}
+      <button
+        type="button"
+        class="row"
+        disabled={hasActiveMatch}
+        aria-keyshortcuts={mode.key}
+        onclick={mode.go}
+      >
+        <Icon name={mode.icon} size={22} />{mode.label}<kbd class="k" aria-hidden="true"
+          >{mode.key}</kbd
         >
-      {/if}
-    </div>
-    <LocaleSelect />
+      </button>
+    {/each}
   </div>
-</main>
+  <div class="locale"><LocaleSelect /></div>
+</ScreenFrame>

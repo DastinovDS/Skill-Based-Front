@@ -32,7 +32,10 @@
 
   // The menu offers a way back into a running match (a failed "return" or a match left by hand).
   $effect(() => {
-    if (app.screen.name === 'menu') void app.refreshActiveMatch();
+    if (app.screen.name === 'menu') {
+      void app.refreshActiveMatch();
+      void app.refreshProfile();
+    }
   });
   const guest = $derived(app.guest);
 </script>
@@ -43,6 +46,7 @@
   <WelcomeScreen
     invited={app.pendingInvite !== null}
     notice={app.notice}
+    map={app.backdrop}
     onsubmit={(nick: string) => app.register(nick)}
     onlogin={(nick: string, password: string) => app.login(nick, password)}
     onregister={(nick: string, password: string) => app.registerAccount(nick, password)}
@@ -51,6 +55,9 @@
   <MenuScreen
     nick={guest.nick}
     notice={app.notice}
+    map={app.backdrop}
+    calibration={app.calibration}
+    banUntil={app.queueBanUntil}
     hasActiveMatch={app.activeMatch !== null}
     onresume={() => {
       const running = app.activeMatch;
@@ -104,10 +111,14 @@
   <QueueScreen
     api={app.api}
     token={guest.token}
+    map={app.backdrop}
     onstart={(matchId: string, mapId: string) => {
       app.go({ name: 'match', matchId, mapId });
     }}
     onbot={() => app.playBot('normal', null)}
+    onbanned={(seconds: number) => {
+      app.banQueue(seconds);
+    }}
     onleave={(notice: MessageKey | null) => {
       app.menu(notice);
     }}

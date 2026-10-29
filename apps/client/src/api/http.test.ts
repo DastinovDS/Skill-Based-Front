@@ -121,6 +121,30 @@ describe('Api accounts (#374)', () => {
     expect(untimed).toMatchObject({ code: 'rate_limited', retryAfterS: null });
   });
 
+  it('tells a queue ban from the entry rate limit and keeps the time left (DEC-34)', async () => {
+    const ban = { detail: { code: 'queue_banned', message: 'locked', retry_after_s: 287 } };
+    const banned = await new Api(respond(429, ban)).joinQueue('t').catch((e: unknown) => e);
+    expect(banned).toMatchObject({ code: 'queue_banned', status: 429, retryAfterS: 287 });
+    // The header is the fallback when the body has no time.
+    const noTime = await new Api(
+      vi.fn(() =>
+        Promise.resolve(
+          new Response('{"detail":{"code":"queue_banned"}}', {
+            status: 429,
+            headers: { 'Retry-After': '60' },
+          }),
+        ),
+      ),
+    )
+      .joinQueue('t')
+      .catch((e: unknown) => e);
+    expect(noTime).toMatchObject({ code: 'queue_banned', retryAfterS: 60 });
+    const limited = await new Api(respond(429, { detail: 'too many' }))
+      .joinQueue('t')
+      .catch((e: unknown) => e);
+    expect(limited).toMatchObject({ code: 'rate_limited' });
+  });
+
   it.each([
     ['120', 120],
     [' 7 ', 7],

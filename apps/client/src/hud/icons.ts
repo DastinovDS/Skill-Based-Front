@@ -140,6 +140,26 @@ export const ICONS = {
     circle(12, 12, 3),
   ],
   x: [path('M18 6 6 18'), path('m6 6 12 12')],
+  // The start menu (#471): the rows of the modes and the account chip.
+  bot: [
+    path('M12 8V4'),
+    rect(4, 8, 16, 11, 2),
+    circle(12, 3.5, 1),
+    circle(9, 13.5, 1),
+    circle(15, 13.5, 1),
+  ],
+  link: [
+    path('M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1'),
+    path('M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1'),
+  ],
+  users: [
+    path('M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1'),
+    circle(9.5, 8, 3.5),
+    path('M21 20v-1a4 4 0 0 0-3-3.9'),
+    path('M16 4.1a3.5 3.5 0 0 1 0 6.8'),
+  ],
+  user: [path('M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'), circle(12, 7, 4)],
+  key: [circle(8, 15, 4), path('m10.8 12.2 9-9'), path('m16 7 3 3')],
   check: [path('M20 6 9 17l-5-5')],
 } as const satisfies Record<string, readonly IconShape[]>;
 

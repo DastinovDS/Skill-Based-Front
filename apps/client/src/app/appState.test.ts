@@ -437,4 +437,73 @@ describe('AppState', () => {
       expect(app.guest).toEqual({ token: 't', nick: 'Me', hasPassword: true });
     });
   });
+  describe('the start menu (#471, DEC-34)', () => {
+    const saved = () =>
+      memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me","hasPassword":true}' });
+    const meWith = (calibration: { played: number; total: number } | null) => () =>
+      Promise.resolve({ player_id: 1, nick: 'Me', has_password: true, calibration });
+
+    it('keeps the calibration of /api/me and asks for it again when the menu opens', async () => {
+      let played = 2;
+      const { app } = setup('', saved(), {
+        me: () => meWith({ played, total: 5 })(),
+        activeMatch: () => Promise.resolve(null),
+      });
+      await app.start();
+      expect(app.calibration).toEqual({ played: 2, total: 5 });
+      played = 3;
+      await app.refreshProfile();
+      expect(app.calibration).toEqual({ played: 3, total: 5 });
+    });
+
+    it('a failed refresh keeps what the chip showed', async () => {
+      let fail = false;
+      const { app } = setup('', saved(), {
+        me: () =>
+          fail ? Promise.reject(new ApiError('network', 0)) : meWith({ played: 1, total: 5 })(),
+        activeMatch: () => Promise.resolve(null),
+      });
+      await app.start();
+      fail = true;
+      await app.refreshProfile();
+      expect(app.calibration).toEqual({ played: 1, total: 5 });
+    });
+
+    it('counts the queue ban from now, and a logout forgets it with the calibration', async () => {
+      const { app } = setup('', saved(), {
+        me: meWith({ played: 1, total: 5 }),
+        activeMatch: () => Promise.resolve(null),
+      });
+      await app.start();
+      const before = Date.now();
+      app.banQueue(287);
+      expect(app.queueBanUntil).toBeGreaterThanOrEqual(before + 287_000);
+      expect(app.queueBanUntil).toBeLessThanOrEqual(Date.now() + 287_000);
+      app.logout();
+      expect(app.queueBanUntil).toBeNull();
+      expect(app.calibration).toBeNull();
+    });
+
+    it('draws the crossroads map behind the screens when the pool has it', async () => {
+      const map = vi.fn((id: string) => Promise.resolve({ meta: { name: id } }));
+      const { app } = setup('', memory(), {
+        maps: () => Promise.resolve([{ id: 'ridge' }, { id: 'crossroads' }] as never),
+        map: map as never,
+      });
+      await app.start();
+      await vi.waitFor(() => {
+        expect(app.backdrop).not.toBeNull();
+      });
+      expect(map).toHaveBeenCalledWith('crossroads');
+    });
+
+    it('works without the picture when the maps cannot be loaded', async () => {
+      const { app } = setup('', memory(), {
+        maps: () => Promise.reject(new ApiError('network', 0)),
+      });
+      await app.start();
+      expect(app.screen.name).toBe('welcome');
+      expect(app.backdrop).toBeNull();
+    });
+  });
 });

@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
-import { SCENES } from '../../visual/scenes.ts';
+import { MENU_SCENES, SCENES } from '../../visual/scenes.ts';
+import { MENU_SCENE_IDS } from './menuScenes.ts';
 import { FIXTURE_SCENES } from './scenarios.ts';
 
 // `mise run shots` and the reference test shoot the scenes of visual/scenes.ts: a new scene of
@@ -10,4 +11,8 @@ test('visual/scenes.ts lists every fixture scene of the dev screen with its tick
   expect(SCENES.map((scene) => [scene.id, scene.tick] as const).sort(byId)).toEqual(
     FIXTURE_SCENES.map((scene) => [scene.id, scene.snapshot.tick] as const).sort(byId),
   );
+});
+
+test('visual/scenes.ts lists every screen scene of src/dev/menuScenes.ts', () => {
+  expect([...MENU_SCENES]).toEqual([...MENU_SCENE_IDS]);
 });

@@ -50,6 +50,12 @@ between two cities), `eta-artery-far` and `eta-artery-bend` (a route of two road
 
 The road mode (#469): `mise run shots` takes `road-mode-normal.png` and `road-mode-supply.png` (the map alone) on the scene `snapshot` with `?menus`: key U, and Tab before it for the Supply view; the dashed band on the road a click would raise shows in both. They have no `visual` references.
 
+The screens before a match (#471): `mise run shots` takes `screen-<id>.png` (and the same in grey scale, `screen-<id>-gray.png`) of the dev scenes
+`/?menu=<id>` (`src/dev/menuScenes.ts`, the list is `MENU_SCENES` in `visual/scenes.ts`): `welcome`, `welcome-notice`, `menu-guest`, `menu-calibration`
+(k/5 in the corner), `menu-ranked`, `menu-resume` (only "Return" is active), `menu-banned` (the queue lock with the time left), `menu-error`, `queue-search`,
+`queue-long` (the bot offer), `queue-found`, `queue-confirmed`; also `screen-account-menu.png` (the chip in the corner pressed) and the menu and the found pair at
+1024x640 and 800x500 (the rail flows over the picture there). They are the real components with fixed data and no server, and have no `visual` references.
+
 Radial menus (#350): `mise run shots` takes them too, on the scene `snapshot_fog` with the parameter `?menus` (in a frozen
 scene orders go nowhere, the menus open as for a player, city development is on): `menu-stance.png` (key Q),
 `menu-city.png` (a click on a city ring), `menu-group.png` (two clicks on a group), `menu-supply.png` (Tab and a click on a city)
