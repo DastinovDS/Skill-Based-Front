@@ -189,8 +189,8 @@ describe('MapView, the roads of R1', () => {
     expect(dashesOfRoad0()).toEqual([]);
   });
 
-  it('dots the lanes of a road in fog, whoever its ends belong to', () => {
-    view.setOwners(owners(0, 0));
+  it('dots the lanes of a foreign road in fog', () => {
+    view.setOwners(owners(1, 1));
     view.setRoads(map.edges.map(() => ({ width: 2, halves: halves('fog', 'fog') })));
     const { casings, lanes } = parts();
     // Both halves alike: one stretch over the whole road, the second one is not drawn.
@@ -206,7 +206,7 @@ describe('MapView, the roads of R1', () => {
   });
 
   it('draws only the half in fog dotted: two stretches that meet at the border point', () => {
-    view.setOwners(owners(0, 0));
+    view.setOwners(owners(1, 1));
     view.setRoads(map.edges.map(() => ({ width: 1, halves: halves('exact', 'fog') })));
     const { casings, lanes } = parts();
     // The half in sight has its solid lane, the half in fog the dots and no solid lane.
@@ -224,6 +224,13 @@ describe('MapView, the roads of R1', () => {
     const first = casings[0] as Graphics;
     const second = casings[1] as Graphics;
     expect(Math.hypot(second.x - first.x, second.y - first.y)).toBeCloseTo(length0 / 2);
+  });
+
+  it('never dots the own territory: an own half in fog is drawn as seen (DEC-35)', () => {
+    view.setOwners(owners(0, 0));
+    view.setRoads(map.edges.map(() => ({ width: 2, halves: halves('fog', 'fog') })));
+    expect(parts().lanes.map((l) => l.visible)).toEqual([true, false]);
+    expect(dashesOfRoad0()).toHaveLength(0);
   });
 
   it('does not redraw a road whose look did not change', () => {

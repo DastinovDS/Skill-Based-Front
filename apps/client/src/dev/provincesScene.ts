@@ -5,6 +5,10 @@
  * group of its own on it, the enemy's in sight and in the fog) next to cities with warehouses of
  * every level (places filled, frames, dashed). Made here from the map file, not a fixture of the
  * protocol: it is a picture for the eyes, the numbers only have to be plausible.
+ *
+ * Vision as DEC-35: only own groups see. An own node without a group is `presence` (its own data
+ * exact, an enemy in it seen without numbers) and gives its halves of roads no zone (`fog`); the
+ * own territory is still drawn without the veil (the owner's decision of 2026-10-29).
  */
 import type {
   Detail,
@@ -24,12 +28,14 @@ export const PROVINCES_TICK = 1200;
 export const PROVINCES_VIEW = { x: 100, y: 140, width: 1000, height: 640 } as const;
 
 const ENEMY = [10, 11, 15, 19, 20, 16];
-/** Own groups stand here: the nodes are seen exactly, their neighbours as presence. */
+/** Own groups stand here: the only sources, seen exactly; their neighbours as presence. */
 const STATIONED = [2, 6, 7, 12];
 /** Warehouse of the own cities at the level of `LEVEL` (the capacity of the level where not listed). */
 const STOCK: Readonly<Record<number, number>> = { 0: 5, 1: 1, 4: 3, 6: 0, 7: 2, 8: 1 };
 /** Warehouse level of the own cities: 0, 1 and 2 (the top level) all appear. */
 const LEVEL: Readonly<Record<number, number>> = { 0: 1, 1: 0, 4: 2, 6: 1, 7: 2, 8: 0 };
+/** An enemy group stands in this own province without an own group: seen as presence (DEC-35). */
+const INTRUDED = 3;
 /** Memory of a node in the fog, ticks ago. */
 const SEEN_NODE: Readonly<Record<number, number>> = { 19: 400, 20: 900 };
 
@@ -51,15 +57,19 @@ function seen(level: Detail, ago: number, enemyModes: Seen['enemy_modes'] = []):
 export function provincesSnapshot(map: MapFile): SnapshotMsg {
   const owner = (node: number) =>
     ENEMY.includes(node) ? 1 : (map.nodes[node]?.start_owner ?? null) === 0 ? 0 : null;
-  const isExact = (node: number) => owner(node) === 0 || STATIONED.includes(node);
+  const isExact = (node: number) => STATIONED.includes(node);
   const nextToExact = (node: number) =>
     map.edges.some((e) => (e.a === node && isExact(e.b)) || (e.b === node && isExact(e.a)));
+  // The level of a node's halves of roads: an own node without a source has none (DEC-35).
+  const zone = (node: number): Detail =>
+    isExact(node) ? 'exact' : nextToExact(node) ? 'presence' : 'fog';
 
   const nodes: NodeView[] = map.nodes.map((n) => {
     const capacity = DEV_CAPACITY[n.kind];
     const city = n.kind !== 'province';
     const mine = owner(n.id) === 0;
-    const detail: Detail = isExact(n.id) ? 'exact' : nextToExact(n.id) ? 'presence' : 'fog';
+    const near = zone(n.id);
+    const detail: Detail = near === 'fog' && mine ? 'presence' : near;
     const ago = SEEN_NODE[n.id];
     const enemy = owner(n.id) === 1;
     const memory =
@@ -67,7 +77,7 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
         ? ago === undefined
           ? null
           : seen('presence', ago, enemy ? ['attack'] : [])
-        : seen(detail, 0, detail === 'presence' && enemy ? ['attack'] : []);
+        : seen(detail, 0, detail === 'presence' && (enemy || n.id === INTRUDED) ? ['attack'] : []);
     const level = LEVEL[n.id] ?? 0;
     const cap = warehouseCapOf(n.kind, level);
     return {
@@ -75,8 +85,15 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
       owner: owner(n.id),
       capacity,
       detail,
-      // A node of a vision source carries its warehouse: a province's is 0, it has none (DEC-23).
-      warehouse: detail === 'exact' ? (city && mine ? Math.min(STOCK[n.id] ?? cap, cap) : 0) : null,
+      // An own node and a node of a vision source carry their warehouse: a province's is 0, it
+      // has none (DEC-23).
+      warehouse: mine
+        ? city
+          ? Math.min(STOCK[n.id] ?? cap, cap)
+          : 0
+        : detail === 'exact'
+          ? 0
+          : null,
       seen: memory,
       attrition_in: null,
       grace_left: null,
@@ -94,7 +111,7 @@ export function provincesSnapshot(map: MapFile): SnapshotMsg {
   const edges: EdgeView[] = map.edges.map((e) => {
     const sight = isExact(e.a) || isExact(e.b);
     const half = (node: number): EdgeView['halves'][number] => {
-      const detail = nodes[node]?.detail ?? 'fog';
+      const detail = zone(node);
       return { detail, seen: detail === 'fog' ? null : seen(detail, 0) };
     };
     return {

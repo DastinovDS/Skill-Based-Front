@@ -1,30 +1,35 @@
-"""Vision (SIM-03; DEC-21, DEC-33, DEC-10): detail levels by terrain, halves of edges, the fog
+"""Vision (SIM-03; DEC-21, DEC-33, DEC-35): detail levels by terrain, halves of edges, the fog
 memory.
 
-DEC-21 (mechanics.md, section 10):
+DEC-21 with the sources of DEC-35 (mechanics.md, section 10):
 
-- sources of vision: own nodes and nodes where own groups stand. A source is ``EXACT``;
+- sources of vision are own groups only (DEC-35): a node where an own group stands, and the node
+  of the half of its edge an own group on an edge is in (``source_node``; a group in a fight on an
+  edge by the half of the fight point, DEC-35, detail 6). An own node without an own group is not
+  a source. A source is ``EXACT``; own packets give no vision;
 - a node next to a source gets the level of the pair «terrain of the source -> terrain of the
   node» from ``vision.by_terrain`` (``EXACT``, ``RANGE`` or ``PRESENCE``); with several sources
-  around, the best one. Any other node is ``FOG``;
+  around, the best one. Any other node is ``FOG``. These levels (``Vision.zones``) are the levels
+  of the halves of a node's edges (DEC-33, item 1);
+- an own node is never in fog for the enemy groups in it: its level (``Vision.nodes``) is the
+  better of its zone level and ``PRESENCE`` (DEC-35, detail 3). That ``PRESENCE`` is a level of
+  the node only: it gives no zone and no levels to the neighbours (detail 4);
 - an edge is split by its border point ``border_permille`` into the half of ``a`` and the half of
-  ``b``; a half is seen with the level of its node (a source's half is ``EXACT``), so a half of a
-  visible node is seen even when the edge has no source at either end (DEC-33, item 1). A group
+  ``b``; a half is seen with the zone level of its node (a source's half is ``EXACT``), so a half of
+  a visible node is seen even when the edge has no source at either end (DEC-33, item 1). A group
   belongs to the half of the node it goes to once it is on the border point or past it, else to
   the half of the other end (``half_node``);
-- an own group on an edge makes that edge an edge source (DEC-10): both of its halves are at
-  least ``PRESENCE`` (``Vision.half``) and its road level is not in fog; the end nodes keep the
-  levels the node sources give them, enemy packets stay hidden;
 - what a place shows of the enemy groups in it (``Sighting``): ``EXACT`` the total units and
   charged and the modes, ``RANGE`` the range of the total units (``vision.range_starts``) and the
   modes, ``PRESENCE`` the modes only.
 
 Road levels follow the edge level of DEC-17 (DEC-22, item 8; roads have no type, DEC-26): an edge
-is not in fog while at least one of its ends is a source or an own group is on it (DEC-10, item 5;
-``Vision.edges``); then its level is shown exactly, else that of its last sighting
-(``VisionMemory.widths``) or level 1 if never seen (``known_roads``). No roads are torn down, so a
-known level never exceeds the true one. The half of a visible node on an edge between two
-non-sources does not show the level (DEC-33, item 4).
+is not in fog while at least one of its ends is a source (``Vision.edges``; the edge of an own
+group on it is one, its end in the group's half is a source, DEC-35, detail 7); then its level is
+shown exactly, else that of its last sighting (``VisionMemory.widths``) or level 1 if never seen
+(``known_roads``). The road level of an own internal edge is own data and always exact (DEC-35,
+detail 5). No roads are torn down, so a known level never exceeds the true one. The half of a
+visible node on an edge between two non-sources does not show the level (DEC-33, item 4).
 
 Public to everyone regardless of level: geography, terrain, the map, ownership of all nodes, VP,
 intents of planned orders and "Defense". That part is the projection's job (SIM-14).
@@ -51,6 +56,7 @@ from gow_sim.state import (
     Packet,
     Sighting,
 )
+from gow_sim.systems.capacity import is_internal
 from gow_sim.systems.movement import border_permille
 
 _RANK: Final = {Detail.EXACT: 0, Detail.RANGE: 1, Detail.PRESENCE: 2, Detail.FOG: 3}
@@ -62,59 +68,75 @@ _RANK: Final = {Detail.EXACT: 0, Detail.RANGE: 1, Detail.PRESENCE: 2, Detail.FOG
 class Vision:
     """Detail levels of one player.
 
-    ``nodes[node_id]``: the level of the node, which is also the level of its halves of edges
-    unless an own group is on the edge (``half``). ``edges[edge_id]``: the road level visibility
-    of DEC-17: ``PRESENCE`` while at least one end is a source or an own group is on the edge
-    (DEC-10, item 5), else ``FOG``. ``sources[node_id]``: the node is a source of vision (its
-    warehouse is seen; DEC-21, item 3). ``edge_sources[edge_id]``: an own group is on the edge
-    (DEC-10, item 1).
+    ``nodes[node_id]``: the level of the enemy groups standing in the node: its zone level, at
+    least ``PRESENCE`` for an own node (DEC-35, detail 3). ``zones[node_id]``: the level by the
+    sources and the terrain table (DEC-21, items 1 and 2), also the level of the node's halves of
+    edges (``half``); an own node without a source gets none (DEC-35, detail 4).
+    ``edges[edge_id]``: the road level visibility of DEC-17: ``PRESENCE`` while at least one end
+    is a source, else ``FOG``. ``sources[node_id]``: the node is a source of vision.
+    ``stands[node_id]``: an own group really stands in the node, so the warehouse of a foreign
+    city there is seen (DEC-21, item 3; DEC-35, detail 2).
     """
 
     nodes: tuple[Detail, ...]
     edges: tuple[Detail, ...]
+    zones: tuple[Detail, ...] = ()
     sources: tuple[bool, ...] = ()
-    edge_sources: tuple[bool, ...] = ()
+    stands: tuple[bool, ...] = ()
 
-    def half(self, edge: int, node: int) -> Detail:
-        """The level of the half of ``edge`` that belongs to ``node``: the level of the node, at
-        least ``PRESENCE`` while an own group is on the edge (DEC-10, item 2)."""
-        level = self.nodes[node]
-        if level is Detail.FOG and self.edge_sources[edge]:
-            return Detail.PRESENCE
-        return level
+    def half(self, node: int) -> Detail:
+        """The level of a half of an edge that belongs to ``node``: the zone level of the node
+        (DEC-21, item 5; DEC-33, item 1; DEC-35, detail 4)."""
+        return self.zones[node]
 
 
 def sources(state: GameState, player: int) -> tuple[list[bool], list[bool]]:
-    """``(nodes, edges)`` of ``player``: ``nodes[node]`` the node is a source of vision (own, or
-    an own group stands there; DEC-21, item 1); ``edges[edge]`` an own group is on the edge, which
-    makes it an edge source (DEC-10, item 1). Own packets give no vision."""
-    source = [state.nodes[n].owner == player for n in range(len(state.map.nodes))]
-    on_edge = [False] * len(state.map.edges)
+    """``(sources, stands)`` of ``player`` (DEC-35, details 1 and 2): ``sources[node]`` the node is
+    a source of vision: an own group stands there or an own group on an edge is in the node's half
+    of it (``source_node``); ``stands[node]`` an own group stands there. Own nodes as such and own
+    packets give no vision."""
+    count = len(state.map.nodes)
+    source = [False] * count
+    stands = [False] * count
     for gid in sorted(state.groups):
         group = state.groups[gid]
         if group.owner != player:
             continue
         match group.location:
             case AtNode(node=node):
-                source[node] = True
-            case OnEdge(edge=edge):
-                on_edge[edge] = True
-    return source, on_edge
+                source[node] = stands[node] = True
+            case OnEdge() as loc:
+                source[source_node(state, group, loc)] = True
+    return source, stands
 
 
-def _edge_levels(mapdef: MapDef, source: list[bool], on_edge: list[bool]) -> tuple[Detail, ...]:
-    """The road level visibility of every edge (DEC-17, item 1; DEC-10, item 5)."""
+def source_node(state: GameState, group: Group, loc: OnEdge) -> int:
+    """The node an own group on an edge is a source in (DEC-35, item 3 and detail 6): the node of
+    its half by the border point; for a group in a fight on the edge, the half of the fight point
+    with the heading of its movement before the fight."""
+    fight = state.fights.get(group.fight) if group.fight is not None else None
+    if fight is None or fight.point is None:
+        return half_node(state.map, loc)
+    mapdef = state.map
+    e = mapdef.edges[loc.edge]
+    border2 = 2 * border_permille(mapdef, loc.edge)  # ``point`` is in half-thousandths
+    if heading(mapdef, loc) == e.b:
+        return e.b if fight.point >= border2 else e.a
+    return e.a if fight.point <= border2 else e.b
+
+
+def _edge_levels(mapdef: MapDef, source: list[bool]) -> tuple[Detail, ...]:
+    """The road level visibility of every edge (DEC-17, item 1)."""
     return tuple(
-        Detail.PRESENCE if source[e.a] or source[e.b] or on_edge[e.id] else Detail.FOG
-        for e in mapdef.edges
+        Detail.PRESENCE if source[e.a] or source[e.b] else Detail.FOG for e in mapdef.edges
     )
 
 
 def compute_vision(state: GameState, rules: Ruleset, player: int) -> Vision:
     """Detail levels of all nodes and edges for ``player``. O(V + E + G)."""
     mapdef = state.map
-    source, on_edge = sources(state, player)
-    nodes = [Detail.EXACT if s else Detail.FOG for s in source]
+    source, stands = sources(state, player)
+    zones = [Detail.EXACT if s else Detail.FOG for s in source]
     table = rules.vision.by_terrain
     for n, is_source in enumerate(source):
         if not is_source:
@@ -123,13 +145,18 @@ def compute_vision(state: GameState, rules: Ruleset, player: int) -> Vision:
         for e in mapdef.incident[n]:
             m = mapdef.edges[e].other(n)
             level = Detail(table.of(here, mapdef.nodes[m].terrain).value)
-            if _RANK[level] < _RANK[nodes[m]]:
-                nodes[m] = level
+            if _RANK[level] < _RANK[zones[m]]:
+                zones[m] = level
+    nodes = tuple(
+        Detail.PRESENCE if level is Detail.FOG and state.nodes[n].owner == player else level
+        for n, level in enumerate(zones)
+    )
     return Vision(
-        nodes=tuple(nodes),
-        edges=_edge_levels(mapdef, source, on_edge),
+        nodes=nodes,
+        edges=_edge_levels(mapdef, source),
+        zones=tuple(zones),
         sources=tuple(source),
-        edge_sources=tuple(on_edge),
+        stands=tuple(stands),
     )
 
 
@@ -138,10 +165,16 @@ def detail_level(state: GameState, rules: Ruleset, player: int, node: int) -> De
 
 
 def edge_detail_level(state: GameState, player: int, edge: int) -> Detail:
-    """The road level visibility of ``edge`` (DEC-17, DEC-10): ``PRESENCE`` or ``FOG``."""
-    source, on_edge = sources(state, player)
+    """The road level visibility of ``edge`` (DEC-17): ``PRESENCE`` or ``FOG``."""
+    source, _ = sources(state, player)
     e = state.map.edges[edge]
-    return Detail.PRESENCE if source[e.a] or source[e.b] or on_edge[edge] else Detail.FOG
+    return Detail.PRESENCE if source[e.a] or source[e.b] else Detail.FOG
+
+
+def own_internal(state: GameState, player: int, edge: int) -> bool:
+    """``edge`` is an own internal edge of ``player``: its road level and builds are own data,
+    always known to the owner (DEC-35, detail 5)."""
+    return is_internal(state, edge) and state.nodes[state.map.edges[edge].a].owner == player
 
 
 def visible_nodes(state: GameState, rules: Ruleset, player: int) -> tuple[int, ...]:
@@ -151,9 +184,9 @@ def visible_nodes(state: GameState, rules: Ruleset, player: int) -> tuple[int, .
 
 
 def visible_edges(state: GameState, player: int) -> tuple[int, ...]:
-    """Ids of the edges whose road level is not in fog (DEC-17, DEC-10), ascending."""
-    source, on_edge = sources(state, player)
-    levels = _edge_levels(state.map, source, on_edge)
+    """Ids of the edges whose road level is not in fog (DEC-17), ascending."""
+    source, _ = sources(state, player)
+    levels = _edge_levels(state.map, source)
     return tuple(e for e, level in enumerate(levels) if level is not Detail.FOG)
 
 
@@ -200,10 +233,10 @@ def is_visible(
 
     - Intents (planned orders and "Defense") are public (DEC-04). Own groups and packets are
       always visible.
-    - An enemy group is visible in a node not in fog and in a half of an edge not in fog: the
-      half of a node not in fog (DEC-21, DEC-33) or any half of an edge an own group is on
-      (DEC-10, item 2); a group in a fight is visible: fights are public (DEC-24, item I1). How
-      much of it is shown is the level of that place.
+    - An enemy group is visible in a node not in fog (an own node is never in fog, DEC-35,
+      detail 3) and in a half of an edge whose node has a zone (DEC-33, item 1; DEC-35, detail
+      4); a group in a fight is visible: fights are public (DEC-24, item I1). How much of it is
+      shown is the level of that place.
     - Enemy packets are never visible, on any edge (DEC-10, item 6).
 
     Pass ``vision`` to reuse levels computed for the same state and player.
@@ -219,7 +252,7 @@ def is_visible(
         case OnEdge() as loc:
             if entity.fight is not None:
                 return True
-            return levels.half(loc.edge, half_node(state.map, loc)) is not Detail.FOG
+            return levels.half(half_node(state.map, loc)) is not Detail.FOG
 
 
 # The fog memory --------------------------------------------------------------------------------
@@ -229,7 +262,8 @@ def vision(state: GameState, rules: Ruleset) -> list[Event]:
     """Last system of a tick: record what each player sees now in ``vision_memory``.
 
     Every node and half of an edge not in fog gets a fresh ``Sighting`` with the current tick,
-    every edge whose road level is not in fog its current level (DEC-17); fogged ones keep their
+    every edge whose road level is not in fog or that is an own internal edge its current level
+    (DEC-17; DEC-35, detail 5); fogged ones keep their
     last sighting. ``spotted`` keeps the enemy groups in sight with the tick each came into sight
     (DEC-33, detail 5). Emits no events.
     """
@@ -240,7 +274,7 @@ def vision(state: GameState, rules: Ruleset) -> list[Event]:
         memory.nodes.update(nodes)
         memory.halves.update(halves)
         for e, level in enumerate(levels.edges):
-            if level is not Detail.FOG:
+            if level is not Detail.FOG or own_internal(state, player, e):
                 memory.widths[e] = state.edges[e].width
         before = memory.spotted
         memory.spotted = {
@@ -287,7 +321,7 @@ def current_sightings(
     halves: dict[tuple[int, int], Sighting] = {}
     for e in mapdef.edges:
         for n in (e.a, e.b):
-            level = levels.half(e.id, n)
+            level = levels.half(n)
             if level is not Detail.FOG:
                 here = on_half.get((e.id, n))
                 halves[e.id, n] = (
@@ -299,13 +333,14 @@ def current_sightings(
 def known_roads(state: GameState, player: int, levels: Vision) -> tuple[int, ...]:
     """Road levels as ``player`` knows them (DEC-17; DEC-22, item 8).
 
-    ``result[edge_id]``: exact for edges not in fog; for a fogged edge that of its last
-    sighting, else level 1, where every road starts (DEC-22). Never above the true level.
+    ``result[edge_id]``: exact for edges not in fog and for own internal edges (own data, DEC-35,
+    detail 5); for another fogged edge that of its last sighting, else level 1, where every road
+    starts (DEC-22). Never above the true level.
     """
     memory = state.vision_memory[player].widths
     roads: list[int] = []
     for e, level in enumerate(levels.edges):
-        if level is not Detail.FOG:
+        if level is not Detail.FOG or own_internal(state, player, e):
             roads.append(state.edges[e].width)
         else:
             roads.append(memory.get(e, ROAD_START_LEVEL))

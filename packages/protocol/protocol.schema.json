@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 27,
+    "PROTOCOL_VERSION": 28,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -662,7 +662,7 @@
           "type": "integer"
         },
         "width": {
-          "description": "Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is\n``fog``; in fog the last seen level, or 1 if never seen. Never above the true level.",
+          "description": "Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is\n``fog``, and always on an own internal edge (DEC-35, detail 5); otherwise in fog the last seen\nlevel, or 1 if never seen. Never above the true level.",
           "maximum": 3,
           "minimum": 1,
           "type": "integer"
@@ -673,7 +673,7 @@
               "$ref": "#/$defs/Detail"
             }
           ],
-          "description": "The road level visibility (DEC-17): ``presence`` while an end is a source of vision or an\nown group is on the edge (DEC-10, item 5), else ``fog``. What is seen of enemies is in\n``halves`` and ``enemy_groups``."
+          "description": "The road level visibility (DEC-17): ``presence`` while an end is a source of vision (DEC-35;\nthe edge of an own group on it is one), else ``fog``. What is seen of enemies is in\n``halves`` and ``enemy_groups``."
         },
         "upgrade_gain": {
           "anyOf": [
@@ -1218,7 +1218,7 @@
               "$ref": "#/$defs/Detail"
             }
           ],
-          "description": "The level of the node the half belongs to (a source's half is ``exact``), at least\n``presence`` while an own group is on the edge (DEC-10, item 2)."
+          "description": "The level of the node the half belongs to by the sources and the terrain table (a source's\nhalf is ``exact``); ``fog`` for an own node without a source (DEC-35, detail 4)."
         },
         "seen": {
           "anyOf": [
@@ -1818,7 +1818,7 @@
               "type": "null"
             }
           ],
-          "description": "Charges in the warehouse; only for sources of vision (own nodes, nodes where own groups\nstand), never for a neighbour seen by the terrain table (DEC-21, item 3)."
+          "description": "Charges in the warehouse; only for own nodes (own data, at any ``detail``) and foreign\nnodes where an own group stands (DEC-21, item 3; DEC-35, detail 2), never for a neighbour seen\nby the terrain table."
         },
         "seen": {
           "anyOf": [

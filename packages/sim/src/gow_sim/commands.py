@@ -51,7 +51,6 @@ from gow_sim.state import (
     event,
 )
 from gow_sim.systems.build import start_city_build, start_road
-from gow_sim.systems.capacity import is_internal
 from gow_sim.systems.economy import set_stance, stance_cooldown_left
 from gow_sim.systems.movement import find_path, path_ticks
 from gow_sim.systems.orders import absorb, clear_bonus, set_intent
@@ -69,7 +68,7 @@ from gow_sim.systems.supply import (
     transfer_route,
     warehouse_room,
 )
-from gow_sim.systems.vision import compute_vision, edge_detail_level, is_visible
+from gow_sim.systems.vision import compute_vision, edge_detail_level, is_visible, own_internal
 
 __all__ = [
     "BuildBarracks",
@@ -678,14 +677,17 @@ def _check_city_build(
 def _check_upgrade(state: GameState, player: int, eid: int) -> tuple[int, ...] | Reject:
     """The checks of ``UpgradeRoad(edge)`` in the order of DEC-28, item 7 (CP last, in
     ``_validate``): no edge or an edge in fog, not internal for the player, the last level, a
-    build on it already. Builds are not limited otherwise; no city takes part."""
-    if not 0 <= eid < len(state.map.edges) or edge_detail_level(state, player, eid) is Detail.FOG:
+    build on it already. An own internal edge always counts as known (own data, DEC-35, detail 5),
+    so the answer reveals nothing. Builds are not limited otherwise; no city takes part."""
+    if not 0 <= eid < len(state.map.edges):
         return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
-    edge = state.map.edges[eid]
-    if not is_internal(state, eid) or state.nodes[edge.a].owner != player:
+    own = own_internal(state, player, eid)
+    if not own and edge_detail_level(state, player, eid) is Detail.FOG:
+        return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
+    if not own:
         return Reject(RejectCode.NOT_INTERNAL)
     road = state.edges[eid]
-    if road.width >= edge.max_level:
+    if road.width >= state.map.edges[eid].max_level:
         return Reject(RejectCode.MAX_WIDTH)
     if road.build is not None:
         return Reject(RejectCode.EDGE_BUSY)

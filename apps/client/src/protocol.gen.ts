@@ -540,8 +540,9 @@ export interface NodeView {
   capacity: number;
   detail: Detail;
   /**
-   * Charges in the warehouse; only for sources of vision (own nodes, nodes where own groups
-   * stand), never for a neighbour seen by the terrain table (DEC-21, item 3).
+   * Charges in the warehouse; only for own nodes (own data, at any ``detail``) and foreign
+   * nodes where an own group stands (DEC-21, item 3; DEC-35, detail 2), never for a neighbour seen
+   * by the terrain table.
    */
   warehouse: number | null;
   /**
@@ -643,12 +644,13 @@ export interface EdgeView {
   id: number;
   /**
    * Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is
-   * ``fog``; in fog the last seen level, or 1 if never seen. Never above the true level.
+   * ``fog``, and always on an own internal edge (DEC-35, detail 5); otherwise in fog the last seen
+   * level, or 1 if never seen. Never above the true level.
    */
   width: number;
   /**
-   * The road level visibility (DEC-17): ``presence`` while an end is a source of vision or an
-   * own group is on the edge (DEC-10, item 5), else ``fog``. What is seen of enemies is in
+   * The road level visibility (DEC-17): ``presence`` while an end is a source of vision (DEC-35;
+   * the edge of an own group on it is one), else ``fog``. What is seen of enemies is in
    * ``halves`` and ``enemy_groups``.
    */
   detail: Detail;
@@ -695,8 +697,8 @@ export interface UpgradeGain {
  */
 export interface HalfView {
   /**
-   * The level of the node the half belongs to (a source's half is ``exact``), at least
-   * ``presence`` while an own group is on the edge (DEC-10, item 2).
+   * The level of the node the half belongs to by the sources and the terrain table (a source's
+   * half is ``exact``); ``fog`` for an own node without a source (DEC-35, detail 4).
    */
   detail: Detail;
   /**
@@ -1142,7 +1144,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 27;
+export const PROTOCOL_VERSION = 28;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

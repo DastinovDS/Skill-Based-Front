@@ -197,6 +197,9 @@ def test_dec16_example_2_not_enough_cp() -> None:
 def test_dec16_example_5_buffer_edge(owner: int | None) -> None:
     state = _dec16()
     state.nodes[5].owner = owner  # e5 = B-5: neutral or enemy N
+    # A buffer edge is seen only from a source at an end (DEC-35, detail 5): a scout in B.
+    scout = Group(state.new_id(), 0, 1, 1, Mode.ATTACK, AtNode(B))
+    state.groups[scout.id] = scout
     assert _cmd(state, UpgradeRoad(B_OTHER))[0] == [Reject(RejectCode.NOT_INTERNAL)]
     assert _cmd(state, UpgradeRoad(6))[0] == [Reject(RejectCode.NOT_INTERNAL)]  # enemy
 
@@ -316,6 +319,8 @@ def test_dec28_check_order() -> None:
     code = RejectCode
     far = 8  # e8 = 7-6: a road of player 1 in the fog of player 0
     assert state.nodes[6].owner == 1 == state.nodes[7].owner
+    scout = Group(state.new_id(), 0, 1, 1, Mode.ATTACK, AtNode(B))  # B-6 seen (DEC-35)
+    state.groups[scout.id] = scout
     cases = [
         (UpgradeRoad(edges), code.NOT_FOUND_OR_HIDDEN),  # no such edge
         (UpgradeRoad(-1), code.NOT_FOUND_OR_HIDDEN),
