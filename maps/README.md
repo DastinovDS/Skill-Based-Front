@@ -8,7 +8,9 @@ mirrored half are free, the picture is not rotated. The three MVP maps (31..34 n
 the picture rotated by 180°) left the pool (#372, owner decision) and are test fixtures in `maps/fixtures/`
 (with their previews, backgrounds and halves in `maps/fixtures/src/`): many tests and the client dev scene `artery`
 stand on their graphs. The server does not serve them (it loads `maps/*.json` without subdirectories), the validator
-still checks them, and they are frozen: `maps:preview`, `maps:bake` and `maps:mirror` work on the pool only. The format:
+still checks them, and they are frozen: `maps:preview`, `maps:bake` and `maps:mirror` work on the pool only. The menu map
+`menu/valley.json` (#474) is drawn behind the start menu by the client, which bundles it; it is outside the pool too, built
+from `menu/src/valley.half.json`, validated, previewed and baked with the pool (`docs/design/map-format.md`, "The menu map"). The format:
 [`docs/design/map-format.md`](../docs/design/map-format.md).
 
 Map ids and the names of cities and provinces are English (part 3 of the switch of the repository to English, #390): the names

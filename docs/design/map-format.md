@@ -1,8 +1,8 @@
 # Map format
 
-A map is a JSON file in `maps/` (the server pool) or in `maps/fixtures/` (the three MVP maps `artery`, `web`, `pass`, kept as test fixtures since #372). The loader: `gow_sim.maps.load_map(path) -> MapDef` (MAP-01, #13).
+A map is a JSON file in `maps/` (the server pool), in `maps/fixtures/` (the three MVP maps `artery`, `web`, `pass`, kept as test fixtures since #372) or in `maps/menu/` (the map `valley` drawn behind the start menu, #474, outside the pool). The loader: `gow_sim.maps.load_map(path) -> MapDef` (MAP-01, #13).
 The map design checks (connectivity, planarity, rule symmetry, names, border points,
-neutral space) are run by the offline validator `uv run gow-maps validate maps/*.json maps/fixtures/*.json` (MAP-02, #14).
+neutral space) are run by the offline validator `uv run gow-maps validate maps/*.json maps/fixtures/*.json maps/menu/*.json` (MAP-02, #14).
 
 The game rules that rely on map fields are described in [`mechanics.md`](mechanics.md): terrain
 (section 4), roads (section 8), cities and capacity (section 9), VP (section 11).
@@ -291,7 +291,7 @@ and its character are described in [`maps/README.md`](../../maps/README.md).
 ## The map pool on the server
 
 At start the server (`gow_server.maps`, SRV-01) loads all `maps/*.json` (without subdirectories:
-`maps/src/` holds the halves, `maps/fixtures/` the MVP maps, which the server does not serve) through `load_map`. The file name must match `meta.name`:
+`maps/src/` holds the halves, `maps/fixtures/` the MVP maps and `maps/menu/` the menu map, which the server does not serve) through `load_map`. The file name must match `meta.name`:
 `maps/<id>.json`. A broken map or a name mismatch stops the server from starting.
 
 The map background (MAP-05) lies next to it: `maps/<id>.bg.webp`. It is optional; the PNG previews from MAP-04 (other
@@ -337,6 +337,19 @@ The background is for looks only: the game rules do not read it. The baker is bu
   by the mean colors of 16 × 16 blocks with a tolerance, not byte by byte: a map edit without `bake` breaks CI.
 - **Client stamps.** A map with baked details gets no `TerrainView` stamps (about 1300 sprites):
   they stay only on maps without a background and on a map whose background failed to load.
+
+## The menu map
+
+`maps/menu/valley.json` (#474, the sketch MM1 "Valley" of `docs/design/mockups/menu-background.html`) is drawn
+behind the screens before a match. It is an ordinary map in this format, built from its half
+`maps/menu/src/valley.half.json` (`uv run gow-maps mirror maps/menu/src/valley.half.json -o maps/menu/valley.json`)
+and validated, previewed and baked with the pool (`mise run maps:validate`, `maps:preview`, `maps:bake`), but it is not
+in the pool: the server never serves it, the queue, the lobby and the tournaments never play on it. The client imports
+the JSON at build time (`apps/client/src/app/menuMap.ts`), so the start screen draws it on the first frame without a
+request. Its world is 800 × 560: at a window of 1280 × 800 the client's `layoutScene` shows it at one px per unit,
+the own capital `Highhold` right of the text rail and `Stormcrown` in the fog; no node is above the line that keeps
+the title bar and the corner chip clear. 25 nodes, the road of the valley `Highhold`, `Mossgate`, `Fordham`, `Wickwood`,
+`Stormcrown` runs straight down the middle.
 
 ## Test maps
 

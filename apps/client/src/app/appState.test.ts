@@ -484,26 +484,13 @@ describe('AppState', () => {
       expect(app.calibration).toBeNull();
     });
 
-    it('draws the crossroads map behind the screens when the pool has it', async () => {
-      const map = vi.fn((id: string) => Promise.resolve({ meta: { name: id } }));
-      const { app } = setup('', memory(), {
-        maps: () => Promise.resolve([{ id: 'ridge' }, { id: 'crossroads' }] as never),
-        map: map as never,
-      });
-      await app.start();
-      await vi.waitFor(() => {
-        expect(app.backdrop).not.toBeNull();
-      });
-      expect(map).toHaveBeenCalledWith('crossroads');
-    });
-
-    it('works without the picture when the maps cannot be loaded', async () => {
-      const { app } = setup('', memory(), {
-        maps: () => Promise.reject(new ApiError('network', 0)),
-      });
+    it('draws the bundled menu map behind the screens without a request (#474)', async () => {
+      const maps = vi.fn(() => Promise.resolve([]));
+      const { app } = setup('', memory(), { maps: maps as never });
+      expect(app.backdrop.meta.name).toBe('valley');
       await app.start();
       expect(app.screen.name).toBe('welcome');
-      expect(app.backdrop).toBeNull();
+      expect(maps).not.toHaveBeenCalled();
     });
   });
 });

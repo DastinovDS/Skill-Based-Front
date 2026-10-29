@@ -1857,7 +1857,7 @@ Findings the round keeps for every variant: **Now shows "Defense" twice** (the p
 
 ## 36. Start menu background: animation and a menu map (#474)
 
-Status: **[awaiting the owner's decision]**. The owner asked on 2026-10-28, after choosing variant A "Front" of the start menu (#471, implemented in #489), for a background animation that is more logical and varied (what moves, why, how it relates to the queue state) and for a look at a map drawn only for the menu; on 2026-10-29 he confirmed it before the release, so the postponement of section 23 does not apply to it. Until the choice the client keeps the backdrop of #489 (`MenuBackdrop.svelte`, `menuScene.ts`).
+Status: **[accepted]** (2026-10-29). The owner asked on 2026-10-28, after choosing variant A "Front" of the start menu (#471, implemented in #489), for a background animation that is more logical and varied (what moves, why, how it relates to the queue state) and for a look at a map drawn only for the menu; on 2026-10-29 he confirmed it before the release, so the postponement of section 23 does not apply to it. Until the choice the client keeps the backdrop of #489 (`MenuBackdrop.svelte`, `menuScene.ts`).
 
 Mockup: [`mockups/menu-background.html`](mockups/menu-background.html), frames in [`mockups/img/menu-background/`](mockups/img/menu-background/). It draws the client's frame (the rail, its shade, the strings of the `?menu=` dev scenes, the fog by the client's `layoutScene`) for six queue states (idle, searching, long wait with the bot offer, found, confirmed, queue locked) and switches the concept, the map, the window size, the season, grayscale, reduced motion and guides (the rail, the title bar line, the fog's top fade, the corner chip, the fog edge); a meter shows the draw time per frame.
 
@@ -1876,7 +1876,7 @@ Menu map sketches (drawn in the mockup, not map files): **MM1 Valley** (**recomm
 | --- | --- |
 | ![searching](mockups/img/menu-background/bg5-search.jpg) | ![found](mockups/img/menu-background/bg5-found.jpg) |
 
-**Owner's decision:** awaiting the owner's decision.
+**Owner's decision (2026-10-29):** **BG5 "Set" on the menu map MM1 "Valley"**. The season by the date stays a still tint (the default: the owner did not answer the question of a fixed palette), and the 1024 × 640 overlap is fixed with it: beside the rail (windows from 900 px wide) `layoutScene` keeps the own capital at `RAIL_RIGHT` and shrinks the map instead. The map is `maps/menu/valley.json` (built from `maps/menu/src/valley.half.json`, validated and baked with the pool, outside it), bundled by the client (`src/app/menuMap.ts`) in place of `GET /api/maps/crossroads`.
 
 ## 37. Supply lines, terrain and vision, rivers and lakes (#429)
 

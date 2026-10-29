@@ -1,0 +1,343 @@
+{
+  "meta": {
+    "name": "valley",
+    "version": 1,
+    "width": 800,
+    "height": 560
+  },
+  "nodes": [
+    {
+      "id": "cap",
+      "name": "Highhold",
+      "mirror_name": "Stormcrown",
+      "x": 40,
+      "y": 280,
+      "mirror_x": 690,
+      "mirror_y": 280,
+      "terrain": "mountains",
+      "vp": 1,
+      "kind": "capital",
+      "capital_of": 0,
+      "start_owner": 0,
+      "start_units": 6,
+      "start_charged": 6,
+      "start_stock": 6
+    },
+    {
+      "id": "grey",
+      "name": "Greyscar",
+      "mirror_name": "Iron Bluff",
+      "x": 130,
+      "y": 160,
+      "mirror_x": 600,
+      "mirror_y": 400,
+      "terrain": "mountains",
+      "vp": 1,
+      "kind": "city_small",
+      "capital_of": null,
+      "start_owner": 0,
+      "start_units": 2,
+      "start_charged": 2,
+      "start_stock": 1
+    },
+    {
+      "id": "alder",
+      "name": "Alderfell",
+      "mirror_name": "Darkwood",
+      "x": 125,
+      "y": 405,
+      "mirror_x": 605,
+      "mirror_y": 155,
+      "terrain": "forest",
+      "vp": 1,
+      "kind": "city_medium",
+      "capital_of": null,
+      "start_owner": 0,
+      "start_units": 2,
+      "start_charged": 2,
+      "start_stock": 2
+    },
+    {
+      "id": "moss",
+      "name": "Mossgate",
+      "mirror_name": "Wickwood",
+      "x": 210,
+      "y": 280,
+      "mirror_x": 520,
+      "mirror_y": 280,
+      "terrain": "forest",
+      "vp": 1,
+      "kind": "city_medium",
+      "capital_of": null,
+      "start_owner": 0,
+      "start_units": 2,
+      "start_charged": 2,
+      "start_stock": 2
+    },
+    {
+      "id": "scairn",
+      "name": "South Cairn",
+      "mirror_name": "High Shelf",
+      "x": 180,
+      "y": 510,
+      "mirror_x": 550,
+      "mirror_y": 50,
+      "terrain": "mountains",
+      "vp": 0,
+      "kind": "province",
+      "capital_of": null,
+      "start_owner": 0,
+      "start_units": 0,
+      "start_charged": 0,
+      "start_stock": 0
+    },
+    {
+      "id": "ncairn",
+      "name": "North Cairn",
+      "mirror_name": "Low Scree",
+      "x": 220,
+      "y": 75,
+      "mirror_x": 510,
+      "mirror_y": 485,
+      "terrain": "mountains",
+      "vp": 0,
+      "kind": "province",
+      "capital_of": null,
+      "start_owner": 0,
+      "start_units": 0,
+      "start_charged": 0,
+      "start_stock": 0
+    },
+    {
+      "id": "watch",
+      "name": "Old Watch",
+      "mirror_name": "Eagle Step",
+      "x": 80,
+      "y": 110,
+      "mirror_x": 650,
+      "mirror_y": 450,
+      "terrain": "mountains",
+      "vp": 0,
+      "kind": "province",
+      "capital_of": null,
+      "start_owner": 0,
+      "start_units": 0,
+      "start_charged": 0,
+      "start_stock": 0
+    },
+    {
+      "id": "quarry",
+      "name": "Quarry",
+      "mirror_name": "Blackrock",
+      "x": 65,
+      "y": 500,
+      "mirror_x": 665,
+      "mirror_y": 60,
+      "terrain": "mountains",
+      "vp": 1,
+      "kind": "city_small",
+      "capital_of": null,
+      "start_owner": 0,
+      "start_units": 2,
+      "start_charged": 2,
+      "start_stock": 1
+    },
+    {
+      "id": "barley",
+      "name": "Barley",
+      "mirror_name": "Long Meadow",
+      "x": 300,
+      "y": 175,
+      "mirror_x": 430,
+      "mirror_y": 385,
+      "terrain": "plains",
+      "vp": 0,
+      "kind": "province",
+      "capital_of": null,
+      "start_owner": null,
+      "start_units": 0,
+      "start_charged": 0,
+      "start_stock": 0
+    },
+    {
+      "id": "mill",
+      "name": "Millbrook",
+      "mirror_name": "Thornby",
+      "x": 290,
+      "y": 390,
+      "mirror_x": 440,
+      "mirror_y": 170,
+      "terrain": "plains",
+      "vp": 1,
+      "kind": "city_small",
+      "capital_of": null,
+      "start_owner": null,
+      "start_units": 0,
+      "start_charged": 0,
+      "start_stock": 0
+    },
+    {
+      "id": "ridge",
+      "name": "Ridgeway",
+      "mirror_name": "Cold Pass",
+      "x": 330,
+      "y": 60,
+      "mirror_x": 400,
+      "mirror_y": 500,
+      "terrain": "mountains",
+      "vp": 1,
+      "kind": "city_small",
+      "capital_of": null,
+      "start_owner": null,
+      "start_units": 0,
+      "start_charged": 0,
+      "start_stock": 0
+    },
+    {
+      "id": "fern",
+      "name": "Fernhollow",
+      "mirror_name": "Elm Rows",
+      "x": 270,
+      "y": 490,
+      "mirror_x": 460,
+      "mirror_y": 70,
+      "terrain": "forest",
+      "vp": 0,
+      "kind": "province",
+      "capital_of": null,
+      "start_owner": null,
+      "start_units": 0,
+      "start_charged": 0,
+      "start_stock": 0
+    },
+    {
+      "id": "ford",
+      "name": "Fordham",
+      "self_mirror": true,
+      "x": 365,
+      "y": 280,
+      "terrain": "plains",
+      "vp": 2,
+      "kind": "city_large",
+      "capital_of": null,
+      "start_owner": null,
+      "start_units": 0,
+      "start_charged": 0,
+      "start_stock": 0
+    }
+  ],
+  "edges": [
+    {
+      "a": "cap",
+      "b": "grey",
+      "max_level": 3
+    },
+    {
+      "a": "cap",
+      "b": "alder",
+      "max_level": 3
+    },
+    {
+      "a": "cap",
+      "b": "moss",
+      "max_level": 3
+    },
+    {
+      "a": "cap",
+      "b": "watch",
+      "max_level": 2
+    },
+    {
+      "a": "cap",
+      "b": "quarry",
+      "max_level": 2
+    },
+    {
+      "a": "grey",
+      "b": "watch",
+      "max_level": 2
+    },
+    {
+      "a": "grey",
+      "b": "ncairn",
+      "max_level": 2
+    },
+    {
+      "a": "grey",
+      "b": "moss",
+      "max_level": 2
+    },
+    {
+      "a": "alder",
+      "b": "quarry",
+      "max_level": 2
+    },
+    {
+      "a": "alder",
+      "b": "moss",
+      "max_level": 2
+    },
+    {
+      "a": "alder",
+      "b": "scairn",
+      "max_level": 2
+    },
+    {
+      "a": "moss",
+      "b": "barley",
+      "max_level": 2
+    },
+    {
+      "a": "moss",
+      "b": "ford",
+      "max_level": 3
+    },
+    {
+      "a": "alder",
+      "b": "mill",
+      "max_level": 2
+    },
+    {
+      "a": "ncairn",
+      "b": "ridge",
+      "max_level": 2
+    },
+    {
+      "a": "ncairn",
+      "b": "barley",
+      "max_level": 2
+    },
+    {
+      "a": "scairn",
+      "b": "fern",
+      "max_level": 2
+    },
+    {
+      "a": "barley",
+      "b": "ford",
+      "max_level": 2
+    },
+    {
+      "a": "barley",
+      "b": "ridge",
+      "max_level": 2
+    },
+    {
+      "a": "mill",
+      "b": "fern",
+      "max_level": 2
+    }
+  ],
+  "cross_edges": [
+    {
+      "a": "ridge",
+      "b": "fern",
+      "max_level": 2
+    },
+    {
+      "a": "barley",
+      "b": "mill",
+      "max_level": 2
+    }
+  ]
+}

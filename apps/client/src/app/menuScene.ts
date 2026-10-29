@@ -1,6 +1,7 @@
 /**
  * The picture behind the start menu (#471, variant A "Front" of docs/design/mockups/start-menu.html):
- * a pool map drawn small, the own capital at the left of it, the enemy capital far away in the fog.
+ * a map drawn small (the menu map `maps/menu/valley.json`, #474), the own capital at the left of it,
+ * the enemy capital far away in the fog.
  * Pure geometry: the map file and the size of the window in, screen points out. It draws nothing
  * and decides nothing about the game; it is decoration, so the road from one capital to the other
  * is a plain shortest path over the map file.
@@ -61,6 +62,11 @@ export interface Scene {
 
 /** The text rail takes this much from the left edge (56 px margin and the rail of 430 px). */
 export const RAIL_RIGHT = 520;
+/**
+ * From this window width on the rail stands beside the picture (app.css: below it, or in a window
+ * up to 560 px tall, the rail flows over the picture under a flat shade).
+ */
+export const RAIL_BESIDE_MIN_WIDTH = 900;
 /** The solid fog is at least this wide at the right edge of the window. */
 export const FOG_WIDTH = 250;
 /** The soft edge of the fog, left of the solid part. */
@@ -145,7 +151,9 @@ export function layoutScene(map: MapFile, width: number, height: number): Scene 
       fadeStart: width - FOG_WIDTH - FOG_FADE,
     };
   }
-  const left = Math.min(RAIL_RIGHT, Math.max(width * 0.4, 260));
+  // Beside the rail the own capital never stands under it or under its key hints (#474: at 1024 px
+  // 40% of the width put it at 410 px, under the hints that reach 426 px): the map shrinks instead.
+  const left = width >= RAIL_BESIDE_MIN_WIDTH ? RAIL_RIGHT : Math.max(width * 0.4, 260);
   const spanX = Math.max(1, capital1.x - capital0.x);
   const wantX = Math.max(80, width - ENEMY_MARGIN - left);
   const fitY = Math.max(80, height - TOP_ROOM - BOTTOM_ROOM) / Math.max(1, map.meta.height);

@@ -66,7 +66,7 @@ run = [
   "uv run ruff format --check --quiet .",
   "uv run pyright",
   "uv run lint-imports --no-logo",
-  "uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json",
+  "uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json maps/menu/*.json",
 ]
 
 [tasks."check:client"]
@@ -217,16 +217,16 @@ description = "Validate the maps (alias of maps:validate)"
 depends = ["maps:validate"]
 
 [tasks."maps:validate"]
-description = "gow-maps validate maps/*.json and maps/fixtures/*.json, with the start-stock check against the warehouses of rulesets/mvp-1.toml (DEC-26, item 5)"
-run = "uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json"
+description = "gow-maps validate maps/*.json, maps/fixtures/*.json and the menu map maps/menu/*.json, with the start-stock check against the warehouses of rulesets/mvp-1.toml (DEC-26, item 5)"
+run = "uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json maps/menu/*.json"
 
 [tasks."maps:preview"]
-description = "Draw maps/<name>.preview.png"
-run = "uv run gow-maps preview maps/*.json"
+description = "Draw maps/<name>.preview.png (the pool and the menu map maps/menu/)"
+run = "uv run gow-maps preview maps/*.json maps/menu/*.json"
 
 [tasks."maps:bake"]
-description = "Bake maps/<name>.bg.webp: numpy and Pillow, texture T2 (after any map edit)"
-run = "uv run gow-maps bake maps/*.json"
+description = "Bake maps/<name>.bg.webp (the pool and the menu map maps/menu/): numpy and Pillow, texture T2 (after any map edit)"
+run = "uv run gow-maps bake maps/*.json maps/menu/*.json"
 
 [tasks."maps:mirror"]
 description = "Build maps/<name>.json from maps/src/<name>.half.json (arg: name)"
