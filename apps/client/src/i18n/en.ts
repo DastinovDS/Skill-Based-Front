@@ -86,6 +86,7 @@ export const en = {
   'split.title': 'Split the group',
   'split.of': 'of {units} to the new group',
   'split.charged': 'charged among them: {charged}',
+  'split.tip': 'Too big to go to {place}: split the group first ({key})',
   'split.confirm': 'Split',
   'split.hint': '←/→ amount, Enter: split, S or Esc: close',
   'split.close': 'Close the split menu',

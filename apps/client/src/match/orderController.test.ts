@@ -293,6 +293,56 @@ describe('OrderController', () => {
     expect(controller.ui.current.reach).toBeNull();
   });
 
+  it('points at a hovered target the group is too big for, before any order is sent (#468)', () => {
+    const { controller, sent } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.overlay();
+    controller.onReach({
+      type: 'reach',
+      group: group.id,
+      tick: 30,
+      nodes: [{ node: enemy.id, ticks: 25, path: [home, other.id, enemy.id] }],
+      split: [other.id],
+    });
+    // Nothing hovered: no hint.
+    controller.overlay();
+    expect(controller.ui.current.splitHover).toBeNull();
+    // A target the server lists under `split`: the hint, from the server's list only.
+    controller.hover({ kind: 'node', id: other.id });
+    controller.overlay();
+    expect(controller.ui.current.splitHover).toBe(other.id);
+    // A reachable target and the group's own node: no hint.
+    controller.hover({ kind: 'node', id: enemy.id });
+    controller.overlay();
+    expect(controller.ui.current.splitHover).toBeNull();
+    controller.hover({ kind: 'node', id: other.id });
+    controller.overlay();
+    controller.hover({ kind: 'node', id: home });
+    controller.overlay();
+    expect(controller.ui.current.splitHover).toBeNull();
+    // The pointer leaves, or the group is let go: the hint goes.
+    controller.hover({ kind: 'node', id: other.id });
+    controller.overlay();
+    controller.hover(null);
+    controller.overlay();
+    expect(controller.ui.current.splitHover).toBeNull();
+    controller.hover({ kind: 'node', id: other.id });
+    controller.overlay();
+    controller.deselect();
+    controller.overlay();
+    expect(controller.ui.current.splitHover).toBeNull();
+    // Hovering sends nothing.
+    expect(sent).toEqual([]);
+  });
+
+  it('has no hint without an answer of the server: it computes nothing itself (#468)', () => {
+    const { controller } = setup();
+    controller.click({ kind: 'group', id: group.id }, false);
+    controller.hover({ kind: 'node', id: other.id });
+    controller.overlay();
+    expect(controller.ui.current.splitHover).toBeNull();
+  });
+
   it('splits with the menu on S: arrows set the amount, Enter splits, S closes (DEC-20)', () => {
     const { controller, sent, hud } = setup();
     const big = { ...group, units: 5, charged: 3 };

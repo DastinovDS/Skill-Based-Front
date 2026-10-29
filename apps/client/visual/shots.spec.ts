@@ -235,3 +235,20 @@ test('shot of the opponent intent in grey scale at 60% scale', async ({ page }) 
   });
   await page.locator('canvas').screenshot({ path: join(OUT, 'intents-gray-60.png') });
 });
+
+// The hint "split the group" before an order hits the stack limit (#468): `?split=2&menus` makes the frozen scene (`menus`: orders go nowhere but the pointer previews them) answer the
+// `reach` of the selected group with the node 2 under `split` (the server's answer, DEC-20). Select the group, rest the
+// pointer on that node. `split-hint.png` is the whole screen, `split-hint-gray.png` the same in grey scale.
+test('shot of the split hint on a target the group is too big for', async ({ page }) => {
+  await page.goto('/?scene=snapshot&split=2&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.mouse.click(465, 415);
+  await page.waitForTimeout(400);
+  await page.mouse.move(640, 598);
+  await page.mouse.move(641, 599);
+  await expect(page.locator('[role="tooltip"]')).toBeVisible();
+  await page.screenshot({ path: join(OUT, 'split-hint.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'split-hint-gray.png') });
+});

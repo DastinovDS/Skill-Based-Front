@@ -33,6 +33,12 @@
   const at = params.has('at') && Number.isFinite(atParam) ? atParam : undefined;
   // `?eta=<from>,<to>,<ticks>[,<via>...]` pins the travel-time label of an order to a frozen scene (#432).
   const etaPinned = parseEta(params.get('eta'));
+  // `?split=<node>` makes a fixture scene answer the `reach` of a selected group with that node under
+  // `split` (the group is too big for it, DEC-20): the hint "split the group" (#468) can be looked at.
+  const splitPinned =
+    params.has('split') && Number.isInteger(Number(params.get('split')))
+      ? Number(params.get('split'))
+      : null;
   const fixtureScene = (id: string | null) => FIXTURE_SCENES.find((scene) => scene.id === id);
   let rendererFailed = $state(false);
   let sceneId = $state(
@@ -128,7 +134,12 @@
       send: match === null ? (menusOn ? () => 0 : null) : (cmd) => match.session.send(cmd),
       alerts: hud.alerts,
       focusNode: (node) => canvas?.focusNode(node),
-      queryReach: (group) => match?.session.queryReach(group),
+      queryReach: (group) => {
+        match?.session.queryReach(group);
+        if (match === null && splitPinned !== null) {
+          orders.onReach({ type: 'reach', group, tick: 0, nodes: [], split: [splitPinned] });
+        }
+      },
     }),
   );
 
