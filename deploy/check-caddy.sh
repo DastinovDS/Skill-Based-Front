@@ -92,12 +92,16 @@ else
 	esac
 fi
 
-echo "== baked map backgrounds are bundled into the client"
-# maps/*.bg.webp reach the client only through Vite's import.meta.glob at image build time; when the
-# Docker context misses them the glob is empty and the map is drawn without its background.
-bg="$(grep -oE '/assets/[A-Za-z0-9_.-]+\.bg-[A-Za-z0-9_-]+\.webp' "$tmp/asset.b" | head -n 1 || true)"
+echo "== map backgrounds come from the server, not from the client bundle (CLI-05)"
+# The client takes the background of a map from MapSummary.background_url; the bundle carries none.
+if grep -qE '\.bg-[A-Za-z0-9_-]+\.webp' "$tmp/asset.b"; then
+	fail "the client bundle references a baked map background (/assets/<map>.bg-<hash>.webp)"
+fi
+status="$(fetch maps /api/maps)"
+[ "$status" = 200 ] || fail "GET /api/maps returned $status"
+bg="$(grep -oE '"background_url" *: *"[^"]+"' "$tmp/maps.b" | head -n 1 | sed -E 's/.*: *"([^"]+)"/\1/' || true)"
 if [ -z "$bg" ]; then
-	fail "the client bundle references no baked map background (/assets/<map>.bg-<hash>.webp)"
+	fail "no map of the pool has a background_url (maps/*.bg.webp missing from the server image?)"
 else
 	status="$(fetch bg "$bg")"
 	[ "$status" = 200 ] || fail "GET $bg returned $status"

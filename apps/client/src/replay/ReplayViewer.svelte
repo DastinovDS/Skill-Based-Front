@@ -2,18 +2,19 @@
   import { onMount } from 'svelte';
   import { formatClock } from '../hud/format.ts';
   import { t, tf } from '../i18n/index.ts';
-  import { backgroundUrl } from '../map/bundledMaps.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
   import { ReplayPlayer, SPEEDS } from './replayPlayer.ts';
   import type { ReplayFile } from './replayFile.ts';
 
   interface Props {
     file: ReplayFile;
+    /** The server's baked background of the map, if the map is still in the pool. */
+    backgroundUrl?: string | null;
     /** Leave the viewer (back to the result screen). Without it there is no back button. */
     onback?: () => void;
   }
 
-  let { file, onback }: Props = $props();
+  let { file, backgroundUrl = null, onback }: Props = $props();
 
   const player = $derived(new ReplayPlayer(file));
 
@@ -56,7 +57,7 @@
   <GameCanvas
     map={file.map}
     source={player}
-    backgroundUrl={backgroundUrl(file.map.meta.name)}
+    {backgroundUrl}
     onerror={(error: unknown) => {
       console.error(error);
       rendererFailed = true;

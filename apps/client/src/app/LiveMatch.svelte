@@ -5,7 +5,6 @@
   import { routeKey } from '../hud/hudKeys.ts';
   import { HudState } from '../hud/hudState.svelte.ts';
   import { t, tf } from '../i18n/index.ts';
-  import { backgroundUrl } from '../map/bundledMaps.ts';
   import { forwardKey } from '../match/keyEvents.ts';
   import { OrderController } from '../match/orderController.ts';
   import { PauseState } from '../match/pauseState.svelte.ts';
@@ -27,6 +26,8 @@
     matchId: string;
     token: string;
     map: MapFile;
+    /** The server's baked background of the map (`MapSummary.background_url`), if it has one. */
+    backgroundUrl?: string | null;
     /** The server said the match is over. */
     onend: (me: PlayerId, end: MatchEndMsg) => void;
     onexit: () => void;
@@ -38,6 +39,7 @@
     matchId,
     token,
     map,
+    backgroundUrl = null,
     onend,
     onexit,
     onreload = () => {
@@ -214,7 +216,7 @@
       source={session}
       interaction={orders}
       player={me}
-      backgroundUrl={backgroundUrl(map.meta.name)}
+      {backgroundUrl}
       onerror={(error: unknown) => {
         console.error(error);
         rendererFailed = true;

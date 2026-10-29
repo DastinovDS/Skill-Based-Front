@@ -1,18 +1,22 @@
 <script lang="ts">
+  import type { Api } from '../api/http.ts';
   import CrashGuard from '../app/CrashGuard.svelte';
   import { t, type MessageKey } from '../i18n/index.ts';
+  import { backgroundUrlOf } from '../map/background.ts';
   import { loadReplayWhenReady, ReplayLoadError, type ReplayLoadCode } from './loadReplay.ts';
   import { parseReplay, type ReplayFile } from './replayFile.ts';
   import ReplayViewer from './ReplayViewer.svelte';
 
   interface Props {
+    /** For the background of the map, which the server states in its map list. */
+    api?: Pick<Api, 'maps'> | null;
     matchId: string;
     /** Guest token for a private match; rated replays are public. */
     token?: string | null;
     onback?: () => void;
   }
 
-  let { matchId, token = null, onback }: Props = $props();
+  let { api = null, matchId, token = null, onback }: Props = $props();
 
   const ERRORS: Record<Exclude<ReplayLoadCode, 'preparing'>, MessageKey> = {
     auth: 'replay.error.auth',
@@ -25,6 +29,7 @@
   };
 
   let file = $state.raw<ReplayFile | null>(null);
+  let backgroundUrl = $state.raw<string | null>(null);
   let failure = $state.raw<Exclude<ReplayLoadCode, 'preparing'> | null>(null);
   /** The server answered "preparing": it is still building the frames of the match (#259). */
   let preparing = $state.raw(false);
@@ -50,21 +55,30 @@
     let current = true;
     const stop = new AbortController();
     file = null;
+    backgroundUrl = null;
     failure = null;
     preparing = false;
     fetchFile(matchId, stop.signal, () => {
       if (current) preparing = true;
-    }).then(
-      (loadedFile) => {
-        if (current) file = loadedFile;
-      },
-      (error: unknown) => {
-        if (!current) return;
-        // `preparing` never ends the wait: it is retried, then it becomes `timeout`.
-        failure =
-          error instanceof ReplayLoadError && error.code !== 'preparing' ? error.code : 'invalid';
-      },
-    );
+    })
+      .then(async (loadedFile) => ({
+        loadedFile,
+        background: api === null ? null : await backgroundUrlOf(api, loadedFile.map_id),
+      }))
+      .then(
+        ({ loadedFile, background }) => {
+          if (current) {
+            backgroundUrl = background;
+            file = loadedFile;
+          }
+        },
+        (error: unknown) => {
+          if (!current) return;
+          // `preparing` never ends the wait: it is retried, then it becomes `timeout`.
+          failure =
+            error instanceof ReplayLoadError && error.code !== 'preparing' ? error.code : 'invalid';
+        },
+      );
     return () => {
       current = false;
       stop.abort();
@@ -74,7 +88,7 @@
 
 <CrashGuard onexit={onback}>
   {#if file !== null}
-    <ReplayViewer {file} {onback} />
+    <ReplayViewer {file} {backgroundUrl} {onback} />
   {:else}
     <main class="status" role={failure === null ? 'status' : 'alert'}>
       {#if failure !== null}
