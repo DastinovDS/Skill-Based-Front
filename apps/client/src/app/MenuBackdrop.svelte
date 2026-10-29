@@ -159,19 +159,25 @@
     const first = clockAt(now, reducedMotion());
     paint(first);
     place(first);
-    if (first.reduced || typeof requestAnimationFrame !== 'function') return undefined;
+    // A locked queue is a still picture (the supply stands): no loop to run.
+    const still = first.reduced || current === 'banned';
+    if (still || typeof requestAnimationFrame !== 'function') return undefined;
 
     let handle = 0;
     let lastFrame = 0;
     let lastSight = now;
+    // "Less motion" switched on while the menu is open: one still frame, then nothing to repaint.
+    let calmPainted = false;
     const frame = (at: number): void => {
       handle = requestAnimationFrame(frame);
       if (at - lastFrame < FRAME_MS - 2) return;
       lastFrame = at;
-      const still = reducedMotion();
-      const clock = clockAt(at, still);
+      const calm = reducedMotion();
+      if (calm && calmPainted) return;
+      calmPainted = calm;
+      const clock = clockAt(at, calm);
       paint(clock);
-      if (still || at - lastSight >= SIGHT_MS) {
+      if (calm || at - lastSight >= SIGHT_MS) {
         lastSight = at;
         place(clock);
       }
