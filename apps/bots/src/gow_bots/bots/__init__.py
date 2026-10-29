@@ -9,6 +9,15 @@ from gow_bots.bots.base import Bot, BotFactory, Controller, ParamRange, choose_p
 from gow_bots.bots.basic import IdleBot, RandomLegalBot
 from gow_bots.bots.reactive import ReactiveBot
 from gow_bots.bots.rusher import RusherBot
+from gow_bots.bots.smart import (
+    PERSONALITIES,
+    SmartBot,
+    SmartExpander,
+    SmartReactive,
+    SmartRusher,
+    SmartStrangler,
+    SmartTurtle,
+)
 from gow_bots.bots.strangler import StranglerBot
 from gow_bots.bots.strategy import ExpanderBot, TurtleBot
 from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take
@@ -24,6 +33,12 @@ __all__ = [
     "RandomLegalBot",
     "ReactiveBot",
     "RusherBot",
+    "SmartBot",
+    "SmartExpander",
+    "SmartReactive",
+    "SmartRusher",
+    "SmartStrangler",
+    "SmartTurtle",
     "StranglerBot",
     "TurtleBot",
     "choose_params",
@@ -40,4 +55,5 @@ BOTS: Final[dict[str, BotFactory]] = {
     ReactiveBot.name: ReactiveBot,
     ExpanderBot.name: ExpanderBot,
     TurtleBot.name: TurtleBot,
+    **{cls.name: cls for cls in PERSONALITIES},
 }
