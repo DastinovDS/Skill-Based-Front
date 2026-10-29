@@ -1,7 +1,12 @@
 // The dev scenes the screenshot tools open (`/?scene=<id>`), each with the tick it is frozen at
 // (src/dev/scenarios.ts). Shared by the reference test (scenes.spec.ts) and `mise run shots`
 // (shots.spec.ts); src/dev/sceneList.test.ts fails when a scene of scenarios.ts is missing here.
-export const SCENES = [
+export const SCENES: readonly {
+  readonly id: string;
+  readonly tick: number;
+  /** Keys the player presses before the frame is taken (`supply`: Tab opens the «Supply» view). */
+  readonly keys?: readonly string[];
+}[] = [
   { id: 'snapshot', tick: 120 },
   { id: 'snapshot_fog', tick: 300 },
   { id: 'fog_road', tick: 300 },
@@ -16,7 +21,8 @@ export const SCENES = [
   { id: 'progress', tick: 2400 },
   { id: 'figures', tick: 2400 },
   { id: 'orders', tick: 2400 },
-] as const;
+  { id: 'supply', tick: 2400, keys: ['Tab'] },
+];
 
 /**
  * The screens before a match (`/?menu=<id>`, src/dev/menuScenes.ts, #471): shot by `mise run shots`

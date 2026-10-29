@@ -61,17 +61,17 @@ function strokes(g: Graphics): Stroke[] {
   return instructions.filter((i) => i.action === 'stroke').map((i) => i.data.style);
 }
 
-/** The children of the layer: pipes, flowing dashes, plates, packet dots, texts. */
+/** The parts of the view: the pipes (on the road layer), the flowing dashes, plates, packet dots, texts. */
 function parts(layers: ReturnType<typeof createLayers>) {
   const [root] = layers.layer.supply.children as Container[];
-  const [pipes, flowing, plates, dots, texts] = (root?.children ?? []) as [
-    Graphics,
+  const [flowing, plates, dots, texts] = (root?.children ?? []) as [
     Graphics,
     Graphics,
     Graphics,
     Container,
   ];
-  return { pipes, flowing, plates, dots, texts };
+  const pipeRoot = layers.layer.roads.children.find((c) => c.label === 'supply-pipes');
+  return { pipes: pipeRoot?.children[0] as Graphics, flowing, plates, dots, texts };
 }
 
 const mockText = () =>

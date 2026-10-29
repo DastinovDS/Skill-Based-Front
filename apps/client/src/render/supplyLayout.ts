@@ -170,7 +170,16 @@ export function supplyScene(
   view.me.fronts.forEach((node, marker) => {
     if (node !== null) markers.push({ marker, node });
   });
-  return { pipes, bulkheads, levels, flows: supplyFlows(view, index), stocks, markers, cut, presence };
+  return {
+    pipes,
+    bulkheads,
+    levels,
+    flows: supplyFlows(view, index),
+    stocks,
+    markers,
+    cut,
+    presence,
+  };
 }
 
 // --- Lanes ------------------------------------------------------------------------------

@@ -6,11 +6,16 @@ import { SCENES } from './scenes.ts';
 
 for (const scene of SCENES) {
   test(`scene ${scene.id} matches the reference`, async ({ page }) => {
-    await page.goto(`/?scene=${scene.id}`);
+    // `menus` lets a frozen scene take the keys of the player (orders go nowhere).
+    await page.goto(`/?scene=${scene.id}${scene.keys === undefined ? '' : '&menus'}`);
     // The renderer marks the canvas host once a frame of the snapshot is drawn.
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(scene.tick));
     // The baked background loads on its own: the map is not ready before it.
     await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    // The keys of the scene (the «Supply» view), then the pointer away from the map.
+    for (const key of scene.keys ?? []) await page.keyboard.press(key);
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(scene.keys === undefined ? 0 : 300);
     // The HUD is not part of the map: hide it (it shows the changing FPS).
     await page.addStyleTag({ content: '.hud { display: none !important; }' });
     await expect(page.locator('canvas')).toHaveScreenshot(`${scene.id}.png`, {

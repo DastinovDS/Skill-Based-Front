@@ -19,10 +19,15 @@ test.beforeAll(() => {
 
 for (const scene of SCENES) {
   test(`shot of scene ${scene.id}`, async ({ page }) => {
-    await page.goto(`/?scene=${scene.id}`);
+    // `menus` lets a frozen scene take the keys of the player (orders go nowhere).
+    await page.goto(`/?scene=${scene.id}${scene.keys === undefined ? '' : '&menus'}`);
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(scene.tick));
     // The baked background loads on its own: the map is not ready before it.
     await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    // The keys of the scene (the «Supply» view), then the pointer away from the map.
+    for (const key of scene.keys ?? []) await page.keyboard.press(key);
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(scene.keys === undefined ? 0 : 300);
     await page.screenshot({ path: join(OUT, `${scene.id}.png`) });
     await page.addStyleTag({ content: '.hud { display: none !important; }' });
     await page.locator('canvas').screenshot({ path: join(OUT, `${scene.id}-map.png`) });

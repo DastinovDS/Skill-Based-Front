@@ -87,6 +87,11 @@ interface FlowRun {
  */
 export class SupplyView {
   private readonly root = new Container({ label: 'supply-map' });
+  /**
+   * The pipes lie on the road layer, under the cities and their names (a pipe never covers a
+   * caption), and show in the «Supply» mode only; everything else is on the `supply` layer.
+   */
+  private readonly pipeRoot = new Container({ label: 'supply-pipes' });
   private readonly pipes = new Graphics();
   private readonly flowing = new Graphics();
   private readonly plates = new Graphics();
@@ -141,7 +146,10 @@ export class SupplyView {
       fill: PAPER,
       stroke: { color: BG, width: 2.5, join: 'round' },
     });
-    this.root.addChild(this.pipes, this.flowing, this.plates, this.dots, this.texts);
+    this.pipeRoot.addChild(this.pipes);
+    this.pipeRoot.visible = false;
+    layers.layer.roads.addChild(this.pipeRoot);
+    this.root.addChild(this.flowing, this.plates, this.dots, this.texts);
     this.root.visible = false;
     layers.layer.supply.addChild(this.root);
   }
@@ -162,6 +170,7 @@ export class SupplyView {
   update(frame: RenderFrame | null, supply: SupplyOverlay | null): void {
     const on = supply !== null && frame !== null;
     if (this.root.visible !== on) this.root.visible = on;
+    if (this.pipeRoot.visible !== on) this.pipeRoot.visible = on;
     if (!on) {
       if (this.base !== null) {
         this.base = null;
@@ -173,10 +182,7 @@ export class SupplyView {
     if (frame.base !== this.base || supply !== this.overlay) {
       this.base = frame.base;
       this.overlay = supply;
-      this.drawStatic(
-        supplyScene(frame.base.view, this.me, this.index, this.map.edges),
-        supply,
-      );
+      this.drawStatic(supplyScene(frame.base.view, this.me, this.index, this.map.edges), supply);
     }
     this.drawFlowing(frame);
     this.drawPackets(frame);
@@ -184,6 +190,7 @@ export class SupplyView {
 
   destroy(): void {
     this.root.destroy({ children: true });
+    this.pipeRoot.destroy({ children: true });
     this.pool.length = 0;
     this.style.destroy();
     this.flagStyle.destroy();
@@ -263,12 +270,19 @@ export class SupplyView {
     const g = this.pipes;
     const active = new Set(scene.flows.map((f) => f.edge));
     for (const pipe of scene.pipes) {
-      const span = this.span(pipe.a, pipe.b);
-      if (span === null) continue;
+      // From city to city: the cities and their rims are drawn over the ends of the pipe.
+      const a = this.point(pipe.a);
+      const b = this.point(pipe.b);
+      if (a === undefined || b === undefined) continue;
+      const span = { start: a, end: b };
       const bore = pipeBore(pipe.level);
       g.moveTo(span.start.x, span.start.y)
         .lineTo(span.end.x, span.end.y)
-        .stroke({ width: bore + 2 * SUPPLY_PIPE.casing, color: BG, alpha: SUPPLY_PIPE.casingAlpha });
+        .stroke({
+          width: bore + 2 * SUPPLY_PIPE.casing,
+          color: BG,
+          alpha: SUPPLY_PIPE.casingAlpha,
+        });
       g.moveTo(span.start.x, span.start.y)
         .lineTo(span.end.x, span.end.y)
         .stroke({ width: bore, color: SUPPLY_PIPE.wallColor });
@@ -283,7 +297,8 @@ export class SupplyView {
 
   /** The flows: the fill of the pipe, the valve cap at the destination and the number along it. */
   private drawFlows(scene: SupplyScene): void {
-    const g = this.pipes;
+    const fill = this.pipes;
+    const g = this.plates;
     const runs: FlowRun[] = [];
     const byEdge = new Map<number, SupplyFlow[]>();
     for (const flow of scene.flows) {
@@ -304,8 +319,11 @@ export class SupplyView {
         if (span === null || a === undefined || b === undefined) return;
         const from = lanePoint(span.start, span.end, 0, band.lane);
         const to = lanePoint(span.start, span.end, 1, band.lane);
-        g.moveTo(from.x, from.y)
-          .lineTo(to.x, to.y)
+        // The fill lies on the pipe under the cities, the dashes and the valve over their rims.
+        const whole = [lanePoint(a, b, 0, band.lane), lanePoint(a, b, 1, band.lane)] as const;
+        fill
+          .moveTo(whole[0].x, whole[0].y)
+          .lineTo(whole[1].x, whole[1].y)
           .stroke({ width: band.width, color: YOU, alpha: SUPPLY_PIPE.fillAlpha });
         runs.push({ from, to, width: both ? 1.8 : 2.4 });
         if (span.length < SUPPLY_PIPE.minFlow) return;
@@ -322,14 +340,23 @@ export class SupplyView {
         ).fill(PAPER);
         const behind = { x: to.x - ux * 2, y: to.y - uy * 2 };
         g.poly(
-          headPoly(behind, ux, uy, inner.length, Math.max(inner.minWidth, bore - 5)).flatMap((p) => [
-            p.x,
-            p.y,
-          ]),
+          headPoly(behind, ux, uy, inner.length, Math.max(inner.minWidth, bore - 5)).flatMap(
+            (p) => [p.x, p.y],
+          ),
         ).fill(YOU);
-        // The volume lies along the pipe; several numbers of one road sit apart along it.
+      });
+      // The volumes lie along the pipe; the numbers of one road sit apart along it, in the order
+      // of its own direction (`a` to `b`) whichever way each flow goes, so they never overlap.
+      const road = this.map.edges[edge];
+      const ends = road === undefined ? null : this.span(road.a, road.b);
+      const pa = road === undefined ? undefined : this.point(road.a);
+      const pb = road === undefined ? undefined : this.point(road.b);
+      if (road === undefined || ends === null || pa === undefined || pb === undefined) continue;
+      if (ends.length < SUPPLY_PIPE.minFlow) continue;
+      const middle = this.radiusOf(road.a) + SUPPLY_PIPE.inset + ends.length / 2;
+      flows.forEach((flow, slot) => {
         const shift = (slot - (flows.length - 1) / 2) * SUPPLY_PIPE.labelGap;
-        const pose = labelPose(a, b, span.length / 2 + this.radiusOf(flow.from) + SUPPLY_PIPE.inset + shift, bore);
+        const pose = labelPose(pa, pb, middle + shift, bore);
         this.text(
           `${flow.transfer ? '~' : ''}${String(flow.charges)}`,
           pose,
@@ -351,7 +378,9 @@ export class SupplyView {
       const pb = this.point(b);
       if (at === undefined || pa === undefined || pb === undefined) continue;
       const [p, q] = bulkheadLine(pa, pb, at, SUPPLY_BULKHEAD.half);
-      g.moveTo(p.x, p.y).lineTo(q.x, q.y).stroke({ width: SUPPLY_BULKHEAD.casing, color: BG, alpha: 0.9 });
+      g.moveTo(p.x, p.y)
+        .lineTo(q.x, q.y)
+        .stroke({ width: SUPPLY_BULKHEAD.casing, color: BG, alpha: 0.9 });
       g.moveTo(p.x, p.y)
         .lineTo(q.x, q.y)
         .stroke({ width: SUPPLY_BULKHEAD.width, color: SUPPLY_BULKHEAD.color, alpha: 0.9 });
@@ -412,8 +441,12 @@ export class SupplyView {
       // The cut and the time to the next starvation (the number is the server's `starve_in`).
       const seconds = formatSeconds(ticks, this.tickHz, getLocale());
       const text = `${STARVE_MARK} ${tf('starve.pill', { seconds })}`;
-      const { gap, height } = SUPPLY_GAUGE;
-      const spot = { x: at.x, y: at.y + this.radiusOf(node) + gap + height + 2 + SUPPLY_FLOW_LABEL.height / 2 };
+      // The time sits above the city: below it are the gauge and the caption of the city, whose
+      // distance in world units changes with the zoom; above a marker's badge takes the place.
+      const marked = scene.markers.some((m) => m.node === node);
+      const lift =
+        radius + SUPPLY_FLOW_LABEL.height / 2 + 2 + (marked ? SUPPLY_MARKER.badge.radius * 2 : 0);
+      const spot = { x: at.x, y: at.y - lift };
       const label = this.text(text, spot);
       const width = label.width + 2 * SUPPLY_FLOW_LABEL.padX;
       const { height: plate, radius: corner } = SUPPLY_FLOW_LABEL;

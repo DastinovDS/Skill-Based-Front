@@ -582,7 +582,12 @@ export const SUPPLY_PIPE = {
   labelGap: 22,
 } as const;
 /** A packet on its pipe: a circle growing with its charges; a transfer is a square (a shape, not a hue). */
-export const SUPPLY_PACKET = { radius: 3.2, perCharge: 0.5, transferSide: 10, outline: 1.3 } as const;
+export const SUPPLY_PACKET = {
+  radius: 3.2,
+  perCharge: 0.5,
+  transferSide: 10,
+  outline: 1.3,
+} as const;
 /** The warehouse gauge under an own city: a bar and the figure «stock/capacity» beside it. */
 export const SUPPLY_GAUGE = {
   width: 32,
@@ -594,7 +599,12 @@ export const SUPPLY_GAUGE = {
   font: 9.5,
 } as const;
 /** The front marker: a ring round the city and a badge with its number above it. */
-export const SUPPLY_MARKER = { ring: 8, ringWidth: 3, badge: { radius: 8, lift: 14 }, font: 11 } as const;
+export const SUPPLY_MARKER = {
+  ring: 8,
+  ringWidth: 3,
+  badge: { radius: 8, lift: 14 },
+  font: 11,
+} as const;
 /** A cut-off city (DEC-19): hatched, a dashed ring and the time to the next starvation. */
 export const SUPPLY_CUT = {
   gap: 9,
