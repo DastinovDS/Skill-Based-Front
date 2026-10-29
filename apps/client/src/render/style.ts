@@ -439,7 +439,8 @@ export const FLASH_COLOR = 0xffffff;
 // top: a short soft cast shadow (the outline moved by `shadow`), the opaque dark underlay (the road
 // below does not show through), the tint, the fill (it grows from the tail to the head while the
 // delay runs, with a paper line at its front; one flat tone after the departure with a soft band
-// that runs along the ribbon), a faint inner rim, one pulse at the departure, the outline. Own:
+// that runs along the ribbon), one pulse at the departure, the outline. (The faint inner rim of the
+// mockup lies wholly under the outline and its casing: it is not drawn.) Own:
 // a dark casing under one lightened line, a dot at the tail. The opponent's: the double outline
 // (two thin lines with the plate between) and a double ring at the tail; the head stops on a dashed
 // ring round the target that is open at the bottom, where the caption of the city sits.
@@ -457,8 +458,6 @@ export const RIBBON = {
   tintAlpha: 0.14,
   prepAlpha: 0.72,
   fillAlpha: 0.74,
-  /** The soft inner rim: a stroke of `width` (half of it inside the outline), the owner colour lightened. */
-  rim: { width: 2.4, lighten: 0.5, alpha: 0.38 },
   /** The paper line across the ribbon at the front of the fill (`inset` short of the edges). */
   front: { width: 2, inset: 1.2 },
   /** The departure pulse: one swell of a paper-white fill, `pulseTicks` long, and the outline swells by `pulseWidth`. */

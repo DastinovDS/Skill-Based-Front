@@ -65,7 +65,8 @@ export function ribbonAxis(
       x: (a.x + b.x) / 2 - uy * len * bend,
       y: (a.y + b.y) / 2 + ux * len * bend,
     };
-    const steps = Math.min(40, Math.max(8, Math.ceil(len / 10)));
+    // A piece every 16 units: the sagitta of a piece on a gentle arc stays under 0.2 units, and every piece costs a quad in each stroke.
+    const steps = Math.min(28, Math.max(8, Math.ceil(len / 16)));
     for (let k = i === 0 || axis.length === 0 ? 0 : 1; k <= steps; k++) {
       const t = k / steps;
       const w = 1 - t;

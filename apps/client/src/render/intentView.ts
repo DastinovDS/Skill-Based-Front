@@ -194,7 +194,7 @@ export class IntentView {
    * runs (`progress` < 1) the filled part is bright, the rest a faint tint, with a paper line at
    * the front; `since` ticks after the end of the delay it pulses once, then the ribbon is one flat
    * tone with a soft band that runs along it. Layers, bottom to top: shadow, underlay, tint and
-   * fill, inner rim, pulse, outline (own: casing and a line; the opponent's: a double line).
+   * fill, pulse, outline (own: casing and a line; the opponent's: a double line).
    */
   private drawRibbon(
     intent: WireIntent,
@@ -267,13 +267,6 @@ export class IntentView {
         if (band.length >= 3) g.poly(flat(band)).fill({ color: PAPER, alpha: RIBBON.sheen.alpha });
       }
     }
-    // The faint inner rim (half of the stroke falls under the casing, as in the mockup).
-    g.poly(poly).stroke({
-      width: RIBBON.rim.width,
-      color: lighten(color, RIBBON.rim.lighten),
-      alpha: RIBBON.rim.alpha,
-      join: 'round',
-    });
     if (pulse.swell > 0) {
       g.poly(poly).fill({ color: PAPER, alpha: RIBBON.flashAlpha * pulse.swell });
     }

@@ -49,7 +49,7 @@ recommendation are ready, there is no choice, there is no code. **[replaced]**: 
 | 26 Map style, round 2 | [accepted] 2026-10-21 (26.3): BL1-1 with the highlight of the borders of the "pronounced" one, T2 (the baker on numpy and Pillow, WebP), F1 "Haze", R1 "Stripes", the packet as a square; #335 closed | waits for implementation: #344 (the baker, T2, the `artery` scene); **implemented: BL1-1 shading with the border glow (26.3) #347, PR #409; roads R1 "Stripes" and the square packet (26.1) #345, PR #367; fog F1 "Haze" (9.8) #346, PR #368** |
 | 27 Orders, fight on the map, arena | [accepted] 2026-10-21 (27.3, shots: 29.4): orders and ribbons as now, IN3 "Sight", the bonus "◇ +N" on the head, LY2 "Over the haze", FX3, EF2 "Pointer" with "Dissolve and marks", arena AR1; #339 closed | waits for implementation: #330 (arena AR1, in progress), **implemented: IN3 "Crosshair" and the bonus on the head #353 (the bonus pill came with #330); EF2 "Pointer" with "Dissolve and marks" #354; fight effects FX3 #351, PR #373; layers LY2 "Over the haze" #346, PR #368; shots SH1 instead of the exchange arrows of the arena #352, PR #376** |
 | 28 Map objects and menu icons | [accepted] 2026-10-21 (28.1): U1 and the row of squares U4, C1, B1, I1 (B2 later, no issue is opened); #337 closed | waits for implementation: the row of squares U4 (#433, moved from #348, waits for a mockup, #431), B1 (#349); **implemented: U1 as part of BL1 #347, PR #409; cities C1 (warehouse places filled / frame / dashed, the province as a hollow ring) #348, PR #437**; implemented (menu icons I1): PR #362 |
-| 33 Planned orders, units, cities | [accepted] 2026-10-29: planned orders ODb; units and cities stay as they are now; rounds 1-4 kept for reference | ODb waits for an implementation issue |
+| 33 Planned orders, units, cities | [accepted] 2026-10-29: planned orders ODb; units and cities stay as they are now; rounds 1-4 kept for reference | **ODb implemented: #519** |
 | 35 Provinces, the Defense counter, the barracks placement | [awaiting the owner's decision] (#431 provinces, #349 counter and placement) | mockup only |
 | 32 Progress indicators | [accepted] 2026-10-28 (32): CP bar C "Track", queue, barracks and warehouse build A "Cells", the alert ring for a unit ready with no room and for production stopped by a fight; #430 closed | **implemented: #439** |
 | 29 Shots in a fight | [accepted] 2026-10-21 (29.4): SH1 "Tracers", the strength "Stronger", the distance of the groups as now (46) | the strength "Stronger" and the common part (pools, the effects layer, the particle core) **implemented: #351, PR #373**; tracers SH1 **implemented: #352, PR #376** |
@@ -529,42 +529,39 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
 | --- | --- | --- |
 | An ordinary order (own) | a thin line 3 with white chevrons every 26 units | only the own player |
 | A scheduled order (own) | a wide ribbon, a **solid** outline | both |
-| The enemy's scheduled order (IN3 "Crosshair", #353) | a **thin dashed arrow** 1.8 (3 when locked) with a small head and the crosshair on the target (below) | both |
+| The enemy's scheduled order (ODb, #519) | the same ribbon with a **double outline** (two thin lines) and a dashed ring round the target (below); the IN3 thin arrow and crosshair (#353) are gone | both |
 | Sent, awaiting confirmation | nothing is drawn (round 4: the flickering ghost and the dashed straight line to the target were removed; the order is shown by the snapshot) | the own player |
 | Server rejection | the ghost shakes for 200 ms and fades, a toast with the reason (IM6) | the own player |
 
 The ribbon arrow (HOI4, Mini Motorways):
 
-- The axis (round 4, #325): one smooth curve from the edge of the source city (radius + 16) to the **center** of the target city,
-  without kinks and without binding to every intermediate city. For an own order the curve bends
-  toward the most distant point of the server's path (`order.path`, up to 30% of the chord, `pathBend`), if the path
-  bends noticeably (not less than 12% of the chord). In all other cases (an order to a neighboring node, an enemy
-  order that has no path, an almost straight path) the ribbon is an **arc to the left along the direction of movement** with a bend
-  of 45% of the chord (`RIBBON.arcBend`, `orderBend`): it never lies as a straight arrow on top of a road, and
-  oncoming orders along one road bend in different directions and do not overlap. The client does not
-  search for a path (AGENTS.md 7.1).
-- The body 16, the tail narrows to 60%, the arrowhead of width 38 and length 30.
-- The ribbon is **not translucent**: under the fill lies an almost opaque dark backing (`RIBBON.underlay`,
-  `--plate`, alpha 0.96), the road and the terrain under the ribbon are not visible. On top: a fill in the owner's color with alpha 0.55,
-  an outline 2.2 with alpha 0.95, a dark stroke 6 with alpha 0.45.
-- The delay (`planned_delay_ticks`, section 15): the whole ribbon is faintly outlined (fill alpha 0.14) and is filled
-  from the start to the tip in the owner's color (alpha 0.55). When the delay is over, one smooth pulse
-  (8 ticks, `departPulse`): the white fill swells and subsides (a sine squared, maximum alpha 0.5), the outline
-  at the peak is wider by 2.2. The pulse "fixes" the order: after it the outline stays strengthened (width 3.2,
-  alpha 1, the fill denser by 0.12). "Reduced motion": no swelling, the ribbon is fixed at once. After
-  the departure the outline is dashed and "runs".
+- **ODb "Low relief"** (#431 round 3, **[accepted]** 2026-10-29, **implemented #519**): the look of both sides' scheduled orders. The mockup is
+  `mockups/tokens-cities-orders-r3.html`, variant ODb; the constants are `RIBBON` in `style.ts`, the layout is `intentLayout.ts`, the drawing `IntentView.drawRibbon`.
+- The axis: one smooth arc without kinks and without binding to every intermediate city. It **always bulges toward the top of the screen** (round 3
+  fix), so it never runs over the caption that hangs under its source or its target: `orderBend` gives the arc 45% of the chord (`RIBBON.arcBend`) with the sign
+  that bulges up for the direction (an arrow going right: negative, going left: positive). An own order bends toward the most distant point of the server's path
+  (`order.path`, up to 30% of the chord, `pathBend`) only when that path bends noticeably (at least 12%) **and** bulges up; otherwise the arc. The consequence:
+  two opposite orders along one road bulge to the same side and lie over each other (the earlier look bent them apart). The client does not search for a path (AGENTS.md 7.1).
+- The ends: the tail starts `RIBBON.startGap` (22) outside the circle of the source and is pushed on until it is 26 from the barracks mark (the B1 column) and 20 from the
+  VP badge (`tailStart`). The own head stops 5 outside the capacity ring of the target (`signRim`); the opponent's stops on its ring (32 outside the circle).
+- The body 16, the tail narrows to 60%, the head 38 x 30; **the body and the head are one closed outline**, no separately outlined head. The body is not thinner than 8 px on the screen.
+- Layers, bottom to top (all flat fills and strokes in the one `Graphics` of the `intents` layer, redrawn every frame, **no filter**): a cast shadow (the outline moved by (1, 2)
+  world units, `--bg` at 0.35); the **opaque** dark backing (`RIBBON.underlay`, `--plate`, 0.96: the road and the terrain below do not show through); the tint (owner colour 0.14) and the fill
+  (0.72 while the delay fills it, 0.74 after the departure); a faint inner rim (a stroke 2.4, the owner colour lightened by 0.5, alpha 0.38; half of it lies under the casing, as in the mockup, so it
+  only lifts the edge a little); the departure pulse; the outline. **Own:** a dark casing (3.4, 0.7) under one line 1.6 in the lightened owner colour (`lighten` 0.15), a dot at the tail (r 4).
+  **The opponent's:** a double outline (a stroke 5.2 in its colour with a 2 plate stroke on top: two thin lines) and a ring in a ring at the tail (r 5.2 and 2.4: the own tail is a dot, so the
+  side reads without the hue; the diamond stays for the bonus). Nothing of the size or composition of the group is drawn for the opponent (DEC-04, DEC-21).
+- The delay (`planned_delay_ticks`, section 15): the whole ribbon is a faint tint (0.14) and is filled from the tail to the head (`ribbonFilled`, 0.72) with a paper line 2 across the ribbon at the
+  front of the fill (`frontLine`). When the delay is over, one smooth pulse (8 ticks, `departPulse`): a paper-white fill swells and subsides (a sine squared, maximum alpha 0.5) and the own
+  line is wider by 2 at the peak. After it the ribbon is one flat tone, and **a soft band of light (18 long, alpha 0.3) runs along it every 1.8 s** (`sheenSpan`, `ribbonSlice`); there are
+  no running dashes any more. "Reduced motion": no swelling and no band.
 - An ordinary order: white chevrons run (30 units per second) along the whole remaining path to the target in one
   stream, through the nodes, not along the current edge; "reduced motion": the chevrons stand still. There is no dashed straight line to the target.
   The dotted preview line under the cursor remains only for a scheduled order (Shift).
-- **The opponent's intent, IN3 "Crosshair" (#353):** the arrow is the thin dashed 9/5 line of the same axis (the arc, 9.7), ending on the inner ring of the crosshair
-  (`INTENT_ENEMY.tipGap` outside the city circle), with a small head 14 x 16 (hollow while the delay runs, solid after it, one white flash at the departure). While the
-  delay runs it is faint (alpha 0.55) and dotted 2/6; after it it is solid ink, dashes run (28 units per second), and it thickens by 1.2 at the lock. It has a dark casing. Nothing of the
-  size or the composition of the group is drawn (DEC-04, DEC-21). **The tail** is a ring in a ring (radii 3.5 and 6.5): the own tail is a dot, so the side
-  reads without the hue, and the diamond stays for the bonus (the mockup draws no tail mark for IN3; the ring in a ring is the text of section 21, item "the diamond means both"). **The target** is a
-  **crosshair**: an outer ring of radius (city radius + 20) with a dark casing, an inner ring 8 inside it, four ticks across the outer ring at the quarters, and a halo that pulses
-  every 0.8 s (radius +4, alpha 0.15 to 0.5, width 5 to 8; steady halfway with "less motion"). In the enemy colour; over **your** city `--warn` (amber) and
-  there is a line in the alert stack (IM7). Rings and ticks, not colour alone; the old dashed ring is gone. Code: `intentLayout.ts` (`reticleLook`, `reticlePhase`, `enemyHead`), `intentView.ts`.
-- The bonus of an own scheduled order "◇ +N" at the head of its ribbon (DEC-29) was done with #330 (`OrderView.bonus`, a pill, dashed while a forecast); #353 only checked it.
+- **The target of the opponent's intent (ODb):** a dashed ring (5 / 4, 2 wide, a dark casing 4.5) of radius (city radius + 29), clear of the VP badge, **open at the bottom** (0.75 rad each side
+  of straight down) so the caption of the city sits in the gap; the head of the ribbon stops on it. In the enemy colour; over **your** city `--warn` (amber), and it then pulses (opacity 0.45
+  to 1 every 0.9 s, `ringOpacity`; steady with "less motion") and there is a line in the alert stack (IM7). A ring is not colour alone. The crosshair of IN3 (two rings, four ticks, a halo) is gone.
+- The bonus of an own scheduled order "◇ +N" (DEC-29, #330: `OrderView.bonus`, a pill, dashed while a forecast) sits **on the outer (upper) side of the arc**, 62 units before its end (`bonusSpot`), never over the target, its VP or its caption.
 - **The stack limit before the order (#468, DEC-20):** with a group selected, the server's `reach` answer lists the nodes the group is too big for (`split`); they have the dashed ring.
   When the pointer rests on one, a tip by the pointer says «Too big to go to {place}: split the group first (S)» with the split icon (a shape and words, not the colour): the order is not sent
   and nothing is computed in the client, the list is the server's (the same text as the rejection `STACK_LIMIT`, which stays for an order sent anyway). `SplitTip.svelte`,
@@ -1783,7 +1780,7 @@ Rules the round keeps for every variant. **Orders**: body 16, tail 60%, head 38 
 | --- | --- |
 | ![recommended](mockups/img/431-r3/scene-recommended.png) | ![second](mockups/img/431-r3/scene-second-set.png) |
 
-**Owner's decision of 2026-10-29** (recorded in #431): **planned orders: ODb Low relief is chosen [accepted]** (OD with a short soft shadow, a faint even inner rim, no grain, with all the round 2 and round 3 fixes; implementation is a separate issue). For units, cities and provinces none of the round 3 variants is chosen; the owner wants different variants again and allowed research of references and game-dev design guidance in the context of this game.
+**Owner's decision of 2026-10-29** (recorded in #431): **planned orders: ODb Low relief is chosen [accepted]** (OD with a short soft shadow, a faint even inner rim, no grain, with all the round 2 and round 3 fixes; implementation: #519, **done**). For units, cities and provinces none of the round 3 variants is chosen; the owner wants different variants again and allowed research of references and game-dev design guidance in the context of this game.
 
 ### 33.4 Round 4
 

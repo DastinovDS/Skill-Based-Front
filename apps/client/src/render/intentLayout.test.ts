@@ -312,7 +312,7 @@ describe('orderBend', () => {
     const bend = (dx: number) => orderBend(dx, 0, RIBBON.minBend, RIBBON.arcBend);
     const there = ribbonAxis([A, B], 0, 0, bend(B.x - A.x));
     const back = ribbonAxis([B, A], 0, 0, bend(A.x - B.x));
-    const mid = (axis: readonly { y: number }[]): number => axis[(axis.length - 1) / 2]?.y ?? 0;
+    const mid = (axis: readonly { y: number }[]): number => Math.min(...axis.map((p) => p.y));
     // y down on the screen: above the chord is negative.
     expect(mid(there)).toBeLessThan(-RIBBON.body);
     expect(mid(back)).toBeLessThan(-RIBBON.body);

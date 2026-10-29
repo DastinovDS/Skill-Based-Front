@@ -273,11 +273,12 @@ test('shot of the enemy figures in grey scale at 60% scale', async ({ page }) =>
   await page.locator('canvas').screenshot({ path: join(OUT, 'figures-gray-60.png') });
 });
 
-// The opponent's planned order (IN3 "Crosshair", #353) in grey scale at 60% of the map scale: the thin dashed arrow, the ring in a ring
-// at its tail and the crosshair (two rings, four ticks) on the target must read without the hue. `intents-gray-60.png`, the map alone.
-test('shot of the opponent intent in grey scale at 60% scale', async ({ page }) => {
+// The planned orders (ODb "Low relief", #519) in grey scale at 60% of the map scale: the double outline and the ring in a ring at the
+// tail of the opponent's ribbons, the open dashed ring on their targets, the dot at the tail and the dashed pill of the own ones must
+// read without the hue. `intents-gray-60.png`, the map alone (the scene `orders`).
+test('shot of the planned orders in grey scale at 60% scale', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 480 });
-  await page.goto('/?scene=artery');
+  await page.goto('/?scene=orders');
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
   await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
   await page.waitForTimeout(500);
