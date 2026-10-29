@@ -6,7 +6,7 @@ test('a match against a bot starts and ends with a forfeit', async ({ browser, b
   const player = await Player.create(browser, baseURL ?? '', nick('solo'));
   await player.enter();
   await player.page.getByRole('button', { name: 'Play a bot' }).click();
-  await player.page.getByLabel('Bot level').selectOption('easy');
+  await player.page.getByRole('radio', { name: 'Easy' }).click();
   await player.page.getByRole('button', { name: 'Start' }).click();
   await player.expectPlaying();
 

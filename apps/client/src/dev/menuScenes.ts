@@ -7,6 +7,38 @@
 import type { QueueStatus } from '../api/http.ts';
 import type { Calibration, MatchEndMsg, UnratedReason } from '../protocol.gen.ts';
 
+/**
+ * The Dock screens (lobby, invite, bot; #473, `DevDock.svelte`): the real screens with a fake API.
+ * A scene that needs a click to reach its state (joining, a failed create) is clicked by
+ * `visual/shots.spec.ts`; the table `DOCK_ACTIONS` says which button.
+ */
+export const DOCK_SCENE_IDS = [
+  'lobby-list',
+  'lobby-many',
+  'lobby-loading',
+  'lobby-empty',
+  'lobby-joining',
+  'lobby-taken',
+  'lobby-network',
+  'lobby-guest',
+  'lobby-banned',
+  'create-private',
+  'create-public',
+  'create-nomaps',
+  'create-error',
+  'invite-link',
+  'invite-public',
+  'invite-joined',
+  'invite-opp-ready',
+  'invite-you-ready',
+  'invite-starting',
+  'invite-banned',
+  'bot-choose',
+  'bot-rated',
+  'bot-starting',
+  'bot-error',
+] as const;
+
 export const MENU_SCENE_IDS = [
   'welcome',
   'welcome-notice',
@@ -20,6 +52,7 @@ export const MENU_SCENE_IDS = [
   'queue-long',
   'queue-found',
   'queue-confirmed',
+  ...DOCK_SCENE_IDS,
   'result-guest',
   'result-calibration',
   'result-limit',
@@ -86,3 +119,7 @@ export const RESULT_SCENES: Readonly<Record<string, MatchEndMsg>> = {
   'result-calibration': { ...ended, rated: true, calibration: { played: 3, total: 5 } },
   'result-limit': unrated('opponent_limit'),
 };
+
+export function isDockScene(id: string): boolean {
+  return DOCK_SCENE_IDS.some((known) => known === id);
+}

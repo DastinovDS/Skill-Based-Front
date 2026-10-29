@@ -1,14 +1,19 @@
 <script lang="ts">
   import { Api, ApiError, type Invite } from '../api/http.ts';
+  import Icon from '../hud/Icon.svelte';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import { apiErrorKey } from './appState.svelte.ts';
+  import DockFrame from './DockFrame.svelte';
+  import type { DockContext } from './dock.ts';
   import { startPolling } from './poll.ts';
+  import VersusStrip from './VersusStrip.svelte';
 
   interface Props {
     api: Api;
     token: string;
     nick: string;
     code: string;
+    dock: DockContext;
     /** Both players are ready: the match exists and the sockets can open. */
     onstart: (matchId: string, mapId: string) => void;
     /** Back to the menu; with a message if the invite is gone. */
@@ -17,7 +22,9 @@
     pollMs?: number;
   }
 
-  let { api, token, nick, code, onstart, onleave, pollMs = 1500 }: Props = $props();
+  let { api, token, nick, code, dock, onstart, onleave, pollMs = 1500 }: Props = $props();
+
+  const KEY_LEAVE = 'Esc';
 
   let invite = $state.raw<Invite | null>(null);
   let failure = $state.raw<MessageKey | null>(null);
@@ -28,6 +35,11 @@
   const link = $derived(`${window.location.origin}/?m=${encodeURIComponent(code)}`);
   const isHost = $derived(invite !== null && invite.host_nick === nick);
   const opponent = $derived(invite === null ? null : isHost ? invite.guest_nick : invite.host_nick);
+  const listed = $derived(invite !== null && isHost && opponent === null && invite.public);
+  const waitingForLink = $derived(invite !== null && isHost && opponent === null && !invite.public);
+  const starting = $derived(
+    invite !== null && opponent !== null && invite.you_ready && invite.opponent_ready,
+  );
 
   function update(next: Invite): void {
     invite = next;
@@ -66,6 +78,7 @@
   });
 
   async function ready(): Promise<void> {
+    if (busy || invite === null || opponent === null || invite.you_ready) return;
     busy = true;
     try {
       update(await api.readyInvite(token, code));
@@ -93,64 +106,86 @@
       copied = false;
     }
   }
+
+  const head = $derived(
+    invite === null
+      ? t('common.loading')
+      : starting
+        ? t('bot.starting')
+        : opponent !== null
+          ? tf('invite.joined', { nick: opponent })
+          : listed
+            ? t('invite.listed')
+            : t('invite.sendLink'),
+  );
+
+  const status = $derived(
+    invite === null || opponent === null
+      ? null
+      : invite.you_ready
+        ? invite.opponent_ready
+          ? t('invite.starting')
+          : t('invite.youReady')
+        : invite.opponent_ready
+          ? t('invite.opponentReady')
+          : t('invite.pressReady'),
+  );
 </script>
 
-<main class="screen">
-  <div class="card">
-    <h1>{t('invite.title')}</h1>
-    {#if invite === null}
-      <p role="status">{t('common.loading')}</p>
+<!-- The waiting room is locked (the other modes and the account menu are off): leaving drops the
+     invite, so the only way out is "Leave" (and Esc). -->
+<DockFrame
+  {dock}
+  mode={invite?.public === true ? 'lobby' : 'friend'}
+  locked
+  phase={invite === null ? 'idle' : opponent !== null ? 'found' : 'search'}
+  {opponent}
+  eyebrow={t('invite.title')}
+  {head}
+  sub={invite === null ? null : tf('invite.map', { map: invite.map_id })}
+  pause={invite?.public === true ? 'none' : 'each'}
+  alert={failure === null ? null : t(failure)}
+  note={invite === null
+    ? null
+    : tf('invite.expires', { minutes: Math.max(1, Math.ceil(invite.expires_in_s / 60)) })}
+  onback={leave}
+  onenter={() => void ready()}
+>
+  {#if invite !== null}
+    {#if waitingForLink}
+      <div class="lnk">
+        <input
+          readonly
+          aria-label={t('invite.link')}
+          value={link}
+          onfocus={(event) => {
+            event.currentTarget.select();
+          }}
+        />
+        <button type="button" class="btn" class:pri={!copied} onclick={copy}>
+          {#if copied}<Icon name="check" size={18} />{t('invite.copied')}{:else}<Icon
+              name="copy"
+              size={18}
+            />{t('invite.copy')}{/if}
+        </button>
+      </div>
+    {/if}
+    {#if opponent === null}
+      <VersusStrip opponent={null} />
+      <p class="note" role="status">{listed ? t('invite.waitingLobby') : t('invite.waiting')}</p>
     {:else}
-      <p>{tf('invite.map', { map: invite.map_id })}</p>
-      {#if isHost && invite.guest_nick === null && invite.public}
-        <p role="status">{t('invite.waitingLobby')}</p>
-      {:else if isHost && invite.guest_nick === null}
-        <label>
-          {t('invite.link')}
-          <input
-            readonly
-            value={link}
-            onfocus={(event) => {
-              event.currentTarget.select();
-            }}
-          />
-        </label>
-        <div class="actions">
-          <button type="button" onclick={copy}>{t('invite.copy')}</button>
-          {#if copied}<span role="status">{t('invite.copied')}</span>{/if}
-        </div>
-        <p role="status">{t('invite.waiting')}</p>
-      {:else}
-        <p role="status">{tf('invite.opponent', { nick: opponent ?? '' })}</p>
-        <p role="status">
-          {invite.you_ready
-            ? invite.opponent_ready
-              ? t('invite.starting')
-              : t('invite.youReady')
-            : invite.opponent_ready
-              ? t('invite.opponentReady')
-              : t('invite.pressReady')}
-        </p>
-        <div class="actions">
-          <button type="button" class="primary" disabled={busy || invite.you_ready} onclick={ready}>
-            {t('invite.ready')}
-          </button>
-        </div>
-      {/if}
-      <p class="hint">
-        {tf('invite.expires', { minutes: Math.max(1, Math.ceil(invite.expires_in_s / 60)) })}
-      </p>
+      <VersusStrip {opponent} youReady={invite.you_ready} opponentReady={invite.opponent_ready} />
+      <p class="note" role="status">{status}</p>
     {/if}
-    {#if failure !== null}
-      <p class="error" role="alert">{t(failure)}</p>
+  {/if}
+  {#snippet actions()}
+    {#if invite !== null && opponent !== null && !starting}
+      <button type="button" class="btn pri" disabled={busy || invite.you_ready} onclick={ready}>
+        {t('invite.ready')}<kbd class="k" aria-hidden="true">↵</kbd>
+      </button>
     {/if}
-    <div class="actions">
-      <button
-        type="button"
-        onclick={() => {
-          leave();
-        }}>{t('invite.leave')}</button
-      >
-    </div>
-  </div>
-</main>
+    <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={leave}>
+      {t('invite.leave')}<kbd class="k" aria-hidden="true">{KEY_LEAVE}</kbd>
+    </button>
+  {/snippet}
+</DockFrame>

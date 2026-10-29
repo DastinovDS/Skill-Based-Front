@@ -34,8 +34,44 @@ export const MENU_SCENES = [
   'queue-long',
   'queue-found',
   'queue-confirmed',
+  'lobby-list',
+  'lobby-many',
+  'lobby-loading',
+  'lobby-empty',
+  'lobby-joining',
+  'lobby-taken',
+  'lobby-network',
+  'lobby-guest',
+  'lobby-banned',
+  'create-private',
+  'create-public',
+  'create-nomaps',
+  'create-error',
+  'invite-link',
+  'invite-public',
+  'invite-joined',
+  'invite-opp-ready',
+  'invite-you-ready',
+  'invite-starting',
+  'invite-banned',
+  'bot-choose',
+  'bot-rated',
+  'bot-starting',
+  'bot-error',
   'result-guest',
   'result-calibration',
   'result-limit',
   'exit-rated',
 ] as const;
+
+/**
+ * The Dock scenes (#473) that need a click to reach their state: the name of the button to press
+ * (a join that waits or fails, a create that fails, a start that waits or fails).
+ */
+export const DOCK_CLICKS: Readonly<Record<string, string>> = {
+  'lobby-joining': 'Join',
+  'lobby-taken': 'Join',
+  'create-error': 'Create the match',
+  'bot-starting': 'Start',
+  'bot-error': 'Start',
+};

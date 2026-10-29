@@ -11,6 +11,7 @@ import { forgetGuest, loadGuest, saveGuest } from '../api/guestStore.ts';
 import type { MessageKey } from '../i18n/index.ts';
 import { loginFailure, passwordFailure, type AccountFailure } from './account.ts';
 import { apiErrorKey } from './apiErrors.ts';
+import { MapCache } from './mapCache.svelte.ts';
 import { MENU_MAP } from './menuMap.ts';
 import type { Calibration, MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
 
@@ -80,12 +81,15 @@ export class AppState {
   readonly backdrop: MapFile = MENU_MAP;
 
   readonly api: Api;
+  /** The pool maps: the thumbnails and tiles of the lobby, invite and bot screens (#473). */
+  readonly maps: MapCache;
   readonly #storage: () => Storage;
   readonly #location: Pick<Location, 'search' | 'pathname' | 'hash'>;
   readonly #replaceUrl: (url: string) => void;
 
   constructor(opts: AppStateOptions = {}) {
     this.api = opts.api ?? new Api();
+    this.maps = new MapCache(this.api);
     this.#storage = opts.storage ?? (() => window.localStorage);
     this.#location = opts.location ?? window.location;
     this.#replaceUrl =
@@ -259,23 +263,31 @@ export class AppState {
     this.notice = notice;
   }
 
-  async createInvite(mapId: string | null, isPublic = false): Promise<void> {
+  /**
+   * Creates an invite and opens its waiting room. A failure stays on the screen that asked (the
+   * choices are kept, #473): the answer is the line to show, or null on success. A lost session
+   * (401) is not shown there: it starts over from the menu with the notice.
+   */
+  async createInvite(mapId: string | null, isPublic = false): Promise<MessageKey | null> {
     const guest = this.#requireGuest();
     try {
       const invite = await this.api.createInvite(guest.token, mapId, isPublic);
       this.go({ name: 'invite', code: invite.code });
+      return null;
     } catch (error) {
-      this.#fail(error);
+      return this.#failHere(error);
     }
   }
 
-  async playBot(level: BotLevel, mapId: string | null): Promise<void> {
+  /** Starts a bot match; a failure is answered like `createInvite`. */
+  async playBot(level: BotLevel, mapId: string | null): Promise<MessageKey | null> {
     const guest = this.#requireGuest();
     try {
       const match = await this.api.createBotMatch(guest.token, level, mapId);
       this.go({ name: 'match', matchId: match.match_id, mapId: match.map_id });
+      return null;
     } catch (error) {
-      this.#fail(error);
+      return this.#failHere(error);
     }
   }
 
@@ -371,6 +383,15 @@ export class AppState {
       this.forget();
     }
     this.menu(apiErrorKey(error));
+  }
+
+  /** The line for a failure that stays on its screen; a lost session goes to the menu instead. */
+  #failHere(error: unknown): MessageKey | null {
+    if (error instanceof ApiError && error.code === 'unauthorized') {
+      this.#fail(error);
+      return null;
+    }
+    return apiErrorKey(error);
   }
 
   #requireGuest(): Guest {

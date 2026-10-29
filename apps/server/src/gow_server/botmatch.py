@@ -37,7 +37,11 @@ LEVEL_BOTS: Final[dict[Level, str]] = {
     "hard": "expander",
     "expert": "rusher",
 }
-"""Bot name of every difficulty level."""
+"""Bot name of every difficulty level.
+
+The bot screen of the client describes them in ``apps/client/src/app/botStyles.ts``;
+``tests/test_bot_styles.py`` keeps the two in step.
+"""
 
 SEED_BITS: Final = 32
 

@@ -3,11 +3,15 @@ import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
 import { MENU_MAP } from './menuMap.ts';
 import {
   BAR_BOTTOM,
+  DOCK_NARROW_LEFT,
+  DOCK_PANEL_LEFT,
+  DOCK_PANEL_RIGHT,
   FOG_FADE,
   FOG_TOP_FADE,
   FOG_WIDTH,
   RAIL_BESIDE_MIN_WIDTH,
   RAIL_RIGHT,
+  dockOwnLeft,
   layoutScene,
   starPoints,
 } from './menuScene.ts';
@@ -126,6 +130,42 @@ describe('layoutScene (#471)', () => {
     const scene = layoutScene(empty, 1280, 720);
     expect(scene.nodes).toEqual([]);
     expect(scene.front).toEqual([]);
+  });
+});
+
+describe('the map behind the Dock panel (#473)', () => {
+  const map = POOL[0] as (typeof POOL)[number];
+
+  it('keeps the own capital between the rail and the panel, and the enemy one right of it', () => {
+    for (const width of [1280, 1366, 1600]) {
+      const scene = layoutScene(map, width, 720, dockOwnLeft(width));
+      // The ring of a capital is about 32 px; the pill with the opponent's nick is 70 px to each side.
+      expect(scene.ownCapital.x + 32).toBeLessThanOrEqual(DOCK_PANEL_LEFT);
+      expect(scene.enemyCapital.x - 70).toBeGreaterThanOrEqual(DOCK_PANEL_RIGHT);
+    }
+  });
+
+  it('moves the whole map out from under the panel in a wide window', () => {
+    for (const width of [1920, 2560]) {
+      const left = dockOwnLeft(width);
+      expect(left).toBeGreaterThan(DOCK_PANEL_RIGHT);
+      const scene = layoutScene(map, width, 1080, left);
+      for (const node of scene.nodes) expect(node.x).toBeGreaterThan(DOCK_PANEL_RIGHT);
+      expect(scene.enemyCapital.x).toBeLessThan(width);
+      expect(width - scene.fogStart).toBeGreaterThanOrEqual(FOG_WIDTH);
+    }
+  });
+
+  it('keeps the own capital visible left of a narrower panel in a small window', () => {
+    for (const width of [900, 1024, 1099]) {
+      const scene = layoutScene(map, width, 640, dockOwnLeft(width));
+      expect(scene.ownCapital.x + 32).toBeLessThanOrEqual(DOCK_NARROW_LEFT);
+      expect(scene.ownCapital.x).toBeGreaterThan(RAIL_RIGHT - 160);
+    }
+  });
+
+  it('leaves the default layout in the flowing column of a window under 900 px', () => {
+    expect(dockOwnLeft(800)).toBeUndefined();
   });
 });
 

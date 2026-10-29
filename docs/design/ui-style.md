@@ -1807,7 +1807,7 @@ Principles the round derives from the research and keeps for every variant: one 
 
 ## 34. Lobby, invite and bot screens (#473)
 
-Status: **[awaiting the owner's decision]**. The owner found these screens too generic after choosing variant A "Front" for the start menu (#471, section 31) and decided on 2026-10-29 to restyle them before the release, so the postponement of section 23 does not apply.
+Status: **[accepted: variant D "Dock", 2026-10-29]**; the implementation notes are at the end of the section. The owner found these screens too generic after choosing variant A "Front" for the start menu (#471, section 31) and decided on 2026-10-29 to restyle them before the release, so the postponement of section 23 does not apply.
 
 Mockup: [`mockups/lobby-invite-bot.html`](mockups/lobby-invite-bot.html), frames in [`mockups/img/473/`](mockups/img/473/). It shows the current look (**Now**) and four variants for every state of the three screens: the lobby (3 waiting, a long list, loading, empty, joining, taken and refreshed, network error), create (private, public, the map list failed, a server error), the waiting room (link, copied, listed in the lobby, an opponent joined, the opponent ready, you ready, both ready, the invite gone, the invite full) and the bot (choose, starting, a server error). Switches: a guest, a calibrating or a rated account, the queue ban, grayscale, reduced motion, "needs from the server" and "frame anatomy"; the map choice and the bot level can be mixed across variants (`#mapst=t`).
 
@@ -1830,6 +1830,19 @@ No variant needs a DEC, a protocol change or a server change. The only new data 
 | ![R, the lobby](mockups/img/473/overview-lobby.png) | ![R with the strip, the bot](mockups/img/473/r-bot.png) |
 
 Checked in grayscale (`gray-overview-lobby.png`, `gray-overview-bot.png`): no state is carried by colour alone (a selected choice is a filled dot or a white outline, a ready player a filled dot with the word, the level is cells, the seat is the triangle with its outline, an alert is amber with `!` and text).
+
+**Owner's decision (2026-10-29):** variant **D "Dock"**: the menu rail stays, the chosen mode opens as a panel on the map, with the real maps drawn small.
+
+### Implementation of D (#473)
+
+- **Components.** `DockFrame` (the rail with the menu rows, the corner, the panel; used by `LobbyScreen`, `CreateScreen`, `InviteScreen`, `BotScreen`), `MapTiles` and `MapThumb` (the pool maps drawn small from `GET /api/maps/{id}`, kept by `MapCache`), `LevelPicker`, `VersusStrip`, `AccountChip` (the account menu of the corner, shared with `MenuScreen`). Styles in `src/app/dock.css`. Dev scenes `/?menu=lobby-list` and the others of `src/dev/DevDock.svelte` (list in `apps/client/visual/README.md`).
+- **The rail** shows the menu as it is: Play is dimmed (a click returns to the menu), the open mode is marked (`aria-current="page"`). The queue lock (DEC-34) adds the amber dashed chip next to the player chip, the dashed ring on the own capital (`phase = banned`), the lock block in the rail and one line in the panel: "The queue is locked. Bots, friends and the lobby stay open."
+- **Keys.** B, I and L open the other modes as in the menu (not while a control has the focus). In the waiting room they are off: the rows and the player chip are disabled, the only way out is "Leave" (Esc), which drops the invite. Enter does the main action of the panel (Join, Create the match, Start, Ready); a radio (a map tile, a bot level) does not hold Enter back, so Enter after a choice starts. Arrows move the choice in the lobby and in the tiles and levels; C opens a match of your own in the lobby; Esc is Back.
+- **Errors stay on the screen** with an amber line and the choices kept (create, bot start, join, the list); only a lost session (401) goes back to the menu with the notice.
+- **"Unrated"** is a chip in every panel and one line per account: a guest, a calibrating account (it does not count toward calibration), a rated one (the rating does not change). The pause chip follows DEC-05 (a public match has none).
+- **The bot styles** (Bunker, Counter, Expander, Rusher) stand under the level words (`BOT_STYLES`, `botStyles.ts`); `apps/server/tests/test_bot_styles.py` reads `botStyles.ts` and fails when `LEVEL_BOTS` of `botmatch.py` gives a level another bot.
+- **The panel and the front of the map.** The panel stands from x = 552 to 1052 (`DOCK_PANEL_LEFT`, `DOCK_PANEL_RIGHT` in `menuScene.ts`, mirrored in `dock.css`). In a window wide enough (about 1640 px and more) the whole map is laid out to the right of the panel (`dockOwnLeft`); in a narrower one the panel covers the middle of the map, and the own capital stays between the rail and the panel and the enemy capital, with its nick, right of the panel (`menuScene.test.ts` keeps both). Under 1100 px the panel starts at x = 470.
+- **Small windows (under 900 x 560, drawn here, not in the mockup).** The same breakpoint as the flowing menu: the rail flows over the picture, the big Play block is hidden, the three mode rows come first and the panel follows below them at full width.
 
 ---
 

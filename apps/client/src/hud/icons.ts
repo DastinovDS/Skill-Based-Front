@@ -161,6 +161,8 @@ export const ICONS = {
   user: [path('M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'), circle(12, 7, 4)],
   key: [circle(8, 15, 4), path('m10.8 12.2 9-9'), path('m16 7 3 3')],
   check: [path('M20 6 9 17l-5-5')],
+  // The pre-match screens (#473): copy the invite link.
+  copy: [rect(9, 9, 13, 13, 2), path('M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1')],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type IconName = keyof typeof ICONS;

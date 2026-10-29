@@ -207,6 +207,35 @@ describe('AppState', () => {
     expect(app.screen).toEqual({ name: 'invite', code: 'pub' });
   });
 
+  it('keeps a failed create or bot start on its screen and answers the line to show (#473)', async () => {
+    const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
+    const { app } = setup('', storage, {
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
+      createInvite: () => Promise.reject(new ApiError('unavailable', 503)),
+      createBotMatch: () => Promise.reject(new ApiError('network', 0)),
+    });
+    await app.start();
+    app.go({ name: 'create', public: false });
+    expect(await app.createInvite(null)).toBe('error.api.unavailable');
+    expect(app.screen).toEqual({ name: 'create', public: false });
+    app.go({ name: 'bot' });
+    expect(await app.playBot('easy', null)).toBe('error.api.network');
+    expect(app.screen).toEqual({ name: 'bot' });
+    expect(app.notice).toBeNull();
+  });
+
+  it('starts over from the menu when the session is lost during a create (401)', async () => {
+    const storage = memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me"}' });
+    const { app } = setup('', storage, {
+      me: () => Promise.resolve({ player_id: 1, nick: 'Me', has_password: false }),
+      createInvite: () => Promise.reject(new ApiError('unauthorized', 401)),
+    });
+    await app.start();
+    expect(await app.createInvite(null)).toBeNull();
+    expect(app.screen.name).toBe('welcome');
+    expect(app.notice).toBe('error.api.unauthorized');
+  });
+
   it('"Back" from a replay opened on the result screen returns to that result screen (#259)', () => {
     const { app } = setup('');
     const end: MatchEndMsg = {

@@ -4,8 +4,8 @@
   import { formatClock } from '../hud/format.ts';
   import { t, tf, type MessageKey } from '../i18n/index.ts';
   import type { Calibration, MapFile } from '../protocol.gen.ts';
+  import AccountChip from './AccountChip.svelte';
   import LocaleSelect from './LocaleSelect.svelte';
-  import PlayerChip from './PlayerChip.svelte';
   import ScreenFrame from './ScreenFrame.svelte';
   import UnitMark from './UnitMark.svelte';
 
@@ -67,19 +67,7 @@
     };
   });
 
-  // A guest without a password loses the account by logging out: ask once before that.
   let menuOpen = $state(false);
-  let confirmingLogout = $state(false);
-
-  function logout(): void {
-    if (hasPassword || confirmingLogout) onlogout();
-    else confirmingLogout = true;
-  }
-
-  function closeMenu(): void {
-    menuOpen = false;
-    confirmingLogout = false;
-  }
 
   const modes = $derived([
     { icon: 'bot', label: t('menu.bot'), key: 'B', go: onbot },
@@ -93,10 +81,6 @@
   // account menu. Typing in a field and a focused button keep their own keys.
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-    if (event.key === 'Escape' && menuOpen) {
-      closeMenu();
-      return;
-    }
     const target = event.target;
     if (menuOpen) return;
     if (target instanceof Element && target.closest('input, textarea, select, button, a')) return;
@@ -112,54 +96,13 @@
     mode.go();
     event.preventDefault();
   }
-
-  function onclick(event: MouseEvent): void {
-    if (menuOpen && event.target instanceof Element && !event.target.closest('.corner')) {
-      closeMenu();
-    }
-  }
 </script>
 
-<svelte:window {onkeydown} {onclick} />
+<svelte:window {onkeydown} />
 
 <ScreenFrame {map} phase={banned ? 'banned' : 'idle'} label={t('menu.nav')}>
   {#snippet corner()}
-    <PlayerChip
-      {nick}
-      {hasPassword}
-      {calibration}
-      open={menuOpen}
-      ontoggle={() => {
-        if (menuOpen) closeMenu();
-        else menuOpen = true;
-      }}
-    />
-    {#if menuOpen}
-      <div class="pop" id="account-menu" role="menu">
-        {#if confirmingLogout}
-          <p class="wl" role="alert">
-            <Icon name="alert" size={16} />{t('menu.logoutWarning')}
-          </p>
-        {/if}
-        <button type="button" role="menuitem" onclick={onpassword}>
-          <Icon name="key" size={18} />
-          {hasPassword ? t('menu.changePassword') : t('menu.setPassword')}
-        </button>
-        <button type="button" role="menuitem" onclick={logout}>
-          <Icon name="logout" size={18} />
-          {confirmingLogout ? t('menu.logoutConfirm') : t('menu.logout')}
-        </button>
-        {#if confirmingLogout}
-          <button
-            type="button"
-            role="menuitem"
-            onclick={() => {
-              confirmingLogout = false;
-            }}>{t('menu.logoutCancel')}</button
-          >
-        {/if}
-      </div>
-    {/if}
+    <AccountChip {nick} {hasPassword} {calibration} {onpassword} {onlogout} bind:open={menuOpen} />
   {/snippet}
 
   {#if notice !== null}

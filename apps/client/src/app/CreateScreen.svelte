@@ -1,40 +1,57 @@
 <script lang="ts">
-  import { Api } from '../api/http.ts';
+  import type { MessageKey } from '../i18n/index.ts';
   import { t } from '../i18n/index.ts';
-  import MapChoice from './MapChoice.svelte';
+  import DockFrame from './DockFrame.svelte';
+  import type { DockContext } from './dock.ts';
+  import MapTiles from './MapTiles.svelte';
 
   interface Props {
-    api: Api;
+    dock: DockContext;
     /** A match for the public lobby instead of an invite link. */
     isPublic?: boolean;
-    oncreate: (mapId: string | null) => Promise<void>;
+    /** Creates the invite; answers why it failed (the screen stays, the choices are kept), or null. */
+    oncreate: (mapId: string | null) => Promise<MessageKey | null>;
     onback: () => void;
   }
 
-  let { api, isPublic = false, oncreate, onback }: Props = $props();
+  let { dock, isPublic = false, oncreate, onback }: Props = $props();
+
+  const KEY_BACK = 'Esc';
 
   let mapId = $state<string | null>(null);
   let busy = $state(false);
+  let failure = $state.raw<MessageKey | null>(null);
 
-  async function submit(event: SubmitEvent): Promise<void> {
-    event.preventDefault();
+  async function submit(): Promise<void> {
+    if (busy) return;
     busy = true;
+    failure = null;
     try {
-      await oncreate(mapId);
+      failure = await oncreate(mapId);
     } finally {
       busy = false;
     }
   }
 </script>
 
-<main class="screen">
-  <form class="card" onsubmit={submit}>
-    <h1>{isPublic ? t('create.titlePublic') : t('create.title')}</h1>
-    <p class="hint">{isPublic ? t('create.introPublic') : t('create.intro')}</p>
-    <MapChoice {api} bind:value={mapId} />
-    <div class="actions">
-      <button type="submit" class="primary" disabled={busy}>{t('create.submit')}</button>
-      <button type="button" onclick={onback}>{t('common.back')}</button>
-    </div>
-  </form>
-</main>
+<DockFrame
+  {dock}
+  mode={isPublic ? 'lobby' : 'friend'}
+  eyebrow={isPublic ? t('menu.lobby') : t('menu.create')}
+  head={isPublic ? t('create.titlePublic') : t('create.title')}
+  sub={isPublic ? t('create.introPublic') : t('create.intro')}
+  pause={isPublic ? 'none' : 'each'}
+  alert={failure === null ? null : t(failure)}
+  {onback}
+  onenter={() => void submit()}
+>
+  <MapTiles maps={dock.maps} bind:value={mapId} />
+  {#snippet actions()}
+    <button type="button" class="btn pri" disabled={busy} onclick={submit}>
+      {t('create.submit')}<kbd class="k" aria-hidden="true">↵</kbd>
+    </button>
+    <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={onback}>
+      {t('common.back')}<kbd class="k" aria-hidden="true">{KEY_BACK}</kbd>
+    </button>
+  {/snippet}
+</DockFrame>
