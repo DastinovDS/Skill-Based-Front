@@ -58,6 +58,7 @@ class ServerMetrics:
     matches_refused_full: int = 0
     matches_refused_bot_full: int = 0
     matches_never_started: int = 0
+    ws_refused_unauth: int = 0
     step_seconds: Histogram = field(default_factory=lambda: Histogram(STEP_BUCKETS_S))
     tick_lag_seconds: Histogram = field(default_factory=lambda: Histogram(LAG_BUCKETS_S))
 
@@ -144,6 +145,13 @@ def render(manager: "MatchManager", queue_size: int = 0) -> str:
         "gow_matches_never_started_total",
         "Bot matches dropped: nobody connected within GOW_BOT_CONNECT_TIMEOUT_S.",
         m.matches_never_started,
+    )
+    _value(
+        lines,
+        "counter",
+        "gow_ws_refused_unauth_total",
+        "WebSockets closed at once: too many connections before hello (GOW_WS_UNAUTH_*).",
+        m.ws_refused_unauth,
     )
     _value(
         lines, "counter", "gow_bot_overruns_total", "Bot decisions over the budget.", m.bot_overruns

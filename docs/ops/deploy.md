@@ -181,6 +181,7 @@ docker compose exec app python -c "import urllib.request as u; print(u.urlopen('
 | `gow_step_seconds` (histogram) | the duration of one tick; p99: `histogram_quantile(0.99, rate(gow_step_seconds_bucket[5m]))` |
 | `gow_bot_overruns_total`, `gow_bot_skipped_total` | bot decisions longer than the budget and the calls skipped because of them (per match the same is written to the `match finished` log) |
 | `gow_ws_connections` | open match WebSocket connections |
+| `gow_ws_refused_unauth_total` | match WebSockets closed with 1013 because of the cap on connections before `hello` (#199) |
 | `gow_outbox_backlog_max` | the longest unsent queue of a connection (the client is not reading) |
 | `gow_queue_size` | players in the matchmaking queue: looking for an opponent or confirming a found pair (MM-01) |
 
@@ -236,6 +237,8 @@ All limits live in the memory of one process (a server restart zeroes the counte
 | Setting and changing the password | player | 5 per hour | `POST /api/account/password` |
 | Joining the matchmaking queue | player | 20 per minute | `POST /api/queue` (MM-01) |
 | Commands in a match | connection | 20/s, burst 60 | WebSocket, flooding leads to a disconnect (SRV-03) |
+| WebSockets that have not sent `hello` | client IP (IPv6: /64) | 10 (`GOW_WS_UNAUTH_PER_IP`) | the socket is closed at once with 1013 (#199, below) |
+| WebSockets that have not sent `hello` | server | 200 (`GOW_WS_UNAUTH_TOTAL`) | the same: a backstop against a flood from many addresses |
 | Active match | player | 1 | `409` (SRV-09) |
 | Running matches | server | 30 (`GOW_MAX_MATCHES`: the budget of AGENTS.md section 12 for one core), of them against a bot 10 (`GOW_MAX_BOT_MATCHES`, 0 turns bot matches off) | `503` with `Retry-After` on `POST /api/bot-matches`, the second `ready` of an invite and the second `confirm` of the queue; the player stays free (#412) |
 | Bot match without a WebSocket | match | 15 s (`GOW_BOT_CONNECT_TIMEOUT_S`) | the match is dropped as never started: no replay, saved `aborted` / `never_started`, the player is free again (#412) |
@@ -254,6 +257,30 @@ proxy and count all players as one client.
 **IPv4 and IPv6 keys (#415).** Every per-IP limit (guests, logins) uses one helper, `gow_server.ratelimit.ip_key`: an IPv4 client is
 keyed by the address, an IPv6 client by its /64 prefix (a client usually controls a whole /64, so each of its addresses would be a
 fresh budget), an IPv4-mapped IPv6 address by the IPv4 address.
+
+#### Connections before `hello` (QA-04, #199)
+
+A match WebSocket is accepted before anything is known about the client and waits for `hello` for up to `GOW_WS_HELLO_TIMEOUT_S`
+(5 s); the message bucket starts only after it. `gow_server.ws` therefore counts the sockets that have not sent `hello` yet
+(`ConnectionGate` in `gow_server.ratelimit`): per client address (`ip_key`, so an IPv6 client is its /64) and in total. A socket over either
+cap is accepted and closed at once with code **1013** (RFC 6455 "Try Again Later"; the protocol does not define it, and the client reconnects
+with backoff on any code it does not know), before any database work. The count ends when `hello` was read or the socket is gone, so
+connected players are not counted and the caps do not limit parallel matches (the count of a normal client is zero for all but the
+milliseconds between the upgrade and `hello`). A refusal is counted in `gow_ws_refused_unauth_total` and logged without the address.
+Defaults: 10 per address (a shared NAT of an office or a school is fine: each socket is counted for milliseconds), 200 in total (well below
+the file descriptor limit; check it with `docker compose exec app sh -c 'ulimit -n'`). The per-address cap holds only with the
+real client address, see above.
+
+**uvicorn `limit_concurrency` is deliberately not set.** Reading the uvicorn source (httptools implementation): the limit is checked for plain HTTP
+requests only, an upgrade to WebSocket is handed on before the check, so it would not stop a WebSocket flood. It also compares
+the number of *all* open connections, live match sockets included (60 for 30 matches), so a flood of idle sockets would turn every
+HTTP request into `503`, which is worse than the flood. Behind Caddy all connections come from Caddy's address anyway, so uvicorn
+cannot tell clients apart. A global ceiling on HTTP therefore belongs in Caddy or a firewall rule on the VPS (`ufw limit`/`nftables`
+`ct count over N` on 80/443) `[manual]`, if the owner wants one: the application layer above covers what it can know.
+
+Not covered: slow requests before the HTTP upgrade (slowloris) are Caddy's job (its server `timeouts`; not tuned here), and many addresses
+each opening a few sockets still fill the total of 200 for 5 seconds at a time: a legitimate player then sees 1013 and retries
+within the backoff.
 
 #### IPv6 and the per-IP limits `[manual]`
 

@@ -60,3 +60,39 @@ class SlidingWindowLimiter:
                 hits.popleft()
             if not hits:
                 del self._hits[key]
+
+
+class ConnectionGate:
+    """Caps connections that are open at once and not yet authenticated (QA-04, #199).
+
+    A match WebSocket is held for up to ``ws_hello_timeout_s`` before ``hello``, and the message
+    bucket starts only after it. ``enter`` counts a connection per key (``ip_key``) and in total;
+    ``leave`` ends the count once ``hello`` was read or the connection is gone. Over a cap
+    ``enter`` is ``False`` and nothing is counted.
+
+    Not thread-safe on purpose: it is used from the event loop only, where ``enter`` and
+    ``leave`` never yield in between.
+    """
+
+    def __init__(self, per_key: int, total: int) -> None:
+        self._per_key = per_key
+        self._total = total
+        self._open: dict[str, int] = {}
+        self.pending = 0
+        """Connections counted now, over all keys."""
+
+    def enter(self, key: str) -> bool:
+        if self.pending >= self._total or self._open.get(key, 0) >= self._per_key:
+            return False
+        self._open[key] = self._open.get(key, 0) + 1
+        self.pending += 1
+        return True
+
+    def leave(self, key: str) -> None:
+        """End the count of a connection that ``enter`` let in (once per ``True``)."""
+        left = self._open[key] - 1
+        if left:
+            self._open[key] = left
+        else:
+            del self._open[key]
+        self.pending -= 1

@@ -308,6 +308,7 @@ async def run(self) -> None:
 
 ### 5.3 Connections
 
+- Sockets that have not sent `hello` yet are capped per client address (IPv6: /64) and in total (`ConnectionGate`, `GOW_WS_UNAUTH_*`); over the cap: close 1013 at once.
 - The first message is `hello` with a token, timeout 5 seconds. The token is **never** in the URL or in logs.
 - The `Origin` is checked on the WebSocket upgrade.
 - The reading and writing tasks live in a `TaskGroup`. Two queues per connection:
