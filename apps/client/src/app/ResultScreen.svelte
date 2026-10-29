@@ -33,6 +33,21 @@
     {#if end.rating}
       <p class="rating">{tf('result.rating', ratingText(end.rating))}</p>
     {/if}
+    <!-- DEC-34: a match that did not change the rating says why; calibration shows its progress. -->
+    {#if !end.rated && end.unrated_reason !== null}
+      <p class="unrated" role="status">{t(`result.unrated.${end.unrated_reason}`)}</p>
+    {/if}
+    {#if end.calibration !== null}
+      <p class="calibration">
+        {tf('result.calibration', {
+          played: end.calibration.played,
+          total: end.calibration.total,
+        })}
+      </p>
+      {#if end.rating === null}
+        <p class="hint">{t('result.calibrationHidden')}</p>
+      {/if}
+    {/if}
     <div class="actions">
       <button type="button" class="primary" onclick={onreplay}>{t('result.replay')}</button>
       <button type="button" onclick={onmenu}>{t('result.menu')}</button>

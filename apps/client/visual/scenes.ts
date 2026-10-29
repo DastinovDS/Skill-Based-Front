@@ -33,4 +33,8 @@ export const MENU_SCENES = [
   'queue-long',
   'queue-found',
   'queue-confirmed',
+  'result-guest',
+  'result-calibration',
+  'result-limit',
+  'exit-rated',
 ] as const;

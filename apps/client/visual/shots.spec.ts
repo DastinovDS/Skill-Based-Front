@@ -142,7 +142,9 @@ for (const view of ['normal', 'supply'] as const) {
 for (const id of MENU_SCENES) {
   test(`shot of the screen ${id}`, async ({ page }) => {
     await page.goto(`/?menu=${id}`);
-    await expect(page.locator('.front svg.scene')).toBeVisible();
+    await expect(
+      page.locator('.front svg.scene, .card, [role="alertdialog"]').first(),
+    ).toBeVisible();
     await page.mouse.move(1000, 700);
     await page.screenshot({ path: join(OUT, `screen-${id}.png`) });
     await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
