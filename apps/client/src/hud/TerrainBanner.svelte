@@ -18,7 +18,7 @@
 
 <!-- The terrain map mode on `T` (#429): says it is on, and the vision table of the rules as its legend. -->
 {#if ui.terrainMode}
-  <section class="banner" aria-live="polite">
+  <section class="legend" aria-live="polite">
     <strong>{t('terrain.banner')}</strong>
     <span>{t('terrain.hint')}</span>
     <table>
@@ -54,44 +54,50 @@
 {/if}
 
 <style>
-  .banner {
+  /*
+   * The legend sits in the bottom left corner, small and see-through: on the pool maps the middle of
+   * the bottom edge is a city more often than not (#560), and the corner has the fewest. It takes
+   * no clicks (`pointer-events: none`), so the map under it stays usable.
+   */
+  .legend {
     position: absolute;
     /* The HUD is a flex column: without an explicit `top` the banner would stretch from its static position. */
     top: auto;
     bottom: 12px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 12px;
     z-index: 4;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    max-width: min(560px, calc(100% - 24px));
-    padding: 6px 12px 8px;
+    align-items: flex-start;
+    gap: 3px;
+    width: 332px;
+    max-width: calc(100% - 24px);
+    padding: 6px 8px 6px;
     box-sizing: border-box;
     border: 1px solid var(--paper);
     border-radius: 8px;
-    background: var(--surface);
+    background: color-mix(in srgb, var(--surface) 80%, transparent);
     color: var(--text);
-    font-size: 13px;
-    text-align: center;
+    font-size: 12px;
+    text-align: left;
     pointer-events: none;
   }
 
   table {
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 11px;
   }
 
   caption {
-    padding-bottom: 3px;
+    padding-bottom: 2px;
+    text-align: left;
     color: var(--text-dim, var(--text));
     font-size: 11px;
   }
 
   th,
   td {
-    padding: 2px 8px;
+    padding: 1px 4px 1px 0;
     text-align: left;
     font-weight: 500;
     white-space: nowrap;
