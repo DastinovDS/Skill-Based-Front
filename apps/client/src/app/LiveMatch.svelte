@@ -21,6 +21,7 @@
     RulesetPublic,
     ServerMsg,
   } from '../protocol.gen.ts';
+  import { forfeitCountsTowardBan } from '../match/forfeitBan.ts';
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
@@ -57,7 +58,8 @@
   let hud = $state.raw<HudState | null>(null);
   let rules = $state.raw<RulesetPublic | null>(null);
   let me = $state<PlayerId>(0);
-  // A ranked match (DEC-34, also a calibration match): leaving it warns about the queue lock.
+  // A forfeit counts toward the queue ban (DEC-34: a ranked or calibration match, also when only the
+  // opponent is rated): leaving it warns about the queue lock.
   let rated = $state(false);
   let forfeitBanS = $state(0);
   let session = $state.raw<MatchSession | null>(null);
@@ -104,7 +106,7 @@
           map,
         });
         me = welcome.player;
-        rated = welcome.rated;
+        rated = forfeitCountsTowardBan(welcome);
         forfeitBanS = welcome.forfeit_ban_s;
         rules = welcome.ruleset_public;
         hud = state;

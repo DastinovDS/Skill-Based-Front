@@ -3407,7 +3407,9 @@ DEC-06 (what is rated) and RAT-02 (the update). Implemented in #414 (`PROTOCOL_V
   only in `match_end`) and `calibration` (`played`, `total`, for a password account that was calibrating when the match
   began). `welcome` also has `forfeit_ban_s` (`PROTOCOL_VERSION` 30, #559): the queue ban in seconds a resign would
   bring to that player now (resigns in the window, counted at the match start, plus one; `0` for none or when the
-  match is not flagged rated). The ranked forfeit dialog shows it; the client computes nothing.
+  match is not flagged rated; a calibrated side facing a calibrating opponent, `opponent_calibrating`, gets the real
+  length, because its resign counts too). The ranked forfeit dialog shows it, also in that case (#571); the client
+  computes nothing.
   `match_end.rating` is `null` while the rating is hidden and present from the match that completes the
   calibration on. `GET /api/me` has `calibration` (`null` for a guest and once calibration is over). The leaderboard
   (LB-01, #78, below) lists only password accounts that are not blocked and have finished calibration.

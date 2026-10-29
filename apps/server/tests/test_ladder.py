@@ -672,3 +672,16 @@ def test_an_unrated_match_has_no_forfeit_ban(session: Session, clock: ManualCloc
     resign(session, clock, a, b, ago=timedelta(hours=3))
     guest = account(session, "g", password=False, played=None)
     assert [s.forfeit_ban_s for s in plan_of(session, clock, a, guest).sides] == [0, 0]
+
+
+def test_a_resign_against_a_calibrating_opponent_announces_the_ban(
+    session: Session, clock: ManualClock
+) -> None:
+    # DEC-34, item 3: a resign in a match flagged rated counts toward the ban, also when this
+    # side's own rating stays (opponent_calibrating). The second resign in the window: 5 minutes.
+    a = account(session, "a")
+    calibrating = account(session, "b", played=2)
+    resign(session, clock, a, calibrating, ago=timedelta(hours=3))
+    p = plan_of(session, clock, a, calibrating)
+    assert reasons(p) == (UnratedReason.OPPONENT_CALIBRATING, None)
+    assert [s.forfeit_ban_s for s in p.sides] == [300, 0]
