@@ -20,8 +20,12 @@ export class ReplayError extends Error {
 
 /** `[cp, vp, stance, forfeited]` of one player; CP in hundredths. */
 export type FramePlayer = [number, number, Stance, number];
-/** `[owner, warehouse, capacity]` of one node. */
-export type FrameNode = [PlayerId | null, number, number];
+/**
+ * `[owner, warehouse, capacity]` of one node, plus the places of its warehouse (`null` in a province):
+ * the fourth element is missing in files from before #556, which then show the node capacity.
+ */
+export type FrameNode =
+  [PlayerId | null, number, number] | [PlayerId | null, number, number, number | null];
 /** `[id, owner, edge, from_node, charges, depart_tick, arrive_tick]`. */
 export type FramePacket = [number, PlayerId, number, number, number, number, number];
 /** `[id, owner, kind, origin, target]`. */

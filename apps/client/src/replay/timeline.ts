@@ -67,7 +67,7 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
   const builds = new Map<number, EdgeBuild>();
   for (const [, edge, done_tick] of frame.b ?? []) builds.set(edge, { done_tick });
   for (const [edge, , done_tick] of frame.e ?? []) builds.set(edge, { done_tick });
-  const nodes: NodeView[] = frame.n.map(([owner, warehouse, capacity], id) => ({
+  const nodes: NodeView[] = frame.n.map(([owner, warehouse, capacity, warehouseCap], id) => ({
     id,
     owner,
     capacity,
@@ -83,7 +83,8 @@ function snapshot(map: MapFile, frame: ReplayFrame): SnapshotMsg {
     recruit_waiting: null,
     has_barracks: null, // not in the replay files (DEC-26)
     warehouse_level: null,
-    warehouse_cap: null,
+    // The places of the warehouse (#556): without them the bar would show the node capacity.
+    warehouse_cap: warehouseCap ?? null,
     building: null,
   }));
   const packets: PacketView[] = frame.k.map(
