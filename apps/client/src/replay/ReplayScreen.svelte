@@ -3,6 +3,7 @@
   import CrashGuard from '../app/CrashGuard.svelte';
   import { t, type MessageKey } from '../i18n/index.ts';
   import { backgroundUrlOf } from '../map/background.ts';
+  import { geoOf, type GeoFile } from '../map/geography.ts';
   import { loadReplayWhenReady, ReplayLoadError, type ReplayLoadCode } from './loadReplay.ts';
   import { parseReplay, type ReplayFile } from './replayFile.ts';
   import ReplayViewer from './ReplayViewer.svelte';
@@ -31,6 +32,7 @@
 
   let file = $state.raw<ReplayFile | null>(null);
   let backgroundUrl = $state.raw<string | null>(null);
+  let geo = $state.raw<GeoFile | null>(null);
   let failure = $state.raw<Exclude<ReplayLoadCode, 'preparing'> | null>(null);
   /** The server answered "preparing": it is still building the frames of the match (#259). */
   let preparing = $state.raw(false);
@@ -57,6 +59,7 @@
     const stop = new AbortController();
     file = null;
     backgroundUrl = null;
+    geo = null;
     failure = null;
     preparing = false;
     fetchFile(matchId, stop.signal, () => {
@@ -65,11 +68,14 @@
       .then(async (loadedFile) => ({
         loadedFile,
         background: api === null ? null : await backgroundUrlOf(api, loadedFile.map_id),
+        // The map as the replay played it: a stale vector file does not fit and is ignored.
+        geography: await geoOf(loadedFile.map),
       }))
       .then(
-        ({ loadedFile, background }) => {
+        ({ loadedFile, background, geography }) => {
           if (current) {
             backgroundUrl = background;
+            geo = geography;
             file = loadedFile;
           }
         },
@@ -89,7 +95,7 @@
 
 <CrashGuard onexit={onback}>
   {#if file !== null}
-    <ReplayViewer {file} {backgroundUrl} {onback} />
+    <ReplayViewer {file} {backgroundUrl} {geo} {onback} />
   {:else}
     <main class="status" role={failure === null ? 'status' : 'alert'}>
       {#if failure !== null}

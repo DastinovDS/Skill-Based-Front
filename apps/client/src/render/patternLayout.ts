@@ -1,5 +1,7 @@
 import type { Terrain } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
+import { distanceToSegment } from './regionLayout.ts';
+import { insidePolygon } from './territory.ts';
 
 /**
  * The marks of the terrain map mode (#429, "Patterns"): a pattern per terrain that stays
@@ -25,16 +27,26 @@ export const FIR_MARGIN = 6;
 
 const NONE: PatternMarks = { dots: [], firs: [], hatches: [] };
 
-export function patternMarks(cell: readonly Point[], terrain: Terrain): PatternMarks {
+/**
+ * The marks inside one area. `convex` is true for a Voronoi cell; the areas of a geography
+ * (DEC-36, #544) are not convex, so a point must be inside by the even-odd rule and the hatching
+ * lines cut in several stretches.
+ */
+export function patternMarks(
+  cell: readonly Point[],
+  terrain: Terrain,
+  convex = true,
+): PatternMarks {
   if (cell.length < 3) return NONE;
   const box = boundsOf(cell);
+  const inside = convex ? insideBy : insideRingBy;
   switch (terrain) {
     case 'plains':
-      return { ...NONE, dots: gridPoints(cell, box, DOT_STEP, DOT_MARGIN) };
+      return { ...NONE, dots: gridPoints(cell, box, DOT_STEP, DOT_MARGIN, inside) };
     case 'forest':
-      return { ...NONE, firs: gridPoints(cell, box, FIR_STEP, FIR_MARGIN) };
+      return { ...NONE, firs: gridPoints(cell, box, FIR_STEP, FIR_MARGIN, inside) };
     case 'mountains':
-      return { ...NONE, hatches: hatching(cell, box) };
+      return { ...NONE, hatches: convex ? hatching(cell, box) : hatchingRing(cell, box) };
   }
 }
 
@@ -52,7 +64,13 @@ function boundsOf(cell: readonly Point[]): Box {
 }
 
 /** Rows of `step`, every other row shifted by half a step (a staggered grid), inside the cell. */
-function gridPoints(cell: readonly Point[], box: Box, step: number, margin: number): Point[] {
+function gridPoints(
+  cell: readonly Point[],
+  box: Box,
+  step: number,
+  margin: number,
+  inside: (cell: readonly Point[], at: Point, margin: number) => boolean,
+): Point[] {
   const out: Point[] = [];
   const first = Math.floor(box.y0 / step);
   const last = Math.ceil(box.y1 / step);
@@ -63,7 +81,7 @@ function gridPoints(cell: readonly Point[], box: Box, step: number, margin: numb
     const to = Math.ceil((box.x1 - shift) / step);
     for (let col = from; col <= to; col++) {
       const at = { x: col * step + shift, y };
-      if (insideBy(cell, at, margin)) out.push(at);
+      if (inside(cell, at, margin)) out.push(at);
     }
   }
   return out;
@@ -118,6 +136,48 @@ function hatching(cell: readonly Point[], box: Box): [Point, Point][] {
     const p = hits[0];
     const q = hits[hits.length - 1];
     if (p !== undefined && q !== undefined && q.x - p.x > 1) out.push([p, q]);
+  }
+  return out;
+}
+
+/** The point is inside the (not convex) ring and at least `margin` from every side of it. */
+function insideRingBy(ring: readonly Point[], at: Point, margin: number): boolean {
+  if (!insidePolygon(ring, at)) return false;
+  return ring.every((a, i) => {
+    const b = ring[(i + 1) % ring.length];
+    return b === undefined || distanceToSegment(at, { a, b }) >= margin;
+  });
+}
+
+/**
+ * Lines `x + y = c` cut to a ring that need not be convex: the crossings of a line with the ring,
+ * sorted along it, pair up into the stretches inside (even-odd, like `insidePolygon`).
+ */
+function hatchingRing(ring: readonly Point[], box: Box): [Point, Point][] {
+  const out: [Point, Point][] = [];
+  const first = Math.ceil((box.x0 + box.y0) / HATCH_STEP);
+  const last = Math.floor((box.x1 + box.y1) / HATCH_STEP);
+  for (let k = first; k <= last; k++) {
+    const c = k * HATCH_STEP;
+    const hits: Point[] = [];
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i];
+      const b = ring[(i + 1) % ring.length];
+      if (a === undefined || b === undefined) continue;
+      const fa = a.x + a.y - c;
+      const fb = b.x + b.y - c;
+      // Half open (a vertex on the line belongs to the side `>= 0`): a line through a vertex
+      // counts it once, or twice where it only touches.
+      if (fa >= 0 === fb >= 0) continue;
+      const t = fa / (fa - fb);
+      hits.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    }
+    hits.sort((p, q) => p.x - q.x);
+    for (let i = 0; i + 1 < hits.length; i += 2) {
+      const p = hits[i];
+      const q = hits[i + 1];
+      if (p !== undefined && q !== undefined && q.x - p.x > 1) out.push([p, q]);
+    }
   }
   return out;
 }

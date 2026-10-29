@@ -1981,6 +1981,6 @@ Mockup: [`mockups/map-geography.html`](mockups/map-geography.html), frames in [`
 where an area border runs along water**. The mockup's W4 darkens a band of land along every coast ("soft shore halo");
 next to a narrow stream that band reads as a dark stroke beside the blue water, and the owner wants it gone: the water
 itself is the border and stays blue. The baker (`gow-maps bake`) therefore paints the shore only lighter, inside
-the water (shallows), never darker on the land, and the client (step 2) draws its thin area line only between two
+the water (shallows), never darker on the land, and the client (step 2, #544) draws its thin area line only between two
 land areas. Reeds stay sparse and muted so they never line up into a dark edge. The open questions of #537 take
 the DEC-36 defaults (long rivers with bridges, about 20 percent water, fixtures without water, before the release).

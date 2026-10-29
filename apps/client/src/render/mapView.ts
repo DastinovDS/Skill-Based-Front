@@ -13,7 +13,7 @@ import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { borderPermille } from './fogLayout.ts';
 import { reducedMotion } from './motion.ts';
-import { cellEdges, territoryBorders } from './regionLayout.ts';
+import { territoryBorders, type CellEdge } from './regionLayout.ts';
 import { easeOutCubic } from './tween.ts';
 import {
   laneDashes,
@@ -37,6 +37,8 @@ import {
   TERRAIN_FILL,
   TERRITORY_GLOW,
   SUPPLY_FLOOR,
+  SUPPLY_WATER,
+  WATER_FLAT,
   SUPPLY_TERRITORY_ALPHA,
   TERRITORY_ALPHA,
   TERRITORY_BORDER,
@@ -45,7 +47,8 @@ import {
 } from './style.ts';
 import { patternMarks } from './patternLayout.ts';
 import { TerrainView } from './terrainView.ts';
-import { voronoiCells } from './voronoi.ts';
+import { territoryOf } from './territory.ts';
+import type { GeoFile } from '../map/geography.ts';
 
 type Owner = PlayerId | null;
 
@@ -100,7 +103,15 @@ export class MapView {
   private readonly casingContexts = new Map<RoadStyle, GraphicsContext>();
   private readonly laneContexts = new Map<string, GraphicsContext>();
   private readonly looks: (RoadLook | undefined)[] = [];
+  /**
+   * The area of every node (a polygon each): the Voronoi cells, or with a geography (DEC-36) the
+   * areas of the baker's border chains, which are not convex.
+   */
   readonly cells: Point[][];
+  /** The edges of the areas, with the area or the water across each. */
+  private readonly edges: readonly CellEdge[];
+  /** The areas are convex Voronoi cells (a map without a usable vector file). */
+  private readonly convex: boolean;
   private readonly terrainFill: Graphics;
   private readonly dim: Graphics;
   /**
@@ -165,9 +176,14 @@ export class MapView {
     private readonly renderer: Renderer,
     /** A baked background is on its way (`setBackground`): the stamps are not created. */
     bakedBackground = false,
+    /** The vector file of the map (DEC-36), if it has one that fits this version of the map. */
+    geo: GeoFile | null = null,
   ) {
     const bounds = { width: map.meta.width, height: map.meta.height };
-    this.cells = voronoiCells(map.nodes, bounds);
+    const territory = territoryOf(map, geo);
+    this.cells = territory.cells;
+    this.edges = territory.edges;
+    this.convex = territory.convex;
 
     this.layers = layers;
     const background = layers.layer.background;
@@ -176,9 +192,7 @@ export class MapView {
     this.dim = background.addChild(
       new Graphics().rect(0, 0, bounds.width, bounds.height).fill(BACKDROP_DIM),
     );
-    this.floor = background.addChild(
-      new Graphics().rect(0, 0, bounds.width, bounds.height).fill(SUPPLY_FLOOR),
-    );
+    this.floor = background.addChild(this.drawFloor());
     this.floor.visible = false;
     this.mapFrame = background.addChild(
       new Graphics().rect(0, 0, bounds.width, bounds.height).stroke(MAP_BORDER),
@@ -249,7 +263,14 @@ export class MapView {
     if (this.stamps !== null || this.backdrop !== null) return;
     // Between the dimming and the floor, as when they were always there.
     const at = this.stampParent.getChildIndex(this.floor);
-    this.stamps = new TerrainView(this.map, this.cells, this.stampParent, this.renderer, at);
+    this.stamps = new TerrainView(
+      this.map,
+      this.cells,
+      this.stampParent,
+      this.renderer,
+      at,
+      this.convex,
+    );
     this.stamps.setVisible(!this.flatGround);
   }
 
@@ -298,6 +319,11 @@ export class MapView {
     if (this.backdrop === null) this.terrainFill.visible = !flat;
   }
 
+  /** The areas come from a vector file (DEC-36), not from Voronoi cells. */
+  get geography(): boolean {
+    return !this.convex;
+  }
+
   /** Number of terrain stamps (tests and the performance check). */
   get stampCount(): number {
     return this.stamps?.count ?? 0;
@@ -318,7 +344,7 @@ export class MapView {
     this.fade = changed
       ? {
           from: previous,
-          fromBorders: territoryBorders(this.cells, previous, TERRITORY_BORDER.inset),
+          fromBorders: territoryBorders(this.cells, previous, TERRITORY_BORDER.inset, this.edges),
           elapsed: 0,
           glowed: false,
         }
@@ -359,7 +385,7 @@ export class MapView {
     });
     // The border of an area: a light line of the owner colour, one stroke per owner and fade.
     const lines = this.borderLines.clear();
-    const now = territoryBorders(this.cells, owners, TERRITORY_BORDER.inset);
+    const now = territoryBorders(this.cells, owners, TERRITORY_BORDER.inset, this.edges);
     const key = (b: { owner: number; a: Point; b: Point }): string =>
       `${String(b.owner)}:${String(b.a.x)},${String(b.a.y)}:${String(b.b.x)},${String(b.b.y)}`;
     const old = this.fade?.fromBorders ?? now;
@@ -436,7 +462,7 @@ export class MapView {
     const key = owners.map((owner) => String(owner)).join('');
     if (key === this.glowKey) return;
     this.glowKey = key;
-    const borders = territoryBorders(this.cells, owners, 0);
+    const borders = territoryBorders(this.cells, owners, 0, this.edges);
     let drawn = 0;
     for (const owner of [0, 1] as const) {
       const lines = this.glowLines[owner].clear();
@@ -635,13 +661,33 @@ export class MapView {
     return context;
   }
 
-  /** Each edge shared by two areas once; the edge on the border of the map is the map frame's. */
+  /**
+   * Each edge shared by two land areas once; the edge on the border of the map is the map frame's.
+   * No line where an area ends at water (DEC-36, the owner's decision of 2026-10-29): the water
+   * itself is the border.
+   */
   private drawCellLines(): Graphics {
     const g = new Graphics();
-    for (const { cell, a, b, neighbour } of cellEdges(this.cells)) {
-      if (neighbour !== null && cell < neighbour) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    for (const { cell, a, b, neighbour, water } of this.edges) {
+      if (neighbour !== null && water !== true && cell < neighbour) {
+        g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      }
     }
     return g.stroke({ width: CELL_LINE.width, color: CELL_LINE.color, alpha: CELL_LINE.alpha });
+  }
+
+  /**
+   * The flat floor of the «Supply» mode. With a geography the water is flat too (a darker blue
+   * than the land floor): the floor hides the baked picture, and the sea, the lakes and the rivers
+   * are whatever the areas do not cover.
+   */
+  private drawFloor(): Graphics {
+    const { width, height } = this.map.meta;
+    const g = new Graphics({ label: 'supply-floor' });
+    if (this.convex) return g.rect(0, 0, width, height).fill(SUPPLY_FLOOR);
+    g.rect(0, 0, width, height).fill(SUPPLY_WATER);
+    for (const cell of this.cells) g.poly(cell).fill(SUPPLY_FLOOR);
+    return g;
   }
 
   /** A flat colour per area and the marks of its terrain, one Graphics drawn once. */
@@ -650,12 +696,15 @@ export class MapView {
     const { dot, fir, hatch } = PATTERN_GROUND;
     // Under the frame and over the dimming, where the «Supply» floor lies.
     this.stampParent.addChildAt(g, this.stampParent.getChildIndex(this.floor));
-    g.rect(0, 0, this.map.meta.width, this.map.meta.height).fill(PATTERN_GROUND.floor);
+    const { width, height } = this.map.meta;
+    g.rect(0, 0, width, height).fill(this.convex ? PATTERN_GROUND.floor : PATTERN_GROUND.water);
     this.map.nodes.forEach((node, i) => {
       const cell = this.cells[i];
       if (cell === undefined || cell.length === 0) return;
+      // Over the water the land needs the floor under its translucent fill.
+      if (!this.convex) g.poly(cell).fill(PATTERN_GROUND.floor);
       g.poly(cell).fill({ color: PATTERN_GROUND.fill[node.terrain], alpha: PATTERN_GROUND.alpha });
-      const marks = patternMarks(cell, node.terrain);
+      const marks = patternMarks(cell, node.terrain, this.convex);
       for (const at of marks.dots) g.circle(at.x, at.y, dot.radius);
       if (marks.dots.length > 0) g.fill({ color: BG, alpha: dot.alpha });
       for (const at of marks.firs) {
@@ -671,12 +720,21 @@ export class MapView {
     return g;
   }
 
+  /**
+   * The flat terrain colours, the fallback of a map whose background did not load. With a geography
+   * the water is flat blue under the land and no area gets a dark stroke (the thin line between
+   * land areas is `drawCellLines`).
+   */
   private drawTerrain(): Graphics {
     const g = new Graphics();
+    if (!this.convex) {
+      g.rect(0, 0, this.map.meta.width, this.map.meta.height).fill(WATER_FLAT);
+    }
     this.map.nodes.forEach((node, i) => {
       const cell = this.cells[i];
       if (cell !== undefined && cell.length > 0) {
-        g.poly(cell).fill(TERRAIN_FILL[node.terrain]).stroke(CELL_BORDER);
+        g.poly(cell).fill(TERRAIN_FILL[node.terrain]);
+        if (this.convex) g.stroke(CELL_BORDER);
       }
     });
     return g;

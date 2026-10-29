@@ -3,6 +3,7 @@ import { hitHalf, type Point } from './camera.ts';
 import type { CityIcon } from './cityStacks.ts';
 import { edgeEnds, nodePoint, type TokenSpot } from './layout.ts';
 import { insideConvex } from './regionLayout.ts';
+import { areaAt } from './territory.ts';
 import type { PickHit } from './interaction.ts';
 import { CAPITAL_RADIUS, NODE_RADIUS } from './style.ts';
 
@@ -30,6 +31,11 @@ export interface PickScene {
   readonly icons?: readonly CityIcon[];
   /** The Voronoi cells of the cities (`MapView.cells`): the area of a city. */
   readonly cells?: readonly (readonly Point[])[];
+  /**
+   * The cells are the areas of a geography (DEC-36): not convex, and water between them belongs to
+   * no city, so a click on a lake or a river hits no area.
+   */
+  readonly geo?: boolean;
 }
 
 /** The city whose area holds `world`, or `null`. */
@@ -87,7 +93,10 @@ export function pickAt(map: MapFile, world: Point, scene: PickScene, scale = 1):
   }
   if (best !== null) return { kind: 'node', id: best };
 
-  const cell = cellAt(scene.cells, world);
+  const cell =
+    scene.geo === true && scene.cells !== undefined
+      ? areaAt(scene.cells, world)
+      : cellAt(scene.cells, world);
   let road: number | null = null;
   let roadDistance = EDGE_HIT;
   for (const edge of map.edges) {

@@ -33,6 +33,8 @@ export const TERRAIN_FILL: Readonly<Record<Terrain, number>> = {
  */
 export const PATTERN_GROUND = {
   floor: 0x10151c,
+  /** The water of a map with a geography (DEC-36): the sea, the lakes and the rivers, flat. */
+  water: 0x2a4a60,
   alpha: 0.92,
   fill: { plains: 0x7c9456, forest: 0x1f5a47, mountains: 0x6b6d75 } satisfies Record<
     Terrain,
@@ -42,6 +44,8 @@ export const PATTERN_GROUND = {
   fir: { width: 1.5, alpha: 0.5, halfWidth: 4, up: 4, down: 3 },
   hatch: { width: 2, alpha: 0.42 },
 } as const;
+/** The flat water of a map with a geography whose background did not load (DEC-36): W4's blue. */
+export const WATER_FLAT = 0x345c74;
 /** The baked background (or the flat terrain colours) is darkened by this (9.1). */
 export const BACKDROP_DIM = { color: BG, alpha: 0.18 } as const;
 /** The thin line round every area of the map (also between areas of one owner): subtle. */
@@ -603,6 +607,8 @@ export const GHOST_SHAKE_AMPLITUDE = 3;
 export const SUPPLY_TERRITORY_ALPHA = 0.34;
 /** The flat floor of the layer instead of the terrain. */
 export const SUPPLY_FLOOR = 0x141a22;
+/** The flat water of the layer on a map with a geography (DEC-36): darker than the land tint, bluer than the floor. */
+export const SUPPLY_WATER = 0x1b3347;
 /**
  * The pipes of the «Supply» layer (#429, variant B "Pipes"): the level of an own road is the bore of
  * its pipe (three widths, never a hue); a pipe with a flow is filled and its dashes run in the

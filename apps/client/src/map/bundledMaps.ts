@@ -1,4 +1,5 @@
 import type { MapFile } from '../protocol.gen.ts';
+import { usableGeo, type GeoFile } from './geography.ts';
 
 // Maps bundled into the client for the dev screen and the tests (CLI-05, #496: only they import this
 // module, so a production build contains none of it; the game takes the map and its background
@@ -53,4 +54,19 @@ const backgrounds = import.meta.glob<string>(
 export function backgroundUrl(mapName: string): string | null {
   const found = Object.entries(backgrounds).find(([path]) => path.endsWith(`/${mapName}.bg.webp`));
   return found === undefined ? null : found[1];
+}
+
+// The vector files `maps/geo/<id>.json` of the maps with a geography (DEC-36, #544), eagerly for
+// the dev screen (the game loads them lazily, `geography.ts`).
+const geographies = import.meta.glob<unknown>('../../../../maps/geo/*.json', {
+  eager: true,
+  import: 'default',
+});
+
+/** The vector file of a bundled map, or `null` if it has none or the file does not fit the map. */
+export function bundledGeo(map: MapFile): GeoFile | null {
+  const found = Object.entries(geographies).find(([path]) =>
+    path.endsWith(`/${map.meta.name}.json`),
+  );
+  return found === undefined ? null : usableGeo(map, found[1]);
 }

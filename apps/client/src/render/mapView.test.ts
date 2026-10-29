@@ -2,7 +2,10 @@ import { Container, Graphics, type Renderer } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { Detail } from '../protocol.gen.ts';
+import { GEO_FILE, GEO_MAP } from './geoFixture.ts';
 import { createLayers, type MapLayers } from './layers.ts';
+import { voronoiTerritory } from './territory.ts';
+import { polygonArea } from './voronoi.ts';
 import { MapView } from './mapView.ts';
 import { BG, ROAD_BUFFER, ROAD_FOG, ROAD_OWN, YOU, ENEMY } from './style.ts';
 
@@ -454,5 +457,34 @@ describe('MapView, the terrain mode (#429)', () => {
     view.setSupplyMode(true);
     view.setSupplyMode(false);
     expect(ground()?.visible).toBe(true);
+  });
+});
+
+describe('MapView on a geography (DEC-36, #544)', () => {
+  it('takes the areas from the vector file and tints them', () => {
+    const view = new MapView(GEO_MAP, createLayers(), 0, {} as Renderer, true, GEO_FILE);
+    expect(view.geography).toBe(true);
+    // Area 0 is x 0..90 above y = 60 and 0..100 below: not the Voronoi half at x < 100.
+    expect(polygonArea(view.cells[0] ?? [])).toBe(9400);
+    view.destroy();
+  });
+
+  it('draws the thin area line only between two land areas, none along the river', () => {
+    const layers = createLayers();
+    const view = new MapView(GEO_MAP, layers, 0, {} as Renderer, true, GEO_FILE);
+    const line = layers.layer.territory.children[0] as Graphics;
+    const box = line.getLocalBounds();
+    // The land border is x = 100 from y = 60 to 100; the river banks (x = 90, 110) get no line.
+    expect(box.minX).toBeGreaterThan(98);
+    expect(box.maxX).toBeLessThan(102);
+    expect(box.minY).toBeGreaterThan(58);
+    view.destroy();
+  });
+
+  it('keeps the Voronoi cells for a map without a usable file', () => {
+    const view = new MapView(GEO_MAP, createLayers(), 0, {} as Renderer, true, null);
+    expect(view.geography).toBe(false);
+    expect(view.cells[0]).toEqual(voronoiTerritory(GEO_MAP).cells[0]);
+    view.destroy();
   });
 });

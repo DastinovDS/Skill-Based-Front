@@ -1,7 +1,8 @@
 import { Container, Graphics, Sprite, type Renderer, type Texture } from 'pixi.js';
 import type { MapFile, Terrain } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
-import { stampPoints, type Segment } from './regionLayout.ts';
+import { insideConvex, stampPoints, type Segment } from './regionLayout.ts';
+import { insidePolygon } from './territory.ts';
 import {
   BG,
   PAPER,
@@ -71,6 +72,8 @@ export class TerrainView {
     renderer: Renderer,
     /** Index in `parent` to insert the container at; the top by default. */
     at?: number,
+    /** The cells are convex (Voronoi); with a geography (DEC-36) they are not. */
+    convex = true,
   ) {
     const stamp = new Map<Terrain, { texture: Texture; anchor: Point }>();
     for (const terrain of ['forest', 'mountains', 'plains'] as const) {
@@ -106,6 +109,7 @@ export class TerrainView {
         roads,
         STAMP_CITY_CLEARANCE,
         STAMP_ROAD_CLEARANCE,
+        convex ? insideConvex : insidePolygon,
       );
       for (const p of points) {
         const sprite = new Sprite({ texture: baked.texture, anchor: baked.anchor, x: p.x, y: p.y });
