@@ -82,6 +82,7 @@ Brief rules:
 - **The report** ends with the blocks `QUESTIONS:` and `RISKS:` (they may be empty). For tasks that need a human (a manual check, the owner's verdict) a block `MANUAL:` is added.
 - If a brief has several issues, the agent does them strictly one after another, each in its own PR.
 - **A task that changes the look:** the brief names the scenes of `visual/scenes.ts` the agent looks at before and after (`mise run shots`) and requires links to the frames in the PR (`AGENTS.md`, section 7.5). A major visual decision does not go into a brief until the owner has chosen a variant (section 7).
+- **Design skills:** if the session has the `design:*` skills, a look-changing task names them in the brief: `design:design-critique` on the before/after shots, `design:accessibility-review` before merge. Skills are per-account, not part of the repository: a task must not fail when they are missing. SpriteCook (generative art) is not used until the owner's decision changes `ui-style.md` section 22.
 
 ---
 
