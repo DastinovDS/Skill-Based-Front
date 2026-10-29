@@ -219,7 +219,6 @@ def ws_settings(maps_dir: Path, tmp_path: Path) -> Settings:
     return Settings(
         maps_dir=maps_dir,
         database_url=f"sqlite:///{tmp_path / 'gow.db'}",
-        ws_hello_timeout_s=0.3,
     )
 
 
@@ -249,11 +248,16 @@ def test_allowed_origin_from_settings(ws_settings: Settings) -> None:
 
 
 def test_no_hello_closes(ws_settings: Settings) -> None:
+    # The only test about the hello timeout, so the only one with a short one (#485). Every other
+    # test keeps the default: a slow runner must not run it out before the client sends `hello`.
+    # This one cannot race: the client sends nothing and waits for the close.
+    settings = ws_settings.model_copy(update={"ws_hello_timeout_s": 0.3})
+
     async def scenario(live: Live) -> None:
         async with live.connect() as ws:
             assert await close_code(ws) == CLOSE_POLICY
 
-    run(ws_settings, scenario)
+    run(settings, scenario)
 
 
 def test_first_message_must_be_hello(ws_settings: Settings) -> None:
