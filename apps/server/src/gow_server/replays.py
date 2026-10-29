@@ -61,7 +61,14 @@ from gow_server.frames import FramesResult, build_frames
 from gow_server.identity import hash_token
 from gow_server.lifecycle import STATUS_RUNNING
 from gow_server.models import Match, MatchPlayer, Player
-from gow_server.replay_retention import BATCH, PurgeResult, RetentionPolicy
+from gow_server.replay_retention import (
+    BATCH,
+    ORPHAN_GRACE_DAYS,
+    PurgeResult,
+    RetentionPolicy,
+    archive_log,
+    recent_match_ids,
+)
 from gow_sim.replay import ReplayWriter
 
 log = logging.getLogger("gow_server.replays")
@@ -136,6 +143,7 @@ class ReplayService:
         sessions: sessionmaker[Session],
         workers: int = 1,
         retention: RetentionPolicy | None = None,
+        stats_archive_dir: Path | None = None,
     ) -> None:
         self.replays_dir: Final = replays_dir
         self.rulesets_dir: Final = rulesets_dir
@@ -144,6 +152,8 @@ class ReplayService:
         self._workers: Final = workers
         self.retention: Final = retention or RetentionPolicy(unrated_days=0, rated_days=0)
         """Used by ``purge_expired`` (SRV-08); the default keeps every replay."""
+        self.stats_archive_dir: Final = stats_archive_dir
+        """Command logs are copied here before their replay expires (#525); ``None``: off."""
         self._pool: ProcessPoolExecutor | None = None
         self._tasks: set[asyncio.Task[FramesResult | None]] = set()
         self._building: set[str] = set()
@@ -285,22 +295,28 @@ class ReplayService:
     def purge_expired(self, now: datetime) -> PurgeResult:
         """Delete the replay files that outlived the retention (blocking: call from a thread).
 
-        A match past its retention loses its command log and frames file, its row gets
+        A replay goes when its match is outside the per-account cap or past an age limit
+        (``RetentionPolicy.expired``). It loses its command log and frames file, its row gets
         ``replay_path = NULL`` and ``replay_expired_at = now``. Matches that are running or whose
-        frames are being built are skipped. Files of no match (a database that was reset, a
-        leftover ``.tmp``) are removed once they are older than the unrated retention. With the
-        database updated first, a crash between the two steps leaves files that the next pass
-        removes.
+        frames are being built are skipped. With ``stats_archive_dir`` the command log is copied
+        there first; a failed copy keeps the match for the next pass. Files of no match (a
+        database that was reset, a leftover ``.tmp``) are removed once they are older than the
+        unrated limit (``ORPHAN_GRACE_DAYS`` without one) and are not archived. With the database
+        updated first, a crash between the two steps leaves files that the next pass removes.
         """
         files = self._scan()
         ids = sorted(files)
-        removed_files = removed_bytes = expired = orphans = 0
+        removed_files = removed_bytes = expired = orphans = archived = 0
         kept = sum(size for group in files.values() for _, size, _ in group)
-        orphan_days = self.retention.unrated_days
+        orphan_days = self.retention.unrated_days or ORPHAN_GRACE_DAYS
+        cap = self.retention.keep_per_player
         for start in range(0, len(ids), BATCH):
             chunk = ids[start : start + BATCH]
             doomed: list[tuple[Path, int]] = []
             with self._sessions.begin() as session:
+                # In the same transaction as the rows: a match that finished since an earlier
+                # look must not be missing from the set.
+                recent = recent_match_ids(session, cap) if cap > 0 else None
                 rows = {
                     str(match.id): match
                     for match in session.execute(
@@ -313,17 +329,27 @@ class ReplayService:
                         continue
                     row = rows.get(match_id)
                     if row is None:
-                        if orphan_days > 0 and all(
-                            (now - modified).days >= orphan_days for _, _, modified in group
-                        ):
+                        if all((now - modified).days >= orphan_days for _, _, modified in group):
                             doomed.extend((path, size) for path, size, _ in group)
                             orphans += len(group)
                         continue
                     if row.status == STATUS_RUNNING:
                         continue
-                    due = self.retention.expires_at(row)
-                    if due is None or due > now:
+                    if not self.retention.expired(row, now, recent):
                         continue
+                    if self.stats_archive_dir is not None:
+                        log_file = next(
+                            (path for path, _, _ in group if path.name.endswith(LOG_SUFFIX)), None
+                        )
+                        if log_file is not None:
+                            try:
+                                archive_log(log_file, self.stats_archive_dir, row)
+                            except OSError:
+                                log.exception(
+                                    "replay log not archived", extra={"match_id": match_id}
+                                )
+                                continue  # keep the replay: it is tried again at the next pass
+                            archived += 1
                     doomed.extend((path, size) for path, size, _ in group)
                     if row.replay_path is not None:
                         row.replay_path = None
@@ -339,7 +365,9 @@ class ReplayService:
                     continue
                 removed_files += 1
                 removed_bytes += size
-        return PurgeResult(removed_files, removed_bytes, expired, orphans, kept - removed_bytes)
+        return PurgeResult(
+            removed_files, removed_bytes, expired, orphans, kept - removed_bytes, archived
+        )
 
     def _get_pool(self) -> ProcessPoolExecutor:
         if self._pool is None:

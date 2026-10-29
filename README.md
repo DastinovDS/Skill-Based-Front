@@ -198,7 +198,10 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_WS_ALLOWED_ORIGINS` | `[]` | a JSON list of `Origin`s, other than the site itself, that may open the match WebSocket |
 | `GOW_WS_HELLO_TIMEOUT_S`, `GOW_WS_SEND_TIMEOUT_S` | `5`, `5` | the wait for `hello`; a send longer than this: the client is not reading, disconnect |
 | `GOW_MONITOR_INTERVAL_S` | `30` | OPS-04: the period of the tick lag check (the alert threshold is 10% of the tick period) |
-| `GOW_REPLAY_RETENTION_DAYS`, `GOW_REPLAY_RATED_RETENTION_DAYS`, `GOW_REPLAY_CLEANUP_INTERVAL_S` | `30`, `0`, `3600` | SRV-08, #515: days a replay (command log and frames file) is kept after the match, for unrated matches (invites, lobby, bots) and for rated ones; `0` keeps forever. A cleanup task runs at start-up and then every interval; the match row stays and the replay answers `410` "expired" |
+| `GOW_REPLAY_KEEP_PER_PLAYER` | `5` | #525: a replay (command log and frames file) is kept while its match is among the N most recent finished matches of at least one human player (bots do not count, a guest is an account, rated and unrated alike); `0`: no cap. A removed replay answers `410` "expired", the match row stays |
+| `GOW_REPLAY_RETENTION_DAYS`, `GOW_REPLAY_RATED_RETENTION_DAYS` | `0`, `0` | SRV-08, #515: optional extra limits: days after the match for unrated and for rated replays; `0`: off |
+| `GOW_REPLAY_CLEANUP_INTERVAL_S` | `3600` | the cleanup task runs at start-up and then every interval |
+| `GOW_REPLAY_STATS_ARCHIVE_DIR` | empty (off) | #525: the command log of a replay is copied here before it expires, for game statistics in development and playtests; never deleted or served, not in backups; `docs/ops/deploy.md`, section 4 |
 | `GOW_RECONNECT_WINDOW_S`, `GOW_PAUSE_MAX_S` | `60`, `60` | DEC-05: the time to reconnect before a technical defeat (the `Forfeit` command in the log); the maximum of a player's single pause in a private match |
 | `GOW_WS_MSG_RATE`, `GOW_WS_MSG_BURST` | `20`, `60` | the message token bucket of one connection (per second, burst); more than that: flood, disconnect |
 

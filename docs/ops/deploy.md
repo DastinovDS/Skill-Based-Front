@@ -102,15 +102,44 @@ then `deploy/restore.sh <the predeploy backup of this deploy>`.
     missing: an empty file list must not wipe the mirror.
   - A one-off full archive with the replays inside (the old format):
     `docker compose exec -T app python -m gow_server.backup create --with-replays > full.tar.gz`.
-- **Replay retention** (SRV-08, #515): the server deletes the command log and the frames file of a match once it is
-  older than `GOW_REPLAY_RETENTION_DAYS` (unrated matches: invites, lobby, bots; default 30) or
-  `GOW_REPLAY_RATED_RETENTION_DAYS` (rated, public replays; default 0 = forever), counted from the end of the match; 0
-  keeps forever. A task in the server runs at start-up and then every `GOW_REPLAY_CLEANUP_INTERVAL_S` (3600 s), in a
-  thread; it also removes files of no match (a reset database, a leftover `.tmp`) once they are older than the
-  unrated limit. The `matches` row stays with `replay_path = NULL` and `replay_expired_at` set: result and rating are
-  kept, and `GET /api/replays/{id}` answers `410` with `"reason": "expired"` (the viewer says "no longer available").
-  Each pass logs `replay cleanup` with the counts of files, bytes and matches. Disk use of the volume:
-  `docker compose exec app du -sh /data/replays`.
+- **Replay retention** (#525, SRV-08 #515): the server keeps at most `GOW_REPLAY_KEEP_PER_PLAYER` (5 by default) replays
+  per account. The command log and the frames file of a finished match are kept while the match is among the N most
+  recent finished matches of at least one of its human players; a bot opponent does not count, a guest is an account,
+  rated and unrated matches follow the same cap (`0` switches the cap off). Optional extra limits, off by default:
+  `GOW_REPLAY_RETENTION_DAYS` (unrated matches) and `GOW_REPLAY_RATED_RETENTION_DAYS` (rated), in days from the end of
+  the match; a replay goes when it is outside the cap or past a limit. A task in the server runs at start-up and then
+  every `GOW_REPLAY_CLEANUP_INTERVAL_S` (3600 s), in a thread; it also removes files of no match (a reset database, a
+  leftover `.tmp`) once they are older than the unrated limit (7 days when there is none). A match that is running or
+  whose frames are being built is skipped. The `matches` row stays with `replay_path = NULL` and `replay_expired_at`
+  set: result and rating are kept, and `GET /api/replays/{id}` answers `410` with `"reason": "expired"` (the viewer says
+  "no longer available"). Each pass logs `replay cleanup` with the counts of files, bytes, matches and archived logs.
+  Disk use of the volume: `docker compose exec app du -sh /data/replays`.
+- **Statistics archive for development and playtests** (#525). To collect the matches of a playtest for analysis, switch
+  the archive on: before a replay expires, its command log (`*.jsonl.gz`, a few KB; not the frames file) is copied into
+  `GOW_REPLAY_STATS_ARCHIVE_DIR` as `<dir>/<YYYY-MM-DD>/<match id>-<creation time>.jsonl.gz` (the date and time are those
+  of the creation of the match, UTC). The copy is written whole (a `.tmp` and a rename) and an existing file is left
+  alone, so a repeated pass changes nothing; if a copy fails the replay is kept and tried again at the next pass. The
+  server never deletes or serves the archive. A log enters it when the match leaves the last-N window of its players, so
+  the newest matches of each account appear later (and `GOW_REPLAY_KEEP_PER_PLAYER=0` archives nothing: nothing expires).
+  The logs contain no nick (the match sides are in the database), see `docs/ops/legal.md`.
+  - Enable (the compose stack has a volume `gow-replay-stats` mounted at `/replay-stats` for this): add
+    `GOW_REPLAY_STATS_ARCHIVE_DIR=/replay-stats` to `~/skill-based-front/.env` (or the environment of `docker compose`)
+    and recreate the app: `docker compose up -d app`. The volume is separate from `gow-data`, so `stack:reset` (which
+    removes `gow-data` only) does not wipe it. Without compose, set the variable to any writable directory (not
+    `GOW_REPLAYS_DIR` itself).
+  - Backups: the archive is **not** in `deploy/backup.sh` (the database archive and the `replays/` mirror do not carry it):
+    it is analysis data and can be rebuilt only from matches that no longer exist, so for a playtest copy it out yourself
+    (below) before removing the volume (`docker compose down -v` or `docker volume rm <project>_gow-replay-stats` delete it).
+  - Analyse with the existing `mise run stats` (`gow-bots stats`, `docs/balance/README.md`), which reads these logs like
+    any replay (the ruleset is found by the hash in the header, so the archive of played rulesets must have it):
+    ```sh
+    mkdir -p stats-copy && docker compose cp app:/replay-stats/. stats-copy/
+    docker compose cp app:/data/rulesets/. stats-rulesets/      # only if the played ruleset is not in rulesets/archive
+    mise run stats stats-copy/*/*.jsonl.gz --rulesets stats-rulesets --maps maps
+    ```
+    `mise run stats` prints one table per match; `uv run gow-bots analyze <files>` prints the same as JSONL for a script.
+    Switch the archive off again (remove the variable, `docker compose up -d app`) when the playtest is over; the files
+    stay until you delete them.
 - **[manual] Disk usage alert.** There is no disk metric in the server yet; watch the free space of the VPS and of
   `BACKUP_DIR` from outside (`df -h`, the provider's monitoring). Check once after the first deploy of this change that
   the cleanup removed what you expect (`docker compose logs app | grep "replay cleanup"`).

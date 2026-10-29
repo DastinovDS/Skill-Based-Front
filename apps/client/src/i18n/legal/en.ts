@@ -51,8 +51,8 @@ export const en = {
         heading: 'Matches, rating and replays',
         body: [
           'For each match the server stores the map, the start and end times, the result, which guest or bot played each side, and the rating values of the guest (rating, deviation, volatility, number of rated matches). A replay file holds the commands and the course of the match; it contains no nickname, but it can be linked to a guest through the match record.',
-          'Statistics of play are calculated from the command log of a match: the stance and the time spent in it, how often commands are sent, supply actions, the share of planned orders and the command points spent. Purpose: balancing the game and reviewing matches. The statistics are tied to the side of the match (the match record links a side to a guest or a bot); the replay contains no nickname. Storage: as for replays.',
-          'Replays of rated matches can be opened by anyone who knows the match number. Other replays are available only to the two participants. Storage: until deletion on request.',
+          'Statistics of play are calculated from the command log of a match: the stance and the time spent in it, how often commands are sent, supply actions, the share of planned orders and the command points spent. Purpose: balancing the game and reviewing matches. The statistics are tied to the side of the match (the match record links a side to a guest or a bot); the replay contains no nickname. Storage: as for replays. While the game is in development or in a playtest, the operator may additionally keep copies of the command logs (not the replay files) for these statistics; they contain no nickname and are kept until <ARCHIVE_RETENTION_PERIOD>.',
+          'Replays of rated matches can be opened by anyone who knows the match number. Other replays are available only to the two participants. Storage: a replay is kept only while its match is among the last 5 matches of one of its players, then it is deleted; the match record stays until deletion on request.',
         ],
       },
       {

@@ -56,7 +56,9 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             retention=RetentionPolicy(
                 unrated_days=settings.replay_retention_days,
                 rated_days=settings.replay_rated_retention_days,
+                keep_per_player=settings.replay_keep_per_player,
             ),
+            stats_archive_dir=settings.replay_stats_archive_dir,
         )
         app.state.matches = MatchManager(
             match_clock,
