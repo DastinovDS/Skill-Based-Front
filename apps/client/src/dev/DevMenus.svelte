@@ -6,6 +6,7 @@
   import WelcomeScreen from '../app/WelcomeScreen.svelte';
   import ExitDialog from '../hud/ExitDialog.svelte';
   import { MENU_MAP } from '../app/menuMap.ts';
+  import { isSeason, setSeasonOverride } from '../app/menuSeason.ts';
   import {
     BAN_SECONDS,
     CALIBRATION,
@@ -16,7 +17,11 @@
   } from './menuScenes.ts';
 
   // `?menu=<id>`: one screen before a match with fixed data (see menuScenes.ts).
-  const requested = new URLSearchParams(window.location.search).get('menu');
+  const params = new URLSearchParams(window.location.search);
+  const requested = params.get('menu');
+  // `&season=winter`: the picture in another season than the date's (#474).
+  const season = params.get('season');
+  setSeasonOverride(isSeason(season) ? season : null);
   const id = isMenuScene(requested) ? requested : 'menu-guest';
   const map = MENU_MAP;
   const nothing = (): void => undefined;

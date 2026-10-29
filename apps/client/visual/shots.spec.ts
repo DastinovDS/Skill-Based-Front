@@ -156,6 +156,27 @@ for (const id of MENU_SCENES) {
   });
 }
 
+// The menu picture by season (#474: the terrain takes the tint of the season of the date; the dev
+// scenes pin one with `&season=`) and the still frame of "less motion" (one frame per state, no loop).
+for (const season of ['spring', 'summer', 'autumn', 'winter'] as const) {
+  test(`shot of the menu picture in ${season}`, async ({ page }) => {
+    await page.goto(`/?menu=menu-guest&season=${season}`);
+    await expect(page.locator('.front svg.scene')).toBeVisible();
+    await page.mouse.move(1000, 700);
+    await page.screenshot({ path: join(OUT, `screen-season-${season}.png`) });
+  });
+}
+
+for (const id of ['queue-search', 'queue-found', 'queue-confirmed'] as const) {
+  test(`shot of the screen ${id} with reduced motion`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`/?menu=${id}`);
+    await expect(page.locator('.front svg.scene')).toBeVisible();
+    await page.mouse.move(1000, 700);
+    await page.screenshot({ path: join(OUT, `screen-${id}-reduced.png`) });
+  });
+}
+
 test('shot of the account menu', async ({ page }) => {
   await page.goto('/?menu=menu-guest');
   await page.locator('button.who').click();

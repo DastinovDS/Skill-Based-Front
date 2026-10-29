@@ -11,6 +11,8 @@
     phase?: BackdropPhase;
     /** The opponent of a found pair: written on the map. */
     opponent?: string | null;
+    /** Seconds in the queue: the scout of the search walks by it (#474). */
+    waited?: number;
     /** The name of the rail for assistive technology. */
     label: string;
     /** The top right corner: the player chip. */
@@ -26,6 +28,7 @@
     map,
     phase = 'idle',
     opponent = null,
+    waited = 0,
     label,
     corner,
     children,
@@ -38,7 +41,7 @@
      text rail stands on the left, the player sits in the top right corner. The shapes are the
      game's own: an own triangle, a dashed road, an enemy triangle. -->
 <main class="front" class:docked={panel !== undefined}>
-  <MenuBackdrop {map} {phase} {opponent} docked={panel !== undefined} />
+  <MenuBackdrop {map} {phase} {opponent} {waited} docked={panel !== undefined} />
   <div class="shade"></div>
   <header class="top">
     <h1 class="mark">

@@ -1,23 +1,30 @@
 import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
-import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import MenuBackdrop from './MenuBackdrop.svelte';
+import { MENU_MAP } from './menuMap.ts';
 import type { BackdropPhase } from './menuScene.ts';
+import { setSeasonOverride } from './menuSeason.ts';
 
-const crossroads = BUNDLED_MAPS.find((m) => m.meta.name === 'crossroads');
-
-describe('MenuBackdrop (#471)', () => {
+describe('MenuBackdrop (#471, #474)', () => {
   let component: Record<string, unknown> | undefined;
+  // jsdom has no 2D canvas (it would log "not implemented"): the motion layer then stays empty.
+  beforeAll(() => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+  });
+  afterAll(() => {
+    vi.restoreAllMocks();
+  });
   afterEach(() => {
     if (component !== undefined) void unmount(component);
     component = undefined;
     document.body.innerHTML = '';
+    setSeasonOverride(null);
   });
 
   function render(phase: BackdropPhase, opponent: string | null = null, withMap = true): void {
     component = mount(MenuBackdrop, {
       target: document.body,
-      props: { map: withMap ? (crossroads ?? null) : null, phase, opponent },
+      props: { map: withMap ? MENU_MAP : null, phase, opponent, waited: 0 },
     });
     flushSync();
   }
@@ -29,37 +36,51 @@ describe('MenuBackdrop (#471)', () => {
     expect(has('svg.scene')).toBe(false);
   });
 
-  it('idle: the map with a question mark where the enemy capital is', () => {
+  it('draws the map, the fog, the motion and the capitals as layers of their own', () => {
     render('idle');
-    expect(has('svg.scene')).toBe(true);
-    expect(document.querySelector('.unknown-mark')?.textContent).toBe('?');
-    expect(has('.road-march') || has('.road-found') || has('.ban-ring') || has('.grow')).toBe(
-      false,
-    );
+    const layers = [...document.querySelectorAll('.backdrop > .layer')].map((e) => e.classList[0]);
+    expect(layers).toEqual(['scene', 'fog', 'motion', 'capitals']);
   });
 
-  it('searching: rings grow from the own capital and the road marches', () => {
+  it('idle: a question mark where the enemy capital is, no hole in the fog', () => {
+    render('idle');
+    expect(document.querySelector('.unknown-mark')?.textContent).toBe('?');
+    expect(has('.sight-hole') || has('.ban-ring')).toBe(false);
+  });
+
+  it('searching: the scout opens a hole in the fog round itself (DEC-35)', () => {
     render('search');
-    expect(document.querySelectorAll('.grow')).toHaveLength(2);
-    expect(has('.road-march')).toBe(true);
+    const hole = document.querySelector('.sight-hole');
+    expect(hole).not.toBeNull();
+    expect(Number(hole?.getAttribute('r'))).toBeGreaterThan(0);
     expect(has('.unknown-mark')).toBe(true);
   });
 
-  it('found: a solid road and the nick of the opponent on the enemy capital', () => {
-    render('found', 'Vega');
-    expect(has('.road-found')).toBe(true);
-    expect(has('.road-march')).toBe(false);
-    expect(document.querySelector('.nick-text')?.textContent).toBe('Vega');
-    expect(has('.unknown-mark')).toBe(false);
+  it('found and confirmed: the nick of the opponent on the enemy capital, the fog open', () => {
+    for (const phase of ['found', 'confirmed'] as const) {
+      render(phase, 'Vega');
+      expect(document.querySelector('.nick-text')?.textContent).toBe('Vega');
+      expect(has('.unknown-mark')).toBe(false);
+      expect(has('.sight-hole')).toBe(true);
+      void unmount(component as Record<string, unknown>);
+      component = undefined;
+    }
   });
 
   it('banned: a dashed amber ring on the own capital', () => {
     render('banned');
     expect(has('.ban-ring')).toBe(true);
+    expect(has('.sight-hole')).toBe(false);
   });
 
   it('shortens a long nick on the map', () => {
     render('found', 'AVeryLongNickName');
     expect(document.querySelector('.nick-text')?.textContent).toBe('AVeryLongNi…');
+  });
+
+  it('tints the terrain by the season', () => {
+    setSeasonOverride('winter');
+    render('idle');
+    expect(document.querySelector('.backdrop')?.classList.contains('winter')).toBe(true);
   });
 });
