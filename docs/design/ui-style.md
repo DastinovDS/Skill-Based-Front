@@ -17,7 +17,7 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/objects-style.html`](mockups/objects-style.html) (units, cities, barracks and "Defense", menu icons, #337),
 [`mockups/progress-style.html`](mockups/progress-style.html) (CP bar and the progress of barracks construction, warehouse upgrades and recruiting, #430: **[accepted]** 2026-10-28, section 32; the owner asked for it on 2026-10-28, after the mechanics freeze, so the postponement of section 23 does not apply to it),
 [`mockups/start-menu.html`](mockups/start-menu.html) (the start menu and the pre-match screens, #471: **[awaiting the owner's decision]**, section 31; asked for before the release on 2026-10-28),
-[`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html) (planned orders, unit tokens, cities and provinces, #431, round 1; asked for before the release on 2026-10-28) and its round 2 [`mockups/tokens-cities-orders-r2.html`](mockups/tokens-cities-orders-r2.html) (after the owner's feedback of 2026-10-29: **[awaiting the owner's decision]**, section 33). All of them are
+[`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html) (planned orders, unit tokens, cities and provinces, #431, round 1; asked for before the release on 2026-10-28) its round 2 [`mockups/tokens-cities-orders-r2.html`](mockups/tokens-cities-orders-r2.html) and round 3 [`mockups/tokens-cities-orders-r3.html`](mockups/tokens-cities-orders-r3.html) (after the owner's feedback of 2026-10-29 on rounds 1 and 2: **[awaiting the owner's decision]**, section 33). All of them are
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
 only links and our descriptions.
@@ -1692,13 +1692,13 @@ Status: **[accepted]**, the owner's decision of 2026-10-28 (issue #430, mockup [
 
 ## 33. Planned orders, unit tokens, cities and provinces (#431)
 
-Status: **[awaiting the owner's decision]** (round 2). The owner asked for this round before the release on 2026-10-28 (issue #431, the cities and provinces part added the same day), so the postponement of section 23 does not apply to it. Until the choice, sections 9.4, 9.5 and 9.7 stay as they are; #433 (the row of squares) waits for the units part.
+Status: **[awaiting the owner's decision]** (round 3). The owner asked for this round before the release on 2026-10-28 (issue #431, the cities and provinces part added the same day), so the postponement of section 23 does not apply to it. Until the choice, sections 9.4, 9.5 and 9.7 stay as they are; #433 (the row of squares) waits for the units part.
 
 ### 33.1 Round 1 (superseded by round 2 for the choice)
 
 Mockup: [`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html), frames in [`mockups/img/431/`](mockups/img/431/), kept unchanged. Variants: orders O1 Slim arc, O2 Medallion, O3 Beads, O4 Rail and target; units U1+U4 Row, UB, UC, UD; cities CA Tidy, CB Banner, CC Citadel, CD Skyline; provinces P1 Pip, P2 Plot, P3 Pennant, P4 Field. The owner's feedback of 2026-10-29 (recorded in #431): **orders**: the current look is the favourite; no thinner orders, nothing that loads the interface (like O3), only experiments with the existing look (opacity, fill, textures), no overlaps, nothing that looks unfinished; in O1 the head stood apart from the line, which must not happen. **Units**: round 1 changed only the fill and the charge display; other shapes and a richer look are wanted, in the neutral setting (the battery look stays rejected). **Cities** and **provinces**: leave the plain circle, richer structure and textures.
 
-### 33.2 Round 2
+### 33.2 Round 2 (superseded by round 3 for the choice)
 
 Mockup: [`mockups/tokens-cities-orders-r2.html`](mockups/tokens-cities-orders-r2.html), frames in [`mockups/img/431-r2/`](mockups/img/431-r2/). The same shell as round 1 (the `ridge` fragment at zoom 0.45, 0.7, 1.0, 1.5, the 9 s clock, the state matrices, grayscale, reduced motion, the frame in the address, the DEC-35 fog with the owner's display decision of 2026-10-29). Textures are SVG patterns in the mockup; in the client each look is one baked texture (SpriteCache, AGENTS.md 7.2), and each variant card gives its bake and FPS cost.
 
@@ -1714,5 +1714,26 @@ Rules the round keeps for every variant: the new order variants stop the head at
 | Scene, recommended set | Scene, Now |
 | --- | --- |
 | ![recommended](mockups/img/431-r2/scene-recommended.png) | ![now](mockups/img/431-r2/scene-now.png) |
+
+The owner's feedback of 2026-10-29 on round 2 (recorded in #431): **orders**: the direction is OD Embossed, show variations of it; **units**: more variants, but no squares or blocks, no banners, no pawns, nothing borrowed from chess or war-game counters, no recognizable setting for now; **cities**: the CE Curtain wall direction without the medieval setting, variants in that direction; **provinces**: a rework consistent with the new cities.
+
+### 33.3 Round 3
+
+Mockup: [`mockups/tokens-cities-orders-r3.html`](mockups/tokens-cities-orders-r3.html), frames in [`mockups/img/431-r3/`](mockups/img/431-r3/). The same shell as round 2, plus the switch **compare with the round 2 pick**: in the matrices it draws the round 2 pick next to every new variant (OD, CE, PA; for units Now, since no round 2 unit was picked), and it adds a second scene with the round 2 picks.
+
+| Element | Variants (besides Now and the round 2 pick) | Recommendation |
+| --- | --- | --- |
+| Planned orders (variations of OD) | ODa Deep relief, ODb Low relief, ODc Fixed light, ODd Chamfer, ODe Pressed delay, ODf Engraved enemy, ODg Set (ODc + ODe + ODf) | ODg (second: ODc) |
+| Units (abstract, setting-free marks) | UG Arc ring, UH Facet, UI Fan, UJ Chevron, UK Strata, UL Orbit, UM Vane | UG (second: UH) |
+| Cities (the CE direction, no medieval language) | CF Vertex nodes, CG Segmented rim, CH Bevelled facets, CI Corner brackets, CJ Notched sides, CK Layered plates | CF (second: CG) |
+| Provinces (the city rule in small: a triangle, three sides for capacity 3) | PF Three nodes, PG Three sides, PH Facet tile, PI Corner brackets, PJ Notched outline | PF (second: PG) |
+
+The recommended set is one family, "nodes and arcs" (a place is a round mark): ODg + UG + CF + PF, `tokens-cities-orders-r3.html#o=8&u=1&c=2&p=2`. The second set, "cut facets": ODc + UH + CH + PH, `#o=4&u=2&c=4&p=4`.
+
+Rules the round keeps for every variant. **Orders**: body 16, tail 60%, head 38 x 30, the body and the head one closed outline, the tail outside the source badges and the B1 column, the head at the target rim (own) or on the open target ring (the opponent's), the bonus beside the arc; new in round 3: the arc always bulges toward the top of the screen, so it never runs over a caption; the shadow is an offset copy of the shape and the lit edge a stroke clipped to it (no filter); the light comes from the upper left (BL1). **Units**: a charged unit is a filled part of the mark, an uncharged one an empty dark part with a grey line (readable without colour); exact up to 8, a proportion above with the number on the token; the enemy has a second outline outside; no square or block grid, banner, pawn, chess piece, war-game counter or battery. **Cities**: 4, 6, 8 sides by kind and 10 for the capital, a lit mark = your unit stands there, the star badge for the capital, fixed slots (cells above, B1 on the left, VP upper right, the capital badge upper left, the warehouse places under the sign, the caption under them), no wall, tower, crenellation, bastion or gate. **Provinces**: three sides for capacity 3, marks at radius 19-20 outside a token, a light tint or none, no dark centre and no closed ring. With the ▽ token of Now (or UK Strata) a △ province forms a six-pointed star; the round tokens do not. No variant needs a DEC, a protocol change or a simulation change. The table with pros, risks, bake and FPS cost and estimates is in #431 and on the page.
+
+| Scene, recommended set | Scene, second set |
+| --- | --- |
+| ![recommended](mockups/img/431-r3/scene-recommended.png) | ![second](mockups/img/431-r3/scene-second-set.png) |
 
 **Owner's decision:** awaiting the owner's decision.
