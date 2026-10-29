@@ -6,6 +6,10 @@ said otherwise; in E an enemy group of 4 units, 3 charged, "Attack". The view is
 terrain table of item 2 is the ``vision.by_terrain`` of ``mvp-0``; the ranges of item 4 its
 ``vision.range_starts``. Example 18 is replaced by DEC-33 (``test_dec33.py``, example 4); its road
 level part is checked here.
+
+DEC-35 (#477): own nodes are no longer sources of vision; mechanics.md reads examples 1-9, 11-15,
+17 and 18 "with an own group in M". ``_state`` puts a scout of player 0 (1 unit, 1 charged) in
+every own node, so these examples keep their sources; the DEC-35 rules have ``test_dec35.py``.
 """
 
 from collections.abc import Callable
@@ -48,8 +52,14 @@ def rules() -> Ruleset:
 
 
 def _state(mapdef: MapDef, rules: Ruleset, tick: int = 10) -> GameState:
+    """The state with a scout of player 0 in each of its nodes: the sources of the examples
+    (DEC-35, the note before the DEC-21 table)."""
     state = initial_state(mapdef, rules)
     state.tick = tick
+    for n in range(len(mapdef.nodes)):
+        if state.nodes[n].owner == 0:
+            gid = state.new_id()
+            state.groups[gid] = Group(gid, 0, 1, 1, Mode.DEFENSE, AtNode(n))
     return state
 
 

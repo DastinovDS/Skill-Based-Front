@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from gow_protocol.base import MAX_INT
 from gow_protocol.codec import decode_client, decode_server, encode
-from gow_protocol.messages import HelloMsg
+from gow_protocol.messages import HelloMsg, SnapshotMsg
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
 TOKEN = "fixture-token-not-a-secret_0123456789ABCDEF"
@@ -252,6 +252,41 @@ BAD_SERVER_FRAMES: dict[str, str | bytes] = {
 def test_bad_server_frame_is_rejected(frame: str | bytes) -> None:
     with pytest.raises(ValidationError):
         decode_server(frame)
+
+
+def _own_node0_without_a_source(data: Json) -> None:
+    """DEC-35, detail 3: the own node 0 without an own group is ``presence`` for the enemy, its
+    own data (warehouse, recruit queue, barracks, warehouse level) stays exact."""
+    _at(data, *NODE0).update(
+        detail="presence",
+        seen={
+            "tick": 120,
+            "level": "presence",
+            "enemy_modes": ["attack"],
+            "enemy_units": None,
+            "enemy_charged": None,
+            "enemy_range": None,
+        },
+    )
+
+
+def test_own_node_without_a_source_keeps_its_own_data() -> None:
+    """DEC-35, detail 3 on the wire: own data at any ``detail`` of an own node."""
+    msg = decode_server(_snapshot(_own_node0_without_a_source))
+    assert isinstance(msg, SnapshotMsg)
+    node = msg.view.nodes[0]
+    assert (node.detail.value, node.warehouse, node.recruit_queue) == ("presence", 2, 0)
+
+
+def _own_node0_in_fog(data: Json) -> None:
+    _own_node0_without_a_source(data)
+    _at(data, *NODE0).update(detail="fog")
+
+
+def test_own_data_is_never_in_fog() -> None:
+    """An own node is never in fog (DEC-35, detail 3): own data with ``fog`` is malformed."""
+    with pytest.raises(ValidationError):
+        decode_server(_snapshot(_own_node0_in_fog))
 
 
 # The token never leaks ---------------------------------------------------------------------

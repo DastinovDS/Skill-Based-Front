@@ -323,8 +323,10 @@ class Tracker:
 # Fog ------------------------------------------------------------------------------------------
 
 
-type Levels = tuple[list[Detail], list[Detail], list[bool]]
-"""Node levels, the road level visibility of edges (DEC-17) and the sources (warehouse shown)."""
+type Levels = tuple[list[Detail], list[Detail], list[bool], dict[tuple[int, int], Detail]]
+"""Node levels, the road level visibility of edges (DEC-17), the nodes whose warehouse is shown
+(own, or an own group stands there; DEC-35, detail 2) and the levels of the halves of edges by
+``(edge, node)`` (an own node without a source gives its halves none, DEC-35, detail 4)."""
 
 
 def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: Levels) -> None:
@@ -332,17 +334,18 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
 
     Hidden: numbers of enemy groups outside EXACT places (on the RANGE level only the charged:
     the range of the units shows), enemy groups in fog, in nodes and in halves of edges (may
-    vanish, new ones may appear), the orders of enemy groups, warehouses outside the sources,
-    enemy packets, the enemy's CP, stance and
+    vanish, new ones may appear), the orders of enemy groups, warehouses not shown, enemy
+    packets, the enemy's CP, stance and
     charge accumulator, the enemy's fog memory and the events of the tick; DEC-17: widths of
-    fogged edges (only upwards, roads are never torn down) and enemy builds on fogged edges;
+    fogged edges but own internal ones (only upwards, roads are never torn down; own roads are own
+    data, DEC-35, detail 5) and enemy builds on fogged edges;
     DEC-18: supply priorities of enemy cities and routes of enemy packets (transfers); DEC-19: the
     starvation countdown of enemy cities. DEC-24: the withdrawals of the enemy's groups in a fight
     (its shots and virtual shots there are public, DEC-29, DEC-32); its groups in a fight are
     visible (their counters are in ``PlayerView.fights``), the rest of them is not.
     """
     draw = data.draw
-    nodes, edges, sources = levels
+    nodes, edges, shown, halves = levels
     enemy = 1 - player
     for fid in sorted(state.fights):
         f = state.fights[fid]
@@ -360,7 +363,11 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
             g.order = None  # its counters are public in the fight, its order is not
             continue
         loc = g.location
-        level = nodes[loc.node if isinstance(loc, AtNode) else half_node(state.map, loc)]
+        level = (
+            nodes[loc.node]
+            if isinstance(loc, AtNode)
+            else halves[loc.edge, half_node(state.map, loc)]
+        )
         g.order = None  # the target of a normal order is never shown (DEC-21, item 6)
         if level is Detail.FOG and draw(st.booleans()):
             del state.groups[gid]
@@ -376,8 +383,8 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
             node = draw(st.sampled_from(fogged))
             units = draw(st.integers(1, 9))
             state.groups[gid] = Group(gid, enemy, units, 0, Mode.ATTACK, AtNode(node))
-    for n, source in enumerate(sources):
-        if not source:
+    for n, warehouse in enumerate(shown):
+        if not warehouse:
             state.nodes[n].warehouse = draw(st.integers(0, 30))
     for p in state.packets.values():
         if p.owner == enemy:
@@ -406,7 +413,9 @@ def perturb_hidden(data: st.DataObject, state: GameState, player: int, levels: L
     state.vision_memory[enemy] = VisionMemory()
     state.events = []
     for e, level in enumerate(edges):
-        if level is Detail.FOG:
+        static = state.map.edges[e]
+        own = state.nodes[static.a].owner == player == state.nodes[static.b].owner
+        if level is Detail.FOG and not own:
             edge = state.edges[e]
             edge.width = draw(st.integers(edge.width, state.map.edges[e].max_level))
     for e, level in enumerate(edges):
@@ -550,6 +559,13 @@ class MatchMachine(RuleBasedStateMachine):
             [n.detail for n in view.nodes],
             [e.detail for e in view.edges],
             [n.warehouse is not None for n in view.nodes],
+            {
+                (e.id, n): h.detail
+                for e in view.edges
+                for n, h in zip(
+                    (m.state.map.edges[e.id].a, m.state.map.edges[e.id].b), e.halves, strict=True
+                )
+            },
         )
         internal = set(m.state.groups)
         for e in view.edges:  # DEC-33: figures only on halves not in fog, never internal ids
@@ -560,6 +576,9 @@ class MatchMachine(RuleBasedStateMachine):
             road = m.state.edges[e.id]
             assert e.width <= road.width
             assert e.detail is Detail.FOG or e.width == road.width
+            ends = m.state.map.edges[e.id]
+            if m.state.nodes[ends.a].owner == player == m.state.nodes[ends.b].owner:
+                assert e.width == road.width  # own internal: own data (DEC-35, detail 5)
         capacities = node_capacities(m.state, m.rules)
         assert [n.capacity for n in view.nodes] == list(capacities)
         hidden = copy.deepcopy(m.state)

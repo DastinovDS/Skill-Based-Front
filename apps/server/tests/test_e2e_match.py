@@ -91,7 +91,7 @@ class Client:
                 msg = decode_server(raw)
                 if isinstance(msg, SnapshotMsg):
                     self.snapshots += 1
-                    check_only_visible(msg)
+                    check_only_visible(msg, self.player)
                     if msg.tick % 25 == 0:
                         await self.react(ws, msg)
                 elif isinstance(msg, MatchEndMsg):
@@ -110,12 +110,13 @@ class Client:
                 await ws.send(encode(CommandMsg(seq=self.seq, cmd=cmd)))
 
 
-def check_only_visible(snapshot: SnapshotMsg) -> None:
+def check_only_visible(snapshot: SnapshotMsg, player: int) -> None:
     """The view holds nothing from a node the player does not see."""
     view = snapshot.view
     for node in view.nodes:
-        if node.detail is not Detail.EXACT:
-            assert node.warehouse is None  # no numbers outside EXACT nodes
+        if node.detail is not Detail.EXACT and node.owner != player:
+            # No foreign warehouse outside EXACT nodes; an own node shows its own (DEC-35).
+            assert node.warehouse is None
         if node.detail in (Detail.RANGE, Detail.PRESENCE):
             assert node.seen is not None
             assert node.seen.enemy_units is None  # numbers only at EXACT (DEC-21, item 3)

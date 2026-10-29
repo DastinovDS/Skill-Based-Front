@@ -186,7 +186,7 @@ class NodeView(WireModel):
             raise ValueError("barracks only for an own city or a city of the enemy (DEC-31)")
         if self.building is not None and self.warehouse_level is None:
             raise ValueError("a building only for an own city")
-        if self.warehouse is not None and self.detail is Detail.FOG:
+        if self.warehouse is not None and self.detail is not Detail.EXACT and not own_data:
             raise ValueError("a warehouse only for an own node or a node with an own group")
         _check_seen(self.detail, self.seen)
         if self.attrition_in is not None and self.grace_left is not None:

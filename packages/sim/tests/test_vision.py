@@ -1,4 +1,4 @@
-"""Vision (SIM-03): detail levels of DEC-21 and DEC-10 on the test maps, is_visible, fog memory.
+"""Vision (SIM-03): detail levels of DEC-21 and DEC-35 on the test maps, is_visible, fog memory.
 
 Expected levels are worked out by hand from the terrain table of DEC-21, item 2 (mechanics.md,
 section 10) and the map files (terrain: p plains, f forest, m mountains):
@@ -109,41 +109,46 @@ def test_standing_group_makes_its_node_exact(rules: Ruleset) -> None:
     assert _levels(state, 1) == ([F, F, F, P, F, E, E], [F, F, F, P, P, F])
 
 
-def test_group_on_edge_sees_its_own_edge(rules: Ruleset) -> None:
-    # DEC-10 (#112), items 1, 2, 4, 5. Player 0 lost both of its nodes; its group on e1 (1 -> 3)
-    # stands nowhere: no node gets a level, but its own edge leaves the fog and both halves of it
-    # are presence. The other edges of 1 and 3 stay in fog.
+def test_group_on_edge_is_a_source_in_its_half(rules: Ruleset) -> None:
+    # DEC-35, item 3 and detail 1. Player 0 lost both of its nodes; its group on e1 (1 -> 3) is
+    # at the border point heading to 3: a source in 3 (mountains), exact. From the mountains of 3:
+    # forest 1 and 5 a range, mountains 2 and 4 a range. The edges with the end 3 leave the fog.
     state = _state("choke", rules)
     state.nodes[0].owner = 1
     state.nodes[1].owner = 1
     state.groups.clear()
     own = _add(state, 0, OnEdge(edge=1, from_node=1, progress=500))
-    enemy = _add(state, 1, OnEdge(edge=1, from_node=3, progress=100))
-    elsewhere = _add(state, 1, OnEdge(edge=0, from_node=0, progress=900))  # e0 = 0 - 1
+    enemy = _add(state, 1, OnEdge(edge=1, from_node=3, progress=100))  # the half of 3
+    on_half_1 = _add(state, 1, OnEdge(edge=0, from_node=0, progress=900))  # e0 = 0 - 1
+    in_fog = _add(state, 1, OnEdge(edge=3, from_node=6, progress=100))  # e3 = 6 - 5, half of 6
     standing = _add(state, 1, AtNode(3))
-    assert _levels(state, 0) == ([F] * 7, [F, P, F, F, F, F])
+    assert _levels(state, 0) == ([F, R, R, E, R, R, F], [F, P, P, F, P, P])
     v = compute_vision(state, rules, 0)
-    assert (v.half(1, 1), v.half(1, 3), v.half(0, 1), v.half(2, 3)) == (P, P, F, F)
-    assert v.sources == (False,) * 7
-    assert v.edge_sources == (False, True, False, False, False, False)
+    assert (v.half(1), v.half(3), v.half(0), v.half(6)) == (R, E, F, F)
+    assert v.sources == (False, False, False, True, False, False, False)
+    assert v.stands == (False,) * 7  # no own group stands anywhere (DEC-35, detail 2)
     assert edge_detail_level(state, 0, 1) is P
-    assert visible_edges(state, 0) == (1,)
-    assert visible_nodes(state, rules, 0) == ()
+    assert visible_edges(state, 0) == (1, 2, 4, 5)
+    assert visible_nodes(state, rules, 0) == (1, 2, 3, 4, 5)
     assert is_visible(state, rules, 0, own)
     assert is_visible(state, rules, 0, enemy)
-    assert not is_visible(state, rules, 0, elsewhere)
-    assert not is_visible(state, rules, 0, standing)
+    assert is_visible(state, rules, 0, on_half_1)
+    assert not is_visible(state, rules, 0, in_fog)
+    assert is_visible(state, rules, 0, standing)
 
 
-def test_edge_source_keeps_a_better_level_of_the_half(rules: Ruleset) -> None:
-    # DEC-10, item 2: the half of an exact or range node keeps its level. diamond: e0 = 0 - 1,
-    # node 1 (forest) is a range for player 0, node 0 its exact capital.
+def test_group_on_edge_before_the_border_sees_from_the_node_it_left(rules: Ruleset) -> None:
+    # DEC-35, item 3. diamond: the own group on e2 = 3 - 2 at ``pos`` 300 from 3 (the enemy
+    # capital, mountains) heading to 2: in the half of 3, so 3 is a source and exact; forest 2
+    # and 1 from the mountains of 3: a range. The own capital 0 keeps its garrison: a source.
     state = _state("diamond", rules)
-    _add(state, 0, OnEdge(edge=2, from_node=3, progress=300))  # e2 = 3 - 2 (fog for player 0)
+    _add(state, 0, OnEdge(edge=2, from_node=3, progress=300))
     v = compute_vision(state, rules, 0)
-    assert _levels(state, 0) == ([E, R, R, F], [P, P, P, F])
-    assert (v.half(2, 3), v.half(2, 2)) == (P, R)  # the half of the fogged 3, of the range 2
-    assert (v.half(0, 0), v.half(0, 1)) == (E, R)
+    assert _levels(state, 0) == ([E, R, R, E], [P, P, P, P])
+    assert (v.half(3), v.half(2)) == (E, R)
+    assert (v.half(0), v.half(1)) == (E, R)
+    assert v.sources == (True, False, False, True)
+    assert v.stands == (True, False, False, False)
 
 
 def test_single_node_and_edge_queries(rules: Ruleset) -> None:
@@ -215,7 +220,7 @@ def test_own_entities_are_always_visible(rules: Ruleset) -> None:
     assert edge_detail_level(state, 0, 3) is F  # e3: 5 - 6; an own packet gives no vision
     assert is_visible(state, rules, 0, packet)
     far_group = _add(state, 0, OnEdge(edge=3, from_node=5, progress=10))
-    assert edge_detail_level(state, 0, 3) is P  # an own group on it does (DEC-10, item 5)
+    assert edge_detail_level(state, 0, 3) is P  # an own group on it does (DEC-35, detail 7)
     assert is_visible(state, rules, 0, far_group)
 
 

@@ -4,6 +4,10 @@ Expected values are the table of worked examples of DEC-33 (mechanics.md, sectio
 test per item of "Details": own city M (player 0, plains, a source) and the edge M-E with ``a`` = M,
 the border point 500 unless said otherwise, ``pos`` in thousandths from ``a``; an enemy group of
 4 units, 3 charged, "Attack" goes from E to M. The view is player 0's (``EdgeView.enemy_groups``).
+
+DEC-35 (#477): own nodes are no longer sources of vision; mechanics.md reads the examples with "M,
+a source" as "an own group stands in M". ``_state`` puts a scout of player 0 (1 unit, 1 charged)
+in every own node, so these examples keep their sources; the DEC-35 rules have ``test_dec35.py``.
 """
 
 from collections.abc import Callable, Sequence
@@ -48,8 +52,14 @@ def rules() -> Ruleset:
 
 
 def _state(mapdef: MapDef, rules: Ruleset, tick: int = 10) -> GameState:
+    """The state with a scout of player 0 in each of its nodes: the sources of the examples
+    (DEC-35, the note before the DEC-33 table)."""
     state = initial_state(mapdef, rules)
     state.tick = tick
+    for n in range(len(mapdef.nodes)):
+        if state.nodes[n].owner == 0:
+            gid = state.new_id()
+            state.groups[gid] = Group(gid, 0, 1, 1, Mode.DEFENSE, AtNode(n))
     return state
 
 
@@ -272,20 +282,23 @@ def test_example_12_a_group_in_a_fight_is_not_a_figure(
     assert view.edges[0].enemy_groups == ()
     (fight,) = view.fights
     assert (fight.edge, fight.point, fight.enemy_units, fight.enemy_charged) == (0, 1300, 4, 3)
-    assert view.edges[0].halves[1].seen == Sighting(10, R, (Mode.ATTACK,), None, None, (3, 5))
+    # DEC-35, detail 6: the own group in the fight is a source in the half of the fight point
+    # (1300 / 2 = 650, past the border point toward E), so the half of E is exact.
+    assert view.edges[0].halves[1].seen == Sighting(10, E, (Mode.ATTACK,), 4, 3)
 
 
 def test_example_13_own_group_on_an_edge_sees_its_edge(
     make_fog_map: MakeMap, rules: Ruleset
 ) -> None:
-    """An own group stands on the edge E-F, no source next to it: as revised by DEC-10 (#112),
-    the halves of E-F are presence, the enemy group on E-F is a figure without numbers."""
+    """An own group stands on the edge E-F, no source next to it: as revised by DEC-35, the own
+    group at the border point heading to F (forest) is a source in F; the enemy group at 400 is in
+    the half of E (plains from forest: ``RANGE``), a figure with the range "3-5"."""
     mapdef = make_fog_map("ppff", [(M_NODE, 3), (3, E_NODE), (E_NODE, F_NODE)])  # M - X - E - F
     state = _state(mapdef, rules)
     _group(state, 0, OnEdge(edge=2, from_node=E_NODE, progress=500), units=1, charged=1)
     _group(state, 1, OnEdge(edge=2, from_node=E_NODE, progress=400))
     (figure,) = _figures(state, rules, 2)
-    assert _shown(figure) == (400, True, P, Mode.ATTACK, None, None, None)
+    assert _shown(figure) == (400, True, R, Mode.ATTACK, None, None, (3, 5))
 
 
 # "Details", one test per item --------------------------------------------------------------------
@@ -475,8 +488,8 @@ def test_detail_11_bots_get_the_same_view(
     mapdef = load_map(ROOT / "maps" / "fixtures" / "pass.json")
     recorders = [_Recorder(expand_bot(mapdef, mvp_rules), p, mvp_rules) for p in (0, 1)]
     run_headless(
-        mapdef, mvp_rules, recorders, max_ticks=1500, match_key=KEY, observer=_Observer(recorders)
-    )
+        mapdef, mvp_rules, recorders, max_ticks=4000, match_key=KEY, observer=_Observer(recorders)
+    )  # DEC-35: only groups see, so the first figures come later than with own nodes as sources
     assert sum(r.figures for r in recorders) > 0
 
 
