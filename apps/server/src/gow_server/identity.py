@@ -163,7 +163,7 @@ def create_guest(
     limiter: Annotated[SlidingWindowLimiter, Depends(_guest_limiter)],
     policy: Policy,
 ) -> GuestCreated:
-    enforce(limiter, _client_ip(request), "too many guests from this address")
+    enforce(limiter, client_ip(request), "too many guests from this address")
     _check_policy(policy, body.nick)
     key = nick_key(body.nick)
     if session.execute(select(Player.id).where(Player.nick_key == key)).first() is not None:
@@ -240,7 +240,7 @@ def login(
     password). Rate limited per client IP and per nick. The previous token stops working.
     """
     limits: Limits = request.app.state.limits
-    client = _client_ip(request)
+    client = client_ip(request)
     enforce(limits.login_ip, client, "too many logins")
     try:
         key: str | None = nick_key(body.nick)
@@ -302,7 +302,7 @@ def _issue_token(player: Player, session: DbSession, response: Response) -> Gues
     return GuestCreated(player_id=player.id, token=token)
 
 
-def _client_ip(request: Request) -> str:
+def client_ip(request: Request) -> str:
     # request.client is the real client address: uvicorn resolves X-Forwarded-For only from
     # the trusted proxies in GOW_FORWARDED_ALLOW_IPS. The key of IPv6 is its /64 (#415).
     return ip_key(request.client.host) if request.client else "unknown"

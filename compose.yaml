@@ -54,6 +54,9 @@ services:
       GOW_REPLAY_CLEANUP_INTERVAL_S: ${GOW_REPLAY_CLEANUP_INTERVAL_S:-3600}
       GOW_MAX_REQUEST_BODY_BYTES: ${GOW_MAX_REQUEST_BODY_BYTES:-32768}
       # Logins and passwords (#374): attempts per window, per client IP, per nick from one IP, per nick overall; password changes.
+      # Public reads without a token (leaderboard, profiles, LB-01 #78): requests per client IP per window.
+      GOW_PUBLIC_READ_RATE_LIMIT: ${GOW_PUBLIC_READ_RATE_LIMIT:-60}
+      GOW_PUBLIC_READ_RATE_WINDOW_S: ${GOW_PUBLIC_READ_RATE_WINDOW_S:-60}
       GOW_LOGIN_IP_RATE_LIMIT: ${GOW_LOGIN_IP_RATE_LIMIT:-20}
       GOW_LOGIN_IP_RATE_WINDOW_S: ${GOW_LOGIN_IP_RATE_WINDOW_S:-600}
       GOW_LOGIN_NICK_RATE_LIMIT: ${GOW_LOGIN_NICK_RATE_LIMIT:-10}

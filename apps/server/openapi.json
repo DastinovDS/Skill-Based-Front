@@ -430,6 +430,80 @@
         }
       }
     },
+    "/api/leaderboard": {
+      "get": {
+        "tags": [
+          "leaderboard"
+        ],
+        "summary": "Get Leaderboard",
+        "description": "The top 100 by the displayed rating ``r - 2 * RD``.\n\nOnly password accounts that are not blocked and finished calibration (DEC-34): at least\n``min_rated_matches`` rating-changing matches. Public; rate limited per client IP.",
+        "operationId": "get_leaderboard_api_leaderboard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Leaderboard"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/players/{player_id}": {
+      "get": {
+        "tags": [
+          "leaderboard"
+        ],
+        "summary": "Get Player",
+        "description": "Rating, rank, records and the last 20 matches of a player (a guest or an account).\n\nPublic; rate limited per client IP. An optional ``Authorization: Bearer <token>`` lets the\nreplay links of the caller's own unrated matches open (``replay.state`` ``ready``); for\nanyone else they are ``private``. 404 for an unknown or blocked player.",
+        "operationId": "get_player_api_players__player_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "player_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Player Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerProfile"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such player, or the account is blocked."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/matches": {
       "post": {
         "tags": [
@@ -1093,6 +1167,69 @@
         ],
         "title": "InviteOut"
       },
+      "Leaderboard": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/LeaderboardEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "min_rated_matches": {
+            "type": "integer",
+            "title": "Min Rated Matches"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entries",
+          "total",
+          "min_rated_matches"
+        ],
+        "title": "Leaderboard"
+      },
+      "LeaderboardEntry": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "player_id": {
+            "type": "integer",
+            "title": "Player Id"
+          },
+          "nick": {
+            "type": "string",
+            "title": "Nick"
+          },
+          "rating": {
+            "type": "integer",
+            "title": "Rating"
+          },
+          "rated_matches": {
+            "type": "integer",
+            "title": "Rated Matches"
+          },
+          "record": {
+            "$ref": "#/components/schemas/Record"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "player_id",
+          "nick",
+          "rating",
+          "rated_matches",
+          "record"
+        ],
+        "title": "LeaderboardEntry"
+      },
       "LobbyEntry": {
         "properties": {
           "code": {
@@ -1198,6 +1335,116 @@
         ],
         "title": "MapSummary"
       },
+      "MatchEntry": {
+        "properties": {
+          "match_id": {
+            "type": "integer",
+            "title": "Match Id"
+          },
+          "map_id": {
+            "type": "string",
+            "title": "Map Id"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "ticks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticks"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "win",
+              "loss",
+              "draw"
+            ],
+            "title": "Result"
+          },
+          "end_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Reason"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MatchKind"
+          },
+          "unrated_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnratedReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "opponent": {
+            "$ref": "#/components/schemas/Opponent"
+          },
+          "rating_change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RatingChange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "replay": {
+            "$ref": "#/components/schemas/ReplayLink"
+          }
+        },
+        "type": "object",
+        "required": [
+          "match_id",
+          "map_id",
+          "ended_at",
+          "ticks",
+          "result",
+          "end_reason",
+          "kind",
+          "unrated_reason",
+          "opponent",
+          "rating_change",
+          "replay"
+        ],
+        "title": "MatchEntry"
+      },
+      "MatchKind": {
+        "type": "string",
+        "enum": [
+          "rated",
+          "calibration",
+          "unrated",
+          "casual",
+          "bot"
+        ],
+        "title": "MatchKind"
+      },
       "Me": {
         "properties": {
           "player_id": {
@@ -1245,6 +1492,36 @@
         ],
         "title": "NickChange"
       },
+      "Opponent": {
+        "properties": {
+          "player_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Id"
+          },
+          "nick": {
+            "type": "string",
+            "title": "Nick"
+          },
+          "bot": {
+            "type": "boolean",
+            "title": "Bot"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "nick",
+          "bot"
+        ],
+        "title": "Opponent"
+      },
       "PasswordSet": {
         "properties": {
           "password": {
@@ -1271,6 +1548,85 @@
         ],
         "title": "PasswordSet",
         "description": "A new password; ``old_password`` is required when the account already has one."
+      },
+      "PlayerProfile": {
+        "properties": {
+          "player_id": {
+            "type": "integer",
+            "title": "Player Id"
+          },
+          "nick": {
+            "type": "string",
+            "title": "Nick"
+          },
+          "has_password": {
+            "type": "boolean",
+            "title": "Has Password"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "calibration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Calibration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rated_matches": {
+            "type": "integer",
+            "title": "Rated Matches"
+          },
+          "rated_record": {
+            "$ref": "#/components/schemas/Record"
+          },
+          "record": {
+            "$ref": "#/components/schemas/Record"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/MatchEntry"
+            },
+            "type": "array",
+            "title": "Matches"
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id",
+          "nick",
+          "has_password",
+          "rating",
+          "rank",
+          "calibration",
+          "rated_matches",
+          "rated_record",
+          "record",
+          "matches"
+        ],
+        "title": "PlayerProfile"
       },
       "QueueBan": {
         "properties": {
@@ -1397,6 +1753,53 @@
         ],
         "title": "QueueStatus"
       },
+      "RatingChange": {
+        "properties": {
+          "before": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": -2147483647.0,
+            "title": "Before"
+          },
+          "after": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": -2147483647.0,
+            "title": "After"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "before",
+          "after"
+        ],
+        "title": "RatingChange",
+        "description": "The rating of the receiving player before and after a rated match (RAT-02, #75).\n\nBoth numbers are the displayed rating (``r - 2 * RD``, RAT-01), rounded to integers."
+      },
+      "Record": {
+        "properties": {
+          "wins": {
+            "type": "integer",
+            "title": "Wins"
+          },
+          "losses": {
+            "type": "integer",
+            "title": "Losses"
+          },
+          "draws": {
+            "type": "integer",
+            "title": "Draws"
+          }
+        },
+        "type": "object",
+        "required": [
+          "wins",
+          "losses",
+          "draws"
+        ],
+        "title": "Record"
+      },
       "ReplayGone": {
         "properties": {
           "detail": {
@@ -1420,6 +1823,41 @@
         "title": "ReplayGone",
         "description": "Body of ``410``. ``reason`` ``expired``: the retention removed the files (SRV-08);\n``unavailable``: the match is over and no frames were or will be made."
       },
+      "ReplayLink": {
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/ReplayLinkState"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "url"
+        ],
+        "title": "ReplayLink"
+      },
+      "ReplayLinkState": {
+        "type": "string",
+        "enum": [
+          "ready",
+          "preparing",
+          "expired",
+          "unavailable",
+          "private"
+        ],
+        "title": "ReplayLinkState"
+      },
       "ReplayPreparing": {
         "properties": {
           "status": {
@@ -1432,6 +1870,19 @@
         "type": "object",
         "title": "ReplayPreparing",
         "description": "Body of ``202``: the replay will be there shortly (or when the match is over)."
+      },
+      "UnratedReason": {
+        "type": "string",
+        "enum": [
+          "casual",
+          "guest",
+          "opponent_guest",
+          "opponent_calibrating",
+          "opponent_limit",
+          "opponent_early_resign"
+        ],
+        "title": "UnratedReason",
+        "description": "Why a match did not change your rating (DEC-34, #414)."
       },
       "ValidationError": {
         "properties": {

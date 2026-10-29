@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     queue_rate_window_s: int = 60
     """At most ``queue_rate_limit`` queue entries per player within ``queue_rate_window_s``
     seconds; used by the matchmaking queue (MM-01, ``app.state.limits.queue``)."""
+    public_read_rate_limit: int = 60
+    public_read_rate_window_s: int = 60
+    """At most ``public_read_rate_limit`` requests per client IP within the window to the public
+    read endpoints that need no token: the leaderboard and player profiles (LB-01, #78)."""
     nick_change_rate_limit: int = 3
     nick_change_rate_window_s: int = 86400
     """At most ``nick_change_rate_limit`` nick changes per player within the window (MOD-01)."""

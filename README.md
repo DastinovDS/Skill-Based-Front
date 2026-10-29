@@ -178,6 +178,7 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_QUEUE_PASS_S`, `GOW_QUEUE_CONFIRM_S` | `1`, `15` | MM-01: no more than one matchmaking pass per N seconds; the time to confirm a found pair |
 | `GOW_QUEUE_BOT_OFFER_S`, `GOW_QUEUE_STALE_S` | `60`, `15` | MM-01: after how many seconds of waiting to offer a bot; a player whose client is silent for that many seconds leaves the queue |
 | `GOW_NICK_CHANGE_RATE_LIMIT`, `GOW_NICK_CHANGE_RATE_WINDOW_S` | `3`, `86400` | MOD-01: no more than N nick changes (`PUT /api/me/nick`) per player per window |
+| `GOW_PUBLIC_READ_RATE_LIMIT`, `GOW_PUBLIC_READ_RATE_WINDOW_S` | `60`, `60` | LB-01, #78: no more than N requests per IP per window to `GET /api/leaderboard` and `GET /api/players/{id}` (no token needed) |
 | `GOW_LOGIN_IP_RATE_LIMIT`, `GOW_LOGIN_IP_RATE_WINDOW_S` | `20`, `600` | #374: no more than N login attempts (`POST /api/login`) from one IP per window |
 | `GOW_LOGIN_NICK_RATE_LIMIT`, `GOW_LOGIN_NICK_RATE_WINDOW_S` | `10`, `600` | #374, #492: no more than N login attempts to one nick (by `nick_key`) from one IP per window (a third party cannot use up the owner's budget) |
 | `GOW_LOGIN_NICK_TOTAL_RATE_LIMIT` | `200` | #492: a high ceiling on login attempts to one nick from all IPs together per `GOW_LOGIN_NICK_RATE_WINDOW_S`; reaching it raises the `login_nick_flood` alert |
@@ -236,6 +237,16 @@ Guest identity (ID-01):
   A `422` response does not repeat the submitted values (`input`). There is no password recovery, reset with `gow-admin reset-password`.
 - `GET /api/me/active-match` → `{match_id, map_id}` of the player's running match or `null` (#189). With it the client
   returns to the match after a page reload: a WebSocket with the same token within the reconnect window (DEC-05).
+- `GET /api/leaderboard` → `{entries, total, min_rated_matches}` (LB-01, #78): the top 100 by the displayed rating
+  `r - 2·RD`; only password accounts that are not blocked and finished calibration (DEC-34). An entry is
+  `{rank, player_id, nick, rating, rated_matches, record{wins, losses, draws}}`. `GET /api/players/{id}` → the profile
+  `{player_id, nick, has_password, rating, rank, calibration, rated_matches, rated_record, record, matches}`: `rating`,
+  `rank` are `null` for a guest and during calibration (`calibration {played, total}`); `matches` are the last 20
+  finished matches of any kind (`kind` `rated`, `calibration`, `unrated`, `casual`, `bot`; the opponent; the rating
+  change, hidden for calibration matches; `replay {state, url}` with `state` `ready`, `preparing`, `expired`,
+  `unavailable` or `private`: the replay of an unrated match opens only for its players, so an optional
+  `Authorization` header tells who asks). Both need no token and share a per-IP limit (`GOW_PUBLIC_READ_RATE_LIMIT`);
+  `404` for an unknown or blocked player.
 - A nick: 3-16 characters after NFC normalization; letters of any alphabet, digits, `_` and `-`. Spaces, punctuation,
   emoji and "empty" filler letters are forbidden. Uniqueness is case-insensitive: the column
   `nick_key = nick.casefold()` with a unique index (`Straße` and `STRASSE` count as one nick).
