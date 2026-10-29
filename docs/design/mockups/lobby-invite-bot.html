@@ -558,7 +558,7 @@ function backdrop(o){const M=MAPDATA[o.id],W=1280,H=720,left=o.left||520;
   s+=`<g mask="url(#mv)"><rect x="${fogX-120}" y="0" width="${1280-fogX+120}" height="720" fill="url(#gf)"/><rect x="${fogX-60}" y="0" width="${1280-fogX+60}" height="720" fill="url(#hf)"/></g>`;
   if(o.unknown)s+='</g>';
   const a=front[0],e=front[front.length-1];
-  if(o.ban)s+=`<circle class="pulse" cx="${a[0]}" cy="${a[1]}" r="24" fill="none" stroke="#ffb020" stroke-width="2.4" stroke-dasharray="6 4"/>`;
+  if(o.ban)s+=`<circle class="pulse" cx="${a[0]}" cy="${a[1]}" r="31" fill="none" stroke="#ffb020" stroke-width="2.4" stroke-dasharray="6 4"/>`;
   if(o.phase==='wait')s+=[0,1].map(i=>`<circle class="ring" style="animation-delay:${i*1.2}s" cx="${a[0]}" cy="${a[1]}" r="16" fill="none" stroke="#5b9bff" stroke-width="2"/>`).join('');
   s+=city(a[0],a[1],15,'you',{star:1})+segRing(a[0],a[1],22,5,1);
   if(o.phase==='found'||o.phase==='seat'){const dash=o.phase==='seat';
@@ -599,13 +599,13 @@ function skeleton(){return '<div class="ents"><i class="sk"></i><i class="sk"></
 function mapB(m,d,o={}){d=S.mapst||d;const opts=o.nomaps?['random']:['random',...MIDS],sel=opts.includes(m.map)?m.map:'random',idx=opts.indexOf(sel);
   let h=`<div class="label">Map</div>`;
   if(d==='r')h+=`<div class="sg" style="margin-top:8px" role="group" aria-label="Map">${opts.map(id=>`<button class="${id===sel?'on':''}" data-act="map:${id}">${id==='random'?'Random':id}</button>`).join('')}</div>`;
-  else if(d==='d'||d==='t'){const card=id=>`<div class="tl${id===sel?' on':''}" data-act="map:${id}" role="button" tabindex="0">${id==='random'?`<div class="rnd">${tri('ghost',30,1)}</div>`:`<div class="th">${need('GET /api/maps/'+id+' (exists)',thumb(id))}</div>`}<div class="row2"><b>${mlab(id)}</b><small>${id==='random'?'':MSTAT[id].n+' nodes'}</small></div></div>`;
+  else if(d==='d'||d==='t'){const card=id=>`<div class="tl${id===sel?' on':''}" data-act="map:${id}" role="button" tabindex="0">${id==='random'?`<div class="rnd">${tri('ghost',30,1)}</div>`:`<div class="th">${need('GET /api/maps/'+id+' (exists)',thumb(id))}</div>`}<div class="row2"><b>${id==='random'&&d==='t'?'Random':mlab(id)}</b><small>${id==='random'?'':MSTAT[id].n+' nodes'}</small></div></div>`;
     h+=`<div class="${d==='d'?'tiles':'strip'}">${opts.map(card).join('')}</div>`}
   else h+=`<div class="stepper"><button class="ar${idx<=0?' off':''}" data-act="mapstep:-1" aria-label="Previous map">‹</button><div class="v"><b>${mlab(sel)}</b><small>${mstat(sel)}${sel==='random'?'':', '+MSTAT[sel].h+' roads capital to capital'}</small></div><button class="ar${idx>=opts.length-1?' off':''}" data-act="mapstep:1" aria-label="Next map">›</button></div><div class="dots">${opts.map((id,i)=>`<i class="${i===idx?'on':''}"></i>`).join('')}</div>`;
   if(o.nomaps)h+=`<p class="note">The map list did not load, so the server picks a random map.</p>`;
   return h}
 function levelB(m,d){d=S.lvst||d;const cur=LEVELS.find(l=>l[0]===m.lvl)||LEVELS[1],idx=LEVELS.indexOf(cur);
-  let h=`<div class="label">Bot level</div>`;
+  let h='';
   const pn=need('client strings, kept in step with LEVEL_BOTS (botmatch.py)','');
   if(d==='r')h+=`<div class="rows2">${LEVELS.map(l=>`<div class="lo${l[0]===cur[0]?' on':''}" data-act="lvl:${l[0]}" role="button" tabindex="0"><div class="l1"><i class="rd"></i><span class="nm">${l[1]}</span><span class="ps">${l[2]}</span>${cells(l[4],4,'Difficulty','d')}</div><div class="ds">${l[3]}</div></div>`).join('')}</div>`;
   else if(d==='d')h+=`<div class="sg" style="margin-top:8px" role="group" aria-label="Bot level">${LEVELS.map(l=>`<button class="${l[0]===cur[0]?'on':''}" data-act="lvl:${l[0]}">${l[1]}</button>`).join('')}</div><div class="lvdesc"><div class="l1"><b>${cur[2]}</b><span class="ps">${cur[1]}</span>${cells(cur[4],4,'Difficulty','d')}</div><div class="ds">${cur[3]}</div></div>`;

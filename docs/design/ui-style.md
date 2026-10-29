@@ -17,6 +17,7 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/objects-style.html`](mockups/objects-style.html) (units, cities, barracks and "Defense", menu icons, #337),
 [`mockups/progress-style.html`](mockups/progress-style.html) (CP bar and the progress of barracks construction, warehouse upgrades and recruiting, #430: **[accepted]** 2026-10-28, section 32; the owner asked for it on 2026-10-28, after the mechanics freeze, so the postponement of section 23 does not apply to it),
 [`mockups/start-menu.html`](mockups/start-menu.html) (the start menu and the pre-match screens, #471: **[awaiting the owner's decision]**, section 31; asked for before the release on 2026-10-28),
+[`mockups/lobby-invite-bot.html`](mockups/lobby-invite-bot.html) (the lobby, invite and bot screens in the language of the new menu, #473: **[awaiting the owner's decision]**, section 34; planned before the release, owner, 2026-10-29),
 [`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html) (planned orders, unit tokens, cities and provinces, #431, round 1; asked for before the release on 2026-10-28) its round 2 [`mockups/tokens-cities-orders-r2.html`](mockups/tokens-cities-orders-r2.html) and round 3 [`mockups/tokens-cities-orders-r3.html`](mockups/tokens-cities-orders-r3.html) (after the owner's feedback of 2026-10-29 on rounds 1 and 2: **[awaiting the owner's decision]**, section 33). All of them are
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
@@ -1791,3 +1792,33 @@ Principles the round derives from the research and keeps for every variant: one 
 | ![recommended](mockups/img/431-r4/scene-recommended.png) | ![set A](mockups/img/431-r4/scene-set-a-transit.png) |
 
 **Owner's decision:** awaiting the owner's decision (units, cities, provinces).
+
+---
+
+## 34. Lobby, invite and bot screens (#473)
+
+Status: **[awaiting the owner's decision]**. The owner found these screens too generic after choosing variant A "Front" for the start menu (#471, section 31) and decided on 2026-10-29 to restyle them before the release, so the postponement of section 23 does not apply.
+
+Mockup: [`mockups/lobby-invite-bot.html`](mockups/lobby-invite-bot.html), frames in [`mockups/img/473/`](mockups/img/473/). It shows the current look (**Now**) and four variants for every state of the three screens: the lobby (3 waiting, a long list, loading, empty, joining, taken and refreshed, network error), create (private, public, the map list failed, a server error), the waiting room (link, copied, listed in the lobby, an opponent joined, the opponent ready, you ready, both ready, the invite gone, the invite full) and the bot (choose, starting, a server error). Switches: a guest, a calibrating or a rated account, the queue ban, grayscale, reduced motion, "needs from the server" and "frame anatomy"; the map choice and the bot level can be mixed across variants (`#mapst=t`).
+
+Today the three screens are the plain card of `app.css` on an empty page (`LobbyScreen`, `CreateScreen`, `InviteScreen`, `BotScreen`, `MapChoice`), while the start menu and the queue are the `ScreenFrame`: the real map, a rail, the corner chip. The mockup keeps that frame and changes only what stands in the rail or beside it.
+
+| Id | Variant | Client effort | Risk |
+| --- | --- | --- | --- |
+| Now | the card on a plain page: selects of ids, equal blue buttons, no hint that the match is unrated | none | generic, leaves the frame |
+| R | **Rail**: the mode replaces the menu in the rail (same x, y, width); lobby entries are rows with the enemy triangle, the waiting room is a "versus strip" (you, a dashed road, the seat), the huge verb is the main action | M, 2 to 3 days | low |
+| D | **Dock**: the menu rail stays (Play dimmed, the open mode marked), the mode is a panel on the map with thumbnails of the real maps and a Join button per row | M, 3 days | medium (B, I, L in a waiting room, the panel covers the front) |
+| P | **Postcard**: R plus a backdrop that follows the choice: the map you pick or the host you point at, the seat shows the host, a bot with its level or a "?", a plate names the map | M to L, 3 to 4 days | medium (hover swaps the backdrop, a random map has no picture) |
+| T | **Tabs**: one screen, Friend, Open matches and Bot are the tabs (I, L, B); a thumbnail strip for maps, four cards for the bot levels | L, 4 to 5 days | medium to high (four screens become one) |
+
+No variant needs a DEC, a protocol change or a server change. The only new data is read: `LobbyEntry.age_s` is sent and unused today; the three map files (about 20 KB each) are served by `GET /api/maps/{id}`. The unrated note follows DEC-34 (the rating changes only in queue matches), the pause chip follows DEC-05 (a public match has no pauses). The bot level lines (Bunker, Counter, Expander, Rusher) are client copy about the four bots of `LEVEL_BOTS` in `botmatch.py` and must be kept in step with it.
+
+**Recommendation: R with the thumbnail strip for the map choice** (`lobby-invite-bot.html#v=r&scr=create&st=private&mapst=t`): the smallest change that ends the card look, built on the frame that exists, with the weakest part (the map choice) fixed by the real maps drawn small. P can follow later on top of R. The reasons, what the implementation touches and the questions to the owner (the bot styles, inline errors, new keys, the unrated note, dropping the create step) are in #473.
+
+| R, the lobby | R with the strip, the bot |
+| --- | --- |
+| ![R, the lobby](mockups/img/473/overview-lobby.png) | ![R with the strip, the bot](mockups/img/473/r-bot.png) |
+
+Checked in grayscale (`gray-overview-lobby.png`, `gray-overview-bot.png`): no state is carried by colour alone (a selected choice is a filled dot or a white outline, a ready player a filled dot with the word, the level is cells, the seat is the triangle with its outline, an alert is amber with `!` and text).
+
+**Owner's decision:** awaiting the owner's decision.
