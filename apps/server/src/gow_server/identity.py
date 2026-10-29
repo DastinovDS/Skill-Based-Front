@@ -30,7 +30,7 @@ from gow_server.lifecycle import MatchLifecycle, MatchState
 from gow_server.models import Player
 from gow_server.nicks import NickPolicy, skeleton, validate_nick
 from gow_server.passwords import HasherBusy, PasswordHasher, normalize
-from gow_server.ratelimit import SlidingWindowLimiter
+from gow_server.ratelimit import SlidingWindowLimiter, ip_key
 from gow_server.rating import played_of
 from gow_server.settings import Settings
 
@@ -292,8 +292,8 @@ def _issue_token(player: Player, session: DbSession, response: Response) -> Gues
 
 def _client_ip(request: Request) -> str:
     # request.client is the real client address: uvicorn resolves X-Forwarded-For only from
-    # the trusted proxies in GOW_FORWARDED_ALLOW_IPS.
-    return request.client.host if request.client else "unknown"
+    # the trusted proxies in GOW_FORWARDED_ALLOW_IPS. The key of IPv6 is its /64 (#415).
+    return ip_key(request.client.host) if request.client else "unknown"
 
 
 def _me(request: Request, player: Player, session: Session) -> Me:

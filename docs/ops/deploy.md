@@ -49,7 +49,7 @@ are enabled; [ ] `.env` has mode 600 and is not in git; [ ] backups are copied o
 ## 2. The first deploy [manual]
 
 DNS: the A record `<DOMAIN>` points to `<VPS_HOST>`, before Caddy starts (otherwise ACME will not issue a certificate).
-No AAAA record (owner's decision of 2026-10-28): the production domain is IPv4 only until the per-IP limits key IPv6 clients by their /64 (audit SRV-05, #415); otherwise a client with an IPv6 /64 gets a new address, and a new limit, for every request.
+No AAAA record (owner's decision of 2026-10-28): the production domain stays IPv4 only until the check in section 8, "IPv6 and the per-IP limits", is done on the VPS. The server keys IPv6 clients by their /64 since #415, but whether it sees the real client address behind Docker is still unverified.
 
 ```sh
 ssh gow@<VPS_HOST>
@@ -219,6 +219,37 @@ it is set to `*`: the `app` container is reachable only from the internal networ
 default `127.0.0.1`: otherwise a client will forge the address and bypass the limit. If there is one more proxy behind Caddy
 (Cloudflare and the like), `trusted_proxies` must be configured in Caddy, otherwise the limit will see the address of that
 proxy and count all players as one client.
+
+**IPv4 and IPv6 keys (#415).** Every per-IP limit (guests, logins) uses one helper, `gow_server.ratelimit.ip_key`: an IPv4 client is
+keyed by the address, an IPv6 client by its /64 prefix (a client usually controls a whole /64, so each of its addresses would be a
+fresh budget), an IPv4-mapped IPv6 address by the IPv4 address.
+
+#### IPv6 and the per-IP limits `[manual]`
+
+The code cannot tell what address Docker hands to Caddy. Hypothesis: if the `edge` network has no IPv6, Docker's userland proxy accepts
+IPv6 connections on `[::]:443` and opens a new IPv4 connection to the container, so Caddy (and the server behind it) sees the bridge
+gateway address for **every** IPv6 client. Then all IPv6 players share one key and one of them can exhaust guest creation and
+logins for the others. Owner's decision (2026-10-28): **no AAAA record until this check passes on the VPS.** Docker Desktop on macOS
+is not representative, so it cannot be checked locally.
+
+Check, on the VPS (a few minutes, the stack keeps running):
+
+1. Find the IPv6 address of the VPS (`ip -6 addr show scope global`; a Hetzner VPS has a /64). `[::]:443` is published without any DNS record.
+2. Temporarily log requests in Caddy: add `log` to the site block of `deploy/Caddyfile` (its JSON line has `request.remote_ip`),
+   `docker compose up -d --build caddy`. Do not commit this change.
+3. From a machine with IPv6 (not the VPS itself, which would use the loopback path; a phone on mobile data is fine) call
+   `curl -6 -sk --resolve <DOMAIN>:443:[<VPS_IPV6>] https://<DOMAIN>/api/maps -o /dev/null`, and the same with `curl -4`.
+4. `docker compose logs caddy | grep remote_ip`: the IPv6 request must show the client's own IPv6 address.
+   - It does: the server sees real addresses, and `ip_key` does the rest. Remove the `log` directive, rebuild Caddy, and the AAAA record
+     may be added.
+   - It shows the bridge gateway (`172.x.0.1`, `fd..`) or any address that is the same for every client: fix it before any AAAA record,
+     either with `enable_ipv6: true` on the `edge` network in `compose.yaml` (the Docker daemon needs `ip6tables` enabled in
+     `/etc/docker/daemon.json`) or with `"userland-proxy": false` in `daemon.json`. Repeat steps 3 and 4. Keep the
+     result and the fix in this section.
+5. Remove the temporary `log`, rebuild Caddy (`docker compose up -d --build caddy`) and make sure `git status` on the VPS is clean.
+
+Until it is done: IPv4 clients are keyed by their real address, so the limits hold for them. Note that the ports are published on `[::]` too,
+so a client that knows the VPS IPv6 address can connect without any AAAA record; the missing record only keeps ordinary players off IPv6.
 
 ### Nicks
 
