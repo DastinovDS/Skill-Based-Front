@@ -15,7 +15,7 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/map-style.html`](mockups/map-style.html) (map style directions, #332),
 [`mockups/map-style-2.html`](mockups/map-style-2.html) (round 2: volume, textures, fog, roads, #335),
 [`mockups/objects-style.html`](mockups/objects-style.html) (units, cities, barracks and "Defense", menu icons, #337),
-[`mockups/progress-style.html`](mockups/progress-style.html) (CP bar and the progress of barracks construction and recruiting, #430: **[awaiting the owner's decision]**; the owner asked for it on 2026-10-28, after the mechanics freeze, so the postponement of section 23 does not apply to it).,
+[`mockups/progress-style.html`](mockups/progress-style.html) (CP bar and the progress of barracks construction, warehouse upgrades and recruiting, #430: **[accepted]** 2026-10-28, section 32; the owner asked for it on 2026-10-28, after the mechanics freeze, so the postponement of section 23 does not apply to it),
 [`mockups/start-menu.html`](mockups/start-menu.html) (the start menu and the pre-match screens, #471: **[awaiting the owner's decision]**, section 31; asked for before the release on 2026-10-28). All of them are
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
@@ -43,6 +43,7 @@ recommendation are ready, there is no choice, there is no code. **[replaced]**: 
 | 26 Map style, round 2 | [accepted] 2026-10-21 (26.3): BL1-1 with the highlight of the borders of the "pronounced" one, T2 (the baker on numpy and Pillow, WebP), F1 "Haze", R1 "Stripes", the packet as a square; #335 closed | waits for implementation: #344 (the baker, T2, the `artery` scene); **implemented: BL1-1 shading with the border glow (26.3) #347, PR #409; roads R1 "Stripes" and the square packet (26.1) #345, PR #367; fog F1 "Haze" (9.8) #346, PR #368** |
 | 27 Orders, fight on the map, arena | [accepted] 2026-10-21 (27.3, shots: 29.4): orders and ribbons as now, IN3 "Sight", the bonus "◇ +N" on the head, LY2 "Over the haze", FX3, EF2 "Pointer" with "Dissolve and marks", arena AR1; #339 closed | waits for implementation: #330 (arena AR1, in progress), #353 (IN3, bonus), #354 (EF2, after #296); **implemented: fight effects FX3 #351, PR #373; layers LY2 "Over the haze" #346, PR #368; shots SH1 instead of the exchange arrows of the arena #352, PR #376** |
 | 28 Map objects and menu icons | [accepted] 2026-10-21 (28.1): U1 and the row of squares U4, C1, B1, I1 (B2 later, no issue is opened); #337 closed | waits for implementation: the row of squares U4 (#433, moved from #348, waits for a mockup, #431), B1 (#349); **implemented: U1 as part of BL1 #347, PR #409; cities C1 (warehouse places filled / frame / dashed, the province as a hollow ring) #348, PR #437**; implemented (menu icons I1): PR #362 |
+| 32 Progress indicators | [accepted] 2026-10-28 (32): CP bar C "Track", queue, barracks and warehouse build A "Cells", the alert ring for a unit ready with no room and for production stopped by a fight; #430 closed | **implemented: #439** |
 | 29 Shots in a fight | [accepted] 2026-10-21 (29.4): SH1 "Tracers", the strength "Stronger", the distance of the groups as now (46) | the strength "Stronger" and the common part (pools, the effects layer, the particle core) **implemented: #351, PR #373**; tracers SH1 **implemented: #352, PR #376** |
 
 Contents:
@@ -78,6 +79,7 @@ Contents:
 29. Shots in the fight on the map: animation variants (#339)
 30. Variant id mapping (old Cyrillic to new Latin)
 31. Start menu redesign (#471)
+32. Progress indicators: CP bar and the cells of builds and recruiting (#430, #439)
 
 ---
 
@@ -465,6 +467,7 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
 - **Owner:** a color fill plus an outline: own a white outline 3; the enemy a white outline and a dark
   inner ring; neutral a gray outline 2.
 - The capital: a white star inside (under the unit icon while the units are in the city). VP: a dark circle of radius 8.5 with a `--vp` rim and a number at the top right, outside the capacity ring (round 3, #274: inside the body it was covered by the unit icon).
+- **Progress marks (A "Cells", #439, section 32):** above the capacity ring of an own city one dark plate with the recruit queue (DEC-25) and, above it, one with the barracks or warehouse build (DEC-26). A cell is one unit of the thing; its state is a pattern: **dashed frame** = a free queue slot (only on the selected city), **frame with a dot** = a unit queued, **hatch growing to a bright head line** = in production or in the build, **solid amber cell with a dashed amber ring** = ready with no room (`recruit_waiting`), the same **dashed amber ring round the hatched cell** = production stopped by a fight in the city (DEC-25, item 9). The build plate is one wide cell behind a round badge with the kind: a house = barracks, stacked squares = warehouse (both builds share the slot). Cells are 16 x 10, the build cell 36 x 10; the hatch is coarse (a stripe 4.5 every 9 along x + y) so it does not alias at 60% scale. The plates are baked sprites (`queueMarkSpec`, `buildMarkSpec` in `bakedShapes.ts`), the growing part in whole pixels, so a look costs one texture; the ring is a sprite of its own and pulses (steady with "less motion"). The mark is hidden in the Supply view.
 - A road construction: a ribbon on the edge itself, a "1→2" plate in the middle (9.3); the city has no construction icon.
 - **Place names (#449):** the name of every node from the map file (`MapNodeFile.name`, DEC-23, item 4) is a caption under the signs of the place (under the warehouse bar of a city, under the ring of a province), one pooled `Text` per node (`render/nameView.ts`, geometry and the zoom rule in `nameLayout.ts`). It keeps its size on screen at every zoom: a city 13 px bold, a province 12 px medium and lighter (alpha 0.78), both with a dark outline for roads and terrain, never below the 12 px minimum of section 22. A city caption hides below camera scale 0.45, a province caption below 0.7 (the province, the smaller and the more numerous, goes first). The captions are in the `nodes` layer: under the groups and the fog, over the cities. Toasts, alerts and menu titles name a place by the same name (`hud/nodeName.ts`), never by its number. Where the place of a caption is moved or the look of cities changes (#431), only `captionTop` changes.
 
@@ -666,8 +669,10 @@ Height 48 px, three columns:
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **CP:** a bar of `cap / 100` segments in the `--you` color, a partial segment is hatched; the number
-  "2.4/5". At the ceiling the tooltip "CP at the ceiling: the excess is lost" (DEC-02).
+- **CP (C "Track", #439):** one notched pill track in the `--you` color, 120 x 12, a notch at every whole CP below the cap, a small white
+  head marker over the growing end; the number "2.4/5". At the cap the head goes and a dashed amber ring (pulsing) and the word `MAX` come
+  (a shape and a word, not a colour: AGENTS.md 7.4), with the tooltip "CP are at the cap: new ones are lost" (DEC-02). HTML/CSS in
+  `TopBar.svelte`, the numbers in `topBar.ts` (`cpTrack`); no map cost.
 - **Stance:** a chip with an icon, a name and `Q`; a click opens the radial menu.
 - **The VP score as a "tug of war"** (Against the Storm): nicks, numbers and a common bar, the blue part on the left,
   the red on the right, a tick mark in the middle. Under the nick a triangle of its own shape (single and double outline).
@@ -1188,6 +1193,7 @@ The principle: **one shape means one thing**, and the shape reads without color 
 | a hollow ring | a province (DEC-23): no city, no warehouse, no VP (C1, #348) | map |
 | shield / flag / little house / star | "Defense" / capture / barracks / capital | groups, cities, captions |
 | `!` in an amber circle, a dashed ring | alert: overflow, they are coming for the city | around a city |
+| a cell (a wide frame) | one unit of a count or a duration: a CP, a queued unit, a build; **frame + dot** queued, **hatch + head line** in progress, **solid** done or ready, **dashed frame** a free slot; the dashed amber ring and `MAX` on a full bar (#439) | HUD CP bar, queue and build plates at a city |
 | `✂` | starvation (cut off from the capital, DEC-19) | city, "Supply" |
 | dashed outline | what does not exist or is not visible exactly: the opponent's scheduled order, an enemy without numbers "?", a ghost, a killed chip; a bonus shot (a dashed hit ring) | map |
 | an amber crossed circle, an amber dashed ring | a silent charge (DEC-24, F2): a sign on the group and a dim ring for one round tick (FX3, #351) | map, arena |
@@ -1648,3 +1654,25 @@ Mockup: [`mockups/start-menu.html`](mockups/start-menu.html), frames in [`mockup
 No variant needs a DEC, a protocol change or a server change. Optional inputs that do not depend on the choice: the rating in `GET /api/me` and a match list for the Replays row (LB-01, #78), the "How to play" screen (#72). **Recommendation: A**, with C as the fast fallback; the reasons, the list of what the implementation touches and the questions to the owner are in #471.
 
 **Owner's decision:** awaiting the owner's decision.
+
+---
+
+## 32. Progress indicators: the CP bar and the cells of builds and recruiting (#430, #439)
+
+Status: **[accepted]**, the owner's decision of 2026-10-28 (issue #430, mockup [`mockups/progress-style.html`](mockups/progress-style.html), frames in [`mockups/img/progress/`](mockups/img/progress/)). Implemented in #439 (client only: no DEC, no protocol change, no `SIM_VERSION` or `PROTOCOL_VERSION` bump).
+
+| Element | Choice | Where in the code |
+| --- | --- | --- |
+| CP bar in the HUD | **C "Track"**: one notched pill with a head marker on the growing end; at the cap a dashed amber ring and the word `MAX` | `hud/TopBar.svelte`, `hud/topBar.ts` (`cpTrack`) |
+| Recruit queue at a city | **A "Cells"**: up to `queue_max` cells; queued = dot, in production = hatch with a head line, ready with no room = solid amber cell with a dashed amber ring, free slot = dashed frame (selected city only) | `render/progressLayout.ts`, `bakedShapes.ts` (`queueMarkSpec`), `cityView.ts` |
+| Barracks and warehouse build at a city | **A "Cells"**: one wide cell and a kind badge (house = barracks, stacked squares = warehouse); both builds use the one plate because they share the build slot | `progressLayout.ts` (`buildMark`), `bakedShapes.ts` (`buildMarkSpec`) |
+| Progress stopped by a fight in the city (DEC-25, item 9) | the dashed amber ring round the first queue cell, the hatch keeps how far the unit got | `cityView.ts` (`fights` of the snapshot) |
+| Warehouse charges at a city | unchanged: C1 of #348 (section 9.4) | |
+
+**Data (AGENTS.md 7.1).** Everything comes from the snapshot and `ruleset_public`: `recruit_queue`, `recruit_progress`, `recruit_waiting`, `building` (`kind`, `done_tick`) and `fights` of the view; `recruit.unit_ticks`, `recruit.queue_max`, `city_upgrades`. The only derivations are the share done (`progress / unit_ticks`, the build's elapsed ticks over its duration) and the choice of what to draw: a city shows free slots when it is selected, own, has a queue in the view and (with the city development) the barracks, the same test as the city menu (`cityChoices.ts`). Whether a unit is ready or the production stands is the server's `recruit_waiting` and the presence of a fight in that node.
+
+**Cost.** The plates are baked sprites, one texture per look. The key holds the cell states and the width of the growing part in whole pixels (12 of them in a queue cell, 32 in the build cell), so a look is made once and shared by every city; textures nobody shows are dropped with the cache's limit. The pulse of the ring is the alpha of one sprite. No filter per object, no `Graphics` redraw per snapshot.
+
+**Checked in grayscale and at 60%** (`mise run shots`: `progress-gray-60.png`, the scene `progress` in a 768 x 480 window with a grey filter, and `progress-selected.png`). Each state has its own pattern, so none needs the hue: a dot (queued), a hatch with a head line (in production), a solid cell (ready), a dashed frame (free slot), a dashed ring (needs a look). At 60% a queue cell is about 10 x 6 px: the dot, the solid cell and the dashed ring still read, the hatch reads as a half-filled cell with a lighter head; the same legibility as the mockup's own grayscale-60 frame (`progress-grayscale-60.png`). The stack of the build plate over the queue plate stays clear of the VP badge (upper right) and the barracks mark (left).
+
+**Not part of this section:** variants B, D of the CP bar and B, C, D of the progress marks stay in the mockup; the look of units and planned orders (#431); the row of squares at a group (#433).

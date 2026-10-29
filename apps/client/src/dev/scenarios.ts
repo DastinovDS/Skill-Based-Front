@@ -19,6 +19,7 @@ import type {
 } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
+import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 
 const files = import.meta.glob<SnapshotMsg>(
@@ -466,6 +467,15 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     cityUpgrades: true,
   },
   {
+    // The artery moment with queues and builds in every state at the own cities (#439).
+    id: 'progress',
+    map: 'artery',
+    snapshot: progressSnapshot(bundledMap('artery')),
+    events: [round(PROGRESS_TICK - 12, { node: 4 }, 2, 0, 1)],
+    view: ARTERY_VIEW,
+    cityUpgrades: true,
+  },
+  {
     // A pool map (DEC-27) with its provinces: hollow rings, no warehouse, no VP (#348).
     id: 'provinces',
     map: 'crossroads',
@@ -539,6 +549,7 @@ export function frozenSource(scene: FixtureScene, at?: number): RenderSource {
     orderDelays: { planned: DEV_RULES.orders.planned_delay_ticks },
     roundTicks: DEV_RULES.combat.round_ticks,
     recruitTicks: DEV_RULES.recruit.unit_ticks,
+    recruitQueueMax: DEV_RULES.recruit.queue_max,
     roadBuildTicks: DEV_RULES.build.ticks_per_level,
     cityUpgrades:
       scene.cityUpgrades === true

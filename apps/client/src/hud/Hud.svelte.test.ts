@@ -131,8 +131,29 @@ describe('Hud', () => {
     expect(target.querySelector('[aria-label^="VP score"]')?.getAttribute('aria-label')).toBe(
       'VP score: Danya 2, Guest 1',
     );
-    // CP in whole segments of the cap: five of them for a cap of 5 CP.
-    expect(target.querySelectorAll('.segment')).toHaveLength(5);
+    // CP as one track with a notch at every whole CP below the cap: four for a cap of 5 CP.
+    expect(target.querySelectorAll('.track')).toHaveLength(1);
+    expect(target.querySelectorAll('.notch')).toHaveLength(4);
+  });
+
+  it('shows the CP as a track: a head marker while it grows, a ring and the word MAX at the cap (#439)', () => {
+    setLocale('en');
+    const { target, state } = render();
+    // Tick 30 at 100 per 50 ticks: 0.6 CP of 5, growing.
+    state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, 30));
+    flushSync();
+    const cp = (): Element | null => target.querySelector('.cp');
+    expect(cp()?.getAttribute('aria-label')).toBe('CP: 0.6 of 5');
+    expect(cp()?.querySelector('.head')).not.toBeNull();
+    expect(cp()?.querySelector('.ring')).toBeNull();
+    expect(cp()?.querySelector('.max')).toBeNull();
+    // Tick 250 is at the cap: the head goes, the ring and the word come (not a colour alone, AGENTS.md 7.4).
+    state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, 250));
+    flushSync();
+    expect(cp()?.getAttribute('aria-label')).toBe('CP: 5 of 5, at the cap');
+    expect(cp()?.querySelector('.head')).toBeNull();
+    expect(cp()?.querySelector('.ring')).not.toBeNull();
+    expect(cp()?.querySelector('.max')?.textContent).toBe('MAX');
   });
 
   it('has no selection card: a selection is a data attribute, there is no hint line', () => {

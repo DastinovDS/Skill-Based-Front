@@ -176,3 +176,31 @@ for (const size of [
     });
   }
 }
+
+// The progress cells of an own city (#439): `?scene=progress` has queues and builds in every state; a click on
+// the capital selects it (a frozen scene only selects), and its queue shows the free slot as a dashed cell.
+// `progress-selected.png`, the map alone.
+test('shot of the progress cells with a selected city', async ({ page }) => {
+  await page.goto('/?scene=progress');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.mouse.click(118, 520);
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(500);
+  await page.addStyleTag({ content: '.hud { display: none !important; }' });
+  await page.locator('canvas').screenshot({ path: join(OUT, 'progress-selected.png') });
+});
+
+// The same scene in grey scale at 60% of the map scale (#439): every state of the cells must read without the hue and
+// by its pattern at a small size. `progress-gray-60.png`, the map alone.
+test('shot of the progress cells in grey scale at 60% scale', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 480 });
+  await page.goto('/?scene=progress');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.waitForTimeout(500);
+  await page.addStyleTag({
+    content: '.hud { display: none !important; } canvas { filter: grayscale(1); }',
+  });
+  await page.locator('canvas').screenshot({ path: join(OUT, 'progress-gray-60.png') });
+});
