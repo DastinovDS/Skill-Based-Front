@@ -22,6 +22,7 @@ import {
   sideOf,
 } from './style.ts';
 import { reducedMotion } from './motion.ts';
+import { EaseTween } from './tween.ts';
 import { beaconPulse } from './alertLayout.ts';
 import { alertSpot, alertAlpha, buildMark, markTops, queueMark } from './progressLayout.ts';
 import type { MapLayers } from './layers.ts';
@@ -121,6 +122,9 @@ function onCircle(radius: number, angle: number): Point {
  * for a look (a unit ready with no room, production stopped by a fight) is a sprite of its own and
  * pulses (`pulse`). `destroy()` releases every object (the textures belong to the cache).
  */
+/** How long a replaced city body takes to fade out, ms. */
+const BODY_FADE_MS = 450;
+
 export class CityView {
   private readonly cities: Container[];
   private readonly bodies: BakedSprite[];
@@ -142,13 +146,17 @@ export class CityView {
   private readonly radii: number[];
   private readonly vpStyle: TextStyle;
   private supplyMode = false;
+  /** Set after the first snapshot: a body that changes after it (a capture) cross-fades. */
+  private warm = false;
+  /** The bodies that were just replaced, fading out over the new ones (#508). */
+  private readonly fading: { sprite: BakedSprite; tween: EaseTween }[] = [];
 
   constructor(
     private readonly map: MapFile,
     layers: MapLayers,
     private readonly me: PlayerId,
     labelResolution: number,
-    sprites: SpriteCache,
+    private readonly sprites: SpriteCache,
   ) {
     this.vpStyle = new TextStyle({
       fontFamily: 'system-ui, sans-serif',
@@ -279,6 +287,7 @@ export class CityView {
         ),
       );
     }
+    this.warm = true;
   }
 
   /**
@@ -394,11 +403,47 @@ export class CityView {
     const body = this.bodies[id];
     if (node === undefined || body === undefined) return;
     const kind = this.kindOf(state.owner);
-    body.set(
+    const spec =
       node.kind === 'province'
         ? provinceBodySpec(kind)
-        : cityBodySpec(kind, this.radii[id] ?? NODE_RADIUS, node.capital_of !== null),
-    );
+        : cityBodySpec(kind, this.radii[id] ?? NODE_RADIUS, node.capital_of !== null);
+    const old = body.spec;
+    if (this.warm && old !== null && old.key !== spec.key && !reducedMotion()) {
+      this.crossFade(id, body, old);
+    }
+    body.set(spec);
+  }
+
+  /**
+   * A captured city: its old body stays on top of the new one and fades out, so the colour flows
+   * from one owner to the other instead of flipping (#508).
+   */
+  private crossFade(id: number, body: BakedSprite, old: NonNullable<BakedSprite['spec']>): void {
+    const city = this.cities[id];
+    if (city === undefined) return;
+    const ghost = this.sprites.sprite(old);
+    ghost.position.set(body.x, body.y);
+    city.addChildAt(ghost, city.getChildIndex(body) + 1);
+    const tween = new EaseTween(1, BODY_FADE_MS);
+    tween.setTarget(0);
+    this.fading.push({ sprite: ghost, tween });
+  }
+
+  /** Fades the replaced bodies out by `dtMs` of real time; once per frame. */
+  advance(dtMs: number): void {
+    for (let i = this.fading.length - 1; i >= 0; i--) {
+      const item = this.fading[i];
+      if (item === undefined) continue;
+      if (item.sprite.destroyed) {
+        this.fading.splice(i, 1);
+        continue;
+      }
+      item.sprite.alpha = item.tween.step(dtMs);
+      if (!item.tween.active) {
+        item.sprite.destroy();
+        this.fading.splice(i, 1);
+      }
+    }
   }
 
   private set(id: number, state: CityState): void {

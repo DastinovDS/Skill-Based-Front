@@ -12,7 +12,9 @@ import type { Detail, MapFile, PlayerId } from '../protocol.gen.ts';
 import type { Point } from './camera.ts';
 import type { MapLayers } from './layers.ts';
 import { borderPermille } from './fogLayout.ts';
+import { reducedMotion } from './motion.ts';
 import { cellEdges, territoryBorders } from './regionLayout.ts';
+import { easeOutCubic } from './tween.ts';
 import {
   laneDashes,
   laneOffsets,
@@ -75,6 +77,9 @@ export interface RoadLook {
   readonly halves?: readonly { readonly detail: Detail }[];
 }
 
+/** How long the territory takes to change hands on the map, ms (#508). */
+const OWNER_FADE_MS = 450;
+
 /**
  * Static part of the map (ui-style.md 9.1-9.3): the terrain background with its dimming and
  * stamps, the territory of the owners with its border line, and the roads. Cities are `CityView`.
@@ -108,6 +113,13 @@ export class MapView {
   private readonly floor: Graphics;
   private supplyMode = false;
   private owners: readonly Owner[] = [];
+  /** A capture under way: the owners before it, their borders and how long it has run. */
+  private fade: {
+    from: readonly Owner[];
+    fromBorders: ReturnType<typeof territoryBorders>;
+    elapsed: number;
+    glowed: boolean;
+  } | null = null;
   private readonly cellLines: Graphics;
   private readonly territory: Graphics;
   /** The line of an owner's border, over its glow. */
@@ -259,38 +271,103 @@ export class MapView {
   }
 
   /** `owners[i]`: current owner of node `i` (`null`: nobody). */
-  setOwners(owners: readonly Owner[]): void {
+  setOwners(owners: readonly Owner[], animate = false): void {
+    const previous = this.owners;
     this.owners = owners;
-    const alpha = this.supplyMode ? SUPPLY_TERRITORY_ALPHA : TERRITORY_ALPHA;
-    const g = this.territory;
-    g.clear();
-    owners.forEach((owner, i) => {
-      const cell = this.cells[i];
-      if (owner !== null && cell !== undefined) {
-        g.poly(cell).fill({ color: ownerColor(this.me, owner), alpha });
-      }
-    });
-    // The border of an area: a light line of the owner colour, one stroke per owner.
-    const lines = this.borderLines.clear();
-    const borders = territoryBorders(this.cells, owners, TERRITORY_BORDER.inset);
-    for (const owner of [0, 1] as const) {
-      const own = borders.filter((border) => border.owner === owner);
-      for (const { a, b } of own) lines.moveTo(a.x, a.y).lineTo(b.x, b.y);
-      if (own.length > 0) {
-        lines.stroke({
-          width: TERRITORY_BORDER.width,
-          color: ownerColor(this.me, owner),
-          alpha: TERRITORY_BORDER.alpha,
-          cap: 'round',
-        });
-      }
-    }
-    this.drawGlow(owners);
+    // A capture cross-fades the territory (the fill and the border lines) over `OWNER_FADE_MS`
+    // instead of flipping it (#508); the first call, the «Supply» tint and "less motion" are instant.
+    const changed =
+      animate &&
+      !this.supplyMode &&
+      !reducedMotion() &&
+      previous.length === owners.length &&
+      previous.some((owner, i) => owner !== owners[i]);
+    this.fade = changed
+      ? {
+          from: previous,
+          fromBorders: territoryBorders(this.cells, previous, TERRITORY_BORDER.inset),
+          elapsed: 0,
+          glowed: false,
+        }
+      : null;
+    this.drawTerritory(changed ? 0 : 1);
+    if (!changed) this.drawGlow(owners);
     // A road between two cities of one owner looks different from a buffer road.
     this.roads.forEach((_, i) => {
       this.drawRoad(i);
     });
     this.flushDashes();
+  }
+
+  /**
+   * Draws the fill of the territory and its border lines. `share` (0..1) is how far a capture has
+   * faded: a cell that changed owner shows the old colour at `1 - share` and the new at `share`, a
+   * border segment of the old map fades out and one of the new fades in, the rest stays.
+   */
+  private drawTerritory(share: number): void {
+    const alpha = this.supplyMode ? SUPPLY_TERRITORY_ALPHA : TERRITORY_ALPHA;
+    const owners = this.owners;
+    const from = this.fade?.from ?? owners;
+    const g = this.territory;
+    g.clear();
+    owners.forEach((owner, i) => {
+      const cell = this.cells[i];
+      if (cell === undefined) return;
+      const before = from[i] ?? null;
+      if (before === owner) {
+        if (owner !== null) g.poly(cell).fill({ color: ownerColor(this.me, owner), alpha });
+        return;
+      }
+      if (before !== null && share < 1) {
+        g.poly(cell).fill({ color: ownerColor(this.me, before), alpha: alpha * (1 - share) });
+      }
+      if (owner !== null)
+        g.poly(cell).fill({ color: ownerColor(this.me, owner), alpha: alpha * share });
+    });
+    // The border of an area: a light line of the owner colour, one stroke per owner and fade.
+    const lines = this.borderLines.clear();
+    const now = territoryBorders(this.cells, owners, TERRITORY_BORDER.inset);
+    const key = (b: { owner: number; a: Point; b: Point }): string =>
+      `${String(b.owner)}:${String(b.a.x)},${String(b.a.y)}:${String(b.b.x)},${String(b.b.y)}`;
+    const old = this.fade?.fromBorders ?? now;
+    const oldKeys = new Set(old.map(key));
+    const nowKeys = new Set(now.map(key));
+    const groups: { borders: typeof now; fade: number }[] = [
+      { borders: now.filter((b) => oldKeys.has(key(b))), fade: 1 },
+      { borders: now.filter((b) => !oldKeys.has(key(b))), fade: share },
+      { borders: old.filter((b) => !nowKeys.has(key(b))), fade: 1 - share },
+    ];
+    for (const { borders, fade } of groups) {
+      if (fade <= 0) continue;
+      for (const owner of [0, 1] as const) {
+        const own = borders.filter((border) => border.owner === owner);
+        for (const { a, b } of own) lines.moveTo(a.x, a.y).lineTo(b.x, b.y);
+        if (own.length > 0) {
+          lines.stroke({
+            width: TERRITORY_BORDER.width,
+            color: ownerColor(this.me, owner),
+            alpha: TERRITORY_BORDER.alpha * fade,
+            cap: 'round',
+          });
+        }
+      }
+    }
+  }
+
+  /** Runs the fade of a capture by `dtMs` of real time; once per frame (a no-op when none is under way). */
+  advance(dtMs: number): void {
+    const fade = this.fade;
+    if (fade === null) return;
+    fade.elapsed += Math.max(0, dtMs);
+    const t = Math.min(1, fade.elapsed / OWNER_FADE_MS);
+    const share = easeOutCubic(t);
+    // The glow is one cached blurred texture: it changes once, half way, not every frame.
+    if (!fade.glowed && t >= 0.4) {
+      fade.glowed = true;
+      this.drawGlow(this.owners);
+    }
+    if (t >= 1) this.fade = null;
+    this.drawTerritory(t >= 1 ? 1 : share);
   }
 
   private buildGlow(parent: Container, bounds: { width: number; height: number }): void {

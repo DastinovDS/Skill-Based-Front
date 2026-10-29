@@ -321,3 +321,67 @@ describe('MapView, the glow along the borders of the territories (BL1, #347)', (
     expect(glow()?.visible).toBe(true);
   });
 });
+
+describe('MapView, a capture cross-fades the territory (#508)', () => {
+  const map = DEFAULT_MAP;
+  let layers: MapLayers;
+  let view: MapView;
+  beforeEach(() => {
+    layers = createLayers();
+    view = new MapView(map, layers, 0, {} as Renderer, true);
+  });
+  afterEach(() => {
+    view.destroy();
+  });
+
+  /** The fills of the territory by colour: the alphas drawn for each. */
+  const fills = (): Map<number, number[]> => {
+    const g = layers.layer.territory.children.filter(
+      (c): c is Graphics => c instanceof Graphics,
+    )[1];
+    const instructions = (g?.context.instructions ?? []) as unknown as {
+      action: string;
+      data: { style: { color: number; alpha: number } };
+    }[];
+    const byColor = new Map<number, number[]>();
+    for (const i of instructions) {
+      if (i.action !== 'fill') continue;
+      byColor.set(i.data.style.color, [
+        ...(byColor.get(i.data.style.color) ?? []),
+        i.data.style.alpha,
+      ]);
+    }
+    return byColor;
+  };
+  const all = (n: 0 | 1 | null): (0 | 1 | null)[] => map.nodes.map(() => n);
+
+  it('shows the first owners and the ones of a call that does not animate at once', () => {
+    view.setOwners(all(0));
+    expect(fills().get(YOU)).toHaveLength(map.nodes.length);
+    expect(fills().get(ENEMY)).toBeUndefined();
+    view.setOwners(all(1));
+    expect(fills().get(YOU)).toBeUndefined();
+    expect(fills().get(ENEMY)).toHaveLength(map.nodes.length);
+  });
+
+  it('fades the old colour out and the new one in over a capture, then settles', () => {
+    view.setOwners(all(0));
+    view.setOwners(all(1), true);
+    // Nothing has moved yet: the old colour is whole.
+    const start = fills();
+    expect(start.get(YOU)?.[0]).toBeGreaterThan(0);
+    view.advance(100);
+    const mid = fills();
+    const you = mid.get(YOU)?.[0] ?? 0;
+    const enemy = mid.get(ENEMY)?.[0] ?? 0;
+    expect(you).toBeGreaterThan(0);
+    expect(enemy).toBeGreaterThan(0);
+    expect(you).toBeLessThan(start.get(YOU)?.[0] ?? 0);
+    view.advance(2000);
+    expect(fills().get(YOU)).toBeUndefined();
+    expect(fills().get(ENEMY)).toHaveLength(map.nodes.length);
+    // Done: another call changes nothing.
+    view.advance(100);
+    expect(fills().get(ENEMY)).toHaveLength(map.nodes.length);
+  });
+});

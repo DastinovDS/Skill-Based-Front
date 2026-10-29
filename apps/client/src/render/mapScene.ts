@@ -290,8 +290,13 @@ export class MapScene {
     this.cities.pulse(performance.now());
     const announce = frame.base !== this.base;
     if (announce) {
+      // The first snapshot shows the map as it is; later changes of owners fade (#508).
+      const first = this.base === null;
       this.base = frame.base;
-      this.view.setOwners(frame.base.view.nodes.map((node) => node.owner));
+      this.view.setOwners(
+        frame.base.view.nodes.map((node) => node.owner),
+        !first,
+      );
       const edges = frame.base.view.edges;
       this.view.setRoads(edges);
       this.cities.update(
@@ -311,6 +316,8 @@ export class MapScene {
     this.intents.setTickHz(tickHz);
     this.entities.update(frame);
     this.entities.advance(this.frameMs);
+    this.view.advance(this.frameMs);
+    this.cities.advance(this.frameMs);
     this.intents.update(frame, this.entities.groupPoints());
     const punches = this.effects.update(
       frame,
