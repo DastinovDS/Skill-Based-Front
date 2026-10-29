@@ -189,8 +189,8 @@ figure.on .thumb{border-color:var(--you)}
 .f .alert{display:flex;align-items:flex-start;gap:8px;margin:12px 0 0;color:var(--warn);font-size:14px;line-height:1.35;max-width:420px}
 .f .alert .ic{margin-top:1px}
 .f .rd{flex:none;display:inline-block;width:16px;height:16px;border:2px solid var(--dim);border-radius:50%;position:relative}
-.f .on>.rd{border-color:var(--paper)}
-.f .on>.rd::after{content:'';position:absolute;inset:2px;border-radius:50%;background:var(--paper)}
+.f .on .rd{border-color:var(--paper)}
+.f .on .rd::after{content:'';position:absolute;inset:2px;border-radius:50%;background:var(--paper)}
 .f .acts{display:flex;align-items:center;gap:8px;margin-top:18px}
 .f .acts .btn.pri .k{background:rgb(13 17 23 / 18%);border-color:rgb(13 17 23 / 35%);color:var(--bg)}
 .f .acts .btn.dis{background:repeating-linear-gradient(135deg,#21262d 0 6px,#1a1f26 6px 12px);color:var(--dim);opacity:.8}
@@ -249,12 +249,13 @@ figure.on .thumb{border-color:var(--you)}
 .f .dots i{width:22px;height:4px;border-radius:2px;border:1px solid var(--dim)}
 .f .dots i.on{background:var(--paper);border-color:var(--paper)}
 /* bot level */
-.f .lo{display:flex;flex-direction:column;gap:3px;width:100%;padding:9px 4px 10px;border:0;border-bottom:1px solid rgb(230 237 243 / 10%);background:none;color:var(--text);text-align:left}
+.f .lo{display:flex;flex-direction:column;gap:3px;width:100%;padding:8px 4px 8px;border:0;border-bottom:1px solid rgb(230 237 243 / 10%);background:none;color:var(--text);text-align:left}
 .f .lo .l1{display:flex;align-items:center;gap:12px;font-size:20px}
 .f .lo .l1 .nm{font-weight:700}
 .f .lo .l1 .ps{color:var(--dim);font-size:15px}
 .f .lo .l1 .cells{margin-left:auto}
-.f .lo .ds{margin-left:28px;font-size:13px;color:var(--dim)}
+.f .lo .ds{display:none;margin-left:28px;font-size:13px;color:var(--dim)}
+.f .lo.on .ds{display:block}
 .f .lo.on{background:linear-gradient(90deg,rgb(91 155 255 / 18%),transparent);border-bottom-color:var(--you)}
 .f .lo.on .ds{color:var(--text)}
 .f .cells.d i{width:14px}
@@ -270,7 +271,7 @@ figure.on .thumb{border-color:var(--you)}
 /* ===== R "Rail": the screen is the rail; the menu is replaced by the content of the mode ===== */
 .r .rail{width:430px}
 .r .prim{display:flex;align-items:center;gap:14px;width:100%;margin-top:18px;padding:0;border:0;background:none;font-size:34px;line-height:1;font-weight:800;letter-spacing:-.02em;color:var(--text);text-align:left}
-.r .prim .k{margin-left:auto;letter-spacing:0}
+.r .prim .k{margin-left:2px;letter-spacing:0;transform:translateY(3px)}
 .r .prim.dis{opacity:.45}
 .r .back{display:flex;align-items:center;gap:8px;margin-top:14px;padding:4px 0;border:0;background:none;color:var(--dim);font-size:15px}
 .r .rows2{margin-top:6px}
@@ -305,7 +306,7 @@ figure.on .thumb{border-color:var(--you)}
 /* ===== P "Postcard": the picture is the form; the chosen map is the backdrop, the seat is on the map ===== */
 .p .rail{width:430px}
 .p .prim{display:flex;align-items:center;gap:14px;width:100%;margin-top:18px;padding:0;border:0;background:none;font-size:34px;line-height:1;font-weight:800;letter-spacing:-.02em;color:var(--text);text-align:left}
-.p .prim .k{margin-left:auto;letter-spacing:0}
+.p .prim .k{margin-left:2px;letter-spacing:0;transform:translateY(3px)}
 .p .prim.dis{opacity:.45}
 .p .back{display:flex;align-items:center;gap:8px;margin-top:14px;padding:4px 0;border:0;background:none;color:var(--dim);font-size:15px}
 .p .plate{position:absolute;right:44px;bottom:46px;z-index:5;width:330px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:rgb(13 17 23 / 86%)}
@@ -366,7 +367,7 @@ figure.on .thumb{border-color:var(--you)}
 .d .ent .go,.t .ent .go{margin-left:auto;min-width:0}
 .d .ent .g,.t .ent .g{display:none}
 .r .ent .tx small,.p .ent .tx small{display:none}
-.r .rail.tall,.p .rail.tall{top:112px}
+.r .rail.tall,.p .rail.tall{top:104px}
 .f .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
 .f .strip .tl{padding:5px;min-width:0}
 .f .strip .tl .th,.f .strip .tl .rnd{height:56px}
@@ -375,7 +376,7 @@ figure.on .thumb{border-color:var(--you)}
 .f .strip .tl.on{padding:4px}
 .t .strip .tl .th,.t .strip .tl .rnd{height:70px}
 .t .strip .tl .row2{font-size:14px}
-.t .strip .tl .row2 small{display:inline}
+.t .strip .tl .row2 small{display:none}
 .f .lvs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
 .f .lvs .lvcard{min-height:0;padding:10px}
 .t .tp .hd{margin:0 0 4px}
@@ -384,6 +385,24 @@ figure.on .thumb{border-color:var(--you)}
 .f .cells.d i{width:14px}
 .f .who{color:var(--text)}
 .p .rail .ents .ent .go{min-width:70px}
+
+.r .rail.tall~.tag,.p .rail.tall~.tag{display:none}
+
+.d .ph .tags{margin:0 0 0 auto}
+.d .panel{top:96px}
+.d .tl .th,.d .tl .rnd{height:46px}
+.d .tl .row2{font-size:14px}
+.d .panel .label{margin-top:14px}
+.d .tiles{gap:8px;margin-top:8px}
+.t .rail{top:92px}
+.t .tp{min-height:0;margin-top:12px}
+.t .tag{display:none}
+.t .tp .hd{font-size:28px}
+
+.f .prim.sm{font-size:28px}
+.f .ents.scroll{max-height:230px}
+.f .lnk{margin-top:12px}
+.f .lnk .u{font-size:13.5px}
 </style>
 </head>
 <body>
@@ -593,8 +612,8 @@ function levelB(m,d){d=S.lvst||d;const cur=LEVELS.find(l=>l[0]===m.lvl)||LEVELS[
   else if(d==='t')h+=`<div class="lvs">${LEVELS.map(l=>`<div class="lvcard${l[0]===cur[0]?' on':''}" data-act="lvl:${l[0]}" role="button" tabindex="0"><span class="ps">${l[2]}</span><b>${l[1]}</b>${cells(l[4],4,'Difficulty','d')}<span class="ds">${l[3]}</span></div>`).join('')}</div>`;
   else h+=`<div class="stepper"><button class="ar${idx<=0?' off':''}" data-act="lvlstep:-1" aria-label="Easier">‹</button><div class="v"><b>${cur[1]} <span style="font-size:15px;font-weight:600;color:var(--dim);letter-spacing:.06em;text-transform:uppercase;margin-left:6px">${cur[2]}</span></b><small style="color:var(--text)">${cur[3]}</small></div>${cells(cur[4],4,'Difficulty','d')}<button class="ar${idx>=3?' off':''}" data-act="lvlstep:1" aria-label="Harder">›</button></div><div class="dots">${LEVELS.map((l,i)=>`<i class="${i===idx?'on':''}"></i>`).join('')}</div>`;
   return h}
-function linkB(m,d,copied){const box=d==='d'||d==='t';
-  return `<div class="lnk${box?' box':''}"><div class="u" aria-label="Invite link">${LINK}</div><button class="btn${copied?'':' pri'}" data-act="copy">${copied?ico('check',18)+' Copied':ico('copy',18)+' Copy the link'}</button></div>`}
+function linkB(m,d,copied){const box=d==='d'||d==='t',lab=copied?ico('check',18)+' Copied':ico('copy',18)+' Copy the link';
+  return `<div class="lnk${box?' box':''}"><div class="u" aria-label="Invite link">${LINK}</div></div>`+(box?`<div style="margin-top:8px"><button class="btn${copied?'':' pri'}" data-act="copy">${lab}</button></div>`:`<div class="rows" style="margin-top:6px;width:100%"><button class="rw2" data-act="copy">${copied?ico('check',22):ico('copy',22)}${copied?'Copied':'Copy the link'}${kb('C')}</button></div>`)}
 /* the versus strip: you, a road, the opponent's seat; "ready" is a filled or an empty dot, never colour alone */
 function vsB(o){const road=o.opp?`<line x1="0" y1="14" x2="100%" y2="14" stroke="#f0f6fc" stroke-width="2.4" ${o.both?'':'stroke-dasharray="3 7" stroke-linecap="round"'}/>`:`<line class="march" x1="0" y1="14" x2="100%" y2="14" stroke="#aab2bd" stroke-width="2.4" stroke-dasharray="7 6"/>`;
   const rd=(r,t)=>`<small class="${r?'y':''}"><i></i>${t}</small>`;
@@ -604,13 +623,13 @@ function vsB(o){const road=o.opp?`<line x1="0" y1="14" x2="100%" y2="14" stroke=
 function spec(m){
   const un=m.guest?'Unrated, like every match outside the queue.':m.cal?'Unrated: it does not count toward calibration.':'Unrated: your rating does not change.';
   const tUn=need('DEC-34: rating changes only in queue matches',''),pause=p=>p?'No pauses':'1 pause each';
-  const sp={eyebrow:'',head:'',cnt:'',sub:'',note:un,tags:['Unrated'],alert:null,body:[],primary:null,rows:[],back:{label:'Back',key:'Esc'},phase:'idle',label:null,bot:false,mapId:'crossroads',unknown:false,tab:'open',menu:null};
+  const sp={tall:false,eyebrow:'',head:'',cnt:'',sub:'',note:un,tags:['Unrated'],alert:null,body:[],primary:null,rows:[],back:{label:'Back',key:'Esc'},phase:'idle',label:null,bot:false,mapId:'crossroads',unknown:false,tab:'open',menu:null};
   const L=(m.st==='many'?ENT_MANY:ENT).slice(m.st==='taken'?1:0);
   if(m.scr==='menu'){sp.menu='';return sp}
   if(m.scr==='lobby'){sp.eyebrow='Open matches';sp.sub='Open matches of other players. The list updates by itself.';sp.tags=['Unrated','No pauses'];
     const cr={ico:'plus',label:'Create an open match',key:'C',act:'go:create:public'};
     const e=L[Math.min(m.row,L.length-1)];
-    if(m.st==='list'||m.st==='many'||m.st==='taken'||m.st==='joining'){sp.head=m.st==='joining'?'Joining '+L[0].nick+'...':L.length+' waiting';
+    if(m.st==='list'||m.st==='many'||m.st==='taken'||m.st==='joining'){sp.tall=m.st==='many';sp.head=m.st==='joining'?'Joining '+L[0].nick+'...':L.length+' waiting';
       sp.body=[d=>entriesB(m,L,d,m.st==='joining'?{busy:0}:{})];sp.rows=[cr];sp.mapId=e?e.map:'crossroads';sp.label=e?e.nick:null;sp.phase='seat';
       if(m.st==='taken')sp.alert='This match is taken or closed. The list was refreshed.';}
     else if(m.st==='loading'){sp.head='Loading...';sp.body=[()=>skeleton()];sp.rows=[cr]}
@@ -635,7 +654,7 @@ function spec(m){
       sp.body=[()=>vsB({opp:'Vega',you,oppReady:opp,both:you&&opp}),()=>`<p class="note" style="margin-top:14px">${m.st==='joined'?'Press "Ready" to start.':m.st==='opp-ready'?'The opponent is ready.':m.st==='you-ready'?'You are ready. Waiting for the opponent...':'Starting the match...'}</p>`];
       sp.primary=m.st==='starting'?null:{label:'Ready',act:'go:invite:you-ready',key:'↵',dis:m.st==='you-ready'};}
   }
-  else if(m.scr==='bot'){const cur=LEVELS.find(l=>l[0]===m.lvl)||LEVELS[1];sp.tab='bot';sp.eyebrow='Play a bot';sp.head=m.st==='starting'?'Starting...':'Pick a level';sp.sub='Unrated. A bot match is never ranked.';sp.note='';
+  else if(m.scr==='bot'){const cur=LEVELS.find(l=>l[0]===m.lvl)||LEVELS[1];sp.tab='bot';sp.eyebrow='Play a bot';sp.head=m.st==='starting'?'Starting...':'Pick a level';sp.sub='';
     sp.tags=['Unrated','1 pause each'];sp.mapId=MIDS.includes(m.map)?m.map:'crossroads';sp.unknown=m.map==='random';
     sp.label=cur[1]+' bot';sp.bot=true;sp.phase=m.st==='starting'?'wait':'seat';
     if(m.st==='starting'){sp.body=[d=>vsB({opp:cur[1]+' bot',bot:1,you:1,oppReady:1,both:1})];sp.note='Starting the match...';sp.back=null;}
@@ -648,7 +667,7 @@ const frame=(cls,inner)=>`<div class="st ${cls}${S.gray?' gray':''}${S.rm?' rm':
 const topbar=m=>`<header class="top">${mark()}${corner(m)}</header>`;
 const chipsHTML=sp=>`<div class="tags">${sp.tags.map(t=>`<span class="chip"${t==='Unrated'?' data-need="DEC-34: rating changes only in queue matches"':t==='No pauses'||t==='1 pause each'?' data-need="DEC-05: a public match has no pauses (flag `public` exists)"':''}>${t}</span>`).join('')}</div>`;
 const alertHTML=(t,k)=>`<p class="alert" role="alert"${k==='ban'?' data-need="the ban state is kept by the app"':''}>${ico(k==='ban'?'alert':'alert',16)}<span>${t}</span></p>`;
-const primHTML=p=>`<button class="prim${p.dis?' dis':''}" data-act="${p.act||''}">${tri('own',34,1)}${p.label}${p.key?kb(p.key):''}</button>`;
+const primHTML=p=>`<button class="prim${p.label.length>14?' sm':''}${p.dis?' dis':''}" data-act="${p.act||''}">${tri('own',34,1)}${p.label}${p.key?kb(p.key):''}</button>`;
 const rowsHTML=sp=>sp.rows.length?`<div class="rows" style="margin-top:14px;width:100%">${sp.rows.map(r=>`<button class="rw2" data-act="${r.act}">${ico(r.ico,22)}${r.label}${kb(r.key)}</button>`).join('')}</div>`:'';
 const backHTML=sp=>sp.back?`<button class="back" data-act="go:menu">${sp.back.label} ${kb(sp.back.key)}</button>`:'';
 /* the backdrop: the same layout in every direction; only P changes the map and draws the seat */
@@ -677,10 +696,10 @@ function railRP(m,sp,d){let h=`<div class="eyebrow">${sp.eyebrow}</div><div clas
   if(sp.primary)h+=primHTML(sp.primary);
   return h+rowsHTML(sp)+backHTML(sp)}
 function frameR(m,sp){if(sp.menu!==null)return frameMenu('r',m,sp.menu||null);
-  return frame('f r',bd('r',m,sp)+'<div class="shade"></div>'+topbar(m)+`<nav class="rail${m.scr==='bot'?' tall':''}" aria-label="${sp.eyebrow}">${railRP(m,sp,'r')}</nav><p class="tag">${T.motto}</p>`)}
+  return frame('f r',bd('r',m,sp)+'<div class="shade"></div>'+topbar(m)+`<nav class="rail${m.scr==='bot'||sp.tall?' tall':''}" aria-label="${sp.eyebrow}">${railRP(m,sp,'r')}</nav><p class="tag">${T.motto}</p>`)}
 /* P "Postcard": the same rail, and the map you pick or the host you point at is the backdrop */
 function frameP(m,sp){if(sp.menu!==null)return frameMenu('p',m,sp.menu||null);
-  return frame('f p',bd('p',m,sp)+'<div class="shade"></div>'+topbar(m)+`<nav class="rail${m.scr==='bot'?' tall':''}" aria-label="${sp.eyebrow}">${railRP(m,sp,'p')}</nav>${plateHTML(sp,m)}<p class="tag">${T.motto}</p>`)}
+  return frame('f p',bd('p',m,sp)+'<div class="shade"></div>'+topbar(m)+`<nav class="rail${m.scr==='bot'||sp.tall?' tall':''}" aria-label="${sp.eyebrow}">${railRP(m,sp,'p')}</nav>${plateHTML(sp,m)}<p class="tag">${T.motto}</p>`)}
 /* D "Dock": the menu rail stays, the mode is a panel next to it */
 function actsHTML(sp){let h='<div class="acts">';
   if(sp.primary)h+=`<button class="btn pri${sp.primary.dis?' dis':''}" data-act="${sp.primary.act||''}">${sp.primary.label} ${kb(sp.primary.key)}</button>`;
@@ -689,9 +708,9 @@ function actsHTML(sp){let h='<div class="acts">';
   return h+'</div>'}
 function frameD(m,sp){if(sp.menu!==null)return frameMenu('d',m,sp.menu||null);
   const cur=m.scr==='bot'?'bot':sp.tab==='open'?'lobby':'friend';
-  let p=`<div class="pe">${sp.eyebrow}</div><div class="ph"><h2>${sp.head}</h2></div>`;
+  let p=`<div class="pe">${sp.eyebrow}</div><div class="ph"><h2>${sp.head}</h2>${chipsHTML(sp)}</div>`;
   if(sp.sub)p+=`<div class="ps">${sp.sub}</div>`;
-  p+=chipsHTML(sp)+sp.body.map(f=>f('d')).join('');
+  p+=sp.body.map(f=>f('d')).join('');
   if(sp.alert)p+=alertHTML(sp.alert);if(sp.ban)p+=alertHTML(sp.ban,'ban');
   if(sp.note)p+=`<div class="note">${sp.note}</div>`;
   return frame('f d',bd('d',m,sp)+'<div class="shade"></div>'+topbar(m)+`<nav class="rail menurail" aria-label="Main menu">${menuHTML(m,{cur,dim:true})}</nav><section class="panel" aria-label="${sp.eyebrow}">${p}${actsHTML(sp)}</section><p class="tag">${T.motto}</p>`)}
