@@ -94,10 +94,10 @@ Details of branches and commits: `AGENTS.md`, section 11; commands of the checks
 3. Implement the tasks and acceptance criteria; run the applicable checks from `AGENTS.md`, section 3, and get them green.
 4. Commits: `<type>(<scope>): <message> (#<N>)`, in English.
 5. Before pushing: `git fetch && git rebase origin/develop` (other agents merge in parallel); on conflicts repeat the checks.
-6. Push, then `gh pr create --base develop`: the description in English per the template `.github/pull_request_template.md`, with `Closes #<N>`, the acceptance criteria with ticks (an unmet one without a tick and with a reason), deviations and the justification of new dependencies.
+6. Push, then `gh pr create --base develop`: the description in English per the template `.github/pull_request_template.md`, with `Closes #<N>` (or `Refs #<N>` for a PR that must not close the issue: a docs-only or mockup PR of a decision issue, one step of a multi-step issue), the acceptance criteria with ticks (an unmet one without a tick and with a reason), deviations and the justification of new dependencies.
 7. Wait for CI: `gh pr checks <PR> --watch`; fix what is red. The required checks are `py`, `web`, `docker`; in a documentation-only PR only `changes` may run.
 8. Squash-merge only when the checks are green, do not enable auto-merge: `gh pr merge <PR> --squash --delete-branch --subject "<type>(<scope>): <message> (#<N>)"`. The commit into `develop` must be a conventional English commit. If you get the refusal "Base branch was modified": rebase, push, CI again, retry. If the command returned an error only because a worktree holds the local branch, check that the PR state is `MERGED`.
-9. Only after `MERGED`: close the issue (`Closes #N` does not reliably close issues in this repository): `gh issue close <N> --comment "Done in #<PR>"`; remove the worktree and the local branch (`git worktree remove`, `git branch -D`); in the main checkout `git checkout develop && git pull --ff-only`.
+9. Only after `MERGED`: `Closes #N` closes the issue automatically; check it (`gh issue view <N>`) and close it by hand only if it is still open (`gh issue close <N> --comment "Done in #<PR>"`); remove the worktree and the local branch (`git worktree remove`, `git branch -D`); in the main checkout `git checkout develop && git pull --ff-only`.
 
 ### Parallel rules changes
 
