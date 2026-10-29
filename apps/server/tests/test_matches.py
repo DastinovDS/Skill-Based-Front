@@ -106,7 +106,9 @@ def test_two_fake_controllers_play_to_the_end(line3: MapDef, short_rules: Rulese
     run(scenario)
 
 
-def test_frozen_clock_does_not_burst(line3: MapDef, short_rules: Ruleset) -> None:
+def test_frozen_clock_does_not_burst(
+    line3: MapDef, short_rules: Ruleset, caplog: pytest.LogCaptureFixture
+) -> None:
     """The clock jumps 2 s (20 ticks) at once: one step and a new schedule, not 20 steps."""
 
     async def scenario() -> None:
@@ -121,6 +123,8 @@ def test_frozen_clock_does_not_burst(line3: MapDef, short_rules: Ruleset) -> Non
         await settle()
         assert runner.match.tick == 7
         assert runner.resets == 1
+        # The reset is logged at once with its length (#546), not only by the 30 s alert.
+        assert any("tick schedule reset" in r.getMessage() for r in caplog.records)
         await tick(clock, 3)
         assert runner.match.tick == 10
         task.cancel()

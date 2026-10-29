@@ -118,6 +118,19 @@ describe('MatchSession', () => {
     expect(hud.current).toBe(current);
   });
 
+  it('logs a long silence between two snapshots, and only that (#546)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { socket, advance } = setup();
+    socket.reply(snapshot(20));
+    advance(100);
+    socket.reply(snapshot(21));
+    expect(warn).not.toHaveBeenCalled();
+    advance(2500);
+    socket.reply(snapshot(22));
+    expect(warn).toHaveBeenCalledExactlyOnceWith('[client] snapshot gap 2500 ms');
+    warn.mockRestore();
+  });
+
   it('keeps events for the map and the HUD feed', () => {
     const { session, hud, socket } = setup();
     const event = devEvent(map, 30);
