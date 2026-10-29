@@ -8,6 +8,9 @@ Difficulty levels are different bots of ``gow_bots.bots.BOTS``, ordered by the w
 ``docs/balance/latest.md`` (``rusher`` beats the rest, ``turtle`` loses to all); the parameters of
 a bot vary with the match seed (``choose_params``). The player's side is random, like in an invite.
 An account has at most one active match of any kind (409, SRV-09): a bot match costs server CPU.
+At most ``GOW_MAX_BOT_MATCHES`` bot matches run at once and ``GOW_MAX_MATCHES`` matches in all:
+past that the answer is 503 (#412). A bot match nobody connects to within
+``GOW_BOT_CONNECT_TIMEOUT_S`` is dropped as never started.
 The match goes through the lifecycle (``gow_server.lifecycle``): a ``matches`` row is written first.
 """
 
@@ -18,11 +21,11 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict
 
 from gow_bots.bots import BOTS
-from gow_server.abuse import Limits, enforce
+from gow_server.abuse import Limits, enforce, server_full
 from gow_server.identity import CurrentPlayer
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchState
 from gow_server.maps import MapCatalog
-from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError
+from gow_server.matches import BOT_ACCOUNT, BotSeat, ManagerDrainingError, ServerFullError
 from gow_sim.maps import PLAYERS
 from gow_sim.ruleset import Ruleset
 
@@ -106,6 +109,8 @@ async def create_bot_match(
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, detail="server is restarting"
         ) from None
+    except ServerFullError:
+        raise server_full() from None
     finally:
         if record.state is MatchState.CREATED:
             lifecycle.abort(record, "start_failed")

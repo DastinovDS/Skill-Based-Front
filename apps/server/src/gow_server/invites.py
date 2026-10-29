@@ -38,12 +38,12 @@ from typing import Annotated, Final, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict
 
-from gow_server.abuse import Limits, enforce
+from gow_server.abuse import Limits, enforce, server_full
 from gow_server.clock import Clock
 from gow_server.identity import CurrentPlayer
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchRecord
 from gow_server.maps import MapCatalog
-from gow_server.matches import ManagerDrainingError
+from gow_server.matches import ManagerDrainingError, ServerFullError
 from gow_server.ratelimit import SlidingWindowLimiter
 from gow_sim.ruleset import Ruleset
 
@@ -369,6 +369,9 @@ async def ready_match(
             raise HTTPException(
                 status.HTTP_503_SERVICE_UNAVAILABLE, detail="server is restarting"
             ) from None
+        except ServerFullError:
+            invite.ready.discard(player.id)  # the caller retries
+            raise server_full() from None
         finally:
             invite.starting = False
         invite.match_id = runner.match_id

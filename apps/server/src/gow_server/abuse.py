@@ -48,3 +48,12 @@ def enforce(limiter: SlidingWindowLimiter, key: str, detail: str) -> None:
             detail=detail,
             headers={"Retry-After": str(math.ceil(retry_after))},
         )
+
+
+def server_full() -> HTTPException:
+    """503 for a match that cannot start: a cap on running matches is reached (#412)."""
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="server is full, try again in a moment",
+        headers={"Retry-After": "15"},
+    )

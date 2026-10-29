@@ -57,6 +57,9 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             pause_max_s=settings.pause_max_s,
             bot_budget_s=settings.bot_budget_s,
             validate_snapshots=settings.env != "prod",
+            max_matches=settings.max_matches,
+            max_bot_matches=settings.max_bot_matches,
+            bot_connect_timeout_s=settings.bot_connect_timeout_s,
         )
         app.state.lifecycle = MatchLifecycle(
             app.state.matches,

@@ -38,13 +38,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
-from gow_server.abuse import Limits, enforce
+from gow_server.abuse import Limits, enforce, server_full
 from gow_server.clock import Clock
 from gow_server.identity import CurrentPlayer
 from gow_server.ladder import ban_seconds_left
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchRecord
 from gow_server.maps import MapCatalog
-from gow_server.matches import ManagerDrainingError
+from gow_server.matches import ManagerDrainingError, ServerFullError
 from gow_server.rating import rating_of
 from gow_sim.ruleset import Ruleset
 
@@ -460,6 +460,9 @@ async def confirm_match(
             raise HTTPException(
                 status.HTTP_503_SERVICE_UNAVAILABLE, detail="server is restarting"
             ) from None
+        except ServerFullError:
+            queue.cancel(proposal, "server_full")
+            raise server_full() from None
         except BaseException:
             queue.cancel(proposal, "start_failed")
             raise
