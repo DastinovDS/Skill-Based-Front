@@ -83,9 +83,11 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 | `charges_produced` | [int, int] | charges produced: the sum of `charges` of the `charges_produced` events (#310) |
 | `charges_burned` | [int, int] | charges burned: the sum of `charges` of the `charges_overflow` events (#310) |
 | `burned_permille` | [int or null, ...] | the share burned in per mille, `charges_burned * 1000 // charges_produced`; `null` without production (#310) |
+| `usage` | [{str: int}, {str: int}] | accepted commands of each player per mechanic (#166): the command class name (`Move`, `CancelOrder`, `Split`, `Merge`, `SetMode`, `SetStance`, `Recruit`, `CancelRecruit`, `BuildBarracks`, `UpgradeWarehouse`, `UpgradeRoad`, `SetFront`, `SetRearMin`, `Transfer`), a planned `Move` as `MovePlanned`; `Forfeit` is not counted. The report shows it as the section "Mechanic usage" |
 
 The fields `stock_*`, `charges_*` and `burned_permille` were added in #310 without changing `schema`: nothing was removed and
 nothing changed meaning. Tournament files older than #310 do not contain them, the report shows "no data" for them.
+`usage` was added in #166 the same way; older files show n/a in its section.
 
 The metric definitions are set in `packages/sim/src/gow_sim/analysis.py` (the module docstring).
 A "scheduled" and an "attacking" order is not visible in the event log (`Move` leaves no event),

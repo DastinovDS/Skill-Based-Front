@@ -15,6 +15,8 @@ Conventions:
   the decisive matches. Without a bot difference only the map and the start side are left.
 - Matches of a bot against itself count for the per-bot behaviour metrics (attack planning,
   sieges, captures) but not for win rates.
+- Mechanic usage (#166): the share of a bot's perspectives in which it used a mechanic at least
+  once, and the mean count per match (``usage`` of the rows; files without it show n/a).
 """
 
 # matplotlib's inline types leave ``**kwargs`` of most Axes methods unannotated, so strict
@@ -30,7 +32,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any, Final
 
-from gow_bots.tournament import SCHEMA_VERSION
+from gow_bots.tournament import SCHEMA_VERSION, USAGE_KEYS
 
 __all__ = [
     "REPORT_Z",
@@ -99,6 +101,8 @@ class Row:
     stock_peak: tuple[int, int] | None = None
     charges_produced: tuple[int, int] | None = None
     charges_burned: tuple[int, int] | None = None
+    usage: tuple[dict[str, int], dict[str, int]] | None = None
+    """Accepted commands per mechanic by side (#166); ``None`` in an older file."""
 
     @property
     def outcome(self) -> tuple[int | None, str, tuple[int, int], tuple[int, int]]:
@@ -121,6 +125,17 @@ def _stock_mean(raw: dict[str, Any]) -> tuple[int | None, int | None] | None:
 
 def _opt_pair(raw: dict[str, Any], key: str) -> tuple[int, int] | None:
     return _pair(raw, key) if key in raw else None
+
+
+def _usage(raw: dict[str, Any]) -> tuple[dict[str, int], dict[str, int]] | None:
+    value = raw.get("usage")
+    if value is None:
+        return None
+    first, second = value
+    return (
+        {str(k): int(v) for k, v in first.items()},
+        {str(k): int(v) for k, v in second.items()},
+    )
 
 
 def _parse_row(raw: dict[str, Any]) -> Row:
@@ -152,6 +167,7 @@ def _parse_row(raw: dict[str, Any]) -> Row:
         stock_peak=_opt_pair(raw, "stock_peak"),
         charges_produced=_opt_pair(raw, "charges_produced"),
         charges_burned=_opt_pair(raw, "charges_burned"),
+        usage=_usage(raw),
     )
 
 
@@ -440,6 +456,28 @@ def _section_stock(ps: Sequence[Persp], rows: Sequence[Row], bots: Sequence[str]
     return intro + _table(["bot", *header], by_bot) + "\n\n" + _table(["map", *header], by_map)
 
 
+def _usage_cell(ps: Sequence[Persp], key: str) -> str:
+    counts = [p.row.usage[p.side].get(key, 0) for p in ps if p.row.usage is not None]
+    if not counts:
+        return "n/a"
+    used = sum(c > 0 for c in counts)
+    return f"{used / len(counts):.2f} ({sum(counts) / len(counts):.1f})"
+
+
+def _section_usage(ps: Sequence[Persp], bots: Sequence[str]) -> str:
+    body = [
+        [f"**{b}**", *(_usage_cell([p for p in ps if p.bot == b], k) for k in USAGE_KEYS)]
+        for b in bots
+    ]
+    intro = (
+        "Accepted commands per mechanic (#166): the share of the bot's matches in which it used "
+        "the mechanic at least once, and in brackets the mean count per match. `MovePlanned` is "
+        "a `Move` with `planned=true`, `Move` the ordinary one. All matches count, mirror matches "
+        "included; a tournament file written before #166 shows n/a.\n\n"
+    )
+    return intro + _table(["bot", *USAGE_KEYS], body)
+
+
 def _section_late(rows: Sequence[Row]) -> str:
     body: list[list[str]] = []
     for m in [*sorted({r.map for r in rows}), None]:
@@ -655,6 +693,7 @@ def render_report(rows: Sequence[Row], source: str, prefix: str) -> str:
         ("Side advantage", _section_sides(rows)),
         ("Metrics by bot", _section_bots(ps, bots)),
         ("Charge stock and burned share (#310)", _section_stock(ps, rows, bots)),
+        ("Mechanic usage (#166)", _section_usage(ps, bots)),
         ("Strategy diversity", _section_diversity(ps, bots)),
         ("Captures at the end of the match", _section_late(rows)),
         ("Unique outcomes", _section_outcomes(rows)),

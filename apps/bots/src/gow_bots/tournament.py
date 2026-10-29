@@ -8,6 +8,10 @@ seed is the match seed of both bots (``choose_params``, AGENTS.md section 8). Ta
 a function of the arguments: the same run gives the same bytes (``docs/balance/README.md``
 describes the row format).
 
+Mechanic usage (#166): every row also counts the accepted commands of each player by mechanic
+(``usage``, the keys of ``USAGE_KEYS``: the command class name, a planned ``Move`` as
+``MovePlanned``), so a report shows which mechanics a bot plays and how often.
+
 The harness imports ``gow_sim`` fully (AGENTS.md, section 4.1); it does not import the server.
 """
 
@@ -21,7 +25,7 @@ from pathlib import Path
 from typing import Final
 
 from gow_bots.bots import BOTS
-from gow_sim.analysis import MatchRecorder, analyze
+from gow_sim.analysis import MatchLog, MatchRecorder, analyze
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, load_map, map_hash
 from gow_sim.match import SIM_VERSION, Match, MatchObserver, MatchResult, run_headless
@@ -30,14 +34,45 @@ from gow_sim.ruleset import load_ruleset, ruleset_hash
 
 __all__ = [
     "SCHEMA_VERSION",
+    "USAGE_KEYS",
     "MatchTask",
     "build_tasks",
     "play_match",
     "run_tournament",
+    "usage",
 ]
 
 SCHEMA_VERSION: Final = 1
 """``schema`` of every JSONL row; bumped when a field is removed or changes meaning."""
+
+USAGE_KEYS: Final[tuple[str, ...]] = (
+    "Move",
+    "MovePlanned",
+    "CancelOrder",
+    "Split",
+    "Merge",
+    "SetMode",
+    "SetStance",
+    "Recruit",
+    "CancelRecruit",
+    "BuildBarracks",
+    "UpgradeWarehouse",
+    "UpgradeRoad",
+    "SetFront",
+    "SetRearMin",
+    "Transfer",
+)
+"""The mechanics of ``usage``, in report order: every command but ``Forfeit``."""
+
+
+def usage(log: MatchLog) -> list[dict[str, int]]:
+    """Accepted commands of every player (by player id) per key of ``USAGE_KEYS``."""
+    counts: list[dict[str, int]] = [{k: 0 for k in USAGE_KEYS} for _ in PLAYERS]
+    for c in log.commands:
+        key = "MovePlanned" if c.kind == "Move" and c.planned else c.kind
+        if c.accepted and key in counts[c.player]:
+            counts[c.player][key] += 1
+    return counts
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,7 +131,9 @@ def play_match(task: MatchTask) -> str:
         "bot1": task.bots[1],
         "state_hash": result.state_hash,
     }
-    row.update(analyze(recorder.log()).to_json())
+    log = recorder.log()
+    row.update(analyze(log).to_json())
+    row["usage"] = usage(log)
     return json.dumps(row, separators=(",", ":"), ensure_ascii=True)
 
 
