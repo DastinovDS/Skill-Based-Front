@@ -1,0 +1,800 @@
+<!doctype html>
+<!--
+  Mockup: nicer supply lines in the Supply map mode, a terrain and vision concept, rivers and lakes as purely visual borders (issue #429, for the owner to choose).
+  Self-contained: no network, no external fonts, images or scripts; everything is drawn by code (Canvas 2D). Open it as a file.
+  This is an illustration, not client code. The three maps are the real pool maps (maps/highway.json, crossroads.json, ridge.json: positions, kinds,
+  terrain, roads, max levels, mirror), embedded in compact form below; the position on them (who owns what, the packets, the markers, the units) is a
+  scenario made by code from those maps. What each variant reads is only what the snapshot carries (the table in section 1), and the rules the page
+  uses (the DEC-21 vision table, DEC-28 supply, DEC-19 starvation period) are checked against mechanics.md at the bottom of the page.
+  The state lives in the address (supply-terrain.html#map=highway&z=region&f=front&gray=0&rm=0&live=0&cols=2&sv=now&tv=chips&rv=r2&src=),
+  so the mockup can be opened at the right frame.
+  The embedded data was made from maps/*.json by a one-off script (nodes: x, y, terrain, kind, vp, start owner, name; edges: a, b, max level; mirror).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Supply lines, terrain and barriers</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#9da7b3;--you:#5b9bff;--enemy:#e5484d;--warn:#ffb020;--ok:#3fb950;--paper:#f0f6fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif}
+header{position:sticky;top:0;z-index:5;padding:8px 16px 10px;background:var(--surface);border-bottom:1px solid var(--border)}
+.row{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center}
+.row+.row{margin-top:6px}
+h1{font-size:16px;margin:0 6px 0 0}
+nav a{color:var(--you);text-decoration:none;margin-right:12px;font-size:13px}
+nav a:hover{text-decoration:underline}
+.opt{display:flex;gap:6px;align-items:center;color:var(--dim);font-size:13px}
+.opt select{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:2px 4px}
+button{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 10px;cursor:pointer;font:inherit;font-size:13px}
+button:hover{border-color:var(--you)}
+main{max-width:1700px;margin:0 auto;padding:16px}
+h2.sec{font-size:18px;margin:34px 0 4px;padding-top:14px;border-top:1px solid var(--border)}
+h2.sec:first-of-type{border-top:0;margin-top:8px}
+h3.sub{font-size:14px;margin:20px 0 4px}
+.note{color:var(--dim);margin:4px 0 10px;font-size:13px;max-width:1150px}
+.note b{color:var(--text)}
+code{background:var(--surface2);padding:0 4px;border-radius:4px;font-size:12.5px}
+.grid{display:grid;gap:14px;margin:10px 0}
+.card{margin:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0;overflow:hidden;min-width:0}
+.card figcaption{display:flex;gap:10px;align-items:baseline;padding:7px 12px;border-bottom:1px solid var(--border)}
+.card figcaption b{font-size:14px}
+.card .tag{color:var(--dim);font-size:12.5px;flex:1}
+.card .prim{color:var(--dim);font-size:11.5px;font-variant-numeric:tabular-nums}
+.card canvas{display:block;background:#000}
+.card .desc{margin:0;padding:8px 12px 10px;color:var(--dim);font-size:12.5px}
+.gray canvas{filter:grayscale(1)}
+.tbl{overflow:auto;max-width:100%;border:1px solid var(--border);border-radius:8px;background:var(--surface);margin:8px 0}
+.tbl table{border-collapse:collapse;width:100%}
+.tbl th,.tbl td{border:1px solid var(--border);padding:6px 10px;vertical-align:top;text-align:left;font-size:12.5px}
+.tbl th{font-weight:600;color:var(--dim);background:var(--surface2)}
+.tbl tr.rec td,.tbl tr.rec th{background:#14261a}
+.tbl td.c{text-align:center}
+table.small{border-collapse:collapse;margin:6px 0}
+table.small th,table.small td{border:1px solid var(--border);padding:3px 10px;font-size:12.5px;text-align:left}
+table.small th{background:var(--surface2);color:var(--dim);font-weight:600}
+ul.chk{list-style:none;padding:0;font-size:13px;color:var(--dim)}
+ul.chk li{margin:2px 0}
+.ok{color:var(--ok);font-weight:700}.bad{color:var(--warn);font-weight:700}
+.decision{margin-top:16px;padding:10px 14px;background:var(--surface);border:1px solid var(--warn);border-radius:8px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:12.5px;color:var(--dim);margin:6px 0}
+@media (max-width:760px){.grid{grid-template-columns:1fr!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>Supply lines, terrain and barriers (#429)</h1>
+    <label class="opt">map <select id="map"></select></label>
+    <label class="opt">zoom <select id="z"></select></label>
+    <label class="opt">look at <select id="f"></select></label>
+    <label class="opt">columns <select id="cols"></select></label>
+    <label class="opt"><input type="checkbox" id="gray"> grayscale</label>
+    <label class="opt"><input type="checkbox" id="rm"> reduced motion</label>
+    <label class="opt"><input type="checkbox" id="live"> animate</label>
+    <nav><a href="#s1">1 Supply</a><a href="#s2">2 Terrain and vision</a><a href="#s3">3 Rivers and lakes</a><a href="#s4">4 Together</a><a href="#s5">5 Table</a><a href="#s6">6 Checks</a></nav>
+  </div>
+</header>
+<main>
+
+<h2 class="sec" id="s1">1. The Supply view: nicer supply lines</h2>
+<p class="note">
+  The map mode on <code>Tab</code> or <code>F2</code> (DEC-28, item 8; <code>ui-style.md</code>, section 19). <b>Now</b> is drawn from the same constants as the client
+  (<code>supplyView.ts</code>, <code>style.ts</code>: <code>SUPPLY_*</code>), the cities are simplified (no capacity ring). What the owner wants nicer: the lines that show delivery.
+  Every variant has to show seven things: the <b>road level</b>, the <b>direction</b> of the flow, the <b>packets</b> in transit, the <b>front markers</b>,
+  <b>cut-off cities</b>, <b>internal roads</b> (supply goes only along them) against <b>buffer roads</b> (it stops there), and the volume. None needs a rule, a protocol or a server change:
+  the scene is the own packets with their <code>path</code>, the own warehouses, <code>me.fronts</code>, <code>starve_in</code> and the level of every road, all in the snapshot today.
+  The opponent stays territory and presence only (DEC-04, DEC-17). State is told by shape, number or pattern, not by colour alone: use the grayscale switch.
+  The position is a made-up mid-game on the chosen map: two markers, a counter-flow on the spine (the automation sends a charge back, DEC-28 example 7), a one-off transfer, a city raided and cut off.
+</p>
+<div class="legend" id="legSup"></div>
+<div id="gSup" class="grid"></div>
+<h3 class="sub">Anatomy: the same seven things on a small hand-made position, one sheet per variant</h3>
+<p class="note">Level 3 and 2 roads, a flow with a counter-flow, a one-off transfer, two markers, a buffer road to the opponent and a cut-off city. The same drawing code as above, at a fixed scale.</p>
+<div id="gAnat" class="grid"></div>
+
+<h2 class="sec" id="s2">2. Terrain, and what it means for vision</h2>
+<p class="note">
+  Today the map shows three biomes (a baked background plus stamps), but nothing says what a terrain <b>means</b>: how well a group sees a neighbouring place depends on the terrain it stands on
+  and the terrain it looks at (DEC-21, item 2), and since DEC-35 only own groups are sources (an empty own city sees nothing). The table is public (<code>ruleset_public.vision.by_terrain</code>)
+  and the level of every place is already in the snapshot (<code>detail</code>: exact, range, presence, fog), so a variant only draws what the server sends; the client computes nothing.
+  <b>Three bars</b> is the sign for a level in every variant: three exact, two range, one presence. The enemy token already tells it by its label (a number, a range, a question mark).
+</p>
+<table class="small" id="vtab"></table>
+<p class="note">Here: the table (the public one) is shown as the page uses it. In the grid, <b>the lens source</b> is the group the variants C and D select:
+  <label class="opt" style="display:inline-flex"><select id="src"></select></label></p>
+<div id="gTer" class="grid"></div>
+<h3 class="sub">The nine pairs: source terrain to target terrain, in each language</h3>
+<p class="note">A group on the left (own, blue) looks at an enemy group of four units on the right. The ground colours here are flat stand-ins; the label on the red token is what the player gets today.</p>
+<div id="gPairs" class="grid"></div>
+
+<h2 class="sec" id="s3">3. Rivers and lakes as purely visual borders</h2>
+<p class="note">
+  The owner's feedback of 2026-10-28: neighbouring places that have no road between them look connected. The 6 px strips of #428 were removed in #451. Here the answer is a landscape:
+  <b>no rule</b> (nothing becomes impassable: there is simply no road there, and the picture now says why), <b>no format change</b> for A to C (the border between two neighbouring cells with no road
+  between the two cities is found from nodes and roads that the client already has), and a river never meets a road (the check at the bottom counts crossings). On the three pool maps
+  that is <span id="rivNums"></span>. If the owner also wants such a river to be a rule (impassable), that is a separate DEC and out of scope here.
+</p>
+<div id="gRiv" class="grid"></div>
+
+<h2 class="sec" id="s4">4. Together</h2>
+<p class="note">Pick one of each and look at the supply view and the normal map side by side, at the zoom of the header.
+  <label class="opt" style="display:inline-flex">supply <select id="sv"></select></label>
+  <label class="opt" style="display:inline-flex">terrain <select id="tv"></select></label>
+  <label class="opt" style="display:inline-flex">barriers <select id="rv"></select></label>
+  (the barrier shows on the normal map only: the Supply view is flat on purpose.)</p>
+<div id="cmb" class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))"><figure class="card"><figcaption><b>Supply view</b></figcaption><canvas id="cmb1"></canvas></figure><figure class="card"><figcaption><b>Normal map</b></figcaption><canvas id="cmb2"></canvas></figure></div>
+
+<h2 class="sec" id="s5">5. Variants, costs and the recommendation</h2>
+<div id="tables"></div>
+
+<h2 class="sec" id="s6">6. Checks</h2>
+<p class="note">Run on this page against the tables of <code>mechanics.md</code> (the DEC-21 table and examples, DEC-35 sources, DEC-28 markers and flows, DEC-26 levels, DEC-19 cut-off) and against the maps.</p>
+<ul class="chk" id="chk"></ul>
+<p class="note"><button id="measureBtn">Measure the draw cost on this machine</button> Canvas 2D, a 700 x 450 view: a stand-in for relative cost only; the client draws with PixiJS (static Graphics are cached, only the packets and the chevrons move).</p>
+<div class="tbl"><table id="perf"></table></div>
+
+</main>
+<script>
+const MAPS={"highway":{"w":2000,"h":1240,"n":[[146,572,2,4,1,0,"Milepost"],[251,398,0,1,1,0,"Homestead"],[305,758,1,1,1,0,"Coach Stop"],[326,582,0,3,1,0,"Checkpoint"],[506,600,0,0,0,-1,"Roadside"],[676,620,0,2,2,-1,"Post House"],[836,640,0,0,0,-1,"Bridge"],[170,214,1,2,1,0,"Pinewood"],[350,157,1,0,0,0,"Thickets"],[476,60,2,0,0,-1,"Stone Crown"],[530,257,2,1,1,-1,"Ore Mine"],[701,178,1,0,0,-1,"Palisade"],[868,317,2,2,2,-1,"Keep"],[1000,130,1,0,0,-1,"North Portage"],[259,934,0,2,1,0,"Newfield"],[445,1017,0,0,0,0,"Haymeadow"],[570,1140,1,0,0,-1,"Quiet Corner"],[618,957,1,1,1,-1,"Tarworks"],[796,1078,2,0,0,-1,"Crest"],[923,957,1,2,2,-1,"Oakwood"],[399,391,1,0,0,-1,"Copse"],[751,453,2,0,0,-1,"Rise"],[458,791,0,0,0,-1,"Common"],[805,813,1,0,0,-1,"Little Grove"],[1000,620,0,3,3,-1,"Market"],[1209,441,1,0,0,-1,"Birch Copse"],[1588,423,0,0,0,-1,"Pasture"],[1247,791,2,0,0,-1,"Knoll"],[1581,820,1,0,0,-1,"Underwood"],[1083,291,1,2,2,-1,"Elmwood"],[1233,170,2,0,0,-1,"Ledge"],[1433,279,1,1,1,-1,"Pitchworks"],[1470,91,1,0,0,-1,"Bear Corner"],[1627,198,0,0,0,1,"Hayfield"],[1831,260,0,2,1,1,"Meadowland"],[1000,1110,1,0,0,-1,"South Portage"],[1127,932,2,2,2,-1,"Bastion"],[1265,1060,1,0,0,-1,"Barricade"],[1434,966,2,1,1,-1,"Quarry"],[1463,1161,2,0,0,-1,"Stone Belt"],[1603,1054,1,0,0,1,"Windfall"],[1776,966,1,2,1,1,"Sprucewood"],[1173,603,0,0,0,-1,"Crossing"],[1328,636,0,2,2,-1,"Coach House"],[1521,641,0,0,0,-1,"Rutway"],[1695,629,0,3,1,1,"Tollgate"],[1759,434,1,1,1,1,"Relay Post"],[1735,797,0,1,1,1,"Wayside Inn"],[1869,599,2,4,1,1,"Waymark"]],"e":[[0,3,3],[3,4,3],[4,5,3],[5,6,3],[6,24,3],[0,1,2],[0,2,2],[1,3,2],[2,3,2],[1,7,2],[2,14,2],[7,8,2],[14,15,2],[8,10,2],[10,11,2],[11,12,2],[12,13,2],[8,9,2],[9,11,2],[15,17,2],[17,18,2],[18,19,2],[15,16,2],[16,18,2],[1,20,2],[4,20,2],[20,10,2],[2,22,2],[4,22,2],[22,17,2],[5,21,2],[21,12,2],[5,23,2],[23,19,2],[6,21,2],[6,23,2],[48,45,3],[45,44,3],[44,43,3],[43,42,3],[42,24,3],[48,47,2],[48,46,2],[47,45,2],[46,45,2],[47,41,2],[46,34,2],[41,40,2],[34,33,2],[40,38,2],[38,37,2],[37,36,2],[36,35,2],[40,39,2],[39,37,2],[33,31,2],[31,30,2],[30,29,2],[33,32,2],[32,30,2],[47,28,2],[44,28,2],[28,38,2],[46,26,2],[44,26,2],[26,31,2],[43,27,2],[27,36,2],[43,25,2],[25,29,2],[42,27,2],[42,25,2],[19,35,2],[13,29,2],[12,29,2],[19,36,2],[21,25,2],[23,27,2]],"m":[48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0]},"crossroads":{"w":2000,"h":1240,"n":[[122,576,2,4,1,0,"Nexus"],[253,204,1,2,1,0,"Lindenwood"],[252,424,0,0,0,0,"Flank"],[279,744,0,0,0,0,"Strip"],[308,964,1,2,1,0,"Broomfield"],[411,86,0,0,0,-1,"Field"],[400,326,0,1,1,0,"Freehold"],[412,596,0,3,1,0,"Middle Court"],[443,866,1,1,1,0,"Lodge"],[474,1106,1,0,0,-1,"Woodcut"],[553,229,1,2,1,-1,"White Spring"],[552,469,0,0,0,-1,"Fork"],[576,749,0,0,0,-1,"Crossways"],[608,989,2,2,1,-1,"Flint"],[711,113,2,1,1,-1,"Watchtower"],[700,353,1,0,0,-1,"Woodlane"],[712,623,0,3,2,-1,"Fairgate"],[743,893,1,0,0,-1,"Glade"],[774,1133,0,1,1,-1,"Millstead"],[842,252,0,0,0,-1,"Old Road"],[842,492,2,2,2,-1,"Sentinel"],[861,772,0,0,0,-1,"Wallside"],[886,1012,1,0,0,-1,"Bend"],[1000,100,2,1,2,-1,"North Outpost"],[1000,620,0,3,3,-1,"Crossroads"],[1000,1140,2,1,2,-1,"South Outpost"],[1101,231,1,0,0,-1,"Loop"],[1134,469,0,0,0,-1,"Overhill"],[1165,744,2,2,2,-1,"Lookout"],[1177,985,0,0,0,-1,"Post Road"],[1207,93,0,1,1,-1,"Millpond"],[1242,331,1,0,0,-1,"Treeline"],[1289,598,0,3,2,-1,"Tradegate"],[1326,871,1,0,0,-1,"Footpath"],[1308,1103,2,1,1,-1,"Beacon"],[1370,228,2,2,1,-1,"Shale"],[1410,459,0,0,0,-1,"Crosspoint"],[1483,748,0,0,0,-1,"Parting"],[1507,980,1,2,1,-1,"Black Spring"],[1461,78,1,0,0,-1,"Clearing"],[1520,326,1,1,1,1,"Newstead"],[1606,586,0,3,1,1,"Bazaar"],[1669,867,0,1,1,1,"Burgh"],[1646,1107,0,0,0,-1,"Meadow"],[1638,211,1,2,1,1,"Willowbed"],[1722,430,0,0,0,1,"Fringe"],[1805,746,0,0,0,1,"Edge"],[1825,961,1,2,1,1,"Elmwood"],[1921,569,2,4,1,1,"Core"]],"e":[[0,2,3],[0,3,3],[0,7,3],[1,2,2],[3,4,2],[1,5,2],[1,6,2],[2,6,2],[2,7,2],[3,7,2],[3,8,2],[4,8,2],[4,9,2],[5,10,2],[6,10,2],[6,11,2],[7,11,2],[7,12,2],[8,12,2],[8,13,2],[9,13,2],[10,11,2],[12,13,2],[10,14,2],[10,15,2],[11,15,2],[11,16,2],[12,16,2],[12,17,2],[13,17,2],[13,18,2],[14,19,2],[15,19,2],[15,20,2],[16,20,2],[16,21,2],[17,21,2],[17,22,2],[18,22,2],[20,24,2],[21,24,2],[14,23,2],[19,23,2],[48,46,3],[48,45,3],[48,41,3],[47,46,2],[45,44,2],[47,43,2],[47,42,2],[46,42,2],[46,41,2],[45,41,2],[45,40,2],[44,40,2],[44,39,2],[43,38,2],[42,38,2],[42,37,2],[41,37,2],[41,36,2],[40,36,2],[40,35,2],[39,35,2],[38,37,2],[36,35,2],[38,34,2],[38,33,2],[37,33,2],[37,32,2],[36,32,2],[36,31,2],[35,31,2],[35,30,2],[34,29,2],[33,29,2],[33,28,2],[32,28,2],[32,27,2],[31,27,2],[31,26,2],[30,26,2],[28,24,2],[27,24,2],[34,25,2],[29,25,2],[19,26,2],[22,29,2],[20,27,2],[21,28,2],[18,25,2],[23,30,2]],"m":[48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0]},"ridge":{"w":2000,"h":1240,"n":[[132,577,2,4,1,0,"Bedrock"],[255,154,1,2,1,0,"Sprucedale"],[251,384,0,0,0,0,"Boundary"],[284,784,1,0,0,0,"Pinewood"],[314,1014,0,2,1,0,"Plowland"],[442,78,2,0,0,-1,"Crag"],[420,297,0,1,1,0,"Farmstead"],[442,598,0,3,1,0,"Outpost"],[467,897,1,1,1,0,"Woodside"],[507,1128,1,0,0,-1,"Backwoods"],[604,214,1,2,1,-1,"Cedarwood"],[611,425,0,0,0,-1,"Forkway"],[612,614,0,0,0,-1,"Highroad"],[642,805,0,0,0,-1,"Fords"],[660,1014,2,2,1,-1,"Stonebrook"],[792,111,2,1,1,-1,"Eagle Nest"],[770,340,1,3,2,-1,"Oakgrove"],[792,631,0,0,0,-1,"Hillfoot"],[816,920,0,3,2,-1,"Fairground"],[856,1151,1,0,0,-1,"Ravine"],[842,262,1,0,0,-1,"Sprucewood"],[881,491,2,0,0,-1,"Scree"],[1000,75,2,0,0,-1,"North Peak"],[1000,200,2,0,0,-1,"North Trail"],[1000,430,2,2,2,-1,"North Pass"],[1000,620,2,3,3,-1,"Gates"],[1000,810,2,2,2,-1,"South Pass"],[1000,1040,2,0,0,-1,"South Trail"],[1000,1165,2,0,0,-1,"South Peak"],[1125,751,2,0,0,-1,"Talus"],[1170,974,1,0,0,-1,"Firwood"],[1130,87,1,0,0,-1,"Gully"],[1176,310,0,3,2,-1,"Marketown"],[1214,599,0,0,0,-1,"Foothills"],[1246,888,1,3,2,-1,"Ashgrove"],[1226,1122,2,1,1,-1,"Falcon Nest"],[1300,195,2,2,1,-1,"Granite"],[1358,417,0,0,0,-1,"Ferry"],[1392,599,0,0,0,-1,"Highway"],[1423,801,0,0,0,-1,"Waycross"],[1450,1003,1,2,1,-1,"Larchwood"],[1430,62,1,0,0,-1,"Wilds"],[1492,299,1,1,1,1,"Thicket"],[1574,589,0,3,1,1,"Cordon"],[1649,900,0,1,1,1,"Hamlet"],[1611,1120,2,0,0,-1,"Bluff"],[1624,162,0,2,1,1,"Acres"],[1708,391,1,0,0,1,"Pinegrove"],[1811,785,0,0,0,1,"Outskirts"],[1820,1011,1,2,1,1,"Firdale"],[1910,569,2,4,1,1,"Bulwark"]],"e":[[0,2,3],[0,3,3],[0,7,3],[1,2,2],[3,4,2],[1,5,2],[1,6,2],[2,6,2],[2,7,2],[3,7,2],[3,8,2],[4,8,2],[4,9,2],[5,10,2],[6,10,2],[6,11,2],[7,12,3],[8,13,2],[8,14,2],[9,14,2],[10,15,2],[10,16,2],[11,16,2],[11,12,2],[12,13,2],[12,17,3],[13,18,2],[14,18,2],[14,19,2],[15,22,2],[15,23,2],[16,20,2],[20,23,2],[16,21,2],[21,24,2],[17,25,3],[22,23,2],[23,24,2],[24,25,2],[50,48,3],[50,47,3],[50,43,3],[49,48,2],[47,46,2],[49,45,2],[49,44,2],[48,44,2],[48,43,2],[47,43,2],[47,42,2],[46,42,2],[46,41,2],[45,40,2],[44,40,2],[44,39,2],[43,38,3],[42,37,2],[42,36,2],[41,36,2],[40,35,2],[40,34,2],[39,34,2],[39,38,2],[38,37,2],[38,33,3],[37,32,2],[36,32,2],[36,31,2],[35,28,2],[35,27,2],[34,30,2],[30,27,2],[34,29,2],[29,26,2],[33,25,3],[28,27,2],[27,26,2],[26,25,2],[18,26,2],[24,32,2],[19,27,2],[23,31,2]],"m":[50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0]}}
+;
+// ============================================================ geometry and scenario
+// Node terrain 0 plains, 1 forest, 2 mountains. Kind 0 province, 1 small, 2 medium, 3 large, 4 capital.
+const TERR=['plains','forest','mountains'];
+const KIND=['province','small city','medium city','large city','capital'];
+// Radius by capacity class (cityLayout.ts: cityRadius): capacity by kind is 3, 4, 6, 8, 10 (rulesets/mvp-1.toml).
+const KRAD=[9,14,17,20,20];
+// Warehouse capacity by kind (rulesets/mvp-1.toml, warehouse.start_by_kind).
+const KWH=[0,1,2,2,6];
+const RANGE_STARTS=[1,3,6,11,21]; // vision.range_starts
+const VIS={ // vision.by_terrain[source][target], DEC-21 item 2: 3 exact, 2 range, 1 presence
+  plains:{plains:3,forest:2,mountains:1},
+  forest:{plains:2,forest:2,mountains:1},
+  mountains:{plains:3,forest:2,mountains:2}};
+const STARVE_PERIOD=100; // starvation.period_ticks
+const ME=0, FOE=1;
+
+function mulberry(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hash2(x,y,s){let h=Math.imul(Math.round(x*7.13)^0x9e3779b1,0x85ebca6b)^Math.imul(Math.round(y*5.77)+s,0xc2b2ae35);h^=h>>>13;h=Math.imul(h,0x27d4eb2f);h^=h>>>15;return (h>>>0)/4294967296;}
+function vnoise(x,y,s){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;const u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf);
+  const a=hash2(xi,yi,s),b=hash2(xi+1,yi,s),c=hash2(xi,yi+1,s),d=hash2(xi+1,yi+1,s);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;}
+
+function clipHalf(poly,a,b,c){const out=[];for(let i=0;i<poly.length;i++){const p=poly[i],q=poly[(i+1)%poly.length];const fp=a*p[0]+b*p[1]-c,fq=a*q[0]+b*q[1]-c;
+  if(fp<=0)out.push(p);if((fp<0&&fq>0)||(fp>0&&fq<0)){const t=fp/(fp-fq);out.push([p[0]+(q[0]-p[0])*t,p[1]+(q[1]-p[1])*t]);}}return out;}
+
+const _base={};
+function buildBase(id){
+  if(_base[id])return _base[id];
+  const M=MAPS[id],W=M.w,H=M.h;
+  const nodes=M.n.map((a,i)=>({id:i,x:a[0],y:a[1],terr:a[2],kind:a[3],vp:a[4],start:a[5],name:a[6],mir:M.m[i],r:KRAD[a[3]]}));
+  const edges=M.e.map((a,i)=>({id:i,a:a[0],b:a[1],max:a[2]}));
+  const nb=nodes.map(()=>[]);const eidx={};
+  edges.forEach(e=>{nb[e.a].push(e.b);nb[e.b].push(e.a);eidx[Math.min(e.a,e.b)+':'+Math.max(e.a,e.b)]=e.id;});
+  const cap0=nodes.find(n=>n.kind===4&&n.start===0).id,cap1=nodes.find(n=>n.kind===4&&n.start===1).id;
+  const hops=(s)=>{const d=nodes.map(()=>1e9);d[s]=0;const q=[s];for(let i=0;i<q.length;i++){for(const m of nb[q[i]])if(d[m]>d[q[i]]+1){d[m]=d[q[i]]+1;q.push(m);}}return d;};
+  // Voronoi cells (convex, clipped to the world rectangle), as the client does (voronoi.ts).
+  const cells=nodes.map((p,i)=>{let poly=[[0,0],[W,0],[W,H],[0,H]];for(const q of nodes){if(q===p)continue;
+    poly=clipHalf(poly,q.x-p.x,q.y-p.y,(q.x*q.x+q.y*q.y-p.x*p.x-p.y*p.y)/2);}return poly;});
+  // Shared cell borders: a segment per neighbouring pair, with or without a road between the two nodes.
+  const shared=[];
+  for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
+    const p=nodes[i],q=nodes[j],a=q.x-p.x,b=q.y-p.y,l=Math.hypot(a,b),c=(q.x*q.x+q.y*q.y-p.x*p.x-p.y*p.y)/2;
+    const on=cells[i].filter(v=>Math.abs(a*v[0]+b*v[1]-c)/l<0.05);
+    if(on.length>=2){let s=on[0],t=on[0],bd=-1;for(const u of on)for(const v of on){const d=Math.hypot(u[0]-v[0],u[1]-v[1]);if(d>bd){bd=d;s=u;t=v;}}
+      if(bd>1)shared.push({i,j,p:s,q:t,len:bd,road:eidx[i+':'+j]!==undefined});}}
+  return _base[id]={id,W,H,nodes,edges,nb,eidx,cap0,cap1,d0:hops(cap0),d1:hops(cap1),cells,shared};
+}
+
+// ---- A mid-game position: the owner of every node, supply, units. Everything below is the data the server would send.
+const _scn={};
+function scenario(id){
+  if(_scn[id])return _scn[id];
+  const B=buildBase(id),{nodes,edges,nb,d0,d1}=B;
+  const owner=nodes.map(n=>n.start);
+  for(const n of nodes)if(n.start===-1)owner[n.id]=d0[n.id]<d1[n.id]?ME:d0[n.id]>d1[n.id]?FOE:-1;
+  // The front moved a little: two tied nodes next to our land are ours, the mirrored ones are the opponent's.
+  const ties=nodes.filter(n=>owner[n.id]===-1&&d0[n.id]===d1[n.id]).map(n=>n.id);
+  let tilt=0;for(const t of ties){if(tilt>=2)break;if(owner[t]!==-1)continue;if(nb[t].some(m=>owner[m]===ME)&&nodes[t].mir!==t&&owner[nodes[t].mir]===-1){owner[t]=ME;owner[nodes[t].mir]=FOE;tilt++;}}
+  // A raid: one enemy city nobody of ours touches is ours now, cut off from the capital.
+  const pocketCand=nodes.filter(n=>owner[n.id]===FOE&&n.kind>=1&&n.kind<4&&!nb[n.id].some(m=>owner[m]===ME)&&nb[n.id].some(m=>owner[m]!==ME))
+    .sort((a,b)=>d0[a.id]-d0[b.id]||a.id-b.id);
+  const pocket=pocketCand.length?pocketCand[0].id:-1;
+  if(pocket>=0)owner[pocket]=ME;
+  const own=i=>owner[i]===ME;
+  // Edge classes: own (both ends ours), foe (both ends theirs), buffer (anything else).
+  const kind=edges.map(e=>owner[e.a]===ME&&owner[e.b]===ME?'own':owner[e.a]===FOE&&owner[e.b]===FOE?'foe':'buffer');
+  // Supply tree: BFS from our capital over own internal roads.
+  const par=nodes.map(()=>-1),dist=nodes.map(()=>-1);dist[B.cap0]=0;const q=[B.cap0];
+  for(let i=0;i<q.length;i++){for(const m of nb[q[i]]){const e=edges[B.eidx[Math.min(q[i],m)+':'+Math.max(q[i],m)]];if(kind[e.id]==='own'&&dist[m]<0){dist[m]=dist[q[i]]+1;par[m]=q[i];q.push(m);}}}
+  const reached=i=>dist[i]>=0;
+  const cities=nodes.filter(n=>own(n.id)&&reached(n.id)&&n.kind>=2&&n.kind<4);
+  cities.sort((a,b)=>d1[a.id]-d1[b.id]||a.id-b.id);
+  const m0=cities.length?cities[0].id:B.cap0;
+  const hopTree=(a,b)=>{const pa=[];for(let x=a;x>=0;x=par[x])pa.push(x);const pb=[];for(let x=b;x>=0;x=par[x])pb.push(x);const s=new Set(pa);let c=pb.find(x=>s.has(x));return pa.indexOf(c)+pb.indexOf(c);};
+  let m1=m0;{let best=1e18;for(const c of cities){if(c.id===m0||hopTree(c.id,m0)<2)continue;const sc=d1[c.id]*100+Math.hypot(c.x-nodes[m0].x,c.y-nodes[m0].y);if(sc<best){best=sc;m1=c.id;}}}
+  const pathTo=(n)=>{const p=[];for(let x=n;x>=0;x=par[x])p.push(x);return p.reverse();};
+  const fronts=[m0,m1];
+  // Road levels: the spine to the markers is built up, the rest mostly level 1.
+  const level=edges.map(e=>1);const spine=new Set();
+  fronts.forEach(m=>{const p=pathTo(m);for(let i=1;i<p.length;i++){const e=B.eidx[Math.min(p[i-1],p[i])+':'+Math.max(p[i-1],p[i])];spine.add(e);level[e]=Math.min(edges[e].max,i<=2?3:2);}});
+  edges.forEach(e=>{if(kind[e.id]==='own'&&!spine.has(e.id)&&e.max>=2&&(e.id%3===0))level[e.id]=2;});
+  edges.forEach(e=>{if(kind[e.id]!=='own')level[e.id]=1;});
+  // Warehouses of own cities (own data, always known), starvation timers of the cut-off ones.
+  const stock={},cut={};
+  for(const n of nodes)if(own(n.id)&&n.kind>=1){const cap=KWH[n.kind];let s=Math.min(1,cap);
+    if(n.id===B.cap0)s=4;else if(fronts.includes(n.id))s=cap;else if(n.id%4===0)s=Math.min(2,cap);
+    if(!reached(n.id)){s=0;cut[n.id]=73;}stock[n.id]=s;}
+  // Packets (own only): charges on their way along the server's path.
+  const packets=[];const eOf=(a,b)=>B.eidx[Math.min(a,b)+':'+Math.max(a,b)];
+  fronts.forEach((m,k)=>{const p=pathTo(m);if(p.length<2)return;
+    const e1=Math.min(1,p.length-2);
+    packets.push({from:p[e1],to:p[e1+1],edge:eOf(p[e1],p[e1+1]),p:0.34+0.12*k,charges:2,transfer:false,path:p.slice(e1+2)});
+    packets.push({from:p[0],to:p[1],edge:eOf(p[0],p[1]),p:0.7-0.2*k,charges:1,transfer:false,path:p.slice(2)});});
+  // A counter-flow on the spine of the first marker (a donor sending a charge back, mechanics.md DEC-28 example 7).
+  {const p=pathTo(m0);if(p.length>=3){const i=Math.min(p.length-1,3);packets.push({from:p[i],to:p[i-1],edge:eOf(p[i-1],p[i]),p:0.5,charges:1,transfer:false,path:[]});}}
+  // A one-off transfer on an own road that is not on the spine.
+  {const cand=edges.filter(e=>kind[e.id]==='own'&&!spine.has(e.id)&&reached(e.a)&&reached(e.b)&&nodes[e.a].kind>=1&&nodes[e.b].kind>=1).sort((a,b)=>(d0[a.a]+d0[a.b])-(d0[b.a]+d0[b.b])||a.id-b.id);
+    if(cand.length){const e=cand[Math.min(1,cand.length-1)];const [f,t]=d0[e.a]<=d0[e.b]?[e.a,e.b]:[e.b,e.a];packets.push({from:f,to:t,edge:e.id,p:0.55,charges:3,transfer:true,path:[]});}}
+  // Enemy presence seen now (no numbers): nodes next to our land and one road.
+  const presence=[];const pn=nodes.filter(n=>owner[n.id]===FOE&&nb[n.id].some(m=>own(m)&&nodes[m].kind>=1)).slice(0,3);pn.forEach(n=>presence.push({k:'n',id:n.id}));
+  // Units on the map (for the terrain part): own groups are the only vision sources (DEC-35).
+  const groups=[];const addG=(n,u,c)=>groups.push({node:n,units:u,charged:c});
+  addG(B.cap0,6,6);addG(m0,3,3);addG(m1,2,1);
+  const front3=nodes.filter(n=>own(n.id)&&n.kind===0&&nb[n.id].some(m=>owner[m]!==ME)).sort((a,b)=>d1[a.id]-d1[b.id]||a.id-b.id)[0];
+  if(front3)addG(front3.id,1,1);
+  // The forward group (the scout): the one the lens and the card look from by default.
+  const scout=front3?front3.id:m0;
+  const sd=nodes.map(()=>1e9);sd[scout]=0;{const qq=[scout];for(let i=0;i<qq.length;i++)for(const m of nb[qq[i]])if(sd[m]>sd[qq[i]]+1){sd[m]=sd[qq[i]]+1;qq.push(m);}}
+  const foes=[];{const cand=nodes.filter(n=>owner[n.id]!==ME).sort((a,b)=>sd[a.id]-sd[b.id]||a.id-b.id);const sizes=[4,2,7,3,12,5];cand.slice(0,6).forEach((n,i)=>foes.push({node:n.id,units:sizes[i]}));}
+  return _scn[id]={scout,B,owner,kind,level,fronts,par,dist,stock,cut,packets,presence,pocket,groups,foes,spine,pathTo};
+}
+
+// Vision levels per node (DEC-21 table with DEC-35 sources): 3 exact, 2 range, 1 presence, 0 fog. Used only to FAKE the server's `detail`.
+function visionLevels(S){
+  const {B,owner,groups}=S,{nodes,nb}=B;const lv=nodes.map(()=>0);const src=new Set(groups.map(g=>g.node));
+  for(const s of src){lv[s]=3;for(const m of nb[s]){const v=VIS[TERR[nodes[s].terr]][TERR[nodes[m].terr]];if(v>lv[m])lv[m]=v;}}
+  nodes.forEach(n=>{if(owner[n.id]===ME&&lv[n.id]<1)lv[n.id]=1;});
+  return lv;
+}
+function rangeLabel(u){let k=0;RANGE_STARTS.forEach((s,i)=>{if(u>=s)k=i;});const lo=RANGE_STARTS[k],hi=RANGE_STARTS[k+1];return hi===undefined?lo+'+':lo+'-'+(hi-1);}
+
+// Rivers and lakes derived from the map alone: the borders of neighbouring cells that have no road between them.
+const _riv={};
+function riverNet(id){
+  if(_riv[id])return _riv[id];
+  const B=buildBase(id);
+  // A border that a road (of two other cities) runs across is dropped: a river must never cut a road.
+  const xs=(a,b,c,d)=>{const o=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);return o(a,b,c)*o(a,b,d)<0&&o(c,d,a)*o(c,d,b)<0;};
+  const all=B.shared.filter(s=>!s.road);
+  const segs=all.filter(s=>!B.edges.some(e=>xs(s.p,s.q,[B.nodes[e.a].x,B.nodes[e.a].y],[B.nodes[e.b].x,B.nodes[e.b].y])));
+  const dropped=all.length-segs.length;
+  const key=p=>Math.round(p[0]*2)+','+Math.round(p[1]*2);
+  const vt={};segs.forEach((s,k)=>{[s.p,s.q].forEach(v=>{const kk=key(v);(vt[kk]=vt[kk]||{pt:v,segs:[]}).segs.push(k);});});
+  // Chains: follow segments through vertices of degree 2.
+  const used=new Set(),chains=[];
+  const other=(s,kk)=>key(segs[s].p)===kk?key(segs[s].q):key(segs[s].p);
+  const walk=(start,kk0)=>{const pts=[vt[kk0].pt];let kk=kk0,cur=start,len=0,pairs=[];
+    while(cur!==undefined&&!used.has(cur)){used.add(cur);const nx=other(cur,kk);pts.push(vt[nx].pt);len+=segs[cur].len;pairs.push(segs[cur]);kk=nx;const deg=vt[kk].segs;
+      cur=deg.length===2?deg.find(s=>s!==cur):undefined;}
+    return {pts,len,pairs};};
+  // start from vertices with degree != 2 first, then the loops.
+  Object.keys(vt).forEach(kk=>{const d=vt[kk].segs;if(d.length!==2)d.forEach(s=>{if(!used.has(s))chains.push(walk(s,kk));});});
+  segs.forEach((s,k)=>{if(!used.has(k))chains.push(walk(k,key(s.p)));});
+  const junctions=Object.keys(vt).filter(kk=>vt[kk].segs.length>=3).map(kk=>vt[kk].pt);
+  const ends=Object.keys(vt).filter(kk=>vt[kk].segs.length===1).map(kk=>vt[kk].pt);
+  return _riv[id]={segs,chains,junctions,ends,dropped,all:all.length};
+}
+// ============================================================ drawing helpers (Canvas 2D, world units, like the client's Pixi layers)
+const C={bg:'#0d1117',paper:'#f0f6fc',you:'#5b9bff',foe:'#e5484d',warn:'#ffb020',floor:'#141a22',lane:'#e6edf3',buf:'#aab2bd',neutral:'#3b4450',vp:'#e8b830',empty:'#3b4450',water:'#4b93d6'};
+let PRIM=0;            // primitives drawn in the last frame (a rough stand-in for draw cost)
+let VW={x0:-1e9,y0:-1e9,x1:1e9,y1:1e9};
+const inV=(x,y,p=60)=>x>VW.x0-p&&x<VW.x1+p&&y>VW.y0-p&&y<VW.y1+p;
+function pth(ctx,pts,close){ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);if(close)ctx.closePath();}
+function strk(ctx,pts,w,col,a=1,o){o=o||{};pth(ctx,pts,o.close);ctx.lineWidth=w;ctx.strokeStyle=col;ctx.globalAlpha=a;ctx.lineCap=o.cap||'butt';ctx.lineJoin=o.join||'round';
+  ctx.setLineDash(o.dash||[]);ctx.lineDashOffset=o.off||0;ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;PRIM++;}
+function fllp(ctx,pts,col,a=1){pth(ctx,pts,true);ctx.globalAlpha=a;ctx.fillStyle=col;ctx.fill();ctx.globalAlpha=1;PRIM++;}
+function circ(ctx,x,y,r,fc,fa=1,sw=0,sc,sa=1,o){ctx.beginPath();ctx.arc(x,y,r,0,6.2832);if(fc){ctx.globalAlpha=fa;ctx.fillStyle=fc;ctx.fill();}
+  if(sw){ctx.globalAlpha=sa;ctx.lineWidth=sw;ctx.strokeStyle=sc;ctx.setLineDash((o&&o.dash)||[]);ctx.stroke();ctx.setLineDash([]);}ctx.globalAlpha=1;PRIM++;}
+function rrect(ctx,x,y,w,h,r,fc,fa=1,sw=0,sc,sa=1){ctx.beginPath();ctx.roundRect(x,y,w,h,r);if(fc){ctx.globalAlpha=fa;ctx.fillStyle=fc;ctx.fill();}
+  if(sw){ctx.globalAlpha=sa;ctx.lineWidth=sw;ctx.strokeStyle=sc;ctx.stroke();}ctx.globalAlpha=1;PRIM++;}
+function text(ctx,s,x,y,size,col,o){o=o||{};ctx.font=(o.weight||700)+' '+size+'px system-ui,-apple-system,Segoe UI,Roboto,sans-serif';ctx.textAlign=o.align||'center';ctx.textBaseline='middle';
+  if(o.halo){ctx.lineWidth=o.halo;ctx.strokeStyle=o.haloCol||C.bg;ctx.lineJoin='round';ctx.globalAlpha=o.haloA===undefined?0.9:o.haloA;ctx.strokeText(s,x,y);ctx.globalAlpha=1;}
+  ctx.fillStyle=col;ctx.fillText(s,x,y);PRIM++;}
+const P=(n)=>[n.x,n.y];
+function unit(p,q){const l=Math.hypot(q[0]-p[0],q[1]-p[1])||1;return [(q[0]-p[0])/l,(q[1]-p[1])/l,l];}
+// Right-hand normal in a y-down plane: opposite flows get opposite lanes (supplyLayout.ts: lanePoint).
+function lane(p,q,at,off){const [ux,uy,l]=unit(p,q);return [p[0]+(q[0]-p[0])*at-uy*off,p[1]+(q[1]-p[1])*at+ux*off];}
+function dashSeg(ctx,p,q,off,w,col,a,dash,gap,o){strk(ctx,[lane(p,q,0,off),lane(p,q,1,off)],w,col,a,Object.assign({dash:[dash,gap]},o||{}));}
+function polar(c,r,deg){const a=deg*Math.PI/180;return [c[0]+r*Math.cos(a),c[1]+r*Math.sin(a)];}
+
+// ---- the backdrop: a stand-in for the baked `maps/<id>.bg.webp` (flat ground in two tones, soft biome bands, flat details)
+const TC={ // [tone A, tone B] per terrain
+  0:[[141,163,91],[167,181,106]], 1:[[31,90,71],[43,110,82]], 2:[[107,109,117],[134,136,145]]};
+const _bd={};
+function backdrop(id){
+  if(_bd[id])return _bd[id];
+  const B=buildBase(id),{nodes}=B;const lw=Math.ceil(B.W/8),lh=Math.ceil(B.H/8);
+  const lo=document.createElement('canvas');lo.width=lw;lo.height=lh;const lc=lo.getContext('2d');const img=lc.createImageData(lw,lh);
+  const wf=[new Float32Array(lw*lh),new Float32Array(lw*lh),new Float32Array(lw*lh)];
+  for(let j=0;j<lh;j++)for(let i=0;i<lw;i++){
+    const x=i*8+4,y=j*8+4;const wx=x+(vnoise(x/110,y/110,1)-.5)*90,wy=y+(vnoise(x/110,y/110,2)-.5)*90;
+    let dmin=1e9;const ds=nodes.map(n=>{const d=Math.hypot(n.x-wx,n.y-wy);if(d<dmin)dmin=d;return d;});
+    const w=[0,0,0];nodes.forEach((n,k)=>{w[n.terr]+=Math.exp(-(ds[k]-dmin)/16);});const s=w[0]+w[1]+w[2];w[0]/=s;w[1]/=s;w[2]/=s;
+    const tone=vnoise(x/70,y/70,3),tone2=vnoise(x/30,y/30,4);const m=Math.min(1,Math.max(0,(tone*.7+tone2*.3-.3)/.4));
+    let r=0,g=0,b=0;for(let t=0;t<3;t++){const A=TC[t][0],Bc=TC[t][1];r+=w[t]*(A[0]+(Bc[0]-A[0])*m);g+=w[t]*(A[1]+(Bc[1]-A[1])*m);b+=w[t]*(A[2]+(Bc[2]-A[2])*m);}
+    const sn=w[2]*Math.min(1,Math.max(0,(vnoise(x/50,y/50,7)-.66)/.1));r+=(228-r)*sn*.85;g+=(232-g)*sn*.85;b+=(238-b)*sn*.85;
+    const k=(j*lw+i);img.data[k*4]=r;img.data[k*4+1]=g;img.data[k*4+2]=b;img.data[k*4+3]=255;wf[0][k]=w[0];wf[1][k]=w[1];wf[2][k]=w[2];}
+  lc.putImageData(img,0,0);
+  const cv=document.createElement('canvas');cv.width=B.W/2;cv.height=B.H/2;const c=cv.getContext('2d');c.imageSmoothingQuality='high';c.drawImage(lo,0,0,cv.width,cv.height);
+  c.scale(.5,.5);const rnd=mulberry(77+B.W);
+  const wAt=(x,y,t)=>wf[t][Math.min(lh-1,Math.max(0,(y/8)|0))*lw+Math.min(lw-1,Math.max(0,(x/8)|0))];
+  for(let k=0;k<9000;k++){const x=rnd()*B.W,y=rnd()*B.H;
+    const wp=wAt(x,y,0),wfo=wAt(x,y,1),wm=wAt(x,y,2);const u=rnd();
+    if(u<wfo*wfo&&wfo>.55){const r=3.5+rnd()*3.5;c.globalAlpha=.55;c.fillStyle=rnd()<.5?'#14463a':'#2f7a5a';c.beginPath();c.arc(x,y,r,0,6.2832);c.fill();}
+    else if(wp>.6&&rnd()<.3){c.globalAlpha=.45;c.strokeStyle='#5e7a3a';c.lineWidth=1.2;c.beginPath();c.moveTo(x-3,y+2);c.lineTo(x-1,y-2);c.moveTo(x,y+2);c.lineTo(x,y-3);c.moveTo(x+3,y+2);c.lineTo(x+1,y-2);c.stroke();}
+    else if(wm>.6&&rnd()<.25){c.globalAlpha=.4;c.fillStyle=rnd()<.5?'#4c4e57':'#a2a5ae';c.beginPath();c.ellipse(x,y,3+rnd()*4,2+rnd()*3,rnd()*3,0,6.2832);c.fill();}}
+  c.globalAlpha=1;
+  // Terrain stamps (terrainView.ts: firs, peaks with a cap, tufts), a loose grid inside each cell, away from cities and roads.
+  const roads=B.edges.map(e=>[nodes[e.a],nodes[e.b]]);
+  const ST={0:{w:30,h:26,a:.28},1:{w:34,h:30,a:.4},2:{w:52,h:40,a:.46}};
+  const inside=(poly,x,y)=>{let s=0;for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length];if(((b[0]-a[0])*(y-a[1])-(b[1]-a[1])*(x-a[0]))>=0)s++;}return s===poly.length||s===0;};
+  const dseg=(x,y,a,b)=>{const dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy;const t=Math.max(0,Math.min(1,((x-a.x)*dx+(y-a.y)*dy)/l2));return Math.hypot(x-a.x-t*dx,y-a.y-t*dy);};
+  nodes.forEach(n=>{const cell=B.cells[n.id],st=ST[n.terr];const xs=cell.map(p=>p[0]),ys=cell.map(p=>p[1]);
+    for(let gy=Math.floor(Math.min(...ys)/st.h);gy<=Math.ceil(Math.max(...ys)/st.h);gy++)for(let gx=Math.floor(Math.min(...xs)/st.w);gx<=Math.ceil(Math.max(...xs)/st.w);gx++){
+      const x=(gx+(gy&1?.5:0))*st.w,y=gy*st.h;if(!inside(cell,x,y)||Math.hypot(x-n.x,y-n.y)<30)continue;if(roads.some(r=>dseg(x,y,r[0],r[1])<12))continue;
+      c.save();c.translate(x,y);c.globalAlpha=st.a;c.strokeStyle=c.fillStyle='#0d1117';c.lineWidth=1.5;c.lineJoin='round';c.lineCap='round';
+      if(n.terr===1){for(const [sx,sy] of [[-6,-2],[7,5]]){c.beginPath();c.moveTo(sx,sy-7);c.lineTo(sx+6,sy+4);c.lineTo(sx-6,sy+4);c.closePath();c.fill();c.beginPath();c.moveTo(sx,sy+4);c.lineTo(sx,sy+7);c.stroke();}}
+      else if(n.terr===2){c.lineWidth=2;for(const [sx,sy,z] of [[-8,5,.75],[7,7,1]]){c.beginPath();c.moveTo(sx-11*z,sy+5*z);c.lineTo(sx,sy-9*z);c.lineTo(sx+11*z,sy+5*z);c.stroke();}
+        c.globalAlpha=.45;c.strokeStyle='#f0f6fc';c.lineWidth=1.6;c.beginPath();c.moveTo(3.5,2.5);c.lineTo(7,-2);c.lineTo(10.5,2.5);c.stroke();}
+      else{c.lineWidth=1.3;c.beginPath();c.moveTo(-4,2);c.lineTo(-2,-2);c.moveTo(0,2);c.lineTo(0,-3);c.moveTo(4,2);c.lineTo(2,-2);c.stroke();}
+      c.restore();}});
+  c.globalAlpha=1;c.fillStyle='rgba(13,17,23,.18)';c.setTransform(1,0,0,1,0,0);c.fillRect(0,0,cv.width,cv.height); // BACKDROP_DIM
+  return _bd[id]={cv,wf,lw,lh};
+}
+const wAtBd=(bd,x,y,t)=>bd.wf[t][Math.min(bd.lh-1,Math.max(0,(y/8)|0))*bd.lw+Math.min(bd.lw-1,Math.max(0,(x/8)|0))];
+
+// ---- territory, borders, roads, cities (the look of the normal map and of the Supply layer)
+function ownerCol(o){return o===ME?C.you:o===FOE?C.foe:null;}
+function drawTerritory(ctx,S,alpha){const {B,owner}=S;B.nodes.forEach(n=>{const o=owner[n.id];if(o<0)return;const c=B.cells[n.id];
+  if(!c.some(p=>inV(p[0],p[1],200)))return;fllp(ctx,c,ownerCol(o),alpha);});}
+function drawCellLines(ctx,S,a){const {B}=S;B.shared.forEach(s=>{if(inV(s.p[0],s.p[1],200))strk(ctx,[s.p,s.q],1,C.paper,a);});}
+function drawBorders(ctx,S,w=2.5){const {B,owner}=S;B.shared.forEach(s=>{const a=owner[s.i],b=owner[s.j];if(a===b||!inV(s.p[0],s.p[1],200))return;
+  [[s.i,a,s.j],[s.j,b,s.i]].forEach(([i,o,k])=>{if(o<0)return;const [ux,uy]=unit(B.nodes[i],B.nodes[k]);
+    strk(ctx,[[s.p[0]+ux*w*.5,s.p[1]+uy*w*.5],[s.q[0]+ux*w*.5,s.q[1]+uy*w*.5]],w,ownerCol(o),1,{cap:'round'});});});}
+const LW=2,LG=1.7;
+const roadSpan=l=>l*LW+(l-1)*LG+3.6;
+function roadClass(S,e){return S.kind[e.id];}
+function drawRoad(ctx,S,e,o){o=o||{};const {B}=S,p=P(B.nodes[e.a]),q=P(B.nodes[e.b]);if(!inV(p[0],p[1],400)&&!inV(q[0],q[1],400))return;
+  const k=S.kind[e.id],l=S.level[e.id];const dim=o.dim===undefined?1:o.dim;
+  if(k==='buffer'){strk(ctx,[p,q],3.6,C.bg,.4*dim);dashSeg(ctx,p,q,0,2,C.buf,.95*dim,7,5);return;}
+  const col=k==='own'?C.you:C.foe;
+  strk(ctx,[p,q],roadSpan(l),col,(o.band===undefined?.62:o.band)*dim);
+  for(let i=0;i<l;i++){const off=(i-(l-1)/2)*(LW+LG);strk(ctx,[lane(p,q,0,off),lane(p,q,1,off)],LW,C.lane,(o.laneA===undefined?.95:o.laneA)*dim);}}
+function drawProvince(ctx,n,side,x,y){const r=9;circ(ctx,x,y,r+3,C.bg,.85);const col=side==='you'?C.you:side==='foe'?C.foe:'#6e7681';
+  circ(ctx,x,y,r,C.bg,.9);circ(ctx,x,y,r-1.8,null,0,side==='none'?2.4:3.6,col);if(side==='you')circ(ctx,x,y,r+2.6,null,0,1.6,C.paper,.9);if(side==='foe')circ(ctx,x,y,r-5,null,0,1.3,C.paper,.9);}
+function star(ctx,x,y,R,fc,sc){const pts=[];for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?R*.45:R;pts.push([x+r*Math.cos(a),y+r*Math.sin(a)]);}fllp(ctx,pts,fc);strk(ctx,pts,1.2,sc,1,{close:true});}
+function drawCity(ctx,n,S,o){o=o||{};const side=S.owner[n.id]===ME?'you':S.owner[n.id]===FOE?'foe':'none';const x=n.x,y=n.y;
+  if(!inV(x,y,80))return;
+  if(n.kind===0){drawProvince(ctx,n,side,x,y);}
+  else{const r=n.r;circ(ctx,x,y,r+3,C.bg,.85);
+    const fillc=side==='you'?C.you:side==='foe'?C.foe:'#2a313b';
+    circ(ctx,x,y,r,fillc,side==='none'?1:.9,side==='none'?2:3,side==='none'?'#6e7681':C.paper);
+    if(side==='foe')circ(ctx,x,y,r-5,null,0,1.6,C.bg);
+    if(n.kind===4)star(ctx,x,y,r*.62,C.paper,C.bg);
+    if(o.vp!==false&&n.vp>0){const bx=x+r*.78,by=y-r*.8;circ(ctx,bx,by,8.5,C.bg,1,2,C.vp);text(ctx,String(n.vp),bx,by+.5,10.5,C.paper);}}
+  // The caption keeps its size on screen (nameLayout.ts: 13 px, a province 12 px and lighter) and hides when zoomed far out.
+  const zs=o.zoom||1;if(o.name!==false&&zs>=(n.kind===0?.7:.45)){const sz=(n.kind===0?12:13)/zs;const ny=y+(n.kind===0?9+9:n.r+24)+sz*.55;
+    ctx.globalAlpha=n.kind===0?.78:1;text(ctx,n.name,x,ny,sz,C.paper,{halo:3/zs,weight:n.kind===0?500:700});ctx.globalAlpha=1;}}
+// An inverted triangle, the sign of a unit (a charged unit is filled, an empty one is a frame).
+function tri(ctx,x,y,side,fc,sc,sw,fa=1){const h=side*Math.sqrt(3)/2;const pts=[[x-side/2,y-h*2/3],[x+side/2,y-h*2/3],[x,y+h*1/3]];if(fc)fllp(ctx,pts,fc,fa);strk(ctx,pts,sw,sc,1,{close:true,join:'round'});}
+function drawStock(ctx,n,stock,cap,colFull){const w=cap*6;const x0=n.x-w/2,y=n.y+n.r+9;rrect(ctx,x0-1,y-3,w+2,10,2,C.bg,.8);
+  for(let i=0;i<cap;i++){ctx.globalAlpha=1;ctx.fillStyle=i<stock?(colFull||C.you):C.empty;ctx.fillRect(x0+i*6,y-1,5,4);PRIM++;}}
+// A flag on a pole at the top left of a city with the number of the marker (the state is told by the number).
+function drawFlag(ctx,n,num,sc){sc=sc||1;const f=polar(P(n),n.r+4,-135);const top=[f[0],f[1]-28*sc];strk(ctx,[f,top],4,C.bg,1,{cap:'round'});strk(ctx,[f,top],2,C.paper,1,{cap:'round'});
+  ctx.fillStyle=C.you;ctx.fillRect(top[0],top[1],20*sc,16*sc);ctx.strokeStyle=C.paper;ctx.lineWidth=1.5;ctx.strokeRect(top[0],top[1],20*sc,16*sc);PRIM+=2;text(ctx,String(num),top[0]+10*sc,top[1]+8.5*sc,12*sc,C.paper,{weight:800});}
+function drawPresence(ctx,S,sc){const {B}=S;S.presence.forEach(m=>{const n=B.nodes[m.id];const at=polar(P(n),n.r+9,45);tri(ctx,at[0],at[1],12,C.bg,C.foe,2.2,.9);});}
+function fmtT(ticks){const s=Math.ceil(ticks/10);return '0:'+String(s).padStart(2,'0');}
+const SCISSORS='✂';
+// ============================================================ the Supply layer: Now and four variants
+// Reads only what the snapshot carries: node owner, warehouse and warehouse_cap (own cities), starve_in, me.fronts, edge level (width),
+// packets (from_node, edge, progress, path, charges, transfer). Flow sums are the client's own `supplyFlows` (sum of the packets' remaining legs).
+function legsOf(S,pk){const nodes=[pk.from,pk.to,...pk.path];const out=[];for(let i=1;i<nodes.length;i++){const a=nodes[i-1],b=nodes[i];const e=i===1?pk.edge:S.B.eidx[Math.min(a,b)+':'+Math.max(a,b)];if(e!==undefined)out.push({edge:e,from:a,to:b});}return out;}
+const _fl=new WeakMap();
+function flowsOf(S){if(_fl.has(S))return _fl.get(S);const m=new Map();
+  S.packets.forEach(pk=>legsOf(S,pk).forEach(l=>{const k=l.edge+':'+l.from+':'+(pk.transfer?'t':'a');const prev=m.get(k);m.set(k,{edge:l.edge,from:l.from,to:l.to,charges:(prev?prev.charges:0)+pk.charges,transfer:pk.transfer});}));
+  const arr=[...m.values()].sort((a,b)=>a.edge-b.edge||a.from-b.from||(a.transfer-b.transfer));_fl.set(S,arr);return arr;}
+const hasOpp=(S,f)=>flowsOf(S).some(g=>g.edge===f.edge&&g.from===f.to);
+function pktAt(S,pk,t){const adv=t?((t*0.07)%0.5):0;const p=Math.min(0.96,pk.p+adv);return p;}
+function nodeP(S,i){return P(S.B.nodes[i]);}
+function flowAxis(S,f,off){const n1=S.B.nodes[f.from],n2=S.B.nodes[f.to];const p=P(n1),q=P(n2);const [ux,uy,l]=unit(p,q);const s=n1.r+3,e=l-n2.r-3;
+  return {p,q,ux,uy,l,s,e,a:lane(p,q,s/l,off),b:lane(p,q,e/l,off),at:d=>lane(p,q,d/l,off)};}
+function arrowhead(ctx,tip,ux,uy,len,wid,col,a){const n=[-uy,ux];const base=[tip[0]-ux*len,tip[1]-uy*len];fllp(ctx,[tip,[base[0]+n[0]*wid/2,base[1]+n[1]*wid/2],[base[0]-n[0]*wid/2,base[1]-n[1]*wid/2]],col,a);}
+function pill(ctx,x,y,label,o){o=o||{};ctx.font='700 '+(o.size||11)+'px system-ui,sans-serif';const w=Math.max(o.minw||14,ctx.measureText(label).width+8),h=o.h||14;
+  ctx.beginPath();ctx.roundRect(x-w/2,y-h/2,w,h,o.r===undefined?4:o.r);ctx.globalAlpha=o.fa===undefined?.92:o.fa;ctx.fillStyle=C.bg;ctx.fill();ctx.globalAlpha=1;ctx.lineWidth=o.sw||1.5;ctx.strokeStyle=o.sc||C.you;ctx.setLineDash(o.dash||[]);ctx.stroke();ctx.setLineDash([]);PRIM++;
+  text(ctx,label,x,y+.5,o.size||11,o.tc||C.paper);}
+function squarePkt(ctx,x,y,tr,small){const s=tr?10:(small||7);ctx.fillStyle=C.paper;ctx.fillRect(x-s/2,y-s/2,s,s);ctx.strokeStyle=C.bg;ctx.lineWidth=1.5;ctx.strokeRect(x-s/2,y-s/2,s,s);PRIM+=2;
+  if(tr){ctx.strokeStyle=C.paper;ctx.lineWidth=1.2;ctx.strokeRect(x-7,y-7,14,14);PRIM++;}}
+function arcRing(ctx,c,r,w,col,a,dash){circ(ctx,c[0],c[1],r,null,0,w,col,a,dash?{dash}:undefined);}
+function cutPill(ctx,n,S,o){const sec=fmtT(S.cut[n.id]);const spot=[n.x,n.y+n.r+9+(o&&o.dy||14)+ (o&&o.bar?0:0)];pill(ctx,spot[0],spot[1],SCISSORS+' '+sec,{sc:C.warn,fa:.94,minw:44});}
+function hatch(ctx,poly,col,a,period,w){ctx.save();pth(ctx,poly,true);ctx.clip();const xs=poly.map(p=>p[0]),ys=poly.map(p=>p[1]);const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  ctx.beginPath();for(let k=x0-(y1-y0);k<x1;k+=period){ctx.moveTo(k,y1);ctx.lineTo(k+(y1-y0),y0);}ctx.lineWidth=w;ctx.strokeStyle=col;ctx.globalAlpha=a;ctx.stroke();ctx.globalAlpha=1;ctx.restore();PRIM++;}
+function circHatch(ctx,x,y,r,col,a,period,w){ctx.save();ctx.beginPath();ctx.arc(x,y,r,0,6.2832);ctx.clip();ctx.beginPath();for(let k=-2*r;k<2*r;k+=period){ctx.moveTo(x+k-r,y+r);ctx.lineTo(x+k+r,y-r);}ctx.lineWidth=w;ctx.strokeStyle=col;ctx.globalAlpha=a;ctx.stroke();ctx.globalAlpha=1;ctx.restore();PRIM++;}
+
+const SV={}; // variants: each can override roads, flows, stock, marker, cut, packets
+// ---- common layers
+function supplyBase(ctx,S,v){const {B}=S;ctx.fillStyle=C.floor;ctx.fillRect(0,0,B.W,B.H);
+  drawTerritory(ctx,S,.34);drawCellLines(ctx,S,.14);drawBorders(ctx,S,2.5);strk(ctx,[[0,0],[B.W,0],[B.W,B.H],[0,B.H]],2,'#484f58',1,{close:true});}
+function drawSupply(ctx,S,v,t,z){t=t||0;const {B}=S;const V=SV[v];supplyBase(ctx,S,v);if(V.under)V.under(ctx,S,t);
+  B.edges.forEach(e=>V.road(ctx,S,e,t));
+  B.nodes.forEach(n=>{drawCity(ctx,n,S,{zoom:z,nameDrop:S.stock[n.id]!==undefined?(V.nameDrop?V.nameDrop(n,S):26):14});});
+  V.flows(ctx,S,t);
+  B.nodes.forEach(n=>{if(S.stock[n.id]!==undefined&&inV(n.x,n.y))V.stock(ctx,n,S);});
+  S.fronts.forEach((m,k)=>{if(inV(B.nodes[m].x,B.nodes[m].y))V.marker(ctx,B.nodes[m],k,S);});
+  Object.keys(S.cut).forEach(id=>{const n=B.nodes[id];if(inV(n.x,n.y))V.cut(ctx,n,S,t);});
+  drawPresence(ctx,S);
+  V.packets(ctx,S,t);}
+const stockNow=(ctx,n,S)=>drawStock(ctx,n,S.stock[n.id],KWH[n.kind]);
+const markerNow=(ctx,n,k)=>drawFlag(ctx,n,k+1);
+function cutNow(ctx,n,S){const r=n.r+9;const dashes=Math.max(10,Math.round(6.2832*r/10));ctx.beginPath();for(let i=0;i<dashes;i++){const a=6.2832*i/dashes;ctx.moveTo(n.x+r*Math.cos(a),n.y+r*Math.sin(a));ctx.arc(n.x,n.y,r,a,a+3.1416/dashes);}
+  ctx.lineWidth=2.5;ctx.strokeStyle=C.warn;ctx.stroke();PRIM++;cutPill(ctx,n,S,{dy:7});}
+function packetsSquares(ctx,S,t,off,small){S.packets.forEach(pk=>{const n1=S.B.nodes[pk.from],n2=S.B.nodes[pk.to];const q=lane(P(n1),P(n2),pktAt(S,pk,t),off);if(inV(q[0],q[1]))squarePkt(ctx,q[0],q[1],pk.transfer,small);});}
+
+// ---- Now: the current look (supplyView.ts and style.ts, SUPPLY_*)
+SV.now={
+  road:(ctx,S,e)=>drawRoad(ctx,S,e),
+  flows(ctx,S){flowsOf(S).forEach(f=>{const A=flowAxis(S,f,8);if(A.e-A.s<14||!inV(A.p[0],A.p[1],400)&&!inV(A.q[0],A.q[1],400))return;
+    const w=f.transfer?4.5:3,tipTo=A.e-10;const sh=[A.at(A.s),A.at(Math.max(A.s,tipTo))];
+    [[w+3,C.bg,.7],[w,C.you,.95]].forEach(([ww,col,a],i)=>{if(f.transfer){const L=tipTo-A.s;ctx.beginPath();for(let d=0;d<L;d+=14){const p0=A.at(A.s+d),p1=A.at(A.s+Math.min(L,d+9));ctx.moveTo(p0[0],p0[1]);ctx.lineTo(p1[0],p1[1]);}
+        ctx.lineWidth=ww;ctx.strokeStyle=col;ctx.globalAlpha=a;ctx.lineCap='round';ctx.stroke();ctx.globalAlpha=1;ctx.lineCap='butt';PRIM++;}
+      else strk(ctx,sh,ww,col,a,{cap:'round'});arrowhead(ctx,A.at(A.e),A.ux,A.uy,10,11,col,a);});
+    const mid=A.at((A.s+A.e)/2);pill(ctx,mid[0],mid[1],String(f.charges));});},
+  stock:stockNow,marker:markerNow,cut:cutNow,packets:(ctx,S,t)=>packetsSquares(ctx,S,t,8)};
+
+// ---- A "Rails": the flow is chevrons marching inside the road, the volume is a tag at the head, buffer roads end in a bulkhead
+function bulkhead(ctx,S,e,a){const {B}=S;const p=P(B.nodes[e.a]),q=P(B.nodes[e.b]);const m=lane(p,q,.5,0),[ux,uy]=unit(p,q);const n=[-uy,ux];
+  strk(ctx,[[m[0]+n[0]*6,m[1]+n[1]*6],[m[0]-n[0]*6,m[1]-n[1]*6]],3,C.bg,.8*a,{cap:'butt'});strk(ctx,[[m[0]+n[0]*5.5,m[1]+n[1]*5.5],[m[0]-n[0]*5.5,m[1]-n[1]*5.5]],1.4,C.buf,.9*a);}
+SV.rails={
+  road(ctx,S,e,t){const k=S.kind[e.id];if(k==='buffer'){const {B}=S,p=P(B.nodes[e.a]),q=P(B.nodes[e.b]);if(!inV(p[0],p[1],400)&&!inV(q[0],q[1],400))return;dashSeg(ctx,p,q,0,1.6,C.buf,.5,3,6,{cap:'round'});bulkhead(ctx,S,e,1);}else drawRoad(ctx,S,e);},
+  flows(ctx,S,t){flowsOf(S).forEach(f=>{const opp=hasOpp(S,f);const A=flowAxis(S,f,opp?4.6:0);if(A.e-A.s<18)return;const hw=opp?2.9:4.2;if(!inV(A.p[0],A.p[1],400)&&!inV(A.q[0],A.q[1],400))return;
+    const sp=15,off=((t||0)*16)%sp;const L=A.e-A.s-14;
+    for(let d=off+4;d<L;d+=sp){const c=A.at(A.s+8+d);const nx=-A.uy,ny=A.ux;const pts=[[c[0]-A.ux*3+nx*hw,c[1]-A.uy*3+ny*hw],[c[0]+A.ux*2.5,c[1]+A.uy*2.5],[c[0]-A.ux*3-nx*hw,c[1]-A.uy*3-ny*hw]];
+      if(f.transfer){strk(ctx,pts,3.6,C.bg,.8,{cap:'round'});strk(ctx,pts,1.5,C.paper,1,{cap:'round'});}
+      else{strk(ctx,pts,4.4,C.bg,.85,{cap:'round'});strk(ctx,pts,2.3,C.paper,1,{cap:'round'});}}
+    const h=A.at(A.e-19);pill(ctx,h[0],h[1],(f.transfer?'':'+')+f.charges,{dash:f.transfer?[3,2]:null,minw:22,h:13});});},
+  stock:stockNow,marker:markerNow,cut(ctx,n,S){const r=n.r+9;for(let i=0;i<3;i++){const a0=i*2.0944+.35;ctx.beginPath();ctx.arc(n.x,n.y,r,a0,a0+1.45);ctx.lineWidth=3;ctx.strokeStyle=C.warn;ctx.lineCap='round';ctx.stroke();ctx.lineCap='butt';PRIM++;}
+    text(ctx,SCISSORS,n.x+r*Math.cos(.0),n.y+r*Math.sin(.0)-.5,13,C.warn,{halo:3});cutPill(ctx,n,S,{dy:7});},
+  packets:(ctx,S,t)=>packetsSquares(ctx,S,t,0,7)};
+
+// ---- B "Pipes": the level is the bore of the pipe, an active pipe is filled and flows with dashes, the number lies along the pipe
+const PB=[0,7,10,13];
+SV.pipes={
+  road(ctx,S,e,t){const {B}=S,p=P(B.nodes[e.a]),q=P(B.nodes[e.b]);if(!inV(p[0],p[1],400)&&!inV(q[0],q[1],400))return;const k=S.kind[e.id];
+    if(k==='buffer'){dashSeg(ctx,p,q,0,1.4,C.buf,.5,2,5,{cap:'round'});const m=lane(p,q,.5,0),[ux,uy]=unit(p,q),n=[-uy,ux];
+      strk(ctx,[[m[0]+n[0]*5,m[1]+n[1]*5],[m[0]-n[0]*5,m[1]-n[1]*5]],3.4,C.bg,.9);strk(ctx,[[m[0]+n[0]*5,m[1]+n[1]*5],[m[0]-n[0]*5,m[1]-n[1]*5]],1.5,C.buf,.9);return;}
+    if(k==='foe'){drawRoad(ctx,S,e);return;}
+    const l=S.level[e.id],W=PB[l];const act=flowsOf(S).filter(f=>f.edge===e.id);
+    strk(ctx,[p,q],W+3.4,C.bg,.9);strk(ctx,[p,q],W,'#566982',1);strk(ctx,[p,q],W-3,act.length?'#1d4e91':'#18202c',1);
+    if(act.length){const two=act.length>1;act.forEach(f=>{const dirSign=f.from===e.a?1:-1;const off=two?(dirSign>0?1:-1)*(W-3)/4:0;const P0=P(B.nodes[f.from]),Q0=P(B.nodes[f.to]);
+      strk(ctx,[lane(P0,Q0,0,off),lane(P0,Q0,1,off)],two?(W-3)/2-.6:W-3.6,C.you,.55);
+      const dd=((t||0)*22)%12;strk(ctx,[lane(P0,Q0,0,off),lane(P0,Q0,1,off)],two?1.8:2.4,C.paper,.95,{dash:[4,8],off:-dd});});}},
+  flows(ctx,S,t){flowsOf(S).forEach(f=>{const e=S.B.edges[f.edge];const W=PB[S.level[f.edge]];const opp=hasOpp(S,f);const A=flowAxis(S,f,opp?(W-3)/4:0);if(A.e-A.s<16)return;if(!inV(A.p[0],A.p[1],400)&&!inV(A.q[0],A.q[1],400))return;
+    // valve cap at the destination rim
+    arrowhead(ctx,A.at(A.e+1),A.ux,A.uy,8,Math.max(8,W-1),C.paper,1);arrowhead(ctx,A.at(A.e-1),A.ux,A.uy,5.5,Math.max(5,W-5),C.you,1);
+    const ang=Math.atan2(A.uy,A.ux),fl=(ang>Math.PI/2||ang<-Math.PI/2);const m=A.at((A.s+A.e)/2+(opp?(f.from<f.to?-9:9):0));
+    ctx.save();ctx.translate(m[0],m[1]);ctx.rotate(fl?ang+Math.PI:ang);text(ctx,(f.transfer?'~':'')+f.charges,0,-W/2-5.5,11,C.paper,{halo:3});ctx.restore();});},
+  stock(ctx,n,S){const cap=KWH[n.kind],st=S.stock[n.id];const w=32,x=n.x-w/2,y=n.y+n.r+9;rrect(ctx,x-1,y-1,w+2,9,3,C.bg,.85);
+    ctx.fillStyle=C.you;ctx.fillRect(x+1,y+1,(w-2)*st/cap,5);ctx.fillStyle='rgba(240,246,252,.18)';ctx.fillRect(x+1+(w-2)*st/cap,y+1,(w-2)*(1-st/cap),5);PRIM+=2;
+    text(ctx,st+'/'+cap,x+w+4,y+3.5,9.5,C.paper,{halo:2.5,align:'left'});},
+  marker(ctx,n,k){circ(ctx,n.x,n.y,n.r+8,null,0,5,C.bg,.9);circ(ctx,n.x,n.y,n.r+8,null,0,3,C.you);const b=[n.x,n.y-n.r-14];circ(ctx,b[0],b[1],8,C.bg,1,2,C.you);text(ctx,String(k+1),b[0],b[1]+.5,11,C.paper,{weight:800});},
+  cut(ctx,n,S){const r=n.r+9;circHatch(ctx,n.x,n.y,r,C.warn,.55,5,1.6);circ(ctx,n.x,n.y,r,null,0,2.6,C.warn,1,{dash:[3,4]});circ(ctx,n.x,n.y,n.r+3,C.bg,.0);cutPill(ctx,n,S,{dy:11});},
+  nameDrop:()=>30,
+  packets(ctx,S,t){S.packets.forEach(pk=>{const n1=S.B.nodes[pk.from],n2=S.B.nodes[pk.to];const q=lane(P(n1),P(n2),pktAt(S,pk,t),0);if(!inV(q[0],q[1]))return;
+    if(pk.transfer){rrect(ctx,q[0]-5,q[1]-5,10,10,2,C.paper,1,1.5,C.bg);}else circ(ctx,q[0],q[1],3.2+.5*pk.charges,C.paper,1,1.3,C.bg);});}};
+
+// ---- C "Comets": a packet is a comet (size and direction in its tail), the route ahead is dotted, the inbound total sits at the city
+SV.comets={
+  road(ctx,S,e){drawRoad(ctx,S,e,{band:.28,laneA:.5});},
+  flows(ctx,S,t){// the route ahead, dotted, from the packet to the end of its path
+    S.packets.forEach(pk=>{const nodes=[pk.from,pk.to,...pk.path].map(i=>P(S.B.nodes[i]));const f0=P(S.B.nodes[pk.from]),f1=P(S.B.nodes[pk.to]);const pos=lane(f0,f1,pktAt(S,pk,t),7);
+      const pts=[pos,lane(nodes[0],nodes[1],1,7)];for(let i=2;i<nodes.length;i++){const a=nodes[i-1],b=nodes[i];pts.push(lane(a,b,0,7),lane(a,b,1,7));}
+      if(pts.length>1&&(inV(pos[0],pos[1],500))){strk(ctx,pts,3.4,C.bg,.7,{dash:[1,6],cap:'round'});strk(ctx,pts,2,'#cfe2ff',1,{dash:[1,6],cap:'round'});}});
+    // the inbound total at the destination city
+    const inb={};S.packets.forEach(pk=>{const d=pk.path.length?pk.path[pk.path.length-1]:pk.to;inb[d]=(inb[d]||0)+pk.charges;});
+    Object.keys(inb).forEach(id=>{const n=S.B.nodes[id];if(!inV(n.x,n.y))return;const at=polar(P(n),n.r+12,50);pill(ctx,at[0]+6,at[1],'+'+inb[id],{minw:20,h:13});});},
+  stock:stockNow,marker:(ctx,n,k)=>drawFlag(ctx,n,k+1,.82),
+  cut(ctx,n,S){const r=n.r+9,fr=S.cut[n.id]/STARVE_PERIOD;circ(ctx,n.x,n.y,r,null,0,4,C.warn,.28);ctx.beginPath();ctx.arc(n.x,n.y,r,-Math.PI/2,-Math.PI/2+6.2832*fr);ctx.lineWidth=4;ctx.strokeStyle=C.warn;ctx.stroke();PRIM++;
+    circ(ctx,n.x,n.y,n.r,C.bg,.35);cutPill(ctx,n,S,{dy:8});},
+  packets(ctx,S,t){S.packets.forEach(pk=>{const n1=S.B.nodes[pk.from],n2=S.B.nodes[pk.to];const p0=P(n1),p1=P(n2);const [ux,uy,l]=unit(p0,p1);const at=pktAt(S,pk,t);const head=lane(p0,p1,at,7);if(!inV(head[0],head[1]))return;
+    const dist=at*l-n1.r;const Lt=Math.min(16+10*pk.charges,Math.max(6,dist+8));
+    {const wmax=pk.transfer?10:9;const seg=(f0,f1)=>[lane(p0,p1,(at*l-Lt*f0)/l,7),lane(p0,p1,(at*l-Lt*f1)/l,7)];for(let i=0;i<7;i++){const f0=i/7,f1=(i+1)/7;strk(ctx,seg(f0,f1),wmax*(1-f0*.8)+3.2,C.bg,.9*(1-f0*.5),{cap:'round'});}
+      for(let i=0;i<7;i++){const f0=i/7,f1=(i+1)/7;strk(ctx,seg(f0,f1),wmax*(1-f0*.8),pk.transfer?C.paper:C.you,1-f0*.55,{cap:'round'});}}
+    if(pk.transfer){ctx.fillStyle=C.paper;ctx.fillRect(head[0]-5,head[1]-5,10,10);ctx.strokeStyle=C.bg;ctx.lineWidth=1.5;ctx.strokeRect(head[0]-5,head[1]-5,10,10);ctx.strokeStyle=C.paper;ctx.lineWidth=1.2;ctx.strokeRect(head[0]-7.5,head[1]-7.5,15,15);PRIM+=3;
+      text(ctx,String(pk.charges),head[0],head[1]+.5,9,C.bg,{weight:800});}
+    else{const r=4.6+1.3*pk.charges;circ(ctx,head[0],head[1],r,C.paper,1,1.8,C.bg);if(pk.charges>=2)text(ctx,String(pk.charges),head[0],head[1]+.5,10,C.bg,{weight:800});}});}};
+
+// ---- D "Corridor": the roads that carry supply light up as a lane of their own, the rest dims; a direction badge carries the volume
+SV.corr={
+  under(ctx,S){},
+  road(ctx,S,e,t){const {B}=S,p=P(B.nodes[e.a]),q=P(B.nodes[e.b]);if(!inV(p[0],p[1],400)&&!inV(q[0],q[1],400))return;const k=S.kind[e.id];
+    if(k==='buffer'){dashSeg(ctx,p,q,0,1.4,C.buf,.35,3,6,{cap:'round'});return;}
+    const act=flowsOf(S).some(f=>f.edge===e.id);const l=S.level[e.id];
+    if(k==='own'&&act){strk(ctx,[p,q],roadSpan(l)+11,C.you,.26);strk(ctx,[p,q],roadSpan(l)+5,C.you,.35);drawRoad(ctx,S,e,{band:.9,laneA:1});}
+    else drawRoad(ctx,S,e,{dim:k==='own'?.45:.8,band:.5});},
+  flows(ctx,S,t){flowsOf(S).forEach(f=>{const opp=hasOpp(S,f);const A=flowAxis(S,f,opp?3.2:0);if(A.e-A.s<20)return;if(!inV(A.p[0],A.p[1],400)&&!inV(A.q[0],A.q[1],400))return;
+    const sp=26,off=((t||0)*14)%sp;for(let d=off+10;d<A.e-A.s-12;d+=sp){const c=A.at(A.s+d),nx=-A.uy,ny=A.ux;strk(ctx,[[c[0]-A.ux*3+nx*4,c[1]-A.uy*3+ny*4],[c[0]+A.ux*2.4,c[1]+A.uy*2.4],[c[0]-A.ux*3-nx*4,c[1]-A.uy*3-ny*4]],2.4,C.bg,1,{cap:'round'});}
+    // the direction badge: a disc with a nub that points the way
+    const m=A.at((A.s+A.e)/2+(opp?(f.from<f.to?-12:12):0));const nx=-A.uy,ny=A.ux;
+    fllp(ctx,[[m[0]+A.ux*16,m[1]+A.uy*16],[m[0]+A.ux*4+nx*7.5,m[1]+A.uy*4+ny*7.5],[m[0]+A.ux*4-nx*7.5,m[1]+A.uy*4-ny*7.5]],C.paper,1);strk(ctx,[[m[0]+A.ux*16,m[1]+A.uy*16],[m[0]+A.ux*4+nx*7.5,m[1]+A.uy*4+ny*7.5],[m[0]+A.ux*4-nx*7.5,m[1]+A.uy*4-ny*7.5]],1.2,C.bg,.9,{close:true});
+    circ(ctx,m[0],m[1],8.5,C.bg,1,1.8,f.transfer?C.paper:C.you);if(f.transfer)circ(ctx,m[0],m[1],6,null,0,1,C.paper,.8,{dash:[2,2]});
+    text(ctx,String(f.charges),m[0],m[1]+.5,11,C.paper);});},
+  stock:stockNow,
+  marker(ctx,n,k){const tip=[n.x,n.y-n.r-2],c=[n.x,n.y-n.r-17];fllp(ctx,[[c[0]-6.5,c[1]+5],[c[0]+6.5,c[1]+5],tip],C.you);strk(ctx,[[c[0]-6.5,c[1]+5],tip,[c[0]+6.5,c[1]+5]],1.8,C.paper,1,{join:'round'});
+    circ(ctx,c[0],c[1],9.5,C.you,1,2,C.paper);text(ctx,String(k+1),c[0],c[1]+.5,12,C.paper,{weight:800});},
+  cut(ctx,n,S){const cell=S.B.cells[n.id];hatch(ctx,cell,C.warn,.36,9,2.4);strk(ctx,cell,2,C.warn,.8,{close:true,dash:[6,4]});circ(ctx,n.x,n.y,n.r+3,C.bg,.55);
+    const r=n.r+9;circ(ctx,n.x,n.y,r,null,0,2.5,C.warn,1,{dash:[8,6]});cutPill(ctx,n,S,{dy:7});},
+  packets:(ctx,S,t)=>packetsSquares(ctx,S,t,0,6)};
+const SUPPLY_VARIANTS=[
+ {id:'now',name:'Now',tag:'The current look',desc:'Territory tint, lanes on a band, one arrow per road and direction beside the road in its own lane with a number plate, squares for packets, a flag on the city, a dashed ring and a timer plate on a cut-off city.'},
+ {id:'rails',name:'A. Rails',tag:'Motion inside the road',desc:'No arrows and no plates on the road: chevrons march inside the road in the direction of the flow, the volume is one small tag at the head next to the destination, packets ride on top. A buffer road is a thin dotted line that ends in a bulkhead at the border point: supply stops there. A cut-off city has a broken amber ring.'},
+ {id:'pipes',name:'B. Pipes',tag:'The level is physical',desc:'The level of an own road is the bore of the pipe (three widths), an active pipe is filled and its dashes flow, a valve cap marks the destination, the volume is a number lying along the pipe. The warehouse is a gauge with its figure. A marker is a ring plus a badge; a cut-off city is hatched.'},
+ {id:'comets',name:'C. Comets',tag:'The packet is the sign',desc:'No arrows, no plates: a packet is a comet whose tail shows direction and size, the route still ahead is a dotted line, the total heading for a city is a chip at that city. A transfer is a square comet. A cut-off city has a depleting amber arc (the share of the starvation period left) around it.'},
+ {id:'corr',name:'D. Corridor',tag:'Light up what carries supply',desc:'Roads that carry supply light up as a corridor with small chevrons; every idle road dims, buffer roads nearly vanish. A direction badge (a disc with a nub) carries the volume. A marker is a map pin on the city. A cut-off city hatches its whole area.'}];
+// ============================================================ the normal map: terrain, vision and barriers
+// What the server sends here (View): node owner, detail (exact | range | presence | fog) per node, the enemy groups seen with their level,
+// the own groups. The mockup FAKES `detail` with the DEC-21 table and DEC-35 sources (checked at the bottom of the page).
+const _pl={};
+function playState(id,srcOverride){const S=scenario(id);if(!_pl[id])_pl[id]={S,lv:visionLevels(S)};const Pl=Object.assign({},_pl[id]);Pl.sel=(srcOverride!==undefined&&S.groups.some(g=>g.node===srcOverride))?srcOverride:S.scout;return Pl;}
+const TFILL={0:'#7c9456',1:'#1f5a47',2:'#6b6d75'};
+function glyph(ctx,terr,x,y,s,col,a){a=a||1;ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.strokeStyle=col;ctx.fillStyle=col;ctx.globalAlpha=a;ctx.lineCap='round';ctx.lineJoin='round';
+  if(terr===1){ctx.lineWidth=1.2/s*s;ctx.beginPath();ctx.moveTo(0,-5);ctx.lineTo(3.6,2);ctx.lineTo(-3.6,2);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(0,2);ctx.lineTo(0,4.5);ctx.lineWidth=1.4;ctx.stroke();}
+  else if(terr===2){ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-5,3.5);ctx.lineTo(-1,-3.6);ctx.lineTo(3,3.5);ctx.stroke();ctx.beginPath();ctx.moveTo(0,3.5);ctx.lineTo(3,-1.5);ctx.lineTo(5.5,3.5);ctx.stroke();ctx.globalAlpha=a*.9;ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(-1,-3.6);ctx.lineTo(-2.4,-1.4);ctx.lineTo(.4,-1.4);ctx.closePath();ctx.fill();}
+  else{ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(-5,-1.6);ctx.lineTo(5,-1.6);ctx.moveTo(-3,2.2);ctx.lineTo(3,2.2);ctx.stroke();}
+  ctx.restore();PRIM++;}
+function chip(ctx,terr,x,y,sc){sc=sc||1;circ(ctx,x,y,9.5*sc,C.bg,.93,1.5,C.paper,.9);glyph(ctx,terr,x,y,1.3*sc,C.paper,1);}
+// Three ascending bars: 3 exact, 2 range, 1 presence, 0 none (the level told by shape, not by colour).
+function bars(ctx,x,y,lvl,sc,box){sc=sc||1;const w=2.6*sc,g=1.4*sc,hs=[3.4*sc,6.2*sc,9*sc];const tw=3*w+2*g;if(box!==false)rrect(ctx,x-tw/2-2.4*sc,y-6.6*sc,tw+4.8*sc,13.2*sc,3,C.bg,.9,1,C.paper,.5);
+  for(let i=0;i<3;i++){const bx=x-tw/2+i*(w+g),by=y+4.5*sc-hs[i];if(i<lvl){ctx.fillStyle=C.paper;ctx.fillRect(bx,by,w,hs[i]);}else{ctx.strokeStyle=C.paper;ctx.globalAlpha=.55;ctx.lineWidth=.8;ctx.strokeRect(bx+.4,by+.4,w-.8,hs[i]-.8);ctx.globalAlpha=1;}PRIM++;}}
+const LVWORD=['','PRESENCE','RANGE','EXACT'];
+function drawTokens(ctx,S,Pl,z){const {B}=S;
+  S.groups.forEach(g=>{const n=B.nodes[g.node];if(!inV(n.x,n.y))return;tri(ctx,n.x,n.y+1,n.kind===0?15:19,C.you,C.bg,2,1);text(ctx,String(g.units),n.x,n.y-1,10.5,C.paper,{halo:2});});
+  S.foes.forEach(f=>{const n=B.nodes[f.node];const l=Pl.lv[f.node];if(l<1||!inV(n.x,n.y))return;const lab=l===3?String(f.units):l===2?rangeLabel(f.units):'?';
+    tri(ctx,n.x,n.y+1,n.kind===0?15:19,C.bg,C.foe,2.4,.92);tri(ctx,n.x,n.y+1,(n.kind===0?15:19)*.62,null,C.paper,1.3);
+    if(z>=.55){pill(ctx,n.x,n.y+n.r+10,lab,{minw:20,h:13,sc:C.foe,size:10.5});}});}
+function playBase(ctx,S,Pl,o){const {B}=S;const bd=backdrop(B.id);
+  if(o.terr==='pat'){patternGround(ctx,S);}
+  else{ctx.drawImage(bd.cv,0,0,B.W,B.H);}
+  riversLayer(ctx,S,o.riv,o.z);
+  drawTerritory(ctx,S,.2);drawCellLines(ctx,S,.16);drawBorders(ctx,S,2.2);
+  // Fog veil: foreign places outside every source's sight. Own land is never veiled (DEC-35, the owner's decision of 2026-10-29).
+  B.nodes.forEach(n=>{if(S.owner[n.id]!==ME&&Pl.lv[n.id]===0){const c=B.cells[n.id];if(c.some(p=>inV(p[0],p[1],200)))fllp(ctx,c,C.bg,o.terr==='pat'?.4:.5);}});
+  B.edges.forEach(e=>{const k=S.kind[e.id];const inFog=k!=='own'&&Pl.lv[e.a]===0&&Pl.lv[e.b]===0;const p=P(B.nodes[e.a]),q=P(B.nodes[e.b]);if(!inV(p[0],p[1],400)&&!inV(q[0],q[1],400))return;
+    if(inFog){strk(ctx,[p,q],3,C.bg,.3);dashSeg(ctx,p,q,0,2,C.buf,.75,1.5,4.5,{cap:'round'});}else drawRoad(ctx,S,e);});}
+function playCities(ctx,S,Pl,o){const {B}=S;B.nodes.forEach(n=>{const veil=S.owner[n.id]!==ME&&Pl.lv[n.id]===0;if(!inV(n.x,n.y,80))return;if(veil){ctx.globalAlpha=.6;}drawCity(ctx,n,S,{zoom:o.z,nameDrop:14});ctx.globalAlpha=1;});}
+function drawPlay(ctx,S,Pl,o,t){const {B}=S;o=Object.assign({terr:'now',riv:'now',z:1},o);
+  playBase(ctx,S,Pl,o);playCities(ctx,S,Pl,o);
+  const TV=TERRV[o.terr];if(TV&&TV.under)TV.under(ctx,S,Pl,o);
+  drawTokens(ctx,S,Pl,o.z);
+  if(TV&&TV.over)TV.over(ctx,S,Pl,o,t||0);}
+// ---- terrain variants
+const TERRV={
+  now:{},
+  chips:{over(ctx,S,Pl,o){if(o.z<.5)return;const {B}=S;B.nodes.forEach(n=>{if(!inV(n.x,n.y))return;const veil=S.owner[n.id]!==ME&&Pl.lv[n.id]===0;if(veil&&o.z<1)return;
+      const a=polar(P(n),n.r+11,135);ctx.globalAlpha=veil?.55:1;chip(ctx,n.terr,a[0],a[1]);ctx.globalAlpha=1;
+      if(S.owner[n.id]!==ME&&Pl.lv[n.id]>0){const b=polar(P(n),n.r+11,45);bars(ctx,b[0],b[1],Pl.lv[n.id],1);}});}},
+  pat:{over(ctx,S,Pl,o){if(o.z<.45)return;const {B}=S;B.nodes.forEach(n=>{if(!inV(n.x,n.y)||S.owner[n.id]===ME||Pl.lv[n.id]<1)return;const b=polar(P(n),n.r+11,45);bars(ctx,b[0],b[1],Pl.lv[n.id],1);});}},
+  lens:{under(ctx,S,Pl,o){const {B}=S;const sel=Pl.sel,ids=new Set([sel,...B.nb[sel]]);
+      B.nodes.forEach(n=>{if(!ids.has(n.id)){const c=B.cells[n.id];if(c.some(p=>inV(p[0],p[1],200)))fllp(ctx,c,C.bg,.42);}});},
+    over(ctx,S,Pl,o,t){const {B}=S;const sel=Pl.sel,src=B.nodes[sel];
+      B.nb[sel].forEach(m=>{const n=B.nodes[m];const l=VIS[TERR[src.terr]][TERR[n.terr]];const p=P(src),q=P(n),[ux,uy,L]=unit(p,q);
+        const a=[p[0]+ux*(src.r+6),p[1]+uy*(src.r+6)],b=[q[0]-ux*(n.r+6),q[1]-uy*(n.r+6)];
+        strk(ctx,[a,b],l===3?6:l===2?5:4,C.bg,.85,{cap:'round'});
+        if(l===3)strk(ctx,[a,b],3,C.paper,1,{cap:'round'});else if(l===2)strk(ctx,[a,b],2.6,C.paper,1,{dash:[8,5],cap:'butt'});else strk(ctx,[a,b],2.2,C.paper,1,{dash:[1.2,5],cap:'round'});
+        const mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];if(o.z>=.55){bars(ctx,mid[0],mid[1]-1,l,1.05);
+          text(ctx,LVWORD[l],mid[0],mid[1]+15,8.5,C.paper,{halo:3});}
+        chip(ctx,n.terr,n.x+n.r*.85,n.y+n.r*.85,.9);});
+      circ(ctx,src.x,src.y,src.r+8,null,0,5,C.bg);circ(ctx,src.x,src.y,src.r+8,null,0,2.5,C.paper);chip(ctx,src.terr,src.x+src.r*.85,src.y+src.r*.85,1.05);}},
+  card:{over(ctx,S,Pl,o){const src=S.B.nodes[Pl.sel];circ(ctx,src.x,src.y,src.r+8,null,0,5,C.bg);circ(ctx,src.x,src.y,src.r+8,null,0,2.5,C.paper);},
+    hud(ctx,S,Pl,o,w,h){const src=S.B.nodes[Pl.sel];visionCard(ctx,12,h-144,TERR[src.terr]);}}};
+// The DEC-21 table as a card (the table is public: ruleset_public.vision.by_terrain, so the client reads it, it computes nothing).
+function visionCard(ctx,x,y,hi){const w=236,h=132;rrect(ctx,x,y,w,h,8,C.bg,.95,1.2,C.paper,.35);text(ctx,'Vision by terrain',x+10,y+13,11.5,C.paper,{align:'left'});
+  text(ctx,'A group on the left sees a place on top as:',x+10,y+28,8.5,'#9da7b3',{align:'left',weight:500});
+  const cx=[x+62,x+118,x+174],cy=[y+68,y+92,y+116];[0,1,2].forEach(c=>{glyph(ctx,c,cx[c]+10,y+47,1.3,C.paper,.95);});
+  [0,1,2].forEach(r=>{const hot=TERR[r]===hi;if(hot)rrect(ctx,x+5,cy[r]-11,w-10,22,5,C.you,.18,1.6,C.you);glyph(ctx,r,x+20,cy[r],1.35,C.paper,1);
+    [0,1,2].forEach(c=>{const l=VIS[TERR[r]][TERR[c]];bars(ctx,cx[c]-4,cy[r],l,.9,false);text(ctx,l===1?'pres.':LVWORD[l].toLowerCase(),cx[c]+10,cy[r]+.5,8.6,C.paper,{align:'left',weight:600});});});
+  text(ctx,'your group stands here',x+40,y+h-5,0.1,C.paper);}
+// Flat pattern ground for the terrain mode: a flat colour per cell plus a pattern that survives grayscale.
+function patternGround(ctx,S){const {B}=S;ctx.fillStyle='#10151c';ctx.fillRect(0,0,B.W,B.H);
+  B.nodes.forEach(n=>{const cell=B.cells[n.id];if(!cell.some(p=>inV(p[0],p[1],200)))return;fllp(ctx,cell,TFILL[n.terr],.92);
+    ctx.save();pth(ctx,cell,true);ctx.clip();const xs=cell.map(p=>p[0]),ys=cell.map(p=>p[1]);const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+    ctx.strokeStyle=C.bg;ctx.fillStyle=C.bg;
+    if(n.terr===0){ctx.globalAlpha=.4;for(let y=y0-(y0%12);y<y1;y+=12)for(let x=x0-(x0%12)+((y/12|0)%2?6:0);x<x1;x+=12){ctx.beginPath();ctx.arc(x,y,1.5,0,6.2832);ctx.fill();}}
+    else if(n.terr===1){ctx.globalAlpha=.5;ctx.lineWidth=1.5;ctx.beginPath();for(let y=y0-(y0%16);y<y1;y+=16)for(let x=x0-(x0%16)+((y/16|0)%2?8:0);x<x1;x+=16){ctx.moveTo(x-4,y+3);ctx.lineTo(x,y-4);ctx.lineTo(x+4,y+3);}ctx.stroke();}
+    else{ctx.globalAlpha=.42;ctx.lineWidth=2;ctx.beginPath();for(let k=x0-(y1-y0);k<x1;k+=9){ctx.moveTo(k,y1);ctx.lineTo(k+(y1-y0),y0);}ctx.stroke();}
+    ctx.restore();ctx.globalAlpha=1;PRIM++;});}
+
+// ---- rivers and lakes (visual only): the borders of neighbouring cells with no road between them
+function wob(a,b,amp,seed,step){step=step||13;const L=Math.hypot(b[0]-a[0],b[1]-a[1]);const n=Math.max(1,Math.round(L/step));const [ux,uy]=unit(a,b);const out=[a];
+  for(let i=1;i<n;i++){const f=i/n;const x=a[0]+(b[0]-a[0])*f,y=a[1]+(b[1]-a[1])*f;const env=Math.sin(Math.PI*f);const off=amp*(vnoise(x/45,y/45,seed)*2-1)*Math.min(1,env*1.6);out.push([x-uy*off,y+ux*off]);}out.push(b);return out;}
+function crossesRoad(B,a,b){return B.edges.some(e=>segX(a,b,P(B.nodes[e.a]),P(B.nodes[e.b])));}
+function safeWob(B,a,b,amp,seed){const w=wob(a,b,amp,seed);for(let i=1;i<w.length;i++)if(crossesRoad(B,w[i-1],w[i]))return [a,b];return w;}
+function riverPts(seg,amp,B){return B?safeWob(B,seg.p,seg.q,Math.min(amp,seg.len*.09),11):wob(seg.p,seg.q,Math.min(amp,seg.len*.09),11);}
+function rayHit(p,u,a,b){const dx=b[0]-a[0],dy=b[1]-a[1];const den=u[0]*dy-u[1]*dx;if(Math.abs(den)<1e-9)return null;const t=((a[0]-p[0])*dy-(a[1]-p[1])*dx)/den,sg=((a[0]-p[0])*u[1]-(a[1]-p[1])*u[0])/den;return sg>=0&&sg<=1?t:null;}
+// Run the end of a river on, straight, to the nearest road (not nearer than a city), so the river closes the gap between roads.
+function extendEnd(B,p0,p1,maxLen){const [ux,uy]=unit(p0,p1);let best=null,bt=maxLen,blocked=false;B.edges.forEach(e=>{const a=P(B.nodes[e.a]),b=P(B.nodes[e.b]);const t=rayHit(p1,[ux,uy],a,b);if(t!==null&&t>0.01&&t<bt){const q=[p1[0]+ux*t,p1[1]+uy*t];bt=t;
+  if(t>3&&Math.hypot(q[0]-a[0],q[1]-a[1])>B.nodes[e.a].r+18&&Math.hypot(q[0]-b[0],q[1]-b[1])>B.nodes[e.b].r+18){best=[p1[0]+ux*(t-5),p1[1]+uy*(t-5)];blocked=false;}else{best=null;blocked=true;}}});return blocked?null:best;}
+function chainPts(ch,amp,B){const out=[];ch.pairs.forEach((s,i)=>{let a=ch.pts[i],b=ch.pts[i+1];const w=B?safeWob(B,a,b,Math.min(amp,s.len*.09),11):wob(a,b,Math.min(amp,s.len*.09),11);if(i)w.shift();out.push(...w);});
+  if(B){const n=ch.pts.length;const e1=extendEnd(B,ch.pts[n-2],ch.pts[n-1],150),e0=extendEnd(B,ch.pts[1],ch.pts[0],150);if(e1)out.push(e1);if(e0)out.unshift(e0);}return out;}
+function waterPasses(ctx,pts,wf,soft){const L=pts.length;const seg=i=>[pts[i-1],pts[i]];
+  if(soft)for(let i=1;i<L;i++)strk(ctx,seg(i),wf((i-1)/(L-1))+9,C.water,.16,{cap:'round'});
+  for(let i=1;i<L;i++)strk(ctx,seg(i),wf((i-1)/(L-1))+3.4,C.bg,.5,{cap:'round'});
+  for(let i=1;i<L;i++)strk(ctx,seg(i),wf((i-1)/(L-1)),C.water,1,{cap:'round'});
+  for(let i=1;i<L;i++)strk(ctx,seg(i),Math.max(1,wf((i-1)/(L-1))*.28),'#bfe0ff',.55,{cap:'round'});}
+function water(ctx,pts,w,a,soft){waterPasses(ctx,pts,()=>w,soft);}
+function lake(ctx,x,y,r,seed,soft){const pts=[];for(let i=0;i<16;i++){const a=i/16*6.2832;pts.push([x+Math.cos(a)*r*(1+.28*(vnoise(Math.cos(a)*2+x,Math.sin(a)*2+y,seed)*2-1)),y+Math.sin(a)*r*.82*(1+.28*(vnoise(Math.sin(a)*2+y,Math.cos(a)*2+x,seed+1)*2-1))]);}
+  if(soft){fllp(ctx,pts.map(p=>[x+(p[0]-x)*1.25,y+(p[1]-y)*1.25]),C.water,.18);}
+  strk(ctx,pts,4,C.bg,.5,{close:true});fllp(ctx,pts,C.water,.97);const inner=pts.map(p=>[x+(p[0]-x)*.62-r*.12,y+(p[1]-y)*.62-r*.1]);fllp(ctx,inner,'#8cc3f0',.45);strk(ctx,pts,1.4,'#bfe0ff',.7,{close:true});}
+const _bk={};
+function riversLayer(ctx,S,v,z){if(!v||v==='now')return;const R=riverNet(S.B.id),B=S.B;
+  if(v==='r1'){R.segs.forEach(s=>{if(inV(s.p[0],s.p[1],300))water(ctx,riverPts(s,7,B),4.6,1);});return;}
+  if(v==='r2'||v==='r4'){const big=R.chains.filter(c=>c.len>=100);
+    const paint=(c,soft)=>{big.forEach(ch=>{const pts=chainPts(ch,8,B);const L=pts.length;waterPasses(c,pts,f=>2.8+3.4*f,soft);
+      const closed=pts.length>ch.pairs.length*3+3;// a chain that was run on to a road at an end needs no lake there
+      if(ch.len>=150){const end=ch.pts[ch.pts.length-1];const edgeOK=end[0]>40&&end[0]<B.W-40&&end[1]>40&&end[1]<B.H-40;if(edgeOK)lake(c,end[0],end[1],10+Math.min(9,ch.len/34),5,soft);}});};
+    if(v==='r2'){paint(ctx,false);return;}
+    if(!_bk[B.id]){const cv=document.createElement('canvas');cv.width=B.W/2;cv.height=B.H/2;const c=cv.getContext('2d');c.scale(.5,.5);const keep=PRIM;paint(c,true);PRIM=keep;_bk[B.id]=cv;}
+    ctx.drawImage(_bk[B.id],0,0,B.W,B.H);PRIM++;return;}
+  if(v==='r3'){const sg=R.segs;sg.forEach(s=>{if(!inV(s.p[0],s.p[1],300))return;const ti=B.nodes[s.i].terr,tj=B.nodes[s.j].terr;const pts=riverPts(s,6,B);
+      if(ti===2||tj===2){strk(ctx,pts,5,C.bg,.55,{cap:'round'});strk(ctx,pts,3.2,'#3b342f',.95,{cap:'round'});strk(ctx,pts,1.2,'#b9b1a6',.8,{cap:'round'});
+        // hachures on the low side
+        const L=s.len,k=Math.max(2,Math.round(L/7));const [ux,uy]=unit(s.p,s.q);const nx=-uy,ny=ux;const low=ti===2?-1:1;ctx.beginPath();for(let a=1;a<k;a++){const f=a/k;const x=s.p[0]+(s.q[0]-s.p[0])*f,y=s.p[1]+(s.q[1]-s.p[1])*f;ctx.moveTo(x+nx*low*2.4,y+ny*low*2.4);ctx.lineTo(x+nx*low*7,y+ny*low*7);}
+        ctx.lineWidth=1.3;ctx.strokeStyle='#3b342f';ctx.globalAlpha=.85;ctx.stroke();ctx.globalAlpha=1;PRIM++;}
+      else if(ti===1&&tj===1){const L=s.len,k=Math.max(2,Math.round(L/6));for(let a=0;a<=k;a++){const f=a/k;const x=s.p[0]+(s.q[0]-s.p[0])*f+(hash2(s.p[0]+a,a,3)-.5)*3,y=s.p[1]+(s.q[1]-s.p[1])*f+(hash2(a,s.p[1]+a,4)-.5)*3;circ(ctx,x,y,3.4+hash2(a,a,5)*1.5,'#0f3a2e',.95,1,C.bg,.6);}}
+      else water(ctx,pts,4.6,1);});}}
+const TERR_VARIANTS=[
+ {id:'now',name:'Now',tag:'Baked ground and stamps',desc:'The baked background in three biomes with dark stamps (firs, peaks with a cap, tufts). The map never says what a terrain means for vision: the enemy token alone tells how well you see it (a number, a range, a question mark).'},
+ {id:'chips',name:'A. Chips',tag:'Always on, small',desc:'A terrain glyph chip on every city and a three-bar sight sign on every place of the opponent that is in sight now (3 bars exact, 2 range, 1 presence). The ground stays baked. Reads at a glance at close zoom, hidden when zoomed out.'},
+ {id:'pat',name:'B. Patterns',tag:'A terrain map mode',desc:'A map mode like Supply: flat colour per cell plus a pattern that survives grayscale (dots for plains, firs for forest, hatch for mountains), the sight bars on the opponent places. Shows the whole map as terrain at one look, costs a mode.'},
+ {id:'lens',name:'C. Lens',tag:'On selection',desc:'Select a group: the places it sees light up, the rest dims, each neighbour gets a sight line (solid exact, dashed range, dotted presence) with its bars and its word, and its terrain chip. The default map does not change.'},
+ {id:'card',name:'D. Card',tag:'HUD only',desc:'Selecting a group (or a city) opens a small card in the HUD with the public table: three terrain rows, three columns, bars and words, the row of the selected terrain marked. On the map only a selection ring. No per-frame map cost at all.'}];
+const RIVER_VARIANTS=[
+ {id:'now',name:'Now',tag:'No barrier',desc:'Cells are told apart by a thin line only, so two neighbouring places without a road look connected (the owner, 2026-10-28).'},
+ {id:'r1',name:'A. Plain rivers',tag:'Derived, no map data',desc:'Every border between neighbouring cells that has no road gets a wobbling river, one width. The client draws it from the nodes and roads it already has (the same Voronoi cells), once.'},
+ {id:'r2',name:'B. Chains and lakes',tag:'Derived, selective',desc:'Only chains of borders at least 100 units long, widening downstream, a lake at the end of a long one. Fewer, longer, more like a landscape; a few places stay unseparated.'},
+ {id:'r3',name:'C. By terrain',tag:'Derived, terrain-aware',desc:'The barrier follows the ground: a cliff with hachures wherever a mountain cell is involved, a thicket between two forests, a river elsewhere. Reads as natural, three looks to draw.'},
+ {id:'r4',name:'D. Painted',tag:'Baked into the background',desc:'The geometry of B drawn once into the background with banks and soft shores, like the baked ground (maps:bake). Nothing is drawn per frame; the look can be as rich as the ground itself.'}];
+// ============================================================ anatomy sheets (mini scenes drawn with the same functions)
+MAPS.mini={w:640,h:270,n:[[60,135,2,4,1,0,'Capital'],[200,60,0,2,1,0,'Ash'],[350,62,1,3,2,0,'Brook'],[200,205,0,1,1,0,'Dell'],[500,125,0,2,1,1,'Foe'],[350,212,1,2,1,-1,'Cut'],[590,235,2,4,1,1,'Foe cap']],
+  e:[[0,1,3],[1,2,3],[0,3,2],[3,1,2],[2,4,2],[4,6,2],[5,4,2]],m:[6,4,5,3,1,2,0]};
+function miniScenario(){const B=buildBase('mini');const owner=[0,0,0,0,1,0,1];const edges=B.edges;
+  const kind=edges.map(e=>owner[e.a]===0&&owner[e.b]===0?'own':owner[e.a]===1&&owner[e.b]===1?'foe':'buffer');const level=[3,3,2,1,1,1,1];
+  const packets=[{from:0,to:1,edge:0,p:.42,charges:2,transfer:false,path:[2]},{from:1,to:0,edge:0,p:.66,charges:1,transfer:false,path:[]},{from:3,to:1,edge:3,p:.5,charges:3,transfer:true,path:[]},{from:1,to:2,edge:1,p:.55,charges:2,transfer:false,path:[]}];
+  return {B,owner,kind,level,fronts:[2,1],stock:{0:4,1:1,2:2,3:1,5:0},cut:{5:73},packets,presence:[{k:'n',id:4}],pocket:5,groups:[],foes:[],spine:new Set(),par:[],dist:[]};}
+function drawAnatomy(ctx,v,w,h,t){const S=miniScenario();const s=Math.min(w/640,h/270);ctx.fillStyle=C.bg;ctx.fillRect(0,0,w,h);ctx.save();ctx.translate((w-640*s)/2,(h-270*s)/2);ctx.scale(s,s);VW={x0:-50,y0:-50,x1:700,y1:330};
+  drawSupply(ctx,S,v,t,1.2);
+  // captions that name the parts (screen-independent, in world units)
+  const cap=(x,y,s2,al)=>text(ctx,s2,x,y,9.5,'#9da7b3',{weight:600,halo:3,align:al||'center'});cap(78,70,'level 3: three lanes');cap(278,34,'level 3');cap(215,135,'transfer','left');cap(436,98,'buffer: supply stops');cap(312,207,'cut off','right');cap(350,7,'marker 1');cap(200,7,'marker 2');
+  ctx.restore();}
+function drawPairSheet(ctx,v,w,h){ctx.fillStyle=C.bg;ctx.fillRect(0,0,w,h);const cw=w/3,ch=h/3;
+  for(let r=0;r<3;r++)for(let c=0;c<3;c++){const x=c*cw,y=r*ch;ctx.save();ctx.beginPath();ctx.rect(x+2,y+2,cw-4,ch-4);ctx.clip();ctx.translate(x,y);drawPair(ctx,v,r,c,cw,ch);ctx.restore();}}
+function drawPair(ctx,v,sT,tT,w,h){const lv=VIS[TERR[sT]][TERR[tT]];const ax=w*.27,bx=w*.73,y=h*.5;
+  const ground=(x0,x1,t)=>{if(v==='pat'){const cell=[[x0,0],[x1,0],[x1,h],[x0,h]];fllp(ctx,cell,TFILL[t],.92);patternFill(ctx,cell,t);}
+    else{const a=TC[t][0];ctx.fillStyle='rgb('+a[0]+','+a[1]+','+a[2]+')';ctx.fillRect(x0,0,x1-x0,h);ctx.fillStyle='rgba(13,17,23,.18)';ctx.fillRect(x0,0,x1-x0,h);
+      for(let i=0;i<5;i++)glyph(ctx,t,x0+(x1-x0)*(.2+.15*i),h*(i%2?.2:.82),1.4,C.bg,.35);}};
+  ground(0,w/2,sT);ground(w/2,w,tT);strk(ctx,[[w/2,0],[w/2,h]],1,C.paper,.16);
+  if(v==='lens'){fllp(ctx,[[0,0],[w,0],[w,h],[0,h]],C.bg,.0);}
+  strk(ctx,[[ax,y],[bx,y]],3.6,C.bg,.4);strk(ctx,[[ax,y],[bx,y]],roadSpan(1),C.you,.3);strk(ctx,[[ax,y],[bx,y]],2,C.lane,.9);
+  const nS={x:ax,y,r:17,kind:2,vp:0,name:'source',terr:sT},nT={x:bx,y,r:17,kind:2,vp:0,name:'target',terr:tT};
+  const S1={owner:[ME,FOE]};
+  [[nS,0],[nT,1]].forEach(([n,i])=>{circ(ctx,n.x,n.y,n.r+3,C.bg,.85);circ(ctx,n.x,n.y,n.r,i?C.foe:C.you,.9,3,C.paper);if(i)circ(ctx,n.x,n.y,n.r-5,null,0,1.6,C.bg);});
+  tri(ctx,ax,y+1,19,C.you,C.bg,2,1);text(ctx,'3',ax,y-1,10.5,C.paper,{halo:2});
+  tri(ctx,bx,y+1,19,C.bg,C.foe,2.4,.92);tri(ctx,bx,y+1,19*.62,null,C.paper,1.3);
+  const lab=lv===3?'4':lv===2?'3-5':'?';pill(ctx,bx,y+30,lab,{minw:20,h:13,sc:C.foe,size:10.5});
+  text(ctx,TERR[sT]+' → '+TERR[tT],w/2,h-9,9.5,C.paper,{halo:3,weight:600});
+  if(v==='chips'){chip(ctx,sT,ax-18,y-26,.9);chip(ctx,tT,bx-18,y-26,.9);bars(ctx,bx+22,y-27,lv,1.35);}
+  if(v==='pat'){bars(ctx,bx+22,y-27,lv,1.35);}
+  if(v==='lens'){const a=[ax+25,y],b=[bx-25,y];strk(ctx,[a,b],lv===3?6:lv===2?5:4,C.bg,.85,{cap:'round'});
+    if(lv===3)strk(ctx,[a,b],3,C.paper,1,{cap:'round'});else if(lv===2)strk(ctx,[a,b],2.6,C.paper,1,{dash:[8,5]});else strk(ctx,[a,b],2.2,C.paper,1,{dash:[1.2,5],cap:'round'});
+    bars(ctx,w/2,y-20,lv,1.35);text(ctx,LVWORD[lv],w/2,y-2,9,C.paper,{halo:3});circ(ctx,ax,y,25,null,0,5,C.bg);circ(ctx,ax,y,25,null,0,2.5,C.paper);chip(ctx,sT,ax+14,y+14,.8);chip(ctx,tT,bx+14,y+14,.8);}
+  if(v==='card'){circ(ctx,ax,y,25,null,0,5,C.bg);circ(ctx,ax,y,25,null,0,2.5,C.paper);text(ctx,'(see the card)',w/2,y-14,8.5,'#9da7b3',{weight:500,halo:2});}}
+function patternFill(ctx,cell,t){ctx.save();pth(ctx,cell,true);ctx.clip();const xs=cell.map(p=>p[0]),ys=cell.map(p=>p[1]);const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  ctx.strokeStyle=C.bg;ctx.fillStyle=C.bg;
+  if(t===0){ctx.globalAlpha=.4;for(let y=y0-(y0%12);y<y1;y+=12)for(let x=x0-(x0%12)+((y/12|0)%2?6:0);x<x1;x+=12){ctx.beginPath();ctx.arc(x,y,1.5,0,6.2832);ctx.fill();}}
+  else if(t===1){ctx.globalAlpha=.5;ctx.lineWidth=1.5;ctx.beginPath();for(let y=y0-(y0%16);y<y1;y+=16)for(let x=x0-(x0%16)+((y/16|0)%2?8:0);x<x1;x+=16){ctx.moveTo(x-4,y+3);ctx.lineTo(x,y-4);ctx.lineTo(x+4,y+3);}ctx.stroke();}
+  else{ctx.globalAlpha=.42;ctx.lineWidth=2;ctx.beginPath();for(let k=x0-(y1-y0);k<x1;k+=9){ctx.moveTo(k,y1);ctx.lineTo(k+(y1-y0),y0);}ctx.stroke();}
+  ctx.restore();ctx.globalAlpha=1;PRIM++;}
+
+// ============================================================ page: state in the address, sections, cards
+const $=id=>document.getElementById(id);
+const Q={map:'highway',z:'region',f:'front',gray:'0',rm:'0',live:'0',cols:'2',src:'',sv:'now',tv:'chips',rv:'r2'};
+function readHash(){const p=new URLSearchParams(location.hash.replace(/^#/,''));for(const k of Object.keys(Q))if(p.has(k))Q[k]=p.get(k);}
+function writeHash(){const p=new URLSearchParams();for(const k of Object.keys(Q))p.set(k,Q[k]);history.replaceState(null,'','#'+p.toString());}
+const ZOOMS={ov:'Overview',map:'Map',region:'Region',close:'Close'},ZS={map:.55,region:1.0,close:2.0};
+function focusPoint(S,f,sel){const B=S.B;if(f==='front'&&sel!==undefined)return P(B.nodes[sel]);if(f==='front')return P(B.nodes[S.fronts[0]]);if(f==='second')return P(B.nodes[S.fronts[1]]);if(f==='home')return P(B.nodes[B.cap0]);if(f==='pocket'&&S.pocket>=0)return P(B.nodes[S.pocket]);const a=B.nodes[S.fronts[0]],b=B.nodes[S.fronts[1]];return [(a.x+b.x)/2,(a.y+b.y)/2];}
+let Pl0=null;function viewFor(S,w,h,sel){const B=S.B;if(Q.z==='ov'){const s=Math.min(w/B.W,h/B.H);return {s,ox:(B.W-w/s)/2,oy:(B.H-h/s)/2,w,h};}
+  const s=ZS[Q.z];const fp=focusPoint(S,Q.f,sel);let ox=fp[0]-w/(2*s),oy=fp[1]-h/(2*s);const vw=w/s,vh=h/s;ox=vw>=B.W?(B.W-vw)/2:Math.max(0,Math.min(B.W-vw,ox));oy=vh>=B.H?(B.H-vh)/2:Math.max(0,Math.min(B.H-vh,oy));return {s,ox,oy,w,h};}
+function setup(cv,w,h){const dpr=Math.min(2,window.devicePixelRatio||1);cv.style.width=w+'px';cv.style.height=h+'px';cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);return ctx;}
+function renderCard(cv,kind,vid,t){
+  const w=cv.__w,h=cv.__h;const ctx=setup(cv,w,h);ctx.fillStyle=C.bg;ctx.fillRect(0,0,w,h);PRIM=0;
+  if(kind==='anat')drawAnatomy(ctx,vid,w,h,t);
+  else if(kind==='pairs')drawPairSheet(ctx,vid,w,h);
+  else{const S=scenario(Q.map);Pl0=kind==='sup'?null:playState(Q.map,Q.src===''?undefined:+Q.src);const vw=viewFor(S,w,h,Pl0?Pl0.sel:undefined);let Pl=null,o=null;
+    ctx.save();ctx.scale(vw.s,vw.s);ctx.translate(-vw.ox,-vw.oy);VW={x0:vw.ox,y0:vw.oy,x1:vw.ox+w/vw.s,y1:vw.oy+h/vw.s};ctx.beginPath();ctx.rect(0,0,S.B.W,S.B.H);ctx.clip();
+    if(kind==='sup')drawSupply(ctx,S,vid,t,vw.s);
+    else{Pl=playState(Q.map,Q.src===''?undefined:+Q.src);o=kind==='ter'?{terr:vid,riv:'now',z:vw.s}:{terr:'now',riv:vid,z:vw.s};drawPlay(ctx,S,Pl,o,t);}
+    ctx.restore();
+    if(kind==='ter'&&TERRV[vid]&&TERRV[vid].hud)TERRV[vid].hud(ctx,S,Pl,o,w,h);}
+  cv.__prim=PRIM;paintBadge(cv);}
+function paintBadge(cv){const b=cv.parentElement.querySelector('.prim');if(b)b.textContent=cv.__prim+' draws';}
+const SECT=[];
+function cardHTML(kind,v){return '<figure class="card" data-kind="'+kind+'" data-v="'+v.id+'"><figcaption><b>'+v.name+'</b><span class="tag">'+v.tag+'</span><span class="prim"></span></figcaption><canvas></canvas><p class="desc">'+v.desc+'</p></figure>';}
+function build(){
+  $('gSup').innerHTML=SUPPLY_VARIANTS.map(v=>cardHTML('sup',v)).join('');
+  $('gAnat').innerHTML=SUPPLY_VARIANTS.map(v=>cardHTML('anat',{id:v.id,name:v.name,tag:'anatomy',desc:''})).join('');
+  $('gTer').innerHTML=TERR_VARIANTS.map(v=>cardHTML('ter',v)).join('');
+  $('gPairs').innerHTML=TERR_VARIANTS.map(v=>cardHTML('pairs',{id:v.id,name:v.name,tag:'the nine pairs',desc:''})).join('');
+  $('gRiv').innerHTML=RIVER_VARIANTS.map(v=>cardHTML('riv',v)).join('');
+}
+function layout(){document.querySelectorAll('.grid').forEach(g=>{g.style.gridTemplateColumns='repeat('+Q.cols+',minmax(0,1fr))';});
+  document.querySelectorAll('.card canvas').forEach(cv=>{const card=cv.parentElement;const kind=card.dataset.kind;const w=Math.max(280,Math.floor(card.clientWidth-2));
+    cv.__w=w;cv.__h=kind==='pairs'?Math.round(w*.5):kind==='anat'?Math.round(w*.42):Math.round(w*.64);});}
+function renderAll(t){document.querySelectorAll('.card canvas').forEach(cv=>{if(cv.__vis===false&&t)return;renderCard(cv,cv.parentElement.dataset.kind,cv.parentElement.dataset.v,t||0);});renderCombined(t||0);}
+function renderCombined(t){const wrap=$('cmb');if(!wrap)return;const cv1=$('cmb1'),cv2=$('cmb2');const w=Math.max(300,Math.floor(wrap.clientWidth/ (Q.cols==='1'?1:2)-8));
+  [cv1,cv2].forEach(cv=>{cv.__w=w;cv.__h=Math.round(w*.64);});
+  const S=scenario(Q.map);[cv1,cv2].forEach((cv,i)=>{const ctx=setup(cv,cv.__w,cv.__h);ctx.fillStyle=C.bg;ctx.fillRect(0,0,cv.__w,cv.__h);const vw=viewFor(S,cv.__w,cv.__h,i===1?playState(Q.map,Q.src===''?undefined:+Q.src).sel:undefined);ctx.save();ctx.scale(vw.s,vw.s);ctx.translate(-vw.ox,-vw.oy);VW={x0:vw.ox,y0:vw.oy,x1:vw.ox+cv.__w/vw.s,y1:vw.oy+cv.__h/vw.s};ctx.beginPath();ctx.rect(0,0,S.B.W,S.B.H);ctx.clip();
+    if(i===0)drawSupply(ctx,S,Q.sv,t,vw.s);else{const Pl=playState(Q.map,Q.src===''?undefined:+Q.src);drawPlay(ctx,S,Pl,{terr:Q.tv,riv:Q.rv,z:vw.s},t);}ctx.restore();
+    if(i===1&&TERRV[Q.tv]&&TERRV[Q.tv].hud)TERRV[Q.tv].hud(ctx,S,playState(Q.map,Q.src===''?undefined:+Q.src),{},cv.__w,cv.__h);});}
+let raf=0,t0=0;
+function loop(ts){if(!t0)t0=ts;const t=(ts-t0)/1000;document.querySelectorAll('.card canvas').forEach(cv=>{if(cv.__vis&&(cv.parentElement.dataset.kind==='sup'||cv.parentElement.dataset.kind==='anat'))renderCard(cv,cv.parentElement.dataset.kind,cv.parentElement.dataset.v,t);});renderCombined(t);raf=requestAnimationFrame(loop);}
+function applyMode(){document.body.classList.toggle('gray',Q.gray==='1');document.body.classList.toggle('rm',Q.rm==='1');cancelAnimationFrame(raf);if(Q.live==='1'&&Q.rm!=='1'){t0=0;raf=requestAnimationFrame(loop);}}
+function syncControls(){$('map').value=Q.map;$('z').value=Q.z;$('f').value=Q.f;$('cols').value=Q.cols;$('gray').checked=Q.gray==='1';$('rm').checked=Q.rm==='1';$('live').checked=Q.live==='1';$('sv').value=Q.sv;$('tv').value=Q.tv;$('rv').value=Q.rv;
+  const S=scenario(Q.map);$('src').innerHTML=S.groups.map(g=>'<option value="'+g.node+'">'+S.B.nodes[g.node].name+' ('+TERR[S.B.nodes[g.node].terr]+')</option>').join('');$('src').value=Q.src===''?S.scout:Q.src;}
+function refresh(){writeHash();applyMode();layout();renderAll(0);}
+function init(){readHash();
+  const mk=(id,opts)=>{$(id).innerHTML=opts.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('');};
+  mk('map',[['highway','highway'],['crossroads','crossroads'],['ridge','ridge']]);mk('z',Object.entries(ZOOMS));mk('f',[['front','marker 1 (the front)'],['second','marker 2'],['home','the capital'],['pocket','the cut-off city']]);mk('cols',[['1','1 column'],['2','2 columns'],['3','3 columns']]);
+  mk('sv',SUPPLY_VARIANTS.map(v=>[v.id,v.name]));mk('tv',TERR_VARIANTS.map(v=>[v.id,v.name]));mk('rv',RIVER_VARIANTS.map(v=>[v.id,v.name]));
+  build();syncControls();
+  const bind=(id,key,ev)=>$(id).addEventListener(ev||'change',e=>{Q[key]=e.target.type==='checkbox'?(e.target.checked?'1':'0'):e.target.value;if(key==='map'){Q.src='';syncControls();}refresh();});
+  [['map','map'],['z','z'],['f','f'],['cols','cols'],['gray','gray'],['rm','rm'],['live','live'],['sv','sv'],['tv','tv'],['rv','rv'],['src','src']].forEach(([i,k])=>bind(i,k));
+  const io=new IntersectionObserver(es=>es.forEach(e=>{e.target.__vis=e.isIntersecting;}),{rootMargin:'200px'});document.querySelectorAll('.card canvas').forEach(cv=>io.observe(cv));
+  let rt=0;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{layout();renderAll(0);},120);});
+  applyMode();layout();renderAll(0);fillChecks();}
+// ============================================================ checks against the tables of mechanics.md, run on the page
+function segX(a,b,c,d){const o=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);const d1=o(a,b,c),d2=o(a,b,d),d3=o(c,d,a),d4=o(c,d,b);return d1*d2<0&&d3*d4<0;}
+function fillChecks(){const out=[];const ok=(c,t)=>out.push('<li><span class="'+(c?'ok':'bad')+'">'+(c?'ok':'FAIL')+'</span> '+t+'</li>');
+  // DEC-21, item 2: the table; DEC-21 worked examples 1-7 (M the source, E the target) and 8, 9 (the best of several sources)
+  const ex=[['plains','plains',3],['mountains','plains',3],['plains','forest',2],['forest','plains',2],['mountains','mountains',2],['plains','mountains',1],['forest','mountains',1]];
+  ex.forEach((e,i)=>ok(VIS[e[0]][e[1]]===e[2],'DEC-21 example '+(i+1)+': source '+e[0]+', target '+e[1]+' gives '+LVWORD[e[2]].toLowerCase()));
+  ok(Math.max(VIS.plains.forest,VIS.mountains.forest)===2,'DEC-21 example 8: forest seen from plains and from mountains: range');
+  ok(Math.max(VIS.forest.plains,VIS.mountains.plains)===3,'DEC-21 example 9: plains seen from forest and from mountains: exact (the best)');
+  ok(['plains','forest','mountains'].every(t=>VIS.forest[t]<3),'DEC-21: a forest is always a range or less, never exact');
+  ok(rangeLabel(1)==='1-2'&&rangeLabel(4)==='3-5'&&rangeLabel(7)==='6-10'&&rangeLabel(12)==='11-20'&&rangeLabel(30)==='21+','DEC-21 item 4: ranges 1-2, 3-5, 6-10, 11-20, 21+ (vision.range_starts)');
+  // DEC-35 on the scenario: sources are own groups only
+  Object.keys(MAPS).filter(k=>k!=='mini').forEach(id=>{const S=scenario(id),lv=visionLevels(S),B=S.B;const srcs=new Set(S.groups.map(g=>g.node));
+    const emptyOwn=B.nodes.filter(n=>S.owner[n.id]===ME&&!srcs.has(n.id));
+    const bad=B.nodes.filter(n=>S.owner[n.id]!==ME&&lv[n.id]>0&&!B.nb[n.id].some(m=>srcs.has(m)));
+    ok(bad.length===0,id+', DEC-35: no foreign place is seen unless an own group stands next to it ('+emptyOwn.length+' own nodes without a group are not sources)');
+    ok(B.nodes.every(n=>S.owner[n.id]!==ME||lv[n.id]>=1),id+', DEC-35 detail 3: an own node is never in the fog (presence at least)');
+    const flowSum=flowsOf(S).reduce((a,f)=>a+f.charges,0),legSum=S.packets.reduce((a,p)=>a+p.charges*legsOf(S,p).length,0);
+    ok(flowSum===legSum,id+', supply: the flow arrows add up to the packets (every charge on every leg of its route: '+legSum+')');
+    ok(S.fronts.length===2&&S.fronts[0]!==S.fronts[1]&&S.fronts.every(m=>S.owner[m]===ME&&B.nodes[m].kind>=1),id+', DEC-28 item 2: two front markers, in two different own cities');
+    ok(B.edges.every(e=>S.level[e.id]>=1&&S.level[e.id]<=e.max),id+', DEC-26: every road level is within its max_level');
+    ok(Object.keys(S.cut).every(i=>S.dist[i]<0),id+', DEC-19: a cut-off city has no path to the capital over own roads ('+Object.keys(S.cut).length+' here)');
+    ok(S.packets.every(p=>S.kind[p.edge]==='own'),id+', DEC-28: every packet is on an own internal road (supply never crosses a buffer road)');
+    const R=riverNet(id);ok(R.segs.every(s=>!s.road),id+', rivers: '+R.all+' cell borders have no road between their two cities; '+R.dropped+' dropped because a road of other cities crosses them, '+R.segs.length+' kept ('+R.chains.length+' chains, '+R.chains.filter(c=>c.len>=100).length+' of 100 units or more)');
+    let cross=0;R.chains.forEach(ch=>{const pts=chainPts(ch,8,B);for(let i=1;i<pts.length;i++)B.edges.forEach(e=>{const a=P(B.nodes[e.a]),b=P(B.nodes[e.b]);if(segX(pts[i-1],pts[i],a,b))cross++;});});
+    ok(cross===0,id+', rivers: the wobbling lines cross '+cross+' roads, wobble and run-on to the road included (a river must never cut a road)');});
+  $('chk').innerHTML=out.join('');
+  // the DEC-21 table as the page uses it
+  $('vtab').innerHTML='<tr><th>source \\ target</th><th>plains</th><th>forest</th><th>mountains</th></tr>'+['plains','forest','mountains'].map(s=>'<tr><th>'+s+'</th>'+['plains','forest','mountains'].map(t=>'<td>'+LVWORD[VIS[s][t]].toLowerCase()+'</td>').join('')+'</tr>').join('');
+}
+function measure(){const rows=[];const keep={z:Q.z};
+  const run=(kind,v)=>{const cv=document.createElement('canvas');const w=700,h=450;cv.__w=w;cv.__h=h;const dv=document.createElement('div');dv.innerHTML='<span class="prim"></span>';dv.appendChild(cv);renderCard(cv,kind,v.id,0);const n=12;const a=performance.now();for(let i=0;i<n;i++)renderCard(cv,kind,v.id,0);const ms=(performance.now()-a)/n;return {name:(kind==='sup'?'Supply ':kind==='ter'?'Terrain ':'Barrier ')+v.name,prim:cv.__prim,ms};};
+  SUPPLY_VARIANTS.forEach(v=>rows.push(run('sup',v)));TERR_VARIANTS.forEach(v=>rows.push(run('ter',v)));RIVER_VARIANTS.forEach(v=>rows.push(run('riv',v)));
+  $('perf').innerHTML='<tr><th>Scene ('+Q.map+', '+ZOOMS[Q.z]+', 700 x 450)</th><th>draw calls</th><th>ms per frame, Canvas 2D</th></tr>'+rows.map(r=>'<tr><td>'+r.name+'</td><td>'+r.prim+'</td><td>'+r.ms.toFixed(1)+'</td></tr>').join('');}
+document.getElementById('measureBtn').addEventListener('click',measure);
+init();
+</script>
+</body>
+</html>
