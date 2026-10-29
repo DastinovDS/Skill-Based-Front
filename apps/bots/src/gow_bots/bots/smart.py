@@ -1093,13 +1093,17 @@ class SmartReactive(SmartBot):
     STANCE: ClassVar[Stance] = Stance.BALANCE
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
-        "radius": ParamRange(2, 3),
+        # Tuned by ``gow-bots search`` against smart_rusher and rusher (#166, PR 3).
+        "radius": ParamRange(1, 2),
         "margin": ParamRange(0, 1),
         "guard": ParamRange(1, 2),
-        "reserve": ParamRange(200, 300),
-        "recruit_keep": ParamRange(250, 350),
+        "reserve": ParamRange(138, 238),
+        "recruit_keep": ParamRange(325, 425),
+        "w_neutral": ParamRange(125, 125),
+        "w_closer": ParamRange(1, 1),
         "w_exposed": ParamRange(500, 500),
         "respond": ParamRange(2, 2),
+        "fortify": ParamRange(1, 1),
     }
 
 
