@@ -68,7 +68,13 @@ const story = storyOf(scene) as Story;
 function frame(phase: BackdropPhase, t: number, waited = 0, reduced = false): Recorder {
   const recorder = new Recorder();
   const clock: MotionClock = { phase, t, g: 1000 + t, waited, reduced };
-  drawMotion(recorder as unknown as CanvasRenderingContext2D, FALLBACK_PALETTE, scene, story, clock);
+  drawMotion(
+    recorder as unknown as CanvasRenderingContext2D,
+    FALLBACK_PALETTE,
+    scene,
+    story,
+    clock,
+  );
   return recorder;
 }
 
@@ -130,7 +136,8 @@ describe('the motion (#474, BG5 "Set")', () => {
 
   it('fights in rounds once confirmed: a shot and a loss', () => {
     const names = new Set<string>();
-    for (let t = 3; t < 12; t += 0.1) for (const c of frame('confirmed', t).calls) names.add(c.name);
+    for (let t = 3; t < 12; t += 0.1)
+      for (const c of frame('confirmed', t).calls) names.add(c.name);
     expect(names.has('fillText −1')).toBe(true);
   });
 
@@ -139,13 +146,19 @@ describe('the motion (#474, BG5 "Set")', () => {
       const still = (g: number): string => {
         const recorder = new Recorder();
         const at = STILL_AT[phase];
-        drawMotion(recorder as unknown as CanvasRenderingContext2D, FALLBACK_PALETTE, scene, story, {
-          phase,
-          t: at,
-          g: at + g * 0,
-          waited: 0,
-          reduced: true,
-        });
+        drawMotion(
+          recorder as unknown as CanvasRenderingContext2D,
+          FALLBACK_PALETTE,
+          scene,
+          story,
+          {
+            phase,
+            t: at,
+            g: at + g * 0,
+            waited: 0,
+            reduced: true,
+          },
+        );
         return JSON.stringify(recorder.calls);
       };
       expect(still(1)).toBe(still(2));
