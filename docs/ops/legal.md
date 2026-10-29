@@ -21,7 +21,8 @@ must fill in the real operator data.
 |---|---|---|
 | nick, `created_at`, SHA-256 of the token, the end of a queue ban for repeated resigns `queue_banned_until` (`players`, `identity.py`, DEC-34) | DB `/data/gow.db` | until deletion on request |
 | the password hash, if the player set one: `scrypt$n$r$p$salt$hash` (`players.password_hash`, `passwords.py`, #374); the password itself is not stored, not logged and not returned in 422 errors; there is no password recovery | DB | until deletion on request or a reset (`gow-admin reset-password`) |
-| token and nick | `localStorage["sbf.guest"]` in the browser (`guestStore.ts`) | until the player clears it |
+| token, nick and whether the account has a password | `localStorage["sbf.guest"]` in the browser (`guestStore.ts`); removed by "Log out" | until the player logs out or clears it |
+| number of matches played and the last match id (hides the key hints after the third match) | `localStorage["sbf.hints.matches"]`, `["sbf.hints.last"]` (`hud/hints.ts`) | until the player clears it |
 | interface language | `localStorage["sbf.locale"]` (`locale.ts`); written only when the viewer picks a language, and the selector is hidden while only `en` exists (#387), so currently not written | the same |
 | rating, matches, sides (`ratings`, `matches`, `match_players`) | DB | until deletion on request |
 | replays (`*.jsonl.gz`, `*.frames.json.gz`) | `/data/replays`, contain no nick | indefinitely |
