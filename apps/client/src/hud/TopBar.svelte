@@ -7,7 +7,7 @@
   import { LAST_MINUTE_S } from './hudState.svelte.ts';
   import Icon from './Icon.svelte';
   import type { IconName } from './icons.ts';
-  import { atCap, cpSegments, isPartial, vpShare } from './topBar.ts';
+  import { atCap, cpTrack, vpShare } from './topBar.ts';
 
   interface Props {
     data: HudData | null;
@@ -30,7 +30,7 @@
   };
 
   const locale = $derived(getLocale());
-  const segments = $derived(data === null ? [] : cpSegments(data.cp.value, data.cp.cap));
+  const track = $derived(data === null ? null : cpTrack(data.cp.value, data.cp.cap));
   const full = $derived(data !== null && atCap(data.cp.value, data.cp.cap));
   const share = $derived(data === null ? 50 : vpShare(data.vp.mine, data.vp.enemy));
   const lastMinute = $derived(data !== null && data.secondsLeft <= LAST_MINUTE_S);
@@ -42,22 +42,31 @@
       <div
         class="cp"
         role="img"
-        aria-label={tf('bar.cpLabel', {
+        title={full ? t('bar.cpMaxHint') : undefined}
+        aria-label={tf(full ? 'bar.cpLabelMax' : 'bar.cpLabel', {
           value: formatCentis(data.cp.value, locale),
           cap: formatCentis(data.cp.cap, locale),
         })}
       >
         <span class="term">{t('status.cp')}</span>
-        <span class="segments" aria-hidden="true">
-          {#each segments as fill, i (i)}
-            <span class="segment" class:partial={isPartial(fill)}>
-              <span class="fill" style:width="{fill}%"></span>
-            </span>
-          {/each}
+        <!-- Variant C "Track" (#439): one notched pill with a head marker on the growing end. At the
+             cap the head goes, a dashed amber ring and the word MAX come: a shape and a word, not a colour. -->
+        <span class="gauge" aria-hidden="true">
+          <span class="track">
+            <span class="fill" style:width="calc((100% - 1px) * {track?.share ?? 0})"></span>
+            {#each track?.notches ?? [] as at (at)}
+              <span class="notch" style:left="calc({at}% - 1px)"></span>
+            {/each}
+          </span>
+          {#if track?.head === true}
+            <span class="head" style:left="calc(2px + (100% - 4px) * {track.share})"></span>
+          {/if}
+          {#if full}<span class="ring"></span>{/if}
         </span>
-        <span class="num" class:full>
+        <span class="num">
           {formatCentis(data.cp.value, locale)}/{formatCentis(data.cp.cap, locale)}
         </span>
+        {#if full}<span class="max">{t('bar.cpMax')}</span>{/if}
       </div>
       <button
         type="button"
@@ -218,39 +227,90 @@
     color: var(--text-dim);
   }
 
-  .segments {
-    display: flex;
-    gap: 2px;
+  .gauge {
+    position: relative;
+    flex: none;
+    width: 120px;
+    height: 12px;
   }
 
-  .segment {
-    position: relative;
-    width: 20px;
-    height: 12px;
+  .track {
+    position: absolute;
+    inset: 0;
     overflow: hidden;
-    border: 1px solid var(--you);
-    border-radius: 2px;
+    border: 1.5px solid var(--you);
+    border-radius: 6px;
     background: var(--bg);
   }
 
   .fill {
     position: absolute;
-    inset: 0 auto 0 0;
+    inset: 0.5px auto 0.5px 0.5px;
+    max-width: calc(100% - 1px);
+    border-radius: 4px;
     background: var(--you);
   }
 
-  /* The partial segment is hatched as well as short, so it reads without colour. */
-  .segment.partial .fill {
-    background: repeating-linear-gradient(135deg, var(--you) 0 3px, var(--bg) 3px 5px);
+  /* A notch at every whole CP, cut through the fill: the old cells, as ticks. */
+  .notch {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--bg);
+  }
+
+  /* The head marker: a small triangle over the growing end of the fill. */
+  .head {
+    position: absolute;
+    top: -6px;
+    width: 7px;
+    height: 5px;
+    margin-left: -3.5px;
+    background: var(--paper);
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+  }
+
+  /* At the cap: a dashed amber ring round the track (the word MAX is beside the number). */
+  .ring {
+    position: absolute;
+    inset: -3px;
+    border: 1.6px dashed var(--warn);
+    border-radius: 9px;
+    animation: cp-pulse 0.8s ease-in-out infinite;
+  }
+
+  .max {
+    padding: 0 6px;
+    border: 1.4px solid var(--warn);
+    border-radius: 8px;
+    color: var(--warn);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 13px;
+    animation: cp-pulse 0.8s ease-in-out infinite;
+  }
+
+  @keyframes cp-pulse {
+    0%,
+    100% {
+      opacity: 0.45;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ring,
+    .max {
+      animation: none;
+    }
   }
 
   .num {
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
-  }
-
-  .num.full {
-    color: var(--warn);
   }
 
   .chip {

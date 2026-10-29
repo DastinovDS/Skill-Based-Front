@@ -8,6 +8,13 @@ import {
   type Arc,
   type PlaceState,
 } from './cityLayout.ts';
+import {
+  hatchPolygons,
+  innerWidth,
+  type BuildMark,
+  type CellState,
+  type QueueMark,
+} from './progressLayout.ts';
 import { CHIP, PLATE, chipHatch, chipHeight, lighten, type ChipState } from './fightFx.ts';
 import { dashSegments, triangleCorners, triangleHeight } from './layout.ts';
 import { circleBox, shadowBox, type Box } from './shading.ts';
@@ -32,6 +39,7 @@ import {
   PLACE_FRAME,
   PLATE_FILL,
   PLATE_INNER_RING,
+  PROGRESS,
   PROVINCE,
   RING_FILLED,
   RING_SEGMENT,
@@ -46,6 +54,7 @@ import {
   ENEMY,
   YOU,
   NEUTRAL_STROKE,
+  WARN,
 } from './style.ts';
 import type { Point } from './camera.ts';
 
@@ -515,6 +524,200 @@ export function chipSpec(state: ChipState, enemy: boolean, color: number): BakeS
           });
           g.stroke({ width: 1.6, color, alpha: 0.6, cap: 'round' });
       }
+    },
+  };
+}
+
+// --- Progress marks above an own city (variant A "Cells", #439) --------------------------------------
+// The plate of a recruit queue or of a build is one baked sprite per look: the key holds the states of
+// the cells and the whole-pixel width of the growing part, so a unit in production costs one texture per
+// pixel of progress (at most `innerWidth` of them), shared by every city. The origin of a plate is the
+// middle of its top edge. The dashed ring that asks for a look is a sprite of its own (it pulses).
+
+/** A rectangle outline made of dashes (PixiJS has no dashed stroke). */
+function dashedRect(
+  g: Graphics,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  dash: number,
+  gap: number,
+): void {
+  const corners: Point[] = [
+    { x, y },
+    { x: x + width, y },
+    { x: x + width, y: y + height },
+    { x, y: y + height },
+  ];
+  corners.forEach((from, i) => {
+    const to = corners[(i + 1) % corners.length];
+    if (to === undefined) return;
+    for (const [a, b] of dashSegments(from, to, dash, gap)) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+  });
+}
+
+/** The dark plate behind a mark: contrast on any terrain. `x` is its left edge from the sprite origin. */
+function progressPlate(into: Container, x: number, width: number, height: number): void {
+  const { radius, alpha, rim } = PROGRESS.plate;
+  const g = graphics(into);
+  g.roundRect(x, 0, width, height, radius).fill({ color: BG, alpha });
+  g.roundRect(x + 0.5, 0.5, width - 1, height - 1, radius - 0.5).stroke({
+    width: 1,
+    color: 0xffffff,
+    alpha: rim,
+  });
+}
+
+/**
+ * One cell of the shared grammar: `slot` a dashed frame, `queued` a frame with a dot, `active` a
+ * hatch of `fill` pixels ending in a head line, `ready` solid.
+ */
+function drawCell(
+  g: Graphics,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  state: CellState,
+  fill: number,
+  tone: number,
+): void {
+  const { frame, dot, slot } = PROGRESS;
+  const half = frame.width / 2;
+  if (state === 'slot') {
+    dashedRect(
+      g,
+      x + half,
+      y + half,
+      width - frame.width,
+      height - frame.width,
+      slot.dash,
+      slot.gap,
+    );
+    g.stroke({ width: frame.width, color: SEGMENT_EMPTY });
+    return;
+  }
+  const radius = Math.min(2.5, height / 3);
+  g.roundRect(x + half, y + half, width - frame.width, height - frame.width, radius)
+    .fill(state === 'ready' ? tone : BG)
+    .stroke({ width: frame.width, color: tone });
+  if (state === 'queued') {
+    g.circle(x + width / 2, y + height / 2, Math.max(dot.min, height * dot.share)).fill(tone);
+  } else if (state === 'active' && fill > 0) {
+    const ox = x + frame.inset;
+    const oy = y + frame.inset;
+    const inner = height - 2 * frame.inset;
+    for (const poly of hatchPolygons(fill, inner)) {
+      g.poly(poly.map((v, i) => v + (i % 2 === 0 ? ox : oy))).fill(tone);
+    }
+    if (fill < innerWidth(width)) g.rect(ox + fill - 1, oy, frame.head, inner).fill(PAPER);
+  }
+}
+
+const QUEUE_LETTER: Readonly<Record<CellState, string>> = {
+  slot: 's',
+  queued: 'q',
+  active: 'a',
+  ready: 'r',
+};
+
+/** The plate of a recruit queue (DEC-25): the cells, the first in production or ready. */
+export function queueMarkSpec(mark: QueueMark): BakeSpec {
+  const { width, height } = mark;
+  const states = mark.cells
+    .map((cell) => QUEUE_LETTER[cell.state] + (cell.state === 'active' ? String(cell.fill) : ''))
+    .join('');
+  return {
+    key: `queue:${states}`,
+    box: { x: -width / 2 - 1, y: -1, width: width + 2, height: height + 2 },
+    draw(into) {
+      progressPlate(into, -width / 2, width, height);
+      const g = graphics(into);
+      for (const cell of mark.cells) {
+        const tone = cell.state === 'ready' ? WARN : YOU;
+        drawCell(
+          g,
+          cell.x,
+          PROGRESS.pad,
+          PROGRESS.cell.width,
+          PROGRESS.cell.height,
+          cell.state,
+          cell.fill,
+          tone,
+        );
+      }
+    },
+  };
+}
+
+/** The little house of the barracks badge, in units of the glyph size around its middle. */
+const HOUSE: readonly (readonly [number, number])[] = [
+  [-1, -0.05],
+  [0, -0.95],
+  [1, -0.05],
+  [0.68, -0.05],
+  [0.68, 0.85],
+  [-0.68, 0.85],
+  [-0.68, -0.05],
+];
+
+/** The glyph of a build kind in its badge: a little house (barracks) or stacked squares (warehouse). */
+function drawKindGlyph(g: Graphics, kind: BuildMark['kind'], cx: number, cy: number): void {
+  const s = PROGRESS.badge.glyph;
+  if (kind === 'warehouse') {
+    for (const [x, y] of [
+      [-0.9, -0.1],
+      [0.05, -0.1],
+      [-0.425, -1],
+    ] as const) {
+      g.rect(cx + x * s, cy + 0.5 + y * s, 0.85 * s, 0.85 * s).fill(PAPER);
+    }
+    return;
+  }
+  g.poly(HOUSE.flatMap(([x, y]) => [cx + x * s, cy + 0.5 + y * s])).fill(PAPER);
+}
+
+/** The plate of a barracks or warehouse build (DEC-26): the badge of its kind and one wide cell. */
+export function buildMarkSpec(mark: BuildMark): BakeSpec {
+  const { width, height } = mark;
+  return {
+    key: `build:${mark.kind}:${String(mark.fill)}`,
+    box: { x: -width / 2 - 1, y: -1, width: width + 2, height: height + 2 },
+    draw(into) {
+      progressPlate(into, -width / 2, width, height);
+      const g = graphics(into);
+      const { cx, radius, rim } = PROGRESS.badge;
+      const left = -width / 2;
+      const cy = height / 2;
+      g.circle(left + cx, cy, radius)
+        .fill(BG)
+        .stroke({ width: rim, color: PAPER });
+      drawKindGlyph(g, mark.kind, left + cx, cy);
+      drawCell(
+        g,
+        left + mark.cellX,
+        PROGRESS.pad,
+        PROGRESS.buildCell.width,
+        PROGRESS.buildCell.height,
+        'active',
+        mark.fill,
+        YOU,
+      );
+    },
+  };
+}
+
+/** The dashed amber ring that asks for a look at a cell (ready with no room, stopped by a fight). */
+export function progressAlertSpec(width: number, height: number): BakeSpec {
+  const { width: stroke, dash, gap } = PROGRESS.alert;
+  return {
+    key: `progress-alert:${String(width)}x${String(height)}`,
+    box: { x: -width / 2 - 1, y: -height / 2 - 1, width: width + 2, height: height + 2 },
+    draw(into) {
+      const g = graphics(into);
+      dashedRect(g, -width / 2, -height / 2, width, height, dash, gap);
+      g.stroke({ width: stroke, color: WARN });
     },
   };
 }

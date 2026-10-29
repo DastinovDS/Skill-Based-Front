@@ -1,26 +1,41 @@
 import { describe, expect, it } from 'vitest';
-import { atCap, cpSegments, isPartial, vpShare } from './topBar.ts';
+import { atCap, cpTrack, vpShare } from './topBar.ts';
 
-describe('cpSegments', () => {
-  it('has one segment per whole CP of the cap, filled left to right', () => {
-    expect(cpSegments(240, 500)).toEqual([100, 100, 40, 0, 0]);
-    expect(cpSegments(0, 500)).toEqual([0, 0, 0, 0, 0]);
-    expect(cpSegments(500, 500)).toEqual([100, 100, 100, 100, 100]);
+describe('cpTrack', () => {
+  it('fills the track by the share of the cap', () => {
+    expect(cpTrack(240, 500).share).toBeCloseTo(0.48);
+    expect(cpTrack(0, 500).share).toBe(0);
+    expect(cpTrack(500, 500).share).toBe(1);
   });
 
-  it('never goes outside 0..100 per segment', () => {
-    expect(cpSegments(9999, 300)).toEqual([100, 100, 100]);
-    expect(cpSegments(-5, 300)).toEqual([0, 0, 0]);
+  it('never goes outside 0..1', () => {
+    expect(cpTrack(9999, 300).share).toBe(1);
+    expect(cpTrack(-5, 300).share).toBe(0);
   });
 
-  it('keeps one segment for a cap below one CP', () => {
-    expect(cpSegments(30, 50)).toEqual([30]);
+  it('has a notch at every whole CP below the cap, in percent along the track', () => {
+    expect(cpTrack(0, 500).notches).toEqual([20, 40, 60, 80]);
+    expect(cpTrack(0, 300).notches.map(Math.round)).toEqual([33, 67]);
   });
 
-  it('marks only the part-filled segment as partial (hatched)', () => {
-    expect(cpSegments(240, 500).map(isPartial)).toEqual([false, false, true, false, false]);
+  it('has no notch for a cap of one CP or less', () => {
+    expect(cpTrack(30, 100).notches).toEqual([]);
+    expect(cpTrack(30, 50).notches).toEqual([]);
   });
 
+  it('shows the head marker on the growing end only: not when empty, not at the cap', () => {
+    expect(cpTrack(0, 500).head).toBe(false);
+    expect(cpTrack(240, 500).head).toBe(true);
+    expect(cpTrack(499, 500).head).toBe(true);
+    expect(cpTrack(500, 500).head).toBe(false);
+  });
+
+  it('survives a cap of 0', () => {
+    expect(cpTrack(10, 0)).toEqual({ share: 0, notches: [], head: false });
+  });
+});
+
+describe('atCap', () => {
   it('knows the cap', () => {
     expect(atCap(500, 500)).toBe(true);
     expect(atCap(499, 500)).toBe(false);

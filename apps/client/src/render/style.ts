@@ -189,12 +189,38 @@ export const PROVINCE = {
   inner: { inset: 3.4, width: 1.3, alpha: 0.9 },
 } as const;
 /**
- * The recruit queue above the ring of an own city (DEC-25): one 8 x 4 slot per queued unit
- * (10 apart); the first fills with the progress of the unit in production.
+ * The progress marks above an own city (variant A "Cells", #439; ui-style 9.4a): one cell is one
+ * unit of the thing, on a dark plate. The recruit queue (DEC-25) is a row of `cell`s (a unit
+ * queued, in production, ready, or a free slot of the selected city); the barracks or warehouse
+ * build (DEC-26) is one wide cell beside a round badge with the kind of the build. The plates of the
+ * two stack above the ring, `gap` apart. The hatch is coarser than in the mockup (a fine one
+ * aliases when the map is zoomed out): stripes `thickness` wide every `period`, both measured along
+ * the diagonal of the 45 degree stripe (x + y).
  */
-export const QUEUE_SLOT = { width: 8, height: 4, pitch: 10, pad: 1 } as const;
-/** The barracks or warehouse build of an own city (DEC-26): a thin bar above the queue mark. */
-export const BUILD_MARK = { width: 24, height: 2, gap: 4 } as const;
+export const PROGRESS = {
+  /** The cell of a recruit queue slot. */
+  cell: { width: 16, height: 10, gap: 3 },
+  /** The wide cell of a build. */
+  buildCell: { width: 36, height: 10 },
+  /** Room round the cells inside the plate. */
+  pad: 4,
+  /** Between the queue plate and the build plate. */
+  gap: 3,
+  /** Between the capacity ring (its centre line) and the lower edge of the lowest plate. */
+  ringGap: 6,
+  plate: { radius: 4, alpha: 0.86, rim: 0.14 },
+  /** The stroke of a cell, the margin of the growing part inside it and its head line. */
+  frame: { width: 1.5, inset: 2, head: 2 },
+  hatch: { period: 9, thickness: 4.5 },
+  /** The dot of a queued unit: its radius is this share of the cell height (at least `min`). */
+  dot: { share: 0.14, min: 1.6 },
+  /** The dashed outline of a free slot. */
+  slot: { dash: 3, gap: 2.5 },
+  /** The dashed amber ring round a cell that needs a look (ready with no room, stopped by a fight). */
+  alert: { width: 1.6, dash: 3, gap: 2, grow: 2, low: 0.45 },
+  /** The round badge with the kind of a build: centre from the left of the plate, radius, rim, glyph size. */
+  badge: { cx: 13, radius: 7, rim: 1.2, glyph: 4 },
+} as const;
 /**
  * The barracks of an own city (DEC-26): a round dark badge with a little house in it (the shape
  * tells it, not the colour), on the left of the capacity ring.

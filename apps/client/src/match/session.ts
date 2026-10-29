@@ -42,6 +42,8 @@ export interface MatchContext {
   roundTicks?: number;
   /** `ruleset_public.recruit.unit_ticks`: the progress of a recruit queue (DEC-25). */
   recruitTicks?: number;
+  /** `ruleset_public.recruit.queue_max`: the free slots a selected city shows (DEC-25). */
+  recruitQueueMax?: number;
   /** `ruleset_public.city_upgrades` when enabled (DEC-26): the city build mark. */
   cityUpgrades?: CityDevelopment | null;
   /** `ruleset_public.build.ticks_per_level`: the part done of the tape of an own road build (DEC-28). */
@@ -80,6 +82,7 @@ export class MatchSession implements RenderSource {
   orderDelays: OrderDelays | undefined;
   roundTicks: number | undefined;
   recruitTicks: number | undefined;
+  recruitQueueMax: number | undefined;
   cityUpgrades: CityDevelopment | null | undefined;
   roadBuildTicks: number | undefined;
   /** The overcrowding numbers: the pill beside an overcrowded city. */
@@ -135,6 +138,7 @@ export class MatchSession implements RenderSource {
     this.orderDelays = orders === undefined ? undefined : { planned: orders.planned_delay_ticks };
     this.roundTicks = context.roundTicks;
     this.recruitTicks = context.recruitTicks;
+    this.recruitQueueMax = context.recruitQueueMax;
     this.cityUpgrades = context.cityUpgrades;
     this.roadBuildTicks = context.roadBuildTicks;
     this.capacityTicks =

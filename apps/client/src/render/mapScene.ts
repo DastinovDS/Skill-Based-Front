@@ -277,6 +277,9 @@ export class MapScene {
     // Asked once per frame and first: the «Supply» mode swaps the picture before anything draws.
     const overlay = this.interaction?.overlay() ?? EMPTY_OVERLAY;
     this.setSupplyMode(overlay.supply !== null);
+    // The selected city shows the free slots of its queue; the rings that ask for a look pulse.
+    this.cities.setSelected(overlay.selection?.kind === 'node' ? overlay.selection.id : null);
+    this.cities.pulse(performance.now());
     const announce = frame.base !== this.base;
     if (announce) {
       this.base = frame.base;
@@ -287,6 +290,7 @@ export class MapScene {
         frame.base,
         this.source.recruitTicks ?? null,
         this.source.cityUpgrades ?? null,
+        this.source.recruitQueueMax ?? null,
       );
       this.names.refresh();
     }

@@ -45,6 +45,11 @@ export interface RenderSource {
    */
   readonly recruitTicks?: number;
   /**
+   * Units a city queues at most (`ruleset_public.recruit.queue_max`, DEC-25): the slots of the queue
+   * mark of the selected city, the free ones dashed. Without it the mark shows only the queued units.
+   */
+  readonly recruitQueueMax?: number;
+  /**
    * The city development of DEC-26 when the rules have it (`ruleset_public.city_upgrades`): the
    * durations of the barracks and warehouse builds for the build mark over an own city, and the
    * warehouse bar of a foreign city shows only its charges (its capacity is hidden).
