@@ -11,7 +11,7 @@
   import { OrderBook } from '../match/orderBook.ts';
   import { forwardKey } from '../match/keyEvents.ts';
   import { OrderController } from '../match/orderController.ts';
-  import { BUNDLED_MAPS, DEFAULT_MAP, backgroundUrl } from '../map/bundledMaps.ts';
+  import { BUNDLED_MAPS, DEFAULT_MAP, backgroundUrl, bundledGeo } from '../map/bundledMaps.ts';
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
@@ -200,6 +200,7 @@
     {source}
     {interaction}
     backgroundUrl={backgroundUrl(map.meta.name)}
+    geo={bundledGeo(map)}
     viewRect={fixture?.view ?? null}
     onerror={handleRendererError}
     onfps={(value: number) => {

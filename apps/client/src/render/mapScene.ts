@@ -24,6 +24,7 @@ import { SightView } from './sightView.ts';
 import { SupplyView } from './supplyView.ts';
 import type { Anchor } from './anchors.ts';
 import type { Point } from './camera.ts';
+import type { GeoFile } from '../map/geography.ts';
 
 /** Failed frames in a row before the player is told (a transient error is only skipped). */
 export const FRAME_FAILURE_LIMIT = 3;
@@ -60,6 +61,12 @@ export interface SceneOptions {
    * terrain stamps (a map with a background has no stamps).
    */
   backgroundUrl?: string | null;
+  /**
+   * The vector file of the map (DEC-36, `map/geography.ts`): the areas of the tint, the borders,
+   * the veil and a click come from it instead of the Voronoi cells. Without it, or when it does
+   * not fit the map, the Voronoi cells.
+   */
+  geo?: GeoFile | null;
   /** Selection, ghost orders and preview to draw, and where clicks go (CLI-06, #62). */
   interaction?: MapInteraction | null;
   /** Called once when the background has loaded or has failed to (tests wait for it). */
@@ -128,7 +135,7 @@ export class MapScene {
     this.ownedSprites = options.sprites === undefined ? shapes : null;
     this.sprites = shapes.world;
     this.screenSprites = shapes.screen;
-    this.view = new MapView(map, this.layers, me, app.renderer, hasBackground);
+    this.view = new MapView(map, this.layers, me, app.renderer, hasBackground, options.geo ?? null);
     this.cities = new CityView(map, this.layers, me, 1, this.sprites);
     const radiusOf = (node: number): number => this.cities.radiusOf(node);
     this.names = new NameView(map, this.layers, radiusOf, 1);
@@ -398,6 +405,7 @@ export class MapScene {
         groups: this.entities.roadGroupPoints(),
         icons: this.entities.cityIcons(),
         cells: this.view.cells,
+        geo: this.view.geography,
       },
       world.scale.x,
     );

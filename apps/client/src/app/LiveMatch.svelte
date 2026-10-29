@@ -9,6 +9,7 @@
   import { OrderController } from '../match/orderController.ts';
   import { PauseState } from '../match/pauseState.svelte.ts';
   import { MatchSession } from '../match/session.ts';
+  import type { GeoFile } from '../map/geography.ts';
   import type { ConnectionStatus } from '../net/matchConnection.ts';
   import type {
     MapFile,
@@ -28,6 +29,8 @@
     map: MapFile;
     /** The server's baked background of the map (`MapSummary.background_url`), if it has one. */
     backgroundUrl?: string | null;
+    /** The vector file of the map (DEC-36), if the map has one: the areas of the territory. */
+    geo?: GeoFile | null;
     /** The server said the match is over. */
     onend: (me: PlayerId, end: MatchEndMsg) => void;
     onexit: () => void;
@@ -40,6 +43,7 @@
     token,
     map,
     backgroundUrl = null,
+    geo = null,
     onend,
     onexit,
     onreload = () => {
@@ -222,6 +226,7 @@
       interaction={orders}
       player={me}
       {backgroundUrl}
+      {geo}
       onerror={(error: unknown) => {
         console.error(error);
         rendererFailed = true;

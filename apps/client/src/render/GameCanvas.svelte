@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Application } from 'pixi.js';
   import { onMount, untrack } from 'svelte';
+  import type { GeoFile } from '../map/geography.ts';
   import type { MapFile, PlayerId } from '../protocol.gen.ts';
   import type { Anchor } from './anchors.ts';
   import { NO_INSETS, type Insets } from './camera.ts';
@@ -19,6 +20,8 @@
     player?: PlayerId;
     /** URL of the baked background (WebP) of the map, if it has one. */
     backgroundUrl?: string | null;
+    /** The vector file of the map (DEC-36), if it has one: the areas of the territory. */
+    geo?: GeoFile | null;
     /** The part of the map (world units) to look at at the start; default: the whole map. */
     viewRect?: { x: number; y: number; width: number; height: number } | null;
     /** Called when the renderer cannot start (for example, no WebGL) or the map keeps failing to draw. */
@@ -33,6 +36,7 @@
     interaction = null,
     player = 0,
     backgroundUrl = null,
+    geo = null,
     viewRect = null,
     onerror,
     onfps,
@@ -94,6 +98,7 @@
           interaction,
           player,
           backgroundUrl,
+          geo,
           onbackground: (state: 'loaded' | 'failed') => {
             host.dataset.background = state;
           },

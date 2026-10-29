@@ -71,6 +71,8 @@ export function stampPoints(
   roads: readonly Segment[],
   cityClearance: number,
   roadClearance: number,
+  /** Whether a point is inside the cell; the cells of a geography (DEC-36) are not convex. */
+  inside: (cell: readonly Point[], p: Point) => boolean = insideConvex,
 ): Point[] {
   if (cell.length < 3) return [];
   const xs = cell.map((p) => p.x);
@@ -87,7 +89,7 @@ export function stampPoints(
     const lastCol = Math.ceil((Math.max(...xs) - shiftX - offset) / grid.width) + 1;
     for (let col = firstCol; col <= lastCol; col++) {
       const p = { x: col * grid.width + shiftX + offset, y };
-      if (!insideConvex(cell, p)) continue;
+      if (!inside(cell, p)) continue;
       if (Math.hypot(p.x - centre.x, p.y - centre.y) < cityClearance) continue;
       if (roads.some((road) => distanceToSegment(p, road) < roadClearance)) continue;
       points.push(p);
@@ -107,6 +109,14 @@ export interface CellEdge {
   readonly b: Point;
   /** The cell on the other side of the edge; `null` on the border of the map. */
   readonly neighbour: number | null;
+  /**
+   * Water lies across the edge (DEC-36, #544): a sea or a lake (`neighbour: null`) or a river or a
+   * stream, then `neighbour` is the area across it, if any. The thin area line is not drawn here,
+   * the owner border is (it runs along a coast).
+   */
+  readonly water?: boolean;
+  /** Unit normal into the cell; set for non-convex areas, whose centroid cannot tell the side. */
+  readonly inward?: Point;
 }
 
 const edgeCache = new WeakMap<readonly (readonly Point[])[], readonly CellEdge[]>();
@@ -185,15 +195,22 @@ export function territoryBorders(
   cells: readonly (readonly Point[])[],
   owners: readonly (number | null)[],
   inset: number,
+  edges: readonly CellEdge[] = cellEdges(cells),
 ): Border[] {
   const borders: Border[] = [];
-  for (const edge of cellEdges(cells)) {
+  for (const edge of edges) {
     const owner = owners[edge.cell] ?? null;
-    if (owner === null || edge.neighbour === null) continue;
-    if (owners[edge.neighbour] === owner) continue;
+    if (owner === null) continue;
+    // The border of the map is not a border; a coast is (DEC-36, item 6), and so is a river bank
+    // unless the area across the river has the same owner.
+    if (edge.neighbour === null && edge.water !== true) continue;
+    if (edge.neighbour !== null && owners[edge.neighbour] === owner) continue;
     const cell = cells[edge.cell];
     if (cell === undefined) continue;
-    const d = inward(edge.a, edge.b, centroid(cell), inset);
+    const d =
+      edge.inward === undefined
+        ? inward(edge.a, edge.b, centroid(cell), inset)
+        : { x: edge.inward.x * inset, y: edge.inward.y * inset };
     borders.push({
       owner,
       a: { x: edge.a.x + d.x, y: edge.a.y + d.y },
