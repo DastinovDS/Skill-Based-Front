@@ -22,6 +22,7 @@
     auth: 'replay.error.auth',
     missing: 'replay.error.missing',
     unavailable: 'replay.error.unavailable',
+    expired: 'replay.error.expired',
     timeout: 'replay.error.timeout',
     network: 'replay.error.network',
     format: 'replay.error.format',

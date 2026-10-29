@@ -105,6 +105,8 @@ export const en = {
   'replay.error.missing': 'Replay not found',
   'replay.error.unavailable':
     'Replay is unavailable: the match was cut short or the server could not build it',
+  'replay.error.expired':
+    'This replay is no longer available: old replays are deleted after a while',
   'replay.error.timeout': 'The replay is taking too long to prepare. Try again later',
   'replay.preparing': 'Preparing the replay...',
   'replay.preparing.hint': 'The server is building the match frames, this can take up to a minute.',

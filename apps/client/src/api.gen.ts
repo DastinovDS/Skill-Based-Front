@@ -214,7 +214,8 @@ export interface paths {
      *
      *     Rated matches: public. Others: 401 without a valid token, 403 for a player outside the match.
      *     404: no such match. 202 (``Retry-After``): the match runs or the frames are being built.
-     *     410: the match is over and there will be no frames (failed build, crash, aborted match).
+     *     410: the match is over and there will be no frames (failed build, crash, aborted match), or
+     *     the retention removed them (``reason: expired``, SRV-08).
      */
     get: operations['get_replay_api_replays__match_id__get'];
     put?: never;
@@ -619,6 +620,20 @@ export interface components {
       map_id?: string | null;
     };
     /**
+     * ReplayGone
+     * @description Body of ``410``. ``reason`` ``expired``: the retention removed the files (SRV-08);
+     *     ``unavailable``: the match is over and no frames were or will be made.
+     */
+    ReplayGone: {
+      /** Detail */
+      detail: string;
+      /**
+       * Reason
+       * @enum {string}
+       */
+      reason: 'expired' | 'unavailable';
+    };
+    /**
      * ReplayPreparing
      * @description Body of ``202``: the replay will be there shortly (or when the match is over).
      */
@@ -960,12 +975,14 @@ export interface operations {
         };
         content?: never;
       };
-      /** @description The match is over and no replay will be made. */
+      /** @description The replay expired (retention), or the match is over and none is made. */
       410: {
         headers: {
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          'application/json': components['schemas']['ReplayGone'];
+        };
       };
       /** @description Validation Error */
       422: {

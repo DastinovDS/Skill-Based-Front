@@ -1,12 +1,21 @@
 import { parseReplay, ReplayError, type ReplayFile } from './replayFile.ts';
 
 export type ReplayLoadCode =
-  'auth' | 'missing' | 'unavailable' | 'preparing' | 'timeout' | 'network' | 'format' | 'invalid';
+  | 'auth'
+  | 'missing'
+  | 'unavailable'
+  | 'expired'
+  | 'preparing'
+  | 'timeout'
+  | 'network'
+  | 'format'
+  | 'invalid';
 
 /**
  * Why a replay could not be loaded: `auth` (401/403), `missing` (404: there is no such match; 422:
  * the id is not a match id), `unavailable` (410: the match is over and the server has no frames
- * for it and will make none), `preparing` (202: the server is still building the frames, ask
+ * for it and will make none), `expired` (410 with `reason: "expired"`: the server's retention
+ * removed the replay files, SRV-08), `preparing` (202: the server is still building the frames, ask
  * again; `loadReplayWhenReady` turns it into `timeout` when it takes too long), `network`, or a
  * file problem.
  */
@@ -14,6 +23,16 @@ export class ReplayLoadError extends Error {
   constructor(readonly code: ReplayLoadCode) {
     super(`replay not loaded: ${code}`);
     this.name = 'ReplayLoadError';
+  }
+}
+
+/** `reason` of a 410 body (`ReplayGone`); anything unreadable counts as "unavailable". */
+async function goneReason(response: Response): Promise<unknown> {
+  try {
+    const body: unknown = await response.json();
+    return typeof body === 'object' && body !== null && 'reason' in body ? body.reason : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -34,7 +53,11 @@ export async function loadReplay(
     });
     if (response.status === 401 || response.status === 403) throw new ReplayLoadError('auth');
     if (response.status === 404 || response.status === 422) throw new ReplayLoadError('missing');
-    if (response.status === 410) throw new ReplayLoadError('unavailable');
+    if (response.status === 410) {
+      throw new ReplayLoadError(
+        (await goneReason(response)) === 'expired' ? 'expired' : 'unavailable',
+      );
+    }
     if (response.status === 202) throw new ReplayLoadError('preparing');
     if (!response.ok) throw new ReplayLoadError('network');
     body = await response.json();

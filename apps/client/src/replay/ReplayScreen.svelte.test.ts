@@ -73,6 +73,14 @@ describe('ReplayScreen', () => {
     );
   });
 
+  it('says "no longer available" for a replay the retention removed', async () => {
+    const root = open([answer(410, { detail: 'replay has expired', reason: 'expired' })]);
+    await wait(0);
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain(
+      translate('en', 'replay.error.expired'),
+    );
+  });
+
   it('gives up after the allowed wait', async () => {
     const root = open(Array.from({ length: 200 }, () => answer(202)));
     await wait(6 * 60 * 1000);

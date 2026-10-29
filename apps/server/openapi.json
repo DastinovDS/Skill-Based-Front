@@ -372,7 +372,7 @@
           "replays"
         ],
         "summary": "Get Replay",
-        "description": "The frames file of a finished match (``docs/design/replay-frames.md``), gzip as stored.\n\nRated matches: public. Others: 401 without a valid token, 403 for a player outside the match.\n404: no such match. 202 (``Retry-After``): the match runs or the frames are being built.\n410: the match is over and there will be no frames (failed build, crash, aborted match).",
+        "description": "The frames file of a finished match (``docs/design/replay-frames.md``), gzip as stored.\n\nRated matches: public. Others: 401 without a valid token, 403 for a player outside the match.\n404: no such match. 202 (``Retry-After``): the match runs or the frames are being built.\n410: the match is over and there will be no frames (failed build, crash, aborted match), or\nthe retention removed them (``reason: expired``, SRV-08).",
         "operationId": "get_replay_api_replays__match_id__get",
         "security": [
           {
@@ -408,7 +408,14 @@
             "description": "No such match."
           },
           "410": {
-            "description": "The match is over and no replay will be made."
+            "description": "The replay expired (retention), or the match is over and none is made.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayGone"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1389,6 +1396,29 @@
           "queue_size"
         ],
         "title": "QueueStatus"
+      },
+      "ReplayGone": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "expired",
+              "unavailable"
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "reason"
+        ],
+        "title": "ReplayGone",
+        "description": "Body of ``410``. ``reason`` ``expired``: the retention removed the files (SRV-08);\n``unavailable``: the match is over and no frames were or will be made."
       },
       "ReplayPreparing": {
         "properties": {
