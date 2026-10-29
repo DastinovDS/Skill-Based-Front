@@ -1,8 +1,9 @@
 import type { MapFile } from '../protocol.gen.ts';
 
-// Maps bundled into the client for the dev screen, until the lobby loads them from the server
-// (`GET /api/maps/{id}`). The maps of the server pool `maps/*.json` (DEC-27) and the MVP maps that
-// stay as test fixtures in `maps/fixtures/` (#372) come first (all sorted by name), then the tiny
+// Maps bundled into the client for the dev screen and the tests (CLI-05, #496: only they import this
+// module, so a production build contains none of it; the game takes the map and its background
+// from the server, `GET /api/maps/{id}` and `MapSummary.background_url`).
+// The maps of the server pool `maps/*.json` (DEC-27) and the MVP maps that stay as test fixtures in `maps/fixtures/` (#372) come first (all sorted by name), then the tiny
 // test maps of the simulation (MAP-01, #13). The files stay where they are, Vite bundles them from
 // there (see `server.fs.allow` in vite.config.ts).
 const mvpFiles = import.meta.glob<MapFile>(
@@ -38,8 +39,7 @@ export const DEFAULT_MAP: MapFile = (() => {
 })();
 
 // Baked backgrounds `maps/<id>.bg.webp` (MAP-05, #70, #344), those of the fixtures in `maps/fixtures/`.
-// The server serves the pool ones at `/api/maps/{id}/background.webp`; the dev screen takes them
-// from the repository through Vite.
+// The dev screen takes them from the repository through Vite.
 const backgrounds = import.meta.glob<string>(
   ['../../../../maps/*.bg.webp', '../../../../maps/fixtures/*.bg.webp'],
   {

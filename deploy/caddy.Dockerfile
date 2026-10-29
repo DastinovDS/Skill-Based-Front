@@ -12,8 +12,8 @@ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     PNPM_HOME=/pnpm
 RUN corepack enable pnpm
 
-# The repository layout is kept: the client bundles map files from ../../maps and
-# ../../packages/sim/tests/maps (src/map/bundledMaps.ts).
+# The production client needs no map files: it loads maps and backgrounds from the server (#496).
+# Only the dev screen bundles them (src/map/bundledMaps.ts), and the dev screen is not built.
 WORKDIR /repo/apps/client
 
 # Dependencies first: this layer is rebuilt only when the lockfile or package.json changes.
@@ -22,12 +22,6 @@ RUN --mount=type=cache,target=/pnpm/store \
     pnpm config set store-dir /pnpm/store \
     && pnpm install --frozen-lockfile
 
-# Backgrounds too: Vite bundles maps/*.bg.webp with `import.meta.glob`; without them the glob is
-# empty and the production client draws flat terrain colours (bug #269).
-COPY maps/*.json maps/*.bg.webp /repo/maps/
-# The MVP maps, test fixtures (#372): not in the server pool, but the dev screen and its scenes bundle them.
-COPY maps/fixtures/*.json maps/fixtures/*.bg.webp /repo/maps/fixtures/
-COPY packages/sim/tests/maps/ /repo/packages/sim/tests/maps/
 COPY apps/client/ ./
 # The client build, then the Content-Security-Policy header for Caddy, generated from
 # apps/client/csp.ts (the single source of truth) and imported by deploy/Caddyfile.

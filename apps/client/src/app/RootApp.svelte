@@ -188,6 +188,7 @@
   />
 {:else}
   <ReplayScreen
+    api={app.api}
     matchId={screen.matchId}
     token={guest.token}
     onback={() => {

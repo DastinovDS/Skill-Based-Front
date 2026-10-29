@@ -28,8 +28,6 @@ data/
 
 # Not needed at runtime.
 **/tests/
-# ...except the test maps the client bundles (apps/client/src/map/bundledMaps.ts).
-!packages/sim/tests/maps/
 apps/client/dist/
 maps/src/
 maps/*.preview.png
