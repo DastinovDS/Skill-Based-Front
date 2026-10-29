@@ -724,7 +724,7 @@ the implementation the code works by DEC-07.
 1. In a fight there are always groups of both players, so both see the fight. A new field `PlayerView.fights`
    (a fog test): the place (a node or an edge and `point`), the attacker, the start tick, the tick of the next round,
    the player's own groups of the fight and, for the opponent, the number of units and charged in this fight, exact (also on an edge, where
-   a group itself shows only the level `PRESENCE`, DEC-10). ~~The opponent's virtual reserve (bonuses, terrain) is hidden, as
+   a group itself shows only the level `PRESENCE`, DEC-10; **[amended by DEC-35]**: on an edge a group shows the level of its half). ~~The opponent's virtual reserve (bonuses, terrain) is hidden, as
    its `pool` is hidden now.~~ **[superseded, revision of recommendation 13 to #261, 2026-10-17, #295]**: the opponent's bonuses in a fight are **not hidden**: the fight arena shows for each round the shots of each side, including virtual bonus ones (separately from real ones), cancelled charges and killed units. This is a change of the fog rule and of the protocol: the implementation (#294, client #295) changes `PlayerView.fights` and the round events and raises `PROTOCOL_VERSION`; the fog test is rewritten. ~~**[accepted]** (confirmed by the owner 2026-10-17) The data of the rounds (`fight_round` events) is revealed, not the reserve before the start of the fight.~~ **[superseded by DEC-32]**: while the fight goes on, the remaining bonus reserve of both sides is visible to both players (`PlayerView.fights`), outside a fight it is hidden. **[accepted]** (the orchestrator, technical, 2026-10-21; #329, for #330): `PlayerView.fights` also has the silent charges of both sides (item F2, plains), see DEC-32, item 13.
 2. Events instead of a single `fight`: `fight_started` (place, `point`, attacker), `fight_round`
    (shots and losses of the sides), `fight_ended` (result, capture, bounces, death by item G3);
@@ -2171,8 +2171,8 @@ on an edge `Edge.build` (`gow_sim.systems.build`), unit speed `movement.road_spe
 `[road.speed_pct]`, `[supply.amount_by_level]`, `supply.front_markers`; table tests
 `test_dec28.py` (examples 10-14), `test_build.py`, `test_dec22.py`, `test_dec26.py`. The details the
 decision does not set:
-- **[accepted]** (confirmed by the owner on 2026-10-21) `NOT_FOUND_OR_HIDDEN`: there is no edge or it is in the player's fog (an internal edge
-  is never in the fog, so the answer reveals nothing); `NOT_INTERNAL`: the edge is visible but its
+- **[accepted]** (confirmed by the owner on 2026-10-21) `NOT_FOUND_OR_HIDDEN`: there is no edge or it is in the player's fog (~~an internal edge
+  is never in the fog, so the answer reveals nothing~~ **[superseded by DEC-35]**: an own internal edge counts as known for commands, whatever its fog level for enemy presence, so the answer still reveals nothing); `NOT_INTERNAL`: the edge is visible but its
   ends are not both own. The codes `NOT_ADJACENT` and `NOT_SUPPLIED` are no longer issued by anything and are removed;
   `CITY_BUSY` stays for the barracks and the warehouse (DEC-26, item 8).
 - **[accepted]** (confirmed by the owner on 2026-10-21) A road between provinces or at a province is upgraded too (there is no paying city;
@@ -2488,7 +2488,7 @@ Alternatives (not chosen):
   1. To everyone, always: geography and terrain.
   2. To everyone, always: scheduled orders ~~and construction~~ (the fact, without strength). The enemy's construction is visible only within vision: DEC-17 below; there is no public intent of construction (DEC-16, section 8).
   3. Near your territory: ownership, presence of troops, status. Without numbers. Refined by DEC-21 below: how much is visible about neighbors depends on terrain.
-  4. Your node or a node where your group stands: everything exactly.
+  4. ~~Your node or a node where your group stands: everything exactly.~~ **[superseded by DEC-35]**: a node where your group stands (or in whose half of an edge your group is) is seen exactly; your own node without a group of yours: its own data (warehouse, queue, construction) exactly, enemies in it at the level `PRESENCE` (the DEC-35 block at the end of this section).
 - **[proposed]** Vision is inversely proportional to the size of a group: a small one sees farther. The role of a scout appears without a separate unit type, and whoever has gathered a big army sees worse. Outside the MVP (DEC-04).
 - **[proposed]** A replay after the match revealing the real state.
 
@@ -2496,11 +2496,13 @@ Alternatives (not chosen):
 
 Refines the information ladder above to a level sufficient for code. Difference from the ladder: the ownership of all nodes and the VP of both sides are public, otherwise the VP scoreboard would reveal the hidden indirectly.
 
-To everyone, always: geography, terrain, ~~road widths~~, ownership ~~and capacity~~ of all nodes, the VP of both sides, the intents of scheduled orders ~~and of construction~~ (from where → to where, the kind; without the size and without the group id). Exactly: own nodes and nodes where own groups stand. ~~In the nodes next to them and on the adjoining edges: whether there are enemy groups and their mode, but not the number of units and charges.~~ **[superseded by DEC-21]**: information about neighbors by the terrain table, on edges by halves. An enemy group with an ordinary order does not show its target. The rest is fog with the "last seen" memory. Vision depending on group size is not done in the MVP.
+To everyone, always: geography, terrain, ~~road widths~~, ownership ~~and capacity~~ of all nodes, the VP of both sides, the intents of scheduled orders ~~and of construction~~ (from where → to where, the kind; without the size and without the group id). ~~Exactly: own nodes and nodes where own groups stand.~~ **[superseded by DEC-35]**: exactly: nodes where own groups stand and the node of the half of an edge an own group is in; the data of an own node stays known to its owner, but an own node without an own group is not a source. ~~In the nodes next to them and on the adjoining edges: whether there are enemy groups and their mode, but not the number of units and charges.~~ **[superseded by DEC-21]**: information about neighbors by the terrain table, on edges by halves. An enemy group with an ordinary order does not show its target. The rest is fog with the "last seen" memory. Vision depending on group size is not done in the MVP.
 
 Every rule of this block: a separate test in SIM-14 (#30).
 
 > **Superseded by DEC-21 (#233), block below:** the information about enemy groups in neighboring nodes and on edges depends on terrain and on the border point of the edge; the capacity of all nodes is public (DEC-22).
+>
+> **Superseded by DEC-35 (#477), block at the end of this section:** "own nodes" are no longer vision sources; the sources are own groups only (a group on an edge counts as standing in the node of its half). Every rule below that relies on own nodes as sources is marked **[superseded by DEC-35]**.
 >
 > **Superseded by DEC-17 (#204), block below:** the struck-through parts are no longer public. Road widths, the capacity of enemy cities and its construction are visible only within vision, outside vision the player sees the last seen state. The ownership of all nodes and the VP are still public.
 
@@ -2513,9 +2515,9 @@ Alternatives (not chosen):
 
 The owner's playtest of 2026-10-07: the enemy's road upgrades were visible through the fog. Decision: road widths, the capacity of enemy cities and its construction are visible only within the vision zone; outside vision the player sees the last seen state. Replaces the corresponding parts of DEC-04 (struck through above). Road construction by a city is introduced by DEC-16 (#203); the visibility rules below do not depend on the way of construction.
 
-1. **Visible edge.** The width of an edge is seen exactly while the edge is not in the fog for the player: edge level `PRESENCE` per DEC-04 (at least one end is seen exactly: an own node or a node where an own group stands). There is no separate vision rule for widths: one edge-level function (`compute_vision`) decides both "is there an enemy" and the width.
-   - Own internal edges are always visible (both ends are own).
-   - A buffer edge with an own end is seen exactly; nobody can upgrade it (section 8).
+1. **Visible edge.** The width of an edge is seen exactly while the edge is not in the fog for the player: edge level `PRESENCE` per DEC-04 (~~at least one end is seen exactly: an own node or a node where an own group stands~~ **[superseded by DEC-35]**: at least one end is a vision source of DEC-35, that is, a node with an own group or the node of the half an own group on the edge is in). There is no separate vision rule for widths: one edge-level function (`compute_vision`) decides both "is there an enemy" and the width.
+   - ~~Own internal edges are always visible (both ends are own).~~ **[superseded by DEC-35]**: an own internal edge is in the fog for enemy presence like any other edge without a source on it; its road level and the own construction on it stay exactly known to the owner (own data, only the owner changes them; DEC-35, detail 5).
+   - ~~A buffer edge with an own end is seen exactly; nobody can upgrade it (section 8).~~ **[superseded by DEC-35]**: a buffer edge is not in the fog only if one of its ends is a vision source (DEC-35); otherwise the last seen width (items 2 and 7 below; `base_width` if never seen); nobody can upgrade a buffer edge (section 8).
    - An edge between two nodes neighboring my territory (both of level `PRESENCE`) is in the fog, as per DEC-04.
 2. **An edge in the fog.** The width on the last tick when the edge was not in the fog is shown (the "last seen" memory). An edge the player has never seen: `base_width` from the map file (the map file is public, at the start the width equals `base_width`). There is no demolition of roads, so the known width is not greater than the real one and equals it outside the fog.
 3. ~~**Node capacity.** The same SIM-07 formula (section 9), but by the widths the player knows (items 1 and 2). Ownership is public, so the supplied territory and "is the city cut off" are computed exactly; only the contribution of widths is hidden. Own and neutral capacity is exact; the capacity of an enemy node is exact if all its internal edges are visible, otherwise it is an estimate by the last seen widths (not greater than the real one). The "estimate" flag (`capacity_stale`): the node is in the supplied territory of its owner and at least one of its internal edges is in the fog for the player. Capacity is not stored in memory, it is derived from the known widths and the current ownership.~~ **[superseded by DEC-22]**: capacity is fixed by the node kind, is public and exact; `capacity_stale` is not needed.
@@ -2542,14 +2544,14 @@ border point of an edge toward my node. Items previously marked "(default)" were
 owner on 2026-10-12 (#239). The vision is wider than in DEC-04 by design; to be checked in a playtest. Every
 item: a separate fog test.
 
-1. **Vision sources** are unchanged (DEC-04): own nodes and nodes where own groups stand. At the
+1. ~~**Vision sources** are unchanged (DEC-04): own nodes and nodes where own groups stand.~~ **[superseded by DEC-35]**: the vision sources are own groups only: a node where an own group stands, and the node of the half of its edge an own group on an edge is in (DEC-35, items 1 and 3); an own node without an own group is not a source. At the
    sources everything is seen exactly. ~~A group on an edge gives no vision (#112 by default, the question stays
    open).~~ **[superseded by DEC-10]**: an own group on an edge is a source for its edge only, its halves are at least
-   `PRESENCE`; it gives no node a level.
+   `PRESENCE`; it gives no node a level. **[superseded by DEC-35]**: it is a source as if it stood in the node of its half (DEC-35, item 3).
 2. **The level of information about a neighboring node.** A node adjacent to a source by an edge gets a level by the
    pair of terrains "source terrain → node terrain" from the table below. If there are several sources nearby,
    the best level is taken: `EXACT` is better than `RANGE`, `RANGE` is better than `PRESENCE`. A node not adjacent to any
-   source: fog (`FOG`) with the "last seen" memory.
+   source: fog (`FOG`) with the "last seen" memory. **[amended by DEC-35]**: an own node without an own group is not a source, but enemy groups in it are seen at the level `PRESENCE` (the better of this and the table level); this level gives no zone and no levels to neighbors (DEC-35, details 3 and 4).
 
    | Source \ target | plains | forest | mountains |
    |---|---|---|---|
@@ -2566,8 +2568,7 @@ item: a separate fog test.
    - `PRESENCE`: whether an enemy is there and the modes, without numbers;
    - `FOG`: the last seen (level, values, tick).
 
-   The warehouse of an enemy city is not visible at any level: a warehouse is visible only at the sources (an own node,
-   a node with an own group), as now.
+   The warehouse of an enemy city is not visible at any level: a warehouse is visible only at the sources (~~an own node, a node with an own group~~ **[superseded by DEC-35]**: the warehouse of an own node is known to its owner as own data; the warehouse of a foreign city only where an own group really stands, not at the node of a group on an edge: DEC-35, detail 2), as now.
 4. **Ranges.** The lower bounds `vision.range_starts = [1, 3, 6, 11, 21]` give the ranges 1..2,
    3..5, 6..10, 11..20 and 21+ (in the interface "1-2", "3-5", "6-10", "11-20", "21+"). 0 units:
    no enemy. A range depends only on the number: no noise, the same on every tick.
@@ -2584,7 +2585,7 @@ item: a separate fog test.
    - On an edge not in the fog the half of the source is visible as `EXACT`; the other half: with the level of its node
      (item 2). Hence the owner's rule: the exact number is revealed when an enemy group crosses
      the border point toward my node (or a node where my group stands), and before that the
-     terrain table applies.
+     terrain table applies. **[amended by DEC-35]**: "my node" here means a node that is a source, that is, a node with an own group (or the node of the half of an edge an own group is in); toward an own node without a group the group is not revealed on the edge.
    - ~~Inside a half neither the position nor the direction of movement is shown (the owner, 2026-10-12): only
      that there is an enemy in the half, and the information by level.~~ **[superseded by DEC-33]**: in the half of a visible node
      an enemy group is visible with a continuous position and direction of movement (the DEC-33 block below).
@@ -2602,6 +2603,8 @@ The numbers and the table in the ruleset (a new section `[vision]`): `range_star
 `[vision.by_terrain.<source terrain>]` with the target terrain keys and the values `"exact"`, `"range"`,
 `"presence"` (the values from the table of item 2). The table in the ruleset is public, like all the rules (section 2,
 invariant 2).
+
+> **[superseded by DEC-35] for the examples that take my city as a source:** in the table below M (and M1, M2 in examples 8 and 9) is a source only because it is my city. Under DEC-35 it is a source only if an own group stands in it (or in its half of an edge); read examples 1-9, 11-15, 17 and 18 with "an own group stands in M" (the DEC-35 block has its own examples). Examples 10, 16 and 19-22 do not depend on this.
 
 Worked examples. My city M, an enemy city E, the edge M-E (`a` = M, border point 500 unless
 stated otherwise); in E there is an enemy group of 4 units, 3 charged, "Attack". Fog tests: exactly this table.
@@ -2651,6 +2654,8 @@ The owner's decision of 2026-10-21 (playtest feedback). Changes the fog of barra
 3. **There is no memory.** The city stopped being adjacent (the own node next to it is lost) or changed owner: the information about the barracks disappears.
 4. **This is about cities.** The owner wrote "in provinces", but provinces have no barracks (DEC-23, section 9: a node without a city and a warehouse, `Recruit` is rejected with `NOT_CITY`); the rule is written for cities. The own node that is the source of adjacency may be both a city and a province.
 
+> **Not affected by DEC-35 (#477):** "the source of adjacency" here is an own node by ownership and the public map graph (item 1: "not by vision and not by the fog"), not a vision source. An own node without an own group still makes an adjacent enemy city show its built barracks. Recorded as a reading in the PR of DEC-35 (open question 4).
+
 **Details [accepted]** (confirmed by the owner on 2026-10-21):
 
 - **[accepted]** For an adjacent foreign city `NodeView.has_barracks` is `True` (built) or `False` (no barracks or it is still under construction), for the other foreign cities and for neutral ones `None` (unknown; neutral ones have no barracks). `Sighting` is not extended: the field is computed as a projection from the current ownership and the map graph.
@@ -2685,14 +2690,14 @@ The owner's decision of 2026-10-21 (from a playtest screenshot): "everything bey
 
 **The owner's decision [accepted].**
 
-1. **The vision zone of a node.** A visible node: a vision source (DEC-21, item 1) or a node with level `EXACT`, `RANGE` or `PRESENCE` by the DEC-21 table, item 2. The vision zone of a visible node: its halves of edges, that is, from the node to the border point `border_permille` of each edge (DEC-23, item 5); the zone coincides with the territory of the node on the map. A `FOG` node gives no zone.
+1. **The vision zone of a node.** A visible node: a vision source (DEC-21, item 1, ~~own nodes and nodes with own groups~~ **[superseded by DEC-35]**: nodes with own groups and the node of the half an own group on an edge is in) or a node with level `EXACT`, `RANGE` or `PRESENCE` by the DEC-21 table, item 2. The vision zone of a visible node: its halves of edges, that is, from the node to the border point `border_permille` of each edge (DEC-23, item 5); the zone coincides with the territory of the node on the map. A `FOG` node gives no zone.
 2. **What is visible in the zone.** In the half of an edge belonging to a visible node, an enemy group is visible with a **continuous position and direction of movement**: the figure moves smoothly (entering the zone through the border point, moving toward the node, leaving the node and going away to the border point). The information about numbers by the level of this half, as in DEC-21, items 3 and 5: the half of a source is `EXACT`; the half of a visible neighbor by its level (`EXACT`, `RANGE`); `PRESENCE`: a figure without numbers.
 3. **Fog.** The half of a node in the fog is not visible at all: at the border point the group disappears into the fog (further the "last seen" memory, DEC-21, item 8) and appears out of the fog at the border point.
 4. **Unchanged.**
    - The target of an enemy's ordinary order is hidden (DEC-21, item 6): the direction is shown only by the nearest node of the edge the group is heading to.
    - The warehouse and the contents of cities (DEC-21, item 3), construction and the recruit queue.
    - The road level in the fog (DEC-17): the width of an edge is visible only while the edge is not in the fog by the edge level; the half of a visible node on an edge between two non-sources does not reveal the width (example 4 below; the leak through speed: item 9 of "Details").
-   - ~~A group on an edge gives no vision (#112 stays open).~~ **[superseded by DEC-10]**: an own group on an edge makes the halves of its edge at least `PRESENCE`.
+   - ~~A group on an edge gives no vision (#112 stays open).~~ **[superseded by DEC-10]**: an own group on an edge makes the halves of its edge at least `PRESENCE`. **[superseded by DEC-35]**: it is a source as if it stood in the node of its half, and the zone of that node and of its visible neighbors follows (DEC-35, item 3).
    - Enemy supply packets are not visible (DEC-04, DEC-10).
 
 The zone borders are the same as for the halves of DEC-21, item 5: a group belongs to the half of the node it is heading to if it is at the border point or beyond it, otherwise to the half of the other end (exactly at the border point: to the half of the node it is heading to; for a bouncing group and a group that cancelled its order, DEC-20, this is the return node).
@@ -2714,6 +2719,8 @@ The zone borders are the same as for the halves of DEC-21, item 5: a group belon
 
 No numbers in the ruleset are needed. Fog tests at implementation: exactly this table plus one test for each item of "Details" above.
 
+> **[superseded by DEC-35] for the examples that take my city as a source:** M is a source below only if an own group stands in it (or in its half of an edge); the DEC-35 block has its own examples. Example 13 is superseded twice (DEC-10, then DEC-35).
+
 Worked examples. My city M (plains, a source) and the edge M-E, `a` = M, border point 500 unless stated otherwise; `pos` in thousandths from `a`; the enemy group is 4 units, 3 charged, "Attack", travels from E to M.
 
 | # | Situation | What the owner of M sees |
@@ -2730,7 +2737,7 @@ Worked examples. My city M (plains, a source) and the edge M-E, `a` = M, border 
 | 10 | border point 700 from M; a group from E travels to M, the edge M-E | at `pos` > 700 the half of E (by the level of E), at `pos` ≤ 700 (including 700) the half of M, exact |
 | 11 | in the half of E two enemy groups, at 800 and 650 | two figures with different `id` and their own information (items 3 and 4 of "Details") |
 | 12 | a group in a fight on an edge, in the half of E | visible in the fight (`fights`, `point`), there is no separate figure |
-| 13 | an own group stands on the edge E-F, no sources nearby | ~~an own group gives no vision (#112): no figures~~ **[superseded by DEC-10]**: the halves of E-F are `PRESENCE`, an enemy group on E-F is a figure without numbers |
+| 13 | an own group stands on the edge E-F, no sources nearby | ~~an own group gives no vision (#112): no figures~~ **[superseded by DEC-10]**: the halves of E-F are `PRESENCE`, an enemy group on E-F is a figure without numbers **[superseded by DEC-35]**: the own group is a source in the node of its half (E or F); the enemy figure has the level of its half by the terrain table (the DEC-35 examples 3 and 4) |
 
 What the implementation changes (simulation and `SIM_VERSION`, protocol and `PROTOCOL_VERSION`, client, bots): the list is in #296.
 
@@ -2749,35 +2756,37 @@ Owner confirmed on 2026-10-28: (1) a group on an edge makes `EdgeView.detail` PR
 enemy construction on that edge are visible; (2) an enemy group standing in an end node stays hidden until it steps
 onto the edge; (3) a half in fog rises only to PRESENCE, never to RANGE or EXACT.
 
+> **Superseded by DEC-35 (#477), block below:** a group on an edge is now a vision source as if it stood in the node of its half (by the border point). Confirmations (2) and (3) and decision item 1, details 1 to 4 and the examples 1, 2, 3, 5, 6 and 10 are superseded (marked in place); confirmation (1), details 5 to 7 (with the source named differently), 8 (with the half's level from DEC-35) and 9 and 10, decision item 2 and the examples 4, 7, 8 and 9 stay. The "edge source" as a separate kind of source no longer exists.
+
 **The owner's decision [accepted].**
 
-1. An own group on an edge is a vision source for that edge only: it sees its own edge at the level
-   "an enemy is there and its mode" (as for an adjacent edge), not the end nodes.
+1. ~~An own group on an edge is a vision source for that edge only: it sees its own edge at the level
+   "an enemy is there and its mode" (as for an adjacent edge), not the end nodes.~~ **[superseded by DEC-35]**: an own group on an edge is a source as if it stood in the node of its half (DEC-35, item 3).
 2. Enemy supply packets stay hidden on all edges, as before.
 
 **Details [accepted]** (written by the implementation in #112 in the terms of DEC-17, DEC-21 and DEC-33; where the
 decision leaves room, the reading that reveals less is taken, the open points are listed in the PR of #112):
 
-1. **The edge source.** Every own group whose place is an edge (`OnEdge`) makes that edge an edge source of its
+1. **[superseded by DEC-35]** (a group on an edge is a source in the node of its half; the cases listed here, bouncing, turned back, in a fight, ends lost on the way, all stay sources, DEC-35, detail 6) **The edge source.** Every own group whose place is an edge (`OnEdge`) makes that edge an edge source of its
    player: a group on the way, bouncing or turned back (DEC-07, DEC-20), in a fight on the edge (DEC-24), whoever
    owns the ends, also when the node it left was lost while it was on the way. Own packets give no vision. A group
    standing in a node (also one waiting for the departure of a scheduled order) is a node source as before (DEC-21,
    item 1).
-2. **The halves of its edge.** While the edge is an edge source, the level of each of its two halves (DEC-21,
+2. **[superseded by DEC-35]** (the half of the group's node is a source half, `EXACT`; the other half has the level its node gets by the terrain table, never lower than `PRESENCE`) **The halves of its edge.** While the edge is an edge source, the level of each of its two halves (DEC-21,
    item 5) is the better of the level of the half's node and `PRESENCE`. So the half of a `FOG` node becomes
    `PRESENCE`; the half of an `EXACT`, `RANGE` or `PRESENCE` node keeps its level. An edge source never makes a half
    `EXACT` or `RANGE`: "the half of the source is `EXACT`" of DEC-21, item 5 is about node sources only.
-3. **What such a half shows** is the `PRESENCE` level of DEC-21, item 3 and DEC-33, item 2, unchanged: the modes of
+3. **[superseded by DEC-35]** (a half shows what its level shows: `EXACT`, `RANGE` or `PRESENCE` by DEC-21, items 3 and 5, and DEC-33) **What such a half shows** is the `PRESENCE` level of DEC-21, item 3 and DEC-33, item 2, unchanged: the modes of
    the enemy groups in the half (`HalfView.seen`) without numbers, and every enemy group of the half not in a fight
    as a figure (`EdgeView.enemy_groups`) with `pos`, `toward_b` and the mode, without numbers. This is what "as for
    an adjacent edge" means after DEC-33: the half of a `PRESENCE` neighbor on the edge of a source shows exactly
    this. A figure that comes into sight through an edge source gets a new opaque id (DEC-33, detail 5).
-4. **The end nodes are not revealed.** Node levels come from node sources only (DEC-21, items 1 and 2). An edge
+4. **[superseded by DEC-35]** (the end node of the group's half is revealed as a source; the far end gets its table level; an enemy standing in the node of the group's half is seen) **The end nodes are not revealed.** Node levels come from node sources only (DEC-21, items 1 and 2). An edge
    source does not change `NodeView.detail` or `NodeView.seen` of its ends, does not show their warehouse, gives
    no levels to their neighbors by the terrain table, and is not an own node for the barracks of DEC-31. An enemy
    group standing in an end node is not seen through the edge source; once it leaves the node onto the edge, it is a
    figure in the half (DEC-33, detail 7). The other edges of the end nodes and their halves do not change.
-5. **The road level (DEC-17, item 8).** An edge source takes its edge out of the fog of DEC-17: `EdgeView.detail` is
+5. **The road level (DEC-17, item 8).** **[stays under DEC-35; the cause is the source node at the end of the edge]** An edge source takes its edge out of the fog of DEC-17: `EdgeView.detail` is
    `PRESENCE` while an own group is on the edge, so its road level is shown exactly and remembered (DEC-17, items 1
    and 7), and an enemy road build on it is visible (DEC-17, item 5). This is intended, also at the `PRESENCE`
    level: DEC-17 has only two edge levels, `PRESENCE` (not in the fog) and `FOG`, and item 8 of DEC-17 tied the
@@ -2792,13 +2801,15 @@ decision leaves room, the reading that reveals less is taken, the open points ar
    nodes; a half that falls into the fog keeps its last sighting, the edge keeps the last seen road level.
 8. **A fight on the edge.** The enemy groups of the fight are shown by the fight, exactly (DEC-24, item I1; DEC-33,
    detail 6); another enemy group on the same edge (a reinforcement on the way, a group passing by) is a figure of
-   its half's level (item 2).
+   its half's level (item 2, **[amended by DEC-35]**: the level of the half by DEC-35).
 9. **Symmetry, numbers, versions.** The rule is the same for both players and has no numbers: no ruleset flag
    (like DEC-04, DEC-17, DEC-33). `SIM_VERSION`++ (the fog memory is part of `state_hash()`, new golden replays).
    The shape of `PlayerView` does not change; the descriptions of `HalfView.detail` and `EdgeView.detail` in the
    protocol schema do, so `PROTOCOL_VERSION`++.
 10. **Interface** (the client, a separate task): a half whose `detail` is not `fog` is drawn as seen even when its
     node is under the haze, and its figures are not covered by the haze of the node.
+
+> **[superseded by DEC-35] examples 1, 2, 3, 5, 6 and 10 below**: they assume that my capital M is a source because it is mine (X is `EXACT`) and that a group on an edge shows only `PRESENCE` and not the end nodes. Examples 4, 7, 8 and 9 stay. The DEC-35 block has its own examples on the same map.
 
 Worked examples. The map M - X - E - F: M (node 0) my capital, plains; E (node 1) the enemy capital; X (node 2) and
 F (node 3) neutral; all plains; the edges e0 = M-X, e1 = X-E (`a` = X), e2 = E-F (`a` = E), border points 500. X is
@@ -2824,6 +2835,74 @@ Alternatives (not chosen):
 - An edge source sees its edge exactly, or by the terrain table: more than "an enemy is there and its mode".
 - An edge source shows the presence without positions: a new kind of half that does not exist since DEC-33.
 - Enemy packets visible as a fact on edges of level `PRESENCE`.
+
+### Vision comes only from units: own nodes are no longer vision sources (DEC-35, #477) **[accepted]**
+
+The owner's decision of 2026-10-28, a rule change after the mechanics freeze (the status line at the top of this document), accepted by the owner and implemented before the smart bots (#166) and the balance gate (#40), which depend on the fog. Implementation: #477.
+
+**Why.** Today an empty own province (or city) gives vision on its neighbours (DEC-04, DEC-21, item 1: "own nodes and nodes where own groups stand"). This reads as illogical: vision should come from the units themselves, and terrain shapes what they see. An enemy near your capital is still noticed through the public ownership of the map (captured territory).
+
+**The owner's decision [accepted].**
+
+1. **Vision sources are own groups only.** An own node without an own group is not a vision source: this holds for provinces, cities and the capital alike. Terrain still decides what a group sees (the DEC-21 table, with the group's node as the source).
+2. **An enemy in an own node without an own group** is visible at the `PRESENCE` level (an enemy is there and its mode, no numbers). The own data of the node (warehouse, recruit queue, construction) stays fully known to its owner.
+3. **A group on the way.** A group on an edge is a vision source as if it stood in the node whose half of the edge it is in (by the border point `border_permille`, DEC-21 item 5 and DEC-23 item 5), with that node's terrain: before the border point it sees from the node it left, after it from the node it is heading to. Consequence accepted by the owner: after crossing the border point toward an enemy node, the group sees that node as a source (its garrison exactly) before arrival, mirroring the DEC-21 rule that an enemy crossing the border point toward my node is revealed exactly.
+
+**What it supersedes** (each place is marked **[superseded by DEC-35]** or **[amended by DEC-35]** in its own block, the old text is kept):
+
+| Where | What is superseded |
+|---|---|
+| Section 10, the information ladder, item 4 | "your node ... everything exactly" |
+| DEC-04 | "Exactly: own nodes and nodes where own groups stand"; the sources "own nodes" [superseded by DEC-35] |
+| DEC-17, item 1 | the end "seen exactly" as an own node; "own internal edges are always visible"; "a buffer edge with an own end is seen exactly" |
+| DEC-21, item 1 | the vision sources; the clause "a group on an edge is a source for its edge only" (already changed by DEC-10) |
+| DEC-21, item 2 (amended), item 3 (the warehouse), item 5 (the exact number toward "my node") | own nodes as sources; examples 1-9, 11-15, 17, 18 (note before the table) |
+| DEC-10, decision item 1, confirmations (2) and (3), details 1 to 4, examples 1, 2, 3, 5, 6, 10 | the "edge source" and "the end nodes are not revealed" |
+| DEC-33, item 1 (the sources), item 4 (the group on an edge), example 13, the examples with "M, a source" | the same |
+| Section 8, DEC-28, the `UpgradeRoad` rejection details | "an internal edge is never in the fog" |
+| Section 4, DEC-24, the fight on an edge | "a group itself shows only the level `PRESENCE`" |
+| Section 16 (rejected) | a row added |
+
+Not affected: DEC-31 (adjacency of the barracks is by ownership and the public graph, not by vision; see the note in its block), DEC-17 items 2 and 4 to 8 (the memory and the rest), DEC-21 items 4, 6 to 10, DEC-33 items 2, 3 and the details, DEC-10 items 5 to 10 in substance (the road level of an edge with an own group, packets, memory, fights).
+
+**Details [default]** (written by the DEC author in the terms of DEC-10, DEC-17, DEC-21 and DEC-33; where the decision leaves room, the reading that reveals less is taken; the open points are listed in the PR of #477 and wait for the owner's confirmation; a fog test for every item):
+
+1. **The sources.** A vision source is a node. A node is a source when (a) an own group stands in it (also a group waiting for the departure of a scheduled order and a freshly recruited group), or (b) an own group on an edge (`OnEdge`) is in the half of the edge that belongs to this node (item 6). Own packets give no vision. Everything else in DEC-21 works on this set of source nodes unchanged: the table of item 2, the best level of several sources, the edge is not in the fog if at least one of its ends is a source (item 5), the zone of a visible node and the figures in it (DEC-33). The separate "edge source" of DEC-10 does not exist any more: a group on an edge is a node source (item 3 above).
+2. **What a source node shows.** At a source node the enemy groups are seen at `EXACT` (`units`, `charged`, modes). The warehouse, the warehouse level, the recruit queue and the construction of a **foreign** city are shown only where an own group **really stands** in it (as before, DEC-21 item 3). At the node of the half of a group on an edge these are **not** shown: the group sees the garrison exactly (the owner's consequence of item 3), but it does not see into the city. (The reading that reveals less.)
+3. **The level of a node.** For the enemy groups of a node the level is the best of: the level from the sources by the DEC-21 table; `EXACT` if the node is a source; `PRESENCE` if the node is **own**. So an own node is never in the fog for enemy presence: an enemy in an own node without an own group is seen at `PRESENCE` at any time, without the "last seen" delay, and the memory of such a node is not needed. The own data of the node (warehouse, level, recruit queue, construction, barracks, production) stays exact for the owner whatever the level. A neutral or an enemy node gets no such level.
+4. **The `PRESENCE` of an own node is a level of the node only.** It does not make the node a source: it gives no level to the neighbours, it is not a node of "level `EXACT`, `RANGE` or `PRESENCE` by the DEC-21 table" of DEC-33, item 1, so the halves of an own node without a source get no zone: an enemy group on the way to my node is not seen on the edge (it is not a figure there, no memory marker) until it is in the node, and in the node it is at `PRESENCE`. A scheduled order of the enemy, a fight (public to both of its sides, DEC-24) and the ownership change stay visible as before. (The reading that reveals less.)
+5. **Own roads and own data.** An own internal edge without a source on it is in the fog for enemy presence (item 1), but its road level and the own construction on it stay exactly known to the owner: this is own data, which only the owner changes (as the warehouse of an own node in item 2 of the decision). The representation in `PlayerView` (a separate flag or the width independent of `EdgeView.detail`) is the implementation's choice; the visible fact is: the owner always sees the level and the construction of their own internal edges. For the commands, an own internal edge always counts as known (`UpgradeRoad` is not rejected with `NOT_FOUND_OR_HIDDEN`; the answer reveals nothing). A buffer edge or an enemy edge: only by the rules of DEC-17 (not in the fog if an end is a source; otherwise the last seen width, `base_width` if never seen). (The reading that reveals less.)
+6. **The node of the half.** The half is found by the rule of DEC-21 item 5 and DEC-33 (the border point `border_permille`, DEC-23 item 5): geometrically, the position of the group on the edge decides which half of the border point it is in; exactly at the border point the half of the node the group is heading to. For a bouncing group and a group that cancelled its order (DEC-20) the node it is heading to is the return node. A group in a fight on an edge stays at the point of the fight and is a source of the node of the half of that point (the heading is that of its movement before the fight). A group that has just left a node (`progress` 0) is in the half of this node. The rule is the same for the group of either player and uses only public data and the group's own position, so the player learns nothing new. If the node of the half was lost while the group is on the way, the group is still a source in that node (as DEC-10, detail 1, for the ends lost on the way): vision does not depend on who owns the node.
+7. **Edges, memory and the rest.** The edge on which the group is, is not in the fog (its end in the group's half is a source): its road level is exact and remembered and an enemy construction on it is visible (DEC-17, items 1, 5, 7), as DEC-10, item 5 said; the other half of the edge has the level of its node by the table from the source node (never lower than `PRESENCE`, because the nodes are neighbours by this edge), so DEC-10's guarantee "both halves at least `PRESENCE`" holds as a consequence and not as a separate rule. The `vision` system records the sightings of a source node and its halves as it does for any source (DEC-21, item 8); when the group crosses the border point, leaves the edge or dies, the places fall to their new levels and keep the last sighting. Enemy supply packets are not visible on any edge (DEC-10, item 6).
+8. **Unchanged.** The terrain table and `vision.range_starts`; the public ownership and VP; the scheduled orders and "Defense" as public intents; the target of an enemy ordinary order is hidden; the fog events; the fights are public and exact to both sides; DEC-31. There are no numbers: no ruleset flag (as DEC-04, DEC-17, DEC-33).
+9. **Symmetry and information.** The rule is the same for both players. A player loses vision of the neighbours of their empty nodes and of the edges around them, so more of the map is in the fog; they keep the public ownership (an enemy that took a node is noticed through it), the scheduled orders, the fights and the `PRESENCE` of an enemy in their nodes. This is the intended effect: a garrison or a scout is needed to see.
+10. **Versions and the rest** (for the implementation, #477): `SIM_VERSION`++ (the vision and the fog memory change, `state_hash()` changes), new golden replays (AGENTS.md, section 4.5); `PROTOCOL_VERSION`++ and a regeneration of `protocol.gen.ts` only if a field of `PlayerView` changes (for example the width of an own edge in the fog, item 5), the descriptions of `detail` in the schema change anyway; a fog test for each item and each example; the mirror and property tests; bots read the same `PlayerView` (they must not assume vision from empty nodes); the smoke tournament `--seeds 3` on `mvp-1`. The client draws no rules: own nodes now in the fog are drawn under the haze with their own data exact (the dev scene and the shots, AGENTS.md, section 7.5).
+
+Worked examples. The map M - X - E - F as in DEC-10: M (node 0) my capital, plains; E (node 1) the enemy capital; X (node 2) and F (node 3) neutral or mine; M and X are mine unless stated otherwise; the edges e0 = M-X, e1 = X-E (`a` = X), e2 = E-F (`a` = E), border points 500; M, X, E plains, F forest. The enemy group is 4 units, 3 charged, "Attack". Fog tests: exactly this table.
+
+| # | Situation | What I see |
+|---|---|---|
+| 1 | I have no groups at all; the enemy group stands in my X | X: "an enemy is there", "Attack", no numbers (item 2 of the decision); the warehouse and the queue of X are exact; M and the edges: no enemy shown, nothing is a source |
+| 2 | as 1, my group stands in M (plains) | M is a source; X is its neighbour plains to plains: `EXACT`, the enemy is 4 and 3 (the best of `EXACT` and the own `PRESENCE`, detail 3) |
+| 3 | I have no groups; the enemy group travels on e0 toward M, at `pos` 700 | not visible: M and X are not sources, own nodes give no zone (detail 4); the road level of e0 is exact (detail 5); when the group arrives in M: M shows "an enemy is there", "Attack" |
+| 4 | my group G on e1 at `pos` 300 (from X toward E) | G is in the half of X: X is a source, `EXACT`; X's neighbours by the table: M `EXACT`, E (plains from plains) `EXACT`: the enemy garrison of E is 4 and 3 if it stands there; the warehouse of E is not shown (detail 2); e1 is not in the fog, its road level is exact |
+| 5 | as 4, G at `pos` 500 (the border point; heading toward E) | G is in the half of E (the node it is heading to): E is a source, `EXACT` (the owner's consequence, item 3); X is a neighbour of E, `EXACT`; F (forest from plains): `RANGE`; e2 is not in the fog |
+| 6 | as 4, G at `pos` 600, bounced and going back to X | still in the half of E (geometrically past the border point): E is a source; at 500 it passes to the half of X (heading to X) |
+| 7 | as 4, an enemy group on e1 at `pos` 800 going to X | the half of E has the level `EXACT` (from the source X, plains to plains): a figure at 800, toward `a`, 4 and 3; (DEC-10 had `PRESENCE` here) |
+| 8 | G on e2 at `pos` 300 (from E toward F) | G is in the half of E: E is a source (the garrison seen exactly), F (forest from plains) `RANGE`; an enemy standing in F is "3-5"; the halves of E (on e1 and e2) are halves of a source, `EXACT` |
+| 9 | as 8, G is a group of mine in a fight on e2 with an enemy group | the fight shows the enemy of the fight exactly (`fights`, DEC-24); G is a source in the half of its fight point (detail 6) |
+| 10 | G left F, F was mine and was captured while G is on e2 | G is still a source in the node of its half (detail 6) |
+| 11 | the enemy builds a road level on e2; G on e1 at `pos` 500 (E is a source) | the build is visible: e2 has an end that is a source, so it is not in the fog (DEC-17, item 5) |
+| 12 | no groups of mine; the enemy city E is joined by an edge to my X; E has a built barracks | `has_barracks = True` (DEC-31 is by ownership and the graph, not by vision) |
+| 13 | no groups of mine; I order `UpgradeRoad` on e0 | accepted: an own internal edge counts as known (detail 5), not `NOT_FOUND_OR_HIDDEN` |
+| 14 | the enemy sends a scheduled order E to X | the intent is public to everyone (DEC-04, DEC-08), as before, whether or not I have sources |
+| 15 | the enemy stands in my X and my group arrives in X; they fight | the fight is public to both sides; after it, if my group stays in X, X is a source |
+
+Alternatives (not chosen):
+- Keep own nodes as sources (DEC-04, DEC-21): an empty own province would see its neighbours, which the owner called illogical.
+- A group on an edge sees only its edge (DEC-10): it could not see the node it is heading to, though the owner wants the garrison seen before arrival.
+- Give an own node without a group no level at all: the owner decided on `PRESENCE` for an enemy in an own node (item 2).
+- Remembered (stale) information for own nodes without a group: not needed, an own node is never in the fog for enemy presence (detail 3).
 
 ---
 
@@ -2943,6 +3022,7 @@ The current starting values of the ruleset `rulesets/mvp-0.toml` (durations in t
 | Of the neighbors only "there is an enemy" (DEC-04) | information by terrain, ranges, the exact number beyond the border point of an edge (DEC-21) | playtest 2026-10-12: decisions in the blind, terrain did not affect vision |
 | Capacity from roads, width 1..5, a 12-minute match | capacity by the kind of node, roads up to 3 levels of two types, 15 minutes (DEC-22) | roads did not get upgraded, capacity mixed two decisions, the match felt rushed |
 | Every node: a city with a warehouse (MAP-01) | provinces without a warehouse, kinds of cities, names (DEC-23) | positional play and different value of cities |
+| Own nodes are vision sources (DEC-04, DEC-21 item 1) | vision comes only from units: own groups, a group on an edge as in the node of its half (DEC-35) | playtest 2026-10-28: an empty own province giving vision on its neighbours read as illogical |
 | Two road types: fast and cargo (DEC-22), all cities recruit and one number for the warehouse and units | roads without a type and cheaper (always), a barracks and a separate warehouse behind a flag (DEC-26) | playtest 2026-10-14: the decision "which type" changed nothing, cities are too equal from the first second |
 
 ---
@@ -3149,16 +3229,16 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-08 | #12 | modes and scheduled orders | section 5 | [accepted]; "Building" [superseded by DEC-16]; the cancel price [superseded by DEC-20]; the "Defense" bonus [superseded by DEC-30] |
 | DEC-09 | #104 | the starting CP stance and the first stance change | section 6 | [accepted] (2026-10-28); confirms the implementation |
 | DEC-13 | #124 | road construction by a group: countdown, builders, interruption | section 8 | [superseded by DEC-16] |
-| DEC-10 | #112 | vision of a group on an edge and enemy packets | section 10 | [accepted] (2026-10-26): an own group on an edge sees its edge at the level `PRESENCE`, not the end nodes; enemy packets stay hidden; implemented #112 (`SIM_VERSION` 21, `PROTOCOL_VERSION` 25) |
+| DEC-10 | #112 | vision of a group on an edge and enemy packets | section 10 | [accepted] (2026-10-26): an own group on an edge sees its edge at the level `PRESENCE`, not the end nodes; enemy packets stay hidden; implemented #112 (`SIM_VERSION` 21, `PROTOCOL_VERSION` 25); the "edge source" [superseded by DEC-35]: a group on an edge is a source in the node of its half |
 | DEC-11 | #117 | splitting and merging groups, commands to a group on the way | section 3 | [superseded by DEC-20] |
 | DEC-12 | #118 | garrison attrition: the count, the grace period, transit, the unit that dies | section 9 | [accepted] (2026-10-28); confirms the implementation; item 5 (trimming the warehouse) obsolete after DEC-22 and DEC-26 |
 | DEC-14 | #131 | supply details SIM-08 | section 7 | [superseded by DEC-18] |
 | DEC-16 | #203 | road upgrade as a city function for warehouse charges | section 8 | [accepted]; the numbers and the link to capacity [superseded by DEC-22]; part [superseded by DEC-28] |
-| DEC-17 | #204 | fog of war for roads: widths, capacity and the enemy's construction | section 10 | [accepted]; item 3 [superseded by DEC-22] |
+| DEC-17 | #204 | fog of war for roads: widths, capacity and the enemy's construction | section 10 | [accepted]; item 3 [superseded by DEC-22]; the "own end" of item 1 [superseded by DEC-35] |
 | DEC-18 | #230 | supply control: priorities and transfer | section 7 | [accepted]; a transfer shares the `amount` of the edge with the automatics, item 10 (2026-10-14, #253); part [superseded by DEC-28] |
 | DEC-19 | #231 | starvation in an encirclement | section 7 | [accepted]; `starve_in` without charges, example 3 (2026-10-14, #253) |
 | DEC-20 | #232 | groups and orders: auto-merge, free split, merge, cancel, stack limit | section 3 | [accepted] |
-| DEC-21 | #233 | terrain vision and the border point of an edge | section 10 | [accepted]; item 5 on position and direction in an edge half [superseded by DEC-33]; implemented #296 (`SIM_VERSION` 19, `PROTOCOL_VERSION` 22) |
+| DEC-21 | #233 | terrain vision and the border point of an edge | section 10 | [accepted]; item 5 on position and direction in an edge half [superseded by DEC-33]; implemented #296 (`SIM_VERSION` 19, `PROTOCOL_VERSION` 22); item 1 (the sources) [superseded by DEC-35] |
 | DEC-22 | #234 | roads of two types, fixed capacity, a 15-minute match | section 8 | [accepted]; road types and prices [superseded by DEC-26] (always); warehouse equals capacity [superseded by DEC-26 with `city_upgrades.enabled = true`] |
 | DEC-23 | #235 | map rework: provinces, kinds of cities, names, the border point | section 9 | [accepted]; implemented: the format (#366, `SIM_VERSION` 20, `PROTOCOL_VERSION` 24), maps with provinces (#266) |
 | DEC-24 | #261 | fight over time: rounds, reinforcements, retreat, a bounce without a chain, the fight point | section 4 | [accepted] (2026-10-14, all 14 recommendations); absorbs #133, #141; `round_ticks = 10` and item I1 on the remaining bonus [superseded by DEC-32, implemented #329] |
@@ -3168,10 +3248,11 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-28 | #290 | supply and roads rework: transit, front markers, rear minimum, donors, roads for CP | sections 6, 7, 8 | [accepted] (2026-10-17); details [accepted] 2026-10-17; replaces the priorities of DEC-18, the road payment of DEC-16, DEC-26; supply implemented #292 (`SIM_VERSION` 14, `PROTOCOL_VERSION` 17); roads (#306) and the client (#293) await implementation |
 | DEC-29 | #291 | the bonus of a scheduled order by distance; revision of DEC-24 item 13 (the opponent's bonuses in a fight are visible) | sections 4, 5 | [accepted] (2026-10-17); details [accepted] 2026-10-17; `orders.planned_bonus` [superseded by DEC-29]; implemented (#294, `SIM_VERSION` 16; client: #295, the arena on the map: #325); the bonus forecast in your own order (`OrderView.bonus`) [accepted] 2026-10-21, implemented #329 |
 | DEC-30 | #316 | accumulating the "Defense" bonus: +1 per `orders.defense_ticks_per_bonus` ticks, the cap by charged units, burns after a fight | section 5 | [accepted] (2026-10-21); replaces the part of DEC-08 about "Defense"; details [accepted] 2026-10-21; implemented (#317, `SIM_VERSION` 17, `PROTOCOL_VERSION` 20); client implemented (#318) |
-| DEC-31 | #316 | enemy barracks are visible at neighboring cities (only a built one, no memory) | section 10 | [accepted] (2026-10-21); changes the barracks fog of DEC-25 and DEC-26; details [accepted] 2026-10-21; implemented (#319, `PROTOCOL_VERSION` 23) |
+| DEC-31 | #316 | enemy barracks are visible at neighboring cities (only a built one, no memory) | section 10 | [accepted] (2026-10-21); changes the barracks fog of DEC-25 and DEC-26; details [accepted] 2026-10-21; implemented (#319, `PROTOCOL_VERSION` 23); not affected by DEC-35 (adjacency is by ownership) |
 | DEC-32 | #327 | the fight arena: a 2 s round (`combat.round_ticks = 20`), the bonus reserve is visible to both sides in a fight (revision of DEC-24, item I1); the bonus rules do not change (B1, B2 not accepted); client A1, V3, ◇ | section 4 | [accepted] (2026-10-21); details [accepted] 2026-10-21; item 13 (mute charges in the fight view) [accepted] by the orchestrator 2026-10-21; variant B3 "bonuses at the end" [open], not accepted by the owner 2026-10-21; implemented (#329, `SIM_VERSION` 18, `PROTOCOL_VERSION` 21); client implemented (#330) |
-| DEC-33 | #296 | visible movement of enemy groups in a node's vision zone: continuous position and direction in the halves of visible nodes | section 10 | [accepted] (2026-10-21); details [accepted] 2026-10-21 (all as recommended); replaces part of DEC-21, item 5; implemented together with DEC-21 (#296, `SIM_VERSION` 19, `PROTOCOL_VERSION` 22); client: ranges, the border point, the half memory and the smooth movement of figures are done in #359, the border point from the map (`border_permille`) since #366, the look of the figure awaits #354 |
+| DEC-33 | #296 | visible movement of enemy groups in a node's vision zone: continuous position and direction in the halves of visible nodes | section 10 | [accepted] (2026-10-21); details [accepted] 2026-10-21 (all as recommended); replaces part of DEC-21, item 5; implemented together with DEC-21 (#296, `SIM_VERSION` 19, `PROTOCOL_VERSION` 22); client: ranges, the border point, the half memory and the smooth movement of figures are done in #359, the border point from the map (`border_permille`) since #366, the look of the figure awaits #354; the sources of item 1 [superseded by DEC-35] |
 | DEC-34 | #414 | rated-match protection against rating farming: rated only between password accounts, calibration, the early-resign and repeated-resign penalty, a per-opponent limit | section 19 | [accepted] (2026-10-28); meta-game server rules, no `SIM_VERSION`; implemented #414 (`PROTOCOL_VERSION` 26); owner's additions of 2026-10-28: a resign in a calibration match counts toward the queue ban, a draw (`double_defeat` too) is not a resign |
+| DEC-35 | #477 | vision comes only from units: own nodes are no longer vision sources; a group on an edge is a source in the node of its half; an enemy in an own node without a group is `PRESENCE` | section 10 | [accepted] (2026-10-28, a rule change after the freeze); details [default] (the readings that reveal less, listed in the PR); implementation #477 (`SIM_VERSION`++ at implementation) |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in

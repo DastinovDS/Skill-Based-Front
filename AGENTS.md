@@ -244,13 +244,14 @@ The fog memory is stored in `GameState` (for each player), so `project()` stays 
 - A `PlayerView` **must not** contain:
   - entities in invisible nodes and edge halves; numbers beyond the level of the place per the terrain table
     (DEC-21: `EXACT` gives `units` and `charged`, `RANGE` only a range of `units`, `PRESENCE` only
-    "an enemy is there" and the modes); the warehouse of an enemy city that is not a vision source (DEC-21, item 3);
+    "an enemy is there" and the modes); the warehouse of an enemy city where no own group stands (DEC-21, item 3, DEC-35: vision sources are own groups only, own nodes are not sources);
   - sequential global ids: only opaque per-player ids (keyed blake2b with the secret `match_key` of the match, not with public data);
   - the enemy's CP, stance, production and overall counters; its front markers and rear minimum (DEC-28);
   - fight and supply events in the fog;
   - the size and id of a group in intents; the target of an enemy's ordinary order; the enemy's accumulated "Defense" bonus and the bonus of the enemy's waiting plan outside a fight (DEC-30, only the mode; in a fight the remaining reserve of the fight is visible to both: `FightView.virtual_left`, DEC-32);
   - enemy figures on edges (`EdgeView.enemy_groups`, DEC-33) outside the halves of visible nodes and
-    of edges with an own group on them (DEC-10: only `PRESENCE` there, the end nodes stay hidden) and
+    of edges with an own group on them (DEC-35: the group is a vision source in the node of its half of the edge,
+    the other half has the level the terrain table gives it; DEC-10's "only `PRESENCE`, end nodes hidden" is superseded) and
     groups in a fight (they are shown by `fights`); of a figure only the opaque `id` (new on every
     exit from the fog), `pos`, `toward_b` (the nearest node of the edge, not the destination), the mode and the numbers by
     the level of the half are visible; the memory of halves (`HalfView.seen` in the fog) has no position and no direction;
