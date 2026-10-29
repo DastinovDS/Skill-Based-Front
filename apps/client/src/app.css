@@ -263,6 +263,19 @@ body {
   white-space: nowrap;
 }
 
+.front .who .score {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.front .who .num {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
 .front .chip {
   display: inline-flex;
   align-items: center;

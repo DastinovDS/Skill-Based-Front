@@ -6,6 +6,7 @@
  */
 import type { QueueStatus } from '../api/http.ts';
 import type { Calibration, MatchEndMsg, UnratedReason } from '../protocol.gen.ts';
+import { BOARD_SCENE_IDS } from './boardScenes.ts';
 
 /**
  * The Dock screens (lobby, invite, bot; #473, `DevDock.svelte`): the real screens with a fake API.
@@ -57,6 +58,7 @@ export const MENU_SCENE_IDS = [
   'result-calibration',
   'result-limit',
   'exit-rated',
+  ...BOARD_SCENE_IDS,
 ] as const;
 
 export type MenuSceneId = (typeof MENU_SCENE_IDS)[number];

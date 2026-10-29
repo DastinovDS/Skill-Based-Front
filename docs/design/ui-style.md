@@ -1708,7 +1708,18 @@ Mockup: [`mockups/start-menu.html`](mockups/start-menu.html), frames in [`mockup
 
 No variant needs a DEC, a protocol change or a server change. Optional inputs that do not depend on the choice: the rating in `GET /api/me` and a match list for the Replays row (LB-01, #78), the "How to play" screen (#72). **Recommendation: A**, with C as the fast fallback; the reasons, the list of what the implementation touches and the questions to the owner are in #471.
 
-**Owner's decision:** awaiting the owner's decision.
+**Owner's decision (2026-10-29):** variant **S "Split"**: the small text rail, the list at the left, the profile of the chosen row at the right, the own profile by default. The six questions of #78 got no answer, so the client uses these defaults (each changeable later):
+
+| # | Question | Default |
+| --- | --- | --- |
+| 1 | Menu rows | **Leaderboard** (key T) and **Replays** (key R), two rows |
+| 2 | What Replays opens | the own profile with its match history scrolled into view |
+| 3 | Record blocks | two: ranked and calibration, all matches |
+| 4 | Other players' profiles | the ranked matches only (kinds `rated` and `calibration`) |
+| 5 | Guest profiles | open from an opponent link, a "Guest" chip, no rating |
+| 6 | Own rank beyond the top 100 | a pinned own row with the real rank |
+
+Implementation: `apps/client/src/board/` (`LeaderboardScreen`, `BoardList`, `ProfilePanel`, `MatchRow`, `ReplayChip`, `SplitFrame`), dev scenes `?menu=board-*`, `profile-*`, `replays` (`src/dev/boardScenes.ts`). The rail has a "Menu" way back (Esc) instead of the dimmed Play of the Dock; the corner chip keeps the account menu and shows the rating; "Preparing" is a chip, only a ready replay is a button.
 
 ---
 
@@ -1924,7 +1935,7 @@ Checked in grayscale (`supply-gray-pocket.png`, `terrain-gray.png`): the level i
 
 ## 38. Leaderboard and player profile (#78)
 
-Status: **[awaiting the owner's decision]**. LB-01 adds two screens that do not exist yet, so by the process of section 23 a mockup comes first and the client code after the choice. The server half (`GET /api/leaderboard`, `GET /api/players/{id}`, no protocol change) is a separate PR. Until the endpoints exist the start menu hides the Replays row and the rating in the corner chip (PR #489); the screens bring both back.
+Status: **[accepted: variant S "Split", owner 2026-10-29]**. LB-01 adds two screens that do not exist yet, so by the process of section 23 a mockup comes first and the client code after the choice. The server half (`GET /api/leaderboard`, `GET /api/players/{id}`, no protocol change) is a separate PR. Until the endpoints exist the start menu hides the Replays row and the rating in the corner chip (PR #489); the screens bring both back.
 
 Mockup: [`mockups/leaderboard-profile.html`](mockups/leaderboard-profile.html), frames in [`mockups/img/78/`](mockups/img/78/). Three variants, all in the family of the start menu (A) and the lobby screens of #473 (the menu rail kept, the content on the map), for two screens and these states: the leaderboard (top list, empty, loading, network error, rate limited, own row marked in the table, own rank beyond the top 100 pinned under the table) and the profile (the matches, no matches yet, loading, network error, an unknown player). Switches: a guest, a calibrating (2/5) or a ranked account; the profile of yourself, of a ranked player, of a calibrating player and of a guest; the queue ban, grayscale, reduced motion and "needs from the server" (which field of which endpoint feeds each piece). The history shows every replay state: ready, preparing, expired (retention, #515), no replay, players only.
 

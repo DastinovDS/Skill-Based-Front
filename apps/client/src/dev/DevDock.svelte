@@ -128,6 +128,8 @@
       onbot: () => undefined,
       oncreate: () => undefined,
       onlobby: () => undefined,
+      onreplays: () => undefined,
+      onboard: () => undefined,
       onmenu: () => undefined,
       onpassword: () => undefined,
       onlogout: () => undefined,

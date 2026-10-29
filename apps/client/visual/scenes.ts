@@ -63,6 +63,22 @@ export const MENU_SCENES = [
   'result-calibration',
   'result-limit',
   'exit-rated',
+  'board-guest',
+  'board-calibration',
+  'board-ranked',
+  'board-far',
+  'board-empty',
+  'board-loading',
+  'board-network',
+  'board-limited',
+  'profile-other',
+  'profile-calibrating',
+  'profile-guest',
+  'profile-missing',
+  'profile-empty',
+  'profile-loading',
+  'profile-network',
+  'replays',
 ] as const;
 
 /**

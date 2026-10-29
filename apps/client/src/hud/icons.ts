@@ -163,6 +163,20 @@ export const ICONS = {
   check: [path('M20 6 9 17l-5-5')],
   // The pre-match screens (#473): copy the invite link.
   copy: [rect(9, 9, 13, 13, 2), path('M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1')],
+  // The leaderboard and the profile (#78): the menu rows and the replay chips.
+  trophy: [
+    path('M8 21h8'),
+    path('M12 17v4'),
+    path('M7 4h10v5a5 5 0 0 1-10 0z'),
+    path('M17 5h3v2a3 3 0 0 1-3 3'),
+    path('M7 5H4v2a3 3 0 0 0 3 3'),
+  ],
+  history: [path('M3 12a9 9 0 1 0 3-6.7L3 8'), path('M3 3v5h5'), path('M12 7v5l3 2')],
+  eye: [path('M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z'), circle(12, 12, 3)],
+  lock: [rect(4, 11, 16, 10, 2), path('M8 11V7a4 4 0 0 1 8 0v4')],
+  ban: [circle(12, 12, 9), path('m5.6 5.6 12.8 12.8')],
+  refresh: [path('M21 12a9 9 0 1 1-3-6.7L21 8'), path('M21 3v5h-5')],
+  chevronLeft: [path('m15 18-6-6 6-6')],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type IconName = keyof typeof ICONS;

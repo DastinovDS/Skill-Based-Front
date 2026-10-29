@@ -25,6 +25,16 @@ export type Screen =
   /** The public lobby: open matches of other players (LOB-01). */
   | { readonly name: 'lobby' }
   | { readonly name: 'bot' }
+  /**
+   * The leaderboard and the profiles (LB-01, #78). `history` is the Replays row: the own profile
+   * with its matches in view. `player` is the profile chosen in the list (null: the own one),
+   * kept here so that "Back" from a replay returns to the same profile.
+   */
+  | {
+      readonly name: 'leaderboard';
+      readonly mode: 'board' | 'history';
+      readonly player: number | null;
+    }
   /** Set or change the password of the account (#374). */
   | { readonly name: 'password' }
   /** The matchmaking queue (MM-01): searching, confirming, then the rated match. */
@@ -75,6 +85,10 @@ export class AppState {
   activeMatch = $state.raw<ActiveMatch | null>(null);
   /** Calibration progress of the account (DEC-34): null for a guest and once it is over. */
   calibration = $state.raw<Calibration | null>(null);
+  /** The own player id, known from `/api/me` once the menu has opened. */
+  playerId = $state.raw<number | null>(null);
+  /** The displayed rating of a ranked account (#78) for the corner chip; null while unknown. */
+  rating = $state.raw<number | null>(null);
   /** The matchmaking queue is locked until this time (ms since the epoch), or null (DEC-34). */
   queueBanUntil = $state.raw<number | null>(null);
   /** The map drawn behind the start screens: the menu map, bundled at build time (#474). */
@@ -108,6 +122,7 @@ export class AppState {
         const me = await this.api.me(saved.token);
         this.guest = { token: saved.token, nick: me.nick, hasPassword: me.has_password };
         this.calibration = me.calibration ?? null;
+        this.playerId = me.player_id;
         saveGuest(this.#storage, this.guest);
       } catch (error) {
         if (error instanceof ApiError && error.code === 'unauthorized') {
@@ -231,14 +246,30 @@ export class AppState {
     return found;
   }
 
-  /** The calibration of the account, asked again whenever the menu opens (a match changes it). */
+  /**
+   * The calibration and the rating of the account, asked again whenever the menu opens (a match
+   * changes them). The rating is the displayed one of `GET /api/players/{id}` (#78); a guest and
+   * a calibrating account have none.
+   */
   async refreshProfile(): Promise<void> {
     const guest = this.guest;
     if (guest === null) return;
+    let me;
     try {
-      this.calibration = (await this.api.me(guest.token)).calibration ?? null;
+      me = await this.api.me(guest.token);
     } catch {
-      // Best effort, like the running match: the chip keeps what it showed.
+      return; // Best effort, like the running match: the chip keeps what it showed.
+    }
+    this.playerId = me.player_id;
+    this.calibration = me.calibration ?? null;
+    if (!me.has_password || this.calibration !== null) {
+      this.rating = null;
+      return;
+    }
+    try {
+      this.rating = (await this.api.player(me.player_id, guest.token)).rating;
+    } catch {
+      // The chip says "Ranked" without the number until the next time.
     }
   }
 
@@ -250,6 +281,17 @@ export class AppState {
   /** Back to the running match (the socket reconnects with the same token, DEC-05). */
   resumeMatch(match: ActiveMatch): void {
     this.go({ name: 'match', matchId: match.match_id, mapId: match.map_id });
+  }
+
+  /** The leaderboard (T) or the Replays row (R): the own profile with its history. */
+  openBoard(mode: 'board' | 'history' = 'board'): void {
+    this.go({ name: 'leaderboard', mode, player: null });
+  }
+
+  /** The player chosen in the list (null: the own profile), remembered without a new screen. */
+  selectPlayer(player: number | null): void {
+    const screen = this.screen;
+    if (screen.name === 'leaderboard') this.screen = { ...screen, player };
   }
 
   go(screen: Screen): void {
@@ -314,6 +356,8 @@ export class AppState {
     forgetGuest(this.#storage);
     this.guest = null;
     this.calibration = null;
+    this.playerId = null;
+    this.rating = null;
     this.queueBanUntil = null;
   }
 

@@ -14,6 +14,8 @@ export interface DockContext {
   hasPassword: boolean;
   /** Calibration progress of the account (DEC-34), null for a guest or once it is over. */
   calibration: Calibration | null;
+  /** The displayed rating of a ranked account (#78), null while unknown; shown in the corner chip. */
+  rating?: number | null;
   /** The queue is locked until this time (ms since the epoch), or null (DEC-34). */
   banUntil: number | null;
   /** The clock of the ban countdown; tests pass their own. */
@@ -26,6 +28,9 @@ export interface DockContext {
   onbot: () => void;
   oncreate: () => void;
   onlobby: () => void;
+  /** The rows "Replays" (R) and "Leaderboard" (T) of the rail (#78). */
+  onreplays: () => void;
+  onboard: () => void;
   onmenu: () => void;
   onpassword: () => void;
   onlogout: () => void;

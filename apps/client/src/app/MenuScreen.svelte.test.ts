@@ -21,12 +21,21 @@ describe('MenuScreen', () => {
     hasActiveMatch?: boolean;
     hasPassword?: boolean;
     calibration?: Calibration | null;
+    rating?: number | null;
     banUntil?: number | null;
     now?: () => number;
     notice?: MessageKey | null;
     handlers?: Partial<
       Record<
-        'onresume' | 'oncreate' | 'onqueue' | 'onlobby' | 'onbot' | 'onpassword' | 'onlogout',
+        | 'onresume'
+        | 'oncreate'
+        | 'onqueue'
+        | 'onlobby'
+        | 'onreplays'
+        | 'onboard'
+        | 'onbot'
+        | 'onpassword'
+        | 'onlogout',
         () => void
       >
     >;
@@ -42,9 +51,12 @@ describe('MenuScreen', () => {
         oncreate: h.oncreate ?? vi.fn(),
         onqueue: h.onqueue ?? vi.fn(),
         onlobby: h.onlobby ?? vi.fn(),
+        onreplays: h.onreplays ?? vi.fn(),
+        onboard: h.onboard ?? vi.fn(),
         onbot: h.onbot ?? vi.fn(),
         hasPassword: options.hasPassword ?? false,
         calibration: options.calibration ?? null,
+        rating: options.rating ?? null,
         banUntil: options.banUntil ?? null,
         ...(options.now === undefined ? {} : { now: options.now }),
         onpassword: h.onpassword ?? vi.fn(),
@@ -78,7 +90,7 @@ describe('MenuScreen', () => {
     flushSync();
   }
 
-  it('has one main action, Play, and three quiet modes; no replays or rating rows yet', () => {
+  it('has one main action, Play, and five quiet rows, Replays and Leaderboard among them (#78)', () => {
     const onqueue = vi.fn();
     render({ handlers: { onqueue } });
     named('menu.play')?.click();
@@ -86,7 +98,22 @@ describe('MenuScreen', () => {
     expect(named('menu.bot')).toBeTruthy();
     expect(named('menu.create')).toBeTruthy();
     expect(named('menu.lobby')).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/Replays|Rating/);
+    expect(named('menu.replays')).toBeTruthy();
+    expect(named('menu.leaderboard')).toBeTruthy();
+  });
+
+  it('opens Replays and the Leaderboard with R and T', () => {
+    const handlers = { onreplays: vi.fn(), onboard: vi.fn() };
+    render({ handlers });
+    press('r');
+    press('T');
+    expect(handlers.onreplays).toHaveBeenCalledOnce();
+    expect(handlers.onboard).toHaveBeenCalledOnce();
+  });
+
+  it('shows the rating of a ranked account in the corner chip', () => {
+    render({ hasPassword: true, rating: 1480 });
+    expect(document.body.textContent).toContain('1480');
   });
 
   it('opens the modes with their keys: B, I, L and Enter', () => {

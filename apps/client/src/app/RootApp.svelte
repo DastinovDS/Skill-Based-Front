@@ -7,6 +7,7 @@
   import CrashGuard from './CrashGuard.svelte';
   import { AppState, type Guest } from './appState.svelte.ts';
   import type { DockContext } from './dock.ts';
+  import LeaderboardScreen from '../board/LeaderboardScreen.svelte';
   import BotScreen from './BotScreen.svelte';
   import CreateScreen from './CreateScreen.svelte';
   import LobbyScreen from './LobbyScreen.svelte';
@@ -46,6 +47,7 @@
       nick: who.nick,
       hasPassword: who.hasPassword,
       calibration: app.calibration,
+      rating: app.rating,
       banUntil: app.queueBanUntil,
       map: app.backdrop,
       maps: app.maps,
@@ -57,6 +59,12 @@
       },
       onlobby: () => {
         app.go({ name: 'lobby' });
+      },
+      onreplays: () => {
+        app.openBoard('history');
+      },
+      onboard: () => {
+        app.openBoard('board');
       },
       onmenu: () => {
         app.menu();
@@ -88,6 +96,7 @@
     notice={app.notice}
     map={app.backdrop}
     calibration={app.calibration}
+    rating={app.rating}
     banUntil={app.queueBanUntil}
     hasActiveMatch={app.activeMatch !== null}
     onresume={() => {
@@ -102,6 +111,12 @@
     }}
     onlobby={() => {
       app.go({ name: 'lobby' });
+    }}
+    onreplays={() => {
+      app.openBoard('history');
+    }}
+    onboard={() => {
+      app.openBoard('board');
     }}
     onbot={() => {
       app.go({ name: 'bot' });
@@ -163,6 +178,52 @@
       app.menu();
     }}
   />
+{:else if screen.name === 'leaderboard'}
+  <!-- The Leaderboard (T) and Replays (R) rows are one screen in two modes: a switch starts over. -->
+  {#key screen.mode}
+    <LeaderboardScreen
+      api={app.api}
+      token={guest.token}
+      ownId={app.playerId}
+      nick={guest.nick}
+      hasPassword={guest.hasPassword}
+      calibration={app.calibration}
+      rating={app.rating}
+      map={app.backdrop}
+      mode={screen.mode}
+      player={screen.player}
+      onselect={(playerId: number | null) => {
+        app.selectPlayer(playerId);
+      }}
+      onwatch={(matchId: string) => {
+        app.openReplay(matchId);
+      }}
+      onmenu={() => {
+        app.menu();
+      }}
+      onbot={() => {
+        app.go({ name: 'bot' });
+      }}
+      oncreate={() => {
+        app.go({ name: 'create', public: false });
+      }}
+      onlobby={() => {
+        app.go({ name: 'lobby' });
+      }}
+      onreplays={() => {
+        app.openBoard('history');
+      }}
+      onboard={() => {
+        app.openBoard('board');
+      }}
+      onpassword={() => {
+        app.go({ name: 'password' });
+      }}
+      onlogout={() => {
+        app.logout();
+      }}
+    />
+  {/key}
 {:else if screen.name === 'password'}
   <PasswordScreen
     hasPassword={guest.hasPassword}

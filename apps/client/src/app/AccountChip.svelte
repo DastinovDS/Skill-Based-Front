@@ -8,6 +8,8 @@
     nick: string;
     hasPassword: boolean;
     calibration: Calibration | null;
+    /** The displayed rating of a ranked account (#78), null while unknown. */
+    rating?: number | null;
     onpassword: () => void;
     onlogout: () => void;
     /** Whether the account menu is open; the screen reads it to keep its own keys quiet. */
@@ -20,6 +22,7 @@
     nick,
     hasPassword,
     calibration,
+    rating = null,
     onpassword,
     onlogout,
     open = $bindable(false),
@@ -58,6 +61,7 @@
     {nick}
     {hasPassword}
     {calibration}
+    {rating}
     {open}
     disabled={inert}
     ontoggle={() => {

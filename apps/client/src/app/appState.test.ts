@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Api, ApiError, type Invite } from '../api/http.ts';
+import { Api, ApiError, type Invite, type PlayerProfile } from '../api/http.ts';
 import { GUEST_STORAGE_KEY } from '../api/guestStore.ts';
 import type { MatchEndMsg } from '../protocol.gen.ts';
 import { AppState } from './appState.svelte.ts';
@@ -520,6 +520,88 @@ describe('AppState', () => {
       await app.start();
       expect(app.screen.name).toBe('welcome');
       expect(maps).not.toHaveBeenCalled();
+    });
+  });
+  describe('the leaderboard and the rating of the chip (#78)', () => {
+    const saved = () =>
+      memory({ [GUEST_STORAGE_KEY]: '{"token":"t","nick":"Me","hasPassword":true}' });
+    const profile = (rating: number | null) => () =>
+      Promise.resolve({ player_id: 7, rating } as PlayerProfile);
+
+    it('learns the own id and the displayed rating when the menu opens', async () => {
+      const player = vi.fn(profile(1480));
+      const { app } = setup('', saved(), {
+        me: () => Promise.resolve({ player_id: 7, nick: 'Me', has_password: true }),
+        activeMatch: () => Promise.resolve(null),
+        player,
+      });
+      await app.start();
+      expect(app.playerId).toBe(7);
+      await app.refreshProfile();
+      expect(app.rating).toBe(1480);
+      expect(player).toHaveBeenCalledWith(7, 't');
+    });
+
+    it('asks for no rating of a guest or of a calibrating account', async () => {
+      const player = vi.fn(profile(1480));
+      const guest = setup('', saved(), {
+        me: () => Promise.resolve({ player_id: 7, nick: 'Me', has_password: false }),
+        activeMatch: () => Promise.resolve(null),
+        player,
+      });
+      await guest.app.start();
+      await guest.app.refreshProfile();
+      const calibrating = setup('', saved(), {
+        me: () =>
+          Promise.resolve({
+            player_id: 7,
+            nick: 'Me',
+            has_password: true,
+            calibration: { played: 1, total: 5 },
+          }),
+        activeMatch: () => Promise.resolve(null),
+        player,
+      });
+      await calibrating.app.start();
+      await calibrating.app.refreshProfile();
+      expect(player).not.toHaveBeenCalled();
+      expect(guest.app.rating).toBeNull();
+      expect(calibrating.app.rating).toBeNull();
+    });
+
+    it('keeps the rating when its request fails, and a logout forgets it', async () => {
+      let fail = false;
+      const { app } = setup('', saved(), {
+        me: () => Promise.resolve({ player_id: 7, nick: 'Me', has_password: true }),
+        activeMatch: () => Promise.resolve(null),
+        player: () => (fail ? Promise.reject(new ApiError('network', 0)) : profile(1480)()),
+      });
+      await app.start();
+      await app.refreshProfile();
+      fail = true;
+      await app.refreshProfile();
+      expect(app.rating).toBe(1480);
+      app.logout();
+      expect(app.rating).toBeNull();
+      expect(app.playerId).toBeNull();
+    });
+
+    it('opens the board or the Replays row and remembers the chosen player for "Back"', async () => {
+      const { app } = setup('', saved(), {
+        me: () => Promise.resolve({ player_id: 7, nick: 'Me', has_password: true }),
+        activeMatch: () => Promise.resolve(null),
+      });
+      await app.start();
+      app.openBoard();
+      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'board', player: null });
+      app.selectPlayer(3);
+      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'board', player: 3 });
+      app.openReplay('55');
+      expect(app.screen).toMatchObject({ name: 'replay', matchId: '55' });
+      app.closeReplay();
+      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'board', player: 3 });
+      app.openBoard('history');
+      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'history', player: null });
     });
   });
 });
