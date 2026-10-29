@@ -7,11 +7,15 @@ import {
   dashAlong,
   delayProgress,
   departPulse,
+  enemyArrowWidth,
+  enemyHead,
   orderBend,
   pathBend,
   ribbonAxis,
   ribbonBody,
   ribbonFilled,
+  reticleLook,
+  reticlePhase,
   ribbonOutline,
   roundRectPoints,
 } from './intentLayout.ts';
@@ -28,8 +32,9 @@ import {
   CHEVRON,
   DEFENSE_ARC,
   INTENT_ICON_ANGLE,
+  INTENT_ENEMY,
   INTENT_ICON_DISTANCE,
-  INTENT_TARGET_RING,
+  INTENT_RETICLE,
   ORDER_LINE,
   ownerColor,
   PAPER,
@@ -56,18 +61,6 @@ function around(distance: number, degrees: number): Point {
 const ARC_RADIUS = 9 + DEFENSE_ARC.gap + DEFENSE_ARC.width / 2;
 /** The pill "◇ +N" at the head of an own planned ribbon (screen px): the diamond, the padding, the height. */
 const BONUS_PILL = { diamond: 5, gap: 4, padX: 7, height: 20, rise: 24, back: 8 } as const;
-/** A ring is drawn as this many corners. */
-const RING_CORNERS = 40;
-
-function ring(at: Point, radius: number): Point[] {
-  const out: Point[] = [];
-  for (let i = 0; i < RING_CORNERS; i++) {
-    const a = (i / RING_CORNERS) * Math.PI * 2;
-    out.push({ x: at.x + radius * Math.cos(a), y: at.y + radius * Math.sin(a) });
-  }
-  return out;
-}
-
 const flat = (points: readonly Point[]): number[] => points.flatMap((p) => [p.x, p.y]);
 
 /**
@@ -164,7 +157,12 @@ export class IntentView {
         this.drawRibbon(intent, pool, progress, since, run);
         if (intent.owner !== this.me) {
           const warn = nodes[intent.target]?.owner === this.me;
-          this.drawTargetRing(target, intent.target, warn);
+          this.drawReticle(
+            target,
+            intent.target,
+            warn,
+            reducedMotion() ? 0 : frame.tick / this.tickHz,
+          );
         }
       } else if (intent.kind !== 'planned_move') {
         // Defense has no delay since DEC-30: its bonus grows, the disc has no arc (#318).
@@ -233,14 +231,25 @@ export class IntentView {
       0,
       bend,
     );
+    const color = ownerColor(this.me, intent.owner);
+    const own = intent.owner === this.me;
+    if (!own) {
+      // IN3 "Crosshair" (#353): the opponent's intent is a thin dashed arrow, the sign is the crosshair on the target.
+      const thin = ribbonAxis(
+        [origin, target],
+        this.radiusOf(intent.origin) + RIBBON.startGap,
+        this.radiusOf(intent.target ?? 0) + INTENT_ENEMY.tipGap,
+        bend,
+      );
+      this.drawEnemyArrow(thin, color, progress, since, run);
+      return;
+    }
     const ribbon = ribbonOutline(axis, ribbonBody(this.cameraScale));
     if (ribbon === null) return;
     const g = this.ribbons;
-    const color = ownerColor(this.me, intent.owner);
-    const own = intent.owner === this.me;
     // The bonus of the plan (DEC-29) is the server's number and only the owner's view has it
     // (the opponent's intent has no size and no bonus): "◇ +N" at the head, dashed while a forecast.
-    const bonus = own ? (item?.group.order?.bonus ?? 0) : 0;
+    const bonus = item?.group.order?.bonus ?? 0;
     if (bonus > 0) {
       this.placeBonus(this.bonusUsed++, ribbon, bonus, progress === null || progress < 1, color);
     }
@@ -275,12 +284,11 @@ export class IntentView {
       RIBBON.pulseWidth * pulse.swell;
     const alpha = RIBBON.contour.alpha + (RIBBON.locked.alpha - RIBBON.contour.alpha) * pulse.lock;
     const style = { width, color, alpha };
-    // Own: solid until the group leaves, then dashes that run. The opponent's: dashed throughout.
-    if (own && left) {
+    // Solid until the group leaves, then dashes that run (the opponent's arrow is `drawEnemyArrow`).
+    if (left) {
       g.poly(poly).stroke({ ...style, join: 'round' });
     } else {
-      const offset = left ? 0 : -run;
-      for (const dash of dashAlong(ribbon.outline, RIBBON.dash, RIBBON.gap, offset, true)) {
+      for (const dash of dashAlong(ribbon.outline, RIBBON.dash, RIBBON.gap, -run, true)) {
         const [first, ...rest] = dash;
         if (first === undefined) continue;
         g.moveTo(first.x, first.y);
@@ -290,22 +298,63 @@ export class IntentView {
     }
     const start = axis[0];
     if (start === undefined) return;
-    if (own) {
-      g.circle(start.x, start.y, 4).fill(color).stroke({ width: 1.5, color: PLATE_FILL });
-    } else {
-      g.poly([
-        start.x,
-        start.y - 5.5,
-        start.x + 5.5,
-        start.y,
-        start.x,
-        start.y + 5.5,
-        start.x - 5.5,
-        start.y,
-      ])
-        .fill(PLATE_FILL)
-        .stroke({ width: 2, color });
-    }
+    // The tail dot says the order is own; the opponent's tail is a ring in a ring (`drawEnemyArrow`).
+    g.circle(start.x, start.y, 4).fill(color).stroke({ width: 1.5, color: PLATE_FILL });
+  }
+
+  /**
+   * The thin dashed arrow of the opponent's planned order (IN3, #353): faint and dotted while the
+   * delay runs, then solid ink with dashes that run; thicker once the order is locked, with one flash
+   * on the head at the departure. A ring in a ring at the tail tells the side without the hue. The
+   * size and the composition of the group are not drawn: nobody sends them (DEC-04, DEC-21).
+   */
+  private drawEnemyArrow(
+    axis: readonly Point[],
+    color: number,
+    progress: number | null,
+    since: number,
+    run: number,
+  ): void {
+    const tip = axis[axis.length - 1];
+    const before = axis[axis.length - 4] ?? axis[0];
+    const start = axis[0];
+    if (tip === undefined || before === undefined || start === undefined) return;
+    const g = this.ribbons;
+    const prep = progress !== null && progress < 1;
+    const pulse = departPulse(since, RIBBON.pulseTicks, reducedMotion());
+    const width = enemyArrowWidth(pulse.lock);
+    const len = Math.hypot(tip.x - before.x, tip.y - before.y) || 1;
+    const dir = { x: (tip.x - before.x) / len, y: (tip.y - before.y) / len };
+    const shaft = axis.slice(0, -1);
+    const { dash, gap, prepDash, prepGap, prepAlpha, casing } = INTENT_ENEMY;
+    const lay = (): void => {
+      for (const part of dashAlong(
+        shaft,
+        prep ? prepDash : dash,
+        prep ? prepGap : gap,
+        prep ? 0 : -run,
+        false,
+      )) {
+        const [first, ...rest] = part;
+        if (first === undefined) continue;
+        g.moveTo(first.x, first.y);
+        for (const p of rest) g.lineTo(p.x, p.y);
+      }
+    };
+    lay();
+    g.stroke({ width: width + casing.extra, color: BG, alpha: casing.alpha, cap: 'round' });
+    lay();
+    g.stroke({ width, color, alpha: prep ? prepAlpha : 1, cap: 'round' });
+    const head = flat(enemyHead(tip, dir));
+    // The head is hollow while the order waits, solid once it is going.
+    g.poly(head)
+      .fill(prep ? PLATE_FILL : color)
+      .stroke({ width: 2, color, join: 'round' });
+    if (pulse.swell > 0) g.poly(head).fill({ color: PAPER, alpha: 0.7 * pulse.swell });
+    // The side mark: a ring in a ring.
+    const { inner, outer, width: ringWidth } = INTENT_ENEMY.tail;
+    g.circle(start.x, start.y, inner).fill(PLATE_FILL).stroke({ width: ringWidth, color });
+    g.circle(start.x, start.y, outer).stroke({ width: ringWidth, color });
   }
 
   private bonusPill(index: number): BonusPill {
@@ -393,29 +442,32 @@ export class IntentView {
     pill.view.visible = true;
   }
 
-  /** The dotted ring around the target of an enemy intent; two rings and `--warn` over my city. */
-  private drawTargetRing(at: Point, node: number, warn: boolean): void {
+  /**
+   * The crosshair on the target of an opponent's intent (IN3, #353): an outer ring, an inner ring,
+   * four ticks and a halo that pulses every 0.8 s (steady with "less motion"); `--warn` over my city
+   * (it is coming for you), the opponent's red otherwise. A ring and ticks, not colour alone.
+   */
+  private drawReticle(at: Point, node: number, warn: boolean, seconds: number): void {
     const g = this.rings;
-    const radius = this.radiusOf(node) + INTENT_TARGET_RING.gap;
     const color = warn ? WARN : ownerColor(this.me, this.me === 0 ? 1 : 0);
-    const draw = (r: number, width: number): void => {
-      for (const dash of dashAlong(
-        ring(at, r),
-        INTENT_TARGET_RING.dash,
-        INTENT_TARGET_RING.gap2,
-        0,
-        true,
-      )) {
-        const [first, ...rest] = dash;
-        if (first === undefined) continue;
-        g.moveTo(first.x, first.y);
-        for (const p of rest) g.lineTo(p.x, p.y);
-      }
-      g.stroke({ width, color, alpha: INTENT_TARGET_RING.alpha, cap: 'round' });
-    };
-    draw(radius, warn ? INTENT_TARGET_RING.width + 1 : INTENT_TARGET_RING.width);
-    // A second, outer ring: "it is coming for you" reads without colour.
-    if (warn) draw(radius + 5, INTENT_TARGET_RING.width - 0.5);
+    const look = reticleLook(this.radiusOf(node), reticlePhase(seconds, reducedMotion()));
+    const { ring: style } = INTENT_RETICLE;
+    g.circle(at.x, at.y, look.halo.radius).stroke({
+      width: look.halo.width,
+      color,
+      alpha: look.halo.alpha,
+    });
+    g.circle(at.x, at.y, look.ring).stroke({
+      width: style.casingWidth,
+      color: BG,
+      alpha: style.casingAlpha,
+    });
+    g.circle(at.x, at.y, look.ring).stroke({ width: style.width, color });
+    g.circle(at.x, at.y, look.inner).stroke({ width: style.innerWidth, color });
+    for (const tick of look.ticks) {
+      g.moveTo(at.x + tick.from.x, at.y + tick.from.y).lineTo(at.x + tick.to.x, at.y + tick.to.y);
+    }
+    g.stroke({ width: INTENT_RETICLE.tick.width, color, cap: 'round' });
   }
 
   private placeIcon(index: number, intent: WireIntent, at: Point, progress: number | null): void {

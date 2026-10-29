@@ -42,7 +42,7 @@ recommendation are ready, there is no choice, there is no code. **[replaced]**: 
 | 20-23 (animation, icons, constraints, process) | 23 [accepted] (the owner's practice of 2026-10-21), 20-22 [proposed] | new |
 | 24 Style directions | [accepted] 2026-10-21: D3 for the shading, without relief (refined by section 26); #332 closed | shading **implemented: #347, PR #409** (see 26.3) |
 | 26 Map style, round 2 | [accepted] 2026-10-21 (26.3): BL1-1 with the highlight of the borders of the "pronounced" one, T2 (the baker on numpy and Pillow, WebP), F1 "Haze", R1 "Stripes", the packet as a square; #335 closed | waits for implementation: #344 (the baker, T2, the `artery` scene); **implemented: BL1-1 shading with the border glow (26.3) #347, PR #409; roads R1 "Stripes" and the square packet (26.1) #345, PR #367; fog F1 "Haze" (9.8) #346, PR #368** |
-| 27 Orders, fight on the map, arena | [accepted] 2026-10-21 (27.3, shots: 29.4): orders and ribbons as now, IN3 "Sight", the bonus "◇ +N" on the head, LY2 "Over the haze", FX3, EF2 "Pointer" with "Dissolve and marks", arena AR1; #339 closed | waits for implementation: #330 (arena AR1, in progress), #353 (IN3, bonus); **implemented: EF2 "Pointer" with "Dissolve and marks" #354; fight effects FX3 #351, PR #373; layers LY2 "Over the haze" #346, PR #368; shots SH1 instead of the exchange arrows of the arena #352, PR #376** |
+| 27 Orders, fight on the map, arena | [accepted] 2026-10-21 (27.3, shots: 29.4): orders and ribbons as now, IN3 "Sight", the bonus "◇ +N" on the head, LY2 "Over the haze", FX3, EF2 "Pointer" with "Dissolve and marks", arena AR1; #339 closed | waits for implementation: #330 (arena AR1, in progress), **implemented: IN3 "Crosshair" and the bonus on the head #353 (the bonus pill came with #330); EF2 "Pointer" with "Dissolve and marks" #354; fight effects FX3 #351, PR #373; layers LY2 "Over the haze" #346, PR #368; shots SH1 instead of the exchange arrows of the arena #352, PR #376** |
 | 28 Map objects and menu icons | [accepted] 2026-10-21 (28.1): U1 and the row of squares U4, C1, B1, I1 (B2 later, no issue is opened); #337 closed | waits for implementation: the row of squares U4 (#433, moved from #348, waits for a mockup, #431), B1 (#349); **implemented: U1 as part of BL1 #347, PR #409; cities C1 (warehouse places filled / frame / dashed, the province as a hollow ring) #348, PR #437**; implemented (menu icons I1): PR #362 |
 | 32 Progress indicators | [accepted] 2026-10-28 (32): CP bar C "Track", queue, barracks and warehouse build A "Cells", the alert ring for a unit ready with no room and for production stopped by a fight; #430 closed | **implemented: #439** |
 | 29 Shots in a fight | [accepted] 2026-10-21 (29.4): SH1 "Tracers", the strength "Stronger", the distance of the groups as now (46) | the strength "Stronger" and the common part (pools, the effects layer, the particle core) **implemented: #351, PR #373**; tracers SH1 **implemented: #352, PR #376** |
@@ -507,7 +507,7 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
 | --- | --- | --- |
 | An ordinary order (own) | a thin line 3 with white chevrons every 26 units | only the own player |
 | A scheduled order (own) | a wide ribbon, a **solid** outline | both |
-| The enemy's scheduled order | a wide ribbon, a **dashed** 9/5 outline | both |
+| The enemy's scheduled order (IN3 "Crosshair", #353) | a **thin dashed arrow** 1.8 (3 when locked) with a small head and the crosshair on the target (below) | both |
 | Sent, awaiting confirmation | nothing is drawn (round 4: the flickering ghost and the dashed straight line to the target were removed; the order is shown by the snapshot) | the own player |
 | Server rejection | the ghost shakes for 200 ms and fades, a toast with the reason (IM6) | the own player |
 
@@ -534,8 +534,15 @@ The ribbon arrow (HOI4, Mini Motorways):
 - An ordinary order: white chevrons run (30 units per second) along the whole remaining path to the target in one
   stream, through the nodes, not along the current edge; "reduced motion": the chevrons stand still. There is no dashed straight line to the target.
   The dotted preview line under the cursor remains only for a scheduled order (Shift).
-- The target of an enemy intent: a dashed ring in the enemy color of radius radius + 20. If the target is in
-  your city, the ring is `--warn` and there is a line in the alert stack (IM7).
+- **The opponent's intent, IN3 "Crosshair" (#353):** the arrow is the thin dashed 9/5 line of the same axis (the arc, 9.7), ending on the inner ring of the crosshair
+  (`INTENT_ENEMY.tipGap` outside the city circle), with a small head 14 x 16 (hollow while the delay runs, solid after it, one white flash at the departure). While the
+  delay runs it is faint (alpha 0.55) and dotted 2/6; after it it is solid ink, dashes run (28 units per second), and it thickens by 1.2 at the lock. It has a dark casing. Nothing of the
+  size or the composition of the group is drawn (DEC-04, DEC-21). **The tail** is a ring in a ring (radii 3.5 and 6.5): the own tail is a dot, so the side
+  reads without the hue, and the diamond stays for the bonus (the mockup draws no tail mark for IN3; the ring in a ring is the text of section 21, item "the diamond means both"). **The target** is a
+  **crosshair**: an outer ring of radius (city radius + 20) with a dark casing, an inner ring 8 inside it, four ticks across the outer ring at the quarters, and a halo that pulses
+  every 0.8 s (radius +4, alpha 0.15 to 0.5, width 5 to 8; steady halfway with "less motion"). In the enemy colour; over **your** city `--warn` (amber) and
+  there is a line in the alert stack (IM7). Rings and ticks, not colour alone; the old dashed ring is gone. Code: `intentLayout.ts` (`reticleLook`, `reticlePhase`, `enemyHead`), `intentView.ts`.
+- The bonus of an own scheduled order "◇ +N" at the head of its ribbon (DEC-29) was done with #330 (`OrderView.bonus`, a pill, dashed while a forecast); #353 only checked it.
 - "Defense" without a target: a circle of radius 13 above the city with a shield glyph and a countdown arc.
 - The arrow body is not thinner than 8 px on the screen.
 
@@ -1211,7 +1218,7 @@ The principle: **one shape means one thing**, and the shape reads without color 
 
 Checking against the map revealed one place where the language is broken (**[proposed]**, a small fix):
 
-- **The diamond means both a bonus and the opponent's side** (a hollow diamond at the tail of an intent ribbon, `intentView.ts`: your own tail is a dot, the enemy's a diamond, so the side reads without color). Replace the mark of the opponent's side with a double ring (like the double outline of enemy shapes), keep the diamond for the bonus.
+- **The diamond means both a bonus and the opponent's side** (**fixed in #353**: the opponent's tail is a ring in a ring; it was a hollow diamond at the tail of an intent ribbon, `intentView.ts`: your own tail is a dot, the enemy's a diamond, so the side reads without color). Replace the mark of the opponent's side with a double ring (like the double outline of enemy shapes), keep the diamond for the bonus.
 
 A new icon is added by an entry in this table (shape, meaning, where) and is checked in grayscale.
 
