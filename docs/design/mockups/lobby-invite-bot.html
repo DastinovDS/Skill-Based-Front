@@ -848,7 +848,7 @@ function tables(){
    ok('<b>Fog.</b> The lobby shows what the lobby shows today: the nick, the map and the age of a public listing. The seat of a running match is not drawn; nothing hidden is revealed.'),
    ok('<b>Guest and account.</b> The screens are the same for both: all three modes are unrated. The corner chip differs (Guest, calibration 2/5, rating) and the unrated note says why a calibrating account gets no calibration credit here.'),
    ok('<b>Queue ban.</b> The lobby, the invite and the bot stay open (DEC-34). The ban shows as the amber dashed chip in the corner, the dashed ring on the own capital and one amber line; the time counts in the corner only.'),
-   bad('<b>Narrow windows.</b> The menu rail goes full width under 640 px (app.css, media query). R and P do the same without work; D and T stack the panel under the rail; to be drawn if the owner picks one of them.'),
+   bad('<b>Small windows.</b> Under 900 px wide or 560 px high the rail of the frame flows over the picture (a media query in <code>app.css</code>); R and P get this for free because they live in the rail. D and T would stack the panel or the tabs under the rail; that frame is drawn only if the owner picks one of them.'),
    bad('<b>Keys.</b> Arrows, Enter, C and the arrows of P are new keys inside the screens; the owner decides whether the lobby is keyboard driven (a question above).')
   ].map(x=>`<li>${x}</li>`).join('')}
 load();render();tables();
