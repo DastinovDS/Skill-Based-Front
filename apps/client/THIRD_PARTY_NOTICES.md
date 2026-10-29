@@ -52,6 +52,17 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## Bundled npm libraries
+
+PixiJS, Svelte and their runtime dependencies (MIT, ISC, BSD-3-Clause) are bundled by Vite, which
+strips their licence banners. `vite build` therefore writes the licence text of every bundled
+dependency to `dist/third-party-licenses.txt` (`build.license` in `vite.config.ts`, generated from
+the installed packages, nothing to maintain by hand). The legal page links to it, and
+`deploy/check-caddy.sh` checks that it is served.
+
+Known gap: `@pixi/colord` (MIT, author Vlad Shilov, a PixiJS dependency) ships no licence file in its
+npm package, so its entry in the generated file has a heading but no text.
+
 ## Sounds and fonts
 
 None yet (package F adds the sounds under CC0 and lists them here).
