@@ -898,6 +898,20 @@ The same frame 13.1, the text of width 680 px, 16 px, line height 1.5; the langu
 - The interface scale 100/125/150% (section 7).
 - "Reduced motion": a setting plus `prefers-reduced-motion`; it turns off the pulse, flashes, waves,
   the running dashes; the numbers and the toasts remain.
+- **Motion transitions (#508):** everything below runs on real time (frame-rate independent) and is instant with
+  "reduced motion". The first frame of a scene always shows it as it is. Positions of groups and packets stay as
+  they were (snapshots 2 ticks behind, no extrapolation); what was missing is the soft edges:
+  - a group token that appears fades and swells in (220 ms, from 0.78); one that leaves the snapshot fades out where it
+    stood (an arrival into a city icon, a kill) and is destroyed when gone; a token that returns while fading is taken back;
+  - a token whose number of units changes (a merge, a split, a loss) swells to 1.14 and settles in 260 ms;
+  - the charge fill eases (section 9.5); a captured city keeps its old body on top of the new one and fades it out
+    (450 ms); the territory (fill and border lines) cross-fades over 450 ms, the cached glow switches once at 40%;
+  - the wheel zoom sets a goal and the camera eases to it around the pointer (time constant 80 ms; a spin adds
+    notches to the goal); "Fit map" and the jump to an alert glide 380 ms (ease-out); a drag takes over at once;
+  - not changed, on purpose: the fog veil is one cached blurred texture, a cross-fade of two such layers would
+    double-darken the areas hidden in both (it flips as before); a reversal of an enemy figure's pointer head.
+  - `/?scene=demo&motion` (dev only) makes the live demo move (a marching group that merges into the city icon and
+    splits out, charges cycling), `?map=<name>` picks the map: for looking at all of this and for FPS checks.
 - The keyboard focus is visible on all buttons (a `--paper` outline of 2 px); the radial menu and the dialogs
   are accessible from the keyboard.
 
