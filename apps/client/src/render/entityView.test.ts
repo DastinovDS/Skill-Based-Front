@@ -621,7 +621,7 @@ describe('EntityView, tokens that come and go (#508)', () => {
   const tokenOf = (entry: Container | undefined): Container => {
     const token = entry?.children[0];
     if (token === undefined) throw new Error('no token');
-    return token as Container;
+    return token;
   };
 
   it('shows the first frame as it is, and fades in what appears later', () => {
