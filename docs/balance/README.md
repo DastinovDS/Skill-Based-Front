@@ -15,7 +15,7 @@ uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --
 | Key | Meaning |
 |---|---|
 | `--maps` | map files (the shell expands the glob; an unexpanded glob works too) |
-| `--bots` | names from `gow_bots.bots.BOTS` or `all` (the whole registry, new bots are picked up by themselves) |
+| `--bots` | names from `gow_bots.bots.BOTS` or `all` (the whole registry, new bots are picked up by themselves); a smart bot takes a difficulty level after `@`: `smart_rusher@easy`, `@normal`, `@hard` (the name alone is `hard`; `gow_bots.bots.tempo`, #166) |
 | `--seeds N` | `N` seeds per map and pair: `seed-base .. seed-base + N - 1` |
 | `--seed-base` | the first seed, 0 by default |
 | `--jobs` | the number of processes, the number of cores by default |
@@ -188,6 +188,33 @@ the number of unique outcomes and the breakdown by map. The output depends only 
 The BAL-01 run (#39) is committed: `latest.jsonl` (the 3 MVP maps, now fixtures in `maps/fixtures/` since #372, 5 strategic bots without `idle` and
 `random_legal`, 100 seeds, 7500 matches, `mvp-0`) and `latest.md`, `latest-*.png` built from it.
 The verdict by the gate criteria and the hypotheses for the iterations of BAL-02 (#40): [log.md](log.md).
+
+## Parameter search
+
+```bash
+mise run search -- --bot smart_turtle --against smart_rusher smart_expander --keys region guard --rounds 30 --seeds 2
+```
+
+`gow-bots search` (`gow_bots.search`, #166, standard library only) tunes the `PARAMS` ranges of one bot by
+tournament: a (1+1) hill climb. Round 0 scores the ranges of the class, every next round moves `--mutate` of the
+`--keys` one step (a quarter of the middle of the range, at least 1; the width stays) and keeps the candidate when it
+scores higher. The score is the win rate against the `--against` bots (both sides, every map, the same seeds for
+every candidate, a draw counts half) plus a tenth of the mean VP share; `--target T` aims at a win rate instead of up.
+Every round is a line of `--out` (JSONL); the best ranges are printed as a `PARAMS` fragment. A search measures on few
+seeds and overfits them: confirm a result with a tournament on fresh seeds (`--seed-base`).
+
+## Difficulty levels and tempo
+
+The smart bots play at a human tempo (`gow_bots.bots.tempo`, #166): a decision at most every `think_ticks`, an enemy
+strike or figure noticed `react_ticks` after it is shown, at most `apm` commands a minute (a token bucket of `burst`),
+and `insight` (the position thresholds, the DEC-37 pin, the evacuation of doomed cities, the scouts) only from
+`normal` up. `apm_avg` and `apm_by_minute` of `gow-bots stats` measure the result on replays.
+
+| Level | think | react | APM (burst) | insight |
+|---|---|---|---|---|
+| `easy` | 20 ticks | 30 ticks | 12 (3) | no |
+| `normal` | 10 ticks | 15 ticks | 25 (5) | yes |
+| `hard` (the name alone) | 5 ticks | 0 | 40 (8) | yes |
 
 ## Budget
 

@@ -147,6 +147,7 @@ jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in 
 | `maps:preview` | draw the preview `maps/<name>.preview.png` (the pool and the menu map `maps/menu/`) | MAP-04, #474 |
 | `maps:bake` | bake the background `maps/<name>.bg.webp` (the pool and the menu map `maps/menu/`): numpy and Pillow, texture T2, WebP up to 0.5 MB; a map with an authored geography `maps/src/<name>.geo.json` also gets water and `maps/geo/<name>.json` (DEC-36) (after any map edit) | MAP-05, #344, #474, #537 |
 | `tournament` | bot tournament (by default all maps and bots, 100 seeds, 8 processes, `mvp-1`; anything else after `--`, for example `-- --seeds 20`; `mvp-0` is only a test ruleset, we do not run tournaments on it) | BOT-04 |
+| `search` | parameter search of one bot by tournament (`gow-bots search`, a hill climb over its `PARAMS` ranges, standard library): the pool maps, 8 processes, `mvp-1`; `--bot`, `--against`, `--keys` and the rest after `--` (`docs/balance/README.md`). Few seeds: confirm the result with `tournament` | #166 |
 | `report` | balance report (argument: file, `docs/balance/latest.jsonl` by default) | BOT-05 |
 | `stats` | player statistics from replays as a table (`gow-bots stats`): stance, APM, supply actions, share of scheduled orders, CP spending; arguments after the task name: replay files and options (`docs/balance/README.md`) | #375 |
 | `stack` | **owner only.** The production stack on `http://localhost:8080` (HTTPS 8443, `SITE_ADDRESS=:80`; ports 80/443 are taken by another project), argument: ruleset (`mvp-1` by default). Needs a POSIX shell | OPS-01 |
@@ -398,6 +399,7 @@ Style guide: `docs/design/ui-style.md` (section 23 "Visual decision process"). I
 - A bot implements `Controller.decide(view: PlayerView, tick) -> list[Command]`, sees only the `PlayerView` and is called every 5 ticks.
 - Bot parameters are chosen deterministically from the match seed: without this, deterministic matches repeat and the tournament measures nothing.
 - The choice "ordinary or scheduled order" is a common utility function of the ruleset prices.
+- The smart bots (`gow_bots.bots.smart`) play at a human tempo: a difficulty level `easy`, `normal` or `hard` (`smart_rusher@easy`; the name alone is `hard`) limits how often they think, how late they notice a shown enemy and their commands per minute (`gow_bots.bots.tempo`, `docs/balance/README.md`). A tempo is integer and deterministic like the rest of the bot.
 - A tournament is one match per process, both sides for each pair; the JSONL result is reproducible. After a ruleset edit: a tournament and a report in the PR.
 - Agents' tournaments run only on `mvp-1` (the ruleset of `stack` and `compose.yaml`); `mvp-0` stays a test ruleset (unit tests, golden replays), we do not run tournaments on it. After a rules change the smoke tournament is `mise run tournament -- --seeds 3` (it looks for crashes and gross imbalance; a report in the PR). A full tournament (default seeds) only after a change of ruleset numbers and before a playtest (BAL-02).
 
