@@ -2478,6 +2478,10 @@ Alternatives (not chosen):
 - A `travel_ticks` tolerance of 25 percent (the road on the screen could be a quarter longer or
   shorter than the travel time).
 
+### Map geography: water cells, rivers as area borders, areas touch only along roads (DEC-36, #537) **[proposed]**
+
+> Draft, being written in #537. Decision: awaiting the owner's decision.
+
 ### Spoils from warehouses
 
 > Outside the MVP: there are no spoils; on a change of owner the warehouse is zeroed (SIM-07, #23).
@@ -3281,6 +3285,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-33 | #296 | visible movement of enemy groups in a node's vision zone: continuous position and direction in the halves of visible nodes | section 10 | [accepted] (2026-10-21); details [accepted] 2026-10-21 (all as recommended); replaces part of DEC-21, item 5; implemented together with DEC-21 (#296, `SIM_VERSION` 19, `PROTOCOL_VERSION` 22); client: ranges, the border point, the half memory and the smooth movement of figures are done in #359, the border point from the map (`border_permille`) since #366, the look of the figure awaits #354; the sources of item 1 [superseded by DEC-35] |
 | DEC-34 | #414 | rated-match protection against rating farming: rated only between password accounts, calibration, the early-resign and repeated-resign penalty, a per-opponent limit | section 19 | [accepted] (2026-10-28); meta-game server rules, no `SIM_VERSION`; implemented #414 (`PROTOCOL_VERSION` 26); owner's additions of 2026-10-28: a resign in a calibration match counts toward the queue ban, a draw (`double_defeat` too) is not a resign |
 | DEC-35 | #477 | vision comes only from units: own nodes are no longer vision sources; a group on an edge is a source in the node of its half; an enemy in an own node without a group is `PRESENCE` | section 10 | [accepted] (2026-10-28, a rule change after the freeze); details [accepted] (2026-10-29, all items as written: the readings that reveal less); implemented #477 (`SIM_VERSION` 22, `PROTOCOL_VERSION` 28: the wire allows own data on an own node at any level) |
+| DEC-36 | #537 | map geography: water cells (sea, lakes), rivers as area borders, areas of nodes touch only where a road links them; visual only, the rules do not read it | section 9 | [proposed]: awaiting the owner's decision; would supersede DEC-27, item 3 ("no water") |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in
