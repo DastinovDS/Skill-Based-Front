@@ -89,7 +89,7 @@ from gow_sim.commands import (
     UpgradeRoad,
 )
 from gow_sim.maps import MapDef, NodeKind
-from gow_sim.ruleset import Ruleset
+from gow_sim.ruleset import RecruitLocation, Ruleset
 from gow_sim.view import AtNode, GroupView, IntentKind, IntentView, Mode, PlayerView, Stance
 
 __all__ = [
@@ -163,7 +163,7 @@ class SmartBot(CampaignBot):
         "spill": ParamRange(0, 0),
         "hold_front": ParamRange(0, 0),
         "fortify": ParamRange(0, 0),
-        "road_keep": ParamRange(300, 400),
+        "road_keep": ParamRange(200, 300),
         "late": ParamRange(0, 0),
         "rear_full": ParamRange(2, 3),
         "scouts": ParamRange(1, 1),
@@ -264,6 +264,7 @@ class SmartBot(CampaignBot):
         for cmd in self.fronts(view):  # front markers on the front cities (DEC-28)
             self.spend(ctx, cmd)
         self.evacuate(ctx)
+        self.unbank(ctx)
         self.set_rear_min(ctx)
         self.feed(ctx)
         if not self.alarm:
@@ -282,6 +283,7 @@ class SmartBot(CampaignBot):
         self._rally(ctx)
         self._recruit(ctx)
         self.build_roads(ctx)
+        self.bank(ctx)
         return ctx.cmds
 
     # Stance ---------------------------------------------------------------------------------
@@ -747,15 +749,22 @@ class SmartBot(CampaignBot):
             return
         wait = self._waiting(view)
         supply = self.rules.supply
+        now = view.me.rear_min
+        # Hysteresis: a setting holds until the reason for it is half gone.
         starving = any(
-            m is not None and wait[m] >= FEED_MIN and not view.nodes[m].warehouse
+            m is not None
+            and (
+                (wait[m] >= FEED_MIN and not view.nodes[m].warehouse)
+                or (now == 0 and wait[m] > (view.nodes[m].warehouse or 0))
+            )
             for m in view.me.fronts
         )
         home = view.nodes[self.home]
+        stock, cap = home.warehouse or 0, home.warehouse_cap or 0
         full = (
             home.owner == self.player
-            and home.warehouse_cap is not None
-            and (home.warehouse or 0) >= home.warehouse_cap
+            and cap > 0
+            and (stock >= cap or (now == self.params["rear_full"] and 2 * stock >= cap))
         )
         if starving:
             want = 0
@@ -766,6 +775,66 @@ class SmartBot(CampaignBot):
         want = min(want, supply.rear_min_max)
         if want != view.me.rear_min and self.spend(ctx, SetRearMin(want)):
             self.rear_tick = ctx.tick
+
+    def bank(self, ctx: Ctx) -> None:
+        """A second unit in the recruit queue of a rear city with the barracks (DEC-25): a queue
+        of one stands empty between the unit made and the next decision, a queue of two does
+        not. The second unit has not started, so it refunds in full (DEC-25, item 3) and
+        ``unbank`` takes it back when the capital needs the CP. Only with a whole recruit price
+        above ``recruit_keep``; CP about to burn on the cap (DEC-02) fill the queue up to
+        ``recruit.queue_max``. One unit per decision, nearest the own capital first."""
+        view, rules = ctx.view, self.rules
+        cost = self.cost(Recruit(0))
+        burning = ctx.budget + self.params["reserve"] >= rules.cp.cap - rules.cp.per_period
+        if not burning and ctx.budget - 2 * cost < self.params["recruit_keep"]:
+            return
+        if ctx.budget < cost:
+            return
+        limit = rules.recruit.queue_max if burning else 2
+        fights = self.fight_nodes(view)
+        hops = self.hops[self.home]
+        cities: list[int] = []
+        for n in view.nodes:
+            node = n.id
+            queue = n.recruit_queue
+            if n.owner != self.player or queue is None or node in fights:
+                continue
+            if self.recruited.get(node) == ctx.tick or not 1 <= queue < limit:
+                continue
+            if self.hot[node] or self.doomed[node] or not self.recruits_in(view, node):
+                continue
+            if ctx.standing[node] + queue + 1 > n.capacity:
+                continue
+            cities.append(node)
+        if not cities:
+            return
+        city = min(cities, key=lambda c: (hops[c], self.key(c)))
+        if self.spend(ctx, Recruit(city)):
+            self.recruited[city] = ctx.tick
+
+    def recruits_in(self, view: PlayerView, node: int) -> bool:
+        """``Recruit`` is allowed in the own city ``node`` by the barracks (DEC-26, item 11) or by
+        ``recruit.location`` (DEC-25, item 8)."""
+        if self.rules.city_upgrades.enabled:
+            return bool(view.nodes[node].has_barracks)
+        if self.rules.recruit.location is RecruitLocation.CAPITAL:
+            return node == self.home
+        return True
+
+    def unbank(self, ctx: Ctx) -> None:
+        """While the capital is in danger, production moves to the capital (its recruits stand
+        where the threat comes): when the CP do not pay for a recruit there, the last unit of the
+        queue of every other own city is cancelled (DEC-25, item 11), a full refund for a unit
+        that has not started, a half for one in production (item 3); the next decision queues
+        it in the capital (``defend_capital``)."""
+        view = ctx.view
+        if not self.alarm or ctx.budget >= self.cost(Recruit(self.home)):
+            return
+        if not self.can_queue(view, self.home, ctx.standing[self.home]):
+            return
+        for n in view.nodes:
+            if n.owner == self.player and n.id != self.home and n.recruit_queue:
+                self.spend(ctx, CancelRecruit(n.id))
 
     def supply_target(self, view: PlayerView, node: int) -> int:
         """The supply target of the own city ``node`` (DEC-28, item 5): a full warehouse with a
@@ -961,7 +1030,7 @@ class SmartExpander(SmartBot):
         "w_neutral": ParamRange(200, 250),
         "w_hops": ParamRange(20, 20),
         "hold_front": ParamRange(1, 2),
-        "road_keep": ParamRange(350, 450),
+        "road_keep": ParamRange(250, 350),
         "late": ParamRange(1200, 2400),
     }
 
@@ -984,7 +1053,7 @@ class SmartTurtle(SmartBot):
         "spill": ParamRange(1, 2),
         "hold_front": ParamRange(2, 3),
         "fortify": ParamRange(1, 1),
-        "road_keep": ParamRange(350, 450),
+        "road_keep": ParamRange(250, 350),
     }
 
 
