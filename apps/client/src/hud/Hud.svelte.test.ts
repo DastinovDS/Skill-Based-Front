@@ -37,7 +37,6 @@ describe('Hud', () => {
       rendererFailed?: boolean;
       onreload?: () => void;
       onpause?: () => void;
-      pauseUsed?: boolean;
     } = {},
   ) {
     const state = new HudState({
@@ -63,7 +62,6 @@ describe('Hud', () => {
         rendererFailed: options.rendererFailed ?? false,
         onreload: options.onreload,
         onpause: options.onpause,
-        pauseUsed: options.pauseUsed,
         hud: state,
         orders,
         chrome,
@@ -101,11 +99,11 @@ describe('Hud', () => {
     expect(onreload).toHaveBeenCalledOnce();
   });
 
-  it('disables the pause button once the pause is used (#475)', () => {
+  it('shows the pause button only when a pause is offered (#448)', () => {
     setLocale('en');
     const onpause = vi.fn();
-    const fresh = render({ onpause });
-    const live = button(fresh.target, 'Pause');
+    const offered = render({ onpause });
+    const live = button(offered.target, 'Pause');
     expect(live?.disabled).toBe(false);
     live?.click();
     expect(onpause).toHaveBeenCalledOnce();
@@ -113,10 +111,9 @@ describe('Hud', () => {
     mounted = undefined;
     document.body.innerHTML = '';
 
-    const used = render({ onpause, pauseUsed: true });
-    const spent = button(used.target, 'Pause');
-    expect(spent?.disabled).toBe(true);
-    expect(spent?.title).toBe('You have already used your pause in this match.');
+    // A rated match, or a pause already used: nothing to click.
+    const none = render();
+    expect(button(none.target, 'Pause')).toBeUndefined();
   });
 
   it('has no side panel and shows the numbers of the snapshot in the top bar', () => {

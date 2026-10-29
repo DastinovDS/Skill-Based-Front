@@ -14,13 +14,11 @@
     /** Opens the stance menu and the other overlays. */
     orders: OrderController;
     chrome: HudChrome;
-    /** The pause of a private match; without it the button is not shown. */
+    /** The pause of a private match; without it (none left, or a rated match) the button is not shown. */
     onpause?: () => void;
-    /** This player has used the pause of the match: the button stays but is disabled. */
-    pauseUsed?: boolean;
   }
 
-  let { data, orders, chrome, onpause, pauseUsed = false }: Props = $props();
+  let { data, orders, chrome, onpause }: Props = $props();
 
   /** The key itself is not translated. */
   const STANCE_KEY = 'Q';
@@ -123,8 +121,7 @@
         type="button"
         class="icon-button"
         aria-label={t('match.pause')}
-        title={pauseUsed ? t('match.pause.used') : t('match.pause')}
-        disabled={pauseUsed}
+        title={t('match.pause')}
         onclick={onpause}
       >
         <Icon name="pause" />

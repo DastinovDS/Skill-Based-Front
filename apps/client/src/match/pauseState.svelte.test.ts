@@ -11,6 +11,9 @@ const paused = (by: 0 | 1 | null): ServerMsg =>
     ends_in_s: by === null ? null : 60,
   }) as unknown as ServerMsg;
 
+const welcome = (pause_available: boolean): ServerMsg =>
+  ({ type: 'welcome', pause_available }) as unknown as ServerMsg;
+
 describe('PauseState', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -56,15 +59,25 @@ describe('PauseState', () => {
     expect(state.notice).toBeNull();
   });
 
-  it('marks the pause used only by the own pause, and keeps it after the resume', () => {
+  it('offers the pause only when welcome says so, also after a reconnect (#448)', () => {
     const state = new PauseState();
+    expect(state.available).toBe(false); // nothing is offered before the welcome
+    state.onMessage(welcome(true), 0);
+    expect(state.available).toBe(true);
+    state.onMessage(welcome(false), 0); // a rated match, or the pause was used before a reload
+    expect(state.available).toBe(false);
+  });
+
+  it('takes the pause away for good when the own pause starts, not the enemy one', () => {
+    const state = new PauseState();
+    state.onMessage(welcome(true), 0);
     state.onMessage(paused(1), 0);
-    expect(state.used).toBe(false);
+    expect(state.available).toBe(true); // the opponent paused: the own pause is still there
     state.onMessage(paused(null), 0);
     state.onMessage(paused(0), 0);
-    expect(state.used).toBe(true);
+    expect(state.available).toBe(false);
     state.onMessage(paused(null), 0);
-    expect(state.used).toBe(true);
+    expect(state.available).toBe(false);
   });
 
   it('a paused message clears a refusal', () => {

@@ -5,21 +5,24 @@ import type { MessageKey } from '../i18n/index.ts';
 export const NOTICE_MS = 4000;
 
 /**
- * The pause refusal banner and whether this player has used the pause of the match (DEC-05: one
- * pause per player in a private match). The server tells only who is paused now, so "used" is
- * tracked from the player's own `paused` message for the life of this page: after a reload the
- * button is enabled again and the server refuses with the banner, which then hides by itself.
+ * The pause refusal banner and whether this player may still pause the match (DEC-05: one pause
+ * per player in a private match, none in a rated one). `welcome` says it (`pause_available`, also
+ * after a reconnect or a reload), and the player's own pause makes it false at once: the button is
+ * offered only while it is true. A refusal that still comes shows the banner, which hides by itself.
  */
 export class PauseState {
   notice = $state.raw<MessageKey | null>(null);
-  used = $state(false);
+  /** The player may pause now: false before `welcome`, in a rated match, once the pause is used. */
+  available = $state(false);
   #timer: ReturnType<typeof setTimeout> | null = null;
 
   /** Reads `paused` and `error` messages; others are ignored. */
   onMessage(msg: ServerMsg, me: PlayerId): void {
-    if (msg.type === 'paused') {
+    if (msg.type === 'welcome') {
+      this.available = msg.pause_available;
+    } else if (msg.type === 'paused') {
       if (msg.paused && msg.by === me) {
-        this.used = true;
+        this.available = false;
       }
       this.dismiss();
     } else if (msg.type === 'error') {
