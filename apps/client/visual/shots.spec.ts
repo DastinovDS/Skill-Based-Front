@@ -19,10 +19,15 @@ test.beforeAll(() => {
 
 for (const scene of SCENES) {
   test(`shot of scene ${scene.id}`, async ({ page }) => {
-    await page.goto(`/?scene=${scene.id}`);
+    // `menus` lets a frozen scene take the keys of the player (orders go nowhere).
+    await page.goto(`/?scene=${scene.id}${scene.keys === undefined ? '' : '&menus'}`);
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(scene.tick));
     // The baked background loads on its own: the map is not ready before it.
     await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    // The keys of the scene (the «Supply» view), then the pointer away from the map.
+    for (const key of scene.keys ?? []) await page.keyboard.press(key);
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(scene.keys === undefined ? 0 : 300);
     await page.screenshot({ path: join(OUT, `${scene.id}.png`) });
     await page.addStyleTag({ content: '.hud { display: none !important; }' });
     await page.locator('canvas').screenshot({ path: join(OUT, `${scene.id}-map.png`) });
@@ -257,6 +262,28 @@ test('shot of the progress cells in grey scale at 60% scale', async ({ page }) =
   });
   await page.locator('canvas').screenshot({ path: join(OUT, 'progress-gray-60.png') });
 });
+
+// The «Supply» view with the pipes (#429) in grey scale, at full size and at 60% of the map scale: the level (the bore),
+// the flow (the fill, the dashes, the valve cap) and the cut-off city (hatching, dashed ring) must read without the hue.
+// `supply-gray.png` and `supply-gray-60.png`, the map alone.
+for (const [name, size] of [
+  ['supply-gray', { width: 1280, height: 800 }],
+  ['supply-gray-60', { width: 768, height: 480 }],
+] as const) {
+  test(`shot of the supply view in grey scale (${name})`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await page.goto('/?scene=supply&menus');
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.keyboard.press('Tab');
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(500);
+    await page.addStyleTag({
+      content: '.hud { display: none !important; } canvas { filter: grayscale(1); }',
+    });
+    await page.locator('canvas').screenshot({ path: join(OUT, `${name}.png`) });
+  });
+}
 
 // The enemy figures of the roads (EF2 "Pointer", #354) in grey scale at 60% of the map scale: the direction (the head),
 // the level (the plate, the dashes) and the half memory with its dashed tick must read without the hue.

@@ -544,40 +544,81 @@ export const GHOST_REJECT_MS = 500;
 export const GHOST_SHAKE_AMPLITUDE = 3;
 
 // --- The «Supply» layer (DEC-28, item 8) ---------------------------------------------------------
-// A flat, minimal picture: the territory is a stronger flat tint than on the normal map, the roads
-// show their level by lanes, and only what supply is about is drawn on top. Opposite flows on
-// one road use opposite lanes; the automatics is a solid arrow, a transfer a dashed and wider one.
+// A flat, minimal picture: the territory is a stronger flat tint than on the normal map, an own
+// road is a pipe whose bore is its level (#429), and only what supply is about is drawn on top.
+// Opposite flows on one road use opposite halves of the pipe.
 
 /** The territory tint of the layer (the normal map: `TERRITORY_ALPHA`): flat, no terrain under it. */
 export const SUPPLY_TERRITORY_ALPHA = 0.34;
 /** The flat floor of the layer instead of the terrain. */
 export const SUPPLY_FLOOR = 0x141a22;
-/** A flow arrow: the lane is the distance from the road axis. */
-export const SUPPLY_FLOW = {
-  lane: 8,
-  width: 3,
-  alpha: 0.95,
-  head: { length: 10, width: 11 },
-} as const;
-export const SUPPLY_TRANSFER = { width: 4.5, dash: 9, gap: 5 } as const;
-/** The number plate in the middle of a flow arrow. */
-export const SUPPLY_FLOW_LABEL = { fontSize: 11, padX: 4, height: 14, radius: 4 } as const;
-/** A packet on its road: a square (a charge, ui-style 21); a transfer a bigger one with a double outline. */
-export const SUPPLY_PACKET = { side: 7, transferSide: 10, transferRing: 14 } as const;
 /**
- * The warehouse bar of the «Supply» layer is the bar of the normal map (`BAR_SEGMENT`); this is its
- * distance under the city (the layer draws no capacity ring).
+ * The pipes of the «Supply» layer (#429, variant B "Pipes"): the level of an own road is the bore of
+ * its pipe (three widths, never a hue); a pipe with a flow is filled and its dashes run in the
+ * direction of the flow (`speed`, units a second), a valve cap marks the destination and the volume
+ * is a number lying along the pipe (`labelLift` above it). `inset` keeps the pipe off the city.
  */
-export const SUPPLY_STOCK = { gap: 9 } as const;
-/** The front marker: a pole with a flag carrying its number, up and to the left of the city. */
-export const SUPPLY_MARKER = {
-  pole: 28,
-  flag: { width: 20, height: 16 },
-  angle: -135,
-  gap: 4,
-  font: 12,
+export const SUPPLY_PIPE = {
+  bore: [7, 10, 13],
+  /** The wall of the pipe on each side of its inside. */
+  wall: 1.5,
+  /** The dark casing round the wall, per side. */
+  casing: 1.7,
+  casingAlpha: 0.9,
+  wallColor: 0x566982,
+  idleColor: 0x18202c,
+  activeColor: 0x1d4e91,
+  fillAlpha: 0.55,
+  dash: 4,
+  gap: 8,
+  speed: 22,
+  inset: 2,
+  /** A flow shorter than this (between the city rims) gets no valve and no number. */
+  minFlow: 16,
+  valve: { outer: { length: 8, minWidth: 8 }, inner: { length: 5.5, minWidth: 5 } },
+  labelLift: 5.5,
+  labelFont: 11,
+  /** Where several numbers share a pipe they sit this far apart along it. */
+  labelGap: 22,
 } as const;
-/** The dashed ring and the badge of a cut-off city (DEC-19). */
-export const SUPPLY_CUT = { gap: 9, width: 2.5, dash: 10 } as const;
+/** A packet on its pipe: a circle growing with its charges; a transfer is a square (a shape, not a hue). */
+export const SUPPLY_PACKET = {
+  radius: 3.2,
+  perCharge: 0.5,
+  transferSide: 10,
+  outline: 1.3,
+} as const;
+/** The warehouse gauge under an own city: a bar and the figure «stock/capacity» beside it. */
+export const SUPPLY_GAUGE = {
+  width: 32,
+  gap: 9,
+  height: 9,
+  bar: 5,
+  radius: 3,
+  restAlpha: 0.18,
+  font: 9.5,
+} as const;
+/** The front marker: a ring round the city and a badge with its number above it. */
+export const SUPPLY_MARKER = {
+  ring: 8,
+  ringWidth: 3,
+  badge: { radius: 8, lift: 14 },
+  font: 11,
+} as const;
+/** A cut-off city (DEC-19): hatched, a dashed ring and the time to the next starvation. */
+export const SUPPLY_CUT = {
+  gap: 9,
+  width: 2.6,
+  dash: 3,
+  gapDash: 4,
+  hatchPeriod: 5,
+  hatchWidth: 1.6,
+  hatchAlpha: 0.55,
+  pill: 11,
+} as const;
+/** The number plate (the badge of the time of a cut-off city). */
+export const SUPPLY_FLOW_LABEL = { fontSize: 11, padX: 4, height: 14, radius: 4 } as const;
+/** A bulkhead on a buffer road at its border point: supply stops there. */
+export const SUPPLY_BULKHEAD = { half: 5, width: 1.5, casing: 3.4, color: 0xaab2bd } as const;
 /** The mark of the enemy presence: a hollow inverted triangle, no number. */
 export const SUPPLY_PRESENCE = { side: 12, width: 2.2, angle: 45, gap: 9 } as const;

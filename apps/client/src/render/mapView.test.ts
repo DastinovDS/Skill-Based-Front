@@ -133,6 +133,29 @@ describe('MapView, the roads of R1', () => {
     }
   });
 
+  it('hides the lanes and the band of an own road in the «Supply» mode: it is a pipe there (#429)', () => {
+    view.setOwners(owners(0, 0));
+    view.setRoads(map.edges.map(() => ({ width: 2 })));
+    expect(parts().lanes[0]?.visible).toBe(true);
+    expect(parts().casings[0]?.visible).toBe(true);
+    view.setSupplyMode(true);
+    expect(parts().lanes.map((l) => l.visible)).toEqual([false, false]);
+    expect(parts().casings.map((c) => c.visible)).toEqual([false, false]);
+    view.setSupplyMode(false);
+    expect(parts().lanes[0]?.visible).toBe(true);
+    expect(parts().casings[0]?.visible).toBe(true);
+  });
+
+  it('keeps a buffer road and an enemy road as they are in the «Supply» mode', () => {
+    view.setSupplyMode(true);
+    view.setOwners(owners(0, 1));
+    view.setRoads(map.edges.map(() => ({ width: 2 })));
+    expect(parts().casings[0]?.visible).toBe(true);
+    view.setOwners(owners(1, 1));
+    expect(parts().casings[0]?.visible).toBe(true);
+    expect(parts().lanes[0]?.visible).toBe(true);
+  });
+
   it('puts the lanes of a level across the road, not along it', () => {
     view.setOwners(owners(0, 0));
     view.setRoads(map.edges.map((e) => ({ width: e.id === edge.id ? 3 : 1 })));

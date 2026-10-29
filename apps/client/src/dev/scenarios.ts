@@ -23,6 +23,7 @@ import { FIGURES_VIEW, figuresSnapshot } from './figuresScene.ts';
 import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
+import { supplySnapshot } from './supplyScene.ts';
 
 const files = import.meta.glob<SnapshotMsg>(
   '../../../../packages/protocol/fixtures/server/snapshot*.json',
@@ -497,6 +498,15 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     snapshot: ordersSnapshot(bundledMap('artery')),
     events: [],
     view: ORDERS_VIEW,
+    cityUpgrades: true,
+  },
+  {
+    // The artery moment for the «Supply» view (Tab, `keys` in visual/scenes.ts): pipes of all levels, flows, markers, a cut-off city (#429).
+    id: 'supply',
+    map: 'artery',
+    snapshot: supplySnapshot(bundledMap('artery')),
+    events: [],
+    view: ARTERY_VIEW,
     cityUpgrades: true,
   },
   {
