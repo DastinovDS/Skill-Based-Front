@@ -60,6 +60,7 @@ from gow_server.clock import ManualClock
 from gow_server.logs import configure_logging
 from gow_server.matches import MatchManager, MatchRunner
 from gow_server.settings import Settings
+from gow_server.ws import CLOSE_TRY_LATER
 from gow_sim.commands import Forfeit
 from gow_sim.replay import read_replay
 from gow_sim.ruleset import Stance, load_ruleset
@@ -256,6 +257,84 @@ def test_no_hello_closes(ws_settings: Settings) -> None:
     async def scenario(live: Live) -> None:
         async with live.connect() as ws:
             assert await close_code(ws) == CLOSE_POLICY
+
+    run(settings, scenario)
+
+
+async def gate_drained(live: Live) -> None:
+    """Wait until the server has counted every closed connection out of the gate."""
+    for _ in range(200):
+        if live.app.state.ws_gate.pending == 0:
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("the gate still counts connections")
+
+
+def test_connections_before_hello_are_capped_per_address(ws_settings: Settings) -> None:
+    settings = ws_settings.model_copy(update={"ws_unauth_per_ip": 2})
+
+    async def scenario(live: Live) -> None:
+        async with live.connect() as first, live.connect() as second:
+            async with live.connect() as third:
+                assert await close_code(third) == CLOSE_TRY_LATER  # refused at once, not at 5 s
+            assert live.manager.metrics.ws_refused_unauth == 1
+            # `hello` ends the count: the slot is free again for a new connection...
+            await send(first, hello(live.tokens[0]))
+            assert isinstance(await recv(first), WelcomeMsg)
+            async with live.connect() as fourth:
+                await send(fourth, hello(live.tokens[1]))
+                assert isinstance(await recv(fourth), WelcomeMsg)
+                # ...and so does a connection closed without one
+                await second.close()
+        await gate_drained(live)
+
+    run(settings, scenario)
+
+
+def test_authenticated_connections_are_not_counted(ws_settings: Settings) -> None:
+    settings = ws_settings.model_copy(update={"ws_unauth_per_ip": 1, "ws_unauth_total": 1})
+
+    async def scenario(live: Live) -> None:
+        async with live.connect() as one:
+            await send(one, hello(live.tokens[0]))
+            assert isinstance(await recv(one), WelcomeMsg)
+            # `one` stays open and authenticated: it does not take the single unauthenticated slot
+            async with live.connect() as two:
+                await send(two, hello(live.tokens[1]))
+                assert isinstance(await recv(two), WelcomeMsg)
+                assert live.app.state.ws_gate.pending == 0
+                await send(two, PingMsg(id=7))
+                assert isinstance(await recv_until(two, PongMsg), PongMsg)
+
+    run(settings, scenario)
+
+
+def test_connections_before_hello_are_capped_in_total(ws_settings: Settings) -> None:
+    settings = ws_settings.model_copy(update={"ws_unauth_per_ip": 10, "ws_unauth_total": 2})
+
+    async def scenario(live: Live) -> None:
+        async with live.connect(), live.connect(), live.connect() as third:
+            assert await close_code(third) == CLOSE_TRY_LATER
+        await gate_drained(live)
+        async with live.connect() as again:
+            await send(again, hello(live.tokens[0]))
+            assert isinstance(await recv(again), WelcomeMsg)
+
+    run(settings, scenario)
+
+
+def test_a_refused_origin_or_bad_hello_leaves_no_count(ws_settings: Settings) -> None:
+    settings = ws_settings.model_copy(update={"ws_unauth_per_ip": 1})
+
+    async def scenario(live: Live) -> None:
+        with pytest.raises(InvalidStatus):
+            async with live.connect(origin="http://evil.example"):
+                pass
+        for _ in range(3):  # a bad hello closes the socket and frees the slot
+            async with live.connect() as ws:
+                await send(ws, PingMsg(id=1))
+                assert await close_code(ws) == CLOSE_POLICY
+            await gate_drained(live)
 
     run(settings, scenario)
 

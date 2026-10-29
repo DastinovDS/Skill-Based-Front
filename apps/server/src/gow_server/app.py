@@ -24,7 +24,7 @@ from gow_server.logs import request_id_var
 from gow_server.matches import MatchManager
 from gow_server.nicks import NickPolicy, load_blocklist
 from gow_server.passwords import PasswordHasher
-from gow_server.ratelimit import SlidingWindowLimiter
+from gow_server.ratelimit import ConnectionGate, SlidingWindowLimiter
 from gow_server.replay_retention import RetentionPolicy, run_cleanup
 from gow_server.settings import Settings
 from gow_sim.ruleset import load_ruleset
@@ -137,6 +137,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         settings.guest_rate_limit, settings.guest_rate_window_s, MonotonicClock()
     )
     app.state.limits = Limits(settings, MonotonicClock())
+    app.state.ws_gate = ConnectionGate(settings.ws_unauth_per_ip, settings.ws_unauth_total)
     app.state.nick_policy = NickPolicy(
         load_blocklist(settings.nick_blocklist_file) if settings.nick_blocklist_file else ()
     )

@@ -71,6 +71,9 @@ services:
       GOW_WS_ALLOWED_ORIGINS: ${GOW_WS_ALLOWED_ORIGINS:-[]}
       GOW_WS_HELLO_TIMEOUT_S: ${GOW_WS_HELLO_TIMEOUT_S:-5}
       GOW_WS_SEND_TIMEOUT_S: ${GOW_WS_SEND_TIMEOUT_S:-5}
+      # Sockets that have not sent hello yet: per client address (IPv6: /64) and in total (#199).
+      GOW_WS_UNAUTH_PER_IP: ${GOW_WS_UNAUTH_PER_IP:-10}
+      GOW_WS_UNAUTH_TOTAL: ${GOW_WS_UNAUTH_TOTAL:-200}
       GOW_WS_MSG_RATE: ${GOW_WS_MSG_RATE:-20}
       GOW_WS_MSG_BURST: ${GOW_WS_MSG_BURST:-60}
       # Invites and the public lobby.

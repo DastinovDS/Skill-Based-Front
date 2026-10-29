@@ -2,7 +2,11 @@
 
 1. The upgrade is refused (HTTP 403) unless ``Origin`` is the page's own origin (the ``Host`` the
    client connected to, i.e. the site behind Caddy) or listed in ``ws_allowed_origins``.
-2. The first message is ``hello`` within ``ws_hello_timeout_s``, else close ``CLOSE_POLICY``.
+2. A connection that has not sent ``hello`` yet counts against ``ws_unauth_per_ip`` (per client
+   address, IPv6 per /64) and ``ws_unauth_total`` (``ConnectionGate``); over either the socket is
+   closed at once with ``CLOSE_TRY_LATER`` (1013), before any work. The first message is ``hello``
+   within ``ws_hello_timeout_s``, else close ``CLOSE_POLICY``; the count ends when ``hello`` was
+   read or the connection ended, so an authenticated connection is not counted.
    Another ``protocol_version`` closes with 4001 (``CLOSE_PROTOCOL_VERSION``), also when the rest
    of an old client's ``hello`` no longer validates. The token is looked up by its SHA-256 in a
    thread (``asyncio.to_thread``: the database is synchronous); it is never logged, and
@@ -62,11 +66,16 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_server.identity import hash_token
 from gow_server.matches import MatchManager, MatchRunner, Outbox, Outgoing
 from gow_server.models import Player
+from gow_server.ratelimit import ConnectionGate, ip_key
 from gow_server.settings import Settings
 
 log = logging.getLogger("gow_server.ws")
 
 CLOSE_NORMAL: Final = 1000
+CLOSE_TRY_LATER: Final = 1013
+"""RFC 6455 / IANA "Try Again Later": too many connections before ``hello`` (#199). Not in the
+protocol: no message and no client logic depend on it, and the client treats any code it does not
+know as a dropped link and reconnects with backoff, which is what it should do here."""
 router = APIRouter()
 
 
@@ -176,8 +185,16 @@ async def match_socket(ws: WebSocket, match_id: str) -> None:
         await ws.close(code=CLOSE_POLICY)  # before accept: the upgrade is answered with 403
         return
     await ws.accept()
+    gate: ConnectionGate = ws.app.state.ws_gate
+    key = ip_key(ws.client.host) if ws.client else "unknown"
+    if not gate.enter(key):
+        manager: MatchManager = ws.app.state.matches
+        manager.metrics.ws_refused_unauth += 1
+        log.info("ws refused: too many connections before hello", extra={"pending": gate.pending})
+        await _close(ws, _Close(CLOSE_TRY_LATER, "too many connections"), settings)
+        return
     try:
-        await _serve(ws, match_id, settings)
+        await _serve(ws, match_id, settings, gate, key)
     except _Close as close:
         await _close(ws, close, settings)
     except WebSocketDisconnect:
@@ -215,8 +232,13 @@ async def _hello(ws: WebSocket, settings: Settings) -> HelloMsg:
     return msg
 
 
-async def _serve(ws: WebSocket, match_id: str, settings: Settings) -> None:
-    hello = await _hello(ws, settings)
+async def _serve(
+    ws: WebSocket, match_id: str, settings: Settings, gate: ConnectionGate, key: str
+) -> None:
+    try:
+        hello = await _hello(ws, settings)
+    finally:
+        gate.leave(key)  # authenticated or gone: no longer an unauthenticated connection
     account = await asyncio.to_thread(account_of, ws.app.state.sessions, hello.token)
     manager: MatchManager = ws.app.state.matches
     runner = manager.get(match_id)

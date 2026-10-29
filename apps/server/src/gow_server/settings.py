@@ -102,6 +102,13 @@ class Settings(BaseSettings):
     reached at, i.e. the page behind Caddy). JSON in the environment: ``'["http://localhost:5173"]'``."""
     ws_hello_timeout_s: float = 5.0
     """The first message, ``hello``, must come within this time (AGENTS.md, section 5.3)."""
+    ws_unauth_per_ip: int = Field(default=10, ge=1)
+    """At most this many match WebSockets per client address (IPv6: the /64, ``ip_key``) that have
+    not sent ``hello`` yet; the next is closed at once with 1013 (QA-04, #199). An honest client
+    sits there for milliseconds, so the cap only bites on a flood of idle sockets."""
+    ws_unauth_total: int = Field(default=200, ge=1)
+    """The same over all addresses together: a backstop for a flood from many addresses (or from
+    one /64 per socket) so that the sockets before ``hello`` cannot take all file descriptors."""
     ws_send_timeout_s: float = 5.0
     """A send that takes longer means the client does not read: it is disconnected."""
     ws_msg_rate: float = 20.0

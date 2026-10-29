@@ -3,7 +3,7 @@
 import pytest
 
 from gow_server.clock import ManualClock
-from gow_server.ratelimit import SlidingWindowLimiter, ip_key
+from gow_server.ratelimit import ConnectionGate, SlidingWindowLimiter, ip_key
 
 
 def test_limit_per_key_and_window_slides() -> None:
@@ -54,3 +54,36 @@ def test_rejected_hits_do_not_extend_the_block() -> None:
 )
 def test_ip_key(host: str, key: str) -> None:
     assert ip_key(host) == key
+
+
+# Connections before hello (#199) -----------------------------------------------
+
+
+def test_gate_caps_per_key_and_in_total() -> None:
+    gate = ConnectionGate(per_key=2, total=3)
+    assert gate.enter("a") and gate.enter("a")
+    assert not gate.enter("a")  # the third of one key
+    assert gate.enter("b")  # another key has its own cap...
+    assert not gate.enter("c")  # ...until the total is reached
+    assert gate.pending == 3
+    gate.leave("a")
+    assert gate.enter("c")
+    assert gate.pending == 3
+
+
+def test_gate_refusal_counts_nothing_and_leave_forgets_empty_keys() -> None:
+    gate = ConnectionGate(per_key=1, total=10)
+    assert gate.enter("a")
+    for _ in range(5):
+        assert not gate.enter("a")
+    assert gate.pending == 1
+    gate.leave("a")
+    assert gate.pending == 0
+    assert gate.enter("a")
+
+
+def test_gate_keys_an_ipv6_client_by_its_64() -> None:
+    gate = ConnectionGate(per_key=1, total=10)
+    assert gate.enter(ip_key("2001:db8:1:2::1"))
+    assert not gate.enter(ip_key("2001:db8:1:2:ffff::9"))  # same /64: one client
+    assert gate.enter(ip_key("2001:db8:1:3::1"))

@@ -147,6 +147,7 @@ def test_metrics_count_matches_steps_and_connections(line3: MapDef, short_rules:
     assert "gow_matches_started_total 1" in lines
     assert 'gow_tick_lag_seconds_bucket{le="+Inf"} 5' in lines
     assert "gow_bot_overruns_total 0" in lines
+    assert "gow_ws_refused_unauth_total 0" in lines
 
 
 def test_metrics_endpoint_is_loopback_only(settings: Settings, client: TestClient) -> None:

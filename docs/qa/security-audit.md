@@ -16,7 +16,7 @@ one low one was fixed in the PR of this audit, the rest was accepted as a delibe
 |---|---|---|---|
 | F1 | Medium | The server log holds the client IP and the query string of every WebSocket handshake (a uvicorn line in `uvicorn.error`), contrary to AGENTS.md 5.3 and `docs/ops/legal.md` | fixed: #193, PR #198 |
 | F2 | Medium (defense in depth) | `/internal/*` (drain, metrics) opens with the header `X-Forwarded-For: 127.0.0.1` from any node of the internal network: uvicorn trusts all proxies (`GOW_FORWARDED_ALLOW_IPS="*"`) | fixed: #194, PR #196 |
-| F3 | Low | There is no limit on simultaneous connections from one address: a WebSocket lives 5 s without authentication before `hello`, and uvicorn has no `limit_concurrency` | filed: #199 (P2) |
+| F3 | Low | There is no limit on simultaneous connections from one address: a WebSocket lives 5 s without authentication before `hello`, and uvicorn has no `limit_concurrency` | fixed: #199 (a cap on WebSockets before `hello`, per address and in total; `limit_concurrency` rejected, `docs/ops/deploy.md`, section 8) |
 | F4 | Low | The client dev dependency `source-map-js` 1.2.1 (GHSA-68fv-2mgg-jv7q, "high" in the database: DoS when parsing a foreign source map). Build and tests only (`postcss`, `jsdom`), it does not get into the prod bundle | fixed in this PR: lockfile, 1.2.2 |
 | F5 | Info | `GET /api/replays/{id}` answers 404, 401 or 403: from a sequential id one can see whether an unranked match exists and whether its replay is ready (the content is not accessible) | accepted |
 | F6 | Info | The headers `Server: Caddy` and `Server: uvicorn` reveal the software | accepted |
@@ -155,7 +155,7 @@ everything it would have shown was checked.
   a message of at most 64 KiB (`ws_max_size`); the reliable message queue is 4096, a slow client
   is disconnected; `send` with a timeout.
 - [x] Integers on the wire are limited to int32, match and file ids are checked with a regular expression.
-- F3: there is no limit on simultaneous connections from an address (#199).
+- F3: there was no limit on simultaneous connections from an address; fixed in #199 (WebSockets before `hello`: `GOW_WS_UNAUTH_PER_IP`, `GOW_WS_UNAUTH_TOTAL`).
 
 ### 5.2 Fuzzing
 

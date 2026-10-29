@@ -200,6 +200,7 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_MONITOR_INTERVAL_S` | `30` | OPS-04: the period of the tick lag check (the alert threshold is 10% of the tick period) |
 | `GOW_REPLAY_RETENTION_DAYS`, `GOW_REPLAY_RATED_RETENTION_DAYS`, `GOW_REPLAY_CLEANUP_INTERVAL_S` | `30`, `0`, `3600` | SRV-08, #515: days a replay (command log and frames file) is kept after the match, for unrated matches (invites, lobby, bots) and for rated ones; `0` keeps forever. A cleanup task runs at start-up and then every interval; the match row stays and the replay answers `410` "expired" |
 | `GOW_RECONNECT_WINDOW_S`, `GOW_PAUSE_MAX_S` | `60`, `60` | DEC-05: the time to reconnect before a technical defeat (the `Forfeit` command in the log); the maximum of a player's single pause in a private match |
+| `GOW_WS_UNAUTH_PER_IP`, `GOW_WS_UNAUTH_TOTAL` | `10`, `200` | #199: match WebSockets that have not sent `hello` yet, per client address (IPv6: the /64) and in total; over either the socket is closed at once with 1013 |
 | `GOW_WS_MSG_RATE`, `GOW_WS_MSG_BURST` | `20`, `60` | the message token bucket of one connection (per second, burst); more than that: flood, disconnect |
 
 The database: SQLite, models in `gow_server/models.py`, Alembic migrations in `gow_server/migrations/versions/`.
@@ -214,6 +215,7 @@ The match WebSocket: `/ws/match/{id}` (`gow_server/ws.py`, AGENTS.md, section 5.
 the site itself (`Host`) or one from `GOW_WS_ALLOWED_ORIGINS`, otherwise 403. The first message is `hello` with
 the guest token. Close codes: 4001 another protocol version, 4004 no such match (or the token is someone else's,
 unknown), 4009 the same player opened a new connection, 1008 no `hello`, flood or the client is not reading,
+1013 too many connections that have not sent `hello` yet (`GOW_WS_UNAUTH_*`, retry later),
 1000 after `match_end`.
 
 Guest identity (ID-01):
