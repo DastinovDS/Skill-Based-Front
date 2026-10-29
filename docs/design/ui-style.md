@@ -18,7 +18,8 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/progress-style.html`](mockups/progress-style.html) (CP bar and the progress of barracks construction, warehouse upgrades and recruiting, #430: **[accepted]** 2026-10-28, section 32; the owner asked for it on 2026-10-28, after the mechanics freeze, so the postponement of section 23 does not apply to it),
 [`mockups/start-menu.html`](mockups/start-menu.html) (the start menu and the pre-match screens, #471: **[awaiting the owner's decision]**, section 31; asked for before the release on 2026-10-28),
 [`mockups/lobby-invite-bot.html`](mockups/lobby-invite-bot.html) (the lobby, invite and bot screens in the language of the new menu, #473: **[awaiting the owner's decision]**, section 34; planned before the release, owner, 2026-10-29),
-[`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html) (planned orders, unit tokens, cities and provinces, #431, round 1; asked for before the release on 2026-10-28) its round 2 [`mockups/tokens-cities-orders-r2.html`](mockups/tokens-cities-orders-r2.html) and round 3 [`mockups/tokens-cities-orders-r3.html`](mockups/tokens-cities-orders-r3.html) and round 4 [`mockups/tokens-cities-orders-r4.html`](mockups/tokens-cities-orders-r4.html) (planned orders ODb **[accepted]**, units and cities stay as they are, 2026-10-29, section 33), [`mockups/provinces-defense.html`](mockups/provinces-defense.html) (provinces in the current look, the "Defense" counter and the barracks placement, #431, #349: **[awaiting the owner's decision]**, section 35). All of them are
+[`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html) (planned orders, unit tokens, cities and provinces, #431, round 1; asked for before the release on 2026-10-28) its round 2 [`mockups/tokens-cities-orders-r2.html`](mockups/tokens-cities-orders-r2.html) and round 3 [`mockups/tokens-cities-orders-r3.html`](mockups/tokens-cities-orders-r3.html) and round 4 [`mockups/tokens-cities-orders-r4.html`](mockups/tokens-cities-orders-r4.html) (planned orders ODb **[accepted]**, units and cities stay as they are, 2026-10-29, section 33), [`mockups/provinces-defense.html`](mockups/provinces-defense.html) (provinces in the current look, the "Defense" counter and the barracks placement, #431, #349: **[awaiting the owner's decision]**, section 35),
+[`mockups/menu-background.html`](mockups/menu-background.html) (the background of the start menu: animation concepts and a dedicated menu map, #474: **[awaiting the owner's decision]**, section 36; asked for before the release on 2026-10-28). All of them are
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
 only links and our descriptions.
@@ -85,7 +86,9 @@ Contents:
 31. Start menu redesign (#471)
 32. Progress indicators: CP bar and the cells of builds and recruiting (#430, #439)
 33. Planned orders, unit tokens, cities and provinces (#431)
+34. Lobby, invite and bot screens (#473)
 35. Provinces in the current look, the "Defense" counter and the barracks placement (#431, #349)
+36. Start menu background: animation and a menu map (#474)
 
 ---
 
@@ -1824,8 +1827,6 @@ No variant needs a DEC, a protocol change or a server change. The only new data 
 
 Checked in grayscale (`gray-overview-lobby.png`, `gray-overview-bot.png`): no state is carried by colour alone (a selected choice is a filled dot or a white outline, a ready player a filled dot with the word, the level is cells, the seat is the triangle with its outline, an alert is amber with `!` and text).
 
-**Owner's decision:** awaiting the owner's decision.
-
 ---
 
 ## 35. Provinces in the current look, the "Defense" counter and the barracks placement (#431, #349)
@@ -1845,5 +1846,30 @@ Findings the round keeps for every variant: **Now shows "Defense" twice** (the p
 | Scene, recommended set (PC + D1 + L1) | Scene, Now |
 | --- | --- |
 | ![recommended](mockups/img/provinces-defense/scene-recommended.png) | ![now](mockups/img/provinces-defense/scene-now.png) |
+
+**Owner's decision:** awaiting the owner's decision.
+
+---
+
+## 36. Start menu background: animation and a menu map (#474)
+
+Status: **[awaiting the owner's decision]**. The owner asked on 2026-10-28, after choosing variant A "Front" of the start menu (#471, implemented in #489), for a background animation that is more logical and varied (what moves, why, how it relates to the queue state) and for a look at a map drawn only for the menu; on 2026-10-29 he confirmed it before the release, so the postponement of section 23 does not apply to it. Until the choice the client keeps the backdrop of #489 (`MenuBackdrop.svelte`, `menuScene.ts`).
+
+Mockup: [`mockups/menu-background.html`](mockups/menu-background.html), frames in [`mockups/img/menu-background/`](mockups/img/menu-background/). It draws the client's frame (the rail, its shade, the strings of the `?menu=` dev scenes, the fog by the client's `layoutScene`) for six queue states (idle, searching, long wait with the bot offer, found, confirmed, queue locked) and switches the concept, the map, the window size, the season, grayscale, reduced motion and guides (the rail, the title bar line, the fog's top fade, the corner chip, the fog edge); a meter shows the draw time per frame.
+
+| Id | Concept | What moves and why |
+| --- | --- | --- |
+| Now | the client today | a marching road and growing rings in the queue: they say "something happens", not what |
+| BG1 | Living front | game things with game reasons: supply packets, recruits and drills while idle; mobilisation to the front city (a stack ×N that grows with the time waited) and a planned order (ODb) waiting while searching; the own order and the opponent's intent (IN3) meeting once found; a fight in rounds (SH1 tracers) once confirmed; the supply stands while the queue is locked |
+| BG2 | Story and scout | idle tells the tagline in four beats (the clause lights up with its beat); while searching a scout walks into the fog and reveals what it sees (DEC-35: own groups are the source of sight); the opponent is found where the scout looks |
+| BG3 | Atlas camera | an atlas sheet (names, grid, compass, scale bar) and a slow zoom about the own capital; the queue signs of Now |
+| BG4 | Light and seasons | the season by the date tints the terrain; day while idle, dusk and city lamps while waiting, dawn from the enemy side once found |
+| BG5 | Set (**recommended**) | BG1 while idle and from found on, the BG2 scout while searching, the BG4 season as a still tint |
+
+Menu map sketches (drawn in the mockup, not map files): **MM1 Valley** (**recommended**: a horizontal valley framed by mountains, the calmest frame for the rail), **MM2 Rising pass** (a diagonal climb), **MM3 Wheel** (a ring round a central city). A menu map would be `maps/menu/<id>.json` in the existing format, built from a half with `gow-maps mirror` so it passes the validator's checks unchanged (only the globs of `maps:validate`, `maps:bake`, `maps:preview` add `maps/menu/*.json`), outside the pool (the server loads `maps/*.json` only), baked like the pool maps and imported by the client at build time instead of `GET /api/maps/crossroads`. No variant needs a DEC, a protocol, server or simulation change. Measured in the mockup (headless Chromium, software rendering, 1280 x 800): 60 fps in every concept and state, 0.09 to 0.37 ms of drawing per frame. The table with pros, risks, cost and estimates and the questions are in #474.
+
+| BG5 on MM1, searching | BG5 on MM1, found |
+| --- | --- |
+| ![searching](mockups/img/menu-background/bg5-search.jpg) | ![found](mockups/img/menu-background/bg5-found.jpg) |
 
 **Owner's decision:** awaiting the owner's decision.
