@@ -7,6 +7,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from gow_server.app import create_app
@@ -153,3 +154,56 @@ def test_guest_creation_rate_limited_per_ip(maps_dir: Path, tmp_path: Path) -> N
         response = client.post("/api/guest", json={"nick": "three"})
     assert response.status_code == 429
     assert 0 < int(response.headers["Retry-After"]) <= 600
+
+
+# Per-IP keys (#415): IPv6 by its /64, IPv4 by the address ---------------------------------------
+
+
+def _from(app: FastAPI, host: str) -> TestClient:
+    """A client the server sees at ``host`` (no lifespan: use it inside a started app)."""
+    return TestClient(app, client=(host, 50000))
+
+
+def _guest_status(client: TestClient, nick: str) -> int:
+    return client.post("/api/guest", json={"nick": nick}).status_code
+
+
+def _limited_app(maps_dir: Path, tmp_path: Path, **limits: int) -> FastAPI:
+    return create_app(
+        Settings(maps_dir=maps_dir, database_url=f"sqlite:///{tmp_path / 'ip.db'}", **limits)  # type: ignore[arg-type]
+    )
+
+
+def test_guest_limit_counts_an_ipv6_prefix_as_one_client(maps_dir: Path, tmp_path: Path) -> None:
+    app = _limited_app(maps_dir, tmp_path, guest_rate_limit=2, guest_rate_window_s=600)
+    with TestClient(app):
+        assert _guest_status(_from(app, "2001:db8:1:2::1"), "one") == 201
+        assert _guest_status(_from(app, "2001:db8:1:2:aaaa:bbbb:cccc:dddd"), "two") == 201
+        # a third address of the same /64 is the same client
+        assert _guest_status(_from(app, "2001:db8:1:2::3"), "three") == 429
+        # another /64 has its own budget
+        assert _guest_status(_from(app, "2001:db8:1:3::1"), "four") == 201
+
+
+def test_guest_limit_counts_ipv4_addresses_separately(maps_dir: Path, tmp_path: Path) -> None:
+    app = _limited_app(maps_dir, tmp_path, guest_rate_limit=1, guest_rate_window_s=600)
+    with TestClient(app):
+        assert _guest_status(_from(app, "192.0.2.1"), "one") == 201
+        assert _guest_status(_from(app, "192.0.2.2"), "two") == 201  # a neighbour is not the same
+        assert _guest_status(_from(app, "192.0.2.1"), "three") == 429
+
+
+def test_login_limit_counts_an_ipv6_prefix_as_one_client(maps_dir: Path, tmp_path: Path) -> None:
+    app = _limited_app(
+        maps_dir, tmp_path, login_ip_rate_limit=2, login_nick_rate_limit=100, scrypt_n=2**10
+    )
+
+    def login(host: str, nick: str) -> int:
+        body = {"nick": nick, "password": "correct horse battery"}
+        return _from(app, host).post("/api/login", json=body).status_code
+
+    with TestClient(app):
+        assert login("2001:db8:5:5::1", "Nobody1") == 401
+        assert login("2001:db8:5:5::2", "Nobody2") == 401
+        assert login("2001:db8:5:5::3", "Nobody3") == 429
+        assert login("2001:db8:5:6::1", "Nobody4") == 401
