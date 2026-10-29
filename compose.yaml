@@ -46,11 +46,12 @@ services:
       GOW_BOT_CONNECT_TIMEOUT_S: ${GOW_BOT_CONNECT_TIMEOUT_S:-15}
       GOW_MONITOR_INTERVAL_S: ${GOW_MONITOR_INTERVAL_S:-30}
       GOW_MAX_REQUEST_BODY_BYTES: ${GOW_MAX_REQUEST_BODY_BYTES:-32768}
-      # Logins and passwords (#374): attempts per window, per client IP and per nick; password changes.
+      # Logins and passwords (#374): attempts per window, per client IP, per nick from one IP, per nick overall; password changes.
       GOW_LOGIN_IP_RATE_LIMIT: ${GOW_LOGIN_IP_RATE_LIMIT:-20}
       GOW_LOGIN_IP_RATE_WINDOW_S: ${GOW_LOGIN_IP_RATE_WINDOW_S:-600}
       GOW_LOGIN_NICK_RATE_LIMIT: ${GOW_LOGIN_NICK_RATE_LIMIT:-10}
       GOW_LOGIN_NICK_RATE_WINDOW_S: ${GOW_LOGIN_NICK_RATE_WINDOW_S:-600}
+      GOW_LOGIN_NICK_TOTAL_RATE_LIMIT: ${GOW_LOGIN_NICK_TOTAL_RATE_LIMIT:-200}
       GOW_PASSWORD_RATE_LIMIT: ${GOW_PASSWORD_RATE_LIMIT:-5}
       GOW_PASSWORD_RATE_WINDOW_S: ${GOW_PASSWORD_RATE_WINDOW_S:-3600}
       # scrypt of new password hashes; docs/ops/deploy.md says to tune N on the VPS (target 50..100 ms).

@@ -17,6 +17,7 @@ from typing import cast
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import QueuePool
@@ -357,6 +358,52 @@ def test_login_rate_limited_per_nick(fast: Settings) -> None:
         # even the right password waits: the limit protects the account, not the guesser
         assert_429(client.post("/api/login", json={"nick": "ALICE", "password": PASSWORD}))
         assert login(client, "Nobody", PASSWORD)[0] == 401  # another nick has its own budget
+
+
+def _login_from(app: FastAPI, host: str, nick: str, password: str) -> int:
+    response = TestClient(app, client=(host, 50000)).post(
+        "/api/login", json={"nick": nick, "password": password}
+    )
+    return response.status_code
+
+
+def test_wrong_guesses_from_another_address_do_not_lock_the_owner(fast: Settings) -> None:
+    """SRV-06 (#492): the per-nick budget is per client address."""
+    app = create_app(
+        fast.model_copy(update={"login_ip_rate_limit": 100, "login_nick_rate_limit": 3})
+    )
+    with TestClient(app) as client:
+        token, _ = guest(client, "Alice")
+        set_password(client, token, PASSWORD)
+        attacker, owner = "203.0.113.9", "198.51.100.7"
+        guesses = [_login_from(app, attacker, "Alice", "wrong password1") for _ in range(3)]
+        assert guesses == [401] * 3
+        assert _login_from(app, attacker, "Alice", "wrong password1") == 429  # the guesser waits
+        assert _login_from(app, owner, "Alice", PASSWORD) == 200  # the owner does not
+
+
+def test_login_per_nick_ceiling_across_addresses(
+    fast: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Guessing from many addresses meets the high per-nick ceiling (and raises an alert)."""
+    app = create_app(
+        fast.model_copy(
+            update={
+                "login_ip_rate_limit": 100,
+                "login_nick_rate_limit": 100,
+                "login_nick_total_rate_limit": 3,
+            }
+        )
+    )
+    with TestClient(app) as client:
+        token, _ = guest(client, "Alice")
+        set_password(client, token, PASSWORD)
+        codes = [_login_from(app, f"203.0.113.{i}", "Alice", "wrong password1") for i in range(3)]
+        assert codes == [401] * 3
+        assert _login_from(app, "198.51.100.7", "Alice", PASSWORD) == 429
+        alerts = [r for r in caplog.records if getattr(r, "alert", None) == "login_nick_flood"]
+        assert len(alerts) == 1
+        assert _login_from(app, "198.51.100.7", "Bobby", PASSWORD) == 401  # other nicks are free
 
 
 def test_password_changes_rate_limited_per_player(fast: Settings) -> None:

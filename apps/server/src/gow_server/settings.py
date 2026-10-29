@@ -63,8 +63,13 @@ class Settings(BaseSettings):
     (#374): password guessing from one address."""
     login_nick_rate_limit: int = 10
     login_nick_rate_window_s: int = 600
-    """At most ``login_nick_rate_limit`` logins per nick (by ``nick_key``) within the window:
-    password guessing for one account from many addresses."""
+    """At most ``login_nick_rate_limit`` logins per nick (by ``nick_key``) from one client address
+    within the window: password guessing for one account from one address. The key includes the
+    address (SRV-06, #492), so a third party cannot use up the budget of the account's owner."""
+    login_nick_total_rate_limit: int = 200
+    """At most this many logins per nick from all addresses together within the same window:
+    a high ceiling against guessing from many addresses. Only attempts that passed the per-IP and
+    per-nick-and-IP limits count. Reaching it raises the ``login_nick_flood`` alert."""
     password_rate_limit: int = 5
     password_rate_window_s: int = 3600
     """At most ``password_rate_limit`` password sets or changes per player within the window

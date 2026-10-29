@@ -173,7 +173,8 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_QUEUE_BOT_OFFER_S`, `GOW_QUEUE_STALE_S` | `60`, `15` | MM-01: after how many seconds of waiting to offer a bot; a player whose client is silent for that many seconds leaves the queue |
 | `GOW_NICK_CHANGE_RATE_LIMIT`, `GOW_NICK_CHANGE_RATE_WINDOW_S` | `3`, `86400` | MOD-01: no more than N nick changes (`PUT /api/me/nick`) per player per window |
 | `GOW_LOGIN_IP_RATE_LIMIT`, `GOW_LOGIN_IP_RATE_WINDOW_S` | `20`, `600` | #374: no more than N login attempts (`POST /api/login`) from one IP per window |
-| `GOW_LOGIN_NICK_RATE_LIMIT`, `GOW_LOGIN_NICK_RATE_WINDOW_S` | `10`, `600` | #374: no more than N login attempts to one nick (by `nick_key`) per window |
+| `GOW_LOGIN_NICK_RATE_LIMIT`, `GOW_LOGIN_NICK_RATE_WINDOW_S` | `10`, `600` | #374, #492: no more than N login attempts to one nick (by `nick_key`) from one IP per window (a third party cannot use up the owner's budget) |
+| `GOW_LOGIN_NICK_TOTAL_RATE_LIMIT` | `200` | #492: a high ceiling on login attempts to one nick from all IPs together per `GOW_LOGIN_NICK_RATE_WINDOW_S`; reaching it raises the `login_nick_flood` alert |
 | `GOW_PASSWORD_RATE_LIMIT`, `GOW_PASSWORD_RATE_WINDOW_S` | `5`, `3600` | #374: no more than N password settings and changes per player per window |
 | `GOW_SCRYPT_N`, `GOW_SCRYPT_R`, `GOW_SCRYPT_P`, `GOW_SCRYPT_MAXMEM` | `32768`, `8`, `1`, `67108864` | #374: the `hashlib.scrypt` parameters of new password hashes (memory is about `128·N·r` bytes, `MAXMEM` must be larger); a hash stores its own parameters |
 | `GOW_SCRYPT_CONCURRENCY` | `3` | #413: at most this many scrypt runs at once (about 32 MiB each); a login or password change over it gets `503` with `Retry-After` at once |

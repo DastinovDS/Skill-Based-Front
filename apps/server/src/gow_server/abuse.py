@@ -8,6 +8,7 @@ import math
 
 from fastapi import HTTPException, status
 
+from gow_server.alerts import Alerter
 from gow_server.clock import Clock
 from gow_server.ratelimit import SlidingWindowLimiter
 from gow_server.settings import Settings
@@ -15,7 +16,7 @@ from gow_server.settings import Settings
 
 class Limits:
     """The limiters of the actions a player can repeat: match creation, queue entry, nick change,
-    password change, and of logins (by IP and by nick)."""
+    password change, and of logins (by IP, by nick and IP, by nick)."""
 
     def __init__(self, settings: Settings, clock: Clock) -> None:
         self.match_create = SlidingWindowLimiter(
@@ -30,13 +31,19 @@ class Limits:
         self.password = SlidingWindowLimiter(
             settings.password_rate_limit, settings.password_rate_window_s, clock
         )
-        # Logins are not keyed by a player: by client IP and by the nick key that was tried.
+        # Logins are not keyed by a player: by client IP, by the nick key that was tried together
+        # with the client IP (a third party must not use up the owner's budget, SRV-06), and by
+        # the nick key alone as a high ceiling against guessing from many addresses.
         self.login_ip = SlidingWindowLimiter(
             settings.login_ip_rate_limit, settings.login_ip_rate_window_s, clock
         )
         self.login_nick = SlidingWindowLimiter(
             settings.login_nick_rate_limit, settings.login_nick_rate_window_s, clock
         )
+        self.login_nick_total = SlidingWindowLimiter(
+            settings.login_nick_total_rate_limit, settings.login_nick_rate_window_s, clock
+        )
+        self.alerter = Alerter()
 
 
 def enforce(limiter: SlidingWindowLimiter, key: str, detail: str) -> None:

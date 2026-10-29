@@ -169,6 +169,7 @@ The server writes an alert as an ERROR line of the logger `gow_server.alerts` wi
 
 - `match_crashed`: a match crashed with an exception (next to it a `match crashed` record with a traceback and the same `match_id`);
 - `matches_full`, `bot_matches_full`: a match was refused because the cap on all running matches or on bot matches was reached (#412; at most once per 5 minutes per kind; a `match refused: server full` WARNING record with `cap`, `active`, `bot_active` goes with every refusal). A few now and then is a busy evening; a steady stream of `bot_matches_full` is someone farming bot matches;
+- `login_nick_flood`: password logins to one nick from many addresses reached `GOW_LOGIN_NICK_TOTAL_RATE_LIMIT` within the window (#492; at most once per 5 minutes per nick): someone is guessing that account's password from a botnet, or locking it on purpose; the owner can still log in from an address that has not tried;
 - `tick_lag`: the average tick lag of a match over the window `GOW_MONITOR_INTERVAL_S` is more than 10% of the tick period or the loop reset the schedule.
 
 The same alert for one match no more often than once in 5 minutes. The `app` container has no way out (the `internal` network),

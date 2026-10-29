@@ -27,7 +27,7 @@ must fill in the real operator data.
 | replays (`*.jsonl.gz`, `*.frames.json.gz`) | `/data/replays`, contain no nick | indefinitely |
 | game statistics from the match command log (stance, command rate, supply actions, the share of scheduled orders, CP spending): `gow-bots analyze` and `gow-bots stats` compute them offline from a replay; not stored anywhere; tied to a player only by the match side (`match_players`), for balance and match review (#375) | the command output, not stored in the DB or on the server | as for replays |
 | IP when a guest is created | process memory, `SlidingWindowLimiter` (window `GOW_GUEST_RATE_WINDOW_S`, 1 h) | until the window ends or a restart |
-| IP and `nick_key` of password login attempts (`abuse.Limits.login_ip`, `login_nick`) | process memory (windows `GOW_LOGIN_IP_RATE_WINDOW_S`, `GOW_LOGIN_NICK_RATE_WINDOW_S`, 10 min) | until the window ends or a restart |
+| IP and `nick_key` of password login attempts (`abuse.Limits.login_ip`, `login_nick`, `login_nick_total`) | process memory (windows `GOW_LOGIN_IP_RATE_WINDOW_S`, `GOW_LOGIN_NICK_RATE_WINDOW_S`, 10 min) | until the window ends or a restart |
 | server log (`app.py`, `logs.py`) | the container stderr: method, path without query, status, time, request id; without IPs and tokens | rotation |
 | Caddy log | the access log is not configured (`deploy/Caddyfile` has no `log`); the service log may contain IPs in errors | rotation |
 
