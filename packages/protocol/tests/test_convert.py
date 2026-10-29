@@ -24,7 +24,8 @@ from gow_bots.bots import BOTS
 from gow_protocol import commands as wire
 from gow_protocol.codec import SnapshotFrame, decode_client, decode_server, encode, encode_snapshot
 from gow_protocol.convert import (
-    ENTITY_KEYS,
+    EVENT_FIELDS,
+    EVENT_ID_FIELDS,
     FIGHT_KINDS,
     PRIVATE_KINDS,
     PUBLIC_KINDS,
@@ -212,10 +213,12 @@ def _check_events(match: Match, events: list[Event], player: int) -> list[EventM
             assert owner == player
         else:
             assert raw.kind in PUBLIC_KINDS or raw.kind in FIGHT_KINDS
-        if raw.kind in FIGHT_KINDS:  # DEC-24, I2 as revised with DEC-29: every field to both
-            assert set(msg.data) == set(data)
+        # ARC-02: the simulation sends only declared fields, and every declared one gets through
+        # (DEC-24, I2 as revised with DEC-29: a fight event goes whole to both players).
+        assert set(data) <= set(EVENT_FIELDS[raw.kind]), raw.kind
+        assert set(msg.data) == set(data)
         for key, value in msg.data.items():
-            if key in ENTITY_KEYS:
+            if key in EVENT_ID_FIELDS.get(raw.kind, frozenset()):
                 assert value == str(opaque_id(match.match_key, player, int(str(data[key]))))
             else:
                 assert value == data[key]

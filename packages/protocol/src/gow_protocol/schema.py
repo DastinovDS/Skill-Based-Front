@@ -20,6 +20,7 @@ from pydantic import TypeAdapter
 from pydantic.json_schema import GenerateJsonSchema, JsonSchemaValue
 from pydantic_core import core_schema
 
+from gow_protocol.convert import EVENT_FIELDS, EVENT_ID_FIELDS
 from gow_protocol.mapfile import MapFile
 from gow_protocol.messages import (
     CLOSE_NO_MATCH,
@@ -33,6 +34,9 @@ from gow_protocol.messages import (
 
 SCHEMA_PATH: Final = Path(__file__).resolve().parents[2] / "protocol.schema.json"
 """``packages/protocol/protocol.schema.json``."""
+
+EVENT_FIELDS_PATH: Final = Path(__file__).resolve().parents[2] / "vectors" / "event_fields.json"
+"""``packages/protocol/vectors/event_fields.json``: the fields of each event kind (ARC-02, #457)."""
 
 ROOTS: Final[tuple[object, ...]] = (ClientMsg, ServerMsg, MapFile)
 """Top-level types of the schema. Each is a named definition (a model or a ``type`` alias), and
@@ -61,6 +65,22 @@ class WireJsonSchema(GenerateJsonSchema):
         if "items" in json_schema or any(item != prefix[0] for item in prefix):
             raise ValueError(f"only a homogeneous fixed-length tuple is supported: {schema}")
         return {**json_schema, "items": prefix[0]}
+
+
+def event_fields_vector() -> dict[str, Any]:
+    """The content of ``event_fields.json``: kind -> ``fields`` (alphabetical) and ``ids``.
+
+    The client tests check the event fields the client reads against it, as they check the kinds
+    against ``event_kinds.json``. ``ids`` are the fields that hold an opaque id (a string).
+    """
+    return {
+        "schema_version": 1,
+        "source": "gow_protocol.convert: EVENT_FIELDS and EVENT_ID_FIELDS (event_for_player)",
+        "kinds": {
+            kind: {"fields": list(fields), "ids": sorted(EVENT_ID_FIELDS.get(kind, ()))}
+            for kind, fields in sorted(EVENT_FIELDS.items())
+        },
+    }
 
 
 def protocol_json_schema() -> dict[str, Any]:

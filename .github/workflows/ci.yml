@@ -192,7 +192,7 @@ jobs:
         run: |
           uv run --no-sync python scripts/export_schema.py
           pnpm -C apps/client gen:protocol
-          set -- packages/protocol/protocol.schema.json apps/client/src/protocol.gen.ts
+          set -- packages/protocol/protocol.schema.json packages/protocol/vectors/event_fields.json apps/client/src/protocol.gen.ts
           if [ -n "$(git status --porcelain -- "$@")" ]; then
             git status --short -- "$@"
             git --no-pager diff -- "$@"

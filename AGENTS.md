@@ -260,6 +260,7 @@ The fog memory is stored in `GameState` (for each player), so `project()` stays 
   - a barracks (except a built barracks of an enemy city adjacent to your own node: DEC-31), the warehouse level, the warehouse capacity, construction and the recruit queue of enemy cities (DEC-25, DEC-26).
     The capacity of a node is public and exact: it is set by the kind of node (DEC-22), there is no estimate.
 - A new field in `PlayerView` only together with a fog test for that field.
+- Event fields are a declared contract (ARC-02, #457): `event_for_player` sends a field of an event only if `gow_protocol.convert.EVENT_FIELDS` lists it for the kind, and turns into opaque ids only the fields `EVENT_ID_FIELDS` lists; the rest of the event is dropped. A new event field only together with a fog test for that field, like a `PlayerView` field (a field of a public or fight kind goes to the opponent). The test `packages/protocol/tests/test_event_fields.py` compares the table with every `event(...)` call of `gow_sim`.
 
 ### 4.5 Replays and versions
 
@@ -428,6 +429,7 @@ Style guide: `docs/design/ui-style.md` (section 23 "Visual decision process"). I
 | a rule in `gow_sim` | a test from mechanics.md; `SIM_VERSION`++; new golden replays; a fix to mechanics.md |
 | a number in the ruleset | a bot tournament and a report in the PR |
 | a field in `PlayerView` | a fog test for that field |
+| a field of an event | an entry in `EVENT_FIELDS` (and `EVENT_ID_FIELDS` for an id), a fog test for that field, `mise run regen:protocol` (`vectors/event_fields.json`) |
 | the protocol | `PROTOCOL_VERSION`++; regenerate the TS types |
 | the database schema | an Alembic migration |
 | a project command | `mise.toml` and section 3 |

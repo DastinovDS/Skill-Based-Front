@@ -61,3 +61,13 @@ The list `kinds` (alphabetical) matches `PUBLIC_KINDS`, `PRIVATE_KINDS` and `FIG
 `packages/protocol/tests/test_vectors.py`. The client (`apps/client/src/hud/eventText.test.ts`) requires
 that every kind have a string in both dictionaries or be explicitly hidden from the feed. If you added an event kind
 to the protocol: add it here and decide whether to show it in the feed.
+
+## `event_fields.json`: the fields of each event kind (ARC-02, #457)
+
+`kinds.<kind>.fields` (alphabetical) are the `data` fields the server sends for the kind, `kinds.<kind>.ids` the ones
+among them that hold an opaque id (a string on the wire). The file is generated from `EVENT_FIELDS` and `EVENT_ID_FIELDS` in
+`gow_protocol.convert` by `scripts/export_schema.py` (`mise run regen:protocol`); `packages/protocol/tests/test_event_fields.py`
+and the CI step `protocol-drift` fail if it is out of date. Do not edit it by hand. The client tests
+(`apps/client/src/net/eventFields.fixture.ts`) check that every field a consumer reads (the feed, the toasts, the threat arcs,
+the capture and bounce effects, the fight effects, the order book) is in it. A new event field: add it to the table, write a
+fog test for it, regenerate, and read it in the client only after that.

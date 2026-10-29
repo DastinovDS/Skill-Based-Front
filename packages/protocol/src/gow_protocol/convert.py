@@ -48,7 +48,7 @@ are all ``timer``; ``double_defeat`` (both players lost in one tick, #136) is it
 """
 
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Final
 
 from gow_protocol import commands as wire
@@ -94,7 +94,8 @@ from gow_sim.systems.victory import EndReason as SimEndReason
 from gow_sim.systems.victory import Outcome
 
 __all__ = [
-    "ENTITY_KEYS",
+    "EVENT_FIELDS",
+    "EVENT_ID_FIELDS",
     "FIGHT_KINDS",
     "PRIVATE_KINDS",
     "PUBLIC_KINDS",
@@ -148,11 +149,115 @@ PRIVATE_KINDS: Final = frozenset(
 )
 """Events only their own player gets."""
 
-ENTITY_KEYS: Final = frozenset({"group", "new_group", "packet", "fight"})
-"""Keys of ``Event.data`` that hold internal entity ids."""
-
 FIGHT_KINDS: Final = frozenset({"fight_started", "fight_round", "fight_ended"})
 """Events of a fight (DEC-24): both players get them whole (item I2 as revised with DEC-29)."""
+
+EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
+    "attrition": ("charged", "destroyed", "group", "node", "player"),
+    "barracks_built": ("node", "player"),
+    "build_started": ("edge", "kind", "level", "node", "player", "width"),
+    "build_stopped": ("edge", "kind", "node", "player", "reason"),
+    "charges_overflow": ("charges", "node", "player"),
+    "charges_produced": ("charges", "node", "player", "spill"),
+    "cp_burned": ("cp", "player"),
+    "fight_ended": (
+        "attacker",
+        "captured",
+        "edge",
+        "fight",
+        "losses_0",
+        "losses_1",
+        "node",
+        "point",
+        "shots_0",
+        "shots_1",
+        "start",
+        "winner",
+    ),
+    "fight_group": (
+        "arrived",
+        "bounce",
+        "charged",
+        "charged_before",
+        "destroyed",
+        "encircled",
+        "group",
+        "left",
+        "player",
+        "units",
+        "units_before",
+    ),
+    "fight_round": (
+        "edge",
+        "fight",
+        "losses_0",
+        "losses_1",
+        "node",
+        "point",
+        "shots_0",
+        "shots_1",
+        "spent_0",
+        "spent_1",
+        "virtual_0",
+        "virtual_1",
+    ),
+    "fight_started": ("attacker", "edge", "fight", "node", "point"),
+    "forfeit": ("player",),
+    "front_set": ("marker", "node", "player", "reason"),
+    "group_arrived": (
+        "back",
+        "edge",
+        "from_node",
+        "group",
+        "level",
+        "node",
+        "planned",
+        "player",
+    ),
+    "group_split": ("group", "new_group", "player", "units"),
+    "groups_merged": ("group", "node", "player", "units"),
+    "node_captured": ("node", "player"),
+    "packet_delivered": ("charges", "node", "packet", "player"),
+    "packet_lost": ("charges", "edge", "packet", "player"),
+    "packet_sent": ("charges", "edge", "from_node", "packet", "player", "to_node"),
+    "rear_min_set": ("n", "player"),
+    "recruit_cancelled": ("cp", "node", "player"),
+    "recruit_queue_lost": ("node", "player", "units"),
+    "recruited": ("group", "node", "player"),
+    "road_upgraded": ("edge", "player", "width"),
+    "stance_changed": ("player", "stance"),
+    "starvation": ("node", "player", "units", "warehouse"),
+    "transfer_started": ("arrive_tick", "charges", "from_node", "packet", "player", "to_node"),
+    "vp_awarded": ("player", "vp"),
+    "warehouse_lost": ("charges", "node", "owner"),
+    "warehouse_upgraded": ("level", "node", "player"),
+}
+"""The fields of each event kind the server sends to a player (ARC-02, #457), alphabetical.
+
+``event_for_player`` drops every other field of a simulation event, so a field a rule change adds
+reaches nobody until it is declared here. Declaring one is a fog decision: a field of a public or
+fight kind goes to the opponent (AGENTS.md 4.4), so it needs a fog test. ``vectors/event_fields.json``
+is written from this table (``scripts/export_schema.py``), and the client tests check the fields
+they read against it. ``packages/protocol/tests/test_convert.py`` checks it against the emitters."""
+
+EVENT_ID_FIELDS: Final[Mapping[str, frozenset[str]]] = {
+    "attrition": frozenset({"group"}),
+    "fight_ended": frozenset({"fight"}),
+    "fight_group": frozenset({"group"}),
+    "fight_round": frozenset({"fight"}),
+    "fight_started": frozenset({"fight"}),
+    "group_arrived": frozenset({"group"}),
+    "group_split": frozenset({"group", "new_group"}),
+    "groups_merged": frozenset({"group"}),
+    "packet_delivered": frozenset({"packet"}),
+    "packet_lost": frozenset({"packet"}),
+    "packet_sent": frozenset({"packet"}),
+    "recruited": frozenset({"group"}),
+    "transfer_started": frozenset({"packet"}),
+}
+"""The fields of an event kind that hold an internal entity id (a subset of ``EVENT_FIELDS``).
+They go out as the receiving player's opaque ids (``view.opaque_id``); no other field is
+translated, so an id under an undeclared name never reaches a player as the internal number."""
 
 
 # Ids -----------------------------------------------------------------------------------------
@@ -610,7 +715,10 @@ def events_msgs(events: Iterable[Event], player: int, match_key: bytes) -> list[
 
 
 def event_for_player(e: Event, player: int, match_key: bytes) -> EventMsg | None:
-    """The ``event`` message of ``e`` for ``player``, or ``None`` if the player must not see it."""
+    """The ``event`` message of ``e`` for ``player``, or ``None`` if the player must not see it.
+
+    Only the fields ``EVENT_FIELDS`` declares for the kind go out (ARC-02, #457).
+    """
     data = dict(e.data)
     if e.kind in PRIVATE_KINDS:
         owner = data["owner"] if e.kind == "warehouse_lost" else data["player"]
@@ -618,13 +726,19 @@ def event_for_player(e: Event, player: int, match_key: bytes) -> EventMsg | None
             return None
     elif e.kind not in PUBLIC_KINDS and e.kind not in FIGHT_KINDS:
         return None
-    return EventMsg(tick=e.tick, kind=e.kind, data=_wire_data(data, player, match_key))
+    return EventMsg(tick=e.tick, kind=e.kind, data=_wire_data(e.kind, data, player, match_key))
 
 
-def _wire_data(data: dict[str, EventValue], player: int, match_key: bytes) -> dict[str, EventValue]:
+def _wire_data(
+    kind: str, data: dict[str, EventValue], player: int, match_key: bytes
+) -> dict[str, EventValue]:
+    fields = EVENT_FIELDS[kind]
+    ids = EVENT_ID_FIELDS.get(kind, frozenset())
     out: dict[str, EventValue] = {}
     for key, value in data.items():
-        if key in ENTITY_KEYS and isinstance(value, int) and not isinstance(value, bool):
+        if key not in fields:
+            continue
+        if key in ids and isinstance(value, int) and not isinstance(value, bool):
             out[key] = opaque_to_wire(sv.opaque_id(match_key, player, value))
         else:
             out[key] = value
