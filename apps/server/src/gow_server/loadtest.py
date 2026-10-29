@@ -399,10 +399,12 @@ async def start_match(base: str, index: int, map_id: str, tokens: tuple[str, str
 
 
 async def make_guests(base: str, count: int) -> list[str]:
+    """Guests ``ld<salt><n>``; the salt (consonants only: no words) keeps nicks unique per run."""
+    salt = "".join(random.SystemRandom().choices("bcdfghjklmnpqrstvwz", k=3))
     tokens: list[str] = []
     for n in range(count):
         try:
-            guest = await call(base, "POST", "/api/guest", body={"nick": f"load{n:03d}"})
+            guest = await call(base, "POST", "/api/guest", body={"nick": f"ld{salt}{n:03d}"})
         except HttpError as exc:
             if exc.status == 429:
                 raise SystemExit(

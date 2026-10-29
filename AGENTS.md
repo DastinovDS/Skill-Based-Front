@@ -152,6 +152,8 @@ jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in 
 | `stack` | **owner only.** The production stack on `http://localhost:8080` (HTTPS 8443, `SITE_ADDRESS=:80`; ports 80/443 are taken by another project), argument: ruleset (`mvp-1` by default). Needs a POSIX shell | OPS-01 |
 | `stack:reset` | **owner only.** `docker compose down`, removal of the volume `gow-data` (database and replays), `up` again; the owner wipes the volume after every update on purpose | OPS-01 |
 | `stack:agent`, `stack:agent:down` | **the agents' stack:** project `sbf-agent`, `http://localhost:18080`, argument: ruleset (`mvp-1` by default); `down` removes its volumes. Needs a POSIX shell | OPS-01 |
+| `load` | the load harness `gow_server.loadtest` against a server on this machine (`dev:server`): N matches over WebSockets, tick lag, step p99, CPU, memory; options after `--` (`docs/qa/load.md`) | QA-03 |
+| `load:agent` | the same inside the `app` container of the agents' stack (`stack:agent`, lift `GOW_GUEST_RATE_LIMIT` to at least 2N when starting it); needs a POSIX shell | QA-03 |
 | `smoke` | `deploy/smoke.sh` on the project `sbf-agent` (build, start, restart with the volume, check through Caddy, `check-caddy.sh`, `check-ws-reload.sh`; the stack is removed at the end); the CI job `docker` does the same. Needs bash | OPS-01 |
 | `e2e` | E2E: its own stack (`e2e:up`, project `sbf-e2e`, `e2e/compose.e2e.yaml`, ruleset `test-short`, `http://localhost:18082`), Playwright Chromium (`e2e:browser`), two browsers play a match via an invite, the stack is removed (`e2e:down`) even if the test failed; if `e2e:up` itself failed, run `e2e:down` | QA-02 |
 
