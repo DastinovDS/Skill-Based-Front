@@ -406,7 +406,7 @@ function fogRoadSnapshot(): SnapshotMsg {
       enemy_groups: [
         {
           id: 'e0f1a2b3c4d5e6f7',
-          pos: 420,
+          pos: 300,
           toward_b: false,
           detail: 'presence',
           mode: 'attack',
