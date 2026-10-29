@@ -371,18 +371,7 @@ class Bot:
         already on a wanted city stay; the others move to the wanted cities left or come off the
         map. Ties by ``node_key`` (mirror-invariant); only changes are commanded.
         """
-        me = view.player
-        supplied = self.supplied(view)
-        far = self.hops[self.map.capital(1 - me)]
-        cities = [
-            n
-            for n in range(len(view.nodes))
-            if supplied[n]
-            and self.map.nodes[n].kind is not NodeKind.PROVINCE
-            and any(view.nodes[m].owner != me for m in self.neighbors[n])
-        ]
-        cities.sort(key=lambda n: (far[n] if far[n] >= 0 else len(far), self.key(n)))
-        wanted = cities[: len(view.me.fronts)]
+        wanted = self.front_cities(view)[: len(view.me.fronts)]
         fronts = list(view.me.fronts)
         free = [n for n in wanted if n not in fronts]
         cmds: list[Command] = []
@@ -394,6 +383,22 @@ class Bot:
                 fronts[i] = new
                 cmds.append(SetFront(i, new))
         return cmds
+
+    def front_cities(self, view: PlayerView) -> list[int]:
+        """The cities ``fronts`` puts the markers on, best first: the own supplied cities at the
+        front, nearest to the enemy capital first (ties by ``node_key``)."""
+        me = view.player
+        supplied = self.supplied(view)
+        far = self.hops[self.map.capital(1 - me)]
+        cities = [
+            n
+            for n in range(len(view.nodes))
+            if supplied[n]
+            and self.map.nodes[n].kind is not NodeKind.PROVINCE
+            and any(view.nodes[m].owner != me for m in self.neighbors[n])
+        ]
+        cities.sort(key=lambda n: (far[n] if far[n] >= 0 else len(far), self.key(n)))
+        return cities
 
     def can_upgrade(self, view: PlayerView, edge: int) -> bool:
         """``UpgradeRoad(edge)`` passes the checks of DEC-28, item 7 that the view shows: an own
