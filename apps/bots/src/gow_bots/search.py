@@ -32,7 +32,7 @@ from gow_bots.tournament import MatchTask, play_tasks
 from gow_sim.maps import load_map
 from gow_sim.ruleset import load_ruleset
 
-__all__ = ["Candidate", "mutate", "run_search", "score_rows", "search_tasks"]
+__all__ = ["Candidate", "best_of_log", "mutate", "run_search", "score_rows", "search_tasks"]
 
 Ranges = dict[str, tuple[int, int]]
 
@@ -181,3 +181,16 @@ def params_fragment(best: Ranges, start: Ranges) -> str:
         if start.get(k) != (lo, hi)
     ]
     return "\n".join(lines) if lines else "(no change)"
+
+
+def best_of_log(path: str) -> Ranges:
+    """The ranges of the last accepted round of a round log (``--resume``)."""
+    best: Ranges | None = None
+    with open(path, encoding="ascii") as f:
+        for line in f:
+            row = json.loads(line)
+            if row["accepted"]:
+                best = {k: (int(v[0]), int(v[1])) for k, v in row["ranges"].items()}
+    if best is None:
+        raise ValueError(f"no accepted round in {path}")
+    return best

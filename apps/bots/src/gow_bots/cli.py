@@ -18,7 +18,7 @@ from pathlib import Path
 
 from gow_bots.bots import BOTS
 from gow_bots.report import write_report
-from gow_bots.search import base_ranges, params_fragment, run_search, write_round
+from gow_bots.search import base_ranges, best_of_log, params_fragment, run_search, write_round
 from gow_bots.stats import render_stats
 from gow_bots.tournament import build_tasks, run_tournament
 from gow_sim.analysis import analyze, analyze_stats
@@ -64,12 +64,14 @@ def _parser() -> argparse.ArgumentParser:
     q.add_argument("--search-seed", type=int, default=0, help="seed of the mutations")
     q.add_argument("--jobs", type=int, default=None, help="worker processes (default: CPU count)")
     q.add_argument("--out", default="search.jsonl", help="round log (JSONL)")
+    q.add_argument("--resume", default=None, help="start from the best ranges of a round log")
     return parser
 
 
 def _search(args: argparse.Namespace) -> int:
     maps = sorted({m for pattern in args.maps for m in (glob.glob(pattern) or [pattern])})
     start = base_ranges(args.bot)
+    first = best_of_log(args.resume) if args.resume else None
     best = None
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -87,6 +89,7 @@ def _search(args: argparse.Namespace) -> int:
             target=args.target,
             search_seed=args.search_seed,
             jobs=args.jobs,
+            start=first,
         ):
             write_round(f, n, cand, accepted)
             if accepted:

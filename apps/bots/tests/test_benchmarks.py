@@ -13,7 +13,8 @@ from typing import Final, Protocol
 
 import pytest
 
-from gow_bots.bots import BOTS
+from gow_bots.bots import BOTS, SmartBot, Tempo
+from gow_bots.bots.tempo import Bucket
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import MapDef
 from gow_sim.match import Match
@@ -153,6 +154,9 @@ def _bench(
     name: str,
 ) -> None:
     bots = [BOTS[name](mapdef, rules, seed=5, player=p) for p in (0, 1)]
+    for bot in bots:
+        if isinstance(bot, SmartBot):  # every call a full decision: no empty APM bucket (#166)
+            bot.bucket = Bucket(Tempo(5, 0, 100_000, 1_000, True), rules.tick_hz)
     feed = cycle(views)
 
     def decide() -> None:

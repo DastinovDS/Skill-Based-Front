@@ -1112,15 +1112,20 @@ class SmartExpander(SmartBot):
     LATE_STANCE: ClassVar[Stance | None] = Stance.BALANCE
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
-        "radius": ParamRange(2, 3),
-        "margin": ParamRange(0, 1),
+        # Tuned by ``gow-bots search`` against smart_rusher and rusher (#166, PR 3).
+        "alarm": ParamRange(200, 300),
+        "radius": ParamRange(4, 5),
+        "margin": ParamRange(2, 3),
         "guard": ParamRange(2, 3),
         "reserve": ParamRange(0, 0),
-        "recruit_keep": ParamRange(100, 200),
-        "w_vp": ParamRange(150, 150),
-        "w_neutral": ParamRange(200, 250),
+        "recruit_keep": ParamRange(63, 163),
+        "w_vp": ParamRange(187, 187),
+        "w_neutral": ParamRange(186, 236),
+        "w_closer": ParamRange(1, 1),
+        "w_need": ParamRange(3, 3),
         "w_hops": ParamRange(20, 20),
-        "hold_front": ParamRange(1, 2),
+        "hold_front": ParamRange(0, 1),
+        "fortify": ParamRange(1, 1),
         "road_keep": ParamRange(250, 350),
         "late": ParamRange(1200, 2400),
     }
