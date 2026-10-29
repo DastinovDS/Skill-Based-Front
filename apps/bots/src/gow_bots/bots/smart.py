@@ -45,13 +45,18 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
    - ``Transfer``: a city without a marker where at least ``FEED_MIN`` own units wait for
      charges that are not there or on the way gets them from the nearest own city with a stock
      above its supply target (DEC-28, item 5), one transfer per decision.
+   - *Recruit queues* (DEC-25): a rear city with the barracks queues a second unit when a whole
+     price is spare (no idle tick between units; up to ``recruit.queue_max`` with CP about to
+     burn); a unit that has not started refunds in full (item 3), so while the capital is in
+     danger and cannot pay its own recruit, the other cities cancel theirs (``unbank``).
    - *Roads*: one at a time while ``road_keep`` CP are left (DEC-28, item 7), the *arteries*
      first (the roads from the capital to the cities with a marker, over own nodes), then the
      road with the most gain.
 
 7. **Scouting** (DEC-35: only own groups see). The ``scouts`` own front nodes nearest the own
-   capital keep at least one unit; an empty one gets the smallest free group nearby (a big group
-   splits off its least charged unit first). A watched node keeps the unit when others march.
+   capital (the capital aside: it keeps ``guard``) keep at least one unit; an empty one gets the
+   smallest free group nearby (a big group splits off its least charged unit first). A watched
+   node keeps the unit when others march.
 8. **The engagement zone** (DEC-37): a group that leaves a node within ``combat.engage_ticks``
    of an enemy arrival there is caught and fights outside the node, without its terrain. A group
    standing in an own node an enemy reaches within that window plus ``PIN_SLACK`` (the order
@@ -889,13 +894,18 @@ class SmartBot(CampaignBot):
     # Scouting -------------------------------------------------------------------------------
 
     def _watch_nodes(self, view: PlayerView) -> list[bool]:
-        """The ``scouts`` own nodes next to the enemy nearest the own capital (item 7)."""
+        """The ``scouts`` own nodes next to the enemy nearest the own capital, the capital aside
+        (it keeps ``guard``), not doomed (item 7)."""
         watch = [False] * len(view.nodes)
         count = self.params["scouts"]
         if count <= 0:
             return watch
         hops = self.hops[self.home]
-        front = [n for n in range(len(view.nodes)) if self.hot[n] and not self.doomed[n]]
+        front = [
+            n
+            for n in range(len(view.nodes))
+            if self.hot[n] and not self.doomed[n] and n != self.home  # the capital has a guard
+        ]
         front.sort(key=lambda n: (hops[n] if hops[n] >= 0 else len(hops), self.key(n)))
         for n in front[:count]:
             watch[n] = True
