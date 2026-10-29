@@ -63,6 +63,75 @@ The game rules that rely on map fields are described in [`mechanics.md`](mechani
 | background `bake` | land and sea, a coast; symmetric by rotation | the whole map is land (no sea, shallows, beach); biomes by node terrain; the picture need not be mirrored. **Done in #269**, see the section "Map background" below |
 | preview, `maps/README.md` | "180° rotational symmetry", 25-40 nodes | rewrite: symmetry of the rules, 45-55 nodes. Preview: names and border points, symmetry of the rules in the README (#366); 45-55 nodes: #266. **Done** |
 
+## Format change proposal under DEC-36 (proposed, awaiting the owner's decision)
+
+> Decision **[proposed]**: DEC-36 (#537), mechanics.md, section 9: water cells, rivers as area borders, areas of
+> nodes touch only where a road links them. Nothing here is implemented; until the owner accepts DEC-36 the
+> sections below ("Map background": no water, DEC-27, item 3) are in force. Mockup:
+> [`mockups/map-geography.html`](mockups/map-geography.html); prototype: `mockups/src/map_geography.py`.
+
+**The map file does not change.** Water is not a field of `maps/<id>.json`: the loader (`gow_sim.maps`), `MapDef`,
+`map_hash`, the protocol type `MapFile` and the simulation stay as they are. Two new files per map, both read only by
+the map tools and the client:
+
+| File | Who writes it | Who reads it | What |
+|---|---|---|---|
+| `maps/src/<id>.geo.json` | the map author (next to the half `maps/src/<id>.half.json`) | `gow-maps bake`, `gow-maps validate` | the authored geography: water cells, long rivers |
+| `maps/<id>.geo.json` | `gow-maps bake` (generated, committed, like `maps/<id>.bg.webp`) | the client (bundled at build time like the background), `gow-maps validate` | the computed geometry: area rings, water, river lines, bridges |
+
+The authored geography (`maps/src/<id>.geo.json`), all numbers integers in world units:
+
+```json
+{
+  "map": "ridge",
+  "water":  [{"kind": "sea",  "x": -150, "y": 1360, "r": 330},
+             {"kind": "lake", "x": 820,  "y": 760,  "r": 72}],
+  "rivers": [{"from": [800, 885], "to": 1, "w0": 6, "w1": 11}]
+}
+```
+
+- `water[]`: a water cell. `kind`: `sea` or `lake` (only the look differs); `x`, `y`: its point, may lie outside the
+  map (a sea along an edge); `r`: its radius (the cell takes the ground nearer to its point minus `r` than to any node).
+- `rivers[]`: a long river. `from`: the spring (a point near an area border; a point at a lake is its outflow); `to`
+  (optional): the index of the water cell it flows into, otherwise the nearest water; `w0`, `w1` (optional): the half
+  width at the spring and at the mouth.
+- Node moves are made in the half itself (`x`, `y`, `mirror_x`, `mirror_y`); `meta.version` is raised as for any map edit.
+
+The computed geometry (`maps/<id>.geo.json`), written by the baker:
+
+| Field | What |
+|---|---|
+| `map`, `version` | the map id and `meta.version` it was baked from (the client ignores a stale file and falls back to the Voronoi cells) |
+| `chains[]` | the shared borders of the subdivision: `{l, r, pts}`, one simplified polyline per pair of neighbouring regions; `l`, `r`: a node id, `w<k>` (water cell `k`), `river`, or `-1` (outside the map). An area ring and its neighbour use the same chain, so the tint, the borders and the water match exactly |
+| `water[]` | the kind of every water cell |
+| `rivers[]`, `streams[]` | centre lines with the half width per point (for the flow look, not for the shape) |
+| `bridges[]` | `{edge, x, y}`: the road and the point (its border point) where a long river passes it |
+
+**The baker** (`gow-maps bake`, still numpy and Pillow): computes the label grid of item 2 of DEC-36 (nearest site:
+a node with its road halves, or a water cell; the warp of `_Noise.warp` fading near roads), cuts a stream on every
+border of two node areas without a road, routes the long rivers along area borders, turns land pieces cut off from
+their node into water, bakes the T2 ground with water as one more ground (details thin out toward a shore), paints
+the water in the chosen look (DEC-36, item 6), and writes the vector file. Deterministic for the map seed as now; the
+WebP limit of 0.5 MB stays. `tools/maps/tests/test_bake.py` compares the vector file exactly and the picture with the
+tolerance of today.
+
+**The validator:** a new check `geography`, on for a map that has `maps/src/<id>.geo.json` (the fixtures without one
+are not checked):
+
+| Check | What it requires |
+|---|---|
+| `geography` | on the label grid of the baker (4 world units per cell, 4-neighbour contacts): two node areas share land only if a road connects their nodes; every area is one piece and holds its node; a road crosses water only at a bridge (its border point); every node is at least `water_clearance` (60) from water; `maps/<id>.geo.json` is up to date with the map version |
+
+**The client** (territory layer, `apps/client/src/render/`): for a map with a vector file, the areas come from its
+chains instead of `voronoiCells`: the tint and its capture fade, the owner border, the glow and the thin area line
+(`mapView.ts`, `regionLayout.ts`), the fog veil (`fogView.ts`), the capture effect (`effectsView.ts`), picking an area
+by a click (`pick.ts`, today `insideConvex`: the new areas are not convex) and the Supply view (its flat floor hides the
+background, so it draws the water flat). The owner border runs along a coast where the territory ends at water and not
+along a river between two areas of one owner. Maps without the file keep today's code. No new dependency, no
+protocol change (the file is bundled like the background; serving it at `GET /api/maps/{id}/geo.json` too is optional).
+
+**Symmetry** (DEC-27, item 1): the authored geography and the vectors need not be mirrored; `symmetry` does not read them.
+
 ## General rules
 
 - **All numbers are integers.** `1.0`, `"1"` and `true` instead of a number: a load error.
@@ -315,7 +384,7 @@ The background is for looks only: the game rules do not read it. The baker is bu
 - **Grid.** The field is computed on a grid with a step of 4 world units (as in the Pygame prototype), so `width` and
   `height` of a map with a background are multiples of 4; otherwise `bake` fails with an error. The grid sets only the layout of biomes; the picture is drawn at full
   resolution and does not show 4 × 4 squares.
-- **No water** (DEC-27, item 3, #269): the background has no sea, shallows or beach, every cell is land.
+- **No water** (DEC-27, item 3, #269): the background has no sea, shallows or beach, every cell is land. **[proposed]** DEC-36 (#537) would bring water cells and rivers back as area borders: the section "Format change proposal under DEC-36" above.
   Previously the background was computed as metaballs from the map generator of the Pygame prototype (the tag `v0-pygame-prototype`):
   the density of cities and roads with a threshold and wave noise, below the threshold the sea, a narrow strip above the threshold
   the coast. The owner finds water confusing. The jungle color from the prototype (turquoise) was replaced

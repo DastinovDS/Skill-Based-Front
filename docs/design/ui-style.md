@@ -21,6 +21,7 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html) (planned orders, unit tokens, cities and provinces, #431, round 1; asked for before the release on 2026-10-28) its round 2 [`mockups/tokens-cities-orders-r2.html`](mockups/tokens-cities-orders-r2.html) and round 3 [`mockups/tokens-cities-orders-r3.html`](mockups/tokens-cities-orders-r3.html) and round 4 [`mockups/tokens-cities-orders-r4.html`](mockups/tokens-cities-orders-r4.html) (planned orders ODb **[accepted]**, units and cities stay as they are, 2026-10-29, section 33), [`mockups/provinces-defense.html`](mockups/provinces-defense.html) (provinces in the current look, the "Defense" counter and the barracks placement, #431, #349: **[awaiting the owner's decision]**, section 35),
 [`mockups/menu-background.html`](mockups/menu-background.html) (the background of the start menu: animation concepts and a dedicated menu map, #474: **[awaiting the owner's decision]**, section 36; asked for before the release on 2026-10-28). All of them are
 [`mockups/leaderboard-profile.html`](mockups/leaderboard-profile.html) (the leaderboard and the player profile in the language of the start menu and the lobby screens, #78: **[awaiting the owner's decision]**, section 38; a new screen, so a mockup first),
+[`mockups/map-geography.html`](mockups/map-geography.html) (map geography: water cells, rivers as area borders, areas touch only along roads, #537, DEC-36: **[awaiting the owner's decision]**, section 39; the owner's feedback on #429, 2026-10-29),
 [`mockups/supply-terrain.html`](mockups/supply-terrain.html) (nicer supply lines in the Supply view, a terrain and vision concept, rivers and lakes as visual borders, #429: **[awaiting the owner's decision]**, section 37; moved before the release by the owner, 2026-10-29),
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
@@ -93,6 +94,7 @@ Contents:
 36. Start menu background: animation and a menu map (#474)
 37. Supply lines, terrain and vision, rivers and lakes (#429)
 38. Leaderboard and player profile (#78)
+39. Map geography: water cells, rivers as area borders (#537, DEC-36)
 
 ---
 
@@ -1942,5 +1944,26 @@ No variant needs a DEC, a protocol change or a new rule. **Recommendation: D** (
 | ![D, the leaderboard](mockups/img/78/d-board-ranked.png) | ![D, the profile of another player](mockups/img/78/d-profile-other-replay-states.png) |
 
 Checked in grayscale (`gray-d-board.png`, `gray-d-profile-other.png`): the own row is a band, a triangle and the word You; a result is a filled dot, a ring or a half dot with its word; the replay state is a shape and a word; calibration is cells and "k/5".
+
+**Owner's decision:** awaiting the owner's decision.
+
+## 39. Map geography: water cells, rivers as area borders (#537, DEC-36)
+
+Status: **[awaiting the owner's decision]**. The owner's feedback of 2026-10-29 on the river variants of section 37 (#429): whole cells of sea or lake are allowed, rivers and the borders they form must look better and more natural in the map's style, no sliver of one area may stick into another, and ideally the areas of two nodes touch only where a road links them. That brings water back (DEC-27, item 3 said "no water"), so the decision is recorded as **DEC-36 [proposed]** in `mechanics.md`, section 9, with the format proposal in `map-format.md`. It changes only the picture: no rule, simulation or protocol change.
+
+Mockup: [`mockups/map-geography.html`](mockups/map-geography.html), frames in [`mockups/img/537/`](mockups/img/537/), generator [`mockups/src/map_geography.py`](mockups/src/map_geography.py) (geography of `ridge` in `mockups/src/ridge.geography.json`). The pool map `ridge` re-imagined: the ground baked by the shipped T2 baker from the new areas, the cities, units, roads and ODb orders as the client draws them (the code of section 35), zoom 0.45 to 1.5, Now against the proposal, grayscale, the fog veil, the contact check computed by the page, the moved nodes against the `travel_ticks` tolerance.
+
+| Id | Water look | Client effort (on top of the geography) | Risk |
+| --- | --- | --- | --- |
+| W1 | **Flat ink**: one water colour, a thin coast line | none if baked | looks like a vector icon on the T2 ground |
+| W2 | **Shallows and banks**: light shallows, a pale bank, a darker river thread | none if baked | the bank must stay pale or it reads as a road |
+| W3 | **Engraved coast**: three waterlines, double river banks | none if baked | busy at overview, competes with border lines |
+| W4 | **Painted (T2 water)**: two-tone water, soft shore, reeds thinning from the bank, flow streaks | none (baked) | softest coast in grayscale |
+
+**Recommendation: W4**, baked into `maps/<id>.bg.webp`. The geography itself (water cells, a stream on every road-less border, long rivers with bridges at border points, the client territory drawn from the baked vectors) is the same in all four. Measured on `ridge`: today 48 of 130 touching area pairs have no road, and on 11 percent of the map the tint lies over the ground of another area; in the proposal 0 and 0.
+
+| Proposal, the whole map | Variants at the west lakes |
+| --- | --- |
+| ![overview](mockups/img/537/overview-compare.png) | ![variants](mockups/img/537/variants-lakes.png) |
 
 **Owner's decision:** awaiting the owner's decision.
