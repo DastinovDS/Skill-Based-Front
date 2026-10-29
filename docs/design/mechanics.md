@@ -641,7 +641,8 @@ the implementation the code works by DEC-07.
 **C. Start of the fight**
 
 1. **Node.** A group finished moving in an enemy node where the owner's groups stand: a fight, the attacker is
-   the one who arrived. An empty enemy node is taken at once, without a fight (DEC-07, row 5). A neutral node:
+   the one who arrived. **[amended by DEC-37]**: the owner's groups that left the node within the last `combat.engage_ticks`
+   ticks are caught into the fight as leaving defenders, and an empty node with such a group is not taken at once. An empty enemy node is taken at once, without a fight (DEC-07, row 5). A neutral node:
    both players arrived in one tick: a symmetric fight (rule 5); one: a capture at once.
 2. **Edge.** The meeting as now (DEC-07, rule 6; #175): in the tick when the sum of `progress`
    of the groups going toward each other first reached 1000. The meeting is started by pairs where at least one group goes
@@ -703,7 +704,7 @@ the implementation the code works by DEC-07.
 
 **G. End of the fight**
 
-1. **A node with a defender.** If no defender units are left in the node, the node passes to the attacker in
+1. **A node with a defender.** If no defender units are left in the node (**[amended by DEC-37]**: standing in it; a caught group on an edge does not hold the node), the node passes to the attacker in
    the tick of the end of the fight (`change_owner`). Until then the node belongs to the defender: VP, supply, capital (victory
    by capturing the capital in the tick of the end of the fight; double defeat: #136). Otherwise the attackers bounce
    (rule 4), the order and the bonus burn.
@@ -968,6 +969,98 @@ Alternatives (not chosen):
 - A2 (a strip of the last rounds): not chosen; the client stays with A1.
 - Arena view V1, V2: V3 is chosen.
 - The bonus source in the caption ("plan", "Defense", "mountains"): not chosen, the protocol does not change.
+
+### Engagement zone around a node: a defender that just left is caught (DEC-37, #549) **[accepted]**
+
+The owner's direction of 2026-10-29 (playtest feedback, #549): "Units should have a larger 'collision' radius when
+they engage in a fight, to avoid situations where the enemy leaves the city a fraction of a second before. The radius
+should be a bit larger than it is now." A rule change after the freeze (the note at the top), like DEC-35, by the
+owner's direction. The rule below and the number are the orchestrator's reading of that direction; the number is
+**[default, chosen by the orchestrator; the owner may tune it]**.
+
+**Why (the analysis of #549).** A fight starts only by DEC-24, item C: in a node when the attacker finishes its
+movement there while the owner's groups *stand* in it (C1), on an edge when two groups going toward each other on *the
+same edge* pass each other (C2). A defender that left the node onto another edge is in neither case: the node is empty,
+it is taken at once (DEC-07, row 5), and the defender walks away untouched. Commands are applied at the start of a tick
+and `movement` runs before `combat`, so a `Move` given in the very tick of the attacker's arrival is already enough.
+The client's render delay (2 ticks, AGENTS.md 7.3) delays both groups equally and is not the cause; a group 1-3 ticks
+out of a city still overlaps the city icon, which makes the escape look like a pass through each other.
+
+**The rule.**
+
+1. **The engagement zone** of a node: the first `combat.engage_ticks` ticks of every edge leaving it. A group on an
+   edge is *in the zone of its start node* when it goes forward (not a return: bounce, cancel or retreat, item A2 of
+   DEC-24), is in no fight, and has spent on the edge at most `engage_ticks` ticks, counting the current one
+   (`leg(...).spent(progress) <= engage_ticks`, the same integer formula as `movement`). A group in transit through
+   the node (DEC-12: it stands on the next edge at `progress = 0` in the tick it passes the node) counts as having
+   left it. The zone is measured in ticks, not in thousandths: the same 0.3 s on a long and a short edge, in any
+   terrain and on any road level.
+2. **Who is caught.** In a tick when an attacker's arrival into an enemy node starts a fight (DEC-24, C1) or would
+   take the empty node (DEC-07, row 5), every group of the node's owner in the zone of that node is caught: it stops
+   where it stands on its edge and joins the fight as a defender. An empty node with a caught group is therefore not
+   taken at once: a fight starts. Nothing is caught for a node that already has a fight (the reinforcement of D1 and
+   the retreat of E1 apply: a defender retreating from a running fight already pays its round), for a neutral node
+   (nobody can be leaving it: a group in a neutral node takes it or fights in it), and on edges (C2 is unchanged).
+3. **A caught group is a leaving defender** (DEC-24, item E): it shoots in the nearest round and may die in it, then
+   leaves the fight and goes on with its order from where it stands, the first step in the next tick. It brings its
+   active plan bonus into the fight like any joining group (F1: it burns with the fight). It is not a holder of the
+   node: terrain ("Defense", mountains, plains: item F2) counts only when a defender *standing in the node* has a
+   charged unit at contact, and the node passes to the attacker when no standing defender is left (G1), even if a
+   caught group is still in the fight. Commands to a caught group: `CancelOrder` is `NOTHING_TO_CANCEL` (it is
+   already leaving), the rest `GROUP_ON_EDGE`, as for any group on an edge.
+4. **End of the fight.** As DEC-24, item G, with item 3 above: if the fight ends before its first round (nobody can
+   shoot at contact, B5), the caught groups are released and go on at once; the attacker takes the node if no
+   standing defender is left, otherwise it bounces.
+5. **Symmetry and determinism.** The rule depends only on the roles (attacker, owner of the node) and on integer
+   ticks; the groups are taken in id order inside the player; no tie-break between players. A mirrored position gives
+   the mirrored outcome.
+6. **Fog.** A fight is public (DEC-24, I1): the caught groups are counted in `PlayerView.fights` like any defender;
+   a caught enemy group is not drawn as a figure on its edge (a group in a fight is shown by the fight, DEC-33). The
+   attacker in the node is a vision source (DEC-35) and a group 3 ticks out is in that node's half of the edge on
+   every map of the pool (`border_permille` is far beyond 3 ticks), so nothing that was hidden is revealed. No new
+   field in `PlayerView`, events or the protocol.
+
+**The number** (`[combat]` of the ruleset): `engage_ticks = 3` **[default, chosen by the orchestrator; the owner may
+tune it]**; `0` switches the rule off (the behavior before DEC-37). Why 3 ticks (0.3 s): it is "a bit larger than now"
+(now 0: even a departure in the arrival tick escapes); it is shorter than a human reaction to a seen threat, so an
+evacuation ordered when the attack was seen coming is not caught, only a last-instant escape; on a typical edge of the
+pool (55-65 ticks) 3 ticks are 45-55 thousandths, the stretch where the figure still overlaps the city icon. 5 ticks
+would also catch evacuations ordered half a second before the arrival, which starts to punish a timely retreat.
+
+**Worked examples.** The line `0 - 1 - 2 - 3`, forest everywhere, `travel_ticks = 30` (`progress` after `k` ticks
+`k * 1000 // 30`: 33, 66, 100, 133), `round_ticks = 20`, `engage_ticks = 3`. Node 1 belongs to player 1, the attacker
+A of player 0 comes from node 0 and arrives in node 1 in tick `t`; D: a group of player 1 that leaves node 1 toward
+node 2 by a `Move` given in the tick shown; G: a group of player 1 that stays in node 1. "On the edge": ticks spent on
+edge 1-2 in tick `t`, counting `t`.
+
+| # | Situation | On the edge | Course | Result |
+|---|---|---|---|---|
+| 1 | A 3/3; D 2/2, `Move` in `t` (the same tick) | 1 (33) | caught; r1 (`t+20`) canc. (A 3/2, D 2/1); D leaves | the node is taken in `t+20` by A (3, 2 charged); D (2, 1 charged) goes on from 33 in `t+21`. Before DEC-37: taken in `t`, D 2/2 |
+| 2 | as 1, `Move` in `t-1` | 2 (66) | as 1 | as 1, D goes on from 66 |
+| 3 | as 1, `Move` in `t-2` | 3 (100) | as 1 | as 1, D goes on from 100 |
+| 4 | as 1, `Move` in `t-3` | 4 (133) | not caught | the node is taken in `t` without a fight; D 2/2 (as before DEC-37) |
+| 5 | A 2/2; D 2 units, 0 charged, `Move` in `t-1` | 2 | caught; r1 A kills 1 (A 2/1) | the node is taken in `t+20`; D (1, 0) goes on. Before: D 2/0 untouched |
+| 6 | A 2/0 (discharged); D 1/0, `Move` in `t-1` | 2 | caught; nobody can shoot: the fight ends in `t` without rounds | D is released and goes on from 66 in `t+1`; no standing defender: the node is taken in `t` (as before DEC-37, plus `fight_started` and `fight_ended`) |
+| 7 | A 4/4; D 2/2, `Move` in `t-1`; G 1/1 stays | 2 | r1 canc.: the defense shoots from D (the most charged, rule 7): A 4/3, D 2/1; D leaves. r2 canc. (A 4/2, G 1/0); r3 A kills G | the node is taken in `t+60` by A (4, 1 charged); D (2, 1 charged) escaped. Before DEC-37: G alone, r1 canc., r2 kill, taken in `t+40` by A 4/2, D 2/2 |
+| 8 | node 1 already has a fight (an attacker of player 0 against G and D of player 1); D got a `Move` and left after the round of `t-1` (DEC-24, E3); A 2/2 arrives in `t` | 1 (33) | A joins the running fight (D1); D is not caught: it already paid its round | DEC-24 unchanged |
+| 9 | A 3/3; D 2/2 left node 1 toward node 0, that is toward A, along A's edge | | an edge meeting (C2), before the node contact of the tick | DEC-24 unchanged |
+| 10 | the mirror of 1: A of player 1 from node 3 into node 2 of player 0, D of player 0 toward node 1 | 1 | as 1 | the mirrored result of 1 |
+
+What the implementation changes (#549): the ruleset field `combat.engage_ticks` (`mvp-0`, `mvp-1`, `test-short`, the
+test rulesets), `gow_sim.systems.combat` (the catch in the node contacts, the leaving of a caught group after the
+round without a bounce, item G1 counting only standing defenders), `SIM_VERSION` and golden replays. Not changed: the
+protocol (`engage_ticks` is not in the public ruleset: the client computes nothing from it), `PlayerView`, the events,
+commands, the client, bots.
+
+Alternatives (not chosen):
+- A zone in thousandths of the edge (`engage_permille`): the same distance is a different time on a long or slow edge,
+  so the escape window would depend on the map; ticks match the complaint ("a fraction of a second").
+- Catching only the groups that left in the arrival tick (`engage_ticks = 1`): fixes the worst case but not "a
+  fraction of a second before".
+- A caught group stays in the fight to the end: an evacuation started in time would be punished by a whole fight; the
+  retreat price of DEC-24 (one round) is the existing rule for leaving a fight.
+- Moving the node contact one tick earlier (an attacker 1 tick from the node already engages): changes every attack
+  timing, the regroup analysis of DEC-24 G5 and the arrival ticks the client shows in the `ack`.
 
 ---
 
@@ -3408,6 +3501,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-34 | #414 | rated-match protection against rating farming: rated only between password accounts, calibration, the early-resign and repeated-resign penalty, a per-opponent limit | section 19 | [accepted] (2026-10-28); meta-game server rules, no `SIM_VERSION`; implemented #414 (`PROTOCOL_VERSION` 26); owner's additions of 2026-10-28: a resign in a calibration match counts toward the queue ban, a draw (`double_defeat` too) is not a resign |
 | DEC-35 | #477 | vision comes only from units: own nodes are no longer vision sources; a group on an edge is a source in the node of its half; an enemy in an own node without a group is `PRESENCE` | section 10 | [accepted] (2026-10-28, a rule change after the freeze); details [accepted] (2026-10-29, all items as written: the readings that reveal less); implemented #477 (`SIM_VERSION` 22, `PROTOCOL_VERSION` 28: the wire allows own data on an own node at any level) |
 | DEC-36 | #537 | map geography: water cells (sea, lakes), rivers as area borders, areas of nodes touch only where a road links them; visual only, the rules do not read it | section 9 | [accepted] 2026-10-29 (W4 Painted, no dark line along water, the defaults of the open questions); supersedes DEC-27, item 3; step 1 (baker, vector file, validator `geography`) #537, step 2 (client territory) and step 3 (pool maps with water): follow-up issues |
+| DEC-37 | #549 | an engagement zone around a node: a defender that left the node within the last `combat.engage_ticks` ticks (3) is caught into the fight as a leaving defender | section 4 | [accepted] (2026-10-29, the owner's direction, a rule change after the freeze); the number `engage_ticks = 3` [default, chosen by the orchestrator; the owner may tune it]; implemented #549 |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in

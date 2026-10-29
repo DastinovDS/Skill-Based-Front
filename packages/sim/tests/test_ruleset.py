@@ -299,8 +299,8 @@ def test_hash_changes_when_any_value_changes() -> None:
     # +4 (supply.rear_min_default, supply.rear_min_max, cost.front, cost.rear_min) - 2
     # (supply.buffer, cost.priority); DEC-30: +1 (orders.defense_ticks_per_bonus) - 2
     # (orders.defense_delay_ticks, orders.defense_bonus); DEC-21: +10 (vision.range_starts and
-    # the 9 cells of vision.by_terrain).
-    assert len(leaves) == 89
+    # the 9 cells of vision.by_terrain); DEC-37: +1 (combat.engage_ticks).
+    assert len(leaves) == 90
     for path in leaves:
         data = copy.deepcopy(base)
         value = _get(data, path)

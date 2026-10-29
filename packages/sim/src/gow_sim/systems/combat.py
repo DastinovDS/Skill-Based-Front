@@ -18,13 +18,16 @@ reads the ``group_arrived`` events of the tick from ``state.events``. In one tic
 3. **Nodes**, in id order (item C1, D1): a group that finished its movement in a node with a fight
    joins its side; foreign groups standing in a player's node without a fight start one (the
    arrivals attack); an empty enemy node is taken at once (DEC-07, row 5); both players arriving
-   in a neutral node start a symmetric fight.
+   in a neutral node start a symmetric fight. The owner's groups that left the node within the
+   last ``combat.engage_ticks`` ticks (its engagement zone, DEC-37) are caught into a new fight
+   as leaving defenders, so an empty node with such a group is not taken at once.
 4. **Fights**, in id order (they share no group, so the order changes nothing): a round in the
    ticks ``start + k * round_ticks`` (item B), then the groups whose withdrawal was ordered leave
    (item E3), then the end (item B5, G): a side without groups, or no side able to shoot after a
    round or at contact.
 
-At the end of a fight (item G): a node goes to the attacker if no defender is left, otherwise
+At the end of a fight (item G): a node goes to the attacker if no defender stands in it (a caught
+group on an edge does not hold it, DEC-37), otherwise
 the attackers bounce, and a group that came back into its lost node and did not take it dies
 (item G3: no chain of bounces); in a neutral node a lone survivor takes it, two bounce; on an edge
 the side that made more shots wins (a side without groups loses), the loser bounces from where it
@@ -413,12 +416,13 @@ def _join_edge(
 def _node_contacts(
     state: GameState, rules: Ruleset, arrivals: dict[int, _Arrival], bonus: dict[int, Bonus]
 ) -> list[Event]:
-    """Items C1 and D1, node by node in id order."""
+    """Items C1 and D1 (with the engagement zone of DEC-37), node by node in id order."""
     standing: dict[int, list[Group]] = {}
     for gid in sorted(state.groups):
         g = state.groups[gid]
         if g.fight is None and isinstance(g.location, AtNode):
             standing.setdefault(g.location.node, []).append(g)
+    zone = _engage_zones(state, rules)
     fight_at = state.fight_nodes()
     events: list[Event] = []
     for node_id in sorted(standing):
@@ -438,7 +442,9 @@ def _node_contacts(
             attacker = 1 - owner
             if not owners[attacker]:
                 continue
-            if not owners[owner]:  # DEC-07, row 5: an empty enemy node is taken without a fight
+            caught = [g for g in zone.get(node_id, []) if g.owner == owner]
+            if not owners[owner] and not caught:
+                # DEC-07, row 5: an empty enemy node nobody just left is taken without a fight
                 events.extend(change_owner(state, node_id, attacker))
                 events.append(event(state.tick, "node_captured", node=node_id, player=attacker))
                 continue
@@ -460,7 +466,38 @@ def _node_contacts(
             armed = False
         for g in here:
             _join(fight, g, _node_member(g, arrivals), bonus, defense=armed and g.owner == defender)
+        if attacker is not None:  # DEC-37, item 3: caught groups leave after the nearest round
+            for g in zone.get(node_id, []):
+                if g.owner == defender:
+                    member = FightMember(g.owner, g.units, g.charged, leaving=True)
+                    _join(fight, g, member, bonus, defense=False)
     return events
+
+
+def _engage_zones(state: GameState, rules: Ruleset) -> dict[int, list[Group]]:
+    """DEC-37, item 1: node -> the groups in its engagement zone, in id order: going forward on
+    an edge out of the node, in no fight, at most ``combat.engage_ticks`` ticks spent on the edge
+    (counting this one; a group passing the node in this tick stands at ``progress = 0``)."""
+    limit = rules.combat.engage_ticks
+    zones: dict[int, list[Group]] = {}
+    if limit <= 0:
+        return zones
+    mapdef = state.map
+    for gid in sorted(state.groups):
+        g = state.groups[gid]
+        loc = g.location
+        if g.fight is not None or not isinstance(loc, OnEdge) or loc.back:
+            continue
+        far = mapdef.edges[loc.edge].other(loc.from_node)
+        if leg(mapdef, rules, loc.edge, far, loc.level).spent(loc.progress) <= limit:
+            zones.setdefault(loc.from_node, []).append(g)
+    return zones
+
+
+def _caught(fight: Fight, g: Group) -> bool:
+    """A group caught into a node fight from its engagement zone (DEC-37): the only member of a
+    node fight that stands on an edge (attackers and defenders stand in the node)."""
+    return fight.node is not None and isinstance(g.location, OnEdge)
 
 
 def _node_member(g: Group, arrivals: dict[int, _Arrival]) -> FightMember:
@@ -632,7 +669,9 @@ def _withdraw(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
         if g is None or not m.leaving:
             continue
         loc = g.location
-        if isinstance(loc, OnEdge):
+        if _caught(fight, g):
+            pass  # DEC-37, item 3: it goes on with its order from where it stands
+        elif isinstance(loc, OnEdge):
             g.location = OnEdge(loc.edge, loc.from_node, loc.progress, back=True, level=loc.level)
             g.order = None
         elif m.edge is not None and m.from_node is not None:  # an attacker of the node
@@ -688,9 +727,10 @@ def _end(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
             takers = [p for p in PLAYERS if alive[p]]
             winner = takers[0] if len(takers) == 1 else None
             bounce = {p: alive[0] and alive[1] for p in PLAYERS}
-        else:  # item G1
+        else:  # item G1: the node is held by the defenders standing in it (DEC-37, item 3)
             defender = 1 - attacker
-            if alive[attacker] and not alive[defender]:
+            holds = any(not _caught(fight, g) for g in live[defender])
+            if alive[attacker] and not holds:
                 winner = attacker
             else:
                 winner = defender if alive[defender] else None
