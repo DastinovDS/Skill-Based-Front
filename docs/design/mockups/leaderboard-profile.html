@@ -555,7 +555,7 @@ const rsHTML=r=>`<span class="rs ${r}"><i></i>${r==='w'?'Win':r==='l'?'Loss':'Dr
 const winbar=(w,l,d)=>{const n=w+l+d,p=n?Math.round(w*100/n):0;return `<span class="wr" aria-label="Win share ${p} percent"><svg width="64" height="8" viewBox="0 0 64 8" aria-hidden="true"><rect x=".75" y=".75" width="62.5" height="6.5" rx="3.25" fill="none" stroke="#6b7480" stroke-width="1.5"/><rect x="1.5" y="1.5" width="${Math.max(0,61*p/100).toFixed(1)}" height="5" rx="2.5" fill="#5b9bff"/></svg>${p}%</span>`};
 const status=p=>p.status==='rated'?`<span class="chip kd-r">${ico('trophy',13)} Ranked${p.rank?' · #'+p.rank:''}</span>`:p.status==='cal'?`<span class="chip kd-c">${cells(p.cal,5,'Calibration')} Calibration ${p.cal}/5</span>`:`<span class="chip wn">${ico('user',13)} Guest</span>`;
 const kindChip=h=>h.kind==='bot'?`<span class="chip">${ico('bot',13)} Bot</span>`:`<span class="chip${h.kind==='rated'?' kd-r':h.kind==='calibration'?' kd-c':''}">${KIND[h.kind]}</span>`;
-const oppHTML=h=>h.bot?`<span class="op">${ico('bot',16)}<b>${BOTS[h.opp.bot]} bot</b></span>`:`<span class="op">${need('opponent.player_id: GET /api/players/{id} (the link)',`<a href="#" data-act="prof:${h.opp}" onclick="return false"><b>${h.opp}</b></a>`)}</span>`;
+const oppHTML=h=>h.bot?`<span class="op">${ico('bot',16)}<b title="${BOTS[h.opp.bot]} bot">${BOTS[h.opp.bot]}</b></span>`:`<span class="op">${need('opponent.player_id: GET /api/players/{id} (the link)',`<a href="#" data-act="prof:${h.opp}" onclick="return false"><b>${h.opp}</b></a>`)}</span>`;
 function rcHTML(h){if(h.ch==='hidden')return `<span class="rc"><span class="hid" title="Calibration: the rating is not shown until the 5th ranked match">Hidden</span></span>`;
   if(!h.ch)return `<span class="rc"><span class="hid">–</span></span>`;const d=h.ch[1]-h.ch[0];return `<span class="rc">${d>0?'+':d<0?'−':'±'}${Math.abs(d)}<small>${h.ch[0]} → ${h.ch[1]}</small></span>`}
 function rpHTML(h){const st={ready:`<button class="btn sm" data-act="watch">${ico('eye',15)} Watch</button>`,
@@ -608,12 +608,13 @@ function boardHead(m,d,sm){const A=acct(m),M=me(m),rows=m.st==='empty'?0:(m.far?
   return `<div class="pe">Leaderboard</div><div class="ph"><h2>Top players</h2>${sm?'':`<div class="tags" style="margin-top:0">${chips}</div>`}</div>${sm?`<div class="tags" style="margin-top:6px">${chips}</div>`:''}<div class="ps">The best rating first. A rating shows after 5 ranked matches.</div>`}
 
 /* ---------- the profile ---------- */
-function wld(r){return `<div class="wld"><span><b>${r[0]}</b>wins</span><span><b>${r[1]}</b>losses</span><span><b>${r[2]}</b>draws</span></div>`}
+const pl=(n,a,b)=>n===1?a:b;
+function wld(r){return `<div class="wld"><span><b>${r[0]}</b>${pl(r[0],'win','wins')}</span><span><b>${r[1]}</b>${pl(r[1],'loss','losses')}</span><span><b>${r[2]}</b>${pl(r[2],'draw','draws')}</span></div>`}
 function statsHTML(p,d){const hid=p.status!=='rated';
   let a;
   if(p.status==='rated')a=`<div class="stat">${need('player.rating',`<b>${p.rating}</b>`)}<span class="cap2">Rating</span></div><div class="stat">${need('player.rank (beyond the top 100 too)',`<b class="sm">#${p.rank}</b>`)}<span class="cap2">of ${p.total} ranked</span></div>`;
   else if(p.status==='cal')a=`<div class="stat">${need('player.rating = null during calibration',`<b class="dsh">–</b>`)}<span class="cap2">Rating</span></div><div class="stat">${need('player.calibration{played,total}',`<b class="sm">${p.cal}/5</b>`)}<span class="cap2">Calibration</span><small>Shown after 5 ranked matches</small></div>`;
-  else a=`<div class="stat">${need('player.has_password = false',`<b class="dsh">–</b>`)}<span class="cap2">Rating</span></div><div class="stat"><span style="height:46px;display:flex;align-items:center"><span class="chip wn">${ico('user',13)} Guest</span></span><span class="cap2">No rating</span><small>${p.you?'Set a password to play ranked':'Guests play unrated'}</small></div>`;
+  else a=`<div class="stat">${need('player.has_password = false',`<b class="dsh">–</b>`)}<span class="cap2">Rating</span></div><div class="stat"><span style="height:46px"></span><span class="cap2">No rating</span><small>${p.you?'Set a password to play ranked':'Guests play unrated'}</small></div>`;
   return `<div class="stats">${a}</div>`}
 function recsHTML(p){return `<div class="recs">${need('player.rated_record (rating-changing matches), player.record (all matches)',`<div class="rec"><div class="cap2">Ranked and calibration</div>${wld(p.rr)}</div><div class="rec"><div class="cap2">All matches</div>${wld(p.all)}</div>`)}</div>`}
 function idHTML(p){return `<div class="id">${tri(p.you?'own':'enemy',44,1)}<div><h2>${p.nick}${p.you?' <span class="you" style="font-size:12px;vertical-align:4px;border:1px solid var(--paper);border-radius:10px;padding:2px 8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-left:6px">You</span>':''}</h2><div class="sub2">${status(p)}</div></div></div>`}
