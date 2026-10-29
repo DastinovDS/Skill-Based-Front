@@ -111,6 +111,13 @@ else
 	esac
 fi
 
+echo "== licence notices of the bundled libraries (CLI-07)"
+status="$(fetch licenses /third-party-licenses.txt)"
+[ "$status" = 200 ] || fail "GET /third-party-licenses.txt returned $status"
+for lib in pixi.js svelte; do
+	grep -q "^## $lib - " "$tmp/licenses.b" || fail "/third-party-licenses.txt has no entry for $lib"
+done
+
 echo "== missing asset is a 404, not index.html"
 status="$(fetch missing /assets/missing-0000.js)"
 [ "$status" = 404 ] || fail "GET /assets/missing-0000.js returned $status"

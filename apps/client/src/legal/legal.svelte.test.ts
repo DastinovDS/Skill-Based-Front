@@ -86,4 +86,15 @@ describe('legal components', () => {
     expect(document.body.querySelector('[role="note"]')).not.toBeNull();
     expect(document.body.querySelector('[style]')).toBeNull();
   });
+
+  it('links to the licence file that the build writes next to the page (CLI-07)', () => {
+    component = mount(LegalPage, { target: document.body, props: { page: 'privacy' } });
+    flushSync();
+    const link = document.body.querySelector<HTMLAnchorElement>(
+      'a[href="/third-party-licenses.txt"]',
+    );
+    expect(link).not.toBeNull();
+    expect(link?.target).toBe('_blank');
+    expect(link?.rel).toContain('noopener');
+  });
 });

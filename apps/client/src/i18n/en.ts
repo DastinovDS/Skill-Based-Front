@@ -416,6 +416,9 @@ export const en = {
     'The interface icons come from the Lucide set and are changed only in colour.',
   'legal.licenses.lucide':
     'Lucide: ISC licence; icons taken from Feather are under the MIT licence. The full notices are in THIRD_PARTY_NOTICES.md in the repository.',
+  'legal.licenses.libraries':
+    'The game also bundles PixiJS, Svelte and their dependencies (MIT, ISC and BSD-3-Clause licences). The licence text of each one:',
+  'legal.licenses.libraries.link': 'third-party licences',
   'cmd.set_front': 'front marker',
   'cmd.set_rear_min': 'rear minimum',
   'cmd.transfer': 'transfer',

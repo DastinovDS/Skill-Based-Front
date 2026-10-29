@@ -14,6 +14,11 @@ const API_PROXY = {
 
 export default defineConfig({
   plugins: [svelte()],
+  build: {
+    // Vite strips the licence banners of the bundled libraries; this writes the licence text of
+    // every bundled dependency next to the page (CLI-07, #498). The legal page links to it.
+    license: { fileName: 'third-party-licenses.txt' },
+  },
   server: {
     proxy: API_PROXY,
     // The dev screen bundles map files from outside apps/client (src/map/bundledMaps.ts), the tests
