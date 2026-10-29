@@ -6,6 +6,7 @@ import {
   dashSegments,
   edgePoint,
   chargeLevel,
+  chargeTicks,
   packetFade,
   triangleCorners,
   triangleHeight,
@@ -24,14 +25,23 @@ describe('unit triangles (9.5)', () => {
     expect(triangleSide(null)).toBe(30);
   });
 
-  it('fills from the tip by sqrt(charged / units) of the height', () => {
-    expect(chargeLevel(4, 1)).toBeCloseTo(0.5);
+  it('fills from the tip by charged / units of the height, so the height reads the share', () => {
+    expect(chargeLevel(4, 1)).toBe(0.25);
+    expect(chargeLevel(4, 2)).toBe(0.5);
     expect(chargeLevel(4, 4)).toBe(1);
     expect(chargeLevel(4, 0)).toBe(0);
     expect(chargeLevel(0, 0)).toBe(0);
     expect(chargeLevel(2, 9)).toBe(1);
-    // The filled area (level squared) is the charged share.
-    expect(chargeLevel(10, 3) ** 2).toBeCloseTo(0.3);
+    expect(chargeLevel(10, 3)).toBeCloseTo(0.3);
+  });
+
+  it('puts a divider between every two units of a small group, none above the cap', () => {
+    expect(chargeTicks(4, 8)).toEqual([0.25, 0.5, 0.75]);
+    expect(chargeTicks(2, 8)).toEqual([0.5]);
+    expect(chargeTicks(1, 8)).toEqual([]);
+    expect(chargeTicks(0, 8)).toEqual([]);
+    expect(chargeTicks(8, 8)).toHaveLength(7);
+    expect(chargeTicks(9, 8)).toEqual([]);
   });
 
   it('points down: the tip is the lowest corner, the box is centred on the origin', () => {

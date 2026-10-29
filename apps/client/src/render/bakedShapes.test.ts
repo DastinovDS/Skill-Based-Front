@@ -1,7 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import type { BakeSpec } from './bake.ts';
-import { provinceBodySpec, warehouseBarSpec } from './bakedShapes.ts';
+import { provinceBodySpec, triangleTicksSpec, warehouseBarSpec } from './bakedShapes.ts';
 import { BAR_SEGMENT, PROVINCE, YOU } from './style.ts';
 
 // The look of the shapes of C1 (#348, ui-style 9.4), read from what they draw. Nothing here needs
@@ -93,5 +93,26 @@ describe('warehouseBarSpec: the places of a warehouse (C1)', () => {
     const bar = warehouseBarSpec(3, 0, YOU, 1);
     // The sprite is as wide as the places plus the base and the room for the shadow.
     expect(bar.box.width).toBeGreaterThan(4 * BAR_SEGMENT.pitch);
+  });
+});
+
+describe('triangleTicksSpec: the dividers inside a unit triangle (#508)', () => {
+  it('has nothing to draw for one unit or a big group', () => {
+    expect(triangleTicksSpec(24, 1)).toBeNull();
+    expect(triangleTicksSpec(36, 9)).toBeNull();
+  });
+
+  it('has a key per side and unit count, so one texture serves every such token', () => {
+    expect(triangleTicksSpec(30, 4)?.key).toBe('tri-ticks:30:4');
+    expect(triangleTicksSpec(30, 5)?.key).not.toBe(triangleTicksSpec(30, 4)?.key);
+    expect(triangleTicksSpec(30, 4)?.key).toBe(triangleTicksSpec(30, 4)?.key);
+  });
+
+  it('draws one stroked line per divider, a stroke and no fill', () => {
+    const spec = triangleTicksSpec(30, 4);
+    if (spec === null) throw new Error('four units have dividers');
+    const actions = drawn(spec).map((i) => i.action);
+    expect(actions).toContain('stroke');
+    expect(actions).not.toContain('fill');
   });
 });

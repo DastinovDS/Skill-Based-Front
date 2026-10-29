@@ -95,12 +95,23 @@ export function triangleHeight(side: number): number {
 }
 
 /**
- * Height share of the charge fill, from the tip: `sqrt(charged / units)`, so that the filled
- * area equals the share of charged units. 0 for an empty group.
+ * Height share of the charge fill, from the tip: `charged / units`. A player reads the height, so
+ * it is linear (1 of 4 charged fills a quarter of the height); the area is not the share (#508).
+ * 0 for an empty group.
  */
 export function chargeLevel(units: number, charged: number): number {
   if (units <= 0 || charged <= 0) return 0;
-  return Math.sqrt(Math.min(1, charged / units));
+  return Math.min(1, charged / units);
+}
+
+/**
+ * Heights of the dividers inside a triangle, as shares of its height from the tip: one between
+ * every two units, `(i / units)` for `i` in `1..units - 1`. No dividers for one unit or for more
+ * than `max` (the fill alone, and the number, tell the rest).
+ */
+export function chargeTicks(units: number, max: number): number[] {
+  if (units < 2 || units > max) return [];
+  return Array.from({ length: units - 1 }, (_, i) => (i + 1) / units);
 }
 
 /**

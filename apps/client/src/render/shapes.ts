@@ -5,12 +5,15 @@ import {
   triangleBackSpec,
   triangleFrontSpec,
   triangleLevelSpec,
+  triangleTicksSpec,
   shieldSpec,
 } from './bakedShapes.ts';
 import { tf } from '../i18n/index.ts';
 import type { Mode, PlayerId } from '../protocol.gen.ts';
 import type { WarehouseBar } from './cityLayout.ts';
 import type { DefenseBonus } from './cityStacks.ts';
+import { reducedMotion } from './motion.ts';
+import { EaseTween } from './tween.ts';
 import { chargeLevel, countLabel, triangleHeight, triangleSide } from './layout.ts';
 import {
   BAR_BASE,
@@ -94,6 +97,8 @@ export class EntityKit {
   /** The number inside a triangle (a city icon): dark stroke, so it reads on the fill and the plate. */
   readonly insideStyle: TextStyle;
   readonly questionStyle: TextStyle;
+  /** The tokens whose charge fill is still easing (#508): `advance` steps them, once per frame. */
+  private readonly easing = new Set<Token>();
   /** "+N / M" beside the shield of an own group in "Defense" (DEC-30): dark stroke, like the number inside. */
   readonly defenseStyle: TextStyle;
 
@@ -169,6 +174,21 @@ export class EntityKit {
     });
   }
 
+  /** Registers a token whose fill started to ease. */
+  startEasing(token: Token): void {
+    this.easing.add(token);
+  }
+
+  /**
+   * Advances every easing charge fill by `dtMs` of real time (once per frame, from the render
+   * loop). A token whose view is gone (swept by its pool) is dropped.
+   */
+  advance(dtMs: number): void {
+    for (const token of this.easing) {
+      if (token.view.destroyed || !token.advance(dtMs)) this.easing.delete(token);
+    }
+  }
+
   context(draw: (g: GraphicsContext) => GraphicsContext): GraphicsContext {
     const context = draw(new GraphicsContext());
     this.contexts.push(context);
@@ -224,6 +244,9 @@ export class Token {
   readonly view = new Container();
   private readonly back: BakedSprite;
   private readonly level: BakedSprite;
+  private readonly ticks: BakedSprite;
+  /** The shown height share of the fill: eases toward the one the snapshot gives (#508). */
+  private readonly fill = new EaseTween(0);
   private readonly outline: BakedSprite;
   private readonly shield: BakedSprite;
   private readonly defensePill = new Graphics();
@@ -248,6 +271,8 @@ export class Token {
     this.back = kit.sprites.sprite();
     this.level = kit.sprites.sprite();
     this.level.visible = false;
+    this.ticks = kit.sprites.sprite();
+    this.ticks.visible = false;
     this.outline = kit.sprites.sprite();
     this.shield = kit.sprites.sprite();
     this.shield.scale.set(SHIELD_BADGE_SCALE);
@@ -271,6 +296,7 @@ export class Token {
     this.view.addChild(
       this.back,
       this.level,
+      this.ticks,
       this.outline,
       this.question,
       this.defenseLabel,
@@ -294,9 +320,27 @@ export class Token {
     this.label.visible = show && this.counted;
   }
 
+  /** Puts the shown fill height on the sprite: scaled from the tip, hidden when empty. */
+  private showFill(): void {
+    const shown = this.fill.value;
+    this.level.visible = shown > 0 && this.level.spec !== null;
+    if (shown > 0) this.level.scale.set(shown);
+  }
+
+  /**
+   * Steps the easing fill by `dtMs` (called by `EntityKit.advance`); `false` once it has settled.
+   * Only the scale of the baked fill changes: no texture is made.
+   */
+  advance(dtMs: number): boolean {
+    this.fill.step(dtMs);
+    this.showFill();
+    return this.fill.active;
+  }
+
   set(spec: TokenSpec): void {
     const key = specKey(spec);
     if (key === this.key) return;
+    const first = this.key === '';
     this.key = key;
     const { counts, owner } = spec;
     const side = triangleSide(counts === null ? null : counts.units);
@@ -308,13 +352,22 @@ export class Token {
     const color = ownerColor(me, owner);
 
     this.back.set(triangleBackSpec(side, spec.inside === true));
+    // The fill: the same baked triangle scaled from the tip; a new level eases in (#508). A token
+    // that is new, unknown or a memory shows the level at once.
     const level = counts === null ? 0 : chargeLevel(counts.units, counts.charged);
-    this.level.visible = level > 0;
-    if (level > 0) {
-      this.level.set(triangleLevelSpec(side, color));
-      this.level.scale.set(level);
-      this.level.position.set(0, h / 2);
+    if (counts !== null) this.level.set(triangleLevelSpec(side, color));
+    this.level.position.set(0, h / 2);
+    if (first || counts === null || spec.ghost === true || reducedMotion()) {
+      this.fill.snap(level);
+    } else {
+      this.fill.setTarget(level);
     }
+    this.showFill();
+    if (this.fill.active) this.kit.startEasing(this);
+    // The dividers: one texture per (side, units), only for a small group with known numbers.
+    const dividers = counts === null ? null : triangleTicksSpec(side, counts.units);
+    this.ticks.visible = dividers !== null;
+    if (dividers !== null) this.ticks.set(dividers);
     // The outline carries the owner's colour, so an empty triangle still tells whose it is; the
     // opponent's second, inner outline tells it without the hue (AGENTS.md 7.4).
     const dashed = counts === null || spec.ghost === true;
