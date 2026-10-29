@@ -1,4 +1,5 @@
 <script lang="ts">
+  import LeaderboardScreen from '../board/LeaderboardScreen.svelte';
   import MenuScreen from '../app/MenuScreen.svelte';
   import DevDock from './DevDock.svelte';
   import ResultScreen from '../app/ResultScreen.svelte';
@@ -7,6 +8,7 @@
   import ExitDialog from '../hud/ExitDialog.svelte';
   import { MENU_MAP } from '../app/menuMap.ts';
   import { isSeason, setSeasonOverride } from '../app/menuSeason.ts';
+  import { BOARD_NOW, BOARD_SCENES, isBoardScene, ME, sceneApi } from './boardScenes.ts';
   import {
     BAN_SECONDS,
     CALIBRATION,
@@ -33,6 +35,7 @@
     onpassword: nothing,
     onlogout: nothing,
   };
+  const board = isBoardScene(id) ? BOARD_SCENES[id] : null;
   const queue = QUEUE_SCENES[id];
   const result = RESULT_SCENES[id];
 </script>
@@ -48,6 +51,29 @@
   />
 {:else if isDockScene(id)}
   <DevDock {id} {map} />
+{:else if board !== null}
+  <LeaderboardScreen
+    api={sceneApi(board)}
+    token="dev"
+    ownId={ME}
+    nick="Danya"
+    hasPassword={board.hasPassword}
+    calibration={board.calibration}
+    rating={board.rating}
+    {map}
+    mode={board.mode}
+    player={board.player}
+    now={() => BOARD_NOW}
+    onselect={nothing}
+    onwatch={nothing}
+    onmenu={nothing}
+    onbot={nothing}
+    oncreate={nothing}
+    onlobby={nothing}
+    onreplays={nothing}
+    onboard={nothing}
+    onpassword={nothing}
+  />
 {:else if result !== undefined}
   <ResultScreen me={0} end={result} onreplay={nothing} onmenu={nothing} />
 {:else if id === 'exit-rated'}

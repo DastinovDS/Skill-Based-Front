@@ -13,6 +13,13 @@ export type BotMatch = Schemas['BotMatchOut'];
 export type LobbyEntry = Schemas['LobbyEntry'];
 export type QueueStatus = Schemas['QueueStatus'];
 export type MapSummary = Schemas['MapSummary'];
+export type Leaderboard = Schemas['Leaderboard'];
+export type LeaderboardEntry = Schemas['LeaderboardEntry'];
+export type PlayerProfile = Schemas['PlayerProfile'];
+export type MatchEntry = Schemas['MatchEntry'];
+export type MatchKind = Schemas['MatchKind'];
+export type ReplayLinkState = Schemas['ReplayLinkState'];
+export type RecordTally = Schemas['Record'];
 export type BotLevel = Schemas['CreateBotMatch']['level'];
 export const BOT_LEVELS: readonly BotLevel[] = ['easy', 'normal', 'hard', 'expert'];
 
@@ -146,6 +153,20 @@ export class Api {
   /** The running match of the guest (after a page reload or in another tab), `null` if none. */
   activeMatch(token: string): Promise<ActiveMatch | null> {
     return this.#request('GET', '/api/me/active-match', token);
+  }
+
+  /** The top 100 (LB-01, #78). Public: no token; a 429 is the per-IP limit of public reads. */
+  leaderboard(signal?: AbortSignal): Promise<Leaderboard> {
+    return this.#request('GET', '/api/leaderboard', null, undefined, signal);
+  }
+
+  /**
+   * The profile of a player, a guest or an account (LB-01, #78); `not_found` for an unknown or
+   * blocked one. The token is optional: with it the replay links of the caller's own unrated
+   * matches open, for anyone else those are `private`.
+   */
+  player(id: number, token: string | null, signal?: AbortSignal): Promise<PlayerProfile> {
+    return this.#request('GET', `/api/players/${String(id)}`, token, undefined, signal);
   }
 
   maps(): Promise<MapSummary[]> {

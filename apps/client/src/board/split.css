@@ -1,0 +1,106 @@
+/* ===== The leaderboard and the profile (#78, variant S "Split" of docs/design/mockups/leaderboard-profile.html) =====
+   The frame of the start screens (`.front`, app.css) with a small text rail at the left, the list
+   of players beside it and the profile of the chosen row at the right. Used by SplitFrame. */
+
+.front.split .shade {
+  background:
+    linear-gradient(
+      90deg,
+      rgb(13 17 23 / 97%) 0,
+      rgb(13 17 23 / 90%) 330px,
+      rgb(13 17 23 / 70%) 700px,
+      rgb(13 17 23 / 35%) 1000px,
+      rgb(13 17 23 / 20%) 1280px
+    ),
+    linear-gradient(0deg, rgb(13 17 23 / 70%), rgb(13 17 23 / 0%) 140px);
+}
+
+.front.split .rail {
+  top: 110px;
+  width: 250px;
+}
+
+.front.split .rail .eyebrow {
+  margin-bottom: 4px;
+}
+
+.front.split .rail .menuback {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px -6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.front.split .rail .menuback:hover {
+  color: var(--text);
+  background: rgb(230 237 243 / 8%);
+}
+
+.front.split .rail .rows {
+  margin-top: 6px;
+  width: 100%;
+}
+
+.front.split .rail .row {
+  gap: 10px;
+  padding: 9px 4px;
+  font-size: 17px;
+}
+
+.front.split .rail .row.cur {
+  background: linear-gradient(90deg, rgb(91 155 255 / 18%), transparent);
+  border-bottom-color: var(--you);
+  cursor: default;
+}
+
+.front.split .panes {
+  position: absolute;
+  left: 330px;
+  top: 96px;
+  bottom: 24px;
+  z-index: 6;
+  box-sizing: border-box;
+  width: min(920px, calc(100% - 330px - 52px));
+  display: grid;
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+/* Under 1180 px the two panes no longer fit beside the rail: everything flows down the page. */
+@media (max-width: 1179px), (max-height: 560px) {
+  .front.split .rail {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: auto;
+    margin: 28px 24px 0;
+    max-width: 320px;
+  }
+
+  .front.split .panes {
+    position: relative;
+    left: auto;
+    top: auto;
+    bottom: auto;
+    width: auto;
+    margin: 20px 24px 24px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  .front.split .shade {
+    background: rgb(13 17 23 / 72%);
+  }
+}
