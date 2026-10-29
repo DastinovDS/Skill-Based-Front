@@ -78,7 +78,7 @@ code{background:var(--surface2);padding:0 4px;border-radius:4px;font-size:12.5px
   <div class="row"><span class="lbl">Provinces</span><div class="seg" id="pk_p"></div></div>
   <div class="row"><span class="lbl">Defense</span><div class="seg" id="pk_d"></div></div>
   <div class="row"><span class="lbl">Layout</span><div class="seg" id="pk_b"></div></div>
-  <div class="row"><span class="lbl">Sets</span><span class="opt"><a href="#p=1&amp;d=1&amp;b=1&amp;z=100&amp;t=1.2&amp;play=0"><b>Recommended</b></a>: PA Glass disc + D1 Diamond pips + L1 Left column</span><span class="opt"><a href="#p=3&amp;d=3&amp;b=2&amp;z=100&amp;t=1.2&amp;play=0"><b>Second</b></a>: PC Place ring + D3 Filling shield + L2 Split sides</span><span class="opt"><a href="#p=0&amp;d=0&amp;b=0&amp;z=100&amp;t=1.2&amp;play=0">Now</a></span></div>
+  <div class="row"><span class="lbl">Sets</span><span class="opt"><a href="#p=3&amp;d=1&amp;b=1&amp;z=100&amp;t=1.2&amp;play=0"><b>Recommended</b></a>: PC Place ring + D1 Diamond pips + L1 Left column</span><span class="opt"><a href="#p=1&amp;d=3&amp;b=2&amp;z=100&amp;t=1.2&amp;play=0"><b>Second</b></a>: PA Glass disc + D3 Filling shield + L2 Split sides</span><span class="opt"><a href="#p=0&amp;d=0&amp;b=0&amp;z=100&amp;t=1.2&amp;play=0">Now</a></span></div>
   <div class="row">
     <label class="opt">zoom <select id="z"><option value="45">0.45 (overview)</option><option value="70">0.7 (fit)</option><option value="100" selected>1.0</option><option value="150">1.5 (close)</option></select></label>
     <label class="opt"><input type="checkbox" id="gray"> grayscale</label>
@@ -632,9 +632,12 @@ function hit(a, b) {
 }
 // pairs that are not a defect by design: the token stands inside the ring, the shield on the token is part of the token
 const SKIP = new Set(['ring|token', 'token|ring', 'token|Defense (token)', 'Defense (token)|token']);
+// only the pairs with a mark the layout places (the barracks, a Defense sign) count: the rest is the shipped city and the same
+// in every layout (the VP badge touches the ring, the caption touches the warehouse places by a unit)
+const PLACED = (m) => m.name === 'barracks' || m.name.startsWith('Defense');
 function overlaps(marks) {
   const out = [];
-  for (let i = 0; i < marks.length; i++) for (let j = i + 1; j < marks.length; j++) { const a = marks[i], b = marks[j]; if (!SKIP.has(a.name + '|' + b.name) && hit(a, b)) out.push(`${a.name} × ${b.name}`); }
+  for (let i = 0; i < marks.length; i++) for (let j = i + 1; j < marks.length; j++) { const a = marks[i], b = marks[j]; if ((PLACED(a) || PLACED(b)) && !SKIP.has(a.name + '|' + b.name) && hit(a, b)) out.push(`${a.name} × ${b.name}`); }
   return out;
 }
 
@@ -667,9 +670,9 @@ const PROVS = [
     s += '</g>' + `<g ${X.shd}>${ringNow(16, 3, own3(n))}</g>`;
     return { svg: s, R: 16, ringW: 7, cap: 20, r: 18 };
   } },
-  { name: 'PA Glass disc', sub: 'the city body in miniature and see-through: the owner gradient at 42%, a thin paper outline, the light rim; the shipped ring', fn(n, X) {
+  { name: 'PA Glass disc', sub: 'the city body in miniature and see-through: the owner gradient at 55%, a thin paper outline, the light rim; the shipped ring', fn(n, X) {
     const r = 9;
-    let s = `<g ${X.shd}><circle r="${r + 1.4}" stroke="${C.bg}" stroke-opacity=".45" stroke-width="2"/><circle r="${r}" fill="${n.o === 'none' ? C.nStroke : X.fill(n.o)}" fill-opacity="${n.o === 'none' ? 0.28 : 0.42}"/>`;
+    let s = `<g ${X.shd}><circle r="${r + 1.4}" stroke="${C.bg}" stroke-opacity=".45" stroke-width="2"/><circle r="${r}" fill="${n.o === 'none' ? C.nStroke : X.fill(n.o)}" fill-opacity="${n.o === 'none' ? 0.3 : 0.55}"/>`;
     s += bodyLine(n, r, r + 2.4) + (n.o !== 'none' ? rimArc(r - 2) : '') + '</g>';
     s += `<g ${X.shd}>${ringNow(16, 3, own3(n))}</g>`;
     return { svg: s, R: 16, ringW: 7, cap: 20, r: 18 };
@@ -731,8 +734,8 @@ const COUNTERS = [
     if (en || d.cap === 0) return { svg: s, box };
     let inner = '', w;
     if (d.cap <= 6) {
-      w = d.cap * 7.4 + 4.6;
-      for (let i = 0; i < d.cap; i++) inner += diamond(5.6 + i * 7.4, 0, 3.3, i < d.b, c);
+      w = d.cap * 8.6 + 5;
+      for (let i = 0; i < d.cap; i++) inner += diamond(6.8 + i * 8.6, 0, 4, i < d.b, c);
     } else {   // above 6 places the row turns into the arena's form: ◆ ×gathered ◇ ×room
       const a = `×${d.b}`, b2 = `×${d.cap - d.b}`;
       w = 12 + a.length * 6 + 12 + b2.length * 6 + 4;
@@ -740,7 +743,7 @@ const COUNTERS = [
       const x2 = 12 + a.length * 6 + 6; inner += diamond(x2, 0, 3.4, false, c) + `<text x="${f1(x2 + 5)}" y="0.4" font-size="10" font-weight="700" fill="${C.paper}" dominant-baseline="central" font-family="${FONT}">${b2}</text>`;
     }
     const x = sideX(dir, 8, w);
-    s = `<g ${X.shd}><rect x="${f1(x)}" y="-6.5" width="${f1(w)}" height="13" rx="6.5" fill="${C.plate}" fill-opacity=".96" stroke="${c}" stroke-width="1.2"/></g>` + G(x, 0, inner) + s;
+    s = `<g ${X.shd}><rect x="${f1(x)}" y="-7.5" width="${f1(w)}" height="15" rx="7.5" fill="${C.plate}" fill-opacity=".96" stroke="${c}" stroke-width="1.2"/></g>` + G(x, 0, inner) + s;
     return { svg: s, box: [Math.min(-9, x), -9, Math.max(9, x + w), 9] };
   } },
   { name: 'D2 Rim segments', sub: 'the shield disc whose rim is cut into one segment per cap place (paper = gathered, grey = room), a thin owner ring outside; above 10 one arc with a notch every 5', fn(d, c, X) {
@@ -883,6 +886,8 @@ function drawNode(n, X, pv = st.p, lv = st.b) {
   s += L.svg;
   marks.push(...L.marks);
   let bottom = L.cap;
+  // a token's range pill hangs under its tip: the caption starts under it (as in rounds 1 to 4)
+  if (n.token) { const u = drawUnit(0, 0, n.token, X, { inside: true }); bottom = Math.max(bottom, u.bottom + 1); }
   const capShown = X.z >= (prov ? 0.7 : 0.45);
   if (capShown) { s += caption(n, bottom - X.px(2), X); marks.push(captionBox(n, bottom - X.px(2), X)); bottom += X.px(prov ? 16 : 17); }
   return { svg: s, bottom, r: geo.rr, geo, marks, corner: L.corner };
@@ -913,7 +918,7 @@ const ORDER = { name: 'ODb Low relief', fn(q, X) { return odRibbon(q, X, { sh: [
 const INFO = {
   p: [
     { what: 'C1 as shipped: a hollow ring 3.6 wide on a dark plate (90%); own with a light ring outside, the enemy with a light ring inside as well, neutral a thin grey ring; the capacity ring of 3 segments outside.', pros: 'Shipped and known.', risks: 'The dark plate with rings reads as a target (the owner\'s complaint); with a garrison token on it the plate is hidden and only the grey or white segments are left, so the owner of the province does not show around the token (the enemy "?" in your province shows nothing of yours).', fps: 'as now / low', dpsc: 'no / no / no / none', est: '0' },
-    { what: 'The city body in miniature and see-through: r 9 (a small city is 14), the owner gradient at 42% so the terrain shows through, a 1.6 paper outline (a city has 3), the light rim at the upper left, a faint soft halo; the shipped ring of 3 segments. Enemy: a second thin outline outside; neutral: a grey tint with a dashed outline.', pros: 'The smallest step from the current map: the same material, light and outline as a city, only smaller, thinner and lighter, so it reads as "a lesser place of the same world"; a light centre, never a target; nothing new to learn.', risks: 'A garrison token covers the body, so with a token the province is still told by its 3 segments (as now); at 0.45 the body is 8 px and reads as a coloured dot.', fps: '3 body textures (own, enemy, neutral) + the shipped ring / low', dpsc: 'no / no / no / yes', est: 'S, 0.5-1 d' },
+    { what: 'The city body in miniature and see-through: r 9 (a small city is 14), the owner gradient at 55% so the terrain shows through, a 1.6 paper outline (a city has 3), the light rim at the upper left, a faint soft halo; the shipped ring of 3 segments. Enemy: a second thin outline outside; neutral: a grey tint with a dashed outline.', pros: 'The smallest step from the current map: the same material, light and outline as a city, only smaller, thinner and lighter, so it reads as "a lesser place of the same world"; a light centre, never a target; nothing new to learn.', risks: 'A garrison token covers the body, so with a token the province is still told by its 3 segments (as now); at 0.45 the body is 8 px and reads as a coloured dot.', fps: '3 body textures (own, enemy, neutral) + the shipped ring / low', dpsc: 'no / no / no / yes', est: 'S, 0.5-1 d' },
     { what: 'A small solid dot (r 6.5) in a pale tint of the owner with a thin darker outline, like a minor place on a road map; the shipped ring. Enemy: a second thin outline outside; neutral: a pale grey dot, dashed.', pros: 'The lightest body that still carries the owner; the pale centre is the opposite of a dark target; cheap.', risks: 'A pale dot is high in value: at 0.45 it can catch the eye more than a city; light blue and light red are close in grayscale (the side rests on the enemy outline).', fps: '3 body textures / low', dpsc: 'no / no / no / yes', est: 'S, 0.5 d' },
     { what: 'No body: the capacity ring is the sign. Its room segments are in the owner\'s colour (a city keeps grey), a garrison unit is paper as on a city, a faint owner tint fills the inside. Enemy: a thin paper arc outside each segment; neutral: grey dashed segments.', pros: 'The owner shows around any token, because the ring is outside its radius: an enemy "?" in your province still sits in a blue ring; the lightest possible weight (only the ring); no centre at all.', risks: 'The ring colours mean something else on a province than on a city (room in the owner colour vs grey): one more rule to learn; a thin coloured ring on a coloured territory border can get lost.', fps: '3 x 4 ring textures (owner x garrison 0-3) / low', dpsc: 'no / no / no / yes', est: 'S, 1 d' },
     { what: 'The glass disc of PA with the capacity as three short arcs (top, lower right, lower left) instead of a closed ring of segments.', pros: 'No closed ring anywhere, so not even a hint of a target; the arcs sit between the corners of a ▽ token, so all three show round a garrison.', risks: 'Three arcs at 120 degrees can read as a "loading" or a recycling sign; a province no longer shares the ring with the cities (a city ring has segments all round).', fps: '3 bodies + 3 x 4 arc textures / low', dpsc: 'no / no / no / yes', est: 'S, 1 d' },
@@ -936,9 +941,9 @@ const INFO = {
     { what: 'One status row under the ring: the barracks on the left of the warehouse places, Defense on the right of them; with no warehouse (an enemy city, a province) the two sit under the ring together. The caption moves down under the row.', pros: 'The sides stay free for the roads; the city\'s own things (barracks, stock, defense) read as one line, top to bottom: progress, body, status, name.', risks: 'The caption moves down by 4-7 units, so captions crowd more on dense maps; a wide row for a capital (8 places + two icons); at 0.45 the row of 16 px icons is wider than the city.', fps: 'icons from the sprite pool / none', dpsc: 'no / no / no / yes', est: 'S-M, 1.5-2 d (part of #349, plus the caption rule of #449)' },
   ],
 };
-const REC = { p: 1, d: 1, b: 1 };
+const REC = { p: 3, d: 1, b: 1 };
 const REC_WHY = {
-  p: 'PA "Glass disc": it is the current city body made lighter (smaller, see-through, a thin outline) and nothing else, so it fits the map without a new rule, removes the dark target centre and keeps the shipped capacity ring. Second: PC "Place ring", if the owner of a province must show around a token (an enemy in your province); it adds one rule (room segments in the owner colour).',
+  p: 'PC "Place ring": the only variant whose owner still shows around a garrison token or an enemy "?" (the ring is outside the radius of a token), and the lightest one (no body at all, so no centre to read as a target); it is made of the shipped capacity ring, so it looks native. It adds one rule: the room segments of a province carry the owner colour. Second: PA "Glass disc", the current city body made smaller and see-through, if the province ring must keep the city colours (with a token it then reads as now, by its three segments).',
   d: 'D1 "Diamond pips": the diamond is already the bonus shot everywhere (the arena stock, the plan bonus), so the counter becomes the same word, exact and readable without colour, and a growing cap only adds a hollow diamond. Second: D3 "Filling shield", the most compact, if no extra width can be afforded.',
   b: 'L1 "Left column": it is B1 as accepted (#337) and specified in #349, with one Defense sign instead of two, the 16 px floor and no overlaps from 0.7 up; nothing sits on the token and the VP side stays free. Second: L2 "Split sides", if the left column gets too wide with the counter.',
 };
@@ -946,7 +951,7 @@ const REC_WHY = {
 // ======================================================================================================
 // State, scene data at time t
 // ======================================================================================================
-const st = { p: 1, d: 1, b: 1, z: 100, gray: 0, rm: 0, tags: 1, bg: 1, t: 1.2, play: 1, bd: 'plain', mag: 2, cmp: 0 };
+const st = { p: 3, d: 1, b: 1, z: 100, gray: 0, rm: 0, tags: 1, bg: 1, t: 1.2, play: 1, bd: 'plain', mag: 2, cmp: 0 };
 const REF = { p: 0, d: 0, b: 0 };
 const NP = (id) => ({ x: NODES[id].x, y: NODES[id].y });
 function planState(pl, t) {
@@ -1168,14 +1173,14 @@ const P_STATES = [
   ['neutral, fog', { k: 'P', o: 'none', name: 'North Peak', fog: true }],
 ];
 function samplesProv() {
-  const z = st.z / 100, w = 150, h = 120;
+  const z = st.z / 100, w = z < 0.6 ? 270 : 190, h = z < 0.6 ? 150 : 130;
   const cols = P_STATES.map(([label, m]) => [label, (i) => { const X = mkX('p' + SID++, z); return cellSvg(placeSample(m, X, i, st.d, st.b, w, h, -10).svg, w, h, X); }]);
   cols.push(['next to a small own city (weight)', (i) => {
-    const X = mkX('p' + SID++, z), W = 250;
+    const X = mkX('p' + SID++, z), W = z < 0.6 ? 420 : 300, sp = z < 0.6 ? 1.4 : 1;
     const city = placeSample({ k: 'S', o: 'you', name: 'Woodside', vp: 1, units: 2, marks: true, wh: { lvl: 1, st: 1 }, token: tokOf('you', 2, 1) }, X, i, st.d, st.b, W, h).svg;
     const pr1 = placeSample({ k: 'P', o: 'you', name: 'Boundary', units: 0, marks: true }, X, i, st.d, st.b, W, h).svg;
     const pr2 = placeSample({ k: 'P', o: 'enemy', name: 'Hillfoot' }, X, i, st.d, st.b, W, h).svg;
-    return cellSvg(G(-78, -12, city) + G(8, -12, pr1) + G(82, -12, pr2), W, h, X);
+    return cellSvg(G(-95 * sp, -12, city) + G(10 * sp, -12, pr1) + G(100 * sp, -12, pr2), W, h, X);
   }]);
   table(document.getElementById('spec_p'), PROVS, cols, st.p, 'p');
 }
@@ -1192,7 +1197,7 @@ const D_STATES = [
   ['enemy at PRESENCE: the mode only', MED('enemy', { def: true, token: tokOf('enemy', null, null, 'presence', true) })],
 ];
 function samplesDef() {
-  const z = st.z / 100, w = 200, h = 150;
+  const z = st.z / 100, w = z < 0.6 ? 330 : 230, h = z < 0.6 ? 190 : 160;
   const cols = D_STATES.map(([label, m]) => [label, (i) => { const X = mkX('d' + SID++, z); return cellSvg(placeSample(m, X, st.p, i, st.b, w, h, -6).svg, w, h, X); }]);
   table(document.getElementById('spec_d'), COUNTERS, cols, st.d, 'd');
 }
@@ -1206,7 +1211,7 @@ const L_STATES = [
   ['own province: Defense 1 of 2', { k: 'P', o: 'you', name: 'Forkway', units: 2, marks: true, def: { b: 1, cap: 2, next: 0.7 }, token: tokOf('you', 2, 2, 'exact', { b: 1, cap: 2, next: 0.7 }) }],
 ];
 function samplesLay() {
-  const z = st.z / 100, w = 230, h = 180;
+  const z = st.z / 100, w = z < 0.6 ? 400 : 300, h = z < 0.6 ? 240 : 200;
   const cols = L_STATES.map(([label, m]) => [label, (i) => {
     const X = mkX('l' + SID++, z), d = placeSample(m, X, st.p, st.d, i, w, h, 0), ov = overlaps(d.marks);
     return cellSvg(d.svg, w, h, X) + `<div class="ovl ${ov.length ? 'bad' : 'ok'}">${ov.length ? 'overlap: ' + ov.join(', ') : 'no overlap'}</div>`;
