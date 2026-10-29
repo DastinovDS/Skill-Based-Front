@@ -226,7 +226,13 @@ export const PROGRESS = {
  * tells it, not the colour), on the left of the capacity ring.
  */
 /** The barracks badge; the rim is drawn in the owner's colour (`YOU` or `ENEMY`, DEC-31). */
-export const BARRACKS_MARK = { radius: 7.5, fill: BG, stroke: { width: 2, color: YOU } } as const;
+export const BARRACKS_MARK = {
+  radius: 8,
+  fill: BG,
+  stroke: { width: 2, color: YOU },
+  /** The opponent's barracks: a light inner ring and a smaller house, so the side reads without the hue. */
+  enemy: { innerRadius: 5.6, ringWidth: 1, ringAlpha: 0.85, house: 0.78 },
+} as const;
 
 export const VP_BADGE_RADIUS = 8.5;
 export const VP_BADGE = { fill: BG, stroke: { width: 2, color: VP } } as const;
@@ -268,8 +274,37 @@ export const UNIT_MIN_SIDE_PX = 20;
 export const UNIT_MIN_HIT_PX = 28;
 export const UNIT_LABEL = { fill: PLATE_FILL, alpha: 0.92, padX: 4, height: 13, gap: 3 } as const;
 export const SHIELD_BADGE_SCALE = 0.9;
-/** The pill "+N / M" beside the shield of an own group in "Defense" (DEC-30); `tuck`: how far it runs under the disc. */
-export const DEFENSE_LABEL = { fontSize: 11, padX: 4, height: 15, tuck: -2, drop: 10 } as const;
+/**
+ * The counter of "Defense" (DEC-30, #349, D1 "Diamond pips"): a capsule of bonus diamonds beside the
+ * shield badge, a filled one for each bonus gathered and a hollow one for room up to the cap. Above
+ * `maxPips` places the row turns into the form of the arena stock, "filled x2, hollow x6", with the
+ * numbers as text of `fontSize`. `gap`: the capsule starts this far from the middle of the badge.
+ */
+export const DEFENSE_PIPS = {
+  maxPips: 6,
+  radius: 4,
+  /** Radius of the diamonds of the numbers form. */
+  smallRadius: 3.4,
+  pitch: 8.6,
+  /** The first diamond's centre from the capsule's near end. */
+  inset: 6.8,
+  /** The capsule is wider than the row of diamonds by this much. */
+  padding: 5,
+  height: 15,
+  gap: 8,
+  rim: 1.2,
+  plateAlpha: 0.96,
+  /** The outline of a hollow diamond. */
+  hollow: { width: 1.1, color: 0x9da7b3 },
+  fontSize: 10,
+  /** Width of one character of the numbers, for the width of the capsule. */
+  charWidth: 6,
+} as const;
+/**
+ * The marks of a city on its left (L1 "Left column", #349): the barracks over the "Defense" signs,
+ * one column outside the capacity ring, `step` apart, never smaller than `iconPx` on screen.
+ */
+export const CITY_COLUMN = { step: 19, clear: 1.5, iconPx: 16, badgeRadius: 9 } as const;
 /** The selection outline is a copy of the triangle this much bigger (9.5). */
 export const SELECT_UNIT_SCALE = 1.45;
 
@@ -299,9 +334,6 @@ export const ARROW_GAP = 6;
 export const ARROW_HEAD = { length: 14, width: 14 } as const;
 export const ARROW_OUTLINE = { width: 6, color: BG, alpha: 0.7 } as const;
 export const ORDER_LINE_ALPHA = 0.7;
-export const INTENT_ICON_DISTANCE = 25;
-/** Intent icon offset direction from the city centre, degrees (-135: up and to the left). */
-export const INTENT_ICON_ANGLE = -135;
 
 /** Red means only "opponent" (6), so a fight mark is paper white. */
 export const FIGHT_COLOR = PAPER;
@@ -513,8 +545,6 @@ export const RIBBON = {
     pulseLow: 0.45,
   },
 } as const;
-/** The disc of "Defense" with the delay arc around it. */
-export const DEFENSE_ARC = { gap: 3, width: 3 } as const;
 
 /** Thin line of an ordinary order (own only) with white chevrons every 26 units. */
 export const ORDER_LINE = {

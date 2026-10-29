@@ -19,6 +19,7 @@ import type {
 } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
+import { DEFENSE_VIEW, defenseSnapshot } from './defenseScene.ts';
 import { FIGURES_VIEW, figuresSnapshot } from './figuresScene.ts';
 import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
@@ -507,6 +508,15 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     snapshot: supplySnapshot(bundledMap('artery')),
     events: [],
     view: ARTERY_VIEW,
+    cityUpgrades: true,
+  },
+  {
+    // The artery moment with the sign of "Defense" in every state of the counter (#349).
+    id: 'defense',
+    map: 'artery',
+    snapshot: defenseSnapshot(bundledMap('artery')),
+    events: [],
+    view: DEFENSE_VIEW,
     cityUpgrades: true,
   },
   {

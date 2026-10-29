@@ -8,7 +8,6 @@
 import {
   BAR_GAP,
   BAR_SEGMENT,
-  BARRACKS_MARK,
   RING_GAP,
   RING_MAX_SEGMENTS,
   RING_SEGMENT,
@@ -164,13 +163,4 @@ export const BARRACKS_HOUSE: readonly (readonly [number, number])[] = [
 export function vpBadgeAt(radius: number): { x: number; y: number } {
   const d = ringRadius(radius) + VP_BADGE_RADIUS + 1;
   return { x: d * Math.cos(-Math.PI / 4), y: d * Math.sin(-Math.PI / 4) };
-}
-
-/**
- * Where the barracks mark sits: outside the capacity ring on the left of the city, clear of the VP
- * badge (upper right), the supply sign (upper left), the queue (above) and the warehouse bar
- * (below), from the city centre.
- */
-export function barracksAt(radius: number): { x: number; y: number } {
-  return { x: -(ringRadius(radius) + BARRACKS_MARK.radius + 1), y: 0 };
 }

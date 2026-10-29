@@ -491,7 +491,6 @@ export class EntityView implements EnemyAnchors {
         owner: stack.owner,
         modes: stack.modes,
         counts: { units: stack.units, charged: stack.charged },
-        defense: stack.defense,
         inside: true,
       });
       const city = nodePoint(this.map, stack.node);

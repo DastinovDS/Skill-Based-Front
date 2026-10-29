@@ -80,16 +80,7 @@ describe('EntityView, enemies seen in a city', () => {
   });
 });
 
-describe('EntityView, the Defense bonus beside the shield (DEC-30)', () => {
-  beforeEach(() => {
-    // jsdom has no canvas to measure text on: seven units a letter.
-    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
-      (text: string) => ({ width: text.length * 7, height: 14 }) as CanvasTextMetrics,
-    );
-  });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+describe('EntityView, the icon of units in a city and "Defense" (DEC-30, #349)', () => {
   const defender = (bonus: number | null, cap: number | null): GroupView => ({
     id: 'd',
     units: 3,
@@ -110,36 +101,23 @@ describe('EntityView, the Defense bonus beside the shield (DEC-30)', () => {
     visit(layers.layer.groups);
     return found;
   };
+  const shields = (layers: ReturnType<typeof createLayers>): string[] => {
+    const found: string[] = [];
+    const visit = (item: Container): void => {
+      if (!item.visible) return;
+      const spec = (item as { spec?: { key: string } | null }).spec;
+      if (spec?.key.startsWith('shield:') === true) found.push(spec.key);
+      for (const child of item.children) visit(child);
+    };
+    visit(layers.layer.groups);
+    return found;
+  };
 
-  it('shows "+N / M" by the shield of an own group in Defense, from the view', () => {
+  it('carries neither the shield nor "+N / M": the sign of the city is the column of `DefenseView`', () => {
     const layers = createLayers();
     const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
     view.update(frameWith([defender(1, 3)], false));
-    expect(texts(layers)).toContain('+1 / 3');
-    // It follows the snapshot: the bonus grows.
-    view.update(frameWith([defender(2, 3)], false));
-    expect(texts(layers)).toContain('+2 / 3');
-    expect(texts(layers)).not.toContain('+1 / 3');
-    view.destroy();
-  });
-
-  it('shows nothing for a group that is not in Defense, or has no numbers', () => {
-    const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
-    view.update(frameWith([{ ...defender(1, 3), mode: 'attack' }], false));
-    expect(texts(layers).filter((text) => text.startsWith('+'))).toEqual([]);
-    view.update(frameWith([defender(null, null)], false));
-    expect(texts(layers).filter((text) => text.startsWith('+'))).toEqual([]);
-    view.destroy();
-  });
-
-  it('never shows a number for the opponent: its icon has the shield and no bonus', () => {
-    const layers = createLayers();
-    const view = new EntityView(map, layers, 0, 1, () => 17, testSprites());
-    // A replay shows both sides; even if the data of the opponent's group had the numbers, the
-    // icon would show the mode only (the server never sends them: DEC-30, item 5).
-    const frame = frameWith([defender(2, 3)], false);
-    view.update({ ...frame, groups: frame.groups.map((g) => ({ ...g, owner: 1 as const })) });
+    expect(shields(layers)).toEqual([]);
     expect(texts(layers).filter((text) => text.startsWith('+'))).toEqual([]);
     view.destroy();
   });

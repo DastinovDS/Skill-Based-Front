@@ -27,6 +27,7 @@ import {
   CAPITAL_STAR,
   CITY_HALO,
   CITY_HALO_INSET,
+  DEFENSE_PIPS,
   FIGHT_COLOR,
   GLYPH_COLOR,
   INNER_RING,
@@ -57,6 +58,7 @@ import {
   NEUTRAL_STROKE,
   WARN,
 } from './style.ts';
+import { counterLayout, type DefensePips } from './defenseLayout.ts';
 import type { Point } from './camera.ts';
 
 // The baked shapes of the map (BL1-1 "Restrained", ui-style 26.3, #347). Each function returns the
@@ -326,9 +328,13 @@ export function vpBadgeSpec(): BakeSpec {
   };
 }
 
-/** The barracks badge: a dark disc with a house, the rim in the owner's colour. */
+/**
+ * The barracks badge (B1, #349): a dark disc with a house, the rim in the owner's colour. The
+ * opponent's has a light inner ring and a smaller house, so the side reads without the hue.
+ */
 export function barracksSpec(rim: number): BakeSpec {
   const radius = BARRACKS_MARK.radius;
+  const enemy = rim === ENEMY;
   return {
     key: `barracks:${String(rim)}`,
     box: shadowBox(circleBox(radius + 1), BAKE_MARGIN),
@@ -338,12 +344,18 @@ export function barracksSpec(rim: number): BakeSpec {
       g.circle(0, 0, radius)
         .fill(BARRACKS_MARK.fill)
         .stroke({ ...BARRACKS_MARK.stroke, color: rim });
-      g.poly(BARRACKS_HOUSE.flatMap(([x, y]) => [x, y])).fill(PAPER);
+      const k = enemy ? BARRACKS_MARK.enemy.house : 1;
+      if (enemy) {
+        g.circle(0, 0, BARRACKS_MARK.enemy.innerRadius).stroke({
+          width: BARRACKS_MARK.enemy.ringWidth,
+          color: PAPER,
+          alpha: BARRACKS_MARK.enemy.ringAlpha,
+        });
+      }
+      g.poly(BARRACKS_HOUSE.flatMap(([x, y]) => [x * k, y * k])).fill(PAPER);
     },
   };
 }
-
-// --- Group triangles (U1) --------------------------------------------------------------------------
 
 /** How the outline of a triangle is drawn: own, the opponent's (a second inner outline), dashed (unknown). */
 export type OutlineKind = 'own' | 'enemy' | 'dashed';
@@ -466,6 +478,59 @@ export function shieldSpec(color: number, enemy: boolean): BakeSpec {
       const g = graphics(into);
       g.circle(0, 0, 9).fill(PLATE_FILL).stroke({ width: 2.5, color });
       if (enemy) g.circle(0, 0, 5.5).stroke(PLATE_INNER_RING);
+      g.poly([-4.5, -5, 4.5, -5, 4.5, 1, 0, 5.5, -4.5, 1]).fill(GLYPH_COLOR);
+    },
+  };
+}
+
+/**
+ * The counter of "Defense" (D1 "Diamond pips", #349): the shield badge at the origin and, for an own
+ * group with places, a capsule of diamonds to its left (the side of the city's column): filled for a
+ * bonus gathered, hollow for room. Above `DEFENSE_PIPS.maxPips` places only the two diamonds are
+ * baked: the numbers are text laid over them (`counterLayout`). The opponent has the badge alone
+ * (`pips: null`): its bonus is never public (DEC-30, item 5; AGENTS.md 4.4).
+ */
+export function defenseCounterSpec(
+  color: number,
+  enemy: boolean,
+  pips: DefensePips | null,
+): BakeSpec {
+  const layout = pips === null || enemy ? null : counterLayout(pips);
+  if (layout === null) return shieldSpec(color, enemy);
+  const { gap, height, rim, plateAlpha, hollow } = DEFENSE_PIPS;
+  const left = -gap - layout.width;
+  const box: Box = { x: left - 1, y: -height / 2 - 1, width: 9 + 2 - left + 1, height: height + 2 };
+  const badge = circleBox(9 + 2);
+  const union: Box = {
+    x: Math.min(box.x, badge.x),
+    y: Math.min(box.y, badge.y),
+    width: Math.max(box.x + box.width, badge.x + badge.width) - Math.min(box.x, badge.x),
+    height: Math.max(box.y + box.height, badge.y + badge.height) - Math.min(box.y, badge.y),
+  };
+  const key =
+    layout.numbers.length === 0
+      ? layout.pips.map((p) => (p.filled ? 'f' : 'h')).join('')
+      : `n${String(layout.width)}`;
+  return {
+    key: `defense:${String(color)}:${key}`,
+    box: shadowBox(union, BAKE_MARGIN),
+    draw(into) {
+      const capsule = (g: Graphics): void => {
+        g.roundRect(left, -height / 2, layout.width, height, height / 2);
+      };
+      shadow(into, capsule);
+      shadow(into, (g) => g.circle(0, 0, 9));
+      const g = graphics(into);
+      capsule(g);
+      g.fill({ color: PLATE_FILL, alpha: plateAlpha }).stroke({ width: rim, color });
+      for (const pip of layout.pips) {
+        const cx = left + pip.x;
+        const r = pip.radius;
+        g.poly([cx, -r, cx + r, 0, cx, r, cx - r, 0]);
+        if (pip.filled) g.fill(PAPER);
+        else g.fill(BG).stroke(hollow);
+      }
+      g.circle(0, 0, 9).fill(PLATE_FILL).stroke({ width: 2.5, color });
       g.poly([-4.5, -5, 4.5, -5, 4.5, 1, 0, 5.5, -4.5, 1]).fill(GLYPH_COLOR);
     },
   };

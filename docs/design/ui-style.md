@@ -1242,11 +1242,11 @@ The principle: **one shape means one thing**, and the shape reads without color 
 | ▽ inverted triangle | a group of units; the fill from the tip = the share of charged; the number = units | map, arena chips (V3) |
 | ■ square | a **charge**: a warehouse place (filled: there is a charge, a frame: room, dashed: a level not built yet, C1 #348), an auto-supply packet (with a tail of two pale squares), a one-off transfer on a road (larger, with a double outline), the warehouse stock on the "Supply" layer, the head of a real shot with a tail (the SH1 tracer) **[accepted]** (#325, #345, #352) | warehouse under a city, roads, "Supply", the fight map |
 | a ring segment | one capacity place; filled with white: a unit stands there | the ring around a city |
-| ◇ diamond | a bonus (virtual) shot and the bonus stock (DEC-32) | arena (stock and caption), the head and echo of a tracer |
+| ◇ diamond | a bonus (virtual) shot and the bonus stock (DEC-32); **◆ filled = a "Defense" bonus gathered, ◇ hollow = room up to the cap** (the counter of "Defense", D1, #349, DEC-30; a row of up to 6, above it "◆ ×2 ◇ ×6") | arena (stock and caption), the head and echo of a tracer, the capsule beside the shield at a city |
 | ✕ cross | the meeting point of a fight on an edge; two shots met and went out (FX3, #351; two arcs of SH1 tracers converge in it, #352) | map |
 | a number in a circle with a rim | the VP of a city | at a city |
 | a hollow ring | a province (DEC-23): no city, no warehouse, no VP (C1, #348) | map |
-| shield / flag / little house / star | "Defense" / capture / barracks / capital | groups, cities, captions |
+| shield / flag / little house / star | "Defense" / capture / barracks / capital; the barracks of the opponent has a light inner ring and a smaller house (B1, #349) | groups, cities, captions |
 | `!` in an amber circle, a dashed ring | alert: overflow, they are coming for the city | around a city |
 | a cell (a wide frame) | one unit of a count or a duration: a CP, a queued unit, a build; **frame + dot** queued, **hatch + head line** in progress, **solid** done or ready, **dashed frame** a free slot; the dashed amber ring and `MAX` on a full bar (#439) | HUD CP bar, queue and build plates at a city |
 | `✂` | starvation (cut off from the capital, DEC-19) | city, "Supply" |
@@ -1858,7 +1858,7 @@ Checked in grayscale (`gray-overview-lobby.png`, `gray-overview-bot.png`): no st
 
 ## 35. Provinces in the current look, the "Defense" counter and the barracks placement (#431, #349)
 
-Status: **[awaiting the owner's decision]** (provinces: #431; the counter and the placement: #349). Asked for by the owner on 2026-10-29 after the decision of section 33 (units and cities stay as they are), so the postponement of section 23 does not apply to it. Until the choice, sections 9.4, 21 and 28 stay as they are.
+Status: **[accepted 2026-10-29]**: provinces **PB Pale dot** (not the recommended PC; #431, implemented in a separate PR), the counter **D1 Diamond pips** and the placement **L1 Left column** (#349, implemented: `defenseLayout.ts`, `defenseSigns.ts`, `defenseView.ts`, `cityView.ts`). Asked for by the owner on 2026-10-29 after the decision of section 33 (units and cities stay as they are), so the postponement of section 23 does not apply to it.
 
 Mockup: [`mockups/provinces-defense.html`](mockups/provinces-defense.html), frames in [`mockups/img/provinces-defense/`](mockups/img/provinces-defense/). The shell of round 4 (the `ridge` fragment at zoom 0.45, 0.7, 1.0, 1.5, the 9 s clock, grayscale, reduced motion, the frame in the address, the DEC-35 fog with the own territory unveiled, the "compare with Now" scene), with ODb orders, and the units, cities and roads drawn **exactly as the client draws them now** (from `bakedShapes.ts`, `shapes.ts`, `cityLayout.ts`, `progressLayout.ts`, `style.ts`, checked against `mise run shots`). Three independent pickers; the scene and every matrix use the current pick of the other two.
 
@@ -1874,7 +1874,9 @@ Findings the round keeps for every variant: **Now shows "Defense" twice** (the p
 | --- | --- |
 | ![recommended](mockups/img/provinces-defense/scene-recommended.png) | ![now](mockups/img/provinces-defense/scene-now.png) |
 
-**Owner's decision:** awaiting the owner's decision.
+**Owner's decision (2026-10-29):** provinces **PB**, the counter **D1**, the placement **L1**; units and cities otherwise stay as they are; orders ODb.
+
+**What the client does now (#349).** One sign of "Defense" per city and side, in the left column outside the capacity ring: the barracks icon (B1, 16 px floor) on top, the sign under it, the counter growing to the left. The sign is the shield badge; an own group with places carries the capsule of diamonds (filled = gathered, hollow = room, a growing cap adds a hollow one; above 6 places "◆ ×N ◇ ×M"); the opponent is the badge alone with its light inner ring, so its bonus never reaches the screen (DEC-30 item 5, AGENTS.md 4.4). It comes from the own group's mode where the group is seen, from the seen modes of the opponent, and from the public intent elsewhere (over the fog, as before). The token of the units in a city has no badge and no "+N / M" pill any more; the shield stays on the corner of a token on a road. The icons grow below zoom 1 so that they are 16 px on screen (`markScale`). The numbers stay in the tooltips and the group radial menu. Everything is baked: one texture per counter row (cap 1 to 6 by bonus gathered), one per width above 6 (the two numbers there are `Text`). The dev scene `defense` shows the matrix (0 of 3, 1 of 3, full, 1 of 2 beside a barracks, 2 of 8, no charged units, the opponent seen with its barracks, the opponent's intent in the fog). At zoom 0.45 the 16 px icons touch the neighbouring city in a dense row (the mockup reported touches at 0.45 in every variant, the previous look included); from 0.7 up nothing overlaps.
 
 ---
 

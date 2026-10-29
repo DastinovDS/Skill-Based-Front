@@ -34,7 +34,7 @@ const intent = (over: Partial<WireIntent>): WireIntent => ({
 function setup() {
   const layers = createLayers();
   const kit = new EntityKit(0, testSprites());
-  const view = new IntentView(map, layers, 0, kit, () => 17);
+  const view = new IntentView(map, layers, 0, () => 17);
   view.setDelays({ planned: 30 });
   const draw = (intents: WireIntent[], groups: GroupView[] = [], tick = 100) => {
     const snapshot: SnapshotMsg = {
@@ -291,20 +291,6 @@ describe('IntentView', () => {
     } finally {
       setReducedMotion(null);
     }
-    view.destroy();
-    kit.destroy();
-  });
-
-  it('shows the shield disc of Defense without a delay arc, and hides it when gone', () => {
-    const { view, draw, layers, kit } = setup();
-    const icons = layers.layer.intents.children[2];
-    const arcs = layers.layer.intents.children[3];
-    // DEC-30: no delay, the bonus grows; the disc has no arc from the first tick.
-    draw([intent({ owner: 0, kind: 'defense', origin: home, target: null, created_tick: 95 })]);
-    expect(icons?.children[0]?.visible).toBe(true);
-    expect(arcs?.getLocalBounds().width).toBe(0);
-    draw([]);
-    expect(icons?.children[0]?.visible).toBe(false);
     view.destroy();
     kit.destroy();
   });

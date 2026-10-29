@@ -9,6 +9,8 @@ import { EffectsView } from './effectsView.ts';
 import { FrameGuard } from './frameGuard.ts';
 import { EntityView } from './entityView.ts';
 import { FogView } from './fogView.ts';
+import { DefenseView } from './defenseView.ts';
+import { defenseSigns, signCounts } from './defenseSigns.ts';
 import { IntentView } from './intentView.ts';
 import { createLayers, type MapLayers } from './layers.ts';
 import { MapView } from './mapView.ts';
@@ -84,6 +86,7 @@ export class MapScene {
   private readonly names: NameView;
   private readonly entities: EntityView;
   private readonly intents: IntentView;
+  private readonly defense: DefenseView;
   private readonly effects: EffectsView;
   private readonly fog: FogView;
   private readonly overlay: OverlayView;
@@ -96,6 +99,7 @@ export class MapScene {
   private base: unknown = null;
   private destroyed = false;
   private supplyOn = false;
+  private readonly me: PlayerId;
   private readonly onsnapshot: ((tick: number) => void) | undefined;
   /** A frame that throws is skipped, not the end of the loop (CLI-03, #418). */
   private readonly guard: FrameGuard;
@@ -114,6 +118,7 @@ export class MapScene {
     this.guard = new FrameGuard(FRAME_FAILURE_LIMIT, (error) => options.onframefailure?.(error));
     this.layers = createLayers();
     const me = options.player ?? 0;
+    this.me = me;
     // Label resolution 1 is a placeholder: the controller reports the first camera right away.
     const hasBackground = options.backgroundUrl !== undefined && options.backgroundUrl !== null;
     const shapes = options.sprites ?? createSceneSprites(app.renderer);
@@ -125,7 +130,10 @@ export class MapScene {
     const radiusOf = (node: number): number => this.cities.radiusOf(node);
     this.names = new NameView(map, this.layers, radiusOf, 1);
     this.entities = new EntityView(map, this.layers, me, 1, radiusOf, this.sprites);
-    this.intents = new IntentView(map, this.layers, me, this.entities.kit, radiusOf);
+    this.intents = new IntentView(map, this.layers, me, radiusOf);
+    this.defense = new DefenseView(map, this.layers, me, this.sprites, radiusOf, (node) =>
+      this.cities.hasBarracks(node),
+    );
     this.effects = new EffectsView(
       map,
       this.layers,
@@ -225,6 +233,7 @@ export class MapScene {
     this.fog.destroy();
     this.alerts.destroy();
     this.effects.destroy();
+    this.defense.destroy();
     this.intents.destroy();
     this.entities.destroy();
     this.overlay.destroy();
@@ -319,6 +328,13 @@ export class MapScene {
     this.view.advance(this.frameMs);
     this.cities.advance(this.frameMs);
     this.intents.update(frame, this.entities.groupPoints());
+    // The sign of "Defense" and the barracks mark share one column on the left of a city (#349).
+    const signs = defenseSigns(
+      { nodes: frame.base.view.nodes, intents: frame.base.view.intents, groups: frame.groups },
+      this.me,
+    );
+    this.cities.setDefenseCounts(signCounts(signs));
+    this.defense.update(signs);
     const punches = this.effects.update(
       frame,
       this.source.events(),
@@ -394,6 +410,7 @@ export class MapScene {
     const resolution = labelResolution(camera.scale, this.app.renderer.resolution);
     this.sprites.setResolution(resolution);
     this.cities.setLabelResolution(resolution);
+    this.defense.setLabelResolution(resolution);
     this.overlay.setLabelResolution(resolution);
     this.overlay.setCameraScale(camera.scale);
     this.entities.setLabelResolution(resolution);
@@ -417,6 +434,8 @@ export class MapScene {
     });
     this.entities.setCameraScale(camera.scale);
     this.intents.setCameraScale(camera.scale);
+    this.defense.setCameraScale(camera.scale);
+    this.cities.setCameraScale(camera.scale);
     this.alerts.setCameraScale(camera.scale);
     this.fog.setCameraScale(camera.scale);
     this.fog.setLabelResolution(resolution);

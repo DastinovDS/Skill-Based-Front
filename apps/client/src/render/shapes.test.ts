@@ -19,7 +19,7 @@ describe('Token, the group triangle as baked sprites', () => {
     outline: BakedSprite;
     shield: BakedSprite;
   } => {
-    const [back, level, ticks, outline, , , shield] = token.view.children as BakedSprite[];
+    const [back, level, ticks, outline, , shield] = token.view.children as BakedSprite[];
     if (
       back === undefined ||
       level === undefined ||
@@ -154,5 +154,15 @@ describe('Token, the group triangle as baked sprites', () => {
     expect(sprites().shield.spec?.key).toBe(`shield:${String(YOU)}:`);
     token.set({ owner: 1, modes: ['defense'], counts: { units: 3, charged: 3 } });
     expect(sprites().shield.spec?.key).toBe(`shield:${String(ENEMY)}:e`);
+  });
+
+  it("has no shield on the icon of the units in a city: the sign is the city's own (#349)", () => {
+    token.set({
+      owner: 0,
+      modes: ['defense'],
+      counts: { units: 3, charged: 3 },
+      inside: true,
+    });
+    expect(sprites().shield.visible).toBe(false);
   });
 });

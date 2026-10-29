@@ -19,6 +19,7 @@ export const SCENES: readonly {
   { id: 'artery', tick: 2400 },
   { id: 'provinces', tick: 1200 },
   { id: 'progress', tick: 2400 },
+  { id: 'defense', tick: 2400 },
   { id: 'figures', tick: 2400 },
   { id: 'orders', tick: 2400 },
   { id: 'supply', tick: 2400, keys: ['Tab'] },
