@@ -25,11 +25,35 @@ describe('legal content', () => {
     );
   });
 
-  it('names what the app stores in the browser', () => {
+  it('names exactly the browser storage keys the code uses', () => {
+    // Every `sbf.*` key in the client source (not in tests, not in the legal text itself).
+    const sources = import.meta.glob<string>(
+      ['../**/*.ts', '../**/*.svelte', '!../**/*.test.ts', '!../i18n/legal/*.ts'],
+      { eager: true, query: '?raw', import: 'default' },
+    );
+    const used = new Set<string>();
+    for (const source of Object.values(sources)) {
+      for (const match of source.matchAll(/'(sbf\.[a-z]+(?:\.[a-z]+)*)'/g)) {
+        used.add(match[1] ?? '');
+      }
+    }
+    expect([...used].sort()).toEqual([
+      'sbf.guest',
+      'sbf.hints.last',
+      'sbf.hints.matches',
+      'sbf.locale',
+    ]);
     for (const locale of LOCALES) {
       const text = JSON.stringify(LEGAL_CONTENT[locale].privacy);
-      expect(text, locale).toContain('sbf.guest');
-      expect(text, locale).toContain('sbf.locale');
+      const named = new Set(text.match(/sbf\.[a-z]+(?:\.[a-z]+)*/g));
+      expect([...named].sort(), locale).toEqual([...used].sort());
+    }
+  });
+
+  it('does not send the reader to menu items that no longer exist', () => {
+    for (const locale of LOCALES) {
+      const text = JSON.stringify(LEGAL_CONTENT[locale].privacy);
+      expect(text, locale).not.toContain('Change nickname');
     }
   });
 });
