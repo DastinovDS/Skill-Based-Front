@@ -85,8 +85,10 @@ List the tasks with `mise tasks`; a task's arguments with `mise run <task> --hel
 `mise run -o prefix <task>` brings back the task labels.
 
 A new or changed project command is edited in `mise.toml` and in this table in the same PR. If a task from the table
-does not work, that is a bug: fix it. CI still calls the tools directly (moving it to mise is a separate issue); the tasks
-`check`, `test`, `test:perf`, `golden:check` repeat what the jobs `py` and `web` run.
+does not work, that is a bug: fix it. CI installs the tools with `jdx/mise-action` and calls the same tasks (`check:py`, `test:py`,
+`test:perf`, `golden:check HEAD^1`, `check:client`, `test:client`, `build`, `regen:protocol`, `regen:api`, `e2e:up`),
+so a task that passes locally is what CI runs; the tasks `check`, `test`, `test:perf`, `golden:check` repeat what the
+jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in `.github/workflows/ci.yml`.
 
 ### For agents
 

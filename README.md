@@ -117,8 +117,8 @@ and manually (`workflow_dispatch`).
 
 | Check | What it does |
 |---|---|
-| `py` | `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `gow-maps validate`, `pytest -n auto -m "not perf and not slow"` (pytest-xdist, `HYPOTHESIS_PROFILE=ci`), then `pytest -m perf` sequentially (performance budgets), replays and `check_golden_frozen` |
-| `web` | `pnpm -C apps/client install --frozen-lockfile`, the steps `protocol-drift` and `api-drift` (regenerate the protocol schema with `protocol.gen.ts` and the server OpenAPI with `api.gen.ts`, fail if they differ from the committed ones), `lint`, `check`, `test`, `build` |
+| `py` | `mise run setup:py`, `check:py` (`ruff check`, `ruff format --check`, `pyright`, `lint-imports`, `gow-maps validate`), `test:py` (`pytest -n auto -m "not perf and not slow"`, pytest-xdist, `HYPOTHESIS_PROFILE=ci`), then `test:perf` (`pytest -m perf`, sequentially, performance budgets), `golden:check HEAD^1` (replays re-simulate and stay frozen against the base) |
+| `web` | `mise run setup:client` and `setup:py`, the steps `protocol-drift` and `api-drift` (`regen:protocol` and `regen:api`: regenerate the protocol schema with `protocol.gen.ts` and the server OpenAPI with `api.gen.ts`, fail if they differ from the committed ones), `check:client` (lint, check), `test:client`, `build` |
 | `docker` | `hadolint` for `deploy/*.Dockerfile`, then `deploy/smoke.sh`: build the images, `docker compose up`, checks through Caddy |
 
 - The not required job `py-slow` runs in parallel with `py` on the same paths: `pytest -n auto -m slow`, that is the long
@@ -135,8 +135,14 @@ and manually (`workflow_dispatch`).
   (for example a documentation-only edit), the matching job is skipped, and GitHub counts a skipped job as
   successful: a required check does not hang waiting. If `changes` itself failed, all checks run in full.
   On a push to `develop` and on a manual run everything is checked.
-- Versions: Python from `.python-version`, pnpm from the `packageManager` field, Node from the `engines.node` field
-  in `apps/client/package.json`.
+- Tools: every job installs them with `jdx/mise-action`, so the versions of node, pnpm and uv come from `mise.toml`
+  (the only place; the version of mise itself is `MISE_VERSION` at the top of the workflow); Python comes from
+  `.python-version` through uv. The job steps call `mise run <task>`, the same tasks as on a developer machine
+  (`MISE_TASK_OUTPUT=interleave` in CI prints each command, so a red log shows which one failed). Caches:
+  the mise tools (the action), the uv cache (`uv.lock`) and the pnpm store (the lock files of `apps/client` and `e2e`).
+  The job `docker` calls `deploy/smoke.sh` directly (the task `smoke` uses the agents' own compose project) and
+  needs only node from mise; the job `e2e` runs the parts of the task `e2e` as separate steps to keep the stack logs
+  of a failed run.
 
 **Branch protection is not enabled.** For a private repository on the free plan the GitHub API answers
 `403 Upgrade to GitHub Pro or make this repository public to enable this feature` (for both branch protection
