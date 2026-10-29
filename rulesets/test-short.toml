@@ -60,6 +60,7 @@ mountains = 70
 round_ticks = 20
 shots_per_round = 1
 regroup_ticks = 10
+engage_ticks = 3 # DEC-37: a defender that left the node at most 3 ticks ago is caught into the fight
 
 [capacity]
 attrition_ticks = 30

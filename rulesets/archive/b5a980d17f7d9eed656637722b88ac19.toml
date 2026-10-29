@@ -1,0 +1,152 @@
+# Ruleset test-short: a short match for e2e (SIM-01, #17; AGENTS.md, section 5.4).
+#
+# Identical to mvp-0.toml in everything except match_ticks: a 60-second match instead of 15 minutes.
+# The meaning of the keys is described in mvp-0.toml. If you change mvp-0.toml, change this file too
+# (the test packages/sim/tests/test_ruleset.py compares them).
+# Available only in the dev and e2e environments (AGENTS.md, section 5.4).
+
+tick_hz = 10
+match_ticks = 600 # a 60-second match
+
+[cp]
+start = 300
+cap = 500
+per_period = 100
+period_ticks = 50
+
+[economy]
+charges_per_cp = 2
+start_stance = "balance" # DEC-09, as in mvp-0.toml
+
+[economy.stance_to_charges_pct]
+economy = 75
+balance = 50
+war = 25
+
+[orders]
+planned_delay_ticks = 30
+planned_bonus_per_edge = 1
+defense_ticks_per_bonus = 60
+stance_cooldown_ticks = 100
+
+[orders.cost]
+move = 100
+planned_move = 200
+cancel = 0
+split = 0
+merge = 0
+attack = 0
+defense = 200
+build = 50
+recruit = 100
+stance = 0
+front = 0
+rear_min = 0
+transfer = 0
+barracks = 300
+warehouse = 200
+
+[terrain.defense_mod]
+mountains = 1
+forest = 0
+plains = -1
+
+[terrain.speed_pct]
+plains = 125
+forest = 100
+mountains = 70
+
+[combat]
+round_ticks = 20
+shots_per_round = 1
+regroup_ticks = 10
+engage_ticks = 3 # DEC-37: a defender that left the node at most 3 ticks ago is caught into the fight
+
+[capacity]
+attrition_ticks = 30
+grace_ticks = 50
+
+[capacity.by_kind]
+capital = 10
+city_large = 8
+city_medium = 6
+city_small = 4
+province = 3
+
+[starvation]
+# Starvation when cut off (DEC-19, #231; mechanics.md, section 7). A city of one's own, cut off from one's own
+# capital (no path through one's own nodes), spends the garrison's charges: at the ticks
+# cut_since + grace_ticks + k * period_ticks the garrison loses charges * ceil(U / per_units) charges,
+# U: the owner's units standing in the city. The warehouse first, then the units' charges. Units do not die.
+# Provinces and neutral nodes do not starve.
+grace_ticks = 100 # grace period after being cut off: 10 s
+period_ticks = 100 # consumption once per 10 s
+charges = 1 # charges ...
+per_units = 3 # ... per each started 3 units
+
+[supply]
+dispatch_ticks = 10
+rear_min_default = 1
+rear_min_max = 8
+recharge_per_tick = 1
+base_speed_pct = 100
+front_markers = 2
+
+[supply.fast_speed_pct]
+2 = 150
+3 = 200
+
+[supply.amount_by_level]
+1 = 1
+2 = 2
+3 = 3
+
+[road.speed_pct]
+2 = 115
+3 = 130
+
+[build]
+ticks_per_level = 150
+
+[recruit]
+unit_ticks = 30
+queue_max = 3
+refund_started_pct = 50
+location = "any_city"
+
+[victory]
+vp_period_ticks = 300
+capital_multiplier = 3
+
+[city_upgrades]
+enabled = false
+barracks_ticks = 100
+warehouse_ticks = 100
+
+[warehouse]
+gain_per_level = 1
+max_level = 2
+
+[warehouse.start_by_kind]
+capital = 6
+city_large = 2
+city_medium = 2
+city_small = 1
+
+[vision]
+range_starts = [1, 3, 6, 11, 21]
+
+[vision.by_terrain.plains]
+plains = "exact"
+forest = "range"
+mountains = "presence"
+
+[vision.by_terrain.forest]
+plains = "range"
+forest = "range"
+mountains = "presence"
+
+[vision.by_terrain.mountains]
+plains = "exact"
+forest = "range"
+mountains = "range"

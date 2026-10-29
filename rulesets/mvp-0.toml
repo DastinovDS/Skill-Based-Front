@@ -102,6 +102,7 @@ mountains = 70 # slower
 round_ticks = 20 # a round: 2 s (DEC-32)
 shots_per_round = 1 # shots of a side per round
 regroup_ticks = 10 # regrouping of the winner on an edge: 1 s
+engage_ticks = 3 # DEC-37: a defender that left the node at most 3 ticks ago is caught into the fight
 
 [capacity]
 # Node capacity (DEC-22, #234; mechanics.md, section 8): limits the number of units standing in a node and,

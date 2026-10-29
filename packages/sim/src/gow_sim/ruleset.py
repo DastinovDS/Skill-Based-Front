@@ -220,11 +220,14 @@ class TerrainRules:
 @dataclass(frozen=True, slots=True)
 class CombatRules:
     """Fights over time (DEC-24, item B): rounds every ``round_ticks``, ``shots_per_round`` shots
-    of each side per round; the winner of an edge fight goes on ``regroup_ticks`` after its end."""
+    of each side per round; the winner of an edge fight goes on ``regroup_ticks`` after its end.
+    ``engage_ticks``: the engagement zone of a node (DEC-37): a defender that left the node at most
+    this many ticks ago (counting the current one) is caught into the attacker's fight; 0: off."""
 
     round_ticks: int
     shots_per_round: int
     regroup_ticks: int
+    engage_ticks: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -529,7 +532,9 @@ def parse_ruleset(data: object) -> Ruleset:
         ),
         terrain=_parse_terrain(root.table("terrain", ("defense_mod", "speed_pct"))),
         combat=_parse_combat(
-            root.table("combat", ("round_ticks", "shots_per_round", "regroup_ticks"))
+            root.table(
+                "combat", ("round_ticks", "shots_per_round", "regroup_ticks", "engage_ticks")
+            )
         ),
         capacity=_parse_capacity(
             root.table("capacity", ("attrition_ticks", "grace_ticks", "by_kind"))
@@ -626,6 +631,7 @@ def _parse_combat(t: "_Table") -> CombatRules:
         round_ticks=t.integer("round_ticks", low=1),
         shots_per_round=t.integer("shots_per_round", low=1),
         regroup_ticks=t.integer("regroup_ticks", low=0),
+        engage_ticks=t.integer("engage_ticks", low=0),
     )
 
 
