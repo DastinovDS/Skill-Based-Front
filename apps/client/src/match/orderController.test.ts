@@ -131,8 +131,8 @@ describe('OrderController', () => {
   it('only selects when there is no match to send to', () => {
     const { controller, hud } = setup(false);
     controller.click({ kind: 'group', id: group.id }, false);
-    controller.click({ kind: 'node', id: enemy.id }, false);
-    expect(hud.selection).toEqual({ kind: 'node', id: enemy.id });
+    controller.click({ kind: 'node', id: other.id }, false);
+    expect(hud.selection).toEqual({ kind: 'node', id: other.id });
   });
 
   it('previews the target with the dotted line, and the combat estimate is gone', () => {

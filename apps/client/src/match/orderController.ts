@@ -330,9 +330,9 @@ export class OrderController implements MapInteraction {
       this.#clickStack(hit.node, hit.ids);
       return;
     }
-    // A province is only a destination (DEC-23): it is never selected, lit or given a menu, so a
-    // click on one that is not an order is a click on nothing.
-    if (hit.kind === 'node' && this.#isProvince(hit.id)) {
+    // A province is only a destination (DEC-23) and an enemy city is only a target (#535): neither
+    // is selected, lit or given a menu, so a click on one that is not an order is a click on nothing.
+    if (hit.kind === 'node' && this.#isUnselectable(hit.id)) {
       this.deselect();
       return;
     }
@@ -374,8 +374,8 @@ export class OrderController implements MapInteraction {
     const wasOpen = this.stackMenu.current.open && this.stackMenu.current.target === node;
     this.#closeMenus();
     const selected = this.#o.hud.selection;
-    if (this.#isProvince(node)) {
-      // The list opens, but the province itself is not selected (DEC-23).
+    if (this.#isUnselectable(node)) {
+      // The list opens, but the province or the enemy city itself is not selected (DEC-23, #535).
       if (!(selected?.kind === 'group' && ids.includes(selected.id))) this.#o.hud.select(null);
     } else if (!(selected?.kind === 'group' && ids.includes(selected.id))) {
       this.#o.hud.select({ kind: 'node', id: node });
@@ -1018,6 +1018,16 @@ export class OrderController implements MapInteraction {
     return this.#o.map.nodes[id]?.kind === 'province';
   }
 
+  /** The node `id` is a city the enemy holds in the snapshot on screen (a target, never selected, #535). */
+  #isEnemyNode(id: number): boolean {
+    return this.#o.hud.current?.nodes.some((n) => n.id === id && n.owner === 'enemy') ?? false;
+  }
+
+  /** A province or an enemy city: it is only a destination, so it gets no selection and no highlight. */
+  #isUnselectable(id: number): boolean {
+    return this.#isProvince(id) || this.#isEnemyNode(id);
+  }
+
   /** The node `id` is one of the player's own cities in the snapshot on screen. */
   #isOwnNode(id: number): boolean {
     return this.#o.hud.current?.nodes.some((n) => n.id === id && n.owner === 'mine') ?? false;
@@ -1028,6 +1038,9 @@ export class OrderController implements MapInteraction {
    * gone, the city was captured, another thing got selected) the menu goes. Cheap, runs every frame.
    */
   #syncTargetMenus(): void {
+    // A selected city the enemy has captured meanwhile loses the highlight with its menu (#535).
+    const picked = this.#o.hud.selection;
+    if (picked?.kind === 'node' && this.#isEnemyNode(picked.id)) this.deselect();
     const city = this.cityMenu.current;
     if (city.open) {
       const selection = this.#o.hud.selection;
@@ -1048,11 +1061,11 @@ export class OrderController implements MapInteraction {
     if (stack.open) {
       // The list belongs to its city while it is selected (or a group in it is) and has a choice.
       const node = this.#o.hud.selection?.kind === 'node' ? this.#o.hud.selection.id : null;
-      // A province is never selected: its list stays open with nothing selected (DEC-23).
+      // A province or an enemy city is never selected: its list stays open with nothing selected.
       const at =
         node ??
         this.#selectedGroup()?.node ??
-        (this.#o.hud.selection === null && this.#isProvince(stack.target ?? -1)
+        (this.#o.hud.selection === null && this.#isUnselectable(stack.target ?? -1)
           ? stack.target
           : null);
       if (at !== stack.target || this.stackGroups().length < 2) this.stackMenu.close();
