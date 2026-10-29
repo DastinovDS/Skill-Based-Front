@@ -1276,6 +1276,7 @@ function drawWater(ctx, v, z) {
     ctx.strokeStyle = 'rgba(40,58,44,.22)'; ctx.lineWidth = 16; ctx.stroke(); ctx.strokeStyle = 'rgba(40,58,44,.22)'; ctx.lineWidth = 7; ctx.stroke();
     ctx.restore();
     waterPath(ctx); ctx.fillStyle = ctx.createPattern(waterTile(), 'repeat'); ctx.fill('nonzero');
+    waterPath(ctx, ['river']); ctx.fillStyle = 'rgba(118,160,168,.42)'; ctx.fill('nonzero');   // a river is shallow: lighter than a lake
     ctx.save(); clipWater(ctx); coastPath(ctx, (c) => c.water !== 'river'); ctx.lineCap = ctx.lineJoin = 'round';
     ctx.strokeStyle = 'rgba(120,168,170,.18)'; ctx.lineWidth = 34; ctx.stroke();
     ctx.strokeStyle = 'rgba(140,186,180,.26)'; ctx.lineWidth = 16; ctx.stroke();
@@ -1381,7 +1382,7 @@ function movesOverlay(X) {
     const a = NOW_POS[id], b = NEW_POS[id], ok = travelCheck(id).every((r) => r.ok);
     s += `<circle cx="${f1(a.x)}" cy="${f1(a.y)}" r="${f1(X.px(9))}" fill="none" stroke="${C.paper}" stroke-width="${f1(X.px(1.6))}" stroke-dasharray="${f1(X.px(3))} ${f1(X.px(3))}"/>`;
     s += `<path d="M${f1(a.x)} ${f1(a.y)}L${f1(b.x)} ${f1(b.y)}" stroke="${ok ? '#3fb950' : C.warn}" stroke-width="${f1(X.px(2.4))}" marker-end="url(#${X.P}arr)"/>`;
-    s += text(a.x, a.y - X.px(16), `moved ${Math.round(Math.hypot(b.x - a.x, b.y - a.y))}`, X.px(10), C.paper, halo(X.px(3)));
+    s += text(a.x, a.y - X.px(26), `moved ${Math.round(Math.hypot(b.x - a.x, b.y - a.y))}`, X.px(10), C.paper, halo(X.px(3)));
   }
   return s;
 }
@@ -1395,7 +1396,7 @@ const SPOTS = {
   lakes: { name: 'West lakes and bridges', vb: { x: 170, y: 520, w: 640, h: 520 } },
   mouth: { name: 'River mouth and the sea', vb: { x: 150, y: 820, w: 640, h: 420 } },
   north: { name: 'North bay and streams', vb: { x: 380, y: 0, w: 700, h: 470 } },
-  ridge: { name: 'The ridge, a lake and a long river (right half)', vb: { x: 1060, y: 160, w: 760, h: 560 } },
+  west: { name: 'A spring, a long river and two bridges', vb: { x: 20, y: 300, w: 560, h: 520 } },
 };
 let VB = { x: 0, y: 0, w: WORLD.w, h: WORLD.h };
 const inView = (x, y, m = 60) => x > VB.x - m && x < VB.x + VB.w + m && y > VB.y - m && y < VB.y + VB.h + m;

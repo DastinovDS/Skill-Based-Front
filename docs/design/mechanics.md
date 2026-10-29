@@ -2480,7 +2480,109 @@ Alternatives (not chosen):
 
 ### Map geography: water cells, rivers as area borders, areas touch only along roads (DEC-36, #537) **[proposed]**
 
-> Draft, being written in #537. Decision: awaiting the owner's decision.
+**Decision: awaiting the owner's decision.** Until it is accepted, DEC-27, item 3 ("no water") stays in force and nothing below is implemented.
+
+The owner's feedback of 2026-10-29 on the river variants of the #429 mockup (`docs/design/mockups/supply-terrain.html`):
+rivers and the visual separation of territories must be reworked; the map may have whole cells of sea or lake;
+rivers and the borders they form must look better and more natural, still in the map's style; no sliver of one
+node's area may stick into a neighbouring area; ideally the areas of two nodes touch **only where a road links them**,
+elsewhere water, a river or another natural border separates them.
+
+**This is not a rule change.** The mechanics are frozen for the release (the note at the top of this document): DEC-36
+changes only the picture of the map and the data that draws it. The simulation, the server, the bots and the
+protocol read none of it (the list in item 7). Format and tools: `docs/design/map-format.md`, section "Format change
+proposal under DEC-36". Mockup: `docs/design/mockups/map-geography.html` (the pool map `ridge` re-imagined, four
+water variants, the check of item 3, the moved nodes of item 9); prototype generator:
+`docs/design/mockups/src/map_geography.py`.
+
+Today (measured on the pool maps by the mockup and its generator): on `ridge` 48 of the 130 pairs of touching
+areas have no road between their nodes (`crossroads` 32 of 124, `highway` 47 of 123); and the picture and the
+territory do not agree, because the client tints straight Voronoi cells (`voronoi.ts`) while the baker warps the
+borders of the same cells by noise (`gow_maps.bake`, `WARP = 40`): on 11 to 12.5 percent of each map the ground under
+a tint belongs to another area, on 6.6 to 7.7 percent it is even another terrain. That is the "sliver of another
+territory" the owner saw.
+
+Proposal (each item is a default for the owner to confirm or change):
+
+1. **Water returns, as part of the picture.** A map may have **water cells**: a sea (at the edge of the map) or a
+   lake (inside), each set by a point and a radius in the authored geography of the map. The water cell takes the
+   ground around its point exactly as a node takes its area (item 2). **Would supersede DEC-27, item 3** ("no water
+   for now", status to change to [superseded by DEC-36] only when this decision is accepted). Why the earlier
+   objection no longer applies: the water of the old baker was the sea below a density threshold of the
+   prototype generator, unrelated to the graph, so it suggested a rule that did not exist; under DEC-36 water lies
+   exactly where the areas do not connect, so it shows the graph instead of contradicting it.
+2. **Areas.** The area of a node is the ground nearer to it than to any other site; the site of a node is its
+   point and the halves of its roads up to the border point (`border_permille`, DEC-23, item 5), the site of a water
+   cell is its point minus its radius. The borders are warped by the baker's noise, and the warp fades near roads.
+   Consequences: a road always runs through its own two areas only, and **their border crosses the road at its
+   border point** (the DEC-21 border point becomes visible on the ground).
+3. **The adjacency rule.** Two land areas share a border only if a road connects their nodes. On every other
+   border of two areas a stream or a river is cut (it widens toward other water). Every area is one piece and
+   holds its node: a land piece cut off from its node becomes the water around it (no slivers, no exclaves).
+   The validator checks this (the new check `geography`, map-format.md).
+4. **Long rivers.** Besides the streams of item 3, a map may have long rivers: a spring point (or a lake) and the
+   water it flows into; the river runs along area borders. Where it passes a road it does so at the road's border
+   point, and a **bridge** is drawn there. A bridge is a picture: the road is unchanged, crossing it costs nothing
+   (rivers and bridges as obstacles would be a rule: a separate DEC after the release, item 13).
+5. **One geometry for the picture and the territory.** The baker writes, next to the background, the vectors of
+   the areas, the water and the rivers; the client draws the territory tint, the owner borders, the fog veil and
+   picks an area from that file instead of its own Voronoi cells (maps without the file keep the Voronoi cells).
+   The tint and the ground then agree everywhere.
+6. **Rendering.** Variants (mockup, section "Water variants"): W1 flat ink, W2 shallows and banks, W3 engraved
+   coast, W4 painted T2 water. **Recommended: W4**, baked into `maps/<id>.bg.webp` (no per-frame cost): flat water in
+   two tones, a soft shore without a hard line, reed tufts on the banks that thin out away from the water (the T2
+   language of details thinning at an edge), faint flow streaks on rivers, wooden bridges. The owner border line
+   runs along a coast where the territory ends at water, and not along a river between two areas of one owner.
+7. **What does not change.** The graph, the roads and their levels, `travel_ticks`, `border_permille`, capacities,
+   supply, vision (DEC-21, DEC-35), fights, the ruleset, `PlayerView`, the protocol, `SIM_VERSION`,
+   `PROTOCOL_VERSION`, the map file `maps/<id>.json` and its loader (water is not a field of the map file). The
+   geography stays public to everyone (section 10, DEC-04), as the background is now.
+8. **Symmetry.** The rules stay mirrored (DEC-27, item 1); water, rivers and bridges are free like the
+   coordinates, so the two halves of a map may differ in the picture (on `ridge` the seas of the two corners mirror
+   each other, the lakes do not).
+9. **Node coordinates may move,** to give a stream or a lake room (on `ridge`: four nodes 131 to 159 units from a
+   neighbour without a road, moved 25 to 45 units). The game does not read coordinates (DEC-27, item 1), but the
+   validator ties the drawn length of a road to its `travel_ticks` (DEC-27, item 4, 15 percent). A move that keeps
+   every road of the node within that tolerance changes no simulation result (the four moves of the mockup do);
+   a move beyond it would change `travel_ticks`, a balance change of the map that needs a tournament (AGENTS.md,
+   section 8).
+10. **Scope.** The three pool maps (`ridge`, `crossroads`, `highway`) get a geography; the fixtures `artery`, `web`,
+    `pass` and the test maps keep the Voronoi cells and the land-only background (they are not served, the dev
+    scenes and visual references use them); the menu map (#474) follows the pool when it lands.
+11. **How much water.** About a fifth of the map on `ridge` (20 percent: two seas in the corners, two bays, four
+    lakes; rivers and streams 2 percent). The owner may ask for less (fewer lakes) without changing the rule.
+12. **Determinism.** The baker stays deterministic (the map seed); the vector file is generated, committed and
+    checked like the background (a map edit without `bake` breaks CI).
+13. **Not in DEC-36:** rivers or lakes as obstacles, bridges or fords as chokepoints, movement or vision by water.
+    They would be rules: a DEC with a ruleset flag after the release (#429).
+
+Worked examples (the validator check `geography`, map-format.md; one "bad" fixture per row).
+
+| # | Map | Result |
+|---|---|---|
+| 1 | the areas of A and B share land, a road A-B exists | `OK` |
+| 2 | the areas of A and B share land, no road A-B | `FAIL [geography]` (a stream must separate them) |
+| 3 | a stream separates A and B, no road A-B | `OK` |
+| 4 | the area of A in two pieces (a piece cut off by a river or a coast) | `FAIL [geography]` |
+| 5 | a road crosses a lake | `FAIL [geography]` |
+| 6 | a long river passes the road A-B at its border point (a bridge) | `OK`; A and B may then share no land at all |
+| 7 | a node closer than `water_clearance` (60 units) to water | `FAIL [geography]` |
+| 8 | mirrored roads: one with a bridge, the other without | `OK` (the picture is free, item 8) |
+| 9 | `ridge` today (land only, warped Voronoi) | `FAIL [geography]`: 48 pairs touch without a road; the check is off for a map without a geography file |
+| 10 | a node moved 40 units, every road within 15 percent of its `travel_ticks` | `OK`; same `travel_ticks`, same simulation results |
+
+What the implementation would change (impact estimate in #537): the map tools (`gow-maps bake` with areas, water,
+rivers, the vector file; the validator check `geography`), the authored geography of the three pool maps, the
+client territory layer (tint, borders, glow, veil, picking, the capture effect and the Supply view from the vector
+file), the docs (`map-format.md`, `maps/README.md`, `ui-style.md`). Not the simulation, the protocol or the golden
+replays (they replay frozen copies of the fixture maps, `packages/sim/tests/golden/v*/maps/`).
+
+Alternatives (not chosen):
+- Keep the land-only map and separate unconnected cells by a drawn strip (#428, PR #445): tried and removed in #451 as out of place.
+- Derive rivers in the client from the Voronoi cells (#429, variants A to C): no water cells, the ground and the tint still disagree, short streams with nowhere to flow.
+- Paint water only where it looks good and accept some unconnected contacts (#429, variant D): misses the owner's rule "touch only along roads".
+- Move nodes freely and recompute `travel_ticks`: a balance change of every map, a tournament, for no gain over item 9.
+- Rivers as obstacles with bridges as chokepoints: a rule, out of scope for the release (item 13).
 
 ### Spoils from warehouses
 
