@@ -172,7 +172,7 @@ describe('CityView: the warehouse places of an own city (C1, DEC-26)', () => {
   });
 });
 
-describe('CityView: a province is a hollow ring (C1, DEC-23)', () => {
+describe('CityView: a province is a pale dot (PB, #431, DEC-23)', () => {
   // The pool maps (DEC-27) have provinces; the first one starts with two own provinces.
   const pool = BUNDLED_MAPS.find((m) => m.meta.name === 'crossroads') as MapFile;
   const snapshot = devSnapshot(pool, DEV_RULES, 100);
@@ -187,7 +187,7 @@ describe('CityView: a province is a hollow ring (C1, DEC-23)', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('is drawn as a ring, not as a city body, in every state of ownership', () => {
+  it('is drawn as a dot, not as a city body, in every state of ownership', () => {
     if (ownProvince === undefined || neutralProvince === undefined || ownCity === undefined) {
       throw new Error('the pool map has no provinces to look at');
     }
