@@ -46,7 +46,27 @@ export interface SupplyCut {
 export type SupplyPresence =
   { readonly kind: 'node'; readonly id: number } | { readonly kind: 'edge'; readonly id: number };
 
+/** An own road with both ends in own cities: the supply runs there, drawn as a pipe of its level (#429). */
+export interface SupplyPipe {
+  readonly edge: number;
+  readonly a: number;
+  readonly b: number;
+  /** The road level 1..3 (the wire `width`, DEC-22); the bore of the pipe. */
+  readonly level: number;
+}
+
+/** A road between an own city and a place that is not own: supply stops at its border point. */
+export interface SupplyBulkhead {
+  readonly edge: number;
+  readonly a: number;
+  readonly b: number;
+}
+
 export interface SupplyScene {
+  readonly pipes: readonly SupplyPipe[];
+  readonly bulkheads: readonly SupplyBulkhead[];
+  /** The level of every road the view knows, by road id (a flow on a road without a pipe uses it). */
+  readonly levels: ReadonlyMap<number, number>;
   readonly flows: readonly SupplyFlow[];
   readonly stocks: readonly SupplyStock[];
   readonly markers: readonly SupplyMarker[];
@@ -95,8 +115,18 @@ export function supplyFlows(view: View, index: EdgeIndex): SupplyFlow[] {
   );
 }
 
-/** Everything the layer shows of the snapshot `view` for the player `me`. */
-export function supplyScene(view: View, me: PlayerId, index: EdgeIndex): SupplyScene {
+const clampLevel = (width: number): number => Math.min(3, Math.max(1, Math.round(width)));
+
+/**
+ * Everything the layer shows of the snapshot `view` for the player `me`. `edges`: the ends of the
+ * roads of the map by road id (the view has the level of a road, not its ends).
+ */
+export function supplyScene(
+  view: View,
+  me: PlayerId,
+  index: EdgeIndex,
+  edges: readonly { readonly a: number; readonly b: number }[] = [],
+): SupplyScene {
   const stocks: SupplyStock[] = [];
   const cut: SupplyCut[] = [];
   const presence: SupplyPresence[] = [];
@@ -123,14 +153,27 @@ export function supplyScene(view: View, me: PlayerId, index: EdgeIndex): SupplyS
       presence.push({ kind: 'edge', id: edge.id });
     }
   }
+  const levels = new Map<number, number>();
+  const pipes: SupplyPipe[] = [];
+  const bulkheads: SupplyBulkhead[] = [];
+  for (const edge of view.edges) {
+    const level = clampLevel(edge.width);
+    levels.set(edge.id, level);
+    const ends = edges[edge.id];
+    if (ends === undefined) continue;
+    const a = view.nodes[ends.a]?.owner;
+    const b = view.nodes[ends.b]?.owner;
+    if (a === me && b === me) pipes.push({ edge: edge.id, a: ends.a, b: ends.b, level });
+    else if (a === me || b === me) bulkheads.push({ edge: edge.id, a: ends.a, b: ends.b });
+  }
   const markers: SupplyMarker[] = [];
   view.me.fronts.forEach((node, marker) => {
     if (node !== null) markers.push({ marker, node });
   });
-  return { flows: supplyFlows(view, index), stocks, markers, cut, presence };
+  return { pipes, bulkheads, levels, flows: supplyFlows(view, index), stocks, markers, cut, presence };
 }
 
-// --- Flow arrows ------------------------------------------------------------------------------
+// --- Lanes ------------------------------------------------------------------------------
 
 /** The point of a road at `at` (0..1) of the way `from` to `to`, moved sideways by `lane`. */
 export function lanePoint(from: Point, to: Point, at: number, lane: number): Point {

@@ -114,7 +114,8 @@ describe('what the layer draws (DEC-28, item 8)', () => {
     throw new Error('the dev snapshot lacks seen enemy cities');
   }
   const idx = edgeIndex(DEFAULT_MAP);
-  const scene = (over: Partial<View> = {}) => supplyScene({ ...base, ...over }, 0, idx);
+  const scene = (over: Partial<View> = {}) =>
+    supplyScene({ ...base, ...over }, 0, idx, DEFAULT_MAP.edges);
 
   it('shows the warehouses of own cities only, never the enemy ones (DEC-04, DEC-17)', () => {
     const { stocks } = scene();
@@ -172,7 +173,59 @@ describe('what the layer draws (DEC-28, item 8)', () => {
       id: enemyExact.id,
     });
     // Nothing about the enemy's numbers, stock, packets or markers reaches the scene.
-    expect(Object.keys(scene()).sort()).toEqual(['cut', 'flows', 'markers', 'presence', 'stocks']);
+    expect(Object.keys(scene()).sort()).toEqual([
+      'bulkheads',
+      'cut',
+      'flows',
+      'levels',
+      'markers',
+      'pipes',
+      'presence',
+      'stocks',
+    ]);
+  });
+});
+
+describe('pipes (#429)', () => {
+  const base = devSnapshot(DEFAULT_MAP, DEV_RULES, 30).view;
+  const idx = edgeIndex(DEFAULT_MAP);
+  const scene = (over: Partial<View> = {}) =>
+    supplyScene({ ...base, ...over }, 0, idx, DEFAULT_MAP.edges);
+  const owner = (id: number) => base.nodes[id]?.owner;
+
+  it('a pipe for every road whose two ends are own cities, with the level of the view', () => {
+    const edges = base.edges.map((e) => ({ ...e, width: e.id % 3 === 0 ? 3 : 2 }));
+    const { pipes } = scene({ edges });
+    expect(pipes.length).toBeGreaterThan(0);
+    for (const pipe of pipes) {
+      expect(owner(pipe.a)).toBe(0);
+      expect(owner(pipe.b)).toBe(0);
+      expect(pipe.level).toBe(pipe.edge % 3 === 0 ? 3 : 2);
+    }
+    const own = DEFAULT_MAP.edges.filter((e) => owner(e.a) === 0 && owner(e.b) === 0);
+    expect(pipes.map((p) => p.edge).sort()).toEqual(own.map((e) => e.id).sort());
+  });
+
+  it('a bulkhead for every road between an own city and a place that is not own, no pipe', () => {
+    const { pipes, bulkheads } = scene();
+    expect(bulkheads.length).toBeGreaterThan(0);
+    for (const bulkhead of bulkheads) {
+      expect([owner(bulkhead.a), owner(bulkhead.b)].filter((o) => o === 0)).toHaveLength(1);
+      expect(pipes.map((p) => p.edge)).not.toContain(bulkhead.edge);
+    }
+  });
+
+  it('clamps a level the view gives out of 1..3 and keeps every road level for the flows', () => {
+    const edges = base.edges.map((e) => ({ ...e, width: 7 }));
+    const { levels } = scene({ edges });
+    expect(levels.size).toBe(base.edges.length);
+    expect([...levels.values()].every((l) => l === 3)).toBe(true);
+  });
+
+  it('no pipe and no bulkhead without the ends of the roads', () => {
+    const bare = supplyScene(base, 0, idx);
+    expect(bare.pipes).toEqual([]);
+    expect(bare.bulkheads).toEqual([]);
   });
 });
 

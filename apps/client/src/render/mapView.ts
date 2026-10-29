@@ -263,6 +263,9 @@ export class MapView {
     // Without a baked background the flat terrain colours are the fallback (hidden with the rest).
     if (this.backdrop === null) this.terrainFill.visible = !on;
     this.setOwners(this.owners);
+    // The roads of the own side turn into pipes (and back): `drawRoad` sees the new mode by its key.
+    this.roads.forEach((_, i) => this.drawRoad(i));
+    this.flushDashes();
   }
 
   /** Number of terrain stamps (tests and the performance check). */
@@ -455,7 +458,10 @@ export class MapView {
       look.halves?.[0]?.detail === 'fog' && this.owners[edge.a] !== this.me,
       look.halves?.[1]?.detail === 'fog' && this.owners[edge.b] !== this.me,
     ];
-    const key = `${String(level)}|${kind.kind === 'buffer' ? 'b' : String(kind.owner)}|${fog[0] ? 'f' : 's'}${fog[1] ? 'f' : 's'}`;
+    // In the «Supply» mode an own road with both halves in sight is a pipe of `SupplyView` (#429):
+    // its lanes and band are hidden here, the other roads keep their look.
+    const piped = this.supplyMode && kind.kind === 'internal' && kind.owner === this.me;
+    const key = `${String(level)}|${kind.kind === 'buffer' ? 'b' : String(kind.owner)}|${fog[0] ? 'f' : 's'}${fog[1] ? 'f' : 's'}${piped ? '|pipe' : ''}`;
     if (key === road.key) return;
     road.key = key;
     const segments = roadSegments(kind, fog, borderPermille(this.map, i) / 1000);
@@ -466,8 +472,8 @@ export class MapView {
       const segment = segments[slot];
       const casing = road.casings[slot];
       const lanes = road.lanes[slot];
-      casing.visible = segment !== undefined;
-      lanes.visible = segment !== undefined && !isDashed(segment.style);
+      casing.visible = segment !== undefined && !piped;
+      lanes.visible = segment !== undefined && !isDashed(segment.style) && !piped;
       if (segment !== undefined) this.placeSegment(road, segment, level, casing, lanes);
     }
   }
