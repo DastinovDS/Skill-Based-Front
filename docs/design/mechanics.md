@@ -2679,6 +2679,8 @@ item: a separate fog test.
    The owner's rules: plains and plains see each other exactly; mountains see plains exactly; from plains
    and from forest only presence is seen in mountains; forest is always a range, never exact; the rest is a
    range.
+
+   **[implemented, #429]** The table is public: `ruleset_public.vision.by_terrain.<source>.<target>` (`PROTOCOL_VERSION` 29) carries it to the client, which only displays it (the legend of the terrain map mode). The level of a place stays decided by the server (`node.detail` in the snapshot).
 3. **What is visible about the enemy groups of a place** (a node or a half of an edge, item 5), by level:
    - `EXACT`: `units` and `charged` (sums over all enemy groups of the place), the modes;
    - `RANGE`: the range of the sum of `units` and the modes; `charged` is not shown (the owner, 2026-10-12);

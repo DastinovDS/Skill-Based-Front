@@ -225,6 +225,20 @@ def test_ruleset_public_takes_values_from_the_ruleset() -> None:
     assert public.build.model_dump() == {"ticks_per_level": rules.build.ticks_per_level}
 
 
+def test_ruleset_public_vision_table_is_dec_21_item_2() -> None:
+    """Expected values come from mechanics.md (DEC-21, item 2), not from the loader: plains and
+    plains exact; mountains see plains exactly; forest is always a range; from plains and from
+    forest only presence is seen in mountains; the rest is a range."""
+    public = RulesetPublic.from_ruleset(load_ruleset(RULESET_PATH))
+    assert public.vision.model_dump(mode="json") == {
+        "by_terrain": {
+            "plains": {"plains": "exact", "forest": "range", "mountains": "presence"},
+            "forest": {"plains": "range", "forest": "range", "mountains": "presence"},
+            "mountains": {"plains": "exact", "forest": "range", "mountains": "range"},
+        }
+    }
+
+
 def test_ruleset_public_has_the_combat_vector_parameter_names() -> None:
     """The vectors' ``params`` use the names of ``combat``; the plan bonus is not among them since
     DEC-29 (it depends on the path, every vector gives its amount), the gathered "Defense" of the

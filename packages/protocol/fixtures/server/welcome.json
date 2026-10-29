@@ -73,6 +73,13 @@
       "rear_min_max": 8,
       "rear_min_default": 1,
       "front_markers": 2
+    },
+    "vision": {
+      "by_terrain": {
+        "plains": {"plains": "exact", "forest": "range", "mountains": "presence"},
+        "forest": {"plains": "range", "forest": "range", "mountains": "presence"},
+        "mountains": {"plains": "exact", "forest": "range", "mountains": "range"}
+      }
     }
   },
   "map_id": "diamond",

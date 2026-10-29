@@ -14,7 +14,8 @@ Only what the client uses (AGENTS.md, section 7.1):
   (DEC-25);
 - the flag and the numbers of the city development (DEC-26, item 10): the barracks and the
   warehouse levels, their prices and durations, for the city menu;
-- the range and the start value of the rear minimum (DEC-28, item 3), for the supply slider.
+- the range and the start value of the rear minimum (DEC-28, item 3), for the supply slider;
+- the vision table by terrain (DEC-21, item 2), for the legend of the terrain map mode (#429).
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -24,7 +25,7 @@ from typing import Annotated, Self
 from pydantic import Field
 
 from gow_protocol.base import Centi, NonNegInt, PosInt, SignedInt, WireModel
-from gow_sim.ruleset import Ruleset, Stance
+from gow_sim.ruleset import Ruleset, Sight, SightTable, Stance
 
 
 class CostsPublic(WireModel):
@@ -160,6 +161,34 @@ class SupplyPublic(WireModel):
     """Front markers of a player: ``set_front`` accepts ``marker`` ``0..front_markers - 1``."""
 
 
+class SightRowPublic(WireModel):
+    """What a source on one terrain shows of a neighbouring node, by the terrain of that node."""
+
+    plains: Sight
+    forest: Sight
+    mountains: Sight
+
+    @classmethod
+    def from_table(cls, table: SightTable) -> Self:
+        return cls(plains=table.plains, forest=table.forest, mountains=table.mountains)
+
+
+class VisionTablePublic(WireModel):
+    """One row per terrain of the source."""
+
+    plains: SightRowPublic
+    forest: SightRowPublic
+    mountains: SightRowPublic
+
+
+class VisionPublic(WireModel):
+    """The vision table by terrain (``vision.by_terrain``, DEC-21, item 2): ``by_terrain.<source>.
+    <target>`` is ``exact``, ``range`` or ``presence``. The client only displays it (the legend of
+    the terrain map mode); the level of a place in the snapshot is decided by the server."""
+
+    by_terrain: VisionTablePublic
+
+
 class RulesetPublic(WireModel):
     tick_hz: PosInt
     match_ticks: PosInt
@@ -173,6 +202,7 @@ class RulesetPublic(WireModel):
     recruit: RecruitPublic
     city_upgrades: CityUpgradesPublic
     supply: SupplyPublic
+    vision: VisionPublic
 
     @classmethod
     def from_ruleset(cls, rules: Ruleset) -> Self:
@@ -247,5 +277,12 @@ class RulesetPublic(WireModel):
                 rear_min_max=rules.supply.rear_min_max,
                 rear_min_default=rules.supply.rear_min_default,
                 front_markers=rules.supply.front_markers,
+            ),
+            vision=VisionPublic(
+                by_terrain=VisionTablePublic(
+                    plains=SightRowPublic.from_table(rules.vision.by_terrain.plains),
+                    forest=SightRowPublic.from_table(rules.vision.by_terrain.forest),
+                    mountains=SightRowPublic.from_table(rules.vision.by_terrain.mountains),
+                )
             ),
         )

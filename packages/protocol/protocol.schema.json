@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 28,
+    "PROTOCOL_VERSION": 29,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -2507,6 +2507,9 @@
         },
         "supply": {
           "$ref": "#/$defs/SupplyPublic"
+        },
+        "vision": {
+          "$ref": "#/$defs/VisionPublic"
         }
       },
       "required": [
@@ -2521,7 +2524,8 @@
         "capacity",
         "recruit",
         "city_upgrades",
-        "supply"
+        "supply",
+        "vision"
       ],
       "title": "RulesetPublic",
       "type": "object"
@@ -2778,6 +2782,38 @@
         "stance"
       ],
       "title": "SetStanceCmd",
+      "type": "object"
+    },
+    "Sight": {
+      "description": "What a source of vision shows of a neighbouring node (DEC-21, item 2): the detail levels\n``exact``, ``range`` and ``presence`` of ``gow_sim.state.Detail`` (never fog).",
+      "enum": [
+        "exact",
+        "range",
+        "presence"
+      ],
+      "title": "Sight",
+      "type": "string"
+    },
+    "SightRowPublic": {
+      "additionalProperties": false,
+      "description": "What a source on one terrain shows of a neighbouring node, by the terrain of that node.",
+      "properties": {
+        "plains": {
+          "$ref": "#/$defs/Sight"
+        },
+        "forest": {
+          "$ref": "#/$defs/Sight"
+        },
+        "mountains": {
+          "$ref": "#/$defs/Sight"
+        }
+      },
+      "required": [
+        "plains",
+        "forest",
+        "mountains"
+      ],
+      "title": "SightRowPublic",
       "type": "object"
     },
     "SnapshotMsg": {
@@ -3158,6 +3194,42 @@
         "fights"
       ],
       "title": "View",
+      "type": "object"
+    },
+    "VisionPublic": {
+      "additionalProperties": false,
+      "description": "The vision table by terrain (``vision.by_terrain``, DEC-21, item 2): ``by_terrain.<source>.\n<target>`` is ``exact``, ``range`` or ``presence``. The client only displays it (the legend of\nthe terrain map mode); the level of a place in the snapshot is decided by the server.",
+      "properties": {
+        "by_terrain": {
+          "$ref": "#/$defs/VisionTablePublic"
+        }
+      },
+      "required": [
+        "by_terrain"
+      ],
+      "title": "VisionPublic",
+      "type": "object"
+    },
+    "VisionTablePublic": {
+      "additionalProperties": false,
+      "description": "One row per terrain of the source.",
+      "properties": {
+        "plains": {
+          "$ref": "#/$defs/SightRowPublic"
+        },
+        "forest": {
+          "$ref": "#/$defs/SightRowPublic"
+        },
+        "mountains": {
+          "$ref": "#/$defs/SightRowPublic"
+        }
+      },
+      "required": [
+        "plains",
+        "forest",
+        "mountains"
+      ],
+      "title": "VisionTablePublic",
       "type": "object"
     },
     "WelcomeMsg": {
