@@ -46,6 +46,8 @@ export interface OrderUiData {
   readonly splitHover: number | null;
   /** The «Supply» map mode is on (Tab or F2, DEC-18). */
   readonly supplyMode: boolean;
+  /** The terrain map mode is on (`T`, #429): patterns for the ground, a sight sign on the places you see. */
+  readonly terrainMode: boolean;
   /** Transfer pick: the own city the charges leave; a click on another own city picks `to`. */
   readonly transferFrom: number | null;
   readonly notice: OrderNotice | null;
@@ -64,6 +66,7 @@ export class OrderUiState {
     roadHover: null,
     splitHover: null,
     supplyMode: false,
+    terrainMode: false,
     transferFrom: null,
     notice: null,
     reach: null,

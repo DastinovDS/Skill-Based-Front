@@ -72,6 +72,8 @@ export interface OverlayState {
   readonly beacon: number | null;
   /** The «Supply» map mode; `null`: the normal map. */
   readonly supply: SupplyOverlay | null;
+  /** The terrain map mode (#429): patterns for the ground and a sight sign on the places you see. */
+  readonly terrain: boolean;
   /**
    * Where the selected group can be ordered to, as the server answered `reach_query` (DEC-20):
    * `reach` gets a solid ring, `split` (too small for the group: split it first) a dashed one.
@@ -102,6 +104,7 @@ export const EMPTY_OVERLAY: OverlayState = {
   candidates: [],
   beacon: null,
   supply: null,
+  terrain: false,
   reach: [],
   split: [],
   eta: null,

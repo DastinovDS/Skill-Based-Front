@@ -26,6 +26,22 @@ export const TERRAIN_FILL: Readonly<Record<Terrain, number>> = {
   forest: 0x25392b,
   mountains: 0x4a453e,
 };
+/**
+ * The ground of the terrain map mode (#429, "Patterns"): a flat colour per area plus a mark that
+ * stays different in grey scale (dots, firs, hatching: `patternLayout.ts`), drawn in the map
+ * background colour over it.
+ */
+export const PATTERN_GROUND = {
+  floor: 0x10151c,
+  alpha: 0.92,
+  fill: { plains: 0x7c9456, forest: 0x1f5a47, mountains: 0x6b6d75 } satisfies Record<
+    Terrain,
+    number
+  >,
+  dot: { radius: 1.5, alpha: 0.4 },
+  fir: { width: 1.5, alpha: 0.5, halfWidth: 4, up: 4, down: 3 },
+  hatch: { width: 2, alpha: 0.42 },
+} as const;
 /** The baked background (or the flat terrain colours) is darkened by this (9.1). */
 export const BACKDROP_DIM = { color: BG, alpha: 0.18 } as const;
 /** The thin line round every area of the map (also between areas of one owner): subtle. */

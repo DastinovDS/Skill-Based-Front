@@ -33,6 +33,7 @@ import {
   ROAD_FOG,
   ROAD_LANE,
   ROAD_OWN,
+  PATTERN_GROUND,
   TERRAIN_FILL,
   TERRITORY_GLOW,
   SUPPLY_FLOOR,
@@ -42,6 +43,7 @@ import {
   ownerColor,
   roadLanesWidth,
 } from './style.ts';
+import { patternMarks } from './patternLayout.ts';
 import { TerrainView } from './terrainView.ts';
 import { voronoiCells } from './voronoi.ts';
 
@@ -112,6 +114,9 @@ export class MapView {
   /** The flat floor of the «Supply» mode, hidden on the normal map. */
   private readonly floor: Graphics;
   private supplyMode = false;
+  /** The ground of the terrain mode (patterns), made on first use. */
+  private ground: Graphics | null = null;
+  private terrainMode = false;
   private owners: readonly Owner[] = [];
   /** A capture under way: the owners before it, their borders and how long it has run. */
   private fade: {
@@ -233,7 +238,7 @@ export class MapView {
     this.layers.layer.background.addChildAt(sprite, 0);
     this.backdrop = sprite;
     this.terrainFill.visible = false;
-    if (this.supplyMode) sprite.visible = false;
+    if (this.flatGround) sprite.visible = false;
   }
 
   /**
@@ -245,7 +250,7 @@ export class MapView {
     // Between the dimming and the floor, as when they were always there.
     const at = this.stampParent.getChildIndex(this.floor);
     this.stamps = new TerrainView(this.map, this.cells, this.stampParent, this.renderer, at);
-    this.stamps.setVisible(!this.supplyMode);
+    this.stamps.setVisible(!this.flatGround);
   }
 
   /**
@@ -256,18 +261,41 @@ export class MapView {
     if (on === this.supplyMode) return;
     this.supplyMode = on;
     this.floor.visible = on;
-    this.dim.visible = !on;
-    this.stamps?.setVisible(!on);
+    this.applyGround();
     this.glow.visible = !on && this.glowDrawn;
-    if (this.backdrop !== null) this.backdrop.visible = !on;
-    // Without a baked background the flat terrain colours are the fallback (hidden with the rest).
-    if (this.backdrop === null) this.terrainFill.visible = !on;
     this.setOwners(this.owners);
     // The roads of the own side turn into pipes (and back): `drawRoad` sees the new mode by its key.
     this.roads.forEach((_, i) => {
       this.drawRoad(i);
     });
     this.flushDashes();
+  }
+
+  /**
+   * The terrain mode (#429, "Patterns"): the baked background, the stamps and the dimming give
+   * way to a flat colour per area with a pattern per terrain. The territory, borders, roads and
+   * the fog stay as they are. Not together with the «Supply» mode (the scene turns one off).
+   */
+  setTerrainMode(on: boolean): void {
+    if (on === this.terrainMode) return;
+    this.terrainMode = on;
+    if (on && this.ground === null) this.ground = this.drawPatternGround();
+    this.applyGround();
+  }
+
+  /** The ground is flat (no baked picture): in the «Supply» mode and in the terrain mode. */
+  private get flatGround(): boolean {
+    return this.supplyMode || this.terrainMode;
+  }
+
+  private applyGround(): void {
+    const flat = this.flatGround;
+    this.dim.visible = !flat;
+    this.stamps?.setVisible(!flat);
+    if (this.ground !== null) this.ground.visible = this.terrainMode;
+    if (this.backdrop !== null) this.backdrop.visible = !flat;
+    // Without a baked background the flat terrain colours are the fallback (hidden with the rest).
+    if (this.backdrop === null) this.terrainFill.visible = !flat;
   }
 
   /** Number of terrain stamps (tests and the performance check). */
@@ -614,6 +642,33 @@ export class MapView {
       if (neighbour !== null && cell < neighbour) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
     }
     return g.stroke({ width: CELL_LINE.width, color: CELL_LINE.color, alpha: CELL_LINE.alpha });
+  }
+
+  /** A flat colour per area and the marks of its terrain, one Graphics drawn once. */
+  private drawPatternGround(): Graphics {
+    const g = new Graphics();
+    const { dot, fir, hatch } = PATTERN_GROUND;
+    // Under the frame and over the dimming, where the «Supply» floor lies.
+    this.stampParent.addChildAt(g, this.stampParent.getChildIndex(this.floor));
+    g.rect(0, 0, this.map.meta.width, this.map.meta.height).fill(PATTERN_GROUND.floor);
+    this.map.nodes.forEach((node, i) => {
+      const cell = this.cells[i];
+      if (cell === undefined || cell.length === 0) return;
+      g.poly(cell).fill({ color: PATTERN_GROUND.fill[node.terrain], alpha: PATTERN_GROUND.alpha });
+      const marks = patternMarks(cell, node.terrain);
+      for (const at of marks.dots) g.circle(at.x, at.y, dot.radius);
+      if (marks.dots.length > 0) g.fill({ color: BG, alpha: dot.alpha });
+      for (const at of marks.firs) {
+        g.moveTo(at.x - fir.halfWidth, at.y + fir.down)
+          .lineTo(at.x, at.y - fir.up)
+          .lineTo(at.x + fir.halfWidth, at.y + fir.down);
+      }
+      if (marks.firs.length > 0) g.stroke({ color: BG, alpha: fir.alpha, width: fir.width });
+      for (const [p, q] of marks.hatches) g.moveTo(p.x, p.y).lineTo(q.x, q.y);
+      if (marks.hatches.length > 0) g.stroke({ color: BG, alpha: hatch.alpha, width: hatch.width });
+    });
+    g.visible = this.terrainMode;
+    return g;
   }
 
   private drawTerrain(): Graphics {

@@ -25,6 +25,7 @@
   import ToastStack from './ToastStack.svelte';
   import GroupTip from './GroupTip.svelte';
   import RoadBanner from './RoadBanner.svelte';
+  import TerrainBanner from './TerrainBanner.svelte';
   import SplitTip from './SplitTip.svelte';
   import RoadTip from './RoadTip.svelte';
   import TopBar from './TopBar.svelte';
@@ -189,6 +190,7 @@
   <StackRadial {orders} {anchors} names={hud.nodeName} />
   <GroupTip group={data?.hovered ?? null} rules={hud.context.rules} />
   <RoadBanner {orders} />
+  <TerrainBanner {orders} />
   <RoadTip {orders} road={roadHover} />
   <SplitTip {orders} names={hud.nodeName} />
   <HelpOverlay

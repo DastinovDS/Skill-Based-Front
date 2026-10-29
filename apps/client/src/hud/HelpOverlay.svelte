@@ -25,6 +25,7 @@
     ['D', 'help.key.defense'],
     ['R', 'help.key.recruit'],
     ['U', 'help.key.road'],
+    ['T', 'help.key.terrain'],
     ['S', 'help.key.split'],
     ['G', 'help.key.merge'],
     ['Q', 'help.key.stance'],
