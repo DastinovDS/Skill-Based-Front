@@ -15,6 +15,7 @@ export const SCENES = [
   { id: 'provinces', tick: 1200 },
   { id: 'progress', tick: 2400 },
   { id: 'figures', tick: 2400 },
+  { id: 'orders', tick: 2400 },
 ] as const;
 
 /**

@@ -1,13 +1,12 @@
 import { Container, Text, TextStyle } from 'pixi.js';
 import type { BuildKind, MapFile, NodeView, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { CityDevelopment } from './source.ts';
-import type { Point } from './camera.ts';
 import {
   barracksAt,
   barTop,
   cityRadius,
   lockedPlaces,
-  ringRadius,
+  vpBadgeAt,
   showsBarracks,
 } from './cityLayout.ts';
 import {
@@ -15,7 +14,6 @@ import {
   ENEMY,
   NODE_RADIUS,
   PROVINCE,
-  VP_BADGE_RADIUS,
   VP_FONT_SIZE,
   VP_TEXT_COLOR,
   YOU,
@@ -92,11 +90,6 @@ function stateKey(s: CityState): string {
   ]
     .map(String)
     .join('|');
-}
-
-/** A point on the circle of `radius` at `angle` radians. */
-function onCircle(radius: number, angle: number): Point {
-  return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
 }
 
 /**
@@ -516,7 +509,7 @@ export class CityView {
     const badge = this.badges[id];
     if (badge !== null && badge !== undefined) {
       // Outside the capacity ring: the icon of the units in the city covers the body.
-      const at = onCircle(ringRadius(radius) + VP_BADGE_RADIUS + 1, -Math.PI / 4);
+      const at = vpBadgeAt(radius);
       badge.position.set(at.x, at.y);
     }
   }

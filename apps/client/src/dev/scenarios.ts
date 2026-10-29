@@ -20,6 +20,7 @@ import type {
 import type { RenderSource } from '../render/source.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 import { FIGURES_VIEW, figuresSnapshot } from './figuresScene.ts';
+import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
 import { PROVINCES_VIEW, provincesSnapshot } from './provincesScene.ts';
 
@@ -487,6 +488,15 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     snapshot: progressSnapshot(bundledMap('artery')),
     events: [round(PROGRESS_TICK - 12, { node: 4 }, 2, 0, 1)],
     view: ARTERY_VIEW,
+    cityUpgrades: true,
+  },
+  {
+    // Planned orders of both sides in every state: ODb "Low relief" (#519).
+    id: 'orders',
+    map: 'artery',
+    snapshot: ordersSnapshot(bundledMap('artery')),
+    events: [],
+    view: ORDERS_VIEW,
     cityUpgrades: true,
   },
   {

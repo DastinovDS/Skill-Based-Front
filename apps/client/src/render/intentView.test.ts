@@ -9,7 +9,8 @@ import { createLayers } from './layers.ts';
 import { nodePoint } from './layout.ts';
 import { setReducedMotion } from './motion.ts';
 import { EntityKit } from './shapes.ts';
-import { BG, ENEMY, INTENT_ENEMY, INTENT_RETICLE, RIBBON, WARN, YOU } from './style.ts';
+import { lighten } from './fightFx.ts';
+import { BG, ENEMY, PAPER, PLATE_FILL, RIBBON, WARN, YOU } from './style.ts';
 import { testSprites } from './testSprites.ts';
 
 const map = DEFAULT_MAP;
@@ -147,39 +148,91 @@ describe('IntentView', () => {
     kit.destroy();
   });
 
-  it('IN3: the opponent intent is a thin dashed arrow, not a ribbon', () => {
+  it('ODb: the opponent intent is the same ribbon with a double outline, not a thin arrow', () => {
     const { view, draw, ribbons, kit } = setup();
     draw([intent({})], [], 140);
-    const strokes = paints(ribbons).filter((p) => p.action === 'stroke');
-    // No ribbon contour of the width of the own ones, and no wide tinted fill.
-    expect(Math.max(...strokes.filter((p) => p.color === ENEMY).map((p) => p.width))).toBeLessThan(
-      RIBBON.contour.width + 2,
+    const all = paints(ribbons);
+    // The same tone of fill as an own ribbon.
+    expect(
+      all.some((p) => p.action === 'fill' && p.color === ENEMY && p.alpha === RIBBON.fillAlpha),
+    ).toBe(true);
+    // A wide line in the colour with a narrower plate line on top: two thin lines.
+    const wide = all.findIndex(
+      (p) => p.action === 'stroke' && p.color === ENEMY && p.width === RIBBON.foe.width,
     );
-    expect(paints(ribbons).some((p) => p.action === 'fill' && p.alpha === RIBBON.fillAlpha)).toBe(
+    expect(wide).toBeGreaterThanOrEqual(0);
+    expect(all[wide + 1]).toMatchObject({
+      action: 'stroke',
+      color: PLATE_FILL,
+      width: RIBBON.foe.inner,
+    });
+    // No casing and no own-style line for the opponent.
+    expect(all.some((p) => p.action === 'stroke' && p.width === RIBBON.outline.casingWidth)).toBe(
       false,
     );
-    // The ink is the opponent's, over a dark casing wider than it.
-    expect(strokes.some((p) => p.color === ENEMY && p.width <= 3)).toBe(true);
-    expect(strokes.some((p) => p.color === BG && p.width > INTENT_ENEMY.width)).toBe(true);
     view.destroy();
     kit.destroy();
   });
 
-  it('IN3: the thin arrow is faint while the delay runs, solid ink after it', () => {
+  it('ODb: the ribbon fills from the tail with a paper line at the front, and a tint ahead of it', () => {
     const { view, draw, ribbons, kit } = setup();
-    draw([intent({})], [], 105);
-    const waiting = paints(ribbons).find((p) => p.action === 'stroke' && p.color === ENEMY);
-    expect(waiting?.alpha).toBeCloseTo(INTENT_ENEMY.prepAlpha);
+    // The delay is 30 ticks from 100: half way at 115.
+    draw([intent({})], [], 115);
+    const waiting = paints(ribbons);
+    expect(
+      waiting.some((p) => p.action === 'fill' && p.color === ENEMY && p.alpha === RIBBON.tintAlpha),
+    ).toBe(true);
+    expect(
+      waiting.some((p) => p.action === 'fill' && p.color === ENEMY && p.alpha === RIBBON.prepAlpha),
+    ).toBe(true);
+    expect(
+      waiting.some(
+        (p) => p.action === 'stroke' && p.color === PAPER && p.width === RIBBON.front.width,
+      ),
+    ).toBe(true);
     draw([intent({})], [], 160);
-    const going = paints(ribbons).filter((p) => p.action === 'stroke' && p.color === ENEMY);
-    expect(going.some((p) => p.alpha === 1)).toBe(true);
+    const going = paints(ribbons);
+    expect(
+      going.some((p) => p.action === 'fill' && p.color === ENEMY && p.alpha === RIBBON.prepAlpha),
+    ).toBe(false);
+    expect(
+      going.some(
+        (p) => p.action === 'stroke' && p.color === PAPER && p.width === RIBBON.front.width,
+      ),
+    ).toBe(false);
     view.destroy();
     kit.destroy();
   });
 
-  it('IN3: the tail of the opponent is a ring in a ring, the own tail a dot (no diamond)', () => {
+  it('ODb: a soft band runs along the ribbon on the way, not while it waits, nor with less motion', () => {
     const { view, draw, ribbons, kit } = setup();
-    draw([intent({})], [], 140);
+    const sheen = (tick: number): boolean =>
+      paints(ribbons).some(
+        (p) => p.action === 'fill' && p.color === PAPER && p.alpha === RIBBON.sheen.alpha,
+      ) && tick > 0;
+    // The pass is 1.8 s: at 180 ticks the band is at the start, it is on the ribbon some time later.
+    const seen = [150, 153, 156, 159, 162, 165, 168, 171].some((tick) => {
+      draw([intent({})], [], tick);
+      return sheen(tick);
+    });
+    expect(seen).toBe(true);
+    draw([intent({})], [], 110);
+    expect(sheen(110)).toBe(false);
+    setReducedMotion(true);
+    try {
+      for (const tick of [150, 156, 162, 168]) {
+        draw([intent({})], [], tick);
+        expect(sheen(tick)).toBe(false);
+      }
+    } finally {
+      setReducedMotion(null);
+    }
+    view.destroy();
+    kit.destroy();
+  });
+
+  it('ODb: the tail of the opponent is a ring in a ring, the own tail a dot', () => {
+    const { view, draw, ribbons, kit } = setup();
     const circles = (g: unknown): number =>
       (
         (g as Graphics).context.instructions as unknown as {
@@ -188,46 +241,53 @@ describe('IntentView', () => {
       )
         .flatMap((i) => i.data.path.shapePath.shapePrimitives)
         .filter((p) => p.shape.type === 'circle').length;
+    draw([intent({})], [], 140);
     const theirs = circles(ribbons);
     draw([intent({ owner: 0, origin: home, target: via })], [], 140);
-    // Two rings against one dot.
-    expect(theirs).toBeGreaterThan(circles(ribbons));
+    // Two rings (three instructions: one is filled and stroked) against one dot (two).
+    expect(theirs).toBe(3);
+    expect(circles(ribbons)).toBe(2);
     view.destroy();
     kit.destroy();
   });
 
-  it('IN3: the crosshair has two rings, four ticks and a halo; amber over my city, red elsewhere', () => {
+  it('ODb: the ring round the target is dashed and open at the bottom; amber over my city, red elsewhere', () => {
     const { view, draw, layers, kit } = setup();
     const rings = layers.layer.intents.children[1];
     draw([intent({ target: home })], [], 140);
-    const mineRings = paints(rings).filter((p) => p.action === 'stroke');
-    // halo, casing, outer ring, inner ring, the ticks.
-    expect(mineRings).toHaveLength(5);
-    expect(mineRings.filter((p) => p.color === WARN)).toHaveLength(4);
+    const strokes = paints(rings).filter((p) => p.action === 'stroke');
+    // The casing and the ring, nothing else (no crosshair).
+    expect(strokes).toHaveLength(2);
+    expect(strokes.filter((p) => p.color === WARN)).toHaveLength(1);
     expect(paints(rings).some((p) => p.color === YOU)).toBe(false);
+    // Open at the bottom: nothing is drawn straight below the centre of the target.
+    const at = nodePoint(map, home);
+    const box = rings?.getLocalBounds();
+    if (at === undefined || box === undefined) throw new Error('no ring');
+    const reach = 17 + RIBBON.ring.gap;
+    expect(box.width).toBeGreaterThan(2 * reach - 4);
+    expect(box.maxY).toBeLessThan(at.y + reach - 1);
     draw([intent({ origin: home, target: far, owner: 1 })], [], 140);
     expect(paints(rings).filter((p) => p.color === WARN)).toHaveLength(0);
-    expect(paints(rings).filter((p) => p.color === ENEMY)).toHaveLength(4);
+    expect(paints(rings).filter((p) => p.color === ENEMY)).toHaveLength(1);
     view.destroy();
     kit.destroy();
   });
 
-  it('IN3: the halo pulses with the time, and holds still with less motion', () => {
+  it('ODb: the ring pulses over my city, and holds still with less motion', () => {
     const { view, draw, layers, kit } = setup();
     const rings = layers.layer.intents.children[1];
-    const halo = (tick: number) => {
+    const ringAlpha = (tick: number) => {
       draw([intent({})], [], tick);
-      return paints(rings)[0];
+      return paints(rings).filter((p) => p.action === 'stroke')[1]?.alpha;
     };
-    // A period is 0.8 s: 8 ticks at 10 Hz; a half period apart the halo is at its two extremes.
-    expect(halo(144)?.alpha).toBeCloseTo(INTENT_RETICLE.pulse.alphaLow);
-    expect(halo(148)?.alpha).toBeCloseTo(INTENT_RETICLE.pulse.alphaHigh);
+    // A period is 0.9 s: 9 ticks at 10 Hz; half a period apart it is at its two extremes.
+    expect(ringAlpha(144)).toBeCloseTo(RIBBON.ring.pulseLow);
+    expect(ringAlpha(148.5)).toBeCloseTo(1);
     setReducedMotion(true);
     try {
-      const still = halo(144)?.alpha;
-      expect(halo(148)?.alpha).toBe(still);
-      expect(still).toBeGreaterThan(INTENT_RETICLE.pulse.alphaLow);
-      expect(still).toBeLessThan(INTENT_RETICLE.pulse.alphaHigh);
+      expect(ringAlpha(144)).toBe(1);
+      expect(ringAlpha(148.5)).toBe(1);
     } finally {
       setReducedMotion(null);
     }
@@ -299,8 +359,9 @@ describe('IntentView: opaque arcs that pulse (#325)', () => {
     const fills = paints(ribbons).filter((p) => p.action === 'fill');
     const underlay = fills.find((p) => p.color === RIBBON.underlay.color);
     expect(underlay?.alpha).toBeGreaterThanOrEqual(0.9);
-    // The underlay comes before every tint.
-    expect(fills[0]).toEqual(underlay);
+    // The cast shadow is under it, the underlay is under every tint.
+    expect(fills[0]).toMatchObject({ color: BG, alpha: RIBBON.shadow.alpha });
+    expect(fills[1]).toEqual(underlay);
     // The enemy's arrow has it too.
     draw([intent({ owner: 1, origin: a, target: b })]);
     expect(paints(ribbons).some((p) => p.color === RIBBON.underlay.color && p.alpha >= 0.9)).toBe(
@@ -310,69 +371,63 @@ describe('IntentView: opaque arcs that pulse (#325)', () => {
     kit.destroy();
   });
 
-  it('draws an order to a neighbour as an arc: opposite orders on one road do not overlap', () => {
+  it('bulges toward the top of the screen whichever way the order goes', () => {
     const { view, draw, ribbons, kit } = setup();
-    const from = nodePoint(map, a);
-    const to = nodePoint(map, b);
+    const wide = map.edges.find((e) => {
+      const p = nodePoint(map, e.a);
+      const q = nodePoint(map, e.b);
+      return p !== undefined && q !== undefined && Math.abs(p.x - q.x) > 60;
+    });
+    if (wide === undefined) throw new Error('a map with a wide road');
+    const from = nodePoint(map, wide.a);
+    const to = nodePoint(map, wide.b);
     if (from === undefined || to === undefined) throw new Error('no points');
-    const centre = (): { x: number; y: number } => {
+    const midY = (from.y + to.y) / 2;
+    // The shadow-free middle of the ribbon: its bounds centre; the arc sits above the chord.
+    for (const [origin, target] of [
+      [wide.a, wide.b],
+      [wide.b, wide.a],
+    ] as const) {
+      draw([intent({ owner: 0, origin, target })]);
       const box = ribbons?.getLocalBounds();
-      return {
-        x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
-        y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
-      };
-    };
-    draw([intent({ owner: 0, origin: a, target: b })]);
-    const there = centre();
-    draw([intent({ owner: 1, origin: b, target: a })]);
-    const back = centre();
-    // The two arrows swing to opposite sides of the road: their middles lie apart, across it.
-    const length = Math.hypot(to.x - from.x, to.y - from.y);
-    const across = Math.abs(
-      ((back.x - there.x) * (to.y - from.y) - (back.y - there.y) * (to.x - from.x)) / length,
-    );
-    expect(across).toBeGreaterThan(RIBBON.body);
-    // Each one bulges to the left of its way (y down on the screen): the cross product is negative.
-    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-    const sideOf = (p: { x: number; y: number }): number =>
-      Math.sign((to.x - from.x) * (p.y - mid.y) - (to.y - from.y) * (p.x - mid.x));
-    // there goes a -> b, bulging left: the centre is on the side of negative cross product.
-    expect(sideOf(there)).toBe(-1);
-    expect(sideOf(back)).toBe(1);
+      const centreY = (box?.y ?? 0) + (box?.height ?? 0) / 2;
+      expect(centreY).toBeLessThan(midY);
+    }
     view.destroy();
     kit.destroy();
   });
 
-  it('pulses once when the delay ends and leaves the contour stronger', () => {
+  it('pulses once when the delay ends: the own line swells, then settles', () => {
     const { view, draw, ribbons, kit } = setup();
+    const line = lighten(YOU, RIBBON.outline.lighten);
     const widthAt = (tick: number, created = 100): number => {
       draw([intent({ owner: 0, origin: a, target: b, created_tick: created })], [], tick);
-      const strokes = paints(ribbons).filter((p) => p.action === 'stroke' && p.color !== BG);
-      return Math.max(...strokes.map((p) => p.width));
+      return paints(ribbons).find((p) => p.action === 'stroke' && p.color === line)?.width ?? NaN;
     };
-    // The delay is 30 ticks: it ends at 130.
-    const running = widthAt(120);
-    const peak = widthAt(134);
-    const locked = widthAt(145);
-    expect(running).toBeCloseTo(RIBBON.contour.width);
-    expect(peak).toBeGreaterThan(locked);
-    expect(locked).toBeCloseTo(RIBBON.locked.width);
-    expect(locked).toBeGreaterThan(running);
-    // It stays locked, not pulsing again.
-    expect(widthAt(300)).toBeCloseTo(RIBBON.locked.width);
+    // The delay is 30 ticks: it ends at 130; the pulse is 8 ticks, its peak at 134.
+    expect(widthAt(120)).toBeCloseTo(RIBBON.outline.width);
+    expect(widthAt(134)).toBeCloseTo(RIBBON.outline.width + RIBBON.pulseWidth);
+    expect(widthAt(145)).toBeCloseTo(RIBBON.outline.width);
+    // It does not pulse again.
+    expect(widthAt(300)).toBeCloseTo(RIBBON.outline.width);
+    // A flash of paper over the ribbon at the peak, none after.
+    draw([intent({ owner: 0, origin: a, target: b, created_tick: 100 })], [], 134);
+    expect(
+      paints(ribbons).some((p) => p.action === 'fill' && p.color === PAPER && p.alpha > 0.4),
+    ).toBe(true);
     view.destroy();
     kit.destroy();
   });
 
-  it('with less motion locks at once, without a pulse', () => {
+  it('with less motion has no pulse', () => {
     setReducedMotion(true);
     try {
       const { view, draw, ribbons, kit } = setup();
       draw([intent({ owner: 0, origin: a, target: b, created_tick: 100 })], [], 134);
-      const widths = paints(ribbons)
-        .filter((p) => p.action === 'stroke' && p.color !== BG)
-        .map((p) => p.width);
-      expect(Math.max(...widths)).toBeCloseTo(RIBBON.locked.width);
+      const line = paints(ribbons).find(
+        (p) => p.action === 'stroke' && p.color === lighten(YOU, RIBBON.outline.lighten),
+      );
+      expect(line?.width).toBeCloseTo(RIBBON.outline.width);
       view.destroy();
       kit.destroy();
     } finally {

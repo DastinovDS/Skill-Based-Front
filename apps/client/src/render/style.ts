@@ -432,13 +432,17 @@ export const FIGHT_GAP = 46;
 /** The hot white of a flash, of sparks and of the contact ring. */
 export const FLASH_COLOR = 0xffffff;
 
-// --- Ribbon arrows of intents and orders (9.7) ---------------------------------------------------
-// A planned order is a wide ribbon from the start city to the centre of the target, an arc that
-// bends to the left of the way (never a straight line over the road), with a big head (HOI4, Mini
-// Motorways). It has an opaque dark underlay: the road under it does not show through. Own: solid
-// contour; the opponent: dashed 9/5, which also "runs" once the group has left. While the delay
-// runs the ribbon fills from the start to the tip; when it ends one smooth pulse locks it in and
-// leaves the contour stronger.
+// --- Planned orders: ODb "Low relief" (#431, #519, ui-style 33.3) ----------------------------------
+// A planned order is a ribbon from the start city to the target, the same for both sides: body 16,
+// tail 60%, head 38 x 30, the body and the head ONE closed outline. The arc always bulges toward the
+// top of the screen (it never runs over the caption of its start or its target). Layers, bottom to
+// top: a short soft cast shadow (the outline moved by `shadow`), the opaque dark underlay (the road
+// below does not show through), the tint, the fill (it grows from the tail to the head while the
+// delay runs, with a paper line at its front; one flat tone after the departure with a soft band
+// that runs along the ribbon), a faint inner rim, one pulse at the departure, the outline. Own:
+// a dark casing under one lightened line, a dot at the tail. The opponent's: the double outline
+// (two thin lines with the plate between) and a double ring at the tail; the head stops on a dashed
+// ring round the target that is open at the bottom, where the caption of the city sits.
 export const RIBBON = {
   /** Body width; the tail narrows to `tailRatio` of it. Head 38 x 30 at this body. */
   body: 16,
@@ -447,69 +451,68 @@ export const RIBBON = {
   headLength: 30,
   /** Under the tint: the road and the terrain below do not show through the ribbon (almost opaque). */
   underlay: { color: PLATE_FILL, alpha: 0.96 },
-  /** Fill of the part the delay has not reached yet, and of the filled / locked ribbon. */
-  idleAlpha: 0.14,
-  fillAlpha: 0.55,
-  /** The pulse at the end of the delay: one swell of a paper-white fill, `pulseTicks` long. */
+  /** The cast shadow: the outline moved by (dx, dy) world units, in the dark of the map. */
+  shadow: { dx: 1, dy: 2, alpha: 0.35 },
+  /** The tint of the part the delay has not reached, the fill the delay has filled, the fill after the departure. */
+  tintAlpha: 0.14,
+  prepAlpha: 0.72,
+  fillAlpha: 0.74,
+  /** The soft inner rim: a stroke of `width` (half of it inside the outline), the owner colour lightened. */
+  rim: { width: 2.4, lighten: 0.5, alpha: 0.38 },
+  /** The paper line across the ribbon at the front of the fill (`inset` short of the edges). */
+  front: { width: 2, inset: 1.2 },
+  /** The departure pulse: one swell of a paper-white fill, `pulseTicks` long, and the outline swells by `pulseWidth`. */
   flashAlpha: 0.5,
   pulseTicks: 8,
-  /** Contour while the delay runs, and after the pulse (locked): the pulse leaves it stronger. */
-  contour: { width: 2.2, alpha: 0.95 },
-  locked: { width: 3.2, alpha: 1, fillBoost: 0.12 },
-  /** Extra contour width at the peak of the pulse. */
-  pulseWidth: 2.2,
-  casing: { width: 6, alpha: 0.45 },
+  pulseWidth: 2,
+  /** The own outline: a dark casing under one line (the owner colour lightened). */
+  outline: { width: 1.6, lighten: 0.15, casingWidth: 3.4, casingAlpha: 0.7 },
+  /** The opponent's double outline: a wide line in its colour with a narrower plate line on top. */
+  foe: { width: 5.2, inner: 2 },
+  /** The band of light that runs along the ribbon on the way: its length, alpha and one pass in seconds. */
+  sheen: { length: 18, alpha: 0.3, periodS: 1.8 },
+  /** The tail marks: own a dot, the opponent a double ring (the diamond stays the bonus sign, ui-style 21). */
+  tail: { dot: 4, dotRing: 1.5, ring: 5.2, ringWidth: 1.6, inner: 2.4, innerWidth: 1.1 },
   /** The ribbon bends at most this share of its chord toward the server's path (one smooth curve). */
   maxBend: 0.3,
   /**
    * An order with no path to follow (a neighbour, or the opponent's) is an arc bending this share of
-   * its chord; negative: to the left of the way on the screen (y down), always, so two orders
-   * against each other on one road do not lie on top of each other. A path that bends less than
-   * `minBend` of the chord gets the arc too.
+   * its chord toward the top of the screen (the sign of `arcBend`: negative is up for an arrow
+   * going right; `orderBend` flips it for one going left). A path that bends less than `minBend` of
+   * the chord, or bends down, gets the arc too.
    */
   arcBend: -0.45,
   minBend: 0.12,
-  /** The ribbon leaves the start city at radius + `startGap` and ends in the centre of the target. */
-  startGap: 16,
+  /** The tail starts this far outside the circle of the start city, and at least `slotClear` from the barracks mark (the B1 column) and `badgeClear` from the VP badge. */
+  startGap: 22,
+  startMax: 60,
+  slotClear: 26,
+  badgeClear: 20,
+  /** The own head stops this far outside the capacity ring of the target; the opponent's this far outside its circle (on the ring). */
+  ownEndGap: 5,
+  foeEndGap: 32,
   /** The narrow end of the body is never thinner than this on screen (CSS px). */
   minTailPx: 8,
-  dash: 9,
-  gap: 5,
-  /** The dashes run along the contour at this speed (world units per second). */
-  runSpeed: 28,
-} as const;
-/** The dotted ring around the target of an enemy intent. */
-export const INTENT_TARGET_RING = { gap: 20, width: 2, dash: 5, gap2: 4, alpha: 0.95 } as const;
-/**
- * IN3 "Crosshair" (#353, ui-style 27): the opponent's planned order is a thin dashed arrow, and the
- * sign is the crosshair on the target city: a ring with an inner ring, four ticks and a pulse of
- * `periodS` (as the alert); `--warn` over an own city. The arrow ends `tipGap` outside the city
- * circle, on the inner ring. While the delay runs the arrow is faint and dotted (`prepAlpha`,
- * `prepDash`), then it is solid ink with running dashes; the lock after the delay makes it thicker.
- */
-export const INTENT_ENEMY = {
-  width: 1.8,
-  lockedExtra: 1.2,
-  casing: { extra: 3.4, alpha: 0.6 },
-  dash: 9,
-  gap: 5,
-  prepDash: 2,
-  prepGap: 6,
-  prepAlpha: 0.55,
-  head: { length: 14, half: 8 },
-  /** Gap between the circle of the target city and the tip of the arrow. */
-  tipGap: 12,
-  /** The mark of the opponent's side at the tail: a ring in a ring (the diamond is the bonus, ui-style 21). */
-  tail: { inner: 3.5, outer: 6.5, width: 1.8 },
-} as const;
-export const INTENT_RETICLE = {
-  /** The outer ring is this far outside the city circle (`INTENT_TARGET_RING.gap`), the inner one `innerGap` inside it. */
-  innerGap: 8,
-  ring: { width: 2.2, innerWidth: 1.6, casingWidth: 5, casingAlpha: 0.6 },
-  /** Four ticks across the outer ring: from `in` inside it to `out` outside it. */
-  tick: { in: 9, out: 5, width: 2.6 },
-  /** The pulse: the halo grows by `grow`, its alpha and width swing between the low and the high value. */
-  pulse: { periodS: 0.8, grow: 4, alphaLow: 0.15, alphaHigh: 0.5, widthLow: 5, widthHigh: 8 },
+  /** The bonus pill sits `bonusBack` before the end of the arc, on its outer side. */
+  bonusBack: 62,
+  bonusMin: 20,
+  bonusMargin: 3,
+  /**
+   * The dashed ring round the target of the opponent's order: `gap` outside its circle (clear of the VP badge on its upper right), open at the
+   * bottom (`open` radians each side of straight down) for the caption; `--warn` over an own city, and
+   * it pulses then (`pulseS`, down to `pulseLow` of its opacity; steady with "less motion").
+   */
+  ring: {
+    gap: 22,
+    width: 2,
+    casingWidth: 4.5,
+    casingAlpha: 0.6,
+    dash: 5,
+    space: 4,
+    open: 0.75,
+    pulseS: 0.9,
+    pulseLow: 0.45,
+  },
 } as const;
 /** The disc of "Defense" with the delay arc around it. */
 export const DEFENSE_ARC = { gap: 3, width: 3 } as const;

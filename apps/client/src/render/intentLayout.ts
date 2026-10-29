@@ -6,15 +6,14 @@
  */
 import type { Point } from './camera.ts';
 import type { GhostStatus } from './interaction.ts';
+import { barracksAt, ringRadius, vpBadgeAt } from './cityLayout.ts';
 import { clipToConvex } from './regionLayout.ts';
 import {
   GHOST_REJECT_MS,
   GHOST_SHAKE_AMPLITUDE,
   GHOST_SHAKE_MS,
-  INTENT_ENEMY,
-  INTENT_RETICLE,
-  INTENT_TARGET_RING,
   RIBBON,
+  RING_SEGMENT,
 } from './style.ts';
 
 function dist(a: Point, b: Point): number {
@@ -309,13 +308,195 @@ export function ribbonFilled(
 }
 
 /**
- * The bend of the ribbon of an order: the bend that follows the server's path (`pathBend`) when it
- * is pronounced (at least `min` of the chord, either side), else the fixed `arc`. So an order with
- * no way to follow, a neighbour or the opponent's, always bends the same way (`arc` is negative:
- * to the left on the screen) and the arrow never lies straight over the road.
+ * The bend of the ribbon of an order: always toward the top of the screen, so the arc never runs
+ * over the caption that hangs under its start or its target (ODb, #519). `dx` is the horizontal
+ * run of the order. The bend that follows the server's path (`pathBend`) is taken when it is
+ * pronounced (at least `min` of the chord) and already bulges up; otherwise the fixed arc, with
+ * the sign that bulges up for this direction (`arc` is negative: up for an arrow going right).
+ * For a vertical order the sign of `arc` stays.
  */
-export function orderBend(followed: number, min: number, arc: number): number {
-  return Math.abs(followed) >= min ? followed : arc;
+export function orderBend(dx: number, followed: number, min: number, arc: number): number {
+  const side = Math.sign(dx);
+  // `ribbonAxis` pushes the middle by `(-uy, ux) * bend`: the y of that push is `ux * bend`, up when negative.
+  if (Math.abs(followed) >= min && (side === 0 || followed * side < 0)) return followed;
+  return side === 0 ? arc : -side * Math.abs(arc);
+}
+
+/**
+ * How far from the centre of the start city its ribbon begins: `RIBBON.startGap` outside the
+ * circle, pushed on in steps of 3 (up to `RIBBON.startMax`) until the tail is `RIBBON.slotClear`
+ * from the barracks mark of the city (the B1 column on its left) and `RIBBON.badgeClear` from its
+ * VP badge (upper right), so it never starts over a badge. The tail starts on the chord, so a
+ * plain walk along the chord finds it.
+ */
+export function tailStart(origin: Point, target: Point, radius: number): number {
+  const full = dist(origin, target);
+  if (full === 0) return radius + RIBBON.startGap;
+  const ux = (target.x - origin.x) / full;
+  const uy = (target.y - origin.y) / full;
+  const marks = [
+    { at: barracksAt(radius), clear: RIBBON.slotClear },
+    { at: vpBadgeAt(radius), clear: RIBBON.badgeClear },
+  ];
+  let gap = radius + RIBBON.startGap;
+  for (; gap < radius + RIBBON.startMax; gap += 3) {
+    if (marks.every((m) => Math.hypot(ux * gap - m.at.x, uy * gap - m.at.y) >= m.clear)) break;
+  }
+  return gap;
+}
+
+/** The outer rim of a city sign: the outer edge of its capacity ring, from the centre. */
+export function signRim(radius: number): number {
+  return ringRadius(radius) + RING_SEGMENT.base / 2;
+}
+
+/** A point of a polyline at the distance `s` from its start, with the unit direction there. */
+export function axisPoint(axis: readonly Point[], s: number): { at: Point; dir: Point } | null {
+  const first = axis[0];
+  if (first === undefined || axis.length < 2) return null;
+  let walked = 0;
+  for (let i = 1; i < axis.length; i++) {
+    const a = axis[i - 1];
+    const b = axis[i];
+    if (a === undefined || b === undefined) continue;
+    const len = dist(a, b);
+    if (len === 0) continue;
+    if (walked + len >= s || i === axis.length - 1) {
+      const t = Math.min(1, Math.max(0, (s - walked) / len));
+      return {
+        at: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t },
+        dir: { x: (b.x - a.x) / len, y: (b.y - a.y) / len },
+      };
+    }
+    walked += len;
+  }
+  return null;
+}
+
+/**
+ * Half of the width of the ribbon at the distance `s` along its axis of length `total`, as
+ * `ribbonOutline` draws it: the body widens from the tail to the full width, the head tapers from
+ * the base to the tip.
+ */
+export function ribbonHalfWidth(total: number, s: number, body: number): number {
+  const scale = body / RIBBON.body;
+  const headL = Math.min(RIBBON.headLength * scale, total * 0.7);
+  const headW = RIBBON.headWidth * scale * (headL / (RIBBON.headLength * scale));
+  if (s >= total - headL) return (headW * Math.max(0, total - s)) / headL / 2;
+  const t = total - headL <= 0 ? 1 : s / (total - headL);
+  return (body / 2) * (RIBBON.tailRatio + (1 - RIBBON.tailRatio) * t);
+}
+
+/**
+ * The paper line across the ribbon at the front of the fill: from one edge to the other at the
+ * share `fraction` of the axis, `RIBBON.front.inset` short of both. `null` at the ends.
+ */
+export function frontLine(
+  axis: readonly Point[],
+  fraction: number,
+  body: number,
+): [Point, Point] | null {
+  if (fraction <= 0 || fraction >= 1) return null;
+  const total = polylineLength(axis);
+  const s = total * fraction;
+  const p = axisPoint(axis, s);
+  if (p === null) return null;
+  const half = Math.max(0, ribbonHalfWidth(total, s, body) - RIBBON.front.inset);
+  return [
+    { x: p.at.x - p.dir.y * half, y: p.at.y + p.dir.x * half },
+    { x: p.at.x + p.dir.y * half, y: p.at.y - p.dir.x * half },
+  ];
+}
+
+/**
+ * The band of light that runs along the ribbon after the departure: the stretch of the axis
+ * `RIBBON.sheen.length` long whose head is at `phase` (0..1, repeated every pass) of the way from
+ * before the tail to the tip, as shares of the axis length (clipped to 0..1). `null` when it is
+ * off the ribbon.
+ */
+export function sheenSpan(total: number, phase: number): { from: number; to: number } | null {
+  if (total <= 0) return null;
+  const start = phase * (total + 30) - 30;
+  const from = Math.max(0, start);
+  const to = Math.min(total, start + RIBBON.sheen.length);
+  return to > from ? { from: from / total, to: to / total } : null;
+}
+
+/** The phase (0..1) of the running band at `seconds`: one pass every `RIBBON.sheen.periodS`. */
+export function sheenPhase(seconds: number): number {
+  const period = RIBBON.sheen.periodS;
+  return (((seconds % period) + period) % period) / period;
+}
+
+/**
+ * The part of a ribbon between the shares `from` and `to` (0..1) of its axis: its outline cut
+ * across the axis at both shares. Empty if the band is empty.
+ */
+export function ribbonSlice(
+  outline: readonly Point[],
+  axis: readonly Point[],
+  from: number,
+  to: number,
+): Point[] {
+  if (to <= from || axis.length < 2) return [];
+  const total = polylineLength(axis);
+  const a = axisPoint(axis, total * from);
+  const b = axisPoint(axis, total * to);
+  if (a === null || b === null) return [];
+  // A quad across the axis from the front `a` to the front `b`, wider than any ribbon.
+  const wide = 400;
+  const quad = [
+    { x: a.at.x - a.dir.y * wide, y: a.at.y + a.dir.x * wide },
+    { x: b.at.x - b.dir.y * wide, y: b.at.y + b.dir.x * wide },
+    { x: b.at.x + b.dir.y * wide, y: b.at.y - b.dir.x * wide },
+    { x: a.at.x + a.dir.y * wide, y: a.at.y - a.dir.x * wide },
+  ];
+  return clipToConvex(outline, quad);
+}
+
+/**
+ * Where the pill "◇ +N" sits: `RIBBON.bonusBack` before the end of the arc (not before
+ * `RIBBON.bonusMin` from its start), moved off the arc to its outer side (the side it bulges to,
+ * `sign(bend)` as `ribbonAxis` uses it) by half the body, `RIBBON.bonusMargin` and `halfPill`
+ * (the half height of the pill, world units).
+ */
+export function bonusSpot(
+  axis: readonly Point[],
+  bend: number,
+  body: number,
+  halfPill: number,
+): Point | null {
+  const total = polylineLength(axis);
+  const p = axisPoint(axis, Math.max(RIBBON.bonusMin, total - RIBBON.bonusBack));
+  if (p === null) return null;
+  // The normal `(-dir.y, dir.x)` is the side `bend > 0` pushes the middle to.
+  const out = (bend < 0 ? -1 : 1) * (body / 2 + RIBBON.bonusMargin + halfPill);
+  return { x: p.at.x - p.dir.y * out, y: p.at.y + p.dir.x * out };
+}
+
+/**
+ * The dashed ring round the target of the opponent's order, as dashes of points: the circle of
+ * `radius` open at the bottom (`RIBBON.ring.open` each side of straight down), dashed 5 / 4.
+ */
+export function ringDashes(centre: Point, radius: number): Point[][] {
+  const { open, dash, space } = RIBBON.ring;
+  const from = Math.PI / 2 + open;
+  const span = 2 * Math.PI - 2 * open;
+  const steps = Math.max(12, Math.ceil((span * radius) / 6));
+  const arc: Point[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const a = from + (span * i) / steps;
+    arc.push({ x: centre.x + radius * Math.cos(a), y: centre.y + radius * Math.sin(a) });
+  }
+  return dashAlong(arc, dash, space, 0);
+}
+
+/** The opacity of the ring over an own city: it swells and fades every `RIBBON.ring.pulseS`; 1 with "less motion". */
+export function ringOpacity(seconds: number, reduced: boolean): number {
+  if (reduced) return 1;
+  const { pulseS, pulseLow } = RIBBON.ring;
+  const phase = (((seconds % pulseS) + pulseS) % pulseS) / pulseS;
+  return pulseLow + (1 - pulseLow) * (0.5 - 0.5 * Math.cos(2 * Math.PI * phase));
 }
 
 /** The pulse of a ribbon whose delay has just run out. */
@@ -407,68 +588,4 @@ export function roundRectPoints(width: number, height: number, radius: number, s
     }
   }
   return points;
-}
-
-// --- IN3 "Crosshair" (#353): the opponent's intent --------------------------------------------------
-
-export interface ReticleLook {
-  /** The pulsing halo outside the ring: its radius, opacity and width. */
-  readonly halo: { readonly radius: number; readonly alpha: number; readonly width: number };
-  /** The outer ring, the inner ring (radii from the centre of the target) and the dark casing under the outer. */
-  readonly ring: number;
-  readonly inner: number;
-  /** The four ticks across the outer ring: from and to, relative to the centre of the target. */
-  readonly ticks: readonly { readonly from: Point; readonly to: Point }[];
-}
-
-/** The phase of the pulse of the crosshair, 0..1: a smooth swell of `periodS`; 0.5 held still with "less motion". */
-export function reticlePhase(seconds: number, reduced: boolean): number {
-  if (reduced) return 0.5;
-  const phase =
-    (((seconds % INTENT_RETICLE.pulse.periodS) + INTENT_RETICLE.pulse.periodS) %
-      INTENT_RETICLE.pulse.periodS) /
-    INTENT_RETICLE.pulse.periodS;
-  return 0.5 - 0.5 * Math.cos(2 * Math.PI * phase);
-}
-
-/**
- * The crosshair on the target of an opponent's intent: the outer ring `ring` (the city circle `radius`
- * plus `INTENT_TARGET_RING.gap`), the inner ring `INTENT_RETICLE.innerGap` inside it, four ticks at the
- * quarters and the halo that swells with `phase`.
- */
-export function reticleLook(radius: number, phase: number): ReticleLook {
-  const ring = radius + INTENT_TARGET_RING.gap;
-  const { tick, pulse, innerGap } = INTENT_RETICLE;
-  const ticks = [0, 1, 2, 3].map((i) => {
-    const a = (i * Math.PI) / 2;
-    const at = (r: number): Point => ({ x: Math.cos(a) * r, y: Math.sin(a) * r });
-    return { from: at(ring - tick.in), to: at(ring + tick.out) };
-  });
-  return {
-    halo: {
-      radius: ring + pulse.grow * phase,
-      alpha: pulse.alphaLow + (pulse.alphaHigh - pulse.alphaLow) * phase,
-      width: pulse.widthLow + (pulse.widthHigh - pulse.widthLow) * phase,
-    },
-    ring,
-    inner: ring - innerGap,
-    ticks,
-  };
-}
-
-/** The width of the thin arrow of an opponent's intent: thicker once the order is locked (`lock` 0..1). */
-export function enemyArrowWidth(lock: number): number {
-  return INTENT_ENEMY.width + INTENT_ENEMY.lockedExtra * Math.min(1, Math.max(0, lock));
-}
-
-/** The three corners of the head of the thin arrow at `tip`, pointing along the unit vector `dir`. */
-export function enemyHead(tip: Point, dir: Point): [Point, Point, Point] {
-  const { length, half } = INTENT_ENEMY.head;
-  const bx = tip.x - dir.x * length;
-  const by = tip.y - dir.y * length;
-  return [
-    tip,
-    { x: bx - dir.y * half, y: by + dir.x * half },
-    { x: bx + dir.y * half, y: by - dir.x * half },
-  ];
 }
