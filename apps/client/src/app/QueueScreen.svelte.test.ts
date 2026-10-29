@@ -37,7 +37,12 @@ describe('QueueScreen', () => {
 
   function render(
     api: Partial<Api>,
-    handlers: { onstart?: () => void; onbot?: () => void; onleave?: () => void } = {},
+    handlers: {
+      onstart?: () => void;
+      onbot?: () => void;
+      onleave?: () => void;
+      onbanned?: (seconds: number) => void;
+    } = {},
   ): void {
     component = mount(QueueScreen, {
       target: document.body,
@@ -47,15 +52,21 @@ describe('QueueScreen', () => {
         onstart: handlers.onstart ?? vi.fn(),
         onbot: handlers.onbot ?? vi.fn(),
         onleave: handlers.onleave ?? vi.fn(),
+        onbanned: handlers.onbanned ?? vi.fn(),
         pollMs: 1000,
       },
     });
   }
 
+  /** A button by its name: the key hint and the countdown beside the name do not count. */
   function button(label: string): HTMLButtonElement | undefined {
-    return [...document.body.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === label,
-    );
+    return [...document.body.querySelectorAll('button')].find((b) => {
+      const copy = b.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll('kbd, .count').forEach((n) => {
+        n.remove();
+      });
+      return copy.textContent.trim() === label;
+    });
   }
 
   it('enters the queue once, then polls the status with the waiting time and queue size', async () => {
@@ -135,7 +146,8 @@ describe('QueueScreen', () => {
     const onstart = vi.fn();
     render({ joinQueue: () => Promise.resolve(found()), confirmQueue }, { onstart });
     await settle();
-    expect(document.body.textContent).toContain('Opponent found: bob');
+    expect(document.body.textContent).toContain(translate('en', 'queue.foundTitle'));
+    expect(document.body.textContent).toContain('bob');
     expect(document.body.textContent).toContain('15 s');
     button(translate('en', 'queue.confirm'))?.click();
     await settle();
@@ -163,6 +175,30 @@ describe('QueueScreen', () => {
     render({ joinQueue: () => Promise.reject(new ApiError('conflict', 409)) }, { onleave });
     await settle();
     expect(onleave).toHaveBeenCalledWith('error.api.conflict');
+  });
+
+  it('hands a queue ban to the menu with the time left, without a generic message (DEC-34)', async () => {
+    const onleave = vi.fn();
+    const onbanned = vi.fn();
+    render(
+      { joinQueue: () => Promise.reject(new ApiError('queue_banned', 429, 287)) },
+      { onleave, onbanned },
+    );
+    await settle();
+    expect(onbanned).toHaveBeenCalledWith(287);
+    expect(onleave).toHaveBeenCalledWith(null);
+  });
+
+  it('falls back to a message when a ban has no time', async () => {
+    const onleave = vi.fn();
+    const onbanned = vi.fn();
+    render(
+      { joinQueue: () => Promise.reject(new ApiError('queue_banned', 429)) },
+      { onleave, onbanned },
+    );
+    await settle();
+    expect(onbanned).not.toHaveBeenCalled();
+    expect(onleave).toHaveBeenCalledWith('error.api.queue_banned');
   });
 
   it('offers a bot after a long wait and leaves the queue for it', async () => {

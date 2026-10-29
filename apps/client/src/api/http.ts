@@ -31,6 +31,8 @@ export type ApiErrorCode =
   | 'invalid'
   /** 429: too many guests, matches created, nick or password changes, logins (MOD-01, #374). */
   | 'rate_limited'
+  /** 429 with a `QueueBan` body: banned from the matchmaking queue for repeated resigns (DEC-34). */
+  | 'queue_banned'
   /** 503: no maps or the server is restarting. */
   | 'unavailable'
   /** The request did not reach the server, or the answer was not understood. */
@@ -41,7 +43,7 @@ export class ApiError extends Error {
   constructor(
     readonly code: ApiErrorCode,
     readonly status: number,
-    /** 429: seconds from the `Retry-After` header, when the server named them. */
+    /** 429: seconds to wait, from `Retry-After` (or the ban body), when the server named them. */
     readonly retryAfterS: number | null = null,
   ) {
     super(`api error: ${code} (${String(status)})`);
@@ -66,9 +68,11 @@ export function parseRetryAfter(header: string | null): number | null {
   return seconds > 0 ? seconds : null;
 }
 
-/** The error of a failed response; the body only tells the two 403 answers apart. */
+/** The error of a failed response; the body only tells some 403 and 429 answers apart. */
 async function errorOf(response: Response): Promise<ApiError> {
   let code = STATUS_CODES[response.status] ?? 'server';
+  let retryAfter =
+    response.status === 429 ? parseRetryAfter(response.headers.get('Retry-After')) : null;
   if (response.status === 403) {
     try {
       const body = (await response.json()) as { detail?: unknown };
@@ -76,9 +80,21 @@ async function errorOf(response: Response): Promise<ApiError> {
     } catch {
       // No readable body: a plain 403 is the blocked account.
     }
+  } else if (response.status === 429) {
+    // A queue ban carries `{"detail": {"code": "queue_banned", "retry_after_s": N}}` (DEC-34).
+    try {
+      const body = (await response.json()) as { detail?: Partial<Schemas['QueueBan']> | string };
+      const detail = body.detail;
+      if (typeof detail === 'object' && detail.code === 'queue_banned') {
+        code = 'queue_banned';
+        if (typeof detail.retry_after_s === 'number' && detail.retry_after_s > 0) {
+          retryAfter = detail.retry_after_s;
+        }
+      }
+    } catch {
+      // Only `Retry-After`: the entry rate limit.
+    }
   }
-  const retryAfter =
-    response.status === 429 ? parseRetryAfter(response.headers.get('Retry-After')) : null;
   return new ApiError(code, response.status, retryAfter);
 }
 

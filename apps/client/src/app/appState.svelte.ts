@@ -11,7 +11,7 @@ import { forgetGuest, loadGuest, saveGuest } from '../api/guestStore.ts';
 import type { MessageKey } from '../i18n/index.ts';
 import { loginFailure, passwordFailure, type AccountFailure } from './account.ts';
 import { apiErrorKey } from './apiErrors.ts';
-import type { MatchEndMsg, PlayerId } from '../protocol.gen.ts';
+import type { Calibration, MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
 
 export type Screen =
   /** Checking the saved guest. */
@@ -71,6 +71,12 @@ export class AppState {
   notice = $state.raw<MessageKey | null>(null);
   /** The running match of the guest, known from the server: the menu offers to return to it. */
   activeMatch = $state.raw<ActiveMatch | null>(null);
+  /** Calibration progress of the account (DEC-34): null for a guest and once it is over. */
+  calibration = $state.raw<Calibration | null>(null);
+  /** The matchmaking queue is locked until this time (ms since the epoch), or null (DEC-34). */
+  queueBanUntil = $state.raw<number | null>(null);
+  /** The pool map drawn behind the start screens; null until it is loaded or if it cannot be. */
+  backdrop = $state.raw<MapFile | null>(null);
 
   readonly api: Api;
   readonly #storage: () => Storage;
@@ -91,11 +97,13 @@ export class AppState {
   /** The first screen: the invite code from the address, the saved guest, then welcome or menu. */
   async start(): Promise<void> {
     this.#takeInviteFromUrl();
+    void this.#loadBackdrop();
     const saved = loadGuest(this.#storage);
     if (saved !== null) {
       try {
         const me = await this.api.me(saved.token);
         this.guest = { token: saved.token, nick: me.nick, hasPassword: me.has_password };
+        this.calibration = me.calibration ?? null;
         saveGuest(this.#storage, this.guest);
       } catch (error) {
         if (error instanceof ApiError && error.code === 'unauthorized') {
@@ -219,6 +227,22 @@ export class AppState {
     return found;
   }
 
+  /** The calibration of the account, asked again whenever the menu opens (a match changes it). */
+  async refreshProfile(): Promise<void> {
+    const guest = this.guest;
+    if (guest === null) return;
+    try {
+      this.calibration = (await this.api.me(guest.token)).calibration ?? null;
+    } catch {
+      // Best effort, like the running match: the chip keeps what it showed.
+    }
+  }
+
+  /** The queue refused us for repeated resigns (DEC-34): the menu counts the time down. */
+  banQueue(seconds: number): void {
+    this.queueBanUntil = Date.now() + seconds * 1000;
+  }
+
   /** Back to the running match (the socket reconnects with the same token, DEC-05). */
   resumeMatch(match: ActiveMatch): void {
     this.go({ name: 'match', matchId: match.match_id, mapId: match.map_id });
@@ -277,6 +301,19 @@ export class AppState {
   forget(): void {
     forgetGuest(this.#storage);
     this.guest = null;
+    this.calibration = null;
+    this.queueBanUntil = null;
+  }
+
+  /** The map behind the start screens: `crossroads` if the pool has it, else the first. Best effort. */
+  async #loadBackdrop(): Promise<void> {
+    try {
+      const pool = await this.api.maps();
+      const pick = pool.find((m) => m.id === 'crossroads') ?? pool[0];
+      if (pick !== undefined) this.backdrop = await this.api.map(pick.id);
+    } catch {
+      // No picture is not fatal: the screens keep the plain dark page.
+    }
   }
 
   #remember(guest: Guest): void {

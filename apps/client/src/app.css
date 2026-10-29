@@ -159,3 +159,511 @@ body {
   background: var(--surface);
   font-size: 14px;
 }
+
+/* ===== The screens before a match (#471, variant A "Front"; docs/design/mockups/start-menu.html) =====
+   The pool map is the postcard, a text rail stands on the left, the player is in the top right
+   corner (inside the fog of the picture, never on its edge). Used by ScreenFrame. */
+.front {
+  position: fixed;
+  inset: 0 0 var(--legal-footer-h);
+  overflow: hidden;
+  color: var(--text);
+}
+
+.front .shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      90deg,
+      rgb(13 17 23 / 97%) 0,
+      rgb(13 17 23 / 90%) 330px,
+      rgb(13 17 23 / 45%) 470px,
+      rgb(13 17 23 / 8%) 640px,
+      rgb(13 17 23 / 0%) 100%
+    ),
+    linear-gradient(0deg, rgb(13 17 23 / 70%), rgb(13 17 23 / 0%) 140px);
+}
+
+.front .top {
+  position: absolute;
+  inset: 28px 44px auto 56px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.front .mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.front .mark-you {
+  fill: var(--you);
+  stroke: var(--paper);
+}
+
+.front .mark-enemy {
+  fill: var(--enemy);
+  stroke: var(--paper);
+}
+
+.front .mark-hole {
+  fill: none;
+  stroke: var(--bg);
+  stroke-width: 1.4;
+}
+
+.front .mark-road {
+  stroke: var(--text-dim);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+}
+
+.front .corner {
+  position: relative;
+  min-width: 0;
+}
+
+.front .who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 5px 14px 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: rgb(13 17 23 / 70%);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.front .who .nick {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.front .who .cap {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.front .chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.front .cells {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.front .cells i {
+  display: block;
+  width: 16px;
+  height: 8px;
+  border: 1.5px solid var(--you);
+  border-radius: 2px;
+}
+
+.front .cells i.on {
+  background: var(--you);
+}
+
+/* The account menu under the chip. */
+.front .pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 300px;
+  box-sizing: border-box;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.front .pop button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.front .pop button:hover {
+  background: var(--surface-2);
+}
+
+.front .pop .wl {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.front .rail {
+  position: absolute;
+  left: 56px;
+  top: 150px;
+  width: 430px;
+  z-index: 5;
+}
+
+.front .eyebrow {
+  min-height: 20px;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.front .eyebrow.warn {
+  color: var(--warn);
+}
+
+.front .big {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  margin: 8px 0 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 68px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.front .big:disabled {
+  cursor: default;
+}
+
+.front .big.sm {
+  font-size: 44px;
+  font-variant-numeric: tabular-nums;
+}
+
+.front .big.warn {
+  color: var(--warn);
+  cursor: default;
+}
+
+.front .big .count {
+  margin-left: 14px;
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.front .big.static {
+  cursor: default;
+}
+
+.front .sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 28px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.front .rows {
+  margin-top: 26px;
+  width: 370px;
+  max-width: 100%;
+}
+
+.front .row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 11px 4px;
+  border: 0;
+  border-bottom: 1px solid rgb(230 237 243 / 10%);
+  background: none;
+  font: inherit;
+  font-size: 22px;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.front .row svg {
+  color: var(--text-dim);
+}
+
+.front .row .k {
+  margin-left: auto;
+}
+
+.front .row:hover:not(:disabled),
+.front .row:focus-visible {
+  background: linear-gradient(90deg, rgb(91 155 255 / 18%), transparent);
+  border-bottom-color: var(--you);
+}
+
+.front .row:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.front .k {
+  display: inline-block;
+  min-width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  border: 1px solid #3d444d;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 21px;
+  text-align: center;
+}
+
+.front .big .k {
+  margin-left: 6px;
+  transform: translateY(4px);
+  letter-spacing: 0;
+}
+
+.front .linkbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.front .linkbtn:hover {
+  color: var(--text);
+}
+
+.front .wl {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0 0;
+  color: var(--warn);
+  font-size: 15px;
+}
+
+.front .wl svg {
+  margin-top: 2px;
+}
+
+.front .hint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.front .tag {
+  position: absolute;
+  left: 56px;
+  bottom: 22px;
+  z-index: 5;
+  max-width: calc(100% - 112px);
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.front :focus-visible {
+  outline: 2px solid var(--paper);
+  outline-offset: 2px;
+}
+
+/* The welcome form on the rail: big plain fields, an underline, the big Play under them. */
+.front .form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.front .form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.front .form input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 52px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 2px solid var(--you);
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 26px;
+}
+
+.front .form input:focus-visible {
+  outline: none;
+  background: rgb(91 155 255 / 10%);
+}
+
+.front .form .error {
+  margin: 0;
+  color: var(--warn);
+  font-size: 14px;
+}
+
+.front .form .hint {
+  margin: 0;
+}
+
+.front .links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.front .links button {
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 15px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.front .links button:hover {
+  color: var(--text);
+}
+
+.front .locale {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.front .locale select {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+/* A small window or a big UI scale: the rail flows over the picture instead of standing beside it. */
+@media (max-width: 899px), (max-height: 560px) {
+  .front {
+    overflow: auto;
+  }
+
+  .front .top {
+    position: relative;
+    inset: auto;
+    margin: 20px 20px 0;
+  }
+
+  .front .rail {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: auto;
+    margin: 28px 24px 0;
+  }
+
+  .front .tag {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    margin: 24px 24px 16px;
+    max-width: none;
+  }
+
+  .front .big {
+    font-size: 52px;
+  }
+
+  /* The rail lies over the map here: a flat shade keeps the text legible. */
+  .front .shade {
+    background: rgb(13 17 23 / 72%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .front * {
+    transition: none;
+  }
+}
+
+.front .versus {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.front .versus .name {
+  font-size: 36px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.front .leave {
+  margin-top: 18px;
+}

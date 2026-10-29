@@ -83,7 +83,7 @@ export class Player {
 
   /** The host: menu, private match on `mapId`, returns the invite link. */
   async createInvite(mapId: string): Promise<string> {
-    await this.page.getByRole('button', { name: 'Private match with a friend' }).click();
+    await this.page.getByRole('button', { name: 'Invite a friend' }).click();
     await this.page.getByLabel('Map').selectOption(mapId);
     await this.page.getByRole('button', { name: 'Create the match' }).click();
     const link = this.page.getByLabel('Invite link');

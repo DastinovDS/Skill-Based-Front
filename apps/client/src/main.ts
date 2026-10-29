@@ -29,6 +29,8 @@ if (target === null) {
 const params = new URLSearchParams(window.location.search);
 const replayId = params.get('replay');
 const devScreen = import.meta.env.DEV && (params.has('scene') || params.has('dev'));
+// `?menu=<id>`: a screen before a match with fixed data (dev build, `mise run shots`, #471).
+const devMenus = import.meta.env.DEV && params.has('menu');
 
 // `/impressum` and `/privacy` are the static legal pages (LEG-01); Caddy serves index.html for them.
 const legalPage =
@@ -56,6 +58,10 @@ async function start(target: HTMLElement) {
       window.location.assign('/');
     };
     return mount(ReplayScreen, { target, props: { matchId: replayId, token, onback } });
+  }
+  if (devMenus) {
+    const { default: DevMenus } = await import('./dev/DevMenus.svelte');
+    return mount(DevMenus, { target });
   }
   if (import.meta.env.DEV && devScreen) {
     const { default: DevScreen } = await import('./dev/DevScreen.svelte');

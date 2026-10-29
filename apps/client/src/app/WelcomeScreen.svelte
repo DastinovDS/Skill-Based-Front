@@ -1,8 +1,11 @@
 <script lang="ts">
   import { t, type MessageKey } from '../i18n/index.ts';
+  import type { MapFile } from '../protocol.gen.ts';
   import { failureText, passwordLengthOk, type AccountFailure } from './account.ts';
   import LocaleSelect from './LocaleSelect.svelte';
   import PasswordFields from './PasswordFields.svelte';
+  import ScreenFrame from './ScreenFrame.svelte';
+  import UnitMark from './UnitMark.svelte';
 
   type Mode = 'guest' | 'login' | 'register';
 
@@ -10,6 +13,8 @@
     /** An invite link was opened: the nick form leads straight into that match. */
     invited: boolean;
     notice: MessageKey | null;
+    /** The map drawn behind the form (null: the plain dark page). */
+    map?: MapFile | null;
     /** Play as a guest: a nick and nothing else. */
     onsubmit: (nick: string) => Promise<void>;
     /** Log in to an account (#374); why it failed, or null. */
@@ -18,7 +23,7 @@
     onregister: (nick: string, password: string) => Promise<AccountFailure | null>;
   }
 
-  let { invited, notice, onsubmit, onlogin, onregister }: Props = $props();
+  let { invited, notice, map = null, onsubmit, onlogin, onregister }: Props = $props();
 
   let mode = $state<Mode>('guest');
   let nick = $state('');
@@ -68,59 +73,61 @@
   );
 </script>
 
-<main class="screen">
-  <form class="card" onsubmit={submit}>
-    <h1>{t('app.title')}</h1>
-    <p>{intro}</p>
-    <label>
-      {t('welcome.nick')}
-      <!-- svelte-ignore a11y_autofocus -->
-      <input
-        bind:value={nick}
-        autofocus
-        required
-        minlength="3"
-        maxlength="16"
-        name="username"
-        autocomplete={mode === 'guest' ? 'nickname' : 'username'}
-        spellcheck="false"
-      />
-    </label>
-    {#if mode === 'login'}
+<ScreenFrame {map} label={t('welcome.eyebrow')}>
+  <form onsubmit={submit}>
+    <div class="eyebrow">{t('welcome.eyebrow')}</div>
+    <p class="sub">{intro}</p>
+    <div class="form">
       <label>
-        {t('account.password')}
+        {t('welcome.nick')}
+        <!-- svelte-ignore a11y_autofocus -->
         <input
-          type="password"
-          name="password"
-          bind:value={password}
+          bind:value={nick}
+          autofocus
           required
-          maxlength="1024"
-          autocomplete="current-password"
+          minlength="3"
+          maxlength="16"
+          name="username"
+          autocomplete={mode === 'guest' ? 'nickname' : 'username'}
+          spellcheck="false"
         />
       </label>
-    {:else}
-      <p class="hint">{t('welcome.nickHint')}</p>
-      {#if mode === 'register'}
-        <PasswordFields bind:password bind:repeat />
-      {/if}
-    {/if}
-    {#if failure !== null}
-      <p class="error" role="alert">{failureText(failure)}</p>
-    {:else if notice !== null}
-      <p class="error" role="alert">{t(notice)}</p>
-    {/if}
-    <div class="actions">
-      <button type="submit" class="primary" disabled={busy}>
-        {#if mode === 'login'}
-          {t('welcome.login')}
-        {:else if mode === 'register'}
-          {t('welcome.register')}
-        {:else}
-          {invited ? t('welcome.join') : t('welcome.start')}
+      {#if mode === 'login'}
+        <label>
+          {t('account.password')}
+          <input
+            type="password"
+            name="password"
+            bind:value={password}
+            required
+            maxlength="1024"
+            autocomplete="current-password"
+          />
+        </label>
+      {:else}
+        <p class="hint">{t('welcome.nickHint')}</p>
+        {#if mode === 'register'}
+          <PasswordFields bind:password bind:repeat />
         {/if}
-      </button>
+      {/if}
+      {#if failure !== null}
+        <p class="error" role="alert">{failureText(failure)}</p>
+      {:else if notice !== null}
+        <p class="error" role="alert">{t(notice)}</p>
+      {/if}
     </div>
-    <div class="actions">
+    <button type="submit" class="big sm" disabled={busy}>
+      <UnitMark side="own" size={36} />
+      {#if mode === 'login'}
+        {t('welcome.login')}
+      {:else if mode === 'register'}
+        {t('welcome.register')}
+      {:else}
+        {invited ? t('welcome.join') : t('welcome.start')}
+      {/if}
+      <kbd class="k" aria-hidden="true">↵</kbd>
+    </button>
+    <div class="links">
       {#if mode !== 'guest'}
         <button
           type="button"
@@ -146,6 +153,6 @@
         >
       {/if}
     </div>
-    <LocaleSelect />
+    <div class="locale"><LocaleSelect /></div>
   </form>
-</main>
+</ScreenFrame>

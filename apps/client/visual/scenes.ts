@@ -14,3 +14,22 @@ export const SCENES = [
   { id: 'artery', tick: 2400 },
   { id: 'provinces', tick: 1200 },
 ] as const;
+
+/**
+ * The screens before a match (`/?menu=<id>`, src/dev/menuScenes.ts, #471): shot by `mise run shots`
+ * as `menu-<id>.png` (and in grey scale); they have no reference screenshots.
+ */
+export const MENU_SCENES = [
+  'welcome',
+  'welcome-notice',
+  'menu-guest',
+  'menu-calibration',
+  'menu-ranked',
+  'menu-resume',
+  'menu-banned',
+  'menu-error',
+  'queue-search',
+  'queue-long',
+  'queue-found',
+  'queue-confirmed',
+] as const;

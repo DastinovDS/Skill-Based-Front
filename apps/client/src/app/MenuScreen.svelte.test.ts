@@ -1,105 +1,253 @@
 import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { setLocale, translate } from '../i18n/index.ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setLocale, translate, type MessageKey } from '../i18n/index.ts';
+import type { Calibration } from '../protocol.gen.ts';
 import MenuScreen from './MenuScreen.svelte';
 
 describe('MenuScreen', () => {
   let component: Record<string, unknown> | undefined;
+  beforeEach(() => {
+    setLocale('en');
+  });
   afterEach(() => {
     if (component !== undefined) void unmount(component);
     component = undefined;
     document.body.innerHTML = '';
+    vi.useRealTimers();
     setLocale('en');
   });
 
-  function render(
-    hasActiveMatch: boolean,
-    onresume = vi.fn(),
-    account: { hasPassword?: boolean; onlogout?: () => void; onpassword?: () => void } = {},
-  ): void {
-    setLocale('en');
+  interface Options {
+    hasActiveMatch?: boolean;
+    hasPassword?: boolean;
+    calibration?: Calibration | null;
+    banUntil?: number | null;
+    now?: () => number;
+    notice?: MessageKey | null;
+    handlers?: Partial<
+      Record<
+        'onresume' | 'oncreate' | 'onqueue' | 'onlobby' | 'onbot' | 'onpassword' | 'onlogout',
+        () => void
+      >
+    >;
+  }
+
+  function render(options: Options = {}): void {
+    const h = options.handlers ?? {};
     component = mount(MenuScreen, {
       target: document.body,
       props: {
         nick: 'Me',
-        notice: null,
-        oncreate: vi.fn(),
-        onqueue: vi.fn(),
-        onlobby: vi.fn(),
-        onbot: vi.fn(),
-        hasPassword: account.hasPassword ?? false,
-        onpassword: account.onpassword ?? vi.fn(),
-        onlogout: account.onlogout ?? vi.fn(),
-        hasActiveMatch,
-        onresume,
+        notice: options.notice ?? null,
+        oncreate: h.oncreate ?? vi.fn(),
+        onqueue: h.onqueue ?? vi.fn(),
+        onlobby: h.onlobby ?? vi.fn(),
+        onbot: h.onbot ?? vi.fn(),
+        hasPassword: options.hasPassword ?? false,
+        calibration: options.calibration ?? null,
+        banUntil: options.banUntil ?? null,
+        ...(options.now === undefined ? {} : { now: options.now }),
+        onpassword: h.onpassword ?? vi.fn(),
+        onlogout: h.onlogout ?? vi.fn(),
+        hasActiveMatch: options.hasActiveMatch ?? false,
+        onresume: h.onresume ?? vi.fn(),
       },
     });
     flushSync();
   }
 
-  function button(
-    key:
-      | 'menu.setPassword'
-      | 'menu.changePassword'
-      | 'menu.logout'
-      | 'menu.logoutConfirm'
-      | 'menu.logoutCancel',
-  ): HTMLButtonElement | undefined {
-    const label = translate('en', key);
-    return [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === label);
+  /** A button by its name: the key hint inside it does not count. */
+  function button(label: string): HTMLButtonElement | undefined {
+    return [...document.querySelectorAll('button')].find((b) => {
+      const copy = b.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll('kbd').forEach((n) => {
+        n.remove();
+      });
+      return copy.textContent.trim() === label;
+    });
+  }
+  const named = (key: MessageKey): HTMLButtonElement | undefined => button(translate('en', key));
+
+  function openAccount(): void {
+    document.querySelector<HTMLButtonElement>('button.who')?.click();
+    flushSync();
   }
 
-  function resumeButton(): HTMLButtonElement | undefined {
-    const label = translate('en', 'menu.resume');
-    return [...document.querySelectorAll('button')].find((b) => b.textContent === label);
+  function press(key: string): void {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    flushSync();
   }
 
-  it('offers the way back into a running match', () => {
-    const onresume = vi.fn();
-    render(true, onresume);
-    resumeButton()?.click();
-    expect(onresume).toHaveBeenCalledOnce();
+  it('has one main action, Play, and three quiet modes; no replays or rating rows yet', () => {
+    const onqueue = vi.fn();
+    render({ handlers: { onqueue } });
+    named('menu.play')?.click();
+    expect(onqueue).toHaveBeenCalledOnce();
+    expect(named('menu.bot')).toBeTruthy();
+    expect(named('menu.create')).toBeTruthy();
+    expect(named('menu.lobby')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/Replays|Rating/);
   });
 
-  it('has no such button without a running match', () => {
-    render(false);
-    expect(resumeButton()).toBeUndefined();
+  it('opens the modes with their keys: B, I, L and Enter', () => {
+    const handlers = { onbot: vi.fn(), oncreate: vi.fn(), onlobby: vi.fn(), onqueue: vi.fn() };
+    render({ handlers });
+    press('b');
+    press('I');
+    press('l');
+    press('Enter');
+    expect(handlers.onbot).toHaveBeenCalledOnce();
+    expect(handlers.oncreate).toHaveBeenCalledOnce();
+    expect(handlers.onlobby).toHaveBeenCalledOnce();
+    expect(handlers.onqueue).toHaveBeenCalledOnce();
   });
 
-  it('offers to set the password of a guest and to change the one of an account', () => {
-    const onpassword = vi.fn();
-    render(false, vi.fn(), { hasPassword: false, onpassword });
-    expect(button('menu.changePassword')).toBeUndefined();
-    button('menu.setPassword')?.click();
-    expect(onpassword).toHaveBeenCalledOnce();
-    void unmount(component ?? {});
-    document.body.innerHTML = '';
-    render(false, vi.fn(), { hasPassword: true, onpassword });
-    expect(button('menu.setPassword')).toBeUndefined();
-    button('menu.changePassword')?.click();
-    expect(onpassword).toHaveBeenCalledTimes(2);
+  it('keeps the keys out of a text field', () => {
+    const onbot = vi.fn();
+    render({ handlers: { onbot } });
+    const field = document.body.appendChild(document.createElement('input'));
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', bubbles: true }));
+    expect(onbot).not.toHaveBeenCalled();
   });
 
-  it('logs an account out at once', () => {
-    const onlogout = vi.fn();
-    render(false, vi.fn(), { hasPassword: true, onlogout });
-    button('menu.logout')?.click();
-    expect(onlogout).toHaveBeenCalledOnce();
+  describe('the player chip in the corner', () => {
+    it('shows a guest as unrated with a hint to set a password', () => {
+      render({ hasPassword: false });
+      expect(document.querySelector('.who')?.textContent).toContain(translate('en', 'menu.guest'));
+      expect(document.body.textContent).toContain(translate('en', 'menu.guestHint'));
+    });
+
+    it('shows calibration k/5 there and nowhere else', () => {
+      render({ hasPassword: true, calibration: { played: 2, total: 5 } });
+      const chip = document.querySelector('.who');
+      expect(chip?.textContent).toContain('Calibration 2/5');
+      expect(chip?.querySelectorAll('.cells i.on')).toHaveLength(2);
+      expect(chip?.querySelectorAll('.cells i')).toHaveLength(5);
+      const outside = document.body.textContent.replace(chip?.textContent ?? '', '');
+      expect(outside).not.toMatch(/Calibration|Rating shows/);
+    });
+
+    it('shows a calibrated account as ranked', () => {
+      render({ hasPassword: true, calibration: null });
+      expect(document.querySelector('.who')?.textContent).toContain(translate('en', 'menu.ranked'));
+      expect(document.querySelector('.who .cells')).toBeNull();
+    });
   });
 
-  it('warns a guest without a password before the logout, and lets them stay', () => {
-    const onlogout = vi.fn();
-    render(false, vi.fn(), { hasPassword: false, onlogout });
-    button('menu.logout')?.click();
-    flushSync();
-    expect(onlogout).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain(translate('en', 'menu.logoutWarning'));
-    button('menu.logoutCancel')?.click();
-    flushSync();
-    expect(document.body.textContent).not.toContain(translate('en', 'menu.logoutWarning'));
-    button('menu.logout')?.click();
-    flushSync();
-    button('menu.logoutConfirm')?.click();
-    expect(onlogout).toHaveBeenCalledOnce();
+  describe('a running match', () => {
+    it('offers only Return, the modes are off', () => {
+      const onresume = vi.fn();
+      const onbot = vi.fn();
+      render({ hasActiveMatch: true, handlers: { onresume, onbot } });
+      named('menu.resume')?.click();
+      expect(onresume).toHaveBeenCalledOnce();
+      expect(named('menu.play')).toBeUndefined();
+      expect(named('menu.bot')?.disabled).toBe(true);
+      expect(named('menu.lobby')?.disabled).toBe(true);
+      press('b');
+      expect(onbot).not.toHaveBeenCalled();
+      press('Enter');
+      expect(onresume).toHaveBeenCalledTimes(2);
+    });
+
+    it('has no Return without a running match', () => {
+      render();
+      expect(named('menu.resume')).toBeUndefined();
+    });
+  });
+
+  describe('a queue ban (DEC-34)', () => {
+    it('replaces Play with the time left, keeps the other modes open and counts down', () => {
+      vi.useFakeTimers();
+      let now = 1_000_000;
+      const onqueue = vi.fn();
+      const onbot = vi.fn();
+      render({ banUntil: now + 287_000, now: () => now, handlers: { onqueue, onbot } });
+      expect(document.body.textContent).toContain('4:47');
+      expect(document.body.textContent).toContain(translate('en', 'menu.banReason'));
+      expect(named('menu.play')).toBeUndefined();
+      press('Enter');
+      expect(onqueue).not.toHaveBeenCalled();
+      named('menu.bot')?.click();
+      expect(onbot).toHaveBeenCalledOnce();
+      now += 60_000;
+      vi.advanceTimersByTime(1000);
+      flushSync();
+      expect(document.body.textContent).toContain('3:47');
+    });
+
+    it('gives Play back when the ban is over', () => {
+      vi.useFakeTimers();
+      let now = 5_000;
+      render({ banUntil: now + 2_000, now: () => now });
+      expect(named('menu.play')).toBeUndefined();
+      now += 3_000;
+      vi.advanceTimersByTime(1000);
+      flushSync();
+      expect(named('menu.play')).toBeTruthy();
+    });
+  });
+
+  it('says why the last action failed', () => {
+    render({ notice: 'error.api.network' });
+    expect(document.querySelector('[role=alert]')?.textContent).toContain(
+      translate('en', 'error.api.network'),
+    );
+  });
+
+  describe('the account menu', () => {
+    it('offers to set the password of a guest and to change the one of an account', () => {
+      const onpassword = vi.fn();
+      render({ hasPassword: false, handlers: { onpassword } });
+      expect(named('menu.setPassword')).toBeUndefined(); // closed until the chip is pressed
+      openAccount();
+      expect(named('menu.changePassword')).toBeUndefined();
+      named('menu.setPassword')?.click();
+      expect(onpassword).toHaveBeenCalledOnce();
+      void unmount(component ?? {});
+      document.body.innerHTML = '';
+      render({ hasPassword: true, handlers: { onpassword } });
+      openAccount();
+      expect(named('menu.setPassword')).toBeUndefined();
+      named('menu.changePassword')?.click();
+      expect(onpassword).toHaveBeenCalledTimes(2);
+    });
+
+    it('logs an account out at once', () => {
+      const onlogout = vi.fn();
+      render({ hasPassword: true, handlers: { onlogout } });
+      openAccount();
+      named('menu.logout')?.click();
+      expect(onlogout).toHaveBeenCalledOnce();
+    });
+
+    it('warns a guest without a password before the logout, and lets them stay', () => {
+      const onlogout = vi.fn();
+      render({ hasPassword: false, handlers: { onlogout } });
+      openAccount();
+      named('menu.logout')?.click();
+      flushSync();
+      expect(onlogout).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain(translate('en', 'menu.logoutWarning'));
+      named('menu.logoutCancel')?.click();
+      flushSync();
+      expect(document.body.textContent).not.toContain(translate('en', 'menu.logoutWarning'));
+      named('menu.logout')?.click();
+      flushSync();
+      named('menu.logoutConfirm')?.click();
+      expect(onlogout).toHaveBeenCalledOnce();
+    });
+
+    it('closes with Escape and with a click elsewhere', () => {
+      render({ hasPassword: true });
+      openAccount();
+      expect(document.querySelector('[role=menu]')).not.toBeNull();
+      press('Escape');
+      expect(document.querySelector('[role=menu]')).toBeNull();
+      openAccount();
+      document.body.click();
+      flushSync();
+      expect(document.querySelector('[role=menu]')).toBeNull();
+    });
   });
 });
