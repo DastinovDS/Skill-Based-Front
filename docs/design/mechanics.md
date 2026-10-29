@@ -2377,7 +2377,7 @@ Alternatives (not chosen):
 - The border point always in the middle (no field): a "long approach" to a mountain fortress is impossible.
 - Names by i18n keys (two versions per node); the owner: one name per node.
 
-### Maps: symmetry of the rules without symmetry of the picture, size, no water (DEC-27, #266) **[accepted]**, asymmetric maps **[deferred]**
+### Maps: symmetry of the rules without symmetry of the picture, size, no water (DEC-27, #266) **[accepted]**, asymmetric maps **[deferred]**; item 3 (no water) **[superseded by DEC-36]**
 
 The owner's decision of 2026-10-14 (#252): maps should look less symmetric and more interesting, be
 a bit larger, and the water on the background is confusing. Changes of the format and the tools:
@@ -2400,9 +2400,12 @@ accepted and implemented (#266, closed 2026-10-22; validator and script #366, DE
 2. **[accepted]** **Maps a bit larger** than before (31..34 nodes, world 1140..1600 by 1000).
    **[accepted]** 45..55 nodes with the provinces of DEC-23; the world scales proportionally (width and
    height are multiples of 4, a `bake` requirement), the specific sizes are set by the maps issue.
-3. **[accepted]** **No water for now:** the sea, shallows and beach are removed from the baked backgrounds (`uv run gow-maps bake`);
+3. ~~**[accepted]** **No water for now:** the sea, shallows and beach are removed from the baked backgrounds (`uv run gow-maps bake`);
    the background is all land, only the biomes by node terrain remain (plains, forest, mountains). The owner
-   finds water confusing. This does not change the game rules (the background is only for looks).
+   finds water confusing. This does not change the game rules (the background is only for looks).~~
+   **[superseded by DEC-36]** (accepted 2026-10-29, #537): water returns as water cells and rivers that lie exactly
+   where the areas of nodes do not connect (the DEC-36 block below). A map without an authored geography
+   (`maps/src/<id>.geo.json`) keeps the land-only background described here.
 4. **[accepted]** **The length of the drawn road agrees with `travel_ticks`** (otherwise with free
    coordinates the road on the screen lies about the travel time): a tolerance of 15 percent, the validator check
    `travel_ticks` (now 25 percent, `travel_tolerance_pct = 25`; it will become `15`). The expected time
@@ -2478,9 +2481,24 @@ Alternatives (not chosen):
 - A `travel_ticks` tolerance of 25 percent (the road on the screen could be a quarter longer or
   shorter than the travel time).
 
-### Map geography: water cells, rivers as area borders, areas touch only along roads (DEC-36, #537) **[proposed]**
+### Map geography: water cells, rivers as area borders, areas touch only along roads (DEC-36, #537) **[accepted]**
 
-**Decision: awaiting the owner's decision.** Until it is accepted, DEC-27, item 3 ("no water") stays in force and nothing below is implemented.
+**Decision: accepted** by the owner on 2026-10-29 (#537), in substance, with these choices and defaults:
+
+- **Water look W4 Painted** (item 6), baked into the background.
+- **No dark line along water.** Where the border of an area runs along water (a sea, a lake, a river or a stream),
+  no dark stroke, dark halo or dark bank line is drawn on the land side or on the water side: the water itself is
+  the border, and the water stays blue. This replaces the "soft shore halo" of the mockup's W4 (a darkened band on
+  the land along every coast) and applies to the client's thin area line too: it is drawn only between two land
+  areas.
+- The questions of #537 the owner did not answer take the defaults of this block: long rivers with drawn bridges at
+  border points as in the mockup (item 4), about 20 percent water on `ridge` (item 11), the fixtures `artery`,
+  `web`, `pass` and the test maps without water (item 10), everything before the release (M6), in three steps:
+  (1) the baker, the vector file and the validator check `geography` (#537); (2) the client territory layer from the
+  vector file (this removes the "sliver"); (3) the geography of the three pool maps and the menu map.
+
+DEC-27, item 3 ("no water") is **[superseded by DEC-36]**: a map with an authored geography gets water; a map
+without one keeps the land-only background.
 
 The owner's feedback of 2026-10-29 on the river variants of the #429 mockup (`docs/design/mockups/supply-terrain.html`):
 rivers and the visual separation of territories must be reworked; the map may have whole cells of sea or lake;
@@ -2490,8 +2508,8 @@ elsewhere water, a river or another natural border separates them.
 
 **This is not a rule change.** The mechanics are frozen for the release (the note at the top of this document): DEC-36
 changes only the picture of the map and the data that draws it. The simulation, the server, the bots and the
-protocol read none of it (the list in item 7). Format and tools: `docs/design/map-format.md`, section "Format change
-proposal under DEC-36". Mockup: `docs/design/mockups/map-geography.html` (the pool map `ridge` re-imagined, four
+protocol read none of it (the list in item 7). Format and tools: `docs/design/map-format.md`, section "Format
+changes under DEC-36". Mockup: `docs/design/mockups/map-geography.html` (the pool map `ridge` re-imagined, four
 water variants, the check of item 3, the moved nodes of item 9); prototype generator:
 `docs/design/mockups/src/map_geography.py`.
 
@@ -2506,8 +2524,8 @@ Proposal (each item is a default for the owner to confirm or change):
 
 1. **Water returns, as part of the picture.** A map may have **water cells**: a sea (at the edge of the map) or a
    lake (inside), each set by a point and a radius in the authored geography of the map. The water cell takes the
-   ground around its point exactly as a node takes its area (item 2). **Would supersede DEC-27, item 3** ("no water
-   for now", status to change to [superseded by DEC-36] only when this decision is accepted). Why the earlier
+   ground around its point exactly as a node takes its area (item 2). **Supersedes DEC-27, item 3** ("no water
+   for now", [superseded by DEC-36] since 2026-10-29). Why the earlier
    objection no longer applies: the water of the old baker was the sea below a density threshold of the
    prototype generator, unrelated to the graph, so it suggested a rule that did not exist; under DEC-36 water lies
    exactly where the areas do not connect, so it shows the graph instead of contradicting it.
@@ -3380,7 +3398,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-24 | #261 | fight over time: rounds, reinforcements, retreat, a bounce without a chain, the fight point | section 4 | [accepted] (2026-10-14, all 14 recommendations); absorbs #133, #141; `round_ticks = 10` and item I1 on the remaining bonus [superseded by DEC-32, implemented #329] |
 | DEC-25 | #262 | recruit queue | section 3 | [accepted] (2026-10-14: 3 s per unit, a queue of 3); implemented #278 |
 | DEC-26 | #265 | city development: roads without a type and cheaper (always); barracks and warehouse separate from capacity (behind the flag `city_upgrades.enabled`) | sections 3 and 8 | [accepted] (2026-10-14, all details; road prices 1 and 2, roads not behind the flag); implemented #265 (`SIM_VERSION` 12, `PROTOCOL_VERSION` 16); part [superseded by DEC-28] |
-| DEC-27 | #266 | maps: symmetry of rules without symmetry of the picture, size, no water | section 9 | [accepted] (2026-10-14, all details); asymmetric maps [deferred]; implemented: the background without water #269, the validator and script #366, the maps and `grid55` #266; the projection budget on 55 nodes 0.45 ms [accepted] 2026-10-22 (#371) |
+| DEC-27 | #266 | maps: symmetry of rules without symmetry of the picture, size, no water | section 9 | [accepted] (2026-10-14, all details); asymmetric maps [deferred]; implemented: the background without water #269 (item 3 [superseded by DEC-36] 2026-10-29), the validator and script #366, the maps and `grid55` #266; the projection budget on 55 nodes 0.45 ms [accepted] 2026-10-22 (#371) |
 | DEC-28 | #290 | supply and roads rework: transit, front markers, rear minimum, donors, roads for CP | sections 6, 7, 8 | [accepted] (2026-10-17); details [accepted] 2026-10-17; replaces the priorities of DEC-18, the road payment of DEC-16, DEC-26; supply implemented #292 (`SIM_VERSION` 14, `PROTOCOL_VERSION` 17); roads (#306) and the client (#293) await implementation |
 | DEC-29 | #291 | the bonus of a scheduled order by distance; revision of DEC-24 item 13 (the opponent's bonuses in a fight are visible) | sections 4, 5 | [accepted] (2026-10-17); details [accepted] 2026-10-17; `orders.planned_bonus` [superseded by DEC-29]; implemented (#294, `SIM_VERSION` 16; client: #295, the arena on the map: #325); the bonus forecast in your own order (`OrderView.bonus`) [accepted] 2026-10-21, implemented #329 |
 | DEC-30 | #316 | accumulating the "Defense" bonus: +1 per `orders.defense_ticks_per_bonus` ticks, the cap by charged units, burns after a fight | section 5 | [accepted] (2026-10-21); replaces the part of DEC-08 about "Defense"; details [accepted] 2026-10-21; implemented (#317, `SIM_VERSION` 17, `PROTOCOL_VERSION` 20); client implemented (#318) |
@@ -3389,7 +3407,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-33 | #296 | visible movement of enemy groups in a node's vision zone: continuous position and direction in the halves of visible nodes | section 10 | [accepted] (2026-10-21); details [accepted] 2026-10-21 (all as recommended); replaces part of DEC-21, item 5; implemented together with DEC-21 (#296, `SIM_VERSION` 19, `PROTOCOL_VERSION` 22); client: ranges, the border point, the half memory and the smooth movement of figures are done in #359, the border point from the map (`border_permille`) since #366, the look of the figure awaits #354; the sources of item 1 [superseded by DEC-35] |
 | DEC-34 | #414 | rated-match protection against rating farming: rated only between password accounts, calibration, the early-resign and repeated-resign penalty, a per-opponent limit | section 19 | [accepted] (2026-10-28); meta-game server rules, no `SIM_VERSION`; implemented #414 (`PROTOCOL_VERSION` 26); owner's additions of 2026-10-28: a resign in a calibration match counts toward the queue ban, a draw (`double_defeat` too) is not a resign |
 | DEC-35 | #477 | vision comes only from units: own nodes are no longer vision sources; a group on an edge is a source in the node of its half; an enemy in an own node without a group is `PRESENCE` | section 10 | [accepted] (2026-10-28, a rule change after the freeze); details [accepted] (2026-10-29, all items as written: the readings that reveal less); implemented #477 (`SIM_VERSION` 22, `PROTOCOL_VERSION` 28: the wire allows own data on an own node at any level) |
-| DEC-36 | #537 | map geography: water cells (sea, lakes), rivers as area borders, areas of nodes touch only where a road links them; visual only, the rules do not read it | section 9 | [proposed]: awaiting the owner's decision; would supersede DEC-27, item 3 ("no water") |
+| DEC-36 | #537 | map geography: water cells (sea, lakes), rivers as area borders, areas of nodes touch only where a road links them; visual only, the rules do not read it | section 9 | [accepted] 2026-10-29 (W4 Painted, no dark line along water, the defaults of the open questions); supersedes DEC-27, item 3; step 1 (baker, vector file, validator `geography`) #537, step 2 (client territory) and step 3 (pool maps with water): follow-up issues |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in

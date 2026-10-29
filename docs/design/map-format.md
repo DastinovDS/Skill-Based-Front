@@ -63,11 +63,13 @@ The game rules that rely on map fields are described in [`mechanics.md`](mechani
 | background `bake` | land and sea, a coast; symmetric by rotation | the whole map is land (no sea, shallows, beach); biomes by node terrain; the picture need not be mirrored. **Done in #269**, see the section "Map background" below |
 | preview, `maps/README.md` | "180° rotational symmetry", 25-40 nodes | rewrite: symmetry of the rules, 45-55 nodes. Preview: names and border points, symmetry of the rules in the README (#366); 45-55 nodes: #266. **Done** |
 
-## Format change proposal under DEC-36 (proposed, awaiting the owner's decision)
+## Format changes under DEC-36 (accepted 2026-10-29; step 1: the baker and the validator, #537)
 
-> Decision **[proposed]**: DEC-36 (#537), mechanics.md, section 9: water cells, rivers as area borders, areas of
-> nodes touch only where a road links them. Nothing here is implemented; until the owner accepts DEC-36 the
-> sections below ("Map background": no water, DEC-27, item 3) are in force. Mockup:
+> Decision **[accepted]** 2026-10-29: DEC-36 (#537), mechanics.md, section 9: water cells, rivers as area borders,
+> areas of nodes touch only where a road links them; water look W4 Painted, no dark line along water. Step 1 (#537):
+> the authored file, the baker and the vector file, the validator check `geography`. Step 2 (the client territory
+> layer) and step 3 (the pool maps and the menu map with water) are follow-up issues; until step 3 no served map has a
+> geography, so the section "Map background" (land only) describes every shipped background. Mockup:
 > [`mockups/map-geography.html`](mockups/map-geography.html); prototype: `mockups/src/map_geography.py`.
 
 **The map file does not change.** Water is not a field of `maps/<id>.json`: the loader (`gow_sim.maps`), `MapDef`,
@@ -384,7 +386,9 @@ The background is for looks only: the game rules do not read it. The baker is bu
 - **Grid.** The field is computed on a grid with a step of 4 world units (as in the Pygame prototype), so `width` and
   `height` of a map with a background are multiples of 4; otherwise `bake` fails with an error. The grid sets only the layout of biomes; the picture is drawn at full
   resolution and does not show 4 × 4 squares.
-- **No water** (DEC-27, item 3, #269): the background has no sea, shallows or beach, every cell is land. **[proposed]** DEC-36 (#537) would bring water cells and rivers back as area borders: the section "Format change proposal under DEC-36" above.
+- **No water without a geography** (DEC-27, item 3, #269, [superseded by DEC-36] for the maps with a geography): a map
+  without `maps/src/<id>.geo.json` has no sea, shallows or beach, every cell is land. A map with one gets water cells
+  and rivers as area borders (DEC-36, #537): the section "Format changes under DEC-36" above.
   Previously the background was computed as metaballs from the map generator of the Pygame prototype (the tag `v0-pygame-prototype`):
   the density of cities and roads with a threshold and wave noise, below the threshold the sea, a narrow strip above the threshold
   the coast. The owner finds water confusing. The jungle color from the prototype (turquoise) was replaced
