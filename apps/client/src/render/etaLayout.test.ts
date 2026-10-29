@@ -76,6 +76,33 @@ describe('etaSpot: the label of a move order sits on the path, above the road (#
     expect(spot?.y).toBeCloseTo(100);
   });
 
+  it('slides off a city on the way, to the longer side of it', () => {
+    // Two roads of 200 and 300 with a city of rim 30 between them: the middle (250) is on the
+    // second road, 50 from the city, and the box of 40 needs 30 + 20 = 50: it stays.
+    const path = [
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 300 },
+    ];
+    expect(etaSpot(path, none, box, 0, [0, 30, 0])?.y).toBeCloseTo(50);
+    // Two roads of 200 and 220: the middle (210) is 10 past the city: it goes to 50 past it, on the longer road.
+    const near = [
+      { x: 0, y: 0 },
+      { x: 200, y: 0 },
+      { x: 200, y: 220 },
+    ];
+    expect(etaSpot(near, none, box, 0, [0, 30, 0])?.y).toBeCloseTo(50);
+    // Mirrored, the longer road comes first: the label goes back along it.
+    const back = [
+      { x: 200, y: 220 },
+      { x: 200, y: 0 },
+      { x: 0, y: 0 },
+    ];
+    expect(etaSpot(back, none, box, 0, [0, 30, 0])?.y).toBeCloseTo(50);
+    // Without the rims the middle is where it was.
+    expect(etaSpot(near, none, box, 0)?.y).toBeCloseTo(10);
+  });
+
   it('is the middle between the city rims, not between their centres', () => {
     const path = [
       { x: 0, y: 100 },
@@ -95,43 +122,6 @@ describe('etaSpot: the label of a move order sits on the path, above the road (#
       { start: 30, end: 30 },
       box,
       0,
-    );
-    expect(spot?.x).toBeCloseTo(20);
-  });
-
-  it('at the end of a path of unknown roads: the last piece before the rim, clear of the cities between', () => {
-    // A level path of 400: the rim at the end is 30, the box is 40 wide: it ends 3 before the rim.
-    const path = [
-      { x: 0, y: 100 },
-      { x: 400, y: 100 },
-    ];
-    const spot = etaSpot(path, { start: 30, end: 30 }, box, 0, 'end');
-    expect(spot?.x).toBeCloseTo(400 - 30 - 3 - 20);
-    expect(spot?.y).toBeCloseTo(100 - 10);
-    // The middle of the same path is far from there.
-    expect(etaSpot(path, { start: 30, end: 30 }, box, 0)?.x).toBeCloseTo(200);
-  });
-
-  it('at the end of a vertical path the box extent is its height', () => {
-    const path = [
-      { x: 50, y: 0 },
-      { x: 50, y: 300 },
-    ];
-    const spot = etaSpot(path, { start: 0, end: 20 }, box, 0, 'end');
-    expect(spot?.y).toBeCloseTo(300 - 20 - 3 - 10);
-    expect(spot?.x).toBeCloseTo(50 + 20);
-  });
-
-  it('never starts before the start rim when the path is short', () => {
-    const spot = etaSpot(
-      [
-        { x: 0, y: 100 },
-        { x: 60, y: 100 },
-      ],
-      { start: 20, end: 20 },
-      box,
-      0,
-      'end',
     );
     expect(spot?.x).toBeCloseTo(20);
   });

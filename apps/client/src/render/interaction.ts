@@ -48,6 +48,8 @@ export interface MovePreview {
   readonly from: number;
   readonly to: number;
   readonly planned: boolean;
+  /** The nodes the group goes through, ends included (the server's route when it gave one). */
+  readonly path: readonly number[];
 }
 
 /**
@@ -77,18 +79,20 @@ export interface OverlayState {
   readonly reach: readonly number[];
   readonly split: readonly number[];
   /**
-   * The time to the hovered reachable node, drawn as a small label on the road between the group
-   * and that node (#432): the server's travel time of the whole path, plus the delay of a planned
-   * order (Shift held). `null`: no label.
+   * The time to the hovered reachable node, drawn as a small label in the middle of the route to
+   * it (#432), and the route itself, lit up (#448): the server's travel time of the whole path,
+   * plus the delay of a planned order (Shift held). `null`: no label.
    */
   readonly eta: EtaMark | null;
 }
 
 export interface EtaMark {
-  /** The node the group stands in: the label sits on the way from it to `node`. */
+  /** The node the group stands in: the route starts there. */
   readonly from: number;
   readonly node: number;
   readonly ticks: number;
+  /** The route the time is for, `ReachNode.path`: the nodes from `from` to `node`, ends included. */
+  readonly path: readonly number[];
 }
 
 export const EMPTY_OVERLAY: OverlayState = {

@@ -248,7 +248,7 @@ export class OrderController implements MapInteraction {
     const reachNodes = reach === null ? [] : [...reach.ticks.keys()];
     const splitNodes = reach === null ? [] : [...reach.split];
     const eta = this.#eta(reach, preview);
-    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}|${reachNodes.join(',')}/${splitNodes.join(',')}`;
+    const key = `${selection?.kind ?? '-'}:${String(selection?.id ?? '-')}|${String(from)}>${String(preview)}|${String(this.planned)}|${candidates.join(',')}|${String(beacon)}|${String(eta?.ticks ?? '-')}:${eta?.path.join('>') ?? '-'}|${reachNodes.join(',')}/${splitNodes.join(',')}`;
     if (
       key !== this.#overlayKey ||
       ghosts !== this.#overlayGhosts ||
@@ -260,7 +260,14 @@ export class OrderController implements MapInteraction {
         selection,
         ghosts,
         preview:
-          from !== null && preview !== null ? { from, to: preview, planned: this.planned } : null,
+          from !== null && preview !== null
+            ? {
+                from,
+                to: preview,
+                planned: this.planned,
+                path: eta?.path ?? [from, preview],
+              }
+            : null,
         candidates,
         beacon,
         supply,
@@ -269,7 +276,7 @@ export class OrderController implements MapInteraction {
         eta:
           eta === null || preview === null || from === null
             ? null
-            : { from, node: preview, ticks: eta.ticks },
+            : { from, node: preview, ticks: eta.ticks, path: eta.path },
       };
     }
     return this.#overlay;
@@ -497,6 +504,7 @@ export class OrderController implements MapInteraction {
     const info: ReachInfo = {
       group: msg.group,
       ticks: new Map(msg.nodes.map((n) => [n.node, n.ticks])),
+      routes: new Map(msg.nodes.map((n) => [n.node, n.path])),
       split: new Set(msg.split),
     };
     this.ui.patch({ reach: info });
@@ -1247,13 +1255,21 @@ export class OrderController implements MapInteraction {
   /**
    * The time to the hovered node for the one small number there: the server's travel time of the
    * whole path (`reach`), and for a planned order the delay before the group sets off, from
-   * `ruleset_public` (display arithmetic only; the client computes no path). `null`: no number.
+   * `ruleset_public` (display arithmetic only; the client computes no path), with the route the
+   * server gave that time for (`ReachNode.path`). `null`: no number.
    */
-  #eta(reach: ReachInfo | null, preview: number | null): { ticks: number } | null {
+  #eta(
+    reach: ReachInfo | null,
+    preview: number | null,
+  ): { ticks: number; path: readonly number[] } | null {
     if (reach === null || preview === null) return null;
     const ticks = reach.ticks.get(preview);
-    if (ticks === undefined) return null;
-    return { ticks: this.planned ? ticks + this.#o.rules.orders.planned_delay_ticks : ticks };
+    const path = reach.routes.get(preview);
+    if (ticks === undefined || path === undefined) return null;
+    return {
+      ticks: this.planned ? ticks + this.#o.rules.orders.planned_delay_ticks : ticks,
+      path,
+    };
   }
 
   /** The node a click would send the selected group to, if it would. */

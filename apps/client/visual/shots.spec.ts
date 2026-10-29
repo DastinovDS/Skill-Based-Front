@@ -97,14 +97,14 @@ for (const menu of MENUS) {
   });
 }
 
-// The travel time of an order (#432): `?eta=<from>,<to>,<ticks>` pins the label to a frozen scene (a
-// fixture has no server to answer `reach`). `eta-<name>.png` is the map alone: a road between two
-// cities (the label in the middle of it), and cities with no road between them (the last piece
-// before the destination).
+// The travel time of an order (#432, #448): `?eta=<from>,<to>,<ticks>[,<via>...]` pins the label and
+// the route to a frozen scene (a fixture has no server to answer `reach`). `eta-<name>.png` is the
+// map alone: a road between two cities, and routes of two roads through a city (the label in the
+// middle of the route, the route lit up).
 const ETAS = [
   { name: 'artery-near', scene: 'artery', tick: 2400, eta: '3,4,120' },
-  { name: 'artery-far', scene: 'artery', tick: 2400, eta: '3,5,250' },
-  { name: 'artery-bend', scene: 'artery', tick: 2400, eta: '6,8,310' },
+  { name: 'artery-far', scene: 'artery', tick: 2400, eta: '3,5,250,4' },
+  { name: 'artery-bend', scene: 'artery', tick: 2400, eta: '6,8,310,7' },
   { name: 'snapshot', scene: 'snapshot', tick: 120, eta: '0,1,95' },
 ] as const;
 

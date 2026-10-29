@@ -5,6 +5,8 @@ export interface ReachInfo {
   readonly group: string;
   /** Travel ticks by node: the nodes a move of the group is accepted to now. */
   readonly ticks: ReadonlyMap<number, number>;
+  /** The route by node (`ReachNode.path`): the nodes from the group's node to it, ends included. */
+  readonly routes: ReadonlyMap<number, readonly number[]>;
   /** Nodes only a smaller group reaches (`STACK_LIMIT`). */
   readonly split: ReadonlySet<number>;
 }

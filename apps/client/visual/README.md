@@ -45,8 +45,8 @@ Commands (from the repository root; `mise run` installs Playwright Chromium itse
    After the PR is merged: `git push origin --delete shots/<number>`.
 
 The travel time of an order (#432): `mise run shots` takes `eta-<name>.png` (the map alone) with the parameter
-`?eta=<from>,<to>,<ticks>` that pins the label to a frozen scene (a fixture has no server to answer `reach`): `eta-artery-near` (a road
-between two cities), `eta-artery-far` and `eta-artery-bend` (no road between them), `eta-snapshot`. They have no `visual` references.
+`?eta=<from>,<to>,<ticks>[,<via>...]` that pins the label and the route (the nodes it goes through, #448) to a frozen scene (a fixture has no server to answer `reach`): `eta-artery-near` (a road
+between two cities), `eta-artery-far` and `eta-artery-bend` (a route of two roads through a city), `eta-snapshot`. They have no `visual` references.
 
 The road mode (#469): `mise run shots` takes `road-mode-normal.png` and `road-mode-supply.png` (the map alone) on the scene `snapshot` with `?menus`: key U, and Tab before it for the Supply view; the dashed band on the road a click would raise shows in both. They have no `visual` references.
 
