@@ -226,8 +226,7 @@
       {orders}
       {chrome}
       {hints}
-      pauseUsed={pauseState.used}
-      onpause={status === 'ready' && paused === null
+      onpause={pauseState.available && status === 'ready' && paused === null
         ? () => {
             session?.pause();
           }

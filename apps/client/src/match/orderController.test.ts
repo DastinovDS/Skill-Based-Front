@@ -139,9 +139,19 @@ describe('OrderController', () => {
     const { controller } = setup();
     controller.click({ kind: 'group', id: group.id }, false);
     controller.hover({ kind: 'node', id: enemy.id });
-    expect(controller.overlay().preview).toEqual({ from: home, to: enemy.id, planned: false });
+    expect(controller.overlay().preview).toEqual({
+      from: home,
+      to: enemy.id,
+      planned: false,
+      path: [home, enemy.id],
+    });
     controller.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
-    expect(controller.overlay().preview).toEqual({ from: home, to: enemy.id, planned: true });
+    expect(controller.overlay().preview).toEqual({
+      from: home,
+      to: enemy.id,
+      planned: true,
+      path: [home, enemy.id],
+    });
     controller.hover(null);
     expect(controller.overlay().preview).toBeNull();
   });
@@ -242,7 +252,7 @@ describe('OrderController', () => {
       type: 'reach',
       group: group.id,
       tick: 30,
-      nodes: [{ node: enemy.id, ticks: 25, path: [home, enemy.id] }],
+      nodes: [{ node: enemy.id, ticks: 25, path: [home, other.id, enemy.id] }],
       split: [other.id],
     });
     const overlay = controller.overlay();
@@ -250,13 +260,21 @@ describe('OrderController', () => {
     // The hovered reachable target shows the server's travel time as one number, nothing else.
     expect(controller.overlay().eta).toBeNull();
     controller.hover({ kind: 'node', id: enemy.id });
-    expect(controller.overlay().eta).toEqual({ from: home, node: enemy.id, ticks: 25 });
+    // The route the server gave comes with it, for the highlight and the place of the label (#448).
+    expect(controller.overlay().eta).toEqual({
+      from: home,
+      node: enemy.id,
+      ticks: 25,
+      path: [home, other.id, enemy.id],
+    });
+    expect(controller.overlay().preview?.path).toEqual([home, other.id, enemy.id]);
     // Shift (a planned order): the delay before the group sets off comes on top.
     controller.key({ type: 'keydown', code: 'ShiftLeft', shiftKey: true });
     expect(controller.overlay().eta).toEqual({
       from: home,
       node: enemy.id,
       ticks: 25 + DEV_RULES.orders.planned_delay_ticks,
+      path: [home, other.id, enemy.id],
     });
     controller.key({ type: 'keyup', code: 'ShiftLeft', shiftKey: false });
     expect(controller.overlay().eta?.ticks).toBe(25);

@@ -26,6 +26,8 @@
  * check the link at once.
  */
 import {
+  CLOSE_NO_MATCH,
+  CLOSE_POLICY,
   CLOSE_PROTOCOL_VERSION,
   CLOSE_REPLACED,
   PROTOCOL_VERSION,
@@ -101,10 +103,6 @@ export interface MatchConnectionOptions {
   /** Monotonic clock in ms. */
   now?: () => number;
 }
-
-/** Close codes of the server that are not in the protocol schema (`ws.py`, `CLOSE_POLICY`, `CLOSE_NO_MATCH`). */
-export const CLOSE_POLICY = 1008;
-export const CLOSE_NO_MATCH = 4004;
 
 /** Failed attempts in a row before giving up: with the backoff this is about the 60 s window of DEC-05. */
 export const MAX_ATTEMPTS = 8;

@@ -11,9 +11,6 @@ export interface LabelBox {
   readonly height: number;
 }
 
-/** Air between the label at the `end` of a path and the rim it stops at. */
-const END_AIR = 3;
-
 /** The point at arc length `at` of the polyline and the unit direction of the segment it is on. */
 function along(
   path: readonly Point[],
@@ -51,36 +48,43 @@ export function pathLength(path: readonly Point[]): number {
 }
 
 /**
- * Where on the path the label stands: `middle` of the stretch between the rims (a path that is one
- * known road), or `end`: the last piece before the destination's rim, for a path the client does
- * not know (the server answers only the total time), so the label stays off the cities between.
- */
-export type EtaWhere = 'middle' | 'end';
-
-/**
  * The centre of the label for `path` (the nodes of the order, ends included): the middle of the
  * part between `trim.start` and `trim.end` from the ends (the city rims; the whole path when it is
  * shorter than both), pushed off the road to the upper side of the screen (to the right on a
- * vertical road; `where` says which part of the stretch) by `gap` plus the half of the box along that side, so the box clears the road
+ * vertical road) by `gap` plus the half of the box along that side, so the box clears the road
  * and never covers it. `null`: a path with no length.
+ *
+ * `rims` (the radius of each node of `path`, the cities in between matter): a middle that falls
+ * on a city in between, or so near it that the box would cover it, slides along the path to the
+ * first place the box clears that city by, on the side where the stretch is longer.
  */
 export function etaSpot(
   path: readonly Point[],
   trim: { readonly start: number; readonly end: number },
   box: LabelBox,
   gap: number,
-  where: EtaWhere = 'middle',
+  rims: readonly number[] = [],
 ): Point | null {
   const length = pathLength(path);
   if (length <= 0) return null;
   const from = trim.start + trim.end < length ? trim.start : 0;
   const to = trim.start + trim.end < length ? length - trim.end : length;
-  let found = along(path, (from + to) / 2);
-  if (found !== null && where === 'end') {
-    // The box ends at the rim: its half along the road, as the road runs, and a little air.
-    const extent = Math.abs(found.dx) * box.width + Math.abs(found.dy) * box.height;
-    found = along(path, Math.max(from, to - extent / 2 - END_AIR));
+  let at = (from + to) / 2;
+  let arc = 0;
+  for (let i = 1; i < path.length - 1; i++) {
+    const a = path[i - 1];
+    const b = path[i];
+    if (a === undefined || b === undefined) continue;
+    arc += Math.hypot(b.x - a.x, b.y - a.y);
+    const rim = rims[i];
+    if (rim === undefined) continue;
+    const clear = rim + box.width / 2;
+    if (Math.abs(at - arc) < clear) {
+      at = to - arc >= arc - from ? arc + clear : arc - clear;
+      at = Math.min(to, Math.max(from, at));
+    }
   }
+  const found = along(path, at);
   if (found === null) return null;
   // The normal of the road that points up the screen (y grows downward), else to the right.
   let nx = -found.dy;

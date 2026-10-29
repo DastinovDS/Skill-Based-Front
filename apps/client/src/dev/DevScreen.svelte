@@ -27,7 +27,7 @@
   // `?at=<tick>` freezes a fixture scene at another render tick (also a fractional one): a round of a fight frame by frame.
   const atParam = Number(params.get('at'));
   const at = params.has('at') && Number.isFinite(atParam) ? atParam : undefined;
-  // `?eta=<from>,<to>,<ticks>` pins the travel-time label of an order to a frozen scene (#432).
+  // `?eta=<from>,<to>,<ticks>[,<via>...]` pins the travel-time label of an order to a frozen scene (#432).
   const etaPinned = parseEta(params.get('eta'));
   const fixtureScene = (id: string | null) => FIXTURE_SCENES.find((scene) => scene.id === id);
   let rendererFailed = $state(false);

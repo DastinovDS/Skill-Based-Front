@@ -37,12 +37,24 @@ import {
   PREVIEW_WIDTH,
   REACH_RING,
   roadSpan,
+  ROUTE_BAND,
   SELECT_COLOR,
   SELECT_RING_GAP,
   SELECT_UNIT_SCALE,
   SELECT_WIDTH,
   WARN,
 } from './style.ts';
+
+/** The stretch of the road `a`-`b` between the city rims (radius `ra` at `a`, `rb` at `b`); `null`: none. */
+function rimSpan(a: Point, b: Point, ra: number, rb: number): [Point, Point] | null {
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  if (length <= ra + rb) return null;
+  const at = (d: number): Point => ({
+    x: a.x + ((b.x - a.x) * d) / length,
+    y: a.y + ((b.y - a.y) * d) / length,
+  });
+  return [at(ra), at(length - rb)];
+}
 
 /**
  * The player's own input on the map (CLI-06, #62): the selection outline, dashed ghost arrows of
@@ -53,7 +65,7 @@ import {
 export class OverlayView {
   private readonly ring = new Graphics();
   private readonly frame = new Graphics();
-  private readonly lines = new Graphics();
+  private readonly lines = new Graphics({ label: 'order-lines' });
   /**
    * The dashed band of the road mode: a Graphics of its own because it has to show in the «Supply»
    * view, which hides the `intents` layer (#469): there it lies on the `roads` layer (under the
@@ -152,15 +164,17 @@ export class OverlayView {
   }
 
   /**
-   * The seconds (rounded up) on the road to the hovered node, or nothing (#432). The path is the
-   * stretch from the group's city to that city (the server answers only the total time on hover,
-   * `reach`); the label sits in the middle of it between the two rims, above the road.
+   * The seconds (rounded up) on the way to the hovered node, or nothing (#432). The way is the
+   * route the server gave with the time (`ReachNode.path`, #448); the label sits in the middle of
+   * it between the two rims, above the road.
    */
   private placeEta(state: OverlayState): void {
     const mark = state.eta;
-    const from = mark === null ? undefined : nodePoint(this.map, mark.from);
-    const to = mark === null ? undefined : nodePoint(this.map, mark.node);
-    if (mark === null || from === undefined || to === undefined || this.tickHz <= 0) {
+    const points =
+      mark === null
+        ? []
+        : mark.path.map((id) => nodePoint(this.map, id)).filter((p) => p !== undefined);
+    if (mark === null || points.length < 2 || this.tickHz <= 0) {
       this.eta.visible = false;
       return;
     }
@@ -169,20 +183,15 @@ export class OverlayView {
     const width = this.drawEtaPlate(text);
     const scale = badgeScale(this.cameraScale);
     const spot = etaSpot(
-      [from, to],
+      points,
       {
         start: this.radiusOf(mark.from) + REACH_RING.gap,
         end: this.radiusOf(mark.node) + REACH_RING.gap,
       },
       { width: width * scale, height: ETA_LABEL.height * scale },
       (roadSpan(3) / 2 + ETA_LABEL.roadGap) * scale,
-      // Two cities with a road between them: that road. Else the way is the server's and unknown
-      // here: the last piece before the destination, never over a city on the way.
-      this.map.edges.some(
-        (e) => (e.a === mark.from && e.b === mark.node) || (e.b === mark.from && e.a === mark.node),
-      )
-        ? 'middle'
-        : 'end',
+      // The cities on the way: the label stays clear of them.
+      mark.path.map((id) => this.radiusOf(id) + REACH_RING.gap),
     );
     if (spot === null) {
       this.eta.visible = false;
@@ -289,21 +298,43 @@ export class OverlayView {
     // The dotted line of an ordinary order is gone (the arrow of the order is its picture); only a
     // planned order shows where its ribbon will go.
     const preview = state.preview !== null && state.preview.planned ? state.preview : null;
+    if (state.eta !== null) this.drawRoute(g, state.eta.path);
     if (preview !== null) {
-      const from = nodePoint(this.map, preview.from);
-      const to = nodePoint(this.map, preview.to);
-      if (from !== undefined && to !== undefined) {
+      // Along the route, node to node, as the order will go (a path of one road: that road).
+      for (let i = 1; i < preview.path.length; i++) {
+        const from = nodePoint(this.map, preview.path[i - 1] ?? -1);
+        const to = nodePoint(this.map, preview.path[i] ?? -1);
+        if (from === undefined || to === undefined) continue;
         for (const [a, b] of dashSegments(from, to, PREVIEW_DASH, PREVIEW_GAP)) {
           g.moveTo(a.x, a.y).lineTo(b.x, b.y);
         }
-        g.stroke({
-          width: PREVIEW_WIDTH,
-          color: SELECT_COLOR,
-          alpha: PREVIEW_ALPHA,
-          cap: 'round',
-        });
       }
+      g.stroke({
+        width: PREVIEW_WIDTH,
+        color: SELECT_COLOR,
+        alpha: PREVIEW_ALPHA,
+        cap: 'round',
+      });
     }
+  }
+
+  /** The route the travel time is for: a solid band on each of its roads, from rim to rim. */
+  private drawRoute(g: Graphics, route: readonly number[]): void {
+    for (let i = 1; i < route.length; i++) {
+      const a = route[i - 1];
+      const b = route[i];
+      const from = a === undefined ? undefined : nodePoint(this.map, a);
+      const to = b === undefined ? undefined : nodePoint(this.map, b);
+      if (a === undefined || b === undefined || from === undefined || to === undefined) continue;
+      const span = rimSpan(from, to, this.radius(a) + 2, this.radius(b) + 2);
+      if (span !== null) g.moveTo(span[0].x, span[0].y).lineTo(span[1].x, span[1].y);
+    }
+    g.stroke({
+      width: roadSpan(3) + ROUTE_BAND.extra,
+      color: SELECT_COLOR,
+      alpha: ROUTE_BAND.alpha,
+      cap: 'butt',
+    });
   }
 
   /** The band is drawn on the layer that is visible in the current view (see `band`). */
@@ -324,15 +355,9 @@ export class OverlayView {
       const edge = this.map.edges[id];
       if (ends === undefined || edge === undefined) continue;
       // From rim to rim: the band stays off the city bodies.
-      const length = Math.hypot(ends.b.x - ends.a.x, ends.b.y - ends.a.y);
-      const ra = this.radius(edge.a) + 2;
-      const rb = this.radius(edge.b) + 2;
-      if (length <= ra + rb) continue;
-      const at = (d: number): Point => ({
-        x: ends.a.x + ((ends.b.x - ends.a.x) * d) / length,
-        y: ends.a.y + ((ends.b.y - ends.a.y) * d) / length,
-      });
-      for (const [p, q] of dashSegments(at(ra), at(length - rb), PICK_BAND.dash, PICK_BAND.gap)) {
+      const span = rimSpan(ends.a, ends.b, this.radius(edge.a) + 2, this.radius(edge.b) + 2);
+      if (span === null) continue;
+      for (const [p, q] of dashSegments(span[0], span[1], PICK_BAND.dash, PICK_BAND.gap)) {
         g.moveTo(p.x, p.y).lineTo(q.x, q.y);
       }
     }

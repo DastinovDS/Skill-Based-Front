@@ -53,7 +53,7 @@ describe('OverlayView', () => {
     const state = (planned: boolean): OverlayState => ({
       selection: null,
       ghosts: [],
-      preview: { from: a.id, to: b.id, planned },
+      preview: { from: a.id, to: b.id, planned, path: [a.id, b.id] },
       candidates: [],
       beacon: null,
       supply: null,
@@ -153,7 +153,7 @@ describe('OverlayView', () => {
   });
 });
 
-describe('OverlayView, the travel time of an order on its road (#432)', () => {
+describe('OverlayView, the travel time and the route of an order (#432, #448)', () => {
   const state = (eta: OverlayState['eta']): OverlayState => ({
     selection: null,
     ghosts: [],
@@ -186,7 +186,7 @@ describe('OverlayView, the travel time of an order on its road (#432)', () => {
     const { layers, view, none } = setup();
     view.setTickHz(10);
     view.setCameraScale(1);
-    view.update(state({ from, node: to, ticks: 25 }), none);
+    view.update(state({ from, node: to, ticks: 25, path: [from, to] }), none);
     const plate = label(layers);
     expect(plate?.visible).toBe(true);
     expect(textOf(layers)).toBe('3 s');
@@ -218,23 +218,67 @@ describe('OverlayView, the travel time of an order on its road (#432)', () => {
     expect(spot.off).toBeGreaterThanOrEqual((roadSpan(3) / 2 + ETA_LABEL.roadGap) * badgeScale(1));
   });
 
-  it('for cities with no road between them: the last piece before the destination, not on a city', () => {
-    const linked = map.edges.some(
-      (e) => (e.a === a.id && e.b === b.id) || (e.a === b.id && e.b === a.id),
+  it('on a route of two roads: in the middle of the whole route, on the longer road', () => {
+    // Every route of two roads p-q-r of the map; the one whose second road is much the longer.
+    const near = (id: number) =>
+      map.edges.flatMap((e) => (e.a === id ? [e.b] : e.b === id ? [e.a] : []));
+    const length = (i: number, j: number) => {
+      const [u, v] = [map.nodes[i], map.nodes[j]];
+      return u === undefined || v === undefined ? 0 : Math.hypot(v.x - u.x, v.y - u.y);
+    };
+    const routes = map.nodes.flatMap((q) =>
+      near(q.id).flatMap((p) =>
+        near(q.id)
+          .filter((r) => r !== p)
+          .map((r) => ({ path: [p, q.id, r], gap: length(q.id, r) - length(p, q.id) })),
+      ),
     );
-    expect(linked).toBe(false);
-    const spot = spotOf(a.id, b.id);
-    // Past the middle, short of the rim of the destination, and clear of the line.
-    expect(spot.along).toBeGreaterThan(spot.length / 2);
-    expect(spot.along).toBeLessThan(spot.length - spot.rimTo);
-    expect(spot.off).toBeGreaterThanOrEqual((roadSpan(3) / 2 + ETA_LABEL.roadGap) * badgeScale(1));
+    const best = routes.reduce((x, y) => (y.gap > x.gap ? y : x));
+    expect(best.gap).toBeGreaterThan(40); // else the test would not tell the roads apart
+    const [p, q, r] = best.path as [number, number, number];
+    const { layers, view, none } = setup();
+    view.setTickHz(10);
+    view.setCameraScale(1);
+    view.update(state({ from: p, node: r, ticks: 25, path: best.path }), none);
+    const plate = label(layers);
+    const at = { x: plate?.x ?? 0, y: plate?.y ?? 0 };
+    const toRoad = (i: number, j: number) => {
+      const [u, v] = [map.nodes[i], map.nodes[j]];
+      if (u === undefined || v === undefined) throw new Error('no such node');
+      const len = length(i, j);
+      const t = Math.min(
+        1,
+        Math.max(0, ((at.x - u.x) * (v.x - u.x) + (at.y - u.y) * (v.y - u.y)) / (len * len)),
+      );
+      return Math.hypot(at.x - (u.x + (v.x - u.x) * t), at.y - (u.y + (v.y - u.y) * t));
+    };
+    // Near the second road, off the first one: the middle of the route is not the middle of the
+    // straight line between the ends.
+    expect(toRoad(q, r)).toBeLessThan(toRoad(p, q));
+    view.destroy();
+  });
+
+  it('lights up the route, and draws it for every order, not only a planned one', () => {
+    const { layers, view, none } = setup();
+    view.setTickHz(10);
+    const lines = () => layers.layer.intents.children.find((c) => c.label === 'order-lines');
+    view.update(state(null), none);
+    expect(lines()?.getLocalBounds().width).toBe(0);
+    const edge = map.edges[0];
+    if (edge === undefined) throw new Error('a map without roads');
+    view.update(state({ from: edge.a, node: edge.b, ticks: 25, path: [edge.a, edge.b] }), none);
+    expect(lines()?.getLocalBounds().width).toBeGreaterThan(0);
+    // Gone with the label.
+    view.update(state(null), none);
+    expect(lines()?.getLocalBounds().width).toBe(0);
+    view.destroy();
   });
 
   it('keeps its size on screen: the scale follows the camera, within the badge bounds', () => {
     const { layers, view, none } = setup();
     view.setTickHz(10);
     view.setCameraScale(0.6);
-    view.update(state({ from: a.id, node: b.id, ticks: 25 }), none);
+    view.update(state({ from: a.id, node: b.id, ticks: 25, path: [a.id, b.id] }), none);
     // 13 px of text at a 60% map scale: world scale 1 / 0.6, so 13 * (1 / 0.6) * 0.6 = 13 px.
     expect(label(layers)?.scale.x).toBeCloseTo(1 / 0.6);
     expect(13 * (label(layers)?.scale.x ?? 0) * 0.6).toBeGreaterThanOrEqual(12);
@@ -244,7 +288,7 @@ describe('OverlayView, the travel time of an order on its road (#432)', () => {
   it('is hidden without a mark', () => {
     const { layers, view, none } = setup();
     view.setTickHz(10);
-    view.update(state({ from: a.id, node: b.id, ticks: 25 }), none);
+    view.update(state({ from: a.id, node: b.id, ticks: 25, path: [a.id, b.id] }), none);
     view.update(state(null), none);
     expect(label(layers)?.visible).toBe(false);
     view.destroy();

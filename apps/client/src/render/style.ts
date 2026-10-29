@@ -346,6 +346,8 @@ export const PREVIEW_ALPHA = 0.55;
 export const PREVIEW_DASH = 2;
 export const PREVIEW_GAP = 6;
 export const PREVIEW_WIDTH = 2;
+/** The route of the hovered order (#448): a solid band along its roads, rim to rim, past the label. */
+export const ROUTE_BAND = { extra: 4, alpha: 0.4 } as const;
 /**
  * Road pick (key U, DEC-16): the roads a click would upgrade carry a dashed band.
  */
