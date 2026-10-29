@@ -42,6 +42,7 @@ describe('legal content', () => {
       'sbf.hints.last',
       'sbf.hints.matches',
       'sbf.locale',
+      'sbf.sound',
     ]);
     for (const locale of LOCALES) {
       const text = JSON.stringify(LEGAL_CONTENT[locale].privacy);

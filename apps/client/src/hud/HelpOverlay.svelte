@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { t } from '../i18n/index.ts';
+  import { sound } from '../audio/soundState.svelte.ts';
   import Icon from './Icon.svelte';
 
   interface Props {
@@ -33,6 +34,7 @@
     ['[ / ]', 'help.key.rearMin'],
     ['Space', 'help.key.alert'],
     ['H', 'help.key.fit'],
+    ['M', 'help.key.mute'],
     ['?', 'help.key.help'],
     ['Esc', 'help.key.escape'],
   ] as const;
@@ -140,6 +142,20 @@
             {/each}
           </dl>
           <p class="note">{t('help.camera')}</p>
+          <label class="volume">
+            <span>{t('help.volume')}</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={sound.volume}
+              oninput={(event) => {
+                sound.setVolume(event.currentTarget.valueAsNumber);
+              }}
+            />
+            <span class="percent">{sound.volume}%</span>
+          </label>
         </section>
       </div>
     </div>
@@ -147,6 +163,25 @@
 {/if}
 
 <style>
+  .volume {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 14px;
+  }
+
+  .volume input {
+    flex: 1;
+    min-width: 0;
+    accent-color: var(--you);
+  }
+
+  .percent {
+    min-width: 3ch;
+    text-align: right;
+  }
+
   .backdrop {
     position: absolute;
     inset: 0;

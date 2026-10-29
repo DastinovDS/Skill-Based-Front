@@ -891,14 +891,17 @@ The same frame 13.1, the text of width 680 px, 16 px, line height 1.5; the langu
 
 ### 14.1 Sound (IM9)
 
-- The library `howler` (allowed by AGENTS.md, section 2; rationale: sprites, a single volume,
-  autoplay after a user gesture). An alternative without a dependency: the Web Audio API directly; the choice
-  in the PR of package F.
-- Events and character: an order accepted (a short click), a rejection (a dull "thud"), a fight in frame (a hit),
-  a city captured (two rising notes), a city lost (falling ones), starvation (a quiet signal),
-  opponent found (a bright signal), the end of the match (a chord of victory or defeat).
-- No more than 4 sounds at once; identical events within 150 ms are merged; a fight out of
-  frame is 50% quieter (Supremacy 1914). The volume and the off switch in the settings and in the top bar.
+- **Done (#71): the Web Audio API directly, no dependency, no files** (`apps/client/src/audio/`; CSP unchanged).
+  Each sound is a few synthesized tones (`recipes.ts`). The set: a round of a fight (a dull hit), a unit of yours lost
+  (a falling buzz: your loss in a fight round, or attrition), a node captured (two rising notes) or lost (two falling),
+  an order accepted (a tiny tick, on the `ack`), the end of the match (win, defeat, draw). No sound for rejections,
+  starvation or the queue (not in the first set).
+- An event sounds when the map draws its tick (like the toasts), so the sound does not run ahead of the picture; a
+  sound older than 0.5 s when it is due is dropped (a hidden tab draws no frames: no burst on return), and nothing
+  plays while the tab is hidden. The round hit is skipped under "less motion" (the setting or `prefers-reduced-motion`).
+- At most 4 sounds at once; the same sound again within 150 ms is dropped. One mute button in the top bar (key `M`,
+  also in the help list) and a volume slider in the help sheet (`?`); both are remembered per browser
+  (`localStorage`, `sbf.sound`: `muted`, `volume` 0..100; default on, 60).
 - Nothing important by sound only: every sound has a visible response (GAG).
 
 ### 14.2 Accessibility

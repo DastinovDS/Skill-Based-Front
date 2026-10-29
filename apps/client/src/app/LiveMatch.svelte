@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { MatchAudio } from '../audio/matchAudio.ts';
+  import { sound } from '../audio/soundState.svelte.ts';
   import { HudChrome } from '../hud/chrome.svelte.ts';
   import { hintsVisible, registerMatch } from '../hud/hints.ts';
   import Hud from '../hud/Hud.svelte';
@@ -111,6 +113,12 @@
           recruitTicks: welcome.ruleset_public.recruit.unit_ticks,
           recruitQueueMax: welcome.ruleset_public.recruit.queue_max,
           roadBuildTicks: welcome.ruleset_public.build.ticks_per_level,
+          audio: new MatchAudio({
+            me: welcome.player,
+            play: (id) => {
+              sound.play(id);
+            },
+          }),
           cityUpgrades: welcome.ruleset_public.city_upgrades.enabled
             ? {
                 barracks: welcome.ruleset_public.city_upgrades.barracks_ticks,
@@ -189,6 +197,9 @@
     if (
       routeKey(chrome, event, {
         fit: () => canvas?.fitMap(),
+        mute: () => {
+          sound.toggleMute();
+        },
         idle: () => orders?.isIdle() ?? true,
       })
     ) {

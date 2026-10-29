@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devEvent, devSnapshot } from '../hud/devFeed.ts';
+import { MatchAudio } from '../audio/matchAudio.ts';
+import type { SoundId } from '../audio/recipes.ts';
 import { HudState } from '../hud/hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import { createFakeServer, type MockSocket } from '../net/fakeServer.ts';
@@ -96,6 +98,52 @@ describe('MatchSession', () => {
     again.accept();
     again.reply(welcome);
     expect(made).toBe(1);
+  });
+
+  it('hands events, acks and the end to the match audio, and releases events with the frames (#71)', () => {
+    const server = createFakeServer();
+    const played: SoundId[] = [];
+    const hud = new HudState({ me: 0, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map });
+    let clock = 0;
+    const audio = new MatchAudio({ me: 0, play: (id) => played.push(id), now: () => clock });
+    const session = new MatchSession({
+      matchId: 'm1',
+      token: 'secret',
+      context: { hud, tickHz: DEV_RULES.tick_hz, audio },
+      now: () => clock,
+      connection: {
+        createSocket: server.create,
+        location: { protocol: 'http:', host: 'localhost' },
+        baseBackoffMs: 100,
+        random: () => 1,
+      },
+    });
+    session.start();
+    const socket = server.last();
+    socket.accept();
+    socket.reply(welcome);
+    socket.reply({
+      type: 'ack',
+      seq: 1,
+      applied_tick: 2,
+      path: null,
+      arrive_tick: null,
+      reject_code: null,
+    });
+    expect(played).toEqual(['orderOk']);
+    for (let tick = 30; tick <= 60; tick += 1) {
+      clock += 100;
+      socket.reply(snapshot(tick));
+    }
+    socket.reply({ type: 'event', tick: 62, kind: 'node_captured', data: { node: 1, player: 0 } });
+    expect(session.frame()?.tick).toBeLessThan(62);
+    expect(played).toEqual(['orderOk']); // waits until the map reaches tick 62
+    for (let tick = 61; tick <= 64; tick += 1) {
+      clock += 100;
+      socket.reply(snapshot(tick));
+    }
+    expect(session.frame()?.tick).toBeGreaterThanOrEqual(62);
+    expect(played).toEqual(['orderOk', 'capture']);
   });
 
   it('sends pause and resume only while ready', () => {

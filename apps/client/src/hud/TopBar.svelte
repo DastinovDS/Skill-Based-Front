@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sound } from '../audio/soundState.svelte.ts';
   import { getLocale, t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import type { HudChrome } from './chrome.svelte.ts';
@@ -136,6 +137,20 @@
         <Icon name="pause" />
       </button>
     {/if}
+    <button
+      type="button"
+      class="icon-button"
+      aria-label={sound.muted ? t('bar.soundOff') : t('bar.soundOn')}
+      aria-pressed={sound.muted}
+      title={tf('bar.soundTip', {
+        tip: sound.muted ? t('bar.soundOff') : t('bar.soundOn'),
+      })}
+      onclick={() => {
+        sound.toggleMute();
+      }}
+    >
+      <Icon name={sound.muted ? 'volumeOff' : 'volumeOn'} />
+    </button>
     <button
       type="button"
       class="icon-button"
