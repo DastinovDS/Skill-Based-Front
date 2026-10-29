@@ -466,9 +466,17 @@ class MatchRunner:
                     self.never_started = True
                     log.info("bot match never started", extra={"match_id": self.match_id})
                     break
-                if now - (start + ticks * dt) > MAX_BEHIND_TICKS * dt:
+                behind = now - (start + ticks * dt)
+                if behind > MAX_BEHIND_TICKS * dt:
                     start, ticks = now, 0
                     self.resets += 1
+                    # The players see the match freeze for about this long (#546); the alert of
+                    # `LagWatch` comes up to 30 s later and only once per cooldown.
+                    log.warning(
+                        "tick schedule reset: the loop was %.0f ms late",
+                        1000 * behind,
+                        extra={"match_id": self.match_id, "tick": self.match.tick},
+                    )
                 while now + _EPS >= start + ticks * dt and not self.finished and not self.paused:
                     lag = max(self.clock.now() - (start + ticks * dt), 0.0)
                     self.steps += 1

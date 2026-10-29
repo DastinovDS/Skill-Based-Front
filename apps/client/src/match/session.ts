@@ -28,6 +28,9 @@ const EVENT_TAIL = 64;
 /** Until `welcome` tells the real rate. */
 const DEFAULT_TICK_HZ = 10;
 
+/** A silence between two snapshots longer than this is logged (a snapshot comes every 100 ms). */
+const SNAPSHOT_GAP_WARN_MS = 1000;
+
 /** What a session needs to know about the match: the HUD to feed and the tick rate. */
 export interface MatchContext {
   /** The HUD numbers: fed from the same snapshots the map draws. */
@@ -93,6 +96,8 @@ export class MatchSession implements RenderSource {
   readonly #onServerMessage: ((msg: ServerMsg) => void) | undefined;
   readonly #connection: MatchConnection;
   #events: readonly EventMsg[] = [];
+  /** When the previous snapshot arrived (ms); `null` after a reset or before the first one. */
+  #lastSnapshotAt: number | null = null;
   #status: ConnectionStatus = 'idle';
 
   constructor(opts: MatchSessionOptions) {
@@ -119,6 +124,7 @@ export class MatchSession implements RenderSource {
         },
         // The snapshot timeline is broken: forget the old frames and the old HUD picture.
         onReset: () => {
+          this.#lastSnapshotAt = null;
           this.buffer.clear();
           this.#hud?.reset();
         },
@@ -204,6 +210,19 @@ export class MatchSession implements RenderSource {
     return this.#events;
   }
 
+  /**
+   * Diagnostics for "the match froze" reports (#546): a long silence between two snapshots goes
+   * to the console with its length, so a bug report can say whether the server or the page stalled.
+   */
+  #noteSnapshotGap(): void {
+    const now = (this.#now ?? (() => performance.now()))();
+    const last = this.#lastSnapshotAt;
+    this.#lastSnapshotAt = now;
+    if (last !== null && now - last > SNAPSHOT_GAP_WARN_MS) {
+      console.warn(`[client] snapshot gap ${String(Math.round(now - last))} ms`);
+    }
+  }
+
   #onMessage(msg: ServerMsg): void {
     switch (msg.type) {
       case 'welcome':
@@ -213,6 +232,7 @@ export class MatchSession implements RenderSource {
         }
         break;
       case 'snapshot':
+        this.#noteSnapshotGap();
         // A duplicate or a stale snapshot is dropped by the buffer, and so by the HUD.
         if (this.buffer.push(msg) === 'added') this.#hud?.onSnapshot(msg);
         break;
