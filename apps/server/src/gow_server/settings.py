@@ -32,12 +32,22 @@ class Settings(BaseSettings):
     replays_dir: Path = Path("data/replays")
     """Command logs and frames files of matches (AGENTS.md, section 9); the server writes only here
     and into the database. Relative paths are relative to the working directory."""
-    replay_retention_days: int = Field(default=30, ge=0)
-    """Days a replay of an unrated match (invite, lobby, bot) is kept after the match ended; then
-    the command log and the frames file are deleted and the match is marked expired (SRV-08, #515).
-    0 keeps them forever."""
+    replay_keep_per_player: int = Field(default=5, ge=0)
+    """Replays kept per account (#525): the replay of a finished match is kept while the match is
+    among the ``replay_keep_per_player`` most recent finished matches of at least one of its human
+    players (a bot opponent does not count, a guest is an account); otherwise the command log and
+    the frames file are deleted and the match is marked expired. Rated and unrated matches follow
+    the same cap. 0: no cap."""
+    replay_retention_days: int = Field(default=0, ge=0)
+    """Optional extra limit (SRV-08, #515): days a replay of an unrated match (invite, lobby, bot)
+    is kept after the match ended, even inside the per-account cap. 0 (the default): off."""
     replay_rated_retention_days: int = Field(default=0, ge=0)
-    """The same for rated matches, whose replays are public. 0 (the default) keeps them forever."""
+    """The same for rated matches, whose replays are public. 0 (the default): off."""
+    replay_stats_archive_dir: Path | None = None
+    """Where the command log (``.jsonl.gz``, not the frames file) of a replay is copied before it
+    expires, for game statistics during development and playtests (#525). Unset: nothing is
+    archived. The files are never deleted by the server and never served; ``gow-bots stats``
+    reads them. Must not be ``replays_dir`` itself."""
     replay_cleanup_interval_s: float = Field(default=3600.0, gt=0)
     """How often the cleanup task looks for replays past their retention (the first pass runs at
     start-up)."""
@@ -176,6 +186,13 @@ class Settings(BaseSettings):
 
     monitor_interval_s: float = 30.0
     """How often the tick lag of running matches is checked against the 10 % alert (OPS-04)."""
+
+    @model_validator(mode="after")
+    def _archive_apart_from_replays(self) -> "Settings":
+        archive = self.replay_stats_archive_dir
+        if archive is not None and archive.resolve() == self.replays_dir.resolve():
+            raise ValueError("GOW_REPLAY_STATS_ARCHIVE_DIR must not be GOW_REPLAYS_DIR itself")
+        return self
 
     @model_validator(mode="after")
     def _ruleset_allowed(self) -> "Settings":

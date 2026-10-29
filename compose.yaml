@@ -45,10 +45,12 @@ services:
       GOW_MAX_BOT_MATCHES: ${GOW_MAX_BOT_MATCHES:-10}
       GOW_BOT_CONNECT_TIMEOUT_S: ${GOW_BOT_CONNECT_TIMEOUT_S:-15}
       GOW_MONITOR_INTERVAL_S: ${GOW_MONITOR_INTERVAL_S:-30}
-      # Replay retention (SRV-08, #515): days a replay is kept after the match, for unrated matches
-      # (invites, lobby, bots) and for rated ones; 0 keeps forever. The cleanup pass period.
-      GOW_REPLAY_RETENTION_DAYS: ${GOW_REPLAY_RETENTION_DAYS:-30}
+      # Replay retention (#525): replays kept per account; optional extra age limits in days
+      # (0: off); the pass period; the statistics archive (empty: off, else /replay-stats).
+      GOW_REPLAY_KEEP_PER_PLAYER: ${GOW_REPLAY_KEEP_PER_PLAYER:-5}
+      GOW_REPLAY_RETENTION_DAYS: ${GOW_REPLAY_RETENTION_DAYS:-0}
       GOW_REPLAY_RATED_RETENTION_DAYS: ${GOW_REPLAY_RATED_RETENTION_DAYS:-0}
+      GOW_REPLAY_STATS_ARCHIVE_DIR: ${GOW_REPLAY_STATS_ARCHIVE_DIR:-}
       GOW_REPLAY_CLEANUP_INTERVAL_S: ${GOW_REPLAY_CLEANUP_INTERVAL_S:-3600}
       GOW_MAX_REQUEST_BODY_BYTES: ${GOW_MAX_REQUEST_BODY_BYTES:-32768}
       # Logins and passwords (#374): attempts per window, per client IP, per nick from one IP, per nick overall; password changes.
@@ -104,6 +106,9 @@ services:
       GOW_FORWARDED_ALLOW_IPS: "*"
     volumes:
       - gow-data:/data
+      # Command logs for statistics, only used with GOW_REPLAY_STATS_ARCHIVE_DIR=/replay-stats (#525).
+      # A volume of its own: `stack:reset` removes gow-data only, and backups do not carry it.
+      - gow-replay-stats:/replay-stats
     networks:
       - internal
     # Log retention (LEG-01, docs/ops/legal.md): rotation by size, removed with the container.
@@ -172,6 +177,8 @@ networks:
 volumes:
   # SQLite database and replays. Backups: deploy/backup.sh, docs/ops/deploy.md.
   gow-data:
+  # Statistics archive of command logs (#525); empty unless the archive is switched on.
+  gow-replay-stats:
   # Caddy TLS certificates and ACME account: keep it, or Let's Encrypt rate limits hit on redeploy.
   caddy-data:
   caddy-config:
