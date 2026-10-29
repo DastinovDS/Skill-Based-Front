@@ -29,7 +29,7 @@ from gow_server.db import DbSession
 from gow_server.lifecycle import MatchLifecycle, MatchState
 from gow_server.models import Player
 from gow_server.nicks import NickPolicy, skeleton, validate_nick
-from gow_server.passwords import PasswordHasher, normalize
+from gow_server.passwords import HasherBusy, PasswordHasher, normalize
 from gow_server.ratelimit import SlidingWindowLimiter
 from gow_server.rating import played_of
 from gow_server.settings import Settings
@@ -211,12 +211,22 @@ def set_password(
     """
     limits: Limits = request.app.state.limits
     enforce(limits.password, str(player.id), "too many password changes")
-    if player.password_hash is not None and (
-        body.old_password is None or not passwords.verify(body.old_password, player.password_hash)
-    ):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="wrong password")
-    player.password_hash = passwords.hash(body.password)
-    return _issue_token(player, session, response)
+    player_id, old_hash = player.id, player.password_hash
+    # The scrypt runs hold no database connection (#413): read, release, hash, write.
+    session.rollback()
+    try:
+        if old_hash is not None and (
+            body.old_password is None or not passwords.verify(body.old_password, old_hash)
+        ):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="wrong password")
+        new_hash = passwords.hash(body.password)
+    except HasherBusy:
+        raise _hasher_busy() from None
+    current = session.get(Player, player_id)
+    if current is None or current.password_hash != old_hash:  # changed meanwhile (another device)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="password changed")
+    current.password_hash = new_hash
+    return _issue_token(current, session, response)
 
 
 @router.post("/login")
@@ -241,14 +251,35 @@ def login(
         if key is None
         else session.execute(select(Player).where(Player.nick_key == key)).scalar_one_or_none()
     )
+    player_id = None if player is None else player.id
     stored = None if player is None else player.password_hash
-    if not passwords.verify(body.password, stored) or player is None:
+    # The scrypt run holds no database connection (#413): read, release, hash, write.
+    session.rollback()
+    try:
+        matches = passwords.verify(body.password, stored)
+    except HasherBusy:
+        raise _hasher_busy() from None
+    if not matches or player_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="wrong nick or password"
         )
-    if player.blocked_at is not None:
+    current = session.get(Player, player_id)
+    if current is None or current.password_hash != stored:  # changed meanwhile: the proof is stale
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="wrong nick or password"
+        )
+    if current.blocked_at is not None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="account is blocked")
-    return _issue_token(player, session, response)
+    return _issue_token(current, session, response)
+
+
+def _hasher_busy() -> HTTPException:
+    """All scrypt slots are taken (``Settings.scrypt_concurrency``): not a verdict on the input."""
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="server is busy, try again in a moment",
+        headers={"Retry-After": "1"},
+    )
 
 
 def _issue_token(player: Player, session: DbSession, response: Response) -> GuestCreated:

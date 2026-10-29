@@ -5,9 +5,11 @@ its open questions), not from the output of the code.
 """
 
 import base64
+import hashlib
 import io
 import re
 import sqlite3
+import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import cast
@@ -17,6 +19,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import QueuePool
 
 from gow_server import admin, passwords
 from gow_server.app import create_app
@@ -437,3 +440,134 @@ def test_migration_0005_adds_an_empty_password(tmp_path: Path) -> None:
     with sqlite3.connect(db_path) as connection:
         columns = {row[1] for row in connection.execute("PRAGMA table_info(players)")}
     assert "password_hash" not in columns
+
+
+# Bounded scrypt (#413) ----------------------------------------------------------------------------
+
+
+class SlowScrypt:
+    """Replaces ``passwords._scrypt``: holds the callers until ``release`` and records the number
+    of pooled database connections in use while a hash runs."""
+
+    def __init__(self, engine_pool_checkedout: Callable[[], int]) -> None:
+        self.entered = threading.Semaphore(0)
+        self.release = threading.Event()
+        self.hold = False
+        self.checked_out: list[int] = []
+        self._checkedout = engine_pool_checkedout
+
+    def __call__(self, password: str, salt: bytes, n: int, r: int, p: int, maxmem: int) -> bytes:
+        self.checked_out.append(self._checkedout())
+        if self.hold:
+            self.entered.release()
+            assert self.release.wait(timeout=10)
+        return hashlib.scrypt(
+            password.encode(), salt=salt, n=n, r=r, p=p, maxmem=maxmem, dklen=passwords.HASH_BYTES
+        )
+
+
+def slow_scrypt_for(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> SlowScrypt:
+    sessions = cast("sessionmaker[Session]", client.app.state.sessions)  # type: ignore[attr-defined]
+    pool = cast("QueuePool", sessions.kw["bind"].pool)
+    slow = SlowScrypt(pool.checkedout)
+    monkeypatch.setattr(passwords, "_scrypt", slow)
+    return slow
+
+
+@pytest.fixture
+def slow_scrypt(api: TestClient, monkeypatch: pytest.MonkeyPatch) -> SlowScrypt:
+    return slow_scrypt_for(api, monkeypatch)
+
+
+def test_scrypt_concurrency_defaults_to_three(settings: Settings) -> None:
+    assert settings.scrypt_concurrency == 3
+
+
+def test_login_over_the_scrypt_slots_is_503_at_once(
+    fast: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with TestClient(create_app(fast.model_copy(update={"scrypt_concurrency": 1}))) as client:
+        token, _ = guest(client, "Alice")
+        token = set_password(client, token, PASSWORD)
+        slow = slow_scrypt_for(client, monkeypatch)
+        slow.hold = True
+        first: list[tuple[int, dict[str, object]]] = []
+        worker = threading.Thread(target=lambda: first.append(login(client, "Alice", PASSWORD)))
+        worker.start()
+        assert slow.entered.acquire(timeout=10)  # the only slot is taken
+
+        # over the limit: an answer at once, whatever the nick or password (no probing by 503)
+        for nick, password in (("Alice", PASSWORD), ("Nobody", PASSWORD), ("Alice", "wrong one!!")):
+            response = client.post("/api/login", json={"nick": nick, "password": password})
+            assert response.status_code == 503
+            assert response.headers["Retry-After"] == "1"
+            assert response.json() == {"detail": "server is busy, try again in a moment"}
+        changed = client.post(
+            "/api/account/password",
+            json={"password": OTHER_PASSWORD, "old_password": PASSWORD},
+            headers=auth(token),
+        )
+        assert changed.status_code == 503
+
+        slow.release.set()
+        worker.join(timeout=10)
+        assert first[0][0] == 200
+        slow.hold = False
+        # the slot is free again
+        assert login(client, "Alice", PASSWORD)[0] == 200
+
+
+def test_the_slot_is_released_after_a_failed_login(fast: Settings) -> None:
+    with TestClient(create_app(fast.model_copy(update={"scrypt_concurrency": 1}))) as client:
+        token, _ = guest(client, "Alice")
+        set_password(client, token, PASSWORD)
+        for _ in range(3):
+            assert login(client, "Alice", "wrong password!")[0] == 401
+            assert login(client, "Nobody", PASSWORD)[0] == 401
+        assert login(client, "Alice", PASSWORD)[0] == 200
+
+
+def test_login_hashes_without_a_database_connection(
+    api: TestClient, slow_scrypt: SlowScrypt
+) -> None:
+    token, _ = guest(api, "Alice")
+    set_password(api, token, PASSWORD)
+    slow_scrypt.checked_out.clear()
+    assert login(api, "Alice", PASSWORD)[0] == 200
+    assert login(api, "Alice", "wrong password!")[0] == 401
+    assert login(api, "Nobody", PASSWORD)[0] == 401
+    assert slow_scrypt.checked_out == [0, 0, 0]
+
+
+def test_changing_a_password_hashes_without_a_database_connection(
+    api: TestClient, slow_scrypt: SlowScrypt
+) -> None:
+    token, _ = guest(api, "Alice")
+    slow_scrypt.checked_out.clear()
+    token = set_password(api, token, PASSWORD)  # one hash
+    token = set_password(api, token, OTHER_PASSWORD, old=PASSWORD)  # verify, then hash
+    assert slow_scrypt.checked_out == [0, 0, 0]
+    assert login(api, "Alice", OTHER_PASSWORD)[0] == 200
+
+
+def test_login_after_the_password_changed_during_the_hash_is_refused(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The hash runs without a transaction, so the row is read again before the token is issued."""
+    token, _ = guest(api, "Alice")
+    token = set_password(api, token, PASSWORD)
+    original = passwords._scrypt  # pyright: ignore[reportPrivateUsage]
+    changed: list[str] = []
+
+    def change_meanwhile(password: str, salt: bytes, n: int, r: int, p: int, maxmem: int) -> bytes:
+        digest = original(password, salt, n, r, p, maxmem)
+        if not changed:  # another device sets a new password while this login hashes
+            changed.append("")  # first: the change below hashes through this function too
+            changed[0] = set_password(api, token, OTHER_PASSWORD, old=PASSWORD)
+        return digest
+
+    monkeypatch.setattr(passwords, "_scrypt", change_meanwhile)
+    status, _ = login(api, "Alice", PASSWORD)
+    assert status == 401
+    monkeypatch.undo()
+    assert login(api, "Alice", OTHER_PASSWORD)[0] == 200
