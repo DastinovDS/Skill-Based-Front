@@ -1726,7 +1726,7 @@ Status: **[accepted]**, the owner's decision of 2026-10-28 (issue #430, mockup [
 
 ## 33. Planned orders, unit tokens, cities and provinces (#431)
 
-Status: **[awaiting the owner's decision]** (round 3). The owner asked for this round before the release on 2026-10-28 (issue #431, the cities and provinces part added the same day), so the postponement of section 23 does not apply to it. Until the choice, sections 9.4, 9.5 and 9.7 stay as they are; #433 (the row of squares) waits for the units part.
+Status: planned orders **[accepted]** 2026-10-29: ODb Low relief (round 3); units, cities and provinces **[awaiting the owner's decision]** (round 4). The owner asked for this round before the release on 2026-10-28 (issue #431, the cities and provinces part added the same day), so the postponement of section 23 does not apply to it. Until the choice, sections 9.4, 9.5 and 9.7 stay as they are; #433 (the row of squares) waits for the units part.
 
 ### 33.1 Round 1 (superseded by round 2 for the choice)
 
@@ -1751,7 +1751,7 @@ Rules the round keeps for every variant: the new order variants stop the head at
 
 The owner's feedback of 2026-10-29 on round 2 (recorded in #431): **orders**: the direction is OD Embossed, show variations of it; **units**: more variants, but no squares or blocks, no banners, no pawns, nothing borrowed from chess or war-game counters, no recognizable setting for now; **cities**: the CE Curtain wall direction without the medieval setting, variants in that direction; **provinces**: a rework consistent with the new cities.
 
-### 33.3 Round 3
+### 33.3 Round 3 (orders chosen; units, cities, provinces superseded by round 4)
 
 Mockup: [`mockups/tokens-cities-orders-r3.html`](mockups/tokens-cities-orders-r3.html), frames in [`mockups/img/431-r3/`](mockups/img/431-r3/). The same shell as round 2, plus the switch **compare with the round 2 pick**: in the matrices it draws the round 2 pick next to every new variant (OD, CE, PA; for units Now, since no round 2 unit was picked), and it adds a second scene with the round 2 picks.
 
@@ -1770,4 +1770,24 @@ Rules the round keeps for every variant. **Orders**: body 16, tail 60%, head 38 
 | --- | --- |
 | ![recommended](mockups/img/431-r3/scene-recommended.png) | ![second](mockups/img/431-r3/scene-second-set.png) |
 
-**Owner's decision:** awaiting the owner's decision.
+**Owner's decision of 2026-10-29** (recorded in #431): **planned orders: ODb Low relief is chosen [accepted]** (OD with a short soft shadow, a faint even inner rim, no grain, with all the round 2 and round 3 fixes; implementation is a separate issue). For units, cities and provinces none of the round 3 variants is chosen; the owner wants different variants again and allowed research of references and game-dev design guidance in the context of this game.
+
+### 33.4 Round 4
+
+Mockup: [`mockups/tokens-cities-orders-r4.html`](mockups/tokens-cities-orders-r4.html), frames in [`mockups/img/431-r4/`](mockups/img/431-r4/), research notes in [`research/431-r4-references.md`](research/431-r4-references.md) (20 sources: cartography and Bertin's visual variables, proportional symbols, Isotype, transit-map stops and interchanges, relief and settlement symbols, glyph design, preattentive perception, icon and game UI guidance, colourblind-safe design). The same shell as round 3; orders are fixed to ODb in every scene; the compare switch now draws **Now** next to every new variant (nothing was picked in round 3); the header has the three sets; a new matrix puts every unit on every province (the check for unintended figures).
+
+| Element | Variants (besides Now) | Recommendation |
+| --- | --- | --- |
+| Units | UN Cluster, UO Comet, UP Phase, UQ Spark, UR Twin, US Drop | UP Phase (second: UN Cluster) |
+| Cities | CL Interchange, CM Terraces, CN Footprint, CO Orbit, CP Junction | CM Terraces (second: CL Interchange) |
+| Provinces | PK Stop, PL Contour, PM Field, PN Orbit, PO Triad | PL Contour (second: PK Stop) |
+
+Sets (one family each): **A Transit** UR Twin + CL Interchange + PK Stop (`#u=5&c=1&p=1`); **B Relief** UP Phase + CM Terraces + PL Contour (`#u=3&c=2&p=2`, recommended); **C Settlement** UN Cluster + CN Footprint + PM Field (`#u=1&c=3&p=3`).
+
+Principles the round derives from the research and keeps for every variant: one visual variable per quantity (kind of place = shape family and a countable step; owner = colour plus outline: single own, double enemy, dashed grey neutral; charge = value or silhouette; size = numeral); the charge on the strongest channel, readable at 0.45 in grayscale; repeated marks exact up to about seven, then a proportion and the numeral; city kinds as graduated, countable classes; layering by weight (provinces lightest, cities medium, units strongest), province marks outside the radius of a token; the fixed slots of round 2 (cells above, B1 on the left, VP upper right, the capital badge upper left, warehouse places under the sign, the caption under them); no rejected shape (battery, square or block grid, banner or flag, pawn or chess piece, war-game counter, wall, tower, crenellation, bastion, gate, a recognizable setting or a borrowing from a known game). Findings of the unit-on-province check: the dots of UN Cluster merge with the dots of PO Triad and PM Field, the beads of UO Comet with the beads of PN Orbit; radial ticks at 120 degrees on a province make a Y (a well-known car badge), so PK uses dots on its rim; UQ Spark starts its rays half a step off the province marks. No variant needs a DEC, a protocol change or a simulation change. The table with pros, risks, bake and FPS cost and estimates is in #431 and on the page.
+
+| Scene, recommended set B | Scene, set A |
+| --- | --- |
+| ![recommended](mockups/img/431-r4/scene-recommended.png) | ![set A](mockups/img/431-r4/scene-set-a-transit.png) |
+
+**Owner's decision:** awaiting the owner's decision (units, cities, provinces).
