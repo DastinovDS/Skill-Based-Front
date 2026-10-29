@@ -17,7 +17,7 @@ import {
 } from './progressLayout.ts';
 import { CHIP, PLATE, chipHatch, chipHeight, lighten, type ChipState } from './fightFx.ts';
 import { chargeTicks, dashSegments, triangleCorners, triangleHeight } from './layout.ts';
-import { circleBox, shadowBox, type Box } from './shading.ts';
+import { circleBox, darken, shadowBox, type Box } from './shading.ts';
 import {
   BAKE_MARGIN,
   BAR_BASE,
@@ -129,38 +129,57 @@ export function cityBodySpec(kind: CityKind, radius: number, capital: boolean): 
 }
 
 /**
- * A province (DEC-23, C1): a small hollow ring on a dark plate, its halo and shadow like a city's.
- * Own: a blue ring with a light ring outside; the opponent's: a red ring with a light ring outside
- * and one inside; nobody's: a thin grey ring. No gradient, no rim, no star, no warehouse.
+ * A province (DEC-23, PB "Pale dot", #431): a small solid dot in a pale tint of the owner with a
+ * thin darker outline, a dark casing and a soft shadow; the opponent's has a second thin light ring
+ * outside; nobody's is a paler see-through grey dot with a dashed outline. The capacity ring is
+ * the city ring (`cityRingSpec`) and the garrison token lies on top of it, so there is no dark
+ * centre. No gradient, no rim, no star, no warehouse.
  */
 export function provinceBodySpec(kind: CityKind): BakeSpec {
-  const r = PROVINCE.radius;
-  const reach = r + CITY_HALO_INSET + CITY_HALO.width / 2;
+  const { dot: r, casing, tint, outline, neutralOutline, enemy } = PROVINCE;
+  const reach = Math.max(r + casing.inset + casing.width / 2, r + enemy.inset + enemy.width / 2);
   return {
     key: `province:${kind}`,
     box: shadowBox(circleBox(reach), BAKE_MARGIN),
     draw(into) {
-      shadow(into, (g) => g.circle(0, 0, reach));
+      shadow(into, (g) => g.circle(0, 0, r + casing.inset));
       const g = graphics(into);
-      g.circle(0, 0, r + CITY_HALO_INSET).stroke(CITY_HALO);
-      g.circle(0, 0, r).fill({ color: PLATE_FILL, alpha: PROVINCE.plateAlpha });
+      g.circle(0, 0, r + casing.inset).stroke({
+        width: casing.width,
+        color: BG,
+        alpha: casing.alpha,
+      });
       if (kind === 'neutral') {
-        g.circle(0, 0, r).stroke({ width: PROVINCE.ring.neutral, color: NEUTRAL_STROKE });
+        g.circle(0, 0, r).fill({
+          color: lighten(NEUTRAL_STROKE, tint.neutral),
+          alpha: tint.neutralAlpha,
+        });
+        const arcs = Math.max(
+          1,
+          Math.round((2 * Math.PI * r) / (neutralOutline.dash + neutralOutline.gap)),
+        );
+        const step = (2 * Math.PI) / arcs;
+        const span = (neutralOutline.dash / (neutralOutline.dash + neutralOutline.gap)) * step;
+        for (let i = 0; i < arcs; i++) {
+          g.moveTo(r * Math.cos(i * step), r * Math.sin(i * step)).arc(
+            0,
+            0,
+            r,
+            i * step,
+            i * step + span,
+          );
+        }
+        g.stroke({ width: neutralOutline.width, color: NEUTRAL_STROKE });
         return;
       }
-      g.circle(0, 0, r).stroke({
-        width: PROVINCE.ring.owned,
-        color: kind === 'you' ? YOU : ENEMY,
-      });
-      g.circle(0, 0, r + PROVINCE.outer.inset).stroke({
-        width: PROVINCE.outer.width,
-        color: PAPER,
-      });
+      const color = kind === 'you' ? YOU : ENEMY;
+      g.circle(0, 0, r).fill(lighten(color, tint.owned));
+      g.circle(0, 0, r).stroke({ width: outline.width, color: darken(color, outline.darken) });
       if (kind === 'enemy') {
-        g.circle(0, 0, r - PROVINCE.inner.inset).stroke({
-          width: PROVINCE.inner.width,
+        g.circle(0, 0, r + enemy.inset).stroke({
+          width: enemy.width,
           color: PAPER,
-          alpha: PROVINCE.inner.alpha,
+          alpha: enemy.alpha,
         });
       }
     },

@@ -2,7 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import type { BakeSpec } from './bake.ts';
 import { provinceBodySpec, triangleTicksSpec, warehouseBarSpec } from './bakedShapes.ts';
-import { BAR_SEGMENT, PROVINCE, YOU } from './style.ts';
+import { BAR_SEGMENT, ENEMY, PLATE_FILL, PROVINCE, YOU } from './style.ts';
 
 // The look of the shapes of C1 (#348, ui-style 9.4), read from what they draw. Nothing here needs
 // WebGL: `draw` only puts vector shapes into a scratch container.
@@ -38,24 +38,56 @@ function circles(spec: BakeSpec, action: 'stroke' | 'fill'): number[] {
     .map((p) => p.shape.radius ?? 0);
 }
 
-describe('provinceBodySpec: a hollow ring (C1, DEC-23)', () => {
-  it('is told from a city by shape: no gradient disc of the city radius, only rings and a plate', () => {
+/** The colour of the first filled circle of the spec, or `null`. */
+function fillOf(spec: BakeSpec): { color: number; alpha: number } | null {
+  const fill = drawn(spec).find((i) => i.action === 'fill') as unknown as
+    { data: { style?: { color: number; alpha: number } } } | undefined;
+  return fill?.data.style ?? null;
+}
+
+const luma = (c: number): number =>
+  0.299 * ((c >> 16) & 0xff) + 0.587 * ((c >> 8) & 0xff) + 0.114 * (c & 0xff);
+
+describe('provinceBodySpec: a pale dot (PB, DEC-23, #431)', () => {
+  it('is a small solid dot, smaller than the capacity ring and than a city', () => {
     for (const kind of ['you', 'enemy', 'neutral'] as const) {
-      const radii = circles(provinceBodySpec(kind), 'stroke');
-      // The biggest circle is the halo, outside the ring; nothing is bigger than the province.
-      expect(Math.max(...radii)).toBeLessThan(PROVINCE.radius + 6);
-      // The fill is the dark plate inside the ring: one circle of the province's radius.
-      expect(circles(provinceBodySpec(kind), 'fill')).toEqual([PROVINCE.radius]);
+      expect(circles(provinceBodySpec(kind), 'fill')).toEqual([PROVINCE.dot]);
+      expect(PROVINCE.dot).toBeLessThan(PROVINCE.radius);
+      // The biggest circle is the opponent's outer ring or the casing: nothing reaches the ring (16).
+      const stroked = circles(provinceBodySpec(kind), 'stroke');
+      expect(Math.max(...stroked, 0)).toBeLessThan(PROVINCE.radius + 6);
     }
   });
 
-  it('carries the side by the number of rings, not only by the hue (grey scale)', () => {
-    const rings = (kind: 'you' | 'enemy' | 'neutral') =>
-      circles(provinceBodySpec(kind), 'stroke').length;
-    // neutral: the halo and one thin ring; own: plus a light ring outside; the opponent's: plus one inside.
-    expect(rings('neutral')).toBe(2);
-    expect(rings('you')).toBe(3);
-    expect(rings('enemy')).toBe(4);
+  it('has no dark centre: the dot is paler than the owner colour and far lighter than the old plate', () => {
+    for (const [kind, owner] of [
+      ['you', YOU],
+      ['enemy', ENEMY],
+    ] as const) {
+      const fill = fillOf(provinceBodySpec(kind));
+      expect(fill).not.toBeNull();
+      expect(luma(fill?.color ?? 0)).toBeGreaterThan(luma(owner));
+      expect(luma(fill?.color ?? 0)).toBeGreaterThan(luma(PLATE_FILL) + 80);
+      expect(fill?.alpha).toBe(1);
+    }
+  });
+
+  it("shows nobody's province paler and see-through, with a dashed outline of arcs", () => {
+    const neutral = provinceBodySpec('neutral');
+    const fill = fillOf(neutral);
+    expect(fill?.alpha).toBeLessThan(1);
+    // The outline is a ring of dashes (arcs of the dot's radius), not a closed circle: only the
+    // casing is a stroked circle, and it is bigger than the dot.
+    expect(circles(neutral, 'stroke').every((radius) => radius > PROVINCE.dot)).toBe(true);
+    expect(drawn(neutral).filter((i) => i.action === 'stroke')).toHaveLength(2);
+  });
+
+  it('carries the side by an extra ring for the opponent, not only by the hue (grey scale)', () => {
+    const rings = (kind: 'you' | 'enemy') => circles(provinceBodySpec(kind), 'stroke');
+    // own: the casing and the outline; the opponent's: plus a light ring outside the dot.
+    expect(rings('you')).toHaveLength(2);
+    expect(rings('enemy')).toHaveLength(3);
+    expect(Math.max(...rings('enemy'))).toBeCloseTo(PROVINCE.dot + PROVINCE.enemy.inset);
   });
 
   it('has a key of its own per side, shared by every province of it', () => {
