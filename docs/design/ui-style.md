@@ -18,7 +18,7 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/progress-style.html`](mockups/progress-style.html) (CP bar and the progress of barracks construction, warehouse upgrades and recruiting, #430: **[accepted]** 2026-10-28, section 32; the owner asked for it on 2026-10-28, after the mechanics freeze, so the postponement of section 23 does not apply to it),
 [`mockups/start-menu.html`](mockups/start-menu.html) (the start menu and the pre-match screens, #471: **[awaiting the owner's decision]**, section 31; asked for before the release on 2026-10-28),
 [`mockups/lobby-invite-bot.html`](mockups/lobby-invite-bot.html) (the lobby, invite and bot screens in the language of the new menu, #473: **[awaiting the owner's decision]**, section 34; planned before the release, owner, 2026-10-29),
-[`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html) (planned orders, unit tokens, cities and provinces, #431, round 1; asked for before the release on 2026-10-28) its round 2 [`mockups/tokens-cities-orders-r2.html`](mockups/tokens-cities-orders-r2.html) and round 3 [`mockups/tokens-cities-orders-r3.html`](mockups/tokens-cities-orders-r3.html) (after the owner's feedback of 2026-10-29 on rounds 1 and 2: **[awaiting the owner's decision]**, section 33). All of them are
+[`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html) (planned orders, unit tokens, cities and provinces, #431, round 1; asked for before the release on 2026-10-28) its round 2 [`mockups/tokens-cities-orders-r2.html`](mockups/tokens-cities-orders-r2.html) and round 3 [`mockups/tokens-cities-orders-r3.html`](mockups/tokens-cities-orders-r3.html) and round 4 [`mockups/tokens-cities-orders-r4.html`](mockups/tokens-cities-orders-r4.html) (planned orders ODb **[accepted]**, units and cities stay as they are, 2026-10-29, section 33), [`mockups/provinces-defense.html`](mockups/provinces-defense.html) (provinces in the current look, the "Defense" counter and the barracks placement, #431, #349: **[awaiting the owner's decision]**, section 35). All of them are
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
 only links and our descriptions.
@@ -45,6 +45,8 @@ recommendation are ready, there is no choice, there is no code. **[replaced]**: 
 | 26 Map style, round 2 | [accepted] 2026-10-21 (26.3): BL1-1 with the highlight of the borders of the "pronounced" one, T2 (the baker on numpy and Pillow, WebP), F1 "Haze", R1 "Stripes", the packet as a square; #335 closed | waits for implementation: #344 (the baker, T2, the `artery` scene); **implemented: BL1-1 shading with the border glow (26.3) #347, PR #409; roads R1 "Stripes" and the square packet (26.1) #345, PR #367; fog F1 "Haze" (9.8) #346, PR #368** |
 | 27 Orders, fight on the map, arena | [accepted] 2026-10-21 (27.3, shots: 29.4): orders and ribbons as now, IN3 "Sight", the bonus "◇ +N" on the head, LY2 "Over the haze", FX3, EF2 "Pointer" with "Dissolve and marks", arena AR1; #339 closed | waits for implementation: #330 (arena AR1, in progress), **implemented: IN3 "Crosshair" and the bonus on the head #353 (the bonus pill came with #330); EF2 "Pointer" with "Dissolve and marks" #354; fight effects FX3 #351, PR #373; layers LY2 "Over the haze" #346, PR #368; shots SH1 instead of the exchange arrows of the arena #352, PR #376** |
 | 28 Map objects and menu icons | [accepted] 2026-10-21 (28.1): U1 and the row of squares U4, C1, B1, I1 (B2 later, no issue is opened); #337 closed | waits for implementation: the row of squares U4 (#433, moved from #348, waits for a mockup, #431), B1 (#349); **implemented: U1 as part of BL1 #347, PR #409; cities C1 (warehouse places filled / frame / dashed, the province as a hollow ring) #348, PR #437**; implemented (menu icons I1): PR #362 |
+| 33 Planned orders, units, cities | [accepted] 2026-10-29: planned orders ODb; units and cities stay as they are now; rounds 1-4 kept for reference | ODb waits for an implementation issue |
+| 35 Provinces, the Defense counter, the barracks placement | [awaiting the owner's decision] (#431 provinces, #349 counter and placement) | mockup only |
 | 32 Progress indicators | [accepted] 2026-10-28 (32): CP bar C "Track", queue, barracks and warehouse build A "Cells", the alert ring for a unit ready with no room and for production stopped by a fight; #430 closed | **implemented: #439** |
 | 29 Shots in a fight | [accepted] 2026-10-21 (29.4): SH1 "Tracers", the strength "Stronger", the distance of the groups as now (46) | the strength "Stronger" and the common part (pools, the effects layer, the particle core) **implemented: #351, PR #373**; tracers SH1 **implemented: #352, PR #376** |
 
@@ -83,6 +85,7 @@ Contents:
 31. Start menu redesign (#471)
 32. Progress indicators: CP bar and the cells of builds and recruiting (#430, #439)
 33. Planned orders, unit tokens, cities and provinces (#431)
+35. Provinces in the current look, the "Defense" counter and the barracks placement (#431, #349)
 
 ---
 
@@ -1727,7 +1730,7 @@ Status: **[accepted]**, the owner's decision of 2026-10-28 (issue #430, mockup [
 
 ## 33. Planned orders, unit tokens, cities and provinces (#431)
 
-Status: planned orders **[accepted]** 2026-10-29: ODb Low relief (round 3); units, cities and provinces **[awaiting the owner's decision]** (round 4). The owner asked for this round before the release on 2026-10-28 (issue #431, the cities and provinces part added the same day), so the postponement of section 23 does not apply to it. Until the choice, sections 9.4, 9.5 and 9.7 stay as they are; #433 (the row of squares) waits for the units part.
+Status: planned orders **[accepted]** 2026-10-29: ODb Low relief (round 3); **units and cities [accepted] 2026-10-29: they stay as they are now** (U1 with the #508 fill and dividers, C1), none of rounds 1 to 4 is chosen; provinces moved to section 35. The owner asked for this round before the release on 2026-10-28 (issue #431, the cities and provinces part added the same day), so the postponement of section 23 does not apply to it. Until the choice, sections 9.4, 9.5 and 9.7 stay as they are; #433 (the row of squares) waits for the units part.
 
 ### 33.1 Round 1 (superseded by round 2 for the choice)
 
@@ -1791,7 +1794,7 @@ Principles the round derives from the research and keeps for every variant: one 
 | --- | --- |
 | ![recommended](mockups/img/431-r4/scene-recommended.png) | ![set A](mockups/img/431-r4/scene-set-a-transit.png) |
 
-**Owner's decision:** awaiting the owner's decision (units, cities, provinces).
+**Owner's decision of 2026-10-29** (recorded in #431): planned orders ODb (round 3) stay accepted; **units and cities stay as they are now**; round 4 is not chosen (none of the sets and none of the single variants). The provinces continue in section 35 with a round that fits the current look.
 
 ---
 
@@ -1820,5 +1823,27 @@ No variant needs a DEC, a protocol change or a server change. The only new data 
 | ![R, the lobby](mockups/img/473/overview-lobby.png) | ![R with the strip, the bot](mockups/img/473/r-bot.png) |
 
 Checked in grayscale (`gray-overview-lobby.png`, `gray-overview-bot.png`): no state is carried by colour alone (a selected choice is a filled dot or a white outline, a ready player a filled dot with the word, the level is cells, the seat is the triangle with its outline, an alert is amber with `!` and text).
+
+**Owner's decision:** awaiting the owner's decision.
+
+---
+
+## 35. Provinces in the current look, the "Defense" counter and the barracks placement (#431, #349)
+
+Status: **[awaiting the owner's decision]** (provinces: #431; the counter and the placement: #349). Asked for by the owner on 2026-10-29 after the decision of section 33 (units and cities stay as they are), so the postponement of section 23 does not apply to it. Until the choice, sections 9.4, 21 and 28 stay as they are.
+
+Mockup: [`mockups/provinces-defense.html`](mockups/provinces-defense.html), frames in [`mockups/img/provinces-defense/`](mockups/img/provinces-defense/). The shell of round 4 (the `ridge` fragment at zoom 0.45, 0.7, 1.0, 1.5, the 9 s clock, grayscale, reduced motion, the frame in the address, the DEC-35 fog with the own territory unveiled, the "compare with Now" scene), with ODb orders, and the units, cities and roads drawn **exactly as the client draws them now** (from `bakedShapes.ts`, `shapes.ts`, `cityLayout.ts`, `progressLayout.ts`, `style.ts`, checked against `mise run shots`). Three independent pickers; the scene and every matrix use the current pick of the other two.
+
+| Element | Variants (besides Now) | Recommendation |
+| --- | --- | --- |
+| 1 Provinces that fit the current look: lighter than a city, no dark centre, capacity 3 outside a token, the side without colour | PA Glass disc, PB Pale dot, PC Place ring, PD Three arcs, PE Dot screen, PF Soft glow | PC Place ring (second: PA Glass disc) |
+| 2 The "Defense" counter (DEC-30) instead of the "+N / M" text: 0 of the cap, partial, full, the cap growing, a large cap, no charged units, the enemy (mode only) | D1 Diamond pips, D2 Rim segments, D3 Filling shield, D4 Track, D5 Cells, D6 Side arc | D1 Diamond pips (second: D3 Filling shield) |
+| 3 The barracks icon (B1) and the counter on the current city, with the cells, VP, the warehouse places and the caption | L1 Left column, L2 Split sides, L3 Status row | L1 Left column (second: L2 Split sides) |
+
+Findings the round keeps for every variant: **Now shows "Defense" twice** (the public intent shield at the upper left of the city and the shield badge with the pill on the token), and the pill runs over the VP badge and the ring. Every new layout draws **one** Defense sign at the city, from the group's mode where the group is seen and from the public intent elsewhere (the same data as now), and keeps the B1 icons at 16 px on screen at any zoom. The page **checks the marks of every layout sample for overlaps** (ring, cells, VP, barracks, Defense, warehouse places, caption, token): at 0.7 and up L1 and L2 have none; at 0.45 the 16 px floor of the icons and the 20 px floor of the token touch on the small cities in every layout, Now included. The enemy never gets a number (DEC-30 item 5, AGENTS.md 4.4): every counter shows the enemy as the badge alone (D3: a dashed shield, "not known exactly"). The cap of the bonus is the charged units, so it grows when a charge arrives: a row of places (D1, D2, D5, D6) gains a hollow place, a share (D3, D4) drops, which can read as a lost bonus. Only D5 (the hatch of the next +1) needs data the view does not carry: one own-only field in `GroupView` (a protocol change with a fog test). No variant needs a DEC or a simulation change. The tables with pros, risks, bake and FPS cost and estimates are in #431 (provinces), #349 (counter and placement) and on the page.
+
+| Scene, recommended set (PC + D1 + L1) | Scene, Now |
+| --- | --- |
+| ![recommended](mockups/img/provinces-defense/scene-recommended.png) | ![now](mockups/img/provinces-defense/scene-now.png) |
 
 **Owner's decision:** awaiting the owner's decision.
