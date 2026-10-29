@@ -214,6 +214,8 @@ docker compose exec app python -c "import urllib.request as u; print(u.urlopen('
 | `gow_outbox_backlog_max` | the longest unsent queue of a connection (the client is not reading) |
 | `gow_queue_size` | players in the matchmaking queue: looking for an opponent or confirming a found pair (MM-01) |
 
+The load harness (`python -m gow_server.loadtest`, `docs/qa/load.md`) reads the same endpoint before and after a run of N matches.
+
 Prometheus cannot reach inside the container (the endpoint is loopback). To collect, a small collector inside the container is needed next to the application, or
 a one-off poll by `cron`; for now manual collection and the logs are enough. [owner's decision]
 

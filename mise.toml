@@ -168,6 +168,10 @@ depends = ["dev:server", "dev:client"]
 description = "Game server with reload (uv run gow-server --reload)"
 run = "uv run gow-server --reload"
 
+[tasks.load]
+description = "Load harness against a server on this machine (default http://127.0.0.1:8000, e.g. `dev:server`): N matches over WebSockets, tick lag and step p99 (QA-03, docs/qa/load.md; options after --)"
+run = "uv run python -m gow_server.loadtest"
+
 [tasks."dev:client"]
 description = "Vite dev server of the client"
 run = "pnpm -C apps/client dev"
@@ -283,6 +287,11 @@ run = "GOW_RULESET_PATH=rulesets/{{usage.ruleset}}.toml docker compose -p {{get_
 description = "Stop the agents' stack and delete its volumes (only project sbf-agent)"
 env = { HTTP_PORT = "{{get_env(name='SBF_AGENT_HTTP_PORT', default='18080')}}", HTTPS_PORT = "{{get_env(name='SBF_AGENT_HTTPS_PORT', default='18443')}}" }
 run = "docker compose -p {{get_env(name='SBF_AGENT_PROJECT', default='sbf-agent')}} --progress quiet down --volumes --remove-orphans"
+
+[tasks."load:agent"]
+description = "Load harness inside the app container of the agents' stack (QA-03, docs/qa/load.md): start the stack with GOW_GUEST_RATE_LIMIT>=2N first; options after --. POSIX shell"
+env = { HTTP_PORT = "{{get_env(name='SBF_AGENT_HTTP_PORT', default='18080')}}", HTTPS_PORT = "{{get_env(name='SBF_AGENT_HTTPS_PORT', default='18443')}}" }
+run = "docker compose -p {{get_env(name='SBF_AGENT_PROJECT', default='sbf-agent')}} exec -T app python -m gow_server.loadtest"
 
 [tasks.smoke]
 description = "deploy/smoke.sh against the agents' project (builds, restarts, checks through Caddy; needs bash)"
