@@ -91,6 +91,9 @@ class Match(Base):
     ticks: Mapped[int | None]
     """Duration of the match in ticks (10 per second) once it is over."""
     replay_path: Mapped[str | None] = mapped_column(String(255))
+    replay_expired_at: Mapped[datetime | None]
+    """When the retention removed the replay files (SRV-08, #515); ``replay_path`` is then null.
+    The row stays: result, rating and sides do not expire with the replay."""
 
 
 class MatchPlayer(Base):

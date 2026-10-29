@@ -25,6 +25,7 @@ from gow_server.matches import MatchManager
 from gow_server.nicks import NickPolicy, load_blocklist
 from gow_server.passwords import PasswordHasher
 from gow_server.ratelimit import SlidingWindowLimiter
+from gow_server.replay_retention import RetentionPolicy, run_cleanup
 from gow_server.settings import Settings
 from gow_sim.ruleset import load_ruleset
 
@@ -48,7 +49,14 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         await asyncio.to_thread(upgrade_to_head, engine)
         app.state.sessions = sessionmaker(engine, expire_on_commit=False)
         app.state.replays = replays.ReplayService(
-            settings.replays_dir, settings.rulesets_dir, settings.maps_dir, app.state.sessions
+            settings.replays_dir,
+            settings.rulesets_dir,
+            settings.maps_dir,
+            app.state.sessions,
+            retention=RetentionPolicy(
+                unrated_days=settings.replay_retention_days,
+                rated_days=settings.replay_rated_retention_days,
+            ),
         )
         app.state.matches = MatchManager(
             match_clock,
@@ -104,6 +112,10 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
         monitor = asyncio.create_task(
             alerts.monitor(app.state.matches, settings.monitor_interval_s), name="monitor"
         )
+        cleanup = asyncio.create_task(
+            run_cleanup(app.state.replays, match_clock, settings.replay_cleanup_interval_s),
+            name="replay-cleanup",
+        )
         log.info(
             "server started",
             extra={"env": settings.env, "maps": [entry.id for entry in app.state.maps.all()]},
@@ -112,6 +124,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             yield
         finally:
             monitor.cancel()
+            cleanup.cancel()
             await app.state.matches.shutdown()
             await app.state.lifecycle.aclose()
             await app.state.replays.aclose()
