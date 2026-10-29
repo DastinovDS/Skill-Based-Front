@@ -25,7 +25,8 @@ from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, replay_run
 from gow_sim.ruleset import Ruleset, ruleset_hash
 from gow_sim.state import AtNode, Fight, FightRound, GameState, Group, OnEdge
 from gow_sim.systems.build import done_tick
-from gow_sim.systems.capacity import node_capacities
+from gow_sim.systems.capacity import node_capacities, warehouse_capacity
+from gow_sim.systems.supply import is_city
 
 __all__ = [
     "FORMAT",
@@ -106,7 +107,13 @@ def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
             for p in (state.players[i] for i in sorted(state.players))
         ],
         "n": [
-            [n.owner, n.warehouse, capacities[n.id]]
+            [
+                n.owner,
+                n.warehouse,
+                capacities[n.id],
+                # Places of the warehouse (DEC-26) as `NodeView.warehouse_cap`; none in a province.
+                (warehouse_capacity(state, rules, n.id) if is_city(state.map, n.id) else None),
+            ]
             for n in (state.nodes[i] for i in sorted(state.nodes))
         ],
         "w": [state.edges[i].width for i in sorted(state.edges)],

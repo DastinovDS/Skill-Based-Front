@@ -18,6 +18,24 @@ describe('buildTimeline', () => {
     expect(view?.edges.every((e) => e.detail !== 'fog')).toBe(true);
   });
 
+  it('gives the places of the warehouse from the frame (#556), none for an older file or a province', () => {
+    const file = structuredClone(SAMPLE);
+    const frame = file.frames[0];
+    if (frame === undefined) throw new Error('no frame');
+    // Places of the warehouse smaller than the node capacity, a province without one.
+    frame.n = frame.n.map(([owner, stock, capacity], id) => [
+      owner,
+      stock,
+      capacity,
+      id === 0 ? null : capacity - 1,
+    ]);
+    const nodes = buildTimeline(file).snapshots[0]?.view.nodes;
+    expect(nodes?.map((n) => n.warehouse_cap)).toEqual(frame.n.map((n) => n[3]));
+    expect(nodes?.map((n) => n.capacity)).toEqual(frame.n.map((n) => n[2]));
+    // A file without the fourth element: unknown, not the capacity.
+    expect(timeline.snapshots[0]?.view.nodes.every((n) => n.warehouse_cap === null)).toBe(true);
+  });
+
   it('keeps the groups of both players, with owners by id', () => {
     const owners = new Set(timeline.groupOwners.values());
     expect(owners).toEqual(new Set([0, 1]));

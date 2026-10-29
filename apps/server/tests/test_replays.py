@@ -82,6 +82,37 @@ def test_frame_builds_are_road_builds_only(line3: MapDef, full_rules: Ruleset) -
     assert frame["e"] == [[0, 0, full_rules.build.ticks_per_level]] and "b" not in frame
 
 
+def test_frame_nodes_carry_the_warehouse_places(full_rules: Ruleset) -> None:
+    """``n[i][3]``: the places of the warehouse as the live view's ``warehouse_cap`` (DEC-26, #556),
+    not the node capacity (which is bigger); ``null`` for a province. The expected numbers are the
+    ruleset's ``start_by_kind`` plus the level times ``gain_per_level``."""
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-1.toml")
+    assert rules.city_upgrades.enabled
+    mapdef = load_map(ROOT / "maps" / "crossroads.json")
+    state = initial_state(mapdef, rules)
+    city = next(n for n in mapdef.nodes if n.kind.value == "city_medium")
+    state.nodes[city.id].warehouse_level = 1
+    frame = frame_of(state, rules)
+    nodes = cast("list[list[Any]]", frame["n"])
+    for node, row in zip(mapdef.nodes, nodes, strict=True):
+        if node.kind.value == "province":
+            assert row[3] is None
+            continue
+        level = 1 if node.id == city.id else 0
+        expected = getattr(rules.warehouse.start_by_kind, node.kind.value) + (
+            level * rules.warehouse.gain_per_level
+        )
+        assert row[3] == expected
+        assert row[1] <= row[3] < row[2]  # the stock fits, and it is less than the node capacity
+    # Without city development the warehouse follows the node capacity (DEC-22).
+    plain = frame_of(initial_state(mapdef, full_rules), full_rules)
+    assert all(
+        row[3] == row[2]
+        for node, row in zip(mapdef.nodes, cast("list[list[Any]]", plain["n"]), strict=True)
+        if node.kind.value != "province"
+    )
+
+
 def _fight(round_: FightRound | None) -> Fight:
     return Fight(
         id=3,

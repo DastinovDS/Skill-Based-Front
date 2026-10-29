@@ -81,7 +81,7 @@ One JSON object (gzip). All numbers are integers; CP in hundredths, the edge pro
 |---|---|---|
 | `t` | tick | integer |
 | `p` | players by id (0, 1) | `[cp, vp, stance, forfeited]`: CP in hundredths, `stance` a string, `forfeited` 0/1 |
-| `n` | nodes by id | `[owner, warehouse, capacity]`: `owner` 0, 1 or `null`; `warehouse` charges in the warehouse; `capacity` the current capacity of the city (the client does not compute rules) |
+| `n` | nodes by id | `[owner, warehouse, capacity, warehouse_cap]`: `owner` 0, 1 or `null`; `warehouse` charges in the warehouse; `capacity` the current capacity of the city for units (the client does not compute rules); `warehouse_cap` the places of the warehouse (DEC-26: `start_by_kind` plus the level, as `NodeView.warehouse_cap` of the live view; without `city_upgrades` the node capacity), `null` for a province. The fourth element was added in #556 (before it the viewer drew the node capacity as the warehouse, larger than the real one with `city_upgrades`); a record of three elements is an older file, the viewer then knows no places |
 | `w` | road level by id (the name "width" stayed from the map format, DEC-22: 1..3) | integer |
 | `g` | groups, in ascending `id` | a group object (below) |
 | `k` | charge packets, by `id` | `[id, owner, edge, from_node, charges, depart_tick, arrive_tick]` |
