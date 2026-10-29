@@ -44,6 +44,8 @@
     chrome: HudChrome;
     /** A ranked match (DEC-34): leaving it warns about the queue lock. */
     rated?: boolean;
+    /** Queue lock in seconds a forfeit would bring now (DEC-34); shown in the ranked forfeit dialog. */
+    forfeitBanS?: number;
     /** Show the key-hint bar (the first matches only). */
     hints?: boolean;
     /** Where cities and groups are on screen: the radial menus of a city and a group sit on them. */
@@ -62,6 +64,7 @@
     orders,
     chrome,
     rated = false,
+    forfeitBanS = 0,
     hints = false,
     anchors = NO_ANCHORS,
     onpause,
@@ -202,6 +205,7 @@
   <ExitDialog
     open={chrome.exitOpen}
     {rated}
+    banSeconds={forfeitBanS}
     onforfeit={() => {
       chrome.exitOpen = false;
       orders.forfeit();

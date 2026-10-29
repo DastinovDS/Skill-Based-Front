@@ -623,3 +623,52 @@ def test_apply_match_takes_the_gain_from_an_early_resign_winner(
     assert rows[a].rating_mode == "none" and rows[a].unrated_reason == "opponent_early_resign"
     assert rows[a].rating_after is None
     assert rows[b].rating_mode == "rated" and rows[b].rating_after is not None
+
+
+# The ban a forfeit would bring, told in welcome (#559) ----------------------------------------
+
+
+def test_the_intro_carries_the_forfeit_ban_of_the_side() -> None:
+    own = SidePlan(RatingMode.RATED, None, NEW, 5, True, forfeit_ban_s=300)
+    assert intro_notice(plan(own, side(RATED)), 0).forfeit_ban_s == 300
+    assert intro_notice(plan(own, side(RATED)), 1).forfeit_ban_s == 0
+    assert intro_notice(None, 0).forfeit_ban_s == 0
+
+
+def test_the_forfeit_ban_follows_the_resigns_in_the_window(
+    session: Session, clock: ManualClock
+) -> None:
+    a, b = account(session, "a"), account(session, "b")
+    assert [s.forfeit_ban_s for s in plan_of(session, clock, a, b).sides] == [0, 0]
+    resign(session, clock, a, b, ago=timedelta(hours=3))
+    assert [s.forfeit_ban_s for s in plan_of(session, clock, a, b).sides] == [300, 0]
+    c = account(session, "c")
+    resign(session, clock, a, c, ago=timedelta(hours=2))
+    assert plan_of(session, clock, a, b).sides[0].forfeit_ban_s == 30 * 60
+    resign(session, clock, a, c, ago=timedelta(hours=1))
+    assert plan_of(session, clock, a, b).sides[0].forfeit_ban_s == 2 * 3600
+
+
+def test_old_resigns_and_the_winner_do_not_count_for_the_forfeit_ban(
+    session: Session, clock: ManualClock
+) -> None:
+    a, b = account(session, "a"), account(session, "b")
+    resign(session, clock, a, b, ago=timedelta(hours=30))
+    resign(session, clock, a, b, ago=timedelta(hours=25))
+    assert [s.forfeit_ban_s for s in plan_of(session, clock, a, b).sides] == [0, 0]
+
+
+def test_a_match_over_the_opponent_limit_has_no_forfeit_ban(
+    session: Session, clock: ManualClock
+) -> None:
+    a, b = account(session, "a"), account(session, "b")
+    for hours in (4, 3, 2):
+        resign(session, clock, a, b, ago=timedelta(hours=hours))
+    assert [s.forfeit_ban_s for s in plan_of(session, clock, a, b).sides] == [0, 0]
+
+
+def test_an_unrated_match_has_no_forfeit_ban(session: Session, clock: ManualClock) -> None:
+    a, b = account(session, "a"), account(session, "b")
+    resign(session, clock, a, b, ago=timedelta(hours=3))
+    guest = account(session, "g", password=False, played=None)
+    assert [s.forfeit_ban_s for s in plan_of(session, clock, a, guest).sides] == [0, 0]

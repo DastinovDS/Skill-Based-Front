@@ -258,6 +258,7 @@ async def _serve(
             rated=notice.rated,
             unrated_reason=notice.unrated_reason,
             calibration=notice.calibration,
+            forfeit_ban_s=notice.forfeit_ban_s,
             pause_available=runner.pause_available(player),
         )
     )

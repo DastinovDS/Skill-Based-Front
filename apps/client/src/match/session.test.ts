@@ -17,6 +17,7 @@ const welcome: ServerMsg = {
   rated: false,
   unrated_reason: 'casual',
   calibration: null,
+  forfeit_ban_s: 0,
   pause_available: true,
 };
 const snapshot = (tick: number): ServerMsg => devSnapshot(map, DEV_RULES, tick);

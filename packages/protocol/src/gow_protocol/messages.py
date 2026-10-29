@@ -32,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 29
+PROTOCOL_VERSION: Final = 30
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -183,6 +183,10 @@ class WelcomeMsg(WireModel):
     calibration: Calibration | None = None
     """Your calibration progress before this match; ``None`` for a guest, in a match that is not
     from the queue, and once calibration is over."""
+    forfeit_ban_s: NonNegInt = 0
+    """Seconds the matchmaking queue would be locked for you if you forfeited (or were
+    disconnected for good) now, counting your earlier resigns in the rolling window (DEC-34,
+    item 3, #559); ``0``: no lock, also for a match that is not rated. The client only shows it."""
     pause_available: bool
     """Whether you may still pause this match (DEC-05): ``False`` in a rated (queue) match and
     once you have used your pause, also on a reconnect. A pause of the opponent going on now

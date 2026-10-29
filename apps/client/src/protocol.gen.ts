@@ -286,6 +286,12 @@ export interface WelcomeMsg {
    */
   calibration: Calibration | null;
   /**
+   * Seconds the matchmaking queue would be locked for you if you forfeited (or were
+   * disconnected for good) now, counting your earlier resigns in the rolling window (DEC-34,
+   * item 3, #559); ``0``: no lock, also for a match that is not rated. The client only shows it.
+   */
+  forfeit_ban_s: number;
+  /**
    * Whether you may still pause this match (DEC-05): ``False`` in a rated (queue) match and
    * once you have used your pause, also on a reconnect. A pause of the opponent going on now
    * does not change it (``paused`` says that).
@@ -1174,7 +1180,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 29;
+export const PROTOCOL_VERSION = 30;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

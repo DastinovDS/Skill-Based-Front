@@ -88,5 +88,6 @@
   "rated": false,
   "unrated_reason": "casual",
   "calibration": null,
+  "forfeit_ban_s": 300,
   "pause_available": true
 }

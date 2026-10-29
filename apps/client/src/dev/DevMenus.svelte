@@ -81,7 +81,7 @@
   <ResultScreen me={0} end={result} onreplay={nothing} onmenu={nothing} />
 {:else if id === 'exit-rated'}
   <div class="stage">
-    <ExitDialog open rated onforfeit={nothing} onstay={nothing} />
+    <ExitDialog open rated banSeconds={300} onforfeit={nothing} onstay={nothing} />
   </div>
 {:else if queue !== undefined}
   <QueueView
