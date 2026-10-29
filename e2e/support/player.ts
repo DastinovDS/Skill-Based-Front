@@ -84,7 +84,7 @@ export class Player {
   /** The host: menu, private match on `mapId`, returns the invite link. */
   async createInvite(mapId: string): Promise<string> {
     await this.page.getByRole('button', { name: 'Invite a friend' }).click();
-    await this.page.getByLabel('Map').selectOption(mapId);
+    await this.page.getByRole('radio', { name: new RegExp(`^${mapId}`) }).click();
     await this.page.getByRole('button', { name: 'Create the match' }).click();
     const link = this.page.getByLabel('Invite link');
     await expect(link).toHaveValue(/\/\?m=[\w-]+$/);
@@ -92,7 +92,7 @@ export class Player {
   }
 
   async pressReady(): Promise<void> {
-    await expect(this.page.getByText(/^Opponent: /)).toBeVisible();
+    await expect(this.page.getByRole('heading', { name: / joined$/ })).toBeVisible();
     await this.page.getByRole('button', { name: 'Ready' }).click();
   }
 

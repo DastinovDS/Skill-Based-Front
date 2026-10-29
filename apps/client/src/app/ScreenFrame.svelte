@@ -16,16 +16,29 @@
     /** The top right corner: the player chip. */
     corner?: Snippet;
     children: Snippet;
+    /** The "Dock" panel beside the rail (#473): the rail keeps the menu, the mode opens here. */
+    panel?: Snippet;
+    /** The name of the panel for assistive technology. */
+    panelLabel?: string;
   }
 
-  let { map, phase = 'idle', opponent = null, label, corner, children }: Props = $props();
+  let {
+    map,
+    phase = 'idle',
+    opponent = null,
+    label,
+    corner,
+    children,
+    panel,
+    panelLabel = '',
+  }: Props = $props();
 </script>
 
 <!-- One frame for the screens before a match (#471, variant A "Front"): the map is the postcard, a
      text rail stands on the left, the player sits in the top right corner. The shapes are the
      game's own: an own triangle, a dashed road, an enemy triangle. -->
-<main class="front">
-  <MenuBackdrop {map} {phase} {opponent} />
+<main class="front" class:docked={panel !== undefined}>
+  <MenuBackdrop {map} {phase} {opponent} docked={panel !== undefined} />
   <div class="shade"></div>
   <header class="top">
     <h1 class="mark">
@@ -54,5 +67,10 @@
   <section class="rail" aria-label={label}>
     {@render children()}
   </section>
+  {#if panel !== undefined}
+    <section class="panel" aria-label={panelLabel}>
+      {@render panel()}
+    </section>
+  {/if}
   <p class="tag">{t('menu.tagline')}</p>
 </main>

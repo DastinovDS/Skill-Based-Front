@@ -1,0 +1,665 @@
+/* ===== The "Dock" screens before a match (#473, variant D of docs/design/mockups/lobby-invite-bot.html) =====
+   The rail of the start menu stays (Play dimmed, the open mode marked); the mode opens as a panel
+   on the map, with the real maps drawn small. Used by DockFrame. The panel's place is mirrored in
+   menuScene.ts (DOCK_PANEL_LEFT, DOCK_PANEL_RIGHT): the map moves out from under it in a wide window. */
+
+.front .corner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.front .acct {
+  display: contents;
+}
+
+.front .who:disabled {
+  cursor: default;
+}
+
+.front .chip.ban {
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px dashed var(--warn);
+  border-radius: 13px;
+  font-size: 13px;
+  color: var(--warn);
+  background: rgb(13 17 23 / 55%);
+}
+
+.front .dockhead .big.dim {
+  opacity: 0.32;
+}
+
+.front .dockhead .big.dim:hover:not(:disabled) {
+  opacity: 0.7;
+}
+
+.front .row.cur {
+  background: linear-gradient(90deg, rgb(91 155 255 / 18%), transparent);
+  border-bottom-color: var(--you);
+  cursor: default;
+}
+
+.front .row:disabled.cur {
+  opacity: 1;
+}
+
+.front.docked .panel {
+  position: absolute;
+  left: 552px;
+  top: 96px;
+  z-index: 6;
+  box-sizing: border-box;
+  width: min(500px, calc(100% - 552px - 24px));
+  max-height: calc(100% - 96px - 40px);
+  overflow: auto;
+  --pad-y: 22px;
+  padding: var(--pad-y) 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.front .panel .pe {
+  margin-bottom: 2px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.front .panel .ph {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.front .panel .ph h2 {
+  margin: 0;
+  min-width: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.front .panel .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.front .panel .chip {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 13px;
+  background: rgb(13 17 23 / 55%);
+}
+
+.front .panel .ps {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.front .panel .note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.front .panel .wl {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.front .panel .label {
+  margin: 14px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* Buttons of the panel: the main action is blue, the rest are quiet. */
+.front .panel .acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  /* The main action stays in reach when the panel scrolls in a short window. */
+  position: sticky;
+  bottom: calc(var(--pad-y, 22px) * -1);
+  padding: 12px 0 var(--pad-y, 22px);
+  margin-bottom: calc(var(--pad-y, 22px) * -1);
+  background: var(--surface);
+}
+
+.front .panel .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.front .panel .btn.pri {
+  flex: 1;
+  border-color: var(--paper);
+  background: var(--you);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.front .panel .btn.pri .k {
+  border-color: rgb(13 17 23 / 35%);
+  background: rgb(13 17 23 / 18%);
+  color: var(--bg);
+}
+
+.front .panel .btn.link {
+  border-color: transparent;
+  background: none;
+  color: var(--text-dim);
+  padding: 0 8px;
+}
+
+.front .panel .btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.front .panel .btn.pri:disabled {
+  background: repeating-linear-gradient(135deg, #21262d 0 6px, #1a1f26 6px 12px);
+  border-color: var(--border);
+  color: var(--text-dim);
+  opacity: 0.8;
+}
+
+/* The lobby: a row per open match, with the map drawn small. */
+.front .panel .ents {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.front .panel .ents.scroll {
+  max-height: 290px;
+  overflow: auto;
+}
+
+.front .panel .ent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px;
+  border-bottom: 1px solid rgb(230 237 243 / 10%);
+  font-size: 18px;
+}
+
+.front .panel .ent.busy {
+  opacity: 0.55;
+}
+
+.front .panel .ent.sel .thumb {
+  outline: 2px solid var(--paper);
+  outline-offset: 1px;
+}
+
+.front .panel .ent .tx {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.front .panel .ent .nm {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.front .panel .ent small {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.front .panel .ent .go {
+  margin-left: auto;
+}
+
+.front .panel .ent .btn {
+  height: 34px;
+  padding: 0 16px;
+}
+
+.front .panel .sk {
+  display: block;
+  height: 46px;
+  margin: 6px 0;
+  border-radius: 6px;
+  background: repeating-linear-gradient(
+    135deg,
+    rgb(230 237 243 / 7%) 0 7px,
+    rgb(230 237 243 / 2%) 7px 14px
+  );
+}
+
+/* The map drawn small: lobby rows, tiles of the choice. */
+.front .thumb {
+  display: block;
+  flex: none;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #10151c;
+}
+
+.front .panel .ent .thumb {
+  width: 76px;
+  height: 46px;
+}
+
+.front .thumb svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.front .th-road {
+  stroke: #7d8793;
+  stroke-width: 9;
+}
+
+.front .th-city {
+  fill: var(--neutral-fill);
+  stroke: var(--neutral);
+}
+
+.front .th-city.you {
+  fill: var(--you);
+  stroke: var(--paper);
+}
+
+.front .th-city.enemy {
+  fill: var(--enemy);
+  stroke: var(--paper);
+}
+
+.front .th-prov {
+  fill: var(--bg);
+  stroke: var(--neutral);
+  stroke-width: 9;
+}
+
+.front .th-prov.you {
+  stroke: var(--you);
+}
+
+.front .th-prov.enemy {
+  stroke: var(--enemy);
+}
+
+.front .th-hole {
+  fill: none;
+  stroke: var(--bg);
+  stroke-width: 12;
+}
+
+.front .ghost {
+  fill: rgb(229 72 77 / 8%);
+  stroke: var(--enemy);
+  stroke-width: 2.4;
+  stroke-dasharray: 7 5;
+  stroke-linejoin: round;
+}
+
+.front .ghost-q {
+  fill: var(--enemy);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* The choice of the map: tiles with the real graph, a filled dot marks the chosen one. */
+.front .panel .tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.front .panel .tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgb(13 17 23 / 55%);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.front .panel .tile .thumb {
+  height: 46px;
+}
+
+.front .panel .tile .thumb.rnd {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--text-dim);
+  background: none;
+}
+
+.front .panel .tile .thumb.rnd svg {
+  width: 30px;
+  height: 27px;
+}
+
+.front .panel .tile .row2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px 2px;
+  font-size: 14px;
+}
+
+.front .panel .tile .row2 small {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.front .panel .tile.on {
+  padding: 5px;
+  border: 2px solid var(--paper);
+}
+
+.front .panel .tile.on .row2 b::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--paper);
+  vertical-align: -1px;
+}
+
+/* The bot level: segmented, then the style of the chosen bot. */
+.front .panel .sg {
+  display: flex;
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.front .panel .sg button {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.front .panel .sg button:last-child {
+  border-right: 0;
+}
+
+.front .panel .sg button.on {
+  background: var(--you);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.front .panel .sg button.on::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.front .panel .lvdesc {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgb(13 17 23 / 45%);
+}
+
+.front .panel .lvdesc .l1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+}
+
+.front .panel .lvdesc .cells {
+  margin-left: auto;
+}
+
+.front .panel .cells.d i {
+  width: 14px;
+}
+
+.front .panel .lvdesc .ds {
+  font-size: 14px;
+}
+
+/* The waiting room: the link, then you, a road and the seat. */
+.front .panel .lnk {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.front .panel .lnk input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font:
+    13.5px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+}
+
+.front .panel .lnk .btn {
+  flex: none;
+}
+
+.front .panel .copied {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.front .panel .vs {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 400px;
+  margin-top: 16px;
+}
+
+.front .panel .vs .sd {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 110px;
+  text-align: center;
+}
+
+.front .panel .vs .sd b {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.front .panel .vs .sd small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.front .panel .vs .sd small i {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--text-dim);
+  border-radius: 50%;
+}
+
+.front .panel .vs .sd small.y {
+  color: var(--text);
+}
+
+.front .panel .vs .sd small.y i {
+  border-color: var(--paper);
+  background: var(--paper);
+}
+
+.front .panel .vs .rdw {
+  flex: 1;
+  padding-top: 20px;
+}
+
+.front .panel .vs-road {
+  stroke-width: 2.4;
+}
+
+.front .panel .vs-road.wait {
+  stroke: #aab2bd;
+  stroke-dasharray: 7 6;
+  animation: dock-march 1.1s linear infinite;
+}
+
+.front .panel .vs-road.near {
+  stroke: var(--paper);
+  stroke-dasharray: 3 7;
+  stroke-linecap: round;
+}
+
+.front .panel .vs-road.both {
+  stroke: var(--paper);
+}
+
+@keyframes dock-march {
+  to {
+    stroke-dashoffset: -26;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .front .panel .vs-road.wait {
+    animation: none;
+  }
+}
+
+/* A short window: the panel is tighter so that the bot screen still fits at 1024 x 640. */
+@media (max-height: 719px) {
+  .front.docked .panel {
+    --pad-y: 16px;
+    top: 76px;
+    max-height: calc(100% - 76px - 28px);
+  }
+
+  .front .panel .label {
+    margin-top: 10px;
+  }
+
+  .front .panel .tile .thumb,
+  .front .panel .tile .thumb.rnd {
+    height: 32px;
+  }
+
+  .front .panel .lvdesc {
+    margin-top: 8px;
+    padding: 8px 12px;
+  }
+
+  .front .panel .ph h2 {
+    font-size: 24px;
+  }
+}
+
+/* A window narrower than the rail and the panel side by side: the panel starts closer to the rail. */
+@media (min-width: 900px) and (max-width: 1099px) {
+  .front.docked .panel {
+    left: 470px;
+    width: calc(100% - 470px - 24px);
+  }
+}
+
+/* A small window (the same breakpoint as the flowing rail of app.css): the panel collapses into
+   the rail column, under the modes, and the big Play block gives its room to the panel. */
+@media (max-width: 899px), (max-height: 560px) {
+  .front.docked .dockhead .big,
+  .front.docked .dockhead .sub {
+    display: none;
+  }
+
+  .front.docked .panel {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: auto;
+    max-height: none;
+    margin: 20px 24px 0;
+    overflow: visible;
+  }
+
+  .front.docked .panel .acts {
+    position: static;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    background: none;
+  }
+
+  .front.docked .rows {
+    margin-top: 14px;
+  }
+}

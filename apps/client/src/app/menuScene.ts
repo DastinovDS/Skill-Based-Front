@@ -70,6 +70,18 @@ export const RAIL_RIGHT = 520;
  * up to 560 px tall, the rail flows over the picture under a flat shade).
  */
 export const RAIL_BESIDE_MIN_WIDTH = 900;
+/**
+ * The panel of the "Dock" screens (lobby, invite, bot; #473) stands right of the rail: from here
+ * to `DOCK_PANEL_RIGHT` at the widest (the same numbers are in `.front.docked .panel` of dock.css).
+ */
+export const DOCK_PANEL_LEFT = 552;
+export const DOCK_PANEL_RIGHT = 1052;
+/** Under this window width the panel starts closer to the rail, at `DOCK_NARROW_LEFT` (dock.css). */
+export const DOCK_NARROW_BELOW = 1100;
+export const DOCK_NARROW_LEFT = 470;
+/** A map needs at least this much room (px) between the panel and the enemy margin to stand beside it. */
+const DOCK_MAP_ROOM = 420;
+
 /** The solid fog is at least this wide at the right edge of the window. */
 export const FOG_WIDTH = 250;
 /** The soft edge of the fog, left of the solid part. */
@@ -106,6 +118,20 @@ function spacing(map: MapFile): number {
     .filter((d) => Number.isFinite(d))
     .sort((a, b) => a - b);
   return nearest[Math.floor(nearest.length / 2)] ?? 100;
+}
+
+/**
+ * Where the own capital stands behind a docked panel. A window wide enough puts the whole map to
+ * the right of the panel, so the panel never covers the front of the postcard (#473). In a
+ * narrower one the panel covers the middle of the map: the own capital stays between the rail and
+ * the panel and the enemy capital, with its label, to the right of the panel.
+ */
+export function dockOwnLeft(width: number): number | undefined {
+  const clear = DOCK_PANEL_RIGHT + 56;
+  if (width - ENEMY_MARGIN - clear >= DOCK_MAP_ROOM) return clear;
+  if (width < RAIL_BESIDE_MIN_WIDTH) return undefined;
+  // The own capital stays visible between the rail and the panel.
+  return (width < DOCK_NARROW_BELOW ? DOCK_NARROW_LEFT : DOCK_PANEL_LEFT) - 36;
 }
 
 function owner(value: number | null): 0 | 1 | null {
@@ -153,9 +179,9 @@ function shortestPath(map: MapFile, from: number, to: number): number[] {
  * Lays the map out for a window of `width` x `height` px: the own capital right of the rail, the
  * enemy capital inside the fog at the right edge, the whole map in between at one scale. A tall
  * map in a short window is shrunk to fit its height; the fog then moves in front of the enemy
- * capital so that it is still hidden.
+ * capital so that it is still hidden. `ownLeft` moves the own capital (`dockOwnLeft`).
  */
-export function layoutScene(map: MapFile, width: number, height: number): Scene {
+export function layoutScene(map: MapFile, width: number, height: number, ownLeft?: number): Scene {
   const capital0 = map.nodes.find((n) => n.capital_of === 0) ?? map.nodes[0];
   const capital1 = map.nodes.find((n) => n.capital_of === 1) ?? map.nodes[map.nodes.length - 1];
   if (capital0 === undefined || capital1 === undefined) {
@@ -177,7 +203,8 @@ export function layoutScene(map: MapFile, width: number, height: number): Scene 
   }
   // Beside the rail the own capital never stands under it or under its key hints (#474: at 1024 px
   // 40% of the width put it at 410 px, under the hints that reach 426 px): the map shrinks instead.
-  const left = width >= RAIL_BESIDE_MIN_WIDTH ? RAIL_RIGHT : Math.max(width * 0.4, 260);
+  const left =
+    ownLeft ?? (width >= RAIL_BESIDE_MIN_WIDTH ? RAIL_RIGHT : Math.max(width * 0.4, 260));
   const spanX = Math.max(1, capital1.x - capital0.x);
   const wantX = Math.max(80, width - ENEMY_MARGIN - left);
   const fitY = Math.max(80, height - TOP_ROOM - BOTTOM_ROOM) / Math.max(1, map.meta.height);

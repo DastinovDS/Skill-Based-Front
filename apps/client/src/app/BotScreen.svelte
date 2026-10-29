@@ -1,46 +1,74 @@
 <script lang="ts">
-  import { Api, BOT_LEVELS, type BotLevel } from '../api/http.ts';
-  import { t } from '../i18n/index.ts';
-  import MapChoice from './MapChoice.svelte';
+  import type { BotLevel } from '../api/http.ts';
+  import { t, tf, type MessageKey } from '../i18n/index.ts';
+  import DockFrame from './DockFrame.svelte';
+  import type { DockContext } from './dock.ts';
+  import LevelPicker from './LevelPicker.svelte';
+  import MapTiles from './MapTiles.svelte';
+  import VersusStrip from './VersusStrip.svelte';
 
   interface Props {
-    api: Api;
-    onstart: (level: BotLevel, mapId: string | null) => Promise<void>;
+    dock: DockContext;
+    /** Starts the match; answers why it failed (the screen stays, the choices are kept), or null. */
+    onstart: (level: BotLevel, mapId: string | null) => Promise<MessageKey | null>;
     onback: () => void;
   }
 
-  let { api, onstart, onback }: Props = $props();
+  let { dock, onstart, onback }: Props = $props();
+
+  const KEY_BACK = 'Esc';
 
   let level = $state<BotLevel>('normal');
   let mapId = $state<string | null>(null);
   let busy = $state(false);
+  let failure = $state.raw<MessageKey | null>(null);
 
-  async function submit(event: SubmitEvent): Promise<void> {
-    event.preventDefault();
+  async function submit(): Promise<void> {
+    if (busy) return;
     busy = true;
+    failure = null;
     try {
-      await onstart(level, mapId);
+      failure = await onstart(level, mapId);
     } finally {
       busy = false;
     }
   }
+
+  const seat = $derived(tf('bot.seat', { level: t(`bot.level.${level}`) }));
 </script>
 
-<main class="screen">
-  <form class="card" onsubmit={submit}>
-    <h1>{t('bot.title')}</h1>
-    <label>
-      {t('bot.level')}
-      <select bind:value={level}>
-        {#each BOT_LEVELS as option (option)}
-          <option value={option}>{t(`bot.level.${option}`)}</option>
-        {/each}
-      </select>
-    </label>
-    <MapChoice {api} bind:value={mapId} />
-    <div class="actions">
-      <button type="submit" class="primary" disabled={busy}>{t('bot.start')}</button>
-      <button type="button" onclick={onback}>{t('common.back')}</button>
-    </div>
-  </form>
-</main>
+<DockFrame
+  {dock}
+  mode="bot"
+  locked={busy}
+  phase={busy ? 'search' : 'idle'}
+  eyebrow={t('menu.bot')}
+  head={busy ? t('bot.starting') : t('bot.pick')}
+  pause="each"
+  alert={failure === null ? null : t(failure)}
+  note={busy ? t('invite.starting') : null}
+  onback={busy ? undefined : onback}
+  onenter={() => void submit()}
+>
+  {#if busy}
+    <VersusStrip opponent={seat} youReady={true} opponentReady={true} />
+  {:else}
+    <LevelPicker
+      value={level}
+      onchange={(next: BotLevel) => {
+        level = next;
+      }}
+    />
+    <MapTiles maps={dock.maps} bind:value={mapId} />
+  {/if}
+  {#snippet actions()}
+    {#if !busy}
+      <button type="button" class="btn pri" onclick={submit}>
+        {t('bot.start')}<kbd class="k" aria-hidden="true">↵</kbd>
+      </button>
+      <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={onback}>
+        {t('common.back')}<kbd class="k" aria-hidden="true">{KEY_BACK}</kbd>
+      </button>
+    {/if}
+  {/snippet}
+</DockFrame>

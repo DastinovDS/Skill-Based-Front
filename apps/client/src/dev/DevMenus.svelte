@@ -1,5 +1,6 @@
 <script lang="ts">
   import MenuScreen from '../app/MenuScreen.svelte';
+  import DevDock from './DevDock.svelte';
   import ResultScreen from '../app/ResultScreen.svelte';
   import QueueView from '../app/QueueView.svelte';
   import WelcomeScreen from '../app/WelcomeScreen.svelte';
@@ -10,6 +11,7 @@
     CALIBRATION,
     QUEUE_SCENES,
     RESULT_SCENES,
+    isDockScene,
     isMenuScene,
   } from './menuScenes.ts';
 
@@ -39,6 +41,8 @@
     onlogin={() => Promise.resolve(null)}
     onregister={() => Promise.resolve(null)}
   />
+{:else if isDockScene(id)}
+  <DevDock {id} {map} />
 {:else if result !== undefined}
   <ResultScreen me={0} end={result} onreplay={nothing} onmenu={nothing} />
 {:else if id === 'exit-rated'}

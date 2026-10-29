@@ -3,6 +3,7 @@
   import {
     BAR_BOTTOM,
     FOG_TOP_FADE,
+    dockOwnLeft,
     layoutScene,
     starPoints,
     type BackdropPhase,
@@ -16,9 +17,11 @@
     phase?: BackdropPhase;
     /** The opponent's nick, written under the enemy capital once a pair is found. */
     opponent?: string | null;
+    /** A panel stands right of the rail (#473): the map moves out from under it where the window allows. */
+    docked?: boolean;
   }
 
-  let { map, phase = 'idle', opponent = null }: Props = $props();
+  let { map, phase = 'idle', opponent = null, docked = false }: Props = $props();
 
   let host: HTMLDivElement | undefined = $state();
   let size = $state({ width: 1280, height: 720 });
@@ -39,7 +42,9 @@
   });
 
   const scene = $derived<Scene | null>(
-    map === null ? null : layoutScene(map, size.width, size.height),
+    map === null
+      ? null
+      : layoutScene(map, size.width, size.height, docked ? dockOwnLeft(size.width) : undefined),
   );
 
   const line = (from: Point, to: Point): { x1: number; y1: number; x2: number; y2: number } => ({

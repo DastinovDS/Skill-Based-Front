@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { MENU_SCENES, SCENES } from './scenes.ts';
+import { DOCK_CLICKS, MENU_SCENES, SCENES } from './scenes.ts';
 
 // `mise run shots [label]`: a PNG of every dev scene for the agent (or the owner) to look at, no
 // comparison with a reference. Per scene: `<scene>.png` is the whole screen with the HUD,
@@ -145,6 +145,10 @@ for (const id of MENU_SCENES) {
     await expect(
       page.locator('.front svg.scene, .card, [role="alertdialog"]').first(),
     ).toBeVisible();
+    const press = DOCK_CLICKS[id];
+    if (press !== undefined) {
+      await page.locator('.panel').getByRole('button', { name: press }).first().click();
+    }
     await page.mouse.move(1000, 700);
     await page.screenshot({ path: join(OUT, `screen-${id}.png`) });
     await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
@@ -164,8 +168,15 @@ test('shot of the account menu', async ({ page }) => {
 for (const size of [
   { width: 1024, height: 640 },
   { width: 800, height: 500 },
+  { width: 1920, height: 1080 },
 ]) {
-  for (const id of ['menu-calibration', 'queue-found'] as const) {
+  for (const id of [
+    'menu-calibration',
+    'queue-found',
+    'lobby-list',
+    'bot-choose',
+    'invite-joined',
+  ] as const) {
     test(`shot of the screen ${id} at ${String(size.width)}x${String(size.height)}`, async ({
       page,
     }) => {

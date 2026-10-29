@@ -5,7 +5,8 @@
   import type { MatchEndMsg, PlayerId } from '../protocol.gen.ts';
   import ReplayScreen from '../replay/ReplayScreen.svelte';
   import CrashGuard from './CrashGuard.svelte';
-  import { AppState } from './appState.svelte.ts';
+  import { AppState, type Guest } from './appState.svelte.ts';
+  import type { DockContext } from './dock.ts';
   import BotScreen from './BotScreen.svelte';
   import CreateScreen from './CreateScreen.svelte';
   import LobbyScreen from './LobbyScreen.svelte';
@@ -38,6 +39,36 @@
     }
   });
   const guest = $derived(app.guest);
+
+  /** What the lobby, invite and bot screens (the Dock, #473) need besides their own data. */
+  function dockOf(who: Guest): DockContext {
+    return {
+      nick: who.nick,
+      hasPassword: who.hasPassword,
+      calibration: app.calibration,
+      banUntil: app.queueBanUntil,
+      map: app.backdrop,
+      maps: app.maps,
+      onbot: () => {
+        app.go({ name: 'bot' });
+      },
+      oncreate: () => {
+        app.go({ name: 'create', public: false });
+      },
+      onlobby: () => {
+        app.go({ name: 'lobby' });
+      },
+      onmenu: () => {
+        app.menu();
+      },
+      onpassword: () => {
+        app.go({ name: 'password' });
+      },
+      onlogout: () => {
+        app.logout();
+      },
+    };
+  }
 </script>
 
 {#if screen.name === 'boot'}
@@ -85,7 +116,7 @@
   />
 {:else if screen.name === 'create'}
   <CreateScreen
-    api={app.api}
+    dock={dockOf(guest)}
     isPublic={screen.public}
     oncreate={(mapId: string | null) => app.createInvite(mapId, screen.public)}
     onback={() => {
@@ -97,6 +128,7 @@
   <LobbyScreen
     api={app.api}
     token={guest.token}
+    dock={dockOf(guest)}
     oncreate={() => {
       app.go({ name: 'create', public: true });
     }}
@@ -125,7 +157,7 @@
   />
 {:else if screen.name === 'bot'}
   <BotScreen
-    api={app.api}
+    dock={dockOf(guest)}
     onstart={(level: BotLevel, mapId: string | null) => app.playBot(level, mapId)}
     onback={() => {
       app.menu();
@@ -146,6 +178,7 @@
       token={guest.token}
       nick={guest.nick}
       code={screen.code}
+      dock={dockOf(guest)}
       onstart={(matchId: string, mapId: string) => {
         app.go({ name: 'match', matchId, mapId });
       }}

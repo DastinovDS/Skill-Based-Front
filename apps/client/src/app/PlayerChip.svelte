@@ -9,10 +9,12 @@
     /** Progress of the first ranked matches (DEC-34); null once it is over or for a guest. */
     calibration: Calibration | null;
     open: boolean;
+    /** The chip only shows the player (the account menu is off, e.g. in a waiting room). */
+    disabled?: boolean;
     ontoggle: () => void;
   }
 
-  let { nick, hasPassword, calibration, open, ontoggle }: Props = $props();
+  let { nick, hasPassword, calibration, open, disabled = false, ontoggle }: Props = $props();
 </script>
 
 <!-- The rating and the calibration live here and nowhere else on the menu (#471). Calibration is
@@ -23,6 +25,7 @@
   aria-haspopup="menu"
   aria-expanded={open}
   aria-controls="account-menu"
+  {disabled}
   onclick={ontoggle}
 >
   {#if !hasPassword}
