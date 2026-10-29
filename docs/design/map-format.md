@@ -68,8 +68,9 @@ The game rules that rely on map fields are described in [`mechanics.md`](mechani
 > Decision **[accepted]** 2026-10-29: DEC-36 (#537), mechanics.md, section 9: water cells, rivers as area borders,
 > areas of nodes touch only where a road links them; water look W4 Painted, no dark line along water. Step 1 (#537):
 > the authored file, the baker and the vector file, the validator check `geography`. Step 2 (the client territory
-> layer) and step 3 (the pool maps and the menu map with water) are follow-up issues; until step 3 no served map has a
-> geography, so the section "Map background" (land only) describes every shipped background. Mockup:
+> layer, #544) and step 3 (the pool maps and the menu map with water, #545) follow. Since #545 the pool maps `ridge`,
+> `crossroads`, `highway` and the menu map `valley` have an authored geography (`maps/README.md` lists their water,
+> rivers and bridges); the fixtures and the test maps keep the land-only background of the section "Map background". Mockup:
 > [`mockups/map-geography.html`](mockups/map-geography.html); prototype: `mockups/src/map_geography.py`.
 
 **The map file does not change.** Water is not a field of `maps/<id>.json`: the loader (`gow_sim.maps`), `MapDef`,
