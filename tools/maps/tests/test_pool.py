@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from gow_maps import geo
 from gow_maps.cli import main
 from gow_maps.mirror import mirror_half
 from gow_maps.preview import preview_path, render_preview
@@ -20,6 +21,7 @@ from gow_sim.ruleset import load_ruleset
 
 MAPS = Path(__file__).parents[3] / "maps"
 FIXTURES = MAPS / "fixtures"
+MENU = MAPS / "menu"  # the menu map (#474), outside the pool
 MVP = ["artery", "web", "pass"]
 DEC27 = ["ridge", "crossroads", "highway"]
 POOL = sorted(MVP + DEC27)
@@ -41,12 +43,39 @@ def test_pool_is_exactly_the_known_maps() -> None:
     # The server pool is only the DEC-27 maps; the MVP maps are fixtures (#372).
     assert sorted(p.stem for p in MAPS.glob("*.json")) == sorted(DEC27)
     assert sorted(p.stem for p in FIXTURES.glob("*.json")) == sorted(MVP)
-    assert sorted(p.name for p in (MAPS / "src").glob("*.json")) == [
-        f"{name}.half.json" for name in sorted(DEC27)
-    ]
+    # Each pool map has its half and its authored geography (DEC-36, #545); the fixtures have
+    # only their halves: they stay land only (DEC-36, item 10).
+    assert sorted(p.name for p in (MAPS / "src").glob("*.json")) == sorted(
+        f"{name}.{kind}.json" for name in DEC27 for kind in ("geo", "half")
+    )
     assert sorted(p.name for p in (FIXTURES / "src").glob("*.json")) == [
         f"{name}.half.json" for name in sorted(MVP)
     ]
+    # The generated vector files (DEC-36, item 5) live in maps/geo/, outside the pool glob.
+    assert sorted(p.name for p in (MAPS / "geo").glob("*.json")) == [
+        f"{name}.json" for name in sorted(DEC27)
+    ]
+    assert not (FIXTURES / "geo").exists()
+
+
+@pytest.mark.parametrize("name", [*DEC27, "valley"])
+def test_pool_and_menu_maps_have_a_geography_with_water(name: str) -> None:
+    # DEC-36, #545: the three pool maps and the menu map have water cells and long rivers; the
+    # check `geography` itself runs in test_map_passes_the_validator (and the menu test below).
+    path = MENU / f"{name}.json" if name == "valley" else MAPS / f"{name}.json"
+    spec = geo.find_spec(path)
+    assert spec is not None and spec.map == name
+    assert any(w.kind == "sea" for w in spec.water)
+    assert spec.rivers
+    vector = json.loads(geo.vector_path(path).read_text(encoding="utf-8"))
+    assert (vector["map"], vector["version"]) == (name, load_map(path).meta.version)
+    assert vector["bridges"]  # the long rivers pass roads at their border points
+
+
+@pytest.mark.parametrize("name", MVP)
+def test_fixtures_stay_land_only(name: str) -> None:
+    # DEC-36, item 10 (owner default): artery, web and pass keep the land-only background.
+    assert geo.find_spec(_file(name)) is None
 
 
 @pytest.mark.parametrize("name", POOL)
@@ -124,13 +153,15 @@ def test_cli_preview(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None
 
 # The menu map (#474, MM1 "Valley"): drawn behind the screens before a match, outside the pool ---
 
-MENU = MAPS / "menu"
-
 
 def test_menu_holds_only_the_valley_map() -> None:
     # maps/menu/ is not read by the server (the pool is maps/*.json, not recursive).
     assert sorted(p.name for p in MENU.glob("*.json")) == ["valley.json"]
-    assert sorted(p.name for p in (MENU / "src").glob("*.json")) == ["valley.half.json"]
+    assert sorted(p.name for p in (MENU / "src").glob("*.json")) == [
+        "valley.geo.json",
+        "valley.half.json",
+    ]
+    assert sorted(p.name for p in (MENU / "geo").glob("*.json")) == ["valley.json"]
     assert "valley" not in DEC27 + MVP
 
 

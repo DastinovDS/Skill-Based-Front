@@ -23,10 +23,18 @@ name (`PINNED_SEEDS` in `tools/maps/src/gow_maps/bake.py`).
 
 Next to a map lie the preview `<id>.preview.png` (for people) and the background `<id>.bg.webp` (MAP-05, #70, #344; the server
 serves it, the client draws it). After any map edit: `uv run gow-maps preview maps/*.json` and
-`uv run gow-maps bake maps/*.json` (or `mise run maps:bake`). The background is all land, no water (DEC-27, #269; a map
-with an authored geography `src/<id>.geo.json` gets water cells and rivers and the vector file `geo/<id>.json`, DEC-36,
-#537; none of the pool maps has one yet, #545), with the
-texture T2 "Thinning" (`ui-style.md`, 26.3), WebP no larger than 0.5 MB, baking one map takes up to 10 s.
+`uv run gow-maps bake maps/*.json` (or `mise run maps:bake`). The background has the texture T2 "Thinning"
+(`ui-style.md`, 26.3), WebP no larger than 0.5 MB, baking one map takes up to 10 s. A map with an authored geography
+`src/<id>.geo.json` (DEC-36, #537) gets water cells, streams and long rivers with bridges in the look W4 Painted, and the
+bake writes the vector file `geo/<id>.json` next to the background; a map without one is all land (DEC-27, #269).
+The three pool maps and the menu map have a geography (#545), the fixtures stay land only:
+
+| Map | Water (seas and lakes, plus rivers and streams) | Long rivers | Bridges | Nodes moved |
+|---|---|---|---|---|
+| `ridge` | 18.0 % + 2.2 %: seas in the north-east and south-west corners, two bays, four lakes | 4 | 10 | none |
+| `crossroads` | 17.6 % + 2.0 %: seas in the north-west and south-east corners, two bays, four lakes | 4 | 13 | none |
+| `highway` | 16.3 % + 2.8 %: seas in the four corners and a northern bay, four lakes | 4 | 10 | none |
+| `menu/valley` | 10.6 % + 3.6 %: seas in the four corners and a southern bay (the map is too tight for a lake 60 units off every node) | 2 | 5 | none |
 
 | File | Map id (`meta.name`) | World | Nodes (provinces) | Roads | Own at start | Neutral, of them contested | Path capital → capital |
 |---|---|---|---|---|---|---|---|
