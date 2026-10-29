@@ -3097,6 +3097,23 @@ A player's rating is a Glicko-2 triple `(r, RD, σ)` (`gow_server.rating`, after
 
 The update (RAT-02, #75): right after a rated match, in the same DB transaction as the result record (outside a tick). A win 1, a draw 0.5 (including `double_defeat`), a loss 0; a technical defeat (`disconnect`, `no_show`) and a surrender are a defeat. A match is counted once: the flag `matches.rating_applied` is taken by a single atomic `UPDATE`, repeated processing does not change the rating. An aborted match (`aborted`) is not rated. A match becomes rated only in `lifecycle.start(rated=True)` between two accounts: against a bot the flag is ignored (extended by DEC-34: only between two password accounts that finished calibration, and with exceptions for calibration, an early resign and the per-opponent limit). The displayed rating before and after is written to `match_players.rating_before/after`; the player gets it in `match_end.rating` (`before`, `after`, integers) and sees it on the result screen. Both sides are computed from the ratings at the start of the match (a player never has two active matches), the server recomputes them in the transaction.
 
+### Leaderboard and player profile (LB-01, #78)
+
+Server read endpoints, no protocol change (`GET /api/leaderboard`, `GET /api/players/{id}`; shapes in the README). Both are
+public and rate limited per client IP (`GOW_PUBLIC_READ_RATE_LIMIT`).
+
+- **Who is on the leaderboard:** the top 100 by the displayed rating `r - 2·RD` (rounded), highest first, equal ratings by
+  player id. Only a password account that is not blocked and has at least `GOW_CALIBRATION_MATCHES` (5) rating-changing
+  matches (`ratings.rated_matches`): a guest and an account in calibration are not listed (DEC-34, item 2).
+- **Profile:** nick, rating and rank (`null` for a guest and while calibrating, then `calibration` says "k/5"), the record of
+  the matches that changed the rating, the record of all finished matches, and the last 20 finished matches of any kind
+  with the opponent, the kind (rated, calibration, unrated queue match with its reason, invite or lobby, bot) and a link to
+  the replay. A blocked account has no profile (404).
+- **Rating in the history** follows `match_end`: the change of a calibration match is hidden, it is shown from the match that
+  completes the calibration on.
+- **Replay link:** `ready`, `preparing`, `expired` (the retention of SRV-08, #515), `unavailable` (no frames were made) or
+  `private`: the replay of an unrated match opens only for its two players, as in `GET /api/replays/{id}`.
+
 ### Matchmaking queue (MM-01, #77)
 
 A rated match (DEC-06) is found through the queue (`gow_server.matchqueue`, `POST/GET/DELETE /api/queue`). These are meta-game rules: the numbers are server settings (`GOW_QUEUE_*`, README), not the ruleset.
@@ -3170,8 +3187,8 @@ DEC-06 (what is rated) and RAT-02 (the update). Implemented in #414 (`PROTOCOL_V
   (`casual`, `guest`, `opponent_guest`, `opponent_calibrating`, `opponent_limit`, `opponent_early_resign`; the last
   only in `match_end`) and `calibration` (`played`, `total`, for a password account that was calibrating when the match
   began). `match_end.rating` is `null` while the rating is hidden and present from the match that completes the
-  calibration on. `GET /api/me` has `calibration` (`null` for a guest and once calibration is over). There is no
-  leaderboard endpoint yet: when one is added it lists only accounts with `calibration` of `null` and a password.
+  calibration on. `GET /api/me` has `calibration` (`null` for a guest and once calibration is over). The leaderboard
+  (LB-01, #78, below) lists only password accounts that are not blocked and have finished calibration.
 - *Settings*: `GOW_CALIBRATION_MATCHES` (5), `GOW_EARLY_RESIGN_S` (180), `GOW_RESIGN_WINDOW_S` (86400),
   `GOW_RESIGN_BAN_SECOND_S` (300), `GOW_RESIGN_BAN_THIRD_S` (1800), `GOW_RESIGN_BAN_LATER_S` (7200),
   `GOW_OPPONENT_LIMIT` (3), `GOW_OPPONENT_LIMIT_WINDOW_S` (86400); passed through `compose.yaml` and listed in the README.

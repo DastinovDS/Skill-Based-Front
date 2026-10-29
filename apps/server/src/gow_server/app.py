@@ -13,7 +13,18 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import sessionmaker
 
-from gow_server import alerts, botmatch, identity, internal, invites, maps, matchqueue, replays, ws
+from gow_server import (
+    alerts,
+    botmatch,
+    identity,
+    internal,
+    invites,
+    leaderboard,
+    maps,
+    matchqueue,
+    replays,
+    ws,
+)
 from gow_server.abuse import Limits
 from gow_server.bodylimit import BodySizeLimitMiddleware
 from gow_server.clock import Clock, MonotonicClock
@@ -196,6 +207,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(maps.router)
     app.include_router(identity.router)
     app.include_router(replays.router)
+    app.include_router(leaderboard.router)
     app.include_router(internal.router)
     app.include_router(invites.router)
     app.include_router(invites.lobby_router)

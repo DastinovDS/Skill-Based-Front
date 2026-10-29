@@ -226,6 +226,53 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/leaderboard': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Leaderboard
+     * @description The top 100 by the displayed rating ``r - 2 * RD``.
+     *
+     *     Only password accounts that are not blocked and finished calibration (DEC-34): at least
+     *     ``min_rated_matches`` rating-changing matches. Public; rate limited per client IP.
+     */
+    get: operations['get_leaderboard_api_leaderboard_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/players/{player_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Player
+     * @description Rating, rank, records and the last 20 matches of a player (a guest or an account).
+     *
+     *     Public; rate limited per client IP. An optional ``Authorization: Bearer <token>`` lets the
+     *     replay links of the caller's own unrated matches open (``replay.state`` ``ready``); for
+     *     anyone else they are ``private``. 404 for an unknown or blocked player.
+     */
+    get: operations['get_player_api_players__player_id__get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/matches': {
     parameters: {
       query?: never;
@@ -501,6 +548,29 @@ export interface components {
       /** Match Id */
       match_id: string | null;
     };
+    /** Leaderboard */
+    Leaderboard: {
+      /** Entries */
+      entries: components['schemas']['LeaderboardEntry'][];
+      /** Total */
+      total: number;
+      /** Min Rated Matches */
+      min_rated_matches: number;
+    };
+    /** LeaderboardEntry */
+    LeaderboardEntry: {
+      /** Rank */
+      rank: number;
+      /** Player Id */
+      player_id: number;
+      /** Nick */
+      nick: string;
+      /** Rating */
+      rating: number;
+      /** Rated Matches */
+      rated_matches: number;
+      record: components['schemas']['Record'];
+    };
     /** LobbyEntry */
     LobbyEntry: {
       /** Code */
@@ -537,6 +607,34 @@ export interface components {
       /** Background Url */
       background_url: string | null;
     };
+    /** MatchEntry */
+    MatchEntry: {
+      /** Match Id */
+      match_id: number;
+      /** Map Id */
+      map_id: string;
+      /** Ended At */
+      ended_at: string | null;
+      /** Ticks */
+      ticks: number | null;
+      /**
+       * Result
+       * @enum {string}
+       */
+      result: 'win' | 'loss' | 'draw';
+      /** End Reason */
+      end_reason: string | null;
+      kind: components['schemas']['MatchKind'];
+      unrated_reason: components['schemas']['UnratedReason'] | null;
+      opponent: components['schemas']['Opponent'];
+      rating_change: components['schemas']['RatingChange'] | null;
+      replay: components['schemas']['ReplayLink'];
+    };
+    /**
+     * MatchKind
+     * @enum {string}
+     */
+    MatchKind: 'rated' | 'calibration' | 'unrated' | 'casual' | 'bot';
     /** Me */
     Me: {
       /** Player Id */
@@ -552,6 +650,15 @@ export interface components {
       /** Nick */
       nick: string;
     };
+    /** Opponent */
+    Opponent: {
+      /** Player Id */
+      player_id: number | null;
+      /** Nick */
+      nick: string;
+      /** Bot */
+      bot: boolean;
+    };
     /**
      * PasswordSet
      * @description A new password; ``old_password`` is required when the account already has one.
@@ -561,6 +668,26 @@ export interface components {
       password: string;
       /** Old Password */
       old_password?: string | null;
+    };
+    /** PlayerProfile */
+    PlayerProfile: {
+      /** Player Id */
+      player_id: number;
+      /** Nick */
+      nick: string;
+      /** Has Password */
+      has_password: boolean;
+      /** Rating */
+      rating: number | null;
+      /** Rank */
+      rank: number | null;
+      calibration: components['schemas']['Calibration'] | null;
+      /** Rated Matches */
+      rated_matches: number;
+      rated_record: components['schemas']['Record'];
+      record: components['schemas']['Record'];
+      /** Matches */
+      matches: components['schemas']['MatchEntry'][];
     };
     /**
      * QueueBan
@@ -620,6 +747,27 @@ export interface components {
       map_id?: string | null;
     };
     /**
+     * RatingChange
+     * @description The rating of the receiving player before and after a rated match (RAT-02, #75).
+     *
+     *     Both numbers are the displayed rating (``r - 2 * RD``, RAT-01), rounded to integers.
+     */
+    RatingChange: {
+      /** Before */
+      before: number;
+      /** After */
+      after: number;
+    };
+    /** Record */
+    Record: {
+      /** Wins */
+      wins: number;
+      /** Losses */
+      losses: number;
+      /** Draws */
+      draws: number;
+    };
+    /**
      * ReplayGone
      * @description Body of ``410``. ``reason`` ``expired``: the retention removed the files (SRV-08);
      *     ``unavailable``: the match is over and no frames were or will be made.
@@ -633,6 +781,17 @@ export interface components {
        */
       reason: 'expired' | 'unavailable';
     };
+    /** ReplayLink */
+    ReplayLink: {
+      state: components['schemas']['ReplayLinkState'];
+      /** Url */
+      url: string | null;
+    };
+    /**
+     * ReplayLinkState
+     * @enum {string}
+     */
+    ReplayLinkState: 'ready' | 'preparing' | 'expired' | 'unavailable' | 'private';
     /**
      * ReplayPreparing
      * @description Body of ``202``: the replay will be there shortly (or when the match is over).
@@ -645,6 +804,18 @@ export interface components {
        */
       status: 'preparing';
     };
+    /**
+     * UnratedReason
+     * @description Why a match did not change your rating (DEC-34, #414).
+     * @enum {string}
+     */
+    UnratedReason:
+      | 'casual'
+      | 'guest'
+      | 'opponent_guest'
+      | 'opponent_calibrating'
+      | 'opponent_limit'
+      | 'opponent_early_resign';
     /** ValidationError */
     ValidationError: {
       /** Location */
@@ -983,6 +1154,64 @@ export interface operations {
         content: {
           'application/json': components['schemas']['ReplayGone'];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_leaderboard_api_leaderboard_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Leaderboard'];
+        };
+      };
+    };
+  };
+  get_player_api_players__player_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        player_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlayerProfile'];
+        };
+      };
+      /** @description No such player, or the account is blocked. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Validation Error */
       422: {

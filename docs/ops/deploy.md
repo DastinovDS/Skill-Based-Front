@@ -230,6 +230,7 @@ All limits live in the memory of one process (a server restart zeroes the counte
 |---|---|---|---|
 | Creating guests | client IP | 10 per hour | `POST /api/guest` (ID-01) |
 | Creating matches (invites and bot matches together) | player | 10 per 10 minutes | `POST /api/matches`, `POST /api/bot-matches` |
+| Public reads without a token | client IP | 60 per minute (`GOW_PUBLIC_READ_RATE_LIMIT`) | `GET /api/leaderboard`, `GET /api/players/{id}` (LB-01, #78) |
 | Changing the nick | player | 3 per day | `PUT /api/me/nick` |
 | Login by nick and password | client IP | 20 per 10 minutes | `POST /api/login` (#374) |
 | Login by nick and password | `nick_key` | 10 per 10 minutes | `POST /api/login`: guessing the password of one account from different IPs |

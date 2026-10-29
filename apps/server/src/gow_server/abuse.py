@@ -16,7 +16,7 @@ from gow_server.settings import Settings
 
 class Limits:
     """The limiters of the actions a player can repeat: match creation, queue entry, nick change,
-    password change, and of logins (by IP, by nick and IP, by nick)."""
+    password change, and of logins (by IP, by nick and IP, by nick); public reads by client IP."""
 
     def __init__(self, settings: Settings, clock: Clock) -> None:
         self.match_create = SlidingWindowLimiter(
@@ -24,6 +24,10 @@ class Limits:
         )
         self.queue = SlidingWindowLimiter(
             settings.queue_rate_limit, settings.queue_rate_window_s, clock
+        )
+        # Public reads have no player: keyed by client IP like the guest limit (LB-01, #78).
+        self.public_read = SlidingWindowLimiter(
+            settings.public_read_rate_limit, settings.public_read_rate_window_s, clock
         )
         self.nick_change = SlidingWindowLimiter(
             settings.nick_change_rate_limit, settings.nick_change_rate_window_s, clock
