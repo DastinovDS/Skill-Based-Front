@@ -45,7 +45,6 @@ echo "backup: $file ($(du -h "$file" | cut -f1))"
 # 2. The replays. The stamp is taken before the copy and set back two minutes (clock skew, a log
 # that was still being written): the next run copies everything modified after it.
 mkdir -p "$mirror"
-chmod 700 "$mirror"
 since=0
 if [ -f "$mirror/.last-sync" ]; then since="$(cat "$mirror/.last-sync")"; fi
 stamp=$(($(date +%s) - 120))
@@ -59,6 +58,9 @@ while IFS= read -r name; do
 	removed=$((removed + 1))
 done < <(cd "$mirror" && ls -1 | LC_ALL=C sort | LC_ALL=C comm -13 "$names" -)
 echo "$stamp" >"$mirror/.last-sync"
+# World-readable: restore.sh mounts the mirror into a container that runs as another user. $dir is
+# 700, so nobody else on the host reaches it; the files hold no nicks or tokens.
+chmod -R a+rX "$mirror"
 echo "replays: mirror $mirror ($(find "$mirror" -type f ! -name .last-sync | wc -l | tr -d ' ') files, $removed removed)"
 
 # Retention: keep the newest $keep archives of this label.
