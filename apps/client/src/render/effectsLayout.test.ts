@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { expectDeclared, filledData, tracked } from '../net/eventFields.fixture.ts';
 import type { EventMsg, MapFile } from '../protocol.gen.ts';
 import {
   bounceArrow,
@@ -90,5 +91,22 @@ describe('event readers', () => {
     });
     expect(bounceInfo(event('fight_group', { group: '5', bounce: false }))).toBeNull();
     expect(bounceInfo(event('fight', { group: '5', bounce: true }))).toBeNull();
+  });
+});
+
+describe('the fields the effects read (ARC-02)', () => {
+  it('captureInfo reads only fields of node_captured the server sends', () => {
+    const { data, reads } = tracked(
+      'node_captured',
+      filledData('node_captured', { node: 0, player: 1 }),
+    );
+    expect(captureInfo(event('node_captured', data), map)).not.toBeNull();
+    expectDeclared('node_captured', reads);
+  });
+
+  it('bounceInfo reads only fields of fight_group the server sends', () => {
+    const { data, reads } = tracked('fight_group', filledData('fight_group', { bounce: true }));
+    expect(bounceInfo(event('fight_group', data))).not.toBeNull();
+    expectDeclared('fight_group', reads);
   });
 });

@@ -71,10 +71,11 @@ export function isLogged(kind: string): boolean {
  */
 export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): string {
   const { data } = event;
-  const side = data.player === me ? 'mine' : 'enemy';
+  // Read on demand: only the kinds that name a `player` ask who it is (ARC-02).
+  const mine = (): boolean => data.player === me;
   switch (event.kind) {
     case 'node_captured':
-      return tf(side === 'mine' ? 'event.node_captured.mine' : 'event.node_captured.enemy', {
+      return tf(mine() ? 'event.node_captured.mine' : 'event.node_captured.enemy', {
         node: names(num(data.node)),
       });
     case 'fight_ended': {
@@ -88,11 +89,11 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
         : tf('event.fight.edge', { ...values, edge: num(data.edge) });
     }
     case 'recruited':
-      return tf(side === 'mine' ? 'event.recruited.mine' : 'event.recruited.enemy', {
+      return tf(mine() ? 'event.recruited.mine' : 'event.recruited.enemy', {
         node: names(num(data.node)),
       });
     case 'stance_changed':
-      return tf(side === 'mine' ? 'event.stance_changed.mine' : 'event.stance_changed.enemy', {
+      return tf(mine() ? 'event.stance_changed.mine' : 'event.stance_changed.enemy', {
         stance: isStance(data.stance) ? t(`stance.${data.stance}`) : '?',
       });
     case 'warehouse_lost':
@@ -103,7 +104,7 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
         units: num(data.units),
       });
     case 'forfeit':
-      return t(side === 'mine' ? 'event.forfeit.mine' : 'event.forfeit.enemy');
+      return t(mine() ? 'event.forfeit.mine' : 'event.forfeit.enemy');
     case 'match_ended':
       return t('event.match_ended');
     case 'attrition':

@@ -40,8 +40,10 @@ If you changed the schema: raise `PROTOCOL_VERSION` (`gow_protocol.messages`), f
   the intents of both sides (scheduled orders, "Defense", construction), a city in the fog with memory.
 - `server/ack_move.json`, `ack_ok.json`, `ack_reject.json`: an accepted `move` with a path, an accepted command
   without a path, the rejection `NOT_ENOUGH_CP`.
-- `server/event.json`: an example event. The set of events (`kind` and the `data` fields) is set by the simulation
-  systems (SIM-06...SIM-13), the filtering by visibility is done by PRO-03 (#46).
+- `server/event.json`: a `node_captured` event as `event_for_player` sends it, taken from a real match (the bots `rusher` against
+  `turtle` on `artery` with `mvp-0`, seed 7, tick 40, node 4 taken by player 0; #457). The set of events (`kind` and the `data` fields)
+  is set by the simulation systems (SIM-06...SIM-13), the filtering by kind and field is done by `gow_protocol.convert`
+  (`EVENT_FIELDS`); `test_event_fields.py` checks that the fixture only has declared fields.
 - `server/match_end.json` (a capital capture), `match_end_draw.json` (a draw on the timer), `match_end_double_defeat.json` (both lost in the same tick, a draw; PRO-03, #46), `match_end_rated.json` (a ranked match: `rating.before` and `rating.after`, the rating shown to the recipient; RAT-02, #75), `match_end_calibration.json` (a calibration match: the rating is hidden, `calibration` is the progress; DEC-34, #414), `match_end_unrated.json` (no gain for the winner after an early resign of the opponent, `unrated_reason`; DEC-34). Every `match_end` and the `welcome` also carry `rated`, `unrated_reason` and `calibration` (DEC-34).
 
 - `server/paused.json`, `paused_end.json`: the pause of a private match started (player 1, 60 s) and ended (DEC-05, #49; SRV-04, #50).

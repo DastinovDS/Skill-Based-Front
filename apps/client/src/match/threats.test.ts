@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
+import { expectDeclared, filledData, tracked } from '../net/eventFields.fixture.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import { THREAT_MS, ThreatLog, incomingNodes, threatOfEvent } from './threats.ts';
 
@@ -75,5 +76,16 @@ describe('ThreatLog', () => {
     expect(log.active()).toEqual([{ threat: { node: mine.id, kind: 'incoming' }, left: null }]);
     log.onSnapshot(snapshot);
     expect(log.active()).toEqual([]);
+  });
+});
+
+describe('the fields threatOfEvent reads (ARC-02)', () => {
+  it.each([
+    ['node_captured', { node: mine.id, player: 1 }],
+    ['fight_started', { node: mine.id }],
+  ] as const)('%s: only fields the server sends', (kind, overrides) => {
+    const { data, reads } = tracked(kind, filledData(kind, overrides));
+    expect(threatOfEvent({ kind, data }, 0, owner), kind).not.toBeNull();
+    expectDeclared(kind, reads);
   });
 });

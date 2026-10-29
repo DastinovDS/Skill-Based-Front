@@ -1,0 +1,326 @@
+{
+  "schema_version": 1,
+  "source": "gow_protocol.convert: EVENT_FIELDS and EVENT_ID_FIELDS (event_for_player)",
+  "kinds": {
+    "attrition": {
+      "fields": [
+        "charged",
+        "destroyed",
+        "group",
+        "node",
+        "player"
+      ],
+      "ids": [
+        "group"
+      ]
+    },
+    "barracks_built": {
+      "fields": [
+        "node",
+        "player"
+      ],
+      "ids": []
+    },
+    "build_started": {
+      "fields": [
+        "edge",
+        "kind",
+        "level",
+        "node",
+        "player",
+        "width"
+      ],
+      "ids": []
+    },
+    "build_stopped": {
+      "fields": [
+        "edge",
+        "kind",
+        "node",
+        "player",
+        "reason"
+      ],
+      "ids": []
+    },
+    "charges_overflow": {
+      "fields": [
+        "charges",
+        "node",
+        "player"
+      ],
+      "ids": []
+    },
+    "charges_produced": {
+      "fields": [
+        "charges",
+        "node",
+        "player",
+        "spill"
+      ],
+      "ids": []
+    },
+    "cp_burned": {
+      "fields": [
+        "cp",
+        "player"
+      ],
+      "ids": []
+    },
+    "fight_ended": {
+      "fields": [
+        "attacker",
+        "captured",
+        "edge",
+        "fight",
+        "losses_0",
+        "losses_1",
+        "node",
+        "point",
+        "shots_0",
+        "shots_1",
+        "start",
+        "winner"
+      ],
+      "ids": [
+        "fight"
+      ]
+    },
+    "fight_group": {
+      "fields": [
+        "arrived",
+        "bounce",
+        "charged",
+        "charged_before",
+        "destroyed",
+        "encircled",
+        "group",
+        "left",
+        "player",
+        "units",
+        "units_before"
+      ],
+      "ids": [
+        "group"
+      ]
+    },
+    "fight_round": {
+      "fields": [
+        "edge",
+        "fight",
+        "losses_0",
+        "losses_1",
+        "node",
+        "point",
+        "shots_0",
+        "shots_1",
+        "spent_0",
+        "spent_1",
+        "virtual_0",
+        "virtual_1"
+      ],
+      "ids": [
+        "fight"
+      ]
+    },
+    "fight_started": {
+      "fields": [
+        "attacker",
+        "edge",
+        "fight",
+        "node",
+        "point"
+      ],
+      "ids": [
+        "fight"
+      ]
+    },
+    "forfeit": {
+      "fields": [
+        "player"
+      ],
+      "ids": []
+    },
+    "front_set": {
+      "fields": [
+        "marker",
+        "node",
+        "player",
+        "reason"
+      ],
+      "ids": []
+    },
+    "group_arrived": {
+      "fields": [
+        "back",
+        "edge",
+        "from_node",
+        "group",
+        "level",
+        "node",
+        "planned",
+        "player"
+      ],
+      "ids": [
+        "group"
+      ]
+    },
+    "group_split": {
+      "fields": [
+        "group",
+        "new_group",
+        "player",
+        "units"
+      ],
+      "ids": [
+        "group",
+        "new_group"
+      ]
+    },
+    "groups_merged": {
+      "fields": [
+        "group",
+        "node",
+        "player",
+        "units"
+      ],
+      "ids": [
+        "group"
+      ]
+    },
+    "node_captured": {
+      "fields": [
+        "node",
+        "player"
+      ],
+      "ids": []
+    },
+    "packet_delivered": {
+      "fields": [
+        "charges",
+        "node",
+        "packet",
+        "player"
+      ],
+      "ids": [
+        "packet"
+      ]
+    },
+    "packet_lost": {
+      "fields": [
+        "charges",
+        "edge",
+        "packet",
+        "player"
+      ],
+      "ids": [
+        "packet"
+      ]
+    },
+    "packet_sent": {
+      "fields": [
+        "charges",
+        "edge",
+        "from_node",
+        "packet",
+        "player",
+        "to_node"
+      ],
+      "ids": [
+        "packet"
+      ]
+    },
+    "rear_min_set": {
+      "fields": [
+        "n",
+        "player"
+      ],
+      "ids": []
+    },
+    "recruit_cancelled": {
+      "fields": [
+        "cp",
+        "node",
+        "player"
+      ],
+      "ids": []
+    },
+    "recruit_queue_lost": {
+      "fields": [
+        "node",
+        "player",
+        "units"
+      ],
+      "ids": []
+    },
+    "recruited": {
+      "fields": [
+        "group",
+        "node",
+        "player"
+      ],
+      "ids": [
+        "group"
+      ]
+    },
+    "road_upgraded": {
+      "fields": [
+        "edge",
+        "player",
+        "width"
+      ],
+      "ids": []
+    },
+    "stance_changed": {
+      "fields": [
+        "player",
+        "stance"
+      ],
+      "ids": []
+    },
+    "starvation": {
+      "fields": [
+        "node",
+        "player",
+        "units",
+        "warehouse"
+      ],
+      "ids": []
+    },
+    "transfer_started": {
+      "fields": [
+        "arrive_tick",
+        "charges",
+        "from_node",
+        "packet",
+        "player",
+        "to_node"
+      ],
+      "ids": [
+        "packet"
+      ]
+    },
+    "vp_awarded": {
+      "fields": [
+        "player",
+        "vp"
+      ],
+      "ids": []
+    },
+    "warehouse_lost": {
+      "fields": [
+        "charges",
+        "node",
+        "owner"
+      ],
+      "ids": []
+    },
+    "warehouse_upgraded": {
+      "fields": [
+        "level",
+        "node",
+        "player"
+      ],
+      "ids": []
+    }
+  }
+}
