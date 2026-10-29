@@ -475,10 +475,11 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
   (`warehouse_level`) and `ruleset_public.city_upgrades`, the filled and frame ones are `warehouse` of `warehouse_cap`. With the
   city development on, a foreign city that is a vision source shows only the filled places (its level and capacity stay hidden, DEC-21 item 3, DEC-26 item 10, AGENTS.md 4.4);
   one that is not has no bar. The «Supply» layer draws the same places.
-- **Province (C1, #348; DEC-23):** a node without a city: no body, no warehouse, no VP, no recruit queue or barracks. It is a **hollow ring** of
-  radius 9 on a dark plate (alpha 0.9): own, a blue ring 3.6 wide with a light ring 2.6 outside it; the opponent's, a red ring with the light ring
-  outside and a second light ring inside; nobody's, a thin grey ring 2.4 wide. The side reads by the rings, not only by the hue. The capacity ring
-  (3 segments) stays around it. A province is told from a city by shape (a hollow ring, no filled body), not by size alone.
+- **Province (C1, #348; DEC-23; PB "Pale dot", #431):** a node without a city: no warehouse, no VP, no recruit queue or barracks. It is a **small pale dot**
+  of radius 6.5, no dark plate (so no centre that reads as a target): a pale tint of the owner (the owner's colour moved half way to white) with a
+  thin darker outline 1.4 wide and a dark casing; the opponent's dot has a second thin light ring 3.4 outside it, so the side reads without the hue;
+  nobody's is a paler, see-through grey dot with a dashed outline. The capacity ring (3 segments, radius 16) stays around it and the garrison token
+  lies on top, so the capacity reads at any size. A province is told from a city by shape (a small dot, no body with a rim), not by size alone.
 - **Owner:** a color fill plus an outline: own a white outline 3; the enemy a white outline and a dark
   inner ring; neutral a gray outline 2.
 - The capital: a white star inside (under the unit icon while the units are in the city). VP: a dark circle of radius 8.5 with a `--vp` rim and a number at the top right, outside the capacity ring (round 3, #274: inside the body it was covered by the unit icon).
@@ -1245,7 +1246,7 @@ The principle: **one shape means one thing**, and the shape reads without color 
 | ◇ diamond | a bonus (virtual) shot and the bonus stock (DEC-32); **◆ filled = a "Defense" bonus gathered, ◇ hollow = room up to the cap** (the counter of "Defense", D1, #349, DEC-30; a row of up to 6, above it "◆ ×2 ◇ ×6") | arena (stock and caption), the head and echo of a tracer, the capsule beside the shield at a city |
 | ✕ cross | the meeting point of a fight on an edge; two shots met and went out (FX3, #351; two arcs of SH1 tracers converge in it, #352) | map |
 | a number in a circle with a rim | the VP of a city | at a city |
-| a hollow ring | a province (DEC-23): no city, no warehouse, no VP (C1, #348) | map |
+| a small pale dot | a province (DEC-23): no city, no warehouse, no VP (PB, #431; was a hollow ring, C1, #348) | map |
 | shield / flag / little house / star | "Defense" / capture / barracks / capital; the barracks of the opponent has a light inner ring and a smaller house (B1, #349) | groups, cities, captions |
 | `!` in an amber circle, a dashed ring | alert: overflow, they are coming for the city | around a city |
 | a cell (a wide frame) | one unit of a count or a duration: a CP, a queued unit, a build; **frame + dot** queued, **hatch + head line** in progress, **solid** done or ready, **dashed frame** a free slot; the dashed amber ring and `MAX` on a full bar (#439) | HUD CP bar, queue and build plates at a city |

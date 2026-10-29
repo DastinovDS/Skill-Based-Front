@@ -520,7 +520,7 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     cityUpgrades: true,
   },
   {
-    // A pool map (DEC-27) with its provinces: hollow rings, no warehouse, no VP (#348).
+    // A pool map (DEC-27) with its provinces: pale dots, no warehouse, no VP (#348).
     id: 'provinces',
     map: 'crossroads',
     snapshot: provincesSnapshot(bundledMap('crossroads')),

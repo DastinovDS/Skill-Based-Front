@@ -98,7 +98,7 @@ function stateKey(s: CityState): string {
  * and the VP badge. The capacity is public and exact (DEC-22: fixed by
  * the node kind).
  *
- * A province (`kind = province`, DEC-23, C1) is a small hollow ring instead of a body, with the
+ * A province (`kind = province`, DEC-23, C1) is a small pale dot (PB, #431) instead of a body, with the
  * capacity ring but no warehouse bar, queue, barracks or VP badge.
  *
  * BL1-1 "Restrained" (#347): the body, the ring, the bar, the badges are baked sprites (a gradient,
