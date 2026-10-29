@@ -74,6 +74,7 @@ ul.chk b{color:var(--text)}
 .st .world{position:absolute;left:0;top:0;transform-origin:0 0}
 .st .world.cam{will-change:transform}
 .st .world svg,.st .world canvas,.st .fog,.st .hi,.st .guides{position:absolute;left:0;top:0}
+.st .shade{position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgb(13 17 23/97%) 0,rgb(13 17 23/90%) 330px,rgb(13 17 23/45%) 470px,rgb(13 17 23/8%) 640px,rgb(13 17 23/0%) 100%),linear-gradient(0deg,rgb(13 17 23/70%),rgb(13 17 23/0%) 140px)}
 .st .top{position:absolute;left:56px;right:44px;top:28px;display:flex;justify-content:space-between;align-items:center;z-index:5}
 .st .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
 .st .who{display:flex;align-items:center;gap:10px;border:1px solid #30363d;border-radius:22px;padding:5px 14px;background:rgb(13 17 23 / 70%);font-size:15px}
@@ -123,7 +124,7 @@ ul.chk b{color:var(--text)}
 </header>
 <main>
 <h2 class="sec" id="s1">1. The frame</h2>
-<p class="note">The live frame: the concept, the map and the queue state from the header. The rail and the strings are the client's (states of <code>?menu=</code> dev scenes). The motion runs on one <code>requestAnimationFrame</code> loop that stops when the tab is hidden, the frame is off screen, "pause" or "reduced motion" is on. The meter in the header is the time this page spends drawing one frame of the background (the canvas of the mockup, not the client).</p>
+<p class="note">The live frame: the concept, the map and the queue state from the header. The rail, its shade and the strings are the client's (<code>ScreenFrame.svelte</code>, <code>app.css</code>, the <code>?menu=</code> dev scenes). The motion runs on one <code>requestAnimationFrame</code> loop that stops when the tab is hidden, the frame is off screen, "pause" or "reduced motion" is on. The meter in the header is the time this page spends drawing one frame of the background (the canvas of the mockup, not the client).</p>
 <div id="vnote" class="note"></div>
 <div class="stagewrap" id="swrap"><div class="stagebox" id="sbox"></div></div>
 <table class="states" id="stab"></table>
@@ -420,7 +421,10 @@ function storyIdle(K,frozenBeat){const{fx,hi,sc,rm}=K;const g=frozenBeat??(K.g%L
 function scoutLens(K,o={}){const{hi,sc,rm}=K;const P=sc.scoutPath,L=plen(P),el=o.reveal?1e9:qElapsed(K),d=Math.min(L,el*18),p=at(P,d);
  let R=64;if(o.reveal){const need=Math.hypot(sc.en.x-p.x,sc.en.y-p.y)+40;R=64+(need-64)*ease(rm?1:K.t/1.2)}
  /* the sight: the map without the fog inside a circle round the scout (DEC-35: own groups see), its rim fading back into the fog */
- if(K.img)for(const[f,al]of[[1,.25],[.9,.34],[.8,.5],[.7,1]]){hi.save();hi.globalAlpha=al;hi.beginPath();hi.arc(p.x,p.y,R*f,0,Math.PI*2);hi.clip();hi.drawImage(K.img,0,0,sc.W,sc.H);hi.restore()}
+ if(K.img){/* the soft-edged sight is built once per place and size, then one small blit per frame */
+  const px=Math.round(p.x),py=Math.round(p.y),key=`${px},${py},${Math.round(R)}`;if(!K.lens||K.lens.key!==key){const n=Math.ceil(R*2)+2,cv=K.lens?.cv??document.createElement('canvas');cv.width=n;cv.height=n;const q=cv.getContext('2d');q.clearRect(0,0,n,n);
+   for(const[f,al]of[[1,.25],[.9,.34],[.8,.5],[.7,1]]){q.save();q.globalAlpha=al;q.beginPath();q.arc(n/2,n/2,R*f,0,Math.PI*2);q.clip();q.drawImage(K.img,px-n/2,py-n/2,n,n,0,0,n,n);q.restore()}K.lens={key,cv,px,py}}
+  hi.drawImage(K.lens.cv,K.lens.px-K.lens.cv.width/2,K.lens.py-K.lens.cv.height/2)}
  return{P,L,d,p,R,reveal:!!o.reveal}}
 function scoutMark(K,s){const{hi,rm}=K;march(hi,sub(s.P,0,Math.max(.1,s.d)),null,.35);
  const waiting=s.d>=s.L&&!s.reveal,br=waiting&&!rm?.5-.5*Math.cos(K.g*Math.PI*2/2.4):.5,fade=s.reveal?1-ease(rm?1:K.t/1.2):1;
@@ -495,13 +499,14 @@ function makeStage(host,cfg){const[W,H]=cfg.win.split('x').map(Number),map=MAPS[
  host.innerHTML=`<div class="st${cfg.gray?' gray':''}${cfg.rm?' rm':''}" style="width:${W}px;height:${H}px">
   <div class="world${atlas?' cam':''}"><div class="b">${svg}</div><canvas class="fx" width="${W*dpr}" height="${H*dpr}" style="width:${W}px;height:${H}px"></canvas></div>
   ${fogSvg(sc)}<canvas class="hi" width="${W*dpr}" height="${H*dpr}" style="width:${W}px;height:${H}px"></canvas>
+  <div class="shade"></div>
   <header class="top"><div class="logo">${triSvg('#5b9bff',22)}<span style="color:#9da7b3;margin:0 -6px">··</span>${triSvg('#e5484d',22)}Skill-Based Front</div>${chipHtml(cfg.s)}</header>
   <nav class="rail">${railHtml(cfg.s,cfg.t??0)}</nav>
   <p class="tag">${TAG.map((s,i)=>`<span data-i="${i}">${s}</span>`).join(', ')}.</p>
   <nav class="legal"><a>Impressum</a><a>Privacy policy</a></nav>${cfg.guides?guidesSvg(sc,!!chipHtml(cfg.s)):''}</div>`;
  const st=host.firstElementChild,world=st.querySelector('.world'),fx=st.querySelector('canvas.fx').getContext('2d'),hi=st.querySelector('canvas.hi').getContext('2d');
  const K={sc,fx,hi,dpr,st:cfg.s,v:cfg.v,rm:cfg.rm,t:0,g:0,img:null,cam:{z:1,ox:0,oy:0},tagOn:-1,world,el:st,lastClock:-1,lastTag:-2};
- const img=new Image();img.onload=()=>{K.img=img;if(K.onImg)K.onImg()};img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+ const img=new Image();img.onload=()=>{/* rasterise the SVG once: drawing an SVG image re-renders its blur every time */const bmp=document.createElement('canvas');bmp.width=W;bmp.height=H;bmp.getContext('2d').drawImage(img,0,0,W,H);K.img=bmp;if(K.onImg)K.onImg()};img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
  return K}
 function drawStage(K,t,g){K.t=t;K.g=g;const{fx,hi,dpr,sc}=K;
  fx.setTransform(dpr,0,0,dpr,0,0);hi.setTransform(dpr,0,0,dpr,0,0);fx.clearRect(0,0,sc.W,sc.H);hi.clearRect(0,0,sc.W,sc.H);
@@ -571,12 +576,12 @@ function cards(){document.getElementById('vcards').innerHTML=CONCEPTS.map(c=>{co
    <li><b>Client:</b> import the JSON at build time (a few KB) and the background as a static asset (CSP <code>img-src 'self'</code>), instead of <code>GET /api/maps</code> + <code>GET /api/maps/crossroads</code> in <code>#loadBackdrop</code>: the picture is there on the first frame and does not depend on the server. <code>layoutScene</code> stays as it is: the sketch is authored at 800 × 560 world units so that it lands 1:1 in a 1280 × 800 window.</li>
    <li><b>No DEC, no protocol, no server, no simulation change.</b> Estimate: S to M, 1 to 1.5 days (half, mirror, validate, bake, client import, a look at <code>mise run shots</code>).</li></ul>`]].map(([h,b])=>`<div class="cd${h==='MM1 Valley'?' rec':''}"><h3>${h}${h==='MM1 Valley'?'<span class="badge">recommended</span>':''}</h3>${b.startsWith('<ul>')?b:`<p>${b}</p>`}</div>`).join('');
  const rowsT=[
-  ['Now','client today: the pool map, a marching road, growing rings','none','the motion says nothing about the game','next to nothing','none','no'],
-  ['BG1 Living front','packets, recruits, drills; mobilisation and a planned order; orders meet; a fight','every motion is a game thing with a reason; the queue state is the army\'s state; the match start is a fight','busy if too many objects: capped at about 15, 30 fps','≈ 15 objects, one rAF at 30 fps; the mockup measures 0.1 to 0.3 ms per frame on canvas','M, 3 days','no (better with one)'],
-  ['BG2 Story and scout','the tagline told in 4 beats; a scout looks into the fog','teaches the core rule on the first screen; the search is a search; the clause of the tagline lights with its beat','a 32 s loop repeats; the sight mask repaints the fog layer (update at 10 Hz)','≈ 6 objects + the sight mask','M, 3 days','no (better with one: fixed beat places)'],
-  ['BG3 Atlas camera','a slow camera over an atlas sheet','calmest; cheapest motion; a look of its own','says nothing new; any camera motion behind text can bother some people (reduced motion stops it); blur repaint if the layer is not promoted','compositor only','S, 1 to 1.5 days','no'],
-  ['BG4 Light and seasons','season by date; light follows the queue','varied through the year; waiting feels like time','the light is not a thing of the game; a darker frame behind the rail','two overlays + up to 8 lamps','S to M, 2 days','no'],
-  ['BG5 Set (recommended)','BG1 + the BG2 scout + the BG4 season tint','all of the above where it fits: idle shows the economy, the search is the scout, found shows both orders, confirmed the fight; varied by season','the most work; needs the menu map for the best look','≈ 15 objects + the sight mask at 10 Hz','M to L, 4 days (+1 to 1.5 for the map)','recommended (MM1)']];
+  ['Now','client today: the pool map, a marching road, growing rings','none','the motion says nothing about the game','0.09 ms per frame here (search); CSS animations in the client','none','no'],
+  ['BG1 Living front','packets, recruits, drills; mobilisation and a planned order; orders meet; a fight','every motion is a game thing with a reason; the queue state is the army\'s state; the match start is a fight','busy if too many objects: capped at about 15, 30 fps','≈ 15 objects; 0.12 (idle) to 0.25 ms per frame here (found, confirmed), 60 fps','M, 3 days','no (better with one)'],
+  ['BG2 Story and scout','the tagline told in 4 beats; a scout looks into the fog','teaches the core rule on the first screen; the search is a search; the clause of the tagline lights with its beat','a 32 s loop repeats; the sight mask repaints the fog layer (update at 10 Hz)','≈ 6 objects + the sight; 0.09 (idle) to 0.34 ms per frame here (search), 60 fps','M, 3 days','no (better with one: fixed beat places)'],
+  ['BG3 Atlas camera','a slow camera over an atlas sheet','calmest; cheapest motion; a look of its own','says nothing new; any camera motion behind text can bother some people (reduced motion stops it); blur repaint if the layer is not promoted','compositor only in the client; 0.12 ms per frame here','S, 1 to 1.5 days','no'],
+  ['BG4 Light and seasons','season by date; light follows the queue','varied through the year; waiting feels like time','the light is not a thing of the game; a darker frame behind the rail','two overlays + up to 8 lamps; 0.13 ms per frame here (long wait)','S to M, 2 days','no'],
+  ['BG5 Set (recommended)','BG1 + the BG2 scout + the BG4 season tint','all of the above where it fits: idle shows the economy, the search is the scout, found shows both orders, confirmed the fight; varied by season','the most work; needs the menu map for the best look','≈ 15 objects + the sight; 0.27 to 0.37 ms per frame here (search, found), 60 fps','M to L, 4 days (+1 to 1.5 for the map)','recommended (MM1)']];
  document.getElementById('tbl').innerHTML=`<tr><th>Id</th><th>What moves</th><th>Pros</th><th>Risks</th><th>FPS cost</th><th>Estimate (client)</th><th>New map file</th></tr>`+rowsT.map(r=>`<tr>${r.map((c,i)=>i===0?`<th>${c}</th>`:`<td>${c}</td>`).join('')}</tr>`).join('')+
   `<tr><th>MM1, MM2, MM3</th><td>a map drawn for the frame</td><td>composition, fixed story places, empty title bar, no server request</td><td>one more map to keep valid (the validator does it); its look must follow the map style</td><td>none (a static layer)</td><td>S to M, 1 to 1.5 days</td><td>yes: <code>maps/menu/&lt;id&gt;.json</code> + <code>.bg.webp</code>, outside the pool</td></tr>`;
  document.getElementById('rec').innerHTML=`<div class="cd rec"><h3>Recommendation: BG5 Set on MM1 Valley</h3><p>BG5 gives every queue state its own action that follows from the rules (economy, scout, two orders, a fight), and the season tint keeps the screen from looking the same every visit. MM1 is the calmest frame for the rail and keeps the title bar and the chip clear by construction. Second choice: <b>BG1</b> alone (no sight mask), or <b>BG3</b> if the owner wants the quietest screen.</p></div>
@@ -585,7 +590,8 @@ function cards(){document.getElementById('vcards').innerHTML=CONCEPTS.map(c=>{co
   '<b>Calm behind the text:</b> objects move at 18 to 55 px/s, only right of the rail (x ≥ 520 at 1280); the rail column has no motion.',
   '<b>Readable:</b> each state keeps a still sign: grayscale and reduced motion show it (header switches).',
   '<b>Fog and chip:</b> the fog starts below the title bar (BAR_BOTTOM 76, fade 60 px), the same rule as the client; the sketches have no node above y 190; guides show it per window size.',
-  '<b>Cheap:</b> one rAF loop, stops when hidden or off screen; the header meter shows the draw time; static layers drawn once.',
+  '<b>Cheap:</b> one rAF loop, stops when hidden or off screen; the header meter shows the draw time; static layers drawn once. Measured on 2026-10-29 in headless Chromium (software rendering, 1280 × 800): every concept and state held 60 fps, the draw took 0.09 to 0.37 ms per frame; the scout\'s sight is cached per pixel of movement (an SVG image drawn into a canvas re-renders its blur on every call: rasterise it once).',
+  '<b>Found at 1024 × 640:</b> the client\'s <code>layoutScene</code> puts the own capital at x = 0.4 × width = 410, under the rail (the rows of the rail end at about 426): under the rail\'s shade the key hints of the rows sit on the capital in the idle and locked states (switch the window to 1024x640 with the guides on; the client\'s own <code>screen-queue-found-1024x640.png</code> shows the capital at the same place). A fix that does not depend on the choice: keep <code>left</code> at least at the rail\'s right edge and shrink the map instead.',
   '<b>Pulses:</b> the ban ring 0.8 Hz, the crosshair 1.25 Hz, the order breathing 0.3 Hz: all under 3 Hz, smooth (ui-style 20.2).',
   '<b>No new mechanic:</b> everything drawn exists in the game: packets 9.6, groups 9.5, planned orders ODb, intents IN3, tracers SH1, capture wave, sight of own groups (DEC-35).'].map(x=>`<li>${x}</li>`).join('')}
 
