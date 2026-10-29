@@ -142,10 +142,10 @@ jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in 
 | `regen`, `regen:protocol`, `regen:api` | regenerate the protocol schema and TS types (`protocol.gen.ts`) and the server OpenAPI with `api.gen.ts` | PRO-02, CLI-09 |
 | `db:migrate` | apply Alembic migrations (the server also does this on start) | DB-01 |
 | `db:revision` | a new migration from the `gow_server.models` models (argument: message) | DB-01 |
-| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json maps/menu/*.json`: the map validator (the pool, the fixtures and the menu map), and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5) | MAP-02, #379, #474 |
+| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json maps/menu/*.json`: the map validator (the pool, the fixtures and the menu map), and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5); the check `geography` for a map with `maps/src/<name>.geo.json` (DEC-36) | MAP-02, #379, #474, #537 |
 | `maps:mirror` | build `maps/<name>.json` from the half `maps/src/<name>.half.json` (argument: name) | MAP-03 |
 | `maps:preview` | draw the preview `maps/<name>.preview.png` (the pool and the menu map `maps/menu/`) | MAP-04, #474 |
-| `maps:bake` | bake the background `maps/<name>.bg.webp` (the pool and the menu map `maps/menu/`): numpy and Pillow, texture T2, WebP up to 0.5 MB (after any map edit) | MAP-05, #344, #474 |
+| `maps:bake` | bake the background `maps/<name>.bg.webp` (the pool and the menu map `maps/menu/`): numpy and Pillow, texture T2, WebP up to 0.5 MB; a map with an authored geography `maps/src/<name>.geo.json` also gets water and `maps/geo/<name>.json` (DEC-36) (after any map edit) | MAP-05, #344, #474, #537 |
 | `tournament` | bot tournament (by default all maps and bots, 100 seeds, 8 processes, `mvp-1`; anything else after `--`, for example `-- --seeds 20`; `mvp-0` is only a test ruleset, we do not run tournaments on it) | BOT-04 |
 | `report` | balance report (argument: file, `docs/balance/latest.jsonl` by default) | BOT-05 |
 | `stats` | player statistics from replays as a table (`gow-bots stats`): stance, APM, supply actions, share of scheduled orders, CP spending; arguments after the task name: replay files and options (`docs/balance/README.md`) | #375 |

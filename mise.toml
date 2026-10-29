@@ -221,7 +221,7 @@ description = "Validate the maps (alias of maps:validate)"
 depends = ["maps:validate"]
 
 [tasks."maps:validate"]
-description = "gow-maps validate maps/*.json, maps/fixtures/*.json and the menu map maps/menu/*.json, with the start-stock check against the warehouses of rulesets/mvp-1.toml (DEC-26, item 5)"
+description = "gow-maps validate maps/*.json, maps/fixtures/*.json and the menu map maps/menu/*.json, with the start-stock check against the warehouses of rulesets/mvp-1.toml (DEC-26, item 5) and the check geography of the maps with maps/src/<name>.geo.json (DEC-36)"
 run = "uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json maps/menu/*.json"
 
 [tasks."maps:preview"]
@@ -229,7 +229,7 @@ description = "Draw maps/<name>.preview.png (the pool and the menu map maps/menu
 run = "uv run gow-maps preview maps/*.json maps/menu/*.json"
 
 [tasks."maps:bake"]
-description = "Bake maps/<name>.bg.webp (the pool and the menu map maps/menu/): numpy and Pillow, texture T2 (after any map edit)"
+description = "Bake maps/<name>.bg.webp (the pool and the menu map maps/menu/): numpy and Pillow, texture T2; a map with maps/src/<name>.geo.json also gets water and maps/geo/<name>.json, DEC-36 (after any map edit)"
 run = "uv run gow-maps bake maps/*.json maps/menu/*.json"
 
 [tasks."maps:mirror"]

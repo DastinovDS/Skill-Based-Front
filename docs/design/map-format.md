@@ -74,14 +74,20 @@ The game rules that rely on map fields are described in [`mechanics.md`](mechani
 
 **The map file does not change.** Water is not a field of `maps/<id>.json`: the loader (`gow_sim.maps`), `MapDef`,
 `map_hash`, the protocol type `MapFile` and the simulation stay as they are. Two new files per map, both read only by
-the map tools and the client:
+the map tools and the client (module `gow_maps.geo`):
 
 | File | Who writes it | Who reads it | What |
 |---|---|---|---|
 | `maps/src/<id>.geo.json` | the map author (next to the half `maps/src/<id>.half.json`) | `gow-maps bake`, `gow-maps validate` | the authored geography: water cells, long rivers |
-| `maps/<id>.geo.json` | `gow-maps bake` (generated, committed, like `maps/<id>.bg.webp`) | the client (bundled at build time like the background), `gow-maps validate` | the computed geometry: area rings, water, river lines, bridges |
+| `maps/geo/<id>.json` | `gow-maps bake` (generated, committed, like `maps/<id>.bg.webp`) | the client (bundled at build time like the background), `gow-maps validate` | the computed geometry: shared border chains, water, river lines, bridges |
 
-The authored geography (`maps/src/<id>.geo.json`), all numbers integers in world units:
+The generated file lives in the subdirectory `maps/geo/` (`maps/menu/geo/` for the menu map), not as
+`maps/<id>.geo.json` as first proposed: every `maps/*.json` is a map to the server pool (`gow_server.maps` loads
+`*.json` without subdirectories), the client bundle (`bundledMaps.ts`), `maps:validate`, `maps:bake` and the
+tournament, so a sibling `.json` file would be taken for a map.
+
+The authored geography (`maps/src/<id>.geo.json`), numbers in world units (`x`, `y`, `r` integers, the half widths
+`w0`, `w1` positive numbers); unknown keys are an error:
 
 ```json
 {
@@ -95,34 +101,44 @@ The authored geography (`maps/src/<id>.geo.json`), all numbers integers in world
 - `water[]`: a water cell. `kind`: `sea` or `lake` (only the look differs); `x`, `y`: its point, may lie outside the
   map (a sea along an edge); `r`: its radius (the cell takes the ground nearer to its point minus `r` than to any node).
 - `rivers[]`: a long river. `from`: the spring (a point near an area border; a point at a lake is its outflow); `to`
-  (optional): the index of the water cell it flows into, otherwise the nearest water; `w0`, `w1` (optional): the half
-  width at the spring and at the mouth.
+  (optional): the index of the water cell it flows into, otherwise the nearest water; `w0`, `w1` (optional, default 4
+  and 11): the half width at the spring and at the mouth.
 - Node moves are made in the half itself (`x`, `y`, `mirror_x`, `mirror_y`); `meta.version` is raised as for any map edit.
 
-The computed geometry (`maps/<id>.geo.json`), written by the baker:
+The computed geometry (`maps/geo/<id>.json`), written by the baker (compact JSON, one chain per line):
 
 | Field | What |
 |---|---|
-| `map`, `version` | the map id and `meta.version` it was baked from (the client ignores a stale file and falls back to the Voronoi cells) |
-| `chains[]` | the shared borders of the subdivision: `{l, r, pts}`, one simplified polyline per pair of neighbouring regions; `l`, `r`: a node id, `w<k>` (water cell `k`), `river`, or `-1` (outside the map). An area ring and its neighbour use the same chain, so the tint, the borders and the water match exactly |
-| `water[]` | the kind of every water cell |
-| `rivers[]`, `streams[]` | centre lines with the half width per point (for the flow look, not for the shape) |
+| `map`, `version` | the map id and `meta.version` it was baked from (the client ignores a stale file and falls back to the Voronoi cells; the validator fails a stale one) |
+| `step` | the grid step of the labels (4 world units) |
+| `chains[]` | the shared borders of the subdivision: `{l, r, pts}`, one polyline per stretch of border between two regions from junction to junction, on the cell corners (integers, multiples of `step`), simplified by Ramer-Douglas-Peucker (3 units); `pts` is flat `[x0, y0, x1, y1, ...]`; `l` lies on the left of the walk from the first point (the `y` axis down), `r` on the right; each is a node id, `"w<k>"` (water cell `k`), `"river"` (a long river or a stream), or `-1` (outside the map). An area ring and its neighbour use the same chain, so the tint, the borders and the water match exactly |
+| `water[]` | `{kind}` of every water cell, in the order of the authored file |
+| `rivers[]`, `streams[]` | `{pts, hw}`: centre lines (flat points) with the half width per point (for the flow look, not for the shape) |
 | `bridges[]` | `{edge, x, y}`: the road and the point (its border point) where a long river passes it |
 
-**The baker** (`gow-maps bake`, still numpy and Pillow): computes the label grid of item 2 of DEC-36 (nearest site:
-a node with its road halves, or a water cell; the warp of `_Noise.warp` fading near roads), cuts a stream on every
-border of two node areas without a road, routes the long rivers along area borders, turns land pieces cut off from
-their node into water, bakes the T2 ground with water as one more ground (details thin out toward a shore), paints
-the water in the chosen look (DEC-36, item 6), and writes the vector file. Deterministic for the map seed as now; the
-WebP limit of 0.5 MB stays. `tools/maps/tests/test_bake.py` compares the vector file exactly and the picture with the
-tolerance of today.
+**The baker** (`gow-maps bake`, still numpy and Pillow; for a map with `maps/src/<id>.geo.json`): computes the label
+grid of item 2 of DEC-36 (nearest site: a node with its road halves plus 18 units, or a water cell; the warp of
+`_Noise.warp` fading near roads; a water cell never comes closer than 34 units to a road nor 60 to a node), cuts a
+stream on every border of two node areas without a road (half width 4.5 units, up to 9 next to water), turns the land
+contacts left over into stream cells, routes the long rivers along area borders (Dijkstra over the cells near a
+border and at least 40 units from every node), turns land pieces cut off from their node into the water around them,
+and bakes the picture: the T2 ground of the new areas (under the water the ground continues, so there is no muddy band
+at a shore), details thinning toward a shore, and the water of **W4 Painted** on top: two tones in blotches, rivers
+lighter, the shore of a sea or a lake lighter inside the water, a slightly darker current and faint flow streaks on
+rivers, sparse muted reed tufts beside the water, wooden bridges. **No dark line along water** (the owner, 2026-10-29):
+nothing darkens the land along a coast or a river bank, the edge of the water is only anti-aliased. Then it writes the
+vector file. Deterministic for the map seed as now; the WebP limit of 0.5 MB and the 10 s per map stay (the mockup
+geography on `ridge`: about 1 s for the geography, 4 to 6 s for the picture). `tools/maps/tests/test_bake.py` compares
+a committed vector file with a fresh bake by its structure (the head, the bridges, the pairs of regions with a shared
+border), not byte by byte: the labels come from floating-point noise, and a cell at a tie may flip between numpy
+builds; the picture with the tolerance of today.
 
-**The validator:** a new check `geography`, on for a map that has `maps/src/<id>.geo.json` (the fixtures without one
-are not checked):
+**The validator:** a new check `geography`, on for a map that has `maps/src/<id>.geo.json` (the fixtures and the
+current pool without one are not checked):
 
 | Check | What it requires |
 |---|---|
-| `geography` | on the label grid of the baker (4 world units per cell, 4-neighbour contacts): two node areas share land only if a road connects their nodes; every area is one piece and holds its node; a road crosses water only at a bridge (its border point); every node is at least `water_clearance` (60) from water; `maps/<id>.geo.json` is up to date with the map version |
+| `geography` | on the label grid of the baker (4 world units per cell, 4-neighbour contacts): two node areas share land only if a road connects their nodes; every area is one piece and holds its node; a road crosses water (a sea, a lake, a river, a stream) only within 24 units of a bridge of its own (the bridge stands at its border point); every node is at least `water_clearance` (60, `validate.toml`) from a water cell (a sea or a lake; rivers and streams are area borders and are not counted); `maps/geo/<id>.json` exists and was baked from this map and `meta.version`; a malformed authored file or one of another map fails here too |
 
 **The client** (territory layer, `apps/client/src/render/`): for a map with a vector file, the areas come from its
 chains instead of `voronoiCells`: the tint and its capture fade, the owner border, the glow and the thin area line
@@ -289,9 +305,11 @@ an unmatched pattern as is). The thresholds: `tools/maps/src/gow_maps/validate.t
 | `disjoint_paths` | from each capital to each node with `vp ≥ 2` at least 2 paths with no common roads |
 | `neutral_space` | at least 20% of the nodes have no starting owner and have distances to the two capitals (in roads) differing by at most 1 |
 | `travel_ticks` | the drawn length agrees with the time (DEC-27, item 4): `|travel_ticks − e| × 100 ≤ 15 × e`, `e = length × 30 / 100` (100 world units = 3 seconds), the tolerance is at least 1 tick; mirrored edges with the same `travel_ticks` therefore differ in length by no more than the tolerance |
+| `geography` | only for a map with an authored geography `maps/src/<id>.geo.json` (DEC-36): land contact of two areas only along a road, one piece per area around its node, roads cross water only at a bridge, nodes at least `water_clearance` (60) from a sea or a lake, the vector file `maps/geo/<id>.json` up to date; details in the section "Format changes under DEC-36" |
 
 The path and distance checks run only on a connected graph. The "bad" fixtures for each
-check: `tools/maps/tests/fixtures/`.
+check: `tools/maps/tests/fixtures/`; for `geography`, the worked examples of DEC-36 in `tools/maps/tests/test_geo.py`
+(hand-made label grids for the failing rows: the baker itself never produces them).
 
 ## Half of a map and mirroring
 
