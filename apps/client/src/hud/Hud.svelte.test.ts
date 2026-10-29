@@ -277,6 +277,7 @@ describe('Hud', () => {
     expect(target.querySelector('.timer.last')).not.toBeNull();
     expect(target.textContent).toContain('0:59');
     state.onSnapshot(devSnapshot(DEFAULT_MAP, DEV_RULES, DEV_RULES.match_ticks - 580));
+    state.onRender(Number.POSITIVE_INFINITY);
     flushSync();
     expect(target.querySelectorAll('.toast')).toHaveLength(1);
     expect(target.querySelector('.toast')?.textContent).toContain('Last minute');

@@ -4,6 +4,7 @@ import { DEFAULT_MAP } from '../map/bundledMaps.ts';
 import type { SnapshotMsg } from '../protocol.gen.ts';
 import { DEV_RULES, devEvent, devSnapshot } from './devFeed.ts';
 import { EVENT_LIMIT, HudState, LAST_MINUTE_S, START_MS } from './hudState.svelte.ts';
+import { TOAST_HOLD_MS } from './toastState.svelte.ts';
 
 const map = DEFAULT_MAP;
 
@@ -156,6 +157,7 @@ describe('HudState: start banner, hover, toasts and the last minute', () => {
     expect(hud.toasts.current).toEqual([]);
     hud.onEvent({ type: 'event', tick: 7, kind: 'node_captured', data: { node: 1, player: 1 } });
     hud.onEvent({ type: 'event', tick: 8, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.onRender(8);
     expect(hud.toasts.current.map((t) => t.tone)).toEqual(['warn', 'enemy']);
     hud.onSnapshot(snapshot(3));
     // The journal keeps what the toasts leave out, but not the VP awards.
@@ -166,6 +168,33 @@ describe('HudState: start banner, hover, toasts and the last minute', () => {
     ]);
   });
 
+  it('shows the toast of an event only when the map has drawn its tick (#561)', () => {
+    const hud = newState();
+    hud.onSnapshot(snapshot(10));
+    hud.onEvent({ type: 'event', tick: 9, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.onEvent({ type: 'event', tick: 10, kind: 'node_captured', data: { node: 1, player: 1 } });
+    // The snapshot is here, the map is two ticks behind it.
+    hud.onRender(8);
+    expect(hud.toasts.current).toEqual([]);
+    hud.onRender(9.5);
+    expect(hud.toasts.current.map((t) => t.tone)).toEqual(['warn']);
+    hud.onRender(10);
+    expect(hud.toasts.current.map((t) => t.tone)).toEqual(['enemy', 'warn']);
+    // Shown once.
+    hud.onRender(11);
+    expect(hud.toasts.current).toHaveLength(2);
+  });
+
+  it('shows a held toast anyway when the map never reaches its tick (pause, end of the match)', () => {
+    const hud = newState();
+    hud.onSnapshot(snapshot(10));
+    hud.onEvent({ type: 'event', tick: 10, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.onRender(8);
+    expect(hud.toasts.current).toEqual([]);
+    vi.advanceTimersByTime(TOAST_HOLD_MS);
+    expect(hud.toasts.current).toHaveLength(1);
+  });
+
   it('adds one toast when the last minute starts', () => {
     const hud = newState();
     const last = (seconds: number): SnapshotMsg =>
@@ -174,6 +203,7 @@ describe('HudState: start banner, hover, toasts and the last minute', () => {
     expect(hud.toasts.current).toEqual([]);
     hud.onSnapshot(last(LAST_MINUTE_S));
     hud.onSnapshot(last(LAST_MINUTE_S - 10));
+    hud.onRender(Number.POSITIVE_INFINITY);
     expect(hud.toasts.current).toHaveLength(1);
     expect(hud.toasts.current[0]?.tone).toBe('warn');
   });
@@ -182,6 +212,8 @@ describe('HudState: start banner, hover, toasts and the last minute', () => {
     const hud = newState();
     hud.onSnapshot(snapshot(2));
     hud.onEvent({ type: 'event', tick: 8, kind: 'attrition', data: { node: 0, player: 0 } });
+    hud.onRender(8);
+    hud.onEvent({ type: 'event', tick: 9, kind: 'attrition', data: { node: 0, player: 0 } });
     hud.reset();
     expect(hud.toasts.current).toEqual([]);
     hud.destroy();
