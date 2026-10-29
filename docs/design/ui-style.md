@@ -477,8 +477,17 @@ A stripe is 2 units, the gap is 1.7. The state of a road reads without color (by
 
 - **Figure:** an inverted equilateral triangle ▽.
 - **Size by the number of units:** side 24 (1-3), 30 (4-7), 36 (8-15), 42 (16+). An unknown number: 30.
-- **Charge as a level:** from the tip a similar triangle in the owner's color is filled, the area equals
-  the share of charged (`k = sqrt(charged / units)` by height). The empty part is `#161b22`.
+- **Charge as a level (#508):** from the tip a similar triangle in the owner's color is filled, and its
+  **height** equals the share of charged (`k = charged / units`): players read the height, so 1 of 4 charged
+  fills a quarter of it (earlier `sqrt(charged / units)`, area-true, read as half full). The empty part is `#161b22`.
+  Up to `UNIT_TICKS.max` (8) units there are **faint dividers**, one between every two units (a thin light line,
+  alpha 0.34, a baked sprite per side and unit count), so the charged units can be counted on the fill; a bigger group
+  has the fill and the number only. The fill does not rely on color: its height and the dividers carry the count.
+- **Charge motion (#508):** whenever `charged` or `units` change (a fight drains it, supply fills it, a merge or a split)
+  the shown fill eases to the new height in 320 ms, ease-out cubic, driven by real time (frame-rate independent),
+  from the value shown now when the target changes mid-way. It scales the one baked fill sprite: no texture is made per
+  frame. A new token, a token with unknown numbers, a memory (ghost) and "less motion" show the level at once. The
+  number under the tip is the value the snapshot gave. The easing is the small module `render/tween.ts` (`EaseTween`), reusable for any displayed number.
 - **Owner:** own a white outline 2.4; the enemy a white outline plus an inner dark outline at
   62% of the size; an enemy without numbers (`PRESENCE`): a dashed outline in the enemy color and a "?".
 - **Mode:** "Defense" as a circle of radius 8 with a shield glyph at the upper right corner; "Attack" is not drawn.

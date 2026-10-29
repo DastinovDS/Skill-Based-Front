@@ -16,7 +16,7 @@ import {
   type QueueMark,
 } from './progressLayout.ts';
 import { CHIP, PLATE, chipHatch, chipHeight, lighten, type ChipState } from './fightFx.ts';
-import { dashSegments, triangleCorners, triangleHeight } from './layout.ts';
+import { chargeTicks, dashSegments, triangleCorners, triangleHeight } from './layout.ts';
 import { circleBox, shadowBox, type Box } from './shading.ts';
 import {
   BAKE_MARGIN,
@@ -49,6 +49,7 @@ import {
   UNIT_DASH,
   UNIT_HALO,
   UNIT_OUTLINE,
+  UNIT_TICKS,
   VP_BADGE,
   VP_BADGE_RADIUS,
   ENEMY,
@@ -382,6 +383,32 @@ export function triangleLevelSpec(side: number, color: number): BakeSpec {
     box: { x: -side / 2 - 1, y: -h - 1, width: side + 2, height: h + 2 },
     draw(into, tools) {
       graphics(into).poly(flat(corners)).fill(tools.gradient(color));
+    },
+  };
+}
+
+/**
+ * The dividers of a triangle with `units` units (#508): a faint line at every unit's height from the
+ * tip, over the fill and the empty part, inside the outline. One texture per (side, units); nothing
+ * to draw (`null`) for one unit or more than `UNIT_TICKS.max`.
+ */
+export function triangleTicksSpec(side: number, units: number): BakeSpec | null {
+  const levels = chargeTicks(units, UNIT_TICKS.max);
+  if (levels.length === 0) return null;
+  const h = triangleHeight(side);
+  return {
+    key: `tri-ticks:${String(side)}:${String(units)}`,
+    box: triangleBox(side, 0),
+    draw(into) {
+      const g = graphics(into);
+      for (const level of levels) {
+        // Row `level` of the triangle from the tip: half-width grows linearly from the tip.
+        const y = h / 2 - level * h;
+        const half = (side * level) / 2 - UNIT_TICKS.inset;
+        if (half <= 0) continue;
+        g.moveTo(-half, y).lineTo(half, y);
+      }
+      g.stroke({ width: UNIT_TICKS.width, color: UNIT_TICKS.color, alpha: UNIT_TICKS.alpha });
     },
   };
 }

@@ -294,6 +294,11 @@ export class EntityView implements EnemyAnchors {
     this.updatePackets(frame);
   }
 
+  /** Eases the charge fills of the tokens by `dtMs` of real time (#508); once per frame, after `update`. */
+  advance(dtMs: number): void {
+    this.kit.advance(dtMs);
+  }
+
   destroy(): void {
     // Containers and their children first: they reference the shared contexts, which Graphics
     // leaves alone. The two Graphics below own their contexts and are destroyed without options.

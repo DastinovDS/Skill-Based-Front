@@ -24,6 +24,10 @@
   // `?menus` lets a fixture scene open the menus of the map (orders go nowhere): the screenshots
   // of the radial menus (`mise run shots`) use it. Without it a fixture only selects.
   const menusOn = params.has('menus');
+  // `?motion` makes the live demo move: a group marches along a road, the charges cycle (#508, `devMotion.ts`).
+  const motionOn = params.has('motion');
+  // `?map=<name>` opens the demo on a bundled map (the FPS check wants a 45-55 node one).
+  const mapParam = params.get('map');
   // `?at=<tick>` freezes a fixture scene at another render tick (also a fractional one): a round of a fight frame by frame.
   const atParam = Number(params.get('at'));
   const at = params.has('at') && Number.isFinite(atParam) ? atParam : undefined;
@@ -34,7 +38,11 @@
   let sceneId = $state(
     fixtureScene(requested) === undefined ? DEMO_SCENE : (requested ?? DEMO_SCENE),
   );
-  let mapName = $state(fixtureScene(requested)?.map ?? DEFAULT_MAP.meta.name);
+  let mapName = $state(
+    fixtureScene(requested)?.map ??
+      BUNDLED_MAPS.find((m) => m.meta.name === mapParam)?.meta.name ??
+      DEFAULT_MAP.meta.name,
+  );
   let fps = $state(0);
   // The part of the GameCanvas instance the HUD uses (spelled out: typescript-eslint cannot see
   // the types of .svelte imports).
@@ -68,9 +76,15 @@
   // snapshot. Either way the map and the HUD read the same snapshots.
   const match = $derived(
     fixture === undefined
-      ? createDevMatch(map, DEV_RULES, hud, (msg) => {
-          orders.onReach(msg);
-        })
+      ? createDevMatch(
+          map,
+          DEV_RULES,
+          hud,
+          (msg) => {
+            orders.onReach(msg);
+          },
+          motionOn,
+        )
       : null,
   );
   const source = $derived(

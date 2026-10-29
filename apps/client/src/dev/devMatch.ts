@@ -16,8 +16,10 @@ export function createDevMatch(
   hud: HudState,
   /** The answers to `reach_query`: the order controller of the screen shows them. */
   onReach?: (msg: ReachMsg) => void,
+  /** Scripted motion for looking at animation (`/?motion`). */
+  motion = false,
 ): DevMatch {
-  const server = createDevServer(map, rules);
+  const server = createDevServer(map, rules, { motion });
   const session = new MatchSession({
     matchId: 'dev',
     token: 'dev',

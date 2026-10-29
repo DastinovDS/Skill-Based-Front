@@ -27,6 +27,8 @@ export const FRAME_FAILURE_LIMIT = 3;
 
 /** Ticks per second when the source does not say (`rulesets/mvp-0.toml`). */
 const DEFAULT_TICK_HZ = 10;
+/** Frame time assumed when the ticker gives none (60 FPS), ms. */
+const DEFAULT_FRAME_MS = 1000 / 60;
 
 /**
  * The baked shapes of the map (`bake.ts`): in world units (cities, tokens: re-baked when the zoom
@@ -263,9 +265,13 @@ export class MapScene {
   }
 
   /** The ticker listener: PixiJS stops asking for frames if a listener throws, so it never does. */
-  private readonly onFrame = (): void => {
+  private readonly onFrame = (ticker?: { deltaMS: number }): void => {
+    this.frameMs = ticker?.deltaMS ?? DEFAULT_FRAME_MS;
     this.guard.run(this.drawFrame);
   };
+
+  /** Real time the last frame took, ms: what the charge fills ease by (#508). */
+  private frameMs = DEFAULT_FRAME_MS;
 
   /** Every frame: owners and road widths from a new snapshot, then the moving entities. */
   private readonly drawFrame = (): void => {
@@ -302,6 +308,7 @@ export class MapScene {
     this.intents.setDelays(delays);
     this.intents.setTickHz(tickHz);
     this.entities.update(frame);
+    this.entities.advance(this.frameMs);
     this.intents.update(frame, this.entities.groupPoints());
     const punches = this.effects.update(
       frame,

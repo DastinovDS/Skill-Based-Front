@@ -248,6 +248,11 @@ export const COUNT_FONT_SIZE = 10;
 /** Side of the triangle by the number of units (steps: 1-3, 4-7, 8-15, 16+); unknown: `UNIT_SIDE_UNKNOWN`. */
 export const UNIT_SIDES = [24, 30, 36, 42] as const;
 export const UNIT_SIDE_UNKNOWN = 30;
+/**
+ * Faint dividers inside a triangle, one per unit (#508), so the charged units can be counted on the
+ * fill: drawn up to `max` units, a bigger group is told by the number alone.
+ */
+export const UNIT_TICKS = { max: 8, width: 1, color: PAPER, alpha: 0.34, inset: 2.4 } as const;
 /** The outline of a triangle (the colour is the owner's, set where it is drawn). */
 export const UNIT_OUTLINE = { width: 2.4, join: 'round' } as const;
 /** The light inner outline of an opponent triangle: visible on a dark empty plate and on its fill. */

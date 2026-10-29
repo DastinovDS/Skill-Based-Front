@@ -7,6 +7,7 @@
  * (DEC-28, item 7: for CP, on the edge) shows as a build of the road that widens it after
  * `ruleset_public.build.ticks_per_level` ticks. The path is a breadth-first search on the map, good enough for a picture.
  */
+import { devMotion } from './devMotion.ts';
 import { devEvent, devFightEvents, devSnapshot, DEV_PLAYER } from '../hud/devFeed.ts';
 import { MockSocket } from '../net/fakeServer.ts';
 import type {
@@ -101,7 +102,12 @@ export function devPackets(map: MapFile, nodes: readonly NodeView[], tick: numbe
   return packets;
 }
 
-export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
+export function createDevServer(
+  map: MapFile,
+  rules: RulesetPublic,
+  /** `motion`: a group marches along a road and the charges cycle (`devMotion.ts`, `/?motion`). */
+  options: { motion?: boolean } = {},
+): DevServer {
   let tick = 0;
   let spent = 0;
   let lastSeq = 0;
@@ -150,7 +156,10 @@ export function createDevServer(map: MapFile, rules: RulesetPublic): DevServer {
             ? { ...e, width, build, upgrade_gain: { speed_pct: 50, unit_speed_pct: 15, amount: 1 } }
             : { ...e, width, build };
         }),
-        groups: base.view.groups.map((g) => ({
+        groups: (options.motion === true
+          ? devMotion(map, base.view.nodes, base.view.groups, tick)
+          : base.view.groups
+        ).map((g) => ({
           ...g,
           mode: modes.get(g.id) ?? g.mode,
           order: orders.get(g.id) ?? null,
