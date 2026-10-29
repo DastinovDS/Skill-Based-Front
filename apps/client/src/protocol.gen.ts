@@ -42,6 +42,11 @@ export type ServerMsg =
   | ReachMsg;
 export type PlayerId = 0 | 1;
 /**
+ * What a source of vision shows of a neighbouring node (DEC-21, item 2): the detail levels
+ * ``exact``, ``range`` and ``presence`` of ``gow_sim.state.Detail`` (never fog).
+ */
+export type Sight = 'exact' | 'range' | 'presence';
+/**
  * Why a match did not change your rating (DEC-34, #414).
  */
 export type UnratedReason =
@@ -300,6 +305,7 @@ export interface RulesetPublic {
   recruit: RecruitPublic;
   city_upgrades: CityUpgradesPublic;
   supply: SupplyPublic;
+  vision: VisionPublic;
 }
 /**
  * CP regeneration: ``per_period`` hundredths every ``period_ticks`` ticks, up to ``cap``.
@@ -467,6 +473,30 @@ export interface SupplyPublic {
    * Front markers of a player: ``set_front`` accepts ``marker`` ``0..front_markers - 1``.
    */
   front_markers: number;
+}
+/**
+ * The vision table by terrain (``vision.by_terrain``, DEC-21, item 2): ``by_terrain.<source>.
+ * <target>`` is ``exact``, ``range`` or ``presence``. The client only displays it (the legend of
+ * the terrain map mode); the level of a place in the snapshot is decided by the server.
+ */
+export interface VisionPublic {
+  by_terrain: VisionTablePublic;
+}
+/**
+ * One row per terrain of the source.
+ */
+export interface VisionTablePublic {
+  plains: SightRowPublic;
+  forest: SightRowPublic;
+  mountains: SightRowPublic;
+}
+/**
+ * What a source on one terrain shows of a neighbouring node, by the terrain of that node.
+ */
+export interface SightRowPublic {
+  plains: Sight;
+  forest: Sight;
+  mountains: Sight;
 }
 /**
  * Calibration progress of an account: the first matches of a rated account do not show its
@@ -1144,7 +1174,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 28;
+export const PROTOCOL_VERSION = 29;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;
