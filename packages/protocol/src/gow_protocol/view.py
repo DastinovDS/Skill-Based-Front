@@ -1,21 +1,24 @@
 """The player's view on the wire: the ``view`` of a ``snapshot`` message.
 
 It carries a ``PlayerView`` (``gow_sim.view.project()``, SIM-14 #30) and nothing else; the
-conversion is PRO-03 (#46). The shape follows DEC-04, DEC-21, DEC-33 and DEC-10 (mechanics.md,
-section 10)
+conversion is PRO-03 (#46). The shape follows DEC-04, DEC-21, DEC-33, DEC-10 and DEC-35
+(mechanics.md, section 10)
 and the list of what a view must not contain (AGENTS.md, section 4.4):
 
-- public to everyone: ownership and capacity (DEC-22) of every node, road levels and types
-  (DEC-17: last seen in fog), VP of both players,
+- public to everyone: ownership and capacity (DEC-22) of every node, road levels (DEC-17: last
+  seen in fog; own internal edges always exact, DEC-35, detail 5), VP of both players,
   intents of planned orders and "Defense" (origin, target, kind; no group id, no size);
 - road builds of cities (DEC-16): own ones always, with ``done_tick``; an enemy one without
   ``done_tick`` and only while its edge is not in fog (DEC-17, item 5);
-- sources of vision (own nodes, nodes where own groups stand): everything with numbers, the
-  warehouse included;
+- sources of vision, own groups only (DEC-35: a node where an own group stands, the node of the
+  half of an edge an own group is in): the enemy totals; the warehouse of a foreign city only
+  where an own group stands (DEC-35, detail 2);
+- own nodes: never in fog, an enemy in an own node without a source is ``presence``; their own
+  data (warehouse, recruit queue, builds) is exact at any ``detail`` (DEC-35, detail 3);
 - neighbours of sources by the terrain table (DEC-21, item 2) and the halves of edges by the
-  level of their node, at least ``presence`` on an edge an own group is on (DEC-10): ``exact`` the
-  enemy totals, ``range`` the range of the enemy units, ``presence`` whether enemy groups are
-  there; the modes on every level; never the warehouse;
+  level of their node (an own node without a source gives its halves none, DEC-35, detail 4):
+  ``exact`` the enemy totals, ``range`` the range of the enemy units, ``presence`` whether enemy
+  groups are there; the modes on every level; never the warehouse;
 - enemy groups on the halves of edges not in fog, each as a figure (``EdgeView.enemy_groups``,
   DEC-33): position, direction, mode and the numbers of its half's level, with an opaque id that
   is new each time the group comes out of the fog; a group in a fight is shown by the fight;
@@ -132,8 +135,9 @@ class NodeView(WireModel):
     """Capacity by the node kind (DEC-22, item 1): public and exact for every node."""
     detail: Detail
     warehouse: NonNegInt | None
-    """Charges in the warehouse; only for sources of vision (own nodes, nodes where own groups
-    stand), never for a neighbour seen by the terrain table (DEC-21, item 3)."""
+    """Charges in the warehouse; only for own nodes (own data, at any ``detail``) and foreign
+    nodes where an own group stands (DEC-21, item 3; DEC-35, detail 2), never for a neighbour seen
+    by the terrain table."""
     seen: Seen | None
     """Current sighting unless ``detail`` is ``fog``; for ``fog`` the last one, or ``None``."""
     attrition_in: PosInt | None
@@ -168,31 +172,27 @@ class NodeView(WireModel):
 
     @model_validator(mode="after")
     def _check(self) -> Self:
-        if self.starve_in is not None and self.detail is not Detail.EXACT:
-            raise ValueError("a starvation countdown only for an own city, seen exactly")
+        # Own data is exact at any detail; an own node is never in fog (DEC-35, detail 3).
+        own_data = self.owner is not None and self.detail is not Detail.FOG
+        if self.starve_in is not None and not own_data:
+            raise ValueError("a starvation countdown only for an own city")
         recruit = (self.recruit_queue, self.recruit_progress, self.recruit_waiting)
-        if any(v is not None for v in recruit) and (
-            None in recruit or self.detail is not Detail.EXACT
-        ):
+        if any(v is not None for v in recruit) and (None in recruit or not own_data):
             raise ValueError("a recruit queue only for an own city, all three fields together")
         city = (self.has_barracks, self.warehouse_level, self.warehouse_cap)
-        if any(v is not None for v in city[1:]) and (
-            None in city or self.detail is not Detail.EXACT
-        ):
+        if any(v is not None for v in city[1:]) and (None in city or not own_data):
             raise ValueError("barracks and warehouse only for an own city, all three together")
         if self.has_barracks is not None and self.owner is None:
             raise ValueError("barracks only for an own city or a city of the enemy (DEC-31)")
         if self.building is not None and self.warehouse_level is None:
             raise ValueError("a building only for an own city")
-        if self.warehouse is not None and self.detail is not Detail.EXACT:
-            raise ValueError("a warehouse only for a source of vision, seen exactly")
+        if self.warehouse is not None and self.detail is Detail.FOG:
+            raise ValueError("a warehouse only for an own node or a node with an own group")
         _check_seen(self.detail, self.seen)
         if self.attrition_in is not None and self.grace_left is not None:
             raise ValueError("attrition_in and grace_left exclude each other")
-        if (self.attrition_in is not None or self.grace_left is not None) and (
-            self.detail is not Detail.EXACT
-        ):
-            raise ValueError("an overcrowding countdown only for a node seen exactly")
+        if (self.attrition_in is not None or self.grace_left is not None) and not own_data:
+            raise ValueError("an overcrowding countdown only for an own node")
         return self
 
 
@@ -211,8 +211,8 @@ class HalfView(WireModel):
     """A half of an edge, from its node to the border point (DEC-21, item 5)."""
 
     detail: Detail
-    """The level of the node the half belongs to (a source's half is ``exact``), at least
-    ``presence`` while an own group is on the edge (DEC-10, item 2)."""
+    """The level of the node the half belongs to by the sources and the terrain table (a source's
+    half is ``exact``); ``fog`` for an own node without a source (DEC-35, detail 4)."""
     seen: Seen | None
     """The enemy groups in the half now (those in a fight too) unless ``detail`` is ``fog``; for
     ``fog`` the last sighting (no positions, DEC-33, detail 8), or ``None``."""
@@ -261,10 +261,11 @@ class EdgeView(WireModel):
     id: EdgeId
     width: Width
     """Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is
-    ``fog``; in fog the last seen level, or 1 if never seen. Never above the true level."""
+    ``fog``, and always on an own internal edge (DEC-35, detail 5); otherwise in fog the last seen
+    level, or 1 if never seen. Never above the true level."""
     detail: Detail
-    """The road level visibility (DEC-17): ``presence`` while an end is a source of vision or an
-    own group is on the edge (DEC-10, item 5), else ``fog``. What is seen of enemies is in
+    """The road level visibility (DEC-17): ``presence`` while an end is a source of vision (DEC-35;
+    the edge of an own group on it is one), else ``fog``. What is seen of enemies is in
     ``halves`` and ``enemy_groups``."""
     upgrade_gain: UpgradeGain | None
     """Only for own internal edges that can still be upgraded."""

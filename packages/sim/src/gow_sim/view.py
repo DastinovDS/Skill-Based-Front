@@ -1,20 +1,23 @@
 """Projection (SIM-14): ``project()`` builds the ``PlayerView``, the only thing a player sees.
 
 ``PlayerView`` is everything that leaves the simulation towards a player or a bot (AGENTS.md,
-section 4.4); bots get the same view as people. It follows DEC-04, DEC-17, DEC-21, DEC-33 and
-DEC-10 (mechanics.md, section 10) and has the shape of the wire ``View`` of the protocol
+section 4.4); bots get the same view as people. It follows DEC-04, DEC-17, DEC-21, DEC-33, DEC-10
+and DEC-35 (mechanics.md, section 10) and has the shape of the wire ``View`` of the protocol
 (``gow_protocol.view``, PRO-01), which PRO-03 converts it into:
 
 - public to everyone: ownership of every node, VP of both players, intents of planned orders
   and "Defense" (kind, origin, target; no group id or size);
 - node capacities: fixed by the node kind (DEC-22, item 1), public and exact for every node;
 - road levels (DEC-17; DEC-22, item 8; roads have no type, DEC-26): exact on edges not in fog (an
-  end is a source or an own group is on the edge, DEC-10, item 5); on a fogged edge that of its
-  last sighting, or level 1 if never seen;
+  end is a source) and on own internal edges (own data, DEC-35, detail 5); on another fogged edge
+  that of its last sighting, or level 1 if never seen;
 - road builds of cities (DEC-16, item 8): own ones always, with the tick they finish; an enemy
   one (the city and the edge, no tick) only while the edge is not in fog (DEC-17, item 5);
-- sources of vision (own nodes, nodes where own groups stand): the warehouse, and the enemy
-  totals like every ``EXACT`` place;
+- sources of vision (DEC-35: nodes where own groups stand, the node of the half of an edge an own
+  group is in): the enemy totals like every ``EXACT`` place; the warehouse of own nodes always
+  (own data) and of a foreign node only where an own group stands (DEC-35, detail 2);
+- own nodes are never in fog: an enemy in an own node without a source is seen at ``PRESENCE``
+  (DEC-35, detail 3), which gives the node's halves of edges no zone (detail 4);
 - own front markers and rear minimum (DEC-28, ``SelfView``; never the enemy's);
 - own cities: cut off, the ticks until the garrison
   next starves (``starve_in``, DEC-19, item 8), their recruit queue and its progress (DEC-25,
@@ -26,8 +29,7 @@ DEC-10 (mechanics.md, section 10) and has the shape of the wire ``View`` of the 
   mode only, in the ``seen`` of places);
 - neighbours of sources by the terrain table (DEC-21, item 2), and the halves of edges by the level
   of their node (item 5): ``EXACT`` the enemy totals, ``RANGE`` the range of the enemy units,
-  ``PRESENCE`` whether enemy groups are there; the modes on every level; both halves of an edge
-  an own group is on are at least ``PRESENCE`` (DEC-10, item 2), its end nodes are not revealed;
+  ``PRESENCE`` whether enemy groups are there; the modes on every level;
 - enemy groups on the halves of edges not in fog, each as a figure (DEC-33, ``EdgeView.
   enemy_groups``): position, direction, mode and the numbers of its half's level, with an opaque id
   that is new each time the group comes out of the fog; a group in a fight is shown by the fight;
@@ -44,7 +46,8 @@ What a view never has: internal ids of enemy groups, enemy groups standing in no
 (only the per-place ``Sighting``), positions or directions of enemy groups in fog, road levels
 of fogged edges newer than the last sighting, the barracks of enemy cities not next to an own
 node, the barracks builds, warehouse level and city builds of the enemy (DEC-26, item 10;
-DEC-31), the warehouse of a node that is not a source (DEC-21, item 3), enemy builds on fogged
+DEC-31), the warehouse of a foreign node where no own group stands (DEC-21, item 3; DEC-35,
+detail 2), enemy builds on fogged
 edges, enemy packets (on any edge, DEC-10, item 6), enemy CP, stance, production and counters,
 the enemy's front markers and rear minimum (DEC-28), enemy transfers (DEC-18, item 8), the bonus
 an enemy "Defense" has gathered (DEC-30, item 5), events, the target of an enemy's normal order
@@ -193,8 +196,9 @@ class NodeView:
     """Capacity by the node kind (DEC-22, item 1): public and exact."""
     detail: Detail
     warehouse: int | None
-    """Charges in the warehouse; only for sources of vision (own nodes, nodes where own groups
-    stand; DEC-21, item 3), never for a neighbour seen by the terrain table."""
+    """Charges in the warehouse; only for own nodes (own data) and foreign nodes where an own group
+    stands (DEC-21, item 3; DEC-35, detail 2), never for a neighbour seen by the terrain table or
+    the node of the half of an own group on an edge."""
     seen: Sighting | None
     """This tick's sighting unless ``detail`` is ``FOG``; for ``FOG`` the last one or ``None``."""
     attrition_in: int | None
@@ -234,8 +238,8 @@ class HalfView:
     """A half of an edge, from its node to the border point (DEC-21, item 5; DEC-23, item 5)."""
 
     detail: Detail
-    """The level of the node the half belongs to (a source's half is ``EXACT``), at least
-    ``PRESENCE`` while an own group is on the edge (DEC-10, item 2)."""
+    """The zone level of the node the half belongs to (a source's half is ``EXACT``; DEC-33, item
+    1); ``FOG`` for an own node without a source (DEC-35, detail 4)."""
     seen: Sighting | None
     """This tick's sighting of the enemy groups in the half (those in a fight too) unless
     ``detail`` is ``FOG``; for ``FOG`` the last one (no positions, DEC-33, detail 8) or ``None``."""
@@ -269,11 +273,12 @@ class EnemyGroupView:
 class EdgeView:
     id: int
     width: int
-    """Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is ``FOG``;
-    in fog the level of the last sighting, or level 1 if never seen. Never above the true one."""
+    """Road level the player knows (DEC-17, DEC-22): the current one unless ``detail`` is ``FOG``,
+    and always on an own internal edge (DEC-35, detail 5); otherwise in fog the level of the last
+    sighting, or level 1 if never seen. Never above the true one."""
     detail: Detail
-    """The road level visibility (DEC-17): ``PRESENCE`` while an end is a source or an own group
-    is on the edge (DEC-10, item 5), else ``FOG``. What is seen of enemies is in ``halves`` and
+    """The road level visibility (DEC-17): ``PRESENCE`` while an end is a source (DEC-35; the edge
+    of an own group on it is one), else ``FOG``. What is seen of enemies is in ``halves`` and
     ``enemy_groups``."""
     upgrade_gain: UpgradeGain | None
     """Only for own internal edges below ``max_level`` (DEC-26, item 7; DEC-28, item 7)."""
@@ -548,7 +553,7 @@ def _borders_enemy_city(state: GameState, player: int, node: int) -> bool:
 
 
 def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> PlayerView:
-    """The view of ``player`` on ``state`` (DEC-04, DEC-17, DEC-21, DEC-33, DEC-10). A pure
+    """The view of ``player`` on ``state`` (DEC-04, DEC-17, DEC-21, DEC-33, DEC-10, DEC-35). A pure
     function: never writes."""
     opaque = _hasher(match_key)
     mapdef = state.map
@@ -574,7 +579,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
                 owner=node.owner,
                 capacity=capacities[n],
                 detail=level,
-                warehouse=node.warehouse if levels.sources[n] else None,
+                warehouse=node.warehouse if node.owner == player or levels.stands[n] else None,
                 seen=now_nodes[n] if level is not Detail.FOG else memory.nodes.get(n),
                 attrition_in=attrition_in,
                 grace_left=grace_left,
@@ -598,7 +603,7 @@ def project(state: GameState, rules: Ruleset, player: int, match_key: bytes) -> 
         own = state.nodes[edef.a].owner == player and state.nodes[edef.b].owner == player
         pair: list[HalfView] = []
         for n in (edef.a, edef.b):
-            half_level = levels.half(e, n)
+            half_level = levels.half(n)
             if half_level is Detail.FOG:
                 remembered = memory.halves.get((e, n))
                 pair.append(fog_half if remembered is None else HalfView(half_level, remembered))
@@ -744,7 +749,7 @@ def _enemy_figures(
         loc = g.location
         if g.owner == player or g.fight is not None or not isinstance(loc, OnEdge):
             continue
-        level = levels.half(loc.edge, half_node(mapdef, loc))
+        level = levels.half(half_node(mapdef, loc))
         if level is Detail.FOG:
             continue
         exact = level is Detail.EXACT
