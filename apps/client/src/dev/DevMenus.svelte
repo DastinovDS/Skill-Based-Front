@@ -128,6 +128,7 @@
     notice={null}
     hasPassword={id !== 'menu-guest'}
     calibration={id === 'menu-calibration' ? CALIBRATION : null}
+    rating={id === 'menu-ranked' ? 1480 : null}
     {...handlers}
   />
 {/if}

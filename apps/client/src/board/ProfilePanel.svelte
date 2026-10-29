@@ -45,7 +45,6 @@
   $effect(() => {
     if (!focusHistory || load.status !== 'ready' || heading === undefined) return;
     heading.scrollIntoView({ block: 'start' });
-    heading.focus({ preventScroll: true });
   });
 
   const retryIn = (seconds: number | null): string | null =>
@@ -169,7 +168,7 @@
       <RecordBlock label={t('profile.record.all')} record={profile.record} />
     </div>
 
-    <h3 class="history" tabindex="-1" bind:this={heading}>
+    <h3 class="history" bind:this={heading}>
       {t('profile.history')}
       <span class="badge">{tf('profile.history.max', { n: HISTORY_LIMIT })}</span>
       {#if !own}<span class="badge">{t('profile.history.rankedOnly')}</span>{/if}
@@ -360,11 +359,6 @@
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--text-dim);
-  }
-
-  .history:focus-visible {
-    outline: 2px solid var(--paper);
-    outline-offset: 4px;
   }
 
   .head {
