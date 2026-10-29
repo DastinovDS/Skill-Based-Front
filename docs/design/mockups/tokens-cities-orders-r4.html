@@ -867,7 +867,7 @@ const pCol = (n) => (n.o === 'none' ? C.nStroke : col(n.o));
 const PROVS = [
   PROVS_R1[0],
   { name: 'PK Stop', sub: 'a minor transit stop: a pale disc with a thin owner rim and three stop dots on the rim (lit = your unit); pairs with CL', fn(n, X) {
-    const r = 11.5, none = n.o === 'none', en = n.o === 'enemy';
+    const r = 15.5, none = n.o === 'none', en = n.o === 'enemy';
     let s = `<g ${X.shd}>`;
     if (en) s += `<circle r="${f1(r + 3.2)}" stroke="${C.paper}" stroke-width="1"/>`;
     s += `<circle r="${r}" fill="${none ? '#c9d1d9' : lighten(col(n.o), 0.55)}" fill-opacity="${none ? 0.12 : 0.24}"/><circle r="${r}" stroke="${pCol(n)}" stroke-width="2" ${neutralDash(n)}/>`;
