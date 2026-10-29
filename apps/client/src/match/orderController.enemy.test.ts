@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEV_RULES, devSnapshot } from '../hud/devFeed.ts';
 import { HudState } from '../hud/hudState.svelte.ts';
 import { DEFAULT_MAP } from '../map/bundledMaps.ts';
-import type { Command, MapFile, SnapshotMsg } from '../protocol.gen.ts';
+import type { Command } from '../protocol.gen.ts';
 import { OrderBook } from './orderBook.ts';
 import { OrderController } from './orderController.ts';
 

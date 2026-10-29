@@ -135,6 +135,25 @@ for (const view of ['normal', 'supply'] as const) {
   });
 }
 
+// A click on an enemy city (#535): it is not selected and not lit. The frozen scene `snapshot`, the click on
+// the enemy city n3, the pointer moved away. `enemy-click.png`, the map alone; compare it with an own city
+// without a group (n2, `own-click.png`), which is selected and lit.
+for (const [name, at] of [
+  ['enemy-click', { x: 812, y: 425 }],
+  ['own-click', { x: 640, y: 597 }],
+] as const) {
+  test(`shot of a click on a city (${name})`, async ({ page }) => {
+    await page.goto('/?scene=snapshot');
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.mouse.click(at.x, at.y);
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(500);
+    await page.addStyleTag({ content: '.hud { display: none !important; }' });
+    await page.locator('canvas').screenshot({ path: join(OUT, `${name}.png`) });
+  });
+}
+
 // The screens before a match (#471, `/?menu=<id>`, src/dev/menuScenes.ts): `screen-<id>.png` and the
 // same in grey scale `screen-<id>-gray.png` (a state must read without the hue). The account menu is
 // the chip in the corner pressed; `-1024x640` is the smallest window we support, `-800x500` the
