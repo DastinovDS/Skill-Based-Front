@@ -240,12 +240,24 @@ def login(
     password). Rate limited per client IP and per nick. The previous token stops working.
     """
     limits: Limits = request.app.state.limits
-    enforce(limits.login_ip, _client_ip(request), "too many logins")
+    client = _client_ip(request)
+    enforce(limits.login_ip, client, "too many logins")
     try:
         key: str | None = nick_key(body.nick)
     except ValueError:  # not a valid nick: no account has it
         key = None
-    enforce(limits.login_nick, key or body.nick.casefold(), "too many logins")
+    nick = key or body.nick.casefold()
+    enforce(limits.login_nick, f"{nick}\n{client}", "too many logins")
+    try:
+        enforce(limits.login_nick_total, nick, "too many logins")
+    except HTTPException:
+        limits.alerter.alert(
+            "login_nick_flood",
+            "logins for one nick from many addresses reached the ceiling",
+            key=nick,
+            nick=nick[:64],
+        )
+        raise
     player = (
         None
         if key is None
