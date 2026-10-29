@@ -16,7 +16,8 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/map-style-2.html`](mockups/map-style-2.html) (round 2: volume, textures, fog, roads, #335),
 [`mockups/objects-style.html`](mockups/objects-style.html) (units, cities, barracks and "Defense", menu icons, #337),
 [`mockups/progress-style.html`](mockups/progress-style.html) (CP bar and the progress of barracks construction, warehouse upgrades and recruiting, #430: **[accepted]** 2026-10-28, section 32; the owner asked for it on 2026-10-28, after the mechanics freeze, so the postponement of section 23 does not apply to it),
-[`mockups/start-menu.html`](mockups/start-menu.html) (the start menu and the pre-match screens, #471: **[awaiting the owner's decision]**, section 31; asked for before the release on 2026-10-28). All of them are
+[`mockups/start-menu.html`](mockups/start-menu.html) (the start menu and the pre-match screens, #471: **[awaiting the owner's decision]**, section 31; asked for before the release on 2026-10-28),
+[`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html) (planned orders, unit tokens, cities and provinces, #431: **[awaiting the owner's decision]**, section 33; asked for before the release on 2026-10-28). All of them are
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
 only links and our descriptions.
@@ -80,6 +81,7 @@ Contents:
 30. Variant id mapping (old Cyrillic to new Latin)
 31. Start menu redesign (#471)
 32. Progress indicators: CP bar and the cells of builds and recruiting (#430, #439)
+33. Planned orders, unit tokens, cities and provinces (#431)
 
 ---
 
@@ -1676,3 +1678,28 @@ Status: **[accepted]**, the owner's decision of 2026-10-28 (issue #430, mockup [
 **Checked in grayscale and at 60%** (`mise run shots`: `progress-gray-60.png`, the scene `progress` in a 768 x 480 window with a grey filter, and `progress-selected.png`). Each state has its own pattern, so none needs the hue: a dot (queued), a hatch with a head line (in production), a solid cell (ready), a dashed frame (free slot), a dashed ring (needs a look). At 60% a queue cell is about 10 x 6 px: the dot, the solid cell and the dashed ring still read, the hatch reads as a half-filled cell with a lighter head; the same legibility as the mockup's own grayscale-60 frame (`progress-grayscale-60.png`). The stack of the build plate over the queue plate stays clear of the VP badge (upper right) and the barracks mark (left).
 
 **Not part of this section:** variants B, D of the CP bar and B, C, D of the progress marks stay in the mockup; the look of units and planned orders (#431); the row of squares at a group (#433).
+
+---
+
+## 33. Planned orders, unit tokens, cities and provinces (#431)
+
+Status: **[awaiting the owner's decision]**. The owner asked for this round before the release on 2026-10-28 (issue #431, the cities and provinces part added the same day), so the postponement of section 23 does not apply to it. Until the choice, sections 9.4, 9.5 and 9.7 stay as they are; #433 (the row of squares) waits for the units part.
+
+Mockup: [`mockups/tokens-cities-orders.html`](mockups/tokens-cities-orders.html), frames in [`mockups/img/431/`](mockups/img/431/). One file, no network, drawn in SVG over a crop of the baked `ridge` background. Four independent pickers (orders, units, cities, provinces), each with **Now** and four variants; a scene on a fragment of `ridge` (nodes 0 to 26, mid-game) at the game zoom levels 0.45, 0.7, 1.0 and 1.5 with a 9 s clock (your planned order prepares, leaves and walks; the opponent's leaves at 2.5 s); a matrix of states per element with all variants side by side; grayscale, reduced motion, state labels; the frame in the address (`#o=1&u=1&c=1&p=2&z=70&gray=1&t=1.2`).
+
+The fog of the scene follows **DEC-35** with the owner's display decision of 2026-10-29: vision only from own groups (the levels are computed on the page from the DEC-21 table of `mvp-1`), the whole own territory (own nodes and own internal roads) is drawn without the veil, an enemy in an own node without an own group is a `PRESENCE` "?", foreign places outside vision are under the F1 haze.
+
+| Element | Variants (besides Now) | Recommendation |
+| --- | --- | --- |
+| Planned orders | O1 Slim arc, O2 Medallion, O3 Beads, O4 Rail and target | O1 (second: O4) |
+| Units | U1+U4 Row (#433 as planned), UB Even token, UC Squares inside, UD Side gauge | U1+U4 (second: UD) |
+| Cities | CA Tidy, CB Banner, CC Citadel, CD Skyline | CA (second: CC) |
+| Provinces | P1 Pip, P2 Plot, P3 Pennant, P4 Field | P2 (second: P1) |
+
+No variant needs a DEC, a protocol change or a simulation change: the countdown of a planned order comes from `IntentView.created_tick` and `ruleset_public.orders.planned_delay_ticks`, the rest from fields the client already reads. The table with pros, risks, FPS risk and estimates, and the reasons for the recommendation, are in #431 and on the page. A finding for any choice of units: the row of squares under the tip reaches the place-name caption and the warehouse row; the mockup moves the caption under the token (`captionTop`, #449).
+
+| Scene, recommended set | Scene, Now |
+| --- | --- |
+| ![recommended](mockups/img/431/scene-recommended.png) | ![now](mockups/img/431/scene-now.png) |
+
+**Owner's decision:** awaiting the owner's decision.
