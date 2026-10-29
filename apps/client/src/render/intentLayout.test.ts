@@ -585,7 +585,7 @@ describe('ribbonSlice on a strongly curved ribbon', () => {
           const span = sheenSpan(total, phase);
           if (span === null) continue;
           const band = ribbonSlice(out, ax, span.from, span.to);
-          expect(band.length, `bend ${bend} len ${len} phase ${phase}`).toBeGreaterThanOrEqual(3);
+          expect(band.length, `bend ${String(bend)} len ${String(len)} phase ${phase.toFixed(1)}`).toBeGreaterThanOrEqual(3);
         }
       }
     }
