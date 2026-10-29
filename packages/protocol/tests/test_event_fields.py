@@ -113,14 +113,14 @@ def test_the_table_matches_the_emitters() -> None:
 # The filter ----------------------------------------------------------------------------------
 
 
-def _sample(kind: str) -> dict[str, EventValue]:
+def _sample(kind: str) -> dict[str, int]:
     """Every declared field with an int, an id field with a value like a sequential id."""
     return {name: 100 + i for i, name in enumerate(EVENT_FIELDS[kind])}
 
 
-def _receiver(kind: str, data: dict[str, EventValue]) -> list[int]:
+def _receiver(kind: str, data: dict[str, int]) -> list[int]:
     if kind in PRIVATE_KINDS:
-        return [int(data["owner" if kind == "warehouse_lost" else "player"])]
+        return [data["owner" if kind == "warehouse_lost" else "player"]]
     return list(PLAYERS)
 
 
@@ -152,7 +152,7 @@ def test_only_the_declared_id_fields_are_translated(kind: str) -> None:
         assert isinstance(msg, EventMsg)
         for name, value in data.items():
             if name in ids:
-                assert msg.data[name] == str(opaque_id(KEY, player, int(str(value)))), name
+                assert msg.data[name] == str(opaque_id(KEY, player, value)), name
             else:
                 assert msg.data[name] == value, name
 

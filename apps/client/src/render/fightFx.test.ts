@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { expectDeclared, filledData, tracked } from '../net/eventFields.fixture.ts';
 import type { EventMsg, FightView, MapFile } from '../protocol.gen.ts';
 import type { RenderGroup } from '../net/interpolate.ts';
 import {
@@ -400,5 +401,18 @@ describe('arena', () => {
     expect(roundProgress(60, 55, 10)).toBeCloseTo(0.5);
     expect(roundProgress(60, 60, 10)).toBe(1);
     expect(roundProgress(60, 70, 10)).toBe(1);
+  });
+});
+
+describe('the fields fightFx reads (ARC-02)', () => {
+  it.each(['fight_round', 'fight_ended'])('%s: only fields the server sends', (kind) => {
+    const place = { node: 0, edge: null, point: null };
+    for (const winner of [0, 1, null]) {
+      const overrides = kind === 'fight_ended' ? { ...place, winner } : place;
+      const { data, reads } = tracked(kind, filledData(kind, overrides));
+      const fx = fightFx({ type: 'event', tick: 10, kind, data }, map, radius);
+      expect(fx, kind).not.toBeNull();
+      expectDeclared(kind, reads);
+    }
   });
 });

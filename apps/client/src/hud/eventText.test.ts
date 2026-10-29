@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { getLocale, LOCALES, setLocale } from '../i18n/index.ts';
 import { eventText, HIDDEN_EVENT_KINDS, isLogged, LOGGED_EVENT_KINDS } from './eventText.ts';
+import { declaredFields, expectDeclared, filledData, tracked } from '../net/eventFields.fixture.ts';
 import type { HudEvent } from './hudData.ts';
 import type { NodeNamer } from './nodeName.ts';
 import { toastOf } from './toasts.ts';
@@ -126,5 +127,35 @@ describe('event kinds of the server', () => {
         expect(text, `${locale} ${kind}`).not.toMatch(/[a-z]+_[a-z]+/); // no raw `snake_case` kind
       }
     }
+  });
+});
+
+describe('the fields the feed and the toasts read (ARC-02)', () => {
+  // `match_ended` has a line but is no `event` message: the result comes as `match_end`.
+  const kinds = [...LOGGED_EVENT_KINDS].filter((kind) => kind !== 'match_ended');
+  // The branches of the texts: a city or a road, a barracks, a warehouse or a road to build.
+  const variants = [
+    {},
+    { edge: null },
+    { node: null },
+    { kind: 'barracks' },
+    { kind: 'warehouse' },
+    { stance: 'war' },
+  ];
+
+  it.each(kinds)('%s: only fields the server sends', (kind) => {
+    const reads = new Set<string>();
+    for (const me of [0, 1] as const) {
+      for (const variant of variants) {
+        // The variant is only as far as the kind has the field.
+        const own = Object.entries(variant).filter(([key]) => declaredFields(kind).has(key));
+        const { data, reads: read } = tracked(kind, filledData(kind, Object.fromEntries(own)));
+        const e = event(kind, data);
+        expect(eventText(e, me, names), kind).not.toBe('');
+        toastOf(e, me, names);
+        for (const key of read) reads.add(key);
+      }
+    }
+    expectDeclared(kind, reads);
   });
 });

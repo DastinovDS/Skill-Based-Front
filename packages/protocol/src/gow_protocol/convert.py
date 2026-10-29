@@ -234,11 +234,12 @@ EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
 }
 """The fields of each event kind the server sends to a player (ARC-02, #457), alphabetical.
 
-``event_for_player`` drops every other field of a simulation event, so a field a rule change adds
-reaches nobody until it is declared here. Declaring one is a fog decision: a field of a public or
-fight kind goes to the opponent (AGENTS.md 4.4), so it needs a fog test. ``vectors/event_fields.json``
-is written from this table (``scripts/export_schema.py``), and the client tests check the fields
-they read against it. ``packages/protocol/tests/test_convert.py`` checks it against the emitters."""
+``event_for_player`` drops every other field of a simulation event, so a field a rule change
+adds reaches nobody until it is declared here. Declaring one is a fog decision: a field of a
+public or fight kind goes to the opponent (AGENTS.md 4.4), so it needs a fog test.
+``vectors/event_fields.json`` is written from this table (``scripts/export_schema.py``), and the
+client tests check the fields they read against it. ``tests/test_event_fields.py`` checks the table
+against the emitters in ``gow_sim``."""
 
 EVENT_ID_FIELDS: Final[Mapping[str, frozenset[str]]] = {
     "attrition": frozenset({"group"}),

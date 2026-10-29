@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { expectDeclared, filledData, tracked } from '../net/eventFields.fixture.ts';
 import type { AckMsg, Command } from '../protocol.gen.ts';
 import { GHOST_REJECT_MS } from '../render/style.ts';
 import { OrderBook, type CommandResult } from './orderBook.ts';
@@ -112,5 +113,22 @@ describe('OrderBook', () => {
     book.onRendered(100);
     book.onAck(ack(9));
     expect(book.ghosts()).toBe(before);
+  });
+});
+
+describe('the fields OrderBook.onEvent reads (ARC-02)', () => {
+  it('group_split: only fields the server sends, and they name the new group', () => {
+    const { book } = setup();
+    const splits: string[][] = [];
+    book.onSplit = (from, to) => splits.push([from, to]);
+    const cmd: Command = { type: 'split', group: 'g', n: 2 };
+    book.track(1, cmd, 2);
+    const { data, reads } = tracked(
+      'group_split',
+      filledData('group_split', { group: 'g', new_group: 'n' }),
+    );
+    book.onEvent({ type: 'event', tick: 10, kind: 'group_split', data });
+    expect(splits).toEqual([['g', 'n']]);
+    expectDeclared('group_split', reads);
   });
 });
