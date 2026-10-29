@@ -486,7 +486,7 @@ describe('AppState', () => {
 
     it('draws the bundled menu map behind the screens without a request (#474)', async () => {
       const maps = vi.fn(() => Promise.resolve([]));
-      const { app } = setup('', memory(), { maps: maps as never });
+      const { app } = setup('', memory(), { maps });
       expect(app.backdrop.meta.name).toBe('valley');
       await app.start();
       expect(app.screen.name).toBe('welcome');

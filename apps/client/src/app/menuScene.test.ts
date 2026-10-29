@@ -89,6 +89,12 @@ describe('layoutScene (#471)', () => {
       expect(scene.ownCapital).toEqual({ x: RAIL_RIGHT, y: 420 });
     });
 
+    it('sizes the terrain and the territory by the spacing of the map, as in the mockup', () => {
+      const scene = layoutScene(MENU_MAP, 1280, 800);
+      expect(Math.round(scene.terrainRadius)).toBe(58);
+      expect(Math.round(scene.territoryRadius)).toBe(44);
+    });
+
     it('runs the front road down the middle of the valley', () => {
       const scene = layoutScene(MENU_MAP, 1280, 800);
       expect(scene.front.length).toBe(5);

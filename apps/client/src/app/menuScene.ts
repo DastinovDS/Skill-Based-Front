@@ -46,6 +46,9 @@ export interface Scene {
   readonly height: number;
   /** Px per unit of the map file. */
   readonly scale: number;
+  /** Px: the soft terrain blob of a node and the tint of the start territory round it. */
+  readonly terrainRadius: number;
+  readonly territoryRadius: number;
   readonly nodes: readonly SceneNode[];
   readonly edges: readonly SceneEdge[];
   /** The road from the own capital to the enemy one, node by node. */
@@ -85,6 +88,25 @@ const TOP_ROOM = BAR_BOTTOM + FOG_TOP_FADE + 4;
 const BOTTOM_ROOM = 100;
 
 const MIN_SCALE = 0.16;
+/**
+ * The terrain blob and the territory tint by the spacing of the map (the median distance from a node
+ * to its nearest neighbour): the look of the menu map sketch MM1 (#474, 58 and 44 units on it).
+ */
+const TERRAIN_PER_SPACING = 0.52;
+const TERRITORY_PER_SPACING = 0.4;
+
+/** The median distance from a node to its nearest neighbour, in map units. */
+function spacing(map: MapFile): number {
+  const nearest = map.nodes
+    .map((n) =>
+      Math.min(
+        ...map.nodes.filter((o) => o.id !== n.id).map((o) => Math.hypot(o.x - n.x, o.y - n.y)),
+      ),
+    )
+    .filter((d) => Number.isFinite(d))
+    .sort((a, b) => a - b);
+  return nearest[Math.floor(nearest.length / 2)] ?? 100;
+}
 
 function owner(value: number | null): 0 | 1 | null {
   return value === 0 || value === 1 ? value : null;
@@ -141,6 +163,8 @@ export function layoutScene(map: MapFile, width: number, height: number): Scene 
       width,
       height,
       scale: MIN_SCALE,
+      terrainRadius: 0,
+      territoryRadius: 0,
       nodes: [],
       edges: [],
       front: [],
@@ -190,10 +214,13 @@ export function layoutScene(map: MapFile, width: number, height: number): Scene 
   const ownCapital = at(capital0);
   const enemyCapital = at(capital1);
   const fogStart = Math.min(width - FOG_WIDTH, enemyCapital.x - 90);
+  const gap = spacing(map);
   return {
     width,
     height,
     scale,
+    terrainRadius: gap * TERRAIN_PER_SPACING * scale,
+    territoryRadius: gap * TERRITORY_PER_SPACING * scale,
     nodes,
     edges,
     front,
