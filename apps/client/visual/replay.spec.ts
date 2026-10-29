@@ -7,7 +7,11 @@ test('replay viewer plays, speeds up and seeks', async ({ page }) => {
   const canvas = page.locator('.game-canvas');
   await expect(canvas).toHaveAttribute('data-tick', '0');
 
-  await page.getByRole('button', { name: '×16' }).click();
+  // ×4, not ×16: the match must outlast the test's own steps. On a slow runner (software WebGL
+  // draws a few frames a second) ×16 reaches the end (tick 409) before the Pause click, and the
+  // slider seek then lands on a replay that is not paused (#476).
+  await page.getByRole('button', { name: '×4' }).click();
+  await expect(page.getByRole('button', { name: '×4' })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Play' }).click();
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
   await expect.poll(async () => Number(await canvas.getAttribute('data-tick'))).toBeGreaterThan(40);

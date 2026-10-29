@@ -81,7 +81,10 @@
       type="button"
       class="play"
       onclick={() => {
-        player.toggle();
+        // The click says what the label said, not what the player does by now: the label is up to
+        // 100 ms old, and a toggle on a replay that has just ended would restart it (#476).
+        if (playing) player.pause();
+        else player.play();
         sync();
       }}
     >

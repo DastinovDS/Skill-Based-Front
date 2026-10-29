@@ -5,7 +5,13 @@ import { SAMPLE } from './fixture.ts';
 import ReplayViewer from './ReplayViewer.svelte';
 
 // PixiJS needs WebGL; the map is covered by GameCanvas tests and the visual job.
-vi.mock('../render/GameCanvas.svelte', () => ({ default: () => undefined }));
+// It keeps the source the viewer hands over, so a test can run the render loop's `frame()` call.
+let drawn: { frame: () => unknown } | undefined;
+vi.mock('../render/GameCanvas.svelte', () => ({
+  default: (_anchor: unknown, props: { source: { frame: () => unknown } }) => {
+    drawn = props.source;
+  },
+}));
 
 let viewer: Record<string, unknown> | undefined;
 
@@ -39,6 +45,25 @@ describe('ReplayViewer controls', () => {
     button(root, 'Pause').click();
     flushSync();
     expect(button(root, 'Play')).toBeTruthy();
+  });
+
+  it('Pause on a replay that ended since the last sync does not restart it (#476)', () => {
+    let now = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const root = open();
+    button(root, '×16').click();
+    button(root, 'Play').click();
+    flushSync();
+    expect(button(root, 'Pause')).toBeTruthy();
+    // The match ends and the render loop notices (`frame()` moves the clock), while the controls
+    // still show "Pause": they sync ten times a second, the loop draws every frame.
+    now += 60_000;
+    drawn?.frame();
+    button(root, 'Pause').click();
+    flushSync();
+    expect(button(root, 'Play')).toBeTruthy();
+    expect(root.textContent).toContain('0:40 / 0:40');
+    vi.restoreAllMocks();
   });
 
   it('offers x1, x4 and x16, one pressed', () => {
