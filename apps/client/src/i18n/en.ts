@@ -344,6 +344,7 @@ export const en = {
   'help.key.defense': 'group Defense on or off',
   'defense.bonus': '+{bonus} / {cap}',
   // A range of enemy units (DEC-21, item 4): "3-5", the last one open: "21+".
+  'figure.plate': '{units} · {charged}●',
   'range.closed': '{low}-{high}',
   'range.open': '{low}+',
   'defense.title': 'Defense: bonus {bonus} of {cap}',

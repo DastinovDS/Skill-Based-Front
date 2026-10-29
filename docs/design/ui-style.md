@@ -42,7 +42,7 @@ recommendation are ready, there is no choice, there is no code. **[replaced]**: 
 | 20-23 (animation, icons, constraints, process) | 23 [accepted] (the owner's practice of 2026-10-21), 20-22 [proposed] | new |
 | 24 Style directions | [accepted] 2026-10-21: D3 for the shading, without relief (refined by section 26); #332 closed | shading **implemented: #347, PR #409** (see 26.3) |
 | 26 Map style, round 2 | [accepted] 2026-10-21 (26.3): BL1-1 with the highlight of the borders of the "pronounced" one, T2 (the baker on numpy and Pillow, WebP), F1 "Haze", R1 "Stripes", the packet as a square; #335 closed | waits for implementation: #344 (the baker, T2, the `artery` scene); **implemented: BL1-1 shading with the border glow (26.3) #347, PR #409; roads R1 "Stripes" and the square packet (26.1) #345, PR #367; fog F1 "Haze" (9.8) #346, PR #368** |
-| 27 Orders, fight on the map, arena | [accepted] 2026-10-21 (27.3, shots: 29.4): orders and ribbons as now, IN3 "Sight", the bonus "◇ +N" on the head, LY2 "Over the haze", FX3, EF2 "Pointer" with "Dissolve and marks", arena AR1; #339 closed | waits for implementation: #330 (arena AR1, in progress), #353 (IN3, bonus), #354 (EF2, after #296); **implemented: fight effects FX3 #351, PR #373; layers LY2 "Over the haze" #346, PR #368; shots SH1 instead of the exchange arrows of the arena #352, PR #376** |
+| 27 Orders, fight on the map, arena | [accepted] 2026-10-21 (27.3, shots: 29.4): orders and ribbons as now, IN3 "Sight", the bonus "◇ +N" on the head, LY2 "Over the haze", FX3, EF2 "Pointer" with "Dissolve and marks", arena AR1; #339 closed | waits for implementation: #330 (arena AR1, in progress), #353 (IN3, bonus); **implemented: EF2 "Pointer" with "Dissolve and marks" #354; fight effects FX3 #351, PR #373; layers LY2 "Over the haze" #346, PR #368; shots SH1 instead of the exchange arrows of the arena #352, PR #376** |
 | 28 Map objects and menu icons | [accepted] 2026-10-21 (28.1): U1 and the row of squares U4, C1, B1, I1 (B2 later, no issue is opened); #337 closed | waits for implementation: the row of squares U4 (#433, moved from #348, waits for a mockup, #431), B1 (#349); **implemented: U1 as part of BL1 #347, PR #409; cities C1 (warehouse places filled / frame / dashed, the province as a hollow ring) #348, PR #437**; implemented (menu icons I1): PR #362 |
 | 32 Progress indicators | [accepted] 2026-10-28 (32): CP bar C "Track", queue, barracks and warehouse build A "Cells", the alert ring for a unit ready with no room and for production stopped by a fight; #430 closed | **implemented: #439** |
 | 29 Shots in a fight | [accepted] 2026-10-21 (29.4): SH1 "Tracers", the strength "Stronger", the distance of the groups as now (46) | the strength "Stronger" and the common part (pools, the effects layer, the particle core) **implemented: #351, PR #373**; tracers SH1 **implemented: #352, PR #376** |
@@ -565,7 +565,16 @@ The ribbon arrow (HOI4, Mini Motorways):
 - **Half memory** (DEC-33, item 8): a ghost with an age at the border point, at the side of the road: the half of end `a`
   to the left of the direction a → b, the half of end `b` to the right. There is no position and direction in the memory.
 - **An enemy figure** on a half (DEC-33): moves smoothly by `pos` between two snapshots (without extrapolation); a new `id`
-  (an exit from the fog) is a new figure, the line is not drawn across a gap.
+  (an exit from the fog) is a new figure, the line is not drawn across a gap. **EF2 "Pointer" (#354):** a ▽ token (as a group), a solid
+  red **pointer head** with a light outline in front of it, 30 units from the centre along the road toward the nearest node it goes to (`toward_b`),
+  and a **plate with the level** under it: «4 · 3●» (EXACT: units and charged), «3-5» (RANGE, «21+» open); at PRESENCE there is no plate, the token is
+  dashed with its «?». The level reads without the hue: head (direction), plate (numbers), dashes (unknown). **Dissolve and marks:** the figure is over the haze and its
+  opacity goes from 0 to 1 over 24 units from the border point inside the visible half (`FIGURE.dissolve`), so it never pops out of the fog;
+  a figure first seen within 40 units of the border point (not on the first frame of the view) came out of the fog there: **one ring** spreads from the point
+  over 0.8 s (not with "less motion") and a **tick** across the road with a chevron into the visible half stays for 2 s. When it goes back into the fog the
+  half memory (above) stays at the border point and a **dashed tick** across the road marks the point while the memory is drawn. Code: `figureLayout.ts` (pure), `figureView.ts`,
+  `fogView.ts` (the dashed tick). Several figures in one half: each has its own plate; a plate is 16 units tall and sits 26 under the token centre, so
+  two figures nearer than that along a road overlap; no merging rule yet (see the PR of #354).
 - **Fading:** up to 60 s alpha 0.6, from 60 to 120 s linearly to 0, after 120 s it is not drawn
   (`GHOST_FADE_START_S = 60`, `GHOST_HIDE_S = 120` in `style.ts`). Display only: the memory remains in
   `PlayerView`.

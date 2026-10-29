@@ -8,10 +8,11 @@ import type {
   PlayerId,
   SnapshotMsg,
 } from '../protocol.gen.ts';
-import { triangleHeight, triangleSide } from './layout.ts';
+import { dashSegments, edgeEnds, triangleHeight, triangleSide } from './layout.ts';
 import {
   ageLabel,
   ghostAlpha,
+  borderPoint,
   halfMarkerPoint,
   nodeMarkerPoint,
   sameVeil,
@@ -28,6 +29,7 @@ import {
   GHOST_AGE_STROKE,
   GLYPH_COLOR,
   GHOST_HIDE_S,
+  ENEMY,
 } from './style.ts';
 
 /** Where a snapshot says an enemy was last seen in a place that is hidden now. */
@@ -130,6 +132,9 @@ export class FogView {
   private readonly halfGhosts: (Ghost | null)[];
   private readonly shadeLayer = new Container({ label: 'fog-shades' });
   private readonly ghostLayer = new Container({ label: 'fog-ghosts' });
+  /** The dashed tick across the road on the border point of a half whose memory is drawn (#354, leaving the haze). */
+  private readonly halfTicks = new Graphics({ label: 'fog-half-ticks' });
+  private tickMarks: { edge: number; alpha: number }[] = [];
   private readonly ageStyle: TextStyle;
   private readonly enemy: PlayerId;
   private base: SnapshotMsg | null = null;
@@ -165,7 +170,7 @@ export class FogView {
     this.shadeLayer.addChild(this.veilCache);
     this.nodeGhosts = map.nodes.map(() => null);
     this.halfGhosts = map.edges.flatMap(() => [null, null]);
-    layers.layer.fog.addChild(this.shadeLayer, this.ghostLayer);
+    layers.layer.fog.addChild(this.shadeLayer, this.halfTicks, this.ghostLayer);
   }
 
   /** Ticks per second, for the age of a memory; set when the ruleset is known. */
@@ -204,12 +209,42 @@ export class FogView {
     const { nodes, edges } = base.view;
     this.setRegions(nodes);
     for (const node of nodes) this.setNode(node, base.tick);
+    this.tickMarks = [];
     for (const edge of edges) this.setEdge(edge, base.tick);
+    this.drawHalfTicks();
+  }
+
+  /**
+   * Where a figure left the vision zone the memory of the half stays at the border point; a dashed
+   * tick across the road there (the entry tick of `FigureView`, dashed: not seen now) says it is the
+   * point it went out at.
+   */
+  private drawHalfTicks(): void {
+    const g = this.halfTicks.clear();
+    for (const { edge, alpha } of this.tickMarks) {
+      const at = borderPoint(this.map, edge);
+      const ends = edgeEnds(this.map, edge);
+      if (at === undefined || ends === undefined) continue;
+      const length = Math.hypot(ends.b.x - ends.a.x, ends.b.y - ends.a.y);
+      if (length === 0) continue;
+      const nx = (-(ends.b.y - ends.a.y) / length) * 12;
+      const ny = ((ends.b.x - ends.a.x) / length) * 12;
+      for (const [from, to] of dashSegments(
+        { x: at.x - nx, y: at.y - ny },
+        { x: at.x + nx, y: at.y + ny },
+        3,
+        3,
+      )) {
+        g.moveTo(from.x, from.y).lineTo(to.x, to.y);
+      }
+      g.stroke({ width: 3, color: ENEMY, alpha, cap: 'round' });
+    }
   }
 
   destroy(): void {
     this.shadeLayer.destroy({ children: true });
     this.blur.destroy();
+    this.halfTicks.destroy();
     this.ghostLayer.destroy({ children: true });
     this.ageStyle.destroy();
   }
@@ -316,5 +351,8 @@ export class FogView {
       return;
     }
     this.showGhost(this.halfGhosts, edge.id * 2 + side, memory, tick, at);
+    const seconds = this.tickHz > 0 ? (tick - memory.tick) / this.tickHz : 0;
+    const alpha = ghostAlpha(seconds);
+    if (alpha > 0) this.tickMarks.push({ edge: edge.id, alpha });
   }
 }
