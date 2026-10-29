@@ -117,6 +117,8 @@
         for (const event of scene.events) {
           hud.onEvent(event);
         }
+        // A frozen scene has no render clock: its toasts show at once.
+        hud.onRender(Number.POSITIVE_INFINITY);
       });
     }
   });

@@ -226,4 +226,23 @@ describe('MatchSession', () => {
     expect(session.frame()?.base.tick).toBeGreaterThanOrEqual(22);
     expect(session.orders.ghosts()).toEqual([]);
   });
+
+  it('shows the toast of an event when the map reaches its tick, not when the event arrives (#561)', () => {
+    const { session, hud, socket, advance } = setup();
+    socket.reply(snapshot(20));
+    socket.reply({
+      type: 'event',
+      tick: 22,
+      kind: 'attrition',
+      data: { node: 0, player: 0 },
+    });
+    for (const tick of [21, 22]) socket.reply(snapshot(tick));
+    // The render time runs behind the newest snapshot: the event is not on the map yet.
+    expect(session.frame()?.tick).toBeLessThan(22);
+    expect(hud.toasts.current).toEqual([]);
+    for (const tick of [23, 24]) socket.reply(snapshot(tick));
+    advance(5000);
+    expect(session.frame()?.tick).toBeGreaterThanOrEqual(22);
+    expect(hud.toasts.current).toHaveLength(1);
+  });
 });

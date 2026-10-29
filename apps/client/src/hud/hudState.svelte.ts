@@ -113,10 +113,19 @@ export class HudState {
     };
     this.threats.onEvent(event, (node) => this.#snapshot?.view.nodes[node]?.owner);
     const toast = toastOf(entry, this.#ctx.me, this.nodeName);
-    if (toast !== null) this.toasts.push(toast);
+    if (toast !== null) this.toasts.later(event.tick, toast);
     if (!isLogged(event.kind)) return; // bookkeeping kinds would push the real news out
     this.#seq += 1;
     this.#events = [entry, ...this.#events].slice(0, EVENT_LIMIT);
+  }
+
+  /**
+   * The map drew tick `tick` (every frame): the toasts of events up to it show now, not when the
+   * event arrived, so the news does not run ahead of the picture (the map renders a few ticks
+   * behind the newest snapshot).
+   */
+  onRender(tick: number): void {
+    this.toasts.release(tick);
   }
 
   select(selection: Selection | null): void {
@@ -170,7 +179,11 @@ export class HudState {
     if (left > LAST_MINUTE_S || this.#lastMinuteSeen) return;
     this.#lastMinuteSeen = true;
     if (match_ticks > LAST_MINUTE_S * tick_hz && snapshot.tick > 0) {
-      this.toasts.push({ tone: 'warn', icon: 'clock', text: t('toast.lastMinute') });
+      this.toasts.later(snapshot.tick, {
+        tone: 'warn',
+        icon: 'clock',
+        text: t('toast.lastMinute'),
+      });
     }
   }
 

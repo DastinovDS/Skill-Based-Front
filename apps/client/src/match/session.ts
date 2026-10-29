@@ -202,7 +202,10 @@ export class MatchSession implements RenderSource {
 
   frame(): RenderFrame | null {
     const frame = this.buffer.sample();
-    if (frame !== null) this.orders.onRendered(frame.base.tick);
+    if (frame !== null) {
+      this.orders.onRendered(frame.base.tick);
+      this.#hud?.onRender(frame.tick);
+    }
     return frame;
   }
 
