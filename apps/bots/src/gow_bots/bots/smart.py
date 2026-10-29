@@ -14,7 +14,9 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
 2. **The capital.** When the shown enemy forces that can reach the own capital within ``alarm``
    ticks are enough to take it (``Threat.danger``), the capital comes first: its groups stay,
    the strongest one goes into Defense if the bonus grows before the arrival (DEC-30), free
-   charged groups that can arrive in time walk home, and the capital recruits.
+   charged groups that can arrive in time walk home, and the capital recruits. Only a garrison
+   sees what comes (DEC-35), so while an enemy node is within ``watch`` hops of the capital it
+   keeps at least ``watch_guard`` units.
 3. **Visible strikes** (DEC-08): ``respond`` 1 answers a planned strike at the capital, 2 at any
    own city, with Defense and the nearest group (the reactive play); for ``EXPOSED_TICKS`` the
    origin of every strike scores ``w_exposed`` more as a target (a bare spot to hit back).
@@ -75,6 +77,8 @@ _COMMON: Final[Mapping[str, ParamRange]] = {
     "all_in": ParamRange(3, 5),
     "secure_margin": ParamRange(1, 1),
     "starved": ParamRange(4, 6),
+    "watch": ParamRange(2, 2),
+    "watch_guard": ParamRange(2, 2),
 }
 """Thresholds every personality shares (see the module docstring)."""
 
@@ -122,6 +126,8 @@ class SmartBot(CampaignBot):
         """Own nodes next to the enemy in this decision: they keep ``hold_front`` units."""
         self.answered: dict[int, bool] = {}
         self.exposed: dict[int, int] = {}
+        self.watched = False
+        """An enemy node is near the own capital in this decision (``enemy_near_home``)."""
         self._cut: dict[int, int] = {}
         self._cut_tick = -CUT_REFRESH_TICKS
 
@@ -139,6 +145,7 @@ class SmartBot(CampaignBot):
             threat.danger and threat.eta is not None and threat.eta - tick <= drawn["alarm"]
         )
         self.hot = self._hot(view)
+        self.watched = self.enemy_near_home(view)
         self.params = self.adjusted(a)
         try:
             return self._decide(view, tick, a)
@@ -156,10 +163,19 @@ class SmartBot(CampaignBot):
             p["radius"] += 1
         if a.enemy_cp < self.rules.orders.cost.planned_move:
             p["reserve"] = 0
+        if self.watched:
+            p["guard"] = max(p["guard"], p["watch_guard"])
         if self.alarm:
             p["guard"] = max(p["guard"], a.threat.units)
             p["reserve"] = 0  # the reserve is for this moment: Defense and the walk home
         return p
+
+    def enemy_near_home(self, view: PlayerView) -> bool:
+        """An enemy node within ``watch`` hops of the own capital (public ownership): only a
+        garrison sees what comes (DEC-35), so the capital keeps ``watch_guard`` units."""
+        hops = self.hops[self.home]
+        watch = self.params["watch"]
+        return any(n.owner == 1 - self.player and 0 <= hops[n.id] <= watch for n in view.nodes)
 
     def _decide(self, view: PlayerView, tick: int, a: Assessment) -> list[Command]:
         ctx = Ctx(view, tick, view.me.cp - self.params["reserve"], standing=self.standing(view))
