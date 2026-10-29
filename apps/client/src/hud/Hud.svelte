@@ -40,6 +40,8 @@
     orders: OrderController;
     /** Which overlay is open (help, exit dialog). */
     chrome: HudChrome;
+    /** A ranked match (DEC-34): leaving it warns about the queue lock. */
+    rated?: boolean;
     /** Show the key-hint bar (the first matches only). */
     hints?: boolean;
     /** Where cities and groups are on screen: the radial menus of a city and a group sit on them. */
@@ -57,6 +59,7 @@
     hud,
     orders,
     chrome,
+    rated = false,
     hints = false,
     anchors = NO_ANCHORS,
     onpause,
@@ -194,6 +197,7 @@
   />
   <ExitDialog
     open={chrome.exitOpen}
+    {rated}
     onforfeit={() => {
       chrome.exitOpen = false;
       orders.forfeit();

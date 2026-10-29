@@ -5,7 +5,7 @@
  * `sceneList.test.ts` keeps the two in step.
  */
 import type { QueueStatus } from '../api/http.ts';
-import type { Calibration } from '../protocol.gen.ts';
+import type { Calibration, MatchEndMsg, UnratedReason } from '../protocol.gen.ts';
 
 export const MENU_SCENE_IDS = [
   'welcome',
@@ -20,6 +20,10 @@ export const MENU_SCENE_IDS = [
   'queue-long',
   'queue-found',
   'queue-confirmed',
+  'result-guest',
+  'result-calibration',
+  'result-limit',
+  'exit-rated',
 ] as const;
 
 export type MenuSceneId = (typeof MENU_SCENE_IDS)[number];
@@ -57,4 +61,28 @@ export const QUEUE_SCENES: Readonly<Record<string, QueueStatus>> = {
     confirm_in_s: 5.2,
     you_confirmed: true,
   },
+};
+
+const ended: MatchEndMsg = {
+  type: 'match_end',
+  tick: 6000,
+  reason: 'timer',
+  winner: 0,
+  vp: [9, 7],
+  rating: null,
+  rated: false,
+  unrated_reason: null,
+  calibration: null,
+};
+
+const unrated = (reason: UnratedReason): MatchEndMsg => ({
+  ...ended,
+  unrated_reason: reason,
+});
+
+/** The result screens of DEC-34 (`?menu=result-*`): why a match did not change the rating. */
+export const RESULT_SCENES: Readonly<Record<string, MatchEndMsg>> = {
+  'result-guest': unrated('guest'),
+  'result-calibration': { ...ended, rated: true, calibration: { played: 3, total: 5 } },
+  'result-limit': unrated('opponent_limit'),
 };

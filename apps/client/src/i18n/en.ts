@@ -271,6 +271,17 @@ export const en = {
   'result.reason.double_defeat': 'Both capitals fell at once.',
   'result.vp': 'Victory points: you {mine}, enemy {enemy}',
   'result.rating': 'Rating: {before} → {after} ({delta})',
+  'result.unrated.casual': 'Not ranked: only matches from the queue change the rating.',
+  'result.unrated.guest': 'Not ranked: you played as a guest. Set a password to get a rating.',
+  'result.unrated.opponent_guest': 'Not ranked: your opponent played as a guest.',
+  'result.unrated.opponent_calibrating':
+    'Your rating did not change: your opponent is still in calibration.',
+  'result.unrated.opponent_limit':
+    'Not ranked: the limit of ranked matches against this opponent is used up for now.',
+  'result.unrated.opponent_early_resign':
+    'Your rating did not change: your opponent gave up early in the match.',
+  'result.calibration': 'Calibration {played}/{total}',
+  'result.calibrationHidden': 'Your rating shows once calibration is over.',
   'result.replay': 'Watch the replay',
   'result.menu': 'To the menu',
   'legal.nav': 'Legal information',
@@ -344,6 +355,8 @@ export const en = {
   'start.capital': 'Opponent: {nick}',
   'exit.title': 'Leave the match?',
   'exit.text': 'This is a forfeit: the match ends with your defeat.',
+  'exit.ratedText':
+    "This is a ranked match. A forfeit is a defeat, and forfeits in ranked matches lock the matchmaking queue: a single one carries no lock, repeated ones lock it for longer each time (bots, friends and the lobby stay open). A forfeit in the first minutes also leaves your opponent's rating unchanged.",
   'exit.confirm': 'Forfeit and leave',
   'exit.stay': 'Stay',
   'help.title': 'Help',

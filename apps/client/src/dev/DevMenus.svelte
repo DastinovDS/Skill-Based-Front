@@ -1,9 +1,17 @@
 <script lang="ts">
   import MenuScreen from '../app/MenuScreen.svelte';
+  import ResultScreen from '../app/ResultScreen.svelte';
   import QueueView from '../app/QueueView.svelte';
   import WelcomeScreen from '../app/WelcomeScreen.svelte';
   import { DEFAULT_MAP, BUNDLED_MAPS } from '../map/bundledMaps.ts';
-  import { BAN_SECONDS, CALIBRATION, QUEUE_SCENES, isMenuScene } from './menuScenes.ts';
+  import ExitDialog from '../hud/ExitDialog.svelte';
+  import {
+    BAN_SECONDS,
+    CALIBRATION,
+    QUEUE_SCENES,
+    RESULT_SCENES,
+    isMenuScene,
+  } from './menuScenes.ts';
 
   // `?menu=<id>`: one screen before a match with fixed data (see menuScenes.ts).
   const requested = new URLSearchParams(window.location.search).get('menu');
@@ -19,6 +27,7 @@
     onlogout: nothing,
   };
   const queue = QUEUE_SCENES[id];
+  const result = RESULT_SCENES[id];
 </script>
 
 {#if id === 'welcome' || id === 'welcome-notice'}
@@ -30,6 +39,12 @@
     onlogin={() => Promise.resolve(null)}
     onregister={() => Promise.resolve(null)}
   />
+{:else if result !== undefined}
+  <ResultScreen me={0} end={result} onreplay={nothing} onmenu={nothing} />
+{:else if id === 'exit-rated'}
+  <div class="stage">
+    <ExitDialog open rated onforfeit={nothing} onstay={nothing} />
+  </div>
 {:else if queue !== undefined}
   <QueueView
     {map}
@@ -78,3 +93,12 @@
     {...handlers}
   />
 {/if}
+
+<style>
+  /* The exit dialog is an overlay of the match screen: give it a page to cover. */
+  .stage {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+  }
+</style>

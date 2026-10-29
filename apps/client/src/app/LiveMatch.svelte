@@ -49,6 +49,8 @@
   let hud = $state.raw<HudState | null>(null);
   let rules = $state.raw<RulesetPublic | null>(null);
   let me = $state<PlayerId>(0);
+  // A ranked match (DEC-34, also a calibration match): leaving it warns about the queue lock.
+  let rated = $state(false);
   let session = $state.raw<MatchSession | null>(null);
   let status = $state<ConnectionStatus>('connecting');
   let paused = $state.raw<PausedMsg | null>(null);
@@ -93,6 +95,7 @@
           map,
         });
         me = welcome.player;
+        rated = welcome.rated;
         rules = welcome.ruleset_public;
         hud = state;
         return {
@@ -225,6 +228,7 @@
       {hud}
       {orders}
       {chrome}
+      {rated}
       {hints}
       onpause={pauseState.available && status === 'ready' && paused === null
         ? () => {

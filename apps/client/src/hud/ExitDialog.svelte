@@ -4,12 +4,14 @@
 
   interface Props {
     open: boolean;
+    /** A ranked match (DEC-34): the warning names the queue lock a forfeit can bring. */
+    rated?: boolean;
     /** The player confirmed: forfeit the match. */
     onforfeit: () => void;
     onstay: () => void;
   }
 
-  let { open, onforfeit, onstay }: Props = $props();
+  let { open, rated = false, onforfeit, onstay }: Props = $props();
 
   let stay: HTMLButtonElement | undefined = $state();
   let confirm: HTMLButtonElement | undefined = $state();
@@ -41,7 +43,7 @@
       onkeydown={onKey}
     >
       <h2 id="exit-title">{t('exit.title')}</h2>
-      <p id="exit-text">{t('exit.text')}</p>
+      <p id="exit-text">{t(rated ? 'exit.ratedText' : 'exit.text')}</p>
       <div class="actions">
         <button type="button" class="danger" bind:this={confirm} onclick={onforfeit}>
           {t('exit.confirm')}
@@ -82,6 +84,10 @@
   h2,
   p {
     margin: 0;
+  }
+
+  p {
+    line-height: 1.4;
   }
 
   h2 {
