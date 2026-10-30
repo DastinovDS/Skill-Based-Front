@@ -241,6 +241,20 @@ run = "uv run gow-maps mirror maps/src/{{usage.name}}.half.json -o maps/{{usage.
 description = "Bot tournament (defaults: the maps of the pool maps/*.json, not the fixtures, all bots, 100 seeds, 8 jobs, mvp-1; override after --)"
 run = "uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --ruleset rulesets/mvp-1.toml"
 
+[tasks."tournament:gh"]
+description = "Run a tournament on GitHub runners (workflow tournament.yml): dispatch, wait once, download tournament.jsonl and report.md into --dir. Prefer it to a local run above --seeds 3. Needs bash and an authenticated gh"
+usage = '''
+flag "--ref <ref>" default="develop" help="git ref to check out and dispatch from (must contain the workflow)"
+flag "--ruleset <path>" default="rulesets/mvp-1.toml" help="ruleset file"
+flag "--bots <bots>" default="all" help="bot names separated by spaces, or all"
+flag "--maps <glob>" default="maps/*.json" help="map files or a glob (the pool by default)"
+flag "--seeds <n>" default="100" help="seeds per map and pair, total over all shards"
+flag "--shards <n>" default="10" help="parallel runner jobs (at most 20)"
+flag "--label <label>" default="" help="name in the run title and the artifact (letters, digits, . _ -)"
+flag "--dir <dir>" default=".tournament" help="folder for the downloaded artifact"
+'''
+run = "TGH_REF='{{usage.ref}}' TGH_RULESET='{{usage.ruleset}}' TGH_BOTS='{{usage.bots}}' TGH_MAPS='{{usage.maps}}' TGH_SEEDS='{{usage.seeds}}' TGH_SHARDS='{{usage.shards}}' TGH_LABEL='{{usage.label}}' TGH_DIR='{{usage.dir}}' bash scripts/tournament_gh.sh"
+
 [tasks.search]
 description = "Parameter search of one bot by tournament (gow-bots search; maps of the pool, 8 jobs, mvp-1; --bot, --against, --keys and the rest after --)"
 run = "uv run gow-bots search --maps maps/*.json --jobs 8 --ruleset rulesets/mvp-1.toml"

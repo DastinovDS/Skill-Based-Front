@@ -1,0 +1,178 @@
+name: Tournament
+
+# Bot tournaments on GitHub runners instead of a laptop (#582). Manual only: it never runs on push
+# or on a PR, so it is not part of the required checks (py, web, docker). Run it with
+# `mise run tournament:gh` (AGENTS.md section 3, docs/balance/README.md).
+#
+# The seeds are split into contiguous ranges (scripts/tournament_shards.py plan), every shard runs
+# the same `mise run tournament` task as a local run with --seed-base/--seeds, and the last job
+# merges the shards into one JSONL identical, byte for byte, to a single run with the same
+# arguments, then runs `gow-bots report` on it.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to check out (it must contain this workflow's scripts)
+        default: develop
+      ruleset:
+        description: Ruleset file
+        default: rulesets/mvp-1.toml
+      bots:
+        description: Bot names separated by spaces, or all
+        default: all
+      maps:
+        description: Map files or a glob (default: the pool, not the fixtures)
+        default: maps/*.json
+      seeds:
+        description: Seeds per map and pair (total over all shards)
+        default: "100"
+      shards:
+        description: Parallel jobs (at most 20, never more than seeds)
+        default: "10"
+      label:
+        description: Name for the run and the artifact (letters, digits, . _ -)
+        default: ""
+
+run-name: Tournament ${{ inputs.label }}
+
+permissions:
+  contents: read
+
+env:
+  # The version of mise itself; the versions of node, pnpm and uv are in mise.toml.
+  MISE_VERSION: 2026.10.20
+  MISE_TASK_OUTPUT: interleave
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      artifact: ${{ steps.plan.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - id: plan
+        env:
+          SEEDS: ${{ inputs.seeds }}
+          SHARDS: ${{ inputs.shards }}
+          LABEL: ${{ inputs.label }}
+          RULESET: ${{ inputs.ruleset }}
+          BOTS: ${{ inputs.bots }}
+          MAPS: ${{ inputs.maps }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set -eu
+          case "$SEEDS" in ''|*[!0-9]*) echo "::error::seeds must be a positive integer"; exit 1;; esac
+          case "$SHARDS" in ''|*[!0-9]*) echo "::error::shards must be a positive integer"; exit 1;; esac
+          [ "$SEEDS" -ge 1 ] && [ "$SHARDS" -ge 1 ] || { echo "::error::seeds and shards must be at least 1"; exit 1; }
+          [ "$SHARDS" -le 20 ] || SHARDS=20
+          case "$LABEL" in *[!A-Za-z0-9._-]*) echo "::error::label may contain only letters, digits, . _ -"; exit 1;; esac
+          # The inputs below go to a shell later: refuse anything but plain path and name characters.
+          for v in "$RULESET" "$BOTS" "$MAPS"; do
+            case "$v" in *[!A-Za-z0-9._/@*\ -]*) echo "::error::unexpected character in an input"; exit 1;; esac
+          done
+          matrix="$(python3 scripts/tournament_shards.py plan --seeds "$SEEDS" --shards "$SHARDS")"
+          artifact="tournament-${LABEL:-run}-${GITHUB_RUN_ID}"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Tournament run"
+            echo
+            echo "| Input | Value |"
+            echo "|---|---|"
+            echo "| ref | \`$REF\` ($(git rev-parse --short HEAD)) |"
+            echo "| ruleset | \`$RULESET\` |"
+            echo "| bots | \`$BOTS\` |"
+            echo "| maps | \`$MAPS\` |"
+            echo "| seeds | $SEEDS |"
+            echo "| shards | $(python3 -c 'import json,sys; print(len(json.loads(sys.argv[1])))' "$matrix") |"
+            echo "| artifact | \`$artifact\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  shard:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: true
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+        with:
+          version: ${{ env.MISE_VERSION }}
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+      - run: mise run setup:py
+      # Determinism can depend on the interpreter: uv fetches the version of .python-version.
+      - name: Check the Python version
+        run: |
+          want="$(cat .python-version)"
+          got="$(mise exec -- uv run python -c 'import platform; print(platform.python_version())')"
+          echo "Python $got on $(nproc) CPUs (.python-version: $want)"
+          case "$got" in "$want"|"$want".*) ;; *) echo "::error::Python $got differs from .python-version $want"; exit 1;; esac
+          echo "shard ${{ matrix.shard }}: seeds ${{ matrix.seed_base }}..$(( ${{ matrix.seed_base }} + ${{ matrix.seeds }} - 1 )), Python $got, $(nproc) CPUs" >> "$GITHUB_STEP_SUMMARY"
+      - name: Play the shard
+        env:
+          RULESET: ${{ inputs.ruleset }}
+          BOTS: ${{ inputs.bots }}
+          MAPS: ${{ inputs.maps }}
+        run: |
+          # Same task as a local run; the later options override the task's defaults.
+          # BOTS is split into words on purpose (several bots).
+          # shellcheck disable=SC2086
+          mise run tournament -- --maps $MAPS --bots $BOTS \
+            --seeds "${{ matrix.seeds }}" --seed-base "${{ matrix.seed_base }}" \
+            --jobs "$(nproc)" --ruleset "$RULESET" --out "shard-${{ matrix.shard }}.jsonl"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: shard-${{ matrix.shard }}
+          path: shard-${{ matrix.shard }}.jsonl
+          retention-days: 1
+      - run: mise exec -- uv cache prune --ci
+
+  merge:
+    needs: [plan, shard]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: jdx/mise-action@v5
+        with:
+          version: ${{ env.MISE_VERSION }}
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ runner.os }}-
+      - run: mise run setup:py
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: shard-*
+          path: shards
+          merge-multiple: true
+      - name: Merge and report
+        run: |
+          mkdir -p result
+          python3 scripts/tournament_shards.py merge --out result/tournament.jsonl shards/shard-*.jsonl
+          mise exec -- uv run gow-bots report result/tournament.jsonl --out-dir result --name report
+          {
+            echo
+            echo "Merged $(wc -l < result/tournament.jsonl) matches. Artifact: \`${{ needs.plan.outputs.artifact }}\` (tournament.jsonl and report.md)."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ needs.plan.outputs.artifact }}
+          path: result
