@@ -298,3 +298,39 @@ stand without charges (74-86% of sieges), so the fights should decide more.
 
 **Change.** `capture.charge_cost = 1`, plus iteration 3 (stance shares 60/50/40); iteration 4 reverted. The branch
 is rebased on develop with #584.
+
+| bot | win rate [95%] | iteration 3 | captures a match (it. 3) | recruits (it. 3) |
+|---|---|---|---|---|
+| smart_expander | 0.92 [0.89; 0.94] | 0.78 | 36.7 (49.7) | 25.4 (13.2) |
+| smart_rusher | 0.86 [0.83; 0.88] | 0.70 | 41.5 (54.9) | 21.6 (5.3) |
+| rusher | 0.73 [0.69; 0.77] | 0.65 | 40.0 (57.0) | 21.7 (4.5) |
+| smart_strangler | 0.67 [0.63; 0.71] | 0.66 | 36.1 (55.6) | 19.7 (4.0) |
+| strangler | 0.60 [0.56; 0.64] | 0.71 | 36.5 (55.2) | 19.1 (3.4) |
+| reactive | 0.37 [0.33; 0.42] | 0.58 | 26.1 (58.5) | 0.0 (0.0) |
+| expander | 0.37 [0.33; 0.41] | 0.24 | 13.6 (18.0) | 9.0 (9.8) |
+| smart_reactive | 0.33 [0.29; 0.37] | 0.56 | 26.0 (55.6) | 1.9 (0.3) |
+| turtle | 0.07 [0.05; 0.09] | 0.06 | 11.5 (12.2) | 6.7 (6.3) |
+| smart_turtle | 0.06 [0.04; 0.08] | 0.04 | 12.9 (19.1) | 23.0 (23.6) |
+
+Sides (mirror): crossroads 0.45 [0.35; 0.55], highway 0.56 [0.45; 0.66], ridge 0.59 [0.48; 0.68]. Planned share
+0.033. Late capture 0.47 (iteration 3: 0.57). Turtle vs Expander 0.00. Capital wins 119 (iteration 3: 302).
+
+**Result: the field polarizes, the gate gets further away.** The bots that recruit and send charged groups (the
+rushers, smart_expander, the stranglers: about 20 recruits a match, 4-6 times iteration 3) keep claiming at 65-75% of
+the old speed; the reactive bots, which never recruit, fall to 0.33-0.37. smart_expander becomes the dominant
+strategy (0.92, it beats everyone but smart_rusher beyond 0.80). This agrees with the #580 smart-bot run (20 seeds,
+`mvp-1` shares: smart_expander 0.68 -> 0.84). DEC-38 as such makes the claim cost a body and a charge, and the bots
+with more bodies win the claim even harder. Not kept alone; iteration 6 checks whether a faster supply (charged
+defenders, `charge-flow.md`, finding 4) changes the picture.
+
+### Iteration 6: road throughput `supply.amount_by_level` 1/2/3 -> 2/3/4, on top of iteration 5
+
+**Hypothesis.** With a capture cost the defenders stand uncharged (`charge-flow.md`, finding 4: 74-86% of defenders
+have no charged unit at a siege) because delivery, not production, limits the front (finding 2: a marker city is
+empty 21-40% of the time while the capital has charges; a level-1 road carries 1 charge per dispatch). Doubling the
+level-1 throughput (+1 per level as in DEC-28, item 7) should charge the front garrisons, make captures of held cities
+cost fights again and slow the claim of the recruiting bots. The rear stock is not a bot issue: it is the spill of the
+full capital (DEC-28, item 4.4); the smart bots raise `rear_min` only to 2-3 while the capital is full.
+
+**Change.** `supply.amount_by_level` `1 = 2`, `2 = 3`, `3 = 4` (`mvp-1`: 1, 2, 3); `capture.charge_cost = 1` and
+the stance shares of iteration 3 kept.
