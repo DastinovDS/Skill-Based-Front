@@ -42,6 +42,8 @@ export type ApiErrorCode =
   | 'queue_banned'
   /** 503: no maps or the server is restarting. */
   | 'unavailable'
+  /** 503 "server is full" or "server is busy" (a cap of running matches #412, all password hashers busy): try again in a minute. */
+  | 'full'
   /** The request did not reach the server, or the answer was not understood. */
   | 'network'
   | 'server';
@@ -80,7 +82,17 @@ async function errorOf(response: Response): Promise<ApiError> {
   let code = STATUS_CODES[response.status] ?? 'server';
   let retryAfter =
     response.status === 429 ? parseRetryAfter(response.headers.get('Retry-After')) : null;
-  if (response.status === 403) {
+  if (response.status === 503) {
+    // The 503 bodies differ: a full or busy server says so, a restarting one has no maps or says "restarting".
+    try {
+      const body = (await response.json()) as { detail?: unknown };
+      if (typeof body.detail === 'string' && /^server is (full|busy)\b/.test(body.detail)) {
+        code = 'full';
+      }
+    } catch {
+      // No readable body: a plain 503 is the server not being ready.
+    }
+  } else if (response.status === 403) {
     try {
       const body = (await response.json()) as { detail?: unknown };
       if (body.detail === 'wrong password') code = 'wrong_password';

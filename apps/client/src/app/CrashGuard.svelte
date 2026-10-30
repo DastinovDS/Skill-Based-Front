@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { t } from '../i18n/index.ts';
+  import FailurePanel from './FailurePanel.svelte';
 
   interface Props {
     /** The screen to guard. */
@@ -28,36 +29,11 @@
 >
   {@render children()}
   {#snippet failed()}
-    <main class="crash" role="alert">
-      <p>{t('error.crash')}</p>
-      <p class="actions">
-        <button type="button" onclick={onreload}>{t('match.reload')}</button>
-        {#if onexit !== undefined}
-          <button type="button" onclick={onexit}>{t('match.toMenu')}</button>
-        {/if}
-      </p>
-    </main>
+    <FailurePanel
+      title={t('error.crash.title')}
+      text={t('error.crash.text')}
+      primary={{ label: 'match.reload', run: onreload }}
+      {onexit}
+    />
   {/snippet}
 </svelte:boundary>
-
-<style>
-  .crash {
-    position: fixed;
-    inset: 0 0 var(--legal-footer-h);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 24px;
-  }
-
-  p {
-    margin: 0;
-  }
-
-  .actions {
-    display: flex;
-    gap: 8px;
-  }
-</style>

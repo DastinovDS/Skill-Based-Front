@@ -78,6 +78,11 @@ export const MENU_SCENES = [
   'password-set',
   'password-change',
   'exit-rated',
+  'match-loading-map',
+  'match-loading-connect',
+  'match-loading-frame',
+  'match-error-map',
+  'crash',
   'board-guest',
   'board-calibration',
   'board-ranked',
@@ -107,3 +112,19 @@ export const DOCK_CLICKS: Readonly<Record<string, string>> = {
   'bot-starting': 'Start',
   'bot-error': 'Start',
 };
+
+/**
+ * The in-match status bars (`/?scene=overflow&status=<id>`, src/dev/statusScenes.ts, #602): shot by
+ * `mise run shots` as `status-<id>.png` (and in grey scale); they have no reference screenshots.
+ */
+export const STATUS_SCENES = [
+  'reconnecting',
+  'failed',
+  'gone',
+  'version',
+  'replaced',
+  'paused-you',
+  'paused-enemy',
+  'pause-denied',
+  'renderer',
+] as const;

@@ -94,7 +94,9 @@ describe('Hud', () => {
     setLocale('en');
     const onreload = vi.fn();
     const { target } = render({ rendererFailed: true, onreload });
-    expect(target.querySelector('section.error')?.textContent).toContain('could not be drawn');
+    expect(target.querySelector('.renderer [role="alert"]')?.textContent).toContain(
+      'could not be drawn',
+    );
     button(target, 'Reload')?.click();
     expect(onreload).toHaveBeenCalledOnce();
   });

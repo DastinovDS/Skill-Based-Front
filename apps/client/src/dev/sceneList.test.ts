@@ -1,7 +1,8 @@
 import { expect, test } from 'vitest';
-import { MENU_SCENES, SCENES } from '../../visual/scenes.ts';
+import { MENU_SCENES, SCENES, STATUS_SCENES } from '../../visual/scenes.ts';
 import { MENU_SCENE_IDS } from './menuScenes.ts';
 import { FIXTURE_SCENES } from './scenarios.ts';
+import { STATUS_SCENE_IDS } from './statusScenes.ts';
 
 // `mise run shots` and the reference test shoot the scenes of visual/scenes.ts: a new scene of
 // scenarios.ts has to be listed there (with its tick), or nobody would ever look at it.
@@ -15,4 +16,8 @@ test('visual/scenes.ts lists every fixture scene of the dev screen with its tick
 
 test('visual/scenes.ts lists every screen scene of src/dev/menuScenes.ts', () => {
   expect([...MENU_SCENES]).toEqual([...MENU_SCENE_IDS]);
+});
+
+test('visual/scenes.ts lists every status scene of src/dev/statusScenes.ts', () => {
+  expect([...STATUS_SCENES]).toEqual([...STATUS_SCENE_IDS]);
 });

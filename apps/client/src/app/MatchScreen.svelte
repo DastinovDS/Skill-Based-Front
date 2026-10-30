@@ -5,7 +5,9 @@
   import { geoOf, type GeoFile } from '../map/geography.ts';
   import type { MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
   import type { MatchSummary } from './matchSummary.ts';
+  import FailurePanel from './FailurePanel.svelte';
   import LiveMatch from './LiveMatch.svelte';
+  import MatchLoading from './MatchLoading.svelte';
 
   interface Props {
     api: Api;
@@ -22,10 +24,12 @@
   let backgroundUrl = $state.raw<string | null>(null);
   let geo = $state.raw<GeoFile | null>(null);
   let failed = $state(false);
+  // A newer load (a retry, or other props) makes the older answer stale.
+  let loadId = 0;
 
   // The map graph is public and comes over HTTP; the socket then carries only the state.
-  $effect(() => {
-    let current = true;
+  function load(): void {
+    const mine = ++loadId;
     map = null;
     failed = false;
     Promise.all([
@@ -33,35 +37,38 @@
       backgroundUrlOf(api, mapId),
     ]).then(
       ([{ file, geography }, background]) => {
-        if (current) {
+        if (mine === loadId) {
           backgroundUrl = background;
           geo = geography;
           map = file;
         }
       },
       () => {
-        if (current) failed = true;
+        if (mine === loadId) failed = true;
       },
     );
+  }
+
+  $effect(() => {
+    load();
     return () => {
-      current = false;
+      loadId += 1;
     };
   });
 </script>
 
 {#if map !== null}
   <LiveMatch {matchId} {token} {map} {backgroundUrl} {geo} {onend} {onexit} />
+{:else if failed}
+  <FailurePanel
+    title={t('match.error.map.title')}
+    text={t('match.error.map.text')}
+    primary={{
+      label: 'match.retry',
+      run: load,
+    }}
+    {onexit}
+  />
 {:else}
-  <main class="screen">
-    <div class="card">
-      {#if failed}
-        <p class="error" role="alert">{t('match.error.map')}</p>
-        <div class="actions">
-          <button type="button" onclick={onexit}>{t('match.toMenu')}</button>
-        </div>
-      {:else}
-        <p role="status">{t('match.connecting')}</p>
-      {/if}
-    </div>
-  </main>
+  <MatchLoading stage="map" />
 {/if}

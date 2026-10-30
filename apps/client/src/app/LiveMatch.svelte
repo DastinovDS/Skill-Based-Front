@@ -6,7 +6,6 @@
   import Hud from '../hud/Hud.svelte';
   import { routeKey } from '../hud/hudKeys.ts';
   import { HudState } from '../hud/hudState.svelte.ts';
-  import { t, tf } from '../i18n/index.ts';
   import { forwardKey } from '../match/keyEvents.ts';
   import { OrderController } from '../match/orderController.ts';
   import { PauseState } from '../match/pauseState.svelte.ts';
@@ -26,6 +25,9 @@
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
   import type { MatchSummary } from './matchSummary.ts';
+  import MatchLoading from './MatchLoading.svelte';
+  import MatchStatus from './MatchStatus.svelte';
+  import { statusKeyAction, statusView, type StatusAction } from './matchStatus.ts';
 
   interface Props {
     matchId: string;
@@ -147,6 +149,7 @@
     return () => {
       current.stop();
       session = null;
+      drawn = false;
       hud?.destroy();
       hud = null;
       chrome.closeAll();
@@ -196,9 +199,27 @@
     };
   });
 
+  function doStatusAction(action: StatusAction): void {
+    if (action === 'retry') session?.retry();
+    else if (action === 'reload') onreload();
+    else if (action === 'resume') session?.resume();
+    else onexit();
+  }
+
   function handleKey(event: KeyboardEvent): void {
     if (event.type === 'keydown') {
       pauseState.dismiss();
+      // The bar's own keys first (`Enter` the main action, `Esc` out of a dead match); `Enter` on a
+      // focused button presses that button.
+      const action = statusKeyAction(bar, event.key);
+      if (
+        action !== null &&
+        !(event.key === 'Enter' && event.target instanceof HTMLButtonElement)
+      ) {
+        event.preventDefault();
+        doStatusAction(action);
+        return;
+      }
     }
     // The HUD's own keys and the open overlays first, then the keys of the orders.
     if (
@@ -217,7 +238,14 @@
     }
   }
 
-  const paused_by_me = $derived(paused !== null && paused.by === me);
+  const bar = $derived(statusView({ status, paused, me, notice: pauseState.notice, pauseLeft }));
+  // Joining: before `welcome` the socket is still opening; after it the first snapshot is awaited.
+  // Once drawn it stays drawn: a reconnect empties the HUD data for a moment, the map stays.
+  let drawn = $state(false);
+  $effect(() => {
+    if (hud?.current != null) drawn = true;
+  });
+  const loadingStage = $derived(drawn ? null : hud === null ? 'connect' : 'frame');
 </script>
 
 <svelte:window
@@ -268,57 +296,14 @@
         group: (id: string) => canvas?.groupAnchor(id) ?? null,
       }}
     />
-  {:else if status === 'version_mismatch' || status === 'replaced' || status === 'gone' || status === 'failed'}
-    <!-- The banner below says what happened. -->
-  {:else}
-    <p class="loading" role="status">{t('match.connecting')}</p>
   {/if}
 
-  {#if status === 'reconnecting'}
-    <div class="banner" role="status">
-      {t('match.status.reconnecting')}
-      <button type="button" onclick={onexit}>{t('match.toMenu')}</button>
-    </div>
-  {:else if status === 'gone'}
-    <div class="banner" role="alert">
-      {t('match.status.gone')}
-      <button type="button" onclick={onexit}>{t('match.toMenu')}</button>
-    </div>
-  {:else if status === 'failed'}
-    <div class="banner" role="alert">
-      {t('match.status.failed')}
-      <button
-        type="button"
-        onclick={() => {
-          session?.retry();
-        }}>{t('match.retry')}</button
-      >
-      <button type="button" onclick={onexit}>{t('match.toMenu')}</button>
-    </div>
-  {:else if status === 'version_mismatch'}
-    <div class="banner" role="alert">
-      {t('match.status.versionMismatch')}
-      <button type="button" onclick={onreload}>{t('match.reload')}</button>
-    </div>
-  {:else if status === 'replaced'}
-    <div class="banner" role="alert">
-      {t('match.status.replaced')}
-      <button type="button" onclick={onexit}>{t('match.toMenu')}</button>
-    </div>
-  {:else if paused !== null}
-    <div class="banner" role="status">
-      {tf(paused_by_me ? 'match.paused.you' : 'match.paused.enemy', { seconds: pauseLeft })}
-      {#if paused_by_me}
-        <button
-          type="button"
-          onclick={() => {
-            session?.resume();
-          }}>{t('match.resume')}</button
-        >
-      {/if}
-    </div>
-  {:else if pauseState.notice !== null}
-    <div class="banner" role="alert">{t(pauseState.notice)}</div>
+  {#if loadingStage !== null}
+    <MatchLoading stage={loadingStage} stalled={bar?.tone === 'alert'} />
+  {/if}
+
+  {#if bar !== null}
+    <MatchStatus view={bar} lifted={rendererFailed} onaction={doStatusAction} />
   {/if}
 </main>
 
@@ -326,10 +311,5 @@
   .match {
     position: fixed;
     inset: 0 0 var(--legal-footer-h);
-  }
-
-  .loading {
-    margin: 0;
-    padding: 24px;
   }
 </style>

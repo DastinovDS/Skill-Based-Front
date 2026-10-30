@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { DOCK_CLICKS, MENU_SCENES, SCENES } from './scenes.ts';
+import { DOCK_CLICKS, MENU_SCENES, SCENES, STATUS_SCENES } from './scenes.ts';
 
 // `mise run shots [label]`: a PNG of every dev scene for the agent (or the owner) to look at, no
 // comparison with a reference. Per scene: `<scene>.png` is the whole screen with the HUD,
@@ -244,7 +244,11 @@ for (const id of MENU_SCENES) {
   test(`shot of the screen ${id}`, async ({ page }) => {
     await page.goto(`/?menu=${id}`);
     await expect(
-      page.locator('.front svg.scene, .card, [role="alertdialog"]').first(),
+      page
+        .locator(
+          '.front svg.scene, .card, [role="alertdialog"], main.failure, main.loading, .crash',
+        )
+        .first(),
     ).toBeVisible();
     const press = DOCK_CLICKS[id];
     if (press !== undefined) {
@@ -256,6 +260,30 @@ for (const id of MENU_SCENES) {
     await page.screenshot({ path: join(OUT, `screen-${id}-gray.png`) });
   });
 }
+
+// The in-match status bars (#602, `/?scene=overflow&status=<state>`, src/dev/statusScenes.ts):
+// `status-<id>.png` and the same in grey scale. `overflow` has two alerts at the top, so the shot
+// shows that the bar does not stand on the alert stack.
+for (const id of STATUS_SCENES) {
+  test(`shot of the status bar ${id}`, async ({ page }) => {
+    await page.goto(`/?scene=overflow&status=${id}`);
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    await page.mouse.move(5, 5);
+    await page.screenshot({ path: join(OUT, `status-${id}.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.screenshot({ path: join(OUT, `status-${id}-gray.png`) });
+  });
+}
+
+// The same bar on a phone (390 px): the buttons wrap under the words (`status-failed-390x700.png`).
+test('shot of the status bar failed at phone width', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto('/?scene=overflow&status=failed');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+  await page.mouse.move(5, 5);
+  await page.screenshot({ path: join(OUT, 'status-failed-390x700.png') });
+});
 
 // The menu picture by season (#474: the terrain takes the tint of the season of the date; the dev
 // scenes pin one with `&season=`) and the still frame of "less motion" (one frame per state, no loop).

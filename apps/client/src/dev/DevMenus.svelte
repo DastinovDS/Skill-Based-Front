@@ -1,6 +1,11 @@
 <script lang="ts">
   import LeaderboardScreen from '../board/LeaderboardScreen.svelte';
   import MenuScreen from '../app/MenuScreen.svelte';
+  import { Api } from '../api/http.ts';
+  import CrashGuard from '../app/CrashGuard.svelte';
+  import MatchLoading from '../app/MatchLoading.svelte';
+  import MatchScreen from '../app/MatchScreen.svelte';
+  import DevBoom from './DevBoom.svelte';
   import DevDock from './DevDock.svelte';
   import ResultScreen from '../app/ResultScreen.svelte';
   import QueueView from '../app/QueueView.svelte';
@@ -39,6 +44,9 @@
     onpassword: nothing,
     onlogout: nothing,
   };
+  // The joining scenes: the real MatchScreen on a fetch that never answers (the map stage) or fails.
+  const waiting = new Api(() => new Promise<Response>(() => undefined));
+  const broken = new Api(() => Promise.reject(new TypeError('offline')));
   const board = isBoardScene(id) ? BOARD_SCENES[id] : null;
   const queue = QUEUE_SCENES[id];
   const result = RESULT_SCENES[id];
@@ -94,6 +102,30 @@
     onsubmit={() => Promise.resolve(null)}
     onback={nothing}
   />
+{:else if id === 'match-loading-map'}
+  <MatchScreen
+    api={waiting}
+    token="dev"
+    matchId="dev"
+    mapId="dev"
+    onend={nothing}
+    onexit={nothing}
+  />
+{:else if id === 'match-error-map'}
+  <MatchScreen
+    api={broken}
+    token="dev"
+    matchId="dev"
+    mapId="dev"
+    onend={nothing}
+    onexit={nothing}
+  />
+{:else if id === 'match-loading-connect' || id === 'match-loading-frame'}
+  <div class="stage">
+    <MatchLoading stage={id === 'match-loading-connect' ? 'connect' : 'frame'} />
+  </div>
+{:else if id === 'crash'}
+  <CrashGuard onexit={nothing} onreload={nothing}><DevBoom /></CrashGuard>
 {:else if id === 'exit-rated'}
   <div class="stage">
     <ExitDialog open rated banSeconds={300} onforfeit={nothing} onstay={nothing} />

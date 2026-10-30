@@ -29,6 +29,8 @@
   import SplitTip from './SplitTip.svelte';
   import CaptureTip from './CaptureTip.svelte';
   import RoadTip from './RoadTip.svelte';
+  import StatusBar from '../app/StatusBar.svelte';
+  import StatusButton from '../app/StatusButton.svelte';
   import TopBar from './TopBar.svelte';
 
   interface Props {
@@ -218,12 +220,15 @@
     }}
   />
   {#if rendererFailed}
-    <section class="error" role="alert">
-      {t('error.renderer')}
-      {#if onreload !== undefined}
-        <button type="button" onclick={onreload}>{t('match.reload')}</button>
-      {/if}
-    </section>
+    <div class="renderer">
+      <StatusBar tone="alert" icon="alert" title={t('error.renderer')} role="alert">
+        {#snippet actions()}
+          {#if onreload !== undefined}
+            <StatusButton primary onclick={onreload}>{t('match.reload')}</StatusButton>
+          {/if}
+        {/snippet}
+      </StatusBar>
+    </div>
   {/if}
 </div>
 
@@ -241,13 +246,16 @@
     align-self: stretch;
   }
 
-  .error {
-    pointer-events: auto;
-    margin: 8px 16px;
-    padding: 8px 12px;
-    border: 1px solid var(--enemy);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text);
+  /* Bottom centre like the match status bar, which stands above it when both show. */
+  .renderer {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    width: max-content;
+    max-width: calc(100% - 32px);
   }
 </style>

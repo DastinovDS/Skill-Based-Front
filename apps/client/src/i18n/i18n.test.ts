@@ -56,7 +56,7 @@ describe('dictionaries', () => {
 
 describe('translate', () => {
   it('returns the string of the given language', () => {
-    expect(translate('en', 'error.renderer')).toBe('The map could not be drawn.');
+    expect(translate('en', 'error.renderer')).toBe('The map could not be drawn. Reload the page.');
   });
 });
 
