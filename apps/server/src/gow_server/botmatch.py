@@ -4,9 +4,10 @@
 ``match_id`` for the WebSocket ``/ws/match/{match_id}``; the player connects like in any match.
 The match is ``private`` (unrated, one pause per player, DEC-05).
 
-Difficulty levels are different bots of ``gow_bots.bots.BOTS``, ordered by the win rates of
-``docs/balance/latest.md`` (``rusher`` beats the rest, ``turtle`` loses to all); the parameters of
-a bot vary with the match seed (``choose_params``). The player's side is random, like in an invite.
+Difficulty levels are smart bots with a tempo level (``bot_factory``, ``smart_reactive@easy``),
+ordered by strength in the tournament of #574 on ``mvp-2`` (``docs/balance/log.md``); the
+parameters of a bot vary with the match seed (``choose_params``).
+The player's side is random, like in an invite.
 An account has at most one active match of any kind (409, SRV-09): a bot match costs server CPU.
 At most ``GOW_MAX_BOT_MATCHES`` bot matches run at once and ``GOW_MAX_MATCHES`` matches in all:
 past that the answer is 503 (#412). A bot match nobody connects to within
@@ -20,7 +21,7 @@ from typing import Final, Literal
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict
 
-from gow_bots.bots import BOTS
+from gow_bots.bots import bot_factory
 from gow_server.abuse import Limits, enforce, server_full
 from gow_server.identity import CurrentPlayer
 from gow_server.lifecycle import AlreadyActiveError, MatchLifecycle, MatchState
@@ -32,12 +33,12 @@ from gow_sim.ruleset import Ruleset
 Level = Literal["easy", "normal", "hard", "expert"]
 
 LEVEL_BOTS: Final[dict[Level, str]] = {
-    "easy": "turtle",
-    "normal": "reactive",
-    "hard": "expander",
-    "expert": "rusher",
+    "easy": "smart_turtle@easy",
+    "normal": "smart_reactive@easy",
+    "hard": "smart_strangler@hard",
+    "expert": "smart_expander@hard",
 }
-"""Bot name of every difficulty level.
+"""Bot name of every difficulty level with its tempo level (``bot_factory``; ``bot_name``).
 
 The bot screen of the client describes them in ``apps/client/src/app/botStyles.ts``;
 ``tests/test_bot_styles.py`` keeps the two in step.
@@ -88,7 +89,7 @@ async def create_bot_match(
         raise HTTPException(status.HTTP_409_CONFLICT, detail="you already have an active match")
     slot = secrets.randbelow(len(PLAYERS))
     bot_slot = 1 - slot
-    controller = BOTS[LEVEL_BOTS[body.level]](
+    controller = bot_factory(LEVEL_BOTS[body.level])(
         entry.definition, rules, seed=secrets.randbits(SEED_BITS), player=bot_slot
     )
     accounts = [BOT_ACCOUNT, BOT_ACCOUNT]

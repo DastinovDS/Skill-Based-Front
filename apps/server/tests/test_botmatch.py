@@ -241,3 +241,20 @@ def test_bot_that_raises_does_not_end_the_match() -> None:
         assert not runner.finished and runner.bot_decisions == 0
 
     asyncio.run(scenario())
+
+
+def test_every_level_is_a_smart_bot_with_a_tempo_level() -> None:
+    """#574: ``LEVEL_BOTS`` names resolve through ``bot_factory`` to smart bots at a level."""
+    from gow_bots.bots import SmartBot, bot_factory
+    from gow_server.botmatch import LEVEL_BOTS
+    from gow_sim.maps import load_map
+    from gow_sim.ruleset import load_ruleset
+
+    root = Path(__file__).resolve().parents[3]
+    mapdef = load_map(root / "maps" / "fixtures" / "web.json")
+    rules = load_ruleset(root / "rulesets" / "mvp-2.toml")
+    assert set(LEVEL_BOTS) == {"easy", "normal", "hard", "expert"}
+    for name in LEVEL_BOTS.values():
+        assert "@" in name
+        bot = bot_factory(name)(mapdef, rules, seed=0, player=0)
+        assert isinstance(bot, SmartBot) and name == f"{bot.name}@{bot.difficulty}"
