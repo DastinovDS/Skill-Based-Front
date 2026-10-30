@@ -161,3 +161,33 @@ the turtles, and end with 37-39 nodes. Sieges succeed 96-98% of the time for eve
 anything. The planned share is low for the reason of BAL-01, H3 and H4: `prefer_planned` needs
 `saved > (planned_move - move) * charges_per_cp / 100 = 2` and never plans into an empty node, and most attacks go
 into empty nodes.
+
+### Iteration 1: `economy.charges_per_cp` 2 -> 1
+
+**Hypothesis.** Charges are overproduced (iteration 0: 61-94% burn outside War), so the War stance pays nothing for
+its CP. With half the charges, War (25% of the quantum) gets 3 charges a minute and should run short in its sieges,
+while Balance still covers what it uses (about 50 charges a match).
+
+**Change.** `economy.charges_per_cp = 1` (`mvp-1`: 2). Ruleset hash `cb13be21b46d79c538a0443f52ef22c8`, GitHub runners.
+
+| bot | win rate [95%] | iteration 0 | burned |
+|---|---|---|---|
+| smart_rusher | 0.79 [0.75; 0.82] | 0.80 | 14% |
+| rusher | 0.74 [0.70; 0.78] | 0.76 | 5% |
+| smart_expander | 0.71 [0.67; 0.75] | 0.69 | 35% |
+| strangler | 0.67 [0.63; 0.71] | 0.66 | 46% |
+| smart_strangler | 0.65 [0.61; 0.69] | 0.65 | 46% |
+| reactive | 0.55 [0.51; 0.59] | 0.54 | 48% |
+| smart_reactive | 0.50 [0.46; 0.54] | 0.51 | 55% |
+| expander | 0.28 [0.24; 0.32] | 0.27 | 68% |
+| turtle | 0.05 [0.04; 0.08] | 0.05 | 88% |
+| smart_turtle | 0.05 [0.04; 0.07] | 0.05 | 72% |
+
+Sides (mirror): crossroads 0.48 [0.38; 0.58], highway 0.53 [0.42; 0.63], ridge 0.62 [0.51; 0.72]. Planned share
+0.016. Late capture 0.58. Turtle vs Expander 0.00.
+
+**Result: no effect.** Every win rate stays inside the interval of iteration 0. Halving production only cut the
+burned share: the rushers still have a mean stock of 27-29 charges (the start stock of the map and the charged
+start units) and win 96% of their sieges. Charges do not limit a strategy whose captures are free in charges,
+so the charge side of the stance cannot be balanced by its rate alone. Reverted (back to 2) for the next iteration;
+it is worth retrying together with DEC-38, where a capture spends a charge.

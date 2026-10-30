@@ -34,7 +34,7 @@ period_ticks = 50 # ... every 50 ticks (5 s); the quantum is split by stance (DE
 # (value * pct // 100, rounded down) accumulates in an accumulator in hundredths of a charge
 # at the rate charges_per_cp and turns into whole charges; the rest goes to CP.
 # The stance's share for charges is always credited, even at the CP ceiling.
-charges_per_cp = 1 # rate: 1 CP -> 1 charge (BAL-02 iteration 1: was 2, charges burned 62-94% outside War)
+charges_per_cp = 2 # rate: 1 CP -> 2 charges
 # Stance of both players at the start of the match: economy | balance | war.
 # DEC-09 (owner, 2026-10-28): both players start in "balance"; the first stance change is allowed at once.
 start_stance = "balance"
@@ -105,6 +105,12 @@ round_ticks = 20 # a round: 2 s (DEC-32)
 shots_per_round = 1 # shots of a side per round
 regroup_ticks = 10 # regrouping of the winner on an edge: 1 s
 engage_ticks = 3 # DEC-37: a defender that left the node at most 3 ticks ago is caught into the fight
+
+[capture]
+# Capture costs a charge (DEC-38, #578; mechanics.md, section 4). A capture of a node (neutral or enemy, a city,
+# a province or a capital, also at the end of a fight) spends charge_cost real charges of the capturing player's
+# groups in the node; with fewer the groups bounce, a returning group dies (DEC-24, G3). Virtual charges never pay.
+charge_cost = 1 # BAL-02 iteration 2 (H2): every capture spends one charge (mvp-1: 0)
 
 [capacity]
 # Node capacity (DEC-22, #234; mechanics.md, section 8): limits the number of units standing in a node and,
