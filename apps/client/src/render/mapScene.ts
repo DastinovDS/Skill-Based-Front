@@ -58,7 +58,10 @@ export interface SceneOptions {
   player?: PlayerId;
   /**
    * URL of the baked background (`maps/<id>.bg.webp`); without it flat terrain colours with the
-   * terrain stamps (a map with a background has no stamps).
+   * terrain stamps (a map with a background has no stamps). Loaded through `Assets`, which caches
+   * it by URL, so the scene that replaces this one gets the same texture. The scene never unloads
+   * it: the unload of `Assets` is async and would destroy the texture a new scene of the same map
+   * has just been handed (#617). The caller unloads the URL once no scene shows it (`GameCanvas`).
    */
   backgroundUrl?: string | null;
   /**
@@ -256,23 +259,15 @@ export class MapScene {
     // Its own caches go with it; the Application's stay for the next scene.
     this.ownedSprites?.world.destroy();
     this.ownedSprites?.screen.destroy();
-    if (this.backgroundUrl !== null) {
-      void Assets.unload(this.backgroundUrl);
-    }
+    // The background stays loaded: the owner of the URL unloads it (see `SceneOptions.backgroundUrl`).
     // Layers are empty now; destroy the containers themselves.
     this.layers.world.destroy({ children: true });
   }
 
-  private backgroundUrl: string | null = null;
-
   private async loadBackground(url: string): Promise<void> {
     try {
       const texture = await Assets.load<Texture>(url);
-      if (this.destroyed) {
-        void Assets.unload(url);
-        return;
-      }
-      this.backgroundUrl = url;
+      if (this.destroyed) return;
       this.view.setBackground(texture);
       this.onbackground?.('loaded');
     } catch (error) {

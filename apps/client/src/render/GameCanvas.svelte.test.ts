@@ -35,6 +35,8 @@ const fakes = vi.hoisted(() => {
     constructor(
       readonly app: unknown,
       readonly map: unknown,
+      readonly insets: unknown,
+      readonly options: { sprites?: unknown; player?: number; backgroundUrl?: string | null },
     ) {
       FakeMapScene.instances.push(this);
     }
@@ -50,16 +52,18 @@ const fakes = vi.hoisted(() => {
       FakeSprites.instances.push(this);
     }
   }
-  return { FakeApplication, FakeMapScene, FakeSprites };
+  /** The background textures `Assets` caches by URL (the scenes load them). */
+  const assets = { unload: vi.fn(() => Promise.resolve()) };
+  return { FakeApplication, FakeMapScene, FakeSprites, assets };
 });
 
-vi.mock('pixi.js', () => ({ Application: fakes.FakeApplication }));
+vi.mock('pixi.js', () => ({ Application: fakes.FakeApplication, Assets: fakes.assets }));
 vi.mock('./mapScene.ts', () => ({
   MapScene: fakes.FakeMapScene,
   createSceneSprites: () => new fakes.FakeSprites(),
 }));
 
-const { FakeApplication, FakeMapScene, FakeSprites } = fakes;
+const { FakeApplication, FakeMapScene, FakeSprites, assets } = fakes;
 
 function mapNamed(name: string): MapFile {
   return {
@@ -94,6 +98,7 @@ describe('GameCanvas', () => {
     FakeApplication.instances = [];
     FakeMapScene.instances = [];
     FakeSprites.instances = [];
+    assets.unload.mockClear();
     target = document.createElement('div');
     document.body.appendChild(target);
   });
@@ -174,5 +179,52 @@ describe('GameCanvas', () => {
 
     await unmount(component);
     expect(second.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  // #617: switching the viewing player (the replay's "View as") rebuilds the scene; the background
+  // the old scene loaded is the very texture the new one gets from the `Assets` cache, so it must
+  // not be unloaded, and the baked shapes of the Application must outlive the scenes.
+  it('keeps the background and the baked shapes alive while the player switches', async () => {
+    const props = $state<{ map: MapFile; player: 0 | 1; backgroundUrl: string | null }>({
+      map: mapNamed('a'),
+      player: 0,
+      backgroundUrl: 'a.bg.webp',
+    });
+    const component = mount(GameCanvas, { target, props });
+    flushSync();
+    last(FakeApplication.instances).resolveInit();
+    await settle();
+    const sprites = last(FakeSprites.instances);
+
+    for (let i = 1; i <= 6; i += 1) {
+      props.player = i % 2 === 0 ? 0 : 1;
+      flushSync();
+      expect(FakeMapScene.instances).toHaveLength(i + 1);
+      const scene = last(FakeMapScene.instances);
+      expect(scene.options.player).toBe(props.player);
+      expect(scene.options.sprites).toBe(sprites);
+      expect(scene.options.backgroundUrl).toBe('a.bg.webp');
+    }
+
+    // Every replaced scene went once; the current one is up; nothing shared was freed.
+    expect(
+      FakeMapScene.instances.slice(0, -1).every((s) => s.destroy.mock.calls.length === 1),
+    ).toBe(true);
+    expect(last(FakeMapScene.instances).destroy).not.toHaveBeenCalled();
+    expect(FakeSprites.instances).toHaveLength(1);
+    expect(sprites.world.destroy).not.toHaveBeenCalled();
+    expect(sprites.screen.destroy).not.toHaveBeenCalled();
+    expect(assets.unload).not.toHaveBeenCalled();
+
+    // Another background: the old one is shown by no scene now and goes.
+    props.backgroundUrl = 'b.bg.webp';
+    flushSync();
+    expect(assets.unload).toHaveBeenCalledTimes(1);
+    expect(assets.unload).toHaveBeenLastCalledWith('a.bg.webp');
+
+    await unmount(component);
+    expect(assets.unload).toHaveBeenCalledTimes(2);
+    expect(assets.unload).toHaveBeenLastCalledWith('b.bg.webp');
+    expect(sprites.world.destroy).toHaveBeenCalledTimes(1);
   });
 });

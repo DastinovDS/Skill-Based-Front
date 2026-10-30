@@ -94,6 +94,18 @@
     return loadReplayWhenReady(id, token, { signal, onPreparing });
   }
 
+  /**
+   * Dev builds: `&bg=<map>` draws a dev sample over the baked background of a bundled map (the
+   * samples are on `siege`, which has none), so `mise run shots` switches the view of a replay over
+   * a background (#617). Dead code in a production build.
+   */
+  async function devBackground(): Promise<string | null> {
+    if (!import.meta.env.DEV) return null;
+    const name = new URLSearchParams(window.location.search).get('bg');
+    if (name === null) return null;
+    return (await import('../map/bundledMaps.ts')).backgroundUrl(name);
+  }
+
   /** Loads the replay; the effect runs it again for a new match or after "Try again". */
   function load(id: string): () => void {
     let current = true;
@@ -108,7 +120,9 @@
     })
       .then(async (loadedFile) => ({
         loadedFile,
-        background: api === null ? null : await backgroundUrlOf(api, loadedFile.map_id),
+        background:
+          (await devBackground()) ??
+          (api === null ? null : await backgroundUrlOf(api, loadedFile.map_id)),
         // The map as the replay played it: a stale vector file does not fit and is ignored.
         geography: await geoOf(loadedFile.map),
       }))
