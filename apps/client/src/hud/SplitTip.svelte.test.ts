@@ -70,7 +70,9 @@ describe('SplitTip: the stack limit before the order is sent (#468)', () => {
     const root = show(orders, hud);
     const tip = root.querySelector('[role="tooltip"]');
     const text = tip?.textContent.replace(/\s+/g, ' ').trim();
-    expect(text).toBe(`Too big to go to ${hud.nodeName(target.id)}: split the group first (S)`);
+    expect(text).toBe(`Too big to go to ${hud.nodeName(target.id)}: split the group first S`);
+    // The key is a chip of its own.
+    expect(tip?.querySelector('kbd')?.textContent).toBe('S');
     // A shape too, not the colour alone: the split icon.
     expect(tip?.querySelector('svg')).not.toBeNull();
   });

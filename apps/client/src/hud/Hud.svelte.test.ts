@@ -204,7 +204,7 @@ describe('Hud', () => {
     expect(reported[0]).toMatchObject({ left: 0, right: 0, bottom: 0 });
   });
 
-  it('forfeits only after the dialog is confirmed, and "Stay" has the focus', async () => {
+  it('forfeits only after the dialog is confirmed, and "Keep playing" has the focus', async () => {
     setLocale('en');
     const { target, sent, chrome } = render();
     button(target, 'Exit')?.click();
@@ -213,9 +213,9 @@ describe('Hud', () => {
     expect(target.querySelector('[role="alertdialog"]')).not.toBeNull();
     expect(target.textContent).toContain('This is a forfeit');
     await vi.advanceTimersByTimeAsync(0);
-    expect(document.activeElement?.textContent.trim()).toBe('Stay');
+    expect(document.activeElement?.textContent).toContain('Keep playing');
     expect(sent).toEqual([]);
-    button(target, 'Stay')?.click();
+    button(target, 'Keep playing')?.click();
     flushSync();
     expect(target.querySelector('[role="alertdialog"]')).toBeNull();
     expect(sent).toEqual([]);

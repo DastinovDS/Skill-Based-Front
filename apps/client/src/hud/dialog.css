@@ -1,0 +1,168 @@
+/*
+ * The look of the match dialogs (#597): the forfeit dialog and the transfer dialog share this frame,
+ * the help sheet shares its buttons. It is the language of the Dock panels (app/dock.css): a
+ * `--surface` panel on a scrim, an eyebrow over a big title, a blue main action with a key chip,
+ * quiet secondary actions, an amber line with an icon for a warning (red means only the enemy).
+ * Loaded by Dialog.svelte; the classes are global and prefixed `dlg-`.
+ */
+.dlg-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--scrim);
+  pointer-events: auto;
+}
+
+.dlg {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  box-sizing: border-box;
+  width: min(440px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.dlg-eyebrow {
+  margin: 0 0 2px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.dlg-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.dlg-lead {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+
+/* A warning line: the icon and the words say it, the amber is only extra. */
+.dlg-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dlg-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.dlg-line svg {
+  margin-top: 1px;
+  color: var(--text-dim);
+}
+
+.dlg-line.warn svg {
+  color: var(--warn);
+}
+
+.dlg-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.dlg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dlg-btn:hover:not(:disabled) {
+  border-color: var(--text-dim);
+}
+
+.dlg-btn.pri {
+  flex: 1;
+  border-color: var(--paper);
+  background: var(--you);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+/* Leaving is told by the exit icon, the word and a dashed amber outline, never by red or colour alone. */
+.dlg-btn.leave {
+  border: 1.5px dashed var(--warn);
+  background: none;
+}
+
+.dlg-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dlg-btn.pri:disabled {
+  background: repeating-linear-gradient(135deg, #21262d 0 6px, #1a1f26 6px 12px);
+  border-color: var(--border);
+  color: var(--text-dim);
+  opacity: 0.8;
+}
+
+.dlg-btn:focus-visible,
+.dlg-btn.pri:focus-visible {
+  outline: 2px solid var(--paper);
+  outline-offset: 2px;
+}
+
+/* A key chip, as the rows and buttons of the menus draw it (app.css `.front .k`). */
+.dlg-k {
+  display: inline-block;
+  min-width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  border: 1px solid #3d444d;
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 21px;
+  text-align: center;
+}
+
+.dlg-btn.pri .dlg-k {
+  border-color: rgb(13 17 23 / 35%);
+  background: rgb(13 17 23 / 18%);
+  color: var(--bg);
+}

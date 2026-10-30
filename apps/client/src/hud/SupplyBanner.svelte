@@ -2,6 +2,7 @@
   import { t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import type { NodeNamer } from './nodeName.ts';
+  import Slider from './Slider.svelte';
 
   interface Props {
     orders: OrderController;
@@ -26,43 +27,47 @@
       if (feedback.kind !== 'accepted' && feedback.cmd.type === 'set_rear_min') draft = null;
     }),
   );
+
+  /** Key labels are the keys themselves, not translations. */
+  const TAB = 'Tab';
 </script>
 
 {#if ui.supplyMode}
-  <section class="banner" aria-live="polite">
-    <strong>{t('supply.banner')}</strong>
+  <section class="supply" aria-live="polite">
+    <p class="head">
+      <strong>{t('supply.banner')}</strong><kbd class="k" aria-hidden="true">{TAB}</kbd>
+    </p>
     {#if ui.transferFrom !== null}
-      <span>{tf('supply.pick', { node: names(ui.transferFrom) })}</span>
+      <p class="line">{tf('supply.pick', { node: names(ui.transferFrom) })}</p>
     {:else}
-      <span>{t('supply.hint')}</span>
+      <p class="line">{t('supply.hint')}</p>
     {/if}
     {#if server !== null}
-      <label class="rear" title={t('supply.rearMinHint')}>
-        <span>{t('supply.rearMin')}</span>
-        <input
-          type="range"
-          min="0"
-          max={orders.rearMinMax}
-          step="1"
+      <div class="rear">
+        <span class="label">{t('supply.rearMin')}</span>
+        <Slider
           value={shown}
-          aria-label={t('supply.rearMin')}
-          oninput={(event) => {
-            draft = { value: Number(event.currentTarget.value), from: server };
+          min={0}
+          max={orders.rearMinMax}
+          label={t('supply.rearMin')}
+          oninput={(n: number) => {
+            draft = { value: n, from: server };
           }}
-          onchange={(event) => {
-            orders.setRearMin(Number(event.currentTarget.value));
+          onchange={(n: number, input: HTMLInputElement) => {
+            orders.setRearMin(n);
             // The map takes the keys again (a focused slider would keep them).
-            event.currentTarget.blur();
+            input.blur();
           }}
         />
         <output>{shown}</output>
         <!-- The keys do the same as the slider: one step a press. -->
-        <span class="keys" aria-hidden="true"><kbd>[</kbd><kbd>]</kbd></span>
-      </label>
+        <span class="keys" aria-hidden="true"><kbd class="k">[</kbd><kbd class="k">]</kbd></span>
+      </div>
+      <p class="line dim">{t('supply.rearMinHint')}</p>
     {/if}
     <ul class="legend">
-      <li><span class="line solid" aria-hidden="true"></span>{t('supply.legendAuto')}</li>
-      <li><span class="line dashed" aria-hidden="true"></span>{t('supply.legendTransfer')}</li>
+      <li><span class="line-key solid" aria-hidden="true"></span>{t('supply.legendAuto')}</li>
+      <li><span class="line-key dashed" aria-hidden="true"></span>{t('supply.legendTransfer')}</li>
       <li><span class="glyph" aria-hidden="true">⚑</span>{t('supply.legendMarker')}</li>
       <li><span class="glyph" aria-hidden="true">●○</span>{t('supply.legendStock')}</li>
       <li><span class="glyph enemy" aria-hidden="true">▽</span>{t('supply.legendEnemy')}</li>
@@ -71,26 +76,60 @@
 {/if}
 
 <style>
-  .banner {
+  /*
+   * In the bottom left corner: the alert row is at the top of the map, a banner there covered it
+   * (#597). The road and terrain banners are bottom too, but one at the middle and this one at the
+   * left, and it takes clicks only on the slider.
+   */
+  .supply {
     position: absolute;
-    top: 64px;
-    left: 50%;
-    transform: translateX(-50%);
+    /* The HUD is a flex column: without an explicit `top` the banner would stretch from its static position. */
+    top: auto;
+    bottom: 12px;
+    left: 12px;
     z-index: 4;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 4px;
+    align-items: stretch;
+    gap: 6px;
+    width: 340px;
     max-width: calc(100% - 24px);
-    padding: 8px 14px;
+    padding: 12px 14px;
     box-sizing: border-box;
-    border: 1px solid var(--paper);
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
     background: var(--surface);
     color: var(--text);
-    font-size: 13px;
-    text-align: center;
+    font-size: 14px;
     pointer-events: none;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .head strong {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .line {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .line.dim {
+    font-size: 12px;
+    color: var(--text-dim);
   }
 
   /* The slider is the one part that takes the pointer. */
@@ -101,41 +140,52 @@
     pointer-events: auto;
   }
 
-  .rear input {
-    width: 140px;
-    accent-color: var(--you);
+  .rear .label {
+    flex: none;
   }
 
-  .rear .keys {
+  .rear :global(.slider) {
+    flex: 1;
+    min-width: 60px;
+  }
+
+  .keys {
     display: flex;
     gap: 3px;
   }
 
-  .rear kbd {
-    min-width: 1.4em;
-    padding: 0 4px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--surface);
+  .k {
+    display: inline-block;
+    min-width: 20px;
+    height: 20px;
+    box-sizing: border-box;
+    padding: 0 5px;
+    border: 1px solid #3d444d;
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--surface-2);
     color: var(--text-dim);
     font: inherit;
     font-size: 12px;
+    font-weight: 600;
+    line-height: 17px;
     text-align: center;
   }
 
   .rear output {
     min-width: 1.5ch;
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
   }
 
   .legend {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
     gap: 4px 12px;
     margin: 0;
     padding: 0;
     list-style: none;
+    font-size: 12px;
     color: var(--text-dim);
   }
 
@@ -145,13 +195,13 @@
     gap: 4px;
   }
 
-  .line {
+  .line-key {
     display: inline-block;
     width: 18px;
     border-top: 3px solid var(--you);
   }
 
-  .line.dashed {
+  .line-key.dashed {
     border-top-style: dashed;
   }
 
