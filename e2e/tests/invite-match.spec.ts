@@ -99,7 +99,7 @@ test('two guests play a private match by invite to the end and watch the replay'
   for (const player of [host, guest]) {
     const heading = player.page.getByRole('heading', { name: VERDICT });
     await expect(heading).toBeVisible({ timeout: 120_000 });
-    verdicts.push((await heading.textContent()) ?? '');
+    verdicts.push(((await heading.textContent()) ?? '').trim());
     await expect(player.page.getByText(/^Time is up\./)).toBeVisible();
     await expect(
       player.page.getByRole('group', { name: /^Victory points: \d+ for .+, \d+ for .+$/ }),
