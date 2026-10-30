@@ -115,11 +115,18 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 | `charges_produced` | [int, int] | charges produced: the sum of `charges` of the `charges_produced` events (#310) |
 | `charges_burned` | [int, int] | charges burned: the sum of `charges` of the `charges_overflow` events (#310) |
 | `burned_permille` | [int or null, ...] | the share burned in per mille, `charges_burned * 1000 // charges_produced`; `null` without production (#310) |
+| `charges_start`, `charges_fights`, `charges_captures`, `charges_packets_lost`, `charges_warehouses_lost`, `charges_starved`, `charges_attrition`, `charges_end` | [int, int] | the charge ledger (#588, section "Charge ledger and flow"): the stock before tick 1, the charges spent in fights, on captures (DEC-38), lost in cut packets, lost with captured warehouses, starved, killed with units, and the stock after the last tick |
+| `charges_residual` | [int, int] | `charges_start + charges_produced` minus all sinks (`charges_burned` and the six above) minus `charges_end`; 0 when every charge is explained by an event (#588) |
+| `charges_sent`, `charges_delivered`, `charges_delivered_front`, `charges_transfers` | [int, int] | the supply flow (#588): charges in dispatched packets, in all delivered packets (one-off transfers included), of them delivered into a city with a front marker, sent by transfers |
+| `stock_by_place_minute` | [{place: [int or null, ...]}, ...] | the stock by place and match minute in hundredths of a charge (#588); places `cap_wh`, `front_wh`, `rear_wh`, `units_node`, `units_road`, `packets`; `null`: no sample in that minute |
+| `marker_ticks`, `front_empty_ticks`, `front_empty_cap_has_ticks`, `cap_full_ticks` | [int, int] | the supply bottleneck in ticks (#588) |
+| `front_empty_permille`, `front_empty_cap_has_permille` | [int or null, ...] | the second and the third over `marker_ticks`, per mille, rounded down; `null` without marker ticks (#588) |
 | `usage` | [{str: int}, {str: int}] | accepted commands of each player per mechanic (#166): the command class name (`Move`, `CancelOrder`, `Split`, `Merge`, `SetMode`, `SetStance`, `Recruit`, `CancelRecruit`, `BuildBarracks`, `UpgradeWarehouse`, `UpgradeRoad`, `SetFront`, `SetRearMin`, `Transfer`), a planned `Move` as `MovePlanned`; `Forfeit` is not counted. The report shows it as the section "Mechanic usage" |
 
 The fields `stock_*`, `charges_*` and `burned_permille` were added in #310 without changing `schema`: nothing was removed and
 nothing changed meaning. Tournament files older than #310 do not contain them, the report shows "no data" for them.
-`usage` was added in #166 the same way; older files show n/a in its section.
+`usage` was added in #166 the same way; older files show n/a in its section. The charge ledger, flow, stock by place and
+bottleneck fields (#588) were added the same way (only additions, `schema` stays 1); the report shows n/a for older files.
 
 The metric definitions are set in `packages/sim/src/gow_sim/analysis.py` (the module docstring).
 A "scheduled" and an "attacking" order is not visible in the event log (`Move` leaves no event),
@@ -203,6 +210,45 @@ per map: mean of `stock_mean_centi` and of `stock_peak`, the highest peak, and t
 of the group** = total `charges_burned` / total `charges_produced` over its matches (not the mean
 of per-match shares, so a match with little production does not count as much as one with a lot).
 `gow-bots analyze` prints the same fields for a real match.
+
+## Charge ledger and flow (#588)
+
+The permanent form of the one-off analysis in [charge-flow.md](charge-flow.md). Not a game rule: no event or field was
+added, `SIM_VERSION` and the golden replays are untouched. The numbers come from the events the simulation already
+writes, plus two samplings of the state by `MatchRecorder` (so tournament matches and re-simulated replays give the same
+values). Code and exact definitions: the module docstring of `gow_sim.analysis` (`analyze`, `ChargeFlow`,
+`charge_places`). All values per player, charges, integers.
+
+**Ledger.** `charges_start + charges_produced = charges_burned + charges_fights + charges_captures +
+charges_packets_lost + charges_warehouses_lost + charges_starved + charges_attrition + charges_end`, and
+`charges_residual` is the difference (must be 0). Sources by event: `charges_fights` is the player's
+`spent_<p>` of every `fight_round`; `charges_captures` is the number of `node_captured` times `capture.charge_cost`
+(DEC-38); `charges_packets_lost` is `packet_lost`; `charges_warehouses_lost` is `warehouse_lost` (its `owner`);
+`charges_starved` is `warehouse + units` of `starvation`; `charges_attrition` counts the `attrition` events that
+killed a charged unit. `charges_start` and `charges_end` are the charge stock (section "Charge stock") before the first
+and after the last tick. A nonzero residual means a rule moved a charge that no event explains: extend the ledger.
+
+**Flow.** `charges_sent` is the sum of `packet_sent` (the supply dispatch); `charges_delivered` the sum of all
+`packet_delivered` (what the target warehouse accepted; transfers included); `charges_delivered_front` the part of it
+delivered into a city that has a front marker at the end of that tick; `charges_transfers` the sum of `transfer_started`.
+
+**Stock by place.** At the end of every 10th tick (`PLACE_SAMPLE_TICKS`, one second) the stock is split into the capital
+warehouse (`cap_wh`), the warehouses of the cities with a front marker (`front_wh`), all other warehouses
+(`rear_wh`), charged units standing in nodes (`units_node`), charged units on roads (`units_road`) and packets
+(`packets`); the places sum to the charge stock. `stock_by_place_minute[p][place][m]` is the mean of the samples of
+minute `m` (ticks `m*60*tick_hz < t <= (m+1)*60*tick_hz`) in hundredths of a charge, rounded down.
+
+**Supply bottleneck**, counted in every tick: `marker_ticks` is the ticks in which the player owns its capital and a city
+other than the capital with a front marker; `front_empty_ticks` the part of them in which such a warehouse is empty;
+`front_empty_cap_has_ticks` the part of those in which the capital's warehouse is not empty (the supply, not the
+production, is the limit); `cap_full_ticks` the ticks in which the owned capital's warehouse is full (all ticks, not only
+marker ticks).
+
+Where to read it: the tournament rows (above); `gow-bots report`, section "Charge flow (#588)" (a table per bot with the
+means per player and match, the bottleneck shares summed over the group's ticks, and the mean stock by place);
+`gow-bots analyze` (the same keys) and `gow-bots stats` (rows `charges ...`, `ledger residual`, `marker city empty`,
+`mean stock <place>` after the CP rows). Not included (needs a new event or a state sample at the start of a fight): the
+siege composition of charge-flow.md; the cost of the added counting is below 2% of a headless match.
 
 ## Report
 

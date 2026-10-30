@@ -53,7 +53,10 @@ def test_stats_prints_a_table_per_replay(capsys: pytest.CaptureFixture[str]) -> 
     labels = [line.split("  ")[0].strip() for line in lines[2:]]
     assert labels[0] == "stance (tick:stance)"
     assert "APM avg" in labels
-    assert labels[-1] == "CP total"
+    assert labels.index("CP total") < labels.index("charges start")  # charge rows come last (#588)
+    assert labels[-1] == "mean stock packets"
+    residual = next(line for line in lines if line.startswith("ledger residual"))
+    assert residual.split()[-2:] == ["0", "0"]  # the ledger balances for both players
 
 
 def test_stats_of_a_missing_replay_fails(

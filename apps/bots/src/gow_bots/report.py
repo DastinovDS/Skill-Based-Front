@@ -103,6 +103,11 @@ class Row:
     charges_burned: tuple[int, int] | None = None
     usage: tuple[dict[str, int], dict[str, int]] | None = None
     """Accepted commands per mechanic by side (#166); ``None`` in an older file."""
+    flow: dict[str, tuple[int, int]] | None = None
+    """Integer charge ledger and bottleneck fields by side (#588), keyed as in the row
+    (``charges_start``, ``marker_ticks``, ...); ``None`` in a file written before they existed."""
+    places: tuple[dict[str, list[int | None]], dict[str, list[int | None]]] | None = None
+    """``stock_by_place_minute`` by side (#588)."""
 
     @property
     def outcome(self) -> tuple[int | None, str, tuple[int, int], tuple[int, int]]:
@@ -138,6 +143,56 @@ def _usage(raw: dict[str, Any]) -> tuple[dict[str, int], dict[str, int]] | None:
     )
 
 
+FLOW_KEYS: Final[tuple[str, ...]] = (
+    "charges_start",
+    "charges_fights",
+    "charges_captures",
+    "charges_packets_lost",
+    "charges_warehouses_lost",
+    "charges_starved",
+    "charges_attrition",
+    "charges_end",
+    "charges_residual",
+    "charges_sent",
+    "charges_delivered",
+    "charges_delivered_front",
+    "charges_transfers",
+    "marker_ticks",
+    "front_empty_ticks",
+    "front_empty_cap_has_ticks",
+    "cap_full_ticks",
+)
+"""The integer per-side fields of the charge flow (#588) that the report reads."""
+PLACE_KEYS: Final[tuple[str, ...]] = (
+    "cap_wh",
+    "front_wh",
+    "rear_wh",
+    "units_node",
+    "units_road",
+    "packets",
+)
+"""The places of ``stock_by_place_minute``; the same as ``gow_sim.analysis.PLACES``."""
+
+
+def _flow(raw: dict[str, Any]) -> dict[str, tuple[int, int]] | None:
+    if any(k not in raw for k in FLOW_KEYS):
+        return None
+    return {k: _pair(raw, k) for k in FLOW_KEYS}
+
+
+def _places(
+    raw: dict[str, Any],
+) -> tuple[dict[str, list[int | None]], dict[str, list[int | None]]] | None:
+    value = raw.get("stock_by_place_minute")
+    if value is None:
+        return None
+    first, second = value
+    return (
+        {str(k): [None if x is None else int(x) for x in v] for k, v in first.items()},
+        {str(k): [None if x is None else int(x) for x in v] for k, v in second.items()},
+    )
+
+
 def _parse_row(raw: dict[str, Any]) -> Row:
     minutes = raw["captures_by_minute"]
     winner = raw["winner"]
@@ -168,6 +223,8 @@ def _parse_row(raw: dict[str, Any]) -> Row:
         charges_produced=_opt_pair(raw, "charges_produced"),
         charges_burned=_opt_pair(raw, "charges_burned"),
         usage=_usage(raw),
+        flow=_flow(raw),
+        places=_places(raw),
     )
 
 
@@ -456,6 +513,108 @@ def _section_stock(ps: Sequence[Persp], rows: Sequence[Row], bots: Sequence[str]
     return intro + _table(["bot", *header], by_bot) + "\n\n" + _table(["map", *header], by_map)
 
 
+def _flow_cells(ps: Sequence[Persp]) -> list[str]:
+    """Charge flow columns of a group of perspectives: means per player and match."""
+    rows = [(p.row.flow, p.side, p.row.ticks) for p in ps if p.row.flow is not None]
+    if not rows:
+        return ["0", *["n/a"] * 15]
+    n = len(rows)
+
+    def total(key: str) -> int:
+        return sum(flow[key][side] for flow, side, _ in rows)
+
+    def mean(key: str) -> str:
+        return f"{total(key) / n:.1f}"
+
+    produced = sum(
+        p.row.charges_produced[p.side] for p in ps if p.row.flow and p.row.charges_produced
+    )
+    burned = sum(p.row.charges_burned[p.side] for p in ps if p.row.flow and p.row.charges_burned)
+    markers = total("marker_ticks")
+    ticks = sum(t for _, _, t in rows)
+
+    def pct(num: int, den: int) -> str:
+        return f"{num * 100 / den:.0f}%" if den else "n/a"
+
+    return [
+        str(n),
+        mean("charges_start"),
+        f"{produced / n:.1f}",
+        f"{burned / n:.1f}",
+        mean("charges_fights"),
+        mean("charges_captures"),
+        mean("charges_packets_lost"),
+        mean("charges_warehouses_lost"),
+        mean("charges_starved"),
+        mean("charges_attrition"),
+        mean("charges_end"),
+        str(total("charges_residual")),
+        f"{mean('charges_sent')} / {mean('charges_delivered')} / {mean('charges_delivered_front')}",
+        pct(total("front_empty_ticks"), markers),
+        pct(total("front_empty_cap_has_ticks"), markers),
+        pct(total("cap_full_ticks"), ticks),
+    ]
+
+
+def _place_cells(ps: Sequence[Persp]) -> list[str]:
+    """Mean stock by place: the mean over matches of the mean of each match's minutes."""
+    per_place: dict[str, list[int]] = {k: [] for k in PLACE_KEYS}
+    for p in ps:
+        if p.row.places is None:
+            continue
+        for k in PLACE_KEYS:
+            known = [v for v in p.row.places[p.side][k] if v is not None]
+            if known:
+                per_place[k].append(sum(known) // len(known))
+    n = max(len(v) for v in per_place.values())
+    if n == 0:
+        return ["0", *["n/a"] * len(PLACE_KEYS)]
+    return [str(n), *(f"{sum(v) / (100 * len(v)):.2f}" if v else "n/a" for v in per_place.values())]
+
+
+def _section_flow(ps: Sequence[Persp], bots: Sequence[str]) -> str:
+    header = [
+        "matches",
+        "start",
+        "produced",
+        "burned",
+        "fights",
+        "captures",
+        "packets lost",
+        "warehouses lost",
+        "starved",
+        "died with units",
+        "end",
+        "residual (sum, 0 = balanced)",
+        "sent / delivered / to markers",
+        "marker city empty",
+        "and capital has charges",
+        "capital full",
+    ]
+    flow = [[f"**{b}**", *_flow_cells([p for p in ps if p.bot == b])] for b in bots]
+    places = [[f"**{b}**", *_place_cells([p for p in ps if p.bot == b])] for b in bots]
+    intro = (
+        "Where the charges of a player come from and go (#588, definitions in "
+        "[README.md](README.md)): *start* + *produced* = *burned* + *fights* + *captures* + "
+        "*packets lost* + *warehouses lost* + *starved* + *died with units* + *end*; the "
+        "columns are the mean per player and match, charges. *Marker city empty* is the share "
+        "of the ticks with a front marker outside the capital in which such a warehouse is empty, "
+        "*and capital has charges* the part of those ticks in which the capital is not empty "
+        "(a supply bottleneck, not a lack of charges); *capital full* is the share of all ticks. "
+        "All matches count, mirror matches included; a file written before #588 shows n/a.\n\n"
+    )
+    stock = (
+        "\n\nMean stock by place (charges, the mean over matches of the per-match mean of the "
+        "minute means):\n\n"
+    )
+    return (
+        intro
+        + _table(["bot", *header], flow)
+        + stock
+        + _table(["bot", "matches", *PLACE_KEYS], places)
+    )
+
+
 def _usage_cell(ps: Sequence[Persp], key: str) -> str:
     counts = [p.row.usage[p.side].get(key, 0) for p in ps if p.row.usage is not None]
     if not counts:
@@ -693,6 +852,7 @@ def render_report(rows: Sequence[Row], source: str, prefix: str) -> str:
         ("Side advantage", _section_sides(rows)),
         ("Metrics by bot", _section_bots(ps, bots)),
         ("Charge stock and burned share (#310)", _section_stock(ps, rows, bots)),
+        ("Charge flow (#588)", _section_flow(ps, bots)),
         ("Mechanic usage (#166)", _section_usage(ps, bots)),
         ("Strategy diversity", _section_diversity(ps, bots)),
         ("Captures at the end of the match", _section_late(rows)),
