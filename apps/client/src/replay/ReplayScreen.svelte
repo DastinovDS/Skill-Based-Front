@@ -151,9 +151,6 @@
   const request = $derived({ id: matchId, attempt });
   $effect(() => load(request.id));
 
-  /** The name of a key is not translated. */
-  const ESC = 'Esc';
-
   const problem = $derived(failure === null ? null : ERRORS[failure]);
 
   // Enter asks again where that can help, Esc goes back; a focused button keeps its own keys.
@@ -213,16 +210,12 @@
       <div class="rows">
         {#if problem?.retry === true}
           <button type="button" class="row" aria-keyshortcuts="Enter" onclick={retry}>
-            <Icon name="refresh" size={22} />{t('replay.retry')}<kbd class="k" aria-hidden="true"
-              >↵</kbd
-            >
+            <Icon name="refresh" size={22} />{t('replay.retry')}
           </button>
         {/if}
         {#if onback !== undefined}
-          <button type="button" class="row" aria-keyshortcuts="Escape" onclick={onback}>
-            <Icon name="chevronLeft" size={22} />{t('replay.back')}<kbd class="k" aria-hidden="true"
-              >{ESC}</kbd
-            >
+          <button type="button" class="row" onclick={onback}>
+            <Icon name="chevronLeft" size={22} />{t('replay.back')}
           </button>
         {/if}
       </div>

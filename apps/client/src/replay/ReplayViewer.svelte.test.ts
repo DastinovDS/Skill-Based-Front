@@ -19,15 +19,11 @@ vi.stubGlobal(
 let drawn: { frame: () => unknown } | undefined;
 // The viewing player the map is drawn for (a getter: the props are reactive).
 let blue: () => number = () => -1;
-const fit = vi.fn<() => void>();
 vi.mock('../render/GameCanvas.svelte', () => ({
   default: (_anchor: unknown, props: { source: { frame: () => unknown }; player?: number }) => {
     drawn = props.source;
     blue = () => props.player ?? 0;
     return {
-      fitMap: () => {
-        fit();
-      },
       setInsets: () => undefined,
     };
   },
@@ -50,7 +46,7 @@ function open(onback?: () => void, extra: Record<string, unknown> = {}): HTMLEle
   return target;
 }
 
-// A button is found by its accessible name: the label, else its text without the key chip.
+// A button is found by its accessible name: the label, else its text.
 const button = (root: HTMLElement, text: string): HTMLButtonElement => {
   const found = [...root.querySelectorAll('button')].find(
     (b) =>
@@ -128,47 +124,18 @@ describe('ReplayViewer controls', () => {
   });
 });
 
-describe('ReplayViewer keys (ui-style 13.7)', () => {
+describe('ReplayViewer keys', () => {
   const key = (code: string): KeyboardEvent => {
-    const event = new KeyboardEvent('keydown', { code, bubbles: true, cancelable: true });
+    const event = new KeyboardEvent('keydown', {
+      code,
+      key: code,
+      bubbles: true,
+      cancelable: true,
+    });
     window.dispatchEvent(event);
     flushSync();
     return event;
   };
-
-  it('Space plays and pauses', () => {
-    const root = open();
-    expect(key('Space').defaultPrevented).toBe(true);
-    expect(button(root, 'Pause')).toBeTruthy();
-    key('Space');
-    expect(button(root, 'Play')).toBeTruthy();
-  });
-
-  it('Left and Right move five seconds, 1 2 3 set the speed', () => {
-    const root = open();
-    const slider = root.querySelector<HTMLInputElement>('input[type="range"]');
-    key('ArrowRight');
-    expect(slider?.value).toBe('50');
-    key('ArrowRight');
-    key('ArrowLeft');
-    expect(slider?.value).toBe('50');
-    key('ArrowLeft');
-    key('ArrowLeft');
-    expect(slider?.value).toBe('0');
-    key('Digit2');
-    expect(button(root, '×4').getAttribute('aria-pressed')).toBe('true');
-    key('Digit3');
-    expect(button(root, '×16').getAttribute('aria-pressed')).toBe('true');
-    key('Digit1');
-    expect(button(root, '×1').getAttribute('aria-pressed')).toBe('true');
-  });
-
-  it('Home fits the map', () => {
-    fit.mockClear();
-    open();
-    expect(key('Home').defaultPrevented).toBe(true);
-    expect(fit).toHaveBeenCalledOnce();
-  });
 
   it('Esc goes back, but only where there is a screen to go back to', () => {
     const back = vi.fn();
@@ -182,11 +149,17 @@ describe('ReplayViewer keys (ui-style 13.7)', () => {
     expect(key('Escape').defaultPrevented).toBe(false);
   });
 
-  it('lists the keys on the buttons', () => {
+  it('has no key hints and no other keys', () => {
     const root = open(vi.fn());
-    expect(button(root, 'Play').getAttribute('aria-keyshortcuts')).toBe('Space');
-    expect(button(root, '×16').getAttribute('aria-keyshortcuts')).toBe('3');
-    expect(root.querySelector('.back kbd')?.textContent).toBe('Esc');
+    expect(root.querySelector('kbd')).toBeNull();
+    expect(root.querySelector('[aria-keyshortcuts]')).toBeNull();
+    const slider = root.querySelector<HTMLInputElement>('input[type="range"]');
+    for (const code of ['Space', 'ArrowRight', 'Digit3', 'KeyF', 'Home']) {
+      expect(key(code).defaultPrevented).toBe(false);
+    }
+    expect(slider?.value).toBe('0');
+    expect(button(root, 'Play')).toBeTruthy();
+    expect(button(root, '×1').getAttribute('aria-pressed')).toBe('true');
   });
 });
 
@@ -239,26 +212,24 @@ describe('ReplayViewer "View as" (#599)', () => {
 });
 
 describe('ReplayViewer fog of a side (#600)', () => {
-  // The key chip "F" is also the first letter of the label: found by its place, its name checked.
   const fogButton = (root: HTMLElement): HTMLButtonElement => {
     const found = root.querySelector<HTMLButtonElement>('.view button.fog');
     if (found === null) throw new Error('no fog button');
-    expect(found.textContent.trim()).toBe('FogF');
+    expect(found.textContent.trim()).toBe('Fog');
     return found;
   };
   const groupsDrawn = (): number =>
     (drawn?.frame() as { groups: { owner?: number }[] }).groups.filter((g) => g.owner === 1).length;
 
-  it('shows a side with its fog by default, F and the button turn it off, Both has none', () => {
+  it('shows a side with its fog by default, the button turns it off, Both has none', () => {
     const root = open(undefined, { file: SAMPLE_FOG, initialView: 0 });
     const fog = fogButton(root);
     expect(fog.getAttribute('aria-pressed')).toBe('true');
     expect(fog.getAttribute('aria-disabled')).toBe('false');
-    expect(fog.getAttribute('aria-keyshortcuts')).toBe('F');
     fog.click();
     flushSync();
     expect(fog.getAttribute('aria-pressed')).toBe('false');
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' }));
+    fog.click();
     flushSync();
     expect(fog.getAttribute('aria-pressed')).toBe('true');
     button(root, 'Both').click();

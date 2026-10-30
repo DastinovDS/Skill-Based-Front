@@ -209,14 +209,10 @@ describe('the Dock screens', () => {
       expect(document.body.textContent).toContain(en('dock.chip.noPause'));
     });
 
-    it('is locked: B, I and L do nothing, the rail and the chip are off, Esc leaves and drops the invite', async () => {
+    it('is locked: the rail and the chip are off, Esc leaves and drops the invite', async () => {
       const cancelInvite = vi.fn(() => Promise.resolve());
-      const { calls, onleave } = render({ invite: () => Promise.resolve(invite()), cancelInvite });
+      const { onleave } = render({ invite: () => Promise.resolve(invite()), cancelInvite });
       await settle();
-      for (const key of ['b', 'i', 'l', 'B']) press(key);
-      expect(calls.onbot).not.toHaveBeenCalled();
-      expect(calls.oncreate).not.toHaveBeenCalled();
-      expect(calls.onlobby).not.toHaveBeenCalled();
       expect(button(en('menu.bot')).disabled).toBe(true);
       expect(button(en('menu.lobby')).disabled).toBe(true);
       expect(document.body.querySelector<HTMLButtonElement>('button.who')?.disabled).toBe(true);
@@ -303,14 +299,13 @@ describe('the Dock screens', () => {
       expect(button(en('bot.start')).disabled).toBe(false);
     });
 
-    it('opens the other modes with B, I and L and ignores the key of the mode it is in', async () => {
+    it('has no key hints and no letter keys on the rail', async () => {
       const calls = mountBot({});
       await settle();
-      press('i');
-      expect(calls.oncreate).toHaveBeenCalledTimes(1);
-      press('l');
-      expect(calls.onlobby).toHaveBeenCalledTimes(1);
-      press('b');
+      expect(document.body.querySelector('.rail kbd')).toBeNull();
+      for (const key of ['b', 'i', 'l', 'r', 't', 'h']) press(key);
+      expect(calls.oncreate).not.toHaveBeenCalled();
+      expect(calls.onlobby).not.toHaveBeenCalled();
       expect(calls.onbot).not.toHaveBeenCalled();
     });
 

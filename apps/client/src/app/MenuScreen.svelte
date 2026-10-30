@@ -81,32 +81,25 @@
   let menuOpen = $state(false);
 
   const modes = $derived([
-    { icon: 'bot', label: t('menu.bot'), key: 'B', go: onbot },
-    { icon: 'link', label: t('menu.create'), key: 'I', go: oncreate },
-    { icon: 'users', label: t('menu.lobby'), key: 'L', go: onlobby },
-    { icon: 'history', label: t('menu.replays'), key: 'R', go: onreplays },
-    { icon: 'trophy', label: t('menu.leaderboard'), key: 'T', go: onboard },
-    { icon: 'info', label: t('help.howTo'), key: 'H', go: onhowto, always: true },
+    { icon: 'bot', label: t('menu.bot'), go: onbot },
+    { icon: 'link', label: t('menu.create'), go: oncreate },
+    { icon: 'users', label: t('menu.lobby'), go: onlobby },
+    { icon: 'history', label: t('menu.replays'), go: onreplays },
+    { icon: 'trophy', label: t('menu.leaderboard'), go: onboard },
+    { icon: 'info', label: t('help.howTo'), go: onhowto, always: true },
   ] as const);
 
   const primary = $derived(hasActiveMatch ? onresume : banned ? null : onqueue);
 
-  // Keys of the mockup: Enter plays (or returns), B, I, L, R and T open the other rows, Esc shuts the
-  // account menu. Typing in a field and a focused button keep their own keys.
+  // Enter plays (or returns); the account menu keeps its own keys while it is open. Typing in a
+  // field and a focused button keep their own keys. The rows have no letter keys.
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
     const target = event.target;
     if (menuOpen) return;
     if (target instanceof Element && target.closest('input, textarea, select, button, a')) return;
-    if (event.key === 'Enter') {
-      if (primary === null) return;
-      primary();
-      event.preventDefault();
-      return;
-    }
-    const mode = modes.find((m) => m.key.toLowerCase() === event.key.toLowerCase());
-    if (mode === undefined || (hasActiveMatch && !('always' in mode))) return;
-    mode.go();
+    if (event.key !== 'Enter' || primary === null) return;
+    primary();
     event.preventDefault();
   }
 </script>
@@ -132,10 +125,7 @@
   {#if hasActiveMatch}
     <div class="eyebrow">{t('menu.eyebrow.match')}</div>
     <button type="button" class="big" aria-keyshortcuts="Enter" onclick={onresume}>
-      <UnitMark side="own" size={44} share={0.6} />{t('menu.resume')}<kbd
-        class="k"
-        aria-hidden="true">↵</kbd
-      >
+      <UnitMark side="own" size={44} share={0.6} />{t('menu.resume')}
     </button>
     <div class="sub">{t('menu.matchWaits')}</div>
   {:else if banned}
@@ -151,22 +141,19 @@
   {:else}
     <div class="eyebrow">{t('menu.eyebrow.ready')}</div>
     <button type="button" class="big" aria-keyshortcuts="Enter" onclick={onqueue}>
-      <UnitMark side="own" size={46} />{t('menu.play')}<kbd class="k" aria-hidden="true">↵</kbd>
+      <UnitMark side="own" size={46} />{t('menu.play')}
     </button>
     <div class="sub">{hasPassword ? '' : t('menu.guestHint')}</div>
   {/if}
   <div class="rows">
-    {#each modes as mode (mode.key)}
+    {#each modes as mode (mode.label)}
       <button
         type="button"
         class="row"
         disabled={hasActiveMatch && !('always' in mode)}
-        aria-keyshortcuts={mode.key}
         onclick={mode.go}
       >
-        <Icon name={mode.icon} size={22} />{mode.label}<kbd class="k" aria-hidden="true"
-          >{mode.key}</kbd
-        >
+        <Icon name={mode.icon} size={22} />{mode.label}
       </button>
     {/each}
   </div>

@@ -80,9 +80,6 @@
     data.stop();
   });
 
-  // Keyboard keys are not words of a language: they are labelled the same in every locale.
-  const ESC = 'Esc';
-
   let accountOpen = $state(false);
 
   const ownProfile = $derived(data.own.status === 'ready' ? data.own.value : null);
@@ -95,16 +92,16 @@
 
   // The rows of the menu, as on the start screen; the open one is marked.
   const rows = $derived([
-    { id: 'bot', icon: 'bot', label: t('menu.bot'), key: 'B', go: onbot },
-    { id: 'friend', icon: 'link', label: t('menu.create'), key: 'I', go: oncreate },
-    { id: 'lobby', icon: 'users', label: t('menu.lobby'), key: 'L', go: onlobby },
-    { id: 'replays', icon: 'history', label: t('menu.replays'), key: 'R', go: onreplays },
-    { id: 'board', icon: 'trophy', label: t('menu.leaderboard'), key: 'T', go: onboard },
-    { id: 'howto', icon: 'info', label: t('help.howTo'), key: 'H', go: onhowto },
+    { id: 'bot', icon: 'bot', label: t('menu.bot'), go: onbot },
+    { id: 'friend', icon: 'link', label: t('menu.create'), go: oncreate },
+    { id: 'lobby', icon: 'users', label: t('menu.lobby'), go: onlobby },
+    { id: 'replays', icon: 'history', label: t('menu.replays'), go: onreplays },
+    { id: 'board', icon: 'trophy', label: t('menu.leaderboard'), go: onboard },
+    { id: 'howto', icon: 'info', label: t('help.howTo'), go: onhowto },
   ] as const);
   const current = $derived(mode === 'history' ? 'replays' : 'board');
 
-  // Esc goes back to the menu; B, I, L, R and T open the other rows (the keys of the menu).
+  // Esc goes back to the menu.
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
     // The account menu keeps its own keys while it is open.
@@ -114,12 +111,6 @@
       onmenu();
       return;
     }
-    const target = event.target;
-    if (target instanceof Element && target.closest('input, textarea, select')) return;
-    const row = rows.find((r) => r.key.toLowerCase() === event.key.toLowerCase());
-    if (row === undefined || row.id === current) return;
-    event.preventDefault();
-    row.go();
   }
 </script>
 
@@ -139,9 +130,8 @@
   {/snippet}
 
   {#snippet rail()}
-    <button type="button" class="menuback" aria-keyshortcuts="Escape" onclick={onmenu}>
+    <button type="button" class="menuback" onclick={onmenu}>
       <Icon name="chevronLeft" size={16} />{t('board.menu')}
-      <kbd class="k" aria-hidden="true">{ESC}</kbd>
     </button>
     <div class="rows">
       {#each rows as row (row.id)}
@@ -150,12 +140,9 @@
           class="row"
           class:cur={row.id === current}
           aria-current={row.id === current ? 'page' : undefined}
-          aria-keyshortcuts={row.key}
           onclick={row.id === current ? undefined : row.go}
         >
-          <Icon name={row.icon} size={20} />{row.label}<kbd class="k" aria-hidden="true"
-            >{row.key}</kbd
-          >
+          <Icon name={row.icon} size={20} />{row.label}
         </button>
       {/each}
     </div>

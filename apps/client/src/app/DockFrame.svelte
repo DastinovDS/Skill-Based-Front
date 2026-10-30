@@ -78,14 +78,13 @@
 
   let accountOpen = $state(false);
 
-  // Keyboard keys are not words of a language: they are labelled the same in every locale.
   const modes = $derived([
-    { id: 'bot', icon: 'bot', label: t('menu.bot'), key: 'B', go: dock.onbot },
-    { id: 'friend', icon: 'link', label: t('menu.create'), key: 'I', go: dock.oncreate },
-    { id: 'lobby', icon: 'users', label: t('menu.lobby'), key: 'L', go: dock.onlobby },
-    { id: 'replays', icon: 'history', label: t('menu.replays'), key: 'R', go: dock.onreplays },
-    { id: 'board', icon: 'trophy', label: t('menu.leaderboard'), key: 'T', go: dock.onboard },
-    { id: 'howto', icon: 'info', label: t('help.howTo'), key: 'H', go: dock.onhowto },
+    { id: 'bot', icon: 'bot', label: t('menu.bot'), go: dock.onbot },
+    { id: 'friend', icon: 'link', label: t('menu.create'), go: dock.oncreate },
+    { id: 'lobby', icon: 'users', label: t('menu.lobby'), go: dock.onlobby },
+    { id: 'replays', icon: 'history', label: t('menu.replays'), go: dock.onreplays },
+    { id: 'board', icon: 'trophy', label: t('menu.leaderboard'), go: dock.onboard },
+    { id: 'howto', icon: 'info', label: t('help.howTo'), go: dock.onhowto },
   ] as const);
 
   const unrated = $derived(
@@ -96,9 +95,8 @@
         : t('dock.unrated.rated'),
   );
 
-  // Esc goes back, Enter does the main action; B, I and L open the other modes (as in the menu)
-  // unless the screen is a waiting room. A field or a button keeps its own keys; the tiles and
-  // levels (radios) do not, so Enter after a choice starts the match.
+  // Esc goes back, Enter does the main action. A field or a button keeps its own keys; the tiles
+  // and levels (radios) do not, so Enter after a choice starts the match.
   function onkeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
     if (accountOpen) return;
@@ -113,17 +111,9 @@
       target instanceof Element &&
       target.closest('input, textarea, select, a, button:not([role="radio"])') !== null;
     if (onControl) return;
-    if (event.key === 'Enter') {
-      if (onenter === undefined) return;
-      event.preventDefault();
-      onenter();
-      return;
-    }
-    if (locked) return;
-    const next = modes.find((m) => m.key.toLowerCase() === event.key.toLowerCase());
-    if (next === undefined || next.id === mode) return;
+    if (event.key !== 'Enter' || onenter === undefined) return;
     event.preventDefault();
-    next.go();
+    onenter();
   }
 </script>
 
@@ -181,11 +171,10 @@
         class="row"
         class:cur={m.id === mode}
         aria-current={m.id === mode ? 'page' : undefined}
-        aria-keyshortcuts={m.key}
         disabled={locked && m.id !== mode}
         onclick={m.id === mode ? undefined : m.go}
       >
-        <Icon name={m.icon} size={22} />{m.label}<kbd class="k" aria-hidden="true">{m.key}</kbd>
+        <Icon name={m.icon} size={22} />{m.label}
       </button>
     {/each}
   </div>

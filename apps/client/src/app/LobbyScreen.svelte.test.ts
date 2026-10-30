@@ -179,15 +179,16 @@ describe('LobbyScreen (Dock, #473)', () => {
     expect(onback).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the other modes of the rail working: B opens the bot, the current row is marked', async () => {
+  it('marks the current row of the rail and opens the other modes by click', async () => {
     const calls = render({ lobby: () => Promise.resolve([]) });
     await settle();
     const current = document.body.querySelector('.rail .row.cur');
     expect(current?.textContent).toContain(translate('en', 'menu.lobby'));
     expect(current?.getAttribute('aria-current')).toBe('page');
-    press('b');
+    const bot = [...document.body.querySelectorAll<HTMLButtonElement>('.rail .row')].find((b) =>
+      b.textContent.includes(translate('en', 'menu.bot')),
+    );
+    bot?.click();
     expect(calls.onbot).toHaveBeenCalledTimes(1);
-    press('l');
-    expect(calls.onlobby).not.toHaveBeenCalled(); // already here
   });
 });
