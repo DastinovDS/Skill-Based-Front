@@ -256,22 +256,19 @@ describe('LeaderboardScreen', () => {
     expect(scrolled).toHaveBeenCalled();
   });
 
-  it('keys: Esc goes to the menu, R and T switch between the rows, B opens the bot', async () => {
+  it('keys: Esc goes to the menu, the rows have no letter keys', async () => {
     const { h } = await render('board-ranked');
     const press = (key: string): void => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
     };
     press('Escape');
     expect(h.onmenu).toHaveBeenCalledOnce();
-    press('r');
-    expect(h.onreplays).toHaveBeenCalledOnce();
-    press('t');
+    for (const key of ['r', 't', 'b', 'i', 'l']) press(key);
+    expect(h.onreplays).not.toHaveBeenCalled();
     expect(h.onboard).not.toHaveBeenCalled();
-    press('b');
-    press('i');
-    press('l');
-    expect(h.onbot).toHaveBeenCalledOnce();
-    expect(h.oncreate).toHaveBeenCalledOnce();
-    expect(h.onlobby).toHaveBeenCalledOnce();
+    expect(h.onbot).not.toHaveBeenCalled();
+    expect(h.oncreate).not.toHaveBeenCalled();
+    expect(h.onlobby).not.toHaveBeenCalled();
+    expect(document.body.querySelector('kbd')).toBeNull();
   });
 });

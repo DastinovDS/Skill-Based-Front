@@ -264,6 +264,9 @@
     max-width: calc(100% - 1px);
     border-radius: 4px;
     background: var(--you);
+    /* The HUD gets a new value 10 times a second; a linear glide a little longer than one
+       snapshot interval turns the steps of the regeneration into a continuous fill. */
+    transition: width 120ms linear;
   }
 
   /* A notch at every whole CP, cut through the fill: the old cells, as ticks. */
@@ -284,6 +287,7 @@
     margin-left: -3.5px;
     background: var(--paper);
     clip-path: polygon(0 0, 100% 0, 50% 100%);
+    transition: left 120ms linear;
   }
 
   /* At the cap: a dashed amber ring round the track (the word MAX is beside the number). */
@@ -320,6 +324,11 @@
     .ring,
     .max {
       animation: none;
+    }
+
+    .fill,
+    .head {
+      transition: none;
     }
   }
 

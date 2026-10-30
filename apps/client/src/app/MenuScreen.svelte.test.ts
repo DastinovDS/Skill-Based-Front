@@ -70,15 +70,9 @@ describe('MenuScreen', () => {
     flushSync();
   }
 
-  /** A button by its name: the key hint inside it does not count. */
+  /** A button by its name. */
   function button(label: string): HTMLButtonElement | undefined {
-    return [...document.querySelectorAll('button')].find((b) => {
-      const copy = b.cloneNode(true) as HTMLElement;
-      copy.querySelectorAll('kbd').forEach((n) => {
-        n.remove();
-      });
-      return copy.textContent.trim() === label;
-    });
+    return [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === label);
   }
   const named = (key: MessageKey): HTMLButtonElement | undefined => button(translate('en', key));
 
@@ -104,21 +98,26 @@ describe('MenuScreen', () => {
     expect(named('menu.leaderboard')).toBeTruthy();
   });
 
-  it('opens How to play with H, also while a match runs (CLI-13)', () => {
+  it('opens How to play also while a match runs (CLI-13)', () => {
     const onhowto = vi.fn();
     render({ hasActiveMatch: true, handlers: { onhowto } });
-    press('h');
     named('help.howTo')?.click();
-    expect(onhowto).toHaveBeenCalledTimes(2);
+    expect(onhowto).toHaveBeenCalledOnce();
   });
 
-  it('opens Replays and the Leaderboard with R and T', () => {
-    const handlers = { onreplays: vi.fn(), onboard: vi.fn() };
+  it('has no key hints and no letter keys on the rows', () => {
+    const handlers = {
+      onbot: vi.fn(),
+      oncreate: vi.fn(),
+      onlobby: vi.fn(),
+      onreplays: vi.fn(),
+      onboard: vi.fn(),
+      onhowto: vi.fn(),
+    };
     render({ handlers });
-    press('r');
-    press('T');
-    expect(handlers.onreplays).toHaveBeenCalledOnce();
-    expect(handlers.onboard).toHaveBeenCalledOnce();
+    expect(document.body.querySelector('kbd')).toBeNull();
+    for (const key of ['b', 'i', 'l', 'r', 't', 'h', 'B']) press(key);
+    for (const handler of Object.values(handlers)) expect(handler).not.toHaveBeenCalled();
   });
 
   it('shows the rating of a ranked account in the corner chip', () => {
@@ -126,17 +125,11 @@ describe('MenuScreen', () => {
     expect(document.body.textContent).toContain('1480');
   });
 
-  it('opens the modes with their keys: B, I, L and Enter', () => {
-    const handlers = { onbot: vi.fn(), oncreate: vi.fn(), onlobby: vi.fn(), onqueue: vi.fn() };
-    render({ handlers });
-    press('b');
-    press('I');
-    press('l');
+  it('plays with Enter', () => {
+    const onqueue = vi.fn();
+    render({ handlers: { onqueue } });
     press('Enter');
-    expect(handlers.onbot).toHaveBeenCalledOnce();
-    expect(handlers.oncreate).toHaveBeenCalledOnce();
-    expect(handlers.onlobby).toHaveBeenCalledOnce();
-    expect(handlers.onqueue).toHaveBeenCalledOnce();
+    expect(onqueue).toHaveBeenCalledOnce();
   });
 
   it('keeps the keys out of a text field', () => {

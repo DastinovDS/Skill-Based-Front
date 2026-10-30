@@ -9,7 +9,6 @@
   import type { PlayerId } from '../protocol.gen.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
   import { replayMarks } from './marks.ts';
-  import { replayKey } from './replayKeys.ts';
   import { ReplayPlayer, SPEEDS } from './replayPlayer.ts';
   import { hasVision, type ReplayFile } from './replayFile.ts';
   import ReplayTimeline from './ReplayTimeline.svelte';
@@ -91,9 +90,6 @@
     winner === null ? t('replay.draw') : tf('replay.winner', { player: names[winner] }),
   );
 
-  /** The names of the keys are not translated. */
-  const KEY = { esc: 'Esc', space: 'Space', home: 'Home', fog: 'F' } as const;
-
   const VIEWS: readonly ReplayView[] = [0, 1, 'both'];
   const viewName = (option: ReplayView): string =>
     option === 'both' ? t('replay.view.both') : names[option];
@@ -101,8 +97,7 @@
   let rendererFailed = $state(false);
   // The part of the GameCanvas instance the viewer uses (spelled out: typescript-eslint cannot see
   // the types of .svelte imports).
-  let canvas: { fitMap: () => void; setInsets: (insets: Insets) => void } | undefined =
-    $state.raw();
+  let canvas: { setInsets: (insets: Insets) => void } | undefined = $state.raw();
   let barHeight = $state(0);
   let controlsHeight = $state(0);
 
@@ -119,42 +114,12 @@
     sync();
   }
 
+  // The only key of the viewer is Esc, back (the same as on the other screens); the controls are
+  // buttons, a mouse or touch affair.
   function onkeydown(event: KeyboardEvent): void {
-    if (event.defaultPrevented) return;
-    const target = event.target;
-    const action = replayKey({
-      code: event.code,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      altKey: event.altKey,
-      onControl: target instanceof Element && target.closest('button, a, select') !== null,
-    });
-    if (action === null) return;
-    switch (action.kind) {
-      case 'toggle':
-        togglePlay();
-        break;
-      case 'skip':
-        player.seek(player.position + action.seconds * player.tickHz);
-        sync();
-        break;
-      case 'speed':
-        player.setSpeed(action.speed);
-        sync();
-        break;
-      case 'fit':
-        canvas?.fitMap();
-        break;
-      case 'fog':
-        if (!fogAvailable) return;
-        toggleFog();
-        break;
-      case 'back':
-        if (onback === undefined) return;
-        onback();
-        break;
-    }
+    if (event.defaultPrevented || event.key !== 'Escape' || onback === undefined) return;
     event.preventDefault();
+    onback();
   }
 </script>
 
@@ -176,10 +141,9 @@
 
   <header class="bar" bind:clientHeight={barHeight}>
     {#if onback !== undefined}
-      <button type="button" class="back" aria-keyshortcuts="Escape" onclick={onback}>
+      <button type="button" class="back" onclick={onback}>
         <Icon name="chevronLeft" size={18} />
         <span class="back-label">{t('replay.back')}</span>
-        <kbd aria-hidden="true">{KEY.esc}</kbd>
       </button>
     {:else}
       <span></span>
@@ -229,12 +193,11 @@
         class="fog"
         aria-pressed={fogOn}
         aria-disabled={!fogAvailable}
-        aria-keyshortcuts="F"
         aria-describedby={fogReason === null ? undefined : 'replay-fog-reason'}
         title={fogReason ?? undefined}
         onclick={toggleFog}
       >
-        <Icon name="fog" size={16} />{t('replay.fog')}<kbd aria-hidden="true">{KEY.fog}</kbd>
+        <Icon name="fog" size={16} />{t('replay.fog')}
       </button>
       {#if fogReason !== null}
         <span id="replay-fog-reason" class="sr-only">{fogReason}</span>
@@ -278,7 +241,6 @@
       <button
         type="button"
         class="play"
-        aria-keyshortcuts="Space"
         onclick={togglePlay}
         aria-label={playing ? t('replay.pause') : t('replay.play')}
       >
@@ -286,18 +248,16 @@
         <span class="play-label" aria-hidden="true">
           {playing ? t('replay.pause') : t('replay.play')}
         </span>
-        <kbd aria-hidden="true">{KEY.space}</kbd>
       </button>
       <div class="seg speeds" role="group" aria-label={t('replay.speed')}>
-        {#each SPEEDS as option, index (option)}
+        {#each SPEEDS as option (option)}
           <button
             type="button"
             aria-pressed={speed === option}
-            aria-keyshortcuts={String(index + 1)}
             onclick={() => {
               player.setSpeed(option);
               sync();
-            }}>×{option}<kbd aria-hidden="true">{index + 1}</kbd></button
+            }}>×{option}</button
           >
         {/each}
       </div>
@@ -305,9 +265,7 @@
         {formatClock(position / player.tickHz)}
         <span class="total">/ {formatClock(player.duration / player.tickHz)}</span>
       </span>
-      <ul class="hints" aria-label={t('replay.keys')}>
-        <li><kbd>←</kbd><kbd>→</kbd> {t('replay.keys.skip')}</li>
-        <li><kbd>{KEY.home}</kbd> {t('replay.keys.fit')}</li>
+      <ul class="hints" aria-label={t('replay.legend')}>
         <li class="legend">
           <i class="lg-dot"></i>{t('replay.legend.fight')}
           <i class="lg-diamond"></i>{t('replay.legend.capture')}
@@ -348,16 +306,6 @@
   button:focus-visible {
     outline: 2px solid var(--paper);
     outline-offset: 1px;
-  }
-
-  kbd {
-    padding: 0 5px;
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    color: var(--text-dim);
-    font: inherit;
-    font-size: 12px;
-    line-height: 16px;
   }
 
   /* The top bar of the match (ui-style 10.2): back on the left, the sides and the VP tug of war in
@@ -473,11 +421,6 @@
     font-weight: 700;
   }
 
-  .seg button[aria-pressed='true'] kbd {
-    border-color: var(--bg);
-    color: var(--bg);
-  }
-
   /* The fog toggle: pressed is filled and bold like the choices; unavailable is dimmed and dashed,
      so the three states read without the hue. */
   .fog[aria-pressed='true'] {
@@ -485,11 +428,6 @@
     background: var(--you);
     color: var(--bg);
     font-weight: 700;
-  }
-
-  .fog[aria-pressed='true'] kbd {
-    border-color: var(--bg);
-    color: var(--bg);
   }
 
   .fog[aria-disabled='true'] {
@@ -568,11 +506,6 @@
     background: var(--you);
     color: var(--bg);
     font-weight: 700;
-  }
-
-  .play kbd {
-    border-color: var(--bg);
-    color: var(--bg);
   }
 
   .play:hover {
@@ -664,7 +597,6 @@
     .back-label,
     .nick,
     .view-label,
-    kbd,
     .play-label {
       display: none;
     }
@@ -684,12 +616,6 @@
 
     .row {
       gap: 8px 12px;
-    }
-  }
-
-  @media (pointer: coarse) {
-    kbd {
-      display: none;
     }
   }
 </style>
