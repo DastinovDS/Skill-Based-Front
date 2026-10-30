@@ -23,6 +23,38 @@ uv run gow-bots tournament --maps maps/*.json --bots all --seeds 100 --jobs 8 --
 | `--out` | the result file, `docs/balance/latest.jsonl` by default |
 | `--replays DIR` | additionally write the replay of every match into `DIR` |
 
+### Running on GitHub runners (#582)
+
+A long tournament does not belong on a laptop. The workflow `.github/workflows/tournament.yml` (manual
+dispatch only, it is not a required check) plays it on GitHub runners:
+
+```bash
+mise run tournament:gh -- --help                       # all options
+mise run tournament:gh --seeds 100 --shards 10 --label bal02
+mise run tournament:gh --ref feature/123-x --ruleset rulesets/mvp-2.toml --bots "rusher smart_rusher@normal" --seeds 20
+```
+
+| Option | Meaning |
+|---|---|
+| `--ref` | the git ref to check out and to dispatch from (`develop` by default); a branch must be pushed and contain the workflow |
+| `--ruleset`, `--bots`, `--maps`, `--seeds` | as for `gow-bots tournament`; `--seeds` is the total over all shards, `--bots` is a space-separated list or `all`, `--maps` the pool `maps/*.json` by default |
+| `--shards` | parallel runner jobs, 10 by default, at most 20, never more than `--seeds` |
+| `--label` | a name for the run title and the artifact |
+| `--dir` | where the artifact lands (`.tournament/`, outside git) |
+
+The task dispatches the run, waits with a single `gh run watch --exit-status` and downloads the artifact
+`tournament-<label>-<run id>/` with `tournament.jsonl` and `report.md` (and the charts of the report).
+The inputs are in the job summary of the run and in the artifact name.
+
+How it keeps the result equal to a local run: the seeds `seed_base .. seed_base + seeds - 1` are split into
+contiguous ranges, each shard runs `mise run tournament` with its `--seed-base`/`--seeds` and `--jobs` = the CPU count of
+the runner, and `scripts/tournament_shards.py merge` puts the rows into the order of a single run
+(`map, seed, bot0, bot1`, see below) without touching their text. The merged file is byte-identical to the
+file of `mise run tournament` with the same arguments (the test `tests/test_tournament_shards.py`). Runners use the
+Python of `.python-version` (uv fetches it; a shard fails if the version differs).
+
+**Agents: prefer this to a local run for anything above `--seeds 3`**; the smoke tournament of 3 seeds stays local.
+
 Matches: `maps x bots x bots x seeds`. Every **ordered** pair `(the bot of side 0, the bot of
 side 1)` plays: each pair meets from both sides, each bot also plays itself (this gives an
 estimate of the skew between the sides of a map). The match seed is shared by both bots; the bot's parameters are chosen from
