@@ -143,8 +143,8 @@ test('pause, a dropped connection and a forfeit in a private match', async ({
 
   // Pause (private matches only): both see it, the clock stops, "Resume" brings it back.
   await host.page.getByRole('button', { name: 'Pause' }).click();
-  await expect(host.page.getByText(/^You paused the match\./)).toBeVisible();
-  await expect(guest.page.getByText(/^The opponent paused the match\./)).toBeVisible();
+  await expect(host.page.getByText(/^You paused the match$/)).toBeVisible();
+  await expect(guest.page.getByText(/^The opponent paused the match$/)).toBeVisible();
   // The server stops the clock: no snapshot after `paused` (the page itself keeps playing out
   // the few snapshots it had buffered, so the frames, not the canvas, are the evidence).
   const pausedAt = guest.received.findLastIndex((f) => f.type === 'paused');
@@ -189,8 +189,8 @@ test('a page reload in a running match returns to the same match (#189)', async 
   // below. A paused clock makes the speed of the runner irrelevant (the pause limit and the
   // reconnect window of the e2e stack are long: e2e/compose.e2e.yaml).
   await host.page.getByRole('button', { name: 'Pause' }).click();
-  await expect(host.page.getByText(/^You paused the match\./)).toBeVisible();
-  await expect(guest.page.getByText(/^The opponent paused the match\./)).toBeVisible();
+  await expect(host.page.getByText(/^You paused the match$/)).toBeVisible();
+  await expect(guest.page.getByText(/^The opponent paused the match$/)).toBeVisible();
 
   // F5 in the middle of the match: the page asks the server where the match is and reconnects
   // with the same token (a second `welcome`), instead of landing on the menu.
@@ -201,7 +201,7 @@ test('a page reload in a running match returns to the same match (#189)', async 
     side,
   ]);
   // The same match, not the menu: the pause the host started is still on.
-  await expect(host.page.getByText(/^You paused the match\./)).toBeVisible();
+  await expect(host.page.getByText(/^You paused the match$/)).toBeVisible();
   await expect(host.page.getByRole('button', { name: host.nick })).toBeHidden();
 
   // Nobody lost by disconnect and the match goes on for both: the guest's forfeit is queued by the
