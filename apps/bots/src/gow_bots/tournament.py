@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from gow_bots.bots import BOTS
+from gow_bots.bots import BotFactory, ParamRange, bot_factory
 from gow_sim.analysis import MatchLog, MatchRecorder, analyze
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, load_map, map_hash
@@ -38,6 +38,7 @@ __all__ = [
     "MatchTask",
     "build_tasks",
     "play_match",
+    "play_tasks",
     "run_tournament",
     "usage",
 ]
@@ -86,6 +87,14 @@ class MatchTask:
     seed: int
     replay_dir: str | None = None
     """Folder to record a replay of this match into, ``None``: no replay."""
+    params: tuple[tuple[str, str, int, int], ...] = ()
+    """Parameter ranges in place of the class's ones: ``(bot, key, low, high)`` (the search,
+    ``gow_bots.search``); empty in a tournament."""
+
+    def factory(self, side: int) -> BotFactory:
+        name = self.bots[side]
+        ranges = {k: ParamRange(lo, hi) for b, k, lo, hi in self.params if b == name}
+        return bot_factory(name, ranges)
 
 
 class _Both:
@@ -111,7 +120,7 @@ def play_match(task: MatchTask) -> str:
     """Play one match and return its JSONL row (no newline). Runs in a worker process."""
     mapdef = load_map(task.map_path)
     rules = load_ruleset(task.rules_path)
-    controllers = [BOTS[task.bots[p]](mapdef, rules, seed=task.seed, player=p) for p in PLAYERS]
+    controllers = [task.factory(p)(mapdef, rules, seed=task.seed, player=p) for p in PLAYERS]
     recorder = MatchRecorder()
     result: MatchResult
     if task.replay_dir is None:
@@ -149,9 +158,8 @@ def build_tasks(
 
     Raises ``ValueError`` for an unknown bot, no maps, no bots or ``seeds < 1``.
     """
-    unknown = sorted(set(bots) - BOTS.keys())
-    if unknown:
-        raise ValueError(f"unknown bots {unknown}; known: {sorted(BOTS)}")
+    for name in sorted(set(bots)):
+        bot_factory(name)  # an unknown bot or level fails here, not in every worker
     if not map_paths or not bots:
         raise ValueError("need at least one map and one bot")
     if seeds < 1:
@@ -186,13 +194,16 @@ def run_tournament(
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.name + ".tmp")
-    workers = jobs if jobs is not None else (os.cpu_count() or 1)
-    context = multiprocessing.get_context("spawn")
-    with (
-        tmp.open("w", encoding="ascii", newline="\n") as f,
-        ProcessPoolExecutor(workers, mp_context=context, max_tasks_per_child=1) as pool,
-    ):
-        for row in pool.map(play_match, tasks, chunksize=1):
+    with tmp.open("w", encoding="ascii", newline="\n") as f:
+        for row in play_tasks(tasks, jobs):
             f.write(row + "\n")
             yield row
     tmp.replace(out)
+
+
+def play_tasks(tasks: Sequence[MatchTask], jobs: int | None = None) -> Iterator[str]:
+    """The rows of ``tasks`` in task order, played on ``jobs`` processes (module docstring)."""
+    workers = jobs if jobs is not None else (os.cpu_count() or 1)
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(workers, mp_context=context, max_tasks_per_child=1) as pool:
+        yield from pool.map(play_match, tasks, chunksize=1)

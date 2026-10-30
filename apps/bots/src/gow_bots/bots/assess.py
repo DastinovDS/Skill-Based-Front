@@ -17,6 +17,11 @@ and the ruleset. Four parts:
   earliest one are summed; numbers hidden by the fog are guessed (``guess`` units, all
   charged). The capital is *in danger* when that sum reaches the shots that take the capital
   from its garrison now (``shots_to_take``, with the own Defense bonus the view shows).
+  Only forces that can reach the capital with one order count (``route``): a path goes through
+  the mover's own nodes and ends at the first foreign or neutral node (SIM-05,
+  ``gow_sim.systems.movement.find_path``), so a force must stand on, or head into, a node from
+  which enemy-owned nodes lead to the capital; a force that must take an own node of the bot
+  first is a threat to that node (``logistics.arrivals``), not yet to the capital.
 - **Upper bound of the enemy CP** (``EnemyCp``): the enemy CP and stance are hidden (AGENTS.md,
   section 4.4), the regeneration is not: the bound starts at ``cp.start``, gains the largest CP
   share of a quantum (the stance with the fewest charges) every ``cp.period_ticks``, stops at
@@ -224,7 +229,8 @@ class Threat:
     eta: int | None
     """The earliest tick a shown enemy force can be in the capital; ``None``: none shown."""
     units: int
-    """Enemy units (an upper guess, all of them taken as charged) arriving within the horizon."""
+    """Enemy shots arriving within the horizon: the exact charges where the view shows them,
+    else units taken as charged (``_shots``, ``_figure_units``)."""
     need: int
     """Shots that take the capital from its garrison now (``shots_to_take``)."""
 
@@ -299,7 +305,7 @@ class Assessor:
     def threat(self, view: PlayerView, guess: int, horizon: int) -> Threat:
         """The ``Threat`` to the own capital (module docstring)."""
         cap = self.capital
-        to_cap = [row[cap] for row in self.travel.ticks]
+        to_cap = self.route(view)
         forces: list[tuple[int, int]] = []  # (eta, units)
         # A force standing in a node needs a new order: not before the enemy can pay for one.
         order_wait = self.enemy_cp.ticks_to(self.rules.orders.cost.move, view.tick)
@@ -311,12 +317,13 @@ class Assessor:
             if view.tick - seen.tick > FRESH_TICKS or Mode.ATTACK not in seen.enemy_modes:
                 continue  # an old sighting, or groups in Defense: a move would drop the bonus
             eta = max(view.tick + order_wait, seen.tick + to_cap[n.id])
-            by_node[n.id] = (eta, _units(seen, guess))
+            garrison = n.owner == 1 - view.player  # standing in its own node, not attacking
+            by_node[n.id] = (eta, _shots(seen, guess, low=garrison))
         for i in view.intents:
             if i.owner == view.player or i.kind is not IntentKind.PLANNED_MOVE:
                 continue
-            if i.target != cap and (i.target is None or to_cap[i.target] < 0):
-                continue
+            if i.target is None or (i.target != cap and not self._passes(view, i.target)):
+                continue  # aimed elsewhere: its path ends at that node (SIM-05)
             way = to_cap[i.origin]
             if way < 0:
                 continue
@@ -327,6 +334,9 @@ class Assessor:
         forces.extend(by_node[n] for n in sorted(by_node))
         for e in view.edges:
             for f in e.enemy_groups:
+                head = self.map.edges[e.id].b if f.toward_b else self.map.edges[e.id].a
+                if head != cap and not self._passes(view, head):
+                    continue  # its path ends at the own or neutral node it heads into
                 eta = self._figure_eta(e.id, f, to_cap)
                 if eta is not None:
                     forces.append((view.tick + eta, _figure_units(f, guess)))
@@ -348,6 +358,30 @@ class Assessor:
         units = sum(u for t, u in forces if t <= eta + horizon)
         return Threat(eta, units, need)
 
+    def route(self, view: PlayerView) -> list[int]:
+        """Least travel ticks (``Travel`` edges) from every node to the own capital along a path
+        an enemy group can take with one order: every node between the start and the capital is
+        enemy-owned (module docstring); ``-1``: no such path. Public ownership only."""
+        cap = self.capital
+        dist = [-1] * len(self.map.nodes)
+        dist[cap] = 0
+        queue = [(0, cap)]
+        while queue:
+            ticks, node = heapq.heappop(queue)
+            if ticks > dist[node] or (node != cap and not self._passes(view, node)):
+                continue  # a start only: the path cannot go on through this node
+            for eid in self.map.incident[node]:
+                other = self.map.edges[eid].other(node)
+                t = ticks + self.travel.edge_ticks[eid]
+                if dist[other] < 0 or t < dist[other]:
+                    dist[other] = t
+                    heapq.heappush(queue, (t, other))
+        return dist
+
+    def _passes(self, view: PlayerView, node: int) -> bool:
+        """An enemy path goes on through ``node`` (its own node, SIM-05)."""
+        return view.nodes[node].owner == 1 - self.player
+
     def _figure_eta(self, edge: int, f: EnemyGroupView, to_cap: list[int]) -> int | None:
         """Ticks until figure ``f`` on ``edge`` can be in the capital, ``None``: never."""
         e = self.map.edges[edge]
@@ -358,18 +392,22 @@ class Assessor:
         return self.travel.edge_ticks[edge] * left // 1000 + to_cap[node]
 
 
-def _units(seen: Sighting, guess: int) -> int:
-    if seen.enemy_units is not None:
-        return seen.enemy_units
+def _shots(seen: Sighting, guess: int, *, low: bool) -> int:
+    """The shots of a sighting: the exact charges (a unit without a charge does not shoot,
+    DEC-07), else the range of units taken as charged: its bottom for a garrison standing in an
+    enemy node (``low``: it is watched every decision and becomes a figure with an ETA once it
+    marches), its top otherwise; ``guess`` without numbers."""
+    if seen.enemy_charged is not None:
+        return seen.enemy_charged
     if seen.enemy_range is not None:
-        low, high = seen.enemy_range
-        return low if high is None else high
+        bottom, high = seen.enemy_range
+        return bottom if low or high is None else high
     return guess
 
 
 def _figure_units(f: EnemyGroupView, guess: int) -> int:
-    if f.detail is Detail.EXACT and f.units is not None:
-        return f.units
+    if f.detail is Detail.EXACT and f.charged is not None:
+        return f.charged  # a unit without a charge does not shoot (DEC-07)
     if f.units_range is not None:
         low, high = f.units_range
         return low if high is None else high

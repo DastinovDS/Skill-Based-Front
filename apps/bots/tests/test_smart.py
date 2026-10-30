@@ -259,10 +259,19 @@ def test_a_figure_heading_to_the_capital_is_a_threat_by_its_eta(
     assert t.units == need and t.danger
     small = dataclasses.replace(big, units=need - 1, charged=need - 1)
     assert not assessor.threat(_with_figure(view, edge, small), guess=3, horizon=60).danger
-    # Going away: it must reach the far end first and come back.
+    # Going away into an own node: its path ends there (SIM-05), no threat to the capital.
     away = dataclasses.replace(big, toward_b=not cap_is_b)
-    later = assessor.threat(_with_figure(view, edge, away), guess=3, horizon=60)
+    assert assessor.threat(_with_figure(view, edge, away), guess=3, horizon=60).eta is None
+    # Going away into an enemy node next to the capital: it can come back with one order.
+    _, near, _ = _capital_edge(mapdef, 0)
+    nodes = list(view.nodes)
+    nodes[near] = dataclasses.replace(nodes[near], owner=1)
+    enemy_near = dataclasses.replace(view, nodes=tuple(nodes))
+    later = assessor.threat(_with_figure(enemy_near, edge, away), guess=3, horizon=60)
     assert later.eta is not None and t.eta is not None and later.eta > t.eta
+    # Exact numbers: only the charged units shoot (DEC-07).
+    empty = dataclasses.replace(big, charged=0)
+    assert assessor.threat(_with_figure(view, edge, empty), guess=3, horizon=60).units == 0
     # Hidden numbers (PRESENCE): the guess.
     hidden = EnemyGroupView(1, pos, cap_is_b, Detail.PRESENCE, Mode.ATTACK, None, None, None)
     assert assessor.threat(_with_figure(view, edge, hidden), guess=7, horizon=60).units == 7
@@ -286,6 +295,45 @@ def test_sightings_count_only_fresh_and_in_the_attack_mode(
     assert seen(Sighting(200, Detail.EXACT, (Mode.DEFENSE,), 9, 9)).eta is None
     assert seen(Sighting(100, Detail.EXACT, (Mode.ATTACK,), 9, 9)).eta is None  # stale
     assert seen(Sighting(200, Detail.RANGE, (Mode.ATTACK,), None, None, (3, 5))).units == 5
+    assert seen(Sighting(200, Detail.EXACT, (Mode.ATTACK,), 9, 4)).units == 4  # 4 shoot
+
+
+def test_only_forces_with_a_one_order_path_threaten_the_capital(
+    maps: dict[str, MapDef], mvp1_rules: Ruleset
+) -> None:
+    # A path goes through the mover's own nodes only and ends at the first foreign or neutral
+    # node (SIM-05): an enemy force behind an own node of the bot must take that node first.
+    mapdef = maps["web"]
+    view = dataclasses.replace(_start(mapdef, mvp1_rules), tick=200)
+    capital = mapdef.capital(0)
+    hops = Bot(mapdef, mvp1_rules, seed=0, player=0).hops[capital]
+    near = next(n for n in range(len(mapdef.nodes)) if hops[n] == 1)
+    far = next(n for n in range(len(mapdef.nodes)) if hops[n] == 2 and near in _nbrs(mapdef, n))
+    assessor = _assessor(mapdef, mvp1_rules)
+    sighting = Sighting(200, Detail.EXACT, (Mode.ATTACK,), 9, 9)
+
+    def threat(owners: dict[int, int | None]) -> Threat:
+        nodes = list(view.nodes)
+        for n, owner in owners.items():
+            nodes[n] = dataclasses.replace(nodes[n], owner=owner)
+        nodes[far] = dataclasses.replace(nodes[far], seen=sighting)
+        return assessor.threat(dataclasses.replace(view, nodes=tuple(nodes)), guess=3, horizon=60)
+
+    assert threat({near: 0, far: 1}).eta is None  # the own node ``near`` stops it
+    assert threat({near: None, far: 1}).eta is None  # so does a neutral one
+    t = threat({near: 1, far: 1})  # over the enemy node ``near``: one order
+    assert t.units == 9 and t.eta == 200 + assessor.travel.ticks[far][capital]
+    # A garrison in its own node with hidden numbers counts the bottom of the range.
+    nodes = list(view.nodes)
+    nodes[near] = dataclasses.replace(
+        nodes[near], owner=1, seen=Sighting(200, Detail.RANGE, (Mode.ATTACK,), None, None, (3, 5))
+    )
+    garrison = assessor.threat(dataclasses.replace(view, nodes=tuple(nodes)), guess=3, horizon=60)
+    assert garrison.units == 3
+
+
+def _nbrs(mapdef: MapDef, node: int) -> list[int]:
+    return [mapdef.edges[e].other(node) for e in mapdef.incident[node]]
 
 
 def test_a_planned_strike_at_the_capital_arrives_after_its_delay(
