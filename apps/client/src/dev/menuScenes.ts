@@ -6,6 +6,7 @@
  */
 import type { QueueStatus } from '../api/http.ts';
 import type { Calibration, MatchEndMsg, UnratedReason } from '../protocol.gen.ts';
+import type { MatchSummary } from '../app/matchSummary.ts';
 import { BOARD_SCENE_IDS } from './boardScenes.ts';
 
 /**
@@ -133,6 +134,13 @@ export const RESULT_SCENES: Readonly<Record<string, MatchEndMsg>> = {
   'result-forfeit': { ...ended, reason: 'forfeit', vp: [4, 6] },
   'result-disconnect': { ...ended, reason: 'disconnect', winner: 1, vp: [7, 3] },
   'result-rated': { ...ended, rated: true, rating: { before: 1466, after: 1480 } },
+};
+
+/** What the client knows of its own side at the end of the result scenes (#596). */
+export const RESULT_SUMMARY: MatchSummary = {
+  nicks: { mine: 'Danya', enemy: 'Marta' },
+  cities: 4,
+  vpPeak: 9,
 };
 
 export function isDockScene(id: string): boolean {

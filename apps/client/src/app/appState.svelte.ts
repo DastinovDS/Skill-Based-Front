@@ -13,6 +13,7 @@ import { loginFailure, passwordFailure, type AccountFailure } from './account.ts
 import { apiErrorKey } from './apiErrors.ts';
 import { MapCache } from './mapCache.svelte.ts';
 import { MENU_MAP } from './menuMap.ts';
+import type { MatchSummary } from './matchSummary.ts';
 import type { Calibration, MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
 
 export type Screen =
@@ -47,6 +48,7 @@ export type Screen =
       readonly matchId: string;
       readonly me: PlayerId;
       readonly end: MatchEndMsg;
+      readonly summary: MatchSummary | null;
     }
   | {
       readonly name: 'replay';
@@ -336,9 +338,14 @@ export class AppState {
   }
 
   /** The match ended: the result screen needs the side we played to say who won. */
-  finishMatch(matchId: string, me: PlayerId, end: MatchEndMsg): void {
+  finishMatch(
+    matchId: string,
+    me: PlayerId,
+    end: MatchEndMsg,
+    summary: MatchSummary | null = null,
+  ): void {
     this.activeMatch = null;
-    this.go({ name: 'result', matchId, me, end });
+    this.go({ name: 'result', matchId, me, end, summary });
   }
 
   /** The replay of a match, opened from the current screen: "Back" returns here (#259). */

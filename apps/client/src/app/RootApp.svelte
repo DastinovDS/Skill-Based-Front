@@ -16,6 +16,7 @@
   import MenuScreen from './MenuScreen.svelte';
   import PasswordScreen from './PasswordScreen.svelte';
   import QueueScreen from './QueueScreen.svelte';
+  import type { MatchSummary } from './matchSummary.ts';
   import ResultScreen from './ResultScreen.svelte';
   import WelcomeScreen from './WelcomeScreen.svelte';
 
@@ -260,8 +261,8 @@
         token={guest.token}
         matchId={screen.matchId}
         mapId={screen.mapId}
-        onend={(me: PlayerId, end: MatchEndMsg) => {
-          app.finishMatch(screen.matchId, me, end);
+        onend={(me: PlayerId, end: MatchEndMsg, summary: MatchSummary | null) => {
+          app.finishMatch(screen.matchId, me, end, summary);
         }}
         onexit={() => {
           app.menu();
@@ -273,6 +274,8 @@
   <ResultScreen
     me={screen.me}
     end={screen.end}
+    summary={screen.summary}
+    map={app.backdrop}
     onreplay={() => {
       app.openReplay(screen.matchId, screen.me);
     }}

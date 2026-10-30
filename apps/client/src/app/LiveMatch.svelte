@@ -25,6 +25,7 @@
   import type { Anchor } from '../render/anchors.ts';
   import { NO_INSETS, type Insets } from '../render/camera.ts';
   import GameCanvas from '../render/GameCanvas.svelte';
+  import type { MatchSummary } from './matchSummary.ts';
 
   interface Props {
     matchId: string;
@@ -35,7 +36,7 @@
     /** The vector file of the map (DEC-36), if the map has one: the areas of the territory. */
     geo?: GeoFile | null;
     /** The server said the match is over. */
-    onend: (me: PlayerId, end: MatchEndMsg) => void;
+    onend: (me: PlayerId, end: MatchEndMsg, summary: MatchSummary | null) => void;
     onexit: () => void;
     /** Reloads the page after a protocol version mismatch (a test replaces it). */
     onreload?: () => void;
@@ -88,7 +89,7 @@
       paused = msg.paused ? msg : null;
       pauseLeft = msg.ends_in_s ?? 0;
     } else if (msg.type === 'match_end') {
-      onend(me, msg);
+      onend(me, msg, hud?.summary() ?? null);
     } else if (msg.type === 'reach') {
       orders?.onReach(msg);
     }

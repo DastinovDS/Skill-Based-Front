@@ -15,6 +15,7 @@
     CALIBRATION,
     QUEUE_SCENES,
     RESULT_SCENES,
+    RESULT_SUMMARY,
     isDockScene,
     isMenuScene,
   } from './menuScenes.ts';
@@ -79,7 +80,14 @@
     onlogout={nothing}
   />
 {:else if result !== undefined}
-  <ResultScreen me={0} end={result} onreplay={nothing} onmenu={nothing} />
+  <ResultScreen
+    me={0}
+    end={result}
+    summary={RESULT_SUMMARY}
+    {map}
+    onreplay={nothing}
+    onmenu={nothing}
+  />
 {:else if id === 'password-set' || id === 'password-change'}
   <PasswordScreen
     hasPassword={id === 'password-change'}
