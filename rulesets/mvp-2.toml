@@ -110,7 +110,7 @@ engage_ticks = 3 # DEC-37: a defender that left the node at most 3 ticks ago is 
 # Capture costs a charge (DEC-38, #578; mechanics.md, section 4). A capture of a node (neutral or enemy, a city,
 # a province or a capital, also at the end of a fight) spends charge_cost real charges of the capturing player's
 # groups in the node; with fewer the groups bounce, a returning group dies (DEC-24, G3). Virtual charges never pay.
-charge_cost = 1 # BAL-02 iteration 5 (H2, DEC-38): every capture spends one charge (mvp-1: 0)
+charge_cost = 0 # 0: off, a capture is free (BAL-02 iterations 2, 5 and 6 tested 1: the field polarizes, see docs/balance/log.md)
 
 [capacity]
 # Node capacity (DEC-22, #234; mechanics.md, section 8): limits the number of units standing in a node and,
@@ -158,9 +158,9 @@ front_markers = 2 # front markers per player (DEC-28, item 2)
 [supply.amount_by_level]
 # Road throughput: charges per dispatch period along an edge. Key: road level, 1..3
 # (DEC-28, item 7: +1 for each level above the first).
-1 = 2 # BAL-02 iteration 6: mvp-1 1 (delivery is the bottleneck, charge-flow.md, finding 2)
-2 = 3 # BAL-02 iteration 6: mvp-1 2
-3 = 4 # BAL-02 iteration 6: mvp-1 3
+1 = 1
+2 = 2
+3 = 3
 
 [road.speed_pct]
 # Unit speed on an upgraded road, in percent (DEC-28, item 7). Key: road level, 2..3;

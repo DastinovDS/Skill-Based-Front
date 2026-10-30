@@ -334,3 +334,27 @@ full capital (DEC-28, item 4.4); the smart bots raise `rear_min` only to 2-3 whi
 
 **Change.** `supply.amount_by_level` `1 = 2`, `2 = 3`, `3 = 4` (`mvp-1`: 1, 2, 3); `capture.charge_cost = 1` and
 the stance shares of iteration 3 kept.
+
+| bot | win rate [95%] | iteration 5 |
+|---|---|---|
+| smart_expander | 0.91 [0.88; 0.93] | 0.92 |
+| smart_rusher | 0.87 [0.84; 0.89] | 0.86 |
+| rusher | 0.74 [0.70; 0.78] | 0.73 |
+| smart_strangler | 0.67 [0.63; 0.71] | 0.67 |
+| strangler | 0.59 [0.55; 0.64] | 0.60 |
+| reactive | 0.37 [0.33; 0.41] | 0.37 |
+| expander | 0.36 [0.32; 0.40] | 0.37 |
+| smart_reactive | 0.35 [0.31; 0.39] | 0.33 |
+| turtle | 0.07 [0.05; 0.09] | 0.07 |
+| smart_turtle | 0.05 [0.04; 0.08] | 0.06 |
+
+Sides (mirror): crossroads 0.51, highway 0.51, ridge 0.52. Planned share (old definition) 0.033. Late capture 0.47.
+
+**Result: no effect.** Every win rate within 0.02 of iteration 5. The bots take few sieges of held cities (2-23 a
+match); the claim of empty nodes decides, and a faster supply does not touch it. Reverted.
+
+### The candidate: iteration 3
+
+The only change that moved the gate the right way is H1 (iteration 3). The final `mvp-2` = `mvp-1` with
+`economy.stance_to_charges_pct.economy = 60` and `war = 40`, `capture.charge_cost = 0`. Its confirming run
+(100 seeds on GitHub runners, the gate share of #590) follows.
