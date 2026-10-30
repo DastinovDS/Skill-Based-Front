@@ -283,6 +283,8 @@ class CampaignBot(Bot):
         for g in view.groups:
             if not isinstance(g.location, OnEdge) or g.order is None or g.id in busy:
                 continue
+            if self.committed(g.id):
+                continue  # one wave of several: the target is judged against all of them
             dest = g.order.dest
             seen = view.nodes[dest].seen
             if view.nodes[dest].owner == self.player or seen is None or seen.tick != view.tick:
@@ -296,6 +298,10 @@ class CampaignBot(Bot):
             if not takes(self.rules, g.charged, bonus, need) and self.spend(ctx, CancelOrder(g.id)):
                 ctx.used[g.id] = True
                 ctx.claimed.pop(dest, None)
+
+    def committed(self, group: int) -> bool:
+        """Hook: own group ``group`` is one of several groups sent together (``SmartBot``)."""
+        return False
 
     # Attacks --------------------------------------------------------------------------------
 

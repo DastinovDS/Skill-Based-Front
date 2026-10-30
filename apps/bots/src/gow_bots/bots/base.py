@@ -282,7 +282,7 @@ class Bot:
             mine = [groups[gid] for gid in f.groups if gid in groups]
             stock = sum(g.charged for g in mine) + f.virtual_left[me]
             enemy = f.enemy_charged + f.virtual_left[1 - me]
-            if enemy > stock:
+            if enemy > stock + self.coming(view, f):
                 for g in sorted(mine, key=lambda g: (-g.units, -g.charged, g.id)):
                     if self._left.get(g.id, -1) >= f.start_tick:
                         continue
@@ -312,6 +312,11 @@ class Bot:
                     idle = [x for x in idle if x.id != g.id]
                     break
         return cmds
+
+    def coming(self, view: PlayerView, fight: FightView) -> int:
+        """Own shots on the way into ``fight`` that keep its groups in it (a converging strike,
+        ``SmartBot``); ``0``: every fight is judged by the stocks in it."""
+        return 0
 
     def _other_end(self, edge: int, node: int) -> int:
         return self.map.edges[edge].other(node)

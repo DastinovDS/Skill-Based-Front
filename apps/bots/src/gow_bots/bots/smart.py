@@ -79,19 +79,34 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
     worth at least that many VP while an award is still to come (Defense and a reinforcement
     like ``respond`` 2). The reaction delay of the level is the one of ``Perception``.
 
+12. **A converging strike on the enemy capital** (``STRIKE``, off for the five personalities;
+    the benchmark ``smart_hoarder``). Instead of single attacks on the capital, the free charged
+    groups within ``STRIKE_HOPS`` edges of it whose path reaches it go together (``strike_plan``):
+    each by an ordinary order while the CP last (the most charged first), then the groups whose
+    plan bonus (DEC-29: the edges, capped by the charged units) turns the strike from a bounce
+    into a capture become scheduled orders by ``prefer_planned`` with the shots the others do not
+    bring. The strike goes when the pool (charges and plan bonuses) reaches the shots that take
+    the capital (``need``) plus ``strike_margin``; while it is ready and the CP cannot pay it, its
+    price is held like a plan (item 10). The orders are timed so that every group arrives within
+    ``STRIKE_ALIGN`` ticks of the slowest one (the plan's ``orders.planned_delay_ticks`` and the
+    travel times of mechanics.md, section 4, ``edge_ticks``): the joins of the first rounds
+    count in full (DEC-24, D1). The groups of a strike are not recalled one by one and do not
+    leave a fight that the rest of the strike is still walking into (``committed``, ``coming``).
+
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
 (``Bot.key``, ``Bot.edge_keys``), nothing draws from ``self.rng``.
 """
 
+import heapq
 from collections import deque
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar, Final, override
 
-from gow_bots.bots.assess import Assessment, Assessor, Travel
+from gow_bots.bots.assess import Assessment, Assessor, Travel, edge_ticks
 from gow_bots.bots.base import ParamRange, node_of
-from gow_bots.bots.campaign import CampaignBot, Ctx, Option
+from gow_bots.bots.campaign import STALE_TICKS, CampaignBot, Ctx, Option
 from gow_bots.bots.logistics import (
     Arrival,
     arrivals,
@@ -100,6 +115,7 @@ from gow_bots.bots.logistics import (
     own_parts,
 )
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Bucket, Perception
+from gow_bots.bots.utility import prefer_planned, shots_to_take
 from gow_sim.commands import (
     CancelRecruit,
     Command,
@@ -115,7 +131,16 @@ from gow_sim.commands import (
 )
 from gow_sim.maps import MapDef, NodeKind
 from gow_sim.ruleset import RecruitLocation, Ruleset
-from gow_sim.view import AtNode, GroupView, IntentKind, IntentView, Mode, PlayerView, Stance
+from gow_sim.view import (
+    AtNode,
+    FightView,
+    GroupView,
+    IntentKind,
+    IntentView,
+    Mode,
+    PlayerView,
+    Stance,
+)
 
 __all__ = [
     "PERSONALITIES",
@@ -149,6 +174,13 @@ REAR_MIN_TICKS: Final = 150
 """The rear minimum changes at most this often (no flapping on every dispatch)."""
 SCOUT_TICKS: Final = 30
 """A node a scout was split off for waits this long before another split for it."""
+STRIKE_ALIGN: Final = 10
+"""The groups of a converging strike arrive within this many ticks of the slowest one (item 12)."""
+STRIKE_TICKS: Final = 400
+"""A strike whose groups are not all sent by its arrival plus this many ticks ends; a sent group
+stays committed to it as long."""
+STRIKE_REST: Final = 300
+"""Ticks after a strike before the next one is planned."""
 STANCES: Final = (Stance.ECONOMY, Stance.BALANCE, Stance.WAR)
 """From the most charges to the most CP (``economy.stance_to_charges_pct``)."""
 
@@ -179,6 +211,50 @@ class Hold:
     """The hold ends at this tick."""
 
 
+@dataclass(frozen=True, slots=True)
+class Pick:
+    """One group of a converging strike (item 12)."""
+
+    group: int
+    """Opaque id."""
+    node: int
+    units: int
+    charged: int
+    planned: bool
+    lead: int
+    """Ticks from the order to the arrival: the plan's delay and the travel time."""
+    bonus: int
+    """The plan bonus it brings (DEC-29), 0 for an ordinary order."""
+
+
+@dataclass(slots=True)
+class Strike:
+    """A converging strike on ``target`` (item 12): the groups not sent yet and the arrival."""
+
+    target: int
+    arrive: int
+    """The tick the slowest group arrives; every group is sent to arrive within ``STRIKE_ALIGN``."""
+    picks: list[Pick] = field(default_factory=list[Pick])
+    until: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class StrikePlan:
+    """What a strike would bring now (``SmartBot.strike_plan``)."""
+
+    pool: int
+    """Charges plus plan bonuses of the picks."""
+    need: int
+    """Shots that take the target by the estimate, with ``strike_margin``."""
+    cost: int
+    """Hundredths of CP."""
+    picks: tuple[Pick, ...]
+
+    @property
+    def ready(self) -> bool:
+        return bool(self.picks) and self.pool >= self.need
+
+
 class SmartBot(CampaignBot):
     """The shared base: see the module docstring. Subclasses set ``PARAMS`` and the stances."""
 
@@ -186,6 +262,12 @@ class SmartBot(CampaignBot):
     STANCE: ClassVar[Stance] = Stance.BALANCE
     LATE_STANCE: ClassVar[Stance | None] = None
     """The stance from tick ``late`` on (``None``: ``STANCE`` all match)."""
+    STRIKE: ClassVar[bool] = False
+    """Converging strikes on the enemy capital instead of single attacks on it (item 12)."""
+    STRIKE_HOPS: ClassVar[int] = 3
+    """Farthest group of a converging strike, in edges of its path."""
+    STRIKE_MARGIN: ClassVar[int] = 1
+    """Shots a strike brings above the estimate (``strike_margin`` in ``PARAMS`` overrides it)."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **_COMMON,
         "radius": ParamRange(2, 3),
@@ -262,6 +344,13 @@ class SmartBot(CampaignBot):
         """By marker index: the tick this bot last moved it (``fronts``)."""
         self.scouted: dict[int, int] = {}
         """Node to the tick a scout was split off for it."""
+        self.strike: Strike | None = None
+        """The converging strike under way (item 12)."""
+        self.strike_rest = 0
+        """No new strike before this tick."""
+        self.strike_sent: dict[int, int] = {}
+        """Opaque id of a group sent in a strike to the tick it was sent."""
+        self._edge_ticks: dict[tuple[int, int, int], int] = {}
         self.edge_between: dict[tuple[int, int], int] = {}
         """``(a, b)`` in both orders to the edge between the two nodes."""
         for e, edef in enumerate(mapdef.edges):
@@ -345,7 +434,9 @@ class SmartBot(CampaignBot):
         self.unbank(ctx)
         self.set_rear_min(ctx)
         self.feed(ctx)
-        ctx.held = self.held_cp(ctx)  # item 10: from here on the spending leaves the plan's CP
+        plan_cp = self.held_cp(ctx)
+        bank = self.strike_cp(ctx) if self.STRIKE else 0  # item 12: the strike's CP
+        ctx.held = max(plan_cp, bank)  # item 10: from here on the spending leaves the plan's CP
         if not self.alarm:
             cmd = self.development(view, ctx.budget)  # DEC-26, item 11: before the orders
             if cmd is not None:
@@ -354,9 +445,14 @@ class SmartBot(CampaignBot):
         held, ctx.held = ctx.held, 0  # the urgent answers do not wait for the plan
         self.defend_capital(ctx, a)
         self.respond(ctx)
+        ctx.held = bank  # a banked strike waits only for the capital and the strikes
         self.garrison(ctx)
         self.scout(ctx)
         self.fortify(ctx)
+        ctx.held = 0
+        if self.STRIKE:
+            self.converge(ctx)
+            held = max(plan_cp if self.hold is not None else 0, self.strike_cp(ctx))
         ctx.held = held
         self._attack(ctx)
         self._fit_split(ctx)
@@ -414,6 +510,200 @@ class SmartBot(CampaignBot):
         self.held_at[opt.dest] = ctx.tick
         self.hold = Hold(opt.dest, opt.group.id, cost, ctx.tick + wait)
         ctx.held = cost
+
+    # A converging strike (item 12) ----------------------------------------------------------
+
+    def strike_wanted(self, ctx: Ctx) -> bool:
+        """Whether a strike may be planned now (a hook of the personalities)."""
+        return True
+
+    def strike_margin(self) -> int:
+        """Shots a strike brings above the estimate: ``strike_margin`` of ``PARAMS`` if drawn,
+        else ``STRIKE_MARGIN``; nothing extra in the last ``all_in`` awards when not ahead."""
+        a = self.assessment
+        if a is not None and not a.ahead and a.awards_left <= self.params["all_in"]:
+            return 0
+        return self.params.get("strike_margin", self.STRIKE_MARGIN)
+
+    def strike_need(self, ctx: Ctx) -> int:
+        """Shots a strike on the enemy capital needs, plus ``strike_margin``. Numbers the view
+        shows (an exact sighting, the top of a range, a fresh memory) give ``need`` without the
+        ``margin`` of single attacks; without them (the capital is in the mountains and seen from
+        the plains as presence only, DEC-21) a garrison of ``strike_guess`` units, all charged
+        (``PARAMS``; the start garrison of the map if the personality draws none)."""
+        view, target = ctx.view, self.enemy_home
+        seen = view.nodes[target].seen
+        known = self.memory.get(target)
+        fresh = known is not None and ctx.tick - known[0] <= STALE_TICKS
+        if fresh or (seen is not None and self.enemy_at(view, target) is not None):
+            base = self.need(view, ctx.tick, target) - self.params["margin"]
+        else:
+            start = self.map.nodes[target]
+            units = self.params.get("strike_guess", start.start_units)
+            base = shots_to_take(
+                self.rules, start.terrain, units, units, self.defended(view, target)
+            )
+        return base + self.strike_margin()
+
+    def edge_time(self, edge: int, to_node: int, level: int) -> int:
+        key = (edge, to_node, level)
+        ticks = self._edge_ticks.get(key)
+        if ticks is None:
+            ticks = edge_ticks(self.map, self.rules, edge, to_node, level)
+            self._edge_ticks[key] = ticks
+        return ticks
+
+    def way(self, view: PlayerView, start: int, dest: int, size: int) -> tuple[int, int] | None:
+        """``(edges, ticks)`` of the fastest path a group of ``size`` units takes from ``start``
+        to ``dest``: through own nodes without a fight, under the stack limit (SIM-05, DEC-20, D),
+        by the travel times of the current road levels; ties by ``node_key``. ``None``: none."""
+        me, nodes = view.player, view.nodes
+        fights = self.fight_nodes(view)
+        best: dict[int, int] = {start: 0}
+        heap: list[tuple[int, int, int, int]] = [(0, self.key(start), start, 0)]
+        while heap:
+            ticks, _, node, edges = heapq.heappop(heap)
+            if ticks > best[node]:
+                continue
+            if node == dest:
+                return (edges, ticks)
+            if node != start and (nodes[node].owner != me or node in fights):
+                continue
+            for e in self.incident[node]:
+                other = self.map.edges[e].other(node)
+                if nodes[other].capacity < size:
+                    continue
+                t = ticks + self.edge_time(e, other, view.edges[e].width)
+                if other not in best or t < best[other]:
+                    best[other] = t
+                    heapq.heappush(heap, (t, self.key(other), other, edges + 1))
+        return None
+
+    def strike_plan(self, ctx: Ctx, budget: int) -> StrikePlan | None:
+        """The converging strike on the enemy capital the free groups could make now with
+        ``budget`` CP in hundredths (item 12); ``None``: no group can go."""
+        view, rules, target = ctx.view, self.rules, self.enemy_home
+        if view.nodes[target].owner == self.player:
+            return None
+        cost = rules.orders.cost
+        found: list[tuple[GroupView, int, int, int]] = []
+        for g in self.free_groups(ctx):
+            here = node_of(g)
+            if g.charged == 0 or self.hops[here][target] > self.STRIKE_HOPS or self.pinned[here]:
+                continue
+            if here == self.home and ctx.standing[here] - g.units < self.params["guard"]:
+                continue
+            path = self.way(view, here, target, g.units)
+            if path is None or path[0] > self.STRIKE_HOPS:
+                continue
+            found.append((g, here, path[0], path[1]))
+        if not found:
+            return None
+        need = self.strike_need(ctx)
+        # The groups next to the target first (a plan of one edge brings 1), the most charged
+        # first, then the farther ones: each is planned when ``plan_strike`` says so for the
+        # shots the groups before it leave missing, else ordinary, while the CP last.
+        found.sort(key=lambda c: (c[2], -c[0].charged, self.group_order(c[0])))
+        delay = rules.orders.planned_delay_ticks
+        spent = pool = 0
+        chosen: list[Pick] = []
+        for g, here, edges, ticks in found:
+            bonus = rules.orders.planned_bonus(edges, g.charged)
+            plan = (
+                bonus >= 1
+                and need - pool > 0
+                and spent + cost.planned_move <= budget
+                and self.plan_strike(g, need - pool, edges)
+            )
+            price = cost.planned_move if plan else cost.move
+            if spent + price > budget:
+                continue
+            spent += price
+            pool += g.charged + (bonus if plan else 0)
+            lead = ticks + (delay if plan else 0)
+            chosen.append(Pick(g.id, here, g.units, g.charged, plan, lead, bonus if plan else 0))
+        return StrikePlan(pool, need, spent, tuple(chosen))
+
+    def plan_strike(self, g: GroupView, missing: int, edges: int) -> bool:
+        """Whether group ``g`` of a strike goes by a scheduled order: the shared utility
+        (``prefer_planned``) with the shots the groups before it leave ``missing``."""
+        return prefer_planned(self.rules, g.charged, missing, edges)
+
+    def strike_cp(self, ctx: Ctx) -> int:
+        """The CP kept for the strike: the orders of a strike under way not sent yet, or the price
+        of a strike that is ready with the CP of the cap (it is banked until paid, item 12)."""
+        s = self.strike
+        cost = self.rules.orders.cost
+        if s is not None:
+            return sum(cost.planned_move if p.planned else cost.move for p in s.picks)
+        if ctx.tick < self.strike_rest or not self.strike_wanted(ctx):
+            return 0
+        plan = self.strike_plan(ctx, self.rules.cp.cap)
+        if plan is None or not plan.ready:
+            return 0
+        return plan.cost
+
+    def converge(self, ctx: Ctx) -> None:
+        """Plan a ready strike, then send the groups whose time has come (item 12)."""
+        tick = ctx.tick
+        self.strike_sent = {
+            g: t for g, t in sorted(self.strike_sent.items()) if tick - t <= STRIKE_TICKS
+        }
+        s = self.strike
+        if s is None:
+            if tick < self.strike_rest or not self.strike_wanted(ctx):
+                return
+            full = self.strike_plan(ctx, self.rules.cp.cap)
+            if full is None or not full.ready or full.cost > ctx.budget:
+                return  # banked: the CP are kept (``strike_cp``)
+            plan = self.strike_plan(ctx, ctx.budget)
+            if plan is None or not plan.ready:
+                return
+            arrive = tick + 1 + max(p.lead for p in plan.picks)
+            s = Strike(self.enemy_home, arrive, list(plan.picks), arrive + STRIKE_TICKS)
+            self.strike = s
+        ctx.claimed[s.target] = True
+        free = {g.id: g for g in self.free_groups(ctx)}
+        left: list[Pick] = []
+        for p in s.picks:
+            g = free.get(p.group)
+            if g is None:
+                continue  # gone, in a fight or busy: the others go on
+            if tick + 1 + p.lead < s.arrive - STRIKE_ALIGN:
+                left.append(p)
+                continue
+            if self.spend(ctx, Move(p.group, s.target, planned=p.planned)):
+                ctx.used[p.group] = True
+                ctx.standing[p.node] -= g.units
+                self.strike_sent[p.group] = tick
+            else:
+                left.append(p)
+        s.picks = left
+        if not left or tick > s.until:
+            self.strike = None
+            self.strike_rest = tick + STRIKE_REST
+
+    @override
+    def committed(self, group: int) -> bool:
+        return group in self.strike_sent
+
+    @override
+    def coming(self, view: PlayerView, fight: FightView) -> int:
+        """The charges and plan bonuses of the own strike groups still walking into the node of
+        ``fight`` (item 12): the first arrivals stay in the fight for the rest."""
+        if not self.STRIKE or fight.node is None:
+            return 0
+        busy = self.fighting(view)
+        shots = 0
+        for g in view.groups:
+            o = g.order
+            sent = o is not None and o.dest == fight.node and g.id in self.strike_sent
+            if sent and o is not None and g.id not in busy:
+                shots += g.charged + o.bonus
+        s = self.strike
+        if s is not None and s.target == fight.node:
+            shots += sum(p.charged + p.bonus for p in s.picks)
+        return shots
 
     # Stance ---------------------------------------------------------------------------------
 
@@ -680,7 +970,7 @@ class SmartBot(CampaignBot):
             if self.hops[self.home][dest] > region:
                 return None
         if node.capital_of is not None:
-            return 10_000 - hops
+            return None if self.STRIKE else 10_000 - hops  # item 12: only a converging strike
         far = self.hops[self.enemy_home]
         closer = far[here] - far[dest]
         if ctx.view.nodes[dest].owner is None:
