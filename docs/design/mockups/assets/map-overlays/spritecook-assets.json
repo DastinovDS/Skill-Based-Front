@@ -1,0 +1,12 @@
+{
+  "project": "Skill-Based Front (SpriteCook project f2fcd6a0-fc8d-48aa-ada1-6c984d6a16f0)",
+  "model": "gpt-image-2, quality low, 1K, 2 credits per image",
+  "sheets": [
+    { "asset_id": "2cb8e9d6-4b59-4c0f-b525-242dc6f5d4aa", "label": "recruit sheet A", "cut_into": "recruit/*.png" },
+    { "asset_id": "1fb61e83-7e80-4abf-a6cf-06a7e799d4a0", "label": "recruit sheet B", "cut_into": "recruit/*.png" },
+    { "asset_id": "6e94368e-23e9-45c1-a53a-740b3e170e44", "label": "city upgrades sheet A", "cut_into": "unused" },
+    { "asset_id": "ca3d2baa-6698-43fa-b2d7-e4b8bc927911", "label": "city upgrades sheet B", "cut_into": "city/*.png" },
+    { "asset_id": "8ac3feca-a946-4820-9f06-750c974dc106", "label": "ETA glyph sheet", "cut_into": "eta/*.png" }
+  ],
+  "note": "Icons are cut from the 3x3 sheets, the dark background keyed to alpha, 72x72 PNG. Candidates for a mockup only, not client assets."
+}
