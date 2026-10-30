@@ -134,8 +134,8 @@
   <dl class="stats">
     {#each stats as stat (stat.key)}
       <div>
-        <dd>{stat.value}</dd>
         <dt>{t(stat.key as MessageKey)}</dt>
+        <dd>{stat.value}</dd>
       </div>
     {/each}
   </dl>
@@ -292,7 +292,7 @@
   }
   .stats div {
     display: flex;
-    flex-direction: column-reverse;
+    flex-direction: column;
   }
   .stats dd {
     margin: 0;
