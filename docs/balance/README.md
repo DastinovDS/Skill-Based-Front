@@ -268,9 +268,10 @@ advantage (mirrored matches), the metrics per bot (the share of scheduled attack
 the last 3 minutes), the strategy diversity (a dominant strategy, "rock-paper-scissors" cycles),
 the number of unique outcomes and the breakdown by map. The output depends only on the lines of the file.
 
-The BAL-01 run (#39) is committed: `latest.jsonl` (the 3 MVP maps, now fixtures in `maps/fixtures/` since #372, 5 strategic bots without `idle` and
-`random_legal`, 100 seeds, 7500 matches, `mvp-0`) and `latest.md`, `latest-*.png` built from it.
-The verdict by the gate criteria and the hypotheses for the iterations of BAL-02 (#40): [log.md](log.md).
+The BAL-02 confirming run (#40) is committed: `latest.md` and `latest-*.png` from 30000 matches of `mvp-2` (the 10
+strategic bots, the 3 pool maps, 100 seeds, GitHub runners); `latest.jsonl` holds seeds 0..9 of that run (the full
+file is 76 MB, reproducible with `mise run tournament:gh --ruleset rulesets/mvp-2.toml --seeds 100`). The BAL-01 run
+(#39, `mvp-0`) is in the git history of these files. The verdict by the gate criteria and the iterations: [log.md](log.md).
 
 ## Parameter search
 
