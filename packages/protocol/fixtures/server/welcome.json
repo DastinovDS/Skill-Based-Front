@@ -37,6 +37,9 @@
       "shots_per_round": 1,
       "regroup_ticks": 10
     },
+    "capture": {
+      "charge_cost": 0
+    },
     "build": {
       "ticks_per_level": 150
     },

@@ -14,7 +14,7 @@
     }
   ],
   "x-constants": {
-    "PROTOCOL_VERSION": 30,
+    "PROTOCOL_VERSION": 31,
     "CLOSE_PROTOCOL_VERSION": 4001,
     "CLOSE_REPLACED": 4009,
     "CLOSE_NO_MATCH": 4004,
@@ -251,6 +251,22 @@
         "grace_ticks"
       ],
       "title": "CapacityPublic",
+      "type": "object"
+    },
+    "CapturePublic": {
+      "additionalProperties": false,
+      "description": "``capture`` of the ruleset (DEC-38): a capture spends ``charge_cost`` real charges of the\ncapturing groups in the node, with fewer they bounce; 0: a capture is free.",
+      "properties": {
+        "charge_cost": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "charge_cost"
+      ],
+      "title": "CapturePublic",
       "type": "object"
     },
     "CityUpgradesPublic": {
@@ -2487,6 +2503,9 @@
         "combat": {
           "$ref": "#/$defs/CombatPublic"
         },
+        "capture": {
+          "$ref": "#/$defs/CapturePublic"
+        },
         "build": {
           "$ref": "#/$defs/BuildPublic"
         },
@@ -2518,6 +2537,7 @@
         "cp",
         "cost",
         "combat",
+        "capture",
         "build",
         "economy",
         "orders",

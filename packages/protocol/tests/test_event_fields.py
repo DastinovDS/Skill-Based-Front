@@ -190,3 +190,22 @@ def test_a_public_or_fight_event_has_the_same_fields_for_both_players(kind: str)
     assert isinstance(first, EventMsg)
     assert isinstance(second, EventMsg)
     assert set(first.data) == set(second.data) == set(EVENT_FIELDS[kind])
+
+
+@pytest.mark.parametrize("result", ["bounce", "encircled"])
+def test_fog_capture_failed_goes_only_to_the_capturing_player(result: str) -> None:
+    """DEC-38, item 10: ``capture_failed`` (``node``, ``player``, ``group``, ``result``) goes only
+    to the player whose group could not pay; the node's owner does not get it, so none of its
+    fields reaches the opponent. ``group`` is the owner's opaque id, never the internal one."""
+    for player in PLAYERS:
+        raw = event(100, "capture_failed", node=7, player=player, group=12, result=result)
+        own = event_for_player(raw, player, KEY)
+        assert isinstance(own, EventMsg)
+        expected: dict[str, Any] = {
+            "node": 7,
+            "player": player,
+            "group": str(opaque_id(KEY, player, 12)),
+            "result": result,
+        }
+        assert own.data == expected
+        assert event_for_player(raw, 1 - player, KEY) is None

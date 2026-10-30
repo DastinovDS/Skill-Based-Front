@@ -6,6 +6,7 @@
     "barracks_built",
     "build_started",
     "build_stopped",
+    "capture_failed",
     "charges_overflow",
     "charges_produced",
     "cp_burned",

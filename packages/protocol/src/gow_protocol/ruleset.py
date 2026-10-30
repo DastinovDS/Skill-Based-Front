@@ -15,7 +15,8 @@ Only what the client uses (AGENTS.md, section 7.1):
 - the flag and the numbers of the city development (DEC-26, item 10): the barracks and the
   warehouse levels, their prices and durations, for the city menu;
 - the range and the start value of the rear minimum (DEC-28, item 3), for the supply slider;
-- the vision table by terrain (DEC-21, item 2), for the legend of the terrain map mode (#429).
+- the vision table by terrain (DEC-21, item 2), for the legend of the terrain map mode (#429);
+- the price of a capture in charges (DEC-38, item 10), for the order tooltip and the help.
 
 The rules are the same for both players, so nothing here is hidden information.
 """
@@ -71,6 +72,13 @@ class CombatPublic(WireModel):
     shots_per_round: PosInt
     regroup_ticks: NonNegInt
     """The pause of an edge winner before it goes on (DEC-24, item G4)."""
+
+
+class CapturePublic(WireModel):
+    """``capture`` of the ruleset (DEC-38): a capture spends ``charge_cost`` real charges of the
+    capturing groups in the node, with fewer they bounce; 0: a capture is free."""
+
+    charge_cost: NonNegInt
 
 
 class CpPublic(WireModel):
@@ -195,6 +203,7 @@ class RulesetPublic(WireModel):
     cp: CpPublic
     cost: CostsPublic
     combat: CombatPublic
+    capture: CapturePublic
     build: BuildPublic
     economy: EconomyPublic
     orders: OrdersPublic
@@ -243,6 +252,7 @@ class RulesetPublic(WireModel):
                 shots_per_round=rules.combat.shots_per_round,
                 regroup_ticks=rules.combat.regroup_ticks,
             ),
+            capture=CapturePublic(charge_cost=rules.capture.charge_cost),
             build=BuildPublic(ticks_per_level=rules.build.ticks_per_level),
             economy=EconomyPublic(
                 stance_to_charges_pct=StancePctPublic(

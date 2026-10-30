@@ -37,7 +37,8 @@ production, counters or groups, no fights and supply in the fog). Unknown kinds 
   events ``build_started``, ``road_upgraded``, ``barracks_built``, ``warehouse_upgraded`` and
   ``build_stopped`` only to the builder (DEC-17, item 6; DEC-26, item 9); ``front_set``,
   ``rear_min_set`` (DEC-28) and ``transfer_started`` only to their player (DEC-18, item 8);
-  ``starvation`` only to the owner of the city (DEC-19, item 8);
+  ``starvation`` only to the owner of the city (DEC-19, item 8); ``capture_failed`` only to the
+  player whose group could not pay for a capture (DEC-38, item 10);
 - ``match_ended`` is not an event on the wire: it is ``match_end``.
 
 Entity ids in event data (``group``, ``new_group``, ``packet``, ``fight``) become opaque ids of
@@ -124,6 +125,7 @@ PRIVATE_KINDS: Final = frozenset(
         "barracks_built",
         "build_started",
         "build_stopped",
+        "capture_failed",
         "charges_overflow",
         "charges_produced",
         "cp_burned",
@@ -157,6 +159,7 @@ EVENT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
     "barracks_built": ("node", "player"),
     "build_started": ("edge", "kind", "level", "node", "player", "width"),
     "build_stopped": ("edge", "kind", "node", "player", "reason"),
+    "capture_failed": ("group", "node", "player", "result"),
     "charges_overflow": ("charges", "node", "player"),
     "charges_produced": ("charges", "node", "player", "spill"),
     "cp_burned": ("cp", "player"),
@@ -243,6 +246,7 @@ against the emitters in ``gow_sim``."""
 
 EVENT_ID_FIELDS: Final[Mapping[str, frozenset[str]]] = {
     "attrition": frozenset({"group"}),
+    "capture_failed": frozenset({"group"}),
     "fight_ended": frozenset({"fight"}),
     "fight_group": frozenset({"group"}),
     "fight_round": frozenset({"fight"}),

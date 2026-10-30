@@ -104,6 +104,12 @@ shots_per_round = 1 # shots of a side per round
 regroup_ticks = 10 # regrouping of the winner on an edge: 1 s
 engage_ticks = 3 # DEC-37: a defender that left the node at most 3 ticks ago is caught into the fight
 
+[capture]
+# Capture costs a charge (DEC-38, #578; mechanics.md, section 4). A capture of a node (neutral or enemy, a city,
+# a province or a capital, also at the end of a fight) spends charge_cost real charges of the capturing player's
+# groups in the node; with fewer the groups bounce, a returning group dies (DEC-24, G3). Virtual charges never pay.
+charge_cost = 0 # 0: off, a capture is free (BAL-02 tests 1 in mvp-2)
+
 [capacity]
 # Node capacity (DEC-22, #234; mechanics.md, section 8): limits the number of units standing in a node and,
 # with city_upgrades.enabled = false, separately the warehouse stock (with true the warehouse follows [warehouse], DEC-26).

@@ -37,6 +37,8 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'rear_min_set',
   // The score is in the top bar already (ui-style U2): a VP line would repeat it every few seconds.
   'vp_awarded',
+  // A capture the group could not pay for (DEC-38): hidden until its alert lands (#580).
+  'capture_failed',
 ]);
 
 /** Kinds with a line in the feed. */

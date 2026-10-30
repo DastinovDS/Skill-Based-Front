@@ -62,6 +62,12 @@ shots_per_round = 1
 regroup_ticks = 10
 engage_ticks = 3 # DEC-37: a defender that left the node at most 3 ticks ago is caught into the fight
 
+[capture]
+# Capture costs a charge (DEC-38, #578; mechanics.md, section 4). A capture of a node (neutral or enemy, a city,
+# a province or a capital, also at the end of a fight) spends charge_cost real charges of the capturing player's
+# groups in the node; with fewer the groups bounce, a returning group dies (DEC-24, G3). Virtual charges never pay.
+charge_cost = 0 # 0: off, a capture is free (BAL-02 tests 1 in mvp-2)
+
 [capacity]
 attrition_ticks = 30
 grace_ticks = 50
