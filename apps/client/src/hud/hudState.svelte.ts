@@ -23,6 +23,7 @@ import { t } from '../i18n/index.ts';
 import { ToastState } from './toastState.svelte.ts';
 import { nodeNamer, type NodeNamer } from './nodeName.ts';
 import { toastOf } from './toasts.ts';
+import type { MatchSummary } from '../app/matchSummary.ts';
 
 /** Events kept for the feed. */
 export const EVENT_LIMIT = 30;
@@ -69,6 +70,7 @@ export class HudState {
   #bannerTimer: ReturnType<typeof setTimeout> | undefined;
   #started = false;
   #lastMinuteSeen = false;
+  #vpPeak: number | null = null;
 
   constructor(ctx: HudContext) {
     this.#ctx = ctx;
@@ -86,6 +88,22 @@ export class HudState {
     return this.#selection;
   }
 
+  /** What the result screen shows about our side (#596): own data of the snapshots only. */
+  summary(): MatchSummary {
+    const me = this.#ctx.me;
+    const nodes = this.#snapshot?.view.nodes;
+    const nodeKinds = this.#ctx.map.nodes;
+    const cities =
+      nodes === undefined
+        ? null
+        : nodes.filter((n) => n.owner === me && nodeKinds[n.id]?.kind !== 'province').length;
+    return {
+      nicks: { mine: this.#ctx.nicks[me], enemy: this.#ctx.nicks[me === 0 ? 1 : 0] },
+      cities,
+      vpPeak: this.#vpPeak,
+    };
+  }
+
   /** The own capital to ring while the start banner is up (read every frame by the map). */
   get beacon(): number | null {
     if (!this.banner) return null;
@@ -96,6 +114,8 @@ export class HudState {
   /** A new snapshot: the HUD numbers are recomputed here and only here. */
   onSnapshot(snapshot: SnapshotMsg): void {
     this.#snapshot = snapshot;
+    const vp = snapshot.view.vp[this.#ctx.me];
+    if (this.#vpPeak === null || vp > this.#vpPeak) this.#vpPeak = vp;
     this.alerts.onSnapshot(snapshot);
     this.threats.onSnapshot(snapshot);
     this.#startOnce(snapshot);

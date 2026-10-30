@@ -4,6 +4,7 @@
   import { backgroundUrlOf } from '../map/background.ts';
   import { geoOf, type GeoFile } from '../map/geography.ts';
   import type { MapFile, MatchEndMsg, PlayerId } from '../protocol.gen.ts';
+  import type { MatchSummary } from './matchSummary.ts';
   import LiveMatch from './LiveMatch.svelte';
 
   interface Props {
@@ -11,7 +12,7 @@
     token: string;
     matchId: string;
     mapId: string;
-    onend: (me: PlayerId, end: MatchEndMsg) => void;
+    onend: (me: PlayerId, end: MatchEndMsg, summary: MatchSummary | null) => void;
     onexit: () => void;
   }
 
