@@ -99,6 +99,8 @@ class Ctx:
     claimed: dict[int, bool] = field(default_factory=dict[int, bool])
     """Targets that a group is already on its way to, or was sent to in this decision."""
     standing: list[int] = field(default_factory=list[int])
+    held: int = 0
+    """CP in hundredths kept for a chosen scheduled order (``SmartBot``): the rest leaves them."""
 
 
 class CampaignBot(Bot):
@@ -345,7 +347,12 @@ class CampaignBot(Bot):
                 ctx.standing[node_of(opt.group)] -= opt.group.units
                 estimate = self.estimate(ctx.view, ctx.tick, opt.dest)
                 self.waves[opt.dest] = Wave(ctx.tick, opt.group.charged, estimate)
+            else:
+                self.short(ctx, opt, cmd)
         self._guard_split(ctx)
+
+    def short(self, ctx: Ctx, opt: Option, cmd: Move) -> None:
+        """Hook: the attack ``cmd`` of ``opt`` was not paid (``SmartBot`` saves CP for a plan)."""
 
     def _guard_split(self, ctx: Ctx) -> None:
         """Split the spare units off the group that holds the capital, so they can march.

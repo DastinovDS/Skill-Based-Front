@@ -67,6 +67,18 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
    (a token bucket every ``spend`` pays) and whether it reads the position (``insight``: the
    thresholds of item 1, the pin of item 8, the evacuation of item 6, the scouts of item 7).
 
+10. **A chosen plan gets its CP** (``wait_plan``, #618). When the best attack is a scheduled order
+    (``prefer_planned``) that the CP cannot pay yet, the bot holds its price for ``wait_plan``
+    ticks (a ``Hold``): every other command that is not urgent (Defense, fights, evacuation,
+    the garrisons and the answers to strikes) leaves that price, so one-CP claims do not eat it
+    up. The hold ends when the plan is sent, when its target or group is gone, or when it runs
+    out; the same target is not held again for twice ``wait_plan`` ticks. Without ``insight``
+    the bot does not plan ahead (no hold).
+11. **Strikes at lesser cities** (``worth_defense``, #618). ``respond`` 1 answers only the
+    strikes at the capital; with ``worth_defense`` > 0 it also answers a strike at an own city
+    worth at least that many VP while an award is still to come (Defense and a reinforcement
+    like ``respond`` 2). The reaction delay of the level is the one of ``Perception``.
+
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
 (``Bot.key``, ``Bot.edge_keys``), nothing draws from ``self.rng``.
@@ -74,11 +86,12 @@ prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-in
 
 from collections import deque
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import ClassVar, Final, override
 
 from gow_bots.bots.assess import Assessment, Assessor, Travel
 from gow_bots.bots.base import ParamRange, node_of
-from gow_bots.bots.campaign import CampaignBot, Ctx
+from gow_bots.bots.campaign import CampaignBot, Ctx, Option
 from gow_bots.bots.logistics import (
     Arrival,
     arrivals,
@@ -146,8 +159,24 @@ _COMMON: Final[Mapping[str, ParamRange]] = {
     "starved": ParamRange(4, 6),
     "watch": ParamRange(2, 2),
     "watch_guard": ParamRange(2, 2),
+    # The keys of #618 sort after every drawn key, so the draws of the others stay as they were.
+    "wait_plan": ParamRange(100, 200),
+    "worth_defense": ParamRange(0, 0),
 }
 """Thresholds every personality shares (see the module docstring)."""
+
+
+@dataclass(frozen=True, slots=True)
+class Hold:
+    """CP kept for a scheduled order the bot chose and could not pay yet (item 10)."""
+
+    dest: int
+    group: int
+    """Opaque id of the group that was to go."""
+    cost: int
+    """Hundredths of CP."""
+    until: int
+    """The hold ends at this tick."""
 
 
 class SmartBot(CampaignBot):
@@ -209,6 +238,10 @@ class SmartBot(CampaignBot):
         """The capital is in danger in this decision (module docstring, item 2)."""
         self.hot: list[bool] = [False] * len(mapdef.nodes)
         """Own nodes next to the enemy in this decision: they keep ``hold_front`` units."""
+        self.hold: Hold | None = None
+        """The CP kept for a chosen plan (item 10)."""
+        self.held_at: dict[int, int] = {}
+        """Target to the tick of its last hold."""
         self.answered: dict[int, bool] = {}
         self.exposed: dict[int, int] = {}
         self.watched = False
@@ -312,16 +345,19 @@ class SmartBot(CampaignBot):
         self.unbank(ctx)
         self.set_rear_min(ctx)
         self.feed(ctx)
+        ctx.held = self.held_cp(ctx)  # item 10: from here on the spending leaves the plan's CP
         if not self.alarm:
             cmd = self.development(view, ctx.budget)  # DEC-26, item 11: before the orders
             if cmd is not None:
                 self.spend(ctx, cmd)
         self._recall(ctx)
+        held, ctx.held = ctx.held, 0  # the urgent answers do not wait for the plan
         self.defend_capital(ctx, a)
         self.respond(ctx)
         self.garrison(ctx)
         self.scout(ctx)
         self.fortify(ctx)
+        ctx.held = held
         self._attack(ctx)
         self._fit_split(ctx)
         self._gather(ctx)
@@ -334,10 +370,50 @@ class SmartBot(CampaignBot):
     @override
     def spend(self, ctx: Ctx, cmd: Command) -> bool:
         """``CampaignBot.spend`` that also pays one command of the APM bucket (item 9)."""
-        if not self.bucket.ready() or not super().spend(ctx, cmd):
+        if not self.bucket.ready():
+            return False
+        plan = cmd if isinstance(cmd, Move) and cmd.planned else None
+        if ctx.held and plan is None and self.cost(cmd) > ctx.budget - ctx.held:
+            return False  # item 10: the CP are for the chosen plan
+        if not super().spend(ctx, cmd):
             return False
         self.bucket.take()
+        if plan is not None and self.hold is not None and plan.dest == self.hold.dest:
+            self.hold = None
+            ctx.held = 0
         return True
+
+    # A chosen plan gets its CP (item 10) ------------------------------------------------------
+
+    def held_cp(self, ctx: Ctx) -> int:
+        """The CP kept for the hold of an earlier decision; a hold that ran out, whose target is
+        taken or whose group is gone ends here."""
+        hold = self.hold
+        if hold is None:
+            return 0
+        view = ctx.view
+        free = any(g.id == hold.group for g in self.idle_groups(view))
+        if ctx.tick >= hold.until or not free or view.nodes[hold.dest].owner == self.player:
+            self.hold = None
+            return 0
+        return hold.cost
+
+    @override
+    def short(self, ctx: Ctx, opt: Option, cmd: Move) -> None:
+        """A planned attack the CP cannot pay: keep its price for ``wait_plan`` ticks, once per
+        target in twice that time (item 10)."""
+        wait = self.params["wait_plan"]
+        if not cmd.planned or wait <= 0 or not self.tempo.insight or self.hold is not None:
+            return
+        cost = self.cost(cmd)
+        if cost <= ctx.budget:
+            return  # the CP are there: the bucket stopped the command, not the price
+        last = self.held_at.get(opt.dest)
+        if last is not None and ctx.tick - last < 2 * wait:
+            return
+        self.held_at[opt.dest] = ctx.tick
+        self.hold = Hold(opt.dest, opt.group.id, cost, ctx.tick + wait)
+        ctx.held = cost
 
     # Stance ---------------------------------------------------------------------------------
 
@@ -432,13 +508,22 @@ class SmartBot(CampaignBot):
             target = intent.target
             if target is None or intent.id in self.answered or level <= 0:
                 continue
-            if level == 1 and target != self.home:
+            if level == 1 and target != self.home and not self.worth_defending(target):
                 continue
             done = self.defend(ctx, target, self.arrival(intent))
             done = self.reinforce(ctx, target) or done
             if done:
                 self.answered[intent.id] = True
         ctx.budget -= self.params["reserve"]
+
+    def worth_defending(self, node: int) -> bool:
+        """Whether a strike at own city ``node`` is answered at ``respond`` 1 (item 11): the
+        city is worth ``worth_defense`` VP or more, and an award is still to come."""
+        worth = self.params["worth_defense"]
+        a = self.assessment
+        if worth <= 0 or a is None or a.awards_left <= 0:
+            return False
+        return self.map.nodes[node].vp >= worth
 
     def strikes(self, ctx: Ctx) -> list[IntentView]:
         """Planned enemy orders aimed at an own node, in a mirror-invariant order."""
@@ -1061,6 +1146,7 @@ class SmartRusher(SmartBot):
         "w_closer": ParamRange(40, 40),
         "w_need": ParamRange(15, 15),
         "respond": ParamRange(1, 1),
+        "worth_defense": ParamRange(3, 3),
     }
 
 
@@ -1082,6 +1168,7 @@ class SmartStrangler(SmartBot):
         "w_base": ParamRange(150, 150),
         "w_cut": ParamRange(100, 100),
         "w_need": ParamRange(3, 3),
+        "worth_defense": ParamRange(2, 2),
     }
 
 
@@ -1132,6 +1219,7 @@ class SmartExpander(SmartBot):
         "fortify": ParamRange(1, 1),
         "road_keep": ParamRange(250, 350),
         "late": ParamRange(1200, 2400),
+        "worth_defense": ParamRange(2, 2),
     }
 
 
@@ -1154,6 +1242,7 @@ class SmartTurtle(SmartBot):
         "hold_front": ParamRange(2, 3),
         "fortify": ParamRange(1, 1),
         "road_keep": ParamRange(250, 350),
+        "worth_defense": ParamRange(1, 1),
     }
 
 
