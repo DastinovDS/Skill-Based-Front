@@ -325,6 +325,16 @@ class SmartBot(CampaignBot):
     """Groups a strike needs: one group alone is a single attack (``_attack``)."""
     ANSWERS: ClassVar[bool] = True
     """The answers of items 13-17 (#624); the benchmark ``smart_hoarder`` keeps them off."""
+    WORRY: ClassVar[bool] = True
+    """Item 13 on (with ``ANSWERS``)."""
+    WITHDRAW: ClassVar[bool] = True
+    """Item 14 on (with ``ANSWERS``)."""
+    BURN_WAR: ClassVar[bool] = True
+    """Item 15 on (with ``ANSWERS``)."""
+    CENTRE_BARRACKS: ClassVar[bool] = True
+    """Item 16 on (with ``ANSWERS``)."""
+    PAIRS: ClassVar[bool] = True
+    """Item 17 on (with ``ANSWERS``)."""
     ANXIETY: ClassVar[int] = 50
     """Percent of the hidden enemy force (``hidden_shots``) a worried capital counts (item 13)."""
     WITHDRAW_GAP: ClassVar[int] = 2
@@ -459,10 +469,10 @@ class SmartBot(CampaignBot):
         self.alarm = (
             threat.danger and threat.eta is not None and threat.eta - tick <= drawn["alarm"]
         )
-        self.paired = self._paired(view) if self.answering() else {}
+        self.paired = self._paired(view) if self.answering() and self.PAIRS else {}
         if self.home in self.paired and self.paired[self.home] - tick <= drawn["alarm"]:
             self.alarm = True  # item 17: two strikes at the capital
-        self.worry = self._worry(view, a) if self.answering() else None
+        self.worry = self._worry(view, a) if self.answering() and self.WORRY else None
         self.hot = self._hot(view)
         self.watched = self.enemy_near_home(view)
         self._read_arrivals(view)
@@ -955,7 +965,7 @@ class SmartBot(CampaignBot):
         to it that would take the node leave for the own neighbour farthest from the enemy (the
         least threatened, then the most own units, then ``node_key``): a unit kept is worth more
         than the node (1 CP an order against 1 CP and a walk a recruit)."""
-        if not self.answering():
+        if not self.answering() or not self.WITHDRAW:
             return
         view = ctx.view
         fights = self.fight_nodes(view)
@@ -1010,7 +1020,7 @@ class SmartBot(CampaignBot):
         """The warehouses are full, so new charges burn (item 15, playtest B3): without the
         answers only a full stock with no unit waiting; with them nine tenths of the capacity,
         units waiting or not (they wait for delivery, not for production)."""
-        if not self.answering():
+        if not self.answering() or not self.BURN_WAR:
             return cap <= stock and waiting == 0
         return 10 * stock >= 9 * cap
 
@@ -1019,7 +1029,7 @@ class SmartBot(CampaignBot):
         """Item 16 (playtest B4): with the answers, the one forward barracks goes to the centre
         (the large city between the capitals) once it is held and not next to the enemy; no
         barracks in the cities a front marker would put up and lose."""
-        if not self.answering():
+        if not self.answering() or not self.CENTRE_BARRACKS:
             return super().wanted_barracks(view)
         centre = self.centre
         if centre == self.home or not self.rules.city_upgrades.enabled:
