@@ -9,7 +9,8 @@ first:
 2. ``respond`` (a hook; ``ReactiveBot`` answers the visible intents of the enemy here);
 3. attacks and captures: every idle group looks at the nodes it can reach under the stack limit
    (DEC-20, D), a node is a *viable target* when the group's charges are enough to take it
-   (``shots_to_take`` against the estimate of the enemy below, plus ``margin``), and ``score``
+   (``shots_to_take`` against the estimate of the enemy below, plus ``margin``, and the price of
+   the capture on top: ``capture.charge_cost`` real charges, DEC-38, ``takes``), and ``score``
    ranks the viable (group, target) pairs; a group too big for every path to a target splits off
    an army that fits and could take it (``fit_split``), the army goes in the next decision;
 4. ``gather``: groups standing in one node are merged when together they can take a target
@@ -48,7 +49,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar, override
 
 from gow_bots.bots.base import Bot, ParamRange, node_of
-from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take
+from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take, takes
 from gow_sim.commands import CancelOrder, Command, Merge, Move, Recruit, SetStance, Split
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
@@ -268,7 +269,8 @@ class CampaignBot(Bot):
         self.memory[dest] = (tick, max(0, units - killed), max(0, charged - cancelled))
 
     def _recall(self, ctx: Ctx) -> None:
-        """Cancel an attack on the way when the target is seen exactly and is too strong for it.
+        """Cancel an attack on the way when the target is seen exactly and is too strong for it
+        (with the price of the capture, DEC-38: a group that could not pay would bounce).
 
         Free since DEC-20: the group turns back to the start of its edge. Only on numbers of
         this tick, so an old memory does not make the bot hesitate.
@@ -288,8 +290,8 @@ class CampaignBot(Bot):
             # The bonus was set by the whole path at the departure (DEC-29); the edges still to
             # go are a lower bound of it.
             bonus = orders.planned_bonus(len(g.order.path), g.charged) if g.order.planned else 0
-            have = g.charged + bonus
-            if have < self.need(view, ctx.tick, dest) and self.spend(ctx, CancelOrder(g.id)):
+            need = self.need(view, ctx.tick, dest)
+            if not takes(self.rules, g.charged, bonus, need) and self.spend(ctx, CancelOrder(g.id)):
                 ctx.used[g.id] = True
                 ctx.claimed.pop(dest, None)
 
@@ -308,8 +310,9 @@ class CampaignBot(Bot):
                 need = self.need(view, ctx.tick, dest)
                 edges = self.path_edges(view, node_of(g), dest, g.units)
                 bonus = orders.planned_bonus(edges, g.charged)
-                plain = g.charged >= need
-                plan = bonus >= 1 and g.charged + bonus >= need
+                # DEC-38: the charges must also pay the capture; virtual shots never pay.
+                plain = takes(self.rules, g.charged, 0, need)
+                plan = bonus >= 1 and takes(self.rules, g.charged, bonus, need)
                 if not (plain or plan):
                     continue
                 planned = plan and (not plain or prefer_planned(self.rules, g.charged, need, edges))

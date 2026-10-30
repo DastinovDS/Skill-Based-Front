@@ -101,6 +101,8 @@ class RandomLegalBot(Bot):
 
     def _move(self, view: PlayerView, g: GroupView, budget: int) -> Command | None:
         dests = self.reachable(view, node_of(g), self.params["radius"], g.units)
+        if g.charged < self.rules.capture.charge_cost:  # it cannot pay a capture (DEC-38)
+            dests = [d for d in dests if view.nodes[d].owner == view.player]
         if not dests:
             return None
         dest = self.rng.choice(dests)

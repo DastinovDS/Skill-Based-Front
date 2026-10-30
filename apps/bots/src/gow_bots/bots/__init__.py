@@ -21,7 +21,7 @@ from gow_bots.bots.smart import (
 from gow_bots.bots.strangler import StranglerBot
 from gow_bots.bots.strategy import ExpanderBot, TurtleBot
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Tempo
-from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take
+from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take, takes
 
 __all__ = [
     "BOTS",
@@ -51,4 +51,5 @@ __all__ = [
     "defender_pool",
     "prefer_planned",
     "shots_to_take",
+    "takes",
 ]
