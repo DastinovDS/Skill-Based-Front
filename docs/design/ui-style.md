@@ -23,6 +23,7 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/leaderboard-profile.html`](mockups/leaderboard-profile.html) (the leaderboard and the player profile in the language of the start menu and the lobby screens, #78: **[awaiting the owner's decision]**, section 38; a new screen, so a mockup first),
 [`mockups/map-geography.html`](mockups/map-geography.html) (map geography: water cells, rivers as area borders, areas touch only along roads, #537, DEC-36: **[accepted]** 2026-10-29, W4 Painted without a dark line along water, section 39; the owner's feedback on #429, 2026-10-29),
 [`mockups/supply-terrain.html`](mockups/supply-terrain.html) (nicer supply lines in the Supply view, a terrain and vision concept, rivers and lakes as visual borders, #429: **[awaiting the owner's decision]**, section 37; moved before the release by the owner, 2026-10-29),
+[`mockups/map-overlays.html`](mockups/map-overlays.html) (the Supply mode panel, the travel-time marker of an order, the recruit and city-upgrade icons of the city menu, #627: **[awaiting the owner's decision]**, section 40; the owner's review of 2026-10-30),
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
 only links and our descriptions.
@@ -387,6 +388,8 @@ no external requests; a new dependency only with a justification (AGENTS.md, 0.5
   three stances, "Defense", recruit, road, sound, settings, replay, copy) are copied into
   `hud/Icon.svelte` (a dictionary name → SVG markup, `currentColor`), without `{@html}`.
 - **Map: our own figures in PixiJS `Graphics`** (triangles, rings, stamps, arrows).
+- **Generated icon and art candidates (SpriteCook, owner, 2026-10-30):** allowed in mockups and, after the owner picks one, as
+  client assets; section 22 lists the conditions.
 - **Sounds: CC0 (Kenney) or our own**, `.ogg` and `.mp3` files in `apps/client/public/sounds/`,
   up to 300 KB in total. Check the license of each pack on its page when adding it.
   CSP: `media-src` is not set in `csp.ts`, so `default-src 'self'` applies, and loading through
@@ -1302,7 +1305,8 @@ A new icon is added by an entry in this table (shape, meaning, where) and is che
 | **One dark theme** | section 6 | the HUD and screens are dark; a light map is admissible only as the owner's decision with an override of the tokens (D2) |
 | **No game logic in the client** | AGENTS.md, 7.1 | the style must not require the client to compute an outcome, a path or a time: everything from the snapshot and events |
 | **PixiJS outside Svelte reactivity** | AGENTS.md, 7.2 | the HUD updates once per snapshot; effect objects in pools; everything created is destroyed (`destroy({ children: true })`) |
-| **Dependencies and assets** | AGENTS.md, 0.5, section 8 of this document | a new dependency only with a justification; an asset without an entry in `THIRD_PARTY_NOTICES.md` is a review error; we do not put generative images and third-party assets into the repository |
+| **Dependencies and assets** | AGENTS.md, 0.5, section 8 of this document | a new dependency only with a justification; an asset without an entry in `THIRD_PARTY_NOTICES.md` is a review error; we do not put third-party assets (other people's screenshots, packs without a checked license) into the repository |
+| **Generated art (SpriteCook)** | the owner, 2026-10-30 (supersedes "no generative images") | icon and art candidates may be generated with SpriteCook (MCP tools `mcp__plugin_spritecook_spritecook__*`, project "Skill-Based Front"). Conditions: the cheapest model that does the job, several candidates per call (a sheet), the cost checked first (`list_generation_models`) and the credits named in the PR; the shown images go to `docs/design/mockups/assets/<name>/` as small PNG or WebP with the SpriteCook asset ids next to them; a picked icon goes into the client only as a static file under `img-src 'self'` (or redrawn as an SVG for `hud/icons.ts`), on the map through the baked sprites of AGENTS.md 7.2, with an entry in `THIRD_PARTY_NOTICES.md` (generator, date, the SpriteCook terms for the account's plan checked at that time); the icon language of section 21 and the checks of this table (grayscale, contrast, minimum size) apply to it as to a drawn icon |
 | **Background baking** | `maps:bake`, MAP-05 | the background is drawn at the baking stage, one pixel per map unit. **The rule "the baker on the standard library, PNG through zlib" was lifted by the owner's decision of 2026-10-21 (26.3):** the baker on `numpy` and `Pillow`, the WebP format (`.bg.webp`, at most 0.5 MB); implemented in #344 |
 
 ---
@@ -1314,11 +1318,17 @@ The owner's practice (**[accepted]**, 2026-10-21; samples: `mockups/fight-arena.
 A **major visual decision** (a new map or unit style, a change of the icon shapes, a new arena or screen look, a rework of the HUD, anything that changes
 the look of most frames or costs more than a day) **does not start with code.** The order:
 
-1. **A mockup.** A self-contained interactive HTML in `docs/design/mockups/` (one file, opens from a file, no network, no generative
-   services and no third-party assets, drawn with code): switchable variants of the same scene, **by default at least 3-4 design variants
-   for each element plus the current look for comparison** (the owner, 2026-10-21; fewer only with a reason in the issue), switches for what affects readability
-   (grayscale, "reduced motion", scale), the state in the address (`#dir=...`) for reproducible frames. The mockup engine, where there are rules,
+1. **A mockup.** A self-contained interactive HTML in `docs/design/mockups/` (one file, opens from a file by double click, no network, no third-party
+   assets; drawn with code, generated images from `mockups/assets/<name>/` referenced by a relative path): switchable variants of the same scene,
+   **at least 10 design variants for each element plus the current look** (the owner, 2026-10-30; it was 3-4 since 2026-10-21), weak variants
+   pruned with `design:design-critique` before the owner sees them (the 10 count after pruning). **As little text and as few tables as possible
+   on the page** (the owner, 2026-10-30): only switches between elements and variants, a side-by-side comparison of 2 to 4 variants, and time
+   controls (play, pause, scrub) where something moves; the explanations go into the issue. Switches for what affects readability
+   (grayscale, "reduced motion"), the state in the address (`#el=...&v=...`) for reproducible frames. The mockup engine, where there are rules,
    is checked against the tables of `mechanics.md` right on the page (like `simulate` in `fight-arena.html`).
+   **Design tools are mandatory** (the owner, 2026-10-30): `design:design-critique` (pruning, the recommendation), `design:accessibility-review`
+   (contrast on the map background, state not by colour alone, AGENTS.md 7.4), `design:ux-copy` for every string left; SpriteCook for icon and
+   art candidates (section 22). A tool that is not installed is named to the owner first, before the work, not replaced silently.
 2. **An issue with a table of variants** (labels `area:design`, `type:decision`): for each variant, whether a DEC, protocol, simulation, client is needed;
    an estimate (S, M, L and days); the FPS price; the risk. A recommendation with reasons. 2-3 PNG frames of the mockup. The field "**Owner's decision: awaiting
    the owner's decision**"; the issue is not closed until the owner has chosen.
@@ -2021,3 +2031,17 @@ itself is the border and stays blue. The baker (`gow-maps bake`) therefore paint
 the water (shallows), never darker on the land, and the client (step 2, #544) draws its thin area line only between two
 land areas. Reeds stay sparse and muted so they never line up into a dark edge. The open questions of #537 take
 the DEC-36 defaults (long rivers with bridges, about 20 percent water, fixtures without water, before the release).
+
+---
+
+## 40. Supply mode panel, order travel time, city menu icons (#627)
+
+Status: **[awaiting the owner's decision]**. The owner's review of 2026-10-30: the Supply mode panel has far too much text (title, hint,
+slider with a caption, a legend of five entries); the travel-time marker of an order (a highlighted road and a "clock 5 s" pill) is too
+plain; recruiting is drawn as a battery, which clashes with "a unit is a battery", and the warehouse icon (squares) is unclear. The first
+round under the new process of section 23 (10 variants per element, minimal text, SpriteCook candidates).
+
+Mockup: [`mockups/map-overlays.html`](mockups/map-overlays.html), SpriteCook candidates in [`mockups/assets/map-overlays/`](mockups/assets/map-overlays/)
+(asset ids in `spritecook-assets.json`). Element 1 changes only the HUD panel: the supply drawing on the map stays as it is (owner, 2026-10-30).
+The variant table and the recommendations are in issue #627.
+

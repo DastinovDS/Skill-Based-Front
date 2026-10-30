@@ -1,0 +1,989 @@
+<!doctype html>
+<!--
+  Map overlays mockup (issue #627, owner review 2026-10-30): three in-match elements, at least ten variants each plus the
+  current look. (1) The HUD panel of the Supply map mode (only the Svelte panel; the supply drawing on the map stays as it is).
+  (2) The travel-time marker of a move order, before the click and while the group marches. (3) The recruit, barracks and
+  warehouse icons of the city radial menu. Raster icons in assets/map-overlays/ are SpriteCook candidates (asset ids in
+  assets/map-overlays/spritecook-assets.json); the rest is drawn by code. No network: open the file in a browser.
+  State in the address: #el=eta&v=e4&cmp=e0,e4,e6&t=3.2&gray=1&rm=1&calm=0&pick=0
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Map overlays mockup</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --surface-2: #21262d;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-dim: #9da7b3;
+        --you: #5b9bff;
+        --enemy: #e5484d;
+        --warn: #ffb020;
+        --paper: #f0f6fc;
+        --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 12px 16px 32px;
+        background: #0a0d12;
+        color: var(--text);
+        font: 14px/1.4 var(--font);
+      }
+      .bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      button,
+      .chip {
+        font: inherit;
+        color: var(--text);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 10px;
+        cursor: pointer;
+      }
+      button.on {
+        background: color-mix(in srgb, var(--you) 30%, var(--surface));
+        border-color: var(--you);
+      }
+      button.cmp-on {
+        outline: 2px dashed var(--warn);
+        outline-offset: 1px;
+      }
+      .sep {
+        width: 1px;
+        height: 24px;
+        background: var(--border);
+        margin: 0 4px;
+      }
+      label.opt {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+        color: var(--text-dim);
+        font-size: 13px;
+      }
+      #scrub {
+        width: 260px;
+      }
+      #tval {
+        font-variant-numeric: tabular-nums;
+        color: var(--text-dim);
+        min-width: 44px;
+      }
+      .view {
+        display: grid;
+        gap: 10px;
+      }
+      .view.n2,
+      .view.n4 {
+        grid-template-columns: 1fr 1fr;
+      }
+      .view.n3 {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+      .cell {
+        position: relative;
+      }
+      .cap {
+        font-size: 13px;
+        color: var(--text-dim);
+        margin: 0 0 3px;
+      }
+      .frame {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 800 / 480;
+        overflow: hidden;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+      }
+      .stage {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 800px;
+        height: 480px;
+        transform-origin: 0 0;
+      }
+      .stage > svg {
+        position: absolute;
+        inset: 0;
+      }
+      .gray .frame {
+        filter: grayscale(1);
+      }
+
+      /* The HUD inside the stage (the client's tokens and sizes). */
+      .hud {
+        position: absolute;
+        font-size: 14px;
+        color: var(--text);
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 12px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 5px 12px;
+        white-space: nowrap;
+      }
+      .caps {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+      }
+      .dim {
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+      kbd {
+        font: 600 11px/1 var(--font);
+        color: var(--text-dim);
+        border: 1px solid var(--border);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 2px 5px;
+        background: var(--surface-2);
+      }
+      .ico {
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex: none;
+      }
+      .cells {
+        display: inline-flex;
+      }
+      /* A 13 px square inside a 28 px hit area (ui-style 22: a mouse target is at least 28 px). */
+      .cells i {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        margin: -6px 0;
+      }
+      .cells i b {
+        width: 13px;
+        height: 13px;
+        border: 1.5px solid var(--text-dim);
+        border-radius: 2px;
+      }
+      .cells i.f b {
+        background: var(--you);
+        border-color: var(--paper);
+      }
+      .cells.v {
+        flex-direction: column-reverse;
+      }
+      .step {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .step b {
+        min-width: 14px;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+      .sbtn {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border-radius: 6px;
+        display: inline-grid;
+        place-items: center;
+        background: var(--surface-2);
+        line-height: 1;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .seg span {
+        min-width: 28px;
+        text-align: center;
+        padding: 4px 6px;
+        cursor: pointer;
+        font-variant-numeric: tabular-nums;
+        border-right: 1px solid var(--border);
+      }
+      .seg span:last-child {
+        border-right: 0;
+      }
+      .seg span.f {
+        background: color-mix(in srgb, var(--you) 45%, var(--surface));
+        font-weight: 700;
+        outline: 2px solid var(--paper);
+        outline-offset: -2px;
+      }
+      .legend {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 6px 0 0;
+        padding: 0;
+        list-style: none;
+        font-size: 12px;
+        color: var(--text-dim);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .slider {
+        width: 120px;
+        accent-color: var(--you);
+      }
+      .knob {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        border: 2px solid var(--border);
+        background: var(--surface-2);
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        position: relative;
+        cursor: pointer;
+      }
+      .tip {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      .frame-mode {
+        position: absolute;
+        inset: 0;
+        border: 3px solid color-mix(in srgb, var(--you) 70%, transparent);
+        border-radius: 8px;
+        pointer-events: none;
+      }
+      .toast {
+        transition: opacity 0.2s;
+      }
+      .calm * {
+        transition: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bar" id="els"></div>
+    <div class="bar" id="vars"></div>
+    <div class="bar" id="ctl"></div>
+    <div id="view" class="view"></div>
+
+    <script>
+      'use strict';
+      // ---------- state ----------
+      const S = { el: 'supply', v: 'c', cmp: [], t: 2.0, play: true, gray: false, calm: false, rm: 1, pick: false };
+      const T_LOOP = 8;
+      const ELS = [
+        ['supply', '1 · Supply panel'],
+        ['eta', '2 · Order time'],
+        ['menu', '3 · City menu icons'],
+      ];
+      const A = 'assets/map-overlays/';
+
+      // ---------- small helpers ----------
+      const lerp = (a, b, k) => a + (b - a) * k;
+      const pt = (a, b, k) => [lerp(a[0], b[0], k), lerp(a[1], b[1], k)];
+      const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const ico = (inner, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
+      const kb = (k) => `<kbd>${k}</kbd>`;
+      const G_SUPPLY = '<circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M7.3 11 16.7 6M7.3 13l9.4 5"/>';
+      const G_KEEP = '<rect x="7" y="4" width="10" height="10" rx="1" fill="currentColor"/><path d="M4 19h16"/>';
+
+      // ---------- (1) the supply map (unchanged look, flat floor) ----------
+      const SN = {
+        sg: [110, 250, 'Stonegate', 'cap', 6, 7],
+        wp: [290, 250, 'Watchpost', '', 2, 2],
+        fw: [470, 250, 'Forkway', '', 2, 4],
+        wd: [250, 100, 'Wood Hollow', '', 2, 2],
+        wh: [470, 105, 'Watchhouse', '', 1, 1],
+        fd: [470, 395, 'Ford', '', 1, 1],
+        ar: [650, 250, 'Archway', 'e'],
+        bl: [650, 100, 'Bluff', 'e'],
+        ht: [770, 250, 'Heart', 'e'],
+      };
+      const SE = [
+        ['sg', 'wp', 3],
+        ['wp', 'fw', 3],
+        ['sg', 'wd', 2],
+        ['fw', 'wh', 1],
+        ['fw', 'fd', 1],
+        ['fw', 'ar', 1],
+        ['wh', 'bl', 1],
+        ['ar', 'ht', 1],
+        ['bl', 'ar', 1],
+        ['wd', 'wh', 1],
+      ];
+      const FLOWS = [
+        ['sg', 'wp', 4, 0.5],
+        ['wp', 'fw', 6, 0.4],
+        ['sg', 'wd', 2, 0.35],
+        ['fw', 'wh', 1, 0.3],
+      ];
+      function supplyMap(t) {
+        let s = '<rect width="800" height="480" fill="#10161f"/>';
+        s += '<path d="M0 0H560L585 175 560 330 600 480H0Z" fill="#5b9bff" fill-opacity=".2" stroke="#5b9bff" stroke-width="2"/>';
+        s += '<path d="M560 0H800V480H600L560 330 585 175Z" fill="#e5484d" fill-opacity=".2" stroke="#e5484d" stroke-width="2"/>';
+        for (const [a, b, w] of SE) {
+          const p = SN[a], q = SN[b];
+          s += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="#0b0f15" stroke-width="${3 + w * 2}" stroke-opacity=".7"/>`;
+        }
+        for (const [a, b, n, sp] of FLOWS) {
+          const p = SN[a], q = SN[b];
+          const L = dist(p, q), ux = (q[0] - p[0]) / L, uy = (q[1] - p[1]) / L;
+          const ox = -uy * 6, oy = ux * 6;
+          const p0 = [p[0] + ux * 26 + ox, p[1] + uy * 26 + oy], p1 = [q[0] - ux * 30 + ox, q[1] - uy * 30 + oy];
+          s += `<line x1="${p0[0]}" y1="${p0[1]}" x2="${p1[0]}" y2="${p1[1]}" stroke="#5b9bff" stroke-width="5"/>`;
+          s += `<line x1="${p0[0]}" y1="${p0[1]}" x2="${p1[0]}" y2="${p1[1]}" stroke="#f0f6fc" stroke-width="1.5" stroke-dasharray="6 6"/>`;
+          s += `<path d="M${p1[0] + ux * 9} ${p1[1] + uy * 9}L${p1[0] - uy * 7} ${p1[1] + ux * 7}L${p1[0] + uy * 7} ${p1[1] - ux * 7}Z" fill="#5b9bff" stroke="#f0f6fc" stroke-width="1.5"/>`;
+          const m = pt(p0, p1, 0.32);
+          s += `<text x="${m[0] - uy * 12}" y="${m[1] + ux * 12 + 4}" fill="#f0f6fc" font-size="13" font-weight="700" text-anchor="middle" paint-order="stroke" stroke="#0d1117" stroke-width="3">${n}</text>`;
+          const k = S.calm ? 0.55 : (t * sp) % 1;
+          const pk = pt(p0, p1, k);
+          s += `<circle cx="${pk[0]}" cy="${pk[1]}" r="5" fill="#f0f6fc" stroke="#0d1117" stroke-width="1.5"/>`;
+        }
+        // a one-off transfer packet (square)
+        {
+          const p = SN.wp, q = SN.fw, k = S.calm ? 0.7 : ((t * 0.25 + 0.5) % 1);
+          const pk = pt([p[0] + 30, p[1] - 6], [q[0] - 34, q[1] - 6], k);
+          s += `<rect x="${pk[0] - 6}" y="${pk[1] - 6}" width="12" height="12" fill="#f0f6fc" stroke="#0d1117" stroke-width="2"/>`;
+        }
+        for (const [id, n] of Object.entries(SN)) {
+          const [x, y, name, kind, have, cap] = n;
+          const enemy = kind === 'e';
+          const r = kind === 'cap' ? 26 : 20;
+          if (id === 'fd') s += `<circle cx="${x}" cy="${y}" r="${r + 8}" fill="none" stroke="#ffb020" stroke-width="3" stroke-dasharray="6 5"/>`;
+          s += `<circle cx="${x}" cy="${y}" r="${r}" fill="${enemy ? '#e5484d' : '#5b9bff'}" stroke="#f0f6fc" stroke-width="3"/>`;
+          if (kind === 'cap') s += `<path d="M${x} ${y - 12}l3.5 7.5 8 .8-6 5.4 1.8 8-7.3-4.2-7.3 4.2 1.8-8-6-5.4 8-.8z" fill="#f0f6fc"/>`;
+          s += `<text x="${x}" y="${y + r + (enemy ? 18 : 30)}" fill="#e6edf3" font-size="13" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#0d1117" stroke-width="3">${name}</text>`;
+          if (!enemy) {
+            const w = cap * 9;
+            for (let i = 0; i < cap; i++) {
+              const cx = x - w / 2 + i * 9;
+              s += `<rect x="${cx}" y="${y + r + 4}" width="7" height="7" fill="${i < have ? '#5b9bff' : 'none'}" stroke="${i < have ? '#f0f6fc' : '#9da7b3'}" stroke-width="1"/>`;
+            }
+          }
+        }
+        // front marker 1 at Forkway
+        const f = SN.fw;
+        s += `<line x1="${f[0] - 18}" y1="${f[1] - 14}" x2="${f[0] - 18}" y2="${f[1] - 44}" stroke="#f0f6fc" stroke-width="2"/><path d="M${f[0] - 18} ${f[1] - 44}h18l-4 7 4 7h-18z" fill="#5b9bff" stroke="#f0f6fc" stroke-width="1.5"/><text x="${f[0] - 10}" y="${f[1] - 33}" font-size="11" font-weight="700" fill="#f0f6fc" text-anchor="middle">1</text>`;
+        // cut-off plate
+        s += `<rect x="${SN.fd[0] - 46}" y="${SN.fd[1] - 58}" width="92" height="20" rx="5" fill="#0d1117" stroke="#ffb020"/><text x="${SN.fd[0]}" y="${SN.fd[1] - 44}" fill="#ffb020" font-size="12" font-weight="700" text-anchor="middle">✂ 7 s</text>`;
+        // enemy presence
+        s += `<path d="M676 270h22l-11 19z" fill="none" stroke="#e5484d" stroke-width="2.5"/>`;
+        return s;
+      }
+
+      // The panel variants of element 1. Each returns HTML placed over the map.
+      const cells = (n = 8) => `<span class="cells" role="slider" aria-label="Rear minimum" aria-valuemin="0" aria-valuemax="8" aria-valuenow="${S.rm}" title="Rear minimum: charges each city without a front marker keeps. Keys [ ]">${Array.from({ length: n }, (_, i) => `<i class="${i < S.rm ? 'f' : ''}" data-rm="${i + 1}"><b></b></i>`).join('')}</span>`;
+      const stepper = () => `<span class="step"><button class="sbtn" data-rmd="-1" aria-label="Fewer">−</button>${ico(G_KEEP)}<b>${S.rm}</b><button class="sbtn" data-rmd="1" aria-label="More">+</button></span>`;
+      const pickLine = () => (S.pick ? `<div class="pill" style="border-color:var(--you)">Transfer from Watchpost: pick a city ${kb('Esc')}</div>` : '');
+      const SUPPLY = [
+        {
+          id: 'c',
+          name: 'Current',
+          html: () => `<div class="hud panel" style="left:12px;bottom:12px;width:340px">
+            <div class="row"><span class="caps">Supply map mode</span>${kb('Tab')}</div>
+            <div style="margin-top:6px">${S.pick ? 'Transfer from Watchpost: click an own destination city. Esc: cancel.' : 'Click a city: front marker or transfer'}</div>
+            <div class="row" style="margin-top:6px">Rear minimum <input class="slider" type="range" min="0" max="8" value="${S.rm}" data-rmr> <b>${S.rm}</b> ${kb('[')}${kb(']')}</div>
+            <div class="dim" style="margin-top:4px">Charges each city without a marker keeps.</div>
+            <ul class="legend"><li>━ charges on a road</li><li>┅ transfer</li><li>⚑ front marker</li><li>●○ warehouse</li><li style="color:var(--enemy)">▽ enemy</li></ul></div>`,
+        },
+        {
+          id: 's1',
+          name: 'Mode chip',
+          html: () => `<div class="hud col" style="left:12px;bottom:12px">${pickLine()}<div class="pill">${ico(G_SUPPLY)}<b>Supply</b>${kb('Tab')}<span class="sep" style="height:16px"></span>${ico(G_KEEP)}<b>${S.rm}</b>${kb('[')}${kb(']')}</div></div>`,
+        },
+        {
+          id: 's2',
+          name: 'Cell strip',
+          html: () => `<div class="hud col" style="left:12px;bottom:12px">${pickLine()}<div class="pill">${ico(G_SUPPLY)}${kb('Tab')}<span class="sep" style="height:16px"></span>${ico(G_KEEP)}${cells()}</div></div>`,
+        },
+        {
+          id: 's3',
+          name: 'Stepper',
+          html: () => `<div class="hud col" style="left:12px;bottom:12px">${pickLine()}<div class="pill"><b>Supply</b>${kb('Tab')}<span class="sep" style="height:16px"></span>${stepper()}</div></div>`,
+        },
+        {
+          id: 's4',
+          name: 'Bottom plate',
+          html: () => `<div class="hud col" style="left:50%;bottom:12px;transform:translateX(-50%);align-items:center">${pickLine()}<div class="pill"><span class="caps">Supply</span>${kb('Tab')}<span class="sep" style="height:16px"></span>${ico(G_KEEP)}${cells()}</div></div>`,
+        },
+        {
+          id: 's5',
+          name: 'Map frame',
+          html: () => `<div class="frame-mode"></div><div class="hud" style="left:12px;top:10px"><span class="caps" style="color:var(--paper)">Supply</span> ${kb('Tab')}</div>
+            <div class="hud col" style="left:12px;bottom:12px">${pickLine()}<div class="pill">${ico(G_KEEP)}<b>${S.rm}</b>${kb('[')}${kb(']')}</div></div>`,
+        },
+        {
+          id: 's6',
+          name: 'Legend on ?',
+          html: () => `<div class="hud col" style="left:12px;bottom:12px">${pickLine()}${S.legend ? `<div class="panel" style="padding:8px 10px"><ul class="legend" style="margin:0;flex-direction:column;gap:4px"><li>━ charges on a road</li><li>┅ transfer</li><li>⚑ front marker</li><li>■□ warehouse</li><li style="color:var(--enemy)">▽ enemy</li></ul></div>` : ''}<div class="pill"><b>Supply</b>${kb('Tab')}<span class="sep" style="height:16px"></span>${stepper()}<button class="sbtn" data-legend aria-label="Legend">?</button></div></div>`,
+        },
+        {
+          id: 's7',
+          name: 'Cursor hint',
+          html: () => `<div class="hud tip" style="left:${SN.wp[0] + 26}px;top:${SN.wp[1] - 54}px">${S.pick ? 'Transfer here' : 'Front marker or transfer'}</div>
+            <div class="hud" style="left:12px;bottom:12px"><div class="pill">${ico(G_SUPPLY)}${kb('Tab')}<span class="sep" style="height:16px"></span>${ico(G_KEEP)}<b>${S.rm}</b>${kb('[')}${kb(']')}</div></div>`,
+        },
+        {
+          id: 's8',
+          name: 'Segments',
+          html: () => `<div class="hud col" style="left:12px;bottom:12px">${pickLine()}<div class="pill">${ico(G_SUPPLY)}${kb('Tab')}<span class="sep" style="height:16px"></span>${ico(G_KEEP)}<span class="seg">${Array.from({ length: 9 }, (_, i) => `<span class="${i === S.rm ? 'f' : ''}" data-rmv="${i}">${i}</span>`).join('')}</span></div></div>`,
+        },
+        {
+          id: 's9',
+          name: 'Top bar tab',
+          html: () => `<div class="hud" style="left:0;top:0;right:0;height:34px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 10px">
+              <span class="dim">CP ▮▮▮▯▯</span><span class="pill" style="padding:3px 10px">Balance ${kb('Q')}</span>
+              <span class="pill" style="padding:3px 10px;border-color:var(--you);background:color-mix(in srgb,var(--you) 25%,var(--surface))">${ico(G_SUPPLY)}Supply ${kb('Tab')}${ico(G_KEEP)}<b>${S.rm}</b>${kb('[')}${kb(']')}</span></div>
+            ${S.pick ? `<div class="hud" style="left:12px;bottom:12px">${pickLine()}</div>` : ''}`,
+        },
+        {
+          id: 's10',
+          name: 'Shown on change',
+          html: () => `<div class="hud col" style="left:12px;bottom:12px">${pickLine()}<div class="pill">${ico(G_SUPPLY)}${kb('Tab')}${performance.now() - (S.rmAt || -1e9) < 2500 ? `<span class="sep" style="height:16px"></span>${ico(G_KEEP)}${cells()}` : ''}</div></div>`,
+        },
+      ];
+      function knob() {
+        const a = (S.rm / 8) * 270 - 135;
+        const r = 18, x = 23 + r * Math.sin((a * Math.PI) / 180), y = 23 - r * Math.cos((a * Math.PI) / 180);
+        return `<svg width="46" height="46" style="position:absolute;inset:-2px"><path d="M${23 + r * Math.sin(-2.356)} ${23 - r * Math.cos(-2.356)}A${r} ${r} 0 1 1 ${23 + r * Math.sin(2.356)} ${23 - r * Math.cos(2.356)}" fill="none" stroke="#30363d" stroke-width="4"/><circle cx="${x}" cy="${y}" r="4" fill="#5b9bff" stroke="#f0f6fc" stroke-width="1.5"/></svg>${S.rm}`;
+      }
+
+      // ---------- (2) the order travel time ----------
+      const EN = {
+        wp: [150, 340, 'Watchpost', 'own'],
+        fw: [390, 300, 'Forkway', 'own'],
+        bl: [620, 140, 'Bluff', 'n'],
+        sg: [120, 120, 'Stonegate', 'own'],
+        hd: [640, 390, 'Heart', 'enemy'],
+      };
+      const EE = [
+        ['wp', 'fw'],
+        ['fw', 'bl'],
+        ['sg', 'wp'],
+        ['sg', 'fw'],
+        ['fw', 'hd'],
+        ['bl', 'hd'],
+      ];
+      const ROUTE = ['wp', 'fw', 'bl'];
+      const HOP = [2.3, 2.6]; // seconds per road (server ticks / 10)
+      const CLICK = 1.5, DEPART = 1.6, TRAVEL = HOP[0] + HOP[1], ARRIVE = DEPART + TRAVEL;
+      const RIM = 26;
+      function routePts() {
+        return ROUTE.map((k) => [EN[k][0], EN[k][1]]);
+      }
+      // Position after s seconds of marching (per road speed differs).
+      function posAt(s) {
+        const p = routePts();
+        if (s <= 0) return p[0];
+        if (s < HOP[0]) return pt(p[0], p[1], s / HOP[0]);
+        if (s < TRAVEL) return pt(p[1], p[2], (s - HOP[0]) / HOP[1]);
+        return p[2];
+      }
+      // Rim-trimmed polyline of the route from point `from` (default the start).
+      function routeFrom(s) {
+        const p = routePts();
+        const out = [posAt(s)];
+        if (s < HOP[0]) out.push(p[1]);
+        out.push(p[2]);
+        return out;
+      }
+      function trimEnd(pts, d) {
+        const a = pts[pts.length - 2], b = pts[pts.length - 1], L = dist(a, b);
+        return [...pts.slice(0, -1), pt(a, b, 1 - d / L)];
+      }
+      function trimStart(pts, d) {
+        const a = pts[0], b = pts[1], L = dist(a, b);
+        return [pt(a, b, d / L), ...pts.slice(1)];
+      }
+      const poly = (pts) => pts.map((p) => p.join(' ')).join(' L');
+      function etaMap() {
+        let s = '<rect width="800" height="480" fill="#3a4630"/>';
+        s += '<ellipse cx="300" cy="80" rx="190" ry="70" fill="#25392b"/><ellipse cx="520" cy="430" rx="220" ry="80" fill="#25392b"/><ellipse cx="700" cy="120" rx="140" ry="90" fill="#4a453e"/>';
+        s += '<path d="M0 0H500L520 220 470 480H0Z" fill="#5b9bff" fill-opacity=".14" stroke="#5b9bff" stroke-opacity=".7" stroke-width="2"/>';
+        s += '<path d="M800 260V480H560L600 330Z" fill="#e5484d" fill-opacity=".16" stroke="#e5484d" stroke-opacity=".7" stroke-width="2"/>';
+        for (const [a, b] of EE) {
+          const p = EN[a], q = EN[b];
+          s += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="#e6edf3" stroke-opacity=".55" stroke-width="3"/>`;
+        }
+        return s;
+      }
+      function etaNodes() {
+        let s = '';
+        for (const [x, y, name, kind] of Object.values(EN)) {
+          const fill = kind === 'own' ? '#5b9bff' : kind === 'enemy' ? '#e5484d' : '#3d434b';
+          s += `<circle cx="${x}" cy="${y}" r="${RIM - 4}" fill="#0d1117" stroke="#9da7b3" stroke-width="3"/><circle cx="${x}" cy="${y}" r="15" fill="${fill}" stroke="#f0f6fc" stroke-width="2"/>`;
+          s += `<text x="${x}" y="${y + 40}" fill="#f0f6fc" font-size="13" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#0d1117" stroke-width="3">${name}</text>`;
+        }
+        return s;
+      }
+      const tokenAt = ([x, y], ghost) =>
+        `<path d="M${x - 15} ${y - 10}h30l-15 26z" fill="${ghost ? 'none' : '#5b9bff'}" stroke="#f0f6fc" stroke-width="2.5" ${ghost ? 'stroke-dasharray="5 4" opacity=".8"' : ''}/>${ghost ? '' : `<text x="${x}" y="${y + 4}" fill="#f0f6fc" font-size="12" font-weight="700" text-anchor="middle">3</text>`}`;
+      const label = (x, y, txt, opt = {}) =>
+        `<text x="${x}" y="${y}" fill="${opt.fill || '#f0f6fc'}" font-size="${opt.size || 13}" font-weight="700" text-anchor="${opt.anchor || 'middle'}" dominant-baseline="central" paint-order="stroke" stroke="#0d1117" stroke-width="3" ${opt.rot ? `transform="rotate(${opt.rot} ${x} ${y})"` : ''}>${txt}</text>`;
+      const img = (href, x, y, w) => `<image href="${A}${href}" x="${x - w / 2}" y="${y - w / 2}" width="${w}" height="${w}"/>`;
+      // A clock glyph (the current plate).
+      const clock = (x, y, r) => `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="#f0f6fc" stroke-width="1.5"/><path d="M${x} ${y}v${-r * 0.6}M${x} ${y}l${r * 0.5} ${r * 0.2}" stroke="#f0f6fc" stroke-width="1.5" stroke-linecap="round"/>`;
+      function plate(x, y, txt, opt = {}) {
+        const w = (opt.clock ? 22 : 10) + txt.length * 7.6;
+        return `<rect x="${x - w / 2}" y="${y - 11}" width="${w}" height="22" rx="${opt.round ? 11 : 7}" fill="#0d1117" fill-opacity=".92" stroke="${opt.stroke || '#f0f6fc'}" stroke-opacity=".75" stroke-width="1.5"/>${opt.clock ? clock(x - w / 2 + 12, y, 5.2) : ''}${label(opt.clock ? x + 6 : x, y, txt)}`;
+      }
+      function midOf(pts) {
+        let L = 0;
+        for (let i = 1; i < pts.length; i++) L += dist(pts[i - 1], pts[i]);
+        let at = L / 2;
+        for (let i = 1; i < pts.length; i++) {
+          const d = dist(pts[i - 1], pts[i]);
+          if (at <= d) return { p: pt(pts[i - 1], pts[i], at / d), dx: (pts[i][0] - pts[i - 1][0]) / d, dy: (pts[i][1] - pts[i - 1][1]) / d };
+          at -= d;
+        }
+        return { p: pts[pts.length - 1], dx: 1, dy: 0 };
+      }
+      // The order ribbon after the click (the same in every variant: the client's order arrow, simplified).
+      function orderArrow(s) {
+        const pts = trimEnd(routeFrom(s), RIM + 6);
+        const b = pts[pts.length - 1], a = pts[pts.length - 2], L = dist(a, b), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L;
+        return `<path d="M${poly(pts)}" fill="none" stroke="#5b9bff" stroke-opacity=".85" stroke-width="7" stroke-linejoin="round"/><path d="M${b[0] + ux * 6} ${b[1] + uy * 6}L${b[0] - ux * 10 - uy * 9} ${b[1] - uy * 10 + ux * 9}L${b[0] - ux * 10 + uy * 9} ${b[1] - uy * 10 - ux * 9}Z" fill="#5b9bff" stroke="#f0f6fc" stroke-width="1.5"/>`;
+      }
+      const band = (pts, extra = '') =>
+        `<path d="M${poly(trimEnd(trimStart(pts, RIM + 2), RIM + 2))}" fill="none" stroke="#f0f6fc" stroke-opacity=".38" stroke-width="12" stroke-linejoin="round" ${extra}/>`;
+      const pointer = ([x, y]) => `<path d="M${x + 6} ${y + 6}l0 18 5-5 4 8 3-1.5-4-8 7 0z" fill="#f0f6fc" stroke="#0d1117" stroke-width="1.5"/>`;
+
+      // e(ctx) -> svg; ctx: {ph:'pre'|'go'|'done', rem, s, pts (remaining route), full}
+      const ETA = [
+        {
+          id: 'e0',
+          name: 'Current',
+          draw: (c) => (c.ph === 'pre' ? band(c.full) + ((m) => plate(m.p[0] - m.dy * 22, m.p[1] + m.dx * 22 - 0, `${c.rem} s`, { clock: true }))(midOf(c.full)) : ''),
+        },
+        {
+          id: 'e1',
+          name: 'Second ticks',
+          draw: (c) => {
+            let s = '';
+            for (let k = 1; k < TRAVEL; k++) {
+              if (c.ph !== 'pre' && k <= c.s) continue;
+              const p = posAt(k);
+              s += `<circle cx="${p[0]}" cy="${p[1]}" r="4.5" fill="#f0f6fc" stroke="#0d1117" stroke-width="1.5"/>`;
+            }
+            const e = EN.bl;
+            return (c.ph === 'pre' ? band(c.full, 'stroke-opacity=".25"') : '') + s + (c.ph !== 'done' ? label(e[0] + 40, e[1] - 6, `${c.rem} s`, { anchor: 'start', size: 15 }) : '');
+          },
+        },
+        {
+          id: 'e2',
+          name: 'Countdown ring',
+          draw: (c) => {
+            if (c.ph === 'done') return '';
+            const e = EN.bl, r = RIM + 9, k = c.ph === 'pre' ? 1 : Math.max(0, (ARRIVE - S.t) / TRAVEL);
+            const a = k * 2 * Math.PI, x = e[0] + r * Math.sin(a), y = e[1] - r * Math.cos(a);
+            const arc = k >= 0.999 ? `<circle cx="${e[0]}" cy="${e[1]}" r="${r}" fill="none" stroke="#f0f6fc" stroke-width="4"/>` : `<path d="M${e[0]} ${e[1] - r}A${r} ${r} 0 ${k > 0.5 ? 1 : 0} 1 ${x} ${y}" fill="none" stroke="#f0f6fc" stroke-width="4" stroke-linecap="round"/>`;
+            return `<circle cx="${e[0]}" cy="${e[1]}" r="${r}" fill="none" stroke="#0d1117" stroke-opacity=".6" stroke-width="7"/>` + arc + plate(e[0], e[1] - r - 16, `${c.rem} s`, { round: true });
+          },
+        },
+        {
+          id: 'e3',
+          name: 'March chevrons',
+          draw: (c) => {
+            if (c.ph === 'done') return '';
+            const pts = c.ph === 'pre' ? c.full : c.pts;
+            let s = '';
+            const step = 26, off = S.calm ? 0 : (S.t * 30) % step;
+            for (let i = 1; i < pts.length; i++) {
+              const a = pts[i - 1], b = pts[i], L = dist(a, b), ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L;
+              for (let d = (i === 1 ? RIM + 14 : 10) + off; d < L - (i === pts.length - 1 ? RIM + 10 : 10); d += step) {
+                const x = a[0] + ux * d, y = a[1] + uy * d;
+                s += `<path d="M${x - ux * 5 - uy * 6} ${y - uy * 5 + ux * 6}L${x + ux * 3} ${y + uy * 3}L${x - ux * 5 + uy * 6} ${y - uy * 5 - ux * 6}" fill="none" stroke="#f0f6fc" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" paint-order="stroke"/>`;
+              }
+            }
+            const e = EN.bl;
+            return s + plate(e[0], e[1] - RIM - 18, `${c.rem} s`, { round: true });
+          },
+        },
+        {
+          id: 'e4',
+          name: 'Hourglass',
+          sc: true,
+          draw: (c) => {
+            if (c.ph === 'done') return '';
+            const m = midOf(c.ph === 'pre' ? c.full : c.pts);
+            const x = m.p[0] - m.dy * 26, y = m.p[1] + m.dx * 26;
+            return (c.ph === 'pre' ? band(c.full, 'stroke-opacity=".25"') : '') + `<circle cx="${x}" cy="${y}" r="17" fill="#0d1117" fill-opacity=".9" stroke="#f0f6fc" stroke-opacity=".6"/>` + img('eta/hourglass.png', x, y, 30) + label(x + 22, y, `${c.rem} s`, { anchor: 'start' });
+          },
+        },
+        {
+          id: 'e5',
+          name: 'Ghost at target',
+          draw: (c) => {
+            if (c.ph === 'done') return '';
+            const e = EN.bl;
+            return tokenAt([e[0], e[1] - 52], true) + label(e[0] + 24, e[1] - 50, `${c.rem} s`, { anchor: 'start', size: 14 });
+          },
+        },
+        {
+          id: 'e6',
+          name: 'Hop times',
+          draw: (c) => {
+            if (c.ph === 'done') return '';
+            const f = EN.fw, e = EN.bl;
+            const tf = Math.ceil(c.ph === 'pre' ? HOP[0] : DEPART + HOP[0] - S.t);
+            let s = c.ph === 'pre' ? band(c.full, 'stroke-opacity=".25"') : '';
+            if (tf > 0) s += plate(f[0], f[1] - RIM - 14, `${tf} s`, { round: true, stroke: '#9da7b3' });
+            return s + plate(e[0], e[1] - RIM - 14, `${c.rem} s`, { round: true });
+          },
+        },
+        {
+          id: 'e7',
+          name: 'Filling road',
+          draw: (c) => {
+            const full = trimEnd(trimStart(c.full, RIM + 2), RIM + 2);
+            let s = `<path d="M${poly(full)}" fill="none" stroke="#f0f6fc" stroke-width="12" stroke-opacity=".9" stroke-linejoin="round"/><path d="M${poly(full)}" fill="none" stroke="#0d1117" stroke-width="8" stroke-opacity=".9" stroke-linejoin="round"/>`;
+            if (c.ph !== 'pre') {
+              const done = [c.full[0]];
+              if (c.s >= HOP[0]) done.push(c.full[1]);
+              done.push(posAt(c.s));
+              s += `<path d="M${poly(trimStart(done, RIM + 2))}" fill="none" stroke="#5b9bff" stroke-width="8" stroke-linejoin="round"/>`;
+            }
+            if (c.ph === 'done') return '';
+            const e = EN.bl;
+            return s + label(e[0] - 40, e[1] - 26, `${c.rem} s`, { anchor: 'end', size: 15 });
+          },
+          noArrow: true,
+        },
+        {
+          id: 'e8',
+          name: 'Group timer',
+          draw: (c) => {
+            if (c.ph === 'done') return '';
+            if (c.ph === 'pre') return band(c.full, 'stroke-opacity=".25"') + label(EN.bl[0] + 30, EN.bl[1] + 18, `${c.rem} s`, { anchor: 'start', size: 15 });
+            const g = posAt(c.s), k = (ARRIVE - S.t) / TRAVEL, r = 24, a = k * 2 * Math.PI;
+            return `<circle cx="${g[0]}" cy="${g[1]}" r="${r}" fill="none" stroke="#0d1117" stroke-opacity=".5" stroke-width="5"/><path d="M${g[0]} ${g[1] - r}A${r} ${r} 0 ${k > 0.5 ? 1 : 0} 1 ${g[0] + r * Math.sin(a)} ${g[1] - r * Math.cos(a)}" fill="none" stroke="#f0f6fc" stroke-width="3" stroke-linecap="round"/>` + label(g[0] + 30, g[1] - 18, `${c.rem} s`, { anchor: 'start' });
+          },
+        },
+        {
+          id: 'e9',
+          name: 'Road sign',
+          draw: (c) => {
+            if (c.ph === 'done') return '';
+            const pts = c.ph === 'pre' ? c.full : c.pts;
+            const m = midOf(pts);
+            let rot = (Math.atan2(m.dy, m.dx) * 180) / Math.PI;
+            if (rot > 90 || rot < -90) rot += 180;
+            return (c.ph === 'pre' ? band(c.full, 'stroke-dasharray="2 10" stroke-linecap="round" stroke-opacity=".8"') : '') + `<g transform="rotate(${rot} ${m.p[0]} ${m.p[1]})"><rect x="${m.p[0] - 22}" y="${m.p[1] - 10}" width="44" height="20" rx="3" fill="#0d1117" stroke="#f0f6fc" stroke-width="1.5"/></g>` + label(m.p[0], m.p[1], `${c.rem} s`, { rot });
+          },
+        },
+        {
+          id: 'e10',
+          name: 'Stopwatch',
+          sc: true,
+          draw: (c) => {
+            if (c.ph === 'done') return '';
+            const m = midOf(c.ph === 'pre' ? c.full : c.pts);
+            const x = m.p[0] - m.dy * 26, y = m.p[1] + m.dx * 26;
+            return `<rect x="${x - 18}" y="${y - 16}" width="62" height="32" rx="16" fill="#0d1117" fill-opacity=".9" stroke="#f0f6fc" stroke-opacity=".6"/>` + img('eta/stopwatch.png', x, y, 28) + label(x + 24, y, `${c.rem}`, { size: 15 });
+          },
+        },
+      ];
+      function etaScene(v) {
+        const t = S.t;
+        const ph = t < CLICK ? 'pre' : t < ARRIVE ? 'go' : 'done';
+        const s = Math.max(0, t - DEPART);
+        const rem = ph === 'pre' ? Math.ceil(TRAVEL) : Math.max(0, Math.ceil(ARRIVE - t - 1e-6));
+        const c = { ph, rem, s, pts: routeFrom(s), full: routePts() };
+        let out = etaMap();
+        if (ph === 'go' && !v.noArrow) out += orderArrow(s);
+        out += etaNodes();
+        out += v.draw(c);
+        out += tokenAt(ph === 'pre' ? EN.wp : posAt(s));
+        if (ph === 'pre') out += pointer(EN.bl);
+        return out;
+      }
+
+      // ---------- (3) the city radial menu ----------
+      const R = (x, y, w, h, extra = '') => `<rect x="${x}" y="${y}" width="${w}" height="${h}" ${extra}/>`;
+      const P = (d, extra = '') => `<path d="${d}" ${extra}/>`;
+      const C = (x, y, r) => `<circle cx="${x}" cy="${y}" r="${r}"/>`;
+      const SV = {
+        battery: R(7, 6, 10, 15, 'rx="2"') + P('M10 3h4v3h-4z') + P('M12 11v6') + P('M9 14h6'),
+        house: P('M3.5 11 12 4l8.5 7') + P('M5.5 9.5V20h13V9.5') + P('M10 20v-5.5h4V20'),
+        squares3: R(8.5, 3.5, 7, 7) + R(3.5, 13.5, 7, 7) + R(13.5, 13.5, 7, 7),
+        unitPlus: P('M3 5h13l-6.5 12z') + P('M19 14v7M15.5 17.5h7'),
+        houseUnit: P('M3.5 11 12 4l8.5 7') + P('M5.5 9.5V20h13V9.5') + P('M9 13h6l-3 5.5z'),
+        barUp: R(2.5, 14.5, 5.5, 5.5, 'fill="currentColor"') + R(9.25, 14.5, 5.5, 5.5, 'fill="currentColor"') + R(16, 14.5, 5.5, 5.5, 'stroke-dasharray="1.8 1.6"') + P('M12 10.5V3M8.5 6.5 12 3l3.5 3.5'),
+        queuedUnit: R(3, 3, 18, 18, 'rx="2" stroke-dasharray="3 2.5"') + P('M7 8h10l-5 9z', 'fill="currentColor"'),
+        userPlus: P('M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2') + C(8.5, 7, 4) + P('M19 8v6M22 11h-6'),
+        crateUp: R(3.5, 11, 17, 10, 'rx="1"') + P('M3.5 15h17') + P('M12 2v6M9 5l3-3 3 3'),
+        twoUnits: P('M2 6h9l-4.5 8.5z', 'fill="currentColor"') + P('M13 6h9l-4.5 8.5z', 'stroke-dasharray="2.5 2"') + P('M17.5 17v5M15 19.5h5'),
+        gate: P('M4 21V9l8-5 8 5v12') + P('M9 21v-6a3 3 0 0 1 6 0v6'),
+        cellBar: R(2.5, 9.5, 5, 5, 'fill="currentColor"') + R(9.5, 9.5, 5, 5, 'fill="currentColor"') + R(16.5, 9.5, 5, 5, 'stroke-dasharray="1.6 1.4"') + P('M19 18v-3M2 19.5h20'),
+        spearPlus: P('M4 20 16 8') + P('M16 8l1-5 4 4-5 1z') + P('M6 12v6M3 15h6'),
+        tent: P('M3 20 12 5l9 15z') + P('M12 20l-2.5-6h5z') + P('M2 20h20'),
+        crate: R(4, 6, 16, 14, 'rx="1"') + P('M4 10h16M9 6v4M15 6v4') + P('M12 13v4'),
+      };
+      // [id, name, recruit, barracks, warehouse]; a string ending in .png is a SpriteCook icon.
+      const MENU = [
+        ['c', 'Current', 'battery', 'house', 'squares3'],
+        ['r1', 'Unit + bar', 'unitPlus', 'houseUnit', 'barUp'],
+        ['r2', 'Soldier', 'recruit/soldier-plus.png', 'city/bk-hall.png', 'city/wh-rack.png'],
+        ['r3', 'Helmet', 'recruit/helmet-plus.png', 'city/bk-fort.png', 'city/wh-crates.png'],
+        ['r4', 'Crest', 'recruit/helmet-crest.png', 'city/bk-tent.png', 'city/wh-arrow.png'],
+        ['r5', 'Chevrons', 'recruit/chevrons.png', 'city/bk-tower.png', 'city/wh-depot.png'],
+        ['r6', 'Person +', 'userPlus', 'house', 'crateUp'],
+        ['r7', 'Two units', 'twoUnits', 'gate', 'cellBar'],
+        ['r8', 'Spear +', 'spearPlus', 'tent', 'crate'],
+        ['r9', 'Mixed', 'unitPlus', 'city/bk-hall.png', 'city/wh-rack.png'],
+        ['r10', 'Queued unit', 'queuedUnit', 'houseUnit', 'cellBar'],
+      ];
+      const SECTORS = [
+        ['Recruit', '1 CP', -90],
+        ['Barracks', '3 CP', 30],
+        ['Warehouse', '2 CP', 150],
+      ];
+      function iconSvg(name, x, y, size, color) {
+        if (name.endsWith('.png')) return img(name, x, y, size + 4);
+        return `<g transform="translate(${x - size / 2} ${y - size / 2}) scale(${size / 24})" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="${color}">${SV[name]}</g>`;
+      }
+      function sectorPath(cx, cy, r0, r1, a, half) {
+        const rad = (d) => (d * Math.PI) / 180;
+        const p = (r, d) => `${cx + r * Math.cos(rad(d))} ${cy + r * Math.sin(rad(d))}`;
+        return `M${p(r1, a - half)}A${r1} ${r1} 0 0 1 ${p(r1, a + half)}L${p(r0, a + half)}A${r0} ${r0} 0 0 0 ${p(r0, a - half)}Z`;
+      }
+      function menuScene(v, hover) {
+        const cx = 330, cy = 235;
+        let s = etaMap() + etaNodes();
+        s += `<circle cx="${cx}" cy="${cy}" r="18" fill="#5b9bff" stroke="#f0f6fc" stroke-width="3"/>`;
+        s += `<circle cx="${cx}" cy="${cy}" r="152" fill="#0d1117" fill-opacity=".35"/>`;
+        SECTORS.forEach(([name, price, a], i) => {
+          const on = i === hover;
+          s += `<path d="${sectorPath(cx, cy, 34, 150, a, 58)}" fill="${on ? '#264066' : '#161b22'}" stroke="${on ? '#f0f6fc' : '#30363d'}" stroke-width="${on ? 2.5 : 1.5}" data-sec="${i}" style="cursor:pointer"/>`;
+          const r = 92, x = cx + r * Math.cos((a * Math.PI) / 180), y = cy + r * Math.sin((a * Math.PI) / 180);
+          s += `<g pointer-events="none">${iconSvg(v[2 + i], x, y - 14, 30, '#f0f6fc')}`;
+          s += `<text x="${x}" y="${y + 16}" fill="#f0f6fc" font-size="13" font-weight="600" text-anchor="middle">${name}</text>`;
+          s += `<text x="${x}" y="${y + 32}" fill="${on ? '#d0d7de' : '#9da7b3'}" font-size="12" text-anchor="middle">${price}</text></g>`;
+        });
+        // the same icons small: 20 px on the surface (a HUD row), the small-size check
+        s += `<rect x="560" y="360" width="200" height="90" rx="10" fill="#161b22" stroke="#30363d"/>`;
+        [0, 1, 2].forEach((i) => {
+          s += iconSvg(v[2 + i], 600 + i * 60, 385, 20, '#f0f6fc');
+          s += `<rect x="${582 + i * 60}" y="402" width="36" height="36" rx="8" fill="#264066" stroke="#f0f6fc" stroke-width="2"/>` + iconSvg(v[2 + i], 600 + i * 60, 420, 24, '#f0f6fc');
+        });
+        return s;
+      }
+
+      // ---------- rendering ----------
+      const LIST = { supply: SUPPLY, eta: ETA, menu: MENU.map((m) => ({ id: m[0], name: m[1], row: m, sc: m.slice(2).some((x) => x.endsWith('.png')) })) };
+      const vById = (id) => LIST[S.el].find((v) => v.id === id) || LIST[S.el][0];
+      const hoverSec = {};
+      function svgHtml(v) {
+        const body = S.el === 'supply' ? supplyMap(S.t) : S.el === 'eta' ? etaScene(v) : menuScene(v.row, hoverSec[v.id] ?? 0);
+        return `<svg viewBox="0 0 800 480" width="800" height="480">${body}</svg>`;
+      }
+      function stageHtml(v) {
+        return svgHtml(v) + (S.el === 'supply' ? v.html() : '');
+      }
+      function shown() {
+        return S.cmp.length >= 2 ? S.cmp.map(vById) : [vById(S.v)];
+      }
+      function render() {
+        document.body.classList.toggle('gray', S.gray);
+        document.body.classList.toggle('calm', S.calm);
+        const vs = shown();
+        const view = document.getElementById('view');
+        view.className = `view n${vs.length}`;
+        view.innerHTML = vs.map((v) => `<div class="cell"><p class="cap">${v.id.toUpperCase()} · ${v.name}${v.sc ? ' · SpriteCook' : ''}</p><div class="frame"><div class="stage" data-v="${v.id}">${stageHtml(v)}</div></div></div>`).join('');
+        fit();
+        drawBars();
+        writeHash();
+      }
+      // Time-only redraw (no rebuild of the bars).
+      function tick() {
+        for (const st of document.querySelectorAll('.stage')) {
+          st.querySelector('svg').outerHTML = svgHtml(vById(st.dataset.v));
+        }
+        document.getElementById('scrub') && (document.getElementById('scrub').value = S.t);
+        const tv = document.getElementById('tval');
+        if (tv) tv.textContent = `${S.t.toFixed(1)} s`;
+      }
+      function fit() {
+        for (const f of document.querySelectorAll('.frame')) {
+          const k = f.clientWidth / 800;
+          f.firstElementChild.style.transform = `scale(${k})`;
+        }
+      }
+      function drawBars() {
+        document.getElementById('els').innerHTML = ELS.map(([id, n]) => `<button data-el="${id}" class="${S.el === id ? 'on' : ''}">${n}</button>`).join('');
+        const cmpMode = S.cmpMode;
+        document.getElementById('vars').innerHTML =
+          LIST[S.el].map((v) => `<button data-v="${v.id}" class="${(!cmpMode && S.v === v.id) || (cmpMode && S.cmp.includes(v.id)) ? 'on' : ''}" title="${v.name}">${v.id.toUpperCase()} ${v.name}</button>`).join('') +
+          `<span class="sep"></span><button data-cmp class="${cmpMode ? 'cmp-on on' : ''}" title="Pick 2 to 4 variants">Compare</button>`;
+        const timed = S.el !== 'menu';
+        document.getElementById('ctl').innerHTML =
+          (timed ? `<button data-play aria-label="Play or pause">${S.play ? '❚❚' : '▶'}</button><input id="scrub" type="range" min="0" max="${T_LOOP}" step="0.05" value="${S.t}" aria-label="Time"><span id="tval">${S.t.toFixed(1)} s</span><span class="sep"></span>` : '') +
+          `<label class="opt"><input type="checkbox" data-gray ${S.gray ? 'checked' : ''}> grayscale</label>` +
+          (timed ? `<label class="opt"><input type="checkbox" data-calm ${S.calm ? 'checked' : ''}> reduced motion</label>` : '') +
+          (S.el === 'supply' ? `<label class="opt"><input type="checkbox" data-pick ${S.pick ? 'checked' : ''}> picking a transfer</label>` : '');
+      }
+      function writeHash() {
+        const p = new URLSearchParams({ el: S.el, v: S.v, t: S.t.toFixed(2), rm: S.rm });
+        if (S.cmp.length) p.set('cmp', S.cmp.join(','));
+        if (S.gray) p.set('gray', '1');
+        if (S.calm) p.set('calm', '1');
+        if (S.pick) p.set('pick', '1');
+        history.replaceState(null, '', '#' + p.toString());
+      }
+      function readHash() {
+        const p = new URLSearchParams(location.hash.slice(1));
+        if (p.has('el') && LIST[p.get('el')]) S.el = p.get('el');
+        if (p.has('v')) S.v = p.get('v');
+        if (p.has('t')) {
+          S.t = +p.get('t');
+          S.play = false;
+        }
+        if (p.has('rm')) S.rm = Math.max(0, Math.min(8, +p.get('rm')));
+        S.cmp = [];
+        S.cmpMode = false;
+        if (p.has('cmp')) {
+          S.cmp = p.get('cmp').split(',').slice(0, 4);
+          S.cmpMode = S.cmp.length > 0;
+        }
+        S.gray = p.get('gray') === '1';
+        S.calm = p.get('calm') === '1';
+        S.pick = p.get('pick') === '1';
+      }
+
+      // ---------- events ----------
+      document.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-el],[data-v],[data-cmp],[data-play],[data-rm],[data-rmd],[data-rmv],[data-legend],[data-knob],[data-sec]');
+        if (!b) return;
+        const d = b.dataset;
+        if (d.el) {
+          S.el = d.el;
+          S.v = LIST[S.el][0].id;
+          S.cmp = [];
+          S.cmpMode = false;
+        } else if (d.v !== undefined && b.tagName === 'BUTTON') {
+          if (S.cmpMode) {
+            S.cmp = S.cmp.includes(d.v) ? S.cmp.filter((x) => x !== d.v) : [...S.cmp, d.v].slice(-4);
+          } else S.v = d.v;
+        } else if (d.cmp !== undefined) {
+          S.cmpMode = !S.cmpMode;
+          S.cmp = S.cmpMode ? [S.v] : [];
+        } else if (d.play !== undefined) S.play = !S.play;
+        else if (d.rm) S.rm = S.rm === +d.rm ? +d.rm - 1 : +d.rm;
+        else if (d.rmd) S.rm = Math.max(0, Math.min(8, S.rm + +d.rmd));
+        else if (d.rmv) S.rm = +d.rmv;
+        else if (d.legend !== undefined) S.legend = !S.legend;
+        else if (d.knob !== undefined) S.rm = (S.rm + 1) % 9;
+        else if (d.sec) {
+          const st = b.closest('.stage');
+          hoverSec[st.dataset.v] = +d.sec;
+        }
+        if (d.rm || d.rmd || d.rmv) {
+          S.rmAt = performance.now();
+          setTimeout(render, 2600);
+        }
+        render();
+      });
+      document.addEventListener('mouseover', (e) => {
+        const sec = e.target.closest('[data-sec]');
+        if (!sec) return;
+        const id = sec.closest('.stage').dataset.v;
+        if (hoverSec[id] !== +sec.dataset.sec) {
+          hoverSec[id] = +sec.dataset.sec;
+          tick();
+        }
+      });
+      document.addEventListener('input', (e) => {
+        const d = e.target.dataset;
+        if (e.target.id === 'scrub') {
+          S.t = +e.target.value;
+          S.play = false;
+          document.querySelector('[data-play]').textContent = '▶';
+          tick();
+          writeHash();
+        } else if (d.rmr !== undefined) {
+          S.rm = +e.target.value;
+          render();
+        }
+      });
+      document.addEventListener('change', (e) => {
+        const d = e.target.dataset;
+        if (d.gray !== undefined) S.gray = e.target.checked;
+        else if (d.calm !== undefined) S.calm = e.target.checked;
+        else if (d.pick !== undefined) S.pick = e.target.checked;
+        else return;
+        render();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (S.el !== 'supply') return;
+        if (e.key === '[') S.rm = Math.max(0, S.rm - 1);
+        else if (e.key === ']') S.rm = Math.min(8, S.rm + 1);
+        else return;
+        S.rmAt = performance.now();
+        setTimeout(render, 2600);
+        render();
+      });
+      addEventListener('resize', fit);
+      addEventListener('hashchange', () => {
+        readHash();
+        render();
+      });
+      let last = performance.now();
+      function frame(now) {
+        const dt = (now - last) / 1000;
+        last = now;
+        if (S.play && S.el !== 'menu') {
+          S.t = (S.t + dt) % T_LOOP;
+          tick();
+        }
+        requestAnimationFrame(frame);
+      }
+      readHash();
+      render();
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>
