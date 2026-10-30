@@ -41,6 +41,7 @@ export const DOCK_SCENE_IDS = [
   'bot-error',
   'password-set',
   'password-change',
+  'howto',
 ] as const;
 
 export const MENU_SCENE_IDS = [

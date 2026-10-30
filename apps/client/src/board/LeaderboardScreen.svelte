@@ -39,6 +39,7 @@
     onlobby: () => void;
     onreplays: () => void;
     onboard: () => void;
+    onhowto: () => void;
     onpassword: () => void;
     onlogout: () => void;
   }
@@ -63,6 +64,7 @@
     onlobby,
     onreplays,
     onboard,
+    onhowto,
     onpassword,
     onlogout,
   }: Props = $props();
@@ -98,6 +100,7 @@
     { id: 'lobby', icon: 'users', label: t('menu.lobby'), key: 'L', go: onlobby },
     { id: 'replays', icon: 'history', label: t('menu.replays'), key: 'R', go: onreplays },
     { id: 'board', icon: 'trophy', label: t('menu.leaderboard'), key: 'T', go: onboard },
+    { id: 'howto', icon: 'info', label: t('help.howTo'), key: 'H', go: onhowto },
   ] as const);
   const current = $derived(mode === 'history' ? 'replays' : 'board');
 

@@ -21,6 +21,8 @@
     onreplays: () => void;
     onboard: () => void;
     onbot: () => void;
+    /** The row "How to play" (H, CLI-13): open even while a match runs, reading changes nothing. */
+    onhowto: () => void;
     /** The account has a password; without one the way out warns that the account is lost. */
     hasPassword: boolean;
     /** Calibration progress of the account (DEC-34), null for a guest or once it is over. */
@@ -48,6 +50,7 @@
     onreplays,
     onboard,
     onbot,
+    onhowto,
     hasPassword,
     calibration = null,
     rating = null,
@@ -83,6 +86,7 @@
     { icon: 'users', label: t('menu.lobby'), key: 'L', go: onlobby },
     { icon: 'history', label: t('menu.replays'), key: 'R', go: onreplays },
     { icon: 'trophy', label: t('menu.leaderboard'), key: 'T', go: onboard },
+    { icon: 'info', label: t('help.howTo'), key: 'H', go: onhowto, always: true },
   ] as const);
 
   const primary = $derived(hasActiveMatch ? onresume : banned ? null : onqueue);
@@ -100,9 +104,8 @@
       event.preventDefault();
       return;
     }
-    if (hasActiveMatch) return;
     const mode = modes.find((m) => m.key.toLowerCase() === event.key.toLowerCase());
-    if (mode === undefined) return;
+    if (mode === undefined || (hasActiveMatch && !('always' in mode))) return;
     mode.go();
     event.preventDefault();
   }
@@ -157,7 +160,7 @@
       <button
         type="button"
         class="row"
-        disabled={hasActiveMatch}
+        disabled={hasActiveMatch && !('always' in mode)}
         aria-keyshortcuts={mode.key}
         onclick={mode.go}
       >

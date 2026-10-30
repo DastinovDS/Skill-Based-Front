@@ -34,6 +34,7 @@ describe('MenuScreen', () => {
         | 'onreplays'
         | 'onboard'
         | 'onbot'
+        | 'onhowto'
         | 'onpassword'
         | 'onlogout',
         () => void
@@ -54,6 +55,7 @@ describe('MenuScreen', () => {
         onreplays: h.onreplays ?? vi.fn(),
         onboard: h.onboard ?? vi.fn(),
         onbot: h.onbot ?? vi.fn(),
+        onhowto: h.onhowto ?? vi.fn(),
         hasPassword: options.hasPassword ?? false,
         calibration: options.calibration ?? null,
         rating: options.rating ?? null,
@@ -100,6 +102,14 @@ describe('MenuScreen', () => {
     expect(named('menu.lobby')).toBeTruthy();
     expect(named('menu.replays')).toBeTruthy();
     expect(named('menu.leaderboard')).toBeTruthy();
+  });
+
+  it('opens How to play with H, also while a match runs (CLI-13)', () => {
+    const onhowto = vi.fn();
+    render({ hasActiveMatch: true, handlers: { onhowto } });
+    press('h');
+    named('help.howTo')?.click();
+    expect(onhowto).toHaveBeenCalledTimes(2);
   });
 
   it('opens Replays and the Leaderboard with R and T', () => {

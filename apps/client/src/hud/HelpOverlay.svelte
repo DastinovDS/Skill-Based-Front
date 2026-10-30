@@ -3,6 +3,7 @@
   import { t, tf } from '../i18n/index.ts';
   import { sound } from '../audio/soundState.svelte.ts';
   import './dialog.css';
+  import HowToPlay from '../howto/HowToPlay.svelte';
   import Icon from './Icon.svelte';
   import Slider from './Slider.svelte';
 
@@ -16,6 +17,13 @@
   let { open, onclose, captureCost = 0 }: Props = $props();
 
   let close: HTMLButtonElement | undefined = $state();
+  /** The rules page replaces the keys inside the sheet; the match runs on under it (nothing pauses). */
+  let page = $state(false);
+
+  // A reopened help starts with the keys again.
+  $effect(() => {
+    if (!open) page = false;
+  });
 
   $effect(() => {
     if (open) void tick().then(() => close?.focus());
@@ -48,7 +56,7 @@
   <div class="backdrop">
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-title">
       <header>
-        <h2 id="help-title">{t('help.title')}</h2>
+        <h2 id="help-title">{page ? t('help.howTo') : t('help.title')}</h2>
         <button
           type="button"
           class="close"
@@ -59,113 +67,135 @@
           <Icon name="x" />
         </button>
       </header>
-      <div class="columns">
-        <section aria-labelledby="help-legend">
-          <h3 id="help-legend">{t('help.legend')}</h3>
-          <ul class="legend">
-            <li>
-              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                <path d="M3 3h22L14 21z" class="you" />
-              </svg>
-              {t('help.legend.mine')}
-            </li>
-            <li>
-              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                <path d="M3 3h22L14 21z" class="enemy" />
-                <path d="M8.5 6.5h11L14 15.5z" class="inner" />
-              </svg>
-              {t('help.legend.enemy')}
-            </li>
-            <li>
-              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                <path d="M3 3h22L14 21z" class="you" />
-                <path d="M8.5 6.5h11L14 15.5z" class="fill" />
-              </svg>
-              {t('help.legend.charge')}
-            </li>
-            <li>
-              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                <path d="M2 12h20" class="thin" />
-                <path d="M18 7l6 5-6 5" class="thin" />
-              </svg>
-              {t('help.legend.order')}
-            </li>
-            <li>
-              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                <path d="M2 8h16l6 4-6 4H2z" class="ribbon" />
-              </svg>
-              {t('help.legend.planned')}
-            </li>
-            <li>
-              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                <circle cx="14" cy="12" r="8" class="alertring" />
-              </svg>
-              {t('help.legend.alert')}
-            </li>
-            <li>
-              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                <path d="M2 4h10l-5 9z" class="you" />
-                <path d="M16 4h10l-5 9z" class="thin" />
-                <path d="M2 15h10l-5 8z" class="dashed" />
-              </svg>
-              {t('help.legend.chips')}
-            </li>
-            <li>
-              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                <path d="M14 4l8 8-8 8-8-8z" class="thin" />
-              </svg>
-              {t('help.legend.stock')}
-            </li>
-            <li>
-              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                <circle cx="14" cy="12" r="7" class="silent" />
-                <path d="M9 17L19 7" class="silent" />
-              </svg>
-              {t('help.legend.silent')}
-            </li>
-            <li>
-              <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
-                <path d="M2 18q12-18 20-6" class="dashed" />
-                <path d="M22 12l-3 -4 -3 4 3 4z" class="thin" />
-              </svg>
-              {t('help.legend.bonusShot')}
-            </li>
-          </ul>
+      {#if page}
+        <div class="howto">
+          <HowToPlay />
           <p class="link">
-            <button type="button" class="dlg-btn" disabled aria-disabled="true">
-              <Icon name="info" size={18} />{t('help.howTo')}
-              <span class="soon">{t('help.howToSoon')}</span>
+            <button
+              type="button"
+              class="dlg-btn"
+              onclick={() => {
+                page = false;
+              }}
+            >
+              {t('help.howToBack')}
             </button>
           </p>
-        </section>
-        <section aria-labelledby="help-keys">
-          <h3 id="help-keys">{t('help.keys')}</h3>
-          <dl class="keys">
-            {#each KEYS as [label, text] (text)}
-              <dt><kbd>{label}</kbd></dt>
-              <dd>{t(text)}</dd>
-            {/each}
-          </dl>
-          <p class="note">{t('help.camera')}</p>
-          {#if captureCost > 0}
-            <p class="note">{tf('help.capture', { n: captureCost })}</p>
-          {/if}
-          <div class="volume">
-            <span>{t('help.volume')}</span>
-            <Slider
-              value={sound.volume}
-              min={0}
-              max={100}
-              step={5}
-              label={t('help.volume')}
-              oninput={(n: number) => {
-                sound.setVolume(n);
-              }}
-            />
-            <span class="percent">{sound.volume}%</span>
-          </div>
-        </section>
-      </div>
+        </div>
+      {:else}
+        <div class="columns">
+          <section aria-labelledby="help-legend">
+            <h3 id="help-legend">{t('help.legend')}</h3>
+            <ul class="legend">
+              <li>
+                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                  <path d="M3 3h22L14 21z" class="you" />
+                </svg>
+                {t('help.legend.mine')}
+              </li>
+              <li>
+                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                  <path d="M3 3h22L14 21z" class="enemy" />
+                  <path d="M8.5 6.5h11L14 15.5z" class="inner" />
+                </svg>
+                {t('help.legend.enemy')}
+              </li>
+              <li>
+                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                  <path d="M3 3h22L14 21z" class="you" />
+                  <path d="M8.5 6.5h11L14 15.5z" class="fill" />
+                </svg>
+                {t('help.legend.charge')}
+              </li>
+              <li>
+                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                  <path d="M2 12h20" class="thin" />
+                  <path d="M18 7l6 5-6 5" class="thin" />
+                </svg>
+                {t('help.legend.order')}
+              </li>
+              <li>
+                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                  <path d="M2 8h16l6 4-6 4H2z" class="ribbon" />
+                </svg>
+                {t('help.legend.planned')}
+              </li>
+              <li>
+                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                  <circle cx="14" cy="12" r="8" class="alertring" />
+                </svg>
+                {t('help.legend.alert')}
+              </li>
+              <li>
+                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                  <path d="M2 4h10l-5 9z" class="you" />
+                  <path d="M16 4h10l-5 9z" class="thin" />
+                  <path d="M2 15h10l-5 8z" class="dashed" />
+                </svg>
+                {t('help.legend.chips')}
+              </li>
+              <li>
+                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                  <path d="M14 4l8 8-8 8-8-8z" class="thin" />
+                </svg>
+                {t('help.legend.stock')}
+              </li>
+              <li>
+                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                  <circle cx="14" cy="12" r="7" class="silent" />
+                  <path d="M9 17L19 7" class="silent" />
+                </svg>
+                {t('help.legend.silent')}
+              </li>
+              <li>
+                <svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">
+                  <path d="M2 18q12-18 20-6" class="dashed" />
+                  <path d="M22 12l-3 -4 -3 4 3 4z" class="thin" />
+                </svg>
+                {t('help.legend.bonusShot')}
+              </li>
+            </ul>
+            <p class="link">
+              <button
+                type="button"
+                class="dlg-btn"
+                onclick={() => {
+                  page = true;
+                }}
+              >
+                <Icon name="info" size={18} />{t('help.howTo')}
+              </button>
+            </p>
+          </section>
+          <section aria-labelledby="help-keys">
+            <h3 id="help-keys">{t('help.keys')}</h3>
+            <dl class="keys">
+              {#each KEYS as [label, text] (text)}
+                <dt><kbd>{label}</kbd></dt>
+                <dd>{t(text)}</dd>
+              {/each}
+            </dl>
+            <p class="note">{t('help.camera')}</p>
+            {#if captureCost > 0}
+              <p class="note">{tf('help.capture', { n: captureCost })}</p>
+            {/if}
+            <div class="volume">
+              <span>{t('help.volume')}</span>
+              <Slider
+                value={sound.volume}
+                min={0}
+                max={100}
+                step={5}
+                label={t('help.volume')}
+                oninput={(n: number) => {
+                  sound.setVolume(n);
+                }}
+              />
+              <span class="percent">{sound.volume}%</span>
+            </div>
+          </section>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -352,16 +382,8 @@
     margin-top: 12px;
   }
 
-  /* "Coming soon" is a visible chip, not a tooltip a disabled button never shows. */
-  .soon {
-    display: inline-flex;
-    align-items: center;
-    height: 22px;
-    padding: 0 9px;
-    border: 1px solid var(--border);
-    border-radius: 11px;
-    font-size: 12px;
-    color: var(--text-dim);
+  .howto {
+    margin-top: 12px;
   }
 
   .keys {

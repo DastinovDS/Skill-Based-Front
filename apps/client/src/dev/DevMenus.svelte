@@ -40,6 +40,7 @@
     onlobby: nothing,
     onreplays: nothing,
     onboard: nothing,
+    onhowto: nothing,
     onbot: nothing,
     onpassword: nothing,
     onlogout: nothing,
@@ -84,6 +85,7 @@
     onlobby={nothing}
     onreplays={nothing}
     onboard={nothing}
+    onhowto={nothing}
     onpassword={nothing}
     onlogout={nothing}
   />

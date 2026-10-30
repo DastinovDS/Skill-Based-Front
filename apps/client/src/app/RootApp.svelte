@@ -16,6 +16,7 @@
   import MatchScreen from './MatchScreen.svelte';
   import MenuScreen from './MenuScreen.svelte';
   import PasswordScreen from './PasswordScreen.svelte';
+  import HowToScreen from './HowToScreen.svelte';
   import QueueScreen from './QueueScreen.svelte';
   import type { MatchSummary } from './matchSummary.ts';
   import ResultScreen from './ResultScreen.svelte';
@@ -67,6 +68,9 @@
       },
       onboard: () => {
         app.openBoard('board');
+      },
+      onhowto: () => {
+        app.go({ name: 'howto' });
       },
       onmenu: () => {
         app.menu();
@@ -122,6 +126,9 @@
     }}
     onbot={() => {
       app.go({ name: 'bot' });
+    }}
+    onhowto={() => {
+      app.go({ name: 'howto' });
     }}
     hasPassword={guest.hasPassword}
     onpassword={() => {
@@ -180,6 +187,13 @@
       app.menu();
     }}
   />
+{:else if screen.name === 'howto'}
+  <HowToScreen
+    dock={dockOf(guest)}
+    onback={() => {
+      app.menu();
+    }}
+  />
 {:else if screen.name === 'leaderboard'}
   <!-- The Leaderboard (T) and Replays (R) rows are one screen in two modes: a switch starts over. -->
   {#key screen.mode}
@@ -217,6 +231,9 @@
       }}
       onboard={() => {
         app.openBoard('board');
+      }}
+      onhowto={() => {
+        app.go({ name: 'howto' });
       }}
       onpassword={() => {
         app.go({ name: 'password' });

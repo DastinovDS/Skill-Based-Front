@@ -1,0 +1,381 @@
+{
+  "generated_by": "scripts/export_howto.py (mise run regen:howto), do not edit",
+  "ruleset": "mvp-2",
+  "ruleset_hash": "9d8cc4dd4b48572ad2be415c2fcc4d4c",
+  "sim_version": 25,
+  "rules": {
+    "round_seconds": 2,
+    "planned_delay_seconds": 3,
+    "planned_bonus_per_road": 1,
+    "defense_seconds_per_bonus": 6,
+    "cost_move_cp": 1,
+    "cost_planned_cp": 2,
+    "cost_defense_cp": 2,
+    "stance_charges_pct": {
+      "economy": 60,
+      "balance": 50,
+      "war": 40
+    },
+    "vp_period_seconds": 30,
+    "capital_multiplier": 3,
+    "match_minutes": 15
+  },
+  "examples": [
+    {
+      "id": "equal",
+      "vector": 1,
+      "terrain": "forest",
+      "bonus_start": {
+        "a": 0,
+        "b": 0
+      },
+      "start": {
+        "a": {
+          "units": 2,
+          "charged": 2
+        },
+        "b": {
+          "units": 2,
+          "charged": 2
+        }
+      },
+      "rounds": [
+        {
+          "round": 1,
+          "after_ticks": 20,
+          "after_seconds": 2,
+          "a": {
+            "units": 2,
+            "charged": 1
+          },
+          "b": {
+            "units": 2,
+            "charged": 1
+          },
+          "bonus_left": {
+            "a": 0,
+            "b": 0
+          }
+        },
+        {
+          "round": 2,
+          "after_ticks": 40,
+          "after_seconds": 4,
+          "a": {
+            "units": 2,
+            "charged": 0
+          },
+          "b": {
+            "units": 2,
+            "charged": 0
+          },
+          "bonus_left": {
+            "a": 0,
+            "b": 0
+          }
+        }
+      ],
+      "end": {
+        "after_ticks": 40,
+        "a": {
+          "units": 2,
+          "charged": 0
+        },
+        "b": {
+          "units": 2,
+          "charged": 0
+        },
+        "node_taken": false,
+        "attack_bounces": true,
+        "losses": {
+          "a": 0,
+          "b": 0
+        }
+      }
+    },
+    {
+      "id": "surplus",
+      "vector": 3,
+      "terrain": "forest",
+      "bonus_start": {
+        "a": 0,
+        "b": 0
+      },
+      "start": {
+        "a": {
+          "units": 4,
+          "charged": 4
+        },
+        "b": {
+          "units": 2,
+          "charged": 2
+        }
+      },
+      "rounds": [
+        {
+          "round": 1,
+          "after_ticks": 20,
+          "after_seconds": 2,
+          "a": {
+            "units": 4,
+            "charged": 3
+          },
+          "b": {
+            "units": 2,
+            "charged": 1
+          },
+          "bonus_left": {
+            "a": 0,
+            "b": 0
+          }
+        },
+        {
+          "round": 2,
+          "after_ticks": 40,
+          "after_seconds": 4,
+          "a": {
+            "units": 4,
+            "charged": 2
+          },
+          "b": {
+            "units": 2,
+            "charged": 0
+          },
+          "bonus_left": {
+            "a": 0,
+            "b": 0
+          }
+        },
+        {
+          "round": 3,
+          "after_ticks": 60,
+          "after_seconds": 6,
+          "a": {
+            "units": 4,
+            "charged": 1
+          },
+          "b": {
+            "units": 1,
+            "charged": 0
+          },
+          "bonus_left": {
+            "a": 0,
+            "b": 0
+          }
+        },
+        {
+          "round": 4,
+          "after_ticks": 80,
+          "after_seconds": 8,
+          "a": {
+            "units": 4,
+            "charged": 0
+          },
+          "b": {
+            "units": 0,
+            "charged": 0
+          },
+          "bonus_left": {
+            "a": 0,
+            "b": 0
+          }
+        }
+      ],
+      "end": {
+        "after_ticks": 80,
+        "a": {
+          "units": 4,
+          "charged": 0
+        },
+        "b": {
+          "units": 0,
+          "charged": 0
+        },
+        "node_taken": true,
+        "attack_bounces": false,
+        "losses": {
+          "a": 0,
+          "b": 2
+        }
+      }
+    },
+    {
+      "id": "defenseless",
+      "vector": 7,
+      "terrain": "mountains",
+      "bonus_start": {
+        "a": 0,
+        "b": 0
+      },
+      "start": {
+        "a": {
+          "units": 2,
+          "charged": 2
+        },
+        "b": {
+          "units": 3,
+          "charged": 0
+        }
+      },
+      "rounds": [
+        {
+          "round": 1,
+          "after_ticks": 20,
+          "after_seconds": 2,
+          "a": {
+            "units": 2,
+            "charged": 1
+          },
+          "b": {
+            "units": 2,
+            "charged": 0
+          },
+          "bonus_left": {
+            "a": 0,
+            "b": 0
+          }
+        },
+        {
+          "round": 2,
+          "after_ticks": 40,
+          "after_seconds": 4,
+          "a": {
+            "units": 2,
+            "charged": 0
+          },
+          "b": {
+            "units": 1,
+            "charged": 0
+          },
+          "bonus_left": {
+            "a": 0,
+            "b": 0
+          }
+        }
+      ],
+      "end": {
+        "after_ticks": 40,
+        "a": {
+          "units": 2,
+          "charged": 0
+        },
+        "b": {
+          "units": 1,
+          "charged": 0
+        },
+        "node_taken": false,
+        "attack_bounces": true,
+        "losses": {
+          "a": 0,
+          "b": 2
+        }
+      }
+    },
+    {
+      "id": "planned",
+      "vector": 9,
+      "terrain": "forest",
+      "bonus_start": {
+        "a": 2,
+        "b": 0
+      },
+      "start": {
+        "a": {
+          "units": 2,
+          "charged": 2
+        },
+        "b": {
+          "units": 2,
+          "charged": 2
+        }
+      },
+      "rounds": [
+        {
+          "round": 1,
+          "after_ticks": 20,
+          "after_seconds": 2,
+          "a": {
+            "units": 2,
+            "charged": 2
+          },
+          "b": {
+            "units": 2,
+            "charged": 1
+          },
+          "bonus_left": {
+            "a": 1,
+            "b": 0
+          }
+        },
+        {
+          "round": 2,
+          "after_ticks": 40,
+          "after_seconds": 4,
+          "a": {
+            "units": 2,
+            "charged": 2
+          },
+          "b": {
+            "units": 2,
+            "charged": 0
+          },
+          "bonus_left": {
+            "a": 0,
+            "b": 0
+          }
+        },
+        {
+          "round": 3,
+          "after_ticks": 60,
+          "after_seconds": 6,
+          "a": {
+            "units": 2,
+            "charged": 1
+          },
+          "b": {
+            "units": 1,
+            "charged": 0
+          },
+          "bonus_left": {
+            "a": 0,
+            "b": 0
+          }
+        },
+        {
+          "round": 4,
+          "after_ticks": 80,
+          "after_seconds": 8,
+          "a": {
+            "units": 2,
+            "charged": 0
+          },
+          "b": {
+            "units": 0,
+            "charged": 0
+          },
+          "bonus_left": {
+            "a": 0,
+            "b": 0
+          }
+        }
+      ],
+      "end": {
+        "after_ticks": 80,
+        "a": {
+          "units": 2,
+          "charged": 0
+        },
+        "b": {
+          "units": 0,
+          "charged": 0
+        },
+        "node_taken": true,
+        "attack_bounces": false,
+        "losses": {
+          "a": 0,
+          "b": 2
+        }
+      }
+    }
+  ]
+}

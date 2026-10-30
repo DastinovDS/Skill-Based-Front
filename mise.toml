@@ -199,9 +199,16 @@ run = [
   "pnpm --silent -C apps/client gen:api",
 ]
 
+[tasks."regen:howto"]
+description = "Regenerate the combat examples of the How to play screen (played through gow_sim under rulesets/mvp-2.toml)"
+run = [
+  "uv run python scripts/export_howto.py",
+  "pnpm --silent -C apps/client exec prettier --write src/howto/combatExamples.gen.json",
+]
+
 [tasks.regen]
-description = "Regenerate protocol and API types"
-depends = ["regen:protocol", "regen:api"]
+description = "Regenerate protocol and API types, and the combat examples of the How to play screen"
+depends = ["regen:protocol", "regen:api", "regen:howto"]
 
 [tasks."db:migrate"]
 description = "Apply Alembic migrations (the server also does it at startup)"

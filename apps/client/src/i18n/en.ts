@@ -488,7 +488,54 @@ export const en = {
   'help.legend.bonusShot':
     'A dashed arrow with a diamond and the caption "bonus attack": a bonus shot fired this round',
   'help.howTo': 'How to play',
-  'help.howToSoon': 'Coming soon',
+  'help.howToBack': 'Back to the keys',
+  // The "How to play" screen (CLI-13, #72); the numbers come from the played ruleset.
+  'howto.eyebrow': 'The rules in two minutes',
+  'howto.charges.title': 'Charges',
+  'howto.charges.text':
+    'Every unit is a battery, charged or empty. Your capital turns command points into charges. Your stance sets how many: {economy}% in Economy, {balance}% in Balance, {war}% in War. The rest stays command points for orders.',
+  'howto.roads.title': 'Roads',
+  'howto.roads.text':
+    'Roads carry charges from the capital to the warehouses of your cities, and units there recharge. Cut a road and the cities behind it stop refilling.',
+  'howto.pic.supply':
+    'The capital sends charges along a road to a city, where the unit is charged. Behind a cut road the unit in the other city is empty.',
+  'howto.fight.title': 'Fights',
+  'howto.fight.text':
+    'A fight runs in rounds of {seconds} s. Each round both sides fire one shot and spend one charge. A shot cancels an enemy charge. If the enemy has none, it kills one unit.',
+  'howto.fight.bounce':
+    'An attack that does not win the place turns back, discharged. Equal charges mean a bounce.',
+  'howto.fight.legend':
+    'Blue attacks, red defends. Filled: charged. Empty: no charge. Dashed: fallen. A diamond is a bonus shot.',
+  'howto.col.attack': 'You attack',
+  'howto.col.defense': 'They defend',
+  'howto.ex.equal.title': 'Equal charges',
+  'howto.ex.equal.why': 'Every shot meets a charge, so nothing dies.',
+  'howto.ex.surplus.title': 'More charges',
+  'howto.ex.surplus.why': 'Once the enemy charges are gone, each shot kills a unit.',
+  'howto.ex.defenseless.title': 'No charge, no defense',
+  'howto.ex.defenseless.why': 'A unit without a charge cannot answer a shot.',
+  'howto.ex.planned.title': 'Planned order',
+  'howto.ex.planned.why': 'Bonus shots go first, so the attack keeps its own charges longer.',
+  'howto.ex.start': 'Start',
+  'howto.ex.time': '{seconds} s',
+  'howto.ex.attackLine': 'Attack: {units} units, {charged} charged',
+  'howto.ex.defenseLine': 'Defense: {units} units, {charged} charged',
+  'howto.ex.frameAria': '{when}. {attack}. {defense}.',
+  'howto.ex.bonusAria': '{n} bonus shots',
+  'howto.ex.taken': 'The attack takes the place. Defenders lost: {lost}.',
+  'howto.ex.bounced': 'The attack turns back, discharged. Defenders lost: {lost}.',
+  'howto.orders.title': 'Orders',
+  'howto.orders.text':
+    'A move costs {move} CP. A planned order (Shift + click) costs {planned} CP and the enemy sees it coming, but the group sets out after {delay} s with bonus shots for the first fight ({bonus} per road on its way).',
+  'howto.orders.defense':
+    'Defense ({cost} CP) stores one bonus shot every {seconds} s while the group stays put.',
+  'howto.pic.orders':
+    'A planned order: a wide ribbon from one city to another with bonus shots in front of it.',
+  'howto.victory.title': 'Victory',
+  'howto.victory.text':
+    'Hold cities to score. Every {seconds} s each city of yours gives its points, your capital {multiplier} times more. Take the enemy capital and you win at once. After {minutes} min the higher score wins.',
+  'howto.pic.victory':
+    'Three cities with point numbers, and a capital with a star that is worth more.',
   'help.keys': 'Keys',
   'help.key.select': 'pick a group or a city, give an order',
   'help.key.planned': 'planned order',
