@@ -125,8 +125,8 @@ contacts left over into stream cells, routes the long rivers along area borders 
 border and at least 40 units from every node), turns land pieces cut off from their node into the water around them,
 and bakes the picture: the T2 ground of the new areas (under the water the ground continues, so there is no muddy band
 at a shore), details thinning toward a shore, and the water of **W4 Painted** on top: two tones in blotches, rivers
-lighter, the shore of a sea or a lake lighter inside the water, a slightly darker current and faint flow streaks on
-rivers, sparse muted reed tufts beside the water, wooden bridges. **No dark line along water** (the owner, 2026-10-29):
+lighter, the shore of a sea or a lake lighter inside the water, a slightly darker current on rivers (no light flow
+streaks: the owner read them as rendering artifacts, 2026-10-30, #585), sparse muted reed tufts beside the water, wooden bridges. **No dark line along water** (the owner, 2026-10-29):
 nothing darkens the land along a coast or a river bank, the edge of the water is only anti-aliased. Then it writes the
 vector file. Deterministic for the map seed as now; the WebP limit of 0.5 MB and the 10 s per map stay (the mockup
 geography on `ridge`: about 1 s for the geography, 4 to 6 s for the picture). `tools/maps/tests/test_bake.py` compares
@@ -151,8 +151,15 @@ protocol change (the file is bundled like the background; serving it at `GET /ap
 
 **Done in #544 (step 2).** `apps/client/src/map/geography.ts` loads `maps/geo/<id>.json` (one lazy chunk per map,
 `maps/geo/` is copied into the client stage of `deploy/caddy.Dockerfile`) and ignores a file of another map or another `meta.version`; `render/territory.ts` turns the chains
-into one polygon per node (a lake inside an area is cut out by a slit; a shore is smoothed by one round of corner cutting,
-under 2 units) and into edges with what lies across each. Across a sea or a lake there is no area; across a river or a
+into one polygon per node (a lake inside an area is cut out by a slit) and into edges with what lies across each.
+Every chain except the map frame is smoothed once (#585): resampled every 4 units, a binomial low-pass filter of about
+10 units (the stairs of the 4-unit label grid vanish, the warp of the borders stays), simplified; the line moves at most
+about 4.5 units from the traced chain. The ends of a chain stay where they are (a junction of three regions, the frame),
+so the neighbours still share every point; where only an area and water meet (a coast running into a river mouth), the
+chains through the point are smoothed as one line, without a kink. A river bank is looked across in pieces of 16 units,
+and a run of another answer shorter than 40 units takes the answer of its longer neighbour, so the owner border has no
+loose stub and no gap at a bend or a mouth; the owner border is moved inward with a miter at every corner, so its
+segments meet. Across a sea or a lake there is no area; across a river or a
 stream the client looks for the area on the far bank, so the owner border runs along a coast, along a river bank between two
 owners, and not along a river between two areas of one owner. The thin area line is drawn only between two land areas (no
 line along water). The fog veil covers the areas of hidden nodes only, not the water beside them. The Supply view and the

@@ -2794,7 +2794,8 @@ Proposal (each item is a default for the owner to confirm or change):
 6. **Rendering.** Variants (mockup, section "Water variants"): W1 flat ink, W2 shallows and banks, W3 engraved
    coast, W4 painted T2 water. **Recommended: W4**, baked into `maps/<id>.bg.webp` (no per-frame cost): flat water in
    two tones, a soft shore without a hard line, reed tufts on the banks that thin out away from the water (the T2
-   language of details thinning at an edge), faint flow streaks on rivers, wooden bridges. The owner border line
+   language of details thinning at an edge), faint flow streaks on rivers (removed by the owner on 2026-10-30, #585:
+   they read as rendering artifacts), wooden bridges. The owner border line
    runs along a coast where the territory ends at water, and not along a river between two areas of one owner.
 7. **What does not change.** The graph, the roads and their levels, `travel_ticks`, `border_permille`, capacities,
    supply, vision (DEC-21, DEC-35), fights, the ruleset, `PlayerView`, the protocol, `SIM_VERSION`,
