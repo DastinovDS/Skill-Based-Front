@@ -114,13 +114,13 @@ test('shot of the replay viewer with the fog of a side', async ({ page }) => {
   };
   await view.getByRole('button', { name: 'Rusher' }).click();
   await shoot('replay-fog-p1', '460', true);
-  await page.keyboard.press('KeyF');
+  await view.getByRole('button', { name: /Fog/ }).click();
   await shoot('replay-fog-p1-off', '460', false);
   await view.getByRole('button', { name: 'Both' }).click();
   await shoot('replay-fog-both', '460', false);
   await view.getByRole('button', { name: 'Reactive' }).click();
   await expect(view.getByRole('button', { name: /Fog/ })).toHaveAttribute('aria-pressed', 'false');
-  await page.keyboard.press('KeyF');
+  await view.getByRole('button', { name: /Fog/ }).click();
   await shoot('replay-fog-p2', '520', true);
 });
 

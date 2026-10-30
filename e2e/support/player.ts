@@ -78,7 +78,7 @@ export class Player {
   async enter(url = '/'): Promise<void> {
     await this.page.goto(url);
     await this.page.getByLabel('Your nick').fill(this.nick);
-    await this.page.getByRole('button', { name: /^(Play|Join the match)$/ }).click();
+    await this.page.getByRole('button', { name: /^(Play|Join)$/ }).click();
   }
 
   /** The host: menu, private match on `mapId`, returns the invite link. */

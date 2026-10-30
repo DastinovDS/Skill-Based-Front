@@ -175,6 +175,8 @@ body {
 }
 
 .front .mark {
+  flex: none;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -218,6 +220,15 @@ body {
   flex-wrap: wrap;
   gap: 4px 28px;
   margin-left: 64px;
+  white-space: nowrap;
+}
+
+/* A medium window: the tabs move closer so the mark, the tabs and the chip keep one line. */
+@media (max-width: 1279px) {
+  .front .tabs {
+    gap: 4px 18px;
+    margin-left: 28px;
+  }
 }
 
 .front .tab {

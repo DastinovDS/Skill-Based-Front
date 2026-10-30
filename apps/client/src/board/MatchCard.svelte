@@ -63,7 +63,7 @@
       >
     {/if}
   </div>
-  <div class="who">
+  <div class="opp">
     {#if match.opponent.bot}<Icon name="bot" size={15} />{/if}<b>{opponent}</b>
     <span
       class="kind"
@@ -143,14 +143,14 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .who {
+  .opp {
     display: flex;
     align-items: center;
     gap: 7px;
     min-width: 0;
   }
 
-  .who b {
+  .opp b {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

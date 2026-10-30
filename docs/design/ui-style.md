@@ -1768,7 +1768,7 @@ No variant needs a DEC, a protocol change or a server change. Optional inputs th
 | 5 | Guest profiles | open from an opponent link, a "Guest" chip, no rating |
 | 6 | Own rank beyond the top 100 | a pinned own row with the real rank |
 
-Implementation: `apps/client/src/board/` (`LeaderboardScreen`, `BoardList`, `ProfilePanel`, `MatchRow`, `ReplayChip`, `SplitFrame`), dev scenes `?menu=board-*`, `profile-*`, `replays` (`src/dev/boardScenes.ts`). The rail has a "Menu" way back (Esc) instead of the dimmed Play of the Dock; the corner chip keeps the account menu and shows the rating; "Preparing" is a chip, only a ready replay is a button.
+Implementation (superseded by section 41, #629: the split screen, the profile panel and the rail are gone): `apps/client/src/board/` (`LeaderboardScreen`, `BoardList`, `ProfilePanel`, `MatchRow`, `ReplayChip`, `SplitFrame`), dev scenes `?menu=board-*`, `profile-*`, `replays` (`src/dev/boardScenes.ts`). The rail has a "Menu" way back (Esc) instead of the dimmed Play of the Dock; the corner chip keeps the account menu and shows the rating; "Preparing" is a chip, only a ready replay is a button.
 
 ---
 
@@ -2056,4 +2056,18 @@ round under the new process of section 23 (10 variants per element, minimal text
 Mockup: [`mockups/map-overlays.html`](mockups/map-overlays.html), SpriteCook candidates in [`mockups/assets/map-overlays/`](mockups/assets/map-overlays/)
 (asset ids in `spritecook-assets.json`). Element 1 changes only the HUD panel: the supply drawing on the map stays as it is (owner, 2026-10-30).
 The variant table and the recommendations are in issue #627.
+
+## 41. Nick entry, main menu, Replays, Leaderboard and queue (#629)
+
+Mockup: `docs/design/mockups/menus-entry.html`. **Owner's decision (2026-10-30):**
+
+| Screen | Variant | What it is in the client |
+| --- | --- | --- |
+| Nick entry | **N5 Title** | a separate screen: both triangles, the game title, the nick field with Play beside it, the map blurred and dimmed behind (`ScreenFrame entry`); the nick rule shows only as an inline amber error with the sign (a short nick after the field is left, a bad character at once, "Taken. Try another nick" from the server); "Log in · Create account" links; an invite says "Invited to a match" and Play becomes Join |
+| Main menu | **M5 Top tabs** | Play / Replays / Leaderboard / How to play as tabs on the top line (`MenuTabs`, the open tab is bold and underlined); the Play tab keeps the rail: Play (or Return, or Play dimmed with the dashed queue-lock chip), then Play a bot, Invite a friend, Open matches; the Dock screens (#473) stay under the Play tab, How to play is its own tab |
+| Replays | **R2 Cards** | the own matches as cards (`ReplaysScreen`, `MatchCard`): the map drawn small from `GET /api/maps/{id}`, the result as a shape and a word, the rating change, the opponent and the kind, the replay state |
+| Leaderboard | **L10 Record columns** | one table (`BoardTable`): #, player, matches, W–L–D, the share of wins (a bar and the number), rating; the own row is a band and the triangle; no match list and no profile on this tab |
+| Queue | **Q1 Timer only** | the clock and "Searching", Stop; "Play a bot instead" with an Unrated chip only when the server offers it (60 s); "Keep this tab open" only once the tab was hidden |
+
+Everywhere: no key badges (the keys Enter and Esc keep working), no tagline at the bottom left. The mockup draws the old left rail beside R2 and L10; with M5 the tabs replace that rail, so these two tabs are one wide sheet under the tabs (`SheetFrame`).
 

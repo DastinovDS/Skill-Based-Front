@@ -126,7 +126,7 @@
         <!-- svelte-ignore a11y_autofocus -->
         <input
           bind:value={nick}
-          class:err={shownError !== null}
+          class:bad={shownError !== null}
           autofocus
           required
           maxlength="16"
@@ -259,7 +259,7 @@
     color: var(--neutral);
   }
 
-  input.err {
+  input.bad {
     border-bottom-color: var(--warn);
   }
 

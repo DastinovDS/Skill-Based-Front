@@ -43,22 +43,25 @@ for (const size of [
   });
 }
 
-// The keys of ui-style 13.7 and the "View as" selector (#599).
-test('replay viewer answers its keys and switches the blue side', async ({ page }) => {
+// The controls of the viewer (its keys went in #631, only Esc is left) and the "View as" selector (#599).
+test('replay viewer answers its buttons and switches the blue side', async ({ page }) => {
   await page.goto('/?replay=dev');
   const canvas = page.locator('.game-canvas');
   await expect(canvas).toHaveAttribute('data-tick', '0');
 
-  await page.keyboard.press('Digit2');
+  await page.getByRole('button', { name: '×4' }).click();
   await expect(page.getByRole('button', { name: '×4' })).toHaveAttribute('aria-pressed', 'true');
-  await page.keyboard.press('ArrowRight');
+  await page.getByLabel('Position in the match').fill('50');
   await expect(canvas).toHaveAttribute('data-tick', '50');
-  await page.keyboard.press('ArrowLeft');
+  await page.getByLabel('Position in the match').fill('0');
   await expect(canvas).toHaveAttribute('data-tick', '0');
-  await page.keyboard.press('Space');
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
-  await page.keyboard.press('Space');
+  await page.getByRole('button', { name: 'Pause' }).click();
   await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+  // The keys of the old viewer do nothing now.
+  await page.keyboard.press('Digit1');
+  await expect(page.getByRole('button', { name: '×4' })).toHaveAttribute('aria-pressed', 'true');
 
   const both = page.getByRole('group', { name: 'View as' }).getByRole('button', { name: 'Both' });
   await expect(both).toHaveAttribute('aria-pressed', 'true');
