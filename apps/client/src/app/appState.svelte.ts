@@ -29,14 +29,12 @@ export type Screen =
   /** The "How to play" page (CLI-13, #72). */
   | { readonly name: 'howto' }
   /**
-   * The leaderboard and the profiles (LB-01, #78). `history` is the Replays row: the own profile
-   * with its matches in view. `player` is the profile chosen in the list (null: the own one),
-   * kept here so that "Back" from a replay returns to the same profile.
+   * The Leaderboard tab (`board`, LB-01, #78) or the Replays tab (`history`): the own matches as
+   * cards (#629). "Back" from a replay returns here.
    */
   | {
       readonly name: 'leaderboard';
       readonly mode: 'board' | 'history';
-      readonly player: number | null;
     }
   /** Set or change the password of the account (#374). */
   | { readonly name: 'password' }
@@ -289,15 +287,9 @@ export class AppState {
     this.go({ name: 'match', matchId: match.match_id, mapId: match.map_id });
   }
 
-  /** The leaderboard (T) or the Replays row (R): the own profile with its history. */
+  /** The Leaderboard tab or the Replays tab (#629). */
   openBoard(mode: 'board' | 'history' = 'board'): void {
-    this.go({ name: 'leaderboard', mode, player: null });
-  }
-
-  /** The player chosen in the list (null: the own profile), remembered without a new screen. */
-  selectPlayer(player: number | null): void {
-    const screen = this.screen;
-    if (screen.name === 'leaderboard') this.screen = { ...screen, player };
+    this.go({ name: 'leaderboard', mode });
   }
 
   go(screen: Screen): void {

@@ -29,8 +29,6 @@
   let busy = $state(false);
   let form = $state<HTMLFormElement>();
 
-  const KEY_BACK = 'Esc';
-
   // The first field takes the focus, like the nick of the welcome screen: typing starts at once.
   onMount(() => {
     form?.querySelector('input')?.focus();
@@ -95,14 +93,14 @@
   {#snippet actions()}
     {#if saved}
       <button type="button" class="btn pri" aria-keyshortcuts="Enter Escape" onclick={onback}>
-        {t('common.back')}<kbd class="k" aria-hidden="true">↵</kbd>
+        {t('common.back')}
       </button>
     {:else}
       <button type="submit" form="password-form" class="btn pri" disabled={busy}>
-        {t('account.save')}<kbd class="k" aria-hidden="true">↵</kbd>
+        {t('account.save')}
       </button>
       <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={onback}>
-        {t('common.back')}<kbd class="k" aria-hidden="true">{KEY_BACK}</kbd>
+        {t('common.back')}
       </button>
     {/if}
   {/snippet}

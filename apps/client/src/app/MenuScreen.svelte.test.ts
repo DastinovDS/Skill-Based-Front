@@ -86,7 +86,7 @@ describe('MenuScreen', () => {
     flushSync();
   }
 
-  it('has one main action, Play, and five quiet rows, Replays and Leaderboard among them (#78)', () => {
+  it('has one main action, Play, three ways to play, and Replays, Leaderboard, How to play as tabs (#629)', () => {
     const onqueue = vi.fn();
     render({ handlers: { onqueue } });
     named('menu.play')?.click();
@@ -94,8 +94,23 @@ describe('MenuScreen', () => {
     expect(named('menu.bot')).toBeTruthy();
     expect(named('menu.create')).toBeTruthy();
     expect(named('menu.lobby')).toBeTruthy();
-    expect(named('menu.replays')).toBeTruthy();
-    expect(named('menu.leaderboard')).toBeTruthy();
+    expect(document.querySelectorAll('.rail .row')).toHaveLength(3);
+    const tabs = document.querySelector('.tabs');
+    expect(tabs?.querySelector('[aria-current="page"]')?.textContent).toBe(
+      translate('en', 'menu.play'),
+    );
+    expect(tabs?.querySelectorAll('button')).toHaveLength(3);
+    expect(document.querySelector('.tag')).toBeNull();
+  });
+
+  it('leads to Replays and the Leaderboard by their tabs', () => {
+    const onreplays = vi.fn();
+    const onboard = vi.fn();
+    render({ handlers: { onreplays, onboard } });
+    named('menu.replays')?.click();
+    named('menu.leaderboard')?.click();
+    expect(onreplays).toHaveBeenCalledOnce();
+    expect(onboard).toHaveBeenCalledOnce();
   });
 
   it('opens How to play also while a match runs (CLI-13)', () => {
@@ -144,7 +159,7 @@ describe('MenuScreen', () => {
     it('shows a guest as unrated with a hint to set a password', () => {
       render({ hasPassword: false });
       expect(document.querySelector('.who')?.textContent).toContain(translate('en', 'menu.guest'));
-      expect(document.body.textContent).toContain(translate('en', 'menu.guestHint'));
+      expect(named('menu.guestHint')).toBeTruthy();
     });
 
     it('shows calibration k/5 there and nowhere else', () => {
@@ -187,15 +202,15 @@ describe('MenuScreen', () => {
   });
 
   describe('a queue ban (DEC-34)', () => {
-    it('replaces Play with the time left, keeps the other modes open and counts down', () => {
+    it('dims Play with a lock chip of the time left, keeps the other modes open and counts down', () => {
       vi.useFakeTimers();
       let now = 1_000_000;
       const onqueue = vi.fn();
       const onbot = vi.fn();
       render({ banUntil: now + 287_000, now: () => now, handlers: { onqueue, onbot } });
       expect(document.body.textContent).toContain('4:47');
-      expect(document.body.textContent).toContain(translate('en', 'menu.banReason'));
-      expect(named('menu.play')).toBeUndefined();
+      expect(document.querySelector('.chip.ban')?.getAttribute('role')).toBe('timer');
+      expect(named('menu.play')?.disabled).toBe(true);
       press('Enter');
       expect(onqueue).not.toHaveBeenCalled();
       named('menu.bot')?.click();
@@ -210,11 +225,11 @@ describe('MenuScreen', () => {
       vi.useFakeTimers();
       let now = 5_000;
       render({ banUntil: now + 2_000, now: () => now });
-      expect(named('menu.play')).toBeUndefined();
+      expect(named('menu.play')?.disabled).toBe(true);
       now += 3_000;
       vi.advanceTimersByTime(1000);
       flushSync();
-      expect(named('menu.play')).toBeTruthy();
+      expect(named('menu.play')?.disabled).toBe(false);
     });
   });
 

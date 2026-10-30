@@ -24,8 +24,6 @@
 
   let { api, token, nick, code, dock, onstart, onleave, pollMs = 1500 }: Props = $props();
 
-  const KEY_LEAVE = 'Esc';
-
   let invite = $state.raw<Invite | null>(null);
   let failure = $state.raw<MessageKey | null>(null);
   let copied = $state(false);
@@ -181,11 +179,11 @@
   {#snippet actions()}
     {#if invite !== null && opponent !== null && !starting}
       <button type="button" class="btn pri" disabled={busy || invite.you_ready} onclick={ready}>
-        {t('invite.ready')}<kbd class="k" aria-hidden="true">↵</kbd>
+        {t('invite.ready')}
       </button>
     {/if}
     <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={leave}>
-      {t('invite.leave')}<kbd class="k" aria-hidden="true">{KEY_LEAVE}</kbd>
+      {t('invite.leave')}
     </button>
   {/snippet}
 </DockFrame>

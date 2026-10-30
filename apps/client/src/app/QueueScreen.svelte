@@ -36,6 +36,18 @@
   }: Props = $props();
 
   let status = $state.raw<QueueStatus | null>(null);
+  /** The tab was hidden while in the queue: then, and only then, the screen asks to keep it open. */
+  let hidden = $state(false);
+  $effect(() => {
+    const seen = (): void => {
+      if (document.visibilityState === 'hidden') hidden = true;
+    };
+    seen();
+    document.addEventListener('visibilitychange', seen);
+    return () => {
+      document.removeEventListener('visibilitychange', seen);
+    };
+  });
   let failure = $state.raw<MessageKey | null>(null);
   let busy = $state(false);
   let done = false;
@@ -142,4 +154,13 @@
   }
 </script>
 
-<QueueView {status} {failure} {busy} {map} onconfirm={confirm} onleave={leave} onbot={playBot} />
+<QueueView
+  {status}
+  {failure}
+  {busy}
+  {map}
+  {hidden}
+  onconfirm={confirm}
+  onleave={leave}
+  onbot={playBot}
+/>

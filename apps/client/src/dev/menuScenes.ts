@@ -47,6 +47,7 @@ export const DOCK_SCENE_IDS = [
 export const MENU_SCENE_IDS = [
   'welcome',
   'welcome-notice',
+  'welcome-invited',
   'menu-guest',
   'menu-calibration',
   'menu-ranked',

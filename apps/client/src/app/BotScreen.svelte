@@ -16,8 +16,6 @@
 
   let { dock, onstart, onback }: Props = $props();
 
-  const KEY_BACK = 'Esc';
-
   let level = $state<BotLevel>('normal');
   let mapId = $state<string | null>(null);
   let busy = $state(false);
@@ -64,10 +62,10 @@
   {#snippet actions()}
     {#if !busy}
       <button type="button" class="btn pri" onclick={submit}>
-        {t('bot.start')}<kbd class="k" aria-hidden="true">↵</kbd>
+        {t('bot.start')}
       </button>
       <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={onback}>
-        {t('common.back')}<kbd class="k" aria-hidden="true">{KEY_BACK}</kbd>
+        {t('common.back')}
       </button>
     {/if}
   {/snippet}

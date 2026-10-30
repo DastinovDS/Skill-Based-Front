@@ -17,13 +17,20 @@
     onconfirm: () => void;
     onleave: () => void;
     onbot: () => void;
+    /** The tab was hidden while searching: a sleeping tab can drop out of the queue. */
+    hidden?: boolean;
   }
 
-  // Keyboard keys are not words of a language: they are labelled the same in every locale.
-  const KEY_BOT = 'B';
-  const KEY_LEAVE = 'Esc';
-
-  let { status, failure, busy, map = null, onconfirm, onleave, onbot }: Props = $props();
+  let {
+    status,
+    failure,
+    busy,
+    map = null,
+    onconfirm,
+    onleave,
+    onbot,
+    hidden = false,
+  }: Props = $props();
 
   const searching = $derived(status === null || status.state === 'searching');
   const found = $derived(status?.state === 'found');
@@ -59,75 +66,72 @@
   waited={status?.waited_s ?? 0}
   label={t('queue.title')}
 >
-  {#if status === null}
-    <div class="eyebrow">{t('queue.title')}</div>
-    <p class="sub" role="status">{t('common.loading')}</p>
-  {:else if status.state === 'searching'}
-    <div class="eyebrow">{t('queue.title')}</div>
+  <!-- The queue (#629, Q1 "Timer only"): the clock and one word; the bot offer only after the
+       server makes it (60 s); "Keep this tab open" only once the tab was hidden. -->
+  {#if status === null || status.state === 'searching'}
+    {@const waited = status?.waited_s ?? 0}
     <div
-      class="big sm static"
+      class="big static clock"
       role="timer"
-      aria-label={tf('queue.waited', { time: formatClock(status.waited_s) })}
+      aria-label={tf('queue.waited', { time: formatClock(waited) })}
     >
-      {formatClock(status.waited_s)}
+      {formatClock(waited)}
     </div>
-    <div class="sub">
-      <span role="status">{t('queue.searching')}</span>
-      <span>{tf('queue.size', { count: status.queue_size })}</span>
+    <div class="sub" role="status">
+      {status === null ? t('common.loading') : t('queue.searching')}
     </div>
-    <p class="hint">{t('queue.keepOpen')}</p>
-    {#if status.bot_offer}
-      <p class="hint">{t('queue.botOffer')}</p>
-      <div class="rows">
-        <button type="button" class="row" aria-keyshortcuts="B" onclick={onbot}>
-          <Icon name="bot" size={22} />{t('queue.playBot')}<kbd class="k" aria-hidden="true"
-            >{KEY_BOT}</kbd
+    {#if hidden}
+      <p class="wl"><Icon name="alert" size={16} />{t('queue.keepOpen')}</p>
+    {/if}
+    <div class="qacts">
+      {#if status?.bot_offer === true}
+        <button type="button" class="qbtn" onclick={onbot}>
+          <Icon name="bot" size={18} />{t('queue.playBot')}<span class="chip"
+            >{t('dock.chip.unrated')}</span
           >
         </button>
-      </div>
-    {/if}
-  {:else if status.state === 'found'}
-    <div class="eyebrow">{t('queue.foundTitle')}</div>
+      {/if}
+      <button type="button" class="qbtn ghost" aria-keyshortcuts="Escape" onclick={onleave}>
+        {t('queue.leave')}
+      </button>
+    </div>
+  {:else}
     <div class="versus">
       <UnitMark side="enemy" size={34} />
       <span class="name">{opponent}</span>
     </div>
-    {#if status.you_confirmed}
-      <div class="big sm static" role="status">{tf('queue.waitingFor', { nick: opponent })}</div>
-      <div class="sub">
-        <span>{t('queue.youConfirmed')}</span>
-        {#if status.opponent_confirmed}<span>{t('queue.opponentConfirmed')}</span>{/if}
-      </div>
-    {:else}
-      <button
-        type="button"
-        class="big"
-        aria-keyshortcuts="Enter"
-        disabled={busy}
-        onclick={onconfirm}
-      >
-        {t('queue.confirm')}<kbd class="k" aria-hidden="true">↵</kbd>
+    {#if status.state === 'found' && !status.you_confirmed}
+      <div class="confirm">
+        <button
+          type="button"
+          class="qbtn pri"
+          aria-keyshortcuts="Enter"
+          disabled={busy}
+          onclick={onconfirm}
+        >
+          {t('queue.confirm')}
+        </button>
         <span class="count"
           >{tf('queue.seconds', { seconds: Math.ceil(status.confirm_in_s ?? 0) })}</span
         >
-      </button>
-      <div class="sub">
-        <span>{t('queue.confirmHint')}</span>
-        {#if status.opponent_confirmed}<span>{t('queue.opponentConfirmed')}</span>{/if}
       </div>
+      <div class="qacts">
+        <button type="button" class="qbtn ghost" aria-keyshortcuts="Escape" onclick={onleave}>
+          {t('queue.decline')}
+        </button>
+      </div>
+    {:else if status.state === 'found'}
+      <p class="sub" role="status">
+        {tf('queue.waitingFor', {
+          nick: opponent,
+          seconds: Math.ceil(status.confirm_in_s ?? 0),
+        })}
+      </p>
+    {:else}
+      <p class="sub" role="status">{t('queue.starting')}</p>
     {/if}
-  {:else}
-    <div class="eyebrow">{t('queue.foundTitle')}</div>
-    <p class="sub" role="status">{t('queue.starting')}</p>
   {/if}
   {#if failure !== null}
     <p class="wl" role="alert"><Icon name="alert" size={16} />{t(failure)}</p>
   {/if}
-  <div class="leave">
-    <button type="button" class="linkbtn" aria-keyshortcuts="Escape" onclick={onleave}>
-      {found ? t('queue.decline') : t('queue.leave')}<kbd class="k" aria-hidden="true"
-        >{KEY_LEAVE}</kbd
-      >
-    </button>
-  </div>
 </ScreenFrame>

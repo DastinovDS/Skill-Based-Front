@@ -1,21 +1,23 @@
 <script lang="ts">
   import type { MatchEntry } from '../api/http.ts';
+  import MapThumb from '../app/MapThumb.svelte';
   import Icon from '../hud/Icon.svelte';
   import { getLocale, t, tf, type MessageKey } from '../i18n/index.ts';
+  import type { MapFile } from '../protocol.gen.ts';
   import ReplayChip from './ReplayChip.svelte';
   import { agoText, lengthText } from './time.ts';
   import { botLabel, ratingOf } from './view.ts';
 
   interface Props {
     match: MatchEntry;
+    /** The file of the match's map for the small picture, null while it loads. */
+    map: MapFile | null;
     /** The clock of "2 hr. ago" (ms since the epoch). */
     now: number;
-    /** Open the profile of the opponent (a player, not a bot). */
-    onprofile: (playerId: number) => void;
     onwatch: (matchId: number) => void;
   }
 
-  let { match, now, onprofile, onwatch }: Props = $props();
+  let { match, map, now, onwatch }: Props = $props();
 
   const RESULTS = {
     win: { key: 'history.win', shape: 'w' },
@@ -43,50 +45,34 @@
   );
 </script>
 
-<li class="match">
-  <span class="result {result.shape}"><i aria-hidden="true"></i>{t(result.key)}</span>
-  <span class="opp">
-    <span class="line">
-      {#if match.opponent.bot}
-        <span class="name"><Icon name="bot" size={16} /><b>{opponent}</b></span>
-      {:else if match.opponent.player_id !== null}
-        {@const id = match.opponent.player_id}
-        <button
-          type="button"
-          class="name link"
-          aria-label={tf('profile.opponentAria', { nick: opponent })}
-          onclick={() => {
-            onprofile(id);
-          }}><b>{opponent}</b></button
-        >
-      {:else}
-        <span class="name"><b>{opponent}</b></span>
-      {/if}
-      <span
-        class="kind"
-        class:ranked={match.kind === 'rated'}
-        class:calibration={match.kind === 'calibration'}
-      >
-        {#if match.kind === 'bot'}<Icon name="bot" size={13} />{/if}{t(KINDS[match.kind])}
-      </span>
-    </span>
-    <small>{details}</small>
-  </span>
-  <span class="rating">
+<!-- One match as a card (#629, R2): the map drawn small, the result as a shape and a word, the
+     opponent, the kind, then the replay. The server says the result, the rating and the replay. -->
+<li class="card">
+  <MapThumb {map} />
+  <div class="head">
+    <span class="result {result.shape}"><i aria-hidden="true"></i>{t(result.key)}</span>
     {#if rating.kind === 'change'}
-      {rating.delta}
-      <small aria-label={tf('history.rating.range', { before: rating.before, after: rating.after })}
-        >{rating.before} &rarr; {rating.after}</small
+      <span
+        class="delta"
+        aria-label={tf('history.rating.range', { before: rating.before, after: rating.after })}
+        >{rating.delta}</span
       >
     {:else if rating.kind === 'hidden'}
       <small class="hidden" title={t('history.rating.hiddenTitle')}
         >{t('history.rating.hidden')}</small
       >
-    {:else}
-      <small class="hidden" aria-hidden="true">&ndash;</small>
     {/if}
-  </span>
-  <span class="replay">
+  </div>
+  <div class="who">
+    {#if match.opponent.bot}<Icon name="bot" size={15} />{/if}<b>{opponent}</b>
+    <span
+      class="kind"
+      class:ranked={match.kind === 'rated'}
+      class:calibration={match.kind === 'calibration'}>{t(KINDS[match.kind])}</span
+    >
+  </div>
+  <small>{details}</small>
+  <div class="replay">
     <ReplayChip
       state={match.replay.state}
       {opponent}
@@ -94,27 +80,41 @@
         onwatch(match.match_id);
       }}
     />
-  </span>
+  </div>
 </li>
 
 <style>
-  .match {
-    display: grid;
-    grid-template-columns: 78px minmax(0, 1fr) 96px 112px;
-    align-items: center;
-    gap: 10px;
-    padding: 0 6px;
-    min-height: 42px;
-    border-bottom: 1px solid rgb(230 237 243 / 9%);
-    font-size: 15px;
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
     list-style: none;
+    font-size: 15px;
+  }
+
+  .card :global(.thumb) {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    margin-bottom: 4px;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
   }
 
   .result {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    font-weight: 700;
   }
 
   /* The result is a shape and a word: a filled, an empty or a half dot. */
@@ -130,69 +130,40 @@
     background: var(--you);
   }
 
+  .result.l i {
+    border-color: var(--paper);
+  }
+
   .result.d i {
     background: linear-gradient(90deg, var(--you) 50%, transparent 50%);
   }
 
-  .opp {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 0;
+  .delta {
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
   }
 
-  .line {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .name {
+  .who {
     display: flex;
     align-items: center;
     gap: 7px;
     min-width: 0;
-    font-weight: 700;
   }
 
-  .name b {
+  .who b {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .link {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--text);
-    font: inherit;
-    cursor: pointer;
-    text-decoration: underline;
-    text-decoration-color: rgb(230 237 243 / 28%);
-    text-underline-offset: 3px;
-  }
-
-  .link:hover {
-    text-decoration-color: var(--text);
-  }
-
-  .link:focus-visible {
-    outline: 2px solid var(--paper);
-    outline-offset: 2px;
   }
 
   .kind {
     display: inline-flex;
     align-items: center;
     flex: none;
-    gap: 5px;
     height: 20px;
     padding: 0 8px;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: rgb(13 17 23 / 55%);
     color: var(--text-dim);
     font-size: 12px;
   }
@@ -208,29 +179,15 @@
   }
 
   small {
-    color: var(--text-dim);
-    font-size: 12.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .rating {
-    text-align: right;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .rating small {
-    display: block;
-    font-weight: 400;
-    font-size: 12px;
-  }
-
-  .rating small.hidden {
+    color: var(--text-dim);
     font-size: 13px;
   }
 
   .replay {
     display: flex;
-    justify-content: flex-end;
+    margin-top: 6px;
   }
 </style>

@@ -8,6 +8,8 @@
   import { AppState, type Guest } from './appState.svelte.ts';
   import type { DockContext } from './dock.ts';
   import LeaderboardScreen from '../board/LeaderboardScreen.svelte';
+  import ReplaysScreen from '../board/ReplaysScreen.svelte';
+  import type { MenuTabActions } from './menuTabs.ts';
   import BootScreen from './BootScreen.svelte';
   import BotScreen from './BotScreen.svelte';
   import CreateScreen from './CreateScreen.svelte';
@@ -43,6 +45,24 @@
     }
   });
   const guest = $derived(app.guest);
+
+  /** Where the tabs of the menu lead (#629, M5). */
+  function tabsOf(): MenuTabActions {
+    return {
+      onplay: () => {
+        app.menu();
+      },
+      onreplays: () => {
+        app.openBoard('history');
+      },
+      onboard: () => {
+        app.openBoard('board');
+      },
+      onhowto: () => {
+        app.go({ name: 'howto' });
+      },
+    };
+  }
 
   /** What the lobby, invite and bot screens (the Dock, #473) need besides their own data. */
   function dockOf(who: Guest): DockContext {
@@ -194,55 +214,49 @@
       app.menu();
     }}
   />
+{:else if screen.name === 'leaderboard' && screen.mode === 'history'}
+  <ReplaysScreen
+    api={app.api}
+    token={guest.token}
+    ownId={app.playerId}
+    nick={guest.nick}
+    hasPassword={guest.hasPassword}
+    calibration={app.calibration}
+    rating={app.rating}
+    map={app.backdrop}
+    maps={app.maps}
+    onwatch={(matchId: string) => {
+      app.openReplay(matchId);
+    }}
+    onbot={() => {
+      app.go({ name: 'bot' });
+    }}
+    onpassword={() => {
+      app.go({ name: 'password' });
+    }}
+    onlogout={() => {
+      app.logout();
+    }}
+    {...tabsOf()}
+  />
 {:else if screen.name === 'leaderboard'}
-  <!-- The Leaderboard (T) and Replays (R) rows are one screen in two modes: a switch starts over. -->
-  {#key screen.mode}
-    <LeaderboardScreen
-      api={app.api}
-      token={guest.token}
-      ownId={app.playerId}
-      nick={guest.nick}
-      hasPassword={guest.hasPassword}
-      calibration={app.calibration}
-      rating={app.rating}
-      map={app.backdrop}
-      mode={screen.mode}
-      player={screen.player}
-      onselect={(playerId: number | null) => {
-        app.selectPlayer(playerId);
-      }}
-      onwatch={(matchId: string) => {
-        app.openReplay(matchId);
-      }}
-      onmenu={() => {
-        app.menu();
-      }}
-      onbot={() => {
-        app.go({ name: 'bot' });
-      }}
-      oncreate={() => {
-        app.go({ name: 'create', public: false });
-      }}
-      onlobby={() => {
-        app.go({ name: 'lobby' });
-      }}
-      onreplays={() => {
-        app.openBoard('history');
-      }}
-      onboard={() => {
-        app.openBoard('board');
-      }}
-      onhowto={() => {
-        app.go({ name: 'howto' });
-      }}
-      onpassword={() => {
-        app.go({ name: 'password' });
-      }}
-      onlogout={() => {
-        app.logout();
-      }}
-    />
-  {/key}
+  <LeaderboardScreen
+    api={app.api}
+    token={guest.token}
+    ownId={app.playerId}
+    nick={guest.nick}
+    hasPassword={guest.hasPassword}
+    calibration={app.calibration}
+    rating={app.rating}
+    map={app.backdrop}
+    onpassword={() => {
+      app.go({ name: 'password' });
+    }}
+    onlogout={() => {
+      app.logout();
+    }}
+    {...tabsOf()}
+  />
 {:else if screen.name === 'password'}
   <PasswordScreen
     dock={dockOf(guest)}

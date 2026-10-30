@@ -7,6 +7,7 @@
   import type { DockContext, DockMode } from './dock.ts';
   import './dock.css';
   import type { BackdropPhase } from './menuScene.ts';
+  import MenuTabs from './MenuTabs.svelte';
   import ScreenFrame from './ScreenFrame.svelte';
   import UnitMark from './UnitMark.svelte';
 
@@ -82,9 +83,6 @@
     { id: 'bot', icon: 'bot', label: t('menu.bot'), go: dock.onbot },
     { id: 'friend', icon: 'link', label: t('menu.create'), go: dock.oncreate },
     { id: 'lobby', icon: 'users', label: t('menu.lobby'), go: dock.onlobby },
-    { id: 'replays', icon: 'history', label: t('menu.replays'), go: dock.onreplays },
-    { id: 'board', icon: 'trophy', label: t('menu.leaderboard'), go: dock.onboard },
-    { id: 'howto', icon: 'info', label: t('help.howTo'), go: dock.onhowto },
   ] as const);
 
   const unrated = $derived(
@@ -126,6 +124,16 @@
   label={t('menu.nav')}
   panelLabel={eyebrow}
 >
+  {#snippet tabs()}
+    <MenuTabs
+      current={mode === 'howto' ? 'howto' : 'play'}
+      {locked}
+      onplay={dock.onmenu}
+      onreplays={dock.onreplays}
+      onboard={dock.onboard}
+      onhowto={dock.onhowto}
+    />
+  {/snippet}
   {#snippet corner()}
     {#if banned}
       <span
@@ -133,7 +141,7 @@
         role="timer"
         aria-label={tf('menu.banAria', { time: formatClock(secondsLeft) })}
       >
-        <Icon name="alert" size={14} />{tf('dock.banChip', { time: formatClock(secondsLeft) })}
+        <Icon name="lock" size={14} />{tf('dock.banChip', { time: formatClock(secondsLeft) })}
       </span>
     {/if}
     <AccountChip
@@ -148,21 +156,13 @@
     />
   {/snippet}
 
-  <!-- The rail is the menu, still: Play is dimmed (it is the way back), the open mode is marked. -->
+  <!-- The rail is the Play tab, still (#629, M5): Play is dimmed (it is the way back to the menu),
+       the open mode is marked. -->
   <div class="dockhead">
-    {#if banned}
-      <div class="eyebrow warn">{t('menu.eyebrow.banned')}</div>
-      <div class="big sm warn" aria-hidden="true">
-        <Icon name="alert" size={40} />{formatClock(secondsLeft)}
-      </div>
-      <div class="sub">{t('menu.banReason')}</div>
-    {:else}
-      <div class="eyebrow">{t('menu.eyebrow.ready')}</div>
-      <button type="button" class="big dim" disabled={locked} onclick={dock.onmenu}>
-        <UnitMark side="own" size={46} />{t('menu.play')}
-      </button>
-      <div class="sub"></div>
-    {/if}
+    <button type="button" class="big dim" disabled={locked} onclick={dock.onmenu}>
+      <UnitMark side="own" size={46} />{t('menu.play')}
+    </button>
+    <div class="sub"></div>
   </div>
   <div class="rows">
     {#each modes as m (m.id)}

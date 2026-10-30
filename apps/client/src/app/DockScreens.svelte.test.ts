@@ -288,21 +288,19 @@ describe('the Dock screens', () => {
       );
     });
 
-    it('adds the queue lock: a chip with the time, the lock block and the line, bots stay open', async () => {
+    it('adds the queue lock: a chip with the time and the line, bots stay open', async () => {
       mountBot({ banUntil: 287_000, now: () => 0 });
       await settle();
       expect(document.body.querySelector('.chip.ban')?.textContent).toContain('Queue locked 4:47');
-      expect(document.body.querySelector('.rail .eyebrow.warn')?.textContent).toBe(
-        en('menu.eyebrow.banned'),
-      );
       expect(document.body.querySelector('.panel')?.textContent).toContain(en('dock.banLine'));
       expect(button(en('bot.start')).disabled).toBe(false);
     });
 
-    it('has no key hints and no letter keys on the rail', async () => {
+    it('has no key hints anywhere and no letter keys on the rail (#629)', async () => {
       const calls = mountBot({});
       await settle();
-      expect(document.body.querySelector('.rail kbd')).toBeNull();
+      expect(document.body.querySelector('kbd')).toBeNull();
+      expect(document.body.querySelectorAll('.rail .row')).toHaveLength(3);
       for (const key of ['b', 'i', 'l', 'r', 't', 'h']) press(key);
       expect(calls.oncreate).not.toHaveBeenCalled();
       expect(calls.onlobby).not.toHaveBeenCalled();

@@ -171,7 +171,6 @@ body {
   z-index: 5;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
 }
 
@@ -210,6 +209,45 @@ body {
 .front .corner {
   position: relative;
   min-width: 0;
+  margin-left: auto;
+}
+
+/* The tabs of the menu (#629, M5): the open one is bold and underlined, not only brighter. */
+.front .tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 28px;
+  margin-left: 64px;
+}
+
+.front .tab {
+  padding: 4px 0 6px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.front button.tab:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.front .tab:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.front .tab.cur {
+  border-bottom-color: var(--you);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.front span.tab.cur {
+  cursor: default;
 }
 
 .front .who {
@@ -282,6 +320,35 @@ body {
 
 .front .cells i.on {
   background: var(--you);
+}
+
+/* The queue lock (DEC-34): a dashed amber chip with a lock and the time left. */
+.front .chip.ban {
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px dashed var(--warn);
+  border-radius: 13px;
+  font-size: 13px;
+  color: var(--warn);
+  background: rgb(13 17 23 / 55%);
+}
+
+/* A quiet link inside the rail ("Set a password to play ranked"). */
+.front .lnk {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.front .lnk:hover {
+  color: var(--paper);
 }
 
 /* The account menu under the chip. */
@@ -365,6 +432,7 @@ body {
 }
 
 .front .big:disabled {
+  opacity: 0.5;
   cursor: default;
 }
 
@@ -501,17 +569,6 @@ body {
   color: var(--text-dim);
 }
 
-.front .tag {
-  position: absolute;
-  left: 56px;
-  bottom: 22px;
-  z-index: 5;
-  max-width: calc(100% - 112px);
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-dim);
-}
-
 .front :focus-visible {
   outline: 2px solid var(--paper);
   outline-offset: 2px;
@@ -599,6 +656,23 @@ body {
   padding: 4px 8px;
 }
 
+/* The entry screen (#629, N5 "Title"): the content in the middle, the map blurred and dimmed. */
+.front.entry .rail {
+  left: 24px;
+  right: 24px;
+  top: max(48px, calc(50% - 230px));
+  width: auto;
+}
+
+.front.entry .backdrop {
+  opacity: 0.5;
+  filter: blur(6px);
+}
+
+.front.entry .shade {
+  background: rgb(13 17 23 / 30%);
+}
+
 /* A small window or a big UI scale: the rail flows over the picture instead of standing beside it. */
 @media (max-width: 899px), (max-height: 560px) {
   .front {
@@ -611,20 +685,22 @@ body {
     margin: 20px 20px 0;
   }
 
+  .front .top {
+    flex-wrap: wrap;
+  }
+
+  .front .tabs {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+  }
+
   .front .rail {
     position: relative;
     left: auto;
     top: auto;
     width: auto;
     margin: 28px 24px 0;
-  }
-
-  .front .tag {
-    position: relative;
-    left: auto;
-    bottom: auto;
-    margin: 24px 24px 16px;
-    max-width: none;
   }
 
   .front .big {
@@ -651,11 +727,78 @@ body {
 }
 
 .front .versus .name {
-  font-size: 36px;
+  font-size: 30px;
   font-weight: 800;
   overflow-wrap: anywhere;
 }
 
-.front .leave {
-  margin-top: 18px;
+/* The queue (#629, Q1): the clock, one word, then the buttons in a column. */
+.front .big.clock {
+  font-size: 64px;
+  font-variant-numeric: tabular-nums;
+}
+
+.front .qacts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.front .qbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.front .qbtn .chip {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.front .qbtn.ghost {
+  background: transparent;
+}
+
+.front .qbtn.pri {
+  height: 56px;
+  padding: 0 30px;
+  border-color: var(--paper);
+  background: var(--you);
+  color: var(--bg);
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.front .qbtn:hover:not(:disabled) {
+  border-color: var(--text-dim);
+}
+
+.front .qbtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.front .confirm {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 10px;
+}
+
+.front .confirm .count {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }

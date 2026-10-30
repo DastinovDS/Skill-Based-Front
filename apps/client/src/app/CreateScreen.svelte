@@ -16,8 +16,6 @@
 
   let { dock, isPublic = false, oncreate, onback }: Props = $props();
 
-  const KEY_BACK = 'Esc';
-
   let mapId = $state<string | null>(null);
   let busy = $state(false);
   let failure = $state.raw<MessageKey | null>(null);
@@ -48,10 +46,10 @@
   <MapTiles maps={dock.maps} bind:value={mapId} />
   {#snippet actions()}
     <button type="button" class="btn pri" disabled={busy} onclick={submit}>
-      {t('create.submit')}<kbd class="k" aria-hidden="true">↵</kbd>
+      {t('create.submit')}
     </button>
     <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={onback}>
-      {t('common.back')}<kbd class="k" aria-hidden="true">{KEY_BACK}</kbd>
+      {t('common.back')}
     </button>
   {/snippet}
 </DockFrame>

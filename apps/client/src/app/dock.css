@@ -17,17 +17,6 @@
   cursor: default;
 }
 
-.front .chip.ban {
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border: 1px dashed var(--warn);
-  border-radius: 13px;
-  font-size: 13px;
-  color: var(--warn);
-  background: rgb(13 17 23 / 55%);
-}
-
 .front .dockhead .big.dim {
   opacity: 0.32;
 }

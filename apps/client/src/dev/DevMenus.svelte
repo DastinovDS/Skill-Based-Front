@@ -1,5 +1,7 @@
 <script lang="ts">
   import LeaderboardScreen from '../board/LeaderboardScreen.svelte';
+  import ReplaysScreen from '../board/ReplaysScreen.svelte';
+  import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
   import MenuScreen from '../app/MenuScreen.svelte';
   import { Api } from '../api/http.ts';
   import CrashGuard from '../app/CrashGuard.svelte';
@@ -49,14 +51,18 @@
   const waiting = new Api(() => new Promise<Response>(() => undefined));
   const broken = new Api(() => Promise.reject(new TypeError('offline')));
   const board = isBoardScene(id) ? BOARD_SCENES[id] : null;
+  const tabs = { onplay: nothing, onreplays: nothing, onboard: nothing, onhowto: nothing };
+  // The pool maps of the replay cards, from the bundle: the scenes ask no server.
+  const bundled = (mapId: string) => BUNDLED_MAPS.find((m) => m.meta.name === mapId) ?? null;
+  const maps = { get: bundled, ensure: (mapId: string) => Promise.resolve(bundled(mapId)) };
   const queue = QUEUE_SCENES[id];
   const result = RESULT_SCENES[id];
 </script>
 
-{#if id === 'welcome' || id === 'welcome-notice'}
+{#if id === 'welcome' || id === 'welcome-notice' || id === 'welcome-invited'}
   <WelcomeScreen
     {map}
-    invited={false}
+    invited={id === 'welcome-invited'}
     notice={id === 'welcome-notice' ? 'error.api.unauthorized' : null}
     onsubmit={() => Promise.resolve()}
     onlogin={() => Promise.resolve(null)}
@@ -64,6 +70,24 @@
   />
 {:else if isDockScene(id)}
   <DevDock {id} {map} />
+{:else if board !== null && board.mode === 'history'}
+  <ReplaysScreen
+    api={sceneApi(board)}
+    token="dev"
+    ownId={ME}
+    nick="Danya"
+    hasPassword={board.hasPassword}
+    calibration={board.calibration}
+    rating={board.rating}
+    {map}
+    {maps}
+    now={() => BOARD_NOW}
+    onwatch={nothing}
+    onbot={nothing}
+    onpassword={nothing}
+    onlogout={nothing}
+    {...tabs}
+  />
 {:else if board !== null}
   <LeaderboardScreen
     api={sceneApi(board)}
@@ -74,20 +98,9 @@
     calibration={board.calibration}
     rating={board.rating}
     {map}
-    mode={board.mode}
-    player={board.player}
-    now={() => BOARD_NOW}
-    onselect={nothing}
-    onwatch={nothing}
-    onmenu={nothing}
-    onbot={nothing}
-    oncreate={nothing}
-    onlobby={nothing}
-    onreplays={nothing}
-    onboard={nothing}
-    onhowto={nothing}
     onpassword={nothing}
     onlogout={nothing}
+    {...tabs}
   />
 {:else if result !== undefined}
   <ResultScreen
@@ -132,6 +145,7 @@
   <QueueView
     {map}
     status={queue}
+    hidden={id === 'queue-long'}
     failure={null}
     busy={false}
     {...{ onconfirm: nothing, onleave: nothing, onbot: nothing }}

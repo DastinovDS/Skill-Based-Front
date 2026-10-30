@@ -6,7 +6,7 @@
 import type { Calibration, MapFile } from '../protocol.gen.ts';
 import type { MapCache } from './mapCache.svelte.ts';
 
-/** The three modes of the rail; the screen that is open marks its own row. */
+/** The three modes of the rail and the How to play tab; the screen that is open marks its row or tab. */
 export type DockMode = 'bot' | 'friend' | 'lobby' | 'howto';
 
 export interface DockContext {
@@ -28,10 +28,10 @@ export interface DockContext {
   onbot: () => void;
   oncreate: () => void;
   onlobby: () => void;
-  /** The rows "Replays" (R) and "Leaderboard" (T) of the rail (#78). */
+  /** The tabs "Replays" and "Leaderboard" (#78, #629). */
   onreplays: () => void;
   onboard: () => void;
-  /** The row "How to play" of the rail (CLI-13, #72). */
+  /** The tab "How to play" (CLI-13, #72). */
   onhowto: () => void;
   onmenu: () => void;
   onpassword: () => void;

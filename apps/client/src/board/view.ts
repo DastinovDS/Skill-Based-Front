@@ -9,6 +9,7 @@ import type {
   LeaderboardEntry,
   MatchEntry,
   PlayerProfile,
+  RecordTally,
 } from '../api/http.ts';
 import type { MessageKey } from '../i18n/index.ts';
 
@@ -87,4 +88,12 @@ export function ratingOf(match: MatchEntry): RatingText {
 /** The row of the leaderboard that is the player's own, if it is in the top. */
 export function ownEntry(board: Leaderboard, ownId: number | null): LeaderboardEntry | null {
   return ownId === null ? null : (board.entries.find((e) => e.player_id === ownId) ?? null);
+}
+
+/**
+ * The share of wins in percent, rounded to the nearest whole one, for the leaderboard column
+ * (#629, L10): a display figure of the record the server sends; `null` without matches.
+ */
+export function winShare(record: RecordTally, matches: number): number | null {
+  return matches <= 0 ? null : Math.round((record.wins * 100) / matches);
 }

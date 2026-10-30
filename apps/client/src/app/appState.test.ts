@@ -587,22 +587,20 @@ describe('AppState', () => {
       expect(app.playerId).toBeNull();
     });
 
-    it('opens the board or the Replays row and remembers the chosen player for "Back"', async () => {
+    it('opens the Leaderboard or the Replays tab, and "Back" from a replay returns there', async () => {
       const { app } = setup('', saved(), {
         me: () => Promise.resolve({ player_id: 7, nick: 'Me', has_password: true }),
         activeMatch: () => Promise.resolve(null),
       });
       await app.start();
       app.openBoard();
-      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'board', player: null });
-      app.selectPlayer(3);
-      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'board', player: 3 });
+      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'board' });
+      app.openBoard('history');
+      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'history' });
       app.openReplay('55');
       expect(app.screen).toMatchObject({ name: 'replay', matchId: '55' });
       app.closeReplay();
-      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'board', player: 3 });
-      app.openBoard('history');
-      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'history', player: null });
+      expect(app.screen).toEqual({ name: 'leaderboard', mode: 'history' });
     });
   });
 });
