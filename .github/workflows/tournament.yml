@@ -12,25 +12,25 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: Git ref to check out (it must contain this workflow's scripts)
+        description: "Git ref to check out (it must contain this workflow and its scripts)"
         default: develop
       ruleset:
-        description: Ruleset file
+        description: "Ruleset file"
         default: rulesets/mvp-1.toml
       bots:
-        description: Bot names separated by spaces, or all
+        description: "Bot names separated by spaces, or all"
         default: all
       maps:
-        description: Map files or a glob (default: the pool, not the fixtures)
+        description: "Map files or a glob (default: the pool, not the fixtures)"
         default: maps/*.json
       seeds:
-        description: Seeds per map and pair (total over all shards)
+        description: "Seeds per map and pair (total over all shards)"
         default: "100"
       shards:
-        description: Parallel jobs (at most 20, never more than seeds)
+        description: "Parallel jobs (at most 20, never more than seeds)"
         default: "10"
       label:
-        description: Name for the run and the artifact (letters, digits, . _ -)
+        description: "Name for the run and the artifact (letters, digits, . _ -)"
         default: ""
 
 run-name: Tournament ${{ inputs.label }}
