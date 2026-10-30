@@ -1495,6 +1495,7 @@ In total about 10-15 days of client work, four separate PRs (after #330 and #329
 - BL1 Shading: **BL1-1 "Restrained", but the territory border highlighting as in "Pronounced"** (a border glow of 5.5 px and brighter, the rest as in "restrained").
 - BL2 Textures: **T2 "Thinning"**; the baker: **(b) numpy and Pillow, the WebP format** (declare `numpy` and `Pillow` in `tools/maps/pyproject.toml`, lift the rule of section 22 about the standard library, `.bg.png` → `.bg.webp`).
 - BL3 Fog: **BL3-1 "Haze"** (F1; not the recommended BL3-2, the owner's decision).
+- **[decided] BL3-2, BL3-3 (#516, item 2):** stay as now (owner, 2026-10-30, #516); a later rework would be a separate effort.
 - BL4 Roads: **BL4-1 "Lanes"** (R1); the supply packet: **a square**.
 
 The implementation issues were opened after the choice per section 27: #344, #345, #346, #347 (order and parallelism: the description of each issue and tracking #282, section 11). BL1-1 in the description of #335 included "an order ribbon as a tube of two layers"; the decision on #339 "the look of the arrow and ribbons as now" is later and more specific, so the ribbons do not change.
@@ -1563,6 +1564,7 @@ The check was done on the mockup page (scene 6): the engine, whose rules are tak
 - [x] An enemy group in the vision zone: **EF2 "Pointer"**; entering and leaving **"Dissolve and marks"**
 - [x] The V3 arena: **AR1 "Chips"**
 - The switches "Half level" and "Case" in the mockup were a preview, not a choice: the half level is set by the DEC-21 terrain table.
+- **[decided] AR2, AR3 (#516, item 4):** stay as now (owner, 2026-10-30, #516); a later rework would be a separate effort.
 
 ---
 
@@ -1596,6 +1598,7 @@ FPS prices: estimates from the measurement of section 24.4 (the ratio to flat dr
 - [x] Units: **U1** as the basis; the row of charge squares from U4 on top of U1: **yes** (a square per charge: filled = charged, empty = discharged; "+N" for long rows, as with arena chips)
 - [x] Cities: **C1** (including the hollow province ring and the dotted warehouse places)
 - [x] Barracks and "Defense": **B1 "Icons"** (B2 "Building and rampart" a possible later step, **postponed**)
+- **[decided] B2, B3, B4 (#516, item 1):** stay as now (owner, 2026-10-30, #516); a later rework would be a separate effort.
 - [x] Menu icons: **I1 "Line"**
 
 ---
@@ -1662,6 +1665,12 @@ The frame price: **a calculation of the page, not a measurement.** A dry run of 
 3. "Stronger" costs about +40% to the price of FX3 ("dangerous for weak graphics"): a measurement with a prototype before the main work, a fallback knob: the strength constant (#351, #352).
 
 Implementation: #351 (FX3: the effects infrastructure, fight events, strength), then #352 (the SH1 shots).
+
+**[decided] SH2-SH5 (#516, item 3):** stay as now (owner, 2026-10-30, #516); a later rework would be a separate effort.
+
+### 29.5 The shot counter (#516, item 5) [decided]
+
+No counter for now. The variants CT1-CT4 and the current look are in [`mockups/shot-counter.html`](mockups/shot-counter.html) (the decision page of the postponed variants: [`mockups/postponed-516.html`](mockups/postponed-516.html)). **[decided] stay as now (owner, 2026-10-30, #516); a later rework would be a separate effort.**
 
 ---
 
