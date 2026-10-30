@@ -545,3 +545,34 @@ Head to head, both sides (120 matches per pair): expert beats normal 0.88 and ea
   and loses to `smart_expander@hard` by 0.59 only (a narrower margin than the strangler's 0.67).
 - Matches already stored with the old bot names (`turtle`, `reactive`, `expander`, `rusher`) keep their level in the
   replay nick (`gow_server.replays`).
+
+## Smart bots keep the CP of a chosen plan and answer strikes at lesser cities (#618)
+
+The BAL-02 plan diagnostic (#40) found that the smart bots spend every 1 CP at once (516 of 1429 chosen plans failed for
+lack of CP) and that defenders do not react to a visible enemy intent at a lesser city. #618 adds the `wait_plan` hold
+and the `worth_defense` answer (`gow_bots.bots.smart`, items 10 and 11; `docs/balance/README.md`). `SIM_VERSION` is
+unchanged (bots only). Before/after: the 15 smart bots (5 personalities x 3 levels), `mvp-2`, 3 pool maps, 20 seeds,
+13500 matches each, GitHub runners (the draws of the other parameters are unchanged: the new keys sort after all varied
+ones).
+
+Win rate against the other 14 bots [95%] and the planned share of sieges (`planned_siege_orders / siege_orders`):
+
+| bot | before | after | planned siege share before -> after |
+|---|---|---|---|
+| smart_expander@normal | 0.75 [0.73; 0.77] | 0.72 [0.70; 0.74] | 0.119 -> 0.329 |
+| smart_expander@hard | 0.72 [0.70; 0.74] | 0.70 [0.68; 0.73] | 0.116 -> 0.336 |
+| smart_strangler@hard | 0.65 [0.63; 0.67] | 0.65 [0.63; 0.68] | 0.072 -> 0.382 |
+| smart_rusher@hard | 0.63 [0.60; 0.65] | 0.66 [0.64; 0.68] | 0.122 -> 0.466 |
+| smart_reactive@hard | 0.54 [0.52; 0.57] | 0.50 [0.47; 0.52] | 0.086 -> 0.367 |
+| smart_turtle@hard | 0.08 [0.07; 0.09] | 0.08 [0.07; 0.10] | 0.698 -> 0.753 |
+
+(The `normal` and `easy` rows are in the PR description; `easy` does not hold CP, it has no `insight`.) The five `hard`
+bots among themselves (1500 matches): expander 0.74 -> 0.69, rusher 0.61 -> 0.67, strangler 0.62 -> 0.66, reactive 0.53
+-> 0.47, turtle 0.00 -> 0.01. Planned share of sieges over all 13500 matches: 0.148 -> 0.351 (planned share of attacks
+0.018 -> 0.049); among the `hard` bots 0.127 -> 0.432.
+
+**Result.** Contrary to the diagnostic's prediction the planned share of sieges rose strongly: a plan that is chosen is
+now paid, so it is sent instead of an ordinary order on the same target. Win rates moved little: no bot changed beyond
+its interval except `smart_reactive` (-0.04) and `smart_rusher` (+0.03), the order of the field is the same, the
+server level ladder of #574 holds (hard beats normal 0.70 -> 0.70, expert beats hard 0.67 -> 0.58, a narrower margin).
+No tuning to the gate was done. Both changes stay on for every personality.
