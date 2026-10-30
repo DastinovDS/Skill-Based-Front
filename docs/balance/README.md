@@ -300,6 +300,13 @@ and `insight` (the position thresholds, the DEC-37 pin, the evacuation of doomed
 | `normal` | 10 ticks | 15 ticks | 25 (5) | yes |
 | `hard` (the name alone) | 5 ticks | 0 | 40 (8) | yes |
 
+Two behaviors of the smart bots that do not depend on the level (#618; module docstring of `gow_bots.bots.smart`,
+items 10 and 11): **a chosen plan gets its CP** (`wait_plan`: when the best attack is a scheduled order that the CP cannot
+pay yet, the bot keeps its price for that many ticks and spends nothing non-urgent meanwhile; not on `easy`, which does not
+plan ahead) and **a strike at a lesser city is answered** (`worth_defense`: with `respond` 1 the bot also switches to Defense
+and reinforces an own city of at least that many VP; the reaction delay of the level applies). `0` switches either off:
+`bot_factory("smart_rusher", {"wait_plan": ParamRange(0, 0)})`.
+
 ## Budget
 
 AGENTS.md, section 12: 1000 matches on 8 cores of the reference machine in no more than 20 minutes. A match
