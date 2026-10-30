@@ -159,6 +159,7 @@ export const en = {
   'account.passwordOld': 'Current password',
   'account.passwordRepeat': 'Repeat the password',
   'account.passwordHint': '10 to 128 characters',
+  'account.eyebrow': 'Account',
   'account.setTitle': 'Set a password',
   'account.changeTitle': 'Change the password',
   'account.setIntro':

@@ -39,6 +39,8 @@ export const DOCK_SCENE_IDS = [
   'bot-rated',
   'bot-starting',
   'bot-error',
+  'password-set',
+  'password-change',
 ] as const;
 
 export const MENU_SCENE_IDS = [
@@ -63,8 +65,7 @@ export const MENU_SCENE_IDS = [
   'result-forfeit',
   'result-disconnect',
   'result-rated',
-  'password-set',
-  'password-change',
+  'boot',
   'exit-rated',
   'match-loading-map',
   'match-loading-connect',

@@ -11,7 +11,7 @@
   import QueueView from '../app/QueueView.svelte';
   import WelcomeScreen from '../app/WelcomeScreen.svelte';
   import ExitDialog from '../hud/ExitDialog.svelte';
-  import PasswordScreen from '../app/PasswordScreen.svelte';
+  import BootScreen from '../app/BootScreen.svelte';
   import { MENU_MAP } from '../app/menuMap.ts';
   import { isSeason, setSeasonOverride } from '../app/menuSeason.ts';
   import { BOARD_NOW, BOARD_SCENES, isBoardScene, ME, sceneApi } from './boardScenes.ts';
@@ -96,12 +96,6 @@
     onreplay={nothing}
     onmenu={nothing}
   />
-{:else if id === 'password-set' || id === 'password-change'}
-  <PasswordScreen
-    hasPassword={id === 'password-change'}
-    onsubmit={() => Promise.resolve(null)}
-    onback={nothing}
-  />
 {:else if id === 'match-loading-map'}
   <MatchScreen
     api={waiting}
@@ -126,6 +120,8 @@
   </div>
 {:else if id === 'crash'}
   <CrashGuard onexit={nothing} onreload={nothing}><DevBoom /></CrashGuard>
+{:else if id === 'boot'}
+  <BootScreen {map} delay={0} />
 {:else if id === 'exit-rated'}
   <div class="stage">
     <ExitDialog open rated banSeconds={300} onforfeit={nothing} onstay={nothing} />

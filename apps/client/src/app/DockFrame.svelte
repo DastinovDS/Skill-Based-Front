@@ -12,8 +12,8 @@
 
   interface Props {
     dock: DockContext;
-    /** The mode this screen is: its row in the rail is marked. */
-    mode: DockMode;
+    /** The mode this screen is: its row in the rail is marked (null: an account screen, no row). */
+    mode: DockMode | null;
     /**
      * The other modes are off (a waiting room: leaving drops the invite). The rail rows, the
      * player chip and the keys B, I and L do nothing; the screen's own "Leave" is the way out.
@@ -26,8 +26,8 @@
     eyebrow: string;
     head: string;
     sub?: string | null;
-    /** DEC-05: a public match has no pauses. */
-    pause: 'none' | 'each';
+    /** DEC-05: a public match has no pauses. `null`: not a match (an account screen), no chips. */
+    pause: 'none' | 'each' | null;
     /** An error or a notice that stays on the screen (amber, with the sign). */
     alert?: string | null;
     /** One more line under the "Unrated" line. */
@@ -193,10 +193,14 @@
     <div class="pe">{eyebrow}</div>
     <div class="ph">
       <h2>{head}</h2>
-      <div class="tags">
-        <span class="chip">{t('dock.chip.unrated')}</span>
-        <span class="chip">{pause === 'none' ? t('dock.chip.noPause') : t('dock.chip.pause')}</span>
-      </div>
+      {#if pause !== null}
+        <div class="tags">
+          <span class="chip">{t('dock.chip.unrated')}</span>
+          <span class="chip"
+            >{pause === 'none' ? t('dock.chip.noPause') : t('dock.chip.pause')}</span
+          >
+        </div>
+      {/if}
     </div>
     {#if sub !== null && sub !== ''}<p class="ps">{sub}</p>{/if}
     {@render children()}
@@ -206,7 +210,7 @@
     {#if banned}
       <p class="wl"><Icon name="alert" size={16} /><span>{t('dock.banLine')}</span></p>
     {/if}
-    <p class="note">{unrated}</p>
+    {#if pause !== null}<p class="note">{unrated}</p>{/if}
     {#if note !== null}<p class="note">{note}</p>{/if}
     <div class="acts">{@render actions()}</div>
   {/snippet}

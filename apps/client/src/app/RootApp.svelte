@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { BotLevel } from '../api/http.ts';
-  import { t, type MessageKey } from '../i18n/index.ts';
+  import type { MessageKey } from '../i18n/index.ts';
   import type { MatchEndMsg, PlayerId } from '../protocol.gen.ts';
   import ReplayScreen from '../replay/ReplayScreen.svelte';
   import CrashGuard from './CrashGuard.svelte';
   import { AppState, type Guest } from './appState.svelte.ts';
   import type { DockContext } from './dock.ts';
   import LeaderboardScreen from '../board/LeaderboardScreen.svelte';
+  import BootScreen from './BootScreen.svelte';
   import BotScreen from './BotScreen.svelte';
   import CreateScreen from './CreateScreen.svelte';
   import LobbyScreen from './LobbyScreen.svelte';
@@ -81,7 +82,7 @@
 </script>
 
 {#if screen.name === 'boot'}
-  <main class="screen"><p role="status">{t('common.loading')}</p></main>
+  <BootScreen map={app.backdrop} />
 {:else if screen.name === 'welcome' || guest === null}
   <WelcomeScreen
     invited={app.pendingInvite !== null}
@@ -227,6 +228,7 @@
   {/key}
 {:else if screen.name === 'password'}
   <PasswordScreen
+    dock={dockOf(guest)}
     hasPassword={guest.hasPassword}
     onsubmit={(password: string, oldPassword: string) => app.setPassword(password, oldPassword)}
     onback={() => {
