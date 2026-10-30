@@ -31,6 +31,7 @@ from gow_sim.ruleset import (
 RULESETS_DIR = Path(__file__).resolve().parents[3] / "rulesets"
 MVP0 = RULESETS_DIR / "mvp-0.toml"
 MVP1 = RULESETS_DIR / "mvp-1.toml"
+MVP2 = RULESETS_DIR / "mvp-2.toml"
 TEST_SHORT = RULESETS_DIR / "test-short.toml"
 
 
@@ -169,6 +170,16 @@ def test_city_upgrades_of_mvp0_and_mvp1(mvp0: Ruleset) -> None:
     assert to_canonical(load_ruleset(MVP1)) == expected
 
 
+def test_mvp2_is_mvp1_with_the_bal02_stance_shares() -> None:
+    """BAL-02 (#40): the played ruleset mvp-2 differs from mvp-1 only in the stance shares of the
+    charge regeneration (economy 75 -> 60, war 25 -> 40); the other numbers are the same."""
+    expected = _raw(MVP1)
+    shares = expected["economy"]["stance_to_charges_pct"]
+    assert (shares["economy"], shares["war"]) == (75, 25)
+    shares["economy"], shares["war"] = 60, 40
+    assert to_canonical(load_ruleset(MVP2)) == expected
+
+
 def test_enabled_must_be_a_boolean() -> None:
     data = _raw()
     data["city_upgrades"]["enabled"] = 1
@@ -201,7 +212,7 @@ def test_test_short_is_mvp0_with_a_60_second_match() -> None:
     assert to_canonical(short) == expected
 
 
-@pytest.mark.parametrize("path", [MVP0, MVP1, TEST_SHORT], ids=lambda p: p.name)
+@pytest.mark.parametrize("path", [MVP0, MVP1, MVP2, TEST_SHORT], ids=lambda p: p.name)
 def test_canonical_form_is_the_toml_data(path: Path) -> None:
     rules = load_ruleset(path)
     assert to_canonical(rules) == _raw(path)

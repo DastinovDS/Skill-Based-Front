@@ -16,7 +16,7 @@ on:
         default: develop
       ruleset:
         description: "Ruleset file"
-        default: rulesets/mvp-1.toml
+        default: rulesets/mvp-2.toml
       bots:
         description: "Bot names separated by spaces, or all"
         default: all

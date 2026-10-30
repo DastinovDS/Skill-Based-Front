@@ -54,8 +54,8 @@ Common to all maps:
 - at the start each player has a capital (6 units, all charged, warehouse 6) and 5 cities (2 units each,
   warehouse 2, a small city has warehouse 1; the DEC-27 maps also give each 2 own provinces without a garrison);
   neutral cities and provinces are empty; a city's starting warehouse is no larger than the warehouse of the ruleset
-  `rulesets/mvp-1.toml` (`city_upgrades`, DEC-26, item 5): `gow-maps validate --ruleset
-  rulesets/mvp-1.toml` flags an excess as `[warehouse]` (#379; `mise run maps:validate`);
+  `rulesets/mvp-2.toml` (`city_upgrades`, DEC-26, item 5): `gow-maps validate --ruleset
+  rulesets/mvp-2.toml` flags an excess as `[warehouse]` (#379; `mise run maps:validate`);
 - every node has a name (DEC-23, item 4; the preview labels it after the kind); the border point is in the middle of all
   roads (`border_permille` 500), the preview draws it as a small circle;
 - all roads start at level 1 (DEC-22); the upgrade limit `max_level` (at most 3) sets the character
@@ -168,7 +168,7 @@ uv run gow-maps mirror maps/src/<name>.half.json -o maps/<name>.json
 uv run gow-maps preview maps/<name>.json
 uv run gow-maps bake maps/<name>.json
 # check the whole pool and the fixtures (CI does the same)
-uv run gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json
+uv run gow-maps validate --ruleset rulesets/mvp-2.toml maps/*.json maps/fixtures/*.json
 ```
 
 The seed of a background comes from the map name and `meta.version`, so raising the version of a new map changes its picture.
@@ -177,7 +177,7 @@ and keep the pictures they had, whatever their version is.
 
 The test `tools/maps/tests/test_pool.py` checks that every map (`maps/<name>.json`, `maps/fixtures/<name>.json`) is exactly equal to the
 result of the script on its half and passes the validator; the MVP maps have 25-40 nodes, the DEC-27
-maps also pass the `size` check (45..55 nodes) and the warehouses of `mvp-1` (`warehouse`). The simulation's
+maps also pass the `size` check (45..55 nodes) and the warehouses of `mvp-2` (`warehouse`). The simulation's
 symmetry test (`packages/sim/tests/test_symmetry.py`) runs all six maps.
 
 The preview (`<name>.preview.png`) is for people only: the server does not serve it. The map background for the client

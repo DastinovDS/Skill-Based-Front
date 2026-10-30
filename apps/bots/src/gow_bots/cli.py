@@ -55,7 +55,7 @@ def _parser() -> argparse.ArgumentParser:
     q.add_argument("--against", nargs="+", required=True, help="the opponents")
     q.add_argument("--keys", nargs="+", required=True, help="parameters to tune")
     q.add_argument("--maps", nargs="+", required=True, help="map files (a glob is expanded)")
-    q.add_argument("--ruleset", default="rulesets/mvp-1.toml")
+    q.add_argument("--ruleset", default="rulesets/mvp-2.toml")
     q.add_argument("--rounds", type=int, default=20, help="mutations to try (default 20)")
     q.add_argument("--seeds", type=int, default=4, help="seeds per map and pair (default 4)")
     q.add_argument("--seed-base", type=int, default=0, help="first seed (default 0)")

@@ -168,7 +168,7 @@ every request has a `request_id` (the header `X-Request-ID`). Settings: the `GOW
 | `GOW_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `GOW_FORWARDED_ALLOW_IPS` | `127.0.0.1` | the proxy (Caddy) whose `X-Forwarded-*` headers are trusted |
 | `GOW_MAPS_DIR` | `maps` | the map pool: `<id>.json` and an optional background `<id>.bg.webp` (not recursive: `maps/fixtures/` is not served) |
-| `GOW_RULESET_PATH` | `rulesets/mvp-0.toml` (in `compose.yaml` and the `app` image: `mvp-1`) | the ruleset of the matches the server runs |
+| `GOW_RULESET_PATH` | `rulesets/mvp-0.toml` (in `compose.yaml` and the `app` image: `mvp-2`) | the ruleset of the matches the server runs |
 | `GOW_RULESETS_DIR`, `GOW_RULESETS_BUNDLED_DIR` | `rulesets/archive`, `rulesets/archive` | the archive of rulesets by hash: the server puts its own ruleset here on start (the directory must be writable; in the container `/data/rulesets` on the volume), the archive from the image is copied here if the directories differ. The server does not accept `test-short` when `GOW_ENV=prod` |
 | `GOW_DATABASE_URL` | `sqlite:///data/gow.db` | the SQLite database (WAL); the path is relative to the working directory |
 | `GOW_GUEST_RATE_LIMIT`, `GOW_GUEST_RATE_WINDOW_S` | `10`, `3600` | no more than N new guests from one IP per window in seconds |
@@ -263,7 +263,7 @@ deploy/smoke.sh                   # build, start and check the stack (the CI job
 deploy/check-caddy.sh             # only the headers, cache and routes of an already running stack
 docker compose logs -f app        # server logs (JSON lines)
 docker compose down               # stop; data stays in the volumes
-GOW_RULESET_PATH=rulesets/mvp-0.toml docker compose up -d   # the stack on another ruleset (mvp-1 by default)
+GOW_RULESET_PATH=rulesets/mvp-0.toml docker compose up -d   # the stack on another ruleset (mvp-2 by default)
 # a 60-second match (the ruleset test-short) for a manual check and E2E: docs/qa/manual-match.md
 docker compose -f compose.yaml -f e2e/compose.e2e.yaml up --build -d --wait
 ```
@@ -272,7 +272,7 @@ mise tasks for stacks (`AGENTS.md`, section 3; ports 80/443 are taken on the own
 
 | Task | For whom | What it does |
 |---|---|---|
-| `mise run stack [ruleset]` | owner | the production stack (project `skill-based-front`) on `http://localhost:8080`, HTTPS 8443, `SITE_ADDRESS=:80`, the default ruleset is `mvp-1` |
+| `mise run stack [ruleset]` | owner | the production stack (project `skill-based-front`) on `http://localhost:8080`, HTTPS 8443, `SITE_ADDRESS=:80`, the default ruleset is `mvp-2` |
 | `mise run stack:reset [ruleset]` | owner | the same from scratch: `down`, removal of the volume `gow-data` (database and replays), `up` |
 | `mise run stack:agent [ruleset]`, `stack:agent:down` | agents | their own stack (project `sbf-agent`, `http://localhost:18080`), does not touch the owner's stack |
 | `mise run smoke` | both | `deploy/smoke.sh` on the project `sbf-agent`, the stack is removed at the end |

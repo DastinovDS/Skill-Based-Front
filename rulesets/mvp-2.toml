@@ -1,6 +1,6 @@
 # Ruleset mvp-2: mvp-1 with the BAL-02 balance iterations (#40). Every change against
 # rulesets/mvp-1.toml is listed in docs/balance/log.md (iterations 1..N) and marked "BAL-02" next to the key.
-# mvp-1 stays the played ruleset until the owner switches (criterion 6 of #40).
+# mvp-2 is the played ruleset since the owner's decision of 2026-10-30 (criterion 6 of #40); mvp-1 stays as a historical one.
 #
 # Source of the rules: docs/design/mechanics.md (DEC decisions, section 21).
 # Values and key names: SIM-01 (#17), the table "Values and notes".

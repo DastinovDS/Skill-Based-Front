@@ -109,8 +109,8 @@ is not mixed in one iteration.
 ## BAL-02 (#40): iterations on `rulesets/mvp-2.toml`
 
 `mvp-2` starts as a copy of `mvp-1` (`SIM_VERSION` 24); every iteration changes ruleset numbers only
-(AGENTS.md, 4.1, item 7) and is marked `BAL-02` next to the key. `mvp-1` stays the played ruleset; switching the
-defaults is the owner's call (criterion 6).
+(AGENTS.md, 4.1, item 7) and is marked `BAL-02` next to the key. `mvp-1` was the played ruleset during the iterations; the owner switched the defaults to `mvp-2` on 2026-10-30
+(criterion 6, see "Owner decisions" below).
 
 **Field.** The 10 strategic bots: `rusher`, `strangler`, `reactive`, `expander`, `turtle` (BOT-03) and
 `smart_rusher`, `smart_strangler`, `smart_reactive`, `smart_expander`, `smart_turtle` (#166, the default `hard`
@@ -388,7 +388,7 @@ share is the #590 definition (`planned_siege_share`) from this run on; iteration
 | 3. Planned attack share 20-70% (#590: sieges of defended nodes) | 0.084 overall (34047 of 405615 siege orders); per bot 0.05-0.16, smart_turtle 0.69 | **failed** |
 | 4. Turtle vs Expander < 40% | turtle 0.00 [0.00; 0.01], smart_turtle vs smart_expander 0.00 [0.00; 0.01] | passed (degenerately) |
 | 5. Late capture >= 30% | 0.58 | passed |
-| 6. Final ruleset `rulesets/mvp.toml`, archived | `mvp-2` archived by hash; no `mvp.toml`, defaults unchanged | awaiting the owner's decision |
+| 6. Final ruleset `rulesets/mvp.toml`, archived | `mvp-2` archived by hash; no `mvp.toml` | **met** by `mvp-2` as the played ruleset (owner decision 2026-10-30, see "Owner decisions") |
 
 End reasons: `vp` 26569, `capital` 2810, `cities` 103, draws 488, double defeats 30.
 
@@ -416,3 +416,24 @@ What the numbers could not do, and why (design hypotheses for the next step):
    even with the #590 definition 0.084. The bots defend few nodes (0.8-1.1 charged defenders at a siege,
    `charge-flow.md`), so there is little to plan against. The share grows with defended fronts, which point 2 would
    bring.
+
+### Owner decisions (2026-10-30)
+
+1. **Played ruleset.** The defaults (`stack`, `stack:reset`, `stack:agent`, `tournament`, `search`, `maps`, `compose.yaml`,
+   the `app` image, the `tournament.yml` input) now point to `rulesets/mvp-2.toml`. The file keeps the name `mvp-2.toml`
+   (no `rulesets/mvp.toml`). It is archived by hash as `rulesets/archive/9d8cc4dd4b48572ad2be415c2fcc4d4c.toml` (byte
+   for byte equal to the file). Criterion 6 of #40 is met by `mvp-2` as the played ruleset. `mvp-0` and `mvp-1` stay
+   as test and historical rulesets (golden replays, unit tests), `SIM_VERSION` is unchanged.
+2. **Criterion 1 (#611, option A).** "No strategic bot > 65%" is read over the non-bunker strategic bots (`rusher`,
+   `strangler`, `reactive`, `expander` and their `smart_*` versions). The bunkers (`turtle`, `smart_turtle`) are checked by
+   criterion 4. Recorded in mechanics.md, section 17. The claim of empty nodes (option C) is not decided: the owner
+   waits for the planned-order diagnostic; if chosen, it gets its own DEC.
+
+**Criterion 1 under reading A, confirming run (30000 matches).** Win rate of the 8 non-bunker bots against all other
+strategic bots (the column of "Metrics by bot" in [latest.md](latest.md)): smart_expander 0.74, rusher 0.70,
+smart_rusher 0.70, strangler 0.68, smart_strangler 0.67 (all above 0.65), reactive 0.60, smart_reactive 0.55,
+expander 0.24. **Not met**. A stricter variant, only against non-bunker opponents (mean of the 7 pairs of the pair
+matrix, 600 matches each; the matrix is rounded to two decimals and the 30000-row file is not in the repo, so these
+are approximations): smart_expander 0.67 [0.66; 0.68], rusher 0.62, smart_rusher 0.62, strangler 0.59,
+smart_strangler 0.57, reactive 0.49, smart_reactive 0.43, expander 0.02. Still **not met**, by smart_expander alone.
+So the gate stays open on criteria 1 and 3.
