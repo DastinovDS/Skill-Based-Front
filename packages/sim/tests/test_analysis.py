@@ -126,6 +126,57 @@ def test_planned_attack_share_counts_attacks_only() -> None:
     assert m.planned_attack_share == (0.5, None)
 
 
+def test_planned_siege_share_counts_orders_into_enemy_garrisons_only() -> None:
+    # #590, option A: the gate share counts only the attacks on a node with an enemy garrison.
+    moves = [
+        MoveRecord(1, 0, planned=True, attack=True, siege=True),
+        MoveRecord(2, 0, planned=False, attack=True, siege=True),
+        MoveRecord(3, 0, planned=False, attack=True, siege=True),
+        MoveRecord(4, 0, planned=True, attack=True),  # a planned walk into an empty node
+        MoveRecord(5, 0, planned=False, attack=True),
+        MoveRecord(6, 1, planned=False, attack=True),  # player 1: attacks, but no siege order
+    ]
+    m = analyze(_log([], moves))
+    assert m.attack_orders == (5, 1)
+    assert m.planned_attack_share == (0.4, 0.0)  # 2 of 5 (the BAL-01 definition), 0 of 1
+    assert m.siege_orders == (3, 0)
+    assert m.planned_siege_orders == (1, 0)
+    assert m.planned_siege_share == (0.3333, None)  # 1 of 3; no siege orders: undefined
+    data = m.to_json()
+    assert data["siege_orders"] == [3, 0]
+    assert data["planned_siege_share"] == [0.3333, None]
+
+
+def test_recorder_marks_a_siege_order_by_the_garrison_before_the_tick() -> None:
+    # Map dec18: player 0 owns K = 0, A = 1, B = 2, C = 3; 4 (a province) and 6 are neutral,
+    # C - 6 and 6 - 7 are roads. A group of player 1 stands in the neutral node 6.
+    match = Match(load_map(TESTS / "maps" / "dec18.json"), _script_rules(), bytes(range(32)))
+    state = match.state
+    gids: list[int] = []
+    for owner, node in ((0, K), (0, C), (0, A), (1, 6)):
+        gid = state.new_id()
+        state.groups[gid] = Group(gid, owner, 1, 1, Mode.ATTACK, AtNode(node))
+        gids.append(gid)
+    g_k, g_c, g_a, g_6 = gids
+    batch = [
+        PlayerCommand(0, 0, Move(g_k, P)),  # an attack into an empty neutral province
+        PlayerCommand(0, 1, Move(g_c, 6, planned=True)),  # into the garrison of player 1
+        PlayerCommand(0, 2, Move(g_a, B)),  # an own node: no attack
+        PlayerCommand(1, 0, Move(g_6, 7)),  # player 1 leaves 6 for the empty neutral 7
+    ]
+    recorder = MatchRecorder()
+    recorder.begin(match)
+    match.step(batch)
+    recorder.record(match, batch)
+    m = analyze(recorder.log())
+    assert m.orders == (3, 1)
+    assert m.attack_orders == (2, 1)
+    assert m.siege_orders == (1, 0)
+    assert m.planned_siege_orders == (1, 0)
+    assert m.planned_siege_share == (1.0, None)
+    assert m.planned_attack_share == (0.5, 0.0)
+
+
 def test_to_json_is_plain_data() -> None:
     data = analyze(_log([event(60, "match_ended", winner=None, reason="draw")])).to_json()
     assert data["winner"] is None
@@ -403,6 +454,7 @@ def test_scripted_match_statistics() -> None:
     assert (p0.orders, p0.planned_orders) == (3, 2)
     assert p0.planned_share == 0.6667
     assert p0.planned_attack_share == 0.5
+    assert p0.planned_siege_share is None  # no order went into an enemy garrison
     assert (p1.orders, p1.planned_share, p1.planned_attack_share) == (0, None, None)
 
     # CP in hundredths: 1 move, 2 planned at 250, defense, 2 recruits less the refunds 100 + 50,

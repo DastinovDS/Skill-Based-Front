@@ -1242,6 +1242,8 @@ Since CP buy charges (section 6), the bonus for a plan can be priced in the same
 
 Calibration by bot self-play: if scheduled orders are more than ~70% of all attacks, the plan is too cheap; if less than ~20%, it is too expensive.
 
+**[accepted]** (the owner's decision 2026-10-30, #590, option A) **"Attacks" here are sieges of defended nodes.** The share counts only the move orders into a node that is not the player's own and holds a group of the opponent at the moment of the order (the state the order is applied to, the end of the previous tick); a walk into an empty node (neutral or enemy) is no attack for this share, because no plan can pay there (there is no fight). Metric: `planned_siege_share` in `gow_sim.analysis` (`docs/balance/README.md`); the share over every order into a node that is not one's own stays as `planned_attack_share` (the BAL-01 definition), for comparison with older runs. A balance metric, not a rule: `SIM_VERSION` unchanged.
+
 ### Open questions about orders
 
 - **[open]** Does the bonus of a scheduled order apply to **defense** (a position prepared in advance), or only to moving armies? The original idea was that a prepared defense takes the initiative away from an ordinary attack.
@@ -3414,7 +3416,7 @@ The current starting values of the ruleset `rulesets/mvp-0.toml` (durations in t
 
 - **A dominant strategy.** If more than 70% of matches follow one scenario, there is no depth.
 - **Bot self-play.** Three simple bots (expansion / early pressure / supply cut-off). Look at the spread of outcomes: if one bot wins more than ~65% against all others, there is a skew somewhere.
-- **The share of scheduled orders** among attacks: the guideline is 20-70%.
+- **The share of scheduled orders** among attacks: the guideline is 20-70%; the attacks are the orders into a node with an enemy garrison (#590, section 5).
 - **Does the siege pay off:** are cities taken by attrition if the roads are cut.
 - **The bunker:** does a player who sealed themselves in a small region win.
 - **The end of the match:** are there attacks in the last minutes.

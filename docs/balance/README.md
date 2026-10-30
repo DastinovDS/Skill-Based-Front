@@ -103,7 +103,10 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 | `orders` | [int, int] | accepted `Move` orders |
 | `attack_orders` | [int, int] | of them attacking: the target did not belong to the player at the moment of the order |
 | `planned_attack_orders` | [int, int] | of the attacking ones the scheduled (`planned=true`) |
-| `planned_attack_share` | [float or null, ...] | `planned_attack_orders / attack_orders`, 4 digits; `null` without attacks |
+| `planned_attack_share` | [float or null, ...] | `planned_attack_orders / attack_orders`, 4 digits; `null` without attacks (the BAL-01 definition: empty nodes count as attacks) |
+| `siege_orders` | [int, int] | of the attacking ones those into a node with an enemy garrison: a group of the opponent stood in the destination at the moment of the order (the end of the previous tick) (#590) |
+| `planned_siege_orders` | [int, int] | of the siege orders the scheduled ones (#590) |
+| `planned_siege_share` | [float or null, ...] | `planned_siege_orders / siege_orders`, 4 digits; `null` without siege orders. **The gate metric** "share of scheduled attacks" (#40, criterion 3; the owner's decision 2026-10-30, #590; mechanics.md, section 5) |
 | `sieges` | [int, int] | siege attempts: a fight for an enemy node with the player as the attacker, or an entry into an empty enemy node |
 | `sieges_won` | [int, int] | successful sieges: captures of enemy nodes (neutral ones do not count) |
 | `captures` | [int, int] | all captures of nodes, neutral ones included |
@@ -125,7 +128,9 @@ One line = one JSON object, ASCII, without spaces. The fields with `[a, b]` are 
 
 The fields `stock_*`, `charges_*` and `burned_permille` were added in #310 without changing `schema`: nothing was removed and
 nothing changed meaning. Tournament files older than #310 do not contain them, the report shows "no data" for them.
-`usage` was added in #166 the same way; older files show n/a in its section. The charge ledger, flow, stock by place and
+`usage` was added in #166 the same way; older files show n/a in its section.
+`siege_orders`, `planned_siege_orders` and `planned_siege_share` were added in #590 the same way (no field changed
+meaning); the report shows the gate share as n/a for older files, next to the share over all attacks. The charge ledger, flow, stock by place and
 bottleneck fields (#588) were added the same way (only additions, `schema` stays 1); the report shows n/a for older files.
 
 The metric definitions are set in `packages/sim/src/gow_sim/analysis.py` (the module docstring).
@@ -156,7 +161,7 @@ these are separate fields, the only thing they share is `MatchRecorder`/`MatchLo
 | `supply` | ticks of the accepted `SetFront` (`set_front`), `SetRearMin` (`set_rear_min`), `Transfer` (`transfer`); `transfer_charges`: the sum of charges from `transfer_started` (a shipment is cut by the free space of the target, so it can be less than the command's `n`) |
 | `orders`, `planned_orders` | accepted `Move` and of them the scheduled ones |
 | `planned_share` | `planned_orders / orders`, 4 digits; `null` without orders |
-| `planned_attack_share` | as in `MatchMetrics` |
+| `planned_attack_share`, `planned_siege_share` | as in `MatchMetrics` (#590: the second one is the gate share) |
 | `cp_by_category` | CP spending in hundredths by accepted commands and the prices `orders.cost` of the ruleset: `move`, `planned_move`, `mode` (`SetMode`), `recruit` (recruiting minus the `CancelRecruit` refunds), `road` (`UpgradeRoad`), `barracks`, `warehouse`, `transfer`, `other` (`Split`, `Merge`, `CancelOrder`, `SetStance`, `SetFront`, `SetRearMin`: free in the MVP rulesets) |
 | `cp_refunded`, `cp_total` | the refund for cancelling a recruit (already subtracted from `recruit`) and the sum of the categories |
 
