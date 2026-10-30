@@ -15,8 +15,7 @@ _spec.loader.exec_module(export_howto)
 
 REGENERATE = "mise run regen:howto"
 VECTORS = {
-    v["id"]: v
-    for v in json.loads(export_howto.VECTORS_PATH.read_text(encoding="utf-8"))["vectors"]
+    v["id"]: v for v in json.loads(export_howto.VECTORS_PATH.read_text(encoding="utf-8"))["vectors"]
 }
 BUILT: dict[str, Any] = export_howto.build()
 
@@ -36,7 +35,7 @@ def test_the_played_ruleset_is_mvp_2() -> None:
 
 @pytest.mark.parametrize("example", BUILT["examples"], ids=lambda e: e["id"])
 def test_outcome_matches_the_table_of_mechanics(example: dict[str, Any]) -> None:
-    """The expected values are the rows of combat.json (mechanics.md, DEC-24), not the code's output."""
+    """Expected values: the rows of combat.json (mechanics.md, DEC-24), not the code's output."""
     vec = VECTORS[example["vector"]]
     exp = vec["expected"]
     assert example["end"]["after_ticks"] == exp["end_after"]

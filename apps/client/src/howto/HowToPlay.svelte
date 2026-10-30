@@ -77,7 +77,9 @@
   const TRI = 'M2 2h18l-9 15.5z';
 </script>
 
-<div class="hw">
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- The panel around it scrolls: a focusable region lets the arrow keys scroll it. -->
+<div class="hw" role="region" aria-label={t('help.howTo')} tabindex="0">
   <section aria-labelledby="hw-charges">
     <h3 id="hw-charges">{t('howto.charges.title')}</h3>
     <p>
@@ -99,31 +101,25 @@
       aria-label={t('howto.pic.supply')}
       focusable="false"
     >
-      <!-- Top: the capital, a road with charges on it, a city with a charged unit. -->
-      <path d="M52 26H292" class="road" />
-      <rect x="110" y="22" width="8" height="8" class="charge" />
-      <rect x="160" y="22" width="8" height="8" class="charge" />
-      <rect x="210" y="22" width="8" height="8" class="charge" />
-      <circle cx="36" cy="26" r="16" class="city" />
+      <!-- One capital, two roads: the upper one carries charges to a charged unit, the lower one is cut. -->
+      <path d="M52 44L292 26" class="road" />
+      <rect x="116" y="33" width="8" height="8" class="charge" />
+      <rect x="166" y="29" width="8" height="8" class="charge" />
+      <rect x="216" y="26" width="8" height="8" class="charge" />
+      <path d="M52 52L132 66" class="road" />
+      <path d="M212 80L292 72" class="road faint" />
+      <path d="M154 60l22 22M176 60l-22 22" class="cut" />
+      <circle cx="36" cy="48" r="16" class="city" />
       <path
-        d="M36 15l3.2 6.5 7.1 1-5.15 5 1.2 7.1L36 31.2l-6.35 3.4 1.2-7.1-5.15-5 7.1-1z"
+        d="M36 37l3.2 6.5 7.1 1-5.15 5 1.2 7.1L36 53.2l-6.35 3.4 1.2-7.1-5.15-5 7.1-1z"
         class="star"
       />
-      <circle cx="308" cy="26" r="16" class="city" />
-      <g transform="translate(297 17)">
+      <circle cx="308" cy="24" r="16" class="city" />
+      <g transform="translate(297 15)">
         <path d={TRI} class="back" />
         <path d={TRI} class="fill own" />
         <path d={TRI} class="rim" />
       </g>
-      <!-- Bottom: a cut road and a city whose unit stays empty. -->
-      <path d="M52 72H140" class="road" />
-      <path d="M180 72H292" class="road faint" />
-      <path d="M150 62l20 20M170 62l-20 20" class="cut" />
-      <circle cx="36" cy="72" r="16" class="city" />
-      <path
-        d="M36 61l3.2 6.5 7.1 1-5.15 5 1.2 7.1L36 77.2l-6.35 3.4 1.2-7.1-5.15-5 7.1-1z"
-        class="star"
-      />
       <circle cx="308" cy="72" r="16" class="city" />
       <g transform="translate(297 63)">
         <path d={TRI} class="back" />
@@ -152,7 +148,8 @@
         </div>
         <ol class="frames">
           {#each list as f (f.key)}
-            <li aria-label={aria(f)}>
+            <li>
+              <span class="sr">{aria(f)}</span>
               <span class="lab" aria-hidden="true">{f.label}</span>
               <span class="side" aria-hidden="true">
                 {#each cells(totals.a.units, f.a) as cell, i (i)}
@@ -225,6 +222,11 @@
     >
       <circle cx="36" cy="26" r="16" class="city" />
       <circle cx="324" cy="26" r="16" class="city" />
+      <g transform="translate(25 17)">
+        <path d={TRI} class="back" />
+        <path d={TRI} class="fill own" />
+        <path d={TRI} class="rim" />
+      </g>
       <path d="M58 16h200l24 10-24 10H58z" class="ribbon" />
       <path d="M180 8l6 6-6 6-6-6z" class="bonusmark" />
       <path d="M212 8l6 6-6 6-6-6z" class="bonusmark" />
@@ -266,6 +268,7 @@
 
 <style>
   .hw {
+    margin-top: 14px;
     display: flex;
     flex-direction: column;
     gap: 18px;
@@ -289,6 +292,25 @@
 
   section p + p {
     margin-top: 6px;
+  }
+
+  /* Read by a screen reader instead of the drawing of the frame. */
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .frames li {
+    position: relative;
+  }
+
+  .hw:focus-visible {
+    outline: 2px solid var(--paper);
+    outline-offset: 4px;
   }
 
   .note {

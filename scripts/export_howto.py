@@ -1,17 +1,19 @@
 """Write the combat examples of the "How to play" screen (CLI-13, #72).
 
-The examples are rows of ``packages/protocol/vectors/combat.json`` (the inputs: who stands where, with
-which bonus). Each one is played here through the real systems of ``gow_sim`` under the ruleset that
-is played (``rulesets/mvp-2.toml``), and the state after every round is recorded. The client only
-draws the file (``apps/client/src/howto/combatExamples.gen.json``); it never works out a fight
-(AGENTS.md, 7.1). The rule numbers the page quotes (a round in seconds, the bonus per road, the
-price of a scheduled order, the VP period, ...) come from the same ruleset and go into the same file.
+The examples are rows of ``packages/protocol/vectors/combat.json`` (the inputs: who stands
+where, with which bonus). Each one is played here through the real systems of ``gow_sim`` under
+the ruleset that is played (``rulesets/mvp-2.toml``), and the state after every round is
+recorded. The client only draws the file (``apps/client/src/howto/combatExamples.gen.json``); it
+never works out a fight (AGENTS.md, 7.1). The rule numbers the page quotes (a round in seconds,
+the bonus per road, the price of a planned order, the VP period, ...) come from the same ruleset
+and go into the same file.
 
-    uv run python scripts/export_howto.py && pnpm -C apps/client exec prettier --write src/howto/combatExamples.gen.json
+    mise run regen:howto
 
-(``mise run regen:howto``). The file is committed; ``tests/test_export_howto.py`` regenerates it and
-fails when it differs, and also compares every outcome with the expected values of ``combat.json``,
-which come from ``docs/design/mechanics.md``, not from the code.
+(that is this script, then prettier on the file). The file is committed;
+``tests/test_export_howto.py`` regenerates it and fails when it differs, and also compares every
+outcome with the expected values of ``combat.json``, which come from ``docs/design/mechanics.md``,
+not from the code.
 """
 
 import json
@@ -23,7 +25,6 @@ from gow_sim.maps import MapDef, parse_map
 from gow_sim.match import SIM_VERSION
 from gow_sim.ruleset import Ruleset, load_ruleset, ruleset_hash
 from gow_sim.state import (
-    PROGRESS_SCALE,
     AtNode,
     Event,
     GameState,
@@ -118,6 +119,12 @@ def _before_arrival(state: GameState, rules: Ruleset, edge: int, from_node: int)
     return OnEdge(edge, from_node, way.progress(way.ticks - 1))
 
 
+def _num(e: Event, key: str) -> int:
+    value = e.get(key)
+    assert isinstance(value, int) and not isinstance(value, bool), (e.kind, key)
+    return value
+
+
 def _side(state: GameState, player: int) -> dict[str, int]:
     groups = [g for g in state.groups.values() if g.owner == player]
     return {"units": sum(g.units for g in groups), "charged": sum(g.charged for g in groups)}
@@ -164,8 +171,8 @@ def _play(vec: dict[str, Any], rules: Ruleset) -> dict[str, Any]:
         rounds = [e for e in events if e.kind == "fight_round"]
         if rounds:
             (rnd,) = rounds
-            bonus_left["a"] -= int(rnd.get("virtual_0"))
-            bonus_left["b"] -= int(rnd.get("virtual_1"))
+            bonus_left["a"] -= _num(rnd, "virtual_0")
+            bonus_left["b"] -= _num(rnd, "virtual_1")
             frames.append(
                 {
                     "round": len(frames) + 1,
@@ -192,7 +199,7 @@ def _play(vec: dict[str, Any], rules: Ruleset) -> dict[str, Any]:
             "b": _side(state, 1),
             "node_taken": state.nodes[1].owner == 0,
             "attack_bounces": bounced,
-            "losses": {"a": int(end.get("losses_0")), "b": int(end.get("losses_1"))},
+            "losses": {"a": _num(end, "losses_0"), "b": _num(end, "losses_1")},
         },
     }
 

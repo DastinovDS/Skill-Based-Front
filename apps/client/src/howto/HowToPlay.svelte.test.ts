@@ -41,12 +41,12 @@ describe('the How to play page (CLI-13, #72)', () => {
     component = mount(HowToPlay, { target: document.body });
     flushSync();
     const surplus = HOWTO.examples.findIndex((e) => e.id === 'surplus');
-    const figure = document.querySelectorAll('figure.ex')[surplus];
-    const last = [...figure.querySelectorAll('.frames li')].at(-1);
+    const figure = document.querySelectorAll('figure.ex')[surplus] as HTMLElement;
+    const last = [...figure.querySelectorAll('.frames li')].at(-1) as HTMLElement;
     // 4 attackers and 2 defenders are drawn in every frame; at the end both defenders have fallen.
-    expect(last?.querySelectorAll('.side')[0].querySelectorAll('svg')).toHaveLength(4);
-    expect(last?.querySelectorAll('.side')[1].querySelectorAll('.gone')).toHaveLength(2);
-    expect(last?.getAttribute('aria-label')).toContain('Defense: 0 units, 0 charged');
+    expect(last.querySelectorAll('.side')[0]?.querySelectorAll('svg')).toHaveLength(4);
+    expect(last.querySelectorAll('.side')[1]?.querySelectorAll('.gone')).toHaveLength(2);
+    expect(last.querySelector('.sr')?.textContent).toContain('Defense: 0 units, 0 charged');
   });
 
   it('tells how each example ended from the recorded outcome', () => {

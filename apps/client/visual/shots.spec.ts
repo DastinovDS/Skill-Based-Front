@@ -546,6 +546,25 @@ test('shot of the help sheet', async ({ page }) => {
   await shootBoth(page, 'help');
 });
 
+// The whole page of the rules at once: a tall window, so the panel needs no scrolling.
+test('shot of the whole How to play screen (CLI-13)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 2300 });
+  await page.goto('/?menu=howto');
+  await expect(page.locator('.hw')).toBeVisible();
+  await page.mouse.move(1000, 2200);
+  await page.screenshot({ path: join(OUT, 'screen-howto-tall.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'screen-howto-tall-gray.png') });
+});
+
+test('shot of the How to play page inside the help sheet (CLI-13)', async ({ page }) => {
+  await openScene(page, 'snapshot_fog');
+  await page.keyboard.press('?');
+  await page.getByRole('button', { name: 'How to play' }).click();
+  await expect(page.locator('.hw')).toBeVisible();
+  await shootBoth(page, 'help-howto');
+});
+
 test('shot of the forfeit dialog in the match', async ({ page }) => {
   await openScene(page, 'snapshot_fog');
   await page.getByRole('button', { name: 'Exit' }).click();

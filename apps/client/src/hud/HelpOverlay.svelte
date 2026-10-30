@@ -20,6 +20,12 @@
   /** The rules page replaces the keys inside the sheet; the match runs on under it (nothing pauses). */
   let page = $state(false);
 
+  /** The button that was pressed leaves the page: the focus goes to a control that stays. */
+  function show(next: boolean): void {
+    page = next;
+    void tick().then(() => close?.focus());
+  }
+
   // A reopened help starts with the keys again.
   $effect(() => {
     if (!open) page = false;
@@ -75,7 +81,7 @@
               type="button"
               class="dlg-btn"
               onclick={() => {
-                page = false;
+                show(false);
               }}
             >
               {t('help.howToBack')}
@@ -160,7 +166,7 @@
                 type="button"
                 class="dlg-btn"
                 onclick={() => {
-                  page = true;
+                  show(true);
                 }}
               >
                 <Icon name="info" size={18} />{t('help.howTo')}
