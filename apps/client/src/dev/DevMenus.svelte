@@ -6,6 +6,7 @@
   import QueueView from '../app/QueueView.svelte';
   import WelcomeScreen from '../app/WelcomeScreen.svelte';
   import ExitDialog from '../hud/ExitDialog.svelte';
+  import PasswordScreen from '../app/PasswordScreen.svelte';
   import { MENU_MAP } from '../app/menuMap.ts';
   import { isSeason, setSeasonOverride } from '../app/menuSeason.ts';
   import { BOARD_NOW, BOARD_SCENES, isBoardScene, ME, sceneApi } from './boardScenes.ts';
@@ -79,6 +80,12 @@
   />
 {:else if result !== undefined}
   <ResultScreen me={0} end={result} onreplay={nothing} onmenu={nothing} />
+{:else if id === 'password-set' || id === 'password-change'}
+  <PasswordScreen
+    hasPassword={id === 'password-change'}
+    onsubmit={() => Promise.resolve(null)}
+    onback={nothing}
+  />
 {:else if id === 'exit-rated'}
   <div class="stage">
     <ExitDialog open rated banSeconds={300} onforfeit={nothing} onstay={nothing} />

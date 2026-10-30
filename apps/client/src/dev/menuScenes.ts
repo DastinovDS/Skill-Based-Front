@@ -57,6 +57,13 @@ export const MENU_SCENE_IDS = [
   'result-guest',
   'result-calibration',
   'result-limit',
+  'result-defeat',
+  'result-draw',
+  'result-forfeit',
+  'result-disconnect',
+  'result-rated',
+  'password-set',
+  'password-change',
   'exit-rated',
   ...BOARD_SCENE_IDS,
 ] as const;
@@ -120,6 +127,12 @@ export const RESULT_SCENES: Readonly<Record<string, MatchEndMsg>> = {
   'result-guest': unrated('guest'),
   'result-calibration': { ...ended, rated: true, calibration: { played: 3, total: 5 } },
   'result-limit': unrated('opponent_limit'),
+  // The outcomes and reasons of the result screen (#593): the scenes play as player 0.
+  'result-defeat': { ...ended, reason: 'capital_captured', winner: 1, vp: [5, 11] },
+  'result-draw': { ...ended, reason: 'double_defeat', winner: null, vp: [8, 8] },
+  'result-forfeit': { ...ended, reason: 'forfeit', vp: [4, 6] },
+  'result-disconnect': { ...ended, reason: 'disconnect', winner: 1, vp: [7, 3] },
+  'result-rated': { ...ended, rated: true, rating: { before: 1466, after: 1480 } },
 };
 
 export function isDockScene(id: string): boolean {

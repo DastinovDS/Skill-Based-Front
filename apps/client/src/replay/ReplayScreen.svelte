@@ -51,6 +51,15 @@
     if (import.meta.env.DEV && id === 'dev-fights') {
       return parseReplay((await import('./siege-fights.frames.json')).default);
     }
+    // `?replay=dev-preparing`: the server keeps answering 202, the wait never ends (#593).
+    if (import.meta.env.DEV && id === 'dev-preparing') {
+      onPreparing();
+      return new Promise<ReplayFile>(() => undefined);
+    }
+    // `?replay=dev-unavailable`: the server answered 410 (#593).
+    if (import.meta.env.DEV && id === 'dev-unavailable') {
+      throw new ReplayLoadError('unavailable');
+    }
     return loadReplayWhenReady(id, token, { signal, onPreparing });
   }
 

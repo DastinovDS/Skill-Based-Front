@@ -45,6 +45,32 @@ test('shot of the replay viewer', async ({ page }) => {
   await page.screenshot({ path: join(OUT, 'replay.png') });
 });
 
+// The states of the replay screen before a file is there (#593): `replay-preparing.png` (the server
+// still builds the frames) and `replay-unavailable.png` (410).
+for (const state of ['preparing', 'unavailable']) {
+  test(`shot of the replay screen (${state})`, async ({ page }) => {
+    await page.goto(`/?replay=dev-${state}`);
+    await expect(page.getByRole(state === 'preparing' ? 'status' : 'alert')).toBeVisible();
+    await page.screenshot({ path: join(OUT, `replay-${state}.png`) });
+  });
+}
+
+// The split menu (S) on the selected own group (#593): `split.png` and `split-gray.png`.
+test('shot of the split menu', async ({ page }) => {
+  await page.goto('/?scene=snapshot_fog&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '300');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.mouse.click(335, 430);
+  await page.waitForTimeout(300);
+  await page.mouse.move(1000, 700);
+  await page.keyboard.press('KeyS');
+  await expect(page.getByRole('slider')).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'split.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'split-gray.png') });
+});
+
 // A replay with fights (#323): the arena with the round data of the file (shots, losses, the
 // last round) in a fight of a node at ticks 385 (a round just fought) and 460 (a short fight).
 // `replay-fights-<tick>.png`; the sample is `src/replay/siege-fights.frames.json`.
