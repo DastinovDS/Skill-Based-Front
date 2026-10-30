@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Application } from 'pixi.js';
+  import { Application, Assets } from 'pixi.js';
   import { onMount, untrack } from 'svelte';
   import type { GeoFile } from '../map/geography.ts';
   import type { MapFile, PlayerId } from '../protocol.gen.ts';
@@ -52,6 +52,9 @@
   let scene: MapScene | null = null;
   // The baked shapes live as long as the renderer: a scene that replaces another finds them made.
   let sprites: SceneSprites | null = null;
+  // The background URL the scenes have loaded. A scene never unloads it (the next scene of the same
+  // map gets the same cached texture, #617): it is unloaded here once no scene shows it.
+  let heldBackground: string | null = null;
   let insets: Insets = NO_INSETS;
 
   /** "Fit map": show the whole map. Called by the HUD button through `bind:this`. */
@@ -112,6 +115,10 @@
         }),
     );
     if (viewRect !== null) scene.showRect(viewRect);
+    if (heldBackground !== null && heldBackground !== backgroundUrl) {
+      void Assets.unload(heldBackground);
+    }
+    heldBackground = backgroundUrl;
   }
 
   // Rebuild the scene when the map or the viewing player changes (the replay viewer switches the
@@ -193,6 +200,10 @@
       sprites?.world.destroy();
       sprites?.screen.destroy();
       sprites = null;
+      if (heldBackground !== null) {
+        void Assets.unload(heldBackground);
+        heldBackground = null;
+      }
     };
   });
 </script>

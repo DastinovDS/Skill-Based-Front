@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { DRAWN_MAP_VARIANCE, mapVariance } from './mapPixels.ts';
 import { DOCK_CLICKS, MENU_SCENES, SCENES, STATUS_SCENES } from './scenes.ts';
 
 // `mise run shots [label]`: a PNG of every dev scene for the agent (or the owner) to look at, no
@@ -121,6 +122,37 @@ test('shot of the replay viewer with the fog of a side', async ({ page }) => {
   await expect(view.getByRole('button', { name: /Fog/ })).toHaveAttribute('aria-pressed', 'false');
   await page.keyboard.press('KeyF');
   await shoot('replay-fog-p2', '520', true);
+});
+
+// #617: the replay over a baked background (`&bg=crossroads` under the dev sample) after the view
+// switched (each switch rebuilds the scene): `replay-switch-p2.png`, `replay-switch-both.png` and
+// their grey twins. Fails when the map is blank (it turned black) or the page throws.
+test('shot of the replay viewer over a background after the view switches', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/?replay=dev-fog&bg=crossroads');
+  const canvas = page.locator('.game-canvas');
+  await expect(canvas).toHaveAttribute('data-tick', '0');
+  await expect(canvas).toHaveAttribute('data-background', 'loaded');
+  const view = page.getByRole('group', { name: 'View as' });
+  const shoot = async (name: string): Promise<void> => {
+    await expect(canvas).not.toHaveAttribute('data-background', 'pending');
+    await page.mouse.move(5, 5);
+    await expect.poll(() => mapVariance(page)).toBeGreaterThan(DRAWN_MAP_VARIANCE);
+    await page.screenshot({ path: join(OUT, `${name}.png`) });
+    await page.evaluate(`document.documentElement.style.filter = 'grayscale(1)'`);
+    await page.screenshot({ path: join(OUT, `${name}-gray.png`) });
+    await page.evaluate(`document.documentElement.style.filter = ''`);
+  };
+  await page.getByLabel('Position in the match').fill('460');
+  await expect(canvas).toHaveAttribute('data-tick', '460');
+  await view.getByRole('button', { name: 'Reactive' }).click();
+  await view.getByRole('button', { name: 'Rusher' }).click();
+  await view.getByRole('button', { name: 'Reactive' }).click();
+  await shoot('replay-switch-p2');
+  await view.getByRole('button', { name: 'Both' }).click();
+  await shoot('replay-switch-both');
+  expect(errors).toEqual([]);
 });
 
 // The split menu (S) on the selected own group (#593): `split.png` and `split-gray.png`.

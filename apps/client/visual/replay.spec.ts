@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { DRAWN_MAP_VARIANCE, mapVariance } from './mapPixels.ts';
 
 // The replay viewer (CLI-10) on the bundled sample (`?replay=dev`, a 409-tick match): it plays,
 // speeds up and seeks. No reference screenshot: this checks the controls drive the real renderer.
@@ -87,4 +88,38 @@ test('replay viewer fits a phone', async ({ page }) => {
     ),
   );
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+// #617: "View as" rebuilds the scene of the same map; the old scene unloaded the baked background
+// the new one had just been handed, the renderer threw every frame and the map turned black. The
+// samples are on `siege` (no background), so `&bg=crossroads` draws one under the dev sample.
+// WebKit shows the black canvas; headless Chromium keeps the last picture, so the uncaught render
+// error is what fails there.
+test('replay viewer keeps the map drawn while the view and the fog switch', async ({ page }) => {
+  // Each check takes a screenshot of the canvas: software WebGL on a CI runner is slow at it.
+  test.setTimeout(180_000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/?replay=dev-fog&bg=crossroads');
+  const canvas = page.locator('.game-canvas');
+  await expect(canvas).toHaveAttribute('data-tick', '0');
+  await expect(canvas).toHaveAttribute('data-background', 'loaded');
+  const view = page.getByRole('group', { name: 'View as' });
+  const drawn = async (): Promise<void> => {
+    await expect(canvas).not.toHaveAttribute('data-background', 'pending');
+    await expect.poll(() => mapVariance(page)).toBeGreaterThan(DRAWN_MAP_VARIANCE);
+  };
+  await drawn();
+  for (const name of ['Reactive', 'Both', 'Rusher']) {
+    await view.getByRole('button', { name }).click();
+    await drawn();
+  }
+  await page.keyboard.press('KeyF');
+  await drawn();
+  // While playing too.
+  await page.keyboard.press('Space');
+  await view.getByRole('button', { name: 'Rusher' }).click();
+  await drawn();
+  await page.keyboard.press('Space');
+  expect(errors).toEqual([]);
 });
