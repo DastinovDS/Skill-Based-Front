@@ -55,6 +55,7 @@ __all__ = [
     "Travel",
     "army",
     "awards_left",
+    "edge_ticks",
     "vp_rates",
 ]
 
@@ -105,6 +106,24 @@ class Travel:
                     best[other] = t
                     heapq.heappush(queue, (t, other))
         return tuple(best)
+
+
+def edge_ticks(mapdef: MapDef, rules: Ruleset, edge: int, to_node: int, level: int = 1) -> int:
+    """Ticks a group takes along ``edge`` of road ``level`` into ``to_node``: the formula of
+    mechanics.md, section 4 ("Speed by terrain by zones", #253) with the road speed of DEC-28,
+    item 7. The border point splits the edge, each zone goes at the terrain speed of its node
+    times the road speed (``terrain_pct * road_pct // 100``), ``T = max(1, travel_ticks * 100 * d
+    // (1000 * pa * pb))`` with ``d = b * pb + (1000 - b) * pa`` (all non-negative, rounded down).
+    Public data only: the map, the ruleset and the road level the view shows."""
+    e = mapdef.edges[edge]
+    from_node = e.other(to_node)
+    b = e.border_permille if from_node == e.a else 1000 - e.border_permille
+    road = rules.road.speed_pct.of(level) if level >= 2 else 100
+    speed = rules.terrain.speed_pct
+    pa = speed.of(mapdef.nodes[from_node].terrain) * road // 100
+    pb = speed.of(mapdef.nodes[to_node].terrain) * road // 100
+    d = b * pb + (1000 - b) * pa
+    return max(1, e.travel_ticks * 100 * d // (1000 * pa * pb))
 
 
 def awards_left(rules: Ruleset, tick: int) -> int:
