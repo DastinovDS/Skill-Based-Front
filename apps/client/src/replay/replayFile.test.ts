@@ -122,7 +122,10 @@ describe('the per-player key (#598)', () => {
     const raw = structuredClone(SAMPLE_FOG) as unknown as { frames: { v?: unknown }[] };
     const second = raw.frames[1];
     if (second === undefined) throw new Error('no frame');
-    second.v = [{ n: [], e: [] }, { n: [], e: [] }];
+    second.v = [
+      { n: [], e: [] },
+      { n: [], e: [] },
+    ];
     const file = parseReplay(raw);
     expect(hasVision(file)).toBe(false);
     expect(file.frames.every((f) => f.v === undefined)).toBe(true);

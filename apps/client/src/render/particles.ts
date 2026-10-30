@@ -12,7 +12,14 @@
  * The pure half (`rnd`, `burst`) makes the position of a particle a function of the progress of its
  * effect, so a paused or frozen scene shows a burst in the state of its tick and nothing is stored.
  */
-import { Container, Particle, ParticleContainer, ParticleShader, Rectangle, Texture } from 'pixi.js';
+import {
+  Container,
+  Particle,
+  ParticleContainer,
+  ParticleShader,
+  Rectangle,
+  Texture,
+} from 'pixi.js';
 import type { Point } from './camera.ts';
 import { BG, ENEMY, PAPER, PLATE_FILL, YOU } from './style.ts';
 

@@ -198,11 +198,9 @@ describe('ReplayViewer "View as" (#599)', () => {
 
   it('offers Player 1, Player 2 and Both, starting with both: player 1 blue', () => {
     const root = open();
-    expect([...root.querySelectorAll('.view .seg button')].map((b) => b.textContent.trim())).toEqual([
-      'Player 1',
-      'Player 2',
-      'Both',
-    ]);
+    expect(
+      [...root.querySelectorAll('.view .seg button')].map((b) => b.textContent.trim()),
+    ).toEqual(['Player 1', 'Player 2', 'Both']);
     expect(pressed(root)).toEqual(['Both']);
     expect(blue()).toBe(0);
     expect(root.querySelector('.side .nick')?.textContent).toBe('Player 1');
@@ -249,8 +247,7 @@ describe('ReplayViewer fog of a side (#600)', () => {
     return found;
   };
   const groupsDrawn = (): number =>
-    (drawn?.frame() as { groups: { owner?: number }[] }).groups.filter((g) => g.owner === 1)
-      .length;
+    (drawn?.frame() as { groups: { owner?: number }[] }).groups.filter((g) => g.owner === 1).length;
 
   it('shows a side with its fog by default, F and the button turn it off, Both has none', () => {
     const root = open(undefined, { file: SAMPLE_FOG, initialView: 0 });
