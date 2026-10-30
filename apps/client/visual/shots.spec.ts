@@ -87,6 +87,40 @@ test('shot of the replay viewer as player 2, at the end and on a phone', async (
   await page.screenshot({ path: join(OUT, 'replay-narrow-gray.png') });
 });
 
+// The fog of one side (#600) on `src/replay/siege-fog.frames.json` (the file has what each player
+// saw): `replay-fog-p1.png` (player 1 at tick 460: the veil, a memory ghost, an enemy figure on a
+// road), `replay-fog-p1-off.png` (the same side without its fog, key F), `replay-fog-both.png`
+// (Both: no fog, the toggle unavailable) and `replay-fog-p2.png` (player 2 at tick 520), the
+// player shots also in grey scale.
+test('shot of the replay viewer with the fog of a side', async ({ page }) => {
+  await page.goto('/?replay=dev-fog');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '0');
+  const view = page.getByRole('group', { name: 'View as' });
+  const shoot = async (name: string, tick: string, gray: boolean): Promise<void> => {
+    await page.getByLabel('Position in the match').fill(tick);
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', tick);
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: join(OUT, `${name}.png`) });
+    if (!gray) return;
+    const style = await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.screenshot({ path: join(OUT, `${name}-gray.png`) });
+    await style.evaluate((node) => {
+      node.remove();
+    });
+  };
+  await view.getByRole('button', { name: 'Rusher' }).click();
+  await shoot('replay-fog-p1', '460', true);
+  await page.keyboard.press('KeyF');
+  await shoot('replay-fog-p1-off', '460', false);
+  await view.getByRole('button', { name: 'Both' }).click();
+  await shoot('replay-fog-both', '460', false);
+  await view.getByRole('button', { name: 'Reactive' }).click();
+  await expect(view.getByRole('button', { name: /Fog/ })).toHaveAttribute('aria-pressed', 'false');
+  await page.keyboard.press('KeyF');
+  await shoot('replay-fog-p2', '520', true);
+});
+
 // The split menu (S) on the selected own group (#593): `split.png` and `split-gray.png`.
 test('shot of the split menu', async ({ page }) => {
   await page.goto('/?scene=snapshot_fog&menus');

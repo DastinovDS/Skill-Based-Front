@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setLocale } from '../i18n/index.ts';
-import { SAMPLE } from './fixture.ts';
+import { SAMPLE, SAMPLE_FOG } from './fixture.ts';
 import ReplayViewer from './ReplayViewer.svelte';
 
 // jsdom has no ResizeObserver (`bind:clientHeight` of the bars uses it).
@@ -192,13 +192,13 @@ describe('ReplayViewer keys (ui-style 13.7)', () => {
 
 describe('ReplayViewer "View as" (#599)', () => {
   const pressed = (root: HTMLElement): string[] =>
-    [...root.querySelectorAll('.view button')]
+    [...root.querySelectorAll('.view .seg button')]
       .filter((b) => b.getAttribute('aria-pressed') === 'true')
       .map((b) => b.textContent.trim());
 
   it('offers Player 1, Player 2 and Both, starting with both: player 1 blue', () => {
     const root = open();
-    expect([...root.querySelectorAll('.view button')].map((b) => b.textContent.trim())).toEqual([
+    expect([...root.querySelectorAll('.view .seg button')].map((b) => b.textContent.trim())).toEqual([
       'Player 1',
       'Player 2',
       'Both',
@@ -237,5 +237,63 @@ describe('ReplayViewer "View as" (#599)', () => {
     slider.dispatchEvent(new Event('input', { bubbles: true }));
     flushSync();
     expect(root.querySelector('.result')?.textContent).toContain('Guest-7 won');
+  });
+});
+
+describe('ReplayViewer fog of a side (#600)', () => {
+  // The key chip "F" is also the first letter of the label: found by its place, its name checked.
+  const fogButton = (root: HTMLElement): HTMLButtonElement => {
+    const found = root.querySelector<HTMLButtonElement>('.view button.fog');
+    if (found === null) throw new Error('no fog button');
+    expect(found.textContent.trim()).toBe('FogF');
+    return found;
+  };
+  const groupsDrawn = (): number =>
+    (drawn?.frame() as { groups: { owner?: number }[] }).groups.filter((g) => g.owner === 1)
+      .length;
+
+  it('shows a side with its fog by default, F and the button turn it off, Both has none', () => {
+    const root = open(undefined, { file: SAMPLE_FOG, initialView: 0 });
+    const fog = fogButton(root);
+    expect(fog.getAttribute('aria-pressed')).toBe('true');
+    expect(fog.getAttribute('aria-disabled')).toBe('false');
+    expect(fog.getAttribute('aria-keyshortcuts')).toBe('F');
+    fog.click();
+    flushSync();
+    expect(fog.getAttribute('aria-pressed')).toBe('false');
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' }));
+    flushSync();
+    expect(fog.getAttribute('aria-pressed')).toBe('true');
+    button(root, 'Both').click();
+    flushSync();
+    expect(fog.getAttribute('aria-pressed')).toBe('false');
+    expect(fog.getAttribute('aria-disabled')).toBe('true');
+    expect(fog.title).toBe('Pick a player to see their fog of war');
+  });
+
+  it('draws only what the side saw while the fog is on', () => {
+    const root = open(undefined, { file: SAMPLE_FOG, initialView: 0 });
+    const slider = root.querySelector<HTMLInputElement>('input[type="range"]');
+    if (slider === null) throw new Error('no slider');
+    slider.value = '300';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    expect(groupsDrawn()).toBe(0);
+    fogButton(root).click();
+    flushSync();
+    expect(groupsDrawn()).toBeGreaterThan(0);
+  });
+
+  it('a file without what the players saw: the fog is unavailable, with the reason', () => {
+    const root = open(undefined, { initialView: 1 });
+    const fog = fogButton(root);
+    expect(fog.getAttribute('aria-pressed')).toBe('false');
+    expect(fog.getAttribute('aria-disabled')).toBe('true');
+    expect(fog.title).toBe('This replay does not record what each player saw');
+    const reason = document.getElementById(fog.getAttribute('aria-describedby') ?? '');
+    expect(reason?.textContent).toBe('This replay does not record what each player saw');
+    fog.click();
+    flushSync();
+    expect(fog.getAttribute('aria-pressed')).toBe('false');
   });
 });

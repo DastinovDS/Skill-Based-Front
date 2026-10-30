@@ -13,6 +13,7 @@ describe('replayKey', () => {
     expect(press('Digit2')).toEqual({ kind: 'speed', speed: 4 });
     expect(press('Numpad3')).toEqual({ kind: 'speed', speed: 16 });
     expect(press('Home')).toEqual({ kind: 'fit' });
+    expect(press('KeyF')).toEqual({ kind: 'fog' });
     expect(press('Escape')).toEqual({ kind: 'back' });
   });
 

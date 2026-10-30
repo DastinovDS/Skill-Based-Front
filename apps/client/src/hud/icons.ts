@@ -173,6 +173,12 @@ export const ICONS = {
   ],
   history: [path('M3 12a9 9 0 1 0 3-6.7L3 8'), path('M3 3v5h5'), path('M12 7v5l3 2')],
   eye: [path('M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z'), circle(12, 12, 3)],
+  // Lucide "cloud-fog": the fog of one side in the replay (#600).
+  fog: [
+    path('M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242'),
+    path('M16 17H7'),
+    path('M17 21H9'),
+  ],
   lock: [rect(4, 11, 16, 10, 2), path('M8 11V7a4 4 0 0 1 8 0v4')],
   ban: [circle(12, 12, 9), path('m5.6 5.6 12.8 12.8')],
   refresh: [path('M21 12a9 9 0 1 1-3-6.7L21 8'), path('M21 3v5h-5')],

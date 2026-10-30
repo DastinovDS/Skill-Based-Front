@@ -8,9 +8,9 @@
  * stay right even when nothing draws).
  */
 import { interpolateFrame, type RenderFrame } from '../net/interpolate.ts';
-import type { EventMsg, SnapshotMsg } from '../protocol.gen.ts';
+import type { EventMsg, PlayerId, SnapshotMsg } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
-import type { ReplayFile } from './replayFile.ts';
+import { hasVision, type ReplayFile } from './replayFile.ts';
 import { buildTimeline, type Timeline } from './timeline.ts';
 
 /** Playback speeds of the controls. */
@@ -25,7 +25,11 @@ export class ReplayPlayer implements RenderSource {
   /** The last tick of the match. */
   readonly duration: number;
   readonly outcome: ReplayFile['outcome'];
-  readonly #timeline: Timeline;
+  readonly #file: ReplayFile;
+  /** The full reveal, then the fog of player 0 and of player 1 once asked for (#600). */
+  readonly #timelines = new Map<PlayerId | null, Timeline>();
+  #timeline: Timeline;
+  #fogOf: PlayerId | null = null;
   readonly #now: () => number;
   #position = 0;
   #playing = false;
@@ -38,8 +42,30 @@ export class ReplayPlayer implements RenderSource {
     this.tickHz = file.tick_hz;
     this.duration = file.frames.at(-1)?.t ?? 0;
     this.outcome = file.outcome;
+    this.#file = file;
     this.#timeline = buildTimeline(file);
+    this.#timelines.set(null, this.#timeline);
     this.#now = now;
+  }
+
+  /** Whose fog the map shows (#600); `null`: none, the full reveal. */
+  get fogOf(): PlayerId | null {
+    return this.#fogOf;
+  }
+
+  /**
+   * Show the match as `side` saw it, from the per-player key of the file (#598), or with `null`
+   * the full reveal. A file without that key keeps the full reveal. The position stays.
+   */
+  showFogOf(side: PlayerId | null): void {
+    const fogOf = hasVision(this.#file) ? side : null;
+    let timeline = this.#timelines.get(fogOf);
+    if (timeline === undefined) {
+      timeline = buildTimeline(this.#file, fogOf);
+      this.#timelines.set(fogOf, timeline);
+    }
+    this.#fogOf = fogOf;
+    this.#timeline = timeline;
   }
 
   /** Render time in ticks (fractional). */

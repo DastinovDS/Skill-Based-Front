@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SAMPLE, SAMPLE_FIGHTS } from './fixture.ts';
+import { SAMPLE, SAMPLE_FIGHTS, SAMPLE_FOG } from './fixture.ts';
 import { parseReplay } from './replayFile.ts';
 import { buildTimeline } from './timeline.ts';
 
@@ -257,5 +257,109 @@ describe('buildTimeline', () => {
     const view = buildTimeline(legacy).snapshots[0]?.view;
     expect(view?.groups[0]?.mode).toBe('attack');
     expect(view?.intents.map((i) => i.kind)).toEqual(['defense']);
+  });
+});
+
+describe('buildTimeline as one side (#600)', () => {
+  const fog = buildTimeline(SAMPLE_FOG, 0);
+  const full = buildTimeline(SAMPLE_FOG);
+  const at = (t: number): number => SAMPLE_FOG.frames.findIndex((f) => f.t === t);
+
+  it('keeps only the own groups and packets: an enemy group the file does not list is hidden', () => {
+    for (const [i, frame] of SAMPLE_FOG.frames.entries()) {
+      const view = fog.snapshots[i]?.view;
+      expect(view?.groups.map((g) => g.id)).toEqual(
+        frame.g.filter((g) => g.o === 0).map((g) => String(g.id)),
+      );
+      expect(view?.packets).toHaveLength(frame.k.filter((k) => k[1] === 0).length);
+    }
+    // The sample has enemy groups the player does not see at all.
+    const hidden = SAMPLE_FOG.frames.find((f) => f.g.some((g) => g.o === 1));
+    expect(full.snapshots[at(hidden?.t ?? -1)]?.view.groups.length).toBeGreaterThan(
+      fog.snapshots[at(hidden?.t ?? -1)]?.view.groups.length ?? 0,
+    );
+  });
+
+  it('keeps an enemy figure the file lists, at its place and level', () => {
+    const frame = SAMPLE_FOG.frames.find((f) => f.v?.[0].e.some((e) => (e[4]?.length ?? 0) > 0));
+    if (frame === undefined) throw new Error('the sample has no figure');
+    const edge = frame.v?.[0].e.findIndex((e) => (e[4]?.length ?? 0) > 0) ?? -1;
+    const record = frame.v?.[0].e[edge]?.[4]?.[0];
+    const shown = fog.snapshots[at(frame.t)]?.view.edges[edge]?.enemy_groups;
+    expect(shown?.map((g) => g.id)).toEqual(frame.v?.[0].e[edge]?.[4]?.map((r) => r[0]));
+    expect(shown?.[0]).toMatchObject({
+      id: record?.[0],
+      pos: record?.[1],
+      toward_b: record?.[2] === 1,
+      detail: record?.[3],
+      mode: record?.[4],
+    });
+    // The full view draws no figures: both sides are groups there.
+    expect(full.snapshots[at(frame.t)]?.view.edges.every((e) => e.enemy_groups.length === 0)).toBe(
+      true,
+    );
+  });
+
+  it('gives every node and road the level, the warehouse and the road level of the file', () => {
+    for (const [i, frame] of SAMPLE_FOG.frames.entries()) {
+      const view = fog.snapshots[i]?.view;
+      const vision = frame.v?.[0];
+      expect(view?.nodes.map((n) => n.detail)).toEqual(vision?.n.map((n) => n[0]));
+      expect(view?.nodes.map((n) => n.warehouse)).toEqual(vision?.n.map((n) => n[2] ?? null));
+      expect(view?.edges.map((e) => e.detail)).toEqual(vision?.e.map((e) => e[1]));
+      expect(view?.edges.map((e) => e.width)).toEqual(vision?.e.map((e) => e[0]));
+      expect(view?.edges.map((e) => e.halves.map((h) => h.detail))).toEqual(
+        vision?.e.map((e) => [e[2][0], e[3][0]]),
+      );
+    }
+    // The sample has fog, ranges and both kinds of levels for player 1.
+    const details = new Set(fog.snapshots.flatMap((s) => s.view.nodes.map((n) => n.detail)));
+    expect(details).toEqual(new Set(['exact', 'range', 'presence', 'fog']));
+  });
+
+  it('dates a sighting by the file: a memory has its own tick, a place in sight the frame tick', () => {
+    let memories = 0;
+    for (const [i, frame] of SAMPLE_FOG.frames.entries()) {
+      for (const [id, [detail, sighting]] of (frame.v?.[0].n ?? []).entries()) {
+        const seen = fog.snapshots[i]?.view.nodes[id]?.seen;
+        if (sighting === undefined || sighting === null) {
+          expect(seen).toBeNull();
+          continue;
+        }
+        if (detail === 'fog') memories += 1;
+        expect(seen).toEqual({
+          tick: detail === 'fog' ? sighting[5] : frame.t,
+          level: sighting[0],
+          enemy_modes: sighting[1],
+          enemy_units: sighting[2] ?? null,
+          enemy_charged: sighting[3] ?? null,
+          enemy_range: sighting[4] ? { low: sighting[4][0], high: sighting[4][1] } : null,
+        });
+      }
+    }
+    expect(memories).toBeGreaterThan(0);
+  });
+
+  it('lists the own groups of a fight and the enemy totals', () => {
+    const i = SAMPLE_FOG.frames.findIndex((f) => (f.f?.length ?? 0) > 0);
+    const frame = SAMPLE_FOG.frames[i];
+    const fight = fog.snapshots[i]?.view.fights[0];
+    const members = (frame?.f?.[0]?.[7] ?? []).map((id) => frame?.g.find((g) => g.id === id));
+    expect(fight?.groups).toEqual(members.filter((g) => g?.o === 0).map((g) => String(g?.id)));
+    const enemy = members.filter((g) => g?.o === 1);
+    expect(fight?.enemy_units).toBe(enemy.reduce((sum, g) => sum + (g?.u ?? 0), 0));
+    expect(fight?.enemy_charged).toBe(enemy.reduce((sum, g) => sum + (g?.c ?? 0), 0));
+  });
+
+  it('shows the CP and stance of the side', () => {
+    const last = SAMPLE_FOG.frames.at(-1);
+    expect(buildTimeline(SAMPLE_FOG, 1).snapshots.at(-1)?.view.me).toMatchObject({
+      cp: last?.p[1][0],
+      stance: last?.p[1][2],
+    });
+  });
+
+  it('gives the full reveal for a side of a file without the key', () => {
+    expect(buildTimeline(SAMPLE, 0).snapshots).toEqual(buildTimeline(SAMPLE).snapshots);
   });
 });

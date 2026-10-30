@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { SAMPLE } from './fixture.ts';
+import { SAMPLE, SAMPLE_FOG } from './fixture.ts';
 import { ReplayPlayer } from './replayPlayer.ts';
 
 let clock = 0;
@@ -107,5 +107,29 @@ describe('ReplayPlayer', () => {
   it('shows the final VP at the end', () => {
     player.seek(SAMPLE.ticks);
     expect(player.current.view.vp).toEqual(SAMPLE.vp);
+  });
+});
+
+describe('ReplayPlayer with the fog of a side (#600)', () => {
+  it('switches to what a side saw and back, at the same position', () => {
+    const fogged = new ReplayPlayer(SAMPLE_FOG, () => clock);
+    fogged.seek(300);
+    const all = fogged.frame().groups.length;
+    fogged.showFogOf(1);
+    expect(fogged.fogOf).toBe(1);
+    expect(fogged.frame().tick).toBe(300);
+    const mine = fogged.frame().groups;
+    expect(mine.every((g) => g.owner === 1)).toBe(true);
+    expect(mine.length).toBeLessThan(all);
+    expect(fogged.current.view.nodes.some((n) => n.detail === 'fog')).toBe(true);
+    fogged.showFogOf(null);
+    expect(fogged.fogOf).toBeNull();
+    expect(fogged.frame().groups).toHaveLength(all);
+  });
+
+  it('keeps the full reveal for a file without the per-player key', () => {
+    player.showFogOf(1);
+    expect(player.fogOf).toBeNull();
+    expect(player.current.view.nodes.every((n) => n.detail === 'exact')).toBe(true);
   });
 });
