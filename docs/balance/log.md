@@ -488,7 +488,7 @@ Capital wins a match: 0.058 pool, 0.110 small (`smart_striker`), median at tick 
 pool. Always against never planning: capital wins 31 against 24 (pool), 29 against 62 (small); head to head 0.52
 [0.43; 0.60] and 0.55 [0.46; 0.64]. Robust against naive: head to head 0.68 [0.60; 0.76] (pool), 0.63 [0.54; 0.71]
 (small). The trace: the auto striker plans 38% of the groups it sends at the capital; at a strike the capital holds 3.2
-units with 3.2 charges on average (0 charges in 8%, 2-4 in 65%) and a full warehouse (5.7 of 6), the striking groups
+units with 3.2 charges on average (0 charges in 8%, 2-4 in 64%) and a full warehouse (5.7 of 6), the striking groups
 carry 2.7 charges each; a fist (4+ units within 2 hops of the capital) forms in 46 of 60 matches, at tick 2540 on
 average, is cut off for 30+ ticks in 31 of 60 (naive 30 of 60), and only 4 of its 76 episodes reach a fight at the
 capital. Decision time: 0.5-0.9 ms mean, p99 up to 2.4 ms (the inherited attack scans over many small groups; the naive
@@ -498,8 +498,8 @@ variant is 10% cheaper), over the 1 ms budget at p99.
 does not beat a normal order against the capital. Why:
 
 1. **The fist cannot get big.** CP is the scarce resource (BAL-02, the plan diagnostic): a unit costs 1 CP to recruit
-   in the capital and about 1 CP to walk it to the front, so the fist grows by 2-3 charged units a minute while the
-   corridor costs its own CP. The striking groups carry 2-3 charges each.
+   in the capital and about 1 CP to walk it to the front; War gives 7.2 CP a minute, so the fist grows by at most
+   about 3 units a minute (an estimate from the prices) while the corridor costs its own CP. The striking groups carry 2-3 charges each.
 2. **The defenders are charged where it matters.** The capital holds 2-4 charged units and refills them from a full
    warehouse between fights; with 1 shot a round (DEC-32) the defender has time to reinforce. So the hypothesis is right
    that the capital is a charged target, but the attacker cannot bring enough to it.
