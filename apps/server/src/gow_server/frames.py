@@ -6,8 +6,11 @@ the whole state twice a second plus every event. The viewer needs no simulation,
 stays readable when ``SIM_VERSION`` or the rules move on. The format is in
 ``docs/design/replay-frames.md``; ``FORMAT`` is its version.
 
-This is a full-reveal view: nothing is hidden by the fog (AGENTS.md, section 4.4 is about live
-views). Replays are published only after the match.
+The frame state is a full-reveal view: nothing is hidden by the fog (AGENTS.md, section 4.4 is
+about live views). Replays are published only after the match. Next to it every frame carries
+what each player saw (``v``, #598): the vision part of ``gow_sim.view.project()`` for that player
+and tick, so the viewer can show one side's fog of war without computing vision itself
+(AGENTS.md, section 7.1).
 """
 
 import gzip
@@ -23,10 +26,11 @@ from gow_sim.maps import PLAYERS, map_hash, map_to_data
 from gow_sim.match import SIM_VERSION, Match
 from gow_sim.replay import DEFAULT_MAPS_DIR, DEFAULT_RULESETS_DIR, replay_run
 from gow_sim.ruleset import Ruleset, ruleset_hash
-from gow_sim.state import AtNode, Fight, FightRound, GameState, Group, OnEdge
+from gow_sim.state import AtNode, Detail, Fight, FightRound, GameState, Group, OnEdge, Sighting
 from gow_sim.systems.build import done_tick
 from gow_sim.systems.capacity import node_capacities, warehouse_capacity
 from gow_sim.systems.supply import is_city
+from gow_sim.view import EnemyGroupView, HalfView, PlayerView
 
 __all__ = [
     "FORMAT",
@@ -36,6 +40,7 @@ __all__ = [
     "FramesResult",
     "build_frames",
     "frame_of",
+    "vision_of",
 ]
 
 FORMAT: Final = 1
@@ -142,6 +147,81 @@ def frame_of(state: GameState, rules: Ruleset) -> dict[str, object]:
     return frame
 
 
+def _trimmed(record: list[object]) -> list[object]:
+    """``record`` without its trailing ``None`` elements: the reader takes a missing one as
+    ``null``."""
+    end = len(record)
+    while end and record[end - 1] is None:
+        end -= 1
+    return record[:end]
+
+
+def _sighting(s: Sighting | None, detail: Detail, tick: int) -> list[object] | None:
+    """A ``Sighting`` as ``[level, modes, units, charged, range, tick]``, trailing ``None`` left
+    out. A place not in fog is seen in this very tick (``project()``: this tick's sighting), so its
+    ``tick`` is the frame's and is left out too; only a remembered sighting (``FOG``) has it."""
+    if s is None:
+        return None
+    remembered = detail is Detail.FOG
+    if not remembered and s.tick != tick:
+        raise ValueError(f"a sighting of tick {s.tick} at tick {tick} outside the fog")
+    return _trimmed(
+        [
+            s.level.value,
+            [m.value for m in s.enemy_modes],
+            s.enemy_units,
+            s.enemy_charged,
+            None if s.enemy_range is None else list(s.enemy_range),
+            s.tick if remembered else None,
+        ]
+    )
+
+
+def _half(h: HalfView, tick: int) -> list[object]:
+    return _trimmed([h.detail.value, _sighting(h.seen, h.detail, tick)])
+
+
+def _figure(f: EnemyGroupView) -> list[object]:
+    """An enemy figure on an edge (DEC-33). The opaque id is a decimal string, as on the wire:
+    63 bits do not fit a JavaScript number."""
+    return _trimmed(
+        [
+            str(f.id),
+            f.pos,
+            int(f.toward_b),
+            f.detail.value,
+            f.mode.value,
+            f.units,
+            f.charged,
+            None if f.units_range is None else list(f.units_range),
+        ]
+    )
+
+
+def vision_of(view: PlayerView) -> dict[str, object]:
+    """What ``view.player`` saw at ``view.tick``: the fog part of ``project()`` (#598).
+
+    Everything here is copied from the ``PlayerView``; nothing is computed again. The layout is in
+    ``docs/design/replay-frames.md`` ("Vision").
+    """
+    t = view.tick
+    out: dict[str, object] = {
+        "n": [
+            _trimmed([n.detail.value, _sighting(n.seen, n.detail, t), n.warehouse])
+            for n in view.nodes
+        ],
+        "e": [
+            [e.width, e.detail.value, _half(e.halves[0], t), _half(e.halves[1], t)]
+            + ([[_figure(f) for f in e.enemy_groups]] if e.enemy_groups else [])
+            for e in view.edges
+        ],
+    }
+    builds = [e.id for e in view.edges if e.build is not None]
+    if builds:  # only while the player sees a road build
+        out["b"] = builds
+    return out
+
+
 class FramesRecorder:
     """A ``MatchObserver`` that collects the frames and the events of a match."""
 
@@ -154,13 +234,21 @@ class FramesRecorder:
     def begin(self, match: Match) -> None:
         self.match = match
         self.frame_every = max(match.rules.tick_hz // FRAMES_PER_SECOND, 1)
-        self.frames.append(frame_of(match.state, match.rules))
+        self.frames.append(self._frame(match))
 
     def record(self, match: Match, commands: Sequence[PlayerCommand]) -> None:
         state = match.state
         self.events.extend([e.tick, e.kind, dict(e.data)] for e in state.events)
         if state.tick % self.frame_every == 0 or match.finished:
-            self.frames.append(frame_of(state, match.rules))
+            self.frames.append(self._frame(match))
+
+    @staticmethod
+    def _frame(match: Match) -> dict[str, object]:
+        """The frame and, under ``v``, each player's ``project()`` of the same state (#598): the
+        snapshot that player had at this tick in the live match."""
+        frame = frame_of(match.state, match.rules)
+        frame["v"] = [vision_of(match.view(p)) for p in PLAYERS]
+        return frame
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,8 +269,12 @@ def build_frames(
     out_path: str | Path,
     rulesets_dir: str | Path = DEFAULT_RULESETS_DIR,
     maps_dir: str | Path = DEFAULT_MAPS_DIR,
+    nicks: Sequence[str] | None = None,
 ) -> FramesResult:
     """Re-simulate the command log, check its hashes and write the frames file ``out_path``.
+
+    ``nicks``: the nicks of the players by player id as the match had them, written to the
+    header (#598); ``None``: no ``nicks`` key (a match without a database row).
 
     One pass: the hashes are compared at every checkpoint of the log while the frames are
     recorded. A top-level function with plain arguments, so a ``ProcessPoolExecutor`` can run it
@@ -215,6 +307,10 @@ def build_frames(
         "outcome": {"winner": match.outcome.winner, "reason": match.outcome.reason.value},
         "vp": [state.players[p].vp for p in PLAYERS],
         "state_hash": final_hash,
+    }
+    if nicks is not None:
+        document["nicks"] = list(nicks)
+    document |= {
         "map": map_to_data(state.map),
         "frames": recorder.frames,
         "events": recorder.events,

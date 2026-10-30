@@ -56,6 +56,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from gow_server.botmatch import LEVEL_BOTS
 from gow_server.db import DbSession
 from gow_server.frames import FramesResult, build_frames
 from gow_server.identity import hash_token
@@ -69,6 +70,7 @@ from gow_server.replay_retention import (
     archive_log,
     recent_match_ids,
 )
+from gow_server.ws import BOT_NICK
 from gow_sim.replay import ReplayWriter
 
 log = logging.getLogger("gow_server.replays")
@@ -130,6 +132,16 @@ def replay_etag(match: Match, file: Path) -> str:
     stat = file.stat()
     created = int(match.created_at.timestamp() * 1000)
     return f'"m{match.id}-{created}-{stat.st_mtime_ns}-{stat.st_size}"'
+
+
+_BOT_LEVELS: Final = {bot: level for level, bot in LEVEL_BOTS.items()}
+
+
+def bot_nick(bot: str | None) -> str:
+    """Nick of a bot side in the frames file (#598): ``Bot`` and its difficulty level, as
+    ``Bot (easy)``; a bot that is no level (an older or a test match) is plain ``Bot``."""
+    level = _BOT_LEVELS.get(bot or "")
+    return BOT_NICK if level is None else f"{BOT_NICK} ({level})"
 
 
 class ReplayService:
@@ -211,6 +223,11 @@ class ReplayService:
         loop = asyncio.get_running_loop()
         out = self.replays_dir / self.frames_name(match_id)
         try:
+            nicks = await asyncio.to_thread(self._nicks, match_id)
+        except Exception:  # the replay is still worth having without the nicks
+            log.exception("replay nicks unavailable", extra={"match_id": match_id})
+            nicks = None
+        try:
             result = await loop.run_in_executor(
                 self._get_pool(),
                 build_frames,
@@ -218,6 +235,7 @@ class ReplayService:
                 out,
                 self.rulesets_dir,
                 self.maps_dir,
+                nicks,
             )
         except BrokenProcessPool:
             self._pool = None  # a new pool on the next match
@@ -376,6 +394,22 @@ class ReplayService:
                 self._workers, mp_context=multiprocessing.get_context("spawn")
             )
         return self._pool
+
+    def _nicks(self, match_id: str) -> tuple[str, str] | None:
+        """Nicks of the two sides from the ``match_players`` rows (blocking), by player id: the
+        account's nick, a bot as ``bot_nick``. ``None`` without both rows."""
+        if not match_id.isdecimal():
+            return None
+        with self._sessions() as session:
+            rows = session.execute(
+                select(MatchPlayer.side, Player.nick, MatchPlayer.bot)
+                .outerjoin(Player, Player.id == MatchPlayer.player_id)
+                .where(MatchPlayer.match_id == int(match_id))
+            ).all()
+        by_side = {side: nick if nick is not None else bot_nick(bot) for side, nick, bot in rows}
+        if sorted(by_side) != [0, 1]:
+            return None
+        return by_side[0], by_side[1]
 
     def _save_path(self, match_id: str) -> bool:
         """Store ``replay_path`` in the ``matches`` row (blocking); ``False``: there is no row."""

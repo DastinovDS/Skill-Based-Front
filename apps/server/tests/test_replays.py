@@ -20,12 +20,13 @@ from gow_server.clock import ManualClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.frames import FORMAT, FramesError, build_frames, frame_of
 from gow_server.matches import MatchManager, MatchRunner
-from gow_server.models import Match, MatchPlayer
-from gow_server.replays import ReplayService, ReplayState
+from gow_server.models import Match, MatchPlayer, Player
+from gow_server.replays import ReplayService, ReplayState, bot_nick
 from gow_server.settings import Settings
 from gow_sim.commands import PlayerCommand
-from gow_sim.maps import MapDef, load_map
+from gow_sim.maps import PLAYERS, MapDef, load_map
 from gow_sim.match import Match as SimMatch
+from gow_sim.match import run_headless
 from gow_sim.replay import ReplayWriter, read_replay, record_headless, replay_run
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset, ruleset_hash
 from gow_sim.state import (
@@ -36,6 +37,7 @@ from gow_sim.state import (
     FightRound,
     initial_state,
 )
+from gow_sim.view import view_to_canonical
 
 ROOT: Final = Path(__file__).parents[3]
 RULESETS: Final = ROOT / "rulesets" / "archive"
@@ -189,7 +191,10 @@ def test_fifteen_minute_match_resimulates_to_the_same_result(
     tmp_path: Path, full_rules: Ruleset
 ) -> None:
     """A real 15-minute match (DEC-22): same hash and outcome after the re-simulation, file
-    within 2 MB."""
+    within 2 MB. ``v`` (#598): in every sampled frame the vision of each player equals what
+    ``project()`` gave that player at that tick in the live match: the detail levels and
+    sightings of nodes and halves (the fog memory included), the road levels known, the enemy
+    figures on edges, the warehouses seen, the road builds seen."""
     mapdef = load_map(MAPS / "web.json")
     bots = [
         # Seeds of a pair that plays the whole 15 minutes (with 2 s rounds, DEC-32).
@@ -197,7 +202,9 @@ def test_fifteen_minute_match_resimulates_to_the_same_result(
         BOTS["reactive"](mapdef, full_rules, seed=3, player=1),
     ]
     log = tmp_path / "7.jsonl.gz"
-    played = record_headless(log, mapdef, full_rules, bots)
+    with ReplayWriter(log) as writer:
+        observer = _ViewsAndLog(writer, every=50)
+        played = run_headless(mapdef, full_rules, bots, observer=observer)
     assert played.outcome is not None
     assert played.ticks == full_rules.match_ticks == 9000  # it went the whole 15 minutes
 
@@ -225,9 +232,128 @@ def test_fifteen_minute_match_resimulates_to_the_same_result(
     )
     assert len(doc["frames"][0]["w"]) == len(mapdef.edges)
     assert any(f["g"] for f in doc["frames"])
+    # Each player's vision (#598): every node and edge, for both players, in every frame.
+    assert all(
+        [len(v["n"]) for v in f["v"]] == [len(mapdef.nodes)] * 2
+        and [len(v["e"]) for v in f["v"]] == [len(mapdef.edges)] * 2
+        for f in doc["frames"]
+    )
+    _check_vision(doc, observer.views)
+    assert "nicks" not in doc  # no database row: no nicks
     assert doc["events"], "events are part of the file"
     assert doc["events"][-1][1] == "match_ended"
     _check_fight_rounds(doc)
+
+
+class _ViewsAndLog:
+    """A ``MatchObserver``: the replay log, plus the live ``project()`` of both players at some
+    frame ticks (#598), to hold the frames file against."""
+
+    def __init__(self, writer: ReplayWriter, every: int) -> None:
+        self.writer = writer
+        self.every = every
+        self.views: dict[int, list[dict[str, Any]]] = {}
+
+    def begin(self, match: SimMatch) -> None:
+        self.writer.begin(match)
+        self._sample(match)
+
+    def record(self, match: SimMatch, commands: Sequence[PlayerCommand]) -> None:
+        self.writer.record(match, commands)
+        if match.tick % self.every == 0 or match.finished:
+            self._sample(match)
+
+    def _sample(self, match: SimMatch) -> None:
+        self.views[match.tick] = [view_to_canonical(match.view(p)) for p in PLAYERS]
+
+
+def _seen(record: list[Any] | None, detail: str, tick: int) -> dict[str, Any] | None:
+    """A sighting of ``v`` (``docs/design/replay-frames.md``, "Vision") as ``view_to_canonical``
+    writes it: trailing ``null`` left out, the tick of a place not in fog is the frame's."""
+    if record is None:
+        return None
+    level, modes, units, charged, range_, seen_tick = [*record, *[None] * (6 - len(record))]
+    return {
+        "tick": seen_tick if detail == "fog" else tick,
+        "level": level,
+        "enemy_modes": modes,
+        "enemy_units": units,
+        "enemy_charged": charged,
+        "enemy_range": range_,
+    }
+
+
+def _padded(record: list[Any], size: int) -> list[Any]:
+    return [*record, *[None] * (size - len(record))]
+
+
+def _decoded(vision: dict[str, Any], tick: int) -> dict[str, Any]:
+    """The ``v`` entry of one player, decoded by the layout of ``replay-frames.md``."""
+    nodes = []
+    for record in vision["n"]:
+        detail, seen, warehouse = _padded(record, 3)
+        nodes.append({"detail": detail, "seen": _seen(seen, detail, tick), "warehouse": warehouse})
+    edges = []
+    for record in vision["e"]:
+        width, detail, a, b, figures = _padded(record, 5)
+        halves = []
+        for half in (a, b):
+            half_detail, seen = _padded(half, 2)
+            halves.append({"detail": half_detail, "seen": _seen(seen, half_detail, tick)})
+        enemy = []
+        for f in figures or []:
+            fid, pos, toward_b, f_detail, mode, units, charged, units_range = _padded(f, 8)
+            enemy.append(
+                {
+                    "id": int(fid),
+                    "pos": pos,
+                    "toward_b": bool(toward_b),
+                    "detail": f_detail,
+                    "mode": mode,
+                    "units": units,
+                    "charged": charged,
+                    "units_range": units_range,
+                }
+            )
+        edges.append({"width": width, "detail": detail, "halves": halves, "enemy_groups": enemy})
+    return {"nodes": nodes, "edges": edges, "builds": vision.get("b", [])}
+
+
+def _expected(view: dict[str, Any]) -> dict[str, Any]:
+    """The vision part of a ``project()`` view (``view_to_canonical``)."""
+    return {
+        "nodes": [
+            {"detail": n["detail"], "seen": n["seen"], "warehouse": n["warehouse"]}
+            for n in view["nodes"]
+        ],
+        "edges": [
+            {k: e[k] for k in ("width", "detail", "halves", "enemy_groups")}
+            for e in view["edges"]
+        ],
+        "builds": [e["id"] for e in view["edges"] if e["build"] is not None],
+    }
+
+
+def _check_vision(doc: dict[str, Any], views: dict[int, list[dict[str, Any]]]) -> None:
+    """``v`` of the sampled frames against the live views; the check must not be empty."""
+    frames = {f["t"]: f for f in doc["frames"]}
+    assert set(views) <= set(frames)
+    seen_levels: set[str] = set()
+    remembered = figures = 0
+    for tick, views in views.items():
+        vision = frames[tick]["v"]
+        assert len(vision) == 2
+        for p in PLAYERS:
+            got = _decoded(vision[p], tick)
+            assert got == _expected(views[p]), f"tick {tick}, player {p}"
+            seen_levels.update(n["detail"] for n in got["nodes"])
+            remembered += sum(
+                n["detail"] == "fog" and n["seen"] is not None for n in got["nodes"]
+            )
+            figures += sum(len(e["enemy_groups"]) for e in got["edges"])
+    # The comparison above was not empty: fog, its memory and figures all occurred.
+    assert {"exact", "fog"} <= seen_levels and len(seen_levels) >= 3
+    assert remembered > 0 and figures > 0
 
 
 def _check_fight_rounds(doc: dict[str, Any]) -> None:
@@ -367,6 +493,47 @@ def test_live_match_is_logged_and_turned_into_frames(
     assert doc["ticks"] == runner.match.tick
     with sessions() as session:
         assert session.get(Match, 5).replay_path == "5.frames.json.gz"  # pyright: ignore[reportOptionalMemberAccess]
+    assert "nicks" not in doc  # the row has no sides
+
+
+def test_frames_header_has_the_nicks_of_the_sides(
+    tmp_path: Path,
+    maps_dir: Path,
+    sessions: sessionmaker[Session],
+    line3: MapDef,
+    short_rules: Ruleset,
+) -> None:
+    """``nicks`` (#598): by player id from the ``match_players`` rows, a bot by its level."""
+    with sessions.begin() as session:
+        session.add(Player(id=101, nick="Danya", nick_key="danya", token_hash=b"t" * 32))
+        session.add(Match(id=6, map_id="line3", ruleset_hash="x", rated=False))
+        session.flush()
+        session.add(MatchPlayer(match_id=6, side=0, bot="turtle"))
+        session.add(MatchPlayer(match_id=6, side=1, player_id=101))
+
+    async def scenario() -> ReplayService:
+        clock = ManualClock()
+        service = _service(tmp_path, maps_dir, sessions)
+        manager = MatchManager(clock, replays=service)
+        runner = manager.create("line3", line3, short_rules, (0, 101), match_id="6")
+        await _settle()
+        await _play(manager, runner, clock, stances=False)
+        await service.aclose()
+        return service
+
+    service = asyncio.run(scenario())
+    doc = json.loads(gzip.decompress((service.replays_dir / "6.frames.json.gz").read_bytes()))
+    assert doc["nicks"] == ["Bot (easy)", "Danya"]
+
+
+def test_bot_nick_names_the_level() -> None:
+    assert [bot_nick(b) for b in ("turtle", "reactive", "expander", "rusher")] == [
+        "Bot (easy)",
+        "Bot (normal)",
+        "Bot (hard)",
+        "Bot (expert)",
+    ]
+    assert bot_nick("idle") == bot_nick(None) == "Bot"  # not a level: a test or an older bot
 
 
 def test_match_without_a_database_row_still_gets_frames(
@@ -629,6 +796,28 @@ def test_replay_file_without_round_data_is_served_as_it_is(
     response = api.client.get("/api/replays/4")
     assert response.status_code == 200
     assert response.json()["frames"][0]["f"] == [old_fight]
+
+
+def test_replay_file_without_vision_and_nicks_is_served_as_it_is(
+    api: Api, line3: MapDef, short_rules: Ruleset
+) -> None:
+    """A file written before #598 has no ``v`` in its frames and no ``nicks``: still served as is
+    (the viewer tells it by the missing keys)."""
+    a, _ = _guest(api, "Alice")
+    b, _ = _guest(api, "Bobby")
+    path = _frames_file(api, "9.frames.json.gz", line3, short_rules)
+    doc = json.loads(gzip.decompress(path.read_bytes()))
+    assert all("v" in f for f in doc["frames"])
+    for frame in doc["frames"]:
+        del frame["v"]
+    doc.pop("nicks", None)
+    path.write_bytes(gzip.compress(json.dumps(doc).encode()))
+    _add_match(api, 9, True, (a, b), path.name)
+
+    response = api.client.get("/api/replays/9")
+    assert response.status_code == 200
+    served = response.json()
+    assert "nicks" not in served and all("v" not in f for f in served["frames"])
 
 
 def test_unrated_replay_is_for_the_participants(
