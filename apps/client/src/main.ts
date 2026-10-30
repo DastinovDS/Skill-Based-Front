@@ -53,11 +53,15 @@ async function start(target: HTMLElement) {
   if (replayId !== null) {
     // A direct link has no screen to go back to: "Back" opens the start page. The saved guest
     // opens the replay of their own private or bot match (those are for the players only).
-    const token = loadGuest(() => window.localStorage)?.token ?? null;
+    const guest = loadGuest(() => window.localStorage);
+    const token = guest?.token ?? null;
     const onback = () => {
       window.location.assign('/');
     };
-    return mount(ReplayScreen, { target, props: { matchId: replayId, token, onback } });
+    return mount(ReplayScreen, {
+      target,
+      props: { matchId: replayId, token, nick: guest?.nick ?? null, onback },
+    });
   }
   if (devMenus) {
     const { default: DevMenus } = await import('./dev/DevMenus.svelte');

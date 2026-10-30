@@ -10,6 +10,22 @@ describe('parseReplay', () => {
     expect(SAMPLE.map.meta.name).toBe('siege');
   });
 
+  it('reads the optional nicks, as an array or keyed by player id, and ignores other shapes', () => {
+    const raw = (): object => ({ ...(SAMPLE_RAW as object) });
+    expect(SAMPLE.nicks).toBeUndefined();
+    expect(parseReplay({ ...raw(), nicks: ['Danya', 'Guest-7'] }).nicks).toEqual([
+      'Danya',
+      'Guest-7',
+    ]);
+    expect(parseReplay({ ...raw(), nicks: { '0': 'Danya', '1': 'hard' } }).nicks).toEqual([
+      'Danya',
+      'hard',
+    ]);
+    for (const odd of [['only'], [1, 2], ['a', ''], 'text', { 0: 'a' }, null]) {
+      expect(parseReplay({ ...raw(), nicks: odd }).nicks).toBeUndefined();
+    }
+  });
+
   it('refuses an unknown format', () => {
     const next = { ...(SAMPLE_RAW as object), format: 2 };
     expect(() => parseReplay(next)).toThrow(expect.objectContaining({ code: 'format' }));

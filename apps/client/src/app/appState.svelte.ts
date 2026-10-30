@@ -51,6 +51,8 @@ export type Screen =
   | {
       readonly name: 'replay';
       readonly matchId: string;
+      /** The side the viewer played, when this screen knows it (the result screen): the replay opens as that side. */
+      readonly me?: PlayerId;
       /** The screen the replay was opened from, where "Back" returns; none: the menu. */
       readonly back?: Screen;
     };
@@ -340,8 +342,8 @@ export class AppState {
   }
 
   /** The replay of a match, opened from the current screen: "Back" returns here (#259). */
-  openReplay(matchId: string): void {
-    this.go({ name: 'replay', matchId, back: this.screen });
+  openReplay(matchId: string, me?: PlayerId): void {
+    this.go({ name: 'replay', matchId, me, back: this.screen });
   }
 
   /** "Back" on the replay screen: to the screen it was opened from, else to the menu. */
