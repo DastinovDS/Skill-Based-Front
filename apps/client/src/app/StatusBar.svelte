@@ -11,20 +11,22 @@
     text?: string | null;
     /** `status` is read politely, `alert` at once. */
     role?: 'status' | 'alert';
+    /** `title`: only the title is read out when it shows (a countdown in the text must not be read every second). */
+    live?: 'all' | 'title';
     /** The buttons (`StatusButton`s), if any. */
     actions?: Snippet;
   }
 
-  let { tone, icon, title, text = null, role = 'status', actions }: Props = $props();
+  let { tone, icon, title, text = null, role = 'status', live = 'all', actions }: Props = $props();
 </script>
 
 <!-- The bar over the map for a state of the connection, a pause or a failure: an icon in a badge
      (the shape tells the tone, the hue only backs it), the title, one plain line, the buttons with
      their keys. The amber edge is the one of the alert stack. -->
-<section class="bar {tone}" {role}>
+<section class="bar {tone}" role={live === 'all' ? role : undefined}>
   <span class="badge" class:spin={icon === 'refresh'}><Icon name={icon} size={18} /></span>
   <div class="words">
-    <strong>{title}</strong>
+    <strong role={live === 'title' ? role : undefined}>{title}</strong>
     {#if text !== null}<span class="text">{text}</span>{/if}
   </div>
   {#if actions !== undefined}
@@ -102,7 +104,12 @@
       flex-wrap: wrap;
     }
 
+    .words {
+      flex: 1 1 0;
+    }
+
     .actions {
+      flex-basis: 100%;
       margin-left: 44px;
     }
   }

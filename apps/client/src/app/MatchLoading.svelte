@@ -26,21 +26,23 @@
 <main class="loading" aria-busy="true">
   <div class="plate">
     <p class="eyebrow">{t('match.loading.eyebrow')}</p>
-    <ol role="status" aria-live="polite">
-      {#each STAGES as item, index (item.id)}
-        <li
-          class:done={index < at}
-          class:now={index === at}
-          class:stalled={stalled && index === at}
-          aria-current={index === at ? 'step' : undefined}
-        >
-          <span class="mark">
-            {#if index < at}<Icon name="check" size={14} />{/if}
-          </span>
-          <span class="label">{t(item.label)}</span>
-        </li>
-      {/each}
-    </ol>
+    <div role="status">
+      <ol>
+        {#each STAGES as item, index (item.id)}
+          <li
+            class:done={index < at}
+            class:now={index === at}
+            class:stalled={stalled && index === at}
+            aria-current={index === at ? 'step' : undefined}
+          >
+            <span class="mark">
+              {#if index < at}<Icon name="check" size={14} />{/if}
+            </span>
+            <span class="label">{t(item.label)}</span>
+          </li>
+        {/each}
+      </ol>
+    </div>
   </div>
 </main>
 
@@ -57,7 +59,8 @@
   }
 
   .plate {
-    width: min(460px, 100%);
+    width: max-content;
+    max-width: 100%;
   }
 
   .eyebrow {

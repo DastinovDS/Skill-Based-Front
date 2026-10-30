@@ -37,12 +37,13 @@
     title={t(view.title)}
     text={view.text === null ? null : tf(view.text, { seconds: view.seconds ?? 0 })}
     role={view.role}
+    live={view.seconds === null ? 'all' : 'title'}
   >
     {#snippet actions()}
       {#each view.actions as action, index (action)}
         {@const key = keyOf(action)}
         <StatusButton
-          primary={action !== 'menu' && index === 0}
+          primary={index === 0 && (action !== 'menu' || view.tone === 'alert')}
           keyHint={key === null ? null : KEY_CAPS[key]}
           shortcut={key}
           onclick={() => {

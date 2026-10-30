@@ -276,6 +276,15 @@ for (const id of STATUS_SCENES) {
   });
 }
 
+// The same bar on a phone (390 px): the buttons wrap under the words (`status-failed-390x700.png`).
+test('shot of the status bar failed at phone width', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto('/?scene=overflow&status=failed');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+  await page.mouse.move(5, 5);
+  await page.screenshot({ path: join(OUT, 'status-failed-390x700.png') });
+});
+
 // The menu picture by season (#474: the terrain takes the tint of the season of the date; the dev
 // scenes pin one with `&season=`) and the still frame of "less motion" (one frame per state, no loop).
 for (const season of ['spring', 'summer', 'autumn', 'winter'] as const) {
