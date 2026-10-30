@@ -109,6 +109,8 @@ else
 	image/webp*) ;;
 	*) fail "$bg: Content-Type is '$(header bg Content-Type)'" ;;
 	esac
+	# A re-baked background keeps its URL: the browser must revalidate, not cache heuristically (#576).
+	expect_header bg Cache-Control no-cache
 fi
 
 echo "== licence notices of the bundled libraries (CLI-07)"
