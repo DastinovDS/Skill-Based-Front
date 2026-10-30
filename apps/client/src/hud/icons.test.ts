@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { ICONS, MENU_ICONS, shapesOf, type IconShape } from './icons.ts';
+import { ICONS, MENU_ICONS, RASTER_ICONS, rasterOf, shapesOf, type IconShape } from './icons.ts';
 
-/** The icons of the radial menus (set I1, #350): city, group, stance, supply, and the list of the groups of a city. */
+/** The drawn icons of the radial menus (set I1, #350): group, stance, supply, and the list of the groups of a city. */
 const NAMES = [
-  'recruit',
-  'barracks',
-  'warehouse',
   'split',
   'defense',
   'cancel',
@@ -22,7 +19,7 @@ const NAMES = [
 const signature = (shapes: readonly IconShape[]): string => JSON.stringify(shapes);
 
 describe('the icons of the radial menus (I1)', () => {
-  it('are the 13 of the mockup and the group of the city list, each with shapes', () => {
+  it('are the 10 of the mockup and the group of the city list, each with shapes', () => {
     expect(Object.keys(MENU_ICONS).sort()).toEqual([...NAMES].sort());
     for (const name of NAMES) expect(MENU_ICONS[name].length).toBeGreaterThan(0);
   });
@@ -62,7 +59,19 @@ describe('the icons of the radial menus (I1)', () => {
   });
 
   it('are found by name together with the Lucide ones', () => {
-    expect(shapesOf('recruit')).toBe(MENU_ICONS.recruit);
+    expect(shapesOf('split')).toBe(MENU_ICONS.split);
     expect(shapesOf('check')).toBe(ICONS.check);
+    expect(rasterOf('split')).toBeNull();
+  });
+});
+
+describe('the city menu icons (R5 "Chevrons", #627)', () => {
+  it('are the three raster files of recruit, barracks and warehouse, with no drawn shapes', () => {
+    expect(Object.keys(RASTER_ICONS).sort()).toEqual(['barracks', 'recruit', 'warehouse']);
+    for (const name of ['recruit', 'barracks', 'warehouse'] as const) {
+      expect(rasterOf(name)).toMatch(/\.png$|^data:image\/png/);
+      expect(shapesOf(name)).toEqual([]);
+    }
+    expect(new Set(Object.values(RASTER_ICONS)).size).toBe(3);
   });
 });

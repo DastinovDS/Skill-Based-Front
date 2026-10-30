@@ -1279,6 +1279,7 @@ The principle: **one shape means one thing**, and the shape reads without color 
 | a number in a circle with a rim | the VP of a city | at a city |
 | a small pale dot | a province (DEC-23): no city, no warehouse, no VP (PB, #431; was a hollow ring, C1, #348) | map |
 | shield / flag / little house / star | "Defense" / capture / barracks / capital; the barracks of the opponent has a light inner ring and a smaller house (B1, #349) | groups, cities, captions |
+| rank chevrons + / watchtower / depot + (raster, SpriteCook, R5) | recruit a unit / build the barracks / raise the warehouse: the actions of the city radial menu (#627); the blue plus is the action, the paper lines the object. The map keeps its own barracks sign (the little house) | city radial menu |
 | `!` in an amber circle, a dashed ring | alert: overflow, they are coming for the city | around a city |
 | a cell (a wide frame) | one unit of a count or a duration: a CP, a queued unit, a build; **frame + dot** queued, **hatch + head line** in progress, **solid** done or ready, **dashed frame** a free slot; the dashed amber ring and `MAX` on a full bar (#439) | HUD CP bar, queue and build plates at a city |
 | `✂` | starvation (cut off from the capital, DEC-19) | city, "Supply" |
@@ -2036,7 +2037,15 @@ the DEC-36 defaults (long rivers with bridges, about 20 percent water, fixtures 
 
 ## 40. Supply mode panel, order travel time, city menu icons (#627)
 
-Status: **[awaiting the owner's decision]**. The owner's review of 2026-10-30: the Supply mode panel has far too much text (title, hint,
+Status: **[accepted]** for elements 1 and 3, element 2 open (the owner, 2026-10-30): the Supply panel is **S3 "Stepper"** (one pill:
+"Supply", Tab, minus, the rear minimum glyph and number, plus; a second pill "Transfer from {city}: pick a destination" with Esc only while
+a transfer is picked; no hint, no slider, no legend), implemented in `SupplyBanner.svelte`. The city menu icons are **R5 "Chevrons"**
+(rank chevrons with a plus, a watchtower, a depot with a plus; R2 and R3 were liked too): final SpriteCook icons, 96 px PNG in
+`apps/client/src/hud/menuIcons/` (`RASTER_ICONS` in `hud/icons.ts`), the direction for generated icons from now on (the owner: the
+SpriteCook textures read higher quality). The order time marker: **E4 "Hourglass"** is liked, but its road highlight is a plain band;
+the highlight goes through one more mockup step (the element "E4 road highlight" of the mockup) before code.
+
+The owner's review of 2026-10-30: the Supply mode panel has far too much text (title, hint,
 slider with a caption, a legend of five entries); the travel-time marker of an order (a highlighted road and a "clock 5 s" pill) is too
 plain; recruiting is drawn as a battery, which clashes with "a unit is a battery", and the warehouse icon (squares) is unclear. The first
 round under the new process of section 23 (10 variants per element, minimal text, SpriteCook candidates).

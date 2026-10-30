@@ -63,6 +63,15 @@ the installed packages, nothing to maintain by hand). The legal page links to it
 Known gap: `@pixi/colord` (MIT, author Vlad Shilov, a PixiJS dependency) ships no licence file in its
 npm package, so its entry in the generated file has a heading but no text.
 
+## City menu icons (SpriteCook)
+
+The three city menu icons in `src/hud/menuIcons/` (recruit, barracks, warehouse; set R5 "Chevrons",
+issue #627) were generated on 2026-10-30 with [SpriteCook](https://spritecook.ai) (model gpt-image-2,
+asset `d26e22f1-d6f4-4d72-8608-c7e76f9228bd` of the project "Skill-Based Front"), then cut, keyed to
+transparency and scaled to 96 px for this project. The SpriteCook terms checked on that date
+(section 6) let the user "use, reproduce, and distribute outputs you generate", on every plan; the
+outputs carry no warranty and are not guaranteed to be unique.
+
 ## Sounds and fonts
 
 None yet (package F adds the sounds under CC0 and lists them here).

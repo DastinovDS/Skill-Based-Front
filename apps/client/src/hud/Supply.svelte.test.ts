@@ -51,50 +51,70 @@ describe('the «Supply» mode UI (DEC-28)', () => {
     return { target, orders, hud, sent };
   }
 
-  const slider = (target: HTMLElement) =>
-    target.querySelector<HTMLInputElement>('input[type="range"]');
-
-  it('the banner and the slider appear with the mode, not before', () => {
-    const { target, orders } = render();
-    expect(slider(target)).toBeNull();
-    orders.toggleSupplyMode();
-    flushSync();
-    const input = slider(target);
-    expect(input?.min).toBe('0');
-    expect(input?.max).toBe(String(DEV_RULES.supply.rear_min_max));
-    expect(input?.value).toBe('1');
-    orders.toggleSupplyMode();
-    flushSync();
-    expect(slider(target)).toBeNull();
+  const stepper = (target: HTMLElement) => ({
+    less: target.querySelector<HTMLButtonElement>('button[aria-label="Lower rear minimum"]'),
+    more: target.querySelector<HTMLButtonElement>('button[aria-label="Raise rear minimum"]'),
+    value: target.querySelector('output')?.textContent ?? null,
   });
 
-  it('the slider sends set_rear_min when released (a change), not on every step', () => {
+  it('the pill and its rear minimum stepper appear with the mode, not before (S3, #627)', () => {
+    setLocale('en');
+    const { target, orders } = render();
+    expect(target.querySelector('.supply')).toBeNull();
+    orders.toggleSupplyMode();
+    flushSync();
+    const pill = target.querySelector('.supply');
+    expect(pill?.textContent).toContain('Supply');
+    expect(pill?.textContent).toContain('Tab');
+    expect(stepper(target).value).toBe('1');
+    // No hint, no legend and no slider any more: the pill is the whole panel.
+    expect(target.querySelector('input[type="range"]')).toBeNull();
+    expect(target.querySelector('ul')).toBeNull();
+    orders.toggleSupplyMode();
+    flushSync();
+    expect(target.querySelector('.supply')).toBeNull();
+  });
+
+  it('minus and plus send one step of set_rear_min each, like the [ and ] keys', () => {
+    setLocale('en');
     const { target, orders, sent } = render();
     orders.toggleSupplyMode();
     flushSync();
-    const input = slider(target);
-    if (input === null) throw new Error('no slider');
-    input.value = '3';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    flushSync();
-    expect(sent).toEqual([]);
-    expect(target.querySelector('output')?.textContent).toBe('3');
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(sent).toEqual([{ type: 'set_rear_min', n: 3 }]);
+    stepper(target).more?.click();
+    expect(sent).toEqual([{ type: 'set_rear_min', n: 2 }]);
+    // Two quick presses before the snapshot are two steps (stepRearMin).
+    stepper(target).more?.click();
+    expect(sent.at(-1)).toEqual({ type: 'set_rear_min', n: 3 });
   });
 
-  it('shows the value of the server again when a snapshot brings a new one', () => {
+  it('shows the value of the server and turns a button off at its end', () => {
+    setLocale('en');
     const { target, orders, hud } = render();
     orders.toggleSupplyMode();
     flushSync();
-    const input = slider(target);
-    if (input === null) throw new Error('no slider');
-    input.value = '4';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    hud.onSnapshot(withFronts([null, null], 0));
     flushSync();
-    hud.onSnapshot(withFronts([null, null], 2));
+    expect(stepper(target).value).toBe('0');
+    expect(stepper(target).less?.disabled).toBe(true);
+    expect(stepper(target).more?.disabled).toBe(false);
+    hud.onSnapshot(withFronts([null, null], DEV_RULES.supply.rear_min_max));
     flushSync();
-    expect(target.querySelector('output')?.textContent).toBe('2');
+    expect(stepper(target).value).toBe(String(DEV_RULES.supply.rear_min_max));
+    expect(stepper(target).more?.disabled).toBe(true);
+  });
+
+  it('a transfer pick adds one line with the source city, only while picking', () => {
+    setLocale('en');
+    const { target, orders } = render();
+    orders.toggleSupplyMode();
+    flushSync();
+    expect(target.querySelector('.pick')).toBeNull();
+    orders.ui.patch({ transferFrom: city });
+    flushSync();
+    expect(target.querySelector('.pick')?.textContent).toContain('pick a destination');
+    orders.cancelTransferPick();
+    flushSync();
+    expect(target.querySelector('.pick')).toBeNull();
   });
 
   it('the menu of a city offers marker 1, marker 2 and the transfer, with their keys', () => {

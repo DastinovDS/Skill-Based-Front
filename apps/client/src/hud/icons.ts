@@ -5,10 +5,18 @@
  * `apps/client/THIRD_PARTY_NOTICES.md` and on the legal page. An icon without an entry there is a
  * review error.
  *
- * `MENU_ICONS` below are not Lucide: the 13 icons of the radial menus (set I1 "line", #350,
+ * `MENU_ICONS` below are not Lucide: the icons of the radial menus (set I1 "line", #350,
  * ui-style 28) are drawn for this project in the same language (24x24 grid, 2 px stroke, round
  * ends), so they need no licence notice.
+ *
+ * `RASTER_ICONS` are the city menu icons of set R5 "Chevrons" (#627, ui-style 40): generated with
+ * SpriteCook, cut and keyed to PNG in `menuIcons/` (the notice is in `THIRD_PARTY_NOTICES.md`).
+ * Vite bundles them as same-origin files, so the CSP (`img-src 'self' data:`) allows them.
  */
+
+import barracksPng from './menuIcons/barracks.png';
+import recruitPng from './menuIcons/recruit.png';
+import warehousePng from './menuIcons/warehouse.png';
 
 /** One drawn element of an icon (24x24 grid, 2 px stroke). */
 export type IconShape =
@@ -189,14 +197,11 @@ export type IconName = keyof typeof ICONS;
 
 /**
  * The icons of the radial menus (set I1 "line", mockup `docs/design/mockups/objects-style.html`,
- * block 4): the city (recruit, barracks, warehouse), the group (split, Defense, cancel, merge), the
- * stance (economy, balance, war), the supply (transfer, markers 1 and 2) and a group in the list of
- * the groups of a city (`stackGroup`). Own drawings.
+ * block 4): the group (split, Defense, cancel, merge), the stance (economy, balance, war), the
+ * supply (transfer, markers 1 and 2) and a group in the list of the groups of a city
+ * (`stackGroup`). Own drawings. The city icons are raster (`RASTER_ICONS`).
  */
 export const MENU_ICONS = {
-  recruit: [rect(7, 6, 10, 15, 2), path('M10 3h4v3h-4z'), path('M12 11v6'), path('M9 14h6')],
-  barracks: [path('M3.5 11 12 4l8.5 7'), path('M5.5 9.5V20h13V9.5'), path('M10 20v-5.5h4V20')],
-  warehouse: [rect(8.5, 3.5, 7, 7, 0), rect(3.5, 13.5, 7, 7, 0), rect(13.5, 13.5, 7, 7, 0)],
   split: [
     path('M12 21v-8'),
     path('M12 13 6 6'),
@@ -231,12 +236,31 @@ export const MENU_ICONS = {
   stackGroup: [path('M3.5 4.5h17L12 19.5z'), circle(12, 9.4, 0.6)],
 } as const satisfies Record<string, readonly IconShape[]>;
 
-export type MenuIconName = keyof typeof MENU_ICONS;
+/**
+ * The city menu icons (set R5 "Chevrons", #627): rank chevrons with a plus (recruit), a watchtower
+ * (barracks), a depot with a plus (warehouse). Paper lines with a blue plus, transparent PNG of
+ * 96 px drawn at 24 to 28 px; the URL of the bundled file.
+ */
+export const RASTER_ICONS = {
+  recruit: recruitPng,
+  barracks: barracksPng,
+  warehouse: warehousePng,
+} as const satisfies Record<string, string>;
+
+export type RasterIconName = keyof typeof RASTER_ICONS;
+
+export type MenuIconName = keyof typeof MENU_ICONS | RasterIconName;
 
 /** Every icon `Icon.svelte` can draw. */
 export type AnyIconName = IconName | MenuIconName;
 
-/** The shapes of an icon by name. */
+/** The URL of a raster icon, `null` for a drawn one. */
+export function rasterOf(name: AnyIconName): string | null {
+  return name in RASTER_ICONS ? RASTER_ICONS[name as RasterIconName] : null;
+}
+
+/** The shapes of a drawn icon by name (none for a raster one). */
 export function shapesOf(name: AnyIconName): readonly IconShape[] {
-  return name in MENU_ICONS ? MENU_ICONS[name as MenuIconName] : ICONS[name as IconName];
+  if (name in RASTER_ICONS) return [];
+  return name in MENU_ICONS ? MENU_ICONS[name as keyof typeof MENU_ICONS] : ICONS[name as IconName];
 }

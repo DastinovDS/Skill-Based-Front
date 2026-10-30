@@ -2,7 +2,6 @@
   import { t, tf } from '../i18n/index.ts';
   import type { OrderController } from '../match/orderController.ts';
   import type { NodeNamer } from './nodeName.ts';
-  import Slider from './Slider.svelte';
 
   interface Props {
     orders: OrderController;
@@ -14,72 +13,75 @@
 
   const ui = $derived(orders.ui.current);
 
-  // The rear minimum slider (DEC-28, item 3). The value of the server comes with every snapshot;
-  // while the player drags, the slider shows the dragged value, and the command goes out once the
-  // thumb is released (a change), not on every step. A refused command drops the dragged value.
-  const server = $derived(orders.rearMin);
-  // The dragged value counts only while the server's value is the one it was dragged from.
-  let draft = $state<{ readonly value: number; readonly from: number | null } | null>(null);
-  const shown = $derived(draft !== null && draft.from === server ? draft.value : (server ?? 0));
-
-  $effect(() =>
-    orders.ui.onFeedback((feedback) => {
-      if (feedback.kind !== 'accepted' && feedback.cmd.type === 'set_rear_min') draft = null;
-    }),
-  );
+  // The rear minimum stepper (S3 "Stepper", #627; DEC-28, item 3). The value is the server's, from
+  // every snapshot; a press sends one step (`stepRearMin`, the same as the `[` and `]` keys), and the
+  // snapshot that applies it shows the new number a tick later.
+  const rearMin = $derived(orders.rearMin);
 
   /** Key labels are the keys themselves, not translations. */
   const TAB = 'Tab';
+  const ESC = 'Esc';
 </script>
 
 {#if ui.supplyMode}
-  <section class="supply" aria-live="polite">
-    <p class="head">
-      <strong>{t('supply.banner')}</strong><kbd class="k" aria-hidden="true">{TAB}</kbd>
-    </p>
+  <section class="supply" aria-label={t('supply.banner')}>
     {#if ui.transferFrom !== null}
-      <p class="line">{tf('supply.pick', { node: names(ui.transferFrom) })}</p>
-    {:else}
-      <p class="line">{t('supply.hint')}</p>
+      <!-- Only while a transfer is being picked: where it goes from, and the way out. -->
+      <p class="pill pick" aria-live="polite">
+        <span>{tf('supply.pick', { node: names(ui.transferFrom) })}</span><kbd
+          class="k"
+          aria-hidden="true">{ESC}</kbd
+        >
+      </p>
     {/if}
-    {#if server !== null}
-      <div class="rear">
-        <span class="label">{t('supply.rearMin')}</span>
-        <Slider
-          value={shown}
-          min={0}
-          max={orders.rearMinMax}
-          label={t('supply.rearMin')}
-          oninput={(n: number) => {
-            draft = { value: n, from: server };
-          }}
-          onchange={(n: number, input: HTMLInputElement) => {
-            orders.setRearMin(n);
-            // The map takes the keys again (a focused slider would keep them).
-            input.blur();
-          }}
-        />
-        <output>{shown}</output>
-        <!-- The keys do the same as the slider: one step a press. -->
-        <span class="keys" aria-hidden="true"><kbd class="k">[</kbd><kbd class="k">]</kbd></span>
-      </div>
-      <p class="line dim">{t('supply.rearMinHint')}</p>
-    {/if}
-    <ul class="legend">
-      <li><span class="line-key solid" aria-hidden="true"></span>{t('supply.legendAuto')}</li>
-      <li><span class="line-key dashed" aria-hidden="true"></span>{t('supply.legendTransfer')}</li>
-      <li><span class="glyph" aria-hidden="true">⚑</span>{t('supply.legendMarker')}</li>
-      <li><span class="glyph" aria-hidden="true">●○</span>{t('supply.legendStock')}</li>
-      <li><span class="glyph enemy" aria-hidden="true">▽</span>{t('supply.legendEnemy')}</li>
-    </ul>
+    <div class="pill">
+      <strong>{t('supply.banner')}</strong><kbd class="k" aria-hidden="true">{TAB}</kbd>
+      {#if rearMin !== null}
+        <span class="sep" aria-hidden="true"></span>
+        <div
+          class="step"
+          role="group"
+          aria-label={t('supply.rearMin')}
+          title={t('supply.rearMinTip')}
+        >
+          <button
+            type="button"
+            class="sbtn"
+            aria-label={t('supply.rearLess')}
+            disabled={rearMin <= 0}
+            onclick={(event) => {
+              orders.stepRearMin(-1);
+              // The map takes the keys again (a focused button would keep them).
+              event.currentTarget.blur();
+            }}>−</button
+          >
+          <!-- A charge kept on the floor of the warehouse: the glyph of the rear minimum. -->
+          <svg class="keep" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="7" y="4" width="10" height="10" rx="1" />
+            <path d="M4 19h16" />
+          </svg>
+          <output aria-live="polite">{rearMin}</output>
+          <button
+            type="button"
+            class="sbtn"
+            aria-label={t('supply.rearMore')}
+            disabled={rearMin >= orders.rearMinMax}
+            onclick={(event) => {
+              orders.stepRearMin(1);
+              event.currentTarget.blur();
+            }}>+</button
+          >
+        </div>
+      {/if}
+    </div>
   </section>
 {/if}
 
 <style>
   /*
    * In the bottom left corner: the alert row is at the top of the map, a banner there covered it
-   * (#597). The road and terrain banners are bottom too, but one at the middle and this one at the
-   * left, and it takes clicks only on the slider.
+   * (#597). One pill (S3, #627): the name of the mode, its key and the rear minimum stepper; a second
+   * pill above it only while a transfer is picked. Only the stepper takes the pointer.
    */
   .supply {
     position: absolute;
@@ -90,68 +92,106 @@
     z-index: 4;
     display: flex;
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
     gap: 6px;
-    width: 340px;
     max-width: calc(100% - 24px);
-    padding: 12px 14px;
-    box-sizing: border-box;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface);
     color: var(--text);
     font-size: 14px;
     pointer-events: none;
   }
 
-  p {
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     margin: 0;
+    min-height: 40px;
+    padding: 5px 8px 5px 14px;
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    white-space: nowrap;
   }
 
-  .head {
-    display: flex;
+  .pill.pick {
+    padding-right: 10px;
+    border-color: var(--you);
+    white-space: normal;
+  }
+
+  strong {
+    font-weight: 700;
+  }
+
+  .sep {
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+  }
+
+  .step {
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
-  }
-
-  .head strong {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-  }
-
-  .line {
-    font-size: 14px;
-    line-height: 1.35;
-  }
-
-  .line.dim {
-    font-size: 12px;
-    color: var(--text-dim);
-  }
-
-  /* The slider is the one part that takes the pointer. */
-  .rear {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    gap: 6px;
     pointer-events: auto;
   }
 
-  .rear .label {
+  /* A 28 px hit area (ui-style 22). */
+  .sbtn {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .sbtn:hover:not(:disabled) {
+    border-color: var(--text-dim);
+  }
+
+  .sbtn:focus-visible {
+    outline: 2px solid var(--paper);
+    outline-offset: 1px;
+  }
+
+  /* Off is told by more than the colour: the button loses its frame too. */
+  .sbtn:disabled {
+    border-style: dashed;
+    color: var(--text-dim);
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .keep {
     flex: none;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
-  .rear :global(.slider) {
-    flex: 1;
-    min-width: 60px;
+  .keep rect {
+    fill: currentColor;
   }
 
-  .keys {
-    display: flex;
-    gap: 3px;
+  output {
+    min-width: 1.5ch;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
   }
 
   .k {
@@ -170,47 +210,5 @@
     font-weight: 600;
     line-height: 17px;
     text-align: center;
-  }
-
-  .rear output {
-    min-width: 1.5ch;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 12px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    font-size: 12px;
-    color: var(--text-dim);
-  }
-
-  .legend li {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .line-key {
-    display: inline-block;
-    width: 18px;
-    border-top: 3px solid var(--you);
-  }
-
-  .line-key.dashed {
-    border-top-style: dashed;
-  }
-
-  .glyph {
-    color: var(--you);
-    font-weight: 700;
-  }
-
-  .glyph.enemy {
-    color: var(--enemy);
   }
 </style>
