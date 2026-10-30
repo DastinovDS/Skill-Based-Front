@@ -790,7 +790,7 @@ def test_match_end_disconnect() -> None:
 def test_match_end_carries_only_the_own_totals() -> None:
     """#607: each player's ``match_end`` has that player's totals and no field of the other side."""
     events = [
-        event(5, "fight_round", fight=1, node=1, losses_0=4, losses_1=1),
+        event(5, "fight_round", fight=1, node=1, spent_0=0, spent_1=0, losses_0=4, losses_1=1),
         event(6, "packet_delivered", packet=1, player=0, node=1, charges=7),
         event(7, "packet_delivered", packet=2, player=1, node=2, charges=2),
     ]

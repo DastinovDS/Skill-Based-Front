@@ -674,8 +674,8 @@ def test_result_totals_count_own_units_lost_and_charges_delivered() -> None:
     """#607: fight kills (``losses_<p>``) and attrition are units lost; starvation and a retreat
     are not; delivered charges are the packets and transfers that arrived."""
     events = [
-        event(6, "fight_round", fight=1, node=1, losses_0=2, losses_1=1),
-        event(7, "fight_round", fight=1, node=1, losses_0=0, losses_1=3),
+        event(6, "fight_round", fight=1, node=1, spent_0=0, spent_1=0, losses_0=2, losses_1=1),
+        event(7, "fight_round", fight=1, node=1, spent_0=0, spent_1=0, losses_0=0, losses_1=3),
         event(8, "attrition", node=0, player=0, group=1, charged=True, destroyed=False),
         event(8, "attrition", node=0, player=1, group=2, charged=False, destroyed=True),
         event(9, "starvation", player=0, node=0, warehouse=1, units=1),
