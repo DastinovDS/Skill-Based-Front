@@ -663,3 +663,52 @@
     margin-top: 14px;
   }
 }
+
+/* The password screen (#601): plain fields with the underline of the welcome form, in the panel. */
+.front .panel .fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.front .panel .fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.front .panel .fields input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 2px solid var(--you);
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 20px;
+}
+
+.front .panel .fields input:focus-visible {
+  outline: none;
+  /* The tint alone is faint: the underline turns paper-white so the focus reads in grey scale. */
+  border-bottom-color: var(--paper);
+  background: rgb(91 155 255 / 10%);
+}
+
+.front .panel .fields .hint {
+  margin: 0;
+}
+
+.front .panel .ok {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 0;
+  font-size: 16px;
+}

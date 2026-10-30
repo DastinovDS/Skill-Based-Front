@@ -285,6 +285,38 @@ test('shot of the status bar failed at phone width', async ({ page }) => {
   await page.screenshot({ path: join(OUT, 'status-failed-390x700.png') });
 });
 
+// The password screen after a submit (#601): `screen-password-saved.png` (the confirmation) and
+// `screen-password-mismatch.png` (the amber line), each with the grey-scale twin.
+for (const outcome of ['saved', 'mismatch'] as const) {
+  test(`shot of the password screen (${outcome})`, async ({ page }) => {
+    await page.goto('/?menu=password-change');
+    await expect(page.locator('.front .panel')).toBeVisible();
+    await page.getByLabel('Current password').fill('old-password-123');
+    await page.getByLabel('New password').fill('new-password-456');
+    await page
+      .getByLabel('Repeat the password')
+      .fill(outcome === 'saved' ? 'new-password-456' : 'x');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole(outcome === 'saved' ? 'status' : 'alert').last()).toBeVisible();
+    await page.mouse.move(1000, 700);
+    await page.screenshot({ path: join(OUT, `screen-password-${outcome}.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.screenshot({ path: join(OUT, `screen-password-${outcome}-gray.png`) });
+  });
+}
+
+// The legal pages (#601): `legal-impressum.png` and `legal-privacy.png`, the same in grey scale.
+for (const page of ['impressum', 'privacy'] as const) {
+  test(`shot of the legal page ${page}`, async ({ page: tab }) => {
+    await tab.goto(`/${page}`);
+    await expect(tab.getByRole('heading', { level: 1 })).toBeVisible();
+    await tab.mouse.move(1000, 700);
+    await tab.screenshot({ path: join(OUT, `legal-${page}.png`) });
+    await tab.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await tab.screenshot({ path: join(OUT, `legal-${page}-gray.png`) });
+  });
+}
+
 // The menu picture by season (#474: the terrain takes the tint of the season of the date; the dev
 // scenes pin one with `&season=`) and the still frame of "less motion" (one frame per state, no loop).
 for (const season of ['spring', 'summer', 'autumn', 'winter'] as const) {

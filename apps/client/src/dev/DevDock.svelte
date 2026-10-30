@@ -5,6 +5,7 @@
   import type { DockContext } from '../app/dock.ts';
   import InviteScreen from '../app/InviteScreen.svelte';
   import LobbyScreen from '../app/LobbyScreen.svelte';
+  import PasswordScreen from '../app/PasswordScreen.svelte';
   import { MapCache } from '../app/mapCache.svelte.ts';
   import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
   import type { MapFile } from '../protocol.gen.ts';
@@ -115,7 +116,7 @@
     } as unknown as Api;
 
     const banned = id.endsWith('-banned');
-    const guest = id === 'lobby-guest';
+    const guest = id === 'lobby-guest' || id === 'password-set';
     const rated = id === 'bot-rated';
     const dock: DockContext = {
       nick: 'Danya',
@@ -150,6 +151,13 @@
     {dock}
     isPublic={id === 'create-public'}
     oncreate={() => Promise.resolve(id === 'create-error' ? 'error.api.unavailable' : null)}
+    onback={nothing}
+  />
+{:else if id === 'password-set' || id === 'password-change'}
+  <PasswordScreen
+    {dock}
+    hasPassword={id === 'password-change'}
+    onsubmit={() => Promise.resolve(null)}
     onback={nothing}
   />
 {:else if id.startsWith('invite-')}

@@ -18,16 +18,21 @@
     gap: 12px;
     padding: 2px 8px;
     border-radius: 4px;
-    background: rgb(13 17 23 / 80%);
+    background: var(--scrim);
     font-size: 12px;
   }
 
   .legal-footer a {
-    color: #8b949e;
+    color: var(--text-dim);
   }
 
   .legal-footer a:hover,
   .legal-footer a:focus-visible {
-    color: #e6edf3;
+    color: var(--text);
+  }
+
+  .legal-footer a:focus-visible {
+    outline: 2px solid var(--paper);
+    outline-offset: 2px;
   }
 </style>
