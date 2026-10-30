@@ -572,7 +572,7 @@ bots among themselves (1500 matches): expander 0.74 -> 0.69, rusher 0.61 -> 0.67
 0.018 -> 0.049); among the `hard` bots 0.127 -> 0.432.
 
 **Result.** Contrary to the diagnostic's prediction the planned share of sieges rose strongly: a plan that is chosen is
-now paid, so it is sent instead of an ordinary order on the same target. Win rates moved little: no bot changed beyond
-its interval except `smart_reactive` (-0.04) and `smart_rusher` (+0.03), the order of the field is the same, the
+now paid, so it is sent instead of an ordinary order on the same target. Win rates moved little: every change is within or at the
+edge of the interval; the largest are `smart_reactive` (-0.04) and `smart_rusher` (+0.03). The order of the field is the same, the
 server level ladder of #574 holds (hard beats normal 0.70 -> 0.70, expert beats hard 0.67 -> 0.58, a narrower margin).
 No tuning to the gate was done. Both changes stay on for every personality.
