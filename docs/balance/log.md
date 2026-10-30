@@ -105,3 +105,59 @@ The order: first #175, then H1 (one edit, already visible in the data), then H2 
 each iteration with a `--seeds 100` tournament and a report in the PR (AGENTS.md, section 10). The bot fixes
 (#166 for Reactive, stance switching for Turtle) go in separate PRs, so that the effect of the bot and of the ruleset
 is not mixed in one iteration.
+
+## BAL-02 (#40): iterations on `rulesets/mvp-2.toml`
+
+`mvp-2` starts as a copy of `mvp-1` (`SIM_VERSION` 24); every iteration changes ruleset numbers only
+(AGENTS.md, 4.1, item 7) and is marked `BAL-02` next to the key. `mvp-1` stays the played ruleset; switching the
+defaults is the owner's call (criterion 6).
+
+**Field.** The 10 strategic bots: `rusher`, `strangler`, `reactive`, `expander`, `turtle` (BOT-03) and
+`smart_rusher`, `smart_strangler`, `smart_reactive`, `smart_expander`, `smart_turtle` (#166, the default `hard`
+level); `idle` and `random_legal` are not counted (#40). The 3 pool maps (`crossroads`, `highway`, `ridge`), 10
+seeds per iteration: `3 x 10 x 10 x 10 = 3000` matches. Iteration 0 ran locally (the laptop); from iteration 1 on the
+iterations run on GitHub runners (`mise run tournament:gh`, #582, byte-identical to a local run).
+
+**How the criteria are read.** Win rate: wins over the matches against the other strategic bots (mirror matches
+excluded, a draw is not a win), 95% Wilson interval. Sides: the mirror matches of each map. Planned attack
+share: `planned_attack_orders / attack_orders` summed over all strategic bots (the per-bot values are listed
+too). Late capture: a match where either side captured something in the last 3 minutes.
+
+### Iteration 0: the baseline, `mvp-1` unchanged
+
+Ruleset `mvp-1` (hash `847cc9a644cf08715fafe7f5688a53d5`).
+
+| bot | win rate [95%] | VP share | planned attack share | nodes at the end | charges produced | burned |
+|---|---|---|---|---|---|---|
+| smart_rusher | 0.80 [0.77; 0.84] | 0.67 | 0.03 | 36.8 | 91 | 28% |
+| rusher | 0.76 [0.72; 0.79] | 0.67 | 0.03 | 39.2 | 78 | 22% |
+| smart_expander | 0.69 [0.64; 0.72] | 0.58 | 0.01 | 27.4 | 169 | 61% |
+| strangler | 0.66 [0.61; 0.69] | 0.54 | 0.01 | 27.9 | 171 | 70% |
+| smart_strangler | 0.65 [0.61; 0.69] | 0.54 | 0.01 | 27.0 | 169 | 71% |
+| reactive | 0.54 [0.50; 0.58] | 0.53 | 0.01 | 24.3 | 180 | 68% |
+| smart_reactive | 0.51 [0.47; 0.55] | 0.52 | 0.01 | 22.9 | 179 | 75% |
+| expander | 0.27 [0.24; 0.31] | 0.40 | 0.00 | 12.6 | 162 | 82% |
+| turtle | 0.05 [0.04; 0.08] | 0.26 | 0.00 | 9.2 | 270 | 94% |
+| smart_turtle | 0.05 [0.04; 0.07] | 0.30 | 0.04 | 13.4 | 243 | 86% |
+
+| Criterion | Value | Outcome |
+|---|---|---|
+| No bot > 65% | smart_rusher 0.80, rusher 0.76, smart_expander 0.69, strangler 0.66 | failed |
+| Side 0 < 55%, CI includes 50% (mirror) | crossroads 0.51 [0.41; 0.61], highway 0.52 [0.42; 0.63], ridge 0.65 [0.54; 0.75] | failed on ridge |
+| Planned attack share 20-70% | 0.015 overall (every bot <= 0.04) | failed |
+| Turtle vs Expander < 40% | turtle 0.00 [0.00; 0.06], smart_turtle vs smart_expander 0.00 | passed (degenerately) |
+| Late capture >= 30% | 0.59 | passed |
+
+End reasons: `vp` 2683, `capital` 254, draws 57. The rushers lose almost only by losing their capital (rusher
+81 of 94 losses on 2 maps), they win on VP.
+
+**Why the leader wins (from the data).** The results are ordered by the stance again: War (rushers) > War then
+Balance (smart_expander) and Balance > Economy (turtles). Every bot outside War burns 61-94% of the charges it
+produces (`charges_overflow`): the warehouses are full and a capture of an empty node needs no charge, so the charge
+share of the quantum is mostly wasted. War produces half the charges of Balance and loses almost nothing for it
+(it burns 22-28% of a smaller production), while its CP (9 CP a minute against 6 in Balance and 3 in Economy)
+buy captures at 1 CP each: the rushers make about 100 move orders a match against 70 for Balance and 12-33 for
+the turtles, and end with 37-39 nodes. Sieges succeed 96-98% of the time for everyone: the fights hardly decide
+anything. The planned share is low for the reason of BAL-01, H3 and H4: `prefer_planned` needs
+`saved > (planned_move - move) * charges_per_cp / 100 = 2` and never plans into an empty node, and most attacks go
+into empty nodes.
