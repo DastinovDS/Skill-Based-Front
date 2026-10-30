@@ -555,7 +555,22 @@ Rules: section 11, DEC-03: VP every 30 s for each own city (capital x3); the ene
 
 ## Appendix A: current smart bots, command usage per player and match (run F)
 
-To be filled from the run `audit-usage`.
+Run `audit-usage` (GitHub run 41121023646): the 5 smart bots at `hard`, develop `298a048` (with the plan hold of
+#618), `mvp-2`, `crossroads`, `highway`, `ridge`, seeds 0..19, both sides: 1500 matches, 600 player slots per bot. Mean
+per player and match; win rate against all 5 (mirrors included).
+
+| bot | Move | planned | Cancel | Split | SetMode | SetStance | Recruit | Barracks | Warehouse | Road | SetFront | RearMin | Transfer | captures | charges fired | burned | win |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| smart_expander | 67.2 | 2.1 | 9.9 | 17.9 | 1.6 | 11.8 | 11.4 | 0.42 | 1.62 | 2.45 | 26.2 | 7.8 | 6.7 | 49.2 | 8.1 | 108.9 | 0.65 |
+| smart_reactive | 68.2 | 2.5 | 5.6 | 6.4 | 1.4 | 13.6 | 0.4 | 0.55 | 0.14 | 3.46 | 31.5 | 7.3 | 8.0 | 58.7 | 5.8 | 124.5 | 0.47 |
+| smart_rusher | 69.7 | 8.0 | 12.6 | 7.7 | 0.0 | 6.8 | 3.6 | 0.17 | 0.27 | 0.65 | 28.4 | 10.2 | 9.7 | 54.9 | 9.7 | 68.5 | 0.64 |
+| smart_strangler | 70.1 | 4.5 | 9.9 | 7.9 | 0.1 | 10.5 | 3.0 | 0.34 | 0.92 | 2.04 | 29.4 | 7.3 | 7.3 | 57.9 | 7.6 | 116.3 | 0.63 |
+| smart_turtle | 39.1 | 1.3 | 3.0 | 16.7 | 1.8 | 25.8 | 23.4 | 0.93 | 1.80 | 3.50 | 11.8 | 2.7 | 1.9 | 17.6 | 3.3 | 161.1 | 0.10 |
+
+Over all slots: 3.4% of the bots' charges (start plus production) are fired in fights, 58% burn, 16% are left at the
+end; 90% of the matches end on the timer, 9% by the capital. The current bots buy 0.7-3.5 road levels, 0.1-1.8
+warehouse levels and 0.2-0.9 barracks a match, and "Defense" 0-1.8 times: the same picture as T (sections 9-11, 14),
+so the bot finding does not depend on the #618 change.
 
 ## Reproduction
 
