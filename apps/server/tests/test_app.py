@@ -64,12 +64,14 @@ def test_list_maps(client: TestClient) -> None:
         {"id": "diamond", "version": 1, "width": 400, "height": 400, "background_url": None},
         {"id": "line3", "version": 1, "width": 400, "height": 200, "background_url": None},
     ]
+    assert response.headers["cache-control"] == "no-cache"
 
 
 def test_get_map_returns_the_file(client: TestClient, maps_dir: Path) -> None:
     response = client.get("/api/maps/line3")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
+    assert response.headers["cache-control"] == "no-cache"
     assert response.json() == json.loads((maps_dir / "line3.json").read_text(encoding="utf-8"))
 
 
@@ -92,6 +94,9 @@ def test_background_webp(maps_dir: Path, settings: Settings) -> None:
         assert client.get("/api/maps/line3/background.png").status_code == 404
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/webp"
+    # Revalidate by ETag instead of heuristic caching: a re-baked map shows up at once (#576).
+    assert response.headers["cache-control"] == "no-cache"
+    assert "etag" in response.headers
     assert response.content == WEBP_BYTES
 
 

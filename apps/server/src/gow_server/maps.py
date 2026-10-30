@@ -15,6 +15,9 @@ from pydantic import BaseModel
 from gow_sim.maps import MapDef, MapFormatError, load_map
 
 BACKGROUND_SUFFIX = ".bg.webp"
+# Map files change between releases under the same URL. Without Cache-Control browsers cache
+# heuristically (from Last-Modified) and keep serving a stale map or background (#576).
+REVALIDATE = {"Cache-Control": "no-cache"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +78,8 @@ router = APIRouter(prefix="/api/maps", tags=["maps"])
 
 
 @router.get("")
-async def list_maps(catalog: Catalog) -> list[MapSummary]:
+async def list_maps(catalog: Catalog, response: Response) -> list[MapSummary]:
+    response.headers.update(REVALIDATE)
     return [
         MapSummary(
             id=entry.id,
@@ -91,7 +95,8 @@ async def list_maps(catalog: Catalog) -> list[MapSummary]:
 @router.get("/{map_id}", responses={200: {"content": {"application/json": {}}}})
 async def get_map(map_id: str, catalog: Catalog) -> Response:
     """The map file as is (format: docs/design/map-format.md)."""
-    return Response(content=_entry(catalog, map_id).raw_json, media_type="application/json")
+    raw_json = _entry(catalog, map_id).raw_json
+    return Response(content=raw_json, media_type="application/json", headers=REVALIDATE)
 
 
 @router.get("/{map_id}/background.webp", response_class=FileResponse)
@@ -99,7 +104,7 @@ async def get_background(map_id: str, catalog: Catalog) -> FileResponse:
     background = _entry(catalog, map_id).background
     if background is None:
         raise HTTPException(status_code=404, detail="map has no background")
-    return FileResponse(background, media_type="image/webp")
+    return FileResponse(background, media_type="image/webp", headers=REVALIDATE)
 
 
 def _entry(catalog: MapCatalog, map_id: str) -> MapEntry:
