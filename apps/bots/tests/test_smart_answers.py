@@ -9,6 +9,7 @@ of scheduled orders (DEC-08) and the playtest of 2026-10-30 (B1-B4).
 import dataclasses
 from collections.abc import Mapping
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -131,6 +132,12 @@ def _province_next_to(mapdef: MapDef, node: int) -> tuple[int, int]:
     raise AssertionError("no province")
 
 
+class _Withdrawing(SmartStrangler):
+    """Item 14 is off for the personalities (measured worse, #624); the rule itself is tested."""
+
+    WITHDRAW: ClassVar[bool] = True
+
+
 def test_a_thin_province_garrison_leaves_before_a_visible_stronger_force(
     crossroads: MapDef, rules: Ruleset
 ) -> None:
@@ -146,13 +153,14 @@ def test_a_thin_province_garrison_leaves_before_a_visible_stronger_force(
         },
     )
     view = dataclasses.replace(view, groups=(*view.groups, _group(900, prov, 1, 1)))
-    bot = SmartStrangler(crossroads, rules, seed=0, player=0)
+    assert not SmartStrangler.WITHDRAW and not SmartStrangler.WORRY
+    bot = _Withdrawing(crossroads, rules, seed=0, player=0)
     # DEC-07: one charge on plains/forest/mountains gives a pool below 4 by 2 or more, and 4
     # shots take a node of one unit: the unit walks to the own neighbour away from the enemy.
     cmds = bot.decide(view, TICK)
     assert any(isinstance(c, Move) and c.group == 900 and c.dest == back for c in cmds)
     calm = _nodes(view, **{f"n{enemy}": {"owner": 1, "seen": _enemy_seen(1)}})
-    cmds = SmartStrangler(crossroads, rules, seed=0, player=0).decide(calm, TICK)
+    cmds = _Withdrawing(crossroads, rules, seed=0, player=0).decide(calm, TICK)
     assert not any(isinstance(c, Move) and c.group == 900 and c.dest == back for c in cmds)
 
 

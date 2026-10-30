@@ -96,7 +96,10 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
     ``STRIKE`` is on for every personality but the bunker, with ``insight`` (``striking``).
 
 Items 13-17 answer the owner's staging strike (#624, playtest 2026-10-30, B1-B4); they need
-``insight`` and the personality's ``ANSWERS`` (the benchmark ``smart_hoarder`` keeps them off):
+``insight`` and the personality's ``ANSWERS`` (the benchmark ``smart_hoarder`` keeps them off),
+and each has its switch (``WORRY``, ``WITHDRAW``, ``BURN_WAR``, ``CENTRE_BARRACKS``, ``PAIRS``).
+Items 13 and 14 are off for every personality: on GitHub runners they made the hard bots weaker
+against the field and against the benchmark (``docs/balance/log.md``, #624):
 
 13. **Worry** (B1, anxiety). The enemy shots seen within two hops of the own capital (fresh
     sightings, figures heading next to it), at least ``WORRY_SEEN`` of them, plus
@@ -325,10 +328,10 @@ class SmartBot(CampaignBot):
     """Groups a strike needs: one group alone is a single attack (``_attack``)."""
     ANSWERS: ClassVar[bool] = True
     """The answers of items 13-17 (#624); the benchmark ``smart_hoarder`` keeps them off."""
-    WORRY: ClassVar[bool] = True
-    """Item 13 on (with ``ANSWERS``)."""
-    WITHDRAW: ClassVar[bool] = True
-    """Item 14 on (with ``ANSWERS``)."""
+    WORRY: ClassVar[bool] = False
+    """Item 13 on (with ``ANSWERS``). Off: measured worse (#624, docs/balance/log.md)."""
+    WITHDRAW: ClassVar[bool] = False
+    """Item 14 on (with ``ANSWERS``). Off: measured worse (#624, docs/balance/log.md)."""
     BURN_WAR: ClassVar[bool] = True
     """Item 15 on (with ``ANSWERS``)."""
     CENTRE_BARRACKS: ClassVar[bool] = True
