@@ -194,10 +194,10 @@ describe('smoothChain (#585)', () => {
   it('turns the stairs into a line with no corner and moves it only a little', () => {
     const line = smoothChain(stairs, false);
     for (let i = 1; i + 1 < line.length; i++) {
-      const [a, b, c] = [line[i - 1], line[i], line[i + 1]] as { x: number; y: number }[];
-      const turn = Math.abs(
-        Math.atan2(c!.y - b!.y, c!.x - b!.x) - Math.atan2(b!.y - a!.y, b!.x - a!.x),
-      );
+      const a = line[i - 1] ?? { x: 0, y: 0 };
+      const b = line[i] ?? { x: 0, y: 0 };
+      const c = line[i + 1] ?? { x: 0, y: 0 };
+      const turn = Math.abs(Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x));
       expect(turn).toBeLessThan(Math.PI / 12);
     }
     // Every point stays within the stairs' own amplitude of the diagonal y = x - 2.
@@ -234,7 +234,7 @@ describe('steadyBank (#585)', () => {
     ];
     const across = steadyBank(bank).map((e) => e.neighbour);
     // Then the run of 2 (20 units) joins the longer of its neighbours, the run of 1.
-    expect(across).toEqual([...Array(26).fill(1), ...Array(15).fill(3)]);
+    expect(across).toEqual([...Array<number>(26).fill(1), ...Array<number>(15).fill(3)]);
   });
 
   it('keeps a bank of one answer as it is', () => {
@@ -292,4 +292,32 @@ describe('the pool maps with a geography (#585)', () => {
       }
     });
   }
+});
+
+describe('a stream cut into one area (#585)', () => {
+  // Area 0 is the whole 100 x 100 map; a stream comes in from the top edge (x 40..60) and ends at
+  // y = 50, with area 0 on both of its banks.
+  const map = {
+    meta: { name: 'inlet', version: 1, symmetry: 'rot180', width: 100, height: 100 },
+    nodes: [{ id: 0, name: 'Only', x: 50, y: 80, terrain: 'plains' }],
+    edges: [],
+  } as unknown as typeof GEO_MAP;
+  const geo = {
+    map: 'inlet',
+    version: 1,
+    chains: [
+      { l: -1, r: 0, pts: [0, 0, 40, 0] },
+      { l: -1, r: 'river', pts: [40, 0, 60, 0] },
+      { l: -1, r: 0, pts: [60, 0, 100, 0, 100, 100, 0, 100, 0, 0] },
+      { l: 0, r: 'river', pts: [60, 0, 60, 50, 40, 50, 40, 0] },
+    ],
+  };
+
+  it('is no coast: the banks look across at their own area, and no owner border runs there', () => {
+    const t = geoTerritory(map, geo);
+    const banks = t?.edges.filter((e) => e.water === true) ?? [];
+    expect(banks.length).toBeGreaterThan(0);
+    expect(new Set(banks.map((e) => e.neighbour))).toEqual(new Set([0]));
+    expect(territoryBorders(t?.cells ?? [], [0], 1.5, t?.edges)).toEqual([]);
+  });
 });

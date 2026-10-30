@@ -111,7 +111,8 @@ export interface CellEdge {
   readonly neighbour: number | null;
   /**
    * Water lies across the edge (DEC-36, #544): a sea or a lake (`neighbour: null`) or a river or a
-   * stream, then `neighbour` is the area across it, if any. The thin area line is not drawn here,
+   * stream, then `neighbour` is the area across it, if any (the cell itself where a stream is cut
+   * into it, #585). The thin area line is not drawn here,
    * the owner border is (it runs along a coast).
    */
   readonly water?: boolean;
@@ -186,17 +187,21 @@ export interface Border extends Segment {
   readonly owner: number;
 }
 
+/** The corner shifts per `edges` array (the edges of a map never change; a capture redraws per frame). */
+const shiftCache = new WeakMap<readonly CellEdge[], Map<string, Point>>();
+
 /** How far (a multiple of the inset) a vertex of a sharp corner may move off its two edges. */
 const MITER_LIMIT = 2;
 
 /**
- * Where every corner of the areas of a geography moves for an inset of 1, by area: along the
- * bisector of the inward normals of the two edges that meet there (a miter, capped at
- * `MITER_LIMIT`). Two border segments that meet at a corner then meet at the moved corner too;
+ * The direction every corner of the areas of a geography moves in, by area: the bisector of the
+ * inward normals of the edges that meet there (the distance is a miter, capped at `MITER_LIMIT`). Two border segments that meet at a corner then meet at the moved corner too;
  * moving each segment on its own normal opens a notch at a bend and crosses into a hook at a sharp
  * tip, such as the land between a river mouth and the coast (#585).
  */
 function cornerShifts(edges: readonly CellEdge[]): Map<string, Point> {
+  const cached = shiftCache.get(edges);
+  if (cached !== undefined) return cached;
   const sums = new Map<string, Point>();
   for (const { cell, a, b, inward } of edges) {
     if (inward === undefined) continue;
@@ -213,6 +218,7 @@ function cornerShifts(edges: readonly CellEdge[]): Map<string, Point> {
     const n = { x: sum.x / length, y: sum.y / length };
     shifts.set(key, n);
   }
+  shiftCache.set(edges, shifts);
   return shifts;
 }
 

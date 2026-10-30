@@ -427,8 +427,8 @@ const MIN_BANK_RUN = 40;
  * a gap into it (#585). Such a run (shorter than `MIN_BANK_RUN`) takes the answer of its longer
  * neighbouring run, the shortest first; deterministic.
  */
-export function steadyBank<T extends { edge: CellEdge; length: number }>(
-  bank: readonly T[],
+export function steadyBank(
+  bank: readonly { readonly edge: CellEdge; readonly length: number }[],
 ): CellEdge[] {
   const runs: { across: number | null; length: number; edges: CellEdge[] }[] = [];
   for (const { edge, length } of bank) {
@@ -528,10 +528,14 @@ function edgesOf(pieces: readonly Piece[], cells: readonly (readonly Point[])[])
           const from = at(k);
           const to = at(k + 1);
           const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+          // The first area past the water; the own area too once the look has been in the
+          // water (a stream cut into the area, its banks facing each other: no coast, #585).
           let across: number | null = null;
+          let wet = false;
           for (let d = ACROSS_STEP; d <= ACROSS_REACH && across === null; d += ACROSS_STEP) {
             const found = nodeAt({ x: mid.x - inward.x * d, y: mid.y - inward.y * d });
-            if (found !== null && found !== area) across = found;
+            if (found === null) wet = true;
+            else if (found !== area || wet) across = found;
           }
           const edge = { cell: area, a: from, b: to, neighbour: across, water: true, inward };
           bank.push({ edge, length: length / parts });
