@@ -93,6 +93,33 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
     count in full (DEC-24, D1). The groups of a strike are not recalled one by one and do not
     leave a fight that the rest of the strike is still walking into (``committed``, ``coming``).
 
+    ``STRIKE`` is on for every personality but the bunker, with ``insight`` (``striking``).
+
+Items 13-17 answer the owner's staging strike (#624, playtest 2026-10-30, B1-B4); they need
+``insight`` and the personality's ``ANSWERS`` (the benchmark ``smart_hoarder`` keeps them off):
+
+13. **Worry** (B1, anxiety). The enemy shots seen within two hops of the own capital (fresh
+    sightings, figures heading next to it), at least ``WORRY_SEEN`` of them, plus
+    ``ANXIETY`` percent of an upper bound of what the fog may hide (``hidden_shots``: the enemy
+    CP bound of ``EnemyCp`` grows with every quiet period, CP regeneration being public and only
+    the stance hidden; two plans of guessed groups at most, a guessed group more for a visible
+    enemy barracks next to the capital, DEC-31), reach the shots that take the capital now: free
+    charged groups that can arrive within ``alarm`` ticks walk home, the capital recruits, one
+    more scout watches the way in, and the enemy node next to the capital with the most visible
+    shots weighs ``W_STAGE`` more as a target (hit the build-up before it strikes).
+14. **A thin garrison leaves** (B2): the groups of an own province whose pool (DEC-07) is
+    ``WITHDRAW_GAP`` or more below a visible enemy force next to it that would take it walk to
+    the safer own neighbour, not back into a node left within ``WITHDRAW_TICKS``. Cities are held
+    (their VP and warehouse), numbers hidden by the fog are no reason, a pinned node (DEC-37)
+    stays.
+15. **War while the charges burn** (B3): the stance steps toward War when the warehouses are
+    nine tenths full, whether units wait for delivery or not.
+16. **One forward barracks in the centre** (B4): the large city whose hops to the two capitals
+    differ least, once held and not next to the enemy; no barracks in front cities.
+17. **Two strikes at one node** (the defensive pair): two or more enemy scheduled orders aimed at
+    the capital raise the alarm (item 2) within ``alarm`` ticks of their arrival; at any other
+    own node they are answered like a strike at the capital (Defense and a reinforcement).
+
 The ordinary-or-planned choice of every order is ``prefer_planned``: a function of the ruleset
 prices only, shared by all bots (AGENTS.md, section 8). Tie-breaks are mirror-invariant
 (``Bot.key``, ``Bot.edge_keys``), nothing draws from ``self.rng``.
