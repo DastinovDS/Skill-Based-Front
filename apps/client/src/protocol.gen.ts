@@ -304,6 +304,7 @@ export interface RulesetPublic {
   cp: CpPublic;
   cost: CostsPublic;
   combat: CombatPublic;
+  capture: CapturePublic;
   build: BuildPublic;
   economy: EconomyPublic;
   orders: OrdersPublic;
@@ -380,6 +381,13 @@ export interface TerrainDefensePublic {
   plains: number;
   forest: number;
   mountains: number;
+}
+/**
+ * ``capture`` of the ruleset (DEC-38): a capture spends ``charge_cost`` real charges of the
+ * capturing groups in the node, with fewer they bounce; 0: a capture is free.
+ */
+export interface CapturePublic {
+  charge_cost: number;
 }
 /**
  * Road upgrades (``build`` of the ruleset, DEC-28, item 7): the price is ``cost.build`` per
@@ -1180,7 +1188,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 30;
+export const PROTOCOL_VERSION = 31;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

@@ -46,6 +46,7 @@ from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.state import PROGRESS_SCALE, AtNode, Event, GameState, OnEdge, Order, event
 from gow_sim.systems.capacity import change_owner, city_capacity
+from gow_sim.systems.capture import bounce_back, pay
 
 
 def border_permille(mapdef: MapDef, edge: int) -> int:
@@ -251,8 +252,9 @@ class Arrival:
 def movement(state: GameState, rules: Ruleset) -> list[Event]:
     """The movement system: ``advance`` all groups, then ``settle_arrivals``.
 
-    Emits ``group_arrived`` for every arrival (combat, SIM-09, tells attackers by it) and
-    ``node_captured`` for every captured empty neutral node.
+    Emits ``group_arrived`` for every arrival (combat, SIM-09, tells attackers by it),
+    ``node_captured`` for every captured empty neutral node and ``capture_failed`` for every group
+    that could not pay for one (DEC-38).
     """
     arrivals = advance(state, rules)
     events = [
@@ -270,7 +272,7 @@ def movement(state: GameState, rules: Ruleset) -> list[Event]:
         )
         for a in arrivals
     ]
-    return events + settle_arrivals(state, arrivals)
+    return events + settle_arrivals(state, rules, arrivals)
 
 
 def advance(state: GameState, rules: Ruleset) -> list[Arrival]:
@@ -368,24 +370,33 @@ def _step_back(state: GameState, rules: Ruleset, gid: int, location: OnEdge) -> 
     return Arrival(gid, location.from_node, location.edge, far, back=True, level=location.level)
 
 
-def settle_arrivals(state: GameState, arrivals: list[Arrival]) -> list[Event]:
+def settle_arrivals(state: GameState, rules: Ruleset, arrivals: list[Arrival]) -> list[Event]:
     """Phase 2: capture every empty neutral node where only one player's groups now stand.
 
-    The capture goes through ``change_owner`` (SIM-07): grace period, empty warehouse.
+    The groups there are the arrivals of this tick (a neutral node has no standing groups); they
+    pay ``capture.charge_cost`` from their pooled charges (DEC-38, item 2), or all of them bounce
+    and the node stays neutral (item 4; a returning group dies, DEC-24, G3). The capture goes
+    through ``change_owner`` (SIM-07): grace period, empty warehouse.
     """
+    by_group = {a.group: a for a in arrivals}
     events: list[Event] = []
     for node_id in sorted(dict.fromkeys(a.node for a in arrivals)):
         node = state.nodes[node_id]
         if node.owner is not None:
             continue
-        owners = sorted(
-            dict.fromkeys(
-                g.owner
-                for g in state.groups.values()
-                if isinstance(g.location, AtNode) and g.location.node == node_id
-            )
-        )
-        if len(owners) == 1:
-            events.extend(change_owner(state, node_id, owners[0]))
-            events.append(event(state.tick, "node_captured", node=node_id, player=owners[0]))
+        here = [
+            state.groups[gid]
+            for gid in sorted(state.groups)
+            if state.groups[gid].location == AtNode(node_id)
+        ]
+        owners = sorted(dict.fromkeys(g.owner for g in here))
+        if len(owners) != 1:
+            continue
+        if not pay(rules, here):
+            for g in here:
+                a = by_group[g.id]  # a neutral node holds only the arrivals of this tick
+                events.append(bounce_back(state, g, node_id, a.edge, a.from_node, returning=a.back))
+            continue
+        events.extend(change_owner(state, node_id, owners[0]))
+        events.append(event(state.tick, "node_captured", node=node_id, player=owners[0]))
     return events

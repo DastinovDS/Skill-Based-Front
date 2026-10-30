@@ -68,6 +68,7 @@ from gow_sim.state import (
     event,
 )
 from gow_sim.systems.capacity import change_owner
+from gow_sim.systems.capture import CaptureFailure, bounce_back, failed, pay
 from gow_sim.systems.movement import edge_between, leg
 
 __all__ = [
@@ -444,9 +445,20 @@ def _node_contacts(
                 continue
             caught = [g for g in zone.get(node_id, []) if g.owner == owner]
             if not owners[owner] and not caught:
-                # DEC-07, row 5: an empty enemy node nobody just left is taken without a fight
-                events.extend(change_owner(state, node_id, attacker))
-                events.append(event(state.tick, "node_captured", node=node_id, player=attacker))
+                # DEC-07, row 5: an empty enemy node nobody just left is taken without a fight,
+                # if the arrivals pay for it (DEC-38, items 2 and 4); otherwise they bounce
+                if pay(rules, owners[attacker]):
+                    events.extend(change_owner(state, node_id, attacker))
+                    events.append(event(state.tick, "node_captured", node=node_id, player=attacker))
+                    continue
+                for g in owners[attacker]:
+                    a = arrivals.get(g.id)
+                    if a is None:
+                        raise ValueError(f"group {g.id} in node {node_id} without an arrival")
+                    bonus.pop(g.id, None)  # the bonus burns with the order (DEC-38, item 4)
+                    events.append(
+                        bounce_back(state, g, node_id, a.edge, a.from_node, returning=a.back)
+                    )
                 continue
         for g in here:
             if g.owner != owner and g.id not in arrivals:
@@ -700,6 +712,7 @@ def _end(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
     bounce = {p: False for p in PLAYERS}
     losses = [fight.losses[0], fight.losses[1]]
     encircled: dict[int, tuple[int, int]] = {}
+    unpaid: list[Group] = []  # the groups of a winner that could not pay (DEC-38)
     if fight.edge is not None:  # item G4
         if alive[0] and alive[1]:
             s0, s1 = fight.shots
@@ -736,7 +749,12 @@ def _end(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
                 winner = defender if alive[defender] else None
                 bounce[attacker] = alive[attacker]
         if winner is not None and state.nodes[node].owner != winner:
-            captured = True
+            # DEC-38, item 5: the winner's live groups standing in the node pay for it, or bounce
+            payers = [g for g in live[winner] if not _caught(fight, g)]
+            captured = pay(rules, payers)
+            if not captured:
+                unpaid = payers
+                bounce[winner] = True
         for p in PLAYERS:
             if not bounce[p]:
                 continue
@@ -785,6 +803,10 @@ def _end(state: GameState, rules: Ruleset, fight: Fight) -> list[Event]:
                 encircled=encircled.get(gid),
             )
         )
+    for g in unpaid:
+        result = CaptureFailure.ENCIRCLED if g.id in encircled else CaptureFailure.BOUNCE
+        assert fight.node is not None
+        events.append(failed(state, fight.node, g, result))
     del state.fights[fight.id]
     if captured and fight.node is not None and winner is not None:
         events.extend(change_owner(state, fight.node, winner))

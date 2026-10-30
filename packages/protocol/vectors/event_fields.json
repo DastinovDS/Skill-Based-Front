@@ -42,6 +42,17 @@
       ],
       "ids": []
     },
+    "capture_failed": {
+      "fields": [
+        "group",
+        "node",
+        "player",
+        "result"
+      ],
+      "ids": [
+        "group"
+      ]
+    },
     "charges_overflow": {
       "fields": [
         "charges",

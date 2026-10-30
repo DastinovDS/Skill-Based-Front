@@ -231,6 +231,15 @@ class CombatRules:
 
 
 @dataclass(frozen=True, slots=True)
+class CaptureRules:
+    """The price of a capture (DEC-38): ``charge_cost`` real charges of the capturing player's
+    groups in the node are spent when it changes its owner; with fewer the groups bounce. 0: off,
+    a capture is free."""
+
+    charge_cost: int
+
+
+@dataclass(frozen=True, slots=True)
 class CapacityRules:
     attrition_ticks: int
     grace_ticks: int
@@ -402,6 +411,7 @@ class Ruleset:
     orders: OrderRules
     terrain: TerrainRules
     combat: CombatRules
+    capture: CaptureRules
     capacity: CapacityRules
     starvation: StarvationRules
     supply: SupplyRules
@@ -492,6 +502,7 @@ def parse_ruleset(data: object) -> Ruleset:
             "orders",
             "terrain",
             "combat",
+            "capture",
             "capacity",
             "starvation",
             "supply",
@@ -535,6 +546,9 @@ def parse_ruleset(data: object) -> Ruleset:
             root.table(
                 "combat", ("round_ticks", "shots_per_round", "regroup_ticks", "engage_ticks")
             )
+        ),
+        capture=CaptureRules(
+            charge_cost=root.table("capture", ("charge_cost",)).integer("charge_cost", low=0)
         ),
         capacity=_parse_capacity(
             root.table("capacity", ("attrition_ticks", "grace_ticks", "by_kind"))
