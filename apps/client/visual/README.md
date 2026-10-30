@@ -68,7 +68,7 @@ The Dock screens (#473, `src/dev/DevDock.svelte`, the real screens with a fake A
 Radial menus (#350): `mise run shots` takes them too, on the scene `snapshot_fog` with the parameter `?menus` (in a frozen
 scene orders go nowhere, the menus open as for a player, city development is on): `menu-stance.png` (key Q),
 `menu-city.png` (a click on a city ring), `menu-group.png` (two clicks on a group), `menu-supply.png` (Tab and a click on a city)
-and the same frames in grayscale `menu-<name>-gray.png`. They have no `visual` references (the HUD is hidden in the references).
+and the same frames in grayscale `menu-<name>-gray.png`; the list of the groups of a city: `stack.png` and `stack-gray.png` (scene `snapshot_clash` with `?menus`, a click on the icon of the three groups in the middle city). They have no `visual` references (the HUD is hidden in the references).
 
 `?at=<tick>` (for example `/?scene=fights&at=397.5`) freezes a fixture scene at another tick of the frame, a fractional one too: fight effects
 are functions of the tick, so a round is viewed frame by frame (the shot frames in the description of #352 were taken this way). References have no such parameter.

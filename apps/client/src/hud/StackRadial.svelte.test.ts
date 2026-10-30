@@ -83,8 +83,12 @@ describe('the list of the groups standing in a city', () => {
     expect(text[1]).toContain('Defense');
     expect(text[0]).toContain('1');
     expect(text[1]).toContain('2');
-    // The sectors are groups, not actions: none of the 13 icons of the menus fits them (#350).
-    expect(target.querySelector('.glyph')).toBeNull();
+    // Every sector has the icon of a group, at least 20 px (#350).
+    const glyphs = items.map((i) => i.querySelector('.glyph'));
+    expect(glyphs.map((g) => g?.getAttribute('data-icon'))).toEqual(['stackGroup', 'stackGroup']);
+    expect(glyphs.every((g) => Number(g?.querySelector('svg')?.getAttribute('width')) >= 20)).toBe(
+      true,
+    );
     items[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     flushSync();
     expect(hud.selection).toEqual({ kind: 'group', id: second.id });

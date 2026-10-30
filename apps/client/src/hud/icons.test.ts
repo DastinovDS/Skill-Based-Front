@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ICONS, MENU_ICONS, shapesOf, type IconShape } from './icons.ts';
 
-/** The 13 icons of the radial menus (set I1, #350): city, group, stance, supply. */
+/** The icons of the radial menus (set I1, #350): city, group, stance, supply, and the list of the groups of a city. */
 const NAMES = [
   'recruit',
   'barracks',
@@ -16,12 +16,13 @@ const NAMES = [
   'transfer',
   'front1',
   'front2',
+  'stackGroup',
 ] as const;
 
 const signature = (shapes: readonly IconShape[]): string => JSON.stringify(shapes);
 
 describe('the icons of the radial menus (I1)', () => {
-  it('are the 13 of the mockup, each with shapes', () => {
+  it('are the 13 of the mockup and the group of the city list, each with shapes', () => {
     expect(Object.keys(MENU_ICONS).sort()).toEqual([...NAMES].sort());
     for (const name of NAMES) expect(MENU_ICONS[name].length).toBeGreaterThan(0);
   });

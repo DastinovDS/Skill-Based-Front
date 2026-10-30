@@ -102,6 +102,25 @@ for (const menu of MENUS) {
   });
 }
 
+// The list of the groups of a city (#350): the scene `snapshot_clash` has three own groups in one
+// city; a click on their icon opens one sector per group. `stack.png` and `stack-gray.png`.
+test('shot of the list of the groups of a city (click on the icon of the stack)', async ({
+  page,
+}) => {
+  await page.goto('/?scene=snapshot_clash&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  // Three own groups stand in the city in the middle: one click on their icon.
+  await page.mouse.click(535, 418);
+  // Away from the menu, so that no sector is lit and no tooltip covers it.
+  await page.mouse.move(1000, 700);
+  await expect(page.locator('[role="menu"]')).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'stack.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'stack-gray.png') });
+});
+
 // The travel time of an order (#432, #448): `?eta=<from>,<to>,<ticks>[,<via>...]` pins the label and
 // the route to a frozen scene (a fixture has no server to answer `reach`). `eta-<name>.png` is the
 // map alone: a road between two cities, and routes of two roads through a city (the label in the
