@@ -29,7 +29,15 @@ done
 echo "run $run_id: https://github.com/$repo/actions/runs/$run_id" >&2
 
 started="$(date +%s)"
-gh run watch "$run_id" -R "$repo" --exit-status --interval 30 > /dev/null
+# One wait. Only if `gh` itself loses the network (the run is still going) it is resumed, up to 3 times.
+for attempt in 1 2 3; do
+  if gh run watch "$run_id" -R "$repo" --exit-status --interval 30 > /dev/null; then break; fi
+  status="$(gh run view "$run_id" -R "$repo" --json status,conclusion --jq '.status + " " + .conclusion' || echo unknown)"
+  case "$status" in
+    "completed "*) echo "run $run_id: $status" >&2; exit 1 ;;
+    *) [ "$attempt" -lt 3 ] || { echo "lost the run $run_id ($status)" >&2; exit 1; } ;;
+  esac
+done
 echo "finished in $(( $(date +%s) - started )) s of waiting" >&2
 
 mkdir -p "$TGH_DIR"
