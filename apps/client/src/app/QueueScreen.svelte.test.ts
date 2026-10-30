@@ -58,18 +58,18 @@ describe('QueueScreen', () => {
     });
   }
 
-  /** A button by its name: the key hint and the countdown beside the name do not count. */
+  /** A button by its name: the countdown and the chip beside the name do not count. */
   function button(label: string): HTMLButtonElement | undefined {
     return [...document.body.querySelectorAll('button')].find((b) => {
       const copy = b.cloneNode(true) as HTMLElement;
-      copy.querySelectorAll('kbd, .count').forEach((n) => {
+      copy.querySelectorAll('kbd, .count, .chip').forEach((n) => {
         n.remove();
       });
       return copy.textContent.trim() === label;
     });
   }
 
-  it('enters the queue once, then polls the status with the waiting time and queue size', async () => {
+  it('enters the queue once, then polls the status: the clock and one word, no queue size (#629)', async () => {
     const joinQueue = vi.fn(() => Promise.resolve(searching({ waited_s: 0, queue_size: 1 })));
     const queueStatus = vi.fn(() => Promise.resolve(searching()));
     render({ joinQueue, queueStatus });
@@ -80,16 +80,25 @@ describe('QueueScreen', () => {
     expect(joinQueue).toHaveBeenCalledTimes(1);
     expect(queueStatus).toHaveBeenCalledWith('t', expect.any(AbortSignal));
     expect(document.body.textContent).toContain('1:05');
-    expect(document.body.textContent).toContain('Players in the queue: 3');
+    expect(document.body.textContent).not.toContain('Players in the queue');
+    expect(document.querySelector('kbd')).toBeNull();
   });
 
-  it('tells the player to keep the tab open', async () => {
+  it('asks to keep the tab open only once the tab was hidden (#629, Q1)', async () => {
     render({
       joinQueue: () => Promise.resolve(searching()),
       queueStatus: () => Promise.resolve(searching()),
     });
     await settle();
-    expect(document.body.textContent).toContain(translate('en', 'queue.keepOpen'));
+    expect(document.body.textContent).not.toContain(translate('en', 'queue.keepOpen'));
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+      flushSync();
+      expect(document.body.textContent).toContain(translate('en', 'queue.keepOpen'));
+    } finally {
+      Reflect.deleteProperty(document, 'visibilityState');
+    }
   });
 
   it('does not start a new poll while the last one is unanswered, and gives a slow one up', async () => {
@@ -146,7 +155,6 @@ describe('QueueScreen', () => {
     const onstart = vi.fn();
     render({ joinQueue: () => Promise.resolve(found()), confirmQueue }, { onstart });
     await settle();
-    expect(document.body.textContent).toContain(translate('en', 'queue.foundTitle'));
     expect(document.body.textContent).toContain('bob');
     expect(document.body.textContent).toContain('15 s');
     button(translate('en', 'queue.confirm'))?.click();

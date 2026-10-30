@@ -1,7 +1,7 @@
 /**
- * The leaderboard and profile screens (#78) as dev scenes (`/?menu=board-*`, `profile-*`,
- * `replays`): the real screen with a fake API and a frozen clock, so `mise run shots` can show
- * every state of mockup variant S. The numbers are made up (the mockup's); the shapes are those
+ * The Leaderboard and Replays tabs (#78, #629) as dev scenes (`/?menu=board-*`, `replays*`): the
+ * real screens with a fake API and a frozen clock, so `mise run shots` can show every state of
+ * mockup variants L10 and R2. The numbers are made up (the mockup's); the shapes are those
  * of `GET /api/leaderboard` and `GET /api/players/{id}`.
  */
 import {
@@ -23,14 +23,11 @@ export const BOARD_SCENE_IDS = [
   'board-loading',
   'board-network',
   'board-limited',
-  'profile-other',
-  'profile-calibrating',
-  'profile-guest',
-  'profile-missing',
-  'profile-empty',
-  'profile-loading',
-  'profile-network',
   'replays',
+  'replays-guest',
+  'replays-empty',
+  'replays-loading',
+  'replays-network',
 ] as const;
 
 export type BoardSceneId = (typeof BOARD_SCENE_IDS)[number];
@@ -51,13 +48,8 @@ const rec = (wins: number, losses: number, draws: number): RecordTally => ({
 
 /** The ids of the made-up players. */
 export const ME = 6;
-export const VEGA = 3;
+const VEGA = 3;
 const PAVEL = 21;
-const ILYA = 22;
-const UNKNOWN = 99;
-const NEWCOMER = 23;
-const SLOW = 24;
-const OFFLINE = 25;
 
 const PEOPLE: readonly (readonly [string, number, number, number, number])[] = [
   ['Alina', 1712, 31, 9, 2],
@@ -137,15 +129,6 @@ const MY_RANKED: MatchEntry[] = [
   m('win', E('Tomas', 2), 'rated', 'highway', mins(13, 15), 3000, 'ready', [1461, 1475]),
 ];
 
-const VEGA_MATCHES: MatchEntry[] = [
-  m('win', E('Kolya', 4), 'rated', 'ridge', mins(11, 52), 12, 'preparing', [1574, 1590]),
-  m('loss', E('Danya', ME), 'casual', 'crossroads', mins(12, 4), 125, 'ready'),
-  m('win', E('Tomas', 2), 'rated', 'highway', mins(14, 8), 1500, 'ready', [1563, 1574]),
-  m('win', E('Mira', 5), 'casual', 'crossroads', mins(10, 27), 1560, 'private'),
-  m('draw', BOT('rusher'), 'bot', 'highway', mins(15, 0), 2900, 'private'),
-  m('loss', E('Alina', 1), 'rated', 'crossroads', mins(13, 40), 4400, 'expired', [1580, 1563]),
-];
-
 function profile(over: Partial<PlayerProfile> & Pick<PlayerProfile, 'player_id' | 'nick'>) {
   const base: PlayerProfile = {
     has_password: true,
@@ -191,38 +174,11 @@ const GUEST_MATCHES: MatchEntry[] = [
   m('win', E('Mira', 5), 'unrated', 'crossroads', mins(8, 3), 2900, 'ready'),
 ];
 
-const vega: PlayerProfile = profile({
-  player_id: VEGA,
-  nick: 'Vega',
-  rating: 1590,
-  rank: 3,
-  rated_matches: 37,
-  rated_record: rec(22, 12, 3),
-  record: rec(31, 17, 4),
-  matches: VEGA_MATCHES,
-});
-
-const pavel = calibrating(PAVEL, 'Pavel', 3, [
-  m('loss', E('Alina', 1), 'calibration', 'crossroads', mins(9, 30), 180, 'ready'),
-  m('win', E('Sasha', 8), 'calibration', 'ridge', mins(10, 41), 1500, 'ready'),
-  m('win', E('Danya', ME), 'unrated', 'ridge', mins(6, 52), 2900, 'ready'),
-]);
-
-const ilya: PlayerProfile = profile({
-  player_id: ILYA,
-  nick: 'Ilya',
-  has_password: false,
-  record: rec(1, 2, 0),
-  matches: [m('win', BOT('turtle'), 'bot', 'crossroads', mins(8, 50), 1440, 'private')],
-});
-
 /** What a scene feeds the screen: the account, the player shown first and the fake answers. */
 export interface BoardScene {
   readonly hasPassword: boolean;
   readonly calibration: { played: number; total: number } | null;
   readonly rating: number | null;
-  /** A player to show instead of the own profile. */
-  readonly player: number | null;
   readonly mode: 'board' | 'history';
   readonly leaderboard: () => Promise<Leaderboard>;
   readonly profiles: Readonly<Record<number, () => Promise<PlayerProfile>>>;
@@ -248,7 +204,6 @@ const reject =
     Promise.reject(error);
 
 const TOP = board(true, 37);
-const OTHERS = { [VEGA]: now(vega), [PAVEL]: now(pavel), [ILYA]: now(ilya) };
 
 function account(
   own: PlayerProfile,
@@ -259,11 +214,10 @@ function account(
     hasPassword: own.has_password,
     calibration: own.calibration,
     rating: own.rating,
-    player: null,
     mode: 'board',
     leaderboard,
     ...extra,
-    profiles: { [ME]: now(own), ...OTHERS, ...extra.profiles },
+    profiles: { [ME]: now(own), ...extra.profiles },
   };
 }
 
@@ -290,26 +244,21 @@ export const BOARD_SCENES: Readonly<Record<BoardSceneId, BoardScene>> = {
   'board-loading': account(ranked(false), never),
   'board-network': account(ranked(false), reject(new ApiError('network', 0))),
   'board-limited': account(ranked(false), reject(new ApiError('rate_limited', 429, 12))),
-  'profile-other': account(ranked(false), now(TOP), { player: VEGA }),
-  'profile-calibrating': account(ranked(false), now(TOP), { player: PAVEL }),
-  'profile-guest': account(ranked(false), now(TOP), { player: ILYA }),
-  'profile-missing': account(ranked(false), now(TOP), {
-    player: UNKNOWN,
-    profiles: { [UNKNOWN]: reject(new ApiError('not_found', 404)) },
-  }),
-  'profile-empty': account(ranked(false), now(TOP), {
-    player: NEWCOMER,
-    profiles: {
-      [NEWCOMER]: now(profile({ player_id: NEWCOMER, nick: 'Newcomer', rating: 1200, rank: 12 })),
-    },
-  }),
-  'profile-loading': account(ranked(false), now(TOP), {
-    player: SLOW,
-    profiles: { [SLOW]: never },
-  }),
-  'profile-network': account(ranked(false), now(TOP), {
-    player: OFFLINE,
-    profiles: { [OFFLINE]: reject(new ApiError('network', 0)) },
-  }),
   replays: account(ranked(false), now(TOP), { mode: 'history' }),
+  'replays-guest': account(ownGuest, now(TOP), { mode: 'history' }),
+  'replays-empty': account(
+    profile({ player_id: ME, nick: 'Danya', has_password: false }),
+    now(TOP),
+    {
+      mode: 'history',
+    },
+  ),
+  'replays-loading': account(ranked(false), now(TOP), {
+    mode: 'history',
+    profiles: { [ME]: never },
+  }),
+  'replays-network': account(ranked(false), now(TOP), {
+    mode: 'history',
+    profiles: { [ME]: reject(new ApiError('network', 0)) },
+  }),
 };

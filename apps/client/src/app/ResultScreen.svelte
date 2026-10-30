@@ -22,10 +22,6 @@
 
   let { me, end, summary = null, map = null, onreplay, onmenu }: Props = $props();
 
-  // Keyboard keys are not words of a language: they are labelled the same in every locale.
-  const KEY_REPLAY = '↵';
-  const KEY_MENU = 'Esc';
-
   type Outcome = 'win' | 'lose' | 'draw';
   const outcome = $derived<Outcome>(
     end.winner === null ? 'draw' : end.winner === me ? 'win' : 'lose',
@@ -193,12 +189,10 @@
 
   <div class="acts">
     <button type="button" class="cta" aria-keyshortcuts="Enter" onclick={onreplay}>
-      <Icon name="history" size={20} />{t('result.replay')}<kbd class="k" aria-hidden="true"
-        >{KEY_REPLAY}</kbd
-      >
+      <Icon name="history" size={20} />{t('result.replay')}
     </button>
     <button type="button" class="linkbtn" aria-keyshortcuts="Escape" onclick={onmenu}>
-      {t('result.menu')}<kbd class="k" aria-hidden="true">{KEY_MENU}</kbd>
+      {t('result.menu')}
     </button>
   </div>
 </ScreenFrame>

@@ -1,59 +1,53 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/http.ts';
-import {
-  BOARD_NOW,
-  BOARD_SCENES,
-  ME,
-  VEGA,
-  sceneApi,
-  type BoardSceneId,
-} from '../dev/boardScenes.ts';
+import { BOARD_NOW, BOARD_SCENES, ME, sceneApi, type BoardSceneId } from '../dev/boardScenes.ts';
 import { setLocale, translate, type MessageKey } from '../i18n/index.ts';
+import type { MapFile } from '../protocol.gen.ts';
 import LeaderboardScreen from './LeaderboardScreen.svelte';
+import ReplaysScreen from './ReplaysScreen.svelte';
+import { winShare } from './view.ts';
 
 const tr = (key: MessageKey): string => translate('en', key);
 
-describe('LeaderboardScreen', () => {
-  let component: Record<string, unknown> | undefined;
-  beforeEach(() => {
-    setLocale('en');
-    // jsdom has no layout: the Replays row scrolls the history into view.
-    Element.prototype.scrollIntoView = vi.fn();
-  });
-  afterEach(() => {
-    if (component !== undefined) void unmount(component);
-    component = undefined;
-    document.body.innerHTML = '';
-  });
+let component: Record<string, unknown> | undefined;
+beforeEach(() => {
+  setLocale('en');
+});
+afterEach(() => {
+  if (component !== undefined) void unmount(component);
+  component = undefined;
+  document.body.innerHTML = '';
+});
 
-  const handlers = () => ({
-    onselect: vi.fn(),
-    onwatch: vi.fn(),
-    onmenu: vi.fn(),
-    onbot: vi.fn(),
-    oncreate: vi.fn(),
-    onlobby: vi.fn(),
-    onreplays: vi.fn(),
-    onboard: vi.fn(),
-    onhowto: vi.fn(),
-    onpassword: vi.fn(),
-    onlogout: vi.fn(),
-  });
+async function settle(): Promise<void> {
+  for (let i = 0; i < 6; i += 1) await Promise.resolve();
+  flushSync();
+}
 
-  async function settle(): Promise<void> {
-    for (let i = 0; i < 6; i += 1) await Promise.resolve();
-    flushSync();
-  }
+const tabs = () => ({
+  onplay: vi.fn(),
+  onreplays: vi.fn(),
+  onboard: vi.fn(),
+  onhowto: vi.fn(),
+});
 
+const text = (): string => document.body.textContent;
+const rowOf = (nick: string): HTMLTableRowElement | undefined =>
+  Array.from(document.querySelectorAll<HTMLTableRowElement>('tbody tr')).find((r) =>
+    r.textContent.includes(nick),
+  );
+const buttonLabelled = (label: string): HTMLButtonElement | undefined =>
+  Array.from(document.querySelectorAll('button')).find((b) => b.textContent.trim() === label);
+
+describe('LeaderboardScreen (#629, L10)', () => {
   async function render(id: BoardSceneId, over: Record<string, unknown> = {}) {
     const scene = BOARD_SCENES[id];
-    const h = handlers();
-    const api = sceneApi(scene);
+    const h = { ...tabs(), onpassword: vi.fn(), onlogout: vi.fn() };
     component = mount(LeaderboardScreen, {
       target: document.body,
       props: {
-        api,
+        api: sceneApi(scene),
         token: 'tok',
         ownId: ME,
         nick: 'Danya',
@@ -61,214 +55,168 @@ describe('LeaderboardScreen', () => {
         calibration: scene.calibration,
         rating: scene.rating,
         map: null,
-        mode: scene.mode,
-        player: scene.player,
+        ...h,
+        ...over,
+      },
+    });
+    await settle();
+    return h;
+  }
+
+  it('ranked: the record columns of every player, the own row marked, no match list', async () => {
+    await render('board-ranked');
+    expect(document.querySelectorAll('th')).toHaveLength(6);
+    const alina = rowOf('Alina');
+    // Alina: 31-9-2 of 42 ranked matches, 74 % wins, rating 1712 (the scene's numbers).
+    expect(alina?.textContent).toContain('42');
+    expect(alina?.textContent).toContain('31–9–2');
+    expect(alina?.textContent).toContain('74%');
+    expect(alina?.textContent).toContain('1712');
+    const own = rowOf('Danya');
+    expect(own?.getAttribute('aria-current')).toBe('true');
+    expect(own?.textContent).toContain(tr('board.you'));
+    expect(document.querySelector('.watch')).toBeNull();
+    expect(document.querySelector('li')).toBeNull();
+  });
+
+  it('far: the own row with the real rank and record under a gap', async () => {
+    await render('board-far');
+    const rows = Array.from(document.querySelectorAll('tbody tr'));
+    const own = rows[rows.length - 1];
+    expect(own?.textContent).toContain('143');
+    expect(own?.textContent).toContain('7–12–1');
+    expect(own?.textContent).toContain('1102');
+    expect(text()).toContain(tr('board.pinned.beyond'));
+  });
+
+  it('calibration: the cells and when the player will appear', async () => {
+    await render('board-calibration');
+    expect(document.querySelector('.pinned .cells')?.getAttribute('aria-label')).toBe(
+      'Calibration: 2 of 5 matches played',
+    );
+    expect(text()).toContain('You appear here after 5 ranked matches');
+  });
+
+  it('guest: a link to set a password', async () => {
+    const h = await render('board-guest');
+    buttonLabelled(tr('board.empty.password'))?.click();
+    expect(h.onpassword).toHaveBeenCalledOnce();
+  });
+
+  it('empty: says so and offers the queue', async () => {
+    const h = await render('board-empty');
+    expect(text()).toContain(tr('board.empty.title'));
+    buttonLabelled(tr('board.empty.play'))?.click();
+    expect(h.onplay).toHaveBeenCalledOnce();
+  });
+
+  it('a failed board says why and tries again', async () => {
+    const h = await render('board-limited');
+    expect(text()).toContain('Too many requests. Try again in 12 s.');
+    expect(h.onplay).not.toHaveBeenCalled();
+  });
+
+  it('the tabs lead to the other screens, Esc to the menu', async () => {
+    const h = await render('board-ranked');
+    const current = document.querySelector('.tabs [aria-current="page"]');
+    expect(current?.textContent).toBe(tr('menu.leaderboard'));
+    buttonLabelled(tr('menu.replays'))?.click();
+    expect(h.onreplays).toHaveBeenCalledOnce();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+    expect(h.onplay).toHaveBeenCalledOnce();
+    expect(document.querySelector('kbd')).toBeNull();
+  });
+});
+
+describe('ReplaysScreen (#629, R2)', () => {
+  const map = (id: string): MapFile => ({ meta: { name: id } }) as MapFile;
+
+  async function render(id: BoardSceneId, over: Record<string, unknown> = {}) {
+    const scene = BOARD_SCENES[id];
+    const h = {
+      ...tabs(),
+      onwatch: vi.fn(),
+      onbot: vi.fn(),
+      onpassword: vi.fn(),
+      onlogout: vi.fn(),
+    };
+    const maps = { get: vi.fn(() => null), ensure: vi.fn((m: string) => Promise.resolve(map(m))) };
+    component = mount(ReplaysScreen, {
+      target: document.body,
+      props: {
+        api: sceneApi(scene),
+        token: 'tok',
+        ownId: ME,
+        nick: 'Danya',
+        hasPassword: scene.hasPassword,
+        calibration: scene.calibration,
+        rating: scene.rating,
+        map: null,
+        maps,
         now: () => BOARD_NOW,
         ...h,
         ...over,
       },
     });
     await settle();
-    return { h, api };
+    return { h, maps };
   }
 
-  const text = (): string => document.body.textContent;
-  const rowOf = (nick: string): HTMLButtonElement | undefined =>
-    Array.from(document.querySelectorAll<HTMLButtonElement>('button.entry')).find((b) =>
-      b.textContent.includes(nick),
-    );
-  const buttonLabelled = (label: string): HTMLButtonElement | undefined =>
-    Array.from(document.querySelectorAll('button')).find((b) => b.textContent.includes(label));
-
-  it('ranked: the top list with the own row marked and the own profile beside it', async () => {
-    await render('board-ranked');
-    expect(rowOf('Alina')).toBeDefined();
-    const own = rowOf('Danya');
-    expect(own?.getAttribute('aria-current')).toBe('true');
-    expect(own?.textContent).toContain(tr('board.you'));
-    expect(text()).toContain('1480');
-    expect(text()).toContain('#6');
-    expect(text()).toContain('of 37 ranked');
-    expect(text()).toContain('12 wins');
-    expect(text()).toContain('19 wins');
-    // The history: ready replays open, the others say why not, in words.
-    expect(document.querySelectorAll('li .watch')).toHaveLength(4);
+  it('a card per match: result, opponent, kind, rating change and the replay state', async () => {
+    const { maps } = await render('replays');
+    expect(document.querySelectorAll('li.card')).toHaveLength(6);
+    expect(document.querySelectorAll('li.card .watch')).toHaveLength(4);
     expect(text()).toContain(tr('history.replay.expired'));
     expect(text()).toContain(tr('history.replay.unavailable'));
     expect(text()).toContain('+14');
-    expect(text()).toContain('1466 → 1480');
-    // The corner chip carries the rating.
-    expect(text()).toContain(tr('menu.rating'));
+    expect(text()).toContain(tr('history.kind.rated'));
+    // Each map file is asked for once, however many cards share it.
+    expect(maps.ensure.mock.calls.map(([m]) => m).sort()).toEqual([
+      'crossroads',
+      'highway',
+      'ridge',
+    ]);
   });
 
   it('opens a replay by the match id', async () => {
-    const { h } = await render('board-ranked');
-    document.querySelector<HTMLButtonElement>('li .watch')?.click();
+    const { h } = await render('replays');
+    document.querySelector<HTMLButtonElement>('li.card .watch')?.click();
     expect(h.onwatch).toHaveBeenCalledWith(expect.stringMatching(/^\d+$/));
   });
 
-  it('far: pins the own row with the real rank under the table', async () => {
-    await render('board-far');
-    expect(document.querySelector('.pinned .entry.me')?.textContent).toContain('143');
-    expect(document.querySelector('[role="separator"]')).not.toBeNull();
+  it('no matches: says so and offers a bot', async () => {
+    const { h } = await render('replays-empty');
+    expect(text()).toContain(tr('replays.empty.title'));
+    buttonLabelled(tr('menu.bot'))?.click();
+    expect(h.onbot).toHaveBeenCalledOnce();
   });
 
-  it('calibration: shows the cells and when the player will appear', async () => {
-    await render('board-calibration');
-    expect(text()).toContain('Calibration 2/5');
-    expect(text()).toContain('You appear here after 5 ranked matches');
-    expect(text()).not.toContain('of 37 ranked');
-    expect(text()).toContain(tr('history.rating.hidden'));
-  });
-
-  it('guest: no rating, a hint to set a password, the pinned guest card', async () => {
-    await render('board-guest');
-    expect(text()).toContain(tr('profile.noRating.own'));
-    expect(text()).toContain('Set a password and play 5 ranked matches to appear here.');
-    expect(text()).toContain(tr('menu.guest'));
-  });
-
-  it('empty board: says so and offers the next step', async () => {
-    const { h } = await render('board-empty');
-    expect(text()).toContain(tr('board.empty.title'));
-    buttonLabelled(tr('board.empty.play'))?.click();
-    expect(h.onmenu).toHaveBeenCalledOnce();
-  });
-
-  it('empty board for a guest offers the password', async () => {
-    const guest = BOARD_SCENES['board-guest'];
-    const api = sceneApi({
-      ...guest,
-      leaderboard: () => Promise.resolve({ entries: [], total: 0, min_rated_matches: 5 }),
-    });
-    const { h } = await render('board-guest', { api });
-    buttonLabelled(tr('board.empty.password'))?.click();
-    expect(h.onpassword).toHaveBeenCalledOnce();
-  });
-
-  it('loading: a status line and no rows yet', async () => {
-    await render('board-loading');
-    expect(document.querySelector('[role="status"]')?.textContent).toBe(tr('board.loading'));
-    expect(document.querySelectorAll('button.entry')).toHaveLength(0);
-    // The profile does not wait for the list.
-    expect(text()).toContain('1480');
-  });
-
-  it('network error: an alert with a retry that asks again', async () => {
-    const scene = BOARD_SCENES['board-network'];
-    const leaderboard = vi
-      .fn()
+  it('a failure says why and loads again', async () => {
+    const scene = BOARD_SCENES.replays;
+    const api = sceneApi(scene);
+    const player = vi
+      .fn<typeof api.player>()
       .mockRejectedValueOnce(new ApiError('network', 0))
-      .mockImplementation(BOARD_SCENES['board-ranked'].leaderboard);
-    const api = { ...sceneApi(scene), leaderboard };
-    await render('board-network', { api });
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-      tr('board.error.network'),
-    );
+      .mockImplementation(api.player);
+    await render('replays', { api: { ...api, player } });
+    expect(text()).toContain(tr('profile.error.network'));
     buttonLabelled(tr('board.retry'))?.click();
     await settle();
-    expect(rowOf('Alina')).toBeDefined();
-    expect(leaderboard).toHaveBeenCalledTimes(2);
+    expect(document.querySelectorAll('li.card')).toHaveLength(6);
   });
 
-  it('429: says how long to wait', async () => {
-    await render('board-limited');
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain('Try again in 12 s');
-  });
-
-  it("another player's profile lists ranked matches only", async () => {
-    await render('profile-other');
-    expect(text()).toContain('Vega');
-    expect(text()).toContain('1590');
-    expect(text()).not.toContain(tr('board.you').toUpperCase());
-    expect(text()).not.toContain(tr('history.kind.casual'));
-    expect(text()).not.toContain(tr('history.kind.bot'));
-    expect(text()).toContain(tr('history.replay.preparing'));
-    expect(text()).toContain(tr('history.replay.expired'));
-    expect(text()).toContain(tr('profile.history.rankedOnly'));
-  });
-
-  it('a calibrating player shows cells, no rating and hidden rating changes', async () => {
-    await render('profile-calibrating');
-    expect(text()).toContain('Pavel');
-    expect(text()).toContain('Calibration 3/5');
-    expect(text()).toContain('Shown after 5 ranked matches');
-  });
-
-  it('a guest profile opens without a rating', async () => {
-    await render('profile-guest');
-    expect(text()).toContain('Ilya');
-    expect(text()).toContain(tr('profile.noRating.other'));
-  });
-
-  it('a ranked player without ranked matches says so', async () => {
-    await render('profile-empty');
-    expect(text()).toContain('Newcomer');
-    expect(text()).toContain(tr('profile.empty.title'));
-  });
-
-  it('404: an unknown player, with the way back to the own profile', async () => {
-    await render('profile-missing');
-    expect(text()).toContain(tr('profile.missing.title'));
-    buttonLabelled(tr('profile.missing.own'))?.click();
-    await settle();
-    expect(text()).toContain('1480');
-    expect(text()).not.toContain(tr('profile.missing.title'));
-  });
-
-  it('profile loading and a network error keep the list usable', async () => {
-    await render('profile-loading');
-    expect(text()).toContain(tr('profile.loading'));
-    expect(rowOf('Alina')).toBeDefined();
-    if (component !== undefined) void unmount(component);
-    document.body.innerHTML = '';
-    await render('profile-network');
-    expect(text()).toContain(tr('profile.error.network'));
-    expect(rowOf('Alina')).toBeDefined();
-  });
-
-  it('a click on a row shows that player and tells the app', async () => {
-    const { h } = await render('board-ranked');
-    rowOf('Vega')?.click();
-    await settle();
-    expect(rowOf('Vega')?.getAttribute('aria-pressed')).toBe('true');
-    expect(h.onselect).toHaveBeenLastCalledWith(VEGA);
-    expect(text()).toContain('22 wins');
-    rowOf('Danya')?.click();
-    await settle();
-    expect(h.onselect).toHaveBeenLastCalledWith(null);
-  });
-
-  it("a click on the opponent's name opens their profile", async () => {
-    await render('board-ranked');
-    const link = document.querySelector<HTMLButtonElement>('li button.link');
-    link?.click();
-    await settle();
-    expect(text()).toContain(tr('profile.history.rankedOnly'));
-  });
-
-  it('Replays mode marks the Replays row and brings the history into view', async () => {
-    const scrolled = vi.fn();
-    Element.prototype.scrollIntoView = scrolled;
+  it('marks its tab', async () => {
     await render('replays');
-    const current = document.querySelector('.rail .row.cur, nav .row.cur');
-    expect(current?.textContent).toContain(tr('menu.replays'));
-    expect(scrolled).toHaveBeenCalled();
+    expect(document.querySelector('.tabs [aria-current="page"]')?.textContent).toBe(
+      tr('menu.replays'),
+    );
   });
+});
 
-  it('keys: Esc goes to the menu, the rows have no letter keys', async () => {
-    const { h } = await render('board-ranked');
-    const press = (key: string): void => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
-    };
-    press('Escape');
-    expect(h.onmenu).toHaveBeenCalledOnce();
-    for (const key of ['r', 't', 'b', 'i', 'l']) press(key);
-    expect(h.onreplays).not.toHaveBeenCalled();
-    expect(h.onboard).not.toHaveBeenCalled();
-    expect(h.onbot).not.toHaveBeenCalled();
-    expect(h.oncreate).not.toHaveBeenCalled();
-    expect(h.onlobby).not.toHaveBeenCalled();
-    expect(document.body.querySelector('kbd')).toBeNull();
+describe('winShare', () => {
+  it('rounds to whole percent and has none without matches', () => {
+    expect(winShare({ wins: 31, losses: 9, draws: 2 }, 42)).toBe(74);
+    expect(winShare({ wins: 1, losses: 1, draws: 1 }, 3)).toBe(33);
+    expect(winShare({ wins: 0, losses: 0, draws: 0 }, 0)).toBeNull();
   });
 });

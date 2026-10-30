@@ -1,10 +1,8 @@
 /**
- * The data of the leaderboard screen (LB-01, #78): the top list, the own profile and the profile
- * of the row that is chosen. State, not markup, so it is tested without a DOM. Each part has its
- * own loading, failure (network, the per-IP limit, unknown player) and retry; one failing never
- * blanks the other.
+ * The data of the leaderboard tab (LB-01, #78; #629): the top list and the own profile (the pinned
+ * row). State, not markup, so it is tested without a DOM. Each part has its own loading, failure
+ * (network, the per-IP limit) and retry; one failing never blanks the other.
  */
-import { SvelteMap } from 'svelte/reactivity';
 import { ApiError, type Api, type Leaderboard, type PlayerProfile } from '../api/http.ts';
 
 export type FailureKind =
@@ -45,18 +43,12 @@ export class BoardState {
   board = $state.raw<Load<Leaderboard>>(LOADING);
   /** The own profile: the pinned row, the default of the right panel, the calibration. */
   own = $state.raw<Load<PlayerProfile>>(LOADING);
-  /** `'own'` or the id of the row that was chosen. */
-  selected = $state.raw<number | 'own'>('own');
-  /** The profile of the chosen player, when it is not the own one. */
-  other = $state.raw<Load<PlayerProfile>>(LOADING);
   ownId = $state.raw<number | null>(null);
 
   readonly #api: Pick<Api, 'leaderboard' | 'player' | 'me'>;
   readonly #token: string;
-  readonly #cache = new SvelteMap<number, PlayerProfile>();
   #stop = new AbortController();
   #boardRun = 0;
-  #otherRun = 0;
 
   constructor(
     api: Pick<Api, 'leaderboard' | 'player' | 'me'>,
@@ -68,22 +60,10 @@ export class BoardState {
     this.ownId = ownId;
   }
 
-  /** The profile the right panel shows now. */
-  get viewed(): Load<PlayerProfile> {
-    return this.selected === 'own' ? this.own : this.other;
-  }
-
-  /** Whether the right panel shows the own profile. */
-  get viewingOwn(): boolean {
-    return this.selected === 'own';
-  }
-
-  /** Loads everything; `initial` is a player to show instead of the own profile. */
-  async start(initial: number | null = null): Promise<void> {
+  /** Loads both parts. */
+  async start(): Promise<void> {
     void this.loadBoard();
-    const own = this.loadOwn();
-    if (initial !== null) this.select(initial);
-    await own;
+    await this.loadOwn();
   }
 
   async loadBoard(): Promise<void> {
@@ -110,44 +90,8 @@ export class BoardState {
     }
   }
 
-  /** Chooses a row: the own one (by its id or `'own'`) or another player. */
-  select(id: number | 'own'): void {
-    if (id === 'own' || id === this.ownId) {
-      this.selected = 'own';
-      return;
-    }
-    this.selected = id;
-    const known = this.#cache.get(id);
-    if (known !== undefined) {
-      this.other = { status: 'ready', value: known };
-      return;
-    }
-    void this.#loadOther(id);
-  }
-
-  /** Asks again for the part of the screen that failed. */
-  retryViewed(): void {
-    if (this.selected === 'own') void this.loadOwn();
-    else void this.#loadOther(this.selected);
-  }
-
   stop(): void {
     this.#stop.abort();
     this.#boardRun += 1;
-    this.#otherRun += 1;
-  }
-
-  async #loadOther(id: number): Promise<void> {
-    const run = ++this.#otherRun;
-    this.other = LOADING;
-    let next: Load<PlayerProfile>;
-    try {
-      const profile = await this.#api.player(id, this.#token, this.#stop.signal);
-      this.#cache.set(id, profile);
-      next = { status: 'ready', value: profile };
-    } catch (error) {
-      next = failed(error);
-    }
-    if (run === this.#otherRun) this.other = next;
   }
 }

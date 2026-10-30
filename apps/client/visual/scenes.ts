@@ -33,6 +33,7 @@ export const SCENES: readonly {
 export const MENU_SCENES = [
   'welcome',
   'welcome-notice',
+  'welcome-invited',
   'menu-guest',
   'menu-calibration',
   'menu-ranked',
@@ -93,14 +94,11 @@ export const MENU_SCENES = [
   'board-loading',
   'board-network',
   'board-limited',
-  'profile-other',
-  'profile-calibrating',
-  'profile-guest',
-  'profile-missing',
-  'profile-empty',
-  'profile-loading',
-  'profile-network',
   'replays',
+  'replays-guest',
+  'replays-empty',
+  'replays-loading',
+  'replays-network',
 ] as const;
 
 /**

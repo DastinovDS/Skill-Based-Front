@@ -6,6 +6,7 @@
   import type { Calibration, MapFile } from '../protocol.gen.ts';
   import AccountChip from './AccountChip.svelte';
   import LocaleSelect from './LocaleSelect.svelte';
+  import MenuTabs from './MenuTabs.svelte';
   import ScreenFrame from './ScreenFrame.svelte';
   import UnitMark from './UnitMark.svelte';
 
@@ -17,11 +18,11 @@
     oncreate: () => void;
     onqueue: () => void;
     onlobby: () => void;
-    /** The rows "Replays" (R) and "Leaderboard" (T), #78. */
+    /** The tabs "Replays" and "Leaderboard" (#78, #629). */
     onreplays: () => void;
     onboard: () => void;
     onbot: () => void;
-    /** The row "How to play" (H, CLI-13): open even while a match runs, reading changes nothing. */
+    /** The tab "How to play" (CLI-13): open even while a match runs, reading changes nothing. */
     onhowto: () => void;
     /** The account has a password; without one the way out warns that the account is lost. */
     hasPassword: boolean;
@@ -84,9 +85,6 @@
     { icon: 'bot', label: t('menu.bot'), go: onbot },
     { icon: 'link', label: t('menu.create'), go: oncreate },
     { icon: 'users', label: t('menu.lobby'), go: onlobby },
-    { icon: 'history', label: t('menu.replays'), go: onreplays },
-    { icon: 'trophy', label: t('menu.leaderboard'), go: onboard },
-    { icon: 'info', label: t('help.howTo'), go: onhowto, always: true },
   ] as const);
 
   const primary = $derived(hasActiveMatch ? onresume : banned ? null : onqueue);
@@ -107,6 +105,9 @@
 <svelte:window {onkeydown} />
 
 <ScreenFrame {map} phase={banned ? 'banned' : 'idle'} label={t('menu.nav')}>
+  {#snippet tabs()}
+    <MenuTabs current="play" playOpen onplay={() => undefined} {onreplays} {onboard} {onhowto} />
+  {/snippet}
   {#snippet corner()}
     <AccountChip
       {nick}
@@ -119,40 +120,41 @@
     />
   {/snippet}
 
+  <!-- The Play tab (#629, M5): Play (or Return, or the lock), then the three ways to play. -->
   {#if notice !== null}
     <p class="wl" role="alert"><Icon name="alert" size={16} />{t(notice)}</p>
   {/if}
   {#if hasActiveMatch}
-    <div class="eyebrow">{t('menu.eyebrow.match')}</div>
-    <button type="button" class="big" aria-keyshortcuts="Enter" onclick={onresume}>
+    <button type="button" class="big" onclick={onresume}>
       <UnitMark side="own" size={44} share={0.6} />{t('menu.resume')}
     </button>
-    <div class="sub">{t('menu.matchWaits')}</div>
+    <div class="sub">{t('menu.matchRunning')}</div>
   {:else if banned}
-    <div class="eyebrow warn">{t('menu.eyebrow.banned')}</div>
-    <div
-      class="big sm warn"
-      role="timer"
-      aria-label={tf('menu.banAria', { time: formatClock(secondsLeft) })}
-    >
-      <Icon name="alert" size={40} />{formatClock(secondsLeft)}
-    </div>
-    <div class="sub">{t('menu.banReason')}</div>
-  {:else}
-    <div class="eyebrow">{t('menu.eyebrow.ready')}</div>
-    <button type="button" class="big" aria-keyshortcuts="Enter" onclick={onqueue}>
+    <button type="button" class="big" disabled>
       <UnitMark side="own" size={46} />{t('menu.play')}
     </button>
-    <div class="sub">{hasPassword ? '' : t('menu.guestHint')}</div>
+    <div class="sub">
+      <span
+        class="chip ban"
+        role="timer"
+        aria-label={tf('menu.banAria', { time: formatClock(secondsLeft) })}
+      >
+        <Icon name="lock" size={14} />{tf('dock.banChip', { time: formatClock(secondsLeft) })}
+      </span>
+    </div>
+  {:else}
+    <button type="button" class="big" onclick={onqueue}>
+      <UnitMark side="own" size={46} />{t('menu.play')}
+    </button>
+    <div class="sub">
+      {#if !hasPassword}
+        <button type="button" class="lnk" onclick={onpassword}>{t('menu.guestHint')}</button>
+      {/if}
+    </div>
   {/if}
   <div class="rows">
     {#each modes as mode (mode.label)}
-      <button
-        type="button"
-        class="row"
-        disabled={hasActiveMatch && !('always' in mode)}
-        onclick={mode.go}
-      >
+      <button type="button" class="row" disabled={hasActiveMatch} onclick={mode.go}>
         <Icon name={mode.icon} size={22} />{mode.label}
       </button>
     {/each}

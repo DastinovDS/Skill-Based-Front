@@ -11,9 +11,6 @@
   }
 
   let { dock, onback }: Props = $props();
-
-  // Keyboard keys are not words of a language: they are labelled the same in every locale.
-  const KEY_BACK = 'Esc';
 </script>
 
 <!-- The page of the rules (CLI-13, #72): the rail keeps the menu, the rules open in the panel. -->
@@ -30,7 +27,7 @@
   <HowToPlay />
   {#snippet actions()}
     <button type="button" class="btn pri" aria-keyshortcuts="Enter Escape" onclick={onback}>
-      {t('common.back')}<kbd class="k" aria-hidden="true">{KEY_BACK}</kbd>
+      {t('common.back')}
     </button>
   {/snippet}
 </DockFrame>

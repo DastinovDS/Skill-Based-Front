@@ -17,14 +17,14 @@ describe('WelcomeScreen accounts (#374)', () => {
   const onlogin = vi.fn<(n: string, p: string) => Promise<AccountFailure | null>>();
   const onregister = vi.fn<(n: string, p: string) => Promise<AccountFailure | null>>();
 
-  function render(): void {
+  function render(over: { invited?: boolean; notice?: MessageKey | null } = {}): void {
     setLocale('en');
     onsubmit.mockClear();
     onlogin.mockReset().mockResolvedValue(null);
     onregister.mockReset().mockResolvedValue(null);
     component = mount(WelcomeScreen, {
       target: document.body,
-      props: { invited: false, notice: null, onsubmit, onlogin, onregister },
+      props: { invited: false, notice: null, onsubmit, onlogin, onregister, ...over },
     });
     flushSync();
   }
@@ -64,6 +64,49 @@ describe('WelcomeScreen accounts (#374)', () => {
     });
     flushSync();
   }
+
+  const alert = (): string | undefined =>
+    document.querySelector('[role=alert]')?.textContent.trim();
+  const play = (): HTMLButtonElement | null =>
+    document.querySelector<HTMLButtonElement>('button[type=submit]');
+
+  describe('the entry screen (#629, N5)', () => {
+    it('shows the title, the field and Play, no rule line and no key badge', () => {
+      render();
+      expect(document.querySelector('h1')?.textContent).toBe(translate('en', 'app.title'));
+      expect(field('welcome.nick').placeholder).toBe(translate('en', 'welcome.nickPlaceholder'));
+      expect(document.body.textContent).not.toContain('3 to 16');
+      expect(document.querySelector('kbd')).toBeNull();
+      expect(play()?.disabled).toBe(true);
+    });
+
+    it('tells a short nick only once the field is left, a bad character at once', () => {
+      render();
+      type(field('welcome.nick'), 'Da');
+      expect(alert()).toBeUndefined();
+      expect(play()?.disabled).toBe(true);
+      field('welcome.nick').dispatchEvent(new Event('blur'));
+      flushSync();
+      expect(alert()).toContain(translate('en', 'welcome.error.short'));
+      type(field('welcome.nick'), 'Dan ya');
+      expect(alert()).toContain(translate('en', 'welcome.error.chars'));
+      type(field('welcome.nick'), 'Данил_2');
+      expect(alert()).toBeUndefined();
+      expect(play()?.disabled).toBe(false);
+    });
+
+    it('says a taken nick shortly', () => {
+      render({ notice: 'error.api.conflict' });
+      expect(alert()).toContain(translate('en', 'welcome.error.taken'));
+    });
+
+    it('shows the session notice and the invite', () => {
+      render({ notice: 'error.api.unauthorized', invited: true });
+      expect(alert()).toContain('Signed out. Pick a nick or log in');
+      expect(document.body.textContent).toContain(translate('en', 'welcome.invitedChip'));
+      expect(play()?.textContent.trim()).toBe(translate('en', 'welcome.join'));
+    });
+  });
 
   it('starts as the guest form: no password field', () => {
     render();

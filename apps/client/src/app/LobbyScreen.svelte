@@ -26,7 +26,6 @@
 
   // Keyboard keys are not words of a language: they are labelled the same in every locale.
   const KEY_CREATE = 'C';
-  const KEY_BACK = 'Esc';
 
   let entries = $state.raw<readonly LobbyEntry[] | null>(null);
   /** Why the list could not be loaded: the next answer clears it. */
@@ -197,7 +196,7 @@
   {#snippet actions()}
     {#if entries !== null && entries.length === 0}
       <button type="button" class="btn pri" onclick={oncreate}>
-        {t('lobby.create')}<kbd class="k" aria-hidden="true">↵</kbd>
+        {t('lobby.create')}
       </button>
     {:else}
       <button
@@ -207,13 +206,11 @@
         disabled={joining !== null}
         onclick={oncreate}
       >
-        <Icon name="plus" size={18} />{t('lobby.create')}<kbd class="k" aria-hidden="true"
-          >{KEY_CREATE}</kbd
-        >
+        <Icon name="plus" size={18} />{t('lobby.create')}
       </button>
     {/if}
     <button type="button" class="btn link" aria-keyshortcuts="Escape" onclick={onback}>
-      {t('common.back')}<kbd class="k" aria-hidden="true">{KEY_BACK}</kbd>
+      {t('common.back')}
     </button>
   {/snippet}
 </DockFrame>

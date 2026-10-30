@@ -11,7 +11,7 @@ test('an account: register, then a login on a second device logs the first one o
   const password = `e2e-${randomBytes(6).toString('hex')}`;
   const first = await Player.create(browser, baseURL ?? '', name);
   await first.page.goto('/');
-  await first.page.getByRole('button', { name: 'Create an account' }).click();
+  await first.page.getByRole('button', { name: 'Create account' }).click();
   await first.page.getByLabel('Your nick').fill(name);
   await first.page.getByLabel('New password').fill(password);
   await first.page.getByLabel('Repeat the password').fill(password);
@@ -22,7 +22,7 @@ test('an account: register, then a login on a second device logs the first one o
   // The account chip in the corner opens the account menu (#471).
   await first.page.getByRole('button', { name }).click();
   await first.page.getByRole('menuitem', { name: 'Log out' }).click();
-  await first.page.getByRole('button', { name: 'Log in to an account' }).click();
+  await first.page.getByRole('button', { name: 'Log in', exact: true }).click();
   await first.page.getByLabel('Your nick').fill(name.toUpperCase());
   await first.page.getByLabel('Password', { exact: true }).fill(password);
   await first.page.getByRole('button', { name: 'Log in', exact: true }).click();
@@ -30,7 +30,7 @@ test('an account: register, then a login on a second device logs the first one o
 
   const second = await Player.create(browser, baseURL ?? '', name);
   await second.page.goto('/');
-  await second.page.getByRole('button', { name: 'Log in to an account' }).click();
+  await second.page.getByRole('button', { name: 'Log in', exact: true }).click();
   await second.page.getByLabel('Your nick').fill(name);
   await second.page.getByLabel('Password', { exact: true }).fill('not the password');
   await second.page.getByRole('button', { name: 'Log in', exact: true }).click();
@@ -41,7 +41,7 @@ test('an account: register, then a login on a second device logs the first one o
 
   // The first device still holds the old token: the server no longer knows it.
   await first.page.reload();
-  await expect(first.page.getByText(/The session is over/)).toBeVisible();
+  await expect(first.page.getByText('Signed out. Pick a nick or log in')).toBeVisible();
   await expect(first.page.getByLabel('Your nick')).toBeVisible();
   await first.close();
   await second.close();

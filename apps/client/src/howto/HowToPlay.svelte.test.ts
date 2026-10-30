@@ -59,12 +59,12 @@ describe('the How to play page (CLI-13, #72)', () => {
     });
   });
 
-  it('the screen opens in the Dock frame with its row marked, and Back leaves', () => {
+  it('the screen opens in the Dock frame with its tab marked, and Back leaves', () => {
     const onback = vi.fn();
     const { dock } = makeDock();
     component = mount(HowToScreen, { target: document.body, props: { dock, onback } });
     flushSync();
-    expect(document.body.querySelector('.rail .row.cur')?.textContent).toContain(
+    expect(document.body.querySelector('.tabs [aria-current="page"]')?.textContent).toContain(
       translate('en', 'help.howTo'),
     );
     expect(document.body.textContent).toContain(translate('en', 'menu.tagline'));
