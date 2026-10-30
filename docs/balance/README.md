@@ -307,6 +307,18 @@ plan ahead) and **a strike at a lesser city is answered** (`worth_defense`: with
 and reinforces an own city of at least that many VP; the reaction delay of the level applies). `0` switches either off:
 `bot_factory("smart_rusher", {"wait_plan": ParamRange(0, 0)})`.
 
+#624 adds (items 12-17 of the same docstring, `insight` levels only): a **converging strike** on the enemy capital
+(several groups within 3 edges, timed to arrive together, planned where the shared utility says so; on top of the
+single attacks, every personality but the bunker), **War while the warehouses are 9/10 full**, **one forward barracks
+in the centre** (the large city between the capitals) and **the alarm on two enemy strikes at one node**. The worry about
+a build-up next to the capital and the withdrawal of thin province garrisons are implemented with a switch each
+(`SmartBot.WORRY`, `SmartBot.WITHDRAW`) and off: they measured worse ([log.md](log.md), #624).
+
+**The benchmark `smart_hoarder`** (`gow_bots.bots.hoarder`, #624) plays the owner's winning plan of the playtest of
+2026-10-30: claims in groups of 2+, a barracks in the centre, from tick 2400..3600 recruits first and an advance to the
+largest city next to the enemy capital, then a converging strike with banked CP. It is a yardstick, not a server level:
+put it in a tournament with `--bots "... smart_hoarder"`.
+
 ## Budget
 
 AGENTS.md, section 12: 1000 matches on 8 cores of the reference machine in no more than 20 minutes. A match
