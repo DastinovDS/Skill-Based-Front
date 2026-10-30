@@ -79,19 +79,19 @@ the assessment layer (``gow_bots.bots.assess``), computed from the ``PlayerView`
     worth at least that many VP while an award is still to come (Defense and a reinforcement
     like ``respond`` 2). The reaction delay of the level is the one of ``Perception``.
 
-12. **A converging strike on the enemy capital** (``STRIKE``, off for the five personalities;
-    the benchmark ``smart_hoarder``). Instead of single attacks on the capital, the free charged
-    groups within ``STRIKE_HOPS`` edges of it whose path reaches it go together (``strike_plan``):
-    each by an ordinary order while the CP last (the most charged first), then the groups whose
-    plan bonus (DEC-29: the edges, capped by the charged units) turns the strike from a bounce
-    into a capture become scheduled orders by ``prefer_planned`` with the shots the others do not
-    bring. The strike goes when the pool (charges and plan bonuses) reaches the shots that take
-    the capital (``need``) plus ``strike_margin``; while it is ready and the CP cannot pay it, its
-    price is held like a plan (item 10). The orders are timed so that every group arrives within
-    ``STRIKE_ALIGN`` ticks of the slowest one (the plan's ``orders.planned_delay_ticks`` and the
-    travel times of mechanics.md, section 4, ``edge_ticks``): the joins of the first rounds
-    count in full (DEC-24, D1). The groups of a strike are not recalled one by one and do not
-    leave a fight that the rest of the strike is still walking into (``committed``, ``coming``).
+12. **A converging strike on the enemy capital** (``STRIKE``). The free charged groups within
+    ``STRIKE_HOPS`` edges of it whose path reaches it go together (``strike_plan``): the groups
+    next to it first, the most charged first, each by a scheduled order when ``plan_strike`` (the
+    shared ``prefer_planned`` with the shots the groups before it leave missing) says so, else by
+    an ordinary one, while the CP last. The strike goes when its pool (charges and plan bonuses,
+    DEC-29) reaches the shots that take the capital (``strike_need``) and it has ``STRIKE_MIN``
+    groups (one group alone is a single attack of item 4, unless ``STRIKE_ONLY``); with
+    ``STRIKE_BANK`` a ready strike keeps its price from the other spending until it is paid. The
+    orders are timed so that every group arrives within ``STRIKE_ALIGN`` ticks of the slowest one
+    (the plan's ``orders.planned_delay_ticks`` and the travel times of mechanics.md, section 4,
+    ``edge_ticks``): the joins of the first rounds count in full (DEC-24, D1). The groups of a
+    strike are not recalled one by one and do not leave a fight that the rest of the strike is
+    still walking into (``committed``, ``coming``).
 
     ``STRIKE`` is on for every personality but the bunker, with ``insight`` (``striking``).
 
@@ -316,6 +316,13 @@ class SmartBot(CampaignBot):
     """Farthest group of a converging strike, in edges of its path."""
     STRIKE_MARGIN: ClassVar[int] = 1
     """Shots a strike brings above the estimate (``strike_margin`` in ``PARAMS`` overrides it)."""
+    STRIKE_ONLY: ClassVar[bool] = False
+    """The enemy capital is never a single target: only a converging strike (the benchmark)."""
+    STRIKE_BANK: ClassVar[bool] = False
+    """A ready strike keeps its price from the other spending until it is paid (the benchmark);
+    otherwise it goes when the CP are there."""
+    STRIKE_MIN: ClassVar[int] = 2
+    """Groups a strike needs: one group alone is a single attack (``_attack``)."""
     ANSWERS: ClassVar[bool] = True
     """The answers of items 13-17 (#624); the benchmark ``smart_hoarder`` keeps them off."""
     ANXIETY: ClassVar[int] = 50
@@ -725,10 +732,10 @@ class SmartBot(CampaignBot):
         cost = self.rules.orders.cost
         if s is not None:
             return sum(cost.planned_move if p.planned else cost.move for p in s.picks)
-        if ctx.tick < self.strike_rest or not self.strike_wanted(ctx):
+        if not self.STRIKE_BANK or ctx.tick < self.strike_rest or not self.strike_wanted(ctx):
             return 0
         plan = self.strike_plan(ctx, self.rules.cp.cap)
-        if plan is None or not plan.ready:
+        if plan is None or not plan.ready or len(plan.picks) < self.STRIKE_MIN:
             return 0
         return plan.cost
 
@@ -744,9 +751,9 @@ class SmartBot(CampaignBot):
                 return
             full = self.strike_plan(ctx, self.rules.cp.cap)
             if full is None or not full.ready or full.cost > ctx.budget:
-                return  # banked: the CP are kept (``strike_cp``)
+                return  # banked (``strike_cp``) or not ready
             plan = self.strike_plan(ctx, ctx.budget)
-            if plan is None or not plan.ready:
+            if plan is None or not plan.ready or len(plan.picks) < self.STRIKE_MIN:
                 return
             arrive = tick + 1 + max(p.lead for p in plan.picks)
             s = Strike(self.enemy_home, arrive, list(plan.picks), arrive + STRIKE_TICKS)
@@ -1292,7 +1299,7 @@ class SmartBot(CampaignBot):
             if self.hops[self.home][dest] > region:
                 return None
         if node.capital_of is not None:
-            return None if self.striking() else 10_000 - hops  # item 12: only a converging strike
+            return None if self.STRIKE_ONLY else 10_000 - hops  # item 12
         far = self.hops[self.enemy_home]
         closer = far[here] - far[dest]
         if ctx.view.nodes[dest].owner is None:

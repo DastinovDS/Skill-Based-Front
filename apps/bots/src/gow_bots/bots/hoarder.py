@@ -57,6 +57,9 @@ class SmartHoarder(SmartBot):
     name: ClassVar[str] = "smart_hoarder"
     STANCE: ClassVar[Stance] = Stance.WAR
     STRIKE: ClassVar[bool] = True
+    STRIKE_ONLY: ClassVar[bool] = True
+    STRIKE_BANK: ClassVar[bool] = True
+    STRIKE_MIN: ClassVar[int] = 1
     ANSWERS: ClassVar[bool] = False
     """The yardstick stays as it was measured (#624, PR 1): none of items 13-17."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
