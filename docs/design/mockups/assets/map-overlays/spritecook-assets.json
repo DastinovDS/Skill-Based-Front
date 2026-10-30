@@ -7,7 +7,7 @@
     { "asset_id": "6e94368e-23e9-45c1-a53a-740b3e170e44", "label": "city upgrades sheet A", "cut_into": "unused" },
     { "asset_id": "ca3d2baa-6698-43fa-b2d7-e4b8bc927911", "label": "city upgrades sheet B", "cut_into": "city/*.png" },
     { "asset_id": "8ac3feca-a946-4820-9f06-750c974dc106", "label": "ETA glyph sheet", "cut_into": "eta/*.png" },
-    { "asset_id": "d26e22f1-d6f4-4d72-8608-c7e76f9228bd", "label": "R5 production sheet (recruit, barracks, warehouse, hourglass), gpt-image-2 low, style refs 2cb8e9d6 + ca3d2baa", "cut_into": "apps/client/src/hud/menuIcons/*.png (96 px), eta/hourglass-r5.png" },
+    { "asset_id": "d26e22f1-d6f4-4d72-8608-c7e76f9228bd", "label": "R5 production sheet (recruit, barracks, warehouse, hourglass), gpt-image-2 low, style refs 2cb8e9d6 + ca3d2baa", "cut_into": "apps/client/src/hud/menuIcons/*.png (96 px); eta/hourglass-r5.png (the E4 glyph of the road highlight element)" },
     { "asset_id": "386d7170-3088-48d0-a0a1-72335494319b", "label": "R5 production sheet, second variation (double outline)", "cut_into": "unused" }
   ],
   "note": "Icons are cut from the 3x3 sheets, the dark background keyed to alpha, 72x72 PNG. Candidates for a mockup only, not client assets."

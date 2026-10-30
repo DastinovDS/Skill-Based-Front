@@ -2043,7 +2043,10 @@ a transfer is picked; no hint, no slider, no legend), implemented in `SupplyBann
 (rank chevrons with a plus, a watchtower, a depot with a plus; R2 and R3 were liked too): final SpriteCook icons, 96 px PNG in
 `apps/client/src/hud/menuIcons/` (`RASTER_ICONS` in `hud/icons.ts`), the direction for generated icons from now on (the owner: the
 SpriteCook textures read higher quality). The order time marker: **E4 "Hourglass"** is liked, but its road highlight is a plain band;
-the highlight goes through one more mockup step (the element "E4 road highlight" of the mockup) before code.
+the highlight goes through one more mockup step (the element "E4 road highlight" of the mockup) before code. That element (2b) draws a
+route of three roads with bends and a curved road; eleven highlights follow it, each with a light pulse toward the target and a still
+frame under reduced motion, next to the current band; the variants and the recommendation are in issue #627 (**[awaiting the owner's
+decision]**).
 
 The owner's review of 2026-10-30: the Supply mode panel has far too much text (title, hint,
 slider with a caption, a legend of five entries); the travel-time marker of an order (a highlighted road and a "clock 5 s" pill) is too
