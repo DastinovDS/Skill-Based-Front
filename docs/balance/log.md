@@ -199,8 +199,8 @@ capture spends a charge, the charge share of the stance gets a use, War pays for
 fights matter more than the claim.
 
 **Change.** `capture.charge_cost = 1` (`mvp-1`: 0), everything else as `mvp-1`. Ruleset hash in the run rows.
-**Caveat:** the bots do not know the cost yet (#580): they send uncharged groups into captures that bounce. The
-result is a lower bound of the rule's effect, to be rerun once #580 is on develop.
+**Caveat:** the bots did not know the cost yet (#580): they sent uncharged groups into captures that bounced. This
+run measures the rule with bots that ignore it; iteration 5 reruns it with the bots of #580.
 
 | bot | win rate [95%] | iteration 0 | captures a match (it. 0) | move orders (it. 0) |
 |---|---|---|---|---|
@@ -266,3 +266,35 @@ only on a long strike that turns a bounce into a capture (planned share 0.012). 
 share can go while most attacks go into empty nodes (H4, `need = 0`, never planned).
 
 **Change.** On top of iteration 3: `orders.cost.planned_move = 150` (200), `orders.planned_bonus_per_edge = 2` (1).
+
+| bot | win rate [95%] | iteration 3 | planned attack share |
+|---|---|---|---|
+| smart_expander | 0.78 [0.74; 0.81] | 0.78 | 0.01 |
+| smart_rusher | 0.72 [0.68; 0.76] | 0.70 | 0.04 |
+| rusher | 0.69 [0.65; 0.73] | 0.65 | 0.04 |
+| smart_strangler | 0.69 [0.64; 0.72] | 0.66 | 0.02 |
+| strangler | 0.66 [0.61; 0.69] | 0.71 | 0.02 |
+| reactive | 0.56 [0.52; 0.60] | 0.58 | 0.02 |
+| smart_reactive | 0.55 [0.51; 0.59] | 0.56 | 0.01 |
+| expander | 0.24 [0.21; 0.28] | 0.24 | 0.01 |
+| turtle | 0.06 [0.04; 0.08] | 0.06 | 0.00 |
+| smart_turtle | 0.03 [0.02; 0.05] | 0.04 | 0.06 |
+
+Sides (mirror): crossroads 0.49, highway 0.54, ridge 0.50, every interval includes 0.5. Planned share 0.025
+(iteration 3: 0.012). Late capture 0.59. Turtle vs Expander 0.00.
+
+**Result: the share doubles but stays an order of magnitude below 20%; no win rate moves beyond its interval.
+Reverted** (`mvp-1` prices). The ceiling is the metric, not the price (H4): the denominator counts every `Move` into
+a node not owned by the player, and most of them go into empty neutral or enemy nodes where no plan can pay
+(`need = 0`); sieges with defenders are a small part of the attacks. A cheaper plan cannot reach 20% without making
+the plan nearly free; the criterion needs either the H4 metric (a definition change, an owner question) or more
+defended targets (DEC-38, iteration 5).
+
+### Iteration 5: `capture.charge_cost = 1` (DEC-38) with the bots of #580, on top of iteration 3
+
+**Hypothesis (H2).** As iteration 2, now with bots that send claiming groups charged and do not loop on an unpaid
+capture (#580, PR #584). The charge-flow report (`charge-flow.md`, finding 4) shows that with the cost the defenders
+stand without charges (74-86% of sieges), so the fights should decide more.
+
+**Change.** `capture.charge_cost = 1`, plus iteration 3 (stance shares 60/50/40); iteration 4 reverted. The branch
+is rebased on develop with #584.
