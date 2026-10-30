@@ -437,3 +437,84 @@ matrix, 600 matches each; the matrix is rounded to two decimals and the 30000-ro
 are approximations): smart_expander 0.67 [0.66; 0.68], rusher 0.62, smart_rusher 0.62, strangler 0.59,
 smart_strangler 0.57, reactive 0.49, smart_reactive 0.43, expander 0.02. Still **not met**, by smart_expander alone.
 So the gate stays open on criteria 1 and 3.
+
+### Experiments H-map and H-strike (2026-10-30): is it the maps, or the missing strike?
+
+Two owner hypotheses before the DEC on the claim race (#40, comment of 2026-10-30). Nothing of this is in the game: the
+striker bots lived on a temporary branch (deleted). Both runs on GitHub runners, `mvp-2`, seeds 0..19, the bots of
+develop `44c449c` (the #574 bot PR had not landed).
+
+**H-map** (the pool maps are too big for 15 minutes, so contact and planned orders come late): the 10 strategic bots on
+the pool and on the fixtures `artery`, `pass`, `web` (they validate under `mvp-2`), 12000 matches (run 41061251055).
+The fixtures differ in more than size: 31-34 nodes against 49-51, **no provinces** (every node a city, so no node of
+capacity 3), capitals 5-8 hops apart against 8-9.
+
+| | pool (3 maps) | small (3 fixtures) |
+|---|---|---|
+| planned siege share, non-bunker bots (#590) | 0.076 | 0.135 |
+| capital wins, share of matches | 0.097 | 0.119 |
+| capital win, mean tick | 4275 | 2825 |
+| `vp` endings | 0.88 | 0.86 |
+| siege orders a match (non-bunker matches) | 17.5 | 14.5 |
+| captures a match (both players) | 88.7 | 74.4 |
+| top non-bunker win rate [95%] | smart_expander 0.75 [0.72; 0.77] | strangler 0.74 [0.72; 0.77] |
+| side 0 in mirrors | 0.49 [0.44; 0.53] | 0.52 [0.48; 0.57] |
+
+The pool numbers match the 100-seed confirming run. **Verdict: partly.** Small maps raise the planned share by 1.8x and
+bring capital wins 1.5x earlier, but the share stays below 20%, there are not more sieges of garrisons (fewer), the
+timer still ends 86% of the matches, and criterion 1 still fails (four bots at 0.67-0.74; the leader changes from
+smart_expander to strangler). `web` (capitals 5 hops apart) and `pass` (8 hops) give the same planned share (0.15), so
+the distance between capitals is not what moves it; the absence of provinces (bigger groups pass) is the likelier cause,
+but the run cannot separate it from the node count.
+
+**H-strike** (a bot that ignores VP and strikes the charged enemy capital would make the plan pay): `smart_striker`, a
+SmartBot personality (War, VP weights 0, claims only a corridor toward the enemy capital, gathers a fist on a stage
+node within 2 hops of it, probes the capital with one unit when the fog hides the numbers, strikes first in the
+decision and holds CP for it when the estimate says the fist and the groups next to it take the capital). The corridor
+is robust: it claims nodes that remove the chokepoints between the own capital and the stage, keeps watchers on two of
+them, sends a group to a chokepoint an enemy heads into, and a cut fist fights its way back. Variants:
+`smart_striker_plan` / `_noplan` (always / never plan the capital strike), `smart_striker_naive` (a one-node tunnel:
+none of the robust part). Against the 5 smart bots, all 6 maps, 9720 matches (run 41065934845), plus a local trace of
+120 matches (pool, seeds 0 and 1) for the strikes and the fist.
+
+| striker vs | expander | reactive | rusher | strangler | turtle | all 5, pool | all 5, small |
+|---|---|---|---|---|---|---|---|
+| `smart_striker` (pool) | 0.03 [0.01; 0.07] | 0.00 [0.00; 0.03] | 0.23 [0.16; 0.31] | 0.01 [0.00; 0.05] | 0.66 [0.57; 0.74] | 0.18 [0.15; 0.22] | 0.32 [0.28; 0.35] |
+| `_plan` | | | | | | 0.18 [0.15; 0.21] | 0.23 [0.20; 0.27] |
+| `_noplan` | | | | | | 0.16 [0.13; 0.19] | 0.26 [0.22; 0.29] |
+| `_naive` | | | | | | 0.14 [0.11; 0.17] | 0.22 [0.19; 0.25] |
+
+Capital wins a match: 0.058 pool, 0.110 small (`smart_striker`), median at tick 2392 / 1863; the other variants 0.04-0.05
+pool. Always against never planning: capital wins 31 against 24 (pool), 29 against 62 (small); head to head 0.52
+[0.43; 0.60] and 0.55 [0.46; 0.64]. Robust against naive: head to head 0.68 [0.60; 0.76] (pool), 0.63 [0.54; 0.71]
+(small). The trace: the auto striker plans 38% of the groups it sends at the capital; at a strike the capital holds 3.2
+units with 3.2 charges on average (0 charges in 8%, 2-4 in 65%) and a full warehouse (5.7 of 6), the striking groups
+carry 2.7 charges each; a fist (4+ units within 2 hops of the capital) forms in 46 of 60 matches, at tick 2540 on
+average, is cut off for 30+ ticks in 31 of 60 (naive 30 of 60), and only 4 of its 76 episodes reach a fight at the
+capital. Decision time: 0.5-0.9 ms mean, p99 up to 2.4 ms (the inherited attack scans over many small groups; the naive
+variant is 10% cheaper), over the 1 ms budget at p99.
+
+**Verdict: rejected.** The striker loses to every smart bot but the bunker (0.18 overall on the pool), and the plan
+does not beat a normal order against the capital. Why:
+
+1. **The fist cannot get big.** CP is the scarce resource (BAL-02, the plan diagnostic): a unit costs 1 CP to recruit
+   in the capital and about 1 CP to walk it to the front, so the fist grows by 2-3 charged units a minute while the
+   corridor costs its own CP. The striking groups carry 2-3 charges each.
+2. **The defenders are charged where it matters.** The capital holds 2-4 charged units and refills them from a full
+   warehouse between fights; with 1 shot a round (DEC-32) the defender has time to reinforce. So the hypothesis is right
+   that the capital is a charged target, but the attacker cannot bring enough to it.
+3. **The stack limit caps the fist** at the stage capacity (6-8; provinces of capacity 3 on the way split it), below the
+   capital's 10, so a strike needs several groups to arrive together.
+4. **The plan's bonus is small here**: a strike from 1-2 hops gets 1-2 virtual shots (DEC-29), worth less than the
+   delay and the public intent; always planning halved the capital wins on the small maps.
+5. **Ignoring VP is fatal**: the timer ends most matches, and the striker's wins are VP wins against the turtle.
+   The robust corridor matters (it beats the naive tunnel), but the fist is still cut in half of the matches.
+
+`smart_striker` is not competitive, so it does not become a personality (no issue).
+
+**What this means for the open DEC.** Both runs point at the same thing as the plan diagnostic: the claim of empty nodes
+decides, and few targets are charged. A smaller map pool alone (H-map) moves the planned share from 0.08 to 0.14 and
+does not fix criterion 1; a decisive strike (H-strike) does not pay under `mvp-2`. Option **B** (charged targets:
+neutral garrisons or a claim delay) is the lever both results support; option **A** (a cheaper plan) does not help the
+strikes measured here, whose bonus is 1-2 shots. If the pool changes as well, the property to decide is the share of
+provinces (capacity 3), then the node count (30-35 instead of about 50); the distance between capitals showed no effect.
