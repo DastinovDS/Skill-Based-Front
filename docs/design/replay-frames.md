@@ -185,6 +185,18 @@ Deltas are not needed; if the format grows (more nodes, more groups), the size t
 `ReplayViewer.svelte` (the controls). The address: `/?replay=<match id>` (`replayUrl`), in a dev build
 `/?replay=dev` plays the sample `siege.frames.json`. In a dev build `/?replay=dev-fights` plays `siege-fights.frames.json`: a recording with fights and round data (#323). The viewer shows the fights like a live match (arena, rounds, tracers): `shots`, `losses`, `virtual_left` and `last_round` of `FightView` come from the ninth element of the fight record (a record of eight elements, that is an old file, gives an empty arena); `mute` is built as zeros.
 
+"View as" a side with the Fog toggle on (#600): `buildTimeline(file, side)` builds the snapshot that player had
+from `v[side]` and nothing else decides it: node `detail`, `seen` (a remembered sighting keeps its `tick`, one in
+sight gets the frame's `t`) and `warehouse`; edge `width`, `detail`, both halves and the figures as
+`enemy_groups`; `build` for the edges in `b` (the end tick only of an own build, from `e`). By owner, as in a live
+view: the own groups (`g`) and packets (`k`), the own CP and stance (`p`), the warehouse places of own cities only,
+and in a fight the own groups plus the enemy totals of its members. Intents and events stay as in the file (public,
+and the effects draw only for what is on the map). The renderer is the live one (the same `SnapshotMsg` path), so
+the veil, the ghosts and their fading by the snapshot tick work as in a match. `parseReplay` keeps `v` only when
+every frame has a sound one; a file without it (the samples `siege.frames.json` and `siege-fights.frames.json`
+predate #598) shows a side as the full map, the toggle unavailable. In a dev build `/?replay=dev-fog` plays
+`siege-fog.frames.json`, a recording with `v` and `nicks`.
+
 Loading: `loadReplayWhenReady` (`loadReplay.ts`) repeats the request while the server answers `202`
 (pauses of 2 s, 3 s, 4.5 s, then 5 s; no longer than 5 minutes, then the error "The replay is taking too long to prepare"), and
 `ReplayScreen` shows the "Preparing the replay..." window. `404`, `410`, `401`/`403` stop
