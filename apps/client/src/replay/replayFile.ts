@@ -122,6 +122,11 @@ export interface ReplayFile {
   ticks: number;
   outcome: { winner: PlayerId | null; reason: EndReason };
   vp: [number, number];
+  /**
+   * The nicks of the two players by player id, when the server wrote them (#598, optional header
+   * key). Older files have none: the viewer says "Player 1" and "Player 2".
+   */
+  nicks?: [string, string];
   map: MapFile;
   /** Ascending by `t`; the first is tick 0. */
   frames: ReplayFrame[];
@@ -150,6 +155,17 @@ const isFightRounds = (v: unknown): v is FrameFightRounds =>
 /** A fight record of an old file (eight elements) or of a new one (nine, with the round data). */
 const isFightRecord = (v: unknown): v is FrameFight =>
   Array.isArray(v) && (v.length === 8 || (v.length === 9 && isFightRounds(v[8])));
+
+const isNick = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
+
+function readNicks(raw: unknown): [string, string] | null {
+  const [first, second]: unknown[] = Array.isArray(raw)
+    ? (raw as unknown[])
+    : isObj(raw)
+      ? [raw['0'], raw['1']]
+      : [];
+  return isNick(first) && isNick(second) ? [first, second] : null;
+}
 
 /** The parsed JSON as a `ReplayFile`; throws `ReplayError`. */
 export function parseReplay(raw: unknown): ReplayFile {
@@ -189,5 +205,11 @@ export function parseReplay(raw: unknown): ReplayFile {
         (f.f === undefined || (Array.isArray(f.f) && f.f.every(isFightRecord))),
     );
   if (!sound) throw new ReplayError('invalid');
-  return raw as unknown as ReplayFile;
+  const file = raw as unknown as ReplayFile;
+  // The optional header key: an array by player id or an object keyed "0" and "1". Anything
+  // else (a shape this version does not know) is ignored, never an error.
+  const nicks = readNicks(raw.nicks);
+  if (nicks === null) delete file.nicks;
+  else file.nicks = nicks;
+  return file;
 }

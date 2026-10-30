@@ -80,7 +80,7 @@
     scene?.setInsets(next);
   }
 
-  function show(next: MapFile): void {
+  function show(next: MapFile, viewing: PlayerId): void {
     const current = app;
     if (current === null) {
       return;
@@ -96,7 +96,7 @@
           sprites: sprites ?? undefined,
           source,
           interaction,
-          player,
+          player: viewing,
           backgroundUrl,
           geo,
           onbackground: (state: 'loaded' | 'failed') => {
@@ -114,9 +114,10 @@
     if (viewRect !== null) scene.showRect(viewRect);
   }
 
-  // Rebuild the scene when the map changes; the first build happens once init() resolves.
+  // Rebuild the scene when the map or the viewing player changes (the replay viewer switches the
+  // blue side, #599); the first build happens once init() resolves.
   $effect(() => {
-    show(map);
+    show(map, player);
   });
 
   $effect(() => {
@@ -164,7 +165,7 @@
         }
         app = pending;
         sprites = createSceneSprites(pending.renderer);
-        show(map);
+        show(map, player);
         if (typeof window.matchMedia === 'function') {
           watchDpr();
         }

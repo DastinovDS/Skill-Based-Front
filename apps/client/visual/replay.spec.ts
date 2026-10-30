@@ -12,7 +12,7 @@ test('replay viewer plays, speeds up and seeks', async ({ page }) => {
   // slider seek then lands on a replay that is not paused (#476).
   await page.getByRole('button', { name: '×4' }).click();
   await expect(page.getByRole('button', { name: '×4' })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
   await expect.poll(async () => Number(await canvas.getAttribute('data-tick'))).toBeGreaterThan(40);
 
@@ -38,6 +38,53 @@ for (const size of [
     const controls = await page.getByRole('region', { name: 'Replay controls' }).boundingBox();
     if (footer === null || controls === null) throw new Error('footer or controls not laid out');
     expect(footer.y).toBeGreaterThanOrEqual(controls.y + controls.height);
-    await expect(page.getByText(/Player 1\s+0 : 0\s+Player 2/)).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Player 1 0, Player 2 0' })).toBeVisible();
   });
 }
+
+// The keys of ui-style 13.7 and the "View as" selector (#599).
+test('replay viewer answers its keys and switches the blue side', async ({ page }) => {
+  await page.goto('/?replay=dev');
+  const canvas = page.locator('.game-canvas');
+  await expect(canvas).toHaveAttribute('data-tick', '0');
+
+  await page.keyboard.press('Digit2');
+  await expect(page.getByRole('button', { name: '×4' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(canvas).toHaveAttribute('data-tick', '50');
+  await page.keyboard.press('ArrowLeft');
+  await expect(canvas).toHaveAttribute('data-tick', '0');
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+
+  const both = page.getByRole('group', { name: 'View as' }).getByRole('button', { name: 'Both' });
+  await expect(both).toHaveAttribute('aria-pressed', 'true');
+  await page
+    .getByRole('group', { name: 'View as' })
+    .getByRole('button', { name: 'Player 2' })
+    .click();
+  await expect(
+    page.getByRole('group', { name: 'View as' }).getByRole('button', { name: 'Player 2' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  // The map was drawn again for the other side, on the same frame and without a reload.
+  await expect(canvas).toHaveAttribute('data-tick', '0');
+  await expect(page.getByRole('img', { name: 'Player 2 0, Player 1 0' })).toBeVisible();
+});
+
+// At a phone width the bars are two tidy rows each and nothing scrolls sideways (#599).
+test('replay viewer fits a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto('/?replay=dev');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '0');
+  const controls = await page.getByRole('region', { name: 'Replay controls' }).boundingBox();
+  if (controls === null) throw new Error('controls not laid out');
+  expect(controls.height).toBeLessThanOrEqual(130);
+  const overflow = Number(
+    await page.evaluate(
+      'document.documentElement.scrollWidth - document.documentElement.clientWidth',
+    ),
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});

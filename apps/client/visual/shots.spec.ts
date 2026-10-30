@@ -38,7 +38,7 @@ test('shot of the replay viewer', async ({ page }) => {
   await page.goto('/?replay=dev');
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '0');
   await page.getByRole('button', { name: '×16' }).click();
-  await page.getByRole('button', { name: 'Play' }).click();
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
   await page.getByRole('button', { name: 'Pause' }).click();
   await page.getByLabel('Position in the match').fill('300');
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '300');
@@ -47,13 +47,45 @@ test('shot of the replay viewer', async ({ page }) => {
 
 // The states of the replay screen before a file is there (#593): `replay-preparing.png` (the server
 // still builds the frames) and `replay-unavailable.png` (410).
-for (const state of ['preparing', 'unavailable']) {
+// `replay-loading.png` and `replay-network.png` (with "Try again") came with #599.
+for (const state of ['loading', 'preparing', 'unavailable', 'network']) {
   test(`shot of the replay screen (${state})`, async ({ page }) => {
     await page.goto(`/?replay=dev-${state}`);
-    await expect(page.getByRole(state === 'preparing' ? 'status' : 'alert')).toBeVisible();
+    await expect(
+      page.getByRole(state === 'loading' || state === 'preparing' ? 'status' : 'alert'),
+    ).toBeVisible();
     await page.screenshot({ path: join(OUT, `replay-${state}.png`) });
   });
 }
+
+// The replay viewer seen as player 2 (the blue side follows the choice, #599), at the end of the
+// match (the result chip), and at a phone width: `replay-as-player2.png`, `replay-end.png`,
+// `replay-narrow.png`, each also in grey scale.
+test('shot of the replay viewer as player 2, at the end and on a phone', async ({ page }) => {
+  await page.goto('/?replay=dev-fights');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '0');
+  await page.getByLabel('Position in the match').fill('385');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '385');
+  await page
+    .getByRole('group', { name: 'View as' })
+    .getByRole('button', { name: 'Player 2' })
+    .click();
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '385');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'replay-as-player2.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'replay-as-player2-gray.png') });
+  await page.reload();
+  await page.getByLabel('Position in the match').fill('464');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '464');
+  await expect(page.getByRole('status')).toContainText('Player 2 won');
+  await page.screenshot({ path: join(OUT, 'replay-end.png') });
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: join(OUT, 'replay-narrow.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'replay-narrow-gray.png') });
+});
 
 // The split menu (S) on the selected own group (#593): `split.png` and `split-gray.png`.
 test('shot of the split menu', async ({ page }) => {

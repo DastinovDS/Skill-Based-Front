@@ -865,11 +865,28 @@ and 5 are visible at once from `match_end`.
 
 ### 13.7 The replay (IM13)
 
-- At the top the nicks of the sides and the VP score in the same "tug of war" as in the match.
-- At the bottom a timeline with event marks (fights as dots, captures as diamonds in the side's color) and a graph of the VP
-  difference 40 px high above the timeline.
-- Keys: `Space` pause, `←`/`→` ±5 s, `1`/`2`/`3` speed ×1/×4/×16, `Home` fit the map.
-- A "view through the eyes of one side" is not done: the frames file has no fog memory (`replay-frames.md`).
+Built in #599 (the UI catch-up #593): `replay/ReplayViewer.svelte`, `ReplayTimeline.svelte`.
+
+- The top bar is the match's (10.2): "Back" with the `Esc` chip on the left; in the middle the two sides, each a
+  triangle and a nick (the header key `nicks` of the frames file when it has one, otherwise "Player 1" and
+  "Player 2"), the VP numbers and the same "tug of war"; on the right the "View as" choice.
+- **View as:** "Player 1", "Player 2", "Both" (a segmented choice, the pressed one filled and bold). A side makes that
+  side blue and puts it on the left (ui-style 6, "Replay"); "Both" is player 1 blue, player 2 red. The choice
+  redraws the map for the other side on the same frame, without a reload. A replay opens as the viewer's own side
+  when the app knows it: the result screen passes it, a link finds it by the viewer's nick in `nicks`; otherwise "Both".
+  The fog of one side is not part of this (#600): until then every choice shows the whole map.
+- At the bottom one bar: the timeline (a styled track over a native range, so the keyboard and screen readers work;
+  fights are dots on the track, captures are diamonds above it in the side's colour: blue single outline for the blue
+  side, red with the inner outline for the other), then play (the main blue button with the `Space` chip), the speeds
+  with their keys, the time, and a hint line (arrows, `Home`, the legend of the marks). The VP-difference graph is not done.
+- At the end of the match a chip under the top bar names the winner (a triangle and the nick) or "Draw".
+- Keys: `Space` pause, `←`/`→` ±5 s, `1`/`2`/`3` speed ×1/×4/×16, `Home` fit the map, `Esc` back; they are on the
+  buttons as key chips (and in `aria-keyshortcuts`), the arrows and `Home` in the hint line.
+- Phone width (up to 640 px): the top bar is two rows (back and score, then the choice), the bottom bar two rows
+  (the timeline, then play, speeds and time); key chips, nicks and the hint line are not shown.
+- Before the file is there (loading, "Preparing", every error) the screen uses the frame of the menu (13.1) with the
+  backdrop map: an eyebrow "Replay", a big word (with the spinner while waiting, the amber `!` for a failure), one
+  plain line, and the rows "Try again" (`Enter`, only for a lost connection or a timeout) and "Back" (`Esc`).
 
 ### 13.8 The legal page
 
