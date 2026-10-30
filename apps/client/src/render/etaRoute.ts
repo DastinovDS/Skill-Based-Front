@@ -107,7 +107,8 @@ export interface Comet {
 export function comet(spans: readonly RouteSpan[], phase: number | null): Comet {
   const total = spansLength(spans);
   if (total <= 0) return { pieces: [], head: null };
-  const { piece, pieces, alpha, still } = ETA_ROUTE.comet;
+  const { piece, alpha, still } = ETA_ROUTE.comet;
+  const pieces: number = ETA_ROUTE.comet.pieces;
   const d = phase === null ? total * still : phase * (total + cometTail());
   const out: { segments: [Point, Point][]; alpha: number }[] = [];
   // From the far end of the tail (faintest) to the head (brightest), as the mockup draws it.

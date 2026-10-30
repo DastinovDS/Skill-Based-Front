@@ -108,7 +108,10 @@ export function etaPlace(
     ny = -ny;
   }
   const lift = gap + (Math.abs(nx) * box.width) / 2 + (Math.abs(ny) * box.height) / 2;
-  return { spot: { x: found.point.x + nx * lift, y: found.point.y + ny * lift }, road: found.point };
+  return {
+    spot: { x: found.point.x + nx * lift, y: found.point.y + ny * lift },
+    road: found.point,
+  };
 }
 
 /**

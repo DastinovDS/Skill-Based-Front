@@ -66,9 +66,7 @@ describe('comet: the light pulse toward the target (mockup map-overlays.html, 2b
     expect(shape.head?.y).toBeCloseTo(30);
     expect(shape.pieces).toHaveLength(6);
     // Faintest first: 0.85 * 1 / 6 ... 0.85 * 6 / 6.
-    expect(shape.pieces.map((p) => p.alpha)).toEqual(
-      [1, 2, 3, 4, 5, 6].map((k) => (0.85 * k) / 6),
-    );
+    expect(shape.pieces.map((p) => p.alpha)).toEqual([1, 2, 3, 4, 5, 6].map((k) => (0.85 * k) / 6));
     // The piece next to the head is the last 12 units before it.
     expect(shape.pieces[5]?.segments).toEqual([
       [
