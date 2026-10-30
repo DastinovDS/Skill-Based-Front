@@ -108,6 +108,9 @@ class Row:
     (``charges_start``, ``marker_ticks``, ...); ``None`` in a file written before they existed."""
     places: tuple[dict[str, list[int | None]], dict[str, list[int | None]]] | None = None
     """``stock_by_place_minute`` by side (#588)."""
+    siege_orders: tuple[int, int] | None = None
+    """Attack orders into a node with an enemy garrison (#590); ``None`` in an older file."""
+    planned_siege_orders: tuple[int, int] | None = None
 
     @property
     def outcome(self) -> tuple[int | None, str, tuple[int, int], tuple[int, int]]:
@@ -225,6 +228,8 @@ def _parse_row(raw: dict[str, Any]) -> Row:
         usage=_usage(raw),
         flow=_flow(raw),
         places=_places(raw),
+        siege_orders=_opt_pair(raw, "siege_orders"),
+        planned_siege_orders=_opt_pair(raw, "planned_siege_orders"),
     )
 
 
@@ -427,6 +432,9 @@ def _section_bots(ps: Sequence[Persp], bots: Sequence[str]) -> str:
         attacks = sum(p.row.attack_orders[p.side] for p in mine)
         planned = sum(p.row.planned_attack_orders[p.side] for p in mine)
         sieges = sum(p.row.sieges[p.side] for p in mine)
+        with_siege = [p for p in mine if p.row.siege_orders is not None]
+        siege_orders = sum(_side(p.row.siege_orders, p.side) for p in with_siege)
+        planned_sieges = sum(_side(p.row.planned_siege_orders, p.side) for p in with_siege)
         sieges_won = sum(p.row.sieges_won[p.side] for p in mine)
         caps = sum(p.row.captures[p.side] for p in mine)
         late = sum(p.late_captures for p in mine)
@@ -436,6 +444,7 @@ def _section_bots(ps: Sequence[Persp], bots: Sequence[str]) -> str:
                 str(len(versus)),
                 _win_rate(versus).fmt(),
                 _share(draw, len(versus)),
+                _share(planned_sieges, siege_orders) if with_siege else "n/a",
                 _share(planned, attacks),
                 f"{_share(sieges_won, sieges)} ({sieges_won}/{sieges})",
                 f"{caps / len(mine):.2f}",
@@ -448,16 +457,24 @@ def _section_bots(ps: Sequence[Persp], bots: Sequence[str]) -> str:
         "win rate [95%]",
         "draws",
         "share of scheduled attacks",
+        "scheduled of all attacks",
         "siege success (taken/attempts)",
         "captures per match",
         f"share of captures in the last {LATE_MINUTES} min",
     ]
     return (
         "Win rate is counted against other bots (no mirror matches); the other metrics over "
-        'all matches of the bot. A "scheduled attack" is a `Move` order with `planned=true` to '
-        'an enemy or neutral node; "siege success" is captures of enemy nodes / siege attempts.'
+        'all matches of the bot. The "share of scheduled attacks" (the BAL-02 gate, #590) counts '
+        "the `Move` orders into a node with an enemy garrison at the moment of the order: the "
+        "scheduled ones (`planned=true`) over all of them (n/a in a file written before #590); "
+        '"scheduled of all attacks" is the BAL-01 definition, every `Move` to an enemy or neutral '
+        'node. "Siege success" is captures of enemy nodes / siege attempts.'
         "\n\n" + _table(header, body) + "\n\n![bots by map](PREFIX-bots.png)"
     )
+
+
+def _side(pair: tuple[int, int] | None, side: int) -> int:
+    return 0 if pair is None else pair[side]
 
 
 def _stock_cells(ps: Sequence[Persp]) -> list[str]:

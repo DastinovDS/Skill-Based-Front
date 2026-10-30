@@ -252,3 +252,24 @@ def test_report_prints_the_charge_flow_table(tmp_path: Path) -> None:
 def test_report_charge_flow_without_the_fields_is_na(tournament: Path) -> None:
     text = render_report(load_rows(tournament), "t.jsonl", "t")
     assert "| **rusher** | 0 | n/a |" in text.split("## Charge flow (#588)")[1]
+
+
+def test_report_share_of_scheduled_attacks_counts_siege_orders(tmp_path: Path) -> None:
+    # #590: the gate share is planned siege orders / siege orders. Every bot plays every row
+    # once on each side, so per bot: (0 + 1) / (4 + 2) = 0.17; all attacks: (2 + 1) / (4 + 2).
+    rows = [
+        _row(m, seed, b0, b1) | {"siege_orders": [4, 2], "planned_siege_orders": [0, 1]}
+        for m in ("alpha",)
+        for seed in range(2)
+        for b0, b1 in product(BOTS, repeat=2)
+    ]
+    text = render_report(load_rows(_write(tmp_path / "g.jsonl", rows)), "g.jsonl", "g")
+    lines = [x for x in text.splitlines() if " | 0.17 | 0.50 | " in x]  # the bots section
+    assert sorted(x.split(" | ")[0] for x in lines) == sorted(f"| **{b}**" for b in BOTS)
+
+
+def test_report_share_of_scheduled_attacks_without_siege_fields_is_na(tournament: Path) -> None:
+    text = render_report(load_rows(tournament), "t.jsonl", "t")
+    lines = [x for x in text.splitlines() if x.startswith("| **rusher** |") and "(0/" in x]
+    assert len(lines) == 1  # the bots section: n/a, then the share of all attacks (2 + 1) / 6
+    assert " | n/a | 0.50 | " in lines[0]

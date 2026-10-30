@@ -7,12 +7,20 @@ PT-01 or REL-01, ``analyze_replay`` in ``gow_sim.replay``). Two steps:
    the events of every tick plus the accepted ``Move`` commands into a ``MatchLog``. The events
    alone do not say whether an order was planned or an attack (a ``Move`` leaves no event, and
    adding one would change the state hash), so the recorder classifies the orders when they are
-   applied: *attack* means the destination did not belong to the player at that moment.
+   applied: *attack* means the destination did not belong to the player at that moment; *siege
+   order* means an attack whose destination held a group of the other player standing in it
+   (an enemy garrison) at that moment, that is at the end of the previous tick, the state the
+   order is applied to.
 2. ``analyze(log)`` is a pure function of the log and returns ``MatchMetrics``.
 
 Definitions (all counts per player id, sides ``0`` and ``1``):
 
-- ``planned_attack_share``: planned attack orders / attack orders (``None`` without attacks).
+- ``planned_siege_share`` (the gate metric "share of scheduled attacks", owner's decision
+  2026-10-30, #590, mechanics.md section 17): planned siege orders / siege orders (``None``
+  without siege orders). A walk into an empty node (neutral or enemy) is no siege order: no plan
+  can pay there, there is no fight.
+- ``planned_attack_share``: planned attack orders / all attack orders, empty nodes included
+  (``None`` without attacks); the BAL-01 definition, kept for comparison with older runs.
 - **Siege attempt** (``sieges``): one assault on a node the enemy owns: a fight in the node with
   this player as attacker (``fight_started``, DEC-24), or the walk-in into an enemy node without
   defenders (the capture without a fight, DEC-07 row 5). A capture at the end of a fight
@@ -92,7 +100,8 @@ simulation, so the state hash does not change. Definitions (the same text is in
   charges that ``transfer_started`` says were sent (a transfer is cut to the free room of the
   target, so this may be less than the ``n`` of the command).
 - **Planned orders**: ``planned_share = planned / all`` accepted ``Move`` orders (``None``
-  without orders); ``planned_attack_share`` is as in ``MatchMetrics``.
+  without orders); ``planned_attack_share`` and ``planned_siege_share`` are as in
+  ``MatchMetrics``.
 - **CP spent** (``cp_by_category``, hundredths of CP): the price charged for every accepted
   command (``orders.cost`` of the ruleset), summed per category: ``move`` (``Move``),
   ``planned_move`` (``Move`` with ``planned``), ``mode`` (``SetMode``), ``recruit``
@@ -114,7 +123,7 @@ from gow_sim.commands import Forfeit, Move, Ok, PlayerCommand
 from gow_sim.maps import PLAYERS
 from gow_sim.match import Match
 from gow_sim.ruleset import Stance
-from gow_sim.state import Event, GameState, OnEdge
+from gow_sim.state import AtNode, Event, GameState, OnEdge
 from gow_sim.systems.capacity import warehouse_capacity
 
 __all__ = [
@@ -191,6 +200,9 @@ class MoveRecord:
     planned: bool
     attack: bool
     """The destination was not owned by ``player`` when the order was applied."""
+    siege: bool = False
+    """An attack on a node with an enemy garrison: a group of the other player stood in the
+    destination at the end of the previous tick (#590)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -290,6 +302,16 @@ def charge_places(state: GameState) -> tuple[tuple[int, ...], ...]:
     return tuple(tuple(out[p]) for p in PLAYERS)
 
 
+def _garrisons(state: GameState) -> dict[int, tuple[bool, ...]]:
+    """Node -> per player id: whether a group of that player stands in the node."""
+    held: dict[int, list[bool]] = {}
+    for gid in sorted(state.groups):
+        g = state.groups[gid]
+        if isinstance(g.location, AtNode):
+            held.setdefault(g.location.node, [False for _ in PLAYERS])[g.owner] = True
+    return {node: tuple(flags) for node, flags in sorted(held.items())}
+
+
 class MatchRecorder:
     """A ``MatchObserver`` that builds a ``MatchLog``; use one recorder per match."""
 
@@ -308,6 +330,8 @@ class MatchRecorder:
         self._bottleneck = {p: [0, 0, 0, 0] for p in PLAYERS}
         self._delivered_front = _zeros()
         self._capitals: dict[int, int] = {}
+        self._garrisons: dict[int, tuple[bool, ...]] = {}
+        """Node -> per player id: a group of that player stands in it (end of the last tick)."""
 
     def begin(self, match: Match) -> None:
         if self._match is not None:
@@ -317,6 +341,7 @@ class MatchRecorder:
         self._places_start = charge_places(match.state)
         self._owners = {nid: n.owner for nid, n in sorted(match.state.nodes.items())}
         self._initial = tuple(self._owners.values())
+        self._garrisons = _garrisons(match.state)
 
     def record(self, match: Match, commands: Sequence[PlayerCommand]) -> None:
         if self._match is not match:
@@ -336,7 +361,11 @@ class MatchRecorder:
             )
             if isinstance(cmd, Move):  # owners are still those from before this tick's events
                 attack = self._owners[cmd.dest] != r.player
-                self._moves.append(MoveRecord(r.tick, r.player, cmd.planned, attack))
+                held = self._garrisons.get(cmd.dest)
+                siege = (
+                    attack and held is not None and any(held[p] for p in PLAYERS if p != r.player)
+                )
+                self._moves.append(MoveRecord(r.tick, r.player, cmd.planned, attack, siege))
         state = match.state
         for e in state.events:
             if e.kind == "node_captured":
@@ -353,6 +382,7 @@ class MatchRecorder:
         for p, charges in zip(PLAYERS, charge_stock(state), strict=True):
             self._stock[p].append(charges)
         self._count_bottleneck(match)
+        self._garrisons = _garrisons(state)
         if state.tick % PLACE_SAMPLE_TICKS == 0:
             for p, places in zip(PLAYERS, charge_places(state), strict=True):
                 self._samples[p].append(places)
@@ -486,6 +516,12 @@ class MatchMetrics:
     attack_orders: tuple[int, ...]
     planned_attack_orders: tuple[int, ...]
     planned_attack_share: tuple[float | None, ...]
+    """Over all attack orders (BAL-01); the gate uses ``planned_siege_share``."""
+    siege_orders: tuple[int, ...]
+    """Attack orders into a node with an enemy garrison (#590)."""
+    planned_siege_orders: tuple[int, ...]
+    planned_siege_share: tuple[float | None, ...]
+    """The gate metric (#590): ``planned_siege_orders / siege_orders``."""
     sieges: tuple[int, ...]
     sieges_won: tuple[int, ...]
     captures: tuple[int, ...]
@@ -524,6 +560,9 @@ class MatchMetrics:
             "attack_orders": list(self.attack_orders),
             "planned_attack_orders": list(self.planned_attack_orders),
             "planned_attack_share": list(self.planned_attack_share),
+            "siege_orders": list(self.siege_orders),
+            "planned_siege_orders": list(self.planned_siege_orders),
+            "planned_siege_share": list(self.planned_siege_share),
             "sieges": list(self.sieges),
             "sieges_won": list(self.sieges_won),
             "captures": list(self.captures),
@@ -592,11 +631,16 @@ def analyze(log: MatchLog) -> MatchMetrics:
     orders = _zeros()
     attacks = _zeros()
     planned = _zeros()
+    siege_orders = _zeros()
+    planned_sieges = _zeros()
     for m in log.moves:
         orders[m.player] += 1
         if m.attack:
             attacks[m.player] += 1
             planned[m.player] += m.planned
+        if m.siege:
+            siege_orders[m.player] += 1
+            planned_sieges[m.player] += m.planned
     return MatchMetrics(
         winner=winner,
         reason=reason,
@@ -609,6 +653,12 @@ def analyze(log: MatchLog) -> MatchMetrics:
         planned_attack_orders=tuple(planned[p] for p in PLAYERS),
         planned_attack_share=tuple(
             round(planned[p] / attacks[p], 4) if attacks[p] else None for p in PLAYERS
+        ),
+        siege_orders=tuple(siege_orders[p] for p in PLAYERS),
+        planned_siege_orders=tuple(planned_sieges[p] for p in PLAYERS),
+        planned_siege_share=tuple(
+            round(planned_sieges[p] / siege_orders[p], 4) if siege_orders[p] else None
+            for p in PLAYERS
         ),
         sieges=tuple(sieges[p] for p in PLAYERS),
         sieges_won=tuple(won[p] for p in PLAYERS),
@@ -760,6 +810,8 @@ class PlayerStats:
     planned_orders: int
     planned_share: float | None
     planned_attack_share: float | None
+    planned_siege_share: float | None
+    """As in ``MatchMetrics`` (#590)."""
     cp_by_category: tuple[tuple[str, int], ...]
     """CP in hundredths per ``CP_CATEGORIES``, recruit net of refunds."""
     cp_refunded: int
@@ -784,6 +836,7 @@ class PlayerStats:
             "planned_orders": self.planned_orders,
             "planned_share": self.planned_share,
             "planned_attack_share": self.planned_attack_share,
+            "planned_siege_share": self.planned_siege_share,
             "cp_by_category": dict(self.cp_by_category),
             "cp_refunded": self.cp_refunded,
             "cp_total": self.cp_total,
@@ -859,6 +912,8 @@ def _player_stats(log: MatchLog, player: int) -> PlayerStats:
     planned = sum(1 for m in log.moves if m.player == player and m.planned)
     attacks = [m for m in log.moves if m.player == player and m.attack]
     planned_attacks = sum(1 for m in attacks if m.planned)
+    sieges = [m for m in log.moves if m.player == player and m.siege]
+    planned_sieges = sum(1 for m in sieges if m.planned)
     return PlayerStats(
         stance_timeline=timeline,
         stance_ticks=tuple(in_stance.items()),
@@ -875,6 +930,7 @@ def _player_stats(log: MatchLog, player: int) -> PlayerStats:
         planned_orders=planned,
         planned_share=round(planned / orders, 4) if orders else None,
         planned_attack_share=round(planned_attacks / len(attacks), 4) if attacks else None,
+        planned_siege_share=round(planned_sieges / len(sieges), 4) if sieges else None,
         cp_by_category=tuple(spent.items()),
         cp_refunded=refunded,
         cp_total=sum(spent.values()),
