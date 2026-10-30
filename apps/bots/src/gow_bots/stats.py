@@ -7,7 +7,7 @@ two decimals (the journal counts hundredths).
 
 from collections.abc import Callable, Sequence
 
-from gow_sim.analysis import CP_CATEGORIES, MatchMetrics, MatchStats, PlayerStats
+from gow_sim.analysis import CP_CATEGORIES, PLACES, MatchMetrics, MatchStats, PlayerStats
 
 __all__ = ["render_stats"]
 
@@ -82,13 +82,15 @@ def _sent_cell(m: MatchMetrics, i: int) -> str:
     return f"{f.sent} / {f.delivered} / {f.delivered_front}"
 
 
-def _places_cell(m: MatchMetrics, i: int) -> str:
-    """Mean stock by place over the whole match: the mean of the minutes that have samples."""
-    parts: list[str] = []
-    for name, minutes in m.flow[i].stock_by_place_minute:
-        known = [v for v in minutes if v is not None]
-        parts.append(f"{name} {_cp(sum(known) // len(known)) if known else '-'}")
-    return ", ".join(parts)
+def _place_cell(place: str) -> Callable[[MatchMetrics, int], str]:
+    """Mean stock in a place over the whole match: the mean of the minutes that have samples."""
+
+    def cell(m: MatchMetrics, i: int) -> str:
+        known = [v for name, vs in m.flow[i].stock_by_place_minute if name == place for v in vs]
+        known = [v for v in known if v is not None]
+        return _cp(sum(known) // len(known)) if known else "-"
+
+    return cell
 
 
 _FlowRow = tuple[str, Callable[[MatchMetrics, int], str]]
@@ -109,7 +111,7 @@ _CHARGE_ROWS: tuple[_FlowRow, ...] = (
     ("marker city empty", lambda m, i: _permille(m.flow[i].front_empty_permille)),
     ("  and capital has charges", lambda m, i: _permille(m.flow[i].front_empty_cap_has_permille)),
     ("capital full (ticks)", lambda m, i: str(m.flow[i].cap_full_ticks)),
-    ("mean stock by place", _places_cell),
+    *((f"mean stock {place}", _place_cell(place)) for place in PLACES),
 )
 
 
