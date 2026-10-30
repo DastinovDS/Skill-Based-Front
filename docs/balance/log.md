@@ -576,3 +576,15 @@ now paid, so it is sent instead of an ordinary order on the same target. Win rat
 edge of the interval; the largest are `smart_reactive` (-0.04) and `smart_rusher` (+0.03). The order of the field is the same, the
 server level ladder of #574 holds (hard beats normal 0.70 -> 0.70, expert beats hard 0.67 -> 0.58, a narrower margin).
 No tuning to the gate was done. Both changes stay on for every personality.
+
+## Playtest 2026-10-30: four owner matches against the smart bots
+
+The owner played four matches on `crossroads` under `mvp-2` (`SIM_VERSION` 25, the bots of #618) against
+`smart_strangler@hard` (two) and `smart_expander@hard` (two) and won all four, three by taking the capital. The
+re-simulated logs are analysed in [playtest-2026-10-30.md](playtest-2026-10-30.md): CP, supply, upgrades, fights,
+the capital strikes, the encirclements and a verdict on each of the owner's eight observations. In short: the bot lost
+75 units in fights against the human's 10 (51 of them in garrisons outgunned by 2+), both sides burned 36-69% of their
+charges while CP was the binding constraint, every capital strike came from Middle Court (a large city next to the
+bot capital) that the bot did not retake, a capital charge took 17-27 s to reach the front, and the starvation and
+G3 checks found no contradiction with `mechanics.md`. The candidate changes (bots B1-B4, ruleset R1-R2, rules D1-D3)
+are for the owner's decision; nothing was changed.
