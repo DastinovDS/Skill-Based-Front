@@ -23,7 +23,7 @@ Mockups: [`mockups/ui-style.html`](mockups/ui-style.html) (v2, the match screen 
 [`mockups/leaderboard-profile.html`](mockups/leaderboard-profile.html) (the leaderboard and the player profile in the language of the start menu and the lobby screens, #78: **[awaiting the owner's decision]**, section 38; a new screen, so a mockup first),
 [`mockups/map-geography.html`](mockups/map-geography.html) (map geography: water cells, rivers as area borders, areas touch only along roads, #537, DEC-36: **[accepted]** 2026-10-29, W4 Painted without a dark line along water, section 39; the owner's feedback on #429, 2026-10-29),
 [`mockups/supply-terrain.html`](mockups/supply-terrain.html) (nicer supply lines in the Supply view, a terrain and vision concept, rivers and lakes as visual borders, #429: **[awaiting the owner's decision]**, section 37; moved before the release by the owner, 2026-10-29),
-[`mockups/map-overlays.html`](mockups/map-overlays.html) (the Supply mode panel, the travel-time marker of an order, the recruit and city-upgrade icons of the city menu, #627: **[awaiting the owner's decision]**, section 40; the owner's review of 2026-10-30),
+[`mockups/map-overlays.html`](mockups/map-overlays.html) (the Supply mode panel, the travel-time marker of an order, the recruit and city-upgrade icons of the city menu, #627: **[accepted]**, section 40; the owner's review of 2026-10-30),
 self-contained: open in a browser. The screenshots of our client and the images of the mockups are in
 [`mockups/img/`](mockups/img/). We do not put other people's screenshots and assets into the repository: the moodboard has
 only links and our descriptions.
@@ -1280,6 +1280,7 @@ The principle: **one shape means one thing**, and the shape reads without color 
 | a small pale dot | a province (DEC-23): no city, no warehouse, no VP (PB, #431; was a hollow ring, C1, #348) | map |
 | shield / flag / little house / star | "Defense" / capture / barracks / capital; the barracks of the opponent has a light inner ring and a smaller house (B1, #349) | groups, cities, captions |
 | rank chevrons + / watchtower / depot + (raster, SpriteCook, R5) | recruit a unit / build the barracks / raise the warehouse: the actions of the city radial menu (#627); the blue plus is the action, the paper lines the object. The map keeps its own barracks sign (the little house) | city radial menu |
+| hourglass on a dark disc (raster, SpriteCook, E4) and a comet running along the route | the travel time of a move order to the hovered node and the route it takes (#627) | map, before the click |
 | `!` in an amber circle, a dashed ring | alert: overflow, they are coming for the city | around a city |
 | a cell (a wide frame) | one unit of a count or a duration: a CP, a queued unit, a build; **frame + dot** queued, **hatch + head line** in progress, **solid** done or ready, **dashed frame** a free slot; the dashed amber ring and `MAX` on a full bar (#439) | HUD CP bar, queue and build plates at a city |
 | `✂` | starvation (cut off from the capital, DEC-19) | city, "Supply" |
@@ -2037,16 +2038,28 @@ the DEC-36 defaults (long rivers with bridges, about 20 percent water, fixtures 
 
 ## 40. Supply mode panel, order travel time, city menu icons (#627)
 
-Status: **[accepted]** for elements 1 and 3, element 2 open (the owner, 2026-10-30): the Supply panel is **S3 "Stepper"** (one pill:
+Status: **[accepted]** (the owner, 2026-10-30; element 2 with its highlight 2b the same day): the Supply panel is **S3 "Stepper"** (one pill:
 "Supply", Tab, minus, the rear minimum glyph and number, plus; a second pill "Transfer from {city}: pick a destination" with Esc only while
 a transfer is picked; no hint, no slider, no legend), implemented in `SupplyBanner.svelte`. The city menu icons are **R5 "Chevrons"**
 (rank chevrons with a plus, a watchtower, a depot with a plus; R2 and R3 were liked too): final SpriteCook icons, 96 px PNG in
 `apps/client/src/hud/menuIcons/` (`RASTER_ICONS` in `hud/icons.ts`), the direction for generated icons from now on (the owner: the
-SpriteCook textures read higher quality). The order time marker: **E4 "Hourglass"** is liked, but its road highlight is a plain band;
-the highlight goes through one more mockup step (the element "E4 road highlight" of the mockup) before code. That element (2b) draws a
-route of three roads with bends and a curved road; eleven highlights follow it, each with a light pulse toward the target and a still
-frame under reduced motion, next to the current band; the variants and the recommendation are in issue #627 (**[awaiting the owner's
-decision]**).
+SpriteCook textures read higher quality). The order time marker: **E4 "Hourglass"** with the road highlight **H10 "Comet"** (the owner,
+2026-10-30, element 2b of the mockup), implemented in `OverlayView` (`etaLayout.ts`, `etaRoute.ts`, `ETA_MARK` and `ETA_ROUTE` in `style.ts`):
+
+- While the pointer rests on a node the selected group can reach, the route the server gave (`ReachNode.path`) is a faint thin paper line
+  (3, alpha 0.35) on each of its roads from rim to rim, and a comet runs along it to the target every 1.8 s: a head dot and a tail of six
+  stretches of 12, fainter toward its end; the head waits at the target while the tail drains in. The comet passes through a city on the
+  way (it is not drawn on the city body). Under "less motion" the comet stands still at 70% of the way. Deviation from the mockup: a dark
+  casing (`--bg` 0.5, 3 wider) lies under the line and the comet, because an own road has light lanes of its own and the faint paper line
+  melted into them in the shots.
+- The time: a dark disc (r 17, `--bg` 0.9, a thin paper rim) with the SpriteCook hourglass glyph (24, `src/render/glyphs/hourglass.png`)
+  beside the road in the middle of the route (the same place as the old plate, clear of the cities on the way and of their VP badges), the
+  seconds beside the disc: away from the nearest city above a flat road, further out on its side beside a steep one. Screen size kept by
+  `badgeScale`. The plate with the clock and the band are gone.
+- Shown before the click only, as the old marker: after the click the order arrow and its chevrons are the picture (the mockup's E4 also
+  shows the remaining time while the group marches; a view has no arrival tick of an order, so that part waits for a protocol change).
+- Cost: the line is drawn once per hover change; the comet is one small `Graphics` of seven strokes and a dot, redrawn per frame only while a
+  route is shown (once under "less motion"); the disc is drawn once and only moves; no filter.
 
 The owner's review of 2026-10-30: the Supply mode panel has far too much text (title, hint,
 slider with a caption, a legend of five entries); the travel-time marker of an order (a highlighted road and a "clock 5 s" pill) is too

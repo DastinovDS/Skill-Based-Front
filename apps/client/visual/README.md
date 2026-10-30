@@ -51,7 +51,7 @@ Commands (from the repository root; `mise run` installs Playwright Chromium itse
 
 The travel time of an order (#432): `mise run shots` takes `eta-<name>.png` (the map alone) with the parameter
 `?eta=<from>,<to>,<ticks>[,<via>...]` that pins the label and the route (the nodes it goes through, #448) to a frozen scene (a fixture has no server to answer `reach`): `eta-artery-near` (a road
-between two cities), `eta-artery-far` and `eta-artery-bend` (a route of two roads through a city), `eta-snapshot`. They have no `visual` references.
+between two cities), `eta-artery-far` and `eta-artery-bend` (a route of two roads through a city), `eta-snapshot`, and `eta-artery-bend-still.png` with `eta-artery-bend-still-gray.png` (the still comet under "less motion", in grey scale too: E4 "Hourglass" and H10 "Comet", #627; the other shots catch the comet at whatever point of its run). They have no `visual` references.
 
 The hint "split the group" (#468): `mise run shots` takes `split-hint.png` and `split-hint-gray.png` on the scene `snapshot` with `?split=2&menus`: a frozen scene has no server to answer `reach`, so `?split=<node>` makes it answer the `reach` of the selected group with that node under `split` (the group is too big for it); `menus` lets the pointer preview an order. The test selects the group, rests the pointer on the node and takes the tip. No `visual` reference.
 

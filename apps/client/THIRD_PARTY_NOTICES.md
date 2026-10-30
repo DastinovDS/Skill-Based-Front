@@ -72,6 +72,10 @@ transparency and scaled to 96 px for this project. The SpriteCook terms checked 
 (section 6) let the user "use, reproduce, and distribute outputs you generate", on every plan; the
 outputs carry no warranty and are not guaranteed to be unique.
 
+The hourglass glyph of the order travel time on the map, `src/render/glyphs/hourglass.png` (E4
+"Hourglass", issue #627), was cut from the same SpriteCook sheet (asset
+`d26e22f1-d6f4-4d72-8608-c7e76f9228bd`), keyed to transparency and scaled to 96 px, under the same terms.
+
 ## Sounds and fonts
 
 None yet (package F adds the sounds under CC0 and lists them here).

@@ -405,21 +405,26 @@ export const SELECT_RING_GAP = 18;
  */
 export const REACH_RING = { gap: 12, width: 2, alpha: 0.8, dash: 5 } as const;
 /**
- * The travel time of a move order (#432): a plate with a small clock and the seconds, on the road
- * between the group and the hovered city. The size is in world units and is scaled to stay as big
- * on screen (`badgeScale`: 13 px of text is still 13 px at a 60% map scale). The seconds are text and
- * the clock is a shape: the label never rests on colour.
+ * The travel time of a move order (#432; E4 "Hourglass", #627): a dark disc with the hourglass glyph
+ * beside the road in the middle of the route, the seconds on the far side of the disc from the road.
+ * The size is in world units and is scaled to stay as big on screen (`badgeScale`: 13 px of text is
+ * still 13 px at a 60% map scale). The seconds are text and the hourglass is a shape: the mark never
+ * rests on colour.
  */
 export const ETA_FONT_SIZE = 13;
-export const ETA_LABEL = {
-  height: 22,
-  padX: 7,
-  /** Width of the clock and the gap between it and the number. */
-  clock: 12,
-  gap: 4,
-  radius: 7,
-  /** The plate stands this far off the road (past the half width of the widest road). */
+export const ETA_MARK = {
+  /** The disc: dark fill, a thin paper rim. */
+  radius: 17,
+  fillAlpha: 0.9,
+  rim: { width: 1, alpha: 0.6 },
+  /** The hourglass glyph (a 96 px SpriteCook texture) drawn this wide. */
+  glyph: 24,
+  /** The seconds start this far from the centre of the disc (past its rim). */
+  textOffset: 22,
+  /** The disc stands this far off the road (past the half width of the widest road). */
   roadGap: 5,
+  /** A city on the way is cleared by this much more than its ring: its VP badge sits above it. */
+  badgeClear: 14,
 } as const;
 export const SELECT_WIDTH = 3;
 /** Group selection: a rounded frame this far outside the token. */
@@ -434,8 +439,23 @@ export const PREVIEW_ALPHA = 0.55;
 export const PREVIEW_DASH = 2;
 export const PREVIEW_GAP = 6;
 export const PREVIEW_WIDTH = 2;
-/** The route of the hovered order (#448): a solid band along its roads, rim to rim, past the label. */
-export const ROUTE_BAND = { extra: 4, alpha: 0.4 } as const;
+/**
+ * The route of the hovered order (#448; H10 "Comet", #627): a faint thin paper line on a dark casing
+ * along its roads, rim to rim, and a comet that runs along it to the target every `periodMs`: a head dot and a tail
+ * of `pieces` stretches of `piece` units, each fainter than the one before. The comet is the light
+ * pulse toward the target; under "less motion" it stands still at `still` of the route. World units.
+ */
+export const ETA_ROUTE = {
+  line: { width: 3, alpha: 0.35 },
+  /**
+   * A dark casing under the line and the comet: an own road has light lanes of its own, and the
+   * paper light must not melt into them (the mockup's roads are a single faint line).
+   */
+  casing: { extra: 3, alpha: 0.5 },
+  /** The line and the comet stop this far outside the city rims. */
+  rimGap: 2,
+  comet: { width: 6, piece: 12, pieces: 6, alpha: 0.85, periodMs: 1800, still: 0.7 },
+} as const;
 /**
  * Road pick (key U, DEC-16): the roads a click would upgrade carry a dashed band.
  */

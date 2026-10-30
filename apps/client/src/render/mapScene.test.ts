@@ -117,7 +117,8 @@ describe('MapScene', () => {
     expect(states).toEqual(['loaded', 'loaded', 'loaded', 'loaded', 'loaded']);
     // The scene never unloads the background: its owner does, once no scene shows it.
     expect(assets.unload).not.toHaveBeenCalled();
-    expect(assets.load).toHaveBeenCalledTimes(5);
+    // Once per scene (the hourglass glyph of the travel time is loaded too, #627).
+    expect(assets.load.mock.calls.filter(([url]) => url === URL)).toHaveLength(5);
     scene?.destroy();
     expect(assets.unload).not.toHaveBeenCalled();
   });

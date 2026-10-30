@@ -5,7 +5,7 @@ import type { TokenSpot } from './layout.ts';
 import type { GhostArrow, OverlayState } from './interaction.ts';
 import { setReducedMotion } from './motion.ts';
 import { badgeScale } from './alertLayout.ts';
-import { ETA_LABEL, GHOST_REJECT_MS, REACH_RING, roadSpan } from './style.ts';
+import { ETA_MARK, GHOST_REJECT_MS, REACH_RING, roadSpan } from './style.ts';
 import { createLayers } from './layers.ts';
 import { OverlayView } from './overlayView.ts';
 
@@ -84,7 +84,7 @@ describe('OverlayView', () => {
       split: [],
       eta: null,
     };
-    const frame = layers.layer.intents.children[3];
+    const frame = layers.layer.intents.children.find((c) => c.label === 'select-frame');
     view.update(state, () => ({ x: 50, y: 60, side: 30, scale: 1 }));
     expect(frame?.visible).toBe(true);
     expect(frame?.position.x).toBe(50);
@@ -220,7 +220,7 @@ describe('OverlayView, the travel time and the route of an order (#432, #448)', 
     if (edge === undefined) throw new Error('a map without roads');
     const spot = spotOf(edge.a, edge.b);
     expect(spot.along).toBeCloseTo((spot.rimFrom + spot.length - spot.rimTo) / 2);
-    expect(spot.off).toBeGreaterThanOrEqual((roadSpan(3) / 2 + ETA_LABEL.roadGap) * badgeScale(1));
+    expect(spot.off).toBeGreaterThanOrEqual((roadSpan(3) / 2 + ETA_MARK.roadGap) * badgeScale(1));
   });
 
   it('on a route of two roads: in the middle of the whole route, on the longer road', () => {
@@ -287,6 +287,40 @@ describe('OverlayView, the travel time and the route of an order (#432, #448)', 
     // 13 px of text at a 60% map scale: world scale 1 / 0.6, so 13 * (1 / 0.6) * 0.6 = 13 px.
     expect(label(layers)?.scale.x).toBeCloseTo(1 / 0.6);
     expect(13 * (label(layers)?.scale.x ?? 0) * 0.6).toBeGreaterThanOrEqual(12);
+    view.destroy();
+  });
+
+  it('runs a comet along the route to the target, and stands it still under less motion (H10)', () => {
+    const { layers, view, none } = setup();
+    view.setTickHz(10);
+    const cometOf = () => layers.layer.intents.children.find((c) => c.label === 'order-comet');
+    const edge = map.edges[0];
+    if (edge === undefined) throw new Error('a map without roads');
+    const mark = state({ from: edge.a, node: edge.b, ticks: 25, path: [edge.a, edge.b] });
+    view.update(mark, none, 0);
+    // Bounds objects are reused: keep plain copies.
+    const box = () => {
+      const b = cometOf()?.getLocalBounds();
+      return { x: b?.x ?? 0, y: b?.y ?? 0, width: b?.width ?? 0, height: b?.height ?? 0 };
+    };
+    const start = box();
+    expect(start.width).toBeGreaterThan(0);
+    // Half a pass later the comet is elsewhere on the road.
+    view.update(mark, none, 600);
+    const later = box();
+    expect(later.width * later.height).toBeGreaterThan(start.width * start.height);
+    // Less motion: one still frame, the same whatever the clock.
+    setReducedMotion(true);
+    try {
+      view.update(mark, none, 100);
+      const still = box();
+      view.update(mark, none, 1300);
+      expect(box()).toEqual(still);
+    } finally {
+      setReducedMotion(null);
+    }
+    view.update(state(null), none, 0);
+    expect(cometOf()?.getLocalBounds().width).toBe(0);
     view.destroy();
   });
 

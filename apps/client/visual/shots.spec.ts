@@ -264,9 +264,24 @@ for (const shot of ETAS) {
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', String(shot.tick));
     await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
     await page.addStyleTag({ content: '.hud { display: none !important; }' });
+    // The hourglass glyph is a texture loaded on its own (E4, #627): give it a moment.
+    await page.waitForTimeout(300);
     await page.locator('canvas').screenshot({ path: join(OUT, `eta-${shot.name}.png`) });
   });
 }
+
+// The still frame of the comet under "less motion" (H10, #627), in colour and in grey scale.
+test('shot of the travel time of an order, less motion (artery-bend)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/?scene=artery&eta=6,8,310,7');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.addStyleTag({ content: '.hud { display: none !important; }' });
+  await page.waitForTimeout(300);
+  await page.locator('canvas').screenshot({ path: join(OUT, 'eta-artery-bend-still.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.locator('canvas').screenshot({ path: join(OUT, 'eta-artery-bend-still-gray.png') });
+});
 
 // The road mode (key U, #469): the dashed band on the roads a click would raise, on the normal map
 // and in the «Supply» view (Tab). `road-mode-normal.png` and `road-mode-supply.png`, the map alone;

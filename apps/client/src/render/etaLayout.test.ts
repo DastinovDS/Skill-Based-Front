@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etaSpot, pathLength } from './etaLayout.ts';
+import { etaSpot, pathLength, secondsRight } from './etaLayout.ts';
 
 const box = { width: 40, height: 20 };
 const none = { start: 0, end: 0 };
@@ -140,5 +140,26 @@ describe('etaSpot: the label of a move order sits on the path, above the road (#
         5,
       ),
     ).toBeNull();
+  });
+});
+
+describe('secondsRight: the seconds beside the hourglass (E4, #627)', () => {
+  const flat = [
+    { x: 0, y: 100 },
+    { x: 200, y: 100 },
+    { x: 400, y: 100 },
+  ];
+  it('above a flat road: away from the nearest city of the route', () => {
+    // The disc slid to the left of the middle city: the seconds go left, not into it.
+    expect(secondsRight({ x: 150, y: 70 }, { x: 150, y: 100 }, flat)).toBe(false);
+    expect(secondsRight({ x: 250, y: 70 }, { x: 250, y: 100 }, flat)).toBe(true);
+  });
+  it('beside a steep road: further out on the side the disc stands', () => {
+    const steep = [
+      { x: 50, y: 0 },
+      { x: 50, y: 300 },
+    ];
+    expect(secondsRight({ x: 80, y: 150 }, { x: 50, y: 150 }, steep)).toBe(true);
+    expect(secondsRight({ x: 20, y: 150 }, { x: 50, y: 150 }, steep)).toBe(false);
   });
 });
