@@ -25,6 +25,7 @@
     return groups.map((group, i) => ({
       id: group.id,
       angle: angles[i] ?? 0,
+      icon: 'stackGroup',
       label: tf('stack.units', { units: group.units }),
       lines: [
         tf('stack.charged', { charged: group.charged }),

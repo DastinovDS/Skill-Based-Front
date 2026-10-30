@@ -38,7 +38,7 @@ export interface RadialItem {
   readonly label: string;
   /**
    * The icon over the name (set I1 "line", `icons.ts`): the shape tells the choice as well as the
-   * colour. Every sector of a menu has one, but the list of the groups of a city.
+   * colour. Every sector of a menu has one.
    */
   readonly icon?: MenuIconName;
   /** Small lines under the name (a price, a number from the ruleset). */

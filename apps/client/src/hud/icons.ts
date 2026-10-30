@@ -184,7 +184,8 @@ export type IconName = keyof typeof ICONS;
 /**
  * The icons of the radial menus (set I1 "line", mockup `docs/design/mockups/objects-style.html`,
  * block 4): the city (recruit, barracks, warehouse), the group (split, Defense, cancel, merge), the
- * stance (economy, balance, war) and the supply (transfer, markers 1 and 2). Own drawings.
+ * stance (economy, balance, war), the supply (transfer, markers 1 and 2) and a group in the list of
+ * the groups of a city (`stackGroup`). Own drawings.
  */
 export const MENU_ICONS = {
   recruit: [rect(7, 6, 10, 15, 2), path('M10 3h4v3h-4z'), path('M12 11v6'), path('M9 14h6')],
@@ -219,6 +220,9 @@ export const MENU_ICONS = {
   transfer: [rect(3, 8.5, 7, 7, 0), path('M12.5 12H21'), path('M17.5 8l4 4-4 4')],
   front1: flag('1'),
   front2: flag('2'),
+  // One group of a city in the list of the groups: the down-pointing triangle a group is on the map
+  // (the own side points down) with its charge as a dot.
+  stackGroup: [path('M3.5 4.5h17L12 19.5z'), circle(12, 9.4, 0.6)],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type MenuIconName = keyof typeof MENU_ICONS;
