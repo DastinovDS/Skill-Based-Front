@@ -1,6 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { t, tf } from '../i18n/index.ts';
+  import Dialog from './Dialog.svelte';
+  import Icon from './Icon.svelte';
 
   interface Props {
     open: boolean;
@@ -29,14 +31,10 @@
     return tf('exit.duration.minutes', { n: Math.ceil(seconds / 60) });
   }
 
-  const ratedText = $derived(
-    [
-      t('exit.rated.lead'),
-      banSeconds > 0
-        ? tf('exit.rated.lock', { duration: duration(banSeconds) })
-        : t('exit.rated.noLock'),
-      t('exit.rated.early'),
-    ].join(' '),
+  const lockText = $derived(
+    banSeconds > 0
+      ? tf('exit.rated.lock', { duration: duration(banSeconds) })
+      : t('exit.rated.noLock'),
   );
 
   function onKey(event: KeyboardEvent): void {
@@ -47,102 +45,42 @@
     event.preventDefault();
     order[next]?.focus();
   }
+
+  /** Key labels are the keys themselves, not translations. */
+  const ESC = 'Esc';
 </script>
 
 {#if open}
-  <div class="backdrop">
-    <div
-      class="dialog"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="exit-title"
-      aria-describedby="exit-text"
-      tabindex="-1"
-      onkeydown={onKey}
-    >
-      <h2 id="exit-title">{t('exit.title')}</h2>
-      <p id="exit-text">{rated ? ratedText : t('exit.text')}</p>
-      <div class="actions">
-        <button type="button" class="danger" bind:this={confirm} onclick={onforfeit}>
-          {t('exit.confirm')}
-        </button>
-        <button type="button" class="primary" bind:this={stay} onclick={onstay}>
-          {t('exit.stay')}
-        </button>
-      </div>
-    </div>
-  </div>
+  <Dialog
+    id="exit"
+    role="alertdialog"
+    eyebrow={t('exit.eyebrow')}
+    title={t('exit.title')}
+    describedby="exit-text"
+    onkeydown={onKey}
+  >
+    {#if rated}
+      <p class="dlg-lead" id="exit-text">{t('exit.rated.lead')}</p>
+      <ul class="dlg-lines">
+        <li class="dlg-line warn">
+          <Icon name="lock" size={18} />
+          <span>{lockText} {t('exit.rated.open')}</span>
+        </li>
+        <li class="dlg-line">
+          <Icon name="info" size={18} />
+          <span>{t('exit.rated.early')}</span>
+        </li>
+      </ul>
+    {:else}
+      <p class="dlg-lead" id="exit-text">{t('exit.text')}</p>
+    {/if}
+    {#snippet actions()}
+      <button type="button" class="dlg-btn pri" bind:this={stay} onclick={onstay}>
+        {t('exit.stay')}<kbd class="dlg-k" aria-hidden="true">{ESC}</kbd>
+      </button>
+      <button type="button" class="dlg-btn leave danger" bind:this={confirm} onclick={onforfeit}>
+        <Icon name="logout" size={18} />{t('exit.confirm')}
+      </button>
+    {/snippet}
+  </Dialog>
 {/if}
-
-<style>
-  .backdrop {
-    position: absolute;
-    inset: 0;
-    z-index: 20;
-    display: grid;
-    place-items: center;
-    padding: 16px;
-    background: var(--scrim);
-    pointer-events: auto;
-  }
-
-  .dialog {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: min(420px, 100%);
-    padding: 18px 20px;
-    box-sizing: border-box;
-    border: 1px solid var(--paper);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--text);
-  }
-
-  h2,
-  p {
-    margin: 0;
-  }
-
-  p {
-    line-height: 1.4;
-  }
-
-  h2 {
-    font-size: 18px;
-  }
-
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-
-  button {
-    min-width: 0;
-    padding: 6px 12px;
-    font: inherit;
-    color: inherit;
-    cursor: pointer;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-  }
-
-  button:focus-visible {
-    outline: 2px solid var(--paper);
-    outline-offset: 2px;
-  }
-
-  .primary {
-    background: var(--you);
-    border-color: var(--paper);
-    color: var(--bg);
-    font-weight: 600;
-  }
-
-  .danger {
-    border-color: var(--enemy);
-  }
-</style>

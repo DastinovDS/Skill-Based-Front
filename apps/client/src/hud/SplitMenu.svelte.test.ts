@@ -66,8 +66,11 @@ describe('SplitMenu', () => {
     slider.value = '4';
     slider.dispatchEvent(new Event('input', { bubbles: true }));
     flushSync();
-    expect(target.querySelector('.n')?.textContent).toBe('4');
-    expect(target.querySelector('.charged')?.textContent).toBe('charged among them: 2');
+    // The two groups of the preview: 4 go (both charged units first), 2 stay (none charged).
+    expect(target.querySelector('.goes .n')?.textContent).toBe('4');
+    expect(target.querySelector('.goes .charged')?.textContent).toBe('2 charged');
+    expect(target.querySelector('.stays .count')?.textContent).toBe('2');
+    expect(target.querySelector('.stays .line:last-child')?.textContent).toBe('0 charged');
     const confirm = target.querySelector<HTMLButtonElement>('.confirm');
     confirm?.dispatchEvent(new PointerEvent('pointerenter'));
     flushSync();

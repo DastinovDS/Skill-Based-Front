@@ -2,7 +2,9 @@
   import { tick } from 'svelte';
   import { t, tf } from '../i18n/index.ts';
   import { sound } from '../audio/soundState.svelte.ts';
+  import './dialog.css';
   import Icon from './Icon.svelte';
+  import Slider from './Slider.svelte';
 
   interface Props {
     open: boolean;
@@ -130,8 +132,9 @@
             </li>
           </ul>
           <p class="link">
-            <button type="button" disabled aria-disabled="true" title={t('help.howToSoon')}>
-              {t('help.howTo')}
+            <button type="button" class="dlg-btn" disabled aria-disabled="true">
+              <Icon name="info" size={18} />{t('help.howTo')}
+              <span class="soon">{t('help.howToSoon')}</span>
             </button>
           </p>
         </section>
@@ -147,20 +150,20 @@
           {#if captureCost > 0}
             <p class="note">{tf('help.capture', { n: captureCost })}</p>
           {/if}
-          <label class="volume">
+          <div class="volume">
             <span>{t('help.volume')}</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="5"
+            <Slider
               value={sound.volume}
-              oninput={(event) => {
-                sound.setVolume(event.currentTarget.valueAsNumber);
+              min={0}
+              max={100}
+              step={5}
+              label={t('help.volume')}
+              oninput={(n: number) => {
+                sound.setVolume(n);
               }}
             />
             <span class="percent">{sound.volume}%</span>
-          </label>
+          </div>
         </section>
       </div>
     </div>
@@ -176,10 +179,9 @@
     font-size: 14px;
   }
 
-  .volume input {
+  .volume :global(.slider) {
     flex: 1;
     min-width: 0;
-    accent-color: var(--you);
   }
 
   .percent {
@@ -203,9 +205,9 @@
     width: min(760px, 100%);
     max-height: 100%;
     overflow: auto;
-    padding: 14px 18px 18px;
+    padding: 18px 24px 22px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 10px;
     background: var(--surface);
     color: var(--text);
   }
@@ -224,7 +226,9 @@
   }
 
   h2 {
-    font-size: 18px;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
   }
 
   h3 {
@@ -243,11 +247,10 @@
     cursor: pointer;
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 8px;
   }
 
-  .close:focus-visible,
-  .link button:focus-visible {
+  .close:focus-visible {
     outline: 2px solid var(--paper);
     outline-offset: 1px;
   }
@@ -349,13 +352,16 @@
     margin-top: 12px;
   }
 
-  .link button {
-    padding: 4px 10px;
-    font: inherit;
-    color: var(--text-dim);
-    background: var(--surface-2);
+  /* "Coming soon" is a visible chip, not a tooltip a disabled button never shows. */
+  .soon {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 9px;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 11px;
+    font-size: 12px;
+    color: var(--text-dim);
   }
 
   .keys {
@@ -377,11 +383,14 @@
 
   kbd {
     padding: 1px 6px;
-    border: 1px solid var(--border);
-    border-radius: 3px;
+    border: 1px solid #3d444d;
+    border-bottom-width: 2px;
+    border-radius: 6px;
     background: var(--surface-2);
+    color: var(--text-dim);
     font: inherit;
     font-size: 12px;
+    font-weight: 600;
   }
 
   .note {

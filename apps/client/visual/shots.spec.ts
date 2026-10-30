@@ -393,3 +393,61 @@ test('shot of the capture rule tip and the capture_failed toast', async ({ page 
   await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
   await page.screenshot({ path: join(OUT, 'capture-tip-gray.png') });
 });
+
+// The match dialogs (#597). `help.png` (key ?), `exit.png` (Esc twice with nothing selected) and
+// `transfer.png` (the Supply view, a city, "Transfer", an own destination city), each with a `-gray` twin, and
+// `supply-hud-gray.png` (the Supply view banner in grey scale).
+async function openScene(page: import('@playwright/test').Page, scene: string): Promise<void> {
+  await page.goto(`/?scene=${scene}&menus`);
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.waitForTimeout(300);
+}
+
+async function shootBoth(page: import('@playwright/test').Page, name: string): Promise<void> {
+  await page.mouse.move(1000, 700);
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(OUT, `${name}.png`) });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, `${name}-gray.png`) });
+}
+
+test('shot of the help sheet', async ({ page }) => {
+  await openScene(page, 'snapshot_fog');
+  await page.keyboard.press('?');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await shootBoth(page, 'help');
+});
+
+test('shot of the forfeit dialog in the match', async ({ page }) => {
+  await openScene(page, 'snapshot_fog');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('alertdialog')).toBeVisible();
+  await shootBoth(page, 'exit');
+});
+
+test('shot of the transfer dialog', async ({ page }) => {
+  await page.goto('/?scene=supply&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(300);
+  await page.mouse.click(118, 520);
+  await expect(page.locator('[role="menu"]')).toBeVisible();
+  await page.keyboard.press('Digit3');
+  await page.waitForTimeout(200);
+  await page.mouse.click(332, 519);
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await shootBoth(page, 'transfer');
+});
+
+test('shot of the supply banner in grey scale', async ({ page }) => {
+  await page.goto('/?scene=supply&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.keyboard.press('Tab');
+  await page.mouse.move(1000, 700);
+  await page.waitForTimeout(400);
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'supply-hud-gray.png') });
+});

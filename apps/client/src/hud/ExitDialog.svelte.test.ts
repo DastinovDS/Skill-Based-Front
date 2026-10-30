@@ -1,4 +1,4 @@
-import { flushSync, mount, unmount } from 'svelte';
+import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setLocale, translate } from '../i18n/index.ts';
 import ExitDialog from './ExitDialog.svelte';
@@ -32,7 +32,7 @@ describe('ExitDialog', () => {
     const text = render(true);
     expect(text).toContain(translate('en', 'exit.rated.noLock'));
     expect(text).toMatch(/does not lock the matchmaking queue/);
-    expect(text).toMatch(/bots, friends and the lobby stay open/);
+    expect(text).toMatch(/Bots, friends and the lobby stay open/);
     expect(text).toMatch(/opponent's rating unchanged/);
     expect(text).not.toContain(translate('en', 'exit.text'));
   });
@@ -44,7 +44,7 @@ describe('ExitDialog', () => {
     [90, '2 min'],
   ])('shows the lock the server announces: %i s as %s', (seconds, shown) => {
     const text = render(true, vi.fn(), seconds);
-    expect(text).toContain(`locks the matchmaking queue for ${shown} `);
+    expect(text).toContain(`locks the matchmaking queue for ${shown}.`);
     expect(text).not.toContain(translate('en', 'exit.rated.noLock'));
   });
 
@@ -60,5 +60,29 @@ describe('ExitDialog', () => {
     expect(onforfeit).not.toHaveBeenCalled();
     document.querySelector<HTMLButtonElement>('button.danger')?.click();
     expect(onforfeit).toHaveBeenCalledOnce();
+  });
+
+  it('marks the forfeit by an icon and words, and gives the focus to the safe answer', async () => {
+    render(true);
+    await tick();
+    const danger = document.querySelector<HTMLButtonElement>('button.danger');
+    expect(danger?.querySelector('svg')).not.toBeNull();
+    expect(danger?.textContent).toContain(translate('en', 'exit.confirm'));
+    expect(document.activeElement?.textContent).toContain(translate('en', 'exit.stay'));
+  });
+
+  it('keeps Tab inside the dialog: Stay, Forfeit, back to Stay', async () => {
+    render(false);
+    await tick();
+    const dialog = document.querySelector('[role=alertdialog]');
+    const press = (shiftKey = false): void => {
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true }));
+    };
+    press();
+    expect(document.activeElement).toBe(document.querySelector('button.danger'));
+    press();
+    expect(document.activeElement?.textContent).toContain(translate('en', 'exit.stay'));
+    press(true);
+    expect(document.activeElement).toBe(document.querySelector('button.danger'));
   });
 });
