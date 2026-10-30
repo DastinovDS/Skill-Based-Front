@@ -54,7 +54,6 @@
     </section>
     <nav class="links" aria-label={t('legal.nav')}>
       <a href="/{other[page]}">{t(`legal.${other[page]}`)}</a>
-      <a href="/">{t('legal.game')}</a>
     </nav>
   </article>
 </main>
