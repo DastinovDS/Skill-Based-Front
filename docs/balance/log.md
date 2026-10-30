@@ -191,3 +191,35 @@ burned share: the rushers still have a mean stock of 27-29 charges (the start st
 start units) and win 96% of their sieges. Charges do not limit a strategy whose captures are free in charges,
 so the charge side of the stance cannot be balanced by its rate alone. Reverted (back to 2) for the next iteration;
 it is worth retrying together with DEC-38, where a capture spends a charge.
+
+### Iteration 2: `capture.charge_cost` 0 -> 1 (DEC-38, #578, H2)
+
+**Hypothesis (H2).** VP are decided by the speed of claiming empty nodes, which costs 1 CP and no charge. If every
+capture spends a charge, the charge share of the stance gets a use, War pays for its CP with fewer captures, and
+fights matter more than the claim.
+
+**Change.** `capture.charge_cost = 1` (`mvp-1`: 0), everything else as `mvp-1`. Ruleset hash in the run rows.
+**Caveat:** the bots do not know the cost yet (#580): they send uncharged groups into captures that bounce. The
+result is a lower bound of the rule's effect, to be rerun once #580 is on develop.
+
+| bot | win rate [95%] | iteration 0 | captures a match (it. 0) | move orders (it. 0) |
+|---|---|---|---|---|
+| smart_rusher | 0.85 [0.81; 0.87] | 0.80 | 29.6 (59.9) | 125 (96) |
+| smart_expander | 0.79 [0.75; 0.82] | 0.69 | 22.2 (49.6) | 96 (68) |
+| rusher | 0.79 [0.75; 0.82] | 0.76 | 28.3 (64.5) | 129 (102) |
+| smart_strangler | 0.61 [0.57; 0.65] | 0.65 | 19.1 (55.3) | 89 (73) |
+| expander | 0.51 [0.47; 0.55] | 0.27 | 15.6 (18.5) | 39 (21) |
+| smart_reactive | 0.48 [0.44; 0.52] | 0.51 | 17.2 (54.5) | 88 (67) |
+| strangler | 0.42 [0.38; 0.46] | 0.66 | 16.3 (56.3) | 90 (76) |
+| reactive | 0.37 [0.33; 0.41] | 0.54 | 17.2 (57.7) | 88 (74) |
+| turtle | 0.11 [0.08; 0.14] | 0.05 | 10.8 (10.4) | 22 (12) |
+| smart_turtle | 0.07 [0.05; 0.09] | 0.05 | 11.2 (16.7) | 34 (33) |
+
+Sides (mirror): crossroads 0.59 [0.48; 0.68], highway 0.58 [0.46; 0.70], ridge 0.60 [0.48; 0.70], all 0.59
+[0.52; 0.65]. Planned share 0.003. Late capture 0.30 (iteration 0: 0.59). Turtle vs Expander 0.00, smart 0.02.
+
+**Result: worse for the gate with the current bots.** Captures halve for everyone, the bots spend the CP on more
+move orders that bounce, sieges drop from about 40 to 4-12 a match, the late captures fall to the limit (0.30), and
+the War bots still lead: they make the most orders, so they still claim the most. The charges keep burning
+(48-92%): they wait in the warehouses while the bots march uncharged groups. Not kept (`charge_cost` back to 0);
+retest with #580.

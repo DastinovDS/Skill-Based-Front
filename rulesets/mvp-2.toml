@@ -41,9 +41,9 @@ start_stance = "balance"
 
 [economy.stance_to_charges_pct]
 # The share of the CP regeneration quantum that goes into charges, in percent (mechanics.md, section 6).
-economy = 75 # "Economy"
+economy = 60 # "Economy" (BAL-02 iteration 3, H1: mvp-1 75)
 balance = 50 # "Balance"
-war = 25 # "War"
+war = 40 # "War" (BAL-02 iteration 3, H1: mvp-1 25)
 
 [orders]
 # Modes and scheduled orders (DEC-08, #12; mechanics.md, section 5).
@@ -110,7 +110,7 @@ engage_ticks = 3 # DEC-37: a defender that left the node at most 3 ticks ago is 
 # Capture costs a charge (DEC-38, #578; mechanics.md, section 4). A capture of a node (neutral or enemy, a city,
 # a province or a capital, also at the end of a fight) spends charge_cost real charges of the capturing player's
 # groups in the node; with fewer the groups bounce, a returning group dies (DEC-24, G3). Virtual charges never pay.
-charge_cost = 1 # BAL-02 iteration 2 (H2): every capture spends one charge (mvp-1: 0)
+charge_cost = 0 # 0: off, a capture is free (BAL-02 iteration 2 tested 1 with bots that do not adapt yet: worse, #580)
 
 [capacity]
 # Node capacity (DEC-22, #234; mechanics.md, section 8): limits the number of units standing in a node and,
