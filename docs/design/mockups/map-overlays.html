@@ -2,7 +2,8 @@
 <!--
   Map overlays mockup (issue #627, owner review 2026-10-30): three in-match elements, at least ten variants each plus the
   current look. (1) The HUD panel of the Supply map mode (only the Svelte panel; the supply drawing on the map stays as it is).
-  (2) The travel-time marker of a move order, before the click and while the group marches. (3) The recruit, barracks and
+  (2) The travel-time marker of a move order, before the click and while the group marches. (2b) The road highlight
+  under the E4 hourglass (owner, 2026-10-30): along the real road geometry, each with a light pulse, plus the current band. (3) The recruit, barracks and
   warehouse icons of the city radial menu. Raster icons in assets/map-overlays/ are SpriteCook candidates (asset ids in
   assets/map-overlays/spritecook-assets.json); the rest is drawn by code. No network: open the file in a browser.
   State in the address: #el=eta&v=e4&cmp=e0,e4,e6&t=3.2&gray=1&rm=1&calm=0&pick=0
@@ -318,6 +319,7 @@
       const ELS = [
         ['supply', '1 · Supply panel'],
         ['eta', '2 · Order time'],
+        ['hl', '2b · E4 road highlight'],
         ['menu', '3 · City menu icons'],
       ];
       const A = 'assets/map-overlays/';
@@ -742,6 +744,294 @@
         return out;
       }
 
+      // ---------- (2b) E4 road highlight: the band under the hourglass, along the real road ----------
+      // A route of three roads with a bend in each city and one curved road (sampled into a polyline, as the client would draw
+      // it); every variant follows that geometry, is trimmed at the city rims and carries a light pulse toward the target.
+      const HN = {
+        a: [110, 390, 'Watchpost', 'own'],
+        b: [300, 330, 'Forkway', 'own'],
+        c: [440, 190, 'Ridge', 'own'],
+        d: [670, 150, 'Bluff', 'n'],
+        e: [150, 140, 'Stonegate', 'own'],
+        f: [650, 400, 'Heart', 'enemy'],
+      };
+      // [from, to, control point of a curved road or null]
+      const HE = [
+        ['a', 'b', null],
+        ['b', 'c', [430, 300]],
+        ['c', 'd', null],
+        ['e', 'a', null],
+        ['e', 'c', null],
+        ['b', 'f', null],
+        ['d', 'f', [720, 280]],
+      ];
+      const HROUTE = ['a', 'b', 'c', 'd'];
+      const H_PERIOD = 1.8; // seconds of one pulse
+      function edgePts(a, b, ctl) {
+        const p = HN[a], q = HN[b];
+        if (!ctl) return [[p[0], p[1]], [q[0], q[1]]];
+        const out = [];
+        for (let i = 0; i <= 24; i++) {
+          const k = i / 24, u = 1 - k;
+          out.push([u * u * p[0] + 2 * u * k * ctl[0] + k * k * q[0], u * u * p[1] + 2 * u * k * ctl[1] + k * k * q[1]]);
+        }
+        return out;
+      }
+      function edgeOf(a, b) {
+        for (const [x, y, c] of HE) {
+          if (x === a && y === b) return edgePts(a, b, c);
+          if (x === b && y === a) return edgePts(b, a, c && c);
+        }
+        return edgePts(a, b, null);
+      }
+      // One polyline of the whole route plus the arc length of each city on it.
+      function hlRoute() {
+        let pts = [];
+        const at = [0];
+        for (let i = 1; i < HROUTE.length; i++) {
+          const e = edgeOf(HROUTE[i - 1], HROUTE[i]);
+          pts = pts.concat(i === 1 ? e : e.slice(1));
+          at.push(lenOf(pts));
+        }
+        return { pts, at };
+      }
+      function lenOf(pts) {
+        let L = 0;
+        for (let i = 1; i < pts.length; i++) L += dist(pts[i - 1], pts[i]);
+        return L;
+      }
+      // The part of a polyline between arc lengths d0 and d1.
+      function sub(pts, d0, d1) {
+        const out = [];
+        let run = 0;
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1], b = pts[i], L = dist(a, b);
+          if (L === 0) continue;
+          const s0 = Math.max(d0, run), s1 = Math.min(d1, run + L);
+          if (s0 <= s1) {
+            if (!out.length) out.push(pt(a, b, (s0 - run) / L));
+            out.push(pt(a, b, (s1 - run) / L));
+          }
+          run += L;
+        }
+        return out;
+      }
+      function at(pts, d) {
+        const s = sub(pts, Math.max(0, d - 0.5), d + 0.5);
+        const a = s[0] || pts[0], b = s[s.length - 1] || pts[1], L = dist(a, b) || 1;
+        return { p: pt(a, b, 0.5), dx: (b[0] - a[0]) / L, dy: (b[1] - a[1]) / L };
+      }
+      // A polyline pushed sideways by `o` (per-point averaged normals).
+      function offset(pts, o) {
+        return pts.map((p, i) => {
+          const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], L = dist(a, b) || 1;
+          return [p[0] - ((b[1] - a[1]) / L) * o, p[1] + ((b[0] - a[0]) / L) * o];
+        });
+      }
+      // Chaikin smoothing: rounds the bends in the cities.
+      function smooth(pts, n = 3) {
+        let p = pts;
+        for (let k = 0; k < n; k++) {
+          const q = [p[0]];
+          for (let i = 1; i < p.length; i++) q.push(pt(p[i - 1], p[i], 0.25), pt(p[i - 1], p[i], 0.75));
+          q.push(p[p.length - 1]);
+          p = q;
+        }
+        return p;
+      }
+      const sp = (pts, attrs) => `<path d="M${poly(pts)}" fill="none" stroke-linejoin="round" ${attrs}/>`;
+      // The pulse phase 0..1 (null under reduced motion: each variant then shows a still frame).
+      const phase = () => (S.calm ? null : (S.t % H_PERIOD) / H_PERIOD);
+      // A bright stretch of `len` that runs from the start to the target (k), fading at both ends of its run.
+      function runner(pts, L, k, len, attrs) {
+        if (k === null) return '';
+        const head = k * (L + len);
+        const s = sub(pts, Math.max(0, head - len), Math.min(L, head));
+        return s.length > 1 ? sp(s, attrs) : '';
+      }
+      // A comet: a head and a tail of shorter, fainter pieces.
+      function comet(pts, L, d, color, w) {
+        let s = '';
+        for (let i = 6; i >= 1; i--) {
+          const piece = sub(pts, Math.max(0, d - i * 12), Math.max(0, d - (i - 1) * 12));
+          if (piece.length > 1) s += sp(piece, `stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-opacity="${(0.85 * (7 - i)) / 6}"`);
+        }
+        const h = at(pts, Math.min(L, d)).p;
+        return s + `<circle cx="${h[0]}" cy="${h[1]}" r="${w / 2 + 1.5}" fill="${color}"/>`;
+      }
+      const HL = [
+        {
+          id: 'h0',
+          name: 'Current band',
+          draw: (r) => sp(r.pts, 'stroke="#f0f6fc" stroke-opacity=".38" stroke-width="12"'),
+        },
+        {
+          id: 'h1',
+          name: 'Lit road',
+          draw: (r, k) => sp(r.pts, 'stroke="#f0f6fc" stroke-opacity=".5" stroke-width="8" stroke-linecap="round"') + runner(r.pts, r.L, k, 70, 'stroke="#ffffff" stroke-opacity=".75" stroke-width="8" stroke-linecap="round"'),
+        },
+        {
+          id: 'h2',
+          name: 'Soft glow',
+          draw: (r, k) => {
+            const g = k === null ? 0.55 : 0.4 + 0.3 * (0.5 - 0.5 * Math.cos(k * 2 * Math.PI));
+            return sp(r.pts, `stroke="#5b9bff" stroke-opacity="${g.toFixed(2)}" stroke-width="18" stroke-linecap="round" filter="url(#hlBlur)"`) + sp(r.pts, 'stroke="#f0f6fc" stroke-opacity=".9" stroke-width="3.5" stroke-linecap="round"');
+          },
+        },
+        {
+          id: 'h3',
+          name: 'Gradient to target',
+          draw: (r, k) => {
+            // A gradient along the curve: a mask of opaque grey pieces (no seams where they overlap) over one stroke.
+            let m = '';
+            const n = 36;
+            for (let i = 0; i < n; i++) {
+              const piece = sub(r.pts, (r.L * i) / n, (r.L * (i + 1)) / n + 1.5);
+              const g = Math.round(255 * (0.15 + 0.85 * (i / (n - 1))));
+              m += sp(piece, `stroke="rgb(${g},${g},${g})" stroke-width="12"`);
+            }
+            const s = `<mask id="hlGrad" maskUnits="userSpaceOnUse" x="0" y="0" width="800" height="480">${m}</mask>` + sp(r.pts, 'stroke="#f0f6fc" stroke-opacity=".85" stroke-width="9" mask="url(#hlGrad)"');
+            return s + runner(r.pts, r.L, k, 50, 'stroke="#ffffff" stroke-opacity=".55" stroke-width="9" stroke-linecap="round"');
+          },
+        },
+        {
+          id: 'h4',
+          name: 'Twin rails',
+          draw: (r, k) => {
+            let s = sp(offset(r.pts, 6), 'stroke="#f0f6fc" stroke-opacity=".8" stroke-width="2.5" stroke-linecap="round"') + sp(offset(r.pts, -6), 'stroke="#f0f6fc" stroke-opacity=".8" stroke-width="2.5" stroke-linecap="round"');
+            s += sp(r.pts, 'stroke="#f0f6fc" stroke-opacity=".12" stroke-width="10"');
+            const d = k === null ? r.L * 0.7 : k * r.L;
+            for (const back of [0, 10, 20]) {
+              const m = at(r.pts, Math.max(0, d - back));
+              s += `<path d="M${m.p[0] + m.dy * 9} ${m.p[1] - m.dx * 9}L${m.p[0] - m.dy * 9} ${m.p[1] + m.dx * 9}" stroke="#ffffff" stroke-opacity="${(0.9 - back / 30).toFixed(2)}" stroke-width="3" stroke-linecap="round"/>`;
+            }
+            return s;
+          },
+        },
+        {
+          id: 'h5',
+          name: 'Widening wedge',
+          draw: (r, k) => {
+            // Narrow at the group, wide at the target: the band itself points the way.
+            const n = 40;
+            const left = [], right = [];
+            for (let i = 0; i <= n; i++) {
+              const m = at(r.pts, (r.L * i) / n), w = 2 + 6 * (i / n);
+              left.push([m.p[0] - m.dy * w, m.p[1] + m.dx * w]);
+              right.push([m.p[0] + m.dy * w, m.p[1] - m.dx * w]);
+            }
+            const shape = [...left, ...right.reverse()];
+            return `<path d="M${poly(shape)}Z" fill="#f0f6fc" fill-opacity=".42"/>` + runner(r.pts, r.L, k, 40, 'stroke="#ffffff" stroke-opacity=".6" stroke-width="7" stroke-linecap="round"');
+          },
+        },
+        {
+          id: 'h6',
+          name: 'Dotted trail',
+          draw: (r, k) => {
+            let s = '';
+            const d0 = k === null ? -1e9 : k * (r.L + 80) - 40;
+            for (let d = 4; d < r.L; d += 13) {
+              const m = at(r.pts, d).p, near = Math.max(0, 1 - Math.abs(d - d0) / 45);
+              s += `<circle cx="${m[0].toFixed(1)}" cy="${m[1].toFixed(1)}" r="${(3 + 1.6 * near).toFixed(2)}" fill="#f0f6fc" fill-opacity="${(0.55 + 0.45 * near).toFixed(2)}"/>`;
+            }
+            return s;
+          },
+        },
+        {
+          id: 'h7',
+          name: 'Cased tube',
+          draw: (r, k) => {
+            let s = sp(r.pts, 'stroke="#0d1117" stroke-opacity=".7" stroke-width="16" stroke-linecap="round"') + sp(r.pts, 'stroke="#f0f6fc" stroke-opacity=".85" stroke-width="12" stroke-linecap="round"') + sp(r.pts, 'stroke="#0d1117" stroke-opacity=".85" stroke-width="7" stroke-linecap="round"');
+            const d = k === null ? r.L * 0.7 : k * (r.L + 80);
+            return s + comet(r.pts, r.L, Math.min(d, r.L + 72), '#5b9bff', 5);
+          },
+        },
+        {
+          id: 'h8',
+          name: 'Smooth bends',
+          draw: (r, k) => {
+            const p = smooth(r.pts), L = lenOf(p);
+            return sp(p, 'stroke="#5b9bff" stroke-opacity=".35" stroke-width="16" stroke-linecap="round" filter="url(#hlBlur)"') + sp(p, 'stroke="#f0f6fc" stroke-opacity=".65" stroke-width="6" stroke-linecap="round"') + runner(p, L, k, 60, 'stroke="#ffffff" stroke-opacity=".8" stroke-width="6" stroke-linecap="round"');
+          },
+          smooth: true,
+        },
+        {
+          id: 'h9',
+          name: 'Road by road',
+          draw: (r, k) => {
+            // Each road lit on its own between the rims, a ring at each city on the way; the pulse steps from road to road.
+            let s = '';
+            const n = r.at.length - 1;
+            for (let i = 0; i < n; i++) {
+              const piece = sub(r.full, r.at[i] + RIM + 4, r.at[i + 1] - RIM - 4);
+              const on = k !== null && Math.floor(k * n) === i;
+              s += sp(piece, `stroke="#f0f6fc" stroke-opacity="${on ? 0.85 : 0.45}" stroke-width="8" stroke-linecap="round"`);
+            }
+            for (let i = 1; i < n; i++) {
+              const c = HN[HROUTE[i]];
+              s += `<circle cx="${c[0]}" cy="${c[1]}" r="${RIM + 2}" fill="none" stroke="#f0f6fc" stroke-opacity=".6" stroke-width="2" stroke-dasharray="4 4"/>`;
+            }
+            return s;
+          },
+        },
+        {
+          id: 'h10',
+          name: 'Comet',
+          draw: (r, k) => {
+            const d = k === null ? r.L * 0.7 : k * (r.L + 72);
+            return sp(r.pts, 'stroke="#f0f6fc" stroke-opacity=".35" stroke-width="3" stroke-linecap="round"') + comet(r.pts, r.L, Math.min(d, r.L + 72), '#f0f6fc', 6);
+          },
+        },
+        {
+          id: 'h11',
+          name: 'Target ripple',
+          draw: (r, k) => {
+            // A lit road with a start dot; the pulse is a ring that spreads from the target city.
+            const t = HN[HROUTE[HROUTE.length - 1]], s0 = r.pts[0];
+            let s = sp(r.pts, 'stroke="#f0f6fc" stroke-opacity=".5" stroke-width="7" stroke-linecap="round"') + `<circle cx="${s0[0]}" cy="${s0[1]}" r="5" fill="#f0f6fc"/>`;
+            const rings = k === null ? [0.35] : [k];
+            for (const q of rings) s += `<circle cx="${t[0]}" cy="${t[1]}" r="${(RIM + 4 + q * 22).toFixed(1)}" fill="none" stroke="#f0f6fc" stroke-opacity="${(0.85 * (1 - q)).toFixed(2)}" stroke-width="3"/>`;
+            return s;
+          },
+        },
+      ];
+      function hlMap() {
+        let s = '<defs><filter id="hlBlur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5"/></filter></defs>';
+        s += '<rect width="800" height="480" fill="#3a4630"/>';
+        s += '<ellipse cx="330" cy="70" rx="200" ry="70" fill="#25392b"/><ellipse cx="520" cy="440" rx="220" ry="70" fill="#25392b"/><ellipse cx="720" cy="90" rx="130" ry="80" fill="#4a453e"/>';
+        s += '<path d="M0 0H560L540 260 470 480H0Z" fill="#5b9bff" fill-opacity=".14" stroke="#5b9bff" stroke-opacity=".7" stroke-width="2"/>';
+        s += '<path d="M800 300V480H540L590 330Z" fill="#e5484d" fill-opacity=".16" stroke="#e5484d" stroke-opacity=".7" stroke-width="2"/>';
+        for (const [a, b, c] of HE) s += sp(edgePts(a, b, c), 'stroke="#e6edf3" stroke-opacity=".55" stroke-width="3"');
+        return s;
+      }
+      function hlNodes() {
+        let s = '';
+        for (const [x, y, name, kind] of Object.values(HN)) {
+          const fill = kind === 'own' ? '#5b9bff' : kind === 'enemy' ? '#e5484d' : '#3d434b';
+          s += `<circle cx="${x}" cy="${y}" r="${RIM - 4}" fill="#0d1117" stroke="#9da7b3" stroke-width="3"/><circle cx="${x}" cy="${y}" r="15" fill="${fill}" stroke="#f0f6fc" stroke-width="2"/>`;
+          s += `<text x="${x}" y="${y + 40}" fill="#f0f6fc" font-size="13" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#0d1117" stroke-width="3">${name}</text>`;
+        }
+        return s;
+      }
+      function hlScene(v) {
+        const { pts: full, at: cities } = hlRoute();
+        const Lf = lenOf(full);
+        const pts = sub(full, RIM + 2, Lf - RIM - 2);
+        const r = { pts, L: lenOf(pts), full, at: cities };
+        let out = hlMap() + v.draw(r, phase()) + hlNodes();
+        // E4: the hourglass on a disc at the middle of the route, the seconds beside it (the SpriteCook R5 glyph).
+        const route = v.smooth ? smooth(pts) : pts;
+        const m = at(route, lenOf(route) / 2);
+        const side = m.dx >= 0 ? 1 : -1;
+        const x = m.p[0] + m.dy * 28 * side, y = m.p[1] - m.dx * 28 * side;
+        // The seconds on the far side of the disc from the road.
+        const right = x >= m.p[0];
+        out += `<circle cx="${x}" cy="${y}" r="17" fill="#0d1117" fill-opacity=".9" stroke="#f0f6fc" stroke-opacity=".6"/>` + img('eta/hourglass-r5.png', x, y, 24) + label(right ? x + 22 : x - 22, y, '7 s', { anchor: right ? 'start' : 'end' });
+        const a = HN.a, d = HN.d;
+        out += tokenAt([a[0], a[1]]) + pointer([d[0], d[1]]);
+        return out;
+      }
+
       // ---------- (3) the city radial menu ----------
       const R = (x, y, w, h, extra = '') => `<rect x="${x}" y="${y}" width="${w}" height="${h}" ${extra}/>`;
       const P = (d, extra = '') => `<path d="${d}" ${extra}/>`;
@@ -814,11 +1104,11 @@
       }
 
       // ---------- rendering ----------
-      const LIST = { supply: SUPPLY, eta: ETA, menu: MENU.map((m) => ({ id: m[0], name: m[1], row: m, sc: m.slice(2).some((x) => x.endsWith('.png')) })) };
+      const LIST = { supply: SUPPLY, eta: ETA, hl: HL, menu: MENU.map((m) => ({ id: m[0], name: m[1], row: m, sc: m.slice(2).some((x) => x.endsWith('.png')) })) };
       const vById = (id) => LIST[S.el].find((v) => v.id === id) || LIST[S.el][0];
       const hoverSec = {};
       function svgHtml(v) {
-        const body = S.el === 'supply' ? supplyMap(S.t) : S.el === 'eta' ? etaScene(v) : menuScene(v.row, hoverSec[v.id] ?? 0);
+        const body = S.el === 'supply' ? supplyMap(S.t) : S.el === 'eta' ? etaScene(v) : S.el === 'hl' ? hlScene(v) : menuScene(v.row, hoverSec[v.id] ?? 0);
         return `<svg viewBox="0 0 800 480" width="800" height="480">${body}</svg>`;
       }
       function stageHtml(v) {
