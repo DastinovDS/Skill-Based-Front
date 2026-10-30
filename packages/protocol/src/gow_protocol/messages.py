@@ -32,7 +32,7 @@ from gow_protocol.ruleset import RulesetPublic
 from gow_protocol.view import View
 from gow_sim.state import Detail
 
-PROTOCOL_VERSION: Final = 31
+PROTOCOL_VERSION: Final = 32
 """Bumped on every change of the message schema."""
 
 CLOSE_PROTOCOL_VERSION: Final = 4001
@@ -289,6 +289,17 @@ class RatingChange(WireModel):
     after: SignedInt
 
 
+class MatchEndStats(WireModel):
+    """Totals of the receiving player only (#607); the opponent's are never sent (fog).
+
+    ``units_lost``: own units destroyed in fights (killed by shots) and by over-capacity attrition;
+    ``charges_delivered``: charges that reached a city as supply packets or transfers. Both count
+    the whole match from the event log, so a reconnect does not change them."""
+
+    units_lost: NonNegInt
+    charges_delivered: NonNegInt
+
+
 class MatchEndMsg(WireModel):
     type: Literal["match_end"] = "match_end"
     tick: Tick
@@ -306,6 +317,8 @@ class MatchEndMsg(WireModel):
     answer, after the early-resign rule (DEC-34, #414)."""
     unrated_reason: UnratedReason | None = UnratedReason.CASUAL
     """Why not (``rated`` is ``False``); ``None`` when ``rated``."""
+    stats: MatchEndStats | None = None
+    """Your own totals for the result screen; ``None`` when the server did not count them."""
     calibration: Calibration | None = None
     """Your calibration progress after this match; ``None`` for a guest, in a match that is not
     from the queue, and once calibration was over before this match."""

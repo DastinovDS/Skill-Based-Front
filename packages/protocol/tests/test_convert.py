@@ -40,10 +40,18 @@ from gow_protocol.convert import (
     snapshot_frame,
     snapshot_msg,
 )
-from gow_protocol.messages import CommandMsg, EndReason, EventMsg, MatchEndMsg, SnapshotMsg
+from gow_protocol.messages import (
+    CommandMsg,
+    EndReason,
+    EventMsg,
+    MatchEndMsg,
+    MatchEndStats,
+    SnapshotMsg,
+)
 from gow_protocol.view import AtNodeLoc, OnEdgeLoc, View
 from gow_sim import commands as sim
 from gow_sim import view as sv
+from gow_sim.analysis import result_totals
 from gow_sim.maps import PLAYERS, MapDef, load_map
 from gow_sim.match import Match, run_headless
 from gow_sim.ruleset import Ruleset, Stance, load_ruleset
@@ -777,6 +785,26 @@ def test_match_end_disconnect() -> None:
     assert msg.reason is EndReason.DISCONNECT
     capital = match_end_msg(Outcome(0, SimEndReason.CAPITAL), 100, (1, 0), disconnect=True)
     assert capital.reason is EndReason.CAPITAL_CAPTURED
+
+
+def test_match_end_carries_only_the_own_totals() -> None:
+    """#607: each player's ``match_end`` has that player's totals and no field of the other side."""
+    events = [
+        event(5, "fight_round", fight=1, node=1, spent_0=0, spent_1=0, losses_0=4, losses_1=1),
+        event(6, "packet_delivered", packet=1, player=0, node=1, charges=7),
+        event(7, "packet_delivered", packet=2, player=1, node=2, charges=2),
+    ]
+    outcome = Outcome(0, SimEndReason.CAPITAL)
+    ends = [match_end_msg(outcome, 100, (1, 0), stats=result_totals(events, p)) for p in (0, 1)]
+    assert [e.stats for e in ends] == [
+        MatchEndStats(units_lost=4, charges_delivered=7),
+        MatchEndStats(units_lost=1, charges_delivered=2),
+    ]
+    for end in ends:
+        assert end.stats is not None
+        assert set(end.stats.model_dump()) == {"units_lost", "charges_delivered"}
+        assert decode_server(encode(end)) == end
+    assert match_end_msg(outcome, 100, (1, 0)).stats is None
 
 
 def test_forfeit_ends_the_match_on_the_wire() -> None:

@@ -1,1 +1,1 @@
-{"type": "hello", "protocol_version": 31, "token": "fixture-token-not-a-secret_0123456789ABCDEF"}
+{"type": "hello", "protocol_version": 32, "token": "fixture-token-not-a-secret_0123456789ABCDEF"}

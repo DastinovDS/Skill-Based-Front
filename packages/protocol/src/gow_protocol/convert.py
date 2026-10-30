@@ -60,6 +60,7 @@ from gow_protocol.messages import (
     EndReason,
     EventMsg,
     MatchEndMsg,
+    MatchEndStats,
     RatingChange,
     ReachMsg,
     ReachNode,
@@ -771,12 +772,14 @@ def match_end_msg(
     rating: RatingChange | None = None,
     unrated_reason: UnratedReason | None = UnratedReason.CASUAL,
     calibration: Calibration | None = None,
+    stats: tuple[int, int] | None = None,
 ) -> MatchEndMsg:
     """``match_end`` of a finished match; ``disconnect``: the ``Forfeit`` was a technical defeat.
 
     ``rating``: the receiving player's rating change in a rated match (RAT-02), ``None`` while
     the rating is hidden. ``unrated_reason``: why the match did not change the rating, ``None``
-    when it did (DEC-34). ``calibration``: the player's progress after the match.
+    when it did (DEC-34). ``calibration``: the player's progress after the match. ``stats``:
+    the receiving player's ``(units_lost, charges_delivered)`` (``gow_sim.analysis.result_totals``).
     """
     reason = _END_REASONS[outcome.reason]
     if disconnect and reason is EndReason.FORFEIT:
@@ -790,4 +793,7 @@ def match_end_msg(
         rated=unrated_reason is None,
         unrated_reason=unrated_reason,
         calibration=calibration,
+        stats=None
+        if stats is None
+        else MatchEndStats(units_lost=stats[0], charges_delivered=stats[1]),
     )

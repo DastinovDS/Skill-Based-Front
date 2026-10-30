@@ -78,6 +78,7 @@ from gow_server.metrics import ServerMetrics
 
 if TYPE_CHECKING:
     from gow_server.replays import ReplayService
+from gow_sim.analysis import result_totals
 from gow_sim.commands import PlayerCommand
 from gow_sim.maps import PLAYERS, MapDef
 from gow_sim.match import Match
@@ -545,6 +546,7 @@ class MatchRunner:
                         rating=notice.rating,
                         unrated_reason=notice.unrated_reason,
                         calibration=notice.calibration,
+                        stats=result_totals(match.state.events, player),
                     )
                 )
                 box.close()

@@ -112,6 +112,15 @@ simulation, so the state hash does not change. Definitions (the same text is in
   Rejected commands cost nothing; the real CP balance (regeneration, burning at the cap) is not
   reconstructed.
 
+**Result totals** (#607, the result screen): ``result_totals(events, player)`` returns the two
+numbers of one player the ``match_end`` message carries. ``units_lost`` is the units of that player
+destroyed in the match: the ``losses_<p>`` of every ``fight_round`` (units killed by shots; units
+of a retreat are not lost) plus one per ``attrition`` event of the player (a unit that dies from
+over-capacity). Starvation spends charges, not units, so it is not counted. ``charges_delivered``
+is the same number as ``ChargeFlow.charges_delivered``: the ``charges`` of all the player's
+``packet_delivered`` events, one-off transfers included. Both are counted over the whole event
+list, so a reconnect does not change them.
+
 Pure: no I/O, no clock (AGENTS.md, section 4.1).
 """
 
@@ -143,6 +152,7 @@ __all__ = [
     "analyze_stats",
     "charge_places",
     "charge_stock",
+    "result_totals",
 ]
 
 UNFINISHED: Final = "unfinished"
@@ -185,6 +195,23 @@ _KIND_CATEGORY: Final = {
     "Transfer": "transfer",
 }
 """``CommandRecord.kind`` to category; ``Move`` goes by ``planned``, the rest is ``other``."""
+
+
+def result_totals(events: Sequence[Event], player: int) -> tuple[int, int]:
+    """``(units_lost, charges_delivered)`` of ``player`` over ``events`` (module docstring)."""
+    lost = delivered = 0
+    for e in events:
+        if e.kind == "fight_round":
+            n = e.get(f"losses_{player}")
+            assert isinstance(n, int)
+            lost += n
+        elif e.kind == "attrition" and e.get("player") == player:
+            lost += 1
+        elif e.kind == "packet_delivered" and e.get("player") == player:
+            charges = e.get("charges")
+            assert isinstance(charges, int)
+            delivered += charges
+    return lost, delivered
 
 
 def _zeros() -> dict[int, int]:

@@ -557,6 +557,7 @@ def test_match_end_reaches_both_and_closes_normally(ws_settings: Settings) -> No
             for ws in (a, b):
                 end = await recv_until(ws, MatchEndMsg)
                 assert end.winner == 0
+                assert end.stats is not None  # own totals (#607), counted by the server
                 assert await close_code(ws) == 1000
             assert live.manager.get(live.runner.match_id) is None
 
