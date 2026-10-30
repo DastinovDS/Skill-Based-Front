@@ -65,6 +65,20 @@ export function etaSpot(
   gap: number,
   rims: readonly number[] = [],
 ): Point | null {
+  return etaPlace(path, trim, box, gap, rims)?.spot ?? null;
+}
+
+/**
+ * `etaSpot` and the point of the road it is lifted off (`road`): the seconds beside the hourglass
+ * go on the far side of the disc from that point (E4, #627).
+ */
+export function etaPlace(
+  path: readonly Point[],
+  trim: { readonly start: number; readonly end: number },
+  box: LabelBox,
+  gap: number,
+  rims: readonly number[] = [],
+): { spot: Point; road: Point } | null {
   const length = pathLength(path);
   if (length <= 0) return null;
   const from = trim.start + trim.end < length ? trim.start : 0;
@@ -94,5 +108,25 @@ export function etaSpot(
     ny = -ny;
   }
   const lift = gap + (Math.abs(nx) * box.width) / 2 + (Math.abs(ny) * box.height) / 2;
-  return { x: found.point.x + nx * lift, y: found.point.y + ny * lift };
+  return { spot: { x: found.point.x + nx * lift, y: found.point.y + ny * lift }, road: found.point };
+}
+
+/**
+ * Which side of the hourglass disc the seconds go on (E4, #627): `true` to the right. Off a steep
+ * road the disc stands beside it, and the seconds go further out on that side; above a flat road
+ * they go away from the nearest city of the route, so they never run into it or its rings.
+ */
+export function secondsRight(spot: Point, road: Point, path: readonly Point[]): boolean {
+  const off = spot.x - road.x;
+  if (Math.abs(off) > Math.abs(spot.y - road.y)) return off >= 0;
+  let nearest: Point | null = null;
+  let best = Infinity;
+  for (const p of path) {
+    const d = Math.hypot(p.x - road.x, p.y - road.y);
+    if (d < best) {
+      best = d;
+      nearest = p;
+    }
+  }
+  return nearest === null ? true : nearest.x <= road.x;
 }

@@ -1,8 +1,10 @@
-import { Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Assets, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
 import { t } from '../i18n/index.ts';
 import type { MapFile, PlayerId } from '../protocol.gen.ts';
 import { badgeScale } from './alertLayout.ts';
-import { etaSpot } from './etaLayout.ts';
+import { etaPlace, secondsRight } from './etaLayout.ts';
+import { comet, cometPhase, routeSpans, type RouteSpan } from './etaRoute.ts';
+import hourglassUrl from './glyphs/hourglass.png';
 import type { Point } from './camera.ts';
 import { EMPTY_OVERLAY, type GhostArrow, type OverlayState } from './interaction.ts';
 import { ghostLook } from './intentLayout.ts';
@@ -19,7 +21,8 @@ import {
 import {
   ARROW_HEAD,
   ETA_FONT_SIZE,
-  ETA_LABEL,
+  ETA_MARK,
+  ETA_ROUTE,
   ARROW_OUTLINE,
   BG,
   CAPITAL_RADIUS,
@@ -37,7 +40,6 @@ import {
   PREVIEW_WIDTH,
   REACH_RING,
   roadSpan,
-  ROUTE_BAND,
   SELECT_COLOR,
   SELECT_RING_GAP,
   SELECT_UNIT_SCALE,
@@ -64,7 +66,7 @@ function rimSpan(a: Point, b: Point, ra: number, rb: number): [Point, Point] | n
  */
 export class OverlayView {
   private readonly ring = new Graphics();
-  private readonly frame = new Graphics();
+  private readonly frame = new Graphics({ label: 'select-frame' });
   private readonly lines = new Graphics({ label: 'order-lines' });
   /**
    * The dashed band of the road mode: a Graphics of its own because it has to show in the «Supply»
@@ -79,12 +81,23 @@ export class OverlayView {
   private overlay: OverlayState = EMPTY_OVERLAY;
   /** Side of the triangle the selection frame is drawn for (0: not drawn yet). */
   private frameSide = 0;
-  /** The time to the hovered reachable node: a small plate on the road to it, no window. */
+  /**
+   * The time to the hovered reachable node (E4 "Hourglass", #627): a disc with the hourglass glyph
+   * beside the road, the seconds on its far side; no window. The disc is drawn once, only the
+   * container moves.
+   */
   private readonly eta = new Container({ label: 'order-eta', visible: false });
-  private readonly etaPlate = new Graphics();
+  private readonly etaDisc = new Graphics();
+  private readonly etaGlyph = new Sprite();
   private readonly etaText: Text;
-  /** The text the plate is drawn for (the plate is redrawn when the number changes). */
-  private etaDrawn = '';
+  /** The comet of the route (H10, #627): redrawn every frame while the route is shown. */
+  private readonly comet = new Graphics({ label: 'order-comet' });
+  /** The roads of the hovered route, rim to rim (empty: no route). */
+  private spans: RouteSpan[] = [];
+  /** The still comet is drawn for these spans (under "less motion" it is not redrawn per frame). */
+  private cometStill: RouteSpan[] | null = null;
+  private cometDrawn = false;
+  private destroyed = false;
   private readonly etaStyle = new TextStyle({
     fontFamily: 'system-ui, sans-serif',
     fontSize: ETA_FONT_SIZE,
@@ -109,12 +122,34 @@ export class OverlayView {
       anchor: { x: 0, y: 0.5 },
       resolution: 1,
     });
-    this.eta.addChild(this.etaPlate, this.etaText);
+    const M = ETA_MARK;
+    this.etaDisc
+      .circle(0, 0, M.radius)
+      .fill({ color: BG, alpha: M.fillAlpha })
+      .stroke({ width: M.rim.width, color: PAPER, alpha: M.rim.alpha });
+    this.etaGlyph.anchor.set(0.5);
+    this.etaGlyph.visible = false;
+    this.eta.addChild(this.etaDisc, this.etaGlyph, this.etaText);
+    // The glyph is a static file of the client (img-src 'self'); the Assets cache keeps it for the
+    // next match. Without it the disc and the seconds still say what the mark is.
+    void Assets.load<Texture>(hourglassUrl).then(
+      (texture) => {
+        if (this.destroyed) return;
+        this.etaGlyph.texture = texture;
+        this.etaGlyph.width = M.glyph;
+        this.etaGlyph.height = M.glyph;
+        this.etaGlyph.visible = true;
+      },
+      (error: unknown) => {
+        console.warn('hourglass glyph failed to load', error);
+      },
+    );
     this.layers = layers;
     this.bandLayer = layers.layer.intents;
     layers.layer.intents.addChild(
       this.band,
       this.lines,
+      this.comet,
       this.ring,
       this.frame,
       this.eta,
@@ -137,6 +172,7 @@ export class OverlayView {
       this.drawRing(next);
     }
     this.placeEta(next);
+    this.drawComet(now);
     // A rejected ghost shakes and fades with the clock; the others only when the overlay changes.
     if (changed || next.ghosts.some((g) => g.status === 'rejected')) this.drawGhosts(next, now);
     const selected = next.selection;
@@ -165,8 +201,8 @@ export class OverlayView {
 
   /**
    * The seconds (rounded up) on the way to the hovered node, or nothing (#432). The way is the
-   * route the server gave with the time (`ReachNode.path`, #448); the label sits in the middle of
-   * it between the two rims, above the road.
+   * route the server gave with the time (`ReachNode.path`, #448); the hourglass disc sits in the
+   * middle of it between the two rims, above the road, the seconds on the far side of the disc.
    */
   private placeEta(state: OverlayState): void {
     const mark = state.eta;
@@ -180,55 +216,73 @@ export class OverlayView {
     }
     const text = `${String(Math.ceil(mark.ticks / this.tickHz))} ${t('unit.s')}`;
     if (this.etaText.text !== text) this.etaText.text = text;
-    const width = this.drawEtaPlate(text);
+    const M = ETA_MARK;
     const scale = badgeScale(this.cameraScale);
-    const spot = etaSpot(
+    const place = etaPlace(
       points,
       {
         start: this.radiusOf(mark.from) + REACH_RING.gap,
         end: this.radiusOf(mark.node) + REACH_RING.gap,
       },
-      { width: width * scale, height: ETA_LABEL.height * scale },
-      (roadSpan(3) / 2 + ETA_LABEL.roadGap) * scale,
-      // The cities on the way: the label stays clear of them.
-      mark.path.map((id) => this.radiusOf(id) + REACH_RING.gap),
+      { width: 2 * M.radius * scale, height: 2 * M.radius * scale },
+      (roadSpan(3) / 2 + M.roadGap) * scale,
+      // The cities on the way: the disc stays clear of them.
+      mark.path.map((id) => this.radiusOf(id) + REACH_RING.gap + M.badgeClear),
     );
-    if (spot === null) {
+    if (place === null) {
       this.eta.visible = false;
       return;
     }
+    // The seconds go on the side of the disc away from the road and from the nearest city.
+    const right = secondsRight(place.spot, place.road, points);
+    this.etaText.anchor.set(right ? 0 : 1, 0.5);
+    this.etaText.position.set(right ? M.textOffset : -M.textOffset, 0);
     this.eta.scale.set(scale);
-    this.eta.position.set(spot.x, spot.y);
+    this.eta.position.set(place.spot.x, place.spot.y);
     this.eta.visible = true;
   }
 
-  /** The plate with the clock and the number, centred on the origin; returns its width. */
-  private drawEtaPlate(text: string): number {
-    const L = ETA_LABEL;
-    const width = L.padX + L.clock + L.gap + this.etaText.width + L.padX;
-    if (this.etaDrawn === text) return width;
-    this.etaDrawn = text;
-    const left = -width / 2;
-    const cx = left + L.padX + L.clock / 2;
-    const r = L.clock / 2 - 0.75;
-    this.etaText.position.set(left + L.padX + L.clock + L.gap, 0);
-    this.etaPlate
-      .clear()
-      .roundRect(left, -L.height / 2, width, L.height, L.radius)
-      .fill({ color: BG, alpha: 0.92 })
-      .stroke({ width: 1.5, color: PAPER, alpha: 0.75 })
-      .circle(cx, 0, r)
-      .stroke({ width: 1.5, color: PAPER })
-      .moveTo(cx, 0)
-      .lineTo(cx, -r * 0.6)
-      .moveTo(cx, 0)
-      .lineTo(cx + r * 0.5, r * 0.2)
-      .stroke({ width: 1.5, color: PAPER, cap: 'round' });
-    return width;
+  /**
+   * The comet of the hovered route (H10, #627): every frame while it runs, once for the still
+   * frame of "less motion". Flat strokes in one small Graphics, no filter.
+   */
+  private drawComet(now: number): void {
+    if (this.spans.length === 0) {
+      if (this.cometDrawn) this.comet.clear();
+      this.cometDrawn = false;
+      this.cometStill = null;
+      return;
+    }
+    const phase = cometPhase(now, reducedMotion());
+    if (phase === null && this.cometStill === this.spans) return;
+    this.cometStill = phase === null ? this.spans : null;
+    const g = this.comet;
+    const { width } = ETA_ROUTE.comet;
+    const shape = comet(this.spans, phase);
+    g.clear();
+    this.cometDrawn = true;
+    const casing = ETA_ROUTE.casing;
+    for (const piece of shape.pieces) {
+      for (const [a, b] of piece.segments) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    }
+    if (shape.pieces.length > 0) {
+      g.stroke({ width: width + casing.extra, color: BG, alpha: casing.alpha, cap: 'round' });
+    }
+    for (const piece of shape.pieces) {
+      for (const [a, b] of piece.segments) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      g.stroke({ width, color: PAPER, alpha: piece.alpha, cap: 'round' });
+    }
+    if (shape.head !== null) {
+      g.circle(shape.head.x, shape.head.y, width / 2 + 1.5).fill({ color: PAPER });
+    }
   }
 
   destroy(): void {
+    this.destroyed = true;
+    // The glyph texture belongs to the Assets cache: only the sprite goes.
+    this.etaGlyph.texture = Texture.EMPTY;
     this.eta.destroy({ children: true });
+    this.comet.destroy();
     this.etaStyle.destroy();
     this.band.destroy();
     this.lines.destroy();
@@ -298,7 +352,8 @@ export class OverlayView {
     // The dotted line of an ordinary order is gone (the arrow of the order is its picture); only a
     // planned order shows where its ribbon will go.
     const preview = state.preview !== null && state.preview.planned ? state.preview : null;
-    if (state.eta !== null) this.drawRoute(g, state.eta.path);
+    this.spans = state.eta === null ? [] : this.routeOf(state.eta.path);
+    this.drawRoute(g, this.spans);
     if (preview !== null) {
       // Along the route, node to node, as the order will go (a path of one road: that road).
       for (let i = 1; i < preview.path.length; i++) {
@@ -318,22 +373,31 @@ export class OverlayView {
     }
   }
 
-  /** The route the travel time is for: a solid band on each of its roads, from rim to rim. */
-  private drawRoute(g: Graphics, route: readonly number[]): void {
-    for (let i = 1; i < route.length; i++) {
-      const a = route[i - 1];
-      const b = route[i];
-      const from = a === undefined ? undefined : nodePoint(this.map, a);
-      const to = b === undefined ? undefined : nodePoint(this.map, b);
-      if (a === undefined || b === undefined || from === undefined || to === undefined) continue;
-      const span = rimSpan(from, to, this.radius(a) + 2, this.radius(b) + 2);
-      if (span !== null) g.moveTo(span[0].x, span[0].y).lineTo(span[1].x, span[1].y);
+  /** The roads of `route` (nodes) from rim to rim, as the comet runs them. */
+  private routeOf(route: readonly number[]): RouteSpan[] {
+    const points: Point[] = [];
+    const rims: number[] = [];
+    for (const id of route) {
+      const at = nodePoint(this.map, id);
+      if (at === undefined) return [];
+      points.push(at);
+      rims.push(this.radius(id) + ETA_ROUTE.rimGap);
     }
+    return routeSpans(points, rims);
+  }
+
+  /** The route the travel time is for: a faint thin line on each of its roads, rim to rim (H10). */
+  private drawRoute(g: Graphics, spans: readonly RouteSpan[]): void {
+    if (spans.length === 0) return;
+    const { line, casing } = ETA_ROUTE;
+    for (const span of spans) g.moveTo(span.a.x, span.a.y).lineTo(span.b.x, span.b.y);
+    g.stroke({ width: line.width + casing.extra, color: BG, alpha: casing.alpha, cap: 'round' });
+    for (const span of spans) g.moveTo(span.a.x, span.a.y).lineTo(span.b.x, span.b.y);
     g.stroke({
-      width: roadSpan(3) + ROUTE_BAND.extra,
-      color: SELECT_COLOR,
-      alpha: ROUTE_BAND.alpha,
-      cap: 'butt',
+      width: line.width,
+      color: PAPER,
+      alpha: line.alpha,
+      cap: 'round',
     });
   }
 
