@@ -12,7 +12,9 @@ and advance the clock. After every tick the invariants below must hold:
   does not fit the warehouse, and the production of a full capital that finds no room in the
   rear, DEC-28, item 4.4) and ``attrition`` deaths of charged units (a road level costs no
   charges since DEC-28: CP); the charges a cut-off garrison spends (``starvation``, DEC-19; units
-  never die of it). A transfer (DEC-18) only moves charges from a warehouse into a
+  never die of it); the price of a capture (DEC-38): ``capture.charge_cost`` per ``node_captured``,
+  and a group that dies in its lost home without a fight (``capture_failed`` with ``encircled``)
+  takes its charges with it. A transfer (DEC-18) only moves charges from a warehouse into a
   packet: it is a flow, not a sink. ``charges_produced`` counts all of the production, the part
   that did not fit into the capital (``spill``) included;
 - no negative counters, ``charged <= units``, road widths within their limits, every group in an
@@ -67,7 +69,7 @@ from gow_sim.commands import (
 )
 from gow_sim.maps import PLAYERS, ROAD_START_LEVEL, MapDef, load_map
 from gow_sim.match import Controller, Match
-from gow_sim.ruleset import Ruleset, Stance, load_ruleset
+from gow_sim.ruleset import CaptureRules, Ruleset, Stance, load_ruleset
 from gow_sim.state import (
     PROGRESS_SCALE,
     AtNode,
@@ -89,6 +91,7 @@ TESTS_DIR = Path(__file__).resolve().parent
 RULES = load_ruleset(ROOT / "rulesets" / "mvp-0.toml")
 RULESETS: Final[dict[str, Ruleset]] = {
     "mvp-0": RULES,
+    "mvp-0-capture": replace(RULES, capture=CaptureRules(charge_cost=1)),  # DEC-38 on
     "mvp-1": load_ruleset(ROOT / "rulesets" / "mvp-1.toml"),
 }
 KEY = bytes(range(32))
@@ -136,15 +139,25 @@ class Ledger:
     """Charges a cut-off garrison spent (DEC-19): a documented sink."""
     builds: int = 0
     """Charges a city paid for a road level: none since DEC-28 (item 7: CP, no charges)."""
+    capture_cost: int = 0
+    """``capture.charge_cost`` of the rules (DEC-38): every capture spends exactly this many."""
+    captures: int = 0
+    """Charges spent on captures (DEC-38, item 2) and lost with a group that could not pay for
+    its lost home outside a fight (item 4, DEC-24 G3)."""
 
     @property
     def lost(self) -> int:
         return (
             self.shots + self.warehouse_lost + self.packet_lost + self.overflow
-            + self.attrition + self.starvation + self.builds
+            + self.attrition + self.starvation + self.builds + self.captures
         )  # fmt: skip
 
-    def record(self, events: list[Event], packets_before: dict[int, int]) -> None:
+    def record(
+        self, events: list[Event], packets_before: dict[int, int], charged_before: dict[int, int]
+    ) -> None:
+        in_fight = {
+            _int(e, "group") for e in events if e.kind == "fight_group" and e.get("encircled")
+        }
         for e in events:
             match e.kind:
                 case "charges_produced":
@@ -169,6 +182,12 @@ class Ledger:
                     self.attrition += 1 if e.get("charged") else 0
                 case "build_started" if e.get("kind") == "road":
                     assert "charges" not in dict(e.data), f"a road paid with charges: {e}"
+                case "node_captured":
+                    self.captures += self.capture_cost
+                case "capture_failed" if e.get("result") == "encircled":
+                    gid = _int(e, "group")
+                    if gid not in in_fight:  # in a fight ``fight_group`` counted its charges
+                        self.captures += charged_before[gid]
                 case "starvation":
                     spent = _int(e, "warehouse") + _int(e, "units")
                     assert spent > 0, f"an empty starvation event: {e}"
@@ -292,7 +311,8 @@ class Tracker:
     def start(cls, mapdef: MapDef, rules: Ruleset = RULES) -> "Tracker":
         match = Match(mapdef, rules, KEY)
         check_state(match.state)
-        return cls(match, Ledger(start=total_charges(match.state)))
+        ledger = Ledger(start=total_charges(match.state), capture_cost=rules.capture.charge_cost)
+        return cls(match, ledger)
 
     def send(self, player: int, cmd: Command) -> PlayerCommand:
         """Wrap an opaque-id command of ``player``: resolved to internal ids, next ``seq``."""
@@ -306,9 +326,10 @@ class Tracker:
         if m.finished:
             return []
         packets = {pid: p.charges for pid, p in m.state.packets.items()}
+        charged = {gid: g.charged for gid, g in m.state.groups.items()}
         garrisons = standing(m.state)
         events = m.step(commands or [])
-        self.ledger.record(events, packets)
+        self.ledger.record(events, packets, charged)
         self.kinds.update(e.kind for e in events)
         check_state(m.state)
         check_garrisons(garrisons, m.state, events)
@@ -624,3 +645,23 @@ def test_ledger_holds_in_a_full_bot_match(
     # No attrition sink here: under the stack limit ExpandBot splits and moves on every 5 ticks
     # (DEC-20), so no city stays overfilled for ``attrition_ticks``. The rush of ``MatchMachine``
     # and ``test_dec20.py`` (example 7) overfill cities.
+
+
+@pytest.mark.parametrize("name", ["siege", "diamond", "artery"])
+def test_ledger_holds_in_a_full_bot_match_with_a_capture_cost(
+    name: str, expand_bot: Callable[[MapDef, Ruleset], Controller]
+) -> None:
+    """DEC-38 on (``capture.charge_cost = 1``): the price of every capture and the groups that
+    could not pay keep the ledger exact over a whole match of two ``ExpandBot``s."""
+    mapdef, rules = MAPS[name], RULESETS["mvp-0-capture"]
+    bots = [expand_bot(mapdef, rules) for _ in PLAYERS]
+    tracker = Tracker.start(mapdef, rules)
+    match = tracker.match
+    while not match.finished:
+        batch: list[PlayerCommand] = []
+        if match.tick % 5 == 0:
+            for p in PLAYERS:
+                batch += [tracker.send(p, c) for c in bots[p].decide(match.view(p), match.tick)]
+        tracker.tick(batch)
+    assert {"node_captured", "capture_failed", "fight_group"} <= tracker.kinds
+    assert tracker.ledger.captures > 0
