@@ -1,6 +1,7 @@
 /**
  * The keys of the replay viewer (ui-style 13.7): `Space` play or pause, `Left` and `Right` five
- * seconds back and forth, `1`, `2`, `3` the speeds, `Home` fit the map, `Esc` back.
+ * seconds back and forth, `1`, `2`, `3` the speeds, `F` the fog of the side on or off (#600),
+ * `Home` fit the map, `Esc` back.
  */
 import { SPEEDS, type Speed } from './replayPlayer.ts';
 
@@ -9,6 +10,7 @@ export type ReplayKeyAction =
   | { readonly kind: 'skip'; readonly seconds: number }
   | { readonly kind: 'speed'; readonly speed: Speed }
   | { readonly kind: 'fit' }
+  | { readonly kind: 'fog' }
   | { readonly kind: 'back' };
 
 export const SKIP_SECONDS = 5;
@@ -44,6 +46,8 @@ export function replayKey(input: ReplayKeyInput): ReplayKeyAction | null {
       return { kind: 'skip', seconds: SKIP_SECONDS };
     case 'Home':
       return { kind: 'fit' };
+    case 'KeyF':
+      return { kind: 'fog' };
     case 'Escape':
       return { kind: 'back' };
     default: {

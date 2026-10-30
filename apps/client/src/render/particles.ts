@@ -12,7 +12,14 @@
  * The pure half (`rnd`, `burst`) makes the position of a particle a function of the progress of its
  * effect, so a paused or frozen scene shows a burst in the state of its tick and nothing is stored.
  */
-import { Container, Particle, ParticleContainer, Rectangle, Texture } from 'pixi.js';
+import {
+  Container,
+  Particle,
+  ParticleContainer,
+  ParticleShader,
+  Rectangle,
+  Texture,
+} from 'pixi.js';
 import type { Point } from './camera.ts';
 import { BG, ENEMY, PAPER, PLATE_FILL, YOU } from './style.ts';
 
@@ -359,6 +366,9 @@ export class ParticleLayer {
       // Everything moves, scales, turns, fades and changes shape from frame to frame.
       dynamicProperties: { position: true, vertex: true, rotation: true, color: true, uvs: true },
       blendMode: add ? 'add' : 'normal',
+      // Its own shader, destroyed with the container: the renderer's shared particle shader would
+      // keep the atlas bound after the layer is gone, and destroying the atlas then warns (#600).
+      shader: new ParticleShader(),
     });
     const particles: Particle[] = [];
     for (let i = 0; i < PARTICLE_CAPACITY; i++) {

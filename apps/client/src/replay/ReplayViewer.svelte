@@ -11,7 +11,7 @@
   import { replayMarks } from './marks.ts';
   import { replayKey } from './replayKeys.ts';
   import { ReplayPlayer, SPEEDS } from './replayPlayer.ts';
-  import type { ReplayFile } from './replayFile.ts';
+  import { hasVision, type ReplayFile } from './replayFile.ts';
   import ReplayTimeline from './ReplayTimeline.svelte';
   import SideMark from './SideMark.svelte';
   import { blueSide, otherSide, type ReplayView } from './viewAs.ts';
@@ -58,9 +58,26 @@
   });
 
   // The side the viewer watches as is drawn blue and stands on the left (ui-style 6, "Replay").
-  // The choice only recolours the map; the fog of one side is #600.
   let view = $state<ReplayView>(untrack(() => initialView));
   const blue = $derived(blueSide(view));
+
+  // The fog of the chosen side (#600): what that player saw, copied from the file. "Both" never
+  // has fog; a file from before #598 has no record of what the players saw.
+  const vision = $derived(hasVision(file));
+  let fog = $state(true);
+  const fogAvailable = $derived(vision && view !== 'both');
+  const fogOn = $derived(fogAvailable && fog);
+  const fogReason = $derived(
+    !vision ? t('replay.fog.noVision') : view === 'both' ? t('replay.fog.pickSide') : null,
+  );
+
+  $effect(() => {
+    player.showFogOf(fogOn && view !== 'both' ? view : null);
+  });
+
+  function toggleFog(): void {
+    if (fogAvailable) fog = !fog;
+  }
   const red = $derived(otherSide(blue));
   const nickOf = (side: PlayerId): string =>
     file.nicks?.[side] ?? t(side === 0 ? 'replay.player1' : 'replay.player2');
@@ -75,7 +92,7 @@
   );
 
   /** The names of the keys are not translated. */
-  const KEY = { esc: 'Esc', space: 'Space', home: 'Home' } as const;
+  const KEY = { esc: 'Esc', space: 'Space', home: 'Home', fog: 'F' } as const;
 
   const VIEWS: readonly ReplayView[] = [0, 1, 'both'];
   const viewName = (option: ReplayView): string =>
@@ -127,6 +144,10 @@
         break;
       case 'fit':
         canvas?.fitMap();
+        break;
+      case 'fog':
+        if (!fogAvailable) return;
+        toggleFog();
         break;
       case 'back':
         if (onback === undefined) return;
@@ -203,6 +224,21 @@
           >
         {/each}
       </div>
+      <button
+        type="button"
+        class="fog"
+        aria-pressed={fogOn}
+        aria-disabled={!fogAvailable}
+        aria-keyshortcuts="F"
+        aria-describedby={fogReason === null ? undefined : 'replay-fog-reason'}
+        title={fogReason ?? undefined}
+        onclick={toggleFog}
+      >
+        <Icon name="fog" size={16} />{t('replay.fog')}<kbd aria-hidden="true">{KEY.fog}</kbd>
+      </button>
+      {#if fogReason !== null}
+        <span id="replay-fog-reason" class="sr-only">{fogReason}</span>
+      {/if}
     </div>
   </header>
 
@@ -440,6 +476,39 @@
   .seg button[aria-pressed='true'] kbd {
     border-color: var(--bg);
     color: var(--bg);
+  }
+
+  /* The fog toggle: pressed is filled and bold like the choices; unavailable is dimmed and dashed,
+     so the three states read without the hue. */
+  .fog[aria-pressed='true'] {
+    border-color: var(--you);
+    background: var(--you);
+    color: var(--bg);
+    font-weight: 700;
+  }
+
+  .fog[aria-pressed='true'] kbd {
+    border-color: var(--bg);
+    color: var(--bg);
+  }
+
+  .fog[aria-disabled='true'] {
+    border-style: dashed;
+    color: var(--text-dim);
+    cursor: not-allowed;
+  }
+
+  .fog[aria-disabled='true']:hover {
+    border-color: var(--neutral);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .result {

@@ -5,7 +5,7 @@
  * JSON. `parseReplay` checks the `format` field and the shape the viewer dereferences; a file with
  * an unknown format is refused, never half-read.
  */
-import type { EndReason, MapFile, Mode, PlayerId, Stance } from '../protocol.gen.ts';
+import type { Detail, EndReason, MapFile, Mode, PlayerId, Stance } from '../protocol.gen.ts';
 
 /** The only frames format this viewer reads. */
 export const REPLAY_FORMAT = 1;
@@ -73,6 +73,60 @@ export interface ReplayFrame {
   r?: string[];
   /** Fights going on (DEC-24); absent while there is none (and in older files). */
   f?: FrameFight[];
+  /**
+   * What each player saw at this tick, `[player 0, player 1]` (#598, "Vision" in
+   * `docs/design/replay-frames.md`); absent in older files. `parseReplay` keeps it only when every
+   * frame of the file has a sound one.
+   */
+  v?: [FrameVision, FrameVision];
+}
+
+/** `low..high` of the enemy units; `high` `null`: open (`UnitsRange`). */
+export type FrameRange = [number, number | null];
+
+/**
+ * A sighting `[level, modes, units, charged, range, tick]` (`Seen`), trailing `null`s left out;
+ * `tick` only in fog (a place not in fog is seen in the frame's tick).
+ */
+export type FrameSighting = [
+  Detail,
+  Mode[],
+  (number | null)?,
+  (number | null)?,
+  (FrameRange | null)?,
+  (number | null)?,
+];
+
+/** `[detail, seen, warehouse]` of a node as the player saw it (`NodeView`), trailing `null`s left out. */
+export type FrameVisionNode = [Detail, (FrameSighting | null)?, (number | null)?];
+
+/** `[detail, seen]` of a half of an edge (`HalfView`). */
+export type FrameHalf = [Detail, (FrameSighting | null)?];
+
+/**
+ * An enemy figure `[id, pos, toward_b, detail, mode, units, charged, range]` (`EnemyGroup`); the
+ * id is opaque and names no group of `g`.
+ */
+export type FrameFigure = [
+  string,
+  number,
+  number,
+  Detail,
+  Mode,
+  (number | null)?,
+  (number | null)?,
+  (FrameRange | null)?,
+];
+
+/** `[width, detail, half_a, half_b, figures]` of an edge as the player saw it (`EdgeView`). */
+export type FrameVisionEdge = [number, Detail, FrameHalf, FrameHalf, FrameFigure[]?];
+
+/** The fog part of one player's `PlayerView` at the frame's tick (#598). */
+export interface FrameVision {
+  n: FrameVisionNode[];
+  e: FrameVisionEdge[];
+  /** Edges whose road build the player saw; absent while there are none. */
+  b?: number[];
 }
 
 /** A pair `[player 0, player 1]`. */
@@ -156,6 +210,72 @@ const isFightRounds = (v: unknown): v is FrameFightRounds =>
 const isFightRecord = (v: unknown): v is FrameFight =>
   Array.isArray(v) && (v.length === 8 || (v.length === 9 && isFightRounds(v[8])));
 
+const DETAILS: readonly unknown[] = ['exact', 'range', 'presence', 'fog'] satisfies Detail[];
+const isDetail = (v: unknown): v is Detail => DETAILS.includes(v);
+const isIntOrNull = (v: unknown): boolean => v === undefined || v === null || isInt(v);
+const isRange = (v: unknown): boolean =>
+  v === undefined ||
+  v === null ||
+  (Array.isArray(v) && v.length === 2 && isInt(v[0]) && isIntOrNull(v[1]));
+const isSighting = (v: unknown): boolean =>
+  v === undefined ||
+  v === null ||
+  (Array.isArray(v) &&
+    isDetail(v[0]) &&
+    Array.isArray(v[1]) &&
+    isIntOrNull(v[2]) &&
+    isIntOrNull(v[3]) &&
+    isRange(v[4]) &&
+    isIntOrNull(v[5]));
+const isHalf = (v: unknown): boolean => Array.isArray(v) && isDetail(v[0]) && isSighting(v[1]);
+const isFigure = (v: unknown): boolean =>
+  Array.isArray(v) &&
+  typeof v[0] === 'string' &&
+  isInt(v[1]) &&
+  isInt(v[2]) &&
+  isDetail(v[3]) &&
+  typeof v[4] === 'string' &&
+  isIntOrNull(v[5]) &&
+  isIntOrNull(v[6]) &&
+  isRange(v[7]);
+
+/** Whether `v` is the per-player key of a frame (#598) for a map of `nodes` nodes and `edges` edges. */
+function isVision(v: unknown, nodes: number, edges: number): v is [FrameVision, FrameVision] {
+  return (
+    Array.isArray(v) &&
+    v.length === 2 &&
+    v.every(
+      (side) =>
+        isObj(side) &&
+        Array.isArray(side.n) &&
+        side.n.length === nodes &&
+        side.n.every(
+          (n) => Array.isArray(n) && isDetail(n[0]) && isSighting(n[1]) && isIntOrNull(n[2]),
+        ) &&
+        Array.isArray(side.e) &&
+        side.e.length === edges &&
+        side.e.every(
+          (e) =>
+            Array.isArray(e) &&
+            isInt(e[0]) &&
+            isDetail(e[1]) &&
+            isHalf(e[2]) &&
+            isHalf(e[3]) &&
+            (e[4] === undefined || (Array.isArray(e[4]) && e[4].every(isFigure))),
+        ) &&
+        (side.b === undefined || (Array.isArray(side.b) && side.b.every(isInt))),
+    )
+  );
+}
+
+/**
+ * Whether the file has what each player saw (#598): then the viewer can show one side with its
+ * fog. Older files (and a file with a damaged key) have none.
+ */
+export function hasVision(file: ReplayFile): boolean {
+  return file.frames.every((frame) => frame.v !== undefined);
+}
+
 const isNick = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
 
 function readNicks(raw: unknown): [string, string] | null {
@@ -211,5 +331,12 @@ export function parseReplay(raw: unknown): ReplayFile {
   const nicks = readNicks(raw.nicks);
   if (nicks === null) delete file.nicks;
   else file.nicks = nicks;
+  // The optional per-player key (#598): kept only when every frame has a sound one, so a side is
+  // either shown whole with its fog or not at all. A damaged key is dropped, never an error.
+  const nodes = file.map.nodes.length;
+  const edges = file.map.edges.length;
+  if (!file.frames.every((frame) => isVision(frame.v, nodes, edges))) {
+    for (const frame of file.frames) delete frame.v;
+  }
   return file;
 }

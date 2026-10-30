@@ -874,13 +874,21 @@ Built in #599 (the UI catch-up #593): `replay/ReplayViewer.svelte`, `ReplayTimel
   side blue and puts it on the left (ui-style 6, "Replay"); "Both" is player 1 blue, player 2 red. The choice
   redraws the map for the other side on the same frame, without a reload. A replay opens as the viewer's own side
   when the app knows it: the result screen passes it, a link finds it by the viewer's nick in `nicks`; otherwise "Both".
-  The fog of one side is not part of this (#600): until then every choice shows the whole map.
+- **Fog** (#600): a toggle after the choice (the `F` chip, `aria-pressed`; pressed is filled and bold like the
+  choice). With a side chosen and the fog on, the map is that player's live view at that tick: the veil ("Haze",
+  BL3-1), ranges and presence instead of numbers, memory ghosts that fade by the replay time (so a seek is stable),
+  the enemy figures on roads, no enemy warehouse. All of it is copied from the frame key `v` of the file (#598,
+  `docs/design/replay-frames.md`, "Vision"); the client decides nothing about vision. A side opens with its fog;
+  turning it off shows the whole map with that side blue. "Both" never has fog. The toggle is unavailable (dashed
+  border, dim text, a tooltip and a screen reader description with the reason) on "Both" ("Pick a player to see their
+  fog of war") and for a file from before #598 ("This replay does not record what each player saw"), where the side
+  choice still swaps the colours.
 - At the bottom one bar: the timeline (a styled track over a native range, so the keyboard and screen readers work;
   fights are dots on the track, captures are diamonds above it in the side's colour: blue single outline for the blue
   side, red with the inner outline for the other), then play (the main blue button with the `Space` chip), the speeds
   with their keys, the time, and a hint line (arrows, `Home`, the legend of the marks). The VP-difference graph is not done.
 - At the end of the match a chip under the top bar names the winner (a triangle and the nick) or "Draw".
-- Keys: `Space` pause, `←`/`→` ±5 s, `1`/`2`/`3` speed ×1/×4/×16, `Home` fit the map, `Esc` back; they are on the
+- Keys: `Space` pause, `←`/`→` ±5 s, `1`/`2`/`3` speed ×1/×4/×16, `F` the fog, `Home` fit the map, `Esc` back; they are on the
   buttons as key chips (and in `aria-keyshortcuts`), the arrows and `Home` in the hint line.
 - Phone width (up to 640 px): the top bar is two rows (back and score, then the choice), the bottom bar two rows
   (the timeline, then play, speeds and time); key chips, nicks and the hint line are not shown.

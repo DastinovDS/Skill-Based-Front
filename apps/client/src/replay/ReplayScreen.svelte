@@ -70,6 +70,10 @@
     if (import.meta.env.DEV && id === 'dev-fights') {
       return parseReplay((await import('./siege-fights.frames.json')).default);
     }
+    // `?replay=dev-fog`: a recording with what each player saw (#598), for the fog of a side (#600).
+    if (import.meta.env.DEV && id === 'dev-fog') {
+      return parseReplay((await import('./siege-fog.frames.json')).default);
+    }
     // `?replay=dev-preparing`: the server keeps answering 202, the wait never ends (#593).
     if (import.meta.env.DEV && id === 'dev-preparing') {
       onPreparing();

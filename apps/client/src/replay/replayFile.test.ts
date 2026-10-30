@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SAMPLE, SAMPLE_RAW } from './fixture.ts';
-import { parseReplay, ReplayError } from './replayFile.ts';
+import { SAMPLE, SAMPLE_FOG, SAMPLE_RAW } from './fixture.ts';
+import { hasVision, parseReplay, ReplayError } from './replayFile.ts';
 
 describe('parseReplay', () => {
   it('reads a frames file of the current format', () => {
@@ -109,5 +109,25 @@ describe('parseReplay', () => {
         expect.objectContaining({ code: 'invalid' }),
       );
     });
+  });
+});
+
+describe('the per-player key (#598)', () => {
+  it('is kept when every frame has a sound one', () => {
+    expect(hasVision(SAMPLE_FOG)).toBe(true);
+    expect(hasVision(SAMPLE)).toBe(false);
+  });
+
+  it('is dropped from the whole file, without an error, when a frame has a damaged one', () => {
+    const raw = structuredClone(SAMPLE_FOG) as unknown as { frames: { v?: unknown }[] };
+    const second = raw.frames[1];
+    if (second === undefined) throw new Error('no frame');
+    second.v = [
+      { n: [], e: [] },
+      { n: [], e: [] },
+    ];
+    const file = parseReplay(raw);
+    expect(hasVision(file)).toBe(false);
+    expect(file.frames.every((f) => f.v === undefined)).toBe(true);
   });
 });
