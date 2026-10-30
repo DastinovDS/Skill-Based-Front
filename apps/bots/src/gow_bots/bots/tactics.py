@@ -45,7 +45,7 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from gow_bots.bots.base import Bot, node_of
-from gow_bots.bots.utility import prefer_planned, shots_to_take
+from gow_bots.bots.utility import prefer_planned, shots_to_take, takes
 from gow_sim.commands import Command, Move, Recruit, SetMode, SetStance, UpgradeRoad
 from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
@@ -245,17 +245,20 @@ class StrategyBot(Bot):
 
         A normal order when the charges of the group suffice with ``margin`` to spare; a planned
         order (DEC-08) when the shared utility says that the bonus pays and makes them suffice.
+        Either way the real charges must also pay the capture (DEC-38, ``takes``).
         """
         want = need + margin
         edges = self.path_edges(turn.view, node_of(g), dest, g.units)
         bonus = self.rules.orders.planned_bonus(edges, g.charged)
         planned = Move(g.id, dest, planned=True)
+        plain = takes(self.rules, g.charged, 0, want)
         sent = (
             need > 0
-            and g.charged < want <= g.charged + bonus
+            and not plain
+            and takes(self.rules, g.charged, bonus, want)
             and prefer_planned(self.rules, g.charged, need, edges)
             and self.spend(turn, planned, keep)
-        ) or (g.charged >= want and self.spend(turn, Move(g.id, dest), keep))
+        ) or (plain and self.spend(turn, Move(g.id, dest), keep))
         if sent:
             turn.busy.add(g.id)
             turn.taken.add(dest)
@@ -303,16 +306,25 @@ class StrategyBot(Bot):
         turn.deficits.sort(key=lambda d: (-self.value[d[0]], self.key(d[0])))
 
     def claim(self, turn: Turn, region: Container[int] | None, keep: int = 0) -> None:
-        """Capture neutral nodes: the nearest free group goes, else a unit is recruited nearby."""
+        """Capture neutral nodes: the nearest free group goes, else a unit is recruited nearby.
+
+        With a price of the capture (DEC-38) only a group whose real charges pay it goes; a free
+        group nearby that cannot pay yet waits for its charges, so no unit is recruited for it.
+        """
+        cost = self.rules.capture.charge_cost
         for target in self.targets(turn, False, region):
             if target in turn.taken:
                 continue
             comps = self._sources(turn, target)
             best: GroupView | None = None
             best_hops = 0
+            waiting = False
             for g in turn.free():
                 node = node_of(g)
                 if turn.comp[node] not in comps:
+                    continue
+                if g.charged < cost:
+                    waiting = True
                     continue
                 hops = self.hops[node][target]
                 if best is None or hops < best_hops:
@@ -321,6 +333,8 @@ class StrategyBot(Bot):
                 if self.spend(turn, Move(best.id, target), keep):
                     turn.busy.add(best.id)
                     turn.taken.add(target)
+                continue
+            if waiting:
                 continue
             for src in self.neighbors[target]:
                 if self.recruit(turn, src, keep + self.rules.orders.cost.move):

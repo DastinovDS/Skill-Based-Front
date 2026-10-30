@@ -331,3 +331,20 @@ test('shot of the split hint on a target the group is too big for', async ({ pag
   await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
   await page.screenshot({ path: join(OUT, 'split-hint-gray.png') });
 });
+
+// The price of a capture (DEC-38, #580): `?capture=2&menus` turns on `capture.charge_cost = 1` and adds a `capture_failed`
+// event at node 2 (its toast at the top right). Select the group, rest the pointer on node 2, a target the player does not
+// own: the rule tip. `capture-tip.png` is the whole screen, `capture-tip-gray.png` the same in grey scale.
+test('shot of the capture rule tip and the capture_failed toast', async ({ page }) => {
+  await page.goto('/?scene=snapshot&capture=2&menus');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '120');
+  await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+  await page.mouse.click(465, 415);
+  await page.waitForTimeout(400);
+  await page.mouse.move(640, 598);
+  await page.mouse.move(641, 599);
+  await expect(page.locator('[role="tooltip"]')).toBeVisible();
+  await page.screenshot({ path: join(OUT, 'capture-tip.png') });
+  await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+  await page.screenshot({ path: join(OUT, 'capture-tip-gray.png') });
+});

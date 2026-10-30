@@ -1,15 +1,17 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { t } from '../i18n/index.ts';
+  import { t, tf } from '../i18n/index.ts';
   import { sound } from '../audio/soundState.svelte.ts';
   import Icon from './Icon.svelte';
 
   interface Props {
     open: boolean;
     onclose: () => void;
+    /** `ruleset_public.capture.charge_cost` (DEC-38): with more than 0 the help tells the price of a capture. */
+    captureCost?: number;
   }
 
-  let { open, onclose }: Props = $props();
+  let { open, onclose, captureCost = 0 }: Props = $props();
 
   let close: HTMLButtonElement | undefined = $state();
 
@@ -142,6 +144,9 @@
             {/each}
           </dl>
           <p class="note">{t('help.camera')}</p>
+          {#if captureCost > 0}
+            <p class="note">{tf('help.capture', { n: captureCost })}</p>
+          {/if}
           <label class="volume">
             <span>{t('help.volume')}</span>
             <input

@@ -21,12 +21,17 @@ Defense bonus and the terrain modifier, both only with at least one firing charg
 node needs one shot per pooled charge (cancelling) and one per defending unit (killing). The
 Defense bonus grows with the time in the mode, at most the charged units (DEC-30); the enemy's
 number is hidden, so the caller passes an estimate (``Bot.defended``).
+
+The price of a capture (DEC-38): a capture spends ``capture.charge_cost`` real charges of the
+capturing groups in the node, and with fewer they bounce. Virtual shots fire first in a fight and
+never pay, so a group takes a node when its real charges cover the shots the bonus does not and
+the price on top (``takes``). With ``charge_cost = 0`` every answer here is the old one.
 """
 
 from gow_sim.maps import Terrain
 from gow_sim.ruleset import Ruleset
 
-__all__ = ["defender_pool", "prefer_planned", "shots_to_take"]
+__all__ = ["defender_pool", "prefer_planned", "shots_to_take", "takes"]
 
 
 def defender_pool(rules: Ruleset, terrain: Terrain, charged: int, defense: int) -> int:
@@ -51,6 +56,18 @@ def shots_to_take(
     return defender_pool(rules, terrain, charged, defense) + units
 
 
+def takes(rules: Ruleset, charged: int, bonus: int, need: int) -> bool:
+    """Whether a group with ``charged`` real charges and ``bonus`` virtual shots takes a node that
+    needs ``need`` shots (``shots_to_take``; ``0``: an empty node) and pays for the capture.
+
+    Virtual shots are spent first (DEC-07, rule 2), so ``max(0, need - bonus)`` real charges go in
+    the fight and ``capture.charge_cost`` must be left after it (DEC-38, items 2 and 3): an empty
+    node never fires the bonus, and only real charges pay.
+    """
+    cost = rules.capture.charge_cost
+    return charged >= cost and charged + bonus >= need + cost
+
+
 def prefer_planned(rules: Ruleset, own_charged: int, need: int, edges: int) -> bool:
     """Whether an attack with ``own_charged`` charges on a node ``edges`` edges away that needs
     ``need`` shots (``shots_to_take``) should be a planned order rather than a normal one.
@@ -63,6 +80,6 @@ def prefer_planned(rules: Ruleset, own_charged: int, need: int, edges: int) -> b
     cost = rules.orders.cost
     surcharge = cost.planned_move - cost.move
     saved = min(bonus, need)
-    if own_charged < need <= own_charged + bonus:
+    if not takes(rules, own_charged, 0, need) and takes(rules, own_charged, bonus, need):
         saved += own_charged  # the plan turns a bounce into a capture
     return saved * 100 > surcharge * rules.economy.charges_per_cp

@@ -27,6 +27,7 @@
   import RoadBanner from './RoadBanner.svelte';
   import TerrainBanner from './TerrainBanner.svelte';
   import SplitTip from './SplitTip.svelte';
+  import CaptureTip from './CaptureTip.svelte';
   import RoadTip from './RoadTip.svelte';
   import TopBar from './TopBar.svelte';
 
@@ -196,8 +197,10 @@
   <TerrainBanner {orders} />
   <RoadTip {orders} road={roadHover} />
   <SplitTip {orders} names={hud.nodeName} />
+  <CaptureTip {orders} names={hud.nodeName} cost={hud.context.rules.capture.charge_cost} />
   <HelpOverlay
     open={chrome.helpOpen}
+    captureCost={hud.context.rules.capture.charge_cost}
     onclose={() => {
       chrome.helpOpen = false;
     }}

@@ -37,8 +37,6 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'rear_min_set',
   // The score is in the top bar already (ui-style U2): a VP line would repeat it every few seconds.
   'vp_awarded',
-  // A capture the group could not pay for (DEC-38): hidden until its alert lands (#580).
-  'capture_failed',
 ]);
 
 /** Kinds with a line in the feed. */
@@ -60,6 +58,8 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'packet_lost',
   'transfer_started',
   'starvation',
+  // A capture the group could not pay for (DEC-38): only its player gets it.
+  'capture_failed',
 ]);
 
 /** Does the feed show this kind? An unknown kind is not shown (never a raw kind name). */
@@ -150,6 +150,14 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
         from: names(num(data.from_node)),
         to: names(num(data.to_node)),
       });
+    case 'capture_failed':
+      // DEC-38: `bounce`, the group turns back; `encircled`, a returning group could not retake its home and died.
+      return tf(
+        data.result === 'encircled'
+          ? 'event.capture_failed.encircled'
+          : 'event.capture_failed.bounce',
+        { node: names(num(data.node)) },
+      );
     default:
       return '';
   }
