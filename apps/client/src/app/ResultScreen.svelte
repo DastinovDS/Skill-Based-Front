@@ -64,8 +64,8 @@
   const enemyVp = $derived(end.vp[me === 0 ? 1 : 0]);
   const share = $derived(vpShare(mineVp, enemyVp));
 
-  // The three numbers the client has from its own screen; units lost and charges delivered need
-  // the server (follow-up of #596).
+  // Cities and VP peak come from the client's own screen; units lost and charges delivered are the
+  // server's totals in match_end (#607), absent when the server sent none.
   const stats = $derived(
     [
       summary?.cities != null ? { key: 'result.stat.cities', value: String(summary.cities) } : null,
@@ -73,6 +73,12 @@
         ? { key: 'result.stat.vpPeak', value: String(Math.max(summary.vpPeak, mineVp)) }
         : null,
       { key: 'result.stat.length', value: lengthText(end.tick) ?? '' },
+      end.stats != null
+        ? { key: 'result.stat.unitsLost', value: String(end.stats.units_lost) }
+        : null,
+      end.stats != null
+        ? { key: 'result.stat.chargesDelivered', value: String(end.stats.charges_delivered) }
+        : null,
     ].filter((stat) => stat !== null),
   );
 

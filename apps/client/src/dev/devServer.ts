@@ -289,6 +289,7 @@ export function createDevServer(
             rated: false,
             unrated_reason: 'casual',
             calibration: null,
+            stats: null,
           });
         }, 0);
         return null;

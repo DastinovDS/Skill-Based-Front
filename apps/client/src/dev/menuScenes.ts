@@ -121,6 +121,7 @@ const ended: MatchEndMsg = {
   rated: false,
   unrated_reason: null,
   calibration: null,
+  stats: { units_lost: 14, charges_delivered: 236 },
 };
 
 const unrated = (reason: UnratedReason): MatchEndMsg => ({

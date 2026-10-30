@@ -15,6 +15,7 @@ from gow_sim.analysis import (
     analyze,
     analyze_stats,
     charge_stock,
+    result_totals,
 )
 from gow_sim.commands import (
     BuildBarracks,
@@ -667,3 +668,23 @@ def test_an_idle_match_ledger_balances_and_places_add_up() -> None:
         exact = sum(sum(s) for s in log.place_samples[p][:60]) * 100 // 60
         parts = sum(v[0] or 0 for _, v in flow.stock_by_place_minute)
         assert exact - len(PLACES) < parts <= exact
+
+
+def test_result_totals_count_own_units_lost_and_charges_delivered() -> None:
+    """#607: fight kills (``losses_<p>``) and attrition are units lost; starvation and a retreat
+    are not; delivered charges are the packets and transfers that arrived."""
+    events = [
+        event(6, "fight_round", fight=1, node=1, losses_0=2, losses_1=1),
+        event(7, "fight_round", fight=1, node=1, losses_0=0, losses_1=3),
+        event(8, "attrition", node=0, player=0, group=1, charged=True, destroyed=False),
+        event(8, "attrition", node=0, player=1, group=2, charged=False, destroyed=True),
+        event(9, "starvation", player=0, node=0, warehouse=1, units=1),
+        event(10, "packet_delivered", packet=2, player=0, node=1, charges=3),
+        event(11, "packet_delivered", packet=3, player=1, node=2, charges=5),
+        event(12, "packet_delivered", packet=4, player=0, node=1, charges=2),
+        event(13, "packet_sent", packet=5, player=0, edge=0, from_node=0, to_node=1, charges=9),
+    ]
+    assert result_totals(events, 0) == (3, 5)
+    assert result_totals(events, 1) == (5, 5)
+    log = dataclasses.replace(_log(events), places_start=((0,) * 6, (0,) * 6))
+    assert [result_totals(events, p)[1] for p in (0, 1)] == [f.delivered for f in analyze(log).flow]

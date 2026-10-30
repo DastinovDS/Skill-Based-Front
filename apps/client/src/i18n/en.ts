@@ -363,6 +363,8 @@ export const en = {
   'result.stat.cities': 'Cities held',
   'result.stat.vpPeak': 'VP peak',
   'result.stat.length': 'Match length',
+  'result.stat.unitsLost': 'Units lost',
+  'result.stat.chargesDelivered': 'Charges delivered',
   'result.rating': 'Rating',
   'result.ratingFrom': 'from {before} to {after}',
   'result.notRanked': 'Not ranked',

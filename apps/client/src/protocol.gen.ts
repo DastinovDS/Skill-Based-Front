@@ -1033,6 +1033,10 @@ export interface MatchEndMsg {
    */
   unrated_reason: UnratedReason | null;
   /**
+   * Your own totals for the result screen; ``None`` when the server did not count them.
+   */
+  stats: MatchEndStats | null;
+  /**
    * Your calibration progress after this match; ``None`` for a guest, in a match that is not
    * from the queue, and once calibration was over before this match.
    */
@@ -1046,6 +1050,17 @@ export interface MatchEndMsg {
 export interface RatingChange {
   before: number;
   after: number;
+}
+/**
+ * Totals of the receiving player only (#607); the opponent's are never sent (fog).
+ *
+ * ``units_lost``: own units destroyed in fights (killed by shots) and by over-capacity attrition;
+ * ``charges_delivered``: charges that reached a city as supply packets or transfers. Both count
+ * the whole match from the event log, so a reconnect does not change them.
+ */
+export interface MatchEndStats {
+  units_lost: number;
+  charges_delivered: number;
 }
 /**
  * A protocol-level error (malformed message, rate limit, ...); game rejections are ``ack``.
@@ -1188,7 +1203,7 @@ export interface MapMirrorFile {
   };
 }
 
-export const PROTOCOL_VERSION = 31;
+export const PROTOCOL_VERSION = 32;
 export const CLOSE_PROTOCOL_VERSION = 4001;
 export const CLOSE_REPLACED = 4009;
 export const CLOSE_NO_MATCH = 4004;

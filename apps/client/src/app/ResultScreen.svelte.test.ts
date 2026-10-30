@@ -15,6 +15,7 @@ const end = (winner: 0 | 1 | null, rating: MatchEndMsg['rating'] = null): MatchE
   rated: rating !== null,
   unrated_reason: rating !== null ? null : 'casual',
   calibration: null,
+  stats: null,
 });
 
 describe('ResultScreen', () => {
@@ -90,6 +91,16 @@ describe('ResultScreen', () => {
     expect(text).toContain('VP peak');
     expect(text).toContain('Match length');
     expect(document.querySelector('.stats')?.textContent).toContain('0:10');
+  });
+
+  it('shows the server totals of units lost and charges delivered', () => {
+    const withStats: MatchEndMsg = { ...end(0), stats: { units_lost: 12, charges_delivered: 340 } };
+    render(0, withStats);
+    const row = document.querySelector('.stats')?.textContent ?? '';
+    expect(row).toContain('Units lost');
+    expect(row).toContain('12');
+    expect(row).toContain('Charges delivered');
+    expect(row).toContain('340');
   });
 
   it('shows only the match length when the client has no summary', () => {

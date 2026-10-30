@@ -248,6 +248,7 @@ describe('AppState', () => {
       rated: false,
       unrated_reason: 'casual',
       calibration: null,
+      stats: null,
     };
     app.finishMatch('7', 0, end);
     const result = app.screen;
