@@ -89,7 +89,7 @@
   .rail {
     top: 24px;
     height: 6px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--neutral);
     border-radius: 4px;
     background: var(--bg);
     box-sizing: content-box;

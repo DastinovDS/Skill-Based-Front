@@ -126,7 +126,7 @@ export const en = {
   'replay.title.unavailable': 'No replay',
   'replay.error.unavailable': 'The match was cut short or the server could not build its replay.',
   'replay.title.expired': 'Expired',
-  'replay.error.expired': 'The server deletes old replays after a while, and this one is gone.',
+  'replay.error.expired': 'This replay was deleted. The server removes old replays after a while.',
   'replay.title.timeout': 'Taking too long',
   'replay.error.timeout': 'The replay is still not ready. Try again in a minute.',
   'replay.title.network': 'No connection',

@@ -19,12 +19,17 @@ vi.stubGlobal(
 let drawn: { frame: () => unknown } | undefined;
 // The viewing player the map is drawn for (a getter: the props are reactive).
 let blue: () => number = () => -1;
-const fit = vi.fn();
+const fit = vi.fn<() => void>();
 vi.mock('../render/GameCanvas.svelte', () => ({
   default: (_anchor: unknown, props: { source: { frame: () => unknown }; player?: number }) => {
     drawn = props.source;
     blue = () => props.player ?? 0;
-    return { fitMap: () => fit(), setInsets: () => undefined };
+    return {
+      fitMap: () => {
+        fit();
+      },
+      setInsets: () => undefined,
+    };
   },
 }));
 

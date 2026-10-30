@@ -74,6 +74,9 @@
     winner === null ? t('replay.draw') : tf('replay.winner', { player: names[winner] }),
   );
 
+  /** The names of the keys are not translated. */
+  const KEY = { esc: 'Esc', space: 'Space', home: 'Home' } as const;
+
   const VIEWS: readonly ReplayView[] = [0, 1, 'both'];
   const viewName = (option: ReplayView): string =>
     option === 'both' ? t('replay.view.both') : names[option];
@@ -136,7 +139,7 @@
 
 <svelte:window {onkeydown} />
 
-<main class="viewer">
+<main class="viewer" style:--bar-h="{barHeight}px">
   <GameCanvas
     bind:this={canvas}
     map={file.map}
@@ -155,7 +158,7 @@
       <button type="button" class="back" aria-keyshortcuts="Escape" onclick={onback}>
         <Icon name="chevronLeft" size={18} />
         <span class="back-label">{t('replay.back')}</span>
-        <kbd aria-hidden="true">Esc</kbd>
+        <kbd aria-hidden="true">{KEY.esc}</kbd>
       </button>
     {:else}
       <span></span>
@@ -247,7 +250,7 @@
         <span class="play-label" aria-hidden="true">
           {playing ? t('replay.pause') : t('replay.play')}
         </span>
-        <kbd aria-hidden="true">Space</kbd>
+        <kbd aria-hidden="true">{KEY.space}</kbd>
       </button>
       <div class="seg speeds" role="group" aria-label={t('replay.speed')}>
         {#each SPEEDS as option, index (option)}
@@ -268,7 +271,7 @@
       </span>
       <ul class="hints" aria-label={t('replay.keys')}>
         <li><kbd>←</kbd><kbd>→</kbd> {t('replay.keys.skip')}</li>
-        <li><kbd>Home</kbd> {t('replay.keys.fit')}</li>
+        <li><kbd>{KEY.home}</kbd> {t('replay.keys.fit')}</li>
         <li class="legend">
           <i class="lg-dot"></i>{t('replay.legend.fight')}
           <i class="lg-diamond"></i>{t('replay.legend.capture')}
@@ -294,7 +297,7 @@
     box-sizing: border-box;
     min-height: 32px;
     padding: 0 10px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--neutral);
     border-radius: 4px;
     background: var(--surface-2);
     color: inherit;
@@ -303,7 +306,7 @@
   }
 
   button:hover {
-    border-color: var(--text-dim);
+    border-color: var(--text);
   }
 
   button:focus-visible {
@@ -363,8 +366,9 @@
     white-space: nowrap;
   }
 
+  /* 19px bold counts as large text: the red number on the bar is 4.4:1, the large-text bar is 3:1. */
   .vp {
-    font-size: 16px;
+    font-size: 19px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
@@ -440,7 +444,7 @@
 
   .result {
     position: absolute;
-    inset: 60px auto auto 50%;
+    inset: calc(var(--bar-h, 48px) + 12px) auto auto 50%;
     z-index: 2;
     display: flex;
     align-items: center;
@@ -458,7 +462,7 @@
 
   .failed {
     position: absolute;
-    inset: 60px auto auto 12px;
+    inset: calc(var(--bar-h, 48px) + 12px) auto auto 12px;
     z-index: 2;
     display: flex;
     align-items: center;
@@ -578,6 +582,14 @@
     .seg button {
       flex: 1;
       max-width: none;
+    }
+
+    button {
+      min-height: 44px;
+    }
+
+    .back {
+      min-width: 44px;
     }
 
     .back-label,

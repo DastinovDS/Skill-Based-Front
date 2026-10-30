@@ -133,6 +133,9 @@
   const request = $derived({ id: matchId, attempt });
   $effect(() => load(request.id));
 
+  /** The name of a key is not translated. */
+  const ESC = 'Esc';
+
   const problem = $derived(failure === null ? null : ERRORS[failure]);
 
   // Enter asks again where that can help, Esc goes back; a focused button keeps its own keys.
@@ -200,7 +203,7 @@
         {#if onback !== undefined}
           <button type="button" class="row" aria-keyshortcuts="Escape" onclick={onback}>
             <Icon name="chevronLeft" size={22} />{t('replay.back')}<kbd class="k" aria-hidden="true"
-              >Esc</kbd
+              >{ESC}</kbd
             >
           </button>
         {/if}
