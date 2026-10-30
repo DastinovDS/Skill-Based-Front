@@ -104,7 +104,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import ClassVar, Final, override
 
-from gow_bots.bots.assess import Assessment, Assessor, Travel, edge_ticks
+from gow_bots.bots.assess import FRESH_TICKS, Assessment, Assessor, Travel, edge_ticks
 from gow_bots.bots.base import ParamRange, node_of
 from gow_bots.bots.campaign import STALE_TICKS, CampaignBot, Ctx, Option
 from gow_bots.bots.logistics import (
@@ -115,7 +115,7 @@ from gow_bots.bots.logistics import (
     own_parts,
 )
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY, DIFFICULTIES, Bucket, Perception
-from gow_bots.bots.utility import prefer_planned, shots_to_take
+from gow_bots.bots.utility import defender_pool, prefer_planned, shots_to_take
 from gow_sim.commands import (
     CancelRecruit,
     Command,
@@ -133,6 +133,8 @@ from gow_sim.maps import MapDef, NodeKind
 from gow_sim.ruleset import RecruitLocation, Ruleset
 from gow_sim.view import (
     AtNode,
+    Detail,
+    EnemyGroupView,
     FightView,
     GroupView,
     IntentKind,
@@ -181,6 +183,12 @@ STRIKE_TICKS: Final = 400
 stays committed to it as long."""
 STRIKE_REST: Final = 300
 """Ticks after a strike before the next one is planned."""
+WITHDRAW_TICKS: Final = 150
+"""A garrison does not withdraw into a node it left this recently (no back and forth)."""
+WORRY_SEEN: Final = 3
+"""Enemy shots that must be seen near the capital before the fog adds to them (item 13)."""
+W_STAGE: Final = 400
+"""Score added to the enemy build-up next to a worried capital (item 13)."""
 STANCES: Final = (Stance.ECONOMY, Stance.BALANCE, Stance.WAR)
 """From the most charges to the most CP (``economy.stance_to_charges_pct``)."""
 
@@ -239,6 +247,19 @@ class Strike:
 
 
 @dataclass(frozen=True, slots=True)
+class Worry:
+    """An enemy build-up the own capital may not hold (item 13)."""
+
+    shots: int
+    """Visible enemy shots within two hops of the capital plus the counted hidden ones."""
+    hold: int
+    """Shots that take the capital from its garrison now (``shots_to_take``)."""
+    stage: int | None
+    """The enemy node next to the capital with the most visible shots: a target to hit first."""
+    home_units: int
+
+
+@dataclass(frozen=True, slots=True)
 class StrikePlan:
     """What a strike would bring now (``SmartBot.strike_plan``)."""
 
@@ -268,6 +289,12 @@ class SmartBot(CampaignBot):
     """Farthest group of a converging strike, in edges of its path."""
     STRIKE_MARGIN: ClassVar[int] = 1
     """Shots a strike brings above the estimate (``strike_margin`` in ``PARAMS`` overrides it)."""
+    ANSWERS: ClassVar[bool] = True
+    """The answers of items 13-17 (#624); the benchmark ``smart_hoarder`` keeps them off."""
+    ANXIETY: ClassVar[int] = 50
+    """Percent of the hidden enemy force (``hidden_shots``) a worried capital counts (item 13)."""
+    WITHDRAW_GAP: ClassVar[int] = 2
+    """A garrison this many shots below a visible adjacent enemy force leaves (item 14)."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **_COMMON,
         "radius": ParamRange(2, 3),
@@ -318,6 +345,27 @@ class SmartBot(CampaignBot):
         """The assessment of the last decision (tests and the docstring's thresholds)."""
         self.alarm = False
         """The capital is in danger in this decision (module docstring, item 2)."""
+        self.paired: dict[int, int] = {}
+        """Own node to the earliest arrival of two or more enemy strikes at it (item 17)."""
+        self.left_from: dict[int, int] = {}
+        """Own node to the tick a garrison withdrew from it: no walk back into it for
+        ``WITHDRAW_TICKS`` (item 14)."""
+        self.worry: Worry | None = None
+        """An enemy build-up near the own capital in this decision (item 13)."""
+        cap = rules.capacity.by_kind
+        far, near = self.hops[self.enemy_home], self.hops[self.home]
+        cities = [
+            n.id
+            for n in mapdef.nodes
+            if n.kind is not NodeKind.CAPITAL and n.kind is not NodeKind.PROVINCE
+        ]
+        size = max((cap.of(mapdef.nodes[n].kind) for n in cities), default=0)
+        self.centre: int = min(
+            (n for n in cities if cap.of(mapdef.nodes[n].kind) == size),
+            key=lambda n: (abs(near[n] - far[n]), near[n], self.key(n)),
+            default=self.home,
+        )
+        """The large city whose hops to the two capitals differ least (item 16)."""
         self.hot: list[bool] = [False] * len(mapdef.nodes)
         """Own nodes next to the enemy in this decision: they keep ``hold_front`` units."""
         self.hold: Hold | None = None
@@ -377,6 +425,10 @@ class SmartBot(CampaignBot):
         self.alarm = (
             threat.danger and threat.eta is not None and threat.eta - tick <= drawn["alarm"]
         )
+        self.paired = self._paired(view) if self.answering() else {}
+        if self.home in self.paired and self.paired[self.home] - tick <= drawn["alarm"]:
+            self.alarm = True  # item 17: two strikes at the capital
+        self.worry = self._worry(view, a) if self.answering() else None
         self.hot = self._hot(view)
         self.watched = self.enemy_near_home(view)
         self._read_arrivals(view)
@@ -409,6 +461,9 @@ class SmartBot(CampaignBot):
         if self.alarm:
             p["guard"] = max(p["guard"], a.threat.units)
             p["reserve"] = 0  # the reserve is for this moment: Defense and the walk home
+        if self.worry is not None:
+            p["scouts"] += 1  # item 13: one more watcher on the way in
+            p["reserve"] = 0
         return p
 
     def enemy_near_home(self, view: PlayerView) -> bool:
@@ -435,7 +490,7 @@ class SmartBot(CampaignBot):
         self.set_rear_min(ctx)
         self.feed(ctx)
         plan_cp = self.held_cp(ctx)
-        bank = self.strike_cp(ctx) if self.STRIKE else 0  # item 12: the strike's CP
+        bank = self.strike_cp(ctx) if self.striking() else 0  # item 12: the strike's CP
         ctx.held = max(plan_cp, bank)  # item 10: from here on the spending leaves the plan's CP
         if not self.alarm:
             cmd = self.development(view, ctx.budget)  # DEC-26, item 11: before the orders
@@ -444,13 +499,15 @@ class SmartBot(CampaignBot):
         self._recall(ctx)
         held, ctx.held = ctx.held, 0  # the urgent answers do not wait for the plan
         self.defend_capital(ctx, a)
+        self.answer_worry(ctx)
         self.respond(ctx)
+        self.withdraw(ctx)
         ctx.held = bank  # a banked strike waits only for the capital and the strikes
         self.garrison(ctx)
         self.scout(ctx)
         self.fortify(ctx)
         ctx.held = 0
-        if self.STRIKE:
+        if self.striking():
             self.converge(ctx)
             held = max(plan_cp if self.hold is not None else 0, self.strike_cp(ctx))
         ctx.held = held
@@ -513,6 +570,11 @@ class SmartBot(CampaignBot):
 
     # A converging strike (item 12) ----------------------------------------------------------
 
+    def striking(self) -> bool:
+        """Converging strikes instead of single attacks on the enemy capital: the personality's
+        ``STRIKE`` with ``insight`` (item 9: an ``easy`` bot does not plan ahead)."""
+        return self.STRIKE and self.tempo.insight
+
     def strike_wanted(self, ctx: Ctx) -> bool:
         """Whether a strike may be planned now (a hook of the personalities)."""
         return True
@@ -530,7 +592,7 @@ class SmartBot(CampaignBot):
         shows (an exact sighting, the top of a range, a fresh memory) give ``need`` without the
         ``margin`` of single attacks; without them (the capital is in the mountains and seen from
         the plains as presence only, DEC-21) a garrison of ``strike_guess`` units, all charged
-        (``PARAMS``; the start garrison of the map if the personality draws none)."""
+        (``PARAMS``; ``GUESS_UNITS`` if the personality draws none)."""
         view, target = ctx.view, self.enemy_home
         seen = view.nodes[target].seen
         known = self.memory.get(target)
@@ -539,7 +601,7 @@ class SmartBot(CampaignBot):
             base = self.need(view, ctx.tick, target) - self.params["margin"]
         else:
             start = self.map.nodes[target]
-            units = self.params.get("strike_guess", start.start_units)
+            units = self.params.get("strike_guess", GUESS_UNITS)
             base = shots_to_take(
                 self.rules, start.terrain, units, units, self.defended(view, target)
             )
@@ -691,7 +753,7 @@ class SmartBot(CampaignBot):
     def coming(self, view: PlayerView, fight: FightView) -> int:
         """The charges and plan bonuses of the own strike groups still walking into the node of
         ``fight`` (item 12): the first arrivals stay in the fight for the rest."""
-        if not self.STRIKE or fight.node is None:
+        if not self.striking() or fight.node is None:
             return 0
         busy = self.fighting(view)
         shots = 0
@@ -704,6 +766,236 @@ class SmartBot(CampaignBot):
         if s is not None and s.target == fight.node:
             shots += sum(p.charged + p.bonus for p in s.picks)
         return shots
+
+    # The answers to a staging strike (items 13-17, #624) ------------------------------------
+
+    def answering(self) -> bool:
+        """Items 13-17 are on: the personality's ``ANSWERS`` with ``insight`` (item 9)."""
+        return self.ANSWERS and self.tempo.insight
+
+    def _paired(self, view: PlayerView) -> dict[int, int]:
+        """Own nodes two or more enemy strikes (planned intents, DEC-08) are aimed at, with the
+        earliest arrival (item 17)."""
+        count: dict[int, int] = {}
+        first: dict[int, int] = {}
+        for i in self.strikes_at(view):
+            assert i.target is not None
+            count[i.target] = count.get(i.target, 0) + 1
+            when = self.arrival(i)
+            first[i.target] = min(first.get(i.target, when), when)
+        return {n: first[n] for n in sorted(count) if count[n] >= 2}
+
+    def strikes_at(self, view: PlayerView) -> list[IntentView]:
+        return [
+            i
+            for i in view.intents
+            if i.owner != self.player
+            and i.kind is IntentKind.PLANNED_MOVE
+            and i.target is not None
+            and view.nodes[i.target].owner == self.player
+        ]
+
+    def hidden_shots(self, view: PlayerView, a: Assessment) -> int:
+        """An upper bound of the enemy shots the fog may hide near the own capital (item 13).
+
+        CP regeneration is public, only the stance is hidden (DEC-02), so the bound of the enemy
+        CP (``EnemyCp``: the largest CP share since the start, minus every visible payment)
+        grows with every quiet period. Each two CP of it can send a scheduled strike of a
+        guessed group (``GUESS_UNITS``) with a bonus of two (DEC-29), at most two of them (the CP
+        cap pays two plans); a built enemy barracks in a city next to the capital (DEC-31) adds a
+        guessed group recruited there. Only while an enemy node stands within two hops of the
+        capital (a build-up needs one). ``ANXIETY`` percent of it counts."""
+        near = self.hops[self.home]
+        enemy = 1 - self.player
+        staging = [n for n in view.nodes if n.owner == enemy and 0 < near[n.id] <= 2]
+        if not staging:
+            return 0
+        plans = min(2, a.enemy_cp // self.rules.orders.cost.planned_move)
+        shots = plans * (GUESS_UNITS + 2)
+        if any(n.has_barracks and near[n.id] == 1 for n in staging):
+            shots += GUESS_UNITS
+        return shots * self.ANXIETY // 100
+
+    def _worry(self, view: PlayerView, a: Assessment) -> Worry | None:
+        """Item 13: the enemy shots seen within two hops of the own capital (fresh sightings in
+        nodes, figures heading into a node next to it) plus ``hidden_shots`` reach the shots that
+        take the capital now; at least ``WORRY_SEEN`` of them must be seen (the fog alone does not
+        worry)."""
+        home = self.home
+        if view.nodes[home].owner != self.player:
+            return None
+        near = self.hops[home]
+        seen_shots = 0
+        best: tuple[int, int] | None = None
+        stage: int | None = None
+        for n in view.nodes:
+            sighting = n.seen
+            if not 0 < near[n.id] <= 2 or sighting is None or not sighting.enemy_modes:
+                continue
+            if view.tick - sighting.tick > FRESH_TICKS:
+                continue
+            numbers = self.enemy_at(view, n.id)
+            shots = GUESS_UNITS if numbers is None else numbers[1]
+            seen_shots += shots
+            rank = (-shots, self.key(n.id))
+            if near[n.id] == 1 and n.owner != self.player and (best is None or rank < best):
+                best, stage = rank, n.id
+        for e in view.edges:
+            edef = self.map.edges[e.id]
+            for f in e.enemy_groups:
+                head = edef.b if f.toward_b else edef.a
+                if near[head] <= 1:
+                    seen_shots += _figure_shots(f)
+        if seen_shots < WORRY_SEEN:
+            return None
+        units = charged = defense = 0
+        for g in view.groups:
+            if g.location == AtNode(home):
+                units += g.units
+                charged += g.charged
+                defense += g.defense_bonus or 0
+        terrain = self.map.nodes[home].terrain
+        hold = shots_to_take(self.rules, terrain, units, charged, defense)
+        shots = seen_shots + self.hidden_shots(view, a)
+        if shots < hold:
+            return None
+        return Worry(shots, hold, stage, units)
+
+    def answer_worry(self, ctx: Ctx) -> None:
+        """Item 13: the free charged groups that can walk home within ``alarm`` ticks come home
+        (nearest first) until the capital holds the worry, and the capital recruits."""
+        w = self.worry
+        view, home = ctx.view, self.home
+        if w is None or self.alarm or home in self.fight_nodes(view):
+            return
+        missing = w.shots - w.hold + 1
+        to_home = [row[home] for row in self.travel.ticks]
+        far = len(self.map.nodes)
+        groups = sorted(
+            (g for g in self.free_groups(ctx) if node_of(g) != home and g.charged > 0),
+            key=lambda g: (to_home[node_of(g)], self.group_order(g)),
+        )
+        for g in groups:
+            here = node_of(g)
+            if missing <= 0 or to_home[here] < 0 or to_home[here] > self.params["alarm"]:
+                break
+            if not self.may_leave(ctx, g) or home not in self.reachable(view, here, far, g.units):
+                continue
+            if ctx.standing[home] + g.units > view.nodes[home].capacity:
+                continue
+            if self.spend(ctx, Move(g.id, home)):
+                ctx.used[g.id] = True
+                ctx.standing[here] -= g.units
+                ctx.standing[home] += g.units
+                missing -= g.charged
+        if self.can_queue(view, home, ctx.standing[home]) and self.spend(ctx, Recruit(home)):
+            self.recruited[home] = ctx.tick
+            ctx.standing[home] += 1
+
+    def enemy_shots_near(self, view: PlayerView, node: int) -> int:
+        """The most shots of one visible enemy force next to own ``node``: a fresh sighting in a
+        neighbour in the Attack mode, or a figure on an incident edge heading into ``node``
+        (item 14). Only numbers the view shows count: a force hidden by the fog is not a reason
+        to give a node up."""
+        best = 0
+        for m in self.neighbors[node]:
+            sighting = view.nodes[m].seen
+            if sighting is None or Mode.ATTACK not in sighting.enemy_modes:
+                continue
+            if view.tick - sighting.tick > FRESH_TICKS:
+                continue
+            numbers = self.enemy_at(view, m)
+            if numbers is not None:
+                best = max(best, numbers[1])
+        for e in self.incident[node]:
+            edef = self.map.edges[e]
+            for f in view.edges[e].enemy_groups:
+                shown = f.detail is not Detail.PRESENCE
+                if shown and (edef.b if f.toward_b else edef.a) == node:
+                    best = max(best, _figure_shots(f))
+        return best
+
+    def withdraw(self, ctx: Ctx) -> None:
+        """Item 14 (playtest B2): the groups of an own node (not the capital, not in a fight, not
+        pinned by DEC-37) whose pool is ``WITHDRAW_GAP`` or more below a visible enemy force next
+        to it that would take the node leave for the own neighbour farthest from the enemy (the
+        least threatened, then the most own units, then ``node_key``): a unit kept is worth more
+        than the node (1 CP an order against 1 CP and a walk a recruit)."""
+        if not self.answering():
+            return
+        view = ctx.view
+        fights = self.fight_nodes(view)
+        by_node: dict[int, list[GroupView]] = {}
+        for g in self.free_groups(ctx):
+            by_node.setdefault(node_of(g), []).append(g)
+        for node in sorted(by_node, key=self.key):
+            if node == self.home or node in fights or self.pinned[node]:
+                continue
+            if self._is_city(node):
+                continue  # a city is worth its VP and its warehouse: it is held, not given up
+            enemy = self.enemy_shots_near(view, node)
+            if enemy <= 0:
+                continue
+            groups = by_node[node]
+            units = sum(g.units for g in groups)
+            charged = sum(g.charged for g in groups)
+            terrain = self.map.nodes[node].terrain
+            pool = defender_pool(self.rules, terrain, charged, 0)
+            if enemy - pool < self.WITHDRAW_GAP or enemy < pool + units:
+                continue
+            for g in groups:
+                exits = [
+                    m
+                    for m in self.neighbors[node]
+                    if view.nodes[m].owner == self.player
+                    and m not in fights
+                    and view.nodes[m].capacity >= ctx.standing[m] + g.units
+                ]
+                if not exits:
+                    continue
+                exits = [
+                    m
+                    for m in exits
+                    if self.left_from.get(m, -WITHDRAW_TICKS) < ctx.tick - WITHDRAW_TICKS
+                ]
+                if not exits:
+                    continue
+                dest = min(
+                    exits,
+                    key=lambda m: (self.enemy_shots_near(view, m), -ctx.standing[m], self.key(m)),
+                )
+                if self.enemy_shots_near(view, dest) >= enemy:
+                    continue  # no safer place next door
+                if self.spend(ctx, Move(g.id, dest)):
+                    ctx.used[g.id] = True
+                    ctx.standing[node] -= g.units
+                    ctx.standing[dest] += g.units
+                    self.left_from[node] = ctx.tick
+
+    def _burning(self, stock: int, cap: int, waiting: int) -> bool:
+        """The warehouses are full, so new charges burn (item 15, playtest B3): without the
+        answers only a full stock with no unit waiting; with them nine tenths of the capacity,
+        units waiting or not (they wait for delivery, not for production)."""
+        if not self.answering():
+            return cap <= stock and waiting == 0
+        return 10 * stock >= 9 * cap
+
+    @override
+    def wanted_barracks(self, view: PlayerView) -> int | None:
+        """Item 16 (playtest B4): with the answers, the one forward barracks goes to the centre
+        (the large city between the capitals) once it is held and not next to the enemy; no
+        barracks in the cities a front marker would put up and lose."""
+        if not self.answering():
+            return super().wanted_barracks(view)
+        centre = self.centre
+        if centre == self.home or not self.rules.city_upgrades.enabled:
+            return None
+        n = view.nodes[centre]
+        if n.owner != self.player or n.has_barracks or n.building is not None:
+            return None
+        if self.hot[centre] or self.doomed[centre] or centre in self.fight_nodes(view):
+            return None
+        return centre
 
     # Stance ---------------------------------------------------------------------------------
 
@@ -720,8 +1012,8 @@ class SmartBot(CampaignBot):
         if own.uncharged_standing >= p["starved"] and 2 * own.warehouse < own.warehouse_cap:
             at = max(0, at - 1)
         elif (
-            0 < own.warehouse_cap <= own.warehouse
-            and own.uncharged_standing == 0
+            own.warehouse_cap > 0
+            and self._burning(own.warehouse, own.warehouse_cap, own.uncharged_standing)
             and a.cp < self.rules.cp.cap - 2 * self.rules.cp.per_period
         ):
             at = min(len(STANCES) - 1, at + 1)
@@ -796,9 +1088,12 @@ class SmartBot(CampaignBot):
         for intent in self.strikes(ctx):
             self.exposed[intent.origin] = ctx.tick
             target = intent.target
-            if target is None or intent.id in self.answered or level <= 0:
+            if target is None or intent.id in self.answered:
                 continue
-            if level == 1 and target != self.home and not self.worth_defending(target):
+            if level <= 0 and target not in self.paired:
+                continue
+            lesser = target != self.home and target not in self.paired  # item 17: pairs count
+            if lesser and level == 1 and not self.worth_defending(target):
                 continue
             done = self.defend(ctx, target, self.arrival(intent))
             done = self.reinforce(ctx, target) or done
@@ -970,7 +1265,7 @@ class SmartBot(CampaignBot):
             if self.hops[self.home][dest] > region:
                 return None
         if node.capital_of is not None:
-            return None if self.STRIKE else 10_000 - hops  # item 12: only a converging strike
+            return None if self.striking() else 10_000 - hops  # item 12: only a converging strike
         far = self.hops[self.enemy_home]
         closer = far[here] - far[dest]
         if ctx.view.nodes[dest].owner is None:
@@ -981,6 +1276,8 @@ class SmartBot(CampaignBot):
         seen = self.exposed.get(dest)
         if seen is not None and ctx.tick - seen <= EXPOSED_TICKS:
             value += p["w_exposed"]
+        if self.worry is not None and dest == self.worry.stage:
+            value += W_STAGE  # item 13: hit the build-up before it strikes
         return value + p["w_closer"] * closer - p["w_need"] * need - p["w_hops"] * hops
 
     @override
@@ -1423,6 +1720,7 @@ class SmartRusher(SmartBot):
 
     name: ClassVar[str] = "smart_rusher"
     STANCE: ClassVar[Stance] = Stance.WAR
+    STRIKE: ClassVar[bool] = True
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
         "radius": ParamRange(3, 4),
@@ -1446,6 +1744,7 @@ class SmartStrangler(SmartBot):
 
     name: ClassVar[str] = "smart_strangler"
     STANCE: ClassVar[Stance] = Stance.BALANCE
+    STRIKE: ClassVar[bool] = True
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
         "radius": ParamRange(2, 4),
@@ -1468,6 +1767,7 @@ class SmartReactive(SmartBot):
 
     name: ClassVar[str] = "smart_reactive"
     STANCE: ClassVar[Stance] = Stance.BALANCE
+    STRIKE: ClassVar[bool] = True
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
         # Tuned by ``gow-bots search`` against smart_rusher and rusher (#166, PR 3).
@@ -1491,6 +1791,7 @@ class SmartExpander(SmartBot):
     name: ClassVar[str] = "smart_expander"
     STANCE: ClassVar[Stance] = Stance.WAR
     LATE_STANCE: ClassVar[Stance | None] = Stance.BALANCE
+    STRIKE: ClassVar[bool] = True
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartBot.PARAMS,
         # Tuned by ``gow-bots search`` against smart_rusher and rusher (#166, PR 3).
@@ -1544,3 +1845,14 @@ PERSONALITIES: Final[tuple[type[SmartBot], ...]] = (
     SmartTurtle,
 )
 """The five personalities, in name order."""
+
+
+def _figure_shots(f: EnemyGroupView) -> int:
+    """The shots of an enemy figure on an edge (DEC-33): the exact charges, the top of the range
+    of units (the start of the open last one), else ``GUESS_UNITS``."""
+    if f.detail is Detail.EXACT and f.charged is not None:
+        return f.charged
+    if f.units_range is not None:
+        low, high = f.units_range
+        return low if high is None else high
+    return GUESS_UNITS

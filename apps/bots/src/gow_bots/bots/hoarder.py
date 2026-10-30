@@ -44,7 +44,7 @@ from gow_bots.bots.campaign import Ctx, Option
 from gow_bots.bots.smart import SmartBot, SmartExpander
 from gow_bots.bots.tempo import DEFAULT_DIFFICULTY
 from gow_sim.commands import BuildBarracks, Command, Merge, Move, Split
-from gow_sim.maps import MapDef, NodeKind
+from gow_sim.maps import MapDef
 from gow_sim.ruleset import Ruleset
 from gow_sim.view import GroupView, PlayerView, Stance
 
@@ -57,6 +57,8 @@ class SmartHoarder(SmartBot):
     name: ClassVar[str] = "smart_hoarder"
     STANCE: ClassVar[Stance] = Stance.WAR
     STRIKE: ClassVar[bool] = True
+    ANSWERS: ClassVar[bool] = False
+    """The yardstick stays as it was measured (#624, PR 1): none of items 13-17."""
     PARAMS: ClassVar[Mapping[str, ParamRange]] = {
         **SmartExpander.PARAMS,
         "radius": ParamRange(3, 4),
@@ -91,18 +93,6 @@ class SmartHoarder(SmartBot):
         ring = [mapdef.edges[e].other(enemy) for e in mapdef.incident[enemy]]
         self.stage = min(ring, key=lambda n: (-cap.of(mapdef.nodes[n].kind), self.key(n)))
         """The largest city next to the enemy capital (module docstring, item 3)."""
-        home, far = self.hops[self.home], self.hops[enemy]
-        cities = [
-            n.id
-            for n in mapdef.nodes
-            if n.kind is not NodeKind.CAPITAL and n.kind is not NodeKind.PROVINCE
-        ]
-        size = max(cap.of(mapdef.nodes[n].kind) for n in cities)
-        self.centre = min(
-            (n for n in cities if cap.of(mapdef.nodes[n].kind) == size),
-            key=lambda n: (abs(home[n] - far[n]), home[n], self.key(n)),
-        )
-        """The large city of the centre (module docstring, items 1 and 2)."""
         self.advance = False
         """The build-up has left the centre for the stage (item 3)."""
         self.marchers: dict[int, bool] = {}
@@ -332,6 +322,10 @@ class SmartHoarder(SmartBot):
                 if self.spend(ctx, Split(g.id, spare)):
                     ctx.used[g.id] = True
                 return
+
+    @override
+    def striking(self) -> bool:
+        return True  # at every level: the strike is the plan
 
     @override
     def plan_strike(self, g: GroupView, missing: int, edges: int) -> bool:
