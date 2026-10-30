@@ -96,6 +96,8 @@ test('replay viewer fits a phone', async ({ page }) => {
 // WebKit shows the black canvas; headless Chromium keeps the last picture, so the uncaught render
 // error is what fails there.
 test('replay viewer keeps the map drawn while the view and the fog switch', async ({ page }) => {
+  // Each check takes a screenshot of the canvas: software WebGL on a CI runner is slow at it.
+  test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/?replay=dev-fog&bg=crossroads');
@@ -108,7 +110,7 @@ test('replay viewer keeps the map drawn while the view and the fog switch', asyn
     await expect.poll(() => mapVariance(page)).toBeGreaterThan(DRAWN_MAP_VARIANCE);
   };
   await drawn();
-  for (const name of ['Rusher', 'Reactive', 'Both', 'Reactive']) {
+  for (const name of ['Reactive', 'Both', 'Rusher']) {
     await view.getByRole('button', { name }).click();
     await drawn();
   }

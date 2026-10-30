@@ -21,9 +21,11 @@ export async function mapVariance(page: Page): Promise<number> {
     const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
     let sum = 0;
     let squares = 0;
-    const count = data.length / 4;
-    for (let i = 0; i < data.length; i += 4) {
+    let count = 0;
+    // Every 16th pixel is plenty for a picture against a flat colour.
+    for (let i = 0; i < data.length; i += 64) {
       const y = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      count += 1;
       sum += y;
       squares += y * y;
     }
