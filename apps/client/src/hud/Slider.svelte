@@ -73,14 +73,14 @@
   /* The track: filled from the left up to the thumb, a lighter bed after it. */
   .slider::-webkit-slider-runnable-track {
     height: 8px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--neutral);
     border-radius: 5px;
     background: linear-gradient(90deg, var(--you) var(--pos), var(--bg) var(--pos));
   }
 
   .slider::-moz-range-track {
     height: 8px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--neutral);
     border-radius: 5px;
     background: linear-gradient(90deg, var(--you) var(--pos), var(--bg) var(--pos));
   }

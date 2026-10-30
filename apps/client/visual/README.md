@@ -100,3 +100,5 @@ that the speed buttons, the pause and the slider drive the real renderer. There 
 `/?replay=dev-fights` plays `src/replay/siege-fights.frames.json` (rusher against rusher on `siege`, recorded the same way, 464 ticks)
 with fights and their round data (#323); `mise run shots` takes `replay-fights-385.png` and `replay-fights-460.png` of it; `replay-preparing.png` and `replay-unavailable.png` show the replay screen before a file (`/?replay=dev-preparing`, `/?replay=dev-unavailable`, dev builds only), `split.png` and `split-gray.png` the split menu (`S`) on the own group of `snapshot_fog` (the arena
 with a killed unit, the "bonus attack" caption). There is no reference screenshot.
+
+The match dialogs (#597): `mise run shots` takes `help.png` (key `?`), `exit.png` (the Exit button), `transfer.png` (the Supply view, a city, "Transfer", an own destination city) and the `-gray` twin of each, and `supply-hud-gray.png` (the Supply banner in grey scale); `split.png` / `split-gray.png` show the new split menu (the two groups as unit tokens), `screen-exit-rated` the ranked forfeit dialog. There is no reference screenshot.

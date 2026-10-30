@@ -394,7 +394,7 @@ test('shot of the capture rule tip and the capture_failed toast', async ({ page 
   await page.screenshot({ path: join(OUT, 'capture-tip-gray.png') });
 });
 
-// The match dialogs (#597). `help.png` (key ?), `exit.png` (Esc twice with nothing selected) and
+// The match dialogs (#597). `help.png` (key ?), `exit.png` (the Exit button) and
 // `transfer.png` (the Supply view, a city, "Transfer", an own destination city), each with a `-gray` twin, and
 // `supply-hud-gray.png` (the Supply view banner in grey scale).
 async function openScene(page: import('@playwright/test').Page, scene: string): Promise<void> {
@@ -420,8 +420,7 @@ test('shot of the help sheet', async ({ page }) => {
 
 test('shot of the forfeit dialog in the match', async ({ page }) => {
   await openScene(page, 'snapshot_fog');
-  await page.keyboard.press('Escape');
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Exit' }).click();
   await expect(page.getByRole('alertdialog')).toBeVisible();
   await shootBoth(page, 'exit');
 });
@@ -436,7 +435,7 @@ test('shot of the transfer dialog', async ({ page }) => {
   await expect(page.locator('[role="menu"]')).toBeVisible();
   await page.keyboard.press('Digit3');
   await page.waitForTimeout(200);
-  await page.mouse.click(332, 519);
+  await page.mouse.click(533, 519);
   await expect(page.getByRole('dialog')).toBeVisible();
   await shootBoth(page, 'transfer');
 });

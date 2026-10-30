@@ -33,7 +33,7 @@
 </script>
 
 {#if ui.supplyMode}
-  <section class="banner" aria-live="polite">
+  <section class="supply" aria-live="polite">
     <p class="head">
       <strong>{t('supply.banner')}</strong><kbd class="k" aria-hidden="true">{TAB}</kbd>
     </p>
@@ -81,7 +81,7 @@
    * (#597). The road and terrain banners are bottom too, but one at the middle and this one at the
    * left, and it takes clicks only on the slider.
    */
-  .banner {
+  .supply {
     position: absolute;
     /* The HUD is a flex column: without an explicit `top` the banner would stretch from its static position. */
     top: auto;
