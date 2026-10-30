@@ -1062,6 +1062,156 @@ Alternatives (not chosen):
 - Moving the node contact one tick earlier (an attacker 1 tick from the node already engages): changes every attack
   timing, the regroup analysis of DEC-24 G5 and the arrival ticks the client shows in the `ack`.
 
+### Capture costs a charge (DEC-38, #578) **[proposed]**
+
+The owner's proposal of 2026-10-30 after BAL-01 (#39; `docs/balance/log.md`, iteration 0, hypothesis H2): "capturing a
+city needs at least one charge, to make fast claiming costlier". The mechanics are frozen for the first release (the
+note at the top), so the rule goes behind a ruleset number that is `0` (today's rule) in `mvp-0`, `mvp-1` and
+`test-short`; BAL-02 (#40) tests it in `rulesets/mvp-2.toml`. The variants and the open questions: #578; the status
+stays **[proposed]** until the owner chooses. The recommended variant (C below, with `charge_cost = 1`) is written out
+in full here.
+
+**Why.** Today any group that finishes its movement in an empty neutral node (`movement.settle_arrivals`) or in an
+empty enemy node (DEC-07, row 5; DEC-24, item C1) takes it at once, even a fully discharged one, and the winner of a
+fight takes the node with whatever it has left. A capture costs only the CP of the order. In BAL-01 6716 of 7500
+matches ended on the timer and rusher held 25-31 nodes against 2-7: VP were decided by the speed of claiming, and
+supply did not limit expansion at all.
+
+**Variants.**
+
+- **A. A charge is needed, not spent.** A capture needs at least one charged unit among the capturing player's groups
+  in the node. A weak brake: one charged unit per claiming group keeps its charge and chains captures; only the
+  "discharged claimer" and "the 0-charge winner takes the node" cases go away.
+- **B. A charge is spent.** A capture spends one real charge of the capturing player's groups in the node; without one
+  there is no capture. Expansion is tied to supply: every claim takes a charge from the front, and a newly captured
+  city has an empty warehouse (SIM-07), so the charge comes back only with supply.
+- **C. B as a number** (recommended): `capture.charge_cost`, a non-negative integer. `0`: today's rule; `1`: variant B;
+  `N`: a capture spends `N` charges and needs at least `N`. A is not a special case of C (it would need a second flag
+  "needed but not spent"); given its weakness it is not worth one.
+
+**The rule (variant C).** `k = capture.charge_cost`; with `k = 0` nothing below applies and every table of DEC-07,
+DEC-24 and DEC-37 stays as it is.
+
+1. **What is a capture.** Every change of the owner of a node to a player whose groups are in it: an empty neutral
+   node (`settle_arrivals`), an empty enemy node without caught groups (DEC-07, row 5; DEC-37, item 2), the end of a
+   fight in a node that the side takes (DEC-24, items G1 and G2, including item E5: all defenders left). The same for a
+   city of any kind, a province (DEC-23) and a capital; an enemy node that was the player's own before gets no
+   discount. Arriving in an own node is not a capture (auto-merge, DEC-20). Edges are not captured; meetings on edges
+   (DEC-07, rule 6) do not change.
+2. **Who pays.** The capturing player's groups in the node at the moment of the capture: the groups that arrived in
+   this tick (an empty node), or the side's live groups in the fight that stand in the node (the end of a fight). Their
+   real charges are pooled: one payment per node, not per group. If the pool has at least `k` charges, `k` charges are
+   spent one at a time, each from the group with the largest `charged`, ties by the smaller id (DEC-07, rule 7); the
+   units stay, discharged. Only then `change_owner` runs as today (the warehouse is zeroed, grace, the recruit queue is
+   lost). The spent charge goes nowhere (not into the warehouse: a unit would recharge from it at once, and the
+   capture would be free again).
+3. **Virtual charges do not pay.** The plan bonus (DEC-29), "Defense" (DEC-30) and mountains are virtual shots of a
+   fight and burn with it (DEC-24, item F1); a plan bonus that was not used in a fight burns with the order, as today.
+4. **Not enough charges: a bounce.** If the pool has fewer than `k` charges, the node does not change its owner and
+   every group of the player that was to take it bounces (DEC-07, rule 4): it goes back along the edge by which it
+   came, by its own track, the order and the bonus burn. An empty node: the group is put back on its edge at
+   `progress = 1000` going home in the arrival tick, the first step in the next tick, home after the edge time `T`. A
+   fight: the bounce of DEC-24, item G1, at the end of the fight. A returning group (a bounce, a cancel, a retreat,
+   DEC-24, item A2) that cannot pay for its own former node dies there (DEC-24, item G3: no chain of bounces).
+   The groups do not stay in the node: a foreign group standing in a neutral or enemy node without a fight is a state
+   that movement, combat, supply and vision do not have.
+5. **A fight.** The fight itself is unchanged; only its end. In a node with a defender (G1): no standing defender left
+   and the attacker pays: the node is taken; it cannot pay: the attacker bounces, the node stays the defender's (empty;
+   the next wave with a charge takes it at once). In a neutral node (G2, DEC-07, rule 5): the sole survivor pays or
+   bounces, the node stays neutral; two survivors bounce as today. `fight_ended.winner` stays the side that won the
+   fight, `captured` is `false` when it could not pay.
+6. **Several groups, auto-merge.** Arrivals of one player into one node in one tick pool their charges (item 2). The
+   capture is decided in `movement` and `combat`; auto-merge (DEC-20, item A3) runs later, in `orders`, so it does not
+   affect the payment. Groups that already stood in the node do not exist for an empty neutral node (it would be the
+   player's own); in a fight only the live groups of the side in the node pay (a caught group of DEC-37 belongs to the
+   defender and is never a payer).
+7. **DEC-37.** The engagement zone is unchanged: an empty enemy node with a caught group starts a fight; if nobody can
+   shoot at contact (DEC-37, item 4), the fight ends at once, the caught groups are released and the attacker takes the
+   node only if it pays (otherwise it bounces).
+8. **The capital.** Taking an enemy capital needs the payment too; no capture, no victory (section 11).
+9. **Orders.** `validate()` does not reject a `Move` to a node the group cannot pay for, and `reach` and the `ack` do
+   not change: at order time the outcome is not known. Charges change on the way (a fight on an edge spends them; a
+   group waiting to set out on a scheduled order recharges from the warehouse), the target can change its owner (and
+   become the player's own, then no payment is needed), and another group arriving in the same tick can pay (item 2).
+   The client does not compute the outcome (AGENTS.md, 7.1): it shows the bounce and the event of item 10.
+10. **Events and fog.** The spent charge is visible to the owner through its group's `charged`; `node_captured` keeps
+    its fields (`node`, `player`; public, ownership is public). A new event `capture_failed` (`node`, `player`,
+    `group`, `result`: `bounce` or `encircled`), one per group, **only to the capturing player** (the node's owner does
+    not see it: vision comes from units, DEC-35; what its groups see of the bounce is shown by the ordinary rules). A
+    new event kind: an entry in `EVENT_FIELDS` (`group` in `EVENT_ID_FIELDS`), a fog test, `PROTOCOL_VERSION`++.
+    `capture.charge_cost` goes into `RulesetPublic` (the rule is public: the order tooltip and the help show it).
+11. **Symmetry and determinism.** The payment depends only on the counters of one player's groups, ties by id inside
+    the player; integers only; the order of systems is unchanged.
+
+**The number** (a new section `[capture]` of the ruleset): `charge_cost = 0` in `mvp-0`, `mvp-1`, `test-short` and the
+test rulesets (the rule is off, current play does not change); BAL-02 sets `1` in `rulesets/mvp-2.toml`.
+
+**Worked examples** (`charge_cost = 1` unless said otherwise). Forest, `travel_ticks = 30` (`T = 30`),
+`round_ticks = 20` (DEC-32), `engage_ticks = 3`; the groups are of player 0 and arrive in tick `t`; "a/b": units /
+charged; "plan (+2)": a scheduled order with a bonus of 2. These rows become the implementation tests.
+
+| # | Situation | Result with `charge_cost = 1` | Today (`charge_cost = 0`) |
+|---|---|---|---|
+| 1 | 2/2 into an empty neutral city | taken in `t`, the group 2/1 | taken, 2/2 |
+| 2 | 2/0 into an empty neutral city | not taken; the group bounces: on the edge at 1000 going home in `t`, home in `t+30`, 2/0; `capture_failed` (`bounce`) | taken, 2/0 |
+| 3 | 1/1 into an empty neutral province | taken, 1/0 | taken, 1/1 |
+| 4 | 1/0 into an empty neutral province | as row 2 | taken |
+| 5 | 2/2 into an empty enemy city, nobody in the engagement zone | taken in `t`, 2/1; `warehouse_lost` as today | taken, 2/2 (DEC-07, row 5) |
+| 6 | 3/0 into an empty enemy city | not taken, bounce; the city stays the enemy's | taken |
+| 7 | two groups 1/0 and 2/1 into one empty neutral in one tick | taken; the charge from 2/1; auto-merge at the end of the tick: 3/0 | taken, merged 3/1 |
+| 8 | two groups 1/0 and 2/0 into one empty neutral in one tick | not taken, both bounce | taken |
+| 9 | `charge_cost = 2`: groups 2/1 (smaller id) and 1/1 into an empty neutral | taken; one charge from each (equal `charged`: the smaller id first); merged 3/0 | taken, 3/2 |
+| 10 | `charge_cost = 2`: one group 3/1 into an empty neutral | not taken, bounce | taken |
+| 11 | neutral, simultaneous: player 0 4/4, player 1 2/2 (DEC-07 row 14) | r1, r2 canc.; r3, r4 kill: player 1 destroyed; player 0 4/0 cannot pay, bounces; the node stays neutral; `t+80`, `captured = false` | taken by 4/0 |
+| 12 | neutral, simultaneous: player 0 5/5, player 1 2/2 | as 11, player 0 5/1 pays: taken in `t+80`, 5/0 | taken, 5/1 |
+| 13 | 4/4 against 2/2 in an enemy city (DEC-07 row 3) | the defense destroyed in `t+80`; the attack 4/0 cannot pay, bounces; the city stays the enemy's, empty | taken by 4/0 |
+| 14 | 5/5 against 2/2 in an enemy city | r1 (4/1), r2 (3/0) canc.; r3, r4 kill; 5/1 pays: taken in `t+80`, 5/0 | taken, 5/1 |
+| 15 | 2/2 + plan (+2) against 2/2 (DEC-07 row 9) | the attack 2/0 at `t+80`; virtual charges do not pay: bounce, the city stays the enemy's, empty | taken by 2/0 |
+| 16 | 3/3 + plan (+2) against 1/0 (DEC-07 row 15) | r1: 1 killed by a virtual shot; taken in `t+20`, 3/2; the unused bonus burns | taken, 3/3 |
+| 17 | 3/3 against 2/0 + "Defense" (+2) (DEC-07 row 16) | taken in `t+40`, 3/0 | taken, 3/1 |
+| 18 | a scheduled order 2/0 + plan (+2) into an empty neutral | not taken (virtual charges do not pay), bounce, the bonus burns | taken |
+| 19 | DEC-37 row 1: A 3/3; D 2/2 caught | r1 canc. (A 3/2, D 2/1), D leaves; taken in `t+20`, A 3/1 | taken, A 3/2 |
+| 20 | DEC-37 row 6: A 2/0; D 1/0 caught | the fight ends in `t` without rounds, D is released; A cannot pay: bounces (the first step in `t+1`), the node stays player 1's | taken in `t` |
+| 21 | DEC-37 row 7: A 4/4; D 2/2 caught; G 1/1 stays | as DEC-37; at `t+60` A 4/1 pays: taken, 4/0 | taken, 4/1 |
+| 22 | an empty enemy capital, A 1/1 | taken, A 1/0; victory by the capital as today | taken, victory |
+| 23 | an empty enemy capital, A 3/0 | not taken, bounce, no victory | taken, victory |
+| 24 | node X was the player's own, the enemy took it and left; 2/0 of the player arrives | not taken, bounce (no discount for a former own node) | taken |
+| 25 | a group 2/0 bounces home to Y; the enemy took Y and left it empty | Y is not taken; the group dies in Y (DEC-24, G3), `capture_failed` (`encircled`) | Y retaken by 2/0 |
+| 26 | as 25, the group 2/1 | Y retaken, 2/0 | Y retaken, 2/1 |
+| 27 | a fight in an enemy city: the last defender leaves by a `Move` (DEC-24, E5); the attacker 2/1 / 2/0 | 2/1: taken, 2/0; 2/0: bounces, the city stays the enemy's | taken in both |
+| 28 | `Move` of a 2/0 group to a neutral node | accepted, the `ack` as today; the outcome at arrival (row 2) | accepted |
+| 29 | `charge_cost = 0`, any row above | the "Today" column; the DEC-07, DEC-24, DEC-32, DEC-37 tables unchanged | |
+
+Variant A differs only in item 2: the pool must have at least one charge, nothing is spent (rows 1, 3, 5, 7, 12, 14,
+16, 17, 19, 21, 22, 26, 27 keep the charges of the "Today" column; the rows without a charge are as in B).
+
+**Expected effect** (qualitative; BAL-02 measures it): rusher (War, 25% of regeneration into charges) is hit hardest,
+every claim takes a charge from its front; expander is hit while it claims in War, less after it switches to Balance;
+turtle (Economy, full warehouses) gains relatively. Discharged raiders can no longer flip empty rear cities and
+provinces to cut supply for free. Attacks need one more charge than the defense (rows 13 and 15), which also favors
+the defender in sieges (section 4, "Siege of attrition": the last wave must keep a charge). With variant A rusher keeps
+one charge per claiming group, and the claiming speed barely changes.
+
+What the implementation changes (a separate issue after the choice): the ruleset field `capture.charge_cost` and its
+public copy; `gow_sim.systems.movement` (`settle_arrivals`: payment or bounce) and `gow_sim.systems.combat` (the
+empty enemy node and the end of a fight: one payment function before `change_owner`); the event `capture_failed`
+(`EVENT_FIELDS`, fog test, `PROTOCOL_VERSION`); `SIM_VERSION` and golden replays (expected: the ruleset hash changes
+with the new field even at `0`; `golden:check` confirms); bots: a capture target needs `charge_cost` more charges
+(`need + charge_cost`), claiming groups are sent charged, `capture_failed` is handled; the client (after the merge of
+the server part): a toast for `capture_failed`, the rule in the order tooltip.
+
+Alternatives (not chosen):
+- Garrisons of neutral cities (the BAL-01 option for H2): a change of every map and of the start, and a neutral
+  garrison is a fight with nobody's units (DEC-07, rule 5 says there are none).
+- A higher CP price for capturing orders: CP are already the narrow resource (H1); it would not tie expansion to supply.
+- The spent charge goes into the warehouse of the captured city: a unit recharges from it in the same tick, so the
+  capture is free in charges again.
+- A capture over time (hold the node `N` ticks): a new state "being captured", a new HUD element and a new fog
+  question, for the same brake.
+- Neutral nodes only (enemy empty nodes free): a discharged raider would still cut supply by flipping empty rear
+  cities, and the rule would differ by owner.
+- Groups that cannot pay stay in the node (a vision post): see item 4.
+
 ---
 
 ## 5. Orders: ordinary and scheduled
@@ -3507,6 +3657,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-35 | #477 | vision comes only from units: own nodes are no longer vision sources; a group on an edge is a source in the node of its half; an enemy in an own node without a group is `PRESENCE` | section 10 | [accepted] (2026-10-28, a rule change after the freeze); details [accepted] (2026-10-29, all items as written: the readings that reveal less); implemented #477 (`SIM_VERSION` 22, `PROTOCOL_VERSION` 28: the wire allows own data on an own node at any level) |
 | DEC-36 | #537 | map geography: water cells (sea, lakes), rivers as area borders, areas of nodes touch only where a road links them; visual only, the rules do not read it | section 9 | [accepted] 2026-10-29 (W4 Painted, no dark line along water, the defaults of the open questions); supersedes DEC-27, item 3; step 1 (baker, vector file, validator `geography`) #537, step 2 (client territory) #544, step 3 (pool maps and the menu map with water, no node moved) #545 |
 | DEC-37 | #549 | an engagement zone around a node: a defender that left the node within the last `combat.engage_ticks` ticks (3) is caught into the fight as a leaving defender | section 4 | [accepted] (2026-10-29, the owner's direction, a rule change after the freeze); the number `engage_ticks = 3` [default, chosen by the orchestrator; the owner may tune it]; implemented #549 |
+| DEC-38 | #578 | capture costs a charge: a capture spends `capture.charge_cost` real charges of the capturing groups in the node, otherwise they bounce | section 4 | [proposed] (2026-10-30, the owner's proposal after BAL-01, H2); awaiting the owner's decision on the variants and the open questions of #578; `charge_cost = 0` (off) in `mvp-0`, `mvp-1`, `test-short`, BAL-02 tests `1` in `mvp-2` |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in
