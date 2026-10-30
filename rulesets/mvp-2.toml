@@ -57,14 +57,14 @@ war = 40 # "War" (BAL-02 iteration 3, H1: mvp-1 25)
 # the group stands; a move order removes it with no extra charge.
 # How bonuses enter the fight pool: DEC-07, rule 1 (mechanics.md, section 4).
 planned_delay_ticks = 30 # 3 s
-planned_bonus_per_edge = 1 # virtual charges per edge of the path (DEC-29)
+planned_bonus_per_edge = 2 # virtual charges per edge of the path (DEC-29) (BAL-02 iteration 4, H3: mvp-1 1)
 defense_ticks_per_bonus = 60 # +1 to the "Defense" bonus per 60 ticks (6 s) in the mode (DEC-30)
 stance_cooldown_ticks = 100 # the stance changes at most once per 100 ticks (DEC-02, #8)
 
 [orders.cost]
 # Cost of commands in hundredths of CP (100 = 1 CP). The full table: SIM-01 (#17), DEC-08 (#12).
 move = 100 # an ordinary move order
-planned_move = 200 # a scheduled order: 2 CP instead of 1 (DEC-08)
+planned_move = 150 # a scheduled order: 1.5 CP instead of 1 (DEC-08) (BAL-02 iteration 4, H3: mvp-1 200)
 cancel = 0 # CancelOrder: cancelling any order is free, on an edge it is a turn-around (DEC-20)
 split = 0 # splitting a group is free (DEC-20)
 merge = 0 # merging groups is free, groups also merge on their own (DEC-20)

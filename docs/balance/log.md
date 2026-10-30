@@ -223,3 +223,46 @@ move orders that bounce, sieges drop from about 40 to 4-12 a match, the late cap
 the War bots still lead: they make the most orders, so they still claim the most. The charges keep burning
 (48-92%): they wait in the warehouses while the bots march uncharged groups. Not kept (`charge_cost` back to 0);
 retest with #580.
+
+### Iteration 3: stance shares `economy` 75 -> 60, `war` 25 -> 40 (H1)
+
+**Hypothesis (H1).** Charges have almost no value (iterations 0 to 2), so the stance with the most CP wins: War has
+3 times the CP of Economy and 1.5 times that of Balance. Narrowing the shares (CP: Economy 40%, Balance 50%,
+War 60%) should lower the War bots and give the Economy bots CP to act.
+
+**Change.** `economy.stance_to_charges_pct.economy = 60` (75), `war = 40` (25); `capture.charge_cost` back to 0.
+
+| bot | win rate [95%] | iteration 0 | move orders (it. 0) |
+|---|---|---|---|
+| smart_expander | 0.78 [0.74; 0.81] | 0.69 | 68 (68) |
+| strangler | 0.71 [0.67; 0.74] | 0.66 | 75 (76) |
+| smart_rusher | 0.70 [0.66; 0.73] | 0.80 | 80 (96) |
+| smart_strangler | 0.66 [0.62; 0.70] | 0.65 | 73 (73) |
+| rusher | 0.65 [0.61; 0.69] | 0.76 | 82 (102) |
+| reactive | 0.58 [0.54; 0.62] | 0.54 | 76 (74) |
+| smart_reactive | 0.56 [0.52; 0.60] | 0.51 | 67 (67) |
+| expander | 0.24 [0.20; 0.28] | 0.27 | 20 (21) |
+| turtle | 0.06 [0.04; 0.08] | 0.05 | 14 (12) |
+| smart_turtle | 0.04 [0.02; 0.06] | 0.05 | 42 (33) |
+
+Sides (mirror): crossroads 0.46 [0.35; 0.57], highway 0.54 [0.43; 0.65], ridge 0.51 [0.41; 0.61] (the ridge skew
+of iterations 0 and 1 is gone, so it was noise of 100 mirror matches). Planned share 0.012. Late capture 0.57.
+Turtle vs Expander 0.00 (both).
+
+**Result: H1 confirmed for the rushers, kept.** The pure War bots lose 10 points each (0.80 -> 0.70,
+0.76 -> 0.65) with 20% fewer orders; the lead moves to smart_expander (War early, Balance late, a guarded capital),
+which now has the War CP early and the Balance charges late. The turtles still lose on VP (9-15 nodes at the end
+against 25-33): the bunker holds its region but the region is worth fewer VP, which is the intent of
+mechanics.md, section 11. **The arithmetic of the field:** the 10 win rates sum to about 4.9 (draws 2%), the two
+turtles and expander give 0.34, so the other 7 average 0.65: criterion 1 can only pass with the 7 exactly level
+or with the bunkers winning some matches.
+
+### Iteration 4: planned order `planned_move` 200 -> 150, `planned_bonus_per_edge` 1 -> 2 (H3)
+
+**Hypothesis (H3).** The shared `prefer_planned` plans when the saved shots exceed
+`(planned_move - move) * charges_per_cp / 100`: 2 shots in `mvp-1`, while the bonus is 1 per edge, so a plan pays
+only on a long strike that turns a bounce into a capture (planned share 0.012). With a surcharge of 0.5 CP
+(1 shot) and 2 per edge, a strike on a defended neighbor with 2 charged units pays. This measures how far the
+share can go while most attacks go into empty nodes (H4, `need = 0`, never planned).
+
+**Change.** On top of iteration 3: `orders.cost.planned_move = 150` (200), `orders.planned_bonus_per_edge = 2` (1).
