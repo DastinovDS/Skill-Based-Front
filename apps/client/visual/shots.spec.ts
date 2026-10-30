@@ -96,18 +96,20 @@ test('shot of the replay viewer with the fog of a side', async ({ page }) => {
   await page.goto('/?replay=dev-fog');
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '0');
   const view = page.getByRole('group', { name: 'View as' });
-  const shoot = async (name: string, tick: string, gray: boolean): Promise<void> => {
+  const shoot = async (name: string, tick: string, withGray: boolean): Promise<void> => {
     await page.getByLabel('Position in the match').fill(tick);
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', tick);
     await page.mouse.move(5, 5);
     await page.waitForTimeout(800);
     await page.screenshot({ path: join(OUT, `${name}.png`) });
-    if (!gray) return;
-    const style = await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    if (!withGray) return;
+    // A string: the spec has no DOM types (as replay.spec.ts does it).
+    const gray = async (on: boolean): Promise<void> => {
+      await page.evaluate(`document.documentElement.style.filter = '${on ? 'grayscale(1)' : ''}'`);
+    };
+    await gray(true);
     await page.screenshot({ path: join(OUT, `${name}-gray.png`) });
-    await style.evaluate((node) => {
-      node.remove();
-    });
+    await gray(false);
   };
   await view.getByRole('button', { name: 'Rusher' }).click();
   await shoot('replay-fog-p1', '460', true);
