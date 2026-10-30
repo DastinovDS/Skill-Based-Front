@@ -358,3 +358,61 @@ match); the claim of empty nodes decides, and a faster supply does not touch it.
 The only change that moved the gate the right way is H1 (iteration 3). The final `mvp-2` = `mvp-1` with
 `economy.stance_to_charges_pct.economy = 60` and `war = 40`, `capture.charge_cost = 0`. Its confirming run
 (100 seeds on GitHub runners, the gate share of #590) follows.
+
+### The confirming run: `mvp-2` (iteration 3), 100 seeds
+
+Ruleset `mvp-2`, hash `9d8cc4dd4b48572ad2be415c2fcc4d4c` (archived as `rulesets/archive/9d8cc4dd4b48572ad2be415c2fcc4d4c.toml`),
+`SIM_VERSION` 25, the 10 strategic bots, the 3 pool maps, seeds 0..99: 30000 matches on GitHub runners
+(`mise run tournament:gh --ruleset rulesets/mvp-2.toml --seeds 100 --shards 20`). The report: [latest.md](latest.md)
+(built from the full file). `latest.jsonl` holds seeds 0..9 of this run (3000 rows): the full file is 76 MB, too big
+for git; it is reproducible byte for byte with the command above (the run artifact `tournament-final-100-*`). The gate
+share is the #590 definition (`planned_siege_share`) from this run on; iterations 0 to 6 measured the BAL-01 share only.
+
+| bot | win rate [95%] | iteration 0 (`mvp-1`, 10 seeds) | planned siege share (#590) | planned share of all attacks |
+|---|---|---|---|---|
+| smart_expander | 0.74 [0.73; 0.76] | 0.69 | 0.09 | 0.01 |
+| rusher | 0.70 [0.69; 0.72] | 0.76 | 0.08 | 0.01 |
+| smart_rusher | 0.70 [0.69; 0.71] | 0.80 | 0.09 | 0.02 |
+| strangler | 0.68 [0.67; 0.69] | 0.66 | 0.06 | 0.01 |
+| smart_strangler | 0.67 [0.65; 0.68] | 0.65 | 0.07 | 0.01 |
+| reactive | 0.60 [0.59; 0.61] | 0.54 | 0.05 | 0.01 |
+| smart_reactive | 0.55 [0.54; 0.57] | 0.51 | 0.06 | 0.00 |
+| expander | 0.24 [0.23; 0.25] | 0.27 | 0.16 | 0.01 |
+| turtle | 0.07 [0.06; 0.08] | 0.05 | 0.05 | 0.00 |
+| smart_turtle | 0.03 [0.03; 0.04] | 0.05 | 0.69 | 0.05 |
+
+| Criterion (#40) | Value | Outcome |
+|---|---|---|
+| 1. No strategic bot > 65% | smart_expander 0.74, rusher 0.70, smart_rusher 0.70, strangler 0.68, smart_strangler 0.67 | **failed** (top: 0.80 -> 0.74) |
+| 2. Side 0 < 55%, CI includes 50% (mirror) | crossroads 0.50 [0.47; 0.54], highway 0.50 [0.46; 0.53], ridge 0.49 [0.46; 0.53] | passed |
+| 3. Planned attack share 20-70% (#590: sieges of defended nodes) | 0.084 overall (34047 of 405615 siege orders); per bot 0.05-0.16, smart_turtle 0.69 | **failed** |
+| 4. Turtle vs Expander < 40% | turtle 0.00 [0.00; 0.01], smart_turtle vs smart_expander 0.00 [0.00; 0.01] | passed (degenerately) |
+| 5. Late capture >= 30% | 0.58 | passed |
+| 6. Final ruleset `rulesets/mvp.toml`, archived | `mvp-2` archived by hash; no `mvp.toml`, defaults unchanged | awaiting the owner's decision |
+
+End reasons: `vp` 26569, `capital` 2810, `cities` 103, draws 488, double defeats 30.
+
+### Verdict and the gaps
+
+The gate is **not passed** after 6 iterations (the timebox). `mvp-2` is better than `mvp-1` on every measured
+criterion that moved: the leaders fall from 0.80 to 0.74, no bot dominates beyond 0.75, the sides hold on 300
+mirror matches per map. Recommendation to the owner: play `mvp-2` (the stance shares 60/50/40) instead of `mvp-1`
+if a switch is wanted now; it changes two numbers and no rule.
+
+What the numbers could not do, and why (design hypotheses for the next step):
+
+1. **Criterion 1 is blocked by the bunkers.** The 10 win rates sum to about 4.9; the two turtles and expander give
+   0.34 (they lose on VP by design: mechanics.md, section 11, "VP is the remedy against the bunker"; criterion 4 wants
+   them to lose to the expansion), so the other 7 must average 0.65, which leaves no room for any skill difference
+   among them. Either the bunkers must win some matches (a VP rule that rewards a held region, e.g. a VP threshold or a
+   final-hold bonus, section 11 [open]) or the criterion should be read over the non-bunker bots. Both are owner
+   decisions; the orchestrator's brief says criterion 1 is not reworded.
+2. **The claim of empty nodes decides the match.** 46-60 captures a match against 2-44 sieges, 96-98% of sieges
+   succeed. Every lever that only prices charges (iterations 1, 6) does nothing, because a free claim needs no
+   charge; DEC-38 (a capture costs a charge, iterations 2 and 5) makes the claim cost a body and a charge, and the bots
+   with the most recruits win the claim harder (smart_expander 0.92). A rule that slows the claim itself (neutral
+   garrisons, a claim delay, diminishing VP of far nodes) is a DEC question.
+3. **The planned share stays low** because few attacks meet a garrison and a plan pays only against a garrison:
+   even with the #590 definition 0.084. The bots defend few nodes (0.8-1.1 charged defenders at a siege,
+   `charge-flow.md`), so there is little to plan against. The share grows with defended fronts, which point 2 would
+   bring.
