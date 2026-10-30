@@ -518,3 +518,30 @@ does not fix criterion 1; a decisive strike (H-strike) does not pay under `mvp-2
 neutral garrisons or a claim delay) is the lever both results support; option **A** (a cheaper plan) does not help the
 strikes measured here, whose bonus is 1-2 shots. If the pool changes as well, the property to decide is the share of
 provinces (capacity 3), then the node count (30-35 instead of about 50); the distance between capitals showed no effect.
+
+## Server bot levels (#574)
+
+`POST /api/bot-matches` plays the smart bots at a tempo level (`gow_server.botmatch.LEVEL_BOTS`). The table was
+chosen from a tournament on `mvp-2` (hash `9d8cc4dd4b48572ad2be415c2fcc4d4c`, `SIM_VERSION` 25): the 15 smart bots
+(5 personalities x `easy`/`normal`/`hard`), 3 pool maps, 20 seeds, both sides, 13500 matches on GitHub runners.
+Criterion: the levels in order of strength (every higher level beats every lower one head to head, and the win rates
+against the whole field rise), preferring four different personalities.
+
+| Level | Bot | Style (client) | Win rate against the 14 others [95%] | Beats the level below |
+|---|---|---|---|---|
+| `easy` | `smart_turtle@easy` | Bunker | 0.06 [0.05; 0.07] | - |
+| `normal` | `smart_reactive@easy` | Counter | 0.46 [0.44; 0.48] | 0.98 against easy |
+| `hard` | `smart_strangler@hard` | Strangler | 0.65 [0.63; 0.67] | 0.70 [0.61; 0.78] against normal |
+| `expert` | `smart_expander@hard` | Expander | 0.72 [0.70; 0.74] | 0.67 [0.58; 0.74] against hard |
+
+Head to head, both sides (120 matches per pair): expert beats normal 0.88 and easy 1.00; hard beats easy 1.00. Notes:
+
+- The tempo levels alone separate the bots little: `hard` and `normal` of the same personality are within the interval
+  of each other (expander 0.72 and 0.75, strangler 0.65 and 0.65, rusher 0.63 and 0.61); only `easy` is clearly weaker
+  for expander, strangler and rusher. So the ladder mixes personalities.
+- `smart_turtle` loses to every other bot (0.06 to 0.08 at any level): a passive opponent for a first match; the step
+  from `easy` to `normal` is large (0.98), a gap of the field, not of the tempo.
+- The rusher personality is left out: `smart_rusher@hard` (0.63) is within the interval of `smart_strangler@hard`
+  and loses to `smart_expander@hard` by 0.59 only (a narrower margin than the strangler's 0.67).
+- Matches already stored with the old bot names (`turtle`, `reactive`, `expander`, `rusher`) keep their level in the
+  replay nick (`gow_server.replays`).

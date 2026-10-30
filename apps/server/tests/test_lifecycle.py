@@ -241,7 +241,7 @@ def test_match_record_passes_every_state(live_settings: Settings) -> None:
             ).status_code == 403
             assert (await live.http.get(url)).status_code == 401
             row, sides = live.row(match_id)
-            assert [s.bot for s in sides].count("turtle") == 1
+            assert [s.bot for s in sides].count("smart_turtle@easy") == 1
             assert sorted(s.result or "" for s in sides) == ["loss", "win"]
             assert row.status == "saved"
 

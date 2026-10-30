@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from gow_bots.bots import BOTS
 from gow_protocol import commands as wire
 from gow_server.app import create_app
+from gow_server.botmatch import LEVEL_BOTS
 from gow_server.clock import ManualClock
 from gow_server.db import create_db_engine, upgrade_to_head
 from gow_server.frames import FORMAT, FramesError, build_frames, frame_of
@@ -530,6 +531,8 @@ def test_bot_nick_names_the_level() -> None:
         "Bot (hard)",
         "Bot (expert)",
     ]
+    # #574: the levels are smart bots with a tempo level now; older rows keep the old names.
+    assert [bot_nick(b) for b in LEVEL_BOTS.values()] == [f"Bot ({level})" for level in LEVEL_BOTS]
     assert bot_nick("idle") == bot_nick(None) == "Bot"  # not a level: a test or an older bot
 
 

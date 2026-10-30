@@ -134,7 +134,14 @@ def replay_etag(match: Match, file: Path) -> str:
     return f'"m{match.id}-{created}-{stat.st_mtime_ns}-{stat.st_size}"'
 
 
-_BOT_LEVELS: Final = {bot: level for level, bot in LEVEL_BOTS.items()}
+_LEGACY_LEVEL_BOTS: Final = {
+    "turtle": "easy",
+    "reactive": "normal",
+    "expander": "hard",
+    "rusher": "expert",
+}
+"""The bots of the levels before #574: matches stored with these names keep their level."""
+_BOT_LEVELS: Final = {**_LEGACY_LEVEL_BOTS, **{bot: level for level, bot in LEVEL_BOTS.items()}}
 
 
 def bot_nick(bot: str | None) -> str:
