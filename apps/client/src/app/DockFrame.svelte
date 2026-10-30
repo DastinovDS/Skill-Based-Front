@@ -85,6 +85,7 @@
     { id: 'lobby', icon: 'users', label: t('menu.lobby'), key: 'L', go: dock.onlobby },
     { id: 'replays', icon: 'history', label: t('menu.replays'), key: 'R', go: dock.onreplays },
     { id: 'board', icon: 'trophy', label: t('menu.leaderboard'), key: 'T', go: dock.onboard },
+    { id: 'howto', icon: 'info', label: t('help.howTo'), key: 'H', go: dock.onhowto },
   ] as const);
 
   const unrated = $derived(

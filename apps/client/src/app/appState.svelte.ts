@@ -26,6 +26,8 @@ export type Screen =
   /** The public lobby: open matches of other players (LOB-01). */
   | { readonly name: 'lobby' }
   | { readonly name: 'bot' }
+  /** The "How to play" page (CLI-13, #72). */
+  | { readonly name: 'howto' }
   /**
    * The leaderboard and the profiles (LB-01, #78). `history` is the Replays row: the own profile
    * with its matches in view. `player` is the profile chosen in the list (null: the own one),

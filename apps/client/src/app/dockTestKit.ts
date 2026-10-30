@@ -33,6 +33,7 @@ export function makeDock(over: Partial<DockContext> = {}, api: Partial<Api> = fa
     onlobby: vi.fn(),
     onreplays: vi.fn(),
     onboard: vi.fn(),
+    onhowto: vi.fn(),
     onmenu: vi.fn(),
     onpassword: vi.fn(),
     onlogout: vi.fn(),

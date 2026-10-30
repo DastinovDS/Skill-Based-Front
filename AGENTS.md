@@ -139,7 +139,8 @@ jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in 
 | `dev` | dev servers together: the game server (`dev:server`, port 8000) and the client (`dev:client`, `http://localhost:5173`, Vite proxies `/api` and `/ws`) | SRV-01 |
 | `build` | production build of the client | INF-03 |
 | `preview` | `build` and a local preview of the production build under the target CSP (`apps/client/csp.ts`) | INF-03 |
-| `regen`, `regen:protocol`, `regen:api` | regenerate the protocol schema and TS types (`protocol.gen.ts`) and the server OpenAPI with `api.gen.ts` | PRO-02, CLI-09 |
+| `regen`, `regen:protocol`, `regen:api` | regenerate the protocol schema and TS types (`protocol.gen.ts`) and the server OpenAPI with `api.gen.ts`; `regen` also runs `regen:howto` | PRO-02, CLI-09 |
+| `regen:howto` | the combat examples of the How to play screen (`apps/client/src/howto/combatExamples.gen.json`): rows of `combat.json` played through `gow_sim` under `rulesets/mvp-2.toml`, plus the rule numbers the page quotes; `tests/test_export_howto.py` fails when the file is out of date | CLI-13 |
 | `db:migrate` | apply Alembic migrations (the server also does this on start) | DB-01 |
 | `db:revision` | a new migration from the `gow_server.models` models (argument: message) | DB-01 |
 | `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-2.toml maps/*.json maps/fixtures/*.json maps/menu/*.json`: the map validator (the pool, the fixtures and the menu map), and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5); the check `geography` for a map with `maps/src/<name>.geo.json` (DEC-36) | MAP-02, #379, #474, #537 |

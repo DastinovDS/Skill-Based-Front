@@ -3,6 +3,7 @@
   import BotScreen from '../app/BotScreen.svelte';
   import CreateScreen from '../app/CreateScreen.svelte';
   import type { DockContext } from '../app/dock.ts';
+  import HowToScreen from '../app/HowToScreen.svelte';
   import InviteScreen from '../app/InviteScreen.svelte';
   import LobbyScreen from '../app/LobbyScreen.svelte';
   import PasswordScreen from '../app/PasswordScreen.svelte';
@@ -131,6 +132,7 @@
       onlobby: () => undefined,
       onreplays: () => undefined,
       onboard: () => undefined,
+      onhowto: () => undefined,
       onmenu: () => undefined,
       onpassword: () => undefined,
       onlogout: () => undefined,
@@ -153,6 +155,8 @@
     oncreate={() => Promise.resolve(id === 'create-error' ? 'error.api.unavailable' : null)}
     onback={nothing}
   />
+{:else if id === 'howto'}
+  <HowToScreen {dock} onback={nothing} />
 {:else if id === 'password-set' || id === 'password-change'}
   <PasswordScreen
     {dock}

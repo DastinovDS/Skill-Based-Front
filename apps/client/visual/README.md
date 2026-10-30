@@ -104,3 +104,5 @@ with fights and their round data (#323); `/?replay=dev-fog` plays `src/replay/si
 with a killed unit, the "bonus attack" caption). There is no reference screenshot.
 
 The match dialogs (#597): `mise run shots` takes `help.png` (key `?`), `exit.png` (the Exit button), `transfer.png` (the Supply view, a city, "Transfer", an own destination city) and the `-gray` twin of each, and `supply-hud-gray.png` (the Supply banner in grey scale); `split.png` / `split-gray.png` show the new split menu (the two groups as unit tokens), `screen-exit-rated` the ranked forfeit dialog. There is no reference screenshot.
+
+The How to play page (CLI-13, #72): `mise run shots` takes `screen-howto.png` (the Dock screen, `/?menu=howto`), `screen-howto-tall.png` (a tall window: the whole page without scrolling) and `help-howto.png` (the page inside the match help, opened with `?` and the button "How to play"), each with a `-gray` twin. The examples come from `src/howto/combatExamples.gen.json` (`mise run regen:howto`). No `visual` reference.

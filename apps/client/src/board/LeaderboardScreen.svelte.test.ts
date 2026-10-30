@@ -36,6 +36,7 @@ describe('LeaderboardScreen', () => {
     onlobby: vi.fn(),
     onreplays: vi.fn(),
     onboard: vi.fn(),
+    onhowto: vi.fn(),
     onpassword: vi.fn(),
     onlogout: vi.fn(),
   });

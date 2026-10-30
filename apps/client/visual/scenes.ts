@@ -69,6 +69,7 @@ export const MENU_SCENES = [
   'bot-error',
   'password-set',
   'password-change',
+  'howto',
   'result-guest',
   'result-calibration',
   'result-limit',
