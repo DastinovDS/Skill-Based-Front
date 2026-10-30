@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { shapesOf, type AnyIconName } from './icons.ts';
+  import { rasterOf, shapesOf, type AnyIconName } from './icons.ts';
 
   interface Props {
     name: AnyIconName;
@@ -8,6 +8,8 @@
   }
 
   let { name, size = 18 }: Props = $props();
+
+  const raster = $derived(rasterOf(name));
 </script>
 
 <!-- Decorative: the button around it carries the name (aria-label or text). -->
@@ -24,6 +26,10 @@
   aria-hidden="true"
   focusable="false"
 >
+  {#if raster !== null}
+    <!-- A raster icon (the city menu, #627): its own colours, not `currentColor`. -->
+    <image href={raster} x="0" y="0" width="24" height="24" />
+  {/if}
   {#each shapesOf(name) as shape, index (index)}
     {#if shape.tag === 'path'}
       <path d={shape.d} />
