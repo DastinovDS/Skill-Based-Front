@@ -100,8 +100,10 @@ test('two guests play a private match by invite to the end and watch the replay'
     const heading = player.page.getByRole('heading', { name: VERDICT });
     await expect(heading).toBeVisible({ timeout: 120_000 });
     verdicts.push((await heading.textContent()) ?? '');
-    await expect(player.page.getByText('Time is up: victory points decide.')).toBeVisible();
-    await expect(player.page.getByText(/^Victory points: you \d+, enemy \d+$/)).toBeVisible();
+    await expect(player.page.getByText(/^Time is up\./)).toBeVisible();
+    await expect(
+      player.page.getByRole('group', { name: /^Victory points: \d+ for .+, \d+ for .+$/ }),
+    ).toBeVisible();
   }
   // Both screens agree: one victory and one defeat, or a draw on both.
   expect(['Defeat,Victory', 'Draw,Draw']).toContain(verdicts.slice().sort().join(','));
@@ -167,9 +169,8 @@ test('pause, a dropped connection and a forfeit in a private match', async ({
   await guest.forfeit();
   await expect(guest.page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
   await expect(host.page.getByRole('heading', { name: 'Victory' })).toBeVisible();
-  for (const player of [host, guest]) {
-    await expect(player.page.getByText('A player gave up.')).toBeVisible();
-  }
+  await expect(host.page.getByText(/ gave up\.$/)).toBeVisible();
+  await expect(guest.page.getByText('You gave up.')).toBeVisible();
 
   await host.close();
   await guest.close();
@@ -208,7 +209,7 @@ test('a page reload in a running match returns to the same match (#189)', async 
   await guest.forfeit();
   await host.page.getByRole('button', { name: 'Resume' }).click();
   await expect(host.page.getByRole('heading', { name: 'Victory' })).toBeVisible();
-  await expect(host.page.getByText('A player gave up.')).toBeVisible();
+  await expect(host.page.getByText(/ gave up\.$/)).toBeVisible();
   await expect(guest.page.getByRole('heading', { name: 'Defeat' })).toBeVisible();
 
   await host.close();
