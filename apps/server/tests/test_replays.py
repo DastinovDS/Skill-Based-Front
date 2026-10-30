@@ -289,19 +289,19 @@ def _padded(record: list[Any], size: int) -> list[Any]:
 
 def _decoded(vision: dict[str, Any], tick: int) -> dict[str, Any]:
     """The ``v`` entry of one player, decoded by the layout of ``replay-frames.md``."""
-    nodes = []
+    nodes: list[dict[str, Any]] = []
     for record in vision["n"]:
         detail, seen, warehouse = _padded(record, 3)
         nodes.append({"detail": detail, "seen": _seen(seen, detail, tick), "warehouse": warehouse})
-    edges = []
+    edges: list[dict[str, Any]] = []
     for record in vision["e"]:
         width, detail, a, b, figures = _padded(record, 5)
-        halves = []
+        halves: list[dict[str, Any]] = []
         for half in (a, b):
             half_detail, seen = _padded(half, 2)
             halves.append({"detail": half_detail, "seen": _seen(seen, half_detail, tick)})
-        enemy = []
-        for f in figures or []:
+        enemy: list[dict[str, Any]] = []
+        for f in cast("list[list[Any]]", figures or []):
             fid, pos, toward_b, f_detail, mode, units, charged, units_range = _padded(f, 8)
             enemy.append(
                 {
@@ -327,8 +327,7 @@ def _expected(view: dict[str, Any]) -> dict[str, Any]:
             for n in view["nodes"]
         ],
         "edges": [
-            {k: e[k] for k in ("width", "detail", "halves", "enemy_groups")}
-            for e in view["edges"]
+            {k: e[k] for k in ("width", "detail", "halves", "enemy_groups")} for e in view["edges"]
         ],
         "builds": [e["id"] for e in view["edges"] if e["build"] is not None],
     }
@@ -340,16 +339,14 @@ def _check_vision(doc: dict[str, Any], views: dict[int, list[dict[str, Any]]]) -
     assert set(views) <= set(frames)
     seen_levels: set[str] = set()
     remembered = figures = 0
-    for tick, views in views.items():
+    for tick, pair in views.items():
         vision = frames[tick]["v"]
         assert len(vision) == 2
         for p in PLAYERS:
             got = _decoded(vision[p], tick)
-            assert got == _expected(views[p]), f"tick {tick}, player {p}"
+            assert got == _expected(pair[p]), f"tick {tick}, player {p}"
             seen_levels.update(n["detail"] for n in got["nodes"])
-            remembered += sum(
-                n["detail"] == "fog" and n["seen"] is not None for n in got["nodes"]
-            )
+            remembered += sum(n["detail"] == "fog" and n["seen"] is not None for n in got["nodes"])
             figures += sum(len(e["enemy_groups"]) for e in got["edges"])
     # The comparison above was not empty: fog, its memory and figures all occurred.
     assert {"exact", "fog"} <= seen_levels and len(seen_levels) >= 3

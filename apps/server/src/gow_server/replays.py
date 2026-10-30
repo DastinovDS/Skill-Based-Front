@@ -402,11 +402,13 @@ class ReplayService:
             return None
         with self._sessions() as session:
             rows = session.execute(
-                select(MatchPlayer.side, Player.nick, MatchPlayer.bot)
+                select(MatchPlayer.side, MatchPlayer.player_id, Player.nick, MatchPlayer.bot)
                 .outerjoin(Player, Player.id == MatchPlayer.player_id)
                 .where(MatchPlayer.match_id == int(match_id))
             ).all()
-        by_side = {side: nick if nick is not None else bot_nick(bot) for side, nick, bot in rows}
+        by_side = {
+            side: bot_nick(bot) if account is None else nick for side, account, nick, bot in rows
+        }
         if sorted(by_side) != [0, 1]:
             return None
         return by_side[0], by_side[1]
