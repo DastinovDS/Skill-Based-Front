@@ -1,0 +1,625 @@
+<!doctype html>
+<!--
+  Shot counter mockup (issue #516, item 5): a counter of the round's shots on the map, four variants plus the current look.
+  Self-contained: no external fonts, images or scripts; the map is drawn by code in SVG. Open in a browser as a file.
+  This is an illustration, not client code. The map, the city, the group tokens, the AR1 arena plate and the SH1 tracers are
+  drawn after the current client look (`mise run shots current`, scenes `fights_flight`, `artery`, 2026-10-30), simplified.
+  The fight is a scripted sequence of rounds in the shape of `FightView.last_round` (`shots`, `virtual`, `spent`, `losses`)
+  with `combat.shots_per_round = 1` of `mvp-1`; the counter only displays these fields, it decides nothing.
+  The state lives in the address: #v=1&cmp=0&n=1&sc=100&gray=0&slow=0&p=1&t=6.5
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shot counter mockup</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --surface-2: #21262d;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-dim: #9da7b3;
+        --you: #5b9bff;
+        --enemy: #e5484d;
+        --warn: #ffb020;
+        --vp: #e3b341;
+        --paper: #f0f6fc;
+        --radius: 8px;
+        --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 20px 16px 48px; background: #0a0d12; color: var(--text); font: 14px/1.45 var(--font); }
+      .wrap { max-width: 1320px; margin: 0 auto; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      h2 { font-size: 16px; margin: 28px 0 8px; }
+      p.lead { color: var(--text-dim); margin: 0 0 14px; max-width: 1000px; }
+      code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+      .bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px; }
+      .bar b { color: var(--text-dim); font-weight: 600; margin-right: 6px; }
+      .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+      .seg label { cursor: pointer; }
+      .seg input { position: absolute; opacity: 0; pointer-events: none; }
+      .seg span { display: block; padding: 4px 10px; border-right: 1px solid var(--border); }
+      .seg label:last-child span { border-right: 0; }
+      .seg input:checked + span { background: #1d4e91; color: #fff; }
+      .seg input:focus-visible + span { outline: 2px solid var(--paper); outline-offset: -2px; }
+      .rec { font-size: 11px; color: var(--vp); margin-left: 4px; }
+      button { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; cursor: pointer; font: inherit; }
+      button:hover { border-color: var(--text-dim); }
+      input[type='range'] { width: 260px; vertical-align: middle; }
+      select { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
+      #stage { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; }
+      #stage svg { display: block; width: 100%; height: auto; }
+      #stage.gray svg { filter: grayscale(1); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 8px; }
+      figure { margin: 0; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+      figcaption { padding: 5px 9px; font-size: 13px; color: var(--text-dim); border-top: 1px solid var(--border); }
+      figcaption b { color: var(--text); }
+      #state { margin-top: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; min-height: 64px; }
+      #state .k { color: var(--text-dim); }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+      .card.on { border-color: var(--you); }
+      .card h3 { margin: 0 0 6px; font-size: 14px; }
+      .card dl { margin: 0; display: grid; grid-template-columns: 92px 1fr; gap: 3px 8px; font-size: 13px; }
+      .card dt { color: var(--text-dim); }
+      .card dd { margin: 0; }
+      table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--surface); }
+      th, td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+      th { background: var(--surface-2); }
+      .note { color: var(--text-dim); font-size: 13px; max-width: 1000px; }
+      .decision { border: 1px dashed var(--vp); border-radius: var(--radius); padding: 10px 12px; margin-top: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>A counter of the round's shots on the map (#516, item 5)</h1>
+      <p class="lead">
+        Since #352 (SH1 tracers, PR #376) the arena plate has no exchange arrows with "● N ◇ N" plates: how many shots and of which kind a round had
+        is seen only from the pulsing of the AR1 chips, the tracers and the caption "◇ bonus attack". Four ways to bring a counter back, plus the
+        current look. The scene is the current map look (forest, own and enemy territory with the border glow, R1 lanes, C1 cities, U1 tokens, the AR1
+        plate, SH1 tracers), drawn by code. A real shot is a <b>■ square</b> (the language of icons, ui-style 21: a charge and the head of a real tracer;
+        the old plate used ●), a bonus shot a <b>◇ diamond</b>; the opponent's signs have a <b>double outline</b>, so the side reads without color.
+      </p>
+
+      <div class="bar">
+        <span><b>Counter</b><span class="seg" id="pkv" role="radiogroup" aria-label="Counter variant"></span></span>
+        <label><input type="checkbox" id="cmp" /> all side by side</label>
+      </div>
+      <div class="bar">
+        <span><b>Fights</b><span class="seg" id="pkn" role="radiogroup" aria-label="Fights"></span></span>
+        <label><b>Map scale</b><select id="sc"><option value="60">60%</option><option value="100">100%</option><option value="150">150%</option></select></label>
+        <label><input type="checkbox" id="gray" /> grayscale</label>
+        <label><input type="checkbox" id="slow" /> slow ×0.25</label>
+        <span>
+          <button id="play" aria-label="Play or pause">⏸</button>
+          <button id="restart" aria-label="Restart">⟲</button>
+          <input type="range" id="scrub" min="0" max="12" step="0.02" aria-label="Time" />
+          <span id="tlab">0.0 s</span>
+        </span>
+        <span id="rbtn"><b>Round</b></span>
+      </div>
+
+      <div id="stage"></div>
+      <div id="state" aria-live="polite"></div>
+
+      <h2>Variants</h2>
+      <div class="cards" id="cards"></div>
+
+      <h2>Table of variants</h2>
+      <table id="tbl"></table>
+      <p class="note">
+        FPS: an estimate from the number of PixiJS objects (baked plates and glyph sprites, ui-style 24.4), not a measurement. "Data" names the
+        fields of <code>FightView</code> (<code>gow_protocol.view</code>) the counter reads: <code>last_round.shots</code>, <code>last_round.virtual</code>
+        (real = shots − virtual), <code>last_round.losses</code>, <code>virtual_left</code>, and the <code>fight_round</code> events with the same numbers.
+        With <code>combat.shots_per_round = 1</code> (<code>mvp-1</code>) a side makes at most one shot per round, so a per-round "number" is always 0 or 1:
+        the round counters below show the <b>kind</b> of the shot (■, ◇ or none) and the number only matters for the fight totals (CT4) or for a ruleset with more shots per round.
+      </p>
+
+      <p class="note">
+        <b>Accessibility check</b> (WCAG 2.1 AA, ui-style 22): the glyphs on the plate (#161b22) have 6.2:1 (yours, #5b9bff) and 4.4:1 (the
+        opponent's, #e5484d), above the 3:1 for graphics; the white text 15.9:1, the dim text 7.1:1. In grayscale the two side colors differ by only
+        1.4:1, so the side is carried by the place (left and right on the plate, top and bottom in CT3, at its own group in CT2) and by the double
+        outline of the opponent's glyphs and pills: checked with the grayscale switch. The counter text is 12 px (the caption minimum); "no shot" is a
+        hollow ring, not a 2 px dot. Risk for CT2: the pill is 20 px tall and readable, but it lives 1.6 s, so it fails the "readable in time"
+        complaint the counter answers. Motion: every flash is a single 0.5 s fade, nothing blinks.
+      </p>
+      <h2>Recommendation</h2>
+      <div id="recom" class="note"></div>
+      <div class="decision"><b>Owner's decision:</b> awaiting the owner's decision (choose CT1, CT2, CT3, CT4, or "stay as now").</div>
+    </div>
+
+    <script>
+      'use strict';
+      // ===================== data =====================
+      const C = { you: '#5b9bff', enemy: '#e5484d', paper: '#f0f6fc', bg: '#0d1117', plate: '#161b22', vp: '#e3b341', warn: '#ffb020', dim: '#9da7b3', seg: '#59636e' };
+      const VARS = [
+        { id: 0, name: 'Now (no counter)', short: 'Now' },
+        { id: 1, name: 'CT1 Tally on the plate', short: 'CT1' },
+        { id: 2, name: 'CT2 Tags at the shooters', short: 'CT2' },
+        { id: 3, name: 'CT3 Round ledger', short: 'CT3' },
+        { id: 4, name: 'CT4 Fight score', short: 'CT4' },
+      ];
+      const REC = 1;
+      const T_END = 12;
+      // index 0 = you, 1 = the opponent (as a pair by player id in FightView)
+      const FIGHTS = [
+        {
+          id: 'f1', name: 'Forkway (node, forest)', kind: 'node', node: 'fork',
+          you: { x: 480, y: 330 }, en: { x: 532, y: 340 }, plate: { x: 585, y: 228 },
+          init: { u: [3, 4], c: [3, 3], v: [2, 1] },
+          rounds: [
+            { t: 2, shots: [1, 1], virtual: [1, 1], spent: [0, 0], losses: [0, 0] },
+            { t: 4, shots: [1, 1], virtual: [1, 0], spent: [0, 1], losses: [0, 0] },
+            { t: 6, shots: [1, 1], virtual: [0, 0], spent: [1, 1], losses: [0, 0] },
+            { t: 8, shots: [1, 1], virtual: [0, 0], spent: [1, 1], losses: [0, 0] },
+            { t: 10, shots: [1, 0], virtual: [0, 0], spent: [1, 0], losses: [0, 1] },
+          ],
+        },
+        {
+          id: 'f2', name: 'Watchhouse – Crest (edge)', kind: 'edge',
+          you: { x: 578, y: 140 }, en: { x: 626, y: 140 }, point: { x: 602, y: 140 }, plate: { x: 690, y: 62 },
+          init: { u: [2, 2], c: [2, 1], v: [0, 1] },
+          rounds: [
+            { t: 3, shots: [1, 1], virtual: [0, 1], spent: [1, 0], losses: [0, 0] },
+            { t: 5, shots: [1, 1], virtual: [0, 0], spent: [1, 1], losses: [0, 0] },
+            { t: 7, shots: [0, 0], virtual: [0, 0], spent: [0, 0], losses: [0, 0] },
+          ],
+        },
+      ];
+      const NODES = {
+        stone: { x: 90, y: 330, name: 'Stonegate', o: 'you', cap: true, g: 8, gc: 8 },
+        watch: { x: 260, y: 330, name: 'Watchpost', o: 'you', g: 4, gc: 4 },
+        fork: { x: 480, y: 330, name: 'Forkway', o: 'you' },
+        whouse: { x: 480, y: 140, name: 'Watchhouse', o: 'you' },
+        ford: { x: 480, y: 505, name: 'Ford', o: 'you' },
+        arch: { x: 730, y: 330, name: 'Archway', o: 'enemy', fogq: true },
+        crest: { x: 760, y: 140, name: 'Crest', o: 'enemy' },
+        heart: { x: 900, y: 330, name: 'Heart', o: 'enemy', fog: true },
+        bluff: { x: 260, y: 130, name: 'Bluff', o: 'none' },
+        gate: { x: 760, y: 505, name: 'Gateway', o: 'enemy', fog: true },
+      };
+      const ROADS = [
+        ['stone', 'watch', 'own'], ['watch', 'fork', 'own'], ['fork', 'whouse', 'own'], ['fork', 'ford', 'own'],
+        ['stone', 'bluff', 'buf'], ['bluff', 'whouse', 'buf'], ['fork', 'arch', 'buf'], ['whouse', 'crest', 'buf'],
+        ['arch', 'heart', 'enemy'], ['crest', 'arch', 'enemy'], ['arch', 'gate', 'enemy'], ['ford', 'gate', 'buf'],
+      ];
+
+      // replay the scripted rounds up to t: the numbers a FightView would carry at that moment
+      function fstate(f, t) {
+        const s = { u: [...f.init.u], c: [...f.init.c], v: [...f.init.v], k: [0, 0], shots: [0, 0], virt: [0, 0], last: null, idx: -1, next: null };
+        f.rounds.forEach((r, i) => {
+          if (r.t <= t) {
+            for (const p of [0, 1]) {
+              s.c[p] -= r.spent[p]; s.v[p] -= r.virtual[p]; s.u[p] -= r.losses[p]; s.k[p] += r.losses[p];
+              s.shots[p] += r.shots[p]; s.virt[p] += r.virtual[p];
+            }
+            s.last = r; s.idx = i;
+          } else if (!s.next) s.next = r;
+        });
+        return s;
+      }
+      // the light check of the script: a side never spends more than it has, a virtual shot only while the stock lasts,
+      // virtual first (DEC-24, item B4), at most shots_per_round = 1 shot per side
+      function checkScript() {
+        const bad = [];
+        for (const f of FIGHTS) {
+          const s = { c: [...f.init.c], v: [...f.init.v], u: [...f.init.u] };
+          for (const r of f.rounds) for (const p of [0, 1]) {
+            if (r.shots[p] > 1) bad.push(f.id + ': more than one shot');
+            if (r.virtual[p] > s.v[p]) bad.push(f.id + ': virtual over the stock');
+            if (r.shots[p] - r.virtual[p] > 0 && s.v[p] > r.virtual[p]) bad.push(f.id + ': real shot before the stock is spent');
+            if (r.spent[p] > s.c[p]) bad.push(f.id + ': spent over charged');
+            s.c[p] -= r.spent[p]; s.v[p] -= r.virtual[p]; s.u[p] -= r.losses[p];
+          }
+        }
+        return bad;
+      }
+
+      // ===================== state in the address =====================
+      const st = { v: REC, cmp: 0, n: 1, sc: 100, gray: 0, slow: 0, t: 0, play: 1 };
+      function fromHash() {
+        const q = new URLSearchParams(location.hash.slice(1));
+        if (q.has('v')) st.v = Math.min(4, Math.max(0, +q.get('v') || 0));
+        st.n = q.get('n') === '2' ? 2 : 1;
+        st.sc = [60, 100, 150].includes(+q.get('sc')) ? +q.get('sc') : 100;
+        for (const k of ['cmp', 'gray', 'slow']) st[k] = q.get(k) === '1' ? 1 : 0;
+        st.play = q.get('p') === '1' ? 0 : 1;
+        st.t = q.has('t') ? Math.min(T_END, Math.max(0, +q.get('t') || 0)) : 0;
+      }
+      function toHash() {
+        const q = new URLSearchParams();
+        q.set('v', st.v); if (st.cmp) q.set('cmp', 1); if (st.n === 2) q.set('n', 2); if (st.sc !== 100) q.set('sc', st.sc);
+        if (st.gray) q.set('gray', 1); if (st.slow) q.set('slow', 1);
+        if (!st.play) { q.set('p', 1); q.set('t', st.t.toFixed(2)); }
+        history.replaceState(null, '', '#' + q);
+      }
+
+      // ===================== drawing helpers =====================
+      const f1 = (n) => Math.round(n * 10) / 10;
+      const pts = (a) => a.map((p) => f1(p[0]) + ',' + f1(p[1])).join(' ');
+      const tri = (x, y, s) => [[x - s, y - s * 0.8], [x + s, y - s * 0.8], [x, y + s * 0.95]];
+      const txt = (x, y, s, size, col, extra = '') =>
+        `<text x="${f1(x)}" y="${f1(y)}" font-size="${size}" font-weight="700" fill="${col}" text-anchor="middle" dominant-baseline="central" stroke="${C.bg}" stroke-width="3" paint-order="stroke" ${extra}>${s}</text>`;
+      const clamp01 = (x) => Math.max(0, Math.min(1, x));
+      const ease = (x) => 1 - (1 - x) * (1 - x);
+
+      function defs(I) {
+        return `<defs>
+          <pattern id="${I}tree" width="22" height="20" patternUnits="userSpaceOnUse">
+            <rect width="22" height="20" fill="#22463a"/><circle cx="6" cy="6" r="4.6" fill="#1b5a45"/><circle cx="6" cy="7.2" r="4.6" fill="#163f33" opacity=".5"/>
+            <circle cx="17" cy="15" r="4" fill="#1d5f49"/><circle cx="17" cy="16" r="4" fill="#163f33" opacity=".5"/><circle cx="15" cy="4" r="2.4" fill="#2a6b52"/>
+          </pattern>
+          <pattern id="${I}plain" width="26" height="22" patternUnits="userSpaceOnUse">
+            <rect width="26" height="22" fill="#8c7f45"/><path d="M5 14l2-5 2 5M17 8l2-5 2 5" stroke="#6f6535" stroke-width="1.4" fill="none"/>
+          </pattern>
+          <pattern id="${I}hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(0)"><rect width="4" height="1.6" fill="#ffffff" opacity=".55"/></pattern>
+          <filter id="${I}glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+          <filter id="${I}soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2"/></filter>
+          <filter id="${I}shd" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity=".55"/></filter>
+          <clipPath id="${I}own"><polygon points="${pts(OWN)}"/></clipPath>
+        </defs>`;
+      }
+      const OWN = [[0, 0], [640, 0], [640, 70], [588, 200], [610, 262], [570, 410], [600, 560], [0, 560]];
+      const BORDER = OWN.slice(1, 7);
+
+      function mapLayer(I) {
+        let s = `<rect width="960" height="560" fill="url(#${I}tree)"/>`;
+        s += `<polygon points="${pts([[640, 230], [800, 230], [830, 330], [800, 430], [650, 430], [610, 330]])}" fill="url(#${I}plain)"/>`;
+        s += `<polygon points="${pts(OWN)}" fill="#3a64a8" opacity=".32"/>`;
+        s += `<polygon points="${pts([[640, 0], [960, 0], [960, 560], [600, 560], [570, 410], [610, 262], [588, 200], [640, 70]])}" fill="#9a3434" opacity=".38"/>`;
+        // fog (F1 haze) on the far enemy rear
+        s += `<rect x="840" y="0" width="120" height="560" fill="#1a1f27" opacity=".62" filter="url(#${I}soft)"/>`;
+        s += `<rect x="852" y="0" width="108" height="560" fill="#1a1f27" opacity=".4"/>`;
+        // border glow: the own side is blue, the opponent's red (BL1 "pronounced" glow)
+        const own = BORDER.map((p) => [p[0] - 4, p[1]]), en = BORDER.map((p) => [p[0] + 4, p[1]]);
+        s += `<polyline points="${pts(own)}" stroke="${C.you}" stroke-width="10" fill="none" opacity=".55" filter="url(#${I}glow)"/>`;
+        s += `<polyline points="${pts(en)}" stroke="${C.enemy}" stroke-width="10" fill="none" opacity=".55" filter="url(#${I}glow)"/>`;
+        s += `<polyline points="${pts(own)}" stroke="${C.you}" stroke-width="2.2" fill="none"/><polyline points="${pts(en)}" stroke="${C.enemy}" stroke-width="2.2" fill="none"/>`;
+        // roads (R1 lanes): own = two light lanes on a blue casing, buffer = dashed grey, enemy = a light line
+        for (const [a, b, k] of ROADS) {
+          const A = NODES[a], B = NODES[b];
+          if (k === 'own') s += `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="${C.you}" stroke-width="7" opacity=".55"/><line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="#e6edf3" stroke-width="4.4"/><line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="#2c4c7a" stroke-width="1.4"/>`;
+          else if (k === 'buf') s += `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="#202833" stroke-width="5"/><line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="#aab2bd" stroke-width="2.2" stroke-dasharray="9 6"/>`;
+          else s += `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="#202833" stroke-width="5"/><line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="#aab2bd" stroke-width="2" stroke-dasharray="2 5"/>`;
+        }
+        return s;
+      }
+      function city(n, extra) {
+        const col = n.o === 'you' ? C.you : n.o === 'enemy' ? C.enemy : '#2b3139';
+        let s = `<g opacity="${n.fog ? 0.55 : 1}">`;
+        s += `<circle cx="${n.x}" cy="${n.y}" r="27" fill="#1b2129" stroke="#0b0e13" stroke-width="2"/>`;
+        s += `<circle cx="${n.x}" cy="${n.y}" r="22" fill="none" stroke="#3b4450" stroke-width="7" stroke-dasharray="30.5 4"/>`;
+        s += `<circle cx="${n.x}" cy="${n.y}" r="15" fill="${n.o === 'none' ? '#3a414b' : col}" stroke="#0b0e13" stroke-width="2"/>`;
+        if (n.cap) s += `<path d="${star(n.x, n.y, 9)}" fill="${C.paper}"/>`;
+        s += `<circle cx="${n.x + 22}" cy="${n.y - 22}" r="9" fill="${C.bg}" stroke="${C.vp}" stroke-width="2.4"/>${txt(n.x + 22, n.y - 21.5, '1', 11, C.paper, 'stroke-width="0"')}`;
+        if (n.o === 'you') {
+          for (let i = 0; i < 4; i++) s += `<rect x="${n.x - 15 + i * 7.6}" y="${n.y + 31}" width="6.4" height="5.5" rx="1" fill="${i < 2 ? C.you : '#3b4450'}" stroke="#0b0e13" stroke-width="1"/>`;
+        }
+        s += txt(n.x, n.y + 48, n.name, 12, n.fog ? C.dim : C.paper);
+        s += extra || '';
+        return s + '</g>';
+      }
+      function star(x, y, r) {
+        let d = '';
+        for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? r * 0.45 : r; d += (i ? 'L' : 'M') + f1(x + rr * Math.cos(a)) + ' ' + f1(y + rr * Math.sin(a)); }
+        return d + 'Z';
+      }
+      // U1 token: an inverted triangle, the fill from the tip = the share of charged; the opponent has a double outline
+      function token(I, x, y, s, u, c, who, label, pulse = 0) {
+        const col = who === 'you' ? C.you : C.enemy, T = tri(x, y, s * (1 + 0.15 * pulse)), id = I + 'tk' + Math.round(x) + '_' + Math.round(y);
+        const share = u ? c / u : 0, top = y - s * 0.8, bot = y + s * 0.95, cut = bot - (bot - top) * share;
+        let g = `<clipPath id="${id}"><rect x="${x - s * 1.3}" y="${f1(cut)}" width="${s * 2.6}" height="${f1(bot - cut + 2)}"/></clipPath>`;
+        g += `<polygon points="${pts(T)}" fill="#141a22" stroke="#0b0e13" stroke-width="5" stroke-linejoin="round"/>`;
+        g += `<polygon points="${pts(T)}" fill="${col}" clip-path="url(#${id})"/>`;
+        g += `<polygon points="${pts(T)}" fill="none" stroke="${who === 'you' ? C.paper : col}" stroke-width="2.4" stroke-linejoin="round"/>`;
+        if (who !== 'you') g += `<polygon points="${pts(tri(x, y, s * 0.78))}" fill="none" stroke="#0b0e13" stroke-width="1.6" stroke-linejoin="round"/>`;
+        return g + txt(x, y - s * 0.12, label, 13, C.paper);
+      }
+      // AR1 chip
+      function chip(x, y, state, who) {
+        const col = who === 'you' ? C.you : C.enemy, T = tri(x, y, 7);
+        if (state === 'k') return `<polygon points="${pts(T)}" fill="none" stroke="${col}" stroke-width="1.3" stroke-dasharray="2.5 2" opacity=".6"/>`;
+        let g = state === 'c' ? `<polygon points="${pts(T)}" fill="${col}" stroke="${who === 'you' ? C.paper : col}" stroke-width="1.6"/>`
+          : `<polygon points="${pts(T)}" fill="#141a22" stroke="${col}" stroke-width="1.6"/><path d="M${x - 4} ${y - 3}h8M${x - 2.8} ${y}h5.6M${x - 1.5} ${y + 3}h3" stroke="${col}" stroke-width="1.1"/>`;
+        if (who !== 'you') g += `<polygon points="${pts(tri(x, y, 4.2))}" fill="none" stroke="#0b0e13" stroke-width="1"/>`;
+        return g;
+      }
+      // the glyph of a shot: ■ real, ◇ bonus, · none; the opponent's with a double outline
+      function glyph(x, y, kind, who, r = 6) {
+        const col = who === 'you' ? C.you : C.enemy;
+        if (kind === 'none') return `<circle cx="${x}" cy="${y}" r="2.6" fill="none" stroke="${C.dim}" stroke-width="1.4"/>`;
+        if (kind === 'real') {
+          let g = `<rect x="${x - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" rx="1.2" fill="${col}" stroke="${who === 'you' ? C.paper : col}" stroke-width="1.4"/>`;
+          if (who !== 'you') g += `<rect x="${x - r + 2.6}" y="${y - r + 2.6}" width="${2 * r - 5.2}" height="${2 * r - 5.2}" fill="none" stroke="#0b0e13" stroke-width="1.2"/>`;
+          return g;
+        }
+        const d = `M${x} ${y - r - 1}L${x + r + 1} ${y}L${x} ${y + r + 1}L${x - r - 1} ${y}Z`;
+        let g = `<path d="${d}" fill="#141a22" stroke="${col}" stroke-width="1.8"/>`;
+        if (who !== 'you') g += `<path d="M${x} ${y - r + 2.4}L${x + r - 2.4} ${y}L${x} ${y + r - 2.4}L${x - r + 2.4} ${y}Z" fill="none" stroke="${col}" stroke-width="1.1"/>`;
+        return g;
+      }
+      const kindOf = (r, p) => (!r || r.shots[p] === 0 ? 'none' : r.virtual[p] > 0 ? 'bonus' : 'real');
+
+      // ===================== fight effects (SH1 tracers, simplified) =====================
+      function tracer(I, A, B, t01, kind, who, bend) {
+        const col = who === 'you' ? C.you : C.enemy, mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2, nx = -(B.y - A.y), ny = B.x - A.x, l = Math.hypot(nx, ny) || 1;
+        const Cp = { x: mx + (nx / l) * bend, y: my + (ny / l) * bend };
+        const at = (u) => ({ x: (1 - u) ** 2 * A.x + 2 * (1 - u) * u * Cp.x + u * u * B.x, y: (1 - u) ** 2 * A.y + 2 * (1 - u) * u * Cp.y + u * u * B.y });
+        let s = '';
+        for (let i = 0; i < 8; i++) {
+          const u0 = Math.max(0, t01 - 0.6 + i * 0.075), u1 = Math.max(0, t01 - 0.6 + (i + 1) * 0.075), p0 = at(u0), p1 = at(u1);
+          s += kind === 'real'
+            ? `<line x1="${f1(p0.x)}" y1="${f1(p0.y)}" x2="${f1(p1.x)}" y2="${f1(p1.y)}" stroke="${col}" stroke-width="${2 + i * 0.9}" stroke-linecap="round" opacity="${0.15 + i * 0.1}"/>`
+            : `<line x1="${f1(p0.x)}" y1="${f1(p0.y)}" x2="${f1(p1.x)}" y2="${f1(p1.y)}" stroke="${col}" stroke-width="1.4" stroke-dasharray="3 3" opacity="${0.2 + i * 0.08}"/>`;
+        }
+        const h = at(t01);
+        return s + glyph(f1(h.x), f1(h.y), kind, who, 6.5);
+      }
+      function effects(I, f, t, P) {
+        let s = '';
+        for (const r of f.rounds) {
+          const a = t - r.t;
+          if (a < -0.35 || a > 1.6) continue;
+          const Y = P(f.you), E = P(f.en), mid = f.point ? P(f.point) : { x: (Y.x + E.x) / 2, y: (Y.y + E.y) / 2 };
+          const k0 = kindOf(r, 0), k1 = kindOf(r, 1), cancel = r.shots[0] > 0 && r.shots[1] > 0;
+          if (a < 0) { // wind-up: a glow gathers at each shooter
+            for (const [p, k] of [[Y, k0], [E, k1]]) if (k !== 'none') s += `<circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="${f1(22 + 10 * (1 + a / 0.35))}" fill="none" stroke="${C.paper}" stroke-width="1.2" opacity="${f1(0.5 * (1 + a / 0.35))}"/>`;
+            continue;
+          }
+          if (cancel) {
+            if (a < 0.3) { s += tracer(I, Y, mid, ease(a / 0.3), k0, 'you', 10); s += tracer(I, E, mid, ease(a / 0.3), k1, 'enemy', 10); }
+            else if (a < 1.0) {
+              const q = (a - 0.3) / 0.7;
+              s += `<circle cx="${f1(mid.x)}" cy="${f1(mid.y)}" r="${f1(6 + 16 * q)}" fill="none" stroke="${C.paper}" stroke-width="2" opacity="${f1(1 - q)}"/>`;
+              s += `<path d="M${mid.x - 6} ${mid.y - 6}l12 12M${mid.x + 6} ${mid.y - 6}l-12 12" stroke="${C.paper}" stroke-width="2.6" stroke-linecap="round" opacity="${f1(1 - q * 0.8)}"/>`;
+            }
+          } else {
+            const p = r.shots[0] > 0 ? 0 : r.shots[1] > 0 ? 1 : -1;
+            if (p < 0) continue;
+            const from = p === 0 ? Y : E, to = p === 0 ? E : Y, k = p === 0 ? k0 : k1;
+            if (a < 0.6) s += tracer(I, from, to, ease(a / 0.6), k, p === 0 ? 'you' : 'enemy', 14);
+            else {
+              const q = (a - 0.6) / 1.0;
+              s += `<circle cx="${f1(to.x)}" cy="${f1(to.y)}" r="${f1(10 + 18 * q)}" fill="none" stroke="${C.paper}" stroke-width="2" opacity="${f1(Math.max(0, 1 - q))}"/>`;
+              s += txt(to.x + 10, to.y - 30 - 14 * q, '−1', 15, C.paper, `opacity="${f1(Math.max(0, 1 - q * 0.9))}"`);
+            }
+          }
+        }
+        return s;
+      }
+
+      // ===================== the AR1 plate and the counters =====================
+      function plate(I, f, t, v, P) {
+        const s0 = fstate(f, t), r = s0.last, age = r ? t - r.t : 99, fresh = age < 0.5;
+        const W = 150, H = 66, x0 = f.plate.x - W / 2, y0 = f.plate.y - H / 2, anchor = P(f.kind === 'edge' ? f.point : f.you);
+        let g = `<line x1="${f.plate.x}" y1="${y0 + H}" x2="${f1(anchor.x)}" y2="${f1(anchor.y - 24)}" stroke="${C.paper}" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>`;
+        // the extra height a counter needs on the plate
+        const extraTop = v === 4 ? 20 : 0, extraBot = v === 1 ? 24 : 0;
+        g += `<g filter="url(#${I}shd)"><rect x="${x0}" y="${y0 - extraTop}" width="${W}" height="${H + extraTop + extraBot}" rx="10" fill="${C.plate}" fill-opacity=".95" stroke="${C.paper}" stroke-opacity=".8" stroke-width="1.5"/></g>`;
+        g += `<line x1="${f.plate.x}" y1="${y0 + 8}" x2="${f.plate.x}" y2="${y0 + H - 14}" stroke="${C.dim}" stroke-dasharray="3 3" opacity=".6"/>`;
+        for (const p of [0, 1]) {
+          const who = p ? 'enemy' : 'you', n = s0.u[p] + s0.k[p], cx = f.plate.x + (p ? 37 : -37);
+          const states = [];
+          for (let i = 0; i < s0.c[p]; i++) states.push('c');
+          for (let i = 0; i < s0.u[p] - s0.c[p]; i++) states.push('d');
+          for (let i = 0; i < s0.k[p]; i++) states.push('k');
+          const per = Math.min(4, n), rows = Math.ceil(n / 4);
+          states.forEach((sv, i) => {
+            const row = Math.floor(i / 4), col = i % 4, cnt = row === rows - 1 ? n - row * 4 : per;
+            g += chip(cx + (col - (cnt - 1) / 2) * 16, y0 + 18 + row * 15, sv, who);
+          });
+          const col = p ? C.enemy : C.you, stock = s0.v[p];
+          g += `<text x="${cx - 4}" y="${y0 + 49}" font-size="11" font-weight="700" fill="${stock ? C.paper : C.dim}" text-anchor="end" dominant-baseline="central">×${stock}</text>`;
+          g += stock ? `<path d="M${cx + 6} ${y0 + 43}l6 6-6 6-6-6z" fill="${col}"/>` : `<path d="M${cx + 6} ${y0 + 43}l6 6-6 6-6-6z" fill="none" stroke="${col}" stroke-dasharray="2 2"/>`;
+        }
+        // the round bar: the time to the next round
+        const nx = s0.next ? s0.next.t : null, prev = r ? r.t : 0, share = nx ? clamp01((t - prev) / (nx - prev)) : 1;
+        g += `<rect x="${x0 + 10}" y="${y0 + H - 8}" width="${W - 20}" height="3" rx="1.5" fill="#3b4450"/><rect x="${x0 + 10}" y="${y0 + H - 8}" width="${f1((W - 20) * share)}" height="3" rx="1.5" fill="${C.paper}"/>`;
+        // the caption "bonus attack" (A1) while the last round had a virtual shot
+        if (r && r.virtual.some((x) => x > 0) && age < 1.6) {
+          g += `<rect x="${f.plate.x - 50}" y="${y0 - extraTop - 26}" width="100" height="18" rx="9" fill="${C.bg}" stroke="${C.paper}" stroke-width="1.3"/>`;
+          g += `<path d="M${f.plate.x - 39} ${y0 - extraTop - 21}l4 4-4 4-4-4z" fill="none" stroke="${C.paper}" stroke-width="1.3"/>`;
+          g += `<text x="${f.plate.x + 5}" y="${y0 - extraTop - 16.5}" font-size="10.5" font-weight="700" fill="${C.paper}" text-anchor="middle" dominant-baseline="central">bonus attack</text>`;
+        }
+        // ---- CT1: a tally row under the chips: the kind of each side's shot in the last round and the result in the middle ----
+        if (v === 1) {
+          const yy = y0 + H + 10;
+          g += `<line x1="${x0 + 8}" y1="${y0 + H - 1}" x2="${x0 + W - 8}" y2="${y0 + H - 1}" stroke="${C.border || '#30363d'}"/>`;
+          if (!r) g += `<text x="${f.plate.x}" y="${yy}" font-size="12" fill="${C.dim}" text-anchor="middle" dominant-baseline="central">no round yet</text>`;
+          else {
+            if (fresh) g += `<rect x="${x0 + 4}" y="${yy - 10}" width="${W - 8}" height="20" rx="6" fill="${C.paper}" opacity="${f1(0.18 * (1 - age / 0.5))}"/>`;
+            g += `<text x="${x0 + 12}" y="${yy}" font-size="12" font-weight="700" fill="${C.dim}" dominant-baseline="central">R${s0.idx + 1}</text>`;
+            for (const p of [0, 1]) {
+              const k = kindOf(r, p), cx = f.plate.x + (p ? 36 : -30), who = p ? 'enemy' : 'you';
+              g += glyph(cx - 8, yy, k, who, 5.5);
+              g += `<text x="${cx + 3}" y="${yy}" font-size="12" font-weight="700" fill="${k === 'none' ? C.dim : C.paper}" dominant-baseline="central">${k === 'none' ? '–' : r.shots[p]}</text>`;
+            }
+            const cancel = r.shots[0] > 0 && r.shots[1] > 0;
+            if (cancel) g += `<path d="M${f.plate.x - 4} ${yy - 4}l8 8M${f.plate.x + 4} ${yy - 4}l-8 8" stroke="${C.paper}" stroke-width="2" stroke-linecap="round"/>`;
+            else if (r.losses.some((x) => x > 0)) {
+              const p = r.losses[0] > 0 ? 0 : 1;
+              g += `<text x="${f.plate.x}" y="${yy}" font-size="12" font-weight="700" fill="${C.paper}" text-anchor="middle" dominant-baseline="central">${p ? '−' + r.losses[p] + '▸' : '◂−' + r.losses[p]}</text>`;
+            } else if (r.shots[0] + r.shots[1] === 0) g += `<text x="${f.plate.x}" y="${yy}" font-size="12" fill="${C.dim}" text-anchor="middle" dominant-baseline="central">·</text>`;
+          }
+        }
+        // ---- CT3: a ledger of the rounds under the plate: a column per round, ■ / ◇ / · per side, ✕ or −N between ----
+        if (v === 3) {
+          const done = f.rounds.filter((x) => x.t <= t), last6 = done.slice(-6), cw = 20, w = Math.max(1, last6.length) * cw + 34, lx = f.plate.x - w / 2, ly = y0 + H + 6;
+          g += `<rect x="${f1(lx)}" y="${ly}" width="${f1(w)}" height="54" rx="7" fill="${C.plate}" fill-opacity=".92" stroke="${C.paper}" stroke-opacity=".45"/>`;
+          g += glyph(lx + 13, ly + 15, 'real', 'you', 3.5).replace(/fill="#5b9bff"/, `fill="${C.you}"`);
+          g += glyph(lx + 13, ly + 39, 'real', 'enemy', 3.5);
+          if (!last6.length) g += `<text x="${lx + 34}" y="${ly + 27}" font-size="12" fill="${C.dim}" dominant-baseline="central">–</text>`;
+          last6.forEach((x, i) => {
+            const cx = lx + 30 + i * cw + cw / 2, newest = i === last6.length - 1;
+            if (newest) g += `<rect x="${f1(cx - cw / 2 + 1)}" y="${ly + 3}" width="${cw - 2}" height="48" rx="4" fill="none" stroke="${C.paper}" stroke-width="${fresh ? 1.8 : 1}" stroke-opacity="${fresh ? 1 : 0.55}"/>`;
+            g += glyph(f1(cx), ly + 15, kindOf(x, 0), 'you', 4.5);
+            g += glyph(f1(cx), ly + 39, kindOf(x, 1), 'enemy', 4.5);
+            if (x.shots[0] > 0 && x.shots[1] > 0) g += `<path d="M${f1(cx - 3)} ${ly + 24}l6 6M${f1(cx + 3)} ${ly + 24}l-6 6" stroke="${C.paper}" stroke-width="1.5" stroke-linecap="round"/>`;
+            else if (x.losses.some((y) => y > 0)) g += `<text x="${f1(cx)}" y="${ly + 27}" font-size="12" font-weight="700" fill="${C.paper}" text-anchor="middle" dominant-baseline="central">${x.losses[0] ? '▲' : '▼'}${x.losses[0] || x.losses[1]}</text>`;
+          });
+        }
+        // ---- CT4: the fight score on top of the plate: totals of real and bonus shots per side and the round number ----
+        if (v === 4) {
+          const yy = y0 - extraTop + 11;
+          for (const p of [0, 1]) {
+            const cx = f.plate.x + (p ? 37 : -37), who = p ? 'enemy' : 'you', real = s0.shots[p] - s0.virt[p], bon = s0.virt[p];
+            g += glyph(cx - 25, yy, 'real', who, 4.5) + `<text x="${cx - 17}" y="${yy}" font-size="12" font-weight="700" fill="${C.paper}" dominant-baseline="central">${real}</text>`;
+            g += glyph(cx + 6, yy, 'bonus', who, 4.5) + `<text x="${cx + 14}" y="${yy}" font-size="12" font-weight="700" fill="${C.paper}" dominant-baseline="central">${bon}</text>`;
+          }
+          if (fresh) g += `<rect x="${x0 + 3}" y="${y0 - extraTop + 2}" width="${W - 6}" height="18" rx="6" fill="none" stroke="${C.paper}" stroke-width="1.4" opacity="${f1(1 - age / 0.5)}"/>`;
+          g += `<line x1="${x0 + 8}" y1="${y0 - 1}" x2="${x0 + W - 8}" y2="${y0 - 1}" stroke="#30363d"/>`;
+        }
+        return g;
+      }
+      // ---- CT2: a tag at each shooter for the time of the round's effects ----
+      function tags(I, f, t, P) {
+        const s0 = fstate(f, t), r = s0.last;
+        if (!r) return '';
+        const age = t - r.t;
+        if (age > 1.9) return '';
+        const op = age > 1.5 ? 1 - (age - 1.5) / 0.4 : 1;
+        let g = '';
+        for (const p of [0, 1]) {
+          const k = kindOf(r, p);
+          if (k === 'none') continue;
+          const at = P(p ? f.en : f.you), dx = p ? 30 : -32, x = at.x + dx, y = at.y - 24, w = 34;
+          const pop = age < 0.25 ? 0.7 + 1.2 * age : 1;
+          g += `<g opacity="${f1(op)}" transform="translate(${f1(x)} ${f1(y)}) scale(${f1(pop)})">`;
+          g += `<rect x="${-w / 2}" y="-10" width="${w}" height="20" rx="10" fill="${C.bg}" stroke="${p ? C.enemy : C.you}" stroke-width="1.5"/>`;
+          if (p) g += `<rect x="${-w / 2 + 2.5}" y="-7.5" width="${w - 5}" height="15" rx="7.5" fill="none" stroke="${C.enemy}" stroke-width=".9"/>`;
+          g += glyph(-7, 0, k, p ? 'enemy' : 'you', 4.6) + `<text x="5" y="0" font-size="12" font-weight="700" fill="${C.paper}" dominant-baseline="central">${r.shots[p]}</text></g>`;
+        }
+        return g;
+      }
+
+      // ===================== the scene =====================
+      function scene(I, v, t, opt) {
+        const s = opt.sc / 100, c = NODES.fork, P = (p) => ({ x: c.x + (p.x - c.x) * s, y: c.y + (p.y - c.y) * s });
+        const fights = FIGHTS.slice(0, opt.n);
+        let map = mapLayer(I);
+        const used = new Set(fights.filter((f) => f.node).map((f) => f.node));
+        for (const k of Object.keys(NODES)) {
+          const n = NODES[k];
+          let extra = '';
+          if (n.g && !used.has(k)) extra = token(I, n.x, n.y, 17, n.g, n.gc, 'you', String(n.g));
+          if (k === 'whouse' && opt.n === 1) extra = token(I, n.x, n.y, 15, 2, 2, 'you', '2');
+          if (n.fogq) extra = `<polygon points="${pts(tri(n.x, n.y, 15))}" fill="#141a22" stroke="${C.enemy}" stroke-width="2.4" stroke-dasharray="5 3"/>` + txt(n.x, n.y - 2, '?', 13, C.paper);
+          map += city(n, extra);
+        }
+        // the fighting groups
+        let fx = '';
+        for (const f of fights) {
+          const s0 = fstate(f, t);
+          if (f.kind === 'node') {
+            map += `<circle cx="${f.you.x}" cy="${f.you.y}" r="33" fill="none" stroke="${C.warn}" stroke-width="2" stroke-dasharray="6 5" opacity=".85"/>`;
+            map += token(I, f.you.x, f.you.y, 16, s0.u[0], s0.c[0], 'you', String(s0.u[0]));
+          } else {
+            map += `<path d="M${f.point.x - 6} ${f.point.y - 6}l12 12M${f.point.x + 6} ${f.point.y - 6}l-12 12" stroke="${C.paper}" stroke-width="2" opacity=".7"/>`;
+            map += token(I, f.you.x, f.you.y, 13, s0.u[0], s0.c[0], 'you', String(s0.u[0]));
+          }
+          map += token(I, f.en.x, f.en.y, 13, s0.u[1], s0.c[1], 'enemy', String(s0.u[1]));
+        }
+        const tf = `translate(${c.x} ${c.y}) scale(${s}) translate(${-c.x} ${-c.y})`;
+        let over = '';
+        for (const f of fights) over += effects(I, f, t, P);
+        for (const f of fights) over += plate(I, f, t, v, P);
+        if (v === 2) for (const f of fights) over += tags(I, f, t, P);
+        const vb = opt.crop || '0 0 960 560';
+        return `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${VARS[v].name}, ${t.toFixed(1)} s">${defs(I)}<rect x="-400" y="-400" width="1800" height="1400" fill="#0d1117"/><g transform="${tf}">${map}</g>${over}</svg>`;
+      }
+
+      // ===================== the state text =====================
+      function describe(t) {
+        const out = [];
+        for (const f of FIGHTS.slice(0, st.n)) {
+          const s0 = fstate(f, t), r = s0.last;
+          const say = (p) => { const k = kindOf(r, p); return k === 'real' ? '■ a real shot (a charge spent)' : k === 'bonus' ? '◇ a bonus shot (no charge spent)' : 'no shot'; };
+          let line = `<b>${f.name}</b>: `;
+          if (!r) line += `contact, no round yet; stock ◇ you ${s0.v[0]}, opponent ${s0.v[1]}. The counter has nothing to show.`;
+          else {
+            const res = r.shots[0] && r.shots[1] ? 'the shots cancelled each other (✕), nobody hit' : r.losses.some((x) => x) ? `a unit killed (−${r.losses[0] || r.losses[1]}, ${r.losses[0] ? 'yours' : "the opponent's"})` : 'nobody shot';
+            line += `round ${s0.idx + 1} at ${r.t.toFixed(1)} s. You: ${say(0)}. Opponent: ${say(1)}. Result: ${res}. `;
+            line += `<span class="k">Data: <code>last_round.shots=[${r.shots}]</code> <code>virtual=[${r.virtual}]</code> <code>spent=[${r.spent}]</code> <code>losses=[${r.losses}]</code>, <code>virtual_left=[${s0.v}]</code>; fight totals (CT4): real [${s0.shots[0] - s0.virt[0]}, ${s0.shots[1] - s0.virt[1]}], bonus [${s0.virt}].</span>`;
+          }
+          out.push(line);
+        }
+        const bad = checkScript();
+        out.push(`<span class="k">Script check (one shot per side per round, virtual first, never over the stock or the charges): ${bad.length ? 'FAILED: ' + bad.join('; ') : 'ok'}.</span>`);
+        return out.join('<br>');
+      }
+
+      // ===================== cards, table, recommendation =====================
+      const INFO = [
+        { what: 'Nothing is added. The round is read from the chips (one goes out, one dies), the SH1 tracers and the caption "◇ bonus attack" above the plate.', data: '–', cost: 'baseline', risk: 'The owner\'s complaint of 2026-10-22: the number of shots is not seen; a cancellation looks like "nothing happened" once the tracers fade (1.6 s).', est: '0' },
+        { what: 'One row under the AR1 chips: per side the glyph of the last round\'s shot (■ real, ◇ bonus, · none) and the count, "✕" in the middle for a cancellation or "−N" with a pointer to the side that lost a unit (◂ yours, ▸ the opponent\'s), "R3" at the left. The row flashes for 0.5 s on the round tick and stays until the next round.', data: '<code>last_round.shots</code>, <code>virtual</code>, <code>losses</code>: all in the view now. No DEC, no protocol, no simulation.', cost: 'about 1.0: one baked row texture per (kind, kind, result) per plate, 2-3 sprites; the plate grows by 24 px.', risk: 'Low. The plate is taller, so with three fights close together it covers a bit more of the map; the count is always 1 with shots_per_round = 1.', est: 'S, 1 day (<code>fightView.ts</code>, <code>arenaLayout.ts</code>, <code>bakedShapes.ts</code>, Vitest, visual references)' },
+        { what: 'A small pill at each shooter on the map (■ 1 or ◇ 1; the opponent\'s pill and glyph with a double outline) from the round tick for 1.6 s, then it fades. The plate stays as now.', data: 'The same fields as CT1. No DEC, no protocol, no simulation.', cost: 'about 1.0-1.02: 2 pooled sprites per fight for 1.9 s, alpha only.', risk: 'Medium-low. Next to the action, but it lives as long as the tracers and competes with the "−1", the sparks and the city signs (VP, the barracks column) at a node; gone when you look away.', est: 'S, 1 day (<code>effectsView.ts</code>, a pooled tag, Vitest)' },
+        { what: 'A strip under the plate: a column per round (last 6), your shot on top, the opponent\'s below (■, ◇, ·), "✕" or "▲N/▼N" (whose unit died) between; the newest column framed.', data: 'The rounds come from the <code>fight_round</code> events the client saw; after a reconnect the history starts at the current round. Exact history after a reconnect would need a protocol field (a short round list in <code>FightView</code>, <code>PROTOCOL_VERSION</code>++, a fog test). Note: this is the DEC-32 "A2 history strip" the owner did not choose on 2026-10-21.', cost: 'about 1.0-1.05: up to 12 glyph sprites and a strip plate per fight, changed once per round.', risk: 'Medium: the most information and the most space (54 px under the plate); with 3 fights it crowds the map; it repeats a variant already declined.', est: 'M, 2 days (client) + S if the protocol field is wanted' },
+        { what: 'A header row on the plate: per side the totals of the whole fight, "■ 3 ◇ 2", flashes on the round tick.', data: 'Real totals and bonus totals of the fight: <code>FightView.shots</code> has all shots per side, but not how many of them were bonus ones. Either the client sums <code>fight_round</code> events (wrong after a reconnect) or <b>a protocol field</b> (<code>FightView.virtual_used</code>, <code>PROTOCOL_VERSION</code>++, a fog test; public, both players already see every round).', cost: 'about 1.0: 4 numbers as `BitmapText` or baked digits per plate.', risk: 'Medium-low: answers "how many in all" (the issue example "● 2 ◇ 1"), but not "what happened just now"; numbers on a small plate need 12 px minimum.', est: 'S-M, 1-2 days (client) + S protocol' },
+      ];
+      function cards() {
+        document.getElementById('cards').innerHTML = VARS.map((x, i) => `<div class="card${i === st.v ? ' on' : ''}"><h3>${x.name}${i === REC ? ' <span class="rec">recommended</span>' : ''}</h3><dl><dt>What</dt><dd>${INFO[i].what}</dd><dt>Data</dt><dd>${INFO[i].data}</dd><dt>FPS</dt><dd>${INFO[i].cost}</dd><dt>Risk</dt><dd>${INFO[i].risk}</dd><dt>Estimate</dt><dd>${INFO[i].est}</dd></dl></div>`).join('');
+        document.getElementById('tbl').innerHTML = '<tr><th>Variant</th><th>DEC</th><th>Protocol</th><th>Simulation</th><th>Client</th><th>Estimate</th><th>FPS</th><th>Risk</th></tr>' + [
+          ['Now', 'no', 'no', 'no', 'no', '0', '1.0', 'the complaint stays'],
+          ['CT1 Tally on the plate', 'no', 'no', 'no', 'yes', 'S, 1 day', 'about 1.0', 'low'],
+          ['CT2 Tags at the shooters', 'no', 'no', 'no', 'yes', 'S, 1 day', 'about 1.0-1.02', 'medium-low'],
+          ['CT3 Round ledger', 'no', 'only for history after a reconnect', 'no', 'yes', 'M, 2 days', 'about 1.0-1.05', 'medium'],
+          ['CT4 Fight score', 'no', 'yes for exact totals (bonus total)', 'no', 'yes', 'S-M, 1-2 days', 'about 1.0', 'medium-low'],
+        ].map((r) => '<tr>' + r.map((c) => `<td>${c}</td>`).join('') + '</tr>').join('');
+        document.getElementById('recom').innerHTML = '<p><b>CT1 "Tally on the plate".</b> It answers the question the owner asked (what the round was: real, bonus, cancelled, a kill) in the place where the eye already goes for the fight (the AR1 plate), stays readable after the tracers fade, needs only fields that are already in the view, adds no moving object to a crowded map, and is the cheapest. Second: <b>CT2</b> if the owner wants the sign at the groups rather than on the plate. CT3 brings back the declined A2 strip; CT4 needs a protocol field and shows totals, not the last round.</p><p>Open question for the owner: is the "number" wanted at all? With <code>shots_per_round = 1</code> it is always 1 per side per round, so CT1 and CT2 could drop the digit and keep only the glyph; the example "● 2 ◇ 1" in #516 reads like fight totals, which is CT4.</p>';
+      }
+
+      // ===================== controls =====================
+      const $ = (s) => document.querySelector(s);
+      function seg(id, name, list, cur) {
+        $(id).innerHTML = list.map((n, i) => `<label><input type="radio" name="${name}" value="${i}" ${i === cur ? 'checked' : ''}><span>${n}</span></label>`).join('');
+      }
+      function controls() {
+        seg('#pkv', 'v', VARS.map((x, i) => x.name + (i === REC ? ' ★' : '')), st.v);
+        seg('#pkn', 'n', ['one', 'two (node and edge)'], st.n - 1);
+        $('#cmp').checked = !!st.cmp; $('#gray').checked = !!st.gray; $('#slow').checked = !!st.slow; $('#sc').value = String(st.sc);
+        $('#rbtn').innerHTML = '<b>Round</b>' + FIGHTS[0].rounds.map((r, i) => `<button data-t="${r.t + 0.4}">${i + 1}</button>`).join(' ');
+      }
+      function bind() {
+        $('#pkv').addEventListener('change', (e) => { st.v = +e.target.value; cards(); draw(); });
+        $('#pkn').addEventListener('change', (e) => { st.n = +e.target.value + 1; draw(); });
+        $('#cmp').addEventListener('change', (e) => { st.cmp = e.target.checked ? 1 : 0; draw(); });
+        $('#gray').addEventListener('change', (e) => { st.gray = e.target.checked ? 1 : 0; draw(); });
+        $('#slow').addEventListener('change', (e) => { st.slow = e.target.checked ? 1 : 0; toHash(); });
+        $('#sc').addEventListener('change', (e) => { st.sc = +e.target.value; draw(); });
+        $('#play').addEventListener('click', () => { st.play = st.play ? 0 : 1; last = performance.now(); draw(); });
+        $('#restart').addEventListener('click', () => { st.t = 0; draw(); });
+        $('#scrub').addEventListener('input', (e) => { st.t = +e.target.value; st.play = 0; draw(); });
+        $('#rbtn').addEventListener('click', (e) => { if (e.target.dataset.t) { st.t = +e.target.dataset.t; st.play = 0; draw(); } });
+        window.addEventListener('hashchange', () => { fromHash(); controls(); cards(); draw(); });
+      }
+      let lastHash = '';
+      function draw() {
+        const stage = $('#stage');
+        stage.classList.toggle('gray', !!st.gray);
+        const opt = { sc: st.sc, n: st.n };
+        if (st.cmp) {
+          const crop = st.n === 2 ? '380 0 440 420' : '380 140 340 300';
+          stage.innerHTML = '<div class="grid">' + VARS.map((x, i) => `<figure>${scene('s' + i, i, st.t, Object.assign({ crop }, opt))}<figcaption><b>${x.name}</b>${i === REC ? ' (recommended)' : ''}</figcaption></figure>`).join('') + '</div>';
+        } else stage.innerHTML = scene('m', st.v, st.t, opt);
+        $('#state').innerHTML = describe(st.t);
+        $('#scrub').value = st.t; $('#tlab').textContent = st.t.toFixed(1) + ' s'; $('#play').textContent = st.play ? '⏸' : '▶';
+        const h = JSON.stringify([st.v, st.cmp, st.n, st.sc, st.gray, st.slow, st.play, st.play ? 0 : st.t]);
+        if (h !== lastHash) { lastHash = h; toHash(); }
+      }
+      let last = performance.now();
+      function tick(now) {
+        if (st.play) {
+          st.t += ((now - last) / 1000) * (st.slow ? 0.25 : 1);
+          if (st.t > T_END) st.t = 0;
+          draw();
+        }
+        last = now;
+        requestAnimationFrame(tick);
+      }
+      fromHash(); controls(); cards(); bind(); draw(); requestAnimationFrame(tick);
+    </script>
+  </body>
+</html>
