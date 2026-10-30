@@ -111,7 +111,8 @@ export interface CellEdge {
   readonly neighbour: number | null;
   /**
    * Water lies across the edge (DEC-36, #544): a sea or a lake (`neighbour: null`) or a river or a
-   * stream, then `neighbour` is the area across it, if any. The thin area line is not drawn here,
+   * stream, then `neighbour` is the area across it, if any (the cell itself where a stream is cut
+   * into it, #585). The thin area line is not drawn here,
    * the owner border is (it runs along a coast).
    */
   readonly water?: boolean;
@@ -186,6 +187,41 @@ export interface Border extends Segment {
   readonly owner: number;
 }
 
+/** The corner shifts per `edges` array (the edges of a map never change; a capture redraws per frame). */
+const shiftCache = new WeakMap<readonly CellEdge[], Map<string, Point>>();
+
+/** How far (a multiple of the inset) a vertex of a sharp corner may move off its two edges. */
+const MITER_LIMIT = 2;
+
+/**
+ * The direction every corner of the areas of a geography moves in, by area: the bisector of the
+ * inward normals of the edges that meet there (the distance is a miter, capped at `MITER_LIMIT`). Two border segments that meet at a corner then meet at the moved corner too;
+ * moving each segment on its own normal opens a notch at a bend and crosses into a hook at a sharp
+ * tip, such as the land between a river mouth and the coast (#585).
+ */
+function cornerShifts(edges: readonly CellEdge[]): Map<string, Point> {
+  const cached = shiftCache.get(edges);
+  if (cached !== undefined) return cached;
+  const sums = new Map<string, Point>();
+  for (const { cell, a, b, inward } of edges) {
+    if (inward === undefined) continue;
+    for (const p of [a, b]) {
+      const key = `${String(cell)}|${String(p.x)},${String(p.y)}`;
+      const sum = sums.get(key) ?? { x: 0, y: 0 };
+      sums.set(key, { x: sum.x + inward.x, y: sum.y + inward.y });
+    }
+  }
+  const shifts = new Map<string, Point>();
+  for (const [key, sum] of sums) {
+    const length = Math.hypot(sum.x, sum.y);
+    if (length < 1e-9) continue;
+    const n = { x: sum.x / length, y: sum.y / length };
+    shifts.set(key, n);
+  }
+  shiftCache.set(edges, shifts);
+  return shifts;
+}
+
 /**
  * Border of the areas of owners: for every edge of an owned cell whose neighbour belongs to
  * somebody else (or nobody), a segment of the owner, moved `inset` into its own cell so that two
@@ -198,6 +234,7 @@ export function territoryBorders(
   edges: readonly CellEdge[] = cellEdges(cells),
 ): Border[] {
   const borders: Border[] = [];
+  const shifts = edges.some((e) => e.inward !== undefined) ? cornerShifts(edges) : null;
   for (const edge of edges) {
     const owner = owners[edge.cell] ?? null;
     if (owner === null) continue;
@@ -207,10 +244,19 @@ export function territoryBorders(
     if (edge.neighbour !== null && owners[edge.neighbour] === owner) continue;
     const cell = cells[edge.cell];
     if (cell === undefined) continue;
-    const d =
-      edge.inward === undefined
-        ? inward(edge.a, edge.b, centroid(cell), inset)
-        : { x: edge.inward.x * inset, y: edge.inward.y * inset };
+    if (edge.inward !== undefined && shifts !== null) {
+      // A miter at each end: the bisector there, as far as keeps the edge `inset` away.
+      const { inward: n } = edge;
+      const at = (p: Point): Point => {
+        const bisector = shifts.get(`${String(edge.cell)}|${String(p.x)},${String(p.y)}`) ?? n;
+        const cos = bisector.x * n.x + bisector.y * n.y;
+        const reach = inset / Math.max(cos, 1 / MITER_LIMIT);
+        return { x: p.x + bisector.x * reach, y: p.y + bisector.y * reach };
+      };
+      borders.push({ owner, a: at(edge.a), b: at(edge.b) });
+      continue;
+    }
+    const d = inward(edge.a, edge.b, centroid(cell), inset);
     borders.push({
       owner,
       a: { x: edge.a.x + d.x, y: edge.a.y + d.y },

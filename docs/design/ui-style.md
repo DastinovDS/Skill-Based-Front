@@ -1972,7 +1972,7 @@ Mockup: [`mockups/map-geography.html`](mockups/map-geography.html), frames in [`
 | W1 | **Flat ink**: one water colour, a thin coast line | none if baked | looks like a vector icon on the T2 ground |
 | W2 | **Shallows and banks**: light shallows, a pale bank, a darker river thread | none if baked | the bank must stay pale or it reads as a road |
 | W3 | **Engraved coast**: three waterlines, double river banks | none if baked | busy at overview, competes with border lines |
-| W4 | **Painted (T2 water)**: two-tone water, soft shore, reeds thinning from the bank, flow streaks | none (baked) | softest coast in grayscale |
+| W4 | **Painted (T2 water)**: two-tone water, soft shore, reeds thinning from the bank, flow streaks (removed 2026-10-30, #585) | none (baked) | softest coast in grayscale |
 
 **Recommendation: W4**, baked into `maps/<id>.bg.webp`. The geography itself (water cells, a stream on every road-less border, long rivers with bridges at border points, the client territory drawn from the baked vectors) is the same in all four. Measured on `ridge`: today 48 of 130 touching area pairs have no road, and on 11 percent of the map the tint lies over the ground of another area; in the proposal 0 and 0.
 

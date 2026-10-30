@@ -743,7 +743,6 @@ WATER_TONES = ((52, 92, 116), (66, 108, 130))  # two tones in soft blotches (moc
 RIVER_LIGHT = ((118, 160, 168), 0.42)  # a river is shallow: lighter than a lake
 SHALLOWS = ((150, 194, 186), 0.34)  # the shore of a sea or a lake: lighter inside the water
 CURRENT = ((30, 62, 84), 0.24)  # a river is a little darker along the current
-STREAK = ((210, 232, 236), 0.30)  # faint flow streaks along the rivers
 REED = ((74, 104, 62), 0.45)  # muted reed tufts on the land beside the water
 DECK, PLANK, RAIL, SHADOW = (155, 132, 102), (60, 44, 28), (91, 70, 50), (0, 0, 0)
 BRIDGE_LEN, BRIDGE_W = 34.0, 11.0
@@ -775,9 +774,7 @@ def _ground_cells(mapdef: MapDef, geo: Geography, seed: int | None) -> NDArray[n
     return np.where(land, own, under).astype(np.uint8)
 
 
-def _paint_lines(
-    size: tuple[int, int], lines: Iterable[Line], width: float, dash: tuple[float, float] | None
-) -> Field:
+def _paint_lines(size: tuple[int, int], lines: Iterable[Line], width: float) -> Field:
     """Alpha (0..1) of polylines drawn with a round pen, supersampled for smooth edges.
 
     ``width`` > 0 is a fixed width in px; ``width`` < 0 is a factor of the half width per point.
@@ -791,33 +788,12 @@ def _paint_lines(
         for k in range(len(pts) - 1):
             (ax, ay), (bx, by) = pts[k], pts[k + 1]
             px = width if width > 0 else -width * 2 * line.hw[k]
-            segs = [((ax, ay), (bx, by))]
-            if dash is not None:
-                segs = _dashes((ax, ay), (bx, by), dash, k)
-            for (sx, sy), (ex, ey) in segs:
-                pen = max(1, round(px * s))
-                draw.line([(sx * s, sy * s), (ex * s, ey * s)], fill=255, width=pen)
-                r = pen / 2
-                for cx, cy in ((sx * s, sy * s), (ex * s, ey * s)):
-                    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=255)
+            pen = max(1, round(px * s))
+            draw.line([(ax * s, ay * s), (bx * s, by * s)], fill=255, width=pen)
+            r = pen / 2
+            for cx, cy in ((ax * s, ay * s), (bx * s, by * s)):
+                draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=255)
     return np.asarray(img.reduce(s), dtype=np.float32) / 255.0
-
-
-def _dashes(a: Pt, b: Pt, dash: tuple[float, float], phase: int) -> list[tuple[Pt, Pt]]:
-    on, off = dash
-    ln = math.dist(a, b)
-    out: list[tuple[Pt, Pt]] = []
-    t = (phase * 7.0) % (on + off)
-    while t < ln:
-        e = min(ln, t + on)
-        out.append(
-            (
-                (a[0] + (b[0] - a[0]) * t / ln, a[1] + (b[1] - a[1]) * t / ln),
-                (a[0] + (b[0] - a[0]) * e / ln, a[1] + (b[1] - a[1]) * e / ln),
-            )
-        )
-        t += on + off
-    return out
 
 
 def _mix(img: Field, colour: tuple[int, int, int], alpha: NDArray[np.floating[Any]]) -> Field:
@@ -924,13 +900,10 @@ def render(mapdef: MapDef, geo: Geography, seed: int | None = None) -> Image8:
         )
         tone = _mix(tone, SHALLOWS[0], shallow * SHALLOWS[1])
         lines = (*geo.rivers, *geo.streams)
-        current = bake.blur(_paint_lines((w, h), lines, -0.5, None), 2) * water
+        current = bake.blur(_paint_lines((w, h), lines, -0.5), 2) * water
         tone = _mix(tone, CURRENT[0], current * CURRENT[1])
-        streaks = np.maximum(
-            _paint_lines((w, h), geo.rivers, 1.3, (10.0, 16.0)),
-            0.7 * _paint_lines((w, h), geo.streams, 1.0, (6.0, 14.0)),
-        )
-        tone = _mix(tone, STREAK[0], streaks * water * STREAK[1])
+        # No light flow streaks on the rivers: the owner read the short pale dashes as rendering
+        # artifacts (2026-10-30, #585); the river is the lighter tone and its darker current.
         out = np.asarray(img * (1.0 - water[..., None]) + tone * water[..., None], np.float32)
         out = _draw_reeds(out, _reeds((w, h), near, 1.0 - water, rng_reeds))
         return _draw_bridges(out, mapdef, geo.bridges)

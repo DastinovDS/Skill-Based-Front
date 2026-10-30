@@ -464,8 +464,9 @@ describe('MapView on a geography (DEC-36, #544)', () => {
   it('takes the areas from the vector file and tints them', () => {
     const view = new MapView(GEO_MAP, createLayers(), 0, {} as Renderer, true, GEO_FILE);
     expect(view.geography).toBe(true);
-    // Area 0 is x 0..90 above y = 60 and 0..100 below: not the Voronoi half at x < 100.
-    expect(polygonArea(view.cells[0] ?? [])).toBe(9400);
+    // Area 0 is x 0..90 above y = 60 and 0..100 below (9400, the end of the river rounded off a
+    // little, #585): not the Voronoi half at x < 100 (10000).
+    expect(polygonArea(view.cells[0] ?? [])).toBeCloseTo(9400, -2);
     view.destroy();
   });
 
