@@ -119,7 +119,7 @@ jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in 
 | `setup` | dependencies: `setup:py` (`uv sync --locked`), `setup:client`, `setup:e2e` (`pnpm install --frozen-lockfile`) | INF-01 |
 | `hooks` | once per clone: `pre-commit install` (ruff before every commit) | INF-02 |
 | `check` | all static checks: `check:py`, `check:client`, `check:e2e` | INF-02 |
-| `check:py` | ruff (check and format), pyright (strict), lint-imports (package boundaries), `gow-maps validate` of the maps (including the starting warehouse against `rulesets/mvp-1.toml`, DEC-26, item 5) | INF-02 |
+| `check:py` | ruff (check and format), pyright (strict), lint-imports (package boundaries), `gow-maps validate` of the maps (including the starting warehouse against `rulesets/mvp-2.toml`, DEC-26, item 5) | INF-02 |
 | `check:client` | eslint and prettier, svelte-check and tsc of the client | INF-03 |
 | `check:e2e` | prettier and tsc of the `e2e/` package | QA-02 |
 | `check:i18n` | UI strings only in dictionaries, the same keys in every locale dictionary (part of `test:client`) | CLI-11 |
@@ -142,18 +142,18 @@ jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in 
 | `regen`, `regen:protocol`, `regen:api` | regenerate the protocol schema and TS types (`protocol.gen.ts`) and the server OpenAPI with `api.gen.ts` | PRO-02, CLI-09 |
 | `db:migrate` | apply Alembic migrations (the server also does this on start) | DB-01 |
 | `db:revision` | a new migration from the `gow_server.models` models (argument: message) | DB-01 |
-| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-1.toml maps/*.json maps/fixtures/*.json maps/menu/*.json`: the map validator (the pool, the fixtures and the menu map), and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5); the check `geography` for a map with `maps/src/<name>.geo.json` (DEC-36) | MAP-02, #379, #474, #537 |
+| `maps`, `maps:validate` | `gow-maps validate --ruleset rulesets/mvp-2.toml maps/*.json maps/fixtures/*.json maps/menu/*.json`: the map validator (the pool, the fixtures and the menu map), and the starting warehouse is not above the warehouse of the ruleset with `city_upgrades` (DEC-26, item 5); the check `geography` for a map with `maps/src/<name>.geo.json` (DEC-36) | MAP-02, #379, #474, #537 |
 | `maps:mirror` | build `maps/<name>.json` from the half `maps/src/<name>.half.json` (argument: name) | MAP-03 |
 | `maps:preview` | draw the preview `maps/<name>.preview.png` (the pool and the menu map `maps/menu/`) | MAP-04, #474 |
 | `maps:bake` | bake the background `maps/<name>.bg.webp` (the pool and the menu map `maps/menu/`): numpy and Pillow, texture T2, WebP up to 0.5 MB; a map with an authored geography `maps/src/<name>.geo.json` also gets water and `maps/geo/<name>.json` (DEC-36) (after any map edit) | MAP-05, #344, #474, #537 |
-| `tournament` | bot tournament (by default all maps and bots, 100 seeds, 8 processes, `mvp-1`; anything else after `--`, for example `-- --seeds 20`; `mvp-0` is only a test ruleset, we do not run tournaments on it) | BOT-04 |
+| `tournament` | bot tournament (by default all maps and bots, 100 seeds, 8 processes, `mvp-2`; anything else after `--`, for example `-- --seeds 20`; `mvp-0` is only a test ruleset, we do not run tournaments on it) | BOT-04 |
 | `tournament:gh` | **for agents:** the tournament on GitHub runners (`.github/workflows/tournament.yml`, manual dispatch): the seeds are sharded over parallel jobs, the shards are merged (`scripts/tournament_shards.py`) into a file byte-identical to a local run, `gow-bots report` runs on it; the task dispatches, waits with one `gh run watch`, downloads `tournament.jsonl` and `report.md` into `--dir` (`.tournament/`). Options `--ref --ruleset --bots --maps --seeds --shards --label --dir` (`mise run tournament:gh --help`). **Prefer it to a local `tournament` above `--seeds 3`** (`docs/balance/README.md`). Needs bash and an authenticated `gh` | #582 |
-| `search` | parameter search of one bot by tournament (`gow-bots search`, a hill climb over its `PARAMS` ranges, standard library): the pool maps, 8 processes, `mvp-1`; `--bot`, `--against`, `--keys` and the rest after `--` (`docs/balance/README.md`). Few seeds: confirm the result with `tournament` | #166 |
+| `search` | parameter search of one bot by tournament (`gow-bots search`, a hill climb over its `PARAMS` ranges, standard library): the pool maps, 8 processes, `mvp-2`; `--bot`, `--against`, `--keys` and the rest after `--` (`docs/balance/README.md`). Few seeds: confirm the result with `tournament` | #166 |
 | `report` | balance report (argument: file, `docs/balance/latest.jsonl` by default) | BOT-05 |
 | `stats` | player statistics from replays as a table (`gow-bots stats`): stance, APM, supply actions, share of scheduled orders, CP spending; arguments after the task name: replay files and options (`docs/balance/README.md`) | #375 |
-| `stack` | **owner only.** The production stack on `http://localhost:8080` (HTTPS 8443, `SITE_ADDRESS=:80`; ports 80/443 are taken by another project), argument: ruleset (`mvp-1` by default). Needs a POSIX shell | OPS-01 |
+| `stack` | **owner only.** The production stack on `http://localhost:8080` (HTTPS 8443, `SITE_ADDRESS=:80`; ports 80/443 are taken by another project), argument: ruleset (`mvp-2` by default). Needs a POSIX shell | OPS-01 |
 | `stack:reset` | **owner only.** `docker compose down`, removal of the volume `gow-data` (database and replays), `up` again; the owner wipes the volume after every update on purpose | OPS-01 |
-| `stack:agent`, `stack:agent:down` | **the agents' stack:** project `sbf-agent`, `http://localhost:18080`, argument: ruleset (`mvp-1` by default); `down` removes its volumes. Needs a POSIX shell | OPS-01 |
+| `stack:agent`, `stack:agent:down` | **the agents' stack:** project `sbf-agent`, `http://localhost:18080`, argument: ruleset (`mvp-2` by default); `down` removes its volumes. Needs a POSIX shell | OPS-01 |
 | `load` | the load harness `gow_server.loadtest` against a server on this machine (`dev:server`): N matches over WebSockets, tick lag, step p99, CPU, memory; options after `--` (`docs/qa/load.md`) | QA-03 |
 | `load:agent` | the same inside the `app` container of the agents' stack (`stack:agent`, lift `GOW_GUEST_RATE_LIMIT` to at least 2N when starting it); needs a POSIX shell | QA-03 |
 | `smoke` | `deploy/smoke.sh` on the project `sbf-agent` (build, start, restart with the volume, check through Caddy, `check-caddy.sh`, `check-ws-reload.sh`; the stack is removed at the end); the CI job `docker` does the same. Needs bash | OPS-01 |
@@ -402,7 +402,7 @@ Style guide: `docs/design/ui-style.md` (section 23 "Visual decision process"). I
 - The choice "ordinary or scheduled order" is a common utility function of the ruleset prices.
 - The smart bots (`gow_bots.bots.smart`) play at a human tempo: a difficulty level `easy`, `normal` or `hard` (`smart_rusher@easy`; the name alone is `hard`) limits how often they think, how late they notice a shown enemy and their commands per minute (`gow_bots.bots.tempo`, `docs/balance/README.md`). A tempo is integer and deterministic like the rest of the bot.
 - A tournament is one match per process, both sides for each pair; the JSONL result is reproducible. After a ruleset edit: a tournament and a report in the PR.
-- Agents' tournaments run only on `mvp-1` (the ruleset of `stack` and `compose.yaml`); `mvp-0` stays a test ruleset (unit tests, golden replays), we do not run tournaments on it. After a rules change the smoke tournament is `mise run tournament -- --seeds 3` (it looks for crashes and gross imbalance; a report in the PR). A full tournament (default seeds) only after a change of ruleset numbers and before a playtest (BAL-02).
+- Agents' tournaments run only on `mvp-2` (the played ruleset of `stack` and `compose.yaml`, owner decision 2026-10-30, #40); `mvp-0` and `mvp-1` stay as historical and test rulesets (unit tests, golden replays), we do not run tournaments on them. After a rules change the smoke tournament is `mise run tournament -- --seeds 3` (it looks for crashes and gross imbalance; a report in the PR). A full tournament (default seeds) only after a change of ruleset numbers and before a playtest (BAL-02).
 
 ---
 

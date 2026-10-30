@@ -3416,6 +3416,7 @@ The current starting values of the ruleset `rulesets/mvp-0.toml` (durations in t
 
 - **A dominant strategy.** If more than 70% of matches follow one scenario, there is no depth.
 - **Bot self-play.** Three simple bots (expansion / early pressure / supply cut-off). Look at the spread of outcomes: if one bot wins more than ~65% against all others, there is a skew somewhere.
+  **Reading of the BAL-02 gate (#40, criterion 1; owner decision 2026-10-30, #611, option A):** the "no strategic bot above 65%" check is read over the non-bunker strategic bots (`rusher`, `strangler`, `reactive`, `expander` and their `smart_*` versions); the bunkers (`turtle`, `smart_turtle`) win by holding and lose on VP by design (section 11), so they are checked by criterion 4 (Turtle against Expander below 40%). Whether the claim of empty nodes needs a rule (option C) is not decided; if it is, it gets its own DEC.
 - **The share of scheduled orders** among attacks: the guideline is 20-70%; the attacks are the orders into a node with an enemy garrison (#590, section 5).
 - **Does the siege pay off:** are cities taken by attrition if the roads are cut.
 - **The bunker:** does a player who sealed themselves in a small region win.
