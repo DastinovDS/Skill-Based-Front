@@ -44,7 +44,11 @@ describe('CrashGuard', () => {
     const alert = target.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain('Something went wrong');
     const buttons = [...target.querySelectorAll('button')];
-    expect(buttons.map((b) => b.textContent)).toEqual(['Reload', 'To the menu']);
+    // The labels carry the key caps (Enter, Esc).
+    expect(buttons.map((b) => b.textContent.replace(/\s+/g, ' ').trim())).toEqual([
+      'Reload ↵',
+      'To the menu Esc',
+    ]);
     buttons[0]?.click();
     buttons[1]?.click();
     expect(onreload).toHaveBeenCalledOnce();
@@ -54,6 +58,18 @@ describe('CrashGuard', () => {
 
   it('offers only Reload without an exit', () => {
     const target = render({ broken: true });
-    expect([...target.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Reload']);
+    expect(
+      [...target.querySelectorAll('button')].map((b) => b.textContent.replace(/\s+/g, ' ').trim()),
+    ).toEqual(['Reload ↵']);
+  });
+
+  it('reloads on Enter and leaves on Esc', () => {
+    const onreload = vi.fn();
+    const onexit = vi.fn();
+    render({ broken: true, onreload, onexit });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(onreload).toHaveBeenCalledOnce();
+    expect(onexit).toHaveBeenCalledOnce();
   });
 });

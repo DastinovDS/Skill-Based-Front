@@ -12,6 +12,7 @@ const API_ERRORS: Record<ApiErrorCode, MessageKey> = {
   rate_limited: 'error.api.rate_limited',
   queue_banned: 'error.api.queue_banned',
   unavailable: 'error.api.unavailable',
+  full: 'error.api.full',
   network: 'error.api.network',
   server: 'error.api.server',
 };

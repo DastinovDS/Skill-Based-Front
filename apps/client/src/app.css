@@ -81,8 +81,7 @@ body {
 
 .card input,
 .card select,
-.card button,
-.banner button {
+.card button {
   font: inherit;
   color: inherit;
   background: var(--surface-2);
@@ -91,8 +90,7 @@ body {
   padding: 6px 10px;
 }
 
-.card button,
-.banner button {
+.card button {
   cursor: pointer;
 }
 
@@ -139,25 +137,6 @@ body {
   justify-content: space-between;
   gap: 12px;
   overflow-wrap: anywhere;
-}
-
-/* Messages over the match map: connection status, pause. */
-.banner {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  top: 56px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  max-width: calc(100% - 32px);
-  padding: 8px 14px;
-  box-sizing: border-box;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  font-size: 14px;
 }
 
 /* ===== The screens before a match (#471, variant A "Front"; docs/design/mockups/start-menu.html) =====

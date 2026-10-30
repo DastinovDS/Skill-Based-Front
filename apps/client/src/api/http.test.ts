@@ -61,6 +61,23 @@ describe('Api', () => {
     expect((error as ApiError).code).toBe(code);
   });
 
+  // The server's 503 bodies differ (#602): a full or busy server must not read as a restarting one.
+  it.each([
+    ['server is full, try again in a moment', 'full'],
+    ['server is busy, try again in a moment', 'full'],
+    ['server is restarting', 'unavailable'],
+    ['no maps', 'unavailable'],
+  ])('tells the 503 body "%s" as %s', async (detail, code) => {
+    const error = await new Api(respond(503, { detail })).me('t').catch((e: unknown) => e);
+    expect((error as ApiError).code).toBe(code);
+  });
+
+  it('keeps a 503 without a readable body as unavailable', async () => {
+    const fetchFn = vi.fn(() => Promise.resolve(new Response('Bad Gateway', { status: 503 })));
+    const error = await new Api(fetchFn).me('t').catch((e: unknown) => e);
+    expect((error as ApiError).code).toBe('unavailable');
+  });
+
   it('reports a failed request as network', async () => {
     const api = new Api(() => Promise.reject(new TypeError('offline')));
     await expect(api.maps()).rejects.toMatchObject({ code: 'network' });

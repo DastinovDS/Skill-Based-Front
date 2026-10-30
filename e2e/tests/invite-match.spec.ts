@@ -163,7 +163,7 @@ test('pause, a dropped connection and a forfeit in a private match', async ({
   await guest.dropConnection();
   await expect.poll(() => guest.welcomes(), { timeout: 20_000 }).toBe(2);
   await expect.poll(async () => guest.tick(), { timeout: 20_000 }).toBeGreaterThan(before + 10);
-  await expect(guest.page.getByText('Connection lost. Reconnecting...')).toBeHidden();
+  await expect(guest.page.getByText('Reconnecting', { exact: true })).toBeHidden();
 
   // The guest gives up: a defeat for them, a victory for the host.
   await guest.forfeit();

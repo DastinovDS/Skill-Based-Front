@@ -2,9 +2,12 @@
   import { untrack } from 'svelte';
   import { HudChrome } from '../hud/chrome.svelte.ts';
   import { DEV_PLAYER, DEV_RULES } from '../hud/devFeed.ts';
+  import MatchStatus from '../app/MatchStatus.svelte';
+  import { statusView } from '../app/matchStatus.ts';
   import Hud from '../hud/Hud.svelte';
   import { routeKey } from '../hud/hudKeys.ts';
   import { HudState } from '../hud/hudState.svelte.ts';
+  import { STATUS_INPUTS, isStatusScene } from './statusScenes.ts';
   import { createDevMatch } from './devMatch.ts';
   import { parseEta, pinEta } from './etaPin.ts';
   import { DEMO_SCENE, FIXTURE_SCENES, frozenSource } from './scenarios.ts';
@@ -46,9 +49,14 @@
     params.has('capture') && Number.isInteger(Number(params.get('capture')))
       ? Number(params.get('capture'))
       : null;
+  // `?status=<state>` puts an in-match status bar over a fixture scene (#602, `statusScenes.ts`);
+  // `renderer` is the notice of a map that could not be drawn.
+  const statusParam = params.get('status');
+  const statusId = isStatusScene(statusParam) ? statusParam : null;
+  const status = statusId === null ? null : statusView(STATUS_INPUTS[statusId]);
   const rules = capturePinned === null ? DEV_RULES : { ...DEV_RULES, capture: { charge_cost: 1 } };
   const fixtureScene = (id: string | null) => FIXTURE_SCENES.find((scene) => scene.id === id);
-  let rendererFailed = $state(false);
+  let rendererFailed = $state(statusId === 'renderer');
   let sceneId = $state(
     fixtureScene(requested) === undefined ? DEMO_SCENE : (requested ?? DEMO_SCENE),
   );
@@ -235,6 +243,7 @@
     {hud}
     {orders}
     {chrome}
+    onreload={() => undefined}
     oninsets={(next: Insets) => {
       insets = next;
     }}
@@ -243,6 +252,9 @@
       group: (id: string) => canvas?.groupAnchor(id) ?? null,
     }}
   />
+  {#if status !== null}
+    <MatchStatus view={status} lifted={rendererFailed} onaction={() => undefined} />
+  {/if}
 </main>
 
 <style>

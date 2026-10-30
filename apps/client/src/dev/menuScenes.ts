@@ -66,6 +66,11 @@ export const MENU_SCENE_IDS = [
   'password-set',
   'password-change',
   'exit-rated',
+  'match-loading-map',
+  'match-loading-connect',
+  'match-loading-frame',
+  'match-error-map',
+  'crash',
   ...BOARD_SCENE_IDS,
 ] as const;
 
