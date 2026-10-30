@@ -39,6 +39,14 @@
     params.has('split') && Number.isInteger(Number(params.get('split')))
       ? Number(params.get('split'))
       : null;
+  // `?capture=<node>` turns on the price of a capture (`capture.charge_cost = 1`, DEC-38) and adds a
+  // `capture_failed` event at that node to a fixture scene: its toast and the capture tip on a target
+  // the player does not own (#580) can be looked at.
+  const capturePinned =
+    params.has('capture') && Number.isInteger(Number(params.get('capture')))
+      ? Number(params.get('capture'))
+      : null;
+  const rules = capturePinned === null ? DEV_RULES : { ...DEV_RULES, capture: { charge_cost: 1 } };
   const fixtureScene = (id: string | null) => FIXTURE_SCENES.find((scene) => scene.id === id);
   let rendererFailed = $state(false);
   let sceneId = $state(
@@ -73,9 +81,7 @@
   const fixture = $derived(fixtureScene(sceneId));
 
   // The HUD numbers for the map on screen.
-  const hud = $derived(
-    new HudState({ me: DEV_PLAYER, nicks: ['Danya', 'Bot'], rules: DEV_RULES, map }),
-  );
+  const hud = $derived(new HudState({ me: DEV_PLAYER, nicks: ['Danya', 'Bot'], rules, map }));
   const chrome = new HudChrome();
 
   // The demo scene is a live match against the dev server (until SRV-03); a fixture is a frozen
@@ -84,7 +90,7 @@
     fixture === undefined
       ? createDevMatch(
           map,
-          DEV_RULES,
+          rules,
           hud,
           (msg) => {
             orders.onReach(msg);
@@ -117,6 +123,14 @@
         for (const event of scene.events) {
           hud.onEvent(event);
         }
+        if (capturePinned !== null) {
+          hud.onEvent({
+            type: 'event',
+            tick: scene.snapshot.tick,
+            kind: 'capture_failed',
+            data: { node: capturePinned, player: DEV_PLAYER, group: 'dev', result: 'bounce' },
+          });
+        }
         // A frozen scene has no render clock: its toasts show at once.
         hud.onRender(Number.POSITIVE_INFINITY);
       });
@@ -130,8 +144,8 @@
       map,
       // With `?menus` the city development is on too: the city menu shows all three sectors.
       rules: menusOn
-        ? { ...DEV_RULES, city_upgrades: { ...DEV_RULES.city_upgrades, enabled: true } }
-        : DEV_RULES,
+        ? { ...rules, city_upgrades: { ...rules.city_upgrades, enabled: true } }
+        : rules,
       book: match?.session.orders ?? new OrderBook(),
       send: match === null ? (menusOn ? () => 0 : null) : (cmd) => match.session.send(cmd),
       alerts: hud.alerts,

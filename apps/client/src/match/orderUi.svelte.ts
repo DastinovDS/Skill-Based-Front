@@ -44,6 +44,12 @@ export interface OrderUiData {
    * order is sent (#468). `null`: none.
    */
   readonly splitHover: number | null;
+  /**
+   * The node the pointer rests on as a target of the selected group that the player does not own,
+   * while a capture costs charges (`ruleset_public.capture.charge_cost > 0`, DEC-38): the tip tells
+   * the rule. It says nothing about whether this group can pay (AGENTS.md 7.1). `null`: none.
+   */
+  readonly captureHover: number | null;
   /** The «Supply» map mode is on (Tab or F2, DEC-18). */
   readonly supplyMode: boolean;
   /** The terrain map mode is on (`T`, #429): patterns for the ground, a sight sign on the places you see. */
@@ -65,6 +71,7 @@ export class OrderUiState {
     roadMode: false,
     roadHover: null,
     splitHover: null,
+    captureHover: null,
     supplyMode: false,
     terrainMode: false,
     transferFrom: null,

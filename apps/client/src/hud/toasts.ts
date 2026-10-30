@@ -1,7 +1,7 @@
 /**
  * Which events and answers become a toast (ui-style 10.4, U2). Pure; `toastState.svelte.ts` keeps
- * the list. Toasts are for fights, captures and lost cities, attrition, a lost recruit queue and a
- * refused command; VP awards are only in the score of the top bar, and everything else is in the
+ * the list. Toasts are for fights, captures and lost cities, a capture that could not be paid
+ * (DEC-38), attrition, a lost recruit queue and a refused command; VP awards are only in the score of the top bar, and everything else is in the
  * journal.
  */
 import type { PlayerId } from '../protocol.gen.ts';
@@ -29,6 +29,7 @@ export const TOAST_EVENT_KINDS: ReadonlySet<string> = new Set([
   'fight_ended',
   'attrition',
   'recruit_queue_lost',
+  'capture_failed',
 ]);
 
 /** The toast of `event` for player `me`, or `null` if the event goes to the journal only. */

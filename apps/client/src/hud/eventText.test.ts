@@ -44,6 +44,24 @@ describe('eventText', () => {
     expect(eventText(event('fight_ended', fight), 0, names)).toContain('on road 5');
   });
 
+  it('tells a capture the group could not pay for (DEC-38), as a warning toast', () => {
+    setLocale('en');
+    const bounce = event('capture_failed', { node: 1, player: 0, group: 'g', result: 'bounce' });
+    const lost = event('capture_failed', { node: 2, player: 0, group: 'g', result: 'encircled' });
+    expect(isLogged('capture_failed')).toBe(true);
+    expect(eventText(bounce, 0, names)).toBe(
+      'Birch not taken: no charge to pay, the group turns back',
+    );
+    expect(eventText(lost, 0, names)).toBe(
+      'Cedar not retaken: no charge to pay, the group is lost',
+    );
+    expect(toastOf(bounce, 0, names)).toEqual({
+      tone: 'warn',
+      icon: 'alert',
+      text: 'Birch not taken: no charge to pay, the group turns back',
+    });
+  });
+
   it('does not show an unknown kind (never a raw kind name)', () => {
     expect(isLogged('weather')).toBe(false);
     expect(eventText(event('weather', {}), 0, names)).toBe('');
