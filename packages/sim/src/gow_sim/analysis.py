@@ -40,6 +40,35 @@ Definitions (all counts per player id, sides ``0`` and ``1``):
   are not burning and are not counted. Charges that never were produced (the start stock) never
   burn, so the share cannot exceed 1000.
 
+**Charge ledger and flow** (#588, balance statistics, not game rules; ``docs/balance/README.md``
+has the same text). Per player, from the events of the match, the start stock of the map and two
+state samplings; nothing is added to the simulation:
+
+- ``charges_start`` and ``charges_end`` are the charge stock (``charge_stock``) before tick 1 and
+  after the last tick. Sources: ``charges_start`` + ``charges_produced``. Sinks: ``charges_burned``,
+  ``charges_fights`` (``spent_<p>`` of the public ``fight_round`` events), ``charges_captures``
+  (``node_captured`` count times ``capture.charge_cost``, DEC-38), ``charges_packets_lost``
+  (``packet_lost``), ``charges_warehouses_lost`` (``warehouse_lost``, its ``owner``),
+  ``charges_starved`` (``starvation`` warehouse + units), ``charges_attrition`` (``attrition``
+  with a charged unit: one charge each) and ``charges_end``. ``charges_residual`` = sources - sinks
+  and must be 0: a value other than 0 means a charge appeared or vanished that no event explains
+  (a rule changed without this ledger).
+- Flow: ``charges_sent`` (``packet_sent``, the supply dispatch), ``charges_delivered`` (all
+  ``packet_delivered``, one-off transfers included), ``charges_delivered_front`` (of them into a
+  city with a front marker at the end of that tick), ``charges_transfers`` (``transfer_started``).
+- **Stock by place**, ``stock_by_place_minute``: the charges of a player split into the places of
+  ``PLACES`` (capital warehouse, warehouses of the cities with a front marker, other warehouses,
+  charged units standing in nodes, charged units on roads, packets), sampled at the end of every
+  ``PLACE_SAMPLE_TICKS``-th tick; the value of a minute is the mean of its samples in hundredths
+  of a charge (rounded down; minute ``m``: ticks ``m * 60 * tick_hz < t <= (m + 1) * 60 *
+  tick_hz``; ``None`` for a minute without a sample). The places sum to ``charge_stock``.
+- **Supply bottleneck**, counted in every tick: ``marker_ticks`` (the player owns its capital and
+  a city other than the capital with a front marker), ``front_empty_ticks`` (of them: a marker
+  city has an empty warehouse), ``front_empty_cap_has_ticks`` (of those: the capital warehouse is
+  not empty), ``cap_full_ticks`` (the player owns its capital and the warehouse is at capacity,
+  counted in all ticks). ``front_empty_permille`` and ``front_empty_cap_has_permille`` are the
+  first two over ``marker_ticks`` (per mille, rounded down; ``None`` without marker ticks).
+
 Player statistics (#375), the actions of a player instead of the outcome: ``analyze_stats(log)``
 returns ``MatchStats``, one ``PlayerStats`` per side. They come from the command journal of the
 match (every command sent, accepted or rejected, with the price charged) and from existing events
@@ -85,11 +114,15 @@ from gow_sim.commands import Forfeit, Move, Ok, PlayerCommand
 from gow_sim.maps import PLAYERS
 from gow_sim.match import Match
 from gow_sim.ruleset import Stance
-from gow_sim.state import Event, GameState
+from gow_sim.state import Event, GameState, OnEdge
+from gow_sim.systems.capacity import warehouse_capacity
 
 __all__ = [
     "CP_CATEGORIES",
+    "PLACES",
+    "PLACE_SAMPLE_TICKS",
     "UNFINISHED",
+    "ChargeFlow",
     "CommandRecord",
     "MatchLog",
     "MatchMetrics",
@@ -99,12 +132,26 @@ __all__ = [
     "PlayerStats",
     "analyze",
     "analyze_stats",
+    "charge_places",
     "charge_stock",
 ]
 
 UNFINISHED: Final = "unfinished"
 """``MatchMetrics.reason`` of a match that did not end (no ``match_ended`` event)."""
 
+
+PLACES: Final[tuple[str, ...]] = (
+    "cap_wh",
+    "front_wh",
+    "rear_wh",
+    "units_node",
+    "units_road",
+    "packets",
+)
+"""Places of the charge stock, in output order (module docstring, stock by place)."""
+
+PLACE_SAMPLE_TICKS: Final = 10
+"""The stock by place is sampled at the end of every tick that is a multiple of this (1 second)."""
 
 CP_CATEGORIES: Final[tuple[str, ...]] = (
     "move",
@@ -188,6 +235,20 @@ class MatchLog:
     stock: tuple[tuple[int, ...], ...]
     """Charge stock samples by player id: entry ``t - 1`` of a player is the stock at the end of
     tick ``t`` (``charge_stock``); every player has one entry per tick played."""
+    capture_charge_cost: int = 0
+    """``capture.charge_cost`` of the ruleset."""
+    places_start: tuple[tuple[int, ...], ...] = ()
+    """``charge_places`` by player id before tick 1; empty in a hand-made log."""
+    places_end: tuple[tuple[int, ...], ...] = ()
+    """``charge_places`` by player id after the last tick."""
+    place_samples: tuple[tuple[tuple[int, ...], ...], ...] = ((), ())
+    """``charge_places`` by player id at the end of every ``PLACE_SAMPLE_TICKS``-th tick:
+    entry ``i`` is tick ``(i + 1) * PLACE_SAMPLE_TICKS``."""
+    bottleneck: tuple[tuple[int, int, int, int], ...] = ((0, 0, 0, 0), (0, 0, 0, 0))
+    """By player id: ``marker_ticks``, ``front_empty_ticks``, ``front_empty_cap_has_ticks``,
+    ``cap_full_ticks`` (module docstring)."""
+    delivered_front: tuple[int, ...] = (0, 0)
+    """By player id: charges delivered into a city with a front marker."""
 
 
 def charge_stock(state: GameState) -> tuple[int, ...]:
@@ -206,6 +267,29 @@ def charge_stock(state: GameState) -> tuple[int, ...]:
     return tuple(total[p] for p in PLAYERS)
 
 
+def charge_places(state: GameState) -> tuple[tuple[int, ...], ...]:
+    """Charges of every player by player id split into ``PLACES`` (module docstring).
+
+    The sums do not depend on the iteration order, so the dicts are read as they are.
+    """
+    out = {p: [0] * len(PLACES) for p in PLAYERS}
+    for nid, node in state.nodes.items():
+        owner = node.owner
+        if owner is None:
+            continue
+        if nid == state.map.capital(owner):
+            out[owner][0] += node.warehouse
+        elif nid in state.players[owner].fronts:
+            out[owner][1] += node.warehouse
+        else:
+            out[owner][2] += node.warehouse
+    for group in state.groups.values():
+        out[group.owner][4 if isinstance(group.location, OnEdge) else 3] += group.charged
+    for packet in state.packets.values():
+        out[packet.owner][5] += packet.charges
+    return tuple(tuple(out[p]) for p in PLAYERS)
+
+
 class MatchRecorder:
     """A ``MatchObserver`` that builds a ``MatchLog``; use one recorder per match."""
 
@@ -219,11 +303,18 @@ class MatchRecorder:
         self._accepted = _zeros()
         self._rejected = _zeros()
         self._stock: dict[int, list[int]] = {p: [] for p in PLAYERS}
+        self._places_start: tuple[tuple[int, ...], ...] = ()
+        self._samples: dict[int, list[tuple[int, ...]]] = {p: [] for p in PLAYERS}
+        self._bottleneck = {p: [0, 0, 0, 0] for p in PLAYERS}
+        self._delivered_front = _zeros()
+        self._capitals: dict[int, int] = {}
 
     def begin(self, match: Match) -> None:
         if self._match is not None:
             raise RuntimeError("the recorder has already begun")
         self._match = match
+        self._capitals = {p: match.state.map.capital(p) for p in PLAYERS}
+        self._places_start = charge_places(match.state)
         self._owners = {nid: n.owner for nid, n in sorted(match.state.nodes.items())}
         self._initial = tuple(self._owners.values())
 
@@ -246,14 +337,48 @@ class MatchRecorder:
             if isinstance(cmd, Move):  # owners are still those from before this tick's events
                 attack = self._owners[cmd.dest] != r.player
                 self._moves.append(MoveRecord(r.tick, r.player, cmd.planned, attack))
-        for e in match.state.events:
+        state = match.state
+        for e in state.events:
             if e.kind == "node_captured":
                 node, player = e.get("node"), e.get("player")
                 assert isinstance(node, int) and isinstance(player, int)
                 self._owners[node] = player
-        self._events.extend(match.state.events)
-        for p, charges in zip(PLAYERS, charge_stock(match.state), strict=True):
+            elif e.kind == "packet_delivered":
+                node, player, charges = e.get("node"), e.get("player"), e.get("charges")
+                assert isinstance(node, int) and isinstance(player, int)
+                assert isinstance(charges, int)
+                if node in state.players[player].fronts:
+                    self._delivered_front[player] += charges
+        self._events.extend(state.events)
+        for p, charges in zip(PLAYERS, charge_stock(state), strict=True):
             self._stock[p].append(charges)
+        self._count_bottleneck(match)
+        if state.tick % PLACE_SAMPLE_TICKS == 0:
+            for p, places in zip(PLAYERS, charge_places(state), strict=True):
+                self._samples[p].append(places)
+
+    def _count_bottleneck(self, match: Match) -> None:
+        state = match.state
+        for p in PLAYERS:
+            capital = self._capitals[p]
+            cap = state.nodes[capital]
+            if cap.owner != p:
+                continue
+            counts = self._bottleneck[p]
+            if cap.warehouse >= warehouse_capacity(state, match.rules, capital):
+                counts[3] += 1
+            marked = [
+                n
+                for n in state.players[p].fronts
+                if n is not None and n != capital and state.nodes[n].owner == p
+            ]
+            if not marked:
+                continue
+            counts[0] += 1
+            if any(state.nodes[n].warehouse == 0 for n in marked):
+                counts[1] += 1
+                if cap.warehouse > 0:
+                    counts[2] += 1
 
     def log(self) -> MatchLog:
         """The log of the match as far as it was played."""
@@ -272,7 +397,76 @@ class MatchRecorder:
             accepted=tuple(self._accepted[p] for p in PLAYERS),
             rejected=tuple(self._rejected[p] for p in PLAYERS),
             stock=tuple(tuple(self._stock[p]) for p in PLAYERS),
+            capture_charge_cost=match.rules.capture.charge_cost,
+            places_start=self._places_start,
+            places_end=charge_places(match.state),
+            place_samples=tuple(tuple(self._samples[p]) for p in PLAYERS),
+            bottleneck=tuple(
+                (b[0], b[1], b[2], b[3]) for b in (self._bottleneck[p] for p in PLAYERS)
+            ),
+            delivered_front=tuple(self._delivered_front[p] for p in PLAYERS),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class ChargeFlow:
+    """The charge ledger, flow, stock by place and bottleneck of one player (module docstring).
+
+    ``charges_produced`` and ``charges_burned`` stay in ``MatchMetrics``.
+    """
+
+    start: int
+    fights: int
+    captures: int
+    packets_lost: int
+    warehouses_lost: int
+    starved: int
+    attrition: int
+    end: int
+    residual: int
+    """``start + produced - (burned + fights + captures + packets_lost + warehouses_lost +
+    starved + attrition) - end``; 0 in a consistent match."""
+    sent: int
+    delivered: int
+    delivered_front: int
+    transfers: int
+    stock_by_place_minute: tuple[tuple[str, tuple[int | None, ...]], ...]
+    """Per ``PLACES`` name the mean of each match minute in hundredths of a charge."""
+    marker_ticks: int
+    front_empty_ticks: int
+    front_empty_cap_has_ticks: int
+    cap_full_ticks: int
+    front_empty_permille: int | None
+    front_empty_cap_has_permille: int | None
+
+
+_FLOW_FIELDS: Final[tuple[str, ...]] = (
+    "start",
+    "fights",
+    "captures",
+    "packets_lost",
+    "warehouses_lost",
+    "starved",
+    "attrition",
+    "end",
+    "residual",
+    "sent",
+    "delivered",
+    "delivered_front",
+    "transfers",
+    "marker_ticks",
+    "front_empty_ticks",
+    "front_empty_cap_has_ticks",
+    "cap_full_ticks",
+)
+"""Integer fields of ``ChargeFlow`` that ``MatchMetrics.to_json`` writes as ``charges_<name>`` or
+``<name>``: ``_flow_key``."""
+
+
+def _flow_key(name: str) -> str:
+    if name.endswith("_ticks") or name == "stock_by_place_minute":
+        return name
+    return f"charges_{name}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,9 +500,19 @@ class MatchMetrics:
     charges_burned: tuple[int, ...]
     burned_permille: tuple[int | None, ...]
     """``charges_burned * 1000 // charges_produced``; ``None`` without production."""
+    flow: tuple[ChargeFlow, ...]
+    """The charge ledger and flow by player id (#588)."""
 
     def to_json(self) -> dict[str, object]:
         """Plain JSON data; per-player values are lists indexed by player id."""
+        flow: dict[str, object] = {
+            _flow_key(f): [getattr(x, f) for x in self.flow] for f in _FLOW_FIELDS
+        }
+        flow["stock_by_place_minute"] = [
+            {name: list(values) for name, values in x.stock_by_place_minute} for x in self.flow
+        ]
+        flow["front_empty_permille"] = [x.front_empty_permille for x in self.flow]
+        flow["front_empty_cap_has_permille"] = [x.front_empty_cap_has_permille for x in self.flow]
         return {
             "winner": self.winner,
             "reason": self.reason,
@@ -331,6 +535,7 @@ class MatchMetrics:
             "charges_produced": list(self.charges_produced),
             "charges_burned": list(self.charges_burned),
             "burned_permille": list(self.burned_permille),
+            **flow,
         }
 
 
@@ -346,6 +551,7 @@ def analyze(log: MatchLog) -> MatchMetrics:
     reason = UNFINISHED
     produced = _zeros()
     burned = _zeros()
+    ledger = {k: _zeros() for k in _EVENT_COUNTERS}
     fought: set[int] = set()  # nodes whose fight started or ended in the tick being read
     fight_tick = -1
     for e in log.events:
@@ -365,6 +571,7 @@ def analyze(log: MatchLog) -> MatchMetrics:
             case "node_captured":
                 node, player = e.get("node"), e.get("player")
                 assert isinstance(node, int) and isinstance(player, int)
+                ledger["captures"][player] += 1
                 if owners[node] == 1 - player:  # an enemy node, not a neutral one
                     won[player] += 1
                     if node not in fought:  # walked into an empty node: a siege of one step
@@ -381,6 +588,7 @@ def analyze(log: MatchLog) -> MatchMetrics:
                 winner, reason = w, why
             case _:
                 pass
+        _count_ledger(e, ledger)
     orders = _zeros()
     attacks = _zeros()
     planned = _zeros()
@@ -417,6 +625,109 @@ def analyze(log: MatchLog) -> MatchMetrics:
         burned_permille=tuple(
             burned[p] * 1000 // produced[p] if produced[p] else None for p in PLAYERS
         ),
+        flow=tuple(
+            _charge_flow(
+                log, p, minutes, {k: v[p] for k, v in ledger.items()}, produced[p], burned[p]
+            )
+            for p in PLAYERS
+        ),
+    )
+
+
+_EVENT_COUNTERS: Final[tuple[str, ...]] = (
+    "captures",
+    "fights",
+    "packets_lost",
+    "warehouses_lost",
+    "starved",
+    "attrition",
+    "sent",
+    "delivered",
+    "transfers",
+)
+"""Counters of ``_count_ledger`` (``captures`` is counted in ``analyze``)."""
+
+
+def _count_ledger(e: Event, ledger: dict[str, dict[int, int]]) -> None:
+    """Add the charges that event ``e`` spent or moved to ``ledger`` (module docstring)."""
+    match e.kind:
+        case "fight_round":
+            for p in PLAYERS:
+                spent = e.get(f"spent_{p}")
+                assert isinstance(spent, int)
+                ledger["fights"][p] += spent
+        case "packet_lost" | "packet_sent" | "packet_delivered" | "transfer_started":
+            player, charges = e.get("player"), e.get("charges")
+            assert isinstance(player, int) and isinstance(charges, int)
+            key = {
+                "packet_lost": "packets_lost",
+                "packet_sent": "sent",
+                "packet_delivered": "delivered",
+                "transfer_started": "transfers",
+            }[e.kind]
+            ledger[key][player] += charges
+        case "warehouse_lost":
+            owner, charges = e.get("owner"), e.get("charges")
+            assert isinstance(owner, int) and isinstance(charges, int)
+            ledger["warehouses_lost"][owner] += charges
+        case "starvation":
+            player, warehouse, units = e.get("player"), e.get("warehouse"), e.get("units")
+            assert isinstance(player, int) and isinstance(warehouse, int)
+            assert isinstance(units, int)
+            ledger["starved"][player] += warehouse + units
+        case "attrition":
+            player, charged = e.get("player"), e.get("charged")
+            assert isinstance(player, int)
+            ledger["attrition"][player] += 1 if charged else 0
+        case _:
+            pass
+
+
+def _charge_flow(
+    log: MatchLog, player: int, minutes: int, counts: dict[str, int], produced: int, burned: int
+) -> ChargeFlow:
+    start = sum(log.places_start[player]) if log.places_start else 0
+    end = sum(log.places_end[player]) if log.places_end else 0
+    counts["captures"] *= log.capture_charge_cost
+    sinks = burned + sum(
+        counts[k]
+        for k in ("captures", "fights", "packets_lost", "warehouses_lost", "starved", "attrition")
+    )
+    by_place: dict[str, list[int | None]] = {name: [None] * minutes for name in PLACES}
+    minute_ticks = 60 * log.tick_hz
+    sums = [[0] * len(PLACES) for _ in range(minutes)]
+    taken = [0] * minutes
+    for i, places in enumerate(log.place_samples[player]):
+        m = min(((i + 1) * PLACE_SAMPLE_TICKS - 1) // minute_ticks, minutes - 1)
+        taken[m] += 1
+        for j, value in enumerate(places):
+            sums[m][j] += value
+    for m in range(minutes):
+        if taken[m]:
+            for j, name in enumerate(PLACES):
+                by_place[name][m] = sums[m][j] * 100 // taken[m]
+    marker, empty, empty_cap, cap_full = log.bottleneck[player]
+    return ChargeFlow(
+        start=start,
+        fights=counts["fights"],
+        captures=counts["captures"],
+        packets_lost=counts["packets_lost"],
+        warehouses_lost=counts["warehouses_lost"],
+        starved=counts["starved"],
+        attrition=counts["attrition"],
+        end=end,
+        residual=start + produced - sinks - end,
+        sent=counts["sent"],
+        delivered=counts["delivered"],
+        delivered_front=log.delivered_front[player],
+        transfers=counts["transfers"],
+        stock_by_place_minute=tuple((name, tuple(v)) for name, v in by_place.items()),
+        marker_ticks=marker,
+        front_empty_ticks=empty,
+        front_empty_cap_has_ticks=empty_cap,
+        cap_full_ticks=cap_full,
+        front_empty_permille=empty * 1000 // marker if marker else None,
+        front_empty_cap_has_permille=empty_cap * 1000 // marker if marker else None,
     )
 
 

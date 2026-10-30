@@ -73,6 +73,46 @@ def _rows(stats: MatchStats) -> list[_Row]:
     ]
 
 
+def _permille(value: int | None) -> str:
+    return "-" if value is None else f"{value / 10:.1f}%"
+
+
+def _sent_cell(m: MatchMetrics, i: int) -> str:
+    f = m.flow[i]
+    return f"{f.sent} / {f.delivered} / {f.delivered_front}"
+
+
+def _places_cell(m: MatchMetrics, i: int) -> str:
+    """Mean stock by place over the whole match: the mean of the minutes that have samples."""
+    parts: list[str] = []
+    for name, minutes in m.flow[i].stock_by_place_minute:
+        known = [v for v in minutes if v is not None]
+        parts.append(f"{name} {_cp(sum(known) // len(known)) if known else '-'}")
+    return ", ".join(parts)
+
+
+_FlowRow = tuple[str, Callable[[MatchMetrics, int], str]]
+
+_CHARGE_ROWS: tuple[_FlowRow, ...] = (
+    ("charges start", lambda m, i: str(m.flow[i].start)),
+    ("charges produced", lambda m, i: str(m.charges_produced[i])),
+    ("charges burned (overflow)", lambda m, i: str(m.charges_burned[i])),
+    ("charges spent in fights", lambda m, i: str(m.flow[i].fights)),
+    ("charges spent on captures", lambda m, i: str(m.flow[i].captures)),
+    ("charges lost in packets", lambda m, i: str(m.flow[i].packets_lost)),
+    ("charges lost with warehouses", lambda m, i: str(m.flow[i].warehouses_lost)),
+    ("charges starved", lambda m, i: str(m.flow[i].starved)),
+    ("charges died with units", lambda m, i: str(m.flow[i].attrition)),
+    ("charges at the end", lambda m, i: str(m.flow[i].end)),
+    ("ledger residual (0 = balanced)", lambda m, i: str(m.flow[i].residual)),
+    ("sent / delivered / to markers", _sent_cell),
+    ("marker city empty", lambda m, i: _permille(m.flow[i].front_empty_permille)),
+    ("  and capital has charges", lambda m, i: _permille(m.flow[i].front_empty_cap_has_permille)),
+    ("capital full (ticks)", lambda m, i: str(m.flow[i].cap_full_ticks)),
+    ("mean stock by place", _places_cell),
+)
+
+
 def render_stats(name: str, metrics: MatchMetrics, stats: MatchStats) -> str:
     """The table of one match: a title line and one row per statistic, a column per player."""
     winner = "draw/none" if metrics.winner is None else f"player {metrics.winner}"
@@ -81,6 +121,9 @@ def render_stats(name: str, metrics: MatchMetrics, stats: MatchStats) -> str:
         f"winner {winner} ({metrics.reason})"
     ]
     rows = [(label, [fmt(p) for p in stats.players]) for label, fmt in _rows(stats)]
+    rows += [
+        (label, [fmt(metrics, i) for i in range(len(stats.players))]) for label, fmt in _CHARGE_ROWS
+    ]
     width = max(len(label) for label, _ in rows)
     cols = [max(len(cells[i]) for _, cells in rows) for i in range(len(stats.players))]
     head = "player".ljust(width) + "".join(f"  {i:<{cols[i]}}" for i in range(len(cols)))

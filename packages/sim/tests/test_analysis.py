@@ -6,6 +6,7 @@ from typing import cast
 
 from gow_sim.analysis import (
     CP_CATEGORIES,
+    PLACES,
     UNFINISHED,
     CommandRecord,
     MatchLog,
@@ -525,3 +526,92 @@ def test_an_idle_match_stock_and_burning_by_hand() -> None:
     assert m.charges_produced == (14, 14)
     assert m.charges_burned == (2, 2)
     assert m.burned_permille == (142, 142)
+
+
+# Charge ledger and flow (#588) --------------------------------------------------------------------
+
+
+def test_ledger_and_flow_from_a_hand_made_log() -> None:
+    # Player 0 starts with 10 charges and ends with 4. Events: produced 5; overflow 1; fights
+    # round spent_0 = 2 (and spent_1 = 1 for the enemy); 2 captures at 1 charge; a packet lost 1;
+    # a warehouse lost 1; starvation 1 + 1; attrition of a charged unit 1 and of a discharged one 0.
+    # Sinks of player 0: 1 + 2 + 2 + 1 + 1 + 2 + 1 = 10; 10 + 5 - 10 - 4 = 1 is the residual.
+    # Player 1 starts with 3, produces nothing, loses 1 in the fight and ends with 2: residual 0.
+    events = [
+        event(5, "charges_produced", player=0, node=0, charges=5, spill=1),
+        event(5, "charges_overflow", player=0, node=0, charges=1),
+        event(6, "fight_round", fight=1, node=1, spent_0=2, spent_1=1),
+        event(7, "node_captured", node=1, player=0),
+        event(8, "node_captured", node=2, player=0),
+        event(9, "packet_lost", packet=1, player=0, edge=0, charges=1),
+        event(9, "warehouse_lost", node=3, owner=0, charges=1),
+        event(10, "starvation", player=0, node=0, warehouse=1, units=1),
+        event(11, "attrition", node=0, player=0, group=1, charged=True, destroyed=False),
+        event(11, "attrition", node=0, player=0, group=2, charged=False, destroyed=True),
+        event(12, "packet_sent", packet=2, player=0, edge=0, from_node=0, to_node=1, charges=4),
+        event(13, "packet_delivered", packet=2, player=0, node=1, charges=3),
+        event(14, "transfer_started", packet=3, player=0, from_node=0, to_node=1, charges=2),
+    ]
+    log = dataclasses.replace(
+        _log(events),
+        capture_charge_cost=1,
+        places_start=((1, 2, 3, 4, 0, 0), (3, 0, 0, 0, 0, 0)),
+        places_end=((1, 0, 1, 1, 1, 0), (0, 0, 2, 0, 0, 0)),
+    )
+    a, b = analyze(log).flow
+    assert (a.start, a.end, a.residual) == (10, 4, 1)
+    assert (a.fights, a.captures, a.packets_lost, a.warehouses_lost) == (2, 2, 1, 1)
+    assert (a.starved, a.attrition) == (2, 1)
+    assert (a.sent, a.delivered, a.transfers) == (4, 3, 2)
+    assert (b.start, b.end, b.fights, b.captures, b.residual) == (3, 2, 1, 0, 0)
+    data = analyze(log).to_json()
+    assert data["charges_residual"] == [1, 0]
+    assert data["charges_captures"] == [2, 0]
+
+
+def test_stock_by_place_means_and_bottleneck_from_a_hand_made_log() -> None:
+    # Samples every 10 ticks; 600 ticks per minute. Player 0 has 61 samples (ticks 10..610):
+    # the first 60 (ticks 10..600) belong to minute 0, the last (tick 610) to minute 1.
+    # Capital 4 in minute 0 and 2 in minute 1; packets 1 for 30 samples and 2 for 30: 150 -> mean
+    # (30 * 1 + 30 * 2) * 100 // 60 = 150.
+    samples = (*((4, 0, 0, 0, 0, 1 if i < 30 else 2) for i in range(60)), (2, 0, 0, 0, 0, 0))
+    log = dataclasses.replace(
+        _log([], ticks=610),
+        place_samples=(samples, ()),
+        bottleneck=((100, 40, 30, 7), (0, 0, 0, 0)),
+    )
+    a, b = analyze(log).flow
+    places = dict(a.stock_by_place_minute)
+    assert places["cap_wh"] == (400, 200)
+    assert places["packets"] == (150, 0)
+    assert places["front_wh"] == (0, 0)
+    assert dict(b.stock_by_place_minute)["cap_wh"] == (None, None)  # no sample
+    assert (a.front_empty_permille, a.front_empty_cap_has_permille) == (400, 300)
+    assert (b.front_empty_permille, b.front_empty_cap_has_permille) == (None, None)
+    assert a.cap_full_ticks == 7
+
+
+def test_an_idle_match_ledger_balances_and_places_add_up() -> None:
+    # The idle match of the test above: nothing but the economy, 14 charges produced, 2 burned,
+    # no start stock on this map, 12 in the end; places at the end add up to the stock.
+    rules = load_ruleset(ROOT / "rulesets" / "mvp-1.toml")
+    mapdef = load_map(TESTS / "maps" / "dec28.json")
+
+    class Idle:
+        def decide(self, view: object, tick: int) -> list[Command]:
+            del view, tick
+            return []
+
+    recorder = MatchRecorder()
+    run_headless(mapdef, rules, [Idle(), Idle()], max_ticks=700, observer=recorder)
+    log = recorder.log()
+    for p, flow in enumerate(analyze(log).flow):
+        assert (flow.start, flow.end, flow.residual) == (0, 12, 0)
+        assert sum(log.places_end[p]) == log.stock[p][-1] == 12
+        assert len(log.place_samples[p]) == 70
+        assert [len(v) for _, v in flow.stock_by_place_minute] == [2] * len(PLACES)
+        # Each sample splits the stock without loss: sum of the means is within the rounding of
+        # the stock mean of the same samples (every sample is an integer, 6 places round down).
+        exact = sum(sum(s) for s in log.place_samples[p][:60]) * 100 // 60
+        parts = sum(v[0] or 0 for _, v in flow.stock_by_place_minute)
+        assert exact - len(PLACES) < parts <= exact

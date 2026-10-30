@@ -194,3 +194,61 @@ def test_cli_report_writes_the_charge_stock_section(tmp_path: Path) -> None:
     path = _write(tmp_path / "s.jsonl", _stock_rows())
     assert main(["report", str(path), "--out-dir", str(tmp_path), "--name", "s"]) == 0
     assert "| **rusher** | 2 | 5.00 |" in (tmp_path / "s.md").read_text(encoding="utf-8")
+
+
+def _flow_rows() -> list[dict[str, Any]]:
+    """One match, rusher (side 0) against expander (side 1), worked by hand."""
+    zeros = [0, 0]
+    return [
+        _row("alpha", 0, "rusher", "expander")
+        | {
+            "ticks": 1000,
+            "charges_produced": [20, 10],
+            "charges_burned": [4, 0],
+            "charges_start": [10, 6],
+            "charges_fights": [2, 1],
+            "charges_captures": [3, 0],
+            "charges_packets_lost": [1, 0],
+            "charges_warehouses_lost": [0, 2],
+            "charges_starved": zeros,
+            "charges_attrition": [0, 1],
+            "charges_end": [20, 12],
+            "charges_residual": zeros,
+            "charges_sent": [8, 4],
+            "charges_delivered": [6, 4],
+            "charges_delivered_front": [2, 0],
+            "charges_transfers": zeros,
+            "marker_ticks": [500, 0],
+            "front_empty_ticks": [100, 0],
+            "front_empty_cap_has_ticks": [50, 0],
+            "cap_full_ticks": [250, 100],
+            "stock_by_place_minute": [
+                {"cap_wh": [200, 400], "front_wh": [0, 0], "rear_wh": [100, None]}
+                | {"units_node": [0], "units_road": [0], "packets": [50, 50]},
+                {k: [None] for k in ("cap_wh", "front_wh", "rear_wh", "units_node")}
+                | {"units_road": [None], "packets": [None]},
+            ],
+        }
+    ]
+
+
+def test_report_prints_the_charge_flow_table(tmp_path: Path) -> None:
+    text = render_report(load_rows(_write(tmp_path / "f.jsonl", _flow_rows())), "f.jsonl", "f")
+    assert "## Charge flow (#588)" in text
+    # rusher: start 10, produced 20, burned 4, fights 2, captures 3, packets lost 1, warehouses 0,
+    # starved 0, attrition 0, end 20, residual 0, sent/delivered/to markers 8 / 6 / 2,
+    # marker city empty 100 of 500 = 20%, capital has charges 50 of 500 = 10%, capital full 25%.
+    row = (
+        "| **rusher** | 1 | 10.0 | 20.0 | 4.0 | 2.0 | 3.0 | 1.0 | 0.0 | 0.0 | 0.0 | 20.0 | 0 "
+        "| 8.0 / 6.0 / 2.0 | 20% | 10% | 25% |"
+    )
+    assert row in text
+    # Stock by place of the rusher: cap_wh minutes 2.00 and 4.00 -> 3.00; rear_wh 1.00 (the
+    # minute without a sample is skipped); packets 0.50. The expander has no sample at all.
+    assert "| **rusher** | 1 | 3.00 | 0.00 | 1.00 | 0.00 | 0.00 | 0.50 |" in text
+    assert "| **expander** | 0 | n/a | n/a | n/a | n/a | n/a | n/a |" in text
+
+
+def test_report_charge_flow_without_the_fields_is_na(tournament: Path) -> None:
+    text = render_report(load_rows(tournament), "t.jsonl", "t")
+    assert "| **rusher** | 0 | n/a |" in text.split("## Charge flow (#588)")[1]
