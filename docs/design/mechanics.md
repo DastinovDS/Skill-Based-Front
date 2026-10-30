@@ -1062,14 +1062,16 @@ Alternatives (not chosen):
 - Moving the node contact one tick earlier (an attacker 1 tick from the node already engages): changes every attack
   timing, the regroup analysis of DEC-24 G5 and the arrival ticks the client shows in the `ack`.
 
-### Capture costs a charge (DEC-38, #578) **[proposed]**
+### Capture costs a charge (DEC-38, #578) **[accepted]**
 
 The owner's proposal of 2026-10-30 after BAL-01 (#39; `docs/balance/log.md`, iteration 0, hypothesis H2): "capturing a
 city needs at least one charge, to make fast claiming costlier". The mechanics are frozen for the first release (the
 note at the top), so the rule goes behind a ruleset number that is `0` (today's rule) in `mvp-0`, `mvp-1` and
-`test-short`; BAL-02 (#40) tests it in `rulesets/mvp-2.toml`. The variants and the open questions: #578; the status
-stays **[proposed]** until the owner chooses. The recommended variant (C below, with `charge_cost = 1`) is written out
-in full here.
+`test-short`; BAL-02 (#40) tests it in `rulesets/mvp-2.toml`. The variants and the open questions: #578.
+**Decision (the owner, 2026-10-30): [accepted] with all defaults**: variant C (the number `capture.charge_cost`),
+every capture costs (also after a fight), provinces and the capital too, a group that cannot pay bounces, a returning
+group that cannot pay for its lost home dies (DEC-24, G3), virtual charges never pay. The rule below is the accepted
+one; implemented #578 (sim and protocol), the bots and the client follow in a separate issue.
 
 **Why.** Today any group that finishes its movement in an empty neutral node (`movement.settle_arrivals`) or in an
 empty enemy node (DEC-07, row 5; DEC-24, item C1) takes it at once, even a fully discharged one, and the winner of a
@@ -3657,7 +3659,7 @@ capacity and supply that are not in sections 7, 8 and 9 are set in the MVP plan:
 | DEC-35 | #477 | vision comes only from units: own nodes are no longer vision sources; a group on an edge is a source in the node of its half; an enemy in an own node without a group is `PRESENCE` | section 10 | [accepted] (2026-10-28, a rule change after the freeze); details [accepted] (2026-10-29, all items as written: the readings that reveal less); implemented #477 (`SIM_VERSION` 22, `PROTOCOL_VERSION` 28: the wire allows own data on an own node at any level) |
 | DEC-36 | #537 | map geography: water cells (sea, lakes), rivers as area borders, areas of nodes touch only where a road links them; visual only, the rules do not read it | section 9 | [accepted] 2026-10-29 (W4 Painted, no dark line along water, the defaults of the open questions); supersedes DEC-27, item 3; step 1 (baker, vector file, validator `geography`) #537, step 2 (client territory) #544, step 3 (pool maps and the menu map with water, no node moved) #545 |
 | DEC-37 | #549 | an engagement zone around a node: a defender that left the node within the last `combat.engage_ticks` ticks (3) is caught into the fight as a leaving defender | section 4 | [accepted] (2026-10-29, the owner's direction, a rule change after the freeze); the number `engage_ticks = 3` [default, chosen by the orchestrator; the owner may tune it]; implemented #549 |
-| DEC-38 | #578 | capture costs a charge: a capture spends `capture.charge_cost` real charges of the capturing groups in the node, otherwise they bounce | section 4 | [proposed] (2026-10-30, the owner's proposal after BAL-01, H2); awaiting the owner's decision on the variants and the open questions of #578; `charge_cost = 0` (off) in `mvp-0`, `mvp-1`, `test-short`, BAL-02 tests `1` in `mvp-2` |
+| DEC-38 | #578 | capture costs a charge: a capture spends `capture.charge_cost` real charges of the capturing groups in the node, otherwise they bounce | section 4 | [accepted] (2026-10-30, the owner, all defaults: variant C, every capture costs, provinces and the capital too, bounce, G3, no virtual charges); implemented #578 (sim, protocol); `charge_cost = 0` (off) in `mvp-0`, `mvp-1`, `test-short`, BAL-02 tests `1` in `mvp-2` |
 
 How to close a DEC issue: confirm the default value or choose an alternative, replace the status
 in the section block and in this table with [accepted] (or record another decision) and reflect the numbers in
