@@ -37,16 +37,12 @@ export const HIDDEN_EVENT_KINDS: ReadonlySet<string> = new Set([
   'rear_min_set',
   // The score is in the top bar already (ui-style U2): a VP line would repeat it every few seconds.
   'vp_awarded',
-  // Economy v2 (DEC-41): factories and supply lines; their UI comes with #649.
+  // Economy v2 (DEC-41): a full factory warehouse burns a charge (the gauge shows it full), every
+  // payment of a building (the build plate shows what is owed) and every charge a gathering plan
+  // takes (the plan shows its bonus) are bookkeeping, every few seconds.
   'charge_burned',
-  'factory_built',
-  // Economy v2 (DEC-41, #645): the progressive payment of a building and the finished bunker.
   'build_paid',
-  'fort_built',
-  // Economy v2 (DEC-41, #646): a waiting planned order took a charge for its bonus.
   'plan_charged',
-  'line_cut',
-  'line_rerouted',
 ]);
 
 /** Kinds with a line in the feed. */
@@ -70,6 +66,11 @@ export const LOGGED_EVENT_KINDS: ReadonlySet<string> = new Set([
   'starvation',
   // A capture the group could not pay for (DEC-38): only its player gets it.
   'capture_failed',
+  // Economy v2 (DEC-41, #649): a factory or a bunker done, a supply line cut or rerouted.
+  'factory_built',
+  'fort_built',
+  'line_cut',
+  'line_rerouted',
 ]);
 
 /** Does the feed show this kind? An unknown kind is not shown (never a raw kind name). */
@@ -124,7 +125,11 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
     case 'road_upgraded':
       return tf('event.road_upgraded', { edge: num(data.edge), width: num(data.width) });
     case 'build_started':
-      // DEC-26: a city builds a road level, the barracks or a warehouse level.
+      // DEC-26: a city builds a road level, the barracks or a warehouse level; DEC-41: a factory or a bunker.
+      if (data.kind === 'factory')
+        return tf('event.build_started.factory', { node: names(num(data.node)) });
+      if (data.kind === 'fort')
+        return tf('event.build_started.bunker', { node: names(num(data.node)) });
       if (data.kind === 'barracks')
         return tf('event.build_started.barracks', { node: names(num(data.node)) });
       if (data.kind === 'warehouse') {
@@ -157,6 +162,20 @@ export function eventText(event: HudEvent, me: PlayerId, names: NodeNamer): stri
     case 'transfer_started':
       return tf('event.transfer_started', {
         charges: num(data.charges),
+        from: names(num(data.from_node)),
+        to: names(num(data.to_node)),
+      });
+    case 'factory_built':
+      return tf('event.factory_built', { node: names(num(data.node)) });
+    case 'fort_built':
+      return tf('event.fort_built', { node: names(num(data.node)) });
+    case 'line_cut':
+      return tf('event.line_cut', {
+        from: names(num(data.from_node)),
+        to: names(num(data.to_node)),
+      });
+    case 'line_rerouted':
+      return tf('event.line_rerouted', {
         from: names(num(data.from_node)),
         to: names(num(data.to_node)),
       });

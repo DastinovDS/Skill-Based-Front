@@ -116,7 +116,11 @@
         return {
           hud: state,
           tickHz: welcome.ruleset_public.tick_hz,
-          orders: welcome.ruleset_public.orders,
+          // Economy v2 (DEC-41, item 10): a plan has no delay, it gathers its bonus instead.
+          orders:
+            welcome.ruleset_public.economy.model === 'v2'
+              ? { planned_delay_ticks: 0 }
+              : welcome.ruleset_public.orders,
           capacity: welcome.ruleset_public.capacity,
           roundTicks: welcome.ruleset_public.combat.round_ticks,
           recruitTicks: welcome.ruleset_public.recruit.unit_ticks,
@@ -135,6 +139,12 @@
                 warehouseMaxLevel: welcome.ruleset_public.city_upgrades.warehouse_max_level,
                 warehouseGainPerLevel:
                   welcome.ruleset_public.city_upgrades.warehouse_gain_per_level,
+                ...(welcome.ruleset_public.factory === null
+                  ? {}
+                  : { factory: welcome.ruleset_public.factory.build_ticks }),
+                ...(welcome.ruleset_public.bunker === null
+                  ? {}
+                  : { fort: welcome.ruleset_public.bunker.build_ticks }),
               }
             : null,
         };

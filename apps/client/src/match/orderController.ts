@@ -12,6 +12,8 @@ import {
 import type { CommandResult, OrderBook } from './orderBook.ts';
 import {
   frontOf,
+  lineOf,
+  type LineChoice,
   RADIAL,
   SECTORS,
   stanceRates,
@@ -25,11 +27,14 @@ import { SplitState } from './splitState.svelte.ts';
 import { TargetMenuState } from './targetMenuState.svelte.ts';
 import { SupplyMenuState, TransferState } from './supplyState.svelte.ts';
 
-/** A sector of the menu of a city. */
-export type CityChoice = 'recruit' | 'barracks' | 'warehouse';
+/** A sector of the menu of a city (`factory` and `bunker`: economy v2, DEC-41). */
+export type CityChoice = 'recruit' | 'barracks' | 'warehouse' | 'factory' | 'bunker';
 
-/** A sector of the menu of a group. */
-export type GroupChoice = 'split' | 'merge' | 'cancel' | 'defense';
+/** A sector of the menu of a group (`release`: economy v2, a gathering plan departs now). */
+export type GroupChoice = 'split' | 'merge' | 'cancel' | 'defense' | 'release';
+
+/** The requested bonus of a planned order under economy v2: the stepper's range (the server caps it too). */
+export const PLAN_BONUS = { min: 1, max: 9 } as const;
 
 /** How long an answer stays in the panel, ms. */
 export const NOTICE_MS = 6000;
@@ -230,6 +235,62 @@ export class OrderController implements MapInteraction {
     this.ui.patch({ planned });
   }
 
+  /**
+   * The rules play economy v2 (DEC-41, `ruleset_public.economy.model`): factories, drawn supply
+   * lines, the bunker and a planned order that gathers its bonus. The v1 controls (stance, front
+   * markers, rear minimum, transfers, road upgrades, "Defense") are off.
+   */
+  get v2(): boolean {
+    return this.#o.rules.economy.model === 'v2';
+  }
+
+  /** The bonus the next planned order asks for (economy v2). */
+  get planBonus(): number {
+    return this.ui.current.planBonus;
+  }
+
+  /** One step of the requested plan bonus up (`delta` 1) or down (-1), within `PLAN_BONUS`. */
+  stepPlanBonus(delta: number): void {
+    const next = Math.min(PLAN_BONUS.max, Math.max(PLAN_BONUS.min, this.planBonus + delta));
+    if (next !== this.planBonus) this.ui.patch({ planBonus: next });
+  }
+
+  /** Ticks per point of a gathering plan (`ruleset_public.orders.plan_ticks_per_bonus`, DEC-41). */
+  get planTicksPerBonus(): number {
+    return this.#o.rules.orders.plan_ticks_per_bonus;
+  }
+
+  /** Costs and numbers of the economy v2 buildings, in charges (`ruleset_public`, DEC-41, item 7). */
+  get chargeCosts(): {
+    readonly barracks: number;
+    readonly warehouse: number;
+    readonly factory: number;
+    readonly bunker: number;
+  } {
+    const { city_upgrades: city, factory, bunker } = this.#o.rules;
+    return {
+      barracks: city.barracks_charges,
+      warehouse: city.warehouse_charges,
+      factory: factory?.cost ?? 0,
+      bunker: bunker?.cost ?? 0,
+    };
+  }
+
+  /** At most this many lines start at one node (`ruleset_public.lines.max_out`); 0 under v1. */
+  get linesMaxOut(): number {
+    return this.#o.rules.lines?.max_out ?? 0;
+  }
+
+  /** The bunker's virtual shots (`ruleset_public.bunker.shots`); 0 under v1. */
+  get bunkerShots(): number {
+    return this.#o.rules.bunker?.shots ?? 0;
+  }
+
+  /** At most this many factories a player has, the capital included (`ruleset_public.factory.max`). */
+  get factoryMax(): number {
+    return this.#o.rules.factory?.max ?? 0;
+  }
+
   // --- MapInteraction -----------------------------------------------------------------------
 
   overlay(): OverlayState {
@@ -321,8 +382,10 @@ export class OrderController implements MapInteraction {
     }
     if (hit.kind === 'node' && group !== null && this.#o.send !== null && group.node !== hit.id) {
       this.#closeTargetMenus();
+      // Economy v2: a planned order asks for its bonus (DEC-41, item 10); otherwise 0.
+      const bonus = this.planned && this.v2 ? this.planBonus : 0;
       this.#sendCommand(
-        { type: 'move', group: group.id, dest: hit.id, planned: this.planned, bonus: 0 },
+        { type: 'move', group: group.id, dest: hit.id, planned: this.planned, bonus },
         group.node,
       );
       // The order is given: the group is let go (the ghost of the order is drawn without it).
@@ -423,6 +486,7 @@ export class OrderController implements MapInteraction {
       this.#o.hud.selection === null &&
       !this.ui.current.roadMode &&
       this.ui.current.transferFrom === null &&
+      this.ui.current.lineDraft === null &&
       !this.cityMenu.current.open &&
       !this.groupMenu.current.open &&
       !this.stackMenu.current.open &&
@@ -453,10 +517,10 @@ export class OrderController implements MapInteraction {
     if (this.#o.send !== null) this.deselect();
   }
 
-  /** Switch the mode of the selected group (attack / defense). */
+  /** Switch the mode of the selected group (attack / defense; under economy v2 there is no «Defense»). */
   setMode(mode: Mode): void {
     const group = this.#selectedGroup();
-    if (group === null) return;
+    if (group === null || (mode === 'defense' && this.v2)) return;
     this.groupMenu.close();
     this.#sendCommand({ type: 'set_mode', group: group.id, mode }, null);
   }
@@ -464,7 +528,7 @@ export class OrderController implements MapInteraction {
   /** D: «Defense» on, or back to «Attack» when the selected group already holds it. */
   toggleDefense(): void {
     const group = this.#selectedGroup();
-    if (group === null) return;
+    if (group === null || this.v2) return;
     this.setMode(group.mode === 'defense' ? 'attack' : 'defense');
   }
 
@@ -584,9 +648,23 @@ export class OrderController implements MapInteraction {
 
   /** A sector of the menu of a city: the same as its key. */
   chooseCity(choice: CityChoice): void {
-    if (choice === 'recruit') this.recruit();
-    else if (choice === 'barracks') this.cityBuild('build_barracks');
-    else this.cityBuild('upgrade_warehouse');
+    switch (choice) {
+      case 'recruit':
+        this.recruit();
+        return;
+      case 'barracks':
+        this.cityBuild('build_barracks');
+        return;
+      case 'warehouse':
+        this.cityBuild('upgrade_warehouse');
+        return;
+      case 'factory':
+        this.cityBuild('build_factory');
+        return;
+      case 'bunker':
+        this.cityBuild('build_bunker');
+        return;
+    }
   }
 
   /** A sector of the menu of a group: the same as its key. */
@@ -605,7 +683,21 @@ export class OrderController implements MapInteraction {
       case 'defense':
         this.toggleDefense();
         return;
+      case 'release':
+        this.releasePlan();
+        return;
     }
+  }
+
+  /**
+   * Economy v2 (DEC-41, item 10): the selected group with a gathering plan departs now with the
+   * bonus gathered so far (`release_plan`, free). Whether it has one is the server's call.
+   */
+  releasePlan(): void {
+    const group = this.#selectedGroup();
+    if (group === null || !this.v2) return;
+    this.groupMenu.close();
+    this.#sendCommand({ type: 'release_plan', group: group.id }, null);
   }
 
   /** The city to recruit in: the selected node, or the node the selected group stands in. */
@@ -626,8 +718,8 @@ export class OrderController implements MapInteraction {
     this.#sendCommand({ type: 'recruit', node }, null);
   }
 
-  /** The barracks or a warehouse level of the selected own city (DEC-26). */
-  cityBuild(type: 'build_barracks' | 'upgrade_warehouse'): void {
+  /** The barracks, a warehouse level, a factory or a bunker of the selected own node (DEC-26, DEC-41). */
+  cityBuild(type: 'build_barracks' | 'upgrade_warehouse' | 'build_factory' | 'build_bunker'): void {
     const node = this.recruitNode();
     this.closeCityMenu();
     if (node === null) return;
@@ -683,6 +775,8 @@ export class OrderController implements MapInteraction {
    * selection stays.
    */
   toggleRoadMode(): void {
+    // Economy v2 has no road levels (DEC-41, item 8): there is no road mode.
+    if (this.v2 && !this.ui.current.roadMode) return;
     const on = !this.ui.current.roadMode;
     if (on) {
       this.#closeMenus();
@@ -721,9 +815,9 @@ export class OrderController implements MapInteraction {
     return stanceRates(this.#o.rules);
   }
 
-  /** The menu opens only in a match, where a stance can be sent. */
+  /** The menu opens only in a match, where a stance can be sent (never under economy v2: no stances). */
   openRadial(sticky: boolean): boolean {
-    if (this.#o.send === null) return false;
+    if (this.#o.send === null || this.v2) return false;
     this.#closeMenus();
     this.radial.open(sticky);
     return true;
@@ -760,7 +854,12 @@ export class OrderController implements MapInteraction {
     this.#closeMenus();
     this.transfer.close();
     if (this.#o.hud.selection?.kind === 'node') this.#o.hud.select(null);
-    this.ui.patch({ supplyMode: on, transferFrom: null, ...(on ? { terrainMode: false } : {}) });
+    this.ui.patch({
+      supplyMode: on,
+      transferFrom: null,
+      lineDraft: null,
+      ...(on ? { terrainMode: false } : {}),
+    });
   }
 
   // --- The terrain map mode (#429) ---------------------------------------------------------------
@@ -778,7 +877,9 @@ export class OrderController implements MapInteraction {
     if (on) {
       this.#closeMenus();
       this.transfer.close();
-      if (this.ui.current.supplyMode) this.ui.patch({ supplyMode: false, transferFrom: null });
+      if (this.ui.current.supplyMode) {
+        this.ui.patch({ supplyMode: false, transferFrom: null, lineDraft: null });
+      }
     }
     this.ui.patch({ terrainMode: on });
   }
@@ -788,13 +889,90 @@ export class OrderController implements MapInteraction {
     return this.#o.rules.vision.by_terrain;
   }
 
-  /** Opens the supply menu of the own city `node` (a click on it in the «Supply» mode). */
+  /**
+   * Opens the supply menu of the own city `node` (a click on it in the «Supply» mode). Under
+   * economy v2 any own node with a warehouse (a province too, DEC-41, item 13) has one: draw a
+   * line from it, or remove one of the lines that start there.
+   */
   openSupplyMenu(node: number): boolean {
+    if (this.#o.send === null) return false;
+    if (this.v2) {
+      const own = this.#o.hud.current?.nodes.find((n) => n.id === node);
+      if (own?.owner !== 'mine') return false;
+      this.#closeMenus();
+      const lines = this.ownLines()
+        .filter((line) => line.path[0] === node)
+        .map((line) => ({ id: line.id, to: line.path[line.path.length - 1] ?? node }));
+      this.supplyMenu.open(node, own.warehouse, [], lines);
+      return true;
+    }
     const city = this.#ownCity(node);
-    if (city === null || this.#o.send === null) return false;
+    if (city === null) return false;
     this.#closeMenus();
     this.supplyMenu.open(node, city.warehouse, this.#o.hud.current?.fronts ?? []);
     return true;
+  }
+
+  /** The own supply lines of the latest snapshot (economy v2; empty under v1). */
+  ownLines(): readonly { readonly id: number; readonly path: readonly number[] }[] {
+    return this.#o.hud.current?.lines ?? [];
+  }
+
+  /**
+   * A sector of the supply menu under economy v2: `draw` starts drawing a line from the city (the
+   * pick of its path), `line:<id>` removes that line (`remove_line`, free).
+   */
+  chooseLine(choice: LineChoice): void {
+    const { open, node } = this.supplyMenu.current;
+    this.supplyMenu.close();
+    if (!open) return;
+    const line = lineOf(choice);
+    if (line === null) this.ui.patch({ lineDraft: [node] });
+    else this.#sendCommand({ type: 'remove_line', line }, null);
+  }
+
+  /**
+   * The own nodes a click adds to the line being drawn: the map neighbours of its last node that
+   * are own in the latest snapshot and not on the path yet. Only what the map and the snapshot
+   * say; whether the line is allowed (a source, a cycle, the limit) is the server's call.
+   */
+  lineNext(): number[] {
+    const draft = this.ui.current.lineDraft;
+    const last = draft?.[draft.length - 1];
+    if (draft === null || last === undefined) return [];
+    const own = new Set(
+      (this.#o.hud.current?.nodes ?? []).filter((n) => n.owner === 'mine').map((n) => n.id),
+    );
+    const next: number[] = [];
+    for (const edge of this.#o.map.edges) {
+      const other = edge.a === last ? edge.b : edge.b === last ? edge.a : null;
+      if (other !== null && own.has(other) && !draft.includes(other) && !next.includes(other)) {
+        next.push(other);
+      }
+    }
+    return next.sort((a, b) => a - b);
+  }
+
+  /** Sends the line being drawn (`draw_line`) when it has two nodes or more, and ends the drawing. */
+  finishLine(): void {
+    const draft = this.ui.current.lineDraft;
+    if (draft === null) return;
+    this.ui.patch({ lineDraft: null });
+    const [source, second, ...rest] = draft;
+    if (source === undefined || second === undefined) return;
+    this.#sendCommand({ type: 'draw_line', path: [source, second, ...rest] }, null);
+  }
+
+  /** Takes the last node off the line being drawn; with only the source left, ends the drawing. */
+  undoLineStep(): void {
+    const draft = this.ui.current.lineDraft;
+    if (draft === null) return;
+    this.ui.patch({ lineDraft: draft.length > 1 ? draft.slice(0, -1) : null });
+  }
+
+  /** Ends the drawing of a line without sending it. */
+  cancelLine(): void {
+    if (this.ui.current.lineDraft !== null) this.ui.patch({ lineDraft: null });
   }
 
   closeSupplyMenu(): void {
@@ -903,7 +1081,7 @@ export class OrderController implements MapInteraction {
       if (input.repeat !== true) this.toggleSupplyMode();
       return true;
     }
-    if (input.code === 'KeyU') {
+    if (input.code === 'KeyU' && !this.v2) {
       if (input.repeat !== true) this.toggleRoadMode();
       return true;
     }
@@ -911,7 +1089,22 @@ export class OrderController implements MapInteraction {
       if (input.repeat !== true) this.toggleTerrainMode();
       return true;
     }
-    if (input.code === 'KeyQ') return this.#qDown(input);
+    if (input.code === 'KeyQ' && !this.v2) return this.#qDown(input);
+    if (this.ui.current.lineDraft !== null) {
+      // Drawing a line: Enter sends it, Backspace takes the last node off, Esc drops it.
+      switch (input.code) {
+        case 'Enter':
+        case 'NumpadEnter':
+          this.finishLine();
+          return true;
+        case 'Backspace':
+          this.undoLineStep();
+          return true;
+        case 'Escape':
+          this.cancelLine();
+          return true;
+      }
+    }
     if (this.splitMenu.current.open) {
       // The split menu: arrows change the amount, Enter splits, S (the key that opened it) or Esc
       // close it; the other keys stay with the menu so a stray key does not order the group.
@@ -940,6 +1133,21 @@ export class OrderController implements MapInteraction {
       // The amount dialog: Esc closes it (Enter and the slider are the dialog's own).
       if (input.code === 'Escape') {
         this.closeTransfer();
+        return true;
+      }
+    }
+    if (this.supplyMenu.current.open && this.v2) {
+      // The supply menu of economy v2: 1 draws a line, 2 to 4 remove the lines listed, Esc closes it.
+      const number = /^Digit([1-9])$/.exec(input.code)?.[1];
+      if (number !== undefined) {
+        const index = Number(number) - 1;
+        const line = this.supplyMenu.current.lines[index - 1];
+        if (index === 0) this.chooseLine('draw');
+        else if (line !== undefined) this.chooseLine(`line:${String(line.id)}` as LineChoice);
+        return true;
+      }
+      if (input.code === 'Escape') {
+        this.closeSupplyMenu();
         return true;
       }
     }
@@ -982,6 +1190,11 @@ export class OrderController implements MapInteraction {
         return true;
       }
     }
+    if ((input.code === 'BracketLeft' || input.code === 'BracketRight') && this.v2) {
+      // Economy v2: `[` and `]` lower and raise the bonus a planned order asks for.
+      this.stepPlanBonus(input.code === 'BracketRight' ? 1 : -1);
+      return true;
+    }
     if (
       (input.code === 'BracketLeft' || input.code === 'BracketRight') &&
       this.ui.current.supplyMode &&
@@ -1004,11 +1217,18 @@ export class OrderController implements MapInteraction {
         } else this.cancelSelected();
         return true;
       case 'KeyD':
+        if (this.v2) return false;
         this.toggleDefense();
+        return true;
+      case 'KeyF':
+        // Economy v2: the gathering plan of the selected group departs now.
+        if (!this.v2) return false;
+        this.releasePlan();
         return true;
       case 'Digit1':
         return this.#modeKey('attack');
       case 'Digit2':
+        if (this.v2) return false;
         return this.#modeKey('defense');
       case 'KeyR':
         this.recruit();
@@ -1045,6 +1265,11 @@ export class OrderController implements MapInteraction {
     this.#closeTargetMenus();
   }
 
+  /** The node `id` is a province (`kind = province`, DEC-23). */
+  isProvince(id: number): boolean {
+    return this.#isProvince(id);
+  }
+
   /** The node `id` is a province (`kind = province`, DEC-23): not selectable, has no city menus. */
   #isProvince(id: number): boolean {
     return this.#o.map.nodes[id]?.kind === 'province';
@@ -1055,8 +1280,12 @@ export class OrderController implements MapInteraction {
     return this.#o.hud.current?.nodes.some((n) => n.id === id && n.owner === 'enemy') ?? false;
   }
 
-  /** A province or an enemy city: it is only a destination, so it gets no selection and no highlight. */
+  /**
+   * A province or an enemy city: it is only a destination, so it gets no selection and no highlight.
+   * Under economy v2 an own province is selected and has a menu: it can build a bunker (DEC-41, item 12).
+   */
   #isUnselectable(id: number): boolean {
+    if (this.v2 && this.#isProvince(id) && this.#isOwnNode(id)) return false;
     return this.#isProvince(id) || this.#isEnemyNode(id);
   }
 
@@ -1123,6 +1352,16 @@ export class OrderController implements MapInteraction {
     if (!this.ui.current.supplyMode) return false;
     const from = this.ui.current.transferFrom;
     const node = hit === null ? null : this.#cityOf(hit);
+    const draft = this.ui.current.lineDraft;
+    if (draft !== null) {
+      // Drawing a line: a neighbouring own node goes on the path, the last node again finishes
+      // the line, the one before it steps back; a click anywhere else changes nothing.
+      if (node === null) return true;
+      if (node === draft[draft.length - 1]) this.finishLine();
+      else if (draft.length > 1 && node === draft[draft.length - 2]) this.undoLineStep();
+      else if (this.lineNext().includes(node)) this.ui.patch({ lineDraft: [...draft, node] });
+      return true;
+    }
     if (from !== null) {
       this.cancelTransferPick();
       if (node !== null && node !== from && this.#ownCity(node) !== null) {
@@ -1161,20 +1400,26 @@ export class OrderController implements MapInteraction {
       this.#supplyOverlay = null;
       return null;
     }
-    const source = this.ui.current.transferFrom;
+    const draft = this.ui.current.lineDraft;
+    const source = draft?.[0] ?? this.ui.current.transferFrom;
     const targets =
-      source === null
-        ? []
-        : (this.#o.hud.current?.nodes ?? [])
-            .filter((n) => n.owner === 'mine' && n.warehouseCap !== null && n.id !== source)
-            .map((n) => n.id);
+      draft !== null
+        ? this.lineNext()
+        : source === null
+          ? []
+          : (this.#o.hud.current?.nodes ?? [])
+              .filter((n) => n.owner === 'mine' && n.warehouseCap !== null && n.id !== source)
+              .map((n) => n.id);
+    const path = draft ?? [];
     const prev = this.#supplyOverlay;
     if (
       prev?.source !== source ||
       prev.targets.length !== targets.length ||
-      prev.targets.some((t, i) => t !== targets[i])
+      prev.targets.some((t, i) => t !== targets[i]) ||
+      prev.draft.length !== path.length ||
+      prev.draft.some((n, i) => n !== path[i])
     ) {
-      this.#supplyOverlay = { source, targets };
+      this.#supplyOverlay = { source, targets, draft: path };
     }
     return this.#supplyOverlay;
   }
@@ -1339,7 +1584,8 @@ export class OrderController implements MapInteraction {
     const path = reach.routes.get(preview);
     if (ticks === undefined || path === undefined) return null;
     return {
-      ticks: this.planned ? ticks + this.#o.rules.orders.planned_delay_ticks : ticks,
+      // Economy v2: a plan waits until its bonus is gathered, an unknown time: the travel time only.
+      ticks: this.planned && !this.v2 ? ticks + this.#o.rules.orders.planned_delay_ticks : ticks,
       path,
     };
   }

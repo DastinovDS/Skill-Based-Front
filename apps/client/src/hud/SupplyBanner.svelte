@@ -16,11 +16,14 @@
   // The rear minimum stepper (S3 "Stepper", #627; DEC-28, item 3). The value is the server's, from
   // every snapshot; a press sends one step (`stepRearMin`, the same as the `[` and `]` keys), and the
   // snapshot that applies it shows the new number a tick later.
-  const rearMin = $derived(orders.rearMin);
+  const rearMin = $derived(orders.v2 ? null : orders.rearMin);
+  // Economy v2 (DEC-41, item 6): the path of the supply line being drawn, from its source.
+  const draft = $derived(ui.lineDraft);
 
   /** Key labels are the keys themselves, not translations. */
   const TAB = 'Tab';
   const ESC = 'Esc';
+  const ENTER = 'Enter';
 </script>
 
 {#if ui.supplyMode}
@@ -34,8 +37,42 @@
         >
       </p>
     {/if}
+    {#if draft !== null}
+      <!-- Drawing a supply line (economy v2): where it starts, how far it got, the way to finish. -->
+      <div class="pill pick draft" aria-live="polite">
+        <span
+          >{draft.length < 2
+            ? tf('supply.lineStart', { node: names(draft[0] ?? -1) })
+            : tf('supply.lineDraft', {
+                from: names(draft[0] ?? -1),
+                to: names(draft[draft.length - 1] ?? -1),
+                n: draft.length,
+              })}</span
+        >
+        <button
+          type="button"
+          class="tbtn primary"
+          disabled={draft.length < 2}
+          onclick={(event) => {
+            orders.finishLine();
+            event.currentTarget.blur();
+          }}>{t('supply.lineFinish')}<kbd class="k" aria-hidden="true">{ENTER}</kbd></button
+        >
+        <button
+          type="button"
+          class="tbtn"
+          onclick={(event) => {
+            orders.cancelLine();
+            event.currentTarget.blur();
+          }}>{t('supply.lineCancel')}<kbd class="k" aria-hidden="true">{ESC}</kbd></button
+        >
+      </div>
+    {/if}
     <div class="pill">
       <strong>{t('supply.banner')}</strong><kbd class="k" aria-hidden="true">{TAB}</kbd>
+      {#if orders.v2 && draft === null}
+        <span class="dim">{t('supply.lineHint')}</span>
+      {/if}
       {#if rearMin !== null}
         <span class="sep" aria-hidden="true"></span>
         <div
@@ -122,6 +159,53 @@
 
   strong {
     font-weight: 700;
+  }
+
+  .pill.draft {
+    gap: 10px;
+  }
+
+  /* A text button of the draft pill: the same frame as the stepper, 28 px high (ui-style 22). */
+  .tbtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 6px 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .tbtn.primary {
+    border-color: var(--you);
+  }
+
+  .tbtn:hover:not(:disabled) {
+    border-color: var(--text-dim);
+  }
+
+  .tbtn:focus-visible {
+    outline: 2px solid var(--paper);
+    outline-offset: 1px;
+  }
+
+  .tbtn:disabled {
+    border-style: dashed;
+    color: var(--text-dim);
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .dim {
+    color: var(--text-dim);
+    font-size: 13px;
   }
 
   .sep {

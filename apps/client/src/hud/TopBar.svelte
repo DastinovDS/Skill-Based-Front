@@ -69,18 +69,21 @@
         </span>
         {#if full}<span class="max">{t('bar.cpMax')}</span>{/if}
       </div>
-      <button
-        type="button"
-        class="chip"
-        aria-label={tf('orders.stanceOpen', { stance: t(`stance.${data.stance}`) })}
-        onclick={() => {
-          orders.openRadial(true);
-        }}
-      >
-        <Icon name={STANCE_ICONS[data.stance]} size={16} />
-        <span class="chip-name">{t(`stance.${data.stance}`)}</span>
-        <kbd>{STANCE_KEY}</kbd>
-      </button>
+      <!-- Economy v2 (DEC-41, item 1) has no stances: the chip is gone. -->
+      {#if !orders.v2}
+        <button
+          type="button"
+          class="chip"
+          aria-label={tf('orders.stanceOpen', { stance: t(`stance.${data.stance}`) })}
+          onclick={() => {
+            orders.openRadial(true);
+          }}
+        >
+          <Icon name={STANCE_ICONS[data.stance]} size={16} />
+          <span class="chip-name">{t(`stance.${data.stance}`)}</span>
+          <kbd>{STANCE_KEY}</kbd>
+        </button>
+      {/if}
     {/if}
   </div>
 

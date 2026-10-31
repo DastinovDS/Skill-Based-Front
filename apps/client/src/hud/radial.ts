@@ -167,6 +167,17 @@ export function stanceRates(rules: RulesetPublic): StanceRate[] {
  */
 export type SupplyChoice = 'front0' | 'front1' | 'transfer';
 
+/**
+ * A sector of the supply menu under economy v2 (DEC-41, item 3): draw a line from the city (key 1),
+ * or remove the own line `line:<id>` that starts there (keys 2 to 4).
+ */
+export type LineChoice = 'draw' | `line:${number}`;
+
+/** The id of the line a `line:<id>` choice removes; `null` for `draw`. */
+export function lineOf(choice: LineChoice): number | null {
+  return choice === 'draw' ? null : Number(choice.slice('line:'.length));
+}
+
 /** The marker index (0 or 1) of a marker choice; `null` for the transfer. */
 export function frontOf(choice: SupplyChoice): number | null {
   return choice === 'front0' ? 0 : choice === 'front1' ? 1 : null;

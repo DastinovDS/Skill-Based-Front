@@ -28,6 +28,10 @@ export interface CityDevelopment {
   readonly warehouseMaxLevel: number;
   /** `warehouse_gain_per_level`: places (charges) one level adds. */
   readonly warehouseGainPerLevel: number;
+  /** Economy v2 (DEC-41): ticks from the full payment to a factory (`factory.build_ticks`). */
+  readonly factory?: number;
+  /** Economy v2: ticks from the full payment to a bunker (`bunker.build_ticks`). */
+  readonly fort?: number;
 }
 
 export interface RenderSource {

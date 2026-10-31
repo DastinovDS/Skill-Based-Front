@@ -4,7 +4,7 @@
  * its map, frozen at the tick of the snapshot. The Playwright test (`visual/`) takes its reference
  * screenshots from them. The live `demo` scene is the dev server's match (CLI-06, #62).
  */
-import { DEV_RULES } from '../hud/devFeed.ts';
+import { DEV_RULES, DEV_RULES_V2 } from '../hud/devFeed.ts';
 import { BUNDLED_MAPS } from '../map/bundledMaps.ts';
 import { interpolateFrame, type RenderFrame } from '../net/interpolate.ts';
 import type {
@@ -14,12 +14,14 @@ import type {
   EventMsg,
   HalfView,
   NodeView,
+  RulesetPublic,
   Seen,
   SnapshotMsg,
 } from '../protocol.gen.ts';
 import type { RenderSource } from '../render/source.ts';
 import { ARTERY_TICK, ARTERY_VIEW, arterySnapshot } from './arteryScene.ts';
 import { DEFENSE_VIEW, defenseSnapshot } from './defenseScene.ts';
+import { ECONOMY_VIEW, economySnapshot } from './economyScene.ts';
 import { FIGURES_VIEW, figuresSnapshot } from './figuresScene.ts';
 import { ORDERS_VIEW, ordersSnapshot } from './ordersScene.ts';
 import { PROGRESS_TICK, progressSnapshot } from './progressScene.ts';
@@ -461,6 +463,8 @@ export interface FixtureScene {
   view?: { x: number; y: number; width: number; height: number };
   /** The city development of DEC-26 is on (the barracks marks are drawn); off when absent. */
   cityUpgrades?: boolean;
+  /** The rules of the scene, for the HUD and the menus; `DEV_RULES` (economy v1) when absent. */
+  rules?: RulesetPublic;
 }
 
 export const FIXTURE_SCENES: readonly FixtureScene[] = [
@@ -530,6 +534,26 @@ export const FIXTURE_SCENES: readonly FixtureScene[] = [
     cityUpgrades: true,
   },
   {
+    // Economy v2 (DEC-41, #649): factories, bunkers, builds that wait for charges, a gathering plan.
+    id: 'economy',
+    map: 'artery',
+    snapshot: economySnapshot(bundledMap('artery')),
+    events: [],
+    view: ECONOMY_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_V2,
+  },
+  {
+    // The same moment on the «Supply» layer (Tab, `keys` in visual/scenes.ts): the drawn supply lines.
+    id: 'economy_supply',
+    map: 'artery',
+    snapshot: economySnapshot(bundledMap('artery')),
+    events: [],
+    view: ECONOMY_VIEW,
+    cityUpgrades: true,
+    rules: DEV_RULES_V2,
+  },
+  {
     // A pool map (DEC-27) with its provinces: pale dots, no warehouse, no VP (#348).
     id: 'provinces',
     map: 'crossroads',
@@ -597,10 +621,13 @@ export function frozenSource(scene: FixtureScene, at?: number): RenderSource {
   // `interpolateFrame` holds the tick inside the snapshot: a later render tick is the snapshot taken then.
   const snapshot = at === undefined ? scene.snapshot : { ...scene.snapshot, tick: at };
   const frame: RenderFrame = interpolateFrame(snapshot, null, snapshot.tick);
+  const rules = scene.rules ?? DEV_RULES;
+  const v2 = rules.economy.model === 'v2';
   return {
     frame: () => frame,
     events: () => scene.events,
-    orderDelays: { planned: DEV_RULES.orders.planned_delay_ticks },
+    // Economy v2: a plan has no delay, it gathers its bonus (DEC-41, item 10).
+    orderDelays: { planned: v2 ? 0 : rules.orders.planned_delay_ticks },
     roundTicks: DEV_RULES.combat.round_ticks,
     recruitTicks: DEV_RULES.recruit.unit_ticks,
     recruitQueueMax: DEV_RULES.recruit.queue_max,
@@ -612,6 +639,8 @@ export function frozenSource(scene: FixtureScene, at?: number): RenderSource {
             warehouse: DEV_RULES.city_upgrades.warehouse_ticks,
             warehouseMaxLevel: DEV_RULES.city_upgrades.warehouse_max_level,
             warehouseGainPerLevel: DEV_RULES.city_upgrades.warehouse_gain_per_level,
+            ...(rules.factory === null ? {} : { factory: rules.factory.build_ticks }),
+            ...(rules.bunker === null ? {} : { fort: rules.bunker.build_ticks }),
           }
         : null,
     capacityTicks: {

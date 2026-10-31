@@ -245,8 +245,9 @@ describe('CityView: a province is a pale dot (PB, #431, DEC-23)', () => {
     const view = new CityView(forged, layers, 0, 1, testSprites());
     view.update(snapshot, null, UPGRADES);
     const container = city(layers.layer.nodes, ownProvince.id);
-    // body, ring, bar, queue, build, the alert ring and the barracks house: no badge after them.
-    expect(container.children).toHaveLength(7);
+    // body, ring, bar, queue, build, the alert ring, the barracks house, the factory and bunker
+    // badges and the two plates of their builds (economy v2): no VP badge after them.
+    expect(container.children).toHaveLength(11);
     expect(barracksMark(layers.layer.nodes, ownProvince.id)).toBeNull();
     view.destroy();
   });

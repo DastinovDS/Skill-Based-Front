@@ -234,6 +234,29 @@ export const MENU_ICONS = {
   // One group of a city in the list of the groups: the down-pointing triangle a group is on the map
   // (the own side points down) with its charge as a dot.
   stackGroup: [path('M3.5 4.5h17L12 19.5z'), circle(12, 9.4, 0.6)],
+  // Economy v2 (DEC-41, #649): a factory (a saw-tooth roof and a chimney), a bunker (a low dome with
+  // a firing slit), a supply line drawn from a city (two nodes and an arrow), a line taken off (the
+  // line crossed out), a gathering plan let go (an arrow out of a gate).
+  factory: [
+    path('M3.5 20.5V11l5 3.2V11l5 3.2V4.5h4.5v16z'),
+    path('M7 17.5h2.5'),
+    path('M12 17.5h2.5'),
+  ],
+  bunker: [path('M2.5 19.5h19'), path('M4.5 19.5a7.5 7.5 0 0 1 15 0'), path('M9 14.5h6')],
+  lineDraw: [
+    circle(5.5, 17.5, 2.3),
+    path('M7.6 16.2 13 12.6'),
+    circle(15, 11.3, 2.3),
+    path('M17 9.8 20.5 7'),
+    path('M16.6 6.6h4.2v4.2'),
+  ],
+  lineRemove: [
+    circle(5, 12, 2.3),
+    path('M7.3 12h6.2'),
+    circle(15.8, 12, 2.3),
+    path('M3.5 20.5 20.5 3.5'),
+  ],
+  release: [path('M4.5 5v14'), path('M8.5 12h11'), path('M15 7.5l4.5 4.5-4.5 4.5')],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 /**

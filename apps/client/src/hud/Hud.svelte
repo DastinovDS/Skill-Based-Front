@@ -20,6 +20,7 @@
   import StackRadial from './StackRadial.svelte';
   import StartBanner from './StartBanner.svelte';
   import SupplyBanner from './SupplyBanner.svelte';
+  import PlanBanner from './PlanBanner.svelte';
   import SupplyMenu from './SupplyMenu.svelte';
   import TransferDialog from './TransferDialog.svelte';
   import ToastStack from './ToastStack.svelte';
@@ -159,7 +160,10 @@
         text:
           feedback.kind === 'lost'
             ? t('orders.lost')
-            : tf('orders.rejected', { command, reason: t(rejectMessageKey(feedback.code)) }),
+            : tf('orders.rejected', {
+                command,
+                reason: t(rejectMessageKey(feedback.code, feedback.cmd.type)),
+              }),
       });
     });
   });
@@ -178,10 +182,11 @@
   <ToastStack toasts={hud.toasts} />
   <StartBanner {data} visible={hud.banner} />
   {#if hints}
-    <KeyHints />
+    <KeyHints v2={orders.v2} />
   {/if}
   <RadialMenu {orders} stance={data?.stance ?? null} />
   <SupplyBanner {orders} names={hud.nodeName} />
+  <PlanBanner {orders} group={data?.group ?? null} />
   <SupplyMenu {orders} names={hud.nodeName} />
   <TransferDialog {orders} names={hud.nodeName} />
   <SplitMenu {orders} {anchors} />
@@ -203,6 +208,7 @@
   <HelpOverlay
     open={chrome.helpOpen}
     captureCost={hud.context.rules.capture.charge_cost}
+    v2={orders.v2}
     onclose={() => {
       chrome.helpOpen = false;
     }}

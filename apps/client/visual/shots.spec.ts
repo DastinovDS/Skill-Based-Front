@@ -228,6 +228,53 @@ for (const menu of MENUS) {
   });
 }
 
+// Economy v2 (DEC-41, #649), the frozen scene `economy` under the rules of `mvp-3`: the menu of an own
+// city with the factory and the bunker priced in charges (Ford), the menu of a group whose plan gathers
+// (Watchhouse: the release and the plan bar), the plan bar with the requested bonus (a group in
+// Watchpost), the supply menu of a city (Tab, Forkway: draw a line, remove the lines that start there)
+// and a supply line being drawn (Tab, Stonegate, 1, Watchpost, Forkway). `v2-<name>.png` and grey.
+const V2_SHOTS = ['city', 'group', 'plan', 'supply', 'line'] as const;
+
+for (const name of V2_SHOTS) {
+  test(`shot of the economy v2 controls (${name})`, async ({ page }) => {
+    await page.goto('/?scene=economy&menus');
+    await expect(page.locator('.game-canvas')).toHaveAttribute('data-tick', '2400');
+    await expect(page.locator('.game-canvas')).not.toHaveAttribute('data-background', 'pending');
+    switch (name) {
+      case 'city':
+        await page.mouse.click(557, 708);
+        break;
+      case 'group':
+        await page.mouse.click(557, 328);
+        await page.waitForTimeout(300);
+        await page.mouse.click(557, 328);
+        break;
+      case 'plan':
+        await page.mouse.click(332, 518);
+        break;
+      case 'supply':
+        await page.keyboard.press('Tab');
+        await page.mouse.click(533, 518);
+        break;
+      case 'line':
+        await page.keyboard.press('Tab');
+        await page.mouse.click(118, 518);
+        await page.keyboard.press('Digit1');
+        await page.mouse.click(332, 518);
+        await page.mouse.click(533, 518);
+        break;
+    }
+    await page.mouse.move(1000, 700);
+    if (name === 'city' || name === 'group' || name === 'supply') {
+      await expect(page.locator('[role="menu"]')).toBeVisible();
+    }
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: join(OUT, `v2-${name}.png`) });
+    await page.addStyleTag({ content: 'html { filter: grayscale(1); }' });
+    await page.screenshot({ path: join(OUT, `v2-${name}-gray.png`) });
+  });
+}
+
 // The list of the groups of a city (#350): the scene `snapshot_clash` has three own groups in one
 // city; a click on their icon opens one sector per group. `stack.png` and `stack-gray.png`.
 test('shot of the list of the groups of a city (click on the icon of the stack)', async ({

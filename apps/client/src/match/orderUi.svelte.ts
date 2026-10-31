@@ -56,6 +56,16 @@ export interface OrderUiData {
   readonly terrainMode: boolean;
   /** Transfer pick: the own city the charges leave; a click on another own city picks `to`. */
   readonly transferFrom: number | null;
+  /**
+   * Economy v2 (DEC-41, item 6): the path of a supply line being drawn in the «Supply» mode, from
+   * its source; each click on a neighbouring own node adds one. `null`: no line is being drawn.
+   */
+  readonly lineDraft: readonly number[] | null;
+  /**
+   * Economy v2 (DEC-41, item 10): the bonus a planned order asks for (`move.bonus`), set by the
+   * stepper of the plan bar or `[` and `]`; at least 1.
+   */
+  readonly planBonus: number;
   readonly notice: OrderNotice | null;
   /** The answer to the last `reach_query` for the selected group; `null`: none yet. */
   readonly reach: ReachInfo | null;
@@ -75,6 +85,8 @@ export class OrderUiState {
     supplyMode: false,
     terrainMode: false,
     transferFrom: null,
+    lineDraft: null,
+    planBonus: 2,
     notice: null,
     reach: null,
   });

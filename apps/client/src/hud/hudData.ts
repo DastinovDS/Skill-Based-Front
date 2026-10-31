@@ -69,6 +69,20 @@ export interface GroupInfo {
    * a forecast while the group stands in its city, 0 without a planned order.
    */
   readonly plannedBonus: number;
+  /**
+   * Economy v2 (DEC-41, item 10): the planned order waits in its node and gathers its bonus; the
+   * server's numbers. `null` without a gathering plan.
+   */
+  readonly gathering: GatheringInfo | null;
+}
+
+/** A gathering planned order (economy v2): the bonus so far, the one asked for, the next charge. */
+export interface GatheringInfo {
+  readonly bonus: number;
+  /** The requested bonus (`OrderView.plan`). */
+  readonly plan: number;
+  /** Ticks until the next charge is due (`next_charge_tick`); `null`: not known. */
+  readonly nextIn: number | null;
 }
 
 /** The gathered "Defense" bonus of a group (or of the groups of a city) and its cap. */
@@ -106,6 +120,17 @@ export interface NodeInfo {
   readonly warehouseCap: number | null;
   /** Own city: its current build of any kind and the whole seconds left; `null` without one. */
   readonly building: BuildingInfo | null;
+  /**
+   * Economy v2 (DEC-41, item 2): an own city is a factory; an enemy city next to an own node: a built
+   * factory (DEC-31). `null` elsewhere and under v1.
+   */
+  readonly factory: boolean | null;
+  /** Own node: the factory being built there (economy v2); `null` without one. */
+  readonly factoryBuild: SiteInfo | null;
+  /** Economy v2 (DEC-41, item 12): the node has a bunker (own, or an enemy one next to an own node). */
+  readonly fort: boolean | null;
+  /** Own node: the bunker being built there (economy v2); `null` without one. */
+  readonly fortBuild: SiteInfo | null;
 }
 
 /** The current build of an own city (`NodeView.building`, DEC-26). */
@@ -113,6 +138,21 @@ export interface BuildingInfo {
   readonly kind: BuildKind;
   /** `null` while the build still waits for its payment in charges (economy v2, DEC-41, item 7). */
   readonly secondsLeft: number | null;
+  /** Economy v2: charges the build still takes (the progressive payment); 0 under v1. */
+  readonly owed: number;
+}
+
+/** A factory or a bunker being built (economy v2, `NodeView.factory_build`, `fort_build`). */
+export interface SiteInfo {
+  /** `null` while charges are still owed: the build time starts at the full payment. */
+  readonly secondsLeft: number | null;
+  readonly owed: number;
+}
+
+/** An own supply line (economy v2, `View.lines`): the server's path from the source to the target. */
+export interface LineInfo {
+  readonly id: number;
+  readonly path: readonly number[];
 }
 
 export interface EnemyInfo {
@@ -192,6 +232,8 @@ export interface HudData {
   readonly groups: readonly GroupChoice[];
   readonly nodes: readonly NodeChoice[];
   readonly roads: readonly RoadInfo[];
+  /** Economy v2: the own supply lines by id (empty under v1). */
+  readonly lines: readonly LineInfo[];
   /** Newest first. */
   readonly events: readonly HudEvent[];
 }
@@ -207,7 +249,7 @@ function ownership(owner: PlayerId | null, me: PlayerId): Ownership {
   return owner === me ? 'mine' : 'enemy';
 }
 
-function groupInfo(group: GroupView, nodes: readonly NodeView[]): GroupInfo {
+function groupInfo(group: GroupView, nodes: readonly NodeView[], tick: number): GroupInfo {
   const at = group.location.kind === 'node' ? group.location.node : null;
   return {
     id: group.id,
@@ -224,6 +266,30 @@ function groupInfo(group: GroupView, nodes: readonly NodeView[]): GroupInfo {
         ? { bonus: group.defense_bonus, cap: group.defense_cap }
         : null,
     plannedBonus: group.order?.planned === true ? group.order.bonus : 0,
+    gathering: gatheringOf(group, tick),
+  };
+}
+
+function gatheringOf(group: GroupView, tick: number): GatheringInfo | null {
+  const order = group.order;
+  if (order?.gathering !== true) return null;
+  return {
+    bonus: order.bonus,
+    plan: order.plan,
+    nextIn: order.next_charge_tick === null ? null : Math.max(0, order.next_charge_tick - tick),
+  };
+}
+
+function siteInfo(
+  site: { readonly done_tick: number | null; readonly owed: number } | null,
+  tick: number,
+  tickHz: number,
+): SiteInfo | null {
+  if (site === null) return null;
+  return {
+    secondsLeft:
+      site.done_tick === null ? null : Math.ceil(Math.max(0, site.done_tick - tick) / tickHz),
+    owed: site.owed,
   };
 }
 
@@ -278,7 +344,12 @@ function nodeInfo(
               node.building.done_tick === null
                 ? null
                 : Math.ceil(Math.max(0, node.building.done_tick - tick) / ctx.rules.tick_hz),
+            owed: node.building.owed,
           },
+    factory: node.factory,
+    factoryBuild: siteInfo(node.factory_build, tick, ctx.rules.tick_hz),
+    fort: node.fort,
+    fortBuild: siteInfo(node.fort_build, tick, ctx.rules.tick_hz),
   };
 }
 
@@ -298,11 +369,15 @@ function roadInfo(ctx: HudContext, edge: SnapshotMsg['view']['edges'][number]): 
  * The tip's subject: one group, or the total of the groups standing in a city (their one icon),
  * as a group of its own with no order.
  */
-function groupUnderPointer(view: SnapshotMsg['view'], target: HoverTarget): GroupInfo | null {
+function groupUnderPointer(
+  view: SnapshotMsg['view'],
+  target: HoverTarget,
+  tick: number,
+): GroupInfo | null {
   if (target === null) return null;
   if (typeof target === 'string') {
     const group = view.groups.find((g) => g.id === target);
-    return group === undefined ? null : groupInfo(group, view.nodes);
+    return group === undefined ? null : groupInfo(group, view.nodes, tick);
   }
   const here = view.groups.filter(
     (g) => g.location.kind === 'node' && g.location.node === target.node,
@@ -323,6 +398,7 @@ function groupUnderPointer(view: SnapshotMsg['view'], target: HoverTarget): Grou
       (total, g) => total + (g.order?.planned === true ? g.order.bonus : 0),
       0,
     ),
+    gathering: null,
   };
 }
 
@@ -364,7 +440,7 @@ export function buildHudData(
     tick,
     me,
     nicks: { mine: ctx.nicks[me], enemy: ctx.nicks[me === 0 ? 1 : 0] },
-    hovered: groupUnderPointer(view, hovered),
+    hovered: groupUnderPointer(view, hovered, tick),
     cp: {
       value: view.me.cp,
       cap: rules.cp.cap,
@@ -375,7 +451,7 @@ export function buildHudData(
     rearMin: view.me.rear_min,
     vp: { mine: view.vp[me], enemy: view.vp[me === 0 ? 1 : 0] },
     secondsLeft: Math.ceil(Math.max(0, rules.match_ticks - tick) / rules.tick_hz),
-    group: selectedGroup === undefined ? null : groupInfo(selectedGroup, view.nodes),
+    group: selectedGroup === undefined ? null : groupInfo(selectedGroup, view.nodes, tick),
     node: selectedNode === undefined ? null : nodeInfo(ctx, selectedNode, view.groups, tick),
     groups: view.groups.map((g) => ({
       id: g.id,
@@ -392,6 +468,7 @@ export function buildHudData(
       warehouseCap: n.warehouse_cap,
     })),
     roads: view.edges.map((e) => roadInfo(ctx, e)),
+    lines: view.lines,
     events,
   };
 }

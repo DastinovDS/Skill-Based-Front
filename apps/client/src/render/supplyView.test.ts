@@ -108,7 +108,7 @@ describe('SupplyView: the pipes (#429)', () => {
   function draw(base: SnapshotMsg, tick = 100) {
     const layers = createLayers();
     const view = new SupplyView(map, layers, 0, () => 14);
-    view.update(interpolateFrame(base, null, tick), { source: null, targets: [] });
+    view.update(interpolateFrame(base, null, tick), { source: null, targets: [], draft: [] });
     return { layers, view, ...parts(layers) };
   }
 
@@ -208,7 +208,10 @@ describe('SupplyView: the pipes (#429)', () => {
       const layers = createLayers();
       const view = new SupplyView(map, layers, 0, () => 14);
       // The render tick runs on from the snapshot: the dashes follow it, the snapshot stays.
-      view.update({ ...interpolateFrame(base, null, 150), tick }, { source: null, targets: [] });
+      view.update(
+        { ...interpolateFrame(base, null, 150), tick },
+        { source: null, targets: [], draft: [] },
+      );
       const { flowing } = parts(layers);
       const instructions = flowing.context.instructions as unknown as {
         data: { path: { shapePath: { shapePrimitives: { shape: { points?: number[] } }[] } } };
@@ -243,7 +246,7 @@ describe('SupplyView: the warehouse gauge', () => {
   it('draws the stock of an own city as a filled share of a bar with «stock/capacity» beside it', () => {
     const layers = createLayers();
     const view = new SupplyView(map, layers, 0, () => 14);
-    view.update(interpolateFrame(snapshot, null, 100), { source: null, targets: [] });
+    view.update(interpolateFrame(snapshot, null, 100), { source: null, targets: [], draft: [] });
     const { plates, texts } = parts(layers);
     const places = snapshot.view.nodes.filter(
       (n) =>
@@ -273,7 +276,7 @@ describe('SupplyView: the warehouse gauge', () => {
     };
     const layers = createLayers();
     const view = new SupplyView(map, layers, 0, () => 14);
-    view.update(interpolateFrame(base, null, 100), { source: null, targets: [] });
+    view.update(interpolateFrame(base, null, 100), { source: null, targets: [], draft: [] });
     const { plates, texts } = parts(layers);
     expect(strokes(plates).some((s) => s.color === YOU && s.width === 3)).toBe(true);
     expect(fills(plates).some((s) => s.type === 'circle' && s.color === BG)).toBe(true);
@@ -307,7 +310,7 @@ describe('SupplyView: the packets (#429)', () => {
     const layers = createLayers();
     const view = new SupplyView(map, layers, 0, () => 14);
     const own: SnapshotMsg = { ...snapshot, view: { ...snapshot.view, packets: list } };
-    view.update(interpolateFrame(own, null, 150), { source: null, targets: [] });
+    view.update(interpolateFrame(own, null, 150), { source: null, targets: [], draft: [] });
     const { dots } = parts(layers);
     const instructions = dots.context.instructions as unknown as {
       data: {

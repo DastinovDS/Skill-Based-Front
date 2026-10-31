@@ -24,6 +24,21 @@
   const defenseSeconds = $derived(Math.round(orders.defenseTicksPerBonus / orders.tickHz));
 
   const angles = spreadAngles(4);
+  // Economy v2 (DEC-41): no «Defense» (the bunker replaces it); its sector lets a gathering plan go.
+  const v2 = $derived(orders.v2);
+  const planSeconds = $derived(Math.round(orders.planTicksPerBonus / orders.tickHz));
+  const release = $derived<RadialItem>({
+    id: 'release',
+    icon: 'release',
+    angle: angles[1] ?? 0,
+    label: t('group.release'),
+    lines:
+      group?.gathering == null
+        ? []
+        : [tf('plan.gathered', { bonus: group.gathering.bonus, plan: group.gathering.plan })],
+    key: 'F',
+    disabled: group?.gathering == null,
+  });
   const items = $derived<RadialItem[]>([
     {
       id: 'split',
@@ -33,21 +48,23 @@
       key: 'S',
       disabled: group === null || group.node === null || group.units < 2,
     },
-    {
-      id: 'defense',
-      icon: 'defense',
-      angle: angles[1] ?? 0,
-      label: t('group.defense'),
-      // The price, and the bonus the group has gathered (DEC-30; the server's numbers).
-      lines: [
-        tf('group.cost', { cost: cp(orders.modeCost('defense')) }),
-        ...(group?.defense == null
-          ? []
-          : [tf('defense.bonus', { bonus: group.defense.bonus, cap: group.defense.cap })]),
-      ],
-      key: 'D',
-      current: group?.mode === 'defense',
-    },
+    v2
+      ? release
+      : {
+          id: 'defense',
+          icon: 'defense',
+          angle: angles[1] ?? 0,
+          label: t('group.defense'),
+          // The price, and the bonus the group has gathered (DEC-30; the server's numbers).
+          lines: [
+            tf('group.cost', { cost: cp(orders.modeCost('defense')) }),
+            ...(group?.defense == null
+              ? []
+              : [tf('defense.bonus', { bonus: group.defense.bonus, cap: group.defense.cap })]),
+          ],
+          key: 'D',
+          current: group?.mode === 'defense',
+        },
     {
       id: 'cancel',
       icon: 'cancel',
@@ -87,9 +104,14 @@
       orders.groupMenu.close();
     }}
     closeLabel={t('group.close')}
-    captions={[
-      { text: tf('defense.radialRule', { seconds: defenseSeconds }), dim: true },
-      { text: t('defense.radialBurn'), dim: true },
-    ]}
+    captions={v2
+      ? [
+          { text: tf('plan.radialRule', { seconds: planSeconds }), dim: true },
+          { text: t('plan.radialRelease'), dim: true },
+        ]
+      : [
+          { text: tf('defense.radialRule', { seconds: defenseSeconds }), dim: true },
+          { text: t('defense.radialBurn'), dim: true },
+        ]}
   />
 {/if}

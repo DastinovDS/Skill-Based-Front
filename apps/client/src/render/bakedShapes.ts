@@ -2,6 +2,9 @@ import { Container, Graphics } from 'pixi.js';
 import type { BakeSpec } from './bake.ts';
 import {
   BARRACKS_HOUSE,
+  BUNKER_GLYPH,
+  BUNKER_SLIT,
+  FACTORY_GLYPH,
   capacityRing,
   ringRadius,
   warehouseSegments,
@@ -374,6 +377,53 @@ export function barracksSpec(rim: number): BakeSpec {
       g.poly(BARRACKS_HOUSE.flatMap(([x, y]) => [x * k, y * k])).fill(PAPER);
     },
   };
+}
+
+/**
+ * Economy v2 (DEC-41): the factory (item 2) and bunker (item 12) badges, in the language of the
+ * barracks badge: a dark disc, the rim in the owner's colour, the glyph in paper (a saw-tooth
+ * factory, a low dome with a slit). The opponent's has the light inner ring and a smaller glyph,
+ * so the side reads without the hue.
+ */
+export function siteMarkSpec(kind: 'factory' | 'fort', rim: number): BakeSpec {
+  const radius = BARRACKS_MARK.radius;
+  const enemy = rim === ENEMY;
+  return {
+    key: `${kind}:${String(rim)}`,
+    box: shadowBox(circleBox(radius + 1), BAKE_MARGIN),
+    draw(into) {
+      shadow(into, (g) => g.circle(0, 0, radius));
+      const g = graphics(into);
+      g.circle(0, 0, radius)
+        .fill(BARRACKS_MARK.fill)
+        .stroke({ ...BARRACKS_MARK.stroke, color: rim });
+      const k = enemy ? BARRACKS_MARK.enemy.house : 1;
+      if (enemy) {
+        g.circle(0, 0, BARRACKS_MARK.enemy.innerRadius).stroke({
+          width: BARRACKS_MARK.enemy.ringWidth,
+          color: PAPER,
+          alpha: BARRACKS_MARK.enemy.ringAlpha,
+        });
+      }
+      drawSiteGlyph(g, kind, 0, 0, k);
+    },
+  };
+}
+
+/** The factory or bunker glyph at (`cx`, `cy`), scaled by `k` (1: the badge of a mark). */
+function drawSiteGlyph(
+  g: Graphics,
+  kind: 'factory' | 'fort',
+  cx: number,
+  cy: number,
+  k: number,
+): void {
+  const shape = kind === 'factory' ? FACTORY_GLYPH : BUNKER_GLYPH;
+  g.poly(shape.flatMap(([x, y]) => [cx + x * k, cy + y * k])).fill(PAPER);
+  if (kind === 'fort') {
+    const { x, y, width, height } = BUNKER_SLIT;
+    g.rect(cx + x * k, cy + y * k, width * k, height * k).fill(BG);
+  }
 }
 
 /** How the outline of a triangle is drawn: own, the opponent's (a second inner outline), dashed (unknown). */
@@ -773,9 +823,16 @@ const HOUSE: readonly (readonly [number, number])[] = [
   [-0.68, -0.05],
 ];
 
-/** The glyph of a build kind in its badge: a little house (barracks) or stacked squares (warehouse). */
+/**
+ * The glyph of a build kind in its badge: a little house (barracks), stacked squares (warehouse),
+ * a factory or a bunker (economy v2, the glyphs of their marks, smaller).
+ */
 function drawKindGlyph(g: Graphics, kind: BuildMark['kind'], cx: number, cy: number): void {
   const s = PROGRESS.badge.glyph;
+  if (kind === 'factory' || kind === 'fort') {
+    drawSiteGlyph(g, kind, cx, cy + 0.2, s / 5.2);
+    return;
+  }
   if (kind === 'warehouse') {
     for (const [x, y] of [
       [-0.9, -0.1],
@@ -793,7 +850,7 @@ function drawKindGlyph(g: Graphics, kind: BuildMark['kind'], cx: number, cy: num
 export function buildMarkSpec(mark: BuildMark): BakeSpec {
   const { width, height } = mark;
   return {
-    key: `build:${mark.kind}:${String(mark.fill)}`,
+    key: `build:${mark.kind}:${String(mark.fill)}:${String(mark.owed)}`,
     box: { x: -width / 2 - 1, y: -1, width: width + 2, height: height + 2 },
     draw(into) {
       progressPlate(into, -width / 2, width, height);
@@ -805,16 +862,22 @@ export function buildMarkSpec(mark: BuildMark): BakeSpec {
         .fill(BG)
         .stroke({ width: rim, color: PAPER });
       drawKindGlyph(g, mark.kind, left + cx, cy);
-      drawCell(
-        g,
-        left + mark.cellX,
-        PROGRESS.pad,
-        PROGRESS.buildCell.width,
-        PROGRESS.buildCell.height,
-        'active',
-        mark.fill,
-        YOU,
-      );
+      const { width: cw, height: ch } = PROGRESS.buildCell;
+      if (mark.owed > 0) {
+        // Economy v2 (DEC-41, item 7): the time has not started, the build waits for charges: a
+        // dashed cell with a hollow dot per charge still owed (an empty dot is a missing charge).
+        drawCell(g, left + mark.cellX, PROGRESS.pad, cw, ch, 'slot', 0, YOU);
+        const { radius, width: stroke, pitch } = PROGRESS.owed;
+        const x0 = left + mark.cellX + cw / 2 - ((mark.owed - 1) * pitch) / 2;
+        for (let i = 0; i < mark.owed; i++) {
+          g.circle(x0 + i * pitch, PROGRESS.pad + ch / 2, radius).stroke({
+            width: stroke,
+            color: PAPER,
+          });
+        }
+        return;
+      }
+      drawCell(g, left + mark.cellX, PROGRESS.pad, cw, ch, 'active', mark.fill, YOU);
     },
   };
 }

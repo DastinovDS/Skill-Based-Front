@@ -32,7 +32,9 @@
   const upgrades = $derived(orders.cityUpgrades);
   // A sector with nothing to do (no recruit without a barracks, the barracks is built, the
   // warehouse is at its top level) is not drawn; the others spread evenly around the ring.
-  const choices = $derived(cityChoices(upgrades, city));
+  const v2 = $derived(orders.v2);
+  const province = $derived(menu.target !== null && orders.isProvince(menu.target));
+  const choices = $derived(cityChoices(upgrades, city, v2, province));
   const count = $derived(choices.length);
   const items = $derived.by<RadialItem[]>(() => {
     const angles = spreadAngles(count);
@@ -45,6 +47,13 @@
     const busy = city?.building != null;
     const price = (centis: number): string[] =>
       centis > 0 ? [tf('city.cost', { cost: cp(centis) })] : [];
+    // Economy v2 (DEC-41, item 7): the buildings are paid in charges, taken from the warehouse and
+    // then from the own units standing there; a build that still owes charges waits for them.
+    const charges = orders.chargeCosts;
+    const chargePrice = (n: number): string[] =>
+      n > 0 ? [tf('city.costCharges', { charges: n })] : [];
+    const buildPrice = (centis: number, n: number): string[] =>
+      v2 ? [...price(centis), ...chargePrice(n)] : price(centis);
     const sector = (choice: CityChoice): Omit<RadialItem, 'angle'> => {
       switch (choice) {
         case 'recruit':
@@ -62,7 +71,7 @@
             id: 'barracks',
             icon: 'barracks',
             label: t('city.barracks'),
-            lines: price(costs.barracks),
+            lines: buildPrice(costs.barracks, charges.barracks),
             compact: true,
             // Only a city known to lack it builds it (a built one has no sector at all).
             disabled: city?.hasBarracks !== false || busy || poor(costs.barracks),
@@ -72,9 +81,30 @@
             id: 'warehouse',
             icon: 'warehouse',
             label: t('city.warehouse'),
-            lines: price(costs.warehouse),
+            lines: buildPrice(costs.warehouse, charges.warehouse),
             compact: true,
             disabled: busy || poor(costs.warehouse),
+          };
+        case 'factory':
+          return {
+            id: 'factory',
+            icon: 'factory',
+            label: t('city.factory'),
+            lines: chargePrice(charges.factory),
+            compact: true,
+            // One factory build at a time in a city; the cap of factories is the server's call.
+            disabled: city?.factoryBuild != null,
+          };
+        case 'bunker':
+          return {
+            id: 'bunker',
+            icon: 'bunker',
+            label: t('city.bunker'),
+            lines: chargePrice(charges.bunker),
+            compact: true,
+            // A province keeps its sector once the bunker stands: it is shown as built.
+            ...(city?.fort === true ? { current: true } : {}),
+            disabled: city?.fort === true || city?.fortBuild != null,
           };
       }
     };
@@ -97,7 +127,7 @@
   {@const target = menu.target}
   <Radial
     {items}
-    label={tf('city.title', { node: names(target) })}
+    label={tf(province ? 'city.titleProvince' : 'city.title', { node: names(target) })}
     at={() => anchors.node(target)}
     {ring}
     half={halfFor(count)}

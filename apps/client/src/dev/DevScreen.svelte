@@ -87,9 +87,13 @@
 
   const map = $derived(BUNDLED_MAPS.find((m) => m.meta.name === mapName) ?? DEFAULT_MAP);
   const fixture = $derived(fixtureScene(sceneId));
+  // A scene may play other rules (economy v2, #649): the HUD and the menus follow them.
+  const sceneRules = $derived(fixture?.rules ?? rules);
 
   // The HUD numbers for the map on screen.
-  const hud = $derived(new HudState({ me: DEV_PLAYER, nicks: ['Danya', 'Bot'], rules, map }));
+  const hud = $derived(
+    new HudState({ me: DEV_PLAYER, nicks: ['Danya', 'Bot'], rules: sceneRules, map }),
+  );
   const chrome = new HudChrome();
 
   // The demo scene is a live match against the dev server (until SRV-03); a fixture is a frozen
@@ -152,8 +156,8 @@
       map,
       // With `?menus` the city development is on too: the city menu shows all three sectors.
       rules: menusOn
-        ? { ...rules, city_upgrades: { ...rules.city_upgrades, enabled: true } }
-        : rules,
+        ? { ...sceneRules, city_upgrades: { ...sceneRules.city_upgrades, enabled: true } }
+        : sceneRules,
       book: match?.session.orders ?? new OrderBook(),
       send: match === null ? (menusOn ? () => 0 : null) : (cmd) => match.session.send(cmd),
       alerts: hud.alerts,

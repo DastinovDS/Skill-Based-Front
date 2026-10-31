@@ -67,7 +67,7 @@ export function counterLayout(pips: DefensePips): CounterLayout | null {
 }
 
 /** What a column of a city holds, top to bottom: the barracks, then the signs of "Defense". */
-export type ColumnKind = 'barracks' | 'defense';
+export type ColumnKind = 'barracks' | 'factory' | 'fort' | 'defense';
 
 /** One entry of the column: where its middle (the badge of a sign) is, in city units, and its scale. */
 export interface ColumnSlot {
@@ -102,14 +102,20 @@ export function columnSlots(
   const edge = columnEdge(radius);
   const step = CITY_COLUMN.step * scale;
   return kinds.map((kind, i) => {
-    const reach = (kind === 'barracks' ? 8 : CITY_COLUMN.badgeRadius) * scale;
+    const reach = (kind === 'defense' ? CITY_COLUMN.badgeRadius : 8) * scale;
     return { kind, x: edge - reach, y: (i - (kinds.length - 1) / 2) * step };
   });
 }
 
 /** The kinds of the column: the barracks (if the city shows it), then one entry per sign. */
-export function columnKinds(barracks: boolean, signs: number): ColumnKind[] {
+export function columnKinds(
+  barracks: boolean,
+  signs: number,
+  /** Economy v2 (DEC-41): the factory and bunker marks, under the barracks. */
+  marks: readonly ('factory' | 'fort')[] = [],
+): ColumnKind[] {
   const kinds: ColumnKind[] = barracks ? ['barracks'] : [];
+  kinds.push(...marks);
   for (let i = 0; i < signs; i++) kinds.push('defense');
   return kinds;
 }

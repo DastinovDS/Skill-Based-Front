@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { en } from '../i18n/en.ts';
-import { REJECT_MESSAGES, rejectMessageKey } from './rejects.ts';
+import { REJECT_MESSAGES, REJECT_MESSAGES_BY_COMMAND, rejectMessageKey } from './rejects.ts';
 
 // The Python source of the codes: a code added there without a message here fails this test.
 const commandsPy = import.meta.glob<string>('../../../../packages/sim/src/gow_sim/commands.py', {
@@ -25,6 +25,15 @@ describe('reject messages', () => {
   it('exist in the dictionary', () => {
     for (const code of Object.keys(REJECT_MESSAGES)) {
       const key = rejectMessageKey(code);
+      expect(en[key].length).toBeGreaterThan(0);
+    }
+  });
+
+  it('tell a code for the command it answers where the general text would mislead (economy v2)', () => {
+    expect(rejectMessageKey('ALREADY_BUILT', 'build_factory')).toBe('reject.ALREADY_BUILT.factory');
+    expect(rejectMessageKey('ALREADY_BUILT', 'build_barracks')).toBe('reject.ALREADY_BUILT');
+    expect(rejectMessageKey('NOT_CITY', 'draw_line')).toBe('reject.NOT_CITY.line');
+    for (const key of Object.values(REJECT_MESSAGES_BY_COMMAND)) {
       expect(en[key].length).toBeGreaterThan(0);
     }
   });
