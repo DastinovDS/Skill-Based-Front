@@ -8,9 +8,10 @@ Expected values come from mechanics.md, section 7, block "Economy v2 (DEC-41, #6
 ``scenarios/test_lines_scenarios.py``.
 
 Map ``dec41`` (rot180): player 0 owns K = 0 (capital), A = 1 (large), B, C, D = 2, 3, 4
-(medium), E, F, G = 5, 6, 7 (small); roads K-A, A-B, B-C, A-D, D-C (40 ticks), A-E, B-F, B-G,
-C-M (30 ticks each); M = 8 is a neutral province in the middle; player 1 owns the mirror,
-``16 - n``. Warehouse capacities of ``mvp-3``: capital 6, large and medium 2, small 1.
+(medium), E, F, G = 5, 6, 7 (small); the roads K-A, A-B, B-C, A-D, A-E, B-F, B-G take 30 ticks,
+D-C 57, K-E 42, C-M 48; M = 8 is a neutral province in the middle; player 1 owns the mirror,
+``16 - n``; the neutral provinces 17..20 join the halves a second way. Warehouse capacities of
+``mvp-3``: capital 6, large and medium 2, small 1.
 """
 
 import tomllib

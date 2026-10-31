@@ -1915,7 +1915,7 @@ The owner's decision of 2026-10-31, after the mechanics audit (#639, `docs/desig
 - **Packets** of a line follow its path at that dispatch and the packet rules of section 7 (lost on a road that is no longer own, taken into an own city where the way is cut); `travel_ticks * 100 // 150` per road (item 8).
 - **Removed under v2** (`FEATURE_DISABLED`): `SetStance`, `SetFront`, `SetRearMin`, `Transfer`, `UpgradeRoad`; no front marker fallback, donors, delivery passes or starvation. Under v1, `BuildFactory`, `DrawLine`, `RemoveLine` give `FEATURE_DISABLED`. Not in this part: buildings paid in charges, the bunker and the province warehouse (#645); the planned order and the capture cost (#646); the `PlayerView` fields and the protocol commands (#647).
 
-| # | Setting (`mvp-3`, map `dec41` of the tests: own cities K (capital), A, B, C, D, E, F, G; roads K-A, A-B, B-C, A-D, D-C, A-E, B-F, B-G) | Result |
+| # | Setting (`mvp-3`, map `dec41` of the tests: own cities K (capital), A, B, C, D, E, F, G; roads K-A, K-E, A-B, B-C, A-D, D-C, A-E, B-F, B-G) | Result |
 |---|---|---|
 | R1 | factory A, lines A -> B and A -> E, warehouse A = 1, both targets empty | dispatch 1: one charge to B; dispatch 2 (A refilled to 1): one charge to E |
 | R2 | factory A, lines A -> B, A -> E, warehouse A = 4 | one dispatch sends one charge on each line, A keeps 2 |
