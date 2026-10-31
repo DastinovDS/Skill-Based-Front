@@ -135,7 +135,7 @@ jobs `py` and `web` run. A tool version is edited only in `mise.toml`, never in 
 | `test:bench` | simulation benchmarks and the budgets of section 12 (`docs/perf.md`) | SIM-15 |
 | `golden:check` | golden replays are re-simulated (`python -m gow_sim.replay check`) and unchanged relative to the base (`scripts/check_golden_frozen.py`; argument: a git ref, `origin/develop` by default; CI: `HEAD^1`) | SIM-16 |
 | `golden:generate` | create the golden replays `v{SIM_VERSION}` (after raising `SIM_VERSION`; does not overwrite an existing directory) | SIM-16 |
-| `ci` | what the jobs `py` and `web` run, locally: `check`, `test`, `test:perf`, `golden:check`, `build` | #301 |
+| `ci` | what the jobs `py` and `web` run, locally: `check`, `test`, `golden:check`, `build` in parallel, then `test:perf` last and alone (timing benchmarks do not compete with the other load) | #301, #653 |
 | `dev` | dev servers together: the game server (`dev:server`, port 8000) and the client (`dev:client`, `http://localhost:5173`, Vite proxies `/api` and `/ws`) | SRV-01 |
 | `build` | production build of the client | INF-03 |
 | `preview` | `build` and a local preview of the production build under the target CSP (`apps/client/csp.ts`) | INF-03 |

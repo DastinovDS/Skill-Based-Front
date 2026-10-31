@@ -153,8 +153,11 @@ description = "Create golden replays v{SIM_VERSION} after a SIM_VERSION bump (ne
 run = "uv run python packages/sim/tests/golden/generate.py"
 
 [tasks.ci]
-description = "Everything job py and job web check, locally: check, test, perf, golden, client build"
-depends = ["check", "test", "test:perf", "golden:check", "build"]
+description = "Everything job py and job web check, locally: check, test, golden, client build, then perf alone"
+# check, test, golden:check and build run in parallel; test:perf is timing-sensitive, so it runs
+# last, after they finish, with no other load on the machine (run is executed after depends).
+depends = ["check", "test", "golden:check", "build"]
+run = "mise run test:perf"
 
 # ---------------------------------------------------------------------------------------------
 # development
