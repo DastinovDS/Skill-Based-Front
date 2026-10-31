@@ -34,6 +34,7 @@ from gow_sim.commands import (
     Ok,
     PlayerCommand,
     Recruit,
+    ReleasePlan,
     RemoveLine,
     SetFront,
     SetMode,
@@ -88,6 +89,10 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
 
     cmds: list[Command] = []
     tick = state.tick
+    if rules.v2 and tick % 50 == 40:  # a gathering planned order departs now (#646)
+        for g in sorted(state.groups.values(), key=lambda g: (key(_node_or_edge(g)), g.id)):
+            if g.owner == player and g.plan:
+                cmds.append(ReleasePlan(g.id))
     if tick % 50 == 25 or tick % 70 == 10:
         for g in sorted(state.groups.values(), key=lambda g: (key(_node_or_edge(g)), g.id)):
             if g.owner == player and g.order is not None and g.order.planned:
@@ -156,7 +161,9 @@ def _decide(state: GameState, rules: Ruleset, player: int) -> list[Command]:
             else:
                 dest = _target(state, rules, player, node)
                 if dest is not None:
-                    cmds.append(Move(g.id, dest, planned=tick % 20 == 0))
+                    planned = tick % 20 == 0
+                    bonus = 1 + tick // 20 % 3 if planned and rules.v2 else 0
+                    cmds.append(Move(g.id, dest, planned=planned, bonus=bonus))
     return cmds
 
 
@@ -222,8 +229,8 @@ def _mirror_cmd(state: GameState, cmd: Command, groups: dict[int, int]) -> Comma
     mirror_nodes, mirror_edges = state.map.mirror_nodes, state.map.mirror_edges
     cmd = map_group_ids(cmd, lambda g: groups[g])
     match cmd:
-        case Move(group=g, dest=dest, planned=planned):
-            return Move(g, mirror_nodes[dest], planned)
+        case Move(group=g, dest=dest, planned=planned, bonus=bonus):
+            return Move(g, mirror_nodes[dest], planned, bonus)
         case UpgradeRoad(edge=edge):
             return UpgradeRoad(mirror_edges[edge])
         case Recruit(node=node):
@@ -274,7 +281,7 @@ def _mirrored(state: GameState, g: Group) -> tuple[object, ...]:
         None
         if order is None
         else (tuple(mn[n] for n in order.path), order.planned, order.depart_tick),
-        (g.bonus, g.bonus_tick, g.intent is None, g.fight is None),
+        (g.bonus, g.bonus_tick, g.intent is None, g.fight is None, g.plan, g.plan_tick),
     )
 
 
@@ -286,7 +293,7 @@ def _plain(g: Group) -> tuple[object, ...]:
         g.mode,
         g.location,
         None if order is None else (order.path, order.planned, order.depart_tick),
-        (g.bonus, g.bonus_tick, g.intent is None, g.fight is None),
+        (g.bonus, g.bonus_tick, g.intent is None, g.fight is None, g.plan, g.plan_tick),
     )
 
 

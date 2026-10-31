@@ -146,6 +146,11 @@ def test_mvp3_is_mvp2_with_the_v2_keys() -> None:
     expected["city_upgrades"]["warehouse_charges"] = 2
     expected["warehouse"]["province"] = 1
     expected["bunker"] = {"cost": 3, "build_ticks": 100, "shots": 1}
+    # #646, items 10 and 11: the planned order costs as much as an ordinary one and gathers one
+    # bonus per 30 ticks; a capture spends one charge.
+    expected["orders"]["cost"]["planned_move"] = expected["orders"]["cost"]["move"]
+    expected["orders"]["plan_ticks_per_bonus"] = 30
+    expected["capture"]["charge_cost"] = 1
     assert to_canonical(RULES) == expected
     assert parse_ruleset(expected) == RULES
     assert RULES.v2 and RULES.economy.model is EconomyModel.V2

@@ -29,6 +29,7 @@
     "packet_delivered",
     "packet_lost",
     "packet_sent",
+    "plan_charged",
     "rear_min_set",
     "recruit_cancelled",
     "recruit_queue_lost",

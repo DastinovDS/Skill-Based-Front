@@ -33,7 +33,9 @@ Economy v2 (DEC-41, items 2, 3, 5, 7, 12, 14; ``economy.model = "v2"``): ``Build
 ``systems.build``); the buildings are paid in charges by the progressive payment of item 7
 (``systems.build.pay``), so no charge check rejects them. ``SetStance``, ``SetFront``,
 ``SetRearMin``, ``Transfer``, ``UpgradeRoad`` and ``SetMode(DEFENSE)`` give ``FEATURE_DISABLED``
-there, and the four new commands give it under v1. None of them is public.
+there, and the four new commands give it under v1. None of them is public. A planned ``Move``
+of v2 names its requested bonus (``Move.bonus >= 1``, item 10) and gathers it in
+``systems.orders``; ``ReleasePlan`` sends it at once (v1: ``FEATURE_DISABLED``).
 """
 
 from collections.abc import Callable, Iterable
@@ -43,6 +45,7 @@ from itertools import pairwise
 
 from gow_sim.ruleset import Ruleset, Stance
 from gow_sim.state import (
+    PLAN_WAIT,
     AtNode,
     BuildKind,
     Detail,
@@ -68,7 +71,7 @@ from gow_sim.systems.lines import (
     lines_out,
 )
 from gow_sim.systems.movement import find_path, path_ticks
-from gow_sim.systems.orders import absorb, clear_bonus, set_intent
+from gow_sim.systems.orders import absorb, clear_bonus, release_plan, set_intent
 from gow_sim.systems.recruit import (
     cancel_unit,
     free_capacity,
@@ -103,6 +106,7 @@ __all__ = [
     "Recruit",
     "Reject",
     "RejectCode",
+    "ReleasePlan",
     "RemoveLine",
     "SetFront",
     "SetMode",
@@ -125,11 +129,14 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True)
 class Move:
-    """Move ``group`` to ``dest``; ``planned``: a planned order (DEC-08)."""
+    """Move ``group`` to ``dest``; ``planned``: a planned order (DEC-08). ``bonus``: under economy
+    v2 the requested attack bonus of a planned order, at least 1 (DEC-41, item 10); 0 otherwise
+    (a planned order of v1 gets the DEC-29 distance bonus)."""
 
     group: int
     dest: int
     planned: bool = False
+    bonus: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,6 +270,14 @@ class RemoveLine:
 
 
 @dataclass(frozen=True, slots=True)
+class ReleasePlan:
+    """The group waiting on a gathering planned order departs now with the bonus gathered so
+    far, free (DEC-41, item 10; economy v2 only)."""
+
+    group: int
+
+
+@dataclass(frozen=True, slots=True)
 class Forfeit:
     pass
 
@@ -286,6 +301,7 @@ type Command = (
     | BuildBunker
     | DrawLine
     | RemoveLine
+    | ReleasePlan
     | Forfeit
 )
 
@@ -293,8 +309,10 @@ type Command = (
 def map_group_ids(cmd: Command, f: Callable[[int], int]) -> Command:
     """``cmd`` with every group id replaced by ``f(id)``: the hook for ``resolve()`` (SIM-14)."""
     match cmd:
-        case Move(group=g, dest=dest, planned=planned):
-            return Move(f(g), dest, planned)
+        case Move(group=g, dest=dest, planned=planned, bonus=bonus):
+            return Move(f(g), dest, planned, bonus)
+        case ReleasePlan(group=g):
+            return ReleasePlan(f(g))
         case Split(group=g, n=n):
             return Split(f(g), n)
         case Merge(groups=groups):
@@ -466,6 +484,8 @@ def command_cost(rules: Ruleset, cmd: Command) -> int:
             return cost.transfer
         case BuildFactory() | BuildBunker() | DrawLine() | RemoveLine():
             return 0  # paid in charges or free (DEC-41, items 2, 3, 12)
+        case ReleasePlan():
+            return 0  # free (DEC-41, item 10)
         case Forfeit():
             return 0
 
@@ -504,7 +524,7 @@ def _validate(
         return Ok(cost=cost, path=checked.nodes, arrive_tick=arrive)
     if isinstance(cmd, Move):
         # The first step is made in the tick of the order (or of the departure): tick + T - 1.
-        delay = rules.orders.planned_delay_ticks if cmd.planned else 0
+        delay = _plan_delay(rules, cmd)
         arrive = state.tick + delay + path_ticks(state, rules, checked) - 1
         return Ok(cost=cost, path=checked, arrive_tick=arrive)
     return Ok(cost=cost, path=checked)
@@ -518,12 +538,15 @@ def _check(
     if _other_model(rules, cmd):
         return Reject(RejectCode.FEATURE_DISABLED)  # DEC-41, items 5 and 14
     match cmd:
-        case Move(group=gid, dest=dest, planned=planned):
+        case Move(group=gid, dest=dest, planned=planned, bonus=bonus):
             group = _standing_group(state, player, gid, seen)
             if isinstance(group, Reject):
                 return group
             if group.fight is not None and (planned or not _defends(state, group)):
                 return Reject(RejectCode.IN_FIGHT)  # DEC-24, E1 and E4
+            # DEC-41, item 10: a v2 planned order names its bonus, b >= 1; nothing else does.
+            if bonus < 0 or (bonus >= 1) != (planned and rules.v2):
+                return Reject(RejectCode.INVALID_ARGUMENT)
             if not 0 <= dest < len(state.map.nodes):
                 return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
             start = _node_of(group)
@@ -648,13 +671,24 @@ def _check(
             if line not in state.players[player].lines:
                 return Reject(RejectCode.NOT_FOUND_OR_HIDDEN)
             return ()
+        case ReleasePlan(group=gid):
+            group = _own_group(state, player, gid, seen)
+            if isinstance(group, Reject):
+                return group
+            if not isinstance(group.location, AtNode):
+                return Reject(RejectCode.GROUP_ON_EDGE)
+            if not (_waits_to_depart(state, group) and group.plan > 0):
+                return Reject(RejectCode.NOTHING_TO_CANCEL)  # TODO(#651): the code of no plan
+            if group.fight is not None:
+                return Reject(RejectCode.IN_FIGHT)  # it may cancel the plan (DEC-24, E)
+            return ()
         case Forfeit():
             return Reject(RejectCode.NO_CHANGE) if state.players[player].forfeited else ()
 
 
 def _other_model(rules: Ruleset, cmd: Command) -> bool:
     """``cmd`` belongs to the other economy model (DEC-41, items 5 and 14)."""
-    if isinstance(cmd, BuildFactory | BuildBunker | DrawLine | RemoveLine):
+    if isinstance(cmd, BuildFactory | BuildBunker | DrawLine | RemoveLine | ReleasePlan):
         return not rules.v2
     if isinstance(cmd, SetStance | SetFront | SetRearMin | Transfer | UpgradeRoad):
         return rules.v2
@@ -882,6 +916,15 @@ def _set_leaving(state: GameState, group: Group, *, leaving: bool) -> None:
     members[group.id] = replace(members[group.id], leaving=leaving)
 
 
+def _plan_delay(rules: Ruleset, cmd: Move) -> int:
+    """Ticks from the order to the departure if nothing stops it: ``planned_delay_ticks`` of a
+    v1 planned order; for a v2 one the requested bonus gathered without a pause (DEC-41, item
+    10; the cap by charged units may send it earlier)."""
+    if cmd.bonus:
+        return cmd.bonus * rules.orders.plan_ticks_per_bonus
+    return rules.orders.planned_delay_ticks if cmd.planned else 0
+
+
 def _waits_to_depart(state: GameState, group: Group) -> bool:
     order = group.order
     return order is not None and order.planned and state.tick < order.depart_tick
@@ -928,10 +971,13 @@ def apply_commands(
 def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) -> list[Event]:
     tick = state.tick
     match cmd:
-        case Move(group=gid, planned=planned):
+        case Move(group=gid, planned=planned, bonus=bonus):
             group = state.groups[gid]
             delay = rules.orders.planned_delay_ticks if planned else 0
-            group.order = Order(path=ok.path[1:], planned=planned, depart_tick=tick + delay)
+            depart = PLAN_WAIT if bonus else tick + delay  # a v2 plan gathers first (DEC-41)
+            group.order = Order(path=ok.path[1:], planned=planned, depart_tick=depart)
+            group.plan = bonus
+            group.plan_tick = tick if bonus else 0
             if group.mode is Mode.DEFENSE:
                 group.mode = Mode.ATTACK  # a move order drops "Defense" for free (DEC-08)
                 group.ticks_in_defense = 0  # with what it gathered (DEC-30)
@@ -939,9 +985,11 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
                 _set_leaving(state, group, leaving=True)
             if planned:  # public intent now, the bonus from the departure on (DEC-08)
                 # DEC-29: per edge of the path chosen now; ``movement`` caps it by the charged
-                # units in the tick the group departs.
-                group.bonus = (len(ok.path) - 1) * rules.orders.planned_bonus_per_edge
-                group.bonus_tick = tick + delay
+                # units in the tick the group departs. Under v2 the bonus is gathered from 0
+                # (DEC-41, item 10: no distance bonus, ``systems.orders``).
+                edges = 0 if bonus else len(ok.path) - 1
+                group.bonus = edges * rules.orders.planned_bonus_per_edge
+                group.bonus_tick = depart
                 set_intent(state, group, IntentKind.PLANNED_MOVE, ok.path[-1])
             else:
                 clear_bonus(group)
@@ -1052,6 +1100,9 @@ def _apply(state: GameState, rules: Ruleset, player: int, cmd: Command, ok: Ok) 
             return []
         case RemoveLine(line=line):
             del state.players[player].lines[line]
+            return []
+        case ReleasePlan(group=gid):
+            release_plan(state.groups[gid], tick)  # it departs in this tick (movement)
             return []
         case Forfeit():
             state.players[player].forfeited = True

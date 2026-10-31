@@ -300,7 +300,9 @@ class OrderView:
     """Remaining nodes to ``dest``, the next one first, ``dest`` included."""
     planned: bool
     depart_tick: int
-    """Not before this tick the group leaves its node (a planned order waits, DEC-08)."""
+    """Not before this tick the group leaves its node (a planned order waits, DEC-08). A planned
+    order of economy v2 that gathers its bonus has ``state.PLAN_WAIT`` here (DEC-41, item 10).
+    TODO(#647): the requested bonus and a gathering flag in the view and the protocol."""
     bonus: int = 0
     """A planned order: the bonus it brings into its first fight (DEC-29: per edge of the path,
     at most the charged units), ``min(Group.bonus, charged now)``. Before the departure it is a

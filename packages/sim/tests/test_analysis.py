@@ -688,3 +688,38 @@ def test_result_totals_count_own_units_lost_and_charges_delivered() -> None:
     assert result_totals(events, 1) == (5, 5)
     log = dataclasses.replace(_log(events), places_start=((0,) * 6, (0,) * 6))
     assert [result_totals(events, p)[1] for p in (0, 1)] == [f.delivered for f in analyze(log).flow]
+
+
+def test_the_v2_sinks_are_counted_from_their_events() -> None:
+    # Economy v2 (DEC-41, #646): a building paid 2 from the warehouse and 1 from a group, a
+    # waiting planned order took 2 charges: 5 + 0 - 3 - 2 = 0 left, residual 0.
+    events = [
+        event(3, "build_paid", player=0, kind="barracks", node=2, warehouse=2, units=1, owed=0),
+        event(40, "plan_charged", player=0, group=7, node=2, bonus=1),
+        event(70, "plan_charged", player=0, group=7, node=2, bonus=2),
+    ]
+    log = dataclasses.replace(
+        _log(events),
+        places_start=((5, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0)),
+        places_end=((0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0)),
+    )
+    a, b = analyze(log).flow
+    assert (a.built, a.plans, a.residual) == (3, 2, 0)
+    assert (b.built, b.plans, b.residual) == (0, 0, 0)
+    data = analyze(log).to_json()
+    assert data["charges_built"] == [3, 0]
+    assert data["charges_plans"] == [2, 0]
+
+
+def test_the_ledger_balances_on_the_v2_golden_matches() -> None:
+    # The identity of the ledger (sources - sinks - end = 0) on the economy v2 golden games,
+    # which pay buildings in charges, gather planned bonuses and pay captures (#646).
+    files = sorted(GOLDEN.glob(f"*-mvp3{REPLAY_SUFFIX}"))
+    assert files
+    for file in files:
+        log = replay_log(file, ROOT / "rulesets" / "archive", ROOT / "maps" / "fixtures")
+        m = analyze(log)
+        assert log.capture_charge_cost == 1
+        assert sum(f.built for f in m.flow) > 0 and sum(f.plans for f in m.flow) > 0
+        for flow in m.flow:
+            assert flow.residual == 0, (file.name, flow)

@@ -28,6 +28,11 @@ from gow_sim.ruleset import Ruleset, Stance
 PROGRESS_SCALE: Final = 1000
 """Edge progress is stored in thousandths of the edge (DEC-07, rule 6)."""
 
+PLAN_WAIT: Final = 2**31 - 1
+"""``Order.depart_tick`` of a planned order that gathers its bonus under economy v2 (DEC-41,
+item 10): no departure tick is known until the requested bonus or the cap is reached, or the
+player releases the group; then ``systems.orders`` (or ``ReleasePlan``) sets the real tick."""
+
 
 class Mode(StrEnum):
     """Group mode (mechanics.md, section 3; effects: DEC-08). Roads are built by cities (DEC-16)."""
@@ -103,7 +108,8 @@ class Order:
 
     ``path``: the nodes still to reach, the next one first; the last one is the destination.
     ``planned``: a planned order (DEC-08). The group leaves its node not before ``depart_tick``:
-    the tick the order was applied, plus ``orders.planned_delay_ticks`` for a planned order.
+    the tick the order was applied, plus ``orders.planned_delay_ticks`` for a planned order; under
+    economy v2 a gathering planned order has ``PLAN_WAIT`` until it may depart (DEC-41, item 10).
     """
 
     path: tuple[int, ...]
@@ -140,6 +146,12 @@ class Group:
     fight: int | None = None
     """Id of the ``Fight`` the group is in (DEC-24); ``None``: in no fight. A group in a fight
     does not move (DEC-24, item B6)."""
+    plan: int = 0
+    """Economy v2 (DEC-41, item 10): the bonus the player requested for the planned order the
+    group waits on and gathers (``bonus`` is what it has so far); 0: no gathering plan."""
+    plan_tick: int = 0
+    """The tick of the planned order or of the last charge it took (DEC-41, item 10): the next
+    charge is due ``orders.plan_ticks_per_bonus`` ticks later; 0 without a gathering plan."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -713,7 +725,7 @@ def _location_data(loc: Location) -> dict[str, object]:
 
 
 def _group_data(g: Group) -> dict[str, object]:
-    return {
+    data: dict[str, object] = {
         "id": g.id,
         "owner": g.owner,
         "units": g.units,
@@ -727,6 +739,10 @@ def _group_data(g: Group) -> dict[str, object]:
         "ticks_in_defense": g.ticks_in_defense,
         "fight": g.fight,
     }
+    if g.plan:  # economy v2 only (DEC-41, item 10): a v1 state keeps its canonical form
+        data["plan"] = g.plan
+        data["plan_tick"] = g.plan_tick
+    return data
 
 
 def _fight_data(f: Fight) -> dict[str, object]:
@@ -1040,6 +1056,7 @@ def _parse_group(data: object, where: str) -> Group:
             "ticks_in_defense",
             "fight",
         ),
+        optional=("plan", "plan_tick"),
     )
     units = _int(raw["units"], f"{where}.units", low=0)
     return Group(
@@ -1055,6 +1072,8 @@ def _parse_group(data: object, where: str) -> Group:
         bonus_tick=_int(raw["bonus_tick"], f"{where}.bonus_tick", low=0),
         ticks_in_defense=_int(raw["ticks_in_defense"], f"{where}.ticks_in_defense", low=0),
         fight=_opt_int(raw["fight"], f"{where}.fight"),
+        plan=_int(raw.get("plan", 0), f"{where}.plan", low=0),
+        plan_tick=_int(raw.get("plan_tick", 0), f"{where}.plan_tick", low=0),
     )
 
 
