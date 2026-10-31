@@ -675,3 +675,65 @@ on VP: its front groups are charged and in groups of 2+, the bots' are single an
 
 The full 16-bot run of the final code (41131096355) was dispatched; its artifact was not downloaded here (the
 GitHub API rate limit of the account ran out during the session), the 8-bot numbers above are the same matches.
+
+## Economy v2: the smart bots and the hoarder play `mvp-3` (#648)
+
+PR #648 teaches the bots the economy of DEC-41 (`gow_bots.bots.economy`, [README.md](README.md), "Economy v2"): no
+v1-only command under v2, lines only from the own factories to the nodes that want charges, two built factories, bunkers
+for the personalities that used Defense, warehouse levels for charges, a planned order only where its bonus turns a
+bounce into a capture (asking for the missing shots, at most the warehouse stock), `ReleasePlan` after a long gathering,
+the converging strike plans every group that can gather; the hoarder's hoard gets its line first. Under v1 nothing
+changed: the `mvp-2` run below has the `state_hash` of `develop` in all 3840 matches.
+
+### Runs
+
+| run | ruleset | field | matches | runner run |
+|---|---|---|---|---|
+| v2 field | `mvp-3` (hash `bcea544177702fae1f939a9910c396e0`), `SIM_VERSION` 28 | 15 smart bots (5 x 3 levels) + `smart_hoarder` | 15360 | 41211377076 |
+| v1 check, branch | `mvp-2` | the 8 bots of #624 | 3840 | 41211384341 |
+| v1 check, `develop` | `mvp-2` | the same | 3840 | 41211384091 |
+
+All on the 3 pool maps, seeds 0..19, both sides. Local smoke (`mise run tournament -- --seeds 3 --ruleset
+rulesets/mvp-3.toml`, every registered bot): no crash.
+
+### `mvp-3`: win rate against the others [95%]
+
+| bot | 16-bot field | the 8 bots of #624 | `mvp-2`, 8 bots (= #624 ablation b) |
+|---|---|---|---|
+| smart_expander@hard | 0.88 [0.86; 0.89] | 0.88 [0.85; 0.90] | 0.72 |
+| smart_rusher@hard | 0.82 [0.80; 0.84] | 0.80 [0.78; 0.83] | 0.67 |
+| smart_expander@normal | 0.79 [0.77; 0.81] | | |
+| smart_rusher@normal | 0.76 [0.74; 0.77] | | |
+| smart_strangler@hard | 0.72 [0.70; 0.74] | 0.67 [0.64; 0.70] | 0.66 |
+| smart_hoarder | 0.70 [0.68; 0.72] | 0.66 [0.62; 0.69] | 0.76 |
+| smart_strangler@normal | 0.64 [0.62; 0.66] | | |
+| smart_reactive@hard | 0.60 [0.57; 0.62] | 0.53 [0.50; 0.57] | 0.57 |
+| smart_reactive@normal | 0.53 [0.51; 0.55] | | |
+| smart_turtle@normal | 0.31 [0.29; 0.33] | | |
+| smart_rusher@easy | 0.29 [0.27; 0.31] | | |
+| smart_expander@easy | 0.28 [0.26; 0.31] | | |
+| smart_strangler@easy | 0.22 [0.20; 0.24] | | |
+| smart_turtle@hard | 0.20 [0.18; 0.22] | 0.15 [0.13; 0.18] | 0.10 |
+| smart_reactive@easy | 0.15 [0.14; 0.17] | 0.21 [0.18; 0.23] | 0.45 |
+| smart_turtle@easy | 0.11 [0.09; 0.12] | 0.10 [0.08; 0.12] | 0.06 |
+
+The server ladder (`LEVEL_BOTS`, 120 matches each): normal `smart_reactive@easy` beats easy `smart_turtle@easy` 0.78
+[0.70; 0.85] (`mvp-2`: 0.97), hard `smart_strangler@hard` beats normal 1.00 [0.97; 1.00] (0.77), expert
+`smart_expander@hard` beats hard 0.79 [0.71; 0.85] (0.55). The order holds; the steps are steeper except the first.
+The hard bots against the hoarder: expander 0.72, rusher 0.78, strangler 0.58, reactive 0.28.
+
+### The v2 economy in use (mean per player and match, the 16-bot field)
+
+`DrawLine` 64.7, `BuildFactory` 3.2 (a capture ends some builds), `BuildBunker` 1.8 (turtle 3.8-4.0, reactive 3.0-3.8,
+expander 2.1-2.5, the others 0), planned orders 3.1, `ReleasePlan` 0.1, warehouse levels 16.9. Charges by sink, share of
+start + production (304 produced per match): burned 0.35 (`mvp-2`: 0.57), buildings 0.16, captures 0.14, warehouses lost
+0.08, packets lost 0.04, fights 0.04, plans 0.02, left at the end 0.15; ledger residual 0 in every match. CP spent
+(orders and recruits at 1 CP over the income of 3 + 1 per 50 ticks): about 0.63. Captures 44 per player and match, 0.63
+of them enemy nodes; siege success 0.91; planned siege share 0.355 (`mvp-2`: 0.421).
+
+### Verdict
+
+No crash, decisions within budget (local, the 3 pool maps, all decide calls: p99 0.33-0.89 ms, mean 0.19-0.28 ms;
+`test_bench_decide_smart_v2_views` keeps the mean under 1 ms), v1 unchanged. Two gates of #648 are not met and are a
+finding for #659, not a rule change here: a bot above 0.80 (the hard expander 0.88, the hard rusher 0.82) and the hoarder
+is no longer the strongest bot (0.70). The relay reading of #644 (a full relay skips its incoming line) is noted on #651.
